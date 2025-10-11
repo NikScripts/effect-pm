@@ -12,6 +12,10 @@
  * - Type-safe queue dependency enforcement
  * - Scoped resource management with automatic cleanup
  * 
+ * **Dependencies:**
+ * - `CronStorage` - Required for tracking cron execution history.
+ *   Provide either `CronStorage.Default` (in-memory) or a custom implementation.
+ * 
  * @module process-manager
  */
 
@@ -177,7 +181,7 @@ export interface QueueDetails {
  * 
  * @public
  */
-export interface ProcessManager<R> {
+export interface ProcessManagerInterface<R> {
   // ========== Process Management ==========
   
   /**
@@ -723,7 +727,7 @@ export const makeProcessManager = <
     | ProcessManagerDependencies
   >[];
 }): Effect.Effect<
-  ProcessManager<
+  ProcessManagerInterface<
     | R
     | ProcessManagerDependencies
     | UnionToIntersection<TagIdentifier<Queues[number]>>

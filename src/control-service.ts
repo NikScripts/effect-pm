@@ -17,7 +17,7 @@
 
 import http from "node:http";
 import { Effect, Scope, Runtime } from "effect";
-import type { ProcessManager, QueueDetails } from "./process-manager";
+import type { ProcessManagerInterface, QueueDetails } from "./process-manager";
 import type { CronStorage } from "./cron-storage";
 
 // ============================================================================
@@ -98,7 +98,7 @@ const readBody = (req: http.IncomingMessage): Effect.Effect<string> =>
   });
 
 const handleCommand =
-  <R>(pm: ProcessManager<R>) =>
+  <R>(pm: ProcessManagerInterface<R>) =>
   (
     command: ControlCommand,
     name?: string,
@@ -344,7 +344,7 @@ const handleCommand =
  */
 export const startControlService = <R>(options: {
   port?: number;
-  pm: ProcessManager<R>;
+  pm: ProcessManagerInterface<R>;
 }): Effect.Effect<void, never, Scope.Scope | R | CronStorage> =>
   Effect.acquireRelease(
     Effect.gen(function* () {

@@ -98,32 +98,6 @@ Effect.runPromise(
 );
 ```
 
-## Using the Service Layer
-
-For applications that need dependency injection, use the service wrapper:
-
-```typescript
-import { ProcessManagerService, ProcessManagerLive } from "@nikscripts/effect-pm";
-import { Effect } from "effect";
-
-const program = Effect.gen(function* () {
-  const pmFactory = yield* ProcessManagerService;
-  const pm = yield* pmFactory({
-    queues: [EmailQueue],
-    processes: [emailCron],
-  });
-  
-  yield* pm.startAll();
-});
-
-// Provide the service layer
-program.pipe(
-  Effect.provide(ProcessManagerLive),
-  Effect.provide(EmailQueueLive),
-  Effect.runPromise
-);
-```
-
 ## Priority Queue Configuration
 
 ### Basic Configuration
@@ -316,24 +290,34 @@ makeProcessManager({
 });
 ```
 
-## Storage Options
+## CronStorage (Required)
 
-### In-Memory Storage (Default)
+ProcessManager requires a `CronStorage` implementation to track cron execution history.
+
+### In-Memory Storage (Development)
 
 ```typescript
-import { CronStorageLive } from "@nikscripts/effect-pm";
+import { CronStorage } from "@nikscripts/effect-pm";
 
-program.pipe(Effect.provide(CronStorageLive));
+program.pipe(
+  Effect.provide(CronStorage.Default), // In-memory storage
+  Effect.runPromise
+);
 ```
 
-### Persistent Storage
+**⚠️ Warning:** In-memory storage loses all execution history on restart. A warning will be displayed when using the default implementation.
 
-For production use, implement a persistent storage layer. See `examples/prisma-storage.ts` for a complete Prisma implementation example.
+### Persistent Storage (Production)
+
+For production, implement a persistent storage layer. See `examples/prisma-storage.ts` for a complete Prisma implementation example.
 
 ```typescript
 import { CronStoragePrismaLayer } from "./my-prisma-storage";
 
-program.pipe(Effect.provide(CronStoragePrismaLayer));
+program.pipe(
+  Effect.provide(CronStoragePrismaLayer), // Persistent storage
+  Effect.runPromise
+);
 ```
 
 ## Control Service (CLI/API)
@@ -449,18 +433,16 @@ See the [examples/example.ts](./examples/example.ts) file for a complete working
 - `makeQueueService` - Create a priority queue service
 - `createCronProcess` - Create a scheduled task
 - `startControlService` - Start HTTP control API
-
-### Service Layer
-
-- `ProcessManagerService` - Effect service wrapper
-- `ProcessManagerLive` - Default layer with dependencies
+- `CronStorage` - Storage service for cron execution history
 
 ### Types
 
-- `ProcessManager<R>` - ProcessManager interface
+- `ProcessManagerInterface<R>` - ProcessManager interface
 - `ProcessManagerDetails` - Process status information
 - `QueueDetails` - Queue status information
 - `PriorityQueueProcessor<T, R>` - Queue processor interface
+- `CronStorageInterface` - Storage interface for implementing custom storage
+- `CronExecution` - Execution record type
 
 ### Errors
 

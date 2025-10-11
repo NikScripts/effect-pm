@@ -16,7 +16,7 @@
  * @module cron-storage
  */
 
-import { Effect, Data, Context, Layer } from "effect";
+import { Effect, Data } from "effect";
 
 // ============================================================================
 // Error Types
@@ -180,34 +180,6 @@ export interface CronStorageInterface {
   forProgram: (programName: string) => ProgramCronStorage;
 }
 
-/**
- * Cron Storage Effect Service
- * 
- * @remarks
- * Use this service tag to access cron storage in your Effects.
- * 
- * @example
- * ```typescript
- * const program = Effect.gen(function* () {
- *   const storage = yield* CronStorage;
- *   const programStorage = storage.forProgram("my-cron");
- *   
- *   yield* programStorage.recordExecution({
- *     executedAt: new Date(),
- *     isStartupRun: false,
- *     success: true,
- *     durationMs: 1500,
- *   });
- * });
- * ```
- * 
- * @public
- */
-export class CronStorage extends Context.Tag("CronStorage")<
-  CronStorage,
-  CronStorageInterface
->() {}
-
 // ============================================================================
 // Default Implementation
 // ============================================================================
@@ -369,4 +341,36 @@ const makeInMemoryCronStorage = Effect.sync(() => {
  * 
  * @public
  */
-export const CronStorageLive = Layer.effect(CronStorage, makeInMemoryCronStorage);
+// export const CronStorageLive = Layer.effect(CronStorage, makeInMemoryCronStorage);
+
+/**
+ * Cron Storage Effect Service
+ * 
+ * @remarks
+ * Use this service tag to access cron storage in your Effects.
+ * 
+ * @example
+ * ```typescript
+ * const program = Effect.gen(function* () {
+ *   const storage = yield* CronStorage;
+ *   const programStorage = storage.forProgram("my-cron");
+ *   
+ *   yield* programStorage.recordExecution({
+ *     executedAt: new Date(),
+ *     isStartupRun: false,
+ *     success: true,
+ *     durationMs: 1500,
+ *   });
+ * });
+ * ```
+ * 
+ * @public
+ */
+// export class CronStorage extends Context.Tag("CronStorage")<
+//   CronStorage,
+//   CronStorageInterface
+// >() {}
+export class CronStorage extends Effect.Service<CronStorage>()("CronStorage", {
+  accessors: true,
+  effect: makeInMemoryCronStorage,
+}) {}

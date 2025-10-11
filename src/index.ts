@@ -11,16 +11,9 @@ export { startControlService } from "./control-service";
 // CLI
 export { createCli, runCli } from "./cli";
 
-// Service layer
-export {
-  ProcessManagerService,
-  ProcessManagerLive,
-} from "./process-manager-service";
-
 // Storage
 export {
   CronStorage,
-  CronStorageLive,
   CronStorageError,
   type CronExecutionData,
   type CronExecution,
@@ -31,7 +24,7 @@ export {
 
 // Types - ProcessManager
 export {
-  type ProcessManager,
+  type ProcessManagerInterface,
   type ProcessManagerDetails,
   type ProcessStatus,
   type QueueDetails,

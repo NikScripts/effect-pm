@@ -98,13 +98,11 @@
 
 import { Effect, Duration, Logger, Cron } from "effect";
 import {
-  makeProcessManager,
+  CronStorage,
   startControlService,
   makeQueueService,
   createCronProcess,
-  ProcessManagerService,
-  ProcessManagerLive,
-  CronStorageLive,
+  makeProcessManager
 } from "../src";
 
 /**
@@ -250,8 +248,7 @@ const CONTROL_PORT = Number(process.env.HOME_SERVER_PORT) || 3001;
 // Demo program
 const program = Effect.gen(function* () {
   // Create the ProcessManager with our demo processes and queues
-  const pmConfig = yield* ProcessManagerService;
-  const pm = yield* pmConfig({
+  const pm = yield* makeProcessManager({
     processes: [queueAdderCron],
     queues: [DemoQueue, DemoTwoQueue],
   });
@@ -314,11 +311,9 @@ const program = Effect.gen(function* () {
 // Run the demo
 Effect.runPromise(
   program.pipe(
-    Effect.provide(ProcessManagerLive),
     Effect.provide(DemoQueueLive),
     Effect.provide(DemoTwoQueueLive),
-    Effect.provide(CronStorageLive), // In-memory storage (no external dependencies)
-    // Effect.provide(CronStoragePrismaLayer), // For production: persistent storage
+    Effect.provide(CronStorage.Default), // In-memory storage (no external dependencies)
     Effect.provide(Logger.pretty),
   ),
 )
