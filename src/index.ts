@@ -12,13 +12,22 @@ export { startControlService } from "./control-service";
 export { createCli, runCli } from "./cli";
 
 // Service layer
-export { 
-  ProcessManagerService, 
-  ProcessManagerLive 
+export {
+  ProcessManagerService,
+  ProcessManagerLive,
 } from "./process-manager-service";
 
 // Storage
-export { CronStorage, CronStorageLive } from "./cron-storage";
+export {
+  CronStorage,
+  CronStorageLive,
+  CronStorageError,
+  type CronExecutionData,
+  type CronExecution,
+  type DateRange,
+  type ProgramCronStorage,
+  type CronStorageInterface,
+} from "./cron-storage";
 
 // Types - ProcessManager
 export {
@@ -35,15 +44,24 @@ export {
   ProcessNotRunningError,
 } from "./process-manager";
 
+// Types - Cron Handler
+export {
+  type CronHandler,
+  type CronDetails,
+  type ScheduledProcessDetails,
+} from "./cron-handler";
+
 // Types - Priority Queue
 export {
   type PriorityQueueProcessor,
   type QueueProcessorConfig,
   type QueueServiceConfig,
+  type QueueProcessDetails,
 } from "./priority-queue";
 
 // Types - Control Service
-export { 
-  type ControlRequestBody, 
-  type ControlResponse 
+export {
+  type ControlCommand,
+  type ControlRequestBody,
+  type ControlResponse,
 } from "./control-service";
