@@ -634,7 +634,7 @@ const getProcessStatus =
       );
       const uptime = startTime ? Date.now() - startTime.getTime() : 0;
 
-      // Handle scheduled processes (CronHandler)
+      // Handle scheduled processes
       const scheduledDetails = yield* (process!)
         .getStatus()
         .pipe(
