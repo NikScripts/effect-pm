@@ -163,9 +163,9 @@ export interface ResourcePool<T, _R> {
   /**
    * Get total number of items completed
    * 
-   * @returns Count of successfully processed items since pool start
+   * @returns Count of successfully completed items since pool start
    */
-  readonly getProcessedCount: () => Effect.Effect<number>;
+  readonly getCompleted: () => Effect.Effect<number>;
   
   /**
    * Pause pool processing
@@ -754,7 +754,7 @@ const makeResourcePoolEffect = <T, R>(
           }),
 
         // Status and control methods
-        getProcessedCount: () => Ref.get(processedCount),
+        getCompleted: () => Ref.get(processedCount),
         pause: () => Ref.set(isPaused, true),
         resume: () => Ref.set(isPaused, false),
         shutdown: () =>

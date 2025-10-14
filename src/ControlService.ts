@@ -31,22 +31,22 @@ import { createCli, runCli } from "./cli";
  * @remarks
  * Commands are categorized by their target:
  * - **Process commands**: start, stop, restart, now
- * - **Queue commands**: pause, resume, shutdown
- * - **Universal commands**: ls, status, queues
+ * - **Pool commands**: pause, resume, shutdown
+ * - **Universal commands**: ls, status, pools
  * 
  * @public
  */
 export type ControlCommand =
-  | "ls"        // List all processes and queues
-  | "status"    // Get detailed status of a process or queue
+  | "ls"        // List all processes and pools
+  | "status"    // Get detailed status of a process or pool
   | "start"     // Start a process
   | "stop"      // Stop a process
-  | "pause"     // Pause a queue
-  | "resume"    // Resume a queue
-  | "restart"   // Restart a process or queue
-  | "shutdown"  // Shutdown a queue permanently
+  | "pause"     // Pause a pool
+  | "resume"    // Resume a pool
+  | "restart"   // Restart a process or pool
+  | "shutdown"  // Shutdown a pool permanently
   | "now"       // Run a process immediately
-  | "queues"    // List all queues
+  | "pools"     // List all resource pools
 
 /**
  * Control API request body
@@ -109,22 +109,22 @@ const handleCommand =
     Effect.gen(function* () {
       switch (command) {
         case "ls": {
-          // List both processes and queues
+          // List both processes and pools
           const processes = yield* pm
             .getAllProcessStatus()
             .pipe(Effect.catchAll(() => Effect.succeed([])));
-          const queues = yield* pm.listPools();
+          const pools = yield* pm.listPools();
           return {
             success: true,
-            data: { processes, queues },
+            data: { processes, pools },
           };
         }
-        case "queues": {
-          // List only queues
-          const queues = yield* pm.listPools();
+        case "pools": {
+          // List all resource pools
+          const pools = yield* pm.listPools();
           return {
             success: true,
-            data: queues,
+            data: pools,
           } as ControlResponse<PoolDetails[]>;
         }
         case "status": {
@@ -149,7 +149,7 @@ const handleCommand =
                 Effect.gen(function* () {
                   const prioritySizes = yield* pool.sizeByPriority();
                   const totalSize = yield* pool.size();
-                  const completed = yield* pool.getProcessedCount();
+                  const completed = yield* pool.getCompleted();
                   return {
                     success: true,
                     data: { 

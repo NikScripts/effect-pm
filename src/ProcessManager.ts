@@ -845,7 +845,7 @@ export const makeProcessManager = <
             Effect.gen(function* () {
               const prioritySizes = yield* pool.sizeByPriority();
               const totalSize = yield* pool.size();
-              const completed = yield* pool.getProcessedCount();
+              const completed = yield* pool.getCompleted();
               return { 
                 name, 
                 size: {

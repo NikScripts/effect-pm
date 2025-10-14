@@ -11,8 +11,8 @@ npm run example
 ```
 
 This starts the ProcessManager demo with:
-- Two priority queues (DemoQueue, DemoTwoQueue)
-- One cron job that adds items to queues every 10 seconds
+- Two resource pools (DemoQueue, DemoTwoQueue)
+- One cron that adds items to pools every 10 seconds
 - HTTP control service on port 3001
 
 ### Use the CLI (in another terminal)
@@ -20,14 +20,14 @@ This starts the ProcessManager demo with:
 While the example is running, use the CLI to control it:
 
 ```bash
-# List all processes and queues
+# List all processes and pools
 npm run cli ls
 
 # Get detailed status
 npm run cli status queue-adder
 
-# List queue details
-npm run cli queues
+# List pool details
+npm run cli pools
 
 # Control processes
 npm run cli start queue-adder
