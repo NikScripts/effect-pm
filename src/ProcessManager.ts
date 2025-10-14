@@ -666,7 +666,7 @@ const getProcessStatus =
  * Create a ProcessManager instance
  * 
  * @remarks
- * Creates a ProcessManager that coordinates scheduled tasks (crons) and priority queues.
+ * Creates a ProcessManager that coordinates scheduled processes and resource pools.
  * The ProcessManager provides:
  * - Lifecycle management for all processes
  * - Unified control interface (start, stop, restart)

@@ -8,7 +8,7 @@
  * Key features:
  * - Localhost-only (127.0.0.1) for security
  * - RESTful JSON API
- * - Process and queue control
+ * - Process and pool control
  * - Status monitoring
  * - Graceful shutdown handling
  * 
@@ -56,9 +56,9 @@ export type ControlCommand =
 export interface ControlRequestBody {
   /** Command to execute */
   command: ControlCommand;
-  /** Target process or queue name (required for most commands) */
+  /** Target process or pool name (required for most commands) */
   name?: string;
-  /** Additional data (e.g., for queue-add operations) */
+  /** Additional data (e.g., for pool-add operations) */
   data?: any;
 }
 
@@ -141,7 +141,7 @@ const handleCommand =
           
           if (processResult) return processResult;
           
-          // Try queue
+          // Try pool
           const poolResult = yield* pm
             .getPool(name)
             .pipe(
@@ -197,41 +197,41 @@ const handleCommand =
           return { success: true };
         }
         case "pause": {
-          // Unified command - check process first, then queue
+          // Unified command - check process first, then pool
           if (!name)
             return { success: false, error: "Missing name" };
           
-          // Processes don't have pause, so check queue
-          const queue = yield* pm
+          // Processes don't have pause, so check pool
+          const pool = yield* pm
             .getPool(name)
             .pipe(Effect.catchAll(() => Effect.succeed(null)));
           
-          if (!queue) {
-            return { success: false, error: `Queue '${name}' not found` };
+          if (!pool) {
+            return { success: false, error: `Pool '${name}' not found` };
           }
-          
-          yield* queue.pause();
+
+          yield* pool.pause();
           return { success: true };
         }
         case "resume": {
-          // Unified command - check process first, then queue
+          // Unified command - check process first, then pool
           if (!name)
             return { success: false, error: "Missing name" };
           
-          // Processes don't have resume, so check queue
-          const queue = yield* pm
+          // Processes don't have resume, so check pool
+          const pool = yield* pm
             .getPool(name)
             .pipe(Effect.catchAll(() => Effect.succeed(null)));
           
-          if (!queue) {
-            return { success: false, error: `Queue '${name}' not found` };
+          if (!pool) {
+            return { success: false, error: `Pool '${name}' not found` };
           }
-          
-          yield* queue.resume();
+
+          yield* pool.resume();
           return { success: true };
         }
         case "restart": {
-          // Unified command - check process first, then queue
+          // Unified command - check process first, then pool
           if (!name) {
             // Global restart (processes only) - fork it to avoid blocking
             yield* Effect.fork(
@@ -256,32 +256,32 @@ const handleCommand =
             return { success: true };
           }
           
-          // Try queue
-          const queue = yield* pm
+          // Try pool
+          const pool = yield* pm
             .getPool(name)
             .pipe(Effect.catchAll(() => Effect.succeed(null)));
           
-          if (!queue) {
-            return { success: false, error: `Process or queue '${name}' not found` };
+          if (!pool) {
+            return { success: false, error: `Process or pool '${name}' not found` };
           }
-          
-          yield* queue.restart();
+
+          yield* pool.restart();
           return { success: true };
         }
         case "shutdown": {
-          // Queue-only command
+          // Pool-only command
           if (!name)
-            return { success: false, error: "Missing queue name" };
-          
-          const queue = yield* pm
+            return { success: false, error: "Missing pool name" };
+
+          const pool = yield* pm
             .getPool(name)
             .pipe(Effect.catchAll(() => Effect.succeed(null)));
           
-          if (!queue) {
-            return { success: false, error: `Queue '${name}' not found` };
+          if (!pool) {
+            return { success: false, error: `Pool '${name}' not found` };
           }
-          
-          yield* queue.shutdown();
+
+          yield* pool.shutdown();
           return { success: true };
         }
       }
@@ -321,7 +321,7 @@ const handleCommand =
  * ```typescript
  * const program = Effect.gen(function* () {
  *   const pm = yield* makeProcessManager({
- *     queues: [EmailQueue],
+ *     pools: [EmailPool],
  *     processes: [emailCron]
  *   });
  *   
@@ -337,7 +337,7 @@ const handleCommand =
  * 
  * // Provide dependencies and run
  * program.pipe(
- *   Effect.provide(EmailQueueLive),
+ *   Effect.provide(EmailPool.Default),
  *   Effect.runPromise
  * );
  * ```

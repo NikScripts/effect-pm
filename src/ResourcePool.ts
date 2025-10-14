@@ -9,7 +9,7 @@
  * - Three priority levels (high, normal, low)
  * - Configurable concurrency limits
  * - Rate limiting/throttling
- * - Queue capacity management
+ * - Pool capacity management
  * - Automatic rebuilding from cache
  * - Non-blocking success callbacks
  * - Pause/resume/restart capabilities
@@ -102,28 +102,28 @@ export interface ResourcePoolDetails {
  */
 export interface ResourcePool<T, _R> {
   /**
-   * Add item(s) to high priority queue
-   *
+   * Add item(s) at high priority
+   * 
    * @param item - Single item or array of items
    * @remarks
    * High priority items are processed before normal and low priority items.
    * Use for urgent tasks that need immediate attention.
    */
   readonly next: (item: T | readonly T[]) => Effect.Effect<void>;
-
+  
   /**
-   * Add item(s) to normal priority queue (default)
-   *
+   * Add item(s) at normal priority (default)
+   * 
    * @param item - Single item or array of items
    * @remarks
    * Normal priority is the default for most items. Processed after high
    * priority but before low priority items.
    */
   readonly add: (item: T | readonly T[]) => Effect.Effect<void>;
-
+  
   /**
-   * Add item(s) to low priority queue
-   *
+   * Add item(s) at low priority
+   * 
    * @param item - Single item or array of items
    * @remarks
    * Low priority items are processed last. Use for background tasks or
@@ -240,15 +240,15 @@ export interface ResourcePoolConfig<T, R> {
    */
   readonly effect: (item: T) => Effect.Effect<R, Error>;
 
-  // ========== Queue Configuration ==========
+  // ========== Pool Configuration ==========
 
   /**
-   * Maximum number of items the queue can hold
+   * Maximum number of items the pool can hold
    *
    * @defaultValue 50000
    * @remarks
-   * When the queue is full, adding new items will block until space is available.
-   * This prevents memory issues from unlimited queue growth.
+   * When the pool is full, adding new items will block until space is available.
+   * This prevents memory issues from unlimited growth.
    */
   capacity?: number;
 
@@ -292,23 +292,23 @@ export interface ResourcePoolConfig<T, R> {
    *
    * @param item - Item(s) being added
    * @remarks
-   * Called immediately when items are added to the queue (before processing).
+   * Called immediately when items are added to the pool (before processing).
    * NOT called for items from {@link refill}.
    * Use for saving items to database for crash recovery.
    */
   cache?: (item: T | readonly T[]) => Effect.Effect<void, Error>;
 
   /**
-   * Function to rebuild queue from cache/database
-   *
-   * @param queueMethods - Methods to add items at different priorities
+   * Effect to refill pool from cache/database
+   * 
+   * @param methods - Methods to add items at different priorities
    * @returns Effect that loads and re-adds items
    * @remarks
-   * Called automatically when the queue becomes empty. Use to reload
+   * Called automatically when the pool becomes empty. Use to reload
    * pending items from database after a restart. Items added here do NOT
    * trigger {@link cache}.
    */
-  refill?: (queueMethods: {
+  refill?: (methods: {
     /** Add items at high priority */
     next: (item: T | readonly T[]) => Effect.Effect<void>;
     /** Add items at normal priority */
@@ -337,7 +337,7 @@ export interface ResourcePoolConfig<T, R> {
    * @param item - Original item that failed
    * @remarks
    * Called when the effect throws an error. Use for error logging,
-   * dead letter queues, or retry logic.
+   * dead letter queue, or retry logic.
    */
   readonly onError?: (error: Error, item: T) => Effect.Effect<void>;
 }
@@ -375,21 +375,21 @@ const makeResourcePoolEffect = <T, R>(
     Effect.gen(function* () {
       const {
         effect: processor,
-        capacity: queueCapacity = 50000,
+        capacity: poolCapacity = 50000,
         concurrency: semaphore = 5,
         throttle = { limit: 1, duration: Duration.seconds(1) },
         cache: cacheFunction,
         onSuccess,
         onError,
-        refill: rebuildFunction,
+        refill: refillFunction,
       } = config;
 
-      // Create queues
+      // Create internal priority queues
       const [high, regular, low] = yield* Effect.all(
         [
-          Queue.bounded<T>(queueCapacity),
-          Queue.bounded<T>(queueCapacity),
-          Queue.bounded<T>(queueCapacity),
+          Queue.bounded<T>(poolCapacity),
+          Queue.bounded<T>(poolCapacity),
+          Queue.bounded<T>(poolCapacity),
         ],
         {
           concurrency: 3,
@@ -475,7 +475,7 @@ const makeResourcePoolEffect = <T, R>(
           )
         );
 
-      // Event-driven worker that blocks on Queue.take
+      // Event-driven worker that blocks until items available
       const createWorker = () =>
         Effect.gen(function* () {
           const currentWorkers = yield* Ref.get(workerCount);
@@ -523,7 +523,7 @@ const makeResourcePoolEffect = <T, R>(
       // Get next item with blocking behavior - maintains priority order
       const getNextItemBlocking = (): Effect.Effect<T> =>
         Effect.gen(function* () {
-          // First try polling each queue in priority order
+          // First try polling each priority level
           const highItem = yield* Queue.poll(high);
           if (highItem._tag === "Some") {
             yield* Effect.logDebug("📦 Got high priority item");
@@ -542,30 +542,30 @@ const makeResourcePoolEffect = <T, R>(
             return lowItem.value;
           }
 
-          // All queues are empty, try to rebuild or wait
-          return yield* handleEmptyQueue();
+          // All priority levels empty, try to rebuild or wait
+          return yield* handleEmptyPool();
         });
 
       // Rebuild from database and then wait for next item
-      const handleEmptyQueue = (): Effect.Effect<T> =>
+      const handleEmptyPool = (): Effect.Effect<T> =>
         Effect.gen(function* () {
-          yield* Effect.logDebug("Queue is empty, waiting for more items");
+          yield* Effect.logDebug("Pool is empty, waiting for more items");
 
           const rebuilding = yield* Ref.get(isRebuilding);
 
-          if (rebuildFunction && !rebuilding) {
-            // Start rebuild
+          if (refillFunction && !rebuilding) {
+            // Start refill
             yield* Ref.set(isRebuilding, true);
-            yield* Effect.logInfo("🔄 Rebuilding queue from database...");
+            yield* Effect.logInfo("🔄 Refilling pool from database...");
 
-            yield* rebuildFunction(rebuildQueueMethods).pipe(
-              Effect.catchAll(() => Effect.void) // Don't fail on rebuild errors
+            yield* refillFunction(refillMethods).pipe(
+              Effect.catchAll(() => Effect.void) // Don't fail on refill errors
             );
 
             yield* Ref.set(isRebuilding, false);
-            yield* Effect.logInfo("✅ Rebuild completed");
+            yield* Effect.logInfo("✅ Refill completed");
 
-            // After rebuild, try to get an item using priority order
+            // After refill, try to get an item using priority order
             // const highItem = yield* Queue.poll(high);
             // if (highItem._tag === "Some") {
             //   return highItem.value;
@@ -612,8 +612,8 @@ const makeResourcePoolEffect = <T, R>(
           return workers;
         });
 
-      // Create queue methods for rebuild function (without caching since items are already persisted)
-      const rebuildQueueMethods = {
+      // Create methods for refill function (without caching since items are already persisted)
+      const refillMethods = {
         next: (item: T | readonly T[]) =>
           Effect.gen(function* () {
             if (Array.isArray(item)) {
@@ -677,7 +677,7 @@ const makeResourcePoolEffect = <T, R>(
               );
             }
 
-            // Add to queue immediately (don't wait for cache)
+            // Add to pool immediately (don't wait for cache)
             if (Array.isArray(item)) {
               yield* Queue.offerAll(high, item);
             } else {
@@ -696,7 +696,7 @@ const makeResourcePoolEffect = <T, R>(
               );
             }
 
-            // Add to queue immediately (don't wait for cache)
+            // Add to pool immediately (don't wait for cache)
             if (Array.isArray(item)) {
               yield* Queue.offerAll(regular, item);
             } else {
@@ -715,7 +715,7 @@ const makeResourcePoolEffect = <T, R>(
               );
             }
 
-            // Add to queue immediately (don't wait for cache)
+            // Add to pool immediately (don't wait for cache)
             if (Array.isArray(item)) {
               yield* Queue.offerAll(low, item);
             } else {
@@ -761,15 +761,15 @@ const makeResourcePoolEffect = <T, R>(
           Effect.gen(function* () {
             yield* Ref.set(isRunning, false);
             yield* Ref.set(isPaused, false);
-            // Don't shutdown queues permanently - just stop the workers
-            // This allows the queue to be restarted later
+            // Don't shutdown pool permanently - just stop the workers
+            // This allows the pool to be restarted later
             yield* Effect.logDebug(
-              "Queue stopped - workers will exit gracefully"
+              "Pool stopped - workers will exit gracefully"
             );
           }),
         restart: () =>
           Effect.gen(function* () {
-            // Clear all pending items from queues
+            // Clear all pending items from all priority levels
             const highItems = yield* Queue.takeAll(high);
             const regularItems = yield* Queue.takeAll(regular);
             const lowItems = yield* Queue.takeAll(low);
@@ -780,7 +780,7 @@ const makeResourcePoolEffect = <T, R>(
             yield* Ref.set(processedCount, 0);
 
             yield* Effect.logInfo(
-              `Queue restarted - cleared ${totalCleared} pending items, reset count to 0`
+              `Pool restarted - cleared ${totalCleared} pending items, reset count to 0`
             );
           }),
 

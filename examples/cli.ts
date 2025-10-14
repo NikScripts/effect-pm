@@ -17,11 +17,11 @@
  * 
  * # Then use the CLI:
  * npm run cli ls                    # List all processes and pools
- * npm run cli status queue-adder    # Get status of a process
+ * npm run cli status pool-adder    # Get status of a process
  * npm run cli pools                 # List all pools
- * npm run cli start queue-adder     # Start a process
- * npm run cli stop queue-adder      # Stop a process
- * npm run cli now queue-adder       # Run process immediately
+ * npm run cli start pool-adder     # Start a process
+ * npm run cli stop pool-adder      # Stop a process
+ * npm run cli now pool-adder       # Run process immediately
  * ```
  * 
  * **Available Commands:**

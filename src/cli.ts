@@ -7,7 +7,7 @@
  * @remarks
  * This CLI communicates with the HTTP control service started by
  * {@link startControlService}. Provides commands for listing, starting,
- * stopping, and monitoring processes and queues.
+ * stopping, and monitoring processes and pools.
  * 
  * **Available Commands:**
  * - `ls` - List all processes and pools
@@ -261,15 +261,15 @@ const makeCommands = (controlUrl: string) => {
   const resume = makeGlobalOrNamed("resume");
   const restart = makeGlobalOrNamed("restart");
 
-  // shutdown <name> - Shutdown a queue
+  // shutdown <name> - Shutdown a pool
   const shutdown = Command.make("shutdown", { name: maybeName }, ({ name }) =>
     Option.match(name, {
-      onNone: () => Console.error("Missing queue name"),
+      onNone: () => Console.error("Missing pool name"),
       onSome: (n) =>
         post("shutdown", n).pipe(
           Effect.flatMap((body) => 
             body.success 
-              ? Console.log(`✅ Queue '${n}' shutdown successfully`)
+              ? Console.log(`✅ Pool '${n}' shutdown successfully`)
               : Console.error(`❌ ${body.error || "Shutdown failed"}`)
           )
         ),

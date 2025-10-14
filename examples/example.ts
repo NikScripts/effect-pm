@@ -94,9 +94,9 @@ import {
  *    catching errors at compile time, not runtime.
  */
 
-// Demo queues
-export const DemoQueue = ResourcePool.make({
-  name: "demo-queue",
+// Demo pools
+export const DemoPool = ResourcePool.make({
+  name: "demo-pool",
   effect: (item: string) =>
     Effect.gen(function* () {
       yield* Effect.logInfo(`Processing: ${item}`);
@@ -114,8 +114,8 @@ export const DemoQueue = ResourcePool.make({
   capacity: 100,
 });
 
-const DemoTwoQueue = ResourcePool.make({
-  name: "demo-two-queue",
+const DemoTwoPool = ResourcePool.make({
+  name: "demo-two-pool",
   effect: (item: number) =>
     Effect.gen(function* () {
       yield* Effect.logInfo(`Processing number: ${item}`);
@@ -140,7 +140,7 @@ const DemoTwoQueue = ResourcePool.make({
  *
  * This demonstrates how ResourcePools and Processes work together:
  * 1. The process wakes up every 10 seconds (defined in the schedule)
- * 2. It yields both pool services (DemoQueue, DemoTwoQueue)
+ * 2. It yields both pool services (DemoPool, DemoTwoPool)
  * 3. It adds new items to both pools
  * 4. The pools process those items according to their configuration
  *
@@ -150,7 +150,7 @@ const DemoTwoQueue = ResourcePool.make({
 
 // Demo cron that adds items to pools
 const queueAdderCron = Process.make({
-  name: "queue-adder",
+  name: "pool-adder",
   crons: Cron.make({
     seconds: [0, 10, 20, 30, 40, 50], // Every 10 seconds
     minutes: [],
@@ -160,22 +160,22 @@ const queueAdderCron = Process.make({
     weekdays: [],
   }),
   effect: Effect.gen(function* () {
-    const demoQueue = yield* DemoQueue;
-    const demoTwoQueue = yield* DemoTwoQueue;
+    const demoPool = yield* DemoPool;
+    const demoTwoPool = yield* DemoTwoPool;
     const timestamp = Date.now();
 
-    yield* Effect.logInfo(`🔄 Cron adding items to demo queues...`);
+    yield* Effect.logInfo(`🔄 Cron adding items to demo pools...`);
 
-    // Add to string queue
-    yield* demoQueue.add([
+    // Add to string pool
+    yield* demoPool.add([
       `cron-item-${timestamp}`,
       `cron-item-${timestamp + 1}`,
     ]);
 
-    // Add to number queue
-    yield* demoTwoQueue.add([timestamp, timestamp + 1]);
+    // Add to number pool
+    yield* demoTwoPool.add([timestamp, timestamp + 1]);
 
-    yield* Effect.logInfo(`✅ Added items to both demo queues`);
+    yield* Effect.logInfo(`✅ Added items to both demo pools`);
   }),
 });
 
@@ -199,7 +199,7 @@ const CONTROL_PORT = Number(process.env.HOME_SERVER_PORT) || 3001;
  * 4. Expose everything through the CLI and control API
  *
  * DEPENDENCY FLOW:
- * - We pass pool TAGS (DemoQueue, DemoTwoQueue) to ProcessManager.make
+ * - We pass pool TAGS (DemoPool, DemoTwoPool) to ProcessManager.make
  * - We provide pool LAYERS (.Default) at runtime via Effect.provide
  * - Effect's dependency system matches them up automatically
  * - This ensures type safety and single instances
@@ -210,12 +210,12 @@ const program = Effect.gen(function* () {
   // Create the ProcessManager with our demo processes and pools
   const pm = yield* ProcessManager.make({
     processes: [queueAdderCron],
-    pools: [DemoQueue, DemoTwoQueue],
+    pools: [DemoPool, DemoTwoPool],
   });
 
   yield* Effect.logInfo("🚀 Starting Demo ProcessManager...");
-  yield* Effect.logInfo(`📝 Processes: 1 cron (queue-adder)`);
-  yield* Effect.logInfo(`🔄 Pools: 2 resource pools (DemoQueue, DemoTwoQueue)`);
+  yield* Effect.logInfo(`📝 Processes: 1 cron (pool-adder)`);
+  yield* Effect.logInfo(`🔄 Pools: 2 resource pools (DemoPool, DemoTwoPool)`);
   yield* Effect.logInfo(`⏰ Schedule: Every 10 seconds`);
 
   // Start control API for CLI access
@@ -226,8 +226,8 @@ const program = Effect.gen(function* () {
 
   yield* Effect.logInfo("✅ Demo is running. Try these commands:");
   yield* Effect.logInfo("   npm run cli ls");
-  yield* Effect.logInfo("   npm run cli status queue-adder");
-  yield* Effect.logInfo("   npm run cli queues");
+  yield* Effect.logInfo("   npm run cli status pool-adder");
+  yield* Effect.logInfo("   npm run cli pools");
   yield* Effect.logInfo("   Press Ctrl+C to stop.");
 
   // Keep process running until signal received
@@ -250,14 +250,14 @@ const program = Effect.gen(function* () {
  * Effect's dependency system requires us to "provide" all services before
  * the program can run. Think of it like this:
  *
- * 1. Our program says "I need DemoQueue, DemoTwoQueue, ExecutionHistory"
+ * 1. Our program says "I need DemoPool, DemoTwoPool, ExecutionHistory"
  * 2. We provide the implementations (.Default layers) for each service
  * 3. Effect wires everything together automatically
  * 4. The program runs with all dependencies satisfied
  *
  * LAYER COMPOSITION:
- * - DemoQueue.Default: Provides the DemoQueue resource pool
- * - DemoTwoQueue.Default: Provides the DemoTwoQueue resource pool
+ * - DemoPool.Default: Provides the DemoPool resource pool
+ * - DemoTwoPool.Default: Provides the DemoTwoPool resource pool
  * - ExecutionHistory.Default: Provides in-memory execution history storage
  * - Logger.pretty: Provides nice formatted console logging
  *
@@ -271,8 +271,8 @@ const program = Effect.gen(function* () {
 // Run the demo
 Effect.runPromise(
   program.pipe(
-    Effect.provide(DemoQueue.Default),
-    Effect.provide(DemoTwoQueue.Default),
+    Effect.provide(DemoPool.Default),
+    Effect.provide(DemoTwoPool.Default),
     Effect.provide(ExecutionHistory.Default), // In-memory storage (no external dependencies)
     Effect.provide(Logger.pretty)
   )

@@ -1,14 +1,14 @@
 # ProcessManager
 
-A comprehensive process orchestration system built on [Effect](https://effect.website/) that manages scheduled tasks (cron jobs) and priority queues with type-safe dependency management.
+A comprehensive process orchestration system built on [Effect](https://effect.website/) that manages scheduled tasks (cron jobs) and resource pools with type-safe dependency management.
 
 ## Features
 
 - 🕐 **Scheduled Tasks (Cron Jobs)** - Run tasks on customizable schedules with execution tracking
-- 🎯 **Priority Queues** - Advanced task queuing with priority levels, rate limiting, and concurrency control
-- 🔒 **Type-Safe Dependencies** - Compile-time validation of queue dependencies
+- 🎯 **Resource Pools** - Advanced effect execution with priority levels, rate limiting, and concurrency control
+- 🔒 **Type-Safe Dependencies** - Compile-time validation of pool dependencies
 - 📊 **Built-in Monitoring** - Real-time status, metrics, and execution history
-- 🎮 **Unified Control** - Single interface to manage all processes and queues
+- 🎮 **Unified Control** - Single interface to manage all processes and pools
 - 🔌 **Effect Integration** - Seamless integration with Effect's dependency injection system
 - 🛡️ **Resource Management** - Automatic cleanup and scoped resource handling
 
@@ -232,7 +232,7 @@ console.log(status);
 //   startTime: Date,
 //   lastRun: Date,
 //   nextRun: Date,
-//   runCount: 24
+//   executions: 24
 // }
 
 // Get all process statuses

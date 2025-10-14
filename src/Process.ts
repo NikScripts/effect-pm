@@ -325,7 +325,7 @@ const createScheduledProcess = <R>(params: {
  *     
  *     const data = yield* db.fetchPending();
  *     yield* pool.add(data);
- *     yield* Effect.logInfo(\`Queued \${data.length} items\`);
+ *     yield* Effect.logInfo(\`Added \${data.length} items to pool\`);
  *   }),
  * });
  * ```

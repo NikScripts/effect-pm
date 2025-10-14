@@ -11,7 +11,7 @@ npm run example
 ```
 
 This starts the ProcessManager demo with:
-- Two resource pools (DemoQueue, DemoTwoQueue)
+- Two resource pools (DemoPool, DemoTwoPool)
 - One cron that adds items to pools every 10 seconds
 - HTTP control service on port 3001
 
@@ -24,16 +24,16 @@ While the example is running, use the CLI to control it:
 npm run cli ls
 
 # Get detailed status
-npm run cli status queue-adder
+npm run cli status pool-adder
 
 # List pool details
 npm run cli pools
 
 # Control processes
-npm run cli start queue-adder
-npm run cli stop queue-adder
-npm run cli restart queue-adder
-npm run cli now queue-adder    # Run immediately
+npm run cli start pool-adder
+npm run cli stop pool-adder
+npm run cli restart pool-adder
+npm run cli now pool-adder    # Run immediately
 
 # Get help
 npm run cli -- --help
@@ -42,9 +42,9 @@ npm run cli -- --help
 ## 📁 Examples
 
 ### `prisma-storage.ts`
-**Persistent CronStorage with Prisma**
+**Persistent ExecutionHistory with Prisma**
 
-A complete implementation showing how to create a database-backed CronStorage layer using Prisma. Use this as a template for production applications that need to persist execution history across restarts.
+A complete implementation showing how to create a database-backed ExecutionHistory layer using Prisma. Use this as a template for production applications that need to persist execution history across restarts.
 
 **What you'll need:**
 - `@prisma/client` installed
@@ -53,10 +53,10 @@ A complete implementation showing how to create a database-backed CronStorage la
 
 **Usage:**
 ```typescript
-import { CronStoragePrismaLayer } from "./examples/prisma-storage";
+import { ExecutionHistoryPrismaLayer } from "./examples/prisma-storage";
 
 program.pipe(
-  Effect.provide(CronStoragePrismaLayer),
+  Effect.provide(ExecutionHistoryPrismaLayer),
   Effect.runPromise
 );
 ```
