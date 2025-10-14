@@ -288,22 +288,22 @@ export interface ProcessManagerControls<R> {
    */
   restartAll(): Effect.Effect<void, PMError, R>;
 
-  // ========== Queue Operations ==========
+  // ========== Pool Operations ==========
   
   /**
-   * List all managed queues
+   * List all managed pools
    * 
-   * @returns Array of queue details including size and processed count
+   * @returns Array of pool details including size and completed count
    */
   listPools(): Effect.Effect<PoolDetails[], never>;
   
   /**
-   * Get a specific queue processor
+   * Get a specific resource pool
    * 
-   * @param name - Queue identifier
-   * @returns The queue processor instance
+   * @param name - Pool identifier
+   * @returns The resource pool instance
    * @remarks
-   * Use this to interact directly with a queue (add items, check status, etc.)
+   * Use this to interact directly with a pool (add items, check status, etc.)
    */
   getPool(
     name: string,
