@@ -1,9 +1,9 @@
 /**
- * Priority Queue System
- *
- * A fully-featured priority queue implementation with concurrency control,
- * rate limiting, and comprehensive lifecycle management.
- *
+ * ResourcePool - Managed Effect Execution System
+ * 
+ * A managed execution system for resource-intensive Effect operations with
+ * priority-based scheduling, concurrency control, rate limiting, and lifecycle management.
+ * 
  * @remarks
  * Key features:
  * - Three priority levels (high, normal, low)
@@ -13,8 +13,8 @@
  * - Automatic rebuilding from cache
  * - Non-blocking success callbacks
  * - Pause/resume/restart capabilities
- *
- * @module priority-queue
+ * 
+ * @module ResourcePool
  */
 
 import { Effect, Queue, Duration, Ref, Fiber, Context, Layer } from "effect";
@@ -70,37 +70,37 @@ const makeGlobalThrottler = (minInterval: Duration.Duration) =>
 // ============================================================================
 
 /**
- * Queue status details for monitoring
- *
+ * ResourcePool status details for monitoring
+ * 
  * @public
  */
-export interface QueueProcessDetails {
+export interface ResourcePoolDetails {
   /** Current number of items in all priority queues */
   queueSize: number;
-  /** Total number of items processed since queue started */
+  /** Total number of items processed since pool started */
   processedCount: number;
   /** Number of active worker fibers */
   workerCount: number;
-  /** Whether the queue is currently processing items */
+  /** Whether the pool is currently processing items */
   isRunning: boolean;
   /** Additional metadata for extensions */
   metadata?: Record<string, unknown>;
 }
 
 /**
- * Priority Queue Processor Interface
- *
+ * ResourcePool Interface
+ * 
  * @remarks
- * The main interface for interacting with a priority queue. Provides methods
- * to add items at different priority levels, monitor queue status, and control
- * queue lifecycle.
- *
- * @typeParam T - Type of items in the queue
- * @typeParam R - Return type of the processor function
- *
+ * The main interface for interacting with a ResourcePool. Provides methods
+ * to add items at different priority levels, monitor pool status, and control
+ * pool lifecycle.
+ * 
+ * @typeParam T - Type of items to process
+ * @typeParam R - Return type of the effect function
+ * 
  * @public
  */
-export interface PriorityQueueProcessor<T, _R> {
+export interface ResourcePool<T, _R> {
   /**
    * Add item(s) to high priority queue
    *
@@ -109,7 +109,7 @@ export interface PriorityQueueProcessor<T, _R> {
    * High priority items are processed before normal and low priority items.
    * Use for urgent tasks that need immediate attention.
    */
-  readonly next: (item: T | readonly T[]) => Effect.Effect<void, never, never>;
+  readonly next: (item: T | readonly T[]) => Effect.Effect<void>;
 
   /**
    * Add item(s) to normal priority queue (default)
@@ -119,7 +119,7 @@ export interface PriorityQueueProcessor<T, _R> {
    * Normal priority is the default for most items. Processed after high
    * priority but before low priority items.
    */
-  readonly add: (item: T | readonly T[]) => Effect.Effect<void, never, never>;
+  readonly add: (item: T | readonly T[]) => Effect.Effect<void>;
 
   /**
    * Add item(s) to low priority queue
@@ -131,21 +131,21 @@ export interface PriorityQueueProcessor<T, _R> {
    */
   readonly deffered: (
     item: T | readonly T[]
-  ) => Effect.Effect<void, never, never>;
+  ) => Effect.Effect<void>;
 
   /**
    * Get current queue size (all priority levels combined)
    *
    * @returns Total number of pending items
    */
-  readonly size: () => Effect.Effect<number, never, never>;
+  readonly size: () => Effect.Effect<number>;
 
   /**
    * Check if queue is empty
    *
    * @returns True if no items are pending in any priority queue
    */
-  readonly isEmpty: () => Effect.Effect<boolean, never, never>;
+  readonly isEmpty: () => Effect.Effect<boolean>;
 
   // ========== Status and Control Methods ==========
 
@@ -154,7 +154,7 @@ export interface PriorityQueueProcessor<T, _R> {
    *
    * @returns Count of successfully processed items since queue start
    */
-  readonly getProcessedCount: () => Effect.Effect<number, never, never>;
+  readonly getProcessedCount: () => Effect.Effect<number>;
 
   /**
    * Pause queue processing
@@ -163,7 +163,7 @@ export interface PriorityQueueProcessor<T, _R> {
    * Workers will stop processing new items but current items will complete.
    * Use {@link resume} to continue processing.
    */
-  readonly pause: () => Effect.Effect<void, never, never>;
+  readonly pause: () => Effect.Effect<void>;
 
   /**
    * Resume queue processing after pause
@@ -171,7 +171,7 @@ export interface PriorityQueueProcessor<T, _R> {
    * @remarks
    * Workers will continue processing pending items.
    */
-  readonly resume: () => Effect.Effect<void, never, never>;
+  readonly resume: () => Effect.Effect<void>;
 
   /**
    * Shutdown queue permanently
@@ -180,7 +180,7 @@ export interface PriorityQueueProcessor<T, _R> {
    * Stops all workers and prevents further processing. Cannot be resumed.
    * The queue scope will be closed.
    */
-  readonly shutdown: () => Effect.Effect<void, never, never>;
+  readonly shutdown: () => Effect.Effect<void>;
 
   /**
    * Restart queue processing
@@ -189,7 +189,7 @@ export interface PriorityQueueProcessor<T, _R> {
    * Stops and then restarts all workers. Useful for recovering from errors
    * or refreshing queue state.
    */
-  readonly restart: () => Effect.Effect<void, never, never>;
+  readonly restart: () => Effect.Effect<void>;
 
   /**
    * Worker fiber references
@@ -199,34 +199,35 @@ export interface PriorityQueueProcessor<T, _R> {
    * Internal field that keeps worker fibers alive to prevent garbage collection.
    * Do not access directly.
    */
-  readonly _workers: readonly Fiber.RuntimeFiber<void, never>[];
+  readonly _workers: readonly Fiber.RuntimeFiber<void>[];
 }
 
 /**
- * Configuration for queue processor internals
- *
+ * Configuration for ResourcePool
+ * 
  * @remarks
- * This is the low-level configuration used by {@link createQueue}.
- * Most users should use {@link makeQueueService} instead.
- *
+ * Configuration object for creating a ResourcePool with {@link ResourcePool.make}.
+ * 
  * @typeParam T - Type of items to process
- * @typeParam R - Return type of processor function
- *
+ * @typeParam R - Return type of effect function
+ * 
  * @public
  */
-export interface QueueProcessorConfig<T, R> {
+export interface ResourcePoolConfig<T, R> {
+  /** Unique name for the resource pool (must be a string literal) */
+  readonly name: string;
   // ========== Processing ==========
 
   /**
-   * Function to process each queue item
-   *
+   * Effect to execute for each item
+   * 
    * @param item - Item to process
    * @returns Effect producing the processed result
    * @remarks
-   * This function is called for each item in the queue. It should handle
+   * This effect is executed for each item in the pool. It should handle
    * the actual work. Errors will be caught and passed to {@link onError}.
    */
-  processor: (item: T) => Effect.Effect<R, Error, never>;
+  readonly effect: (item: T) => Effect.Effect<R, Error>;
 
   // ========== Queue Configuration ==========
 
@@ -238,41 +239,39 @@ export interface QueueProcessorConfig<T, R> {
    * When the queue is full, adding new items will block until space is available.
    * This prevents memory issues from unlimited queue growth.
    */
-  queueCapacity?: number;
+  capacity?: number;
 
   // ========== Concurrency Control ==========
 
   /**
    * Number of items to process concurrently
-   *
+   * 
    * @defaultValue 5
    * @remarks
    * Controls how many worker fibers process items in parallel.
    * Higher values increase throughput but use more resources.
    */
-  concurrency?: number;
+  readonly concurrency?: number;
 
   // ========== Rate Limiting ==========
 
   /**
    * Throttle configuration for rate limiting
-   *
+   * 
    * @defaultValue { limit: 1, duration: Duration.seconds(1) }
    * @remarks
    * Controls how frequently items can be processed:
    * - `limit`: Maximum number of items to process
    * - `duration`: Within this time period
-   *
+   * 
    * Example: `{ limit: 10, duration: Duration.minutes(1) }` allows 10 items per minute.
    * Use this to prevent overwhelming external APIs or services.
    */
-  throttle?: {
+  readonly throttle?: {
     /** Maximum number of operations allowed per duration */
-    limit: number;
+    readonly limit: number;
     /** Time period for the limit */
-    duration: Duration.Duration;
-    /** Type of throttle: not implemented yet */
-    // type: "fixed" | "burst";
+    readonly duration: Duration.Duration;
   };
 
   // ========== Persistence ==========
@@ -283,36 +282,10 @@ export interface QueueProcessorConfig<T, R> {
    * @param item - Item(s) being added
    * @remarks
    * Called immediately when items are added to the queue (before processing).
-   * NOT called for items from {@link rebuildFunction}.
+   * NOT called for items from {@link refill}.
    * Use for saving items to database for crash recovery.
    */
-  cacheFunction?: (item: T | readonly T[]) => Effect.Effect<void, Error, never>;
-
-  // ========== Callbacks ==========
-
-  /**
-   * Callback after successful processing
-   *
-   * @param result - Result from processor
-   * @param item - Original item that was processed
-   * @remarks
-   * Runs in a forked fiber (non-blocking). The queue continues processing
-   * while the callback runs. Use for notifications, logging, etc.
-   */
-  onSuccess?: (result: R, item: T) => Effect.Effect<void, never, never>;
-
-  /**
-   * Callback after processing error
-   *
-   * @param error - Error that occurred
-   * @param item - Original item that failed
-   * @remarks
-   * Called when the processor throws an error. Use for error logging,
-   * dead letter queues, or retry logic.
-   */
-  onError?: (error: Error, item: T) => Effect.Effect<void, never, never>;
-
-  // ========== Recovery ==========
+  cache?: (item: T | readonly T[]) => Effect.Effect<void, Error>;
 
   /**
    * Function to rebuild queue from cache/database
@@ -322,76 +295,82 @@ export interface QueueProcessorConfig<T, R> {
    * @remarks
    * Called automatically when the queue becomes empty. Use to reload
    * pending items from database after a restart. Items added here do NOT
-   * trigger {@link cacheFunction}.
+   * trigger {@link cache}.
    */
-  rebuildFunction?: (queueMethods: {
+  refill?: (queueMethods: {
     /** Add items at high priority */
-    next: (item: T | readonly T[]) => Effect.Effect<void, never, never>;
+    next: (item: T | readonly T[]) => Effect.Effect<void>;
     /** Add items at normal priority */
-    add: (item: T | readonly T[]) => Effect.Effect<void, never, never>;
+    add: (item: T | readonly T[]) => Effect.Effect<void>;
     /** Add items at low priority */
-    deffered: (item: T | readonly T[]) => Effect.Effect<void, never, never>;
-  }) => Effect.Effect<void, Error, never>;
+    deffered: (item: T | readonly T[]) => Effect.Effect<void>;
+  }) => Effect.Effect<void, Error>;
+
+  // ========== Callbacks ==========
+
+  /**
+   * Effect to run after successful processing
+   * 
+   * @param result - Result from effect
+   * @param item - Original item that was processed
+   * @remarks
+   * Runs in a forked fiber (non-blocking). The pool continues processing
+   * while the callback runs. Use for notifications, logging, etc.
+   */
+  readonly onSuccess?: (result: R, item: T) => Effect.Effect<void>;
+  
+  /**
+   * Effect to run after processing error
+   * 
+   * @param error - Error that occurred
+   * @param item - Original item that failed
+   * @remarks
+   * Called when the effect throws an error. Use for error logging,
+   * dead letter queues, or retry logic.
+   */
+  readonly onError?: (error: Error, item: T) => Effect.Effect<void>;
 }
 
 // ============================================================================
-// Queue Factory Functions
+// ResourcePool Factory
 // ============================================================================
 
 /**
- * Create a priority queue processor (low-level API)
- *
+ * Create a ResourcePool effect (internal implementation)
+ * 
+ * @internal
  * @remarks
- * This is the low-level function for creating queues. Most users should use
- * {@link makeQueueService} instead, which provides proper Effect service integration.
- *
- * Creates a scoped queue processor with:
+ * Internal function for creating the ResourcePool effect. Use {@link ResourcePool.make}
+ * for the public API.
+ * 
+ * Creates a scoped ResourcePool with:
  * - Three priority levels (high, normal, low)
  * - Concurrent workers
  * - Rate limiting
  * - Automatic cache persistence
  * - Error handling
- * - Automatic rebuild on empty
- *
+ * - Automatic refill on empty
+ * 
  * @typeParam T - Type of items to process
- * @typeParam R - Return type of processor function
- *
- * @param config - Queue configuration
- * @returns Scoped effect producing a queue processor
- *
- * @example
- * ```typescript
- * const queueEffect = createQueue({
- *   processor: (item: string) => Effect.succeed(item.toUpperCase()),
- *   concurrency: 3,
- *   queueCapacity: 1000,
- * });
- *
- * // Must be run in a scope
- * yield* Effect.scoped(
- *   Effect.gen(function* () {
- *     const queue = yield* queueEffect;
- *     yield* queue.add(["item1", "item2"]);
- *   })
- * );
- * ```
- *
- * @public
+ * @typeParam R - Return type of effect function
+ * 
+ * @param config - Pool configuration (without name)
+ * @returns Scoped effect producing a ResourcePool
  */
-export const createQueue = <T, R>(
-  config: QueueProcessorConfig<T, R>
-): Effect.Effect<PriorityQueueProcessor<T, R>, never> =>
+const makeResourcePoolEffect = <T, R>(
+  config: Omit<ResourcePoolConfig<T, R>, "name">
+): Effect.Effect<ResourcePool<T, R>> =>
   Effect.scoped(
     Effect.gen(function* () {
       const {
-        processor,
-        queueCapacity = 50000,
+        effect: processor,
+        capacity: queueCapacity = 50000,
         concurrency: semaphore = 5,
         throttle = { limit: 1, duration: Duration.seconds(1) },
-        cacheFunction,
+        cache: cacheFunction,
         onSuccess,
         onError,
-        rebuildFunction,
+        refill: rebuildFunction,
       } = config;
 
       // Create queues
@@ -427,7 +406,7 @@ export const createQueue = <T, R>(
 
       // Track onSuccess fibers for automatic cleanup with finalizers
       const onSuccessFibers = yield* Ref.make(
-        new Set<Fiber.RuntimeFiber<void, never>>()
+        new Set<Fiber.RuntimeFiber<void>>()
       );
 
       // Process a single item
@@ -531,7 +510,7 @@ export const createQueue = <T, R>(
         );
 
       // Get next item with blocking behavior - maintains priority order
-      const getNextItemBlocking = (): Effect.Effect<T, never, never> =>
+      const getNextItemBlocking = (): Effect.Effect<T> =>
         Effect.gen(function* () {
           // First try polling each queue in priority order
           const highItem = yield* Queue.poll(high);
@@ -557,7 +536,7 @@ export const createQueue = <T, R>(
         });
 
       // Rebuild from database and then wait for next item
-      const handleEmptyQueue = (): Effect.Effect<T, never, never> =>
+      const handleEmptyQueue = (): Effect.Effect<T> =>
         Effect.gen(function* () {
           yield* Effect.logDebug("Queue is empty, waiting for more items");
 
@@ -674,8 +653,8 @@ export const createQueue = <T, R>(
         })
       );
 
-      // Create the queue processor for internal use
-      const queueProcessor: PriorityQueueProcessor<T, R> = {
+      // Create the ResourcePool instance
+      const pool: ResourcePool<T, R> = {
         next: (item: T | readonly T[]) =>
           Effect.gen(function* () {
             // Start caching in background (non-blocking)
@@ -787,105 +766,99 @@ export const createQueue = <T, R>(
         _workers: workers,
       };
 
-      // Return the PriorityQueueProcessor directly
-      return queueProcessor;
+      // Return the ResourcePool instance
+      return pool;
     })
   );
 
 /**
- * Configuration for creating a queue service
- *
+ * ResourcePool - Managed Effect Execution with Priority Scheduling
+ * 
  * @remarks
- * Extends {@link QueueProcessorConfig} with a unique name for service identification.
- *
- * @typeParam ID - Unique string literal identifier for the queue
- * @typeParam T - Type of items to process
- * @typeParam R - Return type of processor function
- *
- * @public
- */
-export interface QueueServiceConfig<ID extends string, T, R>
-  extends QueueProcessorConfig<T, R> {
-  /** Unique name for the queue service (must be a string literal) */
-  readonly name: ID;
-}
-
-/**
- * Create a priority queue service with Effect integration
- *
- * @remarks
- * This is the recommended way to create queues for use with ProcessManager.
- * Returns a tuple of [ServiceTag, Layer] for dependency injection.
- *
- * **Benefits over {@link createQueue}:**
- * - Proper Effect service integration
- * - Automatic dependency management
- * - Type-safe service identification
- * - Easy to provide/compose in layers
- *
- * **Usage Pattern:**
- * 1. Call `makeQueueService` to get [Tag, Layer]
- * 2. Use the Tag to access the queue in your Effects
- * 3. Provide the Layer when running your program
- *
- * @typeParam ID - Unique string literal identifier for the queue
- * @typeParam T - Type of items to process
- * @typeParam R - Return type of processor function
- *
- * @param config - Queue service configuration
- * @returns Tuple of [ServiceTag, ServiceLayer] for dependency injection
- *
+ * A managed execution system for resource-intensive Effect operations.
+ * Provides priority-based scheduling, concurrency control, rate limiting,
+ * and comprehensive lifecycle management.
+ * 
+ * **Features:**
+ * - Three priority levels (high, normal, low)
+ * - Configurable concurrency and rate limiting  
+ * - Automatic persistence and recovery
+ * - Non-blocking success callbacks
+ * - Pause/resume/restart capabilities
+ * 
+ * **Usage:**
+ * 1. Call `ResourcePool.make()` to create a pool service
+ * 2. Yield the service tag in your Effects to access the pool
+ * 3. Provide the `.Default` layer when running your program
+ * 
  * @example
  * ```typescript
- * // Create a queue service
- * const [EmailQueue, EmailQueueLive] = makeQueueService({
- *   name: "email-queue",
- *   processor: (email: Email) => sendEmail(email),
+ * import { ResourcePool, ProcessManager } from "@nikscripts/effect-pm";
+ * import { Effect, Duration } from "effect";
+ * 
+ * // Create a resource pool
+ * const EmailPool = ResourcePool.make({
+ *   name: "email-pool",
+ *   effect: (email: Email) => sendEmail(email),
  *   concurrency: 5,
- *   queueCapacity: 1000,
+ *   capacity: 1000,
  * });
- *
- * // Use the queue in your program
+ * 
+ * // Use in your program
  * const program = Effect.gen(function* () {
- *   const queue = yield* EmailQueue;
- *   yield* queue.add([email1, email2]);
+ *   const pool = yield* EmailPool;
+ *   yield* pool.add([email1, email2, email3]);
  * });
- *
- * // Provide the layer when running
+ * 
+ * // Provide the layer
  * program.pipe(
- *   Effect.provide(EmailQueueLive),
+ *   Effect.provide(EmailPool.Default),
  *   Effect.runPromise
  * );
  * ```
- *
+ * 
  * @example
  * ```typescript
  * // With all options
- * const [ProcessingQueue, ProcessingQueueLive] = makeQueueService({
- *   name: "processing-queue",
- *   processor: (item: Task) => processTask(item),
+ * const ProcessingPool = ResourcePool.make({
+ *   name: "processing-pool",
+ *   effect: (task: Task) => processTask(task),
  *   concurrency: 10,
- *   queueCapacity: 5000,
- *   throttle: { limit: 100, duration: Duration.minutes(1) }, // 100 items per minute
- *   onSuccess: (result, item) => Effect.logInfo(\`Processed: \${item.id}\`),
- *   onError: (error, item) => Effect.logError(\`Failed: \${item.id}\`),
- *   cacheFunction: (items) => saveToDatabase(items),
- *   rebuildFunction: ({ add }) =>
+ *   capacity: 5000,
+ *   throttle: { limit: 100, duration: Duration.minutes(1) },
+ *   onSuccess: (result, task) => Effect.logInfo(\`Done: \${task.id}\`),
+ *   onError: (error, task) => Effect.logError(\`Failed: \${task.id}\`),
+ *   cache: (tasks) => saveToDatabase(tasks),
+ *   refill: ({ add }) => 
  *     Effect.gen(function* () {
  *       const pending = yield* loadPendingTasks();
  *       yield* add(pending);
  *     }),
  * });
  * ```
- *
+ * 
  * @public
  */
-export const makeQueueService = <ID extends string, T, R>(
-  config: QueueServiceConfig<ID, T, R>
-) => {
-  const service = Context.GenericTag<
-    PriorityQueueProcessor<T, R> & { _brand: ID },
-    PriorityQueueProcessor<T, R>
-  >(config.name);
-  return [service, Layer.effect(service, createQueue(config))] as const;
-};
+export const ResourcePool = {
+  /**
+   * Create a ResourcePool service
+   * 
+   * @typeParam T - Type of items to process
+   * @typeParam R - Return type of effect function
+   * 
+   * @param config - ResourcePool configuration
+   * @returns Service tag with Default layer that can be yielded and provided
+   */
+  make: <T, R>(
+    config: ResourcePoolConfig<T, R>
+  ) => {
+    const service = Context.GenericTag<
+      ResourcePool<T, R> & { _brand: typeof config.name },
+      ResourcePool<T, R>
+    >(config.name);
+    
+    const layer = Layer.effect(service, makeResourcePoolEffect(config));
+    
+    return Object.assign(service, { Default: layer });
+  },
+}

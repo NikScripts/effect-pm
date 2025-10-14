@@ -17,8 +17,9 @@
 
 import http from "node:http";
 import { Effect, Scope, Runtime } from "effect";
-import type { ProcessManagerInterface, QueueDetails } from "./process-manager";
-import type { CronStorage } from "./cron-storage";
+import type { ProcessManagerControls, PoolDetails } from "./ProcessManager";
+import type { ExecutionHistory } from "./ExecutionHistory";
+import { createCli, runCli } from "./cli";
 
 // ============================================================================
 // Public Types
@@ -98,11 +99,11 @@ const readBody = (req: http.IncomingMessage): Effect.Effect<string> =>
   });
 
 const handleCommand =
-  <R>(pm: ProcessManagerInterface<R>) =>
+  <R>(pm: ProcessManagerControls<R>) =>
   (
     command: ControlCommand,
     name?: string,
-  ): Effect.Effect<ControlResponse<unknown>, never, R | CronStorage> =>
+  ): Effect.Effect<ControlResponse<unknown>, never, R | ExecutionHistory> =>
     Effect.gen(function* () {
       switch (command) {
         case "ls": {
@@ -110,7 +111,7 @@ const handleCommand =
           const processes = yield* pm
             .getAllProcessStatus()
             .pipe(Effect.catchAll(() => Effect.succeed([])));
-          const queues = yield* pm.listQueues();
+          const queues = yield* pm.listPools();
           return {
             success: true,
             data: { processes, queues },
@@ -118,11 +119,11 @@ const handleCommand =
         }
         case "queues": {
           // List only queues
-          const queues = yield* pm.listQueues();
+          const queues = yield* pm.listPools();
           return {
             success: true,
             data: queues,
-          } as ControlResponse<QueueDetails[]>;
+          } as ControlResponse<PoolDetails[]>;
         }
         case "status": {
           if (!name)
@@ -140,7 +141,7 @@ const handleCommand =
           
           // Try queue
           const queueResult = yield* pm
-            .getQueue(name)
+            .getPool(name)
             .pipe(
               Effect.flatMap((queue) =>
                 Effect.gen(function* () {
@@ -190,7 +191,7 @@ const handleCommand =
           
           // Processes don't have pause, so check queue
           const queue = yield* pm
-            .getQueue(name)
+            .getPool(name)
             .pipe(Effect.catchAll(() => Effect.succeed(null)));
           
           if (!queue) {
@@ -207,7 +208,7 @@ const handleCommand =
           
           // Processes don't have resume, so check queue
           const queue = yield* pm
-            .getQueue(name)
+            .getPool(name)
             .pipe(Effect.catchAll(() => Effect.succeed(null)));
           
           if (!queue) {
@@ -245,7 +246,7 @@ const handleCommand =
           
           // Try queue
           const queue = yield* pm
-            .getQueue(name)
+            .getPool(name)
             .pipe(Effect.catchAll(() => Effect.succeed(null)));
           
           if (!queue) {
@@ -261,7 +262,7 @@ const handleCommand =
             return { success: false, error: "Missing queue name" };
           
           const queue = yield* pm
-            .getQueue(name)
+            .getPool(name)
             .pipe(Effect.catchAll(() => Effect.succeed(null)));
           
           if (!queue) {
@@ -342,17 +343,17 @@ const handleCommand =
  * 
  * @public
  */
-export const startControlService = <R>(options: {
+const startControlService = <R>(options: {
   port?: number;
-  pm: ProcessManagerInterface<R>;
-}): Effect.Effect<void, never, Scope.Scope | R | CronStorage> =>
+  pm: ProcessManagerControls<R>;
+}): Effect.Effect<void, never, Scope.Scope | R | ExecutionHistory> =>
   Effect.acquireRelease(
     Effect.gen(function* () {
       const port = options.port ?? 3001;
       const pm = options.pm;
 
       // Capture the runtime with all dependencies already provided
-      const runtime = yield* Effect.runtime<R | CronStorage>();
+      const runtime = yield* Effect.runtime<R | ExecutionHistory>();
 
       // Create HTTP request handler
       const handler = (
@@ -441,3 +442,9 @@ export const startControlService = <R>(options: {
         });
       }),
   )
+
+export const ControlService = {
+  make: startControlService,
+  createCli: createCli,
+  runCli: runCli,
+}

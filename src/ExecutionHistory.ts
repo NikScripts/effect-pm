@@ -1,19 +1,19 @@
 /**
- * Cron Storage - Execution History and Analytics
+ * ExecutionHistory - Process Execution History and Analytics
  * 
- * Provides persistent storage for cron execution history, enabling analytics,
+ * Provides persistent storage for process execution history, enabling analytics,
  * monitoring, and execution tracking across application restarts.
  * 
  * @remarks
  * Key features:
- * - Program-scoped storage interface
+ * - Process-scoped storage interface
  * - Execution history tracking
  * - Success/failure recording
  * - Startup run detection
  * - Date range queries
  * - Pluggable storage backends (in-memory, Prisma, etc.)
  * 
- * @module cron-storage
+ * @module ExecutionHistory
  */
 
 import { Effect, Data } from "effect";
@@ -23,20 +23,20 @@ import { Effect, Data } from "effect";
 // ============================================================================
 
 /**
- * Cron storage operation error
+ * Execution history storage operation error
  * 
  * @remarks
  * Thrown when storage operations fail (database errors, etc.)
  * 
  * @public
  */
-export class CronStorageError extends Data.TaggedError("CronStorageError")<{
+export class ExecutionHistoryError extends Data.TaggedError("ExecutionHistoryError")<{
   /** Error reason/message */
   reason: string;
   /** Operation that failed */
   operation: string;
-  /** Program name if applicable */
-  programName?: string;
+  /** Process name if applicable */
+  processName?: string;
 }> {}
 
 // ============================================================================
@@ -44,16 +44,16 @@ export class CronStorageError extends Data.TaggedError("CronStorageError")<{
 // ============================================================================
 
 /**
- * Data for recording a cron execution
+ * Data for recording a process execution
  * 
  * @remarks
- * Contains all information about a single execution of a cron process.
+ * Contains all information about a single execution of a process.
  * 
  * @public
  */
-export interface CronExecutionData {
-  /** Name of the cron program */
-  programName: string;
+export interface ExecutionData {
+  /** Name of the process */
+  processName: string;
   /** When the execution started */
   executedAt: Date;
   /** Whether this was a startup run (first run after restart) */
@@ -79,18 +79,18 @@ export interface DateRange {
 }
 
 /**
- * Stored cron execution record
+ * Stored execution record
  * 
  * @remarks
- * The persisted form of a cron execution with a unique ID.
+ * The persisted form of a process execution with a unique ID.
  * 
  * @public
  */
-export interface CronExecution {
+export interface Execution {
   /** Unique execution identifier */
   id: string;
-  /** Name of the cron program */
-  programName: string;
+  /** Name of the process */
+  processName: string;
   /** When the execution started */
   executedAt: Date;
   /** Whether this was a startup run */
@@ -104,24 +104,24 @@ export interface CronExecution {
 }
 
 /**
- * Program-scoped storage interface
+ * Process-scoped storage interface
  * 
  * @remarks
- * Provides storage operations for a specific cron program.
- * Obtained via {@link CronStorageInterface.forProgram}.
+ * Provides storage operations for a specific process.
+ * Obtained via {@link ExecutionHistoryInterface.forProcess}.
  * 
- * All operations are scoped to the program, so programName doesn't need
+ * All operations are scoped to the process, so processName doesn't need
  * to be passed to each method.
  * 
  * @public
  */
-export interface ProgramCronStorage {
+export interface ProcessExecutionHistory {
   /**
-   * Record a cron execution
+   * Record a process execution
    * 
-   * @param data - Execution data (programName is automatically added)
+   * @param data - Execution data (processName is automatically added)
    */
-  recordExecution: (data: Omit<CronExecutionData, 'programName'>) => Effect.Effect<void, CronStorageError, never>;
+  recordExecution: (data: Omit<ExecutionData, 'processName'>) => Effect.Effect<void, ExecutionHistoryError>;
   
   /**
    * Get execution history
@@ -129,14 +129,14 @@ export interface ProgramCronStorage {
    * @param dateRange - Optional date range to filter results
    * @returns Array of executions
    */
-  getExecutions: (dateRange?: DateRange) => Effect.Effect<CronExecution[], CronStorageError, never>;
+  getExecutions: (dateRange?: DateRange) => Effect.Effect<Execution[], ExecutionHistoryError>;
   
   /**
    * Get most recent execution time
    * 
    * @returns Date of last execution (null if never run)
    */
-  getLastRun: () => Effect.Effect<Date | null, CronStorageError, never>;
+  getLastRun: () => Effect.Effect<Date | null, ExecutionHistoryError>;
   
   /**
    * Get total execution count
@@ -144,40 +144,40 @@ export interface ProgramCronStorage {
    * @param dateRange - Optional date range to filter count
    * @returns Number of executions
    */
-  getRunCount: (dateRange?: DateRange) => Effect.Effect<number, CronStorageError, never>;
+  getRunCount: (dateRange?: DateRange) => Effect.Effect<number, ExecutionHistoryError>;
   
   /**
    * Get first startup run time
    * 
    * @returns Date of first startup run (null if hasn't run since startup)
    */
-  getFirstStartupRun: () => Effect.Effect<Date | null, CronStorageError, never>;
+  getFirstStartupRun: () => Effect.Effect<Date | null, ExecutionHistoryError>;
   
   /**
    * Check if this is the first run since restart
    * 
    * @returns True if no startup run has been recorded yet
    */
-  isFirstRunSinceRestart: () => Effect.Effect<boolean, CronStorageError, never>;
+  isFirstRunSinceRestart: () => Effect.Effect<boolean, ExecutionHistoryError>;
 }
 
 /**
- * Cron storage service interface
+ * ExecutionHistory service interface
  * 
  * @remarks
- * Main interface for cron storage. Use {@link forProgram} to get a
- * program-scoped storage interface.
+ * Main interface for execution history storage. Use {@link forProcess} to get a
+ * process-scoped storage interface.
  * 
  * @public
  */
-export interface CronStorageInterface {
+export interface ExecutionHistoryInterface {
   /**
-   * Get program-scoped storage
+   * Get process-scoped storage
    * 
-   * @param programName - Name of the cron program
-   * @returns Storage interface scoped to the program
+   * @param processName - Name of the process
+   * @returns Storage interface scoped to the process
    */
-  forProgram: (programName: string) => ProgramCronStorage;
+  forProcess: (processName: string) => ProcessExecutionHistory;
 }
 
 // ============================================================================
@@ -185,10 +185,10 @@ export interface CronStorageInterface {
 // ============================================================================
 
 /**
- * Create in-memory cron storage implementation
+ * Create in-memory execution history implementation
  * 
  * @remarks
- * Creates a fast, simple in-memory storage for cron execution history.
+ * Creates a fast, simple in-memory storage for process execution history.
  * 
  * **Characteristics:**
  * - Fast - No I/O overhead
@@ -202,33 +202,33 @@ export interface CronStorageInterface {
  * - Temporary/disposable workloads
  * 
  * **For Production:**
- * Consider using a persistent implementation like `CronStoragePrismaLayer`
+ * Consider using a persistent implementation (see examples/prisma-storage.ts)
  * to retain execution history across restarts.
  * 
- * @returns Effect producing a CronStorageInterface
+ * @returns Effect producing an ExecutionHistoryInterface
  * 
  * @internal
  */
-const makeInMemoryCronStorage = Effect.sync(() => {
+const makeInMemoryExecutionHistory = Effect.sync(() => {
   // Warn users that this is in-memory storage
   console.warn(
-    '\n⚠️  WARNING: Using in-memory CronStorage (CronStorageLive)\n' +
+    '\n⚠️  WARNING: Using in-memory ExecutionHistory\n' +
     '   Execution history will be lost on restart.\n' +
     '   For production, use a persistent storage implementation.\n' +
     '   See: https://github.com/nikscripts/effect-pm/tree/main/examples/prisma-storage.ts\n'
   );
 
-  // In-memory storage: Map<programName, executions[]>
-  const storage = new Map<string, CronExecution[]>();
+  // In-memory storage: Map<processName, executions[]>
+  const storage = new Map<string, Execution[]>();
   let idCounter = 0;
 
   return {
-    forProgram: (programName: string): ProgramCronStorage => ({
-      recordExecution: (data: Omit<CronExecutionData, 'programName'>) =>
+    forProcess: (processName: string): ProcessExecutionHistory => ({
+      recordExecution: (data: Omit<ExecutionData, 'processName'>) =>
         Effect.sync(() => {
-          const execution: CronExecution = {
+          const execution: Execution = {
             id: String(++idCounter),
-            programName,
+            processName,
             executedAt: data.executedAt,
             isStartupRun: data.isStartupRun,
             durationMs: data.durationMs ?? null,
@@ -236,14 +236,14 @@ const makeInMemoryCronStorage = Effect.sync(() => {
             errorMessage: data.errorMessage ?? null,
           };
 
-          const existing = storage.get(programName) || [];
+          const existing = storage.get(processName) || [];
           existing.push(execution);
-          storage.set(programName, existing);
+          storage.set(processName, existing);
         }),
 
       getExecutions: (dateRange?: DateRange) =>
         Effect.sync(() => {
-          const executions = storage.get(programName) || [];
+          const executions = storage.get(processName) || [];
           
           if (!dateRange) return executions;
           
@@ -255,7 +255,7 @@ const makeInMemoryCronStorage = Effect.sync(() => {
 
       getLastRun: () =>
         Effect.sync(() => {
-          const executions = storage.get(programName) || [];
+          const executions = storage.get(processName) || [];
           if (executions.length === 0) return null;
           
           // Return most recent execution
@@ -267,7 +267,7 @@ const makeInMemoryCronStorage = Effect.sync(() => {
 
       getRunCount: (dateRange?: DateRange) =>
         Effect.sync(() => {
-          const executions = storage.get(programName) || [];
+          const executions = storage.get(processName) || [];
           
           if (!dateRange) return executions.length;
           
@@ -279,7 +279,7 @@ const makeInMemoryCronStorage = Effect.sync(() => {
 
       getFirstStartupRun: () =>
         Effect.sync(() => {
-          const executions = storage.get(programName) || [];
+          const executions = storage.get(processName) || [];
           const startupRuns = executions.filter(e => e.isStartupRun);
           
           if (startupRuns.length === 0) return null;
@@ -293,7 +293,7 @@ const makeInMemoryCronStorage = Effect.sync(() => {
 
       isFirstRunSinceRestart: () =>
         Effect.sync(() => {
-          const executions = storage.get(programName) || [];
+          const executions = storage.get(processName) || [];
           const hasStartupRun = executions.some(e => e.isStartupRun);
           return !hasStartupRun; // First run if no startup run recorded yet
         }),
@@ -302,75 +302,52 @@ const makeInMemoryCronStorage = Effect.sync(() => {
 });
 
 /**
- * Default CronStorage Layer (In-Memory)
+ * ExecutionHistory - Process Execution Tracking Service
  * 
  * @remarks
- * Provides an in-memory implementation of CronStorage. Perfect for development,
- * testing, and applications that don't need persistent execution history.
+ * Effect service for tracking process execution history. Provides persistent storage
+ * for execution analytics, monitoring, and tracking across application restarts.
  * 
- * **Characteristics:**
- * - No configuration required
- * - No external dependencies
- * - Fast performance
- * - Data is lost on application restart
- * 
- * **For Production Use:**
- * Replace with a persistent implementation:
- * ```typescript
- * import { CronStoragePrismaLayer } from "./cron-storage-prisma";
- * 
- * program.pipe(
- *   Effect.provide(CronStoragePrismaLayer), // Instead of CronStorageLive
- *   Effect.runPromise
- * );
- * ```
+ * The default implementation uses in-memory storage (data lost on restart).
+ * For production, implement a custom storage backend (see examples/prisma-storage.ts).
  * 
  * @example
  * ```typescript
+ * import { ExecutionHistory, Process, ProcessManager } from "@nikscripts/effect-pm";
+ * import { Effect } from "effect";
+ * 
  * const program = Effect.gen(function* () {
- *   const storage = yield* CronStorage;
- *   // Use storage...
- * });
- * 
- * // Provide in-memory storage
- * program.pipe(
- *   Effect.provide(CronStorageLive),
- *   Effect.runPromise
- * );
- * ```
- * 
- * @public
- */
-// export const CronStorageLive = Layer.effect(CronStorage, makeInMemoryCronStorage);
-
-/**
- * Cron Storage Effect Service
- * 
- * @remarks
- * Use this service tag to access cron storage in your Effects.
- * 
- * @example
- * ```typescript
- * const program = Effect.gen(function* () {
- *   const storage = yield* CronStorage;
- *   const programStorage = storage.forProgram("my-cron");
+ *   const history = yield* ExecutionHistory;
+ *   const processHistory = history.forProcess("my-process");
  *   
- *   yield* programStorage.recordExecution({
+ *   yield* processHistory.recordExecution({
  *     executedAt: new Date(),
  *     isStartupRun: false,
  *     success: true,
  *     durationMs: 1500,
  *   });
  * });
+ * 
+ * // Use default in-memory storage
+ * program.pipe(
+ *   Effect.provide(ExecutionHistory.Default),
+ *   Effect.runPromise
+ * );
+ * ```
+ * 
+ * @example
+ * ```typescript
+ * // With custom persistent storage
+ * import { ExecutionHistoryPrismaLayer } from "./my-prisma-storage";
+ * 
+ * program.pipe(
+ *   Effect.provide(ExecutionHistoryPrismaLayer),
+ *   Effect.runPromise
+ * );
  * ```
  * 
  * @public
  */
-// export class CronStorage extends Context.Tag("CronStorage")<
-//   CronStorage,
-//   CronStorageInterface
-// >() {}
-export class CronStorage extends Effect.Service<CronStorage>()("CronStorage", {
-  accessors: true,
-  effect: makeInMemoryCronStorage,
+export class ExecutionHistory extends Effect.Service<ExecutionHistory>()("ExecutionHistory", {
+  effect: makeInMemoryExecutionHistory,
 }) {}

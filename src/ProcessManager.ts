@@ -20,9 +20,10 @@
  */
 
 import { Effect, Scope, Fiber, Ref, Data, Context } from "effect";
-import type { CronHandler } from "./cron-handler";
-import type { PriorityQueueProcessor } from "./priority-queue";
-import { CronStorage, type CronStorageError } from "./cron-storage";
+import type { Process } from "./Process";
+import type { ResourcePool } from "./ResourcePool";
+import { ExecutionHistory, type ExecutionHistoryError } from "./ExecutionHistory";
+import { ControlService } from "./ControlService";
 
 // ============================================================================
 // Type Utilities
@@ -57,18 +58,7 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
  * 
  * @public
  */
-export type ProcessManagerDependencies = CronStorage;
-
-/**
- * Process types that ProcessManager can handle
- * 
- * @remarks
- * Currently supports CronHandler (scheduled tasks). Future versions may support
- * additional process types like long-running services or event-driven handlers.
- * 
- * @public
- */
-export type Process<R> = CronHandler<R>;
+export type ProcessManagerDependencies = ExecutionHistory;
 
 /**
  * Process status managed by ProcessManager
@@ -136,11 +126,11 @@ export interface ProcessManagerDetails {
  */
 export interface ProcessManagerState<R> {
   processes: Ref.Ref<Map<string, Process<R>>>;
-  queues: Record<string, PriorityQueueProcessor<any, any>>;
+  pools: Record<string, ResourcePool<any, any>>;
   statuses: Ref.Ref<Map<string, ProcessStatus>>;
   startTimes: Ref.Ref<Map<string, Date>>;
   scopes: Ref.Ref<Map<string, Scope.Scope>>;
-  fibers: Ref.Ref<Map<string, Fiber.RuntimeFiber<void, CronStorageError>>>;
+  fibers: Ref.Ref<Map<string, Fiber.RuntimeFiber<void, ExecutionHistoryError>>>;
 }
 
 /**
@@ -148,7 +138,7 @@ export interface ProcessManagerState<R> {
  * 
  * @public
  */
-export interface QueueDetails {
+export interface PoolDetails {
   /** Queue identifier */
   name: string;
   /** Current number of items in queue */
@@ -181,7 +171,7 @@ export interface QueueDetails {
  * 
  * @public
  */
-export interface ProcessManagerInterface<R> {
+export interface ProcessManagerControls<R> {
   // ========== Process Management ==========
   
   /**
@@ -199,7 +189,7 @@ export interface ProcessManagerInterface<R> {
    * 
    * @returns Array of process details
    */
-  listProcesses(): Effect.Effect<ProcessManagerDetails[], PMError, CronStorage>;
+  listProcesses(): Effect.Effect<ProcessManagerDetails[], PMError, ExecutionHistory>;
 
   // ========== Process Control ==========
   
@@ -250,7 +240,7 @@ export interface ProcessManagerInterface<R> {
    */
   getProcessStatus(
     name: string,
-  ): Effect.Effect<ProcessManagerDetails, PMError, CronStorage>;
+  ): Effect.Effect<ProcessManagerDetails, PMError, ExecutionHistory>;
   
   /**
    * Get status of all managed processes
@@ -260,7 +250,7 @@ export interface ProcessManagerInterface<R> {
   getAllProcessStatus(): Effect.Effect<
     ProcessManagerDetails[],
     PMError,
-    CronStorage
+    ExecutionHistory
   >;
 
   // ========== Global Control ==========
@@ -296,7 +286,7 @@ export interface ProcessManagerInterface<R> {
    * 
    * @returns Array of queue details including size and processed count
    */
-  listQueues(): Effect.Effect<QueueDetails[], never>;
+  listPools(): Effect.Effect<PoolDetails[], never>;
   
   /**
    * Get a specific queue processor
@@ -306,9 +296,13 @@ export interface ProcessManagerInterface<R> {
    * @remarks
    * Use this to interact directly with a queue (add items, check status, etc.)
    */
-  getQueue(
+  getPool(
     name: string,
-  ): Effect.Effect<PriorityQueueProcessor<any, any>, PMError>;
+  ): Effect.Effect<ResourcePool<any, any>, PMError>;
+}
+
+export interface ProcessManager<R> extends ProcessManagerControls<R> {
+  serve: ({ port }: { port?: number }) => Effect.Effect<void, never, Scope.Scope | R | ExecutionHistory>;
 }
 
 // ============================================================================
@@ -382,7 +376,7 @@ export type PMError =
   | ProcessNotFoundError
   | ProcessAlreadyRunningError
   | ProcessNotRunningError
-  | CronStorageError;
+  | ExecutionHistoryError;
 
 // ============================================================================
 // Helper Functions (Internal)
@@ -445,7 +439,7 @@ const removeProcess =
 
 const listProcesses = <R>(
   state: ProcessManagerState<R>,
-): Effect.Effect<ProcessManagerDetails[], PMError, CronStorage> =>
+): Effect.Effect<ProcessManagerDetails[], PMError, ExecutionHistory> =>
   Effect.gen(function* () {
     const processes = yield* Ref.get(state.processes);
     const statuses = yield* Ref.get(state.statuses);
@@ -461,7 +455,7 @@ const listProcesses = <R>(
           // Get additional details for scheduled processes
           let scheduledDetails = {};
           if (process.type === "scheduled") {
-            const details = yield* (process as CronHandler<R>).getStatus().pipe(
+            const details = yield* (process as Process<R>).getStatus().pipe(
               Effect.catchAll(() =>
                 Effect.succeed({
                   lastRun: null,
@@ -498,7 +492,7 @@ const listProcesses = <R>(
 
 const startProcess =
   <R>(state: ProcessManagerState<R>) =>
-  (name: string): Effect.Effect<void, PMError, R | CronStorage> =>
+  (name: string): Effect.Effect<void, PMError, R | ExecutionHistory> =>
     Effect.gen(function* () {
       yield* Effect.logDebug(`🚀 Starting process: ${name}`);
 
@@ -587,7 +581,7 @@ const stopProcess =
 
 const runProcessImmediately =
   <R>(state: ProcessManagerState<R>) =>
-  (name: string): Effect.Effect<void, PMError, R | CronStorage> =>
+  (name: string): Effect.Effect<void, PMError, R | ExecutionHistory> =>
     Effect.gen(function* () {
       // Check if process exists
       const process = yield* Ref.get(state.processes).pipe(
@@ -613,7 +607,7 @@ const runProcessImmediately =
 
 const getProcessStatus =
   <R>(state: ProcessManagerState<R>) =>
-  (name: string): Effect.Effect<ProcessManagerDetails, PMError, CronStorage> =>
+  (name: string): Effect.Effect<ProcessManagerDetails, PMError, ExecutionHistory> =>
     Effect.gen(function* () {
       const process = yield* Ref.get(state.processes).pipe(
         Effect.map((processes) => processes.get(name)),
@@ -714,38 +708,38 @@ const getProcessStatus =
  * @public
  */
 export const makeProcessManager = <
-  const Queues extends readonly [
-    ...Context.Tag<any, PriorityQueueProcessor<any, any>>[],
+  const Pools extends readonly [
+    ...Context.Tag<any, ResourcePool<any, any>>[],
   ],
   R,
 >(config: {
-  queues: Queues;
+  pools: Pools;
   processes: Process<
-    | (R extends PriorityQueueProcessor<any, any>
-        ? TagIdentifier<Queues[number]>
+    | (R extends ResourcePool<any, any>
+        ? TagIdentifier<Pools[number]>
         : R)
     | ProcessManagerDependencies
   >[];
 }): Effect.Effect<
-  ProcessManagerInterface<
+  ProcessManager<
     | R
     | ProcessManagerDependencies
-    | UnionToIntersection<TagIdentifier<Queues[number]>>
+    | UnionToIntersection<TagIdentifier<Pools[number]>>
   >,
   PMError,
-  TagIdentifier<Queues[number]>
+  TagIdentifier<Pools[number]>
 > =>
   Effect.gen(function* () {
     // Yield all queue services to make them requirements
-    const queuesMap = Object.fromEntries(
-      config.queues.map((queue) => [queue.key, queue]),
+    const poolsMap = Object.fromEntries(
+      config.pools.map((pool) => [pool.key, pool]),
     );
-    const queues = yield* Effect.all(queuesMap);
+    const pools = yield* Effect.all(poolsMap);
 
     // Initialize processes map with the provided processes
     const processMap = new Map<
       string,
-      Process<R | ProcessManagerDependencies | TagIdentifier<Queues[number]>>
+      Process<R | ProcessManagerDependencies | TagIdentifier<Pools[number]>>
     >();
     const statusMap = new Map<string, ProcessStatus>();
     for (const process of config.processes) {
@@ -758,21 +752,21 @@ export const makeProcessManager = <
     const startTimes = yield* Ref.make(new Map<string, Date>());
     const scopes = yield* Ref.make(new Map<string, Scope.Scope>());
     const fibers = yield* Ref.make(
-      new Map<string, Fiber.RuntimeFiber<void, CronStorageError>>(),
+      new Map<string, Fiber.RuntimeFiber<void, ExecutionHistoryError>>(),
     );
 
     const state: ProcessManagerState<
-      R | ProcessManagerDependencies | TagIdentifier<Queues[number]>
+      R | ProcessManagerDependencies | TagIdentifier<Pools[number]>
     > = {
       processes,
-      queues,
+      pools,
       statuses,
       startTimes,
       scopes,
       fibers,
     };
 
-    return {
+    const controls = {
       removeProcess: removeProcess(state),
       listProcesses: () => listProcesses(state),
       startProcess: (name: string) =>
@@ -833,23 +827,31 @@ export const makeProcessManager = <
           reason: "not_implemented",
           operation: "restartAll",
         }),
-      listQueues: () =>
+      listPools: () =>
         Effect.all(
-          Object.entries(state.queues).map(([name, queue]) =>
+          Object.entries(state.pools).map(([name, pool]) =>
             Effect.gen(function* () {
-              const queueSize = yield* queue.size();
-              const processedCount = yield* queue.getProcessedCount();
+              const queueSize = yield* pool.size();
+              const processedCount = yield* pool.getProcessedCount();
               return { name, queueSize, processedCount };
             }),
           ),
         ),
-      getQueue: (name: string) =>
+      getPool: (name: string) =>
         Effect.gen(function* () {
-          const queue = state.queues[name];
-          if (!queue) {
+          const pool = state.pools[name];
+          if (!pool) {
             yield* new ProcessNotFoundError({ processName: name });
           }
-          return queue!;
+          return pool!;
         }),
     };
+    return {
+      ...controls,
+      serve: ({ port }: { port?: number }) => ControlService.make({ pm: controls, port }),
+    };
   });
+
+export const ProcessManager = {
+  make: makeProcessManager,
+}

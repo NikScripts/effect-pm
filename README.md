@@ -20,44 +20,40 @@ npm install @nikscripts/effect-pm effect
 
 ## Quick Start
 
-### 1. Create a Queue
+### 1. Create a Resource Pool
 
 ```typescript
-import { makeQueueService } from "@nikscripts/effect-pm";
+import { ResourcePool } from "@nikscripts/effect-pm";
 import { Effect } from "effect";
 
-const [EmailQueue, EmailQueueLive] = makeQueueService({
-  name: "email-queue",
-  processor: (email: Email) =>
+const EmailPool = ResourcePool.make({
+  name: "email-pool",
+  effect: (email: Email) =>
     Effect.gen(function* () {
       // Process the email
       yield* sendEmail(email);
       return email.id;
     }),
   concurrency: 5,
-  queueCapacity: 1000,
+  capacity: 1000,
 });
 ```
 
-### 2. Create a Scheduled Task
+### 2. Create a Scheduled Process
 
 ```typescript
-import { createCronProcess } from "@nikscripts/effect-pm";
+import { Process } from "@nikscripts/effect-pm";
 import { Cron, Effect } from "effect";
 
-const emailCron = createCronProcess({
+const emailProcess = Process.make({
   name: "send-emails",
   crons: Cron.make({
     minutes: [0, 30], // Every 30 minutes
-    hours: [],
-    days: [],
-    months: [],
-    weekdays: [],
   }),
   program: Effect.gen(function* () {
-    const queue = yield* EmailQueue;
+    const pool = yield* EmailPool;
     const pendingEmails = yield* fetchPendingEmails();
-    yield* queue.add(pendingEmails);
+    yield* pool.add(pendingEmails);
   }),
 });
 ```
@@ -65,11 +61,11 @@ const emailCron = createCronProcess({
 ### 3. Create ProcessManager
 
 ```typescript
-import { makeProcessManager } from "@nikscripts/effect-pm";
+import { ProcessManager } from "@nikscripts/effect-pm";
 
-const pm = yield* makeProcessManager({
-  queues: [EmailQueue],
-  processes: [emailCron],
+const pm = yield* ProcessManager.make({
+  pools: [EmailPool],
+  processes: [emailProcess],
 });
 
 // Start all processes
@@ -80,11 +76,12 @@ yield* pm.startAll();
 
 ```typescript
 import { Effect, Logger } from "effect";
+import { ExecutionHistory } from "@nikscripts/effect-pm";
 
 const program = Effect.gen(function* () {
-  const pm = yield* makeProcessManager({
-    queues: [EmailQueue],
-    processes: [emailCron],
+  const pm = yield* ProcessManager.make({
+    pools: [EmailPool],
+    processes: [emailProcess],
   });
   yield* pm.startAll();
 });
@@ -92,39 +89,43 @@ const program = Effect.gen(function* () {
 // Run with dependencies
 Effect.runPromise(
   program.pipe(
-    Effect.provide(EmailQueueLive),
+    Effect.provide(EmailPool.Default),
+    Effect.provide(ExecutionHistory.Default),
     Effect.provide(Logger.pretty),
   )
 );
 ```
 
-## Priority Queue Configuration
+## ResourcePool Configuration
 
 ### Basic Configuration
 
 ```typescript
-const [Queue, QueueLive] = makeQueueService({
-  name: "my-queue",
-  processor: (item: Item) => processItem(item),
+import { ResourcePool } from "@nikscripts/effect-pm";
+
+const TaskPool = ResourcePool.make({
+  name: "task-pool",
+  effect: (item: Item) => processItem(item),
   concurrency: 3,
-  queueCapacity: 5000,
+  capacity: 5000,
 });
 ```
 
 ### Advanced Configuration
 
 ```typescript
+import { ResourcePool } from "@nikscripts/effect-pm";
 import { Duration } from "effect";
 
-const [Queue, QueueLive] = makeQueueService({
-  name: "advanced-queue",
-  processor: processItem,
+const ProcessingPool = ResourcePool.make({
+  name: "processing-pool",
+  effect: processItem,
   
   // Concurrency control
   concurrency: 5,
   
-  // Queue capacity (memory management)
-  queueCapacity: 10000,
+  // Pool capacity (memory management)
+  capacity: 10000,
   
   // Rate limiting
   throttle: {
@@ -141,7 +142,7 @@ const [Queue, QueueLive] = makeQueueService({
     Effect.logError(`Failed: ${error.message}`),
   
   // Recovery from cache/database
-  rebuildFunction: ({ add }) => 
+  refill: ({ add }) => 
     Effect.gen(function* () {
       const cached = yield* getCachedItems();
       yield* add(cached);
@@ -149,42 +150,38 @@ const [Queue, QueueLive] = makeQueueService({
 });
 ```
 
-## Cron Process Configuration
+## Process Configuration (Scheduled Tasks)
 
-### Basic Cron
+### Basic Scheduled Process
 
 ```typescript
-const basicCron = createCronProcess({
+import { Process } from "@nikscripts/effect-pm";
+import { Cron, Effect } from "effect";
+
+const hourlyTask = Process.make({
   name: "hourly-task",
   crons: Cron.make({
     minutes: [0],    // Top of the hour
-    hours: [],       // Every hour
-    days: [],        // Every day
-    months: [],      // Every month
-    weekdays: [],    // Every weekday
   }),
   program: Effect.logInfo("Running hourly task"),
 });
 ```
 
-### Advanced Cron with Dependencies
+### Advanced Process with Dependencies
 
 ```typescript
-const advancedCron = createCronProcess({
+const dataSync = Process.make({
   name: "data-sync",
   crons: Cron.make({
     minutes: [0],
     hours: [2], // 2 AM
-    days: [],
-    months: [],
-    weekdays: [],
   }),
   program: Effect.gen(function* () {
     const db = yield* Database;
-    const queue = yield* ProcessingQueue;
+    const pool = yield* ProcessingPool;
     
     const data = yield* db.fetchData();
-    yield* queue.add(data);
+    yield* pool.add(data);
   }),
   runOnStartup: true, // Run immediately on start
 });
@@ -196,16 +193,16 @@ const advancedCron = createCronProcess({
 
 ```typescript
 // Start specific process
-yield* pm.startProcess("email-cron");
+yield* pm.startProcess("email-process");
 
 // Stop specific process
-yield* pm.stopProcess("email-cron");
+yield* pm.stopProcess("email-process");
 
 // Restart process
-yield* pm.restartProcess("email-cron");
+yield* pm.restartProcess("email-process");
 
-// Run cron immediately (doesn't affect schedule)
-yield* pm.runProcessImmediately("email-cron");
+// Run process immediately (doesn't affect schedule)
+yield* pm.runProcessImmediately("email-process");
 ```
 
 ### Global Control
@@ -225,10 +222,10 @@ yield* pm.restartAll();
 
 ```typescript
 // Get single process status
-const status = yield* pm.getProcessStatus("email-cron");
+const status = yield* pm.getProcessStatus("email-process");
 console.log(status);
 // {
-//   name: "email-cron",
+//   name: "email-process",
 //   type: "scheduled",
 //   status: "running",
 //   uptime: 3600000,
@@ -245,62 +242,70 @@ const allStatuses = yield* pm.getAllProcessStatus();
 const processes = yield* pm.listProcesses();
 ```
 
-### Queue Operations
+### Pool Operations
 
 ```typescript
-// List all queues
-const queues = yield* pm.listQueues();
+// List all pools
+const pools = yield* pm.listPools();
 
-// Get specific queue
-const emailQueue = yield* pm.getQueue("email-queue");
-yield* emailQueue.add([email1, email2, email3]);
+// Get specific pool
+const emailPool = yield* pm.getPool("email-pool");
+yield* emailPool.add([email1, email2, email3]);
 ```
 
 ### Process Management
 
 ```typescript
 // Remove a process
-yield* pm.removeProcess("old-cron");
+yield* pm.removeProcess("old-process");
 ```
 
 ## Type Safety
 
-The ProcessManager enforces type-safe queue dependencies at compile time:
+The ProcessManager enforces type-safe pool dependencies at compile time:
 
 ```typescript
-const cronWithQueue = createCronProcess({
-  name: "needs-queue",
+import { Process, ResourcePool, ProcessManager } from "@nikscripts/effect-pm";
+import { Cron, Effect } from "effect";
+
+const EmailPool = ResourcePool.make({
+  name: "email-pool",
+  effect: sendEmail,
+});
+
+const cronWithPool = Process.make({
+  name: "needs-pool",
   crons: Cron.make({ minutes: [0] }),
   program: Effect.gen(function* () {
-    const queue = yield* EmailQueue; // Uses EmailQueue
-    // ...
+    const pool = yield* EmailPool; // Uses EmailPool
+    yield* pool.add([email1, email2]);
   }),
 });
 
-// ✅ This works - EmailQueue is provided
-makeProcessManager({
-  queues: [EmailQueue],
-  processes: [cronWithQueue],
+// ✅ This works - EmailPool is provided
+const pm = yield* ProcessManager.make({
+  pools: [EmailPool],
+  processes: [cronWithPool],
 });
 
-// ❌ Compile error - EmailQueue is missing!
-makeProcessManager({
-  queues: [],
-  processes: [cronWithQueue],
+// ❌ Compile error - EmailPool is missing!
+const pm = yield* ProcessManager.make({
+  pools: [],
+  processes: [cronWithPool],  // TypeScript error!
 });
 ```
 
-## CronStorage (Required)
+## ExecutionHistory (Required)
 
-ProcessManager requires a `CronStorage` implementation to track cron execution history.
+ProcessManager requires an `ExecutionHistory` implementation to track process execution history.
 
 ### In-Memory Storage (Development)
 
 ```typescript
-import { CronStorage } from "@nikscripts/effect-pm";
+import { ExecutionHistory } from "@nikscripts/effect-pm";
 
 program.pipe(
-  Effect.provide(CronStorage.Default), // In-memory storage
+  Effect.provide(ExecutionHistory.Default), // In-memory storage
   Effect.runPromise
 );
 ```
@@ -312,10 +317,10 @@ program.pipe(
 For production, implement a persistent storage layer. See `examples/prisma-storage.ts` for a complete Prisma implementation example.
 
 ```typescript
-import { CronStoragePrismaLayer } from "./my-prisma-storage";
+import { ExecutionHistoryPrismaLayer } from "./my-prisma-storage";
 
 program.pipe(
-  Effect.provide(CronStoragePrismaLayer), // Persistent storage
+  Effect.provide(ExecutionHistoryPrismaLayer), // Persistent storage
   Effect.runPromise
 );
 ```
@@ -325,18 +330,16 @@ program.pipe(
 Start an HTTP control service for external management:
 
 ```typescript
-import { startControlService } from "@nikscripts/effect-pm";
+const pm = yield* ProcessManager.make({...});
 
-yield* startControlService({
-  port: 3001,
-  pm: pm,
-});
+// Start control service
+yield* pm.listen({ port: 3001 });
 
 // Now accessible via HTTP:
 // GET  /processes      - List all processes
 // POST /process/start  - Start a process
 // POST /process/stop   - Stop a process
-// GET  /queues         - List all queues
+// GET  /pools          - List all resource pools
 ```
 
 ## Error Handling
@@ -368,31 +371,31 @@ Always use `Effect.scoped` for long-running programs:
 
 ```typescript
 const program = Effect.gen(function* () {
-  const pm = yield* makeProcessManager({ ... });
+  const pm = yield* ProcessManager.make({...});
   yield* pm.startAll();
   yield* Effect.never; // Keep running
 }).pipe(Effect.scoped);
 ```
 
-### 2. Queue Capacity
+### 2. Pool Capacity
 
-Set appropriate queue capacities to prevent memory issues:
+Set appropriate pool capacities to prevent memory issues:
 
 ```typescript
-makeQueueService({
-  name: "my-queue",
-  queueCapacity: 50000, // Adjust based on item size
-  // ...
+const TaskPool = ResourcePool.make({
+  name: "task-pool",
+  capacity: 50000, // Adjust based on item size
+  effect: processItem,
 });
 ```
 
 ### 3. Error Handling
 
-Always provide error handlers for queues:
+Always provide error handlers for resource pools:
 
 ```typescript
-makeQueueService({
-  processor: processItem,
+const TaskPool = ResourcePool.make({
+  effect: processItem,
   onError: (error, item) => 
     Effect.gen(function* () {
       yield* Effect.logError(`Failed: ${error.message}`);
@@ -406,10 +409,11 @@ makeQueueService({
 Use throttling for external API calls:
 
 ```typescript
+import { ResourcePool } from "@nikscripts/effect-pm";
 import { Duration } from "effect";
 
-makeQueueService({
-  processor: callExternalAPI,
+const ApiPool = ResourcePool.make({
+  effect: callExternalAPI,
   throttle: {
     limit: 10,
     duration: Duration.seconds(1),
@@ -420,29 +424,36 @@ makeQueueService({
 ## Examples
 
 See the [examples/example.ts](./examples/example.ts) file for a complete working example with:
-- Multiple queues
-- Scheduled tasks
+- Multiple resource pools
+- Scheduled processes
 - Full setup with dependencies
 - Control service integration
+- CLI usage
 
 ## API Reference
 
 ### Core Exports
 
-- `makeProcessManager` - Create a ProcessManager instance
-- `makeQueueService` - Create a priority queue service
-- `createCronProcess` - Create a scheduled task
-- `startControlService` - Start HTTP control API
-- `CronStorage` - Storage service for cron execution history
+- `ProcessManager.make()` - Create a ProcessManager instance
+- `ResourcePool.make()` - Create a resource pool
+- `Process.make()` - Create a scheduled process
+- `ExecutionHistory` - Service for tracking process execution history
+- `ControlService` - HTTP control API utilities
+
+### CLI
+
+- `createCli()` - Create CLI command
+- `runCli()` - Run CLI with config
 
 ### Types
 
-- `ProcessManagerInterface<R>` - ProcessManager interface
+- `ProcessManager` - ProcessManager interface
 - `ProcessManagerDetails` - Process status information
-- `QueueDetails` - Queue status information
-- `PriorityQueueProcessor<T, R>` - Queue processor interface
-- `CronStorageInterface` - Storage interface for implementing custom storage
-- `CronExecution` - Execution record type
+- `PoolDetails` - Pool status information
+- `ResourcePool<T, R>` - Resource pool interface
+- `Process<R>` - Process interface
+- `ExecutionHistoryInterface` - Storage interface for implementing custom storage
+- `Execution` - Execution record type
 
 ### Errors
 
@@ -450,6 +461,7 @@ See the [examples/example.ts](./examples/example.ts) file for a complete working
 - `ProcessNotFoundError` - Process not found
 - `ProcessAlreadyRunningError` - Process already running
 - `ProcessNotRunningError` - Process not running
+- `ExecutionHistoryError` - Storage operation error
 
 ## License
 

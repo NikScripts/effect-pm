@@ -17,7 +17,7 @@
  */
 
 import { Effect, Schedule, Cron } from "effect";
-import { CronStorage, type CronStorageError } from "./cron-storage";
+import { ExecutionHistory, type ExecutionHistoryError } from "./ExecutionHistory";
 
 // ============================================================================
 // Public Types
@@ -48,7 +48,7 @@ export interface CronDetails {
  * Scheduled process status details
  * 
  * @remarks
- * Returned by {@link CronHandler.getStatus}. Contains execution history
+ * Returned by {@link Process.getStatus}. Contains execution history
  * and next run information for a scheduled process.
  * 
  * @public
@@ -83,13 +83,13 @@ export interface ScheduledProcessDetails {
  * 
  * @public
  */
-export interface CronHandler<R> {
+export interface Process<R> {
   /** Unique identifier for the cron process */
   readonly name: string;
   /** Process type discriminator (always "scheduled") */
   readonly type: "scheduled";
   /** The scheduled effect that runs on the cron schedule */
-  readonly effect: Effect.Effect<void, CronStorageError, R | CronStorage>;
+  readonly effect: Effect.Effect<void, ExecutionHistoryError, R | ExecutionHistory>;
   /**
    * Get current status and execution history
    * 
@@ -99,7 +99,7 @@ export interface CronHandler<R> {
   readonly getStatus: (dateRange?: {
     start: Date;
     end: Date;
-  }) => Effect.Effect<ScheduledProcessDetails, CronStorageError, CronStorage>;
+  }) => Effect.Effect<ScheduledProcessDetails, ExecutionHistoryError, ExecutionHistory>;
   /**
    * Run the process immediately (bypasses schedule)
    * 
@@ -109,7 +109,7 @@ export interface CronHandler<R> {
    * 
    * @returns Effect that runs the program
    */
-  readonly runImmediately: () => Effect.Effect<void, CronStorageError, R | CronStorage>;
+  readonly runImmediately: () => Effect.Effect<void, ExecutionHistoryError, R | ExecutionHistory>;
 }
 
 // ============================================================================
@@ -214,14 +214,14 @@ export const createCronProcess = <R>(params: {
   name: string;
   crons: Cron.Cron | Cron.Cron[];
   program: Effect.Effect<void, never, R>;
-}): CronHandler<R> => {
+}): Process<R> => {
   const { name, crons, program } = params;
   const cronArray = Array.isArray(crons) ? crons : [crons];
 
   // Enhanced program that tracks execution
   const trackedProgram = Effect.gen(function* () {
-    const storage = yield* CronStorage;
-    const programStorage = storage.forProgram(name);
+    const storage = yield* ExecutionHistory;
+    const programStorage = storage.forProcess(name);
     
     const startTime = Date.now();
     const executedAt = new Date();
@@ -286,10 +286,10 @@ export const createCronProcess = <R>(params: {
   const getStatus = (dateRange?: {
     start: Date;
     end: Date;
-  }): Effect.Effect<ScheduledProcessDetails, CronStorageError, CronStorage> =>
+  }): Effect.Effect<ScheduledProcessDetails, ExecutionHistoryError, ExecutionHistory> =>
     Effect.gen(function* () {
-      const storage = yield* CronStorage;
-      const programStorage = storage.forProgram(name);
+      const storage = yield* ExecutionHistory;
+      const programStorage = storage.forProcess(name);
       
       const lastRun = yield* programStorage.getLastRun();
       const runCount = yield* programStorage.getRunCount(dateRange);
@@ -307,7 +307,7 @@ export const createCronProcess = <R>(params: {
     });
 
   // Run immediately method (bypasses scheduler)
-  const runImmediately = (): Effect.Effect<void, CronStorageError, R | CronStorage> =>
+  const runImmediately = (): Effect.Effect<void, ExecutionHistoryError, R | ExecutionHistory> =>
     Effect.gen(function* () {
       yield* Effect.logInfo(`🚀 Running '${name}' immediately...`);
       yield* trackedProgram;
@@ -322,3 +322,7 @@ export const createCronProcess = <R>(params: {
     runImmediately,
   };
 };
+
+export const Process = {
+  make: createCronProcess,
+}
