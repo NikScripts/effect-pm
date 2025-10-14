@@ -27,7 +27,7 @@ export type {
   ProcessManagerControls,
   ProcessManagerDetails,
   ProcessStatus,
-  PoolDetails as QueueDetails,
+  PoolDetails,
   PMError,
   ProcessManagerDependencies,
 } from "./ProcessManager";

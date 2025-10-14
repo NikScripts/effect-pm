@@ -72,6 +72,8 @@ export interface ControlRequestBody {
 export interface ControlResponse<T = unknown> {
   /** Whether the command succeeded */
   success: boolean;
+  /** Response type (for status command) */
+  type?: "process" | "pool";
   /** Response data (if applicable) */
   data?: T;
   /** Error message (if failed) */
@@ -133,33 +135,43 @@ const handleCommand =
           const processResult = yield* pm
             .getProcessStatus(name)
             .pipe(
-              Effect.map((data) => ({ success: true, data, type: "process" })),
+              Effect.map((data) => ({ success: true, data, type: "process" as const })),
               Effect.catchAll(() => Effect.succeed(null)),
             );
           
           if (processResult) return processResult;
           
           // Try queue
-          const queueResult = yield* pm
+          const poolResult = yield* pm
             .getPool(name)
             .pipe(
-              Effect.flatMap((queue) =>
+              Effect.flatMap((pool) =>
                 Effect.gen(function* () {
-                  const queueSize = yield* queue.size();
-                  const processedCount = yield* queue.getProcessedCount();
+                  const prioritySizes = yield* pool.sizeByPriority();
+                  const totalSize = yield* pool.size();
+                  const completed = yield* pool.getProcessedCount();
                   return {
                     success: true,
-                    data: { name, queueSize, processedCount },
-                    type: "queue",
+                    data: { 
+                      name, 
+                      size: {
+                        high: prioritySizes.high,
+                        normal: prioritySizes.normal,
+                        low: prioritySizes.low,
+                        total: totalSize,
+                      },
+                      completed 
+                    },
+                    type: "pool" as const,
                   };
                 }),
               ),
               Effect.catchAll(() => Effect.succeed(null)),
             );
           
-          if (queueResult) return queueResult;
+          if (poolResult) return poolResult;
           
-          return { success: false, error: `Process or queue '${name}' not found` };
+          return { success: false, error: `Process or pool '${name}' not found` };
         }
         case "start": {
           // Process-only command

@@ -10,16 +10,16 @@
  * stopping, and monitoring processes and queues.
  * 
  * **Available Commands:**
- * - `ls` - List all processes and queues
+ * - `ls` - List all processes and pools
  * - `status <name>` - Get detailed status
  * - `start [name]` - Start process(es)
  * - `stop [name]` - Stop process(es)
- * - `pause <name>` - Pause a queue
- * - `resume <name>` - Resume a queue
- * - `restart [name]` - Restart process/queue
- * - `shutdown <name>` - Shutdown a queue
+ * - `pause <name>` - Pause a pool
+ * - `resume <name>` - Resume a pool
+ * - `restart [name]` - Restart process/pool
+ * - `shutdown <name>` - Shutdown a pool
  * - `now <name>` - Run process immediately
- * - `queues` - List all queues
+ * - `pools` - List all pools
  * 
  * @module cli
  */
@@ -29,6 +29,7 @@ import { NodeContext, NodeRuntime } from "@effect/platform-node";
 import { Console, Effect, Option } from "effect";
 import Table from "cli-table3";
 import prettyMs from "pretty-ms";
+import type { ProcessManagerDetails, PoolDetails, ControlResponse } from "./index";
 
 // ============================================================================
 // Types
@@ -44,7 +45,7 @@ type ControlCommand =
   | "restart"
   | "shutdown"
   | "now"
-  | "queues";
+  | "pools";
 
 // ============================================================================
 // HTTP Client
@@ -63,7 +64,7 @@ const postCommand = (controlUrl: string) => (command: ControlCommand, name?: str
         body: JSON.stringify({ command, name }),
       });
       const json = await res.json();
-      return { status: res.status, json } as { status: number; json: any };
+      return { status: res.status, json } as { status: number; json: ControlResponse };
     },
     catch: (e) => new Error(e instanceof Error ? e.message : String(e)),
   }).pipe(
@@ -82,9 +83,9 @@ const postCommand = (controlUrl: string) => (command: ControlCommand, name?: str
  * Format last run timestamp
  * @internal
  */
-const formatLastRun = (lastRun: string | null | undefined): string => {
+const formatLastRun = (lastRun: Date | string | null | undefined): string => {
   if (!lastRun) return "-";
-  const lastRunDate = new Date(lastRun);
+  const lastRunDate = typeof lastRun === 'string' ? new Date(lastRun) : lastRun;
   const now = Date.now();
   const timeSince = now - lastRunDate.getTime();
   return prettyMs(timeSince, { compact: true }) + " ago";
@@ -94,9 +95,9 @@ const formatLastRun = (lastRun: string | null | undefined): string => {
  * Format next run timestamp
  * @internal
  */
-const formatNextRun = (nextRun: string | null | undefined): string => {
+const formatNextRun = (nextRun: Date | string | null | undefined): string => {
   if (!nextRun) return "-";
-  const nextRunDate = new Date(nextRun);
+  const nextRunDate = typeof nextRun === 'string' ? new Date(nextRun) : nextRun;
   const now = Date.now();
   const timeUntil = nextRunDate.getTime() - now;
   
@@ -112,11 +113,11 @@ const formatNextRun = (nextRun: string | null | undefined): string => {
  * Format processes table
  * @internal
  */
-const formatProcesses = (processes: any[]) => {
+const formatProcesses = (processes: ProcessManagerDetails[]) => {
   if (!processes || processes.length === 0) return "No processes";
   
   const table = new Table({
-    head: ["NAME", "TYPE", "STATUS", "UPTIME", "LAST RUN", "NEXT RUN", "RUN COUNT"],
+    head: ["NAME", "TYPE", "STATUS", "UPTIME", "LAST RUN", "NEXT RUN", "EXECUTIONS"],
     style: { head: ["cyan"] }
   });
   
@@ -128,7 +129,7 @@ const formatProcesses = (processes: any[]) => {
       p.uptime ? prettyMs(p.uptime, { compact: true }) : "-",
       formatLastRun(p.lastRun),
       formatNextRun(p.nextRun),
-      p.runCount !== undefined ? String(p.runCount) : "-"
+      p.executions !== undefined ? String(p.executions) : "-"
     ]);
   });
   
@@ -136,22 +137,23 @@ const formatProcesses = (processes: any[]) => {
 };
 
 /**
- * Format queues table
+ * Format pools table
  * @internal
  */
-const formatQueues = (queues: any[]) => {
-  if (!queues || queues.length === 0) return "No queues";
+const formatPools = (pools: PoolDetails[]) => {
+  if (!pools || pools.length === 0) return "No pools";
   
   const table = new Table({
-    head: ["NAME", "SIZE", "PROCESSED"],
+    head: ["NAME", "SIZE (H/N/L)", "TOTAL", "COMPLETED"],
     style: { head: ["cyan"] }
   });
   
-  queues.forEach(q => {
+  pools.forEach(p => {
     table.push([
-      q.name,
-      String(q.queueSize),
-      String(q.processedCount)
+      p.name,
+      `${p.size.high}/${p.size.normal}/${p.size.low}`,
+      String(p.size.total),
+      String(p.completed)
     ]);
   });
   
@@ -162,26 +164,31 @@ const formatQueues = (queues: any[]) => {
  * Format status details
  * @internal
  */
-const formatStatus = (data: any) => {
+const formatStatus = (data: ControlResponse<ProcessManagerDetails | PoolDetails>) => {
   const table = new Table({
     style: { head: ["cyan"] }
   });
   
   if (data.type === "process") {
+    const processData = data.data as ProcessManagerDetails;
     table.push(
-      ["Name", data.data.name],
-      ["Type", data.data.type],
-      ["Status", data.data.status],
-      ["Uptime", data.data.uptime ? prettyMs(data.data.uptime, { compact: true }) : "-"],
-      ["Last Run", formatLastRun(data.data.lastRun)],
-      ["Next Run", formatNextRun(data.data.nextRun)],
-      ["Run Count", data.data.runCount !== undefined ? String(data.data.runCount) : "-"]
+      ["Name", processData.name],
+      ["Type", processData.type],
+      ["Status", processData.status],
+      ["Uptime", processData.uptime ? prettyMs(processData.uptime, { compact: true }) : "-"],
+      ["Last Run", formatLastRun(processData.lastRun)],
+      ["Next Run", formatNextRun(processData.nextRun)],
+      ["Executions", processData.executions !== undefined ? String(processData.executions) : "-"]
     );
-  } else if (data.type === "queue") {
+  } else if (data.type === "pool") {
+    const poolData = data.data as PoolDetails;
     table.push(
-      ["Name", data.data.name],
-      ["Size", String(data.data.queueSize)],
-      ["Processed", String(data.data.processedCount)]
+      ["Name", poolData.name],
+      ["Size (Total)", String(poolData.size.total)],
+      ["Size (High)", String(poolData.size.high)],
+      ["Size (Normal)", String(poolData.size.normal)],
+      ["Size (Low)", String(poolData.size.low)],
+      ["Completed", String(poolData.completed)]
     );
   } else {
     return JSON.stringify(data, null, 2);
@@ -202,21 +209,22 @@ const makeCommands = (controlUrl: string) => {
   const post = postCommand(controlUrl);
   const maybeName = Args.text({ name: "name" }).pipe(Args.optional);
 
-  // ls - List all processes and queues
+  // ls - List all processes and pools
   const ls = Command.make("ls", {}, () =>
     post("ls").pipe(
       Effect.flatMap((body) => {
         const output: string[] = [];
+        const data = body.data as { processes?: ProcessManagerDetails[], pools?: PoolDetails[] } | undefined;
         
-        if (body.data?.processes) {
+        if (data?.processes) {
           output.push("📋 PROCESSES");
-          output.push(formatProcesses(body.data.processes));
+          output.push(formatProcesses(data.processes));
         }
         
-        if (body.data?.queues) {
+        if (data?.pools) {
           if (output.length > 0) output.push("");
-          output.push("🔄 QUEUES");
-          output.push(formatQueues(body.data.queues));
+          output.push("🔄 POOLS");
+          output.push(formatPools(data.pools));
         }
         
         return Console.log(output.join("\n"));
@@ -227,10 +235,10 @@ const makeCommands = (controlUrl: string) => {
   // status <name> - Get detailed status
   const status = Command.make("status", { name: maybeName }, ({ name }) =>
     Option.match(name, {
-      onNone: () => Console.error("Missing process/queue name"),
+      onNone: () => Console.error("Missing process/pool name"),
       onSome: (n) =>
         post("status", n).pipe(
-          Effect.flatMap((body) => Console.log(formatStatus(body)))
+          Effect.flatMap((body) => Console.log(formatStatus(body as ControlResponse<ProcessManagerDetails | PoolDetails>)))
         ),
     })
   );
@@ -283,19 +291,20 @@ const makeCommands = (controlUrl: string) => {
     })
   );
 
-  // queues - List all queues
-  const queues = Command.make("queues", {}, () =>
-    post("queues").pipe(
+  // pools - List all resource pools
+  const pools = Command.make("pools", {}, () =>
+    post("pools").pipe(
       Effect.flatMap((body) => {
-        if (body.data) {
-          return Console.log("🔄 QUEUES\n" + formatQueues(body.data));
+        const data = body.data as PoolDetails[] | undefined;
+        if (data) {
+          return Console.log("🔄 POOLS\n" + formatPools(data));
         }
-        return Console.log("No queues");
+        return Console.log("No pools");
       })
     )
   );
 
-  return { ls, status, start, stop, pause, resume, restart, shutdown, now, queues };
+  return { ls, status, start, stop, pause, resume, restart, shutdown, now, pools };
 };
 
 // ============================================================================
@@ -359,7 +368,7 @@ export const createCli = (config: {
       commands.restart,
       commands.shutdown,
       commands.now,
-      commands.queues,
+      commands.pools,
     ])
   );
 

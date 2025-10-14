@@ -1,5 +1,5 @@
 /**
- * Cron Handler - Scheduled Task Management
+ * Process - Scheduled Task Management
  * 
  * Provides scheduled task execution with cron expressions, execution tracking,
  * and comprehensive status reporting.
@@ -13,7 +13,7 @@
  * - Immediate execution trigger
  * - Persistent execution history
  * 
- * @module cron-handler
+ * @module Process
  */
 
 import { Effect, Schedule, Cron } from "effect";
@@ -67,7 +67,7 @@ export interface ScheduledProcessDetails {
 }
 
 /**
- * Cron Handler Interface
+ * Process Interface
  * 
  * @remarks
  * A self-contained scheduled process that runs according to a cron schedule.
@@ -84,7 +84,7 @@ export interface ScheduledProcessDetails {
  * @public
  */
 export interface Process<R> {
-  /** Unique identifier for the cron process */
+  /** Unique identifier for the process */
   readonly name: string;
   /** Process type discriminator (always "scheduled") */
   readonly type: "scheduled";
@@ -137,13 +137,16 @@ const getNextCronRun = (
 // ============================================================================
 
 /**
- * Create a scheduled cron process
+ * Create a scheduled process (internal implementation)
  * 
+ * @internal
  * @remarks
+ * Internal function for creating scheduled processes. Use {@link Process.make} for the public API.
+ * 
  * Creates a self-contained scheduled task that runs according to cron expressions.
  * The process automatically:
  * - Schedules execution using Effect's Cron scheduler
- * - Tracks all executions in storage
+ * - Tracks all executions in ExecutionHistory
  * - Reports execution history and status
  * - Supports manual triggering via `runImmediately()`
  * 
@@ -163,54 +166,9 @@ const getNextCronRun = (
  * @param params.crons - Single or multiple cron expressions
  * @param params.program - Effect to execute on schedule
  * 
- * @returns CronHandler that can be managed by ProcessManager
- * 
- * @example
- * ```typescript
- * // Simple cron - runs every hour
- * const hourlyCron = createCronProcess({
- *   name: "hourly-task",
- *   crons: Cron.make({
- *     minutes: [0],  // Top of the hour
- *     hours: [],     // Every hour
- *   }),
- *   program: Effect.logInfo("Running hourly task"),
- * });
- * ```
- * 
- * @example
- * ```typescript
- * // Multiple crons - runs at 9 AM and 5 PM
- * const businessHours = createCronProcess({
- *   name: "business-hours",
- *   crons: [
- *     Cron.make({ hours: [9], minutes: [0] }),
- *     Cron.make({ hours: [17], minutes: [0] }),
- *   ],
- *   program: Effect.logInfo("Business hours check"),
- * });
- * ```
- * 
- * @example
- * ```typescript
- * // With dependencies
- * const dataSyncCron = createCronProcess({
- *   name: "data-sync",
- *   crons: Cron.make({ hours: [2], minutes: [0] }), // 2 AM daily
- *   program: Effect.gen(function* () {
- *     const db = yield* Database;
- *     const queue = yield* ProcessingQueue;
- *     
- *     const data = yield* db.fetchPending();
- *     yield* queue.add(data);
- *     yield* Effect.logInfo(\`Queued \${data.length} items\`);
- *   }),
- * });
- * ```
- * 
- * @public
+ * @returns Process that can be managed by ProcessManager
  */
-export const createCronProcess = <R>(params: {
+const createScheduledProcess = <R>(params: {
   name: string;
   crons: Cron.Cron | Cron.Cron[];
   program: Effect.Effect<void, never, R>;
@@ -323,6 +281,64 @@ export const createCronProcess = <R>(params: {
   };
 };
 
+/**
+ * Process - Scheduled Task Factory
+ * 
+ * @remarks
+ * Factory for creating scheduled processes that run on cron schedules.
+ * 
+ * @example
+ * ```typescript
+ * import { Process } from "@nikscripts/effect-pm";
+ * import { Cron, Effect } from "effect";
+ * 
+ * // Simple cron - runs every hour
+ * const hourlyTask = Process.make({
+ *   name: "hourly-task",
+ *   crons: Cron.make({ minutes: [0] }),
+ *   program: Effect.logInfo("Running hourly task"),
+ * });
+ * ```
+ * 
+ * @example
+ * ```typescript
+ * // Multiple crons - runs at 9 AM and 5 PM
+ * const businessHours = Process.make({
+ *   name: "business-hours",
+ *   crons: [
+ *     Cron.make({ hours: [9], minutes: [0] }),
+ *     Cron.make({ hours: [17], minutes: [0] }),
+ *   ],
+ *   program: Effect.logInfo("Business hours check"),
+ * });
+ * ```
+ * 
+ * @example
+ * ```typescript
+ * // With dependencies
+ * const dataSync = Process.make({
+ *   name: "data-sync",
+ *   crons: Cron.make({ hours: [2], minutes: [0] }), // 2 AM daily
+ *   program: Effect.gen(function* () {
+ *     const db = yield* Database;
+ *     const pool = yield* ProcessingPool;
+ *     
+ *     const data = yield* db.fetchPending();
+ *     yield* pool.add(data);
+ *     yield* Effect.logInfo(\`Queued \${data.length} items\`);
+ *   }),
+ * });
+ * ```
+ * 
+ * @public
+ */
 export const Process = {
-  make: createCronProcess,
+  /**
+   * Create a scheduled process
+   * 
+   * @typeParam R - Requirements type for the program effect
+   * @param config - Process configuration
+   * @returns Process that can be managed by ProcessManager
+   */
+  make: createScheduledProcess,
 }

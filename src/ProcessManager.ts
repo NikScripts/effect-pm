@@ -1,22 +1,22 @@
 /**
- * ProcessManager - Orchestration Layer for Scheduled Tasks and Queues
+ * ProcessManager - Orchestration Layer for Scheduled Processes and Resource Pools
  * 
- * The ProcessManager provides a unified interface for managing scheduled tasks (crons)
- * and priority queues. It handles process lifecycle, monitoring, and coordination.
+ * The ProcessManager provides a unified interface for managing scheduled processes
+ * and resource pools. It handles process lifecycle, monitoring, and coordination.
  * 
  * @remarks
  * Key features:
  * - Process lifecycle management (start, stop, restart)
  * - Real-time status monitoring and metrics
- * - Queue integration and management
- * - Type-safe queue dependency enforcement
+ * - Resource pool integration and management
+ * - Type-safe pool dependency enforcement
  * - Scoped resource management with automatic cleanup
  * 
  * **Dependencies:**
- * - `CronStorage` - Required for tracking cron execution history.
- *   Provide either `CronStorage.Default` (in-memory) or a custom implementation.
+ * - `ExecutionHistory` - Required for tracking process execution history.
+ *   Provide either `ExecutionHistory.Default` (in-memory) or a custom implementation.
  * 
- * @module process-manager
+ * @module ProcessManager
  */
 
 import { Effect, Scope, Fiber, Ref, Data, Context } from "effect";
@@ -53,8 +53,8 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
  * ProcessManager core dependencies
  * 
  * @remarks
- * CronStorage provides persistence for scheduled task execution history.
- * A default in-memory implementation is available via `CronStorageLive`.
+ * ExecutionHistory provides persistence for process execution history.
+ * A default in-memory implementation is available via `ExecutionHistory.Default`.
  * 
  * @public
  */
@@ -671,43 +671,46 @@ const getProcessStatus =
  * - Lifecycle management for all processes
  * - Unified control interface (start, stop, restart)
  * - Status monitoring and metrics
- * - Queue integration and access
- * - Type-safe queue dependency enforcement
+ * - Resource pool integration and access
+ * - Type-safe pool dependency enforcement
  * 
  * **Type Safety**
  * 
- * The type system ensures that all queue dependencies used in processes are
- * provided in the `queues` array. If a process references a queue that isn't
+ * The type system ensures that all pool dependencies used in processes are
+ * provided in the `pools` array. If a process references a pool that isn't
  * provided, you'll get a compile-time error.
  * 
- * @typeParam Queues - Array of queue service tags to manage
- * @typeParam R - Additional requirements for processes beyond queues and ProcessManager dependencies
+ * @typeParam Pools - Array of resource pool service tags to manage
+ * @typeParam R - Additional requirements for processes beyond pools and ProcessManager dependencies
  * 
  * @param config - Configuration object
- * @param config.queues - Array of queue service tags (from makeQueueService)
- * @param config.processes - Array of processes to manage (from createCronProcess)
+ * @param config.pools - Array of resource pool service tags (from ResourcePool.make)
+ * @param config.processes - Array of processes to manage (from Process.make)
  * 
  * @returns Effect that produces a ProcessManager instance
  * 
  * @example
  * ```typescript
- * const [EmailQueue, EmailQueueLive] = makeQueueService({
- *   name: "email-queue",
- *   processor: sendEmail,
+ * import { ResourcePool, Process, ProcessManager } from "@nikscripts/effect-pm";
+ * import { Cron, Effect } from "effect";
+ * 
+ * const EmailPool = ResourcePool.make({
+ *   name: "email-pool",
+ *   effect: sendEmail,
  *   concurrency: 5
  * });
  * 
- * const emailCron = createCronProcess({
+ * const emailCron = Process.make({
  *   name: "send-emails",
  *   crons: Cron.make({ minutes: [0, 30] }), // Every 30 minutes
  *   program: Effect.gen(function* () {
- *     const queue = yield* EmailQueue;
- *     yield* queue.add([email1, email2, email3]);
+ *     const pool = yield* EmailPool;
+ *     yield* pool.add([email1, email2, email3]);
  *   })
  * });
  * 
- * const pm = yield* makeProcessManager({
- *   queues: [EmailQueue],
+ * const pm = yield* ProcessManager.make({
+ *   pools: [EmailPool],
  *   processes: [emailCron]
  * });
  * 
@@ -739,7 +742,7 @@ export const makeProcessManager = <
   TagIdentifier<Pools[number]>
 > =>
   Effect.gen(function* () {
-    // Yield all queue services to make them requirements
+    // Yield all pool services to make them requirements
     const poolsMap = Object.fromEntries(
       config.pools.map((pool) => [pool.key, pool]),
     );
