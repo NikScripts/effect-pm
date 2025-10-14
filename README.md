@@ -50,7 +50,7 @@ const emailProcess = Process.make({
   crons: Cron.make({
     minutes: [0, 30], // Every 30 minutes
   }),
-  program: Effect.gen(function* () {
+  effect: Effect.gen(function* () {
     const pool = yield* EmailPool;
     const pendingEmails = yield* fetchPendingEmails();
     yield* pool.add(pendingEmails);
@@ -163,7 +163,7 @@ const hourlyTask = Process.make({
   crons: Cron.make({
     minutes: [0],    // Top of the hour
   }),
-  program: Effect.logInfo("Running hourly task"),
+  effect: Effect.logInfo("Running hourly task"),
 });
 ```
 
@@ -176,7 +176,7 @@ const dataSync = Process.make({
     minutes: [0],
     hours: [2], // 2 AM
   }),
-  program: Effect.gen(function* () {
+  effect: Effect.gen(function* () {
     const db = yield* Database;
     const pool = yield* ProcessingPool;
     
@@ -276,7 +276,7 @@ const EmailPool = ResourcePool.make({
 const cronWithPool = Process.make({
   name: "needs-pool",
   crons: Cron.make({ minutes: [0] }),
-  program: Effect.gen(function* () {
+  effect: Effect.gen(function* () {
     const pool = yield* EmailPool; // Uses EmailPool
     yield* pool.add([email1, email2]);
   }),

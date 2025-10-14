@@ -164,16 +164,16 @@ const getNextCronRun = (
  * @param params - Configuration object
  * @param params.name - Unique identifier for the process
  * @param params.crons - Single or multiple cron expressions
- * @param params.program - Effect to execute on schedule
+ * @param params.effect - Effect to execute on schedule
  * 
  * @returns Process that can be managed by ProcessManager
  */
 const createScheduledProcess = <R>(params: {
   name: string;
   crons: Cron.Cron | Cron.Cron[];
-  program: Effect.Effect<void, never, R>;
+  effect: Effect.Effect<void, never, R>;
 }): Process<R> => {
-  const { name, crons, program } = params;
+  const { name, crons, effect: program } = params;
   const cronArray = Array.isArray(crons) ? crons : [crons];
 
   // Enhanced program that tracks execution
@@ -296,7 +296,7 @@ const createScheduledProcess = <R>(params: {
  * const hourlyTask = Process.make({
  *   name: "hourly-task",
  *   crons: Cron.make({ minutes: [0] }),
- *   program: Effect.logInfo("Running hourly task"),
+ *   effect: Effect.logInfo("Running hourly task"),
  * });
  * ```
  * 
@@ -319,7 +319,7 @@ const createScheduledProcess = <R>(params: {
  * const dataSync = Process.make({
  *   name: "data-sync",
  *   crons: Cron.make({ hours: [2], minutes: [0] }), // 2 AM daily
- *   program: Effect.gen(function* () {
+ *   effect: Effect.gen(function* () {
  *     const db = yield* Database;
  *     const pool = yield* ProcessingPool;
  *     

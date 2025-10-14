@@ -136,7 +136,7 @@ const DemoTwoQueue = ResourcePool.make({
  * CONFIGURATION:
  * - name: Unique identifier for the process
  * - crons: Cron.make() defines WHEN it runs (seconds, minutes, hours, etc.)
- * - program: The Effect that gets executed on schedule
+ * - effect: The Effect that gets executed on schedule
  *
  * This demonstrates how ResourcePools and Processes work together:
  * 1. The process wakes up every 10 seconds (defined in the schedule)
@@ -159,7 +159,7 @@ const queueAdderCron = Process.make({
     months: [],
     weekdays: [],
   }),
-  program: Effect.gen(function* () {
+  effect: Effect.gen(function* () {
     const demoQueue = yield* DemoQueue;
     const demoTwoQueue = yield* DemoTwoQueue;
     const timestamp = Date.now();
