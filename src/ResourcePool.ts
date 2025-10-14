@@ -75,14 +75,14 @@ const makeGlobalThrottler = (minInterval: Duration.Duration) =>
  * @public
  */
 export interface ResourcePoolDetails {
-  /** Current number of items in all priority queues */
-  queueSize: number;
-  /** Total number of items processed since pool started */
-  processedCount: number;
+  /** Current number of items in pool */
+  size: number;
+  /** Total number of items completed */
+  completed: number;
   /** Number of active worker fibers */
-  workerCount: number;
+  workers: number;
   /** Whether the pool is currently processing items */
-  isRunning: boolean;
+  running: boolean;
   /** Additional metadata for extensions */
   metadata?: Record<string, unknown>;
 }
@@ -134,60 +134,71 @@ export interface ResourcePool<T, _R> {
   ) => Effect.Effect<void>;
 
   /**
-   * Get current queue size (all priority levels combined)
-   *
+   * Get current pool size (all priority levels combined)
+   * 
    * @returns Total number of pending items
    */
   readonly size: () => Effect.Effect<number>;
-
+  
   /**
-   * Check if queue is empty
-   *
-   * @returns True if no items are pending in any priority queue
+   * Get size by priority level
+   * 
+   * @returns Object with counts for each priority level
+   */
+  readonly sizeByPriority: () => Effect.Effect<{
+    high: number;
+    normal: number;
+    low: number;
+  }>;
+  
+  /**
+   * Check if pool is empty
+   * 
+   * @returns True if no items are pending at any priority level
    */
   readonly isEmpty: () => Effect.Effect<boolean>;
 
   // ========== Status and Control Methods ==========
-
+  
   /**
-   * Get total number of items processed
-   *
-   * @returns Count of successfully processed items since queue start
+   * Get total number of items completed
+   * 
+   * @returns Count of successfully processed items since pool start
    */
   readonly getProcessedCount: () => Effect.Effect<number>;
-
+  
   /**
-   * Pause queue processing
-   *
+   * Pause pool processing
+   * 
    * @remarks
    * Workers will stop processing new items but current items will complete.
    * Use {@link resume} to continue processing.
    */
   readonly pause: () => Effect.Effect<void>;
-
+  
   /**
-   * Resume queue processing after pause
-   *
+   * Resume pool processing after pause
+   * 
    * @remarks
    * Workers will continue processing pending items.
    */
   readonly resume: () => Effect.Effect<void>;
-
+  
   /**
-   * Shutdown queue permanently
-   *
+   * Shutdown pool permanently
+   * 
    * @remarks
    * Stops all workers and prevents further processing. Cannot be resumed.
-   * The queue scope will be closed.
+   * The pool scope will be closed.
    */
   readonly shutdown: () => Effect.Effect<void>;
-
+  
   /**
-   * Restart queue processing
-   *
+   * Restart pool processing
+   * 
    * @remarks
    * Stops and then restarts all workers. Useful for recovering from errors
-   * or refreshing queue state.
+   * or refreshing pool state.
    */
   readonly restart: () => Effect.Effect<void>;
 
@@ -719,6 +730,18 @@ const makeResourcePoolEffect = <T, R>(
               (yield* Queue.size(regular)) +
               (yield* Queue.size(low));
             return total < 0 ? 0 : total;
+          }),
+
+        sizeByPriority: () =>
+          Effect.gen(function* () {
+            const highSize = yield* Queue.size(high);
+            const normalSize = yield* Queue.size(regular);
+            const lowSize = yield* Queue.size(low);
+            return {
+              high: highSize < 0 ? 0 : highSize,
+              normal: normalSize < 0 ? 0 : normalSize,
+              low: lowSize < 0 ? 0 : lowSize,
+            };
           }),
 
         isEmpty: () =>

@@ -102,19 +102,19 @@ export interface ProcessManagerDetails {
   /** Next scheduled execution time */
   nextRun?: Date;
   /** Total number of executions */
-  runCount?: number;
+  executions?: number;
   /** First startup run time (if runOnStartup is enabled) */
-  firstStartupRun?: Date | null;
+  firstStartup?: Date | null;
   
-  // Queue-specific details (when type is "queue")
-  /** Current number of items in queue */
-  queueSize?: number;
-  /** Total number of items processed */
-  processedCount?: number;
+  // Pool-specific details (when type is "pool")
+  /** Current number of items in pool */
+  size?: number;
+  /** Total number of items completed */
+  completed?: number;
   /** Number of concurrent workers */
-  workerCount?: number;
-  /** Whether the queue is currently processing */
-  isRunning?: boolean;
+  workers?: number;
+  /** Whether the pool is currently processing */
+  running?: boolean;
   
   /** Additional metadata for extensions */
   metadata?: Record<string, unknown>;
@@ -134,38 +134,47 @@ export interface ProcessManagerState<R> {
 }
 
 /**
- * Queue status information
+ * ResourcePool status information
  * 
  * @public
  */
 export interface PoolDetails {
-  /** Queue identifier */
+  /** Pool identifier */
   name: string;
-  /** Current number of items in queue */
-  queueSize: number;
-  /** Total number of items processed */
-  processedCount: number;
+  /** Current number of items in pool by priority */
+  size: {
+    /** High priority items pending */
+    high: number;
+    /** Normal priority items pending */
+    normal: number;
+    /** Low priority items pending */
+    low: number;
+    /** Total items pending (all priorities) */
+    total: number;
+  };
+  /** Total number of items completed */
+  completed: number;
 }
 
 /**
  * ProcessManager Interface
  * 
  * @remarks
- * The ProcessManager provides a comprehensive API for managing scheduled tasks and queues:
+ * The ProcessManager provides a comprehensive API for managing scheduled processes and resource pools:
  * 
  * **Process Management**
  * - Add, remove, and list processes
  * - Start, stop, and restart individual processes or all processes
- * - Run scheduled tasks immediately
+ * - Run scheduled processes immediately
  * 
  * **Monitoring**
  * - Get detailed status of individual processes
  * - Get status of all processes
- * - List and access queue information
+ * - List and access pool information
  * 
- * **Queue Integration**
- * - Access managed queues directly
- * - View queue metrics and status
+ * **Pool Integration**
+ * - Access managed resource pools directly
+ * - View pool metrics and status
  * 
  * @typeParam R - Requirements type representing dependencies needed by managed processes
  * 
@@ -459,17 +468,17 @@ const listProcesses = <R>(
               Effect.catchAll(() =>
                 Effect.succeed({
                   lastRun: null,
-                  runCount: 0,
+                  executions: 0,
                   nextRun: new Date(),
-                  firstStartupRun: null,
+                  firstStartup: null,
                 }),
               ),
             );
             scheduledDetails = {
               lastRun: details.lastRun,
               nextRun: details.nextRun,
-              runCount: details.runCount,
-              firstStartupRun: details.firstStartupRun,
+              executions: details.executions,
+              firstStartup: details.firstStartup,
             };
           }
 
@@ -831,9 +840,19 @@ export const makeProcessManager = <
         Effect.all(
           Object.entries(state.pools).map(([name, pool]) =>
             Effect.gen(function* () {
-              const queueSize = yield* pool.size();
-              const processedCount = yield* pool.getProcessedCount();
-              return { name, queueSize, processedCount };
+              const prioritySizes = yield* pool.sizeByPriority();
+              const totalSize = yield* pool.size();
+              const completed = yield* pool.getProcessedCount();
+              return { 
+                name, 
+                size: {
+                  high: prioritySizes.high,
+                  normal: prioritySizes.normal,
+                  low: prioritySizes.low,
+                  total: totalSize,
+                },
+                completed 
+              };
             }),
           ),
         ),

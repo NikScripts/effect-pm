@@ -34,12 +34,12 @@ import { ExecutionHistory, type ExecutionHistoryError } from "./ExecutionHistory
 export interface CronDetails {
   /** When the cron last executed (null if never run) */
   lastRun: Date | null;
-  /** Total number of times the cron has executed */
-  runCount: number;
+  /** Total number of executions */
+  executions: number;
   /** When the cron will execute next */
   nextRun: Date;
   /** First execution after startup (null if hasn't run since startup) */
-  firstStartupRun: Date | null;
+  firstStartup: Date | null;
   /** Cron expressions defining the schedule */
   crons: Cron.Cron[];
 }
@@ -56,12 +56,12 @@ export interface CronDetails {
 export interface ScheduledProcessDetails {
   /** When the process last executed (null if never run) */
   lastRun: Date | null;
-  /** Total number of times the process has executed */
-  runCount: number;
+  /** Total number of executions */
+  executions: number;
   /** When the process will execute next */
   nextRun: Date;
   /** First execution after startup (null if hasn't run since startup) */
-  firstStartupRun: Date | null;
+  firstStartup: Date | null;
   /** Additional metadata for extensions */
   metadata?: Record<string, unknown>;
 }
@@ -292,17 +292,17 @@ export const createCronProcess = <R>(params: {
       const programStorage = storage.forProcess(name);
       
       const lastRun = yield* programStorage.getLastRun();
-      const runCount = yield* programStorage.getRunCount(dateRange);
-      const firstStartupRun = yield* programStorage.getFirstStartupRun();
+      const executions = yield* programStorage.getRunCount(dateRange);
+      const firstStartup = yield* programStorage.getFirstStartupRun();
 
       // Calculate next run time
       const nextRun = getNextCronRun(crons, new Date());
 
       return {
         lastRun,
-        runCount,
+        executions,
         nextRun,
-        firstStartupRun
+        firstStartup
       };
     });
 
