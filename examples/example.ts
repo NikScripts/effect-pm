@@ -103,9 +103,17 @@ export const DemoPool = ResourcePool.make({
       yield* Effect.sleep(Duration.millis(1000)); // Simulate work
       return `Processed: ${item}`;
     }),
-  onSuccess: (result: string, item: string) => Effect.logInfo(result),
-  onError: (error: Error, item: string) =>
-    Effect.logError(`Error processing ${item}: ${error.message}`),
+  onSuccess: (result: string, item: string, pool: ResourcePool<string, string>) =>
+    Effect.gen(function* () {
+      yield* Effect.logInfo(result);
+      // Pool instance is now available for adding follow-up tasks or lifecycle control
+    }),
+  onError: (error: Error, item: string, pool: ResourcePool<string, string>) =>
+    Effect.gen(function* () {
+      yield* Effect.logError(`Error processing ${item}: ${error.message}`);
+      // Pool instance is now available for controlling lifecycle if needed
+      // Example: yield* pool.shutdown() on critical errors
+    }),
   throttle: {
     limit: 10,
     duration: Duration.seconds(1),

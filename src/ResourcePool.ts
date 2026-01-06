@@ -301,21 +301,15 @@ export interface ResourcePoolConfig<T, R> {
   /**
    * Effect to refill pool from cache/database
    * 
-   * @param methods - Methods to add items at different priorities
+   * @param pool - The ResourcePool instance (allows adding items and checking pool state)
    * @returns Effect that loads and re-adds items
    * @remarks
    * Called automatically when the pool becomes empty. Use to reload
    * pending items from database after a restart. Items added here do NOT
-   * trigger {@link cache}.
+   * trigger {@link cache}. Use pool.add(), pool.next(), or pool.deffered() to
+   * add items at different priority levels.
    */
-  refill?: (methods: {
-    /** Add items at high priority */
-    next: (item: T | readonly T[]) => Effect.Effect<void>;
-    /** Add items at normal priority */
-    add: (item: T | readonly T[]) => Effect.Effect<void>;
-    /** Add items at low priority */
-    deffered: (item: T | readonly T[]) => Effect.Effect<void>;
-  }) => Effect.Effect<void, Error>;
+  refill?: (pool: ResourcePool<T, R>) => Effect.Effect<void, Error>;
 
   // ========== Callbacks ==========
 
@@ -324,22 +318,26 @@ export interface ResourcePoolConfig<T, R> {
    * 
    * @param result - Result from effect
    * @param item - Original item that was processed
+   * @param pool - The ResourcePool instance (allows controlling pool lifecycle)
    * @remarks
    * Runs in a forked fiber (non-blocking). The pool continues processing
-   * while the callback runs. Use for notifications, logging, etc.
+   * while the callback runs. Use for notifications, logging, enqueueing follow-up
+   * tasks, or controlling pool lifecycle.
    */
-  readonly onSuccess?: (result: R, item: T) => Effect.Effect<void>;
+  readonly onSuccess?: (result: R, item: T, pool: ResourcePool<T, R>) => Effect.Effect<void>;
   
   /**
    * Effect to run after processing error
    * 
    * @param error - Error that occurred
    * @param item - Original item that failed
+   * @param pool - The ResourcePool instance (allows controlling pool lifecycle)
    * @remarks
    * Called when the effect throws an error. Use for error logging,
-   * dead letter queue, or retry logic.
+   * dead letter queue, retry logic, or controlling pool lifecycle (e.g., 
+   * calling pool.shutdown() or pool.pause() on critical errors).
    */
-  readonly onError?: (error: Error, item: T) => Effect.Effect<void>;
+  readonly onError?: (error: Error, item: T, pool: ResourcePool<T, R>) => Effect.Effect<void>;
 }
 
 // ============================================================================
@@ -420,251 +418,10 @@ const makeResourcePoolEffect = <T, R>(
         new Set<Fiber.RuntimeFiber<void>>()
       );
 
-      // Process a single item
-      const processItem = (item: T) =>
-        sem.withPermits(1)(
-          throttler(
-            Effect.gen(function* () {
-              yield* Effect.logDebug(
-                `Processing item: ${JSON.stringify(item)}`
-              );
+      // Store workers in closure variable (will be populated later)
+      let workers: readonly Fiber.RuntimeFiber<void>[] = [];
 
-              const result = yield* processor(item).pipe(
-                Effect.catchAll((error) => {
-                  if (onError) {
-                    return onError(error, item);
-                  }
-                  return Effect.void;
-                })
-              );
-
-              // Increment processed count
-              const currentCount = yield* Ref.get(processedCount);
-              yield* Ref.set(processedCount, currentCount + 1);
-
-              // Fork onSuccess to make it non-blocking and track the fiber
-              if (onSuccess && result !== undefined) {
-                const onSuccessFiber = yield* Effect.fork(
-                  onSuccess(result, item).pipe(
-                    Effect.ensuring(
-                      Effect.gen(function* () {
-                        // Remove fiber from tracking when it completes
-                        yield* Ref.update(onSuccessFibers, (fibers) => {
-                          fibers.delete(onSuccessFiber);
-                          return new Set(fibers);
-                        });
-                        yield* Effect.logDebug(
-                          `onSuccess completed for item: ${JSON.stringify(
-                            item
-                          )}`
-                        );
-                      })
-                    )
-                  )
-                );
-
-                // Track the fiber for finalizer cleanup
-                yield* Ref.update(onSuccessFibers, (fibers) => {
-                  fibers.add(onSuccessFiber);
-                  return new Set(fibers);
-                });
-              }
-
-              yield* Effect.logDebug(`Completed item: ${JSON.stringify(item)}`);
-            })
-          )
-        );
-
-      // Event-driven worker that blocks until items available
-      const createWorker = () =>
-        Effect.gen(function* () {
-          const currentWorkers = yield* Ref.get(workerCount);
-          yield* Ref.set(workerCount, currentWorkers + 1);
-
-          yield* Effect.logDebug(
-            `Worker started (total: ${currentWorkers + 1})`
-          );
-
-          yield* Effect.forever(
-            Effect.gen(function* () {
-              const running = yield* Ref.get(isRunning);
-              const paused = yield* Ref.get(isPaused);
-
-              if (!running) {
-                yield* Effect.logDebug("Worker stopped - isRunning is false");
-                return;
-              }
-
-              if (paused) {
-                yield* Effect.logDebug("Worker paused - waiting for resume");
-                yield* Effect.sleep(Duration.millis(500)); // Wait a bit before checking again
-                return;
-              }
-
-              yield* Effect.logDebug("Worker waiting for item...");
-              // Try to get next item - this blocks until an item is available
-              const nextItem = yield* getNextItemBlocking();
-              yield* Effect.logDebug(`Worker got item`);
-              yield* processItem(nextItem);
-            })
-          );
-        }).pipe(
-          Effect.ensuring(
-            Effect.gen(function* () {
-              const currentWorkers = yield* Ref.get(workerCount);
-              yield* Ref.set(workerCount, currentWorkers - 1);
-              yield* Effect.logDebug(
-                `Worker stopped (total: ${currentWorkers - 1})`
-              );
-            })
-          )
-        );
-
-      // Get next item with blocking behavior - maintains priority order
-      const getNextItemBlocking = (): Effect.Effect<T> =>
-        Effect.gen(function* () {
-          // First try polling each priority level
-          const highItem = yield* Queue.poll(high);
-          if (highItem._tag === "Some") {
-            yield* Effect.logDebug("📦 Got high priority item");
-            return highItem.value;
-          }
-
-          const regularItem = yield* Queue.poll(regular);
-          if (regularItem._tag === "Some") {
-            yield* Effect.logDebug("📦 Got regular priority item");
-            return regularItem.value;
-          }
-
-          const lowItem = yield* Queue.poll(low);
-          if (lowItem._tag === "Some") {
-            yield* Effect.logDebug("📦 Got low priority item");
-            return lowItem.value;
-          }
-
-          // All priority levels empty, try to rebuild or wait
-          return yield* handleEmptyPool();
-        });
-
-      // Rebuild from database and then wait for next item
-      const handleEmptyPool = (): Effect.Effect<T> =>
-        Effect.gen(function* () {
-          yield* Effect.logDebug("Pool is empty, waiting for more items");
-
-          const rebuilding = yield* Ref.get(isRebuilding);
-
-          if (refillFunction && !rebuilding) {
-            // Start refill
-            yield* Ref.set(isRebuilding, true);
-            yield* Effect.logInfo("🔄 Refilling pool from database...");
-
-            yield* refillFunction(refillMethods).pipe(
-              Effect.catchAll(() => Effect.void) // Don't fail on refill errors
-            );
-
-            yield* Ref.set(isRebuilding, false);
-            yield* Effect.logInfo("✅ Refill completed");
-
-            // After refill, try to get an item using priority order
-            // const highItem = yield* Queue.poll(high);
-            // if (highItem._tag === "Some") {
-            //   return highItem.value;
-            // }
-
-            // const regularItem = yield* Queue.poll(regular);
-            // if (regularItem._tag === "Some") {
-            //   return regularItem.value;
-            // }
-
-            // const lowItem = yield* Queue.poll(low);
-            // if (lowItem._tag === "Some") {
-            //   return lowItem.value;
-            // }
-          }
-
-          const result = yield* Effect.race(
-            Effect.race(
-              Effect.gen(function* () {
-                const item = yield* Queue.take(high);
-                return { queue: "high", item };
-              }),
-              Effect.gen(function* () {
-                const item = yield* Queue.take(regular);
-                return { queue: "regular", item };
-              })
-            ),
-            Effect.gen(function* () {
-              const item = yield* Queue.take(low);
-              return { queue: "low", item };
-            })
-          );
-          return result.item;
-        });
-
-      // Start workers dynamically based on semaphore
-      const startWorkers = () =>
-        Effect.gen(function* () {
-          const workers = [];
-          for (let i = 0; i < semaphore; i++) {
-            const worker = yield* Effect.fork(createWorker());
-            workers.push(worker);
-          }
-          return workers;
-        });
-
-      // Create methods for refill function (without caching since items are already persisted)
-      const refillMethods = {
-        next: (item: T | readonly T[]) =>
-          Effect.gen(function* () {
-            if (Array.isArray(item)) {
-              yield* Queue.offerAll(high, item);
-            } else {
-              yield* Queue.offer(high, item as T);
-            }
-          }),
-
-        add: (item: T | readonly T[]) =>
-          Effect.gen(function* () {
-            if (Array.isArray(item)) {
-              yield* Queue.offerAll(regular, item);
-            } else {
-              yield* Queue.offer(regular, item as T);
-            }
-          }),
-
-        deffered: (item: T | readonly T[]) =>
-          Effect.gen(function* () {
-            if (Array.isArray(item)) {
-              yield* Queue.offerAll(low, item);
-            } else {
-              yield* Queue.offer(low, item as T);
-            }
-          }),
-      };
-
-      // Start workers
-      const workers = yield* startWorkers();
-
-      // Add finalizer to ensure all onSuccess fibers complete when scope closes
-      yield* Effect.addFinalizer((_exit) =>
-        Effect.gen(function* () {
-          const fibers = yield* Ref.get(onSuccessFibers);
-          if (fibers.size > 0) {
-            yield* Effect.logInfo(
-              `Waiting for ${fibers.size} onSuccess fibers to complete...`
-            );
-            yield* Effect.all(
-              Array.from(fibers).map((fiber) => fiber.await),
-              { concurrency: "unbounded" }
-            );
-            yield* Effect.logInfo(
-              "All onSuccess fibers completed successfully"
-            );
-          }
-        })
-      );
-
-      // Create the ResourcePool instance
+      // Create the ResourcePool instance (before processItem so it can be passed to onError)
       const pool: ResourcePool<T, R> = {
         next: (item: T | readonly T[]) =>
           Effect.gen(function* () {
@@ -786,8 +543,224 @@ const makeResourcePoolEffect = <T, R>(
 
         // Keep workers alive by storing them in the returned object
         // This prevents garbage collection of the worker fibers
-        _workers: workers,
+        get _workers() {
+          return workers;
+        },
       };
+
+      // Process a single item
+      const processItem = (item: T) =>
+        sem.withPermits(1)(
+          throttler(
+            Effect.gen(function* () {
+              yield* Effect.logDebug(
+                `Processing item: ${JSON.stringify(item)}`
+              );
+
+              const result = yield* processor(item).pipe(
+                Effect.catchAll((error) => {
+                  if (onError) {
+                    return onError(error, item, pool);
+                  }
+                  return Effect.void;
+                })
+              );
+
+              // Increment processed count
+              const currentCount = yield* Ref.get(processedCount);
+              yield* Ref.set(processedCount, currentCount + 1);
+
+              // Fork onSuccess to make it non-blocking and track the fiber
+              if (onSuccess && result !== undefined) {
+                const onSuccessFiber = yield* Effect.fork(
+                  onSuccess(result, item, pool).pipe(
+                    Effect.ensuring(
+                      Effect.gen(function* () {
+                        // Remove fiber from tracking when it completes
+                        yield* Ref.update(onSuccessFibers, (fibers) => {
+                          fibers.delete(onSuccessFiber);
+                          return new Set(fibers);
+                        });
+                        yield* Effect.logDebug(
+                          `onSuccess completed for item: ${JSON.stringify(
+                            item
+                          )}`
+                        );
+                      })
+                    )
+                  )
+                );
+
+                // Track the fiber for finalizer cleanup
+                yield* Ref.update(onSuccessFibers, (fibers) => {
+                  fibers.add(onSuccessFiber);
+                  return new Set(fibers);
+                });
+              }
+
+              yield* Effect.logDebug(`Completed item: ${JSON.stringify(item)}`);
+            })
+          )
+        );
+
+      // Event-driven worker that blocks until items available
+      const createWorker = () =>
+        Effect.gen(function* () {
+          const currentWorkers = yield* Ref.get(workerCount);
+          yield* Ref.set(workerCount, currentWorkers + 1);
+
+          yield* Effect.logDebug(
+            `Worker started (total: ${currentWorkers + 1})`
+          );
+
+          yield* Effect.forever(
+            Effect.gen(function* () {
+              const running = yield* Ref.get(isRunning);
+              const paused = yield* Ref.get(isPaused);
+
+              if (!running) {
+                yield* Effect.logDebug("Worker stopped - isRunning is false");
+                return;
+              }
+
+              if (paused) {
+                yield* Effect.logDebug("Worker paused - waiting for resume");
+                yield* Effect.sleep(Duration.millis(500)); // Wait a bit before checking again
+                return;
+              }
+
+              yield* Effect.logDebug("Worker waiting for item...");
+              // Try to get next item - this blocks until an item is available
+              const nextItem = yield* getNextItemBlocking();
+              yield* Effect.logDebug(`Worker got item`);
+              yield* processItem(nextItem);
+            })
+          );
+        }).pipe(
+          Effect.ensuring(
+            Effect.gen(function* () {
+              const currentWorkers = yield* Ref.get(workerCount);
+              yield* Ref.set(workerCount, currentWorkers - 1);
+              yield* Effect.logDebug(
+                `Worker stopped (total: ${currentWorkers - 1})`
+              );
+            })
+          )
+        );
+
+      // Get next item with blocking behavior - maintains priority order
+      const getNextItemBlocking = (): Effect.Effect<T> =>
+        Effect.gen(function* () {
+          // First try polling each priority level
+          const highItem = yield* Queue.poll(high);
+          if (highItem._tag === "Some") {
+            yield* Effect.logDebug("📦 Got high priority item");
+            return highItem.value;
+          }
+
+          const regularItem = yield* Queue.poll(regular);
+          if (regularItem._tag === "Some") {
+            yield* Effect.logDebug("📦 Got regular priority item");
+            return regularItem.value;
+          }
+
+          const lowItem = yield* Queue.poll(low);
+          if (lowItem._tag === "Some") {
+            yield* Effect.logDebug("📦 Got low priority item");
+            return lowItem.value;
+          }
+
+          // All priority levels empty, try to rebuild or wait
+          return yield* handleEmptyPool();
+        });
+
+      // Rebuild from database and then wait for next item
+      const handleEmptyPool = (): Effect.Effect<T> =>
+        Effect.gen(function* () {
+          yield* Effect.logDebug("Pool is empty, waiting for more items");
+
+          const rebuilding = yield* Ref.get(isRebuilding);
+
+          if (refillFunction && !rebuilding) {
+            // Start refill
+            yield* Ref.set(isRebuilding, true);
+            yield* Effect.logInfo("🔄 Refilling pool from database...");
+
+            yield* refillFunction(pool).pipe(
+              Effect.catchAll(() => Effect.void) // Don't fail on refill errors
+            );
+
+            yield* Ref.set(isRebuilding, false);
+            yield* Effect.logInfo("✅ Refill completed");
+
+            // After refill, try to get an item using priority order
+            // const highItem = yield* Queue.poll(high);
+            // if (highItem._tag === "Some") {
+            //   return highItem.value;
+            // }
+
+            // const regularItem = yield* Queue.poll(regular);
+            // if (regularItem._tag === "Some") {
+            //   return regularItem.value;
+            // }
+
+            // const lowItem = yield* Queue.poll(low);
+            // if (lowItem._tag === "Some") {
+            //   return lowItem.value;
+            // }
+          }
+
+          const result = yield* Effect.race(
+            Effect.race(
+              Effect.gen(function* () {
+                const item = yield* Queue.take(high);
+                return { queue: "high", item };
+              }),
+              Effect.gen(function* () {
+                const item = yield* Queue.take(regular);
+                return { queue: "regular", item };
+              })
+            ),
+            Effect.gen(function* () {
+              const item = yield* Queue.take(low);
+              return { queue: "low", item };
+            })
+          );
+          return result.item;
+        });
+
+      // Start workers dynamically based on semaphore
+      const startWorkers = () =>
+        Effect.gen(function* () {
+          const workers = [];
+          for (let i = 0; i < semaphore; i++) {
+            const worker = yield* Effect.fork(createWorker());
+            workers.push(worker);
+          }
+          return workers;
+        });
+
+      // Start workers and assign to closure variable
+      workers = yield* startWorkers();
+
+      // Add finalizer to ensure all onSuccess fibers complete when scope closes
+      yield* Effect.addFinalizer((_exit) =>
+        Effect.gen(function* () {
+          const fibers = yield* Ref.get(onSuccessFibers);
+          if (fibers.size > 0) {
+            yield* Effect.logInfo(
+              `Waiting for ${fibers.size} onSuccess fibers to complete...`
+            );
+            yield* Effect.all(
+              Array.from(fibers).map((fiber) => fiber.await),
+              { concurrency: "unbounded" }
+            );
+            yield* Effect.logInfo(
+              "All onSuccess fibers completed successfully"
+            );
+          }
+        })
+      );
 
       // Return the ResourcePool instance
       return pool;
@@ -849,13 +822,21 @@ const makeResourcePoolEffect = <T, R>(
  *   concurrency: 10,
  *   capacity: 5000,
  *   throttle: { limit: 100, duration: Duration.minutes(1) },
- *   onSuccess: (result, task) => Effect.logInfo(\`Done: \${task.id}\`),
- *   onError: (error, task) => Effect.logError(\`Failed: \${task.id}\`),
+ *   onSuccess: (result, task, pool) => 
+ *     Effect.gen(function* () {
+ *       yield* Effect.logInfo(\`Done: \${task.id}\`);
+ *       // Pool instance available for adding follow-up tasks or lifecycle control
+ *     }),
+ *   onError: (error, task, pool) => 
+ *     Effect.gen(function* () {
+ *       yield* Effect.logError(\`Failed: \${task.id}\`);
+ *       // Pool instance available for lifecycle control if needed
+ *     }),
  *   cache: (tasks) => saveToDatabase(tasks),
- *   refill: ({ add }) => 
+ *   refill: (pool) => 
  *     Effect.gen(function* () {
  *       const pending = yield* loadPendingTasks();
- *       yield* add(pending);
+ *       yield* pool.add(pending);
  *     }),
  * });
  * ```

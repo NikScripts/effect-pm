@@ -134,18 +134,24 @@ const ProcessingPool = ResourcePool.make({
   },
   
   // Success callback (non-blocking)
-  onSuccess: (result, item) => 
-    Effect.logInfo(`Processed: ${result}`),
+  onSuccess: (result, item, pool) => 
+    Effect.gen(function* () {
+      yield* Effect.logInfo(`Processed: ${result}`);
+      // Pool instance available for adding follow-up tasks or lifecycle control
+    }),
   
   // Error handling
-  onError: (error, item) => 
-    Effect.logError(`Failed: ${error.message}`),
+  onError: (error, item, pool) => 
+    Effect.gen(function* () {
+      yield* Effect.logError(`Failed: ${error.message}`);
+      // Pool instance available for lifecycle control if needed
+    }),
   
   // Recovery from cache/database
-  refill: ({ add }) => 
+  refill: (pool) => 
     Effect.gen(function* () {
       const cached = yield* getCachedItems();
-      yield* add(cached);
+      yield* pool.add(cached);
     }),
 });
 ```
@@ -396,10 +402,11 @@ Always provide error handlers for resource pools:
 ```typescript
 const TaskPool = ResourcePool.make({
   effect: processItem,
-  onError: (error, item) => 
+  onError: (error, item, pool) => 
     Effect.gen(function* () {
       yield* Effect.logError(`Failed: ${error.message}`);
       yield* saveFailedItemForRetry(item);
+      // Pool instance available for lifecycle control if needed
     }),
 });
 ```
