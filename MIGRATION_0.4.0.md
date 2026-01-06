@@ -8,7 +8,7 @@ v0.4.0 introduces a consistent pattern where ResourcePool callbacks receive the 
 
 ## Breaking vs Non-Breaking Changes
 
-### ✅ Non-Breaking: `onError` and `onSuccess`
+### ✅ Non-Breaking: `onError`, `onSuccess`, and `cache`
 These changes are **backward compatible**. Your existing code will continue to work without modification because TypeScript allows functions with fewer parameters to match function types that expect more parameters (just like `array.map((item) => ...)` works even though `.map()` also provides `index` and `array`).
 
 ### ❌ Breaking: `refill`
@@ -148,6 +148,7 @@ const TaskPool = ResourcePool.make({
 const EmailPool = ResourcePool.make({
   name: "email-pool",
   effect: (email: Email) => sendEmail(email),
+  cache: (emails) => saveToDatabase(emails),
   onSuccess: (result, email) => 
     Effect.logInfo(`Sent: ${email.id}`),
   onError: (error, email) => 
@@ -165,6 +166,11 @@ const EmailPool = ResourcePool.make({
 const EmailPool = ResourcePool.make({
   name: "email-pool",
   effect: (email: Email) => sendEmail(email),
+  cache: (emails, pool) => 
+    Effect.gen(function* () {
+      // Pool instance available for checking state
+      yield* saveToDatabase(emails);
+    }),
   onSuccess: (result, email, pool) => 
     Effect.gen(function* () {
       yield* Effect.logInfo(`Sent: ${email.id}`);
@@ -199,6 +205,7 @@ const EmailPool = ResourcePool.make({
 ### Optional (Non-Breaking Enhancements)
 - [ ] Update `onError` callbacks to accept `pool` as third parameter (if you want pool control)
 - [ ] Update `onSuccess` callbacks to accept `pool` as third parameter (if you want pool control)
+- [ ] Update `cache` functions to accept `pool` as second parameter (if you want pool state access)
 - [ ] Test all callbacks to ensure they work correctly
 
 ---

@@ -1,6 +1,6 @@
 {
   "name": "@nikscripts/effect-pm",
-  "version": "0.4.0-beta.0",
+  "version": "0.4.0-beta.1",
   "description": "Manage long-running Effect processes with runtime control. Queue resource-heavy operations with configurable throttling and priorities. Schedule recurring tasks with cron. Check status, start/stop processes, and view metrics through a CLI while your application runs.",
   "keywords": [
     "effect",

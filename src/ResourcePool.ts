@@ -291,12 +291,13 @@ export interface ResourcePoolConfig<T, R> {
    * Function to cache/persist items when added
    *
    * @param item - Item(s) being added
+   * @param pool - The ResourcePool instance (allows checking pool state)
    * @remarks
    * Called immediately when items are added to the pool (before processing).
    * NOT called for items from {@link refill}.
    * Use for saving items to database for crash recovery.
    */
-  cache?: (item: T | readonly T[]) => Effect.Effect<void, Error>;
+  cache?: (item: T | readonly T[], pool: ResourcePool<T, R>) => Effect.Effect<void, Error>;
 
   /**
    * Effect to refill pool from cache/database
@@ -428,7 +429,7 @@ const makeResourcePoolEffect = <T, R>(
             // Start caching in background (non-blocking)
             if (cacheFunction) {
               yield* Effect.fork(
-                cacheFunction(item).pipe(
+                cacheFunction(item, pool).pipe(
                   Effect.catchAll(() => Effect.void) // Don't fail on cache errors
                 )
               );
@@ -447,7 +448,7 @@ const makeResourcePoolEffect = <T, R>(
             // Start caching in background (non-blocking)
             if (cacheFunction) {
               yield* Effect.fork(
-                cacheFunction(item).pipe(
+                cacheFunction(item, pool).pipe(
                   Effect.catchAll(() => Effect.void) // Don't fail on cache errors
                 )
               );
@@ -466,7 +467,7 @@ const makeResourcePoolEffect = <T, R>(
             // Start caching in background (non-blocking)
             if (cacheFunction) {
               yield* Effect.fork(
-                cacheFunction(item).pipe(
+                cacheFunction(item, pool).pipe(
                   Effect.catchAll(() => Effect.void) // Don't fail on cache errors
                 )
               );
@@ -832,7 +833,7 @@ const makeResourcePoolEffect = <T, R>(
  *       yield* Effect.logError(\`Failed: \${task.id}\`);
  *       // Pool instance available for lifecycle control if needed
  *     }),
- *   cache: (tasks) => saveToDatabase(tasks),
+ *   cache: (tasks, pool) => saveToDatabase(tasks),
  *   refill: (pool) => 
  *     Effect.gen(function* () {
  *       const pending = yield* loadPendingTasks();
