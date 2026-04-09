@@ -47,5 +47,6 @@ coverage/
 # OS
 Thumbs.db
 
-examples/nwslsoccer
-
+# Optional local NWSL SDP client (schemas, programs, mock tests, http-api-resource example).
+# Not committed. `npm run test:nwsl` / `example:nwsl-http-api-resource` no-op cleanly when absent.
+examples/nwslsoccer/

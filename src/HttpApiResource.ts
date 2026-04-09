@@ -37,9 +37,13 @@ export type HttpApiResourceClientOptions = {
 export type HttpApiResourceMakeConfig<
   _ApiId extends string,
   _Groups extends HttpApiGroup.Any,
+  Name extends string = string,
 > = {
-  /** Context tag id used for the service key. */
-  readonly name: string;
+  /**
+   * Context tag id (service key). Required because `HttpApi`’s runtime `identifier`
+   * may be unset in some builds; use a stable string (often derived from your API name).
+   */
+  readonly name: Name;
   readonly client: HttpApiResourceClientOptions;
   readonly limits?: RunResourceLimits;
 };
@@ -56,30 +60,42 @@ export const acceptJson = <E, R>(
     HttpClient.mapRequest(HttpClientRequest.setHeader("Accept", "application/json"))
   );
 
-function makeHttpApiResource<ApiId extends string, Groups extends HttpApiGroup.Any>(
+function makeHttpApiResource<
+  ApiId extends string,
+  Groups extends HttpApiGroup.Any,
+  Name extends string,
+>(
   api: HttpApiType.HttpApi<ApiId, Groups>,
-  config: HttpApiResourceMakeConfig<ApiId, Groups>
-) {
+  config: HttpApiResourceMakeConfig<ApiId, Groups, Name>
+): Context.Service<
+  HttpApiClient.Client<Groups> & { _brand: Name },
+  HttpApiClient.Client<Groups>
+> & {
+  readonly layer: Layer.Layer<
+    HttpApiClient.Client<Groups> & { _brand: Name },
+    never,
+    HttpClient.HttpClient | HttpApiGroup.MiddlewareClient<Groups>
+  >;
+} {
   const tagId = config.name;
 
-  type ClientType = HttpApiClient.Client<Groups>;
+  type ClientShape = HttpApiClient.Client<Groups>;
 
-  const tag = Context.Service<ClientType & { _brand: typeof tagId }, ClientType>(
-    tagId
-  );
+  const tag = Context.Service<ClientShape & { _brand: Name }, ClientShape>(tagId);
 
   const layer = Layer.effect(
     tag,
     Effect.gen(function* () {
       const wrap = yield* makeRunResourceWrap(config.limits);
-      const runner = wrap as unknown as RunResourceRunner;
+      const runner: RunResourceRunner = <A, E, R>(e: Effect.Effect<A, E, R>) =>
+        wrap(e);
       const userTc = config.client.transformClient;
-      return (yield* HttpApiClient.make(api, {
+      return yield* HttpApiClient.make(api, {
         baseUrl: config.client.baseUrl,
         transformClient: (c) =>
           HttpClientRunGate.withRunner(runner)(userTc ? userTc(c) : c),
         transformResponse: config.client.transformResponse,
-      })) as ClientType;
+      });
     })
   );
 

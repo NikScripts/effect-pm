@@ -45,6 +45,7 @@
     "build": "tsup",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
+    "test:nwsl": "node scripts/nwsl-local.mjs test",
     "test:watch": "vitest",
     "lint": "eslint .",
     "clean": "rm -rf dist",
@@ -55,6 +56,8 @@
     "example": "tsx examples/example.ts",
     "example:run-resource": "tsx examples/run-resource.ts",
     "example:http-client-run-gate": "tsx examples/http-client-run-gate.ts",
+    "example:http-api-resource": "tsx examples/http-api-resource.ts",
+    "example:nwsl-http-api-resource": "node scripts/nwsl-local.mjs example",
     "cli": "tsx examples/cli.ts"
   },
   "dependencies": {
