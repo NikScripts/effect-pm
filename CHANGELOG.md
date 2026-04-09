@@ -4,13 +4,13 @@
 
 ### Minor Changes
 
-- - `refill` function now receives pool instance instead of methods object
+- - `refill` function now receives queue instance instead of methods object
 
-    - Change: `refill: ({ add }) => ...` → `refill: (pool) => pool.add(...)`
-    - Migration: Replace `methods.add()` with `pool.add()`, etc.
+    - Change: `refill: ({ add }) => ...` → `refill: (queue) => queue.add(...)`
+    - Migration: Replace `methods.add()` with `queue.add()`, etc.
 
-  - `onError` callback now receives pool instance as 3rd parameter (backward compatible)
-  - `onSuccess` callback now receives pool instance as 3rd parameter (backward compatible)
+  - `onError` callback now receives queue instance as 3rd parameter (backward compatible)
+  - `onSuccess` callback now receives queue instance as 3rd parameter (backward compatible)
   - See MIGRATION_0.4.0.md for details
 
 ## 0.3.0
@@ -25,27 +25,27 @@
 
   **Core Types:**
 
-  - `PriorityQueueProcessor` → `ResourcePool`
+  - `PriorityQueueProcessor` → `QueueResource`
   - `CronHandler` → `Process`
   - `CronStorage` → `ExecutionHistory`
   - `ProcessManagerInterface` → `ProcessManager`
 
   **Details Types:**
 
-  - `QueueDetails` → `PoolDetails`
+  - `PoolDetails` → `QueueDetails`
   - `CronDetails` → `ScheduledProcessDetails`
 
   ### Renamed Factory Functions
 
   All factory functions now follow the `Thing.make()` pattern:
 
-  - `makeQueueService()` → `ResourcePool.make()`
+  - `makeQueueService()` → `QueueResource.make()`
   - `createCronProcess()` → `Process.make()`
   - `makeProcessManager()` → `ProcessManager.make()`
 
   ### Renamed Config Properties
 
-  **ResourcePool config:**
+  **QueueResource config:**
 
   - `processor` → `effect`
   - `queueCapacity` → `capacity`
@@ -72,7 +72,7 @@
 
   ### Layer Pattern Change
 
-  The `.Default` pattern replaces tuple returns:
+  The `.layer` pattern on factory tags replaces tuple returns:
 
   ```typescript
   // Before (v0.2.0):
@@ -80,14 +80,14 @@
   Effect.provide(EmailQueueLayer)
 
   // After (v0.3.0):
-  const EmailPool = ResourcePool.make({...});
-  Effect.provide(EmailPool.Default)
+  const EmailQueue = QueueResource.make({...});
+  Effect.provide(EmailQueue.layer)
   ```
 
   ### Why These Changes?
 
-  1. **Effect Conventions**: Follows Effect's `Thing.make()` and `.Default` patterns
-  2. **Clearer Naming**: "ResourcePool" better describes what it does than "PriorityQueue"
+  1. **Effect Conventions**: Follows `Thing.make()` and `Tag.layer` patterns
+  2. **Clearer Naming**: `QueueResource` names the queued execution model alongside `RunResource` / `HttpApiResource`
   3. **Better DX**: More intuitive for Effect users
   4. **Future-Proof**: "Process" allows for non-cron processes in the future
 
@@ -135,7 +135,7 @@
 
   program.pipe(
     Effect.provide(QueueLive),
-    Effect.provide(CronStorage.Default) // or your custom storage
+    Effect.provide(CronStorage.layer) // or your custom storage
   );
   ```
 

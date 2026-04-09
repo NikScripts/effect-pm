@@ -4,7 +4,7 @@ This guide covers the changes in v0.4.0. **Partial breaking change** - most code
 
 ## Overview
 
-v0.4.0 introduces a consistent pattern where ResourcePool callbacks receive the pool instance as a parameter. This provides full control over pool lifecycle and enables more powerful workflows.
+v0.4.0 introduces a consistent pattern where QueueResource callbacks receive the queue instance as a parameter. This provides full control over queue lifecycle and enables more powerful workflows.
 
 ## Breaking vs Non-Breaking Changes
 
@@ -12,16 +12,16 @@ v0.4.0 introduces a consistent pattern where ResourcePool callbacks receive the 
 These changes are **backward compatible**. Your existing code will continue to work without modification because TypeScript allows functions with fewer parameters to match function types that expect more parameters (just like `array.map((item) => ...)` works even though `.map()` also provides `index` and `array`).
 
 ### ❌ Breaking: `refill`
-This change **requires code updates** because the parameter type changed completely (from `methods` object to `pool` instance).
+This change **requires code updates** because the parameter type changed completely (from `methods` object to `queue` instance).
 
 ## Breaking Changes
 
-### 1. `refill` Function - Now Receives Pool Instance Instead of Methods Object ⚠️ BREAKING
+### 1. `refill` Function - Now Receives Queue Instance Instead of Methods Object ⚠️ BREAKING
 
 **Before (v0.3.0):**
 ```typescript
-const TaskPool = ResourcePool.make({
-  name: "task-pool",
+const TaskQueue = QueueResource.make({
+  name: "task-queue",
   effect: processItem,
   refill: (methods: {
     next: (item: Task | readonly Task[]) => Effect.Effect<void>;
@@ -37,42 +37,42 @@ const TaskPool = ResourcePool.make({
 
 **After (v0.4.0):**
 ```typescript
-const TaskPool = ResourcePool.make({
-  name: "task-pool",
+const TaskQueue = QueueResource.make({
+  name: "task-queue",
   effect: processItem,
-  refill: (pool: ResourcePool<Task, void>) => 
+  refill: (queue: QueueResourceInterface<Task, void>) => 
     Effect.gen(function* () {
-      const size = yield* pool.size();
+      const size = yield* queue.size();
       if (size < 100) {
         const cached = yield* loadFromDatabase();
-        yield* pool.add(cached);
+        yield* queue.add(cached);
       }
     }),
 });
 ```
 
 **Migration:**
-- Change parameter from `methods` object to `pool` instance
-- Replace `methods.add()` with `pool.add()`
-- Replace `methods.next()` with `pool.next()`
-- Replace `methods.deffered()` with `pool.deffered()`
+- Change parameter from `methods` object to `queue` instance
+- Replace `methods.add()` with `queue.add()`
+- Replace `methods.next()` with `queue.next()`
+- Replace `methods.deffered()` with `queue.deffered()`
 
 **Benefits:**
-- Cleaner API - direct access to pool methods
-- Full pool access - can check size, status, etc. before refilling
+- Cleaner API - direct access to queue methods
+- Full queue access - can check size, status, etc. before refilling
 - Consistent pattern with other callbacks
-- More powerful - can use any pool method, not just add operations
+- More powerful - can use any queue method, not just add operations
 
 ---
 
 ## Non-Breaking Changes (Optional Migration)
 
-### 2. `onError` Callback - Now Receives Pool Instance (Optional)
+### 2. `onError` Callback - Now Receives Queue Instance (Optional)
 
 **Before (v0.3.0) - Still Works:**
 ```typescript
-const TaskPool = ResourcePool.make({
-  name: "task-pool",
+const TaskQueue = QueueResource.make({
+  name: "task-queue",
   effect: processItem,
   onError: (error: Error, item: Task) => 
     Effect.logError(`Failed: ${error.message}`),
@@ -81,35 +81,35 @@ const TaskPool = ResourcePool.make({
 
 **After (v0.4.0) - Optional Enhancement:**
 ```typescript
-const TaskPool = ResourcePool.make({
-  name: "task-pool",
+const TaskQueue = QueueResource.make({
+  name: "task-queue",
   effect: processItem,
-  onError: (error: Error, item: Task, pool: ResourcePool<Task, void>) => 
+  onError: (error: Error, item: Task, queue: QueueResourceInterface<Task, void>) => 
     Effect.gen(function* () {
       yield* Effect.logError(`Failed: ${error.message}`);
-      // Pool instance available for lifecycle control
+      // Queue instance available for lifecycle control
       if (error.message.includes("FATAL")) {
-        yield* pool.shutdown();
+        yield* queue.shutdown();
       }
     }),
 });
 ```
 
-**Migration:** Optional - old code still works! Add `pool` as third parameter if you want pool control.
+**Migration:** Optional - old code still works! Add `queue` as third parameter if you want queue control.
 
 **Benefits:**
-- Can control pool lifecycle (shutdown, pause) on critical errors
-- Can add items to pool for retry logic
-- Can check pool state before taking action
+- Can control queue lifecycle (shutdown, pause) on critical errors
+- Can add items to queue for retry logic
+- Can check queue state before taking action
 
 ---
 
-### 3. `onSuccess` Callback - Now Receives Pool Instance (Optional)
+### 3. `onSuccess` Callback - Now Receives Queue Instance (Optional)
 
 **Before (v0.3.0) - Still Works:**
 ```typescript
-const TaskPool = ResourcePool.make({
-  name: "task-pool",
+const TaskQueue = QueueResource.make({
+  name: "task-queue",
   effect: processItem,
   onSuccess: (result: Result, item: Task) => 
     Effect.logInfo(`Processed: ${result.id}`),
@@ -118,26 +118,26 @@ const TaskPool = ResourcePool.make({
 
 **After (v0.4.0) - Optional Enhancement:**
 ```typescript
-const TaskPool = ResourcePool.make({
-  name: "task-pool",
+const TaskQueue = QueueResource.make({
+  name: "task-queue",
   effect: processItem,
-  onSuccess: (result: Result, item: Task, pool: ResourcePool<Task, Result>) => 
+  onSuccess: (result: Result, item: Task, queue: QueueResourceInterface<Task, Result>) => 
     Effect.gen(function* () {
       yield* Effect.logInfo(`Processed: ${result.id}`);
-      // Pool instance available for adding follow-up tasks
+      // Queue instance available for adding follow-up tasks
       if (result.requiresFollowUp) {
-        yield* pool.add([followUpTask]);
+        yield* queue.add([followUpTask]);
       }
     }),
 });
 ```
 
-**Migration:** Optional - old code still works! Add `pool` as third parameter if you want pool control.
+**Migration:** Optional - old code still works! Add `queue` as third parameter if you want queue control.
 
 **Benefits:**
 - Can enqueue follow-up tasks after successful processing
 - Can create processing pipelines and workflows
-- Can control pool lifecycle from success callbacks
+- Can control queue lifecycle from success callbacks
 
 ---
 
@@ -145,8 +145,8 @@ const TaskPool = ResourcePool.make({
 
 **Before (v0.3.0):**
 ```typescript
-const EmailPool = ResourcePool.make({
-  name: "email-pool",
+const EmailQueue = QueueResource.make({
+  name: "email-queue",
   effect: (email: Email) => sendEmail(email),
   cache: (emails) => saveToDatabase(emails),
   onSuccess: (result, email) => 
@@ -163,31 +163,31 @@ const EmailPool = ResourcePool.make({
 
 **After (v0.4.0):**
 ```typescript
-const EmailPool = ResourcePool.make({
-  name: "email-pool",
+const EmailQueue = QueueResource.make({
+  name: "email-queue",
   effect: (email: Email) => sendEmail(email),
-  cache: (emails, pool) => 
+  cache: (emails, queue) => 
     Effect.gen(function* () {
-      // Pool instance available for checking state
+      // Queue instance available for checking state
       yield* saveToDatabase(emails);
     }),
-  onSuccess: (result, email, pool) => 
+  onSuccess: (result, email, queue) => 
     Effect.gen(function* () {
       yield* Effect.logInfo(`Sent: ${email.id}`);
       // Can add follow-up tasks if needed
     }),
-  onError: (error, email, pool) => 
+  onError: (error, email, queue) => 
     Effect.gen(function* () {
       yield* Effect.logError(`Failed: ${email.id}`);
-      // Can control pool lifecycle on critical errors
+      // Can control queue lifecycle on critical errors
       if (error.message.includes("RATE_LIMIT")) {
-        yield* pool.pause();
+        yield* queue.pause();
       }
     }),
-  refill: (pool) => 
+  refill: (queue) => 
     Effect.gen(function* () {
       const pending = yield* loadPendingEmails();
-      yield* pool.add(pending);
+      yield* queue.add(pending);
     }),
 });
 ```
@@ -197,25 +197,25 @@ const EmailPool = ResourcePool.make({
 ## Migration Checklist
 
 ### Required (Breaking Changes)
-- [ ] Update all `refill` functions to accept `pool` instead of `methods` object
-- [ ] Replace `methods.add()` with `pool.add()` in refill functions
-- [ ] Replace `methods.next()` with `pool.next()` in refill functions (if used)
-- [ ] Replace `methods.deffered()` with `pool.deffered()` in refill functions (if used)
+- [ ] Update all `refill` functions to accept `queue` instead of `methods` object
+- [ ] Replace `methods.add()` with `queue.add()` in refill functions
+- [ ] Replace `methods.next()` with `queue.next()` in refill functions (if used)
+- [ ] Replace `methods.deffered()` with `queue.deffered()` in refill functions (if used)
 
 ### Optional (Non-Breaking Enhancements)
-- [ ] Update `onError` callbacks to accept `pool` as third parameter (if you want pool control)
-- [ ] Update `onSuccess` callbacks to accept `pool` as third parameter (if you want pool control)
-- [ ] Update `cache` functions to accept `pool` as second parameter (if you want pool state access)
+- [ ] Update `onError` callbacks to accept `queue` as third parameter (if you want queue control)
+- [ ] Update `onSuccess` callbacks to accept `queue` as third parameter (if you want queue control)
+- [ ] Update `cache` functions to accept `queue` as second parameter (if you want queue state access)
 - [ ] Test all callbacks to ensure they work correctly
 
 ---
 
 ## Why These Changes?
 
-1. **Consistency**: All callbacks now follow the same pattern (receive pool instance)
-2. **Power**: Full pool control available everywhere it's needed
+1. **Consistency**: All callbacks now follow the same pattern (receive queue instance)
+2. **Power**: Full queue control available everywhere it's needed
 3. **Flexibility**: Can create complex workflows, pipelines, and error handling
-4. **Cleaner API**: `refill` is simpler - direct pool access instead of methods object
+4. **Cleaner API**: `refill` is simpler - direct queue access instead of methods object
 
 ---
 

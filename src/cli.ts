@@ -7,29 +7,29 @@
  * @remarks
  * This CLI communicates with the HTTP control service started by
  * {@link startControlService}. Provides commands for listing, starting,
- * stopping, and monitoring processes and pools.
+ * stopping, and monitoring processes and queues.
  * 
  * **Available Commands:**
- * - `ls` - List all processes and pools
+ * - `ls` - List all processes and queues
  * - `status <name>` - Get detailed status
  * - `start [name]` - Start process(es)
  * - `stop [name]` - Stop process(es)
- * - `pause <name>` - Pause a pool
- * - `resume <name>` - Resume a pool
- * - `restart [name]` - Restart process/pool
- * - `shutdown <name>` - Shutdown a pool
+ * - `pause <name>` - Pause a queue
+ * - `resume <name>` - Resume a queue
+ * - `restart [name]` - Restart process/queue
+ * - `shutdown <name>` - Shutdown a queue
  * - `now <name>` - Run process immediately
- * - `pools` - List all pools
+ * - `queues` - List all queues
  * 
  * @module cli
  */
 
-import { Args, Command } from "@effect/cli";
-import { NodeContext, NodeRuntime } from "@effect/platform-node";
+import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Console, Effect, Option } from "effect";
+import { Argument, Command } from "effect/unstable/cli";
 import Table from "cli-table3";
 import prettyMs from "pretty-ms";
-import type { ProcessManagerDetails, PoolDetails, ControlResponse } from "./index";
+import type { ProcessManagerDetails, QueueDetails, ControlResponse } from "./index";
 
 // ============================================================================
 // Types
@@ -45,7 +45,7 @@ type ControlCommand =
   | "restart"
   | "shutdown"
   | "now"
-  | "pools";
+  | "queues";
 
 // ============================================================================
 // HTTP Client
@@ -137,18 +137,18 @@ const formatProcesses = (processes: ProcessManagerDetails[]) => {
 };
 
 /**
- * Format pools table
+ * Format queues table
  * @internal
  */
-const formatPools = (pools: PoolDetails[]) => {
-  if (!pools || pools.length === 0) return "No pools";
+const formatQueues = (queues: QueueDetails[]) => {
+  if (!queues || queues.length === 0) return "No queues";
   
   const table = new Table({
     head: ["NAME", "SIZE (H/N/L)", "TOTAL", "COMPLETED"],
     style: { head: ["cyan"] }
   });
   
-  pools.forEach(p => {
+  queues.forEach(p => {
     table.push([
       p.name,
       `${p.size.high}/${p.size.normal}/${p.size.low}`,
@@ -164,7 +164,7 @@ const formatPools = (pools: PoolDetails[]) => {
  * Format status details
  * @internal
  */
-const formatStatus = (data: ControlResponse<ProcessManagerDetails | PoolDetails>) => {
+const formatStatus = (data: ControlResponse<ProcessManagerDetails | QueueDetails>) => {
   const table = new Table({
     style: { head: ["cyan"] }
   });
@@ -180,15 +180,15 @@ const formatStatus = (data: ControlResponse<ProcessManagerDetails | PoolDetails>
       ["Next Run", formatNextRun(processData.nextRun)],
       ["Executions", processData.executions !== undefined ? String(processData.executions) : "-"]
     );
-  } else if (data.type === "pool") {
-    const poolData = data.data as PoolDetails;
+  } else if (data.type === "queue") {
+    const queueData = data.data as QueueDetails;
     table.push(
-      ["Name", poolData.name],
-      ["Size (Total)", String(poolData.size.total)],
-      ["Size (High)", String(poolData.size.high)],
-      ["Size (Normal)", String(poolData.size.normal)],
-      ["Size (Low)", String(poolData.size.low)],
-      ["Completed", String(poolData.completed)]
+      ["Name", queueData.name],
+      ["Size (Total)", String(queueData.size.total)],
+      ["Size (High)", String(queueData.size.high)],
+      ["Size (Normal)", String(queueData.size.normal)],
+      ["Size (Low)", String(queueData.size.low)],
+      ["Completed", String(queueData.completed)]
     );
   } else {
     return JSON.stringify(data, null, 2);
@@ -207,24 +207,24 @@ const formatStatus = (data: ControlResponse<ProcessManagerDetails | PoolDetails>
  */
 const makeCommands = (controlUrl: string) => {
   const post = postCommand(controlUrl);
-  const maybeName = Args.text({ name: "name" }).pipe(Args.optional);
+  const maybeName = Argument.string("name").pipe(Argument.optional);
 
-  // ls - List all processes and pools
+  // ls - List all processes and queues
   const ls = Command.make("ls", {}, () =>
     post("ls").pipe(
       Effect.flatMap((body) => {
         const output: string[] = [];
-        const data = body.data as { processes?: ProcessManagerDetails[], pools?: PoolDetails[] } | undefined;
+        const data = body.data as { processes?: ProcessManagerDetails[], queues?: QueueDetails[] } | undefined;
         
         if (data?.processes) {
           output.push("📋 PROCESSES");
           output.push(formatProcesses(data.processes));
         }
         
-        if (data?.pools) {
+        if (data?.queues) {
           if (output.length > 0) output.push("");
-          output.push("🔄 POOLS");
-          output.push(formatPools(data.pools));
+          output.push("🔄 QUEUES");
+          output.push(formatQueues(data.queues));
         }
         
         return Console.log(output.join("\n"));
@@ -235,10 +235,10 @@ const makeCommands = (controlUrl: string) => {
   // status <name> - Get detailed status
   const status = Command.make("status", { name: maybeName }, ({ name }) =>
     Option.match(name, {
-      onNone: () => Console.error("Missing process/pool name"),
+      onNone: () => Console.error("Missing process/queue name"),
       onSome: (n) =>
         post("status", n).pipe(
-          Effect.flatMap((body) => Console.log(formatStatus(body as ControlResponse<ProcessManagerDetails | PoolDetails>)))
+          Effect.flatMap((body) => Console.log(formatStatus(body as ControlResponse<ProcessManagerDetails | QueueDetails>)))
         ),
     })
   );
@@ -261,15 +261,15 @@ const makeCommands = (controlUrl: string) => {
   const resume = makeGlobalOrNamed("resume");
   const restart = makeGlobalOrNamed("restart");
 
-  // shutdown <name> - Shutdown a pool
+  // shutdown <name> - Shutdown a queue
   const shutdown = Command.make("shutdown", { name: maybeName }, ({ name }) =>
     Option.match(name, {
-      onNone: () => Console.error("Missing pool name"),
+      onNone: () => Console.error("Missing queue name"),
       onSome: (n) =>
         post("shutdown", n).pipe(
           Effect.flatMap((body) => 
             body.success 
-              ? Console.log(`✅ Pool '${n}' shutdown successfully`)
+              ? Console.log(`✅ Queue '${n}' shutdown successfully`)
               : Console.error(`❌ ${body.error || "Shutdown failed"}`)
           )
         ),
@@ -291,20 +291,20 @@ const makeCommands = (controlUrl: string) => {
     })
   );
 
-  // pools - List all resource pools
-  const pools = Command.make("pools", {}, () =>
-    post("pools").pipe(
+  // queues - List all queues
+  const queues = Command.make("queues", {}, () =>
+    post("queues").pipe(
       Effect.flatMap((body) => {
-        const data = body.data as PoolDetails[] | undefined;
+        const data = body.data as QueueDetails[] | undefined;
         if (data) {
-          return Console.log("🔄 POOLS\n" + formatPools(data));
+          return Console.log("🔄 QUEUES\n" + formatQueues(data));
         }
-        return Console.log("No pools");
+        return Console.log("No queues");
       })
     )
   );
 
-  return { ls, status, start, stop, pause, resume, restart, shutdown, now, pools };
+  return { ls, status, start, stop, pause, resume, restart, shutdown, now, queues };
 };
 
 // ============================================================================
@@ -336,7 +336,7 @@ const makeCommands = (controlUrl: string) => {
  * 
  * // Run CLI (typically in a separate script)
  * Effect.suspend(() => cli(process.argv)).pipe(
- *   Effect.provide(NodeContext.layer),
+ *   Effect.provide(NodeServices.layer),
  *   NodeRuntime.runMain
  * );
  * ```
@@ -368,12 +368,11 @@ export const createCli = (config: {
       commands.restart,
       commands.shutdown,
       commands.now,
-      commands.pools,
+      commands.queues,
     ])
   );
 
-  return Command.run(root, {
-    name: config.name,
+  return Command.runWith(root, {
     version: config.version,
   });
 };
@@ -416,7 +415,7 @@ export const runCli = (
   const cli = createCli(config);
   
   Effect.suspend(() => cli(argv)).pipe(
-    Effect.provide(NodeContext.layer),
+    Effect.provide(NodeServices.layer),
     NodeRuntime.runMain
   );
 };

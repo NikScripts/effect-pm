@@ -16,25 +16,25 @@
  * npm run example
  * 
  * # Then use the CLI:
- * npm run cli ls                    # List all processes and pools
- * npm run cli status pool-adder    # Get status of a process
- * npm run cli pools                 # List all pools
- * npm run cli start pool-adder     # Start a process
- * npm run cli stop pool-adder      # Stop a process
- * npm run cli now pool-adder       # Run process immediately
+ * npm run cli ls                    # List all processes and queues
+ * npm run cli status queue-adder    # Get status of a process
+ * npm run cli queues                # List all queues
+ * npm run cli start queue-adder     # Start a process
+ * npm run cli stop queue-adder      # Stop a process
+ * npm run cli now queue-adder       # Run process immediately
  * ```
  * 
  * **Available Commands:**
- * - `ls` - List all processes and pools
+ * - `ls` - List all processes and queues
  * - `status <name>` - Get detailed status for a process
  * - `start [name]` - Start process(es) (all if no name)
  * - `stop [name]` - Stop process(es) (all if no name)
- * - `pause <name>` - Pause a pool
- * - `resume <name>` - Resume a pool
- * - `restart [name]` - Restart process/pool (all if no name)
- * - `shutdown <name>` - Shutdown a pool permanently
+ * - `pause <name>` - Pause a queue
+ * - `resume <name>` - Resume a queue
+ * - `restart [name]` - Restart process/queue (all if no name)
+ * - `shutdown <name>` - Shutdown a queue permanently
  * - `now <name>` - Run a cron process immediately
- * - `pools` - List all pools with details
+ * - `queues` - List all queues with details
  */
 
 import { runCli } from "../src/cli";

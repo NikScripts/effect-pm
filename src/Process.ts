@@ -16,7 +16,7 @@
  * @module Process
  */
 
-import { Effect, Schedule, Cron } from "effect";
+import { Cron, Duration, Effect, Schedule } from "effect";
 import { ExecutionHistory, type ExecutionHistoryError } from "./ExecutionHistory";
 
 // ============================================================================
@@ -222,19 +222,20 @@ const createScheduledProcess = <R>(params: {
   // Create the scheduled effect
   const scheduledEffect = Effect.gen(function* () {
     // Set up the cron schedule
+    const cronSchedules = cronArray.map((cron) => Schedule.cron(cron));
     const cronSchedule =
-      cronArray.length === 1
-        ? Schedule.cron(cronArray[0]!)
-        : cronArray
-            .map((cron) => Schedule.cron(cron))
-            .reduce(
-              (a, b) =>
-                Schedule.union(a, b) as unknown as Schedule.Schedule<
-                  [number, number],
-                  unknown,
-                  never
-                >,
-            );
+      cronSchedules.length === 1
+        ? cronSchedules[0]!
+        : cronSchedules.slice(1).reduce(
+            (a, b) =>
+              Schedule.either(a, b) as unknown as Schedule.Schedule<
+                Duration.Duration,
+                unknown,
+                Cron.CronParseError,
+                never
+              >,
+            cronSchedules[0]!,
+          );
 
     // Run the tracked program on schedule only
     yield* Effect.schedule(trackedProgram, cronSchedule);
@@ -321,11 +322,11 @@ const createScheduledProcess = <R>(params: {
  *   crons: Cron.make({ hours: [2], minutes: [0] }), // 2 AM daily
  *   effect: Effect.gen(function* () {
  *     const db = yield* Database;
- *     const pool = yield* ProcessingPool;
+ *     const queue = yield* ProcessingQueue;
  *     
  *     const data = yield* db.fetchPending();
- *     yield* pool.add(data);
- *     yield* Effect.logInfo(\`Added \${data.length} items to pool\`);
+ *     yield* queue.add(data);
+ *     yield* Effect.logInfo(\`Added \${data.length} items to queue\`);
  *   }),
  * });
  * ```

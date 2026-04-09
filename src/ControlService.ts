@@ -8,7 +8,7 @@
  * Key features:
  * - Localhost-only (127.0.0.1) for security
  * - RESTful JSON API
- * - Process and pool control
+ * - Process and queue control
  * - Status monitoring
  * - Graceful shutdown handling
  * 
@@ -16,8 +16,8 @@
  */
 
 import http from "node:http";
-import { Effect, Scope, Runtime } from "effect";
-import type { ProcessManagerControls, PoolDetails } from "./ProcessManager";
+import { Effect, Scope } from "effect";
+import type { ProcessManagerControls, QueueDetails } from "./ProcessManager";
 import type { ExecutionHistory } from "./ExecutionHistory";
 import { createCli, runCli } from "./cli";
 
@@ -31,22 +31,22 @@ import { createCli, runCli } from "./cli";
  * @remarks
  * Commands are categorized by their target:
  * - **Process commands**: start, stop, restart, now
- * - **Pool commands**: pause, resume, shutdown
- * - **Universal commands**: ls, status, pools
+ * - **Queue commands**: pause, resume, shutdown
+ * - **Universal commands**: ls, status, queues
  * 
  * @public
  */
 export type ControlCommand =
-  | "ls"        // List all processes and pools
-  | "status"    // Get detailed status of a process or pool
+  | "ls"        // List all processes and queues
+  | "status"    // Get detailed status of a process or queue
   | "start"     // Start a process
   | "stop"      // Stop a process
-  | "pause"     // Pause a pool
-  | "resume"    // Resume a pool
-  | "restart"   // Restart a process or pool
-  | "shutdown"  // Shutdown a pool permanently
+  | "pause"     // Pause a queue
+  | "resume"    // Resume a queue
+  | "restart"   // Restart a process or queue
+  | "shutdown"  // Shutdown a queue permanently
   | "now"       // Run a process immediately
-  | "pools"     // List all resource pools
+  | "queues"    // List all queues
 
 /**
  * Control API request body
@@ -56,9 +56,9 @@ export type ControlCommand =
 export interface ControlRequestBody {
   /** Command to execute */
   command: ControlCommand;
-  /** Target process or pool name (required for most commands) */
+  /** Target process or queue name (required for most commands) */
   name?: string;
-  /** Additional data (e.g., for pool-add operations) */
+  /** Additional data (e.g., for queue-add operations) */
   data?: any;
 }
 
@@ -73,7 +73,7 @@ export interface ControlResponse<T = unknown> {
   /** Whether the command succeeded */
   success: boolean;
   /** Response type (for status command) */
-  type?: "process" | "pool";
+  type?: "process" | "queue";
   /** Response data (if applicable) */
   data?: T;
   /** Error message (if failed) */
@@ -91,7 +91,7 @@ const writeJson = (
   });
 
 const readBody = (req: http.IncomingMessage): Effect.Effect<string> =>
-  Effect.async<string>((resume) => {
+  Effect.callback<string>((resume: (effect: Effect.Effect<string>) => void) => {
     let data = "";
     req.on("data", (chunk) => {
       data += chunk.toString();
@@ -109,23 +109,23 @@ const handleCommand =
     Effect.gen(function* () {
       switch (command) {
         case "ls": {
-          // List both processes and pools
+          // List both processes and queues
           const processes = yield* pm
             .getAllProcessStatus()
-            .pipe(Effect.catchAll(() => Effect.succeed([])));
-          const pools = yield* pm.listPools();
+            .pipe(Effect.catch(() => Effect.succeed([])));
+          const queues = yield* pm.listQueues();
           return {
             success: true,
-            data: { processes, pools },
+            data: { processes, queues },
           };
         }
-        case "pools": {
-          // List all resource pools
-          const pools = yield* pm.listPools();
+        case "queues": {
+          // List all queues
+          const queues = yield* pm.listQueues();
           return {
             success: true,
-            data: pools,
-          } as ControlResponse<PoolDetails[]>;
+            data: queues,
+          } as ControlResponse<QueueDetails[]>;
         }
         case "status": {
           if (!name)
@@ -136,20 +136,20 @@ const handleCommand =
             .getProcessStatus(name)
             .pipe(
               Effect.map((data) => ({ success: true, data, type: "process" as const })),
-              Effect.catchAll(() => Effect.succeed(null)),
+              Effect.catch(() => Effect.succeed(null)),
             );
           
           if (processResult) return processResult;
           
-          // Try pool
-          const poolResult = yield* pm
-            .getPool(name)
+          // Try queue
+          const queueResult = yield* pm
+            .getQueue(name)
             .pipe(
-              Effect.flatMap((pool) =>
+              Effect.flatMap((queue) =>
                 Effect.gen(function* () {
-                  const prioritySizes = yield* pool.sizeByPriority();
-                  const totalSize = yield* pool.size();
-                  const completed = yield* pool.getCompleted();
+                  const prioritySizes = yield* queue.sizeByPriority();
+                  const totalSize = yield* queue.size();
+                  const completed = yield* queue.getCompleted();
                   return {
                     success: true,
                     data: { 
@@ -162,29 +162,29 @@ const handleCommand =
                       },
                       completed 
                     },
-                    type: "pool" as const,
+                    type: "queue" as const,
                   };
                 }),
               ),
-              Effect.catchAll(() => Effect.succeed(null)),
+              Effect.catch(() => Effect.succeed(null)),
             );
           
-          if (poolResult) return poolResult;
+          if (queueResult) return queueResult;
           
-          return { success: false, error: `Process or pool '${name}' not found` };
+          return { success: false, error: `Process or queue '${name}' not found` };
         }
         case "start": {
           // Process-only command
           if (name)
-            yield* pm.startProcess(name).pipe(Effect.catchAll(() => Effect.void));
-          else yield* pm.startAll().pipe(Effect.catchAll(() => Effect.void));
+            yield* pm.startProcess(name).pipe(Effect.catch(() => Effect.void));
+          else yield* pm.startAll().pipe(Effect.catch(() => Effect.void));
           return { success: true };
         }
         case "stop": {
           // Process-only command
           if (name)
-            yield* pm.stopProcess(name).pipe(Effect.catchAll(() => Effect.void));
-          else yield* pm.stopAll().pipe(Effect.catchAll(() => Effect.void));
+            yield* pm.stopProcess(name).pipe(Effect.catch(() => Effect.void));
+          else yield* pm.stopAll().pipe(Effect.catch(() => Effect.void));
           return { success: true };
         }
         case "now": {
@@ -193,49 +193,52 @@ const handleCommand =
             return { success: false, error: "Missing process name" };
           yield* pm
             .runProcessImmediately(name)
-            .pipe(Effect.catchAll(() => Effect.void));
+            .pipe(Effect.catch(() => Effect.void));
           return { success: true };
         }
         case "pause": {
-          // Unified command - check process first, then pool
+          // Unified command - check process first, then queue
           if (!name)
             return { success: false, error: "Missing name" };
           
-          // Processes don't have pause, so check pool
-          const pool = yield* pm
-            .getPool(name)
-            .pipe(Effect.catchAll(() => Effect.succeed(null)));
+          // Processes don't have pause, so check queue
+          const queue = yield* pm
+            .getQueue(name)
+            .pipe(Effect.catch(() => Effect.succeed(null)));
           
-          if (!pool) {
-            return { success: false, error: `Pool '${name}' not found` };
+          if (!queue) {
+            return { success: false, error: `Queue '${name}' not found` };
           }
 
-          yield* pool.pause();
+          yield* queue.pause();
           return { success: true };
         }
         case "resume": {
-          // Unified command - check process first, then pool
+          // Unified command - check process first, then queue
           if (!name)
             return { success: false, error: "Missing name" };
           
-          // Processes don't have resume, so check pool
-          const pool = yield* pm
-            .getPool(name)
-            .pipe(Effect.catchAll(() => Effect.succeed(null)));
+          // Processes don't have resume, so check queue
+          const queue = yield* pm
+            .getQueue(name)
+            .pipe(Effect.catch(() => Effect.succeed(null)));
           
-          if (!pool) {
-            return { success: false, error: `Pool '${name}' not found` };
+          if (!queue) {
+            return { success: false, error: `Queue '${name}' not found` };
           }
 
-          yield* pool.resume();
+          yield* queue.resume();
           return { success: true };
         }
         case "restart": {
-          // Unified command - check process first, then pool
+          // Unified command - check process first, then queue
           if (!name) {
-            // Global restart (processes only) - fork it to avoid blocking
-            yield* Effect.fork(
-              pm.restartAll().pipe(Effect.catchAll(() => Effect.void))
+            // Global restart: stop all processes then start all — fork to avoid blocking
+            yield* Effect.forkChild(
+              Effect.gen(function* () {
+                yield* pm.stopAll();
+                yield* pm.startAll();
+              }).pipe(Effect.catch(() => Effect.void)),
             );
             return { success: true };
           }
@@ -245,43 +248,43 @@ const handleCommand =
             .getProcessStatus(name)
             .pipe(
               Effect.map(() => true),
-              Effect.catchAll(() => Effect.succeed(false)),
+              Effect.catch(() => Effect.succeed(false)),
             );
           
           if (processExists) {
             // Fork the restart operation so it doesn't block the HTTP response
-            yield* Effect.fork(
-              pm.restartProcess(name).pipe(Effect.catchAll(() => Effect.void))
+            yield* Effect.forkChild(
+              pm.restartProcess(name).pipe(Effect.catch(() => Effect.void))
             );
             return { success: true };
           }
           
-          // Try pool
-          const pool = yield* pm
-            .getPool(name)
-            .pipe(Effect.catchAll(() => Effect.succeed(null)));
+          // Try queue
+          const queue = yield* pm
+            .getQueue(name)
+            .pipe(Effect.catch(() => Effect.succeed(null)));
           
-          if (!pool) {
-            return { success: false, error: `Process or pool '${name}' not found` };
+          if (!queue) {
+            return { success: false, error: `Process or queue '${name}' not found` };
           }
 
-          yield* pool.restart();
+          yield* queue.restart();
           return { success: true };
         }
         case "shutdown": {
-          // Pool-only command
+          // Queue-only command
           if (!name)
-            return { success: false, error: "Missing pool name" };
+            return { success: false, error: "Missing queue name" };
 
-          const pool = yield* pm
-            .getPool(name)
-            .pipe(Effect.catchAll(() => Effect.succeed(null)));
+          const queue = yield* pm
+            .getQueue(name)
+            .pipe(Effect.catch(() => Effect.succeed(null)));
           
-          if (!pool) {
-            return { success: false, error: `Pool '${name}' not found` };
+          if (!queue) {
+            return { success: false, error: `Queue '${name}' not found` };
           }
 
-          yield* pool.shutdown();
+          yield* queue.shutdown();
           return { success: true };
         }
       }
@@ -320,8 +323,8 @@ const handleCommand =
  * @example
  * ```typescript
  * const program = Effect.gen(function* () {
- *   const pm = yield* makeProcessManager({
- *     pools: [EmailPool],
+ *   const pm = yield* ProcessManager.make({
+ *     queues: [EmailQueue],
  *     processes: [emailCron]
  *   });
  *   
@@ -337,7 +340,7 @@ const handleCommand =
  * 
  * // Provide dependencies and run
  * program.pipe(
- *   Effect.provide(EmailPool.Default),
+ *   Effect.provide(EmailQueue.layer),
  *   Effect.runPromise
  * );
  * ```
@@ -364,8 +367,8 @@ const startControlService = <R>(options: {
       const port = options.port ?? 3001;
       const pm = options.pm;
 
-      // Capture the runtime with all dependencies already provided
-      const runtime = yield* Effect.runtime<R | ExecutionHistory>();
+      // Capture context (services) with all dependencies already provided
+      const services = yield* Effect.context<R | ExecutionHistory>();
 
       // Create HTTP request handler
       const handler = (
@@ -401,10 +404,10 @@ const startControlService = <R>(options: {
           yield* writeJson(res, 404, { error: "Not found" });
         });
 
-        // Run the program using the captured runtime (which has all dependencies)
-        Runtime.runFork(runtime)(
+        // Run the program with the captured context (all dependencies)
+        Effect.runForkWith(services)(
           program.pipe(
-            Effect.catchAll((error) =>
+            Effect.catch((error) =>
               writeJson(res, 500, {
                 success: false,
                 error: String(error),
@@ -424,35 +427,39 @@ const startControlService = <R>(options: {
       });
 
       // Start listening
-      yield* Effect.async<void>((resume) => {
-        server.listen(port, "127.0.0.1", () => {
-          resume(Effect.void);
-        });
-        server.on("error", (error) => {
-          console.error("❌ Control service error:", error);
-        });
-      });
+      yield* Effect.callback<void>(
+        (resume: (effect: Effect.Effect<void>) => void) => {
+          server.listen(port, "127.0.0.1", () => {
+            resume(Effect.void);
+          });
+          server.on("error", (error) => {
+            console.error("❌ Control service error:", error);
+          });
+        },
+      );
 
       return { server, connections };
     }),
     ({ server, connections }) =>
-      Effect.async<void>((resume) => {
-        console.log("🛑 Stopping control service...");
-        
-        // Destroy all active connections
-        for (const conn of connections) {
-          conn.destroy();
-        }
-        
-        server.close((err) => {
-          if (err) {
-            console.error("❌ Error closing server:", err);
-          } else {
-            console.log("✅ Control service stopped");
+      Effect.callback<void>(
+        (resume: (effect: Effect.Effect<void>) => void) => {
+          console.log("🛑 Stopping control service...");
+
+          // Destroy all active connections
+          for (const conn of connections) {
+            conn.destroy();
           }
-          resume(Effect.void);
-        });
-      }),
+
+          server.close((err) => {
+            if (err) {
+              console.error("❌ Error closing server:", err);
+            } else {
+              console.log("✅ Control service stopped");
+            }
+            resume(Effect.void);
+          });
+        },
+      ),
   )
 
 export const ControlService = {

@@ -6,7 +6,7 @@
  * Complete example demonstrating process orchestration with Effect.
  *
  * WHAT THIS DEMONSTRATES:
- * - ResourcePool: Managed execution pools with priority scheduling
+ * - QueueResource: Managed execution queues with priority scheduling
  * - Process: Scheduled tasks with cron expressions
  * - ProcessManager: Unified orchestration and control
  * - ExecutionHistory: Automatic tracking and analytics
@@ -19,12 +19,12 @@
  * 1. PROCESS - Scheduled Task Execution
  *    Create tasks that run on cron schedules with automatic execution tracking.
  *
- * 2. RESOURCE POOL - Managed Effect Execution
- *    Priority-based execution pools with concurrency control, rate limiting,
+ * 2. QUEUE RESOURCE - Managed Effect Execution
+ *    Priority-based execution with concurrency control, rate limiting,
  *    and comprehensive resource management.
  *
  * 3. PROCESS MANAGER - Orchestration Layer
- *    Unified control and monitoring for all processes and resource pools.
+ *    Unified control and monitoring for all processes and queues.
  *
  * 4. EXECUTION HISTORY - Analytics & Tracking
  *    Automatic tracking of all process executions with queryable history.
@@ -39,81 +39,90 @@
 
 /**
  * ProcessManager Example
- * 
+ *
  * @remarks
- * This example demonstrates the full ProcessManager system with resource pools
+ * This example demonstrates the full ProcessManager system with queues
  * and scheduled processes. Uses in-memory ExecutionHistory for execution tracking -
  * perfect for development and testing without external dependencies.
- * 
+ *
  * **For Production:**
- * Replace `ExecutionHistory.Default` with a persistent storage implementation:
+ * Replace `ExecutionHistory.layer` with a persistent storage implementation:
  * ```typescript
  * import { ExecutionHistoryPrismaLayer } from "./my-prisma-storage";
- * 
+ *
  * program.pipe(
  *   Effect.provide(ExecutionHistoryPrismaLayer),
  *   Effect.runPromise
  * );
  * ```
- * 
+ *
  * See `examples/prisma-storage.ts` for a complete Prisma implementation.
  */
 
-import { Effect, Duration, Logger, Cron } from "effect";
+import { Effect, Duration, Logger, Cron, Data, Resource, Layer, References } from "effect";
 import {
   Process,
   ExecutionHistory,
-  ResourcePool,
+  QueueResource,
   ProcessManager,
 } from "../src";
 
 /**
  * ============================================================================
- * CREATING RESOURCE POOLS
+ * CREATING QUEUE RESOURCES
  * ============================================================================
  *
- * ResourcePool.make() creates a managed execution pool for processing items
+ * QueueResource.make() creates a managed execution queue for processing items
  * with priority levels, concurrency control, and rate limiting.
  *
  * How it works:
  * -------------
  *
- * 1. YIELD THE TAG: Use the returned service tag to access the pool in Effects
+ * 1. YIELD THE TAG: Use the returned service tag to access the queue in Effects
  *    Example:
- *      const pool = yield* DemoPool;  // Get the pool anywhere
- *      yield* pool.add(["item1", "item2"]);
+ *      const queue = yield* DemoQueue;  // Get the queue anywhere
+ *      yield* queue.add(["item1", "item2"]);
  *
- * 2. PROVIDE THE LAYER: Use .Default to provide the implementation
+ * 2. PROVIDE THE LAYER: Use `.layer` to provide the implementation
  *    Example:
- *      Effect.provide(DemoPool.Default)
+ *      Effect.provide(DemoQueue.layer)
  *
- * 3. SINGLE INSTANCE: Effect ensures only ONE instance of each pool exists
+ * 3. SINGLE INSTANCE: Effect ensures only ONE instance of each queue exists
  *    No accidental duplicates, no synchronization issues.
  *
- * 4. TYPE SAFETY: TypeScript tracks the pool's item and result types,
- *    catching errors at compile time, not runtime.
+ * 4. TYPE SAFETY: `QueueResource.make` infers `T`, `R`, and `E` from `effect`.
+ *    When `E` is not `never`, `forkWith` is required and must return
+ *    **`Effect<void, never, …>`** (void success, all failures from `forked` handled).
+ *
  */
 
-// Demo pools
-export const DemoPool = ResourcePool.make({
-  name: "demo-pool",
+/**
+ * Example tagged error for the demo queue’s failure channel (`E`).
+ * `yield*` this value inside `Effect.gen` so `E` is `DemoQueueItemError`, not `R`.
+ */
+export class DemoQueueItemError extends Data.TaggedError("DemoQueueItemError")<{
+  readonly item: string;
+  readonly reason: string;
+}> { }
+
+// Demo queues
+export const DemoQueue = QueueResource.make({
+  name: "demo-queue",
   effect: (item: string) =>
     Effect.gen(function* () {
       yield* Effect.logInfo(`Processing: ${item}`);
       yield* Effect.sleep(Duration.millis(1000)); // Simulate work
-      return `Processed: ${item}`;
+      return yield* new DemoQueueItemError({
+        item,
+        reason: `Error processing ${item}`,
+      });
     }),
-  onSuccess: (result: string, item: string, pool: ResourcePool<string, string>) =>
-    Effect.gen(function* () {
-      yield* Effect.logInfo(result);
-      // Pool instance is now available for adding follow-up tasks or lifecycle control
-    }),
-  onError: (error: Error, item: string, pool: ResourcePool<string, string>) =>
-    Effect.gen(function* () {
-      yield* Effect.logError(`Error processing ${item}: ${error.message}`);
-      // Pool instance is now available for controlling lifecycle if needed
-      // Example: yield* pool.shutdown() on critical errors
-    }),
+  forkWith: (forked, _item, _queue) =>
+    forked.pipe(
+      Effect.catchTag("DemoQueueItemError", (error) =>
+        Effect.logError(`${error.item}: ${error.reason}`)
+      )
+    ),
   throttle: {
     limit: 10,
     duration: Duration.seconds(1),
@@ -122,14 +131,23 @@ export const DemoPool = ResourcePool.make({
   capacity: 100,
 });
 
-const DemoTwoPool = ResourcePool.make({
-  name: "demo-two-pool",
+const DemoTwoQueue = QueueResource.make({
+  name: "demo-two-queue",
   effect: (item: number) =>
     Effect.gen(function* () {
       yield* Effect.logInfo(`Processing number: ${item}`);
       yield* Effect.sleep(Duration.millis(1000)); // Simulate work
       return item * 2;
     }),
+  forkWith: (forked, item, _queue) =>
+    forked.pipe(
+      Effect.tap(() => Effect.logInfo("Forked: ", item)),
+      Effect.catch((error) => {
+        // error could be any remaining error type
+        console.log("Unexpected error:", error)
+        return Effect.void
+      })
+    ),
   concurrency: 2,
   capacity: 50,
 });
@@ -146,19 +164,19 @@ const DemoTwoPool = ResourcePool.make({
  * - crons: Cron.make() defines WHEN it runs (seconds, minutes, hours, etc.)
  * - effect: The Effect that gets executed on schedule
  *
- * This demonstrates how ResourcePools and Processes work together:
+ * This demonstrates how queue resources and Processes work together:
  * 1. The process wakes up every 10 seconds (defined in the schedule)
- * 2. It yields both pool services (DemoPool, DemoTwoPool)
- * 3. It adds new items to both pools
- * 4. The pools process those items according to their configuration
+ * 2. It yields both queue services (DemoQueue, DemoTwoQueue)
+ * 3. It adds new items to both queues
+ * 4. The queues process those items according to their configuration
  *
  * ANALYTICS: Every execution is automatically tracked in ExecutionHistory.
  * You can query execution history, success/failure rates, and timing data.
  */
 
-// Demo cron that adds items to pools
+// Demo cron that adds items to queues
 const queueAdderCron = Process.make({
-  name: "pool-adder",
+  name: "queue-adder",
   crons: Cron.make({
     seconds: [0, 10, 20, 30, 40, 50], // Every 10 seconds
     minutes: [],
@@ -168,22 +186,22 @@ const queueAdderCron = Process.make({
     weekdays: [],
   }),
   effect: Effect.gen(function* () {
-    const demoPool = yield* DemoPool;
-    const demoTwoPool = yield* DemoTwoPool;
+    const demoQueue = yield* DemoQueue;
+    const demoTwoQueue = yield* DemoTwoQueue;
     const timestamp = Date.now();
 
-    yield* Effect.logInfo(`🔄 Cron adding items to demo pools...`);
+    yield* Effect.logInfo(`🔄 Cron adding items to demo queues...`);
 
-    // Add to string pool
-    yield* demoPool.add([
+    // Add to string queue
+    yield* demoQueue.add([
       `cron-item-${timestamp}`,
       `cron-item-${timestamp + 1}`,
     ]);
 
-    // Add to number pool
-    yield* demoTwoPool.add([timestamp, timestamp + 1]);
+    // Add to number queue
+    yield* demoTwoQueue.add([timestamp, timestamp + 1]);
 
-    yield* Effect.logInfo(`✅ Added items to both demo pools`);
+    yield* Effect.logInfo(`✅ Added items to both demo queues`);
   }),
 });
 
@@ -198,32 +216,32 @@ const CONTROL_PORT = Number(process.env.HOME_SERVER_PORT) || 3001;
  *
  * CONFIG:
  * - processes: Array of scheduled processes to manage
- * - pools: Array of resource pool service tags
+ * - queues: Array of queue resource service tags
  *
  * The ProcessManager will:
- * 1. Track all processes and resource pools
+ * 1. Track all processes and queues
  * 2. Provide start/stop/restart controls for each
  * 3. Collect status and metrics
  * 4. Expose everything through the CLI and control API
  *
  * DEPENDENCY FLOW:
- * - We pass pool TAGS (DemoPool, DemoTwoPool) to ProcessManager.make
- * - We provide pool LAYERS (.Default) at runtime via Effect.provide
+ * - We pass queue TAGS (DemoQueue, DemoTwoQueue) to ProcessManager.make
+ * - We provide queue layers (`.layer`) at runtime via Effect.provide
  * - Effect's dependency system matches them up automatically
  * - This ensures type safety and single instances
  */
 
 // Demo program
 const program = Effect.gen(function* () {
-  // Create the ProcessManager with our demo processes and pools
+  // Create the ProcessManager with our demo processes and queues
   const pm = yield* ProcessManager.make({
     processes: [queueAdderCron],
-    pools: [DemoPool, DemoTwoPool],
+    queues: [DemoQueue, DemoTwoQueue],
   });
 
   yield* Effect.logInfo("🚀 Starting Demo ProcessManager...");
-  yield* Effect.logInfo(`📝 Processes: 1 cron (pool-adder)`);
-  yield* Effect.logInfo(`🔄 Pools: 2 resource pools (DemoPool, DemoTwoPool)`);
+  yield* Effect.logInfo(`📝 Processes: 1 cron (queue-adder)`);
+  yield* Effect.logInfo(`🔄 Queues: 2 (DemoQueue, DemoTwoQueue)`);
   yield* Effect.logInfo(`⏰ Schedule: Every 10 seconds`);
 
   // Start control API for CLI access
@@ -234,12 +252,12 @@ const program = Effect.gen(function* () {
 
   yield* Effect.logInfo("✅ Demo is running. Try these commands:");
   yield* Effect.logInfo("   npm run cli ls");
-  yield* Effect.logInfo("   npm run cli status pool-adder");
-  yield* Effect.logInfo("   npm run cli pools");
+  yield* Effect.logInfo("   npm run cli status queue-adder");
+  yield* Effect.logInfo("   npm run cli queues");
   yield* Effect.logInfo("   Press Ctrl+C to stop.");
 
   // Keep process running until signal received
-  yield* Effect.async<never>((resume) => {
+  yield* Effect.callback<never>((resume) => {
     const handleSignal = (signal: string) => {
       console.log(`\n📡 Received ${signal}, shutting down gracefully...`);
       resume(Effect.interrupt);
@@ -258,32 +276,32 @@ const program = Effect.gen(function* () {
  * Effect's dependency system requires us to "provide" all services before
  * the program can run. Think of it like this:
  *
- * 1. Our program says "I need DemoPool, DemoTwoPool, ExecutionHistory"
- * 2. We provide the implementations (.Default layers) for each service
+ * 1. Our program says "I need DemoQueue, DemoTwoQueue, ExecutionHistory"
+ * 2. We provide the implementations (`.layer` for each tag) for each service
  * 3. Effect wires everything together automatically
  * 4. The program runs with all dependencies satisfied
  *
  * LAYER COMPOSITION:
- * - DemoPool.Default: Provides the DemoPool resource pool
- * - DemoTwoPool.Default: Provides the DemoTwoPool resource pool
- * - ExecutionHistory.Default: Provides in-memory execution history storage
+ * - DemoQueue.layer: Provides the DemoQueue resource
+ * - DemoTwoQueue.layer: Provides the DemoTwoQueue resource
+ * - ExecutionHistory.layer: Provides in-memory execution history storage
  * - Logger.pretty: Provides nice formatted console logging
  *
  * The order of Effect.provide() calls doesn't matter - Effect figures out
  * the dependency graph and initializes services in the correct order.
- * 
- * NOTE: ExecutionHistory.Default is in-memory, so data is lost on restart.
+ *
+ * NOTE: ExecutionHistory.layer is in-memory, so data is lost on restart.
  * For production, use a persistent implementation (see examples/prisma-storage.ts).
  */
 
 // Run the demo
 Effect.runPromise(
   program.pipe(
-    Effect.provide(DemoPool.Default),
-    Effect.provide(DemoTwoPool.Default),
-    Effect.provide(ExecutionHistory.Default), // In-memory storage (no external dependencies)
-    Effect.provide(Logger.pretty)
-  )
+    Effect.provide(DemoQueue.layer),
+    Effect.provide(DemoTwoQueue.layer),
+    Effect.provide(ExecutionHistory.layer), // In-memory storage (no external dependencies)
+    Effect.provide(Layer.succeed(References.MinimumLogLevel, "Debug")),
+  ),
 )
   .then(() => {
     console.log("✅ Demo shutdown complete");

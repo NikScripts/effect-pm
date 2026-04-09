@@ -1,27 +1,27 @@
 /**
- * ProcessManager - Orchestration Layer for Scheduled Processes and Resource Pools
+ * ProcessManager - Orchestration Layer for Scheduled Processes and Queues
  * 
  * The ProcessManager provides a unified interface for managing scheduled processes
- * and resource pools. It handles process lifecycle, monitoring, and coordination.
+ * and queues. It handles process lifecycle, monitoring, and coordination.
  * 
  * @remarks
  * Key features:
  * - Process lifecycle management (start, stop, restart)
  * - Real-time status monitoring and metrics
- * - Resource pool integration and management
- * - Type-safe pool dependency enforcement
+ * - Queue resource integration and management
+ * - Type-safe queue dependency enforcement
  * - Scoped resource management with automatic cleanup
  * 
  * **Dependencies:**
  * - `ExecutionHistory` - Required for tracking process execution history.
- *   Provide either `ExecutionHistory.Default` (in-memory) or a custom implementation.
+ *   Provide either `ExecutionHistory.layer` (in-memory) or a custom implementation.
  * 
  * @module ProcessManager
  */
 
 import { Effect, Scope, Fiber, Ref, Data, Context } from "effect";
 import type { Process } from "./Process";
-import type { ResourcePool } from "./ResourcePool";
+import type { QueueResourceInstance } from "./QueueResource";
 import { ExecutionHistory, type ExecutionHistoryError } from "./ExecutionHistory";
 import { ControlService } from "./ControlService";
 
@@ -30,10 +30,10 @@ import { ControlService } from "./ControlService";
 // ============================================================================
 
 /**
- * Extract the identifier type from a Context.Tag
+ * Extract the identifier type from a Context.Key
  * @internal
  */
-type TagIdentifier<T> = T extends Context.Tag<infer I, any> ? I : never;
+type TagIdentifier<T> = T extends Context.Key<infer I, any> ? I : never;
 
 /**
  * Helper type to convert union to intersection
@@ -54,7 +54,7 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
  * 
  * @remarks
  * ExecutionHistory provides persistence for process execution history.
- * A default in-memory implementation is available via `ExecutionHistory.Default`.
+ * A default in-memory implementation is available via `ExecutionHistory.layer`.
  * 
  * @public
  */
@@ -106,14 +106,14 @@ export interface ProcessManagerDetails {
   /** First startup run time (if runOnStartup is enabled) */
   firstStartup?: Date | null;
   
-  // Pool-specific details (when type is "pool")
-  /** Current number of items in pool */
+  // Queue-specific details (when type is "queue")
+  /** Current number of items in queue */
   size?: number;
   /** Total number of items completed */
   completed?: number;
   /** Number of concurrent workers */
   workers?: number;
-  /** Whether the pool is currently processing */
+  /** Whether the queue is currently processing */
   running?: boolean;
   
   /** Additional metadata for extensions */
@@ -126,22 +126,22 @@ export interface ProcessManagerDetails {
  */
 export interface ProcessManagerState<R> {
   processes: Ref.Ref<Map<string, Process<R>>>;
-  pools: Record<string, ResourcePool<any, any>>;
+  queues: Record<string, QueueResourceInstance<any, any, any>>;
   statuses: Ref.Ref<Map<string, ProcessStatus>>;
   startTimes: Ref.Ref<Map<string, Date>>;
   scopes: Ref.Ref<Map<string, Scope.Scope>>;
-  fibers: Ref.Ref<Map<string, Fiber.RuntimeFiber<void, ExecutionHistoryError>>>;
+  fibers: Ref.Ref<Map<string, Fiber.Fiber<void, ExecutionHistoryError>>>;
 }
 
 /**
- * ResourcePool status information
+ * Queue resource status information
  * 
  * @public
  */
-export interface PoolDetails {
-  /** Pool identifier */
+export interface QueueDetails {
+  /** Queue identifier */
   name: string;
-  /** Current number of items in pool by priority */
+  /** Current number of items in queue by priority */
   size: {
     /** High priority items pending */
     high: number;
@@ -160,7 +160,7 @@ export interface PoolDetails {
  * ProcessManager Interface
  * 
  * @remarks
- * The ProcessManager provides a comprehensive API for managing scheduled processes and resource pools:
+ * The ProcessManager provides a comprehensive API for managing scheduled processes and queues:
  * 
  * **Process Management**
  * - Add, remove, and list processes
@@ -170,11 +170,11 @@ export interface PoolDetails {
  * **Monitoring**
  * - Get detailed status of individual processes
  * - Get status of all processes
- * - List and access pool information
+ * - List and access queue information
  * 
- * **Pool Integration**
- * - Access managed resource pools directly
- * - View pool metrics and status
+ * **Queue integration**
+ * - Access managed queues directly
+ * - View queue metrics and status
  * 
  * @typeParam R - Requirements type representing dependencies needed by managed processes
  * 
@@ -279,35 +279,27 @@ export interface ProcessManagerControls<R> {
    * Gracefully stops all processes. Processes that are already stopped are skipped.
    */
   stopAll(): Effect.Effect<void, PMError>;
-  
-  /**
-   * Restart all processes
-   * 
-   * @remarks
-   * Stops and then starts all processes.
-   */
-  restartAll(): Effect.Effect<void, PMError, R>;
 
-  // ========== Pool Operations ==========
+  // ========== Queue operations ==========
   
   /**
-   * List all managed pools
+   * List all managed queues
    * 
-   * @returns Array of pool details including size and completed count
+   * @returns Array of queue details including size and completed count
    */
-  listPools(): Effect.Effect<PoolDetails[], never>;
+  listQueues(): Effect.Effect<QueueDetails[], never>;
   
   /**
-   * Get a specific resource pool
+   * Get a specific queue resource
    * 
-   * @param name - Pool identifier
-   * @returns The resource pool instance
+   * @param name - Queue identifier
+   * @returns The queue resource instance
    * @remarks
-   * Use this to interact directly with a pool (add items, check status, etc.)
+   * Use this to interact directly with a queue (add items, check status, etc.)
    */
-  getPool(
+  getQueue(
     name: string,
-  ): Effect.Effect<ResourcePool<any, any>, PMError>;
+  ): Effect.Effect<QueueResourceInstance<any, any, any>, PMError>;
 }
 
 export interface ProcessManager<R> extends ProcessManagerControls<R> {
@@ -465,7 +457,7 @@ const listProcesses = <R>(
           let scheduledDetails = {};
           if (process.type === "scheduled") {
             const details = yield* (process as Process<R>).getStatus().pipe(
-              Effect.catchAll(() =>
+              Effect.catch(() =>
                 Effect.succeed({
                   lastRun: null,
                   executions: 0,
@@ -508,7 +500,7 @@ const startProcess =
       // Check if process exists
       const process = yield* Ref.get(state.processes).pipe(
         Effect.map((processes) => processes.get(name)),
-      );
+      ); 
 
       if (!process) {
         yield* new ProcessNotFoundError({ processName: name });
@@ -530,7 +522,7 @@ const startProcess =
 
       // Create scope and start process
       const scope = yield* Scope.make();
-      const fiber = yield* Effect.fork(process!.effect);
+      const fiber = yield* Effect.forkChild(process!.effect);
 
       // Update state
       yield* Ref.update(state.scopes, (scopes) => scopes.set(name, scope));
@@ -666,36 +658,36 @@ const getProcessStatus =
  * Create a ProcessManager instance
  * 
  * @remarks
- * Creates a ProcessManager that coordinates scheduled processes and resource pools.
+ * Creates a ProcessManager that coordinates scheduled processes and queues.
  * The ProcessManager provides:
  * - Lifecycle management for all processes
  * - Unified control interface (start, stop, restart)
  * - Status monitoring and metrics
- * - Resource pool integration and access
- * - Type-safe pool dependency enforcement
+ * - Queue resource integration and access
+ * - Type-safe queue dependency enforcement
  * 
  * **Type Safety**
  * 
- * The type system ensures that all pool dependencies used in processes are
- * provided in the `pools` array. If a process references a pool that isn't
+ * The type system ensures that all queue dependencies used in processes are
+ * provided in the `queues` array. If a process references a queue that isn't
  * provided, you'll get a compile-time error.
  * 
- * @typeParam Pools - Array of resource pool service tags to manage
- * @typeParam R - Additional requirements for processes beyond pools and ProcessManager dependencies
+ * @typeParam Queues - Array of queue resource service tags to manage
+ * @typeParam R - Additional requirements for processes beyond queues and ProcessManager dependencies
  * 
  * @param config - Configuration object
- * @param config.pools - Array of resource pool service tags (from ResourcePool.make)
+ * @param config.queues - Array of queue resource service tags (from QueueResource.make)
  * @param config.processes - Array of processes to manage (from Process.make)
  * 
  * @returns Effect that produces a ProcessManager instance
  * 
  * @example
  * ```typescript
- * import { ResourcePool, Process, ProcessManager } from "@nikscripts/effect-pm";
+ * import { QueueResource, Process, ProcessManager } from "@nikscripts/effect-pm";
  * import { Cron, Effect } from "effect";
  * 
- * const EmailPool = ResourcePool.make({
- *   name: "email-pool",
+ * const EmailQueue = QueueResource.make({
+ *   name: "email-queue",
  *   effect: sendEmail,
  *   concurrency: 5
  * });
@@ -704,13 +696,13 @@ const getProcessStatus =
  *   name: "send-emails",
  *   crons: Cron.make({ minutes: [0, 30] }), // Every 30 minutes
  *   program: Effect.gen(function* () {
- *     const pool = yield* EmailPool;
- *     yield* pool.add([email1, email2, email3]);
+ *     const queue = yield* EmailQueue;
+ *     yield* queue.add([email1, email2, email3]);
  *   })
  * });
  * 
  * const pm = yield* ProcessManager.make({
- *   pools: [EmailPool],
+ *   queues: [EmailQueue],
  *   processes: [emailCron]
  * });
  * 
@@ -720,15 +712,15 @@ const getProcessStatus =
  * @public
  */
 export const makeProcessManager = <
-  const Pools extends readonly [
-    ...Context.Tag<any, ResourcePool<any, any>>[],
+  const Queues extends readonly [
+    ...Context.Key<any, QueueResourceInstance<any, any, any>>[],
   ],
   R,
 >(config: {
-  pools: Pools;
+  queues: Queues;
   processes: Process<
-    | (R extends ResourcePool<any, any>
-        ? TagIdentifier<Pools[number]>
+    | (R extends QueueResourceInstance<any, any, any>
+        ? TagIdentifier<Queues[number]>
         : R)
     | ProcessManagerDependencies
   >[];
@@ -736,22 +728,22 @@ export const makeProcessManager = <
   ProcessManager<
     | R
     | ProcessManagerDependencies
-    | UnionToIntersection<TagIdentifier<Pools[number]>>
+    | UnionToIntersection<TagIdentifier<Queues[number]>>
   >,
   PMError,
-  TagIdentifier<Pools[number]>
+  TagIdentifier<Queues[number]>
 > =>
   Effect.gen(function* () {
-    // Yield all pool services to make them requirements
-    const poolsMap = Object.fromEntries(
-      config.pools.map((pool) => [pool.key, pool]),
+    // Yield all queue services to make them requirements
+    const queuesMap = Object.fromEntries(
+      config.queues.map((queueTag) => [queueTag.key, queueTag.asEffect()]),
     );
-    const pools = yield* Effect.all(poolsMap);
+    const queues = yield* Effect.all(queuesMap);
 
     // Initialize processes map with the provided processes
     const processMap = new Map<
       string,
-      Process<R | ProcessManagerDependencies | TagIdentifier<Pools[number]>>
+      Process<R | ProcessManagerDependencies | TagIdentifier<Queues[number]>>
     >();
     const statusMap = new Map<string, ProcessStatus>();
     for (const process of config.processes) {
@@ -764,14 +756,14 @@ export const makeProcessManager = <
     const startTimes = yield* Ref.make(new Map<string, Date>());
     const scopes = yield* Ref.make(new Map<string, Scope.Scope>());
     const fibers = yield* Ref.make(
-      new Map<string, Fiber.RuntimeFiber<void, ExecutionHistoryError>>(),
+      new Map<string, Fiber.Fiber<void, ExecutionHistoryError>>(),
     );
 
     const state: ProcessManagerState<
-      R | ProcessManagerDependencies | TagIdentifier<Pools[number]>
+      R | ProcessManagerDependencies | TagIdentifier<Queues[number]>
     > = {
       processes,
-      pools,
+      queues,
       statuses,
       startTimes,
       scopes,
@@ -782,12 +774,12 @@ export const makeProcessManager = <
       removeProcess: removeProcess(state),
       listProcesses: () => listProcesses(state),
       startProcess: (name: string) =>
-        Effect.zipRight(
+        Effect.andThen(
           Effect.logInfo(`🚀 Starting process: ${name}`),
           startProcess(state)(name),
         ),
       stopProcess: (name: string) =>
-        Effect.zipRight(
+        Effect.andThen(
           Effect.logInfo(`🛑 Stopping process: ${name}`),
           stopProcess(state)(name),
         ),
@@ -824,28 +816,13 @@ export const makeProcessManager = <
             }
           }
         }),
-      pauseAll: () =>
-        new ProcessManagerError({
-          reason: "not_implemented",
-          operation: "pauseAll",
-        }),
-      resumeAll: () =>
-        new ProcessManagerError({
-          reason: "not_implemented",
-          operation: "resumeAll",
-        }),
-      restartAll: () =>
-        new ProcessManagerError({
-          reason: "not_implemented",
-          operation: "restartAll",
-        }),
-      listPools: () =>
+      listQueues: () =>
         Effect.all(
-          Object.entries(state.pools).map(([name, pool]) =>
+          Object.entries(state.queues).map(([name, queue]) =>
             Effect.gen(function* () {
-              const prioritySizes = yield* pool.sizeByPriority();
-              const totalSize = yield* pool.size();
-              const completed = yield* pool.getCompleted();
+              const prioritySizes = yield* queue.sizeByPriority();
+              const totalSize = yield* queue.size();
+              const completed = yield* queue.getCompleted();
               return { 
                 name, 
                 size: {
@@ -859,13 +836,13 @@ export const makeProcessManager = <
             }),
           ),
         ),
-      getPool: (name: string) =>
+      getQueue: (name: string) =>
         Effect.gen(function* () {
-          const pool = state.pools[name];
-          if (!pool) {
+          const queue = state.queues[name];
+          if (!queue) {
             yield* new ProcessNotFoundError({ processName: name });
           }
-          return pool!;
+          return queue!;
         }),
     };
     return {

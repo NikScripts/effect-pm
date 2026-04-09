@@ -5,7 +5,16 @@
 // Namespace exports (these export objects with .make methods)
 export { Process } from "./Process";
 export { ProcessManager } from "./ProcessManager";
-export { ResourcePool } from "./ResourcePool";
+export { QueueResource, Cause } from "./QueueResource";
+export { RunResource } from "./RunResource";
+export { HttpClientRunGate } from "./HttpClientRunGate";
+export {
+  HttpApiResource,
+  acceptJson,
+  type HttpApiResourceClientOptions,
+  type HttpApiResourceMakeConfig,
+} from "./HttpApiResource";
+export { Resource } from "./Resource";
 export { ControlService } from "./ControlService";
 
 // CLI
@@ -27,7 +36,7 @@ export type {
   ProcessManagerControls,
   ProcessManagerDetails,
   ProcessStatus,
-  PoolDetails,
+  QueueDetails,
   PMError,
   ProcessManagerDependencies,
 } from "./ProcessManager";
@@ -47,12 +56,24 @@ export type {
   ScheduledProcessDetails,
 } from "./Process";
 
-// Types - ResourcePool
+// Types - QueueResource
 export type {
-  ResourcePool as ResourcePoolInterface,
-  ResourcePoolConfig,
-  ResourcePoolDetails,
-} from "./ResourcePool";
+  QueueResourceInstance as QueueResourceInterface,
+  QueueResourceConfig,
+  QueueResourceConfigBase,
+  QueueResourceDetails,
+} from "./QueueResource";
+
+// Types - RunResource
+export type {
+  RunResourceLimits,
+  RunResourceConfigUnit,
+  RunResourceConfigWithArg,
+  RunResourceUnit,
+  RunResourceApply,
+  RunResourceRunner,
+  RunResourceRunnerConfig,
+} from "./RunResource";
 
 // Types - Control Service
 export type {

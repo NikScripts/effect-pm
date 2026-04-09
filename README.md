@@ -1,14 +1,14 @@
 # ProcessManager
 
-A comprehensive process orchestration system built on [Effect](https://effect.website/) that manages scheduled tasks (cron jobs) and resource pools with type-safe dependency management.
+A comprehensive process orchestration system built on [Effect](https://effect.website/) that manages scheduled tasks (cron jobs) and queues with type-safe dependency management.
 
 ## Features
 
 - 🕐 **Scheduled Tasks (Cron Jobs)** - Run tasks on customizable schedules with execution tracking
-- 🎯 **Resource Pools** - Advanced effect execution with priority levels, rate limiting, and concurrency control
-- 🔒 **Type-Safe Dependencies** - Compile-time validation of pool dependencies
+- 🎯 **Queue resources** - Advanced effect execution with priority levels, rate limiting, and concurrency control
+- 🔒 **Type-Safe Dependencies** - Compile-time validation of queue dependencies
 - 📊 **Built-in Monitoring** - Real-time status, metrics, and execution history
-- 🎮 **Unified Control** - Single interface to manage all processes and pools
+- 🎮 **Unified Control** - Single interface to manage all processes and queues
 - 🔌 **Effect Integration** - Seamless integration with Effect's dependency injection system
 - 🛡️ **Resource Management** - Automatic cleanup and scoped resource handling
 
@@ -20,14 +20,14 @@ npm install @nikscripts/effect-pm effect
 
 ## Quick Start
 
-### 1. Create a Resource Pool
+### 1. Create a Resource Queue
 
 ```typescript
-import { ResourcePool } from "@nikscripts/effect-pm";
+import { QueueResource } from "@nikscripts/effect-pm";
 import { Effect } from "effect";
 
-const EmailPool = ResourcePool.make({
-  name: "email-pool",
+const EmailQueue = QueueResource.make({
+  name: "email-queue",
   effect: (email: Email) =>
     Effect.gen(function* () {
       // Process the email
@@ -51,9 +51,9 @@ const emailProcess = Process.make({
     minutes: [0, 30], // Every 30 minutes
   }),
   effect: Effect.gen(function* () {
-    const pool = yield* EmailPool;
+    const queue = yield* EmailQueue;
     const pendingEmails = yield* fetchPendingEmails();
-    yield* pool.add(pendingEmails);
+    yield* queue.add(pendingEmails);
   }),
 });
 ```
@@ -64,7 +64,7 @@ const emailProcess = Process.make({
 import { ProcessManager } from "@nikscripts/effect-pm";
 
 const pm = yield* ProcessManager.make({
-  pools: [EmailPool],
+  queues: [EmailQueue],
   processes: [emailProcess],
 });
 
@@ -80,7 +80,7 @@ import { ExecutionHistory } from "@nikscripts/effect-pm";
 
 const program = Effect.gen(function* () {
   const pm = yield* ProcessManager.make({
-    pools: [EmailPool],
+    queues: [EmailQueue],
     processes: [emailProcess],
   });
   yield* pm.startAll();
@@ -89,22 +89,22 @@ const program = Effect.gen(function* () {
 // Run with dependencies
 Effect.runPromise(
   program.pipe(
-    Effect.provide(EmailPool.Default),
-    Effect.provide(ExecutionHistory.Default),
+    Effect.provide(EmailQueue.layer),
+    Effect.provide(ExecutionHistory.layer),
     Effect.provide(Logger.pretty),
   )
 );
 ```
 
-## ResourcePool Configuration
+## QueueResource configuration
 
 ### Basic Configuration
 
 ```typescript
-import { ResourcePool } from "@nikscripts/effect-pm";
+import { QueueResource } from "@nikscripts/effect-pm";
 
-const TaskPool = ResourcePool.make({
-  name: "task-pool",
+const TaskQueue = QueueResource.make({
+  name: "task-queue",
   effect: (item: Item) => processItem(item),
   concurrency: 3,
   capacity: 5000,
@@ -114,17 +114,17 @@ const TaskPool = ResourcePool.make({
 ### Advanced Configuration
 
 ```typescript
-import { ResourcePool } from "@nikscripts/effect-pm";
+import { QueueResource } from "@nikscripts/effect-pm";
 import { Duration } from "effect";
 
-const ProcessingPool = ResourcePool.make({
-  name: "processing-pool",
+const ProcessingQueue = QueueResource.make({
+  name: "processing-queue",
   effect: processItem,
   
   // Concurrency control
   concurrency: 5,
   
-  // Pool capacity (memory management)
+  // Queue capacity (memory management)
   capacity: 10000,
   
   // Rate limiting
@@ -134,24 +134,24 @@ const ProcessingPool = ResourcePool.make({
   },
   
   // Success callback (non-blocking)
-  onSuccess: (result, item, pool) => 
+  onSuccess: (result, item, queue) => 
     Effect.gen(function* () {
       yield* Effect.logInfo(`Processed: ${result}`);
-      // Pool instance available for adding follow-up tasks or lifecycle control
+      // Queue instance available for adding follow-up tasks or lifecycle control
     }),
   
   // Error handling
-  onError: (error, item, pool) => 
+  onError: (error, item, queue) => 
     Effect.gen(function* () {
       yield* Effect.logError(`Failed: ${error.message}`);
-      // Pool instance available for lifecycle control if needed
+      // Queue instance available for lifecycle control if needed
     }),
   
   // Recovery from cache/database
-  refill: (pool) => 
+  refill: (queue) => 
     Effect.gen(function* () {
       const cached = yield* getCachedItems();
-      yield* pool.add(cached);
+      yield* queue.add(cached);
     }),
 });
 ```
@@ -184,10 +184,10 @@ const dataSync = Process.make({
   }),
   effect: Effect.gen(function* () {
     const db = yield* Database;
-    const pool = yield* ProcessingPool;
+    const queue = yield* ProcessingQueue;
     
     const data = yield* db.fetchData();
-    yield* pool.add(data);
+    yield* queue.add(data);
   }),
   runOnStartup: true, // Run immediately on start
 });
@@ -220,8 +220,9 @@ yield* pm.startAll();
 // Stop all processes
 yield* pm.stopAll();
 
-// Restart all processes
-yield* pm.restartAll();
+// “Restart all”: stop then start (no dedicated API)
+yield* pm.stopAll();
+yield* pm.startAll();
 ```
 
 ### Monitoring
@@ -248,15 +249,15 @@ const allStatuses = yield* pm.getAllProcessStatus();
 const processes = yield* pm.listProcesses();
 ```
 
-### Pool Operations
+### Queue Operations
 
 ```typescript
-// List all pools
-const pools = yield* pm.listPools();
+// List all queues
+const queues = yield* pm.listQueues();
 
-// Get specific pool
-const emailPool = yield* pm.getPool("email-pool");
-yield* emailPool.add([email1, email2, email3]);
+// Get specific queue
+const emailQueue = yield* pm.getQueue("email-queue");
+yield* emailQueue.add([email1, email2, email3]);
 ```
 
 ### Process Management
@@ -268,36 +269,36 @@ yield* pm.removeProcess("old-process");
 
 ## Type Safety
 
-The ProcessManager enforces type-safe pool dependencies at compile time:
+The ProcessManager enforces type-safe queue dependencies at compile time:
 
 ```typescript
-import { Process, ResourcePool, ProcessManager } from "@nikscripts/effect-pm";
+import { Process, QueueResource, ProcessManager } from "@nikscripts/effect-pm";
 import { Cron, Effect } from "effect";
 
-const EmailPool = ResourcePool.make({
-  name: "email-pool",
+const EmailQueue = QueueResource.make({
+  name: "email-queue",
   effect: sendEmail,
 });
 
-const cronWithPool = Process.make({
-  name: "needs-pool",
+const cronWithQueue = Process.make({
+  name: "needs-queue",
   crons: Cron.make({ minutes: [0] }),
   effect: Effect.gen(function* () {
-    const pool = yield* EmailPool; // Uses EmailPool
-    yield* pool.add([email1, email2]);
+    const queue = yield* EmailQueue; // Uses EmailQueue
+    yield* queue.add([email1, email2]);
   }),
 });
 
-// ✅ This works - EmailPool is provided
+// ✅ This works - EmailQueue is provided
 const pm = yield* ProcessManager.make({
-  pools: [EmailPool],
-  processes: [cronWithPool],
+  queues: [EmailQueue],
+  processes: [cronWithQueue],
 });
 
-// ❌ Compile error - EmailPool is missing!
+// ❌ Compile error - EmailQueue is missing!
 const pm = yield* ProcessManager.make({
-  pools: [],
-  processes: [cronWithPool],  // TypeScript error!
+  queues: [],
+  processes: [cronWithQueue],  // TypeScript error!
 });
 ```
 
@@ -311,7 +312,7 @@ ProcessManager requires an `ExecutionHistory` implementation to track process ex
 import { ExecutionHistory } from "@nikscripts/effect-pm";
 
 program.pipe(
-  Effect.provide(ExecutionHistory.Default), // In-memory storage
+  Effect.provide(ExecutionHistory.layer), // In-memory storage
   Effect.runPromise
 );
 ```
@@ -345,7 +346,7 @@ yield* pm.listen({ port: 3001 });
 // GET  /processes      - List all processes
 // POST /process/start  - Start a process
 // POST /process/stop   - Stop a process
-// GET  /pools          - List all resource pools
+// GET  /queues         - List all queues
 ```
 
 ## Error Handling
@@ -383,13 +384,13 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.scoped);
 ```
 
-### 2. Pool Capacity
+### 2. Queue Capacity
 
-Set appropriate pool capacities to prevent memory issues:
+Set appropriate queue capacities to prevent memory issues:
 
 ```typescript
-const TaskPool = ResourcePool.make({
-  name: "task-pool",
+const TaskQueue = QueueResource.make({
+  name: "task-queue",
   capacity: 50000, // Adjust based on item size
   effect: processItem,
 });
@@ -397,16 +398,16 @@ const TaskPool = ResourcePool.make({
 
 ### 3. Error Handling
 
-Always provide error handlers for resource pools:
+Always provide error handlers for queue resources:
 
 ```typescript
-const TaskPool = ResourcePool.make({
+const TaskQueue = QueueResource.make({
   effect: processItem,
-  onError: (error, item, pool) => 
+  onError: (error, item, queue) => 
     Effect.gen(function* () {
       yield* Effect.logError(`Failed: ${error.message}`);
       yield* saveFailedItemForRetry(item);
-      // Pool instance available for lifecycle control if needed
+      // Queue instance available for lifecycle control if needed
     }),
 });
 ```
@@ -416,10 +417,10 @@ const TaskPool = ResourcePool.make({
 Use throttling for external API calls:
 
 ```typescript
-import { ResourcePool } from "@nikscripts/effect-pm";
+import { QueueResource } from "@nikscripts/effect-pm";
 import { Duration } from "effect";
 
-const ApiPool = ResourcePool.make({
+const ApiQueue = QueueResource.make({
   effect: callExternalAPI,
   throttle: {
     limit: 10,
@@ -431,7 +432,7 @@ const ApiPool = ResourcePool.make({
 ## Examples
 
 See the [examples/example.ts](./examples/example.ts) file for a complete working example with:
-- Multiple resource pools
+- Multiple queue resources
 - Scheduled processes
 - Full setup with dependencies
 - Control service integration
@@ -442,7 +443,7 @@ See the [examples/example.ts](./examples/example.ts) file for a complete working
 ### Core Exports
 
 - `ProcessManager.make()` - Create a ProcessManager instance
-- `ResourcePool.make()` - Create a resource pool
+- `QueueResource.make()` - Create a resource queue
 - `Process.make()` - Create a scheduled process
 - `ExecutionHistory` - Service for tracking process execution history
 - `ControlService` - HTTP control API utilities
@@ -456,8 +457,8 @@ See the [examples/example.ts](./examples/example.ts) file for a complete working
 
 - `ProcessManager` - ProcessManager interface
 - `ProcessManagerDetails` - Process status information
-- `PoolDetails` - Pool status information
-- `ResourcePool<T, R>` - Resource pool interface
+- `QueueDetails` - Queue status information
+- `QueueResourceInterface<T, R, E>` - Queue resource (queue) instance API
 - `Process<R>` - Process interface
 - `ExecutionHistoryInterface` - Storage interface for implementing custom storage
 - `Execution` - Execution record type

@@ -16,7 +16,7 @@
  * @module ExecutionHistory
  */
 
-import { Effect, Data } from "effect";
+import { Context, Data, Effect, Layer } from "effect";
 
 // ============================================================================
 // Error Types
@@ -330,7 +330,7 @@ const makeInMemoryExecutionHistory = Effect.sync(() => {
  * 
  * // Use default in-memory storage
  * program.pipe(
- *   Effect.provide(ExecutionHistory.Default),
+ *   Effect.provide(ExecutionHistory.layer),
  *   Effect.runPromise
  * );
  * ```
@@ -348,6 +348,13 @@ const makeInMemoryExecutionHistory = Effect.sync(() => {
  * 
  * @public
  */
-export class ExecutionHistory extends Effect.Service<ExecutionHistory>()("ExecutionHistory", {
-  effect: makeInMemoryExecutionHistory,
+export class ExecutionHistory extends Context.Service<
+  ExecutionHistory,
+  ExecutionHistoryInterface
+>()("ExecutionHistory", {
+  make: makeInMemoryExecutionHistory,
 }) {}
+
+export namespace ExecutionHistory {
+  export const layer = Layer.effect(ExecutionHistory, makeInMemoryExecutionHistory);
+}

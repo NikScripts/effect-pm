@@ -75,10 +75,10 @@ git push --follow-tags
 
 ### Breaking Changes
 - Complete API renaming to follow Effect conventions
-- `ResourcePool.make()` replaces `makeQueueService()`
+- `QueueResource.make()` replaces `makeQueueService()`
 - `Process.make()` replaces `createCronProcess()`
 - `ProcessManager.make()` replaces `makeProcessManager()`
-- `.Default` layer pattern replaces tuple returns
+- `.layer` on factory-built tags replaces tuple returns
 - Property renames across all configs
 
 ### Why v0.3.0?
