@@ -1,5 +1,15 @@
 # @nikscripts/effect-pm
 
+## 0.5.0-beta.0
+
+### Minor Changes
+
+- **Pre-1.0:** Minor bump per semver `0.x` — breaking API changes are allowed without a major (major would target `1.0.0`).
+
+  - **`HttpApiResource`**: typed `HttpApiClient.make` with optional `limits` (same concurrency/throttle model as `RunResource`) via `HttpClientRunGate`; `acceptJson` helper; explicit service/layer typing (Effect v4 `Context.Service`).
+  - **`Resource`**: `makeHttpApiClient` / `acceptJson` delegate to `HttpApiResource`.
+  - **Examples**: `examples/http-api-resource.ts` (jsonplaceholder); optional local NWSL scripts (`scripts/nwsl-local.mjs`, `vitest.nwsl.config.ts`, `test:nwsl` / `example:nwsl-http-api-resource` when `examples/nwslsoccer` is present).
+
 ## 0.4.0
 
 ### Minor Changes
