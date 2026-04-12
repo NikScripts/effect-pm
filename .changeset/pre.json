@@ -4,5 +4,7 @@
   "initialVersions": {
     "@nikscripts/effect-pm": "0.5.0-beta.0"
   },
-  "changesets": []
+  "changesets": [
+    "effect-v4-beta-47"
+  ]
 }
