@@ -1,8 +1,8 @@
 import { it, describe, expect } from "@effect/vitest"
-import { Effect, Layer, Ref, Schema } from "effect"
+import { Context, Effect, Layer, Ref, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import type { HttpClientError } from "effect/unstable/http"
-import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
+import { HttpApi, HttpApiClient, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 import { acceptJson, HttpApiResource } from "../src"
 
 const json200 = JSON.stringify({ pong: true })
@@ -213,6 +213,52 @@ describe("HttpApiResource.make", () => {
         const client = yield* Tag
         yield* client.g.ping()
       }).pipe(Effect.provide(Tag.layer), Effect.provide(httpLayer))
+    })
+  )
+})
+
+describe("HttpApiResource.layerEffect", () => {
+  it.live("wraps an existing client effect with one shared gated instance", () =>
+    Effect.gen(function* () {
+      const active = yield* Ref.make(0)
+      const peak = yield* Ref.make(0)
+      const builds = yield* Ref.make(0)
+      const api = HttpApi.make("vitest-existing-client").add(HttpApiGroup.make("g").add(pingEndpoint))
+      const makeClient = Effect.gen(function* () {
+        yield* Ref.update(builds, (n) => n + 1)
+        return yield* HttpApiClient.make(api, {
+          transformClient: acceptJson,
+        })
+      })
+      type ClientShape = Effect.Success<typeof makeClient>
+      const Tag = Context.Service<
+        ClientShape & { _brand: "test/existing-client" },
+        ClientShape
+      >("test/existing-client")
+      const layerCapture = HttpApiResource.layerEffect(Tag, makeClient, {
+        limits: {},
+      })
+      const httpLayer = Layer.succeed(
+        HttpClient.HttpClient,
+        makeRecordingClient(active, peak)
+      )
+      const result = yield* Effect.gen(function* () {
+        const clientA = yield* Tag
+        const clientB = yield* Tag
+        expect(clientA).toBe(clientB)
+        yield* Effect.all(
+          Array.from({ length: 12 }, (_, i) =>
+            i % 2 === 0 ? clientA.g.ping() : clientB.g.ping()
+          ),
+          { concurrency: "unbounded" }
+        )
+        return {
+          builds: yield* Ref.get(builds),
+          peakConcurrent: yield* Ref.get(peak),
+        }
+      }).pipe(Effect.provide(layerCapture), Effect.provide(httpLayer))
+      expect(result.builds).toBe(1)
+      expect(result.peakConcurrent).toBe(1)
     })
   )
 })

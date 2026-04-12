@@ -49,6 +49,16 @@ export type HttpApiResourceMakeConfig<
 };
 
 /**
+ * Config for wrapping an existing client-building effect with the same transport gate
+ * used by {@link HttpApiResource.make}.
+ *
+ * @public
+ */
+export type HttpApiResourceLayerEffectConfig = {
+  readonly limits?: RunResourceLimits;
+};
+
+/**
  * `Accept: application/json` on every request. Use inside `transformClient` or pipe a client.
  *
  * @public
@@ -59,6 +69,35 @@ export const acceptJson = <E, R>(
   client.pipe(
     HttpClient.mapRequest(HttpClientRequest.setHeader("Accept", "application/json"))
   );
+
+const makeRunner = (
+  limits: RunResourceLimits | undefined
+): Effect.Effect<RunResourceRunner, never, never> =>
+  Effect.map(makeRunResourceWrap(limits), (wrap) =>
+    <A, E, R>(effect: Effect.Effect<A, E, R>) => wrap(effect)
+  );
+
+function layerEffect<
+  Service,
+  Identifier,
+  Error,
+  Requirements,
+>(
+  tag: Context.Key<Identifier, Service>,
+  effect: Effect.Effect<Service, Error, Requirements>,
+  config: HttpApiResourceLayerEffectConfig = {}
+){
+  return Layer.effect(tag)(
+    Effect.gen(function* () {
+      const runner = yield* makeRunner(config.limits);
+      const httpClient = yield* HttpClient.HttpClient;
+      const gatedHttpClient = HttpClientRunGate.withRunner(runner)(httpClient);
+      return yield* effect.pipe(
+        Effect.provideService(HttpClient.HttpClient, gatedHttpClient)
+      );
+    })
+  );
+}
 
 function makeHttpApiResource<
   ApiId extends string,
@@ -83,12 +122,10 @@ function makeHttpApiResource<
 
   const tag = Context.Service<ClientShape & { _brand: Name }, ClientShape>(tagId);
 
-  const layer = Layer.effect(
+  const layer = layerEffect(
     tag,
     Effect.gen(function* () {
-      const wrap = yield* makeRunResourceWrap(config.limits);
-      const runner: RunResourceRunner = <A, E, R>(e: Effect.Effect<A, E, R>) =>
-        wrap(e);
+      const runner = yield* makeRunner(config.limits);
       const userTc = config.client.transformClient;
       return yield* HttpApiClient.make(api, {
         baseUrl: config.client.baseUrl,
@@ -107,5 +144,6 @@ function makeHttpApiResource<
  */
 export const HttpApiResource = {
   make: makeHttpApiResource,
+  layerEffect,
   acceptJson,
 } as const;

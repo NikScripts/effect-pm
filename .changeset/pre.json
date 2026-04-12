@@ -5,6 +5,7 @@
     "@nikscripts/effect-pm": "0.5.0-beta.0"
   },
   "changesets": [
-    "effect-v4-beta-47"
+    "effect-v4-beta-47",
+    "http-api-resource-layer-effect"
   ]
 }

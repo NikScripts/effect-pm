@@ -1,6 +1,6 @@
 {
   "name": "@nikscripts/effect-pm",
-  "version": "0.5.0-beta.1",
+  "version": "0.5.0-beta.2",
   "description": "Manage long-running Effect processes with runtime control. Queue resource-heavy operations with configurable throttling and priorities. Schedule recurring tasks with cron. Check status, start/stop processes, and view metrics through a CLI while your application runs.",
   "keywords": [
     "effect",
@@ -58,7 +58,8 @@
     "example:http-client-run-gate": "tsx examples/http-client-run-gate.ts",
     "example:http-api-resource": "tsx examples/http-api-resource.ts",
     "example:nwsl-http-api-resource": "node scripts/nwsl-local.mjs example",
-    "cli": "tsx examples/cli.ts"
+    "cli": "tsx examples/cli.ts",
+    "example:http-api-resource-layer-effect": "tsx examples/http-api-resource-layer-effect.ts"
   },
   "dependencies": {
     "@effect/platform-node": "4.0.0-beta.47",

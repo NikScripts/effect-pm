@@ -12,6 +12,7 @@ export {
   HttpApiResource,
   acceptJson,
   type HttpApiResourceClientOptions,
+  type HttpApiResourceLayerEffectConfig,
   type HttpApiResourceMakeConfig,
 } from "./HttpApiResource";
 export { Resource } from "./Resource";
