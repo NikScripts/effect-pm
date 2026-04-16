@@ -79,11 +79,12 @@ export interface ScheduledProcessDetails {
  * - Status reporting with next run calculation
  * - Manual triggering via {@link runImmediately}
  * 
- * @typeParam R - Requirements type for the scheduled program
+ * @typeParam R - Requirements type for the scheduled program (covariant so a
+ * heterogeneous tuple of processes can be managed under one union environment)
  * 
  * @public
  */
-export interface Process<R> {
+export interface Process<out R> {
   /** Unique identifier for the process */
   readonly name: string;
   /** Process type discriminator (always "scheduled") */

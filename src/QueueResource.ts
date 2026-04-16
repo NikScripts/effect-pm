@@ -97,6 +97,18 @@ const makeGlobalThrottler = (minInterval: Duration.Duration) =>
 // ============================================================================
 
 /**
+ * Service environment required by a queue's per-item processor (the return type
+ * of {@link QueueResourceConfigBase.effect}).
+ *
+ * @public
+ */
+export type QueueItemEffectRequirements<F> = F extends (
+  item: infer _Item,
+) => Effect.Effect<any, any, infer R>
+  ? R
+  : never;
+
+/**
  * QueueResource status details for monitoring
  * 
  * @public
@@ -247,10 +259,11 @@ export interface QueueResourceInstance<T, _R, _E = never> {
  * @typeParam T - Type of items to process
  * @typeParam R - Success type produced by the item effect
  * @typeParam E - Error type of the item effect
+ * @typeParam RItem - Service environment required by each item's {@link QueueResourceConfigBase.effect | effect}
  *
  * @public
  */
-export interface QueueResourceConfigBase<T, R, E = never> {
+export interface QueueResourceConfigBase<T, R, E = never, RItem = never> {
   /** Unique name for the resource queue (must be a string literal) */
   readonly name: string;
   // ========== Processing ==========
@@ -259,7 +272,8 @@ export interface QueueResourceConfigBase<T, R, E = never> {
    * Effect to execute for each item
    *
    * @param item - Item to process
-   * @returns Effect with success type `R` and failure type `E`
+   * @returns Effect with success type `R`, failure type `E`, and service
+   * environment `RItem` (defaults to `never` when omitted).
    * @remarks
    * **Worker behavior:** The queue runs this effect with `Effect.exit`. Failures
    * and defects do not crash the worker; the outcome is turned into a value-level
@@ -270,7 +284,7 @@ export interface QueueResourceConfigBase<T, R, E = never> {
    * argument of `Effect.Effect<R, E>`). That is how TypeScript models errors —
    * not whether you use `Effect.fail` specifically.
    */
-  readonly effect: (item: T) => Effect.Effect<R, E>;
+  readonly effect: (item: T) => Effect.Effect<R, E, RItem>;
 
   // ========== Queue configuration ==========
 
@@ -372,11 +386,12 @@ export interface QueueResourceConfigBase<T, R, E = never> {
  * @typeParam R - Success type produced by the item effect
  * @typeParam E - Error type of the item effect
  * @typeParam RFork - Environment required by the effect returned from `forkWith`
+ * @typeParam RItem - Environment required by each item {@link QueueResourceConfigBase.effect | effect}
  *
  * @public
  */
-export type QueueResourceConfig<T, R, E = never, RFork = never> =
-  QueueResourceConfigBase<T, R, E> &
+export type QueueResourceConfig<T, R, E = never, RFork = never, RItem = never> =
+  QueueResourceConfigBase<T, R, E, RItem> &
     ([E] extends [never]
       ? {
           /**
@@ -437,12 +452,13 @@ export type QueueResourceConfig<T, R, E = never, RFork = never> =
  * @typeParam R - Success type produced by the item effect
  * @typeParam E - Error type of the item effect
  * @typeParam RFork - Environment required by `forkWith`'s returned effect
+ * @typeParam RItem - Environment required by each item `effect`
  *
  * @param config - Queue configuration (without name)
  * @returns Scoped effect producing a QueueResource
  */
-const makeQueueResourceEffect = <T, R, E, RFork = never>(
-  config: Omit<QueueResourceConfig<T, R, E, RFork>, "name">
+const makeQueueResourceEffect = <T, R, E, RFork = never, RItem = never>(
+  config: Omit<QueueResourceConfig<T, R, E, RFork, RItem>, "name">
 ) =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -934,13 +950,15 @@ export const QueueResource = {
    * @typeParam R - Success type produced by the item effect
    * @typeParam E - Error type of the item effect
    * @typeParam RFork - Requirements of the effect returned from `forkWith` (inferred)
+   * @typeParam RItem - Requirements of each item `effect` (inferred from the handler)
    *
    * @param config - QueueResource configuration; see {@link QueueResourceConfig}
    * @returns Service tag with `.layer`. The layer’s requirement type includes
-   * whatever `RFork` your `forkWith` needs, in addition to internal queue dependencies.
+   * whatever `RFork` your `forkWith` needs, `RItem` for the item processor, and
+   * internal queue dependencies.
    */
-  make: <T, R, E, RFork = never>(
-    config: QueueResourceConfig<T, R, E, RFork>
+  make: <T, R, E, RFork = never, RItem = never>(
+    config: QueueResourceConfig<T, R, E, RFork, RItem>
   ) => {
     const service = Context.Service<
       QueueResourceInstance<T, R, E> & { _brand: typeof config.name },
@@ -949,7 +967,7 @@ export const QueueResource = {
     
     const layer = Layer.effect(
       service,
-      makeQueueResourceEffect<T, R, E, RFork>(config)
+      makeQueueResourceEffect<T, R, E, RFork, RItem>(config)
     );
     
     return Object.assign(service, { layer });

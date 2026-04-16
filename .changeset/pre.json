@@ -6,6 +6,7 @@
   },
   "changesets": [
     "effect-v4-beta-47",
-    "http-api-resource-layer-effect"
+    "http-api-resource-layer-effect",
+    "v060-env-inference"
   ]
 }

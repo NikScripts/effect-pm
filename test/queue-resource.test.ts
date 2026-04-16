@@ -1,7 +1,12 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Duration, Effect, Ref } from "effect"
+import { Context, Duration, Effect, Layer, Ref } from "effect"
 import type { QueueResourceInterface } from "../src"
 import { QueueResource } from "../src"
+
+/** Per-item dependency for requirement-propagation tests */
+const ItemDeps = Context.Service<{ readonly marker: string }>(
+  "test/queue-item-deps",
+)
 
 /** Keeps queue resource tests fast; default queue throttle is very conservative. */
 const fastThrottle = { limit: 10_000, duration: Duration.seconds(1) } as const
@@ -107,6 +112,28 @@ describe("QueueResource.make — processing", () => {
       expect(yield* queue.getCompleted()).toBe(0)
       expect(yield* queue.isEmpty()).toBe(true)
     }).pipe(Effect.provide(Queue.layer))
+  })
+
+  it.live("item effect service requirements flow into the queue layer", () => {
+    const ItemDepsLive = Layer.succeed(ItemDeps)({ marker: "from-layer" })
+
+    const Queue = QueueResource.make({
+      name: "test/queue-item-ritem",
+      effect: (_n: number) =>
+        Effect.gen(function* () {
+          const deps = yield* ItemDeps
+          expect(deps.marker).toBe("from-layer")
+          return 0
+        }),
+      concurrency: 1,
+      throttle: fastThrottle,
+    })
+
+    return Effect.gen(function* () {
+      const queue = yield* Queue
+      yield* queue.add(1)
+      yield* waitUntilProcessed(queue, 1)
+    }).pipe(Effect.provide(Layer.provide(Queue.layer, ItemDepsLive)))
   })
 })
 

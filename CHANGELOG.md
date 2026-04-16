@@ -1,5 +1,28 @@
 # @nikscripts/effect-pm
 
+## 0.6.0-beta.0
+
+### Minor Changes
+
+- **Pre-1.0:** `0.6.x` prerelease — type-level environment inference for **ProcessManager** and **QueueResource** (see below). Install: `npm install @nikscripts/effect-pm@0.6.0-beta.0` or tag `beta`.
+
+  ### ProcessManager
+
+  - **`ProcessManager.make`** now takes `processes` as a **`const` tuple** of `Process` values and infers combined requirements via **`AllManagedProcessesRequirements`**, instead of restricting process environments to queues + `ExecutionHistory` only.
+  - New exports: **`ProcessEffectRequirements`**, **`AllManagedProcessesRequirements`** (also uses **`Effect.Services`** for alignment with Effect).
+  - Internal process map is built with **`processMapFromTuple`**; **`Process`** is now **`Process<out R>`** so heterogeneous processes widen covariantly into the union environment (no assertions).
+  - Lifecycle controls that fork scheduled work remain typed as **`R | ExecutionHistory`** where needed for a sound generic `R`.
+
+  ### QueueResource
+
+  - Item **`effect`** is now **`(item: T) => Effect.Effect<R, E, RItem>`** with **`RItem` defaulting to `never`**, so per-item service requirements flow into **`Queue.layer`** (inferred).
+  - **`QueueResourceConfig`** gains an optional fifth type parameter **`RItem`** after **`RFork`** to avoid breaking existing four-parameter type references.
+  - New export: **`QueueItemEffectRequirements`** for extracting services from an item handler type.
+
+  ### Tests
+
+  - Queue resource test: item effect that **`yield*`** a service is covered by the composed layer.
+
 ## 0.5.0-beta.2
 
 ### Minor Changes

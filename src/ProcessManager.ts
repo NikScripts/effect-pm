@@ -9,7 +9,6 @@
  * - Process lifecycle management (start, stop, restart)
  * - Real-time status monitoring and metrics
  * - Queue resource integration and management
- * - Type-safe queue dependency enforcement
  * - Scoped resource management with automatic cleanup
  * 
  * **Dependencies:**
@@ -35,19 +34,53 @@ import { ControlService } from "./ControlService";
  */
 type TagIdentifier<T> = T extends Context.Key<infer I, any> ? I : never;
 
-/**
- * Helper type to convert union to intersection
- * @internal
- */
-type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
-  k: infer I,
-) => void
-  ? I
-  : never;
-
 // ============================================================================
 // Public Types
 // ============================================================================
+
+/**
+ * Environment required to run a process's scheduled `effect` (including
+ * {@link ExecutionHistory}, which the scheduler wrapper always uses).
+ *
+ * @public
+ */
+export type ProcessEffectRequirements<P> = P extends Process<any>
+  ? Effect.Services<P["effect"]>
+  : never;
+
+/**
+ * Union of {@link ProcessEffectRequirements} for every process in a tuple.
+ *
+ * @remarks
+ * {@link ProcessManager.make} uses this so `startAll`, `startProcess`, and
+ * related controls carry the same combined environment you would thread
+ * through any nested `Effect`.
+ *
+ * @public
+ */
+export type AllManagedProcessesRequirements<
+  Processes extends readonly Process<any>[],
+> = ProcessEffectRequirements<Processes[number]>;
+
+/**
+ * Builds the internal process map: each concrete process is assignable to
+ * `Process<PMR>` because {@link Process} is covariant in `R` and `PMR` is the
+ * union of every process effect's environment.
+ *
+ * @internal
+ */
+const processMapFromTuple = <const Processes extends readonly Process<any>[]>(
+  processes: Processes,
+): Map<string, Process<AllManagedProcessesRequirements<Processes>>> => {
+  const map = new Map<
+    string,
+    Process<AllManagedProcessesRequirements<Processes>>
+  >();
+  for (const p of processes) {
+    map.set(p.name, p);
+  }
+  return map;
+};
 
 /**
  * ProcessManager core dependencies
@@ -176,7 +209,10 @@ export interface QueueDetails {
  * - Access managed queues directly
  * - View queue metrics and status
  * 
- * @typeParam R - Requirements type representing dependencies needed by managed processes
+ * @typeParam R - Combined environment for all managed processes' runnable effects
+ * (see {@link AllManagedProcessesRequirements}). Lifecycle methods that fork
+ * scheduled work list `R | {@link ExecutionHistory}` because TypeScript cannot
+ * prove `ExecutionHistory` is already part of an unconstrained `R`.
  * 
  * @public
  */
@@ -209,7 +245,9 @@ export interface ProcessManagerControls<R> {
    * @remarks
    * Fails if the process is already running or doesn't exist.
    */
-  startProcess(name: string): Effect.Effect<void, PMError, R>;
+  startProcess(
+    name: string,
+  ): Effect.Effect<void, PMError, R | ExecutionHistory>;
   
   /**
    * Stop a specific process
@@ -225,7 +263,9 @@ export interface ProcessManagerControls<R> {
    * 
    * @param name - Process identifier
    */
-  restartProcess(name: string): Effect.Effect<void, PMError, R>;
+  restartProcess(
+    name: string,
+  ): Effect.Effect<void, PMError, R | ExecutionHistory>;
 
   // ========== Process-Specific Actions ==========
   
@@ -237,7 +277,9 @@ export interface ProcessManagerControls<R> {
    * Only works for scheduled processes (crons). The process must support
    * immediate execution. This does not affect the regular schedule.
    */
-  runProcessImmediately(name: string): Effect.Effect<void, PMError, R>;
+  runProcessImmediately(
+    name: string,
+  ): Effect.Effect<void, PMError, R | ExecutionHistory>;
 
   // ========== Status and Details ==========
   
@@ -270,7 +312,7 @@ export interface ProcessManagerControls<R> {
    * @remarks
    * Processes that are already running will be skipped.
    */
-  startAll(): Effect.Effect<void, PMError, R>;
+  startAll(): Effect.Effect<void, PMError, R | ExecutionHistory>;
   
   /**
    * Stop all running processes
@@ -561,7 +603,7 @@ const listProcesses = <R>(
           // Get additional details for scheduled processes
           let scheduledDetails = {};
           if (process.type === "scheduled") {
-            const details = yield* (process as Process<R>).getStatus().pipe(
+            const details = yield* process.getStatus().pipe(
               Effect.catch(() =>
                 Effect.succeed({
                   lastRun: null,
@@ -769,16 +811,18 @@ const getProcessStatus =
  * - Unified control interface (start, stop, restart)
  * - Status monitoring and metrics
  * - Queue resource integration and access
- * - Type-safe queue dependency enforcement
  * 
  * **Type Safety**
  * 
- * The type system ensures that all queue dependencies used in processes are
- * provided in the `queues` array. If a process references a queue that isn't
- * provided, you'll get a compile-time error.
+ * Managed processes may require any Effect services. The returned
+ * {@link ProcessManager} is parameterized by {@link AllManagedProcessesRequirements},
+ * inferred from the `processes` tuple, so `startAll` and related controls
+ * require the same combined environment as forking those effects elsewhere.
+ * Queue tags in `queues` must still be available when running `ProcessManager.make`
+ * (they are acquired during construction).
  * 
  * @typeParam Queues - Array of queue resource service tags to manage
- * @typeParam R - Additional requirements for processes beyond queues and ProcessManager dependencies
+ * @typeParam Processes - Tuple of {@link Process} values; used to infer combined requirements
  * 
  * @param config - Configuration object
  * @param config.queues - Array of queue resource service tags (from QueueResource.make)
@@ -800,7 +844,7 @@ const getProcessStatus =
  * const emailCron = Process.make({
  *   name: "send-emails",
  *   crons: Cron.make({ minutes: [0, 30] }), // Every 30 minutes
- *   program: Effect.gen(function* () {
+ *   effect: Effect.gen(function* () {
  *     const queue = yield* EmailQueue;
  *     yield* queue.add([email1, email2, email3]);
  *   })
@@ -820,40 +864,28 @@ export const makeProcessManager = <
   const Queues extends readonly [
     ...Context.Key<any, QueueResourceInstance<any, any, any>>[],
   ],
-  R,
+  const Processes extends readonly Process<any>[],
 >(config: {
   queues: Queues;
-  processes: Process<
-    | (R extends QueueResourceInstance<any, any, any>
-        ? TagIdentifier<Queues[number]>
-        : R)
-    | ProcessManagerDependencies
-  >[];
+  processes: Processes;
 }): Effect.Effect<
-  ProcessManager<
-    | R
-    | ProcessManagerDependencies
-    | UnionToIntersection<TagIdentifier<Queues[number]>>
-  >,
+  ProcessManager<AllManagedProcessesRequirements<Processes>>,
   PMError,
   TagIdentifier<Queues[number]>
 > =>
   Effect.gen(function* () {
+    type PMR = AllManagedProcessesRequirements<Processes>;
+
     // Yield all queue services to make them requirements
     const queuesMap = Object.fromEntries(
       config.queues.map((queueTag) => [queueTag.key, queueTag.asEffect()]),
     );
     const queues = yield* Effect.all(queuesMap);
 
-    // Initialize processes map with the provided processes
-    const processMap = new Map<
-      string,
-      Process<R | ProcessManagerDependencies | TagIdentifier<Queues[number]>>
-    >();
+    const processMap = processMapFromTuple(config.processes);
     const statusMap = new Map<string, ProcessStatus>();
-    for (const process of config.processes) {
-      processMap.set(process.name, process);
-      statusMap.set(process.name, "stopped");
+    for (const name of processMap.keys()) {
+      statusMap.set(name, "stopped");
     }
 
     const processes = yield* Ref.make(processMap);
@@ -864,9 +896,7 @@ export const makeProcessManager = <
       new Map<string, Fiber.Fiber<void, ExecutionHistoryError>>(),
     );
 
-    const state: ProcessManagerState<
-      R | ProcessManagerDependencies | TagIdentifier<Queues[number]>
-    > = {
+    const state: ProcessManagerState<PMR> = {
       processes,
       queues,
       statuses,

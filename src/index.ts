@@ -41,6 +41,8 @@ export type {
   PMError,
   ProcessManagerDependencies,
   AwaitShutdownOptions,
+  ProcessEffectRequirements,
+  AllManagedProcessesRequirements,
 } from "./ProcessManager";
 
 // Error classes - ProcessManager  
@@ -64,6 +66,7 @@ export type {
   QueueResourceConfig,
   QueueResourceConfigBase,
   QueueResourceDetails,
+  QueueItemEffectRequirements,
 } from "./QueueResource";
 
 // Types - RunResource
