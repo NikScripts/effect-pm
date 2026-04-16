@@ -40,6 +40,7 @@ export type {
   QueueDetails,
   PMError,
   ProcessManagerDependencies,
+  AwaitShutdownOptions,
 } from "./ProcessManager";
 
 // Error classes - ProcessManager  

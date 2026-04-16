@@ -302,8 +302,47 @@ export interface ProcessManagerControls<R> {
   ): Effect.Effect<QueueResourceInstance<any, any, any>, PMError>;
 }
 
+/**
+ * Options for {@link ProcessManager} shutdown waiting (Node.js signals).
+ *
+ * @public
+ */
+export interface AwaitShutdownOptions {
+  /**
+   * OS signals that trigger graceful shutdown (interrupts the running fiber).
+   *
+   * @defaultValue `["SIGINT", "SIGTERM"]` — matches local Ctrl+C and `docker stop`.
+   */
+  readonly signals?: readonly string[];
+  /**
+   * Custom log line for each signal. Return `undefined` or `""` to skip logging.
+   *
+   * @remarks
+   * When omitted, a default info message is logged via {@link Effect.logInfo}.
+   */
+  readonly logMessage?: (signal: string) => string | undefined;
+}
+
 export interface ProcessManager<R> extends ProcessManagerControls<R> {
   serve: ({ port }: { port?: number }) => Effect.Effect<void, never, Scope.Scope | R | ExecutionHistory>;
+
+  /**
+   * Block until a shutdown signal is received, then interrupt (so scoped
+   * resources such as the control HTTP server shut down cleanly).
+   *
+   * @remarks
+   * Intended as the last step in a long-running program after `serve` and
+   * `startAll`. Listeners are removed when the surrounding scope closes or
+   * after the first matching signal.
+   *
+   * No-ops into {@link Effect.never} with a warning when `process.on` is
+   * unavailable (non-Node environments).
+   *
+   * @public
+   */
+  awaitShutdown: (
+    options?: AwaitShutdownOptions,
+  ) => Effect.Effect<never, never, Scope.Scope>;
 }
 
 // ============================================================================
@@ -378,6 +417,72 @@ export type PMError =
   | ProcessAlreadyRunningError
   | ProcessNotRunningError
   | ExecutionHistoryError;
+
+const defaultShutdownSignals = ["SIGINT", "SIGTERM"] as const;
+
+/**
+ * Wait for Node process signals, then interrupt the current fiber.
+ *
+ * @internal
+ */
+const awaitShutdownNode = (
+  options?: AwaitShutdownOptions,
+): Effect.Effect<never, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    const signals = options?.signals ?? defaultShutdownSignals;
+    const entries: Array<{ readonly sig: string; readonly fn: () => void }> =
+      [];
+
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        for (const { sig, fn } of entries) {
+          process.off(sig, fn);
+        }
+        entries.length = 0;
+      }),
+    );
+
+    yield* Effect.callback<never>((resume) => {
+      let done = false;
+      for (const sig of signals) {
+        const fn = () => {
+          if (done) return;
+          done = true;
+          for (const e of entries) {
+            process.off(e.sig, e.fn);
+          }
+          entries.length = 0;
+
+          const resolved =
+            options?.logMessage !== undefined
+              ? options.logMessage(sig)
+              : `Received ${sig}, shutting down gracefully...`;
+
+          const log =
+            resolved !== undefined && resolved !== ""
+              ? Effect.logInfo(resolved)
+              : Effect.void;
+
+          resume(Effect.andThen(log, () => Effect.interrupt));
+        };
+        entries.push({ sig, fn });
+        process.on(sig, fn);
+      }
+    });
+    // addFinalizer yields void; success type stays `void` unless asserted.
+  }) as Effect.Effect<never, never, Scope.Scope>;
+
+const awaitShutdown = (
+  options?: AwaitShutdownOptions,
+): Effect.Effect<never, never, Scope.Scope> =>
+  typeof process !== "undefined" && typeof process.on === "function"
+    ? awaitShutdownNode(options)
+    : Effect.andThen(
+        Effect.logWarning(
+          "ProcessManager.awaitShutdown: process.on is not available; blocking forever. Use a Node.js entrypoint.",
+        ),
+        () => Effect.never,
+      );
 
 // ============================================================================
 // Helper Functions (Internal)
@@ -848,6 +953,7 @@ export const makeProcessManager = <
     return {
       ...controls,
       serve: ({ port }: { port?: number }) => ControlService.make({ pm: controls, port }),
+      awaitShutdown,
     };
   });
 

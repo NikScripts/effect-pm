@@ -256,15 +256,8 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo("   npm run cli queues");
   yield* Effect.logInfo("   Press Ctrl+C to stop.");
 
-  // Keep process running until signal received
-  yield* Effect.callback<never>((resume) => {
-    const handleSignal = (signal: string) => {
-      console.log(`\n📡 Received ${signal}, shutting down gracefully...`);
-      resume(Effect.interrupt);
-    };
-
-    process.on("SIGINT", () => handleSignal("SIGINT"));
-    process.on("SIGTERM", () => handleSignal("SIGTERM"));
+  yield* pm.awaitShutdown({
+    logMessage: (signal) => `📡 Received ${signal}, shutting down gracefully...`,
   });
 }).pipe(Effect.scoped);
 
