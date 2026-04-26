@@ -1,5 +1,14 @@
 # @nikscripts/effect-pm
 
+## 0.6.0-beta.1
+
+### Patch Changes
+
+- **Prerelease:** next `0.6.0` beta (not a new semver minor line).
+
+  - **QueueResource:** Public instance type is **`QueueRef<Name, T, R, E>`** with **queue id first** (phantom type param; use a **string literal** `name` in `QueueResource.make` so `Name` is inferred). **`Context.Service`** uses `QueueRef<Name, T, R, E>` for both identifier and shape — no **`& { _brand: … }`**. Removed **`QueueNameBrand`**. Deprecated **`QueueResourceInstance` / `QueueResourceInterface`** map to **`QueueRef<string, T, R, E>`** for the old 3-parameter form.
+  - **ProcessManager:** Queue-related types use **`QueueRef<any, any, any, any>`** where needed; docs note literal `name` for `Effect.provide` / merged `Layer` typing.
+
 ## 0.6.0-beta.0
 
 ### Minor Changes

@@ -127,20 +127,17 @@ export interface QueueResourceDetails {
 }
 
 /**
- * QueueResource Interface
- * 
- * @remarks
- * The main interface for interacting with a QueueResource. Provides methods
- * to add items at different priority levels, monitor queue status, and control
- * queue lifecycle.
- * 
+ * Handle returned from a queue’s service (what you get from `yield* MyQueue`):
+ * add items, read status, pause/resume, etc.
+ *
+ * @typeParam _Name - String literal queue id from {@link QueueResourceConfigBase.name} (phantom). Shown first in `QueueRef<…>` hovers as the first type argument.
  * @typeParam T - Type of items to process
  * @typeParam R - Success type produced by the item effect
  * @typeParam E - Error type of the item effect
  *
  * @public
  */
-export interface QueueResourceInstance<T, _R, _E = never> {
+export interface QueueRef<_Name extends string, T, _R, _E = never> {
   /**
    * Add item(s) at high priority
    * 
@@ -254,18 +251,41 @@ export interface QueueResourceInstance<T, _R, _E = never> {
 }
 
 /**
+ * @deprecated Use {@link QueueRef}. Old arity was `(T,R,E)`; use {@link QueueRef} with `Name` first, or `string` for `Name` if unknown.
+ * @public
+ */
+export type QueueResourceInstance<T, R, E = never> = QueueRef<string, T, R, E>;
+
+/**
+ * Same as {@link QueueRef} (legacy export name for the public package entry).
+ *
+ * @public
+ */
+export type QueueResourceInterface<T, R, E = never> = QueueRef<string, T, R, E>;
+
+/**
  * Shared fields for {@link QueueResourceConfig} (excluding `forkWith`).
  *
  * @typeParam T - Type of items to process
  * @typeParam R - Success type produced by the item effect
  * @typeParam E - Error type of the item effect
  * @typeParam RItem - Service environment required by each item's {@link QueueResourceConfigBase.effect | effect}
+ * @typeParam Name - String literal queue id (first type argument on {@link QueueRef}; phantom for `Layer` / `Effect.provide` typing)
  *
  * @public
  */
-export interface QueueResourceConfigBase<T, R, E = never, RItem = never> {
-  /** Unique name for the resource queue (must be a string literal) */
-  readonly name: string;
+export interface QueueResourceConfigBase<
+  T,
+  R,
+  E = never,
+  RItem = never,
+  Name extends string = string,
+> {
+  /**
+   * Unique name for the resource queue. Use a **string literal** so it becomes
+   * the first type parameter of {@link QueueRef} and lines up with `Effect.provide` / `Layer`.
+   */
+  readonly name: Name;
   // ========== Processing ==========
 
   /**
@@ -345,13 +365,13 @@ export interface QueueResourceConfigBase<T, R, E = never, RItem = never> {
    */
   cache?: (
     item: T | readonly T[],
-    queue: QueueResourceInstance<T, R, E>
+    queue: QueueRef<Name, T, R, E>
   ) => Effect.Effect<void, Error>;
 
   /**
    * Effect to refill queue from cache/database
    *
-   * @param queue - The QueueResource instance (allows adding items and checking queue state)
+   * @param queue - The {@link QueueRef} (allows adding items and checking queue state)
    * @returns Effect that loads and re-adds items
    * @remarks
    * Called automatically when the queue becomes empty. Use to reload
@@ -359,7 +379,7 @@ export interface QueueResourceConfigBase<T, R, E = never, RItem = never> {
    * trigger {@link cache}. Use queue.add(), queue.next(), or queue.deffered() to
    * add items at different priority levels.
    */
-  refill?: (queue: QueueResourceInstance<T, R, E>) => Effect.Effect<void, Error>;
+  refill?: (queue: QueueRef<Name, T, R, E>) => Effect.Effect<void, Error>;
 }
 
 /**
@@ -387,46 +407,53 @@ export interface QueueResourceConfigBase<T, R, E = never, RItem = never> {
  * @typeParam E - Error type of the item effect
  * @typeParam RFork - Environment required by the effect returned from `forkWith`
  * @typeParam RItem - Environment required by each item {@link QueueResourceConfigBase.effect | effect}
+ * @typeParam Name - String literal for {@link QueueResourceConfigBase.name} (inferred)
  *
  * @public
  */
-export type QueueResourceConfig<T, R, E = never, RFork = never, RItem = never> =
-  QueueResourceConfigBase<T, R, E, RItem> &
-    ([E] extends [never]
-      ? {
-          /**
-           * Optional follow-up run in a **fork** after each item. The queue wraps the
-           * returned effect in `catchAll` so defects in the handler do not kill workers.
-           *
-           * @param forked - Item outcome as `Effect.succeed` / `Effect.failCause` (same `R`, `E` as `effect`)
-           * @param item - Item that was processed
-           * @param queue - Queue instance (lifecycle, re-enqueue, etc.)
-           * @remarks Return **`Effect<void, never, RFork>`** — handle `forked` until errors are `never`.
-           */
-          readonly forkWith?: (
-            forked: Effect.Effect<R, E>,
-            item: T,
-            queue: QueueResourceInstance<T, R, E>
-          ) => Effect.Effect<void, never, RFork>;
-        }
-      : {
-          /**
-           * **Required** when the item effect has a non-`never` error type `E`.
-           * Runs in a **fork** after each item; the queue wraps with `catchAll` so
-           * handler bugs do not crash workers.
-           *
-           * @param forked - Item outcome as `Effect.succeed` / `Effect.failCause` (same `R`, `E` as `effect`)
-           * @param item - Item that was processed
-           * @param queue - Queue instance (lifecycle, re-enqueue, etc.)
-           * @remarks Must return **`Effect<void, never, RFork>`**. Narrow tagged errors with
-           * `catchTag` and cover the rest with `catchAll` until `E` is gone.
-           */
-          readonly forkWith: (
-            forked: Effect.Effect<R, E>,
-            item: T,
-            queue: QueueResourceInstance<T, R, E>
-          ) => Effect.Effect<void, never, RFork>;
-        });
+export type QueueResourceConfig<
+  T,
+  R,
+  E = never,
+  RFork = never,
+  RItem = never,
+  Name extends string = string,
+> = QueueResourceConfigBase<T, R, E, RItem, Name> &
+  ([E] extends [never]
+    ? {
+        /**
+         * Optional follow-up run in a **fork** after each item. The queue wraps the
+         * returned effect in `catchAll` so defects in the handler do not kill workers.
+         *
+         * @param forked - Item outcome as `Effect.succeed` / `Effect.failCause` (same `R`, `E` as `effect`)
+         * @param item - Item that was processed
+         * @param queue - Queue instance (lifecycle, re-enqueue, etc.)
+         * @remarks Return **`Effect<void, never, RFork>`** — handle `forked` until errors are `never`.
+         */
+        readonly forkWith?: (
+          forked: Effect.Effect<R, E>,
+          item: T,
+          queue: QueueRef<Name, T, R, E>
+        ) => Effect.Effect<void, never, RFork>;
+      }
+    : {
+        /**
+         * **Required** when the item effect has a non-`never` error type `E`.
+         * Runs in a **fork** after each item; the queue wraps with `catchAll` so
+         * handler bugs do not crash workers.
+         *
+         * @param forked - Item outcome as `Effect.succeed` / `Effect.failCause` (same `R`, `E` as `effect`)
+         * @param item - Item that was processed
+         * @param queue - Queue instance (lifecycle, re-enqueue, etc.)
+         * @remarks Must return **`Effect<void, never, RFork>`**. Narrow tagged errors with
+         * `catchTag` and cover the rest with `catchAll` until `E` is gone.
+         */
+        readonly forkWith: (
+          forked: Effect.Effect<R, E>,
+          item: T,
+          queue: QueueRef<Name, T, R, E>
+        ) => Effect.Effect<void, never, RFork>;
+      });
 
 // ============================================================================
 // QueueResource Factory
@@ -457,8 +484,8 @@ export type QueueResourceConfig<T, R, E = never, RFork = never, RItem = never> =
  * @param config - Queue configuration (without name)
  * @returns Scoped effect producing a QueueResource
  */
-const makeQueueResourceEffect = <T, R, E, RFork = never, RItem = never>(
-  config: Omit<QueueResourceConfig<T, R, E, RFork, RItem>, "name">
+const makeQueueResourceEffect = <T, R, E, RFork = never, RItem = never, Name extends string = string>(
+  config: Omit<QueueResourceConfig<T, R, E, RFork, RItem, Name>, "name">
 ) =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -510,8 +537,8 @@ const makeQueueResourceEffect = <T, R, E, RFork = never, RItem = never>(
       // Store workers in closure variable (will be populated later)
       let workers: readonly Fiber.Fiber<void>[] = [];
 
-      // Create the QueueResource instance (before processItem so it can be passed to forkWith)
-      const queue: QueueResourceInstance<T, R, E> = {
+      // Create the queue ref (before processItem so it can be passed to forkWith)
+      const queue: QueueRef<Name, T, R, E> = {
         next: (item: T | readonly T[]) =>
           Effect.gen(function* () {
             // Start caching in background (non-blocking)
@@ -951,25 +978,26 @@ export const QueueResource = {
    * @typeParam E - Error type of the item effect
    * @typeParam RFork - Requirements of the effect returned from `forkWith` (inferred)
    * @typeParam RItem - Requirements of each item `effect` (inferred from the handler)
+   * @typeParam Name - Inferred from `name` when it is a string literal (first
+   * type argument of {@link QueueRef}; needed for `Layer` / `Effect.provide` to narrow `R`).
    *
    * @param config - QueueResource configuration; see {@link QueueResourceConfig}
    * @returns Service tag with `.layer`. The layer’s requirement type includes
    * whatever `RFork` your `forkWith` needs, `RItem` for the item processor, and
    * internal queue dependencies.
    */
-  make: <T, R, E, RFork = never, RItem = never>(
-    config: QueueResourceConfig<T, R, E, RFork, RItem>
+  make: <T, R, E, RFork = never, RItem = never, const Name extends string = string>(
+    config: QueueResourceConfig<T, R, E, RFork, RItem, Name>
   ) => {
-    const service = Context.Service<
-      QueueResourceInstance<T, R, E> & { _brand: typeof config.name },
-      QueueResourceInstance<T, R, E>
-    >(config.name);
-    
+    const service = Context.Service<QueueRef<Name, T, R, E>, QueueRef<Name, T, R, E>>(
+      config.name,
+    );
+
     const layer = Layer.effect(
       service,
-      makeQueueResourceEffect<T, R, E, RFork, RItem>(config)
+      makeQueueResourceEffect<T, R, E, RFork, RItem, Name>(config),
     );
-    
+
     return Object.assign(service, { layer });
   },
-}
+};

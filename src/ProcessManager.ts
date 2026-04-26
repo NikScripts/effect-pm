@@ -20,7 +20,7 @@
 
 import { Effect, Scope, Fiber, Ref, Data, Context } from "effect";
 import type { Process } from "./Process";
-import type { QueueResourceInstance } from "./QueueResource";
+import type { QueueRef } from "./QueueResource";
 import { ExecutionHistory, type ExecutionHistoryError } from "./ExecutionHistory";
 import { ControlService } from "./ControlService";
 
@@ -159,7 +159,7 @@ export interface ProcessManagerDetails {
  */
 export interface ProcessManagerState<R> {
   processes: Ref.Ref<Map<string, Process<R>>>;
-  queues: Record<string, QueueResourceInstance<any, any, any>>;
+  queues: Record<string, QueueRef<any, any, any, any>>;
   statuses: Ref.Ref<Map<string, ProcessStatus>>;
   startTimes: Ref.Ref<Map<string, Date>>;
   scopes: Ref.Ref<Map<string, Scope.Scope>>;
@@ -341,7 +341,7 @@ export interface ProcessManagerControls<R> {
    */
   getQueue(
     name: string,
-  ): Effect.Effect<QueueResourceInstance<any, any, any>, PMError>;
+  ): Effect.Effect<QueueRef<any, any, any, any>, PMError>;
 }
 
 /**
@@ -820,6 +820,9 @@ const getProcessStatus =
  * require the same combined environment as forking those effects elsewhere.
  * Queue tags in `queues` must still be available when running `ProcessManager.make`
  * (they are acquired during construction).
+ * For each queue, use {@link QueueResource.make} with a **string literal** `name`
+ * so {@link QueueRef}’s first type parameter is a literal and `Effect.provide` /
+ * merged `Layer`s can narrow `R` correctly.
  * 
  * @typeParam Queues - Array of queue resource service tags to manage
  * @typeParam Processes - Tuple of {@link Process} values; used to infer combined requirements
@@ -862,7 +865,7 @@ const getProcessStatus =
  */
 export const makeProcessManager = <
   const Queues extends readonly [
-    ...Context.Key<any, QueueResourceInstance<any, any, any>>[],
+    ...Context.Key<any, QueueRef<any, any, any, any>>[],
   ],
   const Processes extends readonly Process<any>[],
 >(config: {

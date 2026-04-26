@@ -6,3 +6,8 @@ find the full documentation for it [in our repository](https://github.com/change
 
 We have a quick list of common questions to get you started engaging with this project in
 [our documentation](https://github.com/changesets/changesets/blob/main/docs/common-questions.md)
+
+## effect-pm maintainers
+
+- Add a changeset (`npm run changeset`), then run **`npm run version`** (`changeset version`) so `package.json` and `CHANGELOG.md` update together. In **pre** mode (`beta`), that bumps **`0.6.0-beta.n`** for the same prerelease line—do not hand-edit versions for releases.
+- Publish: `npm run release` or `npm publish --tag beta` after `npm run build`, with npm auth configured.

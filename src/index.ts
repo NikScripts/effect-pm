@@ -62,7 +62,10 @@ export type {
 
 // Types - QueueResource
 export type {
-  QueueResourceInstance as QueueResourceInterface,
+  QueueRef,
+  /** @deprecated Use {@link QueueRef}. */
+  QueueResourceInstance,
+  QueueResourceInterface,
   QueueResourceConfig,
   QueueResourceConfigBase,
   QueueResourceDetails,

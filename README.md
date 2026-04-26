@@ -458,7 +458,7 @@ See the [examples/example.ts](./examples/example.ts) file for a complete working
 - `ProcessManager` - ProcessManager interface
 - `ProcessManagerDetails` - Process status information
 - `QueueDetails` - Queue status information
-- `QueueResourceInterface<T, R, E>` - Queue resource (queue) instance API
+- `QueueRef<Name, T, R, E>` - Queue handle API (`yield*` the tag from `QueueResource.make`); `Name` is the literal `name`; `QueueResourceInterface` is a legacy 3-param alias (`Name` widened to `string`)
 - `Process<R>` - Process interface
 - `ExecutionHistoryInterface` - Storage interface for implementing custom storage
 - `Execution` - Execution record type

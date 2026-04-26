@@ -5,8 +5,6 @@
     "@nikscripts/effect-pm": "0.5.0-beta.0"
   },
   "changesets": [
-    "effect-v4-beta-47",
-    "http-api-resource-layer-effect",
-    "v060-env-inference"
+    "queue-ref-name-first-beta"
   ]
 }
