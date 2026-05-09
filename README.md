@@ -76,7 +76,7 @@ yield* pm.startAll();
 
 ```typescript
 import { Effect, Logger } from "effect";
-import { ExecutionHistory } from "@nikscripts/effect-pm";
+import { ProcessStore } from "@nikscripts/effect-pm";
 
 const program = Effect.gen(function* () {
   const pm = yield* ProcessManager.make({
@@ -90,7 +90,7 @@ const program = Effect.gen(function* () {
 Effect.runPromise(
   program.pipe(
     Effect.provide(EmailQueue.layer),
-    Effect.provide(ExecutionHistory.layer),
+    Effect.provide(ProcessStore.layer), // analytics: in-memory by default
     Effect.provide(Logger.pretty),
   )
 );
@@ -302,60 +302,79 @@ const pm = yield* ProcessManager.make({
 });
 ```
 
-## ExecutionHistory (Current Runtime Requirement)
+## ProcessStore (Analytics & Lifecycle)
 
-ProcessManager requires an `ExecutionHistory` implementation to track process execution history.
+`ProcessStore` is the unified analytics service used by `Process` and
+`ProcessManager`. It is event-first: a single `append` path with a typed
+envelope, plus typed read helpers.
 
-### In-Memory Storage (Development)
+Supported event types out of the box:
 
-```typescript
-import { ExecutionHistory } from "@nikscripts/effect-pm";
+- `process.execution.completed` — every successful or failed run
+- `process.lifecycle.changed` — `Started` / `Stopped` / `Restarted` / etc.
 
-program.pipe(
-  Effect.provide(ExecutionHistory.layer), // In-memory storage
-  Effect.runPromise
-);
-```
-
-**⚠️ Warning:** In-memory storage loses all execution history on restart. A warning will be displayed when using the default implementation.
-
-### Persistent Storage (Production)
-
-For production, implement a persistent storage layer. See `examples/prisma-storage.ts` for a complete Prisma implementation example.
-
-```typescript
-import { ExecutionHistoryPrismaLayer } from "./my-prisma-storage";
-
-program.pipe(
-  Effect.provide(ExecutionHistoryPrismaLayer), // Persistent storage
-  Effect.runPromise
-);
-```
-
-## ProcessStore (Beta Foundation)
-
-`ProcessStore` is now exported as the new unified analytics and storage foundation for vNext.
-It supports process execution/lifecycle/schedule events and queue records in one service.
+### In-memory (development / tests)
 
 ```typescript
 import { ProcessStore } from "@nikscripts/effect-pm";
 
-const program = Effect.gen(function* () {
-  const store = yield* ProcessStore;
-  yield* store.recordExecution({
-    id: "exec-1",
-    processId: "my-process",
-    scheduleKey: null,
-    startedAt: new Date(),
-    completedAt: new Date(),
-    durationMs: 0,
-    status: "completed",
-  });
-}).pipe(Effect.provide(ProcessStore.layer));
+program.pipe(
+  Effect.provide(ProcessStore.layer), // in-memory; data lost on restart
+  Effect.runPromise,
+);
 ```
 
-`ExecutionHistory` is still used by the current `ProcessManager` runtime today.
-The migration to `ProcessStore` in manager/queue internals is in progress.
+### Persistent: Prisma
+
+`@nikscripts/effect-pm` ships a Prisma adapter on a subpath import. It uses a
+single envelope-shaped table (`EffectPmEvent`) so adding new event types in
+the future does not require schema migrations.
+
+#### One-time setup
+
+```bash
+# Add the EffectPmEvent model to your Prisma schema (idempotent).
+npx effect-pm add prisma
+
+# Then generate the client and migrate as usual.
+npx prisma generate
+npx prisma migrate dev --name add_effect_pm_event
+```
+
+The rewriter detects single-file (`prisma/schema.prisma`) and multi-file
+(`prisma/schema/`) layouts. Use `--dry-run` to preview, `--separate-file` /
+`--no-separate-file` to override the placement, or `npx effect-pm prisma:print-schema`
+to copy the fragment manually.
+
+#### Usage
+
+```typescript
+import { PrismaClient } from "@prisma/client";
+import { ProcessManager } from "@nikscripts/effect-pm";
+import { PrismaProcessStore } from "@nikscripts/effect-pm/prisma";
+
+const prisma = new PrismaClient();
+
+const program = Effect.gen(function* () {
+  const pm = yield* ProcessManager.make({ queues: [], processes: [...] });
+  yield* pm.startAll();
+}).pipe(
+  Effect.provide(PrismaProcessStore.layer({ client: prisma })),
+);
+```
+
+If you already wire Prisma through Effect, there is a layer that consumes a
+`PrismaClientService` from your environment instead:
+
+```typescript
+const layer = Layer.provide(
+  PrismaProcessStore.layerFromContext,
+  PrismaProcessStore.prismaClientLayer({ client: prisma }),
+);
+```
+
+`@prisma/client` is an **optional peer dependency** — only required when you
+opt into the Prisma subpath.
 
 ## Control Service (CLI/API)
 
@@ -470,8 +489,8 @@ See the [examples/example.ts](./examples/example.ts) file for a complete working
 - `ProcessManager.make()` - Create a ProcessManager instance
 - `QueueResource.make()` - Create a resource queue
 - `Process.make()` - Create a scheduled process
-- `ExecutionHistory` - Service for tracking process execution history
-- `ProcessStore` - Unified process + queue analytics storage foundation (beta)
+- `ProcessStore` - Unified analytics & lifecycle service (in-memory by default)
+- `PrismaProcessStore` - Prisma-backed `ProcessStore` (subpath: `@nikscripts/effect-pm/prisma`)
 - `ControlService` - HTTP control API utilities
 
 ### CLI
@@ -486,8 +505,8 @@ See the [examples/example.ts](./examples/example.ts) file for a complete working
 - `QueueDetails` - Queue status information
 - `QueueRef<Name, T, R, E>` - Queue handle API (`yield*` the tag from `QueueResource.make`); `Name` is the literal `name`; `QueueResourceInterface` is a legacy 3-param alias (`Name` widened to `string`)
 - `Process<R>` - Process interface
-- `ExecutionHistoryInterface` - Storage interface for implementing custom storage
-- `Execution` - Execution record type
+- `ProcessStoreInterface` - Service contract for implementing a custom store
+- `AnalyticsEvent` / `ProcessExecutionCompletedEvent` / `ProcessLifecycleChangedEvent` - Event envelope and concrete event types
 
 ### Errors
 
@@ -495,7 +514,7 @@ See the [examples/example.ts](./examples/example.ts) file for a complete working
 - `ProcessNotFoundError` - Process not found
 - `ProcessAlreadyRunningError` - Process already running
 - `ProcessNotRunningError` - Process not running
-- `ExecutionHistoryError` - Storage operation error
+- `PrismaProcessStoreDecodeError` - Prisma row failed to decode into a typed event
 
 ## License
 

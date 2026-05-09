@@ -32,7 +32,16 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
-    }
+    },
+    "./prisma": {
+      "types": "./dist/prisma/index.d.ts",
+      "import": "./dist/prisma/index.mjs",
+      "require": "./dist/prisma/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "effect-pm": "./dist/bin/effect-pm.js"
   },
   "files": [
     "dist",
@@ -67,7 +76,13 @@
     "pretty-ms": "^9.1.0"
   },
   "peerDependencies": {
+    "@prisma/client": ">=5",
     "effect": "^4.0.0-beta.64"
+  },
+  "peerDependenciesMeta": {
+    "@prisma/client": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.0",

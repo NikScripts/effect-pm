@@ -41,25 +41,34 @@ npm run cli -- --help
 
 ## 📁 Examples
 
-### `prisma-storage.ts`
-**Persistent ExecutionHistory with Prisma**
+### Persistent analytics with Prisma
 
-A complete implementation showing how to create a database-backed ExecutionHistory layer using Prisma. Use this as a template for production applications that need to persist execution history across restarts.
+The Prisma-backed `ProcessStore` ships in the package itself — no example file
+needed. Set it up in your project with:
 
-**What you'll need:**
-- `@prisma/client` installed
-- Prisma configured with the CronExecution model
-- Database migrated
+```bash
+npx effect-pm add prisma
+npx prisma generate
+npx prisma migrate dev --name add_effect_pm_event
+```
 
-**Usage:**
+Then provide it to your program:
+
 ```typescript
-import { ExecutionHistoryPrismaLayer } from "./examples/prisma-storage";
+import { PrismaClient } from "@prisma/client";
+import { PrismaProcessStore } from "@nikscripts/effect-pm/prisma";
+
+const prisma = new PrismaClient();
 
 program.pipe(
-  Effect.provide(ExecutionHistoryPrismaLayer),
-  Effect.runPromise
+  Effect.provide(PrismaProcessStore.layer({ client: prisma })),
+  Effect.runPromise,
 );
 ```
+
+See the main [README](../README.md#processstore-analytics--lifecycle) for
+full Prisma details, including the `layerFromContext` variant for
+Effect-style DI and the `--dry-run` / `--separate-file` flags.
 
 ## 🎯 Why Examples?
 

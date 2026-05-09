@@ -9,7 +9,7 @@
  * - QueueResource: Managed execution queues with priority scheduling
  * - Process: Scheduled tasks with cron expressions
  * - ProcessManager: Unified orchestration and control
- * - ExecutionHistory: Automatic tracking and analytics
+ * - ProcessStore: Event-first analytics (executions + lifecycle)
  * - CLI: Command-line interface for runtime control
  *
  * ============================================================================
@@ -26,8 +26,9 @@
  * 3. PROCESS MANAGER - Orchestration Layer
  *    Unified control and monitoring for all processes and queues.
  *
- * 4. EXECUTION HISTORY - Analytics & Tracking
- *    Automatic tracking of all process executions with queryable history.
+ * 4. PROCESS STORE - Analytics & Lifecycle Events
+ *    Single event-first store. In-memory by default; Prisma-backed for
+ *    durable analytics via `@nikscripts/effect-pm/prisma`.
  *
  * 5. CLI - Command Line Interface
  *    Runtime control and monitoring via command-line interface.
@@ -42,21 +43,26 @@
  *
  * @remarks
  * This example demonstrates the full ProcessManager system with queues
- * and scheduled processes. Uses in-memory ExecutionHistory for execution tracking -
- * perfect for development and testing without external dependencies.
+ * and scheduled processes. Uses the in-memory `ProcessStore` for execution
+ * and lifecycle analytics — perfect for development and testing without
+ * external dependencies.
  *
  * **For Production:**
- * Replace `ExecutionHistory.layer` with a persistent storage implementation:
+ * Swap `ProcessStore.layer` for the Prisma-backed implementation:
  * ```typescript
- * import { ExecutionHistoryPrismaLayer } from "./my-prisma-storage";
+ * import { PrismaClient } from "@prisma/client";
+ * import { PrismaProcessStore } from "@nikscripts/effect-pm/prisma";
+ *
+ * const prisma = new PrismaClient();
  *
  * program.pipe(
- *   Effect.provide(ExecutionHistoryPrismaLayer),
- *   Effect.runPromise
+ *   Effect.provide(PrismaProcessStore.layer({ client: prisma })),
+ *   Effect.runPromise,
  * );
  * ```
  *
- * See `examples/prisma-storage.ts` for a complete Prisma implementation.
+ * Run `npx effect-pm add prisma` once to add the required model to your
+ * Prisma schema, then `prisma migrate dev`.
  */
 
 import { Effect, Duration, Logger, Cron, Data, Resource, Layer, References } from "effect";
@@ -170,7 +176,7 @@ const DemoTwoQueue = QueueResource.make({
  * 3. It adds new items to both queues
  * 4. The queues process those items according to their configuration
  *
- * ANALYTICS: Every execution is automatically tracked in ExecutionHistory.
+ * ANALYTICS: Every execution is automatically tracked in ProcessStore.
  * You can query execution history, success/failure rates, and timing data.
  */
 
@@ -269,7 +275,7 @@ const program = Effect.gen(function* () {
  * Effect's dependency system requires us to "provide" all services before
  * the program can run. Think of it like this:
  *
- * 1. Our program says "I need DemoQueue, DemoTwoQueue, ExecutionHistory"
+ * 1. Our program says "I need DemoQueue, DemoTwoQueue, ProcessStore"
  * 2. We provide the implementations (`.layer` for each tag) for each service
  * 3. Effect wires everything together automatically
  * 4. The program runs with all dependencies satisfied
@@ -277,14 +283,15 @@ const program = Effect.gen(function* () {
  * LAYER COMPOSITION:
  * - DemoQueue.layer: Provides the DemoQueue resource
  * - DemoTwoQueue.layer: Provides the DemoTwoQueue resource
- * - ExecutionHistory.layer: Provides in-memory execution history storage
+ * - ProcessStore.layer: Provides in-memory analytics for executions + lifecycle
  * - Logger.pretty: Provides nice formatted console logging
  *
  * The order of Effect.provide() calls doesn't matter - Effect figures out
  * the dependency graph and initializes services in the correct order.
  *
- * NOTE: ExecutionHistory.layer is in-memory, so data is lost on restart.
- * For production, use a persistent implementation (see examples/prisma-storage.ts).
+ * NOTE: ProcessStore.layer is in-memory, so data is lost on restart. For
+ * production, use the Prisma-backed `PrismaProcessStore.layer({ client })`
+ * from `@nikscripts/effect-pm/prisma`.
  */
 
 // Run the demo
