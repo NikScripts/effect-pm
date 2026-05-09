@@ -302,7 +302,7 @@ const pm = yield* ProcessManager.make({
 });
 ```
 
-## ExecutionHistory (Required)
+## ExecutionHistory (Current Runtime Requirement)
 
 ProcessManager requires an `ExecutionHistory` implementation to track process execution history.
 
@@ -331,6 +331,31 @@ program.pipe(
   Effect.runPromise
 );
 ```
+
+## ProcessStore (Beta Foundation)
+
+`ProcessStore` is now exported as the new unified analytics and storage foundation for vNext.
+It supports process execution/lifecycle/schedule events and queue records in one service.
+
+```typescript
+import { ProcessStore } from "@nikscripts/effect-pm";
+
+const program = Effect.gen(function* () {
+  const store = yield* ProcessStore;
+  yield* store.recordExecution({
+    id: "exec-1",
+    processId: "my-process",
+    scheduleKey: null,
+    startedAt: new Date(),
+    completedAt: new Date(),
+    durationMs: 0,
+    status: "completed",
+  });
+}).pipe(Effect.provide(ProcessStore.layer));
+```
+
+`ExecutionHistory` is still used by the current `ProcessManager` runtime today.
+The migration to `ProcessStore` in manager/queue internals is in progress.
 
 ## Control Service (CLI/API)
 
@@ -446,6 +471,7 @@ See the [examples/example.ts](./examples/example.ts) file for a complete working
 - `QueueResource.make()` - Create a resource queue
 - `Process.make()` - Create a scheduled process
 - `ExecutionHistory` - Service for tracking process execution history
+- `ProcessStore` - Unified process + queue analytics storage foundation (beta)
 - `ControlService` - HTTP control API utilities
 
 ### CLI

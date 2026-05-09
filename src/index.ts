@@ -32,6 +32,20 @@ export {
   type ExecutionHistoryInterface,
 } from "./ExecutionHistory";
 
+// Process Store
+export {
+  ProcessStore,
+  type QueryOpts,
+  type ExecutionRecord,
+  type ScheduleSwitchEvent,
+  type LifecycleEvent,
+  type EnqueuedRecord,
+  type EffectCompleteRecord,
+  type ForkCompleteRecord,
+  type QueueRecord,
+  type ProcessStoreInterface,
+} from "./ProcessStore";
+
 // Types - ProcessManager
 export type {
   ProcessManagerControls,
