@@ -16,8 +16,8 @@
  * @module Process
  */
 
-import { Cron, Duration, Effect, Schedule } from "effect";
-import { ExecutionHistory, type ExecutionHistoryError } from "./ExecutionHistory";
+import { Cron, Effect, Schedule } from "effect";
+import { ProcessStore } from "./ProcessStore";
 
 // ============================================================================
 // Public Types
@@ -90,7 +90,7 @@ export interface Process<out R> {
   /** Process type discriminator (always "scheduled") */
   readonly type: "scheduled";
   /** The scheduled effect that runs on the cron schedule */
-  readonly effect: Effect.Effect<void, ExecutionHistoryError, R | ExecutionHistory>;
+  readonly effect: Effect.Effect<void, never, R | ProcessStore>;
   /**
    * Get current status and execution history
    * 
@@ -100,7 +100,7 @@ export interface Process<out R> {
   readonly getStatus: (dateRange?: {
     start: Date;
     end: Date;
-  }) => Effect.Effect<ScheduledProcessDetails, ExecutionHistoryError, ExecutionHistory>;
+  }) => Effect.Effect<ScheduledProcessDetails, never, ProcessStore>;
   /**
    * Run the process immediately (bypasses schedule)
    * 
@@ -110,7 +110,7 @@ export interface Process<out R> {
    * 
    * @returns Effect that runs the program
    */
-  readonly runImmediately: () => Effect.Effect<void, ExecutionHistoryError, R | ExecutionHistory>;
+  readonly runImmediately: () => Effect.Effect<void, never, R | ProcessStore>;
 }
 
 // ============================================================================
@@ -147,7 +147,7 @@ const getNextCronRun = (
  * Creates a self-contained scheduled task that runs according to cron expressions.
  * The process automatically:
  * - Schedules execution using Effect's Cron scheduler
- * - Tracks all executions in ExecutionHistory
+ * - Tracks all executions in ProcessStore
  * - Reports execution history and status
  * - Supports manual triggering via `runImmediately()`
  * 
@@ -176,43 +176,68 @@ const createScheduledProcess = <R>(params: {
 }): Process<R> => {
   const { name, crons, effect: program } = params;
   const cronArray = Array.isArray(crons) ? crons : [crons];
+  let executionRecordId = 0;
 
-  // Enhanced program that tracks execution
+  const recordExecutionEvent = (args: {
+    scheduleKey: string | null;
+    startedAt: Date;
+    completedAt: Date;
+    status: "completed" | "failed" | "interrupted";
+    error?: unknown;
+    isStartupRun: boolean;
+  }) =>
+    Effect.gen(function* () {
+      const store = yield* ProcessStore;
+      executionRecordId += 1;
+      yield* store.append({
+        id: `${name}-execution-${executionRecordId}`,
+        type: "process.execution.completed",
+        occurredAt: args.completedAt,
+        entityType: "process",
+        entityId: name,
+        execution: {
+          scheduleKey: args.scheduleKey,
+          startedAt: args.startedAt,
+          completedAt: args.completedAt,
+          durationMs: Math.max(
+            0,
+            args.completedAt.getTime() - args.startedAt.getTime(),
+          ),
+          status: args.status,
+          error: args.error === undefined ? undefined : String(args.error),
+          isStartupRun: args.isStartupRun,
+        },
+      });
+    });
+
+  // Enhanced program that tracks execution.
   const trackedProgram = Effect.gen(function* () {
-    const storage = yield* ExecutionHistory;
-    const programStorage = storage.forProcess(name);
-    
-    const startTime = Date.now();
+    const store = yield* ProcessStore;
     const executedAt = new Date();
-
-    // Check if this is the first run since restart
-    const isStartupRun = yield* programStorage.isFirstRunSinceRestart();
+    const isStartupRun =
+      (yield* store.getProcessExecutions(name, { limit: 1 })).length === 0;
 
     try {
-      // Run the actual program
       yield* program;
-
-      // Record successful execution
-      yield* programStorage.recordExecution({
-        executedAt,
+      yield* recordExecutionEvent({
+        scheduleKey: null,
+        startedAt: executedAt,
+        completedAt: new Date(),
+        status: "completed",
         isStartupRun,
-        durationMs: Date.now() - startTime,
-        success: true,
       });
-
       yield* Effect.logDebug(
         `✅ Cron program '${name}' executed at ${executedAt.toISOString()}`,
       );
     } catch (error) {
-      // Record failed execution
-      yield* programStorage.recordExecution({
-        executedAt,
+      yield* recordExecutionEvent({
+        scheduleKey: null,
+        startedAt: executedAt,
+        completedAt: new Date(),
+        status: "failed",
+        error,
         isStartupRun,
-        durationMs: Date.now() - startTime,
-        success: false,
-        errorMessage: String(error),
       });
-
       yield* Effect.logError(
         `❌ Cron program '${name}' failed at ${executedAt.toISOString()}: ${error}`,
       );
@@ -221,39 +246,32 @@ const createScheduledProcess = <R>(params: {
   });
 
   // Create the scheduled effect
-  const scheduledEffect = Effect.gen(function* () {
-    // Set up the cron schedule
-    const cronSchedules = cronArray.map((cron) => Schedule.cron(cron));
-    const cronSchedule =
-      cronSchedules.length === 1
-        ? cronSchedules[0]!
-        : cronSchedules.slice(1).reduce(
-            (a, b) =>
-              Schedule.either(a, b) as unknown as Schedule.Schedule<
-                Duration.Duration,
-                unknown,
-                Cron.CronParseError,
-                never
-              >,
-            cronSchedules[0]!,
-          );
-
-    // Run the tracked program on schedule only
-    yield* Effect.schedule(trackedProgram, cronSchedule);
-  });
+  const scheduledEffect = Effect.all(
+    cronArray.map((cron) =>
+      Effect.schedule(trackedProgram, Schedule.cron(cron)).pipe(Effect.orDie),
+    ),
+    { concurrency: "unbounded", discard: true },
+  );
 
   // Get details method (returns standardized process details)
   const getStatus = (dateRange?: {
     start: Date;
     end: Date;
-  }): Effect.Effect<ScheduledProcessDetails, ExecutionHistoryError, ExecutionHistory> =>
+  }): Effect.Effect<ScheduledProcessDetails, never, ProcessStore> =>
     Effect.gen(function* () {
-      const storage = yield* ExecutionHistory;
-      const programStorage = storage.forProcess(name);
-      
-      const lastRun = yield* programStorage.getLastRun();
-      const executions = yield* programStorage.getRunCount(dateRange);
-      const firstStartup = yield* programStorage.getFirstStartupRun();
+      const store = yield* ProcessStore;
+      const allExecutions = yield* store.getProcessExecutions(name);
+      const inRange = dateRange
+        ? allExecutions.filter(
+            (event) =>
+              event.execution.startedAt >= dateRange.start &&
+              event.execution.startedAt <= dateRange.end,
+          )
+        : allExecutions;
+      const lastRun = allExecutions[0]?.execution.startedAt ?? null;
+      const executions = inRange.length;
+      const firstStartup =
+        allExecutions.find((event) => event.execution.isStartupRun)?.execution.startedAt ?? null;
 
       // Calculate next run time
       const nextRun = getNextCronRun(crons, new Date());
@@ -267,7 +285,7 @@ const createScheduledProcess = <R>(params: {
     });
 
   // Run immediately method (bypasses scheduler)
-  const runImmediately = (): Effect.Effect<void, ExecutionHistoryError, R | ExecutionHistory> =>
+  const runImmediately = (): Effect.Effect<void, never, R | ProcessStore> =>
     Effect.gen(function* () {
       yield* Effect.logInfo(`🚀 Running '${name}' immediately...`);
       yield* trackedProgram;

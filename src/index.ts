@@ -21,28 +21,15 @@ export { ControlService } from "./ControlService";
 // CLI
 export { createCli, runCli } from "./cli";
 
-// Execution History
-export {
-  ExecutionHistory,
-  ExecutionHistoryError,
-  type ExecutionData,
-  type Execution,
-  type DateRange,
-  type ProcessExecutionHistory,
-  type ExecutionHistoryInterface,
-} from "./ExecutionHistory";
-
 // Process Store
 export {
   ProcessStore,
   type QueryOpts,
-  type ExecutionRecord,
-  type ScheduleSwitchEvent,
-  type LifecycleEvent,
-  type EnqueuedRecord,
-  type EffectCompleteRecord,
-  type ForkCompleteRecord,
-  type QueueRecord,
+  type AnalyticsEventBase,
+  type ProcessExecutionCompletedEvent,
+  type ProcessLifecycleTag,
+  type ProcessLifecycleChangedEvent,
+  type AnalyticsEvent,
   type ProcessStoreInterface,
 } from "./ProcessStore";
 

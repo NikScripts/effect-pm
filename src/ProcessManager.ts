@@ -12,17 +12,17 @@
  * - Scoped resource management with automatic cleanup
  * 
  * **Dependencies:**
- * - `ExecutionHistory` - Required for tracking process execution history.
- *   Provide either `ExecutionHistory.layer` (in-memory) or a custom implementation.
+ * - `ProcessStore` - Required for process analytics and lifecycle records.
+ *   Provide either `ProcessStore.layer` (in-memory) or a custom implementation.
  * 
  * @module ProcessManager
  */
 
-import { Effect, Scope, Fiber, Ref, Data, Context, Exit } from "effect";
+import { Effect, Scope, Fiber, Ref, Data, Context, Exit, Option } from "effect";
 import type { Process } from "./Process";
 import type { QueueRef } from "./QueueResource";
-import { ExecutionHistory, type ExecutionHistoryError } from "./ExecutionHistory";
 import { ControlService } from "./ControlService";
+import { ProcessStore, type ProcessLifecycleChangedEvent } from "./ProcessStore";
 
 // ============================================================================
 // Type Utilities
@@ -40,7 +40,7 @@ type TagIdentifier<T> = T extends Context.Key<infer I, any> ? I : never;
 
 /**
  * Environment required to run a process's scheduled `effect` (including
- * {@link ExecutionHistory}, which the scheduler wrapper always uses).
+ * {@link ProcessStore}, which process runtime analytics uses).
  *
  * @public
  */
@@ -84,14 +84,14 @@ const processMapFromTuple = <const Processes extends readonly Process<any>[]>(
 
 /**
  * ProcessManager core dependencies
- * 
+ *
  * @remarks
- * ExecutionHistory provides persistence for process execution history.
- * A default in-memory implementation is available via `ExecutionHistory.layer`.
- * 
+ * ProcessStore provides analytics persistence for process execution and lifecycle.
+ * A default in-memory implementation is available via `ProcessStore.layer`.
+ *
  * @public
  */
-export type ProcessManagerDependencies = ExecutionHistory;
+export type ProcessManagerDependencies = ProcessStore;
 
 /**
  * Process status managed by ProcessManager
@@ -163,7 +163,7 @@ export interface ProcessManagerState<R> {
   statuses: Ref.Ref<Map<string, ProcessStatus>>;
   startTimes: Ref.Ref<Map<string, Date>>;
   scopes: Ref.Ref<Map<string, Scope.Scope>>;
-  fibers: Ref.Ref<Map<string, Fiber.Fiber<void, ExecutionHistoryError>>>;
+  fibers: Ref.Ref<Map<string, Fiber.Fiber<void, never>>>;
 }
 
 /**
@@ -211,8 +211,8 @@ export interface QueueDetails {
  * 
  * @typeParam R - Combined environment for all managed processes' runnable effects
  * (see {@link AllManagedProcessesRequirements}). Lifecycle methods that fork
- * scheduled work list `R | {@link ExecutionHistory}` because TypeScript cannot
- * prove `ExecutionHistory` is already part of an unconstrained `R`.
+ * scheduled work list `R | {@link ProcessStore}` because TypeScript cannot
+ * prove `ProcessStore` is already part of an unconstrained `R`.
  * 
  * @public
  */
@@ -234,7 +234,7 @@ export interface ProcessManagerControls<R> {
    * 
    * @returns Array of process details
    */
-  listProcesses(): Effect.Effect<ProcessManagerDetails[], PMError, ExecutionHistory>;
+  listProcesses(): Effect.Effect<ProcessManagerDetails[], PMError, ProcessStore>;
 
   // ========== Process Control ==========
   
@@ -247,7 +247,7 @@ export interface ProcessManagerControls<R> {
    */
   startProcess(
     name: string,
-  ): Effect.Effect<void, PMError, R | ExecutionHistory>;
+  ): Effect.Effect<void, PMError, R | ProcessStore>;
   
   /**
    * Stop a specific process
@@ -265,7 +265,7 @@ export interface ProcessManagerControls<R> {
    */
   restartProcess(
     name: string,
-  ): Effect.Effect<void, PMError, R | ExecutionHistory>;
+  ): Effect.Effect<void, PMError, R | ProcessStore>;
 
   // ========== Process-Specific Actions ==========
   
@@ -279,7 +279,7 @@ export interface ProcessManagerControls<R> {
    */
   runProcessImmediately(
     name: string,
-  ): Effect.Effect<void, PMError, R | ExecutionHistory>;
+  ): Effect.Effect<void, PMError, R | ProcessStore>;
 
   // ========== Status and Details ==========
   
@@ -291,7 +291,7 @@ export interface ProcessManagerControls<R> {
    */
   getProcessStatus(
     name: string,
-  ): Effect.Effect<ProcessManagerDetails, PMError, ExecutionHistory>;
+  ): Effect.Effect<ProcessManagerDetails, PMError, ProcessStore>;
   
   /**
    * Get status of all managed processes
@@ -301,7 +301,7 @@ export interface ProcessManagerControls<R> {
   getAllProcessStatus(): Effect.Effect<
     ProcessManagerDetails[],
     PMError,
-    ExecutionHistory
+    ProcessStore
   >;
 
   // ========== Global Control ==========
@@ -312,7 +312,7 @@ export interface ProcessManagerControls<R> {
    * @remarks
    * Processes that are already running will be skipped.
    */
-  startAll(): Effect.Effect<void, PMError, R | ExecutionHistory>;
+  startAll(): Effect.Effect<void, PMError, R | ProcessStore>;
   
   /**
    * Stop all running processes
@@ -366,7 +366,7 @@ export interface AwaitShutdownOptions {
 }
 
 export interface ProcessManager<R> extends ProcessManagerControls<R> {
-  serve: ({ port }: { port?: number }) => Effect.Effect<void, never, Scope.Scope | R | ExecutionHistory>;
+  serve: ({ port }: { port?: number }) => Effect.Effect<void, never, Scope.Scope | R | ProcessStore>;
 
   /**
    * Block until a shutdown signal is received, then interrupt (so scoped
@@ -457,8 +457,7 @@ export type PMError =
   | ProcessManagerError
   | ProcessNotFoundError
   | ProcessAlreadyRunningError
-  | ProcessNotRunningError
-  | ExecutionHistoryError;
+  | ProcessNotRunningError;
 
 const defaultShutdownSignals = ["SIGINT", "SIGTERM"] as const;
 
@@ -484,7 +483,7 @@ const awaitShutdownNode = (
       }),
     );
 
-    yield* Effect.callback<never>((resume) => {
+    return yield* Effect.callback<never>((resume) => {
       let done = false;
       for (const sig of signals) {
         const fn = () => {
@@ -511,8 +510,7 @@ const awaitShutdownNode = (
         process.on(sig, fn);
       }
     });
-    // addFinalizer yields void; success type stays `void` unless asserted.
-  }) as Effect.Effect<never, never, Scope.Scope>;
+  });
 
 const awaitShutdown = (
   options?: AwaitShutdownOptions,
@@ -525,6 +523,18 @@ const awaitShutdown = (
         ),
         () => Effect.never,
       );
+
+const recordLifecycleIfAvailable = (event: ProcessLifecycleChangedEvent): Effect.Effect<void> =>
+  Effect.serviceOption(ProcessStore).pipe(
+    Effect.flatMap(
+      Option.match({
+        onNone: () => Effect.void,
+        onSome: (store) => store.append(event),
+      }),
+    ),
+    // During migration, lifecycle analytics writes are best-effort.
+    Effect.catch(() => Effect.void),
+  );
 
 // ============================================================================
 // Helper Functions (Internal)
@@ -587,7 +597,7 @@ const removeProcess =
 
 const listProcesses = <R>(
   state: ProcessManagerState<R>,
-): Effect.Effect<ProcessManagerDetails[], PMError, ExecutionHistory> =>
+): Effect.Effect<ProcessManagerDetails[], PMError, ProcessStore> =>
   Effect.gen(function* () {
     const processes = yield* Ref.get(state.processes);
     const statuses = yield* Ref.get(state.statuses);
@@ -640,7 +650,7 @@ const listProcesses = <R>(
 
 const startProcess =
   <R>(state: ProcessManagerState<R>) =>
-  (name: string): Effect.Effect<void, PMError, R | ExecutionHistory> =>
+  (name: string): Effect.Effect<void, PMError, R | ProcessStore> =>
     Effect.gen(function* () {
       yield* Effect.logDebug(`🚀 Starting process: ${name}`);
 
@@ -680,6 +690,14 @@ const startProcess =
       yield* Ref.update(state.startTimes, (startTimes) =>
         startTimes.set(name, new Date()),
       );
+      yield* recordLifecycleIfAvailable({
+        id: `${name}-lifecycle-started-${Date.now()}`,
+        type: "process.lifecycle.changed",
+        occurredAt: new Date(),
+        entityType: "process",
+        entityId: name,
+        lifecycle: { tag: "Started" },
+      });
 
       yield* Effect.logInfo(`✅ '${name}' is running`);
     });
@@ -739,13 +757,21 @@ const stopProcess =
         next.delete(name);
         return next;
       });
+      yield* recordLifecycleIfAvailable({
+        id: `${name}-lifecycle-stopped-${Date.now()}`,
+        type: "process.lifecycle.changed",
+        occurredAt: new Date(),
+        entityType: "process",
+        entityId: name,
+        lifecycle: { tag: "Stopped" },
+      });
 
       yield* Effect.logInfo(`✅ Process '${name}' stopped successfully`);
     });
 
 const runProcessImmediately =
   <R>(state: ProcessManagerState<R>) =>
-  (name: string): Effect.Effect<void, PMError, R | ExecutionHistory> =>
+  (name: string): Effect.Effect<void, PMError, R | ProcessStore> =>
     Effect.gen(function* () {
       // Check if process exists
       const process = yield* Ref.get(state.processes).pipe(
@@ -771,7 +797,7 @@ const runProcessImmediately =
 
 const getProcessStatus =
   <R>(state: ProcessManagerState<R>) =>
-  (name: string): Effect.Effect<ProcessManagerDetails, PMError, ExecutionHistory> =>
+  (name: string): Effect.Effect<ProcessManagerDetails, PMError, ProcessStore> =>
     Effect.gen(function* () {
       const process = yield* Ref.get(state.processes).pipe(
         Effect.map((processes) => processes.get(name)),
@@ -912,7 +938,7 @@ export const makeProcessManager = <
     const startTimes = yield* Ref.make(new Map<string, Date>());
     const scopes = yield* Ref.make(new Map<string, Scope.Scope>());
     const fibers = yield* Ref.make(
-      new Map<string, Fiber.Fiber<void, ExecutionHistoryError>>(),
+      new Map<string, Fiber.Fiber<void, never>>(),
     );
 
     const state: ProcessManagerState<PMR> = {
@@ -941,6 +967,14 @@ export const makeProcessManager = <
         Effect.gen(function* () {
           yield* stopProcess(state)(name);
           yield* startProcess(state)(name);
+          yield* recordLifecycleIfAvailable({
+            id: `${name}-lifecycle-restarted-${Date.now()}`,
+            type: "process.lifecycle.changed",
+            occurredAt: new Date(),
+            entityType: "process",
+            entityId: name,
+            lifecycle: { tag: "Restarted" },
+          });
         }),
       runProcessImmediately: runProcessImmediately(state),
       getProcessStatus: getProcessStatus(state),

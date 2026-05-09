@@ -62,7 +62,7 @@
 import { Effect, Duration, Logger, Cron, Data, Resource, Layer, References } from "effect";
 import {
   Process,
-  ExecutionHistory,
+  ProcessStore,
   QueueResource,
   ProcessManager,
 } from "../src";
@@ -292,7 +292,7 @@ Effect.runPromise(
   program.pipe(
     Effect.provide(DemoQueue.layer),
     Effect.provide(DemoTwoQueue.layer),
-    Effect.provide(ExecutionHistory.layer), // In-memory storage (no external dependencies)
+    Effect.provide(ProcessStore.layer), // In-memory storage (no external dependencies)
     Effect.provide(Layer.succeed(References.MinimumLogLevel, "Debug")),
   ),
 )

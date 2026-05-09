@@ -16,9 +16,10 @@
  */
 
 import http from "node:http";
+import type net from "node:net";
 import { Effect, Scope } from "effect";
 import type { ProcessManagerControls, QueueDetails } from "./ProcessManager";
-import type { ExecutionHistory } from "./ExecutionHistory";
+import type { ProcessStore } from "./ProcessStore";
 import { createCli, runCli } from "./cli";
 
 // ============================================================================
@@ -105,7 +106,7 @@ const handleCommand =
   (
     command: ControlCommand,
     name?: string,
-  ): Effect.Effect<ControlResponse<unknown>, never, R | ExecutionHistory> =>
+  ): Effect.Effect<ControlResponse<unknown>, never, R | ProcessStore> =>
     Effect.gen(function* () {
       switch (command) {
         case "ls": {
@@ -361,14 +362,14 @@ const handleCommand =
 const startControlService = <R>(options: {
   port?: number;
   pm: ProcessManagerControls<R>;
-}): Effect.Effect<void, never, Scope.Scope | R | ExecutionHistory> =>
+}): Effect.Effect<void, never, Scope.Scope | R | ProcessStore> =>
   Effect.acquireRelease(
     Effect.gen(function* () {
       const port = options.port ?? 3001;
       const pm = options.pm;
 
       // Capture context (services) with all dependencies already provided
-      const services = yield* Effect.context<R | ExecutionHistory>();
+      const services = yield* Effect.context<R | ProcessStore>();
 
       // Create HTTP request handler
       const handler = (
@@ -420,7 +421,7 @@ const startControlService = <R>(options: {
       const server = http.createServer(handler);
 
       // Track active connections for cleanup
-      const connections = new Set<any>();
+      const connections = new Set<net.Socket>();
       server.on("connection", (conn) => {
         connections.add(conn);
         conn.on("close", () => connections.delete(conn));
