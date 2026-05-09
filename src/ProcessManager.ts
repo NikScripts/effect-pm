@@ -18,7 +18,7 @@
  * @module ProcessManager
  */
 
-import { Effect, Scope, Fiber, Ref, Data, Context } from "effect";
+import { Effect, Scope, Fiber, Ref, Data, Context, Exit } from "effect";
 import type { Process } from "./Process";
 import type { QueueRef } from "./QueueResource";
 import { ExecutionHistory, type ExecutionHistoryError } from "./ExecutionHistory";
@@ -669,7 +669,7 @@ const startProcess =
 
       // Create scope and start process
       const scope = yield* Scope.make();
-      const fiber = yield* Effect.forkChild(process!.effect);
+      const fiber = yield* Effect.forkIn(process!.effect, scope);
 
       // Update state
       yield* Ref.update(state.scopes, (scopes) => scopes.set(name, scope));
@@ -713,16 +713,32 @@ const stopProcess =
       const fiber = yield* Ref.get(state.fibers).pipe(
         Effect.map((fibers) => fibers.get(name)),
       );
+      const scope = yield* Ref.get(state.scopes).pipe(
+        Effect.map((scopes) => scopes.get(name)),
+      );
 
       // Interrupt the main process fiber
       if (fiber) {
         yield* Fiber.interrupt(fiber);
+      }
+      if (scope) {
+        yield* Scope.close(scope, Exit.void);
       }
 
       // Update status
       yield* Ref.update(state.statuses, (statuses) =>
         statuses.set(name, "stopped"),
       );
+      yield* Ref.update(state.fibers, (fibers) => {
+        const next = new Map(fibers);
+        next.delete(name);
+        return next;
+      });
+      yield* Ref.update(state.scopes, (scopes) => {
+        const next = new Map(scopes);
+        next.delete(name);
+        return next;
+      });
 
       yield* Effect.logInfo(`✅ Process '${name}' stopped successfully`);
     });

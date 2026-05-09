@@ -1,12 +1,36 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Context, Duration, Effect, Layer, Ref } from "effect"
+import type { Effect as IO } from "effect"
+import { Cause, Context, Data, Duration, Effect, Exit, Fiber, Layer, Ref } from "effect"
 import type { QueueResourceInterface } from "../src"
 import { QueueResource } from "../src"
+
+/** For forkWith success/failure rows without `Effect.either` (naming can differ by Effect version). */
+type EithRow =
+  | { readonly tag: "left"; readonly e: string }
+  | { readonly tag: "right"; readonly n: number }
 
 /** Per-item dependency for requirement-propagation tests */
 const ItemDeps = Context.Service<{ readonly marker: string }>(
   "test/queue-item-deps",
 )
+
+const ForkDeps = Context.Service<{ readonly token: string }>(
+  "test/queue-fork-deps",
+)
+
+const CacheDeps = Context.Service<{ readonly prefix: string }>(
+  "test/queue-cache-deps",
+)
+
+const RefillDeps = Context.Service<{ readonly source: string }>(
+  "test/queue-refill-deps",
+)
+
+const ItemLayer = Layer.succeed(ItemDeps, { marker: "item" })
+const ForkLayer = Layer.succeed(ForkDeps, { token: "fork" })
+const CacheLayer = Layer.succeed(CacheDeps, { prefix: "cache" })
+const RefillLayer = Layer.succeed(RefillDeps, { source: "refill" })
+
 
 /** Keeps queue resource tests fast; default queue throttle is very conservative. */
 const fastThrottle = { limit: 10_000, duration: Duration.seconds(1) } as const
@@ -134,6 +158,32 @@ describe("QueueResource.make — processing", () => {
       yield* queue.add(1)
       yield* waitUntilProcessed(queue, 1)
     }).pipe(Effect.provide(Layer.provide(Queue.layer, ItemDepsLive)))
+  })
+})
+
+describe("QueueResource.make — worker lifecycle", () => {
+  it.live("workers keep processing after queue acquisition fiber exits", () => {
+    const Queue = QueueResource.make({
+      name: "test/queue-worker-lifecycle-acquire-fiber",
+      effect: (n: number) => Effect.succeed(n),
+      concurrency: 1,
+      throttle: fastThrottle,
+    })
+
+    return Effect.gen(function* () {
+      const acquiredInChild = Effect.gen(function* () {
+        return yield* Queue
+      })
+
+      const fiber = yield* Effect.forkChild(acquiredInChild)
+      const queue = yield* Fiber.join(fiber)
+
+      yield* queue.add(1)
+      yield* waitUntilProcessed(queue, 1).pipe(
+        Effect.timeout(Duration.seconds(1)),
+      )
+      expect(yield* queue.getCompleted()).toBe(1)
+    }).pipe(Effect.provide(Queue.layer))
   })
 })
 
@@ -308,6 +358,35 @@ describe("QueueResource.make — cache", () => {
 })
 
 describe("QueueResource.make — refill", () => {
+  it.live("refill runs on cold start before any add()", () =>
+    Effect.gen(function* () {
+      const refills = yield* Ref.make(0)
+      const Queue = QueueResource.make({
+        name: "test/queue-refill-cold",
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+        throttle: fastThrottle,
+        // One-shot: after the queue drains, refill would run again but must not
+        // re-enqueue, or the worker will spin (empty → refill → add → process…).
+        refill: (p) =>
+          Effect.gen(function* () {
+            const n = yield* Ref.get(refills)
+            if (n === 0) {
+              yield* Ref.set(refills, 1)
+              yield* p.add(42)
+            }
+          }),
+      })
+      yield* Effect.gen(function* () {
+        const queue = yield* Queue
+        // Workers start with the layer; no queue.add() — first work comes from refill.
+        yield* waitUntilProcessed(queue, 1)
+        expect(yield* Ref.get(refills)).toBe(1)
+        expect(yield* queue.getCompleted()).toBe(1)
+      }).pipe(Effect.provide(Queue.layer))
+    })
+  )
+
   it.live("refill runs when the queue becomes empty", () =>
     Effect.gen(function* () {
       const refills = yield* Ref.make(0)
@@ -332,6 +411,394 @@ describe("QueueResource.make — refill", () => {
         expect(yield* Ref.get(refills)).toBe(1)
         expect(yield* queue.getCompleted()).toBe(2)
       }).pipe(Effect.provide(Queue.layer))
+    })
+  )
+})
+
+/**
+ * RItem = item `effect` needs; RFork = `forkWith` needs. `cache` / `refill` are
+ * typed in the public API as `R = never` on their return effect, but at runtime
+ * they run in the same fiber context as the queue; merged layers supply services.
+ * A few cases use `as any` on the object passed to `make` to satisfy tsc; behavior
+ * under test is still runtime propagation, not the cast.
+ *
+ * For services used inside `cache` (forked), `Queue.layer.pipe(Layer.provideMerge(…))`
+ * keeps them in the runtime `Context`. `Layer.provide(Queue.layer, X)` is enough
+ * for `refill` and the item effect, which run on the worker fiber.
+ */
+describe("QueueResource.make — service dependencies (RItem, RFork, cache, refill)", () => {
+  class Nope extends Data.TaggedError("Nope")<{ id: string }> {}
+
+  it.live("concurrent item effects all receive the same RItem from the layer", () =>
+    Effect.gen(function* () {
+      const log = yield* Ref.make<readonly string[]>([])
+      const Queue = QueueResource.make({
+        name: "test/queue-ritem-concurrent",
+        effect: (n: number) =>
+          Effect.gen(function* () {
+            const d = yield* ItemDeps
+            yield* Ref.update(log, (xs) => [...xs, `${d.marker}:${n}`])
+            return n
+          }),
+        concurrency: 4,
+        throttle: fastThrottle,
+      })
+      yield* Effect.gen(function* () {
+        const q = yield* Queue
+        for (let k = 0; k < 10; k++) {
+          yield* q.add(k)
+        }
+        yield* waitUntilProcessed(q, 10)
+        const xs = yield* Ref.get(log)
+        expect(xs.length).toBe(10)
+        expect(new Set(xs.map((s) => s.startsWith("item:"))).size).toBe(1)
+        expect(yield* q.getCompleted()).toBe(10)
+      }).pipe(Effect.provide(Layer.provide(Queue.layer, ItemLayer)))
+    })
+  )
+
+  it.live("forkWith (RFork) can require a different service when E is never", () =>
+    Effect.gen(function* () {
+      const log = yield* Ref.make<readonly string[]>([])
+      const Queue = QueueResource.make({
+        name: "test/queue-rfork-only",
+        effect: (n: number) => Effect.succeed(n * 2),
+        concurrency: 1,
+        throttle: fastThrottle,
+        forkWith: (forked) =>
+          Effect.gen(function* () {
+            const d = yield* ForkDeps
+            const v = yield* forked
+            yield* Ref.update(log, (xs) => [...xs, `${d.token}:${v}`])
+          }),
+      })
+      yield* Effect.gen(function* () {
+        const q = yield* Queue
+        yield* q.add(5)
+        yield* waitUntilProcessed(q, 1)
+        yield* Effect.sleep(Duration.millis(50))
+        expect(yield* Ref.get(log)).toEqual(["fork:10"])
+      }).pipe(Effect.provide(Layer.provide(Queue.layer, ForkLayer)))
+    })
+  )
+
+  it.live("RItem and RFork can point at different services in one queue", () =>
+    Effect.gen(function* () {
+      const out = yield* Ref.make<readonly string[]>([])
+      const Queue = QueueResource.make({
+        name: "test/queue-ritem-rfork",
+        effect: (n: number) =>
+          Effect.gen(function* () {
+            const i = yield* ItemDeps
+            return `proc:${i.marker}:${n}`
+          }),
+        concurrency: 1,
+        throttle: fastThrottle,
+        forkWith: (forked) =>
+          Effect.gen(function* () {
+            const f = yield* ForkDeps
+            const s = yield* forked
+            yield* Ref.update(out, (xs) => [...xs, `fork:${f.token}:${s}`])
+          }),
+      })
+      const deps = Layer.mergeAll(ItemLayer, ForkLayer)
+      yield* Effect.gen(function* () {
+        const q = yield* Queue
+        yield* q.add(7)
+        yield* waitUntilProcessed(q, 1)
+        // forkWith runs in a child fiber; give it time to update `out`
+        yield* Effect.sleep(Duration.millis(50))
+        expect(yield* Ref.get(out)).toEqual(["fork:fork:proc:item:7"])
+      }).pipe(Effect.provide(Layer.provide(Queue.layer, deps)))
+    })
+  )
+
+  it.live("non-never E: forkWith is invoked for failure and success when RFork is provided", () =>
+    Effect.gen(function* () {
+        const eithers = yield* Ref.make<readonly EithRow[]>([])
+        const Queue = QueueResource.make({
+          name: "test/queue-rfork-either",
+          effect: (n: number) => (n === 0 ? Effect.fail("boom") : Effect.succeed(n)),
+          concurrency: 1,
+          throttle: fastThrottle,
+          forkWith: (forked) =>
+            Effect.gen(function* () {
+              yield* ForkDeps
+              const ex = yield* Effect.exit(forked)
+              if (Exit.isFailure(ex)) {
+                yield* Ref.update(eithers, (xs) => [
+                  ...xs,
+                  { tag: "left" as const, e: String(Cause.squash(ex.cause)) },
+                ])
+              } else {
+                yield* Ref.update(eithers, (xs) => [
+                  ...xs,
+                  { tag: "right" as const, n: ex.value as number },
+                ])
+              }
+            }),
+        })
+        const forkLayer = Layer.provide(Queue.layer, ForkLayer)
+        yield* Effect.gen(function* () {
+          const q = yield* Queue
+          yield* q.add(0)
+          yield* q.add(3)
+          yield* waitUntilProcessed(q, 2)
+          yield* Effect.sleep(Duration.millis(50))
+          const xs = yield* Ref.get(eithers)
+          expect(xs.length).toBe(2)
+          const lefts = xs.filter((r) => r.tag === "left")
+          const rights = xs.filter((r) => r.tag === "right")
+          expect(lefts.length).toBe(1)
+          expect(rights.length).toBe(1)
+          expect(lefts[0]!.e).toBe("boom")
+          expect(rights[0]!.n).toBe(3)
+        }).pipe(Effect.provide(forkLayer))
+    })
+  )
+
+  it.live("tagged E: forkWith uses RFork and records failure and success", () =>
+    Effect.gen(function* () {
+      const flags = yield* Ref.make<readonly string[]>([])
+      const Queue = QueueResource.make({
+        name: "test/queue-rfork-tagged",
+        effect: (n: number) =>
+          n < 0 ? Effect.fail(new Nope({ id: "x" })) : Effect.succeed(n),
+        concurrency: 1,
+        throttle: fastThrottle,
+        forkWith: (forked) =>
+          Effect.gen(function* () {
+            const d = yield* ForkDeps
+            const ex = yield* Effect.exit(forked)
+            if (Exit.isFailure(ex)) {
+              yield* Ref.update(
+                flags,
+                (fs) => [...fs, `fork+${d.token}+fail`],
+              )
+            } else if (Exit.isSuccess(ex)) {
+              yield* Ref.update(
+                flags,
+                (fs) => [...fs, `fork+${d.token}+ok:${ex.value}`],
+              )
+            }
+          }),
+      })
+      const forkLayer = Layer.provide(Queue.layer, ForkLayer)
+      yield* Effect.gen(function* () {
+        const q = yield* Queue
+        yield* q.add(-1)
+        yield* q.add(5)
+        yield* waitUntilProcessed(q, 2)
+        yield* Effect.sleep(Duration.millis(50))
+        const fs = yield* Ref.get(flags)
+        expect(fs.filter((f) => f.includes("ok"))).toEqual([
+          "fork+fork+ok:5",
+        ])
+        expect(fs.filter((f) => f.includes("fail")).length).toBe(1)
+      }).pipe(Effect.provide(forkLayer))
+    })
+  )
+
+  it.live("cache callback can use a service from a merged layer (runtime R)", () =>
+    Effect.gen(function* () {
+      const log = yield* Ref.make<readonly string[]>([])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cfg: any = {
+        name: "test/queue-cache-r",
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+        throttle: fastThrottle,
+        cache: (item: number | readonly number[], _q: never) =>
+          Effect.gen(function* () {
+            const c = yield* CacheDeps
+            const n = Array.isArray(item) ? item.length : 1
+            yield* Ref.update(
+              log,
+              (xs) => [...xs, `${c.prefix}:n${n}`],
+            )
+          }),
+      }
+      const Queue = QueueResource.make(cfg)
+      yield* Effect.gen(function* () {
+        const q = yield* Queue
+        yield* q.add(1)
+        yield* q.add([2, 3, 4])
+        yield* waitUntilProcessed(q, 4)
+        // Cache runs in a fork; wait for the forked work to log
+        yield* Effect.sleep(Duration.millis(50))
+        expect(
+          Array.from(yield* Ref.get(log))
+            .slice()
+            .sort(),
+        ).toEqual(["cache:n1", "cache:n3"].slice().sort())
+      }).pipe(
+        Effect.provide(Queue.layer.pipe(Layer.provideMerge(CacheLayer))),
+      )
+    })
+  )
+
+  it.live("refill callback can use a service from a merged layer (runtime R)", () =>
+    Effect.gen(function* () {
+      const log = yield* Ref.make<readonly string[]>([])
+      const refilled = yield* Ref.make(0)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cfg: any = {
+        name: "test/queue-refill-r",
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+        throttle: fastThrottle,
+        refill: (p: { add: (n: number) => IO.Effect<void> }) =>
+          Effect.gen(function* () {
+            const r = yield* Ref.get(refilled)
+            if (r > 0) {
+              return
+            }
+            yield* Ref.set(refilled, 1)
+            const s = yield* RefillDeps
+            yield* Ref.update(
+              log,
+              (xs) => [...xs, `from=${s.source}`],
+            )
+            yield* p.add(1)
+          }),
+      }
+      const Queue = QueueResource.make(cfg)
+      yield* Effect.gen(function* () {
+        const q = yield* Queue
+        yield* waitUntilProcessed(q, 1)
+        expect(yield* Ref.get(log)).toEqual(["from=refill"])
+      }).pipe(Effect.provide(Layer.provide(Queue.layer, RefillLayer)))
+    })
+  )
+
+  it.live("RItem in effect + R in cache: both from merged context", () =>
+    Effect.gen(function* () {
+      const cacheLog = yield* Ref.make<readonly string[]>([])
+      const itemLog = yield* Ref.make<readonly string[]>([])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cfg: any = {
+        name: "test/queue-ritem-cache",
+        effect: (n: number) =>
+          Effect.gen(function* () {
+            const i = yield* ItemDeps
+            yield* Ref.update(
+              itemLog,
+              (xs) => [...xs, `${i.marker}@${n}`],
+            )
+            return n
+          }),
+        concurrency: 1,
+        throttle: fastThrottle,
+        cache: (item: number | readonly number[], _q: never) =>
+          Effect.gen(function* () {
+            const c = yield* CacheDeps
+            const n = Array.isArray(item) ? item.length : 1
+            yield* Ref.update(
+              cacheLog,
+              (xs) => [...xs, `${c.prefix}*${n}`],
+            )
+          }),
+      }
+      const Queue = QueueResource.make(cfg)
+      yield* Effect.gen(function* () {
+        const q = yield* Queue
+        yield* q.add(9)
+        yield* waitUntilProcessed(q, 1)
+        // cache logs in a fork; item runs in worker
+        yield* Effect.sleep(Duration.millis(30))
+        expect(yield* Ref.get(cacheLog)).toEqual(["cache*1"])
+        expect(yield* Ref.get(itemLog)).toEqual(["item@9"])
+      }).pipe(
+        Effect.provide(
+          Queue.layer.pipe(
+            Layer.provideMerge(Layer.mergeAll(ItemLayer, CacheLayer)),
+          ),
+        ),
+      )
+    })
+  )
+
+  it.live("RItem, RFork, cache, and refill each see their own service in one program", () =>
+    Effect.gen(function* () {
+      const trace = yield* Ref.make<readonly string[]>([])
+      const didRefill = yield* Ref.make(0)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cfg: any = {
+        name: "test/queue-full-stack-deps",
+        effect: (n: number) =>
+          Effect.gen(function* () {
+            const i = yield* ItemDeps
+            return `${i.marker}:${n}`
+          }),
+        concurrency: 1,
+        throttle: fastThrottle,
+        cache: (item: number | readonly number[], _q: never) =>
+          Effect.gen(function* () {
+            const c = yield* CacheDeps
+            const k = Array.isArray(item) ? `arr:${item.length}` : `one:${item}`
+            yield* Ref.update(trace, (xs) => [...xs, `cache=${c.prefix}:${k}`])
+          }),
+        forkWith: (forked: IO.Effect<string, never>) =>
+          Effect.gen(function* () {
+            const f = yield* ForkDeps
+            const s = yield* forked
+            yield* Ref.update(
+              trace,
+              (xs) => [...xs, `fork=${f.token}:${s}`],
+            )
+          }),
+        refill: (p: { add: (n: number) => IO.Effect<void> }) =>
+          Effect.gen(function* () {
+            const d = yield* Ref.get(didRefill)
+            if (d > 0) {
+              return
+            }
+            yield* Ref.set(didRefill, 1)
+            const r = yield* RefillDeps
+            yield* Ref.update(
+              trace,
+              (xs) => [...xs, `refill=${r.source}`],
+            )
+            yield* p.add(0)
+          }),
+      }
+      const Queue = QueueResource.make(cfg)
+      yield* Effect.gen(function* () {
+        const q = yield* Queue
+        // Cold start: refill enqueues; item runs with Item; cache skipped for refill
+        yield* waitUntilProcessed(q, 1)
+        yield* Effect.sleep(Duration.millis(50))
+        const t1 = yield* Ref.get(trace)
+        expect(
+          t1.find((l) => l === "refill=refill") !== undefined
+        )
+        expect(
+          t1.find((l) => l === "fork=fork:item:0") !== undefined
+        )
+        // User add: cache + process + fork
+        yield* q.add(1)
+        yield* waitUntilProcessed(q, 2)
+        yield* Effect.sleep(Duration.millis(50))
+        const t2 = (yield* Ref.get(trace)) as string[]
+        expect(
+          t2.find((l) => l.startsWith("cache=cache:one:1")) !== undefined
+        )
+        expect(
+          t2.find((l) => l === "fork=fork:item:1") !== undefined
+        )
+      }).pipe(
+        Effect.provide(
+          Layer.provide(
+            Queue.layer,
+            Layer.mergeAll(
+              ItemLayer,
+              ForkLayer,
+              CacheLayer,
+              RefillLayer,
+            ),
+          ),
+        ),
+      )
     })
   )
 })

@@ -487,8 +487,7 @@ export type QueueResourceConfig<
 const makeQueueResourceEffect = <T, R, E, RFork = never, RItem = never, Name extends string = string>(
   config: Omit<QueueResourceConfig<T, R, E, RFork, RItem, Name>, "name">
 ) =>
-  Effect.scoped(
-    Effect.gen(function* () {
+  Effect.gen(function* () {
       const {
         effect: processor,
         capacity: queueCapacity = 50000,
@@ -838,7 +837,7 @@ const makeQueueResourceEffect = <T, R, E, RFork = never, RItem = never, Name ext
         Effect.gen(function* () {
           const workers = [];
           for (let i = 0; i < semaphore; i++) {
-            const worker = yield* Effect.forkChild(createWorker());
+            const worker = yield* Effect.forkScoped(createWorker());
             workers.push(worker);
           }
           return workers;
@@ -863,7 +862,7 @@ const makeQueueResourceEffect = <T, R, E, RFork = never, RItem = never, Name ext
       // Return the QueueResource instance
       return queue;
     })
-  );
+  ;
 
 /**
  * QueueResource - Managed Effect Execution with Priority Scheduling
