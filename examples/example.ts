@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * ProcessManager - Example & Documentation
+ * ProcessGroup - Example & Documentation
  * ============================================================================
  *
  * Complete example demonstrating process orchestration with Effect.
@@ -8,7 +8,7 @@
  * WHAT THIS DEMONSTRATES:
  * - QueueResource: Managed execution queues with priority scheduling
  * - Process: Scheduled tasks with cron expressions
- * - ProcessManager: Unified orchestration and control
+ * - ProcessGroup: Unified orchestration and control for a cohesive bundle
  * - ProcessStore: Event-first analytics (executions + lifecycle)
  * - CLI: Command-line interface for runtime control
  *
@@ -23,8 +23,10 @@
  *    Priority-based execution with concurrency control, rate limiting,
  *    and comprehensive resource management.
  *
- * 3. PROCESS MANAGER - Orchestration Layer
- *    Unified control and monitoring for all processes and queues.
+ * 3. PROCESS GROUP - Orchestration Layer
+ *    Unified control and monitoring for the processes and queues that belong
+ *    together. (Future: a top-level `ProcessManager` will coordinate multiple
+ *    `ProcessGroup` instances across hosts.)
  *
  * 4. PROCESS STORE - Analytics & Lifecycle Events
  *    Single event-first store. In-memory by default; Prisma-backed for
@@ -39,10 +41,10 @@
  */
 
 /**
- * ProcessManager Example
+ * ProcessGroup Example
  *
  * @remarks
- * This example demonstrates the full ProcessManager system with queues
+ * This example demonstrates the full ProcessGroup system with queues
  * and scheduled processes. Uses the in-memory `ProcessStore` for execution
  * and lifecycle analytics — perfect for development and testing without
  * external dependencies.
@@ -70,7 +72,7 @@ import {
   Process,
   ProcessStore,
   QueueResource,
-  ProcessManager,
+  ProcessGroup,
 } from "../src";
 
 /**
@@ -215,23 +217,23 @@ const CONTROL_PORT = Number(process.env.HOME_SERVER_PORT) || 3001;
 
 /**
  * ============================================================================
- * ASSEMBLING THE PROCESS MANAGER
+ * ASSEMBLING THE PROCESS GROUP
  * ============================================================================
  *
- * ProcessManager.make() brings everything together:
+ * ProcessGroup.make() brings everything together:
  *
  * CONFIG:
  * - processes: Array of scheduled processes to manage
  * - queues: Array of queue resource service tags
  *
- * The ProcessManager will:
+ * The ProcessGroup will:
  * 1. Track all processes and queues
  * 2. Provide start/stop/restart controls for each
  * 3. Collect status and metrics
  * 4. Expose everything through the CLI and control API
  *
  * DEPENDENCY FLOW:
- * - We pass queue TAGS (DemoQueue, DemoTwoQueue) to ProcessManager.make
+ * - We pass queue TAGS (DemoQueue, DemoTwoQueue) to ProcessGroup.make
  * - We provide queue layers (`.layer`) at runtime via Effect.provide
  * - Effect's dependency system matches them up automatically
  * - This ensures type safety and single instances
@@ -239,22 +241,22 @@ const CONTROL_PORT = Number(process.env.HOME_SERVER_PORT) || 3001;
 
 // Demo program
 const program = Effect.gen(function* () {
-  // Create the ProcessManager with our demo processes and queues
-  const pm = yield* ProcessManager.make({
+  // Create the ProcessGroup with our demo processes and queues
+  const group = yield* ProcessGroup.make({
     processes: [queueAdderCron],
     queues: [DemoQueue, DemoTwoQueue],
   });
 
-  yield* Effect.logInfo("🚀 Starting Demo ProcessManager...");
+  yield* Effect.logInfo("🚀 Starting Demo ProcessGroup...");
   yield* Effect.logInfo(`📝 Processes: 1 cron (queue-adder)`);
   yield* Effect.logInfo(`🔄 Queues: 2 (DemoQueue, DemoTwoQueue)`);
   yield* Effect.logInfo(`⏰ Schedule: Every 10 seconds`);
 
   // Start control API for CLI access
-  yield* pm.serve({ port: CONTROL_PORT });
+  yield* group.serve({ port: CONTROL_PORT });
 
   // Auto-start all processes
-  yield* pm.startAll();
+  yield* group.startAll();
 
   yield* Effect.logInfo("✅ Demo is running. Try these commands:");
   yield* Effect.logInfo("   npm run cli ls");
@@ -262,7 +264,7 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo("   npm run cli queues");
   yield* Effect.logInfo("   Press Ctrl+C to stop.");
 
-  yield* pm.awaitShutdown({
+  yield* group.awaitShutdown({
     logMessage: (signal) => `📡 Received ${signal}, shutting down gracefully...`,
   });
 }).pipe(Effect.scoped);

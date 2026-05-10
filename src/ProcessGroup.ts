@@ -1,21 +1,26 @@
 /**
- * ProcessManager - Orchestration Layer for Scheduled Processes and Queues
- * 
- * The ProcessManager provides a unified interface for managing scheduled processes
- * and queues. It handles process lifecycle, monitoring, and coordination.
- * 
+ * ProcessGroup - Orchestration layer for a cohesive set of processes and queues
+ *
+ * A {@link ProcessGroup} owns processes that belong together: their lifecycle,
+ * scheduling, queue access, and analytics. It is the unit of deployment
+ * within `effect-pm`.
+ *
+ * A future top-level `ProcessManager` (not yet implemented) will coordinate
+ * multiple `ProcessGroup` instances across hosts via Effect RPC / HTTP. Use
+ * a single `ProcessGroup` per logical bundle for now.
+ *
  * @remarks
  * Key features:
  * - Process lifecycle management (start, stop, restart)
  * - Real-time status monitoring and metrics
  * - Queue resource integration and management
  * - Scoped resource management with automatic cleanup
- * 
+ *
  * **Dependencies:**
  * - `ProcessStore` - Required for process analytics and lifecycle records.
  *   Provide either `ProcessStore.layer` (in-memory) or a custom implementation.
- * 
- * @module ProcessManager
+ *
+ * @module ProcessGroup
  */
 
 import { Effect, Scope, Fiber, Ref, Data, Context, Exit, Option } from "effect";
@@ -52,29 +57,29 @@ export type ProcessEffectRequirements<P> = P extends Process<any>
  * Union of {@link ProcessEffectRequirements} for every process in a tuple.
  *
  * @remarks
- * {@link ProcessManager.make} uses this so `startAll`, `startProcess`, and
+ * {@link ProcessGroup.make} uses this so `startAll`, `startProcess`, and
  * related controls carry the same combined environment you would thread
  * through any nested `Effect`.
  *
  * @public
  */
-export type AllManagedProcessesRequirements<
+export type AllGroupProcessesRequirements<
   Processes extends readonly Process<any>[],
 > = ProcessEffectRequirements<Processes[number]>;
 
 /**
  * Builds the internal process map: each concrete process is assignable to
- * `Process<PMR>` because {@link Process} is covariant in `R` and `PMR` is the
+ * `Process<PGR>` because {@link Process} is covariant in `R` and `PGR` is the
  * union of every process effect's environment.
  *
  * @internal
  */
 const processMapFromTuple = <const Processes extends readonly Process<any>[]>(
   processes: Processes,
-): Map<string, Process<AllManagedProcessesRequirements<Processes>>> => {
+): Map<string, Process<AllGroupProcessesRequirements<Processes>>> => {
   const map = new Map<
     string,
-    Process<AllManagedProcessesRequirements<Processes>>
+    Process<AllGroupProcessesRequirements<Processes>>
   >();
   for (const p of processes) {
     map.set(p.name, p);
@@ -83,41 +88,35 @@ const processMapFromTuple = <const Processes extends readonly Process<any>[]>(
 };
 
 /**
- * ProcessManager core dependencies
+ * ProcessGroup core dependencies.
  *
  * @remarks
- * ProcessStore provides analytics persistence for process execution and lifecycle.
- * A default in-memory implementation is available via `ProcessStore.layer`.
+ * `ProcessStore` provides analytics persistence for process execution and
+ * lifecycle. A default in-memory implementation is available via
+ * `ProcessStore.layer`.
  *
  * @public
  */
-export type ProcessManagerDependencies = ProcessStore;
+export type ProcessGroupDependencies = ProcessStore;
 
 /**
- * Process status managed by ProcessManager
- * 
+ * Process status managed by ProcessGroup.
+ *
  * @remarks
  * - `running` - Process is actively running
  * - `paused` - Process is paused (not currently implemented)
  * - `stopped` - Process is stopped
- * 
+ *
  * @public
  */
 export type ProcessStatus = "running" | "paused" | "stopped";
 
 /**
- * Detailed information about a managed process
- * 
- * @remarks
- * Contains comprehensive status information including:
- * - Basic metadata (name, type, status)
- * - Runtime metrics (uptime, start time)
- * - Scheduled process details (lastRun, nextRun, runCount)
- * - Optional metadata for extension
- * 
+ * Detailed information about a managed process.
+ *
  * @public
  */
-export interface ProcessManagerDetails {
+export interface ProcessGroupDetails {
   /** Unique process identifier */
   name: string;
   /** Process type */
@@ -128,8 +127,7 @@ export interface ProcessManagerDetails {
   uptime: number;
   /** When the process was started (null if never started) */
   startTime: Date | null;
-  
-  // Scheduled process details (when type is "scheduled")
+
   /** Last execution time for scheduled processes */
   lastRun?: Date | null;
   /** Next scheduled execution time */
@@ -138,8 +136,7 @@ export interface ProcessManagerDetails {
   executions?: number;
   /** First startup run time (if runOnStartup is enabled) */
   firstStartup?: Date | null;
-  
-  // Queue-specific details (when type is "queue")
+
   /** Current number of items in queue */
   size?: number;
   /** Total number of items completed */
@@ -148,16 +145,16 @@ export interface ProcessManagerDetails {
   workers?: number;
   /** Whether the queue is currently processing */
   running?: boolean;
-  
+
   /** Additional metadata for extensions */
   metadata?: Record<string, unknown>;
 }
 
 /**
- * Internal state for ProcessManager
+ * Internal state for ProcessGroup.
  * @internal
  */
-export interface ProcessManagerState<R> {
+export interface ProcessGroupState<R> {
   processes: Ref.Ref<Map<string, Process<R>>>;
   queues: Record<string, QueueRef<any, any, any, any>>;
   statuses: Ref.Ref<Map<string, ProcessStatus>>;
@@ -167,221 +164,79 @@ export interface ProcessManagerState<R> {
 }
 
 /**
- * Queue resource status information
- * 
+ * Queue resource status information.
+ *
  * @public
  */
 export interface QueueDetails {
-  /** Queue identifier */
   name: string;
-  /** Current number of items in queue by priority */
   size: {
-    /** High priority items pending */
     high: number;
-    /** Normal priority items pending */
     normal: number;
-    /** Low priority items pending */
     low: number;
-    /** Total items pending (all priorities) */
     total: number;
   };
-  /** Total number of items completed */
   completed: number;
 }
 
 /**
- * ProcessManager Interface
- * 
- * @remarks
- * The ProcessManager provides a comprehensive API for managing scheduled processes and queues:
- * 
- * **Process Management**
- * - Add, remove, and list processes
- * - Start, stop, and restart individual processes or all processes
- * - Run scheduled processes immediately
- * 
- * **Monitoring**
- * - Get detailed status of individual processes
- * - Get status of all processes
- * - List and access queue information
- * 
- * **Queue integration**
- * - Access managed queues directly
- * - View queue metrics and status
- * 
+ * ProcessGroup control surface.
+ *
  * @typeParam R - Combined environment for all managed processes' runnable effects
- * (see {@link AllManagedProcessesRequirements}). Lifecycle methods that fork
- * scheduled work list `R | {@link ProcessStore}` because TypeScript cannot
- * prove `ProcessStore` is already part of an unconstrained `R`.
- * 
+ *
  * @public
  */
-export interface ProcessManagerControls<R> {
-  // ========== Process Management ==========
-  
-  /**
-   * Remove a process from management
-   * 
-   * @param name - Process identifier
-   * @remarks
-   * If the process is running, it will be stopped before removal.
-   * After removal, the process cannot be started again unless re-added.
-   */
-  removeProcess(name: string): Effect.Effect<void, PMError>;
-  
-  /**
-   * List all managed processes
-   * 
-   * @returns Array of process details
-   */
-  listProcesses(): Effect.Effect<ProcessManagerDetails[], PMError, ProcessStore>;
+export interface ProcessGroupControls<R> {
+  removeProcess(name: string): Effect.Effect<void, ProcessGroupErrors>;
+  listProcesses(): Effect.Effect<ProcessGroupDetails[], ProcessGroupErrors, ProcessStore>;
 
-  // ========== Process Control ==========
-  
-  /**
-   * Start a specific process
-   * 
-   * @param name - Process identifier
-   * @remarks
-   * Fails if the process is already running or doesn't exist.
-   */
   startProcess(
     name: string,
-  ): Effect.Effect<void, PMError, R | ProcessStore>;
-  
-  /**
-   * Stop a specific process
-   * 
-   * @param name - Process identifier
-   * @remarks
-   * Gracefully interrupts the process fiber and updates status.
-   */
-  stopProcess(name: string): Effect.Effect<void, PMError>;
-  
-  /**
-   * Restart a process (stop then start)
-   * 
-   * @param name - Process identifier
-   */
+  ): Effect.Effect<void, ProcessGroupErrors, R | ProcessStore>;
+  stopProcess(name: string): Effect.Effect<void, ProcessGroupErrors>;
   restartProcess(
     name: string,
-  ): Effect.Effect<void, PMError, R | ProcessStore>;
+  ): Effect.Effect<void, ProcessGroupErrors, R | ProcessStore>;
 
-  // ========== Process-Specific Actions ==========
-  
-  /**
-   * Run a scheduled process immediately
-   * 
-   * @param name - Process identifier
-   * @remarks
-   * Only works for scheduled processes (crons). The process must support
-   * immediate execution. This does not affect the regular schedule.
-   */
   runProcessImmediately(
     name: string,
-  ): Effect.Effect<void, PMError, R | ProcessStore>;
+  ): Effect.Effect<void, ProcessGroupErrors, R | ProcessStore>;
 
-  // ========== Status and Details ==========
-  
-  /**
-   * Get detailed status of a specific process
-   * 
-   * @param name - Process identifier
-   * @returns Comprehensive process details
-   */
   getProcessStatus(
     name: string,
-  ): Effect.Effect<ProcessManagerDetails, PMError, ProcessStore>;
-  
-  /**
-   * Get status of all managed processes
-   * 
-   * @returns Array of all process details
-   */
+  ): Effect.Effect<ProcessGroupDetails, ProcessGroupErrors, ProcessStore>;
   getAllProcessStatus(): Effect.Effect<
-    ProcessManagerDetails[],
-    PMError,
+    ProcessGroupDetails[],
+    ProcessGroupErrors,
     ProcessStore
   >;
 
-  // ========== Global Control ==========
-  
-  /**
-   * Start all managed processes
-   * 
-   * @remarks
-   * Processes that are already running will be skipped.
-   */
-  startAll(): Effect.Effect<void, PMError, R | ProcessStore>;
-  
-  /**
-   * Stop all running processes
-   * 
-   * @remarks
-   * Gracefully stops all processes. Processes that are already stopped are skipped.
-   */
-  stopAll(): Effect.Effect<void, PMError>;
+  startAll(): Effect.Effect<void, ProcessGroupErrors, R | ProcessStore>;
+  stopAll(): Effect.Effect<void, ProcessGroupErrors>;
 
-  // ========== Queue operations ==========
-  
-  /**
-   * List all managed queues
-   * 
-   * @returns Array of queue details including size and completed count
-   */
   listQueues(): Effect.Effect<QueueDetails[], never>;
-  
-  /**
-   * Get a specific queue resource
-   * 
-   * @param name - Queue identifier
-   * @returns The queue resource instance
-   * @remarks
-   * Use this to interact directly with a queue (add items, check status, etc.)
-   */
   getQueue(
     name: string,
-  ): Effect.Effect<QueueRef<any, any, any, any>, PMError>;
+  ): Effect.Effect<QueueRef<any, any, any, any>, ProcessGroupErrors>;
 }
 
 /**
- * Options for {@link ProcessManager} shutdown waiting (Node.js signals).
+ * Options for {@link ProcessGroup} shutdown waiting (Node.js signals).
  *
  * @public
  */
 export interface AwaitShutdownOptions {
-  /**
-   * OS signals that trigger graceful shutdown (interrupts the running fiber).
-   *
-   * @defaultValue `["SIGINT", "SIGTERM"]` — matches local Ctrl+C and `docker stop`.
-   */
   readonly signals?: readonly string[];
-  /**
-   * Custom log line for each signal. Return `undefined` or `""` to skip logging.
-   *
-   * @remarks
-   * When omitted, a default info message is logged via {@link Effect.logInfo}.
-   */
   readonly logMessage?: (signal: string) => string | undefined;
 }
 
-export interface ProcessManager<R> extends ProcessManagerControls<R> {
+/**
+ * Public ProcessGroup interface returned by {@link ProcessGroup.make}.
+ *
+ * @public
+ */
+export interface ProcessGroup<R> extends ProcessGroupControls<R> {
   serve: ({ port }: { port?: number }) => Effect.Effect<void, never, Scope.Scope | R | ProcessStore>;
-
-  /**
-   * Block until a shutdown signal is received, then interrupt (so scoped
-   * resources such as the control HTTP server shut down cleanly).
-   *
-   * @remarks
-   * Intended as the last step in a long-running program after `serve` and
-   * `startAll`. Listeners are removed when the surrounding scope closes or
-   * after the first matching signal.
-   *
-   * No-ops into {@link Effect.never} with a warning when `process.on` is
-   * unavailable (non-Node environments).
-   *
-   * @public
-   */
   awaitShutdown: (
     options?: AwaitShutdownOptions,
   ) => Effect.Effect<never, never, Scope.Scope>;
@@ -392,80 +247,65 @@ export interface ProcessManager<R> extends ProcessManagerControls<R> {
 // ============================================================================
 
 /**
- * General ProcessManager error
- * 
- * @remarks
- * Used for errors that don't fit into more specific error categories.
- * 
+ * General ProcessGroup error.
+ *
  * @public
  */
-export class ProcessManagerError extends Data.TaggedError(
-  "ProcessManagerError",
+export class ProcessGroupError extends Data.TaggedError(
+  "ProcessGroupError",
 )<{
-  /** Error reason/message */
   reason: string;
-  /** Process that caused the error (if applicable) */
   processName?: string;
-  /** Operation that failed (if applicable) */
   operation?: string;
 }> {}
 
 /**
- * Error thrown when a process is not found
- * 
+ * Error thrown when a process is not found.
+ *
  * @public
  */
 export class ProcessNotFoundError extends Data.TaggedError(
   "ProcessNotFoundError",
 )<{
-  /** Name of the process that was not found */
   processName: string;
 }> {}
 
 /**
- * Error thrown when attempting to start a process that is already running
- * 
+ * Error thrown when attempting to start a process that is already running.
+ *
  * @public
  */
 export class ProcessAlreadyRunningError extends Data.TaggedError(
   "ProcessAlreadyRunningError",
 )<{
-  /** Name of the process that is already running */
   processName: string;
 }> {}
 
 /**
- * Error thrown when attempting an operation on a process that is not running
- * 
+ * Error thrown when attempting an operation on a process that is not running.
+ *
  * @public
  */
 export class ProcessNotRunningError extends Data.TaggedError(
   "ProcessNotRunningError",
 )<{
-  /** Name of the process that is not running */
   processName: string;
-  /** Operation that was attempted */
   operation: string;
 }> {}
 
 /**
- * Union of all possible ProcessManager errors
- * 
+ * Union of all possible ProcessGroup errors.
+ *
  * @public
  */
-export type PMError =
-  | ProcessManagerError
+export type ProcessGroupErrors =
+  | ProcessGroupError
   | ProcessNotFoundError
   | ProcessAlreadyRunningError
   | ProcessNotRunningError;
 
 const defaultShutdownSignals = ["SIGINT", "SIGTERM"] as const;
 
-/**
- * Wait for Node process signals, then interrupt the current fiber.
- *
- * @internal
- */
 const awaitShutdownNode = (
   options?: AwaitShutdownOptions,
 ): Effect.Effect<never, never, Scope.Scope> =>
@@ -519,7 +359,7 @@ const awaitShutdown = (
     ? awaitShutdownNode(options)
     : Effect.andThen(
         Effect.logWarning(
-          "ProcessManager.awaitShutdown: process.on is not available; blocking forever. Use a Node.js entrypoint.",
+          "ProcessGroup.awaitShutdown: process.on is not available; blocking forever. Use a Node.js entrypoint.",
         ),
         () => Effect.never,
       );
@@ -532,7 +372,6 @@ const recordLifecycleIfAvailable = (event: ProcessLifecycleChangedEvent): Effect
         onSome: (store) => store.append(event),
       }),
     ),
-    // During migration, lifecycle analytics writes are best-effort.
     Effect.catch(() => Effect.void),
   );
 
@@ -540,14 +379,12 @@ const recordLifecycleIfAvailable = (event: ProcessLifecycleChangedEvent): Effect
 // Helper Functions (Internal)
 // ============================================================================
 
-// Helper functions for process management
 const removeProcess =
-  <R>(state: ProcessManagerState<R>) =>
-  (name: string): Effect.Effect<void, PMError> =>
+  <R>(state: ProcessGroupState<R>) =>
+  (name: string): Effect.Effect<void, ProcessGroupErrors> =>
     Effect.gen(function* () {
       yield* Effect.logDebug(`🗑️  Removing process: ${name}`);
 
-      // Check if process exists
       const process = yield* Ref.get(state.processes).pipe(
         Effect.map((processes) => processes.get(name)),
       );
@@ -556,7 +393,6 @@ const removeProcess =
         yield* new ProcessNotFoundError({ processName: name });
       }
 
-      // Stop if running
       const status = yield* Ref.get(state.statuses).pipe(
         Effect.map((statuses) => statuses.get(name)),
       );
@@ -565,7 +401,6 @@ const removeProcess =
         yield* stopProcess(state)(name);
       }
 
-      // Remove from all maps
       yield* Ref.update(state.processes, (processes) => {
         const newMap = new Map(processes);
         newMap.delete(name);
@@ -596,8 +431,8 @@ const removeProcess =
     });
 
 const listProcesses = <R>(
-  state: ProcessManagerState<R>,
-): Effect.Effect<ProcessManagerDetails[], PMError, ProcessStore> =>
+  state: ProcessGroupState<R>,
+): Effect.Effect<ProcessGroupDetails[], ProcessGroupErrors, ProcessStore> =>
   Effect.gen(function* () {
     const processes = yield* Ref.get(state.processes);
     const statuses = yield* Ref.get(state.statuses);
@@ -610,7 +445,6 @@ const listProcesses = <R>(
           const startTime = startTimes.get(name) || null;
           const uptime = startTime ? Date.now() - startTime.getTime() : 0;
 
-          // Get additional details for scheduled processes
           let scheduledDetails = {};
           if (process.type === "scheduled") {
             const details = yield* process.getStatus().pipe(
@@ -649,21 +483,19 @@ const listProcesses = <R>(
   });
 
 const startProcess =
-  <R>(state: ProcessManagerState<R>) =>
-  (name: string): Effect.Effect<void, PMError, R | ProcessStore> =>
+  <R>(state: ProcessGroupState<R>) =>
+  (name: string): Effect.Effect<void, ProcessGroupErrors, R | ProcessStore> =>
     Effect.gen(function* () {
       yield* Effect.logDebug(`🚀 Starting process: ${name}`);
 
-      // Check if process exists
       const process = yield* Ref.get(state.processes).pipe(
         Effect.map((processes) => processes.get(name)),
-      ); 
+      );
 
       if (!process) {
         yield* new ProcessNotFoundError({ processName: name });
       }
 
-      // Check current status
       const status = yield* Ref.get(state.statuses).pipe(
         Effect.map((statuses) => statuses.get(name)),
       );
@@ -672,16 +504,13 @@ const startProcess =
         yield* new ProcessAlreadyRunningError({ processName: name });
       }
 
-      // If stopped, restart instead of starting new
       if (status === "stopped") {
         yield* Effect.logInfo(`📝 Process '${name}' is starting`);
       }
 
-      // Create scope and start process
       const scope = yield* Scope.make();
       const fiber = yield* Effect.forkIn(process!.effect, scope);
 
-      // Update state
       yield* Ref.update(state.scopes, (scopes) => scopes.set(name, scope));
       yield* Ref.update(state.fibers, (fibers) => fibers.set(name, fiber));
       yield* Ref.update(state.statuses, (statuses) =>
@@ -703,10 +532,9 @@ const startProcess =
     });
 
 const stopProcess =
-  <R>(state: ProcessManagerState<R>) =>
-  (name: string): Effect.Effect<void, PMError> =>
+  <R>(state: ProcessGroupState<R>) =>
+  (name: string): Effect.Effect<void, ProcessGroupErrors> =>
     Effect.gen(function* () {
-      // Check if process exists
       const process = yield* Ref.get(state.processes).pipe(
         Effect.map((processes) => processes.get(name)),
       );
@@ -715,7 +543,6 @@ const stopProcess =
         yield* new ProcessNotFoundError({ processName: name });
       }
 
-      // Check if running
       const status = yield* Ref.get(state.statuses).pipe(
         Effect.map((statuses) => statuses.get(name)),
       );
@@ -727,7 +554,6 @@ const stopProcess =
         });
       }
 
-      // Get fiber
       const fiber = yield* Ref.get(state.fibers).pipe(
         Effect.map((fibers) => fibers.get(name)),
       );
@@ -735,7 +561,6 @@ const stopProcess =
         Effect.map((scopes) => scopes.get(name)),
       );
 
-      // Interrupt the main process fiber
       if (fiber) {
         yield* Fiber.interrupt(fiber);
       }
@@ -743,7 +568,6 @@ const stopProcess =
         yield* Scope.close(scope, Exit.void);
       }
 
-      // Update status
       yield* Ref.update(state.statuses, (statuses) =>
         statuses.set(name, "stopped"),
       );
@@ -770,10 +594,9 @@ const stopProcess =
     });
 
 const runProcessImmediately =
-  <R>(state: ProcessManagerState<R>) =>
-  (name: string): Effect.Effect<void, PMError, R | ProcessStore> =>
+  <R>(state: ProcessGroupState<R>) =>
+  (name: string): Effect.Effect<void, ProcessGroupErrors, R | ProcessStore> =>
     Effect.gen(function* () {
-      // Check if process exists
       const process = yield* Ref.get(state.processes).pipe(
         Effect.map((processes) => processes.get(name)),
       );
@@ -782,12 +605,11 @@ const runProcessImmediately =
         yield* new ProcessNotFoundError({ processName: name });
       }
 
-      // Check if it's a scheduled process with runImmediately
       if (process!.type === "scheduled" && "runImmediately" in process!) {
         yield* Effect.logInfo(`🚀 Running '${name}' immediately...`);
         yield* process!.runImmediately();
       } else {
-        yield* new ProcessManagerError({
+        yield* new ProcessGroupError({
           reason: "unsupported_immediate_execution",
           processName: name,
           operation: "runImmediately",
@@ -796,8 +618,8 @@ const runProcessImmediately =
     });
 
 const getProcessStatus =
-  <R>(state: ProcessManagerState<R>) =>
-  (name: string): Effect.Effect<ProcessManagerDetails, PMError, ProcessStore> =>
+  <R>(state: ProcessGroupState<R>) =>
+  (name: string): Effect.Effect<ProcessGroupDetails, ProcessGroupErrors, ProcessStore> =>
     Effect.gen(function* () {
       const process = yield* Ref.get(state.processes).pipe(
         Effect.map((processes) => processes.get(name)),
@@ -815,13 +637,12 @@ const getProcessStatus =
       );
       const uptime = startTime ? Date.now() - startTime.getTime() : 0;
 
-      // Handle scheduled processes
       const scheduledDetails = yield* (process!)
         .getStatus()
         .pipe(
           Effect.mapError(
             () =>
-              new ProcessManagerError({
+              new ProcessGroupError({
                 reason: "status_details_error",
                 processName: name,
                 operation: "status",
@@ -844,68 +665,50 @@ const getProcessStatus =
 // ============================================================================
 
 /**
- * Create a ProcessManager instance
- * 
+ * Create a {@link ProcessGroup} instance.
+ *
  * @remarks
- * Creates a ProcessManager that coordinates scheduled processes and queues.
- * The ProcessManager provides:
+ * A `ProcessGroup` coordinates the processes and queues that need to run
+ * together. It provides:
  * - Lifecycle management for all processes
  * - Unified control interface (start, stop, restart)
  * - Status monitoring and metrics
  * - Queue resource integration and access
- * 
- * **Type Safety**
- * 
- * Managed processes may require any Effect services. The returned
- * {@link ProcessManager} is parameterized by {@link AllManagedProcessesRequirements},
- * inferred from the `processes` tuple, so `startAll` and related controls
- * require the same combined environment as forking those effects elsewhere.
- * Queue tags in `queues` must still be available when running `ProcessManager.make`
- * (they are acquired during construction).
- * For each queue, use {@link QueueResource.make} with a **string literal** `name`
- * so {@link QueueRef}’s first type parameter is a literal and `Effect.provide` /
- * merged `Layer`s can narrow `R` correctly.
- * 
+ *
  * @typeParam Queues - Array of queue resource service tags to manage
  * @typeParam Processes - Tuple of {@link Process} values; used to infer combined requirements
- * 
- * @param config - Configuration object
- * @param config.queues - Array of queue resource service tags (from QueueResource.make)
- * @param config.processes - Array of processes to manage (from Process.make)
- * 
- * @returns Effect that produces a ProcessManager instance
- * 
+ *
  * @example
  * ```typescript
- * import { QueueResource, Process, ProcessManager } from "@nikscripts/effect-pm";
+ * import { QueueResource, Process, ProcessGroup } from "@nikscripts/effect-pm";
  * import { Cron, Effect } from "effect";
- * 
+ *
  * const EmailQueue = QueueResource.make({
  *   name: "email-queue",
  *   effect: sendEmail,
- *   concurrency: 5
+ *   concurrency: 5,
  * });
- * 
+ *
  * const emailCron = Process.make({
  *   name: "send-emails",
- *   crons: Cron.make({ minutes: [0, 30] }), // Every 30 minutes
+ *   crons: Cron.make({ minutes: [0, 30] }),
  *   effect: Effect.gen(function* () {
  *     const queue = yield* EmailQueue;
  *     yield* queue.add([email1, email2, email3]);
- *   })
+ *   }),
  * });
- * 
- * const pm = yield* ProcessManager.make({
+ *
+ * const group = yield* ProcessGroup.make({
  *   queues: [EmailQueue],
- *   processes: [emailCron]
+ *   processes: [emailCron],
  * });
- * 
- * yield* pm.startAll();
+ *
+ * yield* group.startAll();
  * ```
- * 
+ *
  * @public
  */
-export const makeProcessManager = <
+export const makeProcessGroup = <
   const Queues extends readonly [
     ...Context.Key<any, QueueRef<any, any, any, any>>[],
   ],
@@ -914,14 +717,13 @@ export const makeProcessManager = <
   queues: Queues;
   processes: Processes;
 }): Effect.Effect<
-  ProcessManager<AllManagedProcessesRequirements<Processes>>,
-  PMError,
+  ProcessGroup<AllGroupProcessesRequirements<Processes>>,
+  ProcessGroupErrors,
   TagIdentifier<Queues[number]>
 > =>
   Effect.gen(function* () {
-    type PMR = AllManagedProcessesRequirements<Processes>;
+    type PGR = AllGroupProcessesRequirements<Processes>;
 
-    // Yield all queue services to make them requirements
     const queuesMap = Object.fromEntries(
       config.queues.map((queueTag) => [queueTag.key, queueTag.asEffect()]),
     );
@@ -941,7 +743,7 @@ export const makeProcessManager = <
       new Map<string, Fiber.Fiber<void, never>>(),
     );
 
-    const state: ProcessManagerState<PMR> = {
+    const state: ProcessGroupState<PGR> = {
       processes,
       queues,
       statuses,
@@ -983,7 +785,6 @@ export const makeProcessManager = <
         Effect.gen(function* () {
           const processes = yield* Ref.get(state.processes);
           for (const name of processes.keys()) {
-            // Start only if not already running
             const status = yield* Ref.get(state.statuses).pipe(
               Effect.map((m) => m.get(name)),
             );
@@ -1011,15 +812,15 @@ export const makeProcessManager = <
               const prioritySizes = yield* queue.sizeByPriority();
               const totalSize = yield* queue.size();
               const completed = yield* queue.getCompleted();
-              return { 
-                name, 
+              return {
+                name,
                 size: {
                   high: prioritySizes.high,
                   normal: prioritySizes.normal,
                   low: prioritySizes.low,
                   total: totalSize,
                 },
-                completed 
+                completed,
               };
             }),
           ),
@@ -1035,11 +836,16 @@ export const makeProcessManager = <
     };
     return {
       ...controls,
-      serve: ({ port }: { port?: number }) => ControlService.make({ pm: controls, port }),
+      serve: ({ port }: { port?: number }) => ControlService.make({ group: controls, port }),
       awaitShutdown,
     };
   });
 
-export const ProcessManager = {
-  make: makeProcessManager,
-}
+/**
+ * `ProcessGroup` namespace.
+ *
+ * @public
+ */
+export const ProcessGroup = {
+  make: makeProcessGroup,
+};

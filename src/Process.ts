@@ -71,7 +71,7 @@ export interface ScheduledProcessDetails {
  * 
  * @remarks
  * A self-contained scheduled process that runs according to a cron schedule.
- * Managed by ProcessManager for lifecycle control and monitoring.
+ * Managed by a {@link ProcessGroup} for lifecycle control and monitoring.
  * 
  * **Features:**
  * - Automatic scheduling with Effect's Cron
@@ -167,7 +167,7 @@ const getNextCronRun = (
  * @param params.crons - Single or multiple cron expressions
  * @param params.effect - Effect to execute on schedule
  * 
- * @returns Process that can be managed by ProcessManager
+ * @returns Process that can be managed by a {@link ProcessGroup}
  */
 const createScheduledProcess = <R>(params: {
   name: string;
@@ -358,7 +358,7 @@ export const Process = {
    * 
    * @typeParam R - Requirements type for the program effect
    * @param config - Process configuration
-   * @returns Process that can be managed by ProcessManager
+   * @returns Process that can be managed by a {@link ProcessGroup}
    */
   make: createScheduledProcess,
 }

@@ -1,6 +1,6 @@
-# ProcessManager Examples
+# ProcessGroup Examples
 
-This directory contains reference implementations and examples for extending ProcessManager functionality. These files are **not included in the published package** but serve as documentation and starting points for your own implementations.
+This directory contains reference implementations and examples for extending ProcessGroup functionality. These files are **not included in the published package** but serve as documentation and starting points for your own implementations.
 
 ## 🚀 Running the Examples
 
@@ -10,7 +10,7 @@ This directory contains reference implementations and examples for extending Pro
 npm run example
 ```
 
-This starts the ProcessManager demo with:
+This starts the ProcessGroup demo with:
 - Two queues (DemoQueue, DemoTwoQueue)
 - One cron that adds items to queues every 10 seconds
 - HTTP control service on port 3001
@@ -77,6 +77,6 @@ The core package has minimal dependencies beyond Effect to remain lightweight. T
 ## 📚 More Resources
 
 - [Main README](../README.md) - Package documentation
-- [ProcessManager API](../src/process-manager.ts) - Core API reference
+- [ProcessGroup API](../src/ProcessGroup.ts) - Core API reference
 - [Effect Documentation](https://effect.website/) - Effect framework docs
 

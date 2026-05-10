@@ -1,12 +1,12 @@
 /**
- * CLI for Process Manager Control
- * 
- * Provides command-line interface for controlling and monitoring ProcessManager
- * via the HTTP control service.
+ * CLI for ProcessGroup Control
+ *
+ * Provides command-line interface for controlling and monitoring a
+ * {@link ProcessGroup} via the HTTP control service.
  * 
  * @remarks
  * This CLI communicates with the HTTP control service started by
- * {@link startControlService}. Provides commands for listing, starting,
+ * {@link ProcessGroup.serve} / {@link ControlService.make}. Provides commands for listing, starting,
  * stopping, and monitoring processes and queues.
  * 
  * **Available Commands:**
@@ -29,7 +29,7 @@ import { Console, Effect, Option } from "effect";
 import { Argument, Command } from "effect/unstable/cli";
 import Table from "cli-table3";
 import prettyMs from "pretty-ms";
-import type { ProcessManagerDetails, QueueDetails, ControlResponse } from "./index";
+import type { ProcessGroupDetails, QueueDetails, ControlResponse } from "./index";
 
 // ============================================================================
 // Types
@@ -113,7 +113,7 @@ const formatNextRun = (nextRun: Date | string | null | undefined): string => {
  * Format processes table
  * @internal
  */
-const formatProcesses = (processes: ProcessManagerDetails[]) => {
+const formatProcesses = (processes: ProcessGroupDetails[]) => {
   if (!processes || processes.length === 0) return "No processes";
   
   const table = new Table({
@@ -164,13 +164,13 @@ const formatQueues = (queues: QueueDetails[]) => {
  * Format status details
  * @internal
  */
-const formatStatus = (data: ControlResponse<ProcessManagerDetails | QueueDetails>) => {
+const formatStatus = (data: ControlResponse<ProcessGroupDetails | QueueDetails>) => {
   const table = new Table({
     style: { head: ["cyan"] }
   });
   
   if (data.type === "process") {
-    const processData = data.data as ProcessManagerDetails;
+    const processData = data.data as ProcessGroupDetails;
     table.push(
       ["Name", processData.name],
       ["Type", processData.type],
@@ -214,7 +214,7 @@ const makeCommands = (controlUrl: string) => {
     post("ls").pipe(
       Effect.flatMap((body) => {
         const output: string[] = [];
-        const data = body.data as { processes?: ProcessManagerDetails[], queues?: QueueDetails[] } | undefined;
+        const data = body.data as { processes?: ProcessGroupDetails[], queues?: QueueDetails[] } | undefined;
         
         if (data?.processes) {
           output.push("📋 PROCESSES");
@@ -238,7 +238,7 @@ const makeCommands = (controlUrl: string) => {
       onNone: () => Console.error("Missing process/queue name"),
       onSome: (n) =>
         post("status", n).pipe(
-          Effect.flatMap((body) => Console.log(formatStatus(body as ControlResponse<ProcessManagerDetails | QueueDetails>)))
+          Effect.flatMap((body) => Console.log(formatStatus(body as ControlResponse<ProcessGroupDetails | QueueDetails>)))
         ),
     })
   );
@@ -312,11 +312,11 @@ const makeCommands = (controlUrl: string) => {
 // ============================================================================
 
 /**
- * Create a CLI for controlling ProcessManager
- * 
+ * Create a CLI for controlling a {@link ProcessGroup}.
+ *
  * @remarks
  * Creates a command-line interface that communicates with the HTTP control service.
- * The CLI must be run while the ProcessManager is running with {@link startControlService}.
+ * The CLI must be run while the {@link ProcessGroup} is running with {@link ProcessGroup.serve} (HTTP control API).
  * 
  * @param config - Configuration object
  * @param config.name - CLI name (shown in help text)
@@ -396,7 +396,7 @@ export const createCli = (config: {
  * import { runCli } from "@nikscripts/effect-pm/cli";
  * 
  * runCli({
- *   name: "My App Process Manager",
+ *   name: "My App Process Group",
  *   version: "1.0.0",
  *   port: 3001
  * });

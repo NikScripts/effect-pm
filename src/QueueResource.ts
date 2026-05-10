@@ -893,7 +893,7 @@ const makeQueueResourceEffect = <T, R, E, RFork = never, RItem = never, Name ext
  * 
  * @example
  * ```typescript
- * import { QueueResource, ProcessManager } from "@nikscripts/effect-pm";
+ * import { QueueResource, ProcessGroup } from "@nikscripts/effect-pm";
  * import { Effect, Duration } from "effect";
  * 
  * // Create a resource queue

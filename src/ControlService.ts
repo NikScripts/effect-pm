@@ -1,7 +1,7 @@
 /**
  * Control Service - HTTP API for Process Management
  * 
- * Provides a localhost-only HTTP API for controlling and monitoring ProcessManager.
+ * Provides a localhost-only HTTP API for controlling and monitoring a ProcessGroup.
  * Used by CLI tools and local management scripts.
  * 
  * @remarks
@@ -18,7 +18,7 @@
 import http from "node:http";
 import type net from "node:net";
 import { Effect, Scope } from "effect";
-import type { ProcessManagerControls, QueueDetails } from "./ProcessManager";
+import type { ProcessGroupControls, QueueDetails } from "./ProcessGroup";
 import type { ProcessStore } from "./ProcessStore";
 import { createCli, runCli } from "./cli";
 
@@ -102,7 +102,7 @@ const readBody = (req: http.IncomingMessage): Effect.Effect<string> =>
   });
 
 const handleCommand =
-  <R>(pm: ProcessManagerControls<R>) =>
+  <R>(group: ProcessGroupControls<R>) =>
   (
     command: ControlCommand,
     name?: string,
@@ -111,10 +111,10 @@ const handleCommand =
       switch (command) {
         case "ls": {
           // List both processes and queues
-          const processes = yield* pm
+          const processes = yield* group
             .getAllProcessStatus()
             .pipe(Effect.catch(() => Effect.succeed([])));
-          const queues = yield* pm.listQueues();
+          const queues = yield* group.listQueues();
           return {
             success: true,
             data: { processes, queues },
@@ -122,7 +122,7 @@ const handleCommand =
         }
         case "queues": {
           // List all queues
-          const queues = yield* pm.listQueues();
+          const queues = yield* group.listQueues();
           return {
             success: true,
             data: queues,
@@ -133,7 +133,7 @@ const handleCommand =
             return { success: false, error: "Missing name" };
           
           // Try process first
-          const processResult = yield* pm
+          const processResult = yield* group
             .getProcessStatus(name)
             .pipe(
               Effect.map((data) => ({ success: true, data, type: "process" as const })),
@@ -143,7 +143,7 @@ const handleCommand =
           if (processResult) return processResult;
           
           // Try queue
-          const queueResult = yield* pm
+          const queueResult = yield* group
             .getQueue(name)
             .pipe(
               Effect.flatMap((queue) =>
@@ -177,22 +177,22 @@ const handleCommand =
         case "start": {
           // Process-only command
           if (name)
-            yield* pm.startProcess(name).pipe(Effect.catch(() => Effect.void));
-          else yield* pm.startAll().pipe(Effect.catch(() => Effect.void));
+            yield* group.startProcess(name).pipe(Effect.catch(() => Effect.void));
+          else yield* group.startAll().pipe(Effect.catch(() => Effect.void));
           return { success: true };
         }
         case "stop": {
           // Process-only command
           if (name)
-            yield* pm.stopProcess(name).pipe(Effect.catch(() => Effect.void));
-          else yield* pm.stopAll().pipe(Effect.catch(() => Effect.void));
+            yield* group.stopProcess(name).pipe(Effect.catch(() => Effect.void));
+          else yield* group.stopAll().pipe(Effect.catch(() => Effect.void));
           return { success: true };
         }
         case "now": {
           // Process-only command
           if (!name)
             return { success: false, error: "Missing process name" };
-          yield* pm
+          yield* group
             .runProcessImmediately(name)
             .pipe(Effect.catch(() => Effect.void));
           return { success: true };
@@ -203,7 +203,7 @@ const handleCommand =
             return { success: false, error: "Missing name" };
           
           // Processes don't have pause, so check queue
-          const queue = yield* pm
+          const queue = yield* group
             .getQueue(name)
             .pipe(Effect.catch(() => Effect.succeed(null)));
           
@@ -220,7 +220,7 @@ const handleCommand =
             return { success: false, error: "Missing name" };
           
           // Processes don't have resume, so check queue
-          const queue = yield* pm
+          const queue = yield* group
             .getQueue(name)
             .pipe(Effect.catch(() => Effect.succeed(null)));
           
@@ -237,15 +237,15 @@ const handleCommand =
             // Global restart: stop all processes then start all — fork to avoid blocking
             yield* Effect.forkChild(
               Effect.gen(function* () {
-                yield* pm.stopAll();
-                yield* pm.startAll();
+                yield* group.stopAll();
+                yield* group.startAll();
               }).pipe(Effect.catch(() => Effect.void)),
             );
             return { success: true };
           }
           
           // Try process first - fork the restart to avoid blocking
-          const processExists = yield* pm
+          const processExists = yield* group
             .getProcessStatus(name)
             .pipe(
               Effect.map(() => true),
@@ -255,13 +255,13 @@ const handleCommand =
           if (processExists) {
             // Fork the restart operation so it doesn't block the HTTP response
             yield* Effect.forkChild(
-              pm.restartProcess(name).pipe(Effect.catch(() => Effect.void))
+              group.restartProcess(name).pipe(Effect.catch(() => Effect.void))
             );
             return { success: true };
           }
           
           // Try queue
-          const queue = yield* pm
+          const queue = yield* group
             .getQueue(name)
             .pipe(Effect.catch(() => Effect.succeed(null)));
           
@@ -277,7 +277,7 @@ const handleCommand =
           if (!name)
             return { success: false, error: "Missing queue name" };
 
-          const queue = yield* pm
+          const queue = yield* group
             .getQueue(name)
             .pipe(Effect.catch(() => Effect.succeed(null)));
           
@@ -295,7 +295,7 @@ const handleCommand =
  * Start the HTTP control service
  * 
  * @remarks
- * Starts a localhost-only HTTP server for controlling and monitoring the ProcessManager.
+ * Starts a localhost-only HTTP server for controlling and monitoring a {@link ProcessGroup}.
  * The server provides a JSON API for CLI tools and management scripts.
  * 
  * **Security:**
@@ -313,26 +313,26 @@ const handleCommand =
  * - `POST /control` - Execute commands (see {@link ControlCommand})
  * - `GET /health` - Health check
  * 
- * @typeParam R - ProcessManager requirements type
+ * @typeParam R - ProcessGroup requirements type
  * 
  * @param options - Configuration object
  * @param options.port - HTTP port to listen on (default: 3001)
- * @param options.pm - ProcessManager instance to control
+ * @param options.group - ProcessGroup instance to control
  * 
  * @returns Scoped effect that runs the control service
  * 
  * @example
  * ```typescript
  * const program = Effect.gen(function* () {
- *   const pm = yield* ProcessManager.make({
+ *   const group = yield* ProcessGroup.make({
  *     queues: [EmailQueue],
  *     processes: [emailCron]
  *   });
  *   
  *   // Start control service on port 3001
- *   yield* startControlService({
+ *   yield* ControlService.make({
  *     port: 3001,
- *     pm: pm
+ *     group
  *   });
  *   
  *   // Service runs until program ends
@@ -349,9 +349,9 @@ const handleCommand =
  * @example
  * ```typescript
  * // With custom port
- * yield* startControlService({
+ * yield* ControlService.make({
  *   port: 8080,
- *   pm: pm
+ *   group
  * });
  * 
  * // Now accessible at http://localhost:8080/control
@@ -361,12 +361,12 @@ const handleCommand =
  */
 const startControlService = <R>(options: {
   port?: number;
-  pm: ProcessManagerControls<R>;
+  group: ProcessGroupControls<R>;
 }): Effect.Effect<void, never, Scope.Scope | R | ProcessStore> =>
   Effect.acquireRelease(
     Effect.gen(function* () {
       const port = options.port ?? 3001;
-      const pm = options.pm;
+      const group = options.group;
 
       // Capture context (services) with all dependencies already provided
       const services = yield* Effect.context<R | ProcessStore>();
@@ -396,7 +396,7 @@ const startControlService = <R>(options: {
               catch: () => new Error("Invalid JSON"),
             });
             const body = yield* parsed;
-            const result = yield* handleCommand(pm)(body.command, body.name);
+            const result = yield* handleCommand(group)(body.command, body.name);
             const status = result.success ? 200 : 400;
             yield* writeJson(res, status, result);
             return;

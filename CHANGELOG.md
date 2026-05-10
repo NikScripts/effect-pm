@@ -126,7 +126,7 @@
 
   **ProcessManager:**
 
-  - `pm.startControlService()` → `pm.serve()` or `pm.listen()`
+  - `startControlService()` → `serve()` on the orchestrator instance (HTTP control API).
 
   **Details Properties:**
 

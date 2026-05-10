@@ -66,7 +66,7 @@ This pushes both commits and version tags.
 
 ### Changeset Types
 
-- **patch** (0.0.x) - Bug fixes, docs, non-breaking changes
+- **patch** (0.0.x) - Bug fixes, docs, non-breaking additions
 - **minor** (0.x.0) - New features, non-breaking additions
 - **major** (x.0.0) - Breaking changes (before 1.0.0, this means significant API changes)
 
@@ -109,4 +109,3 @@ npm run build
 npm unpublish @nikscripts/effect-pm@0.x.x
 ```
 ⚠️ Only use for serious issues, not recommended
-

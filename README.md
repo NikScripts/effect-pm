@@ -1,6 +1,12 @@
-# ProcessManager
+# effect-pm
 
 A comprehensive process orchestration system built on [Effect](https://effect.website/) that manages scheduled tasks (cron jobs) and queues with type-safe dependency management.
+
+The runtime is organized around the **`ProcessGroup`** — a cohesive bundle of
+processes and queues that run together. A future top-level **`ProcessManager`**
+(not yet implemented) will coordinate multiple `ProcessGroup` instances across
+hosts via Effect RPC / HTTP. For now, use one `ProcessGroup` per logical
+bundle.
 
 ## Features
 
@@ -58,18 +64,18 @@ const emailProcess = Process.make({
 });
 ```
 
-### 3. Create ProcessManager
+### 3. Create ProcessGroup
 
 ```typescript
-import { ProcessManager } from "@nikscripts/effect-pm";
+import { ProcessGroup } from "@nikscripts/effect-pm";
 
-const pm = yield* ProcessManager.make({
+const group = yield* ProcessGroup.make({
   queues: [EmailQueue],
   processes: [emailProcess],
 });
 
 // Start all processes
-yield* pm.startAll();
+yield* group.startAll();
 ```
 
 ### 4. Provide Dependencies
@@ -79,11 +85,11 @@ import { Effect, Logger } from "effect";
 import { ProcessStore } from "@nikscripts/effect-pm";
 
 const program = Effect.gen(function* () {
-  const pm = yield* ProcessManager.make({
+  const group = yield* ProcessGroup.make({
     queues: [EmailQueue],
     processes: [emailProcess],
   });
-  yield* pm.startAll();
+  yield* group.startAll();
 });
 
 // Run with dependencies
@@ -193,43 +199,43 @@ const dataSync = Process.make({
 });
 ```
 
-## ProcessManager API
+## ProcessGroup API
 
 ### Process Control
 
 ```typescript
 // Start specific process
-yield* pm.startProcess("email-process");
+yield* group.startProcess("email-process");
 
 // Stop specific process
-yield* pm.stopProcess("email-process");
+yield* group.stopProcess("email-process");
 
 // Restart process
-yield* pm.restartProcess("email-process");
+yield* group.restartProcess("email-process");
 
 // Run process immediately (doesn't affect schedule)
-yield* pm.runProcessImmediately("email-process");
+yield* group.runProcessImmediately("email-process");
 ```
 
 ### Global Control
 
 ```typescript
 // Start all processes
-yield* pm.startAll();
+yield* group.startAll();
 
 // Stop all processes
-yield* pm.stopAll();
+yield* group.stopAll();
 
 // “Restart all”: stop then start (no dedicated API)
-yield* pm.stopAll();
-yield* pm.startAll();
+yield* group.stopAll();
+yield* group.startAll();
 ```
 
 ### Monitoring
 
 ```typescript
 // Get single process status
-const status = yield* pm.getProcessStatus("email-process");
+const status = yield* group.getProcessStatus("email-process");
 console.log(status);
 // {
 //   name: "email-process",
@@ -243,20 +249,20 @@ console.log(status);
 // }
 
 // Get all process statuses
-const allStatuses = yield* pm.getAllProcessStatus();
+const allStatuses = yield* group.getAllProcessStatus();
 
 // List all processes
-const processes = yield* pm.listProcesses();
+const processes = yield* group.listProcesses();
 ```
 
 ### Queue Operations
 
 ```typescript
 // List all queues
-const queues = yield* pm.listQueues();
+const queues = yield* group.listQueues();
 
 // Get specific queue
-const emailQueue = yield* pm.getQueue("email-queue");
+const emailQueue = yield* group.getQueue("email-queue");
 yield* emailQueue.add([email1, email2, email3]);
 ```
 
@@ -264,15 +270,15 @@ yield* emailQueue.add([email1, email2, email3]);
 
 ```typescript
 // Remove a process
-yield* pm.removeProcess("old-process");
+yield* group.removeProcess("old-process");
 ```
 
 ## Type Safety
 
-The ProcessManager enforces type-safe queue dependencies at compile time:
+The ProcessGroup enforces type-safe queue dependencies at compile time:
 
 ```typescript
-import { Process, QueueResource, ProcessManager } from "@nikscripts/effect-pm";
+import { Process, QueueResource, ProcessGroup } from "@nikscripts/effect-pm";
 import { Cron, Effect } from "effect";
 
 const EmailQueue = QueueResource.make({
@@ -290,13 +296,13 @@ const cronWithQueue = Process.make({
 });
 
 // ✅ This works - EmailQueue is provided
-const pm = yield* ProcessManager.make({
+const group = yield* ProcessGroup.make({
   queues: [EmailQueue],
   processes: [cronWithQueue],
 });
 
 // ❌ Compile error - EmailQueue is missing!
-const pm = yield* ProcessManager.make({
+const groupBad = yield* ProcessGroup.make({
   queues: [],
   processes: [cronWithQueue],  // TypeScript error!
 });
@@ -305,7 +311,7 @@ const pm = yield* ProcessManager.make({
 ## ProcessStore (Analytics & Lifecycle)
 
 `ProcessStore` is the unified analytics service used by `Process` and
-`ProcessManager`. It is event-first: a single `append` path with a typed
+`ProcessGroup`. It is event-first: a single `append` path with a typed
 envelope, plus typed read helpers.
 
 Supported event types out of the box:
@@ -350,14 +356,14 @@ to copy the fragment manually.
 
 ```typescript
 import { PrismaClient } from "@prisma/client";
-import { ProcessManager } from "@nikscripts/effect-pm";
+import { ProcessGroup } from "@nikscripts/effect-pm";
 import { PrismaProcessStore } from "@nikscripts/effect-pm/prisma";
 
 const prisma = new PrismaClient();
 
 const program = Effect.gen(function* () {
-  const pm = yield* ProcessManager.make({ queues: [], processes: [...] });
-  yield* pm.startAll();
+  const group = yield* ProcessGroup.make({ queues: [], processes: [...] });
+  yield* group.startAll();
 }).pipe(
   Effect.provide(PrismaProcessStore.layer({ client: prisma })),
 );
@@ -381,10 +387,10 @@ opt into the Prisma subpath.
 Start an HTTP control service for external management:
 
 ```typescript
-const pm = yield* ProcessManager.make({...});
+const group = yield* ProcessGroup.make({...});
 
 // Start control service
-yield* pm.listen({ port: 3001 });
+yield* group.serve({ port: 3001 });
 
 // Now accessible via HTTP:
 // GET  /processes      - List all processes
@@ -404,7 +410,7 @@ import {
   ProcessNotRunningError 
 } from "@nikscripts/effect-pm";
 
-const result = yield* pm.startProcess("my-process").pipe(
+const result = yield* group.startProcess("my-process").pipe(
   Effect.catchTags({
     ProcessNotFoundError: (err) => 
       Effect.logError(`Process not found: ${err.processName}`),
@@ -422,8 +428,8 @@ Always use `Effect.scoped` for long-running programs:
 
 ```typescript
 const program = Effect.gen(function* () {
-  const pm = yield* ProcessManager.make({...});
-  yield* pm.startAll();
+  const group = yield* ProcessGroup.make({...});
+  yield* group.startAll();
   yield* Effect.never; // Keep running
 }).pipe(Effect.scoped);
 ```
@@ -486,7 +492,7 @@ See the [examples/example.ts](./examples/example.ts) file for a complete working
 
 ### Core Exports
 
-- `ProcessManager.make()` - Create a ProcessManager instance
+- `ProcessGroup.make()` - Create a ProcessGroup instance
 - `QueueResource.make()` - Create a resource queue
 - `Process.make()` - Create a scheduled process
 - `ProcessStore` - Unified analytics & lifecycle service (in-memory by default)
@@ -500,8 +506,8 @@ See the [examples/example.ts](./examples/example.ts) file for a complete working
 
 ### Types
 
-- `ProcessManager` - ProcessManager interface
-- `ProcessManagerDetails` - Process status information
+- `ProcessGroup` - ProcessGroup interface
+- `ProcessGroupDetails` - Process status information
 - `QueueDetails` - Queue status information
 - `QueueRef<Name, T, R, E>` - Queue handle API (`yield*` the tag from `QueueResource.make`); `Name` is the literal `name`; `QueueResourceInterface` is a legacy 3-param alias (`Name` widened to `string`)
 - `Process<R>` - Process interface
@@ -510,7 +516,7 @@ See the [examples/example.ts](./examples/example.ts) file for a complete working
 
 ### Errors
 
-- `ProcessManagerError` - General error
+- `ProcessGroupError` - General error
 - `ProcessNotFoundError` - Process not found
 - `ProcessAlreadyRunningError` - Process already running
 - `ProcessNotRunningError` - Process not running

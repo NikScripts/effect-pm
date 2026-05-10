@@ -1,10 +1,10 @@
 #!/usr/bin/env tsx
 
 /**
- * CLI Script for Effect Process Manager
+ * CLI Script for the effect-pm demo (ProcessGroup control)
  * 
  * This script provides a command-line interface to control and monitor
- * the ProcessManager example running in example.ts
+ * the ProcessGroup example running in example.ts
  * 
  * **Prerequisites:**
  * - The example.ts must be running (it starts the control service)

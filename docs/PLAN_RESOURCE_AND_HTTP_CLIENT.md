@@ -118,7 +118,7 @@ Use a **single scoped `Layer.effect`** that allocates the runner **inside** and 
 ## 7. Queued resource (`QueueResource`) — shipped
 
 - **`Resource.makeQueue`** === **`QueueResource.make`**.
-- Priority queues, enqueue-only, `forkWith`, refill/cache, ProcessManager integration.
+- Priority queues, enqueue-only, `forkWith`, refill/cache, `ProcessGroup` integration.
 
 ---
 

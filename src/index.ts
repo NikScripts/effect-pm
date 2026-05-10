@@ -1,10 +1,10 @@
 // ============================================================================
-// ProcessManager - Main Exports
+// effect-pm - Main Exports
 // ============================================================================
 
 // Namespace exports (these export objects with .make methods)
 export { Process } from "./Process";
-export { ProcessManager } from "./ProcessManager";
+export { ProcessGroup } from "./ProcessGroup";
 export { QueueResource, Cause } from "./QueueResource";
 export { RunResource } from "./RunResource";
 export { HttpClientRunGate } from "./HttpClientRunGate";
@@ -33,26 +33,27 @@ export {
   type ProcessStoreInterface,
 } from "./ProcessStore";
 
-// Types - ProcessManager
+// Types - ProcessGroup
 export type {
-  ProcessManagerControls,
-  ProcessManagerDetails,
+  ProcessGroup as ProcessGroupInterface,
+  ProcessGroupControls,
+  ProcessGroupDetails,
   ProcessStatus,
   QueueDetails,
-  PMError,
-  ProcessManagerDependencies,
+  ProcessGroupErrors,
+  ProcessGroupDependencies,
   AwaitShutdownOptions,
   ProcessEffectRequirements,
-  AllManagedProcessesRequirements,
-} from "./ProcessManager";
+  AllGroupProcessesRequirements,
+} from "./ProcessGroup";
 
-// Error classes - ProcessManager  
+// Error classes - ProcessGroup
 export {
-  ProcessManagerError,
+  ProcessGroupError,
   ProcessNotFoundError,
   ProcessAlreadyRunningError,
   ProcessNotRunningError,
-} from "./ProcessManager";
+} from "./ProcessGroup";
 
 // Types - Process
 export type {
