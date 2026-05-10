@@ -151,7 +151,7 @@ as inline `polling` / `schedule`.
 3. **Implemented shape (single fiber):**
    - **Outer loop** — wait until the schedule gate is **armed**. While disarmed,
      interruptible sleep follows `status.nextScheduleTransition` when present
-     (clamped), otherwise a capped fallback poll (`schedulePollWhileDisarmed`,
+     (clamped), otherwise a capped fallback poll (configuration-level fallback),
      default 5s, minimum 100ms). Uses runtime **`Clock`** for “now”.
    - **Inner loop** — while **armed**: `Polling.awaitNextTick` (wakeable cadence),
      one tracked user **`effect`**, `Polling.afterTick`; if the gate reads **disarmed**,

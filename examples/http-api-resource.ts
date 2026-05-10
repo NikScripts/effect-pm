@@ -1,16 +1,32 @@
 /**
- * `HttpApiResource.make` — typed `HttpApiClient` as a `Context.Service` + `layer`
+ * @module examples/http-api-resource
  *
- * Same as `Resource.makeHttpApiClient` (umbrella alias).
+ * ## Typed **HttpApi** client as an Effect **service**
  *
- * Run: `npm run example:http-api-resource`
+ * `HttpApiResource.make` wraps `HttpApiClient.make` so you get:
  *
- * The returned value is a **tag** with a **`.layer`**:
- * - `yield* MyApi` → `HttpApiClient` for your `HttpApi`
- * - `Effect.provide(MyApi.layer)` supplies that client (still requires platform `HttpClient`, e.g. `FetchHttpClient.layer`)
+ * - A **Context.Tag** you can `yield*` inside `Effect.gen`
+ * - A **`.layer`** that builds the client when provided
+ * - Optional **`limits`** — same throttle + concurrency gate as `RunResource`, applied to the
+ *   **entire per-request** effect via `HttpClient.transform` (see `HttpClientRunGate` in `src/`)
  *
- * Optional **`limits`** apply the same run gate as `RunResource` (concurrency + optional throttle) on the
- * full request effect via `HttpClient.transform` (see `HttpClientRunGate`).
+ * Umbrella alias: **`Resource.makeHttpApiClient`** (same implementation).
+ *
+ * ### Run
+ *
+ * ```bash
+ * pnpm run example:http-api-resource
+ * ```
+ *
+ * ### Dependencies you must still provide
+ *
+ * - **`FetchHttpClient.layer`** (or any `HttpClient` implementation) — the HttpApi client sits on top
+ *   of the platform HTTP stack.
+ *
+ * ### Public API surface touched
+ *
+ * - `src/HttpApiResource.ts` — factory
+ * - `src/HttpClientRunGate.ts` — gating helper used when `limits` is set
  */
 
 import { FetchHttpClient } from "effect/unstable/http";

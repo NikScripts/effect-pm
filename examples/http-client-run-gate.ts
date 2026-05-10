@@ -1,10 +1,24 @@
 /**
- * HttpClient + RunResource (same idea as gating HttpApiClient)
+ * @module examples/http-client-run-gate
  *
- * Run: `npm run example:http-client-run-gate`
+ * ## Gate a raw **`HttpClient`** pipeline (not HttpApi-specific)
  *
- * `HttpApiClient.make` accepts `transformClient`. After you `yield* YourRunner` inside
- * the same `Effect.gen` that builds the client, pipe the platform client:
+ * Shows the same pattern as wrapping **`HttpApiClient.make(..., { transformClient })`**, but at the
+ * lower **`HttpClient`** level using **`HttpClientRunGate.transformClient`**.
+ *
+ * ### Mental model
+ *
+ * 1. Build a **`RunResource.makeRunner`** — reusable throttle + concurrency “runner”.
+ * 2. Acquire the platform client (`yield* HttpClient.HttpClient` with `FetchHttpClient.layer` provided).
+ * 3. **`HttpClientRunGate.transformClient(base, runner)`** returns a client whose `execute` path is gated.
+ *
+ * ### Run
+ *
+ * ```bash
+ * pnpm run example:http-client-run-gate
+ * ```
+ *
+ * ### Pattern snippet (copy into your app)
  *
  * ```typescript
  * const _make = Effect.gen(function* () {

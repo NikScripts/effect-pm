@@ -47,6 +47,45 @@ type ControlCommand =
   | "now"
   | "queues";
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isProcessGroupDetails = (value: unknown): value is ProcessGroupDetails =>
+  isRecord(value)
+  && typeof value["name"] === "string"
+  && typeof value["type"] === "string"
+  && typeof value["status"] === "string"
+  && typeof value["uptime"] === "number";
+
+const isQueueDetails = (value: unknown): value is QueueDetails =>
+  isRecord(value)
+  && typeof value["name"] === "string"
+  && isRecord(value["size"])
+  && typeof value["completed"] === "number";
+
+const isControlResponse = (value: unknown): value is ControlResponse<unknown> =>
+  isRecord(value) && typeof value["success"] === "boolean";
+
+const decodeControlResponse = (value: unknown): ControlResponse<unknown> =>
+  isControlResponse(value)
+    ? value
+    : { success: false, error: "Malformed control-service response" };
+
+const decodeLsData = (
+  value: unknown,
+): { processes?: ProcessGroupDetails[]; queues?: QueueDetails[] } | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const processes = Array.isArray(value["processes"])
+    ? value["processes"].filter(isProcessGroupDetails)
+    : undefined;
+  const queues = Array.isArray(value["queues"])
+    ? value["queues"].filter(isQueueDetails)
+    : undefined;
+  return { processes, queues };
+};
+
 // ============================================================================
 // HTTP Client
 // ============================================================================
@@ -63,8 +102,8 @@ const postCommand = (controlUrl: string) => (command: ControlCommand, name?: str
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command, name }),
       });
-      const json = await res.json();
-      return { status: res.status, json } as { status: number; json: ControlResponse };
+      const json: unknown = await res.json();
+      return { status: res.status, json: decodeControlResponse(json) };
     },
     catch: (e) => new Error(e instanceof Error ? e.message : String(e)),
   }).pipe(
@@ -164,13 +203,16 @@ const formatQueues = (queues: QueueDetails[]) => {
  * Format status details
  * @internal
  */
-const formatStatus = (data: ControlResponse<ProcessGroupDetails | QueueDetails>) => {
+const formatStatus = (data: ControlResponse<unknown>) => {
   const table = new Table({
     style: { head: ["cyan"] }
   });
   
   if (data.type === "process") {
-    const processData = data.data as ProcessGroupDetails;
+    if (!isProcessGroupDetails(data.data)) {
+      return JSON.stringify(data, null, 2);
+    }
+    const processData = data.data;
     table.push(
       ["Name", processData.name],
       ["Type", processData.type],
@@ -181,7 +223,10 @@ const formatStatus = (data: ControlResponse<ProcessGroupDetails | QueueDetails>)
       ["Executions", processData.executions !== undefined ? String(processData.executions) : "-"]
     );
   } else if (data.type === "queue") {
-    const queueData = data.data as QueueDetails;
+    if (!isQueueDetails(data.data)) {
+      return JSON.stringify(data, null, 2);
+    }
+    const queueData = data.data;
     table.push(
       ["Name", queueData.name],
       ["Size (Total)", String(queueData.size.total)],
@@ -214,7 +259,7 @@ const makeCommands = (controlUrl: string) => {
     post("ls").pipe(
       Effect.flatMap((body) => {
         const output: string[] = [];
-        const data = body.data as { processes?: ProcessGroupDetails[], queues?: QueueDetails[] } | undefined;
+        const data = decodeLsData(body.data);
         
         if (data?.processes) {
           output.push("📋 PROCESSES");
@@ -238,7 +283,7 @@ const makeCommands = (controlUrl: string) => {
       onNone: () => Console.error("Missing process/queue name"),
       onSome: (n) =>
         post("status", n).pipe(
-          Effect.flatMap((body) => Console.log(formatStatus(body as ControlResponse<ProcessGroupDetails | QueueDetails>)))
+          Effect.flatMap((body) => Console.log(formatStatus(body)))
         ),
     })
   );
@@ -295,9 +340,11 @@ const makeCommands = (controlUrl: string) => {
   const queues = Command.make("queues", {}, () =>
     post("queues").pipe(
       Effect.flatMap((body) => {
-        const data = body.data as QueueDetails[] | undefined;
-        if (data) {
-          return Console.log("🔄 QUEUES\n" + formatQueues(data));
+        const queuesData = Array.isArray(body.data)
+          ? body.data.filter(isQueueDetails)
+          : undefined;
+        if (queuesData) {
+          return Console.log("🔄 QUEUES\n" + formatQueues(queuesData));
         }
         return Console.log("No queues");
       })

@@ -16,7 +16,7 @@ import { Duration, Option } from "effect";
 export const DEFAULT_SCHEDULE_POLL_WHILE_DISARMED = Duration.seconds(5);
 
 /**
- * Lower bound for {@link ProcessMakeConfig.schedulePollWhileDisarmed} so `Duration.zero`
+ * Lower bound for configured disarmed fallback polls so `Duration.zero`
  * or negative durations cannot create a busy loop.
  */
 /** @public */

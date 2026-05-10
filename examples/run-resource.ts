@@ -1,12 +1,27 @@
 /**
- * RunResource example
+ * @module examples/run-resource
  *
- * Run: `npm run example:run-resource`
+ * ## **`RunResource`** — throttle + concurrency around *your* effects
  *
- * Demonstrates:
- * - Configuring `effect` + optional `limits` (concurrency / throttle) in one `make()` call
- * - Tag + `.layer`, then `const run = yield* Tag` and `yield* run()` / `yield* run(x)`
- * - Zero-arg `effect` (an `Effect`) vs `effect: (input) => Effect` with `run(input)`
+ * `RunResource.make` produces a **tagged service**:
+ *
+ * - If **`effect`** is already an `Effect` → the service is a **nullary** runner: `yield* run()`.
+ * - If **`effect`** is `(input: T) => Effect` → the service is **apply-shaped**: `yield* run(x)`.
+ *
+ * Optional **`limits`** combine a token-bucket style **throttle** and a **concurrency semaphore**
+ * around every invocation. This example runs **15 parallel** calls through one gate to show how
+ * start times spread out (see log line with median gap).
+ *
+ * ### Run
+ *
+ * ```bash
+ * pnpm run example:run-resource
+ * ```
+ *
+ * ### Related examples
+ *
+ * - **`examples/http-client-run-gate.ts`** — same gate concept on `HttpClient`
+ * - **`examples/http-api-resource.ts`** — gate on typed HttpApi client factory
  */
 
 import { Duration, Effect } from "effect";

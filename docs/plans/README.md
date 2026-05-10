@@ -4,6 +4,13 @@ Living, canonical specs for the runtime + analytics architecture of
 `@nikscripts/effect-pm`. Anything in here is the source of truth: code that
 disagrees with these documents is the bug, not these documents.
 
+**Also read (outside this folder):**
+
+- [Package guide](../PACKAGE-GUIDE.md) — narrative architecture for humans and tools.
+- [Agent guide](../AGENTS.md) — repository map and invariants for assistants.
+- [Process / polling / schedule API tables](../PROCESS-API.md) — concise reference.
+- [Examples README](../../examples/README.md) — runnable teaching scripts.
+
 The set is intentionally small. Each file owns exactly one concept; the
 numbering encodes reading order, not priority.
 

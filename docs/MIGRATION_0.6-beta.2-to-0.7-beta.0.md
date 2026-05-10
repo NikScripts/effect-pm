@@ -18,7 +18,7 @@ Pre-1.0 semver: **`0.7.x`** signals the **Process v2** breaking surface (`Proces
 | 2 | Replace **`Process.make({ crons, … })`** with **`effect`** + **`schedule: ProcessSchedule.cronMatch({ crons })`** (and **`polling: Polling.spaced(…)`**). See [MIGRATION_0.7.0-process-v2.md](../MIGRATION_0.7.0-process-v2.md). |
 | 3 | Merge **`ProcessStore.layer`** (or Prisma adapter) wherever you fork **`process.effect`** or run **`ProcessGroup`**. |
 | 4 | If you relied on “supervisor exits when disarmed”, update to **one `startAll`** and let **arm/disarm** control ticks (or call **`stopProcess`** when you truly want the fiber gone). |
-| 5 | Optional: use **`schedulePollWhileDisarmed`**, **`computeDisarmedIdleSleep`**, or **`fromArmedRef` + `nextScheduleTransition`** for tests / custom gates. |
+| 5 | Optional: use **`computeDisarmedIdleSleep`** or **`fromArmedRef` + `nextScheduleTransition`** for tests / custom gates. |
 
 ---
 

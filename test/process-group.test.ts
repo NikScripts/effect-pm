@@ -29,6 +29,8 @@ const makeTickProcess = (
       armed: false,
       nextScheduleTransition: Option.none(),
       nextPollCadence: Option.none(),
+      activeInstances: 0,
+      nextTriggerRun: Option.none(),
     } satisfies ProcessDetails),
   runImmediately: () => Effect.void,
 })

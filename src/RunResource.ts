@@ -169,6 +169,11 @@ export const makeRunResourceWrap = (
           exec.withPermits(1)(throttleStep(inner));
       });
 
+const isEffectFactory = <A, E, R, T>(
+  effect: Effect.Effect<A, E, R> | ((input: T) => Effect.Effect<A, E, R>),
+): effect is (input: T) => Effect.Effect<A, E, R> =>
+  typeof effect === "function";
+
 function makeRunResourceGate<A, E, R, const Name extends string>(
   config: RunResourceConfigUnit<A, E, R> & { readonly name: Name }
 ): Context.Service<
@@ -228,7 +233,7 @@ function makeRunResourceGate<
     }) {
   const { name, effect, limits } = config;
 
-  if (Effect.isEffect(effect)) {
+  if (!isEffectFactory(effect)) {
     const tag = Context.Service<
       RunResourceUnit<A, E, R> & { _brand: Name },
       RunResourceUnit<A, E, R>
@@ -239,7 +244,7 @@ function makeRunResourceGate<
       Effect.gen(function* () {
         const wrap = yield* makeRunResourceWrap(limits);
         const unit: RunResourceUnit<A, E, R> = () =>
-          wrap(effect as Effect.Effect<A, E, R>);
+          wrap(effect);
         return unit;
       })
     );
@@ -252,14 +257,12 @@ function makeRunResourceGate<
     RunResourceApply<T, A, E, R>
   >(name);
 
-  const effectFn = effect as (input: T) => Effect.Effect<A, E, R>;
-
   const layer = Layer.effect(
     tag,
     Effect.gen(function* () {
       const wrap = yield* makeRunResourceWrap(limits);
       const apply: RunResourceApply<T, A, E, R> = (input: T) =>
-        wrap(effectFn(input));
+        wrap(effect(input));
       return apply;
     })
   );

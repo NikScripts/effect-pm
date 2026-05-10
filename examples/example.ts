@@ -1,77 +1,85 @@
 /**
- * ============================================================================
- * ProcessGroup - Example & Documentation
- * ============================================================================
+ * @module examples/example
  *
- * Complete example demonstrating process orchestration with Effect.
+ * ## Full-stack demo: `ProcessGroup` + queues + managed `Process` + control plane
  *
- * WHAT THIS DEMONSTRATES:
- * - QueueResource: Managed execution queues with priority scheduling
- * - Process: Supervised user `effect` with **polling** cadence and a **schedule gate**
- * - ProcessGroup: Unified orchestration and control for a cohesive bundle
- * - ProcessStore: Event-first analytics (executions + lifecycle)
- * - CLI: Command-line interface for runtime control
+ * This file is the **canonical “happy path”** for learning effect-pm: it wires every
+ * major subsystem together in one `Effect.gen` program and shows how to **provide**
+ * dependencies at the root with **`Layer.mergeAll`**.
  *
- * MORE (v0.7+): **`examples/process-supervisor-patterns.ts`** (accelerating polling, disarm/rearm,
- * `TestClock`) and **`docs/PROCESS-API.md`** (full API tables).
+ * ---
  *
- * ============================================================================
- * THE SYSTEM
- * ============================================================================
+ * ### What you should learn from this file
  *
- * 1. PROCESS - Supervised repeat execution
- *    Combine {@link Polling} (how often to attempt a tick) and {@link ProcessSchedule}
- *    (whether ticks are armed — e.g. cron windows via `ProcessSchedule.cronMatch`).
+ * | Topic | Where / what to read |
+ * |-------|----------------------|
+ * | **Queues** | `DemoQueue` / `DemoTwoQueue` — `QueueResource.make`, `forkWhen` error handling, throttle |
+ * | **Process** | `queueAdderCron` — `Process.make` with **inlined** `polling` + `schedule` (supervisor bakes them in; no duplicate root layers for those) |
+ * | **Orchestration** | `ProcessGroup.make({ processes, queues })` — combined environment type |
+ * | **Analytics** | `ProcessStore.layer` — in-memory; swap for Prisma in production |
+ * | **Control HTTP** | `group.serve({ port })` — localhost control API (see `ControlService`) |
+ * | **Graceful exit** | `group.awaitShutdown` — `void` success + `Effect.scoped` |
+ * | **Root DI** | `Effect.runPromise(program.pipe(Effect.provide(Layer.mergeAll(...))))` |
  *
- * 2. QUEUE RESOURCE - Managed Effect Execution
- *    Priority-based execution with concurrency control, rate limiting,
- *    and comprehensive resource management.
+ * ---
  *
- * 3. PROCESS GROUP - Orchestration Layer
- *    Unified control and monitoring for the processes and queues that belong
- *    together. (Future: a top-level `ProcessManager` will coordinate multiple
- *    `ProcessGroup` instances across hosts.)
+ * ### Dependency graph (mental model)
  *
- * 4. PROCESS STORE - Analytics & Lifecycle Events
- *    Single event-first store. In-memory by default; Prisma-backed for
- *    durable analytics via `@nikscripts/effect-pm/prisma`.
+ * ```
+ * ProcessGroup.make
+ *   requires: DemoQueue, DemoTwoQueue  (from `queues` tuple — type-level)
  *
- * 5. CLI - Command Line Interface
- *    Runtime control and monitoring via command-line interface.
+ * queueAdderCron.effect (supervisor)
+ *   requires: DemoQueue, DemoTwoQueue, ProcessStore   (+ default Effect services)
+ *   polling/schedule: already merged at Process.make
  *
- * ============================================================================
- * CODE WALKTHROUGH
- * ============================================================================
- */
-
-/**
- * ProcessGroup Example
- *
- * @remarks
- * This example demonstrates the full ProcessGroup system with queues
- * and scheduled processes. Uses the in-memory `ProcessStore` for execution
- * and lifecycle analytics — perfect for development and testing without
- * external dependencies.
- *
- * **For Production:**
- * Swap `ProcessStore.layer` for the Prisma-backed implementation:
- * ```typescript
- * import { PrismaClient } from "@prisma/client";
- * import { PrismaProcessStore } from "@nikscripts/effect-pm/prisma";
- *
- * const prisma = new PrismaClient();
- *
- * program.pipe(
- *   Effect.provide(PrismaProcessStore.layer({ client: prisma })),
- *   Effect.runPromise,
- * );
+ * group.serve / awaitShutdown
+ *   requires: ProcessStore + same R as processes for control handlers
  * ```
  *
- * Run `npx effect-pm add prisma` once to add the required model to your
- * Prisma schema, then `prisma migrate dev`.
+ * ---
+ *
+ * ### How to run (two terminals)
+ *
+ * 1. **Terminal A — demo app**
+ *    ```bash
+ *    pnpm run example
+ *    ```
+ *    Optional: `HOME_SERVER_PORT=3002 pnpm run example` to change the control port.
+ *
+ * 2. **Terminal B — CLI** (must match port)
+ *    ```bash
+ *    pnpm run cli ls
+ *    ```
+ *    The CLI script reads `HOME_SERVER_PORT` the same way as this file.
+ *
+ * ---
+ *
+ * ### Further reading
+ *
+ * - **`docs/PACKAGE-GUIDE.md`** — narrative package overview
+ * - **`docs/PROCESS-API.md`** — API tables for Process / Polling / Schedule / ProcessGroup
+ * - **`examples/process-supervisor-patterns.ts`** — `TestClock` patterns (no real time)
+ * - **`docs/plans/09-process-v2-effect-first.md`** — supervisor semantics (source of truth)
+ *
+ * ---
+ *
+ * ### For AI coding agents
+ *
+ * When modifying or answering questions about this demo:
+ * 1. Preserve the **order of concepts** in comments (queues → process → group → store → serve).
+ * 2. Do **not** re-add root `Layer`s for `Polling` / `ProcessSchedule` if they are already on
+ *    `Process.make` for the same process — that was a historical typing workaround; the library
+ *    now models inlined layers in `Process` types.
+ * 3. If you add a new queue or process, update **`ProcessGroup.make`** `queues` / `processes`
+ *    arrays and extend **`Layer.mergeAll`** with any new `.layer` you introduce.
+ *
+ * @remarks
+ * **Production:** swap `ProcessStore.layer` for `PrismaProcessStore.layer({ client })` from
+ * `@nikscripts/effect-pm/prisma`. Run `npx effect-pm add prisma`, migrate, then provide the layer.
  */
 
-import { Effect, Duration, Logger, Data, Resource, Layer, References } from "effect";
+import { Effect, Duration, Data, Layer, References } from "effect";
 import {
   Process,
   ProcessStore,
@@ -171,26 +179,32 @@ const DemoTwoQueue = QueueResource.make({
  * CREATING MANAGED PROCESSES
  * ============================================================================
  *
- * `Process.make` wires a **long-running supervisor** (`process.effect`) that:
- * - waits until {@link ProcessSchedule} says work is **armed** (hint-based or 5s fallback sleep when disarmed);
- * - when armed, waits for the next **poll** via {@link Polling.awaitNextTick};
- * - runs your `effect` once per tick (tracked in {@link ProcessStore} when provided), then repeats when disarmed → armed again.
+ * `Process.make` wires a **long-running schedule driver** (`process.effect`) that:
+ * - watches schedule entries and spawns run instances at each `startAt`;
+ * - inside each running instance, waits for the next **poll** via {@link Polling.awaitNextTick};
+ * - runs your `effect` once per tick (tracked in {@link ProcessStore} when provided), then naturally exits once the entry window closes.
  *
  * CONFIGURATION (typical):
  * - `name` — stable id for CLI / HTTP and analytics `entityId`
  * - `effect` — `Effect<void, E, R>`; failures are logged and recorded as failed executions
  * - `polling` — cadence between ticks while armed (here: every 10 seconds)
- * - `schedule` — gate: `alwaysArmed`, `cronMatch({ crons })`, or `fromArmedRef` for tests
+ * - `schedule` — in-memory or custom `ProcessScheduleService` layer (or initializer)
  *
- * This demo keeps the gate always armed and uses spaced polling so the queue-adder
+ * This demo uses an open-ended schedule entry and spaced polling so the queue-adder
  * runs every 10 seconds under real wall time (no `TestClock` in this script).
  */
 
-// Demo process that adds items to queues on a fixed poll cadence
+/**
+ * Managed process: schedule driver runs `effect` on {@link Polling} cadence while
+ * the active schedule entry remains open. Here one open-ended entry + spaced polling (~10s)
+ * produce a steady “tick” that only needs the two queue services at runtime.
+ */
 const queueAdderCron = Process.make({
   name: "queue-adder",
   polling: Polling.spaced(Duration.seconds(10)),
-  schedule: ProcessSchedule.alwaysArmed,
+  schedule: ProcessSchedule.inMemory([
+    ProcessSchedule.at("queue-adder", new Date(0)),
+  ]),
   effect: Effect.gen(function* () {
     const demoQueue = yield* DemoQueue;
     const demoTwoQueue = yield* DemoTwoQueue;
@@ -211,6 +225,10 @@ const queueAdderCron = Process.make({
   }),
 });
 
+/**
+ * Port for {@link ProcessGroup.serve} and for **`examples/cli.ts`**.
+ * Override with `HOME_SERVER_PORT` so two demos never collide on one machine.
+ */
 const CONTROL_PORT = Number(process.env.HOME_SERVER_PORT) || 3001;
 
 /**
@@ -237,9 +255,11 @@ const CONTROL_PORT = Number(process.env.HOME_SERVER_PORT) || 3001;
  * - This ensures type safety and single instances
  */
 
-// Demo program
+/**
+ * End-to-end program: acquire group → expose control HTTP → start work → block on shutdown.
+ * **`Effect.scoped`**: `serve` / internal scopes attach finalizers so fibers and listeners clean up.
+ */
 const program = Effect.gen(function* () {
-  // Create the ProcessGroup with our demo processes and queues
   const group = yield* ProcessGroup.make({
     processes: [queueAdderCron],
     queues: [DemoQueue, DemoTwoQueue],
@@ -250,10 +270,10 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(`🔄 Queues: 2 (DemoQueue, DemoTwoQueue)`);
   yield* Effect.logInfo(`⏰ Polling: every 10 seconds (schedule: always armed)`);
 
-  // Start control API for CLI access
+  /** Localhost HTTP JSON API consumed by `pnpm run cli` (see `ControlService`). */
   yield* group.serve({ port: CONTROL_PORT });
 
-  // Auto-start all processes
+  /** Forks each process supervisor (`queueAdderCron.effect`) inside the group’s scopes. */
   yield* group.startAll();
 
   yield* Effect.logInfo("✅ Demo is running. Try these commands:");
@@ -262,6 +282,10 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo("   npm run cli queues");
   yield* Effect.logInfo("   Press Ctrl+C to stop.");
 
+  /**
+   * Blocks until SIGINT/SIGTERM (Node). Success type is **`void`** so this `yield*` does not
+   * collapse the whole `program` to `Effect<never, …>` under inference.
+   */
   yield* group.awaitShutdown({
     logMessage: (signal) => `📡 Received ${signal}, shutting down gracefully...`,
   });
@@ -286,21 +310,27 @@ const program = Effect.gen(function* () {
  * - ProcessStore.layer: Provides in-memory analytics for executions + lifecycle
  * - Logger.pretty: Provides nice formatted console logging
  *
- * The order of Effect.provide() calls doesn't matter - Effect figures out
- * the dependency graph and initializes services in the correct order.
+ * A **single** `Effect.provide(Layer.mergeAll(...))` is used so Effect builds one merged
+ * context (good practice; avoids chained-provide lint warnings).
+ *
+ * `Polling` / `ProcessSchedule` passed to {@link Process.make} are merged into the
+ * supervisor there; you do **not** need to provide them again at the program root.
  *
  * NOTE: ProcessStore.layer is in-memory, so data is lost on restart. For
  * production, use the Prisma-backed `PrismaProcessStore.layer({ client })`
  * from `@nikscripts/effect-pm/prisma`.
  */
 
-// Run the demo
 Effect.runPromise(
   program.pipe(
-    Effect.provide(DemoQueue.layer),
-    Effect.provide(DemoTwoQueue.layer),
-    Effect.provide(ProcessStore.layer), // In-memory storage (no external dependencies)
-    Effect.provide(Layer.succeed(References.MinimumLogLevel, "Debug")),
+    Effect.provide(
+      Layer.mergeAll(
+        DemoQueue.layer,
+        DemoTwoQueue.layer,
+        ProcessStore.layer, // In-memory storage (no external dependencies)
+        Layer.succeed(References.MinimumLogLevel, "Debug"),
+      ),
+    ),
   ),
 )
   .then(() => {

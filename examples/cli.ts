@@ -1,45 +1,48 @@
 #!/usr/bin/env tsx
-
 /**
- * CLI Script for the effect-pm demo (ProcessGroup control)
- * 
- * This script provides a command-line interface to control and monitor
- * the ProcessGroup example running in example.ts
- * 
- * **Prerequisites:**
- * - The example.ts must be running (it starts the control service)
- * - Control service runs on port 3001 by default
- * 
- * **Usage:**
- * ```bash
- * # Make sure example.ts is running in another terminal:
- * npm run example
- * 
- * # Then use the CLI:
- * npm run cli ls                    # List all processes and queues
- * npm run cli status queue-adder    # Get status of a process
- * npm run cli queues                # List all queues
- * npm run cli start queue-adder     # Start a process
- * npm run cli stop queue-adder      # Stop a process
- * npm run cli now queue-adder       # Run process immediately
- * ```
- * 
- * **Available Commands:**
- * - `ls` - List all processes and queues
- * - `status <name>` - Get detailed status for a process
- * - `start [name]` - Start process(es) (all if no name)
- * - `stop [name]` - Stop process(es) (all if no name)
- * - `pause <name>` - Pause a queue
- * - `resume <name>` - Resume a queue
- * - `restart [name]` - Restart process/queue (all if no name)
- * - `shutdown <name>` - Shutdown a queue permanently
- * - `now <name>` - Run a cron process immediately
- * - `queues` - List all queues with details
+ * @module examples/cli
+ *
+ * ## Thin wrapper around the package CLI (`runCli`)
+ *
+ * This script exists so **`pnpm run cli`** has a stable entry without passing `tsx` paths
+ * on the command line. It configures **only**:
+ *
+ * - **Display metadata** — `name` / `version` shown in `--help`
+ * - **Control base URL** — derived from `HOME_SERVER_PORT` (must match `examples/example.ts`)
+ *
+ * ## Prerequisites
+ *
+ * 1. Start the demo app first: **`pnpm run example`** (starts `ControlService` on the port below).
+ * 2. In another shell, run e.g. **`pnpm run cli ls`**.
+ *
+ * ## Port contract
+ *
+ * `HOME_SERVER_PORT` is read here and in `example.ts`. If you change one, change both
+ * sessions (or export the variable in your shell profile for the session).
+ *
+ * ## What the CLI talks to
+ *
+ * The implementation lives in **`src/cli.ts`** (`createCli` / `runCli`). It performs
+ * HTTP `POST` requests to the **localhost-only** control API exposed by `ProcessGroup.serve`
+ * (see **`src/ControlService.ts`**).
+ *
+ * ## Commands (summary)
+ *
+ * | Command | Purpose |
+ * |---------|---------|
+ * | `ls` | List processes and queues |
+ * | `status <name>` | Detailed row for one process or queue |
+ * | `start [name]` / `stop [name]` / `restart [name]` | Process control (omit name for all) |
+ * | `pause <name>` / `resume <name>` / `shutdown <name>` | Queue lifecycle |
+ * | `now <name>` | `runImmediately` on a managed process |
+ * | `queues` | Queue table |
+ *
+ * Pass `--help` after the script (per `@effect/cli` conventions) for full usage.
  */
 
 import { runCli } from "../src/cli";
 
-// Get port from environment or use default
+/** Must match `examples/example.ts` (default **3001**). */
 const CONTROL_PORT = Number(process.env.HOME_SERVER_PORT) || 3001;
 
 runCli({
@@ -47,4 +50,3 @@ runCli({
   version: "0.1.0",
   port: CONTROL_PORT,
 });
-

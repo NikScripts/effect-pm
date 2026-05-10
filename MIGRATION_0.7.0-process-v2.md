@@ -26,7 +26,7 @@ This note covers the **breaking** redesign of `Process` described in
    This arms the process when any expression matches “now”. Re-evaluation uses the **wall clock** (`sampleInterval`, default **1 second**); it does **not** follow `TestClock`. Pass a shorter `sampleInterval` only if you need snappier transitions.
 
 2. **Cadence** — choose an explicit poll interval, e.g. `polling: Polling.spaced(Duration.minutes(1))`.  
-   While **armed**, the supervisor waits `awaitNextTick` between ticks. When the gate becomes **disarmed**, scheduled ticks stop; the supervisor **waits** for the next armed window using interruptible sleep. If the schedule exposes `nextScheduleTransition` (cron layers do), sleep follows that hint (clamped); otherwise the fallback is **5 seconds**, overridable with `schedulePollWhileDisarmed` on `Process.make` (values below **100 ms** are raised to 100 ms). The package exports `computeDisarmedIdleSleep` and `resolveDisarmedFallbackPoll` for tests and custom schedule layers. Call `ProcessGroup.startProcess` (or `startAll`) **once** to keep that fiber attached — you do **not** need a new start on each arm cycle.
+   While **armed**, instances wait `awaitNextTick` between repeats. When the gate becomes **disarmed**, each running instance exits naturally on its next gate check. The package still exports `computeDisarmedIdleSleep` and `resolveDisarmedFallbackPoll` for custom schedule logic and tests.
 
 3. **Tests** — prefer `ProcessSchedule.fromArmedRef({ armed: someRef })` so arm state is deterministic.
 

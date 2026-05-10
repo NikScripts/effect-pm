@@ -17,6 +17,10 @@
  * - Scoped resource management with automatic cleanup when a managed process
  *   supervisor **ends** unexpectedly or after `stop` / interrupt
  *
+ * **Schedule vs lifecycle:** `ProcessGroup.make` does **not** start supervisors; call
+ * `startProcess` / `startAll` first. Arm/disarm (from `ProcessSchedule`) controls whether
+ * **ticks** run while the supervisor fiber is attached. See `docs/SCHEDULE-AND-PROCESSGROUP.md`.
+ *
  * **Dependencies:**
  * - `ProcessStore` - Required for process analytics and lifecycle records.
  *   Provide either `ProcessStore.layer` (in-memory) or a custom implementation.
@@ -137,6 +141,10 @@ export interface ProcessGroupDetails {
   armed?: boolean;
   /** Best-effort next poll cadence in milliseconds, when known */
   nextPollCadenceMs?: number | null;
+  /** Number of currently running process instances, when known */
+  activeInstances?: number;
+  /** Best-effort next trigger timestamp, when known */
+  nextTriggerRun?: Date | null;
   /** Total number of executions */
   executions?: number;
   /** First execution flagged as startup in analytics, when known */
@@ -244,7 +252,7 @@ export interface ProcessGroup<R> extends ProcessGroupControls<R> {
   serve: ({ port }: { port?: number }) => Effect.Effect<void, never, Scope.Scope | R | ProcessStore>;
   awaitShutdown: (
     options?: AwaitShutdownOptions,
-  ) => Effect.Effect<never, never, Scope.Scope>;
+  ) => Effect.Effect<void, never, Scope.Scope>;
 }
 
 // ============================================================================
@@ -359,15 +367,17 @@ const awaitShutdownNode = (
 
 const awaitShutdown = (
   options?: AwaitShutdownOptions,
-): Effect.Effect<never, never, Scope.Scope> =>
-  typeof process !== "undefined" && typeof process.on === "function"
-    ? awaitShutdownNode(options)
-    : Effect.andThen(
-        Effect.logWarning(
-          "ProcessGroup.awaitShutdown: process.on is not available; blocking forever. Use a Node.js entrypoint.",
+): Effect.Effect<void, never, Scope.Scope> =>
+  Effect.asVoid(
+    typeof process !== "undefined" && typeof process.on === "function"
+      ? awaitShutdownNode(options)
+      : Effect.andThen(
+          Effect.logWarning(
+            "ProcessGroup.awaitShutdown: process.on is not available; blocking forever. Use a Node.js entrypoint.",
+          ),
+          () => Effect.never,
         ),
-        () => Effect.never,
-      );
+  );
 
 const recordLifecycleIfAvailable = (event: ProcessLifecycleChangedEvent): Effect.Effect<void> =>
   Effect.serviceOption(ProcessStore).pipe(
@@ -442,18 +452,25 @@ const emptyProcessDetails: ProcessDetails = {
   armed: false,
   nextScheduleTransition: Option.none(),
   nextPollCadence: Option.none(),
+  activeInstances: 0,
+  nextTriggerRun: Option.none(),
 };
 
 const processDetailsToGroupFields = (details: ProcessDetails) => ({
   lastRun: details.lastRun,
-  nextRun: Option.getOrNull(details.nextScheduleTransition),
+  nextRun: Option.match(details.nextTriggerRun, {
+    onNone: () => Option.getOrNull(details.nextScheduleTransition),
+    onSome: (d) => d,
+  }),
   executions: details.executions,
   firstStartup: details.firstStartup,
   armed: details.armed,
   nextPollCadenceMs: Option.match(details.nextPollCadence, {
-    onNone: () => null as number | null,
+    onNone: () => null,
     onSome: (d) => Duration.toMillis(d),
   }),
+  activeInstances: details.activeInstances,
+  nextTriggerRun: Option.getOrNull(details.nextTriggerRun),
 });
 
 const listProcesses = <R>(
@@ -727,7 +744,7 @@ const getProcessStatus =
  * @example
  * ```typescript
  * import { QueueResource, Process, ProcessGroup, Polling, ProcessSchedule } from "@nikscripts/effect-pm";
- * import { Cron, Duration, Effect } from "effect";
+ * import { Duration, Effect } from "effect";
  *
  * const EmailQueue = QueueResource.make({
  *   name: "email-queue",
@@ -742,9 +759,9 @@ const getProcessStatus =
  *     yield* queue.add([email1, email2, email3]);
  *   }),
  *   polling: Polling.spaced(Duration.minutes(5)),
- *   schedule: ProcessSchedule.cronMatch({
- *     crons: Cron.make({ minutes: [0, 30] }),
- *   }),
+ *   schedule: ProcessSchedule.inMemory([
+ *     ProcessSchedule.window("email-window", new Date(0), new Date(30 * 60 * 1000)),
+ *   ]),
  * });
  *
  * const group = yield* ProcessGroup.make({

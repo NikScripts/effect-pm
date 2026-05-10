@@ -1,5 +1,50 @@
+/**
+ * @packageDocumentation
+ *
+ * **effect-pm** (`@nikscripts/effect-pm`) — Effect-first **process orchestration** and **queue
+ * resources** for long-running applications.
+ *
+ * @remarks
+ * ## What this package provides
+ *
+ * - **`Process`**, **`Polling`**, **`ProcessSchedule`** — Build a **managed process** with
+ *   a trigger-driven runtime: a long-lived driver follows an Effect `Schedule` and spawns
+ *   process instances; each instance checks `ProcessSchedule` and exits naturally when
+ *   disarmed while `Polling` controls in-instance repeat cadence. Optional `polling` /
+ *   `schedule` layers on `Process.make` are merged into `process.effect` so fork-time
+ *   requirements stay accurate in TypeScript.
+ * - **`ProcessGroup`** — Bundle **queue tags** and **process handles**; `startProcess` /
+ *   `startAll` fork supervisors; `serve` exposes a **localhost** control HTTP API;
+ *   `awaitShutdown` waits for OS signals (Node).
+ * - **`QueueResource`** — Three-level **priority** queues with **concurrency** and optional
+ *   **throttle**; each queue is a **Context** service with a `.layer`.
+ * - **`ProcessStore`** — In-memory (or **Prisma**) **analytics**: execution rows + lifecycle
+ *   events for processes.
+ * - **`RunResource`**, **`HttpClientRunGate`**, **`HttpApiResource`**, **`Resource`** —
+ *   Optional building blocks for **gated** HTTP and reusable resource patterns.
+ * - **`ControlService`** + **`createCli` / `runCli`** — Local **control plane** for ops
+ *   (used by the examples CLI).
+ * - **`disarmedIdleSleep` exports** — Compatibility helpers for custom schedule layers and
+ *   migration tooling.
+ *
+ * ## Where to read next
+ *
+ * - Narrative architecture: `docs/PACKAGE-GUIDE.md`
+ * - API tables (Process, Polling, Schedule, ProcessGroup): `docs/PROCESS-API.md`
+ * - Runnable teaching scripts: `examples/README.md`
+ * - Architecture contracts: `docs/plans/README.md` (especially plan **09** for process v2)
+ * - Agent-oriented repo map: `docs/AGENTS.md`
+ *
+ * ## Prisma subpath
+ *
+ * Durable analytics: import from **`@nikscripts/effect-pm/prisma`** (see package `exports`
+ * in `package.json`).
+ *
+ * @module @nikscripts/effect-pm
+ */
+
 // ============================================================================
-// effect-pm - Main Exports
+// effect-pm - Main exports (see @packageDocumentation above)
 // ============================================================================
 
 export {
@@ -71,6 +116,7 @@ export type {
   Process as ProcessInterface,
   ProcessDetails,
   ProcessMakeConfig,
+  ProcessSupervisorRequirements,
   CronDetails,
   ScheduledProcessDetails,
 } from "./Process";

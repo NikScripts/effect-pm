@@ -1,6 +1,6 @@
 # Process, polling, and schedule — API reference
 
-This document complements the [README](../README.md) with a concise **spec-style** overview of the v0.7 **effect-first** process stack (`Process`, `Polling`, `ProcessSchedule`, disarmed idle policy, and `ProcessGroup` lifecycle). For migration from older `Process.make({ crons })`, see [MIGRATION_0.7.0-process-v2.md](../MIGRATION_0.7.0-process-v2.md). For **npm publish** steps from `0.6.0-beta.2` → `0.7.0-beta.0`, see [MIGRATION_0.6-beta.2-to-0.7-beta.0.md](./MIGRATION_0.6-beta.2-to-0.7-beta.0.md).
+This document complements the [README](../README.md) with a concise **spec-style** overview of the v0.7 **effect-first** process stack (`Process`, `Polling`, `ProcessSchedule`, disarmed idle policy, and `ProcessGroup` lifecycle). For **when schedules run vs `startProcess`**, **API-driven gates**, and **disarm vs `stopProcess`**, see [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md). For migration from older `Process.make({ crons })`, see [MIGRATION_0.7.0-process-v2.md](../MIGRATION_0.7.0-process-v2.md). For **npm publish** steps from `0.6.0-beta.2` → `0.7.0-beta.0`, see [MIGRATION_0.6-beta.2-to-0.7-beta.0.md](./MIGRATION_0.6-beta.2-to-0.7-beta.0.md).
 
 ---
 
@@ -8,13 +8,13 @@ This document complements the [README](../README.md) with a concise **spec-style
 
 | Piece | Role |
 |--------|------|
-| **`Process`** | Builds `process.effect`: a **single-fiber supervisor** forked by `ProcessGroup`. |
-| **`ProcessSchedule`** | **Gate**: armed → scheduled ticks allowed; disarmed → supervisor **waits** (no ticks). |
-| **`Polling`** | **Cadence** while armed: time between tick **attempts** (`awaitNextTick` → user `effect` → `afterTick`). |
+| **`Process`** | Builds `process.effect`: a long-lived **schedule driver** forked by `ProcessGroup`. Each schedule entry can spawn one run instance. |
+| **`ProcessSchedule`** | Stores run windows (`startAt`, optional `stopAt`, optional `id`) and notifies the driver when entries change. |
+| **`Polling`** | **Cadence** between repeats inside a running instance (`awaitNextTick` → user `effect` → `afterTick`). |
 | **`ProcessStore`** | Optional analytics: execution rows + lifecycle events. |
 | **`ProcessGroup`** | Owns scopes, fibers, `startProcess` / `stopProcess`, control HTTP/CLI. |
 
-**One `startProcess` (or `startAll`)** keeps the supervisor fiber attached. Arm/disarm toggles **whether ticks run**, not whether the fiber exists (until `stop` / interrupt).
+**One `startProcess` (or `startAll`)** attaches the schedule driver. Schedule entries control whether instances continue repeating; `stop` / interrupt tears down the driver scope.
 
 ---
 
@@ -26,9 +26,9 @@ This document complements the [README](../README.md) with a concise **spec-style
 |--------|----------|-------------|
 | `name` | yes | Stable id (CLI, HTTP, `entityId` in store). |
 | `effect` | yes | `Effect<void, E, R>` — one **tick** body; failures logged + recorded when `ProcessStore` is provided. |
-| `polling` | no | `Layer.Layer<PollingService, never, never>` — often `Polling.spaced(d)` or `Polling.acceleratingScoped(…)`. Omit and provide at fork time. |
-| `schedule` | no | `Layer.Layer<ProcessScheduleService, never, never>` — `alwaysArmed`, `cronMatch`, `fromArmedRef`, or custom. Omit and provide at fork time. |
-| `schedulePollWhileDisarmed` | no | When disarmed and `status.nextScheduleTransition` is **none**, sleep this long between gate re-checks (default **5s**, floored at **100ms**). |
+| `polling` | no | `Layer.Layer<PollingService, never, never>` — repeat cadence inside an instance. Omit and provide at fork time. |
+| `schedule` | no | Either a `ProcessScheduleInitializer` (`({ set, add, clear }) => Effect`) or a `Layer.Layer<ProcessScheduleService, never, never>`. |
+| `scheduleLayer` | no | Explicit schedule service layer. Defaults to `ProcessSchedule.inMemory()`. |
 
 ### Static helpers
 
@@ -42,13 +42,13 @@ This document complements the [README](../README.md) with a concise **spec-style
 |--------|---------------------|--------|
 | `name` | `string` | |
 | `type` | `"managed"` | |
-| `effect` | `Effect<void, never, R \| ProcessStore>` | Supervisor; requires merged `Polling` + `ProcessSchedule` + `ProcessStore` at runtime unless inlined on `make`. |
+| `effect` | `Effect<void, never, R \| ProcessStore>` | Schedule-driven runtime. If `polling` / schedule layers are passed on `Process.make`, those layers are merged into `process.effect`. |
 | `getStatus(range?)` | `Effect<ProcessDetails, never, ProcessStore>` | Execution stats + mirror of last gate/cadence hints. |
 | `runImmediately()` | `Effect<void, never, R \| ProcessStore>` | One tracked tick **even when disarmed** (separate from supervisor loop). |
 
 ### `ProcessDetails`
 
-Includes `lastRun`, `executions`, `firstStartup`, `armed`, `nextScheduleTransition`, `nextPollCadence` (mirrors are best-effort).
+Includes `lastRun`, `executions`, `firstStartup`, `armed`, `nextScheduleTransition`, `nextPollCadence`, `activeInstances`, `nextTriggerRun` (best-effort mirrors).
 
 ---
 
@@ -84,24 +84,29 @@ Built-in factories:
 
 | Factory | Behavior |
 |---------|----------|
-| **`ProcessSchedule.alwaysArmed`** | Gate always true; no transition hint. |
-| **`ProcessSchedule.cronMatch({ crons, sampleInterval? })`** | Background fiber updates armed + `nextScheduleTransition` on **`Clock`** (default sample **1s**). |
-| **`ProcessSchedule.fromArmedRef({ armed, nextScheduleTransition? })`** | Gate + optional transition from refs (tests, feature flags). |
+| **`ProcessSchedule.inMemory(entries?)`** | In-memory mutable schedule storage. |
+| **`ProcessSchedule.at(startAt)` / `at(id, startAt)`** | One-shot entry (no `stopAt`). |
+| **`ProcessSchedule.window(startAt, stopAt)` / `window(id, startAt, stopAt)`** | Bounded run window. |
+| **`ProcessSchedule.fromStarts([...])`** | Convenience constructor for many `at(...)` entries. |
+| **`ProcessSchedule.define((api) => [...])`** | Compositional layer builder using `at`, `window`, `fromStarts`, `all`. |
 
 ### `ProcessScheduleService`
 
 | Member | Returns |
 |--------|---------|
-| `armed` | `Effect<boolean>` |
-| `status` | `Effect<{ armed, nextScheduleTransition: Option<Date> }>` |
+| `entries` | `Effect<ReadonlyArray<ProcessScheduleEntry>>` |
+| `set(entries)` | `Effect<void>` |
+| `add(entry)` | `Effect<void>` |
+| `clear` | `Effect<void>` |
+| `changed` | `Effect<void>` (completes when any mutation occurs) |
 
-While **disarmed**, `Process` uses `nextScheduleTransition` when **some**, to choose idle sleep (clamped); when **none**, uses `schedulePollWhileDisarmed` / default.
+`Process.currentScheduleId` exposes the optional entry id to the currently running instance.
 
 ---
 
-## Disarmed idle policy (exported helpers)
+## Disarmed idle policy helpers
 
-Useful for **custom schedule layers** and **unit tests** so behavior matches `Process`:
+These exports remain for custom schedule implementations and migration tooling; the schedule-driven runtime no longer relies on a disarmed supervisor polling loop.
 
 | Export | Role |
 |--------|------|
@@ -121,7 +126,7 @@ Typical control (requires the group’s `R` + `ProcessStore` where applicable):
 - `runProcessImmediately(name)` — tracked run without requiring armed schedule
 - `getProcessStatus` / `getAllProcessStatus` / `listProcesses`
 
-Stopping interrupts the supervisor fiber; **disarming** does not stop the fiber — it only stops **scheduled** ticks until armed again.
+Stopping interrupts the schedule driver fiber and child instances; removing/closing entries does not stop the driver — active instances exit naturally on their stop checks.
 
 ---
 
@@ -129,11 +134,22 @@ Stopping interrupts the supervisor fiber; **disarming** does not stop the fiber 
 
 | File | Focus |
 |------|--------|
-| [examples/example.ts](../examples/example.ts) | Full `ProcessGroup` + queues + CLI + `Polling.spaced` + `alwaysArmed`. |
-| [examples/process-supervisor-patterns.ts](../examples/process-supervisor-patterns.ts) | **`TestClock`**: accelerating polling + `resetCadence`, `schedulePollWhileDisarmed`, `fromArmedRef`. |
+| [examples/example.ts](../examples/example.ts) | Full `ProcessGroup` + queues + control `serve` + `awaitShutdown` + root `Layer.mergeAll`. |
+| [examples/process-supervisor-patterns.ts](../examples/process-supervisor-patterns.ts) | **`TestClock`**: accelerating polling + `resetCadence`, with schedule windows. |
+| [examples/schedule-gates-and-cron.ts](../examples/schedule-gates-and-cron.ts) | Schedule entry composition (`at`, `window`, `define`) and runtime schedule mutation. |
+| [examples/process-game-window-with-group.ts](../examples/process-game-window-with-group.ts) | **`ProcessGroup.startProcess`** + schedule ids with `Process.currentScheduleId`; narrative [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md). |
+| [examples/sports-polling-accelerating.ts](../examples/sports-polling-accelerating.ts) | **Three demos** (basic spaced → minimal accel+**`resetCadence`** → verbose **`peekCadence`**); [mocks/sports-score-feed.mock.ts](../examples/mocks/sports-score-feed.mock.ts), [mocks/demo-harness.mock.ts](../examples/mocks/demo-harness.mock.ts). |
+| [examples/run-resource.ts](../examples/run-resource.ts) | `RunResource` throttle + concurrency. |
+| [examples/http-client-run-gate.ts](../examples/http-client-run-gate.ts) | `HttpClientRunGate` on a fetch `HttpClient`. |
+| [examples/http-api-resource.ts](../examples/http-api-resource.ts) | `HttpApiResource.make` tag + layer. |
+| [examples/http-api-resource-layer-effect.ts](../examples/http-api-resource-layer-effect.ts) | `HttpApiResource.layerEffect` + sidecar service. |
+
+See [examples/README.md](../examples/README.md) for **`pnpm run example:*`** commands and a guided reading order.
 
 Run the patterns demo:
 
 ```bash
+pnpm run example:process-supervisor-patterns
+# or
 npx tsx examples/process-supervisor-patterns.ts
 ```

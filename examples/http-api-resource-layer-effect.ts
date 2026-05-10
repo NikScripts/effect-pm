@@ -1,14 +1,32 @@
 /**
- * `HttpApiResource.layerEffect` with an existing `Context.Service` client.
+ * @module examples/http-api-resource-layer-effect
  *
- * This mirrors an app setup where:
- * - `layerCapture` requires an extra capture service
- * - `layer` provides a noop capture implementation
- * - `resourceLayerCapture` applies effect-pm limits to the same client effect
- * - `resourceLayer` derives from `resourceLayerCapture` so the gate stays singleton
+ * ## Advanced **`HttpApiResource.layerEffect`** composition
  *
- * Run:
- *   `npm run example:http-api-resource-layer-effect`
+ * Some codebases already expose an **`HttpApiClient` as a `Context.Service`** with a custom
+ * `Layer` (logging, tracing, base URL, etc.). **`HttpApiResource.layerEffect`** lets you wrap
+ * that existing construction path and still attach **effect-pm limits** (throttle + concurrency)
+ * without duplicating client wiring.
+ *
+ * ### What this example models
+ *
+ * - **`DecodeCapture`** — a tiny sidecar service used only to prove `layerCapture` wiring.
+ * - **`layer`** — provides a noop capture (production might record decode metadata).
+ * - **`resourceLayerCapture`** — `HttpApiResource.layerEffect` merges limits into the captured client effect.
+ * - **`resourceLayer`** — derived so the run gate stays a **singleton** per process shape you choose.
+ *
+ * ### Run
+ *
+ * ```bash
+ * pnpm run example:http-api-resource-layer-effect
+ * ```
+ *
+ * ### When to use which factory
+ *
+ * | Factory | Use when |
+ * |---------|----------|
+ * | `HttpApiResource.make` | Green-field: you want tag + `.layer` from an `HttpApi` definition. |
+ * | `HttpApiResource.layerEffect` | Brown-field: you already have a `Layer` that builds `HttpApiClient`. |
  */
 
 import { Context, Effect, Layer, Ref, Schema } from "effect";

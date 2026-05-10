@@ -1,6 +1,7 @@
 {
   "name": "@nikscripts/effect-pm",
   "version": "0.7.0-beta.0",
+  "packageManager": "pnpm@10.33.4",
   "description": "Manage long-running Effect processes with runtime control. Queue resource-heavy operations with configurable throttling and priorities. Schedule recurring tasks with cron. Check status, start/stop processes, and view metrics through a CLI while your application runs.",
   "keywords": [
     "effect",
@@ -66,21 +67,25 @@
     "release": "npm run build && changeset publish",
     "example": "tsx examples/example.ts",
     "example:process-patterns": "tsx examples/process-supervisor-patterns.ts",
+    "example:sports-polling-accelerating": "tsx examples/sports-polling-accelerating.ts",
+    "example:schedule-gates-and-cron": "tsx examples/schedule-gates-and-cron.ts",
+    "example:process-game-window": "tsx examples/process-game-window-with-group.ts",
     "example:run-resource": "tsx examples/run-resource.ts",
     "example:http-client-run-gate": "tsx examples/http-client-run-gate.ts",
     "example:http-api-resource": "tsx examples/http-api-resource.ts",
     "example:nwsl-http-api-resource": "node scripts/nwsl-local.mjs example",
     "cli": "tsx examples/cli.ts",
-    "example:http-api-resource-layer-effect": "tsx examples/http-api-resource-layer-effect.ts"
+    "example:http-api-resource-layer-effect": "tsx examples/http-api-resource-layer-effect.ts",
+    "prepare": "effect-tsgo patch"
   },
   "dependencies": {
-    "@effect/platform-node": "4.0.0-beta.64",
+    "@effect/platform-node": "4.0.0-beta.65",
     "cli-table3": "^0.6.5",
-    "pretty-ms": "^9.1.0"
+    "pretty-ms": "^9.3.0"
   },
   "peerDependencies": {
     "@prisma/client": ">=5",
-    "effect": "^4.0.0-beta.64"
+    "effect": "^4.0.0-beta.65"
   },
   "peerDependenciesMeta": {
     "@prisma/client": {
@@ -88,17 +93,19 @@
     }
   },
   "devDependencies": {
-    "@changesets/cli": "^2.27.0",
-    "@effect/vitest": "4.0.0-beta.64",
-    "@types/node": "^20.19.20",
-    "effect": "^4.0.0-beta.64",
-    "tsup": "^8.0.0",
-    "tsx": "^4.19.2",
-    "typescript": "^5.3.0",
-    "vitest": "^4.1.4"
+    "@changesets/cli": "^2.31.0",
+    "@effect/tsgo": "0.5.2",
+    "@effect/vitest": "4.0.0-beta.65",
+    "@types/node": "^20.19.40",
+    "@typescript/native-preview": "7.0.0-dev.20260510.1",
+    "effect": "^4.0.0-beta.65",
+    "tsup": "^8.5.0",
+    "tsx": "^4.21.0",
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.5"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.19.0"
   },
   "publishConfig": {
     "access": "public"

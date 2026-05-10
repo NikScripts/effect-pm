@@ -1,6 +1,6 @@
 /**
- * **Polling** — cadence between runs of a {@link Process} `effect` while the
- * {@link ProcessSchedule} gate is armed.
+ * **Polling** — cadence between repeats of a running {@link Process} instance
+ * while the {@link ProcessSchedule} gate remains armed.
  *
  * Configure with {@link Polling.spaced}, {@link Polling.accelerating}, or a
  * custom {@link Layer.Layer} built with {@link Layer.succeed}(`Polling`, implementation).

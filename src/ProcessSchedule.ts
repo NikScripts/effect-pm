@@ -1,181 +1,216 @@
 /**
- * **ProcessSchedule** — arms or disarms whether a {@link Process} may poll.
- *
- * This is intentionally **not** named `Schedule` to avoid clashing with
- * `import { Schedule } from "effect"`.
+ * **ProcessSchedule** — centralized schedule storage + controls.
  *
  * @remarks
- * While **disarmed**, a running {@link Process} supervisor **does not** run
- * polling ticks; it waits for the gate to become armed again (interruptible sleep
- * between checks). {@link Process.runImmediately} still runs one tracked execution
- * of the user `effect` even when disarmed. Call {@link ProcessGroup.startProcess}
- * (or `startAll`) **once** to attach the supervisor; arm/disarm then controls ticks.
+ * A process schedule entry defines an absolute start time and optional stop time.
+ * Process runtimes consume this service to:
+ * - spawn run fibers at `startAt`
+ * - stop repeating loops after `stopAt` (if present)
  *
  * @module ProcessSchedule
  */
 
-import { Clock, Cron, Context, Duration, Effect, Layer, Option, Ref, Schedule } from "effect";
-
-// ============================================================================
-// Service
-// ============================================================================
+import { Context, Deferred, Effect, Layer, Option, Ref } from "effect";
 
 /**
- * Gate + optional status hints for {@link Process.getStatus}.
+ * One scheduled run window for a process.
+ *
+ * @public
+ */
+export interface ProcessScheduleEntry {
+  readonly id: Option.Option<string>;
+  readonly startAt: Date;
+  readonly stopAt: Option.Option<Date>;
+}
+
+const sortEntries = (
+  entries: ReadonlyArray<ProcessScheduleEntry>,
+): ReadonlyArray<ProcessScheduleEntry> =>
+  [...entries].sort((a, b) => {
+    const byStart = a.startAt.getTime() - b.startAt.getTime();
+    if (byStart !== 0) {
+      return byStart;
+    }
+    const aStop = Option.match(a.stopAt, {
+      onNone: () => Number.POSITIVE_INFINITY,
+      onSome: (d) => d.getTime(),
+    });
+    const bStop = Option.match(b.stopAt, {
+      onNone: () => Number.POSITIVE_INFINITY,
+      onSome: (d) => d.getTime(),
+    });
+    return aStop - bStop;
+  });
+
+const normalizeEntries = (
+  entries: ReadonlyArray<ProcessScheduleEntry>,
+): ReadonlyArray<ProcessScheduleEntry> =>
+  sortEntries(entries);
+
+/**
+ * Schedule service used by process runtimes and control APIs.
  *
  * @public
  */
 export interface ProcessScheduleService {
-  /** `true` when polling ticks are allowed. */
-  readonly armed: Effect.Effect<boolean>;
-  /**
-   * Snapshot for dashboards: current arm state and best-effort next transition.
-   *
-   * @remarks
-   * **`nextScheduleTransition`** — best-effort instant for “something about the gate
-   * may change” (cron layers use the earliest next cron fire). While **disarmed**,
-   * {@link Process} may sleep until near this time instead of only the configured
-   * fallback poll. Custom layers may return `none`
-   * if unknown.
-   */
-  readonly status: Effect.Effect<{
-    readonly armed: boolean;
-    readonly nextScheduleTransition: Option.Option<Date>;
-  }>;
+  readonly entries: Effect.Effect<ReadonlyArray<ProcessScheduleEntry>, never, never>;
+  readonly set: (
+    entries: ReadonlyArray<ProcessScheduleEntry>,
+  ) => Effect.Effect<void, never, never>;
+  readonly add: (
+    entry: ProcessScheduleEntry,
+  ) => Effect.Effect<void, never, never>;
+  readonly clear: Effect.Effect<void, never, never>;
+  readonly changed: Effect.Effect<void, never, never>;
 }
 
 const ProcessScheduleTag = Context.Service<ProcessScheduleService>(
   "@effect-pm/ProcessSchedule",
 );
 
-const minDate = (dates: ReadonlyArray<Date>): Date =>
-  new Date(Math.min(...dates.map((d) => d.getTime())));
+const buildInMemoryService = (
+  initial: ReadonlyArray<ProcessScheduleEntry>,
+): Effect.Effect<ProcessScheduleService, never, never> =>
+  Effect.gen(function* () {
+    const entriesRef = yield* Ref.make<ReadonlyArray<ProcessScheduleEntry>>(
+      normalizeEntries(initial),
+    );
+    const changeSignal = yield* Ref.make<Deferred.Deferred<void, never>>(
+      yield* Deferred.make<void>(),
+    );
 
-const nextCronTransition = (
-  crons: ReadonlyArray<Cron.Cron>,
-  reference: Date,
-): Option.Option<Date> => {
-  if (crons.length === 0) {
-    return Option.none();
-  }
-  const nextRuns = crons.map((c) => Cron.next(c, reference));
-  return Option.some(minDate(nextRuns));
-};
+    const notify = Effect.gen(function* () {
+      const current = yield* Ref.get(changeSignal);
+      yield* Deferred.succeed(current, undefined);
+      const next = yield* Deferred.make<void>();
+      yield* Ref.set(changeSignal, next);
+    });
 
-const cronArmedNow = (crons: ReadonlyArray<Cron.Cron>, now: Date): boolean =>
-  crons.some((c) => Cron.match(c, now));
-
-// ============================================================================
-// Presets
-// ============================================================================
-
-const alwaysArmedLayer: Layer.Layer<ProcessScheduleService, never, never> = Layer.succeed(
-  ProcessScheduleTag,
-  {
-    armed: Effect.succeed(true),
-    status: Effect.succeed({
-      armed: true,
-      nextScheduleTransition: Option.none(),
-    }),
-  },
-);
-
-/**
- * Arms the gate when **any** cron expression {@link Cron.match | matches} “now”.
- *
- * @remarks
- * A scoped background fiber calls `Cron.match` / `Cron.next` on a fixed cadence
- * (`sampleInterval`, default **one second`) using {@link Clock.currentTimeMillis}
- * (so it follows the runtime clock, including {@link TestClock} when that is the
- * active clock). Use a shorter interval only when you need faster arm/disarm
- * detection at the cost of more wakeups. For deterministic tests you can still
- * prefer {@link ProcessSchedule.fromArmedRef} when you want direct ref control.
- */
-const cronMatchLayer = (config: {
-  readonly crons: Cron.Cron | ReadonlyArray<Cron.Cron>;
-  /** How often to recompute {@link Cron.match} against the wall clock. */
-  readonly sampleInterval?: Duration.Duration;
-}): Layer.Layer<ProcessScheduleService, never, never> =>
-  Layer.effect(
-    ProcessScheduleTag,
-    Effect.gen(function* () {
-      const crons = Array.isArray(config.crons) ? config.crons : [config.crons];
-      const sample = config.sampleInterval ?? Duration.seconds(1);
-      const t0 = yield* Clock.currentTimeMillis;
-      const now0 = new Date(t0);
-      const armedRef = yield* Ref.make(cronArmedNow(crons, now0));
-      const transitionRef = yield* Ref.make<Option.Option<Date>>(
-        nextCronTransition(crons, now0),
+    const set = (
+      entries: ReadonlyArray<ProcessScheduleEntry>,
+    ): Effect.Effect<void> =>
+      Ref.set(entriesRef, normalizeEntries(entries)).pipe(
+        Effect.andThen(() => notify),
       );
 
-      const recompute = Effect.gen(function* () {
-        const t = yield* Clock.currentTimeMillis;
-        const now = new Date(t);
-        const armed = cronArmedNow(crons, now);
-        yield* Ref.set(armedRef, armed);
-        yield* Ref.set(transitionRef, nextCronTransition(crons, now));
+    const add = (entry: ProcessScheduleEntry): Effect.Effect<void> =>
+      Effect.gen(function* () {
+        const current = yield* Ref.get(entriesRef);
+        yield* set([...current, entry]);
       });
 
-      yield* Effect.forkScoped(
-        Effect.repeat(recompute, Schedule.spaced(sample)).pipe(Effect.interruptible),
-      );
+    const clear = set([]);
 
-      const impl: ProcessScheduleService = {
-        armed: Ref.get(armedRef),
-        status: Effect.gen(function* () {
-          const armed = yield* Ref.get(armedRef);
-          const nextScheduleTransition = yield* Ref.get(transitionRef);
-          return { armed, nextScheduleTransition };
-        }),
-      };
+    return {
+      entries: Ref.get(entriesRef),
+      set,
+      add,
+      clear,
+      changed: Ref.get(changeSignal).pipe(
+        Effect.flatMap((d) => Deferred.await(d)),
+      ),
+    };
+  });
 
-      return impl;
+const inMemoryLayer = (
+  initial: ReadonlyArray<ProcessScheduleEntry> = [],
+): Layer.Layer<ProcessScheduleService, never, never> =>
+  Layer.effect(
+    ProcessScheduleTag,
+    buildInMemoryService(initial),
+  );
+
+const toId = (id: string | undefined): Option.Option<string> =>
+  id === undefined ? Option.none() : Option.some(id);
+
+function at(startAt: Date): ProcessScheduleEntry;
+function at(id: string, startAt: Date): ProcessScheduleEntry;
+function at(
+  idOrStartAt: string | Date,
+  maybeStartAt?: Date,
+): ProcessScheduleEntry {
+  if (idOrStartAt instanceof Date) {
+    return {
+      id: Option.none(),
+      startAt: idOrStartAt,
+      stopAt: Option.none(),
+    };
+  }
+  if (maybeStartAt === undefined) {
+    throw new Error("ProcessSchedule.at(id, startAt) requires a startAt Date");
+  }
+  return {
+    id: toId(idOrStartAt),
+    startAt: maybeStartAt,
+    stopAt: Option.none(),
+  };
+}
+
+function window(startAt: Date, stopAt: Date): ProcessScheduleEntry;
+function window(id: string, startAt: Date, stopAt: Date): ProcessScheduleEntry;
+function window(
+  idOrStartAt: string | Date,
+  startAtOrStopAt: Date,
+  maybeStopAt?: Date,
+): ProcessScheduleEntry {
+  if (idOrStartAt instanceof Date) {
+    return {
+      id: Option.none(),
+      startAt: idOrStartAt,
+      stopAt: Option.some(startAtOrStopAt),
+    };
+  }
+  if (maybeStopAt === undefined) {
+    throw new Error("ProcessSchedule.window(id, startAt, stopAt) requires stopAt Date");
+  }
+  return {
+    id: toId(idOrStartAt),
+    startAt: startAtOrStopAt,
+    stopAt: Option.some(maybeStopAt),
+  };
+}
+
+const fromStarts = (
+  starts: ReadonlyArray<Date>,
+): ReadonlyArray<ProcessScheduleEntry> =>
+  starts.map((startAt) => at(startAt));
+
+interface DefineApi {
+  readonly at: typeof at;
+  readonly window: typeof window;
+  readonly fromStarts: typeof fromStarts;
+  readonly all: (
+    ...entries: ReadonlyArray<ProcessScheduleEntry>
+  ) => ReadonlyArray<ProcessScheduleEntry>;
+}
+
+const define = (
+  build: (api: DefineApi) => ReadonlyArray<ProcessScheduleEntry>,
+): Layer.Layer<ProcessScheduleService, never, never> =>
+  inMemoryLayer(
+    build({
+      at,
+      window,
+      fromStarts,
+      all: (...entries) => entries,
     }),
   );
 
 /**
- * Gate from mutable refs (ideal for tests and feature flags).
- *
- * @remarks
- * Pass `nextScheduleTransition` when you know the next time the arm state might
- * change; {@link Process} uses it for disarmed idle sleep (with the same
- * {@link Clock} as the runtime) instead of relying only on the fallback poll.
- */
-const fromArmedRefLayer = (options: {
-  readonly armed: Ref.Ref<boolean>;
-  readonly nextScheduleTransition?: Ref.Ref<Option.Option<Date>>;
-}): Layer.Layer<ProcessScheduleService, never, never> => {
-  const transitionRef = options.nextScheduleTransition;
-  return Layer.succeed(ProcessScheduleTag, {
-    armed: Ref.get(options.armed),
-    status: Effect.gen(function* () {
-      const armed = yield* Ref.get(options.armed);
-      const nextScheduleTransition =
-        transitionRef !== undefined
-          ? yield* Ref.get(transitionRef)
-          : Option.none<Date>();
-      return { armed, nextScheduleTransition };
-    }),
-  });
-};
-
-/**
- * Context tag for {@link ProcessScheduleService}, merged with static layer factories.
- *
- * @remarks
- * Use with `yield* ProcessSchedule` inside an effect that is provided one of:
- * - {@link ProcessSchedule.alwaysArmed}
- * - {@link ProcessSchedule.cronMatch}
- * - {@link ProcessSchedule.fromArmedRef}
+ * Context tag + in-memory constructors for process schedule storage.
  *
  * @public
  */
 export const ProcessSchedule: typeof ProcessScheduleTag & {
-  readonly alwaysArmed: typeof alwaysArmedLayer;
-  readonly cronMatch: typeof cronMatchLayer;
-  readonly fromArmedRef: typeof fromArmedRefLayer;
+  readonly inMemory: typeof inMemoryLayer;
+  readonly at: typeof at;
+  readonly window: typeof window;
+  readonly fromStarts: typeof fromStarts;
+  readonly define: typeof define;
 } = Object.assign(ProcessScheduleTag, {
-  alwaysArmed: alwaysArmedLayer,
-  cronMatch: cronMatchLayer,
-  fromArmedRef: fromArmedRefLayer,
+  inMemory: inMemoryLayer,
+  at,
+  window,
+  fromStarts,
+  define,
 });

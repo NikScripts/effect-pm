@@ -1,48 +1,34 @@
 /**
- * **Process** — supervised repeat of a user **`effect`**, gated by
- * {@link ProcessSchedule} and cadenced by {@link Polling}.
+ * **Process** — trigger-driven supervised instances.
  *
  * @remarks
- * **Supervisor** (single fiber forked by {@link ProcessGroup}): an **outer** loop
- * waits until {@link ProcessSchedule.status} is **armed** (interruptible sleep
- * while disarmed — no busy spin). When `status.nextScheduleTransition` is set
- * (e.g. {@link ProcessSchedule.cronMatch}), sleep duration follows that hint
- * (clamped); otherwise sleep uses {@link ProcessMakeConfig.schedulePollWhileDisarmed}
- * or a calm default. An **inner** loop then reads the
- * gate each tick: if **armed**, it uses {@link Polling.awaitNextTick}, runs the
- * tracked user **`effect`** once, then {@link Polling.afterTick}; if **disarmed**,
- * the inner loop exits and the outer loop waits again. One `startProcess` keeps
- * this fiber alive across arm/disarm cycles so the **schedule drives when ticks
- * run**, not repeated starts.
+ * A started process has a long-lived **driver** fiber that follows
+ * {@link ProcessSchedule} entries. Each eligible `startAt` spawns a run instance.
+ * Inside an instance,
+ * we repeatedly:
+ * 1. check the active entry `stopAt`
+ * 2. if closed: exit the instance naturally
+ * 3. otherwise await {@link Polling.awaitNextTick}, run the tracked user effect,
+ *    then {@link Polling.afterTick}.
  *
- * **Semantics** (`docs/plans/09-process-v2-effect-first.md`):
- * - **Disarmed:** no scheduled ticks; the supervisor **waits** for the next armed
- *   window (hint-based sleep when available, else a configurable fallback poll).
- *   `runImmediately` still runs once without an armed gate.
- * - **`ProcessGroup.stop`:** interrupts the supervisor (in-flight work may be interrupted).
- * - **`runImmediately`:** one tracked run of the user `effect` **even when disarmed**;
- *   it may overlap an in-flight scheduled tick (separate fiber from the poll loop).
+ * Default overlap policy is **parallel** because the driver forks each instance.
  *
  * @module Process
  */
 
-import { Clock, Duration, Effect, Layer, MutableRef, Option } from "effect";
-import {
-  computeDisarmedIdleSleep,
-  resolveDisarmedFallbackPoll,
-} from "./disarmedIdleSleep";
+import { Clock, Context, Duration, Effect, Fiber, Layer, MutableRef, Option } from "effect";
 import { ProcessStore } from "./ProcessStore";
 import { Polling } from "./Polling";
 import { ProcessSchedule } from "./ProcessSchedule";
 import type { PollingService } from "./Polling";
-import type { ProcessScheduleService } from "./ProcessSchedule";
+import type { ProcessScheduleEntry, ProcessScheduleService } from "./ProcessSchedule";
 
 // ============================================================================
 // Public types
 // ============================================================================
 
 /**
- * Analytics + live gate snapshot returned by {@link Process.getStatus}.
+ * Analytics + live runtime snapshot returned by {@link Process.getStatus}.
  *
  * @public
  */
@@ -57,8 +43,12 @@ export interface ProcessDetails {
   readonly armed: boolean;
   /** Best-effort next schedule transition (cron layers populate). */
   readonly nextScheduleTransition: Option.Option<Date>;
-  /** Best-effort next cadence delay before the next poll attempt while armed. */
+  /** Best-effort next polling cadence observed in a running instance. */
   readonly nextPollCadence: Option.Option<Duration.Duration>;
+  /** Active instances spawned by the trigger driver and not yet finished. */
+  readonly activeInstances: number;
+  /** Best-effort next trigger run (currently none for generic schedules). */
+  readonly nextTriggerRun: Option.Option<Date>;
 }
 
 /**
@@ -84,31 +74,13 @@ export interface CronDetails {
  *
  * @typeParam R — Environment required to run {@link Process.effect} (after optional inline layers).
  *
- * @remarks
- * **TypeScript vs runtime:** Inlined `polling` / `schedule` layers are applied to the
- * supervisor step at build time, but the type checker may still list
- * `PollingService | ProcessScheduleService` on {@link Process.effect}. At fork time,
- * merge a `Layer` that includes those services anyway (duplicate `Layer.succeed`
- * presets are safe). See the `provideStepLayers` comment in this module.
- *
  * @public
  */
 export interface Process<out R> {
   readonly name: string;
-  /** Discriminator for HTTP / CLI consumers. */
   readonly type: "managed";
   /**
-   * Long-running supervised program: schedule sampling, polling loop, analytics.
-   *
-   * @remarks
-   * Environment is `R` combined with {@link ProcessStore}: `ProcessStore` is always required
-   * for execution records. Optional `polling` / `schedule` from {@link Process.make}
-   * are merged into this effect so `R` is only **leftover** services (typically
-   * from the user `effect`).
-   *
-   * The supervisor uses the runtime {@link Clock} for disarmed idle sleep, aligned
-   * with {@link ProcessSchedule.cronMatch} when that layer is used (both use the
-   * same clock service).
+   * Long-running trigger driver that spawns run instances.
    */
   readonly effect: Effect.Effect<void, never, R | ProcessStore>;
   readonly getStatus: (dateRange?: {
@@ -116,12 +88,7 @@ export interface Process<out R> {
     end: Date;
   }) => Effect.Effect<ProcessDetails, never, ProcessStore>;
   /**
-   * Runs the user `effect` once with {@link ProcessStore} tracking.
-   *
-   * @remarks
-   * Does **not** require the schedule to be armed. May overlap a concurrent
-   * scheduled tick (the supervisor runs on a single fiber for polling, but
-   * `runImmediately` does not participate in that loop).
+   * Runs the user `effect` once with tracking, independent of trigger cadence.
    */
   readonly runImmediately: () => Effect.Effect<void, never, R | ProcessStore>;
 }
@@ -132,6 +99,38 @@ export interface Process<out R> {
  * @public
  */
 export type ProcessEffectRequirements<P> = P extends Process<infer R> ? R : never;
+
+/**
+ * Context for the currently running scheduled window.
+ *
+ * @public
+ */
+export interface ProcessScheduleContext {
+  readonly id: Option.Option<string>;
+}
+
+const ProcessScheduleContextTag = Context.Service<ProcessScheduleContext>(
+  "@effect-pm/ProcessScheduleContext",
+);
+
+/**
+ * Identifier attached to the schedule entry that started the current run.
+ *
+ * @remarks
+ * - For scheduled runs: value from `ProcessScheduleEntry.id`
+ * - For `runImmediately()`: `Option.none()`
+ *
+ * @public
+ */
+export const currentScheduleId: Effect.Effect<Option.Option<string>, never, never> =
+  Effect.serviceOption(ProcessScheduleContextTag).pipe(
+    Effect.map(
+      Option.match({
+        onNone: () => Option.none(),
+        onSome: (ctx) => ctx.id,
+      }),
+    ),
+  );
 
 // ============================================================================
 // Internal
@@ -144,16 +143,63 @@ interface ProcessMirror {
   readonly armed: MutableRef.MutableRef<boolean>;
   readonly nextScheduleTransition: MutableRef.MutableRef<Option.Option<Date>>;
   readonly nextPollCadence: MutableRef.MutableRef<Option.Option<Duration.Duration>>;
+  readonly activeInstances: MutableRef.MutableRef<number>;
+  readonly nextTriggerRun: MutableRef.MutableRef<Option.Option<Date>>;
 }
 
-interface ProcessBuildState<E, RUser> {
+interface ProcessBuildStateBase<E, RUser> {
   readonly name: string;
   readonly userEffect: Effect.Effect<void, E, RUser>;
-  readonly pollingLayer?: AnyPollingLayer;
-  readonly scheduleLayer?: AnyScheduleLayer;
-  /** Fallback disarmed sleep when schedule provides no `nextScheduleTransition`. */
-  readonly schedulePollWhileDisarmed?: Duration.Duration;
+  readonly scheduleInitializer?: ProcessScheduleInitializer<RUser>;
 }
+
+export interface ProcessScheduleControls {
+  readonly set: (
+    entries: ReadonlyArray<ProcessScheduleEntry>,
+  ) => Effect.Effect<void, never, never>;
+  readonly add: (
+    entry: ProcessScheduleEntry,
+  ) => Effect.Effect<void, never, never>;
+  readonly clear: Effect.Effect<void, never, never>;
+}
+
+export type ProcessScheduleInitializer<R = never> = (
+  controls: ProcessScheduleControls,
+) => Effect.Effect<void, never, R>;
+
+type ProcessBuildStateWithPollingAndSchedule<E, RUser> =
+  & ProcessBuildStateBase<E, RUser>
+  & {
+    readonly pollingLayer: AnyPollingLayer;
+    readonly scheduleLayer: AnyScheduleLayer;
+  };
+
+type ProcessBuildStateWithPolling<E, RUser> =
+  & ProcessBuildStateBase<E, RUser>
+  & {
+    readonly pollingLayer: AnyPollingLayer;
+    readonly scheduleLayer?: undefined;
+  };
+
+type ProcessBuildStateWithSchedule<E, RUser> =
+  & ProcessBuildStateBase<E, RUser>
+  & {
+    readonly pollingLayer?: undefined;
+    readonly scheduleLayer: AnyScheduleLayer;
+  };
+
+type ProcessBuildStateWithoutStepLayers<E, RUser> =
+  & ProcessBuildStateBase<E, RUser>
+  & {
+    readonly pollingLayer?: undefined;
+    readonly scheduleLayer?: undefined;
+  };
+
+type AnyProcessBuildState<E, RUser> =
+  | ProcessBuildStateWithPollingAndSchedule<E, RUser>
+  | ProcessBuildStateWithPolling<E, RUser>
+  | ProcessBuildStateWithSchedule<E, RUser>
+  | ProcessBuildStateWithoutStepLayers<E, RUser>;
 
 const writeScheduleMirror = (
   mirror: ProcessMirror,
@@ -165,18 +211,41 @@ const writeScheduleMirror = (
   MutableRef.set(mirror.nextPollCadence, nextPollCadence);
 };
 
-/**
- * Bakes optional cadence / gate layers into the **supervisor** program (the long
- * runner that reads the gate and runs ticks). Same `Effect.provide` typing notes
- * as before apply at fork sites (see {@link Process}).
- */
-const provideStepLayers = <R>(
+function provideStepLayers<R>(
   step: Effect.Effect<void, never, R>,
-  state: Pick<ProcessBuildState<never, never>, "pollingLayer" | "scheduleLayer">,
-) => {
+  state: Pick<
+    ProcessBuildStateWithPollingAndSchedule<never, never>,
+    "pollingLayer" | "scheduleLayer"
+  >,
+): Effect.Effect<void, never, Exclude<Exclude<R, PollingService>, ProcessScheduleService>>;
+function provideStepLayers<R>(
+  step: Effect.Effect<void, never, R>,
+  state: Pick<
+    ProcessBuildStateWithPolling<never, never>,
+    "pollingLayer" | "scheduleLayer"
+  >,
+): Effect.Effect<void, never, Exclude<R, PollingService>>;
+function provideStepLayers<R>(
+  step: Effect.Effect<void, never, R>,
+  state: Pick<
+    ProcessBuildStateWithSchedule<never, never>,
+    "pollingLayer" | "scheduleLayer"
+  >,
+): Effect.Effect<void, never, Exclude<R, ProcessScheduleService>>;
+function provideStepLayers<R>(
+  step: Effect.Effect<void, never, R>,
+  state: Pick<
+    ProcessBuildStateWithoutStepLayers<never, never>,
+    "pollingLayer" | "scheduleLayer"
+  >,
+): Effect.Effect<void, never, R>;
+function provideStepLayers<R>(
+  step: Effect.Effect<void, never, R>,
+  state: Pick<AnyProcessBuildState<never, never>, "pollingLayer" | "scheduleLayer">,
+) {
   const { pollingLayer, scheduleLayer } = state;
   if (pollingLayer !== undefined && scheduleLayer !== undefined) {
-    return step.pipe(Effect.provide(pollingLayer), Effect.provide(scheduleLayer));
+    return step.pipe(Effect.provide(Layer.mergeAll(pollingLayer, scheduleLayer)));
   }
   if (pollingLayer !== undefined) {
     return step.pipe(Effect.provide(pollingLayer));
@@ -185,16 +254,29 @@ const provideStepLayers = <R>(
     return step.pipe(Effect.provide(scheduleLayer));
   }
   return step;
-};
+}
 
-const createProcess = <E, RUser>(state: ProcessBuildState<E, RUser>) => {
+function createProcess<E, RUser>(
+  state: ProcessBuildStateWithPollingAndSchedule<E, RUser>,
+): Process<RUser>;
+function createProcess<E, RUser>(
+  state: ProcessBuildStateWithPolling<E, RUser>,
+): Process<RUser>;
+function createProcess<E, RUser>(
+  state: ProcessBuildStateWithSchedule<E, RUser>,
+): Process<RUser>;
+function createProcess<E, RUser>(
+  state: ProcessBuildStateWithoutStepLayers<E, RUser>,
+): Process<RUser>;
+function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const { name, userEffect } = state;
-  const disarmedFallbackPoll = resolveDisarmedFallbackPoll(state.schedulePollWhileDisarmed);
 
   const mirror: ProcessMirror = {
     armed: MutableRef.make(false),
     nextScheduleTransition: MutableRef.make<Option.Option<Date>>(Option.none()),
     nextPollCadence: MutableRef.make<Option.Option<Duration.Duration>>(Option.none()),
+    activeInstances: MutableRef.make(0),
+    nextTriggerRun: MutableRef.make<Option.Option<Date>>(Option.none()),
   };
 
   let executionRecordId = 0;
@@ -231,96 +313,348 @@ const createProcess = <E, RUser>(state: ProcessBuildState<E, RUser>) => {
       });
     });
 
-  const trackedProgram: Effect.Effect<void, never, RUser | ProcessStore> = Effect.gen(function* () {
-    const store = yield* ProcessStore;
-    const executedAt = new Date();
-    const isStartupRun =
-      (yield* store.getProcessExecutions(name, { limit: 1 })).length === 0;
+  const trackedProgram = (
+    scheduleIdentifier: Option.Option<string>,
+  ): Effect.Effect<void, never, RUser | ProcessStore> =>
+    Effect.gen(function* () {
+      const store = yield* ProcessStore;
+      const executedAt = new Date();
+      const isStartupRun =
+        (yield* store.getProcessExecutions(name, { limit: 1 })).length === 0;
 
-    /** Use {@link Effect.matchEffect} so handler bodies (store append + logs) actually run. */
-    yield* Effect.matchEffect(userEffect, {
-      onFailure: (error) =>
-        Effect.gen(function* () {
-          const completedAt = new Date();
-          yield* recordExecutionEvent({
-            scheduleKey: null,
-            startedAt: executedAt,
-            completedAt,
-            status: "failed",
-            error,
-            isStartupRun,
-          });
-          yield* Effect.logError(
-            `❌ Process '${name}' tick failed at ${executedAt.toISOString()}: ${String(error)}`,
-          );
+      yield* Effect.matchEffect(
+        Effect.provideService(userEffect, ProcessScheduleContextTag, {
+          id: scheduleIdentifier,
         }),
-      onSuccess: () =>
-        Effect.gen(function* () {
-          const completedAt = new Date();
-          yield* recordExecutionEvent({
-            scheduleKey: null,
-            startedAt: executedAt,
-            completedAt,
-            status: "completed",
-            isStartupRun,
-          });
-          yield* Effect.logDebug(
-            `✅ Process '${name}' tick completed at ${executedAt.toISOString()}`,
-          );
-        }),
+        {
+          onFailure: (error) =>
+            Effect.gen(function* () {
+              const completedAt = new Date();
+              yield* recordExecutionEvent({
+                scheduleKey: Option.getOrNull(scheduleIdentifier),
+                startedAt: executedAt,
+                completedAt,
+                status: "failed",
+                error,
+                isStartupRun,
+              });
+              yield* Effect.logError(
+                `❌ Process '${name}' run failed at ${executedAt.toISOString()}: ${String(error)}`,
+              );
+            }),
+          onSuccess: () =>
+            Effect.gen(function* () {
+              const completedAt = new Date();
+              yield* recordExecutionEvent({
+                scheduleKey: Option.getOrNull(scheduleIdentifier),
+                startedAt: executedAt,
+                completedAt,
+                status: "completed",
+                isStartupRun,
+              });
+              yield* Effect.logDebug(
+                `✅ Process '${name}' run completed at ${executedAt.toISOString()}`,
+              );
+            }),
+        },
+      );
     });
-  });
 
-  /**
-   * Single-fiber supervisor: wait until **armed**, run ticks until **disarmed**,
-   * repeat until interrupted (e.g. `ProcessGroup.stopProcess`).
-   */
-  const waitUntilScheduleArmed = Effect.gen(function* () {
-    for (;;) {
-      const schedule = yield* ProcessSchedule;
-      const st = yield* schedule.status;
-      writeScheduleMirror(mirror, st, Option.none());
-      if (st.armed) {
-        return;
+  const minDate = (dates: ReadonlyArray<Date>): Option.Option<Date> => {
+    if (dates.length === 0) {
+      return Option.none();
+    }
+    return Option.some(
+      new Date(Math.min(...dates.map((candidate) => candidate.getTime()))),
+    );
+  };
+
+  const summarizeScheduleState = (
+    entries: ReadonlyArray<ProcessScheduleEntry>,
+    now: Date,
+  ): {
+    readonly armed: boolean;
+    readonly nextScheduleTransition: Option.Option<Date>;
+    readonly nextTriggerRun: Option.Option<Date>;
+  } => {
+    const nowMs = now.getTime();
+    const armed = entries.some((entry) => {
+      const startMs = entry.startAt.getTime();
+      if (startMs > nowMs) {
+        return false;
       }
-      const nowMillis = yield* Clock.currentTimeMillis;
-      const sleepFor = computeDisarmedIdleSleep({
-        now: new Date(nowMillis),
-        nextScheduleTransition: st.nextScheduleTransition,
-        fallbackPoll: disarmedFallbackPoll,
+      return Option.match(entry.stopAt, {
+        onNone: () => true,
+        onSome: (stopAt) => stopAt.getTime() > nowMs,
       });
-      yield* Effect.sleep(sleepFor);
+    });
+
+    const transitionCandidates: Array<Date> = [];
+    const nextStarts: Array<Date> = [];
+    for (const entry of entries) {
+      if (entry.startAt.getTime() > nowMs) {
+        transitionCandidates.push(entry.startAt);
+        nextStarts.push(entry.startAt);
+      }
+      if (Option.isSome(entry.stopAt) && entry.stopAt.value.getTime() > nowMs) {
+        transitionCandidates.push(entry.stopAt.value);
+      }
     }
-  });
 
-  const runTicksWhileScheduleArmed = Effect.gen(function* () {
-    for (;;) {
-      const polling = yield* Polling;
-      const schedule = yield* ProcessSchedule;
-      const st = yield* schedule.status;
+    return {
+      armed,
+      nextScheduleTransition: minDate(transitionCandidates),
+      nextTriggerRun: minDate(nextStarts),
+    };
+  };
 
-      if (!st.armed) {
-        writeScheduleMirror(mirror, st, Option.none());
+  const refreshScheduleMirror = (
+    entries: ReadonlyArray<ProcessScheduleEntry>,
+  ): Effect.Effect<void, never, Clock.Clock> =>
+    Effect.gen(function* () {
+      const nowMillis = yield* Clock.currentTimeMillis;
+      const now = new Date(nowMillis);
+      const stateSummary = summarizeScheduleState(entries, now);
+      MutableRef.set(mirror.armed, stateSummary.armed);
+      MutableRef.set(mirror.nextScheduleTransition, stateSummary.nextScheduleTransition);
+      MutableRef.set(mirror.nextTriggerRun, stateSummary.nextTriggerRun);
+    });
+
+  interface PendingStart {
+    readonly startAtMs: number;
+    readonly fiber: Fiber.Fiber<void, never>;
+  }
+
+  const entryKeyFrom = (
+    entry: ProcessScheduleEntry,
+    index: number,
+  ): string => {
+    const stopPart = Option.match(entry.stopAt, {
+      onNone: () => "none",
+      onSome: (d) => String(d.getTime()),
+    });
+    return `${entry.startAt.getTime()}:${stopPart}:${index}`;
+  };
+
+  interface MaterializedEntry {
+    readonly key: string;
+    readonly entry: ProcessScheduleEntry;
+  }
+
+  const materializeEntries = (
+    entries: ReadonlyArray<ProcessScheduleEntry>,
+  ): ReadonlyArray<MaterializedEntry> =>
+    entries.map((entry, index) => ({
+      key: entryKeyFrom(entry, index),
+      entry,
+    }));
+
+  const pendingStarts = MutableRef.make(new Map<string, PendingStart>());
+  const runningByEntry = MutableRef.make(new Map<string, Fiber.Fiber<void, never>>());
+  const completedEntries = MutableRef.make(new Set<string>());
+
+  const spawnEntryInstance = (
+    key: string,
+    entry: ProcessScheduleEntry,
+  ): Effect.Effect<void, never, RUser | PollingService | ProcessScheduleService | ProcessStore | Clock.Clock> =>
+    Effect.gen(function* () {
+      if (MutableRef.get(runningByEntry).has(key)) {
         return;
       }
 
-      const cadencePeek = yield* polling.peekCadence;
-      writeScheduleMirror(mirror, st, cadencePeek);
+      const runEntryInstance = Effect.gen(function* () {
+        const pollingOption = yield* Effect.serviceOption(Polling);
 
-      yield* polling.awaitNextTick;
-      yield* trackedProgram;
-      yield* polling.afterTick;
+        const canContinue = Effect.gen(function* () {
+          const nowMillis = yield* Clock.currentTimeMillis;
+          const now = new Date(nowMillis);
+          return Option.match(entry.stopAt, {
+            onNone: () => true,
+            onSome: (stopAt) => now < stopAt,
+          });
+        });
+
+        if (Option.isNone(pollingOption)) {
+          if (yield* canContinue) {
+            yield* trackedProgram(entry.id);
+          }
+          return;
+        }
+
+        const polling = pollingOption.value;
+        for (;;) {
+          if (!(yield* canContinue)) {
+            return;
+          }
+
+          const schedule = yield* ProcessSchedule;
+          const entries = yield* schedule.entries;
+          yield* refreshScheduleMirror(entries);
+          const cadencePeek = yield* polling.peekCadence;
+          writeScheduleMirror(
+            mirror,
+            {
+              armed: MutableRef.get(mirror.armed),
+              nextScheduleTransition: MutableRef.get(mirror.nextScheduleTransition),
+            },
+            cadencePeek,
+          );
+
+          yield* polling.awaitNextTick;
+          if (!(yield* canContinue)) {
+            return;
+          }
+          yield* trackedProgram(entry.id);
+          yield* polling.afterTick;
+        }
+      });
+
+      MutableRef.update(mirror.activeInstances, (n) => n + 1);
+      const instanceFiber = yield* Effect.forkChild(
+        runEntryInstance.pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              MutableRef.update(mirror.activeInstances, (n) => Math.max(0, n - 1));
+              MutableRef.update(runningByEntry, (running) => {
+                const next = new Map(running);
+                next.delete(key);
+                return next;
+              });
+              MutableRef.update(completedEntries, (completed) => {
+                const next = new Set(completed);
+                next.add(key);
+                return next;
+              });
+            }),
+          ),
+        ),
+      );
+
+      MutableRef.update(runningByEntry, (running) => {
+        const next = new Map(running);
+        next.set(key, instanceFiber);
+        return next;
+      });
+    });
+
+  const scheduleFutureEntry = (
+    key: string,
+    entry: ProcessScheduleEntry,
+  ): Effect.Effect<void, never, RUser | PollingService | ProcessScheduleService | ProcessStore | Clock.Clock> =>
+    Effect.gen(function* () {
+      const nowMillis = yield* Clock.currentTimeMillis;
+      const delayMs = entry.startAt.getTime() - nowMillis;
+      if (delayMs <= 0) {
+        yield* spawnEntryInstance(key, entry);
+        return;
+      }
+
+      const sleeper = yield* Effect.forkChild(
+        Effect.sleep(Duration.millis(delayMs)).pipe(
+          Effect.andThen(() => spawnEntryInstance(key, entry)),
+          Effect.ensuring(
+            Effect.sync(() => {
+              MutableRef.update(pendingStarts, (pending) => {
+                const next = new Map(pending);
+                next.delete(key);
+                return next;
+              });
+            }),
+          ),
+        ),
+      );
+
+      MutableRef.update(pendingStarts, (pending) => {
+        const next = new Map(pending);
+        next.set(key, { startAtMs: entry.startAt.getTime(), fiber: sleeper });
+        return next;
+      });
+    });
+
+  const reconcileSchedules: Effect.Effect<
+    void,
+    never,
+    RUser | PollingService | ProcessScheduleService | ProcessStore | Clock.Clock
+  > = Effect.gen(function* () {
+    const schedule = yield* ProcessSchedule;
+    const entries = yield* schedule.entries;
+    yield* refreshScheduleMirror(entries);
+    const materialized = materializeEntries(entries);
+
+    const entryIds = new Set(materialized.map((item) => item.key));
+    MutableRef.update(completedEntries, (completed) => {
+      const next = new Set<string>();
+      for (const id of completed) {
+        if (entryIds.has(id)) {
+          next.add(id);
+        }
+      }
+      return next;
+    });
+
+    const pending = MutableRef.get(pendingStarts);
+    for (const [entryId, pendingStart] of pending.entries()) {
+      const current = materialized.find((item) => item.key === entryId)?.entry;
+      if (
+        current === undefined ||
+        current.startAt.getTime() !== pendingStart.startAtMs
+      ) {
+        yield* Fiber.interrupt(pendingStart.fiber);
+      }
+    }
+
+    const nowMillis = yield* Clock.currentTimeMillis;
+    for (const { key, entry } of materialized) {
+      if (MutableRef.get(completedEntries).has(key)) {
+        continue;
+      }
+      if (MutableRef.get(runningByEntry).has(key)) {
+        continue;
+      }
+      const startMs = entry.startAt.getTime();
+      if (startMs <= nowMillis) {
+        const stillValid = Option.match(entry.stopAt, {
+          onNone: () => true,
+          onSome: (stopAt) => stopAt.getTime() > nowMillis,
+        });
+        if (stillValid) {
+          yield* spawnEntryInstance(key, entry);
+        } else {
+          MutableRef.update(completedEntries, (completed) => {
+            const next = new Set(completed);
+            next.add(key);
+            return next;
+          });
+        }
+        continue;
+      }
+
+      const pendingStart = MutableRef.get(pendingStarts).get(key);
+      if (pendingStart === undefined) {
+        yield* scheduleFutureEntry(key, entry);
+      }
     }
   });
 
-  const supervisedCore = Effect.gen(function* () {
+  const supervisedCore: Effect.Effect<
+    void,
+    never,
+    RUser | PollingService | ProcessScheduleService | ProcessStore | Clock.Clock
+  > = Effect.gen(function* () {
+    const schedule = yield* ProcessSchedule;
+    if (state.scheduleInitializer !== undefined) {
+      const controls: ProcessScheduleControls = {
+        set: (entries) => schedule.set(entries),
+        add: (entry) => schedule.add(entry),
+        clear: schedule.clear,
+      };
+      yield* state.scheduleInitializer(controls);
+    }
     for (;;) {
-      yield* waitUntilScheduleArmed;
-      yield* runTicksWhileScheduleArmed;
+      yield* reconcileSchedules;
+      yield* schedule.changed;
     }
   });
-
-  const supervised = provideStepLayers(supervisedCore, state);
 
   const getStatus = (dateRange?: {
     start: Date;
@@ -349,30 +683,65 @@ const createProcess = <E, RUser>(state: ProcessBuildState<E, RUser>) => {
         armed: MutableRef.get(mirror.armed),
         nextScheduleTransition: MutableRef.get(mirror.nextScheduleTransition),
         nextPollCadence: MutableRef.get(mirror.nextPollCadence),
+        activeInstances: MutableRef.get(mirror.activeInstances),
+        nextTriggerRun: MutableRef.get(mirror.nextTriggerRun),
       };
     });
 
   const runImmediately = (): Effect.Effect<void, never, RUser | ProcessStore> =>
     Effect.gen(function* () {
       yield* Effect.logInfo(
-        `🚀 Running '${name}' immediately (tracked; does not require schedule armed)...`,
+        `🚀 Running '${name}' immediately (tracked; independent of trigger)...`,
       );
-      yield* trackedProgram;
+      yield* trackedProgram(Option.none());
       yield* Effect.logDebug(`✅ Completed immediate run of '${name}'`);
     });
 
-  return {
+  const base = {
     name,
     type: "managed" as const,
-    effect: supervised,
     getStatus,
     runImmediately,
   };
-};
+
+  if (state.pollingLayer !== undefined && state.scheduleLayer !== undefined) {
+    return {
+      ...base,
+      effect: provideStepLayers(supervisedCore, state),
+    };
+  }
+  if (state.pollingLayer !== undefined) {
+    return {
+      ...base,
+      effect: provideStepLayers(supervisedCore, state),
+    };
+  }
+  if (state.scheduleLayer !== undefined) {
+    return {
+      ...base,
+      effect: provideStepLayers(supervisedCore, state),
+    };
+  }
+  return {
+    ...base,
+    effect: provideStepLayers(supervisedCore, state),
+  };
+}
 
 // ============================================================================
 // Public API
 // ============================================================================
+
+/**
+ * Services still required at the fork site for {@link Process.effect} /
+ * {@link Process.runImmediately} for a given {@link ProcessMakeConfig}.
+ *
+ * @public
+ */
+export type ProcessSupervisorRequirements<C extends ProcessMakeConfig<any, any>> =
+  C extends ProcessMakeConfig<infer _E, infer RUser>
+    ? RUser
+    : never;
 
 /**
  * Configuration for {@link Process.make}.
@@ -382,77 +751,116 @@ const createProcess = <E, RUser>(state: ProcessBuildState<E, RUser>) => {
 export interface ProcessMakeConfig<E, RUser> {
   readonly name: string;
   readonly effect: Effect.Effect<void, E, RUser>;
+  /** Optional polling layer for in-instance repeat cadence. */
   readonly polling?: AnyPollingLayer;
-  readonly schedule?: AnyScheduleLayer;
   /**
-   * When the gate is **disarmed** and {@link ProcessScheduleService.status} has
-   * `nextScheduleTransition: none`, the supervisor sleeps this long between
-   * re-checks. When the schedule supplies a transition date (e.g. cron layers),
-   * sleep is derived from that hint instead (clamped to 1s–5min).
+   * Optional schedule initializer that runs once on process start.
    *
-   * Values below **100 ms** are raised to 100 ms so a misconfigured `Duration.zero`
-   * cannot busy-loop. {@link computeDisarmedIdleSleep} documents the full policy.
-   *
-   * @defaultValue Five seconds — calm for production; use a shorter value in
-   * tests with {@link TestClock}.
+   * Use this for async bootstrapping (DB/API) and setting initial windows.
    */
-  readonly schedulePollWhileDisarmed?: Duration.Duration;
+  readonly schedule?: ProcessScheduleInitializer<RUser> | AnyScheduleLayer;
+  /**
+   * Optional schedule service layer; defaults to in-memory schedule storage.
+   */
+  readonly scheduleLayer?: AnyScheduleLayer;
 }
 
 /**
  * Create a managed {@link Process}.
  *
- * @example
- * ```ts
- * import { Process, Polling, ProcessSchedule } from "@nikscripts/effect-pm";
- * import { Duration, Effect } from "effect";
- *
- * const worker = Process.make({
- *   name: "worker",
- *   effect: Effect.logInfo("tick"),
- *   polling: Polling.spaced(Duration.seconds(5)),
- *   schedule: ProcessSchedule.alwaysArmed,
- * });
- * ```
- *
  * @public
  */
-const make = <E, RUser>(config: ProcessMakeConfig<E, RUser>) =>
-  createProcess({
+function make<E, RUser>(
+  config: ProcessMakeConfig<E, RUser>,
+): Process<RUser> {
+  const scheduleInitializer = typeof config.schedule === "function"
+    ? config.schedule
+    : undefined;
+  const scheduleLayer = config.scheduleLayer
+    ?? (typeof config.schedule === "function"
+      ? ProcessSchedule.inMemory()
+      : config.schedule)
+    ?? ProcessSchedule.inMemory();
+  if (config.polling !== undefined) {
+    return createProcess({
+      name: config.name,
+      userEffect: config.effect,
+      pollingLayer: config.polling,
+      scheduleLayer,
+      scheduleInitializer,
+    });
+  }
+  return createProcess({
     name: config.name,
     userEffect: config.effect,
-    pollingLayer: config.polling,
-    scheduleLayer: config.schedule,
-    schedulePollWhileDisarmed: config.schedulePollWhileDisarmed,
+    scheduleLayer,
+    scheduleInitializer,
   });
+}
 
 /**
- * Attach a {@link Polling} layer after {@link Process.make} (replaces any prior polling layer).
+ * Attach a {@link Polling} layer after defining base config.
  *
  * @public
  */
-const providePolling = <E, RUser>(base: ProcessMakeConfig<E, RUser>, layer: AnyPollingLayer) =>
-  createProcess({
+function providePolling<E, RUser>(
+  base: ProcessMakeConfig<E, RUser>,
+  layer: AnyPollingLayer,
+): Process<RUser>;
+function providePolling<E, RUser>(
+  base: ProcessMakeConfig<E, RUser>,
+  layer: AnyPollingLayer,
+): Process<RUser> {
+  const scheduleInitializer = typeof base.schedule === "function"
+    ? base.schedule
+    : undefined;
+  const scheduleLayer = base.scheduleLayer
+    ?? (typeof base.schedule === "function"
+      ? ProcessSchedule.inMemory()
+      : base.schedule)
+    ?? ProcessSchedule.inMemory();
+  return createProcess({
     name: base.name,
     userEffect: base.effect,
     pollingLayer: layer,
-    scheduleLayer: base.schedule,
-    schedulePollWhileDisarmed: base.schedulePollWhileDisarmed,
+    scheduleLayer,
+    scheduleInitializer,
   });
+}
 
 /**
- * Attach a {@link ProcessSchedule} layer after defining the base config (replaces any prior schedule layer).
+ * Attach a {@link ProcessSchedule} layer after defining base config.
  *
  * @public
  */
-const provideSchedule = <E, RUser>(base: ProcessMakeConfig<E, RUser>, layer: AnyScheduleLayer) =>
-  createProcess({
+function provideSchedule<E, RUser>(
+  base: ProcessMakeConfig<E, RUser>,
+  layer: AnyScheduleLayer,
+): Process<RUser>;
+function provideSchedule<E, RUser>(
+  base: ProcessMakeConfig<E, RUser>,
+  layer: AnyScheduleLayer,
+): Process<RUser> {
+  const pollingLayer = base.polling;
+  const scheduleInitializer = typeof base.schedule === "function"
+    ? base.schedule
+    : undefined;
+  if (pollingLayer !== undefined) {
+    return createProcess({
+      name: base.name,
+      userEffect: base.effect,
+      pollingLayer,
+      scheduleLayer: layer,
+      scheduleInitializer,
+    });
+  }
+  return createProcess({
     name: base.name,
     userEffect: base.effect,
-    pollingLayer: base.polling,
     scheduleLayer: layer,
-    schedulePollWhileDisarmed: base.schedulePollWhileDisarmed,
+    scheduleInitializer,
   });
+}
 
 /**
  * @public
@@ -461,4 +869,5 @@ export const Process = {
   make,
   providePolling,
   provideSchedule,
+  currentScheduleId,
 } as const;

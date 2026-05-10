@@ -8,6 +8,21 @@ processes and queues that run together. A future top-level **`ProcessManager`**
 hosts via Effect RPC / HTTP. For now, use one `ProcessGroup` per logical
 bundle.
 
+## Documentation map (read in any order)
+
+| Resource | Purpose |
+|-----------|---------|
+| [docs/README.md](./docs/README.md) | **Index** of all committed docs in `docs/`. |
+| [docs/PACKAGE-GUIDE.md](./docs/PACKAGE-GUIDE.md) | Narrative architecture: mental model, dependency rules, links. |
+| [docs/PROCESS-API.md](./docs/PROCESS-API.md) | Spec-style tables for `Process`, `Polling`, `ProcessSchedule`, `ProcessGroup`, disarmed sleep helpers. |
+| [docs/SCHEDULE-AND-PROCESSGROUP.md](./docs/SCHEDULE-AND-PROCESSGROUP.md) | **`startProcess`** vs schedule, disarm vs **`stopProcess`**, API-driven **`fromArmedRef`**. |
+| [docs/AGENTS.md](./docs/AGENTS.md) | Repository map and invariants for **AI assistants** (committed; use instead of ad-hoc local notes). |
+| [examples/README.md](./examples/README.md) | **Runnable examples**: commands, learning order, file index. |
+| [docs/plans/README.md](./docs/plans/README.md) | Long-form architecture contracts (plan **09** = process v2 canonical). |
+| [MIGRATION_0.7.0-process-v2.md](./MIGRATION_0.7.0-process-v2.md) | Upgrading from pre–v0.7 `Process` shapes. |
+
+The package entry [`src/index.ts`](./src/index.ts) has **`@packageDocumentation`** describing exports at a glance (visible in IDEs that surface it).
+
 ## Features
 
 - 🕐 **Managed processes** — repeat a user `Effect` with **polling** cadence and a **schedule gate** (`alwaysArmed`, `cronMatch`, or custom layers), with execution tracking ([API reference](./docs/PROCESS-API.md))
@@ -65,7 +80,7 @@ const emailProcess = Process.make({
 });
 ```
 
-`polling` controls how often the supervisor **attempts** a tick while armed; `schedule` controls whether ticks are **armed** (here: armed whenever the cron matches the wall clock). See `MIGRATION_0.7.0-process-v2.md` if you are upgrading from the old `crons`-only `Process.make`. Publishing **`0.6.0-beta.2` → `0.7.0-beta.0`**: [docs/MIGRATION_0.6-beta.2-to-0.7-beta.0.md](./docs/MIGRATION_0.6-beta.2-to-0.7-beta.0.md).
+`trigger` controls when new process instances are spawned, `polling` controls repeat cadence inside an instance, and `schedule` controls whether an instance stays armed and continues running. See `MIGRATION_0.7.0-process-v2.md` if you are upgrading from the old `crons`-only `Process.make`. Publishing **`0.6.0-beta.2` → `0.7.0-beta.0`**: [docs/MIGRATION_0.6-beta.2-to-0.7-beta.0.md](./docs/MIGRATION_0.6-beta.2-to-0.7-beta.0.md).
 
 ### 3. Create ProcessGroup
 
@@ -104,6 +119,8 @@ Effect.runPromise(
   )
 );
 ```
+
+You can merge independent layers with **`Layer.mergeAll(...)`** and a single `Effect.provide` at the root (clearer graph; matches the full demo in `examples/example.ts`).
 
 ## QueueResource configuration
 
@@ -203,13 +220,13 @@ const dataSync = Process.make({
 });
 ```
 
-While **disarmed**, the supervisor does not run polling ticks; it sleeps until the gate may arm again. Cron-backed schedules expose `nextScheduleTransition`, so waits track that hint (with sane bounds). For gates without a hint, the default re-check interval is **five seconds** (never below **100 ms**, even if you pass `Duration.zero`); override with `schedulePollWhileDisarmed` on `Process.make` if you need a different trade-off (for example shorter intervals in tests with `TestClock`). Low-level sleep policy is exported as `computeDisarmedIdleSleep` / `resolveDisarmedFallbackPoll` for custom gates and tests.
+While **disarmed**, running instances exit naturally on their next schedule check. The trigger driver remains attached, so future trigger times can still spawn fresh instances. The legacy disarmed-idle helpers (`computeDisarmedIdleSleep` / `resolveDisarmedFallbackPoll`) are still exported for custom schedule layers and migration scenarios.
 
-To run once outside the poll loop (even when the schedule is disarmed), call `process.runImmediately()` or `group.runProcessImmediately(name)` after the process is registered.
+To run once outside trigger cadence (even when schedule is disarmed), call `process.runImmediately()` or `group.runProcessImmediately(name)` after the process is registered.
 
 ### Accelerating polling (speeds up, then reset)
 
-Use **`Polling.acceleratingScoped`** (or **`Polling.accelerating`** with your own refs) when intervals should **shorten** after each tick. **`yield* Polling.resetCadence`** sets the iteration back to zero and **wakes** the current wait so spacing returns toward the configured **maximum**. Any effect that calls `resetCadence` must see the **same** `Polling` layer instance as the process (merge the layer once at the app / `ProcessGroup` boundary).
+Use **`Polling.acceleratingScoped`** (or **`Polling.accelerating`** with your own refs) when intervals should **shorten** after each tick. **`yield* Polling.resetCadence`** sets the iteration back to zero and **wakes** the current wait so spacing returns toward the configured **maximum**. Any effect that calls `resetCadence` must see the **same** `Polling` layer instance as the process (merge the layer once at the app / `ProcessGroup` boundary). For **scores-feed** examples (**basic spaced poll → minimal `resetCadence` → verbose `peekCadence`**), see **`examples/sports-polling-accelerating.ts`** with **`examples/mocks/sports-score-feed.mock.ts`** and **`examples/mocks/demo-harness.mock.ts`** (`pnpm run example:sports-polling-accelerating`).
 
 Runnable demo (with `TestClock`): `npx tsx examples/process-supervisor-patterns.ts`.
 

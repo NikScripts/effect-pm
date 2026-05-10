@@ -18,7 +18,7 @@
 import http from "node:http";
 import type net from "node:net";
 import { Effect, Scope } from "effect";
-import type { ProcessGroupControls, QueueDetails } from "./ProcessGroup";
+import type { ProcessGroupControls } from "./ProcessGroup";
 import type { ProcessStore } from "./ProcessStore";
 import { createCli, runCli } from "./cli";
 
@@ -60,7 +60,7 @@ export interface ControlRequestBody {
   /** Target process or queue name (required for most commands) */
   name?: string;
   /** Additional data (e.g., for queue-add operations) */
-  data?: any;
+  data?: unknown;
 }
 
 /**
@@ -101,6 +101,54 @@ const readBody = (req: http.IncomingMessage): Effect.Effect<string> =>
     req.on("error", () => resume(Effect.succeed(data)));
   });
 
+const isControlCommand = (value: unknown): value is ControlCommand =>
+  typeof value === "string"
+  && [
+    "ls",
+    "status",
+    "start",
+    "stop",
+    "pause",
+    "resume",
+    "restart",
+    "shutdown",
+    "now",
+    "queues",
+  ].includes(value);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const decodeControlRequestBody = (value: unknown): ControlRequestBody => {
+  if (!isRecord(value)) {
+    throw new Error("Invalid JSON body");
+  }
+  if (!isControlCommand(value.command)) {
+    throw new Error("Invalid command");
+  }
+  return {
+    command: value.command,
+    name: typeof value.name === "string" ? value.name : undefined,
+    data: value.data,
+  };
+};
+
+const processStatusResponse = <T>(
+  data: T,
+): ControlResponse<T> & { readonly type: "process" } => ({
+  success: true,
+  data,
+  type: "process",
+});
+
+const queueStatusResponse = <T>(
+  data: T,
+): ControlResponse<T> & { readonly type: "queue" } => ({
+  success: true,
+  data,
+  type: "queue",
+});
+
 const handleCommand =
   <R>(group: ProcessGroupControls<R>) =>
   (
@@ -126,7 +174,7 @@ const handleCommand =
           return {
             success: true,
             data: queues,
-          } as ControlResponse<QueueDetails[]>;
+          };
         }
         case "status": {
           if (!name)
@@ -136,7 +184,7 @@ const handleCommand =
           const processResult = yield* group
             .getProcessStatus(name)
             .pipe(
-              Effect.map((data) => ({ success: true, data, type: "process" as const })),
+              Effect.map((data) => processStatusResponse(data)),
               Effect.catch(() => Effect.succeed(null)),
             );
           
@@ -152,8 +200,7 @@ const handleCommand =
                   const totalSize = yield* queue.size();
                   const completed = yield* queue.getCompleted();
                   return {
-                    success: true,
-                    data: { 
+                    ...queueStatusResponse({
                       name, 
                       size: {
                         high: prioritySizes.high,
@@ -162,8 +209,7 @@ const handleCommand =
                         total: totalSize,
                       },
                       completed 
-                    },
-                    type: "queue" as const,
+                    }),
                   };
                 }),
               ),
@@ -392,7 +438,7 @@ const startControlService = <R>(options: {
           if (url.pathname === "/control" && req.method === "POST") {
             const raw = yield* readBody(req);
             const parsed = Effect.try({
-              try: () => JSON.parse(raw) as ControlRequestBody,
+              try: () => decodeControlRequestBody(JSON.parse(raw)),
               catch: () => new Error("Invalid JSON"),
             });
             const body = yield* parsed;

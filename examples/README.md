@@ -1,50 +1,81 @@
-# ProcessGroup Examples
+# Examples (`examples/`)
 
-This directory contains reference implementations and examples for extending ProcessGroup functionality. These files are **not included in the published package** but serve as documentation and starting points for your own implementations.
+Scripts in this folder are **teaching and integration references**. They are **not** published inside the npm tarball (see package `files` / `.npmignore`), but they **are** in the Git repository so humans and tools can read them alongside `src/` and `docs/`.
 
-## 🚀 Running the Examples
+**`examples/mocks/`** — long-form comments + **test doubles** / scenario setup + **`demo-harness.mock.ts`** (`forkSupervisedAndSideThenAdvanceTime`, `runNodeProgramOrExit`). Not published to npm.
 
-### Start the Demo Application
+---
+
+## Prerequisites
+
+- **Node.js** compatible with the repo `engines` field in `package.json`.
+- **Dependencies** installed from the package root (`pnpm install`, or `npm install` if you use the lockfile there).
+- Most examples use **`tsx`** via `npx` or npm scripts so you do not need a separate build step.
+
+---
+
+## Suggested learning order
+
+Read in this order if you are new to effect-pm:
+
+1. **[`example.ts`](./example.ts)** — Full **ProcessGroup**: two queues, one **Process** (`Polling` + `ProcessSchedule`), **ProcessStore**, **ControlService** (`serve`), **`awaitShutdown`**, and how to **`Layer.mergeAll`** dependencies at the program root.
+2. **[`cli.ts`](./cli.ts)** — Minimal script that runs **`runCli`** against the control port while `example.ts` is up.
+3. **[`process-supervisor-patterns.ts`](./process-supervisor-patterns.ts)** — **TestClock**-driven patterns: accelerating polling plus runtime schedule mutation (`set` / `clear`).
+4. **[`schedule-gates-and-cron.ts`](./schedule-gates-and-cron.ts)** — **`ProcessSchedule`** composition (`at`, `window`, `define`) and dynamic updates while a process is running.
+5. **[`process-game-window-with-group.ts`](./process-game-window-with-group.ts)** — **`ProcessGroup.startProcess`** with schedule ids (`Process.currentScheduleId`); read **[`docs/SCHEDULE-AND-PROCESSGROUP.md`](../docs/SCHEDULE-AND-PROCESSGROUP.md)**.
+6. **[`sports-polling-accelerating.ts`](./sports-polling-accelerating.ts)** — **Three demos:** basic **`Polling.spaced`**, accelerating + **`resetCadence`** (minimal tick), then verbose **`peekCadence`**; feed + **`demo-harness`** in **`examples/mocks/`**.
+7. **[`run-resource.ts`](./run-resource.ts)** — **`RunResource`**: throttle + concurrency gate for arbitrary effects.
+8. **[`http-client-run-gate.ts`](./http-client-run-gate.ts)** — Gate an **`HttpClient`** pipeline (same idea as gating HttpApi clients).
+9. **[`http-api-resource.ts`](./http-api-resource.ts)** — **`HttpApiResource.make`**: typed HttpApi client as a **Context.Service** + `layer`.
+10. **[`http-api-resource-layer-effect.ts`](./http-api-resource-layer-effect.ts)** — Advanced **`layerEffect`** composition with an extra capture service.
+
+Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API tables: [docs/PROCESS-API.md](../docs/PROCESS-API.md). Schedule + group: [docs/SCHEDULE-AND-PROCESSGROUP.md](../docs/SCHEDULE-AND-PROCESSGROUP.md).
+
+---
+
+## npm scripts (from package root)
+
+| Script | What it runs |
+|--------|----------------|
+| `pnpm run example` | Full ProcessGroup demo (`example.ts`). |
+| `pnpm run cli …` | CLI against the demo control port (pass args after `--`). |
+| `pnpm run example:process-supervisor-patterns` | Supervisor patterns with TestClock. |
+| `pnpm run example:sports-polling-accelerating` | Accelerating poll + score-driven `resetCadence` (`readScore` facade). |
+| `pnpm run example:schedule-gates-and-cron` | Compositional schedule entries + live schedule updates. |
+| `pnpm run example:process-game-window` | `ProcessGroup` + schedule windows + `TestClock`. |
+| `pnpm run example:run-resource` | RunResource demo. |
+| `pnpm run example:http-client-run-gate` | HttpClient + RunResource gate. |
+| `pnpm run example:http-api-resource` | HttpApiResource basic. |
+| `pnpm run example:http-api-resource-layer-effect` | HttpApiResource `layerEffect` demo. |
+
+If a script is missing, run the file directly:
 
 ```bash
-npm run example
+npx tsx examples/<file>.ts
 ```
 
-This starts the ProcessGroup demo with:
-- Two queues (DemoQueue, DemoTwoQueue)
-- One cron that adds items to queues every 10 seconds
-- HTTP control service on port 3001
+---
 
-### Use the CLI (in another terminal)
+## File reference
 
-While the example is running, use the CLI to control it:
+| File | Teaches |
+|------|---------|
+| [`example.ts`](./example.ts) | End-to-end **ProcessGroup.make**, **queues**, **Process.make** (polling + schedule inlined), **ProcessStore.layer**, **serve** + **awaitShutdown**, **Layer.mergeAll** for root `provide`. |
+| [`cli.ts`](./cli.ts) | Wiring **`runCli`** with port from `HOME_SERVER_PORT` (must match the demo). |
+| [`process-supervisor-patterns.ts`](./process-supervisor-patterns.ts) | Deterministic tests: **accelerating** polling and schedule disarm/re-arm with in-memory entries. |
+| [`schedule-gates-and-cron.ts`](./schedule-gates-and-cron.ts) | Schedule entry composition + `ProcessSchedule` mutation; links to **`test/process-schedule.test.ts`** + **`test/process.test.ts`**. |
+| [`process-game-window-with-group.ts`](./process-game-window-with-group.ts) | **`startProcess`** / **`stopProcess`**, schedule windows + `Process.currentScheduleId`; doc **`docs/SCHEDULE-AND-PROCESSGROUP.md`**. |
+| [`sports-polling-accelerating.ts`](./sports-polling-accelerating.ts) | **3 demos** (basic → minimal → verbose); mocks + **`demo-harness.mock.ts`**; **`TestClock.setTime(0)`** between sections. |
+| [`run-resource.ts`](./run-resource.ts) | **RunResource.make** (unit and `(input) => Effect` forms) + limits. |
+| [`http-client-run-gate.ts`](./http-client-run-gate.ts) | **HttpClientRunGate.withRunner** after building a fetch client. |
+| [`http-api-resource.ts`](./http-api-resource.ts) | **HttpApiResource** tag + layer + optional limits. |
+| [`http-api-resource-layer-effect.ts`](./http-api-resource-layer-effect.ts) | **`layerEffect`**, capture sidecar service, shared gate. |
 
-```bash
-# List all processes and queues
-npm run cli ls
+---
 
-# Get detailed status
-npm run cli status queue-adder
+## Prisma-backed **ProcessStore**
 
-# List queue details
-npm run cli queues
-
-# Control processes
-npm run cli start queue-adder
-npm run cli stop queue-adder
-npm run cli restart queue-adder
-npm run cli now queue-adder    # Run immediately
-
-# Get help
-npm run cli -- --help
-```
-
-## 📁 Examples
-
-### Persistent analytics with Prisma
-
-The Prisma-backed `ProcessStore` ships in the package itself — no example file
-needed. Set it up in your project with:
+There is no separate “prisma example” file: the adapter ships as **`@nikscripts/effect-pm/prisma`**. From your app:
 
 ```bash
 npx effect-pm add prisma
@@ -52,31 +83,23 @@ npx prisma generate
 npx prisma migrate dev --name add_effect_pm_event
 ```
 
-Then provide it to your program:
+Then provide `PrismaProcessStore.layer({ client })` in your `Effect` program. See the main [README](../README.md) for full setup, flags (`--dry-run`, `--separate-file`), and `layerFromContext`.
 
-```typescript
-import { PrismaClient } from "@prisma/client";
-import { PrismaProcessStore } from "@nikscripts/effect-pm/prisma";
+---
 
-const prisma = new PrismaClient();
+## Control port
 
-program.pipe(
-  Effect.provide(PrismaProcessStore.layer({ client: prisma })),
-  Effect.runPromise,
-);
-```
+Examples and the CLI default to port **3001** unless **`HOME_SERVER_PORT`** is set. Keep the demo and CLI on the **same** port.
 
-See the main [README](../README.md#processstore-analytics--lifecycle) for
-full Prisma details, including the `layerFromContext` variant for
-Effect-style DI and the `--dry-run` / `--separate-file` flags.
+---
 
-## 🎯 Why Examples?
+## For AI assistants
 
-The core package has minimal dependencies beyond Effect to remain lightweight. These examples show you how to integrate with popular tools like Prisma while keeping the package flexible for your specific needs.
+When answering questions about **behavior**, prefer **source of truth** in this order:
 
-## 📚 More Resources
+1. `src/*.ts` implementation + TSDoc  
+2. `docs/plans/09-process-v2-effect-first.md` for supervisor semantics  
+3. `docs/PROCESS-API.md` for quick tables  
+4. These examples for **composition patterns**
 
-- [Main README](../README.md) - Package documentation
-- [ProcessGroup API](../src/ProcessGroup.ts) - Core API reference
-- [Effect Documentation](https://effect.website/) - Effect framework docs
-
+Committed agent map: [docs/AGENTS.md](../docs/AGENTS.md).
