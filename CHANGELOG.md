@@ -2,11 +2,15 @@
 
 ## Unreleased
 
+## 0.7.0-beta.0
+
 ### Minor Changes
 
-- **Process v2 (effect-first, breaking):** `Process.make` is centered on `effect`, with optional **`polling`** (`Polling.spaced`, `Polling.accelerating`, …) and **`schedule`** (`ProcessSchedule.alwaysArmed`, `ProcessSchedule.cronMatch`, `ProcessSchedule.fromArmedRef`, …) as **layers**, composable at `make`, via `Process.providePolling` / `Process.provideSchedule`, or when providing `process.effect` at fork time. Removes the old `crons`-only config surface.
-- **`Polling` / `ProcessSchedule`:** new context services and preset layers; `ProcessDetails` / `ProcessGroup` status expose **`armed`**, **`nextPollCadence`**, and schedule transition hints where available.
-- **Docs & tests:** README and `examples/example.ts` updated; added `MIGRATION_0.7.0-process-v2.md`, `test/polling.test.ts`, `test/process-schedule.test.ts`, and expanded process tests (`Effect.forkChild`, `provide*`).
+- **Breaking — Process v2 (effect-first):** `Process.make` is centered on **`effect`**, with optional **`polling`** (`Polling.spaced`, `Polling.acceleratingScoped`, …) and **`schedule`** (`ProcessSchedule.alwaysArmed`, `ProcessSchedule.cronMatch`, `ProcessSchedule.fromArmedRef`, …) as **layers**. Removed the old **`crons`‑only** config. Compose at `make`, via **`Process.providePolling`** / **`Process.provideSchedule`**, or when providing **`process.effect`** at fork time.
+- **`Polling` / `ProcessSchedule`:** new context services and preset layers; **`ProcessDetails`** / **`ProcessGroup`** status expose **`armed`**, **`nextPollCadence`**, and schedule transition hints where available.
+- **Supervisor:** **`startProcess` / `startAll`** once; **disarm** pauses scheduled ticks while the fiber **waits** (hint-based or fallback idle sleep, **`Clock`**‑aligned); **`cronMatch`** sampling uses the same **`Clock`**.
+- **Exports:** **`computeDisarmedIdleSleep`**, **`resolveDisarmedFallbackPoll`**, and related constants for custom gates and tests.
+- **Docs & examples:** **`docs/PROCESS-API.md`**, **`MIGRATION_0.7.0-process-v2.md`**, **`examples/process-supervisor-patterns.ts`**, README updates, and expanded Vitest coverage.
 
 ## 0.6.0-beta.2
 

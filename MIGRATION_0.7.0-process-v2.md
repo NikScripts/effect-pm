@@ -1,5 +1,7 @@
 # Migrating to Process v2 (effect-first, polling + schedule)
 
+**Shipped in `@nikscripts/effect-pm@0.7.0-beta.0`.** For the release checklist (npm, version line), see [docs/MIGRATION_0.6-beta.2-to-0.7-beta.0.md](./docs/MIGRATION_0.6-beta.2-to-0.7-beta.0.md).
+
 This note covers the **breaking** redesign of `Process` described in
 `docs/plans/09-process-v2-effect-first.md` (landed in the `0.7.x` line).
 

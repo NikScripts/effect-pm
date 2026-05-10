@@ -65,7 +65,7 @@ const emailProcess = Process.make({
 });
 ```
 
-`polling` controls how often the supervisor **attempts** a tick while armed; `schedule` controls whether ticks are **armed** (here: armed whenever the cron matches the wall clock). See `MIGRATION_0.7.0-process-v2.md` if you are upgrading from the old `crons`-only `Process.make`.
+`polling` controls how often the supervisor **attempts** a tick while armed; `schedule` controls whether ticks are **armed** (here: armed whenever the cron matches the wall clock). See `MIGRATION_0.7.0-process-v2.md` if you are upgrading from the old `crons`-only `Process.make`. Publishing **`0.6.0-beta.2` → `0.7.0-beta.0`**: [docs/MIGRATION_0.6-beta.2-to-0.7-beta.0.md](./docs/MIGRATION_0.6-beta.2-to-0.7-beta.0.md).
 
 ### 3. Create ProcessGroup
 

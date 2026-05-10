@@ -1,6 +1,6 @@
 # Process, polling, and schedule — API reference
 
-This document complements the [README](../README.md) with a concise **spec-style** overview of the v0.7 **effect-first** process stack (`Process`, `Polling`, `ProcessSchedule`, disarmed idle policy, and `ProcessGroup` lifecycle). For migration from older `Process.make({ crons })`, see [MIGRATION_0.7.0-process-v2.md](../MIGRATION_0.7.0-process-v2.md).
+This document complements the [README](../README.md) with a concise **spec-style** overview of the v0.7 **effect-first** process stack (`Process`, `Polling`, `ProcessSchedule`, disarmed idle policy, and `ProcessGroup` lifecycle). For migration from older `Process.make({ crons })`, see [MIGRATION_0.7.0-process-v2.md](../MIGRATION_0.7.0-process-v2.md). For **npm publish** steps from `0.6.0-beta.2` → `0.7.0-beta.0`, see [MIGRATION_0.6-beta.2-to-0.7-beta.0.md](./MIGRATION_0.6-beta.2-to-0.7-beta.0.md).
 
 ---
 

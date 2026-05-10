@@ -17,6 +17,8 @@ npm run changeset
 # Select: patch, minor, or major
 ```
 
+**Prerelease (`0.x.0-beta.n`):** In `pre` mode, `changeset version` may bump the **prerelease segment** (e.g. `0.6.0-beta.2` → `0.6.0-beta.3`) rather than opening a **new minor line** (`0.7.0-beta.0`). For a deliberate **`0.7.0-beta.0`** line, set `package.json` and `CHANGELOG.md` explicitly and keep stray `.changeset/*.md` files out of the folder (see `docs/MIGRATION_0.6-beta.2-to-0.7-beta.0.md`).
+
 #### 2. Version Bump
 
 ```bash
@@ -59,10 +61,12 @@ This pushes both commits and version tags.
 
 ### Version History
 
+- **v0.7.0-beta.0** — Process v2 (`Polling` + `ProcessSchedule` layers, new supervisor, exports). See `CHANGELOG.md`, `MIGRATION_0.7.0-process-v2.md`, `docs/MIGRATION_0.6-beta.2-to-0.7-beta.0.md`, `docs/PROCESS-API.md`.
+- **v0.6.0-beta.x** — `ProcessStore` foundation, queue / `ProcessGroup` typing work
 - **v0.1.0** - Initial release
 - **v0.1.1** - Bug fixes and type exports
 - **v0.2.0** - API improvements
-- **v0.3.0** - Breaking changes: API modernization (current)
+- **v0.3.0** - Breaking changes: API modernization
 
 ### Changeset Types
 
