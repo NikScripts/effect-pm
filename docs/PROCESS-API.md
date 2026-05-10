@@ -101,6 +101,7 @@ Built-in factories:
 | `changed` | `Effect<void>` (completes when any mutation occurs) |
 
 `Process.currentScheduleId` exposes the optional entry id to the currently running instance.
+`Process.scheduleControls` exposes the same schedule controls available in the `schedule` initializer (`entries`, `set`, `add`, `clear`) from inside the running process effect.
 
 ---
 
@@ -136,7 +137,7 @@ Stopping interrupts the schedule driver fiber and child instances; removing/clos
 |------|--------|
 | [examples/example.ts](../examples/example.ts) | Full `ProcessGroup` + queues + control `serve` + `awaitShutdown` + root `Layer.mergeAll`. |
 | [examples/process-supervisor-patterns.ts](../examples/process-supervisor-patterns.ts) | **`TestClock`**: accelerating polling + `resetCadence`, with schedule windows. |
-| [examples/schedule-gates-and-cron.ts](../examples/schedule-gates-and-cron.ts) | Schedule entry composition (`at`, `window`, `define`) and runtime schedule mutation. |
+| [examples/schedule-control-surfaces.ts](../examples/schedule-control-surfaces.ts) | Schedule control surfaces: initializer controls, in-effect controls, and external service-driven controls. |
 | [examples/process-game-window-with-group.ts](../examples/process-game-window-with-group.ts) | **`ProcessGroup.startProcess`** + schedule ids with `Process.currentScheduleId`; narrative [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md). |
 | [examples/sports-polling-accelerating.ts](../examples/sports-polling-accelerating.ts) | **Three demos** (basic spaced → minimal accel+**`resetCadence`** → verbose **`peekCadence`**); [mocks/sports-score-feed.mock.ts](../examples/mocks/sports-score-feed.mock.ts), [mocks/demo-harness.mock.ts](../examples/mocks/demo-harness.mock.ts). |
 | [examples/run-resource.ts](../examples/run-resource.ts) | `RunResource` throttle + concurrency. |

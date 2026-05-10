@@ -3,7 +3,8 @@
  *
  * ## What this file is
  *
- * **Scenario scaffolding** for **`examples/schedule-gates-and-cron.ts`**: cron expressions,
+ * Scenario scaffolding originally used for schedule-gate demo variants. These utilities remain
+ * useful when building deterministic schedule scenarios with **`TestClock`**.
  * simple refs, and helper fibers under **`TestClock`**. None of this
  * is shipped library code; it exists so the **example entrypoint** stays short and the **deep
  * explanation** of *why* each demo behaves the way it does lives in one place.

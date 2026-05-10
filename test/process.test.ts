@@ -56,6 +56,46 @@ describe("Process runtime with schedule windows", () => {
     ),
   );
 
+  it.effect("exposes schedule controls inside process effect", () =>
+    Effect.gen(function* () {
+      const tickIds = yield* Ref.make<ReadonlyArray<string>>([]);
+      const proc = Process.make({
+        name: "test/schedule-controls-inside-effect",
+        polling: Polling.spaced(Duration.millis(100)),
+        schedule: ({ set }) =>
+          set([
+            ProcessSchedule.window("first-window", new Date(0), new Date(500)),
+            ProcessSchedule.window("second-window", new Date(2_000), new Date(2_500)),
+          ]),
+        effect: Effect.gen(function* () {
+          const currentId = yield* Process.currentScheduleId;
+          const controls = yield* Process.scheduleControls;
+          const existing = yield* controls.entries;
+          if (existing.length > 1) {
+            yield* controls.set(existing.slice(0, 1));
+          }
+          yield* Option.match(currentId, {
+            onNone: () => Effect.void,
+            onSome: (id) => Ref.update(tickIds, (ids) => [...ids, id]),
+          });
+        }),
+      });
+
+      const fib = yield* Effect.forkChild(proc.effect);
+      yield* TestClock.adjust(Duration.seconds(3));
+      yield* Effect.yieldNow;
+      yield* Fiber.interrupt(fib);
+
+      const seen = yield* Ref.get(tickIds);
+      expect(seen.length).toBeGreaterThan(0);
+      expect(seen.every((id) => id === "first-window")).toBe(true);
+    }).pipe(
+      Effect.provide(ProcessStore.layer),
+      Effect.provide(TestClock.layer()),
+      Effect.scoped,
+    ),
+  );
+
   it.effect("starts from schedule startAt and repeats while stopAt is open", () =>
     Effect.gen(function* () {
       const ticks = yield* Ref.make(0);

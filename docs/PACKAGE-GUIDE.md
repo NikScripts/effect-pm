@@ -51,7 +51,7 @@ A future **`ProcessManager`** (multi-host) is planned but **not implemented**; u
 | Goal | Start here |
 |------|------------|
 | Run the full demo + CLI | [examples/README.md](../examples/README.md) → `examples/example.ts` |
-| Schedule composition + runtime updates | [examples/schedule-gates-and-cron.ts](../examples/schedule-gates-and-cron.ts) |
+| Schedule composition + runtime updates | [examples/schedule-control-surfaces.ts](../examples/schedule-control-surfaces.ts) |
 | Schedule + **`ProcessGroup`** / API-driven arm | [docs/SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + [examples/process-game-window-with-group.ts](../examples/process-game-window-with-group.ts) |
 | Understand process v2 semantics | [plans/09-process-v2-effect-first.md](./plans/09-process-v2-effect-first.md) |
 | API tables (make, Polling, Schedule, ProcessGroup) | [PROCESS-API.md](./PROCESS-API.md) |

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Minor Changes
+
+- Add `Process.scheduleControls` so schedule controls (`entries`, `set`, `add`, `clear`) are available inside running process effects, matching the controls passed to the `schedule` initializer.
+- Add a new schedule-control example (`examples/schedule-control-surfaces.ts`) demonstrating three control surfaces: initializer controls, in-effect controls, and external controller fibers.
+- Expand schedule-focused tests to cover in-effect schedule controls and change-signal behavior.
+
 ## 0.7.0-beta.0
 
 ### Minor Changes

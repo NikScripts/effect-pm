@@ -113,6 +113,10 @@ const ProcessScheduleContextTag = Context.Service<ProcessScheduleContext>(
   "@effect-pm/ProcessScheduleContext",
 );
 
+const ProcessScheduleControlsTag = Context.Service<ProcessScheduleControls>(
+  "@effect-pm/ProcessScheduleControls",
+);
+
 /**
  * Identifier attached to the schedule entry that started the current run.
  *
@@ -128,6 +132,31 @@ export const currentScheduleId: Effect.Effect<Option.Option<string>, never, neve
       Option.match({
         onNone: () => Option.none(),
         onSome: (ctx) => ctx.id,
+      }),
+    ),
+  );
+
+/**
+ * Schedule controls for the currently running process runtime.
+ *
+ * @remarks
+ * Available from both:
+ * - `Process.make({ schedule: (controls) => ... })`
+ * - inside the process `effect` via this accessor.
+ *
+ * @public
+ */
+export const scheduleControls: Effect.Effect<ProcessScheduleControls, never, never> =
+  Effect.serviceOption(ProcessScheduleControlsTag).pipe(
+    Effect.map(
+      Option.match({
+        onNone: () => ({
+          entries: Effect.succeed([]),
+          set: () => Effect.void,
+          add: () => Effect.void,
+          clear: Effect.void,
+        }),
+        onSome: (controls) => controls,
       }),
     ),
   );
@@ -154,6 +183,7 @@ interface ProcessBuildStateBase<E, RUser> {
 }
 
 export interface ProcessScheduleControls {
+  readonly entries: Effect.Effect<ReadonlyArray<ProcessScheduleEntry>, never, never>;
   readonly set: (
     entries: ReadonlyArray<ProcessScheduleEntry>,
   ) => Effect.Effect<void, never, never>;
@@ -269,6 +299,22 @@ function createProcess<E, RUser>(
   state: ProcessBuildStateWithoutStepLayers<E, RUser>,
 ): Process<RUser>;
 function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
+  const toScheduleControls = (
+    schedule: ProcessScheduleService,
+  ): ProcessScheduleControls => ({
+    entries: schedule.entries,
+    set: (entries) => schedule.set(entries),
+    add: (entry) => schedule.add(entry),
+    clear: schedule.clear,
+  });
+
+  const noScheduleControls: ProcessScheduleControls = {
+    entries: Effect.succeed([]),
+    set: () => Effect.void,
+    add: () => Effect.void,
+    clear: Effect.void,
+  };
+
   const { name, userEffect } = state;
 
   const mirror: ProcessMirror = {
@@ -315,6 +361,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 
   const trackedProgram = (
     scheduleIdentifier: Option.Option<string>,
+    controls: ProcessScheduleControls,
   ): Effect.Effect<void, never, RUser | ProcessStore> =>
     Effect.gen(function* () {
       const store = yield* ProcessStore;
@@ -323,9 +370,12 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
         (yield* store.getProcessExecutions(name, { limit: 1 })).length === 0;
 
       yield* Effect.matchEffect(
-        Effect.provideService(userEffect, ProcessScheduleContextTag, {
-          id: scheduleIdentifier,
-        }),
+        userEffect.pipe(
+          Effect.provideService(ProcessScheduleContextTag, {
+            id: scheduleIdentifier,
+          }),
+          Effect.provideService(ProcessScheduleControlsTag, controls),
+        ),
         {
           onFailure: (error) =>
             Effect.gen(function* () {
@@ -456,6 +506,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const spawnEntryInstance = (
     key: string,
     entry: ProcessScheduleEntry,
+    controls: ProcessScheduleControls,
   ): Effect.Effect<void, never, RUser | PollingService | ProcessScheduleService | ProcessStore | Clock.Clock> =>
     Effect.gen(function* () {
       if (MutableRef.get(runningByEntry).has(key)) {
@@ -476,7 +527,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 
         if (Option.isNone(pollingOption)) {
           if (yield* canContinue) {
-            yield* trackedProgram(entry.id);
+            yield* trackedProgram(entry.id, controls);
           }
           return;
         }
@@ -504,7 +555,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
           if (!(yield* canContinue)) {
             return;
           }
-          yield* trackedProgram(entry.id);
+          yield* trackedProgram(entry.id, controls);
           yield* polling.afterTick;
         }
       });
@@ -540,18 +591,19 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const scheduleFutureEntry = (
     key: string,
     entry: ProcessScheduleEntry,
+    controls: ProcessScheduleControls,
   ): Effect.Effect<void, never, RUser | PollingService | ProcessScheduleService | ProcessStore | Clock.Clock> =>
     Effect.gen(function* () {
       const nowMillis = yield* Clock.currentTimeMillis;
       const delayMs = entry.startAt.getTime() - nowMillis;
       if (delayMs <= 0) {
-        yield* spawnEntryInstance(key, entry);
+        yield* spawnEntryInstance(key, entry, controls);
         return;
       }
 
       const sleeper = yield* Effect.forkChild(
         Effect.sleep(Duration.millis(delayMs)).pipe(
-          Effect.andThen(() => spawnEntryInstance(key, entry)),
+          Effect.andThen(() => spawnEntryInstance(key, entry, controls)),
           Effect.ensuring(
             Effect.sync(() => {
               MutableRef.update(pendingStarts, (pending) => {
@@ -577,6 +629,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     RUser | PollingService | ProcessScheduleService | ProcessStore | Clock.Clock
   > = Effect.gen(function* () {
     const schedule = yield* ProcessSchedule;
+    const controls = toScheduleControls(schedule);
     const entries = yield* schedule.entries;
     yield* refreshScheduleMirror(entries);
     const materialized = materializeEntries(entries);
@@ -618,7 +671,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
           onSome: (stopAt) => stopAt.getTime() > nowMillis,
         });
         if (stillValid) {
-          yield* spawnEntryInstance(key, entry);
+          yield* spawnEntryInstance(key, entry, controls);
         } else {
           MutableRef.update(completedEntries, (completed) => {
             const next = new Set(completed);
@@ -631,7 +684,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 
       const pendingStart = MutableRef.get(pendingStarts).get(key);
       if (pendingStart === undefined) {
-        yield* scheduleFutureEntry(key, entry);
+        yield* scheduleFutureEntry(key, entry, controls);
       }
     }
   });
@@ -642,12 +695,8 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     RUser | PollingService | ProcessScheduleService | ProcessStore | Clock.Clock
   > = Effect.gen(function* () {
     const schedule = yield* ProcessSchedule;
+    const controls = toScheduleControls(schedule);
     if (state.scheduleInitializer !== undefined) {
-      const controls: ProcessScheduleControls = {
-        set: (entries) => schedule.set(entries),
-        add: (entry) => schedule.add(entry),
-        clear: schedule.clear,
-      };
       yield* state.scheduleInitializer(controls);
     }
     for (;;) {
@@ -693,7 +742,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
       yield* Effect.logInfo(
         `🚀 Running '${name}' immediately (tracked; independent of trigger)...`,
       );
-      yield* trackedProgram(Option.none());
+      yield* trackedProgram(Option.none(), noScheduleControls);
       yield* Effect.logDebug(`✅ Completed immediate run of '${name}'`);
     });
 
@@ -870,4 +919,5 @@ export const Process = {
   providePolling,
   provideSchedule,
   currentScheduleId,
+  scheduleControls,
 } as const;

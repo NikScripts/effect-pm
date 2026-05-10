@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Option } from "effect";
+import { Effect, Fiber, Option } from "effect";
 import { ProcessSchedule } from "../src";
 
 describe("ProcessSchedule.inMemory", () => {
@@ -39,5 +39,17 @@ describe("ProcessSchedule.inMemory", () => {
       yield* schedule.clear;
       expect((yield* schedule.entries).length).toBe(0);
     }).pipe(Effect.provide(ProcessSchedule.inMemory())),
+  );
+
+  it.effect("changed completes after a schedule mutation", () =>
+    Effect.gen(function* () {
+      const schedule = yield* ProcessSchedule;
+      const waiter = yield* Effect.forkChild(schedule.changed);
+      yield* Effect.yieldNow;
+      yield* schedule.add(ProcessSchedule.at("wake", new Date(0)));
+      yield* Effect.yieldNow;
+      const exit = yield* Fiber.await(waiter);
+      expect(exit._tag).toBe("Success");
+    }).pipe(Effect.provide(ProcessSchedule.inMemory()), Effect.scoped),
   );
 });

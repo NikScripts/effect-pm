@@ -17,7 +17,7 @@
  *    Compare with `stopProcess`, which **interrupts** the fiber.
  *
  * For schedule composition patterns and runtime mutation examples,
- * see **`examples/schedule-gates-and-cron.ts`**.
+ * see **`examples/schedule-control-surfaces.ts`**.
  *
  * ### How to run
  *

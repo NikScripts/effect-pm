@@ -21,7 +21,7 @@ Read in this order if you are new to effect-pm:
 1. **[`example.ts`](./example.ts)** — Full **ProcessGroup**: two queues, one **Process** (`Polling` + `ProcessSchedule`), **ProcessStore**, **ControlService** (`serve`), **`awaitShutdown`**, and how to **`Layer.mergeAll`** dependencies at the program root.
 2. **[`cli.ts`](./cli.ts)** — Minimal script that runs **`runCli`** against the control port while `example.ts` is up.
 3. **[`process-supervisor-patterns.ts`](./process-supervisor-patterns.ts)** — **TestClock**-driven patterns: accelerating polling plus runtime schedule mutation (`set` / `clear`).
-4. **[`schedule-gates-and-cron.ts`](./schedule-gates-and-cron.ts)** — **`ProcessSchedule`** composition (`at`, `window`, `define`) and dynamic updates while a process is running.
+4. **[`schedule-control-surfaces.ts`](./schedule-control-surfaces.ts)** — Schedule controls in three places: initializer controls, in-effect controls, and external controller fibers.
 5. **[`process-game-window-with-group.ts`](./process-game-window-with-group.ts)** — **`ProcessGroup.startProcess`** with schedule ids (`Process.currentScheduleId`); read **[`docs/SCHEDULE-AND-PROCESSGROUP.md`](../docs/SCHEDULE-AND-PROCESSGROUP.md)**.
 6. **[`sports-polling-accelerating.ts`](./sports-polling-accelerating.ts)** — **Three demos:** basic **`Polling.spaced`**, accelerating + **`resetCadence`** (minimal tick), then verbose **`peekCadence`**; feed + **`demo-harness`** in **`examples/mocks/`**.
 7. **[`run-resource.ts`](./run-resource.ts)** — **`RunResource`**: throttle + concurrency gate for arbitrary effects.
@@ -41,7 +41,8 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | `pnpm run cli …` | CLI against the demo control port (pass args after `--`). |
 | `pnpm run example:process-supervisor-patterns` | Supervisor patterns with TestClock. |
 | `pnpm run example:sports-polling-accelerating` | Accelerating poll + score-driven `resetCadence` (`readScore` facade). |
-| `pnpm run example:schedule-gates-and-cron` | Compositional schedule entries + live schedule updates. |
+| `pnpm run example:schedule-gates-and-cron` | Alias for `schedule-control-surfaces` example (initializer/effect/external controls). |
+| `pnpm run example:schedule-control-surfaces` | Schedule controls from initializer, effect, and external controller fibers. |
 | `pnpm run example:process-game-window` | `ProcessGroup` + schedule windows + `TestClock`. |
 | `pnpm run example:run-resource` | RunResource demo. |
 | `pnpm run example:http-client-run-gate` | HttpClient + RunResource gate. |
@@ -63,7 +64,7 @@ npx tsx examples/<file>.ts
 | [`example.ts`](./example.ts) | End-to-end **ProcessGroup.make**, **queues**, **Process.make** (polling + schedule inlined), **ProcessStore.layer**, **serve** + **awaitShutdown**, **Layer.mergeAll** for root `provide`. |
 | [`cli.ts`](./cli.ts) | Wiring **`runCli`** with port from `HOME_SERVER_PORT` (must match the demo). |
 | [`process-supervisor-patterns.ts`](./process-supervisor-patterns.ts) | Deterministic tests: **accelerating** polling and schedule disarm/re-arm with in-memory entries. |
-| [`schedule-gates-and-cron.ts`](./schedule-gates-and-cron.ts) | Schedule entry composition + `ProcessSchedule` mutation; links to **`test/process-schedule.test.ts`** + **`test/process.test.ts`**. |
+| [`schedule-control-surfaces.ts`](./schedule-control-surfaces.ts) | End-to-end schedule control surfaces (`schedule` initializer, `Process.scheduleControls`, `ProcessSchedule` service from external fibers). |
 | [`process-game-window-with-group.ts`](./process-game-window-with-group.ts) | **`startProcess`** / **`stopProcess`**, schedule windows + `Process.currentScheduleId`; doc **`docs/SCHEDULE-AND-PROCESSGROUP.md`**. |
 | [`sports-polling-accelerating.ts`](./sports-polling-accelerating.ts) | **3 demos** (basic → minimal → verbose); mocks + **`demo-harness.mock.ts`**; **`TestClock.setTime(0)`** between sections. |
 | [`run-resource.ts`](./run-resource.ts) | **RunResource.make** (unit and `(input) => Effect` forms) + limits. |
