@@ -1,5 +1,9 @@
 # 04 — Process types & schedule control (planned)
 
+> **Superseded for Process runtime & DX** by [09 — Process v2](./09-process-v2-effect-first.md).  
+> Do not implement multi-schedule reconciler flows for `Process` unless 09 is
+> amended. This file remains as background for earlier design discussion.
+
 ## Goal
 
 Beyond a single cron-backed `Process.make`:

@@ -1,6 +1,6 @@
 # effect-pm
 
-A comprehensive process orchestration system built on [Effect](https://effect.website/) that manages scheduled tasks (cron jobs) and queues with type-safe dependency management.
+A comprehensive process orchestration system built on [Effect](https://effect.website/) that manages **supervised processes** (polling cadence + schedule gate, including cron-backed gates) and **queues**, with type-safe dependency management.
 
 The runtime is organized around the **`ProcessGroup`** — a cohesive bundle of
 processes and queues that run together. A future top-level **`ProcessManager`**
@@ -10,7 +10,7 @@ bundle.
 
 ## Features
 
-- 🕐 **Scheduled Tasks (Cron Jobs)** - Run tasks on customizable schedules with execution tracking
+- 🕐 **Managed processes** — repeat a user `Effect` with **polling** cadence and a **schedule gate** (`alwaysArmed`, `cronMatch`, or custom layers), with execution tracking ([API reference](./docs/PROCESS-API.md))
 - 🎯 **Queue resources** - Advanced effect execution with priority levels, rate limiting, and concurrency control
 - 🔒 **Type-Safe Dependencies** - Compile-time validation of queue dependencies
 - 📊 **Built-in Monitoring** - Real-time status, metrics, and execution history
@@ -45,16 +45,17 @@ const EmailQueue = QueueResource.make({
 });
 ```
 
-### 2. Create a Scheduled Process
+### 2. Create a managed process
 
 ```typescript
-import { Process } from "@nikscripts/effect-pm";
-import { Cron, Effect } from "effect";
+import { Process, Polling, ProcessSchedule } from "@nikscripts/effect-pm";
+import { Cron, Duration, Effect } from "effect";
 
 const emailProcess = Process.make({
   name: "send-emails",
-  crons: Cron.make({
-    minutes: [0, 30], // Every 30 minutes
+  polling: Polling.spaced(Duration.minutes(5)),
+  schedule: ProcessSchedule.cronMatch({
+    crons: Cron.make({ minutes: [0, 30] }),
   }),
   effect: Effect.gen(function* () {
     const queue = yield* EmailQueue;
@@ -63,6 +64,8 @@ const emailProcess = Process.make({
   }),
 });
 ```
+
+`polling` controls how often the supervisor **attempts** a tick while armed; `schedule` controls whether ticks are **armed** (here: armed whenever the cron matches the wall clock). See `MIGRATION_0.7.0-process-v2.md` if you are upgrading from the old `crons`-only `Process.make`.
 
 ### 3. Create ProcessGroup
 
@@ -162,42 +165,58 @@ const ProcessingQueue = QueueResource.make({
 });
 ```
 
-## Process Configuration (Scheduled Tasks)
+## Process configuration (polling + schedule)
 
-### Basic Scheduled Process
+### Basic process (always armed)
 
 ```typescript
-import { Process } from "@nikscripts/effect-pm";
-import { Cron, Effect } from "effect";
+import { Process, Polling, ProcessSchedule } from "@nikscripts/effect-pm";
+import { Duration, Effect } from "effect";
 
-const hourlyTask = Process.make({
+const heartbeat = Process.make({
   name: "hourly-task",
-  crons: Cron.make({
-    minutes: [0],    // Top of the hour
-  }),
+  polling: Polling.spaced(Duration.hours(1)),
+  schedule: ProcessSchedule.alwaysArmed,
   effect: Effect.logInfo("Running hourly task"),
 });
 ```
 
-### Advanced Process with Dependencies
+### Cron gate + dependencies
 
 ```typescript
+import { Process, Polling, ProcessSchedule } from "@nikscripts/effect-pm";
+import { Cron, Duration, Effect } from "effect";
+
 const dataSync = Process.make({
   name: "data-sync",
-  crons: Cron.make({
-    minutes: [0],
-    hours: [2], // 2 AM
+  polling: Polling.spaced(Duration.minutes(1)),
+  schedule: ProcessSchedule.cronMatch({
+    crons: Cron.make({ minutes: [0], hours: [2] }), // 2:00 every day
   }),
   effect: Effect.gen(function* () {
     const db = yield* Database;
     const queue = yield* ProcessingQueue;
-    
+
     const data = yield* db.fetchData();
     yield* queue.add(data);
   }),
-  runOnStartup: true, // Run immediately on start
 });
 ```
+
+While **disarmed**, the supervisor does not run polling ticks; it sleeps until the gate may arm again. Cron-backed schedules expose `nextScheduleTransition`, so waits track that hint (with sane bounds). For gates without a hint, the default re-check interval is **five seconds** (never below **100 ms**, even if you pass `Duration.zero`); override with `schedulePollWhileDisarmed` on `Process.make` if you need a different trade-off (for example shorter intervals in tests with `TestClock`). Low-level sleep policy is exported as `computeDisarmedIdleSleep` / `resolveDisarmedFallbackPoll` for custom gates and tests.
+
+To run once outside the poll loop (even when the schedule is disarmed), call `process.runImmediately()` or `group.runProcessImmediately(name)` after the process is registered.
+
+### Accelerating polling (speeds up, then reset)
+
+Use **`Polling.acceleratingScoped`** (or **`Polling.accelerating`** with your own refs) when intervals should **shorten** after each tick. **`yield* Polling.resetCadence`** sets the iteration back to zero and **wakes** the current wait so spacing returns toward the configured **maximum**. Any effect that calls `resetCadence` must see the **same** `Polling` layer instance as the process (merge the layer once at the app / `ProcessGroup` boundary).
+
+Runnable demo (with `TestClock`): `npx tsx examples/process-supervisor-patterns.ts`.
+
+### API tables and exports
+
+- **[docs/PROCESS-API.md](./docs/PROCESS-API.md)** — `Process`, `Polling`, `ProcessSchedule`, disarmed idle helpers, `ProcessGroup` lifecycle.
+- Package exports also include **`computeDisarmedIdleSleep`**, **`resolveDisarmedFallbackPoll`**, and related constants for custom schedule layers and tests.
 
 ## ProcessGroup API
 
@@ -278,19 +297,20 @@ yield* group.removeProcess("old-process");
 The ProcessGroup enforces type-safe queue dependencies at compile time:
 
 ```typescript
-import { Process, QueueResource, ProcessGroup } from "@nikscripts/effect-pm";
-import { Cron, Effect } from "effect";
+import { Process, QueueResource, ProcessGroup, Polling, ProcessSchedule } from "@nikscripts/effect-pm";
+import { Cron, Duration, Effect } from "effect";
 
 const EmailQueue = QueueResource.make({
   name: "email-queue",
   effect: sendEmail,
 });
 
-const cronWithQueue = Process.make({
+const workerWithQueue = Process.make({
   name: "needs-queue",
-  crons: Cron.make({ minutes: [0] }),
+  polling: Polling.spaced(Duration.minutes(1)),
+  schedule: ProcessSchedule.cronMatch({ crons: Cron.make({ minutes: [0] }) }),
   effect: Effect.gen(function* () {
-    const queue = yield* EmailQueue; // Uses EmailQueue
+    const queue = yield* EmailQueue;
     yield* queue.add([email1, email2]);
   }),
 });
@@ -298,13 +318,13 @@ const cronWithQueue = Process.make({
 // ✅ This works - EmailQueue is provided
 const group = yield* ProcessGroup.make({
   queues: [EmailQueue],
-  processes: [cronWithQueue],
+  processes: [workerWithQueue],
 });
 
 // ❌ Compile error - EmailQueue is missing!
 const groupBad = yield* ProcessGroup.make({
   queues: [],
-  processes: [cronWithQueue],  // TypeScript error!
+  processes: [workerWithQueue], // TypeScript error!
 });
 ```
 
@@ -483,7 +503,7 @@ const ApiQueue = QueueResource.make({
 
 See the [examples/example.ts](./examples/example.ts) file for a complete working example with:
 - Multiple queue resources
-- Scheduled processes
+- Managed processes (polling + schedule gate)
 - Full setup with dependencies
 - Control service integration
 - CLI usage
@@ -494,7 +514,8 @@ See the [examples/example.ts](./examples/example.ts) file for a complete working
 
 - `ProcessGroup.make()` - Create a ProcessGroup instance
 - `QueueResource.make()` - Create a resource queue
-- `Process.make()` - Create a scheduled process
+- `Process.make()` — Create a managed process (`polling` + `schedule` layers)
+- `Polling` / `ProcessSchedule` — Cadence and gate services with preset layers
 - `ProcessStore` - Unified analytics & lifecycle service (in-memory by default)
 - `PrismaProcessStore` - Prisma-backed `ProcessStore` (subpath: `@nikscripts/effect-pm/prisma`)
 - `ControlService` - HTTP control API utilities

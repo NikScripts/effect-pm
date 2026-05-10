@@ -1,5 +1,13 @@
 # @nikscripts/effect-pm
 
+## Unreleased
+
+### Minor Changes
+
+- **Process v2 (effect-first, breaking):** `Process.make` is centered on `effect`, with optional **`polling`** (`Polling.spaced`, `Polling.accelerating`, …) and **`schedule`** (`ProcessSchedule.alwaysArmed`, `ProcessSchedule.cronMatch`, `ProcessSchedule.fromArmedRef`, …) as **layers**, composable at `make`, via `Process.providePolling` / `Process.provideSchedule`, or when providing `process.effect` at fork time. Removes the old `crons`-only config surface.
+- **`Polling` / `ProcessSchedule`:** new context services and preset layers; `ProcessDetails` / `ProcessGroup` status expose **`armed`**, **`nextPollCadence`**, and schedule transition hints where available.
+- **Docs & tests:** README and `examples/example.ts` updated; added `MIGRATION_0.7.0-process-v2.md`, `test/polling.test.ts`, `test/process-schedule.test.ts`, and expanded process tests (`Effect.forkChild`, `provide*`).
+
 ## 0.6.0-beta.2
 
 ### Patch Changes

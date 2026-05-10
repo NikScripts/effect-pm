@@ -2,8 +2,19 @@
 // effect-pm - Main Exports
 // ============================================================================
 
+export {
+  computeDisarmedIdleSleep,
+  resolveDisarmedFallbackPoll,
+  DEFAULT_SCHEDULE_POLL_WHILE_DISARMED,
+  MIN_SCHEDULE_POLL_WHILE_DISARMED,
+  DISARMED_HINT_SLEEP_MIN,
+  DISARMED_HINT_SLEEP_MAX,
+} from "./disarmedIdleSleep";
+
 // Namespace exports (these export objects with .make methods)
 export { Process } from "./Process";
+export { Polling } from "./Polling";
+export { ProcessSchedule } from "./ProcessSchedule";
 export { ProcessGroup } from "./ProcessGroup";
 export { QueueResource, Cause } from "./QueueResource";
 export { RunResource } from "./RunResource";
@@ -58,9 +69,15 @@ export {
 // Types - Process
 export type {
   Process as ProcessInterface,
+  ProcessDetails,
+  ProcessMakeConfig,
   CronDetails,
   ScheduledProcessDetails,
 } from "./Process";
+
+// Types - Polling / ProcessSchedule
+export type { PollingService, AcceleratingPollConfig } from "./Polling";
+export type { ProcessScheduleService } from "./ProcessSchedule";
 
 // Types - QueueResource
 export type {

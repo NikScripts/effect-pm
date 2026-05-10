@@ -18,6 +18,11 @@ numbering encodes reading order, not priority.
 | 06 | [`ProcessStore` analytics service](./06-process-store.md) | Living      |
 | 07 | [`QueueResource` storage hooks](./07-queue-resource.md)   | Living      |
 | 08 | [Top-level `ProcessManager` (multi-group)](./08-process-manager-future.md) | Deferred    |
+| 09 | [Process v2 — effect-first, Layer polling & schedule](./09-process-v2-effect-first.md) | **Canonical** (implementation target) |
 
 If you are about to add a new concept that is not described here, write
 the doc first.
+
+**Process runtime:** implement against [09](./09-process-v2-effect-first.md).
+[04](./04-process-types-and-control.md) is historical for multi-schedule /
+reconciler ideas unless rewritten to match 09.

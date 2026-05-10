@@ -46,6 +46,8 @@
   "files": [
     "dist",
     "src",
+    "docs",
+    "examples",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"
@@ -63,6 +65,7 @@
     "version": "changeset version",
     "release": "npm run build && changeset publish",
     "example": "tsx examples/example.ts",
+    "example:process-patterns": "tsx examples/process-supervisor-patterns.ts",
     "example:run-resource": "tsx examples/run-resource.ts",
     "example:http-client-run-gate": "tsx examples/http-client-run-gate.ts",
     "example:http-api-resource": "tsx examples/http-api-resource.ts",
@@ -88,7 +91,7 @@
     "@changesets/cli": "^2.27.0",
     "@effect/vitest": "4.0.0-beta.64",
     "@types/node": "^20.19.20",
-    "effect": "4.0.0-beta.64",
+    "effect": "^4.0.0-beta.64",
     "tsup": "^8.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.3.0",

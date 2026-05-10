@@ -7,17 +7,21 @@
  *
  * WHAT THIS DEMONSTRATES:
  * - QueueResource: Managed execution queues with priority scheduling
- * - Process: Scheduled tasks with cron expressions
+ * - Process: Supervised user `effect` with **polling** cadence and a **schedule gate**
  * - ProcessGroup: Unified orchestration and control for a cohesive bundle
  * - ProcessStore: Event-first analytics (executions + lifecycle)
  * - CLI: Command-line interface for runtime control
+ *
+ * MORE (v0.7+): **`examples/process-supervisor-patterns.ts`** (accelerating polling, disarm/rearm,
+ * `TestClock`) and **`docs/PROCESS-API.md`** (full API tables).
  *
  * ============================================================================
  * THE SYSTEM
  * ============================================================================
  *
- * 1. PROCESS - Scheduled Task Execution
- *    Create tasks that run on cron schedules with automatic execution tracking.
+ * 1. PROCESS - Supervised repeat execution
+ *    Combine {@link Polling} (how often to attempt a tick) and {@link ProcessSchedule}
+ *    (whether ticks are armed — e.g. cron windows via `ProcessSchedule.cronMatch`).
  *
  * 2. QUEUE RESOURCE - Managed Effect Execution
  *    Priority-based execution with concurrency control, rate limiting,
@@ -67,12 +71,14 @@
  * Prisma schema, then `prisma migrate dev`.
  */
 
-import { Effect, Duration, Logger, Cron, Data, Resource, Layer, References } from "effect";
+import { Effect, Duration, Logger, Data, Resource, Layer, References } from "effect";
 import {
   Process,
   ProcessStore,
   QueueResource,
   ProcessGroup,
+  Polling,
+  ProcessSchedule,
 } from "../src";
 
 /**
@@ -162,43 +168,35 @@ const DemoTwoQueue = QueueResource.make({
 
 /**
  * ============================================================================
- * CREATING SCHEDULED PROCESSES
+ * CREATING MANAGED PROCESSES
  * ============================================================================
  *
- * Process.make() creates a scheduled task that runs on a cron schedule.
+ * `Process.make` wires a **long-running supervisor** (`process.effect`) that:
+ * - waits until {@link ProcessSchedule} says work is **armed** (hint-based or 5s fallback sleep when disarmed);
+ * - when armed, waits for the next **poll** via {@link Polling.awaitNextTick};
+ * - runs your `effect` once per tick (tracked in {@link ProcessStore} when provided), then repeats when disarmed → armed again.
  *
- * CONFIGURATION:
- * - name: Unique identifier for the process
- * - crons: Cron.make() defines WHEN it runs (seconds, minutes, hours, etc.)
- * - effect: The Effect that gets executed on schedule
+ * CONFIGURATION (typical):
+ * - `name` — stable id for CLI / HTTP and analytics `entityId`
+ * - `effect` — `Effect<void, E, R>`; failures are logged and recorded as failed executions
+ * - `polling` — cadence between ticks while armed (here: every 10 seconds)
+ * - `schedule` — gate: `alwaysArmed`, `cronMatch({ crons })`, or `fromArmedRef` for tests
  *
- * This demonstrates how queue resources and Processes work together:
- * 1. The process wakes up every 10 seconds (defined in the schedule)
- * 2. It yields both queue services (DemoQueue, DemoTwoQueue)
- * 3. It adds new items to both queues
- * 4. The queues process those items according to their configuration
- *
- * ANALYTICS: Every execution is automatically tracked in ProcessStore.
- * You can query execution history, success/failure rates, and timing data.
+ * This demo keeps the gate always armed and uses spaced polling so the queue-adder
+ * runs every 10 seconds under real wall time (no `TestClock` in this script).
  */
 
-// Demo cron that adds items to queues
+// Demo process that adds items to queues on a fixed poll cadence
 const queueAdderCron = Process.make({
   name: "queue-adder",
-  crons: Cron.make({
-    seconds: [0, 10, 20, 30, 40, 50], // Every 10 seconds
-    minutes: [],
-    hours: [],
-    days: [],
-    months: [],
-    weekdays: [],
-  }),
+  polling: Polling.spaced(Duration.seconds(10)),
+  schedule: ProcessSchedule.alwaysArmed,
   effect: Effect.gen(function* () {
     const demoQueue = yield* DemoQueue;
     const demoTwoQueue = yield* DemoTwoQueue;
     const timestamp = Date.now();
 
-    yield* Effect.logInfo(`🔄 Cron adding items to demo queues...`);
+    yield* Effect.logInfo(`🔄 Poll tick: adding items to demo queues...`);
 
     // Add to string queue
     yield* demoQueue.add([
@@ -248,9 +246,9 @@ const program = Effect.gen(function* () {
   });
 
   yield* Effect.logInfo("🚀 Starting Demo ProcessGroup...");
-  yield* Effect.logInfo(`📝 Processes: 1 cron (queue-adder)`);
+  yield* Effect.logInfo(`📝 Processes: 1 managed (queue-adder)`);
   yield* Effect.logInfo(`🔄 Queues: 2 (DemoQueue, DemoTwoQueue)`);
-  yield* Effect.logInfo(`⏰ Schedule: Every 10 seconds`);
+  yield* Effect.logInfo(`⏰ Polling: every 10 seconds (schedule: always armed)`);
 
   // Start control API for CLI access
   yield* group.serve({ port: CONTROL_PORT });

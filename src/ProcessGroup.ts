@@ -14,7 +14,8 @@
  * - Process lifecycle management (start, stop, restart)
  * - Real-time status monitoring and metrics
  * - Queue resource integration and management
- * - Scoped resource management with automatic cleanup
+ * - Scoped resource management with automatic cleanup when a managed process
+ *   supervisor **ends** unexpectedly or after `stop` / interrupt
  *
  * **Dependencies:**
  * - `ProcessStore` - Required for process analytics and lifecycle records.
@@ -23,8 +24,8 @@
  * @module ProcessGroup
  */
 
-import { Effect, Scope, Fiber, Ref, Data, Context, Exit, Option } from "effect";
-import type { Process } from "./Process";
+import { Duration, Effect, Scope, Fiber, Ref, Data, Context, Exit, Option } from "effect";
+import type { Process, ProcessDetails } from "./Process";
 import type { QueueRef } from "./QueueResource";
 import { ControlService } from "./ControlService";
 import { ProcessStore, type ProcessLifecycleChangedEvent } from "./ProcessStore";
@@ -120,7 +121,7 @@ export interface ProcessGroupDetails {
   /** Unique process identifier */
   name: string;
   /** Process type */
-  type: "scheduled" | "service";
+  type: "managed" | "scheduled" | "service";
   /** Current process status */
   status: ProcessStatus;
   /** Milliseconds since process start */
@@ -130,11 +131,15 @@ export interface ProcessGroupDetails {
 
   /** Last execution time for scheduled processes */
   lastRun?: Date | null;
-  /** Next scheduled execution time */
-  nextRun?: Date;
+  /** Next schedule transition (cron / gate), when known */
+  nextRun?: Date | null;
+  /** Whether the process schedule gate is armed (polling allowed). */
+  armed?: boolean;
+  /** Best-effort next poll cadence in milliseconds, when known */
+  nextPollCadenceMs?: number | null;
   /** Total number of executions */
   executions?: number;
-  /** First startup run time (if runOnStartup is enabled) */
+  /** First execution flagged as startup in analytics, when known */
   firstStartup?: Date | null;
 
   /** Current number of items in queue */
@@ -430,6 +435,27 @@ const removeProcess =
       yield* Effect.logInfo(`✅ Process '${name}' removed successfully`);
     });
 
+const emptyProcessDetails: ProcessDetails = {
+  lastRun: null,
+  executions: 0,
+  firstStartup: null,
+  armed: false,
+  nextScheduleTransition: Option.none(),
+  nextPollCadence: Option.none(),
+};
+
+const processDetailsToGroupFields = (details: ProcessDetails) => ({
+  lastRun: details.lastRun,
+  nextRun: Option.getOrNull(details.nextScheduleTransition),
+  executions: details.executions,
+  firstStartup: details.firstStartup,
+  armed: details.armed,
+  nextPollCadenceMs: Option.match(details.nextPollCadence, {
+    onNone: () => null as number | null,
+    onSome: (d) => Duration.toMillis(d),
+  }),
+});
+
 const listProcesses = <R>(
   state: ProcessGroupState<R>,
 ): Effect.Effect<ProcessGroupDetails[], ProcessGroupErrors, ProcessStore> =>
@@ -445,24 +471,12 @@ const listProcesses = <R>(
           const startTime = startTimes.get(name) || null;
           const uptime = startTime ? Date.now() - startTime.getTime() : 0;
 
-          let scheduledDetails = {};
-          if (process.type === "scheduled") {
+          let scheduledDetails: Record<string, unknown> = {};
+          if (process.type === "managed" || process.type === "scheduled") {
             const details = yield* process.getStatus().pipe(
-              Effect.catch(() =>
-                Effect.succeed({
-                  lastRun: null,
-                  executions: 0,
-                  nextRun: new Date(),
-                  firstStartup: null,
-                }),
-              ),
+              Effect.catch(() => Effect.succeed(emptyProcessDetails)),
             );
-            scheduledDetails = {
-              lastRun: details.lastRun,
-              nextRun: details.nextRun,
-              executions: details.executions,
-              firstStartup: details.firstStartup,
-            };
+            scheduledDetails = processDetailsToGroupFields(details);
           }
 
           return {
@@ -481,6 +495,43 @@ const listProcesses = <R>(
 
     return yield* Effect.all(detailsPromises);
   });
+
+/**
+ * Closes the process scope, clears fork maps, marks stopped, and records lifecycle.
+ * Does **not** interrupt the fiber (caller interrupts first when stopping manually).
+ */
+const releaseProcessForkResources =
+  <R>(state: ProcessGroupState<R>) =>
+  (name: string): Effect.Effect<void, never, never> =>
+    Effect.gen(function* () {
+      const scope = yield* Ref.get(state.scopes).pipe(
+        Effect.map((scopes) => scopes.get(name)),
+      );
+
+      if (scope) {
+        yield* Scope.close(scope, Exit.void);
+      }
+
+      yield* Ref.update(state.statuses, (statuses) => statuses.set(name, "stopped"));
+      yield* Ref.update(state.fibers, (fibers) => {
+        const next = new Map(fibers);
+        next.delete(name);
+        return next;
+      });
+      yield* Ref.update(state.scopes, (scopes) => {
+        const next = new Map(scopes);
+        next.delete(name);
+        return next;
+      });
+      yield* recordLifecycleIfAvailable({
+        id: `${name}-lifecycle-stopped-${Date.now()}`,
+        type: "process.lifecycle.changed",
+        occurredAt: new Date(),
+        entityType: "process",
+        entityId: name,
+        lifecycle: { tag: "Stopped" },
+      });
+    });
 
 const startProcess =
   <R>(state: ProcessGroupState<R>) =>
@@ -528,6 +579,29 @@ const startProcess =
         lifecycle: { tag: "Started" },
       });
 
+      yield* Effect.forkDetach(
+        Fiber.join(fiber).pipe(
+          Effect.exit,
+          Effect.flatMap((exit) =>
+            Exit.match(exit, {
+              onSuccess: () =>
+                Effect.gen(function* () {
+                  const st = yield* Ref.get(state.statuses).pipe(
+                    Effect.map((statuses) => statuses.get(name)),
+                  );
+                  if (st === "running") {
+                    yield* releaseProcessForkResources(state)(name);
+                    yield* Effect.logInfo(
+                      `🛑 Process '${name}' supervisor ended unexpectedly; marked stopped.`,
+                    );
+                  }
+                }),
+              onFailure: () => Effect.void,
+            }),
+          ),
+        ),
+      );
+
       yield* Effect.logInfo(`✅ '${name}' is running`);
     });
 
@@ -557,38 +631,12 @@ const stopProcess =
       const fiber = yield* Ref.get(state.fibers).pipe(
         Effect.map((fibers) => fibers.get(name)),
       );
-      const scope = yield* Ref.get(state.scopes).pipe(
-        Effect.map((scopes) => scopes.get(name)),
-      );
 
       if (fiber) {
         yield* Fiber.interrupt(fiber);
       }
-      if (scope) {
-        yield* Scope.close(scope, Exit.void);
-      }
 
-      yield* Ref.update(state.statuses, (statuses) =>
-        statuses.set(name, "stopped"),
-      );
-      yield* Ref.update(state.fibers, (fibers) => {
-        const next = new Map(fibers);
-        next.delete(name);
-        return next;
-      });
-      yield* Ref.update(state.scopes, (scopes) => {
-        const next = new Map(scopes);
-        next.delete(name);
-        return next;
-      });
-      yield* recordLifecycleIfAvailable({
-        id: `${name}-lifecycle-stopped-${Date.now()}`,
-        type: "process.lifecycle.changed",
-        occurredAt: new Date(),
-        entityType: "process",
-        entityId: name,
-        lifecycle: { tag: "Stopped" },
-      });
+      yield* releaseProcessForkResources(state)(name);
 
       yield* Effect.logInfo(`✅ Process '${name}' stopped successfully`);
     });
@@ -605,7 +653,7 @@ const runProcessImmediately =
         yield* new ProcessNotFoundError({ processName: name });
       }
 
-      if (process!.type === "scheduled" && "runImmediately" in process!) {
+      if ("runImmediately" in process!) {
         yield* Effect.logInfo(`🚀 Running '${name}' immediately...`);
         yield* process!.runImmediately();
       } else {
@@ -637,18 +685,16 @@ const getProcessStatus =
       );
       const uptime = startTime ? Date.now() - startTime.getTime() : 0;
 
-      const scheduledDetails = yield* (process!)
-        .getStatus()
-        .pipe(
-          Effect.mapError(
-            () =>
-              new ProcessGroupError({
-                reason: "status_details_error",
-                processName: name,
-                operation: "status",
-              }),
-          ),
-        );
+      const details = yield* (process!).getStatus().pipe(
+        Effect.mapError(
+          () =>
+            new ProcessGroupError({
+              reason: "status_details_error",
+              processName: name,
+              operation: "status",
+            }),
+        ),
+      );
 
       return {
         name,
@@ -656,7 +702,7 @@ const getProcessStatus =
         status: status || "stopped",
         uptime,
         startTime: startTime || null,
-        ...scheduledDetails,
+        ...processDetailsToGroupFields(details),
       };
     });
 
@@ -680,8 +726,8 @@ const getProcessStatus =
  *
  * @example
  * ```typescript
- * import { QueueResource, Process, ProcessGroup } from "@nikscripts/effect-pm";
- * import { Cron, Effect } from "effect";
+ * import { QueueResource, Process, ProcessGroup, Polling, ProcessSchedule } from "@nikscripts/effect-pm";
+ * import { Cron, Duration, Effect } from "effect";
  *
  * const EmailQueue = QueueResource.make({
  *   name: "email-queue",
@@ -689,18 +735,21 @@ const getProcessStatus =
  *   concurrency: 5,
  * });
  *
- * const emailCron = Process.make({
+ * const emailWorker = Process.make({
  *   name: "send-emails",
- *   crons: Cron.make({ minutes: [0, 30] }),
  *   effect: Effect.gen(function* () {
  *     const queue = yield* EmailQueue;
  *     yield* queue.add([email1, email2, email3]);
+ *   }),
+ *   polling: Polling.spaced(Duration.minutes(5)),
+ *   schedule: ProcessSchedule.cronMatch({
+ *     crons: Cron.make({ minutes: [0, 30] }),
  *   }),
  * });
  *
  * const group = yield* ProcessGroup.make({
  *   queues: [EmailQueue],
- *   processes: [emailCron],
+ *   processes: [emailWorker],
  * });
  *
  * yield* group.startAll();
