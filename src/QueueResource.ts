@@ -1,9 +1,9 @@
 /**
- * QueueResource - Managed Effect Execution System
- * 
- * A managed execution system for resource-intensive Effect operations with
- * priority-based scheduling, concurrency control, rate limiting, and lifecycle management.
- * 
+ * **QueueResource** — managed execution for resource-heavy Effect workloads.
+ *
+ * Each queue is a {@link Context.Service} with a `.layer`: callers `yield*` the tag to get
+ * a {@link QueueRef} for `add`, priority selection, pause/resume, and observability hooks.
+ *
  * @remarks
  * Key features:
  * - Three priority levels (high, normal, low)
