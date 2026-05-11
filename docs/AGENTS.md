@@ -58,3 +58,29 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 
 - **`examples/`** is not on the npm package payload by default; consumers read GitHub or a monorepo checkout.
 - **`AI_CONTEXT.md`** in repo root may be gitignored locally; this **`docs/AGENTS.md`** is the **committed** agent entry.
+
+---
+
+## Cursor Cloud specific instructions
+
+**Environment:** Node ≥ 20.19.0 + pnpm 10.33.4 (declared in `packageManager` field). No lock file is committed (gitignored); `pnpm install` generates it fresh each session.
+
+**No external services required.** All tests and examples run purely in-process. Prisma adapter tests use a structural mock — no real database is needed.
+
+**Key commands** (see `package.json` scripts for full list):
+
+| Task | Command |
+|------|---------|
+| Install deps | `pnpm install` |
+| Run tests | `pnpm test` |
+| Typecheck | `pnpm run typecheck` |
+| Build (CJS+ESM) | `pnpm run build` |
+| Run main example | `pnpm run example` |
+
+**Gotchas:**
+
+- `pnpm run lint` (ESLint) has no config and no eslint dependency — use `pnpm run typecheck` for static analysis (the `@effect/language-service` plugin in `tsconfig.json` provides extensive Effect-specific diagnostics).
+- `pnpm run build` DTS generation may fail with `nodeBuiltinImport` diagnostics from the Effect language-service plugin patched into TypeScript during `prepare`. CJS and ESM outputs succeed; DTS is the only affected step.
+- The `pnpm install` `prepare` hook patches TypeScript with `@effect/language-service`. If you see `effect-language-service patch` output during install, that is normal.
+- Examples using `ControlService.serve` bind to `127.0.0.1:3001`. If you restart an example, ensure the port is free first (`lsof -ti:3001`).
+- The `pnpm.onlyBuiltDependencies` field is not present; pnpm may warn about ignored build scripts for `esbuild` and `msgpackr-extract`. These packages work without their postinstall scripts in this environment.
