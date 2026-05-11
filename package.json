@@ -71,6 +71,8 @@
     "example:sports-polling-accelerating": "tsx examples/sports-polling-accelerating.ts",
     "example:schedule-gates-and-cron": "tsx examples/schedule-control-surfaces.ts",
     "example:schedule-control-surfaces": "tsx examples/schedule-control-surfaces.ts",
+    "example:schedule-control-basics": "tsx examples/schedule-control-basics.ts",
+    "example:schedule-control-db-sync": "tsx examples/schedule-control-db-sync.ts",
     "example:process-game-window": "tsx examples/process-game-window-with-group.ts",
     "example:run-resource": "tsx examples/run-resource.ts",
     "example:http-client-run-gate": "tsx examples/http-client-run-gate.ts",

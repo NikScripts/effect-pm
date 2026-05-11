@@ -14,20 +14,17 @@ Scripts in this folder are **teaching and integration references**. They are **n
 
 ---
 
-## Suggested learning order
+## Suggested tracks
 
-Read in this order if you are new to effect-pm:
+Pick a track based on what you are building.
 
-1. **[`example.ts`](./example.ts)** — Full **ProcessGroup**: two queues, one **Process** (`Polling` + `ProcessSchedule`), **ProcessStore**, **ControlService** (`serve`), **`awaitShutdown`**, and how to **`Layer.mergeAll`** dependencies at the program root.
-2. **[`cli.ts`](./cli.ts)** — Minimal script that runs **`runCli`** against the control port while `example.ts` is up.
-3. **[`process-supervisor-patterns.ts`](./process-supervisor-patterns.ts)** — **TestClock**-driven patterns: accelerating polling plus runtime schedule mutation (`set` / `clear`).
-4. **[`schedule-control-surfaces.ts`](./schedule-control-surfaces.ts)** — Schedule controls in three places: initializer controls, in-effect controls, and external controller fibers.
-5. **[`process-game-window-with-group.ts`](./process-game-window-with-group.ts)** — **`ProcessGroup.startProcess`** with schedule ids (`Process.currentScheduleId`); read **[`docs/SCHEDULE-AND-PROCESSGROUP.md`](../docs/SCHEDULE-AND-PROCESSGROUP.md)**.
-6. **[`sports-polling-accelerating.ts`](./sports-polling-accelerating.ts)** — **Three demos:** basic **`Polling.spaced`**, accelerating + **`resetCadence`** (minimal tick), then verbose **`peekCadence`**; feed + **`demo-harness`** in **`examples/mocks/`**.
-7. **[`run-resource.ts`](./run-resource.ts)** — **`RunResource`**: throttle + concurrency gate for arbitrary effects.
-8. **[`http-client-run-gate.ts`](./http-client-run-gate.ts)** — Gate an **`HttpClient`** pipeline (same idea as gating HttpApi clients).
-9. **[`http-api-resource.ts`](./http-api-resource.ts)** — **`HttpApiResource.make`**: typed HttpApi client as a **Context.Service** + `layer`.
-10. **[`http-api-resource-layer-effect.ts`](./http-api-resource-layer-effect.ts)** — Advanced **`layerEffect`** composition with an extra capture service.
+| Track | Read in this order |
+|------|---------------------|
+| **Start here** | [`example.ts`](./example.ts) → [`cli.ts`](./cli.ts) |
+| **Schedule controls** | [`schedule-control-basics.ts`](./schedule-control-basics.ts) → [`schedule-control-surfaces.ts`](./schedule-control-surfaces.ts) → [`schedule-control-db-sync.ts`](./schedule-control-db-sync.ts) |
+| **Process runtime behavior** | [`process-supervisor-patterns.ts`](./process-supervisor-patterns.ts) → [`process-game-window-with-group.ts`](./process-game-window-with-group.ts) |
+| **Polling patterns** | [`sports-polling-accelerating.ts`](./sports-polling-accelerating.ts) |
+| **Resource gating** | [`run-resource.ts`](./run-resource.ts) → [`http-client-run-gate.ts`](./http-client-run-gate.ts) → [`http-api-resource.ts`](./http-api-resource.ts) → [`http-api-resource-layer-effect.ts`](./http-api-resource-layer-effect.ts) |
 
 Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API tables: [docs/PROCESS-API.md](../docs/PROCESS-API.md). Schedule + group: [docs/SCHEDULE-AND-PROCESSGROUP.md](../docs/SCHEDULE-AND-PROCESSGROUP.md).
 
@@ -43,6 +40,8 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | `pnpm run example:sports-polling-accelerating` | Accelerating poll + score-driven `resetCadence` (`readScore` facade). |
 | `pnpm run example:schedule-gates-and-cron` | Alias for `schedule-control-surfaces` example (initializer/effect/external controls). |
 | `pnpm run example:schedule-control-surfaces` | Schedule controls from initializer, effect, and external controller fibers. |
+| `pnpm run example:schedule-control-basics` | Intro schedule entry patterns (`at`, `window`, `define`). |
+| `pnpm run example:schedule-control-db-sync` | Simulated DB-to-runtime schedule sync using controls. |
 | `pnpm run example:process-game-window` | `ProcessGroup` + schedule windows + `TestClock`. |
 | `pnpm run example:run-resource` | RunResource demo. |
 | `pnpm run example:http-client-run-gate` | HttpClient + RunResource gate. |
@@ -63,8 +62,10 @@ npx tsx examples/<file>.ts
 |------|---------|
 | [`example.ts`](./example.ts) | End-to-end **ProcessGroup.make**, **queues**, **Process.make** (polling + schedule inlined), **ProcessStore.layer**, **serve** + **awaitShutdown**, **Layer.mergeAll** for root `provide`. |
 | [`cli.ts`](./cli.ts) | Wiring **`runCli`** with port from `HOME_SERVER_PORT` (must match the demo). |
+| [`schedule-control-basics.ts`](./schedule-control-basics.ts) | Minimal schedule entry patterns: one-shot starts, bounded windows, and `ProcessSchedule.define` composition. |
 | [`process-supervisor-patterns.ts`](./process-supervisor-patterns.ts) | Deterministic tests: **accelerating** polling and schedule disarm/re-arm with in-memory entries. |
 | [`schedule-control-surfaces.ts`](./schedule-control-surfaces.ts) | End-to-end schedule control surfaces (`schedule` initializer, `Process.scheduleControls`, `ProcessSchedule` service from external fibers). |
+| [`schedule-control-db-sync.ts`](./schedule-control-db-sync.ts) | Simulated DB sync strategy: startup `set` + in-effect re-sync to keep runtime schedule aligned with external data. |
 | [`process-game-window-with-group.ts`](./process-game-window-with-group.ts) | **`startProcess`** / **`stopProcess`**, schedule windows + `Process.currentScheduleId`; doc **`docs/SCHEDULE-AND-PROCESSGROUP.md`**. |
 | [`sports-polling-accelerating.ts`](./sports-polling-accelerating.ts) | **3 demos** (basic → minimal → verbose); mocks + **`demo-harness.mock.ts`**; **`TestClock.setTime(0)`** between sections. |
 | [`run-resource.ts`](./run-resource.ts) | **RunResource.make** (unit and `(input) => Effect` forms) + limits. |
