@@ -1,4 +1,4 @@
-# 11 — QueueResource v2: Effect-idiomatic rewrite
+# 11 — QueueResource v2: class-based factories + Effect-idiomatic internals
 
 **Status:** Plan (implementation target for next beta)
 
@@ -8,137 +8,95 @@
 
 ## 1. Design philosophy
 
-This is not a refactor. It is a ground-up redesign following Effect's conventions:
+Custom class factories (`QueueResource.Service`, `QueueResource.Tag`) for ergonomic DX. Everything else follows Effect conventions:
 
-- **The library provides `make` functions that return Effects.** Users wire them into standard `Context.Service` classes themselves.
-- **No custom class factories.** No `QueueResource.Tag`, no `QueueResource.Service`. Users use `Context.Service` directly.
-- **No auto-generated `.layer`.** Users build layers with `Layer.scoped` (standard).
-- **Named functions via `Effect.fn`.** Every meaningful operation has a span name.
+- **`Effect.fn` for named functions** with automatic span names.
 - **`FiberSet` for fork tracking.** No manual `Ref<Set<Fiber>>`.
 - **`Latch` for pause/resume.** No polling `isPaused` flag.
 - **`Data.TaggedError` for all errors.**
-- **Dual-style APIs where appropriate.**
+- **Effectful properties** where no input is needed (`size`, `completed`).
+- **`Exit` as the result type** in handlers (standard Effect result modeling).
+- **`Duration.Input` accepted** where durations are configured (strings like `"1 minute"`).
+- **`Effect.annotateLogs`** for structured log context.
 
 ---
 
-## 2. What the library exports
+## 2. Public API
+
+### 2.1 `QueueResource.Service` — identity + default layer (primary)
+
+Config baked into class. Auto-generates `.layer`. The 90% case.
 
 ```typescript
-import { QueueResource } from "@nikscripts/effect-pm"
-```
-
-### 2.1 `QueueResource.make`
-
-The core factory. Returns a **scoped Effect** that produces a `QueueResource.Queue`.
-
-```typescript
-QueueResource.make(config: QueueResource.Config<T, R, E, ...>): Effect<QueueResource.Queue<T, R, E>, never, Scope>
-```
-
-### 2.2 `QueueResource.layer`
-
-Convenience: builds a `Layer` from a tag + config. Equivalent to `Layer.scoped(tag, QueueResource.make(config))`.
-
-```typescript
-QueueResource.layer(tag, config): Layer.Layer<TagIdentifier, never, Requirements>
-```
-
-### 2.3 `QueueResource.Queue<T, R, E>` (the service shape)
-
-The interface you get from `yield* MyQueue`.
-
-### 2.4 `QueueResource.Config<T, R, E, ...>` (the config type)
-
-Full configuration with all features.
-
----
-
-## 3. User-facing patterns
-
-### 3.1 Declare a queue service (standard `Context.Service`)
-
-```typescript
-import { Context, Layer } from "effect"
-import { QueueResource } from "@nikscripts/effect-pm"
-
-class EmailQueue extends Context.Service<EmailQueue, QueueResource.Queue<Email, void, SmtpError>>()(
-  "@app/EmailQueue"
-) {}
-```
-
-### 3.2 Build the layer
-
-```typescript
-const EmailQueueLive = Layer.scoped(
-  EmailQueue,
-  QueueResource.make({
-    effect: (email: Email) => sendEmail(email),
-    handler: (item, exit) =>
-      exit.pipe(
-        Exit.match({
-          onFailure: (cause) => deadLetter.add(item),
-          onSuccess: () => Effect.void,
-        }),
-      ),
-    concurrency: 5,
-    throttle: { limit: 100, duration: Duration.minutes(1) },
-  }),
-)
-```
-
-Or using the convenience helper:
-
-```typescript
-const EmailQueueLive = QueueResource.layer(EmailQueue, {
-  effect: (email: Email) => sendEmail(email),
-  handler: (item, exit) => ...,
-  concurrency: 5,
-})
-```
-
-### 3.3 Use the queue
-
-```typescript
-const program = Effect.gen(function*() {
-  const queue = yield* EmailQueue
-  yield* queue.add(pendingEmails)
-})
-
-program.pipe(Effect.provide(EmailQueueLive))
-```
-
-### 3.4 Inline with `{ make }` (ProcessStore-style, most concise)
-
-```typescript
-class EmailQueue extends Context.Service<EmailQueue>()(
-  "@app/EmailQueue",
-  {
-    make: QueueResource.make({
-      effect: (email: Email) => sendEmail(email),
-      handler: (item, exit) => ...,
-      concurrency: 5,
+class EmailQueue extends QueueResource.Service<EmailQueue, Email, void, SmtpError>()("@app/EmailQueue", {
+  effect: (email) => sendEmail(email),
+  handler: (item, exit) =>
+    Exit.match(exit, {
+      onFailure: (cause) => deadLetter.add(item),
+      onSuccess: () => Effect.void,
     }),
-  },
-) {}
+  concurrency: 5,
+  throttle: { limit: 100, duration: "1 minute" },
+}) {}
 
-// Layer:
-const EmailQueueLive = Layer.scoped(EmailQueue, EmailQueue.make)
+// EmailQueue IS the Context.Tag
+// EmailQueue.layer is auto-generated (Layer.scoped)
+
+const queue = yield* EmailQueue
+yield* queue.add(emails)
+Effect.provide(EmailQueue.layer)
 ```
 
-### 3.5 ProcessGroup integration
+### 2.2 `QueueResource.Tag` — pure identity, no default layer
+
+For shared contracts, library interfaces, dependency inversion.
 
 ```typescript
-const group = yield* ProcessGroup.make({
-  queues: [EmailQueue, AnalyticsQueue],
-  processes: [syncProcess],
-})
+class JobQueue extends QueueResource.Tag<JobQueue, Job, JobResult, JobError>()("@app/JobQueue") {}
+
+// No .layer — consumers provide one:
+const JobQueueLive = QueueResource.layer(JobQueue, { effect: ..., handler: ... })
 ```
 
-Works because `Context.Service` classes are `Context.Key` instances.
+### 2.3 `QueueResource.layer` — build a layer for any tag
+
+Works with both `Service` and `Tag`. For tests, environment overrides, alternate implementations.
+
+```typescript
+// Override a Service's default:
+const TestEmailLayer = QueueResource.layer(EmailQueue, { effect: mockSend, concurrency: 1 })
+
+// Provide for a Tag:
+const JobQueueProd = QueueResource.layer(JobQueue, { effect: processJob, concurrency: 20, handler: ... })
+```
+
+### 2.4 `QueueResource.make` — raw scoped Effect (escape hatch)
+
+For users who want full manual control or to use `Context.Service` directly.
+
+```typescript
+// Use with standard Context.Service:
+class MyQueue extends Context.Service<MyQueue>()(
+  "@app/MyQueue",
+  { make: QueueResource.make({ effect: ..., concurrency: 5 }) }
+) {}
+
+const layer = Layer.scoped(MyQueue, MyQueue.make)
+```
+
+### 2.5 Guidance
+
+| Scenario | Use |
+|----------|-----|
+| Concrete queue, config known at declaration | `QueueResource.Service` |
+| Abstract queue, implementation varies | `QueueResource.Tag` + `QueueResource.layer` |
+| Tests / env-specific override | `QueueResource.layer(Tag, altConfig)` |
+| Full mock (no processing) | `Layer.succeed(Tag, mockHandle)` |
+| Want standard `Context.Service` directly | `QueueResource.make` + `Layer.scoped` |
 
 ---
 
-## 4. `QueueResource.Queue<T, R, E>` — the service shape
+## 3. `QueueResource.Queue<T, R, E>` — the service shape
 
 ```typescript
 export declare namespace QueueResource {
@@ -148,13 +106,13 @@ export declare namespace QueueResource {
     readonly prioritize: (item: T | ReadonlyArray<T>) => Effect<void>
     readonly defer: (item: T | ReadonlyArray<T>) => Effect<void>
 
-    // ─── Observe ───
+    // ─── Observe (effectful properties — no parens) ───
     readonly size: Effect<number>
     readonly sizes: Effect<{ readonly high: number; readonly normal: number; readonly low: number }>
     readonly isEmpty: Effect<boolean>
     readonly completed: Effect<number>
 
-    // ─── Lifecycle ───
+    // ─── Lifecycle (effectful properties — no parens) ───
     readonly pause: Effect<void>
     readonly resume: Effect<void>
     readonly shutdown: Effect<void>
@@ -163,25 +121,17 @@ export declare namespace QueueResource {
 }
 ```
 
-**Naming decisions:**
-- `add` — normal priority (the default operation)
-- `prioritize` — high priority (verb: "prioritize this item")
-- `defer` — low priority (verb: "defer this item")
-- `size` / `sizes` / `isEmpty` / `completed` — effectful **properties** (no `()` call needed). These are `Effect<T>` not `() => Effect<T>`.
-- `pause` / `resume` / `shutdown` / `clear` — effectful properties (actions with no input)
-- `clear` replaces `restart` — clearer semantics: empties queues, resets counter, returns items cleared. Does NOT stop workers.
-
-**Why effectful properties instead of methods:**
-
-Effect convention for service interfaces uses properties when there's no input:
-```typescript
-readonly size: Effect<number>          // yield* queue.size
-readonly add: (item: T) => Effect<void> // yield* queue.add(item)
-```
+**Naming:**
+- `add` — normal priority (default operation)
+- `prioritize` — high priority (verb: "prioritize this")
+- `defer` — low priority (verb: "defer this")
+- `size` / `sizes` / `isEmpty` / `completed` — effectful properties, use as `yield* queue.size`
+- `pause` / `resume` / `shutdown` / `clear` — effectful properties, use as `yield* queue.pause`
+- `clear` replaces `restart` — empties all queues, resets counter, returns items cleared. Workers stay alive.
 
 ---
 
-## 5. `QueueResource.Config<T, R, E>` — full configuration
+## 4. `QueueResource.Config<T, R, E>` — full configuration
 
 ```typescript
 export declare namespace QueueResource {
@@ -191,7 +141,12 @@ export declare namespace QueueResource {
     /** Process each item. */
     readonly effect: (item: T) => Effect<R, E, RItem>
 
-    /** Handle each item's result. Runs in a managed fiber. Must eliminate E. */
+    /**
+     * Handle each item's result. Runs in a managed fiber.
+     * Receives the item and its Exit (success or failure).
+     * Must return Effect<void, never, RHandler> (errors eliminated).
+     * Optional — unhandled failures are logged.
+     */
     readonly handler?: (item: T, exit: Exit<R, E>) => Effect<void, never, RHandler>
 
     // ─── Concurrency ───
@@ -207,12 +162,16 @@ export declare namespace QueueResource {
 
     // ─── Deduplication ───
 
-    /** Extract a dedup key. When set, items with a key already in-flight are dropped. */
+    /** Extract a dedup key. Items with a key already in-flight are silently dropped. */
     readonly key?: (item: T) => string
 
     // ─── Retry ───
 
-    /** Auto-retry failed items (only when handler is NOT set). @default 0 */
+    /**
+     * Auto-retry failed items (only when handler is NOT set).
+     * When handler IS set, retry responsibility belongs to the handler.
+     * @default 0
+     */
     readonly retries?: number
 
     /** Called when retries exhausted. */
@@ -223,10 +182,10 @@ export declare namespace QueueResource {
     /** Persist items on enqueue (before processing). */
     readonly persist?: (items: ReadonlyArray<T>, priority: Priority) => Effect<void>
 
-    /** Refill from external source when empty. */
+    /** Refill from external source when all queues are empty. */
     readonly refill?: (queue: Queue<T, R, E>) => Effect<void>
 
-    // ─── Hooks (fire-and-forget, errors logged) ───
+    // ─── Hooks (fire-and-forget, errors logged and swallowed) ───
 
     readonly onEnqueue?: (items: ReadonlyArray<T>, priority: Priority) => Effect<void>
     readonly onComplete?: (item: T, exit: Exit<R, E>, elapsed: Duration.Duration) => Effect<void>
@@ -237,28 +196,34 @@ export declare namespace QueueResource {
 }
 ```
 
-**Key design decisions:**
+**Key decisions:**
 
-1. **`handler` replaces `forkWith`** — clearer name, receives `Exit<R, E>` directly (the Effect-native result type), runs in a managed fiber.
+1. **`handler` replaces `forkWith`** — receives `Exit<R, E>` directly (Effect-native). Clearer name. Always optional — unhandled failures are logged.
 
-2. **`handler` is always optional** — when `E ≠ never` and no `handler` is set:
-   - If `retries > 0`: auto-retry, then call `onRetryExhausted`.
-   - If `retries === 0` and no handler: the failure is **logged** and the item is dropped.
-   - This eliminates the confusing conditional-required pattern.
+2. **No conditional required/optional handler.** Handler is always optional. When `E ≠ never` and no handler:
+   - `retries > 0` → auto-retry, then `onRetryExhausted`.
+   - `retries === 0` → failure is logged, item dropped.
 
-3. **`key` replaces `getKey`/`skipDuplicates`** — simpler. If `key` is set, dedup is active. No boolean flag needed.
+3. **`key` for dedup** — if set, dedup is active. No separate boolean.
 
-4. **`persist` replaces `cache`** — clearer name. "Cache" implies read; "persist" implies write-through.
+4. **`persist` replaces `cache`** — "persist" is write-through semantics.
 
-5. **`throttle.duration` accepts `Duration.Input`** — Effect convention: accept both `Duration` and string literals (`"1 minute"`, `"500 millis"`).
+5. **`throttle.duration` accepts `Duration.Input`** — strings like `"1 minute"`, `"500 millis"`.
 
-6. **Hooks are fire-and-forget** — errors are logged but never propagate. Hooks are observability, not control flow.
+6. **Hooks are fire-and-forget** — errors logged, never propagate.
+
+7. **`handler` receives queue handle?** — Yes: `(item, exit, queue) => ...` for re-enqueue patterns.
+
+Updated signature:
+```typescript
+readonly handler?: (item: T, exit: Exit<R, E>, queue: Queue<T, R, E>) => Effect<void, never, RHandler>
+```
 
 ---
 
-## 6. Internal architecture
+## 5. Internal architecture
 
-### 6.1 Worker loop (using `Latch` + `FiberSet`)
+### 5.1 Worker loop (`Latch` + `FiberSet`)
 
 ```typescript
 const workerLoop = Effect.fn("QueueResource.worker")(function*(workerId: number) {
@@ -266,21 +231,19 @@ const workerLoop = Effect.fn("QueueResource.worker")(function*(workerId: number)
 
   while (true) {
     yield* latch.await          // blocks when paused
-    const item = yield* takeNext() // priority-ordered poll then block
+    const item = yield* takeNext()
     yield* processItem(item)
   }
 })
 ```
 
-**Pause/resume:** `latch.close` pauses (workers block on next iteration). `latch.open` resumes (all waiting workers wake).
+`Latch` starts open. `pause` closes it. `resume` opens it. Workers block at the top of each iteration.
 
-**Shutdown:** Interrupt the scoped FiberSet (automatic on scope close). Workers exit cleanly.
-
-### 6.2 Priority dispatch
+### 5.2 Priority dispatch (no priority inversion)
 
 ```typescript
 const takeNext = Effect.fn("QueueResource.take")(function*() {
-  // Poll in priority order (non-blocking)
+  // Priority-ordered non-blocking poll
   const high = yield* InternalQueue.poll(highQueue)
   if (Option.isSome(high)) return high.value
 
@@ -290,44 +253,44 @@ const takeNext = Effect.fn("QueueResource.take")(function*() {
   const low = yield* InternalQueue.poll(lowQueue)
   if (Option.isSome(low)) return low.value
 
-  // All empty → race for wake signal, then re-poll
+  // All empty → wait for wake signal, then re-poll
   yield* Deferred.await(wakeSignal)
   return yield* takeNext()
 })
 ```
 
-When items are enqueued, `wakeSignal` is completed (and recreated). This avoids the priority-inversion problem of `Effect.race(Queue.take, Queue.take, Queue.take)`.
+On enqueue: complete `wakeSignal` (then recreate it). Workers re-enter priority poll.
 
-### 6.3 Item processing
+### 5.3 Item processing
 
 ```typescript
 const processItem = Effect.fn("QueueResource.processItem")(function*(item: T) {
   yield* semaphore.withPermits(1)(
     throttle(
       Effect.gen(function*() {
-        const start = yield* Effect.clockWith((c) => c.currentTimeMillis)
+        const start = yield* Clock.currentTimeMillis
         const exit = yield* Effect.exit(config.effect(item))
-        const elapsed = /* compute from start */
+        const elapsed = Duration.millis((yield* Clock.currentTimeMillis) - start)
 
         yield* Ref.update(completedCount, (n) => n + 1)
 
-        // Hook
+        // Dedup key release
+        if (config.key) yield* Ref.update(activeKeys, HashSet.remove(config.key(item)))
+
+        // Hook: onComplete
         if (config.onComplete) {
-          yield* Effect.forkIn(fiberSet)(
-            config.onComplete(item, exit, elapsed).pipe(Effect.ignore)
-          )
+          yield* FiberSet.run(hookFibers, config.onComplete(item, exit, elapsed).pipe(Effect.ignore))
         }
 
         // Handler or auto-retry
         if (config.handler) {
-          yield* FiberSet.run(handlerFibers, config.handler(item, exit).pipe(Effect.ignore))
+          yield* FiberSet.run(handlerFibers, config.handler(item, exit, queueHandle).pipe(Effect.ignore))
         } else if (Exit.isFailure(exit) && retries > 0) {
           yield* retryItem(item, exit.cause, 1)
-        }
-
-        // Dedup key release
-        if (config.key) {
-          yield* Ref.update(activeKeys, HashSet.remove(config.key(item)))
+        } else if (Exit.isFailure(exit)) {
+          yield* Effect.logWarning("Item failed without handler").pipe(
+            Effect.annotateLogs({ item: JSON.stringify(item), cause: Cause.pretty(exit.cause) })
+          )
         }
       })
     )
@@ -335,7 +298,7 @@ const processItem = Effect.fn("QueueResource.processItem")(function*(item: T) {
 })
 ```
 
-### 6.4 Deduplication
+### 5.4 Deduplication
 
 On enqueue:
 ```typescript
@@ -347,56 +310,85 @@ if (config.key) {
 }
 ```
 
-Key is released after processing completes (success or failure, after handler).
+Key released after processing (success or failure, after handler).
 
-### 6.5 Throttling
+### 5.5 Throttle (token-bucket via semaphore)
 
-Internal throttle using `Semaphore` and `Clock`:
 ```typescript
 const makeThrottle = (limit: number, window: Duration.Duration) =>
   Effect.gen(function*() {
     const sem = yield* Semaphore.make(limit)
-    return <A, E, R>(effect: Effect<A, E, R>) =>
+    return <A, E, R>(effect: Effect<A, E, R>): Effect<A, E, R> =>
       sem.withPermits(1)(
-        Effect.zipRight(
-          effect,
-          Effect.sleep(window) // hold permit for window duration
-        )
+        Effect.ensuring(effect, Effect.sleep(window))
       )
   })
 ```
 
-This is a token-bucket style: each permit represents one execution slot within the window. Simpler and more correct than timestamp tracking.
+Each permit = one execution slot. Held for `window / limit` duration after the effect completes. Simple, correct, no timestamp math.
 
-### 6.6 Scope lifecycle
+### 5.6 Scope lifecycle
 
 ```typescript
 QueueResource.make = (config) => Effect.gen(function*() {
-  // Allocate queues, latch, semaphore, fiber sets
   const highQueue = yield* InternalQueue.bounded<T>(capacity)
   const normalQueue = yield* InternalQueue.bounded<T>(capacity)
   const lowQueue = yield* InternalQueue.bounded<T>(capacity)
-  const latch = yield* Latch.make(true) // starts open (running)
+  const latch = yield* Latch.make(true)  // starts open
   const semaphore = yield* Semaphore.make(concurrency)
   const workerFibers = yield* FiberSet.make<void>()
   const handlerFibers = yield* FiberSet.make<void>()
+  const hookFibers = yield* FiberSet.make<void>()
+
+  // ... setup internals ...
 
   // Start workers
   for (let i = 0; i < concurrency; i++) {
     yield* FiberSet.run(workerFibers, workerLoop(i))
   }
 
-  // Return the Queue handle
-  return { add, prioritize, defer, size, sizes, isEmpty, completed, pause, resume, shutdown, clear }
-})
+  return queueHandle
+}).pipe(Effect.annotateLogs({ "queue.name": config.name ?? "anonymous" }))
 ```
 
-When the scope closes:
-1. `workerFibers` is interrupted (all workers stop)
-2. `handlerFibers` is interrupted (in-flight handlers stop)
-3. Internal queues are shut down
+Scope close → `FiberSet`s interrupted automatically → workers stop, handlers stop, hooks stop. No manual finalizers.
 
-No manual finalizers needed — `FiberSet.make()` is scoped and handles cleanup.
+---
+
+## 6. Type system
+
+### 6.1 Class factory signatures
+
+```typescript
+export declare const QueueResource: {
+  Service: <Self, T, R, E = never>() =>
+    <const Name extends string, RHandler = never, RItem = never>(
+      name: Name,
+      config: Config<T, R, E, RHandler, RItem>,
+    ) => ServiceClass<Self, Name, Queue<T, R, E>> & { readonly layer: Layer<Self, never, RHandler | RItem> }
+
+  Tag: <Self, T, R, E = never>() =>
+    <const Name extends string>(name: Name) =>
+      ServiceClass<Self, Name, Queue<T, R, E>>
+
+  layer: <Self, T, R, E, RHandler = never, RItem = never>(
+    tag: Context.Key<Self, Queue<T, R, E>>,
+    config: Config<T, R, E, RHandler, RItem>,
+  ) => Layer<Self, never, RHandler | RItem>
+
+  make: <T, R, E, RHandler = never, RItem = never>(
+    config: Config<T, R, E, RHandler, RItem>,
+  ) => Effect<Queue<T, R, E>, never, Scope | RHandler | RItem>
+}
+```
+
+### 6.2 Requirement propagation
+
+Layer requirements = `RItem | RHandler | Rpersist | Rrefill | Rhooks` (all inferred from the config callbacks).
+
+### 6.3 ProcessGroup compatibility
+
+`QueueResource.Service` and `QueueResource.Tag` produce `Context.Key` instances. `ProcessGroup.make({ queues: [...] })` works unchanged.
 
 ---
 
@@ -408,31 +400,25 @@ export class QueueShutdownError extends Data.TaggedError("QueueShutdownError")<{
 }> {}
 ```
 
-Enqueue operations after shutdown fail with `QueueShutdownError`. All other errors are typed through the user's `E` on their effect.
+Enqueue after shutdown → `QueueShutdownError`.
 
 ---
 
-## 8. Full example (end-to-end)
+## 8. Full example
 
 ```typescript
-import { Context, Data, Duration, Effect, Exit, Layer } from "effect"
-import { QueueResource, ProcessGroup, Process, Polling, ProcessSchedule } from "@nikscripts/effect-pm"
+import { Duration, Effect, Exit, Layer } from "effect"
+import { QueueResource, ProcessGroup, Process, Polling, ProcessSchedule, ProcessStore } from "@nikscripts/effect-pm"
 
-// ─── Define the queue service ───
+// ─── Declare queue (Service style — config baked in) ───
 
-class EmailQueue extends Context.Service<EmailQueue, QueueResource.Queue<Email, EmailResult, SmtpError>>()(
-  "@app/EmailQueue"
-) {}
+class EmailQueue extends QueueResource.Service<EmailQueue, Email, EmailResult, SmtpError>()("@app/EmailQueue", {
+  effect: (email) => smtpClient.send(email),
 
-// ─── Build the layer ───
-
-const EmailQueueLive = QueueResource.layer(EmailQueue, {
-  effect: (email: Email) => smtpClient.send(email),
-
-  handler: (item, exit) =>
+  handler: (item, exit, queue) =>
     Exit.match(exit, {
-      onFailure: (cause) => Effect.logError("Email failed", { item, cause }),
-      onSuccess: (result) => Effect.logInfo("Email sent", { messageId: result.id }),
+      onFailure: () => queue.defer(item),
+      onSuccess: (result) => Effect.logInfo(`Sent ${result.id}`),
     }),
 
   concurrency: 10,
@@ -446,9 +432,9 @@ const EmailQueueLive = QueueResource.layer(EmailQueue, {
   }),
 
   onEmpty: Effect.logDebug("Email queue drained"),
-})
+}) {}
 
-// ─── Define a process that feeds the queue ───
+// ─── Process that feeds the queue ───
 
 const emailSync = Process.make({
   name: "email-sync",
@@ -461,7 +447,7 @@ const emailSync = Process.make({
   }),
 })
 
-// ─── Wire it all together ───
+// ─── Compose ───
 
 const program = Effect.gen(function*() {
   const group = yield* ProcessGroup.make({
@@ -474,10 +460,7 @@ const program = Effect.gen(function*() {
 })
 
 program.pipe(
-  Effect.provide(Layer.mergeAll(
-    EmailQueueLive,
-    ProcessStore.layer,
-  )),
+  Effect.provide(Layer.mergeAll(EmailQueue.layer, ProcessStore.layer)),
   Effect.runPromise,
 )
 ```
@@ -486,22 +469,21 @@ program.pipe(
 
 ## 9. Test patterns
 
-### 9.1 Fast test config (no throttle, instant processing)
+### Fast test layer
 
 ```typescript
-const TestEmailQueueLive = QueueResource.layer(EmailQueue, {
-  effect: (email: Email) => Effect.succeed({ id: `test-${email.to}` }),
+const TestEmailQueue = QueueResource.layer(EmailQueue, {
+  effect: (email) => Effect.succeed({ id: `test-${email.to}` }),
   concurrency: 1,
 })
 ```
 
-### 9.2 Full mock (no processing at all)
+### Full mock
 
 ```typescript
-const calls: Email[] = []
-const MockEmailQueueLive = Layer.succeed(EmailQueue, {
-  add: (items) => Effect.sync(() => { calls.push(...(Array.isArray(items) ? items : [items])) }),
-  prioritize: (items) => Effect.sync(() => { calls.push(...(Array.isArray(items) ? items : [items])) }),
+const MockEmailQueue = Layer.succeed(EmailQueue, {
+  add: () => Effect.void,
+  prioritize: () => Effect.void,
   defer: () => Effect.void,
   size: Effect.succeed(0),
   sizes: Effect.succeed({ high: 0, normal: 0, low: 0 }),
@@ -511,14 +493,7 @@ const MockEmailQueueLive = Layer.succeed(EmailQueue, {
   resume: Effect.void,
   shutdown: Effect.void,
   clear: Effect.succeed(0),
-})
-```
-
-### 9.3 Override default layer (for Service with `{ make }`)
-
-```typescript
-// If EmailQueue was declared with { make: QueueResource.make(...) }:
-const TestLayer = Layer.scoped(EmailQueue, QueueResource.make({ effect: mockEffect, concurrency: 1 }))
+} satisfies QueueResource.Queue<Email, EmailResult, SmtpError>)
 ```
 
 ---
@@ -529,7 +504,7 @@ const TestLayer = Layer.scoped(EmailQueue, QueueResource.make({ effect: mockEffe
 
 | File | Contents |
 |------|----------|
-| `src/QueueResource.ts` | `QueueResource.make`, `QueueResource.layer`, types, internals |
+| `src/QueueResource.ts` | Factories, types, internals |
 | `test/queue-resource.test.ts` | Full test suite |
 
 ### Minimal changes
@@ -537,93 +512,87 @@ const TestLayer = Layer.scoped(EmailQueue, QueueResource.make({ effect: mockEffe
 | File | Change |
 |------|--------|
 | `src/index.ts` | Update exports |
-| `src/Resource.ts` | `Resource.makeQueue` → delegates to `QueueResource.layer` |
+| `src/Resource.ts` | Update umbrella delegation |
 
 ### Not touched
 
-All other source files (`ProcessGroup`, `RunResource`, `HttpApiResource`, `Process`, etc.)
+`ProcessGroup`, `RunResource`, `HttpApiResource`, `Process`, `ProcessStore`, `ControlService`, examples.
 
 ---
 
 ## 11. Migration guide
 
-### Before:
-
-```typescript
-const EmailQueue = QueueResource.make({
-  name: "email-queue",
-  effect: (email: Email) => sendEmail(email),
-  forkWith: (forked, item, queue) => forked.pipe(Effect.catchAll(() => queue.deffered(item))),
-  concurrency: 5,
-});
-
-const queue = yield* EmailQueue;
-yield* queue.deffered(items);
-Effect.provide(EmailQueue.layer);
-```
-
-### After:
-
-```typescript
-class EmailQueue extends Context.Service<EmailQueue, QueueResource.Queue<Email, void, SmtpError>>()(
-  "@app/EmailQueue"
-) {}
-
-const EmailQueueLive = QueueResource.layer(EmailQueue, {
-  effect: (email: Email) => sendEmail(email),
-  handler: (item, exit) => exit.pipe(
-    Exit.match({
-      onFailure: () => Effect.void,
-      onSuccess: () => Effect.void,
-    }),
-  ),
-  concurrency: 5,
-});
-
-const queue = yield* EmailQueue;
-yield* queue.defer(items);
-Effect.provide(EmailQueueLive);
-```
-
-### Step-by-step:
-
-1. Declare your queue as `class X extends Context.Service<X, QueueResource.Queue<T, R, E>>()("key") {}`.
-2. Build layer with `QueueResource.layer(X, config)` or `Layer.scoped(X, QueueResource.make(config))`.
-3. `forkWith(forked, item, queue)` → `handler(item, exit)`. The `exit` is `Exit<R, E>` — use `Exit.match` to handle both cases.
-4. `deffered` → `defer`.
-5. `next` → `prioritize`.
-6. `getCompleted()` → `completed` (effectful property, no parens).
-7. `size()` → `size` (effectful property).
-8. `sizeByPriority()` → `sizes` (effectful property).
-9. `restart()` → `clear` (clears queues + resets counter; workers stay alive).
-10. Remove imports of `QueueResourceInterface`, `QueueResourceInstance`, `Cause` re-export.
+| Before | After |
+|--------|-------|
+| `const Q = QueueResource.make({ name, ... })` | `class Q extends QueueResource.Service<Q, T, R, E>()("@app/Name", { ... }) {}` |
+| `QueueResource.make({ name })` (Tag-only) | `class Q extends QueueResource.Tag<Q, T, R, E>()("@app/Name") {}` |
+| `Q.layer` | `Q.layer` (unchanged for Service) |
+| `forkWith: (forked, item, queue) => ...` | `handler: (item, exit, queue) => Exit.match(exit, { ... })` |
+| `queue.deffered(items)` | `yield* queue.defer(items)` |
+| `queue.next(items)` | `yield* queue.prioritize(items)` |
+| `yield* queue.getCompleted()` | `yield* queue.completed` |
+| `yield* queue.size()` | `yield* queue.size` |
+| `yield* queue.sizeByPriority()` | `yield* queue.sizes` |
+| `yield* queue.restart()` | `yield* queue.clear` |
+| `QueueResourceInterface<T,R,E>` | `QueueResource.Queue<T,R,E>` |
+| `QueueResourceInstance<T,R,E>` | `QueueResource.Queue<T,R,E>` |
+| `import { Cause } from "@nikscripts/effect-pm"` | `import { Cause } from "effect"` |
 
 ---
 
-## 12. What the library does NOT do
+## 12. Open questions
 
-- **No custom class factories.** Standard `Context.Service` only.
-- **No conditional required/optional `handler`.** Handler is always optional. Unhandled failures are logged.
-- **No `_workers` leak.** Fiber management is fully internal.
-- **No `onSuccess`/`onError` split.** One `handler` receives the full `Exit`. Use `Exit.match`.
-- **No busy-loop.** Workers block on `Latch.await` (paused) or `Deferred.await` (empty queue).
-- **No legacy type aliases.** One type: `QueueResource.Queue<T, R, E>`.
+1. **Throttle strategy** — token-bucket (hold permit for `window/limit` after completion) vs sliding-window. Recommendation: token-bucket (simpler, no external state).
+2. **`clear` return type** — `Effect<number>` (count cleared) or `Effect<{ high: T[]; normal: T[]; low: T[] }>` (items returned)? Recommendation: count only (cheaper, items may be large).
+3. **`refill` trigger** — auto when empty, or also expose as `queue.refill` method? Recommendation: auto only for v1; add method in future if needed.
+4. **Name in config for `QueueResource.make`** — should raw `make` accept an optional `name` for log annotations? Recommendation: yes, optional `readonly name?: string`.
 
 ---
 
-## 13. Open questions
+## 13. Implementation phases
 
-1. **Should `handler` receive the `Queue` handle?** (for re-enqueue on failure). Leaning yes: `handler: (item, exit, queue) => ...`
-2. **Should `clear` return the cleared items or just the count?** Count is cheaper; items would require draining into an array.
-3. **Should `throttle` use a token-bucket (hold-permit) or sliding-window approach?** Token-bucket is simpler and more predictable.
-4. **Should `refill` run automatically when empty, or only on explicit trigger?** Currently: auto on empty. Alternative: expose `refill` as a method on the queue handle.
+### Phase 1: Core
+
+1. `QueueResource.Queue` interface.
+2. `QueueResource.Config` type (with conditional handler inference).
+3. Internal `makeQueueEffect` using `FiberSet`, `Latch`, `Semaphore`, `Effect.fn`.
+4. `QueueResource.make` (raw scoped Effect).
+5. `QueueResource.layer` (builds `Layer.scoped`).
+6. `QueueResource.Tag` (class factory, no layer).
+7. `QueueResource.Service` (class factory + `.layer`).
+
+### Phase 2: Features
+
+1. Dedup (`key` field + `HashSet` tracking).
+2. Auto-retry (`retries` + `onRetryExhausted`).
+3. Persistence (`persist` + `refill`).
+4. Hooks (`onEnqueue`, `onComplete`, `onEmpty`).
+
+### Phase 3: Tests
+
+1. Basic processing, batch, priority ordering.
+2. Handler with Exit matching.
+3. Pause/resume via Latch.
+4. Shutdown (clean exit, QueueShutdownError on enqueue).
+5. Clear (resets counter, empties queues).
+6. Dedup (dropped duplicates).
+7. Retry (auto re-enqueue, onRetryExhausted).
+8. Hooks (fire-and-forget, error swallowed).
+9. Layer swap patterns (Tag + layer, Service override).
+10. ProcessGroup integration.
+
+### Phase 4: Exports
+
+1. `src/index.ts` — public API surface.
+2. `src/Resource.ts` — umbrella update.
 
 ---
 
 ## 14. References
 
-- Effect v4 `Context.Service` — `node_modules/effect/src/Context.ts`
-- Effect `FiberSet` — `node_modules/effect/src/FiberSet.ts`
-- Effect `Latch` — `node_modules/effect/src/Latch.ts`
-- Effect `Effect.fn` — `node_modules/effect/src/Effect.ts`
+- Effect `Context.Service` — `class X extends Context.Service<X, Shape>()("key") {}`
+- Effect `FiberSet` — scoped fiber collection with auto-cleanup
+- Effect `Latch` — open/close gate for fiber coordination
+- Effect `Effect.fn("name")` — named traced functions
 - Effect `Data.TaggedError` — standard error pattern
+- Effect `Exit.match` — result handling
