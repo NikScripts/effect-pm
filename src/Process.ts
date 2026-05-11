@@ -929,6 +929,16 @@ function provideSchedule<E, RUser>(
 }
 
 /**
+ * Managed process factories and schedule helpers.
+ *
+ * @remarks
+ * - **`make`** — construct a {@link Process} from `effect` plus optional inline `polling` /
+ *   `schedule` layers (merged into requirements for accurate typing).
+ * - **`providePolling` / `provideSchedule`** — attach layers after the fact while preserving
+ *   the same runtime wiring as `make`.
+ * - **`currentScheduleId` / `scheduleControls`** — ergonomic access to schedule metadata and
+ *   mutators from inside a running process instance.
+ *
  * @public
  */
 export const Process = {

@@ -224,7 +224,12 @@ const acceleratingScopedLayer = (
   );
 
 /**
- * Context tag for {@link PollingService}, plus static factories for cadence layers.
+ * Context tag for {@link PollingService}, plus preset cadence layers.
+ *
+ * @remarks
+ * - **`spaced`** — fixed delay between ticks (wakeable).
+ * - **`accelerating`** — shared refs; usually prefer **`acceleratingScoped`** for isolation.
+ * - **`acceleratingScoped`** — `Layer.unwrap` so each scope gets its own refs.
  *
  * @public
  */

@@ -198,7 +198,13 @@ const define = (
   );
 
 /**
- * Context tag + in-memory constructors for process schedule storage.
+ * Context tag plus schedule constructors and `Layer` builders.
+ *
+ * @remarks
+ * - **`inMemory`** — `Layer` from initial {@link ProcessScheduleEntry} rows.
+ * - **`at` / `window`** — row builders (optional string ids for stable matching).
+ * - **`fromStarts`** — expand bare `Date` starts into open-ended windows.
+ * - **`define`** — declarative `Layer` from a small combinator DSL.
  *
  * @public
  */

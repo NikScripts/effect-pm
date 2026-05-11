@@ -901,7 +901,12 @@ export const makeProcessGroup = <
   });
 
 /**
- * `ProcessGroup` namespace.
+ * Orchestration entrypoints for bundled processes and queues.
+ *
+ * @remarks
+ * **`make`** returns an `Effect` of {@link ProcessGroup} controls: start/stop/restart,
+ * queue access, optional {@link ControlService.make} via `serve`, and graceful shutdown via
+ * `awaitShutdown` (see {@link AwaitShutdownOptions}).
  *
  * @public
  */
