@@ -103,7 +103,8 @@ export type AnalyticsEvent =
   | ProcessLifecycleChangedEvent;
 
 /**
- * Storage port implemented by the in-memory service and {@link PrismaProcessStore}.
+ * Storage port implemented by the in-memory service and the Prisma-backed adapter
+ * (`@nikscripts/effect-pm/prisma`).
  *
  * @public
  */
