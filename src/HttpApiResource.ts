@@ -103,40 +103,30 @@ function makeHttpApiResource<
   ApiId extends string,
   Groups extends HttpApiGroup.Any,
   Name extends string,
->(
-  api: HttpApiType.HttpApi<ApiId, Groups>,
-  config: HttpApiResourceMakeConfig<ApiId, Groups, Name>
-): Context.Service<
-  HttpApiClient.Client<Groups> & { _brand: Name },
-  HttpApiClient.Client<Groups>
-> & {
-  readonly layer: Layer.Layer<
-    HttpApiClient.Client<Groups> & { _brand: Name },
-    never,
-    HttpClient.HttpClient | HttpApiGroup.MiddlewareClient<Groups>
-  >;
-} {
+>(api: HttpApiType.HttpApi<ApiId, Groups>, config: HttpApiResourceMakeConfig<ApiId, Groups, Name>) {
   const tagId = config.name;
 
   type ClientShape = HttpApiClient.Client<Groups>;
 
-  const tag = Context.Service<ClientShape & { _brand: Name }, ClientShape>(tagId);
+  const HttpApiResourceTag = Context.Service<ClientShape>(tagId);
 
   const layer = layerEffect(
-    tag,
+    HttpApiResourceTag,
     Effect.gen(function* () {
       const runner = yield* makeRunner(config.limits);
       const userTc = config.client.transformClient;
       return yield* HttpApiClient.make(api, {
         baseUrl: config.client.baseUrl,
-        transformClient: (c) =>
-          HttpClientRunGate.withRunner(runner)(userTc ? userTc(c) : c),
+        transformClient: (c) => {
+          const client = userTc === undefined ? c : userTc(c);
+          return HttpClientRunGate.withRunner(runner)(client);
+        },
         transformResponse: config.client.transformResponse,
       });
     })
   );
 
-  return Object.assign(tag, { layer });
+  return Object.assign(HttpApiResourceTag, { layer });
 }
 
 /**

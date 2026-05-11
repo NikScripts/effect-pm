@@ -90,10 +90,10 @@ const applyQueryOpts = <T>(
 ): T[] => {
   const filtered = rows.filter((row) => {
     const timestamp = getDate(row).getTime();
-    if (opts?.before && timestamp >= opts.before.getTime()) {
+    if (opts?.before !== undefined && timestamp >= opts.before.getTime()) {
       return false;
     }
-    if (opts?.after && timestamp <= opts.after.getTime()) {
+    if (opts?.after !== undefined && timestamp <= opts.after.getTime()) {
       return false;
     }
     return true;
@@ -164,7 +164,7 @@ const makeInMemoryProcessStore = Effect.sync<ProcessStoreInterface>(() => {
 export class ProcessStore extends Context.Service<
   ProcessStore,
   ProcessStoreInterface
->()("ProcessStore", {
+>()("@nikscripts/effect-pm/ProcessStore", {
   make: makeInMemoryProcessStore,
 }) {}
 

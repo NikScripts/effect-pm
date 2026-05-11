@@ -3,6 +3,7 @@ import type { Effect as IO } from "effect"
 import { Cause, Context, Data, Duration, Effect, Exit, Fiber, Layer, Ref } from "effect"
 import type { QueueResourceInterface } from "../src"
 import { QueueResource } from "../src"
+import { provideLayer } from "../src/provideLayer.js";
 
 /** For forkWith success/failure rows without `Effect.either` (naming can differ by Effect version). */
 type EithRow =
@@ -10,21 +11,21 @@ type EithRow =
   | { readonly tag: "right"; readonly n: number }
 
 /** Per-item dependency for requirement-propagation tests */
-const ItemDeps = Context.Service<{ readonly marker: string }>(
-  "test/queue-item-deps",
-)
+class ItemDeps extends Context.Service<ItemDeps, { readonly marker: string }>()(
+  "@nikscripts/effect-pm/test/queue-resource.test/ItemDeps",
+) {}
 
-const ForkDeps = Context.Service<{ readonly token: string }>(
-  "test/queue-fork-deps",
-)
+class ForkDeps extends Context.Service<ForkDeps, { readonly token: string }>()(
+  "@nikscripts/effect-pm/test/queue-resource.test/ForkDeps",
+) {}
 
-const CacheDeps = Context.Service<{ readonly prefix: string }>(
-  "test/queue-cache-deps",
-)
+class CacheDeps extends Context.Service<CacheDeps, { readonly prefix: string }>()(
+  "@nikscripts/effect-pm/test/queue-resource.test/CacheDeps",
+) {}
 
-const RefillDeps = Context.Service<{ readonly source: string }>(
-  "test/queue-refill-deps",
-)
+class RefillDeps extends Context.Service<RefillDeps, { readonly source: string }>()(
+  "@nikscripts/effect-pm/test/queue-resource.test/RefillDeps",
+) {}
 
 const ItemLayer = Layer.succeed(ItemDeps, { marker: "item" })
 const ForkLayer = Layer.succeed(ForkDeps, { token: "fork" })
@@ -66,7 +67,7 @@ describe("QueueResource.make — processing", () => {
       yield* queue.add(1)
       yield* waitUntilProcessed(queue, 1)
       expect(yield* queue.getCompleted()).toBe(1)
-    }).pipe(Effect.provide(Queue.layer))
+    }).pipe(provideLayer(Queue.layer))
   })
 
   it.live("batch arrays are accepted on add", () => {
@@ -81,7 +82,7 @@ describe("QueueResource.make — processing", () => {
       yield* queue.add([10, 11, 12])
       yield* waitUntilProcessed(queue, 3)
       expect(yield* queue.getCompleted()).toBe(3)
-    }).pipe(Effect.provide(Queue.layer))
+    }).pipe(provideLayer(Queue.layer))
   })
 
   it.live("getCompleted increments for each finished item", () => {
@@ -98,7 +99,7 @@ describe("QueueResource.make — processing", () => {
       }
       yield* waitUntilProcessed(queue, 7)
       expect(yield* queue.getCompleted()).toBe(7)
-    }).pipe(Effect.provide(Queue.layer))
+    }).pipe(provideLayer(Queue.layer))
   })
 
   it.live("batch arrays work for next and deffered", () => {
@@ -114,7 +115,7 @@ describe("QueueResource.make — processing", () => {
       yield* queue.deffered([3])
       yield* waitUntilProcessed(queue, 3)
       expect(yield* queue.getCompleted()).toBe(3)
-    }).pipe(Effect.provide(Queue.layer))
+    }).pipe(provideLayer(Queue.layer))
   })
 
   it.live("restart resets completed count when queues are already empty", () => {
@@ -135,7 +136,7 @@ describe("QueueResource.make — processing", () => {
       yield* queue.restart()
       expect(yield* queue.getCompleted()).toBe(0)
       expect(yield* queue.isEmpty()).toBe(true)
-    }).pipe(Effect.provide(Queue.layer))
+    }).pipe(provideLayer(Queue.layer))
   })
 
   it.live("item effect service requirements flow into the queue layer", () => {
@@ -157,7 +158,7 @@ describe("QueueResource.make — processing", () => {
       const queue = yield* Queue
       yield* queue.add(1)
       yield* waitUntilProcessed(queue, 1)
-    }).pipe(Effect.provide(Layer.provide(Queue.layer, ItemDepsLive)))
+    }).pipe(provideLayer(Layer.provide(Queue.layer, ItemDepsLive)))
   })
 })
 
@@ -172,6 +173,7 @@ describe("QueueResource.make — worker lifecycle", () => {
 
     return Effect.gen(function* () {
       const acquiredInChild = Effect.gen(function* () {
+        yield* Effect.void
         return yield* Queue
       })
 
@@ -183,7 +185,7 @@ describe("QueueResource.make — worker lifecycle", () => {
         Effect.timeout(Duration.seconds(1)),
       )
       expect(yield* queue.getCompleted()).toBe(1)
-    }).pipe(Effect.provide(Queue.layer))
+    }).pipe(provideLayer(Queue.layer))
   })
 })
 
@@ -207,7 +209,7 @@ describe("QueueResource.make — priority", () => {
         yield* queue.resume()
         yield* waitUntilProcessed(queue, 3)
         expect(yield* Ref.get(orderRef)).toEqual(["high", "mid", "low"])
-      }).pipe(Effect.provide(Queue.layer))
+      }).pipe(provideLayer(Queue.layer))
     })
   )
 })
@@ -241,7 +243,7 @@ describe("QueueResource.make — concurrency", () => {
         const p = yield* Ref.get(peak)
         expect(p).toBeLessThanOrEqual(3)
         expect(p).toBeGreaterThanOrEqual(1)
-      }).pipe(Effect.provide(Queue.layer))
+      }).pipe(provideLayer(Queue.layer))
     })
   )
 })
@@ -279,7 +281,7 @@ describe("QueueResource.make — size helpers", () => {
         yield* Ref.set(gate, true)
         yield* waitUntilProcessed(queue, 3)
         expect(yield* queue.isEmpty()).toBe(true)
-      }).pipe(Effect.provide(Queue.layer))
+      }).pipe(provideLayer(Queue.layer))
     })
   )
 })
@@ -294,10 +296,7 @@ describe("QueueResource.make — forkWith", () => {
         concurrency: 1,
         throttle: fastThrottle,
         forkWith: (forked, _item, _queue) =>
-          forked.pipe(
-            Effect.flatMap((v) => Ref.update(seen, (xs) => [...xs, v])),
-            Effect.catch(() => Effect.void)
-          ),
+          forked.pipe(Effect.flatMap((v) => Ref.update(seen, (xs) => [...xs, v]))),
       })
       yield* Effect.gen(function* () {
         const queue = yield* Queue
@@ -305,7 +304,7 @@ describe("QueueResource.make — forkWith", () => {
         yield* waitUntilProcessed(queue, 1)
         yield* Effect.sleep(Duration.millis(20))
         expect(yield* Ref.get(seen)).toEqual([10])
-      }).pipe(Effect.provide(Queue.layer))
+      }).pipe(provideLayer(Queue.layer))
     })
   )
 
@@ -326,7 +325,7 @@ describe("QueueResource.make — forkWith", () => {
         yield* queue.add(1)
         yield* waitUntilProcessed(queue, 2)
         expect(yield* queue.getCompleted()).toBe(2)
-      }).pipe(Effect.provide(Queue.layer))
+      }).pipe(provideLayer(Queue.layer))
     })
   )
 })
@@ -352,7 +351,7 @@ describe("QueueResource.make — cache", () => {
         yield* queue.add([2, 3])
         yield* waitUntilProcessed(queue, 3)
         expect(yield* Ref.get(calls)).toBe(3)
-      }).pipe(Effect.provide(Queue.layer))
+      }).pipe(provideLayer(Queue.layer))
     })
   )
 })
@@ -383,7 +382,7 @@ describe("QueueResource.make — refill", () => {
         yield* waitUntilProcessed(queue, 1)
         expect(yield* Ref.get(refills)).toBe(1)
         expect(yield* queue.getCompleted()).toBe(1)
-      }).pipe(Effect.provide(Queue.layer))
+      }).pipe(provideLayer(Queue.layer))
     })
   )
 
@@ -410,7 +409,7 @@ describe("QueueResource.make — refill", () => {
         yield* waitUntilProcessed(queue, 2)
         expect(yield* Ref.get(refills)).toBe(1)
         expect(yield* queue.getCompleted()).toBe(2)
-      }).pipe(Effect.provide(Queue.layer))
+      }).pipe(provideLayer(Queue.layer))
     })
   )
 })
@@ -453,7 +452,7 @@ describe("QueueResource.make — service dependencies (RItem, RFork, cache, refi
         expect(xs.length).toBe(10)
         expect(new Set(xs.map((s) => s.startsWith("item:"))).size).toBe(1)
         expect(yield* q.getCompleted()).toBe(10)
-      }).pipe(Effect.provide(Layer.provide(Queue.layer, ItemLayer)))
+      }).pipe(provideLayer(Layer.provide(Queue.layer, ItemLayer)))
     })
   )
 
@@ -478,7 +477,7 @@ describe("QueueResource.make — service dependencies (RItem, RFork, cache, refi
         yield* waitUntilProcessed(q, 1)
         yield* Effect.sleep(Duration.millis(50))
         expect(yield* Ref.get(log)).toEqual(["fork:10"])
-      }).pipe(Effect.provide(Layer.provide(Queue.layer, ForkLayer)))
+      }).pipe(provideLayer(Layer.provide(Queue.layer, ForkLayer)))
     })
   )
 
@@ -509,7 +508,7 @@ describe("QueueResource.make — service dependencies (RItem, RFork, cache, refi
         // forkWith runs in a child fiber; give it time to update `out`
         yield* Effect.sleep(Duration.millis(50))
         expect(yield* Ref.get(out)).toEqual(["fork:fork:proc:item:7"])
-      }).pipe(Effect.provide(Layer.provide(Queue.layer, deps)))
+      }).pipe(provideLayer(Layer.provide(Queue.layer, deps)))
     })
   )
 
@@ -553,7 +552,7 @@ describe("QueueResource.make — service dependencies (RItem, RFork, cache, refi
           expect(rights.length).toBe(1)
           expect(lefts[0]!.e).toBe("boom")
           expect(rights[0]!.n).toBe(3)
-        }).pipe(Effect.provide(forkLayer))
+        }).pipe(provideLayer(forkLayer))
     })
   )
 
@@ -595,7 +594,7 @@ describe("QueueResource.make — service dependencies (RItem, RFork, cache, refi
           "fork+fork+ok:5",
         ])
         expect(fs.filter((f) => f.includes("fail")).length).toBe(1)
-      }).pipe(Effect.provide(forkLayer))
+      }).pipe(provideLayer(forkLayer))
     })
   )
 
@@ -632,7 +631,7 @@ describe("QueueResource.make — service dependencies (RItem, RFork, cache, refi
             .sort(),
         ).toEqual(["cache:n1", "cache:n3"].slice().sort())
       }).pipe(
-        Effect.provide(Queue.layer.pipe(Layer.provideMerge(CacheLayer))),
+        provideLayer(Queue.layer.pipe(Layer.provideMerge(CacheLayer))),
       )
     })
   )
@@ -667,7 +666,7 @@ describe("QueueResource.make — service dependencies (RItem, RFork, cache, refi
         const q = yield* Queue
         yield* waitUntilProcessed(q, 1)
         expect(yield* Ref.get(log)).toEqual(["from=refill"])
-      }).pipe(Effect.provide(Layer.provide(Queue.layer, RefillLayer)))
+      }).pipe(provideLayer(Layer.provide(Queue.layer, RefillLayer)))
     })
   )
 
@@ -709,7 +708,7 @@ describe("QueueResource.make — service dependencies (RItem, RFork, cache, refi
         expect(yield* Ref.get(cacheLog)).toEqual(["cache*1"])
         expect(yield* Ref.get(itemLog)).toEqual(["item@9"])
       }).pipe(
-        Effect.provide(
+        provideLayer(
           Queue.layer.pipe(
             Layer.provideMerge(Layer.mergeAll(ItemLayer, CacheLayer)),
           ),
@@ -787,7 +786,7 @@ describe("QueueResource.make — service dependencies (RItem, RFork, cache, refi
           t2.find((l) => l === "fork=fork:item:1") !== undefined
         )
       }).pipe(
-        Effect.provide(
+        provideLayer(
           Layer.provide(
             Queue.layer,
             Layer.mergeAll(

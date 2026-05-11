@@ -7,7 +7,7 @@
  * @module ProcessStore/Prisma/Codec
  */
 
-import { Data } from "effect";
+import { Data, DateTime, Option } from "effect";
 import type {
   AnalyticsEvent,
   ProcessExecutionCompletedEvent,
@@ -81,8 +81,11 @@ const parseDate = (value: unknown): Date | null => {
     return Number.isNaN(value.getTime()) ? null : value;
   }
   if (isString(value)) {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
+    const parsed = DateTime.make(value);
+    return Option.match(parsed, {
+      onNone: () => null,
+      onSome: (dateTime) => DateTime.toDateUtc(dateTime),
+    });
   }
   return null;
 };

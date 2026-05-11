@@ -24,9 +24,9 @@
  * @module cli
  */
 
-import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Console, Effect, Option } from "effect";
+import { Console, Data, DateTime, Effect, Option } from "effect";
 import { Argument, Command } from "effect/unstable/cli";
+import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import Table from "cli-table3";
 import prettyMs from "pretty-ms";
 import type { ProcessGroupDetails, QueueDetails, ControlResponse } from "./index";
@@ -71,6 +71,10 @@ const decodeControlResponse = (value: unknown): ControlResponse<unknown> =>
     ? value
     : { success: false, error: "Malformed control-service response" };
 
+class CliRequestError extends Data.TaggedError("CliRequestError")<{
+  readonly reason: string;
+}> {}
+
 const decodeLsData = (
   value: unknown,
 ): { processes?: ProcessGroupDetails[]; queues?: QueueDetails[] } | undefined => {
@@ -95,24 +99,21 @@ const decodeLsData = (
  * @internal
  */
 const postCommand = (controlUrl: string) => (command: ControlCommand, name?: string) =>
-  Effect.tryPromise({
-    try: async () => {
-      const res = await fetch(controlUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command, name }),
-      });
-      const json: unknown = await res.json();
-      return { status: res.status, json: decodeControlResponse(json) };
-    },
-    catch: (e) => new Error(e instanceof Error ? e.message : String(e)),
-  }).pipe(
-    Effect.flatMap(({ status, json }) =>
-      status >= 200 && status < 300
-        ? Effect.succeed(json)
-        : Effect.fail(new Error(json?.error ?? `HTTP ${status}`))
-    )
-  );
+  Effect.gen(function* () {
+    const request = yield* HttpClientRequest.bodyJson(
+      HttpClientRequest.post(controlUrl),
+      { command, name },
+    );
+    const response = yield* HttpClient.execute(request);
+    const json = yield* response.json;
+    const decoded = decodeControlResponse(json);
+    if (response.status >= 200 && response.status < 300) {
+      return decoded;
+    }
+    return yield* new CliRequestError({
+      reason: decoded.error ?? `HTTP ${response.status}`,
+    });
+  });
 
 // ============================================================================
 // Formatting Helpers
@@ -123,9 +124,15 @@ const postCommand = (controlUrl: string) => (command: ControlCommand, name?: str
  * @internal
  */
 const formatLastRun = (lastRun: Date | string | null | undefined): string => {
-  if (!lastRun) return "-";
-  const lastRunDate = typeof lastRun === 'string' ? new Date(lastRun) : lastRun;
-  const now = Date.now();
+  if (lastRun === null || lastRun === undefined) return "-";
+  const lastRunDate = typeof lastRun === "string"
+    ? Option.match(DateTime.make(lastRun), {
+      onNone: () => undefined,
+      onSome: (dateTime) => DateTime.toDateUtc(dateTime),
+    })
+    : lastRun;
+  if (lastRunDate === undefined) return "-";
+  const now = DateTime.toEpochMillis(DateTime.nowUnsafe());
   const timeSince = now - lastRunDate.getTime();
   return prettyMs(timeSince, { compact: true }) + " ago";
 };
@@ -135,9 +142,15 @@ const formatLastRun = (lastRun: Date | string | null | undefined): string => {
  * @internal
  */
 const formatNextRun = (nextRun: Date | string | null | undefined): string => {
-  if (!nextRun) return "-";
-  const nextRunDate = typeof nextRun === 'string' ? new Date(nextRun) : nextRun;
-  const now = Date.now();
+  if (nextRun === null || nextRun === undefined) return "-";
+  const nextRunDate = typeof nextRun === "string"
+    ? Option.match(DateTime.make(nextRun), {
+      onNone: () => undefined,
+      onSome: (dateTime) => DateTime.toDateUtc(dateTime),
+    })
+    : nextRun;
+  if (nextRunDate === undefined) return "-";
+  const now = DateTime.toEpochMillis(DateTime.nowUnsafe());
   const timeUntil = nextRunDate.getTime() - now;
   
   // If more than 24 hours away, include the date
@@ -153,7 +166,7 @@ const formatNextRun = (nextRun: Date | string | null | undefined): string => {
  * @internal
  */
 const formatProcesses = (processes: ProcessGroupDetails[]) => {
-  if (!processes || processes.length === 0) return "No processes";
+  if (processes.length === 0) return "No processes";
   
   const table = new Table({
     head: ["NAME", "TYPE", "STATUS", "UPTIME", "LAST RUN", "NEXT RUN", "EXECUTIONS"],
@@ -165,7 +178,7 @@ const formatProcesses = (processes: ProcessGroupDetails[]) => {
       p.name,
       p.type,
       p.status,
-      p.uptime ? prettyMs(p.uptime, { compact: true }) : "-",
+      p.uptime > 0 ? prettyMs(p.uptime, { compact: true }) : "-",
       formatLastRun(p.lastRun),
       formatNextRun(p.nextRun),
       p.executions !== undefined ? String(p.executions) : "-"
@@ -180,7 +193,7 @@ const formatProcesses = (processes: ProcessGroupDetails[]) => {
  * @internal
  */
 const formatQueues = (queues: QueueDetails[]) => {
-  if (!queues || queues.length === 0) return "No queues";
+  if (queues.length === 0) return "No queues";
   
   const table = new Table({
     head: ["NAME", "SIZE (H/N/L)", "TOTAL", "COMPLETED"],
@@ -210,21 +223,21 @@ const formatStatus = (data: ControlResponse<unknown>) => {
   
   if (data.type === "process") {
     if (!isProcessGroupDetails(data.data)) {
-      return JSON.stringify(data, null, 2);
+      return data.error ?? "Invalid process status payload";
     }
     const processData = data.data;
     table.push(
       ["Name", processData.name],
       ["Type", processData.type],
       ["Status", processData.status],
-      ["Uptime", processData.uptime ? prettyMs(processData.uptime, { compact: true }) : "-"],
+      ["Uptime", processData.uptime > 0 ? prettyMs(processData.uptime, { compact: true }) : "-"],
       ["Last Run", formatLastRun(processData.lastRun)],
       ["Next Run", formatNextRun(processData.nextRun)],
       ["Executions", processData.executions !== undefined ? String(processData.executions) : "-"]
     );
   } else if (data.type === "queue") {
     if (!isQueueDetails(data.data)) {
-      return JSON.stringify(data, null, 2);
+      return data.error ?? "Invalid queue status payload";
     }
     const queueData = data.data;
     table.push(
@@ -236,7 +249,7 @@ const formatStatus = (data: ControlResponse<unknown>) => {
       ["Completed", String(queueData.completed)]
     );
   } else {
-    return JSON.stringify(data, null, 2);
+    return data.error ?? "Unsupported status response";
   }
   
   return table.toString();
@@ -261,12 +274,12 @@ const makeCommands = (controlUrl: string) => {
         const output: string[] = [];
         const data = decodeLsData(body.data);
         
-        if (data?.processes) {
+        if (data?.processes !== undefined) {
           output.push("📋 PROCESSES");
           output.push(formatProcesses(data.processes));
         }
         
-        if (data?.queues) {
+        if (data?.queues !== undefined) {
           if (output.length > 0) output.push("");
           output.push("🔄 QUEUES");
           output.push(formatQueues(data.queues));
@@ -295,7 +308,7 @@ const makeCommands = (controlUrl: string) => {
         Effect.flatMap((body) => 
           body.success 
             ? Console.log(`✅ ${cmd} completed successfully`)
-            : Console.error(`❌ ${body.error || "Command failed"}`)
+            : Console.error(`❌ ${body.error ?? "Command failed"}`)
         )
       )
     );
@@ -315,7 +328,7 @@ const makeCommands = (controlUrl: string) => {
           Effect.flatMap((body) => 
             body.success 
               ? Console.log(`✅ Queue '${n}' shutdown successfully`)
-              : Console.error(`❌ ${body.error || "Shutdown failed"}`)
+              : Console.error(`❌ ${body.error ?? "Shutdown failed"}`)
           )
         ),
     })
@@ -330,7 +343,7 @@ const makeCommands = (controlUrl: string) => {
           Effect.flatMap((body) => 
             body.success 
               ? Console.log(`✅ Process '${n}' executed immediately`)
-              : Console.error(`❌ ${body.error || "Execution failed"}`)
+              : Console.error(`❌ ${body.error ?? "Execution failed"}`)
           )
         ),
     })
@@ -343,7 +356,7 @@ const makeCommands = (controlUrl: string) => {
         const queuesData = Array.isArray(body.data)
           ? body.data.filter(isQueueDetails)
           : undefined;
-        if (queuesData) {
+        if (queuesData !== undefined && queuesData.length > 0) {
           return Console.log("🔄 QUEUES\n" + formatQueues(queuesData));
         }
         return Console.log("No queues");
@@ -460,10 +473,6 @@ export const runCli = (
   argv: string[] = process.argv
 ) => {
   const cli = createCli(config);
-  
-  Effect.suspend(() => cli(argv)).pipe(
-    Effect.provide(NodeServices.layer),
-    NodeRuntime.runMain
-  );
+  return Effect.suspend(() => cli(argv));
 };
 

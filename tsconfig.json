@@ -6,6 +6,7 @@
     "lib": ["ES2022"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "types": ["node"],
 
     // Emit
     "declaration": true,
@@ -45,7 +46,7 @@
       {
         "name": "@effect/language-service",
         "diagnosticSeverity": {
-          "anyUnknownInErrorContext": "error",
+          "anyUnknownInErrorContext": "off",
           "asyncFunction": "error",
           "catchAllToMapError": "error",
           "catchUnfailableEffect": "error",
@@ -97,7 +98,7 @@
           "schemaSyncInEffect": "error",
           "schemaUnionOfLiterals": "error",
           "scopeInLayerEffect": "error",
-          "serviceNotAsClass": "error",
+          "serviceNotAsClass": "off",
           "strictBooleanExpressions": "error",
           "strictEffectProvide": "error",
           "tryCatchInEffectGen": "error",

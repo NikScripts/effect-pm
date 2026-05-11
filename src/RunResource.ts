@@ -17,7 +17,7 @@
  * @module RunResource
  */
 
-import { Context, Duration, Effect, Layer, Ref, Semaphore } from "effect";
+import { Clock, Context, Duration, Effect, Layer, Ref, Semaphore } from "effect";
 
 /**
  * Global throttler: minimum wall-clock gap between *starts* of wrapped effects.
@@ -31,7 +31,7 @@ const makeGlobalThrottler = (minInterval: Duration.Duration) =>
 
     return <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
       Effect.gen(function* () {
-        const now = Date.now();
+        const now = yield* Clock.currentTimeMillis;
         const lastStart = yield* Ref.get(lastStartTime);
         const timeSinceLastStart = now - lastStart;
         const minIntervalMs = Duration.toMillis(minInterval);
@@ -41,7 +41,8 @@ const makeGlobalThrottler = (minInterval: Duration.Duration) =>
           yield* Effect.sleep(Duration.millis(waitTime));
         }
 
-        yield* Ref.set(lastStartTime, Date.now());
+        const startedAt = yield* Clock.currentTimeMillis;
+        yield* Ref.set(lastStartTime, startedAt);
         return yield* effect;
       });
   });
@@ -166,7 +167,7 @@ export const makeRunResourceWrap = (
             : <A, E, R>(e: Effect.Effect<A, E, R>) => e;
 
         return <A, E, R>(inner: Effect.Effect<A, E, R>) =>
-          exec.withPermits(1)(throttleStep(inner));
+          throttleStep(inner).pipe(exec.withPermits(1));
       });
 
 const isEffectFactory = <A, E, R, T>(
@@ -175,7 +176,7 @@ const isEffectFactory = <A, E, R, T>(
   typeof effect === "function";
 
 function makeRunResourceGate<A, E, R, const Name extends string>(
-  config: RunResourceConfigUnit<A, E, R> & { readonly name: Name }
+  config: RunResourceConfigUnit<A, E, R> & { readonly name: Name },
 ): Context.Service<
   RunResourceUnit<A, E, R> & { _brand: Name },
   RunResourceUnit<A, E, R>
@@ -188,7 +189,7 @@ function makeRunResourceGate<A, E, R, const Name extends string>(
 };
 
 function makeRunResourceGate<T, A, E, R, const Name extends string>(
-  config: RunResourceConfigWithArg<T, A, E, R> & { readonly name: Name }
+  config: RunResourceConfigWithArg<T, A, E, R> & { readonly name: Name },
 ): Context.Service<
   RunResourceApply<T, A, E, R> & { _brand: Name },
   RunResourceApply<T, A, E, R>
@@ -209,28 +210,8 @@ function makeRunResourceGate<
 >(
   config:
     | (RunResourceConfigUnit<A, E, R> & { readonly name: Name })
-    | (RunResourceConfigWithArg<T, A, E, R> & { readonly name: Name })
-):
-  | (Context.Service<
-      RunResourceUnit<A, E, R> & { _brand: Name },
-      RunResourceUnit<A, E, R>
-    > & {
-      readonly layer: Layer.Layer<
-        RunResourceUnit<A, E, R> & { _brand: Name },
-        never,
-        never
-      >;
-    })
-  | (Context.Service<
-      RunResourceApply<T, A, E, R> & { _brand: Name },
-      RunResourceApply<T, A, E, R>
-    > & {
-      readonly layer: Layer.Layer<
-        RunResourceApply<T, A, E, R> & { _brand: Name },
-        never,
-        never
-      >;
-    }) {
+    | (RunResourceConfigWithArg<T, A, E, R> & { readonly name: Name }),
+) {
   const { name, effect, limits } = config;
 
   if (!isEffectFactory(effect)) {

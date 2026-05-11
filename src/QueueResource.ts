@@ -20,6 +20,7 @@
 
 import {
   Cause,
+  Clock,
   Context,
   Duration,
   Effect,
@@ -74,7 +75,7 @@ const makeGlobalThrottler = (minInterval: Duration.Duration) =>
     return <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
       Effect.gen(function* () {
         // Enforce minimum interval globally
-        const now = Date.now();
+        const now = yield* Clock.currentTimeMillis;
         const lastStart = yield* Ref.get(lastStartTime);
         const timeSinceLastStart = now - lastStart;
         const minIntervalMs = Duration.toMillis(minInterval);
@@ -85,7 +86,8 @@ const makeGlobalThrottler = (minInterval: Duration.Duration) =>
         }
         
         // Update last start time before starting the effect
-        yield* Ref.set(lastStartTime, Date.now());
+        const startedAt = yield* Clock.currentTimeMillis;
+        yield* Ref.set(lastStartTime, startedAt);
         
         // Execute the wrapped effect
         return yield* effect;
@@ -541,7 +543,7 @@ const makeQueueResourceEffect = <T, R, E, RFork = never, RItem = never, Name ext
         next: (item: T | readonly T[]) =>
           Effect.gen(function* () {
             // Start caching in background (non-blocking)
-            if (cacheFunction) {
+            if (cacheFunction !== undefined) {
               yield* Effect.forkChild(
                 cacheFunction(item, queue).pipe(
                   Effect.catch(() => Effect.void) // Don't fail on cache errors
@@ -560,7 +562,7 @@ const makeQueueResourceEffect = <T, R, E, RFork = never, RItem = never, Name ext
         add: (item: T | readonly T[]) =>
           Effect.gen(function* () {
             // Start caching in background (non-blocking)
-            if (cacheFunction) {
+            if (cacheFunction !== undefined) {
               yield* Effect.forkChild(
                 cacheFunction(item, queue).pipe(
                   Effect.catch(() => Effect.void) // Don't fail on cache errors
@@ -579,7 +581,7 @@ const makeQueueResourceEffect = <T, R, E, RFork = never, RItem = never, Name ext
         deffered: (item: T | readonly T[]) =>
           Effect.gen(function* () {
             // Start caching in background (non-blocking)
-            if (cacheFunction) {
+            if (cacheFunction !== undefined) {
               yield* Effect.forkChild(
                 cacheFunction(item, queue).pipe(
                   Effect.catch(() => Effect.void) // Don't fail on cache errors
@@ -668,43 +670,38 @@ const makeQueueResourceEffect = <T, R, E, RFork = never, RItem = never, Name ext
        * `forked` mirrors success/failure without failing the worker.
        */
       const processItem = (item: T) =>
-        sem.withPermits(1)(
-          throttler(
-            Effect.gen(function* () {
-              yield* Effect.logDebug(
-                `Processing item: ${JSON.stringify(item)}`
-              );
+        throttler(
+          Effect.gen(function* () {
+            yield* Effect.logDebug(`Processing item: ${String(item)}`);
 
-              const exit = yield* Effect.exit(processor(item));
+            const exit = yield* Effect.exit(processor(item));
 
-              const forked = Exit.isSuccess(exit)
-                ? Effect.succeed(exit.value)
-                : Effect.failCause(exit.cause);
+            const forked = Exit.isSuccess(exit)
+              ? Effect.succeed(exit.value)
+              : Effect.failCause(exit.cause);
 
-              yield* Ref.update(processedCount, (n) => n + 1);
+            yield* Ref.update(processedCount, (n) => n + 1);
 
-              if (forkWith) {
-                const fiber = yield* Effect.forkChild(
-                  forkWith(forked, item, queue).pipe(
-                    Effect.catch(() => Effect.void),
-                    Effect.ensuring(
-                      Ref.update(forkedFibers, (fibers) => {
-                        const next = new Set(fibers);
-                        next.delete(fiber);
-                        return next;
-                      })
-                    )
+            if (forkWith !== undefined) {
+              const fiber = yield* Effect.forkChild(
+                forkWith(forked, item, queue).pipe(
+                  Effect.ensuring(
+                    Ref.update(forkedFibers, (fibers) => {
+                      const next = new Set(fibers);
+                      next.delete(fiber);
+                      return next;
+                    })
                   )
-                );
-                yield* Ref.update(forkedFibers, (fibers) =>
-                  new Set(fibers).add(fiber)
-                );
-              }
+                )
+              );
+              yield* Ref.update(forkedFibers, (fibers) =>
+                new Set(fibers).add(fiber)
+              );
+            }
 
-              yield* Effect.logDebug(`Completed item: ${JSON.stringify(item)}`);
-            })
-          )
-        );
+            yield* Effect.logDebug(`Completed item: ${String(item)}`);
+          })
+        ).pipe(sem.withPermits(1));
 
       // Event-driven worker that blocks until items available
       const createWorker = () =>
@@ -716,20 +713,20 @@ const makeQueueResourceEffect = <T, R, E, RFork = never, RItem = never, Name ext
             `Worker started (total: ${currentWorkers + 1})`
           );
 
-          yield* Effect.forever(
+          return yield* Effect.forever(
             Effect.gen(function* () {
               const running = yield* Ref.get(isRunning);
               const paused = yield* Ref.get(isPaused);
 
-              if (!running) {
+              if (running === false) {
                 yield* Effect.logDebug("Worker stopped - isRunning is false");
-                return;
+                return yield* Effect.void;
               }
 
-              if (paused) {
+              if (paused === true) {
                 yield* Effect.logDebug("Worker paused - waiting for resume");
                 yield* Effect.sleep(Duration.millis(500)); // Wait a bit before checking again
-                return;
+                return yield* Effect.void;
               }
 
               yield* Effect.logDebug("Worker waiting for item...");
@@ -784,7 +781,7 @@ const makeQueueResourceEffect = <T, R, E, RFork = never, RItem = never, Name ext
 
           const rebuilding = yield* Ref.get(isRebuilding);
 
-          if (refillFunction && !rebuilding) {
+          if (refillFunction !== undefined && rebuilding === false) {
             // Start refill
             yield* Ref.set(isRebuilding, true);
             yield* Effect.logInfo("🔄 Refilling queue from database...");
@@ -988,15 +985,13 @@ export const QueueResource = {
   make: <T, R, E, RFork = never, RItem = never, const Name extends string = string>(
     config: QueueResourceConfig<T, R, E, RFork, RItem, Name>
   ) => {
-    const service = Context.Service<QueueRef<Name, T, R, E>, QueueRef<Name, T, R, E>>(
-      config.name,
-    );
+    const QueueResourceTag = Context.Service<QueueRef<Name, T, R, E>>(config.name);
 
     const layer = Layer.effect(
-      service,
+      QueueResourceTag,
       makeQueueResourceEffect<T, R, E, RFork, RItem, Name>(config),
     );
 
-    return Object.assign(service, { layer });
+    return Object.assign(QueueResourceTag, { layer });
   },
 };

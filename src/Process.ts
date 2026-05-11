@@ -16,12 +16,17 @@
  * @module Process
  */
 
-import { Clock, Context, Duration, Effect, Fiber, Layer, MutableRef, Option } from "effect";
+import { Clock, Context, DateTime, Duration, Effect, Fiber, Layer, MutableRef, Option } from "effect";
 import { ProcessStore } from "./ProcessStore";
 import { Polling } from "./Polling";
 import { ProcessSchedule } from "./ProcessSchedule";
-import type { PollingService } from "./Polling";
-import type { ProcessScheduleEntry, ProcessScheduleService } from "./ProcessSchedule";
+import type { PollingTag } from "./Polling";
+import type {
+  ProcessScheduleEntry,
+  ProcessScheduleService,
+  ProcessScheduleTag,
+} from "./ProcessSchedule";
+import { provideLayer } from "./provideLayer.js";
 
 // ============================================================================
 // Public types
@@ -109,13 +114,15 @@ export interface ProcessScheduleContext {
   readonly id: Option.Option<string>;
 }
 
-const ProcessScheduleContextTag = Context.Service<ProcessScheduleContext>(
-  "@effect-pm/ProcessScheduleContext",
-);
+class ProcessScheduleContextTag extends Context.Service<
+  ProcessScheduleContextTag,
+  ProcessScheduleContext
+>()("@nikscripts/effect-pm/Process/ProcessScheduleContextTag") {}
 
-const ProcessScheduleControlsTag = Context.Service<ProcessScheduleControls>(
-  "@effect-pm/ProcessScheduleControls",
-);
+class ProcessScheduleControlsTag extends Context.Service<
+  ProcessScheduleControlsTag,
+  ProcessScheduleControls
+>()("@nikscripts/effect-pm/Process/ProcessScheduleControlsTag") {}
 
 /**
  * Identifier attached to the schedule entry that started the current run.
@@ -165,8 +172,8 @@ export const scheduleControls: Effect.Effect<ProcessScheduleControls, never, nev
 // Internal
 // ============================================================================
 
-type AnyPollingLayer = Layer.Layer<PollingService, never, never>;
-type AnyScheduleLayer = Layer.Layer<ProcessScheduleService, never, never>;
+type AnyPollingLayer = Layer.Layer<PollingTag, never, never>;
+type AnyScheduleLayer = Layer.Layer<ProcessScheduleTag, never, never>;
 
 interface ProcessMirror {
   readonly armed: MutableRef.MutableRef<boolean>;
@@ -241,27 +248,38 @@ const writeScheduleMirror = (
   MutableRef.set(mirror.nextPollCadence, nextPollCadence);
 };
 
+const provideWithLayer = <A, E, RIn, ROut>(
+  step: Effect.Effect<A, E, RIn>,
+  layer: Layer.Layer<ROut, E, never>,
+): Effect.Effect<A, E, Exclude<RIn, ROut>> =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const context = yield* Layer.build(layer);
+      return yield* step.pipe(provideLayer(context));
+    }),
+  );
+
 function provideStepLayers<R>(
   step: Effect.Effect<void, never, R>,
   state: Pick<
     ProcessBuildStateWithPollingAndSchedule<never, never>,
     "pollingLayer" | "scheduleLayer"
   >,
-): Effect.Effect<void, never, Exclude<Exclude<R, PollingService>, ProcessScheduleService>>;
+): Effect.Effect<void, never, Exclude<Exclude<R, PollingTag>, ProcessScheduleTag>>;
 function provideStepLayers<R>(
   step: Effect.Effect<void, never, R>,
   state: Pick<
     ProcessBuildStateWithPolling<never, never>,
     "pollingLayer" | "scheduleLayer"
   >,
-): Effect.Effect<void, never, Exclude<R, PollingService>>;
+): Effect.Effect<void, never, Exclude<R, PollingTag>>;
 function provideStepLayers<R>(
   step: Effect.Effect<void, never, R>,
   state: Pick<
     ProcessBuildStateWithSchedule<never, never>,
     "pollingLayer" | "scheduleLayer"
   >,
-): Effect.Effect<void, never, Exclude<R, ProcessScheduleService>>;
+): Effect.Effect<void, never, Exclude<R, ProcessScheduleTag>>;
 function provideStepLayers<R>(
   step: Effect.Effect<void, never, R>,
   state: Pick<
@@ -275,13 +293,13 @@ function provideStepLayers<R>(
 ) {
   const { pollingLayer, scheduleLayer } = state;
   if (pollingLayer !== undefined && scheduleLayer !== undefined) {
-    return step.pipe(Effect.provide(Layer.mergeAll(pollingLayer, scheduleLayer)));
+    return provideWithLayer(step, Layer.mergeAll(pollingLayer, scheduleLayer));
   }
   if (pollingLayer !== undefined) {
-    return step.pipe(Effect.provide(pollingLayer));
+    return provideWithLayer(step, pollingLayer);
   }
   if (scheduleLayer !== undefined) {
-    return step.pipe(Effect.provide(scheduleLayer));
+    return provideWithLayer(step, scheduleLayer);
   }
   return step;
 }
@@ -365,7 +383,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   ): Effect.Effect<void, never, RUser | ProcessStore> =>
     Effect.gen(function* () {
       const store = yield* ProcessStore;
-      const executedAt = new Date();
+      const executedAt = yield* DateTime.nowAsDate;
       const isStartupRun =
         (yield* store.getProcessExecutions(name, { limit: 1 })).length === 0;
 
@@ -379,7 +397,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
         {
           onFailure: (error) =>
             Effect.gen(function* () {
-              const completedAt = new Date();
+              const completedAt = yield* DateTime.nowAsDate;
               yield* recordExecutionEvent({
                 scheduleKey: Option.getOrNull(scheduleIdentifier),
                 startedAt: executedAt,
@@ -394,7 +412,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
             }),
           onSuccess: () =>
             Effect.gen(function* () {
-              const completedAt = new Date();
+              const completedAt = yield* DateTime.nowAsDate;
               yield* recordExecutionEvent({
                 scheduleKey: Option.getOrNull(scheduleIdentifier),
                 startedAt: executedAt,
@@ -414,9 +432,8 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     if (dates.length === 0) {
       return Option.none();
     }
-    return Option.some(
-      new Date(Math.min(...dates.map((candidate) => candidate.getTime()))),
-    );
+    const minEpochMs = Math.min(...dates.map((candidate) => candidate.getTime()));
+    return Option.some(DateTime.toDateUtc(DateTime.makeUnsafe(minEpochMs)));
   };
 
   const summarizeScheduleState = (
@@ -463,7 +480,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   ): Effect.Effect<void, never, Clock.Clock> =>
     Effect.gen(function* () {
       const nowMillis = yield* Clock.currentTimeMillis;
-      const now = new Date(nowMillis);
+      const now = DateTime.toDateUtc(DateTime.makeUnsafe(nowMillis));
       const stateSummary = summarizeScheduleState(entries, now);
       MutableRef.set(mirror.armed, stateSummary.armed);
       MutableRef.set(mirror.nextScheduleTransition, stateSummary.nextScheduleTransition);
@@ -507,7 +524,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     key: string,
     entry: ProcessScheduleEntry,
     controls: ProcessScheduleControls,
-  ): Effect.Effect<void, never, RUser | PollingService | ProcessScheduleService | ProcessStore | Clock.Clock> =>
+  ): Effect.Effect<void, never, RUser | PollingTag | ProcessScheduleTag | ProcessStore | Clock.Clock> =>
     Effect.gen(function* () {
       if (MutableRef.get(runningByEntry).has(key)) {
         return;
@@ -518,7 +535,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 
         const canContinue = Effect.gen(function* () {
           const nowMillis = yield* Clock.currentTimeMillis;
-          const now = new Date(nowMillis);
+          const now = DateTime.toDateUtc(DateTime.makeUnsafe(nowMillis));
           return Option.match(entry.stopAt, {
             onNone: () => true,
             onSome: (stopAt) => now < stopAt,
@@ -592,7 +609,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     key: string,
     entry: ProcessScheduleEntry,
     controls: ProcessScheduleControls,
-  ): Effect.Effect<void, never, RUser | PollingService | ProcessScheduleService | ProcessStore | Clock.Clock> =>
+  ): Effect.Effect<void, never, RUser | PollingTag | ProcessScheduleTag | ProcessStore | Clock.Clock> =>
     Effect.gen(function* () {
       const nowMillis = yield* Clock.currentTimeMillis;
       const delayMs = entry.startAt.getTime() - nowMillis;
@@ -626,7 +643,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const reconcileSchedules: Effect.Effect<
     void,
     never,
-    RUser | PollingService | ProcessScheduleService | ProcessStore | Clock.Clock
+    RUser | PollingTag | ProcessScheduleTag | ProcessStore | Clock.Clock
   > = Effect.gen(function* () {
     const schedule = yield* ProcessSchedule;
     const controls = toScheduleControls(schedule);
@@ -692,7 +709,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const supervisedCore: Effect.Effect<
     void,
     never,
-    RUser | PollingService | ProcessScheduleService | ProcessStore | Clock.Clock
+    RUser | PollingTag | ProcessScheduleTag | ProcessStore | Clock.Clock
   > = Effect.gen(function* () {
     const schedule = yield* ProcessSchedule;
     const controls = toScheduleControls(schedule);
@@ -712,13 +729,13 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     Effect.gen(function* () {
       const store = yield* ProcessStore;
       const allExecutions = yield* store.getProcessExecutions(name);
-      const inRange = dateRange
-        ? allExecutions.filter(
+      const inRange = dateRange === undefined
+        ? allExecutions
+        : allExecutions.filter(
             (event) =>
               event.execution.startedAt >= dateRange.start &&
               event.execution.startedAt <= dateRange.end,
-          )
-        : allExecutions;
+          );
       const lastRun = allExecutions[0]?.execution.startedAt ?? null;
       const executions = inRange.length;
       const firstStartup =

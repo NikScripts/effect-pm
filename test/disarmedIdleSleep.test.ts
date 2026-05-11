@@ -8,6 +8,7 @@ import {
   MIN_SCHEDULE_POLL_WHILE_DISARMED,
   resolveDisarmedFallbackPoll,
 } from "../src/disarmedIdleSleep";
+import { utcDateFromMillis } from "../src/utcDate.js";
 
 const expectDuration = (actual: Duration.Duration, expected: Duration.Duration) => {
   expect(Duration.equals(actual, expected)).toBe(true);
@@ -42,7 +43,7 @@ describe("resolveDisarmedFallbackPoll", () => {
 });
 
 describe("computeDisarmedIdleSleep", () => {
-  const epoch = new Date(0);
+  const epoch = utcDateFromMillis(0);
 
   it("uses fallback when there is no transition hint (ignores long fallback in hint branch)", () => {
     expectDuration(
@@ -59,35 +60,35 @@ describe("computeDisarmedIdleSleep", () => {
     {
       name: "500 ms ahead (below 1 s hint minimum)",
       now: epoch,
-      next: new Date(500),
+      next: utcDateFromMillis(500),
       fallback: Duration.seconds(99),
       want: DISARMED_HINT_SLEEP_MIN,
     },
     {
       name: "exactly 1 s ahead (on hint minimum)",
       now: epoch,
-      next: new Date(1000),
+      next: utcDateFromMillis(1000),
       fallback: Duration.seconds(99),
       want: DISARMED_HINT_SLEEP_MIN,
     },
     {
       name: "30 s ahead (between min and max)",
       now: epoch,
-      next: new Date(30_000),
+      next: utcDateFromMillis(30_000),
       fallback: Duration.seconds(99),
       want: Duration.seconds(30),
     },
     {
       name: "hint in the past",
-      now: new Date(10_000),
-      next: new Date(5000),
+      now: utcDateFromMillis(10_000),
+      next: utcDateFromMillis(5000),
       fallback: Duration.seconds(99),
       want: DISARMED_HINT_SLEEP_MIN,
     },
     {
       name: "hint equal to now",
-      now: new Date(5000),
-      next: new Date(5000),
+      now: utcDateFromMillis(5000),
+      next: utcDateFromMillis(5000),
       fallback: Duration.seconds(99),
       want: DISARMED_HINT_SLEEP_MIN,
     },
@@ -103,7 +104,7 @@ describe("computeDisarmedIdleSleep", () => {
   });
 
   it("caps deltas above the hint maximum", () => {
-    const far = new Date(epoch.getTime() + 60 * 60 * 1000);
+    const far = utcDateFromMillis(epoch.getTime() + 60 * 60 * 1000);
     expectDuration(
       computeDisarmedIdleSleep({
         now: epoch,
@@ -115,7 +116,9 @@ describe("computeDisarmedIdleSleep", () => {
   });
 
   it("uses hint maximum when delta equals cap (5 minutes)", () => {
-    const exactly = new Date(epoch.getTime() + Duration.toMillis(DISARMED_HINT_SLEEP_MAX));
+    const exactly = utcDateFromMillis(
+      epoch.getTime() + Duration.toMillis(DISARMED_HINT_SLEEP_MAX),
+    );
     expectDuration(
       computeDisarmedIdleSleep({
         now: epoch,
@@ -130,7 +133,7 @@ describe("computeDisarmedIdleSleep", () => {
     expectDuration(
       computeDisarmedIdleSleep({
         now: epoch,
-        nextScheduleTransition: Option.some(new Date(5000)),
+        nextScheduleTransition: Option.some(utcDateFromMillis(5000)),
         fallbackPoll: Duration.hours(24),
       }),
       Duration.seconds(5),

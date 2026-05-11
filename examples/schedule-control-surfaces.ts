@@ -13,6 +13,8 @@ import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process, ProcessSchedule, ProcessStore } from "../src";
 import { runNodeProgramOrExit } from "./mocks/demo-harness.mock.js";
+import { provideLayer } from "../src/provideLayer.js";
+import { utcDateFromMillis } from "../src/utcDate.js";
 
 const initializerControlsDemo = Effect.gen(function* () {
   yield* Effect.logInfo("── demo 1: initializer controls (set/add) ──");
@@ -25,17 +27,17 @@ const initializerControlsDemo = Effect.gen(function* () {
       Effect.gen(function* () {
         yield* Effect.sleep(Duration.millis(10));
         yield* set([
-          ProcessSchedule.window("init-window", new Date(0), new Date(700)),
+          ProcessSchedule.window("init-window", utcDateFromMillis(0), utcDateFromMillis(700)),
         ]);
         const existing = yield* entries;
         if (existing.length === 1) {
-          yield* add(ProcessSchedule.window("late-window", new Date(1_200), new Date(1_700)));
+          yield* add(ProcessSchedule.window("late-window", utcDateFromMillis(1_200), utcDateFromMillis(1_700)));
         }
       }),
     effect: Ref.update(ticks, (n) => n + 1),
   });
 
-  const fib = yield* Effect.forkChild(proc.effect.pipe(Effect.provide(ProcessStore.layer)));
+  const fib = yield* Effect.forkChild(proc.effect.pipe(provideLayer(ProcessStore.layer)));
   yield* TestClock.adjust(Duration.seconds(3));
   yield* Effect.yieldNow;
   yield* Fiber.interrupt(fib);
@@ -51,8 +53,8 @@ const effectControlsDemo = Effect.gen(function* () {
     polling: Polling.spaced(Duration.millis(100)),
     schedule: ({ set }) =>
       set([
-        ProcessSchedule.window("first-window", new Date(0), new Date(700)),
-        ProcessSchedule.window("second-window", new Date(1_500), new Date(2_200)),
+        ProcessSchedule.window("first-window", utcDateFromMillis(0), utcDateFromMillis(700)),
+        ProcessSchedule.window("second-window", utcDateFromMillis(1_500), utcDateFromMillis(2_200)),
       ]),
     effect: Effect.gen(function* () {
       const controls = yield* Process.scheduleControls;
@@ -70,7 +72,7 @@ const effectControlsDemo = Effect.gen(function* () {
     }),
   });
 
-  const fib = yield* Effect.forkChild(proc.effect.pipe(Effect.provide(ProcessStore.layer)));
+  const fib = yield* Effect.forkChild(proc.effect.pipe(provideLayer(ProcessStore.layer)));
   yield* TestClock.adjust(Duration.seconds(3));
   yield* Effect.yieldNow;
   yield* Fiber.interrupt(fib);
@@ -85,7 +87,7 @@ const externalControllerDemo = Effect.gen(function* () {
   yield* Effect.logInfo("── demo 3: external controller fiber (service-level controls) ──");
   const ticks = yield* Ref.make(0);
   const scheduleLayer = ProcessSchedule.inMemory([
-    ProcessSchedule.window("external-1", new Date(0), new Date(500)),
+    ProcessSchedule.window("external-1", utcDateFromMillis(0), utcDateFromMillis(500)),
   ]);
   const runtimeLayer = Layer.mergeAll(ProcessStore.layer, scheduleLayer);
 
@@ -99,11 +101,11 @@ const externalControllerDemo = Effect.gen(function* () {
     const schedule = yield* ProcessSchedule;
     yield* Effect.sleep(Duration.millis(900));
     yield* schedule.add(
-      ProcessSchedule.window("external-2", new Date(900), new Date(1_500)),
+      ProcessSchedule.window("external-2", utcDateFromMillis(900), utcDateFromMillis(1_500)),
     );
     yield* Effect.sleep(Duration.millis(700));
     yield* schedule.set([
-      ProcessSchedule.window("external-2", new Date(900), new Date(1_500)),
+      ProcessSchedule.window("external-2", utcDateFromMillis(900), utcDateFromMillis(1_500)),
     ]);
   });
 
@@ -114,7 +116,7 @@ const externalControllerDemo = Effect.gen(function* () {
     yield* Effect.yieldNow;
     yield* Fiber.interrupt(side);
     yield* Fiber.interrupt(supervised);
-  }).pipe(Effect.provide(runtimeLayer));
+  }).pipe(provideLayer(runtimeLayer));
 
   yield* Effect.logInfo(`  ticks with external schedule controller: ${yield* Ref.get(ticks)}`);
 });
@@ -130,7 +132,7 @@ const program = Effect.gen(function* () {
 
   yield* externalControllerDemo;
 }).pipe(
-  Effect.provide(TestClock.layer()),
+  provideLayer(TestClock.layer()),
   Effect.scoped,
 );
 

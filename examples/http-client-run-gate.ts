@@ -46,8 +46,9 @@ import {
   HttpClient,
   HttpClientRequest,
 } from "effect/unstable/http";
-import { Duration, Effect } from "effect";
+import { Clock, Duration, Effect } from "effect";
 import { HttpClientRunGate, RunResource } from "../src";
+import { provideLayer } from "../src/provideLayer.js";
 
 const DemoHttpRunner = RunResource.makeRunner({
   name: "examples/DemoHttpRunner",
@@ -63,7 +64,7 @@ const program = Effect.gen(function* () {
   const client = HttpClientRunGate.transformClient(base, runner);
 
   yield* Effect.log("10 parallel GETs through the run gate…");
-  const t0 = Date.now();
+  const t0 = yield* Clock.currentTimeMillis;
   yield* Effect.all(
     Array.from({ length: 10 }, (_, i) =>
       client.execute(
@@ -74,18 +75,14 @@ const program = Effect.gen(function* () {
     ),
     { concurrency: "unbounded" }
   );
-  yield* Effect.log(`All done in ${Date.now() - t0}ms`);
+  const t1 = yield* Clock.currentTimeMillis;
+  yield* Effect.log(`All done in ${t1 - t0}ms`);
 });
 
-Effect.runPromise(
+void Effect.runPromise(
   program.pipe(
-    Effect.provide(DemoHttpRunner.layer),
-    Effect.provide(FetchHttpClient.layer),
-  )
-).then(
-  () => console.log("example:http-client-run-gate finished OK"),
-  (e) => {
-    console.error(e);
-    process.exitCode = 1;
-  }
+    provideLayer(DemoHttpRunner.layer),
+    provideLayer(FetchHttpClient.layer),
+    Effect.tap(() => Effect.logInfo("example:http-client-run-gate finished OK")),
+  ),
 );

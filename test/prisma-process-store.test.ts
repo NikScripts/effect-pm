@@ -5,6 +5,7 @@ import {
   type ProcessExecutionCompletedEvent,
   type ProcessLifecycleChangedEvent,
 } from "../src";
+import { provideLayer } from "../src/provideLayer.js";
 import {
   PrismaProcessStore,
   decodeEventRow,
@@ -14,6 +15,7 @@ import {
   type EffectPmEventRow,
   type PrismaProcessStoreClient,
 } from "../src/prisma";
+import { utcDateFromIso, utcDateFromMillis } from "../src/utcDate.js";
 
 // Derive the args shape structurally from the public client interface so the
 // fake matches exactly what the adapter calls without relying on internal
@@ -37,7 +39,7 @@ const makeFakeClient = () => {
       entityId: input.entityId,
       attributes: input.attributes ?? null,
       payload: input.payload,
-      createdAt: new Date(),
+      createdAt: utcDateFromMillis(0),
     };
     rows.push(row);
     return row;
@@ -48,7 +50,7 @@ const makeFakeClient = () => {
     args: FindManyArgs | undefined,
   ): boolean => {
     const where = args?.where;
-    if (!where) return true;
+    if (where === undefined) return true;
     if (where.type !== undefined) {
       const want =
         typeof where.type === "string" ? where.type : where.type.equals;
@@ -69,26 +71,26 @@ const makeFakeClient = () => {
       if (want !== undefined && row.entityId !== want) return false;
     }
     const range = where.occurredAt;
-    if (range) {
+    if (range !== undefined) {
       const t = row.occurredAt.getTime();
-      if (range.gt && !(t > range.gt.getTime())) return false;
-      if (range.gte && !(t >= range.gte.getTime())) return false;
-      if (range.lt && !(t < range.lt.getTime())) return false;
-      if (range.lte && !(t <= range.lte.getTime())) return false;
+      if (range.gt !== undefined && !(t > range.gt.getTime())) return false;
+      if (range.gte !== undefined && !(t >= range.gte.getTime())) return false;
+      if (range.lt !== undefined && !(t < range.lt.getTime())) return false;
+      if (range.lte !== undefined && !(t <= range.lte.getTime())) return false;
     }
     return true;
   };
 
   const client: PrismaProcessStoreClient = {
     effectPmEvent: {
-      create: async (args) => insert(args.data),
-      createMany: async (args) => {
+      create: (args) => Promise.resolve(insert(args.data)),
+      createMany: (args) => {
         for (const data of args.data) {
           insert(data);
         }
-        return { count: args.data.length };
+        return Promise.resolve({ count: args.data.length });
       },
-      findMany: async (args) => {
+      findMany: (args) => {
         const out = rows.filter((row) => matches(row, args));
         const orderBy = Array.isArray(args?.orderBy)
           ? args?.orderBy[0]
@@ -103,12 +105,14 @@ const makeFakeClient = () => {
           );
         }
         if (args?.skip !== undefined) {
-          return out.slice(args.skip, args.skip + (args.take ?? out.length));
+          return Promise.resolve(
+            out.slice(args.skip, args.skip + (args.take ?? out.length)),
+          );
         }
         if (args?.take !== undefined) {
-          return out.slice(0, args.take);
+          return Promise.resolve(out.slice(0, args.take));
         }
-        return out;
+        return Promise.resolve(out);
       },
     },
   };
@@ -125,13 +129,13 @@ describe("PrismaProcessStore — codec", () => {
     const event: ProcessExecutionCompletedEvent = {
       id: "exec-1",
       type: "process.execution.completed",
-      occurredAt: new Date("2026-01-01T00:00:00.000Z"),
+      occurredAt: utcDateFromIso("2026-01-01T00:00:00.000Z"),
       entityType: "process",
       entityId: "p",
       execution: {
         scheduleKey: "live",
-        startedAt: new Date("2026-01-01T00:00:00.000Z"),
-        completedAt: new Date("2026-01-01T00:00:01.000Z"),
+        startedAt: utcDateFromIso("2026-01-01T00:00:00.000Z"),
+        completedAt: utcDateFromIso("2026-01-01T00:00:01.000Z"),
         durationMs: 1000,
         status: "completed",
         isStartupRun: true,
@@ -146,7 +150,7 @@ describe("PrismaProcessStore — codec", () => {
       entityId: created.entityId,
       attributes: created.attributes ?? null,
       payload: created.payload,
-      createdAt: new Date(),
+      createdAt: utcDateFromMillis(0),
     };
     const decoded = decodeEventRow(row);
     expect(decoded).toEqual(event);
@@ -156,7 +160,7 @@ describe("PrismaProcessStore — codec", () => {
     const event: ProcessLifecycleChangedEvent = {
       id: "lc-1",
       type: "process.lifecycle.changed",
-      occurredAt: new Date("2026-01-01T01:00:00.000Z"),
+      occurredAt: utcDateFromIso("2026-01-01T01:00:00.000Z"),
       entityType: "process",
       entityId: "p",
       lifecycle: { tag: "Errored", error: "boom" },
@@ -170,7 +174,7 @@ describe("PrismaProcessStore — codec", () => {
       entityId: created.entityId,
       attributes: created.attributes ?? null,
       payload: created.payload,
-      createdAt: new Date(),
+      createdAt: utcDateFromMillis(0),
     };
     const decoded = decodeEventRow(row);
     expect(decoded).toEqual(event);
@@ -180,12 +184,12 @@ describe("PrismaProcessStore — codec", () => {
     const row: EffectPmEventRow = {
       id: "bad-1",
       type: "process.execution.completed",
-      occurredAt: new Date(),
+      occurredAt: utcDateFromMillis(0),
       entityType: "process",
       entityId: "p",
       attributes: null,
       payload: { not: "an execution payload" },
-      createdAt: new Date(),
+      createdAt: utcDateFromMillis(0),
     };
     const decoded = decodeEventRow(row);
     expect(decoded).toBeInstanceOf(PrismaProcessStoreDecodeError);
@@ -195,12 +199,12 @@ describe("PrismaProcessStore — codec", () => {
     const row: EffectPmEventRow = {
       id: "wat",
       type: "process.unknown",
-      occurredAt: new Date(),
+      occurredAt: utcDateFromMillis(0),
       entityType: "process",
       entityId: "p",
       attributes: null,
       payload: {},
-      createdAt: new Date(),
+      createdAt: utcDateFromMillis(0),
     };
     const decoded = decodeEventRow(row);
     expect(decoded).toBeInstanceOf(PrismaProcessStoreDecodeError);
@@ -219,13 +223,13 @@ describe("PrismaProcessStore — adapter", () => {
       yield* store.append({
         id: "e1",
         type: "process.execution.completed",
-        occurredAt: new Date("2026-01-01T00:00:00.000Z"),
+        occurredAt: utcDateFromIso("2026-01-01T00:00:00.000Z"),
         entityType: "process",
         entityId: "p",
         execution: {
           scheduleKey: null,
-          startedAt: new Date("2026-01-01T00:00:00.000Z"),
-          completedAt: new Date("2026-01-01T00:00:00.500Z"),
+          startedAt: utcDateFromIso("2026-01-01T00:00:00.000Z"),
+          completedAt: utcDateFromIso("2026-01-01T00:00:00.500Z"),
           durationMs: 500,
           status: "completed",
           isStartupRun: true,
@@ -234,13 +238,13 @@ describe("PrismaProcessStore — adapter", () => {
       yield* store.append({
         id: "e2",
         type: "process.execution.completed",
-        occurredAt: new Date("2026-01-01T00:01:00.000Z"),
+        occurredAt: utcDateFromIso("2026-01-01T00:01:00.000Z"),
         entityType: "process",
         entityId: "p",
         execution: {
           scheduleKey: "live",
-          startedAt: new Date("2026-01-01T00:01:00.000Z"),
-          completedAt: new Date("2026-01-01T00:01:00.250Z"),
+          startedAt: utcDateFromIso("2026-01-01T00:01:00.000Z"),
+          completedAt: utcDateFromIso("2026-01-01T00:01:00.250Z"),
           durationMs: 250,
           status: "failed",
           error: "fail",
@@ -256,7 +260,7 @@ describe("PrismaProcessStore — adapter", () => {
       expect(all.map((row) => row.id)).toEqual(["e2", "e1"]);
 
       expect(rows.length).toBe(2);
-    }).pipe(Effect.provide(PrismaProcessStore.layer({ client })));
+    }).pipe(provideLayer(PrismaProcessStore.layer({ client })));
   });
 
   it.live("supports the layer-from-context wiring", () => {
@@ -270,7 +274,7 @@ describe("PrismaProcessStore — adapter", () => {
       yield* store.append({
         id: "lc-1",
         type: "process.lifecycle.changed",
-        occurredAt: new Date("2026-01-01T00:00:00.000Z"),
+        occurredAt: utcDateFromIso("2026-01-01T00:00:00.000Z"),
         entityType: "process",
         entityId: "p",
         lifecycle: { tag: "Started" },
@@ -278,6 +282,6 @@ describe("PrismaProcessStore — adapter", () => {
       const lifecycle = yield* store.getProcessLifecycle("p");
       expect(lifecycle.length).toBe(1);
       expect(lifecycle[0]?.lifecycle.tag).toBe("Started");
-    }).pipe(Effect.provide(layer));
+    }).pipe(provideLayer(layer));
   });
 });

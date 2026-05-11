@@ -15,6 +15,8 @@ import { Duration, Effect, Fiber, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process, ProcessSchedule, ProcessStore } from "../src";
 import { runNodeProgramOrExit } from "./mocks/demo-harness.mock.js";
+import { provideLayer } from "../src/provideLayer.js";
+import { utcDateFromMillis } from "../src/utcDate.js";
 
 const oneShotAndWindowDemo = Effect.gen(function* () {
   yield* Effect.logInfo("── demo 1: one-shot + bounded window ──");
@@ -25,14 +27,14 @@ const oneShotAndWindowDemo = Effect.gen(function* () {
     polling: Polling.spaced(Duration.millis(100)),
     schedule: ProcessSchedule.inMemory([
       // one-shot start: open-ended without stopAt
-      ProcessSchedule.at("one-shot", new Date(0)),
+      ProcessSchedule.at("one-shot", utcDateFromMillis(0)),
       // bounded window: process repeats only while window stays open
-      ProcessSchedule.window("window-a", new Date(1_000), new Date(1_600)),
+      ProcessSchedule.window("window-a", utcDateFromMillis(1_000), utcDateFromMillis(1_600)),
     ]),
     effect: Ref.update(ticks, (n) => n + 1),
   });
 
-  const fib = yield* Effect.forkChild(proc.effect.pipe(Effect.provide(ProcessStore.layer)));
+  const fib = yield* Effect.forkChild(proc.effect.pipe(provideLayer(ProcessStore.layer)));
   yield* TestClock.adjust(Duration.seconds(3));
   yield* Effect.yieldNow;
   yield* Fiber.interrupt(fib);
@@ -48,8 +50,8 @@ const defineCompositionDemo = Effect.gen(function* () {
     polling: Polling.spaced(Duration.millis(120)),
     schedule: ProcessSchedule.define(({ all, at, window }) =>
       all(
-        at("define-one-shot", new Date(0)),
-        window("define-window", new Date(900), new Date(1_500)),
+        at("define-one-shot", utcDateFromMillis(0)),
+        window("define-window", utcDateFromMillis(900), utcDateFromMillis(1_500)),
       )
     ),
     effect: Effect.gen(function* () {
@@ -61,7 +63,7 @@ const defineCompositionDemo = Effect.gen(function* () {
     }),
   });
 
-  const fib = yield* Effect.forkChild(proc.effect.pipe(Effect.provide(ProcessStore.layer)));
+  const fib = yield* Effect.forkChild(proc.effect.pipe(provideLayer(ProcessStore.layer)));
   yield* TestClock.adjust(Duration.seconds(3));
   yield* Effect.yieldNow;
   yield* Fiber.interrupt(fib);
@@ -74,7 +76,7 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo("");
   yield* defineCompositionDemo;
 }).pipe(
-  Effect.provide(TestClock.layer()),
+  provideLayer(TestClock.layer()),
   Effect.scoped,
 );
 

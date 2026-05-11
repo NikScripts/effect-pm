@@ -1,6 +1,7 @@
 import { it, describe, expect } from "@effect/vitest"
 import { Duration, Effect, Ref } from "effect"
 import { RunResource } from "../src"
+import { provideLayer } from "../src/provideLayer.js";
 
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
   Effect.gen(function* () {
@@ -24,7 +25,7 @@ describe("RunResource.makeRunner", () => {
       })
       const p = yield* Ref.get(peak)
       expect(p).toBeGreaterThan(8)
-    }).pipe(Effect.provide(Gate.layer))
+    }).pipe(provideLayer(Gate.layer))
   })
 
   it.live("limits: {} defaults concurrency to 1", () => {
@@ -42,7 +43,7 @@ describe("RunResource.makeRunner", () => {
       })
       const p = yield* Ref.get(peak)
       expect(p).toBe(1)
-    }).pipe(Effect.provide(Gate.layer))
+    }).pipe(provideLayer(Gate.layer))
   })
 
   it.live("respects limits.concurrency", () => {
@@ -61,7 +62,7 @@ describe("RunResource.makeRunner", () => {
       const p = yield* Ref.get(peak)
       expect(p).toBeLessThanOrEqual(4)
       expect(p).toBeGreaterThanOrEqual(1)
-    }).pipe(Effect.provide(Gate.layer))
+    }).pipe(provideLayer(Gate.layer))
   })
 
   it.live("throttle completes without hanging", () => {
@@ -79,7 +80,7 @@ describe("RunResource.makeRunner", () => {
         { concurrency: "unbounded" }
       )
       expect(results.length).toBe(8)
-    }).pipe(Effect.provide(Gate.layer))
+    }).pipe(provideLayer(Gate.layer))
   })
 })
 
@@ -94,7 +95,7 @@ describe("RunResource.make", () => {
       const run = yield* Tag
       const v = yield* run()
       expect(v).toBe(7)
-    }).pipe(Effect.provide(Tag.layer))
+    }).pipe(provideLayer(Tag.layer))
   })
 
   it.live("parameterized effect: run(input) forwards argument", () => {
@@ -107,7 +108,7 @@ describe("RunResource.make", () => {
       const run = yield* Tag
       const v = yield* run(5)
       expect(v).toBe(15)
-    }).pipe(Effect.provide(Tag.layer))
+    }).pipe(provideLayer(Tag.layer))
   })
 
   it.live("repeated yield* reuses same semaphore", () => {
@@ -123,6 +124,6 @@ describe("RunResource.make", () => {
       yield* run()
       yield* run()
       expect(callCount).toBe(3)
-    }).pipe(Effect.provide(Tag.layer))
+    }).pipe(provideLayer(Tag.layer))
   })
 })
