@@ -172,8 +172,8 @@ export interface EffectContext<T> {
   readonly defer: (items: Iterable<T>) => Effect.Effect<void>;
   /** How many times this item has been processed (1 = first attempt). */
   readonly attempts: number;
-  /** When the item first entered the queue (preserved across retries). */
-  readonly enqueuedAt: Date;
+  /** When the item first entered the queue as epoch millis (preserved across retries). */
+  readonly enqueuedAt: number;
   /** The priority level this item was enqueued at. */
   readonly priority: Priority;
 }
@@ -207,8 +207,8 @@ export interface HandlerContext<T> {
   readonly defer: (items: Iterable<T>) => Effect.Effect<void>;
   /** How many times this item has been processed (1 = first attempt). */
   readonly attempts: number;
-  /** When the item first entered the queue (preserved across retries). */
-  readonly enqueuedAt: Date;
+  /** When the item first entered the queue as epoch millis (preserved across retries). */
+  readonly enqueuedAt: number;
   /** The priority level this item was enqueued at. */
   readonly priority: Priority;
 }
@@ -472,7 +472,7 @@ const makeQueueEffect = <T, R, E>(
 
         for (const item of items) {
           // Dedup: skip items whose key is already in-flight
-          if (config.key) {
+          if (config.key !== undefined) {
             const k = config.key(item);
             const keys = yield* Ref.get(activeKeys);
             if (HashSet.has(keys, k)) continue;
@@ -482,8 +482,8 @@ const makeQueueEffect = <T, R, E>(
             item,
             retries,
             priority,
-            enqueuedAt: enqueuedAt ?? Date.now(),
-            key: config.key ? config.key(item) : undefined,
+            enqueuedAt: enqueuedAt ?? (yield* Effect.clockWith((c) => c.currentTimeMillis)),
+            key: config.key !== undefined ? config.key(item) : undefined,
           });
         }
 
@@ -493,12 +493,12 @@ const makeQueueEffect = <T, R, E>(
         yield* signalWake;
 
         // Fire-and-forget hooks
-        if (config.onEnqueue) {
+        if (config.onEnqueue !== undefined) {
           yield* config
             .onEnqueue(toEnqueue.map((i) => i.item), priority)
             .pipe(Effect.ignore);
         }
-        if (config.persist) {
+        if (config.persist !== undefined) {
           yield* config
             .persist(toEnqueue.map((i) => i.item), priority)
             .pipe(Effect.ignore);
@@ -522,7 +522,7 @@ const makeQueueEffect = <T, R, E>(
     ): EffectContext<T> => {
       const isSameItem = (candidate: T): boolean => {
         if (candidate === internal.item) return true;
-        if (config.key && internal.key && config.key(candidate) === internal.key)
+        if (config.key !== undefined && internal.key !== undefined && config.key(candidate) === internal.key)
           return true;
         return false;
       };
@@ -549,7 +549,7 @@ const makeQueueEffect = <T, R, E>(
         prioritize: (items) => guardedEnqueue(items, "high"),
         defer: (items) => guardedEnqueue(items, "low"),
         attempts: internal.retries + 1,
-        enqueuedAt: new Date(internal.enqueuedAt),
+        enqueuedAt: internal.enqueuedAt,
         priority: internal.priority,
       };
     };
@@ -566,7 +566,7 @@ const makeQueueEffect = <T, R, E>(
     ): HandlerContext<T> => ({
       retry: Effect.gen(function* () {
         if (internal.retries >= maxRetries) {
-          if (config.onRetryExhausted) {
+          if (config.onRetryExhausted !== undefined) {
             const cause = Exit.isFailure(exit) ? exit.cause : Cause.empty;
             yield* config.onRetryExhausted(internal.item, cause).pipe(
               Effect.ignore,
@@ -588,7 +588,7 @@ const makeQueueEffect = <T, R, E>(
       prioritize: (items) => enqueuePublic(items, "high"),
       defer: (items) => enqueuePublic(items, "low"),
       attempts: internal.retries + 1,
-      enqueuedAt: new Date(internal.enqueuedAt),
+      enqueuedAt: internal.enqueuedAt,
       priority: internal.priority,
     });
 
@@ -627,27 +627,28 @@ const makeQueueEffect = <T, R, E>(
     const processItem = (internal: InternalItem<T>): Effect.Effect<void> =>
       semaphore.withPermits(1)(
         Effect.gen(function* () {
-          const start = Date.now();
+          const start = yield* Effect.clockWith((c) => c.currentTimeMillis);
           const ctx = makeEffectContext(internal);
           const exit = yield* Effect.exit(config.effect(internal.item, ctx));
-          const elapsed = Duration.millis(Date.now() - start);
+          const end = yield* Effect.clockWith((c) => c.currentTimeMillis);
+          const elapsed = Duration.millis(end - start);
 
           yield* Ref.update(completedCount, (n) => n + 1);
 
           // Release dedup key so future items with same key can enter
-          if (config.key && internal.key) {
+          if (config.key !== undefined && internal.key !== undefined) {
             yield* Ref.update(activeKeys, HashSet.remove(internal.key));
           }
 
           // Fire onComplete hook in a managed fiber (non-blocking)
-          if (config.onComplete) {
+          if (config.onComplete !== undefined) {
             yield* FiberSet.run(handlerFibers)(
               config.onComplete(internal.item, exit, elapsed).pipe(Effect.ignore),
             );
           }
 
           // Route to handler or log unhandled failure
-          if (config.handler) {
+          if (config.handler !== undefined) {
             const handlerCtx = makeHandlerContext(internal, exit);
             yield* FiberSet.run(handlerFibers)(
               config.handler(internal.item, exit, handlerCtx).pipe(Effect.ignore),
@@ -761,7 +762,7 @@ const makeQueueEffect = <T, R, E>(
 
     // ─── Refill: monitor for empty state ───
 
-    if (config.refill) {
+    if (config.refill !== undefined) {
       const refillFn = config.refill;
       yield* FiberSet.run(workerFibers)(
         Effect.forever(
@@ -772,7 +773,7 @@ const makeQueueEffect = <T, R, E>(
               if (shutdown) return yield* Effect.interrupt;
               yield* Effect.logDebug(`Queue "${queueName}" empty, triggering refill`);
               yield* refillFn(queueHandle).pipe(Effect.ignore);
-              if (config.onEmpty) {
+              if (config.onEmpty !== undefined) {
                 yield* config.onEmpty.pipe(Effect.ignore);
               }
             }
@@ -852,11 +853,10 @@ export const QueueResource = {
   <const Name extends string>(
     name: Name,
     config: QueueResourceConfig<T, R, E>,
-  ) => {
-    const tag = Context.Service<Self, QueueHandle<T, R, E>>(name);
-    const layer = Layer.effect(tag)(makeQueueEffect({ ...config, name }));
-    return Object.assign(tag, { layer });
-  },
+  ) =>
+    ((service) => Object.assign(service, { layer: Layer.effect(service)(makeQueueEffect({ ...config, name })) }))(
+      Context.Service<Self, QueueHandle<T, R, E>>(name),
+    ),
 
   /**
    * Class factory: creates a pure identity Context tag (no default layer).

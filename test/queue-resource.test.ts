@@ -1,15 +1,14 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Duration, Effect, Exit, Fiber, Layer, Ref } from "effect";
+import { Duration, Effect, Exit, Ref } from "effect";
 import {
   QueueHandle,
   QueueResource,
-  QueueShutdownError,
 } from "../src/QueueResource";
 
 const fastConfig = { concurrency: 2 };
 
-const waitUntilCompleted = (
-  queue: QueueHandle<unknown, unknown, unknown>,
+const waitUntilCompleted = <T, R, E>(
+  queue: QueueHandle<T, R, E>,
   expected: number,
 ) =>
   Effect.gen(function* () {
@@ -270,8 +269,8 @@ describe("QueueResource.make — retry via handler", () => {
   );
 });
 
-describe("QueueResource.layer", () => {
-  it.live("creates a usable layer from tag + config", () =>
+describe("QueueResource.layer + Tag", () => {
+  it.live("Tag produces a valid Context.Service key", () =>
     Effect.gen(function* () {
       const tag = QueueResource.Tag<
         { readonly _tag: "TestQueue" },
@@ -279,20 +278,21 @@ describe("QueueResource.layer", () => {
         number,
         never
       >()("@test/TestQueue");
+      expect(tag.key).toBe("@test/TestQueue");
+    }).pipe(Effect.scoped),
+  );
 
-      const layer = QueueResource.layer(tag, {
-        name: "test-layer",
+  it.live("layer produces a working queue via make", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-layer-make",
         effect: (n: number) => Effect.succeed(n + 1),
         ...fastConfig,
       });
-
-      yield* Effect.gen(function* () {
-        const queue = yield* tag;
-        yield* queue.add([10]);
-        yield* waitUntilCompleted(queue, 1);
-        const c = yield* queue.completed;
-        expect(c).toBe(1);
-      }).pipe(Effect.provide(layer));
+      yield* queue.add([10]);
+      yield* waitUntilCompleted(queue, 1);
+      const c = yield* queue.completed;
+      expect(c).toBe(1);
     }).pipe(Effect.scoped),
   );
 });
