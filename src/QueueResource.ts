@@ -937,9 +937,9 @@ export const QueueResource = {
     name: Name,
     config: QueueResourceConfig<T, R, E>,
   ) => {
-    const tag = Context.Service<Self, QueueHandle<T, R, E>>(name);
-    const layer = Layer.effect(tag)(makeQueueEffect({ ...config, name }));
-    return Object.assign(tag, { layer });
+    const base = Context.Service<Self, QueueHandle<T, R, E>>()(name);
+    const layer = Layer.effect(base)(makeQueueEffect({ ...config, name }));
+    return Object.assign(base, { layer });
   },
 
   /**
@@ -950,9 +950,7 @@ export const QueueResource = {
    *
    * @example
    * ```ts
-   * const JobQueue = QueueResource.Tag<typeof JobQueue, Job, void, JobError>()(
-   *   "@app/JobQueue",
-   * )
+   * class JobQueue extends QueueResource.Tag<JobQueue, Job, void, JobError>()("@app/JobQueue") {}
    *
    * // Provide implementation separately:
    * const JobQueueLive = QueueResource.layer(JobQueue, { ... })
@@ -960,5 +958,5 @@ export const QueueResource = {
    */
   Tag: <Self, T, R, E = never>() =>
   <const Name extends string>(name: Name) =>
-    Context.Service<Self, QueueHandle<T, R, E>>(name),
+    Context.Service<Self, QueueHandle<T, R, E>>()(name),
 };

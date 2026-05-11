@@ -140,13 +140,8 @@ export class DemoQueueItemError extends Data.TaggedError("DemoQueueItemError")<{
   readonly reason: string;
 }> { }
 
-// Demo queues using the v2 class factory pattern
-const DemoQueue = QueueResource.Service<
-  { readonly _tag: "DemoQueue" },
-  string,
-  never,
-  DemoQueueItemError
->()("demo-queue", {
+// Demo queues using the v2 class pattern
+class DemoQueue extends QueueResource.Service<DemoQueue, string, never, DemoQueueItemError>()("demo-queue", {
   effect: (item: string) =>
     Effect.gen(function* () {
       yield* Effect.logInfo(`Processing: ${item}`);
@@ -163,14 +158,9 @@ const DemoQueue = QueueResource.Service<
     }),
   concurrency: 3,
   capacity: 100,
-});
+}) {}
 
-const DemoTwoQueue = QueueResource.Service<
-  { readonly _tag: "DemoTwoQueue" },
-  number,
-  number,
-  never
->()("demo-two-queue", {
+class DemoTwoQueue extends QueueResource.Service<DemoTwoQueue, number, number, never>()("demo-two-queue", {
   effect: (item: number) =>
     Effect.gen(function* () {
       yield* Effect.logInfo(`Processing number: ${item}`);
@@ -184,7 +174,7 @@ const DemoTwoQueue = QueueResource.Service<
     }),
   concurrency: 2,
   capacity: 50,
-});
+}) {}
 
 /**
  * ============================================================================

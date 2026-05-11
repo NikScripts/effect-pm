@@ -257,9 +257,9 @@ export const RunResource = {
     name: Name,
     config: RunResourceConfig<T, A, E>,
   ) => {
-    const tag = Context.Service<Self, RunGate<T, A, E>>(name);
-    const layer = Layer.effect(tag)(makeRunGateEffect({ ...config, name }));
-    return Object.assign(tag, { layer });
+    const base = Context.Service<Self, RunGate<T, A, E>>()(name);
+    const layer = Layer.effect(base)(makeRunGateEffect({ ...config, name }));
+    return Object.assign(base, { layer });
   },
 
   /**
@@ -281,7 +281,7 @@ export const RunResource = {
    */
   Tag: <Self, T, A, E = never>() =>
   <const Name extends string>(name: Name) =>
-    Context.Service<Self, RunGate<T, A, E>>(name),
+    Context.Service<Self, RunGate<T, A, E>>()(name),
 
   /**
    * Create a generic runner that wraps any effect with concurrency gating.

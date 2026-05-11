@@ -28,12 +28,7 @@ import { provideLayer } from "../src/provideLayer.js";
 
 // ─── Gated callable: records wall time when the body starts ───
 
-const TimedWorkGate = RunResource.Service<
-  { readonly _tag: "TimedWorkGate" },
-  void,
-  number,
-  never
->()("examples/TimedWorkGate", {
+class TimedWorkGate extends RunResource.Service<TimedWorkGate, void, number, never>()("examples/TimedWorkGate", {
   effect: () =>
     Effect.gen(function* () {
       const startedAt = yield* Clock.currentTimeMillis;
@@ -41,23 +36,18 @@ const TimedWorkGate = RunResource.Service<
       return startedAt;
     }),
   concurrency: 3,
-});
+}) {}
 
 // ─── Parameterized gate: doubles a number ───
 
-const DoubleGate = RunResource.Service<
-  { readonly _tag: "DoubleGate" },
-  number,
-  number,
-  never
->()("examples/DoubleGate", {
+class DoubleGate extends RunResource.Service<DoubleGate, number, number, never>()("examples/DoubleGate", {
   effect: (n: number) =>
     Effect.gen(function* () {
       yield* Effect.sleep(Duration.millis(8));
       return n * 2;
     }),
   concurrency: 2,
-});
+}) {}
 
 const median = (xs: ReadonlyArray<number>): number => {
   if (xs.length === 0) return 0;
