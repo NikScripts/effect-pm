@@ -853,10 +853,11 @@ export const QueueResource = {
   <const Name extends string>(
     name: Name,
     config: QueueResourceConfig<T, R, E>,
-  ) =>
-    ((service) => Object.assign(service, { layer: Layer.effect(service)(makeQueueEffect({ ...config, name })) }))(
-      Context.Service<Self, QueueHandle<T, R, E>>(name),
-    ),
+  ) => {
+    const tag = Context.Service<Self, QueueHandle<T, R, E>>(name);
+    const layer = Layer.effect(tag)(makeQueueEffect({ ...config, name }));
+    return Object.assign(tag, { layer });
+  },
 
   /**
    * Class factory: creates a pure identity Context tag (no default layer).
