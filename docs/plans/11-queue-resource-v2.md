@@ -138,8 +138,8 @@ export declare namespace QueueResource {
   interface Config<T, R, E, RHandler = never, RItem = never> {
     // ─── Core ───
 
-    /** Process each item. */
-    readonly effect: (item: T) => Effect<R, E, RItem>
+    /** Process each item. Receives the queue handle for self-enqueue, priority escalation, etc. */
+    readonly effect: (item: T, queue: Queue<T, R, E>) => Effect<R, E, RItem>
 
     /**
      * Handle each item's result. **Always forked** — runs in its own fiber,
