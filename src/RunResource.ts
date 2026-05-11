@@ -1,9 +1,10 @@
 /**
- * RunResource — concurrency gate with optional rate limiting for effects.
+ * RunResource — concurrency gate for effects.
  *
- * Wraps any effect with bounded concurrency (via `Semaphore`) and an optional
- * rate limiter. Unlike {@link QueueResource}, there are no queues, priorities,
- * or workers — the gate is applied inline at the call site.
+ * Wraps any effect with bounded concurrency via `Semaphore`. Unlike
+ * {@link QueueResource}, there are no queues, priorities, or background workers —
+ * the gate is applied inline at the call site. Each call to the gate acquires
+ * a permit, executes the effect, and releases the permit on completion.
  *
  * ## Entry points
  *
@@ -21,19 +22,30 @@
  * import { Effect } from "effect"
  * import { RunResource } from "@nikscripts/effect-pm"
  *
- * // Gated effect with concurrency limit
- * const FetchPrices = RunResource.Service<typeof FetchPrices, void, PriceData, FetchError>()(
- *   "@app/FetchPrices",
- *   { effect: fetchPriceData(), concurrency: 3 },
+ * // Create a gated callable with concurrency 3
+ * const program = Effect.scoped(
+ *   Effect.gen(function*() {
+ *     const fetchPrices = yield* RunResource.make({
+ *       name: "@app/FetchPrices",
+ *       effect: (symbol: string) => httpClient.get(`/prices/${symbol}`),
+ *       concurrency: 3,
+ *     })
+ *
+ *     // Up to 3 concurrent requests; additional calls block until a slot opens
+ *     const [aapl, goog, msft] = yield* Effect.all(
+ *       [fetchPrices("AAPL"), fetchPrices("GOOG"), fetchPrices("MSFT")],
+ *       { concurrency: "unbounded" },
+ *     )
+ *   })
  * )
- *
- * const program = Effect.gen(function*() {
- *   const fetch = yield* FetchPrices
- *   const data = yield* fetch()
- * })
- *
- * program.pipe(Effect.provide(FetchPrices.layer))
  * ```
+ *
+ * ## Architecture
+ *
+ * - **Semaphore** with `concurrency` permits controls max parallel executions
+ * - Each call to the gate acquires 1 permit, runs the inner effect, releases on exit
+ * - The semaphore is allocated once (scoped) and shared across all call sites
+ * - No background fibers, no state management beyond the semaphore
  *
  * @module RunResource
  */
@@ -119,10 +131,14 @@ export interface RunResourceRunnerConfig {
 // ============================================================================
 
 /**
- * Allocate a semaphore-based gate. Returns a function that wraps any effect
- * with `sem.withPermits(1)(...)`.
+ * Allocate a counting semaphore and return a wrapper function.
  *
- * When `concurrency` is undefined or absent, defaults to 1 (serial execution).
+ * The returned function acquires 1 permit before executing the inner effect
+ * and releases it on completion (success, failure, or interruption).
+ * This is the core concurrency primitive — all public APIs delegate here.
+ *
+ * The semaphore is created once per gate instance (not per call), so repeated
+ * `yield*` of the same gate share the same concurrency pool.
  */
 const makeGateInternal = (concurrency: number) =>
   Effect.gen(function* () {
@@ -214,16 +230,26 @@ export const RunResource = {
   /**
    * Class factory: creates a Context tag with a baked-in `.layer`.
    *
+   * The returned value is both a yieldable tag and has a `.layer` property.
+   * Use `typeof MyService` as the Self type at the call site.
+   *
    * @example
    * ```ts
-   * const FetchPrices = RunResource.Service<typeof FetchPrices, void, PriceData, FetchError>()(
-   *   "@app/FetchPrices",
-   *   { effect: fetchPriceData(), concurrency: 3 },
+   * // Parameterized gate (with input):
+   * const SendSms = RunResource.Service<{ readonly _tag: "SendSms" }, PhoneNumber, SmsResult, SmsError>()(
+   *   "@app/SendSms",
+   *   { effect: (phone) => smsClient.send(phone), concurrency: 5 },
    * )
+   * const send = yield* SendSms
+   * yield* send("+1234567890")
    *
-   * const fetch = yield* FetchPrices
-   * const data = yield* fetch()
-   * Effect.provide(FetchPrices.layer)
+   * // Unit gate (no input):
+   * const RefreshCache = RunResource.Service<{ readonly _tag: "RefreshCache" }, void, void, never>()(
+   *   "@app/RefreshCache",
+   *   { effect: () => cache.refresh(), concurrency: 1 },
+   * )
+   * const refresh = yield* RefreshCache
+   * yield* refresh(undefined)
    * ```
    */
   Service: <Self, T, A, E = never>() =>
@@ -239,12 +265,18 @@ export const RunResource = {
   /**
    * Class factory: creates a pure identity Context tag (no default layer).
    *
+   * Use with {@link RunResource.layer} to provide implementations.
+   * Useful for shared contracts, library interfaces, and dependency inversion.
+   *
    * @example
    * ```ts
-   * const FetchGate = RunResource.Tag<typeof FetchGate, void, PriceData, FetchError>()(
+   * const FetchGate = RunResource.Tag<{ readonly _tag: "FetchGate" }, void, PriceData, FetchError>()(
    *   "@app/FetchGate",
    * )
-   * const FetchLayer = RunResource.layer(FetchGate, { effect: ..., concurrency: 3 })
+   * const FetchGateLive = RunResource.layer(FetchGate, {
+   *   effect: () => fetchPriceData(),
+   *   concurrency: 3,
+   * })
    * ```
    */
   Tag: <Self, T, A, E = never>() =>
