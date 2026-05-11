@@ -55,13 +55,13 @@
   ],
   "scripts": {
     "build": "tsup",
-    "type-check": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:nwsl": "node scripts/nwsl-local.mjs test",
     "test:watch": "vitest",
     "lint": "eslint .",
     "clean": "rm -rf dist",
-    "prepublishOnly": "npm run clean && npm run build && npm run type-check",
+    "prepublishOnly": "npm run clean && npm run build && npm run typecheck",
     "changeset": "changeset",
     "version": "changeset version",
     "release": "npm run build && changeset publish",
@@ -80,7 +80,7 @@
     "example:nwsl-http-api-resource": "node scripts/nwsl-local.mjs example",
     "cli": "tsx examples/cli.ts",
     "example:http-api-resource-layer-effect": "tsx examples/http-api-resource-layer-effect.ts",
-    "prepare": "effect-tsgo patch"
+    "prepare": "effect-language-service patch"
   },
   "dependencies": {
     "@effect/platform-node": "4.0.0-beta.65",
@@ -98,6 +98,7 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
+    "@effect/language-service": "^0.85.1",
     "@effect/tsgo": "0.5.2",
     "@effect/vitest": "4.0.0-beta.65",
     "@types/node": "^20.19.40",
