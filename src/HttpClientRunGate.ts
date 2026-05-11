@@ -1,9 +1,12 @@
 /**
- * Wrap an {@link HttpClient.HttpClient} so every `execute` (and thus get/post/…) runs
- * through a {@link RunResourceRunner}.
+ * **HttpClientRunGate** — pipe-friendly {@link HttpClient.transform} that runs every
+ * request effect through a {@link RunResourceRunner}.
  *
- * Uses `HttpClient.transform`, which brackets the full request effect — unlike
- * `HttpApiClient`’s `transformResponse`, which only sees decode steps after the fetch.
+ * @remarks
+ * `transform` sees the **entire** `execute` pipeline (DNS/TLS/body included), whereas
+ * `HttpApiClient`’s `transformResponse` only wraps decode stages after the fetch completes.
+ * Pair with {@link RunResource.makeRunner} or the runner produced inside
+ * {@link HttpApiResource.make}.
  *
  * @module HttpClientRunGate
  */
@@ -32,6 +35,8 @@ export const transformClient = <E, R>(
 ): HttpClient.HttpClient.With<E, R> => withRunner(runner)(client);
 
 /**
+ * Namespace for {@link withRunner} / {@link transformClient}.
+ *
  * @public
  */
 export const HttpClientRunGate = {

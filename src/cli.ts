@@ -1,27 +1,27 @@
 /**
- * CLI for ProcessGroup Control
+ * **CLI** — HTTP client for the localhost {@link ControlService} control plane.
  *
- * Provides command-line interface for controlling and monitoring a
- * {@link ProcessGroup} via the HTTP control service.
- * 
  * @remarks
- * This CLI communicates with the HTTP control service started by
- * {@link ProcessGroup.serve} / {@link ControlService.make}. Provides commands for listing, starting,
- * stopping, and monitoring processes and queues.
- * 
- * **Available Commands:**
- * - `ls` - List all processes and queues
- * - `status <name>` - Get detailed status
- * - `start [name]` - Start process(es)
- * - `stop [name]` - Stop process(es)
- * - `pause <name>` - Pause a queue
- * - `resume <name>` - Resume a queue
- * - `restart [name]` - Restart process/queue
- * - `shutdown <name>` - Shutdown a queue
- * - `now <name>` - Run process immediately
- * - `queues` - List all queues
- * 
- * @module cli
+ * Talks to JSON endpoints exposed by {@link ControlService.make} (typically after
+ * {@link ProcessGroup.serve}). Commands map 1:1 to {@link ControlCommand} values
+ * sent as `POST /control` bodies.
+ *
+ * **Commands**
+ *
+ * | Subcommand | Purpose |
+ * |------------|---------|
+ * | `ls` | List processes and queues |
+ * | `status [name]` | Detailed process or queue snapshot |
+ * | `start [name]` | Start one process or all |
+ * | `stop [name]` | Stop one process or all |
+ * | `pause [name]` | Pause a queue |
+ * | `resume [name]` | Resume a queue |
+ * | `restart [name]` | Restart process/queue, or full group if name omitted |
+ * | `shutdown <name>` | Shut down a queue for good |
+ * | `now <name>` | Fire a process run immediately |
+ * | `queues` | Queue listing only |
+ *
+ * @module Cli
  */
 
 import { Console, Data, DateTime, Effect, Option } from "effect";
@@ -387,16 +387,17 @@ const makeCommands = (controlUrl: string) => {
  * 
  * @example
  * ```typescript
- * // Create CLI
- * const cli = createCli({
- *   name: "My App CLI",
- *   version: "1.0.0",
- *   port: 3001
- * });
- * 
- * // Run CLI (typically in a separate script)
+ * import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
+ * import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+ * import * as NodeServices from "@effect/platform-node/NodeServices";
+ * import { Effect, Layer } from "effect";
+ * import { createCli } from "@nikscripts/effect-pm";
+ *
+ * const cli = createCli({ name: "My App CLI", version: "1.0.0", port: 3001 });
+ * const platform = Layer.mergeAll(NodeServices.layer, NodeHttpClient.layerNodeHttp);
+ *
  * Effect.suspend(() => cli(process.argv)).pipe(
- *   Effect.provide(NodeServices.layer),
+ *   Effect.provide(platform),
  *   NodeRuntime.runMain
  * );
  * ```
@@ -452,14 +453,18 @@ export const createCli = (config: {
  * 
  * @example
  * ```typescript
- * // In your CLI script (e.g., bin/pm-cli.ts)
- * import { runCli } from "@nikscripts/effect-pm/cli";
- * 
- * runCli({
- *   name: "My App Process Group",
- *   version: "1.0.0",
- *   port: 3001
- * });
+ * import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
+ * import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+ * import * as NodeServices from "@effect/platform-node/NodeServices";
+ * import { Effect, Layer } from "effect";
+ * import { runCli } from "@nikscripts/effect-pm";
+ *
+ * const platform = Layer.mergeAll(NodeServices.layer, NodeHttpClient.layerNodeHttp);
+ *
+ * runCli({ name: "My App", version: "1.0.0", port: 3001 }).pipe(
+ *   Effect.provide(platform),
+ *   NodeRuntime.runMain
+ * );
  * ```
  * 
  * @public

@@ -283,7 +283,13 @@ function makeRunResourceRunnerImpl<const Name extends string>(
 }
 
 /**
- * Factories: {@link RunResource.make} (configured effect) and {@link RunResource.makeRunner} (generic wrap).
+ * Entrypoints for gated effects and reusable runners.
+ *
+ * @remarks
+ * - **`make`** — bake a concrete `effect` (unit or unary) into a service value that applies
+ *   the same semaphores/throttle for every `yield*`.
+ * - **`makeRunner`** — expose only the `wrap` function (used by {@link HttpApiResource} and
+ *   {@link HttpClientRunGate}).
  *
  * @public
  */

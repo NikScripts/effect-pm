@@ -1,6 +1,15 @@
 /**
- * Typed {@link HttpApiClient.make} with optional concurrency / throttle on the transport
- * (`HttpClient.transform`), same limits model as {@link RunResource}.
+ * **HttpApiResource** — {@link HttpApiClient.make} with the same **transport gate** as
+ * {@link RunResource} (concurrency + optional start throttle on every `execute`).
+ *
+ * @remarks
+ * - **Why a gate on the client** — `HttpClient.transform` wraps the full request effect,
+ *   unlike `transformResponse`, which only sees decode steps after the wire call.
+ * - **Tag shape** — {@link HttpApiResource.make} returns a {@link Context.Service} tag for
+ *   `HttpApiClient.Client<Groups>` plus a `.layer` built under `HttpClient.HttpClient` in
+ *   context.
+ * - **Existing clients** — {@link HttpApiResource.layerEffect} reuses that pipeline for any
+ *   effect that already produces your API client type.
  *
  * @module HttpApiResource
  */
@@ -32,6 +41,8 @@ export type HttpApiResourceClientOptions = {
 };
 
 /**
+ * Options for {@link HttpApiResource.make} (stable service key + client options + limits).
+ *
  * @public
  */
 export type HttpApiResourceMakeConfig<
@@ -77,6 +88,12 @@ const makeRunner = (
     <A, E, R>(effect: Effect.Effect<A, E, R>) => wrap(effect)
   );
 
+/**
+ * Layer helper: acquire `HttpClient`, wrap it with the runner from `config.limits`, then run
+ * `effect` with the gated client provided as `HttpClient.HttpClient`.
+ *
+ * @internal
+ */
 function layerEffect<
   Service,
   Identifier,
@@ -99,6 +116,11 @@ function layerEffect<
   );
 }
 
+/**
+ * Construct a {@link Context.Service} tag and `Layer.effect` for `HttpApiClient.make`.
+ *
+ * @internal
+ */
 function makeHttpApiResource<
   ApiId extends string,
   Groups extends HttpApiGroup.Any,
@@ -130,10 +152,15 @@ function makeHttpApiResource<
 }
 
 /**
+ * Factories for typed HTTP API clients with optional {@link RunResourceLimits}.
+ *
  * @public
  */
 export const HttpApiResource = {
+  /** Typed `HttpApiClient` tag + `.layer` (see {@link makeHttpApiResource}). */
   make: makeHttpApiResource,
+  /** Apply the same transport gate to an arbitrary client-producing effect. */
   layerEffect,
+  /** Request header helper for JSON APIs. */
   acceptJson,
 } as const;

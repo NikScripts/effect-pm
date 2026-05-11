@@ -1,18 +1,19 @@
 /**
- * Control Service - HTTP API for Process Management
- * 
- * Provides a localhost-only HTTP API for controlling and monitoring a ProcessGroup.
- * Used by CLI tools and local management scripts.
- * 
+ * **ControlService** — localhost JSON control plane for a {@link ProcessGroup}.
+ *
  * @remarks
- * Key features:
- * - Localhost-only (127.0.0.1) for security
- * - RESTful JSON API
- * - Process and queue control
- * - Status monitoring
- * - Graceful shutdown handling
- * 
- * @module control-service
+ * - **Binding** — `127.0.0.1` only (not exposed on LAN interfaces).
+ * - **Transport** — `POST /control` with {@link ControlRequestBody}; responses use
+ *   {@link ControlResponse}. `GET /health` for probes.
+ * - **Payloads** — Request bodies are validated with **Effect Schema**; responses are
+ *   JSON-encoded safely from plain objects.
+ * - **Concurrency** — Some mutating routes fork work so the HTTP handler returns quickly
+ *   (see `restart` / global restart in the implementation).
+ *
+ * The namespace also re-exports {@link createCli} and {@link runCli} so operators can
+ * depend on a single import when wiring tooling.
+ *
+ * @module ControlService
  */
 
 import { Data, Effect, Schema, Scope } from "effect";
@@ -530,8 +531,18 @@ const startControlService = <R>(options: {
       ),
   )
 
+/**
+ * Control plane entrypoints.
+ *
+ * @public
+ */
 export const ControlService = {
+  /**
+   * Acquire a localhost HTTP listener for `/control` and `/health` until the scope ends.
+   */
   make: startControlService,
-  createCli: createCli,
-  runCli: runCli,
-}
+  /** Build an `@effect/cli` application targeting this service’s port. */
+  createCli,
+  /** `Effect` that runs {@link createCli} against `process.argv` (or a passed argv). */
+  runCli,
+} as const;
