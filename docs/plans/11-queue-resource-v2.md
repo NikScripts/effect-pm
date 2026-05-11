@@ -30,11 +30,13 @@ Config baked into class. Auto-generates `.layer`. The 90% case.
 ```typescript
 class EmailQueue extends QueueResource.Service<EmailQueue, Email, void, SmtpError>()("@app/EmailQueue", {
   effect: (email) => sendEmail(email),
-  handler: (item, exit) =>
+  handler: (item, exit, ctx) =>
     Exit.match(exit, {
-      onFailure: (cause) => deadLetter.add(item),
+      onFailure: () => ctx.retry,  // re-enqueue (back of line)
       onSuccess: () => Effect.void,
     }),
+  retries: 3,
+  onRetryExhausted: (item) => deadLetter.add(item),
   concurrency: 5,
   limit: RateLimiter.make(100, "1 minute"),
 }) {}
@@ -139,23 +141,36 @@ export declare namespace QueueResource {
     // ─── Core ───
 
     /**
-     * Process each item. Receives a guarded queue handle for enqueuing follow-up work.
-     * The guarded handle throws QueueSelfEnqueueError at runtime if you attempt
-     * to enqueue the same item (by reference or by key) — prevents infinite loops.
+     * Process each item. Receives a context with guarded enqueue operations
+     * for spawning derived work. Self-enqueue attempts are warned and dropped
+     * (prevents infinite loops). Use `ctx.retry` in the handler for intentional re-processing.
      */
-    readonly effect: (item: T, queue: Queue<T, R, E>) => Effect<R, E, RItem>
+    readonly effect: (item: T, ctx: EffectContext<T, R, E>) => Effect<R, E, RItem>
 
     /**
      * Handle each item's result. **Always forked** — runs in its own fiber,
      * never blocks the worker from picking up the next item.
-     * Receives the item, its Exit, and the queue handle (for re-enqueue).
-     * Must return Effect<void, never, RHandler> (errors eliminated).
-     * Optional — unhandled failures are logged.
      *
-     * Managed by a FiberSet: in-flight handlers are awaited on scope close
-     * but never block item throughput.
+     * Receives:
+     * - `item` — the processed item
+     * - `exit` — Exit<R, E> (success value or failure cause)
+     * - `ctx` — HandlerContext: `retry`, `add`, `prioritize`, `defer`
+     *
+     * **`ctx.retry`** re-enqueues the item at the same priority level.
+     * This is a RE-ENQUEUE, not an immediate retry — the item goes to the
+     * back of its priority queue and waits its turn like any other item.
+     * Respects `retries` limit; when exhausted → `onRetryExhausted`.
+     *
+     * There is NO automatic retry on failure. The handler decides whether
+     * to retry, log, dead-letter, or drop. This keeps retry policy in
+     * userland where it belongs.
+     *
+     * Must return Effect<void, never, RHandler> (errors eliminated).
+     * Optional — when absent, failures are logged and items dropped.
+     *
+     * Managed by a FiberSet: in-flight handlers are awaited on scope close.
      */
-    readonly handler?: (item: T, exit: Exit<R, E>, queue: Queue<T, R, E>) => Effect<void, never, RHandler>
+    readonly handler?: (item: T, exit: Exit<R, E>, ctx: HandlerContext<T, R, E>) => Effect<void, never, RHandler>
 
     // ─── Concurrency ───
 
@@ -182,13 +197,14 @@ export declare namespace QueueResource {
     // ─── Retry ───
 
     /**
-     * Auto-retry failed items (only when handler is NOT set).
-     * When handler IS set, retry responsibility belongs to the handler.
-     * @default 0
+     * Max times an item may be re-enqueued via ctx.retry (in the handler).
+     * When exhausted → `onRetryExhausted` is called.
+     * There is NO automatic retry — the handler must explicitly call ctx.retry.
+     * @default Infinity (unlimited retries unless capped here)
      */
     readonly retries?: number
 
-    /** Called when retries exhausted. */
+    /** Called when ctx.retry is invoked but the retry limit is reached. */
     readonly onRetryExhausted?: (item: T, cause: Cause<E>) => Effect<void>
 
     // ─── Persistence ───
@@ -207,6 +223,41 @@ export declare namespace QueueResource {
   }
 
   type Priority = "high" | "normal" | "low"
+
+  /** Passed to effect — guarded enqueue for derived work only. */
+  interface EffectContext<T, R, E> {
+    /** Enqueue derived items (normal priority). Warns+drops if same item detected. */
+    readonly add: (items: T | ReadonlyArray<T>) => Effect<void>
+    /** Enqueue derived items (high priority). Warns+drops if same item detected. */
+    readonly prioritize: (items: T | ReadonlyArray<T>) => Effect<void>
+    /** Enqueue derived items (low priority). Warns+drops if same item detected. */
+    readonly defer: (items: T | ReadonlyArray<T>) => Effect<void>
+  }
+
+  /**
+   * Passed to handler — full control including retry.
+   *
+   * `retry` re-enqueues the item at the SAME priority it originally entered.
+   * The item goes to the BACK of that priority queue — it is not processed
+   * immediately. It waits its turn behind any other items at that level.
+   * This is intentional: it gives the system time to recover (rate limits,
+   * transient failures) before the item is attempted again.
+   */
+  interface HandlerContext<T, R, E> {
+    /**
+     * Re-enqueue this item (back of same priority queue).
+     * Tracked: respects `retries` limit. When exhausted → onRetryExhausted.
+     * This is NOT immediate re-execution — the item waits in line.
+     */
+    readonly retry: Effect<void>
+
+    /** Enqueue new/derived items at normal priority. */
+    readonly add: (items: T | ReadonlyArray<T>) => Effect<void>
+    /** Enqueue new/derived items at high priority. */
+    readonly prioritize: (items: T | ReadonlyArray<T>) => Effect<void>
+    /** Enqueue new/derived items at low priority. */
+    readonly defer: (items: T | ReadonlyArray<T>) => Effect<void>
+  }
 }
 ```
 
@@ -214,9 +265,7 @@ export declare namespace QueueResource {
 
 1. **`handler` replaces `forkWith`** — receives `Exit<R, E>` directly (Effect-native). Clearer name. **Always forked into its own fiber** — the worker immediately moves to the next item without waiting for the handler to complete. In-flight handler fibers are tracked by a `FiberSet` and awaited on scope close (graceful shutdown). Always optional — unhandled failures are logged.
 
-2. **No conditional required/optional handler.** Handler is always optional. When `E ≠ never` and no handler:
-   - `retries > 0` → auto-retry, then `onRetryExhausted`.
-   - `retries === 0` → failure is logged, item dropped.
+2. **No automatic retry.** The handler decides retry policy. `ctx.retry` re-enqueues (back of queue, NOT immediate). `retries` config is just a cap. When absent, failures are logged and items dropped.
 
 3. **`key` for dedup** — if set, dedup is active. No separate boolean.
 
@@ -228,9 +277,10 @@ export declare namespace QueueResource {
 
 7. **`handler` receives queue handle?** — Yes: `(item, exit, queue) => ...` for re-enqueue patterns.
 
-Updated signature:
+Updated signatures:
 ```typescript
-readonly handler?: (item: T, exit: Exit<R, E>, queue: Queue<T, R, E>) => Effect<void, never, RHandler>
+readonly effect: (item: T, ctx: EffectContext<T, R, E>) => Effect<R, E, RItem>
+readonly handler?: (item: T, exit: Exit<R, E>, ctx: HandlerContext<T, R, E>) => Effect<void, never, RHandler>
 ```
 
 ---
@@ -302,11 +352,10 @@ const processItem = Effect.fn("QueueResource.processItem")(function*(item: T) {
 
       // Handler: FORKED — does not block the worker from taking the next item
       if (config.handler) {
-        yield* FiberSet.run(handlerFibers, config.handler(item, exit, queueHandle).pipe(Effect.ignore))
-      } else if (Exit.isFailure(exit) && retries > 0) {
-        yield* retryItem(item, exit.cause, 1)
+        const handlerCtx = makeHandlerContext(item, internalItem._retries, exit)
+        yield* FiberSet.run(handlerFibers, config.handler(item, exit, handlerCtx).pipe(Effect.ignore))
       } else if (Exit.isFailure(exit)) {
-        yield* Effect.logWarning("Item failed without handler").pipe(
+        yield* Effect.logWarning("Item failed, no handler configured").pipe(
           Effect.annotateLogs({ item: JSON.stringify(item), cause: Cause.pretty(exit.cause) })
         )
       }
@@ -315,54 +364,77 @@ const processItem = Effect.fn("QueueResource.processItem")(function*(item: T) {
 })
 ```
 
-### 5.4 Guarded queue handle (self-enqueue protection)
+### 5.4 EffectContext (guarded enqueue, self-enqueue protection)
 
-The `effect` receives a **guarded** queue handle — not the raw handle. The guard rejects attempts to re-enqueue the current item:
+The `effect` receives an `EffectContext` — not the raw queue handle. The context warns and drops attempts to re-enqueue the current item:
 
 ```typescript
-const makeGuardedQueue = (item: T, realQueue: Queue<T, R, E>): Queue<T, R, E> => {
+const makeEffectContext = (item: T): EffectContext<T, R, E> => {
   const isSameItem = (candidate: T): boolean => {
-    // Reference equality
     if (candidate === item) return true
-    // Key equality (if key extractor is configured)
     if (config.key && config.key(candidate) === config.key(item)) return true
     return false
   }
 
-  const guard = (candidates: T | ReadonlyArray<T>): Effect<void> => {
-    const items = Array.isArray(candidates) ? candidates : [candidates]
-    const selfMatch = items.find(isSameItem)
-    if (selfMatch) {
-      return Effect.die(new QueueSelfEnqueueError({ queue: queueName, item: selfMatch }))
-    }
-    return Effect.void
-  }
+  const guardedEnqueue = (candidates: T | ReadonlyArray<T>, enqueue: (items: T | ReadonlyArray<T>) => Effect<void>) =>
+    Effect.gen(function*() {
+      const items = Array.isArray(candidates) ? candidates : [candidates]
+      const safe = items.filter((c) => {
+        if (isSameItem(c)) {
+          Effect.runSync(Effect.logWarning("Self-enqueue detected, item dropped").pipe(
+            Effect.annotateLogs({ queue: queueName })
+          ))
+          return false
+        }
+        return true
+      })
+      if (safe.length > 0) yield* enqueue(safe)
+    })
 
   return {
-    ...realQueue,
-    add: (items) => Effect.zipRight(guard(items), realQueue.add(items)),
-    prioritize: (items) => Effect.zipRight(guard(items), realQueue.prioritize(items)),
-    defer: (items) => Effect.zipRight(guard(items), realQueue.defer(items)),
+    add: (items) => guardedEnqueue(items, realQueue.add),
+    prioritize: (items) => guardedEnqueue(items, realQueue.prioritize),
+    defer: (items) => guardedEnqueue(items, realQueue.defer),
   }
 }
 ```
 
-Usage — this is safe:
+Usage — safe (derived items):
 ```typescript
-effect: (order, queue) => Effect.gen(function*() {
+effect: (order, ctx) => Effect.gen(function*() {
   const subOrders = yield* splitOrder(order)
-  yield* queue.add(subOrders) // ✅ different items
+  yield* ctx.add(subOrders) // ✅ different items
 })
 ```
 
-This throws at runtime:
+Self-enqueue attempt — warned and dropped (no crash):
 ```typescript
-effect: (order, queue) => Effect.gen(function*() {
-  yield* queue.add(order) // 💥 QueueSelfEnqueueError — same item
+effect: (order, ctx) => Effect.gen(function*() {
+  yield* ctx.add(order) // ⚠️ logged warning, item dropped, worker continues
 })
 ```
 
-The handler does NOT get a guarded handle — re-enqueue from the handler is a valid retry pattern.
+### 5.4.1 HandlerContext (retry + unguarded enqueue)
+
+The handler gets `HandlerContext` which includes `retry` — the **only** sanctioned way to re-process the same item:
+
+```typescript
+const makeHandlerContext = (item: T, currentRetries: number, exit: Exit<R, E>): HandlerContext<T, R, E> => ({
+  retry: Effect.gen(function*() {
+    if (currentRetries >= (config.retries ?? Infinity)) {
+      if (config.onRetryExhausted) {
+        yield* config.onRetryExhausted(item, Exit.isFailure(exit) ? exit.cause : Cause.empty)
+      }
+      return // exhausted — don't re-enqueue
+    }
+    // Re-enqueue at same priority, back of the line
+    yield* enqueueInternal(item, originalPriority, currentRetries + 1)
+  }),
+  add: realQueue.add,        // unguarded — handler knows what it's doing
+  prioritize: realQueue.prioritize,
+  defer: realQueue.defer,
+})
+```
 
 ### 5.5 Deduplication
 
@@ -470,11 +542,6 @@ Layer requirements = `RItem | RHandler | Rpersist | Rrefill | Rhooks` (all infer
 export class QueueShutdownError extends Data.TaggedError("QueueShutdownError")<{
   readonly queue: string
 }> {}
-
-export class QueueSelfEnqueueError extends Data.TaggedError("QueueSelfEnqueueError")<{
-  readonly queue: string
-  readonly item: unknown
-}> {}
 ```
 
 Enqueue after shutdown → `QueueShutdownError`.
@@ -492,11 +559,13 @@ import { QueueResource, ProcessGroup, Process, Polling, ProcessSchedule, Process
 class EmailQueue extends QueueResource.Service<EmailQueue, Email, EmailResult, SmtpError>()("@app/EmailQueue", {
   effect: (email) => smtpClient.send(email),
 
-  handler: (item, exit, queue) =>
+  handler: (item, exit, ctx) =>
     Exit.match(exit, {
-      onFailure: () => queue.defer(item),
+      onFailure: () => ctx.retry,  // re-enqueue — waits in line, not immediate
       onSuccess: (result) => Effect.logInfo(`Sent ${result.id}`),
     }),
+  retries: 5,
+  onRetryExhausted: (item) => Effect.logError(`Gave up on ${item.to}`),
 
   concurrency: 10,
   limit: RateLimiter.make(200, "1 minute"),
@@ -604,7 +673,7 @@ const MockEmailQueue = Layer.succeed(EmailQueue, {
 | `const Q = QueueResource.make({ name, ... })` | `class Q extends QueueResource.Service<Q, T, R, E>()("@app/Name", { ... }) {}` |
 | `QueueResource.make({ name })` (Tag-only) | `class Q extends QueueResource.Tag<Q, T, R, E>()("@app/Name") {}` |
 | `Q.layer` | `Q.layer` (unchanged for Service) |
-| `forkWith: (forked, item, queue) => ...` | `handler: (item, exit, queue) => Exit.match(exit, { ... })` |
+| `forkWith: (forked, item, queue) => ...` | `handler: (item, exit, ctx) => Exit.match(exit, { onFailure: () => ctx.retry, ... })` |
 | `queue.deffered(items)` | `yield* queue.defer(items)` |
 | `queue.next(items)` | `yield* queue.prioritize(items)` |
 | `yield* queue.getCompleted()` | `yield* queue.completed` |
