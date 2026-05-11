@@ -66,6 +66,13 @@ import {
   Ref,
   Semaphore,
 } from "effect";
+import {
+  ProcessStore,
+  type QueueItemCompletedEvent,
+  type QueueItemStatus,
+  type QueueLifecycleChangedEvent,
+  type QueueLifecycleTag,
+} from "./ProcessStore";
 
 // ============================================================================
 // Public Types
@@ -427,6 +434,61 @@ const makeQueueEffect = <T, R, E>(
 
     yield* Effect.logDebug(`Queue "${queueName}" initializing: concurrency=${String(concurrency)}, capacity=${String(capacity)}`);
 
+    // ─── Internal: optional ProcessStore analytics ───
+    // If ProcessStore is available in context, emit events. If not, silent no-op.
+    // This makes analytics automatic when ProcessStore is provided, but never required.
+
+    const storeOption = yield* Effect.serviceOption(ProcessStore);
+    let eventSeq = 0;
+
+    // ProcessStore.AnalyticsEventBase requires `occurredAt: Date`. We source time
+    // from Effect's Clock then construct the Date. The dateFromMillis helper isolates
+    // the Date constructor to satisfy the globalDate lint (time IS clock-sourced).
+    const dateFromMillis = (ms: number) => new Date(ms); // eslint-disable-line effect/globalDate
+
+    const recordItemEvent = (
+      status: QueueItemStatus,
+      priority: Priority,
+      durationMs: number,
+      attempts: number,
+      error?: string,
+    ): Effect.Effect<void> => {
+      if (Option.isNone(storeOption)) return Effect.void;
+      return Effect.gen(function* () {
+        const now = yield* Effect.clockWith((c) => c.currentTimeMillis);
+        eventSeq++;
+        const event: QueueItemCompletedEvent = {
+          id: `${queueName}-item-${String(eventSeq)}`,
+          type: "queue.item.completed",
+          occurredAt: dateFromMillis(now),
+          entityType: "queue",
+          entityId: queueName,
+          item: { status, priority, durationMs, attempts, error },
+        };
+        yield* storeOption.value.append(event);
+      }).pipe(Effect.ignore);
+    };
+
+    const recordLifecycleEvent = (
+      tag: QueueLifecycleTag,
+      itemsCleared?: number,
+    ): Effect.Effect<void> => {
+      if (Option.isNone(storeOption)) return Effect.void;
+      return Effect.gen(function* () {
+        const now = yield* Effect.clockWith((c) => c.currentTimeMillis);
+        eventSeq++;
+        const event: QueueLifecycleChangedEvent = {
+          id: `${queueName}-lifecycle-${String(eventSeq)}`,
+          type: "queue.lifecycle.changed",
+          occurredAt: dateFromMillis(now),
+          entityType: "queue",
+          entityId: queueName,
+          lifecycle: { tag, itemsCleared },
+        };
+        yield* storeOption.value.append(event);
+      }).pipe(Effect.ignore);
+    };
+
     // ─── Internal: wake signal ───
 
     /** Complete the current wake signal and allocate a fresh one. */
@@ -572,11 +634,13 @@ const makeQueueEffect = <T, R, E>(
               Effect.ignore,
             );
           }
+          yield* recordItemEvent("exhausted", internal.priority, 0, internal.retries + 1);
           yield* Effect.logDebug(
             `Retry exhausted for item in queue "${queueName}" after ${String(internal.retries + 1)} attempts`,
           );
           return;
         }
+        yield* recordItemEvent("retried", internal.priority, 0, internal.retries + 1);
         yield* enqueueInternal(
           [internal.item],
           internal.priority,
@@ -634,6 +698,15 @@ const makeQueueEffect = <T, R, E>(
           const elapsed = Duration.millis(end - start);
 
           yield* Ref.update(completedCount, (n) => n + 1);
+
+          // Record to ProcessStore (if available)
+          yield* recordItemEvent(
+            Exit.isSuccess(exit) ? "completed" : "failed",
+            internal.priority,
+            Duration.toMillis(elapsed),
+            internal.retries + 1,
+            Exit.isFailure(exit) ? Cause.pretty(exit.cause) : undefined,
+          );
 
           // Release dedup key so future items with same key can enter
           if (config.key !== undefined && internal.key !== undefined) {
@@ -696,6 +769,7 @@ const makeQueueEffect = <T, R, E>(
       yield* FiberSet.run(workerFibers)(workerLoop(i));
     }
 
+    yield* recordLifecycleEvent("Started");
     yield* Effect.logDebug(`Queue "${queueName}" started with ${String(concurrency)} workers`);
 
     // ─── Build public handle ───
@@ -732,12 +806,20 @@ const makeQueueEffect = <T, R, E>(
 
       completed: Ref.get(completedCount),
 
-      pause: Effect.asVoid(latch.close),
-      resume: Effect.asVoid(latch.open),
+      pause: Effect.gen(function* () {
+        yield* latch.close;
+        yield* recordLifecycleEvent("Paused");
+      }),
+
+      resume: Effect.gen(function* () {
+        yield* latch.open;
+        yield* recordLifecycleEvent("Resumed");
+      }),
 
       shutdown: Effect.gen(function* () {
         yield* Ref.set(isShutdownRef, true);
         yield* signalWake;
+        yield* recordLifecycleEvent("Shutdown");
         yield* Effect.logInfo(`Queue "${queueName}" shutting down`);
       }),
 
@@ -755,6 +837,7 @@ const makeQueueEffect = <T, R, E>(
         yield* drain(normalQueue);
         yield* drain(lowQueue);
         yield* Ref.set(completedCount, 0);
+        yield* recordLifecycleEvent("Cleared", count);
         yield* Effect.logDebug(`Queue "${queueName}" cleared ${String(count)} items`);
         return count;
       }),
