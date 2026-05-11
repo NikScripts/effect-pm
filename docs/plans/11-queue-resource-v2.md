@@ -36,7 +36,7 @@ class EmailQueue extends QueueResource.Service<EmailQueue, Email, void, SmtpErro
       onSuccess: () => Effect.void,
     }),
   concurrency: 5,
-  throttle: { limit: 100, duration: "1 minute" },
+  throttle: { make: RateLimiter.make, limit: 100, window: "1 minute" },
 }) {}
 
 // EmailQueue IS the Context.Tag
@@ -157,8 +157,18 @@ export declare namespace QueueResource {
     /** Max items per priority queue. @default 50_000 */
     readonly capacity?: number
 
-    /** Rate limit: max starts per window. */
-    readonly throttle?: { readonly limit: number; readonly duration: Duration.Input }
+    /**
+     * Rate limiter from Effect's RateLimiter module.
+     * Pass RateLimiter.make — the queue calls .consume() before each item.
+     * Requirements (e.g. RateLimiterStore) propagate to the layer.
+     */
+    readonly throttle?: {
+      readonly make: Effect<RateLimiter, never, any>
+      readonly window: Duration.Input
+      readonly limit: number
+      readonly key?: string  // defaults to queue name
+      readonly algorithm?: "fixed-window" | "token-bucket"
+    }
 
     // ─── Deduplication ───
 
@@ -266,34 +276,39 @@ On enqueue: complete `wakeSignal` (then recreate it). Workers re-enter priority 
 ```typescript
 const processItem = Effect.fn("QueueResource.processItem")(function*(item: T) {
   yield* semaphore.withPermits(1)(
-    throttle(
-      Effect.gen(function*() {
-        const start = yield* Clock.currentTimeMillis
-        const exit = yield* Effect.exit(config.effect(item))
-        const elapsed = Duration.millis((yield* Clock.currentTimeMillis) - start)
+    Effect.gen(function*() {
+      // Rate limit (if configured)
+      if (rateLimiter) {
+        yield* rateLimiter.consume({
+          key: throttleKey, limit: throttleLimit, window: throttleWindow, onExceeded: "delay"
+        })
+      }
 
-        yield* Ref.update(completedCount, (n) => n + 1)
+      const start = yield* Clock.currentTimeMillis
+      const exit = yield* Effect.exit(config.effect(item))
+      const elapsed = Duration.millis((yield* Clock.currentTimeMillis) - start)
 
-        // Dedup key release
-        if (config.key) yield* Ref.update(activeKeys, HashSet.remove(config.key(item)))
+      yield* Ref.update(completedCount, (n) => n + 1)
 
-        // Hook: onComplete
-        if (config.onComplete) {
-          yield* FiberSet.run(hookFibers, config.onComplete(item, exit, elapsed).pipe(Effect.ignore))
-        }
+      // Dedup key release
+      if (config.key) yield* Ref.update(activeKeys, HashSet.remove(config.key(item)))
 
-        // Handler or auto-retry
-        if (config.handler) {
-          yield* FiberSet.run(handlerFibers, config.handler(item, exit, queueHandle).pipe(Effect.ignore))
-        } else if (Exit.isFailure(exit) && retries > 0) {
-          yield* retryItem(item, exit.cause, 1)
-        } else if (Exit.isFailure(exit)) {
-          yield* Effect.logWarning("Item failed without handler").pipe(
-            Effect.annotateLogs({ item: JSON.stringify(item), cause: Cause.pretty(exit.cause) })
-          )
-        }
-      })
-    )
+      // Hook: onComplete
+      if (config.onComplete) {
+        yield* FiberSet.run(hookFibers, config.onComplete(item, exit, elapsed).pipe(Effect.ignore))
+      }
+
+      // Handler or auto-retry
+      if (config.handler) {
+        yield* FiberSet.run(handlerFibers, config.handler(item, exit, queueHandle).pipe(Effect.ignore))
+      } else if (Exit.isFailure(exit) && retries > 0) {
+        yield* retryItem(item, exit.cause, 1)
+      } else if (Exit.isFailure(exit)) {
+        yield* Effect.logWarning("Item failed without handler").pipe(
+          Effect.annotateLogs({ item: JSON.stringify(item), cause: Cause.pretty(exit.cause) })
+        )
+      }
+    })
   )
 })
 ```
@@ -312,20 +327,27 @@ if (config.key) {
 
 Key released after processing (success or failure, after handler).
 
-### 5.5 Throttle (token-bucket via semaphore)
+### 5.5 Throttle (Effect's `RateLimiter`)
 
 ```typescript
-const makeThrottle = (limit: number, window: Duration.Duration) =>
-  Effect.gen(function*() {
-    const sem = yield* Semaphore.make(limit)
-    return <A, E, R>(effect: Effect<A, E, R>): Effect<A, E, R> =>
-      sem.withPermits(1)(
-        Effect.ensuring(effect, Effect.sleep(window))
-      )
+// During queue setup:
+const rateLimiter = config.throttle ? yield* config.throttle.make : undefined
+
+// Before each item:
+if (rateLimiter) {
+  const result = yield* rateLimiter.consume({
+    key: config.throttle.key ?? queueName,
+    limit: config.throttle.limit,
+    window: config.throttle.window,
+    algorithm: config.throttle.algorithm ?? "token-bucket",
+    onExceeded: "delay",  // block until slot available
   })
+}
 ```
 
-Each permit = one execution slot. Held for `window / limit` duration after the effect completes. Simple, correct, no timestamp math.
+Uses Effect's `RateLimiter` from `effect/unstable/persistence`. The `make` field accepts `RateLimiter.make` (requires `RateLimiterStore`) or any compatible constructor. Requirements propagate to the queue's layer type.
+
+If no `throttle` in config → no rate limiting.
 
 ### 5.6 Scope lifecycle
 
@@ -422,7 +444,7 @@ class EmailQueue extends QueueResource.Service<EmailQueue, Email, EmailResult, S
     }),
 
   concurrency: 10,
-  throttle: { limit: 200, duration: "1 minute" },
+  throttle: { make: RateLimiter.make, limit: 200, window: "1 minute" },
   key: (email) => email.messageId,
 
   persist: (items) => db.emailOutbox.insertMany(items),
@@ -542,10 +564,10 @@ const MockEmailQueue = Layer.succeed(EmailQueue, {
 
 ## 12. Open questions
 
-1. **Throttle strategy** — token-bucket (hold permit for `window/limit` after completion) vs sliding-window. Recommendation: token-bucket (simpler, no external state).
-2. **`clear` return type** — `Effect<number>` (count cleared) or `Effect<{ high: T[]; normal: T[]; low: T[] }>` (items returned)? Recommendation: count only (cheaper, items may be large).
-3. **`refill` trigger** — auto when empty, or also expose as `queue.refill` method? Recommendation: auto only for v1; add method in future if needed.
-4. **Name in config for `QueueResource.make`** — should raw `make` accept an optional `name` for log annotations? Recommendation: yes, optional `readonly name?: string`.
+1. **`clear` return type** — `Effect<number>` (count cleared) or `Effect<{ high: T[]; normal: T[]; low: T[] }>` (items returned)? Recommendation: count only (cheaper, items may be large).
+2. **`refill` trigger** — auto when empty, or also expose as `queue.refill` method? Recommendation: auto only for v1; add method in future if needed.
+3. **Name in config for `QueueResource.make`** — should raw `make` accept an optional `name` for log annotations? Recommendation: yes, optional `readonly name?: string`.
+4. **In-memory `RateLimiterStore`** — Effect's `RateLimiter.make` requires `RateLimiterStore` (typically Redis). Should we provide a simple in-memory store adapter for local-only use, or require users to bring their own?
 
 ---
 
