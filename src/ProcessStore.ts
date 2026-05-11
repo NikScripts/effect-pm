@@ -202,6 +202,11 @@ const makeInMemoryProcessStore = Effect.sync<ProcessStoreInterface>(() => {
 // Public Service
 // ============================================================================
 
+/**
+ * Context tag for {@link ProcessStoreInterface} (in-memory implementation by default).
+ *
+ * @public
+ */
 export class ProcessStore extends Context.Service<
   ProcessStore,
   ProcessStoreInterface

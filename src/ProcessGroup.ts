@@ -1,5 +1,5 @@
 /**
- * ProcessGroup - Orchestration layer for a cohesive set of processes and queues
+ * **ProcessGroup** — orchestration for a cohesive set of processes and queues.
  *
  * A {@link ProcessGroup} owns processes that belong together: their lifecycle,
  * scheduling, queue access, and analytics. It is the unit of deployment

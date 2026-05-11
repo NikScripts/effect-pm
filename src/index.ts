@@ -40,6 +40,13 @@
  * Durable analytics: import from **`@nikscripts/effect-pm/prisma`** (see package `exports`
  * in `package.json`).
  *
+ * ## Source-only helpers
+ *
+ * The published **`exports["."]`** surface is this file. Small utilities such as
+ * **`provideLayer`** (strict `Effect.provide` alias) and **`utcDate`** helpers live under
+ * `src/` for tests, examples, and internal call sites only; they are not part of the semver
+ * API unless promoted here later.
+ *
  * @module @nikscripts/effect-pm
  */
 
