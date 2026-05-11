@@ -36,7 +36,7 @@ class EmailQueue extends QueueResource.Service<EmailQueue, Email, void, SmtpErro
       onSuccess: () => Effect.void,
     }),
   concurrency: 5,
-  throttle: { make: RateLimiter.make, limit: 100, window: "1 minute" },
+  limit: RateLimiter.make(100, "1 minute"),
 }) {}
 
 // EmailQueue IS the Context.Tag
@@ -162,17 +162,13 @@ export declare namespace QueueResource {
     readonly capacity?: number
 
     /**
-     * Rate limiter from Effect's RateLimiter module.
-     * Pass RateLimiter.make — the queue calls .consume() before each item.
-     * Requirements (e.g. RateLimiterStore) propagate to the layer.
+     * Rate limiter. Pass the result of RateLimiter.make(limit, window).
+     * The queue calls .consume() before each item with onExceeded: "delay".
+     * Requirements propagate to the layer.
+     *
+     * @example limit: RateLimiter.make(10, "2 seconds")
      */
-    readonly throttle?: {
-      readonly make: Effect<RateLimiter, never, any>
-      readonly window: Duration.Input
-      readonly limit: number
-      readonly key?: string  // defaults to queue name
-      readonly algorithm?: "fixed-window" | "token-bucket"
-    }
+    readonly limit?: Effect<RateLimiter, never, any>
 
     // ─── Deduplication ───
 
@@ -222,7 +218,7 @@ export declare namespace QueueResource {
 
 4. **`persist` replaces `cache`** — "persist" is write-through semantics.
 
-5. **`throttle.duration` accepts `Duration.Input`** — strings like `"1 minute"`, `"500 millis"`.
+5. **`limit` accepts `RateLimiter.make(n, window)`** — e.g. `limit: RateLimiter.make(10, "2 seconds")`. Uses Effect's `RateLimiter`.
 
 6. **Hooks are fire-and-forget** — errors logged, never propagate.
 
@@ -283,9 +279,7 @@ const processItem = Effect.fn("QueueResource.processItem")(function*(item: T) {
     Effect.gen(function*() {
       // Rate limit (if configured)
       if (rateLimiter) {
-        yield* rateLimiter.consume({
-          key: throttleKey, limit: throttleLimit, window: throttleWindow, onExceeded: "delay"
-        })
+        yield* rateLimiter.consume({ key: queueName, onExceeded: "delay" })
       }
 
       const start = yield* Clock.currentTimeMillis
@@ -331,27 +325,26 @@ if (config.key) {
 
 Key released after processing (success or failure, after handler).
 
-### 5.5 Throttle (Effect's `RateLimiter`)
+### 5.5 Rate limiting (Effect's `RateLimiter`)
 
 ```typescript
 // During queue setup:
-const rateLimiter = config.throttle ? yield* config.throttle.make : undefined
+const rateLimiter = config.limit ? yield* config.limit : undefined
 
 // Before each item:
 if (rateLimiter) {
-  const result = yield* rateLimiter.consume({
-    key: config.throttle.key ?? queueName,
-    limit: config.throttle.limit,
-    window: config.throttle.window,
-    algorithm: config.throttle.algorithm ?? "token-bucket",
+  yield* rateLimiter.consume({
+    key: queueName,
+    limit: /* from the RateLimiter instance */,
+    window: /* from the RateLimiter instance */,
     onExceeded: "delay",  // block until slot available
   })
 }
 ```
 
-Uses Effect's `RateLimiter` from `effect/unstable/persistence`. The `make` field accepts `RateLimiter.make` (requires `RateLimiterStore`) or any compatible constructor. Requirements propagate to the queue's layer type.
+The user passes `RateLimiter.make(limit, window)` in config. The queue `yield*`s it during setup and calls `.consume()` before each item. Requirements (e.g. `RateLimiterStore`) propagate to the queue's layer type.
 
-If no `throttle` in config → no rate limiting.
+If no `limit` in config → no rate limiting.
 
 ### 5.6 Scope lifecycle
 
@@ -448,7 +441,7 @@ class EmailQueue extends QueueResource.Service<EmailQueue, Email, EmailResult, S
     }),
 
   concurrency: 10,
-  throttle: { make: RateLimiter.make, limit: 200, window: "1 minute" },
+  limit: RateLimiter.make(200, "1 minute"),
   key: (email) => email.messageId,
 
   persist: (items) => db.emailOutbox.insertMany(items),
@@ -571,7 +564,7 @@ const MockEmailQueue = Layer.succeed(EmailQueue, {
 1. **`clear` return type** — `Effect<number>` (count cleared) or `Effect<{ high: T[]; normal: T[]; low: T[] }>` (items returned)? Recommendation: count only (cheaper, items may be large).
 2. **`refill` trigger** — auto when empty, or also expose as `queue.refill` method? Recommendation: auto only for v1; add method in future if needed.
 3. **Name in config for `QueueResource.make`** — should raw `make` accept an optional `name` for log annotations? Recommendation: yes, optional `readonly name?: string`.
-4. **In-memory `RateLimiterStore`** — Effect's `RateLimiter.make` requires `RateLimiterStore` (typically Redis). Should we provide a simple in-memory store adapter for local-only use, or require users to bring their own?
+4. **In-memory `RateLimiterStore`** — Effect's `RateLimiter.make` requires `RateLimiterStore` (typically Redis). Should we provide a simple in-memory store adapter for local-only use, or require users to bring their own? (Alt: if `RateLimiter.make` doesn't accept positional `(limit, window)` args directly, we may need a thin wrapper or our own local implementation matching the same interface.)
 
 ---
 
