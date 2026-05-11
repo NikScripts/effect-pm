@@ -142,12 +142,16 @@ export declare namespace QueueResource {
     readonly effect: (item: T) => Effect<R, E, RItem>
 
     /**
-     * Handle each item's result. Runs in a managed fiber.
-     * Receives the item and its Exit (success or failure).
+     * Handle each item's result. **Always forked** — runs in its own fiber,
+     * never blocks the worker from picking up the next item.
+     * Receives the item, its Exit, and the queue handle (for re-enqueue).
      * Must return Effect<void, never, RHandler> (errors eliminated).
      * Optional — unhandled failures are logged.
+     *
+     * Managed by a FiberSet: in-flight handlers are awaited on scope close
+     * but never block item throughput.
      */
-    readonly handler?: (item: T, exit: Exit<R, E>) => Effect<void, never, RHandler>
+    readonly handler?: (item: T, exit: Exit<R, E>, queue: Queue<T, R, E>) => Effect<void, never, RHandler>
 
     // ─── Concurrency ───
 
@@ -208,7 +212,7 @@ export declare namespace QueueResource {
 
 **Key decisions:**
 
-1. **`handler` replaces `forkWith`** — receives `Exit<R, E>` directly (Effect-native). Clearer name. Always optional — unhandled failures are logged.
+1. **`handler` replaces `forkWith`** — receives `Exit<R, E>` directly (Effect-native). Clearer name. **Always forked into its own fiber** — the worker immediately moves to the next item without waiting for the handler to complete. In-flight handler fibers are tracked by a `FiberSet` and awaited on scope close (graceful shutdown). Always optional — unhandled failures are logged.
 
 2. **No conditional required/optional handler.** Handler is always optional. When `E ≠ never` and no handler:
    - `retries > 0` → auto-retry, then `onRetryExhausted`.
@@ -298,7 +302,7 @@ const processItem = Effect.fn("QueueResource.processItem")(function*(item: T) {
         yield* FiberSet.run(hookFibers, config.onComplete(item, exit, elapsed).pipe(Effect.ignore))
       }
 
-      // Handler or auto-retry
+      // Handler: FORKED — does not block the worker from taking the next item
       if (config.handler) {
         yield* FiberSet.run(handlerFibers, config.handler(item, exit, queueHandle).pipe(Effect.ignore))
       } else if (Exit.isFailure(exit) && retries > 0) {
