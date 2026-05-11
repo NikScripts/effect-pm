@@ -94,6 +94,8 @@ export interface HandlerContext<T> {
  */
 export interface QueueResourceConfig<T, R, E> {
   readonly name?: string;
+  /** Start with processing paused. Call resume to begin. @default false */
+  readonly paused?: boolean;
   readonly effect: (
     item: T,
     ctx: EffectContext<T>,
@@ -188,7 +190,7 @@ const makeQueueEffect = <T, R, E>(
     const normalQueue = yield* Queue.bounded<InternalItem<T>>(capacity);
     const lowQueue = yield* Queue.bounded<InternalItem<T>>(capacity);
 
-    const latch = yield* Latch.make(true);
+    const latch = yield* Latch.make(!(config.paused ?? false));
     const semaphore = yield* Semaphore.make(concurrency);
     const completedCount = yield* Ref.make(0);
     const isShutdownRef = yield* Ref.make(false);
@@ -407,6 +409,7 @@ const makeQueueEffect = <T, R, E>(
 
             yield* latch.await;
             const internal = yield* takeNext;
+            yield* latch.await;
             yield* processItem(internal);
           }),
         ),
