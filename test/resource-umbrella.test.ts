@@ -11,7 +11,7 @@ describe("Resource umbrella", () => {
     expect(Resource.make).toBe(RunResource.make)
     expect(Resource.makeRunner).toBe(RunResource.makeRunner)
     expect(Resource.makeHttpApiClient).toBe(HttpApiResource.make)
-    expect(Resource.makeQueue).toBe(QueueResource.make)
+    expect(Resource.makeQueue).toBe(QueueResource.layer)
     expect(Resource.acceptJson).toBe(HttpApiResource.acceptJson)
   })
 })

@@ -61,7 +61,7 @@ export { Process } from "./Process";
 export { Polling } from "./Polling";
 export { ProcessSchedule } from "./ProcessSchedule";
 export { ProcessGroup } from "./ProcessGroup";
-export { QueueResource, Cause } from "./QueueResource";
+export { QueueResource } from "./QueueResource";
 export { RunResource } from "./RunResource";
 export { HttpClientRunGate } from "./HttpClientRunGate";
 export {
@@ -128,13 +128,12 @@ export type { ProcessScheduleService } from "./ProcessSchedule";
 // Types - QueueResource
 export type {
   QueueRef,
-  /** @deprecated Use {@link QueueRef}. */
-  QueueResourceInstance,
-  QueueResourceInterface,
+  QueueHandle,
   QueueResourceConfig,
-  QueueResourceConfigBase,
-  QueueResourceDetails,
-  QueueItemEffectRequirements,
+  QueueShutdownError,
+  EffectContext,
+  HandlerContext,
+  Priority,
 } from "./QueueResource";
 
 // Types - RunResource

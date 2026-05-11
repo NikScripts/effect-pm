@@ -16,6 +16,6 @@ export const Resource = {
   makeRunner: RunResource.makeRunner,
   makeHttpApiClient: HttpApiResource.make,
   layerHttpApiClient: HttpApiResource.layerEffect,
-  makeQueue: QueueResource.make,
+  makeQueue: QueueResource.layer,
   acceptJson: HttpApiResource.acceptJson,
 } as const;
