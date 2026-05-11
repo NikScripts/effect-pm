@@ -138,7 +138,11 @@ export declare namespace QueueResource {
   interface Config<T, R, E, RHandler = never, RItem = never> {
     // ─── Core ───
 
-    /** Process each item. Receives the queue handle for self-enqueue, priority escalation, etc. */
+    /**
+     * Process each item. Receives a guarded queue handle for enqueuing follow-up work.
+     * The guarded handle throws QueueSelfEnqueueError at runtime if you attempt
+     * to enqueue the same item (by reference or by key) — prevents infinite loops.
+     */
     readonly effect: (item: T, queue: Queue<T, R, E>) => Effect<R, E, RItem>
 
     /**
@@ -311,7 +315,56 @@ const processItem = Effect.fn("QueueResource.processItem")(function*(item: T) {
 })
 ```
 
-### 5.4 Deduplication
+### 5.4 Guarded queue handle (self-enqueue protection)
+
+The `effect` receives a **guarded** queue handle — not the raw handle. The guard rejects attempts to re-enqueue the current item:
+
+```typescript
+const makeGuardedQueue = (item: T, realQueue: Queue<T, R, E>): Queue<T, R, E> => {
+  const isSameItem = (candidate: T): boolean => {
+    // Reference equality
+    if (candidate === item) return true
+    // Key equality (if key extractor is configured)
+    if (config.key && config.key(candidate) === config.key(item)) return true
+    return false
+  }
+
+  const guard = (candidates: T | ReadonlyArray<T>): Effect<void> => {
+    const items = Array.isArray(candidates) ? candidates : [candidates]
+    const selfMatch = items.find(isSameItem)
+    if (selfMatch) {
+      return Effect.die(new QueueSelfEnqueueError({ queue: queueName, item: selfMatch }))
+    }
+    return Effect.void
+  }
+
+  return {
+    ...realQueue,
+    add: (items) => Effect.zipRight(guard(items), realQueue.add(items)),
+    prioritize: (items) => Effect.zipRight(guard(items), realQueue.prioritize(items)),
+    defer: (items) => Effect.zipRight(guard(items), realQueue.defer(items)),
+  }
+}
+```
+
+Usage — this is safe:
+```typescript
+effect: (order, queue) => Effect.gen(function*() {
+  const subOrders = yield* splitOrder(order)
+  yield* queue.add(subOrders) // ✅ different items
+})
+```
+
+This throws at runtime:
+```typescript
+effect: (order, queue) => Effect.gen(function*() {
+  yield* queue.add(order) // 💥 QueueSelfEnqueueError — same item
+})
+```
+
+The handler does NOT get a guarded handle — re-enqueue from the handler is a valid retry pattern.
+
+### 5.5 Deduplication
 
 On enqueue:
 ```typescript
@@ -325,7 +378,7 @@ if (config.key) {
 
 Key released after processing (success or failure, after handler).
 
-### 5.5 Rate limiting (Effect's `RateLimiter`)
+### 5.6 Rate limiting (Effect's `RateLimiter`)
 
 ```typescript
 // During queue setup:
@@ -346,7 +399,7 @@ The user passes `RateLimiter.make(limit, window)` in config. The queue `yield*`s
 
 If no `limit` in config → no rate limiting.
 
-### 5.6 Scope lifecycle
+### 5.7 Scope lifecycle
 
 ```typescript
 QueueResource.make = (config) => Effect.gen(function*() {
@@ -416,6 +469,11 @@ Layer requirements = `RItem | RHandler | Rpersist | Rrefill | Rhooks` (all infer
 ```typescript
 export class QueueShutdownError extends Data.TaggedError("QueueShutdownError")<{
   readonly queue: string
+}> {}
+
+export class QueueSelfEnqueueError extends Data.TaggedError("QueueSelfEnqueueError")<{
+  readonly queue: string
+  readonly item: unknown
 }> {}
 ```
 
