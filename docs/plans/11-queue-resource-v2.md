@@ -224,7 +224,7 @@ export declare namespace QueueResource {
 
   type Priority = "high" | "normal" | "low"
 
-  /** Passed to effect — guarded enqueue for derived work only. */
+  /** Passed to effect — guarded enqueue for derived work + item metadata. */
   interface EffectContext<T, R, E> {
     /** Enqueue derived items (normal priority). Warns+drops if same item detected. */
     readonly add: (items: T | ReadonlyArray<T>) => Effect<void>
@@ -232,6 +232,14 @@ export declare namespace QueueResource {
     readonly prioritize: (items: T | ReadonlyArray<T>) => Effect<void>
     /** Enqueue derived items (low priority). Warns+drops if same item detected. */
     readonly defer: (items: T | ReadonlyArray<T>) => Effect<void>
+
+    // ─── Item metadata ───
+    /** How many times this item has been processed (1 = first attempt). */
+    readonly attempts: number
+    /** When the item first entered the queue (survives retries). */
+    readonly enqueuedAt: Date
+    /** The priority level this item was enqueued at. */
+    readonly priority: Priority
   }
 
   /**
@@ -257,6 +265,14 @@ export declare namespace QueueResource {
     readonly prioritize: (items: T | ReadonlyArray<T>) => Effect<void>
     /** Enqueue new/derived items at low priority. */
     readonly defer: (items: T | ReadonlyArray<T>) => Effect<void>
+
+    // ─── Item metadata ───
+    /** How many times this item has been processed (1 = first attempt). */
+    readonly attempts: number
+    /** When the item first entered the queue (survives retries). */
+    readonly enqueuedAt: Date
+    /** The priority level this item was enqueued at. */
+    readonly priority: Priority
   }
 }
 ```
