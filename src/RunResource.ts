@@ -141,12 +141,12 @@ export interface RunResourceRunnerConfig {
  * `yield*` of the same gate share the same concurrency pool.
  */
 const makeGateInternal = (concurrency: number) =>
-  Effect.gen(function* () {
-    const sem = yield* Semaphore.make(concurrency);
-
-    return <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
-      sem.withPermits(1)(effect);
-  });
+  Effect.map(
+    Semaphore.make(concurrency),
+    (sem) =>
+      <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+        sem.withPermits(1)(effect),
+  );
 
 // ============================================================================
 // Internal: build the scoped RunGate effect
@@ -154,38 +154,35 @@ const makeGateInternal = (concurrency: number) =>
 
 const makeRunGateEffect = <T, A, E>(
   config: RunResourceConfig<T, A, E>,
-) =>
-  Effect.gen(function* () {
-    const concurrency = config.concurrency ?? 1;
-    const gate = yield* makeGateInternal(concurrency);
-
-    yield* Effect.logDebug(
-      `RunResource "${config.name ?? "anonymous"}" initialized: concurrency=${String(concurrency)}`,
-    );
-
-    const runGate: RunGate<T, A, E> = (input: T) => gate(config.effect(input));
-    return runGate;
-  });
+) => {
+  const concurrency = config.concurrency ?? 1;
+  return makeGateInternal(concurrency).pipe(
+    Effect.tap(() =>
+      Effect.logDebug(
+        `RunResource "${config.name ?? "anonymous"}" initialized: concurrency=${String(concurrency)}`,
+      ),
+    ),
+    Effect.map((gate): RunGate<T, A, E> => (input: T) => gate(config.effect(input))),
+  );
+};
 
 // ============================================================================
 // Internal: build the scoped Runner effect
 // ============================================================================
 
-const makeRunnerEffect = (config: RunResourceRunnerConfig) =>
-  Effect.gen(function* () {
-    const concurrency = config.concurrency ?? 1;
-    const gate = yield* makeGateInternal(concurrency);
-
-    yield* Effect.logDebug(
-      `RunResource runner "${config.name ?? "anonymous"}" initialized: concurrency=${String(concurrency)}`,
-    );
-
-    const runner: RunResourceRunner = <A, E, R>(
-      effect: Effect.Effect<A, E, R>,
-    ): Effect.Effect<A, E, R> => gate(effect);
-
-    return runner;
-  });
+const makeRunnerEffect = (config: RunResourceRunnerConfig) => {
+  const concurrency = config.concurrency ?? 1;
+  return makeGateInternal(concurrency).pipe(
+    Effect.tap(() =>
+      Effect.logDebug(
+        `RunResource runner "${config.name ?? "anonymous"}" initialized: concurrency=${String(concurrency)}`,
+      ),
+    ),
+    Effect.map((gate): RunResourceRunner =>
+      <A, E, R>(effect: Effect.Effect<A, E, R>) => gate(effect),
+    ),
+  );
+};
 
 // ============================================================================
 // Public API
@@ -341,12 +338,10 @@ export const makeRunResourceWrap = (
   <A, E, R>(inner: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>,
   never,
   never
-> => {
-  if (limits === undefined) {
-    return Effect.succeed(<A, E, R>(inner: Effect.Effect<A, E, R>) => inner);
-  }
-  return Effect.map(
-    makeGateInternal(limits.concurrency ?? 1),
-    (gate) => <A, E, R>(inner: Effect.Effect<A, E, R>) => gate(inner),
-  );
-};
+> =>
+  limits === undefined
+    ? Effect.succeed(<A, E, R>(inner: Effect.Effect<A, E, R>) => inner)
+    : Effect.map(
+        makeGateInternal(limits.concurrency ?? 1),
+        (gate) => <A, E, R>(inner: Effect.Effect<A, E, R>) => gate(inner),
+      );

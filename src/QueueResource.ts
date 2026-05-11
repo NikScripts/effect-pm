@@ -779,49 +779,42 @@ const makeQueueEffect = <T, R, E>(
       prioritize: (items) => enqueuePublic(items, "high"),
       defer: (items) => enqueuePublic(items, "low"),
 
-      size: Effect.gen(function* () {
-        const h = yield* Queue.size(highQueue);
-        const n = yield* Queue.size(normalQueue);
-        const l = yield* Queue.size(lowQueue);
-        return Math.max(0, h) + Math.max(0, n) + Math.max(0, l);
-      }),
+      size: Effect.map(
+        Effect.all([Queue.size(highQueue), Queue.size(normalQueue), Queue.size(lowQueue)]),
+        ([h, n, l]) => Math.max(0, h) + Math.max(0, n) + Math.max(0, l),
+      ),
 
-      sizes: Effect.gen(function* () {
-        const h = yield* Queue.size(highQueue);
-        const n = yield* Queue.size(normalQueue);
-        const l = yield* Queue.size(lowQueue);
-        return {
+      sizes: Effect.map(
+        Effect.all([Queue.size(highQueue), Queue.size(normalQueue), Queue.size(lowQueue)]),
+        ([h, n, l]) => ({
           high: Math.max(0, h),
           normal: Math.max(0, n),
           low: Math.max(0, l),
-        };
-      }),
+        }),
+      ),
 
-      isEmpty: Effect.gen(function* () {
-        const h = yield* Queue.size(highQueue);
-        const n = yield* Queue.size(normalQueue);
-        const l = yield* Queue.size(lowQueue);
-        return h <= 0 && n <= 0 && l <= 0;
-      }),
+      isEmpty: Effect.map(
+        Effect.all([Queue.size(highQueue), Queue.size(normalQueue), Queue.size(lowQueue)]),
+        ([h, n, l]) => h <= 0 && n <= 0 && l <= 0,
+      ),
 
       completed: Ref.get(completedCount),
 
-      pause: Effect.gen(function* () {
-        yield* latch.close;
-        yield* recordLifecycleEvent("Paused");
-      }),
+      pause: latch.close.pipe(
+        Effect.andThen(recordLifecycleEvent("Paused")),
+        Effect.asVoid,
+      ),
 
-      resume: Effect.gen(function* () {
-        yield* latch.open;
-        yield* recordLifecycleEvent("Resumed");
-      }),
+      resume: latch.open.pipe(
+        Effect.andThen(recordLifecycleEvent("Resumed")),
+        Effect.asVoid,
+      ),
 
-      shutdown: Effect.gen(function* () {
-        yield* Ref.set(isShutdownRef, true);
-        yield* signalWake;
-        yield* recordLifecycleEvent("Shutdown");
-        yield* Effect.logInfo(`Queue "${queueName}" shutting down`);
-      }),
+      shutdown: Ref.set(isShutdownRef, true).pipe(
+        Effect.andThen(signalWake),
+        Effect.andThen(recordLifecycleEvent("Shutdown")),
+        Effect.andThen(Effect.logInfo(`Queue "${queueName}" shutting down`)),
+      ),
 
       clear: Effect.gen(function* () {
         let count = 0;
