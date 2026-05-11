@@ -27,6 +27,7 @@ numbering encodes reading order, not priority.
 | 08 | [Top-level `ProcessManager` (multi-group)](./08-process-manager-future.md) | Deferred    |
 | 09 | [Process v2 — effect-first, Layer polling & schedule](./09-process-v2-effect-first.md) | **Canonical** (implementation target) |
 | 10 | [Schedule controls, reconcile, and removal cleanup](./10-schedule-controls-and-reconcile.md) | Planned (next beta) |
+| 11 | [QueueResource v2 — class-based + features](./11-queue-resource-v2.md) | **Plan** (implementation target) |
 
 If you are about to add a new concept that is not described here, write
 the doc first.
