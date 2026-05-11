@@ -11,8 +11,17 @@
 
 import { Duration, Effect, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Process, Polling, ProcessGroup, ProcessSchedule, ProcessStore } from "../src";
+import {
+  Process,
+  Polling,
+  ProcessGroup,
+  type ProcessGroupErrors,
+  ProcessSchedule,
+  ProcessStore,
+} from "../src";
 import { runNodeProgramOrExit } from "./mocks/demo-harness.mock.js";
+import { provideLayer } from "../src/provideLayer.js";
+import { utcDateFromMillis } from "../src/utcDate.js";
 
 /**
  * End-to-end: build group → start process runtime → advance TestClock →
@@ -29,8 +38,8 @@ const program = Effect.gen(function* () {
     polling: Polling.spaced(Duration.millis(200)),
     schedule: ProcessSchedule.define(({ all, at, window }) =>
       all(
-        window("match-101", new Date(0), new Date(2_000)),
-        at("match-102", new Date(60_000)),
+        window("match-101", utcDateFromMillis(0), utcDateFromMillis(2_000)),
+        at("match-102", utcDateFromMillis(60_000)),
       )
     ),
     effect: Effect.gen(function* () {
@@ -71,8 +80,11 @@ const program = Effect.gen(function* () {
   // Stop the managed runtime and close its scope.
   yield* group.stopProcess(liveGamePoller.name);
 }).pipe(
-  Effect.provide(Layer.mergeAll(TestClock.layer(), ProcessStore.layer)),
+  provideLayer(Layer.mergeAll(TestClock.layer(), ProcessStore.layer)),
   Effect.scoped,
+  Effect.catch((error: ProcessGroupErrors) =>
+    Effect.logError(`Game-window demo failed: ${String(error)}`),
+  ),
 );
 
 runNodeProgramOrExit(program, "✅ process-game-window-with-group.ts finished");

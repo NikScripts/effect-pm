@@ -11,26 +11,41 @@
 
 import { Duration, Option } from "effect";
 
-/** When the schedule does not supply `nextScheduleTransition`. */
-/** @public */
+/**
+ * When the schedule does not supply `nextScheduleTransition`, the supervisor
+ * sleeps this long before re-reading {@link ProcessScheduleService.status}.
+ *
+ * @public
+ */
 export const DEFAULT_SCHEDULE_POLL_WHILE_DISARMED = Duration.seconds(5);
 
 /**
- * Lower bound for configured disarmed fallback polls so `Duration.zero`
- * or negative durations cannot create a busy loop.
+ * Lower bound for configured disarmed fallback polls so `Duration.zero` or
+ * negative durations cannot create a busy loop.
+ *
+ * @public
  */
-/** @public */
 export const MIN_SCHEDULE_POLL_WHILE_DISARMED = Duration.millis(100);
 
-/** When a hint date is in the past or equal to “now”, re-check after this delay. */
-/** @public */
+/**
+ * When a hint date is in the past or equal to “now”, re-check after this delay.
+ *
+ * @public
+ */
 export const DISARMED_HINT_SLEEP_MIN = Duration.seconds(1);
 
-/** Upper bound so refreshed cron hints are picked up even if a stale date was far out. */
-/** @public */
+/**
+ * Upper bound so refreshed cron hints are picked up even if a stale date was far out.
+ *
+ * @public
+ */
 export const DISARMED_HINT_SLEEP_MAX = Duration.minutes(5);
 
-/** @public */
+/**
+ * Clamp a caller-configured disarmed poll duration to a safe minimum.
+ *
+ * @public
+ */
 export const resolveDisarmedFallbackPoll = (
   configured: Duration.Duration | undefined,
 ): Duration.Duration =>

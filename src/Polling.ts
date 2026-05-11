@@ -46,7 +46,9 @@ export interface PollingService {
   readonly peekCadence: Effect.Effect<Option.Option<Duration.Duration>>;
 }
 
-const PollingTag = Context.Service<PollingService>("@effect-pm/Polling");
+export class PollingTag extends Context.Service<PollingTag, PollingService>()(
+  "@nikscripts/effect-pm/Polling/PollingTag",
+) {}
 
 // ============================================================================
 // Internal: wakeable sleep
@@ -85,7 +87,7 @@ const makeWakeableAwait = (
 
 const spacedLayer = (
   duration: Duration.Duration,
-): Layer.Layer<PollingService, never, never> =>
+): Layer.Layer<PollingTag, never, never> =>
   Layer.effect(
     PollingTag,
     Effect.gen(function* () {
@@ -146,7 +148,7 @@ const acceleratingLayer = (options: {
   readonly config: Ref.Ref<AcceleratingPollConfig>;
   readonly iteration: Ref.Ref<number>;
   readonly excitement: Ref.Ref<number>;
-}): Layer.Layer<PollingService, never, never> =>
+}): Layer.Layer<PollingTag, never, never> =>
   Layer.effect(
     PollingTag,
     Effect.gen(function* () {
@@ -211,7 +213,7 @@ const acceleratingLayer = (options: {
  */
 const acceleratingScopedLayer = (
   initial: AcceleratingPollConfig,
-): Layer.Layer<PollingService, never, never> =>
+): Layer.Layer<PollingTag, never, never> =>
   Layer.unwrap(
     Effect.gen(function* () {
       const config = yield* Ref.make(initial);
@@ -222,7 +224,12 @@ const acceleratingScopedLayer = (
   );
 
 /**
- * Context tag for {@link PollingService}, plus static factories for cadence layers.
+ * Context tag for {@link PollingService}, plus preset cadence layers.
+ *
+ * @remarks
+ * - **`spaced`** — fixed delay between ticks (wakeable).
+ * - **`accelerating`** — shared refs; usually prefer **`acceleratingScoped`** for isolation.
+ * - **`acceleratingScoped`** — `Layer.unwrap` so each scope gets its own refs.
  *
  * @public
  */

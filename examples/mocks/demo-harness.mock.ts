@@ -27,17 +27,10 @@ export const forkSupervisedAndSideThenAdvanceTime = (options: {
   });
 
 export const runNodeProgramOrExit = (
-  program: Effect.Effect<void, unknown, never>,
+  program: Effect.Effect<void, never, never>,
   successLine: string,
 ): void => {
-  Effect.runPromise(program).then(
-    () => {
-      console.log(successLine);
-      process.exit(0);
-    },
-    (e) => {
-      console.error("❌", e);
-      process.exit(1);
-    },
+  void Effect.runPromise(
+    program.pipe(Effect.tap(() => Effect.logInfo(successLine))),
   );
 };

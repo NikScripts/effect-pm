@@ -30,7 +30,7 @@
  * @module ProcessStore/Prisma
  */
 
-import { Context, Effect, Layer } from "effect";
+import { Context, Data, Effect, Layer } from "effect";
 import {
   ProcessStore,
   type AnalyticsEvent,
@@ -76,7 +76,7 @@ import type {
 export class PrismaClientService extends Context.Service<
   PrismaClientService,
   PrismaProcessStoreClient
->()("@nikscripts/effect-pm/PrismaClientService") {}
+>()("@nikscripts/effect-pm/prisma/PrismaProcessStore/PrismaClientService") {}
 
 /**
  * Build a layer providing {@link PrismaClientService} from a concrete client.
@@ -93,14 +93,18 @@ export const prismaClientLayer = (config: {
 // ============================================================================
 
 const buildWindow = (opts: QueryOpts | undefined) => {
-  if (!opts?.before && !opts?.after) {
+  if (opts?.before === undefined && opts?.after === undefined) {
     return undefined;
   }
   const window: { gt?: Date; lt?: Date } = {};
-  if (opts.after) window.gt = opts.after;
-  if (opts.before) window.lt = opts.before;
+  if (opts?.after !== undefined) window.gt = opts.after;
+  if (opts?.before !== undefined) window.lt = opts.before;
   return window;
 };
+
+class PrismaProcessStoreError extends Data.TaggedError("PrismaProcessStoreError")<{
+  readonly cause: unknown;
+}> {}
 
 const findEventsOfType = <T extends AnalyticsEvent>(
   client: PrismaProcessStoreClient,
@@ -109,19 +113,20 @@ const findEventsOfType = <T extends AnalyticsEvent>(
   opts: QueryOpts | undefined,
   refine: (event: AnalyticsEvent) => event is T,
 ): Effect.Effect<T[]> => {
+  const window = buildWindow(opts);
   const args: EffectPmEventFindManyArgs = {
     where: {
       type,
       entityType: "process",
       entityId: processId,
-      ...(buildWindow(opts) ? { occurredAt: buildWindow(opts) } : {}),
+      ...(window === undefined ? {} : { occurredAt: window }),
     },
     orderBy: { occurredAt: "desc" },
     ...(opts?.limit !== undefined ? { take: Math.max(0, opts.limit) } : {}),
   };
   return Effect.tryPromise({
     try: () => client.effectPmEvent.findMany(args),
-    catch: (cause) => cause,
+    catch: (cause) => new PrismaProcessStoreError({ cause }),
   }).pipe(
     Effect.map((rows) => {
       const out: T[] = [];
@@ -169,7 +174,7 @@ export const make = (
     Effect.tryPromise({
       try: () =>
         client.effectPmEvent.create({ data: encodeEvent(event) }).then(() => {}),
-      catch: (cause) => cause,
+      catch: (cause) => new PrismaProcessStoreError({ cause }),
     }).pipe(Effect.orDie),
 
   appendBatch: (events) =>
@@ -181,7 +186,7 @@ export const make = (
             skipDuplicates: true,
           })
           .then(() => {}),
-      catch: (cause) => cause,
+      catch: (cause) => new PrismaProcessStoreError({ cause }),
     }).pipe(Effect.orDie),
 
   getProcessExecutions: (processId, opts) =>

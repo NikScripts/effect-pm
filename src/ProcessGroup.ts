@@ -1,5 +1,5 @@
 /**
- * ProcessGroup - Orchestration layer for a cohesive set of processes and queues
+ * **ProcessGroup** — orchestration for a cohesive set of processes and queues.
  *
  * A {@link ProcessGroup} owns processes that belong together: their lifecycle,
  * scheduling, queue access, and analytics. It is the unit of deployment
@@ -28,7 +28,7 @@
  * @module ProcessGroup
  */
 
-import { Duration, Effect, Scope, Fiber, Ref, Data, Context, Exit, Option } from "effect";
+import { Clock, DateTime, Duration, Effect, Scope, Fiber, Ref, Data, Context, Exit, Option } from "effect";
 import type { Process, ProcessDetails } from "./Process";
 import type { QueueRef } from "./QueueResource";
 import { ControlService } from "./ControlService";
@@ -42,7 +42,7 @@ import { ProcessStore, type ProcessLifecycleChangedEvent } from "./ProcessStore"
  * Extract the identifier type from a Context.Key
  * @internal
  */
-type TagIdentifier<T> = T extends Context.Key<infer I, any> ? I : never;
+type TagIdentifier<T> = T extends Context.Key<infer I, infer _> ? I : never;
 
 // ============================================================================
 // Public Types
@@ -79,6 +79,10 @@ export type AllGroupProcessesRequirements<
  *
  * @internal
  */
+const queueInstance = <Identifier, Q extends QueueRef<any, any, any, any>>(
+  tag: Context.Key<Identifier, Q>,
+): Effect.Effect<Q, never, Identifier> => tag.asEffect();
+
 const processMapFromTuple = <const Processes extends readonly Process<any>[]>(
   processes: Processes,
 ): Map<string, Process<AllGroupProcessesRequirements<Processes>>> => {
@@ -387,7 +391,6 @@ const recordLifecycleIfAvailable = (event: ProcessLifecycleChangedEvent): Effect
         onSome: (store) => store.append(event),
       }),
     ),
-    Effect.catch(() => Effect.void),
   );
 
 // ============================================================================
@@ -404,8 +407,8 @@ const removeProcess =
         Effect.map((processes) => processes.get(name)),
       );
 
-      if (!process) {
-        yield* new ProcessNotFoundError({ processName: name });
+      if (process === undefined) {
+        return yield* new ProcessNotFoundError({ processName: name });
       }
 
       const status = yield* Ref.get(state.statuses).pipe(
@@ -445,17 +448,6 @@ const removeProcess =
       yield* Effect.logInfo(`✅ Process '${name}' removed successfully`);
     });
 
-const emptyProcessDetails: ProcessDetails = {
-  lastRun: null,
-  executions: 0,
-  firstStartup: null,
-  armed: false,
-  nextScheduleTransition: Option.none(),
-  nextPollCadence: Option.none(),
-  activeInstances: 0,
-  nextTriggerRun: Option.none(),
-};
-
 const processDetailsToGroupFields = (details: ProcessDetails) => ({
   lastRun: details.lastRun,
   nextRun: Option.match(details.nextTriggerRun, {
@@ -484,15 +476,14 @@ const listProcesses = <R>(
     const detailsPromises = Array.from(processes.entries()).map(
       ([name, process]) =>
         Effect.gen(function* () {
-          const status = statuses.get(name) || "stopped";
-          const startTime = startTimes.get(name) || null;
-          const uptime = startTime ? Date.now() - startTime.getTime() : 0;
+          const status = statuses.get(name) ?? "stopped";
+          const startTime = startTimes.get(name) ?? null;
+          const nowMillis = yield* Clock.currentTimeMillis;
+          const uptime = startTime === null ? 0 : nowMillis - startTime.getTime();
 
           let scheduledDetails: Record<string, unknown> = {};
           if (process.type === "managed" || process.type === "scheduled") {
-            const details = yield* process.getStatus().pipe(
-              Effect.catch(() => Effect.succeed(emptyProcessDetails)),
-            );
+            const details = yield* process.getStatus();
             scheduledDetails = processDetailsToGroupFields(details);
           }
 
@@ -525,7 +516,7 @@ const releaseProcessForkResources =
         Effect.map((scopes) => scopes.get(name)),
       );
 
-      if (scope) {
+      if (scope !== undefined) {
         yield* Scope.close(scope, Exit.void);
       }
 
@@ -540,10 +531,11 @@ const releaseProcessForkResources =
         next.delete(name);
         return next;
       });
+      const stoppedAt = yield* DateTime.nowAsDate;
       yield* recordLifecycleIfAvailable({
-        id: `${name}-lifecycle-stopped-${Date.now()}`,
+        id: `${name}-lifecycle-stopped-${stoppedAt.getTime()}`,
         type: "process.lifecycle.changed",
-        occurredAt: new Date(),
+        occurredAt: stoppedAt,
         entityType: "process",
         entityId: name,
         lifecycle: { tag: "Stopped" },
@@ -560,8 +552,8 @@ const startProcess =
         Effect.map((processes) => processes.get(name)),
       );
 
-      if (!process) {
-        yield* new ProcessNotFoundError({ processName: name });
+      if (process === undefined) {
+        return yield* new ProcessNotFoundError({ processName: name });
       }
 
       const status = yield* Ref.get(state.statuses).pipe(
@@ -569,7 +561,7 @@ const startProcess =
       );
 
       if (status === "running") {
-        yield* new ProcessAlreadyRunningError({ processName: name });
+        return yield* new ProcessAlreadyRunningError({ processName: name });
       }
 
       if (status === "stopped") {
@@ -577,20 +569,19 @@ const startProcess =
       }
 
       const scope = yield* Scope.make();
-      const fiber = yield* Effect.forkIn(process!.effect, scope);
+      const fiber = yield* Effect.forkIn(process.effect, scope);
 
       yield* Ref.update(state.scopes, (scopes) => scopes.set(name, scope));
       yield* Ref.update(state.fibers, (fibers) => fibers.set(name, fiber));
       yield* Ref.update(state.statuses, (statuses) =>
         statuses.set(name, "running"),
       );
-      yield* Ref.update(state.startTimes, (startTimes) =>
-        startTimes.set(name, new Date()),
-      );
+      const startedAt = yield* DateTime.nowAsDate;
+      yield* Ref.update(state.startTimes, (startTimes) => startTimes.set(name, startedAt));
       yield* recordLifecycleIfAvailable({
-        id: `${name}-lifecycle-started-${Date.now()}`,
+        id: `${name}-lifecycle-started-${startedAt.getTime()}`,
         type: "process.lifecycle.changed",
-        occurredAt: new Date(),
+        occurredAt: startedAt,
         entityType: "process",
         entityId: name,
         lifecycle: { tag: "Started" },
@@ -630,8 +621,8 @@ const stopProcess =
         Effect.map((processes) => processes.get(name)),
       );
 
-      if (!process) {
-        yield* new ProcessNotFoundError({ processName: name });
+      if (process === undefined) {
+        return yield* new ProcessNotFoundError({ processName: name });
       }
 
       const status = yield* Ref.get(state.statuses).pipe(
@@ -639,7 +630,7 @@ const stopProcess =
       );
 
       if (status !== "running") {
-        yield* new ProcessNotRunningError({
+        return yield* new ProcessNotRunningError({
           processName: name,
           operation: "stop",
         });
@@ -649,7 +640,7 @@ const stopProcess =
         Effect.map((fibers) => fibers.get(name)),
       );
 
-      if (fiber) {
+      if (fiber !== undefined) {
         yield* Fiber.interrupt(fiber);
       }
 
@@ -666,15 +657,15 @@ const runProcessImmediately =
         Effect.map((processes) => processes.get(name)),
       );
 
-      if (!process) {
-        yield* new ProcessNotFoundError({ processName: name });
+      if (process === undefined) {
+        return yield* new ProcessNotFoundError({ processName: name });
       }
 
-      if ("runImmediately" in process!) {
+      if ("runImmediately" in process) {
         yield* Effect.logInfo(`🚀 Running '${name}' immediately...`);
-        yield* process!.runImmediately();
+        yield* process.runImmediately();
       } else {
-        yield* new ProcessGroupError({
+        return yield* new ProcessGroupError({
           reason: "unsupported_immediate_execution",
           processName: name,
           operation: "runImmediately",
@@ -690,8 +681,8 @@ const getProcessStatus =
         Effect.map((processes) => processes.get(name)),
       );
 
-      if (!process) {
-        yield* new ProcessNotFoundError({ processName: name });
+      if (process === undefined) {
+        return yield* new ProcessNotFoundError({ processName: name });
       }
 
       const status = yield* Ref.get(state.statuses).pipe(
@@ -700,9 +691,10 @@ const getProcessStatus =
       const startTime = yield* Ref.get(state.startTimes).pipe(
         Effect.map((startTimes) => startTimes.get(name)),
       );
-      const uptime = startTime ? Date.now() - startTime.getTime() : 0;
+      const nowMillis = yield* Clock.currentTimeMillis;
+      const uptime = startTime === undefined ? 0 : nowMillis - startTime.getTime();
 
-      const details = yield* (process!).getStatus().pipe(
+      const details = yield* process.getStatus().pipe(
         Effect.mapError(
           () =>
             new ProcessGroupError({
@@ -715,10 +707,10 @@ const getProcessStatus =
 
       return {
         name,
-        type: process!.type,
-        status: status || "stopped",
+        type: process.type,
+        status: status ?? "stopped",
         uptime,
-        startTime: startTime || null,
+        startTime: startTime ?? null,
         ...processDetailsToGroupFields(details),
       };
     });
@@ -790,10 +782,10 @@ export const makeProcessGroup = <
   Effect.gen(function* () {
     type PGR = AllGroupProcessesRequirements<Processes>;
 
-    const queuesMap = Object.fromEntries(
-      config.queues.map((queueTag) => [queueTag.key, queueTag.asEffect()]),
-    );
-    const queues = yield* Effect.all(queuesMap);
+    const queues: Record<string, QueueRef<any, any, any, any>> = {};
+    for (const queueTag of config.queues) {
+      queues[queueTag.key] = yield* queueInstance(queueTag);
+    }
 
     const processMap = processMapFromTuple(config.processes);
     const statusMap = new Map<string, ProcessStatus>();
@@ -835,10 +827,11 @@ export const makeProcessGroup = <
         Effect.gen(function* () {
           yield* stopProcess(state)(name);
           yield* startProcess(state)(name);
+          const restartedAt = yield* DateTime.nowAsDate;
           yield* recordLifecycleIfAvailable({
-            id: `${name}-lifecycle-restarted-${Date.now()}`,
+            id: `${name}-lifecycle-restarted-${restartedAt.getTime()}`,
             type: "process.lifecycle.changed",
-            occurredAt: new Date(),
+            occurredAt: restartedAt,
             entityType: "process",
             entityId: name,
             lifecycle: { tag: "Restarted" },
@@ -875,9 +868,9 @@ export const makeProcessGroup = <
         Effect.all(
           Object.entries(state.queues).map(([name, queue]) =>
             Effect.gen(function* () {
-              const prioritySizes = yield* queue.sizeByPriority();
-              const totalSize = yield* queue.size();
-              const completed = yield* queue.getCompleted();
+              const prioritySizes = yield* queue.sizes;
+              const totalSize = yield* queue.size;
+              const completed = yield* queue.completed;
               return {
                 name,
                 size: {
@@ -894,10 +887,10 @@ export const makeProcessGroup = <
       getQueue: (name: string) =>
         Effect.gen(function* () {
           const queue = state.queues[name];
-          if (!queue) {
-            yield* new ProcessNotFoundError({ processName: name });
+          if (queue === undefined) {
+            return yield* new ProcessNotFoundError({ processName: name });
           }
-          return queue!;
+          return queue;
         }),
     };
     return {
@@ -908,7 +901,12 @@ export const makeProcessGroup = <
   });
 
 /**
- * `ProcessGroup` namespace.
+ * Orchestration entrypoints for bundled processes and queues.
+ *
+ * @remarks
+ * **`make`** returns an `Effect` of {@link ProcessGroup} controls: start/stop/restart,
+ * queue access, optional {@link ControlService.make} via `serve`, and graceful shutdown via
+ * `awaitShutdown` (see {@link AwaitShutdownOptions}).
  *
  * @public
  */

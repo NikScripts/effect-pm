@@ -9,7 +9,6 @@
  * @module ProcessStore/Prisma/Setup
  */
 
-import path from "node:path";
 import { Data } from "effect";
 import { prismaSchema, prismaSchemaModelMarker } from "./schema";
 
@@ -113,18 +112,24 @@ interface DetectedLayout {
   readonly existingSchemaFiles: ReadonlyArray<string>;
 }
 
+const joinPath = (...parts: ReadonlyArray<string>): string =>
+  parts
+    .join("/")
+    .replace(/\/+/g, "/")
+    .replace(/\/$/, "");
+
 const detectLayout = (
   fs: FsAdapter,
   cwd: string,
 ): DetectedLayout | AddPrismaError => {
-  const schemaDir = path.join(cwd, "prisma", "schema");
-  const singleFile = path.join(cwd, "prisma", "schema.prisma");
+  const schemaDir = joinPath(cwd, "prisma", "schema");
+  const singleFile = joinPath(cwd, "prisma", "schema.prisma");
 
   if (fs.exists(schemaDir) && fs.isDirectory(schemaDir)) {
     const files = fs
       .readdir(schemaDir)
       .filter((entry) => entry.endsWith(".prisma"))
-      .map((entry) => path.join(schemaDir, entry));
+      .map((entry) => joinPath(schemaDir, entry));
     return {
       kind: "multi-file",
       target: schemaDir,
@@ -160,7 +165,7 @@ export const addPrismaSchema = (
   fs: FsAdapter,
   options: AddPrismaOptions,
 ): AddPrismaResult | AddPrismaError => {
-  if (options.separateFile && options.noSeparateFile) {
+  if (options.separateFile === true && options.noSeparateFile === true) {
     return new AddPrismaError({
       cwd: options.cwd,
       reason: "--separate-file and --no-separate-file are mutually exclusive.",
@@ -179,7 +184,7 @@ export const addPrismaSchema = (
   }
 
   if (layout.kind === "single-file") {
-    if (options.separateFile) {
+    if (options.separateFile === true) {
       return new AddPrismaError({
         cwd: options.cwd,
         reason:
@@ -188,7 +193,7 @@ export const addPrismaSchema = (
     }
     const schemaFile = layout.target;
     const fragment = `\n${prismaSchema}`;
-    if (options.dryRun) {
+    if (options.dryRun === true) {
       return {
         _tag: "DryRun",
         mode: "single-file",
@@ -207,7 +212,7 @@ export const addPrismaSchema = (
   }
 
   // multi-file
-  const useSeparate = options.noSeparateFile ? false : true;
+  const useSeparate = options.noSeparateFile === true ? false : true;
   if (!useSeparate) {
     const target = layout.existingSchemaFiles[0];
     if (target === undefined) {
@@ -218,7 +223,7 @@ export const addPrismaSchema = (
       });
     }
     const fragment = `\n${prismaSchema}`;
-    if (options.dryRun) {
+    if (options.dryRun === true) {
       return {
         _tag: "DryRun",
         mode: "multi-file-append",
@@ -236,8 +241,8 @@ export const addPrismaSchema = (
     };
   }
 
-  const schemaFile = path.join(layout.target, "effect-pm.prisma");
-  if (options.dryRun) {
+  const schemaFile = `${layout.target}/effect-pm.prisma`;
+  if (options.dryRun === true) {
     return {
       _tag: "DryRun",
       mode: "multi-file-separate",

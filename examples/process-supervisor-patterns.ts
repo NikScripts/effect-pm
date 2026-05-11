@@ -43,6 +43,8 @@ import {
   ProcessStore,
   resolveDisarmedFallbackPoll,
 } from "../src";
+import { provideLayer } from "../src/provideLayer.js";
+import { utcDateFromMillis } from "../src/utcDate.js";
 
 /** Demonstrates **accelerating** cadence + explicit time jumps via `TestClock`. */
 const acceleratingDemo = Effect.gen(function* () {
@@ -54,7 +56,7 @@ const acceleratingDemo = Effect.gen(function* () {
     name: "patterns/accelerating",
     effect: Ref.update(tickCount, (n) => n + 1),
     schedule: ProcessSchedule.inMemory([
-      ProcessSchedule.at("patterns-accelerating", new Date(0)),
+      ProcessSchedule.at("patterns-accelerating", utcDateFromMillis(0)),
     ]),
   });
 
@@ -66,11 +68,11 @@ const acceleratingDemo = Effect.gen(function* () {
       decayK: 0.4,
     }),
     ProcessSchedule.inMemory([
-      ProcessSchedule.at("patterns-accelerating", new Date(0)),
+      ProcessSchedule.at("patterns-accelerating", utcDateFromMillis(0)),
     ]),
   );
 
-  const supervised = proc.effect.pipe(Effect.provide(runtime));
+  const supervised = proc.effect.pipe(provideLayer(runtime));
 
   const mainFiber = yield* Effect.forkChild(supervised);
 
@@ -98,11 +100,11 @@ const disarmRearmDemo = Effect.gen(function* () {
     ProcessStore.layer,
     Polling.spaced(Duration.millis(100)),
     ProcessSchedule.inMemory([
-      ProcessSchedule.at("delayed-start", new Date(500)),
+      ProcessSchedule.at("delayed-start", utcDateFromMillis(500)),
     ]),
   );
 
-  const fib = yield* Effect.forkChild(proc.effect.pipe(Effect.provide(runtime)));
+  const fib = yield* Effect.forkChild(proc.effect.pipe(provideLayer(runtime)));
 
   yield* TestClock.adjust(Duration.millis(350));
   const whileDisarmed = yield* Ref.get(ticks);
@@ -128,15 +130,10 @@ const program = Effect.gen(function* () {
   yield* disarmRearmDemo;
 
   yield* Effect.logInfo("Done. See docs/PROCESS-API.md for full API tables.");
-}).pipe(Effect.provide(TestClock.layer()), Effect.scoped);
+}).pipe(provideLayer(TestClock.layer()), Effect.scoped);
 
-Effect.runPromise(program).then(
-  () => {
-    console.log("✅ process-supervisor-patterns.ts finished");
-    process.exit(0);
-  },
-  (e) => {
-    console.error("❌", e);
-    process.exit(1);
-  },
+void Effect.runPromise(
+  program.pipe(
+    Effect.tap(() => Effect.logInfo("✅ process-supervisor-patterns.ts finished")),
+  ),
 );

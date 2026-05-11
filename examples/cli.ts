@@ -40,13 +40,32 @@
  * Pass `--help` after the script (per `@effect/cli` conventions) for full usage.
  */
 
+import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Config, Effect, Layer, Option } from "effect";
 import { runCli } from "../src/cli";
+import { provideLayer } from "../src/provideLayer.js";
 
-/** Must match `examples/example.ts` (default **3001**). */
-const CONTROL_PORT = Number(process.env.HOME_SERVER_PORT) || 3001;
+const nodePlatform = Layer.mergeAll(
+  NodeServices.layer,
+  NodeHttpClient.layerNodeHttp,
+);
 
-runCli({
-  name: "Effect-PM Demo CLI",
-  version: "0.1.0",
-  port: CONTROL_PORT,
-});
+const main = Effect.gen(function* () {
+  const raw = yield* Config.string("HOME_SERVER_PORT").pipe(Config.option);
+  const port = Option.match(raw, {
+    onNone: () => 3001,
+    onSome: (s) => {
+      const n = Number(s);
+      return Number.isFinite(n) && n > 0 ? n : 3001;
+    },
+  });
+  yield* runCli({
+    name: "Effect-PM Demo CLI",
+    version: "0.1.0",
+    port,
+  });
+}).pipe(provideLayer(nodePlatform));
+
+NodeRuntime.runMain(main);

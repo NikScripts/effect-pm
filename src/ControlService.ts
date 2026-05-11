@@ -1,23 +1,22 @@
 /**
- * Control Service - HTTP API for Process Management
- * 
- * Provides a localhost-only HTTP API for controlling and monitoring a ProcessGroup.
- * Used by CLI tools and local management scripts.
- * 
+ * **ControlService** — localhost JSON control plane for a {@link ProcessGroup}.
+ *
  * @remarks
- * Key features:
- * - Localhost-only (127.0.0.1) for security
- * - RESTful JSON API
- * - Process and queue control
- * - Status monitoring
- * - Graceful shutdown handling
- * 
- * @module control-service
+ * - **Binding** — `127.0.0.1` only (not exposed on LAN interfaces).
+ * - **Transport** — `POST /control` with {@link ControlRequestBody}; responses use
+ *   {@link ControlResponse}. `GET /health` for probes.
+ * - **Payloads** — Request bodies are validated with **Effect Schema**; responses are
+ *   JSON-encoded safely from plain objects.
+ * - **Concurrency** — Some mutating routes fork work so the HTTP handler returns quickly
+ *   (see `restart` / global restart in the implementation).
+ *
+ * The namespace also re-exports {@link createCli} and {@link runCli} so operators can
+ * depend on a single import when wiring tooling.
+ *
+ * @module ControlService
  */
 
-import http from "node:http";
-import type net from "node:net";
-import { Effect, Scope } from "effect";
+import { Data, Effect, Schema, Scope } from "effect";
 import type { ProcessGroupControls } from "./ProcessGroup";
 import type { ProcessStore } from "./ProcessStore";
 import { createCli, runCli } from "./cli";
@@ -81,57 +80,80 @@ export interface ControlResponse<T = unknown> {
   error?: string;
 }
 
+class InvalidJsonError extends Data.TaggedError("InvalidJsonError")<{
+  readonly cause: unknown;
+}> {}
+
+const controlCommandSchema = Schema.Literals([
+  "ls",
+  "status",
+  "start",
+  "stop",
+  "pause",
+  "resume",
+  "restart",
+  "shutdown",
+  "now",
+  "queues",
+] as const);
+
+const controlRequestFromJson = Schema.fromJsonString(
+  Schema.Struct({
+    command: controlCommandSchema,
+    name: Schema.optional(Schema.String),
+    data: Schema.optional(Schema.Unknown),
+  }),
+);
+
+const responseBodyJson = Schema.fromJsonString(Schema.Unknown);
+
+/** Minimal surface used from Node’s `ServerResponse` (avoids `node:http` type imports). */
+interface JsonResponse {
+  writeHead(statusCode: number, headers?: { readonly [k: string]: string }): void;
+  end(chunk?: string): void;
+}
+
+/** Minimal surface used from Node’s `IncomingMessage` (avoids `node:http` type imports). */
+interface JsonRequest {
+  readonly method?: string | undefined;
+  readonly url?: string | undefined;
+  readonly on: (event: string, listener: (...args: ReadonlyArray<unknown>) => void) => void;
+}
+
 const writeJson = (
-  res: http.ServerResponse,
+  res: JsonResponse,
   status: number,
   body: unknown,
 ): Effect.Effect<void> =>
-  Effect.sync(() => {
-    res.writeHead(status, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(body));
+  Effect.gen(function* () {
+    const json = yield* Schema.encodeUnknownEffect(responseBodyJson)(body).pipe(
+      Effect.orDie,
+    );
+    yield* Effect.sync(() => {
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(json);
+    });
   });
 
-const readBody = (req: http.IncomingMessage): Effect.Effect<string> =>
+const appendChunk = (data: string, chunk: unknown): string => {
+  if (typeof chunk === "string") {
+    return data + chunk;
+  }
+  if (chunk instanceof Uint8Array) {
+    return data + new TextDecoder().decode(chunk);
+  }
+  return data;
+};
+
+const readBody = (req: JsonRequest): Effect.Effect<string> =>
   Effect.callback<string>((resume: (effect: Effect.Effect<string>) => void) => {
     let data = "";
-    req.on("data", (chunk) => {
-      data += chunk.toString();
+    req.on("data", (chunk: unknown) => {
+      data = appendChunk(data, chunk);
     });
     req.on("end", () => resume(Effect.succeed(data)));
     req.on("error", () => resume(Effect.succeed(data)));
   });
-
-const isControlCommand = (value: unknown): value is ControlCommand =>
-  typeof value === "string"
-  && [
-    "ls",
-    "status",
-    "start",
-    "stop",
-    "pause",
-    "resume",
-    "restart",
-    "shutdown",
-    "now",
-    "queues",
-  ].includes(value);
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
-const decodeControlRequestBody = (value: unknown): ControlRequestBody => {
-  if (!isRecord(value)) {
-    throw new Error("Invalid JSON body");
-  }
-  if (!isControlCommand(value.command)) {
-    throw new Error("Invalid command");
-  }
-  return {
-    command: value.command,
-    name: typeof value.name === "string" ? value.name : undefined,
-    data: value.data,
-  };
-};
 
 const processStatusResponse = <T>(
   data: T,
@@ -177,7 +199,7 @@ const handleCommand =
           };
         }
         case "status": {
-          if (!name)
+          if (name === undefined)
             return { success: false, error: "Missing name" };
           
           // Try process first
@@ -188,7 +210,7 @@ const handleCommand =
               Effect.catch(() => Effect.succeed(null)),
             );
           
-          if (processResult) return processResult;
+          if (processResult !== null) return processResult;
           
           // Try queue
           const queueResult = yield* group
@@ -196,9 +218,9 @@ const handleCommand =
             .pipe(
               Effect.flatMap((queue) =>
                 Effect.gen(function* () {
-                  const prioritySizes = yield* queue.sizeByPriority();
-                  const totalSize = yield* queue.size();
-                  const completed = yield* queue.getCompleted();
+                  const prioritySizes = yield* queue.sizes;
+                  const totalSize = yield* queue.size;
+                  const completed = yield* queue.completed;
                   return {
                     ...queueStatusResponse({
                       name, 
@@ -216,27 +238,27 @@ const handleCommand =
               Effect.catch(() => Effect.succeed(null)),
             );
           
-          if (queueResult) return queueResult;
+          if (queueResult !== null) return queueResult;
           
           return { success: false, error: `Process or queue '${name}' not found` };
         }
         case "start": {
           // Process-only command
-          if (name)
+          if (name !== undefined)
             yield* group.startProcess(name).pipe(Effect.catch(() => Effect.void));
           else yield* group.startAll().pipe(Effect.catch(() => Effect.void));
           return { success: true };
         }
         case "stop": {
           // Process-only command
-          if (name)
+          if (name !== undefined)
             yield* group.stopProcess(name).pipe(Effect.catch(() => Effect.void));
           else yield* group.stopAll().pipe(Effect.catch(() => Effect.void));
           return { success: true };
         }
         case "now": {
           // Process-only command
-          if (!name)
+          if (name === undefined)
             return { success: false, error: "Missing process name" };
           yield* group
             .runProcessImmediately(name)
@@ -245,7 +267,7 @@ const handleCommand =
         }
         case "pause": {
           // Unified command - check process first, then queue
-          if (!name)
+          if (name === undefined)
             return { success: false, error: "Missing name" };
           
           // Processes don't have pause, so check queue
@@ -253,16 +275,16 @@ const handleCommand =
             .getQueue(name)
             .pipe(Effect.catch(() => Effect.succeed(null)));
           
-          if (!queue) {
+          if (queue === null) {
             return { success: false, error: `Queue '${name}' not found` };
           }
 
-          yield* queue.pause();
+          yield* queue.pause;
           return { success: true };
         }
         case "resume": {
           // Unified command - check process first, then queue
-          if (!name)
+          if (name === undefined)
             return { success: false, error: "Missing name" };
           
           // Processes don't have resume, so check queue
@@ -270,16 +292,16 @@ const handleCommand =
             .getQueue(name)
             .pipe(Effect.catch(() => Effect.succeed(null)));
           
-          if (!queue) {
+          if (queue === null) {
             return { success: false, error: `Queue '${name}' not found` };
           }
 
-          yield* queue.resume();
+          yield* queue.resume;
           return { success: true };
         }
         case "restart": {
           // Unified command - check process first, then queue
-          if (!name) {
+          if (name === undefined) {
             // Global restart: stop all processes then start all — fork to avoid blocking
             yield* Effect.forkChild(
               Effect.gen(function* () {
@@ -311,27 +333,27 @@ const handleCommand =
             .getQueue(name)
             .pipe(Effect.catch(() => Effect.succeed(null)));
           
-          if (!queue) {
+          if (queue === null) {
             return { success: false, error: `Process or queue '${name}' not found` };
           }
 
-          yield* queue.restart();
+          yield* queue.clear;
           return { success: true };
         }
         case "shutdown": {
           // Queue-only command
-          if (!name)
+          if (name === undefined)
             return { success: false, error: "Missing queue name" };
 
           const queue = yield* group
             .getQueue(name)
             .pipe(Effect.catch(() => Effect.succeed(null)));
           
-          if (!queue) {
+          if (queue === null) {
             return { success: false, error: `Queue '${name}' not found` };
           }
 
-          yield* queue.shutdown();
+          yield* queue.shutdown;
           return { success: true };
         }
       }
@@ -416,12 +438,12 @@ const startControlService = <R>(options: {
 
       // Capture context (services) with all dependencies already provided
       const services = yield* Effect.context<R | ProcessStore>();
+      const runWithServices = Effect.runForkWith(services);
+
+      const nodeHttp = yield* Effect.promise(() => import("node:http"));
 
       // Create HTTP request handler
-      const handler = (
-        req: http.IncomingMessage,
-        res: http.ServerResponse,
-      ) => {
+      const handler = (req: JsonRequest, res: JsonResponse) => {
         const program = Effect.gen(function* () {
           if (req.method === "OPTIONS") {
             yield* writeJson(res, 200, {});
@@ -437,11 +459,11 @@ const startControlService = <R>(options: {
 
           if (url.pathname === "/control" && req.method === "POST") {
             const raw = yield* readBody(req);
-            const parsed = Effect.try({
-              try: () => decodeControlRequestBody(JSON.parse(raw)),
-              catch: () => new Error("Invalid JSON"),
-            });
-            const body = yield* parsed;
+            const body = yield* Schema.decodeUnknownEffect(
+              controlRequestFromJson,
+            )(raw).pipe(
+              Effect.mapError((cause) => new InvalidJsonError({ cause })),
+            );
             const result = yield* handleCommand(group)(body.command, body.name);
             const status = result.success ? 200 : 400;
             yield* writeJson(res, status, result);
@@ -452,7 +474,7 @@ const startControlService = <R>(options: {
         });
 
         // Run the program with the captured context (all dependencies)
-        Effect.runForkWith(services)(
+        runWithServices(
           program.pipe(
             Effect.catch((error) =>
               writeJson(res, 500, {
@@ -464,10 +486,10 @@ const startControlService = <R>(options: {
         );
       };
 
-      const server = http.createServer(handler);
+      const server = nodeHttp.createServer(handler);
 
       // Track active connections for cleanup
-      const connections = new Set<net.Socket>();
+      const connections = new Set<{ destroy(): void }>();
       server.on("connection", (conn) => {
         connections.add(conn);
         conn.on("close", () => connections.delete(conn));
@@ -480,17 +502,17 @@ const startControlService = <R>(options: {
             resume(Effect.void);
           });
           server.on("error", (error) => {
-            console.error("❌ Control service error:", error);
+            runWithServices(Effect.logError(`Control service error: ${String(error)}`));
           });
         },
       );
 
-      return { server, connections };
+      return { server, connections, runWithServices };
     }),
-    ({ server, connections }) =>
+    ({ server, connections, runWithServices }) =>
       Effect.callback<void>(
         (resume: (effect: Effect.Effect<void>) => void) => {
-          console.log("🛑 Stopping control service...");
+          runWithServices(Effect.logInfo("Stopping control service..."));
 
           // Destroy all active connections
           for (const conn of connections) {
@@ -498,10 +520,10 @@ const startControlService = <R>(options: {
           }
 
           server.close((err) => {
-            if (err) {
-              console.error("❌ Error closing server:", err);
+            if (err !== undefined) {
+              runWithServices(Effect.logError(`Error closing server: ${String(err)}`));
             } else {
-              console.log("✅ Control service stopped");
+              runWithServices(Effect.logInfo("Control service stopped"));
             }
             resume(Effect.void);
           });
@@ -509,8 +531,18 @@ const startControlService = <R>(options: {
       ),
   )
 
+/**
+ * Control plane entrypoints.
+ *
+ * @public
+ */
 export const ControlService = {
+  /**
+   * Acquire a localhost HTTP listener for `/control` and `/health` until the scope ends.
+   */
   make: startControlService,
-  createCli: createCli,
-  runCli: runCli,
-}
+  /** Build an `@effect/cli` application targeting this service’s port. */
+  createCli,
+  /** `Effect` that runs {@link createCli} against `process.argv` (or a passed argv). */
+  runCli,
+} as const;

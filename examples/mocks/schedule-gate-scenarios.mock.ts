@@ -1,3 +1,4 @@
+import { utcDateFromMillis } from "../../src/utcDate.js";
 /**
  * @module examples/mocks/schedule-gate-scenarios
  *
@@ -93,7 +94,7 @@ export const allocateMaintenanceGate = (): Effect.Effect<{
   Effect.gen(function* () {
     const armed = yield* Ref.make(false);
     const reopenHint = yield* Ref.make<Option.Option<Date>>(Option.none());
-    yield* Ref.set(reopenHint, Option.some(new Date(2_500)));
+    yield* Ref.set(reopenHint, Option.some(utcDateFromMillis(2_500)));
     return { armed, reopenHint };
   });
 

@@ -19,6 +19,8 @@ import { TestClock } from "effect/testing";
 import { Polling, Process, ProcessStore } from "../src";
 import type { ProcessScheduleEntry } from "../src/ProcessSchedule";
 import { runNodeProgramOrExit } from "./mocks/demo-harness.mock.js";
+import { provideLayer } from "../src/provideLayer.js";
+import { utcDateFromMillis } from "../src/utcDate.js";
 
 interface DbScheduleRow {
   readonly id: string;
@@ -28,8 +30,8 @@ interface DbScheduleRow {
 
 const toEntry = (row: DbScheduleRow): ProcessScheduleEntry => ({
   id: Option.some(row.id),
-  startAt: new Date(row.startMs),
-  stopAt: row.stopMs === undefined ? Option.none() : Option.some(new Date(row.stopMs)),
+  startAt: utcDateFromMillis(row.startMs),
+  stopAt: row.stopMs === undefined ? Option.none() : Option.some(utcDateFromMillis(row.stopMs)),
 });
 
 const program = Effect.gen(function* () {
@@ -57,7 +59,7 @@ const program = Effect.gen(function* () {
     }),
   });
 
-  const supervisor = yield* Effect.forkChild(proc.effect.pipe(Effect.provide(ProcessStore.layer)));
+  const supervisor = yield* Effect.forkChild(proc.effect.pipe(provideLayer(ProcessStore.layer)));
 
   // Simulate DB change: remove old rows and introduce a new one.
   yield* Effect.sleep(Duration.millis(900));
@@ -70,7 +72,7 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(`ticks with db-sync pattern: ${yield* Ref.get(ticks)}`);
   yield* Fiber.interrupt(supervisor);
 }).pipe(
-  Effect.provide(TestClock.layer()),
+  provideLayer(TestClock.layer()),
   Effect.scoped,
 );
 

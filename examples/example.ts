@@ -79,7 +79,16 @@
  * `@nikscripts/effect-pm/prisma`. Run `npx effect-pm add prisma`, migrate, then provide the layer.
  */
 
-import { Effect, Duration, Data, Layer, References } from "effect";
+import {
+  Clock,
+  Config,
+  Duration,
+  Effect,
+  Data,
+  Layer,
+  Option,
+  References,
+} from "effect";
 import {
   Process,
   ProcessStore,
@@ -88,6 +97,8 @@ import {
   Polling,
   ProcessSchedule,
 } from "../src";
+import { provideLayer } from "../src/provideLayer.js";
+import { utcDateFromMillis } from "../src/utcDate.js";
 
 /**
  * ============================================================================
@@ -162,14 +173,7 @@ const DemoTwoQueue = QueueResource.make({
       return item * 2;
     }),
   forkWith: (forked, item, _queue) =>
-    forked.pipe(
-      Effect.tap(() => Effect.logInfo("Forked: ", item)),
-      Effect.catch((error) => {
-        // error could be any remaining error type
-        console.log("Unexpected error:", error)
-        return Effect.void
-      })
-    ),
+    forked.pipe(Effect.tap(() => Effect.logInfo(`Forked: ${String(item)}`))),
   concurrency: 2,
   capacity: 50,
 });
@@ -203,12 +207,12 @@ const queueAdderCron = Process.make({
   name: "queue-adder",
   polling: Polling.spaced(Duration.seconds(10)),
   schedule: ProcessSchedule.inMemory([
-    ProcessSchedule.at("queue-adder", new Date(0)),
+    ProcessSchedule.at("queue-adder", utcDateFromMillis(0)),
   ]),
   effect: Effect.gen(function* () {
     const demoQueue = yield* DemoQueue;
     const demoTwoQueue = yield* DemoTwoQueue;
-    const timestamp = Date.now();
+    const timestamp = yield* Clock.currentTimeMillis;
 
     yield* Effect.logInfo(`🔄 Poll tick: adding items to demo queues...`);
 
@@ -224,12 +228,6 @@ const queueAdderCron = Process.make({
     yield* Effect.logInfo(`✅ Added items to both demo queues`);
   }),
 });
-
-/**
- * Port for {@link ProcessGroup.serve} and for **`examples/cli.ts`**.
- * Override with `HOME_SERVER_PORT` so two demos never collide on one machine.
- */
-const CONTROL_PORT = Number(process.env.HOME_SERVER_PORT) || 3001;
 
 /**
  * ============================================================================
@@ -260,6 +258,15 @@ const CONTROL_PORT = Number(process.env.HOME_SERVER_PORT) || 3001;
  * **`Effect.scoped`**: `serve` / internal scopes attach finalizers so fibers and listeners clean up.
  */
 const program = Effect.gen(function* () {
+  const portRaw = yield* Config.string("HOME_SERVER_PORT").pipe(Config.option);
+  const controlPort = Option.match(portRaw, {
+    onNone: () => 3001,
+    onSome: (s) => {
+      const n = Number(s);
+      return Number.isFinite(n) && n > 0 ? n : 3001;
+    },
+  });
+
   const group = yield* ProcessGroup.make({
     processes: [queueAdderCron],
     queues: [DemoQueue, DemoTwoQueue],
@@ -271,7 +278,7 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(`⏰ Polling: every 10 seconds (schedule: always armed)`);
 
   /** Localhost HTTP JSON API consumed by `pnpm run cli` (see `ControlService`). */
-  yield* group.serve({ port: CONTROL_PORT });
+  yield* group.serve({ port: controlPort });
 
   /** Forks each process supervisor (`queueAdderCron.effect`) inside the group’s scopes. */
   yield* group.startAll();
@@ -321,9 +328,9 @@ const program = Effect.gen(function* () {
  * from `@nikscripts/effect-pm/prisma`.
  */
 
-Effect.runPromise(
+void Effect.runPromise(
   program.pipe(
-    Effect.provide(
+    provideLayer(
       Layer.mergeAll(
         DemoQueue.layer,
         DemoTwoQueue.layer,
@@ -331,13 +338,6 @@ Effect.runPromise(
         Layer.succeed(References.MinimumLogLevel, "Debug"),
       ),
     ),
+    Effect.tap(() => Effect.logInfo("✅ Demo shutdown complete")),
   ),
-)
-  .then(() => {
-    console.log("✅ Demo shutdown complete");
-    process.exit(0);
-  })
-  .catch((err) => {
-    console.error("❌ Demo failed:", err);
-    process.exit(1);
-  });
+);

@@ -41,7 +41,7 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 | Add a public export | Edit `src/index.ts` + add TSDoc `@public` on the symbol in its module. |
 | Change process semantics | Update `src/Process.ts`, tests in `test/process*.ts`, and plan **09** if behavior is contractual. |
 | Add an example | Add `examples/foo.ts`, document in `examples/README.md`, add `package.json` script if runnable. Put heavy mock / scenario prose in `examples/mocks/*.mock.ts` when it would drown the entry script. |
-| Verify types (strict Effect rules) | `pnpm run typecheck` (uses `tsgo`) |
+| Verify types (strict Effect rules) | `pnpm run typecheck` (uses `tsgo`). Two plugin rules are temporarily `"off"`; see [plan 11](./plans/11-strict-effect-language-service.md). |
 | Run tests | `pnpm test` |
 
 ---

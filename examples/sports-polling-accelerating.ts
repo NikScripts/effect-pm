@@ -20,17 +20,21 @@
  * **See also:** `examples/process-supervisor-patterns.ts`, `docs/PROCESS-API.md`
  */
 
-import { Duration, Effect, Layer, Option, Ref } from "effect";
+import { DateTime, Duration, Effect, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Process, Polling, ProcessSchedule, ProcessStore } from "../src";
 import {
   forkSupervisedAndSideThenAdvanceTime,
   runNodeProgramOrExit,
 } from "./mocks/demo-harness.mock.js";
+import { provideLayer } from "../src/provideLayer.js";
 import {
   makeSportsScoreFeedTestDouble,
   scoreKey,
 } from "./mocks/sports-score-feed.mock.js";
+
+/** `ProcessSchedule.at` expects `Date`; derive it from `DateTime` (not `new Date()` inside Effect). */
+const scheduleStartAtUnixEpoch = DateTime.toDateUtc(DateTime.makeUnsafe(0));
 
 const basicSportsPollDemo = Effect.gen(function* () {
   yield* Effect.logInfo(
@@ -43,7 +47,7 @@ const basicSportsPollDemo = Effect.gen(function* () {
     name: "examples/sports-basic-poller",
     polling: Polling.spaced(Duration.millis(500)),
     schedule: ProcessSchedule.inMemory([
-      ProcessSchedule.at("sports-basic", new Date(0)),
+      ProcessSchedule.at("sports-basic", scheduleStartAtUnixEpoch),
     ]),
     effect: Effect.gen(function* () {
       const s = yield* feed.readScore;
@@ -52,7 +56,7 @@ const basicSportsPollDemo = Effect.gen(function* () {
   });
 
   yield* forkSupervisedAndSideThenAdvanceTime({
-    supervised: proc.effect.pipe(Effect.provide(ProcessStore.layer)),
+    supervised: proc.effect.pipe(provideLayer(ProcessStore.layer)),
     sideFiber: feed.runSimulator,
     advanceBy: Duration.millis(2_200),
   });
@@ -71,7 +75,7 @@ const acceleratingScoreResetSimpleDemo = Effect.gen(function* () {
     decayK: 0.55,
   });
   const scheduleLayer = ProcessSchedule.inMemory([
-    ProcessSchedule.at("sports-accel-simple", new Date(0)),
+    ProcessSchedule.at("sports-accel-simple", scheduleStartAtUnixEpoch),
   ]);
 
   const proc = Process.make({
@@ -94,7 +98,7 @@ const acceleratingScoreResetSimpleDemo = Effect.gen(function* () {
 
   yield* forkSupervisedAndSideThenAdvanceTime({
     supervised: proc.effect.pipe(
-      Effect.provide(Layer.mergeAll(ProcessStore.layer, pollLayer, scheduleLayer)),
+      provideLayer(Layer.mergeAll(ProcessStore.layer, pollLayer, scheduleLayer)),
     ),
     sideFiber: feed.runSimulator,
     advanceBy: Duration.millis(2_200),
@@ -117,7 +121,7 @@ const acceleratingScoreResetVerboseDemo = Effect.gen(function* () {
     decayK: 0.55,
   });
   const scheduleLayer = ProcessSchedule.inMemory([
-    ProcessSchedule.at("sports-accel-verbose", new Date(0)),
+    ProcessSchedule.at("sports-accel-verbose", scheduleStartAtUnixEpoch),
   ]);
 
   const proc = Process.make({
@@ -150,7 +154,7 @@ const acceleratingScoreResetVerboseDemo = Effect.gen(function* () {
 
   yield* forkSupervisedAndSideThenAdvanceTime({
     supervised: proc.effect.pipe(
-      Effect.provide(Layer.mergeAll(ProcessStore.layer, pollLayer, scheduleLayer)),
+      provideLayer(Layer.mergeAll(ProcessStore.layer, pollLayer, scheduleLayer)),
     ),
     sideFiber: feed.runSimulator,
     advanceBy: Duration.millis(2_200),
@@ -174,6 +178,6 @@ const program = Effect.gen(function* () {
   yield* TestClock.setTime(0);
   yield* Effect.logInfo("");
   yield* acceleratingScoreResetVerboseDemo;
-}).pipe(Effect.provide(TestClock.layer()), Effect.scoped);
+}).pipe(provideLayer(TestClock.layer()), Effect.scoped);
 
 runNodeProgramOrExit(program, "✅ sports-polling-accelerating.ts finished");

@@ -5,15 +5,17 @@ import {
   type ProcessExecutionCompletedEvent,
   type ProcessLifecycleChangedEvent,
 } from "../src"
+import { provideLayer } from "../src/provideLayer.js"
+import { utcDateFromIso } from "../src/utcDate.js";
 
 describe("ProcessStore.memory", () => {
   it.live("appends and queries process execution events with ordering and query opts", () =>
     Effect.gen(function* () {
       const store = yield* ProcessStore
 
-      const t1 = new Date("2026-01-01T00:00:00.000Z")
-      const t2 = new Date("2026-01-01T00:10:00.000Z")
-      const t3 = new Date("2026-01-01T00:20:00.000Z")
+      const t1 = utcDateFromIso("2026-01-01T00:00:00.000Z")
+      const t2 = utcDateFromIso("2026-01-01T00:10:00.000Z")
+      const t3 = utcDateFromIso("2026-01-01T00:20:00.000Z")
 
       const e1: ProcessExecutionCompletedEvent = {
         id: "e1",
@@ -75,14 +77,14 @@ describe("ProcessStore.memory", () => {
 
       const after = yield* store.getProcessExecutions("p1", { after: t1 })
       expect(after.map((row) => row.id)).toEqual(["e3", "e2"])
-    }).pipe(Effect.provide(ProcessStore.layer)),
+    }).pipe(provideLayer(ProcessStore.layer)),
   )
 
   it.live("appends and queries process lifecycle events", () =>
     Effect.gen(function* () {
       const store = yield* ProcessStore
-      const t1 = new Date("2026-01-01T01:00:00.000Z")
-      const t2 = new Date("2026-01-01T02:00:00.000Z")
+      const t1 = utcDateFromIso("2026-01-01T01:00:00.000Z")
+      const t2 = utcDateFromIso("2026-01-01T02:00:00.000Z")
 
       const started: ProcessLifecycleChangedEvent = {
         id: "l1",
@@ -110,6 +112,6 @@ describe("ProcessStore.memory", () => {
       const limited = yield* store.getProcessLifecycle("p2", { limit: 1 })
       expect(limited.length).toBe(1)
       expect(limited[0]?.lifecycle.tag).toBe("Stopped")
-    }).pipe(Effect.provide(ProcessStore.layer)),
+    }).pipe(provideLayer(ProcessStore.layer)),
   )
 })

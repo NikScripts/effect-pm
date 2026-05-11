@@ -10,14 +10,15 @@
  * - `effect-pm add prisma [--separate-file|--no-separate-file] [--dry-run]` —
  *   detect the project's Prisma schema and add the effect-pm models.
  *
- * Kept dependency-free (only `node:fs` / `node:path`) so it does not pull the
- * Effect runtime into npm's bin output.
+ * Uses Effect’s `FileSystem` + `Path` (via `@effect/platform-node`) instead of
+ * direct `node:fs` / `node:path` imports.
  *
  * @module bin/effect-pm
  */
 
-import fs from "node:fs";
-import path from "node:path";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
+import { Effect, FileSystem, Layer, Path } from "effect";
 import { prismaSchema } from "../prisma/schema";
 import {
   addPrismaSchema,
@@ -25,22 +26,58 @@ import {
   type AddPrismaOptions,
   type FsAdapter,
 } from "../prisma/setup";
+import { provideLayer } from "../provideLayer.js";
+
+const platform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
+
+const runPlatform = <A, E>(
+  self: Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
+): A =>
+  Effect.runSync(self.pipe(provideLayer(platform), Effect.orDie));
 
 const nodeFs: FsAdapter = {
-  exists: (filepath) => fs.existsSync(filepath),
-  isDirectory: (filepath) => {
-    try {
-      return fs.statSync(filepath).isDirectory();
-    } catch {
-      return false;
-    }
-  },
-  readFile: (filepath) => fs.readFileSync(filepath, "utf8"),
-  writeFile: (filepath, contents) => {
-    fs.mkdirSync(path.dirname(filepath), { recursive: true });
-    fs.writeFileSync(filepath, contents, "utf8");
-  },
-  readdir: (dir) => fs.readdirSync(dir),
+  exists: (filepath) =>
+    runPlatform(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        return yield* fs.exists(filepath);
+      }),
+    ),
+  isDirectory: (filepath) =>
+    runPlatform(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        return yield* fs.stat(filepath).pipe(
+          Effect.map((s) => s.type === "Directory"),
+          Effect.catch(() => Effect.succeed(false)),
+        );
+      }),
+    ),
+  readFile: (filepath) =>
+    runPlatform(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        return yield* fs.readFileString(filepath);
+      }),
+    ),
+  writeFile: (filepath, contents) =>
+    runPlatform(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const p = yield* Path.Path;
+        const dir = p.dirname(filepath);
+        yield* fs.makeDirectory(dir, { recursive: true });
+        yield* fs.writeFileString(filepath, contents);
+      }),
+    ),
+  readdir: (dir) =>
+    runPlatform(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const names = yield* fs.readDirectory(dir);
+        return [...names];
+      }),
+    ),
 };
 
 const usage = `effect-pm — admin CLI

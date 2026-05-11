@@ -39,6 +39,7 @@ import {
   HttpApiGroup,
 } from "effect/unstable/httpapi";
 import { acceptJson, HttpApiResource } from "../src";
+import { provideLayer } from "../src/provideLayer.js";
 
 const Post = Schema.Struct({
   userId: Schema.Number,
@@ -62,7 +63,7 @@ class DecodeCapture extends Context.Service<
     readonly record: (label: string) => Effect.Effect<void>;
     readonly count: () => Effect.Effect<number>;
   }
->()("examples/DecodeCapture") {}
+>()("@nikscripts/effect-pm/examples/http-api-resource-layer-effect/DecodeCapture") {}
 
 const DecodeCaptureNoop = Layer.succeed(DecodeCapture, {
   record: (_label: string) => Effect.void,
@@ -81,17 +82,15 @@ const DecodeCaptureLive = Layer.effect(
 );
 
 const _make = Effect.gen(function* () {
-  const capture = yield* DecodeCapture;
-  return yield* HttpApiClient.make(DemoApi, {
+  const client = yield* HttpApiClient.make(DemoApi, {
     baseUrl: "https://example.test",
     transformClient: acceptJson,
-    transformResponse: (effect) =>
-      effect.pipe(Effect.tap(() => capture.record("decoded response"))),
   });
+  return client;
 });
 
 export class DemoApiClient extends Context.Service<DemoApiClient>()(
-  "examples/DemoApiClient",
+  "@nikscripts/effect-pm/examples/http-api-resource-layer-effect/DemoApiClient",
   {
     make: _make,
   }
@@ -178,16 +177,13 @@ const program = Effect.gen(function* () {
   );
 });
 
-Effect.runPromise(
+void Effect.runPromise(
   program.pipe(
-    Effect.provide(DemoApiClient.resourceLayerCapture),
-    Effect.provide(DecodeCaptureLive),
-    Effect.provide(Layer.succeed(HttpClient.HttpClient, fakeHttpClient))
-  )
-).then(
-  () => console.log("example:http-api-resource-layer-effect finished OK"),
-  (e) => {
-    console.error(e);
-    process.exitCode = 1;
-  }
+    provideLayer(DemoApiClient.resourceLayerCapture),
+    provideLayer(DecodeCaptureLive),
+    provideLayer(Layer.succeed(HttpClient.HttpClient, fakeHttpClient)),
+    Effect.tap(() =>
+      Effect.logInfo("example:http-api-resource-layer-effect finished OK"),
+    ),
+  ),
 );

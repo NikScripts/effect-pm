@@ -24,14 +24,15 @@
  * - **`examples/http-api-resource.ts`** — gate on typed HttpApi client factory
  */
 
-import { Duration, Effect } from "effect";
+import { Clock, Duration, Effect } from "effect";
 import { RunResource } from "../src";
+import { provideLayer } from "../src/provideLayer.js";
 
 /** Records wall time when the gated body actually starts (after exec slot + throttle). */
 const TimedWorkGate = RunResource.make({
   name: "TimedWorkGate",
   effect: Effect.gen(function* () {
-    const startedAt = Date.now();
+    const startedAt = yield* Clock.currentTimeMillis;
     yield* Effect.sleep(Duration.millis(45));
     return startedAt;
   }),
@@ -58,7 +59,7 @@ const median = (xs: number[]): number => {
   if (xs.length === 0) return 0;
   const s = [...xs].sort((a, b) => a - b);
   const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
+  return s.length % 2 !== 0 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
 };
 
 const program = Effect.gen(function* () {
@@ -92,16 +93,12 @@ const program = Effect.gen(function* () {
 });
 
 const runnable = program.pipe(
-  Effect.provide(TimedWorkGate.layer),
-  Effect.provide(DoubleGate.layer),
+  provideLayer(TimedWorkGate.layer),
+  provideLayer(DoubleGate.layer),
 );
 
-Effect.runPromise(runnable).then(
-  () => {
-    console.log("example:run-resource finished OK");
-  },
-  (e) => {
-    console.error(e);
-    process.exitCode = 1;
-  }
+void Effect.runPromise(
+  runnable.pipe(
+    Effect.tap(() => Effect.logInfo("example:run-resource finished OK")),
+  ),
 );

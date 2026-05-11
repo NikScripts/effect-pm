@@ -64,9 +64,10 @@ export interface ProcessScheduleService {
   readonly changed: Effect.Effect<void, never, never>;
 }
 
-const ProcessScheduleTag = Context.Service<ProcessScheduleService>(
-  "@effect-pm/ProcessSchedule",
-);
+export class ProcessScheduleTag extends Context.Service<
+  ProcessScheduleTag,
+  ProcessScheduleService
+>()("@nikscripts/effect-pm/ProcessSchedule/ProcessScheduleTag") {}
 
 const buildInMemoryService = (
   initial: ReadonlyArray<ProcessScheduleEntry>,
@@ -114,7 +115,7 @@ const buildInMemoryService = (
 
 const inMemoryLayer = (
   initial: ReadonlyArray<ProcessScheduleEntry> = [],
-): Layer.Layer<ProcessScheduleService, never, never> =>
+): Layer.Layer<ProcessScheduleTag, never, never> =>
   Layer.effect(
     ProcessScheduleTag,
     buildInMemoryService(initial),
@@ -186,7 +187,7 @@ interface DefineApi {
 
 const define = (
   build: (api: DefineApi) => ReadonlyArray<ProcessScheduleEntry>,
-): Layer.Layer<ProcessScheduleService, never, never> =>
+): Layer.Layer<ProcessScheduleTag, never, never> =>
   inMemoryLayer(
     build({
       at,
@@ -197,7 +198,13 @@ const define = (
   );
 
 /**
- * Context tag + in-memory constructors for process schedule storage.
+ * Context tag plus schedule constructors and `Layer` builders.
+ *
+ * @remarks
+ * - **`inMemory`** — `Layer` from initial {@link ProcessScheduleEntry} rows.
+ * - **`at` / `window`** — row builders (optional string ids for stable matching).
+ * - **`fromStarts`** — expand bare `Date` starts into open-ended windows.
+ * - **`define`** — declarative `Layer` from a small combinator DSL.
  *
  * @public
  */

@@ -4,6 +4,7 @@ import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstab
 import type { HttpClientError } from "effect/unstable/http"
 import { HttpApi, HttpApiClient, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 import { acceptJson, HttpApiResource } from "../src"
+import { provideLayer } from "../src/provideLayer.js";
 
 const json200 = JSON.stringify({ pong: true })
 
@@ -78,8 +79,8 @@ describe("HttpApiResource.make", () => {
       expect(client).toBeDefined()
       expect(typeof client).toBe("object")
     }).pipe(
-      Effect.provide(Tag.layer),
-      Effect.provide(fakeHttpClientLayer)
+      provideLayer(Tag.layer),
+      provideLayer(fakeHttpClientLayer)
     )
   })
 
@@ -122,7 +123,7 @@ describe("HttpApiResource.make", () => {
           { concurrency: "unbounded" }
         )
         return yield* Ref.get(peak)
-      }).pipe(Effect.provide(Tag.layer), Effect.provide(httpLayer))
+      }).pipe(provideLayer(Tag.layer), provideLayer(httpLayer))
       expect(peakConcurrent).toBe(1)
     })
   )
@@ -148,7 +149,7 @@ describe("HttpApiResource.make", () => {
           { concurrency: "unbounded" }
         )
         return yield* Ref.get(peak)
-      }).pipe(Effect.provide(Tag.layer), Effect.provide(httpLayer))
+      }).pipe(provideLayer(Tag.layer), provideLayer(httpLayer))
       expect(peakConcurrent).toBeLessThanOrEqual(3)
       expect(peakConcurrent).toBeGreaterThanOrEqual(1)
     })
@@ -174,7 +175,7 @@ describe("HttpApiResource.make", () => {
           { concurrency: "unbounded" }
         )
         return yield* Ref.get(peak)
-      }).pipe(Effect.provide(Tag.layer), Effect.provide(httpLayer))
+      }).pipe(provideLayer(Tag.layer), provideLayer(httpLayer))
       expect(peakConcurrent).toBe(12)
     })
   )
@@ -212,7 +213,7 @@ describe("HttpApiResource.make", () => {
       yield* Effect.gen(function* () {
         const client = yield* Tag
         yield* client.g.ping()
-      }).pipe(Effect.provide(Tag.layer), Effect.provide(httpLayer))
+      }).pipe(provideLayer(Tag.layer), provideLayer(httpLayer))
     })
   )
 })
@@ -231,10 +232,9 @@ describe("HttpApiResource.layerEffect", () => {
         })
       })
       type ClientShape = Effect.Success<typeof makeClient>
-      const Tag = Context.Service<
-        ClientShape & { _brand: "test/existing-client" },
-        ClientShape
-      >("test/existing-client")
+      class Tag extends Context.Service<Tag, ClientShape>()(
+        "@nikscripts/effect-pm/test/http-api-resource.test/Tag",
+      ) {}
       const layerCapture = HttpApiResource.layerEffect(Tag, makeClient, {
         limits: {},
       })
@@ -256,7 +256,7 @@ describe("HttpApiResource.layerEffect", () => {
           builds: yield* Ref.get(builds),
           peakConcurrent: yield* Ref.get(peak),
         }
-      }).pipe(Effect.provide(layerCapture), Effect.provide(httpLayer))
+      }).pipe(provideLayer(layerCapture), provideLayer(httpLayer))
       expect(result.builds).toBe(1)
       expect(result.peakConcurrent).toBe(1)
     })
