@@ -4,7 +4,7 @@
  * **Topic:** **`ProcessGroup`** lifecycle + compositional schedule windows.
  *
  * **Read first:** **`docs/SCHEDULE-AND-PROCESSGROUP.md`** — answers *does the schedule auto-start?*,
- * *can I change the gate from outside the process?*, *disarm vs `stopProcess`*.
+ * *can I change the gate from outside the process?*, *disarm vs `ProcessGroup.stop`*.
  *
  * **Run:** `pnpm run example:process-game-window` or `npx tsx examples/process-game-window-with-group.ts`
  */
@@ -65,9 +65,9 @@ const program = Effect.gen(function* () {
 
   // **This** line forks `liveGamePoller.effect` (driver + inlined schedule/polling). Until
   // here, no runtime fibers are active for the process in a group-managed scope (you could fork
-  // `process.effect` yourself without a group; the group adds lifecycle + `stopProcess` /
+  // `process.effect` yourself without a group; the group adds lifecycle + `stop` /
   // metrics wiring).
-  yield* group.startProcess(liveGamePoller.name);
+  yield* group.start(liveGamePoller.name);
 
   // Enough simulated time to run the first window.
   yield* TestClock.adjust(Duration.seconds(5));
@@ -78,7 +78,7 @@ const program = Effect.gen(function* () {
   );
 
   // Stop the managed runtime and close its scope.
-  yield* group.stopProcess(liveGamePoller.name);
+  yield* group.stop(liveGamePoller.name);
 }).pipe(
   provideLayer(Layer.mergeAll(TestClock.layer(), ProcessStore.layer)),
   Effect.scoped,

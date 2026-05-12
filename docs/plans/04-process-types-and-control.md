@@ -1,6 +1,6 @@
 # 04 — Process types & schedule control (planned)
 
-> **Superseded for Process runtime & DX** by [09 — Process v2](./09-process-v2-effect-first.md).  
+> **Superseded for Process runtime & DX** by [09 — Process runtime](./09-process-runtime.md).  
 > Do not implement multi-schedule reconciler flows for `Process` unless 09 is
 > amended. This file remains as background for earlier design discussion.
 

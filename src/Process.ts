@@ -349,8 +349,8 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
 
   const recordExecutionEvent = (args: {
     readonly scheduleKey: string | null;
-    readonly startedAt: Date;
-    readonly completedAt: Date;
+    readonly startedAt: number;
+    readonly completedAt: number;
     readonly status: "completed" | "failed" | "interrupted";
     readonly error?: unknown;
     readonly isStartupRun: boolean;
@@ -371,7 +371,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
           completedAt: args.completedAt,
           durationMs: Math.max(
             0,
-            args.completedAt.getTime() - args.startedAt.getTime(),
+            args.completedAt - args.startedAt,
           ),
           status: args.status,
           error: args.error === undefined ? undefined : String(args.error),
@@ -386,7 +386,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   ): Effect.Effect<void, never, RUser> =>
     Effect.gen(function* () {
       const storeOption = yield* Effect.serviceOption(ProcessStore);
-      const executedAt = yield* DateTime.nowAsDate;
+      const executedAt = yield* Clock.currentTimeMillis;
       const isStartupRun = Option.isSome(storeOption)
         ? (yield* storeOption.value.getProcessExecutions(name, { limit: 1 })).length === 0
         : true;
@@ -401,7 +401,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
         {
           onFailure: (error) =>
             Effect.gen(function* () {
-              const completedAt = yield* DateTime.nowAsDate;
+              const completedAt = yield* Clock.currentTimeMillis;
               yield* recordExecutionEvent({
                 scheduleKey: Option.getOrNull(scheduleIdentifier),
                 startedAt: executedAt,
@@ -411,12 +411,12 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
                 isStartupRun,
               });
               yield* Effect.logError(
-                `❌ Process '${name}' run failed at ${executedAt.toISOString()}: ${String(error)}`,
+                `❌ Process '${name}' run failed at ${String(executedAt)}: ${String(error)}`,
               );
             }),
           onSuccess: () =>
             Effect.gen(function* () {
-              const completedAt = yield* DateTime.nowAsDate;
+              const completedAt = yield* Clock.currentTimeMillis;
               yield* recordExecutionEvent({
                 scheduleKey: Option.getOrNull(scheduleIdentifier),
                 startedAt: executedAt,
@@ -425,7 +425,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
                 isStartupRun,
               });
               yield* Effect.logDebug(
-                `✅ Process '${name}' run completed at ${executedAt.toISOString()}`,
+                `✅ Process '${name}' run completed at ${String(executedAt)}`,
               );
             }),
         },
@@ -739,14 +739,22 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
         ? allExecutions
         : allExecutions.filter(
             (event) =>
-              event.execution.startedAt >= dateRange.start &&
-              event.execution.startedAt <= dateRange.end,
+              event.execution.startedAt >= dateRange.start.getTime() &&
+              event.execution.startedAt <= dateRange.end.getTime(),
           );
-      const lastRun = allExecutions[0]?.execution.startedAt ?? null;
+      const lastRunMillis = allExecutions[0]?.execution.startedAt;
+      const lastRun =
+        lastRunMillis === undefined
+          ? null
+          : DateTime.toDateUtc(DateTime.makeUnsafe(lastRunMillis));
       const executions = inRange.length;
-      const firstStartup =
+      const firstStartupMillis =
         allExecutions.find((event) => event.execution.isStartupRun)?.execution
-          .startedAt ?? null;
+          .startedAt;
+      const firstStartup =
+        firstStartupMillis === undefined
+          ? null
+          : DateTime.toDateUtc(DateTime.makeUnsafe(firstStartupMillis));
 
       return {
         lastRun,

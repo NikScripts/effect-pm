@@ -281,7 +281,7 @@ From package exports, we also track unstable families for future architecture:
 ### 19) `Effect.withSpan` / `withSpanScoped`
 - **Use-cases:**
   - `src/Process.ts`: span each run instance and reconciliation cycle.
-  - `src/ProcessGroup.ts`: span `startProcess`/`stopProcess` orchestration.
+  - `src/ProcessGroup.ts`: span `start`/`stop` orchestration.
   - `src/ControlService.ts`: span each incoming command.
 
 ### 20) `Effect.withLogSpan`

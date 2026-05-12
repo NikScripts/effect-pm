@@ -30,7 +30,7 @@
  * @module ProcessStore/Prisma
  */
 
-import { Context, Data, Effect, Layer } from "effect";
+import { Context, Data, DateTime, Effect, Layer } from "effect";
 import {
   ProcessStore,
   type AnalyticsEvent,
@@ -97,8 +97,12 @@ const buildWindow = (opts: QueryOpts | undefined) => {
     return undefined;
   }
   const window: { gt?: Date; lt?: Date } = {};
-  if (opts?.after !== undefined) window.gt = opts.after;
-  if (opts?.before !== undefined) window.lt = opts.before;
+  if (opts?.after !== undefined) {
+    window.gt = DateTime.toDateUtc(DateTime.makeUnsafe(opts.after));
+  }
+  if (opts?.before !== undefined) {
+    window.lt = DateTime.toDateUtc(DateTime.makeUnsafe(opts.before));
+  }
   return window;
 };
 

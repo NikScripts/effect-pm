@@ -17,6 +17,8 @@ import {
 } from "../src/prisma";
 import { utcDateFromIso, utcDateFromMillis } from "../src/utcDate.js";
 
+const utcMillisFromIso = (iso: string): number => utcDateFromIso(iso).getTime();
+
 // Derive the args shape structurally from the public client interface so the
 // fake matches exactly what the adapter calls without relying on internal
 // type exports.
@@ -129,13 +131,13 @@ describe("PrismaProcessStore — codec", () => {
     const event: ProcessExecutionCompletedEvent = {
       id: "exec-1",
       type: "process.execution.completed",
-      occurredAt: utcDateFromIso("2026-01-01T00:00:00.000Z"),
+      occurredAt: utcMillisFromIso("2026-01-01T00:00:00.000Z"),
       entityType: "process",
       entityId: "p",
       execution: {
         scheduleKey: "live",
-        startedAt: utcDateFromIso("2026-01-01T00:00:00.000Z"),
-        completedAt: utcDateFromIso("2026-01-01T00:00:01.000Z"),
+        startedAt: utcMillisFromIso("2026-01-01T00:00:00.000Z"),
+        completedAt: utcMillisFromIso("2026-01-01T00:00:01.000Z"),
         durationMs: 1000,
         status: "completed",
         isStartupRun: true,
@@ -160,7 +162,7 @@ describe("PrismaProcessStore — codec", () => {
     const event: ProcessLifecycleChangedEvent = {
       id: "lc-1",
       type: "process.lifecycle.changed",
-      occurredAt: utcDateFromIso("2026-01-01T01:00:00.000Z"),
+      occurredAt: utcMillisFromIso("2026-01-01T01:00:00.000Z"),
       entityType: "process",
       entityId: "p",
       lifecycle: { tag: "Errored", error: "boom" },
@@ -223,13 +225,13 @@ describe("PrismaProcessStore — adapter", () => {
       yield* store.append({
         id: "e1",
         type: "process.execution.completed",
-        occurredAt: utcDateFromIso("2026-01-01T00:00:00.000Z"),
+        occurredAt: utcMillisFromIso("2026-01-01T00:00:00.000Z"),
         entityType: "process",
         entityId: "p",
         execution: {
           scheduleKey: null,
-          startedAt: utcDateFromIso("2026-01-01T00:00:00.000Z"),
-          completedAt: utcDateFromIso("2026-01-01T00:00:00.500Z"),
+          startedAt: utcMillisFromIso("2026-01-01T00:00:00.000Z"),
+          completedAt: utcMillisFromIso("2026-01-01T00:00:00.500Z"),
           durationMs: 500,
           status: "completed",
           isStartupRun: true,
@@ -238,13 +240,13 @@ describe("PrismaProcessStore — adapter", () => {
       yield* store.append({
         id: "e2",
         type: "process.execution.completed",
-        occurredAt: utcDateFromIso("2026-01-01T00:01:00.000Z"),
+        occurredAt: utcMillisFromIso("2026-01-01T00:01:00.000Z"),
         entityType: "process",
         entityId: "p",
         execution: {
           scheduleKey: "live",
-          startedAt: utcDateFromIso("2026-01-01T00:01:00.000Z"),
-          completedAt: utcDateFromIso("2026-01-01T00:01:00.250Z"),
+          startedAt: utcMillisFromIso("2026-01-01T00:01:00.000Z"),
+          completedAt: utcMillisFromIso("2026-01-01T00:01:00.250Z"),
           durationMs: 250,
           status: "failed",
           error: "fail",
@@ -274,7 +276,7 @@ describe("PrismaProcessStore — adapter", () => {
       yield* store.append({
         id: "lc-1",
         type: "process.lifecycle.changed",
-        occurredAt: utcDateFromIso("2026-01-01T00:00:00.000Z"),
+        occurredAt: utcMillisFromIso("2026-01-01T00:00:00.000Z"),
         entityType: "process",
         entityId: "p",
         lifecycle: { tag: "Started" },

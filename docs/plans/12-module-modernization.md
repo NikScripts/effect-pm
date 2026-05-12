@@ -1,4 +1,4 @@
-# 13 — Remaining Modules: detailed plans
+# 12 — Module modernization roadmap
 
 **Status:** Plan
 
@@ -15,10 +15,10 @@ Already uses class pattern (`PollingTag`), clean architecture (wakeable sleep vi
 **1. Accept `Duration.Input` for spaced preset:**
 
 ```typescript
-// Before:
+// Current:
 Polling.spaced(Duration.minutes(5))
 
-// After (also accept string shorthand):
+// Target:
 Polling.spaced("5 minutes")
 Polling.spaced(Duration.minutes(5))  // still works
 ```
@@ -26,10 +26,10 @@ Polling.spaced(Duration.minutes(5))  // still works
 **2. Simpler accelerating preset (DX sugar):**
 
 ```typescript
-// Before (complex, requires understanding refs):
+// Current lower-level form:
 Polling.acceleratingScoped({ minIntervalMs: 1000, maxIntervalMs: 60000, decayK: 0.3 })
 
-// After (human-friendly):
+// Target human-friendly form:
 Polling.accelerating({
   fastest: "1 second",
   slowest: "1 minute",
@@ -62,7 +62,7 @@ Polling.backoff({
 | Change | Effort |
 |--------|--------|
 | `Duration.Input` on `spaced` | Trivial |
-| Rename accelerating config fields | Small (alias old for compat) |
+| Rename accelerating config fields | Small |
 | `jittered` preset | Small (wrap spaced with random offset) |
 | `backoff` preset | Small (similar to accelerating but simpler math) |
 | TSDoc with `@example` on each preset | Small |
@@ -86,10 +86,10 @@ Already class pattern (`ProcessScheduleTag`), in-memory store with change signal
 **1. Required `id` on entries (plan 10):**
 
 ```typescript
-// Before (id is Option):
+// Current shape:
 { id: Option.some("match-123"), startAt: new Date(), stopAt: Option.none() }
 
-// After (id is required string — no Option wrapping):
+// Target shape:
 { id: "match-123", startAt: Date, stopAt: Date | undefined }
 ```
 
@@ -98,10 +98,10 @@ This simplifies every interaction. `Option` was premature — id should always e
 **2. Fluent entry builder:**
 
 ```typescript
-// Before:
+// Current:
 ProcessSchedule.window("game-123", gameStart, gameEnd)
 
-// After (chainable):
+// Target chainable form:
 ProcessSchedule.entry("game-123")
   .startsAt(gameStart)
   .endsAt(gameEnd)
@@ -126,7 +126,7 @@ const exists = yield* controls.has("match-123")   // boolean
 yield* controls.add(entry)
 yield* controls.upsert(entry)                      // insert or update by id
 yield* controls.remove("match-123")                // returns boolean (was it there?)
-yield* controls.removeMany(["old-1", "old-2"])     // returns count removed
+yield* controls.removeMany(["expired-1", "expired-2"]) // returns count removed
 yield* controls.clear
 
 // Sync from external source (DB, API)
@@ -264,21 +264,21 @@ Same `serviceOption` pattern. Lifecycle events (Started, Stopped, Restarted) are
 ```typescript
 const processFibers = yield* FiberMap.make<string, void>()
 // Key: process name, Value: supervisor fiber
-// startProcess → FiberMap.run(processFibers, name, supervisorEffect)
-// stopProcess → FiberMap.interrupt(processFibers, name)
+// start → FiberMap.run(processFibers, name, supervisorEffect)
+// stop → FiberMap.interrupt(processFibers, name)
 ```
 
 **3. Effect.fn on control methods:**
 
 ```typescript
-const startProcess = Effect.fn("ProcessGroup.startProcess")(function*(name: string) { ... })
-const stopProcess = Effect.fn("ProcessGroup.stopProcess")(function*(name: string) { ... })
+const start = Effect.fn("ProcessGroup.start")(function*(name: string) { ... })
+const stop = Effect.fn("ProcessGroup.stop")(function*(name: string) { ... })
 ```
 
 **4. Richer status API:**
 
 ```typescript
-// Current: getProcessStatus returns ProcessDetails
+// Current: processStatus returns ProcessDetails
 // New: also expose group-level aggregate
 yield* group.status  // { processes: [...], queues: [...], uptime, health }
 ```
@@ -374,7 +374,7 @@ Process.make({
 
 ```typescript
 yield* group.addProcess(newProcess)  // hot-add without restart
-yield* group.removeProcess("old-proc")  // already exists but document clearly
+yield* group.removeProcess("stale-proc")  // document runtime removal clearly
 ```
 
 ### Polling: `Polling.cron` (schedule-aware cadence)

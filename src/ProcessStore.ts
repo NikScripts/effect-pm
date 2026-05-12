@@ -28,8 +28,10 @@ import { Context, Effect, Layer } from "effect";
  */
 export interface QueryOpts {
   limit?: number;
-  before?: Date;
-  after?: Date;
+  /** Filter: only events before this epoch millis. */
+  before?: number;
+  /** Filter: only events after this epoch millis. */
+  after?: number;
 }
 
 /**
@@ -40,7 +42,8 @@ export interface QueryOpts {
 export interface AnalyticsEventBase {
   id: string;
   type: string;
-  occurredAt: Date;
+  /** Epoch milliseconds when the event occurred. Use `Clock.currentTimeMillis` to produce. */
+  occurredAt: number;
   entityType: "process" | "queue";
   entityId: string;
   attributes?: Record<string, unknown>;
@@ -56,8 +59,10 @@ export interface ProcessExecutionCompletedEvent extends AnalyticsEventBase {
   entityType: "process";
   execution: {
     scheduleKey: string | null;
-    startedAt: Date;
-    completedAt: Date;
+    /** Epoch millis when the execution started. */
+    startedAt: number;
+    /** Epoch millis when the execution completed. */
+    completedAt: number;
     durationMs: number;
     status: "completed" | "failed" | "interrupted";
     error?: string;
@@ -168,14 +173,14 @@ export interface ProcessStoreInterface {
 const applyQueryOpts = <T>(
   rows: readonly T[],
   opts: QueryOpts | undefined,
-  getDate: (row: T) => Date,
+  getTimestamp: (row: T) => number,
 ): T[] => {
   const filtered = rows.filter((row) => {
-    const timestamp = getDate(row).getTime();
-    if (opts?.before !== undefined && timestamp >= opts.before.getTime()) {
+    const timestamp = getTimestamp(row);
+    if (opts?.before !== undefined && timestamp >= opts.before) {
       return false;
     }
-    if (opts?.after !== undefined && timestamp <= opts.after.getTime()) {
+    if (opts?.after !== undefined && timestamp <= opts.after) {
       return false;
     }
     return true;
@@ -188,8 +193,8 @@ const applyQueryOpts = <T>(
   return filtered.slice(0, Math.max(0, opts.limit));
 };
 
-const byDateDesc = <T>(getDate: (row: T) => Date) => (a: T, b: T) =>
-  getDate(b).getTime() - getDate(a).getTime();
+const byTimestampDesc = <T>(getTimestamp: (row: T) => number) => (a: T, b: T) =>
+  getTimestamp(b) - getTimestamp(a);
 
 // ============================================================================
 // In-memory implementation
@@ -220,7 +225,7 @@ const makeInMemoryProcessStore = Effect.sync<ProcessStoreInterface>(() => {
               event.entityType === "process" &&
               event.entityId === processId,
           )
-          .sort(byDateDesc((event) => event.execution.startedAt));
+          .sort(byTimestampDesc((event) => event.execution.startedAt));
         return applyQueryOpts(rows, opts, (event) => event.execution.startedAt);
       }),
 
@@ -233,7 +238,7 @@ const makeInMemoryProcessStore = Effect.sync<ProcessStoreInterface>(() => {
               event.entityType === "process" &&
               event.entityId === processId,
           )
-          .sort(byDateDesc((event) => event.occurredAt));
+          .sort(byTimestampDesc((event) => event.occurredAt));
         return applyQueryOpts(rows, opts, (event) => event.occurredAt);
       }),
   };

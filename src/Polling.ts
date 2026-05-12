@@ -32,7 +32,7 @@
  * @module Polling
  */
 
-import { Context, Duration, Effect, Layer, Option, Ref, Deferred } from "effect";
+import { Context, Duration, Effect, Layer, Option, Random, Ref, Deferred } from "effect";
 
 // ============================================================================
 // Service interface
@@ -156,8 +156,9 @@ const jitteredLayer = (
       const awaitNextTick: Effect.Effect<void> = Effect.gen(function* () {
         const d = Deferred.makeUnsafe<void, never>();
         yield* Ref.set(wakeRef, d);
-        // Random offset: base ± jitter%
-        const offset = (Math.random() * 2 - 1) * jitterFraction * baseMs;
+        // Random offset: base +/- jitter%.
+        const random = yield* Random.next;
+        const offset = (random * 2 - 1) * jitterFraction * baseMs;
         const ms = Math.max(0, baseMs + offset);
         yield* Effect.race(Effect.sleep(Duration.millis(ms)), Deferred.await(d)).pipe(Effect.asVoid);
       });

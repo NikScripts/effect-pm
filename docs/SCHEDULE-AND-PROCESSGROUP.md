@@ -2,7 +2,7 @@
 
 This page answers **how `ProcessSchedule` interacts with `ProcessGroup`**, what **starts** when, and how to mutate schedule entries from **outside** the process (e.g. an HTTP API that knows when a game is live).
 
-For API tables, see [PROCESS-API.md](./PROCESS-API.md). For runtime semantics, see [plans/09-process-v2-effect-first.md](./plans/09-process-v2-effect-first.md).
+For API tables, see [PROCESS-API.md](./PROCESS-API.md). For runtime semantics, see [plans/09-process-runtime.md](./plans/09-process-runtime.md).
 
 ---
 
@@ -12,10 +12,10 @@ For API tables, see [PROCESS-API.md](./PROCESS-API.md). For runtime semantics, s
 
 The **`ProcessSchedule`** service layer attached to **`Process.make`** is **merged into `process.effect`**. That effect is a **long-running schedule driver**. Nothing runs that driver until you:
 
-- **`yield* group.startProcess(name)`**, or  
+- **`yield* group.start(name)`**, or  
 - **`yield* group.startAll()`**
 
-At **`startProcess`**, the group **`forkIn`s `process.effect` into a dedicated scope** (see `src/ProcessGroup.ts`). From that moment:
+At **`start`**, the group **`forkIn`s `process.effect` into a dedicated scope** (see `src/ProcessGroup.ts`). From that moment:
 
 - The **schedule-driver fiber** is alive.
 - Any inlined schedule/polling resources are started together in the same merged `Effect` / `Layer` tree.
@@ -24,14 +24,14 @@ So: **schedule logic runs as part of the started process**, not when the group i
 
 ---
 
-## Disarm vs `stopProcess` (still “running” in the group?)
+## Disarm vs `stop` (still “running” in the group?)
 
 | Action | Driver fiber | Active instances |
 |--------|--------------|------------------|
 | **No active schedule entries** (for example after `schedule.clear`) | **Still running** | Existing instances exit naturally once their current entry closes |
-| **`stopProcess(name)`** | **Interrupted** — scope closed, lifecycle **Stopped** | Ended (driver + child fibers interrupted) |
+| **`stop(name)`** | **Interrupted** — scope closed, lifecycle **Stopped** | Ended (driver + child fibers interrupted) |
 
-So **`startProcess` ≠ “game is on”**. It means **“attach the schedule driver”**. Whether work runs is controlled by current schedule entries (`startAt` / `stopAt`).
+So **`start` ≠ “game is on”**. It means **“attach the schedule driver”**. Whether work runs is controlled by current schedule entries (`startAt` / `stopAt`).
 
 ---
 
@@ -39,7 +39,7 @@ So **`startProcess` ≠ “game is on”**. It means **“attach the schedule dr
 
 **Meaningfully, yes — but not by swapping the `Layer` on a live `Process` handle.**
 
-`Process.make` **bakes** `polling` / `schedule` **layers into `process.effect`**. There is no API to replace that layer on an already-built `Process` without building a **new** `Process` (or **`restartProcess`**, which stops and starts again with the **same** config object the group already holds).
+`Process.make` **bakes** `polling` / `schedule` **layers into `process.effect`**. There is no API to replace that layer on an already-built `Process` without building a **new** `Process` (or **`restart`**, which stops and starts again with the **same** config object the group already holds).
 
 What you **can** do (recommended pattern):
 
@@ -55,14 +55,14 @@ If you need a completely different schedule policy implementation, create a new 
 
 **Yes**, once:
 
-1. **`group.startProcess(name)`** has been called (driver running), and
+1. **`group.start(name)`** has been called (driver running), and
 2. There is at least one active schedule entry for the current wall-clock time.
 
 Then spawned instances run **`Polling.awaitNextTick` → user `effect` → `Polling.afterTick`** while their entry window remains open.
 
 When the game ends and your updater clears/closes entries, running instances exit naturally at their next stop check.
 
-When you want the **fiber gone** (scale to zero, deploy teardown), call **`stopProcess`**.
+When you want the **fiber gone** (scale to zero, deploy teardown), call **`stop`**.
 
 ---
 
@@ -71,10 +71,10 @@ When you want the **fiber gone** (scale to zero, deploy teardown), call **`stopP
 1. Start with no entries (pre-game = no active window).
 2. **`Process.make`** with **`schedule`** initializer or `ProcessSchedule.inMemory(...)` and **`polling: Polling.spaced(…)`**.
 3. **`ProcessGroup.make({ queues: [], processes: [proc] })`** (empty `queues` is allowed — see `test/process-group.test.ts`).  
-4. **`yield* group.startProcess(proc.name)`** — schedule driver starts.
+4. **`yield* group.start(proc.name)`** — schedule driver starts.
 5. **Fork** `Effect.gen` that simulates (or performs) **`HttpClient.get`**, then updates entries (for example `set([ProcessSchedule.window("match-101", kickoff, finalWhistle)])`).
 6. Under **`TestClock`**, **`TestClock.adjust`** so sleeps complete.  
-7. Inspect tick counter / logs; then **`yield* group.stopProcess(proc.name)`** if you want the process **removed** from the running set, not merely unscheduled.
+7. Inspect tick counter / logs; then **`yield* group.stop(proc.name)`** if you want the process **removed** from the running set, not merely unscheduled.
 
 Runnable script: **`examples/process-game-window-with-group.ts`**.
 

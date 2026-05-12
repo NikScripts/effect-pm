@@ -14,7 +14,7 @@
  *    snaps back toward the long initial delay and wakes the waiter.
  * 2. **`disarmRearmDemo`** — mutate in-memory schedule entries (`set` / `clear`) to
  *    disarm and then re-arm windows.
- *    Compare with `stopProcess`, which **interrupts** the fiber.
+ *    Compare with `ProcessGroup.stop`, which **interrupts** the fiber.
  *
  * For schedule composition patterns and runtime mutation examples,
  * see **`examples/schedule-control-surfaces.ts`**.
@@ -30,7 +30,7 @@
  * ### Further reading
  *
  * - `docs/PROCESS-API.md` — tables for `Polling`, `ProcessSchedule`, disarmed sleep helpers
- * - `docs/plans/09-process-v2-effect-first.md` — canonical supervisor semantics
+ * - `docs/plans/09-process-runtime.md` — canonical supervisor semantics
  * - `examples/example.ts` — full `ProcessGroup` + real clock demo
  */
 

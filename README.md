@@ -15,11 +15,11 @@ bundle.
 | [docs/README.md](./docs/README.md) | **Index** of all committed docs in `docs/`. |
 | [docs/PACKAGE-GUIDE.md](./docs/PACKAGE-GUIDE.md) | Narrative architecture: mental model, dependency rules, links. |
 | [docs/PROCESS-API.md](./docs/PROCESS-API.md) | Spec-style tables for `Process`, `Polling`, `ProcessSchedule`, `ProcessGroup`, disarmed sleep helpers. |
-| [docs/SCHEDULE-AND-PROCESSGROUP.md](./docs/SCHEDULE-AND-PROCESSGROUP.md) | **`startProcess`** vs schedule, disarm vs **`stopProcess`**, API-driven **`fromArmedRef`**. |
+| [docs/RESOURCE-API.md](./docs/RESOURCE-API.md) | Current `QueueResource`, `RunResource`, HTTP gate, and `HttpApiResource` APIs. |
+| [docs/SCHEDULE-AND-PROCESSGROUP.md](./docs/SCHEDULE-AND-PROCESSGROUP.md) | `ProcessGroup.start` vs schedule, disarm vs `ProcessGroup.stop`, API-driven **`fromArmedRef`**. |
 | [docs/AGENTS.md](./docs/AGENTS.md) | Repository map and invariants for **AI assistants** (committed; use instead of ad-hoc local notes). |
 | [examples/README.md](./examples/README.md) | **Runnable examples**: commands, learning order, file index. |
-| [docs/plans/README.md](./docs/plans/README.md) | Long-form architecture contracts (plan **09** = process v2 canonical). |
-| [MIGRATION_0.7.0-process-v2.md](./MIGRATION_0.7.0-process-v2.md) | Upgrading from pre–v0.7 `Process` shapes. |
+| [docs/plans/README.md](./docs/plans/README.md) | Long-form architecture contracts (plan **09** = process runtime canonical). |
 
 The package entry [`src/index.ts`](./src/index.ts) has **`@packageDocumentation`** describing exports at a glance (visible in IDEs that surface it).
 
@@ -47,17 +47,19 @@ npm install @nikscripts/effect-pm effect
 import { QueueResource } from "@nikscripts/effect-pm";
 import { Effect } from "effect";
 
-const EmailQueue = QueueResource.make({
-  name: "email-queue",
-  effect: (email: Email) =>
-    Effect.gen(function* () {
-      // Process the email
-      yield* sendEmail(email);
-      return email.id;
-    }),
-  concurrency: 5,
-  capacity: 1000,
-});
+class EmailQueue extends QueueResource.Service<EmailQueue, Email, string, never>()(
+  "email-queue",
+  {
+    effect: (email: Email) =>
+      Effect.gen(function* () {
+        // Process the email
+        yield* sendEmail(email);
+        return email.id;
+      }),
+    concurrency: 5,
+    capacity: 1000,
+  },
+) {}
 ```
 
 ### 2. Create a managed process
@@ -80,7 +82,7 @@ const emailProcess = Process.make({
 });
 ```
 
-`trigger` controls when new process instances are spawned, `polling` controls repeat cadence inside an instance, and `schedule` controls whether an instance stays armed and continues running. See `MIGRATION_0.7.0-process-v2.md` if you are upgrading from the old `crons`-only `Process.make`. Publishing **`0.6.0-beta.2` → `0.7.0-beta.0`**: [docs/MIGRATION_0.6-beta.2-to-0.7-beta.0.md](./docs/MIGRATION_0.6-beta.2-to-0.7-beta.0.md).
+`polling` controls repeat cadence inside an instance, and `schedule` controls whether an instance stays armed and continues running.
 
 ### 3. Create ProcessGroup
 
@@ -129,58 +131,55 @@ You can merge independent layers with **`Layer.mergeAll(...)`** and a single `Ef
 ```typescript
 import { QueueResource } from "@nikscripts/effect-pm";
 
-const TaskQueue = QueueResource.make({
-  name: "task-queue",
-  effect: (item: Item) => processItem(item),
-  concurrency: 3,
-  capacity: 5000,
-});
+class TaskQueue extends QueueResource.Service<TaskQueue, Item, void, never>()(
+  "task-queue",
+  {
+    effect: (item: Item) => processItem(item),
+    concurrency: 3,
+    capacity: 5000,
+  },
+) {}
 ```
 
 ### Advanced Configuration
 
 ```typescript
 import { QueueResource } from "@nikscripts/effect-pm";
-import { Duration } from "effect";
+import { Effect, Exit } from "effect";
 
-const ProcessingQueue = QueueResource.make({
-  name: "processing-queue",
-  effect: processItem,
-  
-  // Concurrency control
-  concurrency: 5,
-  
-  // Queue capacity (memory management)
-  capacity: 10000,
-  
-  // Rate limiting
-  throttle: {
-    limit: 100,                       // 100 requests
-    duration: Duration.minutes(1),    // per minute
+class ProcessingQueue extends QueueResource.Service<ProcessingQueue, Item, Result, ProcessingError>()(
+  "processing-queue",
+  {
+    effect: processItem,
+
+    // Concurrency control
+    concurrency: 5,
+
+    // Queue capacity (memory management)
+    capacity: 10000,
+
+    // Result handling (forked; never blocks workers)
+    handler: (item, exit, ctx) =>
+      Exit.match(exit, {
+        onFailure: () => ctx.retry,
+        onSuccess: (result) => Effect.logInfo(`Processed: ${result.id}`),
+      }),
+    retries: 3,
+
+    // Deduplication
+    key: (item) => item.id,
+
+    // Recovery from storage
+    refill: (queue) =>
+      Effect.gen(function* () {
+        const cached = yield* getCachedItems();
+        yield* queue.add(cached);
+      }),
   },
-  
-  // Success callback (non-blocking)
-  onSuccess: (result, item, queue) => 
-    Effect.gen(function* () {
-      yield* Effect.logInfo(`Processed: ${result}`);
-      // Queue instance available for adding follow-up tasks or lifecycle control
-    }),
-  
-  // Error handling
-  onError: (error, item, queue) => 
-    Effect.gen(function* () {
-      yield* Effect.logError(`Failed: ${error.message}`);
-      // Queue instance available for lifecycle control if needed
-    }),
-  
-  // Recovery from cache/database
-  refill: (queue) => 
-    Effect.gen(function* () {
-      const cached = yield* getCachedItems();
-      yield* queue.add(cached);
-    }),
-});
+) {}
 ```
+
+For the full current queue surface, including `handler`, `EffectContext`, `HandlerContext`, `queue.prioritize`, `queue.defer`, and effectful status properties, see [docs/RESOURCE-API.md](./docs/RESOURCE-API.md).
 
 ## Process configuration (polling + schedule)
 
@@ -220,9 +219,9 @@ const dataSync = Process.make({
 });
 ```
 
-While **disarmed**, running instances exit naturally on their next schedule check. The trigger driver remains attached, so future trigger times can still spawn fresh instances. The legacy disarmed-idle helpers (`computeDisarmedIdleSleep` / `resolveDisarmedFallbackPoll`) are still exported for custom schedule layers and migration scenarios.
+While **disarmed**, running instances exit naturally on their next schedule check. The schedule driver remains attached, so future schedule openings can still spawn fresh instances. The disarmed-idle helpers (`computeDisarmedIdleSleep` / `resolveDisarmedFallbackPoll`) are exported for custom schedule layers.
 
-To run once outside trigger cadence (even when schedule is disarmed), call `process.runImmediately()` or `group.runProcessImmediately(name)` after the process is registered.
+To run once outside trigger cadence (even when schedule is disarmed), call `process.runImmediately()` or `group.runImmediately(name)` after the process is registered.
 
 ### Accelerating polling (speeds up, then reset)
 
@@ -241,16 +240,16 @@ Runnable demo (with `TestClock`): `npx tsx examples/process-supervisor-patterns.
 
 ```typescript
 // Start specific process
-yield* group.startProcess("email-process");
+yield* group.start("email-process");
 
 // Stop specific process
-yield* group.stopProcess("email-process");
+yield* group.stop("email-process");
 
 // Restart process
-yield* group.restartProcess("email-process");
+yield* group.restart("email-process");
 
 // Run process immediately (doesn't affect schedule)
-yield* group.runProcessImmediately("email-process");
+yield* group.runImmediately("email-process");
 ```
 
 ### Global Control
@@ -271,8 +270,7 @@ yield* group.startAll();
 
 ```typescript
 // Get single process status
-const status = yield* group.getProcessStatus("email-process");
-console.log(status);
+const status = yield* group.processStatus("email-process");
 // {
 //   name: "email-process",
 //   type: "scheduled",
@@ -280,15 +278,12 @@ console.log(status);
 //   uptime: 3600000,
 //   startTime: Date,
 //   lastRun: Date,
-//   nextRun: Date,
+//   nextTriggerRun: Date,
 //   executions: 24
 // }
 
-// Get all process statuses
-const allStatuses = yield* group.getAllProcessStatus();
-
-// List all processes
-const processes = yield* group.listProcesses();
+// Get all process and queue statuses
+const allStatuses = yield* group.status;
 ```
 
 ### Queue Operations
@@ -306,7 +301,7 @@ yield* emailQueue.add([email1, email2, email3]);
 
 ```typescript
 // Remove a process
-yield* group.removeProcess("old-process");
+yield* group.removeProcess("stale-process");
 ```
 
 ## Type Safety
@@ -317,10 +312,12 @@ The ProcessGroup enforces type-safe queue dependencies at compile time:
 import { Process, QueueResource, ProcessGroup, Polling, ProcessSchedule } from "@nikscripts/effect-pm";
 import { Cron, Duration, Effect } from "effect";
 
-const EmailQueue = QueueResource.make({
-  name: "email-queue",
-  effect: sendEmail,
-});
+class EmailQueue extends QueueResource.Service<EmailQueue, Email, void, SendError>()(
+  "email-queue",
+  {
+    effect: sendEmail,
+  },
+) {}
 
 const workerWithQueue = Process.make({
   name: "needs-queue",
@@ -332,13 +329,13 @@ const workerWithQueue = Process.make({
   }),
 });
 
-// ✅ This works - EmailQueue is provided
+// This works - EmailQueue is provided
 const group = yield* ProcessGroup.make({
   queues: [EmailQueue],
   processes: [workerWithQueue],
 });
 
-// ❌ Compile error - EmailQueue is missing!
+// Compile error - EmailQueue is missing
 const groupBad = yield* ProcessGroup.make({
   queues: [],
   processes: [workerWithQueue], // TypeScript error!
@@ -447,7 +444,7 @@ import {
   ProcessNotRunningError 
 } from "@nikscripts/effect-pm";
 
-const result = yield* group.startProcess("my-process").pipe(
+const result = yield* group.start("my-process").pipe(
   Effect.catchTags({
     ProcessNotFoundError: (err) => 
       Effect.logError(`Process not found: ${err.processName}`),
@@ -476,44 +473,48 @@ const program = Effect.gen(function* () {
 Set appropriate queue capacities to prevent memory issues:
 
 ```typescript
-const TaskQueue = QueueResource.make({
-  name: "task-queue",
-  capacity: 50000, // Adjust based on item size
-  effect: processItem,
-});
+class TaskQueue extends QueueResource.Service<TaskQueue, Task, void, never>()(
+  "task-queue",
+  {
+    capacity: 50000, // Adjust based on item size
+    effect: processItem,
+  },
+) {}
 ```
 
 ### 3. Error Handling
 
-Always provide error handlers for queue resources:
+Use `handler` to observe item exits and decide whether to retry:
 
 ```typescript
-const TaskQueue = QueueResource.make({
-  effect: processItem,
-  onError: (error, item, queue) => 
-    Effect.gen(function* () {
-      yield* Effect.logError(`Failed: ${error.message}`);
-      yield* saveFailedItemForRetry(item);
-      // Queue instance available for lifecycle control if needed
-    }),
-});
+class TaskQueue extends QueueResource.Service<TaskQueue, Task, Result, TaskError>()(
+  "task-queue",
+  {
+    effect: processItem,
+    handler: (item, exit, ctx) =>
+      Exit.match(exit, {
+        onFailure: () =>
+          Effect.gen(function* () {
+            yield* saveFailedItemForRetry(item);
+            yield* ctx.retry;
+          }),
+        onSuccess: () => Effect.void,
+      }),
+    retries: 3,
+  },
+) {}
 ```
 
-### 4. Rate Limiting
+### 4. Priority
 
-Use throttling for external API calls:
+Use priority to keep urgent work ahead of background work:
 
 ```typescript
-import { QueueResource } from "@nikscripts/effect-pm";
-import { Duration } from "effect";
+const queue = yield* TaskQueue;
 
-const ApiQueue = QueueResource.make({
-  effect: callExternalAPI,
-  throttle: {
-    limit: 10,
-    duration: Duration.seconds(1),
-  },
-});
+yield* queue.add([normalTask]);
+yield* queue.prioritize([urgentTask]);
+yield* queue.defer([backgroundTask]);
 ```
 
 ## Examples
@@ -530,7 +531,7 @@ See the [examples/example.ts](./examples/example.ts) file for a complete working
 ### Core Exports
 
 - `ProcessGroup.make()` - Create a ProcessGroup instance
-- `QueueResource.make()` - Create a resource queue
+- `QueueResource.Service()` / `QueueResource.Tag()` - Create queue services and queue service contracts
 - `Process.make()` — Create a managed process (`polling` + `schedule` layers)
 - `Polling` / `ProcessSchedule` — Cadence and gate services with preset layers
 - `ProcessStore` - Unified analytics & lifecycle service (in-memory by default)
@@ -547,7 +548,7 @@ See the [examples/example.ts](./examples/example.ts) file for a complete working
 - `ProcessGroup` - ProcessGroup interface
 - `ProcessGroupDetails` - Process status information
 - `QueueDetails` - Queue status information
-- `QueueRef<Name, T, R, E>` - Queue handle API (`yield*` the tag from `QueueResource.make`); `Name` is the literal `name`; `QueueResourceInterface` is a legacy 3-param alias (`Name` widened to `string`)
+- `QueueHandle<T, R, E>` - Queue handle API (`yield*` the queue service tag)
 - `Process<R>` - Process interface
 - `ProcessStoreInterface` - Service contract for implementing a custom store
 - `AnalyticsEvent` / `ProcessExecutionCompletedEvent` / `ProcessLifecycleChangedEvent` - Event envelope and concrete event types
