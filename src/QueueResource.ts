@@ -336,19 +336,6 @@ export class QueueShutdownError extends Data.TaggedError(
 // Backwards-compat type alias for ProcessGroup
 // ============================================================================
 
-/**
- * Legacy type alias preserved for {@link ProcessGroup} compatibility.
- * New code should use {@link QueueHandle} directly.
- *
- * @deprecated Use {@link QueueHandle} instead.
- * @public
- */
-export type QueueRef<
-  _Name extends string,
-  T,
-  R,
-  E = never,
-> = QueueHandle<T, R, E>;
 
 // ============================================================================
 // Internal Utilities

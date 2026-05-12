@@ -273,25 +273,3 @@ export const HttpApiResource = {
   acceptJson,
 } as const;
 
-// ============================================================================
-// Legacy exports (backwards compat for existing imports)
-// ============================================================================
-
-/** @deprecated Use `HttpApiResourceConfig` instead. */
-export type HttpApiResourceMakeConfig<
-  ApiId extends string,
-  Groups extends HttpApiGroup.Any,
-  Name extends string = string,
-> = HttpApiResourceConfig<ApiId, Groups, Name>;
-
-/** @deprecated Use `HttpApiResourceConfig.baseUrl` / `transformClient` directly. */
-export type HttpApiResourceClientOptions = {
-  readonly baseUrl?: URL | string | undefined;
-  readonly transformClient?:
-    | ((client: HttpClient.HttpClient) => HttpClient.HttpClient)
-    | undefined;
-  readonly transformResponse?:
-    | ((effect: Effect.Effect<unknown, unknown, unknown>) => Effect.Effect<unknown, unknown, unknown>)
-    | undefined;
-};
-

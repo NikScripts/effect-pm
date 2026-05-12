@@ -23,7 +23,7 @@
 import { Clock, Data, Duration, Effect, FiberMap, Option, Ref, Scope } from "effect";
 import type { Context } from "effect";
 import type { Process } from "./Process";
-import type { QueueRef } from "./QueueResource";
+import type { QueueHandle } from "./QueueResource";
 import {
   ProcessStore,
   type ProcessLifecycleChangedEvent,
@@ -151,27 +151,13 @@ export interface ProcessGroup<R> {
 
   // ─── Queue control (delegates to queue handle) ───
   readonly listQueues: () => Effect.Effect<ReadonlyArray<QueueDetails>>;
-  readonly getQueue: (name: string) => Effect.Effect<QueueRef<any, any, any, any>, ProcessGroupErrors>;
+  readonly getQueue: (name: string) => Effect.Effect<QueueHandle<any, any, any, any>, ProcessGroupErrors>;
   readonly pauseQueue: (name: string) => Effect.Effect<void, ProcessGroupErrors>;
   readonly resumeQueue: (name: string) => Effect.Effect<void, ProcessGroupErrors>;
   readonly clearQueue: (name: string) => Effect.Effect<number, ProcessGroupErrors>;
 
   // ─── Shutdown ───
   readonly awaitShutdown: (options?: { readonly logMessage?: (signal: string) => string }) => Effect.Effect<void, never, Scope.Scope>;
-
-  // ─── Legacy compat ───
-  /** @deprecated Use `group.start(name)` */
-  readonly startProcess: (name: string) => Effect.Effect<void, ProcessGroupErrors, R>;
-  /** @deprecated Use `group.stop(name)` */
-  readonly stopProcess: (name: string) => Effect.Effect<void, ProcessGroupErrors>;
-  /** @deprecated Use `group.restart(name)` */
-  readonly restartProcess: (name: string) => Effect.Effect<void, ProcessGroupErrors, R>;
-  /** @deprecated Use `group.processStatus(name)` */
-  readonly getProcessStatus: (name: string) => Effect.Effect<ProcessGroupDetails, ProcessGroupErrors>;
-  /** @deprecated Use `group.status` */
-  readonly getAllProcessStatus: () => Effect.Effect<ReadonlyArray<ProcessGroupDetails>>;
-  /** @deprecated Use ControlService.serve(group, opts) separately */
-  readonly serve: (opts: { readonly port?: number }) => Effect.Effect<void, never, Scope.Scope | R>;
 }
 
 // ============================================================================
@@ -239,7 +225,7 @@ const buildProcessDetails = (
  * @public
  */
 export const makeProcessGroup = <
-  const Queues extends readonly [...Context.Key<any, QueueRef<any, any, any, any>>[]],
+  const Queues extends readonly [...Context.Key<any, QueueHandle<any, any, any, any>>[]],
   const Processes extends readonly Process<any>[],
 >(config: {
   readonly queues: Queues;
@@ -253,7 +239,7 @@ export const makeProcessGroup = <
     type R = AllGroupProcessesRequirements<Processes>;
 
     // ─── Resolve queue tags from context ───
-    const queueMap: Record<string, QueueRef<any, any, any, any>> = {};
+    const queueMap: Record<string, QueueHandle<any, any, any, any>> = {};
     for (const queueTag of config.queues) {
       queueMap[queueTag.key] = yield* queueTag.asEffect();
     }
@@ -366,7 +352,7 @@ export const makeProcessGroup = <
         return results;
       });
 
-    const getQueue = (name: string): Effect.Effect<QueueRef<any, any, any, any>, ProcessGroupErrors> => {
+    const getQueue = (name: string): Effect.Effect<QueueHandle<any, any, any, any>, ProcessGroupErrors> => {
       const queue = queueMap[name];
       if (queue === undefined) return Effect.fail(new ProcessNotFoundError({ processName: name }));
       return Effect.succeed(queue);
@@ -417,9 +403,6 @@ export const makeProcessGroup = <
         yield* stopAll().pipe(Effect.ignore);
       });
 
-    // ─── Legacy compat: serve stub (ControlService.serve(group, opts) is the new pattern) ───
-    const serve = (_opts: { readonly port?: number }): Effect.Effect<void, never, Scope.Scope | R> =>
-      Effect.logWarning("ProcessGroup.serve() is deprecated. Use ControlService.serve(group, opts) instead.").pipe(Effect.asVoid);
 
     // ─── Build the group handle ───
 
@@ -439,14 +422,6 @@ export const makeProcessGroup = <
       resumeQueue,
       clearQueue,
       awaitShutdown,
-      serve,
-
-      // Legacy aliases
-      startProcess: start,
-      stopProcess: stop,
-      restartProcess: restart,
-      getProcessStatus: processStatus,
-      getAllProcessStatus: getAllProcessStatus,
     };
 
     return group;
@@ -464,13 +439,6 @@ export const makeProcessGroup = <
 export const ProcessGroup = {
   make: makeProcessGroup,
 } as const;
-
-// ============================================================================
-// Legacy exports (backwards compat)
-// ============================================================================
-
-/** @deprecated No hard dependencies required. */
-export type ProcessGroupDependencies = never;
 
 /**
  * Control surface type used by ControlService.

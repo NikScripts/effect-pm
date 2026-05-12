@@ -52,7 +52,6 @@
 
 import {
   Context,
-  Duration,
   Effect,
   Layer,
   Semaphore,
@@ -313,40 +312,3 @@ export const RunResource = {
   },
 } as const;
 
-// ============================================================================
-// Backwards-compat exports (used by HttpApiResource until rewritten)
-// ============================================================================
-
-/**
- * Legacy limits config shape used by {@link HttpApiResource}.
- *
- * @deprecated Use `concurrency` directly on RunResourceConfig.
- * @internal
- */
-export interface RunResourceLimits {
-  readonly concurrency?: number;
-  readonly throttle?: {
-    readonly limit: number;
-    readonly duration: Duration.Duration;
-  };
-}
-
-/**
- * Build the concurrency gate wrapper (shared with HttpApiResource).
- * Accepts the legacy `RunResourceLimits | undefined` shape for backwards compat.
- *
- * @internal
- */
-export const makeRunResourceWrap = (
-  limits: RunResourceLimits | undefined,
-): Effect.Effect<
-  <A, E, R>(inner: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>,
-  never,
-  never
-> =>
-  limits === undefined
-    ? Effect.succeed(<A, E, R>(inner: Effect.Effect<A, E, R>) => inner)
-    : Effect.map(
-        makeGateInternal(limits.concurrency ?? 1),
-        (gate) => <A, E, R>(inner: Effect.Effect<A, E, R>) => gate(inner),
-      );

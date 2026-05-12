@@ -74,9 +74,7 @@ export { HttpClientRunGate } from "./HttpClientRunGate";
 export {
   HttpApiResource,
   acceptJson,
-  type HttpApiResourceClientOptions,
   type HttpApiResourceLayerEffectConfig,
-  type HttpApiResourceMakeConfig,
 } from "./HttpApiResource";
 export { Resource } from "./Resource";
 export { ControlService } from "./ControlService";
@@ -134,7 +132,6 @@ export type { ProcessScheduleService } from "./ProcessSchedule";
 
 // Types - QueueResource
 export type {
-  QueueRef,
   QueueHandle,
   QueueResourceConfig,
   QueueShutdownError,
@@ -145,7 +142,6 @@ export type {
 
 // Types - RunResource
 export type {
-  RunResourceLimits,
   RunResourceConfig,
   RunGate,
   RunResourceRunner,

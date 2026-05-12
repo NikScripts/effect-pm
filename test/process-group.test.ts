@@ -47,13 +47,13 @@ describe("ProcessGroup — process lifecycle", () => {
         processes: [process],
       })
 
-      const fiber = yield* Effect.forkChild(group.startProcess(process.name))
+      const fiber = yield* Effect.forkChild(group.start(process.name))
       yield* Fiber.join(fiber)
 
       yield* waitUntilTicked(ticks)
 
       expect(yield* Ref.get(ticks)).toBeGreaterThan(0)
-      yield* group.stopProcess(process.name)
+      yield* group.stop(process.name)
     }).pipe(provideLayer(ProcessStore.layer)),
   )
 
@@ -66,9 +66,9 @@ describe("ProcessGroup — process lifecycle", () => {
         processes: [process],
       })
 
-      yield* group.startProcess(process.name)
+      yield* group.start(process.name)
       yield* waitUntilTicked(ticks)
-      yield* group.stopProcess(process.name)
+      yield* group.stop(process.name)
 
       const stoppedAt = yield* Ref.get(ticks)
       yield* Effect.sleep(Duration.millis(80))
@@ -85,9 +85,9 @@ describe("ProcessGroup — process lifecycle", () => {
         processes: [process],
       })
 
-      yield* group.startProcess(process.name)
+      yield* group.start(process.name)
       yield* waitUntilTicked(ticks)
-      yield* group.stopProcess(process.name)
+      yield* group.stop(process.name)
 
       const store = yield* ProcessStore
       const history = yield* store.getProcessLifecycle(process.name)
