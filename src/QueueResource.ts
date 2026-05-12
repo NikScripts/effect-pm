@@ -775,15 +775,18 @@ const makeQueueEffect = <T, R, E>(
     // ─── Build public handle ───
 
     const queueHandle: QueueHandle<T, R, E> = {
+      // Enqueue delegates — priority is the only difference
       add: (items) => enqueuePublic(items, "normal"),
       prioritize: (items) => enqueuePublic(items, "high"),
       defer: (items) => enqueuePublic(items, "low"),
 
+      // Read all three queue sizes in parallel, combine into total
       size: Effect.map(
         Effect.all([Queue.size(highQueue), Queue.size(normalQueue), Queue.size(lowQueue)]),
         ([h, n, l]) => Math.max(0, h) + Math.max(0, n) + Math.max(0, l),
       ),
 
+      // Read all three queue sizes in parallel, return per-level breakdown
       sizes: Effect.map(
         Effect.all([Queue.size(highQueue), Queue.size(normalQueue), Queue.size(lowQueue)]),
         ([h, n, l]) => ({
@@ -793,23 +796,28 @@ const makeQueueEffect = <T, R, E>(
         }),
       ),
 
+      // True when all three priority queues report zero or negative size
       isEmpty: Effect.map(
         Effect.all([Queue.size(highQueue), Queue.size(normalQueue), Queue.size(lowQueue)]),
         ([h, n, l]) => h <= 0 && n <= 0 && l <= 0,
       ),
 
+      // Counter incremented after each item completes processing
       completed: Ref.get(completedCount),
 
+      // Close latch → workers block on next iteration before taking items
       pause: latch.close.pipe(
         Effect.andThen(recordLifecycleEvent("Paused")),
         Effect.asVoid,
       ),
 
+      // Open latch → blocked workers proceed to take + process
       resume: latch.open.pipe(
         Effect.andThen(recordLifecycleEvent("Resumed")),
         Effect.asVoid,
       ),
 
+      // Mark shutdown → wake sleeping workers (so they see the flag) → record
       shutdown: Ref.set(isShutdownRef, true).pipe(
         Effect.andThen(signalWake),
         Effect.andThen(recordLifecycleEvent("Shutdown")),

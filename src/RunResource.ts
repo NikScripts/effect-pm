@@ -141,6 +141,7 @@ export interface RunResourceRunnerConfig {
  * `yield*` of the same gate share the same concurrency pool.
  */
 const makeGateInternal = (concurrency: number) =>
+  // Allocate semaphore → return a wrapper that acquires 1 permit per call
   Effect.map(
     Semaphore.make(concurrency),
     (sem) =>
@@ -156,12 +157,14 @@ const makeRunGateEffect = <T, A, E>(
   config: RunResourceConfig<T, A, E>,
 ) => {
   const concurrency = config.concurrency ?? 1;
+  // Allocate gate → log init → wrap user's effect with the gate
   return makeGateInternal(concurrency).pipe(
     Effect.tap(() =>
       Effect.logDebug(
         `RunResource "${config.name ?? "anonymous"}" initialized: concurrency=${String(concurrency)}`,
       ),
     ),
+    // The returned callable applies the gate around each invocation of the user's effect
     Effect.map((gate): RunGate<T, A, E> => (input: T) => gate(config.effect(input))),
   );
 };
@@ -172,12 +175,14 @@ const makeRunGateEffect = <T, A, E>(
 
 const makeRunnerEffect = (config: RunResourceRunnerConfig) => {
   const concurrency = config.concurrency ?? 1;
+  // Allocate gate → log init → return a generic wrapper that gates any effect
   return makeGateInternal(concurrency).pipe(
     Effect.tap(() =>
       Effect.logDebug(
         `RunResource runner "${config.name ?? "anonymous"}" initialized: concurrency=${String(concurrency)}`,
       ),
     ),
+    // The runner wraps arbitrary effects (not tied to a specific effect like RunGate)
     Effect.map((gate): RunResourceRunner =>
       <A, E, R>(effect: Effect.Effect<A, E, R>) => gate(effect),
     ),
