@@ -288,7 +288,10 @@ function at(idOrStartAt: string | Date, maybeStartAt?: Date): ProcessScheduleEnt
   if (idOrStartAt instanceof Date) {
     return { id: Option.none(), startAt: idOrStartAt, stopAt: Option.none() };
   }
-  return { id: toId(idOrStartAt), startAt: maybeStartAt!, stopAt: Option.none() };
+  if (maybeStartAt === undefined) {
+    throw new Error("ProcessSchedule.at(id, startAt): startAt is required");
+  }
+  return { id: toId(idOrStartAt), startAt: maybeStartAt, stopAt: Option.none() };
 }
 
 /** Create a windowed entry (start + stop). */
@@ -302,7 +305,10 @@ function window(
   if (idOrStartAt instanceof Date) {
     return { id: Option.none(), startAt: idOrStartAt, stopAt: Option.some(startAtOrStopAt) };
   }
-  return { id: toId(idOrStartAt), startAt: startAtOrStopAt, stopAt: Option.some(maybeStopAt!) };
+  if (maybeStopAt === undefined) {
+    throw new Error("ProcessSchedule.window(id, startAt, stopAt): stopAt is required");
+  }
+  return { id: toId(idOrStartAt), startAt: startAtOrStopAt, stopAt: Option.some(maybeStopAt) };
 }
 
 /** Create entries from bare Date starts (no ids, no stop times). */

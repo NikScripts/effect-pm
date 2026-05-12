@@ -246,6 +246,16 @@ const backoffLayer = (options: {
 /**
  * Configuration for the accelerating preset.
  *
+ * @example
+ * ```ts
+ * Polling.accelerating({
+ *   fastest: "500 millis",   // lower bound (at high iteration)
+ *   slowest: "30 seconds",   // upper bound (at iteration 0)
+ *   decay: 0.5,              // faster decay = quicker acceleration
+ *   excitement: 2,           // multiplier for the decay (tune live)
+ * })
+ * ```
+ *
  * @public
  */
 export interface AcceleratingPollConfig {
