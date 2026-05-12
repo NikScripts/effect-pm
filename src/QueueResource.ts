@@ -428,10 +428,6 @@ const makeQueueEffect = <T, R, E>(
     const storeOption = yield* Effect.serviceOption(ProcessStore);
     let eventSeq = 0;
 
-    // ProcessStore.AnalyticsEventBase requires `occurredAt: Date`. We source time
-    // from Effect's Clock then construct the Date. The dateFromMillis helper isolates
-    // the Date constructor to satisfy the globalDate lint (time IS clock-sourced).
-    const dateFromMillis = (ms: number) => new Date(ms); // eslint-disable-line effect/globalDate
 
     const recordItemEvent = (
       status: QueueItemStatus,
@@ -447,7 +443,7 @@ const makeQueueEffect = <T, R, E>(
         const event: QueueItemCompletedEvent = {
           id: `${queueName}-item-${String(eventSeq)}`,
           type: "queue.item.completed",
-          occurredAt: dateFromMillis(now),
+          occurredAt: now,
           entityType: "queue",
           entityId: queueName,
           item: { status, priority, durationMs, attempts, error },
@@ -467,7 +463,7 @@ const makeQueueEffect = <T, R, E>(
         const event: QueueLifecycleChangedEvent = {
           id: `${queueName}-lifecycle-${String(eventSeq)}`,
           type: "queue.lifecycle.changed",
-          occurredAt: dateFromMillis(now),
+          occurredAt: now,
           entityType: "queue",
           entityId: queueName,
           lifecycle: { tag, itemsCleared },

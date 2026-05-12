@@ -1,6 +1,6 @@
 # Agent guide — effect-pm (`@nikscripts/effect-pm`)
 
-Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) (schedule vs `startProcess` / API gates), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
+Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [RESOURCE-API.md](./RESOURCE-API.md), [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) (schedule vs `ProcessGroup.start` / API gates), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
 
 ---
 
@@ -18,9 +18,9 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 | `src/cli.ts` | `createCli` / `runCli` — HTTP client for control API. |
 | `src/disarmedIdleSleep.ts` | Pure policy for disarmed idle sleep (shared with tests). |
 | `src/prisma/*` | Optional Prisma adapter (`@nikscripts/effect-pm/prisma` export). |
-| `examples/*` | Runnable teaching scripts (**not** published). |
+| `examples/*` | Runnable teaching scripts. |
 | `examples/mocks/*` | Test doubles, scenario docs, **`demo-harness.mock.ts`** (`forkChild` + `TestClock` + Node exit). |
-| `docs/plans/*.md` | Architecture contracts; **09** is canonical for process v2. |
+| `docs/plans/*.md` | Architecture contracts; **09** is canonical for process runtime. |
 | `test/*.ts` | Vitest suites — run `pnpm test`. |
 
 ---
@@ -56,5 +56,4 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 
 ## What not to assume
 
-- **`examples/`** is not on the npm package payload by default; consumers read GitHub or a monorepo checkout.
 - **`AI_CONTEXT.md`** in repo root may be gitignored locally; this **`docs/AGENTS.md`** is the **committed** agent entry.

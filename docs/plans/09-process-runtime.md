@@ -1,22 +1,21 @@
-# 09 — Process v2: effect-first, Layer-backed polling & schedule
+# 09 — Process runtime: effect-first, Layer-backed polling & schedule
 
 ## Status
 
-**Canonical.** This document is the source of truth for the next `Process`
-implementation and its integration with `ProcessGroup`, `ControlService`, and
-exports. Code or other docs that disagree with **this** file are wrong until
-updated.
+**Canonical.** This document is the source of truth for the `Process` runtime
+and its integration with `ProcessGroup`, `ControlService`, and exports. Code or
+other docs that disagree with **this** file are wrong until updated.
 
-## Relationship to older plans
+## Relationship to earlier plans
 
 - **[04 — Process types & schedule control](./04-process-types-and-control.md)**  
   Described multi-schedule keys, `ProcessControl`, and reconciler-driven
-  convergence. **Process v2 does not use that reconciliation model.**  
+  convergence. The current process runtime does not use that reconciliation model.  
   For **runtime shape, DX, and services**, follow **this doc (09)** only.  
-  04 remains historical context unless it is rewritten to align with 09.
+  04 remains background context unless it is rewritten to align with 09.
 
 - **[05 — State & reconciler](./05-state-and-reconciler.md)**  
-  Not the driver for Process v2 arm/disarm or polling cadence. Any future
+  Not the driver for process arm/disarm or polling cadence. Any future
   reconciler work is orthogonal unless explicitly merged into this plan.
 
 ## Goals
@@ -44,13 +43,13 @@ updated.
 
 6. **Accelerating poll** — Supported as a **preset** (e.g. `Polling.accelerating(…)` → `Layer`) with ref-based config, iteration counter, reset + wake so long sleeps shorten after reset.
 
-## Non-goals (v1 of this plan)
+## Non-goals
 
 - Changing **`QueueResource`** internals (only if needed for clearer
   `ProcessGroup` integration — defer unless required).
 - Top-level multi-host **`ProcessManager`** (see [08](./08-process-manager-future.md)).
 - **`Process` as a `Context.Tag` service** for cross-process control (future).
-- **Backward compatibility** with old `Process.make({ crons, effect })` — breaking change is acceptable; document in changelog / migration note.
+- Shims for removed `Process.make({ crons, effect })` shapes.
 
 ---
 
@@ -208,7 +207,7 @@ Expose at minimum concepts that are knowable without lying:
 
 ## `ProcessGroup` changes (normative)
 
-- **`startProcess`:** before fork, **`Effect.provideMerge`**:
+- **`start`:** before fork, **`Effect.provideMerge`**:
   - layers baked into `Process`, **plus**
   - optional **`processLayers` / `layerFor(name)`** if the group API gains a
     hook for per-process ambient layers (recommended when multiple processes
@@ -216,7 +215,7 @@ Expose at minimum concepts that are knowable without lying:
 
 - **`ProcessEffectRequirements`:** derived from new supervised `effect` `R`.
 
-- **`runProcessImmediately` / control “now”:** behavior must match locked spec
+- **`runImmediately` / control “now”:** behavior must match locked spec
   for **`tickNow`** (armed-only vs force tick).
 
 - **Status / list endpoints:** updated for new detail fields; remove reliance on
@@ -262,7 +261,7 @@ Expose at minimum concepts that are knowable without lying:
 ### Phase 5 — Ship prep
 
 - [ ] JSDoc on public API.
-- [ ] `CHANGELOG.md` / migration note for breaking `Process.make`.
+- [ ] `CHANGELOG.md` notes for breaking `Process.make` changes.
 - [ ] **`changeset`** for package release (required before publish).
 
 ---
@@ -276,7 +275,7 @@ Expose at minimum concepts that are knowable without lying:
 | Disarmed | No new ticks (and store / probe matches locked policy). |
 | `TestClock` | Cadence advances; accelerating delays shrink with `n`. |
 | Reset + wake | After reset, wait until next tick ≤ configured max post-reset. |
-| `stopProcess` | Supervisor ends; in-flight matches Phase 0 policy. |
+| `stop` | Supervisor ends; in-flight matches Phase 0 policy. |
 | `runImmediately` / control `now` | Matches Phase 0 spec. |
 
 ---
@@ -304,4 +303,4 @@ identified; then minimal diff only.
    first.
 2. Any API or behavior change during implementation **must** be reflected here
    in the same PR (or immediately after in a doc-only follow-up).
-3. **04** and **05** are not authoritative for Process v2 runtime; **09** is.
+3. **04** and **05** are not authoritative for the process runtime; **09** is.

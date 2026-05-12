@@ -20,7 +20,7 @@
  * @module ProcessGroup
  */
 
-import { Clock, Data, Duration, Effect, FiberMap, Option, Ref, Scope } from "effect";
+import { Clock, Data, DateTime, Duration, Effect, FiberMap, Option, Ref, Scope } from "effect";
 import type { Context } from "effect";
 import type { Process } from "./Process";
 import type { QueueHandle } from "./QueueResource";
@@ -151,7 +151,7 @@ export interface ProcessGroup<R> {
 
   // ─── Queue control (delegates to queue handle) ───
   readonly listQueues: () => Effect.Effect<ReadonlyArray<QueueDetails>>;
-  readonly getQueue: (name: string) => Effect.Effect<QueueHandle<any, any, any, any>, ProcessGroupErrors>;
+  readonly getQueue: (name: string) => Effect.Effect<QueueHandle<any, any, any>, ProcessGroupErrors>;
   readonly pauseQueue: (name: string) => Effect.Effect<void, ProcessGroupErrors>;
   readonly resumeQueue: (name: string) => Effect.Effect<void, ProcessGroupErrors>;
   readonly clearQueue: (name: string) => Effect.Effect<number, ProcessGroupErrors>;
@@ -173,17 +173,22 @@ const recordLifecycle = (event: ProcessLifecycleChangedEvent): Effect.Effect<voi
     }),
   );
 
-const lifecycleEvent = (
+let lifecycleSeq = 0;
+const makeLifecycleEvent = (
   name: string,
   tag: ProcessLifecycleChangedEvent["lifecycle"]["tag"],
-): ProcessLifecycleChangedEvent => ({
-  id: `${name}-lifecycle-${tag.toLowerCase()}-${String(Date.now())}`,
-  type: "process.lifecycle.changed",
-  occurredAt: new Date(),
-  entityType: "process",
-  entityId: name,
-  lifecycle: { tag },
-});
+): Effect.Effect<ProcessLifecycleChangedEvent> =>
+  Effect.map(Clock.currentTimeMillis, (now): ProcessLifecycleChangedEvent => {
+    lifecycleSeq++;
+    return {
+      id: `${name}-lifecycle-${tag.toLowerCase()}-${String(lifecycleSeq)}`,
+      type: "process.lifecycle.changed",
+      occurredAt: now,
+      entityType: "process",
+      entityId: name,
+      lifecycle: { tag },
+    };
+  });
 
 // ============================================================================
 // Internal: build process details from fiber state
@@ -225,7 +230,7 @@ const buildProcessDetails = (
  * @public
  */
 export const makeProcessGroup = <
-  const Queues extends readonly [...Context.Key<any, QueueHandle<any, any, any, any>>[]],
+  const Queues extends readonly [...Context.Key<any, QueueHandle<any, any, any>>[]],
   const Processes extends readonly Process<any>[],
 >(config: {
   readonly queues: Queues;
@@ -239,7 +244,7 @@ export const makeProcessGroup = <
     type R = AllGroupProcessesRequirements<Processes>;
 
     // ─── Resolve queue tags from context ───
-    const queueMap: Record<string, QueueHandle<any, any, any, any>> = {};
+    const queueMap: Record<string, QueueHandle<any, any, any>> = {};
     for (const queueTag of config.queues) {
       queueMap[queueTag.key] = yield* queueTag.asEffect();
     }
@@ -266,8 +271,11 @@ export const makeProcessGroup = <
 
         yield* Effect.logDebug(`Starting process: ${name}`);
         yield* FiberMap.run(fibers, name)(process.effect);
-        yield* Ref.update(startTimes, (m) => new Map([...m, [name, new Date()]]));
-        yield* recordLifecycle(lifecycleEvent(name, "Started"));
+        const startedAt = yield* Effect.map(Clock.currentTimeMillis, (ms) =>
+          DateTime.toDateUtc(DateTime.makeUnsafe(ms)),
+        );
+        yield* Ref.update(startTimes, (m) => new Map([...m, [name, startedAt]]));
+        yield* Effect.flatMap(makeLifecycleEvent(name, "Started"), recordLifecycle);
         yield* Effect.logInfo(`Process '${name}' is running`);
       });
 
@@ -281,7 +289,7 @@ export const makeProcessGroup = <
 
         yield* FiberMap.remove(fibers, name);
         yield* Ref.update(startTimes, (m) => { const next = new Map(m); next.delete(name); return next; });
-        yield* recordLifecycle(lifecycleEvent(name, "Stopped"));
+        yield* Effect.flatMap(makeLifecycleEvent(name, "Stopped"), recordLifecycle);
         yield* Effect.logInfo(`Process '${name}' stopped`);
       });
 
@@ -290,7 +298,7 @@ export const makeProcessGroup = <
         const running = yield* FiberMap.has(fibers, name);
         if (running) yield* stop(name);
         yield* start(name);
-        yield* recordLifecycle(lifecycleEvent(name, "Restarted"));
+        yield* Effect.flatMap(makeLifecycleEvent(name, "Restarted"), recordLifecycle);
       });
 
     const startAll = (): Effect.Effect<void, ProcessGroupErrors, R> =>
@@ -328,7 +336,7 @@ export const makeProcessGroup = <
         return yield* buildProcessDetails(name, process, running, times.get(name) ?? null, nowMs);
       });
 
-    const getAllProcessStatus = (): Effect.Effect<ReadonlyArray<ProcessGroupDetails>> =>
+    const allProcessStatus = (): Effect.Effect<ReadonlyArray<ProcessGroupDetails>> =>
       Effect.gen(function* () {
         const times = yield* Ref.get(startTimes);
         const nowMs = yield* Clock.currentTimeMillis;
@@ -352,7 +360,7 @@ export const makeProcessGroup = <
         return results;
       });
 
-    const getQueue = (name: string): Effect.Effect<QueueHandle<any, any, any, any>, ProcessGroupErrors> => {
+    const getQueue = (name: string): Effect.Effect<QueueHandle<any, any, any>, ProcessGroupErrors> => {
       const queue = queueMap[name];
       if (queue === undefined) return Effect.fail(new ProcessNotFoundError({ processName: name }));
       return Effect.succeed(queue);
@@ -368,7 +376,7 @@ export const makeProcessGroup = <
       Effect.flatMap(getQueue(name), (q) => q.clear);
 
     const statusEffect = Effect.gen(function* () {
-      const processes = yield* getAllProcessStatus();
+      const processes = yield* allProcessStatus();
       const queues = yield* listQueues();
       return { processes, queues };
     });

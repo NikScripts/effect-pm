@@ -11,7 +11,7 @@
  * | Pre-game | **0 → 800** | no active schedule entry — no process ticks. |
  * | Kickoff | at **800** | entry opens — process may poll your `effect`. |
  * | Live window | **800 → 2000** | entry active — ticks run per **`Polling`**. |
- * | Full time | at **2000** | entry closes — ticks stop; driver stays alive until **`stopProcess`**. |
+ * | Full time | at **2000** | entry closes — ticks stop; driver stays alive until **`ProcessGroup.stop`**. |
  *
  * ### Production swap-in
  *
@@ -24,7 +24,7 @@ import { Duration, Effect, Ref } from "effect";
 
 /**
  * Fiber body: flip **`armed`** when our pretend API says the game went live / ended.
- * Fork with **`Effect.forkChild`** alongside **`group.startProcess`** (see example file).
+ * Fork with **`Effect.forkChild`** alongside **`group.start`** (see example file).
  */
 export const gameScheduleApiSimulator = (
   armed: Ref.Ref<boolean>,

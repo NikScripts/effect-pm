@@ -181,9 +181,8 @@ const handleCommand =
       switch (command) {
         case "ls": {
           // List both processes and queues
-          const processes = yield* group
-            .getAllProcessStatus()
-            .pipe(Effect.catch(() => Effect.succeed([])));
+          const groupStatus = yield* group.status;
+          const processes = groupStatus.processes;
           const queues = yield* group.listQueues();
           return {
             success: true,
@@ -204,7 +203,7 @@ const handleCommand =
           
           // Try process first
           const processResult = yield* group
-            .getProcessStatus(name)
+            .processStatus(name)
             .pipe(
               Effect.map((data) => processStatusResponse(data)),
               Effect.catch(() => Effect.succeed(null)),
@@ -245,14 +244,14 @@ const handleCommand =
         case "start": {
           // Process-only command
           if (name !== undefined)
-            yield* group.startProcess(name).pipe(Effect.catch(() => Effect.void));
+            yield* group.start(name).pipe(Effect.catch(() => Effect.void));
           else yield* group.startAll().pipe(Effect.catch(() => Effect.void));
           return { success: true };
         }
         case "stop": {
           // Process-only command
           if (name !== undefined)
-            yield* group.stopProcess(name).pipe(Effect.catch(() => Effect.void));
+            yield* group.stop(name).pipe(Effect.catch(() => Effect.void));
           else yield* group.stopAll().pipe(Effect.catch(() => Effect.void));
           return { success: true };
         }
@@ -261,7 +260,7 @@ const handleCommand =
           if (name === undefined)
             return { success: false, error: "Missing process name" };
           yield* group
-            .runProcessImmediately(name)
+            .runImmediately(name)
             .pipe(Effect.catch(() => Effect.void));
           return { success: true };
         }
@@ -314,7 +313,7 @@ const handleCommand =
           
           // Try process first - fork the restart to avoid blocking
           const processExists = yield* group
-            .getProcessStatus(name)
+            .processStatus(name)
             .pipe(
               Effect.map(() => true),
               Effect.catch(() => Effect.succeed(false)),
@@ -323,7 +322,7 @@ const handleCommand =
           if (processExists) {
             // Fork the restart operation so it doesn't block the HTTP response
             yield* Effect.forkChild(
-              group.restartProcess(name).pipe(Effect.catch(() => Effect.void))
+              group.restart(name).pipe(Effect.catch(() => Effect.void))
             );
             return { success: true };
           }

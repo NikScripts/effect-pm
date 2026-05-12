@@ -24,7 +24,7 @@ A future **`ProcessManager`** (multi-host) is planned but **not implemented**; u
 │  • acquires queue instances (Effect services)                     │
 │  • holds Map(name → Process handle) + status + Scope per fork     │
 └───────────────────────────────────────────────────────────────────┘
-         │ startProcess / forkIn(process.effect, scope)
+         │ start / forkIn(process.effect, scope)
          ▼
 ┌───────────────────────────────────────────────────────────────────┐
 │ Process.make({ name, effect, polling?, schedule? })               │
@@ -51,11 +51,11 @@ A future **`ProcessManager`** (multi-host) is planned but **not implemented**; u
 | Goal | Start here |
 |------|------------|
 | Run the full demo + CLI | [examples/README.md](../examples/README.md) → `examples/example.ts` |
+| Queue / run / HTTP resource APIs | [RESOURCE-API.md](./RESOURCE-API.md) |
 | Schedule composition + runtime updates | [examples/schedule-control-surfaces.ts](../examples/schedule-control-surfaces.ts) |
 | Schedule + **`ProcessGroup`** / API-driven arm | [docs/SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + [examples/process-game-window-with-group.ts](../examples/process-game-window-with-group.ts) |
-| Understand process v2 semantics | [plans/09-process-v2-effect-first.md](./plans/09-process-v2-effect-first.md) |
+| Understand process runtime semantics | [plans/09-process-runtime.md](./plans/09-process-runtime.md) |
 | API tables (make, Polling, Schedule, ProcessGroup) | [PROCESS-API.md](./PROCESS-API.md) |
-| Upgrade from older betas | [MIGRATION_0.7.0-process-v2.md](../MIGRATION_0.7.0-process-v2.md), [MIGRATION_0.6-beta.2-to-0.7-beta.0.md](./MIGRATION_0.6-beta.2-to-0.7-beta.0.md) |
 | Prisma-backed analytics | [README.md](../README.md) Prisma section + `src/prisma/` |
 | AI / agent onboarding (repo map, conventions) | [AGENTS.md](./AGENTS.md) |
 
@@ -73,7 +73,7 @@ A future **`ProcessManager`** (multi-host) is planned but **not implemented**; u
 | `HttpApiResource`, `Resource` | Typed HttpApi client as a service + layers. |
 | `ControlService` | Localhost JSON control server consumed by `createCli` / `runCli`. |
 | `createCli`, `runCli` | Build a CLI that talks to `ControlService`. |
-| `disarmedIdleSleep` exports | Compatibility helpers for migration and custom schedule logic. |
+| `disarmedIdleSleep` exports | Compatibility helpers for custom schedule logic. |
 
 TSDoc on each module repeats details; this guide stays **concept-shaped**.
 
@@ -88,7 +88,7 @@ TSDoc on each module repeats details; this guide stays **concept-shaped**.
 
 ---
 
-## Examples directory (not published to npm)
+## Examples directory
 
 All runnable scripts live under `examples/`; **`examples/mocks/`** holds test doubles and long-form scenario docs for some scripts. See [examples/README.md](../examples/README.md) for commands, learning paths, and file purposes. They are the **best teaching surface** after this guide.
 

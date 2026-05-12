@@ -45,7 +45,7 @@ Result: easy to accidentally drift from DB truth or leave stale runtime work ali
 
 - Distributed multi-node schedule consensus.
 - External queue/storage integration inside the core runtime (DB sync orchestration remains app-level).
-- Backward compatibility with pre-plan control names/shapes.
+- Shims for pre-plan control names/shapes.
 
 ---
 
@@ -282,7 +282,7 @@ if (removed) {
 
 ### Phase 6 — Ship prep
 
-- [ ] Changelog / migration notes for schedule-control API additions and naming.
+- [ ] Changelog notes for schedule-control API additions and naming.
 - [ ] Add changeset for beta release.
 
 ---

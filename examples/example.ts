@@ -13,7 +13,7 @@
  *
  * | Topic | Where / what to read |
  * |-------|----------------------|
- * | **Queues** | `DemoQueue` / `DemoTwoQueue` — `QueueResource.make`, `forkWhen` error handling, throttle |
+ * | **Queues** | `DemoQueue` / `DemoTwoQueue` — `QueueResource.Service`, forked `handler`s, priority queues |
  * | **Process** | `queueAdderCron` — `Process.make` with **inlined** `polling` + `schedule` (supervisor bakes them in; no duplicate root layers for those) |
  * | **Orchestration** | `ProcessGroup.make({ processes, queues })` — combined environment type |
  * | **Analytics** | `ProcessStore.layer` — in-memory; swap for Prisma in production |
@@ -60,7 +60,7 @@
  * - **`docs/PACKAGE-GUIDE.md`** — narrative package overview
  * - **`docs/PROCESS-API.md`** — API tables for Process / Polling / Schedule / ProcessGroup
  * - **`examples/process-supervisor-patterns.ts`** — `TestClock` patterns (no real time)
- * - **`docs/plans/09-process-v2-effect-first.md`** — supervisor semantics (source of truth)
+ * - **`docs/plans/09-process-runtime.md`** — supervisor semantics (source of truth)
  *
  * ---
  *
@@ -98,6 +98,7 @@ import {
   ProcessGroup,
   Polling,
   ProcessSchedule,
+  ControlService,
 } from "../src";
 import { provideLayer } from "../src/provideLayer.js";
 import { utcDateFromMillis } from "../src/utcDate.js";
@@ -126,8 +127,7 @@ import { utcDateFromMillis } from "../src/utcDate.js";
  *    No accidental duplicates, no synchronization issues.
  *
  * 4. TYPE SAFETY: `QueueResource.make` infers `T`, `R`, and `E` from `effect`.
- *    When `E` is not `never`, `forkWith` is required and must return
- *    **`Effect<void, never, …>`** (void success, all failures from `forked` handled).
+ *    The optional `handler` receives the item `Exit` in a fork so workers keep moving.
  *
  */
 
@@ -140,7 +140,7 @@ export class DemoQueueItemError extends Data.TaggedError("DemoQueueItemError")<{
   readonly reason: string;
 }> { }
 
-// Demo queues using the v2 class pattern
+// Demo queues using the class service pattern
 class DemoQueue extends QueueResource.Service<DemoQueue, string, never, DemoQueueItemError>()("demo-queue", {
   effect: (item: string) =>
     Effect.gen(function* () {
@@ -276,7 +276,7 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(`⏰ Polling: every 10 seconds (schedule: always armed)`);
 
   /** Localhost HTTP JSON API consumed by `pnpm run cli` (see `ControlService`). */
-  yield* group.serve({ port: controlPort });
+  yield* ControlService.make({ group, port: controlPort });
 
   /** Forks each process supervisor (`queueAdderCron.effect`) inside the group’s scopes. */
   yield* group.startAll();

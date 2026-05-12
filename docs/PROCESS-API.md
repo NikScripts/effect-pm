@@ -1,6 +1,6 @@
 # Process, polling, and schedule — API reference
 
-This document complements the [README](../README.md) with a concise **spec-style** overview of the v0.7 **effect-first** process stack (`Process`, `Polling`, `ProcessSchedule`, disarmed idle policy, and `ProcessGroup` lifecycle). For **when schedules run vs `startProcess`**, **API-driven gates**, and **disarm vs `stopProcess`**, see [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md). For migration from older `Process.make({ crons })`, see [MIGRATION_0.7.0-process-v2.md](../MIGRATION_0.7.0-process-v2.md). For **npm publish** steps from `0.6.0-beta.2` → `0.7.0-beta.0`, see [MIGRATION_0.6-beta.2-to-0.7-beta.0.md](./MIGRATION_0.6-beta.2-to-0.7-beta.0.md).
+This document complements the [README](../README.md) with a concise **spec-style** overview of the effect-first process stack (`Process`, `Polling`, `ProcessSchedule`, disarmed idle policy, and `ProcessGroup` lifecycle). For **when schedules run vs `ProcessGroup.start`**, **API-driven gates**, and **disarm vs `ProcessGroup.stop`**, see [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md).
 
 ---
 
@@ -12,9 +12,9 @@ This document complements the [README](../README.md) with a concise **spec-style
 | **`ProcessSchedule`** | Stores run windows (`startAt`, optional `stopAt`, optional `id`) and notifies the driver when entries change. |
 | **`Polling`** | **Cadence** between repeats inside a running instance (`awaitNextTick` → user `effect` → `afterTick`). |
 | **`ProcessStore`** | Optional analytics: execution rows + lifecycle events. |
-| **`ProcessGroup`** | Owns scopes, fibers, `startProcess` / `stopProcess`, control HTTP/CLI. |
+| **`ProcessGroup`** | Owns scopes, fibers, `start` / `stop`, control HTTP/CLI. |
 
-**One `startProcess` (or `startAll`)** attaches the schedule driver. Schedule entries control whether instances continue repeating; `stop` / interrupt tears down the driver scope.
+**One `start` (or `startAll`)** attaches the schedule driver. Schedule entries control whether instances continue repeating; `stop` / interrupt tears down the driver scope.
 
 ---
 
@@ -107,7 +107,7 @@ Built-in factories:
 
 ## Disarmed idle policy helpers
 
-These exports remain for custom schedule implementations and migration tooling; the schedule-driven runtime no longer relies on a disarmed supervisor polling loop.
+These exports remain for custom schedule implementations; the schedule-driven runtime no longer relies on a disarmed supervisor polling loop.
 
 | Export | Role |
 |--------|------|
@@ -122,10 +122,10 @@ These exports remain for custom schedule implementations and migration tooling; 
 
 Typical control (requires the group’s `R` + `ProcessStore` where applicable):
 
-- `startProcess(name)` / `stopProcess(name)` / `restartProcess(name)`
+- `start(name)` / `stop(name)` / `restart(name)`
 - `startAll()` / `stopAll()`
-- `runProcessImmediately(name)` — tracked run without requiring armed schedule
-- `getProcessStatus` / `getAllProcessStatus` / `listProcesses`
+- `runImmediately(name)` — tracked run without requiring armed schedule
+- `processStatus(name)` / `status`
 
 Stopping interrupts the schedule driver fiber and child instances; removing/closing entries does not stop the driver — active instances exit naturally on their stop checks.
 
@@ -140,7 +140,7 @@ Stopping interrupts the schedule driver fiber and child instances; removing/clos
 | [examples/process-supervisor-patterns.ts](../examples/process-supervisor-patterns.ts) | **`TestClock`**: accelerating polling + `resetCadence`, with schedule windows. |
 | [examples/schedule-control-surfaces.ts](../examples/schedule-control-surfaces.ts) | Schedule control surfaces: initializer controls, in-effect controls, and external service-driven controls. |
 | [examples/schedule-control-db-sync.ts](../examples/schedule-control-db-sync.ts) | Simulated DB-sync pattern that keeps runtime schedules aligned with external rows. |
-| [examples/process-game-window-with-group.ts](../examples/process-game-window-with-group.ts) | **`ProcessGroup.startProcess`** + schedule ids with `Process.currentScheduleId`; narrative [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md). |
+| [examples/process-game-window-with-group.ts](../examples/process-game-window-with-group.ts) | **`ProcessGroup.start`** + schedule ids with `Process.currentScheduleId`; narrative [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md). |
 | [examples/sports-polling-accelerating.ts](../examples/sports-polling-accelerating.ts) | **Three demos** (basic spaced → minimal accel+**`resetCadence`** → verbose **`peekCadence`**); [mocks/sports-score-feed.mock.ts](../examples/mocks/sports-score-feed.mock.ts), [mocks/demo-harness.mock.ts](../examples/mocks/demo-harness.mock.ts). |
 | [examples/run-resource.ts](../examples/run-resource.ts) | `RunResource` throttle + concurrency. |
 | [examples/http-client-run-gate.ts](../examples/http-client-run-gate.ts) | `HttpClientRunGate` on a fetch `HttpClient`. |

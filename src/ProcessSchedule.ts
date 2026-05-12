@@ -41,7 +41,7 @@
  * @module ProcessSchedule
  */
 
-import { Context, Deferred, Effect, Layer, Option, Ref } from "effect";
+import { Context, DateTime, Deferred, Effect, Layer, Option, Ref } from "effect";
 
 // ============================================================================
 // Public Types
@@ -317,7 +317,13 @@ const fromStarts = (starts: ReadonlyArray<Date>): ReadonlyArray<ProcessScheduleE
 
 /** Always-armed: single entry starting at epoch, never stops. */
 const alwaysArmed: Layer.Layer<ProcessScheduleTag> =
-  inMemoryLayer([{ id: Option.some("always"), startAt: new Date(0), stopAt: Option.none() }]);
+  inMemoryLayer([
+    {
+      id: Option.some("always"),
+      startAt: DateTime.toDateUtc(DateTime.makeUnsafe(0)),
+      stopAt: Option.none(),
+    },
+  ]);
 
 // ============================================================================
 // Define DSL

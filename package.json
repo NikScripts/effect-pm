@@ -66,6 +66,7 @@
     "version": "changeset version",
     "release": "npm run build && changeset publish",
     "example": "tsx examples/example.ts",
+    "example:queue-resource": "tsx examples/queue-resource.ts",
     "example:process-patterns": "tsx examples/process-supervisor-patterns.ts",
     "example:process-supervisor-patterns": "tsx examples/process-supervisor-patterns.ts",
     "example:sports-polling-accelerating": "tsx examples/sports-polling-accelerating.ts",

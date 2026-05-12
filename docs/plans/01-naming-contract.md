@@ -17,7 +17,7 @@ Non-negotiable: new code and docs must match this list.
 ## Banned
 
 - `ExecutionHistory`, `PMError`, `AllManagedProcessesRequirements`, `ProcessManager` as the name of the in-process orchestrator (that role is **ProcessGroup**).
-- Legacy queue spellings: `next`, `deffered`, `cache`, `refill` in new public API.
+- Queue APIs use `add`, `prioritize`, `defer`, `persist`, and `refill`.
 
 ## Invariants
 

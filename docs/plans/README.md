@@ -25,13 +25,14 @@ numbering encodes reading order, not priority.
 | 06 | [`ProcessStore` analytics service](./06-process-store.md) | Living      |
 | 07 | [`QueueResource` storage hooks](./07-queue-resource.md)   | Living      |
 | 08 | [Top-level `ProcessManager` (multi-group)](./08-process-manager-future.md) | Deferred    |
-| 09 | [Process v2 — effect-first, Layer polling & schedule](./09-process-v2-effect-first.md) | **Canonical** (implementation target) |
+| 09 | [Process runtime — effect-first, Layer polling & schedule](./09-process-runtime.md) | **Canonical** |
 | 10 | [Schedule controls, reconcile, and removal cleanup](./10-schedule-controls-and-reconcile.md) | Planned (next beta) |
 | 11 | [Strict `@effect/language-service` rules](./11-strict-effect-language-service.md) | Planned (tooling / typing backlog) |
+| 12 | [Module modernization roadmap](./12-module-modernization.md) | Planned |
 
 If you are about to add a new concept that is not described here, write
 the doc first.
 
-**Process runtime:** implement against [09](./09-process-v2-effect-first.md).
-[04](./04-process-types-and-control.md) is historical for multi-schedule /
+**Process runtime:** implement against [09](./09-process-runtime.md).
+[04](./04-process-types-and-control.md) is background for multi-schedule /
 reconciler ideas unless rewritten to match 09.

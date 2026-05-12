@@ -64,5 +64,5 @@ a single coherent service model.
 - A multi-group `ProcessManager` runtime. Designed but deferred.
 - A bespoke deploy/handoff orchestration layer. Out of scope; if needed,
   it lives inside the future `ProcessManager`.
-- Backwards compatibility with anything before this rename. We are
+- Shims for names before this rename. We are
   pre-1.0 (`0.6.0-beta.x`), so naming is locked once, here.

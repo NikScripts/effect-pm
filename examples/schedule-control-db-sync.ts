@@ -61,7 +61,7 @@ const program = Effect.gen(function* () {
 
   const supervisor = yield* Effect.forkChild(proc.effect.pipe(provideLayer(ProcessStore.layer)));
 
-  // Simulate DB change: remove old rows and introduce a new one.
+  // Simulate DB change: remove stale rows and introduce a new one.
   yield* Effect.sleep(Duration.millis(900));
   yield* Ref.set(dbRows, [
     { id: "db-c", startMs: 2_500, stopMs: 3_200 },

@@ -57,7 +57,7 @@ describe("ProcessGroup — process lifecycle", () => {
     }).pipe(provideLayer(ProcessStore.layer)),
   )
 
-  it.live("stopProcess closes the process scope and stops future work", () =>
+  it.live("stop closes the process scope and stops future work", () =>
     Effect.gen(function* () {
       const ticks = yield* Ref.make(0)
       const process = makeTickProcess("test/pg-stop-lifecycle", ticks)

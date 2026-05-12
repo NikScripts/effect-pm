@@ -7,8 +7,8 @@
 ## API surface (current)
 
 - Construction: `ProcessGroup.make({ queues, processes })`.
-- Lifecycle: `startAll`, `stopAll`, `startProcess`, `stopProcess`, `restartProcess`, `runProcessImmediately`.
-- Introspection: `listProcesses`, `getProcessStatus`, `getAllProcessStatus`, `listQueues`, `getQueue`.
+- Lifecycle: `start`, `stop`, `restart`, `startAll`, `stopAll`, `runImmediately`.
+- Introspection: `status`, `processStatus`, `health`, `listQueues`, `getQueue`.
 - Ops: `serve({ port })`, `awaitShutdown(options)`.
 
 ## Dependencies
