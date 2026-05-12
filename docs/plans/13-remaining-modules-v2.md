@@ -1,233 +1,403 @@
-# 13 — Remaining Modules: modernization roadmap
+# 13 — Remaining Modules: detailed plans
 
 **Status:** Plan
 
 ---
 
-## Module inventory
+## Polling.ts — detailed plan
 
-| Module | Lines | Urgency | Blocked? |
-|--------|------:|---------|----------|
-| `HttpClientRunGate.ts` | 46 | ✅ Done | No — already clean |
-| `Polling.ts` | 245 | Low | No |
-| `ProcessSchedule.ts` | 224 | Medium | No (plan 10 adds features) |
-| `Process.ts` | 951 | High | ProcessStore hard-requirement |
-| `ProcessGroup.ts` | 916 | High | ProcessStore hard-requirement |
-| `ControlService.ts` | 548 | Medium | Depends on ProcessGroup interface |
+### Current state (245 lines, clean)
 
----
+Already uses class pattern (`PollingTag`), clean architecture (wakeable sleep via Deferred), proper Effect patterns. Mostly needs documentation polish and potential new features.
 
-## 1. HttpClientRunGate (NO WORK NEEDED)
+### DX improvements
 
-Already clean: 46 lines, no `Date.now()`, no old patterns, full TSDoc, pipe-friendly.
-Only actionable item: already exported and documented in `RESOURCE-API.md`.
-
----
-
-## 2. Polling.ts (small, incremental)
-
-### Current state
-
-- Already uses class pattern: `class PollingTag extends Context.Service<...>()(...) {}`
-- Clean internal architecture (wakeable sleep via Deferred)
-- Uses `Effect.gen` appropriately for branching
-- Uses `Effect.sleep` / `Duration` correctly
-
-### Changes needed
-
-| Issue | Fix |
-|-------|-----|
-| Internal `Date.now()` usage (if any) | Replace with `Clock.currentTimeMillis` |
-| `strictBooleanExpressions` | Explicit `!== undefined` checks |
-| Pipeline opportunities | Some simple allocations could be `pipe(map)` |
-| TSDoc coverage | Add `@example` blocks on presets |
-
-### New features from plan 09
-
-- The current presets (`spaced`, `accelerating`, `acceleratingScoped`) are shipped and stable
-- No structural changes planned — just polish
-
-### Effort: Small (cleanup pass, no rewrite)
-
----
-
-## 3. ProcessSchedule.ts (medium, plan 10 features)
-
-### Current state
-
-- Already uses class pattern: `class ProcessScheduleTag extends Context.Service<...>()(...) {}`
-- In-memory schedule store (Ref + Deferred change signal)
-- Entries are `{ id, startAt: Date, stopAt: Option<Date> }`
-
-### Changes from plan 10
-
-Plan 10 expands the `ProcessScheduleService` interface with:
+**1. Accept `Duration.Input` for spaced preset:**
 
 ```typescript
-// New methods (plan 10):
-get(id: string): Effect<Option<ProcessScheduleEntry>>
-has(id: string): Effect<boolean>
-upsert(entry: ProcessScheduleEntry): Effect<void>
-remove(id: string): Effect<void>
-removeMany(ids: ReadonlyArray<string>): Effect<void>
-reconcile(entries: ReadonlyArray<ProcessScheduleEntry>): Effect<{ added; removed; updated }>
+// Before:
+Polling.spaced(Duration.minutes(5))
+
+// After (also accept string shorthand):
+Polling.spaced("5 minutes")
+Polling.spaced(Duration.minutes(5))  // still works
 ```
 
-### Changes needed
+**2. Simpler accelerating preset (DX sugar):**
 
-| Issue | Fix |
-|-------|-----|
-| `Date` in entry type | Consider epoch millis or Effect DateTime (future) |
-| `strictBooleanExpressions` | Explicit checks |
-| Plan 10 features | Add `get`/`has`/`upsert`/`remove`/`reconcile` |
-| TSDoc | Document each method with examples |
+```typescript
+// Before (complex, requires understanding refs):
+Polling.acceleratingScoped({ minIntervalMs: 1000, maxIntervalMs: 60000, decayK: 0.3 })
 
-### Effort: Medium (new features + polish)
+// After (human-friendly):
+Polling.accelerating({
+  fastest: "1 second",
+  slowest: "1 minute",
+  decay: 0.3,         // how quickly it speeds up
+  excitement: 1,      // multiplier (higher = faster acceleration)
+})
+```
 
----
+**3. New preset: `jittered` (prevents thundering herd):**
 
-## 4. Process.ts (large, core module)
+```typescript
+Polling.jittered("5 seconds", { jitter: 0.2 })
+// Each tick: 5s ± 20% random jitter (4s–6s)
+```
 
-### Current state
+**4. New preset: `backoff` (for retry-like polling):**
 
-- 951 lines, complex supervisor architecture
-- **ProcessStore is a HARD requirement** (`R | ProcessStore` on every process effect)
-- Uses `Clock` correctly for timing
-- Uses `MutableRef` for running instance tracking
-- Trigger driver → spawn instances → inner poll loop → tracked execution
+```typescript
+Polling.backoff({
+  initial: "1 second",
+  max: "30 seconds",
+  factor: 2,
+})
+// 1s → 2s → 4s → 8s → 16s → 30s → 30s → ...
+// resetCadence resets to initial
+```
 
-### Changes needed
+### Implementation changes
 
-| Issue | Priority | Fix |
-|-------|----------|-----|
-| **ProcessStore hard requirement** | High | `Effect.serviceOption(ProcessStore)` — analytics optional |
-| `strictBooleanExpressions` | Medium | Explicit checks |
-| Pipeline composition | Low | Where linear flows exist |
-| `Effect.fn` for key operations | Medium | `spawnInstance`, `trackedProgram`, `reconcileSchedules` |
-| TSDoc | Medium | Document supervisor loop, instance lifecycle |
-| `new Date()` usage | Medium | Replace with Clock → DateTime (if ProcessStore updates) |
+| Change | Effort |
+|--------|--------|
+| `Duration.Input` on `spaced` | Trivial |
+| Rename accelerating config fields | Small (alias old for compat) |
+| `jittered` preset | Small (wrap spaced with random offset) |
+| `backoff` preset | Small (similar to accelerating but simpler math) |
+| TSDoc with `@example` on each preset | Small |
+| `strictBooleanExpressions` fixes | Trivial |
 
-### Effect v4 opportunities
+### Effect v4 to leverage
 
-| Feature | Benefit |
-|---------|---------|
-| `FiberSet` / `FiberMap` | Replace manual `Map<string, Fiber>` for running instances |
-| `SubscriptionRef` | Replace `Ref + Deferred` pattern for schedule change signaling |
-| `Effect.fn("Process.spawnInstance")` | Named traces for debugging |
-| `Effect.annotateLogs` | `process.name`, `process.entry`, `process.instance` |
-
-### Architectural decisions
-
-1. **ProcessStore optional** — `Effect.serviceOption(ProcessStore)`. When absent:
-   - Execution tracking becomes no-op
-   - `getStatus` returns partial data (no historical executions)
-   - Lifecycle events not recorded
-
-2. **FiberMap for instances** — each entry key maps to a running fiber. `FiberMap` handles cleanup on scope close.
-
-3. **SubscriptionRef for schedule** — schedule changes propagate reactively (no polling for changes).
-
-### Effort: Large (careful refactor, preserve semantics)
+- `Duration.fromInput` — accept string durations everywhere
+- Could use `Random` service for jitter (testable with `TestRandom`)
 
 ---
 
-## 5. ProcessGroup.ts (large, orchestration)
+## ProcessSchedule.ts — detailed plan
 
-### Current state
+### Current state (224 lines)
 
-- 916 lines, owns process lifecycle + queue access + control API
-- **ProcessStore is a HARD requirement** (`ProcessGroupDependencies = ProcessStore`)
-- Manages: process map, status map, start times, scopes, fibers
-- Exposes `serve()` (ControlService) and `awaitShutdown()`
+Already class pattern (`ProcessScheduleTag`), in-memory store with change signaling. Missing plan 10 features.
 
-### Changes needed
+### DX improvements
 
-| Issue | Priority | Fix |
-|-------|----------|-----|
-| **ProcessStore hard requirement** | High | `Effect.serviceOption` (same as Process) |
-| Queue interface references | Done | Already migrated to `QueueHandle` effectful props |
-| `strictBooleanExpressions` | Medium | Throughout |
-| Pipeline composition | Low | Linear control flows |
-| `Effect.fn` | Medium | `startProcess`, `stopProcess`, `restartProcess` |
-| TSDoc | Medium | Document each control method |
+**1. Required `id` on entries (plan 10):**
 
-### Effect v4 opportunities
+```typescript
+// Before (id is Option):
+{ id: Option.some("match-123"), startAt: new Date(), stopAt: Option.none() }
 
-| Feature | Benefit |
-|---------|---------|
-| `FiberMap` | Replace `Ref<Map<string, Fiber>>` for process fibers |
-| `Effect.fn` | Named spans on `startProcess`, `stopProcess`, `restartProcess` |
-| `Effect.annotateLogs` | `group.process` annotation on all process operations |
+// After (id is required string — no Option wrapping):
+{ id: "match-123", startAt: Date, stopAt: Date | undefined }
+```
 
-### Effort: Large (careful refactor, preserve semantics)
+This simplifies every interaction. `Option` was premature — id should always exist for real scheduling.
+
+**2. Fluent entry builder:**
+
+```typescript
+// Before:
+ProcessSchedule.window("game-123", gameStart, gameEnd)
+
+// After (chainable):
+ProcessSchedule.entry("game-123")
+  .startsAt(gameStart)
+  .endsAt(gameEnd)
+  .build()
+
+// Or keep the simple shorthand too:
+ProcessSchedule.at("game-123", gameStart)
+ProcessSchedule.window("game-123", gameStart, gameEnd)
+```
+
+**3. Full CRUD + reconcile (plan 10):**
+
+```typescript
+const controls = yield* ProcessSchedule
+
+// Read
+const entries = yield* controls.entries
+const entry = yield* controls.get("match-123")    // Option<Entry>
+const exists = yield* controls.has("match-123")   // boolean
+
+// Mutate
+yield* controls.add(entry)
+yield* controls.upsert(entry)                      // insert or update by id
+yield* controls.remove("match-123")                // returns boolean (was it there?)
+yield* controls.removeMany(["old-1", "old-2"])     // returns count removed
+yield* controls.clear
+
+// Sync from external source (DB, API)
+const diff = yield* controls.reconcile(dbEntries)
+// diff: { added: string[], updated: string[], removed: string[], unchanged: string[] }
+```
+
+**4. SubscriptionRef for reactive changes:**
+
+Replace the manual `Ref<Deferred>` + notify pattern with `SubscriptionRef`:
+
+```typescript
+// Internal: SubscriptionRef<ReadonlyArray<ProcessScheduleEntry>>
+// Consumers: yield* controls.changed (blocks until next mutation)
+// Advanced: subscribe to the SubscriptionRef for streaming changes
+```
+
+**5. Duration-based time (consider):**
+
+Entry `startAt`/`stopAt` could use epoch millis (number) instead of `Date` to avoid `globalDate` violations. Or use Effect's `DateTime`.
+
+### Implementation changes
+
+| Change | Effort |
+|--------|--------|
+| `id` required (breaking — drop Option) | Small |
+| `get`/`has`/`upsert`/`remove`/`removeMany` | Medium |
+| `reconcile` (diff + prune) | Medium |
+| `SubscriptionRef` for change signal | Medium |
+| Fluent entry builder | Small |
+| `stopAt: Date \| undefined` (drop Option) | Small |
+| TSDoc on all methods | Small |
+| `Duration.Input` for time-based helpers | Small |
+
+### Removal semantics (plan 10, critical)
+
+When an entry is removed:
+1. **Pending sleep** — fiber waiting for `startAt` is interrupted immediately
+2. **Running instance** — checks `has(id)` before each poll tick; exits naturally if missing
+3. **Completed** — no effect (only affects future reconcile)
+
+This requires coordination with `Process.ts` (the supervisor that holds the sleeper/instance fibers).
 
 ---
 
-## 6. ControlService.ts (medium, modernization)
+## Process.ts — detailed plan
 
-### Current state
+### Current state (951 lines, complex)
 
-- 548 lines, uses raw `node:http` (violates `nodeBuiltinImport`)
-- JSON request/response without Schema validation (manual parsing)
-- Binds to 127.0.0.1 only
+Trigger-driven supervisor. Spawns instances per schedule entry. Inner loop: poll → user effect → repeat while armed.
 
-### Target architecture
+### DX improvements
 
-Migrate to **Effect's HttpServer** from `@effect/platform-node`:
+**1. ProcessStore optional (`serviceOption`):**
 
-| Current | Target |
-|---------|--------|
-| `node:http` | `@effect/platform-node` HttpServer |
-| Manual JSON parsing | Schema-validated request/response |
-| Custom route matching | Effect HttpRouter |
-| No middleware | Built-in error handling, logging, CORS |
-| No streaming | SSE for `watch`, `logs --follow` (future) |
+```typescript
+// Before: Process effect REQUIRES ProcessStore
+readonly effect: Effect<void, never, R | ProcessStore>
 
-### New commands (from earlier discussion)
+// After: ProcessStore is optional — analytics silently skip when absent
+readonly effect: Effect<void, never, R>
+```
 
-- `clear <name>` — drain queue (already wired)
-- `history <name>` — ProcessStore query
-- `errors <name>` — filtered failures
-- `health` — structured health check
-- `config <name>` — view current config
+Execution tracking and `getStatus` degrade gracefully without ProcessStore.
 
-### Effort: Medium-Large (transport rewrite, same logic)
+**2. `Process.scheduleControls` accessor (plan 10):**
+
+```typescript
+const proc = Process.make({
+  name: "sports-poller",
+  effect: Effect.gen(function*() {
+    const controls = yield* Process.scheduleControls
+    const latest = yield* loadFromDb()
+    yield* controls.reconcile(latest)
+    // ... business logic
+  }),
+})
+```
+
+**3. Effect.fn for key operations:**
+
+```typescript
+// Named traces:
+const spawnInstance = Effect.fn("Process.spawnInstance")(function*(...) { ... })
+const trackedProgram = Effect.fn("Process.trackedProgram")(function*(...) { ... })
+const reconcileSchedules = Effect.fn("Process.reconcileSchedules")(function*(...) { ... })
+```
+
+**4. FiberMap for instance management:**
+
+Replace manual `MutableRef<Map<string, Fiber>>` with Effect's `FiberMap`:
+
+```typescript
+const instances = yield* FiberMap.make<string, void>()
+// Key: entry id, Value: running instance fiber
+// Auto-cleanup on scope close, keyed interrupt for removal
+```
+
+**5. Structured logging:**
+
+```typescript
+Effect.annotateLogs({
+  "process.name": name,
+  "process.entry": entryId,
+  "process.instance": instanceId,
+})
+```
+
+### Effect v4 to leverage
+
+| Feature | Replaces | Benefit |
+|---------|----------|---------|
+| `FiberMap` | `MutableRef<Map<string, Fiber>>` | Keyed management, auto-cleanup |
+| `Effect.fn` | Anonymous generators | Named traces in spans |
+| `Effect.serviceOption` | Hard `ProcessStore` requirement | Optional analytics |
+| `Effect.annotateLogs` | No structured context | Per-process, per-entry, per-instance annotations |
+| `SubscriptionRef` | `changed` Deferred polling | Reactive schedule propagation |
 
 ---
 
-## 7. Recommended order
+## ProcessGroup.ts — detailed plan
 
-### Phase A: Quick wins (no blockers)
+### Current state (916 lines, orchestration)
 
-1. **Polling.ts** — cleanup pass (LSP fixes, TSDoc, pipeline)
-2. **ProcessSchedule.ts** — plan 10 features + cleanup
+Owns process lifecycle + queue access + control server. Hard ProcessStore requirement.
 
-### Phase B: ProcessStore optional (unlocks everything)
+### DX improvements
 
-3. **Process.ts** — `serviceOption(ProcessStore)`, FiberMap, Effect.fn
-4. **ProcessGroup.ts** — same treatment, FiberMap for process fibers
+**1. ProcessStore optional:**
 
-### Phase C: Infrastructure modernization
+Same `serviceOption` pattern. Lifecycle events (Started, Stopped, Restarted) are recorded when ProcessStore is available, silently skipped when absent.
 
-5. **ControlService.ts** — migrate to Effect HttpServer, Schema validation
+**2. FiberMap for process fibers:**
 
-### Phase D: Future (separate planning)
+```typescript
+const processFibers = yield* FiberMap.make<string, void>()
+// Key: process name, Value: supervisor fiber
+// startProcess → FiberMap.run(processFibers, name, supervisorEffect)
+// stopProcess → FiberMap.interrupt(processFibers, name)
+```
 
-6. **ProcessManager** — multi-group coordination via Effect RPC
-7. **CLI v2** — Unix socket transport, richer commands
+**3. Effect.fn on control methods:**
+
+```typescript
+const startProcess = Effect.fn("ProcessGroup.startProcess")(function*(name: string) { ... })
+const stopProcess = Effect.fn("ProcessGroup.stopProcess")(function*(name: string) { ... })
+```
+
+**4. Richer status API:**
+
+```typescript
+// Current: getProcessStatus returns ProcessDetails
+// New: also expose group-level aggregate
+yield* group.status  // { processes: [...], queues: [...], uptime, health }
+```
+
+**5. Health check:**
+
+```typescript
+yield* group.health
+// { healthy: boolean, processes: { running: 3, stopped: 1 }, queues: { active: 2, paused: 0 } }
+```
 
 ---
 
-## 8. Effect v4 features to leverage
+## ControlService.ts — detailed plan
 
-| Feature | Where | Benefit |
-|---------|-------|---------|
-| `FiberMap` | Process (instance tracking), ProcessGroup (process fibers) | Auto-cleanup, keyed fiber management |
-| `SubscriptionRef` | ProcessSchedule (reactive changes) | No polling for schedule mutations |
-| `Effect.fn` | Process supervisor, ProcessGroup controls | Named traces |
-| `Effect.annotateLogs` | Everywhere | Structured log context |
-| `Latch` | Already used in QueueResource | Could also gate Process pause |
-| `DateTime` | ProcessSchedule entries (replace Date) | Effect-native time values |
-| Effect HttpServer | ControlService | Type-safe routes, middleware, SSE |
-| Effect Schema | ControlService requests/responses | Validation, OpenAPI |
-| Effect RPC | ProcessManager ↔ ProcessGroup | Type-safe cross-process communication |
+### Current state (548 lines, raw node:http)
+
+Uses `node:http` directly (violates `nodeBuiltinImport`). Manual JSON parsing. Single POST endpoint.
+
+### Target: Effect HttpServer
+
+```typescript
+import { HttpRouter, HttpServer } from "@effect/platform-node"
+
+const controlRouter = HttpRouter.empty.pipe(
+  HttpRouter.post("/control", controlHandler),
+  HttpRouter.get("/health", healthHandler),
+  HttpRouter.get("/events", sseEventsHandler),  // streaming
+)
+```
+
+### DX improvements
+
+**1. Schema-validated requests:**
+
+```typescript
+const ControlRequest = Schema.Union(
+  Schema.Struct({ command: Schema.Literal("start"), name: Schema.String }),
+  Schema.Struct({ command: Schema.Literal("stop"), name: Schema.String }),
+  Schema.Struct({ command: Schema.Literal("ls") }),
+  // ...
+)
+```
+
+**2. RESTful routes (not just POST /control):**
+
+```
+GET  /processes              → list processes
+GET  /processes/:name        → process status
+POST /processes/:name/start  → start
+POST /processes/:name/stop   → stop
+POST /processes/:name/restart → restart
+GET  /queues                 → list queues
+GET  /queues/:name           → queue status
+POST /queues/:name/pause     → pause
+POST /queues/:name/resume    → resume
+POST /queues/:name/clear     → clear
+GET  /health                 → health check
+GET  /events                 → SSE stream of ProcessStore events
+```
+
+**3. Unix socket transport (from earlier discussion):**
+
+```typescript
+// Bind to socket file instead of TCP port
+group.serve({ socket: `/tmp/effect-pm-${groupName}.sock` })
+// CLI auto-discovers socket by group name
+```
+
+**4. SSE streaming for live updates:**
+
+```typescript
+// GET /events → Server-Sent Events
+// Client receives real-time ProcessStore events as they happen
+```
+
+---
+
+## New features to add across modules
+
+### Process: `onTick` / `onError` hooks (like QueueResource's hooks)
+
+```typescript
+Process.make({
+  name: "my-proc",
+  effect: ...,
+  onTick: (duration) => metrics.histogram("tick_duration", duration),
+  onError: (error) => alerting.notify(error),
+})
+```
+
+### ProcessGroup: `addProcess` / `removeProcess` at runtime
+
+```typescript
+yield* group.addProcess(newProcess)  // hot-add without restart
+yield* group.removeProcess("old-proc")  // already exists but document clearly
+```
+
+### Polling: `Polling.cron` (schedule-aware cadence)
+
+```typescript
+// Poll at cron-defined intervals (not just fixed/accelerating)
+Polling.cron("*/5 * * * *")  // every 5 minutes, aligned to clock
+```
+
+### ProcessSchedule: `ProcessSchedule.fromCron`
+
+```typescript
+// Generate schedule entries from a cron expression
+ProcessSchedule.fromCron("0 2 * * *", { count: 7 })
+// → next 7 occurrences of "daily at 2am" as entries
+```
+
+---
+
+## Implementation order
+
+1. **Polling** — Duration.Input, new presets (jittered, backoff), TSDoc
+2. **ProcessSchedule** — plan 10 (id required, CRUD, reconcile, SubscriptionRef)
+3. **Process** — serviceOption, FiberMap, Effect.fn, schedule controls accessor
+4. **ProcessGroup** — serviceOption, FiberMap, Effect.fn, health
+5. **ControlService** — Effect HttpServer, Schema, RESTful routes, SSE, Unix socket
