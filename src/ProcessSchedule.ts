@@ -1,16 +1,51 @@
 /**
- * **ProcessSchedule** — centralized schedule storage + controls.
+ * ProcessSchedule — centralized schedule storage + controls.
  *
- * @remarks
- * A process schedule entry defines an absolute start time and optional stop time.
- * Process runtimes consume this service to:
- * - spawn run fibers at `startAt`
- * - stop repeating loops after `stopAt` (if present)
+ * A process schedule defines when run instances should be spawned. Each entry
+ * has a `startAt` time and optional `stopAt` (the run window). The Process
+ * supervisor watches this service for changes and manages trigger fibers.
+ *
+ * ## Core operations
+ *
+ * | Method | Purpose |
+ * |--------|---------|
+ * | `entries` | Read all current entries |
+ * | `changed` | Block until the next mutation |
+ * | `get` | Lookup entry by id |
+ * | `has` | Check if entry exists |
+ * | `add` | Append an entry |
+ * | `upsert` | Insert or update by id |
+ * | `remove` | Delete by id |
+ * | `removeMany` | Delete multiple by id |
+ * | `set` | Replace all entries |
+ * | `clear` | Remove all entries |
+ * | `reconcile` | Diff-based sync from external source (DB) |
+ *
+ * ## Usage
+ *
+ * ```ts
+ * import { ProcessSchedule } from "@nikscripts/effect-pm"
+ *
+ * // Declarative schedule (Layer)
+ * const schedule = ProcessSchedule.define(({ at, window }) => [
+ *   at("daily-2am", new Date("2025-01-01T02:00:00Z")),
+ *   window("game-123", gameStart, gameEnd),
+ * ])
+ *
+ * // Or use the in-memory Layer directly
+ * const schedule = ProcessSchedule.inMemory([
+ *   ProcessSchedule.at("job-1", new Date()),
+ * ])
+ * ```
  *
  * @module ProcessSchedule
  */
 
 import { Context, Deferred, Effect, Layer, Option, Ref } from "effect";
+
+// ============================================================================
+// Public Types
+// ============================================================================
 
 /**
  * One scheduled run window for a process.
@@ -18,34 +53,25 @@ import { Context, Deferred, Effect, Layer, Option, Ref } from "effect";
  * @public
  */
 export interface ProcessScheduleEntry {
+  /** Stable identity for this entry. Used for CRUD, reconcile, and removal cleanup. */
   readonly id: Option.Option<string>;
+  /** When the run instance should be triggered. */
   readonly startAt: Date;
+  /** When the run instance should stop (open-ended if absent). */
   readonly stopAt: Option.Option<Date>;
 }
 
-const sortEntries = (
-  entries: ReadonlyArray<ProcessScheduleEntry>,
-): ReadonlyArray<ProcessScheduleEntry> =>
-  [...entries].sort((a, b) => {
-    const byStart = a.startAt.getTime() - b.startAt.getTime();
-    if (byStart !== 0) {
-      return byStart;
-    }
-    const aStop = Option.match(a.stopAt, {
-      onNone: () => Number.POSITIVE_INFINITY,
-      onSome: (d) => d.getTime(),
-    });
-    const bStop = Option.match(b.stopAt, {
-      onNone: () => Number.POSITIVE_INFINITY,
-      onSome: (d) => d.getTime(),
-    });
-    return aStop - bStop;
-  });
-
-const normalizeEntries = (
-  entries: ReadonlyArray<ProcessScheduleEntry>,
-): ReadonlyArray<ProcessScheduleEntry> =>
-  sortEntries(entries);
+/**
+ * Result of a `reconcile` operation — shows what changed.
+ *
+ * @public
+ */
+export interface ReconcileResult {
+  readonly added: ReadonlyArray<string>;
+  readonly updated: ReadonlyArray<string>;
+  readonly removed: ReadonlyArray<string>;
+  readonly unchanged: ReadonlyArray<string>;
+}
 
 /**
  * Schedule service used by process runtimes and control APIs.
@@ -53,100 +79,219 @@ const normalizeEntries = (
  * @public
  */
 export interface ProcessScheduleService {
-  readonly entries: Effect.Effect<ReadonlyArray<ProcessScheduleEntry>, never, never>;
-  readonly set: (
-    entries: ReadonlyArray<ProcessScheduleEntry>,
-  ) => Effect.Effect<void, never, never>;
-  readonly add: (
-    entry: ProcessScheduleEntry,
-  ) => Effect.Effect<void, never, never>;
-  readonly clear: Effect.Effect<void, never, never>;
-  readonly changed: Effect.Effect<void, never, never>;
+  /** Read all current entries (sorted by startAt). */
+  readonly entries: Effect.Effect<ReadonlyArray<ProcessScheduleEntry>>;
+  /** Block until the next mutation occurs. */
+  readonly changed: Effect.Effect<void>;
+
+  // ─── Lookup ───
+  /** Get entry by id. Returns None if not found or entry has no id. */
+  readonly get: (id: string) => Effect.Effect<Option.Option<ProcessScheduleEntry>>;
+  /** Check if an entry with given id exists. */
+  readonly has: (id: string) => Effect.Effect<boolean>;
+
+  // ─── Mutate ───
+  /** Replace all entries (triggers changed). */
+  readonly set: (entries: ReadonlyArray<ProcessScheduleEntry>) => Effect.Effect<void>;
+  /** Append an entry (triggers changed). */
+  readonly add: (entry: ProcessScheduleEntry) => Effect.Effect<void>;
+  /** Insert or update by id (triggers changed). */
+  readonly upsert: (entry: ProcessScheduleEntry) => Effect.Effect<void>;
+  /** Remove entry by id. Returns true if found and removed. */
+  readonly remove: (id: string) => Effect.Effect<boolean>;
+  /** Remove multiple entries by id. Returns count removed. */
+  readonly removeMany: (ids: ReadonlyArray<string>) => Effect.Effect<number>;
+  /** Remove all entries (triggers changed). */
+  readonly clear: Effect.Effect<void>;
+
+  // ─── Sync ───
+  /**
+   * Diff-based sync: compute what's added/updated/removed/unchanged
+   * relative to the provided entries. Applies the diff atomically.
+   * Entries without ids are matched by reference only.
+   */
+  readonly reconcile: (
+    next: ReadonlyArray<ProcessScheduleEntry>,
+  ) => Effect.Effect<ReconcileResult>;
 }
 
+/**
+ * Context tag for the ProcessSchedule service.
+ *
+ * @public
+ */
 export class ProcessScheduleTag extends Context.Service<
   ProcessScheduleTag,
   ProcessScheduleService
 >()("@nikscripts/effect-pm/ProcessSchedule/ProcessScheduleTag") {}
 
+// ============================================================================
+// Internal: sorting and normalization
+// ============================================================================
+
+const sortEntries = (
+  entries: ReadonlyArray<ProcessScheduleEntry>,
+): ReadonlyArray<ProcessScheduleEntry> =>
+  [...entries].sort((a, b) => {
+    const byStart = a.startAt.getTime() - b.startAt.getTime();
+    if (byStart !== 0) return byStart;
+    const aStop = Option.match(a.stopAt, { onNone: () => Infinity, onSome: (d) => d.getTime() });
+    const bStop = Option.match(b.stopAt, { onNone: () => Infinity, onSome: (d) => d.getTime() });
+    return aStop - bStop;
+  });
+
+const getEntryId = (entry: ProcessScheduleEntry): string | undefined =>
+  Option.getOrUndefined(entry.id);
+
+// ============================================================================
+// Internal: in-memory implementation
+// ============================================================================
+
 const buildInMemoryService = (
   initial: ReadonlyArray<ProcessScheduleEntry>,
-): Effect.Effect<ProcessScheduleService, never, never> =>
+): Effect.Effect<ProcessScheduleService> =>
   Effect.gen(function* () {
-    const entriesRef = yield* Ref.make<ReadonlyArray<ProcessScheduleEntry>>(
-      normalizeEntries(initial),
-    );
-    const changeSignal = yield* Ref.make<Deferred.Deferred<void, never>>(
-      yield* Deferred.make<void>(),
-    );
+    const entriesRef = yield* Ref.make<ReadonlyArray<ProcessScheduleEntry>>(sortEntries(initial));
+    const changeSignal = yield* Ref.make<Deferred.Deferred<void, never>>(Deferred.makeUnsafe());
 
+    // Notify subscribers that a mutation occurred
     const notify = Effect.gen(function* () {
       const current = yield* Ref.get(changeSignal);
       yield* Deferred.succeed(current, undefined);
-      const next = yield* Deferred.make<void>();
-      yield* Ref.set(changeSignal, next);
+      yield* Ref.set(changeSignal, Deferred.makeUnsafe());
     });
 
-    const set = (
-      entries: ReadonlyArray<ProcessScheduleEntry>,
-    ): Effect.Effect<void> =>
-      Ref.set(entriesRef, normalizeEntries(entries)).pipe(
-        Effect.andThen(() => notify),
-      );
-
-    const add = (entry: ProcessScheduleEntry): Effect.Effect<void> =>
-      Effect.gen(function* () {
-        const current = yield* Ref.get(entriesRef);
-        yield* set([...current, entry]);
-      });
-
-    const clear = set([]);
+    // Core setter: normalize + notify
+    const setEntries = (next: ReadonlyArray<ProcessScheduleEntry>) =>
+      Ref.set(entriesRef, sortEntries(next)).pipe(Effect.andThen(notify));
 
     return {
       entries: Ref.get(entriesRef),
-      set,
-      add,
-      clear,
-      changed: Ref.get(changeSignal).pipe(
-        Effect.flatMap((d) => Deferred.await(d)),
-      ),
-    };
+
+      changed: Effect.flatMap(Ref.get(changeSignal), Deferred.await),
+
+      get: (id) =>
+        Effect.map(Ref.get(entriesRef), (all) => {
+          const found = all.find((e) => getEntryId(e) === id);
+          return found !== undefined ? Option.some(found) : Option.none();
+        }),
+
+      has: (id) =>
+        Effect.map(Ref.get(entriesRef), (all) =>
+          all.some((e) => getEntryId(e) === id),
+        ),
+
+      set: (entries) => setEntries(entries),
+
+      add: (entry) =>
+        Effect.flatMap(Ref.get(entriesRef), (current) =>
+          setEntries([...current, entry]),
+        ),
+
+      upsert: (entry) =>
+        Effect.flatMap(Ref.get(entriesRef), (current) => {
+          const id = getEntryId(entry);
+          if (id === undefined) return setEntries([...current, entry]);
+          const filtered = current.filter((e) => getEntryId(e) !== id);
+          return setEntries([...filtered, entry]);
+        }),
+
+      remove: (id) =>
+        Effect.flatMap(Ref.get(entriesRef), (current) => {
+          const before = current.length;
+          const filtered = current.filter((e) => getEntryId(e) !== id);
+          if (filtered.length === before) return Effect.succeed(false);
+          return Effect.as(setEntries(filtered), true);
+        }),
+
+      removeMany: (ids) =>
+        Effect.flatMap(Ref.get(entriesRef), (current) => {
+          const idSet = new Set(ids);
+          const filtered = current.filter((e) => {
+            const eid = getEntryId(e);
+            return eid === undefined || !idSet.has(eid);
+          });
+          const removed = current.length - filtered.length;
+          if (removed === 0) return Effect.succeed(0);
+          return Effect.as(setEntries(filtered), removed);
+        }),
+
+      clear: setEntries([]),
+
+      reconcile: (next) =>
+        Effect.flatMap(Ref.get(entriesRef), (current) => {
+          const currentById = new Map<string, ProcessScheduleEntry>();
+          for (const e of current) {
+            const id = getEntryId(e);
+            if (id !== undefined) currentById.set(id, e);
+          }
+
+          const nextById = new Map<string, ProcessScheduleEntry>();
+          for (const e of next) {
+            const id = getEntryId(e);
+            if (id !== undefined) nextById.set(id, e);
+          }
+
+          const added: Array<string> = [];
+          const updated: Array<string> = [];
+          const unchanged: Array<string> = [];
+          const removed: Array<string> = [];
+
+          // Entries in next: added or updated
+          for (const [id, entry] of nextById) {
+            const existing = currentById.get(id);
+            if (existing === undefined) {
+              added.push(id);
+            } else if (
+              existing.startAt.getTime() !== entry.startAt.getTime() ||
+              Option.getOrNull(existing.stopAt)?.getTime() !== Option.getOrNull(entry.stopAt)?.getTime()
+            ) {
+              updated.push(id);
+            } else {
+              unchanged.push(id);
+            }
+          }
+
+          // Entries in current but not in next: removed
+          for (const id of currentById.keys()) {
+            if (!nextById.has(id)) {
+              removed.push(id);
+            }
+          }
+
+          const result: ReconcileResult = { added, updated, removed, unchanged };
+          return Effect.as(setEntries([...next]), result);
+        }),
+    } satisfies ProcessScheduleService;
   });
+
+// ============================================================================
+// Layer builders
+// ============================================================================
 
 const inMemoryLayer = (
   initial: ReadonlyArray<ProcessScheduleEntry> = [],
-): Layer.Layer<ProcessScheduleTag, never, never> =>
-  Layer.effect(
-    ProcessScheduleTag,
-    buildInMemoryService(initial),
-  );
+): Layer.Layer<ProcessScheduleTag> =>
+  Layer.effect(ProcessScheduleTag, buildInMemoryService(initial));
+
+// ============================================================================
+// Entry constructors (convenience)
+// ============================================================================
 
 const toId = (id: string | undefined): Option.Option<string> =>
   id === undefined ? Option.none() : Option.some(id);
 
+/** Create an open-ended entry (no stop time). */
 function at(startAt: Date): ProcessScheduleEntry;
 function at(id: string, startAt: Date): ProcessScheduleEntry;
-function at(
-  idOrStartAt: string | Date,
-  maybeStartAt?: Date,
-): ProcessScheduleEntry {
+function at(idOrStartAt: string | Date, maybeStartAt?: Date): ProcessScheduleEntry {
   if (idOrStartAt instanceof Date) {
-    return {
-      id: Option.none(),
-      startAt: idOrStartAt,
-      stopAt: Option.none(),
-    };
+    return { id: Option.none(), startAt: idOrStartAt, stopAt: Option.none() };
   }
-  if (maybeStartAt === undefined) {
-    throw new Error("ProcessSchedule.at(id, startAt) requires a startAt Date");
-  }
-  return {
-    id: toId(idOrStartAt),
-    startAt: maybeStartAt,
-    stopAt: Option.none(),
-  };
+  return { id: toId(idOrStartAt), startAt: maybeStartAt!, stopAt: Option.none() };
 }
 
+/** Create a windowed entry (start + stop). */
 function window(startAt: Date, stopAt: Date): ProcessScheduleEntry;
 function window(id: string, startAt: Date, stopAt: Date): ProcessScheduleEntry;
 function window(
@@ -155,67 +300,65 @@ function window(
   maybeStopAt?: Date,
 ): ProcessScheduleEntry {
   if (idOrStartAt instanceof Date) {
-    return {
-      id: Option.none(),
-      startAt: idOrStartAt,
-      stopAt: Option.some(startAtOrStopAt),
-    };
+    return { id: Option.none(), startAt: idOrStartAt, stopAt: Option.some(startAtOrStopAt) };
   }
-  if (maybeStopAt === undefined) {
-    throw new Error("ProcessSchedule.window(id, startAt, stopAt) requires stopAt Date");
-  }
-  return {
-    id: toId(idOrStartAt),
-    startAt: startAtOrStopAt,
-    stopAt: Option.some(maybeStopAt),
-  };
+  return { id: toId(idOrStartAt), startAt: startAtOrStopAt, stopAt: Option.some(maybeStopAt!) };
 }
 
-const fromStarts = (
-  starts: ReadonlyArray<Date>,
-): ReadonlyArray<ProcessScheduleEntry> =>
+/** Create entries from bare Date starts (no ids, no stop times). */
+const fromStarts = (starts: ReadonlyArray<Date>): ReadonlyArray<ProcessScheduleEntry> =>
   starts.map((startAt) => at(startAt));
+
+/** Always-armed: single entry starting at epoch, never stops. */
+const alwaysArmed: Layer.Layer<ProcessScheduleTag> =
+  inMemoryLayer([{ id: Option.some("always"), startAt: new Date(0), stopAt: Option.none() }]);
+
+// ============================================================================
+// Define DSL
+// ============================================================================
 
 interface DefineApi {
   readonly at: typeof at;
   readonly window: typeof window;
   readonly fromStarts: typeof fromStarts;
-  readonly all: (
-    ...entries: ReadonlyArray<ProcessScheduleEntry>
-  ) => ReadonlyArray<ProcessScheduleEntry>;
+  readonly all: (...entries: ReadonlyArray<ProcessScheduleEntry>) => ReadonlyArray<ProcessScheduleEntry>;
 }
 
+/**
+ * Declarative schedule Layer from a combinator DSL.
+ *
+ * @example
+ * ```ts
+ * ProcessSchedule.define(({ at, window }) => [
+ *   at("job-1", new Date("2025-06-01T00:00:00Z")),
+ *   window("game", gameStart, gameEnd),
+ * ])
+ * ```
+ */
 const define = (
   build: (api: DefineApi) => ReadonlyArray<ProcessScheduleEntry>,
-): Layer.Layer<ProcessScheduleTag, never, never> =>
-  inMemoryLayer(
-    build({
-      at,
-      window,
-      fromStarts,
-      all: (...entries) => entries,
-    }),
-  );
+): Layer.Layer<ProcessScheduleTag> =>
+  inMemoryLayer(build({ at, window, fromStarts, all: (...entries) => entries }));
+
+// ============================================================================
+// Public API
+// ============================================================================
 
 /**
- * Context tag plus schedule constructors and `Layer` builders.
- *
- * @remarks
- * - **`inMemory`** — `Layer` from initial {@link ProcessScheduleEntry} rows.
- * - **`at` / `window`** — row builders (optional string ids for stable matching).
- * - **`fromStarts`** — expand bare `Date` starts into open-ended windows.
- * - **`define`** — declarative `Layer` from a small combinator DSL.
+ * ProcessSchedule — schedule storage, CRUD, and sync.
  *
  * @public
  */
 export const ProcessSchedule: typeof ProcessScheduleTag & {
   readonly inMemory: typeof inMemoryLayer;
+  readonly alwaysArmed: Layer.Layer<ProcessScheduleTag>;
   readonly at: typeof at;
   readonly window: typeof window;
   readonly fromStarts: typeof fromStarts;
   readonly define: typeof define;
 } = Object.assign(ProcessScheduleTag, {
   inMemory: inMemoryLayer,
+  alwaysArmed,
   at,
   window,
   fromStarts,
