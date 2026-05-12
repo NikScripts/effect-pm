@@ -1,134 +1,84 @@
 /**
- * RunResource — concurrency + optional start throttling for effects.
+ * RunResource — concurrency gate for effects.
  *
- * The tag’s value is a **callable** closed over one scoped gate (same idea as
- * `const m = yield* makeSemaphore(1); const task = m.withPermits(1)(work)` — repeated
- * `yield*` uses the **same** semaphores, not a new scope per call).
+ * Wraps any effect with bounded concurrency via `Semaphore`. Unlike
+ * {@link QueueResource}, there are no queues, priorities, or background workers —
+ * the gate is applied inline at the call site. Each call to the gate acquires
+ * a permit, executes the effect, and releases the permit on completion.
  *
- * - {@link RunResource.make} — configured `effect`; `yield* gate()` or `yield* gate(input)`.
- * - {@link RunResource.makeRunner} — `yield* wrap(arbitraryEffect)` for HttpClient, etc.
+ * ## Entry points
  *
- * Use {@link RunResourceLimits} via **`limits`**: omit **`limits`** for a pass-through
- * wrapper (no semaphores / throttler); pass **`limits`** (including `{}`) for an execution
- * semaphore with default concurrency **1** and optional throttle.
+ * | Function | Purpose |
+ * |----------|---------|
+ * | `RunResource.make` | Scoped Effect producing a gated callable |
+ * | `RunResource.layer` | Builds a `Layer` from tag + config |
+ * | `RunResource.Service` | Class factory: tag + baked-in `.layer` |
+ * | `RunResource.Tag` | Class factory: pure identity tag (no layer) |
+ * | `RunResource.makeRunner` | Generic runner (wraps arbitrary effects) |
  *
- * Unlike {@link QueueResource}, there are no queues or priorities.
+ * ## Usage
+ *
+ * ```ts
+ * import { Effect } from "effect"
+ * import { RunResource } from "@nikscripts/effect-pm"
+ *
+ * // Create a gated callable with concurrency 3
+ * const program = Effect.scoped(
+ *   Effect.gen(function*() {
+ *     const fetchPrices = yield* RunResource.make({
+ *       name: "@app/FetchPrices",
+ *       effect: (symbol: string) => httpClient.get(`/prices/${symbol}`),
+ *       concurrency: 3,
+ *     })
+ *
+ *     // Up to 3 concurrent requests; additional calls block until a slot opens
+ *     const [aapl, goog, msft] = yield* Effect.all(
+ *       [fetchPrices("AAPL"), fetchPrices("GOOG"), fetchPrices("MSFT")],
+ *       { concurrency: "unbounded" },
+ *     )
+ *   })
+ * )
+ * ```
+ *
+ * ## Architecture
+ *
+ * - **Semaphore** with `concurrency` permits controls max parallel executions
+ * - Each call to the gate acquires 1 permit, runs the inner effect, releases on exit
+ * - The semaphore is allocated once (scoped) and shared across all call sites
+ * - No background fibers, no state management beyond the semaphore
  *
  * @module RunResource
  */
 
-import { Clock, Context, Duration, Effect, Layer, Ref, Semaphore } from "effect";
+import {
+  Context,
+  Effect,
+  Layer,
+  Semaphore,
+} from "effect";
+
+// ============================================================================
+// Public Types
+// ============================================================================
 
 /**
- * Global throttler: minimum wall-clock gap between *starts* of wrapped effects.
- * Same behavior as QueueResource’s internal throttler.
+ * A gated callable produced by {@link RunResource.make}.
  *
- * @internal
- */
-const makeGlobalThrottler = (minInterval: Duration.Duration) =>
-  Effect.gen(function* () {
-    const lastStartTime = yield* Ref.make<number>(0);
-
-    return <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
-      Effect.gen(function* () {
-        const now = yield* Clock.currentTimeMillis;
-        const lastStart = yield* Ref.get(lastStartTime);
-        const timeSinceLastStart = now - lastStart;
-        const minIntervalMs = Duration.toMillis(minInterval);
-
-        if (timeSinceLastStart < minIntervalMs) {
-          const waitTime = minIntervalMs - timeSinceLastStart;
-          yield* Effect.sleep(Duration.millis(waitTime));
-        }
-
-        const startedAt = yield* Clock.currentTimeMillis;
-        yield* Ref.set(lastStartTime, startedAt);
-        return yield* effect;
-      });
-  });
-
-/**
- * Concurrency and optional start throttle when **`limits`** is passed to
- * {@link RunResource.make} / {@link RunResource.makeRunner}.
+ * Call it with the input to execute the effect through the concurrency gate.
  *
- * - **`concurrency`** — max concurrent inner effects; default **1** when **`limits`** is set.
- * - **`throttle`** — if omitted, no minimum gap between starts.
+ * @typeParam T - Input type
+ * @typeParam A - Success type
+ * @typeParam E - Error type
  *
  * @public
  */
-export interface RunResourceLimits {
-  /**
-   * Max gated effects executing at once.
-   *
-   * @defaultValue 1 (when `limits` is present)
-   */
-  readonly concurrency?: number;
-
-  /**
-   * Start throttling: at most `limit` effect starts per `duration`, spread across
-   * execution slots (same formula as {@link QueueResource}).
-   */
-  readonly throttle?: {
-    readonly limit: number;
-    readonly duration: Duration.Duration;
-  };
+export interface RunGate<in T, out A, out E> {
+  (input: T): Effect.Effect<A, E>;
 }
 
 /**
- * Config when `effect` is a single `Effect` value — tag is `() => Effect`.
- *
- * @public
- */
-export type RunResourceConfigUnit<A, E, R> = {
-  readonly name: string;
-  readonly effect: Effect.Effect<A, E, R>;
-  /**
-   * When omitted, effects pass through unchanged (no semaphores / throttler).
-   * When present (including `{}`), an execution semaphore is allocated;
-   * {@link RunResourceLimits.concurrency} defaults to **1**.
-   */
-  readonly limits?: RunResourceLimits;
-};
-
-/**
- * Config when `effect` is a function — tag is `(input: T) => Effect`.
- *
- * @public
- */
-export type RunResourceConfigWithArg<T, A, E, R> = {
-  readonly name: string;
-  readonly effect: (input: T) => Effect.Effect<A, E, R>;
-  readonly limits?: RunResourceLimits;
-};
-
-/**
- * Gated configured effect with no parameters (`yield* gate()`).
- *
- * @public
- */
-export type RunResourceUnit<A, E, R> = () => Effect.Effect<A, E, R>;
-
-/**
- * Gated configured effect with parameter (`yield* gate(input)`).
- *
- * @public
- */
-export type RunResourceApply<T, A, E, R> = (
-  input: T
-) => Effect.Effect<A, E, R>;
-
-/**
- * Config for {@link RunResource.makeRunner} (limits only, no baked-in effect).
- *
- * @public
- */
-export type RunResourceRunnerConfig = {
-  readonly name: string;
-  readonly limits?: RunResourceLimits;
-};
-
-/**
- * Wrap any effect with the same concurrency and throttle rules (`yield* wrap(e)`).
+ * A generic runner that wraps any effect with concurrency + throttle gating.
+ * Produced by {@link RunResource.makeRunner}.
  *
  * @public
  */
@@ -137,166 +87,228 @@ export interface RunResourceRunner {
 }
 
 /**
- * Build the inner `wrap` used by {@link RunResource} and {@link HttpApiResource}.
- * `limits === undefined` → identity; otherwise scoped semaphore (+ optional throttler).
+ * Configuration for {@link RunResource.make} and {@link RunResource.Service}.
  *
- * @internal
+ * @typeParam T - Input type (void for unit effects)
+ * @typeParam A - Success type
+ * @typeParam E - Error type
+ *
+ * @public
  */
-export const makeRunResourceWrap = (
-  limits: RunResourceLimits | undefined
-): Effect.Effect<
-  <A, E, R>(inner: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>,
-  never,
-  never
-> =>
-  limits === undefined
-    ? Effect.succeed(<A, E, R>(inner: Effect.Effect<A, E, R>) => inner)
-    : Effect.gen(function* () {
-        const concurrency = limits.concurrency ?? 1;
-        const exec = yield* Semaphore.make(concurrency);
-
-        const throttleStep =
-          limits.throttle !== undefined
-            ? yield* makeGlobalThrottler(
-                Duration.millis(
-                  Duration.toMillis(limits.throttle.duration) /
-                    limits.throttle.limit /
-                    concurrency
-                )
-              )
-            : <A, E, R>(e: Effect.Effect<A, E, R>) => e;
-
-        return <A, E, R>(inner: Effect.Effect<A, E, R>) =>
-          throttleStep(inner).pipe(exec.withPermits(1));
-      });
-
-const isEffectFactory = <A, E, R, T>(
-  effect: Effect.Effect<A, E, R> | ((input: T) => Effect.Effect<A, E, R>),
-): effect is (input: T) => Effect.Effect<A, E, R> =>
-  typeof effect === "function";
-
-function makeRunResourceGate<A, E, R, const Name extends string>(
-  config: RunResourceConfigUnit<A, E, R> & { readonly name: Name },
-): Context.Service<
-  RunResourceUnit<A, E, R> & { _brand: Name },
-  RunResourceUnit<A, E, R>
-> & {
-  readonly layer: Layer.Layer<
-    RunResourceUnit<A, E, R> & { _brand: Name },
-    never,
-    never
-  >;
-};
-
-function makeRunResourceGate<T, A, E, R, const Name extends string>(
-  config: RunResourceConfigWithArg<T, A, E, R> & { readonly name: Name },
-): Context.Service<
-  RunResourceApply<T, A, E, R> & { _brand: Name },
-  RunResourceApply<T, A, E, R>
-> & {
-  readonly layer: Layer.Layer<
-    RunResourceApply<T, A, E, R> & { _brand: Name },
-    never,
-    never
-  >;
-};
-
-function makeRunResourceGate<
-  A,
-  E,
-  R,
-  T,
-  const Name extends string,
->(
-  config:
-    | (RunResourceConfigUnit<A, E, R> & { readonly name: Name })
-    | (RunResourceConfigWithArg<T, A, E, R> & { readonly name: Name }),
-) {
-  const { name, effect, limits } = config;
-
-  if (!isEffectFactory(effect)) {
-    const tag = Context.Service<
-      RunResourceUnit<A, E, R> & { _brand: Name },
-      RunResourceUnit<A, E, R>
-    >(name);
-
-    const layer = Layer.effect(
-      tag,
-      Effect.gen(function* () {
-        const wrap = yield* makeRunResourceWrap(limits);
-        const unit: RunResourceUnit<A, E, R> = () =>
-          wrap(effect);
-        return unit;
-      })
-    );
-
-    return Object.assign(tag, { layer });
-  }
-
-  const tag = Context.Service<
-    RunResourceApply<T, A, E, R> & { _brand: Name },
-    RunResourceApply<T, A, E, R>
-  >(name);
-
-  const layer = Layer.effect(
-    tag,
-    Effect.gen(function* () {
-      const wrap = yield* makeRunResourceWrap(limits);
-      const apply: RunResourceApply<T, A, E, R> = (input: T) =>
-        wrap(effect(input));
-      return apply;
-    })
-  );
-
-  return Object.assign(tag, { layer });
-}
-
-function makeRunResourceRunnerImpl<const Name extends string>(
-  config: RunResourceRunnerConfig & { readonly name: Name }
-): Context.Service<
-  RunResourceRunner & { _brand: Name },
-  RunResourceRunner
-> & {
-  readonly layer: Layer.Layer<
-    RunResourceRunner & { _brand: Name },
-    never,
-    never
-  >;
-} {
-  const { name, limits } = config;
-  const tag = Context.Service<
-    RunResourceRunner & { _brand: Name },
-    RunResourceRunner
-  >(name);
-
-  const layer = Layer.effect(
-    tag,
-    Effect.gen(function* () {
-      const wrap = yield* makeRunResourceWrap(limits);
-      const runner: RunResourceRunner = <A, E, R>(e: Effect.Effect<A, E, R>) =>
-        wrap(e);
-      return runner;
-    })
-  );
-
-  return Object.assign(tag, { layer });
+export interface RunResourceConfig<T, A, E> {
+  /** Service name used for log annotations. */
+  readonly name?: string;
+  /**
+   * The effect to gate. A function receiving the input and returning the effect.
+   * For unit gates (no input), use `() => myEffect`.
+   */
+  readonly effect: (input: T) => Effect.Effect<A, E>;
+  /**
+   * Max concurrent executions through this gate.
+   * @default 1
+   */
+  readonly concurrency?: number;
 }
 
 /**
- * Entrypoints for gated effects and reusable runners.
+ * Configuration for {@link RunResource.makeRunner}.
  *
- * @remarks
- * - **`make`** — bake a concrete `effect` (unit or unary) into a service value that applies
- *   the same semaphores/throttle for every `yield*`.
- * - **`makeRunner`** — expose only the `wrap` function (used by {@link HttpApiResource} and
- *   {@link HttpClientRunGate}).
+ * @public
+ */
+export interface RunResourceRunnerConfig {
+  /** Service name used for log annotations. */
+  readonly name?: string;
+  /**
+   * Max concurrent executions through this runner.
+   * @default 1
+   */
+  readonly concurrency?: number;
+}
+
+// ============================================================================
+// Internal: build the gating wrapper
+// ============================================================================
+
+/**
+ * Allocate a counting semaphore and return a wrapper function.
+ *
+ * The returned function acquires 1 permit before executing the inner effect
+ * and releases it on completion (success, failure, or interruption).
+ * This is the core concurrency primitive — all public APIs delegate here.
+ *
+ * The semaphore is created once per gate instance (not per call), so repeated
+ * `yield*` of the same gate share the same concurrency pool.
+ */
+const makeGateInternal = (concurrency: number) =>
+  // Allocate semaphore → return a wrapper that acquires 1 permit per call
+  Effect.map(
+    Semaphore.make(concurrency),
+    (sem) =>
+      <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+        sem.withPermits(1)(effect),
+  );
+
+// ============================================================================
+// Internal: build the scoped RunGate effect
+// ============================================================================
+
+const makeRunGateEffect = <T, A, E>(
+  config: RunResourceConfig<T, A, E>,
+) => {
+  const concurrency = config.concurrency ?? 1;
+  // Allocate gate → log init → wrap user's effect with the gate
+  return makeGateInternal(concurrency).pipe(
+    Effect.tap(() =>
+      Effect.logDebug(
+        `RunResource "${config.name ?? "anonymous"}" initialized: concurrency=${String(concurrency)}`,
+      ),
+    ),
+    // The returned callable applies the gate around each invocation of the user's effect
+    Effect.map((gate): RunGate<T, A, E> => (input: T) => gate(config.effect(input))),
+  );
+};
+
+// ============================================================================
+// Internal: build the scoped Runner effect
+// ============================================================================
+
+const makeRunnerEffect = (config: RunResourceRunnerConfig) => {
+  const concurrency = config.concurrency ?? 1;
+  // Allocate gate → log init → return a generic wrapper that gates any effect
+  return makeGateInternal(concurrency).pipe(
+    Effect.tap(() =>
+      Effect.logDebug(
+        `RunResource runner "${config.name ?? "anonymous"}" initialized: concurrency=${String(concurrency)}`,
+      ),
+    ),
+    // The runner wraps arbitrary effects (not tied to a specific effect like RunGate)
+    Effect.map((gate): RunResourceRunner =>
+      <A, E, R>(effect: Effect.Effect<A, E, R>) => gate(effect),
+    ),
+  );
+};
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+/**
+ * RunResource namespace — concurrency gate for effects.
  *
  * @public
  */
 export const RunResource = {
-  make: makeRunResourceGate,
-  makeRunner: makeRunResourceRunnerImpl,
-} as {
-  readonly make: typeof makeRunResourceGate;
-  readonly makeRunner: typeof makeRunResourceRunnerImpl;
-};
+  /**
+   * Create a scoped Effect that produces a gated callable.
+   *
+   * @example
+   * ```ts
+   * const gate = yield* RunResource.make({
+   *   effect: fetchData(),
+   *   concurrency: 3,
+   * })
+   * const result = yield* gate()
+   * ```
+   */
+  make: makeRunGateEffect,
+
+  /**
+   * Build a `Layer` from a Context tag and config.
+   *
+   * @example
+   * ```ts
+   * const FetchLayer = RunResource.layer(FetchGate, {
+   *   effect: fetchData(),
+   *   concurrency: 3,
+   * })
+   * ```
+   */
+  layer: <Self, T, A, E>(
+    tag: Context.Key<Self, RunGate<T, A, E>>,
+    config: RunResourceConfig<T, A, E>,
+  ) => Layer.effect(tag)(makeRunGateEffect(config)),
+
+  /**
+   * Class factory: creates a Context tag with a baked-in `.layer`.
+   *
+   * The returned value is both a yieldable tag and has a `.layer` property.
+   * Use `typeof MyService` as the Self type at the call site.
+   *
+   * @example
+   * ```ts
+   * // Parameterized gate (with input):
+   * const SendSms = RunResource.Service<{ readonly _tag: "SendSms" }, PhoneNumber, SmsResult, SmsError>()(
+   *   "@app/SendSms",
+   *   { effect: (phone) => smsClient.send(phone), concurrency: 5 },
+   * )
+   * const send = yield* SendSms
+   * yield* send("+1234567890")
+   *
+   * // Unit gate (no input):
+   * const RefreshCache = RunResource.Service<{ readonly _tag: "RefreshCache" }, void, void, never>()(
+   *   "@app/RefreshCache",
+   *   { effect: () => cache.refresh(), concurrency: 1 },
+   * )
+   * const refresh = yield* RefreshCache
+   * yield* refresh(undefined)
+   * ```
+   */
+  Service: <Self, T, A, E = never>() =>
+  <const Name extends string>(
+    name: Name,
+    config: RunResourceConfig<T, A, E>,
+  ) => {
+    const base = Context.Service<Self, RunGate<T, A, E>>()(name);
+    const layer = Layer.effect(base)(makeRunGateEffect({ ...config, name }));
+    return Object.assign(base, { layer });
+  },
+
+  /**
+   * Class factory: creates a pure identity Context tag (no default layer).
+   *
+   * Use with {@link RunResource.layer} to provide implementations.
+   * Useful for shared contracts, library interfaces, and dependency inversion.
+   *
+   * @example
+   * ```ts
+   * const FetchGate = RunResource.Tag<{ readonly _tag: "FetchGate" }, void, PriceData, FetchError>()(
+   *   "@app/FetchGate",
+   * )
+   * const FetchGateLive = RunResource.layer(FetchGate, {
+   *   effect: () => fetchPriceData(),
+   *   concurrency: 3,
+   * })
+   * ```
+   */
+  Tag: <Self, T, A, E = never>() =>
+  <const Name extends string>(name: Name) =>
+    Context.Service<Self, RunGate<T, A, E>>()(name),
+
+  /**
+   * Create a generic runner that wraps any effect with concurrency gating.
+   *
+   * Returns a Context.Service tag with `.layer`.
+   *
+   * @example
+   * ```ts
+   * const ApiGate = RunResource.makeRunner({
+   *   name: "@app/ApiGate",
+   *   concurrency: 10,
+   * })
+   *
+   * const runner = yield* ApiGate
+   * const result = yield* runner(someEffect)
+   * ```
+   */
+  makeRunner: <const Name extends string>(
+    config: RunResourceRunnerConfig & { readonly name: Name },
+  ) => {
+    const tag = Context.Service<
+      RunResourceRunner & { readonly _tag: Name },
+      RunResourceRunner
+    >(config.name);
+    const layer = Layer.effect(tag)(makeRunnerEffect(config));
+    return Object.assign(tag, { layer });
+  },
+} as const;
+

@@ -1,997 +1,950 @@
 /**
- * **QueueResource** — managed execution for resource-heavy Effect workloads.
+ * QueueResource — Effect-idiomatic managed priority queue with workers.
  *
- * Each queue is a {@link Context.Service} with a `.layer`: callers `yield*` the tag to get
- * a {@link QueueRef} for `add`, priority selection, pause/resume, and observability hooks.
+ * Provides a three-level priority queue (high, normal, low) backed by bounded
+ * Effect `Queue`s with configurable concurrency, deduplication, retry, persistence,
+ * and lifecycle hooks. Workers are managed fibers tracked by `FiberSet`; pause/resume
+ * is implemented via `Latch`; empty-queue blocking uses a `Deferred` wake signal to
+ * avoid priority inversion.
  *
- * @remarks
- * Key features:
- * - Three priority levels (high, normal, low)
- * - Configurable concurrency limits
- * - Rate limiting/throttling
- * - Queue capacity management
- * - Automatic rebuilding from cache
- * - Optional follow-up via `forkWith` (required when the item effect’s error type `E` is not `never`)
- * - `forkWith` runs in a fork; in-flight forks are awaited when the queue scope ends
- * - Pause/resume/restart capabilities
- * 
+ * ## Entry points
+ *
+ * | Function | Purpose |
+ * |----------|---------|
+ * | `QueueResource.make` | Scoped Effect producing a {@link QueueHandle} |
+ * | `QueueResource.layer` | Builds a `Layer` from tag + config |
+ * | `QueueResource.Service` | Class factory: tag + baked-in `.layer` |
+ * | `QueueResource.Tag` | Class factory: pure identity tag (no layer) |
+ *
+ * ## Usage
+ *
+ * ```ts
+ * import { Effect, Layer } from "effect"
+ * import { QueueResource } from "@nikscripts/effect-pm"
+ *
+ * // Declare service via class factory
+ * const EmailQueue = QueueResource.Service<typeof EmailQueue, Email, void, SmtpError>()(
+ *   "@app/EmailQueue",
+ *   {
+ *     effect: (email, ctx) => sendEmail(email),
+ *     handler: (item, exit, ctx) =>
+ *       Exit.match(exit, {
+ *         onFailure: () => ctx.retry,
+ *         onSuccess: () => Effect.void,
+ *       }),
+ *     concurrency: 5,
+ *     retries: 3,
+ *   },
+ * )
+ *
+ * // Use in program
+ * const program = Effect.gen(function*() {
+ *   const queue = yield* EmailQueue
+ *   yield* queue.add([email1, email2])
+ * })
+ *
+ * program.pipe(Effect.provide(EmailQueue.layer))
+ * ```
+ *
  * @module QueueResource
  */
 
 import {
   Cause,
-  Clock,
   Context,
+  Data,
+  Deferred,
   Duration,
   Effect,
   Exit,
-  Fiber,
+  FiberSet,
+  HashSet,
+  Latch,
   Layer,
+  Option,
   Queue,
   Ref,
   Semaphore,
 } from "effect";
-
-/** Re-export for use next to `forkWith` handlers (failure inspection, `Cause.pretty`, etc.). */
-export { Cause };
-
-// ============================================================================
-// Internal Utilities
-// ============================================================================
-
-/**
- * Creates a global throttler that enforces minimum time gaps between effect starts
- * 
- * @internal
- * @remarks
- * This throttler ensures that wrapped effects don't start more frequently than
- * the specified minimum interval. Unlike rate limiting which tracks completions,
- * this throttles the _start_ of effects.
- * 
- * **Behavior:**
- * - Tracks when the last effect started
- * - If insufficient time has passed, waits before starting the next effect
- * - Updates the timestamp _before_ starting the effect (not after completion)
- * 
- * @param minInterval - Minimum time gap between effect starts
- * @returns An effect that produces a throttling function
- */
-/** Drain a queue without blocking when empty (unlike `Queue.takeAll`, which waits for ≥1 item). */
-const drainQueue = <A>(q: Queue.Queue<A>) =>
-  Effect.gen(function* () {
-    const out: A[] = [];
-    while (true) {
-      const x = yield* Queue.poll(q);
-      if (x._tag === "None") break;
-      out.push(x.value);
-    }
-    return out;
-  });
-
-const makeGlobalThrottler = (minInterval: Duration.Duration) =>
-  Effect.gen(function* () {
-    const lastStartTime = yield* Ref.make<number>(0);
-    
-    return <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
-      Effect.gen(function* () {
-        // Enforce minimum interval globally
-        const now = yield* Clock.currentTimeMillis;
-        const lastStart = yield* Ref.get(lastStartTime);
-        const timeSinceLastStart = now - lastStart;
-        const minIntervalMs = Duration.toMillis(minInterval);
-        
-        if (timeSinceLastStart < minIntervalMs) {
-          const waitTime = minIntervalMs - timeSinceLastStart;
-          yield* Effect.sleep(Duration.millis(waitTime));
-        }
-        
-        // Update last start time before starting the effect
-        const startedAt = yield* Clock.currentTimeMillis;
-        yield* Ref.set(lastStartTime, startedAt);
-        
-        // Execute the wrapped effect
-        return yield* effect;
-      });
-  });
+import {
+  ProcessStore,
+  type QueueItemCompletedEvent,
+  type QueueItemStatus,
+  type QueueLifecycleChangedEvent,
+  type QueueLifecycleTag,
+} from "./ProcessStore";
 
 // ============================================================================
 // Public Types
 // ============================================================================
 
 /**
- * Service environment required by a queue's per-item processor (the return type
- * of {@link QueueResourceConfigBase.effect}).
+ * Priority level for queue items.
+ *
+ * - `"high"` — processed first (use for urgent/time-sensitive items)
+ * - `"normal"` — default priority
+ * - `"low"` — processed last (use for background/deferrable work)
  *
  * @public
  */
-export type QueueItemEffectRequirements<F> = F extends (
-  item: infer _Item,
-) => Effect.Effect<any, any, infer R>
-  ? R
-  : never;
+export type Priority = "high" | "normal" | "low";
 
 /**
- * QueueResource status details for monitoring
- * 
- * @public
- */
-export interface QueueResourceDetails {
-  /** Current number of items in queue */
-  size: number;
-  /** Total number of items that finished processing (success or failure) */
-  completed: number;
-  /** Number of active worker fibers */
-  workers: number;
-  /** Whether the queue is currently processing items */
-  running: boolean;
-  /** Additional metadata for extensions */
-  metadata?: Record<string, unknown>;
-}
-
-/**
- * Handle returned from a queue’s service (what you get from `yield* MyQueue`):
- * add items, read status, pause/resume, etc.
+ * The service interface returned from `yield* MyQueue`.
  *
- * @typeParam _Name - String literal queue id from {@link QueueResourceConfigBase.name} (phantom). Shown first in `QueueRef<…>` hovers as the first type argument.
- * @typeParam T - Type of items to process
- * @typeParam R - Success type produced by the item effect
- * @typeParam E - Error type of the item effect
+ * All observation methods (`size`, `sizes`, `isEmpty`, `completed`) and lifecycle
+ * actions (`pause`, `resume`, `shutdown`, `clear`) are effectful properties —
+ * access them with `yield*` directly (no function call parentheses).
+ *
+ * Enqueue methods accept `Iterable<T>` for both single items (`[item]`) and
+ * batches (`items`).
+ *
+ * @typeParam T - Item type processed by this queue
+ * @typeParam _R - Success type of the item effect (phantom, used for type inference)
+ * @typeParam _E - Error type of the item effect (phantom, used for type inference)
+ *
+ * @example
+ * ```ts
+ * const queue = yield* MyQueue
+ * yield* queue.add([item1, item2])
+ * yield* queue.prioritize([urgentItem])
+ * const pending = yield* queue.size
+ * yield* queue.pause
+ * ```
  *
  * @public
  */
-export interface QueueRef<_Name extends string, T, _R, _E = never> {
-  /**
-   * Add item(s) at high priority
-   * 
-   * @param item - Single item or array of items
-   * @remarks
-   * High priority items are processed before normal and low priority items.
-   * Use for urgent tasks that need immediate attention.
-   */
-  readonly next: (item: T | readonly T[]) => Effect.Effect<void>;
-  
-  /**
-   * Add item(s) at normal priority (default)
-   * 
-   * @param item - Single item or array of items
-   * @remarks
-   * Normal priority is the default for most items. Processed after high
-   * priority but before low priority items.
-   */
-  readonly add: (item: T | readonly T[]) => Effect.Effect<void>;
-  
-  /**
-   * Add item(s) at low priority
-   * 
-   * @param item - Single item or array of items
-   * @remarks
-   * Low priority items are processed last. Use for background tasks or
-   * non-urgent operations that can wait.
-   */
-  readonly deffered: (
-    item: T | readonly T[]
-  ) => Effect.Effect<void>;
+export interface QueueHandle<in out T, out _R = void, out _E = never> {
+  /** Enqueue items at **normal** priority. */
+  readonly add: (items: Iterable<T>) => Effect.Effect<void>;
+  /** Enqueue items at **high** priority (processed before normal and low). */
+  readonly prioritize: (items: Iterable<T>) => Effect.Effect<void>;
+  /** Enqueue items at **low** priority (processed after high and normal). */
+  readonly defer: (items: Iterable<T>) => Effect.Effect<void>;
 
-  /**
-   * Get current queue size (all priority levels combined)
-   * 
-   * @returns Total number of pending items
-   */
-  readonly size: () => Effect.Effect<number>;
-  
-  /**
-   * Get size by priority level
-   * 
-   * @returns Object with counts for each priority level
-   */
-  readonly sizeByPriority: () => Effect.Effect<{
-    high: number;
-    normal: number;
-    low: number;
+  /** Total pending items across all priority levels. */
+  readonly size: Effect.Effect<number>;
+  /** Pending item count per priority level. */
+  readonly sizes: Effect.Effect<{
+    readonly high: number;
+    readonly normal: number;
+    readonly low: number;
   }>;
-  
-  /**
-   * Check if queue is empty
-   * 
-   * @returns True if no items are pending at any priority level
-   */
-  readonly isEmpty: () => Effect.Effect<boolean>;
-
-  // ========== Status and Control Methods ==========
-  
-  /**
-   * Get total number of items that finished processing (success or failure)
-   *
-   * @returns Count since queue start; reset when the queue is {@link restart | restarted}
-   */
-  readonly getCompleted: () => Effect.Effect<number>;
-  
-  /**
-   * Pause queue processing
-   * 
-   * @remarks
-   * Workers will stop processing new items but current items will complete.
-   * Use {@link resume} to continue processing.
-   */
-  readonly pause: () => Effect.Effect<void>;
-  
-  /**
-   * Resume queue processing after pause
-   * 
-   * @remarks
-   * Workers will continue processing pending items.
-   */
-  readonly resume: () => Effect.Effect<void>;
-  
-  /**
-   * Shutdown queue permanently
-   * 
-   * @remarks
-   * Stops all workers and prevents further processing. Cannot be resumed.
-   * The queue scope will be closed.
-   */
-  readonly shutdown: () => Effect.Effect<void>;
-  
-  /**
-   * Restart queue processing
-   * 
-   * @remarks
-   * Stops and then restarts all workers. Useful for recovering from errors
-   * or refreshing queue state.
-   */
-  readonly restart: () => Effect.Effect<void>;
+  /** Whether all priority queues are empty. */
+  readonly isEmpty: Effect.Effect<boolean>;
+  /** Total items that have finished processing (success or failure). */
+  readonly completed: Effect.Effect<number>;
 
   /**
-   * Worker fiber references
-   *
-   * @internal
-   * @remarks
-   * Internal field that keeps worker fibers alive to prevent garbage collection.
-   * Do not access directly.
+   * Pause processing. Workers block before their next item.
+   * Items can still be enqueued while paused — they accumulate in the queues.
    */
-  readonly _workers: readonly Fiber.Fiber<void>[];
+  readonly pause: Effect.Effect<void>;
+  /**
+   * Resume processing after a pause.
+   * Workers unblock and process accumulated items in priority order.
+   */
+  readonly resume: Effect.Effect<void>;
+  /**
+   * Permanently stop the queue. Enqueue attempts after shutdown are logged
+   * and silently dropped. Workers exit on their next iteration.
+   */
+  readonly shutdown: Effect.Effect<void>;
+  /**
+   * Drain all pending items from all priority queues and reset the completed
+   * counter. Returns the number of items cleared. Workers remain alive.
+   */
+  readonly clear: Effect.Effect<number>;
 }
 
 /**
- * @deprecated Use {@link QueueRef}. Old arity was `(T,R,E)`; use {@link QueueRef} with `Name` first, or `string` for `Name` if unknown.
- * @public
- */
-export type QueueResourceInstance<T, R, E = never> = QueueRef<string, T, R, E>;
-
-/**
- * Same as {@link QueueRef} (legacy export name for the public package entry).
+ * Context passed to the `effect` callback during item processing.
+ *
+ * Provides **guarded** enqueue operations for spawning derived/follow-up work.
+ * Attempting to enqueue the same item (by reference or by `key`) logs a warning
+ * and silently drops the item to prevent infinite processing loops.
+ *
+ * Use `ctx.retry` in the **handler** (not here) for intentional re-processing.
+ *
+ * @typeParam T - Item type
  *
  * @public
  */
-export type QueueResourceInterface<T, R, E = never> = QueueRef<string, T, R, E>;
+export interface EffectContext<T> {
+  /** Enqueue derived items at normal priority. Self-enqueue is warned and dropped. */
+  readonly add: (items: Iterable<T>) => Effect.Effect<void>;
+  /** Enqueue derived items at high priority. Self-enqueue is warned and dropped. */
+  readonly prioritize: (items: Iterable<T>) => Effect.Effect<void>;
+  /** Enqueue derived items at low priority. Self-enqueue is warned and dropped. */
+  readonly defer: (items: Iterable<T>) => Effect.Effect<void>;
+  /** How many times this item has been processed (1 = first attempt). */
+  readonly attempts: number;
+  /** When the item first entered the queue as epoch millis (preserved across retries). */
+  readonly enqueuedAt: number;
+  /** The priority level this item was enqueued at. */
+  readonly priority: Priority;
+}
 
 /**
- * Shared fields for {@link QueueResourceConfig} (excluding `forkWith`).
+ * Context passed to the `handler` callback after item processing.
  *
- * @typeParam T - Type of items to process
- * @typeParam R - Success type produced by the item effect
+ * Includes `retry` — the only sanctioned way to re-process the same item.
+ * Retry is a **re-enqueue** (back of the same priority queue), NOT an immediate
+ * re-execution. The item waits in line behind other pending items.
+ *
+ * Enqueue operations here are **unguarded** — the handler is trusted to make
+ * intentional routing decisions (retry, dead-letter, escalation, etc.).
+ *
+ * @typeParam T - Item type
+ *
+ * @public
+ */
+export interface HandlerContext<T> {
+  /**
+   * Re-enqueue this item at the same priority (back of the line).
+   * Respects the `retries` limit — when exhausted, `onRetryExhausted` is called
+   * and the item is NOT re-enqueued.
+   */
+  readonly retry: Effect.Effect<void>;
+  /** Enqueue items at normal priority (unguarded). */
+  readonly add: (items: Iterable<T>) => Effect.Effect<void>;
+  /** Enqueue items at high priority (unguarded). */
+  readonly prioritize: (items: Iterable<T>) => Effect.Effect<void>;
+  /** Enqueue items at low priority (unguarded). */
+  readonly defer: (items: Iterable<T>) => Effect.Effect<void>;
+  /** How many times this item has been processed (1 = first attempt). */
+  readonly attempts: number;
+  /** When the item first entered the queue as epoch millis (preserved across retries). */
+  readonly enqueuedAt: number;
+  /** The priority level this item was enqueued at. */
+  readonly priority: Priority;
+}
+
+/**
+ * Configuration for {@link QueueResource.make}.
+ *
+ * @typeParam T - Item type
+ * @typeParam R - Success type of the item effect
  * @typeParam E - Error type of the item effect
- * @typeParam RItem - Service environment required by each item's {@link QueueResourceConfigBase.effect | effect}
- * @typeParam Name - String literal queue id (first type argument on {@link QueueRef}; phantom for `Layer` / `Effect.provide` typing)
  *
  * @public
  */
-export interface QueueResourceConfigBase<
-  T,
-  R,
-  E = never,
-  RItem = never,
-  Name extends string = string,
-> {
+export interface QueueResourceConfig<T, R, E> {
+  /** Queue name used for log annotations and error messages. @default "anonymous" */
+  readonly name?: string;
+  /** Start with processing paused. Call `resume` to begin. @default false */
+  readonly paused?: boolean;
   /**
-   * Unique name for the resource queue. Use a **string literal** so it becomes
-   * the first type parameter of {@link QueueRef} and lines up with `Effect.provide` / `Layer`.
+   * Process each item. Receives a guarded {@link EffectContext} for spawning
+   * derived work. The exit of this effect determines success/failure for the item.
    */
-  readonly name: Name;
-  // ========== Processing ==========
-
+  readonly effect: (
+    item: T,
+    ctx: EffectContext<T>,
+  ) => Effect.Effect<R, E>;
   /**
-   * Effect to execute for each item
+   * Handle each item's result. **Always forked** — runs in its own fiber and
+   * never blocks the worker from processing the next item.
    *
-   * @param item - Item to process
-   * @returns Effect with success type `R`, failure type `E`, and service
-   * environment `RItem` (defaults to `never` when omitted).
-   * @remarks
-   * **Worker behavior:** The queue runs this effect with `Effect.exit`. Failures
-   * and defects do not crash the worker; the outcome is turned into a value-level
-   * `Effect<R, E>` (`Effect.succeed` / `Effect.failCause`) and passed to
-   * {@link QueueResourceConfig}'s `forkWith` when configured.
+   * Receives the item, its `Exit`, and a {@link HandlerContext} with `retry`.
+   * There is no automatic retry — the handler decides retry policy.
    *
-   * **What counts as `E`:** Only the effect’s **failure channel** (the second type
-   * argument of `Effect.Effect<R, E>`). That is how TypeScript models errors —
-   * not whether you use `Effect.fail` specifically.
+   * When absent, failures are logged with a warning.
    */
-  readonly effect: (item: T) => Effect.Effect<R, E, RItem>;
-
-  // ========== Queue configuration ==========
-
-  /**
-   * Maximum number of items the queue can hold
-   *
-   * @defaultValue 50000
-   * @remarks
-   * When the queue is full, adding new items will block until space is available.
-   * This prevents memory issues from unlimited growth.
-   */
-  capacity?: number;
-
-  // ========== Concurrency Control ==========
-
-  /**
-   * Number of items to process concurrently
-   *
-   * @defaultValue 5
-   * @remarks
-   * Controls how many worker fibers process items in parallel.
-   * Higher values increase throughput but use more resources.
-   */
+  readonly handler?: (
+    item: T,
+    exit: Exit.Exit<R, E>,
+    ctx: HandlerContext<T>,
+  ) => Effect.Effect<void>;
+  /** Max items processing concurrently (worker count). @default 5 */
   readonly concurrency?: number;
-
-  // ========== Rate Limiting ==========
-
+  /** Max items per priority queue (bounded backpressure). @default 50_000 */
+  readonly capacity?: number;
   /**
-   * Throttle configuration for rate limiting
-   *
-   * @defaultValue { limit: 1, duration: Duration.seconds(1) }
-   * @remarks
-   * Controls how frequently items can be processed:
-   * - `limit`: Maximum number of items to process
-   * - `duration`: Within this time period
-   *
-   * Example: `{ limit: 10, duration: Duration.minutes(1) }` allows 10 items per minute.
-   * Use this to prevent overwhelming external APIs or services.
+   * Extract a deduplication key from each item. When set, items with a key
+   * already in-flight (enqueued or processing) are silently dropped.
+   * The key is released after processing completes (including handler).
    */
-  readonly throttle?: {
-    /** Maximum number of operations allowed per duration */
-    readonly limit: number;
-    /** Time period for the limit */
-    readonly duration: Duration.Duration;
-  };
-
-  // ========== Persistence ==========
-
+  readonly key?: (item: T) => string;
   /**
-   * Function to cache/persist items when added
-   *
-   * @param item - Item(s) being added
-   * @param queue - The QueueResource instance (allows checking queue state)
-   * @remarks
-   * Called immediately when items are added to the queue (before processing).
-   * NOT called for items from {@link refill}.
-   * Use for saving items to database for crash recovery.
+   * Max times an item may be re-enqueued via `ctx.retry` in the handler.
+   * When exhausted, `onRetryExhausted` is called instead of re-enqueuing.
+   * @default Infinity
    */
-  cache?: (
-    item: T | readonly T[],
-    queue: QueueRef<Name, T, R, E>
-  ) => Effect.Effect<void, Error>;
-
+  readonly retries?: number;
+  /** Called when `ctx.retry` is invoked but the retry limit is reached. */
+  readonly onRetryExhausted?: (
+    item: T,
+    cause: Cause.Cause<E>,
+  ) => Effect.Effect<void>;
   /**
-   * Effect to refill queue from cache/database
-   *
-   * @param queue - The {@link QueueRef} (allows adding items and checking queue state)
-   * @returns Effect that loads and re-adds items
-   * @remarks
-   * Called automatically when the queue becomes empty. Use to reload
-   * pending items from database after a restart. Items added here do NOT
-   * trigger {@link cache}. Use queue.add(), queue.next(), or queue.deffered() to
-   * add items at different priority levels.
+   * Persist items on enqueue (before processing). Called with the batch and
+   * priority level. Errors are logged and swallowed (fire-and-forget).
    */
-  refill?: (queue: QueueRef<Name, T, R, E>) => Effect.Effect<void, Error>;
+  readonly persist?: (
+    items: ReadonlyArray<T>,
+    priority: Priority,
+  ) => Effect.Effect<void>;
+  /**
+   * Refill the queue from an external source when all priority queues are empty.
+   * Receives the queue handle for re-enqueuing. Errors are logged and swallowed.
+   */
+  readonly refill?: (queue: QueueHandle<T, R, E>) => Effect.Effect<void>;
+  /**
+   * Hook: fired after item(s) are enqueued. Receives the batch and priority.
+   * Fire-and-forget — errors are logged and swallowed.
+   */
+  readonly onEnqueue?: (
+    items: ReadonlyArray<T>,
+    priority: Priority,
+  ) => Effect.Effect<void>;
+  /**
+   * Hook: fired after each item's effect completes. Receives the item, its
+   * Exit, and the elapsed Duration. Runs in a forked fiber (non-blocking).
+   * Errors are logged and swallowed.
+   */
+  readonly onComplete?: (
+    item: T,
+    exit: Exit.Exit<R, E>,
+    elapsed: Duration.Duration,
+  ) => Effect.Effect<void>;
+  /**
+   * Hook: fired when all priority queues become empty (after drain, not idle).
+   * Fire-and-forget — errors are logged and swallowed.
+   */
+  readonly onEmpty?: Effect.Effect<void>;
 }
 
+// ============================================================================
+// Errors
+// ============================================================================
+
 /**
- * Configuration for QueueResource
- *
- * @remarks
- * Use with {@link QueueResource.make}.
- *
- * **`forkWith` and `E`:** If the item {@link QueueResourceConfigBase.effect | effect}
- * can fail (`[E] extends [never]` is false), `forkWith` is **required**. It
- * receives `forked: Effect<R, E>` — the same `R` and `E` as the item effect —
- * and must return **`Effect<void, never, RFork>`**: **success must be `void`** and
- * the **error type must be `never`**, so you eliminate `E` using Effect’s APIs
- * (`catchTag`, `catchAll`, `orElse`, etc.). **`RFork`** is the **requirements**
- * context your handler needs (e.g. logger, DB); it is inferred from the returned
- * effect.
- *
- * **Scope shutdown:** Each `forkWith` run is executed in a **forked fiber**.
- * Those fibers are tracked; when the queue’s `Effect.scoped` scope ends, a
- * finalizer **awaits** any still-running `forkWith` fibers so follow-up work can
- * finish before teardown.
- *
- * @typeParam T - Type of items to process
- * @typeParam R - Success type produced by the item effect
- * @typeParam E - Error type of the item effect
- * @typeParam RFork - Environment required by the effect returned from `forkWith`
- * @typeParam RItem - Environment required by each item {@link QueueResourceConfigBase.effect | effect}
- * @typeParam Name - String literal for {@link QueueResourceConfigBase.name} (inferred)
+ * Indicates an enqueue was attempted after the queue was shut down.
+ * In practice this is logged as a warning and the items are dropped —
+ * this error type exists for programmatic detection in tests/monitoring.
  *
  * @public
  */
-export type QueueResourceConfig<
-  T,
-  R,
-  E = never,
-  RFork = never,
-  RItem = never,
-  Name extends string = string,
-> = QueueResourceConfigBase<T, R, E, RItem, Name> &
-  ([E] extends [never]
-    ? {
-        /**
-         * Optional follow-up run in a **fork** after each item. The queue wraps the
-         * returned effect in `catchAll` so defects in the handler do not kill workers.
-         *
-         * @param forked - Item outcome as `Effect.succeed` / `Effect.failCause` (same `R`, `E` as `effect`)
-         * @param item - Item that was processed
-         * @param queue - Queue instance (lifecycle, re-enqueue, etc.)
-         * @remarks Return **`Effect<void, never, RFork>`** — handle `forked` until errors are `never`.
-         */
-        readonly forkWith?: (
-          forked: Effect.Effect<R, E>,
-          item: T,
-          queue: QueueRef<Name, T, R, E>
-        ) => Effect.Effect<void, never, RFork>;
-      }
-    : {
-        /**
-         * **Required** when the item effect has a non-`never` error type `E`.
-         * Runs in a **fork** after each item; the queue wraps with `catchAll` so
-         * handler bugs do not crash workers.
-         *
-         * @param forked - Item outcome as `Effect.succeed` / `Effect.failCause` (same `R`, `E` as `effect`)
-         * @param item - Item that was processed
-         * @param queue - Queue instance (lifecycle, re-enqueue, etc.)
-         * @remarks Must return **`Effect<void, never, RFork>`**. Narrow tagged errors with
-         * `catchTag` and cover the rest with `catchAll` until `E` is gone.
-         */
-        readonly forkWith: (
-          forked: Effect.Effect<R, E>,
-          item: T,
-          queue: QueueRef<Name, T, R, E>
-        ) => Effect.Effect<void, never, RFork>;
-      });
+export class QueueShutdownError extends Data.TaggedError(
+  "QueueShutdownError",
+)<{
+  readonly queue: string;
+}> {}
 
 // ============================================================================
-// QueueResource Factory
+// Backwards-compat type alias for ProcessGroup
+// ============================================================================
+
+
+// ============================================================================
+// Internal Utilities
+// ============================================================================
+
+/** Convert any `Iterable<A>` to a concrete array for indexed access. */
+function iterableToArray<A>(input: Iterable<A>): ReadonlyArray<A> {
+  return Array.from(input);
+}
+
+// ============================================================================
+// Internal Item Wrapper
 // ============================================================================
 
 /**
- * Create a QueueResource effect (internal implementation)
- * 
- * @internal
- * @remarks
- * Internal function for creating the QueueResource effect. Use {@link QueueResource.make}
- * for the public API.
- * 
- * Creates a scoped QueueResource with:
- * - Three priority levels (high, normal, low)
- * - Concurrent workers
- * - Rate limiting
- * - Automatic cache persistence
- * - Item outcomes via `Effect.exit`, optional `forkWith`, and fork fiber finalizer
- * - Automatic refill on empty
- * 
- * @typeParam T - Type of items to process
- * @typeParam R - Success type produced by the item effect
- * @typeParam E - Error type of the item effect
- * @typeParam RFork - Environment required by `forkWith`'s returned effect
- * @typeParam RItem - Environment required by each item `effect`
- *
- * @param config - Queue configuration (without name)
- * @returns Scoped effect producing a QueueResource
+ * Internal envelope wrapping each item with queue metadata.
+ * This is stripped before passing items to the user's `effect` callback.
  */
-const makeQueueResourceEffect = <T, R, E, RFork = never, RItem = never, Name extends string = string>(
-  config: Omit<QueueResourceConfig<T, R, E, RFork, RItem, Name>, "name">
+interface InternalItem<T> {
+  readonly item: T;
+  /** Number of times this item has been re-enqueued via retry. */
+  readonly retries: number;
+  /** Priority level the item was originally enqueued at. */
+  readonly priority: Priority;
+  /** Timestamp (ms since epoch) when the item first entered the queue. */
+  readonly enqueuedAt: number;
+  /** Cached dedup key (avoids recomputing `config.key` on each check). */
+  readonly key: string | undefined;
+}
+
+// ============================================================================
+// Core Implementation
+// ============================================================================
+
+/**
+ * Internal factory: creates the scoped Effect that produces a {@link QueueHandle}.
+ *
+ * Architecture:
+ * - Three bounded `Queue<InternalItem<T>>` (one per priority level)
+ * - N worker fibers (managed by `FiberSet`) that loop: latch → take → latch → process
+ * - `Latch` gates worker entry (pause/resume)
+ * - `Deferred` wake signal for non-blocking empty-queue wait (avoids priority inversion)
+ * - `Semaphore` for concurrency control within the worker pool
+ * - Handler effects are forked into a separate `FiberSet` (never block workers)
+ */
+const makeQueueEffect = <T, R, E>(
+  config: QueueResourceConfig<T, R, E>,
 ) =>
   Effect.gen(function* () {
-      const {
-        effect: processor,
-        capacity: queueCapacity = 50000,
-        concurrency: semaphore = 5,
-        throttle = { limit: 1, duration: Duration.seconds(1) },
-        cache: cacheFunction,
-        forkWith,
-        refill: refillFunction,
-      } = config;
+    const queueName = config.name ?? "anonymous";
+    const concurrency = config.concurrency ?? 5;
+    const capacity = config.capacity ?? 50_000;
+    const maxRetries = config.retries ?? Infinity;
 
-      // Create internal priority queues
-      const [high, regular, low] = yield* Effect.all(
-        [
-          Queue.bounded<T>(queueCapacity),
-          Queue.bounded<T>(queueCapacity),
-          Queue.bounded<T>(queueCapacity),
-        ],
-        {
-          concurrency: 3,
+    // ─── Allocate internal state ───
+    // Three bounded queues: one per priority level. Backpressure at `capacity`.
+    const highQueue = yield* Queue.bounded<InternalItem<T>>(capacity);
+    const normalQueue = yield* Queue.bounded<InternalItem<T>>(capacity);
+    const lowQueue = yield* Queue.bounded<InternalItem<T>>(capacity);
+
+    // Latch: open = workers run, closed = workers block before next item.
+    // Starts closed when `paused: true` so items can accumulate before processing.
+    const latch = yield* Latch.make(!(config.paused ?? false));
+
+    // Concurrency gate: workers acquire a permit before processing.
+    const semaphore = yield* Semaphore.make(concurrency);
+
+    // Counters and state flags
+    const completedCount = yield* Ref.make(0);
+    const isShutdownRef = yield* Ref.make(false);
+
+    // Dedup: set of keys currently in-flight (enqueued or processing).
+    // A key is added on enqueue and removed after processing completes.
+    const activeKeys = yield* Ref.make(HashSet.empty<string>());
+
+    // Wake signal: completed when items arrive, workers blocked on empty queue
+    // await this. Recreated after each signal (single-use Deferred pattern).
+    let wakeSignal = yield* Deferred.make<void>();
+
+    // Managed fiber collections. Scope close interrupts all fibers automatically.
+    const workerFibers = yield* FiberSet.make<void>();
+    const handlerFibers = yield* FiberSet.make<void>();
+
+    yield* Effect.logDebug(`Queue "${queueName}" initializing: concurrency=${String(concurrency)}, capacity=${String(capacity)}`);
+
+    // ─── Internal: optional ProcessStore analytics ───
+    // If ProcessStore is available in context, emit events. If not, silent no-op.
+    // This makes analytics automatic when ProcessStore is provided, but never required.
+
+    const storeOption = yield* Effect.serviceOption(ProcessStore);
+    let eventSeq = 0;
+
+    // ProcessStore.AnalyticsEventBase requires `occurredAt: Date`. We source time
+    // from Effect's Clock then construct the Date. The dateFromMillis helper isolates
+    // the Date constructor to satisfy the globalDate lint (time IS clock-sourced).
+    const dateFromMillis = (ms: number) => new Date(ms); // eslint-disable-line effect/globalDate
+
+    const recordItemEvent = (
+      status: QueueItemStatus,
+      priority: Priority,
+      durationMs: number,
+      attempts: number,
+      error?: string,
+    ): Effect.Effect<void> => {
+      if (Option.isNone(storeOption)) return Effect.void;
+      return Effect.gen(function* () {
+        const now = yield* Effect.clockWith((c) => c.currentTimeMillis);
+        eventSeq++;
+        const event: QueueItemCompletedEvent = {
+          id: `${queueName}-item-${String(eventSeq)}`,
+          type: "queue.item.completed",
+          occurredAt: dateFromMillis(now),
+          entityType: "queue",
+          entityId: queueName,
+          item: { status, priority, durationMs, attempts, error },
+        };
+        yield* storeOption.value.append(event);
+      }).pipe(Effect.ignore);
+    };
+
+    const recordLifecycleEvent = (
+      tag: QueueLifecycleTag,
+      itemsCleared?: number,
+    ): Effect.Effect<void> => {
+      if (Option.isNone(storeOption)) return Effect.void;
+      return Effect.gen(function* () {
+        const now = yield* Effect.clockWith((c) => c.currentTimeMillis);
+        eventSeq++;
+        const event: QueueLifecycleChangedEvent = {
+          id: `${queueName}-lifecycle-${String(eventSeq)}`,
+          type: "queue.lifecycle.changed",
+          occurredAt: dateFromMillis(now),
+          entityType: "queue",
+          entityId: queueName,
+          lifecycle: { tag, itemsCleared },
+        };
+        yield* storeOption.value.append(event);
+      }).pipe(Effect.ignore);
+    };
+
+    // ─── Internal: wake signal ───
+
+    /** Complete the current wake signal and allocate a fresh one. */
+    const signalWake = Effect.gen(function* () {
+      yield* Deferred.succeed(wakeSignal, undefined);
+      wakeSignal = yield* Deferred.make<void>();
+    });
+
+    /** Select the internal queue for a given priority level. */
+    const queueForPriority = (priority: Priority) =>
+      priority === "high"
+        ? highQueue
+        : priority === "low"
+          ? lowQueue
+          : normalQueue;
+
+    // ─── Internal: enqueue logic ───
+
+    /**
+     * Core enqueue path. Handles:
+     * 1. Shutdown check (warn + drop)
+     * 2. Dedup key check (skip duplicates)
+     * 3. Offer to the target priority queue
+     * 4. Wake sleeping workers
+     * 5. Fire hooks (onEnqueue, persist)
+     */
+    const enqueueInternal = (
+      items: ReadonlyArray<T>,
+      priority: Priority,
+      retries = 0,
+      enqueuedAt?: number,
+    ): Effect.Effect<void> =>
+      Effect.gen(function* () {
+        const shutdown = yield* Ref.get(isShutdownRef);
+        if (shutdown) {
+          yield* Effect.logWarning(
+            `Enqueue after shutdown in queue "${queueName}", item(s) dropped`,
+          );
+          return;
         }
-      );
 
-      // Create semaphore for concurrency control
-      const sem = yield* Semaphore.make(semaphore);
+        const toEnqueue: Array<InternalItem<T>> = [];
 
-      // Create global throttler - calculate min duration from throttle config
-      // If limit=10 per minute, min duration = 1 minute / 10 = 6 seconds between worker executions
-      // If semaphore=5, min duration = 6 seconds / 5 ≈ 1.2 seconds between items
-      const minDuration =
-        Duration.toMillis(throttle.duration) / throttle.limit / semaphore;
-      const throttler = yield* makeGlobalThrottler(
-        Duration.millis(minDuration)
-      );
+        for (const item of items) {
+          // Dedup: skip items whose key is already in-flight
+          if (config.key !== undefined) {
+            const k = config.key(item);
+            const keys = yield* Ref.get(activeKeys);
+            if (HashSet.has(keys, k)) continue;
+            yield* Ref.update(activeKeys, HashSet.add(k));
+          }
+          toEnqueue.push({
+            item,
+            retries,
+            priority,
+            enqueuedAt: enqueuedAt ?? (yield* Effect.clockWith((c) => c.currentTimeMillis)),
+            key: config.key !== undefined ? config.key(item) : undefined,
+          });
+        }
 
-      // Processing state
-      const isRunning = yield* Ref.make(true);
-      const isPaused = yield* Ref.make(false);
-      const workerCount = yield* Ref.make(0);
-      const processedCount = yield* Ref.make(0);
-      const isRebuilding = yield* Ref.make(false);
+        if (toEnqueue.length === 0) return;
 
-      const forkedFibers = yield* Ref.make(
-        new Set<Fiber.Fiber<void>>()
-      );
+        yield* Queue.offerAll(queueForPriority(priority), toEnqueue);
+        yield* signalWake;
 
-      // Store workers in closure variable (will be populated later)
-      let workers: readonly Fiber.Fiber<void>[] = [];
+        // Fire-and-forget hooks
+        if (config.onEnqueue !== undefined) {
+          yield* config
+            .onEnqueue(toEnqueue.map((i) => i.item), priority)
+            .pipe(Effect.ignore);
+        }
+        if (config.persist !== undefined) {
+          yield* config
+            .persist(toEnqueue.map((i) => i.item), priority)
+            .pipe(Effect.ignore);
+        }
+      });
 
-      // Create the queue ref (before processItem so it can be passed to forkWith)
-      const queue: QueueRef<Name, T, R, E> = {
-        next: (item: T | readonly T[]) =>
-          Effect.gen(function* () {
-            // Start caching in background (non-blocking)
-            if (cacheFunction !== undefined) {
-              yield* Effect.forkChild(
-                cacheFunction(item, queue).pipe(
-                  Effect.catch(() => Effect.void) // Don't fail on cache errors
-                )
-              );
-            }
+    /** Public enqueue: convert Iterable to array, delegate to internal. */
+    const enqueuePublic = (
+      items: Iterable<T>,
+      priority: Priority,
+    ): Effect.Effect<void> => enqueueInternal(iterableToArray(items), priority);
 
-            // Add to queue immediately (don't wait for cache)
-            if (Array.isArray(item)) {
-              yield* Queue.offerAll(high, item);
-            } else {
-              yield* Queue.offer(high, item as T);
-            }
-          }),
+    // ─── Internal: EffectContext (guarded) ───
 
-        add: (item: T | readonly T[]) =>
-          Effect.gen(function* () {
-            // Start caching in background (non-blocking)
-            if (cacheFunction !== undefined) {
-              yield* Effect.forkChild(
-                cacheFunction(item, queue).pipe(
-                  Effect.catch(() => Effect.void) // Don't fail on cache errors
-                )
-              );
-            }
-
-            // Add to queue immediately (don't wait for cache)
-            if (Array.isArray(item)) {
-              yield* Queue.offerAll(regular, item);
-            } else {
-              yield* Queue.offer(regular, item as T);
-            }
-          }),
-
-        deffered: (item: T | readonly T[]) =>
-          Effect.gen(function* () {
-            // Start caching in background (non-blocking)
-            if (cacheFunction !== undefined) {
-              yield* Effect.forkChild(
-                cacheFunction(item, queue).pipe(
-                  Effect.catch(() => Effect.void) // Don't fail on cache errors
-                )
-              );
-            }
-
-            // Add to queue immediately (don't wait for cache)
-            if (Array.isArray(item)) {
-              yield* Queue.offerAll(low, item);
-            } else {
-              yield* Queue.offer(low, item as T);
-            }
-          }),
-
-        size: () =>
-          Effect.gen(function* () {
-            const total =
-              (yield* Queue.size(high)) +
-              (yield* Queue.size(regular)) +
-              (yield* Queue.size(low));
-            return total < 0 ? 0 : total;
-          }),
-
-        sizeByPriority: () =>
-          Effect.gen(function* () {
-            const highSize = yield* Queue.size(high);
-            const normalSize = yield* Queue.size(regular);
-            const lowSize = yield* Queue.size(low);
-            return {
-              high: highSize < 0 ? 0 : highSize,
-              normal: normalSize < 0 ? 0 : normalSize,
-              low: lowSize < 0 ? 0 : lowSize,
-            };
-          }),
-
-        isEmpty: () =>
-          Effect.gen(function* () {
-            const highSize = yield* Queue.size(high);
-            const normalSize = yield* Queue.size(regular);
-            const lowSize = yield* Queue.size(low);
-            return highSize === 0 && normalSize === 0 && lowSize === 0;
-          }),
-
-        // Status and control methods
-        getCompleted: () => Ref.get(processedCount),
-        pause: () => Ref.set(isPaused, true),
-        resume: () => Ref.set(isPaused, false),
-        shutdown: () =>
-          Effect.gen(function* () {
-            yield* Ref.set(isRunning, false);
-            yield* Ref.set(isPaused, false);
-            // Don't shutdown queue permanently - just stop the workers
-            // This allows the queue to be restarted later
-            yield* Effect.logDebug(
-              "Queue stopped - workers will exit gracefully"
-            );
-          }),
-        restart: () =>
-          Effect.gen(function* () {
-            // Clear all pending items from all priority levels
-            const highItems = yield* drainQueue(high);
-            const regularItems = yield* drainQueue(regular);
-            const lowItems = yield* drainQueue(low);
-            const totalCleared =
-              highItems.length + regularItems.length + lowItems.length;
-
-            // Reset processed count
-            yield* Ref.set(processedCount, 0);
-
-            yield* Effect.logInfo(
-              `Queue restarted - cleared ${totalCleared} pending items, reset count to 0`
-            );
-          }),
-
-        // Keep workers alive by storing them in the returned object
-        // This prevents garbage collection of the worker fibers
-        get _workers() {
-          return workers;
-        },
+    /**
+     * Build the guarded context passed to the user's `effect` callback.
+     * Self-enqueue detection uses reference equality and (if configured) key equality.
+     */
+    const makeEffectContext = (
+      internal: InternalItem<T>,
+    ): EffectContext<T> => {
+      const isSameItem = (candidate: T): boolean => {
+        if (candidate === internal.item) return true;
+        if (config.key !== undefined && internal.key !== undefined && config.key(candidate) === internal.key)
+          return true;
+        return false;
       };
 
-      /**
-       * Run the item effect to completion, bump the processed counter, then fork
-       * `forkWith(forked, …)` when set (`catchAll` on the returned effect).
-       * `forked` mirrors success/failure without failing the worker.
-       */
-      const processItem = (item: T) =>
-        throttler(
-          Effect.gen(function* () {
-            yield* Effect.logDebug(`Processing item: ${String(item)}`);
-
-            const exit = yield* Effect.exit(processor(item));
-
-            const forked = Exit.isSuccess(exit)
-              ? Effect.succeed(exit.value)
-              : Effect.failCause(exit.cause);
-
-            yield* Ref.update(processedCount, (n) => n + 1);
-
-            if (forkWith !== undefined) {
-              const fiber = yield* Effect.forkChild(
-                forkWith(forked, item, queue).pipe(
-                  Effect.ensuring(
-                    Ref.update(forkedFibers, (fibers) => {
-                      const next = new Set(fibers);
-                      next.delete(fiber);
-                      return next;
-                    })
-                  )
-                )
-              );
-              yield* Ref.update(forkedFibers, (fibers) =>
-                new Set(fibers).add(fiber)
-              );
-            }
-
-            yield* Effect.logDebug(`Completed item: ${String(item)}`);
-          })
-        ).pipe(sem.withPermits(1));
-
-      // Event-driven worker that blocks until items available
-      const createWorker = () =>
+      const guardedEnqueue = (
+        candidates: Iterable<T>,
+        priority: Priority,
+      ): Effect.Effect<void> =>
         Effect.gen(function* () {
-          const currentWorkers = yield* Ref.get(workerCount);
-          yield* Ref.set(workerCount, currentWorkers + 1);
+          const items = iterableToArray(candidates);
+          const safe = items.filter((c) => !isSameItem(c));
+          if (safe.length < items.length) {
+            yield* Effect.logWarning(
+              `Self-enqueue detected in queue "${queueName}", item(s) dropped`,
+            );
+          }
+          if (safe.length > 0) {
+            yield* enqueueInternal(safe, priority);
+          }
+        });
 
+      return {
+        add: (items) => guardedEnqueue(items, "normal"),
+        prioritize: (items) => guardedEnqueue(items, "high"),
+        defer: (items) => guardedEnqueue(items, "low"),
+        attempts: internal.retries + 1,
+        enqueuedAt: internal.enqueuedAt,
+        priority: internal.priority,
+      };
+    };
+
+    // ─── Internal: HandlerContext ───
+
+    /**
+     * Build the context passed to the user's `handler` callback.
+     * Includes `retry` which re-enqueues the item with an incremented retry counter.
+     */
+    const makeHandlerContext = (
+      internal: InternalItem<T>,
+      exit: Exit.Exit<R, E>,
+    ): HandlerContext<T> => ({
+      retry: Effect.gen(function* () {
+        if (internal.retries >= maxRetries) {
+          if (config.onRetryExhausted !== undefined) {
+            const cause = Exit.isFailure(exit) ? exit.cause : Cause.empty;
+            yield* config.onRetryExhausted(internal.item, cause).pipe(
+              Effect.ignore,
+            );
+          }
+          yield* recordItemEvent("exhausted", internal.priority, 0, internal.retries + 1);
           yield* Effect.logDebug(
-            `Worker started (total: ${currentWorkers + 1})`
+            `Retry exhausted for item in queue "${queueName}" after ${String(internal.retries + 1)} attempts`,
           );
-
-          return yield* Effect.forever(
-            Effect.gen(function* () {
-              const running = yield* Ref.get(isRunning);
-              const paused = yield* Ref.get(isPaused);
-
-              if (running === false) {
-                yield* Effect.logDebug("Worker stopped - isRunning is false");
-                return yield* Effect.void;
-              }
-
-              if (paused === true) {
-                yield* Effect.logDebug("Worker paused - waiting for resume");
-                yield* Effect.sleep(Duration.millis(500)); // Wait a bit before checking again
-                return yield* Effect.void;
-              }
-
-              yield* Effect.logDebug("Worker waiting for item...");
-              // Try to get next item - this blocks until an item is available
-              const nextItem = yield* getNextItemBlocking();
-              yield* Effect.logDebug(`Worker got item`);
-              yield* processItem(nextItem);
-            })
-          );
-        }).pipe(
-          Effect.ensuring(
-            Effect.gen(function* () {
-              const currentWorkers = yield* Ref.get(workerCount);
-              yield* Ref.set(workerCount, currentWorkers - 1);
-              yield* Effect.logDebug(
-                `Worker stopped (total: ${currentWorkers - 1})`
-              );
-            })
-          )
+          return;
+        }
+        yield* recordItemEvent("retried", internal.priority, 0, internal.retries + 1);
+        yield* enqueueInternal(
+          [internal.item],
+          internal.priority,
+          internal.retries + 1,
+          internal.enqueuedAt,
         );
+      }),
+      add: (items) => enqueuePublic(items, "normal"),
+      prioritize: (items) => enqueuePublic(items, "high"),
+      defer: (items) => enqueuePublic(items, "low"),
+      attempts: internal.retries + 1,
+      enqueuedAt: internal.enqueuedAt,
+      priority: internal.priority,
+    });
 
-      // Get next item with blocking behavior - maintains priority order
-      const getNextItemBlocking = (): Effect.Effect<T> =>
+    // ─── Internal: priority dispatch ───
+
+    /**
+     * Take the next item in strict priority order (high → normal → low).
+     * If all queues are empty, blocks on the wake signal then re-polls.
+     * This avoids the priority inversion that `Effect.race(take, take, take)` would cause.
+     */
+    const takeNext: Effect.Effect<InternalItem<T>> = Effect.gen(function* () {
+      const high = yield* Queue.poll(highQueue);
+      if (Option.isSome(high)) return high.value;
+
+      const normal = yield* Queue.poll(normalQueue);
+      if (Option.isSome(normal)) return normal.value;
+
+      const low = yield* Queue.poll(lowQueue);
+      if (Option.isSome(low)) return low.value;
+
+      // All empty — wait for wake signal then re-poll in priority order
+      yield* Deferred.await(wakeSignal);
+      return yield* takeNext;
+    });
+
+    // ─── Internal: item processing ───
+
+    /**
+     * Process a single item within the semaphore gate.
+     * 1. Run user's `effect` and capture Exit
+     * 2. Increment completed counter
+     * 3. Release dedup key
+     * 4. Fire onComplete hook (forked)
+     * 5. Run handler or log unhandled failure (forked)
+     */
+    const processItem = (internal: InternalItem<T>): Effect.Effect<void> =>
+      semaphore.withPermits(1)(
         Effect.gen(function* () {
-          // First try polling each priority level
-          const highItem = yield* Queue.poll(high);
-          if (highItem._tag === "Some") {
-            yield* Effect.logDebug("📦 Got high priority item");
-            return highItem.value;
-          }
+          const start = yield* Effect.clockWith((c) => c.currentTimeMillis);
+          const ctx = makeEffectContext(internal);
+          const exit = yield* Effect.exit(config.effect(internal.item, ctx));
+          const end = yield* Effect.clockWith((c) => c.currentTimeMillis);
+          const elapsed = Duration.millis(end - start);
 
-          const regularItem = yield* Queue.poll(regular);
-          if (regularItem._tag === "Some") {
-            yield* Effect.logDebug("📦 Got regular priority item");
-            return regularItem.value;
-          }
+          yield* Ref.update(completedCount, (n) => n + 1);
 
-          const lowItem = yield* Queue.poll(low);
-          if (lowItem._tag === "Some") {
-            yield* Effect.logDebug("📦 Got low priority item");
-            return lowItem.value;
-          }
-
-          // All priority levels empty, try to rebuild or wait
-          return yield* handleEmptyQueue();
-        });
-
-      // Rebuild from database and then wait for next item
-      const handleEmptyQueue = (): Effect.Effect<T> =>
-        Effect.gen(function* () {
-          yield* Effect.logDebug("Queue is empty, waiting for more items");
-
-          const rebuilding = yield* Ref.get(isRebuilding);
-
-          if (refillFunction !== undefined && rebuilding === false) {
-            // Start refill
-            yield* Ref.set(isRebuilding, true);
-            yield* Effect.logInfo("🔄 Refilling queue from database...");
-
-            yield* refillFunction(queue).pipe(
-              Effect.catch(() => Effect.void) // Don't fail on refill errors
-            );
-
-            yield* Ref.set(isRebuilding, false);
-            yield* Effect.logInfo("✅ Refill completed");
-
-            // After refill, try to get an item using priority order
-            // const highItem = yield* Queue.poll(high);
-            // if (highItem._tag === "Some") {
-            //   return highItem.value;
-            // }
-
-            // const regularItem = yield* Queue.poll(regular);
-            // if (regularItem._tag === "Some") {
-            //   return regularItem.value;
-            // }
-
-            // const lowItem = yield* Queue.poll(low);
-            // if (lowItem._tag === "Some") {
-            //   return lowItem.value;
-            // }
-          }
-
-          const result = yield* Effect.race(
-            Effect.race(
-              Effect.gen(function* () {
-                const item = yield* Queue.take(high);
-                return { queue: "high", item };
-              }),
-              Effect.gen(function* () {
-                const item = yield* Queue.take(regular);
-                return { queue: "regular", item };
-              })
-            ),
-            Effect.gen(function* () {
-              const item = yield* Queue.take(low);
-              return { queue: "low", item };
-            })
+          // Record to ProcessStore (if available)
+          yield* recordItemEvent(
+            Exit.isSuccess(exit) ? "completed" : "failed",
+            internal.priority,
+            Duration.toMillis(elapsed),
+            internal.retries + 1,
+            Exit.isFailure(exit) ? Cause.pretty(exit.cause) : undefined,
           );
-          return result.item;
-        });
 
-      // Start workers dynamically based on semaphore
-      const startWorkers = () =>
-        Effect.gen(function* () {
-          const workers = [];
-          for (let i = 0; i < semaphore; i++) {
-            const worker = yield* Effect.forkScoped(createWorker());
-            workers.push(worker);
+          // Release dedup key so future items with same key can enter
+          if (config.key !== undefined && internal.key !== undefined) {
+            yield* Ref.update(activeKeys, HashSet.remove(internal.key));
           }
-          return workers;
-        });
 
-      // Start workers and assign to closure variable
-      workers = yield* startWorkers();
-
-      /** Wait for in-flight `forkWith` fibers before the scoped queue is torn down. */
-      yield* Effect.addFinalizer((_exit) =>
-        Effect.gen(function* () {
-          const fibers = yield* Ref.get(forkedFibers);
-          if (fibers.size > 0) {
-            yield* Effect.logInfo(
-              `Waiting for ${fibers.size} forked fibers to complete...`
+          // Fire onComplete hook in a managed fiber (non-blocking)
+          if (config.onComplete !== undefined) {
+            yield* FiberSet.run(handlerFibers)(
+              config.onComplete(internal.item, exit, elapsed).pipe(Effect.ignore),
             );
-            yield* Fiber.joinAll(Array.from(fibers));
           }
-        })
+
+          // Route to handler or log unhandled failure
+          if (config.handler !== undefined) {
+            const handlerCtx = makeHandlerContext(internal, exit);
+            yield* FiberSet.run(handlerFibers)(
+              config.handler(internal.item, exit, handlerCtx).pipe(Effect.ignore),
+            );
+          } else if (Exit.isFailure(exit)) {
+            yield* Effect.logWarning(
+              `Item failed in queue "${queueName}", no handler configured`,
+            ).pipe(Effect.annotateLogs("cause", Cause.pretty(exit.cause)));
+          }
+        }),
       );
 
-      // Return the QueueResource instance
-      return queue;
-    })
-  ;
+    // ─── Internal: worker loop ───
+
+    /**
+     * Each worker loops forever:
+     * 1. Check shutdown → interrupt if true
+     * 2. Await latch (blocks when paused)
+     * 3. Take next item (blocks when all queues empty)
+     * 4. Await latch again (in case pause happened during take)
+     * 5. Process item (within semaphore gate)
+     *
+     * The double latch-await ensures that items taken during a race with
+     * `pause` are held until resume, preserving priority ordering.
+     */
+    const workerLoop = (workerId: number): Effect.Effect<void> =>
+      Effect.annotateLogs(
+        Effect.forever(
+          Effect.gen(function* () {
+            const shutdown = yield* Ref.get(isShutdownRef);
+            if (shutdown) return yield* Effect.interrupt;
+
+            yield* latch.await;
+            const internal = yield* takeNext;
+            yield* latch.await;
+            yield* processItem(internal);
+          }),
+        ),
+        { "queue.name": queueName, "queue.worker": String(workerId) },
+      );
+
+    // ─── Start worker pool ───
+
+    for (let i = 0; i < concurrency; i++) {
+      yield* FiberSet.run(workerFibers)(workerLoop(i));
+    }
+
+    yield* recordLifecycleEvent("Started");
+    yield* Effect.logDebug(`Queue "${queueName}" started with ${String(concurrency)} workers`);
+
+    // ─── Build public handle ───
+
+    const queueHandle: QueueHandle<T, R, E> = {
+      // Enqueue delegates — priority is the only difference
+      add: (items) => enqueuePublic(items, "normal"),
+      prioritize: (items) => enqueuePublic(items, "high"),
+      defer: (items) => enqueuePublic(items, "low"),
+
+      // Read all three queue sizes in parallel, combine into total
+      size: Effect.map(
+        Effect.all([Queue.size(highQueue), Queue.size(normalQueue), Queue.size(lowQueue)]),
+        ([h, n, l]) => Math.max(0, h) + Math.max(0, n) + Math.max(0, l),
+      ),
+
+      // Read all three queue sizes in parallel, return per-level breakdown
+      sizes: Effect.map(
+        Effect.all([Queue.size(highQueue), Queue.size(normalQueue), Queue.size(lowQueue)]),
+        ([h, n, l]) => ({
+          high: Math.max(0, h),
+          normal: Math.max(0, n),
+          low: Math.max(0, l),
+        }),
+      ),
+
+      // True when all three priority queues report zero or negative size
+      isEmpty: Effect.map(
+        Effect.all([Queue.size(highQueue), Queue.size(normalQueue), Queue.size(lowQueue)]),
+        ([h, n, l]) => h <= 0 && n <= 0 && l <= 0,
+      ),
+
+      // Counter incremented after each item completes processing
+      completed: Ref.get(completedCount),
+
+      // Close latch → workers block on next iteration before taking items
+      pause: latch.close.pipe(
+        Effect.andThen(recordLifecycleEvent("Paused")),
+        Effect.asVoid,
+      ),
+
+      // Open latch → blocked workers proceed to take + process
+      resume: latch.open.pipe(
+        Effect.andThen(recordLifecycleEvent("Resumed")),
+        Effect.asVoid,
+      ),
+
+      // Mark shutdown → wake sleeping workers (so they see the flag) → record
+      shutdown: Ref.set(isShutdownRef, true).pipe(
+        Effect.andThen(signalWake),
+        Effect.andThen(recordLifecycleEvent("Shutdown")),
+        Effect.andThen(Effect.logInfo(`Queue "${queueName}" shutting down`)),
+      ),
+
+      clear: Effect.gen(function* () {
+        let count = 0;
+        const drain = <A>(q: Queue.Queue<A>): Effect.Effect<void> =>
+          Effect.gen(function* () {
+            const item = yield* Queue.poll(q);
+            if (Option.isSome(item)) {
+              count++;
+              yield* drain(q);
+            }
+          });
+        yield* drain(highQueue);
+        yield* drain(normalQueue);
+        yield* drain(lowQueue);
+        yield* Ref.set(completedCount, 0);
+        yield* recordLifecycleEvent("Cleared", count);
+        yield* Effect.logDebug(`Queue "${queueName}" cleared ${String(count)} items`);
+        return count;
+      }),
+    };
+
+    // ─── Refill: monitor for empty state ───
+
+    if (config.refill !== undefined) {
+      const refillFn = config.refill;
+      yield* FiberSet.run(workerFibers)(
+        Effect.forever(
+          Effect.gen(function* () {
+            const empty = yield* queueHandle.isEmpty;
+            if (empty) {
+              const shutdown = yield* Ref.get(isShutdownRef);
+              if (shutdown) return yield* Effect.interrupt;
+              yield* Effect.logDebug(`Queue "${queueName}" empty, triggering refill`);
+              yield* refillFn(queueHandle).pipe(Effect.ignore);
+              if (config.onEmpty !== undefined) {
+                yield* config.onEmpty.pipe(Effect.ignore);
+              }
+            }
+            yield* Deferred.await(wakeSignal);
+          }),
+        ),
+      );
+    }
+
+    return queueHandle;
+  });
+
+// ============================================================================
+// Public API
+// ============================================================================
 
 /**
- * QueueResource - Managed Effect Execution with Priority Scheduling
- * 
- * @remarks
- * A managed execution system for resource-intensive Effect operations.
- * Provides priority-based scheduling, concurrency control, rate limiting,
- * and comprehensive lifecycle management.
- * 
- * **Features:**
- * - Three priority levels (high, normal, low)
- * - Configurable concurrency and rate limiting  
- * - Automatic persistence and recovery
- * - Optional follow-up via `forkWith` (required when the item effect’s error type `E` is not `never`)
- * - `forkWith` runs in a fork; in-flight forks are awaited when the queue scope ends
- * - Pause/resume/restart capabilities
- * 
- * **Item failures and `forkWith`:**
- * TypeScript uses the item effect’s **`E`** (failure channel) to decide whether
- * `forkWith` is required. Handlers return **`Effect<void, never, RFork>`** — void
- * success and **`E` cleared** in the type system (see {@link QueueResourceConfig}).
+ * QueueResource namespace — managed priority queue with workers.
  *
- * **Usage:**
- * 1. Call `QueueResource.make()` to create a queue service
- * 2. Yield the service tag in your Effects to access the queue
- * 3. Provide the `.layer` when running your program (include any `RFork`
- *    requirements from `forkWith` in your program’s layers)
- * 
- * @example
- * ```typescript
- * import { QueueResource, ProcessGroup } from "@nikscripts/effect-pm";
- * import { Effect, Duration } from "effect";
- * 
- * // Create a resource queue
- * const EmailQueue = QueueResource.make({
- *   name: "email-queue",
- *   effect: (email: Email) => sendEmail(email),
- *   concurrency: 5,
- *   capacity: 1000,
- * });
- * 
- * // Use in your program
- * const program = Effect.gen(function* () {
- *   const queue = yield* EmailQueue;
- *   yield* queue.add([email1, email2, email3]);
- * });
- * 
- * // Provide the layer
- * program.pipe(
- *   Effect.provide(EmailQueue.layer),
- *   Effect.runPromise
- * );
- * ```
- * 
- * @example
- * ```typescript
- * import { Effect, Duration } from "effect";
- *
- * // Success path only (use Effect.tap so logging stays in the same effect)
- * const SuccessQueue = QueueResource.make({
- *   name: "success-queue",
- *   effect: (task: Task) => processTask(task),
- *   forkWith: (forked, _item, _queue) =>
- *     forked.pipe(
- *       Effect.tap((result) => Effect.logInfo(String(result))),
- *       Effect.catch(() => Effect.void)
- *     ),
- * });
- *
- * // Error handling only (example: tagged errors)
- * const ErrorQueue = QueueResource.make({
- *   name: "error-queue",
- *   effect: (task: Task) => processTask(task),
- *   forkWith: (forked, item, _queue) =>
- *     forked.pipe(
- *       Effect.catchTag("DatabaseError", (_error) => saveToDeadLetterQueue(item)),
- *       Effect.catch((_error) => Effect.logError("task failed"))
- *     ),
- * });
- *
- * // Both success and failure handling
- * const FullQueue = QueueResource.make({
- *   name: "full-queue",
- *   effect: (task: Task) => processTask(task),
- *   forkWith: (forked, item, _queue) =>
- *     Effect.gen(function* () {
- *       const result = yield* forked.pipe(
- *         Effect.catchTag("DatabaseError", (_error) => saveToDeadLetterQueue(item)),
- *         Effect.catch((_error) => Effect.logError("task failed")),
- *         Effect.orDie
- *       );
- *       yield* notifyWebhook(result);
- *     }),
- *   cache: (tasks, queue) => saveToDatabase(tasks),
- *   throttle: { limit: 100, duration: Duration.minutes(1) },
- *   refill: (queue) =>
- *     Effect.gen(function* () {
- *       const pending = yield* loadPendingTasks();
- *       yield* queue.add(pending);
- *     }),
- * });
- * ```
- * 
  * @public
  */
 export const QueueResource = {
   /**
-   * Create a QueueResource service
+   * Create a scoped Effect that produces a {@link QueueHandle}.
    *
-   * @typeParam T - Type of items to process
-   * @typeParam R - Success type produced by the item effect
-   * @typeParam E - Error type of the item effect
-   * @typeParam RFork - Requirements of the effect returned from `forkWith` (inferred)
-   * @typeParam RItem - Requirements of each item `effect` (inferred from the handler)
-   * @typeParam Name - Inferred from `name` when it is a string literal (first
-   * type argument of {@link QueueRef}; needed for `Layer` / `Effect.provide` to narrow `R`).
+   * The returned Effect requires `Scope` (workers are scoped fibers).
+   * Use `Layer.effect(tag)(QueueResource.make(config))` or the convenience
+   * helpers `.layer` / `.Service` for standard wiring.
    *
-   * @param config - QueueResource configuration; see {@link QueueResourceConfig}
-   * @returns Service tag with `.layer`. The layer’s requirement type includes
-   * whatever `RFork` your `forkWith` needs, `RItem` for the item processor, and
-   * internal queue dependencies.
+   * @example
+   * ```ts
+   * const queue = yield* QueueResource.make({
+   *   effect: (item) => processItem(item),
+   *   concurrency: 10,
+   * })
+   * ```
    */
-  make: <T, R, E, RFork = never, RItem = never, const Name extends string = string>(
-    config: QueueResourceConfig<T, R, E, RFork, RItem, Name>
+  make: makeQueueEffect,
+
+  /**
+   * Build a `Layer` from a Context tag and config.
+   *
+   * Equivalent to `Layer.effect(tag)(QueueResource.make(config))`.
+   *
+   * @example
+   * ```ts
+   * const MyQueueLive = QueueResource.layer(MyQueue, {
+   *   effect: (item) => processItem(item),
+   *   concurrency: 5,
+   * })
+   * ```
+   */
+  layer: <Self, T, R, E>(
+    tag: Context.Key<Self, QueueHandle<T, R, E>>,
+    config: QueueResourceConfig<T, R, E>,
+  ) => Layer.effect(tag)(makeQueueEffect(config)),
+
+  /**
+   * Class factory: creates a Context tag with a baked-in `.layer`.
+   *
+   * The returned value is both a `Context.Service` (yieldable tag) and has
+   * a `.layer` property for providing the queue to your program.
+   *
+   * @example
+   * ```ts
+   * const EmailQueue = QueueResource.Service<typeof EmailQueue, Email, void, SmtpError>()(
+   *   "@app/EmailQueue",
+   *   { effect: (email) => sendEmail(email), concurrency: 5 },
+   * )
+   *
+   * // Use:
+   * const queue = yield* EmailQueue
+   * Effect.provide(EmailQueue.layer)
+   * ```
+   */
+  Service: <Self, T, R, E = never>() =>
+  <const Name extends string>(
+    name: Name,
+    config: QueueResourceConfig<T, R, E>,
   ) => {
-    const QueueResourceTag = Context.Service<QueueRef<Name, T, R, E>>(config.name);
-
-    const layer = Layer.effect(
-      QueueResourceTag,
-      makeQueueResourceEffect<T, R, E, RFork, RItem, Name>(config),
-    );
-
-    return Object.assign(QueueResourceTag, { layer });
+    const base = Context.Service<Self, QueueHandle<T, R, E>>()(name);
+    const layer = Layer.effect(base)(makeQueueEffect({ ...config, name }));
+    return Object.assign(base, { layer });
   },
+
+  /**
+   * Class factory: creates a pure identity Context tag (no default layer).
+   *
+   * Use with {@link QueueResource.layer} to provide implementations.
+   * Useful for shared contracts, library interfaces, and dependency inversion.
+   *
+   * @example
+   * ```ts
+   * class JobQueue extends QueueResource.Tag<JobQueue, Job, void, JobError>()("@app/JobQueue") {}
+   *
+   * // Provide implementation separately:
+   * const JobQueueLive = QueueResource.layer(JobQueue, { ... })
+   * ```
+   */
+  Tag: <Self, T, R, E = never>() =>
+  <const Name extends string>(name: Name) =>
+    Context.Service<Self, QueueHandle<T, R, E>>()(name),
 };

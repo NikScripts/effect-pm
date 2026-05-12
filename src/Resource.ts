@@ -25,8 +25,8 @@ export const Resource = {
   makeHttpApiClient: HttpApiResource.make,
   /** @see {@link HttpApiResource.layerEffect} */
   layerHttpApiClient: HttpApiResource.layerEffect,
-  /** @see {@link QueueResource.make} */
-  makeQueue: QueueResource.make,
+  /** @see {@link QueueResource.layer} */
+  makeQueue: QueueResource.layer,
   /** @see {@link HttpApiResource.acceptJson} */
   acceptJson: HttpApiResource.acceptJson,
 } as const;

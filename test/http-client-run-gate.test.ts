@@ -25,7 +25,7 @@ describe("HttpClientRunGate", () => {
   it.live("transformClient gates execute through the runner", () => {
     const Runner = RunResource.makeRunner({
       name: "test/http-gate-c1",
-      limits: {},
+      concurrency: 1,
     })
     return Effect.gen(function* () {
       const active = yield* Ref.make(0)
@@ -49,7 +49,7 @@ describe("HttpClientRunGate", () => {
   it.live("withRunner is pipe-friendly and respects concurrency", () => {
     const Runner = RunResource.makeRunner({
       name: "test/http-gate-pipe",
-      limits: { concurrency: 3 },
+      concurrency: 3,
     })
     return Effect.gen(function* () {
       const active = yield* Ref.make(0)

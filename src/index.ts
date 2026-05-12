@@ -68,15 +68,13 @@ export { Process } from "./Process";
 export { Polling } from "./Polling";
 export { ProcessSchedule } from "./ProcessSchedule";
 export { ProcessGroup } from "./ProcessGroup";
-export { QueueResource, Cause } from "./QueueResource";
+export { QueueResource } from "./QueueResource";
 export { RunResource } from "./RunResource";
 export { HttpClientRunGate } from "./HttpClientRunGate";
 export {
   HttpApiResource,
   acceptJson,
-  type HttpApiResourceClientOptions,
   type HttpApiResourceLayerEffectConfig,
-  type HttpApiResourceMakeConfig,
 } from "./HttpApiResource";
 export { Resource } from "./Resource";
 export { ControlService } from "./ControlService";
@@ -134,23 +132,18 @@ export type { ProcessScheduleService } from "./ProcessSchedule";
 
 // Types - QueueResource
 export type {
-  QueueRef,
-  /** @deprecated Use {@link QueueRef}. */
-  QueueResourceInstance,
-  QueueResourceInterface,
+  QueueHandle,
   QueueResourceConfig,
-  QueueResourceConfigBase,
-  QueueResourceDetails,
-  QueueItemEffectRequirements,
+  QueueShutdownError,
+  EffectContext,
+  HandlerContext,
+  Priority,
 } from "./QueueResource";
 
 // Types - RunResource
 export type {
-  RunResourceLimits,
-  RunResourceConfigUnit,
-  RunResourceConfigWithArg,
-  RunResourceUnit,
-  RunResourceApply,
+  RunResourceConfig,
+  RunGate,
   RunResourceRunner,
   RunResourceRunnerConfig,
 } from "./RunResource";

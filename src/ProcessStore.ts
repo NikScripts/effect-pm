@@ -93,6 +93,44 @@ export interface ProcessLifecycleChangedEvent extends AnalyticsEventBase {
   };
 }
 
+// ============================================================================
+// Queue Event Types
+// ============================================================================
+
+export type QueueItemStatus = "completed" | "failed" | "retried" | "exhausted";
+
+export interface QueueItemCompletedEvent extends AnalyticsEventBase {
+  type: "queue.item.completed";
+  entityType: "queue";
+  item: {
+    status: QueueItemStatus;
+    priority: "high" | "normal" | "low";
+    durationMs: number;
+    attempts: number;
+    error?: string;
+  };
+}
+
+export type QueueLifecycleTag =
+  | "Started"
+  | "Paused"
+  | "Resumed"
+  | "Shutdown"
+  | "Cleared";
+
+export interface QueueLifecycleChangedEvent extends AnalyticsEventBase {
+  type: "queue.lifecycle.changed";
+  entityType: "queue";
+  lifecycle: {
+    tag: QueueLifecycleTag;
+    itemsCleared?: number;
+  };
+}
+
+// ============================================================================
+// Event Union
+// ============================================================================
+
 /**
  * Closed union of supported analytics payloads.
  *
@@ -100,7 +138,9 @@ export interface ProcessLifecycleChangedEvent extends AnalyticsEventBase {
  */
 export type AnalyticsEvent =
   | ProcessExecutionCompletedEvent
-  | ProcessLifecycleChangedEvent;
+  | ProcessLifecycleChangedEvent
+  | QueueItemCompletedEvent
+  | QueueLifecycleChangedEvent;
 
 /**
  * Storage port implemented by the in-memory service and the Prisma-backed adapter

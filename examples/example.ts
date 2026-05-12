@@ -80,10 +80,12 @@
  */
 
 import {
+  Cause,
   Clock,
   Config,
   Duration,
   Effect,
+  Exit,
   Data,
   Layer,
   Option,
@@ -138,45 +140,41 @@ export class DemoQueueItemError extends Data.TaggedError("DemoQueueItemError")<{
   readonly reason: string;
 }> { }
 
-// Demo queues
-export const DemoQueue = QueueResource.make({
-  name: "demo-queue",
+// Demo queues using the v2 class pattern
+class DemoQueue extends QueueResource.Service<DemoQueue, string, never, DemoQueueItemError>()("demo-queue", {
   effect: (item: string) =>
     Effect.gen(function* () {
       yield* Effect.logInfo(`Processing: ${item}`);
-      yield* Effect.sleep(Duration.millis(1000)); // Simulate work
+      yield* Effect.sleep(Duration.millis(1000));
       return yield* new DemoQueueItemError({
         item,
         reason: `Error processing ${item}`,
       });
     }),
-  forkWith: (forked, _item, _queue) =>
-    forked.pipe(
-      Effect.catchTag("DemoQueueItemError", (error) =>
-        Effect.logError(`${error.item}: ${error.reason}`)
-      )
-    ),
-  throttle: {
-    limit: 10,
-    duration: Duration.seconds(1),
-  },
+  handler: (item, exit) =>
+    Exit.match(exit, {
+      onFailure: (cause) => Effect.logError(`${item}: ${Cause.pretty(cause)}`),
+      onSuccess: () => Effect.void,
+    }),
   concurrency: 3,
   capacity: 100,
-});
+}) {}
 
-const DemoTwoQueue = QueueResource.make({
-  name: "demo-two-queue",
+class DemoTwoQueue extends QueueResource.Service<DemoTwoQueue, number, number, never>()("demo-two-queue", {
   effect: (item: number) =>
     Effect.gen(function* () {
       yield* Effect.logInfo(`Processing number: ${item}`);
-      yield* Effect.sleep(Duration.millis(1000)); // Simulate work
+      yield* Effect.sleep(Duration.millis(1000));
       return item * 2;
     }),
-  forkWith: (forked, item, _queue) =>
-    forked.pipe(Effect.tap(() => Effect.logInfo(`Forked: ${String(item)}`))),
+  handler: (item, exit) =>
+    Exit.match(exit, {
+      onFailure: () => Effect.void,
+      onSuccess: () => Effect.logInfo(`Forked: ${String(item)}`),
+    }),
   concurrency: 2,
   capacity: 50,
-});
+}) {}
 
 /**
  * ============================================================================

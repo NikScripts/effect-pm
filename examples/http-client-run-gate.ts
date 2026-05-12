@@ -46,16 +46,13 @@ import {
   HttpClient,
   HttpClientRequest,
 } from "effect/unstable/http";
-import { Clock, Duration, Effect } from "effect";
+import { Clock, Effect } from "effect";
 import { HttpClientRunGate, RunResource } from "../src";
 import { provideLayer } from "../src/provideLayer.js";
 
 const DemoHttpRunner = RunResource.makeRunner({
   name: "examples/DemoHttpRunner",
-  limits: {
-    throttle: { limit: 8, duration: Duration.seconds(1) },
-    concurrency: 2,
-  },
+  concurrency: 2,
 });
 
 const program = Effect.gen(function* () {

@@ -4,7 +4,6 @@ import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstab
 import type { HttpClientError } from "effect/unstable/http"
 import { HttpApi, HttpApiClient, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 import { acceptJson, HttpApiResource } from "../src"
-import { provideLayer } from "../src/provideLayer.js";
 
 const json200 = JSON.stringify({ pong: true })
 
@@ -71,15 +70,16 @@ describe("HttpApiResource.make", () => {
     const api = HttpApi.make("vitest-empty-api")
     const Tag = HttpApiResource.make(api, {
       name: "test/vitest-empty-api",
-      concurrency: 1,
+      client: {},
+      limits: {},
     })
     return Effect.gen(function* () {
       const client = yield* Tag
       expect(client).toBeDefined()
       expect(typeof client).toBe("object")
     }).pipe(
-      provideLayer(Tag.layer),
-      provideLayer(fakeHttpClientLayer)
+      Effect.provide(Tag.layer),
+      Effect.provide(fakeHttpClientLayer)
     )
   })
 
@@ -87,6 +87,7 @@ describe("HttpApiResource.make", () => {
     const api = HttpApi.make("my-cool-api")
     const Tag = HttpApiResource.make(api, {
       name: "api/my-cool-api",
+      client: {},
     })
     expect(Tag.key).toBe("api/my-cool-api")
   })
@@ -95,6 +96,7 @@ describe("HttpApiResource.make", () => {
     const api = HttpApi.make("some-api")
     const Tag = HttpApiResource.make(api, {
       name: "custom/tag-id",
+      client: {},
     })
     expect(Tag.key).toBe("custom/tag-id")
   })
@@ -106,7 +108,8 @@ describe("HttpApiResource.make", () => {
       const api = HttpApi.make("vitest-c1").add(HttpApiGroup.make("g").add(pingEndpoint))
       const Tag = HttpApiResource.make(api, {
         name: "test/http-api-c1",
-        concurrency: 1,
+        client: {},
+        limits: {},
       })
       const httpLayer = Layer.succeed(
         HttpClient.HttpClient,
@@ -119,7 +122,7 @@ describe("HttpApiResource.make", () => {
           { concurrency: "unbounded" }
         )
         return yield* Ref.get(peak)
-      }).pipe(provideLayer(Tag.layer), provideLayer(httpLayer))
+      }).pipe(Effect.provide(Tag.layer), Effect.provide(httpLayer))
       expect(peakConcurrent).toBe(1)
     })
   )
@@ -131,7 +134,8 @@ describe("HttpApiResource.make", () => {
       const api = HttpApi.make("vitest-c3").add(HttpApiGroup.make("g").add(pingEndpoint))
       const Tag = HttpApiResource.make(api, {
         name: "test/http-api-c3",
-        concurrency: 3,
+        client: {},
+        limits: { concurrency: 3 },
       })
       const httpLayer = Layer.succeed(
         HttpClient.HttpClient,
@@ -144,7 +148,7 @@ describe("HttpApiResource.make", () => {
           { concurrency: "unbounded" }
         )
         return yield* Ref.get(peak)
-      }).pipe(provideLayer(Tag.layer), provideLayer(httpLayer))
+      }).pipe(Effect.provide(Tag.layer), Effect.provide(httpLayer))
       expect(peakConcurrent).toBeLessThanOrEqual(3)
       expect(peakConcurrent).toBeGreaterThanOrEqual(1)
     })
@@ -157,6 +161,7 @@ describe("HttpApiResource.make", () => {
       const api = HttpApi.make("vitest-nogate").add(HttpApiGroup.make("g").add(pingEndpoint))
       const Tag = HttpApiResource.make(api, {
         name: "test/http-api-no-limits",
+        client: {},
       })
       const httpLayer = Layer.succeed(
         HttpClient.HttpClient,
@@ -169,7 +174,7 @@ describe("HttpApiResource.make", () => {
           { concurrency: "unbounded" }
         )
         return yield* Ref.get(peak)
-      }).pipe(provideLayer(Tag.layer), provideLayer(httpLayer))
+      }).pipe(Effect.provide(Tag.layer), Effect.provide(httpLayer))
       expect(peakConcurrent).toBe(12)
     })
   )
@@ -179,9 +184,11 @@ describe("HttpApiResource.make", () => {
       const api = HttpApi.make("vitest-tc").add(HttpApiGroup.make("g").add(pingEndpoint))
       const Tag = HttpApiResource.make(api, {
         name: "test/http-api-transform-order",
-        concurrency: 1,
-        transformClient: (c) =>
-          HttpClient.mapRequest(c, HttpClientRequest.setHeader("X-Test-Order", "user-first")),
+        limits: {},
+        client: {
+          transformClient: (c) =>
+            HttpClient.mapRequest(c, HttpClientRequest.setHeader("X-Test-Order", "user-first")),
+        },
       })
       const httpLayer = Layer.succeed(
         HttpClient.HttpClient,
@@ -205,7 +212,7 @@ describe("HttpApiResource.make", () => {
       yield* Effect.gen(function* () {
         const client = yield* Tag
         yield* client.g.ping()
-      }).pipe(provideLayer(Tag.layer), provideLayer(httpLayer))
+      }).pipe(Effect.provide(Tag.layer), Effect.provide(httpLayer))
     })
   )
 })
@@ -224,11 +231,12 @@ describe("HttpApiResource.layerEffect", () => {
         })
       })
       type ClientShape = Effect.Success<typeof makeClient>
-      class Tag extends Context.Service<Tag, ClientShape>()(
-        "@nikscripts/effect-pm/test/http-api-resource.test/Tag",
-      ) {}
+      const Tag = Context.Service<
+        ClientShape & { _brand: "test/existing-client" },
+        ClientShape
+      >("test/existing-client")
       const layerCapture = HttpApiResource.layerEffect(Tag, makeClient, {
-        concurrency: 1,
+        limits: {},
       })
       const httpLayer = Layer.succeed(
         HttpClient.HttpClient,
@@ -248,7 +256,7 @@ describe("HttpApiResource.layerEffect", () => {
           builds: yield* Ref.get(builds),
           peakConcurrent: yield* Ref.get(peak),
         }
-      }).pipe(provideLayer(layerCapture), provideLayer(httpLayer))
+      }).pipe(Effect.provide(layerCapture), Effect.provide(httpLayer))
       expect(result.builds).toBe(1)
       expect(result.peakConcurrent).toBe(1)
     })

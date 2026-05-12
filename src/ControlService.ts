@@ -218,9 +218,9 @@ const handleCommand =
             .pipe(
               Effect.flatMap((queue) =>
                 Effect.gen(function* () {
-                  const prioritySizes = yield* queue.sizeByPriority();
-                  const totalSize = yield* queue.size();
-                  const completed = yield* queue.getCompleted();
+                  const prioritySizes = yield* queue.sizes;
+                  const totalSize = yield* queue.size;
+                  const completed = yield* queue.completed;
                   return {
                     ...queueStatusResponse({
                       name, 
@@ -279,7 +279,7 @@ const handleCommand =
             return { success: false, error: `Queue '${name}' not found` };
           }
 
-          yield* queue.pause();
+          yield* queue.pause;
           return { success: true };
         }
         case "resume": {
@@ -296,7 +296,7 @@ const handleCommand =
             return { success: false, error: `Queue '${name}' not found` };
           }
 
-          yield* queue.resume();
+          yield* queue.resume;
           return { success: true };
         }
         case "restart": {
@@ -337,7 +337,7 @@ const handleCommand =
             return { success: false, error: `Process or queue '${name}' not found` };
           }
 
-          yield* queue.restart();
+          yield* queue.clear;
           return { success: true };
         }
         case "shutdown": {
@@ -353,7 +353,7 @@ const handleCommand =
             return { success: false, error: `Queue '${name}' not found` };
           }
 
-          yield* queue.shutdown();
+          yield* queue.shutdown;
           return { success: true };
         }
       }
