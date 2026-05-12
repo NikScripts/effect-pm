@@ -71,8 +71,7 @@ describe("HttpApiResource.make", () => {
     const api = HttpApi.make("vitest-empty-api")
     const Tag = HttpApiResource.make(api, {
       name: "test/vitest-empty-api",
-      client: {},
-      limits: {},
+      concurrency: 1,
     })
     return Effect.gen(function* () {
       const client = yield* Tag
@@ -109,8 +108,7 @@ describe("HttpApiResource.make", () => {
       const api = HttpApi.make("vitest-c1").add(HttpApiGroup.make("g").add(pingEndpoint))
       const Tag = HttpApiResource.make(api, {
         name: "test/http-api-c1",
-        client: {},
-        limits: {},
+        concurrency: 1,
       })
       const httpLayer = Layer.succeed(
         HttpClient.HttpClient,
@@ -135,8 +133,7 @@ describe("HttpApiResource.make", () => {
       const api = HttpApi.make("vitest-c3").add(HttpApiGroup.make("g").add(pingEndpoint))
       const Tag = HttpApiResource.make(api, {
         name: "test/http-api-c3",
-        client: {},
-        limits: { concurrency: 3 },
+        concurrency: 3,
       })
       const httpLayer = Layer.succeed(
         HttpClient.HttpClient,
@@ -162,7 +159,6 @@ describe("HttpApiResource.make", () => {
       const api = HttpApi.make("vitest-nogate").add(HttpApiGroup.make("g").add(pingEndpoint))
       const Tag = HttpApiResource.make(api, {
         name: "test/http-api-no-limits",
-        client: {},
       })
       const httpLayer = Layer.succeed(
         HttpClient.HttpClient,
@@ -185,11 +181,9 @@ describe("HttpApiResource.make", () => {
       const api = HttpApi.make("vitest-tc").add(HttpApiGroup.make("g").add(pingEndpoint))
       const Tag = HttpApiResource.make(api, {
         name: "test/http-api-transform-order",
-        limits: {},
-        client: {
-          transformClient: (c) =>
-            HttpClient.mapRequest(c, HttpClientRequest.setHeader("X-Test-Order", "user-first")),
-        },
+        concurrency: 1,
+        transformClient: (c) =>
+          HttpClient.mapRequest(c, HttpClientRequest.setHeader("X-Test-Order", "user-first")),
       })
       const httpLayer = Layer.succeed(
         HttpClient.HttpClient,
@@ -236,7 +230,7 @@ describe("HttpApiResource.layerEffect", () => {
         "@nikscripts/effect-pm/test/http-api-resource.test/Tag",
       ) {}
       const layerCapture = HttpApiResource.layerEffect(Tag, makeClient, {
-        limits: {},
+        concurrency: 1,
       })
       const httpLayer = Layer.succeed(
         HttpClient.HttpClient,
