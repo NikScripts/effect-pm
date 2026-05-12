@@ -180,7 +180,7 @@ const formatProcesses = (processes: ProcessGroupDetails[]) => {
       p.status,
       p.uptime > 0 ? prettyMs(p.uptime, { compact: true }) : "-",
       formatLastRun(p.lastRun),
-      formatNextRun(p.nextRun),
+      formatNextRun(p.nextTriggerRun),
       p.executions !== undefined ? String(p.executions) : "-"
     ]);
   });
@@ -232,7 +232,7 @@ const formatStatus = (data: ControlResponse<unknown>) => {
       ["Status", processData.status],
       ["Uptime", processData.uptime > 0 ? prettyMs(processData.uptime, { compact: true }) : "-"],
       ["Last Run", formatLastRun(processData.lastRun)],
-      ["Next Run", formatNextRun(processData.nextRun)],
+      ["Next Run", formatNextRun(processData.nextTriggerRun)],
       ["Executions", processData.executions !== undefined ? String(processData.executions) : "-"]
     );
   } else if (data.type === "queue") {

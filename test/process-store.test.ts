@@ -13,9 +13,9 @@ describe("ProcessStore.memory", () => {
     Effect.gen(function* () {
       const store = yield* ProcessStore
 
-      const t1 = utcDateFromIso("2026-01-01T00:00:00.000Z")
-      const t2 = utcDateFromIso("2026-01-01T00:10:00.000Z")
-      const t3 = utcDateFromIso("2026-01-01T00:20:00.000Z")
+      const t1 = utcDateFromIso("2026-01-01T00:00:00.000Z").getTime()
+      const t2 = utcDateFromIso("2026-01-01T00:10:00.000Z").getTime()
+      const t3 = utcDateFromIso("2026-01-01T00:20:00.000Z").getTime()
 
       const e1: ProcessExecutionCompletedEvent = {
         id: "e1",
@@ -83,8 +83,8 @@ describe("ProcessStore.memory", () => {
   it.live("appends and queries process lifecycle events", () =>
     Effect.gen(function* () {
       const store = yield* ProcessStore
-      const t1 = utcDateFromIso("2026-01-01T01:00:00.000Z")
-      const t2 = utcDateFromIso("2026-01-01T02:00:00.000Z")
+      const t1 = utcDateFromIso("2026-01-01T01:00:00.000Z").getTime()
+      const t2 = utcDateFromIso("2026-01-01T02:00:00.000Z").getTime()
 
       const started: ProcessLifecycleChangedEvent = {
         id: "l1",

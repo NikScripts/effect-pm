@@ -72,7 +72,7 @@ const makeFakeClient = () => {
     }
     const range = where.occurredAt;
     if (range !== undefined) {
-      const t = row.occurredAt.getTime();
+      const t = row.occurredAt;
       if (range.gt !== undefined && !(t > range.gt.getTime())) return false;
       if (range.gte !== undefined && !(t >= range.gte.getTime())) return false;
       if (range.lt !== undefined && !(t < range.lt.getTime())) return false;
@@ -97,11 +97,11 @@ const makeFakeClient = () => {
           : args?.orderBy;
         if (orderBy?.occurredAt === "desc") {
           out.sort(
-            (a, b) => b.occurredAt.getTime() - a.occurredAt.getTime(),
+            (a, b) => b.occurredAt - a.occurredAt,
           );
         } else if (orderBy?.occurredAt === "asc") {
           out.sort(
-            (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime(),
+            (a, b) => a.occurredAt - b.occurredAt,
           );
         }
         if (args?.skip !== undefined) {
@@ -129,7 +129,7 @@ describe("PrismaProcessStore — codec", () => {
     const event: ProcessExecutionCompletedEvent = {
       id: "exec-1",
       type: "process.execution.completed",
-      occurredAt: utcDateFromIso("2026-01-01T00:00:00.000Z"),
+      occurredAt: new Date("2026-01-01T00:00:00.000Z").getTime(),
       entityType: "process",
       entityId: "p",
       execution: {
@@ -160,7 +160,7 @@ describe("PrismaProcessStore — codec", () => {
     const event: ProcessLifecycleChangedEvent = {
       id: "lc-1",
       type: "process.lifecycle.changed",
-      occurredAt: utcDateFromIso("2026-01-01T01:00:00.000Z"),
+      occurredAt: new Date("2026-01-01T01:00:00.000Z").getTime(),
       entityType: "process",
       entityId: "p",
       lifecycle: { tag: "Errored", error: "boom" },
@@ -184,7 +184,7 @@ describe("PrismaProcessStore — codec", () => {
     const row: EffectPmEventRow = {
       id: "bad-1",
       type: "process.execution.completed",
-      occurredAt: utcDateFromMillis(0),
+      occurredAt: 0,
       entityType: "process",
       entityId: "p",
       attributes: null,
@@ -199,7 +199,7 @@ describe("PrismaProcessStore — codec", () => {
     const row: EffectPmEventRow = {
       id: "wat",
       type: "process.unknown",
-      occurredAt: utcDateFromMillis(0),
+      occurredAt: 0,
       entityType: "process",
       entityId: "p",
       attributes: null,
@@ -223,7 +223,7 @@ describe("PrismaProcessStore — adapter", () => {
       yield* store.append({
         id: "e1",
         type: "process.execution.completed",
-        occurredAt: utcDateFromIso("2026-01-01T00:00:00.000Z"),
+        occurredAt: new Date("2026-01-01T00:00:00.000Z").getTime(),
         entityType: "process",
         entityId: "p",
         execution: {
@@ -238,7 +238,7 @@ describe("PrismaProcessStore — adapter", () => {
       yield* store.append({
         id: "e2",
         type: "process.execution.completed",
-        occurredAt: utcDateFromIso("2026-01-01T00:01:00.000Z"),
+        occurredAt: new Date("2026-01-01T00:01:00.000Z").getTime(),
         entityType: "process",
         entityId: "p",
         execution: {
@@ -274,7 +274,7 @@ describe("PrismaProcessStore — adapter", () => {
       yield* store.append({
         id: "lc-1",
         type: "process.lifecycle.changed",
-        occurredAt: utcDateFromIso("2026-01-01T00:00:00.000Z"),
+        occurredAt: new Date("2026-01-01T00:00:00.000Z").getTime(),
         entityType: "process",
         entityId: "p",
         lifecycle: { tag: "Started" },

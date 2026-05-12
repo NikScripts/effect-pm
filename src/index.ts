@@ -102,15 +102,12 @@ export type {
   ProcessStatus,
   QueueDetails,
   ProcessGroupErrors,
-  ProcessGroupDependencies,
-  AwaitShutdownOptions,
   ProcessEffectRequirements,
   AllGroupProcessesRequirements,
 } from "./ProcessGroup";
 
 // Error classes - ProcessGroup
 export {
-  ProcessGroupError,
   ProcessNotFoundError,
   ProcessAlreadyRunningError,
   ProcessNotRunningError,

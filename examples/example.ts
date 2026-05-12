@@ -98,6 +98,7 @@ import {
   ProcessGroup,
   Polling,
   ProcessSchedule,
+  ControlService,
 } from "../src";
 import { provideLayer } from "../src/provideLayer.js";
 import { utcDateFromMillis } from "../src/utcDate.js";
@@ -276,7 +277,7 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(`⏰ Polling: every 10 seconds (schedule: always armed)`);
 
   /** Localhost HTTP JSON API consumed by `pnpm run cli` (see `ControlService`). */
-  yield* group.serve({ port: controlPort });
+  yield* ControlService.make(group, { port: controlPort });
 
   /** Forks each process supervisor (`queueAdderCron.effect`) inside the group’s scopes. */
   yield* group.startAll();

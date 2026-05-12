@@ -116,7 +116,7 @@ export class DemoApiClient extends Context.Service<DemoApiClient>()(
     DemoApiClient,
     _make,
     {
-      limits: { concurrency: 2 },
+      concurrency: 2,
     }
   );
 

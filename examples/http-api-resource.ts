@@ -54,11 +54,9 @@ const DemoApi = HttpApi.make("jsonplaceholder-demo").add(
 /** Tag + layer: provide `DemoApi.layer` and `FetchHttpClient.layer` (or any `HttpClient`). */
 const DemoApiClient = HttpApiResource.make(DemoApi, {
   name: "examples/jsonplaceholder/DemoApiClient",
-  client: {
-    baseUrl: "https://jsonplaceholder.typicode.com",
-    transformClient: HttpApiResource.acceptJson,
-  },
-  limits: { concurrency: 2 },
+  baseUrl: "https://jsonplaceholder.typicode.com",
+  transformClient: HttpApiResource.acceptJson,
+  concurrency: 2,
 });
 
 const program = Effect.gen(function* () {
