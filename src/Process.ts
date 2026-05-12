@@ -86,16 +86,18 @@ export interface Process<out R> {
   readonly type: "managed";
   /**
    * Long-running trigger driver that spawns run instances.
+   * ProcessStore is optional — analytics are recorded when available, silently skipped when absent.
    */
-  readonly effect: Effect.Effect<void, never, R | ProcessStore>;
+  readonly effect: Effect.Effect<void, never, R>;
   readonly getStatus: (dateRange?: {
     start: Date;
     end: Date;
-  }) => Effect.Effect<ProcessDetails, never, ProcessStore>;
+  }) => Effect.Effect<ProcessDetails>;
   /**
    * Runs the user `effect` once with tracking, independent of trigger cadence.
+   * ProcessStore is optional — execution is tracked when available.
    */
-  readonly runImmediately: () => Effect.Effect<void, never, R | ProcessStore>;
+  readonly runImmediately: () => Effect.Effect<void, never, R>;
 }
 
 /**
@@ -352,11 +354,12 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     readonly status: "completed" | "failed" | "interrupted";
     readonly error?: unknown;
     readonly isStartupRun: boolean;
-  }): Effect.Effect<void, never, ProcessStore> =>
+  }): Effect.Effect<void> =>
     Effect.gen(function* () {
-      const store = yield* ProcessStore;
+      const storeOption = yield* Effect.serviceOption(ProcessStore);
+      if (Option.isNone(storeOption)) return;
       executionRecordId += 1;
-      yield* store.append({
+      yield* storeOption.value.append({
         id: `${name}-execution-${executionRecordId}`,
         type: "process.execution.completed",
         occurredAt: args.completedAt,
@@ -380,12 +383,13 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const trackedProgram = (
     scheduleIdentifier: Option.Option<string>,
     controls: ProcessScheduleControls,
-  ): Effect.Effect<void, never, RUser | ProcessStore> =>
+  ): Effect.Effect<void, never, RUser> =>
     Effect.gen(function* () {
-      const store = yield* ProcessStore;
+      const storeOption = yield* Effect.serviceOption(ProcessStore);
       const executedAt = yield* DateTime.nowAsDate;
-      const isStartupRun =
-        (yield* store.getProcessExecutions(name, { limit: 1 })).length === 0;
+      const isStartupRun = Option.isSome(storeOption)
+        ? (yield* storeOption.value.getProcessExecutions(name, { limit: 1 })).length === 0
+        : true;
 
       yield* Effect.matchEffect(
         userEffect.pipe(
@@ -524,7 +528,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     key: string,
     entry: ProcessScheduleEntry,
     controls: ProcessScheduleControls,
-  ): Effect.Effect<void, never, RUser | PollingTag | ProcessScheduleTag | ProcessStore | Clock.Clock> =>
+  ): Effect.Effect<void, never, RUser | PollingTag | ProcessScheduleTag | Clock.Clock> =>
     Effect.gen(function* () {
       if (MutableRef.get(runningByEntry).has(key)) {
         return;
@@ -609,7 +613,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     key: string,
     entry: ProcessScheduleEntry,
     controls: ProcessScheduleControls,
-  ): Effect.Effect<void, never, RUser | PollingTag | ProcessScheduleTag | ProcessStore | Clock.Clock> =>
+  ): Effect.Effect<void, never, RUser | PollingTag | ProcessScheduleTag | Clock.Clock> =>
     Effect.gen(function* () {
       const nowMillis = yield* Clock.currentTimeMillis;
       const delayMs = entry.startAt.getTime() - nowMillis;
@@ -643,7 +647,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const reconcileSchedules: Effect.Effect<
     void,
     never,
-    RUser | PollingTag | ProcessScheduleTag | ProcessStore | Clock.Clock
+    RUser | PollingTag | ProcessScheduleTag | Clock.Clock
   > = Effect.gen(function* () {
     const schedule = yield* ProcessSchedule;
     const controls = toScheduleControls(schedule);
@@ -709,7 +713,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const supervisedCore: Effect.Effect<
     void,
     never,
-    RUser | PollingTag | ProcessScheduleTag | ProcessStore | Clock.Clock
+    RUser | PollingTag | ProcessScheduleTag | Clock.Clock
   > = Effect.gen(function* () {
     const schedule = yield* ProcessSchedule;
     const controls = toScheduleControls(schedule);
@@ -725,10 +729,12 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const getStatus = (dateRange?: {
     start: Date;
     end: Date;
-  }): Effect.Effect<ProcessDetails, never, ProcessStore> =>
+  }): Effect.Effect<ProcessDetails> =>
     Effect.gen(function* () {
-      const store = yield* ProcessStore;
-      const allExecutions = yield* store.getProcessExecutions(name);
+      const storeOption = yield* Effect.serviceOption(ProcessStore);
+      const allExecutions = Option.isSome(storeOption)
+        ? yield* storeOption.value.getProcessExecutions(name)
+        : [];
       const inRange = dateRange === undefined
         ? allExecutions
         : allExecutions.filter(
@@ -754,7 +760,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
       };
     });
 
-  const runImmediately = (): Effect.Effect<void, never, RUser | ProcessStore> =>
+  const runImmediately = (): Effect.Effect<void, never, RUser> =>
     Effect.gen(function* () {
       yield* Effect.logInfo(
         `🚀 Running '${name}' immediately (tracked; independent of trigger)...`,

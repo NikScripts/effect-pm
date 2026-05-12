@@ -106,7 +106,11 @@ const processMapFromTuple = <const Processes extends readonly Process<any>[]>(
  *
  * @public
  */
-export type ProcessGroupDependencies = ProcessStore;
+/**
+ * ProcessGroup dependencies. ProcessStore is now optional (auto-detected via serviceOption).
+ * @deprecated No hard dependencies required. ProcessStore is used when available.
+ */
+export type ProcessGroupDependencies = never;
 
 /**
  * Process status managed by ProcessGroup.
@@ -205,30 +209,30 @@ export interface QueueDetails {
  */
 export interface ProcessGroupControls<R> {
   removeProcess(name: string): Effect.Effect<void, ProcessGroupErrors>;
-  listProcesses(): Effect.Effect<ProcessGroupDetails[], ProcessGroupErrors, ProcessStore>;
+  listProcesses(): Effect.Effect<ProcessGroupDetails[], ProcessGroupErrors>;
 
   startProcess(
     name: string,
-  ): Effect.Effect<void, ProcessGroupErrors, R | ProcessStore>;
+  ): Effect.Effect<void, ProcessGroupErrors, R>;
   stopProcess(name: string): Effect.Effect<void, ProcessGroupErrors>;
   restartProcess(
     name: string,
-  ): Effect.Effect<void, ProcessGroupErrors, R | ProcessStore>;
+  ): Effect.Effect<void, ProcessGroupErrors, R>;
 
   runProcessImmediately(
     name: string,
-  ): Effect.Effect<void, ProcessGroupErrors, R | ProcessStore>;
+  ): Effect.Effect<void, ProcessGroupErrors, R>;
 
   getProcessStatus(
     name: string,
-  ): Effect.Effect<ProcessGroupDetails, ProcessGroupErrors, ProcessStore>;
+  ): Effect.Effect<ProcessGroupDetails, ProcessGroupErrors>;
   getAllProcessStatus(): Effect.Effect<
     ProcessGroupDetails[],
     ProcessGroupErrors,
     ProcessStore
   >;
 
-  startAll(): Effect.Effect<void, ProcessGroupErrors, R | ProcessStore>;
+  startAll(): Effect.Effect<void, ProcessGroupErrors, R>;
   stopAll(): Effect.Effect<void, ProcessGroupErrors>;
 
   listQueues(): Effect.Effect<QueueDetails[], never>;
@@ -253,7 +257,7 @@ export interface AwaitShutdownOptions {
  * @public
  */
 export interface ProcessGroup<R> extends ProcessGroupControls<R> {
-  serve: ({ port }: { port?: number }) => Effect.Effect<void, never, Scope.Scope | R | ProcessStore>;
+  serve: ({ port }: { port?: number }) => Effect.Effect<void, never, Scope.Scope | R>;
   awaitShutdown: (
     options?: AwaitShutdownOptions,
   ) => Effect.Effect<void, never, Scope.Scope>;
@@ -467,7 +471,7 @@ const processDetailsToGroupFields = (details: ProcessDetails) => ({
 
 const listProcesses = <R>(
   state: ProcessGroupState<R>,
-): Effect.Effect<ProcessGroupDetails[], ProcessGroupErrors, ProcessStore> =>
+): Effect.Effect<ProcessGroupDetails[], ProcessGroupErrors> =>
   Effect.gen(function* () {
     const processes = yield* Ref.get(state.processes);
     const statuses = yield* Ref.get(state.statuses);
@@ -544,7 +548,7 @@ const releaseProcessForkResources =
 
 const startProcess =
   <R>(state: ProcessGroupState<R>) =>
-  (name: string): Effect.Effect<void, ProcessGroupErrors, R | ProcessStore> =>
+  (name: string): Effect.Effect<void, ProcessGroupErrors, R> =>
     Effect.gen(function* () {
       yield* Effect.logDebug(`🚀 Starting process: ${name}`);
 
@@ -651,7 +655,7 @@ const stopProcess =
 
 const runProcessImmediately =
   <R>(state: ProcessGroupState<R>) =>
-  (name: string): Effect.Effect<void, ProcessGroupErrors, R | ProcessStore> =>
+  (name: string): Effect.Effect<void, ProcessGroupErrors, R> =>
     Effect.gen(function* () {
       const process = yield* Ref.get(state.processes).pipe(
         Effect.map((processes) => processes.get(name)),
@@ -675,7 +679,7 @@ const runProcessImmediately =
 
 const getProcessStatus =
   <R>(state: ProcessGroupState<R>) =>
-  (name: string): Effect.Effect<ProcessGroupDetails, ProcessGroupErrors, ProcessStore> =>
+  (name: string): Effect.Effect<ProcessGroupDetails, ProcessGroupErrors> =>
     Effect.gen(function* () {
       const process = yield* Ref.get(state.processes).pipe(
         Effect.map((processes) => processes.get(name)),

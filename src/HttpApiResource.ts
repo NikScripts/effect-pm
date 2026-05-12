@@ -295,5 +295,3 @@ export type HttpApiResourceClientOptions = {
     | undefined;
 };
 
-/** @deprecated Use `HttpApiResourceLayerEffectConfig` instead. */
-export type { HttpApiResourceLayerEffectConfig };

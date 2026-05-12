@@ -87,7 +87,6 @@ describe("HttpApiResource.make", () => {
     const api = HttpApi.make("my-cool-api")
     const Tag = HttpApiResource.make(api, {
       name: "api/my-cool-api",
-      client: {},
     })
     expect(Tag.key).toBe("api/my-cool-api")
   })
@@ -96,7 +95,6 @@ describe("HttpApiResource.make", () => {
     const api = HttpApi.make("some-api")
     const Tag = HttpApiResource.make(api, {
       name: "custom/tag-id",
-      client: {},
     })
     expect(Tag.key).toBe("custom/tag-id")
   })
