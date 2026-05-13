@@ -17,6 +17,7 @@ tsup.config.ts
 # Examples and internal documentation
 example.ts
 examples/
+repos/
 REVIEW.md
 
 # Build artifacts

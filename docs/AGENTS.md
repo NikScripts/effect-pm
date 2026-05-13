@@ -21,6 +21,7 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 | `examples/*` | Runnable teaching scripts. |
 | `examples/mocks/*` | Test doubles, scenario docs, **`demo-harness.mock.ts`** (`forkChild` + `TestClock` + Node exit). |
 | `docs/plans/*.md` | Architecture contracts; **09** is canonical for process runtime. |
+| `repos/effect/` | Vendored Effect source for read-only agent reference. **Do not import from it.** |
 | `test/*.ts` | Vitest suites — run `pnpm test`. |
 
 ---
@@ -46,6 +47,16 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 
 ---
 
+## Vendored repositories
+
+- External source lives under `repos/` only to help agents inspect upstream implementations and tests.
+- Treat `repos/effect/` as read-only reference material for idiomatic Effect patterns.
+- Never import from `repos/`; package code must import from declared dependencies such as `effect`.
+- Do not edit files under `repos/` unless explicitly asked.
+- When changing Effect-heavy code, inspect `repos/effect/packages/effect/` for examples before introducing new patterns.
+
+---
+
 ## Documentation conventions
 
 - Use **`@public`** / **`@internal`** on exported symbols as appropriate.
@@ -56,4 +67,4 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 
 ## What not to assume
 
-- **`AI_CONTEXT.md`** in repo root may be gitignored locally; this **`docs/AGENTS.md`** is the **committed** agent entry.
+- **`AI_CONTEXT.md`** in repo root may be gitignored locally; committed agent guidance starts in root `AGENTS.md` and continues here.
