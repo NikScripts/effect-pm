@@ -103,7 +103,7 @@ Examples and the CLI default to port **3001** unless **`HOME_SERVER_PORT`** is s
 When answering questions about **behavior**, prefer **source of truth** in this order:
 
 1. `src/*.ts` implementation + TSDoc  
-2. `docs/plans/09-process-runtime.md` for supervisor semantics  
+2. `src/Process.ts` TSDoc and `docs/SCHEDULE-AND-PROCESSGROUP.md` for supervisor semantics
 3. `docs/PROCESS-API.md` for quick tables  
 4. These examples for **composition patterns**
 

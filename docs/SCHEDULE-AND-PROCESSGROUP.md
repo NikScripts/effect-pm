@@ -2,7 +2,7 @@
 
 This page answers **how `ProcessSchedule` interacts with `ProcessGroup`**, what **starts** when, and how to mutate schedule entries from **outside** the process (e.g. an HTTP API that knows when a game is live).
 
-For API tables, see [PROCESS-API.md](./PROCESS-API.md). For runtime semantics, see [plans/09-process-runtime.md](./plans/09-process-runtime.md).
+For API tables, see [PROCESS-API.md](./PROCESS-API.md). For runtime semantics, see `src/Process.ts` TSDoc and this page.
 
 ---
 

@@ -1,38 +1,43 @@
-# effect-pm Architecture Plans
+# effect-pm Future Plans
 
-Living, canonical specs for the runtime + analytics architecture of
-`@nikscripts/effect-pm`. Anything in here is the source of truth: code that
-disagrees with these documents is the bug, not these documents.
+This directory is only for work that has **not** happened yet.
 
-**Also read (outside this folder):**
+Implemented behavior, naming rules, public API reference, and operational
+guidance belong in regular docs outside `docs/plans`. A plan graduates out of
+this directory once the feature is implemented and the stable behavior is
+documented elsewhere.
 
-- [Package guide](../PACKAGE-GUIDE.md) — narrative architecture for humans and tools.
-- [Agent guide](../AGENTS.md) — repository map and invariants for assistants.
-- [Process / polling / schedule API tables](../PROCESS-API.md) — concise reference.
-- [Examples README](../../examples/README.md) — runnable teaching scripts.
+## Current plan set
 
-The set is intentionally small. Each file owns exactly one concept; the
-numbering encodes reading order, not priority.
+Read these in order. The first plans build the storage and queue foundations
+that later plans depend on.
 
-| #  | Doc                                                       | Status      |
-| -- | --------------------------------------------------------- | ----------- |
-| 00 | [Vision & topology](./00-vision-and-topology.md)          | Living      |
-| 01 | [Naming & consistency contract](./01-naming-contract.md)  | Living      |
-| 02 | [Implementation status](./02-status.md)                   | Living      |
-| 03 | [`ProcessGroup` (renamed orchestrator)](./03-process-group.md) | Living      |
-| 04 | [`Process` types & schedule control](./04-process-types-and-control.md) | Living      |
-| 05 | [State & reconciler](./05-state-and-reconciler.md)        | Living      |
-| 06 | [`ProcessStore` analytics service](./06-process-store.md) | Living      |
-| 07 | [`QueueResource` storage hooks](./07-queue-resource.md)   | Living      |
-| 08 | [Top-level `ProcessManager` (multi-group)](./08-process-manager-future.md) | Deferred    |
-| 09 | [Process runtime — effect-first, Layer polling & schedule](./09-process-runtime.md) | **Canonical** |
-| 10 | [Schedule controls, reconcile, and removal cleanup](./10-schedule-controls-and-reconcile.md) | Planned (next beta) |
-| 11 | [Strict `@effect/language-service` rules](./11-strict-effect-language-service.md) | Planned (tooling / typing backlog) |
-| 12 | [Module modernization roadmap](./12-module-modernization.md) | Planned |
+| # | Plan | Purpose |
+| - | ---- | ------- |
+| 01 | [ProcessStore as the storage service](./01-process-store-service.md) | Turn `ProcessStore` into the durable service boundary for processes, queues, resources, and custom storage implementations. |
+| 02 | [Queue controls and lifecycle hooks](./02-queue-controls-and-hooks.md) | Replace special `persist` / `refill` callbacks with queue-bound controls passed to effects and hooks. |
+| 03 | [Queue analytics v2](./03-queue-analytics-v2.md) | Add first-class queue events, reads, projections, and summaries through `ProcessStore`. |
+| 04 | [Schedule identity and persistence boundaries](./04-schedule-identity-and-persistence.md) | Clarify schedule persistence, stable IDs, DB sync, and removal cleanup. |
+| 05 | [Control service v2](./05-control-service-v2.md) | Upgrade local control from a single command endpoint to a richer control and streaming surface. |
+| 06 | [Process lifecycle hooks](./06-process-lifecycle-hooks.md) | Add process-level hooks without hiding user work under polling or schedule configuration. |
+| 07 | [ProcessManager](./07-process-manager.md) | Future multi-group coordinator across hosts, tenants, or isolation boundaries. |
+| 08 | [Lifecycle machine](./08-lifecycle-machine.md) | Explore an internal typed lifecycle kernel for queues, processes, schedules, and control eligibility. |
+| 09 | [Strict any/unknown rule](./09-strict-any-unknown.md) | Re-enable `anyUnknownInErrorContext` when the queue/process typing boundary can support it. |
 
-If you are about to add a new concept that is not described here, write
-the doc first.
+## Explicitly discarded from active planning
 
-**Process runtime:** implement against [09](./09-process-runtime.md).
-[04](./04-process-types-and-control.md) is background for multi-schedule /
-reconciler ideas unless rewritten to match 09.
+- Runtime-wide `ProcessEntry` target/live reconciler.
+- Old `ProcessControl` design with `switchSchedule`, `sleepUntil`, and metadata setters.
+- `Polling.cron`; cron belongs to schedule generation, not polling cadence.
+- Dynamic `ProcessGroup.addProcess` / `removeProcess` until a future
+  `ProcessManager` has a concrete ownership model.
+- `serviceNotAsClass`; that language-service rule stays off unless project
+  direction changes.
+
+## Planning rules
+
+- Keep plans future-only.
+- Prefer one concept per file.
+- Call out graduation criteria so implemented work can move into regular docs.
+- Do not reintroduce the old reconciler framing unless the current
+  schedule/polling runtime is explicitly redesigned.
