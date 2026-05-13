@@ -20,7 +20,7 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 | `src/prisma/*` | Optional Prisma adapter (`@nikscripts/effect-pm/prisma` export). |
 | `examples/*` | Runnable teaching scripts. |
 | `examples/mocks/*` | Test doubles, scenario docs, **`demo-harness.mock.ts`** (`forkChild` + `TestClock` + Node exit). |
-| `docs/plans/*.md` | Architecture contracts; **09** is canonical for process runtime. |
+| `docs/plans/*.md` | Future-only roadmap items. Implemented behavior belongs in regular docs and source TSDoc. |
 | `repos/effect/` | Vendored Effect source for read-only agent reference. **Do not import from it.** |
 | `test/*.ts` | Vitest suites — run `pnpm test`. |
 
@@ -28,7 +28,7 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 
 ## Invariants (do not break casually)
 
-1. **Supervisor semantics** — One fiber per started process; outer loop waits for **armed** schedule; inner loop runs **polling** ticks while armed. See `Process.ts` module doc and plan **09**.
+1. **Supervisor semantics** — One fiber per started process; outer loop waits for **armed** schedule; inner loop runs **polling** ticks while armed. See `Process.ts` module doc and `docs/SCHEDULE-AND-PROCESSGROUP.md`.
 2. **`Process.effect` typing** — `Process<R>`: `effect` needs `R | ProcessStore`. Inlined `polling` / `schedule` on `Process.make` are merged into the supervisor so **`R` excludes those services** when present (overload-resolved in `Process.ts`).
 3. **ProcessGroup combined requirements** — `AllGroupProcessesRequirements` unions `Effect.Services<p["effect"]>` across processes; app must provide that environment when calling `startAll`, etc.
 4. **Control API security** — `ControlService` binds to **127.0.0.1** only.
@@ -40,9 +40,9 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 | Task | Approach |
 |------|----------|
 | Add a public export | Edit `src/index.ts` + add TSDoc `@public` on the symbol in its module. |
-| Change process semantics | Update `src/Process.ts`, tests in `test/process*.ts`, and plan **09** if behavior is contractual. |
+| Change process semantics | Update `src/Process.ts`, tests in `test/process*.ts`, and the relevant regular docs if behavior is contractual. |
 | Add an example | Add `examples/foo.ts`, document in `examples/README.md`, add `package.json` script if runnable. Put heavy mock / scenario prose in `examples/mocks/*.mock.ts` when it would drown the entry script. |
-| Verify types (strict Effect rules) | `pnpm run typecheck` (uses `tsgo`). Two plugin rules are temporarily `"off"`; see [plan 11](./plans/11-strict-effect-language-service.md). |
+| Verify types (strict Effect rules) | `pnpm run typecheck` (uses `tsgo`). `anyUnknownInErrorContext` is temporarily `"off"`; see [strict any/unknown plan](./plans/09-strict-any-unknown.md). |
 | Run tests | `pnpm test` |
 
 ---

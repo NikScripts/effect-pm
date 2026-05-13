@@ -54,7 +54,7 @@ A future **`ProcessManager`** (multi-host) is planned but **not implemented**; u
 | Queue / run / HTTP resource APIs | [RESOURCE-API.md](./RESOURCE-API.md) |
 | Schedule composition + runtime updates | [examples/schedule-control-surfaces.ts](../examples/schedule-control-surfaces.ts) |
 | Schedule + **`ProcessGroup`** / API-driven arm | [docs/SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + [examples/process-game-window-with-group.ts](../examples/process-game-window-with-group.ts) |
-| Understand process runtime semantics | [plans/09-process-runtime.md](./plans/09-process-runtime.md) |
+| Understand process runtime semantics | [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + `src/Process.ts` TSDoc |
 | API tables (make, Polling, Schedule, ProcessGroup) | [PROCESS-API.md](./PROCESS-API.md) |
 | Prisma-backed analytics | [README.md](../README.md) Prisma section + `src/prisma/` |
 | AI / agent onboarding (repo map, conventions) | [AGENTS.md](./AGENTS.md) |
