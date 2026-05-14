@@ -246,7 +246,7 @@ export const makeProcessGroup = <
     // ─── Resolve queue tags from context ───
     const queueMap: Record<string, QueueHandle<any, any, any>> = {};
     for (const queueTag of config.queues) {
-      queueMap[queueTag.key] = yield* queueTag.asEffect();
+      queueMap[queueTag.key] = yield* queueTag;
     }
 
     // ─── Build process registry ───

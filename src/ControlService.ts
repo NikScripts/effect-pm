@@ -530,12 +530,21 @@ const startControlService = <R>(options: {
       ),
   )
 
+interface ControlServiceApi {
+  readonly make: <R>(options: {
+    readonly port?: number;
+    readonly group: ProcessGroupControls<R>;
+  }) => Effect.Effect<void, never, Scope.Scope | R | ProcessStore>;
+  readonly createCli: typeof createCli;
+  readonly runCli: typeof runCli;
+}
+
 /**
  * Control plane entrypoints.
  *
  * @public
  */
-export const ControlService = {
+export const ControlService: ControlServiceApi = {
   /**
    * Acquire a localhost HTTP listener for `/control` and `/health` until the scope ends.
    */

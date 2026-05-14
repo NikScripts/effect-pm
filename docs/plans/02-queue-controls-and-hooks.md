@@ -192,11 +192,26 @@ released items must be preserved.
 
 Candidate release options:
 
-- `scope: "pendingOnly" | "waitForInFlight" | "interruptAndRequeue"`,
+- `scope: "pendingOnly" | "waitForInFlight" | "drain"`,
 - `deadline`,
 - `mode: "atomic" | "partial"`,
 - `releaseId`,
 - `attributes`.
+
+Release scopes:
+
+- `pendingOnly` - pause/quiesce the queue, export pending entries, and let
+  already in-flight items finish on the source deployment.
+- `waitForInFlight` - pause/quiesce the queue so no more pending work starts,
+  wait for currently in-flight item effects to settle, then export remaining
+  pending entries.
+- `drain` - transfer nothing; stop accepting new work and let pending plus
+  in-flight work finish on the source deployment.
+
+`waitForInFlight` is not the same as `drain`. It waits for active work only,
+then transfers whatever remains pending. `drain` waits for the whole queue to
+finish and should be the preferred handoff mode for short queues,
+non-transferable payloads, or schema-incompatible deployments.
 
 Candidate release flow:
 
@@ -300,18 +315,72 @@ Replace special storage-oriented callbacks with lifecycle hooks:
 - `onSettled(item, exit, controls)`
 - `onRetryScheduled(item, controls)`
 - `onRetryExhausted(item, cause, controls)`
+- `onDeadLettered(item, reason, controls)`
+- `onDropped(itemOrKey, reason, controls)`
 - `onEmpty(controls)`
 - `onDrained(controls)`
 - `onPaused(controls)`
 - `onResumed(controls)`
+- `onQuiesced(controls)`
 - `onShutdown(controls)`
 - `onCleared(count, controls)`
+- `onReleaseStarted(options, controls)`
 - `onReleased(entries, controls)`
 - `onReleaseFailed(error, controls)`
+- `onDrainStarted(options, controls)`
+- `onDrainCompleted(result, controls)`
+- `onDrainFailed(error, controls)`
 
 `persist` becomes unnecessary because `ProcessStore` handles storage.
 `refill` becomes a normal `onEmpty` or `onDrained` behavior that can call
 queue-bound controls to add more work.
+
+Hook event payloads should include queue-bound metadata where relevant:
+
+- queue name,
+- item key,
+- entry id,
+- batch id,
+- release id,
+- priority,
+- attempts,
+- enqueued time,
+- started time,
+- completed time,
+- source group/deployment,
+- attributes.
+
+## Future add-on: batch waiting
+
+Waiting for a batch to finish is valuable, but it should not be part of the
+first implementation pass. Save it as a follow-up after enqueue metadata,
+store events, and queue controls are stable.
+
+Candidate future controls:
+
+- `awaitBatch(batchId)`
+- `batchStatus(batchId)`
+- `releaseBatch(batchId, options)`
+
+Candidate batch metadata:
+
+- `batchId`,
+- `batchSize`,
+- `enqueuedAt`,
+- `source`,
+- `attributes`.
+
+Candidate batch status:
+
+- total,
+- pending,
+- in-flight,
+- completed,
+- failed,
+- retried,
+- exhausted,
+- started at,
+- completed at.
 
 ## Safety rules
 
@@ -342,6 +411,10 @@ This keeps the queue service as the source of truth for queue control.
 - `release` can export transferable entries.
 - `ProcessGroup` delegates only through `QueueHandle`.
 - Queue effects and hooks receive queue-bound controls.
+- Planned lifecycle hooks cover enqueue, validation rejection, item start,
+  completion, failure, settlement, retry, exhaustion, dead-letter, drop, empty,
+  drain, pause, resume, quiesce, shutdown, clear, release start, release
+  success, and release failure.
 - `persist` and `refill` are removed or renamed into lifecycle hooks.
 - Queue tests cover hook-triggered enqueue, retry, empty refill, and lifecycle
   operations.

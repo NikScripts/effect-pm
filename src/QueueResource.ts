@@ -90,14 +90,23 @@ import {
 export type Priority = "high" | "normal" | "low";
 
 /**
+ * Enqueue a single item or a readonly batch of items.
+ *
+ * @public
+ */
+export interface QueueEnqueue<T> {
+  (item: T): Effect.Effect<void>;
+  (items: ReadonlyArray<T>): Effect.Effect<void>;
+}
+
+/**
  * The service interface returned from `yield* MyQueue`.
  *
  * All observation methods (`size`, `sizes`, `isEmpty`, `completed`) and lifecycle
  * actions (`pause`, `resume`, `shutdown`, `clear`) are effectful properties —
  * access them with `yield*` directly (no function call parentheses).
  *
- * Enqueue methods accept `Iterable<T>` for both single items (`[item]`) and
- * batches (`items`).
+ * Enqueue methods accept either a single item or a readonly array of items.
  *
  * @typeParam T - Item type processed by this queue
  * @typeParam _R - Success type of the item effect (phantom, used for type inference)
@@ -106,21 +115,26 @@ export type Priority = "high" | "normal" | "low";
  * @example
  * ```ts
  * const queue = yield* MyQueue
- * yield* queue.add([item1, item2])
- * yield* queue.prioritize([urgentItem])
+ * yield* queue.add(item1)
+ * yield* queue.add([item2, item3])
+ * yield* queue.prioritize(urgentItem)
  * const pending = yield* queue.size
  * yield* queue.pause
  * ```
  *
  * @public
  */
-export interface QueueHandle<in out T, out _R = void, out _E = never> {
+export interface QueueHandle<
+  in out T,
+  out _R = void,
+  out _E = never,
+> {
   /** Enqueue items at **normal** priority. */
-  readonly add: (items: Iterable<T>) => Effect.Effect<void>;
+  readonly add: QueueEnqueue<T>;
   /** Enqueue items at **high** priority (processed before normal and low). */
-  readonly prioritize: (items: Iterable<T>) => Effect.Effect<void>;
+  readonly prioritize: QueueEnqueue<T>;
   /** Enqueue items at **low** priority (processed after high and normal). */
-  readonly defer: (items: Iterable<T>) => Effect.Effect<void>;
+  readonly defer: QueueEnqueue<T>;
 
   /** Total pending items across all priority levels. */
   readonly size: Effect.Effect<number>;
@@ -172,11 +186,11 @@ export interface QueueHandle<in out T, out _R = void, out _E = never> {
  */
 export interface EffectContext<T> {
   /** Enqueue derived items at normal priority. Self-enqueue is warned and dropped. */
-  readonly add: (items: Iterable<T>) => Effect.Effect<void>;
+  readonly add: QueueEnqueue<T>;
   /** Enqueue derived items at high priority. Self-enqueue is warned and dropped. */
-  readonly prioritize: (items: Iterable<T>) => Effect.Effect<void>;
+  readonly prioritize: QueueEnqueue<T>;
   /** Enqueue derived items at low priority. Self-enqueue is warned and dropped. */
-  readonly defer: (items: Iterable<T>) => Effect.Effect<void>;
+  readonly defer: QueueEnqueue<T>;
   /** How many times this item has been processed (1 = first attempt). */
   readonly attempts: number;
   /** When the item first entered the queue as epoch millis (preserved across retries). */
@@ -207,11 +221,11 @@ export interface HandlerContext<T> {
    */
   readonly retry: Effect.Effect<void>;
   /** Enqueue items at normal priority (unguarded). */
-  readonly add: (items: Iterable<T>) => Effect.Effect<void>;
+  readonly add: QueueEnqueue<T>;
   /** Enqueue items at high priority (unguarded). */
-  readonly prioritize: (items: Iterable<T>) => Effect.Effect<void>;
+  readonly prioritize: QueueEnqueue<T>;
   /** Enqueue items at low priority (unguarded). */
-  readonly defer: (items: Iterable<T>) => Effect.Effect<void>;
+  readonly defer: QueueEnqueue<T>;
   /** How many times this item has been processed (1 = first attempt). */
   readonly attempts: number;
   /** When the item first entered the queue as epoch millis (preserved across retries). */
@@ -341,9 +355,12 @@ export class QueueShutdownError extends Data.TaggedError(
 // Internal Utilities
 // ============================================================================
 
-/** Convert any `Iterable<A>` to a concrete array for indexed access. */
-function iterableToArray<A>(input: Iterable<A>): ReadonlyArray<A> {
-  return Array.from(input);
+const isReadonlyArray = <A>(input: A | ReadonlyArray<A>): input is ReadonlyArray<A> =>
+  Array.isArray(input);
+
+/** Normalize public enqueue input without treating arbitrary iterables as batches. */
+function normalizeEnqueueInput<A>(input: A | ReadonlyArray<A>): ReadonlyArray<A> {
+  return isReadonlyArray(input) ? input : [input];
 }
 
 // ============================================================================
@@ -552,9 +569,9 @@ const makeQueueEffect = <T, R, E>(
 
     /** Public enqueue: convert Iterable to array, delegate to internal. */
     const enqueuePublic = (
-      items: Iterable<T>,
+      items: T | ReadonlyArray<T>,
       priority: Priority,
-    ): Effect.Effect<void> => enqueueInternal(iterableToArray(items), priority);
+    ): Effect.Effect<void> => enqueueInternal(normalizeEnqueueInput(items), priority);
 
     // ─── Internal: EffectContext (guarded) ───
 
@@ -573,11 +590,11 @@ const makeQueueEffect = <T, R, E>(
       };
 
       const guardedEnqueue = (
-        candidates: Iterable<T>,
+        candidates: T | ReadonlyArray<T>,
         priority: Priority,
       ): Effect.Effect<void> =>
         Effect.gen(function* () {
-          const items = iterableToArray(candidates);
+          const items = normalizeEnqueueInput(candidates);
           const safe = items.filter((c) => !isSameItem(c));
           if (safe.length < items.length) {
             yield* Effect.logWarning(
