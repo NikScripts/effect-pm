@@ -10,6 +10,13 @@ queryable boundary for the event types that already exist. It should not redesig
 queue persistence, remove `persist` / `refill`, add handoff, or introduce
 resource lifecycle storage. Those are later plan 01 slices.
 
+Design note: after [11 - Runtime state, listener hooks, history, and mutable
+config](./11-runtime-state-hooks-and-config.md), do not implement this phase by
+adding a new store method for every resource feature. Reconcile the concrete API
+with the generic state/fact storage model first. The useful parts of this plan
+are the current-state audit, memory/Prisma consistency requirements, and
+verification criteria.
+
 ## Preflight: current code vs planned gaps
 
 Before implementing phase one, verify these facts against the source. If any

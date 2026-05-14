@@ -2,15 +2,17 @@
 
 ## Status
 
-Candidate plan. This captures open design ideas and should not be treated as an
-approved implementation plan yet.
+Planned direction with unsettled API names. Most of this model should be
+implemented, but the final public shape must line up with
+[07 - Typed ProcessGroup and remote ProcessManager](./07-process-manager.md).
 
 ## Intent
 
 Define a future runtime model where processes and resources own their live
 state, publish state changes as they happen, and optionally persist state
-history through `ProcessStore` / storage. This is separate from the
-`ProcessGroup` / `ProcessManager` shape, but it informs both.
+history through `ProcessStore` / storage. This is the state/history foundation
+that typed `ProcessGroup` contracts and remote `ProcessManager` clients should
+consume.
 
 The core concern: the store should not need a new method every time a process or
 resource grows a feature. New modules should define their own state and signal
@@ -372,8 +374,9 @@ Potential stored data:
 
 ## ProcessGroup / ProcessManager state
 
-This plan does not settle the `ProcessGroup` / `ProcessManager` redesign, but it
-does preserve the state and storage requirements those designs must support.
+The concrete PG/PM contract design lives in
+[07 - Typed ProcessGroup and remote ProcessManager](./07-process-manager.md).
+This section defines the state data that design should consume.
 
 Potential group state:
 
