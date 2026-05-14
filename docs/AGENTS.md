@@ -21,7 +21,7 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 | `examples/*` | Runnable teaching scripts. |
 | `examples/mocks/*` | Test doubles, scenario docs, **`demo-harness.mock.ts`** (`forkChild` + `TestClock` + Node exit). |
 | `docs/plans/*.md` | Future-only roadmap items. Implemented behavior belongs in regular docs and source TSDoc. |
-| `docs/plans/10-agent-implementation-roadmap.md` | **Meta roadmap** for agents: phased implementation of plans 01–09, code sketches, verification. Read after [`docs/plans/README.md`](./plans/README.md). |
+| `docs/plans/10-process-store-phase-one.md` | Detailed first implementation slice for plan 01: `ProcessStore` read foundation, current-state checks, code sketches, and verification. Read after [`docs/plans/README.md`](./plans/README.md). |
 | `repos/effect/` | Vendored Effect source for read-only agent reference. **Do not import from it.** |
 | `test/*.ts` | Vitest suites — run `pnpm test`. |
 
@@ -76,7 +76,7 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 | Add an example | Add `examples/foo.ts`, document in `examples/README.md`, add `package.json` script if runnable. Put heavy mock / scenario prose in `examples/mocks/*.mock.ts` when it would drown the entry script. |
 | Verify types (strict Effect rules) | `pnpm run typecheck` (uses `tsgo`). `anyUnknownInErrorContext` is temporarily `"off"`; see [strict any/unknown plan](./plans/09-strict-any-unknown.md). |
 | Run tests | `pnpm test` |
-| Implement store + queue roadmap | Follow numbered plans in [`docs/plans/README.md`](./plans/README.md); use phased slice order in [`docs/plans/10-agent-implementation-roadmap.md`](./plans/10-agent-implementation-roadmap.md). |
+| Implement store + queue roadmap | Follow numbered plans in [`docs/plans/README.md`](./plans/README.md); start plan 01 with [`docs/plans/10-process-store-phase-one.md`](./plans/10-process-store-phase-one.md). |
 
 ---
 
