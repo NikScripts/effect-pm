@@ -23,6 +23,7 @@ that later plans depend on.
 | 07 | [ProcessManager](./07-process-manager.md) | Future multi-group coordinator across hosts, tenants, or isolation boundaries. |
 | 08 | [Lifecycle machine](./08-lifecycle-machine.md) | Explore an internal typed lifecycle kernel for queues, processes, schedules, and control eligibility. |
 | 09 | [Strict any/unknown rule](./09-strict-any-unknown.md) | Re-enable `anyUnknownInErrorContext` when the queue/process typing boundary can support it. |
+| 10 | [Agent implementation roadmap](./10-agent-implementation-roadmap.md) | **Meta:** execution order, source anchors, and illustrative code for agents implementing plans **01–09** together. |
 
 ## Explicitly discarded from active planning
 
