@@ -265,6 +265,59 @@ describe("PrismaProcessStore — adapter", () => {
     }).pipe(provideLayer(PrismaProcessStore.layer({ client })));
   });
 
+  it.live("orders process executions by event occurrence time", () => {
+    const { client } = makeFakeClient();
+    return Effect.gen(function* () {
+      const store = yield* ProcessStore;
+
+      const earlyStart = utcMillisFromIso("2026-01-01T00:00:00.000Z");
+      const lateStart = utcMillisFromIso("2026-01-01T00:10:00.000Z");
+      const earlyCompletion = utcMillisFromIso("2026-01-01T00:11:00.000Z");
+      const lateCompletion = utcMillisFromIso("2026-01-01T00:12:00.000Z");
+
+      yield* store.appendBatch([
+        {
+          id: "long-run",
+          type: "process.execution.completed",
+          occurredAt: lateCompletion,
+          entityType: "process",
+          entityId: "p-overlap",
+          execution: {
+            scheduleKey: "live",
+            startedAt: earlyStart,
+            completedAt: lateCompletion,
+            durationMs: lateCompletion - earlyStart,
+            status: "completed",
+            isStartupRun: false,
+          },
+        },
+        {
+          id: "short-run",
+          type: "process.execution.completed",
+          occurredAt: earlyCompletion,
+          entityType: "process",
+          entityId: "p-overlap",
+          execution: {
+            scheduleKey: "live",
+            startedAt: lateStart,
+            completedAt: earlyCompletion,
+            durationMs: earlyCompletion - lateStart,
+            status: "completed",
+            isStartupRun: false,
+          },
+        },
+      ]);
+
+      const all = yield* store.getProcessExecutions("p-overlap");
+      expect(all.map((row) => row.id)).toEqual(["long-run", "short-run"]);
+
+      const beforeLateCompletion = yield* store.getProcessExecutions("p-overlap", {
+        before: lateCompletion,
+      });
+      expect(beforeLateCompletion.map((row) => row.id)).toEqual(["short-run"]);
+    }).pipe(provideLayer(PrismaProcessStore.layer({ client })));
+  });
+
   it.live("supports the layer-from-context wiring", () => {
     const { client } = makeFakeClient();
     const layer = Layer.provide(

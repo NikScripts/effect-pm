@@ -80,6 +80,58 @@ describe("ProcessStore.memory", () => {
     }).pipe(provideLayer(ProcessStore.layer)),
   )
 
+  it.live("orders process executions by event occurrence time", () =>
+    Effect.gen(function* () {
+      const store = yield* ProcessStore
+
+      const earlyStart = utcDateFromIso("2026-01-01T00:00:00.000Z").getTime()
+      const lateStart = utcDateFromIso("2026-01-01T00:10:00.000Z").getTime()
+      const earlyCompletion = utcDateFromIso("2026-01-01T00:11:00.000Z").getTime()
+      const lateCompletion = utcDateFromIso("2026-01-01T00:12:00.000Z").getTime()
+
+      yield* store.appendBatch([
+        {
+          id: "long-run",
+          type: "process.execution.completed",
+          occurredAt: lateCompletion,
+          entityType: "process",
+          entityId: "p-overlap",
+          execution: {
+            scheduleKey: "live",
+            startedAt: earlyStart,
+            completedAt: lateCompletion,
+            durationMs: lateCompletion - earlyStart,
+            status: "completed",
+            isStartupRun: false,
+          },
+        },
+        {
+          id: "short-run",
+          type: "process.execution.completed",
+          occurredAt: earlyCompletion,
+          entityType: "process",
+          entityId: "p-overlap",
+          execution: {
+            scheduleKey: "live",
+            startedAt: lateStart,
+            completedAt: earlyCompletion,
+            durationMs: earlyCompletion - lateStart,
+            status: "completed",
+            isStartupRun: false,
+          },
+        },
+      ])
+
+      const all = yield* store.getProcessExecutions("p-overlap")
+      expect(all.map((row) => row.id)).toEqual(["long-run", "short-run"])
+
+      const beforeLateCompletion = yield* store.getProcessExecutions("p-overlap", {
+        before: lateCompletion,
+      })
+      expect(beforeLateCompletion.map((row) => row.id)).toEqual(["short-run"])
+    }).pipe(provideLayer(ProcessStore.layer)),
+  )
+
   it.live("appends and queries process lifecycle events", () =>
     Effect.gen(function* () {
       const store = yield* ProcessStore

@@ -826,11 +826,14 @@ const makeQueueEffect = <T, R, E>(
 
       clear: Effect.gen(function* () {
         let count = 0;
-        const drain = <A>(q: Queue.Queue<A>): Effect.Effect<void> =>
+        const drain = (q: Queue.Queue<InternalItem<T>>): Effect.Effect<void> =>
           Effect.gen(function* () {
-            const item = yield* Queue.poll(q);
-            if (Option.isSome(item)) {
+            const internal = yield* Queue.poll(q);
+            if (Option.isSome(internal)) {
               count++;
+              if (config.key !== undefined && internal.value.key !== undefined) {
+                yield* Ref.update(activeKeys, HashSet.remove(internal.value.key));
+              }
               yield* drain(q);
             }
           });

@@ -225,8 +225,8 @@ const makeInMemoryProcessStore = Effect.sync<ProcessStoreInterface>(() => {
               event.entityType === "process" &&
               event.entityId === processId,
           )
-          .sort(byTimestampDesc((event) => event.execution.startedAt));
-        return applyQueryOpts(rows, opts, (event) => event.execution.startedAt);
+          .sort(byTimestampDesc((event) => event.occurredAt));
+        return applyQueryOpts(rows, opts, (event) => event.occurredAt);
       }),
 
     getProcessLifecycle: (processId, opts) =>

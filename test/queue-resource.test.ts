@@ -254,6 +254,31 @@ describe("QueueResource.make — dedup (key)", () => {
       expect(results.sort()).toEqual(["a", "b"]);
     }).pipe(Effect.scoped),
   );
+
+  it.live("releases keys for pending items removed by clear", () =>
+    Effect.gen(function* () {
+      const processed = yield* Ref.make<Array<string>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-dedup-clear",
+        paused: true,
+        effect: (item: { readonly id: string }) =>
+          Ref.update(processed, (arr) => [...arr, item.id]),
+        key: (item) => item.id,
+        concurrency: 1,
+      });
+
+      yield* queue.add({ id: "a" });
+      const cleared = yield* queue.clear;
+      expect(cleared).toBe(1);
+
+      yield* queue.add({ id: "a" });
+      yield* queue.resume;
+      yield* waitUntilCompleted(queue, 1);
+
+      const results = yield* Ref.get(processed);
+      expect(results).toEqual(["a"]);
+    }).pipe(Effect.scoped),
+  );
 });
 
 describe("QueueResource.make — retry via handler", () => {
