@@ -37,6 +37,8 @@ It should own:
 - process lifecycle history,
 - queue item history,
 - queue lifecycle history,
+- queue enqueue rejection / validation history,
+- queue release and handoff history,
 - resource lifecycle history,
 - projected summaries,
 - optional event streaming,
@@ -112,6 +114,29 @@ Instead:
 - custom durable queue semantics are implemented by a custom `ProcessStore` or
   future queue storage implementation, not by special callback names.
 
+`ProcessStore` should also record failed enqueue attempts when the runtime can
+observe them, especially schema validation failures, duplicate key rejections,
+and release / handoff import failures. Invalid items are not queue items yet,
+but they are still operationally important events.
+
+## Queue handoff implication
+
+Queue handoff depends on queue-level schema or codec support.
+
+The store should be able to record:
+
+- release requested,
+- release completed,
+- release rejected,
+- enqueue imported,
+- enqueue validation failed,
+- handoff source / target group metadata,
+- release batch id.
+
+The store does not need to understand the user payload. It can store encoded
+payload metadata, attributes, and validation diagnostics supplied by the queue
+runtime or storage implementation.
+
 ## Schedule persistence boundary
 
 Do not make `ProcessStore` the default mutable schedule database.
@@ -127,5 +152,6 @@ what should run.
 - Queue reads no longer require ad hoc store access.
 - Prisma implementation supports the expanded interface.
 - Queue persistence no longer depends on `persist`.
+- Queue validation and handoff events can be stored and queried.
 - Docs explain how to provide a custom store.
 - Examples include memory, Prisma, and custom store wiring.

@@ -32,19 +32,26 @@ Candidate queue events:
 - `queue.lifecycle.shutdown`
 - `queue.lifecycle.cleared`
 - `queue.item.enqueued`
+- `queue.item.enqueue_rejected`
 - `queue.item.started`
 - `queue.item.completed`
 - `queue.item.failed`
 - `queue.item.retry.scheduled`
 - `queue.item.retry.exhausted`
 - `queue.item.dead_lettered`
+- `queue.release.requested`
+- `queue.release.completed`
+- `queue.release.failed`
 - `queue.empty`
 - `queue.drained`
 
 Event payloads should include, where available:
 
 - queue name,
+- entry id,
 - item key,
+- release id,
+- source group / deployment metadata,
 - priority,
 - attempt number,
 - enqueue timestamp,
@@ -53,6 +60,7 @@ Event payloads should include, where available:
 - duration,
 - error/cause string,
 - lifecycle state,
+- validation diagnostics,
 - hook/source metadata.
 
 If an `onEmpty` or `onDrained` hook adds more work, that follow-up work should
@@ -65,6 +73,8 @@ Add queue reads to `ProcessStore`:
 
 - `getQueueItems(queueId, opts)`
 - `getQueueLifecycle(queueId, opts)`
+- `getQueueEnqueueRejections(queueId, opts)`
+- `getQueueReleases(queueId, opts)`
 - `getQueueSummary(queueId, opts)`
 - `getQueueFailures(queueId, opts)`
 - `getQueueDeadLetters(queueId, opts)`
@@ -77,6 +87,8 @@ Projection candidates:
 - failure rate,
 - retry rate,
 - exhausted count,
+- validation rejection count,
+- release success / failure count,
 - average processing duration,
 - enqueue-to-start latency,
 - throughput by priority,
@@ -107,5 +119,6 @@ events should describe what the runtime observed, not what hooks chose to do.
 - Memory and Prisma stores implement queue reads.
 - Queue events cover enqueue, start, completion, retry, exhaustion, and
   lifecycle transitions.
+- Queue events cover schema validation rejection and release / handoff events.
 - Queue status can be projected from store events.
 - `ControlService` can read queue history without knowing queue internals.

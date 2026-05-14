@@ -37,6 +37,22 @@ describe("QueueResource.make — basic processing", () => {
     }).pipe(Effect.scoped),
   );
 
+  it.live("treats a single string as one item, not an iterable batch", () =>
+    Effect.gen(function* () {
+      const results = yield* Ref.make<Array<string>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-single-string",
+        effect: (value: string) =>
+          Ref.update(results, (arr) => [...arr, value]),
+        ...fastConfig,
+      });
+      yield* queue.add("hello");
+      yield* waitUntilCompleted(queue, 1);
+      const final = yield* Ref.get(results);
+      expect(final).toEqual(["hello"]);
+    }).pipe(Effect.scoped),
+  );
+
   it.live("processes prioritized items before normal", () =>
     Effect.gen(function* () {
       const order = yield* Ref.make<Array<string>>([]);

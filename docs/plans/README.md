@@ -15,7 +15,7 @@ that later plans depend on.
 | # | Plan | Purpose |
 | - | ---- | ------- |
 | 01 | [ProcessStore as the storage service](./01-process-store-service.md) | Turn `ProcessStore` into the durable service boundary for processes, queues, resources, and custom storage implementations. |
-| 02 | [Queue controls and lifecycle hooks](./02-queue-controls-and-hooks.md) | Replace special `persist` / `refill` callbacks with queue-bound controls passed to effects and hooks. |
+| 02 | [Queue controls, schema, handoff, and lifecycle hooks](./02-queue-controls-and-hooks.md) | Define queue-bound controls, schema-driven enqueue validation, release/handoff envelopes, and lifecycle hooks. |
 | 03 | [Queue analytics v2](./03-queue-analytics-v2.md) | Add first-class queue events, reads, projections, and summaries through `ProcessStore`. |
 | 04 | [Schedule identity and persistence boundaries](./04-schedule-identity-and-persistence.md) | Clarify schedule persistence, stable IDs, DB sync, and removal cleanup. |
 | 05 | [Control service v2](./05-control-service-v2.md) | Upgrade local control from a single command endpoint to a richer control and streaming surface. |

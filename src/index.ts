@@ -130,6 +130,7 @@ export type { ProcessScheduleService } from "./ProcessSchedule";
 // Types - QueueResource
 export type {
   QueueHandle,
+  QueueEnqueue,
   QueueResourceConfig,
   QueueShutdownError,
   EffectContext,
