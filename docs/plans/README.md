@@ -24,6 +24,7 @@ that later plans depend on.
 | 08 | [Lifecycle machine](./08-lifecycle-machine.md) | Explore an internal typed lifecycle kernel for queues, processes, schedules, and control eligibility. |
 | 09 | [Strict any/unknown rule](./09-strict-any-unknown.md) | Re-enable `anyUnknownInErrorContext` when the queue/process typing boundary can support it. |
 | 10 | [Plan 01 phase one: ProcessStore read foundation](./10-process-store-phase-one.md) | Detailed first implementation slice for plan **01**: current-state checks, additive read APIs, memory/Prisma work, tests, and release notes. |
+| 11 | [Runtime state, listener hooks, history, and mutable config](./11-runtime-state-hooks-and-config.md) | **Candidate:** preserve open design ideas for state snapshots/history, external listeners, store expansion, per-resource data, and config changes after start. |
 
 ## Explicitly discarded from active planning
 
