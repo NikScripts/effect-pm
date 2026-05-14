@@ -35,6 +35,37 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 
 ---
 
+## Engineering and change-management rules
+
+- Prefer type-safe designs over casts; do not use unsafe type casts to bypass
+  TypeScript.
+- Narrow unknown values with predicates, schemas, or typed APIs instead of
+  assertion-heavy code.
+- Fix type errors wherever they appear during a task; do not ignore unrelated
+  type failures.
+- Typecheck frequently while editing Effect-heavy or public API code.
+- For non-trivial changes, validate with `pnpm run typecheck`, `pnpm test`,
+  `pnpm run build`, and `pnpm run lint` unless the task is docs-only or the
+  user explicitly narrows testing.
+- Recommend a changeset whenever public API, behavior, package metadata, or
+  release notes are affected. Creating or editing a changeset requires user
+  approval.
+- Recommend commits, PRs, or merges when appropriate.
+- Commits, PR creation/update, and merges to branches created by the user
+  require user approval first.
+- Commits, PR creation/update, and pushes on agent-created branches are allowed
+  when needed for the task.
+- Keep docs and plans separate: regular docs describe implemented behavior;
+  `docs/plans` describes future work only.
+- Prefer existing Effect patterns, services, and local helper APIs over ad hoc
+  abstractions.
+- Make validation deterministic from type/config shape where possible; avoid
+  extra boolean flags for behavior that can be derived.
+- Hooks should be powerful extension points, but core persistence/analytics
+  should be automatic through services such as `ProcessStore`.
+
+---
+
 ## Common tasks
 
 | Task | Approach |
