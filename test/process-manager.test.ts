@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Ref } from "effect";
 import {
   ControlService,
@@ -151,6 +152,101 @@ describe("ProcessManager", () => {
           provideLayer(
             ProcessManager.ConnectionRegistry.layer([BillingGroup] as const, {
               [BillingGroup.id]: "http://127.0.0.1:32136",
+            }),
+          ),
+          provideLayer(NodeHttpClient.layerUndici),
+        );
+      }),
+    ),
+  );
+
+  it.live("runs a multi-group CLI with target aliases from the connection registry", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const northRuns = yield* Ref.make(0);
+        const southRuns = yield* Ref.make(0);
+
+        class NorthQueue extends QueueResource.Service<NorthQueue, Email, void>()(
+          "@repo/NorthWest/BillingGroup/BillingEmailQueue",
+          {
+            effect: (_email) => Effect.void,
+          },
+        ) {}
+
+        class SouthQueue extends QueueResource.Service<SouthQueue, Email, void>()(
+          "@repo/SouthWest/BillingGroup/BillingEmailQueue",
+          {
+            effect: (_email) => Effect.void,
+          },
+        ) {}
+
+        class NorthSync extends Process.Service<NorthSync>()(
+          "@repo/NorthWest/BillingGroup/SyncInvoices",
+          {
+            effect: Ref.update(northRuns, (count) => count + 1),
+          },
+        ) {}
+
+        class SouthSync extends Process.Service<SouthSync>()(
+          "@repo/SouthWest/BillingGroup/SyncInvoices",
+          {
+            effect: Ref.update(southRuns, (count) => count + 1),
+          },
+        ) {}
+
+        class NorthGroup extends ProcessGroup.Service<NorthGroup>()(
+          "@repo/NorthWest/BillingGroup",
+          [NorthSync, NorthQueue] as const,
+        ) {}
+
+        class SouthGroup extends ProcessGroup.Service<SouthGroup>()(
+          "@repo/SouthWest/BillingGroup",
+          [SouthSync, SouthQueue] as const,
+        ) {}
+
+        yield* Effect.gen(function* () {
+          const northGroup = yield* NorthGroup;
+          const southGroup = yield* SouthGroup;
+          const cli = ProcessManager.cli([NorthGroup, SouthGroup] as const, {
+            name: "Test ProcessManager CLI",
+            version: "0.0.0",
+          });
+
+          yield* ControlService.make({
+            port: 32138,
+            group: northGroup,
+          });
+          yield* ControlService.make({
+            port: 32139,
+            group: southGroup,
+          });
+
+          yield* cli([
+            "now",
+            "north-west/billing-group/sync-invoices",
+          ]);
+          const ambiguous = yield* cli([
+            "now",
+            "sync-invoices",
+          ]).pipe(Effect.flip);
+
+          expect(yield* Ref.get(northRuns)).toBe(1);
+          expect(yield* Ref.get(southRuns)).toBe(0);
+          expect(ambiguous._tag).toBe("ProcessManagerConnectionError");
+          if (ambiguous._tag === "ProcessManagerConnectionError") {
+            expect(ambiguous.reason).toContain("Ambiguous target");
+          }
+        }).pipe(
+          provideLayer(NorthGroup.layer),
+          provideLayer(SouthGroup.layer),
+          provideLayer(NorthQueue.layer),
+          provideLayer(SouthQueue.layer),
+          provideLayer(ProcessStore.layer),
+          provideLayer(NodeServices.layer),
+          provideLayer(
+            ProcessManager.ConnectionRegistry.layer([NorthGroup, SouthGroup] as const, {
+              [NorthGroup.id]: "http://127.0.0.1:32138",
+              [SouthGroup.id]: "http://127.0.0.1:32139",
             }),
           ),
           provideLayer(NodeHttpClient.layerUndici),
