@@ -20,7 +20,7 @@ Pick a track based on what you are building.
 
 | Track | Read in this order |
 |------|---------------------|
-| **Start here** | [`example.ts`](./example.ts) → [`cli.ts`](./cli.ts) |
+| **Start here** | [`example.ts`](./example.ts) → [`typed-process-group.ts`](./typed-process-group.ts) → [`cli.ts`](./cli.ts) |
 | **Queues** | [`queue-resource.ts`](./queue-resource.ts) → [`example.ts`](./example.ts) |
 | **Schedule controls** | [`schedule-control-basics.ts`](./schedule-control-basics.ts) → [`schedule-control-surfaces.ts`](./schedule-control-surfaces.ts) → [`schedule-control-db-sync.ts`](./schedule-control-db-sync.ts) |
 | **Process runtime behavior** | [`process-supervisor-patterns.ts`](./process-supervisor-patterns.ts) → [`process-game-window-with-group.ts`](./process-game-window-with-group.ts) |
@@ -36,6 +36,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). Proc
 | Script | What it runs |
 |--------|----------------|
 | `pnpm run example` | Full ProcessGroup demo (`example.ts`). |
+| `pnpm run example:typed-process-group` | Typed ProcessGroup declarations, injectable group service, and `GET /contract`. |
 | `pnpm run example:queue-resource` | QueueResource priority + retry demo. |
 | `pnpm run cli …` | CLI against the demo control port (pass args after `--`). |
 | `pnpm run example:process-supervisor-patterns` | Supervisor patterns with TestClock. |
@@ -63,6 +64,7 @@ npx tsx examples/<file>.ts
 | File | Teaches |
 |------|---------|
 | [`example.ts`](./example.ts) | End-to-end **ProcessGroup.make**, **queues**, **Process.make** (polling + schedule inlined), **ProcessStore.layer**, **serve** + **awaitShutdown**, **Layer.mergeAll** for root `provide`. |
+| [`typed-process-group.ts`](./typed-process-group.ts) | **`Process.define`**, **`QueueResource.define`**, **`ProcessGroup.define`**, **`ProcessGroup.Service`**, typed queue controls, and **`ControlService` `GET /contract`**. |
 | [`queue-resource.ts`](./queue-resource.ts) | Focused **QueueResource.Service** example: priority enqueue, dedup key, handler-driven retry, and effectful status properties. |
 | [`cli.ts`](./cli.ts) | Wiring **`runCli`** with port from `HOME_SERVER_PORT` (must match the demo). |
 | [`schedule-control-basics.ts`](./schedule-control-basics.ts) | Minimal schedule entry patterns: one-shot starts, bounded windows, and `ProcessSchedule.define` composition. |
