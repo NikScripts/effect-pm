@@ -92,7 +92,11 @@ export interface RemoteProcessControls {
 export interface RemoteQueueControls {
   readonly pause: Effect.Effect<void, ProcessManagerRequestError, HttpClient.HttpClient>;
   readonly resume: Effect.Effect<void, ProcessManagerRequestError, HttpClient.HttpClient>;
-  readonly clear: Effect.Effect<void, ProcessManagerRequestError, HttpClient.HttpClient>;
+  readonly clear: Effect.Effect<
+    ControlResponse<unknown>,
+    ProcessManagerRequestError,
+    HttpClient.HttpClient
+  >;
   readonly status: Effect.Effect<
     ControlResponse<unknown>,
     ProcessManagerRequestError,
@@ -333,7 +337,7 @@ const makeRemoteProcessManager = <
     queue: (id) => ({
       pause: commandVoid(baseUrl, `/queues/${encodeURIComponent(id)}/pause`),
       resume: commandVoid(baseUrl, `/queues/${encodeURIComponent(id)}/resume`),
-      clear: commandVoid(baseUrl, `/queues/${encodeURIComponent(id)}/clear`),
+      clear: postControl(baseUrl, `/queues/${encodeURIComponent(id)}/clear`),
       status: getControl(baseUrl, `/queues/${encodeURIComponent(id)}`),
     }),
     status: getControl(baseUrl, "/status"),

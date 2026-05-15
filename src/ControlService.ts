@@ -133,18 +133,19 @@ type AnyProcessGroupContract = ProcessGroupContract<
   readonly ProcessGroupEntry[]
 >;
 
-type LegacyControlServiceOptions<R> = {
+type LegacyControlServiceOptions<R, Error = unknown> = {
   readonly port?: number;
-  readonly group: ProcessGroupControls<R>;
+  readonly group: ProcessGroupControls<R, Error>;
   readonly contract?: AnyProcessGroupContract;
 };
 
 type TypedControlServiceOptions<
   Id extends string,
   Entries extends readonly ProcessGroupEntry[],
+  Error = unknown,
 > = {
   readonly port?: number;
-  readonly group: TypedProcessGroup<Id, Entries>;
+  readonly group: TypedProcessGroup<Id, Entries, Error>;
 };
 
 const writeJson = (
@@ -255,11 +256,11 @@ interface RouteResponse {
 }
 
 const handleRestRoute =
-  <R>(group: ProcessGroupControls<R>) =>
+  <R, Error>(group: ProcessGroupControls<R, Error>) =>
   (
     method: string | undefined,
     url: URL,
-  ): Effect.Effect<RouteResponse | undefined, never, R | ProcessStore> =>
+  ): Effect.Effect<RouteResponse | undefined, Error, R | ProcessStore> =>
     Effect.gen(function* () {
       const segments = pathSegments(url);
       if (segments === undefined) {
@@ -393,11 +394,11 @@ const handleRestRoute =
     });
 
 const handleCommand =
-  <R>(group: ProcessGroupControls<R>) =>
+  <R, Error>(group: ProcessGroupControls<R, Error>) =>
   (
     command: ControlCommand,
     name?: string,
-  ): Effect.Effect<ControlResponse<unknown>, never, R | ProcessStore> =>
+  ): Effect.Effect<ControlResponse<unknown>, Error, R | ProcessStore> =>
     Effect.gen(function* () {
       switch (command) {
         case "ls": {
@@ -653,14 +654,15 @@ const handleCommand =
  * 
  * @public
  */
-function startControlService<R>(
-  options: LegacyControlServiceOptions<R>,
+function startControlService<R, Error>(
+  options: LegacyControlServiceOptions<R, Error>,
 ): Effect.Effect<void, never, Scope.Scope | R | ProcessStore>;
 function startControlService<
   const Id extends string,
   const Entries extends readonly ProcessGroupEntry[],
+  Error,
 >(
-  options: TypedControlServiceOptions<Id, Entries>,
+  options: TypedControlServiceOptions<Id, Entries, Error>,
 ): Effect.Effect<
   void,
   never,
@@ -668,8 +670,8 @@ function startControlService<
 >;
 function startControlService(
   options:
-    | LegacyControlServiceOptions<unknown>
-    | TypedControlServiceOptions<string, readonly ProcessGroupEntry[]>,
+    | LegacyControlServiceOptions<unknown, unknown>
+    | TypedControlServiceOptions<string, readonly ProcessGroupEntry[], unknown>,
 ): Effect.Effect<void, never, Scope.Scope | unknown | ProcessStore> {
   return Effect.acquireRelease(
     Effect.gen(function* () {

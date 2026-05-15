@@ -65,6 +65,20 @@ const program = Effect.scoped(
       yield* manager.verifyContract;
       yield* manager.process(SyncProcess.id).runImmediately;
 
+      const remoteGroupProgram = Effect.gen(function* () {
+        const remoteBilling = yield* BillingGroup;
+
+        yield* remoteBilling.process(SyncProcess).runImmediately;
+        yield* remoteBilling.queue(EmailQueue).pause;
+        yield* remoteBilling.queue(EmailQueue).resume;
+      }).pipe(
+        provideLayer(ProcessGroup.remoteLayer(BillingGroup, BillingEndpoint)),
+        provideLayer(BillingEndpoint.layer),
+        provideLayer(NodeHttpClient.layerUndici),
+      );
+
+      yield* remoteGroupProgram;
+
       const status = yield* manager.status;
       yield* Effect.logInfo(`endpoint contract id: ${BillingEndpoint.contract.id}`);
       yield* Effect.logInfo(`remote process runs: ${String(yield* Ref.get(runs))}`);

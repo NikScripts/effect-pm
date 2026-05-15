@@ -127,6 +127,9 @@ export type {
   TypedProcessControls,
   TypedQueueControls,
   TypedProcessGroup,
+  ProcessGroupControlError,
+  ProcessGroupRemoteEndpointDefinition,
+  ProcessGroupServiceDefinition,
 } from "./ProcessGroup";
 
 // Error classes - ProcessGroup
@@ -134,6 +137,8 @@ export {
   ProcessNotFoundError,
   ProcessAlreadyRunningError,
   ProcessNotRunningError,
+  ProcessGroupRemoteControlError,
+  UnsupportedRemoteControlError,
   ProcessGroupProcessControlSchema,
   ProcessGroupQueueControlSchema,
   ProcessGroupProcessContractSchema,

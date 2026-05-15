@@ -195,4 +195,97 @@ describe("ProcessManager", () => {
       }),
     ),
   );
+
+  it.live("provides typed remote group controls through ProcessGroup.remoteLayer", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const delivered = yield* Ref.make<ReadonlyArray<string>>([]);
+        const runs = yield* Ref.make(0);
+
+        class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+          "@test/RemoteLayerEmailQueue",
+          {
+            effect: (email) =>
+              Ref.update(delivered, (emails) => [...emails, email.to]),
+            concurrency: 1,
+          },
+        ) {}
+
+        class SyncProcess extends Process.Service<SyncProcess>()(
+          "@test/RemoteLayerProcess",
+          {
+            effect: Ref.update(runs, (count) => count + 1),
+          },
+        ) {}
+
+        class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+          "@test/RemoteLayerGroup",
+          [SyncProcess, EmailQueue] as const,
+        ) {}
+
+        class BillingEndpoint extends ProcessManager.Endpoint<BillingEndpoint>()(
+          BillingGroup,
+          {
+            baseUrl: "http://127.0.0.1:32131",
+          },
+        ) {}
+
+        yield* Effect.gen(function* () {
+          const localGroup = yield* BillingGroup;
+          const localQueue = yield* EmailQueue;
+
+          yield* ControlService.make({
+            port: 32131,
+            group: localGroup,
+          });
+
+          const remoteProgram = Effect.gen(function* () {
+            const remoteGroup = yield* BillingGroup;
+
+            yield* remoteGroup.process(SyncProcess).runImmediately;
+            yield* remoteGroup.queue(EmailQueue).pause;
+            yield* localQueue.add({ to: "ops@example.com" });
+            yield* Effect.sleep("20 millis");
+
+            expect(yield* Ref.get(runs)).toBe(1);
+            expect(yield* Ref.get(delivered)).toEqual([]);
+
+            yield* remoteGroup.queue(EmailQueue).resume;
+            yield* waitForQueueCompleted(localQueue, 1);
+
+            const queueStatus = yield* remoteGroup.queue(EmailQueue).status;
+            expect(queueStatus).toMatchObject({
+              name: EmailQueue.id,
+              completed: 1,
+            });
+
+            yield* remoteGroup.queue(EmailQueue).pause;
+            yield* localQueue.add([
+              { to: "a@example.com" },
+              { to: "b@example.com" },
+            ]);
+
+            const cleared = yield* remoteGroup.queue(EmailQueue).clear;
+            expect(cleared).toBe(1);
+
+            const enqueueError = yield* remoteGroup
+              .queue(EmailQueue)
+              .enqueue({ to: "blocked@example.com" })
+              .pipe(Effect.flip);
+            expect(enqueueError._tag).toBe("UnsupportedRemoteControlError");
+          }).pipe(
+            provideLayer(ProcessGroup.remoteLayer(BillingGroup, BillingEndpoint)),
+            provideLayer(BillingEndpoint.layer),
+            provideLayer(NodeHttpClient.layerUndici),
+          );
+
+          yield* remoteProgram;
+        }).pipe(
+          provideLayer(BillingGroup.layer),
+          provideLayer(EmailQueue.layer),
+          provideLayer(ProcessStore.layer),
+        );
+      }),
+    ),
+  );
 });
