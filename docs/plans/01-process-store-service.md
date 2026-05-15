@@ -79,6 +79,57 @@ by the runtime module. Keep `ProcessStore` as the public storage service name
 until a lower-level `RuntimeStorage` boundary is proven in both memory and
 Prisma implementations.
 
+### Final service split
+
+The final architecture has two layers:
+
+1. **`ProcessStore`** — rich module-facing service used by `Process`,
+   `QueueResource`, `RunResource`, `HttpApiResource`, and `ProcessGroup`.
+2. **`RuntimeStorage`** — generic swappable persistence service used by
+   `ProcessStore`.
+
+Runtime modules should depend on `ProcessStore`, not on `RuntimeStorage`.
+Storage adapters should implement `RuntimeStorage`, not module-specific APIs.
+
+Target dependency direction:
+
+```text
+runtime module -> ProcessStore -> RuntimeStorage -> memory / Prisma / custom
+```
+
+`ProcessStore` may expose ergonomic module sub-surfaces:
+
+```typescript
+interface ProcessStore {
+  readonly runtime: ProcessStoreRuntime;
+  readonly process: ProcessStoreProcess;
+  readonly queue: ProcessStoreQueue;
+  readonly run: ProcessStoreRunResource;
+  readonly http: ProcessStoreHttpApiResource;
+  readonly group: ProcessStoreGroup;
+}
+```
+
+`RuntimeStorage` should remain generic:
+
+```typescript
+interface RuntimeStorage {
+  appendFact(fact: RuntimeFact): Effect.Effect<void>;
+  appendStateChange(change: RuntimeStateChange): Effect.Effect<void>;
+  facts(query?: FactQuery): Effect.Effect<ReadonlyArray<RuntimeFact>>;
+  latestState(ref: RuntimeRef): Effect.Effect<Option.Option<RuntimeStateBase>>;
+  stateHistory(
+    ref: RuntimeRef,
+    query?: HistoryQuery,
+  ): Effect.Effect<ReadonlyArray<RuntimeStateChange>>;
+}
+```
+
+This split lets `ProcessStore.queue.enqueueRejected(...)` be a useful
+module-aware API while keeping the storage adapter surface stable forever.
+`ProcessStore` owns conversion, redaction, projection, and observer bridging.
+`RuntimeStorage` only persists generic records.
+
 Candidate surface:
 
 - `append(event)`

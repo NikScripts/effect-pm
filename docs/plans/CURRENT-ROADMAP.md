@@ -64,6 +64,8 @@ plan for this phase, and reconcile storage work with
 1. Keep `ProcessStore` as the public storage service name for the first slice;
    `RuntimeRef`, `RuntimeStateBase`, `RuntimeStateChange`, `RuntimeFact`, and
    optional `RuntimeObserver` are now implemented without renaming storage.
+   `ProcessStore` is the rich module-facing singleton facade; `RuntimeStorage`
+   is the generic swappable storage boundary underneath it.
 2. `RunResource` is the first observed runtime because it is a low-risk gate with
    no queue payloads, no schema work, and no background workers. It now publishes
    run started/completed/failed facts when `RuntimeObserver` is provided, and

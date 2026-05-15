@@ -195,10 +195,35 @@ export interface RuntimeFact<P = unknown> {
 }
 ```
 
-## Storage boundary
+## ProcessStore facade vs RuntimeStorage boundary
+
+There are two different services in the final shape:
+
+1. **`ProcessStore`** — the rich module-facing singleton service. Runtime modules
+   depend on this service because it knows package concepts and can expose the
+   best API for each module.
+2. **`RuntimeStorage`** — the boring, swappable persistence port underneath
+   `ProcessStore`. Storage adapters implement this service. It does not know
+   about `Process`, `QueueResource`, `RunResource`, `HttpApiResource`, or
+   `ProcessGroup`.
+
+The dependency direction should be:
+
+```text
+Process / QueueResource / RunResource / HttpApiResource / ProcessGroup
+  -> ProcessStore
+  -> RuntimeStorage
+  -> memory / Prisma / custom storage
+```
+
+Runtime modules should not depend on `RuntimeStorage` directly. They call the
+module-specific `ProcessStore` facade, and `ProcessStore` converts semantic
+module operations into generic facts/state changes for `RuntimeStorage`.
+
+### RuntimeStorage
 
 The swappable dependency should be stable and generic. Feature-specific reads
-should live in typed helpers or projections above this interface.
+live in typed helpers or projections above this interface.
 
 ```typescript
 export interface RuntimeStorage {
@@ -223,12 +248,137 @@ export interface RuntimeStorage {
 }
 ```
 
-Resolved for Phase C slice one: keep `ProcessStore` as the public storage name
-and keep `RuntimeStorage` as a deferred lower-level name. The important line is:
+`RuntimeStorage` should not grow methods such as
+`appendQueueItemCompleted(...)`, `appendHttpRequestFailed(...)`, or
+`getRunResourceFailuresByMinute(...)`. Those are module semantics and
+projections, not storage responsibilities.
+
+### ProcessStore
+
+`ProcessStore` is the singleton package service that runtime modules use. It can
+have rich module-specific sub-surfaces because it is package logic, not the
+storage adapter contract.
+
+Target shape:
+
+```typescript
+interface ProcessStore {
+  readonly runtime: ProcessStoreRuntime;
+  readonly process: ProcessStoreProcess;
+  readonly queue: ProcessStoreQueue;
+  readonly run: ProcessStoreRunResource;
+  readonly http: ProcessStoreHttpApiResource;
+  readonly group: ProcessStoreGroup;
+}
+```
+
+Generic escape hatch:
+
+```typescript
+interface ProcessStoreRuntime {
+  readonly appendFact: (fact: RuntimeFact) => Effect.Effect<void>;
+  readonly appendStateChange: (
+    change: RuntimeStateChange,
+  ) => Effect.Effect<void>;
+  readonly facts: (query?: FactQuery) => Effect.Effect<ReadonlyArray<RuntimeFact>>;
+  readonly latestState: (
+    ref: RuntimeRef,
+  ) => Effect.Effect<Option.Option<RuntimeStateBase>>;
+  readonly stateHistory: (
+    ref: RuntimeRef,
+    query?: HistoryQuery,
+  ) => Effect.Effect<ReadonlyArray<RuntimeStateChange>>;
+}
+```
+
+Module-facing examples:
+
+```typescript
+interface ProcessStoreProcess {
+  readonly executionStarted: (processId: string, payload: unknown) => Effect.Effect<void>;
+  readonly executionCompleted: (processId: string, payload: unknown) => Effect.Effect<void>;
+  readonly lifecycleChanged: (processId: string, payload: unknown) => Effect.Effect<void>;
+  readonly stateChanged: (processId: string, state: RuntimeStateBase) => Effect.Effect<void>;
+}
+
+interface ProcessStoreQueue {
+  readonly enqueued: (queueId: string, payload: unknown) => Effect.Effect<void>;
+  readonly enqueueRejected: (queueId: string, payload: unknown) => Effect.Effect<void>;
+  readonly itemStarted: (queueId: string, payload: unknown) => Effect.Effect<void>;
+  readonly itemCompleted: (queueId: string, payload: unknown) => Effect.Effect<void>;
+  readonly retryExhausted: (queueId: string, payload: unknown) => Effect.Effect<void>;
+  readonly lifecycleChanged: (queueId: string, payload: unknown) => Effect.Effect<void>;
+  readonly released: (queueId: string, payload: unknown) => Effect.Effect<void>;
+  readonly imported: (queueId: string, payload: unknown) => Effect.Effect<void>;
+}
+
+interface ProcessStoreRunResource {
+  readonly started: (resourceId: string, payload: unknown) => Effect.Effect<void>;
+  readonly completed: (resourceId: string, payload: unknown) => Effect.Effect<void>;
+  readonly failed: (resourceId: string, payload: unknown) => Effect.Effect<void>;
+}
+
+interface ProcessStoreHttpApiResource {
+  readonly requestStarted: (resourceId: string, payload: unknown) => Effect.Effect<void>;
+  readonly requestCompleted: (resourceId: string, payload: unknown) => Effect.Effect<void>;
+  readonly requestFailed: (resourceId: string, payload: unknown) => Effect.Effect<void>;
+}
+
+interface ProcessStoreGroup {
+  readonly stateChanged: (groupId: string, state: RuntimeStateBase) => Effect.Effect<void>;
+  readonly activated: (groupId: string, payload: unknown) => Effect.Effect<void>;
+  readonly deactivated: (groupId: string, payload: unknown) => Effect.Effect<void>;
+  readonly quiesced: (groupId: string, payload: unknown) => Effect.Effect<void>;
+  readonly drained: (groupId: string, payload: unknown) => Effect.Effect<void>;
+  readonly handoffStarted: (groupId: string, payload: unknown) => Effect.Effect<void>;
+  readonly handoffCompleted: (groupId: string, payload: unknown) => Effect.Effect<void>;
+}
+```
+
+The exact payload types should be narrowed by each module as the module-level
+features land. The shape above is intentionally illustrative; the invariant is
+that module APIs call `ProcessStore`, and `ProcessStore` writes generic
+`RuntimeFact` / `RuntimeStateChange` records to `RuntimeStorage`.
+
+### Projection ownership
+
+Storage adapters persist and query generic facts/state changes. They should not
+own domain-specific projections. Projections such as queue summaries, process
+execution views, HTTP error rates, or group health belong in `ProcessStore` or
+module-owned projection helpers.
+
+Bad storage API:
+
+```typescript
+runtimeStorage.getHttp500sForRoute(...);
+runtimeStorage.getQueueRetryExhaustedItems(...);
+```
+
+Good shape:
+
+```typescript
+const facts = yield* runtimeStorage.facts(query);
+const summary = ProcessStore.QueueProjection.summary(facts);
+```
+
+### Singleton boundary
+
+`ProcessStore` should be singleton by Effect layer, not by global mutable state.
+One runtime should have one provided `ProcessStore` so redaction policy,
+projection caches, observer bridging, and the durable backend are consistent.
+Tests and applications can still swap the whole store by providing a different
+layer.
+
+Resolved for Phase C slice one: keep `ProcessStore` as the public module-facing
+service name and keep `RuntimeStorage` as the lower-level generic storage port.
+The important lines are:
 
 - storage stores generic state changes and facts;
-- process / queue / resource modules define typed state, typed facts, and typed
-  projections.
+- process / queue / run / http / group modules call rich `ProcessStore`
+  sub-surfaces;
+- `ProcessStore` converts semantic module operations into generic storage
+  records;
+- typed projections live above storage.
 
 `RuntimeStorage` can become public later only if it removes real ambiguity
 between the generic state/fact backend and the higher-level `ProcessStore`
