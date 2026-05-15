@@ -12,6 +12,9 @@ roadmap context, not as the source of truth for shipped APIs.
 Plan numbers are stable references, not strict implementation order. Use the
 recommended order below when picking up new work.
 
+For the current execution order, status, and dependency phases, start with
+[CURRENT-ROADMAP.md](./CURRENT-ROADMAP.md).
+
 | # | Plan | Purpose |
 | - | ---- | ------- |
 | 01 | [ProcessStore as the storage service](./01-process-store-service.md) | Turn `ProcessStore` into the durable service boundary for processes, queues, resources, and custom storage implementations. |
