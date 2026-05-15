@@ -12,7 +12,8 @@
  * - `ProcessGroup.Service` adds the same group as an injectable singleton.
  * - `ControlService` can expose the group's schema-backed contract at
  *   `GET /contract`.
- * - `ProcessManager.connect` uses the contract to call the group over HTTP.
+ * - `ProcessManager.connect(Group, { baseUrl })` uses the group contract to
+ *   call the group over HTTP.
  *
  * Run:
  *
@@ -226,11 +227,13 @@ const controlContractDemo = Effect.scoped(
       effect: Effect.void,
     }) {}
 
+    class ContractGroup extends ProcessGroup.Service<ContractGroup>()(
+      "@examples/ContractGroup",
+      [ContractProcess, EmailQueue] as const,
+    ) {}
+
     yield* Effect.gen(function* () {
-      const group = yield* ProcessGroup.make("@examples/ContractGroup", [
-        ContractProcess,
-        EmailQueue,
-      ] as const);
+      const group = yield* ContractGroup;
 
       yield* ControlService.make({
         port: 32125,
@@ -249,9 +252,8 @@ const controlContractDemo = Effect.scoped(
       yield* Effect.logInfo(
         `contract route queue ids: ${contract.queues.map((q) => q.id).join(", ")}`,
       );
-      const manager = ProcessManager.connect({
+      const manager = ProcessManager.connect(ContractGroup, {
         baseUrl: "http://127.0.0.1:32125",
-        contract: group.contract,
       });
 
       yield* manager.verifyContract;
@@ -262,6 +264,7 @@ const controlContractDemo = Effect.scoped(
         `remote manager status success: ${String(remoteStatus.success)}`,
       );
     }).pipe(
+      provideLayer(ContractGroup.layer),
       provideLayer(EmailQueue.layer),
       provideLayer(ProcessStore.layer),
       provideLayer(NodeHttpClient.layerUndici),

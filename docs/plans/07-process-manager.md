@@ -297,14 +297,13 @@ is the lifecycle/control/status interface for the runtime entries.
 
 ## Remote ProcessManager contract
 
-`ProcessManager` only connects to groups over a network. It cannot receive
-actual process or queue objects. It should consume a serializable group
-contract derived from the local declaration.
+`ProcessManager` only connects to groups over a network. It should consume the
+group service value when that class is available at runtime, because the class
+already carries the schema-backed contract. Raw contracts are still useful for
+generated clients that cannot import the group class.
 
 ```typescript
-export const BillingContract = BillingGroup.contract;
-
-const billing = ProcessManager.connect<typeof BillingContract>({
+const billing = ProcessManager.connect(BillingGroup, {
   url: "https://billing.internal",
 });
 
@@ -328,6 +327,15 @@ If the app imports the declaration, it can still avoid spelling strings:
 
 ```typescript
 yield* billing.queue(InvoiceQueue.id).enqueue(job);
+```
+
+Generated/remote-only clients can use a raw contract value:
+
+```typescript
+const billing = ProcessManager.connect({
+  url: "https://billing.internal",
+  contract: BillingGroup.contract,
+});
 ```
 
 ## Contract shape
@@ -417,7 +425,7 @@ The PM client should mirror local group controls, but all operations are network
 requests.
 
 ```typescript
-const billing = ProcessManager.connect<typeof BillingContract>({
+const billing = ProcessManager.connect(BillingGroup, {
   url: "https://billing.internal",
 });
 
@@ -534,11 +542,11 @@ yield* billing.queue(InvoiceQueue).release({ mode: "pendingOnly" });
 Remote PM handoff:
 
 ```typescript
-const oldBilling = ProcessManager.connect<typeof BillingContract>({
+const oldBilling = ProcessManager.connect(BillingGroup, {
   url: "https://billing-a.internal",
 });
 
-const newBilling = ProcessManager.connect<typeof BillingContract>({
+const newBilling = ProcessManager.connect(BillingGroup, {
   url: "https://billing-b.internal",
 });
 
@@ -604,8 +612,9 @@ yield* ProcessGroup.make(id, entries, options);
 
 ### Slice 6 - Remote PM client
 
-- Add `ProcessManager.connect(contract, transport)` or
-  `ProcessManager.connect<typeof Contract>(config)`.
+- Add `ProcessManager.connect(GroupService, { baseUrl })` as the preferred
+  runtime-class form, plus `ProcessManager.connect({ baseUrl, contract })` for
+  generated clients.
 - Route commands over the network to a group.
 - Validate remote enqueue payloads with schema.
 - Aggregate status from multiple remote groups.

@@ -29,6 +29,13 @@ type ProcessId<Contract extends AnyProcessGroupContract> =
 type QueueId<Contract extends AnyProcessGroupContract> =
   Contract["queues"][number]["id"];
 
+type ContractSource<Contract extends AnyProcessGroupContract> = {
+  readonly contract: Contract;
+};
+
+type ContractFromSource<Source extends ContractSource<AnyProcessGroupContract>> =
+  Source["contract"];
+
 const controlResponseSchema = Schema.Struct({
   success: Schema.Boolean,
   type: Schema.optional(Schema.Literals(["process", "queue"] as const)),
@@ -221,16 +228,13 @@ const commandVoid = (
 ): Effect.Effect<void, ProcessManagerRequestError, HttpClient.HttpClient> =>
   Effect.asVoid(postControl(baseUrl, { command, name }));
 
-/**
- * Build a typed remote client for one ProcessGroup endpoint.
- *
- * @public
- */
-const connect = <const Contract extends AnyProcessGroupContract>(options: {
-  readonly baseUrl: string;
-  readonly contract: Contract;
-}): RemoteProcessManager<Contract> => {
-  const fetchContract = getJson(options.baseUrl, "/contract").pipe(
+const makeRemoteProcessManager = <
+  const Contract extends AnyProcessGroupContract,
+>(
+  baseUrl: string,
+  contract: Contract,
+): RemoteProcessManager<Contract> => {
+  const fetchContract = getJson(baseUrl, "/contract").pipe(
     Effect.flatMap((json) =>
       Schema.decodeUnknownEffect(ProcessGroupContractSchema)(json).pipe(
         Effect.mapError(
@@ -244,32 +248,79 @@ const connect = <const Contract extends AnyProcessGroupContract>(options: {
   );
 
   return {
-    contract: options.contract,
+    contract,
     fetchContract,
     verifyContract: Effect.gen(function* () {
       const remote = yield* fetchContract;
-      if (remote.id !== options.contract.id) {
+      if (remote.id !== contract.id) {
         return yield* new ProcessManagerRequestError({
-          reason: `Remote contract id '${remote.id}' did not match '${options.contract.id}'`,
+          reason: `Remote contract id '${remote.id}' did not match '${contract.id}'`,
         });
       }
     }),
     process: (id) => ({
-      start: commandVoid(options.baseUrl, "start", id),
-      stop: commandVoid(options.baseUrl, "stop", id),
-      restart: commandVoid(options.baseUrl, "restart", id),
-      runImmediately: commandVoid(options.baseUrl, "now", id),
-      status: postControl(options.baseUrl, { command: "status", name: id }),
+      start: commandVoid(baseUrl, "start", id),
+      stop: commandVoid(baseUrl, "stop", id),
+      restart: commandVoid(baseUrl, "restart", id),
+      runImmediately: commandVoid(baseUrl, "now", id),
+      status: postControl(baseUrl, { command: "status", name: id }),
     }),
     queue: (id) => ({
-      pause: commandVoid(options.baseUrl, "pause", id),
-      resume: commandVoid(options.baseUrl, "resume", id),
-      clear: commandVoid(options.baseUrl, "restart", id),
-      status: postControl(options.baseUrl, { command: "status", name: id }),
+      pause: commandVoid(baseUrl, "pause", id),
+      resume: commandVoid(baseUrl, "resume", id),
+      clear: commandVoid(baseUrl, "restart", id),
+      status: postControl(baseUrl, { command: "status", name: id }),
     }),
-    status: postControl(options.baseUrl, { command: "ls" }),
+    status: postControl(baseUrl, { command: "ls" }),
   };
 };
+
+/**
+ * Build a typed remote client from a group service/definition value. This is
+ * the preferred Effect-style form when the group class is available at runtime.
+ *
+ * @public
+ */
+function connect<Source extends ContractSource<AnyProcessGroupContract>>(
+  source: Source,
+  options: {
+    readonly baseUrl: string;
+  },
+): RemoteProcessManager<ContractFromSource<Source>>;
+
+/**
+ * Build a typed remote client from a raw contract. Use this form for generated
+ * contracts or code that cannot import the group service class.
+ *
+ * @public
+ */
+function connect<const Contract extends AnyProcessGroupContract>(options: {
+  readonly baseUrl: string;
+  readonly contract: Contract;
+}): RemoteProcessManager<Contract>;
+
+function connect(
+  sourceOrOptions:
+    | ContractSource<AnyProcessGroupContract>
+    | {
+        readonly baseUrl: string;
+        readonly contract: AnyProcessGroupContract;
+      },
+  options?: {
+    readonly baseUrl: string;
+  },
+): RemoteProcessManager<AnyProcessGroupContract> {
+  if (options !== undefined) {
+    return makeRemoteProcessManager(options.baseUrl, sourceOrOptions.contract);
+  }
+  if ("baseUrl" in sourceOrOptions) {
+    return makeRemoteProcessManager(
+      sourceOrOptions.baseUrl,
+      sourceOrOptions.contract,
+    );
+  }
+  throw new TypeError("ProcessManager.connect requires connection options");
+}
 
 /**
  * Remote ProcessManager namespace.

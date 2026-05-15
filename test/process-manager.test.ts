@@ -52,9 +52,8 @@ describe("ProcessManager", () => {
 
         yield* Effect.gen(function* () {
           const group = yield* BillingGroup;
-          const manager = ProcessManager.connect({
+          const manager = ProcessManager.connect(BillingGroup, {
             baseUrl: "http://127.0.0.1:32126",
-            contract: BillingGroup.contract,
           });
 
           yield* ControlService.make({
@@ -108,9 +107,8 @@ describe("ProcessManager", () => {
         yield* Effect.gen(function* () {
           const group = yield* BillingGroup;
           const queue = yield* EmailQueue;
-          const manager = ProcessManager.connect({
+          const manager = ProcessManager.connect(BillingGroup, {
             baseUrl: "http://127.0.0.1:32127",
-            contract: BillingGroup.contract,
           });
 
           yield* ControlService.make({
