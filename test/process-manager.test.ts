@@ -85,11 +85,17 @@ describe("ProcessManager", () => {
           yield* rawContractManager.verifyContract;
           yield* rawContractManager.process(SyncProcess.id).runImmediately;
           const mismatch = yield* mismatchedManager.verifyContract.pipe(Effect.flip);
+          const missingRun = yield* mismatchedManager
+            .process(OtherProcess.id)
+            .runImmediately
+            .pipe(Effect.flip);
 
           // @ts-expect-error queue ids are not valid process ids
           manager.process(EmailQueue.id);
 
           expect(mismatch.reason).toContain("process ids");
+          expect(missingRun.status).toBe(404);
+          expect(missingRun.reason).toContain("could not run immediately");
           expect(yield* Ref.get(runs)).toBe(2);
         }).pipe(
           provideLayer(BillingGroup.layer),

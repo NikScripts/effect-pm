@@ -257,6 +257,53 @@ interface RouteResponse {
   readonly body: unknown;
 }
 
+const errorTag = (error: unknown): string | undefined => {
+  if (typeof error !== "object" || error === null || !("_tag" in error)) {
+    return undefined;
+  }
+  const tag = error._tag;
+  return typeof tag === "string" ? tag : undefined;
+};
+
+const errorStatus = (error: unknown): number => {
+  const tag = errorTag(error);
+  if (tag === "ProcessNotFoundError") {
+    return 404;
+  }
+  if (
+    tag === "ProcessAlreadyRunningError" ||
+    tag === "ProcessNotRunningError"
+  ) {
+    return 409;
+  }
+  if (tag === "UnsupportedRemoteControlError") {
+    return 400;
+  }
+  if (tag === "ProcessGroupRemoteControlError") {
+    if (typeof error === "object" && error !== null && "status" in error) {
+      const status = error.status;
+      return typeof status === "number" ? status : 502;
+    }
+    return 502;
+  }
+  return 500;
+};
+
+const errorMessage = (error: unknown, fallback: string): string => {
+  if (typeof error === "object" && error !== null && "reason" in error) {
+    const reason = error.reason;
+    if (typeof reason === "string") {
+      return reason;
+    }
+  }
+  return fallback;
+};
+
+const routeFailure = (error: unknown, fallback: string): RouteResponse => ({
+  status: errorStatus(error),
+  body: errorResponse(errorMessage(error, fallback)),
+});
+
 const handleRestRoute =
   <R, Error>(group: ProcessGroupControls<R, Error>) =>
   (
@@ -273,22 +320,32 @@ const handleRestRoute =
       }
 
       if (method === "GET" && segments.length === 1 && segments[0] === "status") {
-        const groupStatus = yield* group.status;
-        return {
-          status: 200,
-          body: successResponse({
-            processes: groupStatus.processes,
-            queues: yield* group.listQueues(),
-          }),
-        };
+        return yield* group.status.pipe(
+          Effect.flatMap((groupStatus) =>
+            Effect.map(group.listQueues(), (queues) => ({
+              status: 200,
+              body: successResponse({
+                processes: groupStatus.processes,
+                queues,
+              }),
+            }))
+          ),
+          Effect.catch((error) =>
+            Effect.succeed(routeFailure(error, "Unable to read group status"))
+          ),
+        );
       }
 
       if (method === "GET" && segments.length === 1 && segments[0] === "processes") {
-        const groupStatus = yield* group.status;
-        return {
-          status: 200,
-          body: successResponse(groupStatus.processes),
-        };
+        return yield* group.status.pipe(
+          Effect.map((groupStatus) => ({
+            status: 200,
+            body: successResponse(groupStatus.processes),
+          })),
+          Effect.catch((error) =>
+            Effect.succeed(routeFailure(error, "Unable to list processes"))
+          ),
+        );
       }
 
       if (segments[0] === "processes" && segments.length >= 2) {
@@ -319,31 +376,50 @@ const handleRestRoute =
         if (method === "POST" && segments.length === 3) {
           const operation = segments[2];
           if (operation === "start") {
-            yield* group.start(name).pipe(Effect.catch(() => Effect.void));
-            return { status: 200, body: successResponse() };
+            return yield* group.start(name).pipe(
+              Effect.as({ status: 200, body: successResponse() }),
+              Effect.catch((error) =>
+                Effect.succeed(routeFailure(error, `Process '${name}' could not be started`))
+              ),
+            );
           }
           if (operation === "stop") {
-            yield* group.stop(name).pipe(Effect.catch(() => Effect.void));
-            return { status: 200, body: successResponse() };
+            return yield* group.stop(name).pipe(
+              Effect.as({ status: 200, body: successResponse() }),
+              Effect.catch((error) =>
+                Effect.succeed(routeFailure(error, `Process '${name}' could not be stopped`))
+              ),
+            );
           }
           if (operation === "restart") {
-            yield* Effect.forkChild(
-              group.restart(name).pipe(Effect.catch(() => Effect.void)),
+            return yield* group.restart(name).pipe(
+              Effect.as({ status: 200, body: successResponse() }),
+              Effect.catch((error) =>
+                Effect.succeed(routeFailure(error, `Process '${name}' could not be restarted`))
+              ),
             );
-            return { status: 200, body: successResponse() };
           }
           if (operation === "now") {
-            yield* group.runImmediately(name).pipe(Effect.catch(() => Effect.void));
-            return { status: 200, body: successResponse() };
+            return yield* group.runImmediately(name).pipe(
+              Effect.as({ status: 200, body: successResponse() }),
+              Effect.catch((error) =>
+                Effect.succeed(routeFailure(error, `Process '${name}' could not run immediately`))
+              ),
+            );
           }
         }
       }
 
       if (method === "GET" && segments.length === 1 && segments[0] === "queues") {
-        return {
-          status: 200,
-          body: successResponse(yield* group.listQueues()),
-        };
+        return yield* group.listQueues().pipe(
+          Effect.map((queues) => ({
+            status: 200,
+            body: successResponse(queues),
+          })),
+          Effect.catch((error) =>
+            Effect.succeed(routeFailure(error, "Unable to list queues"))
+          ),
+        );
       }
 
       if (segments[0] === "queues" && segments.length >= 2) {
@@ -376,18 +452,31 @@ const handleRestRoute =
         if (method === "POST" && segments.length === 3) {
           const operation = segments[2];
           if (operation === "pause") {
-            yield* group.pauseQueue(name).pipe(Effect.catch(() => Effect.void));
-            return { status: 200, body: successResponse() };
+            return yield* group.pauseQueue(name).pipe(
+              Effect.as({ status: 200, body: successResponse() }),
+              Effect.catch((error) =>
+                Effect.succeed(routeFailure(error, `Queue '${name}' could not be paused`))
+              ),
+            );
           }
           if (operation === "resume") {
-            yield* group.resumeQueue(name).pipe(Effect.catch(() => Effect.void));
-            return { status: 200, body: successResponse() };
+            return yield* group.resumeQueue(name).pipe(
+              Effect.as({ status: 200, body: successResponse() }),
+              Effect.catch((error) =>
+                Effect.succeed(routeFailure(error, `Queue '${name}' could not be resumed`))
+              ),
+            );
           }
           if (operation === "clear") {
-            const cleared = yield* group.clearQueue(name).pipe(
-              Effect.catch(() => Effect.succeed(0)),
+            return yield* group.clearQueue(name).pipe(
+              Effect.map((cleared) => ({
+                status: 200,
+                body: successResponse({ cleared }),
+              })),
+              Effect.catch((error) =>
+                Effect.succeed(routeFailure(error, `Queue '${name}' could not be cleared`))
+              ),
             );
-            return { status: 200, body: successResponse({ cleared }) };
           }
         }
       }
