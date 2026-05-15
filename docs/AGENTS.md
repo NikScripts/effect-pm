@@ -60,6 +60,11 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
   `docs/plans` describes future work only.
 - Prefer existing Effect patterns, services, and local helper APIs over ad hoc
   abstractions.
+- Use comments and TSDoc to make intent clear when code relies on non-obvious
+  type-level plumbing, Effect layering/order, runtime ownership, or compatibility
+  behavior. Lean toward assuming future readers will not have the whole design
+  discussion in their head; a concise comment is better than making them infer
+  invariants from implementation details.
 - Make validation deterministic from type/config shape where possible; avoid
   extra boolean flags for behavior that can be derived.
 - Hooks should be powerful extension points, but core persistence/analytics

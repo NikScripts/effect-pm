@@ -938,27 +938,6 @@ export const QueueResource = {
   ) => Layer.effect(tag)(makeQueueEffect(config)),
 
   /**
-   * Define a queue resource with a canonical id, service tag, and baked-in
-   * layer. The returned value can be yielded as a service and registered with a
-   * typed ProcessGroup.
-   *
-   * @public
-   */
-  define: <const Name extends string, T, R, E = never>(
-    name: Name,
-    config: QueueResourceConfig<T, R, E>,
-  ) => {
-    const base = Context.Service<unknown, QueueHandle<T, R, E>>()(name);
-    const layer = Layer.effect(base)(makeQueueEffect({ ...config, name }));
-    return Object.assign(base, {
-      id: name,
-      kind: queueResourceKind,
-      tag: base,
-      layer,
-    });
-  },
-
-  /**
    * Class factory: creates a Context tag with a baked-in `.layer`.
    *
    * The returned value is both a `Context.Service` (yieldable tag) and has

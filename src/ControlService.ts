@@ -473,6 +473,9 @@ function startControlService(
     Effect.gen(function* () {
       const port = options.port ?? 3001;
       const group = options.group;
+      // Typed groups expose their contract and keep the legacy string-based
+      // controls under `.legacy`; legacy groups can optionally pass a contract
+      // while continuing to serve the existing `/control` command API.
       const commandGroup = "legacy" in group ? group.legacy : group;
       const contract = "legacy" in group
         ? group.contract

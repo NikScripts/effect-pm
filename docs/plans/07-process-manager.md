@@ -68,23 +68,28 @@ export interface RuntimeEntry<Id extends string, Kind extends string> {
 }
 ```
 
-Process definitions do not need to be services by default:
+Processes are canonical services. A process is more than an effect: it is a
+trackable runtime unit with external controls, status, hooks/listeners, and
+future config mutation.
 
 ```typescript
-export interface ProcessDefinition<Id extends string, R>
-  extends RuntimeEntry<Id, "process"> {
+export interface ProcessServiceDefinition<Self, Id extends string, R>
+  extends Context.ServiceClass<Self, Id, Process<R>>,
+    RuntimeEntry<Id, "process"> {
   readonly effect: Effect.Effect<void, never, R>;
-  readonly make: Effect.Effect<ProcessHandle<R>>;
+  readonly layer: Layer.Layer<Self>;
   readonly contract: ProcessContract<Id>;
 }
 ```
 
-Queue/resource definitions can wrap existing service tags:
+Queue/resource services follow the same canonical-entry rule:
 
 ```typescript
-export interface QueueDefinition<Id extends string, T, R, E>
-  extends RuntimeEntry<Id, "queue"> {
+export interface QueueServiceDefinition<Self, Id extends string, T, R, E>
+  extends Context.ServiceClass<Self, Id, QueueHandle<T, R, E>>,
+    RuntimeEntry<Id, "queue"> {
   readonly tag: Context.Key<unknown, QueueHandle<T, R, E>>;
+  readonly layer: Layer.Layer<Self>;
   readonly contract: QueueContract<Id, T>;
 }
 ```
@@ -92,93 +97,82 @@ export interface QueueDefinition<Id extends string, T, R, E>
 The important rule: `id` comes from the declaration itself.
 
 ```typescript
-const StripeSync = Process.define("@app/StripeSync", {
+class StripeSync extends Process.Service<StripeSync>()("@app/StripeSync", {
   effect: syncStripe,
-});
+}) {}
 
-const EmailQueue = QueueResource.define("@app/EmailQueue", {
+class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()("@app/EmailQueue", {
   effect: sendEmail,
   schema: EmailSchema,
-});
+}) {}
 
 StripeSync.id; // "@app/StripeSync"
 EmailQueue.id; // "@app/EmailQueue"
 ```
 
-## Process service question
+## Naming convention
 
-`Process.Service` may be useful later, but it should not be required for the
-first typed `ProcessGroup`.
+Use Effect-style names consistently:
 
-Resources benefit from services because application code commonly yields them:
+- `make` builds/acquires a runtime handle.
+- `Service` declares canonical service identity plus implementation/layer.
+- `Tag` declares identity only.
+- `layer` provides an implementation.
+- `contract` is the schema-backed serializable remote/control description.
+
+Do not use `define` for runtime entries. It is too close to a pure spec concept,
+and this design intentionally avoids separate specs for processes/resources.
+
+Processes and resources are both services because both can be yielded for
+controls, status, listeners, and future config mutation:
 
 ```typescript
 const queue = yield* EmailQueue;
 yield* queue.add(email);
+
+const stripe = yield* StripeSync;
+yield* stripe.runImmediately();
 ```
 
-Processes are different. Most app code does not yield a process to do work; the
-group or manager controls the process lifecycle. Therefore the initial process
-shape should be `Process.define`, with optional service helpers later.
-
-Candidate optional service helper:
-
-```typescript
-class StripeSync extends Process.Service<StripeSync>()("@app/StripeSync", {
-  effect: syncStripe,
-}) {}
-```
-
-This can be added if process handles need singleton injection, test replacement,
-or composition inside other modules. It should not block the PG redesign.
-
-## Preferred PG declaration: direct define plus optional layer
+## Preferred PG usage: direct make plus optional service
 
 Use one entries tuple. Do not split `processes` and `resources`, and do not add
 registration IDs.
 
 ```typescript
-const BillingGroup = ProcessGroup.define(
+const billing = yield* ProcessGroup.make(
   "@app/BillingGroup",
   [StripeSync, InvoiceSweep, EmailQueue, InvoiceQueue] as const,
-  {
-    autoStart: true,
-  },
 );
 ```
 
 Direct use should not require providing a layer:
 
 ```typescript
-const billing = yield* BillingGroup.make;
-
 yield* billing.start(StripeSync);
 yield* billing.runImmediately(InvoiceSweep);
 yield* billing.queue(EmailQueue).pause;
 yield* billing.queue(InvoiceQueue).enqueue({ invoiceId: "inv_123" });
 ```
 
-The same definition can expose a layer for applications that want dependency
-injection:
+Use `ProcessGroup.Service` when the group itself should be injectable:
 
 ```typescript
-const program = Effect.gen(function* () {
-  const billing = yield* BillingGroup;
-  yield* billing.serve({ port: 3030 });
-});
-
-yield* program.pipe(Effect.provide(BillingGroup.layer));
+class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+  "@app/BillingGroup",
+  [StripeSync, InvoiceSweep, EmailQueue, InvoiceQueue] as const,
+) {}
 ```
 
 This gives both styles:
 
-- direct `.make` for local composition and examples;
+- direct `ProcessGroup.make(id, entries)` for local composition and examples;
 - `.layer` / service access for singleton group injection, `ControlService`,
   tests, and hosted agents.
 
 ## Class-based PG service variant
 
-The class form should be a convenience over the same definition model.
+The class form is the canonical injectable group model.
 
 ```typescript
 class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
@@ -211,7 +205,7 @@ Why a group service can be useful:
 - A web server can yield the group and expose its controls.
 - The group becomes the singleton local controller for its runtime entries.
 
-The service form should not be the only form. `ProcessGroup.define(...).make`
+The service form should not be the only form. `ProcessGroup.make(id, entries)`
 should remain the lowest ceremony path.
 
 ## Type inference model
@@ -286,7 +280,7 @@ Inside a single process, resources should communicate through normal Effect
 dependencies and direct handles.
 
 ```typescript
-const StripeSync = Process.define("@app/StripeSync", {
+class StripeSync extends Process.Service<StripeSync>()("@app/StripeSync", {
   effect: Effect.gen(function* () {
     const emails = yield* EmailQueue;
     const invoices = yield* InvoiceQueue;
@@ -295,7 +289,7 @@ const StripeSync = Process.define("@app/StripeSync", {
     yield* emails.add(changed.email);
     yield* invoices.add({ invoiceId: changed.invoiceId });
   }),
-});
+}) {}
 ```
 
 `ProcessGroup` should not become a private message bus for normal app work. It
@@ -469,7 +463,7 @@ methods.
 
 Preferred flow:
 
-1. process/resource mutates state;
+1. process/resource service mutates state;
 2. process/resource emits a state change/fact;
 3. storage records generic state history/facts;
 4. PG reads latest state from live handles or projections;
@@ -523,8 +517,8 @@ group validates them against its queue schema or codec.
 
 ### Slice 1 - Type-only design spike
 
-- Add temporary type tests for `Process.define`, `QueueResource.define`,
-  `ProcessGroup.define`, and `ProcessGroup.Service`.
+- Add temporary type tests for `Process.Service`, `QueueResource.Service`,
+  `ProcessGroup.make(id, entries)`, and `ProcessGroup.Service`.
 - Prove tuple entries infer process-only and queue-only controls.
 - Prove queue item types are preserved.
 - Prove invalid process/queue operations fail with `@ts-expect-error`.
@@ -534,22 +528,23 @@ group validates them against its queue schema or codec.
 ### Slice 2 - Runtime entry declarations
 
 - Add `RuntimeEntry`.
-- Add `Process.define` while keeping `Process.make`.
-- Add or adapt queue/resource declarations so existing `QueueResource.Service`
-  can be used as a group entry without a secondary ID.
+- Add `Process.Service` while keeping `Process.make`.
+- Adapt queue/resource services so existing `QueueResource.Service` can be used
+  as a group entry without a secondary ID.
 - Preserve current behavior behind existing APIs.
 
-### Slice 3 - `ProcessGroup.define`
+### Slice 3 - typed `ProcessGroup.make`
 
-- Add direct group definition:
+- Add direct group runtime acquisition:
 
 ```typescript
-ProcessGroup.define(id, entries, options);
+yield* ProcessGroup.make(id, entries, options);
 ```
 
-- Return `.make`, `.layer`, `.contract`, `.id`, and `.entries`.
-- Keep current `ProcessGroup.make` as a compatibility wrapper if needed during
-  beta.
+- Return a typed group handle with `id`, `contract`, typed local controls, and
+  the legacy control surface.
+- Keep current `ProcessGroup.make({ processes, queues })` as a compatibility
+  overload if needed during beta.
 
 ### Slice 4 - Typed local controls
 
@@ -582,31 +577,25 @@ ProcessGroup.define(id, entries, options);
 
 ## Open questions
 
-- Should `ProcessGroup.define(...).make` also be yieldable as a service, or
-  should only `ProcessGroup.Service` be yieldable?
 - Should local PG controls accept declarations only, canonical IDs only, or both?
 - Should remote PM clients accept only canonical IDs, or also imported
   declarations as convenience values?
-- Should `Process.define` be separate from `Process.make`, or should `make`
-  become the declaration API in a beta break?
 - How do we expose resource kinds beyond queue/run/http without making the group
   surface too generic?
-- Should `ControlService` be owned by the group definition (`BillingGroup.serve`)
+- Should `ControlService` be owned by the group service (`BillingGroup.serve`)
   or remain a separate service consuming a group?
 
 ## Non-goals
 
 - Do not make PM reach into queue internals.
-- Do not require every process to be a `Context.Service` before it can join a
-  group.
 - Do not add secondary registration IDs.
 - Do not make `ProcessStore` responsible for live control.
 - Do not design authentication in the first local PG slice.
 
 ## Graduation criteria
 
-- Group declarations have canonical IDs.
-- Process and resource declarations have canonical IDs.
+- Group services have canonical IDs.
+- Process and resource services have canonical IDs.
 - A group accepts a single tuple of entries.
 - Local controls are typed by entry declaration, not plain strings.
 - Queue item types are preserved through group controls.

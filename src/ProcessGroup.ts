@@ -83,7 +83,9 @@ export type ProcessGroupQueueEntries<
  */
 export type ProcessGroupEntryRequirements<
   Entries extends readonly ProcessGroupEntry[],
-> = ProcessEffectRequirements<ProcessGroupProcessEntries<Entries>>;
+> = ProcessGroupProcessEntries<Entries> extends ProcessDefinition<string, infer R>
+  ? R
+  : never;
 
 /**
  * Queue item type for a queue entry.
@@ -387,32 +389,6 @@ export interface TypedProcessGroup<
   readonly legacy: ProcessGroup<ProcessGroupEntryRequirements<Entries>>;
 }
 
-/**
- * Typed ProcessGroup declaration. Use `.make` directly for low ceremony, or
- * provide `.layer` when the group should be injectable as a singleton service.
- *
- * @public
- */
-export interface ProcessGroupDefinition<
-  Id extends string,
-  Entries extends readonly ProcessGroupEntry[],
-> extends Context.Key<unknown, TypedProcessGroup<Id, Entries>> {
-  readonly id: Id;
-  readonly kind: "group";
-  readonly entries: Entries;
-  readonly contract: ProcessGroupContract<Id, Entries>;
-  readonly make: Effect.Effect<
-    TypedProcessGroup<Id, Entries>,
-    ProcessGroupErrors,
-    TagIdentifier<ProcessGroupQueueEntries<Entries>["tag"]>
-  >;
-  readonly layer: Layer.Layer<
-    ProcessGroupDefinition<Id, Entries>,
-    ProcessGroupErrors,
-    TagIdentifier<ProcessGroupQueueEntries<Entries>["tag"]>
-  >;
-}
-
 // ============================================================================
 // Internal: lifecycle event recording (optional ProcessStore)
 // ============================================================================
@@ -688,6 +664,43 @@ export const makeProcessGroup = <
     return group;
   });
 
+export function makeTypedProcessGroupEffect<
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+>(
+  id: Id,
+  entries: Entries,
+): Effect.Effect<
+  TypedProcessGroup<Id, Entries>,
+  ProcessGroupErrors,
+  TagIdentifier<ProcessGroupQueueEntries<Entries>["tag"]>
+>;
+export function makeTypedProcessGroupEffect<
+  const Queues extends readonly [...Context.Key<any, QueueHandle<any, any, any>>[]],
+  const Processes extends readonly Process<any>[],
+>(config: {
+  readonly queues: Queues;
+  readonly processes: Processes;
+}): Effect.Effect<
+  ProcessGroup<AllGroupProcessesRequirements<Processes>>,
+  ProcessGroupErrors,
+  TagIdentifier<Queues[number]>
+>;
+export function makeTypedProcessGroupEffect(
+  idOrConfig:
+    | string
+    | {
+        readonly queues: readonly Context.Key<any, QueueHandle<any, any, any>>[];
+        readonly processes: readonly Process<any>[];
+      },
+  entries?: readonly ProcessGroupEntry[],
+) {
+  if (typeof idOrConfig === "string") {
+    return makeTypedProcessGroup(idOrConfig, entries ?? []);
+  }
+  return makeProcessGroup(idOrConfig);
+}
+
 const processGroupKind = "group" as const;
 const processGroupContractVersion = "v1" as const;
 const processGroupProcessControls: ReadonlyArray<ProcessGroupProcessControl> = [
@@ -763,11 +776,14 @@ const makeTypedProcessGroup = <
     const contract = makeProcessGroupContract(id, entries);
     const processes = entries.filter(isProcessGroupProcessEntry);
     const queues = entries.filter(isProcessGroupQueueEntry);
+    // The legacy ProcessGroup still owns the running fibers and queue lookup.
+    // Typed groups are a safe facade over that runtime while the old string API
+    // remains available for compatibility and ControlService delegation.
     const queueTags = queues.map(
       (queue): ProcessGroupQueueEntries<Entries>["tag"] => queue.tag,
     );
     const legacy = yield* makeProcessGroup({
-      processes,
+      processes: processes.map((process) => process.process),
       queues: queueTags,
     });
 
@@ -824,27 +840,6 @@ const makeTypedProcessGroup = <
     };
   });
 
-const defineProcessGroup = <
-  const Id extends string,
-  const Entries extends readonly ProcessGroupEntry[],
->(
-  id: Id,
-  entries: Entries,
-): ProcessGroupDefinition<Id, Entries> => {
-  const base = Context.Service<unknown, TypedProcessGroup<Id, Entries>>()(id);
-  const contract = makeProcessGroupContract(id, entries);
-  const make = makeTypedProcessGroup(id, entries);
-  const layer = Layer.effect(base)(make);
-  return Object.assign(base, {
-    id,
-    kind: processGroupKind,
-    entries,
-    contract,
-    make,
-    layer,
-  });
-};
-
 // ============================================================================
 // Public namespace
 // ============================================================================
@@ -855,8 +850,7 @@ const defineProcessGroup = <
  * @public
  */
 export const ProcessGroup = {
-  make: makeProcessGroup,
-  define: defineProcessGroup,
+  make: makeTypedProcessGroupEffect,
   Service: <Self>() =>
   <const Id extends string, const Entries extends readonly ProcessGroupEntry[]>(
     id: Id,
@@ -866,6 +860,8 @@ export const ProcessGroup = {
     const contract = makeProcessGroupContract(id, entries);
     const make = makeTypedProcessGroup(id, entries);
     const layer = Layer.effect(base)(make);
+    // Match Effect's class-based service style: the class is yieldable, and the
+    // static fields expose group identity/contract data for control surfaces.
     return Object.assign(base, {
       id,
       kind: processGroupKind,

@@ -5,9 +5,9 @@
  *
  * This example shows the new canonical-id group style:
  *
- * - `Process.define("@id", config)` gives a process entry with one canonical id.
- * - `QueueResource.define("@id", config)` gives a queue entry with one canonical id.
- * - `ProcessGroup.define("@id", [entries] as const)` gives a typed group whose
+ * - `Process.Service` gives a process service with one canonical id.
+ * - `QueueResource.Service` gives a queue service with one canonical id.
+ * - `ProcessGroup.make("@id", [entries] as const)` gives a typed group whose
  *   controls accept the process/queue declarations, not secondary string ids.
  * - `ProcessGroup.Service` adds the same group as an injectable singleton.
  * - `ControlService` can expose the group's schema-backed contract at
@@ -26,6 +26,7 @@ import {
   Process,
   ProcessGroup,
   ProcessGroupContractSchema,
+  ProcessStore,
   QueueResource,
 } from "../src";
 import { provideLayer } from "../src/provideLayer.js";
@@ -94,24 +95,24 @@ const waitForCompleted = (
   });
 
 const directGroupDemo = Effect.gen(function* () {
-  yield* Effect.logInfo("── Direct typed ProcessGroup.define(...).make ──");
+  yield* Effect.logInfo("── Direct typed ProcessGroup.make(id, entries) ──");
 
   const sentEmails = yield* Ref.make<ReadonlyArray<string>>([]);
   const syncedInvoices = yield* Ref.make<ReadonlyArray<string>>([]);
 
-  const EmailQueue = QueueResource.define("@examples/EmailQueue", {
+  class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()("@examples/EmailQueue", {
     effect: (email: EmailJob) =>
       Ref.update(sentEmails, (emails) => [...emails, email.to]),
     concurrency: 1,
-  });
+  }) {}
 
-  const InvoiceQueue = QueueResource.define("@examples/InvoiceQueue", {
+  class InvoiceQueue extends QueueResource.Service<InvoiceQueue, InvoiceJob, void>()("@examples/InvoiceQueue", {
     effect: (invoice: InvoiceJob) =>
       Ref.update(syncedInvoices, (invoices) => [...invoices, invoice.invoiceId]),
     concurrency: 1,
-  });
+  }) {}
 
-  const SyncBilling = Process.define("@examples/SyncBilling", {
+  class SyncBilling extends Process.Service<SyncBilling>()("@examples/SyncBilling", {
     effect: Effect.gen(function* () {
       const emailQueue = yield* EmailQueue;
       const invoiceQueue = yield* InvoiceQueue;
@@ -122,16 +123,14 @@ const directGroupDemo = Effect.gen(function* () {
       });
       yield* invoiceQueue.add({ invoiceId: "inv_001" });
     }),
-  });
-
-  const BillingGroup = ProcessGroup.define("@examples/BillingGroup", [
-    SyncBilling,
-    EmailQueue,
-    InvoiceQueue,
-  ] as const);
+  }) {}
 
   yield* Effect.gen(function* () {
-    const group = yield* BillingGroup.make;
+    const group = yield* ProcessGroup.make("@examples/BillingGroup", [
+      SyncBilling,
+      EmailQueue,
+      InvoiceQueue,
+    ] as const);
 
     yield* group.runImmediately(SyncBilling);
 
@@ -145,10 +144,10 @@ const directGroupDemo = Effect.gen(function* () {
 
     yield* Effect.logInfo(`group id: ${group.id}`);
     yield* Effect.logInfo(
-      `contract processes: ${BillingGroup.contract.processes.map((p) => p.id).join(", ")}`,
+      `contract processes: ${group.contract.processes.map((p) => p.id).join(", ")}`,
     );
     yield* Effect.logInfo(
-      `contract queues: ${BillingGroup.contract.queues.map((q) => q.id).join(", ")}`,
+      `contract queues: ${group.contract.queues.map((q) => q.id).join(", ")}`,
     );
     yield* Effect.logInfo(
       `email completed=${String(emailStatus.completed)}, invoice completed=${String(invoiceStatus.completed)}`,
@@ -170,13 +169,13 @@ const serviceGroupDemo = Effect.gen(function* () {
 
   const sentEmails = yield* Ref.make<ReadonlyArray<string>>([]);
 
-  const EmailQueue = QueueResource.define("@examples/ServiceEmailQueue", {
+  class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()("@examples/ServiceEmailQueue", {
     effect: (email: EmailJob) =>
       Ref.update(sentEmails, (emails) => [...emails, email.to]),
     concurrency: 1,
-  });
+  }) {}
 
-  const NotifyOps = Process.define("@examples/NotifyOps", {
+  class NotifyOps extends Process.Service<NotifyOps>()("@examples/NotifyOps", {
     effect: Effect.gen(function* () {
       const emailQueue = yield* EmailQueue;
       yield* emailQueue.add({
@@ -184,7 +183,7 @@ const serviceGroupDemo = Effect.gen(function* () {
         subject: "service group process ran",
       });
     }),
-  });
+  }) {}
 
   class OpsGroup extends ProcessGroup.Service<OpsGroup>()(
     "@examples/OpsGroup",
@@ -216,21 +215,19 @@ const controlContractDemo = Effect.scoped(
   Effect.gen(function* () {
     yield* Effect.logInfo("── ControlService GET /contract ──");
 
-    const EmailQueue = QueueResource.define("@examples/ContractEmailQueue", {
+    class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()("@examples/ContractEmailQueue", {
       effect: (_email: EmailJob) => Effect.void,
-    });
+    }) {}
 
-    const ContractProcess = Process.define("@examples/ContractProcess", {
+    class ContractProcess extends Process.Service<ContractProcess>()("@examples/ContractProcess", {
       effect: Effect.void,
-    });
-
-    const ContractGroup = ProcessGroup.define("@examples/ContractGroup", [
-      ContractProcess,
-      EmailQueue,
-    ] as const);
+    }) {}
 
     yield* Effect.gen(function* () {
-      const group = yield* ContractGroup.make;
+      const group = yield* ProcessGroup.make("@examples/ContractGroup", [
+        ContractProcess,
+        EmailQueue,
+      ] as const);
 
       yield* ControlService.make({
         port: 32125,
@@ -249,7 +246,10 @@ const controlContractDemo = Effect.scoped(
       yield* Effect.logInfo(
         `contract route queue ids: ${contract.queues.map((q) => q.id).join(", ")}`,
       );
-    }).pipe(provideLayer(EmailQueue.layer));
+    }).pipe(
+      provideLayer(EmailQueue.layer),
+      provideLayer(ProcessStore.layer),
+    );
   }),
 );
 

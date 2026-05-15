@@ -117,7 +117,6 @@ export type {
   TypedProcessControls,
   TypedQueueControls,
   TypedProcessGroup,
-  ProcessGroupDefinition,
 } from "./ProcessGroup";
 
 // Error classes - ProcessGroup
@@ -136,6 +135,7 @@ export {
 export type {
   Process as ProcessInterface,
   ProcessDefinition,
+  ProcessServiceDefinition,
   ProcessDetails,
   ProcessMakeConfig,
   ProcessSupervisorRequirements,

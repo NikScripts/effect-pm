@@ -104,12 +104,35 @@ export interface Process<out R> {
  * Canonical process declaration that can be registered with a typed
  * {@link ProcessGroup}.
  *
+ * @remarks
+ * The declaration carries the process handle under {@link process} rather than
+ * copying handle fields onto the service class. Function/class `name` is a
+ * read-only JavaScript property, so storing the runtime handle separately keeps
+ * the service class safe while preserving the canonical process id.
+ *
  * @public
  */
 export interface ProcessDefinition<out Id extends string, out R>
-  extends Process<R> {
+{
   readonly id: Id;
   readonly kind: "process";
+  readonly process: Process<R>;
+}
+
+/**
+ * Canonical process service declaration.
+ *
+ * @remarks
+ * This mirrors Effect's class-based `Context.Service` style while attaching the
+ * metadata `ProcessGroup` needs for typed registration and contract generation.
+ *
+ * @public
+ */
+export interface ProcessServiceDefinition<Self, Id extends string, R>
+  extends Context.ServiceClass<Self, Id, Process<R>>,
+    ProcessDefinition<Id, R> {
+  readonly tag: Context.Key<Self, Process<R>>;
+  readonly layer: Layer.Layer<Self>;
 }
 
 /**
@@ -890,27 +913,22 @@ function make<E, RUser>(
   });
 }
 
-/**
- * Define a process with a canonical id that can be used by typed
- * {@link ProcessGroup} declarations.
- *
- * @public
- */
-function define<const Id extends string, E, RUser>(
+const processDefinitionKind = "process" as const;
+
+const makeProcessDefinition = <const Id extends string, E, RUser>(
   id: Id,
   config: Omit<ProcessMakeConfig<E, RUser>, "name">,
-): ProcessDefinition<Id, RUser> {
+): ProcessDefinition<Id, RUser> => {
   const process = make({
     ...config,
     name: id,
   });
-  const kind = "process";
   return {
-    ...process,
     id,
-    kind,
+    kind: processDefinitionKind,
+    process,
   };
-}
+};
 
 /**
  * Attach a {@link Polling} layer after defining base config.
@@ -991,7 +1009,21 @@ function provideSchedule<E, RUser>(
  */
 export const Process = {
   make,
-  define,
+  Service: <Self>() =>
+  <const Id extends string, E, RUser>(
+    id: Id,
+    config: Omit<ProcessMakeConfig<E, RUser>, "name">,
+  ): ProcessServiceDefinition<Self, Id, RUser> => {
+    const process = makeProcessDefinition(id, config);
+    const base = Context.Service<Self, Process<RUser>>()(id);
+    // Keep the service yieldable as Process<RUser>, and attach declaration
+    // metadata for typed ProcessGroup registration on the same class value.
+    return Object.assign(base, {
+      ...process,
+      tag: base,
+      layer: Layer.succeed(base, process.process),
+    });
+  },
   providePolling,
   provideSchedule,
   currentScheduleId,

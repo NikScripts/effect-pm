@@ -85,18 +85,17 @@ describe("ControlService — contract route", () => {
   it.live("serves typed ProcessGroup contracts", () =>
     Effect.scoped(
       Effect.gen(function* () {
-        const EmailQueue = QueueResource.define("@test/ControlContractEmail", {
+        class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()("@test/ControlContractEmail", {
           effect: (_email: Email) => Effect.void,
-        });
-        const SyncProcess = Process.define("@test/ControlContractProcess", {
+        }) {}
+        class SyncProcess extends Process.Service<SyncProcess>()("@test/ControlContractProcess", {
           effect: Effect.void,
-        });
-        const BillingGroup = ProcessGroup.define("@test/ControlContractGroup", [
-          SyncProcess,
-          EmailQueue,
-        ] as const);
+        }) {}
         yield* Effect.gen(function* () {
-          const group = yield* BillingGroup.make;
+          const group = yield* ProcessGroup.make("@test/ControlContractGroup", [
+            SyncProcess,
+            EmailQueue,
+          ] as const);
 
           yield* ControlService.make({
             port: 32123,
@@ -109,7 +108,7 @@ describe("ControlService — contract route", () => {
           )(response.body);
 
           expect(response.statusCode).toBe(200);
-          expect(contract).toEqual(BillingGroup.contract);
+          expect(contract).toEqual(group.contract);
         }).pipe(
           provideLayer(EmailQueue.layer),
           provideLayer(ProcessStore.layer),

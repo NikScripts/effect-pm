@@ -16,23 +16,23 @@ interface InvoiceJob {
   readonly invoiceId: string;
 }
 
-const TypeEmailQueue = QueueResource.define("@test/TypeEmailQueue", {
+class TypeEmailQueue extends QueueResource.Service<TypeEmailQueue, Email, void>()("@test/TypeEmailQueue", {
   effect: (_email: Email) => Effect.void,
-});
+}) {}
 
-const TypeInvoiceQueue = QueueResource.define("@test/TypeInvoiceQueue", {
+class TypeInvoiceQueue extends QueueResource.Service<TypeInvoiceQueue, InvoiceJob, void>()("@test/TypeInvoiceQueue", {
   effect: (_job: InvoiceJob) => Effect.void,
-});
+}) {}
 
-const TypeProcess = Process.define("@test/TypeProcess", {
+class TypeProcess extends Process.Service<TypeProcess>()("@test/TypeProcess", {
   effect: Effect.void,
-});
+}) {}
 
-const TypeGroup = ProcessGroup.define("@test/TypeGroup", [
+class TypeGroup extends ProcessGroup.Service<TypeGroup>()("@test/TypeGroup", [
   TypeProcess,
   TypeEmailQueue,
   TypeInvoiceQueue,
-] as const);
+] as const) {}
 
 export const processGroupTypeChecks = Effect.gen(function* () {
   const group = yield* TypeGroup.make;
@@ -78,33 +78,30 @@ const waitForCompleted = (
     }
   });
 
-describe("ProcessGroup.define", () => {
+describe("ProcessGroup.make", () => {
   it.live("creates direct typed controls from one canonical entry tuple", () =>
     Effect.gen(function* () {
       const handled = yield* Ref.make<ReadonlyArray<string>>([]);
       const runs = yield* Ref.make(0);
 
-      const EmailQueue = QueueResource.define("@test/TypedDirectEmailQueue", {
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()("@test/TypedDirectEmailQueue", {
         effect: (email: Email) =>
           Ref.update(handled, (values) => [...values, email.to]),
         concurrency: 1,
-      });
+      }) {}
 
-      const SyncProcess = Process.define("@test/TypedDirectSyncProcess", {
+      class SyncProcess extends Process.Service<SyncProcess>()("@test/TypedDirectSyncProcess", {
         effect: Ref.update(runs, (count) => count + 1),
-      });
-
-      const BillingGroup = ProcessGroup.define("@test/TypedDirectBillingGroup", [
-        SyncProcess,
-        EmailQueue,
-      ] as const);
+      }) {}
 
       yield* Effect.gen(function* () {
-        const group = yield* BillingGroup.make;
+        const group = yield* ProcessGroup.make("@test/TypedDirectBillingGroup", [
+          SyncProcess,
+          EmailQueue,
+        ] as const);
 
         expect(group.id).toBe("@test/TypedDirectBillingGroup");
-        expect(group.contract).toEqual(BillingGroup.contract);
-        expect(BillingGroup.contract).toEqual({
+        expect(group.contract).toEqual({
           id: "@test/TypedDirectBillingGroup",
           kind: "group",
           version: "v1",
@@ -125,12 +122,12 @@ describe("ProcessGroup.define", () => {
         });
         expect(
           Schema.decodeUnknownSync(ProcessGroupContractSchema)(
-            BillingGroup.contract,
+            group.contract,
           ),
-        ).toEqual(BillingGroup.contract);
+        ).toEqual(group.contract);
         expect(() =>
           Schema.decodeUnknownSync(ProcessGroupContractSchema)({
-            ...BillingGroup.contract,
+            ...group.contract,
             queues: [
               {
                 id: EmailQueue.id,
@@ -162,15 +159,15 @@ describe("ProcessGroup.define", () => {
       const handled = yield* Ref.make<ReadonlyArray<string>>([]);
       const runs = yield* Ref.make(0);
 
-      const EmailQueue = QueueResource.define("@test/TypedServiceEmailQueue", {
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()("@test/TypedServiceEmailQueue", {
         effect: (email: Email) =>
           Ref.update(handled, (values) => [...values, email.to]),
         concurrency: 1,
-      });
+      }) {}
 
-      const SyncProcess = Process.define("@test/TypedServiceSyncProcess", {
+      class SyncProcess extends Process.Service<SyncProcess>()("@test/TypedServiceSyncProcess", {
         effect: Ref.update(runs, (count) => count + 1),
-      });
+      }) {}
 
       class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
         "@test/TypedServiceBillingGroup",
