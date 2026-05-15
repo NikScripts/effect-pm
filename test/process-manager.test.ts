@@ -356,10 +356,12 @@ describe("ProcessManager", () => {
           expect(unsupportedProcessControl._tag).toBe("ProcessManagerConnectionError");
           if (unsupportedProcessControl._tag === "ProcessManagerConnectionError") {
             expect(unsupportedProcessControl.reason).toContain("does not expose 'runImmediately'");
+            expect(unsupportedProcessControl.reason).toContain("Available controls: status");
           }
           expect(unsupportedQueueControl._tag).toBe("ProcessManagerConnectionError");
           if (unsupportedQueueControl._tag === "ProcessManagerConnectionError") {
             expect(unsupportedQueueControl.reason).toContain("does not expose 'pause'");
+            expect(unsupportedQueueControl.reason).toContain("Available controls: status");
           }
           expect(ambiguous._tag).toBe("ProcessManagerConnectionError");
           if (ambiguous._tag === "ProcessManagerConnectionError") {
