@@ -225,6 +225,17 @@ describe("ProcessManager", () => {
             "now",
             "north-west/billing-group/sync-invoices",
           ]);
+          yield* cli([
+            "pause",
+            "north-west/billing-group/billing-email-queue",
+          ]);
+          yield* cli(["groups"]);
+          yield* cli(["ls"]);
+
+          const wrongKind = yield* cli([
+            "pause",
+            "north-west/billing-group/sync-invoices",
+          ]).pipe(Effect.flip);
           const ambiguous = yield* cli([
             "now",
             "sync-invoices",
@@ -232,9 +243,15 @@ describe("ProcessManager", () => {
 
           expect(yield* Ref.get(northRuns)).toBe(1);
           expect(yield* Ref.get(southRuns)).toBe(0);
+          expect(wrongKind._tag).toBe("ProcessManagerConnectionError");
+          if (wrongKind._tag === "ProcessManagerConnectionError") {
+            expect(wrongKind.reason).toContain("is a process, not a queue");
+          }
           expect(ambiguous._tag).toBe("ProcessManagerConnectionError");
           if (ambiguous._tag === "ProcessManagerConnectionError") {
             expect(ambiguous.reason).toContain("Ambiguous target");
+            expect(ambiguous.reason).toContain("[north-west/billing-group/sync-invoices]");
+            expect(ambiguous.reason).toContain("@repo/NorthWest/BillingGroup/SyncInvoices");
           }
         }).pipe(
           provideLayer(NorthGroup.layer),
