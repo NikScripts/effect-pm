@@ -388,6 +388,11 @@ Open schema question: runtime contracts may need a serializable schema
 descriptor rather than carrying `Schema.Schema` directly over the network. Local
 typing can use `Schema.Schema`; remote discovery needs JSON metadata.
 
+Queue enqueue, release, and handoff controls depend on
+[02 - Queue controls, schema, handoff, and lifecycle hooks](./02-queue-controls-and-hooks.md).
+Do not add remote enqueue to `ProcessManager` until queue contracts can describe
+payload schema/codec metadata and the target queue can validate incoming items.
+
 ## Remote client shape
 
 The PM client should mirror local group controls, but all operations are network

@@ -106,3 +106,35 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 ## What not to assume
 
 - **`AI_CONTEXT.md`** in repo root may be gitignored locally; committed agent guidance starts in root `AGENTS.md` and continues here.
+
+---
+
+## Cursor Cloud specific instructions
+
+**Environment:** Node >= 20.19.0 and pnpm 10.33.4 are declared by
+`package.json`. A `pnpm-lock.yaml` is committed; use `pnpm install` when
+dependencies are missing in a fresh cloud workspace.
+
+**No external services required for the standard checks.** The Vitest suites and
+examples run in-process. Prisma adapter tests use structural mocks rather than a
+real database.
+
+**Key commands:**
+
+| Task | Command |
+|------|---------|
+| Install dependencies | `pnpm install` |
+| Typecheck | `pnpm run typecheck` |
+| Run tests | `pnpm test` |
+| Lint | `pnpm run lint` |
+| Build | `pnpm run build` |
+| Typed PG walkthrough | `pnpm run example:typed-process-group` |
+
+**Gotchas:**
+
+- `pnpm install` runs the `prepare` hook, which patches TypeScript with
+  `@effect/language-service`; seeing `effect-language-service patch` output is
+  expected.
+- Examples using `ControlService` bind to localhost ports. If an example fails
+  because a port is already in use, rerun with a free port or stop the specific
+  process that owns that port.

@@ -300,10 +300,30 @@ export interface QueueRuntimeState extends RuntimeStateBase {
   readonly retried: number;
   readonly exhausted: number;
   readonly activeWorkers: number;
+  readonly inFlight: number;
+  readonly handlerFibers: number;
+  readonly hookFibers: number;
   readonly concurrency: number;
+  readonly remainingCapacity: number;
   readonly throttleMs: number | null;
+  readonly rateLimit: {
+    readonly enabled: boolean;
+    readonly delayed: number;
+  } | null;
 }
 ```
+
+Additional queue state notes from the QueueResource v2 plan:
+
+- Worker, handler, and hook fibers should be owned by `FiberSet`; state snapshots
+  can report counts without exposing fibers.
+- `Latch` open/closed state should drive `running` vs `paused`.
+- `clear` should record the number of pending items removed and release dedup
+  keys for those items.
+- Handler-triggered retries should preserve `enqueuedAt`, priority, and attempt
+  history.
+- Rate-limit state is optional until the actual Effect rate limiter integration
+  is designed.
 
 Potential queue signals:
 
@@ -315,7 +335,10 @@ type QueueSignal<T, E> =
   | { readonly type: "itemStarted"; readonly item: T; readonly attempts: number }
   | { readonly type: "itemCompleted"; readonly item: T; readonly durationMs: number }
   | { readonly type: "itemFailed"; readonly item: T; readonly cause: Cause.Cause<E> }
+  | { readonly type: "retryScheduled"; readonly item: T; readonly attempts: number }
   | { readonly type: "retryExhausted"; readonly item: T; readonly cause: Cause.Cause<E> }
+  | { readonly type: "cleared"; readonly itemsCleared: number }
+  | { readonly type: "rateLimitDelayed"; readonly item: T; readonly delayMs: number }
   | { readonly type: "configChanged"; readonly change: QueueConfigChange };
 ```
 
@@ -416,6 +439,8 @@ change should produce:
 - Replace or append handler/listener hooks.
 - Change retry limits for future retries.
 - Change throttling if implemented through a mutable gate/ref.
+- Change queue rate limit if implemented through a replaceable limiter or
+  ref-backed local adapter.
 - Change schedule entries through schedule controls.
 - Pause/resume queues and process groups.
 - Toggle enabled/disabled flags.
@@ -425,6 +450,7 @@ change should produce:
 - Change queue concurrency by adding/removing worker fibers.
 - Change RunResource or HttpApiResource concurrency if gates are implemented
   through mutable permits or a replaceable gate.
+- Swap queue handler and lifecycle hooks for future items.
 - Change queue priority policy for future dequeues.
 - Change timeout/retry policies for future work.
 

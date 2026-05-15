@@ -48,6 +48,90 @@ Then derive safe views:
 
 All views should be implemented from the same underlying queue state.
 
+## Naming and factory contract
+
+QueueResource should follow the same naming contract used by the typed
+`ProcessGroup` work:
+
+- `QueueResource.make(config)` - raw scoped Effect that acquires a live queue
+  handle. Use this when a caller wants full manual ownership or a custom
+  `Context.Service` wrapper.
+- `QueueResource.Service<Self, T, R, E>()(id, config)` - primary concrete queue
+  declaration. The class is the Context service key, has one canonical id, and
+  owns a default `.layer`.
+- `QueueResource.Tag<Self, T, R, E>()(id)` - identity only. Use with
+  `QueueResource.layer(tag, config)` or `Layer.succeed(tag, mock)` for alternate
+  implementations.
+- `QueueResource.layer(tag, config)` - provider for either a `Service` override
+  or a `Tag` implementation.
+
+Do not add a separate queue `define` API. `Service` is the canonical class-based
+declaration; `make` is runtime acquisition.
+
+| Scenario | Use |
+|----------|-----|
+| Concrete app queue with config known at declaration | `QueueResource.Service` |
+| Library/shared contract where implementation varies | `QueueResource.Tag` + `QueueResource.layer` |
+| Test or environment-specific override | `QueueResource.layer(ServiceOrTag, config)` |
+| Full mock/no processing | `Layer.succeed(Tag, mockHandle)` |
+| Manual scoped acquisition | `QueueResource.make` |
+
+## Effect-idiomatic internal architecture
+
+The v2 rewrite should prefer Effect modules over custom bookkeeping:
+
+- `FiberSet` for worker, handler, and hook fibers. Avoid manual
+  `Ref<Set<Fiber>>` tracking.
+- `Latch` for pause/resume. Avoid polling boolean pause flags.
+- `Semaphore` for concurrency.
+- `Data.TaggedError` for all public/runtime errors.
+- `Exit` in handlers so users receive standard Effect result information.
+- `Duration.Input` for user-facing duration config where durations are accepted.
+- `Effect.annotateLogs` for structured queue/process log context.
+- `Effect.fn` can be used for named internal functions when it improves tracing
+  and does not obscure simple control flow.
+
+Workers should be scope-owned: closing the queue scope interrupts workers and
+in-flight handler/hook fibers through `FiberSet`.
+
+## Handle shape and naming
+
+Keep the public queue handle small at first:
+
+```typescript
+export interface QueueHandle<T, R = void, E = never> {
+  readonly add: (item: T | ReadonlyArray<T>) => Effect.Effect<void>;
+  readonly prioritize: (item: T | ReadonlyArray<T>) => Effect.Effect<void>;
+  readonly defer: (item: T | ReadonlyArray<T>) => Effect.Effect<void>;
+
+  readonly size: Effect.Effect<number>;
+  readonly sizes: Effect.Effect<{
+    readonly high: number;
+    readonly normal: number;
+    readonly low: number;
+  }>;
+  readonly isEmpty: Effect.Effect<boolean>;
+  readonly completed: Effect.Effect<number>;
+
+  readonly pause: Effect.Effect<void>;
+  readonly resume: Effect.Effect<void>;
+  readonly shutdown: Effect.Effect<void>;
+  readonly clear: Effect.Effect<number>;
+}
+```
+
+Naming rules:
+
+- `add` is normal priority.
+- `prioritize` is high priority.
+- `defer` is low priority.
+- `clear` empties pending queues and resets counters; it is not `restart`.
+- `size`, `sizes`, `isEmpty`, `completed`, `pause`, `resume`, `shutdown`, and
+  `clear` are effectful properties where no input is needed.
+
+`clear` should return a count first. Returning drained items is a later decision
+because payloads can be large and may become encoded/opaque.
+
 ## Schema model
 
 Queues may optionally declare a schema or codec for their item payload.
@@ -298,12 +382,52 @@ Runtime tuning candidates:
 
 - `setConcurrency(n)`
 - `setMaxRetries(n)`
+- `setLimit(limit)`
 - `requestWake`
 - `rebalance`
 
 These are candidates, not commitments. Trim aggressively before public API.
 
-## Hook model
+## Handler, retry, and hook model
+
+### Handler
+
+Use `handler`, not `forkWith`, for the post-item result callback:
+
+```typescript
+readonly handler?: (
+  item: T,
+  exit: Exit.Exit<R, E>,
+  ctx: HandlerContext<T, R, E>,
+) => Effect.Effect<void>;
+```
+
+Rules:
+
+- The handler receives `Exit<R, E>` directly.
+- The handler is forked into a managed fiber and must not block workers from
+  taking the next item.
+- There is no automatic retry on failure. Retry policy belongs to userland.
+- `ctx.retry` re-enqueues the same item at the back of the same priority queue.
+  It is not immediate re-execution.
+- `retries` is a cap for handler-triggered retry, not an automatic retry count.
+- When exhausted, `onRetryExhausted` / lifecycle equivalent runs.
+
+### Context metadata
+
+Both effect and handler contexts should expose:
+
+- `attempts` - how many times the item has been processed, with `1` meaning the
+  first attempt.
+- `enqueuedAt` - when the item first entered the queue; retries preserve it.
+- `priority` - the original priority level for the current queue entry.
+
+The effect context should expose guarded enqueue helpers and protect against
+self-enqueue by reference and by configured key. The handler context can expose
+more powerful, unguarded enqueue helpers because it is the explicit routing
+decision point.
+
+### Hooks
 
 Replace special storage-oriented callbacks with lifecycle hooks:
 
@@ -349,6 +473,21 @@ Hook event payloads should include queue-bound metadata where relevant:
 - completed time,
 - source group/deployment,
 - attributes.
+
+## Rate limiting
+
+The queue should support an Effect-style rate limit hook in config, but the
+exact API must be verified against the Effect version in this repo before
+implementation. Candidate shape:
+
+```typescript
+readonly limit?: Effect.Effect<RateLimiter, never, RLimit>;
+```
+
+The queue would acquire the limiter during setup and call it before processing
+each item, using delay/backpressure rather than dropping by default. If Effect's
+current `RateLimiter` API does not match the desired positional examples, add a
+thin local adapter rather than guessing.
 
 ## Future add-on: batch waiting
 
