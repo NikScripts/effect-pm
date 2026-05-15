@@ -199,6 +199,8 @@ as `north-west/billing-group/sync-invoices` or `sync-invoices`. Ambiguous
 aliases fail with the minimum kebab-case suffix for each canonical candidate.
 The CLI supports `groups`, `ls`, `status <target>`, `verify`, process
 `start` / `stop` / `restart` / `now`, and queue `pause` / `resume` / `clear`.
+All target-taking commands use the same resolver, so canonical ids and
+normalized suffix aliases work for status, process controls, and queue controls.
 Remote queue `add`, `enqueue`, `prioritize`, and `defer` remain unsupported.
 
 ---

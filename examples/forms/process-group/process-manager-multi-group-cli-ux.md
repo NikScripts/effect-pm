@@ -101,6 +101,32 @@ $ effect-pm now north-west/billing-group/sync-invoices
 OK process @repo/north-west/BillingGroup/SyncInvoices run requested
 ```
 
+Process controls use the same target resolver:
+
+```bash
+$ effect-pm start north-west/billing-group/sync-invoices
+OK process @repo/north-west/BillingGroup/SyncInvoices start requested
+
+$ effect-pm restart north-west/billing-group/sync-invoices
+OK process @repo/north-west/BillingGroup/SyncInvoices restart requested
+
+$ effect-pm stop north-west/billing-group/sync-invoices
+OK process @repo/north-west/BillingGroup/SyncInvoices stop requested
+```
+
+Queue controls also accept canonical ids or normalized suffix aliases:
+
+```bash
+$ effect-pm pause north-west/billing-group/billing-email-queue
+OK queue @repo/north-west/BillingGroup/BillingEmailQueue pause requested
+
+$ effect-pm resume north-west/billing-group/billing-email-queue
+OK queue @repo/north-west/BillingGroup/BillingEmailQueue resume requested
+
+$ effect-pm clear north-west/billing-group/billing-email-queue
+OK queue @repo/north-west/BillingGroup/BillingEmailQueue clear requested
+```
+
 ## Ambiguity rules
 
 - Commands accept canonical ids and aliases resolved from normalized full ids.
