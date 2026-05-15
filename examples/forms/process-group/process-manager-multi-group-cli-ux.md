@@ -126,7 +126,7 @@ OK process @repo/north-west/BillingGroup/SyncInvoices run requested
 - Display kind separately from ids. Use a `KIND` column, label, or accessible
   color fallback instead of encoding process/queue/group kind in the id string.
 - Targeted commands verify the remote contract before controlling a group and
-  surface drift as a checked control error.
+  surface contract drift as a checked control error.
 
 Example ambiguity:
 
@@ -145,7 +145,7 @@ Keep the minimum typed suffix and canonical id separate, and keep kind as a
 
 - Do not make `ControlService` own multiple groups; it remains a local control
   plane for one typed group.
-- Do not implement remote queue enqueue as part of the CLI. Queue `add`,
+- Do not treat remote queue enqueue as supported by the CLI. Queue `add`,
   `enqueue`, `prioritize`, and `defer` stay blocked until schema-backed item
   contracts land.
 - Do not hide network, protocol, or contract drift failures as defects.
