@@ -595,6 +595,11 @@ The endpoint service owns connection configuration and the imported contract.
 The application still provides transport, such as `NodeHttpClient.layerUndici`,
 through normal layer wiring.
 
+Remote group controls should verify the endpoint contract before issuing remote
+commands. Cache successful verification inside the remote group provider so the
+layer remains infallible, while contract drift still reaches callers as a
+checked remote/control error on the operation they attempted.
+
 Do not implement remote queue enqueue in this slice. The remote group can expose
 typed process controls plus queue `pause`, `resume`, `clear`, and `status`.
 Queue `add` / `enqueue` / `prioritize` / `defer` remain blocked until queue item

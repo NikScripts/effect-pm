@@ -247,6 +247,74 @@ describe("ProcessManager", () => {
     ),
   );
 
+  it.live("fails remote group controls when the endpoint contract drifts", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+          "@test/RemoteLayerDriftEmailQueue",
+          {
+            effect: (_email) => Effect.void,
+          },
+        ) {}
+
+        class SyncProcess extends Process.Service<SyncProcess>()(
+          "@test/RemoteLayerDriftProcess",
+          {
+            effect: Effect.void,
+          },
+        ) {}
+
+        class LocalGroup extends ProcessGroup.Service<LocalGroup>()(
+          "@test/RemoteLayerDriftGroup",
+          [SyncProcess, EmailQueue] as const,
+        ) {}
+
+        class StaleGroup extends ProcessGroup.Service<StaleGroup>()(
+          "@test/RemoteLayerDriftGroup",
+          [SyncProcess] as const,
+        ) {}
+
+        class StaleEndpoint extends ProcessManager.Endpoint<StaleEndpoint>()(
+          StaleGroup,
+          {
+            baseUrl: "http://127.0.0.1:32133",
+          },
+        ) {}
+
+        yield* Effect.gen(function* () {
+          const localGroup = yield* LocalGroup;
+
+          yield* ControlService.make({
+            port: 32133,
+            group: localGroup,
+          });
+
+          const remoteProgram = Effect.gen(function* () {
+            const staleRemoteGroup = yield* StaleGroup;
+            return yield* staleRemoteGroup.status.pipe(Effect.flip);
+          }).pipe(
+            provideLayer(ProcessGroup.remoteLayer(StaleGroup, StaleEndpoint)),
+            provideLayer(StaleEndpoint.layer),
+            provideLayer(NodeHttpClient.layerUndici),
+          );
+
+          const error = yield* remoteProgram;
+
+          expect(error._tag).toBe("ProcessGroupRemoteControlError");
+          if ("reason" in error) {
+            expect(error.reason).toContain("Remote queue ids");
+          } else {
+            throw new Error(`Unexpected error: ${String(error)}`);
+          }
+        }).pipe(
+          provideLayer(LocalGroup.layer),
+          provideLayer(EmailQueue.layer),
+          provideLayer(ProcessStore.layer),
+        );
+      }),
+    ),
+  );
+
   it.live("provides typed remote group controls through ProcessGroup.remoteLayer", () =>
     Effect.scoped(
       Effect.gen(function* () {
