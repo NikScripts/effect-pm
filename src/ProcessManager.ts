@@ -36,6 +36,20 @@ type ContractSource<Contract extends AnyProcessGroupContract> = {
 type ContractFromSource<Source extends ContractSource<AnyProcessGroupContract>> =
   Source["contract"];
 
+type ConnectionSource<Contract extends AnyProcessGroupContract> =
+  ContractSource<Contract> & {
+    readonly id: Contract["id"];
+  };
+
+type ConnectionGroupId<Groups extends readonly ConnectionSource<AnyProcessGroupContract>[]> =
+  Groups[number]["id"];
+
+export type ProcessManagerConnectionMap<
+  Groups extends readonly ConnectionSource<AnyProcessGroupContract>[],
+> = {
+  readonly [Id in ConnectionGroupId<Groups>]: string;
+};
+
 /**
  * Configuration for a remote ProcessManager endpoint service.
  *
@@ -66,6 +80,27 @@ export class ProcessManagerRequestError extends Data.TaggedError(
   readonly reason: string;
   readonly status?: number;
 }> {}
+
+/** @public */
+export class ProcessManagerConnectionError extends Data.TaggedError(
+  "ProcessManagerConnectionError",
+)<{
+  readonly groupId: string;
+  readonly reason: string;
+}> {}
+
+/** @public */
+export interface ProcessManagerConnectionRegistryService {
+  readonly baseUrl: (
+    groupId: string,
+  ) => Effect.Effect<string, ProcessManagerConnectionError>;
+}
+
+/** @public */
+export class ProcessManagerConnectionRegistry extends Context.Service<
+  ProcessManagerConnectionRegistry,
+  ProcessManagerConnectionRegistryService
+>()("@nikscripts/effect-pm/ProcessManager/ProcessManagerConnectionRegistry") {}
 
 /**
  * Remote controls for one process ID from a group contract.
@@ -421,6 +456,49 @@ const makeRemoteProcessManager = <
   };
 };
 
+const makeConnectionRegistryLayer = <
+  const Groups extends readonly ConnectionSource<AnyProcessGroupContract>[],
+>(
+  _groups: Groups,
+  connections: ProcessManagerConnectionMap<Groups>,
+): Layer.Layer<ProcessManagerConnectionRegistry> => {
+  const baseUrls = new Map<string, string>();
+  for (const [groupId, baseUrl] of Object.entries(connections)) {
+    if (typeof baseUrl === "string") {
+      baseUrls.set(groupId, baseUrl);
+    }
+  }
+  return Layer.succeed(ProcessManagerConnectionRegistry, {
+    baseUrl: (groupId) => {
+      const baseUrl = baseUrls.get(groupId);
+      if (baseUrl === undefined) {
+        return Effect.fail(
+          new ProcessManagerConnectionError({
+            groupId,
+            reason: `Group '${groupId}' is not registered in this connection registry`,
+          }),
+        );
+      }
+      return Effect.succeed(baseUrl);
+    },
+  });
+};
+
+const connectFromRegistry = <
+  Source extends ConnectionSource<AnyProcessGroupContract>,
+>(
+  source: Source,
+): Effect.Effect<
+  RemoteProcessManager<ContractFromSource<Source>>,
+  ProcessManagerConnectionError,
+  ProcessManagerConnectionRegistry
+> =>
+  Effect.gen(function* () {
+    const registry = yield* ProcessManagerConnectionRegistry;
+    const baseUrl = yield* registry.baseUrl(source.id);
+    return makeRemoteProcessManager(baseUrl, source.contract);
+  });
+
 const makeEndpoint = <
   Self,
   const Id extends string,
@@ -439,6 +517,20 @@ const makeEndpoint = <
     layer: Layer.succeed(base, manager),
   });
 };
+
+/**
+ * Build a typed remote client from a group service/definition value by reading
+ * the group's URL from {@link ProcessManagerConnectionRegistry}.
+ *
+ * @public
+ */
+function connect<Source extends ConnectionSource<AnyProcessGroupContract>>(
+  source: Source,
+): Effect.Effect<
+  RemoteProcessManager<ContractFromSource<Source>>,
+  ProcessManagerConnectionError,
+  ProcessManagerConnectionRegistry
+>;
 
 /**
  * Build a typed remote client from a group service/definition value. This is
@@ -466,6 +558,7 @@ function connect<const Contract extends AnyProcessGroupContract>(options: {
 
 function connect(
   sourceOrOptions:
+    | ConnectionSource<AnyProcessGroupContract>
     | ContractSource<AnyProcessGroupContract>
     | {
         readonly baseUrl: string;
@@ -474,7 +567,14 @@ function connect(
   options?: {
     readonly baseUrl: string;
   },
-): RemoteProcessManager<AnyProcessGroupContract> {
+):
+  | RemoteProcessManager<AnyProcessGroupContract>
+  | Effect.Effect<
+    RemoteProcessManager<AnyProcessGroupContract>,
+    ProcessManagerConnectionError,
+    ProcessManagerConnectionRegistry
+  >
+{
   if (options !== undefined) {
     return makeRemoteProcessManager(options.baseUrl, sourceOrOptions.contract);
   }
@@ -484,7 +584,10 @@ function connect(
       sourceOrOptions.contract,
     );
   }
-  throw new TypeError("ProcessManager.connect requires connection options");
+  if ("id" in sourceOrOptions) {
+    return connectFromRegistry(sourceOrOptions);
+  }
+  throw new TypeError("ProcessManager.connect requires connection options or a connection registry source");
 }
 
 /**
@@ -494,6 +597,9 @@ function connect(
  */
 export const ProcessManager = {
   connect,
+  ConnectionRegistry: {
+    layer: makeConnectionRegistryLayer,
+  },
   Endpoint: <Self>() =>
   <const Source extends ContractSource<AnyProcessGroupContract>>(
     group: Source,

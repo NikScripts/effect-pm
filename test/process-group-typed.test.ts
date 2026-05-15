@@ -9,6 +9,7 @@ import {
   ProcessGroupContractSchema,
   ProcessGroupErrors,
   ProcessManager,
+  ProcessManagerConnectionRegistry,
   QueueResource,
   UnsupportedRemoteControlError,
 } from "../src";
@@ -93,12 +94,21 @@ export const processGroupTypeChecks = Effect.gen(function* () {
     .queue(TypeEmailQueue)
     .enqueue({ to: "remote-error-channel@example.com" });
   const _remoteLayer = ProcessGroup.remoteLayer(TypeGroup, TypeEndpoint);
+  const _registryLayer = ProcessManager.ConnectionRegistry.layer(
+    [TypeGroup] as const,
+    {
+      [TypeGroup.id]: "http://127.0.0.1:32134",
+    },
+  );
+  const _registryConnect = ProcessManager.connect(TypeGroup);
 
   type DirectGroupId = typeof directGroup.id;
   type DirectQueueEnqueueError = EffectError<typeof _directQueueEnqueue>;
   type ServiceQueueEnqueueError = EffectError<typeof _serviceQueueEnqueue>;
   type RemoteLayerOut = LayerOut<typeof _remoteLayer>;
   type RemoteLayerIn = LayerIn<typeof _remoteLayer>;
+  type RegistryLayerOut = LayerOut<typeof _registryLayer>;
+  type RegistryConnectIn = Effect.Services<typeof _registryConnect>;
 
   assertType<Assert<IsEqual<DirectGroupId, "@test/TypeDirectGroup">>>();
   assertType<Assert<IsEqual<DirectQueueEnqueueError, ProcessGroupErrors>>>();
@@ -107,6 +117,8 @@ export const processGroupTypeChecks = Effect.gen(function* () {
   assertType<Assert<IsAssignable<UnsupportedRemoteControlError, ServiceQueueEnqueueError>>>();
   assertType<Assert<IsEqual<RemoteLayerOut, TypeGroup>>>();
   assertType<Assert<IsEqual<RemoteLayerIn, TypeEndpoint | HttpClient.HttpClient>>>();
+  assertType<Assert<IsEqual<RegistryLayerOut, ProcessManagerConnectionRegistry>>>();
+  assertType<Assert<IsEqual<RegistryConnectIn, ProcessManagerConnectionRegistry>>>();
 
   if (false) {
     // @ts-expect-error queues are not valid process lifecycle targets
@@ -123,6 +135,11 @@ export const processGroupTypeChecks = Effect.gen(function* () {
 
     // @ts-expect-error process IDs are not valid queue contract IDs
     yield* acceptQueueId(TypeProcess.id);
+
+    ProcessManager.ConnectionRegistry.layer([TypeGroup] as const, {
+      // @ts-expect-error registry requires every group id in the tuple
+      "@test/OtherGroup": "http://127.0.0.1:32134",
+    });
   }
 });
 

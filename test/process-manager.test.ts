@@ -107,6 +107,58 @@ describe("ProcessManager", () => {
     ),
   );
 
+  it.live("connects to a group through the typed connection registry", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const runs = yield* Ref.make(0);
+
+        class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+          "@test/RegistryEmailQueue",
+          {
+            effect: (_email) => Effect.void,
+          },
+        ) {}
+
+        class SyncProcess extends Process.Service<SyncProcess>()(
+          "@test/RegistryProcess",
+          {
+            effect: Ref.update(runs, (count) => count + 1),
+          },
+        ) {}
+
+        class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+          "@test/RegistryBillingGroup",
+          [SyncProcess, EmailQueue] as const,
+        ) {}
+
+        yield* Effect.gen(function* () {
+          const group = yield* BillingGroup;
+
+          yield* ControlService.make({
+            port: 32136,
+            group,
+          });
+
+          const manager = yield* ProcessManager.connect(BillingGroup);
+          yield* manager.verifyContract;
+          yield* manager.process(SyncProcess.id).runImmediately;
+
+          expect(yield* Ref.get(runs)).toBe(1);
+        }).pipe(
+          provideLayer(BillingGroup.layer),
+          provideLayer(EmailQueue.layer),
+          provideLayer(ProcessStore.layer),
+          provideLayer(
+            ProcessManager.ConnectionRegistry.layer([BillingGroup] as const, {
+              [BillingGroup.id]: "http://127.0.0.1:32136",
+            }),
+          ),
+          provideLayer(NodeHttpClient.layerUndici),
+        );
+      }),
+    ),
+  );
+
   it.live("reads remote queue status by typed queue id", () =>
     Effect.scoped(
       Effect.gen(function* () {

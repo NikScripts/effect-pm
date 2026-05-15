@@ -10,4 +10,6 @@ Add typed process group declarations, contracts, and remote management. Processe
 
 `ControlService` is now contract/REST-first: the legacy `POST /control` command endpoint and command request types were removed, and the CLI now calls the REST routes directly.
 
+`ProcessManager.ConnectionRegistry.layer` can now provide typed group connection URLs, and `ProcessManager.connect(Group)` can build a remote manager from that registry requirement.
+
 Also fixes `ProcessStore` execution ordering consistency and keyed queue `clear()` dedup cleanup.

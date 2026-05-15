@@ -83,8 +83,15 @@ export { ControlService } from "./ControlService";
 export { createCli, runCli } from "./cli";
 
 // Process Manager
-export { ProcessManager, ProcessManagerRequestError } from "./ProcessManager";
+export {
+  ProcessManager,
+  ProcessManagerConnectionError,
+  ProcessManagerConnectionRegistry,
+  ProcessManagerRequestError,
+} from "./ProcessManager";
 export type {
+  ProcessManagerConnectionMap,
+  ProcessManagerConnectionRegistryService,
   RemoteProcessManager,
   RemoteProcessControls,
   RemoteQueueControls,
