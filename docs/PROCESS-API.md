@@ -227,13 +227,21 @@ Remote queue `add`, `enqueue`, `prioritize`, and `defer` remain unsupported.
 
 | Member | Role |
 |--------|------|
+| `RuntimeRef` | Stable `{ kind, id }` identity for a runtime component. |
+| `RuntimeStateBase` | Base shape for live state snapshots with `ref`, `observedAt`, and `configVersion`. |
+| `RuntimeStateChange` | Generic transition record with previous/current state. |
+| `RuntimeFact` | Generic discrete runtime occurrence payload. |
 | `RuntimeObserver` | Optional service for publishing runtime facts and state changes. |
 | `RuntimeObserver.publishFact(fact)` | Publishes a fact when the service is present; otherwise no-ops. |
 | `RuntimeObserver.publishStateChange(change)` | Publishes a state transition when the service is present; otherwise no-ops. |
 
 `RunResource` publishes `run-resource.run.started`,
 `run-resource.run.completed`, and `run-resource.run.failed` facts when
-`RuntimeObserver` is provided.
+`RuntimeObserver` is provided. Observation is optional: when no
+`RuntimeObserver` service is in the environment, publish helpers no-op and the
+gated effect behavior is unchanged. Runtime facts and state changes are not yet
+persisted to `ProcessStore`; generic runtime state/fact persistence is the next
+likely Phase C slice.
 
 ---
 

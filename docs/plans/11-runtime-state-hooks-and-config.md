@@ -2,10 +2,15 @@
 
 ## Status
 
-Planned. The first Phase C implementation slice should keep `ProcessStore` as
-the public storage service name, introduce generic runtime state/fact vocabulary,
-and prove the model with `RunResource` before publishing a separate
-`RuntimeStorage` boundary. The final public shape must line up with
+Partially implemented. `RuntimeRef`, `RuntimeStateBase`,
+`RuntimeStateChange`, `RuntimeFact`, and optional `RuntimeObserver` have landed.
+`RuntimeObserver.publishFact` and `RuntimeObserver.publishStateChange` no-op when
+no observer is provided. `RunResource` publishes run started/completed/failed
+facts when `RuntimeObserver` is provided. Runtime facts and state changes are
+not persisted to `ProcessStore` yet; generic runtime state/fact persistence is
+the next likely Phase C slice. Keep `ProcessStore` as the public storage service
+name until a separate `RuntimeStorage` boundary is proven in memory and Prisma.
+The final public shape must line up with
 [07 - Typed ProcessGroup and remote ProcessManager](./07-process-manager.md).
 
 ## Intent
@@ -53,12 +58,14 @@ the mutation point.
 
 Start with a deliberately small, generic slice:
 
-1. Define the shared runtime vocabulary: `RuntimeRef`,
-   `RuntimeStateChange`, `RuntimeFact`, and an internal `RuntimeObserver`.
-2. Apply it to `RunResource` only.
+1. Define the shared runtime vocabulary: `RuntimeRef`, `RuntimeStateBase`,
+   `RuntimeStateChange`, `RuntimeFact`, and optional `RuntimeObserver`.
+   (Implemented.)
+2. Apply it to `RunResource` only. (Implemented for run
+   started/completed/failed facts.)
 3. Prove scoped subscribers can observe state changes without persistence.
 4. Only then bridge generic state changes/facts into `ProcessStore` when that
-   service is available.
+   service is available. (Not implemented; this is the next likely slice.)
 
 `RunResource` is the first publisher because it is the lowest-risk runtime:
 
@@ -87,8 +94,8 @@ Use these names in the first slice:
 - `RuntimeStateChange` — generic history record from one state snapshot to the
   next.
 - `RuntimeFact` — discrete occurrence that may not be a full state snapshot.
-- `RuntimeObserver` — internal observation service/helper that owns current
-  state, publishes changes, and fans out listener streams.
+- `RuntimeObserver` — optional observation service that publishes facts and
+  state changes when provided, and otherwise no-ops through its helper methods.
 
 Rationale:
 
@@ -96,8 +103,8 @@ Rationale:
   already implements that service key.
 - `RuntimeStorage` is a good possible lower-level name, but publishing it before
   memory and Prisma can both store generic state/facts would create churn.
-- `RuntimeObserver` is not storage. It belongs near runtime modules and may stay
-  internal until the listener/stream API settles.
+- `RuntimeObserver` is not storage. It is public as an optional sink, but the
+  listener/stream API and persistence bridge are still unsettled.
 - `RuntimeFact` and `RuntimeStateChange` should stay generic, not
   process/queue-specific.
 
@@ -656,22 +663,27 @@ Avoid:
 
 ## Candidate implementation phases
 
-### Phase C.1 - RunResource observer, no storage writes
+### Phase C.1 - RuntimeObserver and RunResource facts
 
-- Add a small internal `RuntimeObserver` helper that stores latest state and
-  publishes `RuntimeStateChange<RunResourceState>`.
-- Instrument `RunResource.make` and `RunResource.makeRunner` around permit wait,
-  run start, run success, run failure, and interruption.
-- Expose observation only through the acquired gate/runner or internal tests at
-  first; do not require applications to provide `ProcessStore`.
-- Keep listener failure isolated from the user effect and from the semaphore
-  release path.
+- Add `RuntimeRef`, `RuntimeStateBase`, `RuntimeStateChange`, `RuntimeFact`, and
+  optional `RuntimeObserver`. (Implemented.)
+- Add `RuntimeObserver.publishFact` and
+  `RuntimeObserver.publishStateChange` helpers that no-op when no observer is in
+  the environment. (Implemented.)
+- Instrument `RunResource.make` around run start, success, and failure facts.
+  (Implemented for `run-resource.run.started`,
+  `run-resource.run.completed`, and `run-resource.run.failed`.)
+- Keep observation optional and do not require applications to provide
+  `ProcessStore`. (Implemented.)
 - Add no queue, process, HTTP, schema, remote enqueue, or handoff behavior.
+  (Implemented.)
 
-### Phase C.2 - Scoped listeners
+### Phase C.2 - RunResource state changes and scoped listeners
 
-- Add scoped subscription/listener helpers for the observed `RunResource` state
-  stream.
+- Publish `RuntimeStateChange<RunResourceState>` around permit wait, run start,
+  run success, run failure, and interruption.
+- Add scoped subscription/listener helpers for the observed `RunResource` fact
+  and state stream.
 - Prefer `Stream`/scoped APIs over callback-only APIs if Effect patterns support
   the same ergonomics.
 - Define listener failure behavior explicitly: log/store a fact later, but do
@@ -696,15 +708,25 @@ Avoid:
 - Keep queue schema validation, remote queue enqueue, release, and deployment
   handoff in later phases.
 
-## Acceptance criteria for the first implementation slice
+## Acceptance criteria
 
-The first Phase C slice is complete only when all of these are true:
+The landed Phase C.1 fact slice is complete when all of these are true:
 
-- `RuntimeRef`, `RuntimeStateChange`, `RuntimeFact`, and internal
-  `RuntimeObserver` names exist with TSDoc that explains which names are public
-  and which are internal.
-- `ProcessStore` remains the public storage service name; no public
-  `RuntimeStorage` export is added.
+- `RuntimeRef`, `RuntimeStateBase`, `RuntimeStateChange`, `RuntimeFact`, and
+  `RuntimeObserver` are exported with TSDoc.
+- `RuntimeObserver.publishFact` and `RuntimeObserver.publishStateChange` no-op
+  when no observer is in the environment.
+- `RunResource` publishes run started/completed/failed facts when an observer is
+  provided.
+- `RunResource` behavior is unchanged when no observer is provided.
+- Facts are not persisted to `ProcessStore`.
+- No `ProcessStoreInterface` method is added for one runtime feature.
+- No queue schema, remote enqueue, release, handoff, process schedule, or
+  `ProcessManager` behavior changes are included.
+
+The next Phase C persistence/state slice is complete only when all of these are
+true:
+
 - `RunResource` publishes state changes for wait/start/success/failure/
   interruption without polling a status getter.
 - `RunResourceState` records at least configured concurrency, in-flight count,
@@ -713,9 +735,8 @@ The first Phase C slice is complete only when all of these are true:
 - Multiple scoped listeners can observe the same `RunResource` state changes.
 - Listener failure is isolated from the gated user effect and cannot leak
   semaphore permits.
-- No `ProcessStoreInterface` method is added for one runtime feature.
-- No queue schema, remote enqueue, release, handoff, process schedule, or
-  `ProcessManager` behavior changes are included.
+- Generic runtime facts/state changes can be persisted through `ProcessStore`
+  without adding feature-specific store methods.
 
 ## Verification commands
 

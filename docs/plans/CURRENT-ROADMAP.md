@@ -62,16 +62,15 @@ plan for this phase, and reconcile storage work with
 [10](./10-process-store-phase-one.md) before adding public store methods.
 
 1. Keep `ProcessStore` as the public storage service name for the first slice;
-   introduce `RuntimeObserver`, `RuntimeStateChange`, and `RuntimeFact` as
-   generic runtime vocabulary without renaming storage yet. (Initial vocabulary
-   and `RuntimeObserver` are implemented.)
-2. Implement an internal runtime observer for `RunResource` first, because it is
-   a low-risk gate with no queue payloads, no schema work, and no background
-   workers. (`RunResource` now publishes run started/completed/failed facts when
-   an observer is provided.)
-3. Add scoped observation/listener support around that observer.
-4. Persist generic state changes/facts through `ProcessStore` only after the
-   in-memory observer shape is proven.
+   `RuntimeRef`, `RuntimeStateBase`, `RuntimeStateChange`, `RuntimeFact`, and
+   optional `RuntimeObserver` are now implemented without renaming storage.
+2. `RunResource` is the first observed runtime because it is a low-risk gate with
+   no queue payloads, no schema work, and no background workers. It now publishes
+   run started/completed/failed facts when `RuntimeObserver` is provided, and
+   no-ops when it is absent.
+3. Add scoped observation/listener support around runtime facts/state changes.
+4. Persist generic state changes/facts through `ProcessStore`; facts are not
+   persisted yet, so this is the next likely Phase C slice.
 5. Add typed projections over generic state/fact history instead of adding one
    store method per runtime feature.
 6. Revisit a public `RuntimeStorage` name only after the generic storage
