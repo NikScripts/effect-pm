@@ -59,9 +59,12 @@ QueueResource should follow the same naming contract used by the typed
 - `QueueResource.Service<Self, T, R, E>()(id, config)` - primary concrete queue
   declaration. The class is the Context service key, has one canonical id, and
   owns a default `.layer`.
-- `QueueResource.RemoteService<Self, T, R, E>()(id, config)` - future
-  remote-capable queue declaration. Use this when the queue service is intended
-  to be swappable between a local runtime provider and a network-backed remote
+- `QueueResource.RemoteService<Self, T, R, E>()(id, config)` - deferred
+  remote-capable queue declaration. Do not implement this constructor until the
+  remote service design gate in
+  [07 - Typed ProcessGroup and remote ProcessManager](./07-process-manager.md)
+  is resolved. When implemented, use it for queue services intended to be
+  swappable between a local runtime provider and a network-backed remote
   provider. Its handle shape must expose control/network/protocol errors from
   the beginning, and its config must include `itemSchema`.
 - `QueueResource.Tag<Self, T, R, E>()(id)` - identity only. Use with
@@ -76,7 +79,7 @@ declaration; `make` is runtime acquisition.
 | Scenario | Use |
 |----------|-----|
 | Concrete app queue with config known at declaration | `QueueResource.Service` |
-| Queue intentionally provided locally or remotely | `QueueResource.RemoteService` |
+| Queue intentionally provided locally or remotely | `QueueResource.RemoteService` after the remote service design gate |
 | Library/shared contract where implementation varies | `QueueResource.Tag` + `QueueResource.layer` |
 | Test or environment-specific override | `QueueResource.layer(ServiceOrTag, config)` |
 | Full mock/no processing | `Layer.succeed(Tag, mockHandle)` |
@@ -84,13 +87,17 @@ declaration; `make` is runtime acquisition.
 
 `RemoteService` is not a remote layer bolted onto the local `Service` shape. It
 is a different service contract for queues that cross process boundaries. The
-same key can have a local `.layer` and a remote `.remoteLayer(endpoint)`, but all
-public operations must honestly model failures that can happen over the network.
-Unlike `QueueResource.Service`, `QueueResource.RemoteService` requires
-`itemSchema`. A queue that can be called remotely must have a schema-backed
-serializable item contract; otherwise remote enqueue, release, and handoff have
-no safe wire boundary. Remote enqueue still remains out of scope until this
-plan's schema-backed enqueue model is implemented.
+same key can eventually have a local `.layer` and a remote
+`.remoteLayer(endpoint)`, but all public operations must honestly model failures
+that can happen over the network. Unlike `QueueResource.Service`,
+`QueueResource.RemoteService` requires `itemSchema`. A queue that can be called
+remotely must have a schema-backed serializable item contract; otherwise remote
+enqueue, release, and handoff have no safe wire boundary.
+
+This is not a near-term implementation item. Finish and harden group-level
+remote controls first; remote enqueue and standalone remote queue services
+remain out of scope until this plan's schema-backed enqueue model is
+implemented.
 
 ## Effect-idiomatic internal architecture
 

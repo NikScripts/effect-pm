@@ -1237,13 +1237,18 @@ const remoteLayer = <
     Effect.gen(function* () {
       const manager = yield* endpoint;
       const context = yield* Effect.context<HttpClient.HttpClient>();
-      const runRemote = <A>(
+      const runRemoteUnverified = <A>(
         effect: Effect.Effect<A, unknown, HttpClient.HttpClient>,
       ): Effect.Effect<A, ProcessGroupRemoteControlError> =>
         effect.pipe(
           provideLayer(context),
           Effect.mapError(toRemoteControlError),
         );
+      const verifyRemote = yield* Effect.cached(runRemoteUnverified(manager.verifyContract));
+      const runRemote = <A>(
+        effect: Effect.Effect<A, unknown, HttpClient.HttpClient>,
+      ): Effect.Effect<A, ProcessGroupRemoteControlError> =>
+        Effect.flatMap(verifyRemote, () => runRemoteUnverified(effect));
       return makeRemoteTypedProcessGroup(group, manager, runRemote);
     }),
   );

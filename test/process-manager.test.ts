@@ -219,6 +219,125 @@ describe("ProcessManager", () => {
     ),
   );
 
+  it.live("fails contract verification when remote process entries drift", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+          "@test/ManagerDriftEmailQueue",
+          {
+            effect: (_email) => Effect.void,
+          },
+        ) {}
+
+        class SyncProcess extends Process.Service<SyncProcess>()(
+          "@test/ManagerDriftProcess",
+          {
+            effect: Effect.void,
+          },
+        ) {}
+
+        class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+          "@test/ManagerDriftGroup",
+          [SyncProcess, EmailQueue] as const,
+        ) {}
+
+        yield* Effect.gen(function* () {
+          const group = yield* BillingGroup;
+          const staleManager = ProcessManager.connect({
+            baseUrl: "http://127.0.0.1:32132",
+            contract: {
+              ...BillingGroup.contract,
+              processes: [],
+            },
+          });
+
+          yield* ControlService.make({
+            port: 32132,
+            group,
+          });
+
+          const error = yield* staleManager.verifyContract.pipe(Effect.flip);
+
+          expect(error._tag).toBe("ProcessManagerRequestError");
+          expect(error.reason).toContain("Remote process ids");
+        }).pipe(
+          provideLayer(BillingGroup.layer),
+          provideLayer(EmailQueue.layer),
+          provideLayer(ProcessStore.layer),
+          provideLayer(NodeHttpClient.layerUndici),
+        );
+      }),
+    ),
+  );
+
+  it.live("fails remote group controls when the endpoint contract drifts", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+          "@test/RemoteLayerDriftEmailQueue",
+          {
+            effect: (_email) => Effect.void,
+          },
+        ) {}
+
+        class SyncProcess extends Process.Service<SyncProcess>()(
+          "@test/RemoteLayerDriftProcess",
+          {
+            effect: Effect.void,
+          },
+        ) {}
+
+        class LocalGroup extends ProcessGroup.Service<LocalGroup>()(
+          "@test/RemoteLayerDriftGroup",
+          [SyncProcess, EmailQueue] as const,
+        ) {}
+
+        class StaleGroup extends ProcessGroup.Service<StaleGroup>()(
+          "@test/RemoteLayerDriftGroup",
+          [SyncProcess] as const,
+        ) {}
+
+        class StaleEndpoint extends ProcessManager.Endpoint<StaleEndpoint>()(
+          StaleGroup,
+          {
+            baseUrl: "http://127.0.0.1:32133",
+          },
+        ) {}
+
+        yield* Effect.gen(function* () {
+          const localGroup = yield* LocalGroup;
+
+          yield* ControlService.make({
+            port: 32133,
+            group: localGroup,
+          });
+
+          const remoteProgram = Effect.gen(function* () {
+            const staleRemoteGroup = yield* StaleGroup;
+            return yield* staleRemoteGroup.status.pipe(Effect.flip);
+          }).pipe(
+            provideLayer(ProcessGroup.remoteLayer(StaleGroup, StaleEndpoint)),
+            provideLayer(StaleEndpoint.layer),
+            provideLayer(NodeHttpClient.layerUndici),
+          );
+
+          const error = yield* remoteProgram;
+
+          expect(error._tag).toBe("ProcessGroupRemoteControlError");
+          if ("reason" in error) {
+            expect(error.reason).toContain("Remote queue ids");
+          } else {
+            throw new Error(`Unexpected error: ${String(error)}`);
+          }
+        }).pipe(
+          provideLayer(LocalGroup.layer),
+          provideLayer(EmailQueue.layer),
+          provideLayer(ProcessStore.layer),
+        );
+      }),
+    ),
+  );
+
   it.live("provides typed remote group controls through ProcessGroup.remoteLayer", () =>
     Effect.scoped(
       Effect.gen(function* () {
