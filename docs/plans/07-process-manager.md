@@ -507,32 +507,122 @@ yield* billing.queue(EmailQueue.id).pause;
 This avoids repeating `baseUrl` and gives later auth/RPC middleware a single
 home.
 
-### Bundled remote layers
+### Resolved remote layer decisions
 
-After endpoint service exists, provide a layer bundle from the group:
+Use Effect's normal service/layer model: the `Context.Service` key declares one
+stable service shape, and local, mock, or remote layers provide implementations
+for that shape. A remote provider must not change the service key or hide
+network failures as defects.
+
+The group service shape therefore needs honest control errors up front:
 
 ```typescript
-const BillingRemoteLive = ProcessGroup.remoteLayers(BillingGroup, BillingEndpoint);
+type ProcessGroupControlError =
+  | ProcessGroupErrors
+  | ProcessGroupRemoteControlError;
+
+interface TypedProcessGroup<Id, Entries, Error = ProcessGroupErrors> {
+  readonly process: <P extends ProcessGroupProcessEntries<Entries>>(
+    process: P,
+  ) => TypedProcessControls<ProcessGroupEntryRequirements<Entries>, Error>;
+
+  readonly queue: <Q extends ProcessGroupQueueEntries<Entries>>(
+    queue: Q,
+  ) => TypedQueueControls<ProcessGroupQueueItem<Q>, Error>;
+}
+```
+
+`ProcessGroup.make(id, entries)` can stay local and narrow:
+
+```typescript
+yield* ProcessGroup.make("@app/BillingGroup", entries);
+// TypedProcessGroup<..., ProcessGroupErrors>
+```
+
+`ProcessGroup.Service` should be remote-capable because it is the injectable
+boundary:
+
+```typescript
+class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+  "@app/BillingGroup",
+  [StripeSync, EmailQueue] as const,
+) {}
+
+// yield* BillingGroup:
+// TypedProcessGroup<..., ProcessGroupControlError>
+```
+
+Keep the remote/control error in a neutral module or type owned by the group
+control boundary. `ProcessGroup` should not import `ProcessManager` only to name
+remote request failures, because that creates the wrong ownership direction.
+
+`ProcessGroup.remoteLayer(Group, Endpoint)` should be a normal Effect provider:
+
+```typescript
+const BillingRemoteLayer = ProcessGroup.remoteLayer(
+  BillingGroup,
+  BillingEndpoint,
+);
+// Layer.Layer<BillingGroup, never, BillingEndpoint | HttpClient>
+```
+
+The endpoint service owns connection configuration and the imported contract.
+The application still provides transport, such as `NodeHttpClient.layerUndici`,
+through normal layer wiring.
+
+Do not implement remote queue enqueue in this slice. The remote group can expose
+typed process controls plus queue `pause`, `resume`, `clear`, and `status`.
+Queue `add` / `enqueue` / `prioritize` / `defer` remain blocked until queue item
+schemas and serializable codec contracts exist. If the stable service shape
+temporarily requires these members, they must fail with an explicit
+unsupported-remote-control error, not `orDie`.
+
+### Bundled remote layers
+
+After endpoint service exists, first provide the remote group service:
+
+```typescript
+const BillingRemoteLive = ProcessGroup.remoteLayer(BillingGroup, BillingEndpoint);
 
 const program = Effect.gen(function* () {
   const billing = yield* BillingGroup;
-  const stripe = yield* StripeSync;
-  const emails = yield* EmailQueue;
 
   yield* billing.process(StripeSync).runImmediately;
-  yield* stripe.runImmediately();
-  yield* emails.pause;
+  yield* billing.queue(EmailQueue).pause;
 });
 
 yield* program.pipe(Effect.provide(BillingRemoteLive));
 ```
 
-`remoteLayers` should eventually provide:
+`remoteLayers` is a later milestone. It would provide more than the group
+service:
 
 - the remote group service (`BillingGroup`);
 - remote process control services for each process entry;
 - remote queue control services for each queue entry whose shape can be safely
   represented remotely.
+
+That later API depends on separate remote-capable process and queue service
+shapes. Current `Process.Service` and `QueueResource.Service` produce local
+runtime-owner handles whose operations do not expose network/control errors, so
+remote layers for those services would be dishonest today.
+
+Prefer future constructors named around remote capability, for example:
+
+```typescript
+class EmailQueue extends QueueResource.RemoteService<EmailQueue, Email>()(
+  "@app/EmailQueue",
+  { effect: sendEmail, itemSchema: EmailSchema },
+) {}
+
+EmailQueue.layer; // local runtime provider
+EmailQueue.remoteLayer(BillingEndpoint); // network-backed provider
+```
+
+`RemoteService` should mean "this service is designed to be provided locally or
+remotely"; its method error channels must account for control, network, and
+protocol failures from the beginning. Keep `Service` as the low-ceremony local
+runtime-owner constructor.
 
 ### Error semantics must be decided before remote resource layers
 
@@ -557,10 +647,11 @@ implementing process/queue remote layers:
 Recommended path:
 
 1. Add `ProcessManager.Endpoint` now.
-2. Add `ProcessGroup.remoteLayer` / `remoteLayers` for group controls, where the
-   return type can expose remote errors.
-3. Wait on process/queue remote layers until process control handles and queue
-   enqueue schema/error types are settled.
+2. Add `ProcessGroup.remoteLayer` for group controls, where the service shape can
+   expose remote/control errors.
+3. Wait on `remoteLayers` until `Process.RemoteService` /
+   `QueueResource.RemoteService`-style handles and queue enqueue schema/error
+   types are settled.
 
 ## ProcessGroup and ControlService
 

@@ -59,6 +59,11 @@ QueueResource should follow the same naming contract used by the typed
 - `QueueResource.Service<Self, T, R, E>()(id, config)` - primary concrete queue
   declaration. The class is the Context service key, has one canonical id, and
   owns a default `.layer`.
+- `QueueResource.RemoteService<Self, T, R, E>()(id, config)` - future
+  remote-capable queue declaration. Use this when the queue service is intended
+  to be swappable between a local runtime provider and a network-backed remote
+  provider. Its handle shape must expose control/network/protocol errors from
+  the beginning.
 - `QueueResource.Tag<Self, T, R, E>()(id)` - identity only. Use with
   `QueueResource.layer(tag, config)` or `Layer.succeed(tag, mock)` for alternate
   implementations.
@@ -71,10 +76,18 @@ declaration; `make` is runtime acquisition.
 | Scenario | Use |
 |----------|-----|
 | Concrete app queue with config known at declaration | `QueueResource.Service` |
+| Queue intentionally provided locally or remotely | `QueueResource.RemoteService` |
 | Library/shared contract where implementation varies | `QueueResource.Tag` + `QueueResource.layer` |
 | Test or environment-specific override | `QueueResource.layer(ServiceOrTag, config)` |
 | Full mock/no processing | `Layer.succeed(Tag, mockHandle)` |
 | Manual scoped acquisition | `QueueResource.make` |
+
+`RemoteService` is not a remote layer bolted onto the local `Service` shape. It
+is a different service contract for queues that cross process boundaries. The
+same key can have a local `.layer` and a remote `.remoteLayer(endpoint)`, but all
+public operations must honestly model failures that can happen over the network.
+Remote enqueue still requires `itemSchema` / codec contracts and must remain out
+of scope until this plan's schema-backed enqueue model is implemented.
 
 ## Effect-idiomatic internal architecture
 
