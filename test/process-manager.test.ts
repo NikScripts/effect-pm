@@ -229,8 +229,17 @@ describe("ProcessManager", () => {
             "pause",
             "north-west/billing-group/billing-email-queue",
           ]);
+          yield* cli([
+            "status",
+            "north-west/billing-group/sync-invoices",
+          ]);
+          yield* cli([
+            "status",
+            "north-west/billing-group/billing-email-queue",
+          ]);
           yield* cli(["groups"]);
           yield* cli(["ls"]);
+          yield* cli(["verify"]);
 
           const wrongKind = yield* cli([
             "pause",

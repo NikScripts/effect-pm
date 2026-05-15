@@ -584,6 +584,49 @@ const resolveCliTarget = (
   return Effect.succeed(resolution.candidate);
 };
 
+const targetResolutionError = (
+  input: string,
+  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+): ProcessManagerConnectionError | undefined => {
+  const resolution = resolveProcessManagerTarget(input, targetCandidatesFrom(groups));
+  if (resolution._tag === "Missing") {
+    return new ProcessManagerConnectionError({
+      groupId: "",
+      reason: `No process or queue target matched '${input}'`,
+    });
+  }
+  if (resolution._tag === "Ambiguous") {
+    const candidates = resolution.candidates
+      .map(({ candidate, minimumSuffix }) =>
+        `${candidate.kind}\t[${minimumSuffix}]\t${candidate.id}`
+      )
+      .join("\n");
+    return new ProcessManagerConnectionError({
+      groupId: "",
+      reason: `Ambiguous target '${input}'.\nKIND\tTYPE THIS MINIMUM\tCANONICAL ID\n${candidates}`,
+    });
+  }
+  return undefined;
+};
+
+const resolveCliAnyTarget = (
+  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  input: string,
+): Effect.Effect<ProcessManagerTargetCandidate, ProcessManagerConnectionError> => {
+  const resolution = resolveProcessManagerTarget(input, targetCandidatesFrom(groups));
+  if (resolution._tag === "Resolved") {
+    return Effect.succeed(resolution.candidate);
+  }
+  const error = targetResolutionError(input, groups);
+  return Effect.fail(
+    error ??
+      new ProcessManagerConnectionError({
+        groupId: "",
+        reason: `Unable to resolve target '${input}'`,
+      }),
+  );
+};
+
 const runProcessCommand = (
   groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
   input: string,
@@ -639,6 +682,51 @@ const runQueueCommand = (
     yield* Console.log(`OK queue ${target.id} ${operation} requested`);
   });
 
+const runStatusCommand = (
+  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  input: string,
+): Effect.Effect<
+  void,
+  ProcessManagerConnectionError | ProcessManagerRequestError,
+  ProcessManagerConnectionRegistry | HttpClient.HttpClient
+> =>
+  Effect.gen(function* () {
+    const target = yield* resolveCliAnyTarget(groups, input);
+    const manager = yield* managerFor(groups, target.groupId);
+    yield* manager.verifyContract;
+    const response = target.kind === "process"
+      ? yield* manager.process(target.id).status
+      : yield* manager.queue(target.id).status;
+    const data = yield* Schema.encodeUnknownEffect(responseBodyJson)(
+      response.data ?? {},
+    ).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ProcessManagerRequestError({
+            reason: `Malformed status response: ${String(cause)}`,
+          }),
+      ),
+    );
+    yield* Console.log(
+      `STATUS ${target.kind} ${target.id}\n${data}`,
+    );
+  });
+
+const runVerifyCommand = (
+  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+): Effect.Effect<
+  void,
+  ProcessManagerConnectionError | ProcessManagerRequestError,
+  ProcessManagerConnectionRegistry | HttpClient.HttpClient
+> =>
+  Effect.gen(function* () {
+    for (const group of groups) {
+      const manager = yield* managerFor(groups, group.id);
+      yield* manager.verifyContract;
+      yield* Console.log(`OK contract verified for ${group.id}`);
+    }
+  });
+
 const runGroupsCommand = (
   groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
 ): Effect.Effect<void, ProcessManagerConnectionError, ProcessManagerConnectionRegistry> =>
@@ -676,6 +764,10 @@ const makeCli = <
   const target = Argument.string("target");
   const groupsCommand = Command.make("groups", {}, () => runGroupsCommand(groups));
   const listCommand = Command.make("ls", {}, () => runListCommand(groups));
+  const verifyCommand = Command.make("verify", {}, () => runVerifyCommand(groups));
+  const statusCommand = Command.make("status", { target }, ({ target }) =>
+    runStatusCommand(groups, target)
+  );
   const processCommand = (
     name: "start" | "stop" | "restart" | "now",
     operation: "start" | "stop" | "restart" | "now",
@@ -696,6 +788,8 @@ const makeCli = <
     Command.withSubcommands([
       groupsCommand,
       listCommand,
+      verifyCommand,
+      statusCommand,
       processCommand("start", "start"),
       processCommand("stop", "stop"),
       processCommand("restart", "restart"),
