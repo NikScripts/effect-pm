@@ -37,7 +37,7 @@ class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, string, Sen
     paused: true, // enqueue while paused, then resume — common bootstrap pattern
     concurrency: 1,
     capacity: 100,
-    key: (job) => job.id, // dedup: same id replaces pending job
+    key: (job) => job.id, // dedup: same id is skipped while in flight
     retries: 1,
     effect: (job, ctx) =>
       Effect.gen(function* () {

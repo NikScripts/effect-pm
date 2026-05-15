@@ -77,7 +77,7 @@ export interface RunGate<in T, out A, out E> {
 }
 
 /**
- * A generic runner that wraps any effect with concurrency + throttle gating.
+ * A generic runner that wraps any effect with concurrency gating.
  * Produced by {@link RunResource.makeRunner}.
  *
  * @public
