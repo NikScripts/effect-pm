@@ -563,13 +563,13 @@ const resolveCliTarget = (
   if (resolution._tag === "Ambiguous") {
     const candidates = resolution.candidates
       .map(({ candidate, minimumSuffix }) =>
-        `${minimumSuffix} -> ${candidate.id}`
+        `${candidate.kind}\t[${minimumSuffix}]\t${candidate.id}`
       )
       .join("\n");
     return Effect.fail(
       new ProcessManagerConnectionError({
         groupId: "",
-        reason: `Ambiguous target '${input}'.\n${candidates}`,
+        reason: `Ambiguous target '${input}'.\nKIND\tTYPE THIS MINIMUM\tCANONICAL ID\n${candidates}`,
       }),
     );
   }
