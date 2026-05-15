@@ -561,9 +561,14 @@ effect-pm groups
 effect-pm ls
 effect-pm verify
 effect-pm status north-west/billing-group/sync-invoices
+effect-pm start north-west/billing-group/sync-invoices
+effect-pm stop north-west/billing-group/sync-invoices
+effect-pm restart north-west/billing-group/sync-invoices
 effect-pm now @repo/north-west/BillingGroup/SyncInvoices
 effect-pm now north-west/billing-group/sync-invoices
 effect-pm pause south-west/billing-group/billing-email-queue
+effect-pm resume south-west/billing-group/billing-email-queue
+effect-pm clear south-west/billing-group/billing-email-queue
 ```
 
 Rules:
