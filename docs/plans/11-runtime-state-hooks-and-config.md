@@ -342,6 +342,64 @@ type QueueSignal<T, E> =
   | { readonly type: "configChanged"; readonly change: QueueConfigChange };
 ```
 
+### Enqueue validation and history (plan 02)
+
+When `itemSchema` is configured, validation failures happen **before** queue
+state mutation. They must not increment `size`, `completed`, or in-flight
+counters, and must not invoke the item `effect`.
+
+**Signals** — extend `enqueueRejected` (or add `enqueueValidationFailed`) with
+structured payload aligned to `QueueItemValidationError` /
+`QueueBatchValidationError`:
+
+```typescript
+| {
+    readonly type: "enqueueValidationFailed"
+    readonly operation: string
+    readonly mode: "atomic" | "partial" | "single"
+    readonly failures: ReadonlyArray<{
+      readonly index?: number
+      readonly issues: ReadonlyArray<ParseResult.ArrayFormatterIssue>
+    }>
+    readonly acceptedCount?: number
+    readonly codecId?: string
+  }
+```
+
+Do not put full invalid `input` in persisted facts by default — payloads may be
+large or sensitive. Store `codecId`, operation, index, and formatted issues;
+keep raw `input` in the error returned to the caller only.
+
+**Facts** — append a generic `RuntimeFact` on validation failure when storage is
+available:
+
+```typescript
+{
+  type: "queue.enqueue.validation_failed",
+  ref: { kind: "queue", id: queueId },
+  payload: {
+    operation: "add",
+    mode: "atomic",
+    failureCount: 2,
+    codecId: "@app/EmailQueue/item@v1",
+  },
+}
+```
+
+**State snapshots** — optional counters on `QueueRuntimeState` for ops
+visibility (not required for v1):
+
+- `enqueueRejected: number` — validation + dedup + shutdown rejections,
+- `lastEnqueueRejectedAt: number | null`.
+
+**Hooks** — `onEnqueueRejected` receives the validation error and queue-bound
+controls; it runs instead of `onEnqueued`. Hook failure must not affect the
+error returned to the enqueue caller.
+
+**Mutable config** — `itemSchema` remains non-dynamic (see **Probably not
+dynamic** below). Changing encoded shape requires a new queue declaration or
+deployment handoff, not hot config patch.
+
 ## RunResource state
 
 Potential future state for a generic effect gate:
@@ -458,7 +516,9 @@ change should produce:
 
 - Queue capacity for existing bounded queues.
 - Resource service name or Context tag.
-- Item type or schema.
+- Item type or `itemSchema` / `QueueItemCodecDescriptor` (encoded shape changes
+  require new declaration or deployment handoff per
+  [02](./02-queue-controls-and-hooks.md)).
 - Required environment type.
 - Storage backend for an already-running runtime.
 - Process schedule implementation layer if fibers are already running against a

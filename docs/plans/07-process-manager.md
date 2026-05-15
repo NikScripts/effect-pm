@@ -103,7 +103,7 @@ class StripeSync extends Process.Service<StripeSync>()("@app/StripeSync", {
 
 class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()("@app/EmailQueue", {
   effect: sendEmail,
-  schema: EmailSchema,
+  itemSchema: EmailSchema,
 }) {}
 
 StripeSync.id; // "@app/StripeSync"
@@ -380,18 +380,36 @@ export interface QueueContract<Id extends string, Item> {
     | "release"
     | "status"
   >;
-  readonly itemSchema?: Schema.Schema<Item, unknown, never>;
+  /** Present when the queue declares itemSchema; absent otherwise */
+  readonly item?: QueueItemCodecDescriptor;
 }
 ```
 
-Open schema question: runtime contracts may need a serializable schema
-descriptor rather than carrying `Schema.Schema` directly over the network. Local
-typing can use `Schema.Schema`; remote discovery needs JSON metadata.
+`QueueItemCodecDescriptor` is defined in
+[02 - Queue controls, schema, handoff, and lifecycle hooks](./02-queue-controls-and-hooks.md).
+Local queue services keep the full `Schema.Schema<Item, Encoded, never>` on the
+declaration; contract generation calls `JSONSchema.make(itemSchema)` and exports
+only the descriptor. Do not put live `Schema` values on the wire.
+
+Remote enqueue prerequisites (do not implement PM enqueue until these exist):
+
+1. **Queue declaration** — `QueueResource.Service` (or layer config) supplies
+   `itemSchema`. Queues without it do not get `"enqueue"` on the contract.
+2. **Contract slice** — `ProcessGroupQueueContract` includes optional `item`
+   descriptor; `GET /contract` returns it for discovery and drift checks.
+3. **Control route** — `POST /queues/:id/enqueue` accepts JSON `unknown`, runs
+   `Schema.decodeUnknown(targetItemSchema)` on the **target** queue, then calls
+   `QueueHandle.enqueue`. Return 400 with `QueueItemValidationError` /
+   `QueueBatchValidationError` JSON on failure.
+4. **PM client** — `RemoteQueueControls.enqueue` is generic over contract queue
+   entries that have `item`; encodes with the imported `itemSchema` before POST;
+   surfaces validation errors from 4xx bodies.
+5. **Handoff** — `enqueueReleased` uses `payload` + partial batch mode (plan 02).
 
 Queue enqueue, release, and handoff controls depend on
 [02 - Queue controls, schema, handoff, and lifecycle hooks](./02-queue-controls-and-hooks.md).
-Do not add remote enqueue to `ProcessManager` until queue contracts can describe
-payload schema/codec metadata and the target queue can validate incoming items.
+Do not add remote enqueue to `ProcessManager` until queue contracts describe
+`QueueItemCodecDescriptor` and the target queue validates with `itemSchema`.
 
 ## Remote client shape
 
@@ -404,11 +422,29 @@ const billing = ProcessManager.connect<typeof BillingContract>({
 });
 
 yield* billing.process(StripeSync.id).restart;
-yield* billing.process(InvoiceSweep.id).runImmediately;
-
 yield* billing.queue(EmailQueue.id).pause;
 yield* billing.queue(InvoiceQueue.id).enqueue({ invoiceId: "inv_123" });
 ```
+
+Remote queue controls (enqueue requires contract `item` descriptor):
+
+```typescript
+export interface RemoteQueueControls<Item, ItemSchema extends Schema.Schema<Item, any, any>> {
+  readonly enqueue: {
+    (item: Item): Effect.Effect<void, ProcessManagerRequestError | QueueItemValidationError, HttpClient.HttpClient>
+    (
+      items: ReadonlyArray<Item>,
+      options?: { readonly mode?: "atomic" | "partial" },
+    ): Effect.Effect<void, ProcessManagerRequestError | QueueBatchValidationError, HttpClient.HttpClient>
+  }
+  readonly pause: Effect.Effect<void, ProcessManagerRequestError, HttpClient.HttpClient>;
+  // …
+}
+```
+
+Only queues whose contract entry includes `item` get `enqueue` on the remote
+handle. The client encodes with the same `itemSchema` used at declaration; the
+server decodes with the target runtime schema (see plan 02).
 
 Remote compile-time expectations:
 
