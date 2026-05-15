@@ -602,12 +602,24 @@ service:
 - remote queue control services for each queue entry whose shape can be safely
   represented remotely.
 
-That later API depends on separate remote-capable process and queue service
-shapes. Current `Process.Service` and `QueueResource.Service` produce local
-runtime-owner handles whose operations do not expose network/control errors, so
-remote layers for those services would be dishonest today.
+That later API depends on separate remote-capable service shapes for every
+runtime entry family that supports service-style declaration: processes, queues,
+and future resource types. Current `Process.Service` and
+`QueueResource.Service` produce local runtime-owner handles whose operations do
+not expose network/control errors, so remote layers for those services would be
+dishonest today.
 
-Prefer future constructors named around remote capability, for example:
+Prefer future constructors named around remote capability:
+
+```typescript
+class StripeSync extends Process.RemoteService<StripeSync>()(
+  "@app/StripeSync",
+  { effect: syncStripe },
+) {}
+```
+
+For queue resources, remote capability also requires a schema-backed item
+contract:
 
 ```typescript
 class EmailQueue extends QueueResource.RemoteService<EmailQueue, Email>()(
@@ -615,6 +627,8 @@ class EmailQueue extends QueueResource.RemoteService<EmailQueue, Email>()(
   { effect: sendEmail, itemSchema: EmailSchema },
 ) {}
 
+StripeSync.layer; // local runtime provider
+StripeSync.remoteLayer(BillingEndpoint); // network-backed provider
 EmailQueue.layer; // local runtime provider
 EmailQueue.remoteLayer(BillingEndpoint); // network-backed provider
 ```
@@ -622,7 +636,9 @@ EmailQueue.remoteLayer(BillingEndpoint); // network-backed provider
 `RemoteService` should mean "this service is designed to be provided locally or
 remotely"; its method error channels must account for control, network, and
 protocol failures from the beginning. Keep `Service` as the low-ceremony local
-runtime-owner constructor.
+runtime-owner constructor for each runtime entry family. `QueueResource.Service`
+may keep `itemSchema` optional for local-only queues, but
+`QueueResource.RemoteService` must require `itemSchema`.
 
 ### Error semantics must be decided before remote resource layers
 

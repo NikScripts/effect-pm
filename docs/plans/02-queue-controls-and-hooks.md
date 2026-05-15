@@ -63,7 +63,7 @@ QueueResource should follow the same naming contract used by the typed
   remote-capable queue declaration. Use this when the queue service is intended
   to be swappable between a local runtime provider and a network-backed remote
   provider. Its handle shape must expose control/network/protocol errors from
-  the beginning.
+  the beginning, and its config must include `itemSchema`.
 - `QueueResource.Tag<Self, T, R, E>()(id)` - identity only. Use with
   `QueueResource.layer(tag, config)` or `Layer.succeed(tag, mock)` for alternate
   implementations.
@@ -86,8 +86,11 @@ declaration; `make` is runtime acquisition.
 is a different service contract for queues that cross process boundaries. The
 same key can have a local `.layer` and a remote `.remoteLayer(endpoint)`, but all
 public operations must honestly model failures that can happen over the network.
-Remote enqueue still requires `itemSchema` / codec contracts and must remain out
-of scope until this plan's schema-backed enqueue model is implemented.
+Unlike `QueueResource.Service`, `QueueResource.RemoteService` requires
+`itemSchema`. A queue that can be called remotely must have a schema-backed
+serializable item contract; otherwise remote enqueue, release, and handoff have
+no safe wire boundary. Remote enqueue still remains out of scope until this
+plan's schema-backed enqueue model is implemented.
 
 ## Effect-idiomatic internal architecture
 
