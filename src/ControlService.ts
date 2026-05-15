@@ -22,8 +22,10 @@ import type {
   ProcessGroupControls,
   ProcessGroupEntry,
   ProcessGroupEntryRequirements,
+  QueueDetails,
   TypedProcessGroup,
 } from "./ProcessGroup";
+import type { QueueHandle } from "./QueueResource";
 import type { ProcessStore } from "./ProcessStore";
 import { createCli, runCli } from "./cli";
 
@@ -195,6 +197,200 @@ const queueStatusResponse = <T>(
   data,
   type: "queue",
 });
+
+const successResponse = <T>(data?: T): ControlResponse<T> => ({
+  success: true,
+  ...(data === undefined ? {} : { data }),
+});
+
+const errorResponse = (error: string): ControlResponse<never> => ({
+  success: false,
+  error,
+});
+
+const decodePathSegment = (segment: string): string | undefined => {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return undefined;
+  }
+};
+
+const pathSegments = (url: URL): ReadonlyArray<string> | undefined => {
+  const rawSegments = url.pathname.split("/").filter((segment) => segment !== "");
+  const decoded: string[] = [];
+  for (const segment of rawSegments) {
+    const value = decodePathSegment(segment);
+    if (value === undefined) {
+      return undefined;
+    }
+    decoded.push(value);
+  }
+  return decoded;
+};
+
+const queueDetails = (
+  name: string,
+  queue: QueueHandle<any, any, any>,
+): Effect.Effect<QueueDetails> =>
+  Effect.gen(function* () {
+    const prioritySizes = yield* queue.sizes;
+    const totalSize = yield* queue.size;
+    const completed = yield* queue.completed;
+    return {
+      name,
+      size: {
+        high: prioritySizes.high,
+        normal: prioritySizes.normal,
+        low: prioritySizes.low,
+        total: totalSize,
+      },
+      completed,
+    };
+  });
+
+interface RouteResponse {
+  readonly status: number;
+  readonly body: unknown;
+}
+
+const handleRestRoute =
+  <R>(group: ProcessGroupControls<R>) =>
+  (
+    method: string | undefined,
+    url: URL,
+  ): Effect.Effect<RouteResponse | undefined, never, R | ProcessStore> =>
+    Effect.gen(function* () {
+      const segments = pathSegments(url);
+      if (segments === undefined) {
+        return {
+          status: 400,
+          body: errorResponse("Malformed URL path"),
+        };
+      }
+
+      if (method === "GET" && segments.length === 1 && segments[0] === "status") {
+        const groupStatus = yield* group.status;
+        return {
+          status: 200,
+          body: successResponse({
+            processes: groupStatus.processes,
+            queues: yield* group.listQueues(),
+          }),
+        };
+      }
+
+      if (method === "GET" && segments.length === 1 && segments[0] === "processes") {
+        const groupStatus = yield* group.status;
+        return {
+          status: 200,
+          body: successResponse(groupStatus.processes),
+        };
+      }
+
+      if (segments[0] === "processes" && segments.length >= 2) {
+        const name = segments[1];
+        if (name === undefined) {
+          return {
+            status: 400,
+            body: errorResponse("Missing process name"),
+          };
+        }
+
+        if (method === "GET" && segments.length === 2) {
+          const result = yield* group.processStatus(name).pipe(
+            Effect.map((data) => ({
+              status: 200,
+              body: processStatusResponse(data),
+            })),
+            Effect.catch(() =>
+              Effect.succeed({
+                status: 404,
+                body: errorResponse(`Process '${name}' not found`),
+              }),
+            ),
+          );
+          return result;
+        }
+
+        if (method === "POST" && segments.length === 3) {
+          const operation = segments[2];
+          if (operation === "start") {
+            yield* group.start(name).pipe(Effect.catch(() => Effect.void));
+            return { status: 200, body: successResponse() };
+          }
+          if (operation === "stop") {
+            yield* group.stop(name).pipe(Effect.catch(() => Effect.void));
+            return { status: 200, body: successResponse() };
+          }
+          if (operation === "restart") {
+            yield* Effect.forkChild(
+              group.restart(name).pipe(Effect.catch(() => Effect.void)),
+            );
+            return { status: 200, body: successResponse() };
+          }
+          if (operation === "now") {
+            yield* group.runImmediately(name).pipe(Effect.catch(() => Effect.void));
+            return { status: 200, body: successResponse() };
+          }
+        }
+      }
+
+      if (method === "GET" && segments.length === 1 && segments[0] === "queues") {
+        return {
+          status: 200,
+          body: successResponse(yield* group.listQueues()),
+        };
+      }
+
+      if (segments[0] === "queues" && segments.length >= 2) {
+        const name = segments[1];
+        if (name === undefined) {
+          return {
+            status: 400,
+            body: errorResponse("Missing queue name"),
+          };
+        }
+
+        if (method === "GET" && segments.length === 2) {
+          const result = yield* group.getQueue(name).pipe(
+            Effect.flatMap((queue) =>
+              Effect.map(queueDetails(name, queue), (data) => ({
+                status: 200,
+                body: queueStatusResponse(data),
+              })),
+            ),
+            Effect.catch(() =>
+              Effect.succeed({
+                status: 404,
+                body: errorResponse(`Queue '${name}' not found`),
+              }),
+            ),
+          );
+          return result;
+        }
+
+        if (method === "POST" && segments.length === 3) {
+          const operation = segments[2];
+          if (operation === "pause") {
+            yield* group.pauseQueue(name).pipe(Effect.catch(() => Effect.void));
+            return { status: 200, body: successResponse() };
+          }
+          if (operation === "resume") {
+            yield* group.resumeQueue(name).pipe(Effect.catch(() => Effect.void));
+            return { status: 200, body: successResponse() };
+          }
+          if (operation === "clear") {
+            const cleared = yield* group.clearQueue(name).pipe(
+              Effect.catch(() => Effect.succeed(0)),
+            );
+            return { status: 200, body: successResponse({ cleared }) };
+          }
+        }
+      }
+
+      return undefined;
+    });
 
 const handleCommand =
   <R>(group: ProcessGroupControls<R>) =>
@@ -402,6 +598,12 @@ const handleCommand =
  * - Destroys active connections on shutdown
  * 
  * **API Endpoints:**
+ * - `GET /contract` - Schema-backed typed group contract when available
+ * - `GET /status` - Combined process/queue status
+ * - `GET /processes` / `GET /processes/:id` - Process listings and status
+ * - `POST /processes/:id/start|stop|restart|now` - Process controls
+ * - `GET /queues` / `GET /queues/:id` - Queue listings and status
+ * - `POST /queues/:id/pause|resume|clear` - Queue controls
  * - `POST /control` - Execute commands (see {@link ControlCommand})
  * - `GET /health` - Health check
  * 
@@ -510,6 +712,12 @@ function startControlService(
               return;
             }
             yield* writeJson(res, 200, contract);
+            return;
+          }
+
+          const restResponse = yield* handleRestRoute(commandGroup)(req.method, url);
+          if (restResponse !== undefined) {
+            yield* writeJson(res, restResponse.status, restResponse.body);
             return;
           }
 

@@ -424,6 +424,13 @@ Do not add remote enqueue to `ProcessManager` until queue contracts describe
 The PM client should mirror local group controls, but all operations are network
 requests.
 
+Initial implementation can use the local `ControlService` HTTP routes because
+they already exist and are easy to inspect from curl/CLI tools. For the richer
+multi-host ProcessManager transport, evaluate Effect RPC before inventing a
+custom protocol. Effect exposes `Rpc`, `RpcGroup`, `RpcClient`, and `RpcServer`
+under `effect/unstable/rpc`, which may be a better fit once group contracts,
+queue schemas, streaming status, and handoff payloads are stable.
+
 ```typescript
 const billing = ProcessManager.connect(BillingGroup, {
   url: "https://billing.internal",

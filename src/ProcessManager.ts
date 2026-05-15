@@ -162,12 +162,62 @@ const getJson = (
     });
   });
 
+const decodeControlResponse = (
+  json: unknown,
+  status: number,
+): Effect.Effect<ControlResponse<unknown>, ProcessManagerRequestError> =>
+  Schema.decodeUnknownEffect(controlResponseSchema)(json).pipe(
+    Effect.mapError(
+      (cause) =>
+        new ProcessManagerRequestError({
+          reason: `Malformed control response: ${String(cause)}`,
+          status,
+        }),
+    ),
+  );
+
+const getControl = (
+  baseUrl: string,
+  path: string,
+): Effect.Effect<
+  ControlResponse<unknown>,
+  ProcessManagerRequestError,
+  HttpClient.HttpClient
+> =>
+  Effect.gen(function* () {
+    const response = yield* HttpClient.execute(
+      HttpClientRequest.get(joinUrl(baseUrl, path)),
+    ).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ProcessManagerRequestError({
+            reason: String(cause),
+          }),
+      ),
+    );
+    const json = yield* response.json.pipe(
+      Effect.mapError(
+        (cause) =>
+          new ProcessManagerRequestError({
+            reason: String(cause),
+            status: response.status,
+          }),
+      ),
+    );
+    const decoded = yield* decodeControlResponse(json, response.status);
+    if (response.status >= 200 && response.status < 300 && decoded.success) {
+      return decoded;
+    }
+    return yield* new ProcessManagerRequestError({
+      reason: decoded.error ?? `HTTP ${response.status}`,
+      status: response.status,
+    });
+  });
+
 const postControl = (
   baseUrl: string,
-  body: {
-    readonly command: string;
-    readonly name?: string;
-  },
+  path: string,
+  body: unknown = {},
 ): Effect.Effect<
   ControlResponse<unknown>,
   ProcessManagerRequestError,
@@ -175,7 +225,7 @@ const postControl = (
 > =>
   Effect.gen(function* () {
     const request = yield* HttpClientRequest.bodyJson(
-      HttpClientRequest.post(joinUrl(baseUrl, "/control")),
+      HttpClientRequest.post(joinUrl(baseUrl, path)),
       body,
     ).pipe(
       Effect.mapError(
@@ -202,16 +252,7 @@ const postControl = (
           }),
       ),
     );
-    const decoded = yield* Schema.decodeUnknownEffect(controlResponseSchema)(json)
-      .pipe(
-        Effect.mapError(
-          (cause) =>
-            new ProcessManagerRequestError({
-              reason: `Malformed control response: ${String(cause)}`,
-              status: response.status,
-            }),
-        ),
-      );
+    const decoded = yield* decodeControlResponse(json, response.status);
     if (response.status >= 200 && response.status < 300 && decoded.success) {
       return decoded;
     }
@@ -223,10 +264,9 @@ const postControl = (
 
 const commandVoid = (
   baseUrl: string,
-  command: string,
-  name: string,
+  path: string,
 ): Effect.Effect<void, ProcessManagerRequestError, HttpClient.HttpClient> =>
-  Effect.asVoid(postControl(baseUrl, { command, name }));
+  Effect.asVoid(postControl(baseUrl, path));
 
 const makeRemoteProcessManager = <
   const Contract extends AnyProcessGroupContract,
@@ -259,19 +299,19 @@ const makeRemoteProcessManager = <
       }
     }),
     process: (id) => ({
-      start: commandVoid(baseUrl, "start", id),
-      stop: commandVoid(baseUrl, "stop", id),
-      restart: commandVoid(baseUrl, "restart", id),
-      runImmediately: commandVoid(baseUrl, "now", id),
-      status: postControl(baseUrl, { command: "status", name: id }),
+      start: commandVoid(baseUrl, `/processes/${encodeURIComponent(id)}/start`),
+      stop: commandVoid(baseUrl, `/processes/${encodeURIComponent(id)}/stop`),
+      restart: commandVoid(baseUrl, `/processes/${encodeURIComponent(id)}/restart`),
+      runImmediately: commandVoid(baseUrl, `/processes/${encodeURIComponent(id)}/now`),
+      status: getControl(baseUrl, `/processes/${encodeURIComponent(id)}`),
     }),
     queue: (id) => ({
-      pause: commandVoid(baseUrl, "pause", id),
-      resume: commandVoid(baseUrl, "resume", id),
-      clear: commandVoid(baseUrl, "restart", id),
-      status: postControl(baseUrl, { command: "status", name: id }),
+      pause: commandVoid(baseUrl, `/queues/${encodeURIComponent(id)}/pause`),
+      resume: commandVoid(baseUrl, `/queues/${encodeURIComponent(id)}/resume`),
+      clear: commandVoid(baseUrl, `/queues/${encodeURIComponent(id)}/clear`),
+      status: getControl(baseUrl, `/queues/${encodeURIComponent(id)}`),
     }),
-    status: postControl(baseUrl, { command: "ls" }),
+    status: getControl(baseUrl, "/status"),
   };
 };
 

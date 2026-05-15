@@ -5,46 +5,19 @@
  */
 
 import { Duration, Effect, Schema } from "effect";
+import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 
 const responseBodyJson = Schema.fromJsonString(Schema.Unknown);
-
-const appendChunk = (data: string, chunk: unknown): string => {
-  if (typeof chunk === "string") {
-    return data + chunk;
-  }
-  if (chunk instanceof Uint8Array) {
-    return data + new TextDecoder().decode(chunk);
-  }
-  return data;
-};
 
 export const requestJson = (
   port: number,
   path: string,
-): Effect.Effect<unknown> =>
+): Effect.Effect<unknown, never, HttpClient.HttpClient> =>
   Effect.gen(function* () {
-    const nodeHttp: typeof import("node:http") = yield* Effect.promise(() =>
-      import("node:http"),
-    );
-    const text = yield* Effect.callback<string>((resume) => {
-      const req = nodeHttp.request(
-        {
-          hostname: "127.0.0.1",
-          port,
-          path,
-          method: "GET",
-        },
-        (res) => {
-          let body = "";
-          res.on("data", (chunk: unknown) => {
-            body = appendChunk(body, chunk);
-          });
-          res.on("end", () => resume(Effect.succeed(body)));
-        },
-      );
-      req.on("error", (error) => resume(Effect.succeed(String(error))));
-      req.end();
-    });
+    const response = yield* HttpClient.execute(
+      HttpClientRequest.get(`http://127.0.0.1:${String(port)}${path}`),
+    ).pipe(Effect.orDie);
+    const text = yield* response.text.pipe(Effect.orDie);
     return yield* Schema.decodeUnknownEffect(responseBodyJson)(text).pipe(
       Effect.orDie,
     );
