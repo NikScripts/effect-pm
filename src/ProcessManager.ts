@@ -9,7 +9,7 @@
  * @module ProcessManager
  */
 
-import { Console, Context, Data, Effect, Layer, Schema } from "effect";
+import { Config, Console, Context, Data, Effect, Layer, Schema } from "effect";
 import { Argument, Command } from "effect/unstable/cli";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import type { ControlResponse } from "./ControlService";
@@ -53,6 +53,14 @@ export type ProcessManagerConnectionMap<
   Groups extends readonly ConnectionSource<AnyProcessGroupContract>[],
 > = {
   readonly [Id in ConnectionGroupId<Groups>]: string;
+};
+
+export type ProcessManagerConnectionConfigMap<
+  Groups extends readonly ConnectionSource<AnyProcessGroupContract>[],
+> = {
+  readonly [Id in ConnectionGroupId<Groups>]: Config.Config<string>;
+} & {
+  readonly [groupId: string]: Config.Config<string>;
 };
 
 /**
@@ -496,6 +504,36 @@ const makeConnectionRegistryLayer = <
     },
   });
 };
+
+const makeConnectionRegistryConfigLayer = <
+  const Groups extends readonly ConnectionSource<AnyProcessGroupContract>[],
+>(
+  _groups: Groups,
+  connections: ProcessManagerConnectionConfigMap<Groups>,
+) =>
+  Layer.effect(ProcessManagerConnectionRegistry)(
+    Effect.gen(function* () {
+      const baseUrls = new Map<string, string>();
+      for (const [groupId, config] of Object.entries(connections)) {
+        const baseUrl = yield* config;
+        baseUrls.set(groupId, baseUrl);
+      }
+      return {
+        baseUrl: (groupId) => {
+          const baseUrl = baseUrls.get(groupId);
+          if (baseUrl === undefined) {
+            return Effect.fail(
+              new ProcessManagerConnectionError({
+                groupId,
+                reason: `Group '${groupId}' is not registered in this connection registry`,
+              }),
+            );
+          }
+          return Effect.succeed(baseUrl);
+        },
+      };
+    }),
+  );
 
 const hasConnectionId = (
   source: ContractSource<AnyProcessGroupContract>,
@@ -997,6 +1035,7 @@ export const ProcessManager = {
   connect,
   ConnectionRegistry: {
     layer: makeConnectionRegistryLayer,
+    layerConfig: makeConnectionRegistryConfigLayer,
   },
   Endpoint: makeEndpointFactory,
 } as const;

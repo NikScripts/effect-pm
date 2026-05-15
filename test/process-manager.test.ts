@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, Ref } from "effect";
+import { Config, ConfigProvider, Effect, Ref } from "effect";
 import {
   ControlService,
   Process,
@@ -153,6 +153,65 @@ describe("ProcessManager", () => {
             ProcessManager.ConnectionRegistry.layer([BillingGroup] as const, {
               [BillingGroup.id]: "http://127.0.0.1:32136",
             }),
+          ),
+          provideLayer(NodeHttpClient.layerUndici),
+        );
+      }),
+    ),
+  );
+
+  it.live("connects to a group through a config-backed connection registry", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const runs = yield* Ref.make(0);
+
+        class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+          "@test/ConfigRegistryEmailQueue",
+          {
+            effect: (_email) => Effect.void,
+          },
+        ) {}
+
+        class SyncProcess extends Process.Service<SyncProcess>()(
+          "@test/ConfigRegistryProcess",
+          {
+            effect: Ref.update(runs, (count) => count + 1),
+          },
+        ) {}
+
+        class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+          "@test/ConfigRegistryBillingGroup",
+          [SyncProcess, EmailQueue] as const,
+        ) {}
+
+        yield* Effect.gen(function* () {
+          const group = yield* BillingGroup;
+
+          yield* ControlService.make({
+            port: 32140,
+            group,
+          });
+
+          const manager = yield* ProcessManager.connect(BillingGroup);
+          yield* manager.verifyContract;
+          yield* manager.process(SyncProcess.id).runImmediately;
+
+          expect(yield* Ref.get(runs)).toBe(1);
+        }).pipe(
+          provideLayer(BillingGroup.layer),
+          provideLayer(EmailQueue.layer),
+          provideLayer(ProcessStore.layer),
+          provideLayer(
+            ProcessManager.ConnectionRegistry.layerConfig([BillingGroup] as const, {
+              [BillingGroup.id]: Config.string("CONFIG_REGISTRY_BILLING_URL"),
+            }),
+          ),
+          provideLayer(
+            ConfigProvider.layer(
+              ConfigProvider.fromUnknown({
+                CONFIG_REGISTRY_BILLING_URL: "http://127.0.0.1:32140",
+              }),
+            ),
           ),
           provideLayer(NodeHttpClient.layerUndici),
         );
