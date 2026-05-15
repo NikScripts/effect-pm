@@ -50,10 +50,10 @@ A future **`ProcessManager`** (multi-host) is planned but **not implemented**; u
 
 | Goal | Start here |
 |------|------------|
-| Run the full demo + CLI | [examples/README.md](../examples/README.md) → `examples/example.ts` |
+| Run the full demo + CLI | [examples/README.md](../examples/README.md) → `examples/scenarios/full-process-group-with-queues-and-control-cli.ts` |
 | Queue / run / HTTP resource APIs | [RESOURCE-API.md](./RESOURCE-API.md) |
-| Schedule composition + runtime updates | [examples/schedule-control-surfaces.ts](../examples/schedule-control-surfaces.ts) |
-| Schedule + **`ProcessGroup`** / API-driven arm | [docs/SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + [examples/process-game-window-with-group.ts](../examples/process-game-window-with-group.ts) |
+| Schedule composition + runtime updates | [examples/forms/schedule/](../examples/forms/schedule/) |
+| Schedule + **`ProcessGroup`** / API-driven arm | [docs/SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + [examples/scenarios/game-window-polling-with-process-group.ts](../examples/scenarios/game-window-polling-with-process-group.ts) |
 | Understand process runtime semantics | [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + `src/Process.ts` TSDoc |
 | API tables (make, Polling, Schedule, ProcessGroup) | [PROCESS-API.md](./PROCESS-API.md) |
 | Prisma-backed analytics | [README.md](../README.md) Prisma section + `src/prisma/` |
@@ -90,7 +90,13 @@ TSDoc on each module repeats details; this guide stays **concept-shaped**.
 
 ## Examples directory
 
-All runnable scripts live under `examples/`; **`examples/mocks/`** holds test doubles and long-form scenario docs for some scripts. See [examples/README.md](../examples/README.md) for commands, learning paths, and file purposes. They are the **best teaching surface** after this guide.
+All runnable scripts live under `examples/`:
+
+- **`examples/forms/`** — one API shape per file
+- **`examples/scenarios/`** — descriptive compositions
+- **`examples/shared/`** — test doubles and harness helpers
+
+See [examples/README.md](../examples/README.md) for commands, learning paths, and file purposes. They are the **best teaching surface** after this guide.
 
 ---
 

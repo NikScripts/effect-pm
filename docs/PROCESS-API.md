@@ -133,19 +133,16 @@ Stopping interrupts the schedule driver fiber and child instances; removing/clos
 
 ## Runnable examples in this repo
 
+Examples are split into **forms** (one API shape) and **scenarios** (compositions). See [examples/README.md](../examples/README.md).
+
 | File | Focus |
 |------|--------|
-| [examples/example.ts](../examples/example.ts) | Full `ProcessGroup` + queues + control `serve` + `awaitShutdown` + root `Layer.mergeAll`. |
-| [examples/schedule-control-basics.ts](../examples/schedule-control-basics.ts) | Intro schedule entries (`at`, `window`, `define`) with minimal process wiring. |
-| [examples/process-supervisor-patterns.ts](../examples/process-supervisor-patterns.ts) | **`TestClock`**: accelerating polling + `resetCadence`, with schedule windows. |
-| [examples/schedule-control-surfaces.ts](../examples/schedule-control-surfaces.ts) | Schedule control surfaces: initializer controls, in-effect controls, and external service-driven controls. |
-| [examples/schedule-control-db-sync.ts](../examples/schedule-control-db-sync.ts) | Simulated DB-sync pattern that keeps runtime schedules aligned with external rows. |
-| [examples/process-game-window-with-group.ts](../examples/process-game-window-with-group.ts) | **`ProcessGroup.start`** + schedule ids with `Process.currentScheduleId`; narrative [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md). |
-| [examples/sports-polling-accelerating.ts](../examples/sports-polling-accelerating.ts) | **Three demos** (basic spaced → minimal accel+**`resetCadence`** → verbose **`peekCadence`**); [mocks/sports-score-feed.mock.ts](../examples/mocks/sports-score-feed.mock.ts), [mocks/demo-harness.mock.ts](../examples/mocks/demo-harness.mock.ts). |
-| [examples/run-resource.ts](../examples/run-resource.ts) | `RunResource` throttle + concurrency. |
-| [examples/http-client-run-gate.ts](../examples/http-client-run-gate.ts) | `HttpClientRunGate` on a fetch `HttpClient`. |
-| [examples/http-api-resource.ts](../examples/http-api-resource.ts) | `HttpApiResource.make` tag + layer. |
-| [examples/http-api-resource-layer-effect.ts](../examples/http-api-resource-layer-effect.ts) | `HttpApiResource.layerEffect` + sidecar service. |
+| [examples/scenarios/full-process-group-with-queues-and-control-cli.ts](../examples/scenarios/full-process-group-with-queues-and-control-cli.ts) | Full `ProcessGroup` + queues + control `serve` + `awaitShutdown` + root `Layer.mergeAll`. |
+| [examples/forms/schedule/](../examples/forms/schedule/) | Schedule entries (`at`, `window`, `define`) and control surfaces. |
+| [examples/forms/polling/](../examples/forms/polling/) | **`TestClock`**: accelerating polling, `resetCadence`, `peekCadence`, delayed start. |
+| [examples/scenarios/schedule-sync-from-external-db.ts](../examples/scenarios/schedule-sync-from-external-db.ts) | Simulated DB-sync pattern. |
+| [examples/scenarios/game-window-polling-with-process-group.ts](../examples/scenarios/game-window-polling-with-process-group.ts) | **`ProcessGroup.start`** + schedule ids; [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md). |
+| [examples/forms/resource/](../examples/forms/resource/) | `RunResource`, `HttpClientRunGate`, `HttpApiResource`. |
 
 See [examples/README.md](../examples/README.md) for **`pnpm run example:*`** commands and a guided reading order.
 
@@ -154,5 +151,5 @@ Run the patterns demo:
 ```bash
 pnpm run example:process-supervisor-patterns
 # or
-npx tsx examples/process-supervisor-patterns.ts
+npx tsx examples/forms/polling/polling-accelerating.ts
 ```

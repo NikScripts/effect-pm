@@ -122,7 +122,7 @@ Effect.runPromise(
 );
 ```
 
-You can merge independent layers with **`Layer.mergeAll(...)`** and a single `Effect.provide` at the root (clearer graph; matches the full demo in `examples/example.ts`).
+You can merge independent layers with **`Layer.mergeAll(...)`** and a single `Effect.provide` at the root (clearer graph; matches the full demo in `examples/scenarios/full-process-group-with-queues-and-control-cli.ts`).
 
 ## QueueResource configuration
 
@@ -225,9 +225,9 @@ To run once outside trigger cadence (even when schedule is disarmed), call `proc
 
 ### Accelerating polling (speeds up, then reset)
 
-Use **`Polling.acceleratingScoped`** (or **`Polling.accelerating`** with your own refs) when intervals should **shorten** after each tick. **`yield* Polling.resetCadence`** sets the iteration back to zero and **wakes** the current wait so spacing returns toward the configured **maximum**. Any effect that calls `resetCadence` must see the **same** `Polling` layer instance as the process (merge the layer once at the app / `ProcessGroup` boundary). For **scores-feed** examples (**basic spaced poll → minimal `resetCadence` → verbose `peekCadence`**), see **`examples/sports-polling-accelerating.ts`** with **`examples/mocks/sports-score-feed.mock.ts`** and **`examples/mocks/demo-harness.mock.ts`** (`pnpm run example:sports-polling-accelerating`).
+Use **`Polling.acceleratingScoped`** (or **`Polling.accelerating`** with your own refs) when intervals should **shorten** after each tick. **`yield* Polling.resetCadence`** sets the iteration back to zero and **wakes** the current wait so spacing returns toward the configured **maximum**. Any effect that calls `resetCadence` must see the **same** `Polling` layer instance as the process (merge the layer once at the app / `ProcessGroup` boundary). For **scores-feed** forms (**basic spaced poll → minimal `resetCadence` → verbose `peekCadence`**), see **`examples/forms/polling/`** with **`examples/shared/sports-score-feed.ts`** and **`examples/shared/demo-harness.ts`** (`pnpm run example:sports-polling-accelerating`).
 
-Runnable demo (with `TestClock`): `npx tsx examples/process-supervisor-patterns.ts`.
+Runnable demo (with `TestClock`): `pnpm run example:process-supervisor-patterns`.
 
 ### API tables and exports
 
@@ -519,7 +519,7 @@ yield* queue.defer([backgroundTask]);
 
 ## Examples
 
-See the [examples/example.ts](./examples/example.ts) file for a complete working example with:
+See [examples/scenarios/full-process-group-with-queues-and-control-cli.ts](./examples/scenarios/full-process-group-with-queues-and-control-cli.ts) for a complete working example with:
 - Multiple queue resources
 - Managed processes (polling + schedule gate)
 - Full setup with dependencies

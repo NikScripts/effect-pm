@@ -76,7 +76,7 @@ When you want the **fiber gone** (scale to zero, deploy teardown), call **`stop`
 6. Under **`TestClock`**, **`TestClock.adjust`** so sleeps complete.  
 7. Inspect tick counter / logs; then **`yield* group.stop(proc.name)`** if you want the process **removed** from the running set, not merely unscheduled.
 
-Runnable script: **`examples/process-game-window-with-group.ts`**.
+Runnable script: **`examples/scenarios/game-window-polling-with-process-group.ts`**.
 
 ---
 

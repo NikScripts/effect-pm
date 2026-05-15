@@ -18,8 +18,9 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 | `src/cli.ts` | `createCli` / `runCli` — HTTP client for control API. |
 | `src/disarmedIdleSleep.ts` | Pure policy for disarmed idle sleep (shared with tests). |
 | `src/prisma/*` | Optional Prisma adapter (`@nikscripts/effect-pm/prisma` export). |
-| `examples/*` | Runnable teaching scripts. |
-| `examples/mocks/*` | Test doubles, scenario docs, **`demo-harness.mock.ts`** (`forkChild` + `TestClock` + Node exit). |
+| `examples/forms/*` | One API shape per file — minimal teaching references. |
+| `examples/scenarios/*` | Descriptive compositions showing subsystems together. |
+| `examples/shared/*` | Test doubles, harness helpers, shared example utilities. |
 | `docs/plans/*.md` | Future-only roadmap items. Implemented behavior belongs in regular docs and source TSDoc. |
 | `docs/plans/10-process-store-phase-one.md` | Detailed first implementation slice for plan 01: `ProcessStore` read foundation, current-state checks, code sketches, and verification. Read after [`docs/plans/README.md`](./plans/README.md). |
 | `repos/effect/` | Vendored Effect source for read-only agent reference. **Do not import from it.** |
@@ -78,7 +79,7 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 |------|----------|
 | Add a public export | Edit `src/index.ts` + add TSDoc `@public` on the symbol in its module. |
 | Change process semantics | Update `src/Process.ts`, tests in `test/process*.ts`, and the relevant regular docs if behavior is contractual. |
-| Add an example | Add `examples/foo.ts`, document in `examples/README.md`, add `package.json` script if runnable. Put heavy mock / scenario prose in `examples/mocks/*.mock.ts` when it would drown the entry script. |
+| Add an example | Add a **form** under `examples/forms/<area>/` or a **scenario** under `examples/scenarios/`; document in `examples/README.md`; add `package.json` script if runnable. Put heavy mock / scenario prose in `examples/shared/` when it would drown the entry script. |
 | Verify types (strict Effect rules) | `pnpm run typecheck` (uses `tsgo`). `anyUnknownInErrorContext` is temporarily `"off"`; see [strict any/unknown plan](./plans/09-strict-any-unknown.md). |
 | Run tests | `pnpm test` |
 | Implement store / runtime / group roadmap | Follow the recommended order in [`docs/plans/README.md`](./plans/README.md); reconcile storage work with [`10-process-store-phase-one.md`](./plans/10-process-store-phase-one.md) and [`11-runtime-state-hooks-and-config.md`](./plans/11-runtime-state-hooks-and-config.md), then use [`07-process-manager.md`](./plans/07-process-manager.md) for typed `ProcessGroup` / remote `ProcessManager` work. |

@@ -8,17 +8,16 @@
  * on the command line. It configures **only**:
  *
  * - **Display metadata** — `name` / `version` shown in `--help`
- * - **Control base URL** — derived from `HOME_SERVER_PORT` (must match `examples/example.ts`)
+ * - **Control base URL** — derived from `HOME_SERVER_PORT` (must match the main scenario)
  *
  * ## Prerequisites
  *
- * 1. Start the demo app first: **`pnpm run example`** (starts `ControlService` on the port below).
+ * - Start the demo app first: **`pnpm run example`** (starts `ControlService` on the port below).
  * 2. In another shell, run e.g. **`pnpm run cli ls`**.
  *
  * ## Port contract
  *
- * `HOME_SERVER_PORT` is read here and in `example.ts`. If you change one, change both
- * sessions (or export the variable in your shell profile for the session).
+ * `HOME_SERVER_PORT` is read here and in `scenarios/full-process-group-with-queues-and-control-cli.ts`.
  *
  * ## What the CLI talks to
  *
@@ -45,7 +44,7 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Config, Effect, Layer, Option } from "effect";
 import { runCli } from "../src/cli";
-import { provideLayer } from "../src/provideLayer.js";
+import { provideLayer } from "../src/provideLayer";
 
 const nodePlatform = Layer.mergeAll(
   NodeServices.layer,
