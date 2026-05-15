@@ -51,11 +51,14 @@
  */
 
 import {
+  Cause,
+  Clock,
   Context,
   Effect,
   Layer,
   Semaphore,
 } from "effect";
+import { RuntimeObserver, type RuntimeFact, type RuntimeRef } from "./RuntimeState";
 
 // ============================================================================
 // Public Types
@@ -156,6 +159,30 @@ const makeRunGateEffect = <T, A, E>(
   config: RunResourceConfig<T, A, E>,
 ) => {
   const concurrency = config.concurrency ?? 1;
+  const resourceId = config.name ?? "anonymous";
+  const ref: RuntimeRef<"run-resource"> = {
+    kind: "run-resource",
+    id: resourceId,
+  };
+  let runSeq = 0;
+  const nextRunId = Effect.sync(() => {
+    runSeq += 1;
+    return `${resourceId}/run/${String(runSeq)}`;
+  });
+  const publishRunFact = (
+    runId: string,
+    type: "run-resource.run.started" | "run-resource.run.completed" | "run-resource.run.failed",
+    occurredAt: number,
+    payload: RuntimeFact["payload"],
+  ) =>
+    RuntimeObserver.publishFact({
+      id: `${runId}/${type}`,
+      ref,
+      type,
+      occurredAt,
+      payload,
+    });
+
   // Allocate gate → log init → wrap user's effect with the gate
   return makeGateInternal(concurrency).pipe(
     Effect.tap(() =>
@@ -163,8 +190,37 @@ const makeRunGateEffect = <T, A, E>(
         `RunResource "${config.name ?? "anonymous"}" initialized: concurrency=${String(concurrency)}`,
       ),
     ),
-    // The returned callable applies the gate around each invocation of the user's effect
-    Effect.map((gate): RunGate<T, A, E> => (input: T) => gate(config.effect(input))),
+    // The returned callable applies the gate around each invocation and emits
+    // optional runtime facts without changing the user's success/error channel.
+    Effect.map((gate): RunGate<T, A, E> => (input: T) =>
+      Effect.gen(function* () {
+        const runId = yield* nextRunId;
+        const startedAt = yield* Clock.currentTimeMillis;
+        yield* publishRunFact(runId, "run-resource.run.started", startedAt, {
+          concurrency,
+        });
+
+        return yield* Effect.matchCauseEffect(gate(config.effect(input)), {
+          onFailure: (cause) =>
+            Effect.gen(function* () {
+              const failedAt = yield* Clock.currentTimeMillis;
+              yield* publishRunFact(runId, "run-resource.run.failed", failedAt, {
+                durationMs: Math.max(0, failedAt - startedAt),
+                cause: Cause.pretty(cause),
+              });
+              return yield* Effect.failCause(cause);
+            }),
+          onSuccess: (value) =>
+            Effect.gen(function* () {
+              const completedAt = yield* Clock.currentTimeMillis;
+              yield* publishRunFact(runId, "run-resource.run.completed", completedAt, {
+                durationMs: Math.max(0, completedAt - startedAt),
+              });
+              return value;
+            }),
+        });
+      })
+    ),
   );
 };
 

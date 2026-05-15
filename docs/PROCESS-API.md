@@ -223,6 +223,20 @@ Remote queue `add`, `enqueue`, `prioritize`, and `defer` remain unsupported.
 
 ---
 
+## `RuntimeObserver` (runtime facts/state)
+
+| Member | Role |
+|--------|------|
+| `RuntimeObserver` | Optional service for publishing runtime facts and state changes. |
+| `RuntimeObserver.publishFact(fact)` | Publishes a fact when the service is present; otherwise no-ops. |
+| `RuntimeObserver.publishStateChange(change)` | Publishes a state transition when the service is present; otherwise no-ops. |
+
+`RunResource` publishes `run-resource.run.started`,
+`run-resource.run.completed`, and `run-resource.run.failed` facts when
+`RuntimeObserver` is provided.
+
+---
+
 ## Runnable examples in this repo
 
 Examples are split into **forms** (one API shape) and **scenarios** (compositions). See [examples/README.md](../examples/README.md).

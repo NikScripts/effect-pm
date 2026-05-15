@@ -77,6 +77,7 @@ export {
   type HttpApiResourceLayerEffectConfig,
 } from "./HttpApiResource";
 export { Resource } from "./Resource";
+export { RuntimeObserver } from "./RuntimeState";
 export { ControlService } from "./ControlService";
 
 // CLI
@@ -190,6 +191,15 @@ export type {
   RunResourceRunner,
   RunResourceRunnerConfig,
 } from "./RunResource";
+
+// Types - RuntimeState
+export type {
+  RuntimeFact,
+  RuntimeObserverService,
+  RuntimeRef,
+  RuntimeStateBase,
+  RuntimeStateChange,
+} from "./RuntimeState";
 
 // Types - Control Service
 export type {

@@ -58,7 +58,10 @@ This phase should come before richer analytics, streaming, dashboards, or
 mutable config.
 
 1. Define runtime state, facts, and storage vocabulary.
-2. Add an internal runtime observer for one low-risk runtime component.
+   (Initial vocabulary and `RuntimeObserver` are implemented.)
+2. Add an internal runtime observer used by one low-risk runtime component.
+   (`RunResource` now publishes run started/completed/failed facts when an
+   observer is provided.)
 3. Add scoped listener support.
 4. Persist state changes/facts through the current store when available.
 5. Add typed projections over state history.

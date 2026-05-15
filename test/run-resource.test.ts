@@ -1,6 +1,7 @@
 import { it, describe, expect } from "@effect/vitest";
 import { Effect, Ref } from "effect";
 import { RunResource } from "../src/RunResource";
+import { RuntimeObserver, type RuntimeFact } from "../src/RuntimeState";
 
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
   Effect.gen(function* () {
@@ -130,5 +131,43 @@ describe("RunResource.make (raw scoped)", () => {
       const result = yield* gate(7);
       expect(result).toBe(21);
     }).pipe(Effect.scoped),
+  );
+
+  it.live("publishes runtime facts when RuntimeObserver is provided", () =>
+    Effect.gen(function* () {
+      const facts = yield* Ref.make<ReadonlyArray<RuntimeFact>>([]);
+      const observer = {
+        publishStateChange: () => Effect.void,
+        publishFact: (fact: RuntimeFact) =>
+          Ref.update(facts, (items) => [...items, fact]),
+      };
+
+      yield* Effect.gen(function* () {
+        const gate = yield* RunResource.make({
+          name: "@test/ObservedGate",
+          effect: (n: number) =>
+            n > 0 ? Effect.succeed(n) : Effect.fail("negative"),
+          concurrency: 1,
+        });
+
+        const success = yield* gate(1);
+        const failure = yield* gate(0).pipe(Effect.flip);
+        const observedFacts = yield* Ref.get(facts);
+
+        expect(success).toBe(1);
+        expect(failure).toBe("negative");
+        expect(observedFacts.map((fact) => fact.type)).toEqual([
+          "run-resource.run.started",
+          "run-resource.run.completed",
+          "run-resource.run.started",
+          "run-resource.run.failed",
+        ]);
+        expect(observedFacts.every((fact) => fact.ref.kind === "run-resource")).toBe(true);
+        expect(observedFacts.every((fact) => fact.ref.id === "@test/ObservedGate")).toBe(true);
+      }).pipe(
+        Effect.provideService(RuntimeObserver, observer),
+        Effect.scoped,
+      );
+    }),
   );
 });
