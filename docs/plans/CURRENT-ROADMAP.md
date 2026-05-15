@@ -22,7 +22,8 @@ than redesigned casually.
 - `ProcessManager.ConnectionRegistry.layerConfig(...)`.
 - Registry-backed `ProcessManager.Endpoint(Group)`.
 - `ProcessGroup.remoteLayer(Group, Endpoint)`.
-- Initial multi-group `ProcessManager.cli([GroupA, GroupB])`.
+- Initial multi-group `ProcessManager.cli([GroupA, GroupB])` with `groups`,
+  `ls`, `verify`, `status <target>`, process commands, and queue commands.
 
 Primary references:
 

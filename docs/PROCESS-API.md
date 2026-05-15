@@ -165,6 +165,7 @@ Stopping interrupts the schedule driver fiber and child instances; removing/clos
 | Member | Role |
 |--------|------|
 | `ProcessManager.ConnectionRegistry.layer([Group], { [Group.id]: url })` | Provide registry-backed remote group URLs as an Effect layer. |
+| `ProcessManager.ConnectionRegistry.layerConfig([Group], { [Group.id]: Config.string(...) })` | Provide the same registry from Effect `Config` values. |
 | `ProcessManager.connect(Group)` | Build a typed remote client by reading the group URL from `ProcessManagerConnectionRegistry`. |
 | `ProcessManager.cli([GroupA, GroupB] as const)` | Build a multi-group CLI from group contracts and the connection registry. |
 | `ProcessManager.connect(Group, { baseUrl })` | Build a typed remote client from a group service/definition. |
@@ -185,6 +186,13 @@ const RemoteGroupsLive = ProcessManager.ConnectionRegistry.layer(
   },
 );
 
+const RemoteGroupsFromConfig = ProcessManager.ConnectionRegistry.layerConfig(
+  [BillingGroup] as const,
+  {
+    [BillingGroup.id]: Config.string("BILLING_GROUP_BASE_URL"),
+  },
+);
+
 const program = Effect.gen(function* () {
   const billing = yield* ProcessManager.connect(BillingGroup);
   yield* billing.verifyContract;
@@ -192,15 +200,19 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.provide(RemoteGroupsLive));
 ```
 
-The same registry powers `ProcessManager.cli([BillingGroup, StripeGroup] as const)`.
+The same registry powers registry-backed
+`ProcessManager.Endpoint<Self>()(BillingGroup)` and
+`ProcessManager.cli([BillingGroup, StripeGroup] as const)`.
 CLI commands accept canonical ids such as
 `@repo/north-west/BillingGroup/SyncInvoices` and normalized suffix aliases such
 as `north-west/billing-group/sync-invoices` or `sync-invoices`. Ambiguous
 aliases fail with the minimum kebab-case suffix for each canonical candidate.
-The CLI supports `groups`, `ls`, `status <target>`, `verify`, process
-`start` / `stop` / `restart` / `now`, and queue `pause` / `resume` / `clear`.
+The CLI supports `groups`, `ls`, `verify`, `status <target>`, process `start` /
+`stop` / `restart` / `now`, and queue `pause` / `resume` / `clear`.
 All target-taking commands use the same resolver, so canonical ids and
 normalized suffix aliases work for status, process controls, and queue controls.
+`--json` output is available for `groups`, `ls`, `verify`, and
+`status <target>`.
 Remote queue `add`, `enqueue`, `prioritize`, and `defer` remain unsupported.
 
 ---

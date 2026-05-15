@@ -343,7 +343,7 @@ const billing = ProcessManager.connect(BillingGroup, {
   baseUrl: "https://billing.internal",
 });
 
-yield* billing.start(StripeSync.id);
+yield* billing.process(StripeSync.id).start;
 yield* billing.queue(InvoiceQueue.id).pause;
 ```
 
@@ -356,13 +356,13 @@ yield* billing.queue(InvoiceQueue).enqueue(job);
 The remote PM should use canonical IDs from the contract:
 
 ```typescript
-yield* billing.queue("@app/InvoiceQueue").enqueue(job);
+yield* billing.queue("@app/InvoiceQueue").pause;
 ```
 
 If the app imports the declaration, it can still avoid spelling strings:
 
 ```typescript
-yield* billing.queue(InvoiceQueue.id).enqueue(job);
+yield* billing.queue(InvoiceQueue.id).status;
 ```
 
 Generated/remote-only clients can use a raw contract value:
@@ -404,7 +404,6 @@ export interface ProcessContract<Id extends string> {
     | "restart"
     | "runImmediately"
     | "status"
-    | "quiesce"
   >;
 }
 ```
@@ -412,7 +411,7 @@ export interface ProcessContract<Id extends string> {
 Queue contract:
 
 ```typescript
-export interface QueueContract<Id extends string, Item> {
+export interface QueueContract<Id extends string> {
   readonly id: Id;
   readonly kind: "queue";
   readonly controls: ReadonlyArray<
@@ -420,20 +419,21 @@ export interface QueueContract<Id extends string, Item> {
     | "pause"
     | "resume"
     | "clear"
-    | "drain"
-    | "release"
     | "status"
   >;
-  /** Present when the queue declares itemSchema; absent otherwise */
-  readonly item?: QueueItemCodecDescriptor;
 }
 ```
 
-`QueueItemCodecDescriptor` is defined in
+The current queue contract can list local `enqueue` capability, but remote
+`ProcessManager` queue handles intentionally expose only `pause`, `resume`,
+`clear`, and `status`. Remote enqueue still requires the future codec metadata
+below.
+
+`QueueItemCodecDescriptor` will be defined in
 [02 - Queue controls, schema, handoff, and lifecycle hooks](./02-queue-controls-and-hooks.md).
-Local queue services keep the full `Schema.Schema<Item, Encoded, never>` on the
-declaration; contract generation calls `JSONSchema.make(itemSchema)` and exports
-only the descriptor. Do not put live `Schema` values on the wire.
+Future local queue services keep the full `Schema.Schema<Item, Encoded, never>`
+on the declaration; contract generation calls `JSONSchema.make(itemSchema)` and
+exports only the descriptor. Do not put live `Schema` values on the wire.
 
 Future remote enqueue prerequisites (do not implement PM enqueue until these exist):
 
@@ -505,7 +505,7 @@ Remote compile-time expectations:
 // should not compile: unknown group member
 yield* billing.process("@app/MissingProcess").start;
 
-// should not compile if queue item schema/type is imported in the contract
+// should not compile in the current remote PM surface: enqueue is unsupported
 yield* billing.queue(InvoiceQueue.id).enqueue({ to: "ops@example.com" });
 ```
 
@@ -530,16 +530,8 @@ The multi-group CLI is:
 const cli = ProcessManager.cli([BillingGroup, StripeGroup] as const);
 ```
 
-The group tuple carries contracts and IDs, so the type system can derive the
-required connection registry:
-
-```typescript
-type BillingAndStripeConnections = ProcessManager.ConnectionRegistry<
-  readonly [typeof BillingGroup, typeof StripeGroup]
->;
-```
-
-Applications provide that requirement with a layer:
+The group tuple carries contracts and IDs, so the type system can check the
+connection maps accepted by `layer` and `layerConfig`:
 
 ```typescript
 const RemoteGroupsLive = ProcessManager.ConnectionRegistry.layer(
@@ -549,12 +541,24 @@ const RemoteGroupsLive = ProcessManager.ConnectionRegistry.layer(
     [StripeGroup.id]: "http://127.0.0.1:32131",
   },
 );
+```
+
+Applications provide that requirement with a layer:
+
+```typescript
+const RemoteGroupsFromConfig = ProcessManager.ConnectionRegistry.layerConfig(
+  [BillingGroup, StripeGroup] as const,
+  {
+    [BillingGroup.id]: Config.string("BILLING_GROUP_BASE_URL"),
+    [StripeGroup.id]: Config.string("STRIPE_GROUP_BASE_URL"),
+  },
+);
 
 const billing = yield* ProcessManager.connect(BillingGroup);
 yield* billing.verifyContract;
 
 yield* ProcessManager.cli([BillingGroup, StripeGroup] as const).pipe(
-  Effect.provide(RemoteGroupsLive),
+  Effect.provide(RemoteGroupsFromConfig),
 );
 ```
 
@@ -604,18 +608,6 @@ Rules:
 - Targeted commands verify the selected remote contract before issuing controls
   and report contract drift as a checked remote/control error.
 
-The same registry should support config-backed layers later:
-
-```typescript
-const RemoteGroupsFromConfig = ProcessManager.ConnectionRegistry.layerConfig(
-  [BillingGroup, StripeGroup] as const,
-  {
-    [BillingGroup.id]: Config.string("BILLING_GROUP_BASE_URL"),
-    [StripeGroup.id]: Config.string("STRIPE_GROUP_BASE_URL"),
-  },
-);
-```
-
 `ProcessManager.Endpoint` remains useful as the injectable single-group remote
 manager. Prefer the registry-backed form so connection state comes from a
 swappable layer:
@@ -626,9 +618,18 @@ class BillingEndpoint extends ProcessManager.Endpoint<BillingEndpoint>()(
 ) {}
 ```
 
-The inline `{ baseUrl }` form remains available for small examples and tests,
-but application wiring should provide the group URL through
-`ProcessManager.ConnectionRegistry.layer`.
+The inline `{ baseUrl }` form remains available for small examples and tests:
+
+```typescript
+class BillingEndpoint extends ProcessManager.Endpoint<BillingEndpoint>()(
+  BillingGroup,
+  { baseUrl: "http://127.0.0.1:32130" },
+) {}
+```
+
+Application wiring should provide the group URL through
+`ProcessManager.ConnectionRegistry.layer` or
+`ProcessManager.ConnectionRegistry.layerConfig`.
 
 The endpoint yields a typed remote manager:
 
@@ -981,24 +982,32 @@ yield* ProcessGroup.make(id, entries, options);
 
 ### Slice 6 - Remote PM client
 
-- Add a typed `ProcessManager.ConnectionRegistry` requirement derived from a
-  group tuple. Provide it with explicit layers (`layer`, later `layerConfig`) so
-  base URLs live in swappable Effect configuration, not in CLI call arguments.
-- Add `ProcessManager.connect(GroupService)` as the preferred runtime-class form
+Implemented initial surface:
+
+- Typed `ProcessManager.ConnectionRegistry` requirement derived from a group
+  tuple, with `layer` and `layerConfig` so base URLs live in swappable Effect
+  configuration, not in CLI call arguments.
+- `ProcessManager.connect(GroupService)` as the preferred runtime-class form
   when a connection registry is available, plus
+  `ProcessManager.connect(GroupService, { baseUrl })` and
   `ProcessManager.connect({ baseUrl, contract })` for generated clients and
   low-level escape hatches.
-- Route commands over the network to a group.
-- Aggregate status from multiple remote groups through
-  `ProcessManager.cli([GroupA, GroupB] as const)` using the connection registry.
-- Keep remote queue enqueue blocked until schema-backed queue item contracts
+- Remote process controls and queue `pause`, `resume`, `clear`, and `status`
+  controls routed over the group control API.
+- Multi-group `ProcessManager.cli([GroupA, GroupB] as const)` using the
+  connection registry, with `groups`, `ls`, `verify`, `status <target>`,
+  process commands, and queue commands.
+- Remote queue enqueue remains blocked until schema-backed queue item contracts
   land.
 
 ### Slice 6.5 - Endpoint service and remote layer bundle
 
-- Add `ProcessManager.Endpoint` to capture group contract and consume
-  connection-registry values for future auth/transport config.
-- Add `ProcessGroup.remoteLayer` for the group service itself.
+Implemented initial surface:
+
+- `ProcessManager.Endpoint` captures the group contract and consumes
+  connection-registry values, with an inline `{ baseUrl }` overload for examples
+  and tests.
+- `ProcessGroup.remoteLayer` for the group service itself.
 - Add `ProcessGroup.remoteLayers` once process/queue remote handle error
   semantics are decided.
 - Do not implement queue/process remote layers by erasing remote failures.

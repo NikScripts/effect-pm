@@ -9,11 +9,10 @@ roadmap context, not as the source of truth for shipped APIs.
 
 ## Current plan set
 
-Plan numbers are stable references, not strict implementation order. Use the
-recommended order below when picking up new work.
-
-For the current execution order, status, and dependency phases, start with
-[CURRENT-ROADMAP.md](./CURRENT-ROADMAP.md).
+Plan numbers are stable references, not strict implementation order. For the
+current execution order, status, and dependency phases, agents should start with
+[CURRENT-ROADMAP.md](./CURRENT-ROADMAP.md) before choosing work from the
+numbered plan details.
 
 | # | Plan | Purpose |
 | - | ---- | ------- |
@@ -29,7 +28,11 @@ For the current execution order, status, and dependency phases, start with
 | 10 | [Plan 01 phase one: ProcessStore read foundation](./10-process-store-phase-one.md) | Detailed first implementation slice for plan **01**; reconcile with plan **11** before adding more feature-specific store methods. |
 | 11 | [Runtime state, listener hooks, history, and mutable config](./11-runtime-state-hooks-and-config.md) | Planned direction for state snapshots/history, external listeners, stable storage primitives, per-resource data, and config changes after start. |
 
-## Recommended implementation order
+## Historical implementation order
+
+Use [CURRENT-ROADMAP.md](./CURRENT-ROADMAP.md) as the active execution order.
+The sequence below is background context for how the numbered plans relate to
+each other.
 
 1. **Stabilize storage vocabulary** — Start with [10](./10-process-store-phase-one.md), but reconcile it with [11](./11-runtime-state-hooks-and-config.md) so storage grows around generic state history/facts rather than a method per feature.
 2. **Define runtime state and signals** — Implement the core state/listener/config concepts from [11](./11-runtime-state-hooks-and-config.md) for one low-risk resource first.
