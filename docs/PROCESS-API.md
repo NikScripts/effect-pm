@@ -131,7 +131,7 @@ Typical control (requires the group’s `R` + `ProcessStore` where applicable):
 Typed group construction also supports canonical runtime entries:
 
 ```typescript
-const group = yield* ProcessGroup.make("app/billing-group", [
+const group = yield* ProcessGroup.make("@app/BillingGroup", [
   SyncBilling,
   EmailQueue,
 ] as const);
@@ -140,12 +140,11 @@ yield* group.process(SyncBilling).runImmediately;
 yield* group.queue(EmailQueue).pause;
 ```
 
-Canonical ids are slash-separated, case-preserving Effect-style strings. Avoid
-symbolic prefixes such as `@` for ownership or kind. If a target id embeds a
-group path segment, keep that segment stable and normalized, for example
-`billing-group`. CLI implementations may accept normalized aliases such as
-lowercase/kebab-case forms, but diagnostics should show canonical ids and display
-kind separately as a column or label.
+Canonical ids are slash-separated, case-preserving Effect-style strings such as
+`@repo/NorthWest/BillingGroup/SyncInvoices`. CLI implementations may accept
+normalized lowercase/kebab-case aliases such as
+`north-west/billing-group/sync-invoices`, but diagnostics should show canonical
+ids and display kind separately as a column or label.
 
 `ProcessGroup.Service` creates an injectable group class with `id`, `entries`,
 `contract`, `make`, and `layer`. `ProcessGroup.remoteLayer(Group, Endpoint)`

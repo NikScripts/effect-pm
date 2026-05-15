@@ -9,10 +9,11 @@ group's localhost control endpoint for typed remote controls, and
 `ProcessManager.Endpoint`. Multi-host coordination and remote queue enqueue are
 still planned follow-ups.
 
-Identifiers are slash-separated, case-preserving Effect-style strings. Do not
-prefix ids with symbolic markers to encode ownership or kind; display kind as a
-separate column or label. CLIs may accept normalized aliases such as
-lowercase/kebab-case forms, while diagnostics should show canonical ids.
+Identifiers are slash-separated, case-preserving Effect-style strings such as
+`@repo/NorthWest/BillingGroup/SyncInvoices`. CLIs may accept normalized
+lowercase/kebab-case aliases such as `north-west/billing-group/sync-invoices`,
+while diagnostics should show canonical ids and display kind as a separate
+column or label.
 
 ## Documentation map (read in any order)
 
