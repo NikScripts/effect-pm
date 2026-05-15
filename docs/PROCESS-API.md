@@ -140,8 +140,9 @@ yield* group.process(SyncBilling).runImmediately;
 yield* group.queue(EmailQueue).pause;
 ```
 
-Canonical ids are slash-separated, case-preserving Effect-style strings such as
-`@repo/NorthWest/BillingGroup/SyncInvoices`. CLI implementations may accept
+Canonical ids are slash-separated Effect-style strings with kebab-case package
+segments and case-preserving service names, such as
+`@repo/north-west/BillingGroup/SyncInvoices`. CLI implementations may accept
 normalized lowercase/kebab-case aliases such as
 `north-west/billing-group/sync-invoices`, but diagnostics should show canonical
 ids and display kind separately as a column or label.

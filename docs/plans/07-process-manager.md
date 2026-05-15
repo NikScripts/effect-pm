@@ -112,9 +112,10 @@ StripeSync.id; // "@app/StripeSync"
 EmailQueue.id; // "@app/EmailQueue"
 ```
 
-Use slash-separated, case-preserving Effect-style ids such as
-`@repo/NorthWest/BillingGroup/SyncInvoices`. CLI aliases may normalize these ids
-to lowercase/kebab-case input such as
+Use slash-separated Effect-style ids with kebab-case package segments and
+case-preserving service names, such as
+`@repo/north-west/BillingGroup/SyncInvoices`. CLI aliases may normalize these
+ids to lowercase/kebab-case input such as
 `north-west/billing-group/sync-invoices`. Display kind as a separate field or
 column instead of encoding it into the id.
 
@@ -558,7 +559,7 @@ Expected operator-facing command shape:
 ```bash
 effect-pm groups
 effect-pm ls
-effect-pm now @repo/NorthWest/BillingGroup/SyncInvoices
+effect-pm now @repo/north-west/BillingGroup/SyncInvoices
 effect-pm now north-west/billing-group/sync-invoices
 effect-pm pause south-west/billing-group/billing-email-queue
 ```
@@ -566,8 +567,9 @@ effect-pm pause south-west/billing-group/billing-email-queue
 Rules:
 
 - `groups` lists the configured group ids, optional aliases, and endpoints.
-- Canonical ids remain slash-separated, case-preserving Effect-style strings
-  such as `@repo/NorthWest/BillingGroup/SyncInvoices`.
+- Canonical ids remain slash-separated Effect-style strings with kebab-case
+  package segments and case-preserving service names, such as
+  `@repo/north-west/BillingGroup/SyncInvoices`.
 - CLI aliases may normalize canonical ids into lowercase/kebab-case input such
   as `north-west/billing-group/sync-invoices`.
 - `ls` lists all configured groups with their process and queue targets.
