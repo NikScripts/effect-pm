@@ -3,9 +3,9 @@
 ## Status
 
 Partially implemented. Typed group entries, group contracts, contract-aligned
-control routes, `ProcessManager.connect`, `ProcessManager.Endpoint`, and
-`ProcessGroup.remoteLayer` have landed. Remote queue enqueue, `RemoteService`,
-and multi-host deployment coordination remain planned.
+control routes, `ProcessManager.connect`, `ProcessManager.Endpoint`,
+`ProcessManager.cli`, and `ProcessGroup.remoteLayer` have landed. Remote queue
+enqueue, `RemoteService`, and multi-host deployment coordination remain planned.
 
 ## Intent
 
@@ -520,7 +520,7 @@ Remote clients should not receive base URLs as ad hoc arguments at each call
 site. Passing group service classes should create typed connection requirements,
 and application layers should provide those requirements.
 
-The target CLI DX is:
+The multi-group CLI is:
 
 ```typescript
 const cli = ProcessManager.cli([BillingGroup, StripeGroup] as const);
@@ -554,7 +554,7 @@ yield* ProcessManager.cli([BillingGroup, StripeGroup] as const).pipe(
 );
 ```
 
-Expected operator-facing command shape:
+Operator-facing command shape:
 
 ```bash
 effect-pm groups
@@ -580,16 +580,15 @@ Rules:
   suffix matching.
 - If a target resolves to exactly one process or queue across all fetched
   contracts, the CLI may issue the command without a separate group argument.
-- If a target resolves to multiple candidates, the CLI must fail and show every
-  candidate plus the shortest unique suffix needed to disambiguate. Use terminal
-  bold/color for the shortest unique suffix when available, and a plain text
-  fallback such as brackets when color is disabled.
+- If a target resolves to multiple candidates, the CLI fails and shows every
+  canonical candidate plus the shortest kebab-case suffix needed to
+  disambiguate.
 - Display kind separately from ids. Use a `KIND` column, label, or accessible
   color fallback instead of encoding process/queue/group kind in the id string.
 - Diagnostics should include canonical group and target ids even when accepting
   shorter aliases.
-- Each command should verify the target group contract before issuing controls
-  and report contract drift as a checked remote/control error.
+- Each command verifies the target group contract before issuing controls and
+  reports contract drift as a checked remote/control error.
 
 The same registry should support config-backed layers later:
 
@@ -974,9 +973,10 @@ yield* ProcessGroup.make(id, entries, options);
   `ProcessManager.connect({ baseUrl, contract })` for generated clients and
   low-level escape hatches.
 - Route commands over the network to a group.
-- Validate remote enqueue payloads with schema.
 - Aggregate status from multiple remote groups through
   `ProcessManager.cli([GroupA, GroupB] as const)` using the connection registry.
+- Keep remote queue enqueue blocked until schema-backed queue item contracts
+  land.
 
 ### Slice 6.5 - Endpoint service and remote layer bundle
 

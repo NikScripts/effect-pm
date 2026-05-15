@@ -6,8 +6,9 @@ The runtime is organized around the **`ProcessGroup`** — a cohesive bundle of
 processes and queues that run together. **`ProcessManager`** connects to a
 group's localhost control endpoint for typed remote controls, and
 **`ProcessGroup.remoteLayer`** can provide the same group service key from a
-`ProcessManager.Endpoint`. Multi-host coordination and remote queue enqueue are
-still planned follow-ups.
+`ProcessManager.Endpoint`. `ProcessManager.cli([GroupA, GroupB] as const)`
+provides the multi-group remote CLI on top of a typed connection registry.
+Multi-host coordination and remote queue enqueue are still planned follow-ups.
 
 Identifiers are slash-separated Effect-style strings with kebab-case package
 segments and case-preserving service names, such as

@@ -142,8 +142,8 @@ yield* group.queue(EmailQueue).pause;
 
 Canonical ids are slash-separated Effect-style strings with kebab-case package
 segments and case-preserving service names, such as
-`@repo/north-west/BillingGroup/SyncInvoices`. CLI implementations may accept
-normalized lowercase/kebab-case aliases such as
+`@repo/north-west/BillingGroup/SyncInvoices`. CLI commands accept normalized
+lowercase/kebab-case aliases such as
 `north-west/billing-group/sync-invoices`, but diagnostics should show canonical
 ids and display kind separately as a column or label.
 
@@ -166,6 +166,7 @@ Stopping interrupts the schedule driver fiber and child instances; removing/clos
 |--------|------|
 | `ProcessManager.ConnectionRegistry.layer([Group], { [Group.id]: url })` | Provide registry-backed remote group URLs as an Effect layer. |
 | `ProcessManager.connect(Group)` | Build a typed remote client by reading the group URL from `ProcessManagerConnectionRegistry`. |
+| `ProcessManager.cli([GroupA, GroupB] as const)` | Build a multi-group CLI from group contracts and the connection registry. |
 | `ProcessManager.connect(Group, { baseUrl })` | Build a typed remote client from a group service/definition. |
 | `ProcessManager.connect({ baseUrl, contract })` | Build from a raw contract for generated or contract-only clients. |
 | `ProcessManager.Endpoint<Self>()(Group, { baseUrl })` | Injectable endpoint service that yields the remote manager. |
@@ -190,9 +191,14 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.provide(RemoteGroupsLive));
 ```
 
-This same registry is the planned foundation for
-`ProcessManager.cli([BillingGroup, StripeGroup] as const)`, where the CLI can
-derive valid group ids and command targets from the group tuple.
+The same registry powers `ProcessManager.cli([BillingGroup, StripeGroup] as const)`.
+CLI commands accept canonical ids such as
+`@repo/north-west/BillingGroup/SyncInvoices` and normalized suffix aliases such
+as `north-west/billing-group/sync-invoices` or `sync-invoices`. Ambiguous
+aliases fail with the minimum kebab-case suffix for each canonical candidate.
+The CLI supports `groups`, `ls`, process `start` / `stop` / `restart` / `now`,
+and queue `pause` / `resume` / `clear`.
+Remote queue `add`, `enqueue`, `prioritize`, and `defer` remain unsupported.
 
 ---
 

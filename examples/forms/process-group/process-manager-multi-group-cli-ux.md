@@ -1,9 +1,9 @@
-# Expected multi-group ProcessManager CLI UX
+# Multi-group ProcessManager CLI UX
 
-This form is a transcript-style design example, not a runnable script. The
-current CLI is a single-control-endpoint client; the multi-group CLI should be
-introduced through `ProcessManager.cli([GroupA, GroupB] as const)` and a typed
-connection registry.
+This form is a transcript-style design example, not a runnable script.
+`ProcessManager.cli([GroupA, GroupB] as const)` is backed by
+`ProcessManager.ConnectionRegistry.layer(...)`, so the CLI can derive group and
+target ids from the imported group contracts.
 
 ## Setup shape
 
@@ -31,7 +31,7 @@ yield* ProcessManager.cli([NorthWestBillingGroup, SouthWestBillingGroup] as cons
 );
 ```
 
-## Expected command flow
+## Command flow
 
 List configured groups first:
 
@@ -86,14 +86,13 @@ OK process @repo/north-west/BillingGroup/SyncInvoices run requested
   suffix matching.
 - If one normalized target matches exactly one process or queue across all
   configured group contracts, the CLI can use that target.
-- If a target matches more than one process or queue, the CLI must fail instead
+- If a target matches more than one process or queue, the CLI fails instead
   of guessing.
-- Ambiguity diagnostics should show every canonical candidate and visually
-  emphasize the shortest unique suffix the user can type for each candidate.
-  Use terminal bold/color when available; fall back to brackets in plain text.
+- Ambiguity diagnostics show every canonical candidate and the shortest
+  kebab-case suffix the user can type for each candidate.
 - Display kind separately from ids. Use a `KIND` column, label, or accessible
   color fallback instead of encoding process/queue/group kind in the id string.
-- Every command should verify the remote contract before controlling a group and
+- Every command verifies the remote contract before controlling a group and
   surface drift as a checked control error.
 
 Example ambiguity:
@@ -101,14 +100,13 @@ Example ambiguity:
 ```bash
 $ effect-pm now sync-invoices
 Ambiguous target "sync-invoices".
-
-KIND     TYPE THIS MINIMUM                    CANONICAL ID
-process  [north-west/billing-group/sync-invoices]   @repo/north-west/BillingGroup/SyncInvoices
-process  [south-west/billing-group/sync-invoices]   @repo/south-west/BillingGroup/SyncInvoices
+north-west/billing-group/sync-invoices -> @repo/north-west/BillingGroup/SyncInvoices
+south-west/billing-group/sync-invoices -> @repo/south-west/BillingGroup/SyncInvoices
 ```
 
-In a color terminal, render the `TYPE THIS MINIMUM` column in bold or an accent
-color. The brackets are only the no-color fallback.
+If this output grows into a table, keep the minimum typed suffix and canonical id
+as separate columns, and keep kind as a `KIND` column rather than encoding it in
+the id.
 
 ## Non-goals for this UX slice
 
