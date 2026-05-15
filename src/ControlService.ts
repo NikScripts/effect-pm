@@ -40,6 +40,8 @@ import { createCli, runCli } from "./cli";
  * Commands are categorized by their target:
  * - **Process commands**: start, stop, restart, now
  * - **Queue commands**: pause, resume, shutdown
+ * - **Queue maintenance**: restart clears pending queue items; REST `clear` is
+ *   available at `POST /queues/:id/clear`
  * - **Universal commands**: ls, status, queues
  * 
  * @public
@@ -51,7 +53,7 @@ export type ControlCommand =
   | "stop"      // Stop a process
   | "pause"     // Pause a queue
   | "resume"    // Resume a queue
-  | "restart"   // Restart a process or queue
+  | "restart"   // Restart a process, or clear a queue
   | "shutdown"  // Shutdown a queue permanently
   | "now"       // Run a process immediately
   | "queues"    // List all queues
@@ -66,7 +68,7 @@ export interface ControlRequestBody {
   command: ControlCommand;
   /** Target process or queue name (required for most commands) */
   name?: string;
-  /** Additional data (e.g., for queue-add operations) */
+  /** Reserved for future command payloads. */
   data?: unknown;
 }
 

@@ -82,4 +82,13 @@ Runnable script: **`examples/scenarios/game-window-polling-with-process-group.ts
 
 ## Relation to “ProcessManager”
 
-`ProcessGroup` module notes: a future **ProcessManager** may coordinate multiple groups across hosts. Today, **one `ProcessGroup` per deployable bundle** is the supported unit; all of the above applies per group.
+`ProcessManager` currently connects to one `ProcessGroup` control endpoint at a
+time, verifies the group contract, and exposes typed remote process/queue
+controls. `ProcessGroup.remoteLayer(Group, Endpoint)` can provide the same
+injectable group service key from a remote endpoint, so application code can
+`yield* Group` whether the provider is local or network-backed.
+
+Remote queue `pause`, `resume`, `clear`, and `status` are supported. Remote
+queue enqueue-style controls intentionally fail with `UnsupportedRemoteControlError`
+until schema-backed queue item contracts land. Multi-host deployment
+coordination remains future work.

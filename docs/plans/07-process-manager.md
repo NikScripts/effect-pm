@@ -2,8 +2,10 @@
 
 ## Status
 
-Planned direction. The `ProcessGroup` shape should be settled before the remote
-`ProcessManager` is implemented.
+Partially implemented. Typed group entries, group contracts, contract-aligned
+control routes, `ProcessManager.connect`, `ProcessManager.Endpoint`, and
+`ProcessGroup.remoteLayer` have landed. Remote queue enqueue, `RemoteService`,
+and multi-host deployment coordination remain planned.
 
 ## Intent
 

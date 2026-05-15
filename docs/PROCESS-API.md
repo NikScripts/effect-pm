@@ -12,7 +12,8 @@ This document complements the [README](../README.md) with a concise **spec-style
 | **`ProcessSchedule`** | Stores run windows (`startAt`, optional `stopAt`, optional `id`) and notifies the driver when entries change. |
 | **`Polling`** | **Cadence** between repeats inside a running instance (`awaitNextTick` → user `effect` → `afterTick`). |
 | **`ProcessStore`** | Optional analytics: execution rows + lifecycle events. |
-| **`ProcessGroup`** | Owns scopes, fibers, `start` / `stop`, control HTTP/CLI. |
+| **`ProcessGroup`** | Owns scopes, fibers, typed process/queue controls, group contracts, control HTTP/CLI. |
+| **`ProcessManager`** | Typed remote client for a `ProcessGroup` contract. |
 
 **One `start` (or `startAll`)** attaches the schedule driver. Schedule entries control whether instances continue repeating; `stop` / interrupt tears down the driver scope.
 
@@ -118,7 +119,7 @@ These exports remain for custom schedule implementations; the schedule-driven ru
 
 ---
 
-## `ProcessGroup` (process lifecycle)
+## `ProcessGroup` (process lifecycle and group contracts)
 
 Typical control (requires the group’s `R` + `ProcessStore` where applicable):
 
@@ -127,7 +128,41 @@ Typical control (requires the group’s `R` + `ProcessStore` where applicable):
 - `runImmediately(name)` — tracked run without requiring armed schedule
 - `processStatus(name)` / `status`
 
+Typed group construction also supports canonical runtime entries:
+
+```typescript
+const group = yield* ProcessGroup.make("@app/BillingGroup", [
+  SyncBilling,
+  EmailQueue,
+] as const);
+
+yield* group.process(SyncBilling).runImmediately;
+yield* group.queue(EmailQueue).pause;
+```
+
+`ProcessGroup.Service` creates an injectable group class with `id`, `entries`,
+`contract`, `make`, and `layer`. `ProcessGroup.remoteLayer(Group, Endpoint)`
+provides that same service key from a remote `ProcessManager.Endpoint`, with
+process controls plus queue `pause`, `resume`, `clear`, and `status`.
+
+Remote queue `add`, `enqueue`, `prioritize`, and `defer` intentionally fail with
+`UnsupportedRemoteControlError` until queue item schemas are represented in the
+group contract.
+
 Stopping interrupts the schedule driver fiber and child instances; removing/closing entries does not stop the driver — active instances exit naturally on their stop checks.
+
+---
+
+## `ProcessManager` (remote group client)
+
+| Member | Role |
+|--------|------|
+| `ProcessManager.connect(Group, { baseUrl })` | Build a typed remote client from a group service/definition. |
+| `ProcessManager.connect({ baseUrl, contract })` | Build from a raw contract for generated or contract-only clients. |
+| `ProcessManager.Endpoint<Self>()(Group, { baseUrl })` | Injectable endpoint service that yields the remote manager. |
+| `manager.verifyContract` | Fetches `GET /contract` and compares group id, version, process ids, queue ids, and control sets. |
+| `manager.process(id)` | Remote process start/stop/restart/run/status controls. |
+| `manager.queue(id)` | Remote queue pause/resume/clear/status controls. |
 
 ---
 
@@ -142,6 +177,7 @@ Examples are split into **forms** (one API shape) and **scenarios** (composition
 | [examples/forms/polling/](../examples/forms/polling/) | **`TestClock`**: accelerating polling, `resetCadence`, `peekCadence`, delayed start. |
 | [examples/scenarios/schedule-sync-from-external-db.ts](../examples/scenarios/schedule-sync-from-external-db.ts) | Simulated DB-sync pattern. |
 | [examples/scenarios/game-window-polling-with-process-group.ts](../examples/scenarios/game-window-polling-with-process-group.ts) | **`ProcessGroup.start`** + schedule ids; [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md). |
+| [examples/forms/process-group/](../examples/forms/process-group/) | Typed group entries, contracts, `ProcessManager.Endpoint`, and `ProcessGroup.remoteLayer`. |
 | [examples/forms/resource/](../examples/forms/resource/) | `RunResource`, `HttpClientRunGate`, `HttpApiResource`. |
 
 See [examples/README.md](../examples/README.md) for **`pnpm run example:*`** commands and a guided reading order.

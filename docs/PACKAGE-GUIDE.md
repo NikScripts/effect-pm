@@ -11,8 +11,9 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 1. **Managed processes** — a schedule-entry-driven runtime: a driver watches `ProcessSchedule` entries, spawns instances, and each instance repeats a user `Effect` on a **polling cadence** until its window closes.
 2. **Queue resources** — priority queues with concurrency, optional throttling, and lifecycle controls.
 3. **Orchestration** — a **`ProcessGroup`** bundles processes + queue tags, tracks status, forks schedule drivers, and exposes **localhost HTTP control** + a **CLI**.
+4. **Remote control** — **`ProcessManager`** connects to a group contract over HTTP, and **`ProcessGroup.remoteLayer`** can provide the same injectable group service key through a `ProcessManager.Endpoint`.
 
-A future **`ProcessManager`** (multi-host) is planned but **not implemented**; use one `ProcessGroup` per deployable bundle today.
+The current remote slice targets one group endpoint at a time. Multi-host coordination, `RemoteService`, and remote queue enqueue stay planned until schema-backed queue item contracts land.
 
 ---
 
@@ -20,9 +21,10 @@ A future **`ProcessManager`** (multi-host) is planned but **not implemented**; u
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
-│ ProcessGroup.make({ queues, processes })                          │
+│ ProcessGroup.make(id, entries) / ProcessGroup.Service(id, entries)│
 │  • acquires queue instances (Effect services)                     │
-│  • holds Map(name → Process handle) + status + Scope per fork     │
+│  • exposes typed process/queue controls + serializable contract   │
+│  • keeps a legacy string control surface for HTTP/CLI delegation  │
 └───────────────────────────────────────────────────────────────────┘
          │ start / forkIn(process.effect, scope)
          ▼
@@ -67,6 +69,7 @@ A future **`ProcessManager`** (multi-host) is planned but **not implemented**; u
 |-------------|------|
 | `Process`, `Polling`, `ProcessSchedule` | Build supervised processes and gate/cadence layers. |
 | `ProcessGroup` | Orchestrate processes + queues; `serve`, `awaitShutdown`, lifecycle APIs. |
+| `ProcessManager` | Typed remote client and endpoint service for group control contracts. |
 | `QueueResource` | Priority queues + workers. |
 | `ProcessStore` | In-memory (or Prisma) analytics: executions + lifecycle events. |
 | `RunResource`, `HttpClientRunGate` | Concurrency + throttle gates for arbitrary effects / `HttpClient`. |
@@ -81,10 +84,11 @@ TSDoc on each module repeats details; this guide stays **concept-shaped**.
 
 ## Dependencies and layers (practical rules)
 
-1. **`ProcessGroup.make`** returns an `Effect` that requires the **queue tag identifiers** you passed in `queues` (so queues are acquired exactly once in that scope).
+1. **`ProcessGroup.make(id, entries)`** returns an `Effect` that requires the **queue tag identifiers** from queue entries (so queues are acquired exactly once in that scope). The legacy `{ queues, processes }` form remains available for compatibility.
 2. **Forking** `process.effect` needs **`R | ProcessStore`** where `R` is whatever remains on the process after optional inlined `polling` / `schedule` layers. Use **`ProcessSupervisorRequirements<C>`** (exported type) if you build configs generically.
 3. Prefer **`Layer.mergeAll(...)`** + **one** `Effect.provide` at the app root when you have many independent layers (clearer dependency graph; matches Effect lint guidance).
 4. **Control service** listens on **127.0.0.1** only — designed for local ops, not public exposure.
+5. **Remote group layers** keep the same group service key, but widen control errors to include remote failures and unsupported controls. Remote queue enqueue-style methods intentionally fail until queue item schemas are part of the group contract.
 
 ---
 

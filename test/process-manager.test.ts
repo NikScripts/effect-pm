@@ -45,6 +45,13 @@ describe("ProcessManager", () => {
           },
         ) {}
 
+        class OtherProcess extends Process.Service<OtherProcess>()(
+          "@test/ManagerOtherProcess",
+          {
+            effect: Effect.void,
+          },
+        ) {}
+
         class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
           "@test/ManagerBillingGroup",
           [SyncProcess, EmailQueue] as const,
@@ -55,6 +62,18 @@ describe("ProcessManager", () => {
           const manager = ProcessManager.connect(BillingGroup, {
             baseUrl: "http://127.0.0.1:32126",
           });
+          const rawContractManager = ProcessManager.connect({
+            baseUrl: "http://127.0.0.1:32126",
+            contract: BillingGroup.contract,
+          });
+          const mismatchedGroup = yield* ProcessGroup.make(
+            "@test/ManagerBillingGroup",
+            [OtherProcess] as const,
+          );
+          const mismatchedManager = ProcessManager.connect({
+            baseUrl: "http://127.0.0.1:32126",
+            contract: mismatchedGroup.contract,
+          });
 
           yield* ControlService.make({
             port: 32126,
@@ -63,11 +82,15 @@ describe("ProcessManager", () => {
 
           yield* manager.verifyContract;
           yield* manager.process(SyncProcess.id).runImmediately;
+          yield* rawContractManager.verifyContract;
+          yield* rawContractManager.process(SyncProcess.id).runImmediately;
+          const mismatch = yield* mismatchedManager.verifyContract.pipe(Effect.flip);
 
           // @ts-expect-error queue ids are not valid process ids
           manager.process(EmailQueue.id);
 
-          expect(yield* Ref.get(runs)).toBe(1);
+          expect(mismatch.reason).toContain("process ids");
+          expect(yield* Ref.get(runs)).toBe(2);
         }).pipe(
           provideLayer(BillingGroup.layer),
           provideLayer(EmailQueue.layer),
@@ -273,6 +296,45 @@ describe("ProcessManager", () => {
               .enqueue({ to: "blocked@example.com" })
               .pipe(Effect.flip);
             expect(enqueueError._tag).toBe("UnsupportedRemoteControlError");
+            if (enqueueError._tag === "UnsupportedRemoteControlError") {
+              expect(enqueueError.operation).toBe("queue.enqueue");
+            }
+
+            const addError = yield* remoteGroup
+              .queue(EmailQueue)
+              .add({ to: "blocked-add@example.com" })
+              .pipe(Effect.flip);
+            expect(addError._tag).toBe("UnsupportedRemoteControlError");
+            if (addError._tag === "UnsupportedRemoteControlError") {
+              expect(addError.operation).toBe("queue.add");
+            }
+
+            const prioritizeError = yield* remoteGroup
+              .queue(EmailQueue)
+              .prioritize({ to: "blocked-prioritize@example.com" })
+              .pipe(Effect.flip);
+            expect(prioritizeError._tag).toBe("UnsupportedRemoteControlError");
+            if (prioritizeError._tag === "UnsupportedRemoteControlError") {
+              expect(prioritizeError.operation).toBe("queue.prioritize");
+            }
+
+            const deferError = yield* remoteGroup
+              .queue(EmailQueue)
+              .defer({ to: "blocked-defer@example.com" })
+              .pipe(Effect.flip);
+            expect(deferError._tag).toBe("UnsupportedRemoteControlError");
+            if (deferError._tag === "UnsupportedRemoteControlError") {
+              expect(deferError.operation).toBe("queue.defer");
+            }
+
+            const getQueueError = yield* remoteGroup
+              .legacy
+              .getQueue(EmailQueue.id)
+              .pipe(Effect.flip);
+            expect(getQueueError._tag).toBe("UnsupportedRemoteControlError");
+            if (getQueueError._tag === "UnsupportedRemoteControlError") {
+              expect(getQueueError.operation).toBe("getQueue");
+            }
           }).pipe(
             provideLayer(ProcessGroup.remoteLayer(BillingGroup, BillingEndpoint)),
             provideLayer(BillingEndpoint.layer),

@@ -88,6 +88,7 @@ describe("ControlService — contract route", () => {
           effect: (email) =>
             Ref.update(delivered, (emails) => [...emails, email.to]),
           concurrency: 1,
+          paused: true,
         }) {}
         class SyncProcess extends Process.Service<SyncProcess>()("@test/RestProcess", {
           effect: Ref.update(runs, (count) => count + 1),
@@ -121,24 +122,49 @@ describe("ControlService — contract route", () => {
           expect(processRun.statusCode).toBe(200);
           expect(yield* Ref.get(runs)).toBe(1);
 
-          yield* queue.add({ to: "ops@example.com" });
-          while ((yield* queue.completed) < 1) {
-            yield* Effect.sleep("5 millis");
-          }
+          yield* queue.add({ to: "clear-me@example.com" });
 
-          const queueStatus = yield* requestJson(
+          const pendingQueueStatus = yield* requestJson(
             32128,
             `/queues/${encodeURIComponent(EmailQueue.id)}`,
           );
-          expect(queueStatus.statusCode).toBe(200);
-          expect(queueStatus.body).toMatchObject({
+          expect(pendingQueueStatus.statusCode).toBe(200);
+          expect(pendingQueueStatus.body).toMatchObject({
             success: true,
             type: "queue",
             data: {
               name: EmailQueue.id,
-              completed: 1,
+              size: {
+                total: 1,
+              },
+              completed: 0,
             },
           });
+
+          const clear = yield* requestJson(
+            32128,
+            `/queues/${encodeURIComponent(EmailQueue.id)}/clear`,
+            "POST",
+          );
+          expect(clear.statusCode).toBe(200);
+          expect(clear.body).toMatchObject({
+            success: true,
+            data: {
+              cleared: 1,
+            },
+          });
+
+          yield* queue.add({ to: "ops@example.com" });
+
+          const resume = yield* requestJson(
+            32128,
+            `/queues/${encodeURIComponent(EmailQueue.id)}/resume`,
+            "POST",
+          );
+          expect(resume.statusCode).toBe(200);
+          while ((yield* queue.completed) < 1) {
+            yield* Effect.sleep("5 millis");
+          }
 
           const pause = yield* requestJson(
             32128,

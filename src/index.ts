@@ -13,9 +13,9 @@
  *   disarmed while `Polling` controls in-instance repeat cadence. Optional `polling` /
  *   `schedule` layers on `Process.make` are merged into `process.effect` so fork-time
  *   requirements stay accurate in TypeScript.
-* - **`ProcessGroup`** — Bundle **queue tags** and **process handles**; `start` /
- *   `startAll` fork supervisors; `serve` exposes a **localhost** control HTTP API;
- *   `awaitShutdown` waits for OS signals (Node).
+ * - **`ProcessGroup`** — Bundle **process and queue entries**; `start` /
+ *   `startAll` fork supervisors; contracts power the **localhost** control HTTP API
+ *   and remote group layers; `awaitShutdown` waits for OS signals (Node).
  * - **`QueueResource`** — Three-level **priority** queues with **concurrency** and optional
  *   **throttle**; each queue is a **Context** service with a `.layer`.
  * - **`ProcessStore`** — In-memory (or **Prisma**) **analytics**: execution rows + lifecycle
@@ -32,7 +32,7 @@
  * - Narrative architecture: `docs/PACKAGE-GUIDE.md`
  * - API tables (Process, Polling, Schedule, ProcessGroup): `docs/PROCESS-API.md`
  * - Runnable teaching scripts: `examples/README.md`
-* - Architecture contracts: `docs/plans/README.md` (especially plan **09** for process runtime)
+ * - Architecture contracts: `docs/plans/README.md` (especially plan **09** for process runtime)
  * - Agent-oriented repo map: `docs/AGENTS.md`
  *
  * ## Prisma subpath

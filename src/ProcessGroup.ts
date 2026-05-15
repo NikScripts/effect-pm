@@ -132,7 +132,12 @@ export const ProcessGroupQueueControlSchema = Schema.Literals([
 ] as const);
 
 /**
- * Queue controls that can be exposed locally or over a remote group contract.
+ * Queue controls included in a group contract.
+ *
+ * @remarks
+ * `enqueue` is part of the serializable capability model, but
+ * `ProcessGroup.remoteLayer` rejects remote enqueue-style methods until queues
+ * expose schema-backed item contracts.
  *
  * @public
  */
@@ -288,7 +293,12 @@ export type ProcessGroupErrors =
   | ProcessAlreadyRunningError
   | ProcessNotRunningError;
 
-/** @public */
+/**
+ * Remote group control failed because the network request, protocol response,
+ * or decoded payload was not usable.
+ *
+ * @public
+ */
 export class ProcessGroupRemoteControlError extends Data.TaggedError(
   "ProcessGroupRemoteControlError",
 )<{
@@ -296,7 +306,16 @@ export class ProcessGroupRemoteControlError extends Data.TaggedError(
   readonly status?: number;
 }> {}
 
-/** @public */
+/**
+ * Remote group control was requested for an operation that cannot be represented
+ * safely over the current group contract.
+ *
+ * @remarks
+ * Queue `add`, `enqueue`, `prioritize`, and `defer` intentionally fail with
+ * this error until schema-backed queue item contracts land.
+ *
+ * @public
+ */
 export class UnsupportedRemoteControlError extends Data.TaggedError(
   "UnsupportedRemoteControlError",
 )<{
@@ -305,7 +324,17 @@ export class UnsupportedRemoteControlError extends Data.TaggedError(
   readonly reason: string;
 }> {}
 
-/** @public */
+/**
+ * Error surface for injectable group services.
+ *
+ * @remarks
+ * Local group construction only produces {@link ProcessGroupErrors}; group
+ * services are widened so the same service key can be provided by
+ * {@link ProcessGroup.remoteLayer} without hiding network or unsupported-control
+ * failures as defects.
+ *
+ * @public
+ */
 export type ProcessGroupControlError =
   | ProcessGroupErrors
   | ProcessGroupRemoteControlError
@@ -897,6 +926,14 @@ export interface ProcessGroupServiceDefinition<
   readonly kind: "group";
   readonly entries: Entries;
   readonly contract: ProcessGroupContract<Id, Entries>;
+  /**
+   * Build the local group implementation.
+   *
+   * @remarks
+   * The local implementation has the narrower {@link ProcessGroupErrors} control
+   * surface; yielding the service key is widened to {@link ProcessGroupControlError}
+   * so remote providers can use the same key honestly.
+   */
   readonly make: Effect.Effect<
     TypedProcessGroup<Id, Entries>,
     ProcessGroupErrors,
@@ -1174,6 +1211,19 @@ const makeRemoteTypedProcessGroup = <
   };
 };
 
+/**
+ * Provide a {@link ProcessGroup.Service} key with a network-backed implementation
+ * from a {@link ProcessManager.Endpoint}.
+ *
+ * @remarks
+ * The caller still yields the same group service key, but controls are routed
+ * through the endpoint and require `HttpClient.HttpClient`. Process controls and
+ * queue pause/resume/clear/status are supported. Queue enqueue-style methods
+ * fail with {@link UnsupportedRemoteControlError} until queue item schemas are
+ * represented in the group contract.
+ *
+ * @public
+ */
 const remoteLayer = <
   Self,
   const Id extends string,

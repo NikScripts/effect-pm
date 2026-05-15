@@ -3,10 +3,11 @@
 A comprehensive process orchestration system built on [Effect](https://effect.website/) that manages **supervised processes** (polling cadence + schedule gate, including cron-backed gates) and **queues**, with type-safe dependency management.
 
 The runtime is organized around the **`ProcessGroup`** — a cohesive bundle of
-processes and queues that run together. A future top-level **`ProcessManager`**
-(not yet implemented) will coordinate multiple `ProcessGroup` instances across
-hosts via Effect RPC / HTTP. For now, use one `ProcessGroup` per logical
-bundle.
+processes and queues that run together. **`ProcessManager`** connects to a
+group's localhost control endpoint for typed remote controls, and
+**`ProcessGroup.remoteLayer`** can provide the same group service key from a
+`ProcessManager.Endpoint`. Multi-host coordination and remote queue enqueue are
+still planned follow-ups.
 
 ## Documentation map (read in any order)
 
@@ -84,7 +85,7 @@ const emailProcess = Process.make({
 
 `polling` controls repeat cadence inside an instance, and `schedule` controls whether an instance stays armed and continues running.
 
-### 3. Create ProcessGroup
+### 3. Create a `ProcessGroup`
 
 ```typescript
 import { ProcessGroup } from "@nikscripts/effect-pm";

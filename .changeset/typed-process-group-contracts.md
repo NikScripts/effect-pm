@@ -6,4 +6,6 @@ Add typed process group declarations, contracts, and remote management. Processe
 
 `ProcessGroup.remoteLayer` can now provide a group service from a `ProcessManager.Endpoint`. Group service/control errors are widened through `ProcessGroupControlError`, including the new `ProcessGroupRemoteControlError` and `UnsupportedRemoteControlError` exports; remote queue enqueue-style controls remain intentionally unsupported with `UnsupportedRemoteControlError` until schema-backed queue item contracts land.
 
+`ProcessManager.verifyContract` now compares the remote contract's group id, version, process ids, queue ids, and control sets against the local contract before reporting success.
+
 Also fixes `ProcessStore` execution ordering consistency and keyed queue `clear()` dedup cleanup.

@@ -116,6 +116,10 @@ export interface RemoteProcessManager<Contract extends AnyProcessGroupContract> 
     ProcessManagerRequestError,
     HttpClient.HttpClient
   >;
+  /**
+   * Fetch the remote group contract and compare group id, version, process ids,
+   * queue ids, and exposed control sets with the local contract.
+   */
   readonly verifyContract: Effect.Effect<void, ProcessManagerRequestError, HttpClient.HttpClient>;
   readonly process: (id: ProcessId<Contract>) => RemoteProcessControls;
   readonly queue: (id: QueueId<Contract>) => RemoteQueueControls;
@@ -297,6 +301,69 @@ const commandVoid = (
 ): Effect.Effect<void, ProcessManagerRequestError, HttpClient.HttpClient> =>
   Effect.asVoid(postControl(baseUrl, path));
 
+interface ContractEntity {
+  readonly id: string;
+  readonly controls: ReadonlyArray<string>;
+}
+
+const sameStringSet = (
+  left: ReadonlyArray<string>,
+  right: ReadonlyArray<string>,
+): boolean => {
+  if (left.length !== right.length) {
+    return false;
+  }
+  const sortedLeft = [...left].sort();
+  const sortedRight = [...right].sort();
+  return sortedLeft.every((value, index) => value === sortedRight[index]);
+};
+
+const findEntity = (
+  entities: ReadonlyArray<ContractEntity>,
+  id: string,
+): ContractEntity | undefined =>
+  entities.find((entity) => entity.id === id);
+
+const describeEntityMismatch = (
+  kind: "process" | "queue",
+  expected: ReadonlyArray<ContractEntity>,
+  remote: ReadonlyArray<ContractEntity>,
+): string | undefined => {
+  if (!sameStringSet(
+    expected.map((entity) => entity.id),
+    remote.map((entity) => entity.id),
+  )) {
+    return `Remote contract ${kind} ids did not match local contract`;
+  }
+
+  for (const expectedEntity of expected) {
+    const remoteEntity = findEntity(remote, expectedEntity.id);
+    if (remoteEntity === undefined) {
+      return `Remote contract ${kind} '${expectedEntity.id}' was missing`;
+    }
+    if (!sameStringSet(expectedEntity.controls, remoteEntity.controls)) {
+      return `Remote contract ${kind} '${expectedEntity.id}' controls did not match local contract`;
+    }
+  }
+
+  return undefined;
+};
+
+const describeContractMismatch = (
+  expected: AnyProcessGroupContract,
+  remote: typeof ProcessGroupContractSchema.Type,
+): string | undefined => {
+  if (remote.id !== expected.id) {
+    return `Remote contract id '${remote.id}' did not match '${expected.id}'`;
+  }
+  if (remote.version !== expected.version) {
+    return `Remote contract version '${remote.version}' did not match '${expected.version}'`;
+  }
+
+  return describeEntityMismatch("process", expected.processes, remote.processes)
+    ?? describeEntityMismatch("queue", expected.queues, remote.queues);
+};
+
 const makeRemoteProcessManager = <
   const Contract extends AnyProcessGroupContract,
 >(
@@ -321,9 +388,10 @@ const makeRemoteProcessManager = <
     fetchContract,
     verifyContract: Effect.gen(function* () {
       const remote = yield* fetchContract;
-      if (remote.id !== contract.id) {
+      const mismatch = describeContractMismatch(contract, remote);
+      if (mismatch !== undefined) {
         return yield* new ProcessManagerRequestError({
-          reason: `Remote contract id '${remote.id}' did not match '${contract.id}'`,
+          reason: mismatch,
         });
       }
     }),
