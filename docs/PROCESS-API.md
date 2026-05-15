@@ -196,8 +196,8 @@ CLI commands accept canonical ids such as
 `@repo/north-west/BillingGroup/SyncInvoices` and normalized suffix aliases such
 as `north-west/billing-group/sync-invoices` or `sync-invoices`. Ambiguous
 aliases fail with the minimum kebab-case suffix for each canonical candidate.
-The CLI supports `groups`, `ls`, process `start` / `stop` / `restart` / `now`,
-and queue `pause` / `resume` / `clear`.
+The CLI supports `groups`, `ls`, `status <target>`, `verify`, process
+`start` / `stop` / `restart` / `now`, and queue `pause` / `resume` / `clear`.
 Remote queue `add`, `enqueue`, `prioritize`, and `defer` remain unsupported.
 
 ---

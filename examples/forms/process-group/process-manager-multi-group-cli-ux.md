@@ -59,6 +59,24 @@ process  @repo/south-west/BillingGroup/SyncInvoices
 queue    @repo/south-west/BillingGroup/BillingEmailQueue
 ```
 
+Verify every configured group contract:
+
+```bash
+$ effect-pm verify
+OK contract verified for @repo/north-west/BillingGroup
+OK contract verified for @repo/south-west/BillingGroup
+```
+
+Read status by alias:
+
+```bash
+$ effect-pm status north-west/billing-group/sync-invoices
+{
+  "name": "@repo/north-west/BillingGroup/SyncInvoices",
+  "status": "stopped"
+}
+```
+
 Run a process by canonical id:
 
 ```bash
@@ -84,6 +102,9 @@ OK process @repo/north-west/BillingGroup/SyncInvoices run requested
 - Normalization applies to the whole id: case-insensitive comparison,
   punctuation-insensitive word casing (`SyncInvoices` ↔ `sync-invoices`), and
   suffix matching.
+- `groups`, `ls`, and `verify` operate across every configured group.
+- `status`, process commands, and queue commands accept one canonical id or
+  normalized suffix alias.
 - If one normalized target matches exactly one process or queue across all
   configured group contracts, the CLI can use that target.
 - If a target matches more than one process or queue, the CLI fails instead
@@ -92,7 +113,7 @@ OK process @repo/north-west/BillingGroup/SyncInvoices run requested
   kebab-case suffix the user can type for each candidate.
 - Display kind separately from ids. Use a `KIND` column, label, or accessible
   color fallback instead of encoding process/queue/group kind in the id string.
-- Every command verifies the remote contract before controlling a group and
+- Targeted commands verify the remote contract before controlling a group and
   surface drift as a checked control error.
 
 Example ambiguity:

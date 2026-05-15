@@ -559,6 +559,8 @@ Operator-facing command shape:
 ```bash
 effect-pm groups
 effect-pm ls
+effect-pm verify
+effect-pm status north-west/billing-group/sync-invoices
 effect-pm now @repo/north-west/BillingGroup/SyncInvoices
 effect-pm now north-west/billing-group/sync-invoices
 effect-pm pause south-west/billing-group/billing-email-queue
@@ -566,13 +568,16 @@ effect-pm pause south-west/billing-group/billing-email-queue
 
 Rules:
 
-- `groups` lists the configured group ids, optional aliases, and endpoints.
+- `groups` lists the configured group ids and endpoints.
+- `ls` lists all configured groups with their process and queue targets.
+- `verify` checks every configured remote contract.
+- `status <target>` reads process or queue status for a canonical id or
+  normalized suffix alias.
 - Canonical ids remain slash-separated Effect-style strings with kebab-case
   package segments and case-preserving service names, such as
   `@repo/north-west/BillingGroup/SyncInvoices`.
 - CLI aliases may normalize canonical ids into lowercase/kebab-case input such
   as `north-west/billing-group/sync-invoices`.
-- `ls` lists all configured groups with their process and queue targets.
 - Single-target commands accept one process or queue id. The id can be canonical
   or an alias resolved from the normalized full id.
 - Normalization applies to the whole id: case-insensitive comparison,
@@ -587,8 +592,8 @@ Rules:
   color fallback instead of encoding process/queue/group kind in the id string.
 - Diagnostics should include canonical group and target ids even when accepting
   shorter aliases.
-- Each command verifies the target group contract before issuing controls and
-  reports contract drift as a checked remote/control error.
+- Targeted commands verify the selected remote contract before issuing controls
+  and report contract drift as a checked remote/control error.
 
 The same registry should support config-backed layers later:
 
