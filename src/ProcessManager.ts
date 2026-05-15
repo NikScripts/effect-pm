@@ -9,7 +9,8 @@
  * @module ProcessManager
  */
 
-import { Context, Data, Effect, Layer, Schema } from "effect";
+import { Console, Context, Data, Effect, Layer, Schema } from "effect";
+import { Argument, Command } from "effect/unstable/cli";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import type { ControlResponse } from "./ControlService";
 import { ProcessGroupContractSchema } from "./ProcessGroup";
@@ -17,6 +18,10 @@ import type {
   ProcessGroupContract,
   ProcessGroupEntry,
 } from "./ProcessGroup";
+import {
+  resolveProcessManagerTarget,
+  type ProcessManagerTargetCandidate,
+} from "./ProcessManagerTargetResolver";
 
 type AnyProcessGroupContract = ProcessGroupContract<
   string,
@@ -101,6 +106,12 @@ export class ProcessManagerConnectionRegistry extends Context.Service<
   ProcessManagerConnectionRegistry,
   ProcessManagerConnectionRegistryService
 >()("@nikscripts/effect-pm/ProcessManager/ProcessManagerConnectionRegistry") {}
+
+/** @public */
+export interface ProcessManagerCliConfig {
+  readonly name?: string;
+  readonly version?: string;
+}
 
 /**
  * Remote controls for one process ID from a group contract.
@@ -499,6 +510,207 @@ const connectFromRegistry = <
     return makeRemoteProcessManager(baseUrl, source.contract);
   });
 
+const targetCandidatesFrom = (
+  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+): ReadonlyArray<ProcessManagerTargetCandidate> =>
+  groups.flatMap((group) => [
+    ...group.contract.processes.map((process) => ({
+      id: process.id,
+      kind: "process" as const,
+      groupId: group.id,
+    })),
+    ...group.contract.queues.map((queue) => ({
+      id: queue.id,
+      kind: "queue" as const,
+      groupId: group.id,
+    })),
+  ]);
+
+const managerFor = (
+  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  groupId: string,
+): Effect.Effect<
+  RemoteProcessManager<AnyProcessGroupContract>,
+  ProcessManagerConnectionError,
+  ProcessManagerConnectionRegistry
+> => {
+  const group = groups.find((candidate) => candidate.id === groupId);
+  if (group === undefined) {
+    return Effect.fail(
+      new ProcessManagerConnectionError({
+        groupId,
+        reason: `Group '${groupId}' is not registered in this CLI`,
+      }),
+    );
+  }
+  return connectFromRegistry(group);
+};
+
+const resolveCliTarget = (
+  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  input: string,
+  expectedKind: "process" | "queue",
+): Effect.Effect<ProcessManagerTargetCandidate, ProcessManagerConnectionError> => {
+  const resolution = resolveProcessManagerTarget(input, targetCandidatesFrom(groups));
+  if (resolution._tag === "Missing") {
+    return Effect.fail(
+      new ProcessManagerConnectionError({
+        groupId: "",
+        reason: `No process or queue target matched '${input}'`,
+      }),
+    );
+  }
+  if (resolution._tag === "Ambiguous") {
+    const candidates = resolution.candidates
+      .map(({ candidate, minimumSuffix }) =>
+        `${minimumSuffix} -> ${candidate.id}`
+      )
+      .join("\n");
+    return Effect.fail(
+      new ProcessManagerConnectionError({
+        groupId: "",
+        reason: `Ambiguous target '${input}'.\n${candidates}`,
+      }),
+    );
+  }
+  if (resolution.candidate.kind !== expectedKind) {
+    return Effect.fail(
+      new ProcessManagerConnectionError({
+        groupId: resolution.candidate.groupId,
+        reason: `Target '${input}' is a ${resolution.candidate.kind}, not a ${expectedKind}`,
+      }),
+    );
+  }
+  return Effect.succeed(resolution.candidate);
+};
+
+const runProcessCommand = (
+  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  input: string,
+  operation: "start" | "stop" | "restart" | "now",
+): Effect.Effect<
+  void,
+  ProcessManagerConnectionError | ProcessManagerRequestError,
+  ProcessManagerConnectionRegistry | HttpClient.HttpClient
+> =>
+  Effect.gen(function* () {
+    const target = yield* resolveCliTarget(groups, input, "process");
+    const manager = yield* managerFor(groups, target.groupId);
+    yield* manager.verifyContract;
+    const process = manager.process(target.id);
+    switch (operation) {
+      case "start":
+        yield* process.start;
+        break;
+      case "stop":
+        yield* process.stop;
+        break;
+      case "restart":
+        yield* process.restart;
+        break;
+      case "now":
+        yield* process.runImmediately;
+        break;
+    }
+    yield* Console.log(`OK process ${target.id} ${operation} requested`);
+  });
+
+const runQueueCommand = (
+  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  input: string,
+  operation: "pause" | "resume" | "clear",
+): Effect.Effect<
+  void,
+  ProcessManagerConnectionError | ProcessManagerRequestError,
+  ProcessManagerConnectionRegistry | HttpClient.HttpClient
+> =>
+  Effect.gen(function* () {
+    const target = yield* resolveCliTarget(groups, input, "queue");
+    const manager = yield* managerFor(groups, target.groupId);
+    yield* manager.verifyContract;
+    const queue = manager.queue(target.id);
+    if (operation === "pause") {
+      yield* queue.pause;
+    } else if (operation === "resume") {
+      yield* queue.resume;
+    } else {
+      yield* queue.clear;
+    }
+    yield* Console.log(`OK queue ${target.id} ${operation} requested`);
+  });
+
+const runGroupsCommand = (
+  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+): Effect.Effect<void, ProcessManagerConnectionError, ProcessManagerConnectionRegistry> =>
+  Effect.gen(function* () {
+    const registry = yield* ProcessManagerConnectionRegistry;
+    const lines: string[] = ["GROUP\tENDPOINT"];
+    for (const group of groups) {
+      const baseUrl = yield* registry.baseUrl(group.id);
+      lines.push(`${group.id}\t${baseUrl}`);
+    }
+    yield* Console.log(lines.join("\n"));
+  });
+
+const runListCommand = (
+  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+): Effect.Effect<void> =>
+  Console.log(
+    groups.map((group) => {
+      const processLines = group.contract.processes.map((process) =>
+        `process\t${process.id}`
+      );
+      const queueLines = group.contract.queues.map((queue) =>
+        `queue\t${queue.id}`
+      );
+      return [`GROUP ${group.id}`, "KIND\tID", ...processLines, ...queueLines].join("\n");
+    }).join("\n\n"),
+  );
+
+const makeCli = <
+  const Groups extends readonly ConnectionSource<AnyProcessGroupContract>[],
+>(
+  groups: Groups,
+  config: ProcessManagerCliConfig = {},
+) => {
+  const target = Argument.string("target");
+  const groupsCommand = Command.make("groups", {}, () => runGroupsCommand(groups));
+  const listCommand = Command.make("ls", {}, () => runListCommand(groups));
+  const processCommand = (
+    name: "start" | "stop" | "restart" | "now",
+    operation: "start" | "stop" | "restart" | "now",
+  ) =>
+    Command.make(name, { target }, ({ target }) =>
+      runProcessCommand(groups, target, operation)
+    );
+  const queueCommand = (name: "pause" | "resume" | "clear") =>
+    Command.make(name, { target }, ({ target }) =>
+      runQueueCommand(groups, target, name)
+    );
+
+  const root = Command.make(
+    "pm",
+    {},
+    () => Effect.logInfo(`${config.name ?? "ProcessManager CLI"}. Use --help for commands.`),
+  ).pipe(
+    Command.withSubcommands([
+      groupsCommand,
+      listCommand,
+      processCommand("start", "start"),
+      processCommand("stop", "stop"),
+      processCommand("restart", "restart"),
+      processCommand("now", "now"),
+      queueCommand("pause"),
+      queueCommand("resume"),
+      queueCommand("clear"),
+    ]),
+  );
+
+  return Command.runWith(root, {
+    version: config.version ?? "0.0.0",
+  });
+};
+
 const makeEndpoint = <
   Self,
   const Id extends string,
@@ -596,6 +808,7 @@ function connect(
  * @public
  */
 export const ProcessManager = {
+  cli: makeCli,
   connect,
   ConnectionRegistry: {
     layer: makeConnectionRegistryLayer,

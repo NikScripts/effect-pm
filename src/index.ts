@@ -90,6 +90,7 @@ export {
   ProcessManagerRequestError,
 } from "./ProcessManager";
 export type {
+  ProcessManagerCliConfig,
   ProcessManagerConnectionMap,
   ProcessManagerConnectionRegistryService,
   RemoteProcessManager,
