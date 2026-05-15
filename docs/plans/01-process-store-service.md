@@ -71,6 +71,14 @@ Leave room for:
 
 Keep the store event-first, but make reads first-class.
 
+Phase C refinement: do not grow this interface by adding one method for every
+runtime feature. The candidate list below is historical direction, not a mandate
+to implement all reads directly on `ProcessStoreInterface`. Prefer generic
+`events(query)`, generic runtime state/fact history, and typed projections owned
+by the runtime module. Keep `ProcessStore` as the public storage service name
+until a lower-level `RuntimeStorage` boundary is proven in both memory and
+Prisma implementations.
+
 Candidate surface:
 
 - `append(event)`

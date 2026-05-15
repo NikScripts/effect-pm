@@ -57,13 +57,23 @@ Primary references:
 This phase should come before richer analytics, streaming, dashboards, or
 mutable config.
 
-1. Define runtime state, facts, and storage vocabulary.
-2. Add an internal runtime observer for one low-risk runtime component.
-3. Add scoped listener support.
-4. Persist state changes/facts through the current store when available.
-5. Add typed projections over state history.
-6. Decide whether a lower-level storage dependency should be renamed or whether
-   `ProcessStore` remains the public service name.
+Use [11](./11-runtime-state-hooks-and-config.md) as the active implementation
+plan for this phase, and reconcile storage work with
+[10](./10-process-store-phase-one.md) before adding public store methods.
+
+1. Keep `ProcessStore` as the public storage service name for the first slice;
+   introduce `RuntimeObserver`, `RuntimeStateChange`, and `RuntimeFact` as
+   generic runtime vocabulary without renaming storage yet.
+2. Implement an internal runtime observer for `RunResource` first, because it is
+   a low-risk gate with no queue payloads, no schema work, and no background
+   workers.
+3. Add scoped observation/listener support around that observer.
+4. Persist generic state changes/facts through `ProcessStore` only after the
+   in-memory observer shape is proven.
+5. Add typed projections over generic state/fact history instead of adding one
+   store method per runtime feature.
+6. Revisit a public `RuntimeStorage` name only after the generic storage
+   contract is real in memory and Prisma implementations.
 
 Primary references:
 

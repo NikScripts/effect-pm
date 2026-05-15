@@ -17,6 +17,32 @@ with the generic state/fact storage model first. The useful parts of this plan
 are the current-state audit, memory/Prisma consistency requirements, and
 verification criteria.
 
+## Relationship to Phase C runtime state/facts
+
+Phase C should not start by renaming `ProcessStore` or by adding feature-specific
+store reads. Use this document as the source of truth for the current
+`ProcessStore` baseline:
+
+- `ProcessStoreInterface` currently has `append`, `appendBatch`,
+  `getProcessExecutions`, and `getProcessLifecycle`.
+- Queue event types exist, and `QueueResource` can write queue completion and
+  lifecycle events when a store is available.
+- The in-memory and Prisma stores must stay behaviorally aligned for ordering,
+  filtering, and decode policy.
+
+For the first Phase C runtime-state slice, keep `ProcessStore` as the public
+service name and introduce runtime observation as a generic layer above/beside
+the store. Do not add `getRunResourceState`, `getQueueState`,
+`getProcessStateMirror`, or similar one-method-per-feature APIs. Once a generic
+`RuntimeStateChange` / `RuntimeFact` stream is proven, this phase-one read plan
+can either:
+
+1. add `events(query)` for existing analytics events, or
+2. add generic runtime state/fact append/read methods to `ProcessStore`.
+
+Do not do both until the runtime observation shape has tests proving that memory
+and Prisma storage can represent the same records.
+
 ## Preflight: current code vs planned gaps
 
 Before implementing phase one, verify these facts against the source. If any
