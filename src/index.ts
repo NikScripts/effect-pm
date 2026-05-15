@@ -109,6 +109,11 @@ export type {
   ProcessGroupQueueEntries,
   ProcessGroupEntryRequirements,
   ProcessGroupQueueItem,
+  ProcessGroupProcessControl,
+  ProcessGroupQueueControl,
+  ProcessGroupProcessContract,
+  ProcessGroupQueueContract,
+  ProcessGroupContract,
   TypedProcessControls,
   TypedQueueControls,
   TypedProcessGroup,
@@ -120,6 +125,11 @@ export {
   ProcessNotFoundError,
   ProcessAlreadyRunningError,
   ProcessNotRunningError,
+  ProcessGroupProcessControlSchema,
+  ProcessGroupQueueControlSchema,
+  ProcessGroupProcessContractSchema,
+  ProcessGroupQueueContractSchema,
+  ProcessGroupContractSchema,
 } from "./ProcessGroup";
 
 // Types - Process

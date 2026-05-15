@@ -20,7 +20,7 @@
  * @module ProcessGroup
  */
 
-import { Clock, Context, Data, DateTime, Duration, Effect, FiberMap, Layer, Option, Ref, Scope } from "effect";
+import { Clock, Context, Data, DateTime, Duration, Effect, FiberMap, Layer, Option, Ref, Schema, Scope } from "effect";
 import type { Process, ProcessDefinition } from "./Process";
 import type { QueueHandle, QueueResourceDefinition } from "./QueueResource";
 import {
@@ -92,6 +92,126 @@ export type ProcessGroupEntryRequirements<
  */
 export type ProcessGroupQueueItem<Queue> =
   Queue extends QueueResourceDefinition<string, infer T, any, any> ? T : never;
+
+/**
+ * Runtime schema for process controls exposed by a group contract.
+ *
+ * @public
+ */
+export const ProcessGroupProcessControlSchema = Schema.Literals([
+  "start",
+  "stop",
+  "restart",
+  "runImmediately",
+  "status",
+] as const);
+
+/**
+ * Process controls that can be exposed locally or over a remote group contract.
+ *
+ * @public
+ */
+export type ProcessGroupProcessControl =
+  typeof ProcessGroupProcessControlSchema.Type;
+
+/**
+ * Runtime schema for queue controls exposed by a group contract.
+ *
+ * @public
+ */
+export const ProcessGroupQueueControlSchema = Schema.Literals([
+  "enqueue",
+  "pause",
+  "resume",
+  "clear",
+  "status",
+] as const);
+
+/**
+ * Queue controls that can be exposed locally or over a remote group contract.
+ *
+ * @public
+ */
+export type ProcessGroupQueueControl =
+  typeof ProcessGroupQueueControlSchema.Type;
+
+/**
+ * Runtime schema for process capability records in a group contract.
+ *
+ * @public
+ */
+export const ProcessGroupProcessContractSchema = Schema.Struct({
+  id: Schema.String,
+  kind: Schema.Literal("process"),
+  controls: Schema.Array(ProcessGroupProcessControlSchema),
+});
+
+/**
+ * Serializable process capability record for a typed ProcessGroup contract.
+ *
+ * @public
+ */
+export interface ProcessGroupProcessContract<out Id extends string> {
+  readonly id: Id;
+  readonly kind: "process";
+  readonly controls: ReadonlyArray<ProcessGroupProcessControl>;
+}
+
+/**
+ * Runtime schema for queue capability records in a group contract.
+ *
+ * @public
+ */
+export const ProcessGroupQueueContractSchema = Schema.Struct({
+  id: Schema.String,
+  kind: Schema.Literal("queue"),
+  controls: Schema.Array(ProcessGroupQueueControlSchema),
+});
+
+/**
+ * Serializable queue capability record for a typed ProcessGroup contract.
+ *
+ * @public
+ */
+export interface ProcessGroupQueueContract<out Id extends string> {
+  readonly id: Id;
+  readonly kind: "queue";
+  readonly controls: ReadonlyArray<ProcessGroupQueueControl>;
+}
+
+/**
+ * Runtime schema for a typed ProcessGroup contract.
+ *
+ * @public
+ */
+export const ProcessGroupContractSchema = Schema.Struct({
+  id: Schema.String,
+  kind: Schema.Literal("group"),
+  version: Schema.Literal("v1"),
+  processes: Schema.Array(ProcessGroupProcessContractSchema),
+  queues: Schema.Array(ProcessGroupQueueContractSchema),
+});
+
+/**
+ * Serializable contract exported by a typed ProcessGroup for remote managers,
+ * control services, and UI clients.
+ *
+ * @public
+ */
+export interface ProcessGroupContract<
+  out Id extends string,
+  Entries extends readonly ProcessGroupEntry[],
+> {
+  readonly id: Id;
+  readonly kind: "group";
+  readonly version: "v1";
+  readonly processes: ReadonlyArray<
+    ProcessGroupProcessContract<ProcessGroupProcessEntries<Entries>["id"]>
+  >;
+  readonly queues: ReadonlyArray<
+    ProcessGroupQueueContract<ProcessGroupQueueEntries<Entries>["id"]>
+  >;
+}
 
 /**
  * Process runtime status.
@@ -242,6 +362,7 @@ export interface TypedProcessGroup<
   Entries extends readonly ProcessGroupEntry[],
 > {
   readonly id: Id;
+  readonly contract: ProcessGroupContract<Id, Entries>;
   readonly start: <P extends ProcessGroupProcessEntries<Entries>>(
     process: P,
   ) => Effect.Effect<void, ProcessGroupErrors, ProcessGroupEntryRequirements<Entries>>;
@@ -279,6 +400,7 @@ export interface ProcessGroupDefinition<
   readonly id: Id;
   readonly kind: "group";
   readonly entries: Entries;
+  readonly contract: ProcessGroupContract<Id, Entries>;
   readonly make: Effect.Effect<
     TypedProcessGroup<Id, Entries>,
     ProcessGroupErrors,
@@ -567,6 +689,21 @@ export const makeProcessGroup = <
   });
 
 const processGroupKind = "group" as const;
+const processGroupContractVersion = "v1" as const;
+const processGroupProcessControls: ReadonlyArray<ProcessGroupProcessControl> = [
+  "start",
+  "stop",
+  "restart",
+  "runImmediately",
+  "status",
+];
+const processGroupQueueControls: ReadonlyArray<ProcessGroupQueueControl> = [
+  "enqueue",
+  "pause",
+  "resume",
+  "clear",
+  "status",
+];
 
 const isProcessGroupProcessEntry = (
   entry: ProcessGroupEntry,
@@ -576,6 +713,40 @@ const isProcessGroupQueueEntry = (
   entry: ProcessGroupEntry,
 ): entry is QueueResourceDefinition<string, any, any, any> =>
   entry.kind === "queue";
+
+const makeProcessContract = <P extends ProcessDefinition<string, unknown>>(
+  process: P,
+): ProcessGroupProcessContract<P["id"]> => ({
+  id: process.id,
+  kind: "process",
+  controls: processGroupProcessControls,
+});
+
+const makeQueueContract = <Q extends QueueResourceDefinition<string, any, any, any>>(
+  queue: Q,
+): ProcessGroupQueueContract<Q["id"]> => ({
+  id: queue.id,
+  kind: "queue",
+  controls: processGroupQueueControls,
+});
+
+const makeProcessGroupContract = <
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+>(
+  id: Id,
+  entries: Entries,
+): ProcessGroupContract<Id, Entries> => ({
+  id,
+  kind: processGroupKind,
+  version: processGroupContractVersion,
+  processes: entries
+    .filter(isProcessGroupProcessEntry)
+    .map(makeProcessContract),
+  queues: entries
+    .filter(isProcessGroupQueueEntry)
+    .map(makeQueueContract),
+});
 
 const makeTypedProcessGroup = <
   const Id extends string,
@@ -589,6 +760,7 @@ const makeTypedProcessGroup = <
   TagIdentifier<ProcessGroupQueueEntries<Entries>["tag"]>
 > =>
   Effect.gen(function* () {
+    const contract = makeProcessGroupContract(id, entries);
     const processes = entries.filter(isProcessGroupProcessEntry);
     const queues = entries.filter(isProcessGroupQueueEntry);
     const queueTags = queues.map(
@@ -616,6 +788,7 @@ const makeTypedProcessGroup = <
 
     return {
       id,
+      contract,
       start: (process) => legacy.start(process.id),
       stop: (process) => legacy.stop(process.id),
       restart: (process) => legacy.restart(process.id),
@@ -659,12 +832,14 @@ const defineProcessGroup = <
   entries: Entries,
 ): ProcessGroupDefinition<Id, Entries> => {
   const base = Context.Service<unknown, TypedProcessGroup<Id, Entries>>()(id);
+  const contract = makeProcessGroupContract(id, entries);
   const make = makeTypedProcessGroup(id, entries);
   const layer = Layer.effect(base)(make);
   return Object.assign(base, {
     id,
     kind: processGroupKind,
     entries,
+    contract,
     make,
     layer,
   });
@@ -688,12 +863,14 @@ export const ProcessGroup = {
     entries: Entries,
   ) => {
     const base = Context.Service<Self, TypedProcessGroup<Id, Entries>>()(id);
+    const contract = makeProcessGroupContract(id, entries);
     const make = makeTypedProcessGroup(id, entries);
     const layer = Layer.effect(base)(make);
     return Object.assign(base, {
       id,
       kind: processGroupKind,
       entries,
+      contract,
       make,
       layer,
     });

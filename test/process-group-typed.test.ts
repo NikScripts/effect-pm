@@ -1,6 +1,11 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Duration, Effect, Ref } from "effect";
-import { Process, ProcessGroup, QueueResource } from "../src";
+import { Duration, Effect, Ref, Schema } from "effect";
+import {
+  Process,
+  ProcessGroup,
+  ProcessGroupContractSchema,
+  QueueResource,
+} from "../src";
 import { provideLayer } from "../src/provideLayer.js";
 
 interface Email {
@@ -31,10 +36,19 @@ const TypeGroup = ProcessGroup.define("@test/TypeGroup", [
 
 export const processGroupTypeChecks = Effect.gen(function* () {
   const group = yield* TypeGroup.make;
+  const acceptProcessId = (
+    _id: typeof TypeGroup.contract.processes[number]["id"],
+  ) => Effect.void;
+  const acceptQueueId = (
+    _id: typeof TypeGroup.contract.queues[number]["id"],
+  ) => Effect.void;
 
   yield* group.start(TypeProcess);
   yield* group.queue(TypeEmailQueue).enqueue({ to: "ops@example.com" });
   yield* group.queue(TypeInvoiceQueue).enqueue({ invoiceId: "inv_123" });
+  yield* acceptProcessId(TypeProcess.id);
+  yield* acceptQueueId(TypeEmailQueue.id);
+  yield* acceptQueueId(TypeInvoiceQueue.id);
 
   if (false) {
     // @ts-expect-error queues are not valid process lifecycle targets
@@ -45,6 +59,12 @@ export const processGroupTypeChecks = Effect.gen(function* () {
 
     // @ts-expect-error invoice jobs cannot be enqueued into the email queue
     yield* group.queue(TypeEmailQueue).enqueue({ invoiceId: "inv_123" });
+
+    // @ts-expect-error queue IDs are not valid process contract IDs
+    yield* acceptProcessId(TypeEmailQueue.id);
+
+    // @ts-expect-error process IDs are not valid queue contract IDs
+    yield* acceptQueueId(TypeProcess.id);
   }
 });
 
@@ -83,6 +103,43 @@ describe("ProcessGroup.define", () => {
         const group = yield* BillingGroup.make;
 
         expect(group.id).toBe("@test/TypedDirectBillingGroup");
+        expect(group.contract).toEqual(BillingGroup.contract);
+        expect(BillingGroup.contract).toEqual({
+          id: "@test/TypedDirectBillingGroup",
+          kind: "group",
+          version: "v1",
+          processes: [
+            {
+              id: SyncProcess.id,
+              kind: "process",
+              controls: ["start", "stop", "restart", "runImmediately", "status"],
+            },
+          ],
+          queues: [
+            {
+              id: EmailQueue.id,
+              kind: "queue",
+              controls: ["enqueue", "pause", "resume", "clear", "status"],
+            },
+          ],
+        });
+        expect(
+          Schema.decodeUnknownSync(ProcessGroupContractSchema)(
+            BillingGroup.contract,
+          ),
+        ).toEqual(BillingGroup.contract);
+        expect(() =>
+          Schema.decodeUnknownSync(ProcessGroupContractSchema)({
+            ...BillingGroup.contract,
+            queues: [
+              {
+                id: EmailQueue.id,
+                kind: "queue",
+                controls: ["not-a-control"],
+              },
+            ],
+          }),
+        ).toThrow();
 
         yield* group.queue(EmailQueue).enqueue({ to: "ops@example.com" });
         const queue = yield* EmailQueue;
@@ -122,6 +179,9 @@ describe("ProcessGroup.define", () => {
 
       yield* Effect.gen(function* () {
         const group = yield* BillingGroup;
+
+        expect(BillingGroup.contract.id).toBe("@test/TypedServiceBillingGroup");
+        expect(group.contract).toEqual(BillingGroup.contract);
 
         yield* group.process(SyncProcess).runImmediately;
         yield* group.queue(EmailQueue).enqueue({ to: "team@example.com" });
