@@ -66,7 +66,7 @@
     "version": "changeset version",
     "release": "npm run build && changeset publish",
     "example": "tsx examples/scenarios/full-process-group-with-queues-and-control-cli.ts",
-    "example:typed-process-group": "tsx examples/forms/process-group/process-group-make-entries.ts && tsx examples/forms/process-group/process-group-service.ts && tsx examples/forms/process-group/process-group-contract-http.ts && tsx examples/forms/process-group/process-manager-endpoint-service.ts && tsx examples/forms/process-group/process-group-remote-layer.ts",
+    "example:typed-process-group": "tsx examples/forms/process-group/process-group-make-entries.ts && tsx examples/forms/process-group/process-group-service.ts && tsx examples/forms/process-group/process-group-contract-http.ts && tsx examples/forms/process-group/process-manager-endpoint-service.ts && tsx examples/forms/process-group/process-group-remote-layer.ts && tsx examples/forms/process-group/process-group-remote-contract-drift.ts",
     "example:queue-resource": "tsx examples/forms/queue/queue-resource-priority-retry.ts",
     "example:process-patterns": "tsx examples/forms/polling/polling-accelerating.ts && tsx examples/forms/polling/schedule-delayed-start.ts",
     "example:process-supervisor-patterns": "tsx examples/forms/polling/polling-accelerating.ts && tsx examples/forms/polling/schedule-delayed-start.ts",
@@ -98,6 +98,7 @@
     "example:form:process-group-contract-http": "tsx examples/forms/process-group/process-group-contract-http.ts",
     "example:form:process-manager-endpoint-service": "tsx examples/forms/process-group/process-manager-endpoint-service.ts",
     "example:form:process-group-remote-layer": "tsx examples/forms/process-group/process-group-remote-layer.ts",
+    "example:form:process-group-remote-contract-drift": "tsx examples/forms/process-group/process-group-remote-contract-drift.ts",
     "prepare": "effect-language-service patch"
   },
   "dependencies": {
