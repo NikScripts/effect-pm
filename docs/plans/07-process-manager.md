@@ -539,6 +539,9 @@ const RemoteGroupsLive = ProcessManager.ConnectionRegistry.layer(
   },
 );
 
+const billing = yield* ProcessManager.connect(BillingGroup);
+yield* billing.verifyContract;
+
 yield* ProcessManager.cli([BillingGroup, StripeGroup] as const).pipe(
   Effect.provide(RemoteGroupsLive),
 );

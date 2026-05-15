@@ -13,9 +13,11 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 3. **Orchestration** — a **`ProcessGroup`** bundles processes + queue tags, tracks status, forks schedule drivers, and exposes **localhost HTTP control** + a **CLI**.
 4. **Remote control** — **`ProcessManager`** connects to a group contract over HTTP, and **`ProcessGroup.remoteLayer`** can provide the same injectable group service key through a `ProcessManager.Endpoint`.
 
-The current remote slice targets one group endpoint at a time. Multi-group CLI
-UX is planned around `ProcessManager.cli([GroupA, GroupB] as const)` plus a
-typed connection registry; see
+The current remote slice targets one group endpoint at a time.
+`ProcessManager.ConnectionRegistry.layer` provides registry-backed group URLs so
+application code can `yield* ProcessManager.connect(Group)`. Multi-group CLI UX
+is planned around `ProcessManager.cli([GroupA, GroupB] as const)` on top of that
+same registry; see
 [examples/forms/process-group/process-manager-multi-group-cli-ux.md](../examples/forms/process-group/process-manager-multi-group-cli-ux.md)
 for the expected operator flow. Multi-host coordination, `RemoteService`, and
 remote queue enqueue stay planned until schema-backed queue item contracts land.

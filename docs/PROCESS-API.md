@@ -157,12 +157,35 @@ Stopping interrupts the schedule driver fiber and child instances; removing/clos
 
 | Member | Role |
 |--------|------|
+| `ProcessManager.ConnectionRegistry.layer([Group], { [Group.id]: url })` | Provide registry-backed remote group URLs as an Effect layer. |
+| `ProcessManager.connect(Group)` | Build a typed remote client by reading the group URL from `ProcessManagerConnectionRegistry`. |
 | `ProcessManager.connect(Group, { baseUrl })` | Build a typed remote client from a group service/definition. |
 | `ProcessManager.connect({ baseUrl, contract })` | Build from a raw contract for generated or contract-only clients. |
 | `ProcessManager.Endpoint<Self>()(Group, { baseUrl })` | Injectable endpoint service that yields the remote manager. |
 | `manager.verifyContract` | Fetches `GET /contract` and compares group id, version, process ids, queue ids, and control sets. |
 | `manager.process(id)` | Remote process start/stop/restart/run/status controls. |
 | `manager.queue(id)` | Remote queue pause/resume/clear/status controls. |
+
+Registry-backed connections are the preferred shape for application wiring:
+
+```typescript
+const RemoteGroupsLive = ProcessManager.ConnectionRegistry.layer(
+  [BillingGroup] as const,
+  {
+    [BillingGroup.id]: "http://127.0.0.1:32130",
+  },
+);
+
+const program = Effect.gen(function* () {
+  const billing = yield* ProcessManager.connect(BillingGroup);
+  yield* billing.verifyContract;
+  yield* billing.process(SyncBilling.id).runImmediately;
+}).pipe(Effect.provide(RemoteGroupsLive));
+```
+
+This same registry is the planned foundation for
+`ProcessManager.cli([BillingGroup, StripeGroup] as const)`, where the CLI can
+derive valid group ids and command targets from the group tuple.
 
 ---
 
