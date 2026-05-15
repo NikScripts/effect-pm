@@ -546,6 +546,21 @@ const managerFor = (
   return connectFromRegistry(group);
 };
 
+const formatAmbiguousTarget = (
+  input: string,
+  candidates: ReadonlyArray<{
+    readonly candidate: ProcessManagerTargetCandidate;
+    readonly minimumSuffix: string;
+  }>,
+): string => {
+  const rows = candidates
+    .map(({ candidate, minimumSuffix }) =>
+      `${candidate.kind}\t[${minimumSuffix}]\t${candidate.id}`
+    )
+    .join("\n");
+  return `Ambiguous target '${input}'.\nKIND\tTYPE THIS MINIMUM\tCANONICAL ID\n${rows}`;
+};
+
 const resolveCliTarget = (
   groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
   input: string,
@@ -561,15 +576,10 @@ const resolveCliTarget = (
     );
   }
   if (resolution._tag === "Ambiguous") {
-    const candidates = resolution.candidates
-      .map(({ candidate, minimumSuffix }) =>
-        `${candidate.kind}\t[${minimumSuffix}]\t${candidate.id}`
-      )
-      .join("\n");
     return Effect.fail(
       new ProcessManagerConnectionError({
         groupId: "",
-        reason: `Ambiguous target '${input}'.\nKIND\tTYPE THIS MINIMUM\tCANONICAL ID\n${candidates}`,
+        reason: formatAmbiguousTarget(input, resolution.candidates),
       }),
     );
   }
@@ -596,14 +606,9 @@ const targetResolutionError = (
     });
   }
   if (resolution._tag === "Ambiguous") {
-    const candidates = resolution.candidates
-      .map(({ candidate, minimumSuffix }) =>
-        `${candidate.kind}\t[${minimumSuffix}]\t${candidate.id}`
-      )
-      .join("\n");
     return new ProcessManagerConnectionError({
       groupId: "",
-      reason: `Ambiguous target '${input}'.\nKIND\tTYPE THIS MINIMUM\tCANONICAL ID\n${candidates}`,
+      reason: formatAmbiguousTarget(input, resolution.candidates),
     });
   }
   return undefined;
@@ -639,6 +644,8 @@ const runProcessCommand = (
   Effect.gen(function* () {
     const target = yield* resolveCliTarget(groups, input, "process");
     const manager = yield* managerFor(groups, target.groupId);
+    // CLI controls are contract-first: verify before every mutation/read so
+    // stale imported contracts fail before the wrong remote operation runs.
     yield* manager.verifyContract;
     const process = manager.process(target.id);
     switch (operation) {
@@ -670,6 +677,7 @@ const runQueueCommand = (
   Effect.gen(function* () {
     const target = yield* resolveCliTarget(groups, input, "queue");
     const manager = yield* managerFor(groups, target.groupId);
+    // Keep queue controls behind the same drift check as process controls.
     yield* manager.verifyContract;
     const queue = manager.queue(target.id);
     if (operation === "pause") {
