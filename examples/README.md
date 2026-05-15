@@ -64,7 +64,7 @@ npx tsx examples/<file>.ts
 | File | Teaches |
 |------|---------|
 | [`example.ts`](./example.ts) | End-to-end **ProcessGroup.make**, **queues**, **Process.make** (polling + schedule inlined), **ProcessStore.layer**, **serve** + **awaitShutdown**, **Layer.mergeAll** for root `provide`. |
-| [`typed-process-group.ts`](./typed-process-group.ts) | **`Process.Service`**, **`QueueResource.Service`**, **`ProcessGroup.make(id, entries)`**, **`ProcessGroup.Service`**, typed queue controls, and **`ControlService` `GET /contract`**. |
+| [`typed-process-group.ts`](./typed-process-group.ts) | **`Process.Service`**, **`QueueResource.Service`**, **`ProcessGroup.make(id, entries)`**, **`ProcessGroup.Service`**, typed queue controls, **`ControlService` `GET /contract`**, and remote **`ProcessManager.connect`**. |
 | [`queue-resource.ts`](./queue-resource.ts) | Focused **QueueResource.Service** example: priority enqueue, dedup key, handler-driven retry, and effectful status properties. |
 | [`cli.ts`](./cli.ts) | Wiring **`runCli`** with port from `HOME_SERVER_PORT` (must match the demo). |
 | [`schedule-control-basics.ts`](./schedule-control-basics.ts) | Minimal schedule entry patterns: one-shot starts, bounded windows, and `ProcessSchedule.define` composition. |

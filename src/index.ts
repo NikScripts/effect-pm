@@ -22,8 +22,8 @@
  *   events for processes.
  * - **`RunResource`**, **`HttpClientRunGate`**, **`HttpApiResource`**, **`Resource`** —
  *   Optional building blocks for **gated** HTTP and reusable resource patterns.
- * - **`ControlService`** + **`createCli` / `runCli`** — Local **control plane** for ops
- *   (used by the examples CLI).
+ * - **`ControlService`** + **`ProcessManager`** + **`createCli` / `runCli`** — Local and
+ *   remote **control plane** helpers for ops (used by the examples CLI).
  * - **`disarmedIdleSleep` exports** — Compatibility helpers for custom schedule layers and
  *   migration tooling.
  *
@@ -81,6 +81,14 @@ export { ControlService } from "./ControlService";
 
 // CLI
 export { createCli, runCli } from "./cli";
+
+// Process Manager
+export { ProcessManager, ProcessManagerRequestError } from "./ProcessManager";
+export type {
+  RemoteProcessManager,
+  RemoteProcessControls,
+  RemoteQueueControls,
+} from "./ProcessManager";
 
 // Process Store
 export {
