@@ -567,11 +567,13 @@ const targetCandidatesFrom = (
       id: process.id,
       kind: "process" as const,
       groupId: group.id,
+      controls: process.controls,
     })),
     ...group.contract.queues.map((queue) => ({
       id: queue.id,
       kind: "queue" as const,
       groupId: group.id,
+      controls: queue.controls,
     })),
   ]);
 
@@ -655,6 +657,24 @@ const resolveCliTarget = (
   return Effect.succeed(resolution.candidate);
 };
 
+const assertTargetControl = (
+  target: ProcessManagerTargetCandidate,
+  control: string,
+): Effect.Effect<void, ProcessManagerConnectionError> =>
+  target.controls.includes(control)
+    ? Effect.void
+    : Effect.fail(
+        new ProcessManagerConnectionError({
+          groupId: target.groupId,
+          reason: `${target.kind} '${target.id}' does not expose '${control}'`,
+        }),
+      );
+
+const processControlFor = (
+  operation: "start" | "stop" | "restart" | "now",
+): "start" | "stop" | "restart" | "runImmediately" =>
+  operation === "now" ? "runImmediately" : operation;
+
 const targetResolutionError = (
   input: string,
   groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
@@ -704,6 +724,7 @@ const runProcessCommand = (
 > =>
   Effect.gen(function* () {
     const target = yield* resolveCliTarget(groups, input, "process");
+    yield* assertTargetControl(target, processControlFor(operation));
     const manager = yield* managerFor(groups, target.groupId);
     // CLI controls are contract-first: verify before every mutation/read so
     // stale imported contracts fail before the wrong remote operation runs.
@@ -737,6 +758,7 @@ const runQueueCommand = (
 > =>
   Effect.gen(function* () {
     const target = yield* resolveCliTarget(groups, input, "queue");
+    yield* assertTargetControl(target, operation);
     const manager = yield* managerFor(groups, target.groupId);
     // Keep queue controls behind the same drift check as process controls.
     yield* manager.verifyContract;
@@ -762,6 +784,7 @@ const runStatusCommand = (
 > =>
   Effect.gen(function* () {
     const target = yield* resolveCliAnyTarget(groups, input);
+    yield* assertTargetControl(target, "status");
     const manager = yield* managerFor(groups, target.groupId);
     yield* manager.verifyContract;
     const response = target.kind === "process"

@@ -14,6 +14,7 @@ export interface ProcessManagerTargetCandidate {
   readonly id: string;
   readonly kind: "process" | "queue";
   readonly groupId: string;
+  readonly controls: ReadonlyArray<string>;
 }
 
 /** Exactly one process or queue matched the user's input. */

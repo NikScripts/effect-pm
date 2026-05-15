@@ -10,16 +10,19 @@ const candidates: ReadonlyArray<ProcessManagerTargetCandidate> = [
     id: "@repo/NorthWest/BillingGroup/SyncInvoices",
     kind: "process",
     groupId: "@repo/NorthWest/BillingGroup",
+    controls: ["runImmediately", "status"],
   },
   {
     id: "@repo/SouthWest/BillingGroup/SyncInvoices",
     kind: "process",
     groupId: "@repo/SouthWest/BillingGroup",
+    controls: ["runImmediately", "status"],
   },
   {
     id: "@repo/NorthWest/BillingGroup/BillingEmailQueue",
     kind: "queue",
     groupId: "@repo/NorthWest/BillingGroup",
+    controls: ["pause", "resume", "clear", "status"],
   },
 ];
 
@@ -92,11 +95,13 @@ describe("ProcessManager target resolver", () => {
         id: "@repo/NorthWest/BillingGroup/SyncInvoices",
         kind: "process",
         groupId: "@repo/NorthWest/BillingGroup",
+        controls: ["runImmediately", "status"],
       },
       {
         id: "@repo/NorthWest/BillingGroup/SyncInvoices",
         kind: "process",
         groupId: "@repo/Other/BillingGroup",
+        controls: ["runImmediately", "status"],
       },
     ];
     const result = resolveProcessManagerTarget("sync-invoices", duplicated);
