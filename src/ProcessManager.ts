@@ -666,7 +666,8 @@ const assertTargetControl = (
     : Effect.fail(
         new ProcessManagerConnectionError({
           groupId: target.groupId,
-          reason: `${target.kind} '${target.id}' does not expose '${control}'`,
+          reason:
+            `${target.kind} '${target.id}' does not expose '${control}'. Available controls: ${target.controls.join(", ") || "(none)"}`,
         }),
       );
 
