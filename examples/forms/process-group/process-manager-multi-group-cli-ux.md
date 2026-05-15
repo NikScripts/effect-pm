@@ -9,12 +9,12 @@ connection registry.
 
 ```typescript
 class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
-  "@app/BillingGroup",
+  "@repo/north-west/billing/BillingGroup",
   [SyncInvoices, BillingEmailQueue] as const,
 ) {}
 
 class SupportGroup extends ProcessGroup.Service<SupportGroup>()(
-  "@app/SupportGroup",
+  "@repo/south-west/billing/SupportGroup",
   [PullTickets, SupportEmailQueue] as const,
 ) {}
 
@@ -37,51 +37,71 @@ List configured groups first:
 
 ```bash
 $ effect-pm groups
-GROUP                 ENDPOINT
-@app/BillingGroup     http://127.0.0.1:32130
-@app/SupportGroup     http://127.0.0.1:32131
+GROUP                                  ENDPOINT
+@repo/north-west/billing/BillingGroup  http://127.0.0.1:32130
+@repo/south-west/billing/SupportGroup  http://127.0.0.1:32131
 ```
 
-List one group explicitly:
+List all configured groups:
 
 ```bash
-$ effect-pm --group @app/BillingGroup ls
-PROCESSES
-@app/SyncInvoices     stopped
+$ effect-pm ls
+GROUP @repo/north-west/billing/BillingGroup
 
-QUEUES
-@app/BillingEmailQueue     0 pending
+KIND     ID
+process  @repo/north-west/billing/SyncInvoices
+queue    @repo/north-west/billing/BillingEmailQueue
+
+GROUP @repo/south-west/billing/SupportGroup
+
+KIND     ID
+process  @repo/south-west/billing/PullTickets
+queue    @repo/south-west/billing/SupportEmailQueue
 ```
 
-Run a process in one group:
+Run a process by canonical id:
 
 ```bash
-$ effect-pm --group @app/BillingGroup now @app/SyncInvoices
-OK process @app/SyncInvoices run requested in @app/BillingGroup
+$ effect-pm now @repo/north-west/billing/SyncInvoices
+OK process @repo/north-west/billing/SyncInvoices run requested
 ```
 
-Pause a queue in another group:
+Run the same process by a unique suffix alias:
 
 ```bash
-$ effect-pm --group @app/SupportGroup pause @app/SupportEmailQueue
-OK queue @app/SupportEmailQueue paused in @app/SupportGroup
+$ effect-pm now north-west/billing/sync-invoices
+OK process @repo/north-west/billing/SyncInvoices run requested
 ```
 
 ## Ambiguity rules
 
-- When more than one group is configured, commands that target a process or queue
-  must include `--group <group-id>` unless the target id is globally unique and
-  the CLI has already fetched every contract.
-- If a process or queue id appears in more than one group, the CLI must fail
-  with a clear ambiguity message instead of guessing.
-- `--all` is only for read-only aggregate commands such as `groups`, `ls`, and
-  status summaries. Mutating commands such as `start`, `stop`, `now`, `pause`,
-  `resume`, and `clear` must target exactly one group.
-- Group ids come from the imported group service contracts. Optional human
-  aliases can be config sugar, but diagnostics should always include the
-  canonical group id.
+- Commands accept canonical ids and aliases resolved from normalized full ids.
+- Normalization applies to the whole id: case-insensitive comparison,
+  punctuation-insensitive word casing (`SyncInvoices` ↔ `sync-invoices`), and
+  suffix matching.
+- If one normalized target matches exactly one process or queue across all
+  configured group contracts, the CLI can use that target.
+- If a target matches more than one process or queue, the CLI must fail instead
+  of guessing.
+- Ambiguity diagnostics should show every canonical candidate and visually
+  emphasize the shortest unique suffix the user can type for each candidate.
+  Use terminal bold/color when available; fall back to brackets in plain text.
 - Every command should verify the remote contract before controlling a group and
   surface drift as a checked control error.
+
+Example ambiguity:
+
+```bash
+$ effect-pm now sync-invoices
+Ambiguous target "sync-invoices".
+
+KIND     TYPE THIS MINIMUM                    CANONICAL ID
+process  [north-west/billing/sync-invoices]   @repo/north-west/billing/SyncInvoices
+process  [south-west/billing/sync-invoices]   @repo/south-west/billing/SyncInvoices
+```
+
+In a color terminal, render the `TYPE THIS MINIMUM` column in bold or an accent
+color. The brackets are only the no-color fallback.
 
 ## Non-goals for this UX slice
 

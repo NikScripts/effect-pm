@@ -551,23 +551,28 @@ Expected operator-facing command shape:
 
 ```bash
 effect-pm groups
-effect-pm --group @app/BillingGroup ls
-effect-pm --group @app/BillingGroup now @app/StripeSync
-effect-pm --group @app/StripeGroup pause @app/StripeWebhookQueue
-effect-pm --all ls
+effect-pm ls
+effect-pm now @repo/north-west/billing/SyncInvoices
+effect-pm now north-west/billing/sync-invoices
+effect-pm pause south-west/billing/support-email-queue
 ```
 
 Rules:
 
 - `groups` lists the configured group ids, optional aliases, and endpoints.
-- Single-target commands require `--group <group-id>` when more than one group
-  is configured, unless the target id is globally unique after contract fetch.
-- If a process or queue id exists in multiple contracts, the CLI must fail with
-  an ambiguity message instead of choosing a group.
-- `--all` is read-only. It can aggregate `ls`, group health, and status
-  summaries, but mutating commands (`start`, `stop`, `restart`, `now`, `pause`,
-  `resume`, `clear`) must target exactly one group.
-- Diagnostics should include canonical group ids even when a user configured
+- `ls` lists all configured groups with their process and queue targets.
+- Single-target commands accept one process or queue id. The id can be canonical
+  or an alias resolved from the normalized full id.
+- Normalization applies to the whole id: case-insensitive comparison,
+  punctuation-insensitive word casing (`SyncInvoices` ↔ `sync-invoices`), and
+  suffix matching.
+- If a target resolves to exactly one process or queue across all fetched
+  contracts, the CLI may issue the command without a separate group argument.
+- If a target resolves to multiple candidates, the CLI must fail and show every
+  candidate plus the shortest unique suffix needed to disambiguate. Use terminal
+  bold/color for the shortest unique suffix when available, and a plain text
+  fallback such as brackets when color is disabled.
+- Diagnostics should include canonical group and target ids even when accepting
   shorter aliases.
 - Each command should verify the target group contract before issuing controls
   and report contract drift as a checked remote/control error.
