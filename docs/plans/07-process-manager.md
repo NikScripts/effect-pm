@@ -552,9 +552,9 @@ Expected operator-facing command shape:
 ```bash
 effect-pm groups
 effect-pm ls
-effect-pm now @repo/north-west/billing/SyncInvoices
-effect-pm now north-west/billing/sync-invoices
-effect-pm pause south-west/billing/support-email-queue
+effect-pm now @repo/north-west/billing-group/SyncInvoices
+effect-pm now north-west/billing-group/sync-invoices
+effect-pm pause south-west/billing-group/billing-email-queue
 ```
 
 Rules:

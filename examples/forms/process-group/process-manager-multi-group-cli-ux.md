@@ -8,25 +8,25 @@ connection registry.
 ## Setup shape
 
 ```typescript
-class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
-  "@repo/north-west/billing/BillingGroup",
-  [SyncInvoices, BillingEmailQueue] as const,
+class NorthWestBillingGroup extends ProcessGroup.Service<NorthWestBillingGroup>()(
+  "@repo/north-west/billing-group",
+  [NorthWestSyncInvoices, NorthWestBillingEmailQueue] as const,
 ) {}
 
-class SupportGroup extends ProcessGroup.Service<SupportGroup>()(
-  "@repo/south-west/billing/SupportGroup",
-  [PullTickets, SupportEmailQueue] as const,
+class SouthWestBillingGroup extends ProcessGroup.Service<SouthWestBillingGroup>()(
+  "@repo/south-west/billing-group",
+  [SouthWestSyncInvoices, SouthWestBillingEmailQueue] as const,
 ) {}
 
 const RemoteGroupsLive = ProcessManager.ConnectionRegistry.layer(
-  [BillingGroup, SupportGroup] as const,
+  [NorthWestBillingGroup, SouthWestBillingGroup] as const,
   {
-    [BillingGroup.id]: "http://127.0.0.1:32130",
-    [SupportGroup.id]: "http://127.0.0.1:32131",
+    [NorthWestBillingGroup.id]: "http://127.0.0.1:32130",
+    [SouthWestBillingGroup.id]: "http://127.0.0.1:32131",
   },
 );
 
-yield* ProcessManager.cli([BillingGroup, SupportGroup] as const).pipe(
+yield* ProcessManager.cli([NorthWestBillingGroup, SouthWestBillingGroup] as const).pipe(
   Effect.provide(RemoteGroupsLive),
 );
 ```
@@ -37,40 +37,40 @@ List configured groups first:
 
 ```bash
 $ effect-pm groups
-GROUP                                  ENDPOINT
-@repo/north-west/billing/BillingGroup  http://127.0.0.1:32130
-@repo/south-west/billing/SupportGroup  http://127.0.0.1:32131
+GROUP                          ENDPOINT
+@repo/north-west/billing-group  http://127.0.0.1:32130
+@repo/south-west/billing-group  http://127.0.0.1:32131
 ```
 
 List all configured groups:
 
 ```bash
 $ effect-pm ls
-GROUP @repo/north-west/billing/BillingGroup
+GROUP @repo/north-west/billing-group
 
 KIND     ID
-process  @repo/north-west/billing/SyncInvoices
-queue    @repo/north-west/billing/BillingEmailQueue
+process  @repo/north-west/billing-group/SyncInvoices
+queue    @repo/north-west/billing-group/BillingEmailQueue
 
-GROUP @repo/south-west/billing/SupportGroup
+GROUP @repo/south-west/billing-group
 
 KIND     ID
-process  @repo/south-west/billing/PullTickets
-queue    @repo/south-west/billing/SupportEmailQueue
+process  @repo/south-west/billing-group/SyncInvoices
+queue    @repo/south-west/billing-group/BillingEmailQueue
 ```
 
 Run a process by canonical id:
 
 ```bash
-$ effect-pm now @repo/north-west/billing/SyncInvoices
-OK process @repo/north-west/billing/SyncInvoices run requested
+$ effect-pm now @repo/north-west/billing-group/SyncInvoices
+OK process @repo/north-west/billing-group/SyncInvoices run requested
 ```
 
 Run the same process by a unique suffix alias:
 
 ```bash
-$ effect-pm now north-west/billing/sync-invoices
-OK process @repo/north-west/billing/SyncInvoices run requested
+$ effect-pm now north-west/billing-group/sync-invoices
+OK process @repo/north-west/billing-group/SyncInvoices run requested
 ```
 
 ## Ambiguity rules
@@ -96,8 +96,8 @@ $ effect-pm now sync-invoices
 Ambiguous target "sync-invoices".
 
 KIND     TYPE THIS MINIMUM                    CANONICAL ID
-process  [north-west/billing/sync-invoices]   @repo/north-west/billing/SyncInvoices
-process  [south-west/billing/sync-invoices]   @repo/south-west/billing/SyncInvoices
+process  [north-west/billing-group/sync-invoices]   @repo/north-west/billing-group/SyncInvoices
+process  [south-west/billing-group/sync-invoices]   @repo/south-west/billing-group/SyncInvoices
 ```
 
 In a color terminal, render the `TYPE THIS MINIMUM` column in bold or an accent
