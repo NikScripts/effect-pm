@@ -101,6 +101,18 @@ export interface Process<out R> {
 }
 
 /**
+ * Canonical process declaration that can be registered with a typed
+ * {@link ProcessGroup}.
+ *
+ * @public
+ */
+export interface ProcessDefinition<out Id extends string, out R>
+  extends Process<R> {
+  readonly id: Id;
+  readonly kind: "process";
+}
+
+/**
  * Extract service requirements from a {@link Process} handle.
  *
  * @public
@@ -879,6 +891,28 @@ function make<E, RUser>(
 }
 
 /**
+ * Define a process with a canonical id that can be used by typed
+ * {@link ProcessGroup} declarations.
+ *
+ * @public
+ */
+function define<const Id extends string, E, RUser>(
+  id: Id,
+  config: Omit<ProcessMakeConfig<E, RUser>, "name">,
+): ProcessDefinition<Id, RUser> {
+  const process = make({
+    ...config,
+    name: id,
+  });
+  const kind = "process";
+  return {
+    ...process,
+    id,
+    kind,
+  };
+}
+
+/**
  * Attach a {@link Polling} layer after defining base config.
  *
  * @public
@@ -957,6 +991,7 @@ function provideSchedule<E, RUser>(
  */
 export const Process = {
   make,
+  define,
   providePolling,
   provideSchedule,
   currentScheduleId,

@@ -104,6 +104,15 @@ export type {
   ProcessGroupErrors,
   ProcessEffectRequirements,
   AllGroupProcessesRequirements,
+  ProcessGroupEntry,
+  ProcessGroupProcessEntries,
+  ProcessGroupQueueEntries,
+  ProcessGroupEntryRequirements,
+  ProcessGroupQueueItem,
+  TypedProcessControls,
+  TypedQueueControls,
+  TypedProcessGroup,
+  ProcessGroupDefinition,
 } from "./ProcessGroup";
 
 // Error classes - ProcessGroup
@@ -116,6 +125,7 @@ export {
 // Types - Process
 export type {
   Process as ProcessInterface,
+  ProcessDefinition,
   ProcessDetails,
   ProcessMakeConfig,
   ProcessSupervisorRequirements,
@@ -131,6 +141,7 @@ export type { ProcessScheduleService } from "./ProcessSchedule";
 export type {
   QueueHandle,
   QueueEnqueue,
+  QueueResourceDefinition,
   QueueResourceConfig,
   QueueShutdownError,
   EffectContext,

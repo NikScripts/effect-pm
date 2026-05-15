@@ -20,10 +20,9 @@
  * @module ProcessGroup
  */
 
-import { Clock, Data, DateTime, Duration, Effect, FiberMap, Option, Ref, Scope } from "effect";
-import type { Context } from "effect";
-import type { Process } from "./Process";
-import type { QueueHandle } from "./QueueResource";
+import { Clock, Context, Data, DateTime, Duration, Effect, FiberMap, Layer, Option, Ref, Scope } from "effect";
+import type { Process, ProcessDefinition } from "./Process";
+import type { QueueHandle, QueueResourceDefinition } from "./QueueResource";
 import {
   ProcessStore,
   type ProcessLifecycleChangedEvent,
@@ -49,6 +48,50 @@ export type ProcessEffectRequirements<P> = P extends Process<infer R> ? R : neve
 export type AllGroupProcessesRequirements<
   Processes extends readonly Process<any>[],
 > = ProcessEffectRequirements<Processes[number]>;
+
+/**
+ * Runtime entries that can be registered with a typed ProcessGroup.
+ *
+ * @public
+ */
+export type ProcessGroupEntry =
+  | ProcessDefinition<string, any>
+  | QueueResourceDefinition<string, any, any, any>;
+
+/**
+ * Process entries from a typed ProcessGroup entry tuple.
+ *
+ * @public
+ */
+export type ProcessGroupProcessEntries<
+  Entries extends readonly ProcessGroupEntry[],
+> = Extract<Entries[number], { readonly kind: "process" }>;
+
+/**
+ * Queue entries from a typed ProcessGroup entry tuple.
+ *
+ * @public
+ */
+export type ProcessGroupQueueEntries<
+  Entries extends readonly ProcessGroupEntry[],
+> = Extract<Entries[number], { readonly kind: "queue" }>;
+
+/**
+ * Combined process requirements for a typed ProcessGroup entry tuple.
+ *
+ * @public
+ */
+export type ProcessGroupEntryRequirements<
+  Entries extends readonly ProcessGroupEntry[],
+> = ProcessEffectRequirements<ProcessGroupProcessEntries<Entries>>;
+
+/**
+ * Queue item type for a queue entry.
+ *
+ * @public
+ */
+export type ProcessGroupQueueItem<Queue> =
+  Queue extends QueueResourceDefinition<string, infer T, any, any> ? T : never;
 
 /**
  * Process runtime status.
@@ -158,6 +201,94 @@ export interface ProcessGroup<R> {
 
   // ─── Shutdown ───
   readonly awaitShutdown: (options?: { readonly logMessage?: (signal: string) => string }) => Effect.Effect<void, never, Scope.Scope>;
+}
+
+/**
+ * Typed controls for one process entry in a typed ProcessGroup.
+ *
+ * @public
+ */
+export interface TypedProcessControls<R> {
+  readonly start: Effect.Effect<void, ProcessGroupErrors, R>;
+  readonly stop: Effect.Effect<void, ProcessGroupErrors>;
+  readonly restart: Effect.Effect<void, ProcessGroupErrors, R>;
+  readonly runImmediately: Effect.Effect<void, ProcessGroupErrors, R>;
+  readonly status: Effect.Effect<ProcessGroupDetails, ProcessGroupErrors>;
+}
+
+/**
+ * Typed controls for one queue entry in a typed ProcessGroup.
+ *
+ * @public
+ */
+export interface TypedQueueControls<T> {
+  readonly add: (items: T | ReadonlyArray<T>) => Effect.Effect<void, ProcessGroupErrors>;
+  readonly enqueue: (items: T | ReadonlyArray<T>) => Effect.Effect<void, ProcessGroupErrors>;
+  readonly prioritize: (items: T | ReadonlyArray<T>) => Effect.Effect<void, ProcessGroupErrors>;
+  readonly defer: (items: T | ReadonlyArray<T>) => Effect.Effect<void, ProcessGroupErrors>;
+  readonly pause: Effect.Effect<void, ProcessGroupErrors>;
+  readonly resume: Effect.Effect<void, ProcessGroupErrors>;
+  readonly clear: Effect.Effect<number, ProcessGroupErrors>;
+  readonly status: Effect.Effect<QueueDetails, ProcessGroupErrors>;
+}
+
+/**
+ * ProcessGroup handle typed from a canonical entry tuple.
+ *
+ * @public
+ */
+export interface TypedProcessGroup<
+  out Id extends string,
+  Entries extends readonly ProcessGroupEntry[],
+> {
+  readonly id: Id;
+  readonly start: <P extends ProcessGroupProcessEntries<Entries>>(
+    process: P,
+  ) => Effect.Effect<void, ProcessGroupErrors, ProcessGroupEntryRequirements<Entries>>;
+  readonly stop: <P extends ProcessGroupProcessEntries<Entries>>(
+    process: P,
+  ) => Effect.Effect<void, ProcessGroupErrors>;
+  readonly restart: <P extends ProcessGroupProcessEntries<Entries>>(
+    process: P,
+  ) => Effect.Effect<void, ProcessGroupErrors, ProcessGroupEntryRequirements<Entries>>;
+  readonly runImmediately: <P extends ProcessGroupProcessEntries<Entries>>(
+    process: P,
+  ) => Effect.Effect<void, ProcessGroupErrors, ProcessGroupEntryRequirements<Entries>>;
+  readonly process: <P extends ProcessGroupProcessEntries<Entries>>(
+    process: P,
+  ) => TypedProcessControls<ProcessGroupEntryRequirements<Entries>>;
+  readonly queue: <Q extends ProcessGroupQueueEntries<Entries>>(
+    queue: Q,
+  ) => TypedQueueControls<ProcessGroupQueueItem<Q>>;
+  readonly status: ProcessGroup<ProcessGroupEntryRequirements<Entries>>["status"];
+  readonly health: Effect.Effect<GroupHealth>;
+  readonly awaitShutdown: ProcessGroup<ProcessGroupEntryRequirements<Entries>>["awaitShutdown"];
+  readonly legacy: ProcessGroup<ProcessGroupEntryRequirements<Entries>>;
+}
+
+/**
+ * Typed ProcessGroup declaration. Use `.make` directly for low ceremony, or
+ * provide `.layer` when the group should be injectable as a singleton service.
+ *
+ * @public
+ */
+export interface ProcessGroupDefinition<
+  Id extends string,
+  Entries extends readonly ProcessGroupEntry[],
+> extends Context.Key<unknown, TypedProcessGroup<Id, Entries>> {
+  readonly id: Id;
+  readonly kind: "group";
+  readonly entries: Entries;
+  readonly make: Effect.Effect<
+    TypedProcessGroup<Id, Entries>,
+    ProcessGroupErrors,
+    TagIdentifier<ProcessGroupQueueEntries<Entries>["tag"]>
+  >;
+  readonly layer: Layer.Layer<
+    ProcessGroupDefinition<Id, Entries>,
+    ProcessGroupErrors,
+    TagIdentifier<ProcessGroupQueueEntries<Entries>["tag"]>
+  >;
 }
 
 // ============================================================================
@@ -435,6 +566,110 @@ export const makeProcessGroup = <
     return group;
   });
 
+const processGroupKind = "group" as const;
+
+const isProcessGroupProcessEntry = (
+  entry: ProcessGroupEntry,
+): entry is ProcessDefinition<string, any> => entry.kind === "process";
+
+const isProcessGroupQueueEntry = (
+  entry: ProcessGroupEntry,
+): entry is QueueResourceDefinition<string, any, any, any> =>
+  entry.kind === "queue";
+
+const makeTypedProcessGroup = <
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+>(
+  id: Id,
+  entries: Entries,
+): Effect.Effect<
+  TypedProcessGroup<Id, Entries>,
+  ProcessGroupErrors,
+  TagIdentifier<ProcessGroupQueueEntries<Entries>["tag"]>
+> =>
+  Effect.gen(function* () {
+    const processes = entries.filter(isProcessGroupProcessEntry);
+    const queues = entries.filter(isProcessGroupQueueEntry);
+    const queueTags = queues.map(
+      (queue): ProcessGroupQueueEntries<Entries>["tag"] => queue.tag,
+    );
+    const legacy = yield* makeProcessGroup({
+      processes,
+      queues: queueTags,
+    });
+
+    const queueStatus = (
+      queueId: string,
+    ): Effect.Effect<QueueDetails, ProcessGroupErrors> =>
+      Effect.gen(function* () {
+        const queue = yield* legacy.getQueue(queueId);
+        const sizes = yield* queue.sizes;
+        const total = yield* queue.size;
+        const completed = yield* queue.completed;
+        return {
+          name: queueId,
+          size: { ...sizes, total },
+          completed,
+        };
+      });
+
+    return {
+      id,
+      start: (process) => legacy.start(process.id),
+      stop: (process) => legacy.stop(process.id),
+      restart: (process) => legacy.restart(process.id),
+      runImmediately: (process) => legacy.runImmediately(process.id),
+      process: (process) => ({
+        start: legacy.start(process.id),
+        stop: legacy.stop(process.id),
+        restart: legacy.restart(process.id),
+        runImmediately: legacy.runImmediately(process.id),
+        status: legacy.processStatus(process.id),
+      }),
+      queue: (queue) => ({
+        add: (items) =>
+          Effect.flatMap(legacy.getQueue(queue.id), (handle) => handle.add(items)),
+        enqueue: (items) =>
+          Effect.flatMap(legacy.getQueue(queue.id), (handle) => handle.add(items)),
+        prioritize: (items) =>
+          Effect.flatMap(
+            legacy.getQueue(queue.id),
+            (handle) => handle.prioritize(items),
+          ),
+        defer: (items) =>
+          Effect.flatMap(legacy.getQueue(queue.id), (handle) => handle.defer(items)),
+        pause: legacy.pauseQueue(queue.id),
+        resume: legacy.resumeQueue(queue.id),
+        clear: legacy.clearQueue(queue.id),
+        status: queueStatus(queue.id),
+      }),
+      status: legacy.status,
+      health: legacy.health,
+      awaitShutdown: legacy.awaitShutdown,
+      legacy,
+    };
+  });
+
+const defineProcessGroup = <
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+>(
+  id: Id,
+  entries: Entries,
+): ProcessGroupDefinition<Id, Entries> => {
+  const base = Context.Service<unknown, TypedProcessGroup<Id, Entries>>()(id);
+  const make = makeTypedProcessGroup(id, entries);
+  const layer = Layer.effect(base)(make);
+  return Object.assign(base, {
+    id,
+    kind: processGroupKind,
+    entries,
+    make,
+    layer,
+  });
+};
+
 // ============================================================================
 // Public namespace
 // ============================================================================
@@ -446,6 +681,23 @@ export const makeProcessGroup = <
  */
 export const ProcessGroup = {
   make: makeProcessGroup,
+  define: defineProcessGroup,
+  Service: <Self>() =>
+  <const Id extends string, const Entries extends readonly ProcessGroupEntry[]>(
+    id: Id,
+    entries: Entries,
+  ) => {
+    const base = Context.Service<Self, TypedProcessGroup<Id, Entries>>()(id);
+    const make = makeTypedProcessGroup(id, entries);
+    const layer = Layer.effect(base)(make);
+    return Object.assign(base, {
+      id,
+      kind: processGroupKind,
+      entries,
+      make,
+      layer,
+    });
+  },
 } as const;
 
 /**

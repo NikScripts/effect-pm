@@ -172,6 +172,23 @@ export interface QueueHandle<
 }
 
 /**
+ * Canonical queue declaration that can be registered with a typed
+ * ProcessGroup.
+ *
+ * @public
+ */
+export interface QueueResourceDefinition<
+  out Id extends string,
+  in out T,
+  out R = void,
+  out E = never,
+> extends Context.Key<unknown, QueueHandle<T, R, E>> {
+  readonly id: Id;
+  readonly kind: "queue";
+  readonly tag: Context.Key<unknown, QueueHandle<T, R, E>>;
+}
+
+/**
  * Context passed to the `effect` callback during item processing.
  *
  * Provides **guarded** enqueue operations for spawning derived/follow-up work.
@@ -357,6 +374,8 @@ export class QueueShutdownError extends Data.TaggedError(
 
 const isReadonlyArray = <A>(input: A | ReadonlyArray<A>): input is ReadonlyArray<A> =>
   Array.isArray(input);
+
+const queueResourceKind = "queue" as const;
 
 /** Normalize public enqueue input without treating arbitrary iterables as batches. */
 function normalizeEnqueueInput<A>(input: A | ReadonlyArray<A>): ReadonlyArray<A> {
@@ -919,6 +938,27 @@ export const QueueResource = {
   ) => Layer.effect(tag)(makeQueueEffect(config)),
 
   /**
+   * Define a queue resource with a canonical id, service tag, and baked-in
+   * layer. The returned value can be yielded as a service and registered with a
+   * typed ProcessGroup.
+   *
+   * @public
+   */
+  define: <const Name extends string, T, R, E = never>(
+    name: Name,
+    config: QueueResourceConfig<T, R, E>,
+  ) => {
+    const base = Context.Service<unknown, QueueHandle<T, R, E>>()(name);
+    const layer = Layer.effect(base)(makeQueueEffect({ ...config, name }));
+    return Object.assign(base, {
+      id: name,
+      kind: queueResourceKind,
+      tag: base,
+      layer,
+    });
+  },
+
+  /**
    * Class factory: creates a Context tag with a baked-in `.layer`.
    *
    * The returned value is both a `Context.Service` (yieldable tag) and has
@@ -943,7 +983,12 @@ export const QueueResource = {
   ) => {
     const base = Context.Service<Self, QueueHandle<T, R, E>>()(name);
     const layer = Layer.effect(base)(makeQueueEffect({ ...config, name }));
-    return Object.assign(base, { layer });
+    return Object.assign(base, {
+      id: name,
+      kind: queueResourceKind,
+      tag: base,
+      layer,
+    });
   },
 
   /**
@@ -961,6 +1006,12 @@ export const QueueResource = {
    * ```
    */
   Tag: <Self, T, R, E = never>() =>
-  <const Name extends string>(name: Name) =>
-    Context.Service<Self, QueueHandle<T, R, E>>()(name),
+  <const Name extends string>(name: Name) => {
+    const base = Context.Service<Self, QueueHandle<T, R, E>>()(name);
+    return Object.assign(base, {
+      id: name,
+      kind: queueResourceKind,
+      tag: base,
+    });
+  },
 };
