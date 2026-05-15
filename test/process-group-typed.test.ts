@@ -1,10 +1,16 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Ref, Schema } from "effect";
+import type { HttpClient } from "effect/unstable/http";
+import type { Layer } from "effect";
 import {
   Process,
   ProcessGroup,
+  ProcessGroupControlError,
   ProcessGroupContractSchema,
+  ProcessGroupErrors,
+  ProcessManager,
   QueueResource,
+  UnsupportedRemoteControlError,
 } from "../src";
 import { provideLayer } from "../src/provideLayer.js";
 
@@ -34,8 +40,36 @@ class TypeGroup extends ProcessGroup.Service<TypeGroup>()("@test/TypeGroup", [
   TypeInvoiceQueue,
 ] as const) {}
 
+class TypeEndpoint extends ProcessManager.Endpoint<TypeEndpoint>()(
+  TypeGroup,
+  {
+    baseUrl: "http://127.0.0.1:32134",
+  },
+) {}
+
+type Assert<T extends true> = T;
+type IsNever<T> = [T] extends [never] ? true : false;
+type IsAssignable<From, To> = [From] extends [To] ? true : false;
+type IsEqual<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends
+    (<T>() => T extends B ? 1 : 2)
+    ? (<T>() => T extends B ? 1 : 2) extends
+        (<T>() => T extends A ? 1 : 2)
+      ? true
+      : false
+    : false;
+type EffectError<T> = T extends Effect.Effect<any, infer E, any> ? E : never;
+type LayerOut<T> = T extends Layer.Layer<infer ROut, any, any> ? ROut : never;
+type LayerIn<T> = T extends Layer.Layer<any, any, infer RIn> ? RIn : never;
+const assertType = <T extends true>(_value?: T): void => undefined;
+
 export const processGroupTypeChecks = Effect.gen(function* () {
+  const directGroup = yield* ProcessGroup.make("@test/TypeDirectGroup", [
+    TypeProcess,
+    TypeEmailQueue,
+  ] as const);
   const group = yield* TypeGroup.make;
+  const serviceGroup = yield* TypeGroup;
   const acceptProcessId = (
     _id: typeof TypeGroup.contract.processes[number]["id"],
   ) => Effect.void;
@@ -46,9 +80,33 @@ export const processGroupTypeChecks = Effect.gen(function* () {
   yield* group.start(TypeProcess);
   yield* group.queue(TypeEmailQueue).enqueue({ to: "ops@example.com" });
   yield* group.queue(TypeInvoiceQueue).enqueue({ invoiceId: "inv_123" });
+  yield* directGroup.queue(TypeEmailQueue).enqueue({ to: "local@example.com" });
+  yield* serviceGroup.queue(TypeEmailQueue).enqueue({ to: "remote-capable@example.com" });
   yield* acceptProcessId(TypeProcess.id);
   yield* acceptQueueId(TypeEmailQueue.id);
   yield* acceptQueueId(TypeInvoiceQueue.id);
+
+  const directQueueEnqueue = directGroup
+    .queue(TypeEmailQueue)
+    .enqueue({ to: "local-error-channel@example.com" });
+  const serviceQueueEnqueue = serviceGroup
+    .queue(TypeEmailQueue)
+    .enqueue({ to: "remote-error-channel@example.com" });
+  const remoteLayer = ProcessGroup.remoteLayer(TypeGroup, TypeEndpoint);
+
+  type DirectGroupId = typeof directGroup.id;
+  type DirectQueueEnqueueError = EffectError<typeof directQueueEnqueue>;
+  type ServiceQueueEnqueueError = EffectError<typeof serviceQueueEnqueue>;
+  type RemoteLayerOut = LayerOut<typeof remoteLayer>;
+  type RemoteLayerIn = LayerIn<typeof remoteLayer>;
+
+  assertType<Assert<IsEqual<DirectGroupId, "@test/TypeDirectGroup">>>();
+  assertType<Assert<IsEqual<DirectQueueEnqueueError, ProcessGroupErrors>>>();
+  assertType<Assert<IsEqual<ServiceQueueEnqueueError, ProcessGroupControlError>>>();
+  assertType<Assert<IsEqual<IsNever<ServiceQueueEnqueueError>, false>>>();
+  assertType<Assert<IsAssignable<UnsupportedRemoteControlError, ServiceQueueEnqueueError>>>();
+  assertType<Assert<IsEqual<RemoteLayerOut, TypeGroup>>>();
+  assertType<Assert<IsEqual<RemoteLayerIn, TypeEndpoint | HttpClient.HttpClient>>>();
 
   if (false) {
     // @ts-expect-error queues are not valid process lifecycle targets
