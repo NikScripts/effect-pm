@@ -31,15 +31,24 @@ yield* ProcessManager.cli([NorthWestBillingGroup, SouthWestBillingGroup] as cons
 );
 ```
 
-## Command flow
+## Implemented command flow
+
+Implemented commands:
+
+- `groups`
+- `ls`
+- `status <target>`
+- `verify`
+- process controls: `start`, `stop`, `restart`, `now`
+- queue controls: `pause`, `resume`, `clear`
 
 List configured groups first:
 
 ```bash
 $ effect-pm groups
-KIND   ID                            ENDPOINT
-group  @repo/north-west/BillingGroup  http://127.0.0.1:32130
-group  @repo/south-west/BillingGroup  http://127.0.0.1:32131
+GROUP                         ENDPOINT
+@repo/north-west/BillingGroup http://127.0.0.1:32130
+@repo/south-west/BillingGroup http://127.0.0.1:32131
 ```
 
 List all configured groups:
@@ -71,6 +80,7 @@ Read status by alias:
 
 ```bash
 $ effect-pm status north-west/billing-group/sync-invoices
+STATUS process @repo/north-west/BillingGroup/SyncInvoices
 {
   "name": "@repo/north-west/BillingGroup/SyncInvoices",
   "status": "stopped"
@@ -102,7 +112,9 @@ OK process @repo/north-west/BillingGroup/SyncInvoices run requested
 - Normalization applies to the whole id: case-insensitive comparison,
   punctuation-insensitive word casing (`SyncInvoices` ↔ `sync-invoices`), and
   suffix matching.
-- `groups`, `ls`, and `verify` operate across every configured group.
+- `groups`, `ls`, and `verify` operate across every configured group. `groups`
+  currently prints group ids and endpoints; `ls` prints process and queue ids
+  with a `KIND` column.
 - `status`, process commands, and queue commands accept one canonical id or
   normalized suffix alias.
 - If one normalized target matches exactly one process or queue across all
@@ -121,13 +133,13 @@ Example ambiguity:
 ```bash
 $ effect-pm now sync-invoices
 Ambiguous target "sync-invoices".
-north-west/billing-group/sync-invoices -> @repo/north-west/BillingGroup/SyncInvoices
-south-west/billing-group/sync-invoices -> @repo/south-west/BillingGroup/SyncInvoices
+KIND    TYPE THIS MINIMUM                         CANONICAL ID
+process [north-west/billing-group/sync-invoices]  @repo/north-west/BillingGroup/SyncInvoices
+process [south-west/billing-group/sync-invoices]  @repo/south-west/BillingGroup/SyncInvoices
 ```
 
-If this output grows into a table, keep the minimum typed suffix and canonical id
-as separate columns, and keep kind as a `KIND` column rather than encoding it in
-the id.
+Keep the minimum typed suffix and canonical id separate, and keep kind as a
+`KIND` column rather than encoding it in the id.
 
 ## Non-goals for this UX slice
 
