@@ -299,6 +299,14 @@ describe("ProcessManager", () => {
           yield* cli(["groups"]);
           yield* cli(["ls"]);
           yield* cli(["verify"]);
+          yield* cli(["groups", "--json"]);
+          yield* cli(["ls", "--json"]);
+          yield* cli(["verify", "--json"]);
+          yield* cli([
+            "status",
+            "north-west/billing-group/sync-invoices",
+            "--json",
+          ]);
 
           const wrongKind = yield* cli([
             "pause",
