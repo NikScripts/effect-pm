@@ -80,6 +80,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | [`forms/process-group/process-group-make-entries.ts`](./forms/process-group/process-group-make-entries.ts) | `ProcessGroup.make(id, entries)` |
 | [`forms/process-group/process-group-service.ts`](./forms/process-group/process-group-service.ts) | `ProcessGroup.Service` |
 | [`forms/process-group/process-group-contract-http.ts`](./forms/process-group/process-group-contract-http.ts) | `GET /contract` + `ProcessManager.connect` |
+| [`forms/process-group/process-manager-endpoint-service.ts`](./forms/process-group/process-manager-endpoint-service.ts) | `ProcessManager.Endpoint` |
 
 ---
 
@@ -99,7 +100,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | Script | What it runs |
 |--------|----------------|
 | `pnpm run example` | Main scenario (`full-process-group-with-queues-and-control-cli`) |
-| `pnpm run example:typed-process-group` | All three ProcessGroup forms |
+| `pnpm run example:typed-process-group` | ProcessGroup + ProcessManager forms |
 | `pnpm run example:queue-resource` | Queue form |
 | `pnpm run cli …` | CLI against the demo control port |
 | `pnpm run example:process-supervisor-patterns` | Accelerating + delayed-start forms |

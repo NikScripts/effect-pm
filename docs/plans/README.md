@@ -36,7 +36,7 @@ recommended order below when picking up new work.
 6. **Schedule identity** — Implement [04](./04-schedule-identity-and-persistence.md) so process state and group contracts can refer to stable schedule entries.
 7. **Process hooks and lifecycle kernel** — Use [06](./06-process-lifecycle-hooks.md) and [08](./08-lifecycle-machine.md) once the state/signal vocabulary is real.
 8. **Control service v2** — Implement [05](./05-control-service-v2.md) as a contract-driven API over typed `ProcessGroup`.
-9. **Remote ProcessManager** — Finish the remote portions of [07](./07-process-manager.md): discover/connect to group contracts, aggregate status, route commands, and coordinate handoff over the network.
+9. **Remote ProcessManager** — Finish the remote portions of [07](./07-process-manager.md): discover/connect to group contracts, add endpoint services and remote group layers, aggregate status, route commands, and coordinate handoff over the network.
 10. **Strict LS rule** — Re-enable [09](./09-strict-any-unknown.md) after the public boundaries are typed without broad `unknown` error channels.
 
 ## Explicitly discarded from active planning

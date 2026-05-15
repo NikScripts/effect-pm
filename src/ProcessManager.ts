@@ -9,7 +9,7 @@
  * @module ProcessManager
  */
 
-import { Data, Effect, Schema } from "effect";
+import { Context, Data, Effect, Layer, Schema } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import type { ControlResponse } from "./ControlService";
 import { ProcessGroupContractSchema } from "./ProcessGroup";
@@ -35,6 +35,15 @@ type ContractSource<Contract extends AnyProcessGroupContract> = {
 
 type ContractFromSource<Source extends ContractSource<AnyProcessGroupContract>> =
   Source["contract"];
+
+/**
+ * Configuration for a remote ProcessManager endpoint service.
+ *
+ * @public
+ */
+export interface ProcessManagerEndpointConfig {
+  readonly baseUrl: string;
+}
 
 const controlResponseSchema = Schema.Struct({
   success: Schema.Boolean,
@@ -111,6 +120,22 @@ export interface RemoteProcessManager<Contract extends AnyProcessGroupContract> 
     ProcessManagerRequestError,
     HttpClient.HttpClient
   >;
+}
+
+/**
+ * Injectable endpoint service for one remote ProcessGroup.
+ *
+ * @public
+ */
+export interface ProcessManagerEndpoint<
+  Self,
+  Id extends string,
+  Contract extends AnyProcessGroupContract,
+> extends Context.ServiceClass<Self, Id, RemoteProcessManager<Contract>> {
+  readonly group: ContractSource<Contract>;
+  readonly contract: Contract;
+  readonly config: ProcessManagerEndpointConfig;
+  readonly layer: Layer.Layer<Self>;
 }
 
 const joinUrl = (baseUrl: string, path: string): string =>
@@ -315,6 +340,25 @@ const makeRemoteProcessManager = <
   };
 };
 
+const makeEndpoint = <
+  Self,
+  const Id extends string,
+  const Source extends ContractSource<AnyProcessGroupContract>,
+>(
+  id: Id,
+  group: Source,
+  config: ProcessManagerEndpointConfig,
+): ProcessManagerEndpoint<Self, Id, ContractFromSource<Source>> => {
+  const base = Context.Service<Self, RemoteProcessManager<ContractFromSource<Source>>>()(id);
+  const manager = connect(group, config);
+  return Object.assign(base, {
+    group,
+    contract: group.contract,
+    config,
+    layer: Layer.succeed(base, manager),
+  });
+};
+
 /**
  * Build a typed remote client from a group service/definition value. This is
  * the preferred Effect-style form when the group class is available at runtime.
@@ -369,4 +413,13 @@ function connect(
  */
 export const ProcessManager = {
   connect,
+  Endpoint: <Self>() =>
+  <const Source extends ContractSource<AnyProcessGroupContract>>(
+    group: Source,
+    config: ProcessManagerEndpointConfig,
+  ) => makeEndpoint<Self, Source["contract"]["id"], Source>(
+    `${group.contract.id}/ProcessManagerEndpoint`,
+    group,
+    config,
+  ),
 } as const;

@@ -473,6 +473,95 @@ yield* billing.queue(InvoiceQueue.id).enqueue({ to: "ops@example.com" });
 
 Runtime validation is still required because network callers may not be typed.
 
+## Endpoint services and bundled remote layers
+
+The long-term remote DX should use Effect layers instead of making application
+code call `ProcessManager.connect` everywhere. The service key stays the same;
+the provided layer decides whether the implementation is local, mocked, or
+network-backed.
+
+### Endpoint service
+
+First introduce a remote endpoint service. It stores remote connection config,
+the group contract, and future transport/auth/retry settings in one place.
+
+```typescript
+class BillingEndpoint extends ProcessManager.Endpoint<BillingEndpoint>()(
+  BillingGroup,
+  {
+    baseUrl: "https://billing.internal",
+  },
+) {}
+```
+
+The endpoint yields a typed remote manager:
+
+```typescript
+const billing = yield* BillingEndpoint;
+
+yield* billing.verifyContract;
+yield* billing.process(StripeSync.id).runImmediately;
+yield* billing.queue(EmailQueue.id).pause;
+```
+
+This avoids repeating `baseUrl` and gives later auth/RPC middleware a single
+home.
+
+### Bundled remote layers
+
+After endpoint service exists, provide a layer bundle from the group:
+
+```typescript
+const BillingRemoteLive = ProcessGroup.remoteLayers(BillingGroup, BillingEndpoint);
+
+const program = Effect.gen(function* () {
+  const billing = yield* BillingGroup;
+  const stripe = yield* StripeSync;
+  const emails = yield* EmailQueue;
+
+  yield* billing.process(StripeSync).runImmediately;
+  yield* stripe.runImmediately();
+  yield* emails.pause;
+});
+
+yield* program.pipe(Effect.provide(BillingRemoteLive));
+```
+
+`remoteLayers` should eventually provide:
+
+- the remote group service (`BillingGroup`);
+- remote process control services for each process entry;
+- remote queue control services for each queue entry whose shape can be safely
+  represented remotely.
+
+### Error semantics must be decided before remote resource layers
+
+Remote implementations cannot be perfectly transparent unless their checked
+error types match the local service shape.
+
+Examples:
+
+- Current `QueueHandle.add` returns `Effect<void>`; a remote implementation can
+  fail with network/protocol errors.
+- Current `Process.runImmediately` returns `Effect<void, never, R>`; a remote
+  implementation can fail because the remote group is down.
+
+Do not hide these failures with `orDie` in public remote layers. Pick one before
+implementing process/queue remote layers:
+
+1. Widen public control errors to include a remote/control error.
+2. Provide remote-only handle interfaces with explicit remote errors.
+3. Keep only the remote group/manager service until queue/process handle shapes
+   are redesigned around control errors.
+
+Recommended path:
+
+1. Add `ProcessManager.Endpoint` now.
+2. Add `ProcessGroup.remoteLayer` / `remoteLayers` for group controls, where the
+   return type can expose remote errors.
+3. Wait on process/queue remote layers until process control handles and queue
+   enqueue schema/error types are settled.
+
 ## ProcessGroup and ControlService
 
 `ControlService` should move from generic string commands toward schema-checked
@@ -625,6 +714,15 @@ yield* ProcessGroup.make(id, entries, options);
 - Route commands over the network to a group.
 - Validate remote enqueue payloads with schema.
 - Aggregate status from multiple remote groups.
+
+### Slice 6.5 - Endpoint service and remote layer bundle
+
+- Add `ProcessManager.Endpoint` to capture group contract + base URL +
+  future auth/transport config.
+- Add `ProcessGroup.remoteLayer` for the group service itself.
+- Add `ProcessGroup.remoteLayers` once process/queue remote handle error
+  semantics are decided.
+- Do not implement queue/process remote layers by erasing remote failures.
 
 ### Slice 7 - Activation and handoff
 

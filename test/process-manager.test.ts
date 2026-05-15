@@ -140,4 +140,59 @@ describe("ProcessManager", () => {
       }),
     ),
   );
+
+  it.live("provides a remote manager as an endpoint service", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const runs = yield* Ref.make(0);
+
+        class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+          "@test/ManagerEndpointEmailQueue",
+          {
+            effect: (_email) => Effect.void,
+          },
+        ) {}
+
+        class SyncProcess extends Process.Service<SyncProcess>()(
+          "@test/ManagerEndpointProcess",
+          {
+            effect: Ref.update(runs, (count) => count + 1),
+          },
+        ) {}
+
+        class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+          "@test/ManagerEndpointGroup",
+          [SyncProcess, EmailQueue] as const,
+        ) {}
+
+        class BillingEndpoint extends ProcessManager.Endpoint<BillingEndpoint>()(
+          BillingGroup,
+          {
+            baseUrl: "http://127.0.0.1:32129",
+          },
+        ) {}
+
+        yield* Effect.gen(function* () {
+          const group = yield* BillingGroup;
+          const manager = yield* BillingEndpoint;
+
+          yield* ControlService.make({
+            port: 32129,
+            group,
+          });
+
+          expect(BillingEndpoint.contract.id).toBe(BillingGroup.contract.id);
+          yield* manager.verifyContract;
+          yield* manager.process(SyncProcess.id).runImmediately;
+          expect(yield* Ref.get(runs)).toBe(1);
+        }).pipe(
+          provideLayer(BillingGroup.layer),
+          provideLayer(BillingEndpoint.layer),
+          provideLayer(EmailQueue.layer),
+          provideLayer(ProcessStore.layer),
+          provideLayer(NodeHttpClient.layerUndici),
+        );
+      }),
+    ),
+  );
 });

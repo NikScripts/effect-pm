@@ -88,6 +88,8 @@ export type {
   RemoteProcessManager,
   RemoteProcessControls,
   RemoteQueueControls,
+  ProcessManagerEndpointConfig,
+  ProcessManagerEndpoint,
 } from "./ProcessManager";
 
 // Process Store
