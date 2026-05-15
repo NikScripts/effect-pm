@@ -14,4 +14,6 @@ Add typed process group declarations, contracts, and remote management. Processe
 
 `ProcessManager.cli([GroupA, GroupB])` adds an initial multi-group CLI surface using the connection registry and normalized target resolution for globally unique process and queue ids, including group verification and process/queue status commands.
 
+The multi-group CLI supports `--json` output for `groups`, `ls`, `verify`, and `status <target>`.
+
 Also fixes `ProcessStore` execution ordering consistency and keyed queue `clear()` dedup cleanup.

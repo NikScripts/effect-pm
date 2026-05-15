@@ -10,7 +10,7 @@
  */
 
 import { Config, Console, Context, Data, Effect, Layer, Schema } from "effect";
-import { Argument, Command } from "effect/unstable/cli";
+import { Argument, Command, Flag } from "effect/unstable/cli";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import type { ControlResponse } from "./ControlService";
 import { ProcessGroupContractSchema } from "./ProcessGroup";
@@ -119,6 +119,10 @@ export class ProcessManagerConnectionRegistry extends Context.Service<
 export interface ProcessManagerCliConfig {
   readonly name?: string;
   readonly version?: string;
+}
+
+interface ProcessManagerCliOptions {
+  readonly json: boolean;
 }
 
 /**
@@ -606,6 +610,18 @@ const formatAmbiguousTarget = (
   return `Ambiguous target '${input}'.\nKIND\tTYPE THIS MINIMUM\tCANONICAL ID\n${rows}`;
 };
 
+const encodeCliJson = (
+  value: unknown,
+): Effect.Effect<string, ProcessManagerRequestError> =>
+  Schema.encodeUnknownEffect(responseBodyJson)(value).pipe(
+    Effect.mapError(
+      (cause) =>
+        new ProcessManagerRequestError({
+          reason: `Unable to encode CLI JSON output: ${String(cause)}`,
+        }),
+    ),
+  );
+
 const resolveCliTarget = (
   groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
   input: string,
@@ -738,6 +754,7 @@ const runQueueCommand = (
 const runStatusCommand = (
   groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
   input: string,
+  options: ProcessManagerCliOptions,
 ): Effect.Effect<
   void,
   ProcessManagerConnectionError | ProcessManagerRequestError,
@@ -750,16 +767,16 @@ const runStatusCommand = (
     const response = target.kind === "process"
       ? yield* manager.process(target.id).status
       : yield* manager.queue(target.id).status;
-    const data = yield* Schema.encodeUnknownEffect(responseBodyJson)(
-      response.data ?? {},
-    ).pipe(
-      Effect.mapError(
-        (cause) =>
-          new ProcessManagerRequestError({
-            reason: `Malformed status response: ${String(cause)}`,
-          }),
-      ),
-    );
+    const data = yield* encodeCliJson(response.data ?? {});
+    if (options.json) {
+      const json = yield* encodeCliJson({
+        kind: target.kind,
+        id: target.id,
+        groupId: target.groupId,
+        status: response.data ?? {},
+      });
+      return yield* Console.log(json);
+    }
     yield* Console.log(
       `STATUS ${target.kind} ${target.id}\n${data}`,
     );
@@ -767,46 +784,79 @@ const runStatusCommand = (
 
 const runVerifyCommand = (
   groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  options: ProcessManagerCliOptions,
 ): Effect.Effect<
   void,
   ProcessManagerConnectionError | ProcessManagerRequestError,
   ProcessManagerConnectionRegistry | HttpClient.HttpClient
 > =>
   Effect.gen(function* () {
+    const verified: Array<{ readonly groupId: string }> = [];
     for (const group of groups) {
       const manager = yield* managerFor(groups, group.id);
       yield* manager.verifyContract;
+      verified.push({ groupId: group.id });
+      if (options.json) {
+        continue;
+      }
       yield* Console.log(`OK contract verified for ${group.id}`);
+    }
+    if (options.json) {
+      yield* Console.log(yield* encodeCliJson({ groups: verified }));
     }
   });
 
 const runGroupsCommand = (
   groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
-): Effect.Effect<void, ProcessManagerConnectionError, ProcessManagerConnectionRegistry> =>
+  options: ProcessManagerCliOptions,
+): Effect.Effect<
+  void,
+  ProcessManagerConnectionError | ProcessManagerRequestError,
+  ProcessManagerConnectionRegistry
+> =>
   Effect.gen(function* () {
     const registry = yield* ProcessManagerConnectionRegistry;
+    const rows: Array<{ readonly groupId: string; readonly baseUrl: string }> = [];
     const lines: string[] = ["GROUP\tENDPOINT"];
     for (const group of groups) {
       const baseUrl = yield* registry.baseUrl(group.id);
+      rows.push({ groupId: group.id, baseUrl });
       lines.push(`${group.id}\t${baseUrl}`);
+    }
+    if (options.json) {
+      yield* Console.log(yield* encodeCliJson({ groups: rows }));
+      return;
     }
     yield* Console.log(lines.join("\n"));
   });
 
 const runListCommand = (
   groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
-): Effect.Effect<void> =>
-  Console.log(
-    groups.map((group) => {
-      const processLines = group.contract.processes.map((process) =>
-        `process\t${process.id}`
-      );
-      const queueLines = group.contract.queues.map((queue) =>
-        `queue\t${queue.id}`
-      );
-      return [`GROUP ${group.id}`, "KIND\tID", ...processLines, ...queueLines].join("\n");
-    }).join("\n\n"),
-  );
+  options: ProcessManagerCliOptions,
+): Effect.Effect<void, ProcessManagerRequestError> =>
+  Effect.gen(function* () {
+    if (options.json) {
+      const json = yield* encodeCliJson({
+        groups: groups.map((group) => ({
+          groupId: group.id,
+          processes: group.contract.processes,
+          queues: group.contract.queues,
+        })),
+      });
+      return yield* Console.log(json);
+    }
+    yield* Console.log(
+      groups.map((group) => {
+        const processLines = group.contract.processes.map((process) =>
+          `process\t${process.id}`
+        );
+        const queueLines = group.contract.queues.map((queue) =>
+          `queue\t${queue.id}`
+        );
+        return [`GROUP ${group.id}`, "KIND\tID", ...processLines, ...queueLines].join("\n");
+      }).join("\n\n"),
+    );
+  });
 
 const makeCli = <
   const Groups extends readonly ConnectionSource<AnyProcessGroupContract>[],
@@ -815,11 +865,18 @@ const makeCli = <
   config: ProcessManagerCliConfig = {},
 ) => {
   const target = Argument.string("target");
-  const groupsCommand = Command.make("groups", {}, () => runGroupsCommand(groups));
-  const listCommand = Command.make("ls", {}, () => runListCommand(groups));
-  const verifyCommand = Command.make("verify", {}, () => runVerifyCommand(groups));
-  const statusCommand = Command.make("status", { target }, ({ target }) =>
-    runStatusCommand(groups, target)
+  const jsonOption = Flag.boolean("json").pipe(Flag.withDefault(false));
+  const groupsCommand = Command.make("groups", { json: jsonOption }, ({ json }) =>
+    runGroupsCommand(groups, { json })
+  );
+  const listCommand = Command.make("ls", { json: jsonOption }, ({ json }) =>
+    runListCommand(groups, { json })
+  );
+  const verifyCommand = Command.make("verify", { json: jsonOption }, ({ json }) =>
+    runVerifyCommand(groups, { json })
+  );
+  const statusCommand = Command.make("status", { target, json: jsonOption }, ({ target, json }) =>
+    runStatusCommand(groups, target, { json })
   );
   const processCommand = (
     name: "start" | "stop" | "restart" | "now",
