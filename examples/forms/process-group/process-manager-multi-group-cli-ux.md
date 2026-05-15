@@ -42,6 +42,8 @@ Implemented commands:
 - process controls: `start`, `stop`, `restart`, `now`
 - queue controls: `pause`, `resume`, `clear`
 
+`--json` is implemented for `groups`, `ls`, `verify`, and `status <target>`.
+
 List configured groups first:
 
 ```bash
@@ -76,6 +78,13 @@ OK contract verified for @repo/north-west/BillingGroup
 OK contract verified for @repo/south-west/BillingGroup
 ```
 
+Machine-readable output is available for read/verify commands:
+
+```bash
+$ effect-pm groups --json
+{"groups":[{"groupId":"@repo/north-west/BillingGroup","baseUrl":"http://127.0.0.1:32130"},{"groupId":"@repo/south-west/BillingGroup","baseUrl":"http://127.0.0.1:32131"}]}
+```
+
 Read status by alias:
 
 ```bash
@@ -91,14 +100,14 @@ Run a process by canonical id:
 
 ```bash
 $ effect-pm now @repo/north-west/BillingGroup/SyncInvoices
-OK process @repo/north-west/BillingGroup/SyncInvoices run requested
+OK process @repo/north-west/BillingGroup/SyncInvoices now requested
 ```
 
 Run the same process by a unique suffix alias:
 
 ```bash
 $ effect-pm now north-west/billing-group/sync-invoices
-OK process @repo/north-west/BillingGroup/SyncInvoices run requested
+OK process @repo/north-west/BillingGroup/SyncInvoices now requested
 ```
 
 Process controls use the same target resolver:
@@ -127,6 +136,23 @@ $ effect-pm clear north-west/billing-group/billing-email-queue
 OK queue @repo/north-west/BillingGroup/BillingEmailQueue clear requested
 ```
 
+Targeted controls are gated by the imported contract before any HTTP control
+request is issued. A status-only process cannot be run with `now`, because
+`now` requires the process contract to expose `runImmediately`:
+
+```bash
+$ effect-pm now north-west/billing-group/status-only-process
+process '@repo/north-west/BillingGroup/StatusOnlyProcess' does not expose 'runImmediately'
+```
+
+The same rule applies to queues. If a queue contract does not expose `clear`,
+`clear` fails locally before the CLI calls the remote group:
+
+```bash
+$ effect-pm clear north-west/billing-group/read-only-queue
+queue '@repo/north-west/BillingGroup/ReadOnlyQueue' does not expose 'clear'
+```
+
 ## Ambiguity rules
 
 - Commands accept canonical ids and aliases resolved from normalized full ids.
@@ -143,6 +169,9 @@ OK queue @repo/north-west/BillingGroup/BillingEmailQueue clear requested
   with a `KIND` column.
 - `status`, process commands, and queue commands accept one canonical id or
   normalized suffix alias.
+- Targeted commands check the selected contract entry exposes the requested
+  control before issuing HTTP. `status <target>` checks `status`, `now` checks
+  `runImmediately`, and queue controls check `pause`, `resume`, or `clear`.
 - If one normalized target matches exactly one process or queue across all
   configured group contracts, the CLI can use that target.
 - If a target matches more than one process or queue, the CLI fails instead
@@ -158,7 +187,7 @@ Example ambiguity:
 
 ```bash
 $ effect-pm now sync-invoices
-Ambiguous target "sync-invoices".
+Ambiguous target 'sync-invoices'.
 KIND    TYPE THIS MINIMUM                         CANONICAL ID
 process [north-west/billing-group/sync-invoices]  @repo/north-west/BillingGroup/SyncInvoices
 process [south-west/billing-group/sync-invoices]  @repo/south-west/BillingGroup/SyncInvoices

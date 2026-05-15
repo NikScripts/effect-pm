@@ -23,7 +23,9 @@ than redesigned casually.
 - Registry-backed `ProcessManager.Endpoint(Group)`.
 - `ProcessGroup.remoteLayer(Group, Endpoint)`.
 - Initial multi-group `ProcessManager.cli([GroupA, GroupB])` with `groups`,
-  `ls`, `verify`, `status <target>`, process commands, and queue commands.
+  `ls`, `verify`, `status <target>`, process commands, queue commands,
+  `--json` for read/verify commands, and local contract capability checks before
+  remote controls.
 
 Primary references:
 
@@ -36,8 +38,10 @@ Primary references:
 These are safe near-term improvements because they build on landed surfaces and
 do not require queue schema/handoff work.
 
-1. Harden multi-group CLI output and target resolution.
-2. Use group contracts to gate CLI commands before HTTP calls.
+1. Polish multi-group CLI output, including the landed JSON output for `groups`,
+   `ls`, `verify`, and `status <target>`.
+2. Harden contract capability-gating diagnostics for CLI commands that fail
+   before HTTP calls.
 3. Keep endpoint/connection examples current.
 4. Remove remaining old compatibility surfaces when no examples/tests depend on
    them.

@@ -213,6 +213,12 @@ All target-taking commands use the same resolver, so canonical ids and
 normalized suffix aliases work for status, process controls, and queue controls.
 `--json` output is available for `groups`, `ls`, `verify`, and
 `status <target>`.
+Before issuing a remote status/control request, target-taking commands check the
+selected contract entry exposes the requested control. `status <target>` checks
+`status`; `now` checks for `runImmediately`; queue commands check `pause`,
+`resume`, or `clear`. If a process contract only exposes `status`,
+`now <target>` fails locally before any HTTP request. If a queue contract lacks
+`clear`, `clear <target>` fails the same way.
 Remote queue `add`, `enqueue`, `prioritize`, and `defer` remain unsupported.
 
 ---

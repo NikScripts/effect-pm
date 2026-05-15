@@ -566,9 +566,13 @@ Operator-facing command shape:
 
 ```bash
 effect-pm groups
+effect-pm groups --json
 effect-pm ls
+effect-pm ls --json
 effect-pm verify
+effect-pm verify --json
 effect-pm status north-west/billing-group/sync-invoices
+effect-pm status north-west/billing-group/sync-invoices --json
 effect-pm start north-west/billing-group/sync-invoices
 effect-pm stop north-west/billing-group/sync-invoices
 effect-pm restart north-west/billing-group/sync-invoices
@@ -586,6 +590,7 @@ Rules:
 - `verify` checks every configured remote contract.
 - `status <target>` reads process or queue status for a canonical id or
   normalized suffix alias.
+- `--json` is implemented for `groups`, `ls`, `verify`, and `status <target>`.
 - Canonical ids remain slash-separated Effect-style strings with kebab-case
   package segments and case-preserving service names, such as
   `@repo/north-west/BillingGroup/SyncInvoices`.
@@ -605,8 +610,14 @@ Rules:
   color fallback instead of encoding process/queue/group kind in the id string.
 - Diagnostics should include canonical group and target ids even when accepting
   shorter aliases.
-- Targeted commands verify the selected remote contract before issuing controls
-  and report contract drift as a checked remote/control error.
+- Targeted commands check the selected target's imported contract capabilities
+  before remote calls. `status <target>` requires `status`, `now` requires
+  `runImmediately`, and queue commands require `pause`, `resume`, or `clear`.
+  If a process only exposes `status`, `now` fails locally before HTTP. If a
+  queue lacks `clear`, `clear` fails locally before HTTP.
+- After local capability checks, targeted commands verify the selected remote
+  contract before issuing controls and report contract drift as a checked
+  remote/control error.
 
 `ProcessManager.Endpoint` remains useful as the injectable single-group remote
 manager. Prefer the registry-backed form so connection state comes from a
@@ -997,6 +1008,10 @@ Implemented initial surface:
 - Multi-group `ProcessManager.cli([GroupA, GroupB] as const)` using the
   connection registry, with `groups`, `ls`, `verify`, `status <target>`,
   process commands, and queue commands.
+- CLI `--json` output for `groups`, `ls`, `verify`, and `status <target>`.
+- CLI local capability gating before HTTP status/control requests, including
+  `status <target>` requiring `status`, `now` requiring `runImmediately`, and
+  queue commands requiring their matching queue controls.
 - Remote queue enqueue remains blocked until schema-backed queue item contracts
   land.
 

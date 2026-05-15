@@ -16,6 +16,6 @@ Add typed process group declarations, contracts, and remote management. Processe
 
 The multi-group CLI supports `--json` output for `groups`, `ls`, `verify`, and `status <target>`.
 
-The multi-group CLI now checks target contract capabilities before issuing remote controls.
+The multi-group CLI now checks target contract capabilities before issuing remote status/control requests, so unsupported process and queue commands fail locally before HTTP.
 
 Also fixes `ProcessStore` execution ordering consistency and keyed queue `clear()` dedup cleanup.
