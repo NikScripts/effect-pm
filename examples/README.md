@@ -82,6 +82,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | [`forms/process-group/process-group-contract-http.ts`](./forms/process-group/process-group-contract-http.ts) | `GET /contract` + `ProcessManager.connect` |
 | [`forms/process-group/process-manager-endpoint-service.ts`](./forms/process-group/process-manager-endpoint-service.ts) | `ProcessManager.Endpoint` + `ProcessGroup.remoteLayer` |
 | [`forms/process-group/process-group-remote-layer.ts`](./forms/process-group/process-group-remote-layer.ts) | `ProcessGroup.remoteLayer` |
+| [`forms/process-group/process-group-remote-contract-drift.ts`](./forms/process-group/process-group-remote-contract-drift.ts) | Remote group contract drift detection |
 
 ---
 
