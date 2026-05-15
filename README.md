@@ -282,7 +282,7 @@ yield* group.startAll();
 const status = yield* group.processStatus("email-process");
 // {
 //   name: "email-process",
-//   type: "scheduled",
+//   type: "managed",
 //   status: "running",
 //   uptime: 3600000,
 //   startTime: Date,
@@ -304,13 +304,6 @@ const queues = yield* group.listQueues();
 // Get specific queue
 const emailQueue = yield* group.getQueue("email-queue");
 yield* emailQueue.add([email1, email2, email3]);
-```
-
-### Process Management
-
-```typescript
-// Remove a process
-yield* group.removeProcess("stale-process");
 ```
 
 ## Type Safety
@@ -433,12 +426,12 @@ Start an HTTP control service for external management:
 const group = yield* ProcessGroup.make({...});
 
 // Start control service
-yield* group.serve({ port: 3001 });
+yield* ControlService.make({ group, port: 3001 });
 
 // Now accessible via HTTP:
 // GET  /processes      - List all processes
-// POST /process/start  - Start a process
-// POST /process/stop   - Stop a process
+// POST /processes/:id/start  - Start a process
+// POST /processes/:id/stop   - Stop a process
 // GET  /queues         - List all queues
 ```
 
@@ -564,7 +557,7 @@ See [examples/scenarios/full-process-group-with-queues-and-control-cli.ts](./exa
 
 ### Errors
 
-- `ProcessGroupError` - General error
+- `ProcessGroupErrors` - Local process-group error union
 - `ProcessNotFoundError` - Process not found
 - `ProcessAlreadyRunningError` - Process already running
 - `ProcessNotRunningError` - Process not running

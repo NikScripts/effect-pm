@@ -33,11 +33,11 @@ center. `ProcessManager` still matters, but it can only be as type-safe as the
 7. The remote protocol must validate runtime payloads with schemas where user
    data crosses the network.
 
-## Current gaps
+## Original gaps and legacy compatibility
 
-Current `ProcessGroup.make` takes separate `processes` and `queues` arrays and
-returns methods that accept plain `string` names. That loses autocomplete and
-lets typos compile.
+The original `ProcessGroup.make` took separate `processes` and `queues` arrays
+and returned methods that accepted plain `string` names. That lost autocomplete
+and let typos compile.
 
 ```typescript
 const group = yield* ProcessGroup.make({
@@ -49,14 +49,16 @@ yield* group.start("emailSync");
 yield* group.pauseQueue("EmailQueue");
 ```
 
-Process and queue identity are also inconsistent today:
+The typed group path now uses canonical entries and generated contracts. The
+legacy split-array shape still exists for compatibility, so some string-keyed
+internals remain while migration continues:
 
 - `Process` has a `name` field.
 - `QueueResource.Service` uses a `Context.Service` key as identity.
 - `ProcessGroup` stores queues by `queueTag.key`.
 
-The target model should make identity consistent without forcing every process
-to become a service.
+The target model makes identity consistent without forcing every process to
+become a service.
 
 ## Canonical runtime declarations
 
@@ -338,7 +340,7 @@ generated clients that cannot import the group class.
 
 ```typescript
 const billing = ProcessManager.connect(BillingGroup, {
-  url: "https://billing.internal",
+  baseUrl: "https://billing.internal",
 });
 
 yield* billing.start(StripeSync.id);
@@ -367,7 +369,7 @@ Generated/remote-only clients can use a raw contract value:
 
 ```typescript
 const billing = ProcessManager.connect({
-  url: "https://billing.internal",
+  baseUrl: "https://billing.internal",
   contract: BillingGroup.contract,
 });
 ```
@@ -433,13 +435,13 @@ Local queue services keep the full `Schema.Schema<Item, Encoded, never>` on the
 declaration; contract generation calls `JSONSchema.make(itemSchema)` and exports
 only the descriptor. Do not put live `Schema` values on the wire.
 
-Remote enqueue prerequisites (do not implement PM enqueue until these exist):
+Future remote enqueue prerequisites (do not implement PM enqueue until these exist):
 
-1. **Queue declaration** — `QueueResource.Service` (or layer config) supplies
-   `itemSchema`. Queues without it do not get `"enqueue"` on the contract.
-2. **Contract slice** — `ProcessGroupQueueContract` includes optional `item`
-   descriptor; `GET /contract` returns it for discovery and drift checks.
-3. **Control route** — `POST /queues/:id/enqueue` accepts JSON `unknown`, runs
+1. **Queue declaration** — a future schema-aware queue declaration supplies
+   `itemSchema`.
+2. **Contract slice** — a future `ProcessGroupQueueContract` includes optional
+   `item` descriptor; `GET /contract` returns it for discovery and drift checks.
+3. **Control route** — a future `POST /queues/:id/enqueue` accepts JSON `unknown`, runs
    `Schema.decodeUnknown(targetItemSchema)` on the **target** queue, then calls
    `QueueHandle.enqueue`. Return 400 with `QueueItemValidationError` /
    `QueueBatchValidationError` JSON on failure.
@@ -467,15 +469,16 @@ queue schemas, streaming status, and handoff payloads are stable.
 
 ```typescript
 const billing = ProcessManager.connect(BillingGroup, {
-  url: "https://billing.internal",
+  baseUrl: "https://billing.internal",
 });
 
 yield* billing.process(StripeSync.id).restart;
 yield* billing.queue(EmailQueue.id).pause;
-yield* billing.queue(InvoiceQueue.id).enqueue({ invoiceId: "inv_123" });
+yield* billing.queue(EmailQueue.id).resume;
 ```
 
-Remote queue controls (enqueue requires contract `item` descriptor):
+Future schema-backed remote queue controls (enqueue requires contract `item`
+descriptor):
 
 ```typescript
 export interface RemoteQueueControls<Item, ItemSchema extends Schema.Schema<Item, any, any>> {
@@ -491,9 +494,10 @@ export interface RemoteQueueControls<Item, ItemSchema extends Schema.Schema<Item
 }
 ```
 
-Only queues whose contract entry includes `item` get `enqueue` on the remote
-handle. The client encodes with the same `itemSchema` used at declaration; the
-server decodes with the target runtime schema (see plan 02).
+When this future slice lands, only queues whose contract entry includes `item`
+should get `enqueue` on the remote handle. The client encodes with the same
+`itemSchema` used at declaration; the server decodes with the target runtime
+schema (see plan 02).
 
 Remote compile-time expectations:
 
@@ -908,11 +912,11 @@ Remote PM handoff:
 
 ```typescript
 const oldBilling = ProcessManager.connect(BillingGroup, {
-  url: "https://billing-a.internal",
+  baseUrl: "https://billing-a.internal",
 });
 
 const newBilling = ProcessManager.connect(BillingGroup, {
-  url: "https://billing-b.internal",
+  baseUrl: "https://billing-b.internal",
 });
 
 const released = yield* oldBilling.queue(InvoiceQueue.id).release({
@@ -956,8 +960,9 @@ yield* ProcessGroup.make(id, entries, options);
 ```
 
 - Return a typed group handle with `id`, `entries`, `contract`, and typed local
-  controls.
-- Remove the split `{ processes, queues }` compatibility shape.
+  controls. (Implemented for typed entries.)
+- Keep the split `{ processes, queues }` compatibility shape until a later
+  breaking release removes it.
 
 ### Slice 4 - Typed local controls
 
@@ -1011,8 +1016,8 @@ yield* ProcessGroup.make(id, entries, options);
   declarations as convenience values?
 - How do we expose resource kinds beyond queue/run/http without making the group
   surface too generic?
-- Should `ControlService` be owned by the group service (`BillingGroup.serve`)
-  or remain a separate service consuming a group?
+- Should `ControlService` remain a separate service consuming a group, or
+  should group service classes grow first-class control-service helpers?
 
 ## Non-goals
 

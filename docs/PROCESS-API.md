@@ -211,7 +211,7 @@ Examples are split into **forms** (one API shape) and **scenarios** (composition
 
 | File | Focus |
 |------|--------|
-| [examples/scenarios/full-process-group-with-queues-and-control-cli.ts](../examples/scenarios/full-process-group-with-queues-and-control-cli.ts) | Full `ProcessGroup` + queues + control `serve` + `awaitShutdown` + root `Layer.mergeAll`. |
+| [examples/scenarios/full-process-group-with-queues-and-control-cli.ts](../examples/scenarios/full-process-group-with-queues-and-control-cli.ts) | Full `ProcessGroup` + queues + `ControlService.make` + `awaitShutdown` + root `Layer.mergeAll`. |
 | [examples/forms/schedule/](../examples/forms/schedule/) | Schedule entries (`at`, `window`, `define`) and control surfaces. |
 | [examples/forms/polling/](../examples/forms/polling/) | **`TestClock`**: accelerating polling, `resetCadence`, `peekCadence`, delayed start. |
 | [examples/scenarios/schedule-sync-from-external-db.ts](../examples/scenarios/schedule-sync-from-external-db.ts) | Simulated DB-sync pattern. |
