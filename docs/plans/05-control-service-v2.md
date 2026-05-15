@@ -15,6 +15,10 @@ projections.
 Keep `ControlService` local-first. It should remain safe for application
 embedding and not become the future multi-host `ProcessManager`.
 
+Multi-group CLI UX belongs in `ProcessManager.cli(...)`, backed by a typed
+connection registry. `ControlService` should keep serving one typed group per
+localhost endpoint so applications can compose and expose groups explicitly.
+
 ## Target capabilities
 
 Transport:
