@@ -99,18 +99,24 @@ export interface QueueServiceDefinition<Self, Id extends string, T, R, E>
 The important rule: `id` comes from the declaration itself.
 
 ```typescript
-class StripeSync extends Process.Service<StripeSync>()("@app/StripeSync", {
+class StripeSync extends Process.Service<StripeSync>()("app/StripeSync", {
   effect: syncStripe,
 }) {}
 
-class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()("@app/EmailQueue", {
+class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()("app/EmailQueue", {
   effect: sendEmail,
   itemSchema: EmailSchema,
 }) {}
 
-StripeSync.id; // "@app/StripeSync"
-EmailQueue.id; // "@app/EmailQueue"
+StripeSync.id; // "app/StripeSync"
+EmailQueue.id; // "app/EmailQueue"
 ```
+
+Use slash-separated, case-preserving Effect-style ids. Do not prefix ids with
+symbolic markers such as `@` to encode ownership or kind. If an id includes a
+group path segment, keep that segment normalized and stable, for example
+`billing-group`, not a mix of `billing` and `BillingGroup`. Display kind as a
+separate field or column instead of encoding it into the id.
 
 ## Naming convention
 
@@ -143,7 +149,7 @@ registration IDs.
 
 ```typescript
 const billing = yield* ProcessGroup.make(
-  "@app/BillingGroup",
+  "app/billing-group",
   [StripeSync, InvoiceSweep, EmailQueue, InvoiceQueue] as const,
 );
 ```
@@ -161,7 +167,7 @@ Use `ProcessGroup.Service` when the group itself should be injectable:
 
 ```typescript
 class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
-  "@app/BillingGroup",
+  "app/billing-group",
   [StripeSync, InvoiceSweep, EmailQueue, InvoiceQueue] as const,
 ) {}
 ```
@@ -178,7 +184,7 @@ The class form is the canonical injectable group model.
 
 ```typescript
 class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
-  "@app/BillingGroup",
+  "app/billing-group",
   [StripeSync, InvoiceSweep, EmailQueue, InvoiceQueue] as const,
   { autoStart: true },
 ) {}
@@ -282,7 +288,7 @@ Inside a single process, resources should communicate through normal Effect
 dependencies and direct handles.
 
 ```typescript
-class StripeSync extends Process.Service<StripeSync>()("@app/StripeSync", {
+class StripeSync extends Process.Service<StripeSync>()("app/StripeSync", {
   effect: Effect.gen(function* () {
     const emails = yield* EmailQueue;
     const invoices = yield* InvoiceQueue;
@@ -347,7 +353,7 @@ yield* billing.queue(InvoiceQueue).enqueue(job);
 The remote PM should use canonical IDs from the contract:
 
 ```typescript
-yield* billing.queue("@app/InvoiceQueue").enqueue(job);
+yield* billing.queue("app/InvoiceQueue").enqueue(job);
 ```
 
 If the app imports the declaration, it can still avoid spelling strings:
@@ -492,7 +498,7 @@ Remote compile-time expectations:
 
 ```typescript
 // should not compile: unknown group member
-yield* billing.process("@app/MissingProcess").start;
+yield* billing.process("app/MissingProcess").start;
 
 // should not compile if queue item schema/type is imported in the contract
 yield* billing.queue(InvoiceQueue.id).enqueue({ to: "ops@example.com" });
@@ -552,7 +558,7 @@ Expected operator-facing command shape:
 ```bash
 effect-pm groups
 effect-pm ls
-effect-pm now @repo/north-west/billing-group/SyncInvoices
+effect-pm now repo/north-west/billing-group/SyncInvoices
 effect-pm now north-west/billing-group/sync-invoices
 effect-pm pause south-west/billing-group/billing-email-queue
 ```
@@ -560,6 +566,10 @@ effect-pm pause south-west/billing-group/billing-email-queue
 Rules:
 
 - `groups` lists the configured group ids, optional aliases, and endpoints.
+- Canonical ids remain slash-separated, case-preserving Effect-style strings.
+  Do not use symbolic markers such as `@` to encode ownership or kind.
+- Keep group path segments stable and normalized. Use `billing-group` in group
+  id examples, not a mix of `billing` and `BillingGroup`.
 - `ls` lists all configured groups with their process and queue targets.
 - Single-target commands accept one process or queue id. The id can be canonical
   or an alias resolved from the normalized full id.
@@ -572,6 +582,9 @@ Rules:
   candidate plus the shortest unique suffix needed to disambiguate. Use terminal
   bold/color for the shortest unique suffix when available, and a plain text
   fallback such as brackets when color is disabled.
+- Display kind separately from ids. Use a `KIND` column, label, or accessible
+  color fallback instead of encoding process/queue/group kind with symbols or
+  prefixes inside the id string.
 - Diagnostics should include canonical group and target ids even when accepting
   shorter aliases.
 - Each command should verify the target group contract before issuing controls
@@ -644,7 +657,7 @@ interface TypedProcessGroup<Id, Entries, Error = ProcessGroupErrors> {
 `ProcessGroup.make(id, entries)` can stay local and narrow:
 
 ```typescript
-yield* ProcessGroup.make("@app/BillingGroup", entries);
+yield* ProcessGroup.make("app/billing-group", entries);
 // TypedProcessGroup<..., ProcessGroupErrors>
 ```
 
@@ -653,7 +666,7 @@ boundary:
 
 ```typescript
 class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
-  "@app/BillingGroup",
+  "app/billing-group",
   [StripeSync, EmailQueue] as const,
 ) {}
 
@@ -742,7 +755,7 @@ When that design gate opens, prefer constructors named around remote capability:
 
 ```typescript
 class StripeSync extends Process.RemoteService<StripeSync>()(
-  "@app/StripeSync",
+  "app/StripeSync",
   { effect: syncStripe },
 ) {}
 ```
@@ -752,7 +765,7 @@ contract:
 
 ```typescript
 class EmailQueue extends QueueResource.RemoteService<EmailQueue, Email>()(
-  "@app/EmailQueue",
+  "app/EmailQueue",
   { effect: sendEmail, itemSchema: EmailSchema },
 ) {}
 
@@ -815,10 +828,10 @@ routes generated from the group contract.
 Local-first routes can still exist:
 
 ```text
-POST /processes/@app%2FStripeSync/start
-POST /processes/@app%2FStripeSync/stop
-POST /queues/@app%2FEmailQueue/pause
-POST /queues/@app%2FInvoiceQueue/enqueue
+POST /processes/app%2FStripeSync/start
+POST /processes/app%2FStripeSync/stop
+POST /queues/app%2FEmailQueue/pause
+POST /queues/app%2FInvoiceQueue/enqueue
 GET  /status
 GET  /contract
 ```

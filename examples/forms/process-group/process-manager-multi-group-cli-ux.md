@@ -9,12 +9,12 @@ connection registry.
 
 ```typescript
 class NorthWestBillingGroup extends ProcessGroup.Service<NorthWestBillingGroup>()(
-  "@repo/north-west/billing-group",
+  "repo/north-west/billing-group",
   [NorthWestSyncInvoices, NorthWestBillingEmailQueue] as const,
 ) {}
 
 class SouthWestBillingGroup extends ProcessGroup.Service<SouthWestBillingGroup>()(
-  "@repo/south-west/billing-group",
+  "repo/south-west/billing-group",
   [SouthWestSyncInvoices, SouthWestBillingEmailQueue] as const,
 ) {}
 
@@ -37,45 +37,49 @@ List configured groups first:
 
 ```bash
 $ effect-pm groups
-GROUP                          ENDPOINT
-@repo/north-west/billing-group  http://127.0.0.1:32130
-@repo/south-west/billing-group  http://127.0.0.1:32131
+KIND   ID                             ENDPOINT
+group  repo/north-west/billing-group  http://127.0.0.1:32130
+group  repo/south-west/billing-group  http://127.0.0.1:32131
 ```
 
 List all configured groups:
 
 ```bash
 $ effect-pm ls
-GROUP @repo/north-west/billing-group
+GROUP repo/north-west/billing-group
 
 KIND     ID
-process  @repo/north-west/billing-group/SyncInvoices
-queue    @repo/north-west/billing-group/BillingEmailQueue
+process  repo/north-west/billing-group/SyncInvoices
+queue    repo/north-west/billing-group/BillingEmailQueue
 
-GROUP @repo/south-west/billing-group
+GROUP repo/south-west/billing-group
 
 KIND     ID
-process  @repo/south-west/billing-group/SyncInvoices
-queue    @repo/south-west/billing-group/BillingEmailQueue
+process  repo/south-west/billing-group/SyncInvoices
+queue    repo/south-west/billing-group/BillingEmailQueue
 ```
 
 Run a process by canonical id:
 
 ```bash
-$ effect-pm now @repo/north-west/billing-group/SyncInvoices
-OK process @repo/north-west/billing-group/SyncInvoices run requested
+$ effect-pm now repo/north-west/billing-group/SyncInvoices
+OK process repo/north-west/billing-group/SyncInvoices run requested
 ```
 
 Run the same process by a unique suffix alias:
 
 ```bash
 $ effect-pm now north-west/billing-group/sync-invoices
-OK process @repo/north-west/billing-group/SyncInvoices run requested
+OK process repo/north-west/billing-group/SyncInvoices run requested
 ```
 
 ## Ambiguity rules
 
 - Commands accept canonical ids and aliases resolved from normalized full ids.
+- Canonical ids are slash-separated, case-preserving Effect-style strings. Do
+  not prefix ids with symbolic markers such as `@` to encode ownership or kind.
+- The group path segment should be stable and normalized, e.g. `billing-group`,
+  not a mix of `billing` and `BillingGroup` across examples.
 - Normalization applies to the whole id: case-insensitive comparison,
   punctuation-insensitive word casing (`SyncInvoices` ↔ `sync-invoices`), and
   suffix matching.
@@ -86,6 +90,9 @@ OK process @repo/north-west/billing-group/SyncInvoices run requested
 - Ambiguity diagnostics should show every canonical candidate and visually
   emphasize the shortest unique suffix the user can type for each candidate.
   Use terminal bold/color when available; fall back to brackets in plain text.
+- Display kind separately from ids. Use a `KIND` column, label, or accessible
+  color fallback instead of encoding process/queue/group kind with symbols or
+  prefixes inside the id string.
 - Every command should verify the remote contract before controlling a group and
   surface drift as a checked control error.
 
@@ -96,8 +103,8 @@ $ effect-pm now sync-invoices
 Ambiguous target "sync-invoices".
 
 KIND     TYPE THIS MINIMUM                    CANONICAL ID
-process  [north-west/billing-group/sync-invoices]   @repo/north-west/billing-group/SyncInvoices
-process  [south-west/billing-group/sync-invoices]   @repo/south-west/billing-group/SyncInvoices
+process  [north-west/billing-group/sync-invoices]   repo/north-west/billing-group/SyncInvoices
+process  [south-west/billing-group/sync-invoices]   repo/south-west/billing-group/SyncInvoices
 ```
 
 In a color terminal, render the `TYPE THIS MINIMUM` column in bold or an accent
