@@ -22,7 +22,7 @@
  * ## What the CLI talks to
  *
  * The implementation lives in **`src/cli.ts`** (`createCli` / `runCli`). It performs
- * HTTP `POST` requests to the **localhost-only** control API exposed by `ProcessGroup.serve`
+ * HTTP requests to the **localhost-only** control API exposed by `ControlService.make`
  * (see **`src/ControlService.ts`**).
  *
  * ## Commands (summary)

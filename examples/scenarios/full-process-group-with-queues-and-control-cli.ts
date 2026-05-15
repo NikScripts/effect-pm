@@ -177,7 +177,7 @@ class QueueAdderProcess extends Process.Service<QueueAdderProcess>()("queue-adde
 
 /**
  * End-to-end program: acquire group → expose control HTTP → start work → block on shutdown.
- * **`Effect.scoped`**: `serve` / internal scopes attach finalizers so fibers and listeners clean up.
+ * **`Effect.scoped`**: `ControlService.make` / internal scopes attach finalizers so fibers and listeners clean up.
  */
 const program = Effect.gen(function* () {
   const portRaw = yield* Config.string("HOME_SERVER_PORT").pipe(Config.option);
@@ -207,9 +207,9 @@ const program = Effect.gen(function* () {
   yield* group.start(QueueAdderProcess);
 
   yield* Effect.logInfo("✅ Demo is running. Try these commands:");
-  yield* Effect.logInfo("   npm run cli ls");
-  yield* Effect.logInfo("   npm run cli status queue-adder");
-  yield* Effect.logInfo("   npm run cli queues");
+  yield* Effect.logInfo("   pnpm run cli ls");
+  yield* Effect.logInfo("   pnpm run cli status queue-adder");
+  yield* Effect.logInfo("   pnpm run cli queues");
   yield* Effect.logInfo("   Press Ctrl+C to stop.");
 
   /**

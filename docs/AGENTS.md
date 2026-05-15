@@ -10,7 +10,7 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 |------|---------|
 | `src/index.ts` | Public exports + package-level TSDoc. **Start here for imports.** |
 | `src/Process.ts` | `Process.make`, supervisor loop, `ProcessSupervisorRequirements`. |
-| `src/ProcessGroup.ts` | Orchestration, `make`, fork/stop, `serve`, `awaitShutdown`. |
+| `src/ProcessGroup.ts` | Orchestration, `make`, fork/stop, typed controls, `awaitShutdown`. |
 | `src/Polling.ts`, `src/ProcessSchedule.ts` | Cadence + gate services and preset `Layer`s. |
 | `src/QueueResource.ts` | Priority queue resource factory. |
 | `src/ProcessStore.ts` | Analytics + lifecycle event append/read. |

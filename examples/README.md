@@ -84,7 +84,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | [`forms/process-group/process-manager-endpoint-service.ts`](./forms/process-group/process-manager-endpoint-service.ts) | `ProcessManager.Endpoint` + `ProcessGroup.remoteLayer` |
 | [`forms/process-group/process-group-remote-layer.ts`](./forms/process-group/process-group-remote-layer.ts) | `ProcessGroup.remoteLayer` |
 | [`forms/process-group/process-group-remote-contract-drift.ts`](./forms/process-group/process-group-remote-contract-drift.ts) | Remote group contract drift detection |
-| [`forms/process-group/process-manager-multi-group-cli-ux.md`](./forms/process-group/process-manager-multi-group-cli-ux.md) | Expected multi-group CLI UX |
+| [`forms/process-group/process-manager-multi-group-cli-ux.md`](./forms/process-group/process-manager-multi-group-cli-ux.md) | Multi-group `ProcessManager.cli` UX |
 
 ---
 
@@ -92,7 +92,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 
 | File | Teaches |
 |------|---------|
-| [`scenarios/full-process-group-with-queues-and-control-cli.ts`](./scenarios/full-process-group-with-queues-and-control-cli.ts) | End-to-end ProcessGroup + queues + `serve` + `awaitShutdown` + CLI |
+| [`scenarios/full-process-group-with-queues-and-control-cli.ts`](./scenarios/full-process-group-with-queues-and-control-cli.ts) | End-to-end ProcessGroup + queues + `ControlService.make` + `awaitShutdown` + CLI |
 | [`scenarios/game-window-polling-with-process-group.ts`](./scenarios/game-window-polling-with-process-group.ts) | `ProcessGroup.start` + schedule windows + `TestClock` |
 | [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) | DB-to-runtime schedule sync pattern |
 | [`scenarios/nwslsoccer/`](./scenarios/nwslsoccer/) | Real HttpApi client against NWSL SDP (optional local tree) |
@@ -107,6 +107,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | `pnpm run example:typed-process-group` | ProcessGroup + ProcessManager forms |
 | `pnpm run example:queue-resource` | Queue form |
 | `pnpm run cli …` | CLI against the demo control port |
+| `pnpm run example:process-patterns` | Alias for `example:process-supervisor-patterns` |
 | `pnpm run example:process-supervisor-patterns` | Accelerating + delayed-start forms |
 | `pnpm run example:sports-polling-accelerating` | All three sports polling forms |
 | `pnpm run example:schedule-control-surfaces` | All three schedule control forms |
@@ -117,7 +118,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | `pnpm run example:http-client-run-gate` | HttpClient gate form |
 | `pnpm run example:http-api-resource` | HttpApiResource form |
 | `pnpm run example:http-api-resource-layer-effect` | `layerEffect` form |
-| `pnpm run example:form:*` | Individual forms (see `package.json`) |
+| `pnpm run example:form:*` | Individual form scripts that are registered in `package.json` |
 
 Run any file directly:
 

@@ -27,9 +27,9 @@ The special `persist` and `refill` names mix storage behavior with lifecycle
 behavior. Storage should move into `ProcessStore`; lifecycle hooks should receive
 powerful queue controls.
 
-The current enqueue input also accepts any `Iterable<T>`. That is too broad for
-the future API. It can treat strings as batches of characters and makes single
-versus batch error typing harder than it needs to be.
+The target enqueue input must stay narrower than broad `Iterable<T>`. Broad
+iterables can treat strings as batches of characters and make single versus
+batch error typing harder than it needs to be.
 
 ## Target model
 
