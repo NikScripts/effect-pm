@@ -17,7 +17,13 @@
  */
 
 import { Data, Effect, Schema, Scope } from "effect";
-import type { ProcessGroupControls } from "./ProcessGroup";
+import type {
+  ProcessGroupContract,
+  ProcessGroupControls,
+  ProcessGroupEntry,
+  ProcessGroupEntryRequirements,
+  TypedProcessGroup,
+} from "./ProcessGroup";
 import type { ProcessStore } from "./ProcessStore";
 import { createCli, runCli } from "./cli";
 
@@ -119,6 +125,25 @@ interface JsonRequest {
   readonly url?: string | undefined;
   readonly on: (event: string, listener: (...args: ReadonlyArray<unknown>) => void) => void;
 }
+
+type AnyProcessGroupContract = ProcessGroupContract<
+  string,
+  readonly ProcessGroupEntry[]
+>;
+
+type LegacyControlServiceOptions<R> = {
+  readonly port?: number;
+  readonly group: ProcessGroupControls<R>;
+  readonly contract?: AnyProcessGroupContract;
+};
+
+type TypedControlServiceOptions<
+  Id extends string,
+  Entries extends readonly ProcessGroupEntry[],
+> = {
+  readonly port?: number;
+  readonly group: TypedProcessGroup<Id, Entries>;
+};
 
 const writeJson = (
   res: JsonResponse,
@@ -426,17 +451,37 @@ const handleCommand =
  * 
  * @public
  */
-const startControlService = <R>(options: {
-  port?: number;
-  group: ProcessGroupControls<R>;
-}): Effect.Effect<void, never, Scope.Scope | R | ProcessStore> =>
-  Effect.acquireRelease(
+function startControlService<R>(
+  options: LegacyControlServiceOptions<R>,
+): Effect.Effect<void, never, Scope.Scope | R | ProcessStore>;
+function startControlService<
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+>(
+  options: TypedControlServiceOptions<Id, Entries>,
+): Effect.Effect<
+  void,
+  never,
+  Scope.Scope | ProcessGroupEntryRequirements<Entries> | ProcessStore
+>;
+function startControlService(
+  options:
+    | LegacyControlServiceOptions<unknown>
+    | TypedControlServiceOptions<string, readonly ProcessGroupEntry[]>,
+): Effect.Effect<void, never, Scope.Scope | unknown | ProcessStore> {
+  return Effect.acquireRelease(
     Effect.gen(function* () {
       const port = options.port ?? 3001;
       const group = options.group;
+      const commandGroup = "legacy" in group ? group.legacy : group;
+      const contract = "legacy" in group
+        ? group.contract
+        : "contract" in options
+          ? options.contract
+          : undefined;
 
       // Capture context (services) with all dependencies already provided
-      const services = yield* Effect.context<R | ProcessStore>();
+      const services = yield* Effect.context<unknown | ProcessStore>();
       const runWithServices = Effect.runForkWith(services);
 
       const nodeHttp = yield* Effect.promise(() => import("node:http"));
@@ -456,6 +501,15 @@ const startControlService = <R>(options: {
             return;
           }
 
+          if (url.pathname === "/contract" && req.method === "GET") {
+            if (contract === undefined) {
+              yield* writeJson(res, 404, { error: "Contract not available" });
+              return;
+            }
+            yield* writeJson(res, 200, contract);
+            return;
+          }
+
           if (url.pathname === "/control" && req.method === "POST") {
             const raw = yield* readBody(req);
             const body = yield* Schema.decodeUnknownEffect(
@@ -463,7 +517,7 @@ const startControlService = <R>(options: {
             )(raw).pipe(
               Effect.mapError((cause) => new InvalidJsonError({ cause })),
             );
-            const result = yield* handleCommand(group)(body.command, body.name);
+            const result = yield* handleCommand(commandGroup)(body.command, body.name);
             const status = result.success ? 200 : 400;
             yield* writeJson(res, status, result);
             return;
@@ -528,13 +582,11 @@ const startControlService = <R>(options: {
           });
         },
       ),
-  )
+  );
+}
 
 interface ControlServiceApi {
-  readonly make: <R>(options: {
-    readonly port?: number;
-    readonly group: ProcessGroupControls<R>;
-  }) => Effect.Effect<void, never, Scope.Scope | R | ProcessStore>;
+  readonly make: typeof startControlService;
   readonly createCli: typeof createCli;
   readonly runCli: typeof runCli;
 }
