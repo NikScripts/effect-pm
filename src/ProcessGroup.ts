@@ -419,6 +419,7 @@ export interface TypedProcessGroup<
   Error = ProcessGroupErrors,
 > {
   readonly id: Id;
+  readonly entries: Entries;
   readonly contract: ProcessGroupContract<Id, Entries>;
   readonly start: <P extends ProcessGroupProcessEntries<Entries>>(
     process: P,
@@ -441,7 +442,6 @@ export interface TypedProcessGroup<
   readonly status: ProcessGroup<ProcessGroupEntryRequirements<Entries>, Error>["status"];
   readonly health: Effect.Effect<GroupHealth, Error>;
   readonly awaitShutdown: ProcessGroup<ProcessGroupEntryRequirements<Entries>, Error>["awaitShutdown"];
-  readonly legacy: ProcessGroup<ProcessGroupEntryRequirements<Entries>, Error>;
 }
 
 // ============================================================================
@@ -1009,22 +1009,6 @@ const decodeRemoteData = <S extends Schema.Top & { readonly DecodingServices: ne
   );
 };
 
-const isRemoteProcessId = <
-  const Entries extends readonly ProcessGroupEntry[],
->(
-  contract: ProcessGroupContract<string, Entries>,
-  id: string,
-): id is ProcessGroupProcessEntries<Entries>["id"] =>
-  contract.processes.some((process) => process.id === id);
-
-const isRemoteQueueId = <
-  const Entries extends readonly ProcessGroupEntry[],
->(
-  contract: ProcessGroupContract<string, Entries>,
-  id: string,
-): id is ProcessGroupQueueEntries<Entries>["id"] =>
-  contract.queues.some((queue) => queue.id === id);
-
 const unsupportedRemoteQueueEnqueue = (
   operation: string,
   target: string,
@@ -1130,73 +1114,9 @@ const makeRemoteTypedProcessGroup = <
     status: queueStatus(queue.id),
   });
 
-  const processNotFound = (name: string): ProcessNotFoundError =>
-    new ProcessNotFoundError({ processName: name });
-
-  const legacy: ProcessGroup<
-    ProcessGroupEntryRequirements<Entries>,
-    ProcessGroupControlError
-  > = {
-    start: (name) =>
-      isRemoteProcessId(manager.contract, name)
-        ? runRemote(manager.process(name).start)
-        : Effect.fail(processNotFound(name)),
-    stop: (name) =>
-      isRemoteProcessId(manager.contract, name)
-        ? runRemote(manager.process(name).stop)
-        : Effect.fail(processNotFound(name)),
-    restart: (name) =>
-      isRemoteProcessId(manager.contract, name)
-        ? runRemote(manager.process(name).restart)
-        : Effect.fail(processNotFound(name)),
-    startAll: () =>
-      Effect.forEach(
-        group.contract.processes,
-        (process) => runRemote(manager.process(process.id).start),
-        { discard: true },
-      ),
-    stopAll: () =>
-      Effect.forEach(
-        group.contract.processes,
-        (process) => runRemote(manager.process(process.id).stop),
-        { discard: true },
-      ),
-    runImmediately: (name) =>
-      isRemoteProcessId(manager.contract, name)
-        ? runRemote(manager.process(name).runImmediately)
-        : Effect.fail(processNotFound(name)),
-    status,
-    processStatus: (name) =>
-      isRemoteProcessId(manager.contract, name)
-        ? processStatus(name)
-        : Effect.fail(processNotFound(name)),
-    health,
-    listQueues: () => Effect.map(status, (groupStatus) => groupStatus.queues),
-    getQueue: (name) =>
-      Effect.fail(
-        new UnsupportedRemoteControlError({
-          operation: "getQueue",
-          target: name,
-          reason: "Remote groups cannot expose local QueueHandle values",
-        }),
-      ),
-    pauseQueue: (name) =>
-      isRemoteQueueId(manager.contract, name)
-        ? runRemote(manager.queue(name).pause)
-        : Effect.fail(processNotFound(name)),
-    resumeQueue: (name) =>
-      isRemoteQueueId(manager.contract, name)
-        ? runRemote(manager.queue(name).resume)
-        : Effect.fail(processNotFound(name)),
-    clearQueue: (name) =>
-      isRemoteQueueId(manager.contract, name)
-        ? clearQueue(name)
-        : Effect.fail(processNotFound(name)),
-    awaitShutdown: () => unsupportedRemoteAwaitShutdown(group.id),
-  };
-
   return {
     id: group.id,
+    entries: group.entries,
     contract: group.contract,
     start: (process) => runRemote(manager.process(process.id).start),
     stop: (process) => runRemote(manager.process(process.id).stop),
@@ -1206,8 +1126,7 @@ const makeRemoteTypedProcessGroup = <
     queue: queueById,
     status,
     health,
-    awaitShutdown: legacy.awaitShutdown,
-    legacy,
+    awaitShutdown: () => unsupportedRemoteAwaitShutdown(group.id),
   };
 };
 
@@ -1268,13 +1187,12 @@ const makeTypedProcessGroup = <
     const contract = makeProcessGroupContract(id, entries);
     const processes = entries.filter(isProcessGroupProcessEntry);
     const queues = entries.filter(isProcessGroupQueueEntry);
-    // The legacy ProcessGroup still owns the running fibers and queue lookup.
-    // Typed groups are a safe facade over that runtime while the old string API
-    // remains available for compatibility and ControlService delegation.
+    // The string-keyed runtime owns the running fibers and queue lookup.
+    // Typed groups are the public facade over this internal implementation.
     const queueTags = queues.map(
       (queue): ProcessGroupQueueEntries<Entries>["tag"] => queue.tag,
     );
-    const legacy = yield* makeProcessGroup({
+    const runtime = yield* makeProcessGroup({
       processes: processes.map((process) => process.process),
       queues: queueTags,
     });
@@ -1283,7 +1201,7 @@ const makeTypedProcessGroup = <
       queueId: string,
     ): Effect.Effect<QueueDetails, ProcessGroupErrors> =>
       Effect.gen(function* () {
-        const queue = yield* legacy.getQueue(queueId);
+        const queue = yield* runtime.getQueue(queueId);
         const sizes = yield* queue.sizes;
         const total = yield* queue.size;
         const completed = yield* queue.completed;
@@ -1296,39 +1214,39 @@ const makeTypedProcessGroup = <
 
     return {
       id,
+      entries,
       contract,
-      start: (process) => legacy.start(process.id),
-      stop: (process) => legacy.stop(process.id),
-      restart: (process) => legacy.restart(process.id),
-      runImmediately: (process) => legacy.runImmediately(process.id),
+      start: (process) => runtime.start(process.id),
+      stop: (process) => runtime.stop(process.id),
+      restart: (process) => runtime.restart(process.id),
+      runImmediately: (process) => runtime.runImmediately(process.id),
       process: (process) => ({
-        start: legacy.start(process.id),
-        stop: legacy.stop(process.id),
-        restart: legacy.restart(process.id),
-        runImmediately: legacy.runImmediately(process.id),
-        status: legacy.processStatus(process.id),
+        start: runtime.start(process.id),
+        stop: runtime.stop(process.id),
+        restart: runtime.restart(process.id),
+        runImmediately: runtime.runImmediately(process.id),
+        status: runtime.processStatus(process.id),
       }),
       queue: (queue) => ({
         add: (items) =>
-          Effect.flatMap(legacy.getQueue(queue.id), (handle) => handle.add(items)),
+          Effect.flatMap(runtime.getQueue(queue.id), (handle) => handle.add(items)),
         enqueue: (items) =>
-          Effect.flatMap(legacy.getQueue(queue.id), (handle) => handle.add(items)),
+          Effect.flatMap(runtime.getQueue(queue.id), (handle) => handle.add(items)),
         prioritize: (items) =>
           Effect.flatMap(
-            legacy.getQueue(queue.id),
+            runtime.getQueue(queue.id),
             (handle) => handle.prioritize(items),
           ),
         defer: (items) =>
-          Effect.flatMap(legacy.getQueue(queue.id), (handle) => handle.defer(items)),
-        pause: legacy.pauseQueue(queue.id),
-        resume: legacy.resumeQueue(queue.id),
-        clear: legacy.clearQueue(queue.id),
+          Effect.flatMap(runtime.getQueue(queue.id), (handle) => handle.defer(items)),
+        pause: runtime.pauseQueue(queue.id),
+        resume: runtime.resumeQueue(queue.id),
+        clear: runtime.clearQueue(queue.id),
         status: queueStatus(queue.id),
       }),
-      status: legacy.status,
-      health: legacy.health,
-      awaitShutdown: legacy.awaitShutdown,
-      legacy,
+      status: runtime.status,
+      health: runtime.health,
+      awaitShutdown: runtime.awaitShutdown,
     };
   });
 

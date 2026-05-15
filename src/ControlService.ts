@@ -3,12 +3,12 @@
  *
  * @remarks
  * - **Binding** — `127.0.0.1` only (not exposed on LAN interfaces).
- * - **Transport** — `POST /control` with {@link ControlRequestBody}; responses use
+ * - **Transport** — Contract-aligned REST routes; responses use
  *   {@link ControlResponse}. `GET /health` for probes.
  * - **Payloads** — Request bodies are validated with **Effect Schema**; responses are
  *   JSON-encoded safely from plain objects.
- * - **Concurrency** — Some mutating routes fork work so the HTTP handler returns quickly
- *   (see `restart` / global restart in the implementation).
+ * - **Contract** — `GET /contract` is always available because the service is
+ *   built from a typed {@link ProcessGroup}.
  *
  * The namespace also re-exports {@link createCli} and {@link runCli} so operators can
  * depend on a single import when wiring tooling.
@@ -16,61 +16,20 @@
  * @module ControlService
  */
 
-import { Data, Effect, Schema, Scope } from "effect";
+import { Effect, Schema, Scope } from "effect";
 import type {
-  ProcessGroupContract,
-  ProcessGroupControls,
   ProcessGroupEntry,
   ProcessGroupEntryRequirements,
-  QueueDetails,
+  ProcessGroupProcessEntries,
+  ProcessGroupQueueEntries,
   TypedProcessGroup,
 } from "./ProcessGroup";
-import type { QueueHandle } from "./QueueResource";
 import type { ProcessStore } from "./ProcessStore";
 import { createCli, runCli } from "./cli";
 
 // ============================================================================
 // Public Types
 // ============================================================================
-
-/**
- * Available control commands
- * 
- * @remarks
- * Commands are categorized by their target:
- * - **Process commands**: start, stop, restart, now
- * - **Queue commands**: pause, resume, shutdown
- * - **Queue maintenance**: restart clears pending queue items; REST `clear` is
- *   available at `POST /queues/:id/clear`
- * - **Universal commands**: ls, status, queues
- * 
- * @public
- */
-export type ControlCommand =
-  | "ls"        // List all processes and queues
-  | "status"    // Get detailed status of a process or queue
-  | "start"     // Start a process
-  | "stop"      // Stop a process
-  | "pause"     // Pause a queue
-  | "resume"    // Resume a queue
-  | "restart"   // Restart a process, or clear a queue
-  | "shutdown"  // Shutdown a queue permanently
-  | "now"       // Run a process immediately
-  | "queues"    // List all queues
-
-/**
- * Control API request body
- * 
- * @public
- */
-export interface ControlRequestBody {
-  /** Command to execute */
-  command: ControlCommand;
-  /** Target process or queue name (required for most commands) */
-  name?: string;
-  /** Reserved for future command payloads. */
-  data?: unknown;
-}
 
 /**
  * Control API response
@@ -90,31 +49,6 @@ export interface ControlResponse<T = unknown> {
   error?: string;
 }
 
-class InvalidJsonError extends Data.TaggedError("InvalidJsonError")<{
-  readonly cause: unknown;
-}> {}
-
-const controlCommandSchema = Schema.Literals([
-  "ls",
-  "status",
-  "start",
-  "stop",
-  "pause",
-  "resume",
-  "restart",
-  "shutdown",
-  "now",
-  "queues",
-] as const);
-
-const controlRequestFromJson = Schema.fromJsonString(
-  Schema.Struct({
-    command: controlCommandSchema,
-    name: Schema.optional(Schema.String),
-    data: Schema.optional(Schema.Unknown),
-  }),
-);
-
 const responseBodyJson = Schema.fromJsonString(Schema.Unknown);
 
 /** Minimal surface used from Node’s `ServerResponse` (avoids `node:http` type imports). */
@@ -129,17 +63,6 @@ interface JsonRequest {
   readonly url?: string | undefined;
   readonly on: (event: string, listener: (...args: ReadonlyArray<unknown>) => void) => void;
 }
-
-type AnyProcessGroupContract = ProcessGroupContract<
-  string,
-  readonly ProcessGroupEntry[]
->;
-
-type LegacyControlServiceOptions<R, Error = unknown> = {
-  readonly port?: number;
-  readonly group: ProcessGroupControls<R, Error>;
-  readonly contract?: AnyProcessGroupContract;
-};
 
 type TypedControlServiceOptions<
   Id extends string,
@@ -163,26 +86,6 @@ const writeJson = (
       res.writeHead(status, { "Content-Type": "application/json" });
       res.end(json);
     });
-  });
-
-const appendChunk = (data: string, chunk: unknown): string => {
-  if (typeof chunk === "string") {
-    return data + chunk;
-  }
-  if (chunk instanceof Uint8Array) {
-    return data + new TextDecoder().decode(chunk);
-  }
-  return data;
-};
-
-const readBody = (req: JsonRequest): Effect.Effect<string> =>
-  Effect.callback<string>((resume: (effect: Effect.Effect<string>) => void) => {
-    let data = "";
-    req.on("data", (chunk: unknown) => {
-      data = appendChunk(data, chunk);
-    });
-    req.on("end", () => resume(Effect.succeed(data)));
-    req.on("error", () => resume(Effect.succeed(data)));
   });
 
 const processStatusResponse = <T>(
@@ -231,26 +134,6 @@ const pathSegments = (url: URL): ReadonlyArray<string> | undefined => {
   }
   return decoded;
 };
-
-const queueDetails = (
-  name: string,
-  queue: QueueHandle<any, any, any>,
-): Effect.Effect<QueueDetails> =>
-  Effect.gen(function* () {
-    const prioritySizes = yield* queue.sizes;
-    const totalSize = yield* queue.size;
-    const completed = yield* queue.completed;
-    return {
-      name,
-      size: {
-        high: prioritySizes.high,
-        normal: prioritySizes.normal,
-        low: prioritySizes.low,
-        total: totalSize,
-      },
-      completed,
-    };
-  });
 
 interface RouteResponse {
   readonly status: number;
@@ -304,12 +187,42 @@ const routeFailure = (error: unknown, fallback: string): RouteResponse => ({
   body: errorResponse(errorMessage(error, fallback)),
 });
 
+const findProcessEntry = <
+  const Entries extends readonly ProcessGroupEntry[],
+>(
+  entries: Entries,
+  id: string,
+): ProcessGroupProcessEntries<Entries> | undefined =>
+  entries.find(
+    (entry): entry is ProcessGroupProcessEntries<Entries> =>
+      entry.kind === "process" && entry.id === id,
+  );
+
+const findQueueEntry = <
+  const Entries extends readonly ProcessGroupEntry[],
+>(
+  entries: Entries,
+  id: string,
+): ProcessGroupQueueEntries<Entries> | undefined =>
+  entries.find(
+    (entry): entry is ProcessGroupQueueEntries<Entries> =>
+      entry.kind === "queue" && entry.id === id,
+  );
+
 const handleRestRoute =
-  <R, Error>(group: ProcessGroupControls<R, Error>) =>
+  <
+    const Id extends string,
+    const Entries extends readonly ProcessGroupEntry[],
+    Error,
+  >(group: TypedProcessGroup<Id, Entries, Error>) =>
   (
     method: string | undefined,
     url: URL,
-  ): Effect.Effect<RouteResponse | undefined, Error, R | ProcessStore> =>
+  ): Effect.Effect<
+    RouteResponse | undefined,
+    never,
+    ProcessGroupEntryRequirements<Entries> | ProcessStore
+  > =>
     Effect.gen(function* () {
       const segments = pathSegments(url);
       if (segments === undefined) {
@@ -321,15 +234,10 @@ const handleRestRoute =
 
       if (method === "GET" && segments.length === 1 && segments[0] === "status") {
         return yield* group.status.pipe(
-          Effect.flatMap((groupStatus) =>
-            Effect.map(group.listQueues(), (queues) => ({
-              status: 200,
-              body: successResponse({
-                processes: groupStatus.processes,
-                queues,
-              }),
-            }))
-          ),
+          Effect.map((groupStatus) => ({
+            status: 200,
+            body: successResponse(groupStatus),
+          })),
           Effect.catch((error) =>
             Effect.succeed(routeFailure(error, "Unable to read group status"))
           ),
@@ -358,16 +266,20 @@ const handleRestRoute =
         }
 
         if (method === "GET" && segments.length === 2) {
-          const result = yield* group.processStatus(name).pipe(
+          const entry = findProcessEntry(group.entries, name);
+          if (entry === undefined) {
+            return {
+              status: 404,
+              body: errorResponse(`Process '${name}' not found`),
+            };
+          }
+          const result = yield* group.process(entry).status.pipe(
             Effect.map((data) => ({
               status: 200,
               body: processStatusResponse(data),
             })),
-            Effect.catch(() =>
-              Effect.succeed({
-                status: 404,
-                body: errorResponse(`Process '${name}' not found`),
-              }),
+            Effect.catch((error) =>
+              Effect.succeed(routeFailure(error, `Process '${name}' not found`)),
             ),
           );
           return result;
@@ -375,8 +287,16 @@ const handleRestRoute =
 
         if (method === "POST" && segments.length === 3) {
           const operation = segments[2];
+          const entry = findProcessEntry(group.entries, name);
+          if (entry === undefined) {
+            return {
+              status: 404,
+              body: errorResponse(`Process '${name}' not found`),
+            };
+          }
+          const controls = group.process(entry);
           if (operation === "start") {
-            return yield* group.start(name).pipe(
+            return yield* controls.start.pipe(
               Effect.as({ status: 200, body: successResponse() }),
               Effect.catch((error) =>
                 Effect.succeed(routeFailure(error, `Process '${name}' could not be started`))
@@ -384,7 +304,7 @@ const handleRestRoute =
             );
           }
           if (operation === "stop") {
-            return yield* group.stop(name).pipe(
+            return yield* controls.stop.pipe(
               Effect.as({ status: 200, body: successResponse() }),
               Effect.catch((error) =>
                 Effect.succeed(routeFailure(error, `Process '${name}' could not be stopped`))
@@ -392,7 +312,7 @@ const handleRestRoute =
             );
           }
           if (operation === "restart") {
-            return yield* group.restart(name).pipe(
+            return yield* controls.restart.pipe(
               Effect.as({ status: 200, body: successResponse() }),
               Effect.catch((error) =>
                 Effect.succeed(routeFailure(error, `Process '${name}' could not be restarted`))
@@ -400,7 +320,7 @@ const handleRestRoute =
             );
           }
           if (operation === "now") {
-            return yield* group.runImmediately(name).pipe(
+            return yield* controls.runImmediately.pipe(
               Effect.as({ status: 200, body: successResponse() }),
               Effect.catch((error) =>
                 Effect.succeed(routeFailure(error, `Process '${name}' could not run immediately`))
@@ -411,10 +331,10 @@ const handleRestRoute =
       }
 
       if (method === "GET" && segments.length === 1 && segments[0] === "queues") {
-        return yield* group.listQueues().pipe(
-          Effect.map((queues) => ({
+        return yield* group.status.pipe(
+          Effect.map((groupStatus) => ({
             status: 200,
-            body: successResponse(queues),
+            body: successResponse(groupStatus.queues),
           })),
           Effect.catch((error) =>
             Effect.succeed(routeFailure(error, "Unable to list queues"))
@@ -432,18 +352,20 @@ const handleRestRoute =
         }
 
         if (method === "GET" && segments.length === 2) {
-          const result = yield* group.getQueue(name).pipe(
-            Effect.flatMap((queue) =>
-              Effect.map(queueDetails(name, queue), (data) => ({
-                status: 200,
-                body: queueStatusResponse(data),
-              })),
-            ),
-            Effect.catch(() =>
-              Effect.succeed({
-                status: 404,
-                body: errorResponse(`Queue '${name}' not found`),
-              }),
+          const entry = findQueueEntry(group.entries, name);
+          if (entry === undefined) {
+            return {
+              status: 404,
+              body: errorResponse(`Queue '${name}' not found`),
+            };
+          }
+          const result = yield* group.queue(entry).status.pipe(
+            Effect.map((data) => ({
+              status: 200,
+              body: queueStatusResponse(data),
+            })),
+            Effect.catch((error) =>
+              Effect.succeed(routeFailure(error, `Queue '${name}' not found`)),
             ),
           );
           return result;
@@ -451,8 +373,16 @@ const handleRestRoute =
 
         if (method === "POST" && segments.length === 3) {
           const operation = segments[2];
+          const entry = findQueueEntry(group.entries, name);
+          if (entry === undefined) {
+            return {
+              status: 404,
+              body: errorResponse(`Queue '${name}' not found`),
+            };
+          }
+          const controls = group.queue(entry);
           if (operation === "pause") {
-            return yield* group.pauseQueue(name).pipe(
+            return yield* controls.pause.pipe(
               Effect.as({ status: 200, body: successResponse() }),
               Effect.catch((error) =>
                 Effect.succeed(routeFailure(error, `Queue '${name}' could not be paused`))
@@ -460,7 +390,7 @@ const handleRestRoute =
             );
           }
           if (operation === "resume") {
-            return yield* group.resumeQueue(name).pipe(
+            return yield* controls.resume.pipe(
               Effect.as({ status: 200, body: successResponse() }),
               Effect.catch((error) =>
                 Effect.succeed(routeFailure(error, `Queue '${name}' could not be resumed`))
@@ -468,7 +398,7 @@ const handleRestRoute =
             );
           }
           if (operation === "clear") {
-            return yield* group.clearQueue(name).pipe(
+            return yield* controls.clear.pipe(
               Effect.map((cleared) => ({
                 status: 200,
                 body: successResponse({ cleared }),
@@ -484,199 +414,13 @@ const handleRestRoute =
       return undefined;
     });
 
-const handleCommand =
-  <R, Error>(group: ProcessGroupControls<R, Error>) =>
-  (
-    command: ControlCommand,
-    name?: string,
-  ): Effect.Effect<ControlResponse<unknown>, Error, R | ProcessStore> =>
-    Effect.gen(function* () {
-      switch (command) {
-        case "ls": {
-          // List both processes and queues
-          const groupStatus = yield* group.status;
-          const processes = groupStatus.processes;
-          const queues = yield* group.listQueues();
-          return {
-            success: true,
-            data: { processes, queues },
-          };
-        }
-        case "queues": {
-          // List all queues
-          const queues = yield* group.listQueues();
-          return {
-            success: true,
-            data: queues,
-          };
-        }
-        case "status": {
-          if (name === undefined)
-            return { success: false, error: "Missing name" };
-          
-          // Try process first
-          const processResult = yield* group
-            .processStatus(name)
-            .pipe(
-              Effect.map((data) => processStatusResponse(data)),
-              Effect.catch(() => Effect.succeed(null)),
-            );
-          
-          if (processResult !== null) return processResult;
-          
-          // Try queue
-          const queueResult = yield* group
-            .getQueue(name)
-            .pipe(
-              Effect.flatMap((queue) =>
-                Effect.gen(function* () {
-                  const prioritySizes = yield* queue.sizes;
-                  const totalSize = yield* queue.size;
-                  const completed = yield* queue.completed;
-                  return {
-                    ...queueStatusResponse({
-                      name, 
-                      size: {
-                        high: prioritySizes.high,
-                        normal: prioritySizes.normal,
-                        low: prioritySizes.low,
-                        total: totalSize,
-                      },
-                      completed 
-                    }),
-                  };
-                }),
-              ),
-              Effect.catch(() => Effect.succeed(null)),
-            );
-          
-          if (queueResult !== null) return queueResult;
-          
-          return { success: false, error: `Process or queue '${name}' not found` };
-        }
-        case "start": {
-          // Process-only command
-          if (name !== undefined)
-            yield* group.start(name).pipe(Effect.catch(() => Effect.void));
-          else yield* group.startAll().pipe(Effect.catch(() => Effect.void));
-          return { success: true };
-        }
-        case "stop": {
-          // Process-only command
-          if (name !== undefined)
-            yield* group.stop(name).pipe(Effect.catch(() => Effect.void));
-          else yield* group.stopAll().pipe(Effect.catch(() => Effect.void));
-          return { success: true };
-        }
-        case "now": {
-          // Process-only command
-          if (name === undefined)
-            return { success: false, error: "Missing process name" };
-          yield* group
-            .runImmediately(name)
-            .pipe(Effect.catch(() => Effect.void));
-          return { success: true };
-        }
-        case "pause": {
-          // Unified command - check process first, then queue
-          if (name === undefined)
-            return { success: false, error: "Missing name" };
-          
-          // Processes don't have pause, so check queue
-          const queue = yield* group
-            .getQueue(name)
-            .pipe(Effect.catch(() => Effect.succeed(null)));
-          
-          if (queue === null) {
-            return { success: false, error: `Queue '${name}' not found` };
-          }
-
-          yield* queue.pause;
-          return { success: true };
-        }
-        case "resume": {
-          // Unified command - check process first, then queue
-          if (name === undefined)
-            return { success: false, error: "Missing name" };
-          
-          // Processes don't have resume, so check queue
-          const queue = yield* group
-            .getQueue(name)
-            .pipe(Effect.catch(() => Effect.succeed(null)));
-          
-          if (queue === null) {
-            return { success: false, error: `Queue '${name}' not found` };
-          }
-
-          yield* queue.resume;
-          return { success: true };
-        }
-        case "restart": {
-          // Unified command - check process first, then queue
-          if (name === undefined) {
-            // Global restart: stop all processes then start all — fork to avoid blocking
-            yield* Effect.forkChild(
-              Effect.gen(function* () {
-                yield* group.stopAll();
-                yield* group.startAll();
-              }).pipe(Effect.catch(() => Effect.void)),
-            );
-            return { success: true };
-          }
-          
-          // Try process first - fork the restart to avoid blocking
-          const processExists = yield* group
-            .processStatus(name)
-            .pipe(
-              Effect.map(() => true),
-              Effect.catch(() => Effect.succeed(false)),
-            );
-          
-          if (processExists) {
-            // Fork the restart operation so it doesn't block the HTTP response
-            yield* Effect.forkChild(
-              group.restart(name).pipe(Effect.catch(() => Effect.void))
-            );
-            return { success: true };
-          }
-          
-          // Try queue
-          const queue = yield* group
-            .getQueue(name)
-            .pipe(Effect.catch(() => Effect.succeed(null)));
-          
-          if (queue === null) {
-            return { success: false, error: `Process or queue '${name}' not found` };
-          }
-
-          yield* queue.clear;
-          return { success: true };
-        }
-        case "shutdown": {
-          // Queue-only command
-          if (name === undefined)
-            return { success: false, error: "Missing queue name" };
-
-          const queue = yield* group
-            .getQueue(name)
-            .pipe(Effect.catch(() => Effect.succeed(null)));
-          
-          if (queue === null) {
-            return { success: false, error: `Queue '${name}' not found` };
-          }
-
-          yield* queue.shutdown;
-          return { success: true };
-        }
-      }
-    });
-
 /**
  * Start the HTTP control service
  * 
  * @remarks
- * Starts a localhost-only HTTP server for controlling and monitoring a {@link ProcessGroup}.
- * The server provides a JSON API for CLI tools and management scripts.
+ * Starts a localhost-only HTTP server for controlling and monitoring a typed
+ * {@link ProcessGroup}. The server provides contract-aligned JSON routes for CLI
+ * tools and remote {@link ProcessManager} clients.
  * 
  * **Security:**
  * - Listens on 127.0.0.1 (localhost) only
@@ -696,7 +440,6 @@ const handleCommand =
  * - `POST /processes/:id/start|stop|restart|now` - Process controls
  * - `GET /queues` / `GET /queues/:id` - Queue listings and status
  * - `POST /queues/:id/pause|resume|clear` - Queue controls
- * - `POST /control` - Execute commands (see {@link ControlCommand})
  * - `GET /health` - Health check
  * 
  * @typeParam R - ProcessGroup requirements type
@@ -710,10 +453,7 @@ const handleCommand =
  * @example
  * ```typescript
  * const program = Effect.gen(function* () {
- *   const group = yield* ProcessGroup.make({
- *     queues: [EmailQueue],
- *     processes: [emailCron]
- *   });
+ *   const group = yield* ProcessGroup.make("@app/Group", [EmailQueue, EmailProcess] as const);
  *   
  *   // Start control service on port 3001
  *   yield* ControlService.make({
@@ -740,14 +480,11 @@ const handleCommand =
  *   group
  * });
  * 
- * // Now accessible at http://localhost:8080/control
+ * // Now accessible at http://localhost:8080/status
  * ```
  * 
  * @public
  */
-function startControlService<R, Error>(
-  options: LegacyControlServiceOptions<R, Error>,
-): Effect.Effect<void, never, Scope.Scope | R | ProcessStore>;
 function startControlService<
   const Id extends string,
   const Entries extends readonly ProcessGroupEntry[],
@@ -760,23 +497,12 @@ function startControlService<
   Scope.Scope | ProcessGroupEntryRequirements<Entries> | ProcessStore
 >;
 function startControlService(
-  options:
-    | LegacyControlServiceOptions<unknown, unknown>
-    | TypedControlServiceOptions<string, readonly ProcessGroupEntry[], unknown>,
+  options: TypedControlServiceOptions<string, readonly ProcessGroupEntry[], unknown>,
 ): Effect.Effect<void, never, Scope.Scope | unknown | ProcessStore> {
   return Effect.acquireRelease(
     Effect.gen(function* () {
       const port = options.port ?? 3001;
       const group = options.group;
-      // Typed groups expose their contract and keep the legacy string-based
-      // controls under `.legacy`; legacy groups can optionally pass a contract
-      // while continuing to serve the existing `/control` command API.
-      const commandGroup = "legacy" in group ? group.legacy : group;
-      const contract = "legacy" in group
-        ? group.contract
-        : "contract" in options
-          ? options.contract
-          : undefined;
 
       // Capture context (services) with all dependencies already provided
       const services = yield* Effect.context<unknown | ProcessStore>();
@@ -800,47 +526,21 @@ function startControlService(
           }
 
           if (url.pathname === "/contract" && req.method === "GET") {
-            if (contract === undefined) {
-              yield* writeJson(res, 404, { error: "Contract not available" });
-              return;
-            }
-            yield* writeJson(res, 200, contract);
+            yield* writeJson(res, 200, group.contract);
             return;
           }
 
-          const restResponse = yield* handleRestRoute(commandGroup)(req.method, url);
+          const restResponse = yield* handleRestRoute(group)(req.method, url);
           if (restResponse !== undefined) {
             yield* writeJson(res, restResponse.status, restResponse.body);
-            return;
-          }
-
-          if (url.pathname === "/control" && req.method === "POST") {
-            const raw = yield* readBody(req);
-            const body = yield* Schema.decodeUnknownEffect(
-              controlRequestFromJson,
-            )(raw).pipe(
-              Effect.mapError((cause) => new InvalidJsonError({ cause })),
-            );
-            const result = yield* handleCommand(commandGroup)(body.command, body.name);
-            const status = result.success ? 200 : 400;
-            yield* writeJson(res, status, result);
             return;
           }
 
           yield* writeJson(res, 404, { error: "Not found" });
         });
 
-        // Run the program with the captured context (all dependencies)
-        runWithServices(
-          program.pipe(
-            Effect.catch((error) =>
-              writeJson(res, 500, {
-                success: false,
-                error: String(error),
-              }),
-            ),
-          ),
-        );
+        // Run the program with the captured context (all dependencies).
+        runWithServices(program);
       };
 
       const server = nodeHttp.createServer(handler);
@@ -902,7 +602,7 @@ interface ControlServiceApi {
  */
 export const ControlService: ControlServiceApi = {
   /**
-   * Acquire a localhost HTTP listener for `/control` and `/health` until the scope ends.
+   * Acquire a localhost HTTP listener for contract-aligned REST routes until the scope ends.
    */
   make: startControlService,
   /** Build an `@effect/cli` application targeting this service’s port. */

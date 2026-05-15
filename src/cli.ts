@@ -3,8 +3,7 @@
  *
  * @remarks
  * Talks to JSON endpoints exposed by {@link ControlService.make} (typically after
- * {@link ProcessGroup.serve}). Commands map 1:1 to {@link ControlCommand} values
- * sent as `POST /control` bodies.
+ * {@link ProcessGroup.serve}). Commands map to the contract-aligned REST routes.
  *
  * **Commands**
  *
@@ -12,12 +11,12 @@
  * |------------|---------|
  * | `ls` | List processes and queues |
  * | `status [name]` | Detailed process or queue snapshot |
- * | `start [name]` | Start one process or all |
- * | `stop [name]` | Stop one process or all |
- * | `pause [name]` | Pause a queue |
- * | `resume [name]` | Resume a queue |
- * | `restart [name]` | Restart process/queue, or full group if name omitted |
- * | `shutdown <name>` | Shut down a queue for good |
+ * | `start <name>` | Start one process |
+ * | `stop <name>` | Stop one process |
+ * | `pause <name>` | Pause a queue |
+ * | `resume <name>` | Resume a queue |
+ * | `restart <name>` | Restart one process |
+ * | `clear <name>` | Clear pending queue items |
  * | `now <name>` | Fire a process run immediately |
  * | `queues` | Queue listing only |
  *
@@ -34,18 +33,6 @@ import type { ProcessGroupDetails, QueueDetails, ControlResponse } from "./index
 // ============================================================================
 // Types
 // ============================================================================
-
-type ControlCommand =
-  | "ls"
-  | "status"
-  | "start"
-  | "stop"
-  | "pause"
-  | "resume"
-  | "restart"
-  | "shutdown"
-  | "now"
-  | "queues";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -75,6 +62,18 @@ class CliRequestError extends Data.TaggedError("CliRequestError")<{
   readonly reason: string;
 }> {}
 
+const isCliRequestError = (error: unknown): error is CliRequestError => {
+  if (typeof error !== "object" || error === null || !("_tag" in error) || !("reason" in error)) {
+    return false;
+  }
+  return error._tag === "CliRequestError" && typeof error.reason === "string";
+};
+
+const toCliRequestError = (error: unknown): CliRequestError =>
+  isCliRequestError(error)
+    ? error
+    : new CliRequestError({ reason: String(error) });
+
 const decodeLsData = (
   value: unknown,
 ): { processes?: ProcessGroupDetails[]; queues?: QueueDetails[] } | undefined => {
@@ -94,26 +93,39 @@ const decodeLsData = (
 // HTTP Client
 // ============================================================================
 
-/**
- * Send command to control service
- * @internal
- */
-const postCommand = (controlUrl: string) => (command: ControlCommand, name?: string) =>
+const requestControl = (
+  baseUrl: string,
+  method: "GET" | "POST",
+  path: string,
+): Effect.Effect<ControlResponse<unknown>, CliRequestError, HttpClient.HttpClient> =>
   Effect.gen(function* () {
-    const request = yield* HttpClientRequest.bodyJson(
-      HttpClientRequest.post(controlUrl),
-      { command, name },
-    );
+    const request = method === "POST"
+      ? HttpClientRequest.post(`${baseUrl}${path}`)
+      : HttpClientRequest.get(`${baseUrl}${path}`);
     const response = yield* HttpClient.execute(request);
     const json = yield* response.json;
     const decoded = decodeControlResponse(json);
-    if (response.status >= 200 && response.status < 300) {
+    if (response.status >= 200 && response.status < 300 && decoded.success) {
       return decoded;
     }
     return yield* new CliRequestError({
       reason: decoded.error ?? `HTTP ${response.status}`,
     });
-  });
+  }).pipe(Effect.mapError(toCliRequestError));
+
+const getControl = (baseUrl: string, path: string) =>
+  requestControl(baseUrl, "GET", path);
+
+const postControl = (baseUrl: string, path: string) =>
+  requestControl(baseUrl, "POST", path);
+
+const statusByName = (
+  baseUrl: string,
+  name: string,
+): Effect.Effect<ControlResponse<unknown>, CliRequestError, HttpClient.HttpClient> =>
+  getControl(baseUrl, `/processes/${encodeURIComponent(name)}`).pipe(
+    Effect.catch(() => getControl(baseUrl, `/queues/${encodeURIComponent(name)}`)),
+  );
 
 // ============================================================================
 // Formatting Helpers
@@ -264,12 +276,20 @@ const formatStatus = (data: ControlResponse<unknown>) => {
  * @internal
  */
 const makeCommands = (controlUrl: string) => {
-  const post = postCommand(controlUrl);
   const maybeName = Argument.string("name").pipe(Argument.optional);
+  const requiredName = (
+    name: Option.Option<string>,
+    label: string,
+    run: (name: string) => Effect.Effect<void, CliRequestError, HttpClient.HttpClient>,
+  ) =>
+    Option.match(name, {
+      onNone: () => Console.error(`Missing ${label} name`),
+      onSome: run,
+    });
 
   // ls - List all processes and queues
   const ls = Command.make("ls", {}, () =>
-    post("ls").pipe(
+    getControl(controlUrl, "/status").pipe(
       Effect.flatMap((body) => {
         const output: string[] = [];
         const data = decodeLsData(body.data);
@@ -295,63 +315,59 @@ const makeCommands = (controlUrl: string) => {
     Option.match(name, {
       onNone: () => Console.error("Missing process/queue name"),
       onSome: (n) =>
-        post("status", n).pipe(
+        statusByName(controlUrl, n).pipe(
           Effect.flatMap((body) => Console.log(formatStatus(body)))
         ),
     })
   );
 
-  // Factory for commands with optional name
-  const makeGlobalOrNamed = (cmd: ControlCommand) =>
-    Command.make(cmd, { name: maybeName }, ({ name }) =>
-      post(cmd, Option.getOrUndefined(name)).pipe(
-        Effect.flatMap((body) => 
-          body.success 
-            ? Console.log(`✅ ${cmd} completed successfully`)
-            : Console.error(`❌ ${body.error ?? "Command failed"}`)
+  const processCommand = (
+    command: "start" | "stop" | "restart" | "now",
+    operation: "start" | "stop" | "restart" | "now",
+  ) =>
+    Command.make(command, { name: maybeName }, ({ name }) =>
+      requiredName(name, "process", (processName) =>
+        postControl(
+          controlUrl,
+          `/processes/${encodeURIComponent(processName)}/${operation}`,
+        ).pipe(
+          Effect.flatMap(() =>
+            Console.log(`✅ Process '${processName}' ${command} completed successfully`)
+          ),
         )
       )
     );
 
-  const start = makeGlobalOrNamed("start");
-  const stop = makeGlobalOrNamed("stop");
-  const pause = makeGlobalOrNamed("pause");
-  const resume = makeGlobalOrNamed("resume");
-  const restart = makeGlobalOrNamed("restart");
+  const queueCommand = (
+    command: "pause" | "resume" | "clear",
+  ) =>
+    Command.make(command, { name: maybeName }, ({ name }) =>
+      requiredName(name, "queue", (queueName) =>
+        postControl(
+          controlUrl,
+          `/queues/${encodeURIComponent(queueName)}/${command}`,
+        ).pipe(
+          Effect.flatMap((body) => {
+            const suffix = command === "clear" && isRecord(body.data) && typeof body.data["cleared"] === "number"
+              ? ` (${String(body.data["cleared"])} cleared)`
+              : "";
+            return Console.log(`✅ Queue '${queueName}' ${command} completed successfully${suffix}`);
+          }),
+        )
+      )
+    );
 
-  // shutdown <name> - Shutdown a queue
-  const shutdown = Command.make("shutdown", { name: maybeName }, ({ name }) =>
-    Option.match(name, {
-      onNone: () => Console.error("Missing queue name"),
-      onSome: (n) =>
-        post("shutdown", n).pipe(
-          Effect.flatMap((body) => 
-            body.success 
-              ? Console.log(`✅ Queue '${n}' shutdown successfully`)
-              : Console.error(`❌ ${body.error ?? "Shutdown failed"}`)
-          )
-        ),
-    })
-  );
-
-  // now <name> - Run process immediately
-  const now = Command.make("now", { name: maybeName }, ({ name }) =>
-    Option.match(name, {
-      onNone: () => Console.error("Missing process name"),
-      onSome: (n) =>
-        post("now", n).pipe(
-          Effect.flatMap((body) => 
-            body.success 
-              ? Console.log(`✅ Process '${n}' executed immediately`)
-              : Console.error(`❌ ${body.error ?? "Execution failed"}`)
-          )
-        ),
-    })
-  );
+  const start = processCommand("start", "start");
+  const stop = processCommand("stop", "stop");
+  const restart = processCommand("restart", "restart");
+  const now = processCommand("now", "now");
+  const pause = queueCommand("pause");
+  const resume = queueCommand("resume");
+  const clear = queueCommand("clear");
 
   // queues - List all queues
   const queues = Command.make("queues", {}, () =>
-    post("queues").pipe(
+    getControl(controlUrl, "/queues").pipe(
       Effect.flatMap((body) => {
         const queuesData = Array.isArray(body.data)
           ? body.data.filter(isQueueDetails)
@@ -364,7 +380,7 @@ const makeCommands = (controlUrl: string) => {
     )
   );
 
-  return { ls, status, start, stop, pause, resume, restart, shutdown, now, queues };
+  return { ls, status, start, stop, pause, resume, restart, now, clear, queues };
 };
 
 // ============================================================================
@@ -410,7 +426,7 @@ export const createCli = (config: {
   port?: number;
 }) => {
   const port = config.port ?? 3001;
-  const controlUrl = `http://127.0.0.1:${port}/control`;
+  const controlUrl = `http://127.0.0.1:${port}`;
   
   const commands = makeCommands(controlUrl);
   
@@ -427,8 +443,8 @@ export const createCli = (config: {
       commands.pause,
       commands.resume,
       commands.restart,
-      commands.shutdown,
       commands.now,
+      commands.clear,
       commands.queues,
     ])
   );

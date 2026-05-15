@@ -24,7 +24,7 @@ The current remote slice targets one group endpoint at a time. Multi-host coordi
 │ ProcessGroup.make(id, entries) / ProcessGroup.Service(id, entries)│
 │  • acquires queue instances (Effect services)                     │
 │  • exposes typed process/queue controls + serializable contract   │
-│  • keeps a legacy string control surface for HTTP/CLI delegation  │
+│  • drives contract-aligned ControlService and ProcessManager APIs │
 └───────────────────────────────────────────────────────────────────┘
          │ start / forkIn(process.effect, scope)
          ▼
@@ -84,7 +84,7 @@ TSDoc on each module repeats details; this guide stays **concept-shaped**.
 
 ## Dependencies and layers (practical rules)
 
-1. **`ProcessGroup.make(id, entries)`** returns an `Effect` that requires the **queue tag identifiers** from queue entries (so queues are acquired exactly once in that scope). The legacy `{ queues, processes }` form remains available for compatibility.
+1. **`ProcessGroup.make(id, entries)`** returns an `Effect` that requires the **queue tag identifiers** from queue entries (so queues are acquired exactly once in that scope).
 2. **Forking** `process.effect` needs **`R | ProcessStore`** where `R` is whatever remains on the process after optional inlined `polling` / `schedule` layers. Use **`ProcessSupervisorRequirements<C>`** (exported type) if you build configs generically.
 3. Prefer **`Layer.mergeAll(...)`** + **one** `Effect.provide` at the app root when you have many independent layers (clearer dependency graph; matches Effect lint guidance).
 4. **Control service** listens on **127.0.0.1** only — designed for local ops, not public exposure.

@@ -184,7 +184,5 @@ export type {
 
 // Types - Control Service
 export type {
-  ControlCommand,
-  ControlRequestBody,
   ControlResponse,
 } from "./ControlService";

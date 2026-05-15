@@ -849,17 +849,16 @@ group validates them against its queue schema or codec.
 yield* ProcessGroup.make(id, entries, options);
 ```
 
-- Return a typed group handle with `id`, `contract`, typed local controls, and
-  the legacy control surface.
-- Keep current `ProcessGroup.make({ processes, queues })` as a compatibility
-  overload if needed during beta.
+- Return a typed group handle with `id`, `entries`, `contract`, and typed local
+  controls.
+- Remove the split `{ processes, queues }` compatibility shape.
 
 ### Slice 4 - Typed local controls
 
 - Add declaration-based `start`, `stop`, `process(entry)`, `queue(entry)`, and
   `status` controls.
-- Keep string-based controls only as compatibility helpers or remote command
-  internals.
+- Keep string/id-based lookup private to REST route adapters; public group
+  controls should stay declaration-based.
 - Add typed tests for autocomplete-facing surfaces.
 
 ### Slice 5 - Contract generation

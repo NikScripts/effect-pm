@@ -65,8 +65,7 @@ Runtime state still comes from live handles when needed.
 
 ## Graduation criteria
 
-- Existing `POST /control` behavior remains compatible or has a documented beta
-  break.
+- `POST /control` is removed in favor of contract-aligned REST routes.
 - REST-style routes are schema-validated.
 - Queue endpoints use `QueueHandle` controls.
 - Live events can stream store events.

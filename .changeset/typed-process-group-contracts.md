@@ -8,4 +8,6 @@ Add typed process group declarations, contracts, and remote management. Processe
 
 `ProcessManager.verifyContract` now compares the remote contract's group id, version, process ids, queue ids, and control sets against the local contract before reporting success.
 
+`ControlService` is now contract/REST-first: the legacy `POST /control` command endpoint and command request types were removed, and the CLI now calls the REST routes directly.
+
 Also fixes `ProcessStore` execution ordering consistency and keyed queue `clear()` dedup cleanup.

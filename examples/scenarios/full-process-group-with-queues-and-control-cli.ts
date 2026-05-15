@@ -126,8 +126,7 @@ class DemoTwoQueue extends QueueResource.Service<DemoTwoQueue, number, number, n
  * the active schedule entry remains open. Here one open-ended entry + spaced polling (~10s)
  * produce a steady “tick” that only needs the two queue services at runtime.
  */
-const queueAdderCron = Process.make({
-  name: "queue-adder",
+class QueueAdderProcess extends Process.Service<QueueAdderProcess>()("queue-adder", {
   polling: Polling.spaced(Duration.seconds(10)),
   schedule: ProcessSchedule.inMemory([
     ProcessSchedule.at("queue-adder", utcDateFromMillis(0)),
@@ -150,18 +149,18 @@ const queueAdderCron = Process.make({
 
     yield* Effect.logInfo(`✅ Added items to both demo queues`);
   }),
-});
+}) {}
 
 /**
  * ============================================================================
  * ASSEMBLING THE PROCESS GROUP
  * ============================================================================
  *
- * ProcessGroup.make() brings everything together:
+ * ProcessGroup.make(id, entries) brings everything together:
  *
- * CONFIG:
- * - processes: Array of scheduled processes to manage
- * - queues: Array of queue resource service tags
+ * ENTRIES:
+ * - process service declarations to manage
+ * - queue resource service declarations to control
  *
  * The ProcessGroup will:
  * 1. Track all processes and queues
@@ -170,7 +169,7 @@ const queueAdderCron = Process.make({
  * 4. Expose everything through the CLI and control API
  *
  * DEPENDENCY FLOW:
- * - We pass queue TAGS (DemoQueue, DemoTwoQueue) to ProcessGroup.make
+ * - We pass process and queue declarations to ProcessGroup.make
  * - We provide queue layers (`.layer`) at runtime via Effect.provide
  * - Effect's dependency system matches them up automatically
  * - This ensures type safety and single instances
@@ -190,10 +189,11 @@ const program = Effect.gen(function* () {
     },
   });
 
-  const group = yield* ProcessGroup.make({
-    processes: [queueAdderCron],
-    queues: [DemoQueue, DemoTwoQueue],
-  });
+  const group = yield* ProcessGroup.make("demo-process-group", [
+    QueueAdderProcess,
+    DemoQueue,
+    DemoTwoQueue,
+  ] as const);
 
   yield* Effect.logInfo("🚀 Starting Demo ProcessGroup...");
   yield* Effect.logInfo(`📝 Processes: 1 managed (queue-adder)`);
@@ -203,8 +203,8 @@ const program = Effect.gen(function* () {
   /** Localhost HTTP JSON API consumed by `pnpm run cli` (see `ControlService`). */
   yield* ControlService.make({ group, port: controlPort });
 
-  /** Forks each process supervisor (`queueAdderCron.effect`) inside the group’s scopes. */
-  yield* group.startAll();
+  /** Forks the process supervisor inside the group’s scopes. */
+  yield* group.start(QueueAdderProcess);
 
   yield* Effect.logInfo("✅ Demo is running. Try these commands:");
   yield* Effect.logInfo("   npm run cli ls");

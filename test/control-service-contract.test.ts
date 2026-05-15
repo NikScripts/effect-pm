@@ -182,7 +182,7 @@ describe("ControlService — contract route", () => {
           expect(missingProcess.statusCode).toBe(404);
           expect(missingProcess.body).toMatchObject({
             success: false,
-            error: "Process '@test/MissingProcess' could not be started",
+            error: "Process '@test/MissingProcess' not found",
           });
 
           const missingQueue = yield* requestJson(
@@ -193,7 +193,7 @@ describe("ControlService — contract route", () => {
           expect(missingQueue.statusCode).toBe(404);
           expect(missingQueue.body).toMatchObject({
             success: false,
-            error: "Queue '@test/MissingQueue' could not be cleared",
+            error: "Queue '@test/MissingQueue' not found",
           });
         }).pipe(
           provideLayer(EmailQueue.layer),
@@ -204,27 +204,4 @@ describe("ControlService — contract route", () => {
     ),
   );
 
-  it.live("returns 404 for legacy groups without a contract", () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const group = yield* ProcessGroup.make({
-          queues: [],
-          processes: [],
-        });
-
-        yield* ControlService.make({
-          port: 32124,
-          group,
-        });
-
-        const response = yield* requestJson(32124, "/contract");
-
-        expect(response.statusCode).toBe(404);
-        expect(response.body).toEqual({ error: "Contract not available" });
-      }).pipe(
-        provideLayer(ProcessStore.layer),
-        provideLayer(NodeHttpClient.layerUndici),
-      ),
-    ),
-  );
 });

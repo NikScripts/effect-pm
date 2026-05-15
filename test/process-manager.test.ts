@@ -95,7 +95,7 @@ describe("ProcessManager", () => {
 
           expect(mismatch.reason).toContain("process ids");
           expect(missingRun.status).toBe(404);
-          expect(missingRun.reason).toContain("could not run immediately");
+          expect(missingRun.reason).toContain("not found");
           expect(yield* Ref.get(runs)).toBe(2);
         }).pipe(
           provideLayer(BillingGroup.layer),
@@ -452,14 +452,6 @@ describe("ProcessManager", () => {
               expect(deferError.operation).toBe("queue.defer");
             }
 
-            const getQueueError = yield* remoteGroup
-              .legacy
-              .getQueue(EmailQueue.id)
-              .pipe(Effect.flip);
-            expect(getQueueError._tag).toBe("UnsupportedRemoteControlError");
-            if (getQueueError._tag === "UnsupportedRemoteControlError") {
-              expect(getQueueError.operation).toBe("getQueue");
-            }
           }).pipe(
             provideLayer(ProcessGroup.remoteLayer(BillingGroup, BillingEndpoint)),
             provideLayer(BillingEndpoint.layer),

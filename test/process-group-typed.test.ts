@@ -86,19 +86,19 @@ export const processGroupTypeChecks = Effect.gen(function* () {
   yield* acceptQueueId(TypeEmailQueue.id);
   yield* acceptQueueId(TypeInvoiceQueue.id);
 
-  const directQueueEnqueue = directGroup
+  const _directQueueEnqueue = directGroup
     .queue(TypeEmailQueue)
     .enqueue({ to: "local-error-channel@example.com" });
-  const serviceQueueEnqueue = serviceGroup
+  const _serviceQueueEnqueue = serviceGroup
     .queue(TypeEmailQueue)
     .enqueue({ to: "remote-error-channel@example.com" });
-  const remoteLayer = ProcessGroup.remoteLayer(TypeGroup, TypeEndpoint);
+  const _remoteLayer = ProcessGroup.remoteLayer(TypeGroup, TypeEndpoint);
 
   type DirectGroupId = typeof directGroup.id;
-  type DirectQueueEnqueueError = EffectError<typeof directQueueEnqueue>;
-  type ServiceQueueEnqueueError = EffectError<typeof serviceQueueEnqueue>;
-  type RemoteLayerOut = LayerOut<typeof remoteLayer>;
-  type RemoteLayerIn = LayerIn<typeof remoteLayer>;
+  type DirectQueueEnqueueError = EffectError<typeof _directQueueEnqueue>;
+  type ServiceQueueEnqueueError = EffectError<typeof _serviceQueueEnqueue>;
+  type RemoteLayerOut = LayerOut<typeof _remoteLayer>;
+  type RemoteLayerIn = LayerIn<typeof _remoteLayer>;
 
   assertType<Assert<IsEqual<DirectGroupId, "@test/TypeDirectGroup">>>();
   assertType<Assert<IsEqual<DirectQueueEnqueueError, ProcessGroupErrors>>>();
