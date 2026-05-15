@@ -619,13 +619,15 @@ const program = Effect.gen(function* () {
 yield* program.pipe(Effect.provide(BillingRemoteLive));
 ```
 
-`remoteLayers` is a later milestone. It would provide more than the group
-service:
+`remoteLayers` is a later milestone for group-level bundling. It should stay
+focused on the remote group service until standalone remote service contracts
+are deliberately designed:
 
 - the remote group service (`BillingGroup`);
-- remote process control services for each process entry;
-- remote queue control services for each queue entry whose shape can be safely
-  represented remotely.
+- future remote process control services for entries that explicitly opt in to a
+  remote-capable service shape;
+- future remote queue control services for entries that explicitly opt in to a
+  remote-capable service shape and have schema-backed item contracts.
 
 That later API depends on separate remote-capable service shapes for every
 runtime entry family that supports service-style declaration: processes, queues,
@@ -634,7 +636,20 @@ and future resource types. Current `Process.Service` and
 not expose network/control errors, so remote layers for those services would be
 dishonest today.
 
-Prefer future constructors named around remote capability:
+Do not implement `Process.RemoteService`, `QueueResource.RemoteService`, or
+resource-family `RemoteService` constructors in the current group remote-layer
+work. They are lower priority than finishing the group-level remote layer and
+must stay behind a design gate until these challenges are resolved:
+
+- lifecycle ownership (`start` / `stop` / `restart` belong to group-owned
+  supervisors, not standalone local process handles);
+- honest checked error channels for all local and remote operations;
+- capability typing for operations that exist locally but are not remotely safe;
+- queue `itemSchema` / codec contracts for enqueue, release, and handoff;
+- per-entry remote provider wiring without hiding network failures or using
+  defects.
+
+When that design gate opens, prefer constructors named around remote capability:
 
 ```typescript
 class StripeSync extends Process.RemoteService<StripeSync>()(
@@ -665,6 +680,13 @@ runtime-owner constructor for each runtime entry family. `QueueResource.Service`
 may keep `itemSchema` optional for local-only queues, but
 `QueueResource.RemoteService` must require `itemSchema`.
 
+Near-term build priority:
+
+1. Harden `ProcessGroup.remoteLayer`.
+2. Add group remote-layer examples and type/runtime tests.
+3. Improve group contract verification and remote error mapping.
+4. Defer standalone `RemoteService` constructors and per-entry remote providers.
+
 ### Error semantics must be decided before remote resource layers
 
 Remote implementations cannot be perfectly transparent unless their checked
@@ -690,7 +712,9 @@ Recommended path:
 1. Add `ProcessManager.Endpoint` now.
 2. Add `ProcessGroup.remoteLayer` for group controls, where the service shape can
    expose remote/control errors.
-3. Wait on `remoteLayers` until `Process.RemoteService` /
+3. Continue group-level remote-layer hardening before designing standalone
+   remote-capable service constructors.
+4. Wait on per-entry `remoteLayers` until `Process.RemoteService` /
    `QueueResource.RemoteService`-style handles and queue enqueue schema/error
    types are settled.
 

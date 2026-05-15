@@ -196,6 +196,57 @@ describe("ProcessManager", () => {
     ),
   );
 
+  it.live("fails contract verification when remote process entries drift", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+          "@test/ManagerDriftEmailQueue",
+          {
+            effect: (_email) => Effect.void,
+          },
+        ) {}
+
+        class SyncProcess extends Process.Service<SyncProcess>()(
+          "@test/ManagerDriftProcess",
+          {
+            effect: Effect.void,
+          },
+        ) {}
+
+        class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+          "@test/ManagerDriftGroup",
+          [SyncProcess, EmailQueue] as const,
+        ) {}
+
+        yield* Effect.gen(function* () {
+          const group = yield* BillingGroup;
+          const staleManager = ProcessManager.connect({
+            baseUrl: "http://127.0.0.1:32132",
+            contract: {
+              ...BillingGroup.contract,
+              processes: [],
+            },
+          });
+
+          yield* ControlService.make({
+            port: 32132,
+            group,
+          });
+
+          const error = yield* staleManager.verifyContract.pipe(Effect.flip);
+
+          expect(error._tag).toBe("ProcessManagerRequestError");
+          expect(error.reason).toContain("Remote process ids");
+        }).pipe(
+          provideLayer(BillingGroup.layer),
+          provideLayer(EmailQueue.layer),
+          provideLayer(ProcessStore.layer),
+          provideLayer(NodeHttpClient.layerUndici),
+        );
+      }),
+    ),
+  );
+
   it.live("provides typed remote group controls through ProcessGroup.remoteLayer", () =>
     Effect.scoped(
       Effect.gen(function* () {

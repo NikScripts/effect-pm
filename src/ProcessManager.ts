@@ -297,6 +297,79 @@ const commandVoid = (
 ): Effect.Effect<void, ProcessManagerRequestError, HttpClient.HttpClient> =>
   Effect.asVoid(postControl(baseUrl, path));
 
+const hasSameMembers = (
+  left: ReadonlyArray<string>,
+  right: ReadonlyArray<string>,
+): boolean => {
+  if (left.length !== right.length) {
+    return false;
+  }
+  const rightSet = new Set(right);
+  return left.every((item) => rightSet.has(item));
+};
+
+const describeMembers = (members: ReadonlyArray<string>): string =>
+  members.length === 0 ? "(none)" : members.join(", ");
+
+const assertContractMatches = <
+  const Contract extends AnyProcessGroupContract,
+>(
+  expected: Contract,
+  remote: typeof ProcessGroupContractSchema.Type,
+): Effect.Effect<void, ProcessManagerRequestError> =>
+  Effect.gen(function* () {
+    if (remote.id !== expected.id) {
+      return yield* new ProcessManagerRequestError({
+        reason: `Remote contract id '${remote.id}' did not match '${expected.id}'`,
+      });
+    }
+    if (remote.version !== expected.version) {
+      return yield* new ProcessManagerRequestError({
+        reason: `Remote contract version '${remote.version}' did not match '${expected.version}'`,
+      });
+    }
+
+    const remoteProcessIds = remote.processes.map((process) => process.id);
+    const expectedProcessIds = expected.processes.map((process) => process.id);
+    if (!hasSameMembers(remoteProcessIds, expectedProcessIds)) {
+      return yield* new ProcessManagerRequestError({
+        reason:
+          `Remote process ids '${describeMembers(remoteProcessIds)}' did not match '${describeMembers(expectedProcessIds)}'`,
+      });
+    }
+    for (const process of expected.processes) {
+      const remoteProcess = remote.processes.find((candidate) => candidate.id === process.id);
+      if (
+        remoteProcess === undefined ||
+        !hasSameMembers(remoteProcess.controls, process.controls)
+      ) {
+        return yield* new ProcessManagerRequestError({
+          reason: `Remote process '${process.id}' controls did not match`,
+        });
+      }
+    }
+
+    const remoteQueueIds = remote.queues.map((queue) => queue.id);
+    const expectedQueueIds = expected.queues.map((queue) => queue.id);
+    if (!hasSameMembers(remoteQueueIds, expectedQueueIds)) {
+      return yield* new ProcessManagerRequestError({
+        reason:
+          `Remote queue ids '${describeMembers(remoteQueueIds)}' did not match '${describeMembers(expectedQueueIds)}'`,
+      });
+    }
+    for (const queue of expected.queues) {
+      const remoteQueue = remote.queues.find((candidate) => candidate.id === queue.id);
+      if (
+        remoteQueue === undefined ||
+        !hasSameMembers(remoteQueue.controls, queue.controls)
+      ) {
+        return yield* new ProcessManagerRequestError({
+          reason: `Remote queue '${queue.id}' controls did not match`,
+        });
+      }
+    }
+  });
+
 const makeRemoteProcessManager = <
   const Contract extends AnyProcessGroupContract,
 >(
@@ -321,11 +394,7 @@ const makeRemoteProcessManager = <
     fetchContract,
     verifyContract: Effect.gen(function* () {
       const remote = yield* fetchContract;
-      if (remote.id !== contract.id) {
-        return yield* new ProcessManagerRequestError({
-          reason: `Remote contract id '${remote.id}' did not match '${contract.id}'`,
-        });
-      }
+      yield* assertContractMatches(contract, remote);
     }),
     process: (id) => ({
       start: commandVoid(baseUrl, `/processes/${encodeURIComponent(id)}/start`),
