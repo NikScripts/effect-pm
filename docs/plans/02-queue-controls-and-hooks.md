@@ -826,6 +826,17 @@ the same `QueueHandle` a normal application receives from the queue service.
 
 This keeps the queue service as the source of truth for queue control.
 
+A queue can be used by processes through normal Effect dependencies without
+being listed in a group. Adding a queue to a group means the group contract
+exposes queue controls and status for local `ControlService` and remote
+`ProcessManager` callers. It does not mean the group owns all application
+communication with that queue.
+
+Standalone remote queue service access is stricter than group membership. A
+queue registered in a group can be controlled through the group endpoint, but
+yielding the queue service itself from either a local or remote provider requires
+`QueueResource.RemoteService`, including a required `itemSchema`.
+
 ## Graduation criteria
 
 - `QueueHandle` exposes the full chosen control surface.

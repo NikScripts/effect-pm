@@ -295,6 +295,31 @@ class StripeSync extends Process.Service<StripeSync>()("@app/StripeSync", {
 `ProcessGroup` should not become a private message bus for normal app work. It
 is the lifecycle/control/status interface for the runtime entries.
 
+### Group membership is control exposure, not dependency wiring
+
+Normal Effect dependencies do not need group registration. A process can depend
+on any queue, process helper, resource, API client, store, or domain service
+through the environment whether or not that dependency appears in the group.
+
+Passing an entry to `ProcessGroup.make(id, entries)` or
+`ProcessGroup.Service(id, entries)` means the group owns a control/status view
+for that entry:
+
+- the entry appears in the group contract;
+- local group controls can target it;
+- `ControlService` can expose its supported controls;
+- `ProcessManager` can control it remotely through the group endpoint.
+
+The group should accept every runtime entry family that can expose the group
+control contract: processes, queues, and future resources. The minimum contract
+for group membership is a canonical `id`, a `kind`, serializable control/status
+metadata, and a local adapter the group can call for supported controls.
+
+This is separate from standalone remote service access. To yield the entry
+itself from the Effect environment and have that yielded service be swappable
+between local and remote providers, the entry must use the `RemoteService`
+constructor for its runtime family.
+
 ## Remote ProcessManager contract
 
 `ProcessManager` only connects to groups over a network. It should consume the
