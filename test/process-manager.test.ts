@@ -312,6 +312,36 @@ describe("ProcessManager", () => {
             "pause",
             "north-west/billing-group/sync-invoices",
           ]).pipe(Effect.flip);
+          const limitedCli = ProcessManager.cli([{
+            id: "@repo/Limited/BillingGroup",
+            contract: {
+              id: "@repo/Limited/BillingGroup",
+              kind: "group",
+              version: "v1",
+              processes: [
+                {
+                  id: "@repo/Limited/BillingGroup/SyncInvoices",
+                  kind: "process",
+                  controls: ["status"],
+                },
+              ],
+              queues: [
+                {
+                  id: "@repo/Limited/BillingGroup/BillingEmailQueue",
+                  kind: "queue",
+                  controls: ["status"],
+                },
+              ],
+            },
+          }] as const);
+          const unsupportedProcessControl = yield* limitedCli([
+            "now",
+            "limited/billing-group/sync-invoices",
+          ]).pipe(Effect.flip);
+          const unsupportedQueueControl = yield* limitedCli([
+            "pause",
+            "limited/billing-group/billing-email-queue",
+          ]).pipe(Effect.flip);
           const ambiguous = yield* cli([
             "now",
             "sync-invoices",
@@ -322,6 +352,14 @@ describe("ProcessManager", () => {
           expect(wrongKind._tag).toBe("ProcessManagerConnectionError");
           if (wrongKind._tag === "ProcessManagerConnectionError") {
             expect(wrongKind.reason).toContain("is a process, not a queue");
+          }
+          expect(unsupportedProcessControl._tag).toBe("ProcessManagerConnectionError");
+          if (unsupportedProcessControl._tag === "ProcessManagerConnectionError") {
+            expect(unsupportedProcessControl.reason).toContain("does not expose 'runImmediately'");
+          }
+          expect(unsupportedQueueControl._tag).toBe("ProcessManagerConnectionError");
+          if (unsupportedQueueControl._tag === "ProcessManagerConnectionError") {
+            expect(unsupportedQueueControl.reason).toContain("does not expose 'pause'");
           }
           expect(ambiguous._tag).toBe("ProcessManagerConnectionError");
           if (ambiguous._tag === "ProcessManagerConnectionError") {
