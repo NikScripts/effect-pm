@@ -173,6 +173,28 @@ describe("ControlService — contract route", () => {
           );
           expect(pause.statusCode).toBe(200);
           expect(yield* Ref.get(delivered)).toEqual(["ops@example.com"]);
+
+          const missingProcess = yield* requestJson(
+            32128,
+            `/processes/${encodeURIComponent("@test/MissingProcess")}/start`,
+            "POST",
+          );
+          expect(missingProcess.statusCode).toBe(404);
+          expect(missingProcess.body).toMatchObject({
+            success: false,
+            error: "Process '@test/MissingProcess' could not be started",
+          });
+
+          const missingQueue = yield* requestJson(
+            32128,
+            `/queues/${encodeURIComponent("@test/MissingQueue")}/clear`,
+            "POST",
+          );
+          expect(missingQueue.statusCode).toBe(404);
+          expect(missingQueue.body).toMatchObject({
+            success: false,
+            error: "Queue '@test/MissingQueue' could not be cleared",
+          });
         }).pipe(
           provideLayer(EmailQueue.layer),
           provideLayer(ProcessStore.layer),
