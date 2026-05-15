@@ -48,9 +48,6 @@ const program = Effect.scoped(
 
     class BillingEndpoint extends ProcessManager.Endpoint<BillingEndpoint>()(
       BillingGroup,
-      {
-        baseUrl: "http://127.0.0.1:32130",
-      },
     ) {}
 
     yield* Effect.gen(function* () {
@@ -88,6 +85,11 @@ const program = Effect.scoped(
       provideLayer(BillingEndpoint.layer),
       provideLayer(EmailQueue.layer),
       provideLayer(ProcessStore.layer),
+      provideLayer(
+        ProcessManager.ConnectionRegistry.layer([BillingGroup] as const, {
+          [BillingGroup.id]: "http://127.0.0.1:32130",
+        }),
+      ),
       provideLayer(NodeHttpClient.layerUndici),
     );
   }),

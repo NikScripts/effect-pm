@@ -370,9 +370,6 @@ describe("ProcessManager", () => {
 
         class BillingEndpoint extends ProcessManager.Endpoint<BillingEndpoint>()(
           BillingGroup,
-          {
-            baseUrl: "http://127.0.0.1:32129",
-          },
         ) {}
 
         yield* Effect.gen(function* () {
@@ -393,6 +390,11 @@ describe("ProcessManager", () => {
           provideLayer(BillingEndpoint.layer),
           provideLayer(EmailQueue.layer),
           provideLayer(ProcessStore.layer),
+          provideLayer(
+            ProcessManager.ConnectionRegistry.layer([BillingGroup] as const, {
+              [BillingGroup.id]: "http://127.0.0.1:32129",
+            }),
+          ),
           provideLayer(NodeHttpClient.layerUndici),
         );
       }),

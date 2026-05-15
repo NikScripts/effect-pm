@@ -169,7 +169,8 @@ Stopping interrupts the schedule driver fiber and child instances; removing/clos
 | `ProcessManager.cli([GroupA, GroupB] as const)` | Build a multi-group CLI from group contracts and the connection registry. |
 | `ProcessManager.connect(Group, { baseUrl })` | Build a typed remote client from a group service/definition. |
 | `ProcessManager.connect({ baseUrl, contract })` | Build from a raw contract for generated or contract-only clients. |
-| `ProcessManager.Endpoint<Self>()(Group, { baseUrl })` | Injectable endpoint service that yields the remote manager. |
+| `ProcessManager.Endpoint<Self>()(Group)` | Injectable endpoint service that reads the group URL from `ProcessManagerConnectionRegistry`. |
+| `ProcessManager.Endpoint<Self>()(Group, { baseUrl })` | Injectable endpoint service with an inline base URL for simple examples/tests. |
 | `manager.verifyContract` | Fetches `GET /contract` and compares group id, version, process ids, queue ids, and control sets. |
 | `manager.process(id)` | Remote process start/stop/restart/run/status controls. |
 | `manager.queue(id)` | Remote queue pause/resume/clear/status controls. |

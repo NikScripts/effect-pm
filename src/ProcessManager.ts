@@ -185,11 +185,13 @@ export interface ProcessManagerEndpoint<
   Self,
   Id extends string,
   Contract extends AnyProcessGroupContract,
+  Error = never,
+  Requirements = never,
 > extends Context.ServiceClass<Self, Id, RemoteProcessManager<Contract>> {
   readonly group: ContractSource<Contract>;
   readonly contract: Contract;
-  readonly config: ProcessManagerEndpointConfig;
-  readonly layer: Layer.Layer<Self>;
+  readonly config: ProcessManagerEndpointConfig | undefined;
+  readonly layer: Layer.Layer<Self, Error, Requirements>;
 }
 
 const joinUrl = (baseUrl: string, path: string): string =>
@@ -494,6 +496,11 @@ const makeConnectionRegistryLayer = <
     },
   });
 };
+
+const hasConnectionId = (
+  source: ContractSource<AnyProcessGroupContract>,
+): source is ConnectionSource<AnyProcessGroupContract> =>
+  "id" in source && typeof source.id === "string";
 
 const connectFromRegistry = <
   Source extends ConnectionSource<AnyProcessGroupContract>,
@@ -813,7 +820,21 @@ const makeCli = <
   });
 };
 
-const makeEndpoint = <
+function makeEndpoint<
+  Self,
+  const Id extends string,
+  const Source extends ConnectionSource<AnyProcessGroupContract>,
+>(
+  id: Id,
+  group: Source,
+): ProcessManagerEndpoint<
+  Self,
+  Id,
+  ContractFromSource<Source>,
+  ProcessManagerConnectionError,
+  ProcessManagerConnectionRegistry
+>;
+function makeEndpoint<
   Self,
   const Id extends string,
   const Source extends ContractSource<AnyProcessGroupContract>,
@@ -821,16 +842,42 @@ const makeEndpoint = <
   id: Id,
   group: Source,
   config: ProcessManagerEndpointConfig,
-): ProcessManagerEndpoint<Self, Id, ContractFromSource<Source>> => {
+): ProcessManagerEndpoint<Self, Id, ContractFromSource<Source>>;
+function makeEndpoint<
+  Self,
+  const Id extends string,
+  const Source extends ContractSource<AnyProcessGroupContract>,
+>(
+  id: Id,
+  group: Source,
+  config?: ProcessManagerEndpointConfig,
+): ProcessManagerEndpoint<
+  Self,
+  Id,
+  ContractFromSource<Source>,
+  ProcessManagerConnectionError,
+  ProcessManagerConnectionRegistry
+> {
   const base = Context.Service<Self, RemoteProcessManager<ContractFromSource<Source>>>()(id);
-  const manager = connect(group, config);
+  const layer = config === undefined
+    ? hasConnectionId(group)
+      ? Layer.effect(base)(connectFromRegistry(group))
+      : Layer.effect(base)(
+          Effect.fail(
+            new ProcessManagerConnectionError({
+              groupId: group.contract.id,
+              reason: "Endpoint without config requires a group service with an id",
+            }),
+          ),
+        )
+    : Layer.succeed(base, connect(group, config));
   return Object.assign(base, {
     group,
     contract: group.contract,
     config,
-    layer: Layer.succeed(base, manager),
+    layer,
   });
-};
+}
 
 /**
  * Build a typed remote client from a group service/definition value by reading
@@ -904,6 +951,42 @@ function connect(
   throw new TypeError("ProcessManager.connect requires connection options or a connection registry source");
 }
 
+function makeEndpointFactory<Self>() {
+  function endpoint<const Source extends ConnectionSource<AnyProcessGroupContract>>(
+    group: Source,
+  ): ProcessManagerEndpoint<
+    Self,
+    Source["contract"]["id"],
+    ContractFromSource<Source>,
+    ProcessManagerConnectionError,
+    ProcessManagerConnectionRegistry
+  >;
+  function endpoint<const Source extends ContractSource<AnyProcessGroupContract>>(
+    group: Source,
+    config: ProcessManagerEndpointConfig,
+  ): ProcessManagerEndpoint<Self, Source["contract"]["id"], ContractFromSource<Source>>;
+  function endpoint(
+    group: ContractSource<AnyProcessGroupContract>,
+    config?: ProcessManagerEndpointConfig,
+  ) {
+    if (config === undefined) {
+      if (!hasConnectionId(group)) {
+        throw new TypeError("ProcessManager.Endpoint without config requires a group service with an id");
+      }
+      return makeEndpoint<Self, string, ConnectionSource<AnyProcessGroupContract>>(
+        `${group.contract.id}/ProcessManagerEndpoint`,
+        group,
+      );
+    }
+    return makeEndpoint<Self, string, ContractSource<AnyProcessGroupContract>>(
+      `${group.contract.id}/ProcessManagerEndpoint`,
+      group,
+      config,
+    );
+  }
+  return endpoint;
+}
+
 /**
  * Remote ProcessManager namespace.
  *
@@ -915,13 +998,5 @@ export const ProcessManager = {
   ConnectionRegistry: {
     layer: makeConnectionRegistryLayer,
   },
-  Endpoint: <Self>() =>
-  <const Source extends ContractSource<AnyProcessGroupContract>>(
-    group: Source,
-    config: ProcessManagerEndpointConfig,
-  ) => makeEndpoint<Self, Source["contract"]["id"], Source>(
-    `${group.contract.id}/ProcessManagerEndpoint`,
-    group,
-    config,
-  ),
+  Endpoint: makeEndpointFactory,
 } as const;

@@ -608,17 +608,18 @@ const RemoteGroupsFromConfig = ProcessManager.ConnectionRegistry.layerConfig(
 ```
 
 `ProcessManager.Endpoint` remains useful as the injectable single-group remote
-manager. It should eventually be implemented on top of the same connection
-registry instead of storing one-off connection state that bypasses the registry.
+manager. Prefer the registry-backed form so connection state comes from a
+swappable layer:
 
 ```typescript
 class BillingEndpoint extends ProcessManager.Endpoint<BillingEndpoint>()(
   BillingGroup,
-  {
-    baseUrl: "https://billing.internal",
-  },
 ) {}
 ```
+
+The inline `{ baseUrl }` form remains available for small examples and tests,
+but application wiring should provide the group URL through
+`ProcessManager.ConnectionRegistry.layer`.
 
 The endpoint yields a typed remote manager:
 
