@@ -544,6 +544,31 @@ yield* ProcessManager.cli([BillingGroup, StripeGroup] as const).pipe(
 );
 ```
 
+Expected operator-facing command shape:
+
+```bash
+effect-pm groups
+effect-pm --group @app/BillingGroup ls
+effect-pm --group @app/BillingGroup now @app/StripeSync
+effect-pm --group @app/StripeGroup pause @app/StripeWebhookQueue
+effect-pm --all ls
+```
+
+Rules:
+
+- `groups` lists the configured group ids, optional aliases, and endpoints.
+- Single-target commands require `--group <group-id>` when more than one group
+  is configured, unless the target id is globally unique after contract fetch.
+- If a process or queue id exists in multiple contracts, the CLI must fail with
+  an ambiguity message instead of choosing a group.
+- `--all` is read-only. It can aggregate `ls`, group health, and status
+  summaries, but mutating commands (`start`, `stop`, `restart`, `now`, `pause`,
+  `resume`, `clear`) must target exactly one group.
+- Diagnostics should include canonical group ids even when a user configured
+  shorter aliases.
+- Each command should verify the target group contract before issuing controls
+  and report contract drift as a checked remote/control error.
+
 The same registry should support config-backed layers later:
 
 ```typescript
