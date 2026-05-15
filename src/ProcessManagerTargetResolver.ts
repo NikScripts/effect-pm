@@ -1,15 +1,22 @@
 /**
  * Pure target resolution helpers for multi-group ProcessManager CLI commands.
  *
+ * The CLI keeps canonical ids Effect-style and case-preserving, but users can
+ * type normalized suffixes such as `north-west/billing-group/sync-invoices`.
+ * This module owns that user-facing normalization without weakening the ids
+ * stored in contracts.
+ *
  * @internal
  */
 
+/** Candidate command target from a fetched group contract. */
 export interface ProcessManagerTargetCandidate {
   readonly id: string;
   readonly kind: "process" | "queue";
   readonly groupId: string;
 }
 
+/** Exactly one process or queue matched the user's input. */
 export interface ResolvedProcessManagerTarget {
   readonly _tag: "Resolved";
   readonly input: string;
@@ -17,6 +24,7 @@ export interface ResolvedProcessManagerTarget {
   readonly candidate: ProcessManagerTargetCandidate;
 }
 
+/** More than one process or queue matched the user's input. */
 export interface AmbiguousProcessManagerTarget {
   readonly _tag: "Ambiguous";
   readonly input: string;
@@ -28,6 +36,7 @@ export interface AmbiguousProcessManagerTarget {
   }>;
 }
 
+/** No process or queue matched the user's input. */
 export interface MissingProcessManagerTarget {
   readonly _tag: "Missing";
   readonly input: string;
@@ -42,6 +51,9 @@ export type ProcessManagerTargetResolution =
 const splitSegments = (id: string): ReadonlyArray<string> =>
   id.split("/").filter((segment) => segment.length > 0);
 
+// Normalize one path segment for typing convenience:
+// `SyncInvoices`, `sync_invoices`, and `sync invoices` all become
+// `sync-invoices`.
 const normalizeSegment = (segment: string): string =>
   segment
     .trim()
@@ -52,6 +64,7 @@ const normalizeSegment = (segment: string): string =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
+/** Normalize a full process/queue id or user-entered alias. */
 export const normalizeProcessManagerTarget = (input: string): string =>
   splitSegments(input)
     .map(normalizeSegment)
@@ -61,6 +74,7 @@ export const normalizeProcessManagerTarget = (input: string): string =>
 const isSuffixMatch = (candidate: string, input: string): boolean =>
   candidate === input || candidate.endsWith(`/${input}`);
 
+// Return the last N path segments of a normalized id.
 const suffixOf = (
   normalizedId: string,
   segmentCount: number,
@@ -74,6 +88,8 @@ const shortestUniqueSuffix = (
   allNormalizedIds: ReadonlyArray<string>,
 ): { readonly minimumSuffix: string; readonly unique: boolean } => {
   const segments = splitSegments(normalizedId);
+  // Walk from shortest to longest suffix so ambiguity diagnostics can show the
+  // minimum users must type to select this candidate.
   for (let length = 1; length <= segments.length; length++) {
     const suffix = suffixOf(normalizedId, length);
     const matches = allNormalizedIds.filter((candidate) =>
@@ -86,6 +102,9 @@ const shortestUniqueSuffix = (
   return { minimumSuffix: normalizedId, unique: false };
 };
 
+/**
+ * Resolve one user-entered target against process and queue candidates.
+ */
 export const resolveProcessManagerTarget = (
   input: string,
   candidates: ReadonlyArray<ProcessManagerTargetCandidate>,

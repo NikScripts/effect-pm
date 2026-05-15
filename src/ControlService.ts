@@ -80,7 +80,9 @@ const writeJson = (
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
     const json = yield* Schema.encodeUnknownEffect(responseBodyJson)(body).pipe(
-      Effect.orDie,
+      Effect.catch(() =>
+        Effect.succeed("{\"success\":false,\"error\":\"Unable to encode JSON response\"}")
+      ),
     );
     yield* Effect.sync(() => {
       res.writeHead(status, { "Content-Type": "application/json" });
