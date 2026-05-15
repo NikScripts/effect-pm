@@ -507,10 +507,58 @@ code call `ProcessManager.connect` everywhere. The service key stays the same;
 the provided layer decides whether the implementation is local, mocked, or
 network-backed.
 
-### Endpoint service
+### Typed connection registry and endpoint service
 
-First introduce a remote endpoint service. It stores remote connection config,
-the group contract, and future transport/auth/retry settings in one place.
+Remote clients should not receive base URLs as ad hoc arguments at each call
+site. Passing group service classes should create typed connection requirements,
+and application layers should provide those requirements.
+
+The target CLI DX is:
+
+```typescript
+const cli = ProcessManager.cli([BillingGroup, StripeGroup] as const);
+```
+
+The group tuple carries contracts and IDs, so the type system can derive the
+required connection registry:
+
+```typescript
+type BillingAndStripeConnections = ProcessManager.ConnectionRegistry<
+  readonly [typeof BillingGroup, typeof StripeGroup]
+>;
+```
+
+Applications provide that requirement with a layer:
+
+```typescript
+const RemoteGroupsLive = ProcessManager.ConnectionRegistry.layer(
+  [BillingGroup, StripeGroup] as const,
+  {
+    [BillingGroup.id]: "http://127.0.0.1:32130",
+    [StripeGroup.id]: "http://127.0.0.1:32131",
+  },
+);
+
+yield* ProcessManager.cli([BillingGroup, StripeGroup] as const).pipe(
+  Effect.provide(RemoteGroupsLive),
+);
+```
+
+The same registry should support config-backed layers later:
+
+```typescript
+const RemoteGroupsFromConfig = ProcessManager.ConnectionRegistry.layerConfig(
+  [BillingGroup, StripeGroup] as const,
+  {
+    [BillingGroup.id]: Config.string("BILLING_GROUP_BASE_URL"),
+    [StripeGroup.id]: Config.string("STRIPE_GROUP_BASE_URL"),
+  },
+);
+```
+
+`ProcessManager.Endpoint` remains useful as the injectable single-group remote
+manager. It should eventually be implemented on top of the same connection
+registry instead of storing one-off connection state that bypasses the registry.
 
 ```typescript
 class BillingEndpoint extends ProcessManager.Endpoint<BillingEndpoint>()(
@@ -531,8 +579,9 @@ yield* billing.process(StripeSync.id).runImmediately;
 yield* billing.queue(EmailQueue.id).pause;
 ```
 
-This avoids repeating `baseUrl` and gives later auth/RPC middleware a single
-home.
+This avoids repeating connection logic and gives later auth/RPC middleware a
+single home. The critical rule is: group classes provide contracts; connection
+layers provide locations.
 
 ### Resolved remote layer decisions
 
@@ -593,9 +642,9 @@ const BillingRemoteLayer = ProcessGroup.remoteLayer(
 // Layer.Layer<BillingGroup, never, BillingEndpoint | HttpClient>
 ```
 
-The endpoint service owns connection configuration and the imported contract.
-The application still provides transport, such as `NodeHttpClient.layerUndici`,
-through normal layer wiring.
+The endpoint service owns the imported contract and consumes the connection
+registry. The application still provides transport, such as
+`NodeHttpClient.layerUndici`, through normal layer wiring.
 
 Remote group controls should verify the endpoint contract before issuing remote
 commands. Cache successful verification inside the remote group provider so the
@@ -870,17 +919,22 @@ yield* ProcessGroup.make(id, entries, options);
 
 ### Slice 6 - Remote PM client
 
-- Add `ProcessManager.connect(GroupService, { baseUrl })` as the preferred
-  runtime-class form, plus `ProcessManager.connect({ baseUrl, contract })` for
-  generated clients.
+- Add a typed `ProcessManager.ConnectionRegistry` requirement derived from a
+  group tuple. Provide it with explicit layers (`layer`, later `layerConfig`) so
+  base URLs live in swappable Effect configuration, not in CLI call arguments.
+- Add `ProcessManager.connect(GroupService)` as the preferred runtime-class form
+  when a connection registry is available, plus
+  `ProcessManager.connect({ baseUrl, contract })` for generated clients and
+  low-level escape hatches.
 - Route commands over the network to a group.
 - Validate remote enqueue payloads with schema.
-- Aggregate status from multiple remote groups.
+- Aggregate status from multiple remote groups through
+  `ProcessManager.cli([GroupA, GroupB] as const)` using the connection registry.
 
 ### Slice 6.5 - Endpoint service and remote layer bundle
 
-- Add `ProcessManager.Endpoint` to capture group contract + base URL +
-  future auth/transport config.
+- Add `ProcessManager.Endpoint` to capture group contract and consume
+  connection-registry values for future auth/transport config.
 - Add `ProcessGroup.remoteLayer` for the group service itself.
 - Add `ProcessGroup.remoteLayers` once process/queue remote handle error
   semantics are decided.
