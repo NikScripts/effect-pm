@@ -2,8 +2,10 @@
 
 ## Status
 
-Planned direction with unsettled API names. Most of this model should be
-implemented, but the final public shape must line up with
+Planned. The first Phase C implementation slice should keep `ProcessStore` as
+the public storage service name, introduce generic runtime state/fact vocabulary,
+and prove the model with `RunResource` before publishing a separate
+`RuntimeStorage` boundary. The final public shape must line up with
 [07 - Typed ProcessGroup and remote ProcessManager](./07-process-manager.md).
 
 ## Intent
@@ -46,6 +48,86 @@ Resources should push state changes when they happen:
 `ProcessStore` should not call `getStatus()` to discover changes after the fact.
 The runtime already knows when state changes. It should publish the change at
 the mutation point.
+
+## Phase C first implementation slice
+
+Start with a deliberately small, generic slice:
+
+1. Define the shared runtime vocabulary: `RuntimeRef`,
+   `RuntimeStateChange`, `RuntimeFact`, and an internal `RuntimeObserver`.
+2. Apply it to `RunResource` only.
+3. Prove scoped subscribers can observe state changes without persistence.
+4. Only then bridge generic state changes/facts into `ProcessStore` when that
+   service is available.
+
+`RunResource` is the first publisher because it is the lowest-risk runtime:
+
+- it is an inline concurrency gate, not a background worker system;
+- it has no user payload persistence;
+- it has no queue schema, retry, dedup, or handoff semantics;
+- its useful state is small: configured concurrency, in-flight count, waiting
+  count, completed count, failed count, interrupted count, and basic duration
+  measurements.
+
+Do not start Phase C with `QueueResource` lifecycle state. Queue state is
+important, but it is entangled with item payloads, dedup keys, retries, hooks,
+existing queue analytics events, and future schema-backed enqueue validation.
+Do not start with `Process` status mirrors either; process status is already
+partly derived from schedule mirrors and `ProcessStore` execution reads, so it is
+a worse test bed for proving push-based runtime observation.
+
+### Naming decision
+
+For the first implementation slice, keep `ProcessStore` as the public storage
+service name. Do **not** introduce public `RuntimeStorage` yet.
+
+Use these names in the first slice:
+
+- `RuntimeRef` — stable identity for a process, queue, resource, or group.
+- `RuntimeStateChange` — generic history record from one state snapshot to the
+  next.
+- `RuntimeFact` — discrete occurrence that may not be a full state snapshot.
+- `RuntimeObserver` — internal observation service/helper that owns current
+  state, publishes changes, and fans out listener streams.
+
+Rationale:
+
+- `ProcessStore` is already the public storage dependency and the Prisma adapter
+  already implements that service key.
+- `RuntimeStorage` is a good possible lower-level name, but publishing it before
+  memory and Prisma can both store generic state/facts would create churn.
+- `RuntimeObserver` is not storage. It belongs near runtime modules and may stay
+  internal until the listener/stream API settles.
+- `RuntimeFact` and `RuntimeStateChange` should stay generic, not
+  process/queue-specific.
+
+### Relationship to plan 10
+
+[10 - Plan 01 phase one: ProcessStore read foundation](./10-process-store-phase-one.md)
+remains the baseline for current event reads: process history exists today;
+queue completion/lifecycle event types exist; generic `events(query)` and queue
+reads are planned but not part of the current `ProcessStoreInterface`.
+
+Phase C should not implement runtime state by adding store methods like
+`getRunResourceState`, `getQueueState`, or `getProcessStatusMirror`. The first
+bridge to storage should be generic. If the current `append` API is used before
+a wider interface exists, encode state/fact records as generic analytics events
+instead of adding a feature-specific method:
+
+```typescript
+yield* store.append(runtimeFactAsAnalyticsEvent);
+```
+
+After a future interface expansion, prefer generic runtime methods:
+
+```typescript
+yield* store.appendStateChange(change);
+yield* store.appendFact(fact);
+```
+
+The exact bridge can wait until the observer has in-memory tests. What cannot
+wait: runtime state/facts must be generic enough that plan 10 does not need a
+new read method for every resource feature.
 
 ## Vocabulary
 
@@ -134,13 +216,17 @@ export interface RuntimeStorage {
 }
 ```
 
-Open naming question: this could be `RuntimeStorage`, with `ProcessStore` as
-package logic on top, or `ProcessStore` could keep the public name while a lower
-level storage adapter gets a new name. The important line is:
+Resolved for Phase C slice one: keep `ProcessStore` as the public storage name
+and keep `RuntimeStorage` as a deferred lower-level name. The important line is:
 
 - storage stores generic state changes and facts;
 - process / queue / resource modules define typed state, typed facts, and typed
   projections.
+
+`RuntimeStorage` can become public later only if it removes real ambiguity
+between the generic state/fact backend and the higher-level `ProcessStore`
+analytics API. Until then, a rename would add vocabulary without proving a
+better boundary.
 
 ## Listener and hook model
 
@@ -570,22 +656,98 @@ Avoid:
 
 ## Candidate implementation phases
 
-1. Define state/fact/storage vocabulary in docs only.
-2. Add an internal runtime observer used by one low-risk resource.
-3. Add scoped listener support for that resource.
-4. Persist state changes through the current store when available.
-5. Add typed projections over state history.
-6. Decide whether the lower-level storage dependency should be renamed.
-7. Apply the pattern to process, queue, run resource, HTTP resource, and groups.
+### Phase C.1 - RunResource observer, no storage writes
+
+- Add a small internal `RuntimeObserver` helper that stores latest state and
+  publishes `RuntimeStateChange<RunResourceState>`.
+- Instrument `RunResource.make` and `RunResource.makeRunner` around permit wait,
+  run start, run success, run failure, and interruption.
+- Expose observation only through the acquired gate/runner or internal tests at
+  first; do not require applications to provide `ProcessStore`.
+- Keep listener failure isolated from the user effect and from the semaphore
+  release path.
+- Add no queue, process, HTTP, schema, remote enqueue, or handoff behavior.
+
+### Phase C.2 - Scoped listeners
+
+- Add scoped subscription/listener helpers for the observed `RunResource` state
+  stream.
+- Prefer `Stream`/scoped APIs over callback-only APIs if Effect patterns support
+  the same ergonomics.
+- Define listener failure behavior explicitly: log/store a fact later, but do
+  not fail the runtime mutation that triggered the listener.
+
+### Phase C.3 - Generic storage bridge
+
+- Bridge `RuntimeStateChange` and `RuntimeFact` into `ProcessStore` only when a
+  store is available.
+- Keep the bridge generic. Do not add `getRunResourceState`,
+  `getRunResourceFacts`, or similar feature-specific reads.
+- Decide whether to add generic state/fact methods to `ProcessStoreInterface` or
+  encode them as `AnalyticsEvent` variants only after memory and Prisma tests
+  prove equivalent behavior.
+
+### Phase C.4 - Projections and additional runtimes
+
+- Add typed projections over generic state/fact history.
+- Apply the pattern next to `Process` status mirrors or `QueueResource`
+  lifecycle state only after `RunResource` proves the observer and storage
+  bridge.
+- Keep queue schema validation, remote queue enqueue, release, and deployment
+  handoff in later phases.
+
+## Acceptance criteria for the first implementation slice
+
+The first Phase C slice is complete only when all of these are true:
+
+- `RuntimeRef`, `RuntimeStateChange`, `RuntimeFact`, and internal
+  `RuntimeObserver` names exist with TSDoc that explains which names are public
+  and which are internal.
+- `ProcessStore` remains the public storage service name; no public
+  `RuntimeStorage` export is added.
+- `RunResource` publishes state changes for wait/start/success/failure/
+  interruption without polling a status getter.
+- `RunResourceState` records at least configured concurrency, in-flight count,
+  waiting count, completed count, failed count, interrupted count, and average
+  duration or enough timing data to derive it.
+- Multiple scoped listeners can observe the same `RunResource` state changes.
+- Listener failure is isolated from the gated user effect and cannot leak
+  semaphore permits.
+- No `ProcessStoreInterface` method is added for one runtime feature.
+- No queue schema, remote enqueue, release, handoff, process schedule, or
+  `ProcessManager` behavior changes are included.
+
+## Verification commands
+
+For the first implementation slice, run the full non-trivial-change suite:
+
+```bash
+pnpm run typecheck
+pnpm test
+pnpm run lint
+pnpm run build
+```
+
+Focused iteration commands:
+
+```bash
+pnpm vitest run test/run-resource.test.ts
+pnpm vitest run test/process-store.test.ts test/prisma-process-store.test.ts
+```
+
+If the first slice adds a storage bridge, also add and run matching memory and
+Prisma tests that prove ordering, filtering, and malformed-row behavior remain
+consistent.
 
 ## Graduation criteria
 
 - Runtime state and fact types are stable enough for public TSDoc.
-- At least one process/resource publishes state changes without storage polling
-  `getStatus()`.
-- Multiple listeners can subscribe to the same signal.
+- `RunResource` publishes state changes without storage polling a `getStatus()`
+  style method.
+- Multiple listeners can subscribe to the same signal with scoped cleanup.
 - Listener failures are isolated and documented.
-- Config mutations are versioned, validated, and stored.
+- Config mutations are versioned, validated, and stored once mutable config
+  enters scope.
 - `ProcessStore` / storage shape does not grow when a new resource-specific
   projection is added.
 - The `ProcessGroup` / `ProcessManager` redesign can consume the same state
