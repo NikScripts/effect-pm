@@ -70,13 +70,14 @@ plan for this phase, and reconcile storage work with
    no queue payloads, no schema work, and no background workers. It now publishes
    run started/completed/failed facts when `RuntimeObserver` is provided, and
    no-ops when it is absent.
-3. Add scoped observation/listener support around runtime facts/state changes.
-4. Persist generic state changes/facts through `ProcessStore`; facts are not
-   persisted yet, so this is the next likely Phase C slice.
+3. Bridge `RuntimeObserver` into `ProcessStore` next. The bridge should let
+   runtime modules keep depending on `ProcessStore`, while `ProcessStore` writes
+   generic records through `RuntimeStorage`.
+4. Add scoped observation/listener support around runtime facts/state changes.
 5. Add typed projections over generic state/fact history instead of adding one
    store method per runtime feature.
-6. Revisit a public `RuntimeStorage` name only after the generic storage
-   contract is real in memory and Prisma implementations.
+6. Implement memory/Prisma `RuntimeStorage` adapters under `ProcessStore`
+   without exposing module-specific adapter APIs.
 
 Primary references:
 
