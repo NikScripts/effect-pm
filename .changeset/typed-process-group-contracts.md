@@ -18,6 +18,6 @@ The multi-group CLI supports `--json` output for `groups`, `ls`, `verify`, and `
 
 The multi-group CLI now checks target contract capabilities before issuing remote status/control requests, so unsupported process and queue commands fail locally before HTTP.
 
-Adds the first runtime state/fact vocabulary and optional `RuntimeObserver`, with `RunResource` publishing run started/completed/failed facts when an observer is provided.
+Adds the first runtime state/fact vocabulary and optional `RuntimeObserver`, with `RunResource` publishing run started/completed/failed facts when an observer is provided. `RuntimeObserver.layerProcessStore` persists runtime facts as `runtime.fact.recorded` ProcessStore analytics events, and the Prisma codec supports that event type. State changes are not persisted yet.
 
 Also fixes `ProcessStore` execution ordering consistency and keyed queue `clear()` dedup cleanup.

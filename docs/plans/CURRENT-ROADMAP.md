@@ -70,14 +70,17 @@ plan for this phase, and reconcile storage work with
    no queue payloads, no schema work, and no background workers. It now publishes
    run started/completed/failed facts when `RuntimeObserver` is provided, and
    no-ops when it is absent.
-3. Bridge `RuntimeObserver` into `ProcessStore` next. The bridge should let
-   runtime modules keep depending on `ProcessStore`, while `ProcessStore` writes
-   generic records through `RuntimeStorage`.
-4. Add scoped observation/listener support around runtime facts/state changes.
-5. Add typed projections over generic state/fact history instead of adding one
-   store method per runtime feature.
-6. Implement memory/Prisma `RuntimeStorage` adapters under `ProcessStore`
-   without exposing module-specific adapter APIs.
+3. `RuntimeObserver.layerProcessStore` now bridges runtime facts into
+   `ProcessStore` as `runtime.fact.recorded` analytics events. State changes are
+   not persisted yet.
+4. Add generic `ProcessStore.events(query)` next so projections can read
+   `runtime.fact.recorded` and existing analytics events without feature-specific
+   read methods.
+5. Add typed projections over generic event/state/fact history after
+   `events(query)`.
+6. Keep `RuntimeStorage` planned as the generic storage port under
+   `ProcessStore`, with memory/Prisma adapters implementing that port rather than
+   module-specific APIs.
 
 Primary references:
 

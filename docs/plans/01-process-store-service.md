@@ -129,6 +129,15 @@ module-aware API while keeping the storage adapter surface stable forever.
 `ProcessStore` owns conversion, redaction, projection, and observer bridging.
 `RuntimeStorage` only persists generic records.
 
+Current bridge status:
+
+- `RuntimeObserver.layerProcessStore` persists `RuntimeFact` values as
+  `runtime.fact.recorded` analytics events.
+- State changes are not persisted yet.
+- `ProcessStore.events(query)` is the next read target before projections.
+- Do not add `getRunResourceFacts`, `getQueueValidationFailures`, or similar
+  feature-specific reads to replace that generic query.
+
 Candidate surface:
 
 - `append(event)`

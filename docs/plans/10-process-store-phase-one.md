@@ -27,6 +27,9 @@ store reads. Use this document as the source of truth for the current
   `getProcessExecutions`, and `getProcessLifecycle`.
 - Queue event types exist, and `QueueResource` can write queue completion and
   lifecycle events when a store is available.
+- Runtime facts can be persisted today as `runtime.fact.recorded` analytics
+  events through `RuntimeObserver.layerProcessStore`; state changes are not
+  persisted yet.
 - The in-memory and Prisma stores must stay behaviorally aligned for ordering,
   filtering, and decode policy.
 
@@ -36,14 +39,16 @@ generic swappable persistence port. Runtime modules should depend on
 `ProcessStore`, not `RuntimeStorage`; storage adapters should implement
 `RuntimeStorage`, not module-specific APIs. Do not add `getRunResourceState`,
 `getQueueState`, `getProcessStateMirror`, or similar one-method-per-feature APIs.
-Once a generic `RuntimeStateChange` / `RuntimeFact` stream is proven, this
-phase-one read plan can either:
+Because runtime facts now share the analytics envelope, this phase-one read plan
+should prioritize:
 
-1. add `events(query)` for existing analytics events, or
-2. add generic runtime state/fact append/read methods to `ProcessStore`.
+1. add `events(query)` for existing analytics events and
+   `runtime.fact.recorded`;
+2. defer generic runtime state/fact append/read methods until state changes are
+   persisted.
 
-Do not do both until the runtime observation shape has tests proving that memory
-and Prisma storage can represent the same records.
+Do not add projections or feature-specific reads until `events(query)` has tests
+proving that memory and Prisma storage can return the same records.
 
 ## Preflight: current code vs planned gaps
 
@@ -76,7 +81,8 @@ one from building on a false baseline.
 
 Add a **read foundation** to `ProcessStoreInterface`:
 
-1. A generic typed event query, `events(query)`.
+1. A generic typed event query, `events(query)`, covering current analytics
+   events and `runtime.fact.recorded`.
 2. Dedicated queue reads for the queue event types already supported today.
 3. Root exports for the queue analytics event types needed by users implementing
    custom stores.
@@ -362,7 +368,8 @@ const isQueueItemCompleted = (
 
 Phase one is complete only when all of these are true:
 
-- `ProcessStoreInterface` has a generic `events(query)` read.
+- `ProcessStoreInterface` has a generic `events(query)` read that includes
+  `runtime.fact.recorded`.
 - `ProcessStoreInterface` has dedicated reads for existing queue completion and
   queue lifecycle events.
 - Memory and Prisma stores return equivalent ordering and filtering behavior.
