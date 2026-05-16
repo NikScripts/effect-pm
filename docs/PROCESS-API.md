@@ -246,11 +246,44 @@ runtime module -> ProcessStore -> RuntimeStorage -> memory / Prisma / custom
 ```
 
 `ProcessStore.events(query)` reads generic analytics events across memory,
-file-backed, and Prisma stores. Queue reads are available as
-`getQueueItemCompletions(queueId, opts)` and `getQueueLifecycle(queueId, opts)`.
-Projections should use these generic/read-foundation surfaces instead of adding
-feature-specific storage adapter methods. Queue schema validation, remote queue
-enqueue, release, and handoff remain later phases.
+file-backed, and Prisma stores. Do not treat dedicated queue reads as part of
+the documented surface yet. Projections should use the generic read surface
+instead of adding feature-specific storage adapter methods. Queue schema
+validation, remote queue enqueue, release, and handoff remain later phases.
+
+File-backed storage is local-process oriented and append-only: each encoded
+analytics row is written as one NDJSON line for a single local runtime/process.
+Reads decode valid rows and skip malformed lines, so a bad local row does not
+poison the whole file.
+
+```typescript
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
+import { Effect, Layer } from "effect";
+import { ProcessStore, RuntimeObserver } from "@nikscripts/effect-pm";
+
+const filePath = ".tmp/effect-pm/events.ndjson";
+const platform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
+const storeLayer = ProcessStore.fileLayer(filePath);
+const observerLayer = Layer.provide(
+  RuntimeObserver.layerProcessStore,
+  storeLayer,
+);
+
+const program = Effect.gen(function* () {
+  const store = yield* ProcessStore;
+  const events = yield* store.events({
+    types: ["runtime.fact.recorded"],
+  });
+
+  yield* Effect.log(`runtime facts: ${String(events.length)}`);
+});
+
+void Effect.runPromise(program.pipe(
+  Effect.provide(Layer.mergeAll(storeLayer, observerLayer)),
+  Effect.provide(platform),
+));
+```
 
 ---
 

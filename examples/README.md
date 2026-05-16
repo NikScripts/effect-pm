@@ -32,6 +32,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | **Process runtime** | `pnpm run example:process-supervisor-patterns` → [`scenarios/game-window-polling-with-process-group.ts`](./scenarios/game-window-polling-with-process-group.ts) |
 | **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
 | **Resource gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → http-client → http-api forms |
+| **Storage** | [`forms/process-store/process-store-events-file-layer.ts`](./forms/process-store/process-store-events-file-layer.ts) |
 
 ---
 
@@ -51,6 +52,18 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | [`forms/resource/http-client-run-gate.ts`](./forms/resource/http-client-run-gate.ts) | `HttpClientRunGate.transformClient` |
 | [`forms/resource/http-api-resource-tag-layer.ts`](./forms/resource/http-api-resource-tag-layer.ts) | `HttpApiResource.make` tag + layer |
 | [`forms/resource/http-api-resource-layer-effect.ts`](./forms/resource/http-api-resource-layer-effect.ts) | `HttpApiResource.layerEffect` + sidecar capture |
+
+### ProcessStore
+
+| File | Teaches |
+|------|---------|
+| [`forms/process-store/process-store-events-file-layer.ts`](./forms/process-store/process-store-events-file-layer.ts) | `ProcessStore.events(query)` + `ProcessStore.fileLayer(filePath)` with Effect `FileSystem` / `Path` |
+
+Storage options:
+
+- `ProcessStore.layer` / `ProcessStore.memory` — in-memory analytics for tests and demos.
+- `ProcessStore.file(filePath)` / `ProcessStore.fileLayer(filePath)` — local append-only NDJSON storage backed by Effect `FileSystem` / `Path`; reads skip malformed rows.
+- `PrismaProcessStore.layer({ client })` from `@nikscripts/effect-pm/prisma` — durable SQL storage.
 
 ### Schedule
 
