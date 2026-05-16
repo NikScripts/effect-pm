@@ -393,7 +393,7 @@ to copy the fragment manually.
 ```typescript
 import { PrismaClient } from "@prisma/client";
 import { ProcessGroup } from "@nikscripts/effect-pm";
-import { PrismaProcessStore } from "@nikscripts/effect-pm/prisma";
+import { PrismaProcessStore } from "@nikscripts/effect-pm/storage/prisma";
 
 const prisma = new PrismaClient();
 
@@ -537,7 +537,7 @@ See [examples/scenarios/full-process-group-with-queues-and-control-cli.ts](./exa
 - `Process.make()` — Create a managed process (`polling` + `schedule` layers)
 - `Polling` / `ProcessSchedule` — Cadence and gate services with preset layers
 - `ProcessStore` - Unified analytics & lifecycle service (in-memory by default)
-- `PrismaProcessStore` - Prisma-backed `ProcessStore` (subpath: `@nikscripts/effect-pm/prisma`)
+- `PrismaProcessStore` - Prisma-backed `ProcessStore` (preferred subpath: `@nikscripts/effect-pm/storage/prisma`; legacy `@nikscripts/effect-pm/prisma` remains available)
 - `ControlService` - HTTP control API utilities
 
 ### CLI

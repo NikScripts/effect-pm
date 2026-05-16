@@ -118,8 +118,8 @@ Rationale:
 [10 - Plan 01 phase one: ProcessStore read foundation](./10-process-store-phase-one.md)
 remains the baseline for current event reads: process history exists today;
 queue completion/lifecycle event types exist; generic `events(query)` is
-implemented; dedicated queue reads are planned but not part of the current
-`ProcessStoreInterface`.
+implemented; dedicated queue completion/lifecycle reads are now part of the
+current `ProcessStoreInterface`.
 
 Phase C should not implement runtime state by adding store methods like
 `getRunResourceState`, `getQueueState`, or `getProcessStatusMirror`. The first

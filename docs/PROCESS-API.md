@@ -246,8 +246,9 @@ persist generic records rather than grow module-specific methods. `ProcessStore`
 owns conversion from module-specific operations into generic `RuntimeFact` and
 `RuntimeStateChange` records, plus redaction and projections.
 
-The current bridge writes runtime facts through today's `ProcessStore` analytics
-event envelope as `runtime.fact.recorded` events.
+The current bridge writes runtime facts and state changes through today's
+`ProcessStore` analytics event envelope as `runtime.fact.recorded` and
+`runtime.state.changed` events.
 
 Dependency direction:
 
@@ -256,10 +257,10 @@ runtime module -> ProcessStore -> RuntimeStorage -> memory / Prisma / custom
 ```
 
 `ProcessStore.events(query)` reads generic analytics events across memory,
-file-backed, and Prisma stores. Do not treat dedicated queue reads as part of
-the documented surface yet. Projections should use the generic read surface
-instead of adding feature-specific storage adapter methods. Queue schema
-validation, remote queue enqueue, release, and handoff remain later phases.
+file-backed, and Prisma stores. Dedicated queue completion/lifecycle reads and
+runtime projections are implemented on top of the same event stream. Queue
+schema validation, remote queue enqueue, release, and handoff remain later
+phases.
 
 File-backed storage is local-process oriented and append-only: each encoded
 analytics row is written as one NDJSON line for a single local runtime/process.
