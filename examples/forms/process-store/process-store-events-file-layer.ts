@@ -14,6 +14,7 @@ import {
   RuntimeObserver,
   type AnalyticsEvent,
 } from "../../../src";
+import { fileLayer } from "../../../src/storage/file";
 
 const platformLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
@@ -38,7 +39,7 @@ const program = Effect.gen(function* () {
   // Keep the demo deterministic while leaving the final NDJSON file inspectable.
   yield* fs.remove(filePath).pipe(Effect.catch(() => Effect.void));
 
-  const storeLayer = ProcessStore.fileLayer(filePath);
+  const storeLayer = fileLayer(filePath);
   const observerLayer = Layer.provide(
     RuntimeObserver.layerProcessStore,
     storeLayer,

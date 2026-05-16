@@ -1,5 +1,5 @@
 import { DateTime, Option, Schema } from "effect";
-import type { JsonValue } from "../prisma/types";
+import type { JsonValue } from "../ProcessStoreEvent";
 
 export const responseBodyJson = Schema.fromJsonString(Schema.Unknown);
 export const unknownJsonString = Schema.UnknownFromJsonString;

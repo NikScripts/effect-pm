@@ -2,11 +2,13 @@
  * Public entry point for the Prisma-backed {@link ProcessStore} adapter.
  *
  * @remarks
- * Imported via the package subpath:
+ * Imported via the legacy package subpath:
  *
  * ```ts
  * import { PrismaProcessStore } from "@nikscripts/effect-pm/prisma";
  * ```
+ *
+ * New code can prefer `@nikscripts/effect-pm/storage/prisma`.
  *
  * The adapter never imports `@prisma/client` — pass any value structurally
  * compatible with {@link PrismaProcessStoreClient}. A generated `PrismaClient`

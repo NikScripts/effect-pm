@@ -271,10 +271,11 @@ import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Effect, Layer } from "effect";
 import { ProcessStore, RuntimeObserver } from "@nikscripts/effect-pm";
+import { fileLayer } from "@nikscripts/effect-pm/storage/file";
 
 const filePath = ".tmp/effect-pm/events.ndjson";
 const platform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
-const storeLayer = ProcessStore.fileLayer(filePath);
+const storeLayer = fileLayer(filePath);
 const observerLayer = Layer.provide(
   RuntimeObserver.layerProcessStore,
   storeLayer,
@@ -322,9 +323,11 @@ gated effect behavior is unchanged.
 When `RuntimeObserver.layerProcessStore` is provided, runtime facts are
 persisted through `ProcessStore` as `runtime.fact.recorded` analytics events.
 Memory, file-backed, and Prisma reads support those generic events through
-`ProcessStore.events(query)`. Use `ProcessStore.fileLayer(path)` with Effect
-`FileSystem`/`Path` platform layers for local durable NDJSON storage. State
-changes are not persisted yet.
+`ProcessStore.events(query)`. Prefer `fileLayer(path)` from
+`@nikscripts/effect-pm/storage/file` with Effect `FileSystem`/`Path` platform
+layers for local durable NDJSON storage. Root `ProcessStore.file` /
+`ProcessStore.fileLayer` remain available as current compatibility helpers.
+State changes are not persisted yet.
 `RuntimeObserver.layerListeners(...)` can observe both facts and state changes
 without persistence. Multiple listeners can observe the same event, and listener
 failures are ignored so runtime mutations continue unchanged.

@@ -32,7 +32,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | **Process runtime** | `pnpm run example:process-supervisor-patterns` → [`scenarios/game-window-polling-with-process-group.ts`](./scenarios/game-window-polling-with-process-group.ts) |
 | **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
 | **Resource gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → http-client → http-api forms |
-| **Storage** | [`forms/process-store/process-store-events-file-layer.ts`](./forms/process-store/process-store-events-file-layer.ts) |
+| **Storage** | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) → [`process-store-events-file-layer.ts`](./forms/process-store/process-store-events-file-layer.ts) → [`process-store-prisma-structural-client.ts`](./forms/process-store/process-store-prisma-structural-client.ts) |
 
 ---
 
@@ -57,13 +57,15 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 
 | File | Teaches |
 |------|---------|
+| [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) | `ProcessStore.layer` / `memory` + `events(query)` |
 | [`forms/process-store/process-store-events-file-layer.ts`](./forms/process-store/process-store-events-file-layer.ts) | `ProcessStore.events(query)` + `ProcessStore.fileLayer(filePath)` with Effect `FileSystem` / `Path` |
+| [`forms/process-store/process-store-prisma-structural-client.ts`](./forms/process-store/process-store-prisma-structural-client.ts) | `PrismaProcessStore.layer({ client })` with a structural client placeholder |
 
 Storage options:
 
 - `ProcessStore.layer` / `ProcessStore.memory` — in-memory analytics for tests and demos.
-- `ProcessStore.file(filePath)` / `ProcessStore.fileLayer(filePath)` — local append-only NDJSON storage backed by Effect `FileSystem` / `Path`; reads skip malformed rows.
-- `PrismaProcessStore.layer({ client })` from `@nikscripts/effect-pm/prisma` — durable SQL storage.
+- `file(filePath)` / `fileLayer(filePath)` from `@nikscripts/effect-pm/storage/file` — local append-only NDJSON storage backed by Effect `FileSystem` / `Path`; reads skip malformed rows.
+- `PrismaProcessStore.layer({ client })` from `@nikscripts/effect-pm/storage/prisma` — durable SQL storage. The legacy `@nikscripts/effect-pm/prisma` path remains available.
 
 ### Schedule
 

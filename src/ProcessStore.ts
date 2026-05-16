@@ -36,9 +36,9 @@ import {
 import {
   decodeEventRow,
   encodeEvent,
-  PrismaProcessStoreDecodeError,
-} from "./prisma/codec";
-import type { EffectPmEventRow, JsonValue } from "./prisma/types";
+  ProcessStoreEventDecodeError,
+} from "./ProcessStoreCodec";
+import type { EffectPmEventRow, JsonValue } from "./ProcessStoreEvent";
 import type { RuntimeFact } from "./RuntimeState";
 
 // ============================================================================
@@ -323,7 +323,7 @@ const decodeJsonLine = (line: string): unknown | null =>
 
 const decodeStoredEvent = (row: EffectPmEventRow): AnalyticsEvent | null => {
   const decoded = decodeEventRow(row);
-  return decoded instanceof PrismaProcessStoreDecodeError ? null : decoded;
+  return decoded instanceof ProcessStoreEventDecodeError ? null : decoded;
 };
 
 const decodeFileRow = (value: unknown): EffectPmEventRow | null => {

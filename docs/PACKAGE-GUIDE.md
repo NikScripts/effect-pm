@@ -69,6 +69,28 @@ remote queue enqueue stay planned until schema-backed queue item contracts land.
 
 ---
 
+## Package subpaths
+
+Root imports from `@nikscripts/effect-pm` remain backwards compatible. Prefer
+dedicated subpaths for focused imports:
+
+- `@nikscripts/effect-pm/Process`
+- `@nikscripts/effect-pm/QueueResource`
+- `@nikscripts/effect-pm/ProcessGroup`
+- `@nikscripts/effect-pm/ProcessStore`
+- `@nikscripts/effect-pm/ProcessManager`
+- `@nikscripts/effect-pm/ControlService`
+- `@nikscripts/effect-pm/storage/file`
+- `@nikscripts/effect-pm/storage/prisma`
+
+Storage adapters use lowercase path segments. File-backed storage is preferred
+from `@nikscripts/effect-pm/storage/file`; root `ProcessStore.file` /
+`ProcessStore.fileLayer` remain current compatibility helpers. The legacy
+`@nikscripts/effect-pm/prisma` path remains available, but new Prisma storage
+examples use `@nikscripts/effect-pm/storage/prisma`.
+
+---
+
 ## Public entry points (from `src/index.ts`)
 
 | Export area | Role |

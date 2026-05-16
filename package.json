@@ -34,6 +34,46 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
+    "./Process": {
+      "types": "./dist/Process.d.ts",
+      "import": "./dist/Process.mjs",
+      "require": "./dist/Process.js"
+    },
+    "./QueueResource": {
+      "types": "./dist/QueueResource.d.ts",
+      "import": "./dist/QueueResource.mjs",
+      "require": "./dist/QueueResource.js"
+    },
+    "./ProcessGroup": {
+      "types": "./dist/ProcessGroup.d.ts",
+      "import": "./dist/ProcessGroup.mjs",
+      "require": "./dist/ProcessGroup.js"
+    },
+    "./ProcessStore": {
+      "types": "./dist/ProcessStore.d.ts",
+      "import": "./dist/ProcessStore.mjs",
+      "require": "./dist/ProcessStore.js"
+    },
+    "./ProcessManager": {
+      "types": "./dist/ProcessManager.d.ts",
+      "import": "./dist/ProcessManager.mjs",
+      "require": "./dist/ProcessManager.js"
+    },
+    "./ControlService": {
+      "types": "./dist/ControlService.d.ts",
+      "import": "./dist/ControlService.mjs",
+      "require": "./dist/ControlService.js"
+    },
+    "./storage/file": {
+      "types": "./dist/storage/file.d.ts",
+      "import": "./dist/storage/file.mjs",
+      "require": "./dist/storage/file.js"
+    },
+    "./storage/prisma": {
+      "types": "./dist/storage/prisma.d.ts",
+      "import": "./dist/storage/prisma.mjs",
+      "require": "./dist/storage/prisma.js"
+    },
     "./prisma": {
       "types": "./dist/prisma/index.d.ts",
       "import": "./dist/prisma/index.mjs",
