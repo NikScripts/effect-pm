@@ -17,12 +17,14 @@ import type {
   QueueItemStatus,
   QueueLifecycleChangedEvent,
   QueueLifecycleTag,
+  RuntimeFactRecordedEvent,
 } from "../ProcessStore";
 import type {
   EffectPmEventCreateInput,
   EffectPmEventRow,
   JsonValue,
 } from "./types";
+import type { RuntimeFact, RuntimeRef } from "../RuntimeState";
 
 // ============================================================================
 // Errors
@@ -187,6 +189,16 @@ export const encodeEvent = (event: AnalyticsEvent): EffectPmEventCreateInput => 
         attributes,
         payload: encodeQueueLifecyclePayload(event),
       };
+    case "runtime.fact.recorded":
+      return {
+        id: event.id,
+        type: event.type,
+        occurredAt: dateFromMillis(event.occurredAt),
+        entityType: event.entityType,
+        entityId: event.entityId,
+        attributes,
+        payload: encodeRuntimeFactPayload(event),
+      };
   }
 };
 
@@ -256,6 +268,12 @@ const encodeQueueLifecyclePayload = (
   return payload;
 };
 
+const encodeRuntimeFactPayload = (
+  event: RuntimeFactRecordedEvent,
+): JsonValue => ({
+  fact: toJsonValue(event.fact),
+});
+
 /**
  * Convert an arbitrary JS value into a {@link JsonValue} structure.
  *
@@ -309,12 +327,59 @@ export const decodeEventRow = (
       return decodeQueueItem(row);
     case "queue.lifecycle.changed":
       return decodeQueueLifecycle(row);
+    case "runtime.fact.recorded":
+      return decodeRuntimeFact(row);
     default:
       return new PrismaProcessStoreDecodeError({
         rowId: row.id,
         reason: `unknown event type: ${row.type}`,
       });
   }
+};
+
+const decodeRuntimeRef = (
+  value: unknown,
+): RuntimeRef | null => {
+  if (!isObject(value)) {
+    return null;
+  }
+  const kind = value["kind"];
+  const id = value["id"];
+  if (!isString(kind) || !isString(id)) {
+    return null;
+  }
+  return { kind, id };
+};
+
+const decodeRuntimeFactValue = (
+  value: unknown,
+): RuntimeFact | null => {
+  if (!isObject(value)) {
+    return null;
+  }
+  const id = value["id"];
+  const ref = decodeRuntimeRef(value["ref"]);
+  const type = value["type"];
+  const occurredAt = value["occurredAt"];
+  if (
+    !isString(id) ||
+    ref === null ||
+    !isString(type) ||
+    !isFiniteNumber(occurredAt)
+  ) {
+    return null;
+  }
+  const attributes = decodeAttributes(
+    value["attributes"] === undefined ? null : toJsonValue(value["attributes"]),
+  );
+  return {
+    id,
+    ref,
+    type,
+    occurredAt,
+    payload: value["payload"],
+    ...(attributes === undefined ? {} : { attributes }),
+  };
 };
 
 const decodeAttributes = (
@@ -529,6 +594,31 @@ const decodeQueueLifecycle = (
       tag,
       ...(itemsCleared === undefined ? {} : { itemsCleared }),
     },
+  };
+};
+
+const decodeRuntimeFact = (
+  row: EffectPmEventRow,
+): RuntimeFactRecordedEvent | PrismaProcessStoreDecodeError => {
+  const payload = row.payload;
+  if (!isObject(payload)) {
+    return new PrismaProcessStoreDecodeError({
+      rowId: row.id,
+      reason: "payload is not an object",
+    });
+  }
+  const fact = decodeRuntimeFactValue(payload["fact"]);
+  if (fact === null) {
+    return failPayload(row, "fact");
+  }
+  return {
+    id: row.id,
+    type: "runtime.fact.recorded",
+    occurredAt: row.occurredAt.getTime(),
+    entityType: row.entityType,
+    entityId: row.entityId,
+    attributes: decodeAttributes(row.attributes),
+    fact,
   };
 };
 

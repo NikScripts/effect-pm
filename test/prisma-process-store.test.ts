@@ -4,6 +4,7 @@ import {
   ProcessStore,
   type ProcessExecutionCompletedEvent,
   type ProcessLifecycleChangedEvent,
+  type RuntimeFactRecordedEvent,
 } from "../src";
 import { provideLayer } from "../src/provideLayer.js";
 import {
@@ -210,6 +211,37 @@ describe("PrismaProcessStore — codec", () => {
     };
     const decoded = decodeEventRow(row);
     expect(decoded).toBeInstanceOf(PrismaProcessStoreDecodeError);
+  });
+
+  it("round-trips a runtime.fact.recorded event", () => {
+    const event: RuntimeFactRecordedEvent = {
+      id: "runtime-fact-1",
+      type: "runtime.fact.recorded",
+      occurredAt: utcMillisFromIso("2026-01-01T02:00:00.000Z"),
+      entityType: "run-resource",
+      entityId: "@test/RunGate",
+      attributes: { source: "test" },
+      fact: {
+        id: "@test/RunGate/run/1/run-resource.run.completed",
+        ref: { kind: "run-resource", id: "@test/RunGate" },
+        type: "run-resource.run.completed",
+        occurredAt: utcMillisFromIso("2026-01-01T02:00:00.000Z"),
+        payload: { durationMs: 5 },
+      },
+    };
+    const created = encodeEvent(event);
+    const row: EffectPmEventRow = {
+      id: created.id,
+      type: created.type,
+      occurredAt: created.occurredAt,
+      entityType: created.entityType,
+      entityId: created.entityId,
+      attributes: created.attributes ?? null,
+      payload: created.payload,
+      createdAt: utcDateFromMillis(0),
+    };
+    const decoded = decodeEventRow(row);
+    expect(decoded).toEqual(event);
   });
 });
 

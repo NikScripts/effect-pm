@@ -1,7 +1,9 @@
 import { it, describe, expect } from "@effect/vitest";
-import { Effect, Ref } from "effect";
+import { Effect, Layer, Ref } from "effect";
 import { RunResource } from "../src/RunResource";
+import { ProcessStore, type AnalyticsEvent, type ProcessStoreInterface } from "../src/ProcessStore";
 import { RuntimeObserver, type RuntimeFact } from "../src/RuntimeState";
+import { provideLayer } from "../src/provideLayer.js";
 
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
   Effect.gen(function* () {
@@ -166,6 +168,51 @@ describe("RunResource.make (raw scoped)", () => {
         expect(observedFacts.every((fact) => fact.ref.id === "@test/ObservedGate")).toBe(true);
       }).pipe(
         Effect.provideService(RuntimeObserver, observer),
+        Effect.scoped,
+      );
+    }),
+  );
+
+  it.live("persists observed runtime facts through ProcessStore bridge", () =>
+    Effect.gen(function* () {
+      const events = yield* Ref.make<ReadonlyArray<AnalyticsEvent>>([]);
+      const store: ProcessStoreInterface = {
+        append: (event: AnalyticsEvent) =>
+          Ref.update(events, (items) => [...items, event]),
+        appendBatch: (batch: ReadonlyArray<AnalyticsEvent>) =>
+          Ref.update(events, (items) => [...items, ...batch]),
+        getProcessExecutions: () => Effect.succeed([]),
+        getProcessLifecycle: () => Effect.succeed([]),
+      };
+
+      yield* Effect.gen(function* () {
+        const gate = yield* RunResource.make({
+          name: "@test/ObservedStoreGate",
+          effect: (n: number) => Effect.succeed(n + 1),
+          concurrency: 1,
+        });
+
+        const result = yield* gate(1);
+        const stored = yield* Ref.get(events);
+
+        expect(result).toBe(2);
+        expect(stored.map((event) => event.type)).toEqual([
+          "runtime.fact.recorded",
+          "runtime.fact.recorded",
+        ]);
+        const first = stored[0];
+        expect(first?.entityType).toBe("run-resource");
+        expect(first?.entityId).toBe("@test/ObservedStoreGate");
+        if (first?.type === "runtime.fact.recorded") {
+          expect(first.fact.type).toBe("run-resource.run.started");
+        }
+      }).pipe(
+        provideLayer(
+          Layer.provide(
+            RuntimeObserver.layerProcessStore,
+            Layer.succeed(ProcessStore, store),
+          ),
+        ),
         Effect.scoped,
       );
     }),

@@ -10,7 +10,8 @@
  * @module RuntimeState
  */
 
-import { Context, Effect, Option } from "effect";
+import { Context, Effect, Layer, Option } from "effect";
+import { ProcessStore, type RuntimeFactRecordedEvent } from "./ProcessStore";
 
 /**
  * Stable identity for a runtime component.
@@ -88,6 +89,16 @@ export class RuntimeObserver extends Context.Service<
 >()("@nikscripts/effect-pm/RuntimeState/RuntimeObserver") {}
 
 export namespace RuntimeObserver {
+  const factToAnalyticsEvent = (fact: RuntimeFact): RuntimeFactRecordedEvent => ({
+    id: `runtime.fact/${fact.id}`,
+    type: "runtime.fact.recorded",
+    occurredAt: fact.occurredAt,
+    entityType: fact.ref.kind,
+    entityId: fact.ref.id,
+    attributes: fact.attributes,
+    fact,
+  });
+
   /**
    * Publish a state change if a {@link RuntimeObserver} is present.
    *
@@ -116,5 +127,24 @@ export namespace RuntimeObserver {
         onNone: () => Effect.void,
         onSome: (observer) => observer.publishFact(fact).pipe(Effect.ignore),
       }),
+    );
+
+  /**
+   * Observer layer that persists runtime facts through the current
+   * {@link ProcessStore} analytics event envelope.
+   *
+   * @remarks
+   * State changes intentionally no-op here until the generic state-history
+   * storage shape lands. Facts are persisted as `runtime.fact.recorded` events.
+   *
+   * @public
+   */
+  export const layerProcessStore: Layer.Layer<RuntimeObserver, never, ProcessStore> =
+    Layer.effect(
+      RuntimeObserver,
+      Effect.map(ProcessStore, (store): RuntimeObserverService => ({
+        publishStateChange: () => Effect.void,
+        publishFact: (fact) => store.append(factToAnalyticsEvent(fact)),
+      })),
     );
 }

@@ -110,6 +110,7 @@ export {
   type ProcessExecutionCompletedEvent,
   type ProcessLifecycleTag,
   type ProcessLifecycleChangedEvent,
+  type RuntimeFactRecordedEvent,
   type AnalyticsEvent,
   type ProcessStoreInterface,
 } from "./ProcessStore";

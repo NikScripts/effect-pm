@@ -16,6 +16,7 @@
  */
 
 import { Context, Effect, Layer } from "effect";
+import type { RuntimeFact } from "./RuntimeState";
 
 // ============================================================================
 // Public Types
@@ -44,7 +45,7 @@ export interface AnalyticsEventBase {
   type: string;
   /** Epoch milliseconds when the event occurred. Use `Clock.currentTimeMillis` to produce. */
   occurredAt: number;
-  entityType: "process" | "queue";
+  entityType: string;
   entityId: string;
   attributes?: Record<string, unknown>;
 }
@@ -132,6 +133,20 @@ export interface QueueLifecycleChangedEvent extends AnalyticsEventBase {
   };
 }
 
+/**
+ * Generic runtime fact persisted through the current analytics event envelope.
+ *
+ * @remarks
+ * This bridges Phase C runtime facts into today's `ProcessStore` append API
+ * without adding a storage method for every runtime feature.
+ *
+ * @public
+ */
+export interface RuntimeFactRecordedEvent extends AnalyticsEventBase {
+  type: "runtime.fact.recorded";
+  fact: RuntimeFact;
+}
+
 // ============================================================================
 // Event Union
 // ============================================================================
@@ -145,7 +160,8 @@ export type AnalyticsEvent =
   | ProcessExecutionCompletedEvent
   | ProcessLifecycleChangedEvent
   | QueueItemCompletedEvent
-  | QueueLifecycleChangedEvent;
+  | QueueLifecycleChangedEvent
+  | RuntimeFactRecordedEvent;
 
 /**
  * Storage port implemented by the in-memory service and the Prisma-backed adapter
