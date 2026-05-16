@@ -45,8 +45,8 @@ import {
 import {
   decodeEventRow,
   encodeEvent,
-  PrismaProcessStoreDecodeError,
-} from "./codec";
+  ProcessStoreEventDecodeError,
+} from "../ProcessStoreCodec";
 import type {
   EffectPmEventFindManyArgs,
   PrismaProcessStoreClient,
@@ -156,7 +156,7 @@ const findEventsOfType = <T extends AnalyticsEvent>(
       const out: T[] = [];
       for (const row of rows) {
         const decoded = decodeEventRow(row);
-        if (decoded instanceof PrismaProcessStoreDecodeError) {
+        if (decoded instanceof ProcessStoreEventDecodeError) {
           continue;
         }
         if (refine(decoded)) {
@@ -232,7 +232,7 @@ export const make = (
         const out: AnalyticsEvent[] = [];
         for (const row of rows) {
           const decoded = decodeEventRow(row);
-          if (!(decoded instanceof PrismaProcessStoreDecodeError)) {
+          if (!(decoded instanceof ProcessStoreEventDecodeError)) {
             out.push(decoded);
           }
         }

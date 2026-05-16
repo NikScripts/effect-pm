@@ -3,6 +3,14 @@ import { defineConfig } from "tsup";
 export default defineConfig({
   entry: {
     index: "src/index.ts",
+    Process: "src/Process.ts",
+    QueueResource: "src/QueueResource.ts",
+    ProcessGroup: "src/ProcessGroup.ts",
+    ProcessStore: "src/ProcessStore.ts",
+    ProcessManager: "src/ProcessManager.ts",
+    ControlService: "src/ControlService.ts",
+    "storage/file": "src/storage/file.ts",
+    "storage/prisma": "src/storage/prisma.ts",
     "prisma/index": "src/prisma/index.ts",
     "bin/effect-pm": "src/bin/effect-pm.ts",
   },

@@ -20,8 +20,10 @@ The multi-group CLI now checks target contract capabilities before issuing remot
 
 Adds the first runtime state/fact vocabulary and optional `RuntimeObserver`, with `RunResource` publishing run started/completed/failed facts when an observer is provided. `RuntimeObserver.layerProcessStore` persists runtime facts as `runtime.fact.recorded` ProcessStore analytics events, and the Prisma codec supports that event type. State changes are not persisted yet.
 
-`ProcessStore.events(query)` now provides a generic storage-neutral event read across memory, file-backed, and Prisma implementations. Dedicated queue completion and lifecycle reads are also available across those stores.
+`ProcessStore.events(query)` now provides a generic storage-neutral event read across memory, file-backed, and Prisma implementations.
 
 `ProcessStore.file(filePath)` and `ProcessStore.fileLayer(filePath)` add an Effect `FileSystem`-backed NDJSON store for local durable analytics events.
+
+Adds dedicated package subpaths for service/resource imports (`/Process`, `/QueueResource`, `/ProcessGroup`, `/ProcessStore`, `/ProcessManager`, `/ControlService`) and storage adapters (`/storage/file`, `/storage/prisma`). Root imports and the legacy `/prisma` subpath remain compatible.
 
 Also fixes `ProcessStore` execution ordering consistency and keyed queue `clear()` dedup cleanup.

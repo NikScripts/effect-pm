@@ -249,7 +249,8 @@ const program = Effect.gen(function* () {
  * NOTE: ProcessStore.layer is in-memory, so data is lost on restart. For local
  * durable analytics without a database, use `ProcessStore.fileLayer(filePath)`
  * with Effect FileSystem / Path platform layers. For SQL-backed persistence,
- * use `PrismaProcessStore.layer({ client })` from `@nikscripts/effect-pm/prisma`.
+ * use `PrismaProcessStore.layer({ client })` from
+ * `@nikscripts/effect-pm/storage/prisma`.
  */
 
 void Effect.runPromise(

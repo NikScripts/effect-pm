@@ -35,10 +35,21 @@
  * - Architecture contracts: `docs/plans/README.md` (especially plan **09** for process runtime)
  * - Agent-oriented repo map: `docs/AGENTS.md`
  *
- * ## Prisma subpath
+ * ## Dedicated subpaths
  *
- * Durable analytics: import from **`@nikscripts/effect-pm/prisma`** (see package `exports`
- * in `package.json`).
+ * Root imports remain backwards compatible. Dedicated service/resource subpaths
+ * are also available: **`@nikscripts/effect-pm/Process`**,
+ * **`@nikscripts/effect-pm/QueueResource`**,
+ * **`@nikscripts/effect-pm/ProcessGroup`**,
+ * **`@nikscripts/effect-pm/ProcessStore`**,
+ * **`@nikscripts/effect-pm/ProcessManager`**, and
+ * **`@nikscripts/effect-pm/ControlService`**.
+ *
+ * Storage adapters use lower-case subpaths:
+ * **`@nikscripts/effect-pm/storage/file`** and
+ * **`@nikscripts/effect-pm/storage/prisma`**. The legacy
+ * **`@nikscripts/effect-pm/prisma`** subpath remains available for
+ * compatibility.
  *
  * ## Source-only helpers
  *
