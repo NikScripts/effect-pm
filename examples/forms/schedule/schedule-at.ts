@@ -14,8 +14,7 @@ import { utcDateFromMillis } from "../../../src/utcDate";
 const program = Effect.gen(function* () {
   const ticks = yield* Ref.make(0);
 
-  const proc = Process.make({
-    name: "examples/forms/schedule-at",
+  const proc = Process.make("examples/forms/schedule-at", {
     polling: Polling.spaced(Duration.millis(100)),
     schedule: ProcessSchedule.inMemory([
       // No stopAt — armed from startAt forward until entry removed or process stopped.

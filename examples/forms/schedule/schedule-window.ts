@@ -14,8 +14,7 @@ import { utcDateFromMillis } from "../../../src/utcDate";
 const program = Effect.gen(function* () {
   const ticks = yield* Ref.make(0);
 
-  const proc = Process.make({
-    name: "examples/forms/schedule-window",
+  const proc = Process.make("examples/forms/schedule-window", {
     polling: Polling.spaced(Duration.millis(100)),
     schedule: ProcessSchedule.inMemory([
       // Armed only between 1000 ms and 1600 ms (simulated). Outside → disarmed, no ticks.

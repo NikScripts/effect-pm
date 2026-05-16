@@ -32,8 +32,7 @@ const program = Effect.gen(function* () {
     ProcessSchedule.at("sports-accel-simple", scheduleStartAtUnixEpoch),
   ]);
 
-  const proc = Process.make({
-    name: "examples/forms/polling-accelerating-reset-cadence",
+  const proc = Process.make("examples/forms/polling-accelerating-reset-cadence", {
     // pollLayer at fork site — required so resetCadence in the tick hits the supervisor's Polling.
     effect: Effect.gen(function* () {
       const snapshot = yield* feed.readScore;

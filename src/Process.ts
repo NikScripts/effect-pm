@@ -185,7 +185,7 @@ export const currentScheduleId: Effect.Effect<Option.Option<string>, never, neve
  *
  * @remarks
  * Available from both:
- * - `Process.make({ schedule: (controls) => ... })`
+ * - `Process.make(id, { schedule: (controls) => ... })`
  * - inside the process `effect` via this accessor.
  *
  * @public
@@ -853,52 +853,68 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
  *
  * @public
  */
-export type ProcessSupervisorRequirements<C extends ProcessMakeConfig<any, any>> =
-  C extends ProcessMakeConfig<infer _E, infer RUser>
+export type ProcessSupervisorRequirements<C extends ProcessMakeOptions<any, any>> =
+  C extends ProcessMakeOptions<infer _E, infer RUser>
     ? RUser
     : never;
 
 /**
- * Configuration for {@link Process.make}.
+ * Configuration for {@link Process.make} (second argument; id is passed separately).
  *
  * @public
  */
-export interface ProcessMakeConfig<E, RUser> {
-  readonly name: string;
+export interface ProcessMakeOptions<E, RUser> {
   readonly effect: Effect.Effect<void, E, RUser>;
   /** Optional polling layer for in-instance repeat cadence. */
   readonly polling?: AnyPollingLayer;
   /**
-   * Optional schedule initializer that runs once on process start.
+   * Optional schedule layer or initializer.
    *
-   * Use this for async bootstrapping (DB/API) and setting initial windows.
+   * When omitted, defaults to {@link ProcessSchedule.alwaysArmed}. Use
+   * {@link ProcessSchedule.empty} or {@link ProcessSchedule.inMemory} for an
+   * empty store (disarmed until entries are added).
    */
   readonly schedule?: ProcessScheduleInitializer<RUser> | AnyScheduleLayer;
   /**
-   * Optional schedule service layer; defaults to in-memory schedule storage.
+   * Explicit schedule service layer. When set, takes precedence over `schedule`.
+   *
+   * When both `schedule` and `scheduleLayer` are omitted,
+   * {@link ProcessSchedule.alwaysArmed} is used.
    */
   readonly scheduleLayer?: AnyScheduleLayer;
 }
 
-/**
- * Create a managed {@link Process}.
- *
- * @public
- */
-function make<E, RUser>(
-  config: ProcessMakeConfig<E, RUser>,
-): Process<RUser> {
+/** @internal Resolved id + {@link ProcessMakeOptions} for supervisor wiring. */
+export type ProcessMakeConfig<E, RUser> = ProcessMakeOptions<E, RUser> & {
+  readonly name: string;
+};
+
+const resolveScheduleLayer = (
+  config: Pick<ProcessMakeOptions<any, any>, "schedule" | "scheduleLayer">,
+): AnyScheduleLayer => {
+  if (config.scheduleLayer !== undefined) {
+    return config.scheduleLayer;
+  }
+  if (typeof config.schedule === "function") {
+    return ProcessSchedule.inMemory();
+  }
+  if (config.schedule !== undefined) {
+    return config.schedule;
+  }
+  return ProcessSchedule.alwaysArmed;
+};
+
+const buildProcess = <E, RUser>(
+  name: string,
+  config: ProcessMakeOptions<E, RUser>,
+): Process<RUser> => {
   const scheduleInitializer = typeof config.schedule === "function"
     ? config.schedule
     : undefined;
-  const scheduleLayer = config.scheduleLayer
-    ?? (typeof config.schedule === "function"
-      ? ProcessSchedule.inMemory()
-      : config.schedule)
-    ?? ProcessSchedule.inMemory();
+  const scheduleLayer = resolveScheduleLayer(config);
   if (config.polling !== undefined) {
     return createProcess({
-      name: config.name,
+      name,
       userEffect: config.effect,
       pollingLayer: config.polling,
       scheduleLayer,
@@ -906,23 +922,32 @@ function make<E, RUser>(
     });
   }
   return createProcess({
-    name: config.name,
+    name,
     userEffect: config.effect,
     scheduleLayer,
     scheduleInitializer,
   });
+};
+
+/**
+ * Create a managed {@link Process}.
+ *
+ * @public
+ */
+function make<const Id extends string, E, RUser>(
+  id: Id,
+  config: ProcessMakeOptions<E, RUser>,
+): Process<RUser> {
+  return buildProcess(id, config);
 }
 
 const processDefinitionKind = "process" as const;
 
 const makeProcessDefinition = <const Id extends string, E, RUser>(
   id: Id,
-  config: Omit<ProcessMakeConfig<E, RUser>, "name">,
+  config: ProcessMakeOptions<E, RUser>,
 ): ProcessDefinition<Id, RUser> => {
-  const process = make({
-    ...config,
-    name: id,
-  });
+  const process = make(id, config);
   return {
     id,
     kind: processDefinitionKind,
@@ -935,29 +960,12 @@ const makeProcessDefinition = <const Id extends string, E, RUser>(
  *
  * @public
  */
-function providePolling<E, RUser>(
-  base: ProcessMakeConfig<E, RUser>,
-  layer: AnyPollingLayer,
-): Process<RUser>;
-function providePolling<E, RUser>(
-  base: ProcessMakeConfig<E, RUser>,
+function providePolling<const Id extends string, E, RUser>(
+  id: Id,
+  base: ProcessMakeOptions<E, RUser>,
   layer: AnyPollingLayer,
 ): Process<RUser> {
-  const scheduleInitializer = typeof base.schedule === "function"
-    ? base.schedule
-    : undefined;
-  const scheduleLayer = base.scheduleLayer
-    ?? (typeof base.schedule === "function"
-      ? ProcessSchedule.inMemory()
-      : base.schedule)
-    ?? ProcessSchedule.inMemory();
-  return createProcess({
-    name: base.name,
-    userEffect: base.effect,
-    pollingLayer: layer,
-    scheduleLayer,
-    scheduleInitializer,
-  });
+  return make(id, { ...base, polling: layer });
 }
 
 /**
@@ -965,33 +973,12 @@ function providePolling<E, RUser>(
  *
  * @public
  */
-function provideSchedule<E, RUser>(
-  base: ProcessMakeConfig<E, RUser>,
-  layer: AnyScheduleLayer,
-): Process<RUser>;
-function provideSchedule<E, RUser>(
-  base: ProcessMakeConfig<E, RUser>,
+function provideSchedule<const Id extends string, E, RUser>(
+  id: Id,
+  base: ProcessMakeOptions<E, RUser>,
   layer: AnyScheduleLayer,
 ): Process<RUser> {
-  const pollingLayer = base.polling;
-  const scheduleInitializer = typeof base.schedule === "function"
-    ? base.schedule
-    : undefined;
-  if (pollingLayer !== undefined) {
-    return createProcess({
-      name: base.name,
-      userEffect: base.effect,
-      pollingLayer,
-      scheduleLayer: layer,
-      scheduleInitializer,
-    });
-  }
-  return createProcess({
-    name: base.name,
-    userEffect: base.effect,
-    scheduleLayer: layer,
-    scheduleInitializer,
-  });
+  return make(id, { ...base, scheduleLayer: layer });
 }
 
 /**
@@ -1012,7 +999,7 @@ export const Process = {
   Service: <Self>() =>
   <const Id extends string, E, RUser>(
     id: Id,
-    config: Omit<ProcessMakeConfig<E, RUser>, "name">,
+    config: ProcessMakeOptions<E, RUser>,
   ): ProcessServiceDefinition<Self, Id, RUser> => {
     const process = makeProcessDefinition(id, config);
     const base = Context.Service<Self, Process<RUser>>()(id);

@@ -19,8 +19,7 @@ const scheduleStartAtUnixEpoch = DateTime.toDateUtc(DateTime.makeUnsafe(0));
 const program = Effect.gen(function* () {
   const feed = yield* makeSportsScoreFeedTestDouble();
 
-  const proc = Process.make({
-    name: "examples/forms/polling-spaced-read",
+  const proc = Process.make("examples/forms/polling-spaced-read", {
     // 500 ms so the first tick (t≈500) still sees 0-0 before the feed changes at t≈600.
     polling: Polling.spaced(Duration.millis(500)),
     schedule: ProcessSchedule.inMemory([

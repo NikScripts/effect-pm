@@ -13,8 +13,7 @@ import { utcDateFromMillis } from "../../../src/utcDate";
 const program = Effect.gen(function* () {
   const tickCount = yield* Ref.make(0);
 
-  const proc = Process.make({
-    name: "examples/forms/polling-accelerating",
+  const proc = Process.make("examples/forms/polling-accelerating", {
     effect: Ref.update(tickCount, (n) => n + 1),
     schedule: ProcessSchedule.inMemory([
       ProcessSchedule.at("polling-accelerating", utcDateFromMillis(0)),

@@ -35,7 +35,7 @@ remote queue enqueue stay planned until schema-backed queue item contracts land.
          │ start / forkIn(process.effect, scope)
          ▼
 ┌───────────────────────────────────────────────────────────────────┐
-│ Process.make({ name, effect, polling?, schedule? })               │
+│ Process.make(id, { effect, polling?, schedule? })                 │
 │  • builds process.effect = schedule driver                        │
 │  • eligible schedule start -> spawn process instance              │
 │  • instance loop: schedule check -> poll -> user effect           │

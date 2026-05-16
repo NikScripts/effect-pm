@@ -11,10 +11,79 @@ const alwaysOnEntry = {
   stopAt: Option.none<Date>(),
 };
 
+describe("Process.make", () => {
+  it("sets process.name to the id passed as the first argument", () => {
+    const id = "test/make-id-first" as const;
+    const proc = Process.make(id, { effect: Effect.void });
+    expect(proc.name).toBe(id);
+  });
+});
+
 describe("Process runtime with schedule windows", () => {
+  it.effect("omitted schedule defaults to always armed so polling ticks without manual set", () =>
+    Effect.gen(function* () {
+      const ticks = yield* Ref.make(0);
+      const proc = Process.make("test/default-schedule-armed", {
+        effect: Ref.update(ticks, (n) => n + 1),
+        polling: Polling.spaced(Duration.millis(100)),
+      });
+
+      const fib = yield* Effect.forkChild(proc.effect);
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* Effect.yieldNow;
+      expect(yield* Ref.get(ticks)).toBeGreaterThan(0);
+      yield* Fiber.interrupt(fib);
+    }).pipe(
+      provideLayer(ProcessStore.layer),
+      provideLayer(TestClock.layer()),
+      Effect.scoped,
+    ),
+  );
+
+  it.effect("ProcessSchedule.empty stays disarmed with no ticks", () =>
+    Effect.gen(function* () {
+      const ticks = yield* Ref.make(0);
+      const proc = Process.make("test/schedule-empty", {
+        effect: Ref.update(ticks, (n) => n + 1),
+        polling: Polling.spaced(Duration.millis(100)),
+        schedule: ProcessSchedule.empty,
+      });
+
+      const fib = yield* Effect.forkChild(proc.effect);
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* Effect.yieldNow;
+      expect(yield* Ref.get(ticks)).toBe(0);
+      yield* Fiber.interrupt(fib);
+    }).pipe(
+      provideLayer(ProcessStore.layer),
+      provideLayer(TestClock.layer()),
+      Effect.scoped,
+    ),
+  );
+
+  it.effect("schedule initializer arms empty in-memory backing store", () =>
+    Effect.gen(function* () {
+      const ticks = yield* Ref.make(0);
+      const proc = Process.make("test/schedule-initializer-empty-backing", {
+        effect: Ref.update(ticks, (n) => n + 1),
+        polling: Polling.spaced(Duration.millis(100)),
+        schedule: ({ set }) => set([alwaysOnEntry]),
+      });
+
+      const fib = yield* Effect.forkChild(proc.effect);
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* Effect.yieldNow;
+      expect(yield* Ref.get(ticks)).toBeGreaterThan(0);
+      yield* Fiber.interrupt(fib);
+    }).pipe(
+      provideLayer(ProcessStore.layer),
+      provideLayer(TestClock.layer()),
+      Effect.scoped,
+    ),
+  );
+
   it.live("runImmediately records one tracked execution", () => {
-    const proc = Process.make({
-      name: "test/run-immediately",
+    const proc = Process.make("test/run-immediately", {
       effect: Effect.void,
       polling: Polling.spaced(Duration.seconds(10)),
       schedule: ProcessSchedule.inMemory([alwaysOnEntry]),
@@ -32,8 +101,7 @@ describe("Process runtime with schedule windows", () => {
   it.effect("exposes current schedule id inside the running effect", () =>
     Effect.gen(function* () {
       const seenIds = yield* Ref.make<ReadonlyArray<string>>([]);
-      const proc = Process.make({
-        name: "test/schedule-id",
+      const proc = Process.make("test/schedule-id", {
         schedule: ProcessSchedule.inMemory([
           ProcessSchedule.at("match-101", utcDateFromMillis(0)),
         ]),
@@ -61,8 +129,7 @@ describe("Process runtime with schedule windows", () => {
   it.effect("exposes schedule controls inside process effect", () =>
     Effect.gen(function* () {
       const tickIds = yield* Ref.make<ReadonlyArray<string>>([]);
-      const proc = Process.make({
-        name: "test/schedule-controls-inside-effect",
+      const proc = Process.make("test/schedule-controls-inside-effect", {
         polling: Polling.spaced(Duration.millis(100)),
         schedule: ({ set }) =>
           set([
@@ -101,8 +168,7 @@ describe("Process runtime with schedule windows", () => {
   it.effect("starts from schedule startAt and repeats while stopAt is open", () =>
     Effect.gen(function* () {
       const ticks = yield* Ref.make(0);
-      const proc = Process.make({
-        name: "test/repeats-while-open",
+      const proc = Process.make("test/repeats-while-open", {
         effect: Ref.update(ticks, (n) => n + 1),
         polling: Polling.spaced(Duration.millis(100)),
         schedule: ({ set }) => set([alwaysOnEntry]),
@@ -123,8 +189,7 @@ describe("Process runtime with schedule windows", () => {
   it.effect("stops naturally after stopAt", () =>
     Effect.gen(function* () {
       const ticks = yield* Ref.make(0);
-      const proc = Process.make({
-        name: "test/stop-window",
+      const proc = Process.make("test/stop-window", {
         effect: Ref.update(ticks, (n) => n + 1),
         polling: Polling.spaced(Duration.millis(100)),
         schedule: ({ set }) =>
@@ -154,8 +219,7 @@ describe("Process runtime with schedule windows", () => {
   it.effect("process without polling runs once for scheduled one-shot windows", () =>
     Effect.gen(function* () {
       const ticks = yield* Ref.make(0);
-      const proc = Process.make({
-        name: "test/one-shot",
+      const proc = Process.make("test/one-shot", {
         effect: Ref.update(ticks, (n) => n + 1),
         schedule: ({ set }) =>
           set([
@@ -179,8 +243,7 @@ describe("Process runtime with schedule windows", () => {
   it.effect("runImmediately does not carry a schedule id", () =>
     Effect.gen(function* () {
       const seen = yield* Ref.make<ReadonlyArray<Option.Option<string>>>([]);
-      const proc = Process.make({
-        name: "test/run-immediately-no-schedule-id",
+      const proc = Process.make("test/run-immediately-no-schedule-id", {
         polling: Polling.spaced(Duration.millis(100)),
         schedule: ProcessSchedule.inMemory([
           ProcessSchedule.at("scheduled-id", utcDateFromMillis(0)),
@@ -202,8 +265,7 @@ describe("Process runtime with schedule windows", () => {
     Effect.gen(function* () {
       const ticks = yield* Ref.make(0);
       const mutated = yield* Ref.make(false);
-      const proc = Process.make({
-        name: "test/mutation-cancels-stale-pending",
+      const proc = Process.make("test/mutation-cancels-stale-pending", {
         schedule: ({ set }) =>
           set([
             ProcessSchedule.at("mutator", utcDateFromMillis(0)),
@@ -246,8 +308,7 @@ describe("Process runtime with schedule windows", () => {
 
   it.effect("status reports activeInstances for overlapping live windows", () =>
     Effect.gen(function* () {
-      const proc = Process.make({
-        name: "test/status-active-instances",
+      const proc = Process.make("test/status-active-instances", {
         schedule: ProcessSchedule.inMemory([
           ProcessSchedule.window("a", utcDateFromMillis(0), utcDateFromMillis(60_000)),
           ProcessSchedule.window("b", utcDateFromMillis(0), utcDateFromMillis(60_000)),

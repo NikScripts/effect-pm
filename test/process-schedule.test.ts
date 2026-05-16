@@ -32,6 +32,14 @@ describe("ProcessSchedule.inMemory", () => {
     }).pipe(provideLayer(ProcessSchedule.inMemory())),
   );
 
+  it.effect("empty starts with no entries", () =>
+    Effect.gen(function* () {
+      const schedule = yield* ProcessSchedule;
+      const entries = yield* schedule.entries;
+      expect(entries.length).toBe(0);
+    }).pipe(provideLayer(ProcessSchedule.empty)),
+  );
+
   it.effect("append/clear mutate schedules", () =>
     Effect.gen(function* () {
       const schedule = yield* ProcessSchedule;

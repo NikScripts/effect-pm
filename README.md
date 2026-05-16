@@ -77,8 +77,7 @@ class EmailQueue extends QueueResource.Service<EmailQueue, Email, string, never>
 import { Process, Polling, ProcessSchedule } from "@nikscripts/effect-pm";
 import { Cron, Duration, Effect } from "effect";
 
-const emailProcess = Process.make({
-  name: "send-emails",
+const emailProcess = Process.make("send-emails", {
   polling: Polling.spaced(Duration.minutes(5)),
   schedule: ProcessSchedule.cronMatch({
     crons: Cron.make({ minutes: [0, 30] }),
@@ -198,8 +197,7 @@ For the full current queue surface, including `handler`, `EffectContext`, `Handl
 import { Process, Polling, ProcessSchedule } from "@nikscripts/effect-pm";
 import { Duration, Effect } from "effect";
 
-const heartbeat = Process.make({
-  name: "hourly-task",
+const heartbeat = Process.make("hourly-task", {
   polling: Polling.spaced(Duration.hours(1)),
   schedule: ProcessSchedule.alwaysArmed,
   effect: Effect.logInfo("Running hourly task"),
@@ -212,8 +210,7 @@ const heartbeat = Process.make({
 import { Process, Polling, ProcessSchedule } from "@nikscripts/effect-pm";
 import { Cron, Duration, Effect } from "effect";
 
-const dataSync = Process.make({
-  name: "data-sync",
+const dataSync = Process.make("data-sync", {
   polling: Polling.spaced(Duration.minutes(1)),
   schedule: ProcessSchedule.cronMatch({
     crons: Cron.make({ minutes: [0], hours: [2] }), // 2:00 every day
@@ -321,8 +318,7 @@ class EmailQueue extends QueueResource.Service<EmailQueue, Email, void, SendErro
   },
 ) {}
 
-const workerWithQueue = Process.make({
-  name: "needs-queue",
+const workerWithQueue = Process.make("needs-queue", {
   polling: Polling.spaced(Duration.minutes(1)),
   schedule: ProcessSchedule.cronMatch({ crons: Cron.make({ minutes: [0] }) }),
   effect: Effect.gen(function* () {
@@ -534,7 +530,7 @@ See [examples/scenarios/full-process-group-with-queues-and-control-cli.ts](./exa
 
 - `ProcessGroup.make()` - Create a ProcessGroup instance
 - `QueueResource.Service()` / `QueueResource.Tag()` - Create queue services and queue service contracts
-- `Process.make()` — Create a managed process (`polling` + `schedule` layers)
+- `Process.make(id, config)` — Create a managed process (`polling` + `schedule` layers)
 - `Polling` / `ProcessSchedule` — Cadence and gate services with preset layers
 - `ProcessStore` - Unified analytics & lifecycle service (in-memory by default)
 - `PrismaProcessStore` - Prisma-backed `ProcessStore` (preferred subpath: `@nikscripts/effect-pm/storage/prisma`; legacy `@nikscripts/effect-pm/prisma` remains available)

@@ -14,8 +14,7 @@ import { utcDateFromMillis } from "../../../src/utcDate";
 const program = Effect.gen(function* () {
   const seenIds = yield* Ref.make<ReadonlyArray<string>>([]);
 
-  const proc = Process.make({
-    name: "examples/forms/schedule-controls-in-effect",
+  const proc = Process.make("examples/forms/schedule-controls-in-effect", {
     polling: Polling.spaced(Duration.millis(100)),
     schedule: ({ set }) =>
       set([

@@ -24,8 +24,7 @@ const program = Effect.gen(function* () {
 
   // `Process.make` merges `schedule` + `polling` into the supervisor — fork site only needs
   // `ProcessStore` for execution analytics (same pattern as the main scenario).
-  const liveGamePoller = Process.make({
-    name: "examples/game-window-poller",
+  const liveGamePoller = Process.make("examples/game-window-poller", {
     polling: Polling.spaced(Duration.millis(200)),
     schedule: ProcessSchedule.define(({ all, at, window }) =>
       all(

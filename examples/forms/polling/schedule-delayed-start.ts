@@ -13,8 +13,7 @@ import { utcDateFromMillis } from "../../../src/utcDate";
 const program = Effect.gen(function* () {
   const ticks = yield* Ref.make(0);
 
-  const proc = Process.make({
-    name: "examples/forms/schedule-delayed-start",
+  const proc = Process.make("examples/forms/schedule-delayed-start", {
     effect: Ref.update(ticks, (n) => n + 1),
   });
 

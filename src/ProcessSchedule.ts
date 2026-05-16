@@ -353,6 +353,16 @@ function window(
 const fromStarts = (starts: ReadonlyArray<Date>): ReadonlyArray<ProcessScheduleEntry> =>
   starts.map((startAt) => at(startAt));
 
+/**
+ * Empty in-memory schedule store.
+ *
+ * Use when the driver may run but no entry covers "now" until you `set`, `add`,
+ * `reconcile`, or populate entries via a schedule initializer on `Process.make`.
+ *
+ * Equivalent to `ProcessSchedule.inMemory()` with no initial entries.
+ */
+const empty: Layer.Layer<ProcessScheduleTag> = inMemoryLayer([]);
+
 /** Always-armed: single entry starting at epoch, never stops. */
 const alwaysArmed: Layer.Layer<ProcessScheduleTag> =
   inMemoryLayer([
@@ -401,6 +411,7 @@ const define = (
  */
 export const ProcessSchedule: typeof ProcessScheduleTag & {
   readonly inMemory: typeof inMemoryLayer;
+  readonly empty: Layer.Layer<ProcessScheduleTag>;
   readonly alwaysArmed: Layer.Layer<ProcessScheduleTag>;
   readonly at: typeof at;
   readonly window: typeof window;
@@ -408,6 +419,7 @@ export const ProcessSchedule: typeof ProcessScheduleTag & {
   readonly define: typeof define;
 } = Object.assign(ProcessScheduleTag, {
   inMemory: inMemoryLayer,
+  empty,
   alwaysArmed,
   at,
   window,

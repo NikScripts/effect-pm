@@ -21,21 +21,25 @@ This document complements the [README](../README.md) with a concise **spec-style
 
 ## `Process.make` / `Process.provide*`
 
-### `ProcessMakeConfig<E, R>`
+### `Process.make(id, config)`
+
+- **`id`** — stable process id (CLI, HTTP, `entityId` in store; exposed as `process.name` on the handle).
+- **`config`** — `ProcessMakeOptions<E, R>` (no `name` field).
+
+### `ProcessMakeOptions<E, R>`
 
 | Field | Required | Description |
 |--------|----------|-------------|
-| `name` | yes | Stable id (CLI, HTTP, `entityId` in store). |
 | `effect` | yes | `Effect<void, E, R>` — one **tick** body; failures logged + recorded when `ProcessStore` is provided. |
 | `polling` | no | `Layer.Layer<PollingService, never, never>` — repeat cadence inside an instance. Omit and provide at fork time. |
-| `schedule` | no | Either a `ProcessScheduleInitializer` (`({ set, add, clear }) => Effect`) or a `Layer.Layer<ProcessScheduleService, never, never>`. |
-| `scheduleLayer` | no | Explicit schedule service layer. Defaults to `ProcessSchedule.inMemory()`. |
+| `schedule` | no | Either a `ProcessScheduleInitializer` (`({ set, add, clear }) => Effect`) or a `Layer.Layer<ProcessScheduleService, never, never>`. When omitted, defaults to `ProcessSchedule.alwaysArmed`. Use `ProcessSchedule.empty` for an empty store (disarmed until mutation). |
+| `scheduleLayer` | no | Explicit schedule service layer; takes precedence over `schedule`. When both are omitted, `ProcessSchedule.alwaysArmed` is used. |
 
 ### Static helpers
 
-- **`Process.make(config)`** — build handle + baked layers from config.
-- **`Process.providePolling(base, layer)`** — set/replace polling layer on a config object.
-- **`Process.provideSchedule(base, layer)`** — set/replace schedule layer.
+- **`Process.make(id, config)`** — build handle + baked layers from config.
+- **`Process.providePolling(id, base, layer)`** — set/replace polling layer before building.
+- **`Process.provideSchedule(id, base, layer)`** — set/replace schedule layer before building.
 
 ### Handle shape `Process<R>`
 

@@ -19,8 +19,7 @@ const program = Effect.gen(function* () {
   ]);
   const runtimeLayer = Layer.mergeAll(ProcessStore.layer, scheduleLayer);
 
-  const proc = Process.make({
-    name: "examples/forms/schedule-controls-external-fiber",
+  const proc = Process.make("examples/forms/schedule-controls-external-fiber", {
     polling: Polling.spaced(Duration.millis(100)),
     // No inlined schedule — arms via ProcessSchedule layer at fork site.
     effect: Ref.update(ticks, (n) => n + 1),

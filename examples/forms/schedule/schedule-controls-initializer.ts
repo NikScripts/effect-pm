@@ -14,8 +14,7 @@ import { utcDateFromMillis } from "../../../src/utcDate";
 const program = Effect.gen(function* () {
   const ticks = yield* Ref.make(0);
 
-  const proc = Process.make({
-    name: "examples/forms/schedule-controls-initializer",
+  const proc = Process.make("examples/forms/schedule-controls-initializer", {
     polling: Polling.spaced(Duration.millis(100)),
     // Function form runs once before the supervisor loop — bootstrap from config/DB here.
     schedule: ({ entries, set, add }) =>

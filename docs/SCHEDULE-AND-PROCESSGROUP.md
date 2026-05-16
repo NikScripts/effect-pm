@@ -43,7 +43,7 @@ So **`start` ≠ “game is on”**. It means **“attach the schedule driver”
 
 What you **can** do (recommended pattern):
 
-1. Use an in-memory schedule service (`ProcessSchedule.inMemory`) via `Process.make({ schedule: ... })` or default it and configure entries through the initializer controls (`set`, `add`, `clear`).
+1. Use an in-memory schedule service (`ProcessSchedule.inMemory`, `ProcessSchedule.empty`, or a schedule initializer) via `Process.make(id, { schedule: ... })`. Omitting `schedule` defaults to `ProcessSchedule.alwaysArmed`; use `ProcessSchedule.empty` when the driver should run but stay disarmed until you mutate entries.
 2. A **separate fiber** (or HTTP handler) polls your game API and mutates entries with `set` / `add` / `clear`.
 3. Each running instance checks its own `stopAt`; when windows close, instances exit naturally. The driver remains attached and future entries can spawn new instances.
 

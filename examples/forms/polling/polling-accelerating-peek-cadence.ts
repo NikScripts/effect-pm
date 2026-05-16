@@ -46,8 +46,7 @@ const program = Effect.gen(function* () {
     ProcessSchedule.at("sports-accel-verbose", scheduleStartAtUnixEpoch),
   ]);
 
-  const proc = Process.make({
-    name: "examples/forms/polling-accelerating-peek-cadence",
+  const proc = Process.make("examples/forms/polling-accelerating-peek-cadence", {
     effect: Effect.gen(function* () {
       const snapshot = yield* feed.readScore;
       const prev = yield* Ref.get(lastScoreKey);

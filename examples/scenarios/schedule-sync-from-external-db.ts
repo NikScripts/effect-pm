@@ -31,8 +31,7 @@ const program = Effect.gen(function* () {
   ]);
   const ticks = yield* Ref.make(0);
 
-  const proc = Process.make({
-    name: "examples/schedule-db-sync",
+  const proc = Process.make("examples/schedule-db-sync", {
     polling: Polling.spaced(Duration.millis(100)),
     // Initial sync at process startup.
     schedule: ({ set }) =>

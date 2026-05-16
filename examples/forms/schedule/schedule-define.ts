@@ -14,8 +14,7 @@ import { utcDateFromMillis } from "../../../src/utcDate";
 const program = Effect.gen(function* () {
   const seen = yield* Ref.make<ReadonlyArray<string>>([]);
 
-  const proc = Process.make({
-    name: "examples/forms/schedule-define",
+  const proc = Process.make("examples/forms/schedule-define", {
     polling: Polling.spaced(Duration.millis(120)),
     schedule: ProcessSchedule.define(({ all, at, window }) =>
       all(
