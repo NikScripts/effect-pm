@@ -313,6 +313,8 @@ void Effect.runPromise(program.pipe(
 | `RuntimeObserver.publishStateChange(change)` | Publishes a state transition when the service is present; otherwise no-ops. |
 | `RuntimeObserver.layerProcessStore` | Observer layer that persists runtime facts through `ProcessStore`. |
 | `RuntimeObserver.layerListeners(listeners)` | Observer layer that forwards facts/state changes to scoped listeners and isolates listener failures. |
+| `ProcessStore.runtime.facts(query)` | Generic projection over persisted `runtime.fact.recorded` events. |
+| `ProcessStore.runResource.history(resourceId, opts)` | RunResource-specific fact history projection backed by `runtime.facts`. |
 
 `RunResource` publishes `run-resource.run.started`,
 `run-resource.run.completed`, and `run-resource.run.failed` facts plus
@@ -331,6 +333,9 @@ State changes are not persisted yet.
 `RuntimeObserver.layerListeners(...)` can observe both facts and state changes
 without persistence. Multiple listeners can observe the same event, and listener
 failures are ignored so runtime mutations continue unchanged.
+`ProcessStore.runtime.facts(query)` and `ProcessStore.runResource.history(...)`
+derive projections from generic event reads; they do not add adapter-specific
+storage APIs.
 
 ---
 

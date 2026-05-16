@@ -214,8 +214,19 @@ describe("ProcessStore.memory", () => {
         types: ["runtime.fact.recorded"],
         opts: { limit: 1 },
       })
+      const runtimeFacts = yield* ProcessStore.runtime.facts({
+        ref: { kind: "run-resource", id: "@test/RunGate" },
+        types: ["run-resource.run.completed"],
+        opts: { limit: 1 },
+      })
+      const runHistory = yield* ProcessStore.runResource.history("@test/RunGate")
 
       expect(rows.map((row) => row.id)).toEqual(["runtime-completed"])
+      expect(runtimeFacts.map((fact) => fact.id)).toEqual(["run-1/completed"])
+      expect(runHistory.map((fact) => fact.id)).toEqual([
+        "run-1/completed",
+        "run-1/start",
+      ])
     }).pipe(provideLayer(ProcessStore.layer)),
   )
 
@@ -350,8 +361,12 @@ describe("ProcessStore.file", () => {
         entityId: "@test/FileRunGate",
         types: ["runtime.fact.recorded"],
       })
+      const runtimeFacts = yield* ProcessStore.runtime.facts({
+        ref: { kind: "run-resource", id: "@test/FileRunGate" },
+      }).pipe(Effect.provideService(ProcessStore, second))
 
       expect(rows.map((row) => row.id)).toEqual(["file-runtime-started"])
+      expect(runtimeFacts.map((fact) => fact.id)).toEqual(["file-run-1/start"])
 
       const completions = yield* second.getQueueItemCompletions("file-email-queue")
       expect(completions.map((row) => row.id)).toEqual([

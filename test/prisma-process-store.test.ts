@@ -369,8 +369,19 @@ describe("PrismaProcessStore — adapter", () => {
         entityId: "@test/RunGate",
         types: ["runtime.fact.recorded"],
       });
+      const facts = yield* ProcessStore.runtime.facts({
+        ref: { kind: "run-resource", id: "@test/RunGate" },
+        types: ["run-resource.run.started"],
+      });
+      const history = yield* ProcessStore.runResource.history("@test/RunGate");
 
       expect(rows.map((row) => row.id)).toEqual(["runtime-fact"]);
+      expect(facts.map((fact) => fact.id)).toEqual([
+        "@test/RunGate/run/1/run-resource.run.started",
+      ]);
+      expect(history.map((fact) => fact.id)).toEqual([
+        "@test/RunGate/run/1/run-resource.run.started",
+      ]);
     }).pipe(provideLayer(PrismaProcessStore.layer({ client })));
   });
 

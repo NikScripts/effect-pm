@@ -898,7 +898,8 @@ Avoid:
 ### Phase C.6 - Projections and additional runtimes
 
 - Add typed projections over generic event/state/fact history after
-  `events(query)`.
+  `events(query)`. (Implemented first for persisted runtime facts and
+  `RunResource` fact history.)
 - Apply the pattern next to `Process` status mirrors or `QueueResource`
   lifecycle state only after `RunResource` proves the observer and storage
   bridge.
@@ -933,6 +934,8 @@ true:
 - Memory, file-backed, and Prisma implementations return equivalent ordering and
   filtering behavior for `runtime.fact.recorded` and existing analytics events.
 - Projections use `events(query)` instead of feature-specific read methods.
+  (Implemented for `ProcessStore.runtime.facts(query)` and
+  `ProcessStore.runResource.history(...)`.)
 - No `getRunResourceFacts`, `getRunResourceState`, or equivalent per-feature
   read method is added.
 

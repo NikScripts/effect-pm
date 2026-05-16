@@ -39,7 +39,7 @@ import {
   ProcessStoreEventDecodeError,
 } from "./ProcessStoreCodec";
 import type { EffectPmEventRow, JsonValue } from "./ProcessStoreEvent";
-import type { RuntimeFact } from "./RuntimeState";
+import type { RuntimeFact, RuntimeRef } from "./RuntimeState";
 
 // ============================================================================
 // Public Types
@@ -67,6 +67,17 @@ export interface StoreEventQuery {
   readonly entityType?: AnalyticsEvent["entityType"];
   readonly entityId?: string;
   readonly types?: ReadonlyArray<AnalyticsEvent["type"]>;
+  readonly opts?: QueryOpts;
+}
+
+/**
+ * Storage-neutral query for persisted runtime facts.
+ *
+ * @public
+ */
+export interface RuntimeFactQuery {
+  readonly ref?: RuntimeRef;
+  readonly types?: ReadonlyArray<RuntimeFact["type"]>;
   readonly opts?: QueryOpts;
 }
 
@@ -296,6 +307,54 @@ const isQueueLifecycleChanged = (
   event: AnalyticsEvent,
 ): event is QueueLifecycleChangedEvent =>
   event.type === "queue.lifecycle.changed" && event.entityType === "queue";
+
+const matchesRuntimeFactQuery =
+  (query: RuntimeFactQuery | undefined) =>
+  (fact: RuntimeFact): boolean => {
+    if (query?.ref !== undefined) {
+      if (fact.ref.kind !== query.ref.kind || fact.ref.id !== query.ref.id) {
+        return false;
+      }
+    }
+    if (
+      query?.types !== undefined &&
+      query.types.length > 0 &&
+      !query.types.includes(fact.type)
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+const runtimeFactStoreQuery = (
+  query: RuntimeFactQuery | undefined,
+): StoreEventQuery => ({
+  entityType: query?.ref?.kind,
+  entityId: query?.ref?.id,
+  types: ["runtime.fact.recorded"],
+  opts: query?.opts === undefined
+    ? undefined
+    : {
+        before: query.opts.before,
+        after: query.opts.after,
+      },
+});
+
+const runtimeFactsFromEvents = (
+  events: ReadonlyArray<AnalyticsEvent>,
+  query: RuntimeFactQuery | undefined,
+): RuntimeFact[] => {
+  const out: RuntimeFact[] = [];
+  for (const event of events) {
+    if (
+      event.type === "runtime.fact.recorded" &&
+      matchesRuntimeFactQuery(query)(event.fact)
+    ) {
+      out.push(event.fact);
+    }
+  }
+  return applyQueryOpts(out, query?.opts, (fact) => fact.occurredAt);
+};
 
 const selectEvents = <T extends AnalyticsEvent>(
   events: ReadonlyArray<AnalyticsEvent>,
@@ -620,5 +679,36 @@ export namespace ProcessStore {
    */
   export const fileLayer = (filePath: string) =>
     Layer.effect(ProcessStore, makeFileProcessStore(filePath));
+
+  /**
+   * Generic runtime projections derived from {@link ProcessStoreInterface.events}.
+   *
+   * @public
+   */
+  export const runtime = {
+    facts: (query?: RuntimeFactQuery): Effect.Effect<RuntimeFact[], never, ProcessStore> =>
+      Effect.flatMap(ProcessStore, (store) =>
+        Effect.map(
+          store.events(runtimeFactStoreQuery(query)),
+          (events) => runtimeFactsFromEvents(events, query),
+        )
+      ),
+  } as const;
+
+  /**
+   * Typed RunResource projections derived from generic runtime facts.
+   *
+   * @public
+   */
+  export const runResource = {
+    history: (
+      resourceId: string,
+      opts?: QueryOpts,
+    ): Effect.Effect<RuntimeFact[], never, ProcessStore> =>
+      runtime.facts({
+        ref: { kind: "run-resource", id: resourceId },
+        opts,
+      }),
+  } as const;
 }
 

@@ -81,8 +81,9 @@ plan for this phase, and reconcile storage work with
    it is append-only and generic so it can later become a `RuntimeStorage`
    adapter.
 6. Dedicated queue completion/lifecycle reads are now available across memory,
-   file-backed, and Prisma stores; typed projections over generic event/state/
-   fact history are next.
+   file-backed, and Prisma stores. `ProcessStore.runtime.facts(query)` and
+   `ProcessStore.runResource.history(...)` now prove typed projections can sit
+   over generic event reads without adapter-specific APIs.
 7. Keep `RuntimeStorage` planned as the generic storage port under
    `ProcessStore`, with memory/file-backed/Prisma adapters implementing that port
    rather than module-specific APIs.
