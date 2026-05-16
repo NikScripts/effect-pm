@@ -295,6 +295,7 @@ void Effect.runPromise(program.pipe(
 | `RuntimeStateBase` | Base shape for live state snapshots with `ref`, `observedAt`, and `configVersion`. |
 | `RuntimeStateChange` | Generic transition record with previous/current state. |
 | `RuntimeFact` | Generic discrete runtime occurrence payload. |
+| `RunResourceState` | Live `RunResource` counters for waiting, in-flight, completed, failed, interrupted, and total duration. |
 | `RuntimeFactRecordedEvent` | ProcessStore analytics event wrapping a persisted `RuntimeFact`. |
 | `RuntimeObserver` | Optional service for publishing runtime facts and state changes. |
 | `RuntimeObserver.publishFact(fact)` | Publishes a fact when the service is present; otherwise no-ops. |
@@ -302,8 +303,8 @@ void Effect.runPromise(program.pipe(
 | `RuntimeObserver.layerProcessStore` | Observer layer that persists runtime facts through `ProcessStore`. |
 
 `RunResource` publishes `run-resource.run.started`,
-`run-resource.run.completed`, and `run-resource.run.failed` facts when
-`RuntimeObserver` is provided. Observation is optional: when no
+`run-resource.run.completed`, and `run-resource.run.failed` facts plus
+`RunResourceState` transitions when `RuntimeObserver` is provided. Observation is optional: when no
 `RuntimeObserver` service is in the environment, publish helpers no-op and the
 gated effect behavior is unchanged.
 

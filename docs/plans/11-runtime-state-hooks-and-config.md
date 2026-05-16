@@ -6,7 +6,7 @@ Partially implemented. `RuntimeRef`, `RuntimeStateBase`,
 `RuntimeStateChange`, `RuntimeFact`, and optional `RuntimeObserver` have landed.
 `RuntimeObserver.publishFact` and `RuntimeObserver.publishStateChange` no-op when
 no observer is provided. `RunResource` publishes run started/completed/failed
-facts when `RuntimeObserver` is provided. `RuntimeObserver.layerProcessStore`
+facts and `RunResourceState` changes when `RuntimeObserver` is provided. `RuntimeObserver.layerProcessStore`
 persists runtime facts through `ProcessStore` as `runtime.fact.recorded`
 analytics events, and the Prisma codec supports that event type. State changes
 are not persisted yet. Generic `ProcessStore.events(query)` and the first
@@ -843,6 +843,8 @@ Avoid:
 - Instrument `RunResource.make` around run start, success, and failure facts.
   (Implemented for `run-resource.run.started`,
   `run-resource.run.completed`, and `run-resource.run.failed`.)
+- Publish `RunResourceState` changes around wait, run start, success, failure,
+  and interruption. (Implemented.)
 - Keep observation optional and do not require applications to provide
   `ProcessStore`. (Implemented.)
 - Add no queue, process, HTTP, schema, remote enqueue, or handoff behavior.
@@ -884,7 +886,7 @@ Avoid:
 ### Phase C.5 - RunResource state changes and scoped listeners
 
 - Publish `RuntimeStateChange<RunResourceState>` around permit wait, run start,
-  run success, run failure, and interruption.
+  run success, run failure, and interruption. (Implemented.)
 - Add scoped subscription/listener helpers for the observed `RunResource` fact
   and state stream.
 - Prefer `Stream`/scoped APIs over callback-only APIs if Effect patterns support
@@ -912,6 +914,8 @@ The landed Phase C.1 fact slice is complete when all of these are true:
   when no observer is in the environment.
 - `RunResource` publishes run started/completed/failed facts when an observer is
   provided.
+- `RunResource` publishes state changes for wait/start/success/failure/
+  interruption when an observer is provided.
 - `RunResource` behavior is unchanged when no observer is provided.
 - `RuntimeObserver.layerProcessStore` persists facts to `ProcessStore` as
   `runtime.fact.recorded` analytics events.
@@ -934,10 +938,10 @@ true:
 The next runtime state/listener slice is complete only when all of these are true:
 
 - `RunResource` publishes state changes for wait/start/success/failure/
-  interruption without polling a status getter.
+  interruption without polling a status getter. (Implemented.)
 - `RunResourceState` records at least configured concurrency, in-flight count,
   waiting count, completed count, failed count, interrupted count, and average
-  duration or enough timing data to derive it.
+  duration or enough timing data to derive it. (Implemented with total duration.)
 - Multiple scoped listeners can observe the same `RunResource` state changes.
 - Listener failure is isolated from the gated user effect and cannot leak
   semaphore permits.

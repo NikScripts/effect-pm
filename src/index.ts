@@ -196,6 +196,7 @@ export type {
   RunGate,
   RunResourceRunner,
   RunResourceRunnerConfig,
+  RunResourceState,
 } from "./RunResource";
 
 // Types - RuntimeState

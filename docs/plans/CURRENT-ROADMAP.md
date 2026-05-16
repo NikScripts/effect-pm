@@ -68,8 +68,8 @@ plan for this phase, and reconcile storage work with
    is the generic swappable storage boundary underneath it.
 2. `RunResource` is the first observed runtime because it is a low-risk gate with
    no queue payloads, no schema work, and no background workers. It now publishes
-   run started/completed/failed facts when `RuntimeObserver` is provided, and
-   no-ops when it is absent.
+   run started/completed/failed facts plus `RunResourceState` changes when
+   `RuntimeObserver` is provided, and no-ops when it is absent.
 3. `RuntimeObserver.layerProcessStore` now bridges runtime facts into
    `ProcessStore` as `runtime.fact.recorded` analytics events. State changes are
    not persisted yet.
