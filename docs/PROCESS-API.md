@@ -230,10 +230,14 @@ as `Process`, `QueueResource`, `RunResource`, `HttpApiResource`, and
 `ProcessGroup` should depend on `ProcessStore`, not on storage adapters.
 
 `RuntimeStorage` is the generic swappable persistence port underneath
-`ProcessStore`. Memory, Prisma, and custom adapters implement `RuntimeStorage`;
-they should not grow module-specific methods. `ProcessStore` owns conversion
+`ProcessStore`. Memory, file-backed, Prisma, and custom adapters implement
+`RuntimeStorage`; they should not grow module-specific methods. `ProcessStore` owns conversion
 from module-specific operations into generic `RuntimeFact` and
 `RuntimeStateChange` records, plus redaction and projections.
+
+`RuntimeStorage` is still planned. The current bridge writes runtime facts
+through today's `ProcessStore` analytics event envelope as
+`runtime.fact.recorded` events.
 
 Dependency direction:
 
@@ -241,9 +245,10 @@ Dependency direction:
 runtime module -> ProcessStore -> RuntimeStorage -> memory / Prisma / custom
 ```
 
-The next likely Phase C slice is the bridge from `RuntimeObserver` to
-`ProcessStore`. Queue schema validation, remote queue enqueue, release, and
-handoff remain later phases.
+Generic `ProcessStore.events(query)` is not implemented yet and is the next
+likely ProcessStore read slice. Projections should wait for that generic read
+surface instead of adding feature-specific read methods. Queue schema
+validation, remote queue enqueue, release, and handoff remain later phases.
 
 ---
 
@@ -255,17 +260,24 @@ handoff remain later phases.
 | `RuntimeStateBase` | Base shape for live state snapshots with `ref`, `observedAt`, and `configVersion`. |
 | `RuntimeStateChange` | Generic transition record with previous/current state. |
 | `RuntimeFact` | Generic discrete runtime occurrence payload. |
+| `RuntimeFactRecordedEvent` | ProcessStore analytics event wrapping a persisted `RuntimeFact`. |
 | `RuntimeObserver` | Optional service for publishing runtime facts and state changes. |
 | `RuntimeObserver.publishFact(fact)` | Publishes a fact when the service is present; otherwise no-ops. |
 | `RuntimeObserver.publishStateChange(change)` | Publishes a state transition when the service is present; otherwise no-ops. |
+| `RuntimeObserver.layerProcessStore` | Observer layer that persists runtime facts through `ProcessStore`. |
 
 `RunResource` publishes `run-resource.run.started`,
 `run-resource.run.completed`, and `run-resource.run.failed` facts when
 `RuntimeObserver` is provided. Observation is optional: when no
 `RuntimeObserver` service is in the environment, publish helpers no-op and the
-gated effect behavior is unchanged. `RuntimeObserver.layerProcessStore` persists
-facts to `ProcessStore` as `runtime.fact.recorded` events. State changes are not
-persisted yet; generic state-history persistence is a later Phase C slice.
+gated effect behavior is unchanged.
+
+When `RuntimeObserver.layerProcessStore` is provided, runtime facts are
+persisted through `ProcessStore` as `runtime.fact.recorded` analytics events.
+Memory, file-backed, and Prisma reads support those generic events through
+`ProcessStore.events(query)`. Use `ProcessStore.fileLayer(path)` with Effect
+`FileSystem`/`Path` platform layers for local durable NDJSON storage. State
+changes are not persisted yet.
 
 ---
 

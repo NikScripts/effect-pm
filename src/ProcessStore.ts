@@ -9,13 +9,30 @@
  * - **Events** — `process.execution.completed` and `process.lifecycle.changed` to start;
  *   Prisma adapter stores the same shapes durably.
  *
- * Default implementation: {@link ProcessStore} service class with an in-memory store;
- * use {@link ProcessStore.layer} in tests and demos.
+ * Default implementation: {@link ProcessStore} service class with an in-memory store.
+ * Use {@link ProcessStore.fileLayer} for local durable NDJSON storage.
  *
  * @module ProcessStore
  */
 
-import { Context, Effect, Layer } from "effect";
+import {
+  Clock,
+  Context,
+  DateTime,
+  Effect,
+  FileSystem,
+  Layer,
+  Option,
+  Path,
+  Semaphore,
+  Schema,
+} from "effect";
+import {
+  decodeEventRow,
+  encodeEvent,
+  PrismaProcessStoreDecodeError,
+} from "./prisma/codec";
+import type { EffectPmEventRow, JsonValue } from "./prisma/types";
 import type { RuntimeFact } from "./RuntimeState";
 
 // ============================================================================
@@ -244,6 +261,145 @@ const matchesStoreEventQuery =
     return true;
   };
 
+const jsonLineSchema = Schema.UnknownFromJsonString;
+
+const encodeJsonLine = (value: unknown): string | null =>
+  Option.match(Schema.encodeUnknownOption(jsonLineSchema)(value), {
+    onNone: () => null,
+    onSome: (line) => line,
+  });
+
+const decodeJsonLine = (line: string): unknown | null =>
+  Option.match(Schema.decodeUnknownOption(jsonLineSchema)(line), {
+    onNone: () => null,
+    onSome: (value) => value,
+  });
+
+const isObject = (value: unknown): value is { readonly [key: string]: unknown } =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isString = (value: unknown): value is string => typeof value === "string";
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
+const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
+
+const isJsonValue = (value: unknown): value is JsonValue => {
+  if (value === null || isString(value) || isFiniteNumber(value) || isBoolean(value)) {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.every(isJsonValue);
+  }
+  if (isObject(value)) {
+    return Object.values(value).every(isJsonValue);
+  }
+  return false;
+};
+
+const dateFromMillis = (millis: number): Date =>
+  DateTime.toDateUtc(DateTime.makeUnsafe(millis));
+
+const dateFromUnknown = (value: unknown): Date | null => {
+  if (isFiniteNumber(value)) {
+    return dateFromMillis(value);
+  }
+  if (value instanceof Date) {
+    const millis = value.getTime();
+    return Number.isNaN(millis) ? null : dateFromMillis(millis);
+  }
+  if (isString(value)) {
+    return Option.match(DateTime.make(value), {
+      onNone: () => null,
+      onSome: (dateTime) => DateTime.toDateUtc(dateTime),
+    });
+  }
+  return null;
+};
+
+const decodeStoredEvent = (row: EffectPmEventRow): AnalyticsEvent | null => {
+  const decoded = decodeEventRow(row);
+  return decoded instanceof PrismaProcessStoreDecodeError ? null : decoded;
+};
+
+const decodeFileRow = (value: unknown): EffectPmEventRow | null => {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  const id = value["id"];
+  const type = value["type"];
+  const occurredAt = dateFromUnknown(value["occurredAt"]);
+  const entityType = value["entityType"];
+  const entityId = value["entityId"];
+  const attributes = value["attributes"];
+  const payload = value["payload"];
+  const createdAt = dateFromUnknown(value["createdAt"]) ?? occurredAt;
+
+  if (
+    !isString(id) ||
+    !isString(type) ||
+    occurredAt === null ||
+    !isString(entityType) ||
+    !isString(entityId) ||
+    !isJsonValue(payload) ||
+    !(attributes === undefined || attributes === null || isJsonValue(attributes)) ||
+    createdAt === null
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    type,
+    occurredAt,
+    entityType,
+    entityId,
+    attributes: attributes === undefined ? null : attributes,
+    payload,
+    createdAt,
+  };
+};
+
+const decodeFileContents = (contents: string): AnalyticsEvent[] => {
+  const out: AnalyticsEvent[] = [];
+  for (const line of contents.split("\n")) {
+    if (line.trim().length === 0) {
+      continue;
+    }
+    const value = decodeJsonLine(line);
+    const row = value === null ? null : decodeFileRow(value);
+    if (row === null) {
+      continue;
+    }
+    const event = decodeStoredEvent(row);
+    if (event !== null) {
+      out.push(event);
+    }
+  }
+  return out;
+};
+
+const encodeFileEventLine = (
+  event: AnalyticsEvent,
+  createdAt: number,
+): string | null => {
+  const encoded = encodeEvent(event);
+  const row: { [key: string]: JsonValue } = {
+    id: encoded.id,
+    type: encoded.type,
+    occurredAt: event.occurredAt,
+    entityType: encoded.entityType,
+    entityId: encoded.entityId,
+    attributes: encoded.attributes ?? null,
+    payload: encoded.payload,
+    createdAt,
+  };
+  const line = encodeJsonLine(row);
+  return line === null ? null : `${line}\n`;
+};
+
 // ============================================================================
 // In-memory implementation
 // ============================================================================
@@ -300,6 +456,82 @@ const makeInMemoryProcessStore = Effect.sync<ProcessStoreInterface>(() => {
   };
 });
 
+const makeFileProcessStore = (
+  filePath: string,
+): Effect.Effect<
+  ProcessStoreInterface,
+  never,
+  FileSystem.FileSystem | Path.Path
+> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const semaphore = yield* Semaphore.make(1);
+    const directory = path.dirname(filePath);
+    const ensureDirectory = fs
+      .makeDirectory(directory, { recursive: true })
+      .pipe(Effect.orDie);
+
+    const readEvents = Effect.gen(function* () {
+      yield* ensureDirectory;
+      const exists = yield* fs.exists(filePath).pipe(Effect.orDie);
+      if (!exists) {
+        return [];
+      }
+      const contents = yield* fs.readFileString(filePath).pipe(Effect.orDie);
+      return decodeFileContents(contents);
+    });
+
+    const appendOne = (event: AnalyticsEvent) =>
+      Effect.gen(function* () {
+        yield* ensureDirectory;
+        const now = yield* Clock.currentTimeMillis;
+        const line = encodeFileEventLine(event, now);
+        if (line !== null) {
+          yield* fs.writeFileString(filePath, line, { flag: "a" }).pipe(Effect.orDie);
+        }
+      });
+
+    const queryEvents = (query: StoreEventQuery | undefined) =>
+      Effect.map(readEvents, (storedEvents) => {
+        const rows = storedEvents
+          .filter(matchesStoreEventQuery(query))
+          .sort(byTimestampDesc((event) => event.occurredAt));
+        return applyQueryOpts(rows, query?.opts, (event) => event.occurredAt);
+      });
+
+    return {
+      append: (event) => semaphore.withPermits(1)(appendOne(event)),
+      appendBatch: (batch) =>
+        semaphore.withPermits(1)(
+          Effect.gen(function* () {
+            for (const event of batch) {
+              yield* appendOne(event);
+            }
+          }),
+        ),
+      events: (query) => semaphore.withPermits(1)(queryEvents(query)),
+      getProcessExecutions: (processId, opts) =>
+        semaphore.withPermits(1)(
+          Effect.map(queryEvents({ entityType: "process", entityId: processId, opts }), (rows) =>
+            rows.filter(
+              (event): event is ProcessExecutionCompletedEvent =>
+                event.type === "process.execution.completed",
+            ),
+          ),
+        ),
+      getProcessLifecycle: (processId, opts) =>
+        semaphore.withPermits(1)(
+          Effect.map(queryEvents({ entityType: "process", entityId: processId, opts }), (rows) =>
+            rows.filter(
+              (event): event is ProcessLifecycleChangedEvent =>
+                event.type === "process.lifecycle.changed",
+            ),
+          ),
+        ),
+    };
+  });
+
 // ============================================================================
 // Public Service
 // ============================================================================
@@ -330,5 +562,20 @@ export namespace ProcessStore {
    * @public
    */
   export const memory = makeInMemoryProcessStore;
+
+  /**
+   * Raw `Effect` that materializes a file-backed {@link ProcessStoreInterface}.
+   *
+   * @public
+   */
+  export const file = makeFileProcessStore;
+
+  /**
+   * `Layer` that provides {@link ProcessStore} backed by an append-only NDJSON file.
+   *
+   * @public
+   */
+  export const fileLayer = (filePath: string) =>
+    Layer.effect(ProcessStore, makeFileProcessStore(filePath));
 }
 

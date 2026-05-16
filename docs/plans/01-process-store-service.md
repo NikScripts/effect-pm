@@ -57,12 +57,13 @@ Provide:
 
 - in-memory store for tests and examples,
 - Prisma-backed store for durable SQL persistence,
+- file-backed store using Effect `FileSystem` for local durable development and
+  lightweight deployments,
 - no-op store for applications that want zero persistence,
 - test store with inspection helpers.
 
 Leave room for:
 
-- file-backed store,
 - SQLite-specific store,
 - remote store over HTTP/RPC,
 - user-provided store with custom event routing.
@@ -128,6 +129,15 @@ This split lets `ProcessStore.queue.enqueueRejected(...)` be a useful
 module-aware API while keeping the storage adapter surface stable forever.
 `ProcessStore` owns conversion, redaction, projection, and observer bridging.
 `RuntimeStorage` only persists generic records.
+
+Current bridge status:
+
+- `RuntimeObserver.layerProcessStore` persists `RuntimeFact` values as
+  `runtime.fact.recorded` analytics events.
+- State changes are not persisted yet.
+- `ProcessStore.events(query)` is the next read target before projections.
+- Do not add `getRunResourceFacts`, `getQueueValidationFailures`, or similar
+  feature-specific reads to replace that generic query.
 
 Candidate surface:
 

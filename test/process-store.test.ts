@@ -1,5 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Effect } from "effect"
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem"
+import * as NodePath from "@effect/platform-node/NodePath"
+import { Clock, Effect, FileSystem, Layer, Path } from "effect"
 import {
   ProcessStore,
   type ProcessExecutionCompletedEvent,
@@ -213,5 +215,50 @@ describe("ProcessStore.memory", () => {
 
       expect(rows.map((row) => row.id)).toEqual(["runtime-completed"])
     }).pipe(provideLayer(ProcessStore.layer)),
+  )
+})
+
+describe("ProcessStore.file", () => {
+  const platform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)
+
+  it.live("persists generic events across file store instances", () =>
+    Effect.gen(function* () {
+      const path = yield* Path.Path
+      const fs = yield* FileSystem.FileSystem
+      const now = yield* Clock.currentTimeMillis
+      const directory = path.join(".tmp", `effect-pm-file-store-${now}`)
+      const filePath = path.join(directory, "events.ndjson")
+
+      const first = yield* ProcessStore.file(filePath)
+      const occurredAt = utcDateFromIso("2026-01-01T05:00:00.000Z").getTime()
+
+      yield* first.append({
+        id: "file-runtime-started",
+        type: "runtime.fact.recorded",
+        occurredAt,
+        entityType: "run-resource",
+        entityId: "@test/FileRunGate",
+        fact: {
+          id: "file-run-1/start",
+          ref: { kind: "run-resource", id: "@test/FileRunGate" },
+          type: "run-resource.run.started",
+          occurredAt,
+          payload: { concurrency: 1 },
+        },
+      })
+
+      yield* fs.writeFileString(filePath, "not json\n", { flag: "a" })
+
+      const second = yield* ProcessStore.file(filePath)
+      const rows = yield* second.events({
+        entityType: "run-resource",
+        entityId: "@test/FileRunGate",
+        types: ["runtime.fact.recorded"],
+      })
+
+      expect(rows.map((row) => row.id)).toEqual(["file-runtime-started"])
+
+      yield* fs.remove(directory, { recursive: true }).pipe(Effect.catch(() => Effect.void))
+    }).pipe(provideLayer(platform)),
   )
 })

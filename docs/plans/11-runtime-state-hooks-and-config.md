@@ -6,11 +6,14 @@ Partially implemented. `RuntimeRef`, `RuntimeStateBase`,
 `RuntimeStateChange`, `RuntimeFact`, and optional `RuntimeObserver` have landed.
 `RuntimeObserver.publishFact` and `RuntimeObserver.publishStateChange` no-op when
 no observer is provided. `RunResource` publishes run started/completed/failed
-facts when `RuntimeObserver` is provided. Runtime facts and state changes are
-not persisted to `ProcessStore` yet; the next likely Phase C slice is the bridge
-from `RuntimeObserver` to `ProcessStore`. The boundary is now locked:
-`ProcessStore` is the rich module-facing singleton facade, and `RuntimeStorage`
-is the generic swappable persistence port underneath it.
+facts when `RuntimeObserver` is provided. `RuntimeObserver.layerProcessStore`
+persists runtime facts through `ProcessStore` as `runtime.fact.recorded`
+analytics events, and the Prisma codec supports that event type. State changes
+are not persisted yet. The next likely ProcessStore slice is generic
+`events(query)`, which projections need before adding feature-specific read
+methods. The boundary is now locked: `ProcessStore` is the rich module-facing
+singleton facade, and planned `RuntimeStorage` is the generic swappable
+persistence port underneath it.
 The final public shape must line up with
 [07 - Typed ProcessGroup and remote ProcessManager](./07-process-manager.md).
 
@@ -66,7 +69,8 @@ Start with a deliberately small, generic slice:
    started/completed/failed facts.)
 3. Prove scoped subscribers can observe state changes without persistence.
 4. Bridge generic state changes/facts into `ProcessStore` when that service is
-   available. (Not implemented; this is the next likely slice.)
+   available. (Implemented for facts through `RuntimeObserver.layerProcessStore`;
+   state changes remain unpersisted.)
 
 `RunResource` is the first publisher because it is the lowest-risk runtime:
 
@@ -126,7 +130,8 @@ instead of adding a feature-specific method:
 yield* store.append(runtimeFactAsAnalyticsEvent);
 ```
 
-After a future interface expansion, prefer generic runtime methods:
+After a future interface expansion, prefer generic runtime methods under the
+`ProcessStore` facade:
 
 ```typescript
 yield* store.appendStateChange(change);
@@ -253,6 +258,19 @@ export interface RuntimeStorage {
 `appendQueueItemCompleted(...)`, `appendHttpRequestFailed(...)`, or
 `getRunResourceFailuresByMinute(...)`. Those are module semantics and
 projections, not storage responsibilities.
+
+### File-backed storage adapter
+
+The local durable adapter should be implemented with Effect `FileSystem` so it
+can run anywhere an Effect platform layer is provided. The first version should
+write generic analytics/runtime rows as append-only NDJSON and implement the
+same `events(query)` behavior as memory and Prisma. It belongs under
+`ProcessStore` for the current implementation, then can become a
+`RuntimeStorage` adapter once that port is extracted.
+
+Do not introduce module-specific file APIs. The file adapter stores generic
+facts/events/state records; `ProcessStore` remains responsible for module-aware
+projections and redaction.
 
 ### ProcessStore
 
@@ -832,16 +850,28 @@ Avoid:
 ### Phase C.2 - RuntimeObserver to ProcessStore bridge
 
 - Bridge `RuntimeObserver` facts/state changes into `ProcessStore` when a store
-  is available.
+  is available. (Implemented for facts through `RuntimeObserver.layerProcessStore`;
+  state changes still no-op in that layer.)
 - Keep runtime modules depending on `ProcessStore`, not `RuntimeStorage`.
 - Have `ProcessStore` convert semantic module operations into generic
   `RuntimeFact` / `RuntimeStateChange` records.
-- Implement memory/Prisma/custom adapters against `RuntimeStorage`, not
+- Keep `RuntimeStorage` planned as the generic adapter port under `ProcessStore`.
+  Memory/Prisma/custom adapters should implement that port when it lands, not
   module-specific storage APIs.
 - Do not add `getRunResourceState`, `getRunResourceFacts`, or similar
   feature-specific reads.
 
-### Phase C.3 - RunResource state changes and scoped listeners
+### Phase C.3 - Generic ProcessStore reads
+
+- Add `ProcessStore.events(query)` before building projections.
+- Ensure `events(query)` can read `runtime.fact.recorded` alongside existing
+  process and queue analytics events.
+- Keep query filters generic (`entityType`, `entityId`, event types, time window,
+  limit) rather than adding a read per runtime feature.
+- Update memory and Prisma tests together so ordering, filtering, and decode
+  behavior remain aligned.
+
+### Phase C.4 - RunResource state changes and scoped listeners
 
 - Publish `RuntimeStateChange<RunResourceState>` around permit wait, run start,
   run success, run failure, and interruption.
@@ -852,9 +882,10 @@ Avoid:
 - Define listener failure behavior explicitly: log/store a fact later, but do
   not fail the runtime mutation that triggered the listener.
 
-### Phase C.4 - Projections and additional runtimes
+### Phase C.5 - Projections and additional runtimes
 
-- Add typed projections over generic state/fact history.
+- Add typed projections over generic event/state/fact history after
+  `events(query)`.
 - Apply the pattern next to `Process` status mirrors or `QueueResource`
   lifecycle state only after `RunResource` proves the observer and storage
   bridge.
@@ -872,13 +903,24 @@ The landed Phase C.1 fact slice is complete when all of these are true:
 - `RunResource` publishes run started/completed/failed facts when an observer is
   provided.
 - `RunResource` behavior is unchanged when no observer is provided.
-- Facts are not persisted to `ProcessStore`.
+- `RuntimeObserver.layerProcessStore` persists facts to `ProcessStore` as
+  `runtime.fact.recorded` analytics events.
+- Prisma encodes and decodes `runtime.fact.recorded`.
+- State changes are not persisted yet.
 - No `ProcessStoreInterface` method is added for one runtime feature.
 - No queue schema, remote enqueue, release, handoff, process schedule, or
   `ProcessManager` behavior changes are included.
 
-The next Phase C persistence/state slice is complete only when all of these are
-true:
+The next ProcessStore read slice is complete only when all of these are true:
+
+- `ProcessStoreInterface` has a generic `events(query)` read.
+- Memory and Prisma implementations return equivalent ordering and filtering
+  behavior for `runtime.fact.recorded` and existing analytics events.
+- Projections use `events(query)` instead of feature-specific read methods.
+- No `getRunResourceFacts`, `getRunResourceState`, or equivalent per-feature
+  read method is added.
+
+The next runtime state/listener slice is complete only when all of these are true:
 
 - `RunResource` publishes state changes for wait/start/success/failure/
   interruption without polling a status getter.
@@ -888,8 +930,8 @@ true:
 - Multiple scoped listeners can observe the same `RunResource` state changes.
 - Listener failure is isolated from the gated user effect and cannot leak
   semaphore permits.
-- Generic runtime facts/state changes can be persisted through `ProcessStore`
-  without adding feature-specific store methods.
+- Generic runtime state changes can be persisted through `ProcessStore` without
+  adding feature-specific store methods.
 
 ## Verification commands
 
