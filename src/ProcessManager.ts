@@ -678,6 +678,52 @@ const resolveCliAnyTarget = (
   );
 };
 
+const verifiedManagerForTarget = (
+  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  target: ProcessManagerTargetCandidate,
+): Effect.Effect<
+  RemoteProcessManager<AnyProcessGroupContract>,
+  ProcessManagerConnectionError | ProcessManagerRequestError,
+  ProcessManagerConnectionRegistry | HttpClient.HttpClient
+> =>
+  Effect.gen(function* () {
+    const manager = yield* managerFor(groups, target.groupId);
+    // CLI controls are contract-first: verify before every mutation/read so
+    // stale imported contracts fail before the wrong remote operation runs.
+    yield* manager.verifyContract;
+    return manager;
+  });
+
+const runRemoteProcessOperation = (
+  process: RemoteProcessControls,
+  operation: "start" | "stop" | "restart" | "now",
+) => {
+  switch (operation) {
+    case "start":
+      return process.start;
+    case "stop":
+      return process.stop;
+    case "restart":
+      return process.restart;
+    case "now":
+      return process.runImmediately;
+  }
+};
+
+const runRemoteQueueOperation = (
+  queue: RemoteQueueControls,
+  operation: "pause" | "resume" | "clear",
+) => {
+  switch (operation) {
+    case "pause":
+      return queue.pause;
+    case "resume":
+      return queue.resume;
+    case "clear":
+      return Effect.asVoid(queue.clear);
+  }
+};
+
 const runProcessCommand = (
   groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
   input: string,
@@ -690,25 +736,8 @@ const runProcessCommand = (
   Effect.gen(function* () {
     const target = yield* resolveCliTarget(groups, input, "process");
     yield* assertTargetControl(target, processControlFor(operation));
-    const manager = yield* managerFor(groups, target.groupId);
-    // CLI controls are contract-first: verify before every mutation/read so
-    // stale imported contracts fail before the wrong remote operation runs.
-    yield* manager.verifyContract;
-    const process = manager.process(target.id);
-    switch (operation) {
-      case "start":
-        yield* process.start;
-        break;
-      case "stop":
-        yield* process.stop;
-        break;
-      case "restart":
-        yield* process.restart;
-        break;
-      case "now":
-        yield* process.runImmediately;
-        break;
-    }
+    const manager = yield* verifiedManagerForTarget(groups, target);
+    yield* runRemoteProcessOperation(manager.process(target.id), operation);
     yield* Console.log(`OK process ${target.id} ${operation} requested`);
   });
 
@@ -724,17 +753,8 @@ const runQueueCommand = (
   Effect.gen(function* () {
     const target = yield* resolveCliTarget(groups, input, "queue");
     yield* assertTargetControl(target, operation);
-    const manager = yield* managerFor(groups, target.groupId);
-    // Keep queue controls behind the same drift check as process controls.
-    yield* manager.verifyContract;
-    const queue = manager.queue(target.id);
-    if (operation === "pause") {
-      yield* queue.pause;
-    } else if (operation === "resume") {
-      yield* queue.resume;
-    } else {
-      yield* queue.clear;
-    }
+    const manager = yield* verifiedManagerForTarget(groups, target);
+    yield* runRemoteQueueOperation(manager.queue(target.id), operation);
     yield* Console.log(`OK queue ${target.id} ${operation} requested`);
   });
 
@@ -750,8 +770,7 @@ const runStatusCommand = (
   Effect.gen(function* () {
     const target = yield* resolveCliAnyTarget(groups, input);
     yield* assertTargetControl(target, "status");
-    const manager = yield* managerFor(groups, target.groupId);
-    yield* manager.verifyContract;
+    const manager = yield* verifiedManagerForTarget(groups, target);
     const response = target.kind === "process"
       ? yield* manager.process(target.id).status
       : yield* manager.queue(target.id).status;

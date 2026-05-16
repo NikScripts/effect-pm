@@ -143,6 +143,19 @@ const sortEntries = (
 const getEntryId = (entry: ProcessScheduleEntry): string | undefined =>
   Option.getOrUndefined(entry.id);
 
+const entriesById = (
+  entries: ReadonlyArray<ProcessScheduleEntry>,
+): Map<string, ProcessScheduleEntry> => {
+  const byId = new Map<string, ProcessScheduleEntry>();
+  for (const entry of entries) {
+    const id = getEntryId(entry);
+    if (id !== undefined) {
+      byId.set(id, entry);
+    }
+  }
+  return byId;
+};
+
 // ============================================================================
 // Internal: in-memory implementation
 // ============================================================================
@@ -165,6 +178,21 @@ const buildInMemoryService = (
     const setEntries = (next: ReadonlyArray<ProcessScheduleEntry>) =>
       Ref.set(entriesRef, sortEntries(next)).pipe(Effect.andThen(notify));
 
+    const mutateEntries = <A>(
+      mutation: (current: ReadonlyArray<ProcessScheduleEntry>) => {
+        readonly entries: ReadonlyArray<ProcessScheduleEntry>;
+        readonly changed: boolean;
+        readonly value: A;
+      },
+    ): Effect.Effect<A> =>
+      Effect.flatMap(Ref.get(entriesRef), (current) => {
+        const result = mutation(current);
+        if (!result.changed) {
+          return Effect.succeed(result.value);
+        }
+        return Effect.as(setEntries(result.entries), result.value);
+      });
+
     return {
       entries: Ref.get(entriesRef),
 
@@ -184,53 +212,63 @@ const buildInMemoryService = (
       set: (entries) => setEntries(entries),
 
       add: (entry) =>
-        Effect.flatMap(Ref.get(entriesRef), (current) =>
-          setEntries([...current, entry]),
-        ),
+        mutateEntries((current) => ({
+          entries: [...current, entry],
+          changed: true,
+          value: undefined,
+        })),
 
       upsert: (entry) =>
-        Effect.flatMap(Ref.get(entriesRef), (current) => {
+        mutateEntries((current) => {
           const id = getEntryId(entry);
-          if (id === undefined) return setEntries([...current, entry]);
+          if (id === undefined) {
+            return {
+              entries: [...current, entry],
+              changed: true,
+              value: undefined,
+            };
+          }
           const filtered = current.filter((e) => getEntryId(e) !== id);
-          return setEntries([...filtered, entry]);
+          return {
+            entries: [...filtered, entry],
+            changed: true,
+            value: undefined,
+          };
         }),
 
       remove: (id) =>
-        Effect.flatMap(Ref.get(entriesRef), (current) => {
+        mutateEntries((current) => {
           const before = current.length;
           const filtered = current.filter((e) => getEntryId(e) !== id);
-          if (filtered.length === before) return Effect.succeed(false);
-          return Effect.as(setEntries(filtered), true);
+          const removed = filtered.length !== before;
+          return {
+            entries: filtered,
+            changed: removed,
+            value: removed,
+          };
         }),
 
       removeMany: (ids) =>
-        Effect.flatMap(Ref.get(entriesRef), (current) => {
+        mutateEntries((current) => {
           const idSet = new Set(ids);
           const filtered = current.filter((e) => {
             const eid = getEntryId(e);
             return eid === undefined || !idSet.has(eid);
           });
           const removed = current.length - filtered.length;
-          if (removed === 0) return Effect.succeed(0);
-          return Effect.as(setEntries(filtered), removed);
+          return {
+            entries: filtered,
+            changed: removed > 0,
+            value: removed,
+          };
         }),
 
       clear: setEntries([]),
 
       reconcile: (next) =>
         Effect.flatMap(Ref.get(entriesRef), (current) => {
-          const currentById = new Map<string, ProcessScheduleEntry>();
-          for (const e of current) {
-            const id = getEntryId(e);
-            if (id !== undefined) currentById.set(id, e);
-          }
-
-          const nextById = new Map<string, ProcessScheduleEntry>();
-          for (const e of next) {
-            const id = getEntryId(e);
-            if (id !== undefined) nextById.set(id, e);
-          }
+          const currentById = entriesById(current);
+          const nextById = entriesById(next);
 
           const added: Array<string> = [];
           const updated: Array<string> = [];
