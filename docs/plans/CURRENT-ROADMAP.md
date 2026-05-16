@@ -79,9 +79,9 @@ plan for this phase, and reconcile storage work with
 5. The first file-backed `ProcessStore` adapter now uses Effect `FileSystem`;
    it is append-only and generic so it can later become a `RuntimeStorage`
    adapter.
-6. Add dedicated queue completion/lifecycle reads or typed projections over
-   generic event/state/fact history after
-   `events(query)`.
+6. Dedicated queue completion/lifecycle reads are now available across memory,
+   file-backed, and Prisma stores; typed projections over generic event/state/
+   fact history are next.
 7. Keep `RuntimeStorage` planned as the generic storage port under
    `ProcessStore`, with memory/file-backed/Prisma adapters implementing that port
    rather than module-specific APIs.

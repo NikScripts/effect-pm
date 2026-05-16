@@ -30,8 +30,10 @@ store reads. Use this document as the source of truth for the current
 - Runtime facts can be persisted today as `runtime.fact.recorded` analytics
   events through `RuntimeObserver.layerProcessStore`; state changes are not
   persisted yet.
-- The in-memory and Prisma stores must stay behaviorally aligned for ordering,
-  filtering, and decode policy.
+- Generic `events(query)` plus dedicated queue completion/lifecycle reads have
+  landed for memory, file-backed, and Prisma stores.
+- Memory, file-backed, and Prisma stores must stay behaviorally aligned for
+  ordering, filtering, and decode policy.
 
 For the Phase C runtime-state boundary, keep `ProcessStore` as the rich
 module-facing singleton facade and put `RuntimeStorage` underneath it as the

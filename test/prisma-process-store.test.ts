@@ -4,6 +4,8 @@ import {
   ProcessStore,
   type ProcessExecutionCompletedEvent,
   type ProcessLifecycleChangedEvent,
+  type QueueItemCompletedEvent,
+  type QueueLifecycleChangedEvent,
   type RuntimeFactRecordedEvent,
 } from "../src";
 import { provideLayer } from "../src/provideLayer.js";
@@ -55,9 +57,16 @@ const makeFakeClient = () => {
     const where = args?.where;
     if (where === undefined) return true;
     if (where.type !== undefined) {
-      const want =
-        typeof where.type === "string" ? where.type : where.type.equals;
-      if (want !== undefined && row.type !== want) return false;
+      if (typeof where.type === "string") {
+        if (row.type !== where.type) return false;
+      } else {
+        if (where.type.equals !== undefined && row.type !== where.type.equals) {
+          return false;
+        }
+        if (where.type.in !== undefined && !where.type.in.includes(row.type)) {
+          return false;
+        }
+      }
     }
     if (where.entityType !== undefined) {
       const want =
@@ -243,6 +252,45 @@ describe("PrismaProcessStore — codec", () => {
     const decoded = decodeEventRow(row);
     expect(decoded).toEqual(event);
   });
+
+  it("round-trips queue analytics events", () => {
+    const completed: QueueItemCompletedEvent = {
+      id: "queue-item-1",
+      type: "queue.item.completed",
+      occurredAt: utcMillisFromIso("2026-01-01T03:00:00.000Z"),
+      entityType: "queue",
+      entityId: "email-queue",
+      item: {
+        status: "completed",
+        priority: "normal",
+        durationMs: 12,
+        attempts: 1,
+      },
+    };
+    const lifecycle: QueueLifecycleChangedEvent = {
+      id: "queue-life-1",
+      type: "queue.lifecycle.changed",
+      occurredAt: utcMillisFromIso("2026-01-01T03:01:00.000Z"),
+      entityType: "queue",
+      entityId: "email-queue",
+      lifecycle: { tag: "Cleared", itemsCleared: 3 },
+    };
+
+    for (const event of [completed, lifecycle]) {
+      const created = encodeEvent(event);
+      const decoded = decodeEventRow({
+        id: created.id,
+        type: created.type,
+        occurredAt: created.occurredAt,
+        entityType: created.entityType,
+        entityId: created.entityId,
+        attributes: created.attributes ?? null,
+        payload: created.payload,
+        createdAt: utcDateFromMillis(0),
+      });
+      expect(decoded).toEqual(event);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -323,6 +371,84 @@ describe("PrismaProcessStore — adapter", () => {
       });
 
       expect(rows.map((row) => row.id)).toEqual(["runtime-fact"]);
+    }).pipe(provideLayer(PrismaProcessStore.layer({ client })));
+  });
+
+  it.live("queries queue completion and lifecycle events through Prisma", () => {
+    const { client } = makeFakeClient();
+    return Effect.gen(function* () {
+      const store = yield* ProcessStore;
+      const t1 = utcMillisFromIso("2026-01-01T05:00:00.000Z");
+      const t2 = utcMillisFromIso("2026-01-01T05:05:00.000Z");
+      const t3 = utcMillisFromIso("2026-01-01T05:10:00.000Z");
+
+      yield* store.appendBatch([
+        {
+          id: "prisma-queue-item-completed",
+          type: "queue.item.completed",
+          occurredAt: t1,
+          entityType: "queue",
+          entityId: "email-queue",
+          item: {
+            status: "completed",
+            priority: "normal",
+            durationMs: 12,
+            attempts: 1,
+          },
+        },
+        {
+          id: "prisma-queue-item-failed",
+          type: "queue.item.completed",
+          occurredAt: t3,
+          entityType: "queue",
+          entityId: "email-queue",
+          item: {
+            status: "failed",
+            priority: "high",
+            durationMs: 20,
+            attempts: 2,
+            error: "smtp down",
+          },
+        },
+        {
+          id: "prisma-queue-paused",
+          type: "queue.lifecycle.changed",
+          occurredAt: t2,
+          entityType: "queue",
+          entityId: "email-queue",
+          lifecycle: { tag: "Paused" },
+        },
+        {
+          id: "prisma-other-queue-item",
+          type: "queue.item.completed",
+          occurredAt: t2,
+          entityType: "queue",
+          entityId: "sms-queue",
+          item: {
+            status: "completed",
+            priority: "low",
+            durationMs: 4,
+            attempts: 1,
+          },
+        },
+      ]);
+
+      const completions = yield* store.getQueueItemCompletions("email-queue");
+      expect(completions.map((row) => row.id)).toEqual([
+        "prisma-queue-item-failed",
+        "prisma-queue-item-completed",
+      ]);
+
+      const limited = yield* store.getQueueItemCompletions("email-queue", {
+        before: t3,
+        limit: 1,
+      });
+      expect(limited.map((row) => row.id)).toEqual([
+        "prisma-queue-item-completed",
+      ]);
+
+      const lifecycle = yield* store.getQueueLifecycle("email-queue");
+      expect(lifecycle.map((row) => row.id)).toEqual(["prisma-queue-paused"]);
     }).pipe(provideLayer(PrismaProcessStore.layer({ client })));
   });
 
