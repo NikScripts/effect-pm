@@ -94,7 +94,22 @@ TSDoc on each module repeats details; this guide stays **concept-shaped**.
 2. **Forking** `process.effect` needs **`R | ProcessStore`** where `R` is whatever remains on the process after optional inlined `polling` / `schedule` layers. Use **`ProcessSupervisorRequirements<C>`** (exported type) if you build configs generically.
 3. Prefer **`Layer.mergeAll(...)`** + **one** `Effect.provide` at the app root when you have many independent layers (clearer dependency graph; matches Effect lint guidance).
 4. **Control service** listens on **127.0.0.1** only — designed for local ops, not public exposure.
-5. **Remote group layers** keep the same group service key, but widen control errors to include remote failures and unsupported controls. Remote queue enqueue-style methods intentionally fail until queue item schemas are part of the group contract.
+5. **Remote control assumes a private network today.** Do not expose a
+   `ControlService` or `ProcessManager` target on the public internet. Current
+   HTTP control routes have no built-in authentication, authorization, replay
+   protection, rate limits, or transport encryption.
+6. **Remote group layers** keep the same group service key, but widen control errors to include remote failures and unsupported controls. Remote queue enqueue-style methods intentionally fail until queue item schemas are part of the group contract.
+
+Planned remote-security work should cover, at minimum:
+
+- TLS/mTLS or an equivalent authenticated transport boundary,
+- signed control requests or short-lived bearer credentials,
+- explicit authorization scopes for status vs mutation controls,
+- operator/audit metadata on every remote command,
+- replay protection and request timestamps/nonces,
+- rate limits and defensive request-size limits,
+- safe defaults that keep localhost/private-network usage easy while making
+  public exposure opt-in and visibly unsafe without security layers.
 
 ---
 

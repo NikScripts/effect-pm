@@ -203,6 +203,16 @@ const program = Effect.gen(function* () {
 The same registry powers registry-backed
 `ProcessManager.Endpoint<Self>()(BillingGroup)` and
 `ProcessManager.cli([BillingGroup, StripeGroup] as const)`.
+
+Security boundary: current remote control is only appropriate for localhost or a
+trusted private network. Do not expose `ControlService` / `ProcessManager`
+targets directly to a non-private network. The current HTTP control surface does
+not provide built-in authn/authz, TLS/mTLS, request signing, replay protection,
+rate limiting, or audit logging. Future security layers should add authenticated
+transport, operator identity, scoped permissions for read vs mutation controls,
+request timestamps/nonces, and audit records for every remote command before
+public-network deployment is considered safe.
+
 CLI commands accept canonical ids such as
 `@repo/north-west/BillingGroup/SyncInvoices` and normalized suffix aliases such
 as `north-west/billing-group/sync-invoices` or `sync-invoices`. Ambiguous

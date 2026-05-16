@@ -338,6 +338,35 @@ group service value when that class is available at runtime, because the class
 already carries the schema-backed contract. Raw contracts are still useful for
 generated clients that cannot import the group class.
 
+### Security boundary
+
+The current remote-control surface assumes localhost or a trusted private
+network. It is unsafe to expose `ControlService` / `ProcessManager` endpoints on
+a non-private network today. The implemented HTTP routes intentionally focus on
+typed contracts and control semantics; they do not yet provide built-in
+authentication, authorization, transport encryption, replay protection, rate
+limits, request-size limits, or audit logging.
+
+Before any public-network deployment story, add explicit security layers:
+
+- **Authenticated transport**: TLS/mTLS, an Effect RPC transport with equivalent
+  peer identity, or a proxy boundary that enforces identity.
+- **Request authentication**: signed requests or short-lived bearer credentials
+  with rotation guidance.
+- **Authorization scopes**: separate read/status permissions from mutating
+  controls such as `start`, `stop`, `restart`, `pause`, `resume`, and `clear`.
+- **Replay protection**: timestamps, nonces, and bounded clock skew for mutating
+  commands.
+- **Operator audit trail**: persist who/what issued each remote command, from
+  which endpoint, against which group/process/queue id, and whether it
+  succeeded.
+- **Defensive limits**: request body limits, schema-validation failures that do
+  not leak internals, rate limits, and clear denial errors.
+
+Default DX should stay easy for localhost/private-network use, but public
+exposure should require an explicit security layer so insecure deployment is
+visible in code.
+
 ```typescript
 const billing = ProcessManager.connect(BillingGroup, {
   baseUrl: "https://billing.internal",
