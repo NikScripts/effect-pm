@@ -22,6 +22,8 @@ Adds the first runtime state/fact vocabulary and optional `RuntimeObserver`, wit
 
 `RunResource` now publishes `RunResourceState` changes for waiting, started, completed, failed, and interrupted runs when `RuntimeObserver` is provided.
 
+`RuntimeObserver.layerListeners(listeners)` adds scoped fact/state listener support with listener failure isolation.
+
 `ProcessStore.events(query)` now provides a generic storage-neutral event read across memory, file-backed, and Prisma implementations. Dedicated queue completion and lifecycle reads are also available across those stores.
 
 `ProcessStore.file(filePath)` and `ProcessStore.fileLayer(filePath)` add an Effect `FileSystem`-backed NDJSON store for local durable analytics events.

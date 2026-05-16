@@ -888,7 +888,8 @@ Avoid:
 - Publish `RuntimeStateChange<RunResourceState>` around permit wait, run start,
   run success, run failure, and interruption. (Implemented.)
 - Add scoped subscription/listener helpers for the observed `RunResource` fact
-  and state stream.
+  and state stream. (Implemented for listener layers; stream helpers remain
+  planned.)
 - Prefer `Stream`/scoped APIs over callback-only APIs if Effect patterns support
   the same ergonomics.
 - Define listener failure behavior explicitly: log/store a fact later, but do
@@ -943,8 +944,9 @@ The next runtime state/listener slice is complete only when all of these are tru
   waiting count, completed count, failed count, interrupted count, and average
   duration or enough timing data to derive it. (Implemented with total duration.)
 - Multiple scoped listeners can observe the same `RunResource` state changes.
+  (Implemented.)
 - Listener failure is isolated from the gated user effect and cannot leak
-  semaphore permits.
+  semaphore permits. (Implemented.)
 - Generic runtime state changes can be persisted through `ProcessStore` without
   adding feature-specific store methods.
 

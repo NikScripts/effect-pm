@@ -203,6 +203,7 @@ export type {
 export type {
   RuntimeFact,
   RuntimeObserverService,
+  RuntimeObserverListener,
   RuntimeRef,
   RuntimeStateBase,
   RuntimeStateChange,

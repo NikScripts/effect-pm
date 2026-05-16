@@ -75,6 +75,23 @@ export interface RuntimeObserverService {
 }
 
 /**
+ * Listener hooks for runtime observations.
+ *
+ * @remarks
+ * Listener failures are isolated by {@link RuntimeObserver.layerListeners}; a
+ * failed listener must not fail the runtime mutation that published the
+ * observation.
+ *
+ * @public
+ */
+export interface RuntimeObserverListener {
+  readonly onStateChange?: (
+    change: RuntimeStateChange,
+  ) => Effect.Effect<void, unknown>;
+  readonly onFact?: (fact: RuntimeFact) => Effect.Effect<void, unknown>;
+}
+
+/**
  * Optional runtime observation sink.
  *
  * @remarks
@@ -89,6 +106,19 @@ export class RuntimeObserver extends Context.Service<
 >()("@nikscripts/effect-pm/RuntimeState/RuntimeObserver") {}
 
 export namespace RuntimeObserver {
+  const notifyListeners = (
+    listeners: ReadonlyArray<RuntimeObserverListener>,
+    select: (listener: RuntimeObserverListener) => Effect.Effect<void, unknown> | undefined,
+  ): Effect.Effect<void> =>
+    Effect.forEach(
+      listeners,
+      (listener) => {
+        const effect = select(listener);
+        return effect === undefined ? Effect.void : effect.pipe(Effect.ignore);
+      },
+      { discard: true },
+    );
+
   const factToAnalyticsEvent = (fact: RuntimeFact): RuntimeFactRecordedEvent => ({
     id: `runtime.fact/${fact.id}`,
     type: "runtime.fact.recorded",
@@ -146,5 +176,35 @@ export namespace RuntimeObserver {
         publishStateChange: () => Effect.void,
         publishFact: (fact) => store.append(factToAnalyticsEvent(fact)),
       })),
+    );
+
+  /**
+   * Observer layer that forwards facts and state changes to scoped listeners.
+   *
+   * @remarks
+   * The listeners are captured when the layer is built. Listener failures are
+   * ignored so observation never changes the runtime effect's success or error
+   * channel. This layer does not persist observations.
+   *
+   * @public
+   */
+  export const layerListeners = (
+    listeners: ReadonlyArray<RuntimeObserverListener>,
+  ): Layer.Layer<RuntimeObserver> =>
+    Layer.effect(
+      RuntimeObserver,
+      Effect.sync(() => {
+        const scopedListeners = [...listeners];
+        return {
+          publishStateChange: (change) =>
+            notifyListeners(scopedListeners, (listener) =>
+              listener.onStateChange?.(change)
+            ),
+          publishFact: (fact) =>
+            notifyListeners(scopedListeners, (listener) =>
+              listener.onFact?.(fact)
+            ),
+        };
+      }),
     );
 }

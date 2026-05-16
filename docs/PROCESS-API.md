@@ -311,6 +311,7 @@ void Effect.runPromise(program.pipe(
 | `RuntimeObserver.publishFact(fact)` | Publishes a fact when the service is present; otherwise no-ops. |
 | `RuntimeObserver.publishStateChange(change)` | Publishes a state transition when the service is present; otherwise no-ops. |
 | `RuntimeObserver.layerProcessStore` | Observer layer that persists runtime facts through `ProcessStore`. |
+| `RuntimeObserver.layerListeners(listeners)` | Observer layer that forwards facts/state changes to scoped listeners and isolates listener failures. |
 
 `RunResource` publishes `run-resource.run.started`,
 `run-resource.run.completed`, and `run-resource.run.failed` facts plus
@@ -324,6 +325,9 @@ Memory, file-backed, and Prisma reads support those generic events through
 `ProcessStore.events(query)`. Use `ProcessStore.fileLayer(path)` with Effect
 `FileSystem`/`Path` platform layers for local durable NDJSON storage. State
 changes are not persisted yet.
+`RuntimeObserver.layerListeners(...)` can observe both facts and state changes
+without persistence. Multiple listeners can observe the same event, and listener
+failures are ignored so runtime mutations continue unchanged.
 
 ---
 
