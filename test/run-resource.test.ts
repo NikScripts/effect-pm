@@ -5,6 +5,7 @@ import { ProcessStore, type AnalyticsEvent, type ProcessStoreInterface } from ".
 import {
   RuntimeObserver,
   type RuntimeFact,
+  type RuntimeObserverListener,
   type RuntimeStateBase,
   type RuntimeStateChange,
 } from "../src/RuntimeState";
@@ -231,6 +232,54 @@ describe("RunResource.make (raw scoped)", () => {
         }
       }).pipe(
         Effect.provideService(RuntimeObserver, observer),
+        Effect.scoped,
+      );
+    }),
+  );
+
+  it.live("notifies multiple scoped listeners and isolates listener failures", () =>
+    Effect.gen(function* () {
+      const factCount = yield* Ref.make(0);
+      const stateReasons = yield* Ref.make<ReadonlyArray<string>>([]);
+      const trailingStateCount = yield* Ref.make(0);
+      const listeners: ReadonlyArray<RuntimeObserverListener> = [
+        {
+          onFact: () => Ref.update(factCount, (count) => count + 1),
+          onStateChange: (change) =>
+            Ref.update(stateReasons, (items) => [...items, change.reason]),
+        },
+        {
+          onFact: () => Effect.fail("fact-listener-failed"),
+          onStateChange: () => Effect.fail("state-listener-failed"),
+        },
+        {
+          onStateChange: () =>
+            Ref.update(trailingStateCount, (count) => count + 1),
+        },
+      ];
+
+      yield* Effect.gen(function* () {
+        const gate = yield* RunResource.make({
+          name: "@test/ObservedListenersGate",
+          effect: (n: number) => Effect.succeed(n),
+          concurrency: 1,
+        });
+
+        const result = yield* gate(1);
+        const facts = yield* Ref.get(factCount);
+        const reasons = yield* Ref.get(stateReasons);
+        const trailing = yield* Ref.get(trailingStateCount);
+
+        expect(result).toBe(1);
+        expect(facts).toBe(2);
+        expect(reasons).toEqual([
+          "run-resource.run.waiting",
+          "run-resource.run.started",
+          "run-resource.run.completed",
+        ]);
+        expect(trailing).toBe(3);
+      }).pipe(
+        provideLayer(RuntimeObserver.layerListeners(listeners)),
         Effect.scoped,
       );
     }),
