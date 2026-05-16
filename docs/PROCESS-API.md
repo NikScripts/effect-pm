@@ -315,9 +315,10 @@ void Effect.runPromise(program.pipe(
 
 `RunResource` publishes `run-resource.run.started`,
 `run-resource.run.completed`, and `run-resource.run.failed` facts plus
-`RunResourceState` transitions when `RuntimeObserver` is provided. Observation is optional: when no
-`RuntimeObserver` service is in the environment, publish helpers no-op and the
-gated effect behavior is unchanged.
+`RunResourceState` transitions for waiting, started, completed, failed, and
+interrupted runs when `RuntimeObserver` is provided. Observation is optional:
+when no `RuntimeObserver` service is in the environment, publish helpers no-op
+and the gated effect behavior is unchanged.
 
 When `RuntimeObserver.layerProcessStore` is provided, runtime facts are
 persisted through `ProcessStore` as `runtime.fact.recorded` analytics events.
@@ -326,7 +327,10 @@ Memory, file-backed, and Prisma reads support those generic events through
 `@nikscripts/effect-pm/storage/file` with Effect `FileSystem`/`Path` platform
 layers for local durable NDJSON storage. Root `ProcessStore.file` /
 `ProcessStore.fileLayer` remain available as current compatibility helpers.
-State changes are not persisted yet.
+State changes are observable through `RuntimeObserver.publishStateChange`, but
+`RuntimeObserver.layerProcessStore` does not persist them yet. Scoped listener /
+stream helpers are still planned; current observation is via the optional
+`RuntimeObserver` service.
 
 ---
 
