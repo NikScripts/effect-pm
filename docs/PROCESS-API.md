@@ -229,15 +229,15 @@ Remote queue `add`, `enqueue`, `prioritize`, and `defer` remain unsupported.
 as `Process`, `QueueResource`, `RunResource`, `HttpApiResource`, and
 `ProcessGroup` should depend on `ProcessStore`, not on storage adapters.
 
-`RuntimeStorage` is the generic swappable persistence port underneath
-`ProcessStore`. Memory, file-backed, Prisma, and custom adapters implement
-`RuntimeStorage`; they should not grow module-specific methods. `ProcessStore` owns conversion
-from module-specific operations into generic `RuntimeFact` and
+`RuntimeStorage` is the planned generic swappable persistence port underneath
+`ProcessStore`. Today's memory, file-backed, and Prisma adapters still provide
+`ProcessStore` directly; when `RuntimeStorage` is extracted, adapters should
+persist generic records rather than grow module-specific methods. `ProcessStore`
+owns conversion from module-specific operations into generic `RuntimeFact` and
 `RuntimeStateChange` records, plus redaction and projections.
 
-`RuntimeStorage` is still planned. The current bridge writes runtime facts
-through today's `ProcessStore` analytics event envelope as
-`runtime.fact.recorded` events.
+The current bridge writes runtime facts through today's `ProcessStore` analytics
+event envelope as `runtime.fact.recorded` events.
 
 Dependency direction:
 
@@ -245,10 +245,10 @@ Dependency direction:
 runtime module -> ProcessStore -> RuntimeStorage -> memory / Prisma / custom
 ```
 
-Generic `ProcessStore.events(query)` is not implemented yet and is the next
-likely ProcessStore read slice. Projections should wait for that generic read
-surface instead of adding feature-specific read methods. Queue schema
-validation, remote queue enqueue, release, and handoff remain later phases.
+`ProcessStore.events(query)` reads generic analytics events across memory,
+file-backed, and Prisma stores. Projections should use that generic read surface
+instead of adding feature-specific read methods. Queue schema validation, remote
+queue enqueue, release, and handoff remain later phases.
 
 ---
 

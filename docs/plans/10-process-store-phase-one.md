@@ -86,9 +86,10 @@ Add a **read foundation** to `ProcessStoreInterface`:
 2. Dedicated queue reads for the queue event types already supported today.
 3. Root exports for the queue analytics event types needed by users implementing
    custom stores.
-4. Memory and Prisma implementations with the same ordering, filtering, and
-   decode behavior.
-5. Regression tests proving memory and Prisma return the same observable shape.
+4. Memory, file-backed, and Prisma implementations with the same ordering,
+   filtering, and decode behavior.
+5. Regression tests proving memory, file-backed, and Prisma return the same
+   observable shape.
 
 The result should let future CLI, control-service, and dashboard work read queue
 history through `ProcessStore` instead of knowing queue internals.
@@ -403,7 +404,8 @@ Phase one is complete only when all of these are true:
   `runtime.fact.recorded`.
 - `ProcessStoreInterface` has dedicated reads for existing queue completion and
   queue lifecycle events.
-- Memory and Prisma stores return equivalent ordering and filtering behavior.
+- Memory, file-backed, and Prisma stores return equivalent ordering and
+  filtering behavior.
 - File-backed store uses Effect `FileSystem`, persists rows across store
   instances, and matches the generic `events(query)` behavior.
 - Queue event types needed by custom store authors are exported from the package
@@ -411,7 +413,8 @@ Phase one is complete only when all of these are true:
 - No code uses unsafe type assertions to satisfy the expanded interface.
 - No runtime behavior changes for `QueueResource.persist`, `refill`, process
   supervisors, or control routes.
-- Tests cover memory and Prisma reads for process, queue, and mixed event rows.
+- Tests cover memory, file-backed, and Prisma reads for process, queue, and
+  mixed event rows.
 - A changeset is prepared before release because public types changed.
 
 ## Verification commands

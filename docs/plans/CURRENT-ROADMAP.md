@@ -73,17 +73,18 @@ plan for this phase, and reconcile storage work with
 3. `RuntimeObserver.layerProcessStore` now bridges runtime facts into
    `ProcessStore` as `runtime.fact.recorded` analytics events. State changes are
    not persisted yet.
-4. Add generic `ProcessStore.events(query)` next so projections can read
-   `runtime.fact.recorded` and existing analytics events without feature-specific
-   read methods.
-5. Add the first file-backed `ProcessStore` adapter using Effect `FileSystem`;
-   keep it append-only and generic so it can later become a `RuntimeStorage`
+4. `ProcessStore.events(query)` now reads `runtime.fact.recorded` and existing
+   analytics events across memory, file-backed, and Prisma stores without
+   feature-specific read methods.
+5. The first file-backed `ProcessStore` adapter now uses Effect `FileSystem`;
+   it is append-only and generic so it can later become a `RuntimeStorage`
    adapter.
-6. Add typed projections over generic event/state/fact history after
+6. Add dedicated queue completion/lifecycle reads or typed projections over
+   generic event/state/fact history after
    `events(query)`.
 7. Keep `RuntimeStorage` planned as the generic storage port under
-   `ProcessStore`, with memory/Prisma adapters implementing that port rather than
-   module-specific APIs.
+   `ProcessStore`, with memory/file-backed/Prisma adapters implementing that port
+   rather than module-specific APIs.
 
 Primary references:
 

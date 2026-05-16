@@ -134,8 +134,11 @@ Current bridge status:
 
 - `RuntimeObserver.layerProcessStore` persists `RuntimeFact` values as
   `runtime.fact.recorded` analytics events.
+- `ProcessStore.events(query)` reads generic analytics events from the memory,
+  file-backed, and Prisma implementations.
+- `ProcessStore.file(filePath)` / `ProcessStore.fileLayer(filePath)` provide
+  local durable NDJSON storage through Effect `FileSystem`.
 - State changes are not persisted yet.
-- `ProcessStore.events(query)` is the next read target before projections.
 - Do not add `getRunResourceFacts`, `getQueueValidationFailures`, or similar
   feature-specific reads to replace that generic query.
 
