@@ -8,8 +8,8 @@ Partially implemented. `RuntimeRef`, `RuntimeStateBase`,
 no observer is provided. `RunResource` publishes run started/completed/failed
 facts and `RunResourceState` changes when `RuntimeObserver` is provided. `RuntimeObserver.layerProcessStore`
 persists runtime facts through `ProcessStore` as `runtime.fact.recorded`
-analytics events, and the Prisma codec supports that event type. State changes
-are not persisted yet. Generic `ProcessStore.events(query)` and the first
+analytics events and state changes as `runtime.state.changed` analytics events.
+The Prisma codec supports both event types. Generic `ProcessStore.events(query)` and the first
 Effect `FileSystem`-backed store have landed, so projections can use generic
 event reads instead of feature-specific methods. The boundary is now locked:
 `ProcessStore` is the rich module-facing singleton facade, and planned
@@ -922,7 +922,7 @@ The landed Phase C.1 fact slice is complete when all of these are true:
 - `RuntimeObserver.layerProcessStore` persists facts to `ProcessStore` as
   `runtime.fact.recorded` analytics events.
 - Prisma encodes and decodes `runtime.fact.recorded`.
-- State changes are not persisted yet.
+- State changes are persisted as `runtime.state.changed` analytics events.
 - No `ProcessStoreInterface` method is added for one runtime feature.
 - No queue schema, remote enqueue, release, handoff, process schedule, or
   `ProcessManager` behavior changes are included.
@@ -951,7 +951,7 @@ The next runtime state/listener slice is complete only when all of these are tru
 - Listener failure is isolated from the gated user effect and cannot leak
   semaphore permits. (Implemented.)
 - Generic runtime state changes can be persisted through `ProcessStore` without
-  adding feature-specific store methods.
+  adding feature-specific store methods. (Implemented.)
 
 ## Verification commands
 

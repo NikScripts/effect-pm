@@ -15,13 +15,19 @@ import type {
   QueueLifecycleChangedEvent,
   QueueLifecycleTag,
   RuntimeFactRecordedEvent,
+  RuntimeStateChangedEvent,
 } from "./ProcessStore";
 import type {
   EffectPmEventCreateInput,
   EffectPmEventRow,
   JsonValue,
 } from "./ProcessStoreEvent";
-import type { RuntimeFact, RuntimeRef } from "./RuntimeState";
+import type {
+  RuntimeFact,
+  RuntimeRef,
+  RuntimeStateBase,
+  RuntimeStateChange,
+} from "./RuntimeState";
 import {
   dateFromMillis,
   epochMillisFromUnknown,
@@ -164,6 +170,16 @@ export const encodeEvent = (event: AnalyticsEvent): EffectPmEventCreateInput => 
         attributes,
         payload: encodeRuntimeFactPayload(event),
       };
+    case "runtime.state.changed":
+      return {
+        id: event.id,
+        type: event.type,
+        occurredAt: dateFromMillis(event.occurredAt),
+        entityType: event.entityType,
+        entityId: event.entityId,
+        attributes,
+        payload: encodeRuntimeStatePayload(event),
+      };
   }
 };
 
@@ -239,6 +255,12 @@ const encodeRuntimeFactPayload = (
   fact: toJsonValue(event.fact),
 });
 
+const encodeRuntimeStatePayload = (
+  event: RuntimeStateChangedEvent,
+): JsonValue => ({
+  change: toJsonValue(event.change),
+});
+
 const toJsonValue = (value: unknown): JsonValue => {
   if (value === null) return null;
   if (value instanceof Date) return value.toISOString();
@@ -277,6 +299,8 @@ export const decodeEventRow = (
       return decodeQueueLifecycle(row);
     case "runtime.fact.recorded":
       return decodeRuntimeFact(row);
+    case "runtime.state.changed":
+      return decodeRuntimeState(row);
     default:
       return new ProcessStoreEventDecodeError({
         rowId: row.id,
@@ -327,6 +351,63 @@ const decodeRuntimeFactValue = (
     occurredAt,
     payload: value["payload"],
     ...(attributes === undefined ? {} : { attributes }),
+  };
+};
+
+const decodeRuntimeStateValue = (
+  value: unknown,
+): RuntimeStateBase | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const ref = decodeRuntimeRef(value["ref"]);
+  const observedAt = value["observedAt"];
+  const configVersion = value["configVersion"];
+  if (
+    ref === null ||
+    !isFiniteNumber(observedAt) ||
+    !isFiniteNumber(configVersion)
+  ) {
+    return null;
+  }
+  return {
+    ...value,
+    ref,
+    observedAt,
+    configVersion,
+  };
+};
+
+const decodeRuntimeStateChangeValue = (
+  value: unknown,
+): RuntimeStateChange | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const id = value["id"];
+  const ref = decodeRuntimeRef(value["ref"]);
+  const changedAt = value["changedAt"];
+  const reason = value["reason"];
+  const previousRaw = value["previous"];
+  const previous = previousRaw === null ? null : decodeRuntimeStateValue(previousRaw);
+  const current = decodeRuntimeStateValue(value["current"]);
+  if (
+    !isString(id) ||
+    ref === null ||
+    !isFiniteNumber(changedAt) ||
+    !isString(reason) ||
+    (previousRaw !== null && previous === null) ||
+    current === null
+  ) {
+    return null;
+  }
+  return {
+    id,
+    ref,
+    changedAt,
+    reason,
+    previous,
+    current,
   };
 };
 
@@ -567,6 +648,31 @@ const decodeRuntimeFact = (
     entityId: row.entityId,
     attributes: decodeAttributes(row.attributes),
     fact,
+  };
+};
+
+const decodeRuntimeState = (
+  row: EffectPmEventRow,
+): RuntimeStateChangedEvent | ProcessStoreEventDecodeError => {
+  const payload = row.payload;
+  if (!isRecord(payload)) {
+    return new ProcessStoreEventDecodeError({
+      rowId: row.id,
+      reason: "payload is not an object",
+    });
+  }
+  const change = decodeRuntimeStateChangeValue(payload["change"]);
+  if (change === null) {
+    return failPayload(row, "change");
+  }
+  return {
+    id: row.id,
+    type: "runtime.state.changed",
+    occurredAt: row.occurredAt.getTime(),
+    entityType: row.entityType,
+    entityId: row.entityId,
+    attributes: decodeAttributes(row.attributes),
+    change,
   };
 };
 

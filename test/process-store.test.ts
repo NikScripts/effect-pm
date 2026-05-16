@@ -1,13 +1,14 @@
 import { describe, expect, it } from "@effect/vitest"
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem"
 import * as NodePath from "@effect/platform-node/NodePath"
-import { Clock, Effect, FileSystem, Layer, Path } from "effect"
+import { Clock, Effect, FileSystem, Layer, Option, Path } from "effect"
 import {
   ProcessStore,
   type ProcessExecutionCompletedEvent,
   type ProcessLifecycleChangedEvent,
   type QueueItemCompletedEvent,
   type QueueLifecycleChangedEvent,
+  type RuntimeStateChangedEvent,
 } from "../src"
 import { provideLayer } from "../src/provideLayer.js"
 import { utcDateFromIso } from "../src/utcDate.js";
@@ -300,6 +301,51 @@ describe("ProcessStore.memory", () => {
       expect(lifecycle.map((row) => row.lifecycle.tag)).toEqual(["Paused"])
     }).pipe(provideLayer(ProcessStore.layer)),
   )
+
+  it.live("projects runtime state history and latest state", () =>
+    Effect.gen(function* () {
+      const store = yield* ProcessStore
+      const t1 = utcDateFromIso("2026-01-01T04:20:00.000Z").getTime()
+      const t2 = utcDateFromIso("2026-01-01T04:25:00.000Z").getTime()
+      const ref = { kind: "run-resource", id: "@test/StateGate" }
+
+      const first = {
+        ref,
+        observedAt: t1,
+        configVersion: 1,
+        waiting: 1,
+      }
+      const second = {
+        ref,
+        observedAt: t2,
+        configVersion: 1,
+        waiting: 0,
+      }
+      const changed: RuntimeStateChangedEvent = {
+        id: "state-change-2",
+        type: "runtime.state.changed",
+        occurredAt: t2,
+        entityType: "run-resource",
+        entityId: "@test/StateGate",
+        change: {
+          id: "change-2",
+          ref,
+          changedAt: t2,
+          reason: "run-resource.run.started",
+          previous: first,
+          current: second,
+        },
+      }
+
+      yield* store.append(changed)
+
+      const history = yield* ProcessStore.runtime.stateHistory({ ref })
+      const latest = yield* ProcessStore.runtime.latestState(ref)
+
+      expect(history.map((change) => change.id)).toEqual(["change-2"])
+      expect(Option.getOrNull(latest)).toEqual(second)
+    }).pipe(provideLayer(ProcessStore.layer)),
+  )
 })
 
 describe("ProcessStore.file", () => {
@@ -315,6 +361,12 @@ describe("ProcessStore.file", () => {
 
       const first = yield* ProcessStore.file(filePath)
       const occurredAt = utcDateFromIso("2026-01-01T05:00:00.000Z").getTime()
+      const fileState = {
+        ref: { kind: "run-resource", id: "@test/FileRunGate" },
+        observedAt: occurredAt + 3,
+        configVersion: 1,
+        completed: 1,
+      }
 
       yield* first.append({
         id: "file-runtime-started",
@@ -352,6 +404,21 @@ describe("ProcessStore.file", () => {
         entityId: "file-email-queue",
         lifecycle: { tag: "Cleared", itemsCleared: 1 },
       })
+      yield* first.append({
+        id: "file-state-change",
+        type: "runtime.state.changed",
+        occurredAt: occurredAt + 3,
+        entityType: "run-resource",
+        entityId: "@test/FileRunGate",
+        change: {
+          id: "file-state-change/inner",
+          ref: { kind: "run-resource", id: "@test/FileRunGate" },
+          changedAt: occurredAt + 3,
+          reason: "run-resource.run.completed",
+          previous: null,
+          current: fileState,
+        },
+      })
 
       yield* fs.writeFileString(filePath, "not json\n", { flag: "a" })
 
@@ -375,6 +442,13 @@ describe("ProcessStore.file", () => {
 
       const lifecycle = yield* second.getQueueLifecycle("file-email-queue")
       expect(lifecycle.map((row) => row.lifecycle.tag)).toEqual(["Cleared"])
+
+      const stateHistory = yield* ProcessStore.runtime.stateHistory({
+        ref: { kind: "run-resource", id: "@test/FileRunGate" },
+      }).pipe(Effect.provideService(ProcessStore, second))
+      expect(stateHistory.map((change) => change.reason)).toEqual([
+        "run-resource.run.completed",
+      ])
 
       yield* fs.remove(directory, { recursive: true }).pipe(Effect.catch(() => Effect.void))
     }).pipe(provideLayer(platform)),

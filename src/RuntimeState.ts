@@ -11,7 +11,11 @@
  */
 
 import { Context, Effect, Layer, Option } from "effect";
-import { ProcessStore, type RuntimeFactRecordedEvent } from "./ProcessStore";
+import {
+  ProcessStore,
+  type RuntimeFactRecordedEvent,
+  type RuntimeStateChangedEvent,
+} from "./ProcessStore";
 
 /**
  * Stable identity for a runtime component.
@@ -129,6 +133,17 @@ export namespace RuntimeObserver {
     fact,
   });
 
+  const stateChangeToAnalyticsEvent = (
+    change: RuntimeStateChange,
+  ): RuntimeStateChangedEvent => ({
+    id: `runtime.state/${change.id}`,
+    type: "runtime.state.changed",
+    occurredAt: change.changedAt,
+    entityType: change.ref.kind,
+    entityId: change.ref.id,
+    change,
+  });
+
   /**
    * Publish a state change if a {@link RuntimeObserver} is present.
    *
@@ -164,8 +179,8 @@ export namespace RuntimeObserver {
    * {@link ProcessStore} analytics event envelope.
    *
    * @remarks
-   * State changes intentionally no-op here until the generic state-history
-   * storage shape lands. Facts are persisted as `runtime.fact.recorded` events.
+   * Facts are persisted as `runtime.fact.recorded` events, and state changes are
+   * persisted as `runtime.state.changed` events.
    *
    * @public
    */
@@ -173,7 +188,7 @@ export namespace RuntimeObserver {
     Layer.effect(
       RuntimeObserver,
       Effect.map(ProcessStore, (store): RuntimeObserverService => ({
-        publishStateChange: () => Effect.void,
+        publishStateChange: (change) => store.append(stateChangeToAnalyticsEvent(change)),
         publishFact: (fact) => store.append(factToAnalyticsEvent(fact)),
       })),
     );

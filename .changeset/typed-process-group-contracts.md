@@ -18,13 +18,15 @@ The multi-group CLI supports `--json` output for `groups`, `ls`, `verify`, and `
 
 The multi-group CLI now checks target contract capabilities before issuing remote status/control requests, so unsupported process and queue commands fail locally before HTTP.
 
-Adds the first runtime state/fact vocabulary and optional `RuntimeObserver`, with `RunResource` publishing run started/completed/failed facts when an observer is provided. `RuntimeObserver.layerProcessStore` persists runtime facts as `runtime.fact.recorded` ProcessStore analytics events, and the Prisma codec supports that event type. State changes are not persisted yet.
+Adds the first runtime state/fact vocabulary and optional `RuntimeObserver`, with `RunResource` publishing run started/completed/failed facts when an observer is provided. `RuntimeObserver.layerProcessStore` persists runtime facts as `runtime.fact.recorded` ProcessStore analytics events and state changes as `runtime.state.changed` events, and the Prisma codec supports those event types.
 
 `RuntimeObserver.layerListeners(listeners)` adds scoped fact/state listener support with listener failure isolation.
 
 `ProcessStore.events(query)` now provides a generic storage-neutral event read across memory, file-backed, and Prisma implementations. Dedicated queue completion and lifecycle reads are also available across those stores.
 
 `ProcessStore.runtime.facts(query)` and `ProcessStore.runResource.history(resourceId, opts)` add projections over persisted runtime fact events.
+
+`ProcessStore.runtime.stateHistory({ ref, opts })` and `ProcessStore.runtime.latestState(ref)` add projections over persisted runtime state changes.
 
 `RunResource` now publishes `RunResourceState` changes for waiting, started, completed, failed, and interrupted runs when `RuntimeObserver` is provided.
 

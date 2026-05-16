@@ -308,12 +308,15 @@ void Effect.runPromise(program.pipe(
 | `RuntimeFact` | Generic discrete runtime occurrence payload. |
 | `RunResourceState` | Live `RunResource` counters for waiting, in-flight, completed, failed, interrupted, and total duration. |
 | `RuntimeFactRecordedEvent` | ProcessStore analytics event wrapping a persisted `RuntimeFact`. |
+| `RuntimeStateChangedEvent` | ProcessStore analytics event wrapping a persisted `RuntimeStateChange`. |
 | `RuntimeObserver` | Optional service for publishing runtime facts and state changes. |
 | `RuntimeObserver.publishFact(fact)` | Publishes a fact when the service is present; otherwise no-ops. |
 | `RuntimeObserver.publishStateChange(change)` | Publishes a state transition when the service is present; otherwise no-ops. |
-| `RuntimeObserver.layerProcessStore` | Observer layer that persists runtime facts through `ProcessStore`. |
+| `RuntimeObserver.layerProcessStore` | Observer layer that persists runtime facts and state changes through `ProcessStore`. |
 | `RuntimeObserver.layerListeners(listeners)` | Observer layer that forwards facts/state changes to scoped listeners and isolates listener failures. |
 | `ProcessStore.runtime.facts(query)` | Generic projection over persisted `runtime.fact.recorded` events. |
+| `ProcessStore.runtime.stateHistory({ ref, opts })` | Generic projection over persisted `runtime.state.changed` events. |
+| `ProcessStore.runtime.latestState(ref)` | Latest persisted runtime state snapshot for a runtime ref. |
 | `ProcessStore.runResource.history(resourceId, opts)` | RunResource-specific fact history projection backed by `runtime.facts`. |
 
 `RunResource` publishes `run-resource.run.started`,
@@ -330,8 +333,10 @@ Memory, file-backed, and Prisma reads support those generic events through
 `@nikscripts/effect-pm/storage/file` with Effect `FileSystem`/`Path` platform
 layers for local durable NDJSON storage. Root `ProcessStore.file` /
 `ProcessStore.fileLayer` remain available as current compatibility helpers.
-State changes are observable through `RuntimeObserver.publishStateChange`, but
-`RuntimeObserver.layerProcessStore` does not persist them yet.
+State changes are persisted as `runtime.state.changed` events when
+`RuntimeObserver.layerProcessStore` is provided. `ProcessStore.runtime.stateHistory(...)`
+and `ProcessStore.runtime.latestState(...)` derive state projections from the
+same generic event stream.
 `RuntimeObserver.layerListeners(...)` can observe both facts and state changes
 without persistence. Multiple listeners can observe the same event, and listener
 failures are ignored so runtime mutations continue unchanged. Stream helpers are

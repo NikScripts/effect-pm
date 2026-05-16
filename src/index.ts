@@ -119,6 +119,7 @@ export {
   type QueryOpts,
   type StoreEventQuery,
   type RuntimeFactQuery,
+  type RuntimeStateHistoryQuery,
   type AnalyticsEventBase,
   type ProcessExecutionCompletedEvent,
   type ProcessLifecycleTag,
@@ -128,6 +129,7 @@ export {
   type QueueLifecycleTag,
   type QueueLifecycleChangedEvent,
   type RuntimeFactRecordedEvent,
+  type RuntimeStateChangedEvent,
   type AnalyticsEvent,
   type ProcessStoreInterface,
 } from "./ProcessStore";

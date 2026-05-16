@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Option } from "effect";
 import {
   ProcessStore,
   type ProcessExecutionCompletedEvent,
@@ -7,6 +7,7 @@ import {
   type QueueItemCompletedEvent,
   type QueueLifecycleChangedEvent,
   type RuntimeFactRecordedEvent,
+  type RuntimeStateChangedEvent,
 } from "../src";
 import { provideLayer } from "../src/provideLayer.js";
 import {
@@ -253,6 +254,44 @@ describe("PrismaProcessStore — codec", () => {
     expect(decoded).toEqual(event);
   });
 
+  it("round-trips a runtime.state.changed event", () => {
+    const ref = { kind: "run-resource", id: "@test/RunGate" } as const;
+    const current = {
+      ref,
+      observedAt: utcMillisFromIso("2026-01-01T02:10:00.000Z"),
+      configVersion: 1,
+      completed: 1,
+    };
+    const event: RuntimeStateChangedEvent = {
+      id: "runtime-state-1",
+      type: "runtime.state.changed",
+      occurredAt: utcMillisFromIso("2026-01-01T02:10:00.000Z"),
+      entityType: "run-resource",
+      entityId: "@test/RunGate",
+      change: {
+        id: "@test/RunGate/state/1",
+        ref,
+        changedAt: utcMillisFromIso("2026-01-01T02:10:00.000Z"),
+        reason: "run-resource.run.completed",
+        previous: null,
+        current,
+      },
+    };
+    const created = encodeEvent(event);
+    const row: EffectPmEventRow = {
+      id: created.id,
+      type: created.type,
+      occurredAt: created.occurredAt,
+      entityType: created.entityType,
+      entityId: created.entityId,
+      attributes: created.attributes ?? null,
+      payload: created.payload,
+      createdAt: utcDateFromMillis(0),
+    };
+    const decoded = decodeEventRow(row);
+    expect(decoded).toEqual(event);
+  });
+
   it("round-trips queue analytics events", () => {
     const completed: QueueItemCompletedEvent = {
       id: "queue-item-1",
@@ -382,6 +421,45 @@ describe("PrismaProcessStore — adapter", () => {
       expect(history.map((fact) => fact.id)).toEqual([
         "@test/RunGate/run/1/run-resource.run.started",
       ]);
+    }).pipe(provideLayer(PrismaProcessStore.layer({ client })));
+  });
+
+  it.live("projects runtime state history through Prisma", () => {
+    const { client } = makeFakeClient();
+    return Effect.gen(function* () {
+      const store = yield* ProcessStore;
+      const ref = { kind: "run-resource", id: "@test/PrismaStateGate" } as const;
+      const changedAt = utcMillisFromIso("2026-01-01T04:30:00.000Z");
+      const current = {
+        ref,
+        observedAt: changedAt,
+        configVersion: 1,
+        completed: 1,
+      };
+
+      yield* store.append({
+        id: "prisma-state-change",
+        type: "runtime.state.changed",
+        occurredAt: changedAt,
+        entityType: "run-resource",
+        entityId: "@test/PrismaStateGate",
+        change: {
+          id: "prisma-state-change/inner",
+          ref,
+          changedAt,
+          reason: "run-resource.run.completed",
+          previous: null,
+          current,
+        },
+      });
+
+      const history = yield* ProcessStore.runtime.stateHistory({ ref });
+      const latest = yield* ProcessStore.runtime.latestState(ref);
+
+      expect(history.map((change) => change.id)).toEqual([
+        "prisma-state-change/inner",
+      ]);
+      expect(Option.getOrNull(latest)).toEqual(current);
     }).pipe(provideLayer(PrismaProcessStore.layer({ client })));
   });
 

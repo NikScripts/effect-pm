@@ -39,7 +39,12 @@ import {
   ProcessStoreEventDecodeError,
 } from "./ProcessStoreCodec";
 import type { EffectPmEventRow, JsonValue } from "./ProcessStoreEvent";
-import type { RuntimeFact, RuntimeRef } from "./RuntimeState";
+import type {
+  RuntimeFact,
+  RuntimeRef,
+  RuntimeStateBase,
+  RuntimeStateChange,
+} from "./RuntimeState";
 
 // ============================================================================
 // Public Types
@@ -78,6 +83,16 @@ export interface StoreEventQuery {
 export interface RuntimeFactQuery {
   readonly ref?: RuntimeRef;
   readonly types?: ReadonlyArray<RuntimeFact["type"]>;
+  readonly opts?: QueryOpts;
+}
+
+/**
+ * Storage-neutral query for persisted runtime state changes.
+ *
+ * @public
+ */
+export interface RuntimeStateHistoryQuery {
+  readonly ref: RuntimeRef;
   readonly opts?: QueryOpts;
 }
 
@@ -193,6 +208,16 @@ export interface RuntimeFactRecordedEvent extends AnalyticsEventBase {
   fact: RuntimeFact;
 }
 
+/**
+ * Generic runtime state transition persisted through the analytics envelope.
+ *
+ * @public
+ */
+export interface RuntimeStateChangedEvent extends AnalyticsEventBase {
+  type: "runtime.state.changed";
+  change: RuntimeStateChange;
+}
+
 // ============================================================================
 // Event Union
 // ============================================================================
@@ -207,7 +232,8 @@ export type AnalyticsEvent =
   | ProcessLifecycleChangedEvent
   | QueueItemCompletedEvent
   | QueueLifecycleChangedEvent
-  | RuntimeFactRecordedEvent;
+  | RuntimeFactRecordedEvent
+  | RuntimeStateChangedEvent;
 
 /**
  * Storage port implemented by the in-memory service and the Prisma-backed adapter
@@ -354,6 +380,27 @@ const runtimeFactsFromEvents = (
     }
   }
   return applyQueryOpts(out, query?.opts, (fact) => fact.occurredAt);
+};
+
+const runtimeStateStoreQuery = (
+  query: RuntimeStateHistoryQuery,
+): StoreEventQuery => ({
+  entityType: query.ref.kind,
+  entityId: query.ref.id,
+  types: ["runtime.state.changed"],
+  opts: query.opts,
+});
+
+const runtimeStateChangesFromEvents = (
+  events: ReadonlyArray<AnalyticsEvent>,
+): RuntimeStateChange[] => {
+  const out: RuntimeStateChange[] = [];
+  for (const event of events) {
+    if (event.type === "runtime.state.changed") {
+      out.push(event.change);
+    }
+  }
+  return out;
 };
 
 const selectEvents = <T extends AnalyticsEvent>(
@@ -692,6 +739,25 @@ export namespace ProcessStore {
           store.events(runtimeFactStoreQuery(query)),
           (events) => runtimeFactsFromEvents(events, query),
         )
+      ),
+    stateHistory: (
+      query: RuntimeStateHistoryQuery,
+    ): Effect.Effect<RuntimeStateChange[], never, ProcessStore> =>
+      Effect.flatMap(ProcessStore, (store) =>
+        Effect.map(
+          store.events(runtimeStateStoreQuery(query)),
+          runtimeStateChangesFromEvents,
+        )
+      ),
+    latestState: (
+      ref: RuntimeRef,
+    ): Effect.Effect<Option.Option<RuntimeStateBase>, never, ProcessStore> =>
+      Effect.map(
+        ProcessStore.runtime.stateHistory({ ref, opts: { limit: 1 } }),
+        (changes) =>
+          changes[0] === undefined
+            ? Option.none()
+            : Option.some(changes[0].current),
       ),
   } as const;
 

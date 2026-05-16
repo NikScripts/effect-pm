@@ -312,14 +312,21 @@ describe("RunResource.make (raw scoped)", () => {
 
         expect(result).toBe(2);
         expect(stored.map((event) => event.type)).toEqual([
+          "runtime.state.changed",
+          "runtime.state.changed",
           "runtime.fact.recorded",
+          "runtime.state.changed",
           "runtime.fact.recorded",
         ]);
-        const first = stored[0];
-        expect(first?.entityType).toBe("run-resource");
-        expect(first?.entityId).toBe("@test/ObservedStoreGate");
-        if (first?.type === "runtime.fact.recorded") {
-          expect(first.fact.type).toBe("run-resource.run.started");
+        const firstFact = stored.find((event) => event.type === "runtime.fact.recorded");
+        const firstState = stored.find((event) => event.type === "runtime.state.changed");
+        expect(firstFact?.entityType).toBe("run-resource");
+        expect(firstFact?.entityId).toBe("@test/ObservedStoreGate");
+        if (firstFact?.type === "runtime.fact.recorded") {
+          expect(firstFact.fact.type).toBe("run-resource.run.started");
+        }
+        if (firstState?.type === "runtime.state.changed") {
+          expect(firstState.change.reason).toBe("run-resource.run.waiting");
         }
       }).pipe(
         provideLayer(

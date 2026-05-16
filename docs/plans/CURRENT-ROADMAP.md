@@ -72,8 +72,8 @@ plan for this phase, and reconcile storage work with
    `RuntimeObserver` is provided, supports scoped listener layers, and no-ops
    when it is absent.
 3. `RuntimeObserver.layerProcessStore` now bridges runtime facts into
-   `ProcessStore` as `runtime.fact.recorded` analytics events. State changes are
-   not persisted yet.
+   `ProcessStore` as `runtime.fact.recorded` analytics events and state changes
+   as `runtime.state.changed` analytics events.
 4. `ProcessStore.events(query)` now reads `runtime.fact.recorded` and existing
    analytics events across memory, file-backed, and Prisma stores without
    feature-specific read methods.

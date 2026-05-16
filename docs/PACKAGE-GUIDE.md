@@ -110,9 +110,9 @@ TSDoc on each module repeats details; this guide stays **concept-shaped**.
 
 `RunResource` publishes runtime facts and `RunResourceState` transitions through
 the optional `RuntimeObserver` service. `RuntimeObserver.layerProcessStore`
-persists facts as `runtime.fact.recorded` events; state changes are observable
-in-process but are not persisted yet. Scoped listener / stream helpers remain
-planned.
+persists facts as `runtime.fact.recorded` events and state changes as
+`runtime.state.changed` events. Scoped listener layers are implemented; stream
+helpers remain planned.
 
 ---
 
