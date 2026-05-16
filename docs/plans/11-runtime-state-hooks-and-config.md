@@ -7,9 +7,10 @@ Partially implemented. `RuntimeRef`, `RuntimeStateBase`,
 `RuntimeObserver.publishFact` and `RuntimeObserver.publishStateChange` no-op when
 no observer is provided. `RunResource` publishes run started/completed/failed
 facts when `RuntimeObserver` is provided. Runtime facts and state changes are
-not persisted to `ProcessStore` yet; generic runtime state/fact persistence is
-the next likely Phase C slice. Keep `ProcessStore` as the public storage service
-name until a separate `RuntimeStorage` boundary is proven in memory and Prisma.
+not persisted to `ProcessStore` yet; the next likely Phase C slice is the bridge
+from `RuntimeObserver` to `ProcessStore`. The boundary is now locked:
+`ProcessStore` is the rich module-facing singleton facade, and `RuntimeStorage`
+is the generic swappable persistence port underneath it.
 The final public shape must line up with
 [07 - Typed ProcessGroup and remote ProcessManager](./07-process-manager.md).
 
@@ -64,8 +65,8 @@ Start with a deliberately small, generic slice:
 2. Apply it to `RunResource` only. (Implemented for run
    started/completed/failed facts.)
 3. Prove scoped subscribers can observe state changes without persistence.
-4. Only then bridge generic state changes/facts into `ProcessStore` when that
-   service is available. (Not implemented; this is the next likely slice.)
+4. Bridge generic state changes/facts into `ProcessStore` when that service is
+   available. (Not implemented; this is the next likely slice.)
 
 `RunResource` is the first publisher because it is the lowest-risk runtime:
 
@@ -85,8 +86,9 @@ a worse test bed for proving push-based runtime observation.
 
 ### Naming decision
 
-For the first implementation slice, keep `ProcessStore` as the public storage
-service name. Do **not** introduce public `RuntimeStorage` yet.
+For the first implementation slice, keep runtime modules pointed at
+`ProcessStore`. Do **not** make runtime modules depend on `RuntimeStorage`
+directly.
 
 Use these names in the first slice:
 
@@ -99,10 +101,9 @@ Use these names in the first slice:
 
 Rationale:
 
-- `ProcessStore` is already the public storage dependency and the Prisma adapter
-  already implements that service key.
-- `RuntimeStorage` is a good possible lower-level name, but publishing it before
-  memory and Prisma can both store generic state/facts would create churn.
+- `ProcessStore` is the public module-facing singleton facade.
+- `RuntimeStorage` is the generic swappable persistence port underneath
+  `ProcessStore`; storage adapters implement it, not module-specific APIs.
 - `RuntimeObserver` is not storage. It is public as an optional sink, but the
   listener/stream API and persistence bridge are still unsettled.
 - `RuntimeFact` and `RuntimeStateChange` should stay generic, not
@@ -369,8 +370,8 @@ projection caches, observer bridging, and the durable backend are consistent.
 Tests and applications can still swap the whole store by providing a different
 layer.
 
-Resolved for Phase C slice one: keep `ProcessStore` as the public module-facing
-service name and keep `RuntimeStorage` as the lower-level generic storage port.
+Resolved for Phase C: keep `ProcessStore` as the rich module-facing singleton
+facade and keep `RuntimeStorage` as the lower-level generic storage port.
 The important lines are:
 
 - storage stores generic state changes and facts;
@@ -380,10 +381,10 @@ The important lines are:
   records;
 - typed projections live above storage.
 
-`RuntimeStorage` can become public later only if it removes real ambiguity
-between the generic state/fact backend and the higher-level `ProcessStore`
-analytics API. Until then, a rename would add vocabulary without proving a
-better boundary.
+The `RuntimeStorage` boundary is locked even if its public export/timing is
+decided by implementation. Runtime modules depend on `ProcessStore`;
+`ProcessStore` depends on `RuntimeStorage`; storage adapters implement
+`RuntimeStorage`.
 
 ## Listener and hook model
 
@@ -828,7 +829,19 @@ Avoid:
 - Add no queue, process, HTTP, schema, remote enqueue, or handoff behavior.
   (Implemented.)
 
-### Phase C.2 - RunResource state changes and scoped listeners
+### Phase C.2 - RuntimeObserver to ProcessStore bridge
+
+- Bridge `RuntimeObserver` facts/state changes into `ProcessStore` when a store
+  is available.
+- Keep runtime modules depending on `ProcessStore`, not `RuntimeStorage`.
+- Have `ProcessStore` convert semantic module operations into generic
+  `RuntimeFact` / `RuntimeStateChange` records.
+- Implement memory/Prisma/custom adapters against `RuntimeStorage`, not
+  module-specific storage APIs.
+- Do not add `getRunResourceState`, `getRunResourceFacts`, or similar
+  feature-specific reads.
+
+### Phase C.3 - RunResource state changes and scoped listeners
 
 - Publish `RuntimeStateChange<RunResourceState>` around permit wait, run start,
   run success, run failure, and interruption.
@@ -838,16 +851,6 @@ Avoid:
   the same ergonomics.
 - Define listener failure behavior explicitly: log/store a fact later, but do
   not fail the runtime mutation that triggered the listener.
-
-### Phase C.3 - Generic storage bridge
-
-- Bridge `RuntimeStateChange` and `RuntimeFact` into `ProcessStore` only when a
-  store is available.
-- Keep the bridge generic. Do not add `getRunResourceState`,
-  `getRunResourceFacts`, or similar feature-specific reads.
-- Decide whether to add generic state/fact methods to `ProcessStoreInterface` or
-  encode them as `AnalyticsEvent` variants only after memory and Prisma tests
-  prove equivalent behavior.
 
 ### Phase C.4 - Projections and additional runtimes
 

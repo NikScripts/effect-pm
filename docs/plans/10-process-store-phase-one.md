@@ -30,12 +30,14 @@ store reads. Use this document as the source of truth for the current
 - The in-memory and Prisma stores must stay behaviorally aligned for ordering,
   filtering, and decode policy.
 
-For the first Phase C runtime-state slice, keep `ProcessStore` as the public
-service name and introduce runtime observation as a generic layer above/beside
-the store. Do not add `getRunResourceState`, `getQueueState`,
-`getProcessStateMirror`, or similar one-method-per-feature APIs. Once a generic
-`RuntimeStateChange` / `RuntimeFact` stream is proven, this phase-one read plan
-can either:
+For the Phase C runtime-state boundary, keep `ProcessStore` as the rich
+module-facing singleton facade and put `RuntimeStorage` underneath it as the
+generic swappable persistence port. Runtime modules should depend on
+`ProcessStore`, not `RuntimeStorage`; storage adapters should implement
+`RuntimeStorage`, not module-specific APIs. Do not add `getRunResourceState`,
+`getQueueState`, `getProcessStateMirror`, or similar one-method-per-feature APIs.
+Once a generic `RuntimeStateChange` / `RuntimeFact` stream is proven, this
+phase-one read plan can either:
 
 1. add `events(query)` for existing analytics events, or
 2. add generic runtime state/fact append/read methods to `ProcessStore`.

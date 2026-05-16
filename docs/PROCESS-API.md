@@ -223,6 +223,30 @@ Remote queue `add`, `enqueue`, `prioritize`, and `defer` remain unsupported.
 
 ---
 
+## `ProcessStore` / `RuntimeStorage` boundary
+
+`ProcessStore` is the rich module-facing singleton facade. Runtime modules such
+as `Process`, `QueueResource`, `RunResource`, `HttpApiResource`, and
+`ProcessGroup` should depend on `ProcessStore`, not on storage adapters.
+
+`RuntimeStorage` is the generic swappable persistence port underneath
+`ProcessStore`. Memory, Prisma, and custom adapters implement `RuntimeStorage`;
+they should not grow module-specific methods. `ProcessStore` owns conversion
+from module-specific operations into generic `RuntimeFact` and
+`RuntimeStateChange` records, plus redaction and projections.
+
+Dependency direction:
+
+```text
+runtime module -> ProcessStore -> RuntimeStorage -> memory / Prisma / custom
+```
+
+The next likely Phase C slice is the bridge from `RuntimeObserver` to
+`ProcessStore`. Queue schema validation, remote queue enqueue, release, and
+handoff remain later phases.
+
+---
+
 ## `RuntimeObserver` (runtime facts/state)
 
 | Member | Role |
