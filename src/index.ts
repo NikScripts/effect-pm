@@ -160,6 +160,7 @@ export type {
   ProcessGroupControlError,
   ProcessGroupRemoteEndpointDefinition,
   ProcessGroupServiceDefinition,
+  ProcessGroupQueueEnqueueError,
 } from "./ProcessGroup";
 
 // Error classes - ProcessGroup
@@ -198,10 +199,22 @@ export type {
   QueueEnqueue,
   QueueResourceDefinition,
   QueueResourceConfig,
+  QueueResourceConfigBase,
+  QueueResourceConfigWithoutItemSchema,
+  QueueResourceConfigWithItemSchema,
   QueueShutdownError,
   EffectContext,
   HandlerContext,
   Priority,
+  QueueItemCodecDescriptor,
+  InferQueueEnqueueError,
+} from "./QueueResource";
+
+export {
+  QueueItemCodecDescriptorSchema,
+  makeQueueItemCodecDescriptor,
+  QueueItemValidationError,
+  QueueBatchValidationError,
 } from "./QueueResource";
 
 // Types - RunResource

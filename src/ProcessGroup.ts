@@ -23,7 +23,12 @@
 import { Clock, Context, Data, DateTime, Duration, Effect, FiberMap, Layer, Option, Ref, Schema, Scope } from "effect";
 import type { HttpClient } from "effect/unstable/http";
 import type { Process, ProcessDefinition } from "./Process";
-import type { QueueHandle, QueueResourceDefinition } from "./QueueResource";
+import type { QueueHandle, QueueItemCodecDescriptor, QueueResourceDefinition } from "./QueueResource";
+import {
+  QueueBatchValidationError,
+  QueueItemCodecDescriptorSchema,
+  QueueItemValidationError,
+} from "./QueueResource";
 import {
   ProcessStore,
   type ProcessLifecycleChangedEvent,
@@ -34,8 +39,11 @@ import { provideLayer } from "./provideLayer.js";
 // Public Types
 // ============================================================================
 
-/** @internal */
-type TagIdentifier<T> = T extends Context.Key<infer I, infer _> ? I : never;
+/** @internal Context key string required to provide each queue tag. */
+type TagIdentifier<T> = T extends { readonly key: infer K extends string } ? K : never;
+
+/** @internal Yieldable queue service tags accepted by {@link makeProcessGroup}. */
+type ProcessGroupQueueTag = Context.Service<any, QueueHandle<any, any, any, any>>;
 
 /**
  * Extract the service requirements from a Process handle.
@@ -58,7 +66,7 @@ export type AllGroupProcessesRequirements<
  */
 export type ProcessGroupEntry =
   | ProcessDefinition<string, any>
-  | QueueResourceDefinition<string, any, any, any>;
+  | QueueResourceDefinition<string, any, any, any, any>;
 
 /**
  * Process entries from a typed ProcessGroup entry tuple.
@@ -175,6 +183,7 @@ export const ProcessGroupQueueContractSchema = Schema.Struct({
   id: Schema.String,
   kind: Schema.Literal("queue"),
   controls: Schema.Array(ProcessGroupQueueControlSchema),
+  item: Schema.optional(QueueItemCodecDescriptorSchema),
 });
 
 /**
@@ -186,6 +195,11 @@ export interface ProcessGroupQueueContract<out Id extends string> {
   readonly id: Id;
   readonly kind: "queue";
   readonly controls: ReadonlyArray<ProcessGroupQueueControl>;
+  /**
+ * Present when the queue declaration included an Effect `itemSchema` on
+ * {@link QueueResource.Service}. Used for remote discovery and contract drift checks ahead of remote enqueue.
+   */
+  readonly item?: QueueItemCodecDescriptor;
 }
 
 /**
@@ -312,7 +326,8 @@ export class ProcessGroupRemoteControlError extends Data.TaggedError(
  *
  * @remarks
  * Queue `add`, `enqueue`, `prioritize`, and `defer` intentionally fail with
- * this error until schema-backed queue item contracts land.
+ * this error until remote enqueue is implemented (even when local contracts
+ * include {@link ProcessGroupQueueContract.item} metadata).
  *
  * @public
  */
@@ -338,7 +353,18 @@ export class UnsupportedRemoteControlError extends Data.TaggedError(
 export type ProcessGroupControlError =
   | ProcessGroupErrors
   | ProcessGroupRemoteControlError
-  | UnsupportedRemoteControlError;
+  | UnsupportedRemoteControlError
+  | QueueItemValidationError
+  | QueueBatchValidationError;
+
+/**
+ * Enqueue error channel for a typed queue entry (never when the queue has no item schema).
+ *
+ * @public
+ */
+export type ProcessGroupQueueEnqueueError<
+  Q extends QueueResourceDefinition<string, any, any, any, any>,
+> = Q extends QueueResourceDefinition<string, any, any, any, infer EEnqueue> ? EEnqueue : never;
 
 // ============================================================================
 // ProcessGroup interface
@@ -370,7 +396,7 @@ export interface ProcessGroup<R, Error = ProcessGroupErrors> {
 
   // ─── Queue control (delegates to queue handle) ───
   readonly listQueues: () => Effect.Effect<ReadonlyArray<QueueDetails>, Error>;
-  readonly getQueue: (name: string) => Effect.Effect<QueueHandle<any, any, any>, Error>;
+  readonly getQueue: (name: string) => Effect.Effect<QueueHandle<any, any, any, any>, Error>;
   readonly pauseQueue: (name: string) => Effect.Effect<void, Error>;
   readonly resumeQueue: (name: string) => Effect.Effect<void, Error>;
   readonly clearQueue: (name: string) => Effect.Effect<number, Error>;
@@ -397,11 +423,15 @@ export interface TypedProcessControls<R, Error = ProcessGroupErrors> {
  *
  * @public
  */
-export interface TypedQueueControls<T, Error = ProcessGroupErrors> {
-  readonly add: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error>;
-  readonly enqueue: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error>;
-  readonly prioritize: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error>;
-  readonly defer: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error>;
+export interface TypedQueueControls<
+  T,
+  Error = ProcessGroupErrors,
+  EnqueueError = never,
+> {
+  readonly add: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error | EnqueueError>;
+  readonly enqueue: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error | EnqueueError>;
+  readonly prioritize: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error | EnqueueError>;
+  readonly defer: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error | EnqueueError>;
   readonly pause: Effect.Effect<void, Error>;
   readonly resume: Effect.Effect<void, Error>;
   readonly clear: Effect.Effect<number, Error>;
@@ -438,7 +468,7 @@ export interface TypedProcessGroup<
   ) => TypedProcessControls<ProcessGroupEntryRequirements<Entries>, Error>;
   readonly queue: <Q extends ProcessGroupQueueEntries<Entries>>(
     queue: Q,
-  ) => TypedQueueControls<ProcessGroupQueueItem<Q>, Error>;
+  ) => TypedQueueControls<ProcessGroupQueueItem<Q>, Error, ProcessGroupQueueEnqueueError<Q>>;
   readonly status: ProcessGroup<ProcessGroupEntryRequirements<Entries>, Error>["status"];
   readonly health: Effect.Effect<GroupHealth, Error>;
   readonly awaitShutdown: ProcessGroup<ProcessGroupEntryRequirements<Entries>, Error>["awaitShutdown"];
@@ -514,7 +544,7 @@ const buildProcessDetails = (
  * @public
  */
 export const makeProcessGroup = <
-  const Queues extends readonly [...Context.Key<any, QueueHandle<any, any, any>>[]],
+  const Queues extends ReadonlyArray<ProcessGroupQueueTag>,
   const Processes extends readonly Process<any>[],
 >(config: {
   readonly queues: Queues;
@@ -528,7 +558,7 @@ export const makeProcessGroup = <
     type R = AllGroupProcessesRequirements<Processes>;
 
     // ─── Resolve queue tags from context ───
-    const queueMap: Record<string, QueueHandle<any, any, any>> = {};
+    const queueMap: Record<string, QueueHandle<unknown, unknown, unknown, unknown>> = {};
     for (const queueTag of config.queues) {
       queueMap[queueTag.key] = yield* queueTag;
     }
@@ -644,7 +674,9 @@ export const makeProcessGroup = <
         return results;
       });
 
-    const getQueue = (name: string): Effect.Effect<QueueHandle<any, any, any>, ProcessGroupErrors> => {
+    const getQueue = (
+      name: string,
+    ): Effect.Effect<QueueHandle<unknown, unknown, unknown, unknown>, ProcessGroupErrors> => {
       const queue = queueMap[name];
       if (queue === undefined) return Effect.fail(new ProcessNotFoundError({ processName: name }));
       return Effect.succeed(queue);
@@ -731,7 +763,7 @@ export function makeTypedProcessGroupEffect<
   TagIdentifier<ProcessGroupQueueEntries<Entries>["tag"]>
 >;
 export function makeTypedProcessGroupEffect<
-  const Queues extends readonly [...Context.Key<any, QueueHandle<any, any, any>>[]],
+  const Queues extends ReadonlyArray<ProcessGroupQueueTag>,
   const Processes extends readonly Process<any>[],
 >(config: {
   readonly queues: Queues;
@@ -745,7 +777,7 @@ export function makeTypedProcessGroupEffect(
   idOrConfig:
     | string
     | {
-        readonly queues: readonly Context.Key<any, QueueHandle<any, any, any>>[];
+        readonly queues: ReadonlyArray<ProcessGroupQueueTag>;
         readonly processes: readonly Process<any>[];
       },
   entries?: readonly ProcessGroupEntry[],
@@ -779,8 +811,16 @@ const isProcessGroupProcessEntry = (
 
 const isProcessGroupQueueEntry = (
   entry: ProcessGroupEntry,
-): entry is QueueResourceDefinition<string, any, any, any> =>
+): entry is QueueResourceDefinition<string, any, any, any, any> =>
   entry.kind === "queue";
+
+/** @internal Preserve queue entry types from a typed entry tuple after filtering. */
+const queueEntriesFrom = <const Entries extends readonly ProcessGroupEntry[]>(
+  entries: Entries,
+): ReadonlyArray<Extract<Entries[number], { readonly kind: "queue" }>> =>
+  entries.filter(isProcessGroupQueueEntry) as unknown as ReadonlyArray<
+    Extract<Entries[number], { readonly kind: "queue" }>
+  >;
 
 const makeProcessContract = <P extends ProcessDefinition<string, unknown>>(
   process: P,
@@ -790,12 +830,13 @@ const makeProcessContract = <P extends ProcessDefinition<string, unknown>>(
   controls: processGroupProcessControls,
 });
 
-const makeQueueContract = <Q extends QueueResourceDefinition<string, any, any, any>>(
+const makeQueueContract = <Q extends QueueResourceDefinition<string, any, any, any, any>>(
   queue: Q,
 ): ProcessGroupQueueContract<Q["id"]> => ({
   id: queue.id,
   kind: "queue",
   controls: processGroupQueueControls,
+  ...(queue.item !== undefined ? { item: queue.item } : {}),
 });
 
 const makeProcessGroupContract = <
@@ -1186,15 +1227,11 @@ const makeTypedProcessGroup = <
   Effect.gen(function* () {
     const contract = makeProcessGroupContract(id, entries);
     const processes = entries.filter(isProcessGroupProcessEntry);
-    const queues = entries.filter(isProcessGroupQueueEntry);
     // The string-keyed runtime owns the running fibers and queue lookup.
     // Typed groups are the public facade over this internal implementation.
-    const queueTags = queues.map(
-      (queue): ProcessGroupQueueEntries<Entries>["tag"] => queue.tag,
-    );
     const runtime = yield* makeProcessGroup({
       processes: processes.map((process) => process.process),
-      queues: queueTags,
+      queues: queueEntriesFrom(entries),
     });
 
     const queueStatus = (
@@ -1286,6 +1323,8 @@ export const ProcessGroup = {
   },
   remoteLayer,
 } as const;
+
+export { QueueItemValidationError, QueueBatchValidationError } from "./QueueResource";
 
 /**
  * Control surface type used by ControlService.

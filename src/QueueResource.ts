@@ -49,6 +49,7 @@
  * @module QueueResource
  */
 
+import type { JsonSchema } from "effect";
 import {
   Cause,
   Context,
@@ -64,6 +65,8 @@ import {
   Option,
   Queue,
   Ref,
+  Schema,
+  Scope,
   Semaphore,
 } from "effect";
 import {
@@ -90,13 +93,93 @@ import {
 export type Priority = "high" | "normal" | "low";
 
 /**
- * Enqueue a single item or a readonly batch of items.
+ * JSON-safe metadata for queue item wire encoding and typed group contracts.
  *
  * @public
  */
-export interface QueueEnqueue<T> {
-  (item: T): Effect.Effect<void>;
-  (items: ReadonlyArray<T>): Effect.Effect<void>;
+export interface QueueItemCodecDescriptor {
+  /** Stable codec id, e.g. `"@app/EmailQueue/item@v1"`. */
+  readonly id: string;
+  /** Version string for drift checks (bump when encoded shape breaks). */
+  readonly version: string;
+  /** Wire encoding; `"json"` is the only supported value today. */
+  readonly encoding: "json";
+  /** Draft-07 JSON Schema for the **encoded** item payload. */
+  readonly jsonSchema: JsonSchema.JsonSchema;
+}
+
+/**
+ * Runtime schema for {@link QueueItemCodecDescriptor}.
+ *
+ * @public
+ */
+export const QueueItemCodecDescriptorSchema = Schema.Struct({
+  id: Schema.String,
+  version: Schema.String,
+  encoding: Schema.Literal("json"),
+  jsonSchema: Schema.Unknown,
+});
+
+/**
+ * Build a {@link QueueItemCodecDescriptor} from a live Effect `Schema` value.
+ *
+ * @public
+ */
+export const makeQueueItemCodecDescriptor = <T>(
+  queueId: string,
+  itemSchema: Schema.Decoder<T, never>,
+  options?: { readonly version?: string },
+): QueueItemCodecDescriptor => {
+  const wrapped = Schema.toStandardJSONSchemaV1(itemSchema);
+  const jsonSchema = wrapped["~standard"].jsonSchema.input({ target: "draft-07" });
+  return {
+    id: `${queueId}/item@v1`,
+    version: options?.version ?? "1.0.0",
+    encoding: "json",
+    jsonSchema,
+  };
+};
+
+/**
+ * Single-item enqueue failed schema validation before the queue mutated.
+ *
+ * @public
+ */
+export class QueueItemValidationError extends Data.TaggedError("QueueItemValidationError")<{
+  readonly queue: string;
+  readonly operation: "add" | "prioritize" | "defer";
+  readonly input: unknown;
+  readonly message: string;
+  readonly codecId?: string;
+}> {}
+
+/**
+ * Batch enqueue failed schema validation under atomic semantics (no items enqueued).
+ *
+ * @public
+ */
+export class QueueBatchValidationError extends Data.TaggedError("QueueBatchValidationError")<{
+  readonly queue: string;
+  readonly operation: "add" | "prioritize" | "defer";
+  readonly mode: "atomic";
+  readonly failures: ReadonlyArray<{
+    readonly index: number;
+    readonly input: unknown;
+    readonly message: string;
+  }>;
+  readonly codecId?: string;
+}> {}
+
+/**
+ * Enqueue a single item or a readonly batch of items.
+ *
+ * @typeParam E - Validation errors when {@link QueueResourceConfig.itemSchema} is set
+ *
+ * @public
+ */
+export interface QueueEnqueue<T, E = never> {
+  (item: T): Effect.Effect<void, E>;
+  (items: ReadonlyArray<T>): Effect.Effect<void, E>;
 }
 
 /**
@@ -111,6 +194,7 @@ export interface QueueEnqueue<T> {
  * @typeParam T - Item type processed by this queue
  * @typeParam _R - Success type of the item effect (phantom, used for type inference)
  * @typeParam _E - Error type of the item effect (phantom, used for type inference)
+ * @typeParam EEnqueue - Errors from schema-backed enqueue validation (see {@link QueueResourceConfig.itemSchema})
  *
  * @example
  * ```ts
@@ -128,13 +212,14 @@ export interface QueueHandle<
   in out T,
   out _R = void,
   out _E = never,
+  out EEnqueue = never,
 > {
   /** Enqueue items at **normal** priority. */
-  readonly add: QueueEnqueue<T>;
+  readonly add: QueueEnqueue<T, EEnqueue>;
   /** Enqueue items at **high** priority (processed before normal and low). */
-  readonly prioritize: QueueEnqueue<T>;
+  readonly prioritize: QueueEnqueue<T, EEnqueue>;
   /** Enqueue items at **low** priority (processed after high and normal). */
-  readonly defer: QueueEnqueue<T>;
+  readonly defer: QueueEnqueue<T, EEnqueue>;
 
   /** Total pending items across all priority levels. */
   readonly size: Effect.Effect<number>;
@@ -177,16 +262,23 @@ export interface QueueHandle<
  *
  * @public
  */
-export interface QueueResourceDefinition<
-  out Id extends string,
-  in out T,
-  out R = void,
-  out E = never,
-> extends Context.Key<unknown, QueueHandle<T, R, E>> {
+export type QueueResourceDefinition<
+  Id extends string,
+  T,
+  R = void,
+  E = never,
+  EEnqueue = never,
+> = Context.Service<Id, QueueHandle<T, R, E, EEnqueue>> & {
   readonly id: Id;
   readonly kind: "queue";
-  readonly tag: Context.Key<unknown, QueueHandle<T, R, E>>;
-}
+  readonly tag: Context.Service<Id, QueueHandle<T, R, E, EEnqueue>>;
+  /**
+   * Serializable item codec metadata when {@link QueueResourceConfig.itemSchema}
+   * was provided on {@link QueueResource.Service}. Used by typed {@link ProcessGroup}
+   * contracts for remote discovery and drift checks.
+   */
+  readonly item?: QueueItemCodecDescriptor;
+};
 
 /**
  * Context passed to the `effect` callback during item processing.
@@ -201,13 +293,13 @@ export interface QueueResourceDefinition<
  *
  * @public
  */
-export interface EffectContext<T> {
+export interface EffectContext<T, EEnqueue = never> {
   /** Enqueue derived items at normal priority. Self-enqueue is warned and dropped. */
-  readonly add: QueueEnqueue<T>;
+  readonly add: QueueEnqueue<T, EEnqueue>;
   /** Enqueue derived items at high priority. Self-enqueue is warned and dropped. */
-  readonly prioritize: QueueEnqueue<T>;
+  readonly prioritize: QueueEnqueue<T, EEnqueue>;
   /** Enqueue derived items at low priority. Self-enqueue is warned and dropped. */
-  readonly defer: QueueEnqueue<T>;
+  readonly defer: QueueEnqueue<T, EEnqueue>;
   /** How many times this item has been processed (1 = first attempt). */
   readonly attempts: number;
   /** When the item first entered the queue as epoch millis (preserved across retries). */
@@ -230,7 +322,7 @@ export interface EffectContext<T> {
  *
  * @public
  */
-export interface HandlerContext<T> {
+export interface HandlerContext<T, EEnqueue = never> {
   /**
    * Re-enqueue this item at the same priority (back of the line).
    * Respects the `retries` limit — when exhausted, `onRetryExhausted` is called
@@ -238,11 +330,11 @@ export interface HandlerContext<T> {
    */
   readonly retry: Effect.Effect<void>;
   /** Enqueue items at normal priority (unguarded). */
-  readonly add: QueueEnqueue<T>;
+  readonly add: QueueEnqueue<T, EEnqueue>;
   /** Enqueue items at high priority (unguarded). */
-  readonly prioritize: QueueEnqueue<T>;
+  readonly prioritize: QueueEnqueue<T, EEnqueue>;
   /** Enqueue items at low priority (unguarded). */
-  readonly defer: QueueEnqueue<T>;
+  readonly defer: QueueEnqueue<T, EEnqueue>;
   /** How many times this item has been processed (1 = first attempt). */
   readonly attempts: number;
   /** When the item first entered the queue as epoch millis (preserved across retries). */
@@ -260,33 +352,16 @@ export interface HandlerContext<T> {
  *
  * @public
  */
-export interface QueueResourceConfig<T, R, E> {
+/**
+ * Shared queue configuration fields (see {@link QueueResourceConfig}).
+ *
+ * @public
+ */
+export interface QueueResourceConfigBase<T, R, E> {
   /** Queue name used for log annotations and error messages. @default "anonymous" */
   readonly name?: string;
   /** Start with processing paused. Call `resume` to begin. @default false */
   readonly paused?: boolean;
-  /**
-   * Process each item. Receives a guarded {@link EffectContext} for spawning
-   * derived work. The exit of this effect determines success/failure for the item.
-   */
-  readonly effect: (
-    item: T,
-    ctx: EffectContext<T>,
-  ) => Effect.Effect<R, E>;
-  /**
-   * Handle each item's result. **Always forked** — runs in its own fiber and
-   * never blocks the worker from processing the next item.
-   *
-   * Receives the item, its `Exit`, and a {@link HandlerContext} with `retry`.
-   * There is no automatic retry — the handler decides retry policy.
-   *
-   * When absent, failures are logged with a warning.
-   */
-  readonly handler?: (
-    item: T,
-    exit: Exit.Exit<R, E>,
-    ctx: HandlerContext<T>,
-  ) => Effect.Effect<void>;
   /** Max items processing concurrently (worker count). @default 5 */
   readonly concurrency?: number;
   /** Max items per priority queue (bounded backpressure). @default 50_000 */
@@ -317,11 +392,6 @@ export interface QueueResourceConfig<T, R, E> {
     priority: Priority,
   ) => Effect.Effect<void>;
   /**
-   * Refill the queue from an external source when all priority queues are empty.
-   * Receives the queue handle for re-enqueuing. Errors are logged and swallowed.
-   */
-  readonly refill?: (queue: QueueHandle<T, R, E>) => Effect.Effect<void>;
-  /**
    * Hook: fired after item(s) are enqueued. Receives the batch and priority.
    * Fire-and-forget — errors are logged and swallowed.
    */
@@ -345,6 +415,74 @@ export interface QueueResourceConfig<T, R, E> {
    */
   readonly onEmpty?: Effect.Effect<void>;
 }
+
+/**
+ * Queue configuration **without** {@link QueueResourceConfigBase} item schema.
+ * Enqueue helpers on {@link QueueHandle} and hook contexts do not fail with
+ * schema validation errors.
+ *
+ * @public
+ */
+export type QueueResourceConfigWithoutItemSchema<T, R, E> = QueueResourceConfigBase<T, R, E> & {
+  readonly itemSchema?: undefined;
+  /**
+   * Process each item. Receives a guarded {@link EffectContext} for spawning
+   * derived work. The exit of this effect determines success/failure for the item.
+   */
+  readonly effect: (item: T, ctx: EffectContext<T, never>) => Effect.Effect<R, E>;
+  /**
+   * Handle each item's result. **Always forked** — runs in its own fiber and
+   * never blocks the worker from processing the next item.
+   */
+  readonly handler?: (
+    item: T,
+    exit: Exit.Exit<R, E>,
+    ctx: HandlerContext<T, never>,
+  ) => Effect.Effect<void>;
+  /**
+   * Refill the queue from an external source when all priority queues are empty.
+   * Receives the queue handle for re-enqueuing. Errors are logged and swallowed.
+   */
+  readonly refill?: (queue: QueueHandle<T, R, E, never>) => Effect.Effect<void>;
+};
+
+/**
+ * Queue configuration **with** {@link QueueResourceConfigBase} item schema.
+ * Public enqueue operations and hook context enqueue helpers can fail with
+ * {@link QueueItemValidationError} or {@link QueueBatchValidationError}.
+ *
+ * @public
+ */
+/**
+ * Enqueue validation errors when {@link QueueResourceConfigWithItemSchema.itemSchema} is set.
+ *
+ * @public
+ */
+export type QueueEnqueueErrors = QueueItemValidationError | QueueBatchValidationError;
+
+export type QueueResourceConfigWithItemSchema<T, R, E> = QueueResourceConfigBase<T, R, E> & {
+  readonly itemSchema: Schema.Decoder<T, never>;
+  readonly effect: (item: T, ctx: EffectContext<T, QueueEnqueueErrors>) => Effect.Effect<R, E>;
+  readonly handler?: (
+    item: T,
+    exit: Exit.Exit<R, E>,
+    ctx: HandlerContext<T, QueueEnqueueErrors>,
+  ) => Effect.Effect<void>;
+  readonly refill?: (queue: QueueHandle<T, R, E, QueueEnqueueErrors>) => Effect.Effect<void>;
+};
+
+/**
+ * Configuration for {@link QueueResource.make}.
+ *
+ * @typeParam T - Item type
+ * @typeParam R - Success type of the item effect
+ * @typeParam E - Error type of the item effect
+ *
+ * @public
+ */
+export type QueueResourceConfig<T, R, E> =
+  | QueueResourceConfigWithoutItemSchema<T, R, E>
+  | QueueResourceConfigWithItemSchema<T, R, E>;
 
 // ============================================================================
 // Errors
@@ -376,6 +514,37 @@ const isReadonlyArray = <A>(input: A | ReadonlyArray<A>): input is ReadonlyArray
   Array.isArray(input);
 
 const queueResourceKind = "queue" as const;
+
+type EnqueueErrOf<C> = C extends QueueResourceConfigWithItemSchema<infer _T, infer _R, infer _E>
+  ? QueueEnqueueErrors
+  : never;
+
+/**
+ * Enqueue error channel for a queue configuration (never when no `itemSchema`).
+ *
+ * @public
+ */
+export type InferQueueEnqueueError<C> = EnqueueErrOf<C>;
+
+const hasItemSchema = <T, R, E>(
+  config: QueueResourceConfig<T, R, E>,
+): config is QueueResourceConfigWithItemSchema<T, R, E> => config.itemSchema !== undefined;
+
+/**
+ * Runtime callbacks and hooks for {@link makeQueueRuntime}, parameterized by the
+ * enqueue error channel carried on public/hook enqueue helpers.
+ *
+ * @internal
+ */
+type QueueRuntimeConfig<T, R, E, EEnqueue> = QueueResourceConfigBase<T, R, E> & {
+  readonly effect: (item: T, ctx: EffectContext<T, EEnqueue>) => Effect.Effect<R, E>;
+  readonly handler?: (
+    item: T,
+    exit: Exit.Exit<R, E>,
+    ctx: HandlerContext<T, EEnqueue>,
+  ) => Effect.Effect<void>;
+  readonly refill?: (queue: QueueHandle<T, R, E, EEnqueue>) => Effect.Effect<void>;
+};
 
 /** Normalize public enqueue input without treating arbitrary iterables as batches. */
 function normalizeEnqueueInput<A>(input: A | ReadonlyArray<A>): ReadonlyArray<A> {
@@ -417,15 +586,135 @@ interface InternalItem<T> {
  * - `Semaphore` for concurrency control within the worker pool
  * - Handler effects are forked into a separate `FiberSet` (never block workers)
  */
-const makeQueueEffect = <T, R, E>(
+const validateItemsWithSchema = <T>(
+  queueName: string,
+  itemSchema: Schema.Decoder<T, never>,
+  codecId: string,
+  items: ReadonlyArray<T>,
+  operation: "add" | "prioritize" | "defer",
+): Effect.Effect<ReadonlyArray<T>, QueueEnqueueErrors> => {
+  const decodeItem = Schema.decodeUnknownExit(itemSchema);
+  if (items.length === 1) {
+    const input = items[0];
+    const exit = decodeItem(input);
+    return Exit.match(exit, {
+      onSuccess: (value) => Effect.succeed([value]),
+      onFailure: (cause) =>
+        Effect.fail(
+          new QueueItemValidationError({
+            queue: queueName,
+            operation,
+            input,
+            message: Cause.pretty(cause),
+            codecId,
+          }),
+        ),
+    });
+  }
+  return Effect.gen(function* () {
+    const decoded: T[] = [];
+    const failures: Array<{
+      readonly index: number;
+      readonly input: unknown;
+      readonly message: string;
+    }> = [];
+    for (let i = 0; i < items.length; i++) {
+      const input = items[i];
+      const exit = decodeItem(input);
+      if (Exit.isSuccess(exit)) {
+        decoded.push(exit.value);
+      } else {
+        failures.push({
+          index: i,
+          input,
+          message: Cause.pretty(exit.cause),
+        });
+      }
+    }
+    if (failures.length > 0) {
+      return yield* Effect.failCause(
+        Cause.fail(
+          new QueueBatchValidationError({
+            queue: queueName,
+            operation,
+            mode: "atomic",
+            failures,
+            codecId,
+          }),
+        ),
+      );
+    }
+    return decoded;
+  });
+};
+
+const makeQueueEffectWithoutSchema = <
+  T,
+  R,
+  E,
+  const C extends QueueResourceConfigWithoutItemSchema<T, R, E>,
+>(
+  config: C,
+): Effect.Effect<QueueHandle<T, R, E, EnqueueErrOf<C>>, never, Scope.Scope> =>
+  makeQueueRuntime(
+    config,
+    (items, _operation) => Effect.succeed(items),
+  );
+
+const makeQueueEffectWithSchema = <
+  T,
+  R,
+  E,
+  const C extends QueueResourceConfigWithItemSchema<T, R, E>,
+>(
+  config: C,
+): Effect.Effect<QueueHandle<T, R, E, QueueEnqueueErrors>, never, Scope.Scope> => {
+  const queueName = config.name ?? "anonymous";
+  const codecId = `${queueName}/item@v1`;
+  return makeQueueRuntime<T, R, E, QueueEnqueueErrors>(
+    config,
+    (items, operation) =>
+      validateItemsWithSchema(queueName, config.itemSchema, codecId, items, operation),
+  );
+};
+
+function makeQueueEffect<T, R, E>(
+  config: QueueResourceConfigWithoutItemSchema<T, R, E>,
+): Effect.Effect<QueueHandle<T, R, E, never>, never, Scope.Scope>;
+function makeQueueEffect<T, R, E>(
+  config: QueueResourceConfigWithItemSchema<T, R, E>,
+): Effect.Effect<QueueHandle<T, R, E, QueueEnqueueErrors>, never, Scope.Scope>;
+function makeQueueEffect<T, R, E>(
   config: QueueResourceConfig<T, R, E>,
-) =>
+): Effect.Effect<
+  QueueHandle<T, R, E, InferQueueEnqueueError<QueueResourceConfig<T, R, E>>>,
+  never,
+  Scope.Scope
+>;
+function makeQueueEffect<T, R, E>(
+  config:
+    | QueueResourceConfigWithoutItemSchema<T, R, E>
+    | QueueResourceConfigWithItemSchema<T, R, E>,
+): Effect.Effect<QueueHandle<T, R, E, QueueEnqueueErrors>, never, Scope.Scope> {
+  return hasItemSchema(config)
+    ? makeQueueEffectWithSchema(config)
+    : makeQueueEffectWithoutSchema(config);
+}
+
+type ValidateForEnqueue<T, EEnqueue> = (
+  items: ReadonlyArray<T>,
+  operation: "add" | "prioritize" | "defer",
+) => Effect.Effect<ReadonlyArray<T>, EEnqueue>;
+
+const makeQueueRuntime = <T, R, E, EEnqueue>(
+  config: QueueRuntimeConfig<T, R, E, EEnqueue>,
+  validateForEnqueue: ValidateForEnqueue<T, EEnqueue>,
+): Effect.Effect<QueueHandle<T, R, E, EEnqueue>, never, Scope.Scope> =>
   Effect.gen(function* () {
     const queueName = config.name ?? "anonymous";
     const concurrency = config.concurrency ?? 5;
     const capacity = config.capacity ?? 50_000;
     const maxRetries = config.retries ?? Infinity;
-
     // ─── Allocate internal state ───
     // Three bounded queues: one per priority level. Backpressure at `capacity`.
     const highQueue = yield* Queue.bounded<InternalItem<T>>(capacity);
@@ -586,11 +875,15 @@ const makeQueueEffect = <T, R, E>(
         }
       });
 
-    /** Public enqueue: convert Iterable to array, delegate to internal. */
+    /** Public enqueue: validate (when configured), then delegate to internal. */
     const enqueuePublic = (
       items: T | ReadonlyArray<T>,
       priority: Priority,
-    ): Effect.Effect<void> => enqueueInternal(normalizeEnqueueInput(items), priority);
+      operation: "add" | "prioritize" | "defer",
+    ) =>
+      Effect.flatMap(validateForEnqueue(normalizeEnqueueInput(items), operation), (validated) =>
+        enqueueInternal(validated, priority),
+      );
 
     // ─── Internal: EffectContext (guarded) ───
 
@@ -598,9 +891,7 @@ const makeQueueEffect = <T, R, E>(
      * Build the guarded context passed to the user's `effect` callback.
      * Self-enqueue detection uses reference equality and (if configured) key equality.
      */
-    const makeEffectContext = (
-      internal: InternalItem<T>,
-    ): EffectContext<T> => {
+    const makeEffectContext = (internal: InternalItem<T>): EffectContext<T, EEnqueue> => {
       const isSameItem = (candidate: T): boolean => {
         if (candidate === internal.item) return true;
         if (config.key !== undefined && internal.key !== undefined && config.key(candidate) === internal.key)
@@ -611,7 +902,8 @@ const makeQueueEffect = <T, R, E>(
       const guardedEnqueue = (
         candidates: T | ReadonlyArray<T>,
         priority: Priority,
-      ): Effect.Effect<void> =>
+        operation: "add" | "prioritize" | "defer",
+      ) =>
         Effect.gen(function* () {
           const items = normalizeEnqueueInput(candidates);
           const safe = items.filter((c) => !isSameItem(c));
@@ -621,14 +913,15 @@ const makeQueueEffect = <T, R, E>(
             );
           }
           if (safe.length > 0) {
-            yield* enqueueInternal(safe, priority);
+            const validated = yield* validateForEnqueue(safe, operation);
+            yield* enqueueInternal(validated, priority);
           }
         });
 
       return {
-        add: (items) => guardedEnqueue(items, "normal"),
-        prioritize: (items) => guardedEnqueue(items, "high"),
-        defer: (items) => guardedEnqueue(items, "low"),
+        add: (items) => guardedEnqueue(items, "normal", "add"),
+        prioritize: (items) => guardedEnqueue(items, "high", "prioritize"),
+        defer: (items) => guardedEnqueue(items, "low", "defer"),
         attempts: internal.retries + 1,
         enqueuedAt: internal.enqueuedAt,
         priority: internal.priority,
@@ -644,7 +937,7 @@ const makeQueueEffect = <T, R, E>(
     const makeHandlerContext = (
       internal: InternalItem<T>,
       exit: Exit.Exit<R, E>,
-    ): HandlerContext<T> => ({
+    ): HandlerContext<T, EEnqueue> => ({
       retry: Effect.gen(function* () {
         if (internal.retries >= maxRetries) {
           if (config.onRetryExhausted !== undefined) {
@@ -667,9 +960,9 @@ const makeQueueEffect = <T, R, E>(
           internal.enqueuedAt,
         );
       }),
-      add: (items) => enqueuePublic(items, "normal"),
-      prioritize: (items) => enqueuePublic(items, "high"),
-      defer: (items) => enqueuePublic(items, "low"),
+      add: (items) => enqueuePublic(items, "normal", "add"),
+      prioritize: (items) => enqueuePublic(items, "high", "prioritize"),
+      defer: (items) => enqueuePublic(items, "low", "defer"),
       attempts: internal.retries + 1,
       enqueuedAt: internal.enqueuedAt,
       priority: internal.priority,
@@ -793,11 +1086,11 @@ const makeQueueEffect = <T, R, E>(
 
     // ─── Build public handle ───
 
-    const queueHandle: QueueHandle<T, R, E> = {
+    const queueHandle: QueueHandle<T, R, E, EEnqueue> = {
       // Enqueue delegates — priority is the only difference
-      add: (items) => enqueuePublic(items, "normal"),
-      prioritize: (items) => enqueuePublic(items, "high"),
-      defer: (items) => enqueuePublic(items, "low"),
+      add: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "normal", "add"),
+      prioritize: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "high", "prioritize"),
+      defer: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "low", "defer"),
 
       // Read all three queue sizes in parallel, combine into total
       size: Effect.map(
@@ -896,6 +1189,23 @@ const makeQueueEffect = <T, R, E>(
 // Public API
 // ============================================================================
 
+function queueResourceLayer<Self, T, R, E>(
+  tag: Context.Key<Self, QueueHandle<T, R, E, never>>,
+  config: QueueResourceConfigWithoutItemSchema<T, R, E>,
+): Layer.Layer<Self, never, Scope.Scope>;
+function queueResourceLayer<Self, T, R, E>(
+  tag: Context.Key<Self, QueueHandle<T, R, E, QueueEnqueueErrors>>,
+  config: QueueResourceConfigWithItemSchema<T, R, E>,
+): Layer.Layer<Self, never, Scope.Scope>;
+function queueResourceLayer<Self, T, R, E>(
+  tag: Context.Key<Self, QueueHandle<T, R, E, never | QueueEnqueueErrors>>,
+  config: QueueResourceConfig<T, R, E>,
+): Layer.Layer<Self, never, Scope.Scope> {
+  return hasItemSchema(config)
+    ? Layer.effect(tag)(makeQueueEffectWithSchema(config))
+    : Layer.effect(tag)(makeQueueEffectWithoutSchema(config));
+}
+
 /**
  * QueueResource namespace — managed priority queue with workers.
  *
@@ -932,16 +1242,16 @@ export const QueueResource = {
    * })
    * ```
    */
-  layer: <Self, T, R, E>(
-    tag: Context.Key<Self, QueueHandle<T, R, E>>,
-    config: QueueResourceConfig<T, R, E>,
-  ) => Layer.effect(tag)(makeQueueEffect(config)),
+  layer: queueResourceLayer,
 
   /**
    * Class factory: creates a Context tag with a baked-in `.layer`.
    *
    * The returned value is both a `Context.Service` (yieldable tag) and has
    * a `.layer` property for providing the queue to your program.
+   *
+   * When `itemSchema` is set, the declaration also exposes {@link QueueResourceDefinition.item}
+   * for typed {@link ProcessGroup} contracts.
    *
    * @example
    * ```ts
@@ -956,17 +1266,29 @@ export const QueueResource = {
    * ```
    */
   Service: <Self, T, R, E = never>() =>
-  <const Name extends string>(
+  <const Name extends string, const C extends QueueResourceConfig<T, R, E>>(
     name: Name,
-    config: QueueResourceConfig<T, R, E>,
+    config: C,
   ) => {
-    const base = Context.Service<Self, QueueHandle<T, R, E>>()(name);
-    const layer = Layer.effect(base)(makeQueueEffect({ ...config, name }));
+    if (hasItemSchema(config)) {
+      const named = { ...config, name } satisfies QueueResourceConfigWithItemSchema<T, R, E>;
+      const base = Context.Service<Self, QueueHandle<T, R, E, QueueEnqueueErrors>>()(name);
+      const item = makeQueueItemCodecDescriptor(name, config.itemSchema);
+      return Object.assign(base, {
+        id: name,
+        kind: queueResourceKind,
+        tag: base,
+        layer: queueResourceLayer(base, named),
+        item,
+      });
+    }
+    const named = { ...config, name } satisfies QueueResourceConfigWithoutItemSchema<T, R, E>;
+    const base = Context.Service<Self, QueueHandle<T, R, E, never>>()(name);
     return Object.assign(base, {
       id: name,
       kind: queueResourceKind,
       tag: base,
-      layer,
+      layer: queueResourceLayer(base, named),
     });
   },
 
@@ -986,7 +1308,7 @@ export const QueueResource = {
    */
   Tag: <Self, T, R, E = never>() =>
   <const Name extends string>(name: Name) => {
-    const base = Context.Service<Self, QueueHandle<T, R, E>>()(name);
+    const base = Context.Service<Self, QueueHandle<T, R, E, never>>()(name);
     return Object.assign(base, {
       id: name,
       kind: queueResourceKind,

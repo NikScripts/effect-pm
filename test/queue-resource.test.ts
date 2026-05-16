@@ -1,8 +1,11 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Duration, Effect, Exit, Ref } from "effect";
+import { Duration, Effect, Exit, Ref, Schema } from "effect";
 import {
+  QueueBatchValidationError,
   QueueHandle,
+  QueueItemValidationError,
   QueueResource,
+  makeQueueItemCodecDescriptor,
 } from "../src/QueueResource";
 
 const fastConfig = { concurrency: 2 };
@@ -482,4 +485,60 @@ describe("QueueResource.make — self-enqueue guard", () => {
       expect(result).toContain("child-2");
     }).pipe(Effect.scoped),
   );
+});
+
+const EmailItem = Schema.Struct({
+  id: Schema.String,
+  subject: Schema.String,
+});
+
+describe("QueueResource.make — itemSchema", () => {
+  it.live("fails single-item enqueue before the queue mutates", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-schema-single",
+        itemSchema: EmailItem,
+        effect: () => Effect.void,
+        ...fastConfig,
+      });
+      const error = yield* Effect.flip(
+        queue.add({ id: 1, subject: "hello" }),
+      );
+      expect(error).toBeInstanceOf(QueueItemValidationError);
+      expect(yield* queue.size).toBe(0);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("fails batch enqueue atomically when any item is invalid", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-schema-batch",
+        itemSchema: EmailItem,
+        effect: () => Effect.void,
+        ...fastConfig,
+      });
+      const error = yield* Effect.flip(
+        queue.add([
+          { id: "a", subject: "ok" },
+          { id: 2, subject: "bad" },
+        ]),
+      );
+      expect(error).toBeInstanceOf(QueueBatchValidationError);
+      expect(yield* queue.size).toBe(0);
+    }).pipe(Effect.scoped),
+  );
+
+  it("Service exposes item codec metadata when itemSchema is configured", () => {
+    const EmailQueue = QueueResource.Service<typeof EmailQueue, Schema.Schema.Type<typeof EmailItem>>()(
+      "@test/EmailQueue",
+      {
+        itemSchema: EmailItem,
+        effect: () => Effect.void,
+        ...fastConfig,
+      },
+    );
+    expect(EmailQueue.item).toEqual(
+      makeQueueItemCodecDescriptor("@test/EmailQueue", EmailItem),
+    );
+  });
 });

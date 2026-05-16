@@ -734,21 +734,19 @@ export namespace ProcessStore {
    */
   export const runtime = {
     facts: (query?: RuntimeFactQuery): Effect.Effect<RuntimeFact[], never, ProcessStore> =>
-      Effect.flatMap(ProcessStore, (store) =>
-        Effect.map(
-          store.events(runtimeFactStoreQuery(query)),
-          (events) => runtimeFactsFromEvents(events, query),
-        )
-      ),
+      Effect.gen(function* () {
+        const store = yield* ProcessStore;
+        const events = yield* store.events(runtimeFactStoreQuery(query));
+        return runtimeFactsFromEvents(events, query);
+      }),
     stateHistory: (
       query: RuntimeStateHistoryQuery,
     ): Effect.Effect<RuntimeStateChange[], never, ProcessStore> =>
-      Effect.flatMap(ProcessStore, (store) =>
-        Effect.map(
-          store.events(runtimeStateStoreQuery(query)),
-          runtimeStateChangesFromEvents,
-        )
-      ),
+      Effect.gen(function* () {
+        const store = yield* ProcessStore;
+        const events = yield* store.events(runtimeStateStoreQuery(query));
+        return runtimeStateChangesFromEvents(events);
+      }),
     latestState: (
       ref: RuntimeRef,
     ): Effect.Effect<Option.Option<RuntimeStateBase>, never, ProcessStore> =>

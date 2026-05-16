@@ -390,6 +390,35 @@ const assertEntitiesMatch = (
     }
   });
 
+type DecodedQueueContract = (typeof ProcessGroupContractSchema.Type)["queues"][number];
+
+const assertQueueItemCodecsMatch = (
+  expected: ReadonlyArray<DecodedQueueContract>,
+  remote: ReadonlyArray<DecodedQueueContract>,
+): Effect.Effect<void, ProcessManagerRequestError> =>
+  Effect.gen(function* () {
+    for (const exp of expected) {
+      const rem = remote.find((q) => q.id === exp.id);
+      if (rem === undefined) continue;
+      const expItem = exp.item;
+      const remItem = rem.item;
+      if (expItem === undefined && remItem === undefined) continue;
+      if (expItem === undefined || remItem === undefined) {
+        return yield* requestError(
+          `Remote queue '${exp.id}' item codec metadata did not match (one side missing item contract data)`,
+        );
+      }
+      if (expItem.id !== remItem.id || expItem.version !== remItem.version) {
+        return yield* requestError(
+          `Remote queue '${exp.id}' item codec id/version did not match local '${expItem.id}'@${expItem.version} vs remote '${remItem.id}'@${remItem.version}`,
+        );
+      }
+      if (expItem.encoding !== remItem.encoding) {
+        return yield* requestError(`Remote queue '${exp.id}' item codec encoding did not match`);
+      }
+    }
+  });
+
 const assertContractMatches = (
   expected: AnyProcessGroupContract,
   remote: typeof ProcessGroupContractSchema.Type,
@@ -404,6 +433,7 @@ const assertContractMatches = (
 
     yield* assertEntitiesMatch("process", expected.processes, remote.processes);
     yield* assertEntitiesMatch("queue", expected.queues, remote.queues);
+    yield* assertQueueItemCodecsMatch(expected.queues, remote.queues);
   });
 
 const makeRemoteProcessManager = <

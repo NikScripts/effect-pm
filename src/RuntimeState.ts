@@ -187,10 +187,13 @@ export namespace RuntimeObserver {
   export const layerProcessStore: Layer.Layer<RuntimeObserver, never, ProcessStore> =
     Layer.effect(
       RuntimeObserver,
-      Effect.map(ProcessStore, (store): RuntimeObserverService => ({
-        publishStateChange: (change) => store.append(stateChangeToAnalyticsEvent(change)),
-        publishFact: (fact) => store.append(factToAnalyticsEvent(fact)),
-      })),
+      Effect.gen(function* () {
+        const store = yield* ProcessStore;
+        return {
+          publishStateChange: (change) => store.append(stateChangeToAnalyticsEvent(change)),
+          publishFact: (fact) => store.append(factToAnalyticsEvent(fact)),
+        };
+      }),
     );
 
   /**
