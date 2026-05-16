@@ -102,7 +102,7 @@ export type SortOrder = "asc" | "desc";
  * @internal
  */
 export interface EffectPmEventWhereInput {
-  type?: string | { equals?: string };
+  type?: string | { equals?: string; in?: ReadonlyArray<string> };
   entityType?: string | { equals?: string };
   entityId?: string | { equals?: string };
   occurredAt?: {

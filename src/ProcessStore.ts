@@ -36,6 +36,18 @@ export interface QueryOpts {
 }
 
 /**
+ * Storage-neutral event query for the append-only analytics envelope.
+ *
+ * @public
+ */
+export interface StoreEventQuery {
+  readonly entityType?: AnalyticsEvent["entityType"];
+  readonly entityId?: string;
+  readonly types?: ReadonlyArray<AnalyticsEvent["type"]>;
+  readonly opts?: QueryOpts;
+}
+
+/**
  * Common fields for every stored analytics row.
  *
  * @public
@@ -172,6 +184,7 @@ export type AnalyticsEvent =
 export interface ProcessStoreInterface {
   append: (event: AnalyticsEvent) => Effect.Effect<void>;
   appendBatch: (events: ReadonlyArray<AnalyticsEvent>) => Effect.Effect<void>;
+  events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>;
   getProcessExecutions: (
     processId: string,
     opts?: QueryOpts,
@@ -212,6 +225,25 @@ const applyQueryOpts = <T>(
 const byTimestampDesc = <T>(getTimestamp: (row: T) => number) => (a: T, b: T) =>
   getTimestamp(b) - getTimestamp(a);
 
+const matchesStoreEventQuery =
+  (query: StoreEventQuery | undefined) =>
+  (event: AnalyticsEvent): boolean => {
+    if (query?.entityType !== undefined && event.entityType !== query.entityType) {
+      return false;
+    }
+    if (query?.entityId !== undefined && event.entityId !== query.entityId) {
+      return false;
+    }
+    if (
+      query?.types !== undefined &&
+      query.types.length > 0 &&
+      !query.types.includes(event.type)
+    ) {
+      return false;
+    }
+    return true;
+  };
+
 // ============================================================================
 // In-memory implementation
 // ============================================================================
@@ -230,6 +262,14 @@ const makeInMemoryProcessStore = Effect.sync<ProcessStoreInterface>(() => {
         for (const event of batch) {
           events.push(event);
         }
+      }),
+
+    events: (query) =>
+      Effect.sync(() => {
+        const rows = events
+          .filter(matchesStoreEventQuery(query))
+          .sort(byTimestampDesc((event) => event.occurredAt));
+        return applyQueryOpts(rows, query?.opts, (event) => event.occurredAt);
       }),
 
     getProcessExecutions: (processId, opts) =>

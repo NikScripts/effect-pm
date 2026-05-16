@@ -297,6 +297,35 @@ describe("PrismaProcessStore — adapter", () => {
     }).pipe(provideLayer(PrismaProcessStore.layer({ client })));
   });
 
+  it.live("queries generic events through Prisma", () => {
+    const { client } = makeFakeClient();
+    return Effect.gen(function* () {
+      const store = yield* ProcessStore;
+      yield* store.append({
+        id: "runtime-fact",
+        type: "runtime.fact.recorded",
+        occurredAt: utcMillisFromIso("2026-01-01T04:00:00.000Z"),
+        entityType: "run-resource",
+        entityId: "@test/RunGate",
+        fact: {
+          id: "@test/RunGate/run/1/run-resource.run.started",
+          ref: { kind: "run-resource", id: "@test/RunGate" },
+          type: "run-resource.run.started",
+          occurredAt: utcMillisFromIso("2026-01-01T04:00:00.000Z"),
+          payload: { concurrency: 1 },
+        },
+      });
+
+      const rows = yield* store.events({
+        entityType: "run-resource",
+        entityId: "@test/RunGate",
+        types: ["runtime.fact.recorded"],
+      });
+
+      expect(rows.map((row) => row.id)).toEqual(["runtime-fact"]);
+    }).pipe(provideLayer(PrismaProcessStore.layer({ client })));
+  });
+
   it.live("orders process executions by event occurrence time", () => {
     const { client } = makeFakeClient();
     return Effect.gen(function* () {

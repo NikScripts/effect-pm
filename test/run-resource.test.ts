@@ -181,6 +181,7 @@ describe("RunResource.make (raw scoped)", () => {
           Ref.update(events, (items) => [...items, event]),
         appendBatch: (batch: ReadonlyArray<AnalyticsEvent>) =>
           Ref.update(events, (items) => [...items, ...batch]),
+        events: () => Effect.map(Ref.get(events), (items) => [...items]),
         getProcessExecutions: () => Effect.succeed([]),
         getProcessLifecycle: () => Effect.succeed([]),
       };

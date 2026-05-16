@@ -166,4 +166,52 @@ describe("ProcessStore.memory", () => {
       expect(limited[0]?.lifecycle.tag).toBe("Stopped")
     }).pipe(provideLayer(ProcessStore.layer)),
   )
+
+  it.live("queries generic events with type and entity filters", () =>
+    Effect.gen(function* () {
+      const store = yield* ProcessStore
+      const t1 = utcDateFromIso("2026-01-01T03:00:00.000Z").getTime()
+      const t2 = utcDateFromIso("2026-01-01T03:10:00.000Z").getTime()
+
+      yield* store.appendBatch([
+        {
+          id: "runtime-started",
+          type: "runtime.fact.recorded",
+          occurredAt: t1,
+          entityType: "run-resource",
+          entityId: "@test/RunGate",
+          fact: {
+            id: "run-1/start",
+            ref: { kind: "run-resource", id: "@test/RunGate" },
+            type: "run-resource.run.started",
+            occurredAt: t1,
+            payload: { concurrency: 1 },
+          },
+        },
+        {
+          id: "runtime-completed",
+          type: "runtime.fact.recorded",
+          occurredAt: t2,
+          entityType: "run-resource",
+          entityId: "@test/RunGate",
+          fact: {
+            id: "run-1/completed",
+            ref: { kind: "run-resource", id: "@test/RunGate" },
+            type: "run-resource.run.completed",
+            occurredAt: t2,
+            payload: { durationMs: 10 },
+          },
+        },
+      ])
+
+      const rows = yield* store.events({
+        entityType: "run-resource",
+        entityId: "@test/RunGate",
+        types: ["runtime.fact.recorded"],
+        opts: { limit: 1 },
+      })
+
+      expect(rows.map((row) => row.id)).toEqual(["runtime-completed"])
+    }).pipe(provideLayer(ProcessStore.layer)),
+  )
 })

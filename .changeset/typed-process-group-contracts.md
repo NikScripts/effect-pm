@@ -20,4 +20,6 @@ The multi-group CLI now checks target contract capabilities before issuing remot
 
 Adds the first runtime state/fact vocabulary and optional `RuntimeObserver`, with `RunResource` publishing run started/completed/failed facts when an observer is provided.
 
+`ProcessStore.events(query)` now provides a generic storage-neutral event read across memory and Prisma implementations.
+
 Also fixes `ProcessStore` execution ordering consistency and keyed queue `clear()` dedup cleanup.

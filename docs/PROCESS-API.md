@@ -263,9 +263,9 @@ handoff remain later phases.
 `run-resource.run.completed`, and `run-resource.run.failed` facts when
 `RuntimeObserver` is provided. Observation is optional: when no
 `RuntimeObserver` service is in the environment, publish helpers no-op and the
-gated effect behavior is unchanged. Runtime facts and state changes are not yet
-persisted to `ProcessStore`; generic runtime state/fact persistence is the next
-likely Phase C slice.
+gated effect behavior is unchanged. `RuntimeObserver.layerProcessStore` persists
+facts to `ProcessStore` as `runtime.fact.recorded` events. State changes are not
+persisted yet; generic state-history persistence is a later Phase C slice.
 
 ---
 

@@ -38,6 +38,7 @@ import {
   type ProcessLifecycleChangedEvent,
   type ProcessStoreInterface,
   type QueryOpts,
+  type StoreEventQuery,
 } from "../ProcessStore";
 import {
   decodeEventRow,
@@ -104,6 +105,22 @@ const buildWindow = (opts: QueryOpts | undefined) => {
     window.lt = DateTime.toDateUtc(DateTime.makeUnsafe(opts.before));
   }
   return window;
+};
+
+const buildEventQueryArgs = (query: StoreEventQuery | undefined): EffectPmEventFindManyArgs => {
+  const window = buildWindow(query?.opts);
+  return {
+    where: {
+      ...(query?.entityType === undefined ? {} : { entityType: query.entityType }),
+      ...(query?.entityId === undefined ? {} : { entityId: query.entityId }),
+      ...(query?.types === undefined || query.types.length === 0
+        ? {}
+        : { type: { in: [...query.types] } }),
+      ...(window === undefined ? {} : { occurredAt: window }),
+    },
+    orderBy: { occurredAt: "desc" },
+    ...(query?.opts?.limit !== undefined ? { take: Math.max(0, query.opts.limit) } : {}),
+  };
 };
 
 class PrismaProcessStoreError extends Data.TaggedError("PrismaProcessStoreError")<{
@@ -192,6 +209,24 @@ export const make = (
           .then(() => {}),
       catch: (cause) => new PrismaProcessStoreError({ cause }),
     }).pipe(Effect.orDie),
+
+  events: (query) =>
+    Effect.tryPromise({
+      try: () => client.effectPmEvent.findMany(buildEventQueryArgs(query)),
+      catch: (cause) => new PrismaProcessStoreError({ cause }),
+    }).pipe(
+      Effect.map((rows) => {
+        const out: AnalyticsEvent[] = [];
+        for (const row of rows) {
+          const decoded = decodeEventRow(row);
+          if (!(decoded instanceof PrismaProcessStoreDecodeError)) {
+            out.push(decoded);
+          }
+        }
+        return out;
+      }),
+      Effect.orDie,
+    ),
 
   getProcessExecutions: (processId, opts) =>
     findEventsOfType(
