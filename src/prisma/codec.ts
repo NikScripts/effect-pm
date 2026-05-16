@@ -7,7 +7,7 @@
  * @module ProcessStore/Prisma/Codec
  */
 
-import { Data, DateTime, Option } from "effect";
+import { Data } from "effect";
 import type {
   AnalyticsEvent,
   ProcessExecutionCompletedEvent,
@@ -25,10 +25,14 @@ import type {
   JsonValue,
 } from "./types";
 import type { RuntimeFact, RuntimeRef } from "../RuntimeState";
-
-// ============================================================================
-// Errors
-// ============================================================================
+import {
+  dateFromMillis,
+  epochMillisFromUnknown,
+  isBoolean,
+  isFiniteNumber,
+  isRecord,
+  isString,
+} from "../internal/json";
 
 /**
  * Raised when a row read from the database does not conform to a known
@@ -47,17 +51,10 @@ export class PrismaProcessStoreDecodeError extends Data.TaggedError(
 // Narrowing primitives
 // ============================================================================
 
-const isObject = (value: unknown): value is { [key: string]: unknown } =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const isString = (value: unknown): value is string =>
-  typeof value === "string";
-
-const isFiniteNumber = (value: unknown): value is number =>
-  typeof value === "number" && Number.isFinite(value);
-
-const isBoolean = (value: unknown): value is boolean =>
-  typeof value === "boolean";
+const includesString = <T extends string>(
+  values: ReadonlyArray<T>,
+  value: string,
+): value is T => values.some((item) => item === value);
 
 const lifecycleTags: ReadonlyArray<ProcessLifecycleTag> = [
   "Started",
@@ -71,7 +68,7 @@ const lifecycleTags: ReadonlyArray<ProcessLifecycleTag> = [
 
 const isLifecycleTag = (value: unknown): value is ProcessLifecycleTag =>
   isString(value) &&
-  (lifecycleTags as ReadonlyArray<string>).includes(value);
+  includesString(lifecycleTags, value);
 
 const executionStatuses: ReadonlyArray<
   ProcessExecutionCompletedEvent["execution"]["status"]
@@ -80,7 +77,7 @@ const executionStatuses: ReadonlyArray<
 const isExecutionStatus = (
   value: unknown,
 ): value is ProcessExecutionCompletedEvent["execution"]["status"] =>
-  isString(value) && (executionStatuses as ReadonlyArray<string>).includes(value);
+  isString(value) && includesString(executionStatuses, value);
 
 const queueItemStatuses: ReadonlyArray<QueueItemStatus> = [
   "completed",
@@ -91,7 +88,7 @@ const queueItemStatuses: ReadonlyArray<QueueItemStatus> = [
 
 const isQueueItemStatus = (value: unknown): value is QueueItemStatus =>
   isString(value) &&
-  (queueItemStatuses as ReadonlyArray<string>).includes(value);
+  includesString(queueItemStatuses, value);
 
 const queuePriorities: ReadonlyArray<QueueItemCompletedEvent["item"]["priority"]> = [
   "high",
@@ -102,7 +99,7 @@ const queuePriorities: ReadonlyArray<QueueItemCompletedEvent["item"]["priority"]
 const isQueuePriority = (
   value: unknown,
 ): value is QueueItemCompletedEvent["item"]["priority"] =>
-  isString(value) && (queuePriorities as ReadonlyArray<string>).includes(value);
+  isString(value) && includesString(queuePriorities, value);
 
 const queueLifecycleTags: ReadonlyArray<QueueLifecycleTag> = [
   "Started",
@@ -114,28 +111,7 @@ const queueLifecycleTags: ReadonlyArray<QueueLifecycleTag> = [
 
 const isQueueLifecycleTag = (value: unknown): value is QueueLifecycleTag =>
   isString(value) &&
-  (queueLifecycleTags as ReadonlyArray<string>).includes(value);
-
-const dateFromMillis = (millis: number): Date =>
-  DateTime.toDateUtc(DateTime.makeUnsafe(millis));
-
-const parseEpochMillis = (value: unknown): number | null => {
-  if (isFiniteNumber(value)) {
-    return value;
-  }
-  if (value instanceof Date) {
-    const millis = value.getTime();
-    return Number.isNaN(millis) ? null : millis;
-  }
-  if (isString(value)) {
-    const parsed = DateTime.make(value);
-    return Option.match(parsed, {
-      onNone: () => null,
-      onSome: (dateTime) => DateTime.toDateUtc(dateTime).getTime(),
-    });
-  }
-  return null;
-};
+  includesString(queueLifecycleTags, value);
 
 // ============================================================================
 // Encoding (typed event -> Prisma create input)
@@ -293,7 +269,7 @@ const toJsonValue = (value: unknown): JsonValue => {
   if (Array.isArray(value)) {
     return value.map(toJsonValue);
   }
-  if (isObject(value)) {
+  if (isRecord(value)) {
     const out: { [key: string]: JsonValue } = {};
     for (const [key, item] of Object.entries(value)) {
       out[key] = toJsonValue(item);
@@ -340,7 +316,7 @@ export const decodeEventRow = (
 const decodeRuntimeRef = (
   value: unknown,
 ): RuntimeRef | null => {
-  if (!isObject(value)) {
+  if (!isRecord(value)) {
     return null;
   }
   const kind = value["kind"];
@@ -354,7 +330,7 @@ const decodeRuntimeRef = (
 const decodeRuntimeFactValue = (
   value: unknown,
 ): RuntimeFact | null => {
-  if (!isObject(value)) {
+  if (!isRecord(value)) {
     return null;
   }
   const id = value["id"];
@@ -386,7 +362,7 @@ const decodeAttributes = (
   attributes: JsonValue | null,
 ): Record<string, unknown> | undefined => {
   if (attributes === null) return undefined;
-  if (!isObject(attributes)) return undefined;
+  if (!isRecord(attributes)) return undefined;
   const out: { [key: string]: unknown } = {};
   for (const [key, value] of Object.entries(attributes)) {
     out[key] = value;
@@ -404,14 +380,14 @@ const decodeExecution = (
     });
   }
   const payload = row.payload;
-  if (!isObject(payload)) {
+  if (!isRecord(payload)) {
     return new PrismaProcessStoreDecodeError({
       rowId: row.id,
       reason: "payload is not an object",
     });
   }
-  const startedAt = parseEpochMillis(payload["startedAt"]);
-  const completedAt = parseEpochMillis(payload["completedAt"]);
+  const startedAt = epochMillisFromUnknown(payload["startedAt"]);
+  const completedAt = epochMillisFromUnknown(payload["completedAt"]);
   const durationMs = payload["durationMs"];
   const status = payload["status"];
   const scheduleKey = payload["scheduleKey"];
@@ -477,7 +453,7 @@ const decodeLifecycle = (
     });
   }
   const payload = row.payload;
-  if (!isObject(payload)) {
+  if (!isRecord(payload)) {
     return new PrismaProcessStoreDecodeError({
       rowId: row.id,
       reason: "payload is not an object",
@@ -522,7 +498,7 @@ const decodeQueueItem = (
     });
   }
   const payload = row.payload;
-  if (!isObject(payload)) {
+  if (!isRecord(payload)) {
     return new PrismaProcessStoreDecodeError({
       rowId: row.id,
       reason: "payload is not an object",
@@ -571,7 +547,7 @@ const decodeQueueLifecycle = (
     });
   }
   const payload = row.payload;
-  if (!isObject(payload)) {
+  if (!isRecord(payload)) {
     return new PrismaProcessStoreDecodeError({
       rowId: row.id,
       reason: "payload is not an object",
@@ -601,7 +577,7 @@ const decodeRuntimeFact = (
   row: EffectPmEventRow,
 ): RuntimeFactRecordedEvent | PrismaProcessStoreDecodeError => {
   const payload = row.payload;
-  if (!isObject(payload)) {
+  if (!isRecord(payload)) {
     return new PrismaProcessStoreDecodeError({
       rowId: row.id,
       reason: "payload is not an object",

@@ -22,6 +22,7 @@ import {
   resolveProcessManagerTarget,
   type ProcessManagerTargetCandidate,
 } from "./ProcessManagerTargetResolver";
+import { responseBodyJson } from "./internal/json";
 
 type AnyProcessGroupContract = ProcessGroupContract<
   string,
@@ -79,8 +80,6 @@ const controlResponseSchema = Schema.Struct({
   error: Schema.optional(Schema.String),
 });
 
-const responseBodyJson = Schema.fromJsonString(Schema.Unknown);
-
 /**
  * Error returned when a remote ProcessGroup request fails or returns malformed
  * data.
@@ -93,6 +92,20 @@ export class ProcessManagerRequestError extends Data.TaggedError(
   readonly reason: string;
   readonly status?: number;
 }> {}
+
+const requestError = (
+  reason: string,
+  status?: number,
+): ProcessManagerRequestError =>
+  new ProcessManagerRequestError({
+    reason,
+    ...(status === undefined ? {} : { status }),
+  });
+
+const requestErrorFromCause = (
+  cause: unknown,
+  status?: number,
+): ProcessManagerRequestError => requestError(String(cause), status);
 
 /** @public */
 export class ProcessManagerConnectionError extends Data.TaggedError(
@@ -215,9 +228,7 @@ const decodeJsonResponse = (
   Schema.decodeUnknownEffect(responseBodyJson)(responseText).pipe(
     Effect.mapError(
       (cause) =>
-        new ProcessManagerRequestError({
-          reason: `Malformed JSON response: ${String(cause)}`,
-        }),
+        requestError(`Malformed JSON response: ${String(cause)}`),
     ),
   );
 
@@ -230,29 +241,19 @@ const getJson = (
       HttpClientRequest.get(joinUrl(baseUrl, path)),
     ).pipe(
       Effect.mapError(
-        (cause) =>
-          new ProcessManagerRequestError({
-            reason: String(cause),
-          }),
+        requestErrorFromCause,
       ),
     );
     const text = yield* response.text.pipe(
       Effect.mapError(
-        (cause) =>
-          new ProcessManagerRequestError({
-            reason: String(cause),
-            status: response.status,
-          }),
+        (cause) => requestErrorFromCause(cause, response.status),
       ),
     );
     const json = yield* decodeJsonResponse(text);
     if (response.status >= 200 && response.status < 300) {
       return json;
     }
-    return yield* new ProcessManagerRequestError({
-      reason: `HTTP ${response.status}`,
-      status: response.status,
-    });
+    return yield* requestError(`HTTP ${response.status}`, response.status);
   });
 
 const decodeControlResponse = (
@@ -262,10 +263,7 @@ const decodeControlResponse = (
   Schema.decodeUnknownEffect(controlResponseSchema)(json).pipe(
     Effect.mapError(
       (cause) =>
-        new ProcessManagerRequestError({
-          reason: `Malformed control response: ${String(cause)}`,
-          status,
-        }),
+        requestError(`Malformed control response: ${String(cause)}`, status),
     ),
   );
 
@@ -282,29 +280,19 @@ const getControl = (
       HttpClientRequest.get(joinUrl(baseUrl, path)),
     ).pipe(
       Effect.mapError(
-        (cause) =>
-          new ProcessManagerRequestError({
-            reason: String(cause),
-          }),
+        requestErrorFromCause,
       ),
     );
     const json = yield* response.json.pipe(
       Effect.mapError(
-        (cause) =>
-          new ProcessManagerRequestError({
-            reason: String(cause),
-            status: response.status,
-          }),
+        (cause) => requestErrorFromCause(cause, response.status),
       ),
     );
     const decoded = yield* decodeControlResponse(json, response.status);
     if (response.status >= 200 && response.status < 300 && decoded.success) {
       return decoded;
     }
-    return yield* new ProcessManagerRequestError({
-      reason: decoded.error ?? `HTTP ${response.status}`,
-      status: response.status,
-    });
+    return yield* requestError(decoded.error ?? `HTTP ${response.status}`, response.status);
   });
 
 const postControl = (
@@ -322,37 +310,24 @@ const postControl = (
       body,
     ).pipe(
       Effect.mapError(
-        (cause) =>
-          new ProcessManagerRequestError({
-            reason: String(cause),
-          }),
+        requestErrorFromCause,
       ),
     );
     const response = yield* HttpClient.execute(request).pipe(
       Effect.mapError(
-        (cause) =>
-          new ProcessManagerRequestError({
-            reason: String(cause),
-          }),
+        requestErrorFromCause,
       ),
     );
     const json = yield* response.json.pipe(
       Effect.mapError(
-        (cause) =>
-          new ProcessManagerRequestError({
-            reason: String(cause),
-            status: response.status,
-          }),
+        (cause) => requestErrorFromCause(cause, response.status),
       ),
     );
     const decoded = yield* decodeControlResponse(json, response.status);
     if (response.status >= 200 && response.status < 300 && decoded.success) {
       return decoded;
     }
-    return yield* new ProcessManagerRequestError({
-      reason: decoded.error ?? `HTTP ${response.status}`,
-      status: response.status,
-    });
+    return yield* requestError(decoded.error ?? `HTTP ${response.status}`, response.status);
   });
 
 const commandVoid = (
@@ -399,10 +374,9 @@ const assertEntitiesMatch = (
       expectedIds,
       remoteIds,
     )) {
-      return yield* new ProcessManagerRequestError({
-        reason:
-          `Remote ${kind} ids '${describeMembers(remoteIds)}' did not match '${describeMembers(expectedIds)}'`,
-      });
+      return yield* requestError(
+        `Remote ${kind} ids '${describeMembers(remoteIds)}' did not match '${describeMembers(expectedIds)}'`,
+      );
     }
 
     for (const expectedEntity of expected) {
@@ -411,9 +385,7 @@ const assertEntitiesMatch = (
         remoteEntity === undefined ||
         !sameStringSet(expectedEntity.controls, remoteEntity.controls)
       ) {
-        return yield* new ProcessManagerRequestError({
-          reason: `Remote ${kind} '${expectedEntity.id}' controls did not match`,
-        });
+        return yield* requestError(`Remote ${kind} '${expectedEntity.id}' controls did not match`);
       }
     }
   });
@@ -424,14 +396,10 @@ const assertContractMatches = (
 ): Effect.Effect<void, ProcessManagerRequestError> =>
   Effect.gen(function* () {
     if (remote.id !== expected.id) {
-      return yield* new ProcessManagerRequestError({
-        reason: `Remote contract id '${remote.id}' did not match '${expected.id}'`,
-      });
+      return yield* requestError(`Remote contract id '${remote.id}' did not match '${expected.id}'`);
     }
     if (remote.version !== expected.version) {
-      return yield* new ProcessManagerRequestError({
-        reason: `Remote contract version '${remote.version}' did not match '${expected.version}'`,
-      });
+      return yield* requestError(`Remote contract version '${remote.version}' did not match '${expected.version}'`);
     }
 
     yield* assertEntitiesMatch("process", expected.processes, remote.processes);
@@ -449,9 +417,7 @@ const makeRemoteProcessManager = <
       Schema.decodeUnknownEffect(ProcessGroupContractSchema)(json).pipe(
         Effect.mapError(
           (cause) =>
-            new ProcessManagerRequestError({
-              reason: `Malformed group contract: ${String(cause)}`,
-            }),
+            requestError(`Malformed group contract: ${String(cause)}`),
         ),
       ),
     ),
@@ -618,9 +584,7 @@ const encodeCliJson = (
   Schema.encodeUnknownEffect(responseBodyJson)(value).pipe(
     Effect.mapError(
       (cause) =>
-        new ProcessManagerRequestError({
-          reason: `Unable to encode CLI JSON output: ${String(cause)}`,
-        }),
+        requestError(`Unable to encode CLI JSON output: ${String(cause)}`),
     ),
   );
 

@@ -10,13 +10,12 @@ import {
   ProcessStore,
   QueueResource,
 } from "../src";
+import { responseBodyJson } from "../src/internal/json.js";
 import { provideLayer } from "../src/provideLayer.js";
 
 interface Email {
   readonly to: string;
 }
-
-const responseBodyJson = Schema.fromJsonString(Schema.Unknown);
 
 const requestJson = (
   port: number,

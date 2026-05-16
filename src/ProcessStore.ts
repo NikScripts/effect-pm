@@ -18,7 +18,6 @@
 import {
   Clock,
   Context,
-  DateTime,
   Effect,
   FileSystem,
   Layer,
@@ -27,6 +26,13 @@ import {
   Semaphore,
   Schema,
 } from "effect";
+import {
+  dateFromUnknown,
+  isJsonValue,
+  isRecord,
+  isString,
+  unknownJsonString,
+} from "./internal/json";
 import {
   decodeEventRow,
   encodeEvent,
@@ -303,62 +309,17 @@ const selectEvents = <T extends AnalyticsEvent>(
   return applyQueryOpts(rows, query.opts, (event) => event.occurredAt);
 };
 
-const jsonLineSchema = Schema.UnknownFromJsonString;
-
 const encodeJsonLine = (value: unknown): string | null =>
-  Option.match(Schema.encodeUnknownOption(jsonLineSchema)(value), {
+  Option.match(Schema.encodeUnknownOption(unknownJsonString)(value), {
     onNone: () => null,
     onSome: (line) => line,
   });
 
 const decodeJsonLine = (line: string): unknown | null =>
-  Option.match(Schema.decodeUnknownOption(jsonLineSchema)(line), {
+  Option.match(Schema.decodeUnknownOption(unknownJsonString)(line), {
     onNone: () => null,
     onSome: (value) => value,
   });
-
-const isObject = (value: unknown): value is { readonly [key: string]: unknown } =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const isString = (value: unknown): value is string => typeof value === "string";
-
-const isFiniteNumber = (value: unknown): value is number =>
-  typeof value === "number" && Number.isFinite(value);
-
-const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
-
-const isJsonValue = (value: unknown): value is JsonValue => {
-  if (value === null || isString(value) || isFiniteNumber(value) || isBoolean(value)) {
-    return true;
-  }
-  if (Array.isArray(value)) {
-    return value.every(isJsonValue);
-  }
-  if (isObject(value)) {
-    return Object.values(value).every(isJsonValue);
-  }
-  return false;
-};
-
-const dateFromMillis = (millis: number): Date =>
-  DateTime.toDateUtc(DateTime.makeUnsafe(millis));
-
-const dateFromUnknown = (value: unknown): Date | null => {
-  if (isFiniteNumber(value)) {
-    return dateFromMillis(value);
-  }
-  if (value instanceof Date) {
-    const millis = value.getTime();
-    return Number.isNaN(millis) ? null : dateFromMillis(millis);
-  }
-  if (isString(value)) {
-    return Option.match(DateTime.make(value), {
-      onNone: () => null,
-      onSome: (dateTime) => DateTime.toDateUtc(dateTime),
-    });
-  }
-  return null;
-};
 
 const decodeStoredEvent = (row: EffectPmEventRow): AnalyticsEvent | null => {
   const decoded = decodeEventRow(row);
@@ -366,7 +327,7 @@ const decodeStoredEvent = (row: EffectPmEventRow): AnalyticsEvent | null => {
 };
 
 const decodeFileRow = (value: unknown): EffectPmEventRow | null => {
-  if (!isObject(value)) {
+  if (!isRecord(value)) {
     return null;
   }
 
