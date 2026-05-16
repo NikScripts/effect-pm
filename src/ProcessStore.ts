@@ -210,6 +210,14 @@ export interface ProcessStoreInterface {
     processId: string,
     opts?: QueryOpts,
   ) => Effect.Effect<ProcessLifecycleChangedEvent[]>;
+  getQueueItemCompletions: (
+    queueId: string,
+    opts?: QueryOpts,
+  ) => Effect.Effect<QueueItemCompletedEvent[]>;
+  getQueueLifecycle: (
+    queueId: string,
+    opts?: QueryOpts,
+  ) => Effect.Effect<QueueLifecycleChangedEvent[]>;
 }
 
 // ============================================================================
@@ -260,6 +268,40 @@ const matchesStoreEventQuery =
     }
     return true;
   };
+
+const isProcessExecutionCompleted = (
+  event: AnalyticsEvent,
+): event is ProcessExecutionCompletedEvent =>
+  event.type === "process.execution.completed" &&
+  event.entityType === "process";
+
+const isProcessLifecycleChanged = (
+  event: AnalyticsEvent,
+): event is ProcessLifecycleChangedEvent =>
+  event.type === "process.lifecycle.changed" &&
+  event.entityType === "process";
+
+const isQueueItemCompleted = (
+  event: AnalyticsEvent,
+): event is QueueItemCompletedEvent =>
+  event.type === "queue.item.completed" && event.entityType === "queue";
+
+const isQueueLifecycleChanged = (
+  event: AnalyticsEvent,
+): event is QueueLifecycleChangedEvent =>
+  event.type === "queue.lifecycle.changed" && event.entityType === "queue";
+
+const selectEvents = <T extends AnalyticsEvent>(
+  events: ReadonlyArray<AnalyticsEvent>,
+  query: StoreEventQuery,
+  refine: (event: AnalyticsEvent) => event is T,
+): T[] => {
+  const rows = events
+    .filter(matchesStoreEventQuery(query))
+    .filter(refine)
+    .sort(byTimestampDesc((event) => event.occurredAt));
+  return applyQueryOpts(rows, query.opts, (event) => event.occurredAt);
+};
 
 const jsonLineSchema = Schema.UnknownFromJsonString;
 
@@ -429,30 +471,40 @@ const makeInMemoryProcessStore = Effect.sync<ProcessStoreInterface>(() => {
       }),
 
     getProcessExecutions: (processId, opts) =>
-      Effect.sync(() => {
-        const rows = events
-          .filter(
-            (event): event is ProcessExecutionCompletedEvent =>
-              event.type === "process.execution.completed" &&
-              event.entityType === "process" &&
-              event.entityId === processId,
-          )
-          .sort(byTimestampDesc((event) => event.occurredAt));
-        return applyQueryOpts(rows, opts, (event) => event.occurredAt);
-      }),
+      Effect.sync(() =>
+        selectEvents(
+          events,
+          { entityType: "process", entityId: processId, types: ["process.execution.completed"], opts },
+          isProcessExecutionCompleted,
+        ),
+      ),
 
     getProcessLifecycle: (processId, opts) =>
-      Effect.sync(() => {
-        const rows = events
-          .filter(
-            (event): event is ProcessLifecycleChangedEvent =>
-              event.type === "process.lifecycle.changed" &&
-              event.entityType === "process" &&
-              event.entityId === processId,
-          )
-          .sort(byTimestampDesc((event) => event.occurredAt));
-        return applyQueryOpts(rows, opts, (event) => event.occurredAt);
-      }),
+      Effect.sync(() =>
+        selectEvents(
+          events,
+          { entityType: "process", entityId: processId, types: ["process.lifecycle.changed"], opts },
+          isProcessLifecycleChanged,
+        ),
+      ),
+
+    getQueueItemCompletions: (queueId, opts) =>
+      Effect.sync(() =>
+        selectEvents(
+          events,
+          { entityType: "queue", entityId: queueId, types: ["queue.item.completed"], opts },
+          isQueueItemCompleted,
+        ),
+      ),
+
+    getQueueLifecycle: (queueId, opts) =>
+      Effect.sync(() =>
+        selectEvents(
+          events,
+          { entityType: "queue", entityId: queueId, types: ["queue.lifecycle.changed"], opts },
+          isQueueLifecycleChanged,
+        ),
+      ),
   };
 });
 
@@ -513,20 +565,50 @@ const makeFileProcessStore = (
       events: (query) => semaphore.withPermits(1)(queryEvents(query)),
       getProcessExecutions: (processId, opts) =>
         semaphore.withPermits(1)(
-          Effect.map(queryEvents({ entityType: "process", entityId: processId, opts }), (rows) =>
-            rows.filter(
-              (event): event is ProcessExecutionCompletedEvent =>
-                event.type === "process.execution.completed",
-            ),
+          Effect.map(
+            queryEvents({
+              entityType: "process",
+              entityId: processId,
+              types: ["process.execution.completed"],
+              opts,
+            }),
+            (rows) => rows.filter(isProcessExecutionCompleted),
           ),
         ),
       getProcessLifecycle: (processId, opts) =>
         semaphore.withPermits(1)(
-          Effect.map(queryEvents({ entityType: "process", entityId: processId, opts }), (rows) =>
-            rows.filter(
-              (event): event is ProcessLifecycleChangedEvent =>
-                event.type === "process.lifecycle.changed",
-            ),
+          Effect.map(
+            queryEvents({
+              entityType: "process",
+              entityId: processId,
+              types: ["process.lifecycle.changed"],
+              opts,
+            }),
+            (rows) => rows.filter(isProcessLifecycleChanged),
+          ),
+        ),
+      getQueueItemCompletions: (queueId, opts) =>
+        semaphore.withPermits(1)(
+          Effect.map(
+            queryEvents({
+              entityType: "queue",
+              entityId: queueId,
+              types: ["queue.item.completed"],
+              opts,
+            }),
+            (rows) => rows.filter(isQueueItemCompleted),
+          ),
+        ),
+      getQueueLifecycle: (queueId, opts) =>
+        semaphore.withPermits(1)(
+          Effect.map(
+            queryEvents({
+              entityType: "queue",
+              entityId: queueId,
+              types: ["queue.lifecycle.changed"],
+              opts,
+            }),
+            (rows) => rows.filter(isQueueLifecycleChanged),
           ),
         ),
     };

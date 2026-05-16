@@ -184,6 +184,8 @@ describe("RunResource.make (raw scoped)", () => {
         events: () => Effect.map(Ref.get(events), (items) => [...items]),
         getProcessExecutions: () => Effect.succeed([]),
         getProcessLifecycle: () => Effect.succeed([]),
+        getQueueItemCompletions: () => Effect.succeed([]),
+        getQueueLifecycle: () => Effect.succeed([]),
       };
 
       yield* Effect.gen(function* () {

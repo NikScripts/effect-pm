@@ -6,6 +6,8 @@ import {
   ProcessStore,
   type ProcessExecutionCompletedEvent,
   type ProcessLifecycleChangedEvent,
+  type QueueItemCompletedEvent,
+  type QueueLifecycleChangedEvent,
 } from "../src"
 import { provideLayer } from "../src/provideLayer.js"
 import { utcDateFromIso } from "../src/utcDate.js";
@@ -216,6 +218,77 @@ describe("ProcessStore.memory", () => {
       expect(rows.map((row) => row.id)).toEqual(["runtime-completed"])
     }).pipe(provideLayer(ProcessStore.layer)),
   )
+
+  it.live("queries queue completion and lifecycle events", () =>
+    Effect.gen(function* () {
+      const store = yield* ProcessStore
+      const t1 = utcDateFromIso("2026-01-01T04:00:00.000Z").getTime()
+      const t2 = utcDateFromIso("2026-01-01T04:05:00.000Z").getTime()
+      const t3 = utcDateFromIso("2026-01-01T04:10:00.000Z").getTime()
+
+      const completed: QueueItemCompletedEvent = {
+        id: "queue-item-completed",
+        type: "queue.item.completed",
+        occurredAt: t1,
+        entityType: "queue",
+        entityId: "email-queue",
+        item: {
+          status: "completed",
+          priority: "normal",
+          durationMs: 10,
+          attempts: 1,
+        },
+      }
+      const failed: QueueItemCompletedEvent = {
+        id: "queue-item-failed",
+        type: "queue.item.completed",
+        occurredAt: t3,
+        entityType: "queue",
+        entityId: "email-queue",
+        item: {
+          status: "failed",
+          priority: "high",
+          durationMs: 20,
+          attempts: 2,
+          error: "smtp down",
+        },
+      }
+      const paused: QueueLifecycleChangedEvent = {
+        id: "queue-paused",
+        type: "queue.lifecycle.changed",
+        occurredAt: t2,
+        entityType: "queue",
+        entityId: "email-queue",
+        lifecycle: { tag: "Paused" },
+      }
+
+      yield* store.appendBatch([
+        completed,
+        failed,
+        paused,
+        {
+          ...completed,
+          id: "other-queue-item",
+          entityId: "sms-queue",
+        },
+      ])
+
+      const completions = yield* store.getQueueItemCompletions("email-queue")
+      expect(completions.map((row) => row.id)).toEqual([
+        "queue-item-failed",
+        "queue-item-completed",
+      ])
+
+      const limited = yield* store.getQueueItemCompletions("email-queue", {
+        before: t3,
+        limit: 1,
+      })
+      expect(limited.map((row) => row.id)).toEqual(["queue-item-completed"])
+
+      const lifecycle = yield* store.getQueueLifecycle("email-queue")
+      expect(lifecycle.map((row) => row.lifecycle.tag)).toEqual(["Paused"])
+    }).pipe(provideLayer(ProcessStore.layer)),
+  )
 })
 
 describe("ProcessStore.file", () => {
@@ -247,6 +320,28 @@ describe("ProcessStore.file", () => {
         },
       })
 
+      yield* first.append({
+        id: "file-queue-item-completed",
+        type: "queue.item.completed",
+        occurredAt: occurredAt + 1,
+        entityType: "queue",
+        entityId: "file-email-queue",
+        item: {
+          status: "completed",
+          priority: "normal",
+          durationMs: 3,
+          attempts: 1,
+        },
+      })
+      yield* first.append({
+        id: "file-queue-cleared",
+        type: "queue.lifecycle.changed",
+        occurredAt: occurredAt + 2,
+        entityType: "queue",
+        entityId: "file-email-queue",
+        lifecycle: { tag: "Cleared", itemsCleared: 1 },
+      })
+
       yield* fs.writeFileString(filePath, "not json\n", { flag: "a" })
 
       const second = yield* ProcessStore.file(filePath)
@@ -257,6 +352,14 @@ describe("ProcessStore.file", () => {
       })
 
       expect(rows.map((row) => row.id)).toEqual(["file-runtime-started"])
+
+      const completions = yield* second.getQueueItemCompletions("file-email-queue")
+      expect(completions.map((row) => row.id)).toEqual([
+        "file-queue-item-completed",
+      ])
+
+      const lifecycle = yield* second.getQueueLifecycle("file-email-queue")
+      expect(lifecycle.map((row) => row.lifecycle.tag)).toEqual(["Cleared"])
 
       yield* fs.remove(directory, { recursive: true }).pipe(Effect.catch(() => Effect.void))
     }).pipe(provideLayer(platform)),
