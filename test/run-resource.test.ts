@@ -2,7 +2,13 @@ import { it, describe, expect } from "@effect/vitest";
 import { Effect, Layer, Ref } from "effect";
 import { RunResource } from "../src/RunResource";
 import { ProcessStore, type AnalyticsEvent, type ProcessStoreInterface } from "../src/ProcessStore";
-import { RuntimeObserver, type RuntimeFact } from "../src/RuntimeState";
+import {
+  RuntimeObserver,
+  type RuntimeFact,
+  type RuntimeStateBase,
+  type RuntimeStateChange,
+} from "../src/RuntimeState";
+import type { RunResourceState } from "../src/RunResource";
 import { provideLayer } from "../src/provideLayer.js";
 
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
@@ -13,6 +19,15 @@ const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
     yield* Effect.yieldNow;
     yield* Ref.update(active, (x) => x - 1);
   });
+
+const isRunResourceState = (state: RuntimeStateBase): state is RunResourceState =>
+  state.ref.kind === "run-resource" &&
+  "completed" in state &&
+  typeof state.completed === "number" &&
+  "failed" in state &&
+  typeof state.failed === "number" &&
+  "inFlight" in state &&
+  typeof state.inFlight === "number";
 
 describe("RunResource.makeRunner", () => {
   it.live("concurrency 1 enforces serial execution", () =>
@@ -166,6 +181,54 @@ describe("RunResource.make (raw scoped)", () => {
         ]);
         expect(observedFacts.every((fact) => fact.ref.kind === "run-resource")).toBe(true);
         expect(observedFacts.every((fact) => fact.ref.id === "@test/ObservedGate")).toBe(true);
+      }).pipe(
+        Effect.provideService(RuntimeObserver, observer),
+        Effect.scoped,
+      );
+    }),
+  );
+
+  it.live("publishes runtime state changes when RuntimeObserver is provided", () =>
+    Effect.gen(function* () {
+      const changes = yield* Ref.make<ReadonlyArray<RuntimeStateChange>>([]);
+      const observer = {
+        publishStateChange: (change: RuntimeStateChange) =>
+          Ref.update(changes, (items) => [...items, change]),
+        publishFact: (_fact: RuntimeFact) => Effect.void,
+      };
+
+      yield* Effect.gen(function* () {
+        const gate = yield* RunResource.make({
+          name: "@test/ObservedStateGate",
+          effect: (n: number) =>
+            n > 0 ? Effect.succeed(n) : Effect.fail("negative"),
+          concurrency: 1,
+        });
+
+        const success = yield* gate(1);
+        const failure = yield* gate(0).pipe(Effect.flip);
+        const observedChanges = yield* Ref.get(changes);
+        const last = observedChanges[observedChanges.length - 1];
+
+        expect(success).toBe(1);
+        expect(failure).toBe("negative");
+        expect(observedChanges.map((change) => change.reason)).toEqual([
+          "run-resource.run.waiting",
+          "run-resource.run.started",
+          "run-resource.run.completed",
+          "run-resource.run.waiting",
+          "run-resource.run.started",
+          "run-resource.run.failed",
+        ]);
+        expect(last).not.toBeUndefined();
+        if (last !== undefined && isRunResourceState(last.current)) {
+          expect(last.current.completed).toBe(1);
+          expect(last.current.failed).toBe(1);
+          expect(last.current.inFlight).toBe(0);
+          expect(last.current.waiting).toBe(0);
+        } else {
+          throw new Error("Expected final RunResource state change");
+        }
       }).pipe(
         Effect.provideService(RuntimeObserver, observer),
         Effect.scoped,

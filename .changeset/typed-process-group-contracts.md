@@ -22,6 +22,8 @@ Adds the first runtime state/fact vocabulary and optional `RuntimeObserver`, wit
 
 `ProcessStore.events(query)` now provides a generic storage-neutral event read across memory, file-backed, and Prisma implementations.
 
+`RunResource` now publishes `RunResourceState` changes for waiting, started, completed, failed, and interrupted runs when `RuntimeObserver` is provided.
+
 `ProcessStore.file(filePath)` and `ProcessStore.fileLayer(filePath)` add an Effect `FileSystem`-backed NDJSON store for local durable analytics events.
 
 Adds dedicated package subpaths for service/resource imports (`/Process`, `/QueueResource`, `/ProcessGroup`, `/ProcessStore`, `/ProcessManager`, `/ControlService`) and storage adapters (`/storage/file`, `/storage/prisma`). Root imports and the legacy `/prisma` subpath remain compatible.

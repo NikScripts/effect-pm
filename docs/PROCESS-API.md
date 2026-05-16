@@ -203,6 +203,16 @@ const program = Effect.gen(function* () {
 The same registry powers registry-backed
 `ProcessManager.Endpoint<Self>()(BillingGroup)` and
 `ProcessManager.cli([BillingGroup, StripeGroup] as const)`.
+
+Security boundary: current remote control is only appropriate for localhost or a
+trusted private network. Do not expose `ControlService` / `ProcessManager`
+targets directly to a non-private network. The current HTTP control surface does
+not provide built-in authn/authz, TLS/mTLS, request signing, replay protection,
+rate limiting, or audit logging. Future security layers should add authenticated
+transport, operator identity, scoped permissions for read vs mutation controls,
+request timestamps/nonces, and audit records for every remote command before
+public-network deployment is considered safe.
+
 CLI commands accept canonical ids such as
 `@repo/north-west/BillingGroup/SyncInvoices` and normalized suffix aliases such
 as `north-west/billing-group/sync-invoices` or `sync-invoices`. Ambiguous
@@ -296,6 +306,7 @@ void Effect.runPromise(program.pipe(
 | `RuntimeStateBase` | Base shape for live state snapshots with `ref`, `observedAt`, and `configVersion`. |
 | `RuntimeStateChange` | Generic transition record with previous/current state. |
 | `RuntimeFact` | Generic discrete runtime occurrence payload. |
+| `RunResourceState` | Live `RunResource` counters for waiting, in-flight, completed, failed, interrupted, and total duration. |
 | `RuntimeFactRecordedEvent` | ProcessStore analytics event wrapping a persisted `RuntimeFact`. |
 | `RuntimeObserver` | Optional service for publishing runtime facts and state changes. |
 | `RuntimeObserver.publishFact(fact)` | Publishes a fact when the service is present; otherwise no-ops. |
@@ -303,8 +314,8 @@ void Effect.runPromise(program.pipe(
 | `RuntimeObserver.layerProcessStore` | Observer layer that persists runtime facts through `ProcessStore`. |
 
 `RunResource` publishes `run-resource.run.started`,
-`run-resource.run.completed`, and `run-resource.run.failed` facts when
-`RuntimeObserver` is provided. Observation is optional: when no
+`run-resource.run.completed`, and `run-resource.run.failed` facts plus
+`RunResourceState` transitions when `RuntimeObserver` is provided. Observation is optional: when no
 `RuntimeObserver` service is in the environment, publish helpers no-op and the
 gated effect behavior is unchanged.
 
