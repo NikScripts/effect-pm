@@ -246,9 +246,10 @@ const program = Effect.gen(function* () {
  * `Polling` / `ProcessSchedule` passed to {@link Process.make} are merged into the
  * supervisor there; you do **not** need to provide them again at the program root.
  *
- * NOTE: ProcessStore.layer is in-memory, so data is lost on restart. For
- * production, use the Prisma-backed `PrismaProcessStore.layer({ client })`
- * from `@nikscripts/effect-pm/prisma`.
+ * NOTE: ProcessStore.layer is in-memory, so data is lost on restart. For local
+ * durable analytics without a database, use `ProcessStore.fileLayer(filePath)`
+ * with Effect FileSystem / Path platform layers. For SQL-backed persistence,
+ * use `PrismaProcessStore.layer({ client })` from `@nikscripts/effect-pm/prisma`.
  */
 
 void Effect.runPromise(

@@ -64,7 +64,7 @@ remote queue enqueue stay planned until schema-backed queue item contracts land.
 | Schedule + **`ProcessGroup`** / API-driven arm | [docs/SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + [examples/scenarios/game-window-polling-with-process-group.ts](../examples/scenarios/game-window-polling-with-process-group.ts) |
 | Understand process runtime semantics | [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + `src/Process.ts` TSDoc |
 | API tables (make, Polling, Schedule, ProcessGroup) | [PROCESS-API.md](./PROCESS-API.md) |
-| Prisma-backed analytics | [README.md](../README.md) Prisma section + `src/prisma/` |
+| ProcessStore storage (memory / file / Prisma) | [PROCESS-API.md](./PROCESS-API.md) + [examples/forms/process-store/](../examples/forms/process-store/) + `src/prisma/` |
 | AI / agent onboarding (repo map, conventions) | [AGENTS.md](./AGENTS.md) |
 
 ---
