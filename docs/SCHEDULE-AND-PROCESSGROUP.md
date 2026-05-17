@@ -8,7 +8,7 @@ For API tables, see [PROCESS-API.md](./PROCESS-API.md). For runtime semantics, s
 
 ## Does the schedule “auto-start” when the group is created?
 
-**No.** `yield* ProcessGroup.make({ … })` only **registers** processes and queues and returns a **`ProcessGroup`** handle. Each process’s status starts as **`stopped`**.
+**No.** `yield* ProcessGroup.make(id, […])` (or legacy `make({ processes, queues })`) only **registers** entries and returns a group handle. Each process status starts **`stopped`**.
 
 The **`ProcessSchedule`** service layer attached to **`Process.make`** is **merged into `process.effect`**. That effect is a **long-running schedule driver**. Nothing runs that driver until you:
 
@@ -69,12 +69,12 @@ When you want the **fiber gone** (scale to zero, deploy teardown), call **`stop`
 ## Pattern: API game schedule → arm while live → disarm when over → optional stop
 
 1. Start with no entries (pre-game = no active window).
-2. **`Process.make`** with **`schedule`** initializer or `ProcessSchedule.inMemory(...)` and **`polling: Polling.spaced(…)`**.
-3. **`ProcessGroup.make({ queues: [], processes: [proc] })`** (empty `queues` is allowed — see `test/process-group.test.ts`).  
-4. **`yield* group.start(proc.name)`** — schedule driver starts.
+2. **`Process.Service`** subclass **or** inline **`Process.make`** with **`schedule`** initializer / `ProcessSchedule.inMemory(...)`, **`polling: Polling.spaced(…)`**.
+3. **`ProcessGroup.make(id, [MyProcess] as const)`** for the typed tuple form, **or** legacy **`ProcessGroup.make({ queues: [], processes: [proc from Process.make] })`** — empty `queues` is allowed (see `test/process-group.test.ts` and **`examples/scenarios/game-window-polling-with-process-group.ts`**).  
+4. **`yield* group.start(MyProcess)`** (typed) or **`yield* group.start(proc.name)`** (legacy **`Process`** handle).
 5. **Fork** `Effect.gen` that simulates (or performs) **`HttpClient.get`**, then updates entries (for example `set([ProcessSchedule.window("match-101", kickoff, finalWhistle)])`).
 6. Under **`TestClock`**, **`TestClock.adjust`** so sleeps complete.  
-7. Inspect tick counter / logs; then **`yield* group.stop(proc.name)`** if you want the process **removed** from the running set, not merely unscheduled.
+7. Inspect tick counter / logs; then **`yield* group.stop(MyProcess)`** or **`yield* group.stop(proc.name)`** if you want the process **removed** from the running set, not merely unscheduled.
 
 Runnable script: **`examples/scenarios/game-window-polling-with-process-group.ts`**.
 

@@ -17,13 +17,12 @@ import {
 import { runNodeProgramWithLayer } from "../shared/demo-harness";
 import { utcDateFromMillis } from "../../src/utcDate";
 
-const program = Effect.gen(function* () {
-  // Tick counter: only increments inside the process `effect` body (i.e. when schedule allows).
-  const pollTicks = yield* Ref.make(0);
+/** Shared tick counter across runs (script exits after one invocation). */
+const pollTicks = Effect.runSync(Ref.make(0));
 
-  // `Process.make` merges `schedule` + `polling` into the supervisor — fork site only needs
-  // `ProcessStore` for execution analytics (same pattern as the main scenario).
-  const liveGamePoller = Process.make("examples/game-window-poller", {
+class GameWindowPoller extends Process.Service<GameWindowPoller>()(
+  "examples/game-window-poller",
+  {
     polling: Polling.spaced(Duration.millis(200)),
     schedule: ProcessSchedule.define(({ all, at, window }) =>
       all(
@@ -43,20 +42,21 @@ const program = Effect.gen(function* () {
         }`,
       );
     }),
-  });
+  },
+) {}
+
+const program = Effect.gen(function* () {
+  yield* Ref.set(pollTicks, 0);
 
   // `ProcessGroup.make` does **not** start supervisors — it only registers handles + initial
-  // `stopped` status. Empty `queues: []` is valid (see `test/process-group.test.ts`).
-  const group = yield* ProcessGroup.make({
-    queues: [],
-    processes: [liveGamePoller],
-  });
+  // `stopped` status. Processes without queues use a single-entry tuple.
+  const group = yield* ProcessGroup.make("@examples/scenario-game-window", [
+    GameWindowPoller,
+  ] as const);
 
-  // **This** line forks `liveGamePoller.effect` (driver + inlined schedule/polling). Until
-  // here, no runtime fibers are active for the process in a group-managed scope (you could fork
-  // `process.effect` yourself without a group; the group adds lifecycle + `stop` /
-  // metrics wiring).
-  yield* group.start(liveGamePoller.name);
+  // **This** line forks schedule + polling drivers. Until here, no runtime fibers are active for
+  // the process under group lifecycle.
+  yield* group.start(GameWindowPoller);
 
   // Enough simulated time to run the first window.
   yield* TestClock.adjust(Duration.seconds(5));
@@ -66,8 +66,7 @@ const program = Effect.gen(function* () {
     `── Game-window demo: pollTicks=${totalTicks} (expect > 0 while schedule window is active) ──`,
   );
 
-  // Stop the managed runtime and close its scope.
-  yield* group.stop(liveGamePoller.name);
+  yield* group.stop(GameWindowPoller);
 }).pipe(
   Effect.scoped,
   Effect.catch((error: ProcessGroupErrors) =>
@@ -77,6 +76,10 @@ const program = Effect.gen(function* () {
 
 runNodeProgramWithLayer(
   program,
-  Layer.mergeAll(TestClock.layer(), ProcessStore.layer),
+  Layer.mergeAll(
+    TestClock.layer(),
+    ProcessStore.layer,
+    GameWindowPoller.layer,
+  ),
   "scenario:game-window-polling-with-process-group finished",
 );
