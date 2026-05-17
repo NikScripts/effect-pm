@@ -978,7 +978,10 @@ const makeCli = <
   const root = Command.make(
     "pm",
     {},
-    () => Effect.logInfo(`${config.name ?? "ProcessManager CLI"}. Use --help for commands.`),
+    () =>
+      Effect.logInfo(
+        `${config.name ?? "ProcessManager CLI"}. Use \`pm --help\`; try \`pm ls\` or \`pm groups\` for targets (--json on read commands).`,
+      ),
   ).pipe(
     Command.withSubcommands([
       groupsCommand,
