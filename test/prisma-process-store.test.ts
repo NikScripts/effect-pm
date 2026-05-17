@@ -9,7 +9,6 @@ import {
   type RuntimeFactRecordedEvent,
   type RuntimeStateChangedEvent,
 } from "../src";
-import { provideLayer } from "../src/provideLayer.js";
 import {
   PrismaProcessStore,
   decodeEventRow,
@@ -381,7 +380,7 @@ describe("PrismaProcessStore — adapter", () => {
       expect(all.map((row) => row.id)).toEqual(["e2", "e1"]);
 
       expect(rows.length).toBe(2);
-    }).pipe(provideLayer(PrismaProcessStore.layer({ client })));
+    }).pipe(Effect.provide(PrismaProcessStore.layer({ client })));
   });
 
   it.live("queries generic events through Prisma", () => {
@@ -421,7 +420,7 @@ describe("PrismaProcessStore — adapter", () => {
       expect(history.map((fact) => fact.id)).toEqual([
         "@test/RunGate/run/1/run-resource.run.started",
       ]);
-    }).pipe(provideLayer(PrismaProcessStore.layer({ client })));
+    }).pipe(Effect.provide(PrismaProcessStore.layer({ client })));
   });
 
   it.live("projects runtime state history through Prisma", () => {
@@ -460,7 +459,7 @@ describe("PrismaProcessStore — adapter", () => {
         "prisma-state-change/inner",
       ]);
       expect(Option.getOrNull(latest)).toEqual(current);
-    }).pipe(provideLayer(PrismaProcessStore.layer({ client })));
+    }).pipe(Effect.provide(PrismaProcessStore.layer({ client })));
   });
 
   it.live("queries queue completion and lifecycle events through Prisma", () => {
@@ -538,7 +537,7 @@ describe("PrismaProcessStore — adapter", () => {
 
       const lifecycle = yield* store.getQueueLifecycle("email-queue");
       expect(lifecycle.map((row) => row.id)).toEqual(["prisma-queue-paused"]);
-    }).pipe(provideLayer(PrismaProcessStore.layer({ client })));
+    }).pipe(Effect.provide(PrismaProcessStore.layer({ client })));
   });
 
   it.live("orders process executions by event occurrence time", () => {
@@ -591,7 +590,7 @@ describe("PrismaProcessStore — adapter", () => {
         before: lateCompletion,
       });
       expect(beforeLateCompletion.map((row) => row.id)).toEqual(["short-run"]);
-    }).pipe(provideLayer(PrismaProcessStore.layer({ client })));
+    }).pipe(Effect.provide(PrismaProcessStore.layer({ client })));
   });
 
   it.live("supports the layer-from-context wiring", () => {
@@ -613,6 +612,6 @@ describe("PrismaProcessStore — adapter", () => {
       const lifecycle = yield* store.getProcessLifecycle("p");
       expect(lifecycle.length).toBe(1);
       expect(lifecycle[0]?.lifecycle.tag).toBe("Started");
-    }).pipe(provideLayer(layer));
+    }).pipe(Effect.provide(layer));
   });
 });

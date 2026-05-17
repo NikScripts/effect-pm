@@ -14,7 +14,6 @@ import {
   RuntimeObserver,
   type AnalyticsEvent,
 } from "../../../src";
-import { provideLayer } from "../../../src/provideLayer";
 import { fileLayer } from "../../../src/storage/file";
 
 const platformLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
@@ -94,7 +93,7 @@ const program = Effect.gen(function* () {
       `events after malformed row is skipped: ${String(afterMalformedRow.length)}`,
     );
     yield* Effect.log(`file-backed store path: ${filePath}`);
-  }).pipe(provideLayer(live));
-}).pipe(provideLayer(platformLayer));
+  }).pipe(Effect.provide(live));
+}).pipe(Effect.provide(platformLayer));
 
 void Effect.runPromise(program);

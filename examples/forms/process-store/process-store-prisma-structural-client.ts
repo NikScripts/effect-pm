@@ -7,7 +7,7 @@
 
 import { Clock, DateTime, Effect } from "effect";
 import { ProcessStore } from "../../../src/ProcessStore";
-import { provideLayer } from "../../../src/provideLayer";
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import {
   PrismaProcessStore,
   type EffectPmEventCreateInput,
@@ -107,8 +107,12 @@ const program = Effect.gen(function* () {
   yield* Effect.log(
     `prisma placeholder events: ${events.map((event) => event.id).join(", ")}`,
   );
-}).pipe(
-  provideLayer(PrismaProcessStore.layer({ client: makePlaceholderClient() })),
-);
+}).pipe(Effect.scoped);
 
-void Effect.runPromise(program);
+const mainLayer = PrismaProcessStore.layer({ client: makePlaceholderClient() });
+
+runNodeProgramWithLayer(
+  program,
+  mainLayer,
+  "form:process-store-prisma-structural-client finished",
+);

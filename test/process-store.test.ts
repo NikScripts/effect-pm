@@ -10,7 +10,6 @@ import {
   type QueueLifecycleChangedEvent,
   type RuntimeStateChangedEvent,
 } from "../src"
-import { provideLayer } from "../src/provideLayer.js"
 import { utcDateFromIso } from "../src/utcDate.js";
 
 describe("ProcessStore.memory", () => {
@@ -82,7 +81,7 @@ describe("ProcessStore.memory", () => {
 
       const after = yield* store.getProcessExecutions("p1", { after: t1 })
       expect(after.map((row) => row.id)).toEqual(["e3", "e2"])
-    }).pipe(provideLayer(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStore.layer)),
   )
 
   it.live("orders process executions by event occurrence time", () =>
@@ -134,7 +133,7 @@ describe("ProcessStore.memory", () => {
         before: lateCompletion,
       })
       expect(beforeLateCompletion.map((row) => row.id)).toEqual(["short-run"])
-    }).pipe(provideLayer(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStore.layer)),
   )
 
   it.live("appends and queries process lifecycle events", () =>
@@ -169,7 +168,7 @@ describe("ProcessStore.memory", () => {
       const limited = yield* store.getProcessLifecycle("p2", { limit: 1 })
       expect(limited.length).toBe(1)
       expect(limited[0]?.lifecycle.tag).toBe("Stopped")
-    }).pipe(provideLayer(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStore.layer)),
   )
 
   it.live("queries generic events with type and entity filters", () =>
@@ -228,7 +227,7 @@ describe("ProcessStore.memory", () => {
         "run-1/completed",
         "run-1/start",
       ])
-    }).pipe(provideLayer(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStore.layer)),
   )
 
   it.live("queries queue completion and lifecycle events", () =>
@@ -299,7 +298,7 @@ describe("ProcessStore.memory", () => {
 
       const lifecycle = yield* store.getQueueLifecycle("email-queue")
       expect(lifecycle.map((row) => row.lifecycle.tag)).toEqual(["Paused"])
-    }).pipe(provideLayer(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStore.layer)),
   )
 
   it.live("projects runtime state history and latest state", () =>
@@ -344,7 +343,7 @@ describe("ProcessStore.memory", () => {
 
       expect(history.map((change) => change.id)).toEqual(["change-2"])
       expect(Option.getOrNull(latest)).toEqual(second)
-    }).pipe(provideLayer(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStore.layer)),
   )
 })
 
@@ -451,6 +450,6 @@ describe("ProcessStore.file", () => {
       ])
 
       yield* fs.remove(directory, { recursive: true }).pipe(Effect.catch(() => Effect.void))
-    }).pipe(provideLayer(platform)),
+    }).pipe(Effect.provide(platform)),
   )
 })

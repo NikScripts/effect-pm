@@ -310,7 +310,7 @@ export interface QueueResourceServiceDefinition<
 > extends Context.ServiceClass<Self, Id, QueueHandle<T, R, E, EEnqueue>>,
     Omit<QueueResourceMetadata<Id, T, R, E, EEnqueue>, "tag"> {
   readonly tag: Context.Key<Self, QueueHandle<T, R, E, EEnqueue>>;
-  readonly layer: Layer.Layer<Self, never, Scope.Scope>;
+  readonly layer: Layer.Layer<Self, never, never>;
 }
 
 /**
@@ -1225,15 +1225,15 @@ const makeQueueRuntime = <T, R, E, EEnqueue>(
 function queueResourceLayer<Self, T, R, E>(
   tag: Context.Key<Self, QueueHandle<T, R, E, never>>,
   config: QueueResourceConfigWithoutItemSchema<T, R, E>,
-): Layer.Layer<Self, never, Scope.Scope>;
+): Layer.Layer<Self, never, never>;
 function queueResourceLayer<Self, T, R, E>(
   tag: Context.Key<Self, QueueHandle<T, R, E, QueueEnqueueErrors>>,
   config: QueueResourceConfigWithItemSchema<T, R, E>,
-): Layer.Layer<Self, never, Scope.Scope>;
+): Layer.Layer<Self, never, never>;
 function queueResourceLayer<Self, T, R, E>(
   tag: Context.Key<Self, QueueHandle<T, R, E, never | QueueEnqueueErrors>>,
   config: QueueResourceConfig<T, R, E>,
-): Layer.Layer<Self, never, Scope.Scope> {
+): Layer.Layer<Self, never, never> {
   return hasItemSchema(config)
     ? Layer.effect(tag)(makeQueueEffectWithSchema(config))
     : Layer.effect(tag)(makeQueueEffectWithoutSchema(config));

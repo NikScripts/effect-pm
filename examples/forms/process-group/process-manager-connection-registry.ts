@@ -15,69 +15,76 @@ import {
   ProcessStore,
   QueueResource,
 } from "../../../src";
-import { provideLayer } from "../../../src/provideLayer";
 
 interface EmailJob {
   readonly to: string;
 }
 
-const program = Effect.gen(function* () {
-  const runs = yield* Ref.make(0);
+const program = Effect.scoped(
+  Effect.gen(function* () {
+    const runs = yield* Ref.make(0);
 
-  class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()(
-    "@examples/RegistryEmailQueue",
-    {
-      effect: (_email) => Effect.void,
-    },
-  ) {}
+    class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()(
+      "@examples/RegistryEmailQueue",
+      {
+        effect: (_email) => Effect.void,
+      },
+    ) {}
 
-  class SyncProcess extends Process.Service<SyncProcess>()(
-    "@examples/RegistrySyncProcess",
-    {
-      effect: Ref.update(runs, (count) => count + 1),
-    },
-  ) {}
+    class SyncProcess extends Process.Service<SyncProcess>()(
+      "@examples/RegistrySyncProcess",
+      {
+        effect: Ref.update(runs, (count) => count + 1),
+      },
+    ) {}
 
-  class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
-    "@examples/RegistryBillingGroup",
-    [SyncProcess, EmailQueue] as const,
-  ) {}
+    class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+      "@examples/RegistryBillingGroup",
+      [SyncProcess, EmailQueue] as const,
+    ) {}
 
-  const RemoteGroupsLive = ProcessManager.ConnectionRegistry.layer(
-    [BillingGroup] as const,
-    {
-      [BillingGroup.id]: "http://127.0.0.1:32137",
-    },
-  );
-
-  return yield* Effect.gen(function* () {
-    const group = yield* BillingGroup;
-
-    yield* ControlService.make({
-      port: 32137,
-      group,
-    });
-
-    const remoteProgram = Effect.gen(function* () {
-      const manager = yield* ProcessManager.connect(BillingGroup);
-
-      yield* manager.verifyContract;
-      yield* manager.process(SyncProcess.id).runImmediately;
-
-      const status = yield* manager.status;
-      yield* Effect.logInfo(`registry group id: ${BillingGroup.id}`);
-      yield* Effect.logInfo(`registry status success: ${String(status.success)}`);
-      yield* Effect.logInfo(`registry process runs: ${String(yield* Ref.get(runs))}`);
-    }).pipe(
-      provideLayer(RemoteGroupsLive),
-      provideLayer(NodeHttpClient.layerUndici),
+    const RemoteGroupsLive = ProcessManager.ConnectionRegistry.layer(
+      [BillingGroup] as const,
+      {
+        [BillingGroup.id]: "http://127.0.0.1:32137",
+      },
     );
 
-    yield* remoteProgram;
-  }).pipe(
-    provideLayer(Layer.mergeAll(BillingGroup.layer, EmailQueue.layer, ProcessStore.layer)),
-  );
-}).pipe(Effect.scoped);
+    yield* Effect.gen(function* () {
+      const group = yield* BillingGroup;
+
+      yield* ControlService.make({
+        port: 32137,
+        group,
+      });
+
+      const remoteProgram = Effect.gen(function* () {
+        const manager = yield* ProcessManager.connect(BillingGroup);
+
+        yield* manager.verifyContract;
+        yield* manager.process(SyncProcess.id).runImmediately;
+
+        const status = yield* manager.status;
+        yield* Effect.logInfo(`registry group id: ${BillingGroup.id}`);
+        yield* Effect.logInfo(`registry status success: ${String(status.success)}`);
+        yield* Effect.logInfo(`registry process runs: ${String(yield* Ref.get(runs))}`);
+      }).pipe(
+        Effect.provide(Layer.mergeAll(RemoteGroupsLive, NodeHttpClient.layerUndici)),
+      );
+
+      yield* remoteProgram;
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          BillingGroup.layer.pipe(
+            Layer.provide(Layer.mergeAll(SyncProcess.layer, EmailQueue.layer)),
+          ),
+          ProcessStore.layer,
+        ),
+      ),
+    );
+  }),
+);
 
 void Effect.runPromise(
   program.pipe(Effect.tap(() =>

@@ -95,7 +95,7 @@
   ],
   "scripts": {
     "build": "tsup",
-    "typecheck": "tsgo --noEmit -p tsconfig.json",
+    "typecheck": "tsgo --noEmit -p tsconfig.json && tsgo --noEmit -p tsconfig.src.strict-effect-provide.json",
     "test": "vitest run",
     "test:nwsl": "node scripts/nwsl-local.mjs test",
     "test:watch": "vitest",

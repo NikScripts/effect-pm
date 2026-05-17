@@ -4,12 +4,11 @@
  * DB rows → ProcessSchedule entries, synced at startup and each tick. Run: `pnpm run example:schedule-control-db-sync`
  */
 
-import { Duration, Effect, Fiber, Option, Ref } from "effect";
+import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process, ProcessStore } from "../../src";
 import type { ProcessScheduleEntry } from "../../src/ProcessSchedule";
-import { runNodeProgramOrExit } from "../shared/demo-harness";
-import { provideLayer } from "../../src/provideLayer";
+import { runNodeProgramWithLayer } from "../shared/demo-harness";
 import { utcDateFromMillis } from "../../src/utcDate";
 
 interface DbScheduleRow {
@@ -48,7 +47,7 @@ const program = Effect.gen(function* () {
     }),
   });
 
-  const supervisor = yield* Effect.forkChild(proc.effect.pipe(provideLayer(ProcessStore.layer)));
+  const supervisor = yield* Effect.forkChild(proc.effect);
 
   // Simulate DB change: remove stale rows and introduce a new one.
   yield* Effect.sleep(Duration.millis(900));
@@ -60,9 +59,10 @@ const program = Effect.gen(function* () {
   yield* Effect.yieldNow;
   yield* Effect.logInfo(`ticks with db-sync pattern: ${yield* Ref.get(ticks)}`);
   yield* Fiber.interrupt(supervisor);
-}).pipe(
-  provideLayer(TestClock.layer()),
-  Effect.scoped,
-);
+}).pipe(Effect.scoped);
 
-runNodeProgramOrExit(program, "scenario:schedule-sync-from-external-db finished");
+runNodeProgramWithLayer(
+  program,
+  Layer.mergeAll(TestClock.layer(), ProcessStore.layer),
+  "scenario:schedule-sync-from-external-db finished",
+);

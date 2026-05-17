@@ -6,7 +6,6 @@
  */
 
 import { Effect, Ref } from "effect";
-import { provideLayer } from "../../../src/provideLayer";
 import {
   RunResource,
   RuntimeObserver,
@@ -80,7 +79,7 @@ const program = Effect.gen(function* () {
         ? "latest state: missing"
         : `latest state: completed=${String(latestState.completed)}, failed=${String(latestState.failed)}, inFlight=${String(latestState.inFlight)}`,
     );
-  }).pipe(provideLayer(observerLayer));
+  }).pipe(Effect.provide(observerLayer));
 
   // Observation is optional. Without RuntimeObserver, publish helpers no-op and
   // the gated effect behavior is unchanged.

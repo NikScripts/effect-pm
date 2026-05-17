@@ -1,8 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Duration, Effect, Fiber, Option } from "effect";
+import { Duration, Effect, Fiber, Layer, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling } from "../src";
-import { provideLayer } from "../src/provideLayer.js";
 
 describe("Polling.spaced", () => {
   it.effect("awaitNextTick completes when TestClock advances by the spacing duration", () =>
@@ -11,12 +10,14 @@ describe("Polling.spaced", () => {
         Effect.gen(function* () {
           const polling = yield* Polling;
           yield* polling.awaitNextTick;
-        }).pipe(provideLayer(Polling.spaced(Duration.seconds(2)))),
+        }),
       );
 
       yield* TestClock.adjust(Duration.seconds(2));
       yield* Fiber.join(fiber);
-    }).pipe(provideLayer(TestClock.layer())),
+    }).pipe(
+      Effect.provide(Layer.mergeAll(TestClock.layer(), Polling.spaced(Duration.seconds(2)))),
+    ),
   );
 
   it.effect("requestWake ends the current await before the full duration elapses", () =>
@@ -26,7 +27,11 @@ describe("Polling.spaced", () => {
       yield* TestClock.adjust(Duration.seconds(1));
       yield* polling.requestWake;
       yield* Fiber.join(waitFiber);
-    }).pipe(provideLayer(Polling.spaced(Duration.seconds(10)))),
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(Polling.spaced(Duration.seconds(10)), TestClock.layer()),
+      ),
+    ),
   );
 });
 
@@ -57,11 +62,15 @@ describe("Polling.accelerating", () => {
 
       expect(firstMs).toBeGreaterThan(acceleratedMs);
       expect(resetMs).toBe(firstMs);
-    }).pipe(provideLayer(Polling.acceleratingScoped({
-      minIntervalMs: 100,
-      maxIntervalMs: 2_000,
-      decayK: 1,
-    }))),
+    }).pipe(
+      Effect.provide(
+        Polling.acceleratingScoped({
+          minIntervalMs: 100,
+          maxIntervalMs: 2_000,
+          decayK: 1,
+        }),
+      ),
+    ),
   );
 
   it.effect("resetCadence wakes a pending wait", () =>
@@ -73,12 +82,16 @@ describe("Polling.accelerating", () => {
       yield* polling.resetCadence;
       yield* Fiber.join(waitFiber);
     }).pipe(
-      provideLayer(Polling.acceleratingScoped({
-        minIntervalMs: 100,
-        maxIntervalMs: 60_000,
-        decayK: 1,
-      })),
-      provideLayer(TestClock.layer()),
+      Effect.provide(
+        Layer.mergeAll(
+          Polling.acceleratingScoped({
+            minIntervalMs: 100,
+            maxIntervalMs: 60_000,
+            decayK: 1,
+          }),
+          TestClock.layer(),
+        ),
+      ),
     ),
   );
 });

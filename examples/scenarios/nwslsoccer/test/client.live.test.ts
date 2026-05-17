@@ -8,7 +8,6 @@ import { describe, expect, it } from "vitest";
 import { NWSL_SDP_DEFAULT_LOCALE } from "../constants";
 import { NwslsoccerClient } from "../client";
 import { LocaleQuery, SeasonIdPath } from "../schemas";
-import { provideLayer } from "../../../../src/provideLayer";
 
 const DEFAULT_SEASON = "nwsl::Football_Season::0b6761e4701749f593690c0f338da74c";
 
@@ -23,7 +22,7 @@ describe.skipIf(!process.env.NWSL_SDP_LIVE)("NWSL SDP live (NWSL_SDP_LIVE=1)", (
           params: new SeasonIdPath({ seasonId }),
           query: new LocaleQuery({ locale: NWSL_SDP_DEFAULT_LOCALE }),
         });
-      }).pipe(provideLayer(NwslsoccerClient.layerNode)),
+      }).pipe(Effect.provide(NwslsoccerClient.layerNode)),
     );
 
     expect(res.competition.seasonId).toBeTruthy();

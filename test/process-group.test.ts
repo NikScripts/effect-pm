@@ -2,7 +2,6 @@ import { describe, expect, it } from "@effect/vitest"
 import { Duration, Effect, Fiber, Option, Ref } from "effect"
 import { ProcessGroup, ProcessStore } from "../src"
 import type { Process, ProcessDetails } from "../src"
-import { provideLayer } from "../src/provideLayer.js";
 
 const waitUntilTicked = (ticks: Ref.Ref<number>) =>
   Effect.gen(function* () {
@@ -54,7 +53,7 @@ describe("ProcessGroup — process lifecycle", () => {
 
       expect(yield* Ref.get(ticks)).toBeGreaterThan(0)
       yield* group.stop(process.name)
-    }).pipe(provideLayer(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStore.layer)),
   )
 
   it.live("stop closes the process scope and stops future work", () =>
@@ -73,7 +72,7 @@ describe("ProcessGroup — process lifecycle", () => {
       const stoppedAt = yield* Ref.get(ticks)
       yield* Effect.sleep(Duration.millis(80))
       expect(yield* Ref.get(ticks)).toBe(stoppedAt)
-    }).pipe(provideLayer(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStore.layer)),
   )
 
   it.live("writes lifecycle events to ProcessStore when provided", () =>
@@ -92,6 +91,6 @@ describe("ProcessGroup — process lifecycle", () => {
       const store = yield* ProcessStore
       const history = yield* store.getProcessLifecycle(process.name)
       expect(history.map((row) => row.lifecycle.tag)).toEqual(["Stopped", "Started"])
-    }).pipe(provideLayer(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStore.layer)),
   )
 })

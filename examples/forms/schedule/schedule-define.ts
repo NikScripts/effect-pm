@@ -4,12 +4,13 @@
  * ProcessSchedule.define composition. Run: `pnpm run example:form:schedule-define`
  */
 
-import { Duration, Effect, Fiber, Option, Ref } from "effect";
+import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process, ProcessSchedule, ProcessStore } from "../../../src";
-import { runNodeProgramOrExit } from "../../shared/demo-harness";
-import { provideLayer } from "../../../src/provideLayer";
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/utcDate";
+
+const env = Layer.mergeAll(ProcessStore.layer, TestClock.layer());
 
 const program = Effect.gen(function* () {
   const seen = yield* Ref.make<ReadonlyArray<string>>([]);
@@ -32,11 +33,11 @@ const program = Effect.gen(function* () {
     }),
   });
 
-  const fib = yield* Effect.forkChild(proc.effect.pipe(provideLayer(ProcessStore.layer)));
+  const fib = yield* Effect.forkChild(proc.effect);
   yield* TestClock.adjust(Duration.seconds(3));
   yield* Effect.yieldNow;
   yield* Fiber.interrupt(fib);
   yield* Effect.logInfo(`ids observed: ${(yield* Ref.get(seen)).join(", ")}`);
-}).pipe(provideLayer(TestClock.layer()), Effect.scoped);
+}).pipe(Effect.scoped);
 
-runNodeProgramOrExit(program, "form:schedule-define finished");
+runNodeProgramWithLayer(program, env, "form:schedule-define finished");

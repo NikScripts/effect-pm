@@ -4,9 +4,9 @@
  * RunResource unit + input forms. Run: `pnpm run example:run-resource`
  */
 
-import { Clock, Duration, Effect } from "effect";
+import { Clock, Duration, Effect, Layer } from "effect";
 import { RunResource } from "../../../src";
-import { provideLayer } from "../../../src/provideLayer";
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 // void input — callable as gate(undefined)
 class TimedWorkGate extends RunResource.Service<TimedWorkGate, void, number, never>()("examples/TimedWorkGate", {
@@ -64,10 +64,6 @@ const program = Effect.gen(function* () {
   yield* Effect.log("");
 });
 
-void Effect.runPromise(
-  program.pipe(
-    provideLayer(TimedWorkGate.layer),
-    provideLayer(DoubleGate.layer),
-    Effect.tap(() => Effect.logInfo("form:run-resource-unit-and-input finished OK")),
-  ),
-);
+const mainLayer = Layer.mergeAll(TimedWorkGate.layer, DoubleGate.layer);
+
+runNodeProgramWithLayer(program, mainLayer, "form:run-resource-unit-and-input finished OK");

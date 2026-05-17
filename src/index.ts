@@ -53,10 +53,16 @@
  *
  * ## Source-only helpers
  *
- * The published **`exports["."]`** surface is this file. Small utilities such as
- * **`provideLayer`** (strict `Effect.provide` alias) and **`utcDate`** helpers live under
- * `src/` for tests, examples, and internal call sites only; they are not part of the semver
- * API unless promoted here later.
+ * The published **`exports["."]`** surface is this file. Small utilities (`utcDate`, etc.)
+ * live under `src/` for tests and tooling; they are not part of the semver API unless promoted
+ * here.
+ *
+ * **Layers in `src/`:** Prefer attaching dependencies via **built {@link Context.Context}**
+ * (`Effect.provide(effect, context)`) inside the runtime, or **`ManagedRuntime`** at true OS
+ * edges (see `src/bin/effect-pm.ts`). Avoid scattering {@link Effect.provide} with
+ * {@link Layer.Layer} through library internals — examples attach a **single** composed layer
+ * at script entry (`examples/shared/demo-harness.ts`, same idea as `@effect/platform-node`
+ * samples). **Tests** may use `Effect.provide` with layers, matching Effect’s own suites.
  *
  * @module @nikscripts/effect-pm
  */

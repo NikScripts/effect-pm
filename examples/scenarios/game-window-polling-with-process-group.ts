@@ -14,8 +14,7 @@ import {
   ProcessSchedule,
   ProcessStore,
 } from "../../src";
-import { runNodeProgramOrExit } from "../shared/demo-harness";
-import { provideLayer } from "../../src/provideLayer";
+import { runNodeProgramWithLayer } from "../shared/demo-harness";
 import { utcDateFromMillis } from "../../src/utcDate";
 
 const program = Effect.gen(function* () {
@@ -70,11 +69,14 @@ const program = Effect.gen(function* () {
   // Stop the managed runtime and close its scope.
   yield* group.stop(liveGamePoller.name);
 }).pipe(
-  provideLayer(Layer.mergeAll(TestClock.layer(), ProcessStore.layer)),
   Effect.scoped,
   Effect.catch((error: ProcessGroupErrors) =>
     Effect.logError(`Game-window demo failed: ${String(error)}`),
   ),
 );
 
-runNodeProgramOrExit(program, "scenario:game-window-polling-with-process-group finished");
+runNodeProgramWithLayer(
+  program,
+  Layer.mergeAll(TestClock.layer(), ProcessStore.layer),
+  "scenario:game-window-polling-with-process-group finished",
+);

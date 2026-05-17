@@ -7,17 +7,17 @@
 import { Duration, Effect, Fiber, Layer, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process, ProcessSchedule, ProcessStore } from "../../../src";
-import { runNodeProgramOrExit } from "../../shared/demo-harness";
-import { provideLayer } from "../../../src/provideLayer";
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/utcDate";
+
+const scheduleLayer = ProcessSchedule.inMemory([
+  ProcessSchedule.window("external-1", utcDateFromMillis(0), utcDateFromMillis(500)),
+]);
+
+const env = Layer.mergeAll(ProcessStore.layer, scheduleLayer, TestClock.layer());
 
 const program = Effect.gen(function* () {
   const ticks = yield* Ref.make(0);
-
-  const scheduleLayer = ProcessSchedule.inMemory([
-    ProcessSchedule.window("external-1", utcDateFromMillis(0), utcDateFromMillis(500)),
-  ]);
-  const runtimeLayer = Layer.mergeAll(ProcessStore.layer, scheduleLayer);
 
   const proc = Process.make("examples/forms/schedule-controls-external-fiber", {
     polling: Polling.spaced(Duration.millis(100)),
@@ -37,16 +37,14 @@ const program = Effect.gen(function* () {
     ]);
   });
 
-  yield* Effect.gen(function* () {
-    const supervised = yield* Effect.forkChild(proc.effect);
-    const side = yield* Effect.forkChild(controller);
-    yield* TestClock.adjust(Duration.seconds(3));
-    yield* Effect.yieldNow;
-    yield* Fiber.interrupt(side);
-    yield* Fiber.interrupt(supervised);
-  }).pipe(provideLayer(runtimeLayer));
+  const supervised = yield* Effect.forkChild(proc.effect);
+  const side = yield* Effect.forkChild(controller);
+  yield* TestClock.adjust(Duration.seconds(3));
+  yield* Effect.yieldNow;
+  yield* Fiber.interrupt(side);
+  yield* Fiber.interrupt(supervised);
 
   yield* Effect.logInfo(`ticks with external schedule controller: ${yield* Ref.get(ticks)}`);
-}).pipe(provideLayer(TestClock.layer()), Effect.scoped);
+}).pipe(Effect.scoped);
 
-runNodeProgramOrExit(program, "form:schedule-controls-external-fiber finished");
+runNodeProgramWithLayer(program, env, "form:schedule-controls-external-fiber finished");

@@ -5,10 +5,10 @@
  */
 
 import { FetchHttpClient } from "effect/unstable/http";
-import { Effect, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
 import { HttpApiResource } from "../../../src";
-import { provideLayer } from "../../../src/provideLayer";
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 const Post = Schema.Struct({
   userId: Schema.Number,
@@ -40,10 +40,6 @@ const program = Effect.gen(function* () {
   yield* Effect.log(`Post #${post.id}: ${post.title.slice(0, 60)}…`);
 });
 
-void Effect.runPromise(
-  program.pipe(
-    provideLayer(DemoApiClient.layer),
-    provideLayer(FetchHttpClient.layer),
-    Effect.tap(() => Effect.logInfo("form:http-api-resource-tag-layer finished OK")),
-  ),
-);
+const mainLayer = DemoApiClient.layer.pipe(Layer.provide(FetchHttpClient.layer));
+
+runNodeProgramWithLayer(program, mainLayer, "form:http-api-resource-tag-layer finished OK");

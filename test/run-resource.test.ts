@@ -10,7 +10,6 @@ import {
   type RuntimeStateChange,
 } from "../src/RuntimeState";
 import type { RunResourceState } from "../src/RunResource";
-import { provideLayer } from "../src/provideLayer.js";
 
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
   Effect.gen(function* () {
@@ -279,7 +278,7 @@ describe("RunResource.make (raw scoped)", () => {
         ]);
         expect(trailing).toBe(3);
       }).pipe(
-        provideLayer(RuntimeObserver.layerListeners(listeners)),
+        Effect.provide(RuntimeObserver.layerListeners(listeners)),
         Effect.scoped,
       );
     }),
@@ -329,7 +328,7 @@ describe("RunResource.make (raw scoped)", () => {
           expect(firstState.change.reason).toBe("run-resource.run.waiting");
         }
       }).pipe(
-        provideLayer(
+        Effect.provide(
           Layer.provide(
             RuntimeObserver.layerProcessStore,
             Layer.succeed(ProcessStore, store),

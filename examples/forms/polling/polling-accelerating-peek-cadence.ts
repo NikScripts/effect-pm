@@ -9,9 +9,8 @@ import { TestClock } from "effect/testing";
 import { Process, Polling, ProcessSchedule, ProcessStore } from "../../../src";
 import {
   forkSupervisedAndSideThenAdvanceTime,
-  runNodeProgramOrExit,
+  runNodeProgramWithLayer,
 } from "../../shared/demo-harness";
-import { provideLayer } from "../../../src/provideLayer";
 import {
   makeSportsScoreFeedTestDouble,
   scoreKey,
@@ -19,6 +18,23 @@ import {
 
 // ProcessSchedule.at expects Date — build from DateTime, not `new Date()` inside Effect.
 const scheduleStartAtUnixEpoch = DateTime.toDateUtc(DateTime.makeUnsafe(0));
+
+const pollLayer = Polling.acceleratingScoped({
+  minIntervalMs: 25,
+  maxIntervalMs: 500,
+  decayK: 0.55,
+});
+
+const scheduleLayer = ProcessSchedule.inMemory([
+  ProcessSchedule.at("sports-accel-verbose", scheduleStartAtUnixEpoch),
+]);
+
+const env = Layer.mergeAll(
+  TestClock.layer(),
+  ProcessStore.layer,
+  pollLayer,
+  scheduleLayer,
+);
 
 const program = Effect.gen(function* () {
   // Stand-in for your scores API. See shared/sports-score-feed.ts for the scripted timeline.
@@ -31,20 +47,6 @@ const program = Effect.gen(function* () {
   const events = yield* Ref.make<readonly string[]>([]);
   const logEvent = (line: string): Effect.Effect<void, never, never> =>
     Ref.update(events, (lines) => [...lines, line]).pipe(Effect.asVoid);
-
-  // First gaps ≈ maxIntervalMs (500), then shrink toward minIntervalMs (25) each tick.
-  // Merged at fork time (not inlined on Process.make) so resetCadence/peekCadence hit the
-  // same Polling instance the supervisor uses for awaitNextTick.
-  const pollLayer = Polling.acceleratingScoped({
-    minIntervalMs: 25,
-    maxIntervalMs: 500,
-    decayK: 0.55,
-  });
-
-  // Armed from simulated t=0 for the whole run.
-  const scheduleLayer = ProcessSchedule.inMemory([
-    ProcessSchedule.at("sports-accel-verbose", scheduleStartAtUnixEpoch),
-  ]);
 
   const proc = Process.make("examples/forms/polling-accelerating-peek-cadence", {
     effect: Effect.gen(function* () {
@@ -77,9 +79,7 @@ const program = Effect.gen(function* () {
 
   // Fork process + feed simulator, advance TestClock, tear down process fiber.
   yield* forkSupervisedAndSideThenAdvanceTime({
-    supervised: proc.effect.pipe(
-      provideLayer(Layer.mergeAll(ProcessStore.layer, pollLayer, scheduleLayer)),
-    ),
+    supervised: proc.effect,
     sideFiber: feed.runSimulator,
     advanceBy: Duration.millis(2_200),
   });
@@ -88,6 +88,6 @@ const program = Effect.gen(function* () {
   for (const line of lines) {
     yield* Effect.logInfo(`  ${line}`);
   }
-}).pipe(provideLayer(TestClock.layer()), Effect.scoped);
+}).pipe(Effect.scoped);
 
-runNodeProgramOrExit(program, "form:polling-accelerating-peek-cadence finished");
+runNodeProgramWithLayer(program, env, "form:polling-accelerating-peek-cadence finished");

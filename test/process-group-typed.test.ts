@@ -12,8 +12,6 @@ import {
   QueueResource,
   UnsupportedRemoteControlError,
 } from "../src";
-import { provideLayer } from "../src/provideLayer.js";
-
 interface Email {
   readonly to: string;
 }
@@ -157,7 +155,7 @@ const waitForCompleted = (
 
 describe("ProcessGroup.make", () => {
   it.live("creates direct typed controls from one canonical entry tuple", () =>
-      Effect.gen(function* () {
+    Effect.gen(function* () {
       const handled = yield* Ref.make<ReadonlyArray<string>>([]);
       const runs = yield* Ref.make(0);
 
@@ -171,7 +169,7 @@ describe("ProcessGroup.make", () => {
         effect: Ref.update(runs, (count) => count + 1),
       }) {}
 
-      return yield* Effect.gen(function* () {
+      yield* Effect.gen(function* () {
         const group = yield* ProcessGroup.make("@test/TypedDirectBillingGroup", [
           SyncProcess,
           EmailQueue,
@@ -228,15 +226,13 @@ describe("ProcessGroup.make", () => {
         expect(queueStatus.name).toBe(EmailQueue.id);
         expect(queueStatus.completed).toBe(1);
       }).pipe(
-        provideLayer(
-          Layer.mergeAll(EmailQueue.layer),
-        ),
+        Effect.provide(Layer.mergeAll(SyncProcess.layer, EmailQueue.layer)),
       );
-      }),
+    }),
   );
 
   it.live("supports an injectable group service for singleton control surfaces", () =>
-      Effect.gen(function* () {
+    Effect.gen(function* () {
       const handled = yield* Ref.make<ReadonlyArray<string>>([]);
       const runs = yield* Ref.make(0);
 
@@ -255,7 +251,7 @@ describe("ProcessGroup.make", () => {
         [SyncProcess, EmailQueue] as const,
       ) {}
 
-      return yield* Effect.gen(function* () {
+      yield* Effect.gen(function* () {
         const group = yield* BillingGroup;
 
         expect(BillingGroup.contract.id).toBe("@test/TypedServiceBillingGroup");
@@ -271,8 +267,15 @@ describe("ProcessGroup.make", () => {
         expect(yield* Ref.get(runs)).toBe(1);
         expect(yield* Ref.get(handled)).toEqual(["team@example.com"]);
       }).pipe(
-        provideLayer(Layer.mergeAll(BillingGroup.layer, EmailQueue.layer)),
+        Effect.provide(
+          Layer.mergeAll(
+            BillingGroup.layer.pipe(
+              Layer.provide(Layer.mergeAll(SyncProcess.layer, EmailQueue.layer)),
+            ),
+            EmailQueue.layer,
+          ),
+        ),
       );
-      }),
+    }),
   );
 });

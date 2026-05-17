@@ -15,7 +15,6 @@ import {
   ProcessStore,
   QueueResource,
 } from "../../../src";
-import { provideLayer } from "../../../src/provideLayer";
 import { waitForCompleted } from "../../shared/process-group-http";
 
 interface EmailJob {
@@ -28,7 +27,8 @@ const ensure = (
 ): Effect.Effect<void> =>
   condition ? Effect.void : Effect.die(new Error(message));
 
-const program = Effect.gen(function* () {
+const program = Effect.scoped(
+  Effect.gen(function* () {
     const sent = yield* Ref.make<ReadonlyArray<string>>([]);
     const runs = yield* Ref.make(0);
 
@@ -64,7 +64,7 @@ const program = Effect.gen(function* () {
       },
     ) {}
 
-    return yield* Effect.gen(function* () {
+    yield* Effect.gen(function* () {
       const localGroup = yield* BillingGroup;
       const localQueue = yield* EmailQueue;
 
@@ -142,16 +142,28 @@ const program = Effect.gen(function* () {
           `remote queue enqueue unsupported: ${enqueueError.reason}`,
         );
       }).pipe(
-        provideLayer(ProcessGroup.remoteLayer(BillingGroup, BillingEndpoint)),
-        provideLayer(BillingEndpoint.layer),
-        provideLayer(NodeHttpClient.layerUndici),
+        Effect.provide(
+          ProcessGroup.remoteLayer(BillingGroup, BillingEndpoint).pipe(
+            Layer.provide(BillingEndpoint.layer),
+            Layer.provide(NodeHttpClient.layerUndici),
+          ),
+        ),
       );
 
       yield* remoteProgram;
     }).pipe(
-      provideLayer(Layer.mergeAll(BillingGroup.layer, EmailQueue.layer, ProcessStore.layer)),
+      Effect.provide(
+        Layer.mergeAll(
+          BillingGroup.layer.pipe(
+            Layer.provide(Layer.mergeAll(SyncProcess.layer, EmailQueue.layer)),
+          ),
+          EmailQueue.layer,
+          ProcessStore.layer,
+        ),
+      ),
     );
-  }).pipe(Effect.scoped);
+  }),
+);
 
 void Effect.runPromise(
   program.pipe(Effect.tap(() =>

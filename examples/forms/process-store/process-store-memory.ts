@@ -10,7 +10,7 @@ import {
   ProcessStore,
   type AnalyticsEvent,
 } from "../../../src/ProcessStore";
-import { provideLayer } from "../../../src/provideLayer";
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 const processLifecycleTypes: ReadonlyArray<AnalyticsEvent["type"]> = [
   "process.lifecycle.changed",
@@ -38,6 +38,6 @@ const program = Effect.gen(function* () {
   yield* Effect.log(
     `memory events: ${events.map((event) => event.id).join(", ")}`,
   );
-}).pipe(provideLayer(ProcessStore.layer));
+});
 
-void Effect.runPromise(program);
+runNodeProgramWithLayer(program, ProcessStore.layer, "memory store example finished");

@@ -11,7 +11,6 @@ import {
   QueueResource,
 } from "../src";
 import { responseBodyJson } from "../src/internal/json.js";
-import { provideLayer } from "../src/provideLayer.js";
 
 interface Email {
   readonly to: string;
@@ -44,7 +43,7 @@ const requestJson = (
 
 describe("ControlService — contract route", () => {
   it.live("serves typed ProcessGroup contracts", () =>
-      Effect.gen(function* () {
+    Effect.gen(function* () {
       class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()("@test/ControlContractEmail", {
         effect: (_email: Email) => Effect.void,
       }) {}
@@ -52,7 +51,7 @@ describe("ControlService — contract route", () => {
         effect: Effect.void,
       }) {}
 
-      return yield* Effect.gen(function* () {
+      yield* Effect.gen(function* () {
         const group = yield* ProcessGroup.make("@test/ControlContractGroup", [
           SyncProcess,
           EmailQueue,
@@ -71,19 +70,20 @@ describe("ControlService — contract route", () => {
         expect(response.statusCode).toBe(200);
         expect(contract).toEqual(group.contract);
       }).pipe(
-        provideLayer(
+        Effect.provide(
           Layer.mergeAll(
+            SyncProcess.layer,
             EmailQueue.layer,
             ProcessStore.layer,
             NodeHttpClient.layerUndici,
           ),
         ),
       );
-      }),
+    }),
   );
 
   it.live("serves contract-aligned REST routes for typed groups", () =>
-      Effect.gen(function* () {
+    Effect.gen(function* () {
       const runs = yield* Ref.make(0);
       const delivered = yield* Ref.make<ReadonlyArray<string>>([]);
 
@@ -97,7 +97,7 @@ describe("ControlService — contract route", () => {
         effect: Ref.update(runs, (count) => count + 1),
       }) {}
 
-      return yield* Effect.gen(function* () {
+      yield* Effect.gen(function* () {
         const group = yield* ProcessGroup.make("@test/RestGroup", [
           SyncProcess,
           EmailQueue,
@@ -199,15 +199,16 @@ describe("ControlService — contract route", () => {
           error: "Queue '@test/MissingQueue' not found",
         });
       }).pipe(
-        provideLayer(
+        Effect.provide(
           Layer.mergeAll(
+            SyncProcess.layer,
             EmailQueue.layer,
             ProcessStore.layer,
             NodeHttpClient.layerUndici,
           ),
         ),
       );
-      }),
+    }),
   );
 
 });

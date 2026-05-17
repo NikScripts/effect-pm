@@ -7,14 +7,14 @@
 import { Effect, Layer, Ref } from "effect";
 import { Process, ProcessGroup, QueueResource } from "../../../src";
 import { waitForCompleted } from "../../shared/process-group-http";
-import { provideLayer } from "../../../src/provideLayer";
 
 interface EmailJob {
   readonly to: string;
   readonly subject: string;
 }
 
-const program = Effect.gen(function* () {
+const program = Effect.scoped(
+  Effect.gen(function* () {
     const sentEmails = yield* Ref.make<ReadonlyArray<string>>([]);
 
     class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()("@examples/ServiceEmailQueue", {
@@ -38,7 +38,14 @@ const program = Effect.gen(function* () {
       [NotifyOps, EmailQueue] as const,
     ) {}
 
-    return yield* Effect.gen(function* () {
+    const envLayer = Layer.mergeAll(
+      OpsGroup.layer.pipe(
+        Layer.provide(Layer.mergeAll(NotifyOps.layer, EmailQueue.layer)),
+      ),
+      EmailQueue.layer,
+    );
+
+    yield* Effect.gen(function* () {
       const group = yield* OpsGroup;
 
       yield* group.process(NotifyOps).runImmediately;
@@ -53,8 +60,9 @@ const program = Effect.gen(function* () {
       yield* Effect.logInfo(
         `service group sent emails=${(yield* Ref.get(sentEmails)).join(", ")}`,
       );
-    }).pipe(provideLayer(Layer.mergeAll(OpsGroup.layer, EmailQueue.layer)));
-  }).pipe(Effect.scoped);
+    }).pipe(Effect.provide(envLayer));
+  }),
+);
 
 void Effect.runPromise(
   program.pipe(

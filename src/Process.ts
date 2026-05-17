@@ -26,8 +26,6 @@ import type {
   ProcessScheduleService,
   ProcessScheduleTag,
 } from "./ProcessSchedule";
-import { provideLayer } from "./provideLayer.js";
-
 // ============================================================================
 // Public types
 // ============================================================================
@@ -292,7 +290,7 @@ const provideWithLayer = <A, E, RIn, ROut>(
   Effect.scoped(
     Effect.gen(function* () {
       const context = yield* Layer.build(layer);
-      return yield* step.pipe(provideLayer(context));
+      return yield* Effect.provide(step, context);
     }),
   );
 

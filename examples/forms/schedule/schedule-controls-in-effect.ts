@@ -4,12 +4,13 @@
  * Process.scheduleControls inside the tick body. Run: `pnpm run example:form:schedule-controls-in-effect`
  */
 
-import { Duration, Effect, Fiber, Option, Ref } from "effect";
+import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process, ProcessSchedule, ProcessStore } from "../../../src";
-import { runNodeProgramOrExit } from "../../shared/demo-harness";
-import { provideLayer } from "../../../src/provideLayer";
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/utcDate";
+
+const env = Layer.mergeAll(ProcessStore.layer, TestClock.layer());
 
 const program = Effect.gen(function* () {
   const seenIds = yield* Ref.make<ReadonlyArray<string>>([]);
@@ -38,7 +39,7 @@ const program = Effect.gen(function* () {
     }),
   });
 
-  const fib = yield* Effect.forkChild(proc.effect.pipe(provideLayer(ProcessStore.layer)));
+  const fib = yield* Effect.forkChild(proc.effect);
   yield* TestClock.adjust(Duration.seconds(3));
   yield* Effect.yieldNow;
   yield* Fiber.interrupt(fib);
@@ -47,6 +48,6 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(
     `ids observed after in-effect schedule pruning: ${ids.length === 0 ? "(none)" : ids.join(", ")}`,
   );
-}).pipe(provideLayer(TestClock.layer()), Effect.scoped);
+}).pipe(Effect.scoped);
 
-runNodeProgramOrExit(program, "form:schedule-controls-in-effect finished");
+runNodeProgramWithLayer(program, env, "form:schedule-controls-in-effect finished");

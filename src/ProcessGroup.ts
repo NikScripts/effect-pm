@@ -39,8 +39,6 @@ import {
   ProcessStore,
   type ProcessLifecycleChangedEvent,
 } from "./ProcessStore";
-import { provideLayer } from "./provideLayer.js";
-
 // ============================================================================
 // Public Types
 // ============================================================================
@@ -103,13 +101,14 @@ export interface ProcessGroupQueueRegistration<out Id extends string = string> {
   readonly key: Id;
   readonly item?: QueueItemCodecDescriptor;
   /** Present on `QueueResource.Service` factories; merges into {@link ProcessGroup.Service} when set. */
-  readonly layer?: Layer.Layer<never, never, Scope.Scope>;
+  readonly layer?: Layer.Layer<never, never, never>;
 }
 
 export type ProcessGroupEntry =
   | ProcessDefinition<string, any>
   | ProcessServiceDefinition<any, string, any>
-  | ProcessGroupQueueRegistration;
+  | ProcessGroupQueueRegistration
+  | QueueResourceServiceDefinition<any, string, any, any, any, any>;
 
 /**
  * Process entries from a typed ProcessGroup entry tuple.
@@ -130,21 +129,41 @@ export type ProcessGroupQueueEntries<
 > = Extract<Entries[number], { readonly kind: "queue" }>;
 
 /**
- * Service identifiers referenced by typed queue registrations in {@link Entries}.
+ * Queue slots required to run a typed {@link ProcessGroup.make} / {@link ProcessGroup.Service}
+ * built from {@link Entries}.
  *
  * @remarks
- * Uses the structurally narrowed `id` fields from {@link ProcessGroupQueueRegistration}
- * so callers see **literal** queue slots in the Effect requirement channel,
- * avoiding `Context.Service` invariant issues at the declarations site.
+ * For {@link QueueResource.Service} declarations, resolves to the **tag class** (`Self`)
+ * so {@link Effect.provide} with {@link QueueResourceServiceDefinition.layer} subtracts
+ * the same dependencies as {@link yield* EmailQueue}. Plain structural
+ * {@link ProcessGroupQueueRegistration} values use their string `id` literals.
+ *
+ * @public
+ */
+type TypedProcessGroupQueueRequirementForEntry<Entry> =
+  Entry extends { readonly tag: Context.Key<infer Self, QueueHandle<any, any, any, any>> }
+    ? Self
+    : Entry extends ProcessGroupQueueRegistration<infer Id>
+      ? Id
+      : never;
+
+/**
+ * Queue slots required to run a typed {@link ProcessGroup.make} / {@link ProcessGroup.Service}
+ * built from {@link Entries}.
+ *
+ * @remarks
+ * For {@link QueueResource.Service} declarations, resolves to the **tag class** (`Self`)
+ * so {@link Effect.provide} with {@link QueueResourceServiceDefinition.layer} subtracts
+ * the same dependencies as {@link yield* EmailQueue}. Plain structural
+ * {@link ProcessGroupQueueRegistration} values use their string `id` literals.
  *
  * @public
  */
 export type TypedProcessGroupQueueRequirements<
   Entries extends readonly ProcessGroupEntry[],
-> =
-  ProcessGroupQueueEntries<Entries> extends never
-    ? never
-    : ProcessGroupQueueEntries<Entries>["id"];
+> = {
+  [K in keyof Entries]: TypedProcessGroupQueueRequirementForEntry<Entries[K]>;
+}[Extract<keyof Entries, number>];
 
 /**
  * Dependencies for constructing {@link ProcessGroup.Service.layer}: scoped group
@@ -1255,8 +1274,7 @@ const remoteLayer = <
       const runRemoteUnverified = <A>(
         effect: Effect.Effect<A, unknown, HttpClient.HttpClient>,
       ): Effect.Effect<A, ProcessGroupRemoteControlError> =>
-        effect.pipe(
-          provideLayer(context),
+        Effect.provide(effect, context).pipe(
           Effect.mapError(toRemoteControlError),
         );
       const verifyRemote = yield* Effect.cached(runRemoteUnverified(manager.verifyContract));
@@ -1282,9 +1300,9 @@ function isProcessGroupRuntimeQueueTag<const Entries extends readonly ProcessGro
 }
 
 const mergeBundledQueueLayers = (
-  first: Layer.Layer<any, never, Scope.Scope>,
-  rest: ReadonlyArray<Layer.Layer<any, never, Scope.Scope>>,
-): Layer.Layer<any, never, Scope.Scope> =>
+  first: Layer.Layer<any, never, never>,
+  rest: ReadonlyArray<Layer.Layer<any, never, never>>,
+): Layer.Layer<any, never, never> =>
   rest.length === 0
     ? first
     : rest.reduce((acc, layer) => Layer.merge(acc, layer), first);
@@ -1368,10 +1386,10 @@ const makeTypedProcessGroup = <
 // `yield*` / `runPromise` callers do not have to compose queue Layers manually.
 const queueContributionLayersFrom = (
   entries: readonly ProcessGroupEntry[],
-): ReadonlyArray<Layer.Layer<any, never, Scope.Scope>> =>
+): ReadonlyArray<Layer.Layer<any, never, never>> =>
   entries.filter(
     (e): e is ProcessGroupQueueRegistration & {
-      readonly layer: Layer.Layer<any, never, Scope.Scope>;
+      readonly layer: Layer.Layer<any, never, never>;
     } => e.kind === "queue" && e.layer !== undefined,
   ).map((q) => q.layer);
 
@@ -1398,12 +1416,18 @@ export const ProcessGroup = {
     const contract = makeProcessGroupContract(id, entries);
     const make = makeTypedProcessGroup(id, entries);
     const queueContrib = queueContributionLayersFrom(entries);
-    const bundledProvider =
+    const bundledForBuild =
       queueContrib.length === 0
         ? Layer.empty
         : mergeBundledQueueLayers(queueContrib[0]!, queueContrib.slice(1));
     const baseLayer = Layer.effect(base)(make);
-    const layer = baseLayer.pipe(Layer.provide(bundledProvider));
+    const built = baseLayer.pipe(Layer.provide(bundledForBuild));
+    /** Re-merge queue layers so the same tags stay in scope for handlers (e.g. ControlService) after `yield* Group`. */
+    const layer: Layer.Layer<
+      Self,
+      ProcessGroupErrors,
+      ProcessGroupServiceLayerRequirements<Entries>
+    > = queueContrib.length === 0 ? built : Layer.mergeAll(built, bundledForBuild);
     // Match Effect's class-based service style: the class is yieldable, and the
     // static fields expose group identity/contract data for control surfaces.
     return Object.assign(base, {

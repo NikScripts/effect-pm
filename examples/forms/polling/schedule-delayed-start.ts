@@ -7,8 +7,19 @@
 import { Duration, Effect, Fiber, Layer, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process, ProcessSchedule, ProcessStore } from "../../../src";
-import { provideLayer } from "../../../src/provideLayer";
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/utcDate";
+
+const runtime = Layer.mergeAll(
+  ProcessStore.layer,
+  Polling.spaced(Duration.millis(100)),
+  ProcessSchedule.inMemory([
+    // Disarmed until t=500 ms — supervisor runs but tick body never executes before this.
+    ProcessSchedule.at("delayed-start", utcDateFromMillis(500)),
+  ]),
+);
+
+const env = Layer.mergeAll(TestClock.layer(), runtime);
 
 const program = Effect.gen(function* () {
   const ticks = yield* Ref.make(0);
@@ -17,16 +28,7 @@ const program = Effect.gen(function* () {
     effect: Ref.update(ticks, (n) => n + 1),
   });
 
-  const runtime = Layer.mergeAll(
-    ProcessStore.layer,
-    Polling.spaced(Duration.millis(100)),
-    ProcessSchedule.inMemory([
-      // Disarmed until t=500 ms — supervisor runs but tick body never executes before this.
-      ProcessSchedule.at("delayed-start", utcDateFromMillis(500)),
-    ]),
-  );
-
-  const fib = yield* Effect.forkChild(proc.effect.pipe(provideLayer(runtime)));
+  const fib = yield* Effect.forkChild(proc.effect);
 
   yield* TestClock.adjust(Duration.millis(350));
   const whileDisarmed = yield* Ref.get(ticks);
@@ -39,8 +41,6 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(
     `ticks before startAt: ${whileDisarmed} (expect 0); ticks after startAt: ${afterStart} (expect ≥ 1)`,
   );
-}).pipe(provideLayer(TestClock.layer()), Effect.scoped);
+}).pipe(Effect.scoped);
 
-void Effect.runPromise(
-  program.pipe(Effect.tap(() => Effect.logInfo("form:schedule-delayed-start finished"))),
-);
+runNodeProgramWithLayer(program, env, "form:schedule-delayed-start finished");

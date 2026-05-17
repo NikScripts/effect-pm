@@ -7,7 +7,6 @@
 import { Effect, Layer, Ref } from "effect";
 import { Process, ProcessGroup, QueueResource } from "../../../src";
 import { waitForCompleted } from "../../shared/process-group-http";
-import { provideLayer } from "../../../src/provideLayer";
 
 interface EmailJob {
   readonly to: string;
@@ -18,7 +17,8 @@ interface InvoiceJob {
   readonly invoiceId: string;
 }
 
-const program = Effect.gen(function* () {
+const program = Effect.scoped(
+  Effect.gen(function* () {
     const sentEmails = yield* Ref.make<ReadonlyArray<string>>([]);
     const syncedInvoices = yield* Ref.make<ReadonlyArray<string>>([]);
 
@@ -47,7 +47,9 @@ const program = Effect.gen(function* () {
       }),
     }) {}
 
-    return yield* Effect.gen(function* () {
+    const envLayer = Layer.mergeAll(SyncBilling.layer, EmailQueue.layer, InvoiceQueue.layer);
+
+    yield* Effect.gen(function* () {
       const group = yield* ProcessGroup.make("@examples/BillingGroup", [
         SyncBilling,
         EmailQueue,
@@ -75,10 +77,12 @@ const program = Effect.gen(function* () {
       yield* Effect.logInfo(
         `synced invoices=${(yield* Ref.get(syncedInvoices)).join(", ")}`,
       );
-    }).pipe(provideLayer(Layer.mergeAll(EmailQueue.layer, InvoiceQueue.layer)));
-  }).pipe(Effect.scoped);
+    }).pipe(Effect.provide(envLayer));
+  }),
+);
 
 void Effect.runPromise(
-  program.pipe(Effect.tap(() =>
-    Effect.logInfo("form:process-group-make-entries finished OK"))),
+  program.pipe(
+    Effect.tap(() => Effect.logInfo("form:process-group-make-entries finished OK")),
+  ),
 );

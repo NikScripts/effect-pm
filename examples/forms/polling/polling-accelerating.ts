@@ -7,32 +7,34 @@
 import { Duration, Effect, Fiber, Layer, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process, ProcessSchedule, ProcessStore } from "../../../src";
-import { provideLayer } from "../../../src/provideLayer";
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/utcDate";
+
+const runtime = Layer.mergeAll(
+  ProcessStore.layer,
+  Polling.acceleratingScoped({
+    minIntervalMs: 40,
+    maxIntervalMs: 400,
+    decayK: 0.4,
+  }),
+  ProcessSchedule.inMemory([
+    ProcessSchedule.at("polling-accelerating", utcDateFromMillis(0)),
+  ]),
+);
+
+const env = Layer.mergeAll(TestClock.layer(), runtime);
 
 const program = Effect.gen(function* () {
   const tickCount = yield* Ref.make(0);
 
-  const proc = Process.make("examples/forms/polling-accelerating", {
+  const proc = Process.make("examples/forms/polling/polling-accelerating", {
     effect: Ref.update(tickCount, (n) => n + 1),
     schedule: ProcessSchedule.inMemory([
       ProcessSchedule.at("polling-accelerating", utcDateFromMillis(0)),
     ]),
   });
 
-  const runtime = Layer.mergeAll(
-    ProcessStore.layer,
-    Polling.acceleratingScoped({
-      minIntervalMs: 40,
-      maxIntervalMs: 400,
-      decayK: 0.4,
-    }),
-    ProcessSchedule.inMemory([
-      ProcessSchedule.at("polling-accelerating", utcDateFromMillis(0)),
-    ]),
-  );
-
-  const mainFiber = yield* Effect.forkChild(proc.effect.pipe(provideLayer(runtime)));
+  const mainFiber = yield* Effect.forkChild(proc.effect);
 
   yield* TestClock.adjust(Duration.seconds(2));
   yield* Fiber.interrupt(mainFiber);
@@ -41,8 +43,6 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(
     `ticks in ~2s simulated time: ${totalTicks} (gaps shrink each iteration)`,
   );
-}).pipe(provideLayer(TestClock.layer()), Effect.scoped);
+}).pipe(Effect.scoped);
 
-void Effect.runPromise(
-  program.pipe(Effect.tap(() => Effect.logInfo("form:polling-accelerating finished"))),
-);
+runNodeProgramWithLayer(program, env, "form:polling-accelerating finished");

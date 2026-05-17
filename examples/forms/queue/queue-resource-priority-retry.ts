@@ -6,7 +6,6 @@
 
 import { Cause, Data, Duration, Effect, Exit } from "effect";
 import { QueueResource, type QueueHandle } from "../../../src";
-import { provideLayer } from "../../../src/provideLayer";
 
 interface EmailJob {
   readonly id: string;
@@ -104,7 +103,7 @@ const program = Effect.gen(function* () {
 
 void Effect.runPromise(
   program.pipe(
-    provideLayer(EmailQueue.layer),
+    Effect.provide(EmailQueue.layer),
     Effect.scoped,
     Effect.tap(() => Effect.logInfo("form:queue-resource-priority-retry finished OK")),
   ),

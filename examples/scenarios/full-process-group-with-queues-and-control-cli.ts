@@ -25,7 +25,6 @@ import {
   ProcessSchedule,
   ControlService,
 } from "../../src";
-import { provideLayer } from "../../src/provideLayer";
 import { utcDateFromMillis } from "../../src/utcDate";
 
 /**
@@ -179,6 +178,16 @@ class QueueAdderProcess extends Process.Service<QueueAdderProcess>()("queue-adde
  * End-to-end program: acquire group → expose control HTTP → start work → block on shutdown.
  * **`Effect.scoped`**: `ControlService.make` / internal scopes attach finalizers so fibers and listeners clean up.
  */
+const mainLayer = Layer.mergeAll(
+  QueueAdderProcess.layer.pipe(
+    Layer.provide(Layer.mergeAll(DemoQueue.layer, DemoTwoQueue.layer)),
+  ),
+  DemoQueue.layer,
+  DemoTwoQueue.layer,
+  ProcessStore.layer, // In-memory storage (no external dependencies)
+  Layer.succeed(References.MinimumLogLevel, "Debug"),
+);
+
 const program = Effect.gen(function* () {
   const portRaw = yield* Config.string("HOME_SERVER_PORT").pipe(Config.option);
   const controlPort = Option.match(portRaw, {
@@ -219,7 +228,7 @@ const program = Effect.gen(function* () {
   yield* group.awaitShutdown({
     logMessage: (signal) => `📡 Received ${signal}, shutting down gracefully...`,
   });
-});
+}).pipe(Effect.provide(mainLayer));
 
 /**
  * ============================================================================
@@ -254,16 +263,9 @@ const program = Effect.gen(function* () {
  */
 
 void Effect.runPromise(
-  program.pipe(
-    provideLayer(
-      Layer.mergeAll(
-        DemoQueue.layer,
-        DemoTwoQueue.layer,
-        ProcessStore.layer, // In-memory storage (no external dependencies)
-        Layer.succeed(References.MinimumLogLevel, "Debug"),
-      ),
+  Effect.scoped(
+    program.pipe(
+      Effect.tap(() => Effect.logInfo("✅ Demo shutdown complete")),
     ),
-    Effect.scoped,
-    Effect.tap(() => Effect.logInfo("✅ Demo shutdown complete")),
   ),
 );

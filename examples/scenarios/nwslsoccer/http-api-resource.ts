@@ -18,13 +18,12 @@
  */
 
 import { FetchHttpClient } from "effect/unstable/http";
-import { ConfigProvider, Effect } from "effect";
+import { ConfigProvider, Effect, Layer } from "effect";
 import { HttpApiResource } from "../../../src";
 import { NwslsoccerApi } from "./api";
 import { NWSL_SDP_DEFAULT_LOCALE } from "./constants";
 import { NwslSoccerApiBaseUrl } from "./config";
 import { LocaleQuery, SeasonIdPath } from "./schemas";
-import { provideLayer } from "../../../src/provideLayer";
 
 const DEFAULT_SEASON =
   process.env.NWSL_SDP_SEASON_ID ??
@@ -40,7 +39,7 @@ const program = Effect.gen(function* () {
     },
     limits: { concurrency: 2 },
   });
-  return yield* Effect.gen(function* () {
+  yield* Effect.gen(function* () {
     const client = yield* NwslTag;
     const res = yield* client.season.getSeasonMatches({
       params: new SeasonIdPath({ seasonId: DEFAULT_SEASON }),
@@ -57,12 +56,10 @@ const program = Effect.gen(function* () {
         Array.isArray(parsed.matches) ? parsed.matches.length : "?"
       } matches`,
     );
-  }).pipe(provideLayer(NwslTag.layer), provideLayer(FetchHttpClient.layer));
-});
+  }).pipe(Effect.provide(Layer.mergeAll(NwslTag.layer, FetchHttpClient.layer)));
+}).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv())));
 
-Effect.runPromise(
-  program.pipe(provideLayer(ConfigProvider.layer(ConfigProvider.fromEnv()))),
-).then(
+Effect.runPromise(program).then(
   () => console.log("example:nwsl-http-api-resource finished OK"),
   (e) => {
     console.error(e);

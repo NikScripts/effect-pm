@@ -14,7 +14,7 @@ import {
   HttpApiGroup,
 } from "effect/unstable/httpapi";
 import { acceptJson, HttpApiResource } from "../../../src";
-import { provideLayer } from "../../../src/provideLayer";
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 const Post = Schema.Struct({
   userId: Schema.Number,
@@ -144,13 +144,9 @@ const program = Effect.gen(function* () {
   );
 });
 
-void Effect.runPromise(
-  program.pipe(
-    provideLayer(DemoApiClient.resourceLayerCapture),
-    provideLayer(DecodeCaptureLive),
-    provideLayer(Layer.succeed(HttpClient.HttpClient, fakeHttpClient)),
-    Effect.tap(() =>
-      Effect.logInfo("form:http-api-resource-layer-effect finished OK"),
-    ),
-  ),
+const mainLayer = Layer.provideMerge(
+  Layer.provide(DemoApiClient.resourceLayerCapture, Layer.succeed(HttpClient.HttpClient, fakeHttpClient)),
+  DecodeCaptureLive,
 );
+
+runNodeProgramWithLayer(program, mainLayer, "form:http-api-resource-layer-effect finished OK");

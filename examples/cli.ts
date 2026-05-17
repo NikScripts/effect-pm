@@ -42,16 +42,15 @@
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Config, Effect, Layer, Option } from "effect";
+import { Config, Effect, Layer, ManagedRuntime, Option } from "effect";
 import { runCli } from "../src/cli";
-import { provideLayer } from "../src/provideLayer";
 
 const nodePlatform = Layer.mergeAll(
   NodeServices.layer,
   NodeHttpClient.layerNodeHttp,
 );
 
-const main = Effect.gen(function* () {
+const app = Effect.gen(function* () {
   const raw = yield* Config.string("HOME_SERVER_PORT").pipe(Config.option);
   const port = Option.match(raw, {
     onNone: () => 3001,
@@ -65,6 +64,11 @@ const main = Effect.gen(function* () {
     version: "0.1.0",
     port,
   });
-}).pipe(provideLayer(nodePlatform));
+});
 
-NodeRuntime.runMain(main);
+const rt = ManagedRuntime.make(nodePlatform);
+NodeRuntime.runMain(
+  Effect.promise(() =>
+    rt.runPromise(app).finally(() => rt.dispose()),
+  ),
+);

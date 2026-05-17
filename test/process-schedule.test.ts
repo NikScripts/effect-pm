@@ -1,7 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Fiber, Option } from "effect";
 import { ProcessSchedule } from "../src";
-import { provideLayer } from "../src/provideLayer.js";
 import { utcDateFromMillis } from "../src/utcDate.js";
 
 describe("ProcessSchedule.inMemory", () => {
@@ -12,7 +11,7 @@ describe("ProcessSchedule.inMemory", () => {
       expect(entries.length).toBe(1);
       expect(Option.getOrNull(entries[0]?.id ?? Option.none())).toBe("a1");
       expect(Option.isNone(entries[0]?.stopAt ?? Option.none())).toBe(true);
-    }).pipe(provideLayer(ProcessSchedule.inMemory([
+    }).pipe(Effect.provide(ProcessSchedule.inMemory([
       ProcessSchedule.at("a1", utcDateFromMillis(0)),
     ]))),
   );
@@ -29,7 +28,7 @@ describe("ProcessSchedule.inMemory", () => {
       expect(entries.length).toBe(2);
       expect(Option.getOrNull(entries[1]?.id ?? Option.none())).toBe("a2");
       expect(entries[1]?.startAt.getTime()).toBe(200);
-    }).pipe(provideLayer(ProcessSchedule.inMemory())),
+    }).pipe(Effect.provide(ProcessSchedule.inMemory())),
   );
 
   it.effect("empty starts with no entries", () =>
@@ -37,7 +36,7 @@ describe("ProcessSchedule.inMemory", () => {
       const schedule = yield* ProcessSchedule;
       const entries = yield* schedule.entries;
       expect(entries.length).toBe(0);
-    }).pipe(provideLayer(ProcessSchedule.empty)),
+    }).pipe(Effect.provide(ProcessSchedule.empty)),
   );
 
   it.effect("append/clear mutate schedules", () =>
@@ -48,7 +47,7 @@ describe("ProcessSchedule.inMemory", () => {
 
       yield* schedule.clear;
       expect((yield* schedule.entries).length).toBe(0);
-    }).pipe(provideLayer(ProcessSchedule.inMemory())),
+    }).pipe(Effect.provide(ProcessSchedule.inMemory())),
   );
 
   it.effect("changed completes after a schedule mutation", () =>
@@ -60,7 +59,7 @@ describe("ProcessSchedule.inMemory", () => {
       yield* Effect.yieldNow;
       const exit = yield* Fiber.await(waiter);
       expect(exit._tag).toBe("Success");
-    }).pipe(provideLayer(ProcessSchedule.inMemory()), Effect.scoped),
+    }).pipe(Effect.provide(ProcessSchedule.inMemory()), Effect.scoped),
   );
 
   it.effect("constructor overloads support id-first and id-less forms", () =>
@@ -92,7 +91,7 @@ describe("ProcessSchedule.inMemory", () => {
       expect(Option.getOrNull(entries[1]?.id ?? Option.none())).toBe("b");
       expect(Option.getOrNull(entries[2]?.id ?? Option.none())).toBe("c");
     }).pipe(
-      provideLayer(ProcessSchedule.define(({ all, at, window }) =>
+      Effect.provide(ProcessSchedule.define(({ all, at, window }) =>
         all(
           at("a", utcDateFromMillis(100)),
           window("b", utcDateFromMillis(200), utcDateFromMillis(300)),

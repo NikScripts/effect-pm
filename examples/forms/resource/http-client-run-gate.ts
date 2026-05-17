@@ -9,9 +9,9 @@ import {
   HttpClient,
   HttpClientRequest,
 } from "effect/unstable/http";
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Layer } from "effect";
 import { HttpClientRunGate, RunResource } from "../../../src";
-import { provideLayer } from "../../../src/provideLayer";
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 const DemoHttpRunner = RunResource.makeRunner({
   name: "examples/DemoHttpRunner",
@@ -40,10 +40,6 @@ const program = Effect.gen(function* () {
   yield* Effect.log(`All done in ${t1 - t0}ms`);
 });
 
-void Effect.runPromise(
-  program.pipe(
-    provideLayer(DemoHttpRunner.layer),
-    provideLayer(FetchHttpClient.layer),
-    Effect.tap(() => Effect.logInfo("form:http-client-run-gate finished OK")),
-  ),
-);
+const mainLayer = Layer.mergeAll(DemoHttpRunner.layer, FetchHttpClient.layer);
+
+runNodeProgramWithLayer(program, mainLayer, "form:http-client-run-gate finished OK");

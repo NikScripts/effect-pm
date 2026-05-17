@@ -3,7 +3,7 @@
  * (`layerNode` uses Node's HTTP client, not `fetch`, so mocks must use this layer.)
  * Kept in one file so Vitest workers do not clobber `fetch`.
  */
-import { ConfigProvider, Effect } from "effect";
+import { ConfigProvider, Effect, Layer } from "effect";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { NwslsoccerClient } from "../client";
 import { NWSL_SDP_DEFAULT_LOCALE } from "../constants";
@@ -16,7 +16,6 @@ import {
   SeasonTeamIdPath,
   TeamIdPath,
 } from "../schemas";
-import { provideLayer } from "../../../../src/provideLayer";
 import {
   fetchMatchDetailBundle,
   fetchSeasonScheduleAndTeams,
@@ -56,10 +55,12 @@ const run = <A, E>(
 ): Promise<A> =>
   Effect.runPromise(
     effect.pipe(
-      provideLayer(NwslsoccerClient.layerFetch),
-      provideLayer(
-        ConfigProvider.layer(
-          ConfigProvider.fromUnknown({ NWSL_SOCCER_API_BASE_URL: MOCK_BASE }),
+      Effect.provide(
+        Layer.mergeAll(
+          NwslsoccerClient.layerFetch,
+          ConfigProvider.layer(
+            ConfigProvider.fromUnknown({ NWSL_SOCCER_API_BASE_URL: MOCK_BASE }),
+          ),
         ),
       ),
     ),

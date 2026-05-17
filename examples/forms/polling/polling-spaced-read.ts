@@ -4,17 +4,18 @@
  * Fixed-interval poll — read feed each tick. Run: `pnpm run example:form:polling-spaced-read`
  */
 
-import { DateTime, Duration, Effect } from "effect";
+import { DateTime, Duration, Effect, Layer } from "effect";
 import { TestClock } from "effect/testing";
 import { Process, Polling, ProcessSchedule, ProcessStore } from "../../../src";
 import {
   forkSupervisedAndSideThenAdvanceTime,
-  runNodeProgramOrExit,
+  runNodeProgramWithLayer,
 } from "../../shared/demo-harness";
-import { provideLayer } from "../../../src/provideLayer";
 import { makeSportsScoreFeedTestDouble } from "../../shared/sports-score-feed";
 
 const scheduleStartAtUnixEpoch = DateTime.toDateUtc(DateTime.makeUnsafe(0));
+
+const env = Layer.mergeAll(ProcessStore.layer, TestClock.layer());
 
 const program = Effect.gen(function* () {
   const feed = yield* makeSportsScoreFeedTestDouble();
@@ -33,10 +34,10 @@ const program = Effect.gen(function* () {
   });
 
   yield* forkSupervisedAndSideThenAdvanceTime({
-    supervised: proc.effect.pipe(provideLayer(ProcessStore.layer)),
+    supervised: proc.effect,
     sideFiber: feed.runSimulator, // delete in production — real APIs update on their own
     advanceBy: Duration.millis(2_200),
   });
-}).pipe(provideLayer(TestClock.layer()), Effect.scoped);
+}).pipe(Effect.scoped);
 
-runNodeProgramOrExit(program, "form:polling-spaced-read finished");
+runNodeProgramWithLayer(program, env, "form:polling-spaced-read finished");

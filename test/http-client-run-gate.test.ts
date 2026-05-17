@@ -3,7 +3,6 @@ import { Effect, Ref } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import type { HttpClientError } from "effect/unstable/http"
 import { HttpClientRunGate, RunResource } from "../src"
-import { provideLayer } from "../src/provideLayer.js";
 
 const makeRecordingClient = (activeRef: Ref.Ref<number>, peakRef: Ref.Ref<number>): HttpClient.HttpClient =>
   HttpClient.makeWith<never, never, HttpClientError.HttpClientError, never>(
@@ -43,7 +42,7 @@ describe("HttpClientRunGate", () => {
       )
       const p = yield* Ref.get(peak)
       expect(p).toBe(1)
-    }).pipe(provideLayer(Runner.layer))
+    }).pipe(Effect.provide(Runner.layer))
   })
 
   it.live("withRunner is pipe-friendly and respects concurrency", () => {
@@ -67,6 +66,6 @@ describe("HttpClientRunGate", () => {
       const p = yield* Ref.get(peak)
       expect(p).toBeLessThanOrEqual(3)
       expect(p).toBeGreaterThanOrEqual(1)
-    }).pipe(provideLayer(Runner.layer))
+    }).pipe(Effect.provide(Runner.layer))
   })
 })
