@@ -611,9 +611,35 @@ const formatAmbiguousTarget = (
       `${candidate.kind}\t[${minimumSuffix}]\t${candidate.id}`
     )
     .join("\n");
-  return `Ambiguous target '${input}'.\nKIND\tTYPE THIS MINIMUM\tCANONICAL ID\n${rows}`;
+  return (
+    `Ambiguous target '${input}'.\nKIND\tTYPE THIS MINIMUM\tCANONICAL ID\n${rows}\n` +
+    "Disambiguate with a longer suffix from TYPE THIS MINIMUM or the full CANONICAL ID."
+  );
 };
 
+/** Shown when no target ID matches */
+const cliHintNoTargetMatch =
+  "Try `ls` for process and queue ids, or `groups` for group endpoints. " +
+  "Use a full canonical id or a normalized suffix that matches exactly one target.";
+
+/** Shown when the imported contract omits a control (local check before HTTP). */
+const cliHintContractSource =
+  "Controls come from your imported group contract. Run `verify` to compare each remote group to that contract.";
+
+const cliFooterGroups =
+  "Each row pairs a declared group id with its remote base URL from ConnectionRegistry.";
+
+const cliFooterList =
+  "IDs are canonical. Short CLI targets must match exactly one entry across all listed groups.";
+const cliFooterVerify =
+  "Compared each group's remote GET /contract payload to the imported local contract.";
+const prettyPrintCliJsonLine = (minifiedJson: string): string => {
+  try {
+    return JSON.stringify(JSON.parse(minifiedJson), null, 2);
+  } catch {
+    return minifiedJson;
+  }
+};
 const encodeCliJson = (
   value: unknown,
 ): Effect.Effect<string, ProcessManagerRequestError> =>
@@ -634,7 +660,7 @@ const resolveCliTarget = (
     return Effect.fail(
       new ProcessManagerConnectionError({
         groupId: "",
-        reason: `No process or queue target matched '${input}'`,
+        reason: `No process or queue target matched '${input}'. ${cliHintNoTargetMatch}`,
       }),
     );
   }
@@ -647,10 +673,14 @@ const resolveCliTarget = (
     );
   }
   if (resolution.candidate.kind !== expectedKind) {
+    const processHint = "use start, stop, restart, or now with a process id.";
+    const queueHint = "use pause, resume, or clear with a queue id.";
     return Effect.fail(
       new ProcessManagerConnectionError({
         groupId: resolution.candidate.groupId,
-        reason: `Target '${input}' is a ${resolution.candidate.kind}, not a ${expectedKind}`,
+        reason: `Target '${input}' is a ${resolution.candidate.kind}, not a ${expectedKind}. Hint: ${
+          expectedKind === "queue" ? queueHint : processHint
+        }`,
       }),
     );
   }
@@ -667,7 +697,7 @@ const assertTargetControl = (
         new ProcessManagerConnectionError({
           groupId: target.groupId,
           reason:
-            `${target.kind} '${target.id}' does not expose '${control}'. Available controls: ${target.controls.join(", ") || "(none)"}`,
+            `${target.kind} '${target.id}' does not expose '${control}'. Available controls: ${target.controls.join(", ") || "(none)"}. ${cliHintContractSource}`,
         }),
       );
 
@@ -684,7 +714,7 @@ const targetResolutionError = (
   if (resolution._tag === "Missing") {
     return new ProcessManagerConnectionError({
       groupId: "",
-      reason: `No process or queue target matched '${input}'`,
+      reason: `No process or queue target matched '${input}'. ${cliHintNoTargetMatch}`,
     });
   }
   if (resolution._tag === "Ambiguous") {
@@ -821,7 +851,7 @@ const runStatusCommand = (
       return yield* Console.log(json);
     }
     yield* Console.log(
-      `STATUS ${target.kind} ${target.id}\n${data}`,
+      `STATUS ${target.kind} ${target.id}\n${prettyPrintCliJsonLine(data)}`,
     );
   });
 
@@ -846,6 +876,9 @@ const runVerifyCommand = (
     }
     if (options.json) {
       yield* Console.log(yield* encodeCliJson({ groups: verified }));
+    } else if (verified.length > 0) {
+      yield* Console.log("");
+      yield* Console.log(cliFooterVerify);
     }
   });
 
@@ -870,7 +903,7 @@ const runGroupsCommand = (
       yield* Console.log(yield* encodeCliJson({ groups: rows }));
       return;
     }
-    yield* Console.log(lines.join("\n"));
+    yield* Console.log(`${lines.join("\n")}\n\n${cliFooterGroups}`);
   });
 
 const runListCommand = (
@@ -888,16 +921,25 @@ const runListCommand = (
       });
       return yield* Console.log(json);
     }
+    const formatListedControls = (controls: ReadonlyArray<string>): string =>
+      controls.length > 0 ? controls.join(", ") : "(none)";
     yield* Console.log(
-      groups.map((group) => {
-        const processLines = group.contract.processes.map((process) =>
-          `process\t${process.id}`
+      `${groups.map((group) => {
+        const processLines = group.contract.processes.map(
+          (process) =>
+            `process\t${process.id}\t${formatListedControls(process.controls)}`,
         );
-        const queueLines = group.contract.queues.map((queue) =>
-          `queue\t${queue.id}`
+        const queueLines = group.contract.queues.map(
+          (queue) =>
+            `queue\t${queue.id}\t${formatListedControls(queue.controls)}`,
         );
-        return [`GROUP ${group.id}`, "KIND\tID", ...processLines, ...queueLines].join("\n");
-      }).join("\n\n"),
+        return [
+          `GROUP ${group.id}`,
+          "KIND\tID\tCONTROLS",
+          ...processLines,
+          ...queueLines,
+        ].join("\n");
+      }).join("\n\n")}\n\n${cliFooterList}`,
     );
   });
 
