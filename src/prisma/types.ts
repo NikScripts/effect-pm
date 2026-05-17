@@ -15,75 +15,16 @@
  * @module ProcessStore/Prisma/Types
  */
 
-// ============================================================================
-// JSON value type
-// ============================================================================
+import type {
+  EffectPmEventCreateInput,
+  EffectPmEventRow,
+} from "../ProcessStoreEvent";
 
-/**
- * Structural JSON value compatible with `Prisma.JsonValue`.
- *
- * @remarks
- * Mirrors the shape Prisma returns for `Json` columns and accepts on writes,
- * without depending on `@prisma/client` types.
- *
- * @public
- */
-export type JsonValue =
-  | null
-  | string
-  | number
-  | boolean
-  | { readonly [key: string]: JsonValue }
-  | ReadonlyArray<JsonValue>;
-
-// ============================================================================
-// Persisted row shape
-// ============================================================================
-
-/**
- * Row shape persisted in the `EffectPmEvent` table.
- *
- * @remarks
- * Matches the schema fragment published by `effect-pm` (see
- * {@link prismaSchema}). `attributes` and `payload` are JSON-typed; the
- * adapter narrows their contents into typed analytics events at the read
- * boundary.
- *
- * @public
- */
-export interface EffectPmEventRow {
-  /** Unique event id (also the primary key). */
-  id: string;
-  /** Discriminator, e.g. `"process.execution.completed"`. */
-  type: string;
-  /** When the event occurred (used for sorting and range filters). */
-  occurredAt: Date;
-  /** Coarse entity domain — currently `"process"` only. */
-  entityType: string;
-  /** Stable identifier for the entity (e.g. process name). */
-  entityId: string;
-  /** Free-form, structured metadata. */
-  attributes: JsonValue | null;
-  /** Type-specific payload; narrowed at the read boundary. */
-  payload: JsonValue;
-  /** Server-assigned insertion time. */
-  createdAt: Date;
-}
-
-/**
- * Subset of `Prisma.EffectPmEventCreateInput` we depend on.
- *
- * @internal
- */
-export interface EffectPmEventCreateInput {
-  id: string;
-  type: string;
-  occurredAt: Date;
-  entityType: string;
-  entityId: string;
-  attributes?: JsonValue | null;
-  payload: JsonValue;
-}
+export type {
+  EffectPmEventCreateInput,
+  EffectPmEventRow,
+  JsonValue,
+} from "../ProcessStoreEvent";
 
 // ============================================================================
 // Query criteria
@@ -102,7 +43,7 @@ export type SortOrder = "asc" | "desc";
  * @internal
  */
 export interface EffectPmEventWhereInput {
-  type?: string | { equals?: string };
+  type?: string | { equals?: string; in?: ReadonlyArray<string> };
   entityType?: string | { equals?: string };
   entityId?: string | { equals?: string };
   occurredAt?: {

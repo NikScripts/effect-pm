@@ -57,12 +57,13 @@ Provide:
 
 - in-memory store for tests and examples,
 - Prisma-backed store for durable SQL persistence,
+- file-backed store using Effect `FileSystem` for local durable development and
+  lightweight deployments,
 - no-op store for applications that want zero persistence,
 - test store with inspection helpers.
 
 Leave room for:
 
-- file-backed store,
 - SQLite-specific store,
 - remote store over HTTP/RPC,
 - user-provided store with custom event routing.
@@ -70,6 +71,77 @@ Leave room for:
 ## Interface direction
 
 Keep the store event-first, but make reads first-class.
+
+Phase C boundary: do not grow storage by adding one method for every runtime
+feature. The candidate list below is historical direction, not a mandate to
+implement all reads directly on `ProcessStoreInterface`. `ProcessStore` is the
+rich module-facing singleton facade; `RuntimeStorage` is the generic swappable
+persistence port underneath it. Runtime modules depend on `ProcessStore`, and
+storage adapters implement `RuntimeStorage`.
+
+### Final service split
+
+The final architecture has two layers:
+
+1. **`ProcessStore`** — rich module-facing service used by `Process`,
+   `QueueResource`, `RunResource`, `HttpApiResource`, and `ProcessGroup`.
+2. **`RuntimeStorage`** — generic swappable persistence service used by
+   `ProcessStore`.
+
+Runtime modules should depend on `ProcessStore`, not on `RuntimeStorage`.
+Storage adapters should implement `RuntimeStorage`, not module-specific APIs.
+
+Target dependency direction:
+
+```text
+runtime module -> ProcessStore -> RuntimeStorage -> memory / Prisma / custom
+```
+
+`ProcessStore` may expose ergonomic module sub-surfaces:
+
+```typescript
+interface ProcessStore {
+  readonly runtime: ProcessStoreRuntime;
+  readonly process: ProcessStoreProcess;
+  readonly queue: ProcessStoreQueue;
+  readonly run: ProcessStoreRunResource;
+  readonly http: ProcessStoreHttpApiResource;
+  readonly group: ProcessStoreGroup;
+}
+```
+
+`RuntimeStorage` should remain generic:
+
+```typescript
+interface RuntimeStorage {
+  appendFact(fact: RuntimeFact): Effect.Effect<void>;
+  appendStateChange(change: RuntimeStateChange): Effect.Effect<void>;
+  facts(query?: FactQuery): Effect.Effect<ReadonlyArray<RuntimeFact>>;
+  latestState(ref: RuntimeRef): Effect.Effect<Option.Option<RuntimeStateBase>>;
+  stateHistory(
+    ref: RuntimeRef,
+    query?: HistoryQuery,
+  ): Effect.Effect<ReadonlyArray<RuntimeStateChange>>;
+}
+```
+
+This split lets `ProcessStore.queue.enqueueRejected(...)` be a useful
+module-aware API while keeping the storage adapter surface stable forever.
+`ProcessStore` owns conversion, redaction, projection, and observer bridging.
+`RuntimeStorage` only persists generic records.
+
+Current bridge status:
+
+- `RuntimeObserver.layerProcessStore` persists `RuntimeFact` values as
+  `runtime.fact.recorded` analytics events.
+- `RuntimeObserver.layerProcessStore` persists `RuntimeStateChange` values as
+  `runtime.state.changed` analytics events.
+- `ProcessStore.events(query)` reads generic analytics events from the memory,
+  file-backed, and Prisma implementations.
+- `ProcessStore.file(filePath)` / `ProcessStore.fileLayer(filePath)` provide
+  local durable NDJSON storage through Effect `FileSystem`.
+- Do not add `getRunResourceFacts`, `getQueueValidationFailures`, or similar
+  feature-specific reads to replace that generic query.
 
 Candidate surface:
 

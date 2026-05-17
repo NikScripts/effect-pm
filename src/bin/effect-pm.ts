@@ -18,7 +18,7 @@
 
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
-import { Effect, FileSystem, Layer, Path } from "effect";
+import { Effect, FileSystem, Layer, ManagedRuntime, Path } from "effect";
 import { prismaSchema } from "../prisma/schema";
 import {
   addPrismaSchema,
@@ -26,14 +26,18 @@ import {
   type AddPrismaOptions,
   type FsAdapter,
 } from "../prisma/setup";
-import { provideLayer } from "../provideLayer.js";
-
 const platform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
 const runPlatform = <A, E>(
   self: Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
-): A =>
-  Effect.runSync(self.pipe(provideLayer(platform), Effect.orDie));
+): A => {
+  const rt = ManagedRuntime.make(platform);
+  try {
+    return rt.runSync(self.pipe(Effect.orDie));
+  } finally {
+    void rt.dispose();
+  }
+};
 
 const nodeFs: FsAdapter = {
   exists: (filepath) =>

@@ -2,18 +2,24 @@
 
 ## Status
 
-Planned.
+Partially implemented. The current `ControlService` is already contract/REST
+first for typed groups and no longer exposes the legacy `POST /control` command
+endpoint. Remaining work includes richer transport options, event streaming, and
+store-backed projections.
 
 ## Intent
 
-Upgrade the local control surface from a minimal command endpoint into a richer
-operations API that can use queue/process controls and `ProcessStore`
-projections.
+Continue upgrading the local control surface into a richer operations API that
+can use queue/process controls and `ProcessStore` projections.
 
 ## Current direction
 
 Keep `ControlService` local-first. It should remain safe for application
 embedding and not become the future multi-host `ProcessManager`.
+
+Multi-group CLI UX belongs in `ProcessManager.cli(...)`, backed by a typed
+connection registry. `ControlService` should keep serving one typed group per
+localhost endpoint so applications can compose and expose groups explicitly.
 
 ## Target capabilities
 
@@ -65,9 +71,8 @@ Runtime state still comes from live handles when needed.
 
 ## Graduation criteria
 
-- Existing `POST /control` behavior remains compatible or has a documented beta
-  break.
-- REST-style routes are schema-validated.
-- Queue endpoints use `QueueHandle` controls.
+- `POST /control` is removed in favor of contract-aligned REST routes. (Done.)
+- REST-style routes are schema-validated for the current typed group surface.
+- Queue endpoints use `QueueHandle` controls for pause, resume, and clear.
 - Live events can stream store events.
 - CLI can consume the new API.

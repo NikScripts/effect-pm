@@ -1,6 +1,15 @@
 import { it, describe, expect } from "@effect/vitest";
-import { Effect, Ref } from "effect";
+import { Effect, Layer, Ref } from "effect";
 import { RunResource } from "../src/RunResource";
+import { ProcessStore, type AnalyticsEvent, type ProcessStoreInterface } from "../src/ProcessStore";
+import {
+  RuntimeObserver,
+  type RuntimeFact,
+  type RuntimeObserverListener,
+  type RuntimeStateBase,
+  type RuntimeStateChange,
+} from "../src/RuntimeState";
+import type { RunResourceState } from "../src/RunResource";
 
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
   Effect.gen(function* () {
@@ -10,6 +19,15 @@ const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
     yield* Effect.yieldNow;
     yield* Ref.update(active, (x) => x - 1);
   });
+
+const isRunResourceState = (state: RuntimeStateBase): state is RunResourceState =>
+  state.ref.kind === "run-resource" &&
+  "completed" in state &&
+  typeof state.completed === "number" &&
+  "failed" in state &&
+  typeof state.failed === "number" &&
+  "inFlight" in state &&
+  typeof state.inFlight === "number";
 
 describe("RunResource.makeRunner", () => {
   it.live("concurrency 1 enforces serial execution", () =>
@@ -130,5 +148,194 @@ describe("RunResource.make (raw scoped)", () => {
       const result = yield* gate(7);
       expect(result).toBe(21);
     }).pipe(Effect.scoped),
+  );
+
+  it.live("publishes runtime facts when RuntimeObserver is provided", () =>
+    Effect.gen(function* () {
+      const facts = yield* Ref.make<ReadonlyArray<RuntimeFact>>([]);
+      const observer = {
+        publishStateChange: () => Effect.void,
+        publishFact: (fact: RuntimeFact) =>
+          Ref.update(facts, (items) => [...items, fact]),
+      };
+
+      yield* Effect.gen(function* () {
+        const gate = yield* RunResource.make({
+          name: "@test/ObservedGate",
+          effect: (n: number) =>
+            n > 0 ? Effect.succeed(n) : Effect.fail("negative"),
+          concurrency: 1,
+        });
+
+        const success = yield* gate(1);
+        const failure = yield* gate(0).pipe(Effect.flip);
+        const observedFacts = yield* Ref.get(facts);
+
+        expect(success).toBe(1);
+        expect(failure).toBe("negative");
+        expect(observedFacts.map((fact) => fact.type)).toEqual([
+          "run-resource.run.started",
+          "run-resource.run.completed",
+          "run-resource.run.started",
+          "run-resource.run.failed",
+        ]);
+        expect(observedFacts.every((fact) => fact.ref.kind === "run-resource")).toBe(true);
+        expect(observedFacts.every((fact) => fact.ref.id === "@test/ObservedGate")).toBe(true);
+      }).pipe(
+        Effect.provideService(RuntimeObserver, observer),
+        Effect.scoped,
+      );
+    }),
+  );
+
+  it.live("publishes runtime state changes when RuntimeObserver is provided", () =>
+    Effect.gen(function* () {
+      const changes = yield* Ref.make<ReadonlyArray<RuntimeStateChange>>([]);
+      const observer = {
+        publishStateChange: (change: RuntimeStateChange) =>
+          Ref.update(changes, (items) => [...items, change]),
+        publishFact: (_fact: RuntimeFact) => Effect.void,
+      };
+
+      yield* Effect.gen(function* () {
+        const gate = yield* RunResource.make({
+          name: "@test/ObservedStateGate",
+          effect: (n: number) =>
+            n > 0 ? Effect.succeed(n) : Effect.fail("negative"),
+          concurrency: 1,
+        });
+
+        const success = yield* gate(1);
+        const failure = yield* gate(0).pipe(Effect.flip);
+        const observedChanges = yield* Ref.get(changes);
+        const last = observedChanges[observedChanges.length - 1];
+
+        expect(success).toBe(1);
+        expect(failure).toBe("negative");
+        expect(observedChanges.map((change) => change.reason)).toEqual([
+          "run-resource.run.waiting",
+          "run-resource.run.started",
+          "run-resource.run.completed",
+          "run-resource.run.waiting",
+          "run-resource.run.started",
+          "run-resource.run.failed",
+        ]);
+        expect(last).not.toBeUndefined();
+        if (last !== undefined && isRunResourceState(last.current)) {
+          expect(last.current.completed).toBe(1);
+          expect(last.current.failed).toBe(1);
+          expect(last.current.inFlight).toBe(0);
+          expect(last.current.waiting).toBe(0);
+        } else {
+          throw new Error("Expected final RunResource state change");
+        }
+      }).pipe(
+        Effect.provideService(RuntimeObserver, observer),
+        Effect.scoped,
+      );
+    }),
+  );
+
+  it.live("notifies multiple scoped listeners and isolates listener failures", () =>
+    Effect.gen(function* () {
+      const factCount = yield* Ref.make(0);
+      const stateReasons = yield* Ref.make<ReadonlyArray<string>>([]);
+      const trailingStateCount = yield* Ref.make(0);
+      const listeners: ReadonlyArray<RuntimeObserverListener> = [
+        {
+          onFact: () => Ref.update(factCount, (count) => count + 1),
+          onStateChange: (change) =>
+            Ref.update(stateReasons, (items) => [...items, change.reason]),
+        },
+        {
+          onFact: () => Effect.fail("fact-listener-failed"),
+          onStateChange: () => Effect.fail("state-listener-failed"),
+        },
+        {
+          onStateChange: () =>
+            Ref.update(trailingStateCount, (count) => count + 1),
+        },
+      ];
+
+      yield* Effect.gen(function* () {
+        const gate = yield* RunResource.make({
+          name: "@test/ObservedListenersGate",
+          effect: (n: number) => Effect.succeed(n),
+          concurrency: 1,
+        });
+
+        const result = yield* gate(1);
+        const facts = yield* Ref.get(factCount);
+        const reasons = yield* Ref.get(stateReasons);
+        const trailing = yield* Ref.get(trailingStateCount);
+
+        expect(result).toBe(1);
+        expect(facts).toBe(2);
+        expect(reasons).toEqual([
+          "run-resource.run.waiting",
+          "run-resource.run.started",
+          "run-resource.run.completed",
+        ]);
+        expect(trailing).toBe(3);
+      }).pipe(
+        Effect.provide(RuntimeObserver.layerListeners(listeners)),
+        Effect.scoped,
+      );
+    }),
+  );
+
+  it.live("persists observed runtime facts through ProcessStore bridge", () =>
+    Effect.gen(function* () {
+      const events = yield* Ref.make<ReadonlyArray<AnalyticsEvent>>([]);
+      const store: ProcessStoreInterface = {
+        append: (event: AnalyticsEvent) =>
+          Ref.update(events, (items) => [...items, event]),
+        appendBatch: (batch: ReadonlyArray<AnalyticsEvent>) =>
+          Ref.update(events, (items) => [...items, ...batch]),
+        events: () => Effect.map(Ref.get(events), (items) => [...items]),
+        getProcessExecutions: () => Effect.succeed([]),
+        getProcessLifecycle: () => Effect.succeed([]),
+        getQueueItemCompletions: () => Effect.succeed([]),
+        getQueueLifecycle: () => Effect.succeed([]),
+      };
+
+      yield* Effect.gen(function* () {
+        const gate = yield* RunResource.make({
+          name: "@test/ObservedStoreGate",
+          effect: (n: number) => Effect.succeed(n + 1),
+          concurrency: 1,
+        });
+
+        const result = yield* gate(1);
+        const stored = yield* Ref.get(events);
+
+        expect(result).toBe(2);
+        expect(stored.map((event) => event.type)).toEqual([
+          "runtime.state.changed",
+          "runtime.state.changed",
+          "runtime.fact.recorded",
+          "runtime.state.changed",
+          "runtime.fact.recorded",
+        ]);
+        const firstFact = stored.find((event) => event.type === "runtime.fact.recorded");
+        const firstState = stored.find((event) => event.type === "runtime.state.changed");
+        expect(firstFact?.entityType).toBe("run-resource");
+        expect(firstFact?.entityId).toBe("@test/ObservedStoreGate");
+        if (firstFact?.type === "runtime.fact.recorded") {
+          expect(firstFact.fact.type).toBe("run-resource.run.started");
+        }
+        if (firstState?.type === "runtime.state.changed") {
+          expect(firstState.change.reason).toBe("run-resource.run.waiting");
+        }
+      }).pipe(
+        Effect.provide(
+          Layer.provide(
+            RuntimeObserver.layerProcessStore,
+            Layer.succeed(ProcessStore, store),
+          ),
+        ),
+        Effect.scoped,
+      );
+    }),
   );
 });

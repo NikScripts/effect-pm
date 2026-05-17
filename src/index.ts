@@ -11,19 +11,19 @@
  *   a trigger-driven runtime: a long-lived driver follows an Effect `Schedule` and spawns
  *   process instances; each instance checks `ProcessSchedule` and exits naturally when
  *   disarmed while `Polling` controls in-instance repeat cadence. Optional `polling` /
- *   `schedule` layers on `Process.make` are merged into `process.effect` so fork-time
+ *   `schedule` layers on `Process.make(id, config)` are merged into `process.effect` so fork-time
  *   requirements stay accurate in TypeScript.
-* - **`ProcessGroup`** — Bundle **queue tags** and **process handles**; `start` /
- *   `startAll` fork supervisors; `serve` exposes a **localhost** control HTTP API;
- *   `awaitShutdown` waits for OS signals (Node).
+ * - **`ProcessGroup`** — Bundle **process and queue entries**; `start` /
+ *   `startAll` fork supervisors; contracts power the **localhost** control HTTP API
+ *   and remote group layers; `awaitShutdown` waits for OS signals (Node).
  * - **`QueueResource`** — Three-level **priority** queues with **concurrency** and optional
  *   **throttle**; each queue is a **Context** service with a `.layer`.
  * - **`ProcessStore`** — In-memory (or **Prisma**) **analytics**: execution rows + lifecycle
  *   events for processes.
  * - **`RunResource`**, **`HttpClientRunGate`**, **`HttpApiResource`**, **`Resource`** —
  *   Optional building blocks for **gated** HTTP and reusable resource patterns.
- * - **`ControlService`** + **`createCli` / `runCli`** — Local **control plane** for ops
- *   (used by the examples CLI).
+ * - **`ControlService`** + **`ProcessManager`** + **`createCli` / `runCli`** — Local and
+ *   remote **control plane** helpers for ops (used by the examples CLI).
  * - **`disarmedIdleSleep` exports** — Compatibility helpers for custom schedule layers and
  *   migration tooling.
  *
@@ -32,20 +32,37 @@
  * - Narrative architecture: `docs/PACKAGE-GUIDE.md`
  * - API tables (Process, Polling, Schedule, ProcessGroup): `docs/PROCESS-API.md`
  * - Runnable teaching scripts: `examples/README.md`
-* - Architecture contracts: `docs/plans/README.md` (especially plan **09** for process runtime)
+ * - Architecture contracts: `docs/plans/README.md` (especially plan **09** for process runtime)
  * - Agent-oriented repo map: `docs/AGENTS.md`
  *
- * ## Prisma subpath
+ * ## Dedicated subpaths
  *
- * Durable analytics: import from **`@nikscripts/effect-pm/prisma`** (see package `exports`
- * in `package.json`).
+ * Root imports remain backwards compatible. Dedicated service/resource subpaths
+ * are also available: **`@nikscripts/effect-pm/Process`**,
+ * **`@nikscripts/effect-pm/QueueResource`**,
+ * **`@nikscripts/effect-pm/ProcessGroup`**,
+ * **`@nikscripts/effect-pm/ProcessStore`**,
+ * **`@nikscripts/effect-pm/ProcessManager`**, and
+ * **`@nikscripts/effect-pm/ControlService`**.
+ *
+ * Storage adapters use lower-case subpaths:
+ * **`@nikscripts/effect-pm/storage/file`** and
+ * **`@nikscripts/effect-pm/storage/prisma`**. The legacy
+ * **`@nikscripts/effect-pm/prisma`** subpath remains available for
+ * compatibility.
  *
  * ## Source-only helpers
  *
- * The published **`exports["."]`** surface is this file. Small utilities such as
- * **`provideLayer`** (strict `Effect.provide` alias) and **`utcDate`** helpers live under
- * `src/` for tests, examples, and internal call sites only; they are not part of the semver
- * API unless promoted here later.
+ * The published **`exports["."]`** surface is this file. Small utilities (`utcDate`, etc.)
+ * live under `src/` for tests and tooling; they are not part of the semver API unless promoted
+ * here.
+ *
+ * **Layers in `src/`:** Prefer attaching dependencies via **built {@link Context.Context}**
+ * (`Effect.provide(effect, context)`) inside the runtime, or **`ManagedRuntime`** at true OS
+ * edges (see `src/bin/effect-pm.ts`). Avoid scattering {@link Effect.provide} with
+ * {@link Layer.Layer} through library internals — examples attach a **single** composed layer
+ * at script entry (`examples/shared/demo-harness.ts`, same idea as `@effect/platform-node`
+ * samples). **Tests** may use `Effect.provide` with layers, matching Effect’s own suites.
  *
  * @module @nikscripts/effect-pm
  */
@@ -77,19 +94,48 @@ export {
   type HttpApiResourceLayerEffectConfig,
 } from "./HttpApiResource";
 export { Resource } from "./Resource";
+export { RuntimeObserver } from "./RuntimeState";
 export { ControlService } from "./ControlService";
 
 // CLI
 export { createCli, runCli } from "./cli";
 
+// Process Manager
+export {
+  ProcessManager,
+  ProcessManagerConnectionError,
+  ProcessManagerConnectionRegistry,
+  ProcessManagerRequestError,
+} from "./ProcessManager";
+export type {
+  ProcessManagerConnectionConfigMap,
+  ProcessManagerCliConfig,
+  ProcessManagerConnectionMap,
+  ProcessManagerConnectionRegistryService,
+  RemoteProcessManager,
+  RemoteProcessControls,
+  RemoteQueueControls,
+  ProcessManagerEndpointConfig,
+  ProcessManagerEndpoint,
+} from "./ProcessManager";
+
 // Process Store
 export {
   ProcessStore,
   type QueryOpts,
+  type StoreEventQuery,
+  type RuntimeFactQuery,
+  type RuntimeStateHistoryQuery,
   type AnalyticsEventBase,
   type ProcessExecutionCompletedEvent,
   type ProcessLifecycleTag,
   type ProcessLifecycleChangedEvent,
+  type QueueItemStatus,
+  type QueueItemCompletedEvent,
+  type QueueLifecycleTag,
+  type QueueLifecycleChangedEvent,
+  type RuntimeFactRecordedEvent,
+  type RuntimeStateChangedEvent,
   type AnalyticsEvent,
   type ProcessStoreInterface,
 } from "./ProcessStore";
@@ -104,6 +150,25 @@ export type {
   ProcessGroupErrors,
   ProcessEffectRequirements,
   AllGroupProcessesRequirements,
+  ProcessGroupEntry,
+  ProcessGroupProcessEntries,
+  ProcessGroupQueueEntries,
+  ProcessGroupQueueRegistration,
+  TypedProcessGroupQueueRequirements,
+  ProcessGroupEntryRequirements,
+  ProcessGroupQueueItem,
+  ProcessGroupProcessControl,
+  ProcessGroupQueueControl,
+  ProcessGroupProcessContract,
+  ProcessGroupQueueContract,
+  ProcessGroupContract,
+  TypedProcessControls,
+  TypedQueueControls,
+  TypedProcessGroup,
+  ProcessGroupControlError,
+  ProcessGroupRemoteEndpointDefinition,
+  ProcessGroupServiceDefinition,
+  ProcessGroupQueueEnqueueError,
 } from "./ProcessGroup";
 
 // Error classes - ProcessGroup
@@ -111,13 +176,23 @@ export {
   ProcessNotFoundError,
   ProcessAlreadyRunningError,
   ProcessNotRunningError,
+  ProcessGroupRemoteControlError,
+  UnsupportedRemoteControlError,
+  ProcessGroupProcessControlSchema,
+  ProcessGroupQueueControlSchema,
+  ProcessGroupProcessContractSchema,
+  ProcessGroupQueueContractSchema,
+  ProcessGroupContractSchema,
 } from "./ProcessGroup";
 
 // Types - Process
 export type {
   Process as ProcessInterface,
+  ProcessDefinition,
+  ProcessServiceDefinition,
   ProcessDetails,
   ProcessMakeConfig,
+  ProcessMakeOptions,
   ProcessSupervisorRequirements,
   CronDetails,
   ScheduledProcessDetails,
@@ -131,11 +206,26 @@ export type { ProcessScheduleService } from "./ProcessSchedule";
 export type {
   QueueHandle,
   QueueEnqueue,
+  QueueResourceDefinition,
+  QueueResourceMetadata,
+  QueueResourceServiceDefinition,
   QueueResourceConfig,
+  QueueResourceConfigBase,
+  QueueResourceConfigWithoutItemSchema,
+  QueueResourceConfigWithItemSchema,
   QueueShutdownError,
   EffectContext,
   HandlerContext,
   Priority,
+  QueueItemCodecDescriptor,
+  InferQueueEnqueueError,
+} from "./QueueResource";
+
+export {
+  QueueItemCodecDescriptorSchema,
+  makeQueueItemCodecDescriptor,
+  QueueItemValidationError,
+  QueueBatchValidationError,
 } from "./QueueResource";
 
 // Types - RunResource
@@ -144,11 +234,20 @@ export type {
   RunGate,
   RunResourceRunner,
   RunResourceRunnerConfig,
+  RunResourceState,
 } from "./RunResource";
+
+// Types - RuntimeState
+export type {
+  RuntimeFact,
+  RuntimeObserverService,
+  RuntimeObserverListener,
+  RuntimeRef,
+  RuntimeStateBase,
+  RuntimeStateChange,
+} from "./RuntimeState";
 
 // Types - Control Service
 export type {
-  ControlCommand,
-  ControlRequestBody,
   ControlResponse,
 } from "./ControlService";

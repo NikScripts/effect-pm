@@ -11,8 +11,15 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 1. **Managed processes** — a schedule-entry-driven runtime: a driver watches `ProcessSchedule` entries, spawns instances, and each instance repeats a user `Effect` on a **polling cadence** until its window closes.
 2. **Queue resources** — priority queues with concurrency, optional throttling, and lifecycle controls.
 3. **Orchestration** — a **`ProcessGroup`** bundles processes + queue tags, tracks status, forks schedule drivers, and exposes **localhost HTTP control** + a **CLI**.
+4. **Remote control** — **`ProcessManager`** connects to a group contract over HTTP, and **`ProcessGroup.remoteLayer`** can provide the same injectable group service key through a `ProcessManager.Endpoint`.
 
-A future **`ProcessManager`** (multi-host) is planned but **not implemented**; use one `ProcessGroup` per deployable bundle today.
+`ProcessManager.ConnectionRegistry.layer` provides registry-backed group URLs so
+application code can `yield* ProcessManager.connect(Group)`. The multi-group CLI
+is `ProcessManager.cli([GroupA, GroupB] as const)` on top of that same registry;
+see
+[examples/forms/process-group/process-manager-multi-group-cli-ux.md](../examples/forms/process-group/process-manager-multi-group-cli-ux.md)
+for the operator flow. Multi-host coordination, `RemoteService`, and
+remote queue enqueue stay planned until schema-backed queue item contracts land.
 
 ---
 
@@ -20,14 +27,15 @@ A future **`ProcessManager`** (multi-host) is planned but **not implemented**; u
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
-│ ProcessGroup.make({ queues, processes })                          │
+│ ProcessGroup.make(id, entries) / ProcessGroup.Service(id, entries)│
 │  • acquires queue instances (Effect services)                     │
-│  • holds Map(name → Process handle) + status + Scope per fork     │
+│  • exposes typed process/queue controls + serializable contract   │
+│  • drives contract-aligned ControlService and ProcessManager APIs │
 └───────────────────────────────────────────────────────────────────┘
          │ start / forkIn(process.effect, scope)
          ▼
 ┌───────────────────────────────────────────────────────────────────┐
-│ Process.make({ name, effect, polling?, schedule? })               │
+│ Process.make(id, { effect, polling?, schedule? })                 │
 │  • builds process.effect = schedule driver                        │
 │  • eligible schedule start -> spawn process instance              │
 │  • instance loop: schedule check -> poll -> user effect           │
@@ -50,14 +58,36 @@ A future **`ProcessManager`** (multi-host) is planned but **not implemented**; u
 
 | Goal | Start here |
 |------|------------|
-| Run the full demo + CLI | [examples/README.md](../examples/README.md) → `examples/example.ts` |
+| Run the full demo + CLI | [examples/README.md](../examples/README.md) → `examples/scenarios/full-process-group-with-queues-and-control-cli.ts` |
 | Queue / run / HTTP resource APIs | [RESOURCE-API.md](./RESOURCE-API.md) |
-| Schedule composition + runtime updates | [examples/schedule-control-surfaces.ts](../examples/schedule-control-surfaces.ts) |
-| Schedule + **`ProcessGroup`** / API-driven arm | [docs/SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + [examples/process-game-window-with-group.ts](../examples/process-game-window-with-group.ts) |
+| Schedule composition + runtime updates | [examples/forms/schedule/](../examples/forms/schedule/) |
+| Schedule + **`ProcessGroup`** / API-driven arm | [docs/SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + [examples/scenarios/game-window-polling-with-process-group.ts](../examples/scenarios/game-window-polling-with-process-group.ts) |
 | Understand process runtime semantics | [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + `src/Process.ts` TSDoc |
 | API tables (make, Polling, Schedule, ProcessGroup) | [PROCESS-API.md](./PROCESS-API.md) |
-| Prisma-backed analytics | [README.md](../README.md) Prisma section + `src/prisma/` |
+| ProcessStore storage (memory / file / Prisma) | [PROCESS-API.md](./PROCESS-API.md) + [examples/forms/process-store/](../examples/forms/process-store/) + `src/prisma/` |
 | AI / agent onboarding (repo map, conventions) | [AGENTS.md](./AGENTS.md) |
+
+---
+
+## Package subpaths
+
+Root imports from `@nikscripts/effect-pm` remain backwards compatible. Prefer
+dedicated subpaths for focused imports:
+
+- `@nikscripts/effect-pm/Process`
+- `@nikscripts/effect-pm/QueueResource`
+- `@nikscripts/effect-pm/ProcessGroup`
+- `@nikscripts/effect-pm/ProcessStore`
+- `@nikscripts/effect-pm/ProcessManager`
+- `@nikscripts/effect-pm/ControlService`
+- `@nikscripts/effect-pm/storage/file`
+- `@nikscripts/effect-pm/storage/prisma`
+
+Storage adapters use lowercase path segments. File-backed storage is preferred
+from `@nikscripts/effect-pm/storage/file`; root `ProcessStore.file` /
+`ProcessStore.fileLayer` remain current compatibility helpers. The legacy
+`@nikscripts/effect-pm/prisma` path remains available, but new Prisma storage
+examples use `@nikscripts/effect-pm/storage/prisma`.
 
 ---
 
@@ -66,7 +96,8 @@ A future **`ProcessManager`** (multi-host) is planned but **not implemented**; u
 | Export area | Role |
 |-------------|------|
 | `Process`, `Polling`, `ProcessSchedule` | Build supervised processes and gate/cadence layers. |
-| `ProcessGroup` | Orchestrate processes + queues; `serve`, `awaitShutdown`, lifecycle APIs. |
+| `ProcessGroup` | Orchestrate processes + queues; typed contracts, controls, and `awaitShutdown`. |
+| `ProcessManager` | Typed remote client and endpoint service for group control contracts. |
 | `QueueResource` | Priority queues + workers. |
 | `ProcessStore` | In-memory (or Prisma) analytics: executions + lifecycle events. |
 | `RunResource`, `HttpClientRunGate` | Concurrency + throttle gates for arbitrary effects / `HttpClient`. |
@@ -77,20 +108,48 @@ A future **`ProcessManager`** (multi-host) is planned but **not implemented**; u
 
 TSDoc on each module repeats details; this guide stays **concept-shaped**.
 
+`RunResource` publishes runtime facts and `RunResourceState` transitions through
+the optional `RuntimeObserver` service. `RuntimeObserver.layerProcessStore`
+persists facts as `runtime.fact.recorded` events and state changes as
+`runtime.state.changed` events. Scoped listener layers are implemented; stream
+helpers remain planned.
+
 ---
 
 ## Dependencies and layers (practical rules)
 
-1. **`ProcessGroup.make`** returns an `Effect` that requires the **queue tag identifiers** you passed in `queues` (so queues are acquired exactly once in that scope).
+1. **`ProcessGroup.make(id, entries)`** returns an `Effect` that requires the **queue tag identifiers** from queue entries (so queues are acquired exactly once in that scope).
 2. **Forking** `process.effect` needs **`R | ProcessStore`** where `R` is whatever remains on the process after optional inlined `polling` / `schedule` layers. Use **`ProcessSupervisorRequirements<C>`** (exported type) if you build configs generically.
 3. Prefer **`Layer.mergeAll(...)`** + **one** `Effect.provide` at the app root when you have many independent layers (clearer dependency graph; matches Effect lint guidance).
 4. **Control service** listens on **127.0.0.1** only — designed for local ops, not public exposure.
+5. **Remote control assumes a private network today.** Do not expose a
+   `ControlService` or `ProcessManager` target on the public internet. Current
+   HTTP control routes have no built-in authentication, authorization, replay
+   protection, rate limits, or transport encryption.
+6. **Remote group layers** keep the same group service key, but widen control errors to include remote failures and unsupported controls. Remote queue enqueue-style methods intentionally fail until queue item schemas are part of the group contract.
+
+Planned remote-security work should cover, at minimum:
+
+- TLS/mTLS or an equivalent authenticated transport boundary,
+- signed control requests or short-lived bearer credentials,
+- explicit authorization scopes for status vs mutation controls,
+- operator/audit metadata on every remote command,
+- replay protection and request timestamps/nonces,
+- rate limits and defensive request-size limits,
+- safe defaults that keep localhost/private-network usage easy while making
+  public exposure opt-in and visibly unsafe without security layers.
 
 ---
 
 ## Examples directory
 
-All runnable scripts live under `examples/`; **`examples/mocks/`** holds test doubles and long-form scenario docs for some scripts. See [examples/README.md](../examples/README.md) for commands, learning paths, and file purposes. They are the **best teaching surface** after this guide.
+All runnable scripts live under `examples/`:
+
+- **`examples/forms/`** — one API shape per file
+- **`examples/scenarios/`** — descriptive compositions
+- **`examples/shared/`** — test doubles and harness helpers
+
+See [examples/README.md](../examples/README.md) for commands, learning paths, and file purposes. They are the **best teaching surface** after this guide.
 
 ---
 

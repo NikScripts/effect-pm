@@ -20,22 +20,50 @@
  * @module ProcessGroup
  */
 
-import { Clock, Data, DateTime, Duration, Effect, FiberMap, Option, Ref, Scope } from "effect";
-import type { Context } from "effect";
-import type { Process } from "./Process";
-import type { QueueHandle } from "./QueueResource";
+import { Clock, Context, Data, DateTime, Duration, Effect, FiberMap, Layer, Option, Ref, Schema, Scope } from "effect";
+import type { HttpClient } from "effect/unstable/http";
+import type { Process, ProcessDefinition, ProcessServiceDefinition } from "./Process";
+import type {
+  QueueHandle,
+  QueueItemCodecDescriptor,
+  QueueResourceDefinition,
+  QueueResourceServiceDefinition,
+} from "./QueueResource";
+import type { RemoteProcessManager } from "./ProcessManager";
+import {
+  QueueBatchValidationError,
+  QueueItemCodecDescriptorSchema,
+  QueueItemValidationError,
+} from "./QueueResource";
 import {
   ProcessStore,
   type ProcessLifecycleChangedEvent,
 } from "./ProcessStore";
-
 // ============================================================================
 // Public Types
 // ============================================================================
 
-/** @internal */
-type TagIdentifier<T> = T extends Context.Key<infer I, infer _> ? I : never;
+/** @internal Dependency slot needed to obtain each manually supplied queue tag (see Context key `Identifier`). */
+type TagIdentifier<T> = Extract<
+  T,
+  Context.Key<any, QueueHandle<any, any, any, any>>
+> extends never
+  ? never
+  : Extract<T, Context.Key<any, QueueHandle<any, any, any, any>>>["Identifier"];
 
+/** @internal Queue tags consumed by {@link makeProcessGroup} at fork time. */
+type ProcessGroupQueueTag = Context.Key<any, QueueHandle<any, any, any, any>>;
+
+/**
+ * Service identifiers referenced by typed queue registrations in {@link Entries}.
+ *
+ * @remarks
+ * Entries use structurally narrowed `id` / `key` fields (see {@link ProcessGroupQueueRegistration})
+ * so this type stays grounded in **string literal** identifiers even though the underlying
+ * `Context.Service` brands use invariant class/`Self` types at runtime.
+ *
+ * @public
+ */
 /**
  * Extract the service requirements from a Process handle.
  * @public
@@ -46,9 +74,270 @@ export type ProcessEffectRequirements<P> = P extends Process<infer R> ? R : neve
  * Union of requirements for all processes in a tuple.
  * @public
  */
+// NB: `Process<any>` here (and below) is a type-inference upper bound, not an
+// unsafe `any`. `Process<R>` exposes `R` in contravariant position via its
+// `effect`/`runImmediately` fields, so `Process<unknown>` is not a true
+// supertype; replacing this with `unknown` breaks tuple-element narrowing
+// during iteration. The downstream `ProcessEffectRequirements` reads `R` back
+// out via `infer`, so callers still get precise typed requirements.
 export type AllGroupProcessesRequirements<
   Processes extends readonly Process<any>[],
 > = ProcessEffectRequirements<Processes[number]>;
+
+/**
+ * Structural queue metadata carried on typed {@link ProcessGroup} entry tuples.
+ *
+ * @remarks
+ * Runtime values are Context tags (`QueueResource.Service` / `.Tag`). This shape
+ * purposefully avoids inheriting invariant `Context.Service` positions so tuples
+ * keep **literal `id` / `key`** for dependency typing; bridging into
+ * {@link makeProcessGroup} uses `unknown` widening at {@link makeTypedProcessGroup}.
+ *
+ * @public
+ */
+export interface ProcessGroupQueueRegistration<out Id extends string = string> {
+  readonly kind: "queue";
+  readonly id: Id;
+  readonly key: Id;
+  readonly item?: QueueItemCodecDescriptor;
+  /** Present on `QueueResource.Service` factories; merges into {@link ProcessGroup.Service} when set. */
+  readonly layer?: Layer.Layer<never, never, never>;
+}
+
+export type ProcessGroupEntry =
+  | ProcessDefinition<string, any>
+  | ProcessServiceDefinition<any, string, any>
+  | ProcessGroupQueueRegistration
+  | QueueResourceServiceDefinition<any, string, any, any, any, any>;
+
+/**
+ * Process entries from a typed ProcessGroup entry tuple.
+ *
+ * @public
+ */
+export type ProcessGroupProcessEntries<
+  Entries extends readonly ProcessGroupEntry[],
+> = Extract<Entries[number], { readonly kind: "process" }>;
+
+/**
+ * Queue entries from a typed ProcessGroup entry tuple.
+ *
+ * @public
+ */
+export type ProcessGroupQueueEntries<
+  Entries extends readonly ProcessGroupEntry[],
+> = Extract<Entries[number], { readonly kind: "queue" }>;
+
+/**
+ * Queue slots required to run a typed {@link ProcessGroup.make} / {@link ProcessGroup.Service}
+ * built from {@link Entries}.
+ *
+ * @remarks
+ * For {@link QueueResource.Service} declarations, resolves to the **tag class** (`Self`)
+ * so {@link Effect.provide} with {@link QueueResourceServiceDefinition.layer} subtracts
+ * the same dependencies as {@link yield* EmailQueue}. Plain structural
+ * {@link ProcessGroupQueueRegistration} values use their string `id` literals.
+ *
+ * @public
+ */
+type TypedProcessGroupQueueRequirementForEntry<Entry> =
+  Entry extends { readonly tag: Context.Key<infer Self, QueueHandle<any, any, any, any>> }
+    ? Self
+    : Entry extends ProcessGroupQueueRegistration<infer Id>
+      ? Id
+      : never;
+
+/**
+ * Queue slots required to run a typed {@link ProcessGroup.make} / {@link ProcessGroup.Service}
+ * built from {@link Entries}.
+ *
+ * @remarks
+ * For {@link QueueResource.Service} declarations, resolves to the **tag class** (`Self`)
+ * so {@link Effect.provide} with {@link QueueResourceServiceDefinition.layer} subtracts
+ * the same dependencies as {@link yield* EmailQueue}. Plain structural
+ * {@link ProcessGroupQueueRegistration} values use their string `id` literals.
+ *
+ * @public
+ */
+export type TypedProcessGroupQueueRequirements<
+  Entries extends readonly ProcessGroupEntry[],
+> = {
+  [K in keyof Entries]: TypedProcessGroupQueueRequirementForEntry<Entries[K]>;
+}[Extract<keyof Entries, number>];
+
+/**
+ * Dependencies for constructing {@link ProcessGroup.Service.layer}: scoped group
+ * build (`Scope.Scope`) plus any queue identifiers the layer may still expose in
+ * the requirement channel alongside bundled queue Layers.
+ *
+ * @internal
+ */
+type ProcessGroupServiceLayerRequirements<Entries extends readonly ProcessGroupEntry[]> =
+  TypedProcessGroupQueueRequirements<Entries> extends never
+    ? Scope.Scope
+    : TypedProcessGroupQueueRequirements<Entries> | Scope.Scope;
+
+/**
+ * Combined process requirements for a typed ProcessGroup entry tuple.
+ *
+ * @public
+ */
+type ProcessRequirementsFromEntry<Entry> = Entry extends ProcessDefinition<string, infer R>
+  ? R
+  : Entry extends ProcessServiceDefinition<any, string, infer R>
+    ? R
+    : never;
+
+export type ProcessGroupEntryRequirements<
+  Entries extends readonly ProcessGroupEntry[],
+> = ProcessRequirementsFromEntry<ProcessGroupProcessEntries<Entries>>;
+
+/**
+ * Queue item type for a queue entry.
+ *
+ * @public
+ */
+export type ProcessGroupQueueItem<Queue> =
+  Queue extends QueueResourceServiceDefinition<any, string, infer T, any, any, any>
+    ? T
+    : Queue extends Context.ServiceClass<any, string, QueueHandle<infer T, any, any, any>>
+      ? T
+    : Queue extends { readonly Service: QueueHandle<infer T, any, any, any> }
+      ? T
+      : Queue extends QueueResourceDefinition<string, infer T, any, any, any>
+        ? T
+        : never;
+
+/**
+ * Runtime schema for process controls exposed by a group contract.
+ *
+ * @public
+ */
+export const ProcessGroupProcessControlSchema = Schema.Literals([
+  "start",
+  "stop",
+  "restart",
+  "runImmediately",
+  "status",
+] as const);
+
+/**
+ * Process controls that can be exposed locally or over a remote group contract.
+ *
+ * @public
+ */
+export type ProcessGroupProcessControl =
+  typeof ProcessGroupProcessControlSchema.Type;
+
+/**
+ * Runtime schema for queue controls exposed by a group contract.
+ *
+ * @public
+ */
+export const ProcessGroupQueueControlSchema = Schema.Literals([
+  "enqueue",
+  "pause",
+  "resume",
+  "clear",
+  "status",
+] as const);
+
+/**
+ * Queue controls included in a group contract.
+ *
+ * @remarks
+ * `enqueue` is part of the serializable capability model, but
+ * `ProcessGroup.remoteLayer` rejects remote enqueue-style methods until queues
+ * expose schema-backed item contracts.
+ *
+ * @public
+ */
+export type ProcessGroupQueueControl =
+  typeof ProcessGroupQueueControlSchema.Type;
+
+/**
+ * Runtime schema for process capability records in a group contract.
+ *
+ * @public
+ */
+export const ProcessGroupProcessContractSchema = Schema.Struct({
+  id: Schema.String,
+  kind: Schema.Literal("process"),
+  controls: Schema.Array(ProcessGroupProcessControlSchema),
+});
+
+/**
+ * Serializable process capability record for a typed ProcessGroup contract.
+ *
+ * @public
+ */
+export interface ProcessGroupProcessContract<out Id extends string> {
+  readonly id: Id;
+  readonly kind: "process";
+  readonly controls: ReadonlyArray<ProcessGroupProcessControl>;
+}
+
+/**
+ * Runtime schema for queue capability records in a group contract.
+ *
+ * @public
+ */
+export const ProcessGroupQueueContractSchema = Schema.Struct({
+  id: Schema.String,
+  kind: Schema.Literal("queue"),
+  controls: Schema.Array(ProcessGroupQueueControlSchema),
+  item: Schema.optional(QueueItemCodecDescriptorSchema),
+});
+
+/**
+ * Serializable queue capability record for a typed ProcessGroup contract.
+ *
+ * @public
+ */
+export interface ProcessGroupQueueContract<out Id extends string> {
+  readonly id: Id;
+  readonly kind: "queue";
+  readonly controls: ReadonlyArray<ProcessGroupQueueControl>;
+  /**
+ * Present when the queue declaration included an Effect `itemSchema` on
+ * {@link QueueResource.Service}. Used for remote discovery and contract drift checks ahead of remote enqueue.
+   */
+  readonly item?: QueueItemCodecDescriptor;
+}
+
+/**
+ * Runtime schema for a typed ProcessGroup contract.
+ *
+ * @public
+ */
+export const ProcessGroupContractSchema = Schema.Struct({
+  id: Schema.String,
+  kind: Schema.Literal("group"),
+  version: Schema.Literal("v1"),
+  processes: Schema.Array(ProcessGroupProcessContractSchema),
+  queues: Schema.Array(ProcessGroupQueueContractSchema),
+});
+
+/**
+ * Serializable contract exported by a typed ProcessGroup for remote managers,
+ * control services, and UI clients.
+ *
+ * @public
+ */
+export interface ProcessGroupContract<
+  out Id extends string,
+  Entries extends readonly ProcessGroupEntry[],
+> {
+  readonly id: Id;
+  readonly kind: "group";
+  readonly version: "v1";
+  readonly processes: ReadonlyArray<
+    ProcessGroupProcessContract<ProcessGroupProcessEntries<Entries>["id"]>
+  >;
+  readonly queues: ReadonlyArray<
+    ProcessGroupQueueContract<ProcessGroupQueueEntries<Entries>["id"]>
+  >;
+}
 
 /**
  * Process runtime status.
@@ -121,6 +410,79 @@ export type ProcessGroupErrors =
   | ProcessAlreadyRunningError
   | ProcessNotRunningError;
 
+/**
+ * Remote group control failed because the network request, protocol response,
+ * or decoded payload was not usable.
+ *
+ * @public
+ */
+export class ProcessGroupRemoteControlError extends Data.TaggedError(
+  "ProcessGroupRemoteControlError",
+)<{
+  readonly reason: string;
+  readonly status?: number;
+}> {}
+
+/**
+ * Remote group control was requested for an operation that cannot be represented
+ * safely over the current group contract.
+ *
+ * @remarks
+ * Queue `add`, `enqueue`, `prioritize`, and `defer` intentionally fail with
+ * this error until remote enqueue is implemented (even when local contracts
+ * include {@link ProcessGroupQueueContract.item} metadata).
+ *
+ * @public
+ */
+export class UnsupportedRemoteControlError extends Data.TaggedError(
+  "UnsupportedRemoteControlError",
+)<{
+  readonly operation: string;
+  readonly target: string;
+  readonly reason: string;
+}> {}
+
+/**
+ * Error surface for injectable group services.
+ *
+ * @remarks
+ * Local group construction only produces {@link ProcessGroupErrors}; group
+ * services are widened so the same service key can be provided by
+ * {@link ProcessGroup.remoteLayer} without hiding network or unsupported-control
+ * failures as defects.
+ *
+ * @public
+ */
+export type ProcessGroupControlError =
+  | ProcessGroupErrors
+  | ProcessGroupRemoteControlError
+  | UnsupportedRemoteControlError
+  | QueueItemValidationError
+  | QueueBatchValidationError;
+
+/**
+ * Enqueue error channel for a typed queue entry (never when the queue has no item schema).
+ *
+ * @public
+ */
+export type ProcessGroupQueueEnqueueError<Queue> =
+  Queue extends QueueResourceServiceDefinition<
+    any,
+    string,
+    any,
+    any,
+    any,
+    infer EEnqueue
+  >
+    ? EEnqueue
+    : Queue extends Context.ServiceClass<any, string, QueueHandle<any, any, any, infer EEnqueue>>
+      ? EEnqueue
+    : Queue extends { readonly Service: QueueHandle<any, any, any, infer EEnqueue> }
+      ? EEnqueue
+      : Queue extends QueueResourceDefinition<string, any, any, any, infer EEnqueue>
+        ? EEnqueue
+        : never;
+
 // ============================================================================
 // ProcessGroup interface
 // ============================================================================
@@ -132,32 +494,101 @@ export type ProcessGroupErrors =
  *
  * @public
  */
-export interface ProcessGroup<R> {
+export interface ProcessGroup<R, Error = ProcessGroupErrors> {
   // ─── Process lifecycle ───
-  readonly start: (name: string) => Effect.Effect<void, ProcessGroupErrors, R>;
-  readonly stop: (name: string) => Effect.Effect<void, ProcessGroupErrors>;
-  readonly restart: (name: string) => Effect.Effect<void, ProcessGroupErrors, R>;
-  readonly startAll: () => Effect.Effect<void, ProcessGroupErrors, R>;
-  readonly stopAll: () => Effect.Effect<void, ProcessGroupErrors>;
-  readonly runImmediately: (name: string) => Effect.Effect<void, ProcessGroupErrors, R>;
+  readonly start: (name: string) => Effect.Effect<void, Error, R>;
+  readonly stop: (name: string) => Effect.Effect<void, Error>;
+  readonly restart: (name: string) => Effect.Effect<void, Error, R>;
+  readonly startAll: () => Effect.Effect<void, Error, R>;
+  readonly stopAll: () => Effect.Effect<void, Error>;
+  readonly runImmediately: (name: string) => Effect.Effect<void, Error, R>;
 
   // ─── Status (derived from fiber liveness + ProcessStore) ───
   readonly status: Effect.Effect<{
     readonly processes: ReadonlyArray<ProcessGroupDetails>;
     readonly queues: ReadonlyArray<QueueDetails>;
-  }>;
-  readonly processStatus: (name: string) => Effect.Effect<ProcessGroupDetails, ProcessGroupErrors>;
-  readonly health: Effect.Effect<GroupHealth>;
+  }, Error>;
+  readonly processStatus: (name: string) => Effect.Effect<ProcessGroupDetails, Error>;
+  readonly health: Effect.Effect<GroupHealth, Error>;
 
   // ─── Queue control (delegates to queue handle) ───
-  readonly listQueues: () => Effect.Effect<ReadonlyArray<QueueDetails>>;
-  readonly getQueue: (name: string) => Effect.Effect<QueueHandle<any, any, any>, ProcessGroupErrors>;
-  readonly pauseQueue: (name: string) => Effect.Effect<void, ProcessGroupErrors>;
-  readonly resumeQueue: (name: string) => Effect.Effect<void, ProcessGroupErrors>;
-  readonly clearQueue: (name: string) => Effect.Effect<number, ProcessGroupErrors>;
+  readonly listQueues: () => Effect.Effect<ReadonlyArray<QueueDetails>, Error>;
+  readonly getQueue: (name: string) => Effect.Effect<QueueHandle<any, any, any, any>, Error>;
+  readonly pauseQueue: (name: string) => Effect.Effect<void, Error>;
+  readonly resumeQueue: (name: string) => Effect.Effect<void, Error>;
+  readonly clearQueue: (name: string) => Effect.Effect<number, Error>;
 
   // ─── Shutdown ───
-  readonly awaitShutdown: (options?: { readonly logMessage?: (signal: string) => string }) => Effect.Effect<void, never, Scope.Scope>;
+  readonly awaitShutdown: (options?: { readonly logMessage?: (signal: string) => string }) => Effect.Effect<void, Error, Scope.Scope>;
+}
+
+/**
+ * Typed controls for one process entry in a typed ProcessGroup.
+ *
+ * @public
+ */
+export interface TypedProcessControls<R, Error = ProcessGroupErrors> {
+  readonly start: Effect.Effect<void, Error, R>;
+  readonly stop: Effect.Effect<void, Error>;
+  readonly restart: Effect.Effect<void, Error, R>;
+  readonly runImmediately: Effect.Effect<void, Error, R>;
+  readonly status: Effect.Effect<ProcessGroupDetails, Error>;
+}
+
+/**
+ * Typed controls for one queue entry in a typed ProcessGroup.
+ *
+ * @public
+ */
+export interface TypedQueueControls<
+  T,
+  Error = ProcessGroupErrors,
+  EnqueueError = never,
+> {
+  readonly add: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error | EnqueueError>;
+  readonly enqueue: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error | EnqueueError>;
+  readonly prioritize: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error | EnqueueError>;
+  readonly defer: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error | EnqueueError>;
+  readonly pause: Effect.Effect<void, Error>;
+  readonly resume: Effect.Effect<void, Error>;
+  readonly clear: Effect.Effect<number, Error>;
+  readonly status: Effect.Effect<QueueDetails, Error>;
+}
+
+/**
+ * ProcessGroup handle typed from a canonical entry tuple.
+ *
+ * @public
+ */
+export interface TypedProcessGroup<
+  out Id extends string,
+  Entries extends readonly ProcessGroupEntry[],
+  Error = ProcessGroupErrors,
+> {
+  readonly id: Id;
+  readonly entries: Entries;
+  readonly contract: ProcessGroupContract<Id, Entries>;
+  readonly start: <P extends ProcessGroupProcessEntries<Entries>>(
+    process: P,
+  ) => Effect.Effect<void, Error, ProcessGroupEntryRequirements<Entries>>;
+  readonly stop: <P extends ProcessGroupProcessEntries<Entries>>(
+    process: P,
+  ) => Effect.Effect<void, Error>;
+  readonly restart: <P extends ProcessGroupProcessEntries<Entries>>(
+    process: P,
+  ) => Effect.Effect<void, Error, ProcessGroupEntryRequirements<Entries>>;
+  readonly runImmediately: <P extends ProcessGroupProcessEntries<Entries>>(
+    process: P,
+  ) => Effect.Effect<void, Error, ProcessGroupEntryRequirements<Entries>>;
+  readonly process: <P extends ProcessGroupProcessEntries<Entries>>(
+    process: P,
+  ) => TypedProcessControls<ProcessGroupEntryRequirements<Entries>, Error>;
+  readonly queue: <Q extends ProcessGroupQueueEntries<Entries>>(
+    queue: Q,
+  ) => TypedQueueControls<ProcessGroupQueueItem<Q>, Error, ProcessGroupQueueEnqueueError<Q>>;
+  readonly status: ProcessGroup<ProcessGroupEntryRequirements<Entries>, Error>["status"];
+  readonly health: Effect.Effect<GroupHealth, Error>;
+  readonly awaitShutdown: ProcessGroup<ProcessGroupEntryRequirements<Entries>, Error>["awaitShutdown"];
 }
 
 // ============================================================================
@@ -196,6 +627,8 @@ const makeLifecycleEvent = (
 
 const buildProcessDetails = (
   name: string,
+  // Internal helper: details only read covariant outputs (`getStatus`), so the
+  // requirement parameter is irrelevant here.
   process: Process<any>,
   isRunning: boolean,
   startTime: Date | null,
@@ -230,7 +663,7 @@ const buildProcessDetails = (
  * @public
  */
 export const makeProcessGroup = <
-  const Queues extends readonly [...Context.Key<any, QueueHandle<any, any, any>>[]],
+  const Queues extends ReadonlyArray<ProcessGroupQueueTag>,
   const Processes extends readonly Process<any>[],
 >(config: {
   readonly queues: Queues;
@@ -244,9 +677,9 @@ export const makeProcessGroup = <
     type R = AllGroupProcessesRequirements<Processes>;
 
     // ─── Resolve queue tags from context ───
-    const queueMap: Record<string, QueueHandle<any, any, any>> = {};
+    const queueMap: Record<string, QueueHandle<unknown, unknown, unknown, unknown>> = {};
     for (const queueTag of config.queues) {
-      queueMap[queueTag.key] = yield* queueTag;
+      queueMap[queueTag.key] = yield* queueTag.asEffect();
     }
 
     // ─── Build process registry ───
@@ -360,7 +793,9 @@ export const makeProcessGroup = <
         return results;
       });
 
-    const getQueue = (name: string): Effect.Effect<QueueHandle<any, any, any>, ProcessGroupErrors> => {
+    const getQueue = (
+      name: string,
+    ): Effect.Effect<QueueHandle<unknown, unknown, unknown, unknown>, ProcessGroupErrors> => {
       const queue = queueMap[name];
       if (queue === undefined) return Effect.fail(new ProcessNotFoundError({ processName: name }));
       return Effect.succeed(queue);
@@ -435,6 +870,536 @@ export const makeProcessGroup = <
     return group;
   });
 
+export function makeTypedProcessGroupEffect<
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+>(
+  id: Id,
+  entries: Entries,
+): Effect.Effect<
+  TypedProcessGroup<Id, Entries>,
+  ProcessGroupErrors,
+  TypedProcessGroupQueueRequirements<Entries>
+>;
+export function makeTypedProcessGroupEffect<
+  const Queues extends ReadonlyArray<ProcessGroupQueueTag>,
+  const Processes extends readonly Process<any>[],
+>(config: {
+  readonly queues: Queues;
+  readonly processes: Processes;
+}): Effect.Effect<
+  ProcessGroup<AllGroupProcessesRequirements<Processes>>,
+  ProcessGroupErrors,
+  TagIdentifier<Queues[number]>
+>;
+export function makeTypedProcessGroupEffect(
+  idOrConfig:
+    | string
+    | {
+        readonly queues: ReadonlyArray<ProcessGroupQueueTag>;
+        readonly processes: readonly Process<any>[];
+      },
+  entries?: readonly ProcessGroupEntry[],
+) {
+  if (typeof idOrConfig === "string") {
+    return makeTypedProcessGroup(idOrConfig, entries ?? []);
+  }
+  return makeProcessGroup(idOrConfig);
+}
+
+const processGroupKind = "group" as const;
+const processGroupContractVersion = "v1" as const;
+const processGroupProcessControls: ReadonlyArray<ProcessGroupProcessControl> = [
+  "start",
+  "stop",
+  "restart",
+  "runImmediately",
+  "status",
+];
+const processGroupQueueControls: ReadonlyArray<ProcessGroupQueueControl> = [
+  "enqueue",
+  "pause",
+  "resume",
+  "clear",
+  "status",
+];
+
+// Preserve per-tuple literals by using type-predicate callbacks on `entries`
+// (`filter` narrowing is better behaved here than iterative `push` widenings).
+const processEntriesFrom = <const Entries extends readonly ProcessGroupEntry[]>(
+  entries: Entries,
+): ReadonlyArray<Extract<Entries[number], { readonly kind: "process" }>> =>
+  entries.filter(
+    (entry): entry is Extract<Entries[number], { readonly kind: "process" }> =>
+      entry.kind === "process",
+  );
+
+const queueEntriesFrom = <const Entries extends readonly ProcessGroupEntry[]>(
+  entries: Entries,
+): ReadonlyArray<Extract<Entries[number], { readonly kind: "queue" }>> =>
+  entries.filter(
+    (entry): entry is Extract<Entries[number], { readonly kind: "queue" }> =>
+      entry.kind === "queue",
+  );
+
+const makeProcessContract = <P extends ProcessDefinition<string, unknown>>(
+  process: P,
+): ProcessGroupProcessContract<P["id"]> => ({
+  id: process.id,
+  kind: "process",
+  controls: processGroupProcessControls,
+});
+
+const makeQueueContract = <const Id extends string>(
+  queue: ProcessGroupQueueRegistration<Id>,
+): ProcessGroupQueueContract<Id> => ({
+  id: queue.id,
+  kind: "queue",
+  controls: processGroupQueueControls,
+  ...(queue.item !== undefined ? { item: queue.item } : {}),
+});
+
+const makeProcessGroupContract = <
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+>(
+  id: Id,
+  entries: Entries,
+): ProcessGroupContract<Id, Entries> => ({
+  id,
+  kind: processGroupKind,
+  version: processGroupContractVersion,
+  processes: processEntriesFrom(entries).map(makeProcessContract),
+  queues: queueEntriesFrom(entries).map(makeQueueContract),
+});
+
+const nullableDateFromString = Schema.NullOr(Schema.DateFromString);
+
+const queueDetailsSchema = Schema.Struct({
+  name: Schema.String,
+  size: Schema.Struct({
+    high: Schema.Number,
+    normal: Schema.Number,
+    low: Schema.Number,
+    total: Schema.Number,
+  }),
+  completed: Schema.Number,
+});
+
+const processGroupDetailsSchema = Schema.Struct({
+  name: Schema.String,
+  type: Schema.String,
+  status: Schema.Literals(["running", "stopped"] as const),
+  uptime: Schema.Number,
+  startTime: nullableDateFromString,
+  lastRun: nullableDateFromString,
+  executions: Schema.Number,
+  firstStartup: nullableDateFromString,
+  armed: Schema.Boolean,
+  nextScheduleTransition: nullableDateFromString,
+  nextPollCadence: Schema.NullOr(Schema.Number),
+  activeInstances: Schema.Number,
+  nextTriggerRun: nullableDateFromString,
+});
+
+const processGroupStatusSchema = Schema.Struct({
+  processes: Schema.Array(processGroupDetailsSchema),
+  queues: Schema.Array(queueDetailsSchema),
+});
+
+const clearQueueResponseDataSchema = Schema.Struct({
+  cleared: Schema.Number,
+});
+
+interface RemoteControlResponse<T = unknown> {
+  readonly success: boolean;
+  readonly type?: "process" | "queue";
+  readonly data?: T;
+  readonly error?: string;
+}
+
+/**
+ * Injectable typed group service declaration produced by
+ * {@link ProcessGroup.Service}.
+ *
+ * @public
+ */
+export interface ProcessGroupServiceDefinition<
+  Self,
+  Id extends string,
+  Entries extends readonly ProcessGroupEntry[],
+> extends Context.ServiceClass<
+    Self,
+    Id,
+    TypedProcessGroup<Id, Entries, ProcessGroupControlError>
+  > {
+  readonly id: Id;
+  readonly kind: "group";
+  readonly entries: Entries;
+  readonly contract: ProcessGroupContract<Id, Entries>;
+  /**
+   * Build the local group implementation.
+   *
+   * @remarks
+   * The local implementation has the narrower {@link ProcessGroupErrors} control
+   * surface; yielding the service key is widened to {@link ProcessGroupControlError}
+   * so remote providers can use the same key honestly.
+   */
+  readonly make: Effect.Effect<
+    TypedProcessGroup<Id, Entries>,
+    ProcessGroupErrors,
+    TypedProcessGroupQueueRequirements<Entries>
+  >;
+  readonly layer: Layer.Layer<
+    Self,
+    ProcessGroupErrors,
+    ProcessGroupServiceLayerRequirements<Entries>
+  >;
+}
+
+/**
+ * Minimal endpoint service shape accepted by {@link ProcessGroup.remoteLayer}.
+ *
+ * @public
+ */
+export interface ProcessGroupRemoteEndpointDefinition<
+  Self,
+  Id extends string,
+  Entries extends readonly ProcessGroupEntry[],
+> extends Context.ServiceClass<
+    Self,
+    string,
+    RemoteProcessManager<ProcessGroupContract<Id, Entries>>
+  > {
+  readonly contract: ProcessGroupContract<Id, Entries>;
+}
+
+const statusFromUnknownError = (error: unknown): number | undefined => {
+  if (typeof error !== "object" || error === null || !("status" in error)) {
+    return undefined;
+  }
+  const status = error.status;
+  return typeof status === "number" ? status : undefined;
+};
+
+const reasonFromUnknownError = (error: unknown): string => {
+  if (typeof error === "object" && error !== null && "reason" in error) {
+    const reason = error.reason;
+    if (typeof reason === "string") {
+      return reason;
+    }
+  }
+  return String(error);
+};
+
+const toRemoteControlError = (error: unknown): ProcessGroupRemoteControlError =>
+  new ProcessGroupRemoteControlError({
+    reason: reasonFromUnknownError(error),
+    status: statusFromUnknownError(error),
+  });
+
+const decodeRemoteData = <S extends Schema.Top & { readonly DecodingServices: never }>(
+  response: RemoteControlResponse<unknown>,
+  schema: S,
+  description: string,
+): Effect.Effect<S["Type"], ProcessGroupRemoteControlError> => {
+  if (response.data === undefined) {
+    return Effect.fail(
+      new ProcessGroupRemoteControlError({
+        reason: `Remote ${description} response did not include data`,
+      }),
+    );
+  }
+  return Schema.decodeUnknownEffect(schema)(response.data).pipe(
+    Effect.mapError(
+      (cause) =>
+        new ProcessGroupRemoteControlError({
+          reason: `Malformed remote ${description} response: ${String(cause)}`,
+        }),
+    ),
+  );
+};
+
+const unsupportedRemoteQueueEnqueue = (
+  operation: string,
+  target: string,
+): Effect.Effect<void, UnsupportedRemoteControlError> =>
+  Effect.fail(
+    new UnsupportedRemoteControlError({
+      operation,
+      target,
+      reason: "Remote queue enqueue requires schema-backed queue item contracts",
+    }),
+  );
+
+const unsupportedRemoteAwaitShutdown = (
+  target: string,
+): Effect.Effect<void, UnsupportedRemoteControlError> =>
+  Effect.fail(
+    new UnsupportedRemoteControlError({
+      operation: "awaitShutdown",
+      target,
+      reason: "Remote groups cannot install local process signal handlers",
+    }),
+  );
+
+const makeRemoteTypedProcessGroup = <
+  Self,
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+>(
+  group: ProcessGroupServiceDefinition<Self, Id, Entries>,
+  manager: RemoteProcessManager<ProcessGroupContract<Id, Entries>>,
+  runRemote: <A>(
+    effect: Effect.Effect<A, unknown, HttpClient.HttpClient>,
+  ) => Effect.Effect<A, ProcessGroupRemoteControlError>,
+): TypedProcessGroup<Id, Entries, ProcessGroupControlError> => {
+  const processStatus = (
+    id: ProcessGroupProcessEntries<Entries>["id"],
+  ): Effect.Effect<ProcessGroupDetails, ProcessGroupControlError> =>
+    Effect.flatMap(
+      runRemote(manager.process(id).status),
+      (response) => decodeRemoteData(response, processGroupDetailsSchema, "process status"),
+    );
+
+  const queueStatus = (
+    id: ProcessGroupQueueEntries<Entries>["id"],
+  ): Effect.Effect<QueueDetails, ProcessGroupControlError> =>
+    Effect.flatMap(
+      runRemote(manager.queue(id).status),
+      (response) => decodeRemoteData(response, queueDetailsSchema, "queue status"),
+    );
+
+  const clearQueue = (
+    id: ProcessGroupQueueEntries<Entries>["id"],
+  ): Effect.Effect<number, ProcessGroupControlError> =>
+    Effect.flatMap(
+      runRemote(manager.queue(id).clear),
+      (response) =>
+        Effect.map(
+          decodeRemoteData(response, clearQueueResponseDataSchema, "queue clear"),
+          (data) => data.cleared,
+        ),
+    );
+
+  const status: TypedProcessGroup<Id, Entries, ProcessGroupControlError>["status"] =
+    Effect.flatMap(
+      runRemote(manager.status),
+      (response) => decodeRemoteData(response, processGroupStatusSchema, "group status"),
+    );
+
+  const health: Effect.Effect<GroupHealth, ProcessGroupControlError> =
+    Effect.map(status, (groupStatus) => {
+      const running = groupStatus.processes.filter((process) => process.status === "running").length;
+      const stopped = groupStatus.processes.length - running;
+      return {
+        healthy: stopped === 0,
+        processes: { running, stopped },
+        queues: { active: groupStatus.queues.length },
+      };
+    });
+
+  const processById = (
+    id: ProcessGroupProcessEntries<Entries>["id"],
+  ): TypedProcessControls<
+    ProcessGroupEntryRequirements<Entries>,
+    ProcessGroupControlError
+  > => ({
+    start: runRemote(manager.process(id).start),
+    stop: runRemote(manager.process(id).stop),
+    restart: runRemote(manager.process(id).restart),
+    runImmediately: runRemote(manager.process(id).runImmediately),
+    status: processStatus(id),
+  });
+
+  const queueById = <Q extends ProcessGroupQueueEntries<Entries>>(
+    queue: Q,
+  ): TypedQueueControls<ProcessGroupQueueItem<Q>, ProcessGroupControlError> => ({
+    add: (_items: ProcessGroupQueueItem<Q> | ReadonlyArray<ProcessGroupQueueItem<Q>>) =>
+      unsupportedRemoteQueueEnqueue("queue.add", queue.id),
+    enqueue: (_items: ProcessGroupQueueItem<Q> | ReadonlyArray<ProcessGroupQueueItem<Q>>) =>
+      unsupportedRemoteQueueEnqueue("queue.enqueue", queue.id),
+    prioritize: (_items: ProcessGroupQueueItem<Q> | ReadonlyArray<ProcessGroupQueueItem<Q>>) =>
+      unsupportedRemoteQueueEnqueue("queue.prioritize", queue.id),
+    defer: (_items: ProcessGroupQueueItem<Q> | ReadonlyArray<ProcessGroupQueueItem<Q>>) =>
+      unsupportedRemoteQueueEnqueue("queue.defer", queue.id),
+    pause: runRemote(manager.queue(queue.id).pause),
+    resume: runRemote(manager.queue(queue.id).resume),
+    clear: clearQueue(queue.id),
+    status: queueStatus(queue.id),
+  });
+
+  return {
+    id: group.id,
+    entries: group.entries,
+    contract: group.contract,
+    start: (process) => runRemote(manager.process(process.id).start),
+    stop: (process) => runRemote(manager.process(process.id).stop),
+    restart: (process) => runRemote(manager.process(process.id).restart),
+    runImmediately: (process) => runRemote(manager.process(process.id).runImmediately),
+    process: (process) => processById(process.id),
+    queue: queueById,
+    status,
+    health,
+    awaitShutdown: () => unsupportedRemoteAwaitShutdown(group.id),
+  };
+};
+
+/**
+ * Provide a {@link ProcessGroup.Service} key with a network-backed implementation
+ * from a {@link ProcessManager.Endpoint}.
+ *
+ * @remarks
+ * The caller still yields the same group service key, but controls are routed
+ * through the endpoint and require `HttpClient.HttpClient`. Process controls and
+ * queue pause/resume/clear/status are supported. Queue enqueue-style methods
+ * fail with {@link UnsupportedRemoteControlError} until queue item schemas are
+ * represented in the group contract.
+ *
+ * @public
+ */
+const remoteLayer = <
+  Self,
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+  EndpointSelf,
+>(
+  group: ProcessGroupServiceDefinition<Self, Id, Entries>,
+  endpoint: ProcessGroupRemoteEndpointDefinition<EndpointSelf, Id, Entries>,
+): Layer.Layer<Self, never, EndpointSelf | HttpClient.HttpClient> =>
+  Layer.effect(group)(
+    Effect.gen(function* () {
+      const manager = yield* endpoint;
+      const context = yield* Effect.context<HttpClient.HttpClient>();
+      const runRemoteUnverified = <A>(
+        effect: Effect.Effect<A, unknown, HttpClient.HttpClient>,
+      ): Effect.Effect<A, ProcessGroupRemoteControlError> =>
+        Effect.provide(effect, context).pipe(
+          Effect.mapError(toRemoteControlError),
+        );
+      const verifyRemote = yield* Effect.cached(runRemoteUnverified(manager.verifyContract));
+      const runRemote = <A>(
+        effect: Effect.Effect<A, unknown, HttpClient.HttpClient>,
+      ): Effect.Effect<A, ProcessGroupRemoteControlError> =>
+        Effect.flatMap(verifyRemote, () => runRemoteUnverified(effect));
+      return makeRemoteTypedProcessGroup(group, manager, runRemote);
+    }),
+  );
+
+/** Runtime queues in typed entry tuples expose `Context.Key.asEffect`; plain structural registrations do not. */
+function isProcessGroupRuntimeQueueTag<const Entries extends readonly ProcessGroupEntry[]>(
+  entry: ProcessGroupQueueEntries<Entries>,
+): entry is ProcessGroupQueueTag &
+  Extract<Entries[number], { readonly kind: "queue" }> {
+  if (typeof entry === "function") {
+    return (
+      "asEffect" in entry &&
+      typeof (entry as { asEffect?: unknown }).asEffect === "function"
+    );
+  }
+  if (typeof entry === "object" && entry !== null) {
+    return (
+      "asEffect" in entry &&
+      typeof (entry as { asEffect?: unknown }).asEffect === "function"
+    );
+  }
+  return false;
+}
+
+const mergeBundledQueueLayers = (
+  first: Layer.Layer<any, never, never>,
+  rest: ReadonlyArray<Layer.Layer<any, never, never>>,
+): Layer.Layer<any, never, never> =>
+  rest.length === 0
+    ? first
+    : rest.reduce((acc, layer) => Layer.merge(acc, layer), first);
+
+const makeTypedProcessGroup = <
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+>(
+  id: Id,
+  entries: Entries,
+): Effect.Effect<
+  TypedProcessGroup<Id, Entries>,
+  ProcessGroupErrors,
+  TypedProcessGroupQueueRequirements<Entries>
+> =>
+  Effect.gen(function* () {
+    const contract = makeProcessGroupContract(id, entries);
+    const processes = processEntriesFrom(entries);
+    const queuesAll = queueEntriesFrom(entries);
+    const queuesRuntime = queuesAll.filter(isProcessGroupRuntimeQueueTag);
+
+    const runtime = yield* makeProcessGroup({
+      processes: processes.map((process) => process.process),
+      queues: queuesRuntime,
+    });
+
+    const queueStatus = (
+      queueId: string,
+    ): Effect.Effect<QueueDetails, ProcessGroupErrors> =>
+      Effect.gen(function* () {
+        const queue = yield* runtime.getQueue(queueId);
+        const sizes = yield* queue.sizes;
+        const total = yield* queue.size;
+        const completed = yield* queue.completed;
+        return {
+          name: queueId,
+          size: { ...sizes, total },
+          completed,
+        };
+      });
+
+    return {
+      id,
+      entries,
+      contract,
+      start: (process) => runtime.start(process.id),
+      stop: (process) => runtime.stop(process.id),
+      restart: (process) => runtime.restart(process.id),
+      runImmediately: (process) => runtime.runImmediately(process.id),
+      process: (process) => ({
+        start: runtime.start(process.id),
+        stop: runtime.stop(process.id),
+        restart: runtime.restart(process.id),
+        runImmediately: runtime.runImmediately(process.id),
+        status: runtime.processStatus(process.id),
+      }),
+      queue: (queue) => ({
+        add: (items) =>
+          Effect.flatMap(runtime.getQueue(queue.id), (handle) => handle.add(items)),
+        enqueue: (items) =>
+          Effect.flatMap(runtime.getQueue(queue.id), (handle) => handle.add(items)),
+        prioritize: (items) =>
+          Effect.flatMap(
+            runtime.getQueue(queue.id),
+            (handle) => handle.prioritize(items),
+          ),
+        defer: (items) =>
+          Effect.flatMap(runtime.getQueue(queue.id), (handle) => handle.defer(items)),
+        pause: runtime.pauseQueue(queue.id),
+        resume: runtime.resumeQueue(queue.id),
+        clear: runtime.clearQueue(queue.id),
+        status: queueStatus(queue.id),
+      }),
+      status: runtime.status,
+      health: runtime.health,
+      awaitShutdown: runtime.awaitShutdown,
+    };
+  });
+
+// Merge queue resource layers bundled on typed entries into the group layer so
+// `yield*` / `runPromise` callers do not have to compose queue Layers manually.
+const queueContributionLayersFrom = (
+  entries: readonly ProcessGroupEntry[],
+): ReadonlyArray<Layer.Layer<any, never, never>> =>
+  entries.filter(
+    (e): e is ProcessGroupQueueRegistration & {
+      readonly layer: Layer.Layer<any, never, never>;
+    } => e.kind === "queue" && e.layer !== undefined,
+  ).map((q) => q.layer);
+
 // ============================================================================
 // Public namespace
 // ============================================================================
@@ -445,11 +1410,49 @@ export const makeProcessGroup = <
  * @public
  */
 export const ProcessGroup = {
-  make: makeProcessGroup,
+  make: makeTypedProcessGroupEffect,
+  Service: <Self>() =>
+  <const Id extends string, const Entries extends readonly ProcessGroupEntry[]>(
+    id: Id,
+    entries: Entries,
+  ) => {
+    const base = Context.Service<
+      Self,
+      TypedProcessGroup<Id, Entries, ProcessGroupControlError>
+    >()(id);
+    const contract = makeProcessGroupContract(id, entries);
+    const make = makeTypedProcessGroup(id, entries);
+    const queueContrib = queueContributionLayersFrom(entries);
+    const bundledForBuild =
+      queueContrib.length === 0
+        ? Layer.empty
+        : mergeBundledQueueLayers(queueContrib[0]!, queueContrib.slice(1));
+    const baseLayer = Layer.effect(base)(make);
+    const built = baseLayer.pipe(Layer.provide(bundledForBuild));
+    /** Re-merge queue layers so the same tags stay in scope for handlers (e.g. ControlService) after `yield* Group`. */
+    const layer: Layer.Layer<
+      Self,
+      ProcessGroupErrors,
+      ProcessGroupServiceLayerRequirements<Entries>
+    > = queueContrib.length === 0 ? built : Layer.mergeAll(built, bundledForBuild);
+    // Match Effect's class-based service style: the class is yieldable, and the
+    // static fields expose group identity/contract data for control surfaces.
+    return Object.assign(base, {
+      id,
+      kind: processGroupKind,
+      entries,
+      contract,
+      make,
+      layer,
+    });
+  },
+  remoteLayer,
 } as const;
+
+export { QueueItemValidationError, QueueBatchValidationError } from "./QueueResource";
 
 /**
  * Control surface type used by ControlService.
  * @public
  */
-export type ProcessGroupControls<R = never> = ProcessGroup<R>;
+export type ProcessGroupControls<R = never, Error = ProcessGroupErrors> = ProcessGroup<R, Error>;

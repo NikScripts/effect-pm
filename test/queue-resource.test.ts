@@ -1,8 +1,11 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Duration, Effect, Exit, Ref } from "effect";
+import { Duration, Effect, Exit, Ref, Schema } from "effect";
 import {
+  QueueBatchValidationError,
   QueueHandle,
+  QueueItemValidationError,
   QueueResource,
+  makeQueueItemCodecDescriptor,
 } from "../src/QueueResource";
 
 const fastConfig = { concurrency: 2 };
@@ -254,6 +257,31 @@ describe("QueueResource.make — dedup (key)", () => {
       expect(results.sort()).toEqual(["a", "b"]);
     }).pipe(Effect.scoped),
   );
+
+  it.live("releases keys for pending items removed by clear", () =>
+    Effect.gen(function* () {
+      const processed = yield* Ref.make<Array<string>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-dedup-clear",
+        paused: true,
+        effect: (item: { readonly id: string }) =>
+          Ref.update(processed, (arr) => [...arr, item.id]),
+        key: (item) => item.id,
+        concurrency: 1,
+      });
+
+      yield* queue.add({ id: "a" });
+      const cleared = yield* queue.clear;
+      expect(cleared).toBe(1);
+
+      yield* queue.add({ id: "a" });
+      yield* queue.resume;
+      yield* waitUntilCompleted(queue, 1);
+
+      const results = yield* Ref.get(processed);
+      expect(results).toEqual(["a"]);
+    }).pipe(Effect.scoped),
+  );
 });
 
 describe("QueueResource.make — retry via handler", () => {
@@ -457,4 +485,56 @@ describe("QueueResource.make — self-enqueue guard", () => {
       expect(result).toContain("child-2");
     }).pipe(Effect.scoped),
   );
+});
+
+const EmailItem = Schema.Struct({
+  id: Schema.String,
+  subject: Schema.String,
+});
+
+describe("QueueResource.make — itemSchema", () => {
+  it.live("fails single-item enqueue before the queue mutates", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-schema-single",
+        itemSchema: EmailItem,
+        effect: () => Effect.void,
+        ...fastConfig,
+      });
+      // Deliberately ill-typed payload: runtime `itemSchema` must reject numeric `id`.
+      const error = yield* Effect.flip(
+        // @ts-expect-error intentional invalid shape for QueueItemValidationError coverage
+        queue.add({ id: 1, subject: "hello" }),
+      );
+      expect(error).toBeInstanceOf(QueueItemValidationError);
+      expect(yield* queue.size).toBe(0);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("fails batch enqueue atomically when any item is invalid", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-schema-batch",
+        itemSchema: EmailItem,
+        effect: () => Effect.void,
+        ...fastConfig,
+      });
+      const error = yield* Effect.flip(
+        queue.add([
+          { id: "a", subject: "ok" },
+          // @ts-expect-error deliberate invalid batch item `id` type for QueueBatchValidationError coverage
+          { id: 2, subject: "bad" },
+        ]),
+      );
+      expect(error).toBeInstanceOf(QueueBatchValidationError);
+      expect(yield* queue.size).toBe(0);
+    }).pipe(Effect.scoped),
+  );
+
+  it("itemSchema uses the queue id for codec metadata", () => {
+    const descriptor = makeQueueItemCodecDescriptor("@test/EmailQueue", EmailItem);
+    expect(descriptor.id).toBe("@test/EmailQueue/item@v1");
+    expect(descriptor.version).toBe("1.0.0");
+    expect(descriptor.encoding).toBe("json");
+  });
 });

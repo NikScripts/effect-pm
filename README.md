@@ -3,10 +3,19 @@
 A comprehensive process orchestration system built on [Effect](https://effect.website/) that manages **supervised processes** (polling cadence + schedule gate, including cron-backed gates) and **queues**, with type-safe dependency management.
 
 The runtime is organized around the **`ProcessGroup`** — a cohesive bundle of
-processes and queues that run together. A future top-level **`ProcessManager`**
-(not yet implemented) will coordinate multiple `ProcessGroup` instances across
-hosts via Effect RPC / HTTP. For now, use one `ProcessGroup` per logical
-bundle.
+processes and queues that run together. **`ProcessManager`** connects to a
+group's localhost control endpoint for typed remote controls, and
+**`ProcessGroup.remoteLayer`** can provide the same group service key from a
+`ProcessManager.Endpoint`. `ProcessManager.cli([GroupA, GroupB] as const)`
+provides the multi-group remote CLI on top of a typed connection registry.
+Multi-host coordination and remote queue enqueue are still planned follow-ups.
+
+Identifiers are slash-separated Effect-style strings with kebab-case package
+segments and case-preserving service names, such as
+`@repo/north-west/BillingGroup/SyncInvoices`. CLIs may accept normalized
+lowercase/kebab-case aliases such as `north-west/billing-group/sync-invoices`,
+while diagnostics should show canonical ids and display kind as a separate
+column or label.
 
 ## Documentation map (read in any order)
 
@@ -68,8 +77,7 @@ class EmailQueue extends QueueResource.Service<EmailQueue, Email, string, never>
 import { Process, Polling, ProcessSchedule } from "@nikscripts/effect-pm";
 import { Cron, Duration, Effect } from "effect";
 
-const emailProcess = Process.make({
-  name: "send-emails",
+const emailProcess = Process.make("send-emails", {
   polling: Polling.spaced(Duration.minutes(5)),
   schedule: ProcessSchedule.cronMatch({
     crons: Cron.make({ minutes: [0, 30] }),
@@ -84,7 +92,7 @@ const emailProcess = Process.make({
 
 `polling` controls repeat cadence inside an instance, and `schedule` controls whether an instance stays armed and continues running.
 
-### 3. Create ProcessGroup
+### 3. Create a `ProcessGroup`
 
 ```typescript
 import { ProcessGroup } from "@nikscripts/effect-pm";
@@ -122,7 +130,7 @@ Effect.runPromise(
 );
 ```
 
-You can merge independent layers with **`Layer.mergeAll(...)`** and a single `Effect.provide` at the root (clearer graph; matches the full demo in `examples/example.ts`).
+You can merge independent layers with **`Layer.mergeAll(...)`** and a single `Effect.provide` at the root (clearer graph; matches the full demo in `examples/scenarios/full-process-group-with-queues-and-control-cli.ts`).
 
 ## QueueResource configuration
 
@@ -189,8 +197,7 @@ For the full current queue surface, including `handler`, `EffectContext`, `Handl
 import { Process, Polling, ProcessSchedule } from "@nikscripts/effect-pm";
 import { Duration, Effect } from "effect";
 
-const heartbeat = Process.make({
-  name: "hourly-task",
+const heartbeat = Process.make("hourly-task", {
   polling: Polling.spaced(Duration.hours(1)),
   schedule: ProcessSchedule.alwaysArmed,
   effect: Effect.logInfo("Running hourly task"),
@@ -203,8 +210,7 @@ const heartbeat = Process.make({
 import { Process, Polling, ProcessSchedule } from "@nikscripts/effect-pm";
 import { Cron, Duration, Effect } from "effect";
 
-const dataSync = Process.make({
-  name: "data-sync",
+const dataSync = Process.make("data-sync", {
   polling: Polling.spaced(Duration.minutes(1)),
   schedule: ProcessSchedule.cronMatch({
     crons: Cron.make({ minutes: [0], hours: [2] }), // 2:00 every day
@@ -225,9 +231,9 @@ To run once outside trigger cadence (even when schedule is disarmed), call `proc
 
 ### Accelerating polling (speeds up, then reset)
 
-Use **`Polling.acceleratingScoped`** (or **`Polling.accelerating`** with your own refs) when intervals should **shorten** after each tick. **`yield* Polling.resetCadence`** sets the iteration back to zero and **wakes** the current wait so spacing returns toward the configured **maximum**. Any effect that calls `resetCadence` must see the **same** `Polling` layer instance as the process (merge the layer once at the app / `ProcessGroup` boundary). For **scores-feed** examples (**basic spaced poll → minimal `resetCadence` → verbose `peekCadence`**), see **`examples/sports-polling-accelerating.ts`** with **`examples/mocks/sports-score-feed.mock.ts`** and **`examples/mocks/demo-harness.mock.ts`** (`pnpm run example:sports-polling-accelerating`).
+Use **`Polling.acceleratingScoped`** (or **`Polling.accelerating`** with your own refs) when intervals should **shorten** after each tick. **`yield* Polling.resetCadence`** sets the iteration back to zero and **wakes** the current wait so spacing returns toward the configured **maximum**. Any effect that calls `resetCadence` must see the **same** `Polling` layer instance as the process (merge the layer once at the app / `ProcessGroup` boundary). For **scores-feed** forms (**basic spaced poll → minimal `resetCadence` → verbose `peekCadence`**), see **`examples/forms/polling/`** with **`examples/shared/sports-score-feed.ts`** and **`examples/shared/demo-harness.ts`** (`pnpm run example:sports-polling-accelerating`).
 
-Runnable demo (with `TestClock`): `npx tsx examples/process-supervisor-patterns.ts`.
+Runnable demo (with `TestClock`): `pnpm run example:process-supervisor-patterns`.
 
 ### API tables and exports
 
@@ -273,7 +279,7 @@ yield* group.startAll();
 const status = yield* group.processStatus("email-process");
 // {
 //   name: "email-process",
-//   type: "scheduled",
+//   type: "managed",
 //   status: "running",
 //   uptime: 3600000,
 //   startTime: Date,
@@ -297,13 +303,6 @@ const emailQueue = yield* group.getQueue("email-queue");
 yield* emailQueue.add([email1, email2, email3]);
 ```
 
-### Process Management
-
-```typescript
-// Remove a process
-yield* group.removeProcess("stale-process");
-```
-
 ## Type Safety
 
 The ProcessGroup enforces type-safe queue dependencies at compile time:
@@ -319,8 +318,7 @@ class EmailQueue extends QueueResource.Service<EmailQueue, Email, void, SendErro
   },
 ) {}
 
-const workerWithQueue = Process.make({
-  name: "needs-queue",
+const workerWithQueue = Process.make("needs-queue", {
   polling: Polling.spaced(Duration.minutes(1)),
   schedule: ProcessSchedule.cronMatch({ crons: Cron.make({ minutes: [0] }) }),
   effect: Effect.gen(function* () {
@@ -391,7 +389,7 @@ to copy the fragment manually.
 ```typescript
 import { PrismaClient } from "@prisma/client";
 import { ProcessGroup } from "@nikscripts/effect-pm";
-import { PrismaProcessStore } from "@nikscripts/effect-pm/prisma";
+import { PrismaProcessStore } from "@nikscripts/effect-pm/storage/prisma";
 
 const prisma = new PrismaClient();
 
@@ -424,12 +422,12 @@ Start an HTTP control service for external management:
 const group = yield* ProcessGroup.make({...});
 
 // Start control service
-yield* group.serve({ port: 3001 });
+yield* ControlService.make({ group, port: 3001 });
 
 // Now accessible via HTTP:
 // GET  /processes      - List all processes
-// POST /process/start  - Start a process
-// POST /process/stop   - Stop a process
+// POST /processes/:id/start  - Start a process
+// POST /processes/:id/stop   - Stop a process
 // GET  /queues         - List all queues
 ```
 
@@ -519,7 +517,7 @@ yield* queue.defer([backgroundTask]);
 
 ## Examples
 
-See the [examples/example.ts](./examples/example.ts) file for a complete working example with:
+See [examples/scenarios/full-process-group-with-queues-and-control-cli.ts](./examples/scenarios/full-process-group-with-queues-and-control-cli.ts) for a complete working example with:
 - Multiple queue resources
 - Managed processes (polling + schedule gate)
 - Full setup with dependencies
@@ -532,10 +530,10 @@ See the [examples/example.ts](./examples/example.ts) file for a complete working
 
 - `ProcessGroup.make()` - Create a ProcessGroup instance
 - `QueueResource.Service()` / `QueueResource.Tag()` - Create queue services and queue service contracts
-- `Process.make()` — Create a managed process (`polling` + `schedule` layers)
+- `Process.make(id, config)` — Create a managed process (`polling` + `schedule` layers)
 - `Polling` / `ProcessSchedule` — Cadence and gate services with preset layers
 - `ProcessStore` - Unified analytics & lifecycle service (in-memory by default)
-- `PrismaProcessStore` - Prisma-backed `ProcessStore` (subpath: `@nikscripts/effect-pm/prisma`)
+- `PrismaProcessStore` - Prisma-backed `ProcessStore` (preferred subpath: `@nikscripts/effect-pm/storage/prisma`; legacy `@nikscripts/effect-pm/prisma` remains available)
 - `ControlService` - HTTP control API utilities
 
 ### CLI
@@ -555,7 +553,7 @@ See the [examples/example.ts](./examples/example.ts) file for a complete working
 
 ### Errors
 
-- `ProcessGroupError` - General error
+- `ProcessGroupErrors` - Local process-group error union
 - `ProcessNotFoundError` - Process not found
 - `ProcessAlreadyRunningError` - Process already running
 - `ProcessNotRunningError` - Process not running

@@ -38,12 +38,15 @@ import {
   type ProcessLifecycleChangedEvent,
   type ProcessStoreInterface,
   type QueryOpts,
+  type QueueItemCompletedEvent,
+  type QueueLifecycleChangedEvent,
+  type StoreEventQuery,
 } from "../ProcessStore";
 import {
   decodeEventRow,
   encodeEvent,
-  PrismaProcessStoreDecodeError,
-} from "./codec";
+  ProcessStoreEventDecodeError,
+} from "../ProcessStoreCodec";
 import type {
   EffectPmEventFindManyArgs,
   PrismaProcessStoreClient,
@@ -106,6 +109,22 @@ const buildWindow = (opts: QueryOpts | undefined) => {
   return window;
 };
 
+const buildEventQueryArgs = (query: StoreEventQuery | undefined): EffectPmEventFindManyArgs => {
+  const window = buildWindow(query?.opts);
+  return {
+    where: {
+      ...(query?.entityType === undefined ? {} : { entityType: query.entityType }),
+      ...(query?.entityId === undefined ? {} : { entityId: query.entityId }),
+      ...(query?.types === undefined || query.types.length === 0
+        ? {}
+        : { type: { in: [...query.types] } }),
+      ...(window === undefined ? {} : { occurredAt: window }),
+    },
+    orderBy: { occurredAt: "desc" },
+    ...(query?.opts?.limit !== undefined ? { take: Math.max(0, query.opts.limit) } : {}),
+  };
+};
+
 class PrismaProcessStoreError extends Data.TaggedError("PrismaProcessStoreError")<{
   readonly cause: unknown;
 }> {}
@@ -113,7 +132,8 @@ class PrismaProcessStoreError extends Data.TaggedError("PrismaProcessStoreError"
 const findEventsOfType = <T extends AnalyticsEvent>(
   client: PrismaProcessStoreClient,
   type: T["type"],
-  processId: string,
+  entityType: T["entityType"],
+  entityId: string,
   opts: QueryOpts | undefined,
   refine: (event: AnalyticsEvent) => event is T,
 ): Effect.Effect<T[]> => {
@@ -121,8 +141,8 @@ const findEventsOfType = <T extends AnalyticsEvent>(
   const args: EffectPmEventFindManyArgs = {
     where: {
       type,
-      entityType: "process",
-      entityId: processId,
+      entityType,
+      entityId,
       ...(window === undefined ? {} : { occurredAt: window }),
     },
     orderBy: { occurredAt: "desc" },
@@ -136,7 +156,7 @@ const findEventsOfType = <T extends AnalyticsEvent>(
       const out: T[] = [];
       for (const row of rows) {
         const decoded = decodeEventRow(row);
-        if (decoded instanceof PrismaProcessStoreDecodeError) {
+        if (decoded instanceof ProcessStoreEventDecodeError) {
           continue;
         }
         if (refine(decoded)) {
@@ -158,6 +178,16 @@ const isLifecycle = (
   event: AnalyticsEvent,
 ): event is ProcessLifecycleChangedEvent =>
   event.type === "process.lifecycle.changed";
+
+const isQueueItemCompleted = (
+  event: AnalyticsEvent,
+): event is QueueItemCompletedEvent =>
+  event.type === "queue.item.completed";
+
+const isQueueLifecycle = (
+  event: AnalyticsEvent,
+): event is QueueLifecycleChangedEvent =>
+  event.type === "queue.lifecycle.changed";
 
 /**
  * Build a {@link ProcessStoreInterface} backed by Prisma.
@@ -193,10 +223,29 @@ export const make = (
       catch: (cause) => new PrismaProcessStoreError({ cause }),
     }).pipe(Effect.orDie),
 
+  events: (query) =>
+    Effect.tryPromise({
+      try: () => client.effectPmEvent.findMany(buildEventQueryArgs(query)),
+      catch: (cause) => new PrismaProcessStoreError({ cause }),
+    }).pipe(
+      Effect.map((rows) => {
+        const out: AnalyticsEvent[] = [];
+        for (const row of rows) {
+          const decoded = decodeEventRow(row);
+          if (!(decoded instanceof ProcessStoreEventDecodeError)) {
+            out.push(decoded);
+          }
+        }
+        return out;
+      }),
+      Effect.orDie,
+    ),
+
   getProcessExecutions: (processId, opts) =>
     findEventsOfType(
       client,
       "process.execution.completed",
+      "process",
       processId,
       opts,
       isExecution,
@@ -206,9 +255,30 @@ export const make = (
     findEventsOfType(
       client,
       "process.lifecycle.changed",
+      "process",
       processId,
       opts,
       isLifecycle,
+    ),
+
+  getQueueItemCompletions: (queueId, opts) =>
+    findEventsOfType(
+      client,
+      "queue.item.completed",
+      "queue",
+      queueId,
+      opts,
+      isQueueItemCompleted,
+    ),
+
+  getQueueLifecycle: (queueId, opts) =>
+    findEventsOfType(
+      client,
+      "queue.lifecycle.changed",
+      "queue",
+      queueId,
+      opts,
+      isQueueLifecycle,
     ),
 });
 

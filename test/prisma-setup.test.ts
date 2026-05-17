@@ -1,7 +1,6 @@
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Effect, Path } from "effect";
 import { describe, expect, it } from "vitest";
-import { provideLayer } from "../src/provideLayer.js";
 import {
   addPrismaSchema,
   AddPrismaError,
@@ -17,7 +16,7 @@ const withPath = <A>(f: (p: Path.Path) => A): A =>
     Effect.gen(function* () {
       const pth = yield* Path.Path;
       return f(pth);
-    }).pipe(provideLayer(NodePath.layer)),
+    }).pipe(Effect.provide(NodePath.layer)),
   );
 
 const normalize = (filepath: string) =>

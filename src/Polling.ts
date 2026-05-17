@@ -21,8 +21,7 @@
  * import { Duration } from "effect"
  * import { Process, Polling, ProcessSchedule } from "@nikscripts/effect-pm"
  *
- * const myProcess = Process.make({
- *   name: "heartbeat",
+ * const myProcess = Process.make("heartbeat", {
  *   polling: Polling.spaced("10 seconds"),
  *   schedule: ProcessSchedule.alwaysArmed,
  *   effect: Effect.logInfo("tick"),

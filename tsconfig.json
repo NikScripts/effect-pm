@@ -100,7 +100,7 @@
           "scopeInLayerEffect": "error",
           "serviceNotAsClass": "off",
           "strictBooleanExpressions": "error",
-          "strictEffectProvide": "error",
+          "strictEffectProvide": "off",
           "tryCatchInEffectGen": "error",
           "unknownInEffectCatch": "error",
           "unnecessaryArrowBlock": "error",
@@ -115,8 +115,8 @@
   "include": [
     "src/**/*.ts",
     "test/**/*.ts",
-    "examples/*.ts",
-    "examples/mocks/**/*.ts"
+    "examples/**/*.ts",
+    "examples/shared/**/*.ts"
   ],
-  "exclude": ["node_modules", "dist", "repos"]
+  "exclude": ["node_modules", "dist", "repos", "examples/scenarios/nwslsoccer"]
 }

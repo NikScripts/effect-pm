@@ -8,22 +8,21 @@
  * on the command line. It configures **only**:
  *
  * - **Display metadata** — `name` / `version` shown in `--help`
- * - **Control base URL** — derived from `HOME_SERVER_PORT` (must match `examples/example.ts`)
+ * - **Control base URL** — derived from `HOME_SERVER_PORT` (must match the main scenario)
  *
  * ## Prerequisites
  *
- * 1. Start the demo app first: **`pnpm run example`** (starts `ControlService` on the port below).
+ * - Start the demo app first: **`pnpm run example`** (starts `ControlService` on the port below).
  * 2. In another shell, run e.g. **`pnpm run cli ls`**.
  *
  * ## Port contract
  *
- * `HOME_SERVER_PORT` is read here and in `example.ts`. If you change one, change both
- * sessions (or export the variable in your shell profile for the session).
+ * `HOME_SERVER_PORT` is read here and in `scenarios/full-process-group-with-queues-and-control-cli.ts`.
  *
  * ## What the CLI talks to
  *
  * The implementation lives in **`src/cli.ts`** (`createCli` / `runCli`). It performs
- * HTTP `POST` requests to the **localhost-only** control API exposed by `ProcessGroup.serve`
+ * HTTP requests to the **localhost-only** control API exposed by `ControlService.make`
  * (see **`src/ControlService.ts`**).
  *
  * ## Commands (summary)
@@ -43,16 +42,15 @@
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Config, Effect, Layer, Option } from "effect";
+import { Config, Effect, Layer, ManagedRuntime, Option } from "effect";
 import { runCli } from "../src/cli";
-import { provideLayer } from "../src/provideLayer.js";
 
 const nodePlatform = Layer.mergeAll(
   NodeServices.layer,
   NodeHttpClient.layerNodeHttp,
 );
 
-const main = Effect.gen(function* () {
+const app = Effect.gen(function* () {
   const raw = yield* Config.string("HOME_SERVER_PORT").pipe(Config.option);
   const port = Option.match(raw, {
     onNone: () => 3001,
@@ -66,6 +64,11 @@ const main = Effect.gen(function* () {
     version: "0.1.0",
     port,
   });
-}).pipe(provideLayer(nodePlatform));
+});
 
-NodeRuntime.runMain(main);
+const rt = ManagedRuntime.make(nodePlatform);
+NodeRuntime.runMain(
+  Effect.promise(() =>
+    rt.runPromise(app).finally(() => rt.dispose()),
+  ),
+);
