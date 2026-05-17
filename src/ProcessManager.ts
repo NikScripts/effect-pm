@@ -18,6 +18,7 @@ import type {
   ControlTransportClientShape,
   ControlTransportError,
 } from "./ControlProtocol";
+import { ControlTransportClient as ControlTransportClientTag } from "./ControlProtocol";
 import { makeControlTransportHttpClient } from "./ControlTransportHttp";
 import { ProcessGroupContractSchema } from "./ProcessGroup";
 import type {
@@ -75,9 +76,13 @@ export type ProcessManagerConnectionConfigMap<
  *
  * @public
  */
-export interface ProcessManagerEndpointConfig {
-  readonly baseUrl: string;
-}
+export type ProcessManagerEndpointConfig =
+  | {
+      readonly baseUrl: string;
+    }
+  | {
+      readonly transport: "context";
+    };
 
 /**
  * Error returned when a remote ProcessGroup request fails or returns malformed
@@ -212,9 +217,10 @@ export interface ProcessManagerEndpoint<
   Self,
   Id extends string,
   Contract extends AnyProcessGroupContract,
+  ManagerRequirements = HttpClient.HttpClient,
   Error = never,
   Requirements = never,
-> extends Context.ServiceClass<Self, Id, RemoteProcessManager<Contract>> {
+> extends Context.ServiceClass<Self, Id, RemoteProcessManager<Contract, ManagerRequirements>> {
   readonly group: ContractSource<Contract>;
   readonly contract: Contract;
   readonly config: ProcessManagerEndpointConfig | undefined;
@@ -503,6 +509,20 @@ const connectFromRegistry = <
       source.contract,
     );
   });
+
+const connectFromTransportService = <
+  Source extends ContractSource<AnyProcessGroupContract>,
+>(
+  source: Source,
+): Effect.Effect<
+  RemoteProcessManager<ContractFromSource<Source>, never>,
+  never,
+  ControlTransportClientTag
+> =>
+  Effect.map(
+    ControlTransportClientTag,
+    (transport) => makeRemoteProcessManager(transport, source.contract),
+  );
 
 const targetCandidatesFrom = (
   groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
@@ -957,6 +977,7 @@ function makeEndpoint<
   Self,
   Id,
   ContractFromSource<Source>,
+  HttpClient.HttpClient,
   ProcessManagerConnectionError,
   ProcessManagerConnectionRegistry
 >;
@@ -967,8 +988,24 @@ function makeEndpoint<
 >(
   id: Id,
   group: Source,
-  config: ProcessManagerEndpointConfig,
-): ProcessManagerEndpoint<Self, Id, ContractFromSource<Source>>;
+  config: { readonly baseUrl: string },
+): ProcessManagerEndpoint<Self, Id, ContractFromSource<Source>, HttpClient.HttpClient>;
+function makeEndpoint<
+  Self,
+  const Id extends string,
+  const Source extends ContractSource<AnyProcessGroupContract>,
+>(
+  id: Id,
+  group: Source,
+  config: { readonly transport: "context" },
+): ProcessManagerEndpoint<
+  Self,
+  Id,
+  ContractFromSource<Source>,
+  never,
+  never,
+  ControlTransportClientTag
+>;
 function makeEndpoint<
   Self,
   const Id extends string,
@@ -981,10 +1018,14 @@ function makeEndpoint<
   Self,
   Id,
   ContractFromSource<Source>,
+  unknown,
   ProcessManagerConnectionError,
-  ProcessManagerConnectionRegistry
+  ProcessManagerConnectionRegistry | ControlTransportClientTag
 > {
-  const base = Context.Service<Self, RemoteProcessManager<ContractFromSource<Source>>>()(id);
+  const base = Context.Service<
+    Self,
+    RemoteProcessManager<ContractFromSource<Source>, unknown>
+  >()(id);
   const layer = config === undefined
     ? hasConnectionId(group)
       ? Layer.effect(base)(connectFromRegistry(group))
@@ -996,7 +1037,9 @@ function makeEndpoint<
             }),
           ),
         )
-    : Layer.succeed(base, connect(group, config));
+    : "baseUrl" in config
+      ? Layer.succeed(base, connect(group, config))
+      : Layer.effect(base)(connectFromTransportService(group));
   return Object.assign(base, {
     group,
     contract: group.contract,
@@ -1049,6 +1092,22 @@ function connect<
 ): RemoteProcessManager<ContractFromSource<Source>, Requirements>;
 
 /**
+ * Build a typed remote client from the ambient {@link ControlTransportClient}.
+ *
+ * @public
+ */
+function connect<Source extends ContractSource<AnyProcessGroupContract>>(
+  source: Source,
+  options: {
+    readonly transport: "context";
+  },
+): Effect.Effect<
+  RemoteProcessManager<ContractFromSource<Source>, never>,
+  never,
+  ControlTransportClientTag
+>;
+
+/**
  * Build a typed remote client from a raw contract. Use this form for generated
  * contracts or code that cannot import the group service class.
  *
@@ -1089,6 +1148,8 @@ function connect(
     readonly baseUrl: string;
   } | {
     readonly transport: ControlTransportClientShape<unknown>;
+  } | {
+    readonly transport: "context";
   },
 ):
   | RemoteProcessManager<AnyProcessGroupContract>
@@ -1098,6 +1159,11 @@ function connect(
     ProcessManagerConnectionError,
     ProcessManagerConnectionRegistry
   >
+  | Effect.Effect<
+    RemoteProcessManager<AnyProcessGroupContract, never>,
+    never,
+    ControlTransportClientTag
+  >
 {
   if (options !== undefined) {
     if ("baseUrl" in options) {
@@ -1105,6 +1171,9 @@ function connect(
         makeControlTransportHttpClient({ baseUrl: options.baseUrl }),
         sourceOrOptions.contract,
       );
+    }
+    if (options.transport === "context") {
+      return connectFromTransportService(sourceOrOptions);
     }
     return makeRemoteProcessManager(options.transport, sourceOrOptions.contract);
   }
@@ -1138,17 +1207,41 @@ function makeEndpointFactory<Self>() {
     Self,
     Source["contract"]["id"],
     ContractFromSource<Source>,
+    HttpClient.HttpClient,
     ProcessManagerConnectionError,
     ProcessManagerConnectionRegistry
   >;
   function endpoint<const Source extends ContractSource<AnyProcessGroupContract>>(
     group: Source,
-    config: ProcessManagerEndpointConfig,
-  ): ProcessManagerEndpoint<Self, Source["contract"]["id"], ContractFromSource<Source>>;
+    config: { readonly baseUrl: string },
+  ): ProcessManagerEndpoint<
+    Self,
+    Source["contract"]["id"],
+    ContractFromSource<Source>,
+    HttpClient.HttpClient
+  >;
+  function endpoint<const Source extends ContractSource<AnyProcessGroupContract>>(
+    group: Source,
+    config: { readonly transport: "context" },
+  ): ProcessManagerEndpoint<
+    Self,
+    Source["contract"]["id"],
+    ContractFromSource<Source>,
+    never,
+    never,
+    ControlTransportClientTag
+  >;
   function endpoint(
     group: ContractSource<AnyProcessGroupContract>,
     config?: ProcessManagerEndpointConfig,
-  ) {
+  ): ProcessManagerEndpoint<
+    Self,
+    string,
+    AnyProcessGroupContract,
+    unknown,
+    ProcessManagerConnectionError,
+    ProcessManagerConnectionRegistry | ControlTransportClientTag
+  > {
     if (config === undefined) {
       if (!hasConnectionId(group)) {
         throw new TypeError("ProcessManager.Endpoint without config requires a group service with an id");
@@ -1156,6 +1249,13 @@ function makeEndpointFactory<Self>() {
       return makeEndpoint<Self, string, ConnectionSource<AnyProcessGroupContract>>(
         `${group.contract.id}/ProcessManagerEndpoint`,
         group,
+      );
+    }
+    if ("baseUrl" in config) {
+      return makeEndpoint<Self, string, ContractSource<AnyProcessGroupContract>>(
+        `${group.contract.id}/ProcessManagerEndpoint`,
+        group,
+        config,
       );
     }
     return makeEndpoint<Self, string, ContractSource<AnyProcessGroupContract>>(

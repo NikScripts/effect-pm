@@ -4,12 +4,13 @@
  * @module ControlProtocol
  */
 
-import { Context, Data, Effect, Schema } from "effect";
+import { Context, Data, Effect, Layer, Schema, Scope } from "effect";
 import type {
   ProcessGroupEntry,
   ProcessGroupEntryRequirements,
   ProcessGroupProcessEntries,
   ProcessGroupQueueEntries,
+  ProcessGroupServiceDefinition,
   TypedProcessGroup,
 } from "./ProcessGroup";
 import type { ProcessStore } from "./ProcessStore";
@@ -132,6 +133,27 @@ export interface ControlProtocolRouter<R> {
 }
 
 /**
+ * Fully provided control router service.
+ *
+ * @public
+ */
+export interface ControlRouterShape {
+  readonly handle: (
+    request: ControlProtocolRequest,
+  ) => Effect.Effect<ControlProtocolResponse>;
+}
+
+/**
+ * Injectable router for transport-neutral control requests.
+ *
+ * @public
+ */
+export class ControlRouter extends Context.Service<
+  ControlRouter,
+  ControlRouterShape
+>()("@nikscripts/effect-pm/ControlProtocol/ControlRouter") {}
+
+/**
  * Checked error raised by a control transport adapter.
  *
  * @public
@@ -163,6 +185,29 @@ export class ControlTransportClient extends Context.Service<
   ControlTransportClient,
   ControlTransportClientShape
 >()("@nikscripts/effect-pm/ControlProtocol/ControlTransportClient") {}
+
+/**
+ * Server side of a control transport.
+ *
+ * @public
+ */
+export interface ControlTransportServerShape {
+  readonly serve: Effect.Effect<
+    void,
+    ControlTransportError,
+    Scope.Scope | ControlRouter
+  >;
+}
+
+/**
+ * Injectable server transport for exposing a {@link ControlRouter}.
+ *
+ * @public
+ */
+export class ControlTransportServer extends Context.Service<
+  ControlTransportServer,
+  ControlTransportServerShape
+>()("@nikscripts/effect-pm/ControlProtocol/ControlTransportServer") {}
 
 const processStatusResponse = <T>(
   data: T,
@@ -471,3 +516,70 @@ export const makeControlProtocolRouter = <
       }
     }),
 });
+
+const makeProvidedControlRouter = <
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+  Error,
+>(
+  group: TypedProcessGroup<Id, Entries, Error>,
+  context: Context.Context<ProcessGroupEntryRequirements<Entries> | ProcessStore>,
+): ControlRouterShape => {
+  const router = makeControlProtocolRouter(group);
+  return {
+    handle: (request) => router.handle(request).pipe(Effect.provide(context)),
+  };
+};
+
+export namespace ControlRouter {
+  /**
+   * Provide a router from an already acquired typed group value.
+   *
+   * @public
+   */
+  export const layer = <
+    const Id extends string,
+    const Entries extends readonly ProcessGroupEntry[],
+    Error,
+  >(
+    group: TypedProcessGroup<Id, Entries, Error>,
+  ): Layer.Layer<
+    ControlRouter,
+    never,
+    ProcessGroupEntryRequirements<Entries> | ProcessStore
+  > =>
+    Layer.effect(
+      ControlRouter,
+      Effect.map(
+        Effect.context<ProcessGroupEntryRequirements<Entries> | ProcessStore>(),
+        (context) => makeProvidedControlRouter(group, context),
+      ),
+    );
+
+  /**
+   * Provide a router by yielding a group service from the environment.
+   *
+   * @public
+   */
+  export const layerFromGroup = <
+    Self,
+    const Id extends string,
+    const Entries extends readonly ProcessGroupEntry[],
+  >(
+    group: ProcessGroupServiceDefinition<Self, Id, Entries>,
+  ): Layer.Layer<
+    ControlRouter,
+    never,
+    Self | ProcessGroupEntryRequirements<Entries> | ProcessStore
+  > =>
+    Layer.effect(
+      ControlRouter,
+      Effect.gen(function* () {
+        const value = yield* group;
+        const context = yield* Effect.context<
+          ProcessGroupEntryRequirements<Entries> | ProcessStore
+        >();
+        return makeProvidedControlRouter(value, context);
+      }),
+    );
+}

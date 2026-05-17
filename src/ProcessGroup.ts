@@ -1066,10 +1066,11 @@ export interface ProcessGroupRemoteEndpointDefinition<
   Self,
   Id extends string,
   Entries extends readonly ProcessGroupEntry[],
+  Requirements = HttpClient.HttpClient,
 > extends Context.ServiceClass<
     Self,
     string,
-    RemoteProcessManager<ProcessGroupContract<Id, Entries>>
+    RemoteProcessManager<ProcessGroupContract<Id, Entries>, Requirements>
   > {
   readonly contract: ProcessGroupContract<Id, Entries>;
 }
@@ -1147,11 +1148,12 @@ const makeRemoteTypedProcessGroup = <
   Self,
   const Id extends string,
   const Entries extends readonly ProcessGroupEntry[],
+  Requirements,
 >(
   group: ProcessGroupServiceDefinition<Self, Id, Entries>,
-  manager: RemoteProcessManager<ProcessGroupContract<Id, Entries>>,
+  manager: RemoteProcessManager<ProcessGroupContract<Id, Entries>, Requirements>,
   runRemote: <A>(
-    effect: Effect.Effect<A, unknown, HttpClient.HttpClient>,
+    effect: Effect.Effect<A, unknown, Requirements>,
   ) => Effect.Effect<A, ProcessGroupRemoteControlError>,
 ): TypedProcessGroup<Id, Entries, ProcessGroupControlError> => {
   const processStatus = (
@@ -1251,7 +1253,7 @@ const makeRemoteTypedProcessGroup = <
  *
  * @remarks
  * The caller still yields the same group service key, but controls are routed
- * through the endpoint and require `HttpClient.HttpClient`. Process controls and
+ * through the endpoint transport requirements. Process controls and
  * queue pause/resume/clear/status are supported. Queue enqueue-style methods
  * fail with {@link UnsupportedRemoteControlError} until queue item schemas are
  * represented in the group contract.
@@ -1263,23 +1265,24 @@ const remoteLayer = <
   const Id extends string,
   const Entries extends readonly ProcessGroupEntry[],
   EndpointSelf,
+  Requirements,
 >(
   group: ProcessGroupServiceDefinition<Self, Id, Entries>,
-  endpoint: ProcessGroupRemoteEndpointDefinition<EndpointSelf, Id, Entries>,
-): Layer.Layer<Self, never, EndpointSelf | HttpClient.HttpClient> =>
+  endpoint: ProcessGroupRemoteEndpointDefinition<EndpointSelf, Id, Entries, Requirements>,
+): Layer.Layer<Self, never, EndpointSelf | Requirements> =>
   Layer.effect(group)(
     Effect.gen(function* () {
       const manager = yield* endpoint;
-      const context = yield* Effect.context<HttpClient.HttpClient>();
+      const context = yield* Effect.context<Requirements>();
       const runRemoteUnverified = <A>(
-        effect: Effect.Effect<A, unknown, HttpClient.HttpClient>,
+        effect: Effect.Effect<A, unknown, Requirements>,
       ): Effect.Effect<A, ProcessGroupRemoteControlError> =>
         Effect.provide(effect, context).pipe(
           Effect.mapError(toRemoteControlError),
         );
       const verifyRemote = yield* Effect.cached(runRemoteUnverified(manager.verifyContract));
       const runRemote = <A>(
-        effect: Effect.Effect<A, unknown, HttpClient.HttpClient>,
+        effect: Effect.Effect<A, unknown, Requirements>,
       ): Effect.Effect<A, ProcessGroupRemoteControlError> =>
         Effect.flatMap(verifyRemote, () => runRemoteUnverified(effect));
       return makeRemoteTypedProcessGroup(group, manager, runRemote);

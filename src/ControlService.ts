@@ -16,35 +16,22 @@
  * @module ControlService
  */
 
-import { Effect, Schema, Scope } from "effect";
+import { Effect, Layer, Scope } from "effect";
 import type {
   ProcessGroupEntry,
   ProcessGroupEntryRequirements,
+  ProcessGroupServiceDefinition,
   TypedProcessGroup,
 } from "./ProcessGroup";
 import type { ProcessStore } from "./ProcessStore";
 import {
-  errorResponse,
-  makeControlProtocolRouter,
-  type ControlProtocolRequest,
-  type ControlProtocolResponse,
+  ControlRouter,
+  ControlTransportError,
+  ControlTransportServer,
 } from "./ControlProtocol";
 export type { ControlResponse } from "./ControlProtocol";
+import { ControlTransportHttp } from "./ControlTransportHttp";
 import { createCli, runCli } from "./cli";
-import { responseBodyJson } from "./internal/json";
-
-/** Minimal surface used from Node’s `ServerResponse` (avoids `node:http` type imports). */
-interface JsonResponse {
-  writeHead(statusCode: number, headers?: { readonly [k: string]: string }): void;
-  end(chunk?: string): void;
-}
-
-/** Minimal surface used from Node’s `IncomingMessage` (avoids `node:http` type imports). */
-interface JsonRequest {
-  readonly method?: string | undefined;
-  readonly url?: string | undefined;
-  readonly on: (event: string, listener: (...args: ReadonlyArray<unknown>) => void) => void;
-}
 
 type TypedControlServiceOptions<
   Id extends string,
@@ -55,184 +42,20 @@ type TypedControlServiceOptions<
   readonly group: TypedProcessGroup<Id, Entries, Error>;
 };
 
-const writeJson = (
-  res: JsonResponse,
-  status: number,
-  body: unknown,
-): Effect.Effect<void> =>
+const serveWithTransport: Effect.Effect<
+  void,
+  ControlTransportError,
+  Scope.Scope | ControlTransportServer | ControlRouter
+> =
   Effect.gen(function* () {
-    const json = yield* Schema.encodeUnknownEffect(responseBodyJson)(body).pipe(
-      Effect.catch(() =>
-        Effect.succeed("{\"success\":false,\"error\":\"Unable to encode JSON response\"}")
-      ),
-    );
-    yield* Effect.sync(() => {
-      res.writeHead(status, { "Content-Type": "application/json" });
-      res.end(json);
-    });
+    const transport = yield* ControlTransportServer;
+    yield* transport.serve;
   });
 
-const decodePathSegment = (segment: string): string | undefined => {
-  try {
-    return decodeURIComponent(segment);
-  } catch {
-    return undefined;
-  }
-};
-
-const pathSegments = (url: URL): ReadonlyArray<string> | undefined => {
-  const rawSegments = url.pathname.split("/").filter((segment) => segment !== "");
-  const decoded: string[] = [];
-  for (const segment of rawSegments) {
-    const value = decodePathSegment(segment);
-    if (value === undefined) {
-      return undefined;
-    }
-    decoded.push(value);
-  }
-  return decoded;
-};
-
-interface RouteResponse {
-  readonly status: number;
-  readonly body: unknown;
-}
-
-type HttpRoute =
-  | {
-      readonly _tag: "Protocol";
-      readonly request: ControlProtocolRequest;
-    }
-  | {
-      readonly _tag: "Response";
-      readonly response: RouteResponse;
-    }
-  | {
-      readonly _tag: "NotFound";
-    };
-
-const routeResponseFromProtocol = (
-  response: ControlProtocolResponse,
-): RouteResponse => ({
-  status: response.status,
-  body: response.body,
-});
-
-const requestFromRestRoute = (
-  method: string | undefined,
-  url: URL,
-): HttpRoute => {
-  const segments = pathSegments(url);
-  if (segments === undefined) {
-    return {
-      _tag: "Response",
-      response: {
-        status: 400,
-        body: errorResponse("Malformed URL path"),
-      },
-    };
-  }
-
-  if (method === "GET" && segments.length === 1 && segments[0] === "contract") {
-    return { _tag: "Protocol", request: { _tag: "GetContract" } };
-  }
-  if (method === "GET" && segments.length === 1 && segments[0] === "status") {
-    return { _tag: "Protocol", request: { _tag: "ReadGroupStatus" } };
-  }
-  if (method === "GET" && segments.length === 1 && segments[0] === "processes") {
-    return { _tag: "Protocol", request: { _tag: "ListProcesses" } };
-  }
-  if (segments[0] === "processes" && segments.length >= 2) {
-    const processId = segments[1];
-    if (processId === undefined) {
-      return {
-        _tag: "Response",
-        response: {
-          status: 400,
-          body: errorResponse("Missing process name"),
-        },
-      };
-    }
-    if (method === "GET" && segments.length === 2) {
-      return {
-        _tag: "Protocol",
-        request: { _tag: "ReadProcessStatus", processId },
-      };
-    }
-    if (method === "POST" && segments.length === 3) {
-      const operation = segments[2];
-      if (operation === "start") {
-        return {
-          _tag: "Protocol",
-          request: { _tag: "StartProcess", processId },
-        };
-      }
-      if (operation === "stop") {
-        return {
-          _tag: "Protocol",
-          request: { _tag: "StopProcess", processId },
-        };
-      }
-      if (operation === "restart") {
-        return {
-          _tag: "Protocol",
-          request: { _tag: "RestartProcess", processId },
-        };
-      }
-      if (operation === "now") {
-        return {
-          _tag: "Protocol",
-          request: { _tag: "RunProcessImmediately", processId },
-        };
-      }
-    }
-  }
-
-  if (method === "GET" && segments.length === 1 && segments[0] === "queues") {
-    return { _tag: "Protocol", request: { _tag: "ListQueues" } };
-  }
-  if (segments[0] === "queues" && segments.length >= 2) {
-    const queueId = segments[1];
-    if (queueId === undefined) {
-      return {
-        _tag: "Response",
-        response: {
-          status: 400,
-          body: errorResponse("Missing queue name"),
-        },
-      };
-    }
-    if (method === "GET" && segments.length === 2) {
-      return {
-        _tag: "Protocol",
-        request: { _tag: "ReadQueueStatus", queueId },
-      };
-    }
-    if (method === "POST" && segments.length === 3) {
-      const operation = segments[2];
-      if (operation === "pause") {
-        return {
-          _tag: "Protocol",
-          request: { _tag: "PauseQueue", queueId },
-        };
-      }
-      if (operation === "resume") {
-        return {
-          _tag: "Protocol",
-          request: { _tag: "ResumeQueue", queueId },
-        };
-      }
-      if (operation === "clear") {
-        return {
-          _tag: "Protocol",
-          request: { _tag: "ClearQueue", queueId },
-        };
-      }
-    }
-  }
-
-  return { _tag: "NotFound" };
-};
+const scopedDiscard = <E, R>(
+  effect: Effect.Effect<void, E, Scope.Scope | R>,
+): Layer.Layer<never, E, R> =>
+  Layer.effectDiscard(effect);
 
 /**
  * Start the HTTP control service
@@ -313,106 +136,117 @@ function startControlService<
   options: TypedControlServiceOptions<Id, Entries, Error>,
 ): Effect.Effect<
   void,
-  never,
+  ControlTransportError,
   Scope.Scope | ProcessGroupEntryRequirements<Entries> | ProcessStore
 >;
 function startControlService(
   options: TypedControlServiceOptions<string, readonly ProcessGroupEntry[], unknown>,
-): Effect.Effect<void, never, Scope.Scope | unknown | ProcessStore> {
-  return Effect.acquireRelease(
-    Effect.gen(function* () {
-      const port = options.port ?? 3001;
-      const group = options.group;
-
-      // Capture context (services) with all dependencies already provided
-      const services = yield* Effect.context<unknown | ProcessStore>();
-      const runWithServices = Effect.runForkWith(services);
-      const router = makeControlProtocolRouter(group);
-
-      const nodeHttp = yield* Effect.promise(() => import("node:http"));
-
-      // Create HTTP request handler
-      const handler = (req: JsonRequest, res: JsonResponse) => {
-        const program = Effect.gen(function* () {
-          if (req.method === "OPTIONS") {
-            yield* writeJson(res, 200, {});
-            return;
-          }
-
-          const url = new URL(req.url ?? "/", `http://localhost:${port}`);
-
-          if (url.pathname === "/health") {
-            yield* writeJson(res, 200, { status: "ok" });
-            return;
-          }
-
-          const route = requestFromRestRoute(req.method, url);
-          if (route._tag === "Response") {
-            yield* writeJson(res, route.response.status, route.response.body);
-            return;
-          }
-          if (route._tag === "Protocol") {
-            const protocolResponse = yield* router.handle(route.request);
-            const restResponse = routeResponseFromProtocol(protocolResponse);
-            yield* writeJson(res, restResponse.status, restResponse.body);
-            return;
-          }
-
-          yield* writeJson(res, 404, { error: "Not found" });
-        });
-
-        // Run the program with the captured context (all dependencies).
-        runWithServices(program);
-      };
-
-      const server = nodeHttp.createServer(handler);
-
-      // Track active connections for cleanup
-      const connections = new Set<{ destroy(): void }>();
-      server.on("connection", (conn) => {
-        connections.add(conn);
-        conn.on("close", () => connections.delete(conn));
-      });
-
-      // Start listening
-      yield* Effect.callback<void>(
-        (resume: (effect: Effect.Effect<void>) => void) => {
-          server.listen(port, "127.0.0.1", () => {
-            resume(Effect.void);
-          });
-          server.on("error", (error) => {
-            runWithServices(Effect.logError(`Control service error: ${String(error)}`));
-          });
-        },
-      );
-
-      return { server, connections, runWithServices };
-    }),
-    ({ server, connections, runWithServices }) =>
-      Effect.callback<void>(
-        (resume: (effect: Effect.Effect<void>) => void) => {
-          runWithServices(Effect.logInfo("Stopping control service..."));
-
-          // Destroy all active connections
-          for (const conn of connections) {
-            conn.destroy();
-          }
-
-          server.close((err) => {
-            if (err !== undefined) {
-              runWithServices(Effect.logError(`Error closing server: ${String(err)}`));
-            } else {
-              runWithServices(Effect.logInfo("Control service stopped"));
-            }
-            resume(Effect.void);
-          });
-        },
-      ),
+): Effect.Effect<void, ControlTransportError, Scope.Scope | unknown | ProcessStore> {
+  return ControlTransportHttp.server({
+    port: options.port,
+  }).serve.pipe(
+    Effect.provide(ControlRouter.layer(options.group)),
   );
+}
+
+const controlServiceLayerFromValue = <
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+  Error,
+>(
+  group: TypedProcessGroup<Id, Entries, Error>,
+): Layer.Layer<
+  never,
+  ControlTransportError,
+  ControlTransportServer | ProcessGroupEntryRequirements<Entries> | ProcessStore
+> =>
+  scopedDiscard(
+    serveWithTransport.pipe(Effect.provide(ControlRouter.layer(group))),
+  );
+
+const controlServiceLayerFromGroup = <
+  Self,
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+>(
+  group: ProcessGroupServiceDefinition<Self, Id, Entries>,
+): Layer.Layer<
+  never,
+  ControlTransportError,
+  ControlTransportServer | Self | ProcessGroupEntryRequirements<Entries> | ProcessStore
+> =>
+  scopedDiscard(
+    serveWithTransport.pipe(Effect.provide(ControlRouter.layerFromGroup(group))),
+  );
+
+const controlServiceHttpLayer = <
+  Self,
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+>(
+  group: ProcessGroupServiceDefinition<Self, Id, Entries>,
+  options: { readonly port?: number } = {},
+): Layer.Layer<
+  never,
+  ControlTransportError,
+  Self | ProcessGroupEntryRequirements<Entries> | ProcessStore
+> =>
+  controlServiceLayerFromGroup(group).pipe(
+    Layer.provide(ControlTransportHttp.serverLayer(options)),
+  );
+
+const isProcessGroupServiceDefinition = (
+  group: unknown,
+): group is ProcessGroupServiceDefinition<
+  unknown,
+  string,
+  readonly ProcessGroupEntry[]
+> =>
+  typeof group === "function" &&
+  "make" in group &&
+  "layer" in group &&
+  "contract" in group;
+
+function controlServiceLayer<
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+  Error,
+>(
+  group: TypedProcessGroup<Id, Entries, Error>,
+): Layer.Layer<
+  never,
+  ControlTransportError,
+  ControlTransportServer | ProcessGroupEntryRequirements<Entries> | ProcessStore
+>;
+function controlServiceLayer<
+  Self,
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+>(
+  group: ProcessGroupServiceDefinition<Self, Id, Entries>,
+): Layer.Layer<
+  never,
+  ControlTransportError,
+  ControlTransportServer | Self | ProcessGroupEntryRequirements<Entries> | ProcessStore
+>;
+function controlServiceLayer(
+  group:
+    | TypedProcessGroup<string, readonly ProcessGroupEntry[], unknown>
+    | ProcessGroupServiceDefinition<unknown, string, readonly ProcessGroupEntry[]>,
+): Layer.Layer<
+  never,
+  ControlTransportError,
+  ControlTransportServer | unknown | ProcessStore
+> {
+  return isProcessGroupServiceDefinition(group)
+    ? controlServiceLayerFromGroup(group)
+    : controlServiceLayerFromValue(group);
 }
 
 interface ControlServiceApi {
   readonly make: typeof startControlService;
+  readonly layer: typeof controlServiceLayer;
+  readonly layerHttp: typeof controlServiceHttpLayer;
   readonly createCli: typeof createCli;
   readonly runCli: typeof runCli;
 }
@@ -427,6 +261,10 @@ export const ControlService: ControlServiceApi = {
    * Acquire a localhost HTTP listener for contract-aligned REST routes until the scope ends.
    */
   make: startControlService,
+  /** Build a control service from an externally provided server transport. */
+  layer: controlServiceLayer,
+  /** Build the default localhost HTTP control service layer. */
+  layerHttp: controlServiceHttpLayer,
   /** Build an `@effect/cli` application targeting this service’s port. */
   createCli,
   /** `Effect` that runs {@link createCli} against `process.argv` (or a passed argv). */

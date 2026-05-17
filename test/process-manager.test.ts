@@ -3,7 +3,9 @@ import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Config, ConfigProvider, Effect, Layer, Ref } from "effect";
 import {
+  ControlRouter,
   ControlService,
+  ControlTransportClient,
   makeControlProtocolRouter,
   Process,
   ProcessGroup,
@@ -84,6 +86,90 @@ describe("ProcessManager", () => {
                 ),
               ),
             ),
+            ProcessStore.layer,
+          ),
+        ),
+      );
+    }),
+  );
+
+  it.live("provides a remote group through layered in-memory control transport", () =>
+    Effect.gen(function* () {
+      const delivered = yield* Ref.make<ReadonlyArray<string>>([]);
+      const runs = yield* Ref.make(0);
+
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+        "@test/LayeredMemoryTransportEmailQueue",
+        {
+          effect: (email) =>
+            Ref.update(delivered, (emails) => [...emails, email.to]),
+          concurrency: 1,
+        },
+      ) {}
+
+      class SyncProcess extends Process.Service<SyncProcess>()(
+        "@test/LayeredMemoryTransportProcess",
+        {
+          effect: Ref.update(runs, (count) => count + 1),
+        },
+      ) {}
+
+      class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+        "@test/LayeredMemoryTransportBillingGroup",
+        [SyncProcess, EmailQueue] as const,
+      ) {}
+
+      class BillingEndpoint extends ProcessManager.Endpoint<BillingEndpoint>()(
+        BillingGroup,
+        { transport: "context" },
+      ) {}
+
+      const inMemoryTransportLayer = Layer.effect(
+        ControlTransportClient,
+        Effect.map(ControlRouter, (router) => ({
+          request: router.handle,
+        })),
+      );
+
+      yield* Effect.gen(function* () {
+        const localGroup = yield* BillingGroup;
+        const localQueue = yield* EmailQueue;
+
+        const remoteProgram = Effect.gen(function* () {
+          const remoteGroup = yield* BillingGroup;
+
+          yield* remoteGroup.process(SyncProcess).runImmediately;
+          yield* remoteGroup.queue(EmailQueue).pause;
+          yield* localQueue.add({ to: "ops@example.com" });
+          yield* Effect.sleep("20 millis");
+
+          expect(yield* Ref.get(runs)).toBe(1);
+          expect(yield* Ref.get(delivered)).toEqual([]);
+
+          yield* remoteGroup.queue(EmailQueue).resume;
+          yield* waitForQueueCompleted(localQueue, 1);
+
+          expect(yield* Ref.get(delivered)).toEqual(["ops@example.com"]);
+        }).pipe(
+          Effect.provide(
+            ProcessGroup.remoteLayer(BillingGroup, BillingEndpoint).pipe(
+              Layer.provide(BillingEndpoint.layer),
+              Layer.provide(inMemoryTransportLayer),
+              Layer.provide(ControlRouter.layer(localGroup)),
+            ),
+          ),
+        );
+
+        yield* remoteProgram;
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            BillingGroup.layer.pipe(
+              Layer.provide(
+                Layer.mergeAll(EmailQueue.layer, SyncProcess.layer, ProcessStore.layer),
+              ),
+            ),
+            EmailQueue.layer,
             ProcessStore.layer,
           ),
         ),

@@ -42,6 +42,49 @@ const requestJson = (
   });
 
 describe("ControlService — contract route", () => {
+  it.live("serves typed ProcessGroup contracts through HTTP layer composition", () =>
+    Effect.gen(function* () {
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()("@test/ControlLayerEmail", {
+        effect: (_email: Email) => Effect.void,
+      }) {}
+      class SyncProcess extends Process.Service<SyncProcess>()("@test/ControlLayerProcess", {
+        effect: Effect.void,
+      }) {}
+      class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+        "@test/ControlLayerGroup",
+        [SyncProcess, EmailQueue] as const,
+      ) {}
+
+      const response = yield* requestJson(32129, "/contract").pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            ControlService.layerHttp(BillingGroup, { port: 32129 }).pipe(
+              Layer.provide(
+                BillingGroup.layer.pipe(
+                  Layer.provide(
+                    Layer.mergeAll(
+                      SyncProcess.layer,
+                      EmailQueue.layer,
+                      ProcessStore.layer,
+                    ),
+                  ),
+                ),
+              ),
+              Layer.provide(ProcessStore.layer),
+            ),
+            NodeHttpClient.layerUndici,
+          ),
+        ),
+      );
+      const contract = yield* Schema.decodeUnknownEffect(ProcessGroupContractSchema)(
+        response.body,
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(contract).toEqual(BillingGroup.contract);
+    }),
+  );
+
   it.live("serves typed ProcessGroup contracts", () =>
     Effect.gen(function* () {
       class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()("@test/ControlContractEmail", {

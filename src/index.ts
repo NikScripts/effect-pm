@@ -97,24 +97,30 @@ export { Resource } from "./Resource";
 export { RuntimeObserver } from "./RuntimeState";
 export { ControlService } from "./ControlService";
 export {
+  ControlRouter,
   ControlResponseSchema,
   ControlTransportClient,
   ControlTransportError,
+  ControlTransportServer,
   ControlProtocolRequestSchema,
   makeControlProtocolRouter,
 } from "./ControlProtocol";
 export {
   ControlTransportHttp,
   makeControlTransportHttpClient,
+  makeControlTransportHttpServer,
 } from "./ControlTransportHttp";
 export type {
+  ControlRouterShape,
   ControlProtocolRequest,
   ControlProtocolResponse,
   ControlProtocolRouter,
   ControlTransportClientShape,
+  ControlTransportServerShape,
 } from "./ControlProtocol";
 export type {
   ControlTransportHttpClientConfig,
+  ControlTransportHttpServerConfig,
 } from "./ControlTransportHttp";
 
 // CLI
