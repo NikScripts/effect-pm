@@ -4,15 +4,21 @@
  * @remarks
  * A manager does not own local process or queue internals. It connects to a
  * `ControlService` exposed by a `ProcessGroup`, uses the group's schema-backed
- * contract for typed IDs, and routes supported controls over HTTP.
+ * contract for typed IDs, and routes supported controls over a control transport.
  *
  * @module ProcessManager
  */
 
 import { Config, ConfigProvider, Console, Context, Data, Effect, Layer, Schema } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import type { ControlResponse } from "./ControlService";
+import type { HttpClient } from "effect/unstable/http";
+import type {
+  ControlProtocolRequest,
+  ControlResponse,
+  ControlTransportClientShape,
+  ControlTransportError,
+} from "./ControlProtocol";
+import { makeControlTransportHttpClient } from "./ControlTransportHttp";
 import { ProcessGroupContractSchema } from "./ProcessGroup";
 import type {
   ProcessGroupContract,
@@ -73,13 +79,6 @@ export interface ProcessManagerEndpointConfig {
   readonly baseUrl: string;
 }
 
-const controlResponseSchema = Schema.Struct({
-  success: Schema.Boolean,
-  type: Schema.optional(Schema.Literals(["process", "queue"] as const)),
-  data: Schema.optional(Schema.Unknown),
-  error: Schema.optional(Schema.String),
-});
-
 /**
  * Error returned when a remote ProcessGroup request fails or returns malformed
  * data.
@@ -101,11 +100,6 @@ const requestError = (
     reason,
     ...(status === undefined ? {} : { status }),
   });
-
-const requestErrorFromCause = (
-  cause: unknown,
-  status?: number,
-): ProcessManagerRequestError => requestError(String(cause), status);
 
 /** @public */
 export class ProcessManagerConnectionError extends Data.TaggedError(
@@ -143,15 +137,15 @@ interface ProcessManagerCliOptions {
  *
  * @public
  */
-export interface RemoteProcessControls {
-  readonly start: Effect.Effect<void, ProcessManagerRequestError, HttpClient.HttpClient>;
-  readonly stop: Effect.Effect<void, ProcessManagerRequestError, HttpClient.HttpClient>;
-  readonly restart: Effect.Effect<void, ProcessManagerRequestError, HttpClient.HttpClient>;
-  readonly runImmediately: Effect.Effect<void, ProcessManagerRequestError, HttpClient.HttpClient>;
+export interface RemoteProcessControls<Requirements = HttpClient.HttpClient> {
+  readonly start: Effect.Effect<void, ProcessManagerRequestError, Requirements>;
+  readonly stop: Effect.Effect<void, ProcessManagerRequestError, Requirements>;
+  readonly restart: Effect.Effect<void, ProcessManagerRequestError, Requirements>;
+  readonly runImmediately: Effect.Effect<void, ProcessManagerRequestError, Requirements>;
   readonly status: Effect.Effect<
     ControlResponse<unknown>,
     ProcessManagerRequestError,
-    HttpClient.HttpClient
+    Requirements
   >;
 }
 
@@ -160,18 +154,18 @@ export interface RemoteProcessControls {
  *
  * @public
  */
-export interface RemoteQueueControls {
-  readonly pause: Effect.Effect<void, ProcessManagerRequestError, HttpClient.HttpClient>;
-  readonly resume: Effect.Effect<void, ProcessManagerRequestError, HttpClient.HttpClient>;
+export interface RemoteQueueControls<Requirements = HttpClient.HttpClient> {
+  readonly pause: Effect.Effect<void, ProcessManagerRequestError, Requirements>;
+  readonly resume: Effect.Effect<void, ProcessManagerRequestError, Requirements>;
   readonly clear: Effect.Effect<
     ControlResponse<unknown>,
     ProcessManagerRequestError,
-    HttpClient.HttpClient
+    Requirements
   >;
   readonly status: Effect.Effect<
     ControlResponse<unknown>,
     ProcessManagerRequestError,
-    HttpClient.HttpClient
+    Requirements
   >;
 }
 
@@ -182,24 +176,27 @@ export interface RemoteQueueControls {
  *
  * @public
  */
-export interface RemoteProcessManager<Contract extends AnyProcessGroupContract> {
+export interface RemoteProcessManager<
+  Contract extends AnyProcessGroupContract,
+  Requirements = HttpClient.HttpClient,
+> {
   readonly contract: Contract;
   readonly fetchContract: Effect.Effect<
     typeof ProcessGroupContractSchema.Type,
     ProcessManagerRequestError,
-    HttpClient.HttpClient
+    Requirements
   >;
   /**
    * Fetch the remote group contract and compare group id, version, process ids,
    * queue ids, and exposed control sets with the local contract.
    */
-  readonly verifyContract: Effect.Effect<void, ProcessManagerRequestError, HttpClient.HttpClient>;
-  readonly process: (id: ProcessId<Contract>) => RemoteProcessControls;
-  readonly queue: (id: QueueId<Contract>) => RemoteQueueControls;
+  readonly verifyContract: Effect.Effect<void, ProcessManagerRequestError, Requirements>;
+  readonly process: (id: ProcessId<Contract>) => RemoteProcessControls<Requirements>;
+  readonly queue: (id: QueueId<Contract>) => RemoteQueueControls<Requirements>;
   readonly status: Effect.Effect<
     ControlResponse<unknown>,
     ProcessManagerRequestError,
-    HttpClient.HttpClient
+    Requirements
   >;
 }
 
@@ -224,122 +221,64 @@ export interface ProcessManagerEndpoint<
   readonly layer: Layer.Layer<Self, Error, Requirements>;
 }
 
-const joinUrl = (baseUrl: string, path: string): string =>
-  `${baseUrl.replace(/\/+$/, "")}${path}`;
+const requestErrorFromTransport = (
+  error: ControlTransportError,
+): ProcessManagerRequestError =>
+  requestError(error.reason, error.status);
 
-const decodeJsonResponse = (
-  responseText: string,
-): Effect.Effect<unknown, ProcessManagerRequestError> =>
-  Schema.decodeUnknownEffect(responseBodyJson)(responseText).pipe(
-    Effect.mapError(
-      (cause) =>
-        requestError(`Malformed JSON response: ${String(cause)}`),
-    ),
+const requestProtocol = <R>(
+  transport: ControlTransportClientShape<R>,
+  request: ControlProtocolRequest,
+) =>
+  transport.request(request).pipe(Effect.mapError(requestErrorFromTransport));
+
+const requestContract = <R>(
+  transport: ControlTransportClientShape<R>,
+): Effect.Effect<typeof ProcessGroupContractSchema.Type, ProcessManagerRequestError, R> =>
+  requestProtocol(transport, { _tag: "GetContract" }).pipe(
+    Effect.flatMap((response) => {
+      if (response._tag !== "Contract") {
+        return Effect.fail(
+          requestError("Remote contract response had the wrong protocol tag", response.status),
+        );
+      }
+      if (response.status < 200 || response.status >= 300) {
+        return Effect.fail(requestError(`HTTP ${response.status}`, response.status));
+      }
+      return Schema.decodeUnknownEffect(ProcessGroupContractSchema)(response.body).pipe(
+        Effect.mapError(
+          (cause) =>
+            requestError(`Malformed group contract: ${String(cause)}`),
+        ),
+      );
+    }),
   );
 
-const getJson = (
-  baseUrl: string,
-  path: string,
-): Effect.Effect<unknown, ProcessManagerRequestError, HttpClient.HttpClient> =>
-  Effect.gen(function* () {
-    const response = yield* HttpClient.execute(
-      HttpClientRequest.get(joinUrl(baseUrl, path)),
-    ).pipe(
-      Effect.mapError(
-        requestErrorFromCause,
-      ),
-    );
-    const text = yield* response.text.pipe(
-      Effect.mapError(
-        (cause) => requestErrorFromCause(cause, response.status),
-      ),
-    );
-    const json = yield* decodeJsonResponse(text);
-    if (response.status >= 200 && response.status < 300) {
-      return json;
-    }
-    return yield* requestError(`HTTP ${response.status}`, response.status);
-  });
-
-const decodeControlResponse = (
-  json: unknown,
-  status: number,
-): Effect.Effect<ControlResponse<unknown>, ProcessManagerRequestError> =>
-  Schema.decodeUnknownEffect(controlResponseSchema)(json).pipe(
-    Effect.mapError(
-      (cause) =>
-        requestError(`Malformed control response: ${String(cause)}`, status),
-    ),
+const requestControl = <R>(
+  transport: ControlTransportClientShape<R>,
+  request: ControlProtocolRequest,
+): Effect.Effect<ControlResponse<unknown>, ProcessManagerRequestError, R> =>
+  requestProtocol(transport, request).pipe(
+    Effect.flatMap((response) => {
+      if (response._tag !== "Control") {
+        return Effect.fail(
+          requestError("Remote control response had the wrong protocol tag", response.status),
+        );
+      }
+      if (response.status >= 200 && response.status < 300 && response.body.success) {
+        return Effect.succeed(response.body);
+      }
+      return Effect.fail(
+        requestError(response.body.error ?? `HTTP ${response.status}`, response.status),
+      );
+    }),
   );
 
-const getControl = (
-  baseUrl: string,
-  path: string,
-): Effect.Effect<
-  ControlResponse<unknown>,
-  ProcessManagerRequestError,
-  HttpClient.HttpClient
-> =>
-  Effect.gen(function* () {
-    const response = yield* HttpClient.execute(
-      HttpClientRequest.get(joinUrl(baseUrl, path)),
-    ).pipe(
-      Effect.mapError(
-        requestErrorFromCause,
-      ),
-    );
-    const json = yield* response.json.pipe(
-      Effect.mapError(
-        (cause) => requestErrorFromCause(cause, response.status),
-      ),
-    );
-    const decoded = yield* decodeControlResponse(json, response.status);
-    if (response.status >= 200 && response.status < 300 && decoded.success) {
-      return decoded;
-    }
-    return yield* requestError(decoded.error ?? `HTTP ${response.status}`, response.status);
-  });
-
-const postControl = (
-  baseUrl: string,
-  path: string,
-  body: unknown = {},
-): Effect.Effect<
-  ControlResponse<unknown>,
-  ProcessManagerRequestError,
-  HttpClient.HttpClient
-> =>
-  Effect.gen(function* () {
-    const request = yield* HttpClientRequest.bodyJson(
-      HttpClientRequest.post(joinUrl(baseUrl, path)),
-      body,
-    ).pipe(
-      Effect.mapError(
-        requestErrorFromCause,
-      ),
-    );
-    const response = yield* HttpClient.execute(request).pipe(
-      Effect.mapError(
-        requestErrorFromCause,
-      ),
-    );
-    const json = yield* response.json.pipe(
-      Effect.mapError(
-        (cause) => requestErrorFromCause(cause, response.status),
-      ),
-    );
-    const decoded = yield* decodeControlResponse(json, response.status);
-    if (response.status >= 200 && response.status < 300 && decoded.success) {
-      return decoded;
-    }
-    return yield* requestError(decoded.error ?? `HTTP ${response.status}`, response.status);
-  });
-
-const commandVoid = (
-  baseUrl: string,
-  path: string,
-): Effect.Effect<void, ProcessManagerRequestError, HttpClient.HttpClient> =>
-  Effect.asVoid(postControl(baseUrl, path));
+const commandVoid = <R>(
+  transport: ControlTransportClientShape<R>,
+  request: ControlProtocolRequest,
+): Effect.Effect<void, ProcessManagerRequestError, R> =>
+  Effect.asVoid(requestControl(transport, request));
 
 interface ContractEntity {
   readonly id: string;
@@ -443,20 +382,12 @@ const assertContractMatches = (
 
 const makeRemoteProcessManager = <
   const Contract extends AnyProcessGroupContract,
+  Requirements,
 >(
-  baseUrl: string,
+  transport: ControlTransportClientShape<Requirements>,
   contract: Contract,
-): RemoteProcessManager<Contract> => {
-  const fetchContract = getJson(baseUrl, "/contract").pipe(
-    Effect.flatMap((json) =>
-      Schema.decodeUnknownEffect(ProcessGroupContractSchema)(json).pipe(
-        Effect.mapError(
-          (cause) =>
-            requestError(`Malformed group contract: ${String(cause)}`),
-        ),
-      ),
-    ),
-  );
+): RemoteProcessManager<Contract, Requirements> => {
+  const fetchContract = requestContract(transport);
 
   return {
     contract,
@@ -466,19 +397,28 @@ const makeRemoteProcessManager = <
       yield* assertContractMatches(contract, remote);
     }),
     process: (id) => ({
-      start: commandVoid(baseUrl, `/processes/${encodeURIComponent(id)}/start`),
-      stop: commandVoid(baseUrl, `/processes/${encodeURIComponent(id)}/stop`),
-      restart: commandVoid(baseUrl, `/processes/${encodeURIComponent(id)}/restart`),
-      runImmediately: commandVoid(baseUrl, `/processes/${encodeURIComponent(id)}/now`),
-      status: getControl(baseUrl, `/processes/${encodeURIComponent(id)}`),
+      start: commandVoid(transport, { _tag: "StartProcess", processId: id }),
+      stop: commandVoid(transport, { _tag: "StopProcess", processId: id }),
+      restart: commandVoid(transport, { _tag: "RestartProcess", processId: id }),
+      runImmediately: commandVoid(transport, {
+        _tag: "RunProcessImmediately",
+        processId: id,
+      }),
+      status: requestControl(transport, {
+        _tag: "ReadProcessStatus",
+        processId: id,
+      }),
     }),
     queue: (id) => ({
-      pause: commandVoid(baseUrl, `/queues/${encodeURIComponent(id)}/pause`),
-      resume: commandVoid(baseUrl, `/queues/${encodeURIComponent(id)}/resume`),
-      clear: postControl(baseUrl, `/queues/${encodeURIComponent(id)}/clear`),
-      status: getControl(baseUrl, `/queues/${encodeURIComponent(id)}`),
+      pause: commandVoid(transport, { _tag: "PauseQueue", queueId: id }),
+      resume: commandVoid(transport, { _tag: "ResumeQueue", queueId: id }),
+      clear: requestControl(transport, { _tag: "ClearQueue", queueId: id }),
+      status: requestControl(transport, {
+        _tag: "ReadQueueStatus",
+        queueId: id,
+      }),
     }),
-    status: getControl(baseUrl, "/status"),
+    status: requestControl(transport, { _tag: "ReadGroupStatus" }),
   };
 };
 
@@ -558,7 +498,10 @@ const connectFromRegistry = <
   Effect.gen(function* () {
     const registry = yield* ProcessManagerConnectionRegistry;
     const baseUrl = yield* registry.baseUrl(source.id);
-    return makeRemoteProcessManager(baseUrl, source.contract);
+    return makeRemoteProcessManager(
+      makeControlTransportHttpClient({ baseUrl }),
+      source.contract,
+    );
   });
 
 const targetCandidatesFrom = (
@@ -1090,6 +1033,22 @@ function connect<Source extends ContractSource<AnyProcessGroupContract>>(
 ): RemoteProcessManager<ContractFromSource<Source>>;
 
 /**
+ * Build a typed remote client from a group service/definition value and explicit
+ * control transport.
+ *
+ * @public
+ */
+function connect<
+  Source extends ContractSource<AnyProcessGroupContract>,
+  Requirements,
+>(
+  source: Source,
+  options: {
+    readonly transport: ControlTransportClientShape<Requirements>;
+  },
+): RemoteProcessManager<ContractFromSource<Source>, Requirements>;
+
+/**
  * Build a typed remote client from a raw contract. Use this form for generated
  * contracts or code that cannot import the group service class.
  *
@@ -1100,6 +1059,20 @@ function connect<const Contract extends AnyProcessGroupContract>(options: {
   readonly contract: Contract;
 }): RemoteProcessManager<Contract>;
 
+/**
+ * Build a typed remote client from a raw contract and explicit control
+ * transport.
+ *
+ * @public
+ */
+function connect<
+  const Contract extends AnyProcessGroupContract,
+  Requirements,
+>(options: {
+  readonly transport: ControlTransportClientShape<Requirements>;
+  readonly contract: Contract;
+}): RemoteProcessManager<Contract, Requirements>;
+
 function connect(
   sourceOrOptions:
     | ConnectionSource<AnyProcessGroupContract>
@@ -1107,12 +1080,19 @@ function connect(
     | {
         readonly baseUrl: string;
         readonly contract: AnyProcessGroupContract;
+      }
+    | {
+        readonly transport: ControlTransportClientShape<unknown>;
+        readonly contract: AnyProcessGroupContract;
       },
   options?: {
     readonly baseUrl: string;
+  } | {
+    readonly transport: ControlTransportClientShape<unknown>;
   },
 ):
   | RemoteProcessManager<AnyProcessGroupContract>
+  | RemoteProcessManager<AnyProcessGroupContract, unknown>
   | Effect.Effect<
     RemoteProcessManager<AnyProcessGroupContract>,
     ProcessManagerConnectionError,
@@ -1120,11 +1100,23 @@ function connect(
   >
 {
   if (options !== undefined) {
-    return makeRemoteProcessManager(options.baseUrl, sourceOrOptions.contract);
+    if ("baseUrl" in options) {
+      return makeRemoteProcessManager(
+        makeControlTransportHttpClient({ baseUrl: options.baseUrl }),
+        sourceOrOptions.contract,
+      );
+    }
+    return makeRemoteProcessManager(options.transport, sourceOrOptions.contract);
   }
   if ("baseUrl" in sourceOrOptions) {
     return makeRemoteProcessManager(
-      sourceOrOptions.baseUrl,
+      makeControlTransportHttpClient({ baseUrl: sourceOrOptions.baseUrl }),
+      sourceOrOptions.contract,
+    );
+  }
+  if ("transport" in sourceOrOptions) {
+    return makeRemoteProcessManager(
+      sourceOrOptions.transport,
       sourceOrOptions.contract,
     );
   }

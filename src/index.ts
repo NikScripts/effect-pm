@@ -96,6 +96,26 @@ export {
 export { Resource } from "./Resource";
 export { RuntimeObserver } from "./RuntimeState";
 export { ControlService } from "./ControlService";
+export {
+  ControlResponseSchema,
+  ControlTransportClient,
+  ControlTransportError,
+  ControlProtocolRequestSchema,
+  makeControlProtocolRouter,
+} from "./ControlProtocol";
+export {
+  ControlTransportHttp,
+  makeControlTransportHttpClient,
+} from "./ControlTransportHttp";
+export type {
+  ControlProtocolRequest,
+  ControlProtocolResponse,
+  ControlProtocolRouter,
+  ControlTransportClientShape,
+} from "./ControlProtocol";
+export type {
+  ControlTransportHttpClientConfig,
+} from "./ControlTransportHttp";
 
 // CLI
 export { createCli, runCli } from "./cli";
@@ -250,4 +270,4 @@ export type {
 // Types - Control Service
 export type {
   ControlResponse,
-} from "./ControlService";
+} from "./ControlProtocol";

@@ -20,35 +20,18 @@ import { Effect, Schema, Scope } from "effect";
 import type {
   ProcessGroupEntry,
   ProcessGroupEntryRequirements,
-  ProcessGroupProcessEntries,
-  ProcessGroupQueueEntries,
   TypedProcessGroup,
 } from "./ProcessGroup";
 import type { ProcessStore } from "./ProcessStore";
+import {
+  errorResponse,
+  makeControlProtocolRouter,
+  type ControlProtocolRequest,
+  type ControlProtocolResponse,
+} from "./ControlProtocol";
+export type { ControlResponse } from "./ControlProtocol";
 import { createCli, runCli } from "./cli";
 import { responseBodyJson } from "./internal/json";
-
-// ============================================================================
-// Public Types
-// ============================================================================
-
-/**
- * Control API response
- * 
- * @typeParam T - Type of data returned (varies by command)
- * 
- * @public
- */
-export interface ControlResponse<T = unknown> {
-  /** Whether the command succeeded */
-  success: boolean;
-  /** Response type (for status command) */
-  type?: "process" | "queue";
-  /** Response data (if applicable) */
-  data?: T;
-  /** Error message (if failed) */
-  error?: string;
-}
 
 /** Minimal surface used from Node’s `ServerResponse` (avoids `node:http` type imports). */
 interface JsonResponse {
@@ -89,32 +72,6 @@ const writeJson = (
     });
   });
 
-const processStatusResponse = <T>(
-  data: T,
-): ControlResponse<T> & { readonly type: "process" } => ({
-  success: true,
-  data,
-  type: "process",
-});
-
-const queueStatusResponse = <T>(
-  data: T,
-): ControlResponse<T> & { readonly type: "queue" } => ({
-  success: true,
-  data,
-  type: "queue",
-});
-
-const successResponse = <T>(data?: T): ControlResponse<T> => ({
-  success: true,
-  ...(data === undefined ? {} : { data }),
-});
-
-const errorResponse = (error: string): ControlResponse<never> => ({
-  success: false,
-  error,
-});
-
 const decodePathSegment = (segment: string): string | undefined => {
   try {
     return decodeURIComponent(segment);
@@ -141,249 +98,141 @@ interface RouteResponse {
   readonly body: unknown;
 }
 
-const errorTag = (error: unknown): string | undefined => {
-  if (typeof error !== "object" || error === null || !("_tag" in error)) {
-    return undefined;
-  }
-  const tag = error._tag;
-  return typeof tag === "string" ? tag : undefined;
-};
-
-const errorStatus = (error: unknown): number => {
-  const tag = errorTag(error);
-  if (tag === "ProcessNotFoundError") {
-    return 404;
-  }
-  if (
-    tag === "ProcessAlreadyRunningError" ||
-    tag === "ProcessNotRunningError"
-  ) {
-    return 409;
-  }
-  if (tag === "UnsupportedRemoteControlError") {
-    return 400;
-  }
-  if (tag === "ProcessGroupRemoteControlError") {
-    if (typeof error === "object" && error !== null && "status" in error) {
-      const status = error.status;
-      return typeof status === "number" ? status : 502;
+type HttpRoute =
+  | {
+      readonly _tag: "Protocol";
+      readonly request: ControlProtocolRequest;
     }
-    return 502;
-  }
-  return 500;
-};
-
-const errorMessage = (error: unknown, fallback: string): string => {
-  if (typeof error === "object" && error !== null && "reason" in error) {
-    const reason = error.reason;
-    if (typeof reason === "string") {
-      return reason;
+  | {
+      readonly _tag: "Response";
+      readonly response: RouteResponse;
     }
-  }
-  return fallback;
-};
+  | {
+      readonly _tag: "NotFound";
+    };
 
-const routeFailure = (error: unknown, fallback: string): RouteResponse => ({
-  status: errorStatus(error),
-  body: errorResponse(errorMessage(error, fallback)),
+const routeResponseFromProtocol = (
+  response: ControlProtocolResponse,
+): RouteResponse => ({
+  status: response.status,
+  body: response.body,
 });
 
-const ok = <T>(body: ControlResponse<T>): RouteResponse => ({
-  status: 200,
-  body,
-});
+const requestFromRestRoute = (
+  method: string | undefined,
+  url: URL,
+): HttpRoute => {
+  const segments = pathSegments(url);
+  if (segments === undefined) {
+    return {
+      _tag: "Response",
+      response: {
+        status: 400,
+        body: errorResponse("Malformed URL path"),
+      },
+    };
+  }
 
-const routeValue = <A, E, R>(
-  effect: Effect.Effect<A, E, R>,
-  body: (value: A) => ControlResponse,
-  fallback: string,
-): Effect.Effect<RouteResponse, never, R> =>
-  effect.pipe(
-    Effect.map((value) => ok(body(value))),
-    Effect.catch((error) => Effect.succeed(routeFailure(error, fallback))),
-  );
-
-const routeVoid = <E, R>(
-  effect: Effect.Effect<void, E, R>,
-  fallback: string,
-): Effect.Effect<RouteResponse, never, R> =>
-  effect.pipe(
-    Effect.as(ok(successResponse())),
-    Effect.catch((error) => Effect.succeed(routeFailure(error, fallback))),
-  );
-
-const findProcessEntry = <
-  const Entries extends readonly ProcessGroupEntry[],
->(
-  entries: Entries,
-  id: string,
-): ProcessGroupProcessEntries<Entries> | undefined =>
-  entries.find(
-    (entry): entry is ProcessGroupProcessEntries<Entries> =>
-      entry.kind === "process" && entry.id === id,
-  );
-
-const findQueueEntry = <
-  const Entries extends readonly ProcessGroupEntry[],
->(
-  entries: Entries,
-  id: string,
-): ProcessGroupQueueEntries<Entries> | undefined =>
-  entries.find(
-    (entry): entry is ProcessGroupQueueEntries<Entries> =>
-      entry.kind === "queue" && entry.id === id,
-  );
-
-const handleRestRoute =
-  <
-    const Id extends string,
-    const Entries extends readonly ProcessGroupEntry[],
-    Error,
-  >(group: TypedProcessGroup<Id, Entries, Error>) =>
-  (
-    method: string | undefined,
-    url: URL,
-  ): Effect.Effect<
-    RouteResponse | undefined,
-    never,
-    ProcessGroupEntryRequirements<Entries> | ProcessStore
-  > =>
-    Effect.gen(function* () {
-      const segments = pathSegments(url);
-      if (segments === undefined) {
-        return {
+  if (method === "GET" && segments.length === 1 && segments[0] === "contract") {
+    return { _tag: "Protocol", request: { _tag: "GetContract" } };
+  }
+  if (method === "GET" && segments.length === 1 && segments[0] === "status") {
+    return { _tag: "Protocol", request: { _tag: "ReadGroupStatus" } };
+  }
+  if (method === "GET" && segments.length === 1 && segments[0] === "processes") {
+    return { _tag: "Protocol", request: { _tag: "ListProcesses" } };
+  }
+  if (segments[0] === "processes" && segments.length >= 2) {
+    const processId = segments[1];
+    if (processId === undefined) {
+      return {
+        _tag: "Response",
+        response: {
           status: 400,
-          body: errorResponse("Malformed URL path"),
+          body: errorResponse("Missing process name"),
+        },
+      };
+    }
+    if (method === "GET" && segments.length === 2) {
+      return {
+        _tag: "Protocol",
+        request: { _tag: "ReadProcessStatus", processId },
+      };
+    }
+    if (method === "POST" && segments.length === 3) {
+      const operation = segments[2];
+      if (operation === "start") {
+        return {
+          _tag: "Protocol",
+          request: { _tag: "StartProcess", processId },
         };
       }
-
-      if (method === "GET" && segments.length === 1 && segments[0] === "status") {
-        return yield* routeValue(
-          group.status,
-          successResponse,
-          "Unable to read group status",
-        );
+      if (operation === "stop") {
+        return {
+          _tag: "Protocol",
+          request: { _tag: "StopProcess", processId },
+        };
       }
-
-      if (method === "GET" && segments.length === 1 && segments[0] === "processes") {
-        return yield* routeValue(
-          group.status,
-          (groupStatus) => successResponse(groupStatus.processes),
-          "Unable to list processes",
-        );
+      if (operation === "restart") {
+        return {
+          _tag: "Protocol",
+          request: { _tag: "RestartProcess", processId },
+        };
       }
-
-      if (segments[0] === "processes" && segments.length >= 2) {
-        const name = segments[1];
-        if (name === undefined) {
-          return {
-            status: 400,
-            body: errorResponse("Missing process name"),
-          };
-        }
-
-        if (method === "GET" && segments.length === 2) {
-          const entry = findProcessEntry(group.entries, name);
-          if (entry === undefined) {
-            return {
-              status: 404,
-              body: errorResponse(`Process '${name}' not found`),
-            };
-          }
-          const result = yield* routeValue(
-            group.process(entry).status,
-            processStatusResponse,
-            `Process '${name}' not found`,
-          );
-          return result;
-        }
-
-        if (method === "POST" && segments.length === 3) {
-          const operation = segments[2];
-          const entry = findProcessEntry(group.entries, name);
-          if (entry === undefined) {
-            return {
-              status: 404,
-              body: errorResponse(`Process '${name}' not found`),
-            };
-          }
-          const controls = group.process(entry);
-          if (operation === "start") {
-            return yield* routeVoid(controls.start, `Process '${name}' could not be started`);
-          }
-          if (operation === "stop") {
-            return yield* routeVoid(controls.stop, `Process '${name}' could not be stopped`);
-          }
-          if (operation === "restart") {
-            return yield* routeVoid(controls.restart, `Process '${name}' could not be restarted`);
-          }
-          if (operation === "now") {
-            return yield* routeVoid(controls.runImmediately, `Process '${name}' could not run immediately`);
-          }
-        }
+      if (operation === "now") {
+        return {
+          _tag: "Protocol",
+          request: { _tag: "RunProcessImmediately", processId },
+        };
       }
+    }
+  }
 
-      if (method === "GET" && segments.length === 1 && segments[0] === "queues") {
-        return yield* routeValue(
-          group.status,
-          (groupStatus) => successResponse(groupStatus.queues),
-          "Unable to list queues",
-        );
+  if (method === "GET" && segments.length === 1 && segments[0] === "queues") {
+    return { _tag: "Protocol", request: { _tag: "ListQueues" } };
+  }
+  if (segments[0] === "queues" && segments.length >= 2) {
+    const queueId = segments[1];
+    if (queueId === undefined) {
+      return {
+        _tag: "Response",
+        response: {
+          status: 400,
+          body: errorResponse("Missing queue name"),
+        },
+      };
+    }
+    if (method === "GET" && segments.length === 2) {
+      return {
+        _tag: "Protocol",
+        request: { _tag: "ReadQueueStatus", queueId },
+      };
+    }
+    if (method === "POST" && segments.length === 3) {
+      const operation = segments[2];
+      if (operation === "pause") {
+        return {
+          _tag: "Protocol",
+          request: { _tag: "PauseQueue", queueId },
+        };
       }
-
-      if (segments[0] === "queues" && segments.length >= 2) {
-        const name = segments[1];
-        if (name === undefined) {
-          return {
-            status: 400,
-            body: errorResponse("Missing queue name"),
-          };
-        }
-
-        if (method === "GET" && segments.length === 2) {
-          const entry = findQueueEntry(group.entries, name);
-          if (entry === undefined) {
-            return {
-              status: 404,
-              body: errorResponse(`Queue '${name}' not found`),
-            };
-          }
-          const result = yield* routeValue(
-            group.queue(entry).status,
-            queueStatusResponse,
-            `Queue '${name}' not found`,
-          );
-          return result;
-        }
-
-        if (method === "POST" && segments.length === 3) {
-          const operation = segments[2];
-          const entry = findQueueEntry(group.entries, name);
-          if (entry === undefined) {
-            return {
-              status: 404,
-              body: errorResponse(`Queue '${name}' not found`),
-            };
-          }
-          const controls = group.queue(entry);
-          if (operation === "pause") {
-            return yield* routeVoid(controls.pause, `Queue '${name}' could not be paused`);
-          }
-          if (operation === "resume") {
-            return yield* routeVoid(controls.resume, `Queue '${name}' could not be resumed`);
-          }
-          if (operation === "clear") {
-            return yield* routeValue(
-              controls.clear,
-              (cleared) => successResponse({ cleared }),
-              `Queue '${name}' could not be cleared`,
-            );
-          }
-        }
+      if (operation === "resume") {
+        return {
+          _tag: "Protocol",
+          request: { _tag: "ResumeQueue", queueId },
+        };
       }
+      if (operation === "clear") {
+        return {
+          _tag: "Protocol",
+          request: { _tag: "ClearQueue", queueId },
+        };
+      }
+    }
+  }
 
-      return undefined;
-    });
+  return { _tag: "NotFound" };
+};
 
 /**
  * Start the HTTP control service
@@ -478,6 +327,7 @@ function startControlService(
       // Capture context (services) with all dependencies already provided
       const services = yield* Effect.context<unknown | ProcessStore>();
       const runWithServices = Effect.runForkWith(services);
+      const router = makeControlProtocolRouter(group);
 
       const nodeHttp = yield* Effect.promise(() => import("node:http"));
 
@@ -496,13 +346,14 @@ function startControlService(
             return;
           }
 
-          if (url.pathname === "/contract" && req.method === "GET") {
-            yield* writeJson(res, 200, group.contract);
+          const route = requestFromRestRoute(req.method, url);
+          if (route._tag === "Response") {
+            yield* writeJson(res, route.response.status, route.response.body);
             return;
           }
-
-          const restResponse = yield* handleRestRoute(group)(req.method, url);
-          if (restResponse !== undefined) {
+          if (route._tag === "Protocol") {
+            const protocolResponse = yield* router.handle(route.request);
+            const restResponse = routeResponseFromProtocol(protocolResponse);
             yield* writeJson(res, restResponse.status, restResponse.body);
             return;
           }

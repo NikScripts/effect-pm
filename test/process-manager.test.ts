@@ -4,6 +4,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Config, ConfigProvider, Effect, Layer, Ref } from "effect";
 import {
   ControlService,
+  makeControlProtocolRouter,
   Process,
   ProcessGroup,
   ProcessManager,
@@ -26,6 +27,70 @@ const waitForQueueCompleted = (
   });
 
 describe("ProcessManager", () => {
+  it.live("connects through an in-memory control transport without HTTP", () =>
+    Effect.gen(function* () {
+      const runs = yield* Ref.make(0);
+
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+        "@test/MemoryTransportEmailQueue",
+        {
+          effect: (_email) => Effect.void,
+        },
+      ) {}
+
+      class SyncProcess extends Process.Service<SyncProcess>()(
+        "@test/MemoryTransportProcess",
+        {
+          effect: Ref.update(runs, (count) => count + 1),
+        },
+      ) {}
+
+      class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+        "@test/MemoryTransportBillingGroup",
+        [SyncProcess, EmailQueue] as const,
+      ) {}
+
+      yield* Effect.gen(function* () {
+        const group = yield* BillingGroup;
+        const router = makeControlProtocolRouter(group);
+        const manager = ProcessManager.connect(BillingGroup, {
+          transport: {
+            request: router.handle,
+          },
+        });
+
+        yield* manager.verifyContract;
+        yield* manager.process(SyncProcess.id).runImmediately;
+        const queueStatus = yield* manager.queue(EmailQueue.id).status;
+
+        expect(queueStatus).toMatchObject({
+          success: true,
+          type: "queue",
+          data: {
+            name: EmailQueue.id,
+            completed: 0,
+          },
+        });
+        expect(yield* Ref.get(runs)).toBe(1);
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            BillingGroup.layer.pipe(
+              Layer.provide(
+                Layer.mergeAll(
+                  EmailQueue.layer,
+                  SyncProcess.layer,
+                  ProcessStore.layer,
+                ),
+              ),
+            ),
+            ProcessStore.layer,
+          ),
+        ),
+      );
+    }),
+  );
+
   it.live("verifies a remote group contract and runs a process by typed id", () =>
     Effect.gen(function* () {
       const runs = yield* Ref.make(0);

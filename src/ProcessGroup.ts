@@ -679,7 +679,7 @@ export const makeProcessGroup = <
     // ─── Resolve queue tags from context ───
     const queueMap: Record<string, QueueHandle<unknown, unknown, unknown, unknown>> = {};
     for (const queueTag of config.queues) {
-      queueMap[queueTag.key] = yield* queueTag.asEffect();
+      queueMap[queueTag.key] = yield* queueTag;
     }
 
     // ─── Build process registry ───
@@ -1286,24 +1286,13 @@ const remoteLayer = <
     }),
   );
 
-/** Runtime queues in typed entry tuples expose `Context.Key.asEffect`; plain structural registrations do not. */
-function isProcessGroupRuntimeQueueTag<const Entries extends readonly ProcessGroupEntry[]>(
+/** Runtime queue declarations carry the Context tag used to acquire the live queue handle. */
+function hasProcessGroupRuntimeQueueTag<const Entries extends readonly ProcessGroupEntry[]>(
   entry: ProcessGroupQueueEntries<Entries>,
-): entry is ProcessGroupQueueTag &
-  Extract<Entries[number], { readonly kind: "queue" }> {
-  if (typeof entry === "function") {
-    return (
-      "asEffect" in entry &&
-      typeof (entry as { asEffect?: unknown }).asEffect === "function"
-    );
-  }
-  if (typeof entry === "object" && entry !== null) {
-    return (
-      "asEffect" in entry &&
-      typeof (entry as { asEffect?: unknown }).asEffect === "function"
-    );
-  }
-  return false;
+): entry is ProcessGroupQueueEntries<Entries> & {
+  readonly tag: ProcessGroupQueueTag;
+} {
+  return "tag" in entry;
 }
 
 const mergeBundledQueueLayers = (
@@ -1329,7 +1318,9 @@ const makeTypedProcessGroup = <
     const contract = makeProcessGroupContract(id, entries);
     const processes = processEntriesFrom(entries);
     const queuesAll = queueEntriesFrom(entries);
-    const queuesRuntime = queuesAll.filter(isProcessGroupRuntimeQueueTag);
+    const queuesRuntime = queuesAll
+      .filter(hasProcessGroupRuntimeQueueTag)
+      .map((queue) => queue.tag);
 
     const runtime = yield* makeProcessGroup({
       processes: processes.map((process) => process.process),
