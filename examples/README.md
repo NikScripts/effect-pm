@@ -129,7 +129,7 @@ Storage options:
 | `pnpm run example:schedule-control-surfaces` | All three schedule control forms |
 | `pnpm run example:schedule-control-basics` | `at` + `window` + `define` forms |
 | `pnpm run example:schedule-control-db-sync` | DB sync scenario |
-| `pnpm run example:process-game-window` | Game-window scenario |
+| `pnpm run example:process-game-window` | **`Process.Service` + typed `make(id, entries)`**, schedule windows + **`TestClock`** |
 | `pnpm run example:run-resource` | RunResource form |
 | `pnpm run example:http-client-run-gate` | HttpClient gate form |
 | `pnpm run example:http-api-resource` | HttpApiResource form |

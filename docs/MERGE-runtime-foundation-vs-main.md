@@ -532,7 +532,7 @@ const legacyGroup = yield* ProcessGroup.make({
 yield* legacyGroup.start(emailSync.name);
 ```
 
-Prefer **typed tuple** (**§2.1**) for new code.
+Prefer **typed tuple** (**§2.1**) for new code (**`examples/scenarios/game-window-polling-with-process-group.ts`** demonstrates **`Process.Service` + `make(id, […])`**). **`test/process-group.test.ts`** still pins the split-array **`make`** path.
 
 ---
 
