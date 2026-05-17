@@ -1291,12 +1291,19 @@ function isProcessGroupRuntimeQueueTag<const Entries extends readonly ProcessGro
   entry: ProcessGroupQueueEntries<Entries>,
 ): entry is ProcessGroupQueueTag &
   Extract<Entries[number], { readonly kind: "queue" }> {
-  return (
-    typeof entry === "object" &&
-    entry !== null &&
-    "asEffect" in entry &&
-    typeof entry.asEffect === "function"
-  );
+  if (typeof entry === "function") {
+    return (
+      "asEffect" in entry &&
+      typeof (entry as { asEffect?: unknown }).asEffect === "function"
+    );
+  }
+  if (typeof entry === "object" && entry !== null) {
+    return (
+      "asEffect" in entry &&
+      typeof (entry as { asEffect?: unknown }).asEffect === "function"
+    );
+  }
+  return false;
 }
 
 const mergeBundledQueueLayers = (

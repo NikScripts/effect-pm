@@ -216,6 +216,9 @@ describe("ProcessManager", () => {
           CONFIG_REGISTRY_BILLING_URL: "http://127.0.0.1:32140",
         }),
       );
+      const billingRegistryLayer = billingRegistryConfigLayer.pipe(
+        Layer.provide(configProviderLayer),
+      );
 
       yield* Effect.gen(function* () {
         const group = yield* BillingGroup;
@@ -239,13 +242,11 @@ describe("ProcessManager", () => {
                   EmailQueue.layer,
                   SyncProcess.layer,
                   ProcessStore.layer,
-                  billingRegistryConfigLayer,
-                  configProviderLayer,
+                  billingRegistryLayer,
                 ),
               ),
             ),
-            billingRegistryConfigLayer,
-            configProviderLayer,
+            billingRegistryLayer,
             ProcessStore.layer,
             NodeHttpClient.layerUndici,
           ),

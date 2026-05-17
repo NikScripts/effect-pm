@@ -9,7 +9,7 @@
  * @module ProcessManager
  */
 
-import { Config, Console, Context, Data, Effect, Layer, Schema } from "effect";
+import { Config, ConfigProvider, Console, Context, Data, Effect, Layer, Schema } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import type { ControlResponse } from "./ControlService";
@@ -518,9 +518,10 @@ const makeConnectionRegistryConfigLayer = <
 ) =>
   Layer.effect(ProcessManagerConnectionRegistry)(
     Effect.gen(function* () {
+      const provider = yield* ConfigProvider.ConfigProvider;
       const baseUrls = new Map<string, string>();
-      for (const [groupId, config] of Object.entries(connections)) {
-        const baseUrl = yield* config;
+      for (const [groupId, cfg] of Object.entries(connections)) {
+        const baseUrl = yield* cfg.parse(provider);
         baseUrls.set(groupId, baseUrl);
       }
       return {
