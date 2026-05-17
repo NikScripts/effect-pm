@@ -1,89 +1,104 @@
 # Process
 
-In effect-pm, a **process** is a reusable, named unit of background work. You give it a stable **id**, an **effect** that runs on each repeat (one **tick**), and optionally **polling** (how often to repeat while active) and **schedule** (when repeating is allowed). The library runs a long-lived **driver** (`process.effect`) that applies those rules and, when `ProcessStore` is in the environment, records executions and lifecycle events.
+In application development, **background work** is logic that should keep running outside the request path: heartbeats, sync jobs, pollers, and other repeating tasks. You usually express that work as an `Effect`, but running it safely in the background still requires a stable name, a way to repeat it on a schedule, visibility into failures, and a clear stop path.
 
-Processes are the smallest orchestration building block. Later you will group them with queues in a `ProcessGroup` and expose controls over HTTP. This page covers **creating** a process with `Process.make` and **running** it.
+Without a dedicated abstraction, you might use Effect’s own repetition tools and fork the result—but you still wire identity, calendar gates, history, and lifecycle yourself. The same concerns show up in every app: separating **how often** work runs from **when** it is allowed to run, recording executions, and stopping cleanly.
 
-## Background jobs without a process
+effect-pm introduces a **process**: a named wrapper around an `Effect` that adds observability and controls. You supply the effect that runs on each repeat; the library runs a long-lived **driver** (`process.effect`) that applies polling cadence and schedule rules. Each repeat runs your effect to completion before the next wait begins.
 
-You can run recurring work in Effect by forking a fiber and sleeping in a loop:
+## Repeating work by hand
+
+Imagine you want to log a heartbeat every five seconds. Effect already gives you `Effect.repeat` and `Schedule.spaced` for cadence—you fork that in the background and interrupt it when you are done:
 
 ```typescript
-const loop = Effect.gen(function* () {
-  while (true) {
-    yield* Effect.logInfo("tick")
-    yield* Effect.sleep("5 seconds")
-  }
-})
+import { Duration, Effect, Fiber, Schedule } from "effect"
+
+const tick = Effect.logInfo("heartbeat")
+
+const repeating = tick.pipe(Effect.repeat(Schedule.spaced(Duration.seconds(5))))
+
+const program = Effect.gen(function* () {
+  const worker = yield* Effect.forkChild(repeating)
+
+  yield* Effect.sleep(Duration.seconds(12))
+  yield* Fiber.interrupt(worker)
+}).pipe(Effect.scoped)
+
+Effect.runPromise(program)
 ```
 
-That works for demos, but most applications reimplement the same concerns: stable naming for ops tools, separating **cadence** from **calendar windows**, tracking failures, and shutting down cleanly. A **process** wraps those behind `Process.make` and `process.effect`.
+That is idiomatic Effect for fixed spacing, but it is still just an anonymous fiber: no stable id for ops tools, no execution history, no schedule gate separate from cadence, and no shared stop/run-once API. `Fiber.interrupt` can still stop the fiber in the middle of `tick`, not only between repeats.
 
-## Managing work with a process
+## Managing background work with effect-pm
 
-effect-pm splits responsibilities so each piece can change independently:
+effect-pm keeps your business logic as a normal `Effect` and moves orchestration behind `Process.make` and `process.effect`:
 
-| Piece | Role |
-| --- | --- |
-| `effect` | One **tick** — the `Effect` that runs on each repeat. |
-| `polling` | How long to wait between ticks **while the schedule is armed**. |
-| `schedule` | Whether a run instance is **armed** right now (windows, always-on, and so on). |
-| `process.effect` | Long-lived **driver** you start once; it runs the supervisor loop. |
+**Named unit of work.** A stable string `id` identifies the process in logs, stores, and (later) control APIs.
 
-The driver's `Effect` type includes whatever your tick needs, after optional `polling` and `schedule` layers are merged in at `Process.make`.
+**Observability.** `getStatus` reflects runtime state; with `ProcessStore` in the environment, executions and lifecycle events are recorded.
+
+**Controls.** Fork `process.effect` to start repeating work; call `runImmediately` for a single tracked run without the driver loop.
+
+**Cadence and schedule.** Optional `polling` controls the wait between completed repeats. Optional `schedule` controls whether repeats are allowed at the current time.
 
 Let's walk through using a process step by step:
 
-1. **Creating a process** — `Process.make(id, config)`.
+1. **Creating a process** — define the repeat effect and optional polling / schedule with `Process.make`.
 2. **Running the driver** — fork `process.effect` inside a scoped program.
-3. **Running one tick** — `runImmediately` without the supervisor loop.
+3. **Running one repeat** — use `runImmediately` when you need a single execution.
 
 ## How it works
 
-Until you fork `process.effect`, nothing runs. Forking starts the **schedule driver**: a supervisor fiber that watches the schedule and, when armed, runs **wait for poll → run your tick → afterTick** (when polling is provided).
+Until you fork `process.effect`, nothing runs. Forking starts the **driver**: a supervisor fiber that watches the schedule and, while **armed**, runs repeats in a loop.
 
-Two ideas are easy to confuse at first:
+A repeat is one full execution of the `effect` you passed to `Process.make`. While the schedule is armed and `polling` is configured, the driver cycles:
+
+```
+wait for next tick → run your effect → update cadence → wait again
+```
+
+If you omit `polling` (and do not provide `Polling` when forking), each armed window runs your effect **once** instead of on a cadence.
+
+`polling` and `schedule` are Effect layers. When you pass them on `Process.make`, they are merged into `process.effect`, so you usually do not provide separate `Polling` or `ProcessSchedule` layers at the fork site.
+
+Two states are easy to confuse at first:
 
 | Concept | Meaning |
 | --- | --- |
-| Driver **started** | You forked `process.effect` (or called `ProcessGroup.start` on a later page). |
-| Schedule **armed** | At least one schedule entry covers the current time, so a run instance may tick. |
+| Driver **started** | You forked `process.effect` (or started a `ProcessGroup` on a later page). |
+| Schedule **armed** | At least one schedule entry covers the current time, so the driver may repeat. |
 
-While armed, one run instance repeats when polling is configured:
+Let's summarize the concepts covered so far:
 
-```
-awaitNextTick  →  your effect  →  polling.afterTick
-       ↑___________________________________|
-```
-
-Without **polling** (and without providing `Polling` at the fork site), a run instance executes the tick **once** per schedule entry instead of looping on a cadence.
-
-Polling and schedule are Effect **layers**. When you pass them on `Process.make`, they are merged into `process.effect`, so you usually do not provide separate `Polling` or `ProcessSchedule` layers when forking.
-
-## Default schedule
-
-When you omit both `schedule` and `scheduleLayer` on `Process.make`, the library uses **`ProcessSchedule.alwaysArmed`**: the process is eligible to tick as soon as the driver is running.
-
-| What you pass | Behavior |
+| Concept | Description |
 | --- | --- |
-| Nothing (omit `schedule`) | Same as `alwaysArmed` — ticks allowed once the driver is up (if polling is set). |
-| `schedule: ProcessSchedule.alwaysArmed` | Explicit always-on (same default). |
-| `schedule: ProcessSchedule.empty` | Driver runs, but **disarmed** until you `set` / `add` / `upsert` entries (or use a schedule initializer). |
-| `schedule: ProcessSchedule.inMemory([...])` | Starts with the entries you supply. |
-| `schedule: (controls) => Effect` | Backing store is **empty** `inMemory`; initializer runs once at driver startup to seed or subscribe. |
-
-If you previously omitted `schedule` expecting a disarmed process until external code added windows, pass **`schedule: ProcessSchedule.empty`** explicitly.
+| process | A named wrapper around an `Effect` with a driver, optional cadence, and optional schedule gate. |
+| repeat | One execution of the `effect` callback inside the driver (or via `runImmediately`). |
+| driver | `process.effect` — the long-lived supervisor you fork once. |
+| polling | Cadence between completed repeats while the schedule is armed. |
+| schedule | Whether repeats are allowed at the current time. |
+| armed | The schedule currently allows the driver to repeat. |
 
 ## Creating a process
 
-`Process.make` takes two arguments so the id cannot be forgotten:
+To create a process, you need:
 
-1. **`id`** — stable string (`@app/Heartbeat`, `@repo/package/SyncInvoices`, and so on). Exposed as `process.name` on the handle.
-2. **`config`** — `ProcessMakeOptions`: `effect`, optional `polling`, optional `schedule` / `scheduleLayer` (no `name` field).
+1. **An `id`** — a stable string (for example `@app/Heartbeat`). Exposed as `process.name` on the handle.
+2. **A config object** — `ProcessMakeOptions` with a required `effect` and optional `polling`, `schedule`, or `scheduleLayer`.
 
-`Process.make("id")` alone is a **type error**; you must pass the config object as the second argument.
+`Process.make` takes both arguments together. `Process.make("id")` without a second argument is a type error.
 
-### Example (Heartbeat)
+When you omit `schedule` and `scheduleLayer`, the default is `ProcessSchedule.alwaysArmed`: the process may repeat as soon as the driver is running (if `polling` is set). Pass `schedule: ProcessSchedule.empty` when the driver should run but stay disarmed until you add entries elsewhere.
+
+| What you pass | Behavior |
+| --- | --- |
+| Nothing (omit `schedule`) | Same as `ProcessSchedule.alwaysArmed`. |
+| `schedule: ProcessSchedule.alwaysArmed` | Explicit always-on. |
+| `schedule: ProcessSchedule.empty` | Disarmed until you `set` / `add` / `upsert` entries. |
+| `schedule: ProcessSchedule.inMemory([...])` | Starts with the entries you supply. |
+| `schedule: (controls) => Effect` | Empty `inMemory` backing; initializer runs once at driver startup. |
+
+Example (Defining a heartbeat process)
 
 ```typescript
 import { Duration, Effect } from "effect"
@@ -92,11 +107,19 @@ import { Process, Polling } from "@nikscripts/effect-pm"
 const heartbeat = Process.make("@app/Heartbeat", {
   effect: Effect.logInfo("heartbeat tick"),
   polling: Polling.spaced(Duration.seconds(5)),
-  // schedule omitted → ProcessSchedule.alwaysArmed
 })
 ```
 
-### Example (Disarmed until you add a window)
+`Process.make` returns a **handle** with:
+
+| Member | Description |
+| --- | --- |
+| `name` | The `id` you passed to `make`. |
+| `effect` | Driver `Effect` — fork this to start the supervisor. |
+| `runImmediately` | One tracked repeat outside the driver loop. |
+| `getStatus` | Best-effort status; uses `ProcessStore` when provided. |
+
+Example (Starting disarmed until you publish a window)
 
 ```typescript
 import { Process, Polling, ProcessSchedule } from "@nikscripts/effect-pm"
@@ -113,39 +136,25 @@ const gameSync = Process.make("@app/GameSync", {
 // yield* schedule.set([ProcessSchedule.window("match-1", start, end)])
 ```
 
-### Example (`Process.Service`)
+For typed entries in a `ProcessGroup`, use the same `id` and config shape with `Process.Service`:
 
-For typed `ProcessGroup` entries, use the same `id` and config shape as `make`:
+Example (Defining a process with `Process.Service`)
 
 ```typescript
+import { Duration, Effect } from "effect"
+import { Process, Polling } from "@nikscripts/effect-pm"
+
 class Heartbeat extends Process.Service<Heartbeat>()("@app/Heartbeat", {
   effect: Effect.logInfo("heartbeat tick"),
   polling: Polling.spaced(Duration.seconds(5)),
 }) {}
 ```
 
-`Process.make` returns a **handle**:
-
-| Member | Description |
-| --- | --- |
-| `name` | The `id` you passed to `make`. |
-| `effect` | Driver `Effect` — fork this to start the supervisor. |
-| `runImmediately` | One tracked tick outside the supervisor loop. |
-| `getStatus` | Best-effort status; uses `ProcessStore` when provided. |
-
-| Concept | Description |
-| --- | --- |
-| tick | A single run of your `effect` callback. |
-| driver | `process.effect` — the long-lived supervisor fiber. |
-| polling | Cadence between ticks while armed. |
-| schedule | Gate that decides whether an instance may tick now. |
-| armed | At least one schedule entry covers the current time. |
-
 ## Running the driver
 
-Run the driver inside a **scoped** program so child fibers can be interrupted when the scope closes. Provide `ProcessStore.layer` when you want execution history.
+Run the driver inside a **scoped** program so child fibers can be interrupted when the scope closes. Provide `ProcessStore.layer` at the application root when you want execution history persisted.
 
-### Example (Fork and stop)
+Example (Forking the driver and stopping)
 
 ```typescript
 import { Duration, Effect, Fiber } from "effect"
@@ -162,18 +171,15 @@ const program = Effect.gen(function* () {
 Effect.runPromise(program.pipe(Effect.provide(ProcessStore.layer)))
 ```
 
-What happens:
+Forking `heartbeat.effect` starts the supervisor. While the schedule is armed, it repeats: wait, run your effect, update cadence. Interrupting the driver fiber stops further repeats.
 
-1. `forkChild(heartbeat.effect)` starts the supervisor. While armed, it repeats the poll → tick → `afterTick` loop (with `Polling.spaced` above).
-2. `Fiber.interrupt` stops the driver. In a long-running app you might use OS signals or `ProcessGroup.awaitShutdown` instead.
+If the repeat effect needs other services (a database, `HttpClient`, and so on), provide those layers together with `ProcessStore.layer` where you run the program.
 
-If the tick needs other services (database, `HttpClient`, and so on), provide those layers together with `ProcessStore.layer` at the application root.
+## Running one repeat
 
-## Running one tick
+Sometimes you need a **single** execution — a test, a manual run, or a script — without starting the supervisor loop. `runImmediately` runs the same effect body with tracking. It does not require the schedule to be armed.
 
-Sometimes you need a **single** execution — a test, a manual "run now", or a script — without starting the supervisor loop.
-
-### Example (`runImmediately`)
+Example (Using `runImmediately`)
 
 ```typescript
 import { Effect } from "effect"
@@ -190,33 +196,4 @@ const once = Effect.gen(function* () {
 Effect.runPromise(once)
 ```
 
-`runImmediately` runs the same tick body with tracking. It does **not** require the schedule to be armed. The driver loop is separate.
-
-## Attaching polling or schedule later
-
-You can build options first, then attach layers with the same **id**:
-
-```typescript
-import type { ProcessMakeOptions } from "@nikscripts/effect-pm"
-
-const base: ProcessMakeOptions<never, never> = {
-  effect: Effect.logInfo("bare tick"),
-}
-
-const withPolling = Process.providePolling("@app/Bare", base, Polling.spaced("1 second"))
-const withSchedule = Process.provideSchedule(
-  "@app/Bare",
-  base,
-  ProcessSchedule.empty,
-)
-```
-
-For application code, passing `polling` and `schedule` on `Process.make(id, { ... })` keeps wiring in one place.
-
-## Next steps
-
-| Topic | What you will learn |
-| --- | --- |
-| Polling | `spaced`, `jittered`, `backoff`, `accelerating`, and waking the cadence early. |
-| ProcessSchedule | Entries, windows, `reconcile`, and mutating the schedule while the driver runs. |
-| ProcessGroup | Bundling processes and queues, `start` / `stop`, and localhost control. |
+Later pages cover **Polling** (cadence presets), **ProcessSchedule** (windows and live updates), and **ProcessGroup** (bundling processes, `start` / `stop`, and localhost control).

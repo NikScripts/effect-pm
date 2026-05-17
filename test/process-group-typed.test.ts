@@ -1,7 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Duration, Effect, Ref, Schema } from "effect";
+import { Duration, Effect, Exit, Layer, Ref, Schema } from "effect";
 import type { HttpClient } from "effect/unstable/http";
-import type { Layer } from "effect";
 import {
   Process,
   ProcessGroup,
@@ -41,6 +40,9 @@ class TypeGroup extends ProcessGroup.Service<TypeGroup>()("@test/TypeGroup", [
   TypeInvoiceQueue,
 ] as const) {}
 
+/**
+ * @effect-expect-leaking HttpClient.HttpClient
+ */
 class TypeEndpoint extends ProcessManager.Endpoint<TypeEndpoint>()(
   TypeGroup,
   {
@@ -59,7 +61,7 @@ type IsEqual<A, B> =
       ? true
       : false
     : false;
-type EffectError<T> = T extends Effect.Effect<any, infer E, any> ? E : never;
+type EffectError<T> = T extends Effect.Effect<unknown, infer E, unknown> ? E : never;
 type LayerOut<T> = T extends Layer.Layer<infer ROut, any, any> ? ROut : never;
 type LayerIn<T> = T extends Layer.Layer<any, any, infer RIn> ? RIn : never;
 const assertType = <T extends true>(_value?: T): void => undefined;
@@ -155,7 +157,7 @@ const waitForCompleted = (
 
 describe("ProcessGroup.make", () => {
   it.live("creates direct typed controls from one canonical entry tuple", () =>
-    Effect.gen(function* () {
+      Effect.gen(function* () {
       const handled = yield* Ref.make<ReadonlyArray<string>>([]);
       const runs = yield* Ref.make(0);
 
@@ -169,7 +171,7 @@ describe("ProcessGroup.make", () => {
         effect: Ref.update(runs, (count) => count + 1),
       }) {}
 
-      yield* Effect.gen(function* () {
+      return yield* Effect.gen(function* () {
         const group = yield* ProcessGroup.make("@test/TypedDirectBillingGroup", [
           SyncProcess,
           EmailQueue,
@@ -195,13 +197,12 @@ describe("ProcessGroup.make", () => {
             },
           ],
         });
-        expect(
-          Schema.decodeUnknownSync(ProcessGroupContractSchema)(
-            group.contract,
-          ),
-        ).toEqual(group.contract);
-        expect(() =>
-          Schema.decodeUnknownSync(ProcessGroupContractSchema)({
+        const validated = yield* Schema.decodeUnknownEffect(
+          ProcessGroupContractSchema,
+        )(group.contract);
+        expect(validated).toEqual(group.contract);
+        const invalidExit = yield* Effect.exit(
+          Schema.decodeUnknownEffect(ProcessGroupContractSchema)({
             ...group.contract,
             queues: [
               {
@@ -211,7 +212,8 @@ describe("ProcessGroup.make", () => {
               },
             ],
           }),
-        ).toThrow();
+        );
+        expect(Exit.isFailure(invalidExit)).toBe(true);
 
         yield* group.queue(EmailQueue).enqueue({ to: "ops@example.com" });
         const queue = yield* EmailQueue;
@@ -225,12 +227,16 @@ describe("ProcessGroup.make", () => {
         const queueStatus = yield* group.queue(EmailQueue).status;
         expect(queueStatus.name).toBe(EmailQueue.id);
         expect(queueStatus.completed).toBe(1);
-      }).pipe(provideLayer(EmailQueue.layer));
-    }),
+      }).pipe(
+        provideLayer(
+          Layer.mergeAll(EmailQueue.layer),
+        ),
+      );
+      }),
   );
 
   it.live("supports an injectable group service for singleton control surfaces", () =>
-    Effect.gen(function* () {
+      Effect.gen(function* () {
       const handled = yield* Ref.make<ReadonlyArray<string>>([]);
       const runs = yield* Ref.make(0);
 
@@ -249,7 +255,7 @@ describe("ProcessGroup.make", () => {
         [SyncProcess, EmailQueue] as const,
       ) {}
 
-      yield* Effect.gen(function* () {
+      return yield* Effect.gen(function* () {
         const group = yield* BillingGroup;
 
         expect(BillingGroup.contract.id).toBe("@test/TypedServiceBillingGroup");
@@ -265,9 +271,8 @@ describe("ProcessGroup.make", () => {
         expect(yield* Ref.get(runs)).toBe(1);
         expect(yield* Ref.get(handled)).toEqual(["team@example.com"]);
       }).pipe(
-        provideLayer(BillingGroup.layer),
-        provideLayer(EmailQueue.layer),
+        provideLayer(Layer.mergeAll(BillingGroup.layer, EmailQueue.layer)),
       );
-    }),
+      }),
   );
 });

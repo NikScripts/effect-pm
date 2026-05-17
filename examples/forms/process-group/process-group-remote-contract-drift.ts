@@ -6,7 +6,7 @@
  */
 
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 import {
   ControlService,
   Process,
@@ -27,88 +27,80 @@ const ensure = (
 ): Effect.Effect<void> =>
   condition ? Effect.void : Effect.die(new Error(message));
 
-const program = Effect.scoped(
-  Effect.gen(function* () {
-    class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()(
-      "@examples/DriftEmailQueue",
-      {
-        effect: (_email) => Effect.void,
-      },
-    ) {}
+const program = Effect.gen(function* () {
+  class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()("@examples/DriftEmailQueue", {
+    effect: (_email) => Effect.void,
+  }) {}
 
-    class SyncProcess extends Process.Service<SyncProcess>()(
-      "@examples/DriftSyncProcess",
-      {
-        effect: Effect.void,
-      },
-    ) {}
+  class SyncProcess extends Process.Service<SyncProcess>()("@examples/DriftSyncProcess", {
+    effect: Effect.void,
+  }) {}
 
-    class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
-      "@examples/DriftBillingGroup",
-      [SyncProcess, EmailQueue] as const,
-    ) {}
+  class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+    "@examples/DriftBillingGroup",
+    [SyncProcess, EmailQueue] as const,
+  ) {}
 
-    class StaleBillingGroup extends ProcessGroup.Service<StaleBillingGroup>()(
-      "@examples/DriftBillingGroup",
-      [SyncProcess] as const,
-    ) {}
+  class StaleBillingGroup extends ProcessGroup.Service<StaleBillingGroup>()(
+    "@examples/DriftBillingGroup",
+    [SyncProcess] as const,
+  ) {}
 
-    class StaleBillingEndpoint extends ProcessManager.Endpoint<StaleBillingEndpoint>()(
-      StaleBillingGroup,
-      {
-        baseUrl: "http://127.0.0.1:32135",
-      },
-    ) {}
+  /**
+   * @effect-expect-leaking HttpClient.HttpClient
+   */
+  class StaleBillingEndpoint extends ProcessManager.Endpoint<StaleBillingEndpoint>()(
+    StaleBillingGroup,
+    {
+      baseUrl: "http://127.0.0.1:32135",
+    },
+  ) {}
 
-    yield* Effect.gen(function* () {
-      const localBilling = yield* BillingGroup;
+  return yield* Effect.gen(function* () {
+    const localBilling = yield* BillingGroup;
 
-      yield* ControlService.make({
-        port: 32135,
-        group: localBilling,
-      });
+    yield* ControlService.make({
+      port: 32135,
+      group: localBilling,
+    });
 
-      const remoteProgram = Effect.gen(function* () {
-        const remoteBilling = yield* StaleBillingGroup;
+    const remoteProgram = Effect.gen(function* () {
+      const remoteBilling = yield* StaleBillingGroup;
 
-        return yield* remoteBilling.status.pipe(Effect.flip);
-      }).pipe(
-        provideLayer(ProcessGroup.remoteLayer(
-          StaleBillingGroup,
-          StaleBillingEndpoint,
-        )),
-        provideLayer(StaleBillingEndpoint.layer),
-        provideLayer(NodeHttpClient.layerUndici),
-      );
-
-      const error = yield* remoteProgram;
-
-      yield* ensure(
-        error._tag === "ProcessGroupRemoteControlError",
-        "remote contract drift should surface as ProcessGroupRemoteControlError",
-      );
-      if (error._tag !== "ProcessGroupRemoteControlError") {
-        return yield* Effect.void;
-      }
-
-      yield* ensure(
-        error.reason.includes("Remote queue ids"),
-        "remote contract drift should explain the mismatched queue ids",
-      );
-
-      yield* Effect.logInfo(`local group id: ${BillingGroup.id}`);
-      yield* Effect.logInfo(`stale endpoint id: ${StaleBillingEndpoint.contract.id}`);
-      yield* Effect.logInfo(`remote contract drift error: ${error.reason}`);
+      return yield* remoteBilling.status.pipe(Effect.flip);
     }).pipe(
-      provideLayer(BillingGroup.layer),
-      provideLayer(EmailQueue.layer),
-      provideLayer(ProcessStore.layer),
+      provideLayer(ProcessGroup.remoteLayer(StaleBillingGroup, StaleBillingEndpoint)),
+      provideLayer(StaleBillingEndpoint.layer),
+      provideLayer(NodeHttpClient.layerUndici),
     );
-  }),
-);
+
+    const error = yield* remoteProgram;
+
+    yield* ensure(
+      error._tag === "ProcessGroupRemoteControlError",
+      "remote contract drift should surface as ProcessGroupRemoteControlError",
+    );
+    if (error._tag !== "ProcessGroupRemoteControlError") {
+      return yield* Effect.void;
+    }
+
+    yield* ensure(
+      error.reason.includes("Remote queue ids"),
+      "remote contract drift should explain the mismatched queue ids",
+    );
+
+    yield* Effect.logInfo(`local group id: ${BillingGroup.id}`);
+    yield* Effect.logInfo(`stale endpoint id: ${StaleBillingEndpoint.contract.id}`);
+    yield* Effect.logInfo(`remote contract drift error: ${error.reason}`);
+  }).pipe(
+    provideLayer(Layer.mergeAll(BillingGroup.layer, EmailQueue.layer, ProcessStore.layer)),
+  );
+}).pipe(Effect.scoped);
 
 void Effect.runPromise(
   program.pipe(
-    Effect.tap(() => Effect.logInfo("form:process-group-remote-contract-drift finished OK")),
+    Effect.tap(() =>
+      Effect.logInfo("form:process-group-remote-contract-drift finished OK"),
+    ),
   ),
 );

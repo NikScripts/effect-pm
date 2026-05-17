@@ -257,6 +257,30 @@ export interface QueueHandle<
 }
 
 /**
+ * Queue declaration metadata for {@link QueueResourceDefinition} and
+ * {@link QueueResourceServiceDefinition}.
+ *
+ * @public
+ */
+export interface QueueResourceMetadata<
+  Id extends string,
+  T,
+  R = void,
+  E = never,
+  EEnqueue = never,
+> {
+  readonly id: Id;
+  readonly kind: "queue";
+  readonly tag: Context.Service<Id, QueueHandle<T, R, E, EEnqueue>>;
+  /**
+   * Serializable item codec metadata when {@link QueueResourceConfig.itemSchema}
+   * was provided on {@link QueueResource.Service}. Used by typed {@link ProcessGroup}
+   * contracts for remote discovery and drift checks.
+   */
+  readonly item?: QueueItemCodecDescriptor;
+}
+
+/**
  * Canonical queue declaration that can be registered with a typed
  * ProcessGroup.
  *
@@ -268,17 +292,26 @@ export type QueueResourceDefinition<
   R = void,
   E = never,
   EEnqueue = never,
-> = Context.Service<Id, QueueHandle<T, R, E, EEnqueue>> & {
-  readonly id: Id;
-  readonly kind: "queue";
-  readonly tag: Context.Service<Id, QueueHandle<T, R, E, EEnqueue>>;
-  /**
-   * Serializable item codec metadata when {@link QueueResourceConfig.itemSchema}
-   * was provided on {@link QueueResource.Service}. Used by typed {@link ProcessGroup}
-   * contracts for remote discovery and drift checks.
-   */
-  readonly item?: QueueItemCodecDescriptor;
-};
+> = Context.Service<Id, QueueHandle<T, R, E, EEnqueue>> &
+  QueueResourceMetadata<Id, T, R, E, EEnqueue>;
+
+/**
+ * Class-based queue service declaration from {@link QueueResource.Service}.
+ *
+ * @public
+ */
+export interface QueueResourceServiceDefinition<
+  Self,
+  Id extends string,
+  T,
+  R = void,
+  E = never,
+  EEnqueue = never,
+> extends Context.ServiceClass<Self, Id, QueueHandle<T, R, E, EEnqueue>>,
+    Omit<QueueResourceMetadata<Id, T, R, E, EEnqueue>, "tag"> {
+  readonly tag: Context.Key<Self, QueueHandle<T, R, E, EEnqueue>>;
+  readonly layer: Layer.Layer<Self, never, Scope.Scope>;
+}
 
 /**
  * Context passed to the `effect` callback during item processing.
@@ -1265,31 +1298,43 @@ export const QueueResource = {
    * Effect.provide(EmailQueue.layer)
    * ```
    */
-  Service: <Self, T, R, E = never>() =>
-  <const Name extends string, const C extends QueueResourceConfig<T, R, E>>(
-    name: Name,
-    config: C,
-  ) => {
-    if (hasItemSchema(config)) {
-      const named = { ...config, name } satisfies QueueResourceConfigWithItemSchema<T, R, E>;
-      const base = Context.Service<Self, QueueHandle<T, R, E, QueueEnqueueErrors>>()(name);
-      const item = makeQueueItemCodecDescriptor(name, config.itemSchema);
+  Service: <Self, T, R, E = never>() => {
+    function queueResourceService<const Name extends string>(
+      name: Name,
+      config: QueueResourceConfigWithoutItemSchema<T, R, E>,
+    ): QueueResourceServiceDefinition<Self, Name, T, R, E, never>;
+    function queueResourceService<const Name extends string>(
+      name: Name,
+      config: QueueResourceConfigWithItemSchema<T, R, E>,
+    ): QueueResourceServiceDefinition<Self, Name, T, R, E, QueueEnqueueErrors>;
+    function queueResourceService<const Name extends string>(
+      name: Name,
+      config: QueueResourceConfig<T, R, E>,
+    ):
+      | QueueResourceServiceDefinition<Self, Name, T, R, E, never>
+      | QueueResourceServiceDefinition<Self, Name, T, R, E, QueueEnqueueErrors> {
+      if (hasItemSchema(config)) {
+        const named = { ...config, name } satisfies QueueResourceConfigWithItemSchema<T, R, E>;
+        const base = Context.Service<Self, QueueHandle<T, R, E, QueueEnqueueErrors>>()(name);
+        const item = makeQueueItemCodecDescriptor(name, config.itemSchema);
+        return Object.assign(base, {
+          id: name,
+          kind: queueResourceKind,
+          tag: base,
+          layer: queueResourceLayer(base, named),
+          item,
+        });
+      }
+      const named = { ...config, name } satisfies QueueResourceConfigWithoutItemSchema<T, R, E>;
+      const base = Context.Service<Self, QueueHandle<T, R, E, never>>()(name);
       return Object.assign(base, {
         id: name,
         kind: queueResourceKind,
         tag: base,
         layer: queueResourceLayer(base, named),
-        item,
       });
     }
-    const named = { ...config, name } satisfies QueueResourceConfigWithoutItemSchema<T, R, E>;
-    const base = Context.Service<Self, QueueHandle<T, R, E, never>>()(name);
-    return Object.assign(base, {
-      id: name,
-      kind: queueResourceKind,
-      tag: base,
-      layer: queueResourceLayer(base, named),
-    });
+    return queueResourceService;
   },
 
   /**

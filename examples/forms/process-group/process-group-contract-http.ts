@@ -5,7 +5,7 @@
  */
 
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
-import { Effect, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import {
   ControlService,
   Process,
@@ -23,8 +23,7 @@ interface EmailJob {
   readonly subject: string;
 }
 
-const program = Effect.scoped(
-  Effect.gen(function* () {
+const program = Effect.gen(function* () {
     class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()("@examples/ContractEmailQueue", {
       effect: (_email: EmailJob) => Effect.void,
     }) {}
@@ -33,7 +32,7 @@ const program = Effect.scoped(
       effect: Effect.void,
     }) {}
 
-    yield* Effect.gen(function* () {
+    return yield* Effect.gen(function* () {
       const group = yield* ProcessGroup.make("@examples/ContractGroup", [
         ContractProcess,
         EmailQueue,
@@ -54,7 +53,6 @@ const program = Effect.scoped(
         `contract route process ids: ${contract.processes.map((p) => p.id).join(", ")}`,
       );
 
-      // Remote client validates contract then calls typed process controls over HTTP.
       const manager = ProcessManager.connect({
         baseUrl: "http://127.0.0.1:32125",
         contract: group.contract,
@@ -68,15 +66,16 @@ const program = Effect.scoped(
         `remote manager status success: ${String(remoteStatus.success)}`,
       );
     }).pipe(
-      provideLayer(EmailQueue.layer),
-      provideLayer(ProcessStore.layer),
-      provideLayer(NodeHttpClient.layerUndici),
+      provideLayer(
+        Layer.mergeAll(
+          EmailQueue.layer,
+          ProcessStore.layer,
+          NodeHttpClient.layerUndici,
+        ),
+      ),
     );
-  }),
-);
+  }).pipe(Effect.scoped);
 
 void Effect.runPromise(
-  program.pipe(
-    Effect.tap(() => Effect.logInfo("form:process-group-contract-http finished OK")),
-  ),
+  program.pipe(Effect.tap(() => Effect.logInfo("form:process-group-contract-http finished OK"))),
 );

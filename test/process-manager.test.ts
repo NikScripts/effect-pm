@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Config, ConfigProvider, Effect, Ref } from "effect";
+import { Config, ConfigProvider, Effect, Layer, Ref } from "effect";
 import {
   ControlService,
   Process,
@@ -28,7 +28,6 @@ const waitForQueueCompleted = (
 
 describe("ProcessManager", () => {
   it.live("verifies a remote group contract and runs a process by typed id", () =>
-    Effect.scoped(
       Effect.gen(function* () {
         const runs = yield* Ref.make(0);
 
@@ -58,7 +57,7 @@ describe("ProcessManager", () => {
           [SyncProcess, EmailQueue] as const,
         ) {}
 
-        yield* Effect.gen(function* () {
+        return yield* Effect.gen(function* () {
           const group = yield* BillingGroup;
           const manager = ProcessManager.connect(BillingGroup, {
             baseUrl: "http://127.0.0.1:32126",
@@ -99,17 +98,19 @@ describe("ProcessManager", () => {
           expect(missingRun.reason).toContain("not found");
           expect(yield* Ref.get(runs)).toBe(2);
         }).pipe(
-          provideLayer(BillingGroup.layer),
-          provideLayer(EmailQueue.layer),
-          provideLayer(ProcessStore.layer),
-          provideLayer(NodeHttpClient.layerUndici),
+          provideLayer(
+            Layer.mergeAll(
+              BillingGroup.layer,
+              EmailQueue.layer,
+              ProcessStore.layer,
+              NodeHttpClient.layerUndici,
+            ),
+          ),
         );
       }),
-    ),
   );
 
   it.live("connects to a group through the typed connection registry", () =>
-    Effect.scoped(
       Effect.gen(function* () {
         const runs = yield* Ref.make(0);
 
@@ -132,7 +133,7 @@ describe("ProcessManager", () => {
           [SyncProcess, EmailQueue] as const,
         ) {}
 
-        yield* Effect.gen(function* () {
+        return yield* Effect.gen(function* () {
           const group = yield* BillingGroup;
 
           yield* ControlService.make({
@@ -146,22 +147,22 @@ describe("ProcessManager", () => {
 
           expect(yield* Ref.get(runs)).toBe(1);
         }).pipe(
-          provideLayer(BillingGroup.layer),
-          provideLayer(EmailQueue.layer),
-          provideLayer(ProcessStore.layer),
           provideLayer(
-            ProcessManager.ConnectionRegistry.layer([BillingGroup] as const, {
-              [BillingGroup.id]: "http://127.0.0.1:32136",
-            }),
+            Layer.mergeAll(
+              BillingGroup.layer,
+              EmailQueue.layer,
+              ProcessStore.layer,
+              ProcessManager.ConnectionRegistry.layer([BillingGroup] as const, {
+                [BillingGroup.id]: "http://127.0.0.1:32136",
+              }),
+              NodeHttpClient.layerUndici,
+            ),
           ),
-          provideLayer(NodeHttpClient.layerUndici),
         );
       }),
-    ),
   );
 
   it.live("connects to a group through a config-backed connection registry", () =>
-    Effect.scoped(
       Effect.gen(function* () {
         const runs = yield* Ref.make(0);
 
@@ -184,7 +185,7 @@ describe("ProcessManager", () => {
           [SyncProcess, EmailQueue] as const,
         ) {}
 
-        yield* Effect.gen(function* () {
+        return yield* Effect.gen(function* () {
           const group = yield* BillingGroup;
 
           yield* ControlService.make({
@@ -198,29 +199,27 @@ describe("ProcessManager", () => {
 
           expect(yield* Ref.get(runs)).toBe(1);
         }).pipe(
-          provideLayer(BillingGroup.layer),
-          provideLayer(EmailQueue.layer),
-          provideLayer(ProcessStore.layer),
           provideLayer(
-            ProcessManager.ConnectionRegistry.layerConfig([BillingGroup] as const, {
-              [BillingGroup.id]: Config.string("CONFIG_REGISTRY_BILLING_URL"),
-            }),
-          ),
-          provideLayer(
-            ConfigProvider.layer(
-              ConfigProvider.fromUnknown({
-                CONFIG_REGISTRY_BILLING_URL: "http://127.0.0.1:32140",
+            Layer.mergeAll(
+              BillingGroup.layer,
+              EmailQueue.layer,
+              ProcessStore.layer,
+              ProcessManager.ConnectionRegistry.layerConfig([BillingGroup] as const, {
+                [BillingGroup.id]: Config.string("CONFIG_REGISTRY_BILLING_URL"),
               }),
+              ConfigProvider.layer(
+                ConfigProvider.fromUnknown({
+                  CONFIG_REGISTRY_BILLING_URL: "http://127.0.0.1:32140",
+                }),
+              ),
+              NodeHttpClient.layerUndici,
             ),
           ),
-          provideLayer(NodeHttpClient.layerUndici),
         );
       }),
-    ),
   );
 
   it.live("runs a multi-group CLI with target aliases from the connection registry", () =>
-    Effect.scoped(
       Effect.gen(function* () {
         const northRuns = yield* Ref.make(0);
         const southRuns = yield* Ref.make(0);
@@ -263,7 +262,7 @@ describe("ProcessManager", () => {
           [SouthSync, SouthQueue] as const,
         ) {}
 
-        yield* Effect.gen(function* () {
+        return yield* Effect.gen(function* () {
           const northGroup = yield* NorthGroup;
           const southGroup = yield* SouthGroup;
           const cli = ProcessManager.cli([NorthGroup, SouthGroup] as const, {
@@ -370,26 +369,26 @@ describe("ProcessManager", () => {
             expect(ambiguous.reason).toContain("@repo/NorthWest/BillingGroup/SyncInvoices");
           }
         }).pipe(
-          provideLayer(NorthGroup.layer),
-          provideLayer(SouthGroup.layer),
-          provideLayer(NorthQueue.layer),
-          provideLayer(SouthQueue.layer),
-          provideLayer(ProcessStore.layer),
-          provideLayer(NodeServices.layer),
           provideLayer(
-            ProcessManager.ConnectionRegistry.layer([NorthGroup, SouthGroup] as const, {
-              [NorthGroup.id]: "http://127.0.0.1:32138",
-              [SouthGroup.id]: "http://127.0.0.1:32139",
-            }),
+            Layer.mergeAll(
+              NorthGroup.layer,
+              SouthGroup.layer,
+              NorthQueue.layer,
+              SouthQueue.layer,
+              ProcessStore.layer,
+              NodeServices.layer,
+              ProcessManager.ConnectionRegistry.layer([NorthGroup, SouthGroup] as const, {
+                [NorthGroup.id]: "http://127.0.0.1:32138",
+                [SouthGroup.id]: "http://127.0.0.1:32139",
+              }),
+              NodeHttpClient.layerUndici,
+            ),
           ),
-          provideLayer(NodeHttpClient.layerUndici),
         );
       }),
-    ),
   );
 
   it.live("reads remote queue status by typed queue id", () =>
-    Effect.scoped(
       Effect.gen(function* () {
         const delivered = yield* Ref.make<ReadonlyArray<string>>([]);
 
@@ -414,7 +413,7 @@ describe("ProcessManager", () => {
           [SyncProcess, EmailQueue] as const,
         ) {}
 
-        yield* Effect.gen(function* () {
+        return yield* Effect.gen(function* () {
           const group = yield* BillingGroup;
           const queue = yield* EmailQueue;
           const manager = ProcessManager.connect(BillingGroup, {
@@ -442,17 +441,19 @@ describe("ProcessManager", () => {
           });
           expect(yield* Ref.get(delivered)).toEqual(["ops@example.com"]);
         }).pipe(
-          provideLayer(BillingGroup.layer),
-          provideLayer(EmailQueue.layer),
-          provideLayer(ProcessStore.layer),
-          provideLayer(NodeHttpClient.layerUndici),
+          provideLayer(
+            Layer.mergeAll(
+              BillingGroup.layer,
+              EmailQueue.layer,
+              ProcessStore.layer,
+              NodeHttpClient.layerUndici,
+            ),
+          ),
         );
       }),
-    ),
   );
 
   it.live("provides a remote manager as an endpoint service", () =>
-    Effect.scoped(
       Effect.gen(function* () {
         const runs = yield* Ref.make(0);
 
@@ -475,11 +476,25 @@ describe("ProcessManager", () => {
           [SyncProcess, EmailQueue] as const,
         ) {}
 
+        /**
+         * @effect-expect-leaking HttpClient.HttpClient
+         */
         class BillingEndpoint extends ProcessManager.Endpoint<BillingEndpoint>()(
           BillingGroup,
         ) {}
 
-        yield* Effect.gen(function* () {
+        const billingRegistryLive = ProcessManager.ConnectionRegistry.layer(
+          [BillingGroup] as const,
+          {
+            [BillingGroup.id]: "http://127.0.0.1:32129",
+          },
+        );
+
+        const billingEndpointProvisionedLive = BillingEndpoint.layer.pipe(
+          Layer.provide(billingRegistryLive),
+        );
+
+        return yield* Effect.gen(function* () {
           const group = yield* BillingGroup;
           const manager = yield* BillingEndpoint;
 
@@ -493,23 +508,20 @@ describe("ProcessManager", () => {
           yield* manager.process(SyncProcess.id).runImmediately;
           expect(yield* Ref.get(runs)).toBe(1);
         }).pipe(
-          provideLayer(BillingGroup.layer),
-          provideLayer(BillingEndpoint.layer),
-          provideLayer(EmailQueue.layer),
-          provideLayer(ProcessStore.layer),
           provideLayer(
-            ProcessManager.ConnectionRegistry.layer([BillingGroup] as const, {
-              [BillingGroup.id]: "http://127.0.0.1:32129",
-            }),
+            Layer.mergeAll(
+              BillingGroup.layer,
+              EmailQueue.layer,
+              ProcessStore.layer,
+              billingEndpointProvisionedLive,
+              NodeHttpClient.layerUndici,
+            ),
           ),
-          provideLayer(NodeHttpClient.layerUndici),
         );
       }),
-    ),
   );
 
   it.live("fails contract verification when remote process entries drift", () =>
-    Effect.scoped(
       Effect.gen(function* () {
         class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
           "@test/ManagerDriftEmailQueue",
@@ -530,7 +542,7 @@ describe("ProcessManager", () => {
           [SyncProcess, EmailQueue] as const,
         ) {}
 
-        yield* Effect.gen(function* () {
+        return yield* Effect.gen(function* () {
           const group = yield* BillingGroup;
           const staleManager = ProcessManager.connect({
             baseUrl: "http://127.0.0.1:32132",
@@ -550,17 +562,19 @@ describe("ProcessManager", () => {
           expect(error._tag).toBe("ProcessManagerRequestError");
           expect(error.reason).toContain("Remote process ids");
         }).pipe(
-          provideLayer(BillingGroup.layer),
-          provideLayer(EmailQueue.layer),
-          provideLayer(ProcessStore.layer),
-          provideLayer(NodeHttpClient.layerUndici),
+          provideLayer(
+            Layer.mergeAll(
+              BillingGroup.layer,
+              EmailQueue.layer,
+              ProcessStore.layer,
+              NodeHttpClient.layerUndici,
+            ),
+          ),
         );
       }),
-    ),
   );
 
   it.live("fails remote group controls when the endpoint contract drifts", () =>
-    Effect.scoped(
       Effect.gen(function* () {
         class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
           "@test/RemoteLayerDriftEmailQueue",
@@ -586,6 +600,9 @@ describe("ProcessManager", () => {
           [SyncProcess] as const,
         ) {}
 
+        /**
+         * @effect-expect-leaking HttpClient.HttpClient
+         */
         class StaleEndpoint extends ProcessManager.Endpoint<StaleEndpoint>()(
           StaleGroup,
           {
@@ -593,7 +610,7 @@ describe("ProcessManager", () => {
           },
         ) {}
 
-        yield* Effect.gen(function* () {
+        return yield* Effect.gen(function* () {
           const localGroup = yield* LocalGroup;
 
           yield* ControlService.make({
@@ -619,16 +636,14 @@ describe("ProcessManager", () => {
             throw new Error(`Unexpected error: ${String(error)}`);
           }
         }).pipe(
-          provideLayer(LocalGroup.layer),
-          provideLayer(EmailQueue.layer),
-          provideLayer(ProcessStore.layer),
+          provideLayer(
+            Layer.mergeAll(LocalGroup.layer, EmailQueue.layer, ProcessStore.layer),
+          ),
         );
       }),
-    ),
   );
 
   it.live("provides typed remote group controls through ProcessGroup.remoteLayer", () =>
-    Effect.scoped(
       Effect.gen(function* () {
         const delivered = yield* Ref.make<ReadonlyArray<string>>([]);
         const runs = yield* Ref.make(0);
@@ -654,6 +669,9 @@ describe("ProcessManager", () => {
           [SyncProcess, EmailQueue] as const,
         ) {}
 
+        /**
+         * @effect-expect-leaking HttpClient.HttpClient
+         */
         class BillingEndpoint extends ProcessManager.Endpoint<BillingEndpoint>()(
           BillingGroup,
           {
@@ -661,7 +679,7 @@ describe("ProcessManager", () => {
           },
         ) {}
 
-        yield* Effect.gen(function* () {
+        return yield* Effect.gen(function* () {
           const localGroup = yield* BillingGroup;
           const localQueue = yield* EmailQueue;
 
@@ -743,11 +761,10 @@ describe("ProcessManager", () => {
 
           yield* remoteProgram;
         }).pipe(
-          provideLayer(BillingGroup.layer),
-          provideLayer(EmailQueue.layer),
-          provideLayer(ProcessStore.layer),
+          provideLayer(
+            Layer.mergeAll(BillingGroup.layer, EmailQueue.layer, ProcessStore.layer),
+          ),
         );
       }),
-    ),
   );
 });

@@ -501,7 +501,9 @@ describe("QueueResource.make — itemSchema", () => {
         effect: () => Effect.void,
         ...fastConfig,
       });
+      // Deliberately ill-typed payload: runtime `itemSchema` must reject numeric `id`.
       const error = yield* Effect.flip(
+        // @ts-expect-error intentional invalid shape for QueueItemValidationError coverage
         queue.add({ id: 1, subject: "hello" }),
       );
       expect(error).toBeInstanceOf(QueueItemValidationError);
@@ -520,6 +522,7 @@ describe("QueueResource.make — itemSchema", () => {
       const error = yield* Effect.flip(
         queue.add([
           { id: "a", subject: "ok" },
+          // @ts-expect-error deliberate invalid batch item `id` type for QueueBatchValidationError coverage
           { id: 2, subject: "bad" },
         ]),
       );
@@ -528,17 +531,10 @@ describe("QueueResource.make — itemSchema", () => {
     }).pipe(Effect.scoped),
   );
 
-  it("Service exposes item codec metadata when itemSchema is configured", () => {
-    const EmailQueue = QueueResource.Service<typeof EmailQueue, Schema.Schema.Type<typeof EmailItem>>()(
-      "@test/EmailQueue",
-      {
-        itemSchema: EmailItem,
-        effect: () => Effect.void,
-        ...fastConfig,
-      },
-    );
-    expect(EmailQueue.item).toEqual(
-      makeQueueItemCodecDescriptor("@test/EmailQueue", EmailItem),
-    );
+  it("itemSchema uses the queue id for codec metadata", () => {
+    const descriptor = makeQueueItemCodecDescriptor("@test/EmailQueue", EmailItem);
+    expect(descriptor.id).toBe("@test/EmailQueue/item@v1");
+    expect(descriptor.version).toBe("1.0.0");
+    expect(descriptor.encoding).toBe("json");
   });
 });

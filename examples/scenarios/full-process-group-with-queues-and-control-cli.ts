@@ -219,7 +219,7 @@ const program = Effect.gen(function* () {
   yield* group.awaitShutdown({
     logMessage: (signal) => `📡 Received ${signal}, shutting down gracefully...`,
   });
-}).pipe(Effect.scoped);
+});
 
 /**
  * ============================================================================
@@ -263,6 +263,7 @@ void Effect.runPromise(
         Layer.succeed(References.MinimumLogLevel, "Debug"),
       ),
     ),
+    Effect.scoped,
     Effect.tap(() => Effect.logInfo("✅ Demo shutdown complete")),
   ),
 );

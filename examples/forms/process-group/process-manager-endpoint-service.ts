@@ -6,7 +6,7 @@
  */
 
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
-import { Effect, Ref } from "effect";
+import { Effect, Layer, Ref } from "effect";
 import {
   ControlService,
   Process,
@@ -21,82 +21,95 @@ interface EmailJob {
   readonly to: string;
 }
 
-const program = Effect.scoped(
-  Effect.gen(function* () {
-    const sent = yield* Ref.make<ReadonlyArray<string>>([]);
-    const runs = yield* Ref.make(0);
+const program = Effect.gen(function* () {
+  const sent = yield* Ref.make<ReadonlyArray<string>>([]);
+  const runs = yield* Ref.make(0);
 
-    class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()(
-      "@examples/EndpointEmailQueue",
-      {
-        effect: (email) =>
-          Ref.update(sent, (emails) => [...emails, email.to]),
-      },
-    ) {}
+  class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()(
+    "@examples/EndpointEmailQueue",
+    {
+      effect: (email) =>
+        Ref.update(sent, (emails) => [...emails, email.to]),
+    },
+  ) {}
 
-    class SyncProcess extends Process.Service<SyncProcess>()(
-      "@examples/EndpointSyncProcess",
-      {
-        effect: Ref.update(runs, (count) => count + 1),
-      },
-    ) {}
+  class SyncProcess extends Process.Service<SyncProcess>()(
+    "@examples/EndpointSyncProcess",
+    {
+      effect: Ref.update(runs, (count) => count + 1),
+    },
+  ) {}
 
-    class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
-      "@examples/EndpointBillingGroup",
-      [SyncProcess, EmailQueue] as const,
-    ) {}
+  class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+    "@examples/EndpointBillingGroup",
+    [SyncProcess, EmailQueue] as const,
+  ) {}
 
-    class BillingEndpoint extends ProcessManager.Endpoint<BillingEndpoint>()(
-      BillingGroup,
-    ) {}
+  /**
+   * Registry-backed endpoint; callers intentionally surface HttpClient.HttpClient.
+   *
+   * @effect-expect-leaking HttpClient.HttpClient
+   */
+  class BillingEndpoint extends ProcessManager.Endpoint<BillingEndpoint>()(
+    BillingGroup,
+  ) {}
 
-    yield* Effect.gen(function* () {
-      const group = yield* BillingGroup;
-      const manager = yield* BillingEndpoint;
+  const billingRegistryLive = ProcessManager.ConnectionRegistry.layer(
+    [BillingGroup] as const,
+    {
+      [BillingGroup.id]: "http://127.0.0.1:32130",
+    },
+  );
 
-      yield* ControlService.make({
-        port: 32130,
-        group,
-      });
+  const billingEndpointProvisionedLive = BillingEndpoint.layer.pipe(
+    Layer.provide(billingRegistryLive),
+  );
 
-      yield* manager.verifyContract;
-      yield* manager.process(SyncProcess.id).runImmediately;
+  return yield* Effect.gen(function* () {
+    const group = yield* BillingGroup;
+    const manager = yield* BillingEndpoint;
 
-      const remoteGroupProgram = Effect.gen(function* () {
-        const remoteBilling = yield* BillingGroup;
+    yield* ControlService.make({
+      port: 32130,
+      group,
+    });
 
-        yield* remoteBilling.process(SyncProcess).runImmediately;
-        yield* remoteBilling.queue(EmailQueue).pause;
-        yield* remoteBilling.queue(EmailQueue).resume;
-      }).pipe(
-        provideLayer(ProcessGroup.remoteLayer(BillingGroup, BillingEndpoint)),
-        provideLayer(BillingEndpoint.layer),
-        provideLayer(NodeHttpClient.layerUndici),
-      );
+    yield* manager.verifyContract;
+    yield* manager.process(SyncProcess.id).runImmediately;
 
-      yield* remoteGroupProgram;
+    const remoteGroupProgram = Effect.gen(function* () {
+      const remoteBilling = yield* BillingGroup;
 
-      const status = yield* manager.status;
-      yield* Effect.logInfo(`endpoint contract id: ${BillingEndpoint.contract.id}`);
-      yield* Effect.logInfo(`remote process runs: ${String(yield* Ref.get(runs))}`);
-      yield* Effect.logInfo(`remote status success: ${String(status.success)}`);
+      yield* remoteBilling.process(SyncProcess).runImmediately;
+      yield* remoteBilling.queue(EmailQueue).pause;
+      yield* remoteBilling.queue(EmailQueue).resume;
     }).pipe(
-      provideLayer(BillingGroup.layer),
-      provideLayer(BillingEndpoint.layer),
-      provideLayer(EmailQueue.layer),
-      provideLayer(ProcessStore.layer),
-      provideLayer(
-        ProcessManager.ConnectionRegistry.layer([BillingGroup] as const, {
-          [BillingGroup.id]: "http://127.0.0.1:32130",
-        }),
-      ),
+      provideLayer(ProcessGroup.remoteLayer(BillingGroup, BillingEndpoint)),
+      provideLayer(billingEndpointProvisionedLive),
       provideLayer(NodeHttpClient.layerUndici),
     );
-  }),
-);
+
+    yield* remoteGroupProgram;
+
+    const status = yield* manager.status;
+    yield* Effect.logInfo(`endpoint contract id: ${BillingEndpoint.contract.id}`);
+    yield* Effect.logInfo(`remote process runs: ${String(yield* Ref.get(runs))}`);
+    yield* Effect.logInfo(`remote status success: ${String(status.success)}`);
+  }).pipe(
+    provideLayer(
+      Layer.mergeAll(
+        BillingGroup.layer,
+        EmailQueue.layer,
+        ProcessStore.layer,
+        billingEndpointProvisionedLive,
+        NodeHttpClient.layerUndici,
+      ),
+    ),
+  );
+}).pipe(Effect.scoped);
 
 void Effect.runPromise(
-  program.pipe(
-    Effect.tap(() => Effect.logInfo("form:process-manager-endpoint-service finished OK")),
+  program.pipe(Effect.tap(() =>
+    Effect.logInfo("form:process-manager-endpoint-service finished OK")),
   ),
 );

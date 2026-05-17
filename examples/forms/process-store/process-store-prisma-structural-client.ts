@@ -5,7 +5,7 @@
  * Run: `npx tsx examples/forms/process-store/process-store-prisma-structural-client.ts`
  */
 
-import { Clock, Effect } from "effect";
+import { Clock, DateTime, Effect } from "effect";
 import { ProcessStore } from "../../../src/ProcessStore";
 import { provideLayer } from "../../../src/provideLayer";
 import {
@@ -53,7 +53,7 @@ const makePlaceholderClient = (): PrismaProcessStoreClient => {
       entityId: input.entityId,
       attributes: input.attributes ?? null,
       payload: input.payload,
-      createdAt: new Date(0),
+      createdAt: DateTime.toDateUtc(DateTime.makeUnsafe(0)),
     };
     rows.push(row);
     return row;

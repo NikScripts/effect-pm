@@ -6,7 +6,7 @@
  */
 
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
-import { Effect, Ref } from "effect";
+import { Effect, Layer, Ref } from "effect";
 import {
   ControlService,
   Process,
@@ -28,8 +28,7 @@ const ensure = (
 ): Effect.Effect<void> =>
   condition ? Effect.void : Effect.die(new Error(message));
 
-const program = Effect.scoped(
-  Effect.gen(function* () {
+const program = Effect.gen(function* () {
     const sent = yield* Ref.make<ReadonlyArray<string>>([]);
     const runs = yield* Ref.make(0);
 
@@ -55,6 +54,9 @@ const program = Effect.scoped(
       [SyncProcess, EmailQueue] as const,
     ) {}
 
+    /**
+     * @effect-expect-leaking HttpClient.HttpClient
+     */
     class BillingEndpoint extends ProcessManager.Endpoint<BillingEndpoint>()(
       BillingGroup,
       {
@@ -62,27 +64,22 @@ const program = Effect.scoped(
       },
     ) {}
 
-    yield* Effect.gen(function* () {
+    return yield* Effect.gen(function* () {
       const localGroup = yield* BillingGroup;
       const localQueue = yield* EmailQueue;
 
-      // Local runtime ownership stays local: BillingGroup.layer owns fibers and
-      // QueueResource.layer owns queue workers. ControlService exposes them.
       yield* ControlService.make({
         port: 32132,
         group: localGroup,
       });
 
       const remoteProgram = Effect.gen(function* () {
-        // This is still the BillingGroup service key, but the implementation is
-        // network-backed by BillingEndpoint through ProcessGroup.remoteLayer.
         const remoteBilling = yield* BillingGroup;
         const remoteEmailQueue = remoteBilling.queue(EmailQueue);
 
         yield* remoteBilling.process(SyncProcess).runImmediately;
         yield* ensure((yield* Ref.get(runs)) === 1, "remote process did not run");
 
-        // The queue starts paused so pending status and clear are deterministic.
         yield* remoteEmailQueue.pause;
         yield* localQueue.add({ to: "clear-me@example.com" });
 
@@ -140,9 +137,7 @@ const program = Effect.scoped(
 
         yield* Effect.logInfo(`remote group id: ${remoteBilling.id}`);
         yield* Effect.logInfo(`remote process runs: ${String(yield* Ref.get(runs))}`);
-        yield* Effect.logInfo(
-          `remote queue completed: ${String(completedStatus.completed)}`,
-        );
+        yield* Effect.logInfo(`remote queue completed: ${String(completedStatus.completed)}`);
         yield* Effect.logInfo(
           `remote queue enqueue unsupported: ${enqueueError.reason}`,
         );
@@ -154,15 +149,12 @@ const program = Effect.scoped(
 
       yield* remoteProgram;
     }).pipe(
-      provideLayer(BillingGroup.layer),
-      provideLayer(EmailQueue.layer),
-      provideLayer(ProcessStore.layer),
+      provideLayer(Layer.mergeAll(BillingGroup.layer, EmailQueue.layer, ProcessStore.layer)),
     );
-  }),
-);
+  }).pipe(Effect.scoped);
 
 void Effect.runPromise(
-  program.pipe(
-    Effect.tap(() => Effect.logInfo("form:process-group-remote-layer finished OK")),
+  program.pipe(Effect.tap(() =>
+    Effect.logInfo("form:process-group-remote-layer finished OK")),
   ),
 );

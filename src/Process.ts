@@ -853,7 +853,10 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
  *
  * @public
  */
-export type ProcessSupervisorRequirements<C extends ProcessMakeOptions<any, any>> =
+// `E` is covariant in `Effect.Effect<void, E, RUser>` (top = `unknown`),
+// `RUser` is contravariant (top = `never`); using these as the upper bound
+// makes the constraint variance-correct without resorting to `any`.
+export type ProcessSupervisorRequirements<C extends ProcessMakeOptions<unknown, never>> =
   C extends ProcessMakeOptions<infer _E, infer RUser>
     ? RUser
     : never;
@@ -889,8 +892,8 @@ export type ProcessMakeConfig<E, RUser> = ProcessMakeOptions<E, RUser> & {
   readonly name: string;
 };
 
-const resolveScheduleLayer = (
-  config: Pick<ProcessMakeOptions<any, any>, "schedule" | "scheduleLayer">,
+const resolveScheduleLayer = <E, RUser>(
+  config: Pick<ProcessMakeOptions<E, RUser>, "schedule" | "scheduleLayer">,
 ): AnyScheduleLayer => {
   if (config.scheduleLayer !== undefined) {
     return config.scheduleLayer;

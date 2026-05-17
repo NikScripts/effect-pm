@@ -178,6 +178,8 @@ export interface RemoteQueueControls {
 /**
  * Typed remote client for a single ProcessGroup contract.
  *
+ * @effect-expect-leaking HttpClient.HttpClient
+ *
  * @public
  */
 export interface RemoteProcessManager<Contract extends AnyProcessGroupContract> {
@@ -203,6 +205,9 @@ export interface RemoteProcessManager<Contract extends AnyProcessGroupContract> 
 
 /**
  * Injectable endpoint service for one remote ProcessGroup.
+ *
+ * @effect-expect-leaking HttpClient.HttpClient Remote requests need an HttpClient
+ * configured at the application's edge.
  *
  * @public
  */
@@ -1084,6 +1089,11 @@ function connect(
 }
 
 function makeEndpointFactory<Self>() {
+  /**
+   * Endpoint services route remote control calls using `HttpClient` from the ambient context.
+   *
+   * @effect-expect-leaking HttpClient.HttpClient
+   */
   function endpoint<const Source extends ConnectionSource<AnyProcessGroupContract>>(
     group: Source,
   ): ProcessManagerEndpoint<
