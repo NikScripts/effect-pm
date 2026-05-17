@@ -27,6 +27,7 @@ numbered plan details.
 | 09 | [Strict any/unknown rule](./09-strict-any-unknown.md) | Re-enable `anyUnknownInErrorContext` when the queue/process typing boundary can support it. |
 | 10 | [Plan 01 phase one: ProcessStore read foundation](./10-process-store-phase-one.md) | Detailed first implementation slice for plan **01**; reconcile with plan **11** before adding more feature-specific store methods. |
 | 11 | [Runtime state, listener hooks, history, and mutable config](./11-runtime-state-hooks-and-config.md) | Planned direction for state snapshots/history, external listeners, stable storage primitives, per-resource data, and config changes after start. |
+| 12 | [Standalone instance spawns](./12-standalone-instance-spawns.md) | **`Process.spawn`** (multi-instance supervised processes outside **`ProcessGroup`**) plus **`suspend`/`wake`** vs schedule **`armed`**; mirrored **`QueueResource.open`** ergonomics and identity/logging conventions. |
 
 ## Historical implementation order
 

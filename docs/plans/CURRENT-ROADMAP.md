@@ -137,7 +137,10 @@ This phase remains deliberately deferred.
 Do not implement `Process.RemoteService`, `QueueResource.RemoteService`, or
 `ProcessGroup.remoteLayers` until these are resolved:
 
-- Lifecycle ownership for standalone process services.
+- Lifecycle ownership for standalone process services (**see
+  [12 - Standalone instance spawns](./12-standalone-instance-spawns.md)** for the
+  designed **`Process.spawn` / **`QueueResource.open`** isolation model vs
+  **`ProcessGroup`** fleet controls).
 - Honest checked error channels for local and remote service handles.
 - Queue `itemSchema` / codec contracts.
 - Per-entry remote provider wiring.
