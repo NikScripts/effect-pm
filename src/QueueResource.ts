@@ -23,10 +23,10 @@
  * import { QueueResource } from "@nikscripts/effect-pm"
  *
  * // Declare service via class factory
- * const EmailQueue = QueueResource.Service<typeof EmailQueue, Email, void, SmtpError>()(
+ * const EmailQueue = QueueResource.Service<typeof EmailQueue, Email, SmtpError, HttpClient.HttpClient>()(
  *   "@app/EmailQueue",
  *   {
- *     effect: (email, ctx) => sendEmail(email),
+ *     effect: (email, ctx) => sendEmail(email).pipe(Effect.asVoid),
  *     handler: (item, exit, ctx) =>
  *       Exit.match(exit, {
  *         onFailure: () => ctx.retry,
@@ -68,6 +68,7 @@ import {
   Schema,
   Scope,
   Semaphore,
+  Types,
 } from "effect";
 import {
   ProcessStore,
@@ -174,13 +175,24 @@ export class QueueBatchValidationError extends Data.TaggedError("QueueBatchValid
  * Enqueue a single item or a readonly batch of items.
  *
  * @typeParam E - Validation errors when {@link QueueResourceConfig.itemSchema} is set
+ * @typeParam R - Dependencies needed to run enqueue-time hooks (`persist`, `onEnqueue`, …) when called from the ambient program
  *
  * @public
  */
-export interface QueueEnqueue<T, E = never> {
-  (item: T): Effect.Effect<void, E>;
-  (items: ReadonlyArray<T>): Effect.Effect<void, E>;
+export interface QueueEnqueue<T, E = never, R = never> {
+  (item: T): Effect.Effect<void, E, R>;
+  (items: ReadonlyArray<T>): Effect.Effect<void, E, R>;
 }
+
+/**
+ * Keeps **`E`** (worker failure channel) nominally observable on {@link QueueHandle}
+ * without adding runtime surface area.
+ *
+ * @internal
+ */
+export type QueueHandlePhantomWorkerFailures<E = never> = {
+  readonly _phantomWorkerEffectFailure?: Types.NoInfer<E>;
+};
 
 /**
  * The service interface returned from `yield* MyQueue`.
@@ -192,9 +204,9 @@ export interface QueueEnqueue<T, E = never> {
  * Enqueue methods accept either a single item or a readonly array of items.
  *
  * @typeParam T - Item type processed by this queue
- * @typeParam _R - Success type of the item effect (phantom, used for type inference)
- * @typeParam _E - Error type of the item effect (phantom, used for type inference)
+ * @typeParam E - Recoverable/item failure channel of the worker `effect`
  * @typeParam EEnqueue - Errors from schema-backed enqueue validation (see {@link QueueResourceConfig.itemSchema})
+ * @typeParam R - Dependencies required while running worker `effect`, `handler`, hooks, and enqueue helpers
  *
  * @example
  * ```ts
@@ -208,18 +220,17 @@ export interface QueueEnqueue<T, E = never> {
  *
  * @public
  */
-export interface QueueHandle<
+export interface QueueHandleApi<
   in out T,
-  out _R = void,
-  out _E = never,
-  out EEnqueue = never,
+  EEnqueue = never,
+  R = never,
 > {
   /** Enqueue items at **normal** priority. */
-  readonly add: QueueEnqueue<T, EEnqueue>;
+  readonly add: QueueEnqueue<T, EEnqueue, R>;
   /** Enqueue items at **high** priority (processed before normal and low). */
-  readonly prioritize: QueueEnqueue<T, EEnqueue>;
+  readonly prioritize: QueueEnqueue<T, EEnqueue, R>;
   /** Enqueue items at **low** priority (processed after high and normal). */
-  readonly defer: QueueEnqueue<T, EEnqueue>;
+  readonly defer: QueueEnqueue<T, EEnqueue, R>;
 
   /** Total pending items across all priority levels. */
   readonly size: Effect.Effect<number>;
@@ -257,6 +268,18 @@ export interface QueueHandle<
 }
 
 /**
+ * Priority queue surface for `yield*`able queue services (`T`, `E`, enqueue errors `EEnqueue`, requirements `R` last).
+ *
+ * @public
+ */
+export type QueueHandle<
+  T,
+  E = never,
+  EEnqueue = never,
+  R = never,
+> = QueueHandleApi<T, EEnqueue, R> & QueueHandlePhantomWorkerFailures<E>;
+
+/**
  * Queue declaration metadata for {@link QueueResourceDefinition} and
  * {@link QueueResourceServiceDefinition}.
  *
@@ -265,13 +288,13 @@ export interface QueueHandle<
 export interface QueueResourceMetadata<
   Id extends string,
   T,
-  R = void,
   E = never,
   EEnqueue = never,
+  R = never,
 > {
   readonly id: Id;
   readonly kind: "queue";
-  readonly tag: Context.Service<Id, QueueHandle<T, R, E, EEnqueue>>;
+  readonly tag: Context.Service<Id, QueueHandle<T, E, EEnqueue, R>>;
   /**
    * Serializable item codec metadata when {@link QueueResourceConfig.itemSchema}
    * was provided on {@link QueueResource.Service}. Used by typed {@link ProcessGroup}
@@ -289,11 +312,11 @@ export interface QueueResourceMetadata<
 export type QueueResourceDefinition<
   Id extends string,
   T,
-  R = void,
   E = never,
   EEnqueue = never,
-> = Context.Service<Id, QueueHandle<T, R, E, EEnqueue>> &
-  QueueResourceMetadata<Id, T, R, E, EEnqueue>;
+  R = never,
+> = Context.Service<Id, QueueHandle<T, E, EEnqueue, R>> &
+  QueueResourceMetadata<Id, T, E, EEnqueue, R>;
 
 /**
  * Class-based queue service declaration from {@link QueueResource.Service}.
@@ -304,13 +327,13 @@ export interface QueueResourceServiceDefinition<
   Self,
   Id extends string,
   T,
-  R = void,
   E = never,
   EEnqueue = never,
-> extends Context.ServiceClass<Self, Id, QueueHandle<T, R, E, EEnqueue>>,
-    Omit<QueueResourceMetadata<Id, T, R, E, EEnqueue>, "tag"> {
-  readonly tag: Context.Key<Self, QueueHandle<T, R, E, EEnqueue>>;
-  readonly layer: Layer.Layer<Self, never, never>;
+  R = never,
+> extends Context.ServiceClass<Self, Id, QueueHandle<T, E, EEnqueue, R>>,
+    Omit<QueueResourceMetadata<Id, T, E, EEnqueue, R>, "tag"> {
+  readonly tag: Context.Key<Self, QueueHandle<T, E, EEnqueue, R>>;
+  readonly layer: Layer.Layer<Self, never, R>;
 }
 
 /**
@@ -326,13 +349,13 @@ export interface QueueResourceServiceDefinition<
  *
  * @public
  */
-export interface EffectContext<T, EEnqueue = never> {
+export interface EffectContext<T, EEnqueue = never, R = never> {
   /** Enqueue derived items at normal priority. Self-enqueue is warned and dropped. */
-  readonly add: QueueEnqueue<T, EEnqueue>;
+  readonly add: QueueEnqueue<T, EEnqueue, R>;
   /** Enqueue derived items at high priority. Self-enqueue is warned and dropped. */
-  readonly prioritize: QueueEnqueue<T, EEnqueue>;
+  readonly prioritize: QueueEnqueue<T, EEnqueue, R>;
   /** Enqueue derived items at low priority. Self-enqueue is warned and dropped. */
-  readonly defer: QueueEnqueue<T, EEnqueue>;
+  readonly defer: QueueEnqueue<T, EEnqueue, R>;
   /** How many times this item has been processed (1 = first attempt). */
   readonly attempts: number;
   /** When the item first entered the queue as epoch millis (preserved across retries). */
@@ -355,19 +378,19 @@ export interface EffectContext<T, EEnqueue = never> {
  *
  * @public
  */
-export interface HandlerContext<T, EEnqueue = never> {
+export interface HandlerContext<T, EEnqueue = never, R = never> {
   /**
    * Re-enqueue this item at the same priority (back of the line).
    * Respects the `retries` limit — when exhausted, `onRetryExhausted` is called
    * and the item is NOT re-enqueued.
    */
-  readonly retry: Effect.Effect<void>;
+  readonly retry: Effect.Effect<void, never, R>;
   /** Enqueue items at normal priority (unguarded). */
-  readonly add: QueueEnqueue<T, EEnqueue>;
+  readonly add: QueueEnqueue<T, EEnqueue, R>;
   /** Enqueue items at high priority (unguarded). */
-  readonly prioritize: QueueEnqueue<T, EEnqueue>;
+  readonly prioritize: QueueEnqueue<T, EEnqueue, R>;
   /** Enqueue items at low priority (unguarded). */
-  readonly defer: QueueEnqueue<T, EEnqueue>;
+  readonly defer: QueueEnqueue<T, EEnqueue, R>;
   /** How many times this item has been processed (1 = first attempt). */
   readonly attempts: number;
   /** When the item first entered the queue as epoch millis (preserved across retries). */
@@ -380,8 +403,8 @@ export interface HandlerContext<T, EEnqueue = never> {
  * Configuration for {@link QueueResource.make}.
  *
  * @typeParam T - Item type
- * @typeParam R - Success type of the item effect
- * @typeParam E - Error type of the item effect
+ * @typeParam E - Failure channel surfaced as `Exit` failures from the worker `effect`
+ * @typeParam R - Dependencies required while running callbacks (`effect`, `handler`, and queue hooks forked alongside workers)
  *
  * @public
  */
@@ -390,7 +413,7 @@ export interface HandlerContext<T, EEnqueue = never> {
  *
  * @public
  */
-export interface QueueResourceConfigBase<T, R, E> {
+export interface QueueResourceConfigBase<T, E, R> {
   /** Queue name used for log annotations and error messages. @default "anonymous" */
   readonly name?: string;
   /** Start with processing paused. Call `resume` to begin. @default false */
@@ -415,7 +438,7 @@ export interface QueueResourceConfigBase<T, R, E> {
   readonly onRetryExhausted?: (
     item: T,
     cause: Cause.Cause<E>,
-  ) => Effect.Effect<void>;
+  ) => Effect.Effect<void, never, R>;
   /**
    * Persist items on enqueue (before processing). Called with the batch and
    * priority level. Errors are logged and swallowed (fire-and-forget).
@@ -423,7 +446,7 @@ export interface QueueResourceConfigBase<T, R, E> {
   readonly persist?: (
     items: ReadonlyArray<T>,
     priority: Priority,
-  ) => Effect.Effect<void>;
+  ) => Effect.Effect<void, never, R>;
   /**
    * Hook: fired after item(s) are enqueued. Receives the batch and priority.
    * Fire-and-forget — errors are logged and swallowed.
@@ -431,7 +454,7 @@ export interface QueueResourceConfigBase<T, R, E> {
   readonly onEnqueue?: (
     items: ReadonlyArray<T>,
     priority: Priority,
-  ) => Effect.Effect<void>;
+  ) => Effect.Effect<void, never, R>;
   /**
    * Hook: fired after each item's effect completes. Receives the item, its
    * Exit, and the elapsed Duration. Runs in a forked fiber (non-blocking).
@@ -439,14 +462,14 @@ export interface QueueResourceConfigBase<T, R, E> {
    */
   readonly onComplete?: (
     item: T,
-    exit: Exit.Exit<R, E>,
+    exit: Exit.Exit<void, E>,
     elapsed: Duration.Duration,
-  ) => Effect.Effect<void>;
+  ) => Effect.Effect<void, never, R>;
   /**
    * Hook: fired when all priority queues become empty (after drain, not idle).
    * Fire-and-forget — errors are logged and swallowed.
    */
-  readonly onEmpty?: Effect.Effect<void>;
+  readonly onEmpty?: Effect.Effect<void, never, R>;
 }
 
 /**
@@ -456,27 +479,28 @@ export interface QueueResourceConfigBase<T, R, E> {
  *
  * @public
  */
-export type QueueResourceConfigWithoutItemSchema<T, R, E> = QueueResourceConfigBase<T, R, E> & {
+export type QueueResourceConfigWithoutItemSchema<T, E, R> = QueueResourceConfigBase<T, E, R> & {
   readonly itemSchema?: undefined;
   /**
    * Process each item. Receives a guarded {@link EffectContext} for spawning
-   * derived work. The exit of this effect determines success/failure for the item.
+   * derived work. The exit of this effect determines success/failure for the item;
+   * the success channel is always **`void`**.
    */
-  readonly effect: (item: T, ctx: EffectContext<T, never>) => Effect.Effect<R, E>;
+  readonly effect: (item: T, ctx: EffectContext<T, never, R>) => Effect.Effect<void, E, R>;
   /**
    * Handle each item's result. **Always forked** — runs in its own fiber and
    * never blocks the worker from processing the next item.
    */
   readonly handler?: (
     item: T,
-    exit: Exit.Exit<R, E>,
-    ctx: HandlerContext<T, never>,
-  ) => Effect.Effect<void>;
+    exit: Exit.Exit<void, E>,
+    ctx: HandlerContext<T, never, R>,
+  ) => Effect.Effect<void, any, R>;
   /**
    * Refill the queue from an external source when all priority queues are empty.
    * Receives the queue handle for re-enqueuing. Errors are logged and swallowed.
    */
-  readonly refill?: (queue: QueueHandle<T, R, E, never>) => Effect.Effect<void>;
+  readonly refill?: (queue: QueueHandle<T, E, never, R>) => Effect.Effect<void, never, R>;
 };
 
 /**
@@ -493,29 +517,29 @@ export type QueueResourceConfigWithoutItemSchema<T, R, E> = QueueResourceConfigB
  */
 export type QueueEnqueueErrors = QueueItemValidationError | QueueBatchValidationError;
 
-export type QueueResourceConfigWithItemSchema<T, R, E> = QueueResourceConfigBase<T, R, E> & {
+export type QueueResourceConfigWithItemSchema<T, E, R> = QueueResourceConfigBase<T, E, R> & {
   readonly itemSchema: Schema.Decoder<T, never>;
-  readonly effect: (item: T, ctx: EffectContext<T, QueueEnqueueErrors>) => Effect.Effect<R, E>;
+  readonly effect: (item: T, ctx: EffectContext<T, QueueEnqueueErrors, R>) => Effect.Effect<void, E, R>;
   readonly handler?: (
     item: T,
-    exit: Exit.Exit<R, E>,
-    ctx: HandlerContext<T, QueueEnqueueErrors>,
-  ) => Effect.Effect<void>;
-  readonly refill?: (queue: QueueHandle<T, R, E, QueueEnqueueErrors>) => Effect.Effect<void>;
+    exit: Exit.Exit<void, E>,
+    ctx: HandlerContext<T, QueueEnqueueErrors, R>,
+  ) => Effect.Effect<void, any, R>;
+  readonly refill?: (queue: QueueHandle<T, E, QueueEnqueueErrors, R>) => Effect.Effect<void, never, R>;
 };
 
 /**
  * Configuration for {@link QueueResource.make}.
  *
  * @typeParam T - Item type
- * @typeParam R - Success type of the item effect
- * @typeParam E - Error type of the item effect
+ * @typeParam E - Worker `effect` failure channel
+ * @typeParam R - Dependencies required while running callbacks
  *
  * @public
  */
-export type QueueResourceConfig<T, R, E> =
-  | QueueResourceConfigWithoutItemSchema<T, R, E>
-  | QueueResourceConfigWithItemSchema<T, R, E>;
+export type QueueResourceConfig<T, E, R> =
+  | QueueResourceConfigWithoutItemSchema<T, E, R>
+  | QueueResourceConfigWithItemSchema<T, E, R>;
 
 // ============================================================================
 // Errors
@@ -548,7 +572,7 @@ const isReadonlyArray = <A>(input: A | ReadonlyArray<A>): input is ReadonlyArray
 
 const queueResourceKind = "queue" as const;
 
-type EnqueueErrOf<C> = C extends QueueResourceConfigWithItemSchema<infer _T, infer _R, infer _E>
+type EnqueueErrOf<C> = C extends QueueResourceConfigWithItemSchema<infer _T, infer _E, infer _R>
   ? QueueEnqueueErrors
   : never;
 
@@ -559,9 +583,49 @@ type EnqueueErrOf<C> = C extends QueueResourceConfigWithItemSchema<infer _T, inf
  */
 export type InferQueueEnqueueError<C> = EnqueueErrOf<C>;
 
-const hasItemSchema = <T, R, E>(
-  config: QueueResourceConfig<T, R, E>,
-): config is QueueResourceConfigWithItemSchema<T, R, E> => config.itemSchema !== undefined;
+/**
+ * Infer item type **`T`** from an inline `{ effect: (item, ctx) => … }` config.
+ *
+ * @remarks
+ * **`effect`** parameter positions use **`any`** in the constraint so TypeScript accepts
+ * the concrete **`ctx`** (`EffectContext` / **`HandlerContext`**) without pretending it is **`unknown`**.
+ *
+ * @public
+ */
+export type InferQueueItem<
+  C extends { readonly effect: (...args: any[]) => unknown },
+> = Parameters<C["effect"]>[0];
+
+/**
+ * Infer worker **`E`** (failure channel) from `effect`'s **`Effect`** return type.
+ *
+ * @public
+ */
+export type InferQueueWorkerError<
+  C extends { readonly effect: (...args: any[]) => Effect.Effect<void, any, any> },
+> = Effect.Error<ReturnType<C["effect"]>>;
+
+type InferOptionalHandlerRequirements<C> = [C] extends [{
+  readonly handler: infer HF;
+}]
+  ? HF extends (...args: any) => Effect.Effect<any, infer _Eh, infer HReq>
+    ? HReq
+    : never
+  : never;
+
+/**
+ * Union of service requirements declared on the worker **`effect`** and optional **`handler`**.
+ *
+ * @public
+ */
+export type InferQueueWorkerRequirements<
+  C extends { readonly effect: (...args: any[]) => Effect.Effect<void, any, any> },
+> = InferOptionalHandlerRequirements<C> | Effect.Services<ReturnType<C["effect"]>>;
+
+
+const hasItemSchema = <T, E, R>(
+  config: QueueResourceConfig<T, E, R>,
+): config is QueueResourceConfigWithItemSchema<T, E, R> => config.itemSchema !== undefined;
 
 /**
  * Runtime callbacks and hooks for {@link makeQueueRuntime}, parameterized by the
@@ -569,14 +633,14 @@ const hasItemSchema = <T, R, E>(
  *
  * @internal
  */
-type QueueRuntimeConfig<T, R, E, EEnqueue> = QueueResourceConfigBase<T, R, E> & {
-  readonly effect: (item: T, ctx: EffectContext<T, EEnqueue>) => Effect.Effect<R, E>;
+type QueueRuntimeConfig<T, E, EEnqueue, R> = QueueResourceConfigBase<T, E, R> & {
+  readonly effect: (item: T, ctx: EffectContext<T, EEnqueue, R>) => Effect.Effect<void, E, R>;
   readonly handler?: (
     item: T,
-    exit: Exit.Exit<R, E>,
-    ctx: HandlerContext<T, EEnqueue>,
-  ) => Effect.Effect<void>;
-  readonly refill?: (queue: QueueHandle<T, R, E, EEnqueue>) => Effect.Effect<void>;
+    exit: Exit.Exit<void, E>,
+    ctx: HandlerContext<T, EEnqueue, R>,
+  ) => Effect.Effect<void, any, R>;
+  readonly refill?: (queue: QueueHandle<T, E, EEnqueue, R>) => Effect.Effect<void, never, R>;
 };
 
 /** Normalize public enqueue input without treating arbitrary iterables as batches. */
@@ -681,54 +745,74 @@ const validateItemsWithSchema = <T>(
   });
 };
 
+type MakeQueueEffectResult<C extends QueueResourceConfig<any, any, any>> = QueueHandle<
+  InferQueueItem<C>,
+  InferQueueWorkerError<C>,
+  C extends QueueResourceConfigWithItemSchema<any, any, any> ? QueueEnqueueErrors : never,
+  InferQueueWorkerRequirements<C>
+>;
+
 const makeQueueEffectWithoutSchema = <
-  T,
-  R,
-  E,
-  const C extends QueueResourceConfigWithoutItemSchema<T, R, E>,
+  const C extends QueueResourceConfigWithoutItemSchema<any, any, any>,
 >(
-  config: C,
-): Effect.Effect<QueueHandle<T, R, E, EnqueueErrOf<C>>, never, Scope.Scope> =>
+  config: Types.NoInfer<C>,
+): Effect.Effect<
+  QueueHandle<
+    InferQueueItem<C>,
+    InferQueueWorkerError<C>,
+    never,
+    InferQueueWorkerRequirements<C>
+  >,
+  never,
+  Scope.Scope | InferQueueWorkerRequirements<C>
+> =>
   makeQueueRuntime(
     config,
     (items, _operation) => Effect.succeed(items),
   );
 
 const makeQueueEffectWithSchema = <
-  T,
-  R,
-  E,
-  const C extends QueueResourceConfigWithItemSchema<T, R, E>,
+  const C extends QueueResourceConfigWithItemSchema<any, any, any>,
 >(
-  config: C,
-): Effect.Effect<QueueHandle<T, R, E, QueueEnqueueErrors>, never, Scope.Scope> => {
+  config: Types.NoInfer<C>,
+): Effect.Effect<
+  QueueHandle<
+    InferQueueItem<C>,
+    InferQueueWorkerError<C>,
+    QueueEnqueueErrors,
+    InferQueueWorkerRequirements<C>
+  >,
+  never,
+  Scope.Scope | InferQueueWorkerRequirements<C>
+> => {
   const queueName = config.name ?? "anonymous";
   const codecId = `${queueName}/item@v1`;
-  return makeQueueRuntime<T, R, E, QueueEnqueueErrors>(
-    config,
-    (items, operation) =>
-      validateItemsWithSchema(queueName, config.itemSchema, codecId, items, operation),
+  return makeQueueRuntime<
+    InferQueueItem<C>,
+    InferQueueWorkerError<C>,
+    QueueEnqueueErrors,
+    InferQueueWorkerRequirements<C>
+  >(config, (items, operation) =>
+    validateItemsWithSchema(queueName, config.itemSchema, codecId, items, operation),
   );
 };
 
-function makeQueueEffect<T, R, E>(
-  config: QueueResourceConfigWithoutItemSchema<T, R, E>,
-): Effect.Effect<QueueHandle<T, R, E, never>, never, Scope.Scope>;
-function makeQueueEffect<T, R, E>(
-  config: QueueResourceConfigWithItemSchema<T, R, E>,
-): Effect.Effect<QueueHandle<T, R, E, QueueEnqueueErrors>, never, Scope.Scope>;
-function makeQueueEffect<T, R, E>(
-  config: QueueResourceConfig<T, R, E>,
+function makeQueueEffect<const C extends QueueResourceConfig<any, any, any>>(
+  config: Types.NoInfer<C>,
 ): Effect.Effect<
-  QueueHandle<T, R, E, InferQueueEnqueueError<QueueResourceConfig<T, R, E>>>,
+  MakeQueueEffectResult<C>,
   never,
-  Scope.Scope
+  Scope.Scope | InferQueueWorkerRequirements<C>
 >;
-function makeQueueEffect<T, R, E>(
-  config:
-    | QueueResourceConfigWithoutItemSchema<T, R, E>
-    | QueueResourceConfigWithItemSchema<T, R, E>,
-): Effect.Effect<QueueHandle<T, R, E, QueueEnqueueErrors>, never, Scope.Scope> {
+
+/** @internal widening — public typing comes from the `const C` overload above */
+function makeQueueEffect(
+  config: QueueResourceConfig<any, any, any>,
+): Effect.Effect<
+  QueueHandle<unknown, unknown, unknown, unknown>,
+  never,
+  Scope.Scope | unknown
+> {
   return hasItemSchema(config)
     ? makeQueueEffectWithSchema(config)
     : makeQueueEffectWithoutSchema(config);
@@ -739,10 +823,10 @@ type ValidateForEnqueue<T, EEnqueue> = (
   operation: "add" | "prioritize" | "defer",
 ) => Effect.Effect<ReadonlyArray<T>, EEnqueue>;
 
-const makeQueueRuntime = <T, R, E, EEnqueue>(
-  config: QueueRuntimeConfig<T, R, E, EEnqueue>,
+const makeQueueRuntime = <T, E, EEnqueue, R>(
+  config: QueueRuntimeConfig<T, E, EEnqueue, R>,
   validateForEnqueue: ValidateForEnqueue<T, EEnqueue>,
-): Effect.Effect<QueueHandle<T, R, E, EEnqueue>, never, Scope.Scope> =>
+): Effect.Effect<QueueHandle<T, E, EEnqueue, R>, never, Scope.Scope | R> =>
   Effect.gen(function* () {
     const queueName = config.name ?? "anonymous";
     const concurrency = config.concurrency ?? 5;
@@ -861,7 +945,7 @@ const makeQueueRuntime = <T, R, E, EEnqueue>(
       priority: Priority,
       retries = 0,
       enqueuedAt?: number,
-    ): Effect.Effect<void> =>
+    ): Effect.Effect<void, never, R> =>
       Effect.gen(function* () {
         const shutdown = yield* Ref.get(isShutdownRef);
         if (shutdown) {
@@ -924,7 +1008,7 @@ const makeQueueRuntime = <T, R, E, EEnqueue>(
      * Build the guarded context passed to the user's `effect` callback.
      * Self-enqueue detection uses reference equality and (if configured) key equality.
      */
-    const makeEffectContext = (internal: InternalItem<T>): EffectContext<T, EEnqueue> => {
+    const makeEffectContext = (internal: InternalItem<T>): EffectContext<T, EEnqueue, R> => {
       const isSameItem = (candidate: T): boolean => {
         if (candidate === internal.item) return true;
         if (config.key !== undefined && internal.key !== undefined && config.key(candidate) === internal.key)
@@ -969,8 +1053,8 @@ const makeQueueRuntime = <T, R, E, EEnqueue>(
      */
     const makeHandlerContext = (
       internal: InternalItem<T>,
-      exit: Exit.Exit<R, E>,
-    ): HandlerContext<T, EEnqueue> => ({
+      exit: Exit.Exit<void, E>,
+    ): HandlerContext<T, EEnqueue, R> => ({
       retry: Effect.gen(function* () {
         if (internal.retries >= maxRetries) {
           if (config.onRetryExhausted !== undefined) {
@@ -1033,7 +1117,7 @@ const makeQueueRuntime = <T, R, E, EEnqueue>(
      * 4. Fire onComplete hook (forked)
      * 5. Run handler or log unhandled failure (forked)
      */
-    const processItem = (internal: InternalItem<T>): Effect.Effect<void> =>
+    const processItem = (internal: InternalItem<T>): Effect.Effect<void, never, R> =>
       semaphore.withPermits(1)(
         Effect.gen(function* () {
           const start = yield* Effect.clockWith((c) => c.currentTimeMillis);
@@ -1092,7 +1176,7 @@ const makeQueueRuntime = <T, R, E, EEnqueue>(
      * The double latch-await ensures that items taken during a race with
      * `pause` are held until resume, preserving priority ordering.
      */
-    const workerLoop = (workerId: number): Effect.Effect<void> =>
+    const workerLoop = (workerId: number): Effect.Effect<void, never, R> =>
       Effect.annotateLogs(
         Effect.forever(
           Effect.gen(function* () {
@@ -1119,7 +1203,7 @@ const makeQueueRuntime = <T, R, E, EEnqueue>(
 
     // ─── Build public handle ───
 
-    const queueHandle: QueueHandle<T, R, E, EEnqueue> = {
+    const queueHandle: QueueHandle<T, E, EEnqueue, R> = {
       // Enqueue delegates — priority is the only difference
       add: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "normal", "add"),
       prioritize: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "high", "prioritize"),
@@ -1222,18 +1306,18 @@ const makeQueueRuntime = <T, R, E, EEnqueue>(
 // Public API
 // ============================================================================
 
-function queueResourceLayer<Self, T, R, E>(
-  tag: Context.Key<Self, QueueHandle<T, R, E, never>>,
-  config: QueueResourceConfigWithoutItemSchema<T, R, E>,
-): Layer.Layer<Self, never, never>;
-function queueResourceLayer<Self, T, R, E>(
-  tag: Context.Key<Self, QueueHandle<T, R, E, QueueEnqueueErrors>>,
-  config: QueueResourceConfigWithItemSchema<T, R, E>,
-): Layer.Layer<Self, never, never>;
-function queueResourceLayer<Self, T, R, E>(
-  tag: Context.Key<Self, QueueHandle<T, R, E, never | QueueEnqueueErrors>>,
-  config: QueueResourceConfig<T, R, E>,
-): Layer.Layer<Self, never, never> {
+function queueResourceLayer<Self, T, E, R>(
+  tag: Context.Key<Self, QueueHandle<T, E, never, R>>,
+  config: QueueResourceConfigWithoutItemSchema<T, E, R>,
+): Layer.Layer<Self, never, R>;
+function queueResourceLayer<Self, T, E, R>(
+  tag: Context.Key<Self, QueueHandle<T, E, QueueEnqueueErrors, R>>,
+  config: QueueResourceConfigWithItemSchema<T, E, R>,
+): Layer.Layer<Self, never, R>;
+function queueResourceLayer<Self, T, E, R>(
+  tag: Context.Key<Self, QueueHandle<T, E, never | QueueEnqueueErrors, R>>,
+  config: QueueResourceConfig<T, E, R>,
+): Layer.Layer<Self, never, R> {
   return hasItemSchema(config)
     ? Layer.effect(tag)(makeQueueEffectWithSchema(config))
     : Layer.effect(tag)(makeQueueEffectWithoutSchema(config));
@@ -1288,9 +1372,9 @@ export const QueueResource = {
    *
    * @example
    * ```ts
-   * const EmailQueue = QueueResource.Service<typeof EmailQueue, Email, void, SmtpError>()(
+   * const EmailQueue = QueueResource.Service<typeof EmailQueue, Email, SmtpError, HttpClient.HttpClient>()(
    *   "@app/EmailQueue",
-   *   { effect: (email) => sendEmail(email), concurrency: 5 },
+   *   { effect: (email) => sendEmail(email).pipe(Effect.asVoid), concurrency: 5 },
    * )
    *
    * // Use:
@@ -1298,24 +1382,24 @@ export const QueueResource = {
    * Effect.provide(EmailQueue.layer)
    * ```
    */
-  Service: <Self, T, R, E = never>() => {
+  Service: <Self, T, E = never, R = never>() => {
     function queueResourceService<const Name extends string>(
       name: Name,
-      config: QueueResourceConfigWithoutItemSchema<T, R, E>,
-    ): QueueResourceServiceDefinition<Self, Name, T, R, E, never>;
+      config: QueueResourceConfigWithoutItemSchema<T, E, R>,
+    ): QueueResourceServiceDefinition<Self, Name, T, E, never, R>;
     function queueResourceService<const Name extends string>(
       name: Name,
-      config: QueueResourceConfigWithItemSchema<T, R, E>,
-    ): QueueResourceServiceDefinition<Self, Name, T, R, E, QueueEnqueueErrors>;
+      config: QueueResourceConfigWithItemSchema<T, E, R>,
+    ): QueueResourceServiceDefinition<Self, Name, T, E, QueueEnqueueErrors, R>;
     function queueResourceService<const Name extends string>(
       name: Name,
-      config: QueueResourceConfig<T, R, E>,
+      config: QueueResourceConfig<T, E, R>,
     ):
-      | QueueResourceServiceDefinition<Self, Name, T, R, E, never>
-      | QueueResourceServiceDefinition<Self, Name, T, R, E, QueueEnqueueErrors> {
+      | QueueResourceServiceDefinition<Self, Name, T, E, never, R>
+      | QueueResourceServiceDefinition<Self, Name, T, E, QueueEnqueueErrors, R> {
       if (hasItemSchema(config)) {
-        const named = { ...config, name } satisfies QueueResourceConfigWithItemSchema<T, R, E>;
-        const base = Context.Service<Self, QueueHandle<T, R, E, QueueEnqueueErrors>>()(name);
+        const named = { ...config, name } satisfies QueueResourceConfigWithItemSchema<T, E, R>;
+        const base = Context.Service<Self, QueueHandle<T, E, QueueEnqueueErrors, R>>()(name);
         const item = makeQueueItemCodecDescriptor(name, config.itemSchema);
         return Object.assign(base, {
           id: name,
@@ -1325,8 +1409,8 @@ export const QueueResource = {
           item,
         });
       }
-      const named = { ...config, name } satisfies QueueResourceConfigWithoutItemSchema<T, R, E>;
-      const base = Context.Service<Self, QueueHandle<T, R, E, never>>()(name);
+      const named = { ...config, name } satisfies QueueResourceConfigWithoutItemSchema<T, E, R>;
+      const base = Context.Service<Self, QueueHandle<T, E, never, R>>()(name);
       return Object.assign(base, {
         id: name,
         kind: queueResourceKind,
@@ -1345,15 +1429,15 @@ export const QueueResource = {
    *
    * @example
    * ```ts
-   * class JobQueue extends QueueResource.Tag<JobQueue, Job, void, JobError>()("@app/JobQueue") {}
+   * class JobQueue extends QueueResource.Tag<JobQueue, Job, JobError, never>()("@app/JobQueue") {}
    *
    * // Provide implementation separately:
    * const JobQueueLive = QueueResource.layer(JobQueue, { ... })
    * ```
    */
-  Tag: <Self, T, R, E = never>() =>
+  Tag: <Self, T, E = never, R = never>() =>
   <const Name extends string>(name: Name) => {
-    const base = Context.Service<Self, QueueHandle<T, R, E, never>>()(name);
+    const base = Context.Service<Self, QueueHandle<T, E, never, R>>()(name);
     return Object.assign(base, {
       id: name,
       kind: queueResourceKind,

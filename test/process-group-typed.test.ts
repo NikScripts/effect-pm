@@ -20,11 +20,11 @@ interface InvoiceJob {
   readonly invoiceId: string;
 }
 
-class TypeEmailQueue extends QueueResource.Service<TypeEmailQueue, Email, void>()("@test/TypeEmailQueue", {
+class TypeEmailQueue extends QueueResource.Service<TypeEmailQueue, Email, never>()("@test/TypeEmailQueue", {
   effect: (_email: Email) => Effect.void,
 }) {}
 
-class TypeInvoiceQueue extends QueueResource.Service<TypeInvoiceQueue, InvoiceJob, void>()("@test/TypeInvoiceQueue", {
+class TypeInvoiceQueue extends QueueResource.Service<TypeInvoiceQueue, InvoiceJob, never>()("@test/TypeInvoiceQueue", {
   effect: (_job: InvoiceJob) => Effect.void,
 }) {}
 
@@ -159,7 +159,7 @@ describe("ProcessGroup.make", () => {
       const handled = yield* Ref.make<ReadonlyArray<string>>([]);
       const runs = yield* Ref.make(0);
 
-      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()("@test/TypedDirectEmailQueue", {
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()("@test/TypedDirectEmailQueue", {
         effect: (email: Email) =>
           Ref.update(handled, (values) => [...values, email.to]),
         concurrency: 1,
@@ -236,7 +236,7 @@ describe("ProcessGroup.make", () => {
       const handled = yield* Ref.make<ReadonlyArray<string>>([]);
       const runs = yield* Ref.make(0);
 
-      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()("@test/TypedServiceEmailQueue", {
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()("@test/TypedServiceEmailQueue", {
         effect: (email: Email) =>
           Ref.update(handled, (values) => [...values, email.to]),
         concurrency: 1,

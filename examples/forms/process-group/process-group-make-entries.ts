@@ -22,13 +22,13 @@ const program = Effect.scoped(
     const sentEmails = yield* Ref.make<ReadonlyArray<string>>([]);
     const syncedInvoices = yield* Ref.make<ReadonlyArray<string>>([]);
 
-    class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()("@examples/EmailQueue", {
+    class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, never>()("@examples/EmailQueue", {
       effect: (email: EmailJob) =>
         Ref.update(sentEmails, (emails) => [...emails, email.to]),
       concurrency: 1,
     }) {}
 
-    class InvoiceQueue extends QueueResource.Service<InvoiceQueue, InvoiceJob, void>()("@examples/InvoiceQueue", {
+    class InvoiceQueue extends QueueResource.Service<InvoiceQueue, InvoiceJob, never>()("@examples/InvoiceQueue", {
       effect: (invoice: InvoiceJob) =>
         Ref.update(syncedInvoices, (invoices) => [...invoices, invoice.invoiceId]),
       concurrency: 1,

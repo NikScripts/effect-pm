@@ -89,11 +89,17 @@ export interface ProcessServiceDefinition<Self, Id extends string, R>
 Queue/resource services follow the same canonical-entry rule:
 
 ```typescript
-export interface QueueServiceDefinition<Self, Id extends string, T, R, E>
-  extends Context.ServiceClass<Self, Id, QueueHandle<T, R, E>>,
+export interface QueueResourceServiceDefinition<
+  Self,
+  Id extends string,
+  T,
+  E,
+  EEnqueue,
+  R,
+> extends Context.ServiceClass<Self, Id, QueueHandle<T, E, EEnqueue, R>>,
     RuntimeEntry<Id, "queue"> {
-  readonly tag: Context.Key<unknown, QueueHandle<T, R, E>>;
-  readonly layer: Layer.Layer<Self>;
+  readonly tag: Context.Key<Self, QueueHandle<T, E, EEnqueue, R>>;
+  readonly layer: Layer.Layer<Self, never, R>;
   readonly contract: QueueContract<Id, T>;
 }
 ```
@@ -105,7 +111,7 @@ class StripeSync extends Process.Service<StripeSync>()("@app/StripeSync", {
   effect: syncStripe,
 }) {}
 
-class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()("@app/EmailQueue", {
+class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()("@app/EmailQueue", {
   effect: sendEmail,
   itemSchema: EmailSchema,
 }) {}

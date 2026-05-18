@@ -17,7 +17,7 @@ const program = Effect.scoped(
   Effect.gen(function* () {
     const sentEmails = yield* Ref.make<ReadonlyArray<string>>([]);
 
-    class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()("@examples/ServiceEmailQueue", {
+    class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, never>()("@examples/ServiceEmailQueue", {
       effect: (email: EmailJob) =>
         Ref.update(sentEmails, (emails) => [...emails, email.to]),
       concurrency: 1,

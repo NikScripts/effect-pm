@@ -23,7 +23,7 @@ interface EmailJob {
   readonly subject: string;
 }
 
-class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()("@examples/ContractEmailQueue", {
+class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, never>()("@examples/ContractEmailQueue", {
   effect: (_email: EmailJob) => Effect.void,
 }) {}
 

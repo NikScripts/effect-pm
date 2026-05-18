@@ -10,8 +10,8 @@ import {
 
 const fastConfig = { concurrency: 2 };
 
-const waitUntilCompleted = <T, R, E>(
-  queue: QueueHandle<T, R, E>,
+const waitUntilCompleted = <T, E, EE = never, R = never>(
+  queue: QueueHandle<T, E, EE, R>,
   expected: number,
 ) =>
   Effect.gen(function* () {
@@ -179,12 +179,12 @@ describe("QueueResource.make — handler (forked, non-blocking)", () => {
       const handlerResults = yield* Ref.make<Array<string>>([]);
       const queue = yield* QueueResource.make({
         name: "test-handler-success",
-        effect: (n: number) => Effect.succeed(n * 2),
-        handler: (_item, exit, _ctx) =>
+        effect: (_n: number) => Effect.void,
+        handler: (item, exit, _ctx) =>
           Exit.match(exit, {
             onFailure: () => Effect.void,
-            onSuccess: (val) =>
-              Ref.update(handlerResults, (arr) => [...arr, `ok:${String(val)}`]),
+            onSuccess: () =>
+              Ref.update(handlerResults, (arr) => [...arr, `ok:${String(item * 2)}`]),
           }),
         ...fastConfig,
       });
@@ -201,8 +201,7 @@ describe("QueueResource.make — handler (forked, non-blocking)", () => {
       const handlerResults = yield* Ref.make<Array<string>>([]);
       const queue = yield* QueueResource.make({
         name: "test-handler-failure",
-        effect: (n: number) =>
-          n > 0 ? Effect.succeed(n) : Effect.fail("negative" as const),
+        effect: (n: number) => (n > 0 ? Effect.void : Effect.fail("negative" as const)),
         handler: (_item, exit, _ctx) =>
           Exit.match(exit, {
             onFailure: () =>
@@ -295,7 +294,6 @@ describe("QueueResource.make — retry via handler", () => {
             yield* Ref.update(attempts, (n) => n + 1);
             const count = yield* Ref.get(attempts);
             if (count < 3) return yield* Effect.fail("not yet" as const);
-            return count;
           }),
         handler: (_item, exit, ctx) =>
           Exit.match(exit, {
@@ -319,7 +317,7 @@ describe("QueueResource.layer + Tag", () => {
       const tag = QueueResource.Tag<
         { readonly _tag: "TestQueue" },
         number,
-        number,
+        never,
         never
       >()("@test/TestQueue");
       expect(tag.key).toBe("@test/TestQueue");
@@ -330,7 +328,7 @@ describe("QueueResource.layer + Tag", () => {
     Effect.gen(function* () {
       const queue = yield* QueueResource.make({
         name: "test-layer-make",
-        effect: (n: number) => Effect.succeed(n + 1),
+        effect: (_n: number) => Effect.void,
         ...fastConfig,
       });
       yield* queue.add([10]);
@@ -368,8 +366,7 @@ describe("QueueResource.make — hooks", () => {
       const completions = yield* Ref.make<Array<{ item: number; success: boolean }>>([]);
       const queue = yield* QueueResource.make({
         name: "test-onComplete",
-        effect: (n: number) =>
-          n > 0 ? Effect.succeed(n) : Effect.fail("negative" as const),
+        effect: (n: number) => (n > 0 ? Effect.void : Effect.fail("negative" as const)),
         onComplete: (item, exit) =>
           Ref.update(completions, (arr) => [
             ...arr,
@@ -503,7 +500,6 @@ describe("QueueResource.make — itemSchema", () => {
       });
       // Deliberately ill-typed payload: runtime `itemSchema` must reject numeric `id`.
       const error = yield* Effect.flip(
-        // @ts-expect-error intentional invalid shape for QueueItemValidationError coverage
         queue.add({ id: 1, subject: "hello" }),
       );
       expect(error).toBeInstanceOf(QueueItemValidationError);
@@ -522,7 +518,6 @@ describe("QueueResource.make — itemSchema", () => {
       const error = yield* Effect.flip(
         queue.add([
           { id: "a", subject: "ok" },
-          // @ts-expect-error deliberate invalid batch item `id` type for QueueBatchValidationError coverage
           { id: 2, subject: "bad" },
         ]),
       );

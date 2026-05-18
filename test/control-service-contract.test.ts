@@ -44,7 +44,7 @@ const requestJson = (
 describe("ControlService — contract route", () => {
   it.live("serves typed ProcessGroup contracts", () =>
     Effect.gen(function* () {
-      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()("@test/ControlContractEmail", {
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()("@test/ControlContractEmail", {
         effect: (_email: Email) => Effect.void,
       }) {}
       class SyncProcess extends Process.Service<SyncProcess>()("@test/ControlContractProcess", {
@@ -87,7 +87,7 @@ describe("ControlService — contract route", () => {
       const runs = yield* Ref.make(0);
       const delivered = yield* Ref.make<ReadonlyArray<string>>([]);
 
-      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()("@test/RestEmailQueue", {
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()("@test/RestEmailQueue", {
         effect: (email) =>
           Ref.update(delivered, (emails) => [...emails, email.to]),
         concurrency: 1,

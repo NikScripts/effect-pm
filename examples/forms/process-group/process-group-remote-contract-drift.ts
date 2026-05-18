@@ -28,7 +28,7 @@ const ensure = (
 
 const program = Effect.scoped(
   Effect.gen(function* () {
-    class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()("@examples/DriftEmailQueue", {
+    class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, never>()("@examples/DriftEmailQueue", {
       effect: (_email) => Effect.void,
     }) {}
 

@@ -50,14 +50,14 @@ import { utcDateFromMillis } from "../../src/utcDate";
  * 3. SINGLE INSTANCE: Effect ensures only ONE instance of each queue exists
  *    No accidental duplicates, no synchronization issues.
  *
- * 4. TYPE SAFETY: `QueueResource.make` infers `T`, `R`, and `E` from `effect`.
+ * 4. TYPE SAFETY: `QueueResource.make` infers `T`, requirements `R`, and `E` from `effect`.
  *    The optional `handler` receives the item `Exit` in a fork so workers keep moving.
  *
  */
 
 /**
  * Example tagged error for the demo queue’s failure channel (`E`).
- * `yield*` this value inside `Effect.gen` so `E` is `DemoQueueItemError`, not `R`.
+ * `yield*` this value inside `Effect.gen` so `E` is `DemoQueueItemError`, not ambient services `R`.
  */
 export class DemoQueueItemError extends Data.TaggedError("DemoQueueItemError")<{
   readonly item: string;
@@ -65,7 +65,7 @@ export class DemoQueueItemError extends Data.TaggedError("DemoQueueItemError")<{
 }> { }
 
 // Demo queues using the class service pattern
-class DemoQueue extends QueueResource.Service<DemoQueue, string, never, DemoQueueItemError>()("demo-queue", {
+class DemoQueue extends QueueResource.Service<DemoQueue, string, DemoQueueItemError, never>()("demo-queue", {
   effect: (item: string) =>
     Effect.gen(function* () {
       yield* Effect.logInfo(`Processing: ${item}`);
@@ -84,12 +84,12 @@ class DemoQueue extends QueueResource.Service<DemoQueue, string, never, DemoQueu
   capacity: 100,
 }) {}
 
-class DemoTwoQueue extends QueueResource.Service<DemoTwoQueue, number, number, never>()("demo-two-queue", {
+class DemoTwoQueue extends QueueResource.Service<DemoTwoQueue, number, never, never>()("demo-two-queue", {
   effect: (item: number) =>
     Effect.gen(function* () {
       yield* Effect.logInfo(`Processing number: ${item}`);
       yield* Effect.sleep(Duration.millis(1000));
-      return item * 2;
+      yield* Effect.logInfo(`Derived value ${String(item * 2)} for demo`);
     }),
   handler: (item, exit) =>
     Exit.match(exit, {

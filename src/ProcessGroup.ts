@@ -39,6 +39,25 @@ import {
   ProcessStore,
   type ProcessLifecycleChangedEvent,
 } from "./ProcessStore";
+
+/** `Reflect.get` without assertions; supports class/functions and ordinary objects only. */
+const reflectGetSupportedTarget = (
+  target: unknown,
+  propertyKey: PropertyKey,
+): unknown => {
+  if (typeof target === "function") {
+    return Reflect.get(target, propertyKey);
+  }
+  if (typeof target === "object" && target !== null) {
+    return Reflect.get(target, propertyKey);
+  }
+  return undefined;
+};
+
+/** Runtime queue entries yieldable from ProcessGroup bundles expose Effect's `Context.Key.asEffect`. */
+const isCallableAsEffect = (candidate: unknown): boolean =>
+  typeof reflectGetSupportedTarget(candidate, "asEffect") === "function";
+
 // ============================================================================
 // Public Types
 // ============================================================================
@@ -101,7 +120,7 @@ export interface ProcessGroupQueueRegistration<out Id extends string = string> {
   readonly key: Id;
   readonly item?: QueueItemCodecDescriptor;
   /** Present on `QueueResource.Service` factories; merges into {@link ProcessGroup.Service} when set. */
-  readonly layer?: Layer.Layer<never, never, never>;
+  readonly layer?: Layer.Layer<never, never, unknown>;
 }
 
 export type ProcessGroupEntry =
@@ -176,6 +195,24 @@ type ProcessGroupServiceLayerRequirements<Entries extends readonly ProcessGroupE
   TypedProcessGroupQueueRequirements<Entries> extends never
     ? Scope.Scope
     : TypedProcessGroupQueueRequirements<Entries> | Scope.Scope;
+
+/**
+ * Requirement channel carried by bundled queue Layers merged into {@link ProcessGroup.Service}.
+ *
+ * @internal
+ */
+type ProcessGroupBundledQueueLayerContext<Entries extends readonly ProcessGroupEntry[]> =
+  Entries[number] extends infer E
+    ? E extends QueueResourceServiceDefinition<any, string, any, any, any, infer R>
+      ? R
+      : E extends ProcessGroupQueueRegistration & { readonly layer: Layer.Layer<any, never, infer R> }
+        ? R
+        : never
+    : never;
+
+/** @internal */
+type ProcessGroupServiceLayerProvided<Entries extends readonly ProcessGroupEntry[]> =
+  ProcessGroupServiceLayerRequirements<Entries> | ProcessGroupBundledQueueLayerContext<Entries>;
 
 /**
  * Combined process requirements for a typed ProcessGroup entry tuple.
@@ -471,17 +508,33 @@ export type ProcessGroupQueueEnqueueError<Queue> =
     string,
     any,
     any,
-    any,
-    infer EEnqueue
+    infer EEnqueue,
+    any
   >
     ? EEnqueue
     : Queue extends Context.ServiceClass<any, string, QueueHandle<any, any, any, infer EEnqueue>>
       ? EEnqueue
     : Queue extends { readonly Service: QueueHandle<any, any, any, infer EEnqueue> }
       ? EEnqueue
-      : Queue extends QueueResourceDefinition<string, any, any, any, infer EEnqueue>
+      : Queue extends QueueResourceDefinition<string, any, any, infer EEnqueue, any>
         ? EEnqueue
         : never;
+
+/**
+ * Service requirements surfaced on enqueue helpers for a typed queue entry (ambient hooks, etc.).
+ *
+ * @public
+ */
+export type ProcessGroupQueueEnqueueRequirements<Queue> =
+  Queue extends QueueResourceServiceDefinition<any, string, any, any, any, infer R>
+    ? R
+    : Queue extends Context.ServiceClass<any, string, QueueHandle<any, any, any, infer R>>
+      ? R
+      : Queue extends { readonly Service: QueueHandle<any, any, any, infer R> }
+        ? R
+        : Queue extends QueueResourceDefinition<string, any, any, any, infer R>
+          ? R
+          : never;
 
 // ============================================================================
 // ProcessGroup interface
@@ -544,11 +597,16 @@ export interface TypedQueueControls<
   T,
   Error = ProcessGroupErrors,
   EnqueueError = never,
+  EnqueueRequirements = never,
 > {
-  readonly add: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error | EnqueueError>;
-  readonly enqueue: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error | EnqueueError>;
-  readonly prioritize: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error | EnqueueError>;
-  readonly defer: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error | EnqueueError>;
+  readonly add: (items: T | ReadonlyArray<T>) =>
+    Effect.Effect<void, Error | EnqueueError, EnqueueRequirements>;
+  readonly enqueue: (items: T | ReadonlyArray<T>) =>
+    Effect.Effect<void, Error | EnqueueError, EnqueueRequirements>;
+  readonly prioritize: (items: T | ReadonlyArray<T>) =>
+    Effect.Effect<void, Error | EnqueueError, EnqueueRequirements>;
+  readonly defer: (items: T | ReadonlyArray<T>) =>
+    Effect.Effect<void, Error | EnqueueError, EnqueueRequirements>;
   readonly pause: Effect.Effect<void, Error>;
   readonly resume: Effect.Effect<void, Error>;
   readonly clear: Effect.Effect<number, Error>;
@@ -585,7 +643,12 @@ export interface TypedProcessGroup<
   ) => TypedProcessControls<ProcessGroupEntryRequirements<Entries>, Error>;
   readonly queue: <Q extends ProcessGroupQueueEntries<Entries>>(
     queue: Q,
-  ) => TypedQueueControls<ProcessGroupQueueItem<Q>, Error, ProcessGroupQueueEnqueueError<Q>>;
+  ) => TypedQueueControls<
+    ProcessGroupQueueItem<Q>,
+    Error,
+    ProcessGroupQueueEnqueueError<Q>,
+    ProcessGroupQueueEnqueueRequirements<Q>
+  >;
   readonly status: ProcessGroup<ProcessGroupEntryRequirements<Entries>, Error>["status"];
   readonly health: Effect.Effect<GroupHealth, Error>;
   readonly awaitShutdown: ProcessGroup<ProcessGroupEntryRequirements<Entries>, Error>["awaitShutdown"];
@@ -950,9 +1013,9 @@ const makeProcessContract = <P extends ProcessDefinition<string, unknown>>(
   controls: processGroupProcessControls,
 });
 
-const makeQueueContract = <const Id extends string>(
-  queue: ProcessGroupQueueRegistration<Id>,
-): ProcessGroupQueueContract<Id> => ({
+const makeQueueContract = (
+  queue: Extract<ProcessGroupEntry, { readonly kind: "queue" }>,
+): ProcessGroupQueueContract<(typeof queue)["id"]> => ({
   id: queue.id,
   kind: "queue",
   controls: processGroupQueueControls,
@@ -1291,28 +1354,14 @@ function isProcessGroupRuntimeQueueTag<const Entries extends readonly ProcessGro
   entry: ProcessGroupQueueEntries<Entries>,
 ): entry is ProcessGroupQueueTag &
   Extract<Entries[number], { readonly kind: "queue" }> {
-  if (typeof entry === "function") {
-    return (
-      "asEffect" in entry &&
-      typeof (entry as { asEffect?: unknown }).asEffect === "function"
-    );
-  }
-  if (typeof entry === "object" && entry !== null) {
-    return (
-      "asEffect" in entry &&
-      typeof (entry as { asEffect?: unknown }).asEffect === "function"
-    );
-  }
-  return false;
+  return isCallableAsEffect(entry);
 }
 
-const mergeBundledQueueLayers = (
-  first: Layer.Layer<any, never, never>,
-  rest: ReadonlyArray<Layer.Layer<any, never, never>>,
-): Layer.Layer<any, never, never> =>
-  rest.length === 0
-    ? first
-    : rest.reduce((acc, layer) => Layer.merge(acc, layer), first);
+const mergeBundledQueueLayersFor = <Entries extends readonly ProcessGroupEntry[]>(
+  first: Layer.Layer<any, never, ProcessGroupBundledQueueLayerContext<Entries>>,
+  rest: ReadonlyArray<Layer.Layer<any, never, ProcessGroupBundledQueueLayerContext<Entries>>>,
+): Layer.Layer<any, never, ProcessGroupBundledQueueLayerContext<Entries>> =>
+  rest.length === 0 ? first : rest.reduce((acc, layer) => Layer.merge(acc, layer), first);
 
 const makeTypedProcessGroup = <
   const Id extends string,
@@ -1391,14 +1440,22 @@ const makeTypedProcessGroup = <
 
 // Merge queue resource layers bundled on typed entries into the group layer so
 // `yield*` / `runPromise` callers do not have to compose queue Layers manually.
-const queueContributionLayersFrom = (
-  entries: readonly ProcessGroupEntry[],
-): ReadonlyArray<Layer.Layer<any, never, never>> =>
-  entries.filter(
-    (e): e is ProcessGroupQueueRegistration & {
-      readonly layer: Layer.Layer<any, never, never>;
-    } => e.kind === "queue" && e.layer !== undefined,
-  ).map((q) => q.layer);
+const queueContributionLayersFrom = <Entries extends readonly ProcessGroupEntry[]>(
+  entries: Entries,
+): ReadonlyArray<
+  Layer.Layer<any, never, ProcessGroupBundledQueueLayerContext<Entries>>
+> =>
+  entries
+    .filter(
+      (
+        e,
+      ): e is Extract<Entries[number], { readonly kind: "queue" }> & {
+        readonly layer: Layer.Layer<any, never, ProcessGroupBundledQueueLayerContext<Entries>>;
+      } =>
+        e.kind === "queue" &&
+        reflectGetSupportedTarget(e, "layer") !== undefined,
+    )
+    .map((q) => q.layer);
 
 // ============================================================================
 // Public namespace
@@ -1425,16 +1482,14 @@ export const ProcessGroup = {
     const queueContrib = queueContributionLayersFrom(entries);
     const bundledForBuild =
       queueContrib.length === 0
-        ? Layer.empty
-        : mergeBundledQueueLayers(queueContrib[0]!, queueContrib.slice(1));
+        ? undefined
+        : mergeBundledQueueLayersFor<Entries>(queueContrib[0]!, queueContrib.slice(1));
     const baseLayer = Layer.effect(base)(make);
-    const built = baseLayer.pipe(Layer.provide(bundledForBuild));
+    const built =
+      bundledForBuild === undefined ? baseLayer : baseLayer.pipe(Layer.provide(bundledForBuild));
     /** Re-merge queue layers so the same tags stay in scope for handlers (e.g. ControlService) after `yield* Group`. */
-    const layer: Layer.Layer<
-      Self,
-      ProcessGroupErrors,
-      ProcessGroupServiceLayerRequirements<Entries>
-    > = queueContrib.length === 0 ? built : Layer.mergeAll(built, bundledForBuild);
+    const layer: Layer.Layer<Self, ProcessGroupErrors, ProcessGroupServiceLayerProvided<Entries>> =
+      bundledForBuild === undefined ? built : Layer.merge(built, bundledForBuild);
     // Match Effect's class-based service style: the class is yieldable, and the
     // static fields expose group identity/contract data for control surfaces.
     return Object.assign(base, {

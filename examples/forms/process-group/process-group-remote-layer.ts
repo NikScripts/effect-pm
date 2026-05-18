@@ -32,7 +32,7 @@ const program = Effect.scoped(
     const sent = yield* Ref.make<ReadonlyArray<string>>([]);
     const runs = yield* Ref.make(0);
 
-    class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()(
+    class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, never>()(
       "@examples/RemoteLayerEmailQueue",
       {
         effect: (email) =>

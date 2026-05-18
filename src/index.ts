@@ -169,6 +169,7 @@ export type {
   ProcessGroupRemoteEndpointDefinition,
   ProcessGroupServiceDefinition,
   ProcessGroupQueueEnqueueError,
+  ProcessGroupQueueEnqueueRequirements,
 } from "./ProcessGroup";
 
 // Error classes - ProcessGroup
@@ -219,6 +220,9 @@ export type {
   Priority,
   QueueItemCodecDescriptor,
   InferQueueEnqueueError,
+  InferQueueItem,
+  InferQueueWorkerError,
+  InferQueueWorkerRequirements,
 } from "./QueueResource";
 
 export {
