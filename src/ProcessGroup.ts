@@ -12,7 +12,7 @@
  *   queues: [EmailQueue, NotificationQueue],
  * })
  *
- * yield* group.startAll()
+ * yield* group.startAll() // forks deferred queue workers (`autoStart: false`), then starts processes
  * yield* group.status
  * yield* ProcessGroup.awaitShutdown(group)
  * ```
@@ -273,6 +273,7 @@ export type ProcessGroupProcessControl =
  */
 export const ProcessGroupQueueControlSchema = Schema.Literals([
   "enqueue",
+  "start",
   "pause",
   "resume",
   "clear",
@@ -607,6 +608,8 @@ export interface TypedQueueControls<
     Effect.Effect<void, Error | EnqueueError, EnqueueRequirements>;
   readonly defer: (items: T | ReadonlyArray<T>) =>
     Effect.Effect<void, Error | EnqueueError, EnqueueRequirements>;
+  /** Fork worker pool / refill fiber when {@link QueueResourceConfigBase.autoStart} was `false`. Idempotent. */
+  readonly start: Effect.Effect<void, Error, EnqueueRequirements>;
   readonly pause: Effect.Effect<void, Error>;
   readonly resume: Effect.Effect<void, Error>;
   readonly clear: Effect.Effect<number, Error>;
@@ -638,6 +641,11 @@ export interface TypedProcessGroup<
   readonly runImmediately: <P extends ProcessGroupProcessEntries<Entries>>(
     process: P,
   ) => Effect.Effect<void, Error, ProcessGroupEntryRequirements<Entries>>;
+  /**
+   * Fork deferred queue workers ({@link QueueResourceConfigBase.autoStart} `false`), then start every process that is not already running.
+   * Queue {@link TypedQueueControls.start} runs first so workers exist before processes enqueue.
+   */
+  readonly startAll: () => Effect.Effect<void, Error, ProcessGroupEntryRequirements<Entries>>;
   readonly process: <P extends ProcessGroupProcessEntries<Entries>>(
     process: P,
   ) => TypedProcessControls<ProcessGroupEntryRequirements<Entries>, Error>;
@@ -740,7 +748,7 @@ export const makeProcessGroup = <
     type R = AllGroupProcessesRequirements<Processes>;
 
     // ─── Resolve queue tags from context ───
-    const queueMap: Record<string, QueueHandle<unknown, unknown, unknown, unknown>> = {};
+    const queueMap: Record<string, QueueHandle<unknown, unknown, unknown, any>> = {};
     for (const queueTag of config.queues) {
       queueMap[queueTag.key] = yield* queueTag.asEffect();
     }
@@ -799,6 +807,9 @@ export const makeProcessGroup = <
 
     const startAll = (): Effect.Effect<void, ProcessGroupErrors, R> =>
       Effect.gen(function* () {
+        for (const queue of Object.values(queueMap)) {
+          yield* queue.start;
+        }
         for (const name of processMap.keys()) {
           const running = yield* FiberMap.has(fibers, name);
           if (!running) yield* start(name);
@@ -981,6 +992,7 @@ const processGroupProcessControls: ReadonlyArray<ProcessGroupProcessControl> = [
 ];
 const processGroupQueueControls: ReadonlyArray<ProcessGroupQueueControl> = [
   "enqueue",
+  "start",
   "pause",
   "resume",
   "clear",
@@ -1286,6 +1298,7 @@ const makeRemoteTypedProcessGroup = <
       unsupportedRemoteQueueEnqueue("queue.prioritize", queue.id),
     defer: (_items: ProcessGroupQueueItem<Q> | ReadonlyArray<ProcessGroupQueueItem<Q>>) =>
       unsupportedRemoteQueueEnqueue("queue.defer", queue.id),
+    start: runRemote(manager.queue(queue.id).start),
     pause: runRemote(manager.queue(queue.id).pause),
     resume: runRemote(manager.queue(queue.id).resume),
     clear: clearQueue(queue.id),
@@ -1300,6 +1313,15 @@ const makeRemoteTypedProcessGroup = <
     stop: (process) => runRemote(manager.process(process.id).stop),
     restart: (process) => runRemote(manager.process(process.id).restart),
     runImmediately: (process) => runRemote(manager.process(process.id).runImmediately),
+    startAll: () =>
+      Effect.gen(function* () {
+        for (const q of queueEntriesFrom(group.entries)) {
+          yield* runRemote(manager.queue(q.id).start);
+        }
+        for (const p of processEntriesFrom(group.entries)) {
+          yield* runRemote(manager.process(p.id).start);
+        }
+      }),
     process: (process) => processById(process.id),
     queue: queueById,
     status,
@@ -1315,7 +1337,7 @@ const makeRemoteTypedProcessGroup = <
  * @remarks
  * The caller still yields the same group service key, but controls are routed
  * through the endpoint and require `HttpClient.HttpClient`. Process controls and
- * queue pause/resume/clear/status are supported. Queue enqueue-style methods
+ * queue start/pause/resume/clear/status are supported. Queue enqueue-style methods
  * fail with {@link UnsupportedRemoteControlError} until queue item schemas are
  * represented in the group contract.
  *
@@ -1408,6 +1430,7 @@ const makeTypedProcessGroup = <
       stop: (process) => runtime.stop(process.id),
       restart: (process) => runtime.restart(process.id),
       runImmediately: (process) => runtime.runImmediately(process.id),
+      startAll: runtime.startAll,
       process: (process) => ({
         start: runtime.start(process.id),
         stop: runtime.stop(process.id),
@@ -1427,6 +1450,7 @@ const makeTypedProcessGroup = <
           ),
         defer: (items) =>
           Effect.flatMap(runtime.getQueue(queue.id), (handle) => handle.defer(items)),
+        start: Effect.flatMap(runtime.getQueue(queue.id), (handle) => handle.start),
         pause: runtime.pauseQueue(queue.id),
         resume: runtime.resumeQueue(queue.id),
         clear: runtime.clearQueue(queue.id),

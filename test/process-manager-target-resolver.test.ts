@@ -22,7 +22,7 @@ const candidates: ReadonlyArray<ProcessManagerTargetCandidate> = [
     id: "@repo/NorthWest/BillingGroup/BillingEmailQueue",
     kind: "queue",
     groupId: "@repo/NorthWest/BillingGroup",
-    controls: ["pause", "resume", "clear", "status"],
+    controls: ["enqueue", "start", "pause", "resume", "clear", "status"],
   },
 ];
 

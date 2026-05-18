@@ -324,6 +324,10 @@ describe("ProcessManager", () => {
           "north-west/billing-group/billing-email-queue",
         ]);
         yield* cli([
+          "queue-start",
+          "north-west/billing-group/billing-email-queue",
+        ]);
+        yield* cli([
           "status",
           "north-west/billing-group/sync-invoices",
         ]);

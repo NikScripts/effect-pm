@@ -113,6 +113,13 @@ describe("ControlService — contract route", () => {
         expect(status.statusCode).toBe(200);
         expect(status.body).toMatchObject({ success: true });
 
+        const queueStart = yield* requestJson(
+          32128,
+          `/queues/${encodeURIComponent(EmailQueue.id)}/start`,
+          "POST",
+        );
+        expect(queueStart.statusCode).toBe(200);
+
         const processes = yield* requestJson(32128, "/processes");
         expect(processes.statusCode).toBe(200);
         expect(processes.body).toMatchObject({ success: true });

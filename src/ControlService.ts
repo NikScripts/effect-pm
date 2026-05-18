@@ -366,6 +366,9 @@ const handleRestRoute =
             };
           }
           const controls = group.queue(entry);
+          if (operation === "start") {
+            return yield* routeVoid(controls.start, `Queue '${name}' could not be started`);
+          }
           if (operation === "pause") {
             return yield* routeVoid(controls.pause, `Queue '${name}' could not be paused`);
           }
@@ -410,7 +413,7 @@ const handleRestRoute =
  * - `GET /processes` / `GET /processes/:id` - Process listings and status
  * - `POST /processes/:id/start|stop|restart|now` - Process controls
  * - `GET /queues` / `GET /queues/:id` - Queue listings and status
- * - `POST /queues/:id/pause|resume|clear` - Queue controls
+ * - `POST /queues/:id/start|pause|resume|clear` - Queue controls
  * - `GET /health` - Health check
  * 
  * @typeParam R - ProcessGroup requirements type

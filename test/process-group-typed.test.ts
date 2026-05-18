@@ -191,7 +191,7 @@ describe("ProcessGroup.make", () => {
             {
               id: EmailQueue.id,
               kind: "queue",
-              controls: ["enqueue", "pause", "resume", "clear", "status"],
+              controls: ["enqueue", "start", "pause", "resume", "clear", "status"],
             },
           ],
         });
@@ -228,6 +228,32 @@ describe("ProcessGroup.make", () => {
       }).pipe(
         Effect.provide(Layer.mergeAll(SyncProcess.layer, EmailQueue.layer)),
       );
+    }),
+  );
+
+  it.live("startAll forks deferred queues (autoStart false) before starting processes", () =>
+    Effect.gen(function* () {
+      const handled = yield* Ref.make<ReadonlyArray<string>>([]);
+
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()("@test/StartAllDeferQueue", {
+        autoStart: false,
+        effect: (email: Email) =>
+          Ref.update(handled, (values) => [...values, email.to]),
+        concurrency: 1,
+      }) {}
+
+      yield* Effect.gen(function* () {
+        const group = yield* ProcessGroup.make("@test/StartAllDeferGroup", [EmailQueue] as const);
+        yield* group.queue(EmailQueue).enqueue({ to: "defer@example.com" });
+        yield* Effect.sleep(Duration.millis(40));
+        expect((yield* Ref.get(handled)).length).toBe(0);
+
+        yield* group.startAll();
+
+        const queue = yield* EmailQueue;
+        yield* waitForCompleted(queue, 1);
+        expect(yield* Ref.get(handled)).toEqual(["defer@example.com"]);
+      }).pipe(Effect.provide(EmailQueue.layer));
     }),
   );
 
