@@ -181,7 +181,7 @@ describe("ProcessManager", () => {
     Effect.gen(function* () {
       const runs = yield* Ref.make(0);
 
-      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
         "@test/ManagerEmailQueue",
         {
           effect: (_email) => Effect.void,
@@ -272,7 +272,7 @@ describe("ProcessManager", () => {
     Effect.gen(function* () {
       const runs = yield* Ref.make(0);
 
-      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
         "@test/RegistryEmailQueue",
         {
           effect: (_email) => Effect.void,
@@ -337,7 +337,7 @@ describe("ProcessManager", () => {
     Effect.gen(function* () {
       const runs = yield* Ref.make(0);
 
-      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
         "@test/ConfigRegistryEmailQueue",
         {
           effect: (_email) => Effect.void,
@@ -411,14 +411,14 @@ describe("ProcessManager", () => {
       const northRuns = yield* Ref.make(0);
       const southRuns = yield* Ref.make(0);
 
-      class NorthQueue extends QueueResource.Service<NorthQueue, Email, void>()(
+      class NorthQueue extends QueueResource.Service<NorthQueue, Email, never>()(
         "@repo/NorthWest/BillingGroup/BillingEmailQueue",
         {
           effect: (_email) => Effect.void,
         },
       ) {}
 
-      class SouthQueue extends QueueResource.Service<SouthQueue, Email, void>()(
+      class SouthQueue extends QueueResource.Service<SouthQueue, Email, never>()(
         "@repo/SouthWest/BillingGroup/BillingEmailQueue",
         {
           effect: (_email) => Effect.void,
@@ -472,6 +472,10 @@ describe("ProcessManager", () => {
         ]);
         yield* cli([
           "pause",
+          "north-west/billing-group/billing-email-queue",
+        ]);
+        yield* cli([
+          "queue-start",
           "north-west/billing-group/billing-email-queue",
         ]);
         yield* cli([
@@ -583,7 +587,7 @@ describe("ProcessManager", () => {
     Effect.gen(function* () {
       const delivered = yield* Ref.make<ReadonlyArray<string>>([]);
 
-      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
         "@test/ManagerStatusEmailQueue",
         {
           effect: (email) =>
@@ -656,7 +660,7 @@ describe("ProcessManager", () => {
     Effect.gen(function* () {
       const runs = yield* Ref.make(0);
 
-      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
         "@test/ManagerEndpointEmailQueue",
         {
           effect: (_email) => Effect.void,
@@ -730,7 +734,7 @@ describe("ProcessManager", () => {
 
   it.live("fails contract verification when remote process entries drift", () =>
     Effect.gen(function* () {
-      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
         "@test/ManagerDriftEmailQueue",
         {
           effect: (_email) => Effect.void,
@@ -790,7 +794,7 @@ describe("ProcessManager", () => {
 
   it.live("fails remote group controls when the endpoint contract drifts", () =>
     Effect.gen(function* () {
-      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
         "@test/RemoteLayerDriftEmailQueue",
         {
           effect: (_email) => Effect.void,
@@ -873,7 +877,7 @@ describe("ProcessManager", () => {
       const delivered = yield* Ref.make<ReadonlyArray<string>>([]);
       const runs = yield* Ref.make(0);
 
-      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()(
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
         "@test/RemoteLayerEmailQueue",
         {
           effect: (email) =>

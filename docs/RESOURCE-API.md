@@ -16,10 +16,10 @@ Priority queue with managed workers, deduplication, retry, and lifecycle hooks.
 import { Effect, Exit } from "effect"
 import { QueueResource } from "@nikscripts/effect-pm"
 
-class EmailQueue extends QueueResource.Service<EmailQueue, Email, void, SmtpError>()(
+class EmailQueue extends QueueResource.Service<EmailQueue, Email, SmtpError, never>()(
   "@app/EmailQueue",
   {
-    effect: (email, ctx) => smtpClient.send(email),
+    effect: (email, ctx) => smtpClient.send(email).pipe(Effect.asVoid),
     handler: (item, exit, ctx) =>
       Exit.match(exit, {
         onFailure: () => ctx.retry,
@@ -42,7 +42,7 @@ Effect.provide(EmailQueue.layer)
 #### Tag (pure identity — implementation provided separately)
 
 ```typescript
-class NotificationQueue extends QueueResource.Tag<NotificationQueue, Notification, void, never>()(
+class NotificationQueue extends QueueResource.Tag<NotificationQueue, Notification, never, never>()(
   "@app/NotificationQueue",
 ) {}
 
@@ -53,7 +53,7 @@ const NotificationQueueDev = QueueResource.layer(NotificationQueue, {
 })
 
 const NotificationQueueProd = QueueResource.layer(NotificationQueue, {
-  effect: (n) => pushService.send(n),
+  effect: (n) => pushService.send(n).pipe(Effect.asVoid),
   concurrency: 20,
 })
 ```
@@ -65,7 +65,7 @@ const program = Effect.scoped(
   Effect.gen(function*() {
     const queue = yield* QueueResource.make({
       name: "temp-work-queue",
-      effect: (item: string) => Effect.succeed(item.length),
+      effect: (item: string) => Effect.logInfo(String(item.length)),
       concurrency: 5,
     })
     yield* queue.add(["hello", "world"])
@@ -74,7 +74,7 @@ const program = Effect.scoped(
 )
 ```
 
-### Service shape (`QueueHandle<T, R, E>`)
+### Service shape (`QueueHandle<T, E, EEnqueue, R>`) — **`R`** is last: ambient services workers need
 
 ```typescript
 const queue = yield* MyQueue
@@ -88,9 +88,11 @@ yield* queue.defer([backgroundItem])    // low priority (processed last)
 const total = yield* queue.size         // total pending across all levels
 const perLevel = yield* queue.sizes     // { high: number, normal: number, low: number }
 const empty = yield* queue.isEmpty      // true if all levels empty
-const done = yield* queue.completed     // total items processed since start
+const done = yield* queue.completed     // items processed since workers began draining
 
 // ─── Lifecycle (effectful properties) ───
+yield* queue.start                      // fork workers when `autoStart: false` was set at construction
+yield* queue.refill                     // manual: run configured `refill` once (optional hook)
 yield* queue.pause                      // workers block before next item
 yield* queue.resume                     // workers unblock
 yield* queue.shutdown                   // permanent stop, enqueue drops items
@@ -100,7 +102,7 @@ const cleared = yield* queue.clear      // drain all queues, reset counter
 ### Configuration reference
 
 ```typescript
-QueueResource.Service<Self, T, R, E>()("name", {
+QueueResource.Service<Self, T, E, R>()("name", {
   // ─── Required ───
   effect: (item: T, ctx: EffectContext<T>) => Effect<R, E>,
 
@@ -111,6 +113,7 @@ QueueResource.Service<Self, T, R, E>()("name", {
   concurrency: 5,        // worker count (default: 5)
   capacity: 50_000,      // max items per priority queue (default: 50,000)
   paused: false,         // start paused? (default: false)
+  autoStart: true,       // fork workers at acquisition (default: true); false → call `yield* queue.start`
 
   // ─── Deduplication ───
   key: (item) => item.id, // extract dedup key; duplicates silently dropped
@@ -121,7 +124,7 @@ QueueResource.Service<Self, T, R, E>()("name", {
 
   // ─── Persistence ───
   persist: (items, priority) => db.save(items),  // write-through on enqueue
-  refill: (queue) => ...,                         // reload from source when empty
+  refill: (queue) => ...,                         // optional; auto-run only after queues drain empty (not on idle workers / cold start) — use `yield* queue.refill` to bootstrap
 
   // ─── Hooks (fire-and-forget) ───
   onEnqueue: (items, priority) => metrics.increment("enqueued", items.length),
@@ -170,7 +173,7 @@ handler: (item, exit, ctx) => Effect.gen(function*() {
 #### Error handling with retry + dead letter
 
 ```typescript
-class OrderQueue extends QueueResource.Service<OrderQueue, Order, void, OrderError>()(
+class OrderQueue extends QueueResource.Service<OrderQueue, Order, OrderError, never>()(
   "@app/OrderQueue",
   {
     effect: (order) => processOrder(order),
@@ -192,7 +195,7 @@ class OrderQueue extends QueueResource.Service<OrderQueue, Order, void, OrderErr
 #### Deduplication (by item key)
 
 ```typescript
-class WebhookQueue extends QueueResource.Service<WebhookQueue, WebhookEvent, void, never>()(
+class WebhookQueue extends QueueResource.Service<WebhookQueue, WebhookEvent, never, never>()(
   "@app/WebhookQueue",
   {
     effect: (event) => deliverWebhook(event),
@@ -205,7 +208,7 @@ class WebhookQueue extends QueueResource.Service<WebhookQueue, WebhookEvent, voi
 #### Spawning derived work from effect
 
 ```typescript
-class CrawlQueue extends QueueResource.Service<CrawlQueue, URL, void, CrawlError>()(
+class CrawlQueue extends QueueResource.Service<CrawlQueue, URL, CrawlError, never>()(
   "@app/CrawlQueue",
   {
     effect: (url, ctx) => Effect.gen(function*() {
@@ -222,7 +225,7 @@ class CrawlQueue extends QueueResource.Service<CrawlQueue, URL, void, CrawlError
 #### Start paused, load items, then resume
 
 ```typescript
-class BatchQueue extends QueueResource.Service<BatchQueue, Job, void, never>()(
+class BatchQueue extends QueueResource.Service<BatchQueue, Job, never, never>()(
   "@app/BatchQueue",
   {
     effect: (job) => processJob(job),

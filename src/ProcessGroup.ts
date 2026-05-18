@@ -12,7 +12,7 @@
  *   queues: [EmailQueue, NotificationQueue],
  * })
  *
- * yield* group.startAll()
+ * yield* group.startAll() // forks deferred queue workers (`autoStart: false`), then starts processes
  * yield* group.status
  * yield* ProcessGroup.awaitShutdown(group)
  * ```
@@ -39,6 +39,7 @@ import {
   ProcessStore,
   type ProcessLifecycleChangedEvent,
 } from "./ProcessStore";
+
 // ============================================================================
 // Public Types
 // ============================================================================
@@ -101,7 +102,7 @@ export interface ProcessGroupQueueRegistration<out Id extends string = string> {
   readonly key: Id;
   readonly item?: QueueItemCodecDescriptor;
   /** Present on `QueueResource.Service` factories; merges into {@link ProcessGroup.Service} when set. */
-  readonly layer?: Layer.Layer<never, never, never>;
+  readonly layer?: Layer.Layer<never, never, unknown>;
 }
 
 export type ProcessGroupEntry =
@@ -178,6 +179,24 @@ type ProcessGroupServiceLayerRequirements<Entries extends readonly ProcessGroupE
     : TypedProcessGroupQueueRequirements<Entries> | Scope.Scope;
 
 /**
+ * Requirement channel carried by bundled queue Layers merged into {@link ProcessGroup.Service}.
+ *
+ * @internal
+ */
+type ProcessGroupBundledQueueLayerContext<Entries extends readonly ProcessGroupEntry[]> =
+  Entries[number] extends infer E
+    ? E extends QueueResourceServiceDefinition<any, string, any, any, any, infer R>
+      ? R
+      : E extends ProcessGroupQueueRegistration & { readonly layer: Layer.Layer<any, never, infer R> }
+        ? R
+        : never
+    : never;
+
+/** @internal */
+type ProcessGroupServiceLayerProvided<Entries extends readonly ProcessGroupEntry[]> =
+  ProcessGroupServiceLayerRequirements<Entries> | ProcessGroupBundledQueueLayerContext<Entries>;
+
+/**
  * Combined process requirements for a typed ProcessGroup entry tuple.
  *
  * @public
@@ -236,6 +255,7 @@ export type ProcessGroupProcessControl =
  */
 export const ProcessGroupQueueControlSchema = Schema.Literals([
   "enqueue",
+  "start",
   "pause",
   "resume",
   "clear",
@@ -471,17 +491,33 @@ export type ProcessGroupQueueEnqueueError<Queue> =
     string,
     any,
     any,
-    any,
-    infer EEnqueue
+    infer EEnqueue,
+    any
   >
     ? EEnqueue
     : Queue extends Context.ServiceClass<any, string, QueueHandle<any, any, any, infer EEnqueue>>
       ? EEnqueue
     : Queue extends { readonly Service: QueueHandle<any, any, any, infer EEnqueue> }
       ? EEnqueue
-      : Queue extends QueueResourceDefinition<string, any, any, any, infer EEnqueue>
+      : Queue extends QueueResourceDefinition<string, any, any, infer EEnqueue, any>
         ? EEnqueue
         : never;
+
+/**
+ * Service requirements surfaced on enqueue helpers for a typed queue entry (ambient hooks, etc.).
+ *
+ * @public
+ */
+export type ProcessGroupQueueEnqueueRequirements<Queue> =
+  Queue extends QueueResourceServiceDefinition<any, string, any, any, any, infer R>
+    ? R
+    : Queue extends Context.ServiceClass<any, string, QueueHandle<any, any, any, infer R>>
+      ? R
+      : Queue extends { readonly Service: QueueHandle<any, any, any, infer R> }
+        ? R
+        : Queue extends QueueResourceDefinition<string, any, any, any, infer R>
+          ? R
+          : never;
 
 // ============================================================================
 // ProcessGroup interface
@@ -544,11 +580,18 @@ export interface TypedQueueControls<
   T,
   Error = ProcessGroupErrors,
   EnqueueError = never,
+  EnqueueRequirements = never,
 > {
-  readonly add: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error | EnqueueError>;
-  readonly enqueue: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error | EnqueueError>;
-  readonly prioritize: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error | EnqueueError>;
-  readonly defer: (items: T | ReadonlyArray<T>) => Effect.Effect<void, Error | EnqueueError>;
+  readonly add: (items: T | ReadonlyArray<T>) =>
+    Effect.Effect<void, Error | EnqueueError, EnqueueRequirements>;
+  readonly enqueue: (items: T | ReadonlyArray<T>) =>
+    Effect.Effect<void, Error | EnqueueError, EnqueueRequirements>;
+  readonly prioritize: (items: T | ReadonlyArray<T>) =>
+    Effect.Effect<void, Error | EnqueueError, EnqueueRequirements>;
+  readonly defer: (items: T | ReadonlyArray<T>) =>
+    Effect.Effect<void, Error | EnqueueError, EnqueueRequirements>;
+  /** Fork worker pool / refill fiber when {@link QueueResourceConfigBase.autoStart} was `false`. Idempotent. */
+  readonly start: Effect.Effect<void, Error, EnqueueRequirements>;
   readonly pause: Effect.Effect<void, Error>;
   readonly resume: Effect.Effect<void, Error>;
   readonly clear: Effect.Effect<number, Error>;
@@ -580,12 +623,22 @@ export interface TypedProcessGroup<
   readonly runImmediately: <P extends ProcessGroupProcessEntries<Entries>>(
     process: P,
   ) => Effect.Effect<void, Error, ProcessGroupEntryRequirements<Entries>>;
+  /**
+   * Fork deferred queue workers ({@link QueueResourceConfigBase.autoStart} `false`), then start every process that is not already running.
+   * Queue {@link TypedQueueControls.start} runs first so workers exist before processes enqueue.
+   */
+  readonly startAll: () => Effect.Effect<void, Error, ProcessGroupEntryRequirements<Entries>>;
   readonly process: <P extends ProcessGroupProcessEntries<Entries>>(
     process: P,
   ) => TypedProcessControls<ProcessGroupEntryRequirements<Entries>, Error>;
   readonly queue: <Q extends ProcessGroupQueueEntries<Entries>>(
     queue: Q,
-  ) => TypedQueueControls<ProcessGroupQueueItem<Q>, Error, ProcessGroupQueueEnqueueError<Q>>;
+  ) => TypedQueueControls<
+    ProcessGroupQueueItem<Q>,
+    Error,
+    ProcessGroupQueueEnqueueError<Q>,
+    ProcessGroupQueueEnqueueRequirements<Q>
+  >;
   readonly status: ProcessGroup<ProcessGroupEntryRequirements<Entries>, Error>["status"];
   readonly health: Effect.Effect<GroupHealth, Error>;
   readonly awaitShutdown: ProcessGroup<ProcessGroupEntryRequirements<Entries>, Error>["awaitShutdown"];
@@ -677,7 +730,7 @@ export const makeProcessGroup = <
     type R = AllGroupProcessesRequirements<Processes>;
 
     // ─── Resolve queue tags from context ───
-    const queueMap: Record<string, QueueHandle<unknown, unknown, unknown, unknown>> = {};
+    const queueMap: Record<string, QueueHandle<unknown, unknown, unknown, any>> = {};
     for (const queueTag of config.queues) {
       queueMap[queueTag.key] = yield* queueTag;
     }
@@ -736,6 +789,9 @@ export const makeProcessGroup = <
 
     const startAll = (): Effect.Effect<void, ProcessGroupErrors, R> =>
       Effect.gen(function* () {
+        for (const queue of Object.values(queueMap)) {
+          yield* queue.start;
+        }
         for (const name of processMap.keys()) {
           const running = yield* FiberMap.has(fibers, name);
           if (!running) yield* start(name);
@@ -918,6 +974,7 @@ const processGroupProcessControls: ReadonlyArray<ProcessGroupProcessControl> = [
 ];
 const processGroupQueueControls: ReadonlyArray<ProcessGroupQueueControl> = [
   "enqueue",
+  "start",
   "pause",
   "resume",
   "clear",
@@ -950,9 +1007,9 @@ const makeProcessContract = <P extends ProcessDefinition<string, unknown>>(
   controls: processGroupProcessControls,
 });
 
-const makeQueueContract = <const Id extends string>(
-  queue: ProcessGroupQueueRegistration<Id>,
-): ProcessGroupQueueContract<Id> => ({
+const makeQueueContract = (
+  queue: Extract<ProcessGroupEntry, { readonly kind: "queue" }>,
+): ProcessGroupQueueContract<(typeof queue)["id"]> => ({
   id: queue.id,
   kind: "queue",
   controls: processGroupQueueControls,
@@ -1225,6 +1282,7 @@ const makeRemoteTypedProcessGroup = <
       unsupportedRemoteQueueEnqueue("queue.prioritize", queue.id),
     defer: (_items: ProcessGroupQueueItem<Q> | ReadonlyArray<ProcessGroupQueueItem<Q>>) =>
       unsupportedRemoteQueueEnqueue("queue.defer", queue.id),
+    start: runRemote(manager.queue(queue.id).start),
     pause: runRemote(manager.queue(queue.id).pause),
     resume: runRemote(manager.queue(queue.id).resume),
     clear: clearQueue(queue.id),
@@ -1239,6 +1297,15 @@ const makeRemoteTypedProcessGroup = <
     stop: (process) => runRemote(manager.process(process.id).stop),
     restart: (process) => runRemote(manager.process(process.id).restart),
     runImmediately: (process) => runRemote(manager.process(process.id).runImmediately),
+    startAll: () =>
+      Effect.gen(function* () {
+        for (const q of queueEntriesFrom(group.entries)) {
+          yield* runRemote(manager.queue(q.id).start);
+        }
+        for (const p of processEntriesFrom(group.entries)) {
+          yield* runRemote(manager.process(p.id).start);
+        }
+      }),
     process: (process) => processById(process.id),
     queue: queueById,
     status,
@@ -1254,7 +1321,7 @@ const makeRemoteTypedProcessGroup = <
  * @remarks
  * The caller still yields the same group service key, but controls are routed
  * through the endpoint transport requirements. Process controls and
- * queue pause/resume/clear/status are supported. Queue enqueue-style methods
+ * queue start/pause/resume/clear/status are supported. Queue enqueue-style methods
  * fail with {@link UnsupportedRemoteControlError} until queue item schemas are
  * represented in the group contract.
  *
@@ -1298,13 +1365,11 @@ function hasProcessGroupRuntimeQueueTag<const Entries extends readonly ProcessGr
   return "tag" in entry;
 }
 
-const mergeBundledQueueLayers = (
-  first: Layer.Layer<any, never, never>,
-  rest: ReadonlyArray<Layer.Layer<any, never, never>>,
-): Layer.Layer<any, never, never> =>
-  rest.length === 0
-    ? first
-    : rest.reduce((acc, layer) => Layer.merge(acc, layer), first);
+const mergeBundledQueueLayersFor = <Entries extends readonly ProcessGroupEntry[]>(
+  first: Layer.Layer<any, never, ProcessGroupBundledQueueLayerContext<Entries>>,
+  rest: ReadonlyArray<Layer.Layer<any, never, ProcessGroupBundledQueueLayerContext<Entries>>>,
+): Layer.Layer<any, never, ProcessGroupBundledQueueLayerContext<Entries>> =>
+  rest.length === 0 ? first : rest.reduce((acc, layer) => Layer.merge(acc, layer), first);
 
 const makeTypedProcessGroup = <
   const Id extends string,
@@ -1353,6 +1418,7 @@ const makeTypedProcessGroup = <
       stop: (process) => runtime.stop(process.id),
       restart: (process) => runtime.restart(process.id),
       runImmediately: (process) => runtime.runImmediately(process.id),
+      startAll: runtime.startAll,
       process: (process) => ({
         start: runtime.start(process.id),
         stop: runtime.stop(process.id),
@@ -1372,6 +1438,7 @@ const makeTypedProcessGroup = <
           ),
         defer: (items) =>
           Effect.flatMap(runtime.getQueue(queue.id), (handle) => handle.defer(items)),
+        start: Effect.flatMap(runtime.getQueue(queue.id), (handle) => handle.start),
         pause: runtime.pauseQueue(queue.id),
         resume: runtime.resumeQueue(queue.id),
         clear: runtime.clearQueue(queue.id),
@@ -1385,14 +1452,22 @@ const makeTypedProcessGroup = <
 
 // Merge queue resource layers bundled on typed entries into the group layer so
 // `yield*` / `runPromise` callers do not have to compose queue Layers manually.
-const queueContributionLayersFrom = (
-  entries: readonly ProcessGroupEntry[],
-): ReadonlyArray<Layer.Layer<any, never, never>> =>
-  entries.filter(
-    (e): e is ProcessGroupQueueRegistration & {
-      readonly layer: Layer.Layer<any, never, never>;
-    } => e.kind === "queue" && e.layer !== undefined,
-  ).map((q) => q.layer);
+const queueContributionLayersFrom = <Entries extends readonly ProcessGroupEntry[]>(
+  entries: Entries,
+): ReadonlyArray<
+  Layer.Layer<any, never, ProcessGroupBundledQueueLayerContext<Entries>>
+> =>
+  entries
+    .filter(
+      (
+        e,
+      ): e is Extract<Entries[number], { readonly kind: "queue" }> & {
+        readonly layer: Layer.Layer<any, never, ProcessGroupBundledQueueLayerContext<Entries>>;
+      } =>
+        e.kind === "queue" &&
+        e.layer !== undefined,
+    )
+    .map((q) => q.layer);
 
 // ============================================================================
 // Public namespace
@@ -1419,16 +1494,14 @@ export const ProcessGroup = {
     const queueContrib = queueContributionLayersFrom(entries);
     const bundledForBuild =
       queueContrib.length === 0
-        ? Layer.empty
-        : mergeBundledQueueLayers(queueContrib[0]!, queueContrib.slice(1));
+        ? undefined
+        : mergeBundledQueueLayersFor<Entries>(queueContrib[0]!, queueContrib.slice(1));
     const baseLayer = Layer.effect(base)(make);
-    const built = baseLayer.pipe(Layer.provide(bundledForBuild));
+    const built =
+      bundledForBuild === undefined ? baseLayer : baseLayer.pipe(Layer.provide(bundledForBuild));
     /** Re-merge queue layers so the same tags stay in scope for handlers (e.g. ControlService) after `yield* Group`. */
-    const layer: Layer.Layer<
-      Self,
-      ProcessGroupErrors,
-      ProcessGroupServiceLayerRequirements<Entries>
-    > = queueContrib.length === 0 ? built : Layer.mergeAll(built, bundledForBuild);
+    const layer: Layer.Layer<Self, ProcessGroupErrors, ProcessGroupServiceLayerProvided<Entries>> =
+      bundledForBuild === undefined ? built : Layer.merge(built, bundledForBuild);
     // Match Effect's class-based service style: the class is yieldable, and the
     // static fields expose group identity/contract data for control surfaces.
     return Object.assign(base, {

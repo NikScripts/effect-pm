@@ -20,11 +20,11 @@ interface InvoiceJob {
   readonly invoiceId: string;
 }
 
-class TypeEmailQueue extends QueueResource.Service<TypeEmailQueue, Email, void>()("@test/TypeEmailQueue", {
+class TypeEmailQueue extends QueueResource.Service<TypeEmailQueue, Email, never>()("@test/TypeEmailQueue", {
   effect: (_email: Email) => Effect.void,
 }) {}
 
-class TypeInvoiceQueue extends QueueResource.Service<TypeInvoiceQueue, InvoiceJob, void>()("@test/TypeInvoiceQueue", {
+class TypeInvoiceQueue extends QueueResource.Service<TypeInvoiceQueue, InvoiceJob, never>()("@test/TypeInvoiceQueue", {
   effect: (_job: InvoiceJob) => Effect.void,
 }) {}
 
@@ -159,7 +159,7 @@ describe("ProcessGroup.make", () => {
       const handled = yield* Ref.make<ReadonlyArray<string>>([]);
       const runs = yield* Ref.make(0);
 
-      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()("@test/TypedDirectEmailQueue", {
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()("@test/TypedDirectEmailQueue", {
         effect: (email: Email) =>
           Ref.update(handled, (values) => [...values, email.to]),
         concurrency: 1,
@@ -191,7 +191,7 @@ describe("ProcessGroup.make", () => {
             {
               id: EmailQueue.id,
               kind: "queue",
-              controls: ["enqueue", "pause", "resume", "clear", "status"],
+              controls: ["enqueue", "start", "pause", "resume", "clear", "status"],
             },
           ],
         });
@@ -231,12 +231,38 @@ describe("ProcessGroup.make", () => {
     }),
   );
 
+  it.live("startAll forks deferred queues (autoStart false) before starting processes", () =>
+    Effect.gen(function* () {
+      const handled = yield* Ref.make<ReadonlyArray<string>>([]);
+
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()("@test/StartAllDeferQueue", {
+        autoStart: false,
+        effect: (email: Email) =>
+          Ref.update(handled, (values) => [...values, email.to]),
+        concurrency: 1,
+      }) {}
+
+      yield* Effect.gen(function* () {
+        const group = yield* ProcessGroup.make("@test/StartAllDeferGroup", [EmailQueue] as const);
+        yield* group.queue(EmailQueue).enqueue({ to: "defer@example.com" });
+        yield* Effect.sleep(Duration.millis(40));
+        expect((yield* Ref.get(handled)).length).toBe(0);
+
+        yield* group.startAll();
+
+        const queue = yield* EmailQueue;
+        yield* waitForCompleted(queue, 1);
+        expect(yield* Ref.get(handled)).toEqual(["defer@example.com"]);
+      }).pipe(Effect.provide(EmailQueue.layer));
+    }),
+  );
+
   it.live("supports an injectable group service for singleton control surfaces", () =>
     Effect.gen(function* () {
       const handled = yield* Ref.make<ReadonlyArray<string>>([]);
       const runs = yield* Ref.make(0);
 
-      class EmailQueue extends QueueResource.Service<EmailQueue, Email, void>()("@test/TypedServiceEmailQueue", {
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()("@test/TypedServiceEmailQueue", {
         effect: (email: Email) =>
           Ref.update(handled, (values) => [...values, email.to]),
         concurrency: 1,

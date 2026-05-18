@@ -19,7 +19,7 @@ class SendError extends Data.TaggedError("SendError")<{
 }> {}
 
 const waitUntilCompleted = (
-  queue: QueueHandle<EmailJob, string, SendError>,
+  queue: QueueHandle<EmailJob, SendError, never, never>,
   expected: number,
 ) =>
   Effect.gen(function* () {
@@ -30,7 +30,7 @@ const waitUntilCompleted = (
     }
   });
 
-class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, string, SendError>()(
+class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, SendError, never>()(
   "examples/EmailQueue",
   {
     paused: true, // enqueue while paused, then resume — common bootstrap pattern
@@ -51,7 +51,7 @@ class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, string, Sen
           });
         }
 
-        return `sent:${job.id}`;
+        yield* Effect.logInfo(`sent:${job.id}`);
       }),
     // Runs in a forked fiber per item — failures don't block the worker loop.
     handler: (job, exit, ctx) =>
@@ -63,10 +63,8 @@ class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, string, Sen
             );
             yield* ctx.retry;
           }),
-        onSuccess: (result) =>
-          Effect.logInfo(
-            `handler saw success for ${job.id}: ${result} after ${String(ctx.attempts)} attempt(s)`,
-          ),
+        onSuccess: () =>
+          Effect.logInfo(`handler saw success for ${job.id} after ${String(ctx.attempts)} attempt(s)`),
       }),
     onEnqueue: (jobs, priority) =>
       Effect.logInfo(`enqueued ${String(jobs.length)} ${priority} job(s)`),

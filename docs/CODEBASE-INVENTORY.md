@@ -236,15 +236,16 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 **Status:** `status` (all processes + queues), `processStatus(name)`, `health`.
 
-**Queues:** `listQueues`, `getQueue(name)` → raw **`QueueHandle`**, `pauseQueue`, `resumeQueue`, `clearQueue` → count cleared.
+**Queues:** `listQueues`, `getQueue(name)` → raw **`QueueHandle`**, `pauseQueue`, `resumeQueue`, `clearQueue` → count cleared. **`startAll`** runs each queue’s **`QueueHandle.start`** first (needed when **`autoStart: false`**), then starts stopped processes.
 
 **Shutdown:** `awaitShutdown({ logMessage? })` — OS signals (Node); needs `Scope`.
 
 ### Typed handle (`TypedProcessGroup`)
 
 - Same operations keyed by **entry value** (`process(SyncBilling)`, `queue(EmailQueue)`).
+- **`startAll`** — runs **`queue(entry).start`** for every queue, then **`start(process)`** for every process not already running (matches legacy **`ProcessGroup.startAll`** ordering).
 - **`process(entry)`** → **`TypedProcessControls`**: `start`, `stop`, `restart`, `runImmediately`, `status`.
-- **`queue(entry)`** → **`TypedQueueControls`**: `add`, `enqueue`, `prioritize`, `defer`, `pause`, `resume`, `clear`, `status` (enqueue errors when item schema present).
+- **`queue(entry)`** → **`TypedQueueControls`**: `add`, `enqueue`, `prioritize`, `defer`, **`start`**, `pause`, `resume`, `clear`, `status` (enqueue errors when item schema present).
 
 ### Contract model
 
@@ -254,7 +255,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 - **`start`**, **`stop`**, **`restart`**, **`runImmediately`**, **`status`**
 
 **Queue contract entry:** `id`, `kind: "queue"`, **`controls[]`** subset of:
-- **`enqueue`** (capability bit; remote enqueue still blocked — see below), **`pause`**, **`resume`**, **`clear`**, **`status`**
+- **`enqueue`** (capability bit; remote enqueue still blocked — see below), **`start`**, **`pause`**, **`resume`**, **`clear`**, **`status`**
 - Optional **`item`** codec descriptor when queue declared with **`itemSchema`**.
 
 **Schema exports for validation/encoding:** `ProcessGroupProcessControlSchema`, `ProcessGroupQueueControlSchema`, `ProcessGroupProcessContractSchema`, `ProcessGroupQueueContractSchema`, `ProcessGroupContractSchema`.
@@ -409,8 +410,8 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### Construction forms
 
-- **`QueueResource.Service<Self, T, R, E>()(name, config)`** — tag + baked **`.layer`**.
-- **`QueueResource.Tag<Self, T, R, E>()(name)`** + **`QueueResource.layer(tag, config)`** — DI / env-specific impls.
+- `QueueResource.Service<Self, T, E, R>()(name, config)` — tag + baked **`.layer`**.
+- **`QueueResource.Tag<Self, T, E, R>()(name)`** + **`QueueResource.layer(tag, config)`** — DI / env-specific impls.
 - **`QueueResource.make(config)`** — scoped `Effect` → **`QueueHandle`** (requires **`Scope`**).
 - **`Layer.effect(tag)(QueueResource.make(config))`** — manual.
 
@@ -428,7 +429,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 - **`onEnqueue?`**, **`onComplete?`**, **`onEmpty?`** — fire-and-forget hooks.
 - **`effect(item, ctx)`** — required worker body.
 - **`handler?(item, exit, ctx)`** — optional; always forked.
-- **`refill?(queueHandle)`** — when all levels empty, optional reload loop.
+- **`refill?(queueHandle)`** — optional reload loop when all levels empty after processed work drains (or after `clear`); not triggered by enqueue alone or idle worker waits.
 
 **Enqueue error channel on contexts:** `QueueItemValidationError | QueueBatchValidationError` only when schema path used; without schema, still typed but validation never fails.
 
@@ -444,7 +445,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 **Observe:** `size`, `sizes` `{ high, normal, low }`, `isEmpty`, `completed`.
 
-**Lifecycle:** `pause`, `resume`, `shutdown` (permanent; further enqueue dropped/warned), `clear` → count removed.
+**Lifecycle:** `pause`, `resume`, `shutdown` (permanent; further enqueue dropped/warned), `clear` → count removed, `refill` → invoke **`config.refill`** manually (bootstrap alongside **`start`**).
 
 ### `EffectContext` (in worker `effect`)
 
@@ -473,7 +474,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### Remote
 
-- **ProcessManager / remoteLayer** — no remote enqueue; local **TypedQueueControls** and **ControlService** local routes support pause/resume/clear/status; enqueue available **in-process** on typed/local handle only.
+- **ProcessManager / remoteLayer** — no remote enqueue; local **TypedQueueControls** and **ControlService** local routes support **start**/pause/resume/clear/status; enqueue available **in-process** on typed/local handle only.
 
 ### Package marketing note
 

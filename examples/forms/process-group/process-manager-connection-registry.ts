@@ -24,7 +24,7 @@ const program = Effect.scoped(
   Effect.gen(function* () {
     const runs = yield* Ref.make(0);
 
-    class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()(
+    class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, never>()(
       "@examples/RegistryEmailQueue",
       {
         effect: (_email) => Effect.void,

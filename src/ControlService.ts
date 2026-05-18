@@ -82,7 +82,7 @@ const scopedDiscard = <E, R>(
  * - `GET /processes` / `GET /processes/:id` - Process listings and status
  * - `POST /processes/:id/start|stop|restart|now` - Process controls
  * - `GET /queues` / `GET /queues/:id` - Queue listings and status
- * - `POST /queues/:id/pause|resume|clear` - Queue controls
+ * - `POST /queues/:id/start|pause|resume|clear` - Queue controls
  * - `GET /health` - Health check
  * 
  * @typeParam R - ProcessGroup requirements type

@@ -160,6 +160,7 @@ export interface RemoteProcessControls<Requirements = HttpClient.HttpClient> {
  * @public
  */
 export interface RemoteQueueControls<Requirements = HttpClient.HttpClient> {
+  readonly start: Effect.Effect<void, ProcessManagerRequestError, Requirements>;
   readonly pause: Effect.Effect<void, ProcessManagerRequestError, Requirements>;
   readonly resume: Effect.Effect<void, ProcessManagerRequestError, Requirements>;
   readonly clear: Effect.Effect<
@@ -416,6 +417,7 @@ const makeRemoteProcessManager = <
       }),
     }),
     queue: (id) => ({
+      start: commandVoid(transport, { _tag: "StartQueue", queueId: id }),
       pause: commandVoid(transport, { _tag: "PauseQueue", queueId: id }),
       resume: commandVoid(transport, { _tag: "ResumeQueue", queueId: id }),
       clear: requestControl(transport, { _tag: "ClearQueue", queueId: id }),
@@ -637,7 +639,8 @@ const resolveCliTarget = (
   }
   if (resolution.candidate.kind !== expectedKind) {
     const processHint = "use start, stop, restart, or now with a process id.";
-    const queueHint = "use pause, resume, or clear with a queue id.";
+    const queueHint =
+      "use queue-start, pause, resume, or clear with a queue id.";
     return Effect.fail(
       new ProcessManagerConnectionError({
         groupId: resolution.candidate.groupId,
@@ -741,9 +744,11 @@ const runRemoteProcessOperation = (
 
 const runRemoteQueueOperation = (
   queue: RemoteQueueControls,
-  operation: "pause" | "resume" | "clear",
+  operation: "start" | "pause" | "resume" | "clear",
 ) => {
   switch (operation) {
+    case "start":
+      return queue.start;
     case "pause":
       return queue.pause;
     case "resume":
@@ -773,7 +778,7 @@ const runProcessCommand = (
 const runQueueCommand = (
   groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
   input: string,
-  operation: "pause" | "resume" | "clear",
+  operation: "start" | "pause" | "resume" | "clear",
 ): Effect.Effect<
   void,
   ProcessManagerConnectionError | ProcessManagerRequestError,
@@ -935,8 +940,12 @@ const makeCli = <
     );
   const queueCommand = (name: "pause" | "resume" | "clear") =>
     Command.make(name, { target }, ({ target }) =>
-      runQueueCommand(groups, target, name)
+      runQueueCommand(groups, target, name),
     );
+
+  const queueStartCommand = Command.make("queue-start", { target }, ({ target }) =>
+    runQueueCommand(groups, target, "start"),
+  );
 
   const root = Command.make(
     "pm",
@@ -955,6 +964,7 @@ const makeCli = <
       processCommand("stop", "stop"),
       processCommand("restart", "restart"),
       processCommand("now", "now"),
+      queueStartCommand,
       queueCommand("pause"),
       queueCommand("resume"),
       queueCommand("clear"),

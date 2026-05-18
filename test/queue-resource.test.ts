@@ -10,8 +10,8 @@ import {
 
 const fastConfig = { concurrency: 2 };
 
-const waitUntilCompleted = <T, R, E>(
-  queue: QueueHandle<T, R, E>,
+const waitUntilCompleted = <T, E, EE = never, R = never>(
+  queue: QueueHandle<T, E, EE, R>,
   expected: number,
 ) =>
   Effect.gen(function* () {
@@ -179,12 +179,12 @@ describe("QueueResource.make — handler (forked, non-blocking)", () => {
       const handlerResults = yield* Ref.make<Array<string>>([]);
       const queue = yield* QueueResource.make({
         name: "test-handler-success",
-        effect: (n: number) => Effect.succeed(n * 2),
-        handler: (_item, exit, _ctx) =>
+        effect: (_n: number) => Effect.void,
+        handler: (item, exit, _ctx) =>
           Exit.match(exit, {
             onFailure: () => Effect.void,
-            onSuccess: (val) =>
-              Ref.update(handlerResults, (arr) => [...arr, `ok:${String(val)}`]),
+            onSuccess: () =>
+              Ref.update(handlerResults, (arr) => [...arr, `ok:${String(item * 2)}`]),
           }),
         ...fastConfig,
       });
@@ -201,8 +201,7 @@ describe("QueueResource.make — handler (forked, non-blocking)", () => {
       const handlerResults = yield* Ref.make<Array<string>>([]);
       const queue = yield* QueueResource.make({
         name: "test-handler-failure",
-        effect: (n: number) =>
-          n > 0 ? Effect.succeed(n) : Effect.fail("negative" as const),
+        effect: (n: number) => (n > 0 ? Effect.void : Effect.fail("negative" as const)),
         handler: (_item, exit, _ctx) =>
           Exit.match(exit, {
             onFailure: () =>
@@ -295,7 +294,6 @@ describe("QueueResource.make — retry via handler", () => {
             yield* Ref.update(attempts, (n) => n + 1);
             const count = yield* Ref.get(attempts);
             if (count < 3) return yield* Effect.fail("not yet" as const);
-            return count;
           }),
         handler: (_item, exit, ctx) =>
           Exit.match(exit, {
@@ -319,7 +317,7 @@ describe("QueueResource.layer + Tag", () => {
       const tag = QueueResource.Tag<
         { readonly _tag: "TestQueue" },
         number,
-        number,
+        never,
         never
       >()("@test/TestQueue");
       expect(tag.key).toBe("@test/TestQueue");
@@ -330,7 +328,7 @@ describe("QueueResource.layer + Tag", () => {
     Effect.gen(function* () {
       const queue = yield* QueueResource.make({
         name: "test-layer-make",
-        effect: (n: number) => Effect.succeed(n + 1),
+        effect: (_n: number) => Effect.void,
         ...fastConfig,
       });
       yield* queue.add([10]);
@@ -368,8 +366,7 @@ describe("QueueResource.make — hooks", () => {
       const completions = yield* Ref.make<Array<{ item: number; success: boolean }>>([]);
       const queue = yield* QueueResource.make({
         name: "test-onComplete",
-        effect: (n: number) =>
-          n > 0 ? Effect.succeed(n) : Effect.fail("negative" as const),
+        effect: (n: number) => (n > 0 ? Effect.void : Effect.fail("negative" as const)),
         onComplete: (item, exit) =>
           Ref.update(completions, (arr) => [
             ...arr,
@@ -487,6 +484,126 @@ describe("QueueResource.make — self-enqueue guard", () => {
   );
 });
 
+describe("QueueResource.make — autoStart", () => {
+  it.live("does not process until start when autoStart is false", () =>
+    Effect.gen(function* () {
+      const results = yield* Ref.make<Array<number>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-autostart-deferred",
+        autoStart: false,
+        effect: (n: number) => Ref.update(results, (arr) => [...arr, n]),
+        concurrency: 1,
+      });
+      yield* queue.add([1, 2]);
+      yield* Effect.sleep(Duration.millis(40));
+      const before = yield* Ref.get(results);
+      expect(before).toHaveLength(0);
+
+      yield* queue.start;
+      yield* waitUntilCompleted(queue, 2);
+      const after = yield* Ref.get(results);
+      expect(after.sort()).toEqual([1, 2]);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("start is idempotent", () =>
+    Effect.gen(function* () {
+      const results = yield* Ref.make<Array<number>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-autostart-idempotent",
+        autoStart: false,
+        effect: (n: number) => Ref.update(results, (arr) => [...arr, n]),
+        concurrency: 2,
+      });
+      yield* queue.start;
+      yield* queue.start;
+      yield* queue.add([1]);
+      yield* waitUntilCompleted(queue, 1);
+      const final = yield* Ref.get(results);
+      expect(final).toEqual([1]);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("start after shutdown does not process queued items", () =>
+    Effect.gen(function* () {
+      const results = yield* Ref.make<Array<number>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-autostart-shutdown-first",
+        autoStart: false,
+        effect: (n: number) => Ref.update(results, (arr) => [...arr, n]),
+        concurrency: 1,
+      });
+      yield* queue.shutdown;
+      yield* queue.start;
+      yield* queue.add([1]);
+      yield* Effect.sleep(Duration.millis(30));
+      const r = yield* Ref.get(results);
+      expect(r).toHaveLength(0);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("automatic refill waits for wake then runs after queues drain empty", () =>
+    Effect.gen(function* () {
+      const refills = yield* Ref.make(0);
+      const queue = yield* QueueResource.make({
+        name: "test-autostart-refill",
+        autoStart: false,
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+        refill: (_q) => Ref.update(refills, (n) => n + 1),
+      });
+      yield* Effect.sleep(Duration.millis(40));
+      expect(yield* Ref.get(refills)).toBe(0);
+
+      yield* queue.start;
+      expect(yield* Ref.get(refills)).toBe(0);
+
+      yield* queue.add([1]);
+      yield* waitUntilCompleted(queue, 1);
+
+      let steps = 0;
+      while ((yield* Ref.get(refills)) < 1 && steps++ < 200) {
+        yield* Effect.sleep(Duration.millis(5));
+      }
+      expect(yield* Ref.get(refills)).toBeGreaterThanOrEqual(1);
+      void queue;
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("automatic refill stays idle until drain even with default autoStart", () =>
+    Effect.gen(function* () {
+      const refills = yield* Ref.make(0);
+      const queue = yield* QueueResource.make({
+        name: "test-refill-no-auto-layer-only",
+        effect: (_n: number) => Effect.void,
+        concurrency: 4,
+        refill: (_q) => Ref.update(refills, (n) => n + 1),
+      });
+      yield* Effect.sleep(Duration.millis(120));
+      expect(yield* Ref.get(refills)).toBe(0);
+      void queue;
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("manual refill invokes configured callback without cold-start automatic refill", () =>
+    Effect.gen(function* () {
+      const refills = yield* Ref.make(0);
+      const queue = yield* QueueResource.make({
+        name: "test-manual-refill",
+        autoStart: false,
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+        refill: (_q) => Ref.update(refills, (n) => n + 1),
+      });
+      yield* queue.start;
+      expect(yield* Ref.get(refills)).toBe(0);
+      yield* queue.refill;
+      expect(yield* Ref.get(refills)).toBe(1);
+      void queue;
+    }).pipe(Effect.scoped),
+  );
+});
+
 const EmailItem = Schema.Struct({
   id: Schema.String,
   subject: Schema.String,
@@ -503,7 +620,6 @@ describe("QueueResource.make — itemSchema", () => {
       });
       // Deliberately ill-typed payload: runtime `itemSchema` must reject numeric `id`.
       const error = yield* Effect.flip(
-        // @ts-expect-error intentional invalid shape for QueueItemValidationError coverage
         queue.add({ id: 1, subject: "hello" }),
       );
       expect(error).toBeInstanceOf(QueueItemValidationError);
@@ -522,7 +638,6 @@ describe("QueueResource.make — itemSchema", () => {
       const error = yield* Effect.flip(
         queue.add([
           { id: "a", subject: "ok" },
-          // @ts-expect-error deliberate invalid batch item `id` type for QueueBatchValidationError coverage
           { id: 2, subject: "bad" },
         ]),
       );

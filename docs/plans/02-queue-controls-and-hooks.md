@@ -35,16 +35,14 @@ batch error typing harder than it needs to be.
 
 Define one conceptual surface:
 
-- `QueueControls<T, R, E>`
+- `QueueControls<T, E, EEnqueue, R>` (worker failure **`E`**, enqueue validation **`EEnqueue`**, requirements **`R`** last)
 
-Then derive safe views:
+Then derive safe views (conceptual; the **shipped** `QueueResource` API is in `src/QueueResource.ts` and `docs/RESOURCE-API.md`):
 
-- `QueueHandle<T, R, E>` - the public service and `ProcessGroup` control
-  surface,
-- `QueueEffectControls<T>` - queue-bound controls passed to the item effect,
-- `QueueHookControls<T, R, E>` - queue-bound controls passed to hooks,
-- `QueueLifecycleControls<T, R, E>` - lifecycle hook view, allowed to call
-  lifecycle operations where appropriate.
+- `QueueHandle<T, E, EEnqueue, R>` — public service and `ProcessGroup` control surface (**`R`** = ambient requirements, **last**),
+- `QueueEffectControls<T, EEnqueue, R>` — queue-bound controls passed to the item effect,
+- `QueueHookControls<T, E, EEnqueue, R>` — queue-bound controls passed to hooks,
+- `QueueLifecycleControls<T, E, EEnqueue, R>` — lifecycle hook view, allowed to call lifecycle operations where appropriate.
 
 All views should be implemented from the same underlying queue state.
 
@@ -56,10 +54,10 @@ QueueResource should follow the same naming contract used by the typed
 - `QueueResource.make(config)` - raw scoped Effect that acquires a live queue
   handle. Use this when a caller wants full manual ownership or a custom
   `Context.Service` wrapper.
-- `QueueResource.Service<Self, T, R, E>()(id, config)` - primary concrete queue
-  declaration. The class is the Context service key, has one canonical id, and
+- `QueueResource.Service<Self, T, E, R>()(id, config)` - primary concrete queue
+  declaration (**`E`** = worker failure channel, **`R`** = requirements **last**). The class is the Context service key, has one canonical id, and
   owns a default `.layer`.
-- `QueueResource.RemoteService<Self, T, R, E>()(id, config)` - deferred
+- `QueueResource.RemoteService<Self, T, E, R>()(id, config)` - deferred
   remote-capable queue declaration. Do not implement this constructor until the
   remote service design gate in
   [07 - Typed ProcessGroup and remote ProcessManager](./07-process-manager.md)
@@ -67,7 +65,7 @@ QueueResource should follow the same naming contract used by the typed
   swappable between a local runtime provider and a network-backed remote
   provider. Its handle shape must expose control/network/protocol errors from
   the beginning, and its config must include `itemSchema`.
-- `QueueResource.Tag<Self, T, R, E>()(id)` - identity only. Use with
+- `QueueResource.Tag<Self, T, E, R>()(id)` - identity only. Use with
   `QueueResource.layer(tag, config)` or `Layer.succeed(tag, mock)` for alternate
   implementations.
 - `QueueResource.layer(tag, config)` - provider for either a `Service` override
@@ -119,29 +117,7 @@ in-flight handler/hook fibers through `FiberSet`.
 
 ## Handle shape and naming
 
-Keep the public queue handle small at first:
-
-```typescript
-export interface QueueHandle<T, R = void, E = never> {
-  readonly add: (item: T | ReadonlyArray<T>) => Effect.Effect<void>;
-  readonly prioritize: (item: T | ReadonlyArray<T>) => Effect.Effect<void>;
-  readonly defer: (item: T | ReadonlyArray<T>) => Effect.Effect<void>;
-
-  readonly size: Effect.Effect<number>;
-  readonly sizes: Effect.Effect<{
-    readonly high: number;
-    readonly normal: number;
-    readonly low: number;
-  }>;
-  readonly isEmpty: Effect.Effect<boolean>;
-  readonly completed: Effect.Effect<number>;
-
-  readonly pause: Effect.Effect<void>;
-  readonly resume: Effect.Effect<void>;
-  readonly shutdown: Effect.Effect<void>;
-  readonly clear: Effect.Effect<number>;
-}
-```
+The **implemented** handle is `QueueHandle<T, E, EEnqueue, R>` (see `src/QueueResource.ts`): enqueue methods are `Effect<void, EEnqueue, R>`; observation and lifecycle actions are documented in `docs/RESOURCE-API.md`.
 
 Naming rules:
 
@@ -160,7 +136,7 @@ because payloads can be large and may become encoded/opaque.
 Queues may optionally declare an **item schema** for their payload. The schema
 is the single source of truth for:
 
-- compile-time item type `T` on `QueueHandle<T, …>`,
+- compile-time item type `T` on `QueueHandle<T, E, EEnqueue, R>`,
 - runtime validation on every public enqueue path,
 - encoded wire payloads for remote enqueue and release/handoff,
 - serializable metadata embedded in `ProcessGroupContract`.
@@ -177,7 +153,7 @@ Add one optional field to `QueueResourceConfig`. Do not add both `schema` and
 import { Schema } from "effect"
 
 // Local declaration — full Schema value, not a descriptor
-export interface QueueResourceConfig<T, R, E> {
+export interface QueueResourceConfig<T, E, R> {
   // …existing fields…
 
   /**
@@ -200,8 +176,8 @@ used only at boundaries (HTTP body, released-entry envelope, contract export).
 class EmailQueue extends QueueResource.Service<
   typeof EmailQueue,
   Email,
-  void,
-  SmtpError
+  SmtpError,
+  never
 >()("@app/EmailQueue", {
   effect: sendEmail,
   itemSchema: EmailSchema, // T = Email, Encoded = Schema encoded type
@@ -513,27 +489,14 @@ Add an advanced metadata-aware API:
 ## Enqueue error typing and handle generics
 
 Full error shapes and batch modes are defined in **Queue item schema and codec
-contract** above. At the handle level, thread schema presence through generics
-so callers only see errors that can occur:
+contract** above. At the handle level today:
 
-```typescript
-interface QueueHandle<
-  T,
-  R = void,
-  E = never,
-  ItemSchema extends Schema.Schema<T, any, any> | undefined = undefined,
-> {
-  readonly add: {
-    (item: T): Effect.Effect<void, ItemEnqueueError<ItemSchema>>
-    (items: ReadonlyArray<T>): Effect.Effect<void, BatchEnqueueError<ItemSchema>>
-  }
-  // prioritize, defer, enqueue — same error pattern
-}
-```
+- **`EEnqueue`** carries schema validation failures when `itemSchema` is present (`QueueEnqueueErrors`); otherwise `never`.
+- **`R`** carries ambient services required by enqueue helpers (hooks persist/onEnqueue/etc.) **and** workers; it is the **fourth / last** type parameter on **`QueueHandle`**.
 
-`QueueResource.Service` should infer `ItemSchema` from config `itemSchema` when
-present so `ProcessGroup.queue(EmailQueue).add(…)` propagates validation errors
-without manual type parameters.
+Roadmap sketches (partial batches, richer `enqueue` overloads, optional `ItemSchema` in generics) belong in future revisions; **`InferQueueEnqueueError`** / **`ProcessGroupQueueEnqueueError`** expose the enqueue error channel to callers today.
+
+`QueueResource.Service` infers enqueue errors from config when `itemSchema` is set so typed `ProcessGroup.queue(EmailQueue).add(…)` propagates validation errors without manual parameters.
 
 ## Batch behavior
 
@@ -690,14 +653,14 @@ Use `handler`, not `forkWith`, for the post-item result callback:
 ```typescript
 readonly handler?: (
   item: T,
-  exit: Exit.Exit<R, E>,
-  ctx: HandlerContext<T, R, E>,
+  exit: Exit.Exit<void, E>,
+  ctx: HandlerContext<T, EEnqueue, R>,
 ) => Effect.Effect<void>;
 ```
 
 Rules:
 
-- The handler receives `Exit<R, E>` directly.
+- The handler receives `Exit<void, E>` directly.
 - The handler is forked into a managed fiber and must not block workers from
   taking the next item.
 - There is no automatic retry on failure. Retry policy belongs to userland.

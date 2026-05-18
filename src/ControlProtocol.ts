@@ -61,6 +61,7 @@ export type ControlProtocolRequest =
   | { readonly _tag: "RunProcessImmediately"; readonly processId: string }
   | { readonly _tag: "ListQueues" }
   | { readonly _tag: "ReadQueueStatus"; readonly queueId: string }
+  | { readonly _tag: "StartQueue"; readonly queueId: string }
   | { readonly _tag: "PauseQueue"; readonly queueId: string }
   | { readonly _tag: "ResumeQueue"; readonly queueId: string }
   | { readonly _tag: "ClearQueue"; readonly queueId: string };
@@ -91,6 +92,9 @@ export const ControlProtocolRequestSchema = Schema.Union([
   }),
   Schema.TaggedStruct("ListQueues", {}),
   Schema.TaggedStruct("ReadQueueStatus", {
+    queueId: Schema.String,
+  }),
+  Schema.TaggedStruct("StartQueue", {
     queueId: Schema.String,
   }),
   Schema.TaggedStruct("PauseQueue", {
@@ -465,6 +469,21 @@ export const makeControlProtocolRouter = <
             group.queue(entry).status,
             queueStatusResponse,
             `Queue '${request.queueId}' not found`,
+          );
+        }
+
+        case "StartQueue": {
+          const entry = findQueueEntry(group.entries, request.queueId);
+          if (entry === undefined) {
+            return {
+              _tag: "Control",
+              status: 404,
+              body: errorResponse(`Queue '${request.queueId}' not found`),
+            };
+          }
+          return yield* routeVoid(
+            group.queue(entry).start,
+            `Queue '${request.queueId}' could not be started`,
           );
         }
 

@@ -222,6 +222,12 @@ const requestFromRestRoute = (
     }
     if (method === "POST" && segments.length === 3) {
       const operation = segments[2];
+      if (operation === "start") {
+        return {
+          _tag: "Protocol",
+          request: { _tag: "StartQueue", queueId },
+        };
+      }
       if (operation === "pause") {
         return {
           _tag: "Protocol",
@@ -340,6 +346,12 @@ const routeFor = (request: ControlProtocolRequest): HttpControlRoute => {
       return {
         method: "GET",
         path: `/queues/${encodeURIComponent(request.queueId)}`,
+        response: "control",
+      };
+    case "StartQueue":
+      return {
+        method: "POST",
+        path: `/queues/${encodeURIComponent(request.queueId)}/start`,
         response: "control",
       };
     case "PauseQueue":

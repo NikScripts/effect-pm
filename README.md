@@ -56,14 +56,14 @@ npm install @nikscripts/effect-pm effect
 import { QueueResource } from "@nikscripts/effect-pm";
 import { Effect } from "effect";
 
-class EmailQueue extends QueueResource.Service<EmailQueue, Email, string, never>()(
+class EmailQueue extends QueueResource.Service<EmailQueue, Email, never, never>()(
   "email-queue",
   {
     effect: (email: Email) =>
       Effect.gen(function* () {
         // Process the email
         yield* sendEmail(email);
-        return email.id;
+        yield* Effect.logInfo(email.id);
       }),
     concurrency: 5,
     capacity: 1000,
@@ -139,7 +139,7 @@ You can merge independent layers with **`Layer.mergeAll(...)`** and a single `Ef
 ```typescript
 import { QueueResource } from "@nikscripts/effect-pm";
 
-class TaskQueue extends QueueResource.Service<TaskQueue, Item, void, never>()(
+class TaskQueue extends QueueResource.Service<TaskQueue, Item, never, never>()(
   "task-queue",
   {
     effect: (item: Item) => processItem(item),
@@ -155,10 +155,15 @@ class TaskQueue extends QueueResource.Service<TaskQueue, Item, void, never>()(
 import { QueueResource } from "@nikscripts/effect-pm";
 import { Effect, Exit } from "effect";
 
-class ProcessingQueue extends QueueResource.Service<ProcessingQueue, Item, Result, ProcessingError>()(
+class ProcessingQueue extends QueueResource.Service<
+  ProcessingQueue,
+  Item,
+  ProcessingError,
+  never
+>()(
   "processing-queue",
   {
-    effect: processItem,
+    effect: (item: Item) => processItem(item),
 
     // Concurrency control
     concurrency: 5,
@@ -170,7 +175,7 @@ class ProcessingQueue extends QueueResource.Service<ProcessingQueue, Item, Resul
     handler: (item, exit, ctx) =>
       Exit.match(exit, {
         onFailure: () => ctx.retry,
-        onSuccess: (result) => Effect.logInfo(`Processed: ${result.id}`),
+        onSuccess: () => Effect.logInfo(`Processed ${item.id}`),
       }),
     retries: 3,
 
@@ -311,7 +316,7 @@ The ProcessGroup enforces type-safe queue dependencies at compile time:
 import { Process, QueueResource, ProcessGroup, Polling, ProcessSchedule } from "@nikscripts/effect-pm";
 import { Cron, Duration, Effect } from "effect";
 
-class EmailQueue extends QueueResource.Service<EmailQueue, Email, void, SendError>()(
+class EmailQueue extends QueueResource.Service<EmailQueue, Email, SendError, never>()(
   "email-queue",
   {
     effect: sendEmail,
@@ -471,7 +476,7 @@ const program = Effect.gen(function* () {
 Set appropriate queue capacities to prevent memory issues:
 
 ```typescript
-class TaskQueue extends QueueResource.Service<TaskQueue, Task, void, never>()(
+class TaskQueue extends QueueResource.Service<TaskQueue, Task, never, never>()(
   "task-queue",
   {
     capacity: 50000, // Adjust based on item size
@@ -485,7 +490,7 @@ class TaskQueue extends QueueResource.Service<TaskQueue, Task, void, never>()(
 Use `handler` to observe item exits and decide whether to retry:
 
 ```typescript
-class TaskQueue extends QueueResource.Service<TaskQueue, Task, Result, TaskError>()(
+class TaskQueue extends QueueResource.Service<TaskQueue, Task, TaskError, never>()(
   "task-queue",
   {
     effect: processItem,
@@ -546,7 +551,7 @@ See [examples/scenarios/full-process-group-with-queues-and-control-cli.ts](./exa
 - `ProcessGroup` - ProcessGroup interface
 - `ProcessGroupDetails` - Process status information
 - `QueueDetails` - Queue status information
-- `QueueHandle<T, R, E>` - Queue handle API (`yield*` the queue service tag)
+- `QueueHandle<T, E, EEnqueue, R>` - Queue handle API (`yield*` the queue service tag)
 - `Process<R>` - Process interface
 - `ProcessStoreInterface` - Service contract for implementing a custom store
 - `AnalyticsEvent` / `ProcessExecutionCompletedEvent` / `ProcessLifecycleChangedEvent` - Event envelope and concrete event types

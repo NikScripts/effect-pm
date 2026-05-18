@@ -229,7 +229,7 @@ Effect.scoped(
   Effect.gen(function* () {
     const sentEmails = yield* Ref.make<ReadonlyArray<string>>([]);
 
-    class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, void>()(
+    class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, never>()(
       "@examples/EmailQueue",
       {
         effect: (email) =>
@@ -451,6 +451,8 @@ makeQueueItemCodecDescriptor("@test/EmailQueue", EmailItem);
 ```
 
 Declare with **`QueueResource.Service`** to attach **`item`** metadata for future contract / remote enqueue (plan **02**/ **07**).
+
+**Generics migration:** Earlier sketches used **`QueueHandle<T, R, E>`** / **`QueueResource.Service<Self, T, R, E>`**-style ordering. The shipped package uses **`QueueHandle<T, E, EEnqueue, R>`** and **`QueueResource.Service<Self, T, E, R>`** (**worker failure `E`, enqueue-validation errors `EEnqueue`, ambient requirements `R` last**). Update explicit type arguments when pinning all four slots (e.g. priority/retry demos that declare a worker **`SendError`**).
 
 ---
 
