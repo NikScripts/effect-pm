@@ -87,12 +87,8 @@ export const processGroupTypeChecks = Effect.gen(function* () {
   yield* acceptQueueId(TypeEmailQueue.id);
   yield* acceptQueueId(TypeInvoiceQueue.id);
 
-  const _directQueueEnqueue = directGroup
-    .queue(TypeEmailQueue)
-    .enqueue({ to: "local-error-channel@example.com" });
-  const _serviceQueueEnqueue = serviceGroup
-    .queue(TypeEmailQueue)
-    .enqueue({ to: "remote-error-channel@example.com" });
+  const _directQueueControls = directGroup.queue(TypeEmailQueue);
+  const _serviceQueueControls = serviceGroup.queue(TypeEmailQueue);
   const _remoteLayer = ProcessGroup.remoteLayer(TypeGroup, TypeEndpoint);
   const _registryLayer = ProcessManager.ConnectionRegistry.layer(
     [TypeGroup] as const,
@@ -103,8 +99,8 @@ export const processGroupTypeChecks = Effect.gen(function* () {
   const _registryConnect = ProcessManager.connect(TypeGroup);
 
   type DirectGroupId = typeof directGroup.id;
-  type DirectQueueEnqueueError = EffectError<typeof _directQueueEnqueue>;
-  type ServiceQueueEnqueueError = EffectError<typeof _serviceQueueEnqueue>;
+  type DirectQueueEnqueueError = EffectError<ReturnType<typeof _directQueueControls.enqueue>>;
+  type ServiceQueueEnqueueError = EffectError<ReturnType<typeof _serviceQueueControls.enqueue>>;
   type RemoteLayerOut = LayerOut<typeof _remoteLayer>;
   type RemoteLayerIn = LayerIn<typeof _remoteLayer>;
   type RegistryLayerOut = LayerOut<typeof _registryLayer>;
