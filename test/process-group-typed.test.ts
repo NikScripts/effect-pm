@@ -257,6 +257,115 @@ describe("ProcessGroup.make", () => {
     }),
   );
 
+  it.live("group service layer does not cold-start queue refill", () =>
+    Effect.gen(function* () {
+      const refills = yield* Ref.make(0);
+
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
+        "@test/GroupLayerRefillQueue",
+        {
+          effect: (_email: Email) => Effect.void,
+          concurrency: 1,
+          refill: (_q) => Ref.update(refills, (n) => n + 1),
+        },
+      ) {}
+
+      class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+        "@test/GroupLayerRefillGroup",
+        [EmailQueue] as const,
+      ) {}
+
+      yield* Effect.gen(function* () {
+        const group = yield* BillingGroup;
+        yield* Effect.sleep(Duration.millis(120));
+        expect(yield* Ref.get(refills)).toBe(0);
+        void group;
+      }).pipe(
+        Effect.provide(
+          BillingGroup.layer.pipe(Layer.provide(EmailQueue.layer)),
+        ),
+      );
+    }),
+  );
+
+  it.live("group queue start does not cold-start refill but drain-to-empty does", () =>
+    Effect.gen(function* () {
+      const handled = yield* Ref.make<ReadonlyArray<string>>([]);
+      const refills = yield* Ref.make(0);
+
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
+        "@test/GroupQueueStartRefillQueue",
+        {
+          autoStart: false,
+          effect: (email: Email) =>
+            Ref.update(handled, (values) => [...values, email.to]),
+          concurrency: 1,
+          refill: (_q) => Ref.update(refills, (n) => n + 1),
+        },
+      ) {}
+
+      yield* Effect.gen(function* () {
+        const group = yield* ProcessGroup.make("@test/GroupQueueStartRefillGroup", [
+          EmailQueue,
+        ] as const);
+
+        yield* group.queue(EmailQueue).start;
+        yield* Effect.sleep(Duration.millis(80));
+        expect(yield* Ref.get(refills)).toBe(0);
+
+        yield* group.queue(EmailQueue).enqueue({ to: "ops@example.com" });
+        const queue = yield* EmailQueue;
+        yield* waitForCompleted(queue, 1);
+
+        let steps = 0;
+        while ((yield* Ref.get(refills)) < 1 && steps++ < 200) {
+          yield* Effect.sleep(Duration.millis(5));
+        }
+        expect(yield* Ref.get(handled)).toEqual(["ops@example.com"]);
+        expect(yield* Ref.get(refills)).toBeGreaterThanOrEqual(1);
+      }).pipe(Effect.provide(EmailQueue.layer));
+    }),
+  );
+
+  it.live("group startAll does not cold-start refill before queued work drains", () =>
+    Effect.gen(function* () {
+      const handled = yield* Ref.make<ReadonlyArray<string>>([]);
+      const refills = yield* Ref.make(0);
+
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
+        "@test/GroupStartAllRefillQueue",
+        {
+          autoStart: false,
+          effect: (email: Email) =>
+            Ref.update(handled, (values) => [...values, email.to]),
+          concurrency: 1,
+          refill: (_q) => Ref.update(refills, (n) => n + 1),
+        },
+      ) {}
+
+      yield* Effect.gen(function* () {
+        const group = yield* ProcessGroup.make("@test/GroupStartAllRefillGroup", [
+          EmailQueue,
+        ] as const);
+
+        yield* group.startAll();
+        yield* Effect.sleep(Duration.millis(80));
+        expect(yield* Ref.get(refills)).toBe(0);
+
+        yield* group.queue(EmailQueue).enqueue({ to: "team@example.com" });
+        const queue = yield* EmailQueue;
+        yield* waitForCompleted(queue, 1);
+
+        let steps = 0;
+        while ((yield* Ref.get(refills)) < 1 && steps++ < 200) {
+          yield* Effect.sleep(Duration.millis(5));
+        }
+        expect(yield* Ref.get(handled)).toEqual(["team@example.com"]);
+        expect(yield* Ref.get(refills)).toBeGreaterThanOrEqual(1);
+      }).pipe(Effect.provide(EmailQueue.layer));
+    }),
+  );
+
   it.live("supports an injectable group service for singleton control surfaces", () =>
     Effect.gen(function* () {
       const handled = yield* Ref.make<ReadonlyArray<string>>([]);
