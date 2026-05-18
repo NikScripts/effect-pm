@@ -277,15 +277,22 @@ metadata. `release` returns the same entry shape so pending work can move from
 one queue to another without losing retry, priority, dedupe, or trace metadata.
 
 ```typescript
+import { DateTime } from "effect"
+
 export interface QueueEntry<T> {
   readonly item: T
   readonly priority?: Priority
   readonly key?: string
   readonly entryId?: string
+  readonly entryIds?: ReadonlyArray<string>
   readonly attempts?: number
-  readonly enqueuedAt?: number
+  readonly timestamps?: {
+    readonly enqueuedAt?: DateTime.Utc
+    readonly startedAt?: DateTime.Utc
+    readonly interruptedAt?: DateTime.Utc
+  }
+  readonly sourceResourceId?: string
   readonly attributes?: Record<string, unknown>
-  readonly source?: string
   readonly releaseId?: string
 }
 ```
@@ -294,12 +301,39 @@ Rules:
 
 - `item` is required.
 - All metadata is optional on input; the target queue fills defaults for missing
-  `priority`, `attempts`, `enqueuedAt`, `entryId`, and derived dedupe key.
+  `priority`, `attempts`, `timestamps.enqueuedAt`, `entryId`, `entryIds`, and
+  derived dedupe key.
+- `entryId` is the current queue-local entry id.
+- `entryIds` is immutable ordered lineage, includes the current `entryId`, and is
+  updated with Effect's `Array` helpers (`Array.append`, etc.), not exposed as a
+  mutable collection.
+- On first enqueue, the target queue creates `entryId` and
+  `entryIds = [entryId]`.
+- On retry or handoff enqueue, the target queue creates a new `entryId` and
+  appends it to `entryIds`.
+- `sourceResourceId` identifies the queue/resource/deployment that produced a
+  released entry. Prefer `sourceResourceId` over a generic `source` so future
+  resource families can share the vocabulary.
 - `add` / `prioritize` / `defer` stay item-only convenience methods.
 - `enqueue(entry)` / `enqueue(entries, { mode })` is the metadata-aware path.
 - `release()` drains pending work and returns `ReadonlyArray<QueueEntry<T>>`.
+- `release()` removes released entries' active dedupe keys from the source queue,
+  including when the source queue uses `Dedupe.manualRelease`; ownership moved
+  out of the source queue, and the target queue re-applies its own dedupe policy
+  when those entries are enqueued.
 - `interruptAndRelease()` is a separate explicit control for interrupting
   recoverable in-flight work and returning the same `QueueEntry<T>` shape.
+- `interruptAndRelease()` follows the same dedupe ownership rule: every returned
+  pending or recoverable in-flight entry has its source dedupe key removed.
+- For `interruptAndRelease()`, "in-flight" means currently being processed by
+  the item effect. Once the item has been passed to completion handlers, it is
+  complete and must not be returned.
+- Entries returned from interrupted in-flight work should preserve all metadata
+  and set `timestamps.interruptedAt` so targets can distinguish normal pending
+  transfer from interrupted transfer. Do not add a separate `interrupted`
+  boolean or reason field in the first implementation; presence of
+  `timestamps.interruptedAt` is the signal, and `interruptAndRelease()` is the
+  only source of that metadata.
 - Do not introduce a separate encoded `payload` entry shape in this slice.
   Remote enqueue and cross-deployment encoded handoff can layer encoding on top
   of `QueueEntry<T>` once queue item codecs are stable.
@@ -694,6 +728,11 @@ Remote release/handoff requires schema or codec support. A ProcessManager should
 be able to treat remote payloads as opaque encoded values and let the target
 group validate them, while local in-process release can keep decoded
 `QueueEntry<T>` values.
+
+Future ProcessManager handoff flows may accept a transform effect between
+release and target enqueue. Use it for deployment-specific mapping, filtering,
+metadata annotation, or compatibility repair before entries enter the target
+queue.
 
 ## Candidate controls
 
