@@ -366,6 +366,66 @@ describe("ProcessGroup.make", () => {
     }),
   );
 
+  it.live("group startAll can trigger refill after a started process enqueues work that drains", () =>
+    Effect.gen(function* () {
+      const handled = yield* Ref.make<ReadonlyArray<string>>([]);
+      const refills = yield* Ref.make(0);
+
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
+        "@test/GroupProcessEnqueueRefillQueue",
+        {
+          autoStart: false,
+          effect: (email: Email) =>
+            Ref.update(handled, (values) => [...values, email.to]),
+          concurrency: 1,
+          refill: (_q) => Ref.update(refills, (n) => n + 1),
+        },
+      ) {}
+
+      class EnqueueProcess extends Process.Service<EnqueueProcess>()(
+        "@test/GroupProcessEnqueueRefillProcess",
+        {
+          effect: Effect.gen(function* () {
+            const queue = yield* EmailQueue;
+            yield* queue.add({ to: "process@example.com" });
+          }),
+        },
+      ) {}
+
+      class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+        "@test/GroupProcessEnqueueRefillGroup",
+        [EnqueueProcess, EmailQueue] as const,
+      ) {}
+
+      yield* Effect.gen(function* () {
+        const group = yield* BillingGroup;
+        yield* Effect.sleep(Duration.millis(80));
+        expect(yield* Ref.get(refills)).toBe(0);
+
+        yield* group.startAll();
+
+        const queue = yield* EmailQueue;
+        yield* waitForCompleted(queue, 1);
+
+        let steps = 0;
+        while ((yield* Ref.get(refills)) < 1 && steps++ < 200) {
+          yield* Effect.sleep(Duration.millis(5));
+        }
+        expect(yield* Ref.get(handled)).toEqual(["process@example.com"]);
+        expect(yield* Ref.get(refills)).toBeGreaterThanOrEqual(1);
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            BillingGroup.layer.pipe(
+              Layer.provide(Layer.mergeAll(EnqueueProcess.layer, EmailQueue.layer)),
+            ),
+            EmailQueue.layer,
+          ),
+        ),
+      );
+    }),
+  );
+
   it.live("supports an injectable group service for singleton control surfaces", () =>
     Effect.gen(function* () {
       const handled = yield* Ref.make<ReadonlyArray<string>>([]);
