@@ -92,6 +92,7 @@ const done = yield* queue.completed     // items processed since workers began d
 
 // ─── Lifecycle (effectful properties) ───
 yield* queue.start                      // fork workers when `autoStart: false` was set at construction
+yield* queue.refill                     // manual: run configured `refill` once (optional hook)
 yield* queue.pause                      // workers block before next item
 yield* queue.resume                     // workers unblock
 yield* queue.shutdown                   // permanent stop, enqueue drops items
@@ -123,7 +124,7 @@ QueueResource.Service<Self, T, E, R>()("name", {
 
   // ─── Persistence ───
   persist: (items, priority) => db.save(items),  // write-through on enqueue
-  refill: (queue) => ...,                         // reload from source when empty
+  refill: (queue) => ...,                         // optional; auto-run only after enqueue/drain signals — use `yield* queue.refill` to bootstrap before workers drain
 
   // ─── Hooks (fire-and-forget) ───
   onEnqueue: (items, priority) => metrics.increment("enqueued", items.length),

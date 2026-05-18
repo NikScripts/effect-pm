@@ -542,7 +542,7 @@ describe("QueueResource.make — autoStart", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.live("defers refill fiber until start when autoStart is false", () =>
+  it.live("automatic refill waits for wake then runs after queues drain empty", () =>
     Effect.gen(function* () {
       const refills = yield* Ref.make(0);
       const queue = yield* QueueResource.make({
@@ -556,11 +556,34 @@ describe("QueueResource.make — autoStart", () => {
       expect(yield* Ref.get(refills)).toBe(0);
 
       yield* queue.start;
+      expect(yield* Ref.get(refills)).toBe(0);
+
+      yield* queue.add([1]);
+      yield* waitUntilCompleted(queue, 1);
+
       let steps = 0;
       while ((yield* Ref.get(refills)) < 1 && steps++ < 200) {
         yield* Effect.sleep(Duration.millis(5));
       }
       expect(yield* Ref.get(refills)).toBeGreaterThanOrEqual(1);
+      void queue;
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("manual refill invokes configured callback without cold-start automatic refill", () =>
+    Effect.gen(function* () {
+      const refills = yield* Ref.make(0);
+      const queue = yield* QueueResource.make({
+        name: "test-manual-refill",
+        autoStart: false,
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+        refill: (_q) => Ref.update(refills, (n) => n + 1),
+      });
+      yield* queue.start;
+      expect(yield* Ref.get(refills)).toBe(0);
+      yield* queue.refill;
+      expect(yield* Ref.get(refills)).toBe(1);
       void queue;
     }).pipe(Effect.scoped),
   );
