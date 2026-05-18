@@ -255,8 +255,8 @@ export interface QueueHandleApi<
 
   /**
    * Invoke {@link QueueResourceConfigBase.refill} once when configured (manual bootstrap).
-   * Automatic empty-triggered refill waits for enqueue activity or a post-work drain signal — it does **not**
-   * run on cold start while queues stay empty.
+   * Automatic empty-triggered refill wakes only after queues drain empty following processed work (or after {@link QueueHandleApi.clear});
+   * enqueue wakes workers, not the refill monitor. Does **not** run on cold start while queues stay empty.
    */
   readonly refill: Effect.Effect<void, never, R>;
 
@@ -704,9 +704,10 @@ interface InternalItem<T> {
  * - Optional deferred fork via {@link QueueResourceConfigBase.autoStart}: when `false`,
  *   call {@link QueueHandleApi.start} to fork workers (and the refill fiber when configured).
  * - Optional {@link QueueHandleApi.refill} invokes {@link QueueResourceConfigBase.refill} manually;
- *   automatic refill waits for a wake (enqueue or queues draining empty), not cold-start empty.
+ *   automatic refill waits on a dedicated wake until queues drain empty after processed work (not cold-start empty).
+ * - Worker wake (`takeNext`): enqueue / shutdown — avoids priority inversion vs racing priority queues.
+ * - Refill wake: drain-to-empty after an item completes (or after {@link QueueHandleApi.clear}) — independent of idle worker waits.
  * - `Latch` gates worker entry (pause/resume)
- * - `Deferred` wake signal for non-blocking empty-queue wait (avoids priority inversion)
  * - `Semaphore` for concurrency control within the worker pool
  * - Handler effects are forked into a separate `FiberSet` (never block workers)
  */
@@ -880,9 +881,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     // A key is added on enqueue and removed after processing completes.
     const activeKeys = yield* Ref.make(HashSet.empty<string>());
 
-    // Wake signal: completed when items arrive, workers blocked on empty queue
-    // await this. Recreated after each signal (single-use Deferred pattern).
-    let wakeSignal = yield* Deferred.make<void>();
+    // Worker wake: enqueue / shutdown unblock `takeNext` waiters on empty queues.
+    let workerWakeSignal = yield* Deferred.make<void>();
+    // Refill wake: distinct so idle workers never pulse the refill monitor (they share no Deferred with workers).
+    let refillWakeSignal = yield* Deferred.make<void>();
 
     // Managed fiber collections. Scope close interrupts all fibers automatically.
     const workerFibers = yield* FiberSet.make<void>();
@@ -941,12 +943,24 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       }).pipe(Effect.ignore);
     };
 
-    // ─── Internal: wake signal ───
+    // ─── Internal: wake signals (workers vs refill monitor) ───
 
-    /** Complete the current wake signal and allocate a fresh one. */
-    const signalWake = Effect.gen(function* () {
-      yield* Deferred.succeed(wakeSignal, undefined);
-      wakeSignal = yield* Deferred.make<void>();
+    /** Complete the current worker wake signal and allocate a fresh one. */
+    const signalWorkerWake = Effect.gen(function* () {
+      yield* Deferred.succeed(workerWakeSignal, undefined);
+      workerWakeSignal = yield* Deferred.make<void>();
+    });
+
+    /** Complete the current refill wake signal and allocate a fresh one. */
+    const signalRefillWake = Effect.gen(function* () {
+      yield* Deferred.succeed(refillWakeSignal, undefined);
+      refillWakeSignal = yield* Deferred.make<void>();
+    });
+
+    /** Shutdown must unblock both `takeNext` waiters and the refill fiber. */
+    const signalShutdownWake = Effect.gen(function* () {
+      yield* signalWorkerWake;
+      yield* signalRefillWake;
     });
 
     /** Wake refill monitor when all priority queues are empty (after work drains). */
@@ -955,7 +969,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       const n = yield* Queue.size(normalQueue);
       const l = yield* Queue.size(lowQueue);
       if (Math.max(0, h) + Math.max(0, n) + Math.max(0, l) === 0) {
-        yield* signalWake;
+        yield* signalRefillWake;
       }
     });
 
@@ -974,7 +988,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
      * 1. Shutdown check (warn + drop)
      * 2. Dedup key check (skip duplicates)
      * 3. Offer to the target priority queue
-     * 4. Wake sleeping workers
+     * 4. Wake sleeping workers (`takeNext` waiters)
      * 5. Fire hooks (onEnqueue, persist)
      */
     const enqueueInternal = (
@@ -1014,7 +1028,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         if (toEnqueue.length === 0) return;
 
         yield* Queue.offerAll(queueForPriority(priority), toEnqueue);
-        yield* signalWake;
+        yield* signalWorkerWake;
 
         // Fire-and-forget hooks
         if (config.onEnqueue !== undefined) {
@@ -1139,8 +1153,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       const low = yield* Queue.poll(lowQueue);
       if (Option.isSome(low)) return low.value;
 
-      // All empty — wait for wake signal then re-poll in priority order
-      yield* Deferred.await(wakeSignal);
+      // All empty — wait for enqueue/shutdown wake then re-poll in priority order
+      yield* Deferred.await(workerWakeSignal);
       return yield* takeNext;
     });
 
@@ -1270,7 +1284,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         yield* FiberSet.run(workerFibers)(
           Effect.forever(
             Effect.gen(function* () {
-              yield* Deferred.await(wakeSignal);
+              yield* Deferred.await(refillWakeSignal);
 
               const shutdown = yield* Ref.get(isShutdownRef);
               if (shutdown) return yield* Effect.interrupt;
@@ -1360,7 +1374,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
       // Mark shutdown → wake sleeping workers (so they see the flag) → record
       shutdown: Ref.set(isShutdownRef, true).pipe(
-        Effect.andThen(signalWake),
+        Effect.andThen(signalShutdownWake),
         Effect.andThen(recordLifecycleEvent("Shutdown")),
         Effect.andThen(Effect.logInfo(`Queue "${queueName}" shutting down`)),
       ),

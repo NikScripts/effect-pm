@@ -124,7 +124,7 @@ QueueResource.Service<Self, T, E, R>()("name", {
 
   // ─── Persistence ───
   persist: (items, priority) => db.save(items),  // write-through on enqueue
-  refill: (queue) => ...,                         // optional; auto-run only after enqueue/drain signals — use `yield* queue.refill` to bootstrap before workers drain
+  refill: (queue) => ...,                         // optional; auto-run only after queues drain empty (not on idle workers / cold start) — use `yield* queue.refill` to bootstrap
 
   // ─── Hooks (fire-and-forget) ───
   onEnqueue: (items, priority) => metrics.increment("enqueued", items.length),

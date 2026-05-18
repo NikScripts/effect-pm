@@ -570,6 +570,21 @@ describe("QueueResource.make — autoStart", () => {
     }).pipe(Effect.scoped),
   );
 
+  it.live("automatic refill stays idle until drain even with default autoStart", () =>
+    Effect.gen(function* () {
+      const refills = yield* Ref.make(0);
+      const queue = yield* QueueResource.make({
+        name: "test-refill-no-auto-layer-only",
+        effect: (_n: number) => Effect.void,
+        concurrency: 4,
+        refill: (_q) => Ref.update(refills, (n) => n + 1),
+      });
+      yield* Effect.sleep(Duration.millis(120));
+      expect(yield* Ref.get(refills)).toBe(0);
+      void queue;
+    }).pipe(Effect.scoped),
+  );
+
   it.live("manual refill invokes configured callback without cold-start automatic refill", () =>
     Effect.gen(function* () {
       const refills = yield* Ref.make(0);

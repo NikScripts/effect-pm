@@ -429,7 +429,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 - **`onEnqueue?`**, **`onComplete?`**, **`onEmpty?`** — fire-and-forget hooks.
 - **`effect(item, ctx)`** — required worker body.
 - **`handler?(item, exit, ctx)`** — optional; always forked.
-- **`refill?(queueHandle)`** — after activity wakes the refill monitor (enqueue / drain-to-empty), optional reload loop when all levels empty.
+- **`refill?(queueHandle)`** — optional reload loop when all levels empty after processed work drains (or after `clear`); not triggered by enqueue alone or idle worker waits.
 
 **Enqueue error channel on contexts:** `QueueItemValidationError | QueueBatchValidationError` only when schema path used; without schema, still typed but validation never fails.
 
