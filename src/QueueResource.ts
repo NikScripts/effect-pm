@@ -198,7 +198,7 @@ export type QueueHandlePhantomWorkerFailures<E = never> = {
  * The service interface returned from `yield* MyQueue`.
  *
  * All observation methods (`size`, `sizes`, `isEmpty`, `completed`) and lifecycle
- * actions (`pause`, `resume`, `shutdown`, `clear`) are effectful properties —
+ * actions (`start`, `pause`, `resume`, `shutdown`, `clear`) are effectful properties —
  * access them with `yield*` directly (no function call parentheses).
  *
  * Enqueue methods accept either a single item or a readonly array of items.
@@ -244,6 +244,14 @@ export interface QueueHandleApi<
   readonly isEmpty: Effect.Effect<boolean>;
   /** Total items that have finished processing (success or failure). */
   readonly completed: Effect.Effect<number>;
+
+  /**
+   * Fork the worker pool (and `refill` monitor when configured). Idempotent — safe to call multiple times.
+   * Only needed when {@link QueueResourceConfigBase.autoStart} was `false`; otherwise workers already started at acquisition.
+   *
+   * After {@link shutdown}, `start` is a no-op (warning logged).
+   */
+  readonly start: Effect.Effect<void, never, R>;
 
   /**
    * Pause processing. Workers block before their next item.
@@ -418,6 +426,14 @@ export interface QueueResourceConfigBase<T, E, R> {
   readonly name?: string;
   /** Start with processing paused. Call `resume` to begin. @default false */
   readonly paused?: boolean;
+  /**
+   * When `false`, worker fibers (and the optional `refill` fiber) are **not** forked until
+   * {@link QueueHandleApi.start} runs. Enqueue still succeeds; items accumulate until workers exist.
+   * `pause` / `resume` update the latch before or after `start` — workers observe it once forked.
+   *
+   * @default true (preserve historic behavior: fork workers as soon as the queue scope acquires).
+   */
+  readonly autoStart?: boolean;
   /** Max items processing concurrently (worker count). @default 5 */
   readonly concurrency?: number;
   /** Max items per priority queue (bounded backpressure). @default 50_000 */
@@ -678,6 +694,8 @@ interface InternalItem<T> {
  * Architecture:
  * - Three bounded `Queue<InternalItem<T>>` (one per priority level)
  * - N worker fibers (managed by `FiberSet`) that loop: latch → take → latch → process
+ * - Optional deferred fork via {@link QueueResourceConfigBase.autoStart}: when `false`,
+ *   call {@link QueueHandleApi.start} to fork workers (and the refill fiber when configured).
  * - `Latch` gates worker entry (pause/resume)
  * - `Deferred` wake signal for non-blocking empty-queue wait (avoids priority inversion)
  * - `Semaphore` for concurrency control within the worker pool
@@ -1192,14 +1210,61 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         { "queue.name": queueName, "queue.worker": String(workerId) },
       );
 
-    // ─── Start worker pool ───
+    const autoStart = config.autoStart ?? true;
+    const workersStartedRef = yield* Ref.make(false);
+    /** Set synchronously before `forkProcessingFibers` first runs (autoStart or manual `start`). */
+    const queueHandleSlot: { current?: QueueHandle<T, E, EEnqueue, R> } = {};
 
-    for (let i = 0; i < concurrency; i++) {
-      yield* FiberSet.run(workerFibers)(workerLoop(i));
-    }
+    const forkProcessingFibers = Effect.gen(function* () {
+      if (yield* Ref.get(isShutdownRef)) {
+        yield* Effect.logWarning(
+          `Queue "${queueName}" start ignored: queue already shut down`,
+        );
+        return;
+      }
 
-    yield* recordLifecycleEvent("Started");
-    yield* Effect.logDebug(`Queue "${queueName}" started with ${String(concurrency)} workers`);
+      const claimed = yield* Ref.modify(workersStartedRef, (started) =>
+        started ? ([false, started] as const) : ([true, true] as const));
+
+      if (!claimed) return;
+
+      for (let i = 0; i < concurrency; i++) {
+        yield* FiberSet.run(workerFibers)(workerLoop(i));
+      }
+
+      yield* recordLifecycleEvent("Started");
+      yield* Effect.logDebug(
+        `Queue "${queueName}" worker pool started (${String(concurrency)} workers)`,
+      );
+
+      if (config.refill !== undefined) {
+        const refillFn = config.refill;
+        const handle = queueHandleSlot.current;
+        if (handle === undefined) {
+          return yield* Effect.die(
+            new Error(`Queue "${queueName}" internal error: handle not wired before refill fork`),
+          );
+        }
+
+        yield* FiberSet.run(workerFibers)(
+          Effect.forever(
+            Effect.gen(function* () {
+              const empty = yield* handle.isEmpty;
+              if (empty) {
+                const shutdown = yield* Ref.get(isShutdownRef);
+                if (shutdown) return yield* Effect.interrupt;
+                yield* Effect.logDebug(`Queue "${queueName}" empty, triggering refill`);
+                yield* refillFn(handle).pipe(Effect.ignore);
+                if (config.onEmpty !== undefined) {
+                  yield* config.onEmpty.pipe(Effect.ignore);
+                }
+              }
+              yield* Deferred.await(wakeSignal);
+            }),
+          ),
+        );
+      }
+    });
 
     // ─── Build public handle ───
 
@@ -1233,6 +1298,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
       // Counter incremented after each item completes processing
       completed: Ref.get(completedCount),
+
+      start: forkProcessingFibers.pipe(Effect.asVoid),
 
       // Close latch → workers block on next iteration before taking items
       pause: latch.close.pipe(
@@ -1276,27 +1343,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       }),
     };
 
-    // ─── Refill: monitor for empty state ───
+    queueHandleSlot.current = queueHandle;
 
-    if (config.refill !== undefined) {
-      const refillFn = config.refill;
-      yield* FiberSet.run(workerFibers)(
-        Effect.forever(
-          Effect.gen(function* () {
-            const empty = yield* queueHandle.isEmpty;
-            if (empty) {
-              const shutdown = yield* Ref.get(isShutdownRef);
-              if (shutdown) return yield* Effect.interrupt;
-              yield* Effect.logDebug(`Queue "${queueName}" empty, triggering refill`);
-              yield* refillFn(queueHandle).pipe(Effect.ignore);
-              if (config.onEmpty !== undefined) {
-                yield* config.onEmpty.pipe(Effect.ignore);
-              }
-            }
-            yield* Deferred.await(wakeSignal);
-          }),
-        ),
-      );
+    if (autoStart) {
+      yield* forkProcessingFibers;
     }
 
     return queueHandle;

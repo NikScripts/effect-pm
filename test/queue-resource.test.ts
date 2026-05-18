@@ -484,6 +484,88 @@ describe("QueueResource.make — self-enqueue guard", () => {
   );
 });
 
+describe("QueueResource.make — autoStart", () => {
+  it.live("does not process until start when autoStart is false", () =>
+    Effect.gen(function* () {
+      const results = yield* Ref.make<Array<number>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-autostart-deferred",
+        autoStart: false,
+        effect: (n: number) => Ref.update(results, (arr) => [...arr, n]),
+        concurrency: 1,
+      });
+      yield* queue.add([1, 2]);
+      yield* Effect.sleep(Duration.millis(40));
+      const before = yield* Ref.get(results);
+      expect(before).toHaveLength(0);
+
+      yield* queue.start;
+      yield* waitUntilCompleted(queue, 2);
+      const after = yield* Ref.get(results);
+      expect(after.sort()).toEqual([1, 2]);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("start is idempotent", () =>
+    Effect.gen(function* () {
+      const results = yield* Ref.make<Array<number>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-autostart-idempotent",
+        autoStart: false,
+        effect: (n: number) => Ref.update(results, (arr) => [...arr, n]),
+        concurrency: 2,
+      });
+      yield* queue.start;
+      yield* queue.start;
+      yield* queue.add([1]);
+      yield* waitUntilCompleted(queue, 1);
+      const final = yield* Ref.get(results);
+      expect(final).toEqual([1]);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("start after shutdown does not process queued items", () =>
+    Effect.gen(function* () {
+      const results = yield* Ref.make<Array<number>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-autostart-shutdown-first",
+        autoStart: false,
+        effect: (n: number) => Ref.update(results, (arr) => [...arr, n]),
+        concurrency: 1,
+      });
+      yield* queue.shutdown;
+      yield* queue.start;
+      yield* queue.add([1]);
+      yield* Effect.sleep(Duration.millis(30));
+      const r = yield* Ref.get(results);
+      expect(r).toHaveLength(0);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("defers refill fiber until start when autoStart is false", () =>
+    Effect.gen(function* () {
+      const refills = yield* Ref.make(0);
+      const queue = yield* QueueResource.make({
+        name: "test-autostart-refill",
+        autoStart: false,
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+        refill: (_q) => Ref.update(refills, (n) => n + 1),
+      });
+      yield* Effect.sleep(Duration.millis(40));
+      expect(yield* Ref.get(refills)).toBe(0);
+
+      yield* queue.start;
+      let steps = 0;
+      while ((yield* Ref.get(refills)) < 1 && steps++ < 200) {
+        yield* Effect.sleep(Duration.millis(5));
+      }
+      expect(yield* Ref.get(refills)).toBeGreaterThanOrEqual(1);
+      void queue;
+    }).pipe(Effect.scoped),
+  );
+});
+
 const EmailItem = Schema.Struct({
   id: Schema.String,
   subject: Schema.String,
