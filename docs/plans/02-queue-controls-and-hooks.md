@@ -270,39 +270,50 @@ untyped callers.
 (id + version) in addition to group id. Mismatched versions are a client
 warning, not a hard failure — the target group always re-validates payloads.
 
-### Enqueue entry shape (schema-aware)
+### Queue entry shape for `enqueue` and `release`
 
-Advanced `enqueue` accepts entries that carry either a decoded item or an
-encoded payload, not both:
+Advanced `enqueue` accepts queue entries: the item plus optional bookkeeping
+metadata. `release` returns the same entry shape so pending work can move from
+one queue to another without losing retry, priority, dedupe, or trace metadata.
 
 ```typescript
-type QueueEnqueueEntry<T, Encoded> =
-  | {
-      readonly item: T
-      readonly priority?: Priority
-      readonly key?: string
-      readonly entryId?: string
-      readonly attributes?: Record<string, unknown>
-    }
-  | {
-      readonly payload: Encoded
-      readonly priority?: Priority
-      readonly key?: string
-      readonly entryId?: string
-      readonly attributes?: Record<string, unknown>
-      readonly source?: string
-      readonly releaseId?: string
-    }
+export interface QueueEntry<T> {
+  readonly item: T
+  readonly priority?: Priority
+  readonly key?: string
+  readonly entryId?: string
+  readonly attempts?: number
+  readonly enqueuedAt?: number
+  readonly attributes?: Record<string, unknown>
+  readonly source?: string
+  readonly releaseId?: string
+}
 ```
 
 Rules:
 
-- `item` paths skip decode when input is already `T` (local callers).
-- `payload` paths always run `decodeUnknown(itemSchema)`.
-- Metadata fields are not validated by `itemSchema`; only the item/payload
-  field is schema-checked.
-- Convenience `add` / `prioritize` / `defer` pass `{ item }` or
-  `{ item: … }[]` with implicit normal/high/low priority.
+- `item` is required.
+- All metadata is optional on input; the target queue fills defaults for missing
+  `priority`, `attempts`, `enqueuedAt`, `entryId`, and derived dedupe key.
+- `add` / `prioritize` / `defer` stay item-only convenience methods.
+- `enqueue(entry)` / `enqueue(entries, { mode })` is the metadata-aware path.
+- `release()` drains pending work and returns `ReadonlyArray<QueueEntry<T>>`.
+- `interruptAndRelease()` is a separate explicit control for interrupting
+  recoverable in-flight work and returning the same `QueueEntry<T>` shape.
+- Do not introduce a separate encoded `payload` entry shape in this slice.
+  Remote enqueue and cross-deployment encoded handoff can layer encoding on top
+  of `QueueEntry<T>` once queue item codecs are stable.
+- Metadata fields are not validated by `itemSchema`; only `entry.item` is
+  schema-checked.
+
+First implementation scope:
+
+- `release()` is pending-only.
+- `interruptAndRelease()` can be designed and implemented in parallel, but it
+  must be obviously destructive: pause/stop the source queue, interrupt
+  recoverable worker fibers, then return pending plus recoverable in-flight
+  entries.
+- Both methods must return the same entry shape accepted by `enqueue`.
 
 ### Single-item vs batch validation errors
 
@@ -412,9 +423,9 @@ Advanced signature:
 
 ```typescript
 readonly enqueue: {
-  (entry: QueueEnqueueEntry<T, Encoded>): Effect.Effect<void, ItemEnqueueError<…>>
+  (entry: QueueEntry<T>): Effect.Effect<void, ItemEnqueueError<…>>
   (
-    entries: ReadonlyArray<QueueEnqueueEntry<T, Encoded>>,
+    entries: ReadonlyArray<QueueEntry<T>>,
     options?: { readonly mode?: "atomic" | "partial" },
   ): Effect.Effect<void, BatchEnqueueError<…>>
 }
@@ -445,11 +456,14 @@ incompatible ones return `QueueItemValidationError` or `QueueBatchValidationErro
 - Untyped callers: may send raw JSON matching `jsonSchema` from
   `GET /contract`; server path identical.
 
-**Handoff `enqueueReleased(entries)`**
+**Handoff `enqueue(releasedEntries)`**
 
-- Released entries carry `payload: Encoded` plus metadata (`releaseId`, `key`, …).
-- Target decodes each `payload` with its own schema; use `partial` batch mode
-  by default so one bad entry does not drop the whole release batch.
+- Released entries carry `item` plus metadata (`releaseId`, `key`, …) for the
+  local in-process slice.
+- Future remote/deployment handoff should encode the item at the transport
+  boundary, not by changing the local queue entry shape.
+- Target decodes each remote payload with its own schema; use `partial` batch
+  mode by default so one bad entry does not drop the whole release batch.
 
 ### Rules (unchanged intent)
 
@@ -504,7 +518,7 @@ See **Atomic vs partial batch semantics** in the schema contract section.
 Convenience methods are always atomic; `enqueue(entries, { mode: "partial" })`
 is for handoff and bulk ingest where rejecting the whole batch is too strict.
 
-## Keys and identity
+## Universal dedupe module and key identity
 
 Keep these concepts separate:
 
@@ -520,11 +534,124 @@ If a target queue receives a released entry whose key is already active, that
 should be reported as a structured enqueue rejection rather than silently
 disappearing.
 
+Move dedupe policy into a universal module so other runtime families can share
+it later:
+
+```typescript
+import { Dedupe } from "@nikscripts/effect-pm"
+
+const dedupe = Dedupe.key((job: EmailJob) => job.deliveryId)
+```
+
+`Dedupe.key(...)` is the required base. Without a key extractor, dedupe is not
+enabled. The default policy releases the key after processing, matching current
+`QueueResourceConfig.key` behavior.
+
+Advanced policy:
+
+```typescript
+const dedupe = Dedupe.key((job: EmailJob) => job.deliveryId).pipe(
+  Dedupe.manualRelease,
+  Dedupe.storeKey,
+)
+```
+
+Meaning:
+
+- `manualRelease` keeps keys after processing; callers must remove or clear
+  them explicitly.
+- `storeKey` persists key state through `ProcessStore`.
+- `manualRelease` and `storeKey` are separate: a key can be manually retained
+  in memory, stored durably, or both.
+
+The builder should be type-state based, but runtime config should stay simple.
+`Dedupe.key(...)` changes the type to “has key”; queue-only or future
+module-only options should be typed so the wrong module cannot accept them.
+
+Candidate queue handle surface:
+
+```typescript
+yield* queue.dedupe.has(key)
+yield* queue.dedupe.add(key)
+yield* queue.dedupe.remove(key)
+yield* queue.dedupe.clear
+```
+
+Candidate `ProcessStore` integration for stored keys:
+
+- key added,
+- key rejected as duplicate,
+- key released,
+- key manually added,
+- key manually removed,
+- keys cleared.
+
+`ProcessStore` should expose package-level dedupe semantics; storage adapters
+remain the swappable persistence implementation underneath.
+
+## Enqueue filters
+
+Add queue-level enqueue filters that run before mutation. Filters are for
+business rules that are not item schema validation, such as disabled targets,
+operator policy, dedupe override policy, queue state, or app-specific guards.
+
+Candidate shape:
+
+```typescript
+filters: [
+  QueueResource.Filter.effect("skip-disabled-team", (entry) =>
+    isTeamDisabled(entry.item.teamId)
+      ? Effect.fail(new QueueEnqueueFiltered({ reason: "team-disabled" }))
+      : Effect.void,
+  ),
+]
+```
+
+Rules:
+
+- Filters receive the normalized `QueueEntry<T>`.
+- Filters run after item schema decode/validation and before internal enqueue.
+- Filter rejection must be structured and visible in the enqueue error channel.
+- Filter rejection must not call the item effect.
+- Filter rejection should be recordable as a runtime fact / queue event through
+  `ProcessStore` once queue event storage grows.
+- Filters must be updateable by the mutable config API below.
+
+## Mutable queue config
+
+Queue config mutation is part of the active queue revamp. The API should allow
+reading and updating config without rebuilding the queue service:
+
+```typescript
+const config = yield* queue.config
+
+yield* queue.setConfig((oldConfig) => ({
+  ...oldConfig,
+  retries: 5,
+  filters: [...oldConfig.filters, skipDisabledTeam],
+}))
+```
+
+Rules:
+
+- Config updates are explicit effects.
+- Successful updates increment a config version.
+- Successful updates record a config-changed fact/signal through the runtime
+  state model.
+- Unsupported updates fail with a typed validation error.
+- Dynamic fields include retry limits, enqueue filters, hooks/listeners, and
+  future throttling/rate-limit knobs.
+- Non-dynamic fields include queue identity, item type, `itemSchema`, required
+  environment type, capacity for already bounded queues, and storage backend.
+- Changing concurrency may be possible later, but requires worker-fiber
+  accounting and should not be bundled into the first config mutation slice.
+
 ## Release and handoff
 
 Add queue release controls for deployment handoff:
 
 - `release(options)`
+- `interruptAndRelease(options)`
 - `enqueue(releasedEntries)`
 
 `release` exports transferable entries. It is not the same as `clear`, because
@@ -563,8 +690,10 @@ Candidate release flow:
 6. enqueue those entries into the target queue,
 7. resume or activate target queue.
 
-Release requires schema or codec support. A ProcessManager should be able to
-treat payloads as opaque encoded values and let the target group validate them.
+Remote release/handoff requires schema or codec support. A ProcessManager should
+be able to treat remote payloads as opaque encoded values and let the target
+group validate them, while local in-process release can keep decoded
+`QueueEntry<T>` values.
 
 ## Candidate controls
 
