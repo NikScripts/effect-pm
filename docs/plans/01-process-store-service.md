@@ -400,6 +400,197 @@ yield* store.records({
 Normal application and runtime module code should use semantic names. Projection
 tools, custom records, and storage adapters may use raw index slots.
 
+### Query DSL and CRUD operations
+
+Add a shared `Query.ts` module for both `RuntimeStorage` and `ProcessStore`.
+The DSL should produce typed, immutable query / write operation values while
+normalizing to adapter-friendly record filters and patches.
+
+Use pipeable operations against services:
+
+```typescript
+yield* pipe(
+  RuntimeStorage,
+  Where(
+    ProcessType.equals("queue"),
+    ProcessId.equals(queueId),
+    Occurred.after(startDate),
+    Occurred.before(endDate),
+  ),
+  Select,
+)
+```
+
+`ProcessStore` queries use the same DSL but can accept runtime declarations or
+runtime family markers as the first `Where` argument:
+
+```typescript
+yield* pipe(
+  ProcessStore,
+  Where(
+    MyQueue,
+    Occurred.after(startDate),
+    Occurred.before(endDate),
+  ),
+  Select,
+)
+
+yield* pipe(
+  ProcessStore,
+  Where(
+    QueueResource,
+    ProcessId.equals(queueId),
+  ),
+  Select,
+)
+```
+
+Rules:
+
+- `Where(MyQueue, ...)` means a specific resource/process id and infers the
+  process type from the declaration.
+- `Where(QueueResource, ...)` means all queue resources and requires an explicit
+  `ProcessId.equals(...)` if the caller wants one queue.
+- `Where(...)` should produce a typed query scope so later query pieces can be
+  restricted to the selected process/resource family where possible.
+- `RuntimeStorage` accepts raw record fields.
+- `ProcessStore` accepts the same basic record fields plus semantic
+  process/resource declarations.
+
+Column helpers:
+
+```typescript
+ProcessId.equals(queueId)
+ProcessId.notEquals(queueId)
+ProcessId.in([queueIdA, queueIdB])
+ProcessId.isNull
+ProcessId.isNotNull
+
+Occurred.after(startDate)
+Occurred.before(endDate)
+Occurred.between(startDate, endDate)
+
+Created.after(startDate)
+Created.before(endDate)
+Created.between(startDate, endDate)
+```
+
+Boolean query composition:
+
+```typescript
+Where(
+  And([
+    ProcessType.equals("queue"),
+    Or([
+      Key.equals(key),
+      Key.isNull,
+    ]),
+  ]),
+)
+```
+
+`And`, `Or`, and `Xor` accept arrays of query blocks. Keep `Xor` only if the
+semantics are explicitly tested; otherwise defer it and start with `And` / `Or`.
+
+Ordering:
+
+```typescript
+OrderBy.occurredAt
+OrderBy.occurredAt("asc")
+OrderBy.createdAt("desc")
+OrderBy.runId
+```
+
+Bare `OrderBy.occurredAt` defaults to descending. Implement this only for
+obvious defaults where the bare form is unambiguous.
+
+Read operation:
+
+```typescript
+yield* pipe(
+  ProcessStore,
+  Where(MyQueue, Key.equals(key)),
+  Limit(100),
+  Select,
+)
+```
+
+`Select` returns raw normalized records for the current query. Projection/report
+operations are deliberately deferred. Later query blocks such as
+`QueueEntry.Report` can return process/resource-specific reports once queue
+record semantics are implemented.
+
+Write operations:
+
+```typescript
+yield* pipe(
+  RuntimeStorage,
+  Insert({
+    type: "queue.entry.enqueued",
+    processType: "queue",
+    processId: queueId,
+    subjectType: "queue-entry",
+    subjectId: entryId,
+  }),
+)
+```
+
+```typescript
+yield* pipe(
+  RuntimeStorage,
+  Where(ProcessId.equals(queueId), Key.equals(key)),
+  Update({
+    payload,
+    attributes,
+    indexA: null,
+  }),
+)
+```
+
+```typescript
+yield* pipe(
+  RuntimeStorage,
+  Where(ProcessId.equals(queueId), Key.equals(key)),
+  Update(
+    Payload.set(payload),
+    Attributes.set(attributes),
+    IndexA.unset,
+  ),
+)
+```
+
+```typescript
+yield* pipe(
+  RuntimeStorage,
+  Where(ProcessId.equals(queueId), Key.equals(key)),
+  Delete,
+)
+```
+
+Rules:
+
+- `Insert`, `Update`, `Upsert`, and `Delete` are pipeable operations.
+- `Update` is overloaded:
+  - object patch,
+  - composable column assignments such as `Payload.set(value)` and
+    `IndexA.unset`.
+- `Column.equals(value)` remains predicate syntax for `Where`.
+- `Column.set(value)` / `Column.unset` are assignment syntax for `Update`.
+- Avoid a top-level `Set` namespace because it collides conceptually with JS
+  `Set`; use `Update(...)`.
+- `Insert` works with id-less input at `ProcessStore` level. `RuntimeStorage`
+  receives normalized records with `id`, timestamps, and `runId` already set.
+- `Upsert` is allowed but must not replace `readonly: true` records.
+- `Update` must never update `readonly: true` records or mutate `id`,
+  `createdAt`, or `readonly`.
+- `Delete` excludes readonly records by default. `Delete` can include readonly
+  records only when the query explicitly includes `readonly: true`.
+- `Delete` returns `{ deleted: number }`; deleting zero rows is success.
+- `Update` returns `{ matched: number, updated: number }`; matched may include
+  readonly rows, updated excludes readonly rows.
+- Duplicate `Insert` fails with a typed storage error. Transfer utilities can
+  keep default `conflict: "skip"` behavior separately.
+
 ### Queue entry storage and projection
 
 Queue entry storage should use a delta/event strategy rather than storing the
