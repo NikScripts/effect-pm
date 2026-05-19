@@ -57,8 +57,9 @@ Provide:
 
 - in-memory store for tests and examples,
 - Prisma-backed store for durable SQL persistence,
-- file-backed store using Effect `FileSystem` for local durable development and
-  lightweight deployments,
+- SQLite-backed store for no-server durable local persistence with real indexes,
+- NDJSON file-backed debug store using Effect `FileSystem` for inspection,
+  tests, export/import, and small local runs,
 - no-op store for applications that want zero persistence,
 - test store with inspection helpers.
 
@@ -67,6 +68,112 @@ Leave room for:
 - SQLite-specific store,
 - remote store over HTTP/RPC,
 - user-provided store with custom event routing.
+
+### Recommended built-in storage layers
+
+Use these defaults once the indexed `RuntimeRecord` model lands:
+
+1. **Memory** — tests, examples, ephemeral development.
+2. **SQLite** — recommended no-server durable store. It is a local file with
+   real indexes for `processId`, `subjectId`, `key`, and `indexA` through
+   `indexH`. Prefer Effect's SQLite packages such as
+   `@effect/sql-sqlite-node` for the Node adapter.
+3. **Prisma** — integration path for applications already using Prisma and a
+   central SQL database.
+4. **NDJSON debug store** — append-only, human-inspectable, easy to export, but
+   not the recommended indexed durable store.
+5. **Custom `RuntimeStorage`** — user-provided backend.
+
+The current single-file `ProcessStore.fileLayer(path)` is useful for small event
+logs, but it should not remain the recommended durable store for broad indexed
+queries once `EffectPmRecord` lands.
+
+### NDJSON debug store
+
+NDJSON storage should be semantically complete, even when slow:
+
+- a query with no `runId` scans all runs,
+- a query with no date range scans all dates,
+- results should match SQLite/Prisma semantics,
+- slow broad scans should log a warning suggesting `runId`, date-range filters,
+  or a switch to SQLite/Prisma.
+
+Use one file per runtime run:
+
+```text
+.effect-pm/records/
+  2026-05-19T13-45-22.123Z__run_01HY....ndjson
+  2026-05-19T14-10-01.955Z__run_01HZ....ndjson
+```
+
+Rules:
+
+- file name starts with a safe ISO timestamp so runs sort lexically by start
+  time,
+- file name includes `runId` for direct run lookup,
+- each line is one normalized `RuntimeRecord`,
+- query planning may skip files by `runId` and/or date range when filters are
+  provided,
+- `all runs` remains the default semantic result when no run/date filters are
+  supplied,
+- use warnings, not silent result changes, when reads become expensive.
+
+Date folders can be added later if directories become too large, but the first
+debug-store shape should prefer the simpler sortable file-name convention.
+
+Default file-backed storage safety warning:
+
+- applies to default SQLite and default NDJSON paths under `./.effect-pm/`,
+- does not apply when the user provides a custom file/directory path,
+- on first-ever storage initialization, if the store has no existing records,
+  log a warning:
+
+```text
+effect-pm file storage is writing runtime data to ./.effect-pm/.
+Add ".effect-pm/" to .gitignore; do not commit this directory.
+```
+
+- if the store already has at least one record, do not warn,
+- check after opening/creating storage but before first append.
+
+### Store transfer utility
+
+Switching storage layers should be easy. Add a transfer utility that copies
+records from one store to another:
+
+```typescript
+yield* ProcessStore.transfer({
+  from: ProcessStore.fileDebugLayer(".effect-pm/records"),
+  to: ProcessStore.sqliteLayer("effect-pm.db"),
+  query,
+})
+```
+
+Rules:
+
+- preserve record `id`, `runId`, `occurredAt`, indexed columns, `payload`, and
+  `attributes`,
+- stream or page records from the source where possible,
+- append to the target through the generic record API,
+- default conflict behavior is `skip` duplicate record ids,
+- return counts:
+
+```typescript
+{
+  read: number,
+  written: number,
+  skipped: number,
+  failed: number,
+}
+```
+
+Optional later conflict modes:
+
+```typescript
+conflict: "skip" | "fail" | "replace"
+```
+
+Default `skip` makes transfers rerunnable and safe for interrupted migrations.
 
 ## Interface direction
 
@@ -174,6 +281,7 @@ interface RuntimeRecord {
   readonly id: string
   readonly type: string
   readonly occurredAt: DateTime.Utc
+  readonly runId: string
 
   /**
    * Generalized runtime owner. A queue, run resource, HTTP resource, group,
@@ -223,6 +331,9 @@ Why this shape:
 - `processId` is the primary owner id for all controllable runtime units.
   Resources are treated as special process-like runtimes for storage and
   projection purposes.
+- `runId` is created when `ProcessStore` starts. `ProcessStore` should write a
+  `runtime.run.started` marker so readers can discover the latest run and group
+  all records from one program execution.
 - `subjectId` covers the primary nested id: queue `entryId`, dedupe key id,
   process execution id, HTTP request id, schedule entry id, etc.
 - `key` is first-class because dedupe/idempotency lookups are hot enough to
@@ -254,6 +365,7 @@ yield* store.queue.entryEnqueued({
 // ProcessStore normalizes to RuntimeStorage:
 {
   type: "queue.entry.enqueued",
+  runId,
   processType: "queue",
   processId: queueId,
   subjectType: "queue-entry",
