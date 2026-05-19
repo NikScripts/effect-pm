@@ -1,11 +1,18 @@
 import { describe, expect, it } from "@effect/vitest"
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem"
 import * as NodePath from "@effect/platform-node/NodePath"
-import { Clock, Effect, FileSystem, Layer, Option, Path } from "effect"
+import { Clock, DateTime, Effect, FileSystem, Layer, Option, Path, pipe } from "effect"
 import {
+  Occurred,
+  OrderBy,
+  ProcessId,
   ProcessStore,
+  Select,
+  SubjectId,
+  Where,
   type ProcessExecutionCompletedEvent,
   type ProcessLifecycleChangedEvent,
+  type ProcessStoreInterface,
   type QueueItemCompletedEvent,
   type QueueLifecycleChangedEvent,
   type RuntimeStateChangedEvent,
@@ -15,7 +22,7 @@ import { utcDateFromIso } from "../src/utcDate.js";
 describe("ProcessStore.memory", () => {
   it.live("appends and queries process execution events with ordering and query opts", () =>
     Effect.gen(function* () {
-      const store = yield* ProcessStore
+      const store = yield* ProcessStore.memory
 
       const t1 = utcDateFromIso("2026-01-01T00:00:00.000Z").getTime()
       const t2 = utcDateFromIso("2026-01-01T00:10:00.000Z").getTime()
@@ -81,7 +88,7 @@ describe("ProcessStore.memory", () => {
 
       const after = yield* store.getProcessExecutions("p1", { after: t1 })
       expect(after.map((row) => row.id)).toEqual(["e3", "e2"])
-    }).pipe(Effect.provide(ProcessStore.layer)),
+    }),
   )
 
   it.live("orders process executions by event occurrence time", () =>
@@ -227,6 +234,57 @@ describe("ProcessStore.memory", () => {
         "run-1/completed",
         "run-1/start",
       ])
+    }).pipe(Effect.provide(ProcessStore.layer)),
+  )
+
+  it.live("projects appended events through generic runtime records", () =>
+    Effect.gen(function* () {
+      const store = yield* ProcessStore
+      const t1 = utcDateFromIso("2026-01-01T03:30:00.000Z").getTime()
+      const t2 = utcDateFromIso("2026-01-01T03:40:00.000Z").getTime()
+
+      yield* store.appendBatch([
+        {
+          id: "record-process-started",
+          type: "process.lifecycle.changed",
+          occurredAt: t1,
+          entityType: "process",
+          entityId: "@test/RecordProcess",
+          lifecycle: { tag: "Started" },
+        },
+        {
+          id: "record-process-stopped",
+          type: "process.lifecycle.changed",
+          occurredAt: t2,
+          entityType: "process",
+          entityId: "@test/RecordProcess",
+          lifecycle: { tag: "Stopped" },
+        },
+      ])
+
+      const rows = yield* store.records({
+        predicate: ProcessId.equals("@test/RecordProcess"),
+      })
+      const source: Effect.Effect<ProcessStoreInterface, never, never> = Effect.succeed(store)
+      const pipedRows = yield* pipe(
+        source,
+        Where(
+          ProcessId.equals("@test/RecordProcess"),
+          Occurred.after(DateTime.makeUnsafe("2026-01-01T03:35:00.000Z")),
+        ),
+        OrderBy.occurredAt,
+        Select,
+      )
+
+      expect(rows.map((row) => row.id)).toEqual([
+        "record-process-stopped",
+        "record-process-started",
+      ])
+      expect(rows[0]?.processType).toBe("process")
+      expect(rows[0]?.processId).toBe("@test/RecordProcess")
+      expect(rows[0]?.runId).toContain("run-")
+      expect(pipedRows.map((row) => row.id)).toEqual(["record-process-stopped"])
+      expect(yield* store.records({ predicate: SubjectId.isNull })).toHaveLength(2)
     }).pipe(Effect.provide(ProcessStore.layer)),
   )
 

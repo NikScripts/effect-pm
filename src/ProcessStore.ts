@@ -18,6 +18,7 @@
 import {
   Clock,
   Context,
+  DateTime,
   Effect,
   FileSystem,
   Layer,
@@ -39,6 +40,11 @@ import {
   ProcessStoreEventDecodeError,
 } from "./ProcessStoreCodec";
 import type { EffectPmEventRow, JsonValue } from "./ProcessStoreEvent";
+import {
+  selectRuntimeRecords,
+  type RuntimeRecord,
+} from "./RuntimeStorage";
+import type { RuntimeRecordQuery } from "./Query";
 import type {
   RuntimeFact,
   RuntimeRef,
@@ -245,6 +251,7 @@ export interface ProcessStoreInterface {
   append: (event: AnalyticsEvent) => Effect.Effect<void>;
   appendBatch: (events: ReadonlyArray<AnalyticsEvent>) => Effect.Effect<void>;
   events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>;
+  records: (query?: RuntimeRecordQuery) => Effect.Effect<RuntimeRecord[]>;
   getProcessExecutions: (
     processId: string,
     opts?: QueryOpts,
@@ -415,6 +422,34 @@ const selectEvents = <T extends AnalyticsEvent>(
   return applyQueryOpts(rows, query.opts, (event) => event.occurredAt);
 };
 
+let inMemoryProcessStoreRunCounter = 0;
+
+const makeRunId = (now: number): string => {
+  inMemoryProcessStoreRunCounter++;
+  return `run-${String(now)}-${String(inMemoryProcessStoreRunCounter)}`;
+};
+
+const eventToRuntimeRecord = (
+  event: AnalyticsEvent,
+  runId: string,
+): RuntimeRecord => {
+  const occurredAt = DateTime.makeUnsafe(event.occurredAt);
+  return {
+    id: event.id,
+    type: event.type,
+    occurredAt,
+    createdAt: occurredAt,
+    runId,
+    processType: event.entityType,
+    processId: event.entityId,
+    attributes: event.attributes === undefined
+      ? undefined
+      : isJsonValue(event.attributes)
+        ? event.attributes
+        : undefined,
+  };
+};
+
 const encodeJsonLine = (value: unknown): string | null =>
   Option.match(Schema.encodeUnknownOption(unknownJsonString)(value), {
     onNone: () => null,
@@ -513,8 +548,14 @@ const encodeFileEventLine = (
 // In-memory implementation
 // ============================================================================
 
-const makeInMemoryProcessStore = Effect.sync<ProcessStoreInterface>(() => {
+const makeInMemoryProcessStore: Effect.Effect<
+  ProcessStoreInterface,
+  never,
+  never
+> = Effect.gen(function* () {
   const events: AnalyticsEvent[] = [];
+  const now = yield* Clock.currentTimeMillis;
+  const runId = makeRunId(now);
 
   return {
     append: (event) =>
@@ -536,6 +577,14 @@ const makeInMemoryProcessStore = Effect.sync<ProcessStoreInterface>(() => {
           .sort(byTimestampDesc((event) => event.occurredAt));
         return applyQueryOpts(rows, query?.opts, (event) => event.occurredAt);
       }),
+
+    records: (query) =>
+      Effect.sync(() =>
+        selectRuntimeRecords(
+          events.map((event) => eventToRuntimeRecord(event, runId)),
+          query,
+        )
+      ),
 
     getProcessExecutions: (processId, opts) =>
       Effect.sync(() =>
@@ -619,6 +668,14 @@ const makeFileProcessStore = (
         return applyQueryOpts(rows, query?.opts, (event) => event.occurredAt);
       });
 
+    const queryRecords = (query: RuntimeRecordQuery | undefined) =>
+      Effect.map(readEvents, (storedEvents) =>
+        selectRuntimeRecords(
+          storedEvents.map((event) => eventToRuntimeRecord(event, "file-store")),
+          query,
+        )
+      );
+
     return {
       append: (event) => semaphore.withPermits(1)(appendOne(event)),
       appendBatch: (batch) =>
@@ -630,6 +687,7 @@ const makeFileProcessStore = (
           }),
         ),
       events: (query) => semaphore.withPermits(1)(queryEvents(query)),
+      records: (query) => semaphore.withPermits(1)(queryRecords(query)),
       getProcessExecutions: (processId, opts) =>
         semaphore.withPermits(1)(
           Effect.map(

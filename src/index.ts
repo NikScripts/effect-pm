@@ -123,6 +123,64 @@ export type {
   ControlTransportHttpServerConfig,
 } from "./ControlTransportHttp";
 
+// Query / Runtime Storage
+export {
+  And,
+  Attributes,
+  Created,
+  Delete,
+  Id,
+  IndexA,
+  IndexB,
+  IndexC,
+  IndexD,
+  IndexE,
+  IndexF,
+  IndexG,
+  IndexH,
+  Insert,
+  Key,
+  Limit,
+  Occurred,
+  Offset,
+  Or,
+  OrderBy,
+  Payload,
+  ProcessId,
+  ProcessType,
+  Readonly,
+  RunId,
+  Select,
+  SubjectId,
+  SubjectType,
+  Type,
+  Update,
+  Upsert,
+  Where,
+  Xor,
+} from "./Query";
+export type {
+  RuntimeRecordAssignment,
+  RuntimeRecordComparison,
+  RuntimeRecordOrderBy,
+  RuntimeRecordOrderField,
+  RuntimeRecordPatch,
+  RuntimeRecordPredicate,
+  RuntimeRecordQuery,
+} from "./Query";
+export {
+  RuntimeStorage,
+  RuntimeStorageDuplicateRecordError,
+  RuntimeStorageReadonlyRecordError,
+} from "./RuntimeStorage";
+export type {
+  DeleteResult,
+  RuntimeRecord,
+  RuntimeStorageError,
+  RuntimeStorageService,
+  UpdateResult,
+} from "./RuntimeStorage";
+
 // CLI
 export { createCli, runCli } from "./cli";
 

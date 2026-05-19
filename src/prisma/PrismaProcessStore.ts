@@ -43,6 +43,11 @@ import {
   type StoreEventQuery,
 } from "../ProcessStore";
 import {
+  selectRuntimeRecords,
+  type RuntimeRecord,
+} from "../RuntimeStorage";
+import type { RuntimeRecordQuery } from "../Query";
+import {
   decodeEventRow,
   encodeEvent,
   ProcessStoreEventDecodeError,
@@ -189,6 +194,44 @@ const isQueueLifecycle = (
 ): event is QueueLifecycleChangedEvent =>
   event.type === "queue.lifecycle.changed";
 
+const rowToRuntimeRecord = (row: import("../ProcessStoreEvent").EffectPmEventRow): RuntimeRecord | null => {
+  const decoded = decodeEventRow(row);
+  if (decoded instanceof ProcessStoreEventDecodeError) {
+    return null;
+  }
+  return {
+    id: row.id,
+    type: row.type,
+    occurredAt: DateTime.makeUnsafe(row.occurredAt),
+    createdAt: DateTime.makeUnsafe(row.createdAt),
+    runId: "prisma-event-store",
+    processType: row.entityType,
+    processId: row.entityId,
+    attributes: row.attributes ?? undefined,
+  };
+};
+
+const findRuntimeRecords = (
+  client: PrismaProcessStoreClient,
+  query: RuntimeRecordQuery | undefined,
+): Effect.Effect<RuntimeRecord[]> =>
+  Effect.tryPromise({
+    try: () => client.effectPmEvent.findMany(),
+    catch: (cause) => new PrismaProcessStoreError({ cause }),
+  }).pipe(
+    Effect.map((rows) => {
+      const out: RuntimeRecord[] = [];
+      for (const row of rows) {
+        const record = rowToRuntimeRecord(row);
+        if (record !== null) {
+          out.push(record);
+        }
+      }
+      return selectRuntimeRecords(out, query);
+    }),
+    Effect.orDie,
+  );
+
 /**
  * Build a {@link ProcessStoreInterface} backed by Prisma.
  *
@@ -240,6 +283,8 @@ export const make = (
       }),
       Effect.orDie,
     ),
+
+  records: (query) => findRuntimeRecords(client, query),
 
   getProcessExecutions: (processId, opts) =>
     findEventsOfType(

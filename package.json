@@ -54,6 +54,16 @@
       "import": "./dist/ProcessStore.mjs",
       "require": "./dist/ProcessStore.js"
     },
+    "./Query": {
+      "types": "./dist/Query.d.ts",
+      "import": "./dist/Query.mjs",
+      "require": "./dist/Query.js"
+    },
+    "./RuntimeStorage": {
+      "types": "./dist/RuntimeStorage.d.ts",
+      "import": "./dist/RuntimeStorage.mjs",
+      "require": "./dist/RuntimeStorage.js"
+    },
     "./ProcessManager": {
       "types": "./dist/ProcessManager.d.ts",
       "import": "./dist/ProcessManager.mjs",

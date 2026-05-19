@@ -293,6 +293,7 @@ describe("RunResource.make (raw scoped)", () => {
         appendBatch: (batch: ReadonlyArray<AnalyticsEvent>) =>
           Ref.update(events, (items) => [...items, ...batch]),
         events: () => Effect.map(Ref.get(events), (items) => [...items]),
+        records: () => Effect.succeed([]),
         getProcessExecutions: () => Effect.succeed([]),
         getProcessLifecycle: () => Effect.succeed([]),
         getQueueItemCompletions: () => Effect.succeed([]),

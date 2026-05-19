@@ -7,6 +7,8 @@ export default defineConfig({
     QueueResource: "src/QueueResource.ts",
     ProcessGroup: "src/ProcessGroup.ts",
     ProcessStore: "src/ProcessStore.ts",
+    Query: "src/Query.ts",
+    RuntimeStorage: "src/RuntimeStorage.ts",
     ProcessManager: "src/ProcessManager.ts",
     ControlService: "src/ControlService.ts",
     "storage/file": "src/storage/file.ts",
