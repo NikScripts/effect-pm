@@ -452,7 +452,7 @@ makeQueueItemCodecDescriptor("@test/EmailQueue", EmailItem);
 
 Declare with **`QueueResource.Service`** to attach **`item`** metadata for future contract / remote enqueue (plan **02**/ **07**).
 
-**Generics migration:** Earlier sketches used **`QueueHandle<T, R, E>`** / **`QueueResource.Service<Self, T, R, E>`**-style ordering. The shipped package uses **`QueueHandle<T, E, EEnqueue, R>`** and **`QueueResource.Service<Self, T, E, R>`** (**worker failure `E`, enqueue-validation errors `EEnqueue`, ambient requirements `R` last**). Update explicit type arguments when pinning all four slots (e.g. priority/retry demos that declare a worker **`SendError`**).
+**Generics migration:** Earlier sketches used **`QueueHandle<T, R, E>`** / **`QueueResource.Service<Self, T, R, E>`**-style ordering. The shipped package uses **`QueueHandle<T, E, EEnqueue, R>`** (**worker failure `E`, enqueue-validation errors `EEnqueue`, ambient requirements `R` last**) and **`QueueResource.Service<Self, T, E>`**, which infers ambient requirements from config.
 
 ---
 

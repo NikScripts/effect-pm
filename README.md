@@ -56,7 +56,7 @@ npm install @nikscripts/effect-pm effect
 import { QueueResource } from "@nikscripts/effect-pm";
 import { Effect } from "effect";
 
-class EmailQueue extends QueueResource.Service<EmailQueue, Email, never, never>()(
+class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
   "email-queue",
   {
     effect: (email: Email) =>
@@ -139,7 +139,7 @@ You can merge independent layers with **`Layer.mergeAll(...)`** and a single `Ef
 ```typescript
 import { QueueResource } from "@nikscripts/effect-pm";
 
-class TaskQueue extends QueueResource.Service<TaskQueue, Item, never, never>()(
+class TaskQueue extends QueueResource.Service<TaskQueue, Item, never>()(
   "task-queue",
   {
     effect: (item: Item) => processItem(item),
@@ -316,7 +316,7 @@ The ProcessGroup enforces type-safe queue dependencies at compile time:
 import { Process, QueueResource, ProcessGroup, Polling, ProcessSchedule } from "@nikscripts/effect-pm";
 import { Cron, Duration, Effect } from "effect";
 
-class EmailQueue extends QueueResource.Service<EmailQueue, Email, SendError, never>()(
+class EmailQueue extends QueueResource.Service<EmailQueue, Email, SendError>()(
   "email-queue",
   {
     effect: sendEmail,
@@ -476,7 +476,7 @@ const program = Effect.gen(function* () {
 Set appropriate queue capacities to prevent memory issues:
 
 ```typescript
-class TaskQueue extends QueueResource.Service<TaskQueue, Task, never, never>()(
+class TaskQueue extends QueueResource.Service<TaskQueue, Task, never>()(
   "task-queue",
   {
     capacity: 50000, // Adjust based on item size
@@ -490,7 +490,7 @@ class TaskQueue extends QueueResource.Service<TaskQueue, Task, never, never>()(
 Use `handler` to observe item exits and decide whether to retry:
 
 ```typescript
-class TaskQueue extends QueueResource.Service<TaskQueue, Task, TaskError, never>()(
+class TaskQueue extends QueueResource.Service<TaskQueue, Task, TaskError>()(
   "task-queue",
   {
     effect: processItem,

@@ -30,7 +30,7 @@ const waitUntilCompleted = (
     }
   });
 
-class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, SendError, never>()(
+class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, SendError>()(
   "examples/EmailQueue",
   {
     paused: true, // enqueue while paused, then resume — common bootstrap pattern

@@ -23,7 +23,7 @@
  * import { QueueResource } from "@nikscripts/effect-pm"
  *
  * // Declare service via class factory
- * const EmailQueue = QueueResource.Service<typeof EmailQueue, Email, SmtpError, HttpClient.HttpClient>()(
+ * const EmailQueue = QueueResource.Service<typeof EmailQueue, Email, SmtpError>()(
  *   "@app/EmailQueue",
  *   {
  *     effect: (email, ctx) => sendEmail(email).pipe(Effect.asVoid),
@@ -636,14 +636,40 @@ type InferOptionalHandlerRequirements<C> = [C] extends [{
     : never
   : never;
 
+type InferEffectRequirements<Value> =
+  Value extends (...args: any) => Effect.Effect<any, any, infer R>
+    ? R
+    : Value extends Effect.Effect<any, any, infer R>
+      ? R
+      : never;
+
+type InferOptionalPropertyRequirements<C, Key extends PropertyKey> =
+  Key extends keyof C ? InferEffectRequirements<C[Key]> : never;
+
+type NormalizeQueueRequirements<R> = unknown extends R
+  ? [R] extends [unknown]
+    ? never
+    : R
+  : R;
+
 /**
- * Union of service requirements declared on the worker **`effect`** and optional **`handler`**.
+ * Union of service requirements declared on the worker `effect`, handler, and queue hooks.
  *
  * @public
  */
 export type InferQueueWorkerRequirements<
   C extends { readonly effect: (...args: any[]) => Effect.Effect<void, any, any> },
-> = InferOptionalHandlerRequirements<C> | Effect.Services<ReturnType<C["effect"]>>;
+> =
+  NormalizeQueueRequirements<
+    | Effect.Services<ReturnType<C["effect"]>>
+    | InferOptionalHandlerRequirements<C>
+    | InferOptionalPropertyRequirements<C, "onRetryExhausted">
+    | InferOptionalPropertyRequirements<C, "persist">
+    | InferOptionalPropertyRequirements<C, "onEnqueue">
+    | InferOptionalPropertyRequirements<C, "onComplete">
+    | InferOptionalPropertyRequirements<C, "onEmpty">
+    | InferOptionalPropertyRequirements<C, "refill">
+  >;
 
 
 const hasItemSchema = <T, E, R>(
@@ -1433,6 +1459,74 @@ function queueResourceLayer<Self, T, E, R>(
     : Layer.effect(tag)(makeQueueEffectWithoutSchema(config));
 }
 
+const queueResourceServiceWithoutSchema = <
+  Self,
+  const Name extends string,
+  const C extends QueueResourceConfigWithoutItemSchema<any, any, any>,
+>(
+  name: Name,
+  config: C,
+): QueueResourceServiceDefinition<
+  Self,
+  Name,
+  InferQueueItem<C>,
+  InferQueueWorkerError<C>,
+  never,
+  InferQueueWorkerRequirements<C>
+> => {
+  const named = { ...config, name };
+  const base = Context.Service<
+    Self,
+    QueueHandle<
+      InferQueueItem<C>,
+      InferQueueWorkerError<C>,
+      never,
+      InferQueueWorkerRequirements<C>
+    >
+  >()(name);
+  return Object.assign(base, {
+    id: name,
+    kind: queueResourceKind,
+    tag: base,
+    layer: Layer.effect(base)(makeQueueEffectWithoutSchema(named)),
+  });
+};
+
+const queueResourceServiceWithSchema = <
+  Self,
+  const Name extends string,
+  const C extends QueueResourceConfigWithItemSchema<any, any, any>,
+>(
+  name: Name,
+  config: C,
+): QueueResourceServiceDefinition<
+  Self,
+  Name,
+  InferQueueItem<C>,
+  InferQueueWorkerError<C>,
+  QueueEnqueueErrors,
+  InferQueueWorkerRequirements<C>
+> => {
+  const named = { ...config, name };
+  const base = Context.Service<
+    Self,
+    QueueHandle<
+      InferQueueItem<C>,
+      InferQueueWorkerError<C>,
+      QueueEnqueueErrors,
+      InferQueueWorkerRequirements<C>
+    >
+  >()(name);
+  const item = makeQueueItemCodecDescriptor(name, config.itemSchema);
+  return Object.assign(base, {
+    id: name,
+    kind: queueResourceKind,
+    tag: base,
+    layer: Layer.effect(base)(makeQueueEffectWithSchema(named)),
+    item,
+  });
+};
+
 /**
  * QueueResource namespace — managed priority queue with workers.
  *
@@ -1482,7 +1576,7 @@ export const QueueResource = {
    *
    * @example
    * ```ts
-   * const EmailQueue = QueueResource.Service<typeof EmailQueue, Email, SmtpError, HttpClient.HttpClient>()(
+   * const EmailQueue = QueueResource.Service<typeof EmailQueue, Email, SmtpError>()(
    *   "@app/EmailQueue",
    *   { effect: (email) => sendEmail(email).pipe(Effect.asVoid), concurrency: 5 },
    * )
@@ -1492,41 +1586,35 @@ export const QueueResource = {
    * Effect.provide(EmailQueue.layer)
    * ```
    */
-  Service: <Self, T, E = never, R = never>() => {
-    function queueResourceService<const Name extends string>(
+  Service: <Self, T, E = never>() => {
+    function queueResourceService<
+      const Name extends string,
+      R,
+    >(
       name: Name,
       config: QueueResourceConfigWithoutItemSchema<T, E, R>,
-    ): QueueResourceServiceDefinition<Self, Name, T, E, never, R>;
-    function queueResourceService<const Name extends string>(
+    ): QueueResourceServiceDefinition<Self, Name, T, E, never, NormalizeQueueRequirements<R>>;
+    function queueResourceService<
+      const Name extends string,
+      R,
+    >(
       name: Name,
       config: QueueResourceConfigWithItemSchema<T, E, R>,
-    ): QueueResourceServiceDefinition<Self, Name, T, E, QueueEnqueueErrors, R>;
+    ): QueueResourceServiceDefinition<Self, Name, T, E, QueueEnqueueErrors, NormalizeQueueRequirements<R>>;
     function queueResourceService<const Name extends string>(
       name: Name,
-      config: QueueResourceConfig<T, E, R>,
-    ):
-      | QueueResourceServiceDefinition<Self, Name, T, E, never, R>
-      | QueueResourceServiceDefinition<Self, Name, T, E, QueueEnqueueErrors, R> {
+      config: QueueResourceConfig<T, E, any>,
+    ): QueueResourceServiceDefinition<Self, Name, any, any, any, any> {
       if (hasItemSchema(config)) {
-        const named = { ...config, name } satisfies QueueResourceConfigWithItemSchema<T, E, R>;
-        const base = Context.Service<Self, QueueHandle<T, E, QueueEnqueueErrors, R>>()(name);
-        const item = makeQueueItemCodecDescriptor(name, config.itemSchema);
-        return Object.assign(base, {
-          id: name,
-          kind: queueResourceKind,
-          tag: base,
-          layer: queueResourceLayer(base, named),
-          item,
-        });
+        return queueResourceServiceWithSchema<Self, Name, QueueResourceConfigWithItemSchema<T, E, any>>(
+          name,
+          config,
+        );
       }
-      const named = { ...config, name } satisfies QueueResourceConfigWithoutItemSchema<T, E, R>;
-      const base = Context.Service<Self, QueueHandle<T, E, never, R>>()(name);
-      return Object.assign(base, {
-        id: name,
-        kind: queueResourceKind,
-        tag: base,
-        layer: queueResourceLayer(base, named),
-      });
+      return queueResourceServiceWithoutSchema<Self, Name, QueueResourceConfigWithoutItemSchema<T, E, any>>(
+        name,
+        config,
+      );
     }
     return queueResourceService;
   },

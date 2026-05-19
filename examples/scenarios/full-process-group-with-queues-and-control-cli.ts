@@ -65,7 +65,7 @@ export class DemoQueueItemError extends Data.TaggedError("DemoQueueItemError")<{
 }> { }
 
 // Demo queues using the class service pattern
-class DemoQueue extends QueueResource.Service<DemoQueue, string, DemoQueueItemError, never>()("demo-queue", {
+class DemoQueue extends QueueResource.Service<DemoQueue, string, DemoQueueItemError>()("demo-queue", {
   effect: (item: string) =>
     Effect.gen(function* () {
       yield* Effect.logInfo(`Processing: ${item}`);
@@ -84,7 +84,7 @@ class DemoQueue extends QueueResource.Service<DemoQueue, string, DemoQueueItemEr
   capacity: 100,
 }) {}
 
-class DemoTwoQueue extends QueueResource.Service<DemoTwoQueue, number, never, never>()("demo-two-queue", {
+class DemoTwoQueue extends QueueResource.Service<DemoTwoQueue, number, never>()("demo-two-queue", {
   effect: (item: number) =>
     Effect.gen(function* () {
       yield* Effect.logInfo(`Processing number: ${item}`);

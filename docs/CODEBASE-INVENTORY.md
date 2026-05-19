@@ -410,7 +410,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### Construction forms
 
-- `QueueResource.Service<Self, T, E, R>()(name, config)` — tag + baked **`.layer`**.
+- `QueueResource.Service<Self, T, E>()(name, config)` — tag + baked **`.layer`**; requirements are inferred from config.
 - **`QueueResource.Tag<Self, T, E, R>()(name)`** + **`QueueResource.layer(tag, config)`** — DI / env-specific impls.
 - **`QueueResource.make(config)`** — scoped `Effect` → **`QueueHandle`** (requires **`Scope`**).
 - **`Layer.effect(tag)(QueueResource.make(config))`** — manual.

@@ -98,7 +98,7 @@ examples use `@nikscripts/effect-pm/storage/prisma`.
 | `Process`, `Polling`, `ProcessSchedule` | Build supervised processes and gate/cadence layers. |
 | `ProcessGroup` | Orchestrate processes + queues; typed contracts, controls, and `awaitShutdown`. |
 | `ProcessManager` | Typed remote client and endpoint service for group control contracts. |
-| `QueueResource` | Priority queues + workers. Public handle: `QueueHandle<T, E, EEnqueue, R>` (**requirements `R` last**); class services: `QueueResource.Service<Self, T, E, R>`. Optional **`autoStart: false`** defers worker/refill fibers until **`yield* queue.start`. |
+| `QueueResource` | Priority queues + workers. Public handle: `QueueHandle<T, E, EEnqueue, R>` (**requirements `R` last**); class services: `QueueResource.Service<Self, T, E>` infer `R` from config. Optional **`autoStart: false`** defers worker/refill fibers until **`yield* queue.start`. |
 | `ProcessStore` | In-memory (or Prisma) analytics: executions + lifecycle events. |
 | `RunResource`, `HttpClientRunGate` | Concurrency + throttle gates for arbitrary effects / `HttpClient`. |
 | `HttpApiResource`, `Resource` | Typed HttpApi client as a service + layers. |

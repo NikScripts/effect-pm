@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Duration, Effect, Exit, Layer, Ref, Schema } from "effect";
+import { Context, Duration, Effect, Exit, Layer, Ref, Schema } from "effect";
 import type { HttpClient } from "effect/unstable/http";
 import {
   Process,
@@ -27,6 +27,23 @@ class TypeEmailQueue extends QueueResource.Service<TypeEmailQueue, Email, never>
 class TypeInvoiceQueue extends QueueResource.Service<TypeInvoiceQueue, InvoiceJob, never>()("@test/TypeInvoiceQueue", {
   effect: (_job: InvoiceJob) => Effect.void,
 }) {}
+
+class TypeQueueHookService extends Context.Service<
+  TypeQueueHookService,
+  { readonly record: Effect.Effect<void> }
+>()("@test/TypeQueueHookService") {}
+
+class TypeHookQueue extends QueueResource.Service<TypeHookQueue, Email, never>()(
+  "@test/TypeHookQueue",
+  {
+    effect: (_email: Email) => Effect.void,
+    onEnqueue: () =>
+      Effect.gen(function* () {
+        const service = yield* TypeQueueHookService;
+        yield* service.record;
+      }),
+  },
+) {}
 
 class TypeProcess extends Process.Service<TypeProcess>()("@test/TypeProcess", {
   effect: Effect.void,
@@ -90,6 +107,7 @@ export const processGroupTypeChecks = Effect.gen(function* () {
   const _directQueueControls = directGroup.queue(TypeEmailQueue);
   const _serviceQueueControls = serviceGroup.queue(TypeEmailQueue);
   const _remoteLayer = ProcessGroup.remoteLayer(TypeGroup, TypeEndpoint);
+  const _hookQueueLayer = TypeHookQueue.layer;
   const _registryLayer = ProcessManager.ConnectionRegistry.layer(
     [TypeGroup] as const,
     {
@@ -103,6 +121,7 @@ export const processGroupTypeChecks = Effect.gen(function* () {
   type ServiceQueueEnqueueError = EffectError<ReturnType<typeof _serviceQueueControls.enqueue>>;
   type RemoteLayerOut = LayerOut<typeof _remoteLayer>;
   type RemoteLayerIn = LayerIn<typeof _remoteLayer>;
+  type HookQueueLayerIn = LayerIn<typeof _hookQueueLayer>;
   type RegistryLayerOut = LayerOut<typeof _registryLayer>;
   type RegistryConnectIn = Effect.Services<typeof _registryConnect>;
 
@@ -113,6 +132,7 @@ export const processGroupTypeChecks = Effect.gen(function* () {
   assertType<Assert<IsAssignable<UnsupportedRemoteControlError, ServiceQueueEnqueueError>>>();
   assertType<Assert<IsEqual<RemoteLayerOut, TypeGroup>>>();
   assertType<Assert<IsEqual<RemoteLayerIn, TypeEndpoint | HttpClient.HttpClient>>>();
+  assertType<Assert<IsEqual<HookQueueLayerIn, TypeQueueHookService>>>();
   assertType<Assert<IsEqual<RegistryLayerOut, ProcessManagerConnectionRegistry>>>();
   assertType<Assert<IsEqual<RegistryConnectIn, ProcessManagerConnectionRegistry>>>();
 

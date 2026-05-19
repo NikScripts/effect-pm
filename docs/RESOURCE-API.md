@@ -16,7 +16,7 @@ Priority queue with managed workers, deduplication, retry, and lifecycle hooks.
 import { Effect, Exit } from "effect"
 import { QueueResource } from "@nikscripts/effect-pm"
 
-class EmailQueue extends QueueResource.Service<EmailQueue, Email, SmtpError, never>()(
+class EmailQueue extends QueueResource.Service<EmailQueue, Email, SmtpError>()(
   "@app/EmailQueue",
   {
     effect: (email, ctx) => smtpClient.send(email).pipe(Effect.asVoid),
@@ -102,7 +102,7 @@ const cleared = yield* queue.clear      // drain all queues, reset counter
 ### Configuration reference
 
 ```typescript
-QueueResource.Service<Self, T, E, R>()("name", {
+QueueResource.Service<Self, T, E>()("name", {
   // ─── Required ───
   effect: (item: T, ctx: EffectContext<T>) => Effect<R, E>,
 
@@ -173,7 +173,7 @@ handler: (item, exit, ctx) => Effect.gen(function*() {
 #### Error handling with retry + dead letter
 
 ```typescript
-class OrderQueue extends QueueResource.Service<OrderQueue, Order, OrderError, never>()(
+class OrderQueue extends QueueResource.Service<OrderQueue, Order, OrderError>()(
   "@app/OrderQueue",
   {
     effect: (order) => processOrder(order),
@@ -195,7 +195,7 @@ class OrderQueue extends QueueResource.Service<OrderQueue, Order, OrderError, ne
 #### Deduplication (by item key)
 
 ```typescript
-class WebhookQueue extends QueueResource.Service<WebhookQueue, WebhookEvent, never, never>()(
+class WebhookQueue extends QueueResource.Service<WebhookQueue, WebhookEvent, never>()(
   "@app/WebhookQueue",
   {
     effect: (event) => deliverWebhook(event),
@@ -208,7 +208,7 @@ class WebhookQueue extends QueueResource.Service<WebhookQueue, WebhookEvent, nev
 #### Spawning derived work from effect
 
 ```typescript
-class CrawlQueue extends QueueResource.Service<CrawlQueue, URL, CrawlError, never>()(
+class CrawlQueue extends QueueResource.Service<CrawlQueue, URL, CrawlError>()(
   "@app/CrawlQueue",
   {
     effect: (url, ctx) => Effect.gen(function*() {
@@ -225,7 +225,7 @@ class CrawlQueue extends QueueResource.Service<CrawlQueue, URL, CrawlError, neve
 #### Start paused, load items, then resume
 
 ```typescript
-class BatchQueue extends QueueResource.Service<BatchQueue, Job, never, never>()(
+class BatchQueue extends QueueResource.Service<BatchQueue, Job, never>()(
   "@app/BatchQueue",
   {
     effect: (job) => processJob(job),
