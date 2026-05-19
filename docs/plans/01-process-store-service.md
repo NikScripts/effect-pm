@@ -159,20 +159,192 @@ Candidate surface:
 
 Queries should be typed and storage-neutral.
 
-## Event envelope
+## Indexed runtime record envelope
 
-Keep one envelope shape:
+Move the durable storage row from an analytics-only event envelope toward a
+generic indexed runtime record. Runtime modules should still write through
+semantic `ProcessStore` sub-surfaces; `ProcessStore` owns the mapping from
+module vocabulary to generic indexed columns before handing rows to
+`RuntimeStorage`.
 
-- `id`
-- `type`
-- `occurredAt`
-- `entityType`
-- `entityId`
-- `attributes`
-- payload-specific data
+Candidate normalized row:
 
-This keeps Prisma and custom stores simple while allowing new event types
-without new storage tables.
+```typescript
+interface RuntimeRecord {
+  readonly id: string
+  readonly type: string
+  readonly occurredAt: DateTime.Utc
+
+  /**
+   * Generalized runtime owner. A queue, run resource, HTTP resource, group,
+   * schedule runtime, or traditional process all gets represented as a
+   * process-like runtime unit.
+   */
+  readonly processType: string
+  readonly processId: string
+
+  /**
+   * The thing inside the process-like runtime that this row is about:
+   * queue entry, dedupe key, process execution, HTTP request, schedule entry,
+   * config version, etc.
+   */
+  readonly subjectType?: string
+  readonly subjectId?: string
+
+  /** Dedupe / idempotency key when relevant. */
+  readonly key?: string
+
+  /** Generic indexed slots for record-specific identifiers. */
+  readonly indexA?: string
+  readonly indexB?: string
+  readonly indexC?: string
+  readonly indexD?: string
+  readonly indexE?: string
+  readonly indexF?: string
+  readonly indexG?: string
+  readonly indexH?: string
+
+  /**
+   * Ordered semantic names for index slots. Position maps to slot:
+   * indexNames[0] = indexA, indexNames[1] = indexB, etc.
+   */
+  readonly indexNames?: ReadonlyArray<string>
+
+  /** Typed event/body data. Optional for marker facts where columns suffice. */
+  readonly payload?: JsonValue
+
+  /** User/app metadata not required by core projections. */
+  readonly attributes?: JsonValue
+}
+```
+
+Why this shape:
+
+- `processId` is the primary owner id for all controllable runtime units.
+  Resources are treated as special process-like runtimes for storage and
+  projection purposes.
+- `subjectId` covers the primary nested id: queue `entryId`, dedupe key id,
+  process execution id, HTTP request id, schedule entry id, etc.
+- `key` is first-class because dedupe/idempotency lookups are hot enough to
+  deserve a named indexed column. It is indexed, but it must not be unique:
+  storage records key history (`added`, `duplicate rejected`, `released`,
+  `manual add`, `manual remove`, `cleared`) and repeated keys over time are
+  expected.
+- `indexA` through `indexH` provide eight generic indexed string slots for
+  module-specific identifiers such as batch id, release id, handoff id, route
+  id, operation id, or deployment id.
+- `indexNames` preserves the historical meaning of each index slot even if a
+  future package version changes the mapping.
+- `payload` and `attributes` are optional JSON so marker facts and highly indexed
+  records do not have to store redundant payload data.
+
+Example queue entry enqueue mapping:
+
+```typescript
+yield* store.queue.entryEnqueued({
+  processId: queueId,
+  entryId,
+  key,
+  batchId,
+  releaseId,
+  sourceResourceId,
+  payload,
+})
+
+// ProcessStore normalizes to RuntimeStorage:
+{
+  type: "queue.entry.enqueued",
+  processType: "queue",
+  processId: queueId,
+  subjectType: "queue-entry",
+  subjectId: entryId,
+  key,
+  indexA: batchId,
+  indexB: releaseId,
+  indexC: sourceResourceId,
+  indexNames: ["batchId", "releaseId", "sourceResourceId"],
+  payload,
+}
+```
+
+Semantic module APIs should remain preferred:
+
+```typescript
+yield* store.queue.entries({
+  processId: "@app/EmailQueue",
+  batchId: "batch-1",
+})
+```
+
+Generic/raw APIs can exist for projections and custom records:
+
+```typescript
+yield* store.records({
+  processId: "@app/EmailQueue",
+  indexA: "batch-1",
+})
+```
+
+Normal application and runtime module code should use semantic names. Projection
+tools, custom records, and storage adapters may use raw index slots.
+
+### Queue entry storage and projection
+
+Queue entry storage should use a delta/event strategy rather than storing the
+full entry snapshot on every state change. Store full item + metadata snapshots
+only when they are operationally needed:
+
+- `queue.entry.enqueued` stores the full item and metadata snapshot.
+- `queue.entry.released` stores the full item and metadata snapshot because this
+  is the handoff/export boundary.
+- `queue.entry.started` stores only indexed ids, key, type, and `occurredAt`.
+- `queue.entry.completed`, `queue.entry.failed`, `queue.entry.retried`,
+  `queue.entry.exhausted`, and `queue.entry.interrupted` store only relevant
+  deltas such as status, attempts, duration, error, and interruption facts.
+
+Use the top-level `occurredAt` column as the timestamp for each event:
+
+- enqueue time = `queue.entry.enqueued.occurredAt`,
+- worker start time = `queue.entry.started.occurredAt`,
+- completion/failure time = completed/failed `occurredAt`,
+- interruption time = interrupted `occurredAt`,
+- release time = released `occurredAt`.
+
+Do not duplicate those same timestamps in payload unless a record needs a
+different domain-specific time.
+
+Projection APIs should be module-facing and semantic:
+
+```typescript
+yield* store.queue.entry({
+  processId: "@app/EmailQueue",
+  entryId: "entry-123",
+})
+
+yield* store.queue.entriesByKey({
+  processId: "@app/EmailQueue",
+  key: "delivery:abc",
+})
+```
+
+`store.queue.entry(...)` returns one combined report for a queue entry. It
+groups records at the entry level, merges deltas by `occurredAt`, and returns:
+
+- current `entryId`,
+- `identifiers` lineage,
+- item snapshot from enqueue or release records,
+- metadata snapshot,
+- lifecycle facts,
+- timings derived from `occurredAt`,
+- attempts/status/error/release information.
+
+`store.queue.entriesByKey(...)` returns multiple projected entry reports because
+one dedupe key can legitimately appear across multiple queue entries over time.
+
+Retries should be grouped through enqueue metadata: each retry creates a new
+`entryId`, appends it to `identifiers`, increments attempts, and writes an
+enqueue/retry record that lets projection reconstruct the full retry chain
+without requiring every later event to duplicate the item snapshot.
 
 ## Queue persistence implication
 

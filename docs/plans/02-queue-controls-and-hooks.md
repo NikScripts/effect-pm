@@ -54,9 +54,10 @@ QueueResource should follow the same naming contract used by the typed
 - `QueueResource.make(config)` - raw scoped Effect that acquires a live queue
   handle. Use this when a caller wants full manual ownership or a custom
   `Context.Service` wrapper.
-- `QueueResource.Service<Self, T, E, R>()(id, config)` - primary concrete queue
-  declaration (**`E`** = worker failure channel, **`R`** = requirements **last**). The class is the Context service key, has one canonical id, and
-  owns a default `.layer`.
+- `QueueResource.Service<Self, T, E>()(id, config)` - primary concrete queue
+  declaration (**`E`** = worker failure channel; requirements are inferred from
+  `effect`, `handler`, and hooks). The class is the Context service key, has one
+  canonical id, and owns a default `.layer`.
 - `QueueResource.RemoteService<Self, T, E, R>()(id, config)` - deferred
   remote-capable queue declaration. Do not implement this constructor until the
   remote service design gate in
@@ -284,7 +285,8 @@ export interface QueueEntry<T> {
   readonly priority?: Priority
   readonly key?: string
   readonly entryId?: string
-  readonly entryIds?: ReadonlyArray<string>
+  readonly identifiers?: ReadonlyArray<string>
+  readonly batchId?: string
   readonly attempts?: number
   readonly timestamps?: {
     readonly enqueuedAt?: DateTime.Utc
@@ -301,16 +303,23 @@ Rules:
 
 - `item` is required.
 - All metadata is optional on input; the target queue fills defaults for missing
-  `priority`, `attempts`, `timestamps.enqueuedAt`, `entryId`, `entryIds`, and
-  derived dedupe key.
+  `priority`, `attempts`, `timestamps.enqueuedAt`, `entryId`, `identifiers`,
+  `batchId`, and derived dedupe key.
 - `entryId` is the current queue-local entry id.
-- `entryIds` is immutable ordered lineage, includes the current `entryId`, and is
-  updated with Effect's `Array` helpers (`Array.append`, etc.), not exposed as a
-  mutable collection.
+- `identifiers` is immutable ordered entry-id lineage, includes the current
+  `entryId`, and is updated with Effect's `Array` helpers (`Array.append`,
+  etc.), not exposed as a mutable collection.
 - On first enqueue, the target queue creates `entryId` and
-  `entryIds = [entryId]`.
+  `identifiers = [entryId]`.
 - On retry or handoff enqueue, the target queue creates a new `entryId` and
-  appends it to `entryIds`.
+  appends it to `identifiers`.
+- `batchId` identifies one enqueue batch. Every entry produced by the same
+  `add(items)`, `prioritize(items)`, `defer(items)`, or `enqueue(entries)` call
+  receives the same `batchId` when omitted. A single-item enqueue still receives
+  a batch id so callers can await or inspect it uniformly.
+- `releaseId` identifies one release/handoff batch. Every entry returned by the
+  same `release()` or `interruptAndRelease()` call receives the same `releaseId`
+  when omitted.
 - `sourceResourceId` identifies the queue/resource/deployment that produced a
   released entry. Prefer `sourceResourceId` over a generic `source` so future
   resource families can share the vocabulary.
@@ -623,6 +632,28 @@ Candidate `ProcessStore` integration for stored keys:
 `ProcessStore` should expose package-level dedupe semantics; storage adapters
 remain the swappable persistence implementation underneath.
 
+Use the indexed runtime record envelope from
+[01 - ProcessStore as the storage service](./01-process-store-service.md) for
+stored queue entries, dedupe key facts, release/handoff rows, enqueue
+rejections, and queue config changes. `QueueResource` should emit semantic queue
+facts; `ProcessStore.queue.*` maps queue fields such as `batchId`, `releaseId`,
+`sourceResourceId`, `entryId`, and dedupe `key` into generic indexed storage
+columns.
+
+Queue entry storage should not store the full entry snapshot on every state
+change:
+
+- enqueue records store full item + metadata,
+- release records store full item + metadata,
+- started/completed/failed/retried/exhausted/interrupted records store only
+  indexed ids, key, type, `occurredAt`, and relevant deltas.
+
+`ProcessStore.queue.entry({ entryId })` should project one combined entry report
+by grouping entry records and merging deltas. `ProcessStore.queue.entriesByKey({
+key })` should return a list because the same dedupe key can be used by multiple
+entries over time. Retry grouping comes from enqueue metadata: every retry gets a
+new `entryId`, appends that id to `identifiers`, and increments `attempts`.
+
 ## Enqueue filters
 
 Add queue-level enqueue filters that run before mutation. Filters are for
@@ -882,6 +913,27 @@ Replace special storage-oriented callbacks with lifecycle hooks:
 `persist` becomes unnecessary because `ProcessStore` handles storage.
 `refill` becomes a normal `onEmpty` or `onDrained` behavior that can call
 queue-bound controls to add more work.
+
+Lifecycle hooks should have `never` in their error channel. Known/domain errors
+belong inside the hook effect; the queue runtime catches unexpected failures,
+logs them, and can record hook failure facts without failing the core queue
+transition by default.
+
+Hook requirements are inferred from every configured hook and unioned with the
+worker effect and handler requirements. The public queue handle keeps one
+combined requirements type parameter:
+
+```typescript
+type QueueRequirements<C> =
+  | Effect.Services<ReturnType<C["effect"]>>
+  | HandlerRequirements<C>
+  | HookRequirements<C>
+
+type QueueHandle<T, E, EEnqueue, R>
+```
+
+Do not add one type parameter per hook. `QueueResource.Service<Self, T, E>()`
+should infer the combined `R` from config instead of asking users to pass it.
 
 Hook event payloads should include queue-bound metadata where relevant:
 
