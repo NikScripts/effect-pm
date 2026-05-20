@@ -626,8 +626,8 @@ Stored-key startup rules:
 - stored key records use the indexed runtime record envelope from the storage
   plan (`processId`, `subjectType = "dedupe-key"`, `subjectId`, `key`).
 
-Retry must not be broken by retained or stored dedupe keys. Handler-triggered
-`ctx.retry` is re-enqueue of the same logical entry lineage, not a new duplicate
+Retry must not be broken by retained or stored dedupe keys. Hook-triggered
+`event.retry` is re-enqueue of the same logical entry lineage, not a new duplicate
 from outside the queue. A retry with the same key should be allowed even when
 `manualRelease` or `storeKey` would reject a different entry with that key.
 Implementation options:
@@ -636,7 +636,7 @@ Implementation options:
   when the active/stored key belongs to the same lineage,
 - or atomically release/re-add the key during retry scheduling.
 
-Do not require users to manually remove a dedupe key before calling `ctx.retry`.
+Do not require users to manually remove a dedupe key before calling `event.retry`.
 
 The builder should be type-state based, but runtime config should stay simple.
 `Dedupe.key(...)` changes the type to “has key”; queue-only or future
@@ -878,30 +878,29 @@ These are candidates, not commitments. Trim aggressively before public API.
 
 ### Handler
 
-Use `handler`, not `forkWith`, for the post-item result callback:
+Use `onExit`, not `forkWith`, for the post-item result callback:
 
 ```typescript
-readonly handler?: (
-  item: T,
-  exit: Exit.Exit<void, E>,
-  ctx: HandlerContext<T, EEnqueue, R>,
+readonly onExit?: (
+  event: QueueExitEvent<T, E, R>,
+  controls: QueueControls<T, E, EEnqueue, R>,
 ) => Effect.Effect<void>;
 ```
 
 Rules:
 
-- The handler receives `Exit<void, E>` directly.
-- The handler is forked into a managed fiber and must not block workers from
+- `onExit` receives `Exit<void, E>` and the entry envelope.
+- `onExit` is forked into a managed fiber and must not block workers from
   taking the next item.
 - There is no automatic retry on failure. Retry policy belongs to userland.
-- `ctx.retry` re-enqueues the same item at the back of the same priority queue.
+- `event.retry` re-enqueues the same item at the back of the same priority queue.
   It is not immediate re-execution.
-- `retries` is a cap for handler-triggered retry, not an automatic retry count.
+- `retries` is a cap for hook-triggered retry, not an automatic retry count.
 - When exhausted, `onRetryExhausted` / lifecycle equivalent runs.
 
 ### Context metadata
 
-Both effect and handler contexts should expose:
+Effect context exposes lightweight current-item metadata:
 
 - `attempts` - how many times the item has been processed, with `1` meaning the
   first attempt.
@@ -909,22 +908,21 @@ Both effect and handler contexts should expose:
 - `priority` - the original priority level for the current queue entry.
 
 The effect context should expose guarded enqueue helpers and protect against
-self-enqueue by reference and by configured key. The handler context can expose
-more powerful, unguarded enqueue helpers because it is the explicit routing
-decision point.
+self-enqueue by reference and by configured key. Lifecycle hooks receive
+`QueueEntry<T>` / hook-specific event envelopes plus queue-bound controls.
 
 ### Hooks
 
 Replace special storage-oriented callbacks with lifecycle hooks:
 
-- `onEnqueued(items, controls)`
+- `onEnqueued(batch, controls)`
 - `onEnqueueRejected(error, controls)`
-- `onStarted(item, controls)`
-- `onCompleted(item, exit, controls)`
-- `onFailed(item, cause, controls)`
-- `onSettled(item, exit, controls)`
-- `onRetryScheduled(item, controls)`
-- `onRetryExhausted(item, cause, controls)`
+- `onStarted(entry, controls)`
+- `onCompleted(event, controls)`
+- `onFailed(event, controls)`
+- `onExit(event, controls)`
+- `onRetryScheduled(event, controls)`
+- `onRetryExhausted(event, controls)`
 - `onDeadLettered(item, reason, controls)`
 - `onDropped(itemOrKey, reason, controls)`
 - `onEmpty(controls)`

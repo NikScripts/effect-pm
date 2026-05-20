@@ -423,20 +423,19 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 - **`concurrency?`** — workers; default 5.
 - **`capacity?`** — per-priority cap; default 50_000.
 - **`key?`** — dedup: drop if key already in-flight.
-- **`retries?`** — max handler `retry` re-enqueues; default Infinity.
-- **`onRetryExhausted?`** — `(item, cause) => Effect`.
-- **`onEnqueue?`**, **`onComplete?`** — fire-and-forget hooks.
+- **`retries?`** — max lifecycle hook `event.retry` re-enqueues; default Infinity.
+- **`onEnqueued?`**, **`onStarted?`**, **`onExit?`**, **`onCompleted?`**, **`onFailed?`**, **`onRetryScheduled?`**, **`onRetryExhausted?`** — fire-and-forget item lifecycle hooks with queue-bound controls.
 - **`effect(item, ctx)`** — required worker body.
-- **`handler?(item, exit, ctx)`** — optional; always forked.
-- **`onStart?(queueHandle)`** — queue-bound hook that runs once when workers start.
-- **`onDrained?(queueHandle)`** — queue-bound hook after pending work drains empty (or after `clear`); not triggered by cold-start idle worker waits.
+- **`onStart?(event, queueHandle)`** — queue-bound hook that runs once when workers start.
+- **`onDrained?(event, queueHandle)`** — queue-bound hook after pending work drains empty (or after `clear`); not triggered by cold-start idle worker waits.
+- **`onCleared?(event, queueHandle)`** — queue-bound hook after pending entries are cleared.
 
 **Enqueue error channel on contexts:** `QueueItemValidationError | QueueBatchValidationError` only when schema path used; without schema, still typed but validation never fails.
 
 ### Config with item schema (`QueueResourceConfigWithItemSchema`)
 
 - **`itemSchema`** — Effect `Schema` for items.
-- Same **`effect`**, **`handler`**, **`onStart`**, and **`onDrained`** as above.
+- Same **`effect`** and lifecycle hooks as above.
 - Public **`add`/`enqueue`/…** and hook enqueues can fail validation.
 
 ### `QueueHandle` operations
@@ -452,11 +451,12 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 - **`attempts`**, **`enqueuedAt`**, **`priority`**.
 - **`add` / `prioritize` / `defer`** — **guarded**: self-enqueue by ref or key → warn + drop.
 
-### `HandlerContext` (in `handler`)
+### Lifecycle hook envelopes
 
-- Same metadata.
-- **`retry`** — re-enqueue same priority back of line; respects **`retries`** + **`onRetryExhausted`**.
-- **`add` / `prioritize` / `defer`** — **unguarded** (trusted).
+- **`QueueEntry<T>`** — item, entry id, key, priority, attempts, timestamps, batch/release/source/attributes.
+- **`QueueBatch<T>`** — batch of queue entries plus priority.
+- **`QueueExitEvent<T, E>`** — entry, `Exit`, elapsed duration, and **`retry`**.
+- **Queue-bound controls** — `add`, `prioritize`, `defer`, lifecycle controls, and status reads.
 
 ### Priority type
 

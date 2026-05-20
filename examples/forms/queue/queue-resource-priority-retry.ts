@@ -1,7 +1,7 @@
 /**
  * @module examples/forms/queue/queue-resource-priority-retry
  *
- * QueueResource priority, dedup, handler retry. Run: `pnpm run example:queue-resource`
+ * QueueResource priority, dedup, lifecycle-hook retry. Run: `pnpm run example:queue-resource`
  */
 
 import { Cause, Data, Duration, Effect, Exit } from "effect";
@@ -54,22 +54,22 @@ class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, SendError>(
         yield* Effect.logInfo(`sent:${job.id}`);
       }),
     // Runs in a forked fiber per item — failures don't block the worker loop.
-    handler: (job, exit, ctx) =>
+    onExit: ({ entry, exit, retry }) =>
       Exit.match(exit, {
         onFailure: (cause) =>
           Effect.gen(function* () {
             yield* Effect.logWarning(
-              `handler saw failure for ${job.id}: ${Cause.pretty(cause)}`,
+              `onExit saw failure for ${entry.item.id}: ${Cause.pretty(cause)}`,
             );
-            yield* ctx.retry;
+            yield* retry;
           }),
         onSuccess: () =>
-          Effect.logInfo(`handler saw success for ${job.id} after ${String(ctx.attempts)} attempt(s)`),
+          Effect.logInfo(`onExit saw success for ${entry.item.id} after ${String(entry.attempts)} attempt(s)`),
       }),
-    onEnqueue: (jobs, priority) =>
-      Effect.logInfo(`enqueued ${String(jobs.length)} ${priority} job(s)`),
-    onRetryExhausted: (job, cause) =>
-      Effect.logError(`dead-letter ${job.id}: ${Cause.pretty(cause)}`),
+    onEnqueued: (batch) =>
+      Effect.logInfo(`enqueued ${String(batch.entries.length)} ${batch.priority} job(s)`),
+    onRetryExhausted: ({ entry, cause }) =>
+      Effect.logError(`dead-letter ${entry.item.id}: ${Cause.pretty(cause)}`),
   },
 ) {}
 

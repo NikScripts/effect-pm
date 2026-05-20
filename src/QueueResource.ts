@@ -27,9 +27,9 @@
  *   "@app/EmailQueue",
  *   {
  *     effect: (email, ctx) => sendEmail(email).pipe(Effect.asVoid),
- *     handler: (item, exit, ctx) =>
+ *     onExit: ({ exit, retry }) =>
  *       Exit.match(exit, {
- *         onFailure: () => ctx.retry,
+ *         onFailure: () => retry,
  *         onSuccess: () => Effect.void,
  *       }),
  *     concurrency: 5,
@@ -170,7 +170,7 @@ export class QueueBatchValidationError extends Data.TaggedError("QueueBatchValid
  * Enqueue a single item or a readonly batch of items.
  *
  * @typeParam E - Validation errors when {@link QueueResourceConfig.itemSchema} is set
- * @typeParam R - Dependencies needed to run enqueue-time hooks (`onEnqueue`, …) when called from the ambient program
+ * @typeParam R - Dependencies needed to run enqueue-time hooks (`onEnqueued`, …) when called from the ambient program
  *
  * @public
  */
@@ -267,7 +267,7 @@ export interface QueueHandleApi<
    * Drain all pending items from all priority queues and reset the completed
    * counter. Returns the number of items cleared. Workers remain alive.
    */
-  readonly clear: Effect.Effect<number>;
+  readonly clear: Effect.Effect<number, never, R>;
 }
 
 /**
@@ -281,6 +281,90 @@ export type QueueHandle<
   EEnqueue = never,
   R = never,
 > = QueueHandleApi<T, EEnqueue, R> & QueueHandlePhantomWorkerFailures<E>;
+
+/** @public */
+export interface QueueEntryTimestamps {
+  readonly enqueuedAt: DateTime.Utc;
+  readonly startedAt?: DateTime.Utc;
+  readonly completedAt?: DateTime.Utc;
+  readonly interruptedAt?: DateTime.Utc;
+}
+
+/** @public */
+export interface QueueEntry<T> {
+  readonly item: T;
+  readonly entryId: string;
+  readonly key?: string;
+  readonly priority: Priority;
+  readonly attempts: number;
+  readonly timestamps: QueueEntryTimestamps;
+  readonly batchId?: string;
+  readonly releaseId?: string;
+  readonly sourceResourceId?: string;
+  readonly attributes?: Record<string, unknown>;
+}
+
+/** @public */
+export interface QueueBatch<T> {
+  readonly entries: ReadonlyArray<QueueEntry<T>>;
+  readonly priority: Priority;
+  readonly batchId?: string;
+}
+
+/** @public */
+export type QueueControls<T, E = never, EEnqueue = never, R = never> = QueueHandle<T, E, EEnqueue, R>;
+
+/** @public */
+export interface QueueStartEvent {
+  readonly queueId: string;
+}
+
+/** @public */
+export interface QueueDrainedEvent {
+  readonly queueId: string;
+  readonly completed: number;
+}
+
+/** @public */
+export interface QueueClearedEvent {
+  readonly queueId: string;
+  readonly count: number;
+}
+
+/** @public */
+export interface QueueExitEvent<T, E, R = never> {
+  readonly entry: QueueEntry<T>;
+  readonly exit: Exit.Exit<void, E>;
+  readonly elapsed: Duration.Duration;
+  readonly retry: Effect.Effect<void, never, R>;
+}
+
+/** @public */
+export interface QueueCompletedEvent<T> {
+  readonly entry: QueueEntry<T>;
+  readonly elapsed: Duration.Duration;
+}
+
+/** @public */
+export interface QueueFailedEvent<T, E, R = never> {
+  readonly entry: QueueEntry<T>;
+  readonly cause: Cause.Cause<E>;
+  readonly elapsed: Duration.Duration;
+  readonly retry: Effect.Effect<void, never, R>;
+}
+
+/** @public */
+export interface QueueRetryScheduledEvent<T, E = never> {
+  readonly entry: QueueEntry<T>;
+  readonly cause: Cause.Cause<E>;
+  readonly nextAttempt: number;
+}
+
+/** @public */
+export interface QueueRetryExhaustedEvent<T, E = never> {
+  readonly entry: QueueEntry<T>;
+  readonly cause: Cause.Cause<E>;
+}
 
 /**
  * Queue declaration metadata for {@link QueueResourceDefinition} and
@@ -346,7 +430,7 @@ export interface QueueResourceServiceDefinition<
  * Attempting to enqueue the same item (by reference or by `key`) logs a warning
  * and silently drops the item to prevent infinite processing loops.
  *
- * Use `ctx.retry` in the **handler** (not here) for intentional re-processing.
+ * Use `event.retry` in **`onExit`** / **`onFailed`** for intentional re-processing.
  *
  * @typeParam T - Item type
  *
@@ -368,46 +452,11 @@ export interface EffectContext<T, EEnqueue = never, R = never> {
 }
 
 /**
- * Context passed to the `handler` callback after item processing.
- *
- * Includes `retry` — the only sanctioned way to re-process the same item.
- * Retry is a **re-enqueue** (back of the same priority queue), NOT an immediate
- * re-execution. The item waits in line behind other pending items.
- *
- * Enqueue operations here are **unguarded** — the handler is trusted to make
- * intentional routing decisions (retry, dead-letter, escalation, etc.).
- *
- * @typeParam T - Item type
- *
- * @public
- */
-export interface HandlerContext<T, EEnqueue = never, R = never> {
-  /**
-   * Re-enqueue this item at the same priority (back of the line).
-   * Respects the `retries` limit — when exhausted, `onRetryExhausted` is called
-   * and the item is NOT re-enqueued.
-   */
-  readonly retry: Effect.Effect<void, never, R>;
-  /** Enqueue items at normal priority (unguarded). */
-  readonly add: QueueEnqueue<T, EEnqueue, R>;
-  /** Enqueue items at high priority (unguarded). */
-  readonly prioritize: QueueEnqueue<T, EEnqueue, R>;
-  /** Enqueue items at low priority (unguarded). */
-  readonly defer: QueueEnqueue<T, EEnqueue, R>;
-  /** How many times this item has been processed (1 = first attempt). */
-  readonly attempts: number;
-  /** When the item first entered the queue as epoch millis (preserved across retries). */
-  readonly enqueuedAt: number;
-  /** The priority level this item was enqueued at. */
-  readonly priority: Priority;
-}
-
-/**
  * Configuration for {@link QueueResource.make}.
  *
  * @typeParam T - Item type
  * @typeParam E - Failure channel surfaced as `Exit` failures from the worker `effect`
- * @typeParam R - Dependencies required while running callbacks (`effect`, `handler`, and queue hooks forked alongside workers)
+ * @typeParam R - Dependencies required while running callbacks (`effect` and queue hooks forked alongside workers)
  *
  * @public
  */
@@ -416,7 +465,7 @@ export interface HandlerContext<T, EEnqueue = never, R = never> {
  *
  * @public
  */
-export interface QueueResourceConfigBase<T, E, R> {
+export interface QueueResourceConfigBase<T> {
   /** Queue name used for log annotations and error messages. @default "anonymous" */
   readonly name?: string;
   /** Start with processing paused. Call `resume` to begin. @default false */
@@ -440,34 +489,11 @@ export interface QueueResourceConfigBase<T, E, R> {
    */
   readonly key?: (item: T) => string;
   /**
-   * Max times an item may be re-enqueued via `ctx.retry` in the handler.
+   * Max times an item may be re-enqueued via `event.retry` in exit/failure hooks.
    * When exhausted, `onRetryExhausted` is called instead of re-enqueuing.
    * @default Infinity
    */
   readonly retries?: number;
-  /** Called when `ctx.retry` is invoked but the retry limit is reached. */
-  readonly onRetryExhausted?: (
-    item: T,
-    cause: Cause.Cause<E>,
-  ) => Effect.Effect<void, never, R>;
-  /**
-   * Hook: fired after item(s) are enqueued. Receives the batch and priority.
-   * Fire-and-forget — errors are logged and swallowed.
-   */
-  readonly onEnqueue?: (
-    items: ReadonlyArray<T>,
-    priority: Priority,
-  ) => Effect.Effect<void, never, R>;
-  /**
-   * Hook: fired after each item's effect completes. Receives the item, its
-   * Exit, and the elapsed Duration. Runs in a forked fiber (non-blocking).
-   * Errors are logged and swallowed.
-   */
-  readonly onComplete?: (
-    item: T,
-    exit: Exit.Exit<void, E>,
-    elapsed: Duration.Duration,
-  ) => Effect.Effect<void, never, R>;
 }
 
 /**
@@ -477,7 +503,7 @@ export interface QueueResourceConfigBase<T, E, R> {
  *
  * @public
  */
-export type QueueResourceConfigWithoutItemSchema<T, E, R> = QueueResourceConfigBase<T, E, R> & {
+export type QueueResourceConfigWithoutItemSchema<T, E, R> = QueueResourceConfigBase<T> & {
   readonly itemSchema?: undefined;
   /**
    * Process each item. Receives a guarded {@link EffectContext} for spawning
@@ -485,19 +511,48 @@ export type QueueResourceConfigWithoutItemSchema<T, E, R> = QueueResourceConfigB
    * the success channel is always **`void`**.
    */
   readonly effect: (item: T, ctx: EffectContext<T, never, R>) => Effect.Effect<void, E, R>;
-  /**
-   * Handle each item's result. **Always forked** — runs in its own fiber and
-   * never blocks the worker from processing the next item.
-   */
-  readonly handler?: (
-    item: T,
-    exit: Exit.Exit<void, E>,
-    ctx: HandlerContext<T, never, R>,
-  ) => Effect.Effect<void, any, R>;
+  readonly onEnqueued?: (
+    batch: QueueBatch<T>,
+    controls: QueueControls<T, E, never, R>,
+  ) => Effect.Effect<void, never, R>;
   /** Hook: fired once when the worker pool starts. */
-  readonly onStart?: (queue: QueueHandle<T, E, never, R>) => Effect.Effect<void, never, R>;
+  readonly onStart?: (
+    event: QueueStartEvent,
+    controls: QueueControls<T, E, never, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onStarted?: (
+    entry: QueueEntry<T>,
+    controls: QueueControls<T, E, never, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onExit?: (
+    event: QueueExitEvent<T, E, R>,
+    controls: QueueControls<T, E, never, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onCompleted?: (
+    event: QueueCompletedEvent<T>,
+    controls: QueueControls<T, E, never, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onFailed?: (
+    event: QueueFailedEvent<T, E, R>,
+    controls: QueueControls<T, E, never, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onRetryScheduled?: (
+    event: QueueRetryScheduledEvent<T, E>,
+    controls: QueueControls<T, E, never, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onRetryExhausted?: (
+    event: QueueRetryExhaustedEvent<T, E>,
+    controls: QueueControls<T, E, never, R>,
+  ) => Effect.Effect<void, never, R>;
   /** Hook: fired when pending work drains to empty after work or clear, not on cold-start idle. */
-  readonly onDrained?: (queue: QueueHandle<T, E, never, R>) => Effect.Effect<void, never, R>;
+  readonly onDrained?: (
+    event: QueueDrainedEvent,
+    controls: QueueControls<T, E, never, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onCleared?: (
+    event: QueueClearedEvent,
+    controls: QueueControls<T, E, never, R>,
+  ) => Effect.Effect<void, never, R>;
 };
 
 /**
@@ -514,16 +569,49 @@ export type QueueResourceConfigWithoutItemSchema<T, E, R> = QueueResourceConfigB
  */
 export type QueueEnqueueErrors = QueueItemValidationError | QueueBatchValidationError;
 
-export type QueueResourceConfigWithItemSchema<T, E, R> = QueueResourceConfigBase<T, E, R> & {
+export type QueueResourceConfigWithItemSchema<T, E, R> = QueueResourceConfigBase<T> & {
   readonly itemSchema: Schema.Decoder<T, never>;
   readonly effect: (item: T, ctx: EffectContext<T, QueueEnqueueErrors, R>) => Effect.Effect<void, E, R>;
-  readonly handler?: (
-    item: T,
-    exit: Exit.Exit<void, E>,
-    ctx: HandlerContext<T, QueueEnqueueErrors, R>,
-  ) => Effect.Effect<void, any, R>;
-  readonly onStart?: (queue: QueueHandle<T, E, QueueEnqueueErrors, R>) => Effect.Effect<void, never, R>;
-  readonly onDrained?: (queue: QueueHandle<T, E, QueueEnqueueErrors, R>) => Effect.Effect<void, never, R>;
+  readonly onEnqueued?: (
+    batch: QueueBatch<T>,
+    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onStart?: (
+    event: QueueStartEvent,
+    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onStarted?: (
+    entry: QueueEntry<T>,
+    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onExit?: (
+    event: QueueExitEvent<T, E, R>,
+    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onCompleted?: (
+    event: QueueCompletedEvent<T>,
+    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onFailed?: (
+    event: QueueFailedEvent<T, E, R>,
+    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onRetryScheduled?: (
+    event: QueueRetryScheduledEvent<T, E>,
+    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onRetryExhausted?: (
+    event: QueueRetryExhaustedEvent<T, E>,
+    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onDrained?: (
+    event: QueueDrainedEvent,
+    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onCleared?: (
+    event: QueueClearedEvent,
+    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
+  ) => Effect.Effect<void, never, R>;
 };
 
 /**
@@ -586,7 +674,7 @@ export type InferQueueEnqueueError<C> = EnqueueErrOf<C>;
  *
  * @remarks
  * **`effect`** parameter positions use **`any`** in the constraint so TypeScript accepts
- * the concrete **`ctx`** (`EffectContext` / **`HandlerContext`**) without pretending it is **`unknown`**.
+ * the concrete **`ctx`** (`EffectContext`) without pretending it is **`unknown`**.
  *
  * @public
  */
@@ -602,14 +690,6 @@ export type InferQueueItem<
 export type InferQueueWorkerError<
   C extends { readonly effect: (...args: any[]) => Effect.Effect<void, any, any> },
 > = Effect.Error<ReturnType<C["effect"]>>;
-
-type InferOptionalHandlerRequirements<C> = [C] extends [{
-  readonly handler: infer HF;
-}]
-  ? HF extends (...args: any) => Effect.Effect<any, infer _Eh, infer HReq>
-    ? HReq
-    : never
-  : never;
 
 type InferEffectRequirements<Value> =
   Value extends (...args: any) => Effect.Effect<any, any, infer R>
@@ -637,12 +717,16 @@ export type InferQueueWorkerRequirements<
 > =
   NormalizeQueueRequirements<
     | Effect.Services<ReturnType<C["effect"]>>
-    | InferOptionalHandlerRequirements<C>
-    | InferOptionalPropertyRequirements<C, "onRetryExhausted">
-    | InferOptionalPropertyRequirements<C, "onEnqueue">
-    | InferOptionalPropertyRequirements<C, "onComplete">
+    | InferOptionalPropertyRequirements<C, "onEnqueued">
     | InferOptionalPropertyRequirements<C, "onStart">
+    | InferOptionalPropertyRequirements<C, "onStarted">
+    | InferOptionalPropertyRequirements<C, "onExit">
+    | InferOptionalPropertyRequirements<C, "onCompleted">
+    | InferOptionalPropertyRequirements<C, "onFailed">
+    | InferOptionalPropertyRequirements<C, "onRetryScheduled">
+    | InferOptionalPropertyRequirements<C, "onRetryExhausted">
     | InferOptionalPropertyRequirements<C, "onDrained">
+    | InferOptionalPropertyRequirements<C, "onCleared">
   >;
 
 
@@ -656,15 +740,48 @@ const hasItemSchema = <T, E, R>(
  *
  * @internal
  */
-type QueueRuntimeConfig<T, E, EEnqueue, R> = QueueResourceConfigBase<T, E, R> & {
+type QueueRuntimeConfig<T, E, EEnqueue, R> = QueueResourceConfigBase<T> & {
   readonly effect: (item: T, ctx: EffectContext<T, EEnqueue, R>) => Effect.Effect<void, E, R>;
-  readonly handler?: (
-    item: T,
-    exit: Exit.Exit<void, E>,
-    ctx: HandlerContext<T, EEnqueue, R>,
-  ) => Effect.Effect<void, any, R>;
-  readonly onStart?: (queue: QueueHandle<T, E, EEnqueue, R>) => Effect.Effect<void, never, R>;
-  readonly onDrained?: (queue: QueueHandle<T, E, EEnqueue, R>) => Effect.Effect<void, never, R>;
+  readonly onEnqueued?: (
+    batch: QueueBatch<T>,
+    controls: QueueControls<T, E, EEnqueue, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onStart?: (
+    event: QueueStartEvent,
+    controls: QueueControls<T, E, EEnqueue, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onStarted?: (
+    entry: QueueEntry<T>,
+    controls: QueueControls<T, E, EEnqueue, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onExit?: (
+    event: QueueExitEvent<T, E, R>,
+    controls: QueueControls<T, E, EEnqueue, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onCompleted?: (
+    event: QueueCompletedEvent<T>,
+    controls: QueueControls<T, E, EEnqueue, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onFailed?: (
+    event: QueueFailedEvent<T, E, R>,
+    controls: QueueControls<T, E, EEnqueue, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onRetryScheduled?: (
+    event: QueueRetryScheduledEvent<T, E>,
+    controls: QueueControls<T, E, EEnqueue, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onRetryExhausted?: (
+    event: QueueRetryExhaustedEvent<T, E>,
+    controls: QueueControls<T, E, EEnqueue, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onDrained?: (
+    event: QueueDrainedEvent,
+    controls: QueueControls<T, E, EEnqueue, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onCleared?: (
+    event: QueueClearedEvent,
+    controls: QueueControls<T, E, EEnqueue, R>,
+  ) => Effect.Effect<void, never, R>;
 };
 
 /** Normalize public enqueue input without treating arbitrary iterables as batches. */
@@ -692,6 +809,21 @@ interface InternalItem<T> {
   /** Cached dedup key (avoids recomputing `config.key` on each check). */
   readonly key: string | undefined;
 }
+
+const queueEntryFromInternal = <T>(
+  internal: InternalItem<T>,
+  timestamps?: Partial<Omit<QueueEntryTimestamps, "enqueuedAt">>,
+): QueueEntry<T> => ({
+  item: internal.item,
+  entryId: internal.entryId,
+  key: internal.key,
+  priority: internal.priority,
+  attempts: internal.retries + 1,
+  timestamps: {
+    enqueuedAt: DateTime.makeUnsafe(internal.enqueuedAt),
+    ...timestamps,
+  },
+});
 
 // ============================================================================
 // Core Implementation
@@ -1010,7 +1142,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
      * 2. Dedup key check (skip duplicates)
      * 3. Offer to the target priority queue
      * 4. Wake sleeping workers (`takeNext` waiters)
-     * 5. Fire hooks (onEnqueue)
+     * 5. Fire hooks (onEnqueued)
      */
     const enqueueInternal = (
       items: ReadonlyArray<T>,
@@ -1057,11 +1189,19 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           { discard: true },
         );
 
-        // Fire-and-forget hooks
-        if (config.onEnqueue !== undefined) {
-          yield* config
-            .onEnqueue(toEnqueue.map((i) => i.item), priority)
-            .pipe((effect) => runQueueHook("onEnqueue", effect));
+        const handle = queueHandleSlot.current;
+        if (handle === undefined) {
+          return yield* Effect.die(
+            new Error(`Queue "${queueName}" internal error: handle not wired before onEnqueued`),
+          );
+        }
+        if (config.onEnqueued !== undefined) {
+          yield* FiberSet.run(handlerFibers)(
+            config.onEnqueued({
+              entries: toEnqueue.map((internal) => queueEntryFromInternal(internal)),
+              priority,
+            }, handle).pipe((effect) => runQueueHook("onEnqueued", effect)),
+          );
         }
       });
 
@@ -1118,21 +1258,22 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       };
     };
 
-    // ─── Internal: HandlerContext ───
-
-    /**
-     * Build the context passed to the user's `handler` callback.
-     * Includes `retry` which re-enqueues the item with an incremented retry counter.
-     */
-    const makeHandlerContext = (
+    const retryInternal = (
       internal: InternalItem<T>,
       exit: Exit.Exit<void, E>,
-    ): HandlerContext<T, EEnqueue, R> => ({
-      retry: Effect.gen(function* () {
+    ): Effect.Effect<void, never, R> =>
+      Effect.gen(function* () {
+        const cause = Exit.isFailure(exit) ? exit.cause : Cause.empty;
+        const entry = queueEntryFromInternal(internal);
+        const handle = queueHandleSlot.current;
+        if (handle === undefined) {
+          return yield* Effect.die(
+            new Error(`Queue "${queueName}" internal error: handle not wired before retry`),
+          );
+        }
         if (internal.retries >= maxRetries) {
           if (config.onRetryExhausted !== undefined) {
-            const cause = Exit.isFailure(exit) ? exit.cause : Cause.empty;
-            yield* config.onRetryExhausted(internal.item, cause).pipe(
+            yield* config.onRetryExhausted({ entry, cause }, handle).pipe(
               (effect) => runQueueHook("onRetryExhausted", effect),
             );
           }
@@ -1143,20 +1284,20 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           return;
         }
         yield* recordEntryEvent("retried", internal);
+        if (config.onRetryScheduled !== undefined) {
+          yield* config.onRetryScheduled({
+            entry,
+            cause,
+            nextAttempt: internal.retries + 2,
+          }, handle).pipe((effect) => runQueueHook("onRetryScheduled", effect));
+        }
         yield* enqueueInternal(
           [internal.item],
           internal.priority,
           internal.retries + 1,
           internal.enqueuedAt,
         );
-      }),
-      add: (items) => enqueuePublic(items, "normal", "add"),
-      prioritize: (items) => enqueuePublic(items, "high", "prioritize"),
-      defer: (items) => enqueuePublic(items, "low", "defer"),
-      attempts: internal.retries + 1,
-      enqueuedAt: internal.enqueuedAt,
-      priority: internal.priority,
-    });
+      });
 
     // ─── Internal: priority dispatch ───
 
@@ -1187,8 +1328,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
      * 1. Run user's `effect` and capture Exit
      * 2. Increment completed counter
      * 3. Release dedup key
-     * 4. Fire onComplete hook (forked)
-     * 5. Run handler or log unhandled failure (forked)
+     * 4. Fire exit lifecycle hooks (forked)
+     * 5. Log unhandled failure when no exit/failure hook is configured
      */
     const processItem = (internal: InternalItem<T>): Effect.Effect<void, never, R> =>
       semaphore.withPermits(1)(
@@ -1199,9 +1340,24 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             occurredAt: startedAt,
             startedAt,
           });
+          const handle = queueHandleSlot.current;
+          if (handle === undefined) {
+            return yield* Effect.die(
+              new Error(`Queue "${queueName}" internal error: handle not wired before item hooks`),
+            );
+          }
+          if (config.onStarted !== undefined) {
+            yield* FiberSet.run(handlerFibers)(
+              config.onStarted(
+                queueEntryFromInternal(internal, { startedAt }),
+                handle,
+              ).pipe((effect) => runQueueHook("onStarted", effect)),
+            );
+          }
           const ctx = makeEffectContext(internal);
           const exit = yield* Effect.exit(config.effect(internal.item, ctx));
           const end = yield* Effect.clockWith((c) => c.currentTimeMillis);
+          const completedAt = DateTime.makeUnsafe(end);
           const elapsed = Duration.millis(end - start);
 
           yield* Ref.update(completedCount, (n) => n + 1);
@@ -1211,11 +1367,34 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             Exit.isSuccess(exit) ? "completed" : "failed",
             internal,
             {
-              occurredAt: DateTime.makeUnsafe(end),
+              occurredAt: completedAt,
               startedAt,
               durationMs: Duration.toMillis(elapsed),
               error: Exit.isFailure(exit) ? Cause.pretty(exit.cause) : undefined,
             },
+          );
+
+          const entry = queueEntryFromInternal(internal, { startedAt, completedAt });
+          const retry = retryInternal(internal, exit);
+          const exitEvent: QueueExitEvent<T, E, R> = { entry, exit, elapsed, retry };
+          yield* FiberSet.run(handlerFibers)(
+            Effect.gen(function* () {
+              if (config.onExit !== undefined) {
+                yield* config.onExit(exitEvent, handle).pipe(
+                  (effect) => runQueueHook("onExit", effect),
+                );
+              }
+              if (Exit.isSuccess(exit) && config.onCompleted !== undefined) {
+                yield* config.onCompleted({ entry, elapsed }, handle).pipe(
+                  (effect) => runQueueHook("onCompleted", effect),
+                );
+              }
+              if (Exit.isFailure(exit) && config.onFailed !== undefined) {
+                yield* config.onFailed({ entry, cause: exit.cause, elapsed, retry }, handle).pipe(
+                  (effect) => runQueueHook("onFailed", effect),
+                );
+              }
+            }),
           );
 
           // Release dedup key so future items with same key can enter
@@ -1223,26 +1402,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             yield* Ref.update(activeKeys, HashSet.remove(internal.key));
           }
 
-          // Fire onComplete hook in a managed fiber (non-blocking)
-          if (config.onComplete !== undefined) {
-            yield* FiberSet.run(handlerFibers)(
-              config.onComplete(internal.item, exit, elapsed).pipe(
-                (effect) => runQueueHook("onComplete", effect),
-              ),
-            );
-          }
-
-          // Route to handler or log unhandled failure
-          if (config.handler !== undefined) {
-            const handlerCtx = makeHandlerContext(internal, exit);
-            yield* FiberSet.run(handlerFibers)(
-              config.handler(internal.item, exit, handlerCtx).pipe(
-                (effect) => runQueueHook("handler", effect),
-              ),
-            );
-          } else if (Exit.isFailure(exit)) {
+          if (Exit.isFailure(exit) && config.onExit === undefined && config.onFailed === undefined) {
             yield* Effect.logWarning(
-              `Item failed in queue "${queueName}", no handler configured`,
+              `Item failed in queue "${queueName}", no exit hook configured`,
             ).pipe(Effect.annotateLogs("cause", Cause.pretty(exit.cause)));
           }
 
@@ -1313,7 +1475,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       }
 
       if (config.onStart !== undefined) {
-        yield* config.onStart(handle).pipe((effect) => runQueueHook("onStart", effect));
+        yield* FiberSet.run(handlerFibers)(
+          config.onStart({ queueId: queueName }, handle).pipe((effect) => runQueueHook("onStart", effect)),
+        );
       }
 
       if (config.onDrained !== undefined) {
@@ -1329,7 +1493,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
               const empty = yield* handle.isEmpty;
               if (empty) {
                 yield* Effect.logDebug(`Queue "${queueName}" drained, triggering onDrained`);
-                yield* onDrained(handle).pipe((effect) => runQueueHook("onDrained", effect));
+                const completed = yield* Ref.get(completedCount);
+                yield* FiberSet.run(handlerFibers)(
+                  onDrained({ queueId: queueName, completed }, handle).pipe(
+                    (effect) => runQueueHook("onDrained", effect),
+                  ),
+                );
               }
             }),
           ),
@@ -1409,6 +1578,13 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         yield* drain(lowQueue);
         yield* Ref.set(completedCount, 0);
         yield* recordLifecycleEvent("Cleared", count);
+        if (config.onCleared !== undefined) {
+          yield* FiberSet.run(handlerFibers)(
+            config.onCleared({ queueId: queueName, count }, queueHandle).pipe(
+              (effect) => runQueueHook("onCleared", effect),
+            ),
+          );
+        }
         yield* Effect.logDebug(`Queue "${queueName}" cleared ${String(count)} items`);
         yield* wakeDrainedIfAllQueuesEmpty;
         return count;

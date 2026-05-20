@@ -20,15 +20,15 @@ class EmailQueue extends QueueResource.Service<EmailQueue, Email, SmtpError>()(
   "@app/EmailQueue",
   {
     effect: (email, ctx) => smtpClient.send(email).pipe(Effect.asVoid),
-    handler: (item, exit, ctx) =>
+    onExit: ({ exit, retry }) =>
       Exit.match(exit, {
-        onFailure: () => ctx.retry,
+        onFailure: () => retry,
         onSuccess: () => Effect.void,
       }),
     concurrency: 10,
     capacity: 100_000,
     retries: 3,
-    onRetryExhausted: (item) => deadLetterQueue.add([item]),
+    onRetryExhausted: ({ entry }) => deadLetterQueue.add([entry.item]),
   },
 ) {}
 
@@ -105,9 +105,6 @@ QueueResource.Service<Self, T, E>()("name", {
   // ─── Required ───
   effect: (item: T, ctx: EffectContext<T>) => Effect<R, E>,
 
-  // ─── Handler (forked, never blocks workers) ───
-  handler: (item: T, exit: Exit<R, E>, ctx: HandlerContext<T>) => Effect<void>,
-
   // ─── Concurrency ───
   concurrency: 5,        // worker count (default: 5)
   capacity: 50_000,      // max items per priority queue (default: 50,000)
@@ -117,15 +114,17 @@ QueueResource.Service<Self, T, E>()("name", {
   // ─── Deduplication ───
   key: (item) => item.id, // extract dedup key; duplicates silently dropped
 
-  // ─── Retry (handler-driven) ───
-  retries: 3,             // max re-enqueues via ctx.retry
-  onRetryExhausted: (item, cause) => ...,  // called when limit reached
+  // ─── Retry (hook-driven) ───
+  retries: 3,             // max re-enqueues via event.retry
+  onRetryExhausted: ({ entry, cause }, queue) => ...,  // called when limit reached
 
   // ─── Hooks (fire-and-forget) ───
-  onEnqueue: (items, priority) => metrics.increment("enqueued", items.length),
-  onComplete: (item, exit, elapsed) => metrics.record("duration", elapsed),
-  onStart: (queue) => queue.add(seedItems),
-  onDrained: (queue) => queue.add(fetchMoreWork),
+  onEnqueued: (batch, queue) => metrics.increment("enqueued", batch.entries.length),
+  onExit: ({ entry, exit, elapsed, retry }, queue) => Effect.void,
+  onCompleted: ({ entry, elapsed }, queue) => metrics.record("duration", elapsed),
+  onFailed: ({ entry, cause, elapsed, retry }, queue) => retry,
+  onStart: (event, queue) => queue.add(seedItems),
+  onDrained: (event, queue) => queue.add(fetchMoreWork),
 })
 ```
 
@@ -145,22 +144,21 @@ effect: (item, ctx) => Effect.gen(function*() {
 })
 ```
 
-### HandlerContext (passed to `handler`)
+### Lifecycle hooks
 
 ```typescript
-handler: (item, exit, ctx) => Effect.gen(function*() {
-  // ─── Same metadata ───
-  ctx.attempts   // number
-  ctx.enqueuedAt // number (epoch millis)
-  ctx.priority   // "high" | "normal" | "low"
+onExit: ({ entry, exit, elapsed, retry }, queue) => Effect.gen(function*() {
+  entry.attempts                 // number
+  entry.timestamps.enqueuedAt    // DateTime.Utc
+  entry.priority                 // "high" | "normal" | "low"
 
-  // ─── Retry: re-enqueue at same priority (back of line) ───
-  yield* ctx.retry  // respects retries limit
+  // Retry re-enqueues the same item at the back of the same priority queue.
+  yield* retry
 
-  // ─── Enqueue (unguarded — handler is trusted) ───
-  yield* ctx.add([newItem])
-  yield* ctx.prioritize([escalated])
-  yield* ctx.defer([demoted])
+  // Queue-bound controls can route follow-up work.
+  yield* queue.add([newItem])
+  yield* queue.prioritize([escalated])
+  yield* queue.defer([demoted])
 })
 ```
 
@@ -173,16 +171,16 @@ class OrderQueue extends QueueResource.Service<OrderQueue, Order, OrderError>()(
   "@app/OrderQueue",
   {
     effect: (order) => processOrder(order),
-    handler: (item, exit, ctx) =>
+    onExit: ({ entry, exit, retry }, queue) =>
       Exit.match(exit, {
         onFailure: () =>
-          ctx.attempts < 3
-            ? ctx.retry
-            : ctx.defer([item]),  // demote to low priority after 3 fails
+          entry.attempts < 3
+            ? retry
+            : queue.defer([entry.item]),  // demote to low priority after 3 fails
         onSuccess: () => Effect.void,
       }),
     retries: 5,
-    onRetryExhausted: (item) => Effect.logError(`Order ${item.id} permanently failed`),
+    onRetryExhausted: ({ entry }) => Effect.logError(`Order ${entry.item.id} permanently failed`),
     concurrency: 10,
   },
 ) {}

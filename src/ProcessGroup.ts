@@ -552,7 +552,7 @@ export interface ProcessGroup<R, Error = ProcessGroupErrors> {
   readonly getQueue: (name: string) => Effect.Effect<QueueHandle<any, any, any, any>, Error>;
   readonly pauseQueue: (name: string) => Effect.Effect<void, Error>;
   readonly resumeQueue: (name: string) => Effect.Effect<void, Error>;
-  readonly clearQueue: (name: string) => Effect.Effect<number, Error>;
+  readonly clearQueue: (name: string) => Effect.Effect<number, Error, R>;
 
   // ─── Shutdown ───
   readonly awaitShutdown: (options?: { readonly logMessage?: (signal: string) => string }) => Effect.Effect<void, Error, Scope.Scope>;
@@ -594,7 +594,7 @@ export interface TypedQueueControls<
   readonly start: Effect.Effect<void, Error, EnqueueRequirements>;
   readonly pause: Effect.Effect<void, Error>;
   readonly resume: Effect.Effect<void, Error>;
-  readonly clear: Effect.Effect<number, Error>;
+  readonly clear: Effect.Effect<number, Error, EnqueueRequirements>;
   readonly status: Effect.Effect<QueueDetails, Error>;
 }
 
@@ -851,7 +851,7 @@ export const makeProcessGroup = <
 
     const getQueue = (
       name: string,
-    ): Effect.Effect<QueueHandle<unknown, unknown, unknown, unknown>, ProcessGroupErrors> => {
+    ): Effect.Effect<QueueHandle<unknown, unknown, unknown, any>, ProcessGroupErrors> => {
       const queue = queueMap[name];
       if (queue === undefined) return Effect.fail(new ProcessNotFoundError({ processName: name }));
       return Effect.succeed(queue);
@@ -863,7 +863,7 @@ export const makeProcessGroup = <
     const resumeQueue = (name: string): Effect.Effect<void, ProcessGroupErrors> =>
       Effect.flatMap(getQueue(name), (q) => q.resume);
 
-    const clearQueue = (name: string): Effect.Effect<number, ProcessGroupErrors> =>
+    const clearQueue = (name: string): Effect.Effect<number, ProcessGroupErrors, R> =>
       Effect.flatMap(getQueue(name), (q) => q.clear);
 
     const statusEffect = Effect.gen(function* () {

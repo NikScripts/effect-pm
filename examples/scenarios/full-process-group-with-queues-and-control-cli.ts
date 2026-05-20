@@ -75,9 +75,9 @@ class DemoQueue extends QueueResource.Service<DemoQueue, string, DemoQueueItemEr
         reason: `Error processing ${item}`,
       });
     }),
-  handler: (item, exit) =>
+  onExit: ({ entry, exit }) =>
     Exit.match(exit, {
-      onFailure: (cause) => Effect.logError(`${item}: ${Cause.pretty(cause)}`),
+      onFailure: (cause) => Effect.logError(`${entry.item}: ${Cause.pretty(cause)}`),
       onSuccess: () => Effect.void,
     }),
   concurrency: 3,
@@ -91,10 +91,10 @@ class DemoTwoQueue extends QueueResource.Service<DemoTwoQueue, number, never>()(
       yield* Effect.sleep(Duration.millis(1000));
       yield* Effect.logInfo(`Derived value ${String(item * 2)} for demo`);
     }),
-  handler: (item, exit) =>
+  onExit: ({ entry, exit }) =>
     Exit.match(exit, {
       onFailure: () => Effect.void,
-      onSuccess: () => Effect.logInfo(`Forked: ${String(item)}`),
+      onSuccess: () => Effect.logInfo(`Forked: ${String(entry.item)}`),
     }),
   concurrency: 2,
   capacity: 50,

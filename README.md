@@ -172,10 +172,10 @@ class ProcessingQueue extends QueueResource.Service<
     capacity: 10000,
 
     // Result handling (forked; never blocks workers)
-    handler: (item, exit, ctx) =>
+    onExit: ({ entry, exit, retry }) =>
       Exit.match(exit, {
-        onFailure: () => ctx.retry,
-        onSuccess: () => Effect.logInfo(`Processed ${item.id}`),
+        onFailure: () => retry,
+        onSuccess: () => Effect.logInfo(`Processed ${entry.item.id}`),
       }),
     retries: 3,
 
@@ -183,12 +183,12 @@ class ProcessingQueue extends QueueResource.Service<
     key: (item) => item.id,
 
     // Bootstrap or replenish work with queue-bound lifecycle hooks
-    onStart: (queue) =>
+    onStart: (_event, queue) =>
       Effect.gen(function* () {
         const cached = yield* getCachedItems();
         yield* queue.add(cached);
       }),
-    onDrained: (queue) =>
+    onDrained: (_event, queue) =>
       Effect.gen(function* () {
         const next = yield* getMoreItems();
         yield* queue.add(next);
@@ -197,7 +197,7 @@ class ProcessingQueue extends QueueResource.Service<
 ) {}
 ```
 
-For the full current queue surface, including `handler`, `EffectContext`, `HandlerContext`, `queue.prioritize`, `queue.defer`, and effectful status properties, see [docs/RESOURCE-API.md](./docs/RESOURCE-API.md).
+For the full current queue surface, including `onExit`, `EffectContext`, `queue.prioritize`, `queue.defer`, and effectful status properties, see [docs/RESOURCE-API.md](./docs/RESOURCE-API.md).
 
 ## Process configuration (polling + schedule)
 
@@ -492,19 +492,19 @@ class TaskQueue extends QueueResource.Service<TaskQueue, Task, never>()(
 
 ### 3. Error Handling
 
-Use `handler` to observe item exits and decide whether to retry:
+Use `onExit` to observe item exits and decide whether to retry:
 
 ```typescript
 class TaskQueue extends QueueResource.Service<TaskQueue, Task, TaskError>()(
   "task-queue",
   {
     effect: processItem,
-    handler: (item, exit, ctx) =>
+    onExit: ({ entry, exit, retry }) =>
       Exit.match(exit, {
         onFailure: () =>
           Effect.gen(function* () {
-            yield* saveFailedItemForRetry(item);
-            yield* ctx.retry;
+            yield* saveFailedItemForRetry(entry.item);
+            yield* retry;
           }),
         onSuccess: () => Effect.void,
       }),

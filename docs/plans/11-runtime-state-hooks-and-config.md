@@ -413,25 +413,15 @@ but not be the only extension point.
 
 ### Current problem
 
-Queue hooks are single optional config fields:
+Queue hooks started as single optional config fields; the current queue surface
+has moved toward lifecycle envelopes, but this plan still tracks the broader
+listener/subscriber direction:
 
 ```typescript
 export interface QueueResourceConfig<T, R, E> {
-  readonly onEnqueue?: (
-    items: ReadonlyArray<T>,
-    priority: Priority,
-  ) => Effect.Effect<void>;
-
-  readonly onComplete?: (
-    item: T,
-    exit: Exit.Exit<R, E>,
-    elapsed: Duration.Duration,
-  ) => Effect.Effect<void>;
-
-  readonly onRetryExhausted?: (
-    item: T,
-    cause: Cause.Cause<E>,
-  ) => Effect.Effect<void>;
+  readonly onEnqueued?: (batch, controls) => Effect.Effect<void>;
+  readonly onExit?: (event, controls) => Effect.Effect<void>;
+  readonly onRetryExhausted?: (event, controls) => Effect.Effect<void>;
 }
 ```
 

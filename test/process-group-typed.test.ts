@@ -37,7 +37,7 @@ class TypeHookQueue extends QueueResource.Service<TypeHookQueue, Email, never>()
   "@test/TypeHookQueue",
   {
     effect: (_email: Email) => Effect.void,
-    onEnqueue: () =>
+    onEnqueued: () =>
       Effect.gen(function* () {
         const service = yield* TypeQueueHookService;
         yield* service.record;

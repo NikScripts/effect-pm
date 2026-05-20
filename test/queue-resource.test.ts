@@ -218,60 +218,60 @@ describe("QueueResource.make — pause/resume", () => {
   );
 });
 
-describe("QueueResource.make — handler (forked, non-blocking)", () => {
-  it.live("handler receives Exit on success", () =>
+describe("QueueResource.make — onExit (forked, non-blocking)", () => {
+  it.live("onExit receives Exit on success", () =>
     Effect.gen(function* () {
-      const handlerResults = yield* Ref.make<Array<string>>([]);
+      const exitResults = yield* Ref.make<Array<string>>([]);
       const queue = yield* QueueResource.make({
         name: "test-handler-success",
         effect: (_n: number) => Effect.void,
-        handler: (item, exit, _ctx) =>
+        onExit: ({ entry, exit }) =>
           Exit.match(exit, {
             onFailure: () => Effect.void,
             onSuccess: () =>
-              Ref.update(handlerResults, (arr) => [...arr, `ok:${String(item * 2)}`]),
+              Ref.update(exitResults, (arr) => [...arr, `ok:${String(entry.item * 2)}`]),
           }),
         ...fastConfig,
       });
       yield* queue.add([5]);
       yield* waitUntilCompleted(queue, 1);
       yield* Effect.sleep(Duration.millis(20));
-      const results = yield* Ref.get(handlerResults);
+      const results = yield* Ref.get(exitResults);
       expect(results).toContain("ok:10");
     }).pipe(Effect.scoped),
   );
 
-  it.live("handler receives Exit on failure", () =>
+  it.live("onExit receives Exit on failure", () =>
     Effect.gen(function* () {
-      const handlerResults = yield* Ref.make<Array<string>>([]);
+      const exitResults = yield* Ref.make<Array<string>>([]);
       const queue = yield* QueueResource.make({
         name: "test-handler-failure",
         effect: (n: number) => (n > 0 ? Effect.void : Effect.fail("negative" as const)),
-        handler: (_item, exit, _ctx) =>
+        onExit: ({ exit }) =>
           Exit.match(exit, {
             onFailure: () =>
-              Ref.update(handlerResults, (arr) => [...arr, "failed"]),
+              Ref.update(exitResults, (arr) => [...arr, "failed"]),
             onSuccess: () =>
-              Ref.update(handlerResults, (arr) => [...arr, "ok"]),
+              Ref.update(exitResults, (arr) => [...arr, "ok"]),
           }),
         ...fastConfig,
       });
       yield* queue.add([1, -1]);
       yield* waitUntilCompleted(queue, 2);
       yield* Effect.sleep(Duration.millis(20));
-      const results = yield* Ref.get(handlerResults);
+      const results = yield* Ref.get(exitResults);
       expect(results).toContain("ok");
       expect(results).toContain("failed");
     }).pipe(Effect.scoped),
   );
 
-  it.live("handler does not block the worker", () =>
+  it.live("onExit does not block the worker", () =>
     Effect.gen(function* () {
       const processed = yield* Ref.make(0);
       const queue = yield* QueueResource.make({
         name: "test-handler-nonblocking",
         effect: (_n: number) => Ref.update(processed, (n) => n + 1),
-        handler: () => Effect.sleep(Duration.seconds(1)),
+        onExit: () => Effect.sleep(Duration.seconds(1)),
         concurrency: 1,
       });
       yield* queue.add([1, 2, 3]);
@@ -328,8 +328,8 @@ describe("QueueResource.make — dedup (key)", () => {
   );
 });
 
-describe("QueueResource.make — retry via handler", () => {
-  it.live("ctx.retry re-enqueues the item", () =>
+describe("QueueResource.make — retry via onExit", () => {
+  it.live("event.retry re-enqueues the item", () =>
     Effect.gen(function* () {
       const attempts = yield* Ref.make(0);
       const queue = yield* QueueResource.make({
@@ -340,9 +340,9 @@ describe("QueueResource.make — retry via handler", () => {
             const count = yield* Ref.get(attempts);
             if (count < 3) return yield* Effect.fail("not yet" as const);
           }),
-        handler: (_item, exit, ctx) =>
+        onExit: ({ exit, retry }) =>
           Exit.match(exit, {
-            onFailure: () => ctx.retry,
+            onFailure: () => retry,
             onSuccess: () => Effect.void,
           }),
         retries: 5,
@@ -385,14 +385,21 @@ describe("QueueResource.layer + Tag", () => {
 });
 
 describe("QueueResource.make — hooks", () => {
-  it.live("onEnqueue fires when items are added", () =>
+  it.live("onEnqueued fires with batch envelope when items are added", () =>
     Effect.gen(function* () {
-      const hookCalls = yield* Ref.make<Array<{ items: ReadonlyArray<number>; priority: string }>>([]);
+      const hookCalls = yield* Ref.make<Array<{ items: ReadonlyArray<number>; priority: string; attempts: ReadonlyArray<number> }>>([]);
       const queue = yield* QueueResource.make({
-        name: "test-onEnqueue",
+        name: "test-onEnqueued",
         effect: (_n: number) => Effect.void,
-        onEnqueue: (items, priority) =>
-          Ref.update(hookCalls, (arr) => [...arr, { items, priority }]),
+        onEnqueued: (batch) =>
+          Ref.update(hookCalls, (arr) => [
+            ...arr,
+            {
+              items: batch.entries.map((entry) => entry.item),
+              priority: batch.priority,
+              attempts: batch.entries.map((entry) => entry.attempts),
+            },
+          ]),
         ...fastConfig,
       });
       yield* queue.add([1, 2]);
@@ -402,32 +409,39 @@ describe("QueueResource.make — hooks", () => {
       expect(calls).toHaveLength(2);
       expect(calls[0]?.priority).toBe("normal");
       expect(calls[0]?.items).toEqual([1, 2]);
+      expect(calls[0]?.attempts).toEqual([1, 1]);
       expect(calls[1]?.priority).toBe("high");
     }).pipe(Effect.scoped),
   );
 
-  it.live("onComplete fires after each item is processed", () =>
+  it.live("onExit and split hooks fire after each item is processed", () =>
     Effect.gen(function* () {
-      const completions = yield* Ref.make<Array<{ item: number; success: boolean }>>([]);
+      const exits = yield* Ref.make<Array<{ item: number; success: boolean }>>([]);
+      const completed = yield* Ref.make<Array<number>>([]);
+      const failed = yield* Ref.make<Array<number>>([]);
       const queue = yield* QueueResource.make({
-        name: "test-onComplete",
+        name: "test-onExit",
         effect: (n: number) => (n > 0 ? Effect.void : Effect.fail("negative" as const)),
-        onComplete: (item, exit) =>
-          Ref.update(completions, (arr) => [
+        onExit: ({ entry, exit }) =>
+          Ref.update(exits, (arr) => [
             ...arr,
-            { item, success: Exit.isSuccess(exit) },
+            { item: entry.item, success: Exit.isSuccess(exit) },
           ]),
+        onCompleted: ({ entry }) => Ref.update(completed, (items) => [...items, entry.item]),
+        onFailed: ({ entry }) => Ref.update(failed, (items) => [...items, entry.item]),
         ...fastConfig,
       });
       yield* queue.add([1, -1]);
       yield* waitUntilCompleted(queue, 2);
       yield* Effect.sleep(Duration.millis(30));
-      const calls = yield* Ref.get(completions);
+      const calls = yield* Ref.get(exits);
       expect(calls).toHaveLength(2);
       const successes = calls.filter((c) => c.success);
       const failures = calls.filter((c) => !c.success);
       expect(successes).toHaveLength(1);
       expect(failures).toHaveLength(1);
+      expect(yield* Ref.get(completed)).toEqual([1]);
+      expect(yield* Ref.get(failed)).toEqual([-1]);
     }).pipe(Effect.scoped),
   );
 
@@ -439,7 +453,7 @@ describe("QueueResource.make — hooks", () => {
         name: "test-onStart",
         autoStart: false,
         effect: (n: number) => Ref.update(handled, (values) => [...values, n]),
-        onStart: (q) =>
+        onStart: (_event, q) =>
           Effect.gen(function* () {
             yield* Ref.update(started, (n) => n + 1);
             yield* q.add([1, 2]);
@@ -459,6 +473,7 @@ describe("QueueResource.make — onRetryExhausted", () => {
   it.live("calls onRetryExhausted when retries are exceeded", () =>
     Effect.gen(function* () {
       const exhaustedItems = yield* Ref.make<Array<number>>([]);
+      const scheduledAttempts = yield* Ref.make<Array<number>>([]);
       const attempts = yield* Ref.make(0);
       const queue = yield* QueueResource.make({
         name: "test-retry-exhausted",
@@ -467,20 +482,23 @@ describe("QueueResource.make — onRetryExhausted", () => {
             yield* Ref.update(attempts, (n) => n + 1);
             return yield* Effect.fail("always-fails" as const);
           }),
-        handler: (_item, exit, ctx) =>
+        onExit: ({ exit, retry }) =>
           Exit.match(exit, {
-            onFailure: () => ctx.retry,
+            onFailure: () => retry,
             onSuccess: () => Effect.void,
           }),
         retries: 2,
-        onRetryExhausted: (item) =>
-          Ref.update(exhaustedItems, (arr) => [...arr, item]),
+        onRetryScheduled: ({ nextAttempt }) =>
+          Ref.update(scheduledAttempts, (arr) => [...arr, nextAttempt]),
+        onRetryExhausted: ({ entry }) =>
+          Ref.update(exhaustedItems, (arr) => [...arr, entry.item]),
         concurrency: 1,
       });
       yield* queue.add([42]);
       yield* Effect.sleep(Duration.millis(300));
       const exhausted = yield* Ref.get(exhaustedItems);
       expect(exhausted).toContain(42);
+      expect(yield* Ref.get(scheduledAttempts)).toContain(2);
       const totalAttempts = yield* Ref.get(attempts);
       expect(totalAttempts).toBeGreaterThanOrEqual(3);
     }).pipe(Effect.scoped),
