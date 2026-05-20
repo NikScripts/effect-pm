@@ -4,36 +4,19 @@
  * @remarks
  * This module intentionally mirrors the in-memory adapter's **optional field**
  * semantics: missing optional columns become `undefined` on the record, not
- * empty strings. JSON columns are validated structurally on read so a corrupted
- * local row cannot deserialize into a non-`JsonValue` tree.
+ * empty strings. JSON columns use the same `Schema` + `unknownJsonString` bridge
+ * as `internal/json` and `ProcessStore` (`encodeJsonLine`), not ad hoc
+ * `JSON.parse` / `JSON.stringify`.
  *
  * @module storage/sqlite/codec
  * @internal
  */
 
-import { DateTime, Effect, Option } from "effect";
+import { DateTime, Effect, Option, Schema } from "effect";
 import type { RuntimeRecordPredicate } from "../../Query";
 import type { JsonValue } from "../../ProcessStoreEvent";
 import type { RuntimeRecord } from "../../RuntimeStorage";
-
-// ---------------------------------------------------------------------------
-// JSON narrowing (structural, mirrors `JsonValue` recursion)
-// ---------------------------------------------------------------------------
-
-const isJsonValue = (value: unknown): value is JsonValue => {
-  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    return true;
-  }
-  if (Array.isArray(value)) {
-    return value.every(isJsonValue);
-  }
-  if (typeof value === "object" && value !== null) {
-    return Object.values(value).every(isJsonValue);
-  }
-  return false;
-};
-
-const jsonParse = Option.liftThrowable(JSON.parse);
+import { isJsonValue, unknownJsonString } from "../../internal/json";
 
 /**
  * Parse a JSON text column into {@link JsonValue}, or `undefined` when absent
@@ -43,8 +26,10 @@ export const parseJsonColumn = (text: string | null | undefined): JsonValue | un
   if (text === null || text === undefined) {
     return undefined;
   }
-  const parsed = Option.getOrUndefined(jsonParse(text));
-  return parsed !== undefined && isJsonValue(parsed) ? parsed : undefined;
+  return Option.match(Schema.decodeUnknownOption(unknownJsonString)(text), {
+    onNone: () => undefined,
+    onSome: (parsed) => (isJsonValue(parsed) ? parsed : undefined),
+  });
 };
 
 /**
@@ -55,11 +40,11 @@ export const parseIndexNamesColumn = (text: string | null | undefined): Readonly
   if (text === null || text === undefined) {
     return undefined;
   }
-  const parsed = Option.getOrUndefined(jsonParse(text));
-  if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === "string")) {
-    return undefined;
-  }
-  return parsed;
+  return Option.match(Schema.decodeUnknownOption(unknownJsonString)(text), {
+    onNone: () => undefined,
+    onSome: (parsed) =>
+      Array.isArray(parsed) && parsed.every((item) => typeof item === "string") ? parsed : undefined,
+  });
 };
 
 // ---------------------------------------------------------------------------
@@ -158,11 +143,8 @@ export const decodeRuntimeRecordRowEffect = (
   row: Readonly<Record<string, unknown>>,
 ): Effect.Effect<RuntimeRecord, never, never> => Effect.sync(() => decodeRuntimeRecordRow(row));
 
-const jsonStringifyOrDie = (value: unknown): Effect.Effect<string, never, never> =>
-  Effect.try({
-    try: () => JSON.stringify(value),
-    catch: (cause) => cause,
-  }).pipe(Effect.orDie);
+const encodeUnknownToJsonStringOrDie = (value: unknown): Effect.Effect<string, never, never> =>
+  Schema.encodeUnknownEffect(unknownJsonString)(value).pipe(Effect.orDie);
 
 /** Parameter object for SQLite insert helpers. */
 export interface RuntimeRecordInsertParams {
@@ -196,20 +178,19 @@ export interface RuntimeRecordInsertParams {
  * semantics.
  *
  * @remarks
- * JSON columns use `JSON.stringify` inside `Effect.try` so a defect (for example
- * a circular structure that violates {@link JsonValue}) surfaces as a fiber
- * failure instead of a synchronous throw mixed into SQL `Effect` chains.
+ * JSON columns use {@link Schema.encodeUnknownEffect} with {@link unknownJsonString},
+ * matching {@link ProcessStore} line encoding (`encodeJsonLine`).
  */
 export const encodeRuntimeRecordParamsEffect = (
   record: RuntimeRecord,
 ): Effect.Effect<RuntimeRecordInsertParams, never, never> =>
   Effect.gen(function* () {
     const index_names_json =
-      record.indexNames === undefined ? null : yield* jsonStringifyOrDie([...record.indexNames]);
+      record.indexNames === undefined ? null : yield* encodeUnknownToJsonStringOrDie([...record.indexNames]);
     const payload_json =
-      record.payload === undefined ? null : yield* jsonStringifyOrDie(record.payload);
+      record.payload === undefined ? null : yield* encodeUnknownToJsonStringOrDie(record.payload);
     const attributes_json =
-      record.attributes === undefined ? null : yield* jsonStringifyOrDie(record.attributes);
+      record.attributes === undefined ? null : yield* encodeUnknownToJsonStringOrDie(record.attributes);
 
     return {
       id: record.id,
