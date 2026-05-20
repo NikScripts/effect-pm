@@ -143,6 +143,9 @@ When adding a built-in adapter:
 ## Current built-in adapter status
 
 - `RuntimeStorage.memory` is the reference implementation.
+- `SQLiteRuntimeStorage` (`@nikscripts/effect-pm/storage/sqlite`) is the first
+  durable `RuntimeStorageService` adapter (SQLite via `@effect/sql-sqlite-node`
+  and `effect/unstable/sql`’s `SqlClient`).
 - `ProcessStore.layerRuntimeStorage` is the bridge from `RuntimeStorage` to
   module-facing `ProcessStore`.
 - `ProcessStore.fileLayer` is still an append-only NDJSON compatibility store,
@@ -160,9 +163,15 @@ without external services. A good implementation should provide:
 
 - `SQLiteRuntimeStorage.make(...)`,
 - `SQLiteRuntimeStorage.layer(...)`,
+- `SQLiteRuntimeStorage.fromSqlClient(...)` when you already provide `SqlClient`,
 - isolated test databases,
 - a persistence-across-service-instances test,
-- the shared conformance suite.
+`make` / `layer` tie the SQLite client lifetime to the caller’s `Scope` via
+`Layer.buildWithScope`, so run them under `Effect.scoped` (or `@effect/vitest`
+`it.live`) for the whole period you use the returned port. Schema installation
+can fail with `SqlError`; other SQL failures on read/update/delete are turned
+into defects so the public `RuntimeStorageService` error channel stays aligned
+with the in-memory reference.
 
 ### Prisma
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { DateTime, Effect } from "effect";
+import { DateTime, Effect, Scope } from "effect";
 import {
   RuntimeStorageDuplicateRecordError,
   RuntimeStorageReadonlyRecordError,
@@ -24,9 +24,9 @@ export const runtimeStorageRecord = (
   ...overrides,
 });
 
-export const describeRuntimeStorageContract = (
+export const describeRuntimeStorageContract = <R extends Scope.Scope>(
   name: string,
-  makeStorage: Effect.Effect<RuntimeStorageService>,
+  makeStorage: Effect.Effect<RuntimeStorageService, never, R>,
 ) =>
   describe(name, () => {
     it.live("creates, reads, orders, and filters records", () =>

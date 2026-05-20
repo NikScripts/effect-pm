@@ -79,6 +79,11 @@
       "import": "./dist/storage/file.mjs",
       "require": "./dist/storage/file.js"
     },
+    "./storage/sqlite": {
+      "types": "./dist/storage/sqlite.d.ts",
+      "import": "./dist/storage/sqlite.mjs",
+      "require": "./dist/storage/sqlite.js"
+    },
     "./storage/prisma": {
       "types": "./dist/storage/prisma.d.ts",
       "import": "./dist/storage/prisma.mjs",
@@ -154,6 +159,7 @@
   },
   "dependencies": {
     "@effect/platform-node": "4.0.0-beta.69",
+    "@effect/sql-sqlite-node": "4.0.0-beta.69",
     "cli-table3": "^0.6.5",
     "pretty-ms": "^9.3.0"
   },
@@ -183,6 +189,11 @@
   },
   "engines": {
     "node": ">=20.19.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
   },
   "publishConfig": {
     "access": "public"
