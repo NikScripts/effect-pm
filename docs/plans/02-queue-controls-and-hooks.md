@@ -607,6 +607,37 @@ Meaning:
 - `manualRelease` and `storeKey` are separate: a key can be manually retained
   in memory, stored durably, or both.
 
+The three first-class policies:
+
+1. **Default** — dedupe only while a key is currently active in the queue
+   (pending or processing). The key is released after processing completes.
+2. **`manualRelease`** — keep the key in memory after processing for the
+   lifetime of the current run, until manually removed or cleared.
+3. **`storeKey`** — store key lifecycle through `ProcessStore` and hydrate stored
+   active keys when the queue starts, so dedupe can survive process restarts.
+
+Stored-key startup rules:
+
+- when `storeKey` is configured and `ProcessStore` is present, `queue.start`
+  should load active stored keys before workers accept/process work,
+- if no `ProcessStore` is present, the queue still works with in-memory dedupe
+  semantics and logs no hard failure,
+- persisted keys are scoped by queue `processId` / resource id,
+- stored key records use the indexed runtime record envelope from the storage
+  plan (`processId`, `subjectType = "dedupe-key"`, `subjectId`, `key`).
+
+Retry must not be broken by retained or stored dedupe keys. Handler-triggered
+`ctx.retry` is re-enqueue of the same logical entry lineage, not a new duplicate
+from outside the queue. A retry with the same key should be allowed even when
+`manualRelease` or `storeKey` would reject a different entry with that key.
+Implementation options:
+
+- carry lineage/entry context into the retry enqueue and ignore the key collision
+  when the active/stored key belongs to the same lineage,
+- or atomically release/re-add the key during retry scheduling.
+
+Do not require users to manually remove a dedupe key before calling `ctx.retry`.
+
 The builder should be type-state based, but runtime config should stay simple.
 `Dedupe.key(...)` changes the type to “has key”; queue-only or future
 module-only options should be typed so the wrong module cannot accept them.
