@@ -11,3 +11,5 @@ Remove `QueueResource`'s storage-oriented `persist` and `refill` callbacks in fa
 Replace legacy queue `handler`, `onEnqueue`, and `onComplete` callbacks with queue lifecycle envelopes such as `onEnqueued`, `onExit`, `onCompleted`, `onFailed`, and retry lifecycle hooks.
 
 Add pending-entry queue routing controls: `release`, `drop`, and `deadLetter`, plus corresponding lifecycle hooks.
+
+Disable the legacy Prisma event-table ProcessStore adapter until Prisma is rebuilt as a RuntimeStorage adapter over normalized RuntimeRecord rows.

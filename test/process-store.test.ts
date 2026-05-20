@@ -7,6 +7,7 @@ import {
   OrderBy,
   ProcessId,
   ProcessStore,
+  RuntimeStorage,
   Select,
   SubjectId,
   Where,
@@ -364,6 +365,31 @@ describe("ProcessStore.memory", () => {
       expect(dedupeKeys.map((row) => row.type)).toEqual(["queue.dedupe-key.added"])
       expect(dedupeKeys[0]?.key).toBe("delivery-1")
     }).pipe(Effect.provide(ProcessStore.layer)),
+  )
+
+  it.live("can be backed by an injected RuntimeStorage layer", () =>
+    Effect.gen(function* () {
+      const store = yield* ProcessStore
+      yield* store.append({
+        id: "runtime-backed-started",
+        type: "process.lifecycle.changed",
+        occurredAt: utcDateFromIso("2026-01-01T03:55:00.000Z").getTime(),
+        entityType: "process",
+        entityId: "@test/RuntimeBackedProcess",
+        lifecycle: { tag: "Started" },
+      })
+
+      const records = yield* store.records({
+        predicate: ProcessId.equals("@test/RuntimeBackedProcess"),
+      })
+      const events = yield* store.events({
+        entityType: "process",
+        entityId: "@test/RuntimeBackedProcess",
+      })
+
+      expect(records.map((row) => row.id)).toEqual(["runtime-backed-started"])
+      expect(events.map((event) => event.id)).toEqual(["runtime-backed-started"])
+    }).pipe(Effect.provide(Layer.provide(ProcessStore.layerRuntimeStorage, RuntimeStorage.layer))),
   )
 
   it.live("queries queue completion and lifecycle events", () =>

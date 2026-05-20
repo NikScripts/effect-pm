@@ -60,13 +60,13 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 |------|---------|
 | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) | `ProcessStore.layer` / `memory` + `events(query)` |
 | [`forms/process-store/process-store-events-file-layer.ts`](./forms/process-store/process-store-events-file-layer.ts) | `ProcessStore.events(query)` + `ProcessStore.fileLayer(filePath)` with Effect `FileSystem` / `Path` |
-| [`forms/process-store/process-store-prisma-structural-client.ts`](./forms/process-store/process-store-prisma-structural-client.ts) | `PrismaProcessStore.layer({ client })` with a structural client placeholder |
+| [`forms/process-store/process-store-prisma-structural-client.ts`](./forms/process-store/process-store-prisma-structural-client.ts) | Placeholder showing Prisma adapter unavailability pending RuntimeStorage rewrite |
 
 Storage options:
 
 - `ProcessStore.layer` / `ProcessStore.memory` — in-memory analytics for tests and demos.
 - `file(filePath)` / `fileLayer(filePath)` from `@nikscripts/effect-pm/storage/file` — local append-only NDJSON storage backed by Effect `FileSystem` / `Path`; reads skip malformed rows.
-- `PrismaProcessStore.layer({ client })` from `@nikscripts/effect-pm/storage/prisma` — durable SQL storage. The legacy `@nikscripts/effect-pm/prisma` path remains available.
+- `PrismaProcessStore` from `@nikscripts/effect-pm/storage/prisma` — placeholder for the upcoming RuntimeStorage-backed Prisma rewrite.
 
 ### Schedule
 

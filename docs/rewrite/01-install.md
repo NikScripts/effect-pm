@@ -11,7 +11,9 @@ Your environment should match:
 | Node.js | `>= 20.19.0` |
 | Effect | `^4.0.0-beta.65` (keep `effect` and effect-pm on the same beta line) |
 
-`@prisma/client` is an optional peer dependency. You only need it if you persist analytics with the Prisma-backed `ProcessStore` adapter.
+`@prisma/client` is an optional peer dependency reserved for the upcoming Prisma
+`RuntimeStorage` adapter rewrite. The old Prisma event-table `ProcessStore`
+adapter is intentionally unavailable.
 
 ## Install the package
 
@@ -50,17 +52,14 @@ import { ProcessStore } from "@nikscripts/effect-pm";
 ProcessStore.layer
 ```
 
-File-backed and Prisma storage are covered in later pages.
+File-backed storage is covered in later pages. Prisma storage will return as a
+RuntimeStorage adapter.
 
 ## Optional: Prisma
 
-For SQL-backed analytics:
-
-1. Install `@prisma/client` in your app.
-2. Run `npx effect-pm add prisma` to add the `EffectPmEvent` model to your schema.
-3. Run `prisma migrate dev` or `prisma db push`, then `prisma generate`.
-
-You can defer this until you need durable metrics.
+Prisma support is paused while storage moves from analytics events to
+`RuntimeRecord`s. Use the `RuntimeStorage` contract when implementing the new
+SQL adapter.
 
 ## Next step
 

@@ -24,6 +24,7 @@ import {
   type RuntimeRecord,
   type RuntimeStorageService,
 } from "../src";
+import { describeRuntimeStorageContract } from "./runtime-storage.conformance";
 
 const dt = (iso: string): DateTime.Utc => DateTime.makeUnsafe(iso);
 
@@ -40,6 +41,8 @@ const record = (
   processId: "queue-a",
   ...overrides,
 });
+
+describeRuntimeStorageContract("RuntimeStorage.memory contract", RuntimeStorage.memory);
 
 describe("RuntimeStorage.memory", () => {
   it.live("creates and reads records with query DSL filters and ordering", () =>

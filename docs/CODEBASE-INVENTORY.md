@@ -570,8 +570,8 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 - **`ProcessStore.memory`** — raw `Effect<ProcessStoreInterface>`.
 - **`ProcessStore.file(path)`** / **`ProcessStore.fileLayer(path)`** — NDJSON append-only local file.
 - **`@nikscripts/effect-pm/storage/file`** — `file`, `fileLayer`, `FileProcessStore` facade.
-- **`PrismaProcessStore.layer({ client })`** / **`layerFromContext`** / **`make(client)`** — SQL via structural client.
-- **`@nikscripts/effect-pm/storage/prisma`** or legacy **`@nikscripts/effect-pm/prisma`** — same adapter surface.
+- **`PrismaProcessStore.layer({ client })`** / **`layerFromContext`** / **`make(client)`** — intentionally unavailable until Prisma is rebuilt as a `RuntimeStorage` adapter.
+- **`@nikscripts/effect-pm/storage/prisma`** or legacy **`@nikscripts/effect-pm/prisma`** — placeholder surface for the upcoming rewrite.
 
 ### `ProcessStoreInterface` write/read
 
@@ -696,9 +696,9 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### `PrismaProcessStore` namespace
 
-- **`make(client)`**, **`layer({ client })`**, **`layerFromContext`**
+- **`make(client)`**, **`layer({ client })`**, **`layerFromContext`** — throw/fail with `PrismaProcessStoreUnavailableError` until the RuntimeStorage-backed rewrite lands.
 - **`PrismaClientService`**, **`prismaClientLayer({ client })`**
-- **`schema`**, **`schemaModelMarker`** — canonical `EffectPmEvent` model fragment
+- **`schema`**, **`schemaModelMarker`** — legacy `EffectPmEvent` model fragment retained for reference during rewrite.
 - **`decodeEventRow`**, **`encodeEvent`**, **`PrismaProcessStoreDecodeError`**
 
 ### Structural types (`prisma/types`)

@@ -397,32 +397,12 @@ The rewriter detects single-file (`prisma/schema.prisma`) and multi-file
 `--no-separate-file` to override the placement, or `npx effect-pm prisma:print-schema`
 to copy the fragment manually.
 
-#### Usage
+#### Prisma adapter status
 
-```typescript
-import { PrismaClient } from "@prisma/client";
-import { ProcessGroup } from "@nikscripts/effect-pm";
-import { PrismaProcessStore } from "@nikscripts/effect-pm/storage/prisma";
-
-const prisma = new PrismaClient();
-
-const program = Effect.gen(function* () {
-  const group = yield* ProcessGroup.make({ queues: [], processes: [...] });
-  yield* group.startAll();
-}).pipe(
-  Effect.provide(PrismaProcessStore.layer({ client: prisma })),
-);
-```
-
-If you already wire Prisma through Effect, there is a layer that consumes a
-`PrismaClientService` from your environment instead:
-
-```typescript
-const layer = Layer.provide(
-  PrismaProcessStore.layerFromContext,
-  PrismaProcessStore.prismaClientLayer({ client: prisma }),
-);
-```
+The old Prisma event-table adapter has been intentionally disabled while storage
+moves to normalized `RuntimeRecord` rows. Prisma will return as a
+`RuntimeStorage` adapter; use `RuntimeStorage` conformance tests as the target
+contract for that rewrite.
 
 `@prisma/client` is an **optional peer dependency** — only required when you
 opt into the Prisma subpath.
@@ -546,7 +526,7 @@ See [examples/scenarios/full-process-group-with-queues-and-control-cli.ts](./exa
 - `Process.make(id, config)` — Create a managed process (`polling` + `schedule` layers)
 - `Polling` / `ProcessSchedule` — Cadence and gate services with preset layers
 - `ProcessStore` - Unified analytics & lifecycle service (in-memory by default)
-- `PrismaProcessStore` - Prisma-backed `ProcessStore` (preferred subpath: `@nikscripts/effect-pm/storage/prisma`; legacy `@nikscripts/effect-pm/prisma` remains available)
+- `PrismaProcessStore` - placeholder for the upcoming RuntimeStorage-backed Prisma adapter (preferred subpath: `@nikscripts/effect-pm/storage/prisma`; legacy `@nikscripts/effect-pm/prisma` remains available)
 - `ControlService` - HTTP control API utilities
 
 ### CLI

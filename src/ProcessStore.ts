@@ -51,6 +51,7 @@ import {
   RuntimeStorage,
   selectRuntimeRecords,
   type RuntimeRecord,
+  type RuntimeStorageService,
 } from "./RuntimeStorage";
 import type { RuntimeRecordQuery } from "./Query";
 import type {
@@ -1169,14 +1170,10 @@ const encodeFileEventLine = (
 // In-memory implementation
 // ============================================================================
 
-const makeInMemoryProcessStore: Effect.Effect<
-  ProcessStoreInterface,
-  never,
-  never
-> = Effect.gen(function* () {
-  const storage = yield* RuntimeStorage.memory;
-  const now = yield* Clock.currentTimeMillis;
-  const runId = makeRunId(now);
+const makeRuntimeStorageProcessStore = (
+  storage: RuntimeStorageService,
+  runId: string,
+): ProcessStoreInterface => {
   const appendEvent = (event: AnalyticsEvent) =>
     storage.create(eventToRuntimeRecord(event, runId)).pipe(Effect.ignore);
   const readRecords = (query: RuntimeRecordQuery | undefined) =>
@@ -1260,6 +1257,26 @@ const makeInMemoryProcessStore: Effect.Effect<
         ),
       ),
   };
+};
+
+const makeInMemoryProcessStore: Effect.Effect<
+  ProcessStoreInterface,
+  never,
+  never
+> = Effect.gen(function* () {
+  const storage = yield* RuntimeStorage.memory;
+  const now = yield* Clock.currentTimeMillis;
+  return makeRuntimeStorageProcessStore(storage, makeRunId(now));
+});
+
+const makeProcessStoreFromRuntimeStorage: Effect.Effect<
+  ProcessStoreInterface,
+  never,
+  RuntimeStorage
+> = Effect.gen(function* () {
+  const storage = yield* RuntimeStorage;
+  const now = yield* Clock.currentTimeMillis;
+  return makeRuntimeStorageProcessStore(storage, makeRunId(now));
 });
 
 const makeFileProcessStore = (
@@ -1408,6 +1425,14 @@ export namespace ProcessStore {
    * @public
    */
   export const layer = Layer.effect(ProcessStore, makeInMemoryProcessStore);
+  /**
+   * `Layer` that provides {@link ProcessStore} from an injected {@link RuntimeStorage}.
+   *
+   * @public
+   */
+  export const layerRuntimeStorage: Layer.Layer<ProcessStore, never, RuntimeStorage> =
+    Layer.effect(ProcessStore, makeProcessStoreFromRuntimeStorage);
+
   /**
    * Raw `Effect` that materializes {@link ProcessStoreInterface} (no `Layer` wrapper).
    * Useful in tests that call `Effect.provideService` manually.

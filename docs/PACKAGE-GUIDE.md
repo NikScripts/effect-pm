@@ -64,7 +64,7 @@ remote queue enqueue stay planned until schema-backed queue item contracts land.
 | Schedule + **`ProcessGroup`** / API-driven arm | [docs/SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + [examples/scenarios/game-window-polling-with-process-group.ts](../examples/scenarios/game-window-polling-with-process-group.ts) |
 | Understand process runtime semantics | [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + `src/Process.ts` TSDoc |
 | API tables (make, Polling, Schedule, ProcessGroup) | [PROCESS-API.md](./PROCESS-API.md) |
-| ProcessStore storage (memory / file / Prisma) | [PROCESS-API.md](./PROCESS-API.md) + [examples/forms/process-store/](../examples/forms/process-store/) + `src/prisma/` |
+| ProcessStore storage (memory / file / future Prisma) | [PROCESS-API.md](./PROCESS-API.md) + [examples/forms/process-store/](../examples/forms/process-store/) + `src/prisma/` |
 | AI / agent onboarding (repo map, conventions) | [AGENTS.md](./AGENTS.md) |
 
 ---
@@ -85,9 +85,8 @@ dedicated subpaths for focused imports:
 
 Storage adapters use lowercase path segments. File-backed storage is preferred
 from `@nikscripts/effect-pm/storage/file`; root `ProcessStore.file` /
-`ProcessStore.fileLayer` remain current compatibility helpers. The legacy
-`@nikscripts/effect-pm/prisma` path remains available, but new Prisma storage
-examples use `@nikscripts/effect-pm/storage/prisma`.
+`ProcessStore.fileLayer` remain current compatibility helpers. Prisma paths are
+currently placeholders pending a RuntimeStorage-backed rewrite.
 
 ---
 
