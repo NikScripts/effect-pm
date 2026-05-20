@@ -159,7 +159,7 @@
   },
   "dependencies": {
     "@effect/platform-node": "4.0.0-beta.65",
-    "better-sqlite3": "^12.10.0",
+    "@effect/sql-sqlite-node": "4.0.0-beta.69",
     "cli-table3": "^0.6.5",
     "pretty-ms": "^9.3.0"
   },
@@ -177,7 +177,6 @@
     "@effect/language-service": "^0.85.1",
     "@effect/tsgo": "0.5.2",
     "@effect/vitest": "4.0.0-beta.65",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.19.40",
     "@typescript/native-preview": "7.0.0-dev.20260510.1",
     "effect": "^4.0.0-beta.65",

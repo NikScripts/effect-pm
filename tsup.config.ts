@@ -12,7 +12,7 @@ export default defineConfig({
     ProcessManager: "src/ProcessManager.ts",
     ControlService: "src/ControlService.ts",
     "storage/file": "src/storage/file.ts",
-    "storage/sqlite": "src/storage/sqlite.ts",
+    "storage/sqlite": "src/storage/sqlite/index.ts",
     "storage/prisma": "src/storage/prisma.ts",
     "prisma/index": "src/prisma/index.ts",
     "bin/effect-pm": "src/bin/effect-pm.ts",
@@ -27,6 +27,6 @@ export default defineConfig({
   external: [
     // Optional peer — never bundle.
     "@prisma/client",
-    "better-sqlite3",
+    "@effect/sql-sqlite-node",
   ],
 });

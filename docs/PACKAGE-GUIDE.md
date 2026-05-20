@@ -89,7 +89,9 @@ storage is preferred from `@nikscripts/effect-pm/storage/file`; root
 `ProcessStore.file` / `ProcessStore.fileLayer` remain current compatibility
 helpers. Durable normalized runtime records can use
 `@nikscripts/effect-pm/storage/sqlite` (`SQLiteRuntimeStorage`) with
-`ProcessStore.layerRuntimeStorage`. Prisma paths are currently placeholders
+`ProcessStore.layerRuntimeStorage`. Run `SQLiteRuntimeStorage.make` under
+`Effect.scoped` (or `it.live`) so the underlying `SqlClient` stays open for the
+whole usage window. Prisma paths are currently placeholders
 pending a RuntimeStorage-backed rewrite.
 
 For durable adapter work, start with
