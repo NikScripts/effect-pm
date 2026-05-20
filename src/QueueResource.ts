@@ -950,6 +950,19 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       ).pipe(Effect.ignore);
     };
 
+    const runQueueHook = <A, EHook, RHook>(
+      hook: string,
+      effect: Effect.Effect<A, EHook, RHook>,
+    ): Effect.Effect<void, never, RHook> =>
+      effect.pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning(`Queue "${queueName}" hook "${hook}" failed`).pipe(
+            Effect.annotateLogs("cause", Cause.pretty(cause)),
+          )
+        ),
+        Effect.asVoid,
+      );
+
     // ─── Internal: wake signals (workers vs drain monitor) ───
 
     /** Complete the current worker wake signal and allocate a fresh one. */
@@ -1048,7 +1061,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         if (config.onEnqueue !== undefined) {
           yield* config
             .onEnqueue(toEnqueue.map((i) => i.item), priority)
-            .pipe(Effect.ignore);
+            .pipe((effect) => runQueueHook("onEnqueue", effect));
         }
       });
 
@@ -1120,7 +1133,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           if (config.onRetryExhausted !== undefined) {
             const cause = Exit.isFailure(exit) ? exit.cause : Cause.empty;
             yield* config.onRetryExhausted(internal.item, cause).pipe(
-              Effect.ignore,
+              (effect) => runQueueHook("onRetryExhausted", effect),
             );
           }
           yield* recordEntryEvent("exhausted", internal);
@@ -1213,7 +1226,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           // Fire onComplete hook in a managed fiber (non-blocking)
           if (config.onComplete !== undefined) {
             yield* FiberSet.run(handlerFibers)(
-              config.onComplete(internal.item, exit, elapsed).pipe(Effect.ignore),
+              config.onComplete(internal.item, exit, elapsed).pipe(
+                (effect) => runQueueHook("onComplete", effect),
+              ),
             );
           }
 
@@ -1221,7 +1236,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           if (config.handler !== undefined) {
             const handlerCtx = makeHandlerContext(internal, exit);
             yield* FiberSet.run(handlerFibers)(
-              config.handler(internal.item, exit, handlerCtx).pipe(Effect.ignore),
+              config.handler(internal.item, exit, handlerCtx).pipe(
+                (effect) => runQueueHook("handler", effect),
+              ),
             );
           } else if (Exit.isFailure(exit)) {
             yield* Effect.logWarning(
@@ -1296,7 +1313,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       }
 
       if (config.onStart !== undefined) {
-        yield* config.onStart(handle).pipe(Effect.ignore);
+        yield* config.onStart(handle).pipe((effect) => runQueueHook("onStart", effect));
       }
 
       if (config.onDrained !== undefined) {
@@ -1312,7 +1329,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
               const empty = yield* handle.isEmpty;
               if (empty) {
                 yield* Effect.logDebug(`Queue "${queueName}" drained, triggering onDrained`);
-                yield* onDrained(handle).pipe(Effect.ignore);
+                yield* onDrained(handle).pipe((effect) => runQueueHook("onDrained", effect));
               }
             }),
           ),
