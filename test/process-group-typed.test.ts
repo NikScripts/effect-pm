@@ -16,6 +16,10 @@ interface Email {
   readonly to: string;
 }
 
+const EmailSchema = Schema.Struct({
+  to: Schema.String,
+});
+
 interface InvoiceJob {
   readonly invoiceId: string;
 }
@@ -27,6 +31,14 @@ class TypeEmailQueue extends QueueResource.Service<TypeEmailQueue, Email, never>
 class TypeInvoiceQueue extends QueueResource.Service<TypeInvoiceQueue, InvoiceJob, never>()("@test/TypeInvoiceQueue", {
   effect: (_job: InvoiceJob) => Effect.void,
 }) {}
+
+class TypeSchemaEmailQueue extends QueueResource.Service<TypeSchemaEmailQueue, Email, never>()(
+  "@test/TypeSchemaEmailQueue",
+  {
+    itemSchema: EmailSchema,
+    effect: (_email: Email) => Effect.void,
+  },
+) {}
 
 class TypeQueueHookService extends Context.Service<
   TypeQueueHookService,
@@ -245,6 +257,22 @@ describe("ProcessGroup.make", () => {
         Effect.provide(Layer.mergeAll(SyncProcess.layer, EmailQueue.layer)),
       );
     }),
+  );
+
+  it.live("contract exposes release only for schema-backed queues", () =>
+    Effect.gen(function* () {
+      const group = yield* ProcessGroup.make("@test/SchemaReleaseContractGroup", [
+        TypeEmailQueue,
+        TypeSchemaEmailQueue,
+      ] as const);
+
+      const plain = group.contract.queues.find((queue) => queue.id === TypeEmailQueue.id);
+      const schema = group.contract.queues.find((queue) => queue.id === TypeSchemaEmailQueue.id);
+
+      expect(plain?.controls).not.toContain("release");
+      expect(schema?.controls).toContain("release");
+      expect(schema?.item?.id).toBe("@test/TypeSchemaEmailQueue/item@v1");
+    }).pipe(Effect.provide(Layer.mergeAll(TypeEmailQueue.layer, TypeSchemaEmailQueue.layer))),
   );
 
   it.live("startAll forks deferred queues (autoStart false) before starting processes", () =>

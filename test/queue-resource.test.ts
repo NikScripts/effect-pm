@@ -3,6 +3,7 @@ import { Duration, Effect, Exit, Ref, Schema } from "effect";
 import {
   QueueBatchValidationError,
   QueueHandle,
+  QueueMissingItemSchemaError,
   QueueItemValidationError,
   QueueResource,
   makeQueueItemCodecDescriptor,
@@ -217,6 +218,23 @@ describe("QueueResource.make — size and status", () => {
       yield* queue.resume;
       yield* waitUntilCompleted(queue, 1);
       expect(yield* Ref.get(processed)).toEqual(["a"]);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("releaseEncoded requires itemSchema", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-release-encoded-missing-schema",
+        paused: true,
+        effect: (_item: { readonly id: string }) => Effect.void,
+        concurrency: 1,
+      });
+
+      yield* queue.add({ id: "a" });
+      const error = yield* Effect.flip(queue.releaseEncoded());
+
+      expect(error).toBeInstanceOf(QueueMissingItemSchemaError);
+      expect(yield* queue.size).toBe(1);
     }).pipe(Effect.scoped),
   );
 
@@ -909,4 +927,25 @@ describe("QueueResource.make — itemSchema", () => {
     expect(descriptor.version).toBe("1.0.0");
     expect(descriptor.encoding).toBe("json");
   });
+
+  it.live("releaseEncoded exports JSON payloads for schema-backed queues", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-release-encoded",
+        paused: true,
+        itemSchema: EmailItem,
+        effect: (_item) => Effect.void,
+        concurrency: 1,
+      });
+
+      yield* queue.add({ id: "email-1", subject: "hello" });
+      const released = yield* queue.releaseEncoded({ releaseId: "encoded-release-1" });
+
+      expect(released).toHaveLength(1);
+      expect(released[0]?.payload).toEqual({ id: "email-1", subject: "hello" });
+      expect(released[0]?.releaseId).toBe("encoded-release-1");
+      expect(released[0]?.item.id).toBe("test-release-encoded/item@v1");
+      expect(yield* queue.size).toBe(0);
+    }).pipe(Effect.scoped),
+  );
 });

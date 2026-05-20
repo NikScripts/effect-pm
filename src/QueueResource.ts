@@ -72,6 +72,7 @@ import {
   Types,
 } from "effect";
 import { ProcessStore } from "./ProcessStore";
+import { isJsonValue } from "./internal/json";
 import type { JsonValue } from "./ProcessStoreEvent";
 
 // ============================================================================
@@ -124,7 +125,7 @@ export const QueueItemCodecDescriptorSchema = Schema.Struct({
  */
 export const makeQueueItemCodecDescriptor = <T>(
   queueId: string,
-  itemSchema: Schema.Decoder<T, never>,
+  itemSchema: Schema.Codec<T, unknown, never, never>,
   options?: { readonly version?: string },
 ): QueueItemCodecDescriptor => {
   const wrapped = Schema.toStandardJSONSchemaV1(itemSchema);
@@ -166,6 +167,30 @@ export class QueueBatchValidationError extends Data.TaggedError("QueueBatchValid
   }>;
   readonly codecId?: string;
 }> {}
+
+/**
+ * Encoded release was requested for a queue without `itemSchema`.
+ *
+ * @public
+ */
+export class QueueMissingItemSchemaError extends Data.TaggedError("QueueMissingItemSchemaError")<{
+  readonly queue: string;
+}> {}
+
+/**
+ * A queue item failed schema encoding while preparing a wire handoff release.
+ *
+ * @public
+ */
+export class QueueItemEncodingError extends Data.TaggedError("QueueItemEncodingError")<{
+  readonly queue: string;
+  readonly entryId: string;
+  readonly message: string;
+  readonly codecId?: string;
+}> {}
+
+/** @public */
+export type QueueReleaseEncodingError = QueueMissingItemSchemaError | QueueItemEncodingError;
 
 /**
  * Enqueue a single item or a readonly batch of items.
@@ -276,6 +301,13 @@ export interface QueueHandleApi<
    * source queue.
    */
   readonly release: (options?: QueueReleaseOptions) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R>;
+  /**
+   * Export pending entries for remote/wire handoff.
+   *
+   * Requires `itemSchema`; local decoded handoff can use {@link QueueHandleApi.release}.
+   */
+  readonly releaseEncoded: (options?: QueueReleaseOptions) =>
+    Effect.Effect<ReadonlyArray<QueueEncodedEntry>, QueueReleaseEncodingError, R>;
   /** Remove pending entries and route them to a dead-letter path. */
   readonly deadLetter: (
     selector: QueueEntrySelector<T> | QueueEntry<T>,
@@ -327,6 +359,21 @@ export interface QueueBatch<T> {
   readonly entries: ReadonlyArray<QueueEntry<T>>;
   readonly priority: Priority;
   readonly batchId?: string;
+}
+
+/** @public */
+export interface QueueEncodedEntry {
+  readonly payload: JsonValue;
+  readonly item: QueueItemCodecDescriptor;
+  readonly entryId: string;
+  readonly key?: string;
+  readonly priority: Priority;
+  readonly attempts: number;
+  readonly timestamps: QueueEntryTimestamps;
+  readonly batchId?: string;
+  readonly releaseId?: string;
+  readonly sourceResourceId?: string;
+  readonly attributes?: Record<string, unknown>;
 }
 
 /** @public */
@@ -641,7 +688,7 @@ export type QueueResourceConfigWithoutItemSchema<T, E, R> = QueueResourceConfigB
 export type QueueEnqueueErrors = QueueItemValidationError | QueueBatchValidationError;
 
 export type QueueResourceConfigWithItemSchema<T, E, R> = QueueResourceConfigBase<T> & {
-  readonly itemSchema: Schema.Decoder<T, never>;
+  readonly itemSchema: Schema.Codec<T, unknown, never, never>;
   readonly effect: (item: T, ctx: EffectContext<T, QueueEnqueueErrors, R>) => Effect.Effect<void, E, R>;
   readonly onEnqueued?: (
     batch: QueueBatch<T>,
@@ -882,6 +929,12 @@ type QueueRuntimeConfig<T, E, EEnqueue, R> = QueueResourceConfigBase<T> & {
   ) => Effect.Effect<void, never, R>;
 };
 
+type ReleaseEntryEncoder<T> = (
+  internal: InternalItem<T>,
+  releaseId: string,
+  attributes: Record<string, unknown> | undefined,
+) => Effect.Effect<QueueEncodedEntry, QueueItemEncodingError>;
+
 /** Normalize public enqueue input without treating arbitrary iterables as batches. */
 function normalizeEnqueueInput<A>(input: A | ReadonlyArray<A>): ReadonlyArray<A> {
   return isReadonlyArray(input) ? input : [input];
@@ -949,7 +1002,7 @@ const isQueueEntry = <T>(value: QueueEntrySelector<T> | QueueEntry<T>): value is
  */
 const validateItemsWithSchema = <T>(
   queueName: string,
-  itemSchema: Schema.Decoder<T, never>,
+  itemSchema: Schema.Codec<T, unknown, never, never>,
   codecId: string,
   items: ReadonlyArray<T>,
   operation: "add" | "prioritize" | "defer",
@@ -1033,6 +1086,7 @@ const makeQueueEffectWithoutSchema = <
   makeQueueRuntime(
     config,
     (items, _operation) => Effect.succeed(items),
+    undefined,
   );
 
 const makeQueueEffectWithSchema = <
@@ -1051,6 +1105,8 @@ const makeQueueEffectWithSchema = <
 > => {
   const queueName = config.name ?? "anonymous";
   const codecId = `${queueName}/item@v1`;
+  const descriptor = makeQueueItemCodecDescriptor(queueName, config.itemSchema);
+  const encodeItem = Schema.encodeUnknownExit(config.itemSchema);
   return makeQueueRuntime<
     InferQueueItem<C>,
     InferQueueWorkerError<C>,
@@ -1058,6 +1114,35 @@ const makeQueueEffectWithSchema = <
     InferQueueWorkerRequirements<C>
   >(config, (items, operation) =>
     validateItemsWithSchema(queueName, config.itemSchema, codecId, items, operation),
+    (internal, releaseId, attributes) => {
+      const encoded = encodeItem(internal.item);
+      return Exit.match(encoded, {
+        onSuccess: (payload) =>
+          isJsonValue(payload)
+            ? Effect.succeed({
+                ...queueEntryFromInternal(internal, undefined, { releaseId, attributes }),
+                payload,
+                item: descriptor,
+              })
+            : Effect.fail(
+                new QueueItemEncodingError({
+                  queue: queueName,
+                  entryId: internal.entryId,
+                  message: "encoded item is not JSON-compatible",
+                  codecId,
+                }),
+              ),
+        onFailure: (cause) =>
+          Effect.fail(
+            new QueueItemEncodingError({
+              queue: queueName,
+              entryId: internal.entryId,
+              message: Cause.pretty(cause),
+              codecId,
+            }),
+          ),
+      });
+    },
   );
 };
 
@@ -1090,6 +1175,7 @@ type ValidateForEnqueue<T, EEnqueue> = (
 const makeQueueRuntime = <T, E, EEnqueue, R>(
   config: QueueRuntimeConfig<T, E, EEnqueue, R>,
   validateForEnqueue: ValidateForEnqueue<T, EEnqueue>,
+  encodeForRelease: ReleaseEntryEncoder<T> | undefined,
 ): Effect.Effect<QueueHandle<T, E, EEnqueue, R>, never, Scope.Scope | R> =>
   Effect.gen(function* () {
     const queueName = config.name ?? "anonymous";
@@ -1647,6 +1733,22 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         ? Effect.void
         : Ref.update(activeKeys, HashSet.remove(internal.key));
 
+    const restoreActiveKey = (internal: InternalItem<T>) =>
+      internal.key === undefined
+        ? Effect.void
+        : Ref.update(activeKeys, HashSet.add(internal.key));
+
+    const restorePending = (items: ReadonlyArray<InternalItem<T>>): Effect.Effect<void> =>
+      Effect.gen(function* () {
+        for (const item of items) {
+          yield* Queue.offer(queueForPriority(item.priority), item);
+          yield* restoreActiveKey(item);
+        }
+        if (items.length > 0) {
+          yield* signalWorkerWake;
+        }
+      });
+
     const extractPending = (
       select: (internal: InternalItem<T>) => boolean,
     ): Effect.Effect<ReadonlyArray<InternalItem<T>>> =>
@@ -1702,6 +1804,49 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         }
         yield* wakeDrainedIfAllQueuesEmpty;
         return entries;
+      });
+
+    const releaseEncodedPending = (
+      options?: QueueReleaseOptions,
+    ): Effect.Effect<ReadonlyArray<QueueEncodedEntry>, QueueReleaseEncodingError, R> =>
+      Effect.gen(function* () {
+        if (encodeForRelease === undefined) {
+          return yield* new QueueMissingItemSchemaError({ queue: queueName });
+        }
+        const releaseId = options?.releaseId ?? nextReleaseId();
+        const internals = yield* extractPending(() => true);
+        const encoded = yield* Effect.forEach(
+          internals,
+          (internal) => encodeForRelease(internal, releaseId, options?.attributes),
+        ).pipe(
+          Effect.catch((error) =>
+            Effect.gen(function* () {
+              yield* restorePending(internals);
+              return yield* error;
+            })
+          ),
+        );
+        for (const internal of internals) {
+          yield* recordEntryEvent("released", internal, {
+            releaseId,
+            attributes: options?.attributes,
+          });
+        }
+        if (encoded.length > 0 && config.onReleased !== undefined) {
+          const entries = internals.map((internal) =>
+            queueEntryFromInternal(internal, undefined, {
+              releaseId,
+              attributes: options?.attributes,
+            })
+          );
+          yield* FiberSet.run(handlerFibers)(
+            config.onReleased({ queueId: queueName, releaseId, entries }, queueHandle).pipe(
+              (effect) => runQueueHook("onReleased", effect),
+            ),
+          );
+        }
+        yield* wakeDrainedIfAllQueuesEmpty;
+        return encoded;
       });
 
     const routePending = (
@@ -1846,6 +1991,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       }),
 
       release: (options) => releasePending(options),
+
+      releaseEncoded: (options) => releaseEncodedPending(options),
 
       deadLetter: (selector, options) => routePending(selector, options, "dead-lettered"),
 

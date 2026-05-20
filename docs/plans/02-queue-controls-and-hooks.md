@@ -746,7 +746,8 @@ Rules:
 
 Add queue release controls for deployment handoff:
 
-- `release(options)` (pending-only implemented first)
+- `release(options)` (decoded pending-only implemented first)
+- `releaseEncoded(options)` (schema-backed wire handoff implemented first)
 - `interruptAndRelease(options)`
 - `enqueue(releasedEntries)`
 

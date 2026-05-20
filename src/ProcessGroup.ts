@@ -255,6 +255,7 @@ export type ProcessGroupProcessControl =
  */
 export const ProcessGroupQueueControlSchema = Schema.Literals([
   "enqueue",
+  "release",
   "start",
   "pause",
   "resume",
@@ -980,6 +981,15 @@ const processGroupQueueControls: ReadonlyArray<ProcessGroupQueueControl> = [
   "clear",
   "status",
 ];
+const processGroupSchemaQueueControls: ReadonlyArray<ProcessGroupQueueControl> = [
+  "enqueue",
+  "release",
+  "start",
+  "pause",
+  "resume",
+  "clear",
+  "status",
+];
 
 // Preserve per-tuple literals by using type-predicate callbacks on `entries`
 // (`filter` narrowing is better behaved here than iterative `push` widenings).
@@ -1012,7 +1022,7 @@ const makeQueueContract = (
 ): ProcessGroupQueueContract<(typeof queue)["id"]> => ({
   id: queue.id,
   kind: "queue",
-  controls: processGroupQueueControls,
+  controls: queue.item === undefined ? processGroupQueueControls : processGroupSchemaQueueControls,
   ...(queue.item !== undefined ? { item: queue.item } : {}),
 });
 

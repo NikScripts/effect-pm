@@ -317,6 +317,7 @@ export type {
   QueueDeadLetteredEvent,
   QueueDrainedEvent,
   QueueDroppedEvent,
+  QueueEncodedEntry,
   QueueEntry,
   QueueEntrySelector,
   QueueEntryTimestamps,
@@ -328,6 +329,7 @@ export type {
   QueueRetryExhaustedEvent,
   QueueRetryScheduledEvent,
   QueueStartEvent,
+  QueueReleaseEncodingError,
   Priority,
   QueueItemCodecDescriptor,
   InferQueueEnqueueError,
@@ -341,6 +343,8 @@ export {
   makeQueueItemCodecDescriptor,
   QueueItemValidationError,
   QueueBatchValidationError,
+  QueueMissingItemSchemaError,
+  QueueItemEncodingError,
 } from "./QueueResource";
 
 // Types - RunResource

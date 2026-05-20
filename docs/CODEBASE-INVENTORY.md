@@ -444,7 +444,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 **Observe:** `size`, `sizes` `{ high, normal, low }`, `isEmpty`, `completed`.
 
-**Lifecycle/routing:** `start`, `pause`, `resume`, `shutdown` (permanent; further enqueue dropped/warned), `clear` → count removed, `release` → pending entries for handoff, `drop` / `deadLetter` → remove matching pending entries.
+**Lifecycle/routing:** `start`, `pause`, `resume`, `shutdown` (permanent; further enqueue dropped/warned), `clear` → count removed, `release` → decoded pending entries for local handoff, `releaseEncoded` → schema-backed JSON payloads for remote handoff, `drop` / `deadLetter` → remove matching pending entries.
 
 ### `EffectContext` (in worker `effect`)
 

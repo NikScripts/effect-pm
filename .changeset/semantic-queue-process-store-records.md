@@ -12,4 +12,6 @@ Replace legacy queue `handler`, `onEnqueue`, and `onComplete` callbacks with que
 
 Add pending-entry queue routing controls: `release`, `drop`, and `deadLetter`, plus corresponding lifecycle hooks.
 
+Add `releaseEncoded` for schema-backed remote/wire handoff while keeping local decoded `release` available without `itemSchema`.
+
 Disable the legacy Prisma event-table ProcessStore adapter until Prisma is rebuilt as a RuntimeStorage adapter over normalized RuntimeRecord rows.

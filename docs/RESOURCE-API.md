@@ -97,6 +97,7 @@ yield* queue.resume                     // workers unblock
 yield* queue.shutdown                   // permanent stop, enqueue drops items
 const cleared = yield* queue.clear      // drain all queues, reset counter
 const released = yield* queue.release({ releaseId: "deploy-42" }) // export pending entries for handoff
+const encoded = yield* queue.releaseEncoded({ releaseId: "deploy-42" }) // schema-backed wire handoff
 yield* queue.drop({ key: "obsolete" }, { reason: "cancelled" })
 yield* queue.deadLetter({ key: "poison" }, { reason: "max retries" })
 ```
@@ -445,7 +446,11 @@ const entries = yield* ProcessStore.QueueResource.entries("email-queue")
 const byKey = yield* ProcessStore.QueueResource.entriesByKey("delivery-123")
 ```
 
-`queue.release()` exports pending entries without losing payloads, unlike
-`queue.clear()`. This first release mode is pending-only: in-flight work stays
-on the source queue. `queue.drop(...)` and `queue.deadLetter(...)` remove
-matching pending entries and trigger their lifecycle hooks.
+`queue.release()` exports decoded pending entries without losing payloads,
+unlike `queue.clear()`. This local release path does not require `itemSchema`.
+`queue.releaseEncoded()` is for remote/wire handoff and requires `itemSchema`;
+it returns JSON-compatible payloads and fails with structured encoding errors
+instead of exporting incompatible data. This first release mode is pending-only:
+in-flight work stays on the source queue. `queue.drop(...)` and
+`queue.deadLetter(...)` remove matching pending entries and trigger their
+lifecycle hooks.
