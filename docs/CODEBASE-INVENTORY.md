@@ -561,7 +561,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ## ProcessStore
 
-**What it is:** Append-only **analytics** Context service; default in-memory; optional file / Prisma.
+**What it is:** Runtime record storage facade; default in-memory uses `RuntimeStorage`, with optional file / Prisma adapters.
 
 ### Service acquisition forms
 
@@ -575,9 +575,9 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### `ProcessStoreInterface` write/read
 
-**Write:** `append`, `appendBatch`.
+**Write:** `append`, `appendBatch`, plus semantic module helpers such as `ProcessStore.QueueResource`.
 
-**Read:** `events(query?)`, `getProcessExecutions(processId, opts?)`, `getProcessLifecycle`, `getQueueItemCompletions`, `getQueueLifecycle`.
+**Read:** `records(query?)`, `events(query?)`, `getProcessExecutions(processId, opts?)`, `getProcessLifecycle`, `getQueueItemCompletions`, `getQueueLifecycle`.
 
 ### Query types
 

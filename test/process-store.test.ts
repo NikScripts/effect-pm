@@ -265,6 +265,11 @@ describe("ProcessStore.memory", () => {
       const rows = yield* store.records({
         predicate: ProcessId.equals("@test/RecordProcess"),
       })
+      const projectedEvents = yield* store.events({
+        entityType: "process",
+        entityId: "@test/RecordProcess",
+        types: ["process.lifecycle.changed"],
+      })
       const source: Effect.Effect<ProcessStoreInterface, never, never> = Effect.succeed(store)
       const pipedRows = yield* pipe(
         source,
@@ -283,6 +288,11 @@ describe("ProcessStore.memory", () => {
       expect(rows[0]?.processType).toBe("process")
       expect(rows[0]?.processId).toBe("@test/RecordProcess")
       expect(rows[0]?.runId).toContain("run-")
+      expect(rows[0]?.payload).toEqual({ tag: "Stopped" })
+      expect(projectedEvents.map((row) => row.id)).toEqual([
+        "record-process-stopped",
+        "record-process-started",
+      ])
       expect(pipedRows.map((row) => row.id)).toEqual(["record-process-stopped"])
       expect(yield* store.records({ predicate: SubjectId.isNull })).toHaveLength(2)
     }).pipe(Effect.provide(ProcessStore.layer)),

@@ -1,13 +1,10 @@
 /**
- * **ProcessStore** — event-first analytics for processes (and future queue metrics).
+ * **ProcessStore** — runtime record storage facade for processes and resources.
  *
  * @remarks
- * Intentionally small surface:
- *
- * - **Append** — `append` / `appendBatch` only (no update/delete in the interface).
- * - **Envelope** — {@link AnalyticsEventBase} carries `occurredAt`, `entityType`, `entityId`.
- * - **Events** — `process.execution.completed` and `process.lifecycle.changed` to start;
- *   Prisma adapter stores the same shapes durably.
+ * `ProcessStore` is the module-facing storage facade. The default in-memory
+ * implementation persists normalized runtime records and projects legacy
+ * analytics events from those records for compatibility.
  *
  * Default implementation: {@link ProcessStore} service class with an in-memory store.
  * Use {@link ProcessStore.fileLayer} for local durable NDJSON storage.
@@ -51,6 +48,7 @@ import {
 } from "./ProcessStoreCodec";
 import type { EffectPmEventRow, JsonValue } from "./ProcessStoreEvent";
 import {
+  RuntimeStorage,
   selectRuntimeRecords,
   type RuntimeRecord,
 } from "./RuntimeStorage";
@@ -628,33 +626,8 @@ const stringArrayAttribute = (
 };
 
 const runtimeRecordPayload = (event: AnalyticsEvent): JsonValue | undefined => {
-  switch (event.type) {
-    case "runtime.fact.recorded":
-      return isJsonValue(event.fact.payload) ? event.fact.payload : undefined;
-    case "queue.item.completed": {
-      const payload: { [key: string]: JsonValue } = {
-        status: event.item.status,
-        priority: event.item.priority,
-        durationMs: event.item.durationMs,
-        attempts: event.item.attempts,
-      };
-      if (event.item.error !== undefined) {
-        payload["error"] = event.item.error;
-      }
-      return payload;
-    }
-    case "queue.lifecycle.changed": {
-      const payload: { [key: string]: JsonValue } = {
-        tag: event.lifecycle.tag,
-      };
-      if (event.lifecycle.itemsCleared !== undefined) {
-        payload["itemsCleared"] = event.lifecycle.itemsCleared;
-      }
-      return payload;
-    }
-    default:
-      return undefined;
-  }
+  const payload = encodeEvent(event).payload;
+  return isJsonValue(payload) ? payload : undefined;
 };
 
 const runtimeRecordType = (event: AnalyticsEvent): string =>
@@ -662,6 +635,48 @@ const runtimeRecordType = (event: AnalyticsEvent): string =>
 
 const runtimeRecordOccurredAt = (event: AnalyticsEvent): number =>
   event.type === "runtime.fact.recorded" ? event.fact.occurredAt : event.occurredAt;
+
+const recordLooksLikeRuntimeFact = (record: RuntimeRecord): boolean =>
+  isRecord(record.payload) && isRecord(record.payload["fact"]);
+
+const recordToStoredEventRow = (record: RuntimeRecord): EffectPmEventRow | null => {
+  const eventType = recordLooksLikeRuntimeFact(record) ? "runtime.fact.recorded" : record.type;
+  const payload = record.payload;
+  if (payload === undefined) {
+    return null;
+  }
+  if (!isJsonValue(payload)) {
+    return null;
+  }
+  return {
+    id: record.id,
+    type: eventType,
+    occurredAt: DateTime.toDateUtc(record.occurredAt),
+    entityType: record.processType,
+    entityId: record.processId,
+    attributes: record.attributes ?? null,
+    payload,
+    createdAt: DateTime.toDateUtc(record.createdAt),
+  };
+};
+
+const recordToAnalyticsEvent = (record: RuntimeRecord): AnalyticsEvent | null => {
+  const row = recordToStoredEventRow(record);
+  return row === null ? null : decodeStoredEvent(row);
+};
+
+const recordsToEvents = (
+  records: ReadonlyArray<RuntimeRecord>,
+): AnalyticsEvent[] => {
+  const out: AnalyticsEvent[] = [];
+  for (const record of records) {
+    const event = recordToAnalyticsEvent(record);
+    if (event !== null) {
+      out.push(event);
+    }
+  }
+  return out;
+};
 
 const requireQueueResourceField = (
   value: string | undefined,
@@ -1073,38 +1088,28 @@ const makeInMemoryProcessStore: Effect.Effect<
   never,
   never
 > = Effect.gen(function* () {
-  const events: AnalyticsEvent[] = [];
+  const storage = yield* RuntimeStorage.memory;
   const now = yield* Clock.currentTimeMillis;
   const runId = makeRunId(now);
   const appendEvent = (event: AnalyticsEvent) =>
-    Effect.sync(() => {
-      events.push(event);
-    });
+    storage.create(eventToRuntimeRecord(event, runId)).pipe(Effect.ignore);
   const readRecords = (query: RuntimeRecordQuery | undefined) =>
-    Effect.sync(() =>
-      selectRuntimeRecords(
-        events.map((event) => eventToRuntimeRecord(event, runId)),
-        query,
-      )
-    );
+    storage.read(query);
+  const readEvents = (query: StoreEventQuery | undefined) =>
+    Effect.map(storage.read(), (records) => {
+      const rows = recordsToEvents(records)
+        .filter(matchesStoreEventQuery(query))
+        .sort(byTimestampDesc((event) => event.occurredAt));
+      return applyQueryOpts(rows, query?.opts, (event) => event.occurredAt);
+    });
 
   return {
     append: appendEvent,
 
     appendBatch: (batch) =>
-      Effect.sync(() => {
-        for (const event of batch) {
-          events.push(event);
-        }
-      }),
+      Effect.forEach(batch, appendEvent, { discard: true }),
 
-    events: (query) =>
-      Effect.sync(() => {
-        const rows = events
-          .filter(matchesStoreEventQuery(query))
-          .sort(byTimestampDesc((event) => event.occurredAt));
-        return applyQueryOpts(rows, query?.opts, (event) => event.occurredAt);
-      }),
+    events: readEvents,
 
     records: readRecords,
 
@@ -1114,7 +1119,12 @@ const makeInMemoryProcessStore: Effect.Effect<
     }),
 
     getProcessExecutions: (processId, opts) =>
-      Effect.sync(() =>
+      Effect.map(readEvents({
+        entityType: "process",
+        entityId: processId,
+        types: ["process.execution.completed"],
+        opts,
+      }), (events) =>
         selectEvents(
           events,
           { entityType: "process", entityId: processId, types: ["process.execution.completed"], opts },
@@ -1123,7 +1133,12 @@ const makeInMemoryProcessStore: Effect.Effect<
       ),
 
     getProcessLifecycle: (processId, opts) =>
-      Effect.sync(() =>
+      Effect.map(readEvents({
+        entityType: "process",
+        entityId: processId,
+        types: ["process.lifecycle.changed"],
+        opts,
+      }), (events) =>
         selectEvents(
           events,
           { entityType: "process", entityId: processId, types: ["process.lifecycle.changed"], opts },
@@ -1132,7 +1147,12 @@ const makeInMemoryProcessStore: Effect.Effect<
       ),
 
     getQueueItemCompletions: (queueId, opts) =>
-      Effect.sync(() =>
+      Effect.map(readEvents({
+        entityType: "queue",
+        entityId: queueId,
+        types: ["queue.item.completed"],
+        opts,
+      }), (events) =>
         selectEvents(
           events,
           { entityType: "queue", entityId: queueId, types: ["queue.item.completed"], opts },
@@ -1141,7 +1161,12 @@ const makeInMemoryProcessStore: Effect.Effect<
       ),
 
     getQueueLifecycle: (queueId, opts) =>
-      Effect.sync(() =>
+      Effect.map(readEvents({
+        entityType: "queue",
+        entityId: queueId,
+        types: ["queue.lifecycle.changed"],
+        opts,
+      }), (events) =>
         selectEvents(
           events,
           { entityType: "queue", entityId: queueId, types: ["queue.lifecycle.changed"], opts },
