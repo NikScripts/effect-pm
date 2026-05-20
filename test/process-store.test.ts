@@ -353,6 +353,12 @@ describe("ProcessStore.memory", () => {
       expect(entries[0]?.key).toBe("delivery-1")
       expect(entries[0]?.indexA).toBe("batch-1")
       expect(entries[0]?.indexNames).toEqual(["batchId", "releaseId"])
+      expect(entries[0]?.payload).toEqual({
+        status: "completed",
+        priority: "high",
+        attempts: 1,
+        durationMs: 8,
+      })
       expect(byKey).toHaveLength(2)
       expect(Option.isSome(entry)).toBe(true)
       expect(dedupeKeys.map((row) => row.type)).toEqual(["queue.dedupe-key.added"])

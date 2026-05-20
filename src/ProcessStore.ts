@@ -626,6 +626,9 @@ const stringArrayAttribute = (
 };
 
 const runtimeRecordPayload = (event: AnalyticsEvent): JsonValue | undefined => {
+  if (event.type === "runtime.fact.recorded") {
+    return isJsonValue(event.fact.payload) ? event.fact.payload : undefined;
+  }
   const payload = encodeEvent(event).payload;
   return isJsonValue(payload) ? payload : undefined;
 };
@@ -636,11 +639,61 @@ const runtimeRecordType = (event: AnalyticsEvent): string =>
 const runtimeRecordOccurredAt = (event: AnalyticsEvent): number =>
   event.type === "runtime.fact.recorded" ? event.fact.occurredAt : event.occurredAt;
 
-const recordLooksLikeRuntimeFact = (record: RuntimeRecord): boolean =>
-  isRecord(record.payload) && isRecord(record.payload["fact"]);
+const runtimeRecordAttributes = (event: AnalyticsEvent): JsonValue | undefined => {
+  const out: { [key: string]: JsonValue } = {};
+  let hasAttributes = false;
+  if (
+    event.attributes !== undefined &&
+    isJsonValue(event.attributes) &&
+    isRecord(event.attributes)
+  ) {
+    for (const [key, value] of Object.entries(event.attributes)) {
+      if (isJsonValue(value)) {
+        out[key] = value;
+        hasAttributes = true;
+      }
+    }
+  }
+  if (event.type === "runtime.fact.recorded") {
+    out["factId"] = event.fact.id;
+    hasAttributes = true;
+  }
+  return hasAttributes ? out : undefined;
+};
+
+const isLegacyEventRecordType = (type: string): type is Exclude<
+  AnalyticsEvent["type"],
+  "runtime.fact.recorded"
+> => {
+  switch (type) {
+    case "process.execution.completed":
+    case "process.lifecycle.changed":
+    case "queue.item.completed":
+    case "queue.lifecycle.changed":
+    case "runtime.state.changed":
+      return true;
+    default:
+      return false;
+  }
+};
+
+const recordAttributes = (
+  value: JsonValue | undefined,
+): Record<string, unknown> | undefined => {
+  if (value === undefined || !isRecord(value)) {
+    return undefined;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    out[key] = item;
+  }
+  return out;
+};
 
 const recordToStoredEventRow = (record: RuntimeRecord): EffectPmEventRow | null => {
-  const eventType = recordLooksLikeRuntimeFact(record) ? "runtime.fact.recorded" : record.type;
+  if (!isLegacyEventRecordType(record.type)) {
+    return null;
+  }
   const payload = record.payload;
   if (payload === undefined) {
     return null;
@@ -650,7 +703,7 @@ const recordToStoredEventRow = (record: RuntimeRecord): EffectPmEventRow | null 
   }
   return {
     id: record.id,
-    type: eventType,
+    type: record.type,
     occurredAt: DateTime.toDateUtc(record.occurredAt),
     entityType: record.processType,
     entityId: record.processId,
@@ -662,7 +715,28 @@ const recordToStoredEventRow = (record: RuntimeRecord): EffectPmEventRow | null 
 
 const recordToAnalyticsEvent = (record: RuntimeRecord): AnalyticsEvent | null => {
   const row = recordToStoredEventRow(record);
-  return row === null ? null : decodeStoredEvent(row);
+  if (row !== null) {
+    return decodeStoredEvent(row);
+  }
+  const occurredAt = DateTime.toEpochMillis(record.occurredAt);
+  const attributes = recordAttributes(record.attributes);
+  const factId = stringAttribute(attributes, "factId") ?? record.id;
+  return {
+    id: record.id,
+    type: "runtime.fact.recorded",
+    occurredAt,
+    entityType: record.processType,
+    entityId: record.processId,
+    attributes,
+    fact: {
+      id: factId,
+      ref: { kind: record.processType, id: record.processId },
+      type: record.type,
+      occurredAt,
+      payload: record.payload ?? null,
+      attributes,
+    },
+  };
 };
 
 const recordsToEvents = (
@@ -955,6 +1029,7 @@ const eventToRuntimeRecord = (
   runId: string,
 ): RuntimeRecord => {
   const attributes = event.attributes;
+  const recordAttributes = runtimeRecordAttributes(event);
   const occurredAt = DateTime.makeUnsafe(runtimeRecordOccurredAt(event));
   return {
     id: event.id,
@@ -977,11 +1052,7 @@ const eventToRuntimeRecord = (
     indexH: stringAttribute(attributes, "indexH"),
     indexNames: stringArrayAttribute(attributes, "indexNames"),
     payload: runtimeRecordPayload(event),
-    attributes: event.attributes === undefined
-      ? undefined
-      : isJsonValue(event.attributes)
-        ? event.attributes
-        : undefined,
+    attributes: recordAttributes,
   };
 };
 
