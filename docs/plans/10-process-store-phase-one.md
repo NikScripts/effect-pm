@@ -65,7 +65,7 @@ fact changes, update this plan before coding.
 | Queue enqueue history | There is no `queue.item.enqueued` event yet. | Do not pretend queue reads can show pending/enqueued history until a later event-model slice adds it. |
 | Queue rejection history | There is no enqueue rejection event yet. | Plan it later; do not surface an empty or synthetic read in phase one. |
 | Prisma schema | The event table stores `type`, `entityType`, `entityId`, `occurredAt`, and JSON payload. | Queue reads should need no schema migration. |
-| `persist` / `refill` | They still exist on `QueueResourceConfig`. | Do not remove or deprecate them in phase one. |
+| Queue lifecycle hooks | `persist` / `refill` have moved out of current queue config after the later lifecycle cleanup. | Phase one originally avoided this API change; current docs/source are the shipped truth. |
 | Control API | It does not expose store-backed queue history routes. | Keep control routes out of phase one. |
 
 Known current-code issues found while writing this plan must be fixed before
@@ -103,7 +103,7 @@ Do not include these in phase one:
 - New queue event types such as `queue.item.enqueued`,
   `queue.item.enqueue_rejected`, retry-scheduled, dead-letter, or release events.
 - Queue payload persistence or replay.
-- Removal or deprecation of `QueueResourceConfig.persist` / `refill`.
+- Queue lifecycle-hook cleanup (handled in a later slice, not this phase-one plan).
 - Store subscriptions, streams, or SSE.
 - Resource lifecycle events.
 - New database tables.
@@ -413,8 +413,7 @@ Phase one is complete only when all of these are true:
 - Queue event types needed by custom store authors are exported from the package
   root.
 - No code uses unsafe type assertions to satisfy the expanded interface.
-- No runtime behavior changes for `QueueResource.persist`, `refill`, process
-  supervisors, or control routes.
+- No runtime behavior changes for process supervisors or control routes.
 - Tests cover memory, file-backed, and Prisma reads for process, queue, and
   mixed event rows.
 - A changeset is prepared before release because public types changed.

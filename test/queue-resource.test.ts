@@ -23,13 +23,13 @@ const waitUntilCompleted = <T, E, EE = never, R = never>(
     }
   });
 
-const waitUntilRefills = (
-  refills: Ref.Ref<number>,
+const waitUntilCount = (
+  ref: Ref.Ref<number>,
   expected: number,
 ) =>
   Effect.gen(function* () {
     let steps = 0;
-    while ((yield* Ref.get(refills)) < expected && steps++ < 200) {
+    while ((yield* Ref.get(ref)) < expected && steps++ < 200) {
       yield* Effect.sleep(Duration.millis(5));
     }
   });
@@ -431,21 +431,26 @@ describe("QueueResource.make — hooks", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.live("persist is called on enqueue", () =>
+  it.live("onStart runs once and receives queue-bound controls", () =>
     Effect.gen(function* () {
-      const persisted = yield* Ref.make<Array<ReadonlyArray<number>>>([]);
+      const started = yield* Ref.make(0);
+      const handled = yield* Ref.make<ReadonlyArray<number>>([]);
       const queue = yield* QueueResource.make({
-        name: "test-persist",
-        effect: (_n: number) => Effect.void,
-        persist: (items) =>
-          Ref.update(persisted, (arr) => [...arr, items]),
-        ...fastConfig,
+        name: "test-onStart",
+        autoStart: false,
+        effect: (n: number) => Ref.update(handled, (values) => [...values, n]),
+        onStart: (q) =>
+          Effect.gen(function* () {
+            yield* Ref.update(started, (n) => n + 1);
+            yield* q.add([1, 2]);
+          }),
+        concurrency: 1,
       });
-      yield* queue.add([1, 2, 3]);
-      yield* waitUntilCompleted(queue, 3);
-      const calls = yield* Ref.get(persisted);
-      expect(calls).toHaveLength(1);
-      expect(calls[0]).toEqual([1, 2, 3]);
+      yield* queue.start;
+      yield* queue.start;
+      yield* waitUntilCompleted(queue, 2);
+      expect(yield* Ref.get(started)).toBe(1);
+      expect(yield* Ref.get(handled)).toEqual([1, 2]);
     }).pipe(Effect.scoped),
   );
 });
@@ -587,216 +592,192 @@ describe("QueueResource.make — autoStart", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.live("automatic refill waits for wake then runs after queues drain empty", () =>
+  it.live("onDrained waits for wake then runs after queues drain empty", () =>
     Effect.gen(function* () {
-      const refills = yield* Ref.make(0);
+      const drains = yield* Ref.make(0);
       const queue = yield* QueueResource.make({
-        name: "test-autostart-refill",
+        name: "test-autostart-drained",
         autoStart: false,
         effect: (_n: number) => Effect.void,
         concurrency: 1,
-        refill: (_q) => Ref.update(refills, (n) => n + 1),
+        onDrained: (_q) => Ref.update(drains, (n) => n + 1),
       });
       yield* Effect.sleep(Duration.millis(40));
-      expect(yield* Ref.get(refills)).toBe(0);
+      expect(yield* Ref.get(drains)).toBe(0);
 
       yield* queue.start;
-      expect(yield* Ref.get(refills)).toBe(0);
+      expect(yield* Ref.get(drains)).toBe(0);
 
       yield* queue.add([1]);
       yield* waitUntilCompleted(queue, 1);
 
-      let steps = 0;
-      while ((yield* Ref.get(refills)) < 1 && steps++ < 200) {
-        yield* Effect.sleep(Duration.millis(5));
-      }
-      expect(yield* Ref.get(refills)).toBeGreaterThanOrEqual(1);
+      yield* waitUntilCount(drains, 1);
+      expect(yield* Ref.get(drains)).toBeGreaterThanOrEqual(1);
       void queue;
     }).pipe(Effect.scoped),
   );
 
-  it.live("automatic refill stays idle until drain even with default autoStart", () =>
+  it.live("onDrained stays idle until drain even with default autoStart", () =>
     Effect.gen(function* () {
-      const refills = yield* Ref.make(0);
+      const drains = yield* Ref.make(0);
       const queue = yield* QueueResource.make({
-        name: "test-refill-no-auto-layer-only",
+        name: "test-drained-no-auto-layer-only",
         effect: (_n: number) => Effect.void,
         concurrency: 4,
-        refill: (_q) => Ref.update(refills, (n) => n + 1),
+        onDrained: (_q) => Ref.update(drains, (n) => n + 1),
       });
       yield* Effect.sleep(Duration.millis(120));
-      expect(yield* Ref.get(refills)).toBe(0);
+      expect(yield* Ref.get(drains)).toBe(0);
       void queue;
     }).pipe(Effect.scoped),
   );
 
-  it.live("default autoStart automatic refill runs only after processed work drains empty", () =>
+  it.live("default autoStart onDrained runs only after processed work drains empty", () =>
     Effect.gen(function* () {
-      const refills = yield* Ref.make(0);
+      const drains = yield* Ref.make(0);
       const handled = yield* Ref.make<ReadonlyArray<number>>([]);
       const queue = yield* QueueResource.make({
-        name: "test-refill-default-autostart-drain",
+        name: "test-drained-default-autostart-drain",
         effect: (n: number) => Ref.update(handled, (values) => [...values, n]),
         concurrency: 1,
-        refill: (_q) => Ref.update(refills, (n) => n + 1),
+        onDrained: (_q) => Ref.update(drains, (n) => n + 1),
       });
 
       yield* Effect.sleep(Duration.millis(80));
-      expect(yield* Ref.get(refills)).toBe(0);
+      expect(yield* Ref.get(drains)).toBe(0);
 
       yield* queue.add(1);
       yield* waitUntilCompleted(queue, 1);
-      yield* waitUntilRefills(refills, 1);
+      yield* waitUntilCount(drains, 1);
 
       expect(yield* Ref.get(handled)).toEqual([1]);
-      expect(yield* Ref.get(refills)).toBeGreaterThanOrEqual(1);
+      expect(yield* Ref.get(drains)).toBeGreaterThanOrEqual(1);
     }).pipe(Effect.scoped),
   );
 
-  it.live("manual refill invokes configured callback without cold-start automatic refill", () =>
+  it.live("service layer provision does not invoke onDrained before the queue is yielded", () =>
     Effect.gen(function* () {
-      const refills = yield* Ref.make(0);
-      const queue = yield* QueueResource.make({
-        name: "test-manual-refill",
-        autoStart: false,
-        effect: (_n: number) => Effect.void,
-        concurrency: 1,
-        refill: (_q) => Ref.update(refills, (n) => n + 1),
-      });
-      yield* queue.start;
-      expect(yield* Ref.get(refills)).toBe(0);
-      yield* queue.refill;
-      expect(yield* Ref.get(refills)).toBe(1);
-      void queue;
-    }).pipe(Effect.scoped),
-  );
+      const drains = yield* Ref.make(0);
 
-  it.live("service layer provision does not invoke refill before the queue is yielded", () =>
-    Effect.gen(function* () {
-      const refills = yield* Ref.make(0);
-
-      class RefillQueue extends QueueResource.Service<RefillQueue, number, never>()(
-        "@test/RefillLayerProvisionQueue",
+      class DrainedQueue extends QueueResource.Service<DrainedQueue, number, never>()(
+        "@test/DrainedLayerProvisionQueue",
         {
           effect: (_n: number) => Effect.void,
           concurrency: 1,
-          refill: (_q) => Ref.update(refills, (n) => n + 1),
+          onDrained: (_q) => Ref.update(drains, (n) => n + 1),
         },
       ) {}
 
       yield* Effect.sleep(Duration.millis(120)).pipe(
-        Effect.provide(RefillQueue.layer),
+        Effect.provide(DrainedQueue.layer),
       );
 
-      expect(yield* Ref.get(refills)).toBe(0);
+      expect(yield* Ref.get(drains)).toBe(0);
     }),
   );
 
-  it.live("yielding a service-layer queue with default autoStart does not cold-start refill", () =>
+  it.live("yielding a service-layer queue with default autoStart does not cold-start onDrained", () =>
     Effect.gen(function* () {
-      const refills = yield* Ref.make(0);
+      const drains = yield* Ref.make(0);
 
-      class RefillQueue extends QueueResource.Service<RefillQueue, number, never>()(
-        "@test/RefillLayerYieldQueue",
+      class DrainedQueue extends QueueResource.Service<DrainedQueue, number, never>()(
+        "@test/DrainedLayerYieldQueue",
         {
           effect: (_n: number) => Effect.void,
           concurrency: 1,
-          refill: (_q) => Ref.update(refills, (n) => n + 1),
+          onDrained: (_q) => Ref.update(drains, (n) => n + 1),
         },
       ) {}
 
       yield* Effect.gen(function* () {
-        const queue = yield* RefillQueue;
+        const queue = yield* DrainedQueue;
         yield* Effect.sleep(Duration.millis(120));
-        expect(yield* Ref.get(refills)).toBe(0);
+        expect(yield* Ref.get(drains)).toBe(0);
         void queue;
-      }).pipe(Effect.provide(RefillQueue.layer));
+      }).pipe(Effect.provide(DrainedQueue.layer));
     }),
   );
 
-  it.live("service-layer queue with autoStart false waits for start and still does not cold-start refill", () =>
+  it.live("service-layer queue with autoStart false waits for start and still does not cold-start onDrained", () =>
     Effect.gen(function* () {
-      const refills = yield* Ref.make(0);
+      const drains = yield* Ref.make(0);
       const handled = yield* Ref.make<ReadonlyArray<number>>([]);
 
-      class RefillQueue extends QueueResource.Service<RefillQueue, number, never>()(
-        "@test/RefillLayerManualStartQueue",
+      class DrainedQueue extends QueueResource.Service<DrainedQueue, number, never>()(
+        "@test/DrainedLayerManualStartQueue",
         {
           autoStart: false,
           effect: (n: number) => Ref.update(handled, (values) => [...values, n]),
           concurrency: 1,
-          refill: (_q) => Ref.update(refills, (n) => n + 1),
+          onDrained: (_q) => Ref.update(drains, (n) => n + 1),
         },
       ) {}
 
       yield* Effect.gen(function* () {
-        const queue = yield* RefillQueue;
+        const queue = yield* DrainedQueue;
         yield* Effect.sleep(Duration.millis(80));
-        expect(yield* Ref.get(refills)).toBe(0);
+        expect(yield* Ref.get(drains)).toBe(0);
 
         yield* queue.start;
         yield* Effect.sleep(Duration.millis(80));
-        expect(yield* Ref.get(refills)).toBe(0);
+        expect(yield* Ref.get(drains)).toBe(0);
 
         yield* queue.add(1);
         yield* waitUntilCompleted(queue, 1);
 
-        let steps = 0;
-        while ((yield* Ref.get(refills)) < 1 && steps++ < 200) {
-          yield* Effect.sleep(Duration.millis(5));
-        }
+        yield* waitUntilCount(drains, 1);
         expect(yield* Ref.get(handled)).toEqual([1]);
-        expect(yield* Ref.get(refills)).toBeGreaterThanOrEqual(1);
-      }).pipe(Effect.provide(RefillQueue.layer));
+        expect(yield* Ref.get(drains)).toBeGreaterThanOrEqual(1);
+      }).pipe(Effect.provide(DrainedQueue.layer));
     }),
   );
 
-  it.live("QueueResource.layer with Tag does not cold-start refill", () =>
+  it.live("QueueResource.layer with Tag does not cold-start onDrained", () =>
     Effect.gen(function* () {
-      const refills = yield* Ref.make(0);
-      const RefillQueue = QueueResource.Tag<
-        { readonly _tag: "RefillTagQueue" },
+      const drains = yield* Ref.make(0);
+      const DrainedQueue = QueueResource.Tag<
+        { readonly _tag: "DrainedTagQueue" },
         number,
         never,
         never
-      >()("@test/RefillTagQueue");
-      const RefillQueueLive = QueueResource.layer(RefillQueue, {
+      >()("@test/DrainedTagQueue");
+      const DrainedQueueLive = QueueResource.layer(DrainedQueue, {
         effect: (_n: number) => Effect.void,
         concurrency: 1,
-        refill: (_q) => Ref.update(refills, (n) => n + 1),
+        onDrained: (_q) => Ref.update(drains, (n) => n + 1),
       });
 
       yield* Effect.gen(function* () {
-        const queue = yield* RefillQueue;
+        const queue = yield* DrainedQueue;
         yield* Effect.sleep(Duration.millis(120));
-        expect(yield* Ref.get(refills)).toBe(0);
+        expect(yield* Ref.get(drains)).toBe(0);
         void queue;
-      }).pipe(Effect.provide(RefillQueueLive));
+      }).pipe(Effect.provide(DrainedQueueLive));
     }),
   );
 
-  it.live("clear triggers automatic refill only after workers have been started", () =>
+  it.live("clear triggers onDrained only after workers have been started", () =>
     Effect.gen(function* () {
-      const refills = yield* Ref.make(0);
+      const drains = yield* Ref.make(0);
       const queue = yield* QueueResource.make({
-        name: "test-clear-refill-after-start",
+        name: "test-clear-drained-after-start",
         autoStart: false,
         paused: true,
         effect: (_n: number) => Effect.void,
         concurrency: 1,
-        refill: (_q) => Ref.update(refills, (n) => n + 1),
+        onDrained: (_q) => Ref.update(drains, (n) => n + 1),
       });
 
       yield* queue.add(1);
       expect(yield* queue.clear).toBe(1);
       yield* Effect.sleep(Duration.millis(80));
-      expect(yield* Ref.get(refills)).toBe(0);
+      expect(yield* Ref.get(drains)).toBe(0);
 
       yield* queue.add(2);
       yield* queue.start;
       expect(yield* queue.clear).toBe(1);
-      yield* waitUntilRefills(refills, 1);
-      expect(yield* Ref.get(refills)).toBeGreaterThanOrEqual(1);
+      yield* waitUntilCount(drains, 1);
+      expect(yield* Ref.get(drains)).toBeGreaterThanOrEqual(1);
     }).pipe(Effect.scoped),
   );
 });

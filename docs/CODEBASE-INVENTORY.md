@@ -425,18 +425,18 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 - **`key?`** — dedup: drop if key already in-flight.
 - **`retries?`** — max handler `retry` re-enqueues; default Infinity.
 - **`onRetryExhausted?`** — `(item, cause) => Effect`.
-- **`persist?`** — `(items, priority) => Effect` on enqueue; errors swallowed.
-- **`onEnqueue?`**, **`onComplete?`**, **`onEmpty?`** — fire-and-forget hooks.
+- **`onEnqueue?`**, **`onComplete?`** — fire-and-forget hooks.
 - **`effect(item, ctx)`** — required worker body.
 - **`handler?(item, exit, ctx)`** — optional; always forked.
-- **`refill?(queueHandle)`** — optional reload loop when all levels empty after processed work drains (or after `clear`); not triggered by enqueue alone or idle worker waits.
+- **`onStart?(queueHandle)`** — queue-bound hook that runs once when workers start.
+- **`onDrained?(queueHandle)`** — queue-bound hook after pending work drains empty (or after `clear`); not triggered by cold-start idle worker waits.
 
 **Enqueue error channel on contexts:** `QueueItemValidationError | QueueBatchValidationError` only when schema path used; without schema, still typed but validation never fails.
 
 ### Config with item schema (`QueueResourceConfigWithItemSchema`)
 
 - **`itemSchema`** — Effect `Schema` for items.
-- Same **`effect`**, **`handler`**, **`refill`** as above.
+- Same **`effect`**, **`handler`**, **`onStart`**, and **`onDrained`** as above.
 - Public **`add`/`enqueue`/…** and hook enqueues can fail validation.
 
 ### `QueueHandle` operations
@@ -445,7 +445,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 **Observe:** `size`, `sizes` `{ high, normal, low }`, `isEmpty`, `completed`.
 
-**Lifecycle:** `pause`, `resume`, `shutdown` (permanent; further enqueue dropped/warned), `clear` → count removed, `refill` → invoke **`config.refill`** manually (bootstrap alongside **`start`**).
+**Lifecycle:** `start`, `pause`, `resume`, `shutdown` (permanent; further enqueue dropped/warned), `clear` → count removed.
 
 ### `EffectContext` (in worker `effect`)
 

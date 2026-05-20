@@ -2,7 +2,7 @@
  * QueueResource — Effect-idiomatic managed priority queue with workers.
  *
  * Provides a three-level priority queue (high, normal, low) backed by bounded
- * Effect `Queue`s with configurable concurrency, deduplication, retry, persistence,
+ * Effect `Queue`s with configurable concurrency, deduplication, retry,
  * and lifecycle hooks. Workers are managed fibers tracked by `FiberSet`; pause/resume
  * is implemented via `Latch`; empty-queue blocking uses a `Deferred` wake signal to
  * avoid priority inversion.
@@ -170,7 +170,7 @@ export class QueueBatchValidationError extends Data.TaggedError("QueueBatchValid
  * Enqueue a single item or a readonly batch of items.
  *
  * @typeParam E - Validation errors when {@link QueueResourceConfig.itemSchema} is set
- * @typeParam R - Dependencies needed to run enqueue-time hooks (`persist`, `onEnqueue`, …) when called from the ambient program
+ * @typeParam R - Dependencies needed to run enqueue-time hooks (`onEnqueue`, …) when called from the ambient program
  *
  * @public
  */
@@ -241,19 +241,12 @@ export interface QueueHandleApi<
   readonly completed: Effect.Effect<number>;
 
   /**
-   * Fork the worker pool (and `refill` monitor when configured). Idempotent — safe to call multiple times.
+   * Fork the worker pool and lifecycle hook monitor. Idempotent — safe to call multiple times.
    * Only needed when {@link QueueResourceConfigBase.autoStart} was `false`; otherwise workers already started at acquisition.
    *
    * After {@link shutdown}, `start` is a no-op (warning logged).
    */
   readonly start: Effect.Effect<void, never, R>;
-
-  /**
-   * Invoke {@link QueueResourceConfigBase.refill} once when configured (manual bootstrap).
-   * Automatic empty-triggered refill wakes only after queues drain empty following processed work (or after {@link QueueHandleApi.clear});
-   * enqueue wakes workers, not the refill monitor. Does **not** run on cold start while queues stay empty.
-   */
-  readonly refill: Effect.Effect<void, never, R>;
 
   /**
    * Pause processing. Workers block before their next item.
@@ -429,7 +422,7 @@ export interface QueueResourceConfigBase<T, E, R> {
   /** Start with processing paused. Call `resume` to begin. @default false */
   readonly paused?: boolean;
   /**
-   * When `false`, worker fibers (and the optional `refill` fiber) are **not** forked until
+   * When `false`, worker fibers (and the lifecycle hook monitor) are **not** forked until
    * {@link QueueHandleApi.start} runs. Enqueue still succeeds; items accumulate until workers exist.
    * `pause` / `resume` update the latch before or after `start` — workers observe it once forked.
    *
@@ -458,14 +451,6 @@ export interface QueueResourceConfigBase<T, E, R> {
     cause: Cause.Cause<E>,
   ) => Effect.Effect<void, never, R>;
   /**
-   * Persist items on enqueue (before processing). Called with the batch and
-   * priority level. Errors are logged and swallowed (fire-and-forget).
-   */
-  readonly persist?: (
-    items: ReadonlyArray<T>,
-    priority: Priority,
-  ) => Effect.Effect<void, never, R>;
-  /**
    * Hook: fired after item(s) are enqueued. Receives the batch and priority.
    * Fire-and-forget — errors are logged and swallowed.
    */
@@ -483,11 +468,6 @@ export interface QueueResourceConfigBase<T, E, R> {
     exit: Exit.Exit<void, E>,
     elapsed: Duration.Duration,
   ) => Effect.Effect<void, never, R>;
-  /**
-   * Hook: fired when all priority queues become empty (after drain, not idle).
-   * Fire-and-forget — errors are logged and swallowed.
-   */
-  readonly onEmpty?: Effect.Effect<void, never, R>;
 }
 
 /**
@@ -514,11 +494,10 @@ export type QueueResourceConfigWithoutItemSchema<T, E, R> = QueueResourceConfigB
     exit: Exit.Exit<void, E>,
     ctx: HandlerContext<T, never, R>,
   ) => Effect.Effect<void, any, R>;
-  /**
-   * Refill the queue from an external source when all priority queues are empty.
-   * Receives the queue handle for re-enqueuing. Errors are logged and swallowed.
-   */
-  readonly refill?: (queue: QueueHandle<T, E, never, R>) => Effect.Effect<void, never, R>;
+  /** Hook: fired once when the worker pool starts. */
+  readonly onStart?: (queue: QueueHandle<T, E, never, R>) => Effect.Effect<void, never, R>;
+  /** Hook: fired when pending work drains to empty after work or clear, not on cold-start idle. */
+  readonly onDrained?: (queue: QueueHandle<T, E, never, R>) => Effect.Effect<void, never, R>;
 };
 
 /**
@@ -543,7 +522,8 @@ export type QueueResourceConfigWithItemSchema<T, E, R> = QueueResourceConfigBase
     exit: Exit.Exit<void, E>,
     ctx: HandlerContext<T, QueueEnqueueErrors, R>,
   ) => Effect.Effect<void, any, R>;
-  readonly refill?: (queue: QueueHandle<T, E, QueueEnqueueErrors, R>) => Effect.Effect<void, never, R>;
+  readonly onStart?: (queue: QueueHandle<T, E, QueueEnqueueErrors, R>) => Effect.Effect<void, never, R>;
+  readonly onDrained?: (queue: QueueHandle<T, E, QueueEnqueueErrors, R>) => Effect.Effect<void, never, R>;
 };
 
 /**
@@ -659,11 +639,10 @@ export type InferQueueWorkerRequirements<
     | Effect.Services<ReturnType<C["effect"]>>
     | InferOptionalHandlerRequirements<C>
     | InferOptionalPropertyRequirements<C, "onRetryExhausted">
-    | InferOptionalPropertyRequirements<C, "persist">
     | InferOptionalPropertyRequirements<C, "onEnqueue">
     | InferOptionalPropertyRequirements<C, "onComplete">
-    | InferOptionalPropertyRequirements<C, "onEmpty">
-    | InferOptionalPropertyRequirements<C, "refill">
+    | InferOptionalPropertyRequirements<C, "onStart">
+    | InferOptionalPropertyRequirements<C, "onDrained">
   >;
 
 
@@ -684,7 +663,8 @@ type QueueRuntimeConfig<T, E, EEnqueue, R> = QueueResourceConfigBase<T, E, R> & 
     exit: Exit.Exit<void, E>,
     ctx: HandlerContext<T, EEnqueue, R>,
   ) => Effect.Effect<void, any, R>;
-  readonly refill?: (queue: QueueHandle<T, E, EEnqueue, R>) => Effect.Effect<void, never, R>;
+  readonly onStart?: (queue: QueueHandle<T, E, EEnqueue, R>) => Effect.Effect<void, never, R>;
+  readonly onDrained?: (queue: QueueHandle<T, E, EEnqueue, R>) => Effect.Effect<void, never, R>;
 };
 
 /** Normalize public enqueue input without treating arbitrary iterables as batches. */
@@ -724,9 +704,8 @@ interface InternalItem<T> {
  * - Three bounded `Queue<InternalItem<T>>` (one per priority level)
  * - N worker fibers (managed by `FiberSet`) that loop: latch → take → latch → process
  * - Optional deferred fork via {@link QueueResourceConfigBase.autoStart}: when `false`,
- *   call {@link QueueHandleApi.start} to fork workers (and the refill fiber when configured).
- * - Optional {@link QueueHandleApi.refill} invokes {@link QueueResourceConfigBase.refill} manually;
- *   automatic refill waits on a dedicated wake until queues drain empty after processed work (not cold-start empty).
+ *   call {@link QueueHandleApi.start} to fork workers and the lifecycle hook monitor.
+ * - `onDrained` waits on a dedicated wake until queues drain empty after processed work (not cold-start empty).
  * - Worker wake (`takeNext`): enqueue / shutdown — avoids priority inversion vs racing priority queues.
  * - Refill wake: drain-to-empty after an item completes (or after {@link QueueHandleApi.clear}) — independent of idle worker waits.
  * - `Latch` gates worker entry (pause/resume)
@@ -905,8 +884,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
     // Worker wake: enqueue / shutdown unblock `takeNext` waiters on empty queues.
     let workerWakeSignal = yield* Deferred.make<void>();
-    // Refill wake: distinct so idle workers never pulse the refill monitor (they share no Deferred with workers).
-    let refillWakeSignal = yield* Deferred.make<void>();
+    // Drain wake: distinct so idle workers never pulse lifecycle hooks.
+    let drainWakeSignal = yield* Deferred.make<void>();
 
     // Managed fiber collections. Scope close interrupts all fibers automatically.
     const workerFibers = yield* FiberSet.make<void>();
@@ -971,7 +950,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       ).pipe(Effect.ignore);
     };
 
-    // ─── Internal: wake signals (workers vs refill monitor) ───
+    // ─── Internal: wake signals (workers vs drain monitor) ───
 
     /** Complete the current worker wake signal and allocate a fresh one. */
     const signalWorkerWake = Effect.gen(function* () {
@@ -979,26 +958,26 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       workerWakeSignal = yield* Deferred.make<void>();
     });
 
-    /** Complete the current refill wake signal and allocate a fresh one. */
-    const signalRefillWake = Effect.gen(function* () {
-      yield* Deferred.succeed(refillWakeSignal, undefined);
-      refillWakeSignal = yield* Deferred.make<void>();
+    /** Complete the current drain wake signal and allocate a fresh one. */
+    const signalDrainWake = Effect.gen(function* () {
+      yield* Deferred.succeed(drainWakeSignal, undefined);
+      drainWakeSignal = yield* Deferred.make<void>();
     });
 
-    /** Shutdown must unblock both `takeNext` waiters and the refill fiber. */
+    /** Shutdown must unblock both `takeNext` waiters and the drain monitor. */
     const signalShutdownWake = Effect.gen(function* () {
       yield* signalWorkerWake;
-      yield* signalRefillWake;
+      yield* signalDrainWake;
     });
 
-    /** Wake refill monitor when all priority queues are empty (after work drains). */
-    const wakeRefillIfAllQueuesEmpty = Effect.gen(function* () {
+    /** Wake drain monitor when all priority queues are empty (after work drains). */
+    const wakeDrainedIfAllQueuesEmpty = Effect.gen(function* () {
       const h = yield* Queue.size(highQueue);
       const n = yield* Queue.size(normalQueue);
       const l = yield* Queue.size(lowQueue);
       if (Math.max(0, h) + Math.max(0, n) + Math.max(0, l) === 0) {
         yield* recordLifecycleEvent("Drained");
-        yield* signalRefillWake;
+        yield* signalDrainWake;
       }
     });
 
@@ -1018,7 +997,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
      * 2. Dedup key check (skip duplicates)
      * 3. Offer to the target priority queue
      * 4. Wake sleeping workers (`takeNext` waiters)
-     * 5. Fire hooks (onEnqueue, persist)
+     * 5. Fire hooks (onEnqueue)
      */
     const enqueueInternal = (
       items: ReadonlyArray<T>,
@@ -1069,11 +1048,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         if (config.onEnqueue !== undefined) {
           yield* config
             .onEnqueue(toEnqueue.map((i) => i.item), priority)
-            .pipe(Effect.ignore);
-        }
-        if (config.persist !== undefined) {
-          yield* config
-            .persist(toEnqueue.map((i) => i.item), priority)
             .pipe(Effect.ignore);
         }
       });
@@ -1255,7 +1229,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             ).pipe(Effect.annotateLogs("cause", Cause.pretty(exit.cause)));
           }
 
-          yield* wakeRefillIfAllQueuesEmpty;
+          yield* wakeDrainedIfAllQueuesEmpty;
         }),
       );
 
@@ -1314,31 +1288,31 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       yield* Effect.logDebug(
         `Queue "${queueName}" worker pool started (${String(concurrency)} workers)`,
       );
+      const handle = queueHandleSlot.current;
+      if (handle === undefined) {
+        return yield* Effect.die(
+          new Error(`Queue "${queueName}" internal error: handle not wired before lifecycle hooks`),
+        );
+      }
 
-      if (config.refill !== undefined) {
-        const refillFn = config.refill;
-        const handle = queueHandleSlot.current;
-        if (handle === undefined) {
-          return yield* Effect.die(
-            new Error(`Queue "${queueName}" internal error: handle not wired before refill fork`),
-          );
-        }
+      if (config.onStart !== undefined) {
+        yield* config.onStart(handle).pipe(Effect.ignore);
+      }
 
+      if (config.onDrained !== undefined) {
+        const onDrained = config.onDrained;
         yield* FiberSet.run(workerFibers)(
           Effect.forever(
             Effect.gen(function* () {
-              yield* Deferred.await(refillWakeSignal);
+              yield* Deferred.await(drainWakeSignal);
 
               const shutdown = yield* Ref.get(isShutdownRef);
               if (shutdown) return yield* Effect.interrupt;
 
               const empty = yield* handle.isEmpty;
               if (empty) {
-                yield* Effect.logDebug(`Queue "${queueName}" empty, triggering refill`);
-                yield* refillFn(handle).pipe(Effect.ignore);
-                if (config.onEmpty !== undefined) {
-                  yield* config.onEmpty.pipe(Effect.ignore);
-                }
+                yield* Effect.logDebug(`Queue "${queueName}" drained, triggering onDrained`);
+                yield* onDrained(handle).pipe(Effect.ignore);
               }
             }),
           ),
@@ -1381,28 +1355,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
       start: forkProcessingFibers.pipe(Effect.asVoid),
 
-      refill: Effect.gen(function* () {
-        const fn = config.refill;
-        if (fn === undefined) {
-          yield* Effect.logWarning(
-            `Queue "${queueName}" refill() ignored: no refill callback configured`,
-          );
-          return;
-        }
-        if (yield* Ref.get(isShutdownRef)) {
-          yield* Effect.logWarning(`Queue "${queueName}" refill() ignored after shutdown`);
-          return;
-        }
-        const handle = queueHandleSlot.current;
-        if (handle === undefined) {
-          return yield* Effect.die(
-            new Error(`Queue "${queueName}" internal error: handle not wired before refill()`),
-          );
-        }
-        yield* Effect.logDebug(`Queue "${queueName}" manual refill`);
-        yield* fn(handle).pipe(Effect.ignore);
-      }),
-
       // Close latch → workers block on next iteration before taking items
       pause: latch.close.pipe(
         Effect.andThen(recordLifecycleEvent("Paused")),
@@ -1441,7 +1393,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         yield* Ref.set(completedCount, 0);
         yield* recordLifecycleEvent("Cleared", count);
         yield* Effect.logDebug(`Queue "${queueName}" cleared ${String(count)} items`);
-        yield* wakeRefillIfAllQueuesEmpty;
+        yield* wakeDrainedIfAllQueuesEmpty;
         return count;
       }),
     };

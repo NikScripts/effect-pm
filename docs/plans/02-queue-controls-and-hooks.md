@@ -549,7 +549,7 @@ Full error shapes and batch modes are defined in **Queue item schema and codec
 contract** above. At the handle level today:
 
 - **`EEnqueue`** carries schema validation failures when `itemSchema` is present (`QueueEnqueueErrors`); otherwise `never`.
-- **`R`** carries ambient services required by enqueue helpers (hooks persist/onEnqueue/etc.) **and** workers; it is the **fourth / last** type parameter on **`QueueHandle`**.
+- **`R`** carries ambient services required by enqueue helpers, lifecycle hooks, and workers; it is the **fourth / last** type parameter on **`QueueHandle`**.
 
 Roadmap sketches (partial batches, richer `enqueue` overloads, optional `ItemSchema` in generics) belong in future revisions; **`InferQueueEnqueueError`** / **`ProcessGroupQueueEnqueueError`** expose the enqueue error channel to callers today.
 
@@ -941,9 +941,9 @@ Replace special storage-oriented callbacks with lifecycle hooks:
 - `onDrainCompleted(result, controls)`
 - `onDrainFailed(error, controls)`
 
-`persist` becomes unnecessary because `ProcessStore` handles storage.
-`refill` becomes a normal `onEmpty` or `onDrained` behavior that can call
-queue-bound controls to add more work.
+`persist` is unnecessary because `ProcessStore` handles storage.
+`refill` is replaced by `onStart` for bootstrap loading and `onDrained` for
+drain-triggered loading; both receive queue-bound controls.
 
 Lifecycle hooks should have `never` in their error channel. Known/domain errors
 belong inside the hook effect; the queue runtime catches unexpected failures,
@@ -1078,7 +1078,7 @@ yielding the queue service itself from either a local or remote provider require
   completion, failure, settlement, retry, exhaustion, dead-letter, drop, empty,
   drain, pause, resume, quiesce, shutdown, clear, release start, release
   success, and release failure.
-- `persist` and `refill` are removed or renamed into lifecycle hooks.
-- Queue tests cover hook-triggered enqueue, retry, empty refill, and lifecycle
+- `persist` and `refill` are removed in favor of `ProcessStore`, `onStart`, and `onDrained`.
+- Queue tests cover hook-triggered enqueue, retry, drained work loading, and lifecycle
   operations.
 - Handoff tests cover schema-compatible and schema-incompatible target queues.

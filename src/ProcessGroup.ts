@@ -590,7 +590,7 @@ export interface TypedQueueControls<
     Effect.Effect<void, Error | EnqueueError, EnqueueRequirements>;
   readonly defer: (items: T | ReadonlyArray<T>) =>
     Effect.Effect<void, Error | EnqueueError, EnqueueRequirements>;
-  /** Fork worker pool / refill fiber when {@link QueueResourceConfigBase.autoStart} was `false`. Idempotent. */
+  /** Fork worker pool when {@link QueueResourceConfigBase.autoStart} was `false`. Idempotent. */
   readonly start: Effect.Effect<void, Error, EnqueueRequirements>;
   readonly pause: Effect.Effect<void, Error>;
   readonly resume: Effect.Effect<void, Error>;

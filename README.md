@@ -182,11 +182,16 @@ class ProcessingQueue extends QueueResource.Service<
     // Deduplication
     key: (item) => item.id,
 
-    // Recovery from storage
-    refill: (queue) =>
+    // Bootstrap or replenish work with queue-bound lifecycle hooks
+    onStart: (queue) =>
       Effect.gen(function* () {
         const cached = yield* getCachedItems();
         yield* queue.add(cached);
+      }),
+    onDrained: (queue) =>
+      Effect.gen(function* () {
+        const next = yield* getMoreItems();
+        yield* queue.add(next);
       }),
   },
 ) {}

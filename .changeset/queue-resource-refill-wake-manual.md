@@ -2,4 +2,4 @@
 "@nikscripts/effect-pm": patch
 ---
 
-**QueueResource**: Automatic **`config.refill`** no longer runs on cold start before any enqueue/drain signal; it runs after queues drain empty once activity has awakened the refill monitor (enqueue wake + drain wake when all levels empty). **`QueueHandle`** exposes **`refill`** to invoke **`config.refill`** manually for bootstrap ordering (e.g. **`yield* queue.refill`** before **`yield* queue.start`**).
+**QueueResource**: Replace **`config.refill`** and **`QueueHandle.refill`** with queue-bound lifecycle hooks. Use **`onStart(queue)`** for bootstrap work and **`onDrained(queue)`** after queues drain empty once activity has awakened the drain monitor. Cold-start idle workers do not trigger **`onDrained`**.

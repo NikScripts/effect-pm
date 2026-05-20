@@ -92,7 +92,6 @@ const done = yield* queue.completed     // items processed since workers began d
 
 // ─── Lifecycle (effectful properties) ───
 yield* queue.start                      // fork workers when `autoStart: false` was set at construction
-yield* queue.refill                     // manual: run configured `refill` once (optional hook)
 yield* queue.pause                      // workers block before next item
 yield* queue.resume                     // workers unblock
 yield* queue.shutdown                   // permanent stop, enqueue drops items
@@ -122,14 +121,11 @@ QueueResource.Service<Self, T, E>()("name", {
   retries: 3,             // max re-enqueues via ctx.retry
   onRetryExhausted: (item, cause) => ...,  // called when limit reached
 
-  // ─── Persistence ───
-  persist: (items, priority) => db.save(items),  // write-through on enqueue
-  refill: (queue) => ...,                         // optional; auto-run only after queues drain empty (not on idle workers / cold start) — use `yield* queue.refill` to bootstrap
-
   // ─── Hooks (fire-and-forget) ───
   onEnqueue: (items, priority) => metrics.increment("enqueued", items.length),
   onComplete: (item, exit, elapsed) => metrics.record("duration", elapsed),
-  onEmpty: Effect.logDebug("queue drained"),
+  onStart: (queue) => queue.add(seedItems),
+  onDrained: (queue) => queue.add(fetchMoreWork),
 })
 ```
 
