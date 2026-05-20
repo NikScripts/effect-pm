@@ -1,29 +1,16 @@
 # RuntimeStorage adapter guide
 
-## Status
+`RuntimeStorage` is the swappable persistence boundary underneath
+`ProcessStore`. Runtime modules write semantic data through `ProcessStore`;
+`ProcessStore` normalizes those writes into `RuntimeRecord`s; storage adapters
+persist and query those records.
 
-`RuntimeStorage` is ready for adapter work.
+Use this guide when implementing a new durable backend such as SQLite, Prisma,
+Postgres, a remote service, or a test storage layer.
 
-The stable adapter boundary is `RuntimeStorageService` in `src/RuntimeStorage.ts`.
-Adapters should implement normalized `RuntimeRecord` persistence, not the old
-analytics/event table shape.
+## Adapter responsibility
 
-Start adapter work from:
-
-```text
-origin/cursor/grill-queue-v2-plan-b6d7
-```
-
-That branch contains:
-
-- `RuntimeRecord` and `RuntimeStorageService`,
-- `ProcessStore.layerRuntimeStorage`,
-- `test/runtime-storage.conformance.ts`,
-- the disabled legacy Prisma event-table adapter.
-
-## Contract
-
-Implement this service:
+Implement `RuntimeStorageService` from `src/RuntimeStorage.ts`.
 
 ```typescript
 interface RuntimeStorageService {
@@ -40,53 +27,89 @@ interface RuntimeStorageService {
 }
 ```
 
-Do not expose feature-specific storage APIs from adapters. Runtime modules use
-`ProcessStore`; `ProcessStore` maps semantic writes to generic `RuntimeRecord`s.
+Do not implement `ProcessStoreInterface` directly for durable adapters. Provide
+`RuntimeStorageService`, then wire it through `ProcessStore.layerRuntimeStorage`.
 
-## Record shape
+```typescript
+Effect.provide(
+  program,
+  Layer.provide(
+    ProcessStore.layerRuntimeStorage,
+    MyRuntimeStorage.layer(...),
+  ),
+)
+```
 
-Every adapter must persist all `RuntimeRecord` fields:
+## Record contract
 
-- `id`, `type`, `occurredAt`, `createdAt`, `runId`,
-- `processType`, `processId`,
-- `subjectType`, `subjectId`, `key`,
-- `indexA` through `indexH`,
-- `indexNames`,
-- `payload`, `attributes`,
-- `readonly`.
+Adapters must persist every `RuntimeRecord` field:
 
-`payload` and `attributes` are JSON values. Store them with a real JSON type
-when available, or losslessly encode/decode JSON text.
+| Field | Notes |
+| --- | --- |
+| `id` | Stable primary key. Duplicate `create` must fail. |
+| `type` | Semantic record type, e.g. `queue.entry.enqueued`. |
+| `occurredAt` | When the runtime event happened. Default read ordering uses this. |
+| `createdAt` | When the record was created in storage. |
+| `runId` | Runtime run identifier. |
+| `processType` / `processId` | Owning process/resource identity. |
+| `subjectType` / `subjectId` | Optional target within the process/resource. |
+| `key` | Optional dedupe or lookup key. |
+| `indexA` through `indexH` | Generic indexed identifiers. |
+| `indexNames` | Ordered mapping of index labels captured at write time. |
+| `payload` | JSON payload. |
+| `attributes` | JSON metadata. |
+| `readonly` | Immutable-record marker for update/delete behavior. |
 
-## Query semantics
+Use native JSON columns when available. Otherwise encode JSON losslessly as text.
+Do not drop unknown JSON fields.
+
+## Query behavior
 
 Adapters must match `RuntimeStorage.memory` semantics:
 
-- default read order: `occurredAt desc`,
-- support all current `RuntimeRecordPredicate` variants from `src/Query.ts`,
-- support multi-column `orderBy`,
-- support `limit` and `offset`,
-- `create` fails on duplicate `id`,
-- `upsert` fails when an existing record is `readonly: true`,
-- `update` counts `matched` rows and skips readonly rows,
-- `delete` skips readonly rows unless the query predicate explicitly includes
-  `Readonly.equals(true)`.
+- default read order is `occurredAt desc`,
+- all predicates in `RuntimeRecordPredicate` are supported,
+- multiple `orderBy` clauses are applied in order,
+- `limit` and `offset` are supported,
+- `create` fails with `RuntimeStorageDuplicateRecordError` when `id` exists,
+- `upsert` fails with `RuntimeStorageReadonlyRecordError` when the existing
+  record is readonly,
+- `update` returns `{ matched, updated }`,
+- `update` counts readonly rows as matched but does not modify them,
+- `delete` skips readonly rows unless the predicate explicitly includes
+  `Readonly.equals(true)`,
+- `delete` returns `{ deleted }`.
+
+## Suggested indexes
+
+Durable SQL adapters should index:
+
+- `id`,
+- `runId`,
+- `type`,
+- `processType`, `processId`,
+- `subjectType`, `subjectId`,
+- `key`,
+- `occurredAt`, `createdAt`,
+- `indexA` through `indexH`.
+
+Index choices may vary by backend, but broad scans should be avoidable for
+common queries.
 
 ## Conformance tests
 
-Every adapter must pass:
+Every adapter must pass the shared conformance suite:
 
 ```typescript
 import { describeRuntimeStorageContract } from "../test/runtime-storage.conformance"
 
-describeRuntimeStorageContract("RuntimeStorage.<adapter> contract", makeStorage)
+describeRuntimeStorageContract("MyRuntimeStorage contract", makeStorage)
 ```
 
-`makeStorage` must return a fresh `RuntimeStorageService` per test. For file or
-database adapters, use a unique temporary database/path per test so rows do not
-leak between cases.
+`makeStorage` must return a fresh isolated `RuntimeStorageService` for each test.
+For file or database adapters, use a unique temporary database/path per test.
 
-Run at minimum:
+Recommended test commands:
 
 ```bash
 pnpm run typecheck
@@ -96,57 +119,56 @@ pnpm run lint
 pnpm run build
 ```
 
-## SQLite first
+Adapter-specific tests should also cover backend behavior that the generic
+contract cannot see, such as file persistence across service instances or SQL
+migration/schema creation.
 
-Build SQLite before Prisma because it can be tested without external services.
+## Packaging conventions
 
-Recommended shape:
+Use lowercase storage subpaths:
 
-- add a new subpath such as `@nikscripts/effect-pm/storage/sqlite`,
-- provide `SQLiteRuntimeStorage.make(...)` and `SQLiteRuntimeStorage.layer(...)`,
-- use a local file path or `:memory:` style database for tests,
-- create a normalized `RuntimeRecord` table with indexes on:
-  - `id`,
-  - `runId`,
-  - `processType`, `processId`,
-  - `subjectType`, `subjectId`,
-  - `key`,
-  - `occurredAt`, `createdAt`,
-  - `indexA` through `indexH`.
-
-Use the current Effect / platform APIs in this repo. Inspect `repos/effect/`
-before guessing APIs. If a SQLite package is needed, add the latest appropriate
-Effect SQLite dependency with `pnpm`.
-
-## Prisma later
-
-Do not revive the old Prisma `EffectPmEvent` adapter.
-
-The current Prisma ProcessStore surface intentionally fails with
-`PrismaProcessStoreUnavailableError` until Prisma is rebuilt as a
-`RuntimeStorage` adapter over normalized `RuntimeRecord` rows.
-
-When implementing Prisma:
-
-- add/replace schema around a runtime record table, not `EffectPmEvent`,
-- implement `RuntimeStorageService`,
-- pass the same conformance suite,
-- expose the adapter through `@nikscripts/effect-pm/storage/prisma`,
-- keep compatibility exports only where they do not imply the old event adapter
-  is usable.
-
-## ProcessStore integration
-
-After an adapter provides `RuntimeStorage`, applications can wire:
-
-```typescript
-Effect.provide(
-  program,
-  Layer.provide(
-    ProcessStore.layerRuntimeStorage,
-    SQLiteRuntimeStorage.layer(...),
-  ),
-)
+```text
+@nikscripts/effect-pm/storage/<adapter>
 ```
 
-Adapters should not implement `ProcessStoreInterface` directly.
+When adding a built-in adapter:
+
+1. add the implementation under `src/storage/` or a small dedicated module,
+2. add an export entry to `package.json`,
+3. add the entry to `tsup.config.ts`,
+4. export public types from `src/index.ts` only when they belong on the root
+   package surface,
+5. add docs and a changeset.
+
+## Current built-in adapter status
+
+- `RuntimeStorage.memory` is the reference implementation.
+- `ProcessStore.layerRuntimeStorage` is the bridge from `RuntimeStorage` to
+  module-facing `ProcessStore`.
+- `ProcessStore.fileLayer` is still an append-only NDJSON compatibility store,
+  not the target durable `RuntimeStorage` file adapter.
+- Prisma paths currently expose a placeholder. The legacy `EffectPmEvent`
+  adapter is intentionally disabled until Prisma is rebuilt as a
+  `RuntimeStorage` adapter over normalized `RuntimeRecord` rows.
+
+## Backend guidance
+
+### SQLite
+
+SQLite is the recommended first durable adapter because it can be tested locally
+without external services. A good implementation should provide:
+
+- `SQLiteRuntimeStorage.make(...)`,
+- `SQLiteRuntimeStorage.layer(...)`,
+- isolated test databases,
+- a persistence-across-service-instances test,
+- the shared conformance suite.
+
+### Prisma
+
+Prisma should not revive the old event-table adapter. It should define a
+normalized runtime record model and implement `RuntimeStorageService` against
+that model.
+
+Keep compatibility exports only where they do not imply the old adapter is
+usable.

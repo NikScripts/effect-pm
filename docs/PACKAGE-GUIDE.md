@@ -89,9 +89,7 @@ from `@nikscripts/effect-pm/storage/file`; root `ProcessStore.file` /
 currently placeholders pending a RuntimeStorage-backed rewrite.
 
 For durable adapter work, start with
-[RUNTIME-STORAGE-ADAPTER-GUIDE.md](./RUNTIME-STORAGE-ADAPTER-GUIDE.md). The
-SQLite handoff prompt is in
-[RUNTIME-STORAGE-SQLITE-AGENT-PROMPT.md](./RUNTIME-STORAGE-SQLITE-AGENT-PROMPT.md).
+[RUNTIME-STORAGE-ADAPTER-GUIDE.md](./RUNTIME-STORAGE-ADAPTER-GUIDE.md).
 
 ---
 
