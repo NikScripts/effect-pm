@@ -49,6 +49,9 @@ import {
 import type { EffectPmEventRow, JsonValue } from "./ProcessStoreEvent";
 import {
   RuntimeStorage,
+  type RuntimeStorageError,
+  RuntimeStorageDuplicateRecordError,
+  RuntimeStorageReadonlyRecordError,
   selectRuntimeRecords,
   type RuntimeRecord,
   type RuntimeStorageService,
@@ -189,6 +192,25 @@ export class ProcessStoreQueueResourceContextError extends Data.TaggedError(
 }> {}
 
 /** @public */
+export class ProcessStoreDuplicateRecordError extends Data.TaggedError(
+  "ProcessStoreDuplicateRecordError",
+)<{
+  readonly id: string;
+}> {}
+
+/** @public */
+export class ProcessStoreReadonlyRecordError extends Data.TaggedError(
+  "ProcessStoreReadonlyRecordError",
+)<{
+  readonly id: string;
+}> {}
+
+/** @public */
+export type ProcessStoreWriteError =
+  | ProcessStoreDuplicateRecordError
+  | ProcessStoreReadonlyRecordError;
+
+/** @public */
 export interface ProcessStoreQueueResourceApi {
   readonly withQueue: <A, E, R>(
     queueId: string,
@@ -208,43 +230,43 @@ export interface ProcessStoreQueueResourceApi {
   ) => Effect.Effect<A, E, R>;
   readonly entryEnqueued: (
     input?: ProcessStoreQueueResourceEntryInput,
-  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError | ProcessStoreWriteError>;
   readonly entryStarted: (
     input?: ProcessStoreQueueResourceEntryInput,
-  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError | ProcessStoreWriteError>;
   readonly entryCompleted: (
     input?: ProcessStoreQueueResourceEntryInput,
-  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError | ProcessStoreWriteError>;
   readonly entryFailed: (
     input?: ProcessStoreQueueResourceEntryInput,
-  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError | ProcessStoreWriteError>;
   readonly entryRetried: (
     input?: ProcessStoreQueueResourceEntryInput,
-  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError | ProcessStoreWriteError>;
   readonly entryExhausted: (
     input?: ProcessStoreQueueResourceEntryInput,
-  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError | ProcessStoreWriteError>;
   readonly entryReleased: (
     input?: ProcessStoreQueueResourceEntryInput,
-  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError | ProcessStoreWriteError>;
   readonly entryDeadLettered: (
     input?: ProcessStoreQueueResourceEntryInput,
-  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError | ProcessStoreWriteError>;
   readonly entryDropped: (
     input?: ProcessStoreQueueResourceEntryInput,
-  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError | ProcessStoreWriteError>;
   readonly lifecycleChanged: (
     input: ProcessStoreQueueResourceLifecycleInput,
-  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError | ProcessStoreWriteError>;
   readonly dedupeKeyAdded: (
     input?: ProcessStoreQueueResourceDedupeKeyInput,
-  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError | ProcessStoreWriteError>;
   readonly dedupeKeyReleased: (
     input?: ProcessStoreQueueResourceDedupeKeyInput,
-  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError | ProcessStoreWriteError>;
   readonly dedupeKeyHydrated: (
     input?: ProcessStoreQueueResourceDedupeKeyInput,
-  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError | ProcessStoreWriteError>;
   readonly entries: (
     queueId?: string,
     query?: RuntimeRecordQuery,
@@ -409,8 +431,8 @@ export type AnalyticsEvent =
  * @public
  */
 export interface ProcessStoreInterface {
-  append: (event: AnalyticsEvent) => Effect.Effect<void>;
-  appendBatch: (events: ReadonlyArray<AnalyticsEvent>) => Effect.Effect<void>;
+  append: (event: AnalyticsEvent) => Effect.Effect<void, ProcessStoreWriteError>;
+  appendBatch: (events: ReadonlyArray<AnalyticsEvent>) => Effect.Effect<void, ProcessStoreWriteError>;
   events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>;
   records: (query?: RuntimeRecordQuery) => Effect.Effect<RuntimeRecord[]>;
   queueResource: ProcessStoreQueueResourceApi;
@@ -773,6 +795,18 @@ const requireQueueResourceField = (
     ? Effect.fail(new ProcessStoreQueueResourceContextError({ field }))
     : Effect.succeed(value);
 
+const processStoreWriteErrorFromRuntimeStorage = (
+  error: RuntimeStorageError,
+): ProcessStoreWriteError => {
+  if (error instanceof RuntimeStorageDuplicateRecordError) {
+    return new ProcessStoreDuplicateRecordError({ id: error.id });
+  }
+  if (error instanceof RuntimeStorageReadonlyRecordError) {
+    return new ProcessStoreReadonlyRecordError({ id: error.id });
+  }
+  return error;
+};
+
 const withRuntimePredicate = (
   query: RuntimeRecordQuery | undefined,
   predicate: RuntimeRecordPredicate,
@@ -859,7 +893,7 @@ const dedupePayload = (
 
 /** @internal */
 export const makeProcessStoreQueueResource = (config: {
-  readonly append: (event: AnalyticsEvent) => Effect.Effect<void, never, never>;
+  readonly append: (event: AnalyticsEvent) => Effect.Effect<void, ProcessStoreWriteError, never>;
   readonly records: (query?: RuntimeRecordQuery) => Effect.Effect<RuntimeRecord[], never, never>;
 }): ProcessStoreQueueResourceApi => {
   let sequence = 0;
@@ -882,7 +916,7 @@ export const makeProcessStoreQueueResource = (config: {
       readonly batchId?: string;
       readonly releaseId?: string;
     },
-  ): Effect.Effect<void, never, never> => {
+  ): Effect.Effect<void, ProcessStoreWriteError, never> => {
     const occurredAtMillis = dateMillis(occurredAt);
     const id = nextFactId(queueId, type, occurredAtMillis);
     const subjectId = input.entryId ?? context.entryId ?? input.key ?? context.dedupeKey ?? queueId;
@@ -922,7 +956,7 @@ export const makeProcessStoreQueueResource = (config: {
   const writeEntry = (
     status: ProcessStoreQueueResourceEntryStatus,
     input: ProcessStoreQueueResourceEntryInput | undefined,
-  ): Effect.Effect<void, ProcessStoreQueueResourceContextError> =>
+  ): Effect.Effect<void, ProcessStoreQueueResourceContextError | ProcessStoreWriteError> =>
     Effect.gen(function* () {
       const ctx = yield* currentQueueResourceContext;
       const entryInput = input ?? {};
@@ -949,7 +983,7 @@ export const makeProcessStoreQueueResource = (config: {
   const writeDedupe = (
     status: ProcessStoreQueueResourceDedupeKeyStatus,
     input: ProcessStoreQueueResourceDedupeKeyInput | undefined,
-  ): Effect.Effect<void, ProcessStoreQueueResourceContextError> =>
+  ): Effect.Effect<void, ProcessStoreQueueResourceContextError | ProcessStoreWriteError> =>
     Effect.gen(function* () {
       const ctx = yield* currentQueueResourceContext;
       const dedupeInput = input ?? {};
@@ -1175,7 +1209,9 @@ const makeRuntimeStorageProcessStore = (
   runId: string,
 ): ProcessStoreInterface => {
   const appendEvent = (event: AnalyticsEvent) =>
-    storage.create(eventToRuntimeRecord(event, runId)).pipe(Effect.ignore);
+    storage.create(eventToRuntimeRecord(event, runId)).pipe(
+      Effect.mapError(processStoreWriteErrorFromRuntimeStorage),
+    );
   const readRecords = (query: RuntimeRecordQuery | undefined) =>
     storage.read(query);
   const readEvents = (query: StoreEventQuery | undefined) =>

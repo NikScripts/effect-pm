@@ -10,7 +10,7 @@
  * @module RuntimeState
  */
 
-import { Context, Effect, Layer, Option } from "effect";
+import { Cause, Context, Effect, Layer, Option } from "effect";
 import {
   ProcessStore,
   type RuntimeFactRecordedEvent,
@@ -189,9 +189,17 @@ export namespace RuntimeObserver {
       RuntimeObserver,
       Effect.gen(function* () {
         const store = yield* ProcessStore;
+        const appendObservation = (event: RuntimeFactRecordedEvent | RuntimeStateChangedEvent) =>
+          store.append(event).pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning("ProcessStore write failed for runtime observation").pipe(
+                Effect.annotateLogs("cause", Cause.pretty(cause)),
+              )
+            ),
+          );
         return {
-          publishStateChange: (change) => store.append(stateChangeToAnalyticsEvent(change)),
-          publishFact: (fact) => store.append(factToAnalyticsEvent(fact)),
+          publishStateChange: (change) => appendObservation(stateChangeToAnalyticsEvent(change)),
+          publishFact: (fact) => appendObservation(factToAnalyticsEvent(fact)),
         };
       }),
     );

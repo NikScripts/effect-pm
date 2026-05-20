@@ -20,7 +20,7 @@
  * @module ProcessGroup
  */
 
-import { Clock, Context, Data, DateTime, Duration, Effect, FiberMap, Layer, Option, Ref, Schema, Scope } from "effect";
+import { Cause, Clock, Context, Data, DateTime, Duration, Effect, FiberMap, Layer, Option, Ref, Schema, Scope } from "effect";
 import type { HttpClient } from "effect/unstable/http";
 import type { Process, ProcessDefinition, ProcessServiceDefinition } from "./Process";
 import type {
@@ -654,7 +654,14 @@ const recordLifecycle = (event: ProcessLifecycleChangedEvent): Effect.Effect<voi
     Effect.serviceOption(ProcessStore),
     Option.match({
       onNone: () => Effect.void,
-      onSome: (store) => store.append(event).pipe(Effect.ignore),
+      onSome: (store) =>
+        store.append(event).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning(`ProcessStore write failed for process lifecycle "${event.entityId}"`).pipe(
+              Effect.annotateLogs("cause", Cause.pretty(cause)),
+            )
+          ),
+        ),
     }),
   );
 

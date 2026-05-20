@@ -29,6 +29,9 @@ interface RuntimeStorageService {
 
 Do not implement `ProcessStoreInterface` directly for durable adapters. Provide
 `RuntimeStorageService`, then wire it through `ProcessStore.layerRuntimeStorage`.
+`ProcessStore` maps adapter-level `RuntimeStorageError`s into package-level
+`ProcessStoreWriteError`s before semantic runtime modules decide whether to
+handle, log, or ignore them.
 
 ```typescript
 Effect.provide(

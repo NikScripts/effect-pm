@@ -7,6 +7,7 @@ import {
   OrderBy,
   ProcessId,
   ProcessStore,
+  ProcessStoreDuplicateRecordError,
   RuntimeStorage,
   Select,
   SubjectId,
@@ -21,6 +22,26 @@ import {
 import { utcDateFromIso } from "../src/utcDate.js";
 
 describe("ProcessStore.memory", () => {
+  it.live("maps RuntimeStorage duplicate writes to ProcessStore errors", () =>
+    Effect.gen(function* () {
+      const store = yield* ProcessStore.memory
+      const event: ProcessLifecycleChangedEvent = {
+        id: "duplicate-store-event",
+        type: "process.lifecycle.changed",
+        occurredAt: utcDateFromIso("2026-01-01T00:00:00.000Z").getTime(),
+        entityType: "process",
+        entityId: "p-duplicate",
+        lifecycle: { tag: "Started" },
+      }
+
+      yield* store.append(event)
+      const duplicate = yield* Effect.flip(store.append(event))
+
+      expect(duplicate).toBeInstanceOf(ProcessStoreDuplicateRecordError)
+      expect(duplicate.id).toBe("duplicate-store-event")
+    }),
+  )
+
   it.live("appends and queries process execution events with ordering and query opts", () =>
     Effect.gen(function* () {
       const store = yield* ProcessStore.memory

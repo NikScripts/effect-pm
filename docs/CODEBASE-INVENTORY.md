@@ -576,7 +576,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### `ProcessStoreInterface` write/read
 
-**Write:** `append`, `appendBatch`, plus semantic module helpers such as `ProcessStore.QueueResource`.
+**Write:** `append`, `appendBatch`, plus semantic module helpers such as `ProcessStore.QueueResource`. Writes can fail with `ProcessStoreDuplicateRecordError` / `ProcessStoreReadonlyRecordError`; runtime modules that treat storage as best-effort log and swallow those errors explicitly.
 
 **Read:** `records(query?)`, `events(query?)`, `getProcessExecutions(processId, opts?)`, `getProcessLifecycle`, `getQueueItemCompletions`, `getQueueLifecycle`.
 

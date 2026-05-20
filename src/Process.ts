@@ -16,7 +16,7 @@
  * @module Process
  */
 
-import { Clock, Context, DateTime, Duration, Effect, Fiber, Layer, MutableRef, Option } from "effect";
+import { Cause, Clock, Context, DateTime, Duration, Effect, Fiber, Layer, MutableRef, Option } from "effect";
 import { ProcessStore } from "./ProcessStore";
 import { Polling } from "./Polling";
 import { ProcessSchedule } from "./ProcessSchedule";
@@ -410,7 +410,13 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
           error: args.error === undefined ? undefined : String(args.error),
           isStartupRun: args.isStartupRun,
         },
-      });
+      }).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning(`ProcessStore write failed for process "${name}" execution event`).pipe(
+            Effect.annotateLogs("cause", Cause.pretty(cause)),
+          )
+        ),
+      );
     });
 
   const trackedProgram = (

@@ -1232,6 +1232,19 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       return `${queueName}-release-${String(releaseSeq)}`;
     };
 
+    const recordStoreWrite = <A, EWrite>(
+      label: string,
+      effect: Effect.Effect<A, EWrite>,
+    ): Effect.Effect<void> =>
+      effect.pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning(`ProcessStore write failed for queue "${queueName}" ${label}`).pipe(
+            Effect.annotateLogs("cause", Cause.pretty(cause)),
+          )
+        ),
+        Effect.asVoid,
+      );
+
     const recordEntryEvent = (
       status: "enqueued" | "started" | "completed" | "failed" | "retried" | "exhausted" | "released" | "dead-lettered" | "dropped",
       internal: InternalItem<T>,
@@ -1269,7 +1282,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         : status === "released" ? api.entryReleased(input)
         : status === "dead-lettered" ? api.entryDeadLettered(input)
         : api.entryDropped(input);
-      return api.withQueue(queueName, api.withEntry(internal.entryId, write)).pipe(Effect.ignore);
+      return recordStoreWrite(
+        `entry ${status}`,
+        api.withQueue(queueName, api.withEntry(internal.entryId, write)),
+      );
     };
 
     const recordLifecycleEvent = (
@@ -1278,10 +1294,13 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     ): Effect.Effect<void> => {
       if (Option.isNone(storeOption)) return Effect.void;
       const api = storeOption.value.queueResource;
-      return api.withQueue(
-        queueName,
-        api.lifecycleChanged({ tag, itemsCleared }),
-      ).pipe(Effect.ignore);
+      return recordStoreWrite(
+        `lifecycle ${tag}`,
+        api.withQueue(
+          queueName,
+          api.lifecycleChanged({ tag, itemsCleared }),
+        ),
+      );
     };
 
     const runQueueHook = <A, EHook, RHook>(
@@ -1883,7 +1902,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           const write = kind === "dead-lettered"
             ? api.entryDeadLettered(input)
             : api.entryDropped(input);
-          yield* api.withQueue(queueName, api.withEntry(selector.entryId, write)).pipe(Effect.ignore);
+          yield* recordStoreWrite(
+            `entry ${kind}`,
+            api.withQueue(queueName, api.withEntry(selector.entryId, write)),
+          );
         }
         if (entries.length > 0) {
           const event = { queueId: queueName, entries, reason: options.reason };

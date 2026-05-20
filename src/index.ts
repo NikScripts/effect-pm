@@ -206,7 +206,9 @@ export type {
 // Process Store
 export {
   ProcessStore,
+  ProcessStoreDuplicateRecordError,
   ProcessStoreQueueResourceContextError,
+  ProcessStoreReadonlyRecordError,
   type QueryOpts,
   type StoreEventQuery,
   type RuntimeFactQuery,
@@ -232,6 +234,7 @@ export {
   type RuntimeStateChangedEvent,
   type AnalyticsEvent,
   type ProcessStoreInterface,
+  type ProcessStoreWriteError,
 } from "./ProcessStore";
 
 // Types - ProcessGroup
