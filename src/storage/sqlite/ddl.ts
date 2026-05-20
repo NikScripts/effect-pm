@@ -46,7 +46,7 @@ const runtimeRecordsDdlStatements = (table: string): ReadonlyArray<string> => [
       index_names_json TEXT,
       payload_json TEXT,
       attributes_json TEXT,
-      readonly_int INTEGER NOT NULL DEFAULT 0
+      readonly_int INTEGER
     )`,
   `CREATE INDEX IF NOT EXISTS ${table}_run_id_idx ON ${table}(run_id)`,
   `CREATE INDEX IF NOT EXISTS ${table}_type_idx ON ${table}(type)`,

@@ -134,7 +134,7 @@ export const decodeRuntimeRecordRow = (row: Readonly<Record<string, unknown>>): 
     attributesRaw === null || attributesRaw === undefined ? undefined : String(attributesRaw);
   const readonlyInt = row["readonly_int"];
   const readonlyFlag =
-    readonlyInt === null || readonlyInt === undefined ? false : Number(readonlyInt) === 1;
+    readonlyInt === null || readonlyInt === undefined ? undefined : Number(readonlyInt) === 1;
 
   return {
     id: readRequiredStringColumn(row, "id"),
@@ -158,7 +158,7 @@ export const decodeRuntimeRecordRow = (row: Readonly<Record<string, unknown>>): 
     indexNames: parseIndexNamesColumnStrict(indexNamesText),
     payload: parseJsonColumnStrict(payloadText, "payload_json"),
     attributes: parseJsonColumnStrict(attributesText, "attributes_json"),
-    readonly: readonlyFlag ? true : undefined,
+    readonly: readonlyFlag,
   };
 };
 
@@ -196,7 +196,7 @@ export interface RuntimeRecordInsertParams {
   readonly index_names_json: string | null;
   readonly payload_json: string | null;
   readonly attributes_json: string | null;
-  readonly readonly_int: 0 | 1;
+  readonly readonly_int: 0 | 1 | null;
 }
 
 /**
@@ -241,7 +241,7 @@ export const encodeRuntimeRecordParamsEffect = (
       index_names_json,
       payload_json,
       attributes_json,
-      readonly_int: record.readonly === true ? 1 : 0,
+      readonly_int: record.readonly === undefined ? null : record.readonly === true ? 1 : 0,
     };
   });
 

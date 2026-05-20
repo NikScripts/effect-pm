@@ -56,7 +56,7 @@ describe("SQLite codec helpers", () => {
         readonly_int: 0,
       });
       expect(row.id).toBe("x");
-      expect(row.readonly).toBeUndefined();
+      expect(row.readonly).toBe(false);
       expect(DateTime.toEpochMillis(row.occurredAt)).toBe(1_700_000_000_000);
     }),
   );
@@ -140,6 +140,25 @@ describe("SQLite codec helpers", () => {
         readonly_int: 1,
       });
       expect(row.readonly).toBe(true);
+    }),
+  );
+
+  it.effect("encode/decode preserves explicit readonly false", () =>
+    Effect.gen(function* () {
+      const record: RuntimeRecord = {
+        id: "false-readonly",
+        type: "t",
+        occurredAt: dt("2026-01-01T00:00:00.000Z"),
+        createdAt: dt("2026-01-01T00:00:01.000Z"),
+        runId: "run",
+        processType: "pt",
+        processId: "pid",
+        readonly: false,
+      };
+      const params = yield* encodeRuntimeRecordParamsEffect(record);
+      const row = decodeRuntimeRecordRow({ ...params });
+      expect(params.readonly_int).toBe(0);
+      expect(row.readonly).toBe(false);
     }),
   );
 });

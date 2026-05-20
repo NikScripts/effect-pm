@@ -2,31 +2,31 @@
  * `RuntimeStorageService` implementation backed by SQLite.
  *
  * @remarks
- * Every public method follows the same evaluation strategy:
+ * Read queries push supported predicates, ordering, and windows into SQL through
+ * whitelisted columns and bound parameters. Mutating queries load matching rows
+ * through the same query compiler, then apply readonly rules in TypeScript so
+ * semantics stay aligned with {@link RuntimeStorage.memory}.
  *
- * 1. Load **all** rows from the physical table into memory through
- *    {@link SqlClient}.
- * 2. Delegate filtering, ordering, pagination, and readonly interaction rules to
- *    {@link selectRuntimeRecords} and {@link applyRuntimeRecordPatch} from
- *    `RuntimeStorage.ts`.
- *
- * That keeps semantics aligned with {@link RuntimeStorage.memory} at the cost
- * of `O(n)` work per call. For large tables, a future iteration can push
- * predicates into SQL while keeping a conformance suite locked to the shared
- * in-memory reference.
+ * The compiler intentionally builds SQL only from a fixed column/operator
+ * whitelist; all runtime values are passed as SQL parameters.
  *
  * @module storage/sqlite/service
  * @internal
  */
 
-import { Effect } from "effect";
+import { DateTime, Effect } from "effect";
 import type { SqlClient } from "effect/unstable/sql/SqlClient";
 import type { SqlError } from "effect/unstable/sql/SqlError";
+import type {
+  RuntimeRecordField,
+  RuntimeRecordOrderField,
+  RuntimeRecordPredicate,
+  RuntimeRecordQuery,
+} from "../../Query";
 import {
   RuntimeStorageDuplicateRecordError,
   RuntimeStorageReadonlyRecordError,
   applyRuntimeRecordPatch,
-  selectRuntimeRecords,
   type DeleteResult,
   type RuntimeRecord,
   type RuntimeStorageService,
@@ -57,10 +57,199 @@ const rowToRuntimeRecord = (row: unknown): Effect.Effect<RuntimeRecord, never, n
     ? decodeRuntimeRecordRowEffect(rowObjectToRecord(row))
     : Effect.die(new Error("SQLiteRuntimeStorage: expected object row from SELECT *"));
 
-const loadAllRuntimeRecords = (
+interface SqlSelection {
+  readonly text: string;
+  readonly params: ReadonlyArray<unknown>;
+}
+
+const stringFieldColumns: Record<Exclude<RuntimeRecordField, "readonly">, string> = {
+  id: "id",
+  type: "type",
+  runId: "run_id",
+  processType: "process_type",
+  processId: "process_id",
+  subjectType: "subject_type",
+  subjectId: "subject_id",
+  key: "key",
+  indexA: "index_a",
+  indexB: "index_b",
+  indexC: "index_c",
+  indexD: "index_d",
+  indexE: "index_e",
+  indexF: "index_f",
+  indexG: "index_g",
+  indexH: "index_h",
+};
+
+const dateFieldColumns = {
+  occurredAt: "occurred_at_ms",
+  createdAt: "created_at_ms",
+} as const satisfies Record<"occurredAt" | "createdAt", string>;
+
+const orderFieldColumns: Record<RuntimeRecordOrderField, string> = {
+  ...stringFieldColumns,
+  readonly: "readonly_int",
+  occurredAt: "occurred_at_ms",
+  createdAt: "created_at_ms",
+};
+
+const optionalStringFields: ReadonlySet<RuntimeRecordField> = new Set([
+  "subjectType",
+  "subjectId",
+  "key",
+  "indexA",
+  "indexB",
+  "indexC",
+  "indexD",
+  "indexE",
+  "indexF",
+  "indexG",
+  "indexH",
+]);
+
+const fieldColumn = (field: RuntimeRecordField): string =>
+  field === "readonly" ? "readonly_int" : stringFieldColumns[field];
+
+const comparisonValue = (field: RuntimeRecordField, value: string | boolean): string | number | null => {
+  if (field === "readonly") {
+    return typeof value === "boolean" ? (value ? 1 : 0) : value;
+  }
+  return typeof value === "string" ? value : null;
+};
+
+const dateMillis = (value: DateTime.Utc): number => DateTime.toEpochMillis(value);
+
+const combineSelections = (
+  operator: "AND" | "OR",
+  fallback: string,
+  selections: ReadonlyArray<SqlSelection>,
+): SqlSelection => {
+  if (selections.length === 0) {
+    return { text: fallback, params: [] };
+  }
+  return {
+    text: selections.map((selection) => `(${selection.text})`).join(` ${operator} `),
+    params: selections.flatMap((selection) => selection.params),
+  };
+};
+
+const predicateSql = (predicate: RuntimeRecordPredicate | undefined): SqlSelection | undefined => {
+  if (predicate === undefined) {
+    return undefined;
+  }
+
+  switch (predicate._tag) {
+    case "Equals": {
+      const column = fieldColumn(predicate.field);
+      const value = comparisonValue(predicate.field, predicate.value);
+      return value === null
+        ? { text: "1 = 0", params: [] }
+        : { text: `${column} = ?`, params: [value] };
+    }
+    case "NotEquals": {
+      const column = fieldColumn(predicate.field);
+      const value = comparisonValue(predicate.field, predicate.value);
+      if (value === null) {
+        return { text: "1 = 1", params: [] };
+      }
+      return optionalStringFields.has(predicate.field) || predicate.field === "readonly"
+        ? { text: `(${column} IS NULL OR ${column} <> ?)`, params: [value] }
+        : { text: `${column} <> ?`, params: [value] };
+    }
+    case "In": {
+      const column = fieldColumn(predicate.field);
+      const values = predicate.values
+        .map((value) => comparisonValue(predicate.field, value))
+        .filter((value): value is string | number => value !== null);
+      if (values.length === 0) {
+        return { text: "1 = 0", params: [] };
+      }
+      const expression = optionalStringFields.has(predicate.field) || predicate.field === "readonly"
+        ? `COALESCE(${column}, '')`
+        : column;
+      return {
+        text: `${expression} IN (${values.map(() => "?").join(", ")})`,
+        params: values,
+      };
+    }
+    case "IsNull": {
+      const column = fieldColumn(predicate.field);
+      return predicate.field === "readonly"
+        ? { text: `${column} IS NULL`, params: [] }
+        : { text: `${column} IS NULL`, params: [] };
+    }
+    case "IsNotNull": {
+      const column = fieldColumn(predicate.field);
+      return { text: `${column} IS NOT NULL`, params: [] };
+    }
+    case "After":
+      return {
+        text: `${dateFieldColumns[predicate.field]} > ?`,
+        params: [dateMillis(predicate.value)],
+      };
+    case "Before":
+      return {
+        text: `${dateFieldColumns[predicate.field]} < ?`,
+        params: [dateMillis(predicate.value)],
+      };
+    case "Between":
+      return {
+        text: `(${dateFieldColumns[predicate.field]} > ? AND ${dateFieldColumns[predicate.field]} < ?)`,
+        params: [dateMillis(predicate.start), dateMillis(predicate.end)],
+      };
+    case "And":
+      return combineSelections("AND", "1 = 1", predicate.predicates.map(predicateSql).filter((item): item is SqlSelection => item !== undefined));
+    case "Or":
+      return combineSelections("OR", "1 = 0", predicate.predicates.map(predicateSql).filter((item): item is SqlSelection => item !== undefined));
+    case "Xor": {
+      if (predicate.predicates.length === 0) {
+        return { text: "1 = 0", params: [] };
+      }
+      const parts = predicate.predicates.map(predicateSql).filter((item): item is SqlSelection => item !== undefined);
+      return {
+        text: parts.map((part) => `(CASE WHEN (${part.text}) THEN 1 ELSE 0 END)`).join(" + ") + " = 1",
+        params: parts.flatMap((part) => part.params),
+      };
+    }
+  }
+};
+
+const querySql = (query: RuntimeRecordQuery | undefined): SqlSelection => {
+  const where = predicateSql(query?.predicate);
+  const orderBy = query?.orderBy ?? [{ field: "occurredAt" as const, direction: "desc" as const }];
+  const orderText = orderBy
+    .map((order) => `${orderFieldColumns[order.field]} ${order.direction === "asc" ? "ASC" : "DESC"}`)
+    .join(", ");
+  const params = where === undefined ? [] : [...where.params];
+  let text = `SELECT * FROM ${RUNTIME_RECORDS_TABLE}`;
+  if (where !== undefined) {
+    text += ` WHERE ${where.text}`;
+  }
+  text += ` ORDER BY ${orderText}`;
+  if (query?.limit !== undefined) {
+    text += " LIMIT ?";
+    params.push(Math.max(0, query.limit));
+  }
+  if (query?.offset !== undefined) {
+    if (query.limit === undefined) {
+      text += " LIMIT -1";
+    }
+    text += " OFFSET ?";
+    params.push(Math.max(0, query.offset));
+  }
+  return { text, params };
+};
+
+const loadRuntimeRecords = (
   sql: SqlClient,
-): Effect.Effect<ReadonlyArray<RuntimeRecord>, SqlError> =>
-  Effect.flatMap(sql`SELECT * FROM ${sql(RUNTIME_RECORDS_TABLE)}`, (rows) => Effect.forEach(rows, rowToRuntimeRecord));
+  query?: RuntimeRecordQuery,
+): Effect.Effect<ReadonlyArray<RuntimeRecord>, SqlError> => {
+  const selection = querySql(query);
+  return Effect.flatMap(
+    sql.unsafe(selection.text, selection.params),
+    (rows) => Effect.forEach(rows, rowToRuntimeRecord),
+  );
+};
 
 const readConstraintCode = (cause: unknown): string | undefined => {
   if (typeof cause !== "object" || cause === null || !("code" in cause)) {
@@ -117,10 +306,7 @@ export const makeSqliteRuntimeStorageService = (sql: SqlClient): RuntimeStorageS
     ),
 
   read: (query) =>
-    Effect.gen(function* () {
-      const all = yield* loadAllRuntimeRecords(sql).pipe(dieSql);
-      return selectRuntimeRecords(all, query);
-    }),
+    Effect.map(loadRuntimeRecords(sql, query).pipe(dieSql), (rows) => [...rows]),
 
   upsert: (record) =>
     Effect.gen(function* () {
@@ -144,8 +330,7 @@ export const makeSqliteRuntimeStorageService = (sql: SqlClient): RuntimeStorageS
 
   update: (query, patch) =>
     Effect.gen(function* () {
-      const all = yield* loadAllRuntimeRecords(sql).pipe(dieSql);
-      const matching = selectRuntimeRecords(all, query);
+      const matching = yield* loadRuntimeRecords(sql, query).pipe(dieSql);
       let matched = 0;
       let updated = 0;
       for (const row of matching) {
@@ -166,8 +351,7 @@ export const makeSqliteRuntimeStorageService = (sql: SqlClient): RuntimeStorageS
   delete: (query) =>
     Effect.gen(function* () {
       const includeReadonly = predicateIncludesReadonlyTrue(query.predicate);
-      const all = yield* loadAllRuntimeRecords(sql).pipe(dieSql);
-      const matching = selectRuntimeRecords(all, query);
+      const matching = yield* loadRuntimeRecords(sql, query).pipe(dieSql);
       let deleted = 0;
       for (const row of matching) {
         if (row.readonly === true && !includeReadonly) {

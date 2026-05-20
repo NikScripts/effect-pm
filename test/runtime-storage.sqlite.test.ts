@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { ProcessId } from "../src";
+import { Key, ProcessId } from "../src";
 import { RuntimeStorage } from "../src/RuntimeStorage";
 import {
   SQLiteRuntimeStorage,
@@ -114,6 +114,33 @@ describe("SQLiteRuntimeStorage extended", () => {
       const row = rows.find((r) => r.id === "mutable-upsert");
       expect(row?.key).toBe("after");
       expect(row?.payload).toEqual({ v: 2 });
+    }),
+  );
+
+  it.live("pushes predicate, ordering, limit, and offset through read semantics", () =>
+    Effect.gen(function* () {
+      const storage = yield* makeRuntimeStorage({ filename: ":memory:" }).pipe(Effect.orDie);
+      yield* storage.create(runtimeStorageRecord("a", {
+        occurredAt: DateTime.makeUnsafe("2026-02-01T12:00:00.000Z"),
+        key: "shared",
+      }));
+      yield* storage.create(runtimeStorageRecord("b", {
+        occurredAt: DateTime.makeUnsafe("2026-02-01T12:01:00.000Z"),
+        key: "shared",
+      }));
+      yield* storage.create(runtimeStorageRecord("c", {
+        occurredAt: DateTime.makeUnsafe("2026-02-01T12:02:00.000Z"),
+        key: "shared",
+      }));
+
+      const rows = yield* storage.read({
+        predicate: Key.equals("shared"),
+        orderBy: [{ field: "occurredAt", direction: "asc" }],
+        limit: 1,
+        offset: 1,
+      });
+
+      expect(rows.map((row) => row.id)).toEqual(["b"]);
     }),
   );
 
