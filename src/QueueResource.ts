@@ -72,6 +72,7 @@ import {
   Types,
 } from "effect";
 import { ProcessStore } from "./ProcessStore";
+import type { JsonValue } from "./ProcessStoreEvent";
 
 // ============================================================================
 // Public Types
@@ -268,6 +269,23 @@ export interface QueueHandleApi<
    * counter. Returns the number of items cleared. Workers remain alive.
    */
   readonly clear: Effect.Effect<number, never, R>;
+  /**
+   * Export pending entries for handoff and remove them from this queue.
+   *
+   * This first release scope is pending-only: in-flight items finish on the
+   * source queue.
+   */
+  readonly release: (options?: QueueReleaseOptions) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R>;
+  /** Remove pending entries and route them to a dead-letter path. */
+  readonly deadLetter: (
+    selector: QueueEntrySelector<T> | QueueEntry<T>,
+    options: QueueRouteOptions,
+  ) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R>;
+  /** Remove pending entries without preserving them for handoff. */
+  readonly drop: (
+    selector: QueueEntrySelector<T> | QueueEntry<T>,
+    options: QueueRouteOptions,
+  ) => Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R>;
 }
 
 /**
@@ -312,6 +330,26 @@ export interface QueueBatch<T> {
 }
 
 /** @public */
+export interface QueueEntrySelector<T> {
+  readonly entryId?: string;
+  readonly key?: string;
+  readonly item?: T;
+}
+
+/** @public */
+export interface QueueReleaseOptions {
+  readonly scope?: "pendingOnly";
+  readonly releaseId?: string;
+  readonly attributes?: Record<string, JsonValue>;
+}
+
+/** @public */
+export interface QueueRouteOptions {
+  readonly reason: string;
+  readonly attributes?: Record<string, JsonValue>;
+}
+
+/** @public */
 export type QueueControls<T, E = never, EEnqueue = never, R = never> = QueueHandle<T, E, EEnqueue, R>;
 
 /** @public */
@@ -329,6 +367,27 @@ export interface QueueDrainedEvent {
 export interface QueueClearedEvent {
   readonly queueId: string;
   readonly count: number;
+}
+
+/** @public */
+export interface QueueReleasedEvent<T> {
+  readonly queueId: string;
+  readonly releaseId: string;
+  readonly entries: ReadonlyArray<QueueEntry<T>>;
+}
+
+/** @public */
+export interface QueueDeadLetteredEvent<T> {
+  readonly queueId: string;
+  readonly entries: ReadonlyArray<QueueEntry<T>>;
+  readonly reason: string;
+}
+
+/** @public */
+export interface QueueDroppedEvent<T> {
+  readonly queueId: string;
+  readonly entries: ReadonlyArray<QueueEntry<T>>;
+  readonly reason: string;
 }
 
 /** @public */
@@ -553,6 +612,18 @@ export type QueueResourceConfigWithoutItemSchema<T, E, R> = QueueResourceConfigB
     event: QueueClearedEvent,
     controls: QueueControls<T, E, never, R>,
   ) => Effect.Effect<void, never, R>;
+  readonly onReleased?: (
+    event: QueueReleasedEvent<T>,
+    controls: QueueControls<T, E, never, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onDeadLettered?: (
+    event: QueueDeadLetteredEvent<T>,
+    controls: QueueControls<T, E, never, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onDropped?: (
+    event: QueueDroppedEvent<T>,
+    controls: QueueControls<T, E, never, R>,
+  ) => Effect.Effect<void, never, R>;
 };
 
 /**
@@ -610,6 +681,18 @@ export type QueueResourceConfigWithItemSchema<T, E, R> = QueueResourceConfigBase
   ) => Effect.Effect<void, never, R>;
   readonly onCleared?: (
     event: QueueClearedEvent,
+    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onReleased?: (
+    event: QueueReleasedEvent<T>,
+    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onDeadLettered?: (
+    event: QueueDeadLetteredEvent<T>,
+    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onDropped?: (
+    event: QueueDroppedEvent<T>,
     controls: QueueControls<T, E, QueueEnqueueErrors, R>,
   ) => Effect.Effect<void, never, R>;
 };
@@ -727,6 +810,9 @@ export type InferQueueWorkerRequirements<
     | InferOptionalPropertyRequirements<C, "onRetryExhausted">
     | InferOptionalPropertyRequirements<C, "onDrained">
     | InferOptionalPropertyRequirements<C, "onCleared">
+    | InferOptionalPropertyRequirements<C, "onReleased">
+    | InferOptionalPropertyRequirements<C, "onDeadLettered">
+    | InferOptionalPropertyRequirements<C, "onDropped">
   >;
 
 
@@ -782,6 +868,18 @@ type QueueRuntimeConfig<T, E, EEnqueue, R> = QueueResourceConfigBase<T> & {
     event: QueueClearedEvent,
     controls: QueueControls<T, E, EEnqueue, R>,
   ) => Effect.Effect<void, never, R>;
+  readonly onReleased?: (
+    event: QueueReleasedEvent<T>,
+    controls: QueueControls<T, E, EEnqueue, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onDeadLettered?: (
+    event: QueueDeadLetteredEvent<T>,
+    controls: QueueControls<T, E, EEnqueue, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onDropped?: (
+    event: QueueDroppedEvent<T>,
+    controls: QueueControls<T, E, EEnqueue, R>,
+  ) => Effect.Effect<void, never, R>;
 };
 
 /** Normalize public enqueue input without treating arbitrary iterables as batches. */
@@ -813,6 +911,7 @@ interface InternalItem<T> {
 const queueEntryFromInternal = <T>(
   internal: InternalItem<T>,
   timestamps?: Partial<Omit<QueueEntryTimestamps, "enqueuedAt">>,
+  metadata?: Pick<QueueEntry<T>, "releaseId" | "sourceResourceId" | "attributes">,
 ): QueueEntry<T> => ({
   item: internal.item,
   entryId: internal.entryId,
@@ -823,7 +922,11 @@ const queueEntryFromInternal = <T>(
     enqueuedAt: DateTime.makeUnsafe(internal.enqueuedAt),
     ...timestamps,
   },
+  ...metadata,
 });
+
+const isQueueEntry = <T>(value: QueueEntrySelector<T> | QueueEntry<T>): value is QueueEntry<T> =>
+  "entryId" in value && "priority" in value && "timestamps" in value;
 
 // ============================================================================
 // Core Implementation
@@ -1031,20 +1134,28 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
     const storeOption = yield* Effect.serviceOption(ProcessStore);
     let entrySeq = 0;
+    let releaseSeq = 0;
 
     const nextEntryId = (): string => {
       entrySeq++;
       return `${queueName}-entry-${String(entrySeq)}`;
     };
 
+    const nextReleaseId = (): string => {
+      releaseSeq++;
+      return `${queueName}-release-${String(releaseSeq)}`;
+    };
+
     const recordEntryEvent = (
-      status: "enqueued" | "started" | "completed" | "failed" | "retried" | "exhausted",
+      status: "enqueued" | "started" | "completed" | "failed" | "retried" | "exhausted" | "released" | "dead-lettered" | "dropped",
       internal: InternalItem<T>,
       options?: {
         readonly occurredAt?: DateTime.Utc;
         readonly startedAt?: DateTime.Utc;
         readonly durationMs?: number;
         readonly error?: string;
+        readonly releaseId?: string;
+        readonly attributes?: { readonly [key: string]: JsonValue };
       },
     ): Effect.Effect<void> => {
       if (Option.isNone(storeOption)) return Effect.void;
@@ -1059,6 +1170,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         startedAt: options?.startedAt,
         durationMs: options?.durationMs,
         error: options?.error,
+        releaseId: options?.releaseId,
+        attributes: options?.attributes,
       };
       const write =
         status === "enqueued" ? api.entryEnqueued(input)
@@ -1066,7 +1179,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         : status === "completed" ? api.entryCompleted(input)
         : status === "failed" ? api.entryFailed(input)
         : status === "retried" ? api.entryRetried(input)
-        : api.entryExhausted(input);
+        : status === "exhausted" ? api.entryExhausted(input)
+        : status === "released" ? api.entryReleased(input)
+        : status === "dead-lettered" ? api.entryDeadLettered(input)
+        : api.entryDropped(input);
       return api.withQueue(queueName, api.withEntry(internal.entryId, write)).pipe(Effect.ignore);
     };
 
@@ -1291,6 +1407,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             nextAttempt: internal.retries + 2,
           }, handle).pipe((effect) => runQueueHook("onRetryScheduled", effect));
         }
+        yield* releaseActiveKey(internal);
         yield* enqueueInternal(
           [internal.item],
           internal.priority,
@@ -1506,6 +1623,144 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       }
     });
 
+    const matchesSelector = (
+      internal: InternalItem<T>,
+      selector: QueueEntrySelector<T> | QueueEntry<T>,
+    ): boolean => {
+      if (isQueueEntry(selector)) {
+        return internal.entryId === selector.entryId;
+      }
+      if (selector.entryId !== undefined && internal.entryId !== selector.entryId) {
+        return false;
+      }
+      if (selector.key !== undefined && internal.key !== selector.key) {
+        return false;
+      }
+      if (selector.item !== undefined && internal.item !== selector.item) {
+        return false;
+      }
+      return selector.entryId !== undefined || selector.key !== undefined || selector.item !== undefined;
+    };
+
+    const releaseActiveKey = (internal: InternalItem<T>) =>
+      internal.key === undefined
+        ? Effect.void
+        : Ref.update(activeKeys, HashSet.remove(internal.key));
+
+    const extractPending = (
+      select: (internal: InternalItem<T>) => boolean,
+    ): Effect.Effect<ReadonlyArray<InternalItem<T>>> =>
+      Effect.gen(function* () {
+        const extracted: InternalItem<T>[] = [];
+        const drainQueue = (q: Queue.Queue<InternalItem<T>>): Effect.Effect<void> =>
+          Effect.gen(function* () {
+            const kept: InternalItem<T>[] = [];
+            while (true) {
+              const item = yield* Queue.poll(q);
+              if (Option.isNone(item)) {
+                break;
+              }
+              if (select(item.value)) {
+                extracted.push(item.value);
+                yield* releaseActiveKey(item.value);
+              } else {
+                kept.push(item.value);
+              }
+            }
+            if (kept.length > 0) {
+              yield* Queue.offerAll(q, kept);
+            }
+          });
+        yield* drainQueue(highQueue);
+        yield* drainQueue(normalQueue);
+        yield* drainQueue(lowQueue);
+        return extracted;
+      });
+
+    const releasePending = (options?: QueueReleaseOptions): Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R> =>
+      Effect.gen(function* () {
+        const releaseId = options?.releaseId ?? nextReleaseId();
+        const internals = yield* extractPending(() => true);
+        const entries = internals.map((internal) =>
+          queueEntryFromInternal(internal, undefined, {
+            releaseId,
+            attributes: options?.attributes,
+          })
+        );
+        for (const internal of internals) {
+          yield* recordEntryEvent("released", internal, {
+            releaseId,
+            attributes: options?.attributes,
+          });
+        }
+        if (entries.length > 0 && config.onReleased !== undefined) {
+          yield* FiberSet.run(handlerFibers)(
+            config.onReleased({ queueId: queueName, releaseId, entries }, queueHandle).pipe(
+              (effect) => runQueueHook("onReleased", effect),
+            ),
+          );
+        }
+        yield* wakeDrainedIfAllQueuesEmpty;
+        return entries;
+      });
+
+    const routePending = (
+      selector: QueueEntrySelector<T> | QueueEntry<T>,
+      options: QueueRouteOptions,
+      kind: "dead-lettered" | "dropped",
+    ): Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R> =>
+      Effect.gen(function* () {
+        const internals = isQueueEntry(selector)
+          ? []
+          : yield* extractPending((internal) => matchesSelector(internal, selector));
+        const entries = isQueueEntry(selector)
+          ? [selector]
+          : internals.map((internal) =>
+              queueEntryFromInternal(internal, undefined, { attributes: options.attributes })
+            );
+        for (const internal of internals) {
+          yield* recordEntryEvent(kind, internal, {
+            attributes: { ...options.attributes, reason: options.reason },
+          });
+        }
+        if (isQueueEntry(selector) && Option.isSome(storeOption)) {
+          const api = storeOption.value.queueResource;
+          const input = {
+            entryId: selector.entryId,
+            key: selector.key,
+            priority: selector.priority,
+            attempts: selector.attempts,
+            enqueuedAt: selector.timestamps.enqueuedAt,
+            startedAt: selector.timestamps.startedAt,
+            interruptedAt: selector.timestamps.interruptedAt,
+            attributes: { ...options.attributes, reason: options.reason },
+          };
+          const write = kind === "dead-lettered"
+            ? api.entryDeadLettered(input)
+            : api.entryDropped(input);
+          yield* api.withQueue(queueName, api.withEntry(selector.entryId, write)).pipe(Effect.ignore);
+        }
+        if (entries.length > 0) {
+          const event = { queueId: queueName, entries, reason: options.reason };
+          if (kind === "dead-lettered" && config.onDeadLettered !== undefined) {
+            yield* FiberSet.run(handlerFibers)(
+              config.onDeadLettered(event, queueHandle).pipe(
+                (effect) => runQueueHook("onDeadLettered", effect),
+              ),
+            );
+          }
+          if (kind === "dropped" && config.onDropped !== undefined) {
+            yield* FiberSet.run(handlerFibers)(
+              config.onDropped(event, queueHandle).pipe(
+                (effect) => runQueueHook("onDropped", effect),
+              ),
+            );
+          }
+        }
+        yield* wakeDrainedIfAllQueuesEmpty;
+        return entries;
+      });
+
     // ─── Build public handle ───
 
     const queueHandle: QueueHandle<T, E, EEnqueue, R> = {
@@ -1589,6 +1844,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         yield* wakeDrainedIfAllQueuesEmpty;
         return count;
       }),
+
+      release: (options) => releasePending(options),
+
+      deadLetter: (selector, options) => routePending(selector, options, "dead-lettered"),
+
+      drop: (selector, options) => routePending(selector, options, "dropped"),
     };
 
     queueHandleSlot.current = queueHandle;

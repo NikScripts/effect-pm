@@ -96,6 +96,9 @@ yield* queue.pause                      // workers block before next item
 yield* queue.resume                     // workers unblock
 yield* queue.shutdown                   // permanent stop, enqueue drops items
 const cleared = yield* queue.clear      // drain all queues, reset counter
+const released = yield* queue.release({ releaseId: "deploy-42" }) // export pending entries for handoff
+yield* queue.drop({ key: "obsolete" }, { reason: "cancelled" })
+yield* queue.deadLetter({ key: "poison" }, { reason: "max retries" })
 ```
 
 ### Configuration reference
@@ -123,6 +126,9 @@ QueueResource.Service<Self, T, E>()("name", {
   onExit: ({ entry, exit, elapsed, retry }, queue) => Effect.void,
   onCompleted: ({ entry, elapsed }, queue) => metrics.record("duration", elapsed),
   onFailed: ({ entry, cause, elapsed, retry }, queue) => retry,
+  onReleased: ({ entries, releaseId }, queue) => auditRelease(releaseId, entries),
+  onDropped: ({ entries, reason }, queue) => auditDrop(reason, entries),
+  onDeadLettered: ({ entries, reason }, queue) => auditDeadLetter(reason, entries),
   onStart: (event, queue) => queue.add(seedItems),
   onDrained: (event, queue) => queue.add(fetchMoreWork),
 })
@@ -438,3 +444,8 @@ Query queue records through the semantic `ProcessStore.QueueResource` helpers:
 const entries = yield* ProcessStore.QueueResource.entries("email-queue")
 const byKey = yield* ProcessStore.QueueResource.entriesByKey("delivery-123")
 ```
+
+`queue.release()` exports pending entries without losing payloads, unlike
+`queue.clear()`. This first release mode is pending-only: in-flight work stays
+on the source queue. `queue.drop(...)` and `queue.deadLetter(...)` remove
+matching pending entries and trigger their lifecycle hooks.

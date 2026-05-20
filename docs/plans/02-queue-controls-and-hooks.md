@@ -746,7 +746,7 @@ Rules:
 
 Add queue release controls for deployment handoff:
 
-- `release(options)`
+- `release(options)` (pending-only implemented first)
 - `interruptAndRelease(options)`
 - `enqueue(releasedEntries)`
 
@@ -812,8 +812,8 @@ Enqueue and routing:
 - `retryAfter(duration)`
 - `retryAt(instant)`
 - `requeue(item, options)`
-- `deadLetter(item, reason)`
-- `drop(itemOrKey, reason)`
+- `deadLetter(item, reason)` (pending selector / entry envelope implemented first)
+- `drop(itemOrKey, reason)` (pending selector / entry envelope implemented first)
 - `dropCurrent(reason)`
 - `replace(key, item)`
 - `hasActiveKey(key)`

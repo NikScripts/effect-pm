@@ -424,7 +424,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 - **`capacity?`** — per-priority cap; default 50_000.
 - **`key?`** — dedup: drop if key already in-flight.
 - **`retries?`** — max lifecycle hook `event.retry` re-enqueues; default Infinity.
-- **`onEnqueued?`**, **`onStarted?`**, **`onExit?`**, **`onCompleted?`**, **`onFailed?`**, **`onRetryScheduled?`**, **`onRetryExhausted?`** — fire-and-forget item lifecycle hooks with queue-bound controls.
+- **`onEnqueued?`**, **`onStarted?`**, **`onExit?`**, **`onCompleted?`**, **`onFailed?`**, **`onRetryScheduled?`**, **`onRetryExhausted?`**, **`onReleased?`**, **`onDropped?`**, **`onDeadLettered?`** — fire-and-forget item lifecycle hooks with queue-bound controls.
 - **`effect(item, ctx)`** — required worker body.
 - **`onStart?(event, queueHandle)`** — queue-bound hook that runs once when workers start.
 - **`onDrained?(event, queueHandle)`** — queue-bound hook after pending work drains empty (or after `clear`); not triggered by cold-start idle worker waits.
@@ -444,7 +444,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 **Observe:** `size`, `sizes` `{ high, normal, low }`, `isEmpty`, `completed`.
 
-**Lifecycle:** `start`, `pause`, `resume`, `shutdown` (permanent; further enqueue dropped/warned), `clear` → count removed.
+**Lifecycle/routing:** `start`, `pause`, `resume`, `shutdown` (permanent; further enqueue dropped/warned), `clear` → count removed, `release` → pending entries for handoff, `drop` / `deadLetter` → remove matching pending entries.
 
 ### `EffectContext` (in worker `effect`)
 

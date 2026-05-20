@@ -187,6 +187,66 @@ describe("QueueResource.make — size and status", () => {
       expect(c).toBe(0);
     }).pipe(Effect.scoped),
   );
+
+  it.live("release exports pending entries and releases dedupe keys", () =>
+    Effect.gen(function* () {
+      const releasedBatches = yield* Ref.make<ReadonlyArray<ReadonlyArray<string>>>([]);
+      const processed = yield* Ref.make<ReadonlyArray<string>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-release-pending",
+        paused: true,
+        key: (item: { readonly id: string }) => item.id,
+        effect: (item) => Ref.update(processed, (items) => [...items, item.id]),
+        onReleased: ({ entries }) =>
+          Ref.update(releasedBatches, (items) => [
+            ...items,
+            entries.map((entry) => entry.key ?? ""),
+          ]),
+        concurrency: 1,
+      });
+
+      yield* queue.add([{ id: "a" }, { id: "b" }]);
+      const released = yield* queue.release({ releaseId: "release-1" });
+
+      expect(released.map((entry) => entry.item.id)).toEqual(["a", "b"]);
+      expect(released.map((entry) => entry.releaseId)).toEqual(["release-1", "release-1"]);
+      expect(yield* queue.size).toBe(0);
+      expect(yield* Ref.get(releasedBatches)).toEqual([["a", "b"]]);
+
+      yield* queue.add({ id: "a" });
+      yield* queue.resume;
+      yield* waitUntilCompleted(queue, 1);
+      expect(yield* Ref.get(processed)).toEqual(["a"]);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("drop and deadLetter remove matching pending entries", () =>
+    Effect.gen(function* () {
+      const dropped = yield* Ref.make<ReadonlyArray<string>>([]);
+      const deadLetters = yield* Ref.make<ReadonlyArray<string>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-drop-dead-letter",
+        paused: true,
+        key: (item: { readonly id: string }) => item.id,
+        effect: (_item) => Effect.void,
+        onDropped: ({ entries }) =>
+          Ref.update(dropped, (items) => [...items, ...entries.map((entry) => entry.key ?? "")]),
+        onDeadLettered: ({ entries }) =>
+          Ref.update(deadLetters, (items) => [...items, ...entries.map((entry) => entry.key ?? "")]),
+        concurrency: 1,
+      });
+
+      yield* queue.add([{ id: "drop-me" }, { id: "dead-letter-me" }, { id: "keep-me" }]);
+      const droppedEntries = yield* queue.drop({ key: "drop-me" }, { reason: "cancelled" });
+      const deadLetteredEntries = yield* queue.deadLetter({ key: "dead-letter-me" }, { reason: "poison" });
+
+      expect(droppedEntries.map((entry) => entry.key)).toEqual(["drop-me"]);
+      expect(deadLetteredEntries.map((entry) => entry.key)).toEqual(["dead-letter-me"]);
+      expect(yield* Ref.get(dropped)).toEqual(["drop-me"]);
+      expect(yield* Ref.get(deadLetters)).toEqual(["dead-letter-me"]);
+      expect(yield* queue.size).toBe(1);
+    }).pipe(Effect.scoped),
+  );
 });
 
 describe("QueueResource.make — pause/resume", () => {
@@ -334,6 +394,7 @@ describe("QueueResource.make — retry via onExit", () => {
       const attempts = yield* Ref.make(0);
       const queue = yield* QueueResource.make({
         name: "test-retry",
+        key: (_n: number) => "retry-key",
         effect: (_n: number) =>
           Effect.gen(function* () {
             yield* Ref.update(attempts, (n) => n + 1);

@@ -120,7 +120,10 @@ export type ProcessStoreQueueResourceEntryStatus =
   | "completed"
   | "failed"
   | "retried"
-  | "exhausted";
+  | "exhausted"
+  | "released"
+  | "dead-lettered"
+  | "dropped";
 
 /** @public */
 export type ProcessStoreQueueResourceLifecycleTag = QueueLifecycleTag | "Drained";
@@ -218,6 +221,15 @@ export interface ProcessStoreQueueResourceApi {
     input?: ProcessStoreQueueResourceEntryInput,
   ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
   readonly entryExhausted: (
+    input?: ProcessStoreQueueResourceEntryInput,
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  readonly entryReleased: (
+    input?: ProcessStoreQueueResourceEntryInput,
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  readonly entryDeadLettered: (
+    input?: ProcessStoreQueueResourceEntryInput,
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  readonly entryDropped: (
     input?: ProcessStoreQueueResourceEntryInput,
   ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
   readonly lifecycleChanged: (
@@ -988,6 +1000,9 @@ export const makeProcessStoreQueueResource = (config: {
     entryFailed: (input) => writeEntry("failed", input),
     entryRetried: (input) => writeEntry("retried", input),
     entryExhausted: (input) => writeEntry("exhausted", input),
+    entryReleased: (input) => writeEntry("released", input),
+    entryDeadLettered: (input) => writeEntry("dead-lettered", input),
+    entryDropped: (input) => writeEntry("dropped", input),
     lifecycleChanged: (input) =>
       Effect.gen(function* () {
         const ctx = yield* currentQueueResourceContext;

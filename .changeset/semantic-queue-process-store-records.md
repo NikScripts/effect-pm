@@ -9,3 +9,5 @@ Move the default in-memory `ProcessStore` backing store onto `RuntimeStorage`, w
 Remove `QueueResource`'s storage-oriented `persist` and `refill` callbacks in favor of `ProcessStore` storage and queue-bound `onStart` / `onDrained` lifecycle hooks.
 
 Replace legacy queue `handler`, `onEnqueue`, and `onComplete` callbacks with queue lifecycle envelopes such as `onEnqueued`, `onExit`, `onCompleted`, `onFailed`, and retry lifecycle hooks.
+
+Add pending-entry queue routing controls: `release`, `drop`, and `deadLetter`, plus corresponding lifecycle hooks.

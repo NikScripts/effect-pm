@@ -199,6 +199,9 @@ class ProcessingQueue extends QueueResource.Service<
 
 For the full current queue surface, including `onExit`, `EffectContext`, `queue.prioritize`, `queue.defer`, and effectful status properties, see [docs/RESOURCE-API.md](./docs/RESOURCE-API.md).
 
+Queues also expose pending-entry routing controls such as `queue.release(...)`,
+`queue.drop(...)`, and `queue.deadLetter(...)` for handoff and cleanup flows.
+
 ## Process configuration (polling + schedule)
 
 ### Basic process (always armed)
