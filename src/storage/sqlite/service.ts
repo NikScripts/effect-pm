@@ -34,12 +34,13 @@ import {
 } from "../../RuntimeStorage";
 import { RUNTIME_RECORDS_TABLE } from "./constants";
 import {
-  decodeRuntimeRecordRow,
-  encodeRuntimeRecordParams,
+  decodeRuntimeRecordRowEffect,
+  encodeRuntimeRecordParamsEffect,
   predicateIncludesReadonlyTrue,
 } from "./codec";
 
-const insertRow = (record: RuntimeRecord): Record<string, unknown> => ({ ...encodeRuntimeRecordParams(record) });
+const insertRowEffect = (record: RuntimeRecord): Effect.Effect<Record<string, unknown>, never, never> =>
+  Effect.map(encodeRuntimeRecordParamsEffect(record), (params) => ({ ...params }));
 
 const rowObjectToRecord = (row: object): Record<string, unknown> => {
   const out: Record<string, unknown> = {};
@@ -53,7 +54,7 @@ const rowObjectToRecord = (row: object): Record<string, unknown> => {
 
 const rowToRuntimeRecord = (row: unknown): Effect.Effect<RuntimeRecord, never, never> =>
   typeof row === "object" && row !== null
-    ? Effect.succeed(decodeRuntimeRecordRow(rowObjectToRecord(row)))
+    ? decodeRuntimeRecordRowEffect(rowObjectToRecord(row))
     : Effect.die(new Error("SQLiteRuntimeStorage: expected object row from SELECT *"));
 
 const loadAllRuntimeRecords = (
@@ -105,11 +106,13 @@ const dieSql = <A, R>(self: Effect.Effect<A, SqlError, R>): Effect.Effect<A, nev
  */
 export const makeSqliteRuntimeStorageService = (sql: SqlClient): RuntimeStorageService => ({
   create: (record) =>
-    sql`INSERT INTO ${sql(RUNTIME_RECORDS_TABLE)} ${sql.insert(insertRow(record))}`.pipe(
-      Effect.catchTag("SqlError", (error) =>
-        isDuplicateKeySqlError(error)
-          ? Effect.fail(new RuntimeStorageDuplicateRecordError({ id: record.id }))
-          : Effect.die(error),
+    Effect.flatMap(insertRowEffect(record), (row) =>
+      sql`INSERT INTO ${sql(RUNTIME_RECORDS_TABLE)} ${sql.insert(row)}`.pipe(
+        Effect.catchTag("SqlError", (error) =>
+          isDuplicateKeySqlError(error)
+            ? Effect.fail(new RuntimeStorageDuplicateRecordError({ id: record.id }))
+            : Effect.die(error),
+        ),
       ),
     ),
 
@@ -133,7 +136,9 @@ export const makeSqliteRuntimeStorageService = (sql: SqlClient): RuntimeStorageS
         return yield* Effect.fail(new RuntimeStorageReadonlyRecordError({ id: record.id }));
       }
       yield* dieSql(
-        sql`INSERT OR REPLACE INTO ${sql(RUNTIME_RECORDS_TABLE)} ${sql.insert(insertRow(record))}`,
+        Effect.flatMap(insertRowEffect(record), (row) =>
+          sql`INSERT OR REPLACE INTO ${sql(RUNTIME_RECORDS_TABLE)} ${sql.insert(row)}`,
+        ),
       );
     }),
 
@@ -149,9 +154,9 @@ export const makeSqliteRuntimeStorageService = (sql: SqlClient): RuntimeStorageS
           continue;
         }
         yield* dieSql(
-          sql`INSERT OR REPLACE INTO ${sql(RUNTIME_RECORDS_TABLE)} ${sql.insert(
-            insertRow(applyRuntimeRecordPatch(row, patch)),
-          )}`,
+          Effect.flatMap(insertRowEffect(applyRuntimeRecordPatch(row, patch)), (insertRow) =>
+            sql`INSERT OR REPLACE INTO ${sql(RUNTIME_RECORDS_TABLE)} ${sql.insert(insertRow)}`,
+          ),
         );
         updated++;
       }

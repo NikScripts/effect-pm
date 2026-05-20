@@ -11,7 +11,7 @@
  * @internal
  */
 
-import { DateTime, Option } from "effect";
+import { DateTime, Effect, Option } from "effect";
 import type { RuntimeRecordPredicate } from "../../Query";
 import type { JsonValue } from "../../ProcessStoreEvent";
 import type { RuntimeRecord } from "../../RuntimeStorage";
@@ -150,6 +150,20 @@ export const decodeRuntimeRecordRow = (row: Readonly<Record<string, unknown>>): 
   };
 };
 
+/**
+ * {@link decodeRuntimeRecordRow} wrapped with {@link Effect.sync} so callers
+ * compose row materialization on the same `Effect` algebra as SQL reads.
+ */
+export const decodeRuntimeRecordRowEffect = (
+  row: Readonly<Record<string, unknown>>,
+): Effect.Effect<RuntimeRecord, never, never> => Effect.sync(() => decodeRuntimeRecordRow(row));
+
+const jsonStringifyOrDie = (value: unknown): Effect.Effect<string, never, never> =>
+  Effect.try({
+    try: () => JSON.stringify(value),
+    catch: (cause) => cause,
+  }).pipe(Effect.orDie);
+
 /** Parameter object for SQLite insert helpers. */
 export interface RuntimeRecordInsertParams {
   readonly id: string;
@@ -180,31 +194,48 @@ export interface RuntimeRecordInsertParams {
  * Encode a runtime record for persistence. Optional fields become SQL `NULL`
  * rather than empty strings, matching {@link RuntimeStorage.memory} optional
  * semantics.
+ *
+ * @remarks
+ * JSON columns use `JSON.stringify` inside `Effect.try` so a defect (for example
+ * a circular structure that violates {@link JsonValue}) surfaces as a fiber
+ * failure instead of a synchronous throw mixed into SQL `Effect` chains.
  */
-export const encodeRuntimeRecordParams = (record: RuntimeRecord): RuntimeRecordInsertParams => ({
-  id: record.id,
-  type: record.type,
-  occurred_at_ms: DateTime.toEpochMillis(record.occurredAt),
-  created_at_ms: DateTime.toEpochMillis(record.createdAt),
-  run_id: record.runId,
-  process_type: record.processType,
-  process_id: record.processId,
-  subject_type: record.subjectType ?? null,
-  subject_id: record.subjectId ?? null,
-  key: record.key ?? null,
-  index_a: record.indexA ?? null,
-  index_b: record.indexB ?? null,
-  index_c: record.indexC ?? null,
-  index_d: record.indexD ?? null,
-  index_e: record.indexE ?? null,
-  index_f: record.indexF ?? null,
-  index_g: record.indexG ?? null,
-  index_h: record.indexH ?? null,
-  index_names_json: record.indexNames === undefined ? null : JSON.stringify([...record.indexNames]),
-  payload_json: record.payload === undefined ? null : JSON.stringify(record.payload),
-  attributes_json: record.attributes === undefined ? null : JSON.stringify(record.attributes),
-  readonly_int: record.readonly === true ? 1 : 0,
-});
+export const encodeRuntimeRecordParamsEffect = (
+  record: RuntimeRecord,
+): Effect.Effect<RuntimeRecordInsertParams, never, never> =>
+  Effect.gen(function* () {
+    const index_names_json =
+      record.indexNames === undefined ? null : yield* jsonStringifyOrDie([...record.indexNames]);
+    const payload_json =
+      record.payload === undefined ? null : yield* jsonStringifyOrDie(record.payload);
+    const attributes_json =
+      record.attributes === undefined ? null : yield* jsonStringifyOrDie(record.attributes);
+
+    return {
+      id: record.id,
+      type: record.type,
+      occurred_at_ms: DateTime.toEpochMillis(record.occurredAt),
+      created_at_ms: DateTime.toEpochMillis(record.createdAt),
+      run_id: record.runId,
+      process_type: record.processType,
+      process_id: record.processId,
+      subject_type: record.subjectType ?? null,
+      subject_id: record.subjectId ?? null,
+      key: record.key ?? null,
+      index_a: record.indexA ?? null,
+      index_b: record.indexB ?? null,
+      index_c: record.indexC ?? null,
+      index_d: record.indexD ?? null,
+      index_e: record.indexE ?? null,
+      index_f: record.indexF ?? null,
+      index_g: record.indexG ?? null,
+      index_h: record.indexH ?? null,
+      index_names_json,
+      payload_json,
+      attributes_json,
+      readonly_int: record.readonly === true ? 1 : 0,
+    };
+  });
 
 // ---------------------------------------------------------------------------
 // Predicate helpers (must stay aligned with `RuntimeStorage.ts`)

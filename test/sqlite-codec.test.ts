@@ -1,10 +1,14 @@
 import { describe, expect, it } from "@effect/vitest";
 import { DateTime, Effect } from "effect";
+import type { RuntimeRecord } from "../src/RuntimeStorage";
 import {
   decodeRuntimeRecordRow,
+  encodeRuntimeRecordParamsEffect,
   parseIndexNamesColumn,
   parseJsonColumn,
 } from "../src/storage/sqlite/codec";
+
+const dt = (iso: string): DateTime.Utc => DateTime.makeUnsafe(iso);
 
 describe("SQLite codec helpers", () => {
   it.effect("parseJsonColumn returns undefined for invalid JSON", () =>
@@ -54,6 +58,27 @@ describe("SQLite codec helpers", () => {
       expect(row.id).toBe("x");
       expect(row.readonly).toBeUndefined();
       expect(DateTime.toEpochMillis(row.occurredAt)).toBe(1_700_000_000_000);
+    }),
+  );
+
+  it.effect("encodeRuntimeRecordParamsEffect JSON-encodes optional columns", () =>
+    Effect.gen(function* () {
+      const record: RuntimeRecord = {
+        id: "id",
+        type: "t",
+        occurredAt: dt("2026-01-01T00:00:00.000Z"),
+        createdAt: dt("2026-01-01T00:00:01.000Z"),
+        runId: "run",
+        processType: "pt",
+        processId: "pid",
+        indexNames: ["x"],
+        payload: { n: 1 },
+        attributes: [true],
+      };
+      const p = yield* encodeRuntimeRecordParamsEffect(record);
+      expect(p.index_names_json).toBe('["x"]');
+      expect(p.payload_json).toBe('{"n":1}');
+      expect(p.attributes_json).toBe("[true]");
     }),
   );
 
