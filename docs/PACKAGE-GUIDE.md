@@ -99,7 +99,7 @@ examples use `@nikscripts/effect-pm/storage/prisma`.
 | `ProcessGroup` | Orchestrate processes + queues; typed contracts, controls, and `awaitShutdown`. |
 | `ProcessManager` | Typed remote client and endpoint service for group control contracts. |
 | `QueueResource` | Priority queues + workers. Public handle: `QueueHandle<T, E, EEnqueue, R>` (**requirements `R` last**); class services: `QueueResource.Service<Self, T, E>` infer `R` from config. Optional **`autoStart: false`** defers worker/refill fibers until **`yield* queue.start`. |
-| `ProcessStore` | In-memory (or Prisma) analytics: executions + lifecycle events. |
+| `ProcessStore` | Runtime records and semantic resource facts, including queue entry/lifecycle records. |
 | `RunResource`, `HttpClientRunGate` | Concurrency + throttle gates for arbitrary effects / `HttpClient`. |
 | `HttpApiResource`, `Resource` | Typed HttpApi client as a service + layers. |
 | `ControlService` | Localhost JSON control server consumed by `createCli` / `runCli`. |

@@ -32,6 +32,7 @@
 
 import { Context, Data, DateTime, Effect, Layer } from "effect";
 import {
+  makeProcessStoreQueueResource,
   ProcessStore,
   type AnalyticsEvent,
   type ProcessExecutionCompletedEvent,
@@ -246,86 +247,96 @@ const findRuntimeRecords = (
  */
 export const make = (
   client: PrismaProcessStoreClient,
-): ProcessStoreInterface => ({
-  append: (event) =>
+): ProcessStoreInterface => {
+  const append = (event: AnalyticsEvent) =>
     Effect.tryPromise({
       try: () =>
         client.effectPmEvent.create({ data: encodeEvent(event) }).then(() => {}),
       catch: (cause) => new PrismaProcessStoreError({ cause }),
-    }).pipe(Effect.orDie),
+    }).pipe(Effect.orDie);
+  const records = (query: RuntimeRecordQuery | undefined) => findRuntimeRecords(client, query);
 
-  appendBatch: (events) =>
-    Effect.tryPromise({
-      try: () =>
-        client.effectPmEvent
-          .createMany({
-            data: events.map(encodeEvent),
-            skipDuplicates: true,
-          })
-          .then(() => {}),
-      catch: (cause) => new PrismaProcessStoreError({ cause }),
-    }).pipe(Effect.orDie),
+  return {
+    append,
 
-  events: (query) =>
-    Effect.tryPromise({
-      try: () => client.effectPmEvent.findMany(buildEventQueryArgs(query)),
-      catch: (cause) => new PrismaProcessStoreError({ cause }),
-    }).pipe(
-      Effect.map((rows) => {
-        const out: AnalyticsEvent[] = [];
-        for (const row of rows) {
-          const decoded = decodeEventRow(row);
-          if (!(decoded instanceof ProcessStoreEventDecodeError)) {
-            out.push(decoded);
+    appendBatch: (events) =>
+      Effect.tryPromise({
+        try: () =>
+          client.effectPmEvent
+            .createMany({
+              data: events.map(encodeEvent),
+              skipDuplicates: true,
+            })
+            .then(() => {}),
+        catch: (cause) => new PrismaProcessStoreError({ cause }),
+      }).pipe(Effect.orDie),
+
+    events: (query) =>
+      Effect.tryPromise({
+        try: () => client.effectPmEvent.findMany(buildEventQueryArgs(query)),
+        catch: (cause) => new PrismaProcessStoreError({ cause }),
+      }).pipe(
+        Effect.map((rows) => {
+          const out: AnalyticsEvent[] = [];
+          for (const row of rows) {
+            const decoded = decodeEventRow(row);
+            if (!(decoded instanceof ProcessStoreEventDecodeError)) {
+              out.push(decoded);
+            }
           }
-        }
-        return out;
-      }),
-      Effect.orDie,
-    ),
+          return out;
+        }),
+        Effect.orDie,
+      ),
 
-  records: (query) => findRuntimeRecords(client, query),
+    records,
 
-  getProcessExecutions: (processId, opts) =>
-    findEventsOfType(
-      client,
-      "process.execution.completed",
-      "process",
-      processId,
-      opts,
-      isExecution,
-    ),
+    queueResource: makeProcessStoreQueueResource({
+      append,
+      records,
+    }),
 
-  getProcessLifecycle: (processId, opts) =>
-    findEventsOfType(
-      client,
-      "process.lifecycle.changed",
-      "process",
-      processId,
-      opts,
-      isLifecycle,
-    ),
+    getProcessExecutions: (processId, opts) =>
+      findEventsOfType(
+        client,
+        "process.execution.completed",
+        "process",
+        processId,
+        opts,
+        isExecution,
+      ),
 
-  getQueueItemCompletions: (queueId, opts) =>
-    findEventsOfType(
-      client,
-      "queue.item.completed",
-      "queue",
-      queueId,
-      opts,
-      isQueueItemCompleted,
-    ),
+    getProcessLifecycle: (processId, opts) =>
+      findEventsOfType(
+        client,
+        "process.lifecycle.changed",
+        "process",
+        processId,
+        opts,
+        isLifecycle,
+      ),
 
-  getQueueLifecycle: (queueId, opts) =>
-    findEventsOfType(
-      client,
-      "queue.lifecycle.changed",
-      "queue",
-      queueId,
-      opts,
-      isQueueLifecycle,
-    ),
-});
+    getQueueItemCompletions: (queueId, opts) =>
+      findEventsOfType(
+        client,
+        "queue.item.completed",
+        "queue",
+        queueId,
+        opts,
+        isQueueItemCompleted,
+      ),
+
+    getQueueLifecycle: (queueId, opts) =>
+      findEventsOfType(
+        client,
+        "queue.lifecycle.changed",
+        "queue",
+        queueId,
+        opts,
+        isQueueLifecycle,
+      ),
+  };
+};
 
 // ============================================================================
 // Layers

@@ -287,6 +287,7 @@ describe("RunResource.make (raw scoped)", () => {
   it.live("persists observed runtime facts through ProcessStore bridge", () =>
     Effect.gen(function* () {
       const events = yield* Ref.make<ReadonlyArray<AnalyticsEvent>>([]);
+      const baseStore = yield* ProcessStore.memory;
       const store: ProcessStoreInterface = {
         append: (event: AnalyticsEvent) =>
           Ref.update(events, (items) => [...items, event]),
@@ -294,6 +295,7 @@ describe("RunResource.make (raw scoped)", () => {
           Ref.update(events, (items) => [...items, ...batch]),
         events: () => Effect.map(Ref.get(events), (items) => [...items]),
         records: () => Effect.succeed([]),
+        queueResource: baseStore.queueResource,
         getProcessExecutions: () => Effect.succeed([]),
         getProcessLifecycle: () => Effect.succeed([]),
         getQueueItemCompletions: () => Effect.succeed([]),

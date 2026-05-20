@@ -7,6 +7,7 @@ import {
   QueueResource,
   makeQueueItemCodecDescriptor,
 } from "../src/QueueResource";
+import { ProcessStore } from "../src/ProcessStore";
 
 const fastConfig = { concurrency: 2 };
 
@@ -106,6 +107,39 @@ describe("QueueResource.make — basic processing", () => {
       expect(final[1]).toBe("normal-1");
       expect(final[2]).toBe("low-1");
     }).pipe(Effect.scoped),
+  );
+});
+
+describe("QueueResource.make — ProcessStore records", () => {
+  it.live("writes semantic queue entry and lifecycle records when ProcessStore is provided", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-store-records",
+        key: (n: number) => `job-${String(n)}`,
+        effect: (_n: number) => Effect.sleep(Duration.millis(5)),
+        concurrency: 1,
+      });
+
+      yield* queue.add([1]);
+      yield* waitUntilCompleted(queue, 1);
+      yield* Effect.sleep(Duration.millis(20));
+
+      const entries = yield* ProcessStore.QueueResource.entries("test-store-records");
+      const byKey = yield* ProcessStore.QueueResource.entriesByKey("job-1");
+      const completed = entries.find((row) => row.type === "queue.entry.completed");
+
+      expect(entries.map((row) => row.type).sort()).toEqual([
+        "queue.entry.completed",
+        "queue.entry.enqueued",
+        "queue.entry.started",
+      ]);
+      expect(completed?.processType).toBe("queue-resource");
+      expect(completed?.processId).toBe("test-store-records");
+      expect(completed?.subjectType).toBe("queue-entry");
+      expect(completed?.subjectId).toBe("test-store-records-entry-1");
+      expect(completed?.key).toBe("job-1");
+      expect(byKey).toHaveLength(3);
+    }).pipe(Effect.provide(ProcessStore.layer), Effect.scoped),
   );
 });
 

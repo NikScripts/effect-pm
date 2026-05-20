@@ -18,6 +18,7 @@
 import {
   Clock,
   Context,
+  Data,
   DateTime,
   Effect,
   FileSystem,
@@ -27,6 +28,15 @@ import {
   Semaphore,
   Schema,
 } from "effect";
+import {
+  And,
+  Key,
+  ProcessId,
+  ProcessType,
+  SubjectId,
+  SubjectType,
+  type RuntimeRecordPredicate,
+} from "./Query";
 import {
   dateFromUnknown,
   isJsonValue,
@@ -100,6 +110,146 @@ export interface RuntimeFactQuery {
 export interface RuntimeStateHistoryQuery {
   readonly ref: RuntimeRef;
   readonly opts?: QueryOpts;
+}
+
+/** @public */
+export type ProcessStoreQueueResourcePriority = "high" | "normal" | "low";
+
+/** @public */
+export type ProcessStoreQueueResourceEntryStatus =
+  | "enqueued"
+  | "started"
+  | "completed"
+  | "failed"
+  | "retried"
+  | "exhausted";
+
+/** @public */
+export type ProcessStoreQueueResourceLifecycleTag = QueueLifecycleTag | "Drained";
+
+/** @public */
+export type ProcessStoreQueueResourceDedupeKeyStatus =
+  | "added"
+  | "released"
+  | "hydrated";
+
+/** @public */
+export interface ProcessStoreQueueResourceContext {
+  readonly queueId?: string;
+  readonly entryId?: string;
+  readonly key?: string;
+  readonly batchId?: string;
+  readonly releaseId?: string;
+  readonly dedupeKey?: string;
+}
+
+/** @public */
+export interface ProcessStoreQueueResourceEntryInput {
+  readonly queueId?: string;
+  readonly entryId?: string;
+  readonly key?: string;
+  readonly priority?: ProcessStoreQueueResourcePriority;
+  readonly attempts?: number;
+  readonly durationMs?: number;
+  readonly error?: string;
+  readonly batchId?: string;
+  readonly releaseId?: string;
+  readonly occurredAt?: DateTime.Utc;
+  readonly enqueuedAt?: DateTime.Utc;
+  readonly startedAt?: DateTime.Utc;
+  readonly interruptedAt?: DateTime.Utc;
+  readonly payload?: JsonValue;
+  readonly attributes?: { readonly [key: string]: JsonValue };
+}
+
+/** @public */
+export interface ProcessStoreQueueResourceLifecycleInput {
+  readonly queueId?: string;
+  readonly tag: ProcessStoreQueueResourceLifecycleTag;
+  readonly itemsCleared?: number;
+  readonly occurredAt?: DateTime.Utc;
+  readonly attributes?: { readonly [key: string]: JsonValue };
+}
+
+/** @public */
+export interface ProcessStoreQueueResourceDedupeKeyInput {
+  readonly queueId?: string;
+  readonly key?: string;
+  readonly occurredAt?: DateTime.Utc;
+  readonly attributes?: { readonly [key: string]: JsonValue };
+}
+
+/** @public */
+export class ProcessStoreQueueResourceContextError extends Data.TaggedError(
+  "ProcessStoreQueueResourceContextError",
+)<{
+  readonly field: "queueId" | "entryId" | "key";
+}> {}
+
+/** @public */
+export interface ProcessStoreQueueResourceApi {
+  readonly withQueue: <A, E, R>(
+    queueId: string,
+    use: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E, R>;
+  readonly withEntry: <A, E, R>(
+    entryId: string,
+    use: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E, R>;
+  readonly withBatch: <A, E, R>(
+    batchId: string,
+    use: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E, R>;
+  readonly withDedupeKey: <A, E, R>(
+    key: string,
+    use: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E, R>;
+  readonly entryEnqueued: (
+    input?: ProcessStoreQueueResourceEntryInput,
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  readonly entryStarted: (
+    input?: ProcessStoreQueueResourceEntryInput,
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  readonly entryCompleted: (
+    input?: ProcessStoreQueueResourceEntryInput,
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  readonly entryFailed: (
+    input?: ProcessStoreQueueResourceEntryInput,
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  readonly entryRetried: (
+    input?: ProcessStoreQueueResourceEntryInput,
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  readonly entryExhausted: (
+    input?: ProcessStoreQueueResourceEntryInput,
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  readonly lifecycleChanged: (
+    input: ProcessStoreQueueResourceLifecycleInput,
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  readonly dedupeKeyAdded: (
+    input?: ProcessStoreQueueResourceDedupeKeyInput,
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  readonly dedupeKeyReleased: (
+    input?: ProcessStoreQueueResourceDedupeKeyInput,
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  readonly dedupeKeyHydrated: (
+    input?: ProcessStoreQueueResourceDedupeKeyInput,
+  ) => Effect.Effect<void, ProcessStoreQueueResourceContextError>;
+  readonly entries: (
+    queueId?: string,
+    query?: RuntimeRecordQuery,
+  ) => Effect.Effect<RuntimeRecord[]>;
+  readonly entry: (
+    entryId: string,
+    query?: RuntimeRecordQuery,
+  ) => Effect.Effect<Option.Option<RuntimeRecord>>;
+  readonly entriesByKey: (
+    key: string,
+    query?: RuntimeRecordQuery,
+  ) => Effect.Effect<RuntimeRecord[]>;
+  readonly dedupeKeys: (
+    queueId?: string,
+    query?: RuntimeRecordQuery,
+  ) => Effect.Effect<RuntimeRecord[]>;
 }
 
 /**
@@ -252,6 +402,7 @@ export interface ProcessStoreInterface {
   appendBatch: (events: ReadonlyArray<AnalyticsEvent>) => Effect.Effect<void>;
   events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>;
   records: (query?: RuntimeRecordQuery) => Effect.Effect<RuntimeRecord[]>;
+  queueResource: ProcessStoreQueueResourceApi;
   getProcessExecutions: (
     processId: string,
     opts?: QueryOpts,
@@ -429,19 +580,388 @@ const makeRunId = (now: number): string => {
   return `run-${String(now)}-${String(inMemoryProcessStoreRunCounter)}`;
 };
 
+const queueResourceProcessType = "queue-resource";
+const queueResourceEntrySubjectType = "queue-entry";
+const queueResourceDedupeSubjectType = "queue-dedupe-key";
+const queueResourceLifecycleSubjectType = "queue-lifecycle";
+const queueResourceIndexNames = ["batchId", "releaseId"];
+
+class ProcessStoreQueueResourceContextTag extends Context.Service<
+  ProcessStoreQueueResourceContextTag,
+  ProcessStoreQueueResourceContext
+>()("@nikscripts/effect-pm/ProcessStore/ProcessStoreQueueResourceContextTag") {}
+
+const currentQueueResourceContext: Effect.Effect<ProcessStoreQueueResourceContext> =
+  Effect.serviceOption(ProcessStoreQueueResourceContextTag).pipe(
+    Effect.map(
+      Option.match({
+        onNone: (): ProcessStoreQueueResourceContext => ({}),
+        onSome: (context) => context,
+      }),
+    ),
+  );
+
+const stringAttribute = (
+  attributes: Record<string, unknown> | undefined,
+  key: string,
+): string | undefined => {
+  const value = attributes?.[key];
+  return isString(value) ? value : undefined;
+};
+
+const stringArrayAttribute = (
+  attributes: Record<string, unknown> | undefined,
+  key: string,
+): ReadonlyArray<string> | undefined => {
+  const value = attributes?.[key];
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const out: string[] = [];
+  for (const item of value) {
+    if (!isString(item)) {
+      return undefined;
+    }
+    out.push(item);
+  }
+  return out;
+};
+
+const runtimeRecordPayload = (event: AnalyticsEvent): JsonValue | undefined => {
+  switch (event.type) {
+    case "runtime.fact.recorded":
+      return isJsonValue(event.fact.payload) ? event.fact.payload : undefined;
+    case "queue.item.completed": {
+      const payload: { [key: string]: JsonValue } = {
+        status: event.item.status,
+        priority: event.item.priority,
+        durationMs: event.item.durationMs,
+        attempts: event.item.attempts,
+      };
+      if (event.item.error !== undefined) {
+        payload["error"] = event.item.error;
+      }
+      return payload;
+    }
+    case "queue.lifecycle.changed": {
+      const payload: { [key: string]: JsonValue } = {
+        tag: event.lifecycle.tag,
+      };
+      if (event.lifecycle.itemsCleared !== undefined) {
+        payload["itemsCleared"] = event.lifecycle.itemsCleared;
+      }
+      return payload;
+    }
+    default:
+      return undefined;
+  }
+};
+
+const runtimeRecordType = (event: AnalyticsEvent): string =>
+  event.type === "runtime.fact.recorded" ? event.fact.type : event.type;
+
+const runtimeRecordOccurredAt = (event: AnalyticsEvent): number =>
+  event.type === "runtime.fact.recorded" ? event.fact.occurredAt : event.occurredAt;
+
+const requireQueueResourceField = (
+  value: string | undefined,
+  field: "queueId" | "entryId" | "key",
+): Effect.Effect<string, ProcessStoreQueueResourceContextError> =>
+  value === undefined
+    ? Effect.fail(new ProcessStoreQueueResourceContextError({ field }))
+    : Effect.succeed(value);
+
+const withRuntimePredicate = (
+  query: RuntimeRecordQuery | undefined,
+  predicate: RuntimeRecordPredicate,
+): RuntimeRecordQuery => ({
+  ...query,
+  predicate: query?.predicate === undefined
+    ? predicate
+    : And([predicate, query.predicate]),
+});
+
+const queueEntryPredicate = (queueId?: string): RuntimeRecordPredicate => {
+  const predicates: RuntimeRecordPredicate[] = [
+    ProcessType.equals(queueResourceProcessType),
+    SubjectType.equals(queueResourceEntrySubjectType),
+  ];
+  if (queueId !== undefined) {
+    predicates.push(ProcessId.equals(queueId));
+  }
+  return And(predicates);
+};
+
+const queueDedupePredicate = (queueId?: string): RuntimeRecordPredicate => {
+  const predicates: RuntimeRecordPredicate[] = [
+    ProcessType.equals(queueResourceProcessType),
+    SubjectType.equals(queueResourceDedupeSubjectType),
+  ];
+  if (queueId !== undefined) {
+    predicates.push(ProcessId.equals(queueId));
+  }
+  return And(predicates);
+};
+
+const dateMillis = (date: DateTime.Utc): number => DateTime.toEpochMillis(date);
+
+const entryFactType = (status: ProcessStoreQueueResourceEntryStatus): string =>
+  `queue.entry.${status}`;
+
+const dedupeFactType = (status: ProcessStoreQueueResourceDedupeKeyStatus): string =>
+  `queue.dedupe-key.${status}`;
+
+const lifecycleFactType = (tag: ProcessStoreQueueResourceLifecycleTag): string =>
+  `queue.lifecycle.${tag.toLowerCase()}`;
+
+const entryPayload = (
+  status: ProcessStoreQueueResourceEntryStatus,
+  input: ProcessStoreQueueResourceEntryInput,
+): JsonValue => {
+  const payload: { [key: string]: JsonValue } = { status };
+  if (input.priority !== undefined) payload["priority"] = input.priority;
+  if (input.attempts !== undefined) payload["attempts"] = input.attempts;
+  if (input.durationMs !== undefined) payload["durationMs"] = input.durationMs;
+  if (input.error !== undefined) payload["error"] = input.error;
+  if (input.enqueuedAt !== undefined) payload["enqueuedAt"] = dateMillis(input.enqueuedAt);
+  if (input.startedAt !== undefined) payload["startedAt"] = dateMillis(input.startedAt);
+  if (input.interruptedAt !== undefined) payload["interruptedAt"] = dateMillis(input.interruptedAt);
+  if (input.payload !== undefined) payload["payload"] = input.payload;
+  if (input.attributes !== undefined) payload["attributes"] = input.attributes;
+  return payload;
+};
+
+const lifecyclePayload = (
+  input: ProcessStoreQueueResourceLifecycleInput,
+): JsonValue => {
+  const payload: { [key: string]: JsonValue } = { tag: input.tag };
+  if (input.itemsCleared !== undefined) {
+    payload["itemsCleared"] = input.itemsCleared;
+  }
+  if (input.attributes !== undefined) {
+    payload["attributes"] = input.attributes;
+  }
+  return payload;
+};
+
+const dedupePayload = (
+  status: ProcessStoreQueueResourceDedupeKeyStatus,
+  input: ProcessStoreQueueResourceDedupeKeyInput,
+): JsonValue => {
+  const payload: { [key: string]: JsonValue } = { status };
+  if (input.attributes !== undefined) {
+    payload["attributes"] = input.attributes;
+  }
+  return payload;
+};
+
+/** @internal */
+export const makeProcessStoreQueueResource = (config: {
+  readonly append: (event: AnalyticsEvent) => Effect.Effect<void, never, never>;
+  readonly records: (query?: RuntimeRecordQuery) => Effect.Effect<RuntimeRecord[], never, never>;
+}): ProcessStoreQueueResourceApi => {
+  let sequence = 0;
+
+  const nextFactId = (queueId: string, type: string, occurredAt: number): string => {
+    sequence++;
+    return `${queueId}/${type}/${String(occurredAt)}/${String(sequence)}`;
+  };
+
+  const appendFact = (
+    queueId: string,
+    type: string,
+    occurredAt: DateTime.Utc,
+    subjectType: string,
+    payload: JsonValue,
+    context: ProcessStoreQueueResourceContext,
+    input: {
+      readonly entryId?: string;
+      readonly key?: string;
+      readonly batchId?: string;
+      readonly releaseId?: string;
+    },
+  ): Effect.Effect<void, never, never> => {
+    const occurredAtMillis = dateMillis(occurredAt);
+    const id = nextFactId(queueId, type, occurredAtMillis);
+    const subjectId = input.entryId ?? context.entryId ?? input.key ?? context.dedupeKey ?? queueId;
+    const key = input.key ?? context.key ?? context.dedupeKey;
+    const batchId = input.batchId ?? context.batchId;
+    const releaseId = input.releaseId ?? context.releaseId;
+    const attributes: Record<string, unknown> = {
+      processType: queueResourceProcessType,
+      processId: queueId,
+      subjectType,
+      subjectId,
+      indexNames: queueResourceIndexNames,
+    };
+    if (key !== undefined) attributes["key"] = key;
+    if (batchId !== undefined) attributes["indexA"] = batchId;
+    if (releaseId !== undefined) attributes["indexB"] = releaseId;
+
+    const event: RuntimeFactRecordedEvent = {
+      id,
+      type: "runtime.fact.recorded",
+      occurredAt: occurredAtMillis,
+      entityType: queueResourceProcessType,
+      entityId: queueId,
+      attributes,
+      fact: {
+        id,
+        ref: { kind: queueResourceProcessType, id: queueId },
+        type,
+        occurredAt: occurredAtMillis,
+        payload,
+        attributes,
+      },
+    };
+    return config.append(event);
+  };
+
+  const writeEntry = (
+    status: ProcessStoreQueueResourceEntryStatus,
+    input: ProcessStoreQueueResourceEntryInput | undefined,
+  ): Effect.Effect<void, ProcessStoreQueueResourceContextError> =>
+    Effect.gen(function* () {
+      const ctx = yield* currentQueueResourceContext;
+      const entryInput = input ?? {};
+      const queueId = yield* requireQueueResourceField(
+        entryInput.queueId ?? ctx.queueId,
+        "queueId",
+      );
+      yield* appendFact(
+        queueId,
+        entryFactType(status),
+        entryInput.occurredAt ?? (yield* Effect.map(Clock.currentTimeMillis, DateTime.makeUnsafe)),
+        queueResourceEntrySubjectType,
+        entryPayload(status, entryInput),
+        ctx,
+        {
+          entryId: entryInput.entryId,
+          key: entryInput.key,
+          batchId: entryInput.batchId,
+          releaseId: entryInput.releaseId,
+        },
+      );
+    });
+
+  const writeDedupe = (
+    status: ProcessStoreQueueResourceDedupeKeyStatus,
+    input: ProcessStoreQueueResourceDedupeKeyInput | undefined,
+  ): Effect.Effect<void, ProcessStoreQueueResourceContextError> =>
+    Effect.gen(function* () {
+      const ctx = yield* currentQueueResourceContext;
+      const dedupeInput = input ?? {};
+      const queueId = yield* requireQueueResourceField(
+        dedupeInput.queueId ?? ctx.queueId,
+        "queueId",
+      );
+      const key = yield* requireQueueResourceField(
+        dedupeInput.key ?? ctx.dedupeKey ?? ctx.key,
+        "key",
+      );
+      yield* appendFact(
+        queueId,
+        dedupeFactType(status),
+        dedupeInput.occurredAt ?? (yield* Effect.map(Clock.currentTimeMillis, DateTime.makeUnsafe)),
+        queueResourceDedupeSubjectType,
+        dedupePayload(status, dedupeInput),
+        ctx,
+        { key },
+      );
+    });
+
+  return {
+    withQueue: (queueId, use) =>
+      Effect.flatMap(currentQueueResourceContext, (ctx) =>
+        use.pipe(Effect.provideService(ProcessStoreQueueResourceContextTag, { ...ctx, queueId }))
+      ),
+    withEntry: (entryId, use) =>
+      Effect.flatMap(currentQueueResourceContext, (ctx) =>
+        use.pipe(Effect.provideService(ProcessStoreQueueResourceContextTag, { ...ctx, entryId }))
+      ),
+    withBatch: (batchId, use) =>
+      Effect.flatMap(currentQueueResourceContext, (ctx) =>
+        use.pipe(Effect.provideService(ProcessStoreQueueResourceContextTag, { ...ctx, batchId }))
+      ),
+    withDedupeKey: (key, use) =>
+      Effect.flatMap(currentQueueResourceContext, (ctx) =>
+        use.pipe(
+          Effect.provideService(ProcessStoreQueueResourceContextTag, {
+            ...ctx,
+            key,
+            dedupeKey: key,
+          }),
+        )
+      ),
+    entryEnqueued: (input) => writeEntry("enqueued", input),
+    entryStarted: (input) => writeEntry("started", input),
+    entryCompleted: (input) => writeEntry("completed", input),
+    entryFailed: (input) => writeEntry("failed", input),
+    entryRetried: (input) => writeEntry("retried", input),
+    entryExhausted: (input) => writeEntry("exhausted", input),
+    lifecycleChanged: (input) =>
+      Effect.gen(function* () {
+        const ctx = yield* currentQueueResourceContext;
+        const queueId = yield* requireQueueResourceField(input.queueId ?? ctx.queueId, "queueId");
+        yield* appendFact(
+          queueId,
+          lifecycleFactType(input.tag),
+          input.occurredAt ?? (yield* Effect.map(Clock.currentTimeMillis, DateTime.makeUnsafe)),
+          queueResourceLifecycleSubjectType,
+          lifecyclePayload(input),
+          ctx,
+          {},
+        );
+      }),
+    dedupeKeyAdded: (input) => writeDedupe("added", input),
+    dedupeKeyReleased: (input) => writeDedupe("released", input),
+    dedupeKeyHydrated: (input) => writeDedupe("hydrated", input),
+    entries: (queueId, query) =>
+      config.records(withRuntimePredicate(query, queueEntryPredicate(queueId))),
+    entry: (entryId, query) =>
+      Effect.map(
+        config.records(
+          withRuntimePredicate(
+            query,
+            And([queueEntryPredicate(), SubjectId.equals(entryId)]),
+          ),
+        ),
+        (rows) => rows[0] === undefined ? Option.none() : Option.some(rows[0]),
+      ),
+    entriesByKey: (key, query) =>
+      config.records(withRuntimePredicate(query, And([queueEntryPredicate(), Key.equals(key)]))),
+    dedupeKeys: (queueId, query) =>
+      config.records(withRuntimePredicate(query, queueDedupePredicate(queueId))),
+  };
+};
+
 const eventToRuntimeRecord = (
   event: AnalyticsEvent,
   runId: string,
 ): RuntimeRecord => {
-  const occurredAt = DateTime.makeUnsafe(event.occurredAt);
+  const attributes = event.attributes;
+  const occurredAt = DateTime.makeUnsafe(runtimeRecordOccurredAt(event));
   return {
     id: event.id,
-    type: event.type,
+    type: runtimeRecordType(event),
     occurredAt,
-    createdAt: occurredAt,
+    createdAt: DateTime.makeUnsafe(event.occurredAt),
     runId,
-    processType: event.entityType,
-    processId: event.entityId,
+    processType: stringAttribute(attributes, "processType") ?? event.entityType,
+    processId: stringAttribute(attributes, "processId") ?? event.entityId,
+    subjectType: stringAttribute(attributes, "subjectType"),
+    subjectId: stringAttribute(attributes, "subjectId"),
+    key: stringAttribute(attributes, "key"),
+    indexA: stringAttribute(attributes, "indexA"),
+    indexB: stringAttribute(attributes, "indexB"),
+    indexC: stringAttribute(attributes, "indexC"),
+    indexD: stringAttribute(attributes, "indexD"),
+    indexE: stringAttribute(attributes, "indexE"),
+    indexF: stringAttribute(attributes, "indexF"),
+    indexG: stringAttribute(attributes, "indexG"),
+    indexH: stringAttribute(attributes, "indexH"),
+    indexNames: stringArrayAttribute(attributes, "indexNames"),
+    payload: runtimeRecordPayload(event),
     attributes: event.attributes === undefined
       ? undefined
       : isJsonValue(event.attributes)
@@ -556,12 +1076,20 @@ const makeInMemoryProcessStore: Effect.Effect<
   const events: AnalyticsEvent[] = [];
   const now = yield* Clock.currentTimeMillis;
   const runId = makeRunId(now);
+  const appendEvent = (event: AnalyticsEvent) =>
+    Effect.sync(() => {
+      events.push(event);
+    });
+  const readRecords = (query: RuntimeRecordQuery | undefined) =>
+    Effect.sync(() =>
+      selectRuntimeRecords(
+        events.map((event) => eventToRuntimeRecord(event, runId)),
+        query,
+      )
+    );
 
   return {
-    append: (event) =>
-      Effect.sync(() => {
-        events.push(event);
-      }),
+    append: appendEvent,
 
     appendBatch: (batch) =>
       Effect.sync(() => {
@@ -578,13 +1106,12 @@ const makeInMemoryProcessStore: Effect.Effect<
         return applyQueryOpts(rows, query?.opts, (event) => event.occurredAt);
       }),
 
-    records: (query) =>
-      Effect.sync(() =>
-        selectRuntimeRecords(
-          events.map((event) => eventToRuntimeRecord(event, runId)),
-          query,
-        )
-      ),
+    records: readRecords,
+
+    queueResource: makeProcessStoreQueueResource({
+      append: appendEvent,
+      records: readRecords,
+    }),
 
     getProcessExecutions: (processId, opts) =>
       Effect.sync(() =>
@@ -675,9 +1202,13 @@ const makeFileProcessStore = (
           query,
         )
       );
+    const appendSerializedEvent = (event: AnalyticsEvent) =>
+      semaphore.withPermits(1)(appendOne(event));
+    const readSerializedRecords = (query: RuntimeRecordQuery | undefined) =>
+      semaphore.withPermits(1)(queryRecords(query));
 
     return {
-      append: (event) => semaphore.withPermits(1)(appendOne(event)),
+      append: appendSerializedEvent,
       appendBatch: (batch) =>
         semaphore.withPermits(1)(
           Effect.gen(function* () {
@@ -687,7 +1218,11 @@ const makeFileProcessStore = (
           }),
         ),
       events: (query) => semaphore.withPermits(1)(queryEvents(query)),
-      records: (query) => semaphore.withPermits(1)(queryRecords(query)),
+      records: readSerializedRecords,
+      queueResource: makeProcessStoreQueueResource({
+        append: appendSerializedEvent,
+        records: readSerializedRecords,
+      }),
       getProcessExecutions: (processId, opts) =>
         semaphore.withPermits(1)(
           Effect.map(
@@ -784,6 +1319,50 @@ export namespace ProcessStore {
    */
   export const fileLayer = (filePath: string) =>
     Layer.effect(ProcessStore, makeFileProcessStore(filePath));
+
+  /**
+   * QueueResource semantic storage helpers.
+   *
+   * @public
+   */
+  export const QueueResource = {
+    withQueue: <A, E, R>(queueId: string, use: Effect.Effect<A, E, R>) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.withQueue(queueId, use)),
+    withEntry: <A, E, R>(entryId: string, use: Effect.Effect<A, E, R>) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.withEntry(entryId, use)),
+    withBatch: <A, E, R>(batchId: string, use: Effect.Effect<A, E, R>) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.withBatch(batchId, use)),
+    withDedupeKey: <A, E, R>(key: string, use: Effect.Effect<A, E, R>) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.withDedupeKey(key, use)),
+    entryEnqueued: (input?: ProcessStoreQueueResourceEntryInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.entryEnqueued(input)),
+    entryStarted: (input?: ProcessStoreQueueResourceEntryInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.entryStarted(input)),
+    entryCompleted: (input?: ProcessStoreQueueResourceEntryInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.entryCompleted(input)),
+    entryFailed: (input?: ProcessStoreQueueResourceEntryInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.entryFailed(input)),
+    entryRetried: (input?: ProcessStoreQueueResourceEntryInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.entryRetried(input)),
+    entryExhausted: (input?: ProcessStoreQueueResourceEntryInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.entryExhausted(input)),
+    lifecycleChanged: (input: ProcessStoreQueueResourceLifecycleInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.lifecycleChanged(input)),
+    dedupeKeyAdded: (input?: ProcessStoreQueueResourceDedupeKeyInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.dedupeKeyAdded(input)),
+    dedupeKeyReleased: (input?: ProcessStoreQueueResourceDedupeKeyInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.dedupeKeyReleased(input)),
+    dedupeKeyHydrated: (input?: ProcessStoreQueueResourceDedupeKeyInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.dedupeKeyHydrated(input)),
+    entries: (queueId?: string, query?: RuntimeRecordQuery) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.entries(queueId, query)),
+    entry: (entryId: string, query?: RuntimeRecordQuery) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.entry(entryId, query)),
+    entriesByKey: (key: string, query?: RuntimeRecordQuery) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.entriesByKey(key, query)),
+    dedupeKeys: (queueId?: string, query?: RuntimeRecordQuery) =>
+      Effect.flatMap(ProcessStore, (store) => store.queueResource.dedupeKeys(queueId, query)),
+  };
 
   /**
    * Generic runtime projections derived from {@link ProcessStoreInterface.events}.

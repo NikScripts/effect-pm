@@ -288,6 +288,68 @@ describe("ProcessStore.memory", () => {
     }).pipe(Effect.provide(ProcessStore.layer)),
   )
 
+  it.live("records queue resource facts with ambient context", () =>
+    Effect.gen(function* () {
+      const first = DateTime.makeUnsafe("2026-01-01T03:50:00.000Z")
+      const second = DateTime.makeUnsafe("2026-01-01T03:51:00.000Z")
+
+      yield* ProcessStore.QueueResource.withQueue(
+        "email-queue",
+        ProcessStore.QueueResource.withBatch(
+          "batch-1",
+          Effect.all(
+            [
+              ProcessStore.QueueResource.withEntry(
+                "entry-1",
+                ProcessStore.QueueResource.entryEnqueued({
+                  key: "delivery-1",
+                  priority: "high",
+                  occurredAt: first,
+                }),
+              ),
+              ProcessStore.QueueResource.withEntry(
+                "entry-1",
+                ProcessStore.QueueResource.entryCompleted({
+                  key: "delivery-1",
+                  priority: "high",
+                  attempts: 1,
+                  durationMs: 8,
+                  occurredAt: second,
+                }),
+              ),
+              ProcessStore.QueueResource.withDedupeKey(
+                "delivery-1",
+                ProcessStore.QueueResource.dedupeKeyAdded({ occurredAt: first }),
+              ),
+            ],
+            { discard: true },
+          ),
+        ),
+      )
+
+      const entries = yield* ProcessStore.QueueResource.entries("email-queue")
+      const byKey = yield* ProcessStore.QueueResource.entriesByKey("delivery-1")
+      const entry = yield* ProcessStore.QueueResource.entry("entry-1")
+      const dedupeKeys = yield* ProcessStore.QueueResource.dedupeKeys("email-queue")
+
+      expect(entries.map((row) => row.type)).toEqual([
+        "queue.entry.completed",
+        "queue.entry.enqueued",
+      ])
+      expect(entries[0]?.processType).toBe("queue-resource")
+      expect(entries[0]?.processId).toBe("email-queue")
+      expect(entries[0]?.subjectType).toBe("queue-entry")
+      expect(entries[0]?.subjectId).toBe("entry-1")
+      expect(entries[0]?.key).toBe("delivery-1")
+      expect(entries[0]?.indexA).toBe("batch-1")
+      expect(entries[0]?.indexNames).toEqual(["batchId", "releaseId"])
+      expect(byKey).toHaveLength(2)
+      expect(Option.isSome(entry)).toBe(true)
+      expect(dedupeKeys.map((row) => row.type)).toEqual(["queue.dedupe-key.added"])
+      expect(dedupeKeys[0]?.key).toBe("delivery-1")
+    }).pipe(Effect.provide(ProcessStore.layer)),
+  )
+
   it.live("queries queue completion and lifecycle events", () =>
     Effect.gen(function* () {
       const store = yield* ProcessStore

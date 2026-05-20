@@ -54,6 +54,7 @@ import {
   Cause,
   Context,
   Data,
+  DateTime,
   Deferred,
   Duration,
   Effect,
@@ -70,13 +71,7 @@ import {
   Semaphore,
   Types,
 } from "effect";
-import {
-  ProcessStore,
-  type QueueItemCompletedEvent,
-  type QueueItemStatus,
-  type QueueLifecycleChangedEvent,
-  type QueueLifecycleTag,
-} from "./ProcessStore";
+import { ProcessStore } from "./ProcessStore";
 
 // ============================================================================
 // Public Types
@@ -707,6 +702,7 @@ function normalizeEnqueueInput<A>(input: A | ReadonlyArray<A>): ReadonlyArray<A>
  */
 interface InternalItem<T> {
   readonly item: T;
+  readonly entryId: string;
   /** Number of times this item has been re-enqueued via retry. */
   readonly retries: number;
   /** Priority level the item was originally enqueued at. */
@@ -923,50 +919,56 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     // This makes analytics automatic when ProcessStore is provided, but never required.
 
     const storeOption = yield* Effect.serviceOption(ProcessStore);
-    let eventSeq = 0;
+    let entrySeq = 0;
 
+    const nextEntryId = (): string => {
+      entrySeq++;
+      return `${queueName}-entry-${String(entrySeq)}`;
+    };
 
-    const recordItemEvent = (
-      status: QueueItemStatus,
-      priority: Priority,
-      durationMs: number,
-      attempts: number,
-      error?: string,
+    const recordEntryEvent = (
+      status: "enqueued" | "started" | "completed" | "failed" | "retried" | "exhausted",
+      internal: InternalItem<T>,
+      options?: {
+        readonly occurredAt?: DateTime.Utc;
+        readonly startedAt?: DateTime.Utc;
+        readonly durationMs?: number;
+        readonly error?: string;
+      },
     ): Effect.Effect<void> => {
       if (Option.isNone(storeOption)) return Effect.void;
-      return Effect.gen(function* () {
-        const now = yield* Effect.clockWith((c) => c.currentTimeMillis);
-        eventSeq++;
-        const event: QueueItemCompletedEvent = {
-          id: `${queueName}-item-${String(eventSeq)}`,
-          type: "queue.item.completed",
-          occurredAt: now,
-          entityType: "queue",
-          entityId: queueName,
-          item: { status, priority, durationMs, attempts, error },
-        };
-        yield* storeOption.value.append(event);
-      }).pipe(Effect.ignore);
+      const api = storeOption.value.queueResource;
+      const input = {
+        entryId: internal.entryId,
+        key: internal.key,
+        priority: internal.priority,
+        attempts: internal.retries + 1,
+        enqueuedAt: DateTime.makeUnsafe(internal.enqueuedAt),
+        occurredAt: options?.occurredAt,
+        startedAt: options?.startedAt,
+        durationMs: options?.durationMs,
+        error: options?.error,
+      };
+      const write =
+        status === "enqueued" ? api.entryEnqueued(input)
+        : status === "started" ? api.entryStarted(input)
+        : status === "completed" ? api.entryCompleted(input)
+        : status === "failed" ? api.entryFailed(input)
+        : status === "retried" ? api.entryRetried(input)
+        : api.entryExhausted(input);
+      return api.withQueue(queueName, api.withEntry(internal.entryId, write)).pipe(Effect.ignore);
     };
 
     const recordLifecycleEvent = (
-      tag: QueueLifecycleTag,
+      tag: "Started" | "Paused" | "Resumed" | "Shutdown" | "Cleared" | "Drained",
       itemsCleared?: number,
     ): Effect.Effect<void> => {
       if (Option.isNone(storeOption)) return Effect.void;
-      return Effect.gen(function* () {
-        const now = yield* Effect.clockWith((c) => c.currentTimeMillis);
-        eventSeq++;
-        const event: QueueLifecycleChangedEvent = {
-          id: `${queueName}-lifecycle-${String(eventSeq)}`,
-          type: "queue.lifecycle.changed",
-          occurredAt: now,
-          entityType: "queue",
-          entityId: queueName,
-          lifecycle: { tag, itemsCleared },
-        };
-        yield* storeOption.value.append(event);
-      }).pipe(Effect.ignore);
+      const api = storeOption.value.queueResource;
+      return api.withQueue(
+        queueName,
+        api.lifecycleChanged({ tag, itemsCleared }),
+      ).pipe(Effect.ignore);
     };
 
     // ─── Internal: wake signals (workers vs refill monitor) ───
@@ -995,6 +997,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       const n = yield* Queue.size(normalQueue);
       const l = yield* Queue.size(lowQueue);
       if (Math.max(0, h) + Math.max(0, n) + Math.max(0, l) === 0) {
+        yield* recordLifecycleEvent("Drained");
         yield* signalRefillWake;
       }
     });
@@ -1044,6 +1047,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           }
           toEnqueue.push({
             item,
+            entryId: nextEntryId(),
             retries,
             priority,
             enqueuedAt: enqueuedAt ?? (yield* Effect.clockWith((c) => c.currentTimeMillis)),
@@ -1055,6 +1059,11 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
         yield* Queue.offerAll(queueForPriority(priority), toEnqueue);
         yield* signalWorkerWake;
+        yield* Effect.forEach(
+          toEnqueue,
+          (internal) => recordEntryEvent("enqueued", internal),
+          { discard: true },
+        );
 
         // Fire-and-forget hooks
         if (config.onEnqueue !== undefined) {
@@ -1140,13 +1149,13 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
               Effect.ignore,
             );
           }
-          yield* recordItemEvent("exhausted", internal.priority, 0, internal.retries + 1);
+          yield* recordEntryEvent("exhausted", internal);
           yield* Effect.logDebug(
             `Retry exhausted for item in queue "${queueName}" after ${String(internal.retries + 1)} attempts`,
           );
           return;
         }
-        yield* recordItemEvent("retried", internal.priority, 0, internal.retries + 1);
+        yield* recordEntryEvent("retried", internal);
         yield* enqueueInternal(
           [internal.item],
           internal.priority,
@@ -1198,6 +1207,11 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       semaphore.withPermits(1)(
         Effect.gen(function* () {
           const start = yield* Effect.clockWith((c) => c.currentTimeMillis);
+          const startedAt = DateTime.makeUnsafe(start);
+          yield* recordEntryEvent("started", internal, {
+            occurredAt: startedAt,
+            startedAt,
+          });
           const ctx = makeEffectContext(internal);
           const exit = yield* Effect.exit(config.effect(internal.item, ctx));
           const end = yield* Effect.clockWith((c) => c.currentTimeMillis);
@@ -1206,12 +1220,15 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           yield* Ref.update(completedCount, (n) => n + 1);
 
           // Record to ProcessStore (if available)
-          yield* recordItemEvent(
+          yield* recordEntryEvent(
             Exit.isSuccess(exit) ? "completed" : "failed",
-            internal.priority,
-            Duration.toMillis(elapsed),
-            internal.retries + 1,
-            Exit.isFailure(exit) ? Cause.pretty(exit.cause) : undefined,
+            internal,
+            {
+              occurredAt: DateTime.makeUnsafe(end),
+              startedAt,
+              durationMs: Duration.toMillis(elapsed),
+              error: Exit.isFailure(exit) ? Cause.pretty(exit.cause) : undefined,
+            },
           );
 
           // Release dedup key so future items with same key can enter

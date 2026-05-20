@@ -206,6 +206,7 @@ export type {
 // Process Store
 export {
   ProcessStore,
+  ProcessStoreQueueResourceContextError,
   type QueryOpts,
   type StoreEventQuery,
   type RuntimeFactQuery,
@@ -218,6 +219,15 @@ export {
   type QueueItemCompletedEvent,
   type QueueLifecycleTag,
   type QueueLifecycleChangedEvent,
+  type ProcessStoreQueueResourceApi,
+  type ProcessStoreQueueResourceContext,
+  type ProcessStoreQueueResourceDedupeKeyInput,
+  type ProcessStoreQueueResourceDedupeKeyStatus,
+  type ProcessStoreQueueResourceEntryInput,
+  type ProcessStoreQueueResourceEntryStatus,
+  type ProcessStoreQueueResourceLifecycleInput,
+  type ProcessStoreQueueResourceLifecycleTag,
+  type ProcessStoreQueueResourcePriority,
   type RuntimeFactRecordedEvent,
   type RuntimeStateChangedEvent,
   type AnalyticsEvent,

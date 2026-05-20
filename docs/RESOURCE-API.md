@@ -414,7 +414,7 @@ const MyClientLive = HttpApiResource.layerEffect(MyClient, myCustomMake, {
 
 ## ProcessStore Integration
 
-All three resource modules automatically record analytics events to `ProcessStore` when it's available in the environment. No configuration needed.
+Resource modules automatically record runtime facts to `ProcessStore` when it's available in the environment. No configuration needed.
 
 ```typescript
 import { ProcessStore } from "@nikscripts/effect-pm"
@@ -422,17 +422,25 @@ import { ProcessStore } from "@nikscripts/effect-pm"
 // Without ProcessStore — resources work fine, no analytics
 program.pipe(Effect.provide(EmailQueue.layer))
 
-// With ProcessStore — queue/run events recorded automatically
+// With ProcessStore — queue/run records are written automatically
 program.pipe(
   Effect.provide(Layer.mergeAll(
     EmailQueue.layer,
-    ProcessStore.layer,  // just by being here, analytics activate
+    ProcessStore.layer,  // just by being here, records activate
   ))
 )
 ```
 
-Events recorded by QueueResource:
-- `queue.item.completed` — status, priority, duration, attempts, error
-- `queue.item.retried` — when ctx.retry is called
-- `queue.item.exhausted` — when retry limit reached
-- `queue.lifecycle.changed` — Started, Paused, Resumed, Shutdown, Cleared
+Records written by `QueueResource`:
+- `queue.entry.enqueued` — entry id, dedupe key, priority, attempt count, enqueue timestamp
+- `queue.entry.started` — entry id, dedupe key, priority, attempt count, start timestamp
+- `queue.entry.completed` / `queue.entry.failed` — duration, attempts, error when present
+- `queue.entry.retried` / `queue.entry.exhausted` — retry lifecycle
+- `queue.lifecycle.started|paused|resumed|shutdown|cleared|drained`
+
+Query queue records through the semantic `ProcessStore.QueueResource` helpers:
+
+```typescript
+const entries = yield* ProcessStore.QueueResource.entries("email-queue")
+const byKey = yield* ProcessStore.QueueResource.entriesByKey("delivery-123")
+```
