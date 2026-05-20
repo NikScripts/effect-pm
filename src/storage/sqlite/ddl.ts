@@ -71,8 +71,8 @@ const runtimeRecordsDdlStatements = (table: string): ReadonlyArray<string> => [
 export const installRuntimeRecordsSchema = (
   sql: SqlClient,
 ): Effect.Effect<void, SqlError> =>
-  Effect.gen(function* () {
-    for (const statement of runtimeRecordsDdlStatements(RUNTIME_RECORDS_TABLE)) {
-      yield* Effect.asVoid(sql.unsafe(statement).unprepared);
-    }
-  });
+  Effect.forEach(
+    runtimeRecordsDdlStatements(RUNTIME_RECORDS_TABLE),
+    (statement) => Effect.asVoid(sql.unsafe(statement).unprepared),
+    { discard: true },
+  );

@@ -51,17 +51,15 @@ const rowObjectToRecord = (row: object): Record<string, unknown> => {
   return out;
 };
 
+const rowToRuntimeRecord = (row: unknown): Effect.Effect<RuntimeRecord, never, never> =>
+  typeof row === "object" && row !== null
+    ? Effect.succeed(decodeRuntimeRecordRow(rowObjectToRecord(row)))
+    : Effect.die(new Error("SQLiteRuntimeStorage: expected object row from SELECT *"));
+
 const loadAllRuntimeRecords = (
   sql: SqlClient,
 ): Effect.Effect<ReadonlyArray<RuntimeRecord>, SqlError> =>
-  Effect.map(sql`SELECT * FROM ${sql(RUNTIME_RECORDS_TABLE)}`, (rows) =>
-    rows.map((row): RuntimeRecord => {
-      if (typeof row !== "object" || row === null) {
-        throw new Error("SQLiteRuntimeStorage: expected object row from SELECT *");
-      }
-      return decodeRuntimeRecordRow(rowObjectToRecord(row));
-    }),
-  );
+  Effect.flatMap(sql`SELECT * FROM ${sql(RUNTIME_RECORDS_TABLE)}`, (rows) => Effect.forEach(rows, rowToRuntimeRecord));
 
 const readConstraintCode = (cause: unknown): string | undefined => {
   if (typeof cause !== "object" || cause === null || !("code" in cause)) {
