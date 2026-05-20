@@ -143,6 +143,9 @@ When adding a built-in adapter:
 ## Current built-in adapter status
 
 - `RuntimeStorage.memory` is the reference implementation.
+- `SQLiteRuntimeStorage` (`@nikscripts/effect-pm/storage/sqlite`) is the first
+  durable `RuntimeStorageService` adapter (file-backed SQLite via
+  `better-sqlite3`).
 - `ProcessStore.layerRuntimeStorage` is the bridge from `RuntimeStorage` to
   module-facing `ProcessStore`.
 - `ProcessStore.fileLayer` is still an append-only NDJSON compatibility store,

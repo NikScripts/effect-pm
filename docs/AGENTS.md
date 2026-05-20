@@ -119,7 +119,10 @@ dependencies are missing in a fresh cloud workspace.
 
 **No external services required for the standard checks.** The Vitest suites and
 examples run in-process. Prisma adapter tests use structural mocks rather than a
-real database.
+real database. SQLite `RuntimeStorage` tests exercise `better-sqlite3` locally;
+`package.json` lists `better-sqlite3` under `pnpm.onlyBuiltDependencies` so its
+install script can compile native bindings when installs run with ignored
+scripts by default.
 
 **Key commands:**
 

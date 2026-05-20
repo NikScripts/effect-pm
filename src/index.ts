@@ -46,7 +46,7 @@
  * **`@nikscripts/effect-pm/ControlService`**.
  *
  * Storage adapters use lower-case subpaths:
- * **`@nikscripts/effect-pm/storage/file`** and
+ * **`@nikscripts/effect-pm/storage/file`**, **`@nikscripts/effect-pm/storage/sqlite`**, and
  * **`@nikscripts/effect-pm/storage/prisma`**. The legacy
  * **`@nikscripts/effect-pm/prisma`** subpath remains available for
  * compatibility.

@@ -240,7 +240,8 @@ export const selectRuntimeRecords = (
     query,
   );
 
-const applyPatch = (
+/** @internal */
+export const applyRuntimeRecordPatch = (
   record: RuntimeRecord,
   patch: RuntimeRecordPatch,
 ): RuntimeRecord =>
@@ -300,7 +301,7 @@ const makeInMemoryRuntimeStorage: Effect.Effect<
           if (record.readonly === true) {
             continue;
           }
-          records.set(record.id, applyPatch(record, patch));
+          records.set(record.id, applyRuntimeRecordPatch(record, patch));
           updated++;
         }
         return { matched, updated };

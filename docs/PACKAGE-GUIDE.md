@@ -81,12 +81,16 @@ dedicated subpaths for focused imports:
 - `@nikscripts/effect-pm/ProcessManager`
 - `@nikscripts/effect-pm/ControlService`
 - `@nikscripts/effect-pm/storage/file`
+- `@nikscripts/effect-pm/storage/sqlite`
 - `@nikscripts/effect-pm/storage/prisma`
 
-Storage adapters use lowercase path segments. File-backed storage is preferred
-from `@nikscripts/effect-pm/storage/file`; root `ProcessStore.file` /
-`ProcessStore.fileLayer` remain current compatibility helpers. Prisma paths are
-currently placeholders pending a RuntimeStorage-backed rewrite.
+Storage adapters use lowercase path segments. File-backed NDJSON analytics
+storage is preferred from `@nikscripts/effect-pm/storage/file`; root
+`ProcessStore.file` / `ProcessStore.fileLayer` remain current compatibility
+helpers. Durable normalized runtime records can use
+`@nikscripts/effect-pm/storage/sqlite` (`SQLiteRuntimeStorage`) with
+`ProcessStore.layerRuntimeStorage`. Prisma paths are currently placeholders
+pending a RuntimeStorage-backed rewrite.
 
 For durable adapter work, start with
 [RUNTIME-STORAGE-ADAPTER-GUIDE.md](./RUNTIME-STORAGE-ADAPTER-GUIDE.md).

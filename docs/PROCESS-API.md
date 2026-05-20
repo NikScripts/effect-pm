@@ -301,6 +301,11 @@ void Effect.runPromise(program.pipe(
 ));
 ```
 
+For durable **normalized `RuntimeRecord` rows** (the `RuntimeStorage` contract),
+use `@nikscripts/effect-pm/storage/sqlite` and compose
+`ProcessStore.layerRuntimeStorage` with `SQLiteRuntimeStorage.layer` or
+`SQLiteRuntimeStorage.make`. See [RUNTIME-STORAGE-ADAPTER-GUIDE.md](./RUNTIME-STORAGE-ADAPTER-GUIDE.md).
+
 ---
 
 ## `RuntimeObserver` (runtime facts/state)

@@ -570,6 +570,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 - **`ProcessStore.memory`** — raw `Effect<ProcessStoreInterface>`.
 - **`ProcessStore.file(path)`** / **`ProcessStore.fileLayer(path)`** — NDJSON append-only local file.
 - **`@nikscripts/effect-pm/storage/file`** — `file`, `fileLayer`, `FileProcessStore` facade.
+- **`@nikscripts/effect-pm/storage/sqlite`** — `SQLiteRuntimeStorage` durable `RuntimeStorageService` via `better-sqlite3`.
 - **`PrismaProcessStore.layer({ client })`** / **`layerFromContext`** / **`make(client)`** — intentionally unavailable until Prisma is rebuilt as a `RuntimeStorage` adapter.
 - **`@nikscripts/effect-pm/storage/prisma`** or legacy **`@nikscripts/effect-pm/prisma`** — placeholder surface for the upcoming rewrite.
 
@@ -721,7 +722,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 ## Package import surfaces (for doc “where do I import X”)
 
 - **Root** `@nikscripts/effect-pm` — barrel in §index exports (Process, Polling, Schedule, Group, Queue, Run, Http*, Store, Manager, Control, CLI, disarmed helpers, types).
-- **Subpaths** — `/Process`, `/QueueResource`, `/ProcessGroup`, `/ProcessStore`, `/ProcessManager`, `/ControlService`, `/storage/file`, `/storage/prisma`, `/prisma` (legacy).
+- **Subpaths** — `/Process`, `/QueueResource`, `/ProcessGroup`, `/ProcessStore`, `/ProcessManager`, `/ControlService`, `/storage/file`, `/storage/sqlite`, `/storage/prisma`, `/prisma` (legacy).
 
 ---
 
