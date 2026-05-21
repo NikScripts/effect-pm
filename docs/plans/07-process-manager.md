@@ -5,7 +5,9 @@
 Partially implemented. Typed group entries, group contracts, contract-aligned
 control routes, `ProcessManager.connect`, `ProcessManager.Endpoint`,
 `ProcessManager.cli`, and `ProcessGroup.remoteLayer` have landed. Remote queue
-enqueue, `RemoteService`, and multi-host deployment coordination remain planned.
+enqueue, group-bundled endpoint config, `Endpoint` direct export,
+`RemoteService`, daemon-backed local launch, and multi-host deployment
+coordination remain planned.
 
 ## Intent
 
@@ -691,6 +693,216 @@ This avoids repeating connection logic and gives later auth/RPC middleware a
 single home. The critical rule is: group classes provide contracts; connection
 layers provide locations.
 
+### CLI, daemon, and endpoint config decisions
+
+Current CLI surfaces are split:
+
+- `src/bin/effect-pm.ts` is the package binary today, but it is an admin CLI for
+  Prisma schema utilities (`prisma:print-schema`, `add prisma`), not the
+  ProcessManager runtime CLI.
+- `src/cli.ts` is the older single-group HTTP CLI. It talks directly to
+  `ControlService` REST aliases with HTTP paths and should stay legacy
+  compatibility rather than the model for new runtime commands.
+- `ProcessManager.cli(groups)` is the newer multi-group control CLI. Runtime
+  controls resolve a target from imported group contracts, get an endpoint from
+  configuration, build a `RemoteProcessManager`, and send commands through
+  `ControlTransportClient`.
+
+Future runtime commands should therefore use:
+
+```text
+CLI -> ProcessManager -> ControlTransport -> ControlService / daemon / remote group
+```
+
+Non-runtime admin tooling, such as Prisma setup commands, does not need to go
+through `ProcessManager`.
+
+The CLI should be a command entrypoint, not a second long-running manager
+program. `ProcessManager` sends commands to group control endpoints; it does not
+own group fibers, queue workers, or application runtime state. The only planned
+same-process exception is a test-only in-memory transport so type tests and
+small integration tests can avoid process spawning.
+
+The long-term CLI flow is:
+
+```typescript
+import { Endpoint, ProcessGroup, ProcessManager } from "@nikscripts/effect-pm";
+
+class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+  "@app/BillingGroup",
+  [StripeSync, EmailQueue] as const,
+  [
+    Endpoint.local(
+      Endpoint.module(
+        () => import("./billing.runtime"),
+        (module) => module.BillingRuntime,
+      ),
+    ).default,
+    Endpoint.production(
+      Endpoint.http({
+        transport: ProcessManager.Transport.http({
+          baseUrl: "https://billing.internal",
+        }),
+      }),
+    ),
+  ],
+) {}
+
+yield* ProcessManager.cli([BillingGroup] as const);
+```
+
+`Endpoint` should be exported both as a standalone namespace and as
+`ProcessManager.Endpoint`, so callers can choose either:
+
+```typescript
+import { Endpoint, ProcessManager } from "@nikscripts/effect-pm";
+
+Endpoint.local(/* ... */);
+ProcessManager.Endpoint.local(/* ... */);
+```
+
+The third `ProcessGroup.Service` / `ProcessGroup.make` argument should become a
+heterogeneous config item array. Endpoint items are the first item type, but the
+shape should also have room for logs, fallback, daemon, security, auth, and
+future transport policy without growing another positional options object.
+
+Endpoint items should be builders, not raw objects:
+
+```typescript
+[
+  Endpoint.local(Endpoint.module(() => import("./billing.runtime"))).default,
+  Endpoint.production(Endpoint.http({ transport: ProcessManager.Transport.http({ baseUrl }) })),
+  Endpoint.define("preview", Endpoint.http({ transport: ProcessManager.Transport.http({ baseUrl }) })),
+]
+```
+
+Endpoint config rules:
+
+- Endpoint labels are required. Label helpers such as `local`, `production`, and
+  `define("preview", ...)` produce labeled config items. The CLI selects one
+  with `--target <label>` and falls back to the item marked with `.default` when
+  no target is provided.
+- Only one endpoint item for a group may be default. Enforce that by derived
+  config shape/runtime validation rather than a separate boolean outside the
+  item list.
+- `baseUrl` should stay inside `Endpoint.http(...)` /
+  `ProcessManager.Transport.http(...)`; CLI-level config should not expose raw
+  transport fields.
+- Group-bundled endpoint config is the default. An explicit external config
+  layer overrides all group-bundled config for environments that must replace
+  targets without editing the group source.
+- `ProcessManager.GroupConfig(Group, ...)` can remain public for external config
+  files, but `ProcessGroup.Service` should wrap it internally when endpoints are
+  declared in the group.
+
+`Endpoint.module` is the TypeScript-first local launch descriptor. It accepts a
+dynamic `import()` thunk and an optional selector:
+
+```typescript
+Endpoint.module(() => import("./billing.runtime"));
+Endpoint.module(
+  () => import("./billing.runtime"),
+  (module) => module.BillingRuntime,
+);
+```
+
+If no selector is supplied, `Endpoint.module` may read the default export as a
+convenience. A named selector is preferred when the group, runtime, and config
+share one file, because TypeScript validates the module path and selected export
+shape without requiring a fragile string `exportName`. The dynamic import is a
+typed descriptor for validation and bundling; the CLI must still launch the
+runtime in a child process, wait for its `ControlService`, then talk over the
+selected transport. It must not import and run group fibers in the CLI process.
+
+`Endpoint.command` remains an escape hatch, not the preferred local model. If it
+is needed, accept an Effect `ChildProcess` command value instead of an ad hoc
+`{ command, args }` object so launching stays scoped, testable, and platform
+provided. `Endpoint.module` can later compile to the same launcher machinery
+internally, but users should be able to point at a typed runtime module instead
+of spelling package scripts.
+
+The runtime module should export a local runtime descriptor that owns the app
+layer and control service:
+
+```typescript
+export const BillingRuntime = ProcessManager.LocalRuntime(BillingGroup, {
+  layer: BillingGroup.layer,
+  control: ControlService.layerHttp(BillingGroup, { port: 32130 }),
+});
+```
+
+This avoids the circular-dependency trap:
+
+1. the group owns only declarations and optional lazy endpoint descriptors;
+2. the runtime descriptor owns live layers and `ControlService`;
+3. the CLI reads descriptors, starts a child runtime when needed, then sends
+   protocol commands.
+
+Contracts fit at every boundary. `ProcessGroup.Service` carries the local
+contract, `Endpoint.module` validates that the selected runtime targets that
+group, and `Endpoint.http` verifies the remote contract before commands. Raw
+contract objects remain useful for generated clients that cannot import the
+group class.
+
+Local/remote status should be observable before commands. A configured group can
+show as `pending`, `online`, `offline`, or contract-drifted after a bounded
+probe. The CLI should not pretend missing endpoints are defects; connection and
+contract failures are normal checked control results.
+
+```typescript
+type GroupConnectionStatus =
+  | { readonly _tag: "Configured" }
+  | { readonly _tag: "Pending"; readonly since: number }
+  | { readonly _tag: "Online"; readonly endpoint: string }
+  | { readonly _tag: "Offline"; readonly reason: string }
+  | { readonly _tag: "StartingLocal"; readonly pid?: number }
+  | { readonly _tag: "FallbackLocal"; readonly pid: number; readonly reason: string };
+```
+
+Local launcher state should be daemon-compatible from the first slice. Store
+small process-table files and logs under package-local paths such as:
+
+```text
+.effect-pm/run/groups/<safe-group-id>.json
+.effect-pm/logs/<safe-group-id>.out.log
+.effect-pm/logs/<safe-group-id>.err.log
+```
+
+Remote-to-local fallback is valuable but must be opt-in. Silent fallback can
+duplicate workers, so fallback policy belongs in explicit endpoint/fallback
+config, not in CLI defaults.
+
+Logs are a sibling transport capability, not a hidden HTTP-only feature. Plan
+for a `LogTransport` / log endpoint item that can:
+
+- follow one group;
+- merge logs from several groups;
+- keep a log stream open while the operator enters commands;
+- switch from remote logs to locally launched logs when fallback starts a local
+  runtime.
+
+The daemon path should grow from these same config items. The first CLI version
+can launch child runtimes directly. A later daemon can own those child runtimes,
+track PIDs, expose health/log/control channels, and apply fallback policy such as
+"use remote, launch local if remote is unavailable or drops." The operator API
+should remain the same: group + endpoint label + command.
+
+Implementation order:
+
+1. Add group config item types and `Endpoint` direct export /
+   `ProcessManager.Endpoint` access.
+2. Add group-bundled endpoint items on `ProcessGroup.Service` /
+   `ProcessGroup.make`, with external config-layer overrides.
+3. Add endpoint label selection and configured group status (`pending`,
+   `online`, `offline`, drift).
+4. Add `Endpoint.http` as the first real transport endpoint.
+5. Add `Endpoint.module` type shape and `LocalRuntime` descriptor, but keep
+   execution out-of-process.
+6. Add child runtime launcher/run-state/log files for local endpoints.
+7. Route all runtime commands through `ProcessManager`.
+8. Add local file-backed log streaming, then remote log transport.
+9. Add the daemon endpoint after direct launcher behavior works.
+
 ### Resolved remote layer decisions
 
 Use Effect's normal service/layer model: the `Context.Service` key declares one
@@ -1061,6 +1273,23 @@ Implemented initial surface:
 - Add `ProcessGroup.remoteLayers` once process/queue remote handle error
   semantics are decided.
 - Do not implement queue/process remote layers by erasing remote failures.
+
+Next endpoint-config surface:
+
+- Add an `Endpoint` namespace export that is also available as
+  `ProcessManager.Endpoint`.
+- Add endpoint config items for `Endpoint.local`, `Endpoint.http`, and
+  `Endpoint.module`.
+- Let `ProcessGroup.Service` / `ProcessGroup.make` accept a heterogeneous config
+  item array as the third argument, with endpoint items as the first supported
+  item type.
+- Add `ProcessManager.GroupConfig(Group, ...)` for external config layers, while
+  letting group-bundled endpoint items wrap that config internally.
+- Add `ProcessManager.LocalRuntime(Group, ...)` as the module target used by
+  child-process launches.
+- Keep same-process endpoints test-only.
+- Add log transport config as a sibling endpoint capability before building a
+  rich daemon UX.
 
 ### Slice 7 - Activation and handoff
 

@@ -5,6 +5,12 @@ This form is a transcript-style design example, not a runnable script.
 `ProcessManager.ConnectionRegistry.layer(...)`, so the CLI can derive group and
 target ids from the imported group contracts.
 
+The current implementation uses the connection registry directly. The planned
+CLI/daemon model lets groups bundle endpoint config with their declarations,
+while still allowing an external config layer to override those defaults.
+Runtime commands should go through `ProcessManager`; non-runtime admin commands
+such as Prisma setup can stay separate under the same binary.
+
 ## Setup shape
 
 ```typescript
@@ -30,6 +36,53 @@ yield* ProcessManager.cli([NorthWestBillingGroup, SouthWestBillingGroup] as cons
   Effect.provide(RemoteGroupsLive),
 );
 ```
+
+## Planned bundled endpoint shape
+
+Endpoint definitions should be available through both `ProcessManager.Endpoint`
+and a direct `Endpoint` export:
+
+```typescript
+import { Endpoint, ProcessGroup, ProcessManager } from "@nikscripts/effect-pm";
+
+class NorthWestBillingGroup extends ProcessGroup.Service<NorthWestBillingGroup>()(
+  "@repo/north-west/BillingGroup",
+  [NorthWestSyncInvoices, NorthWestBillingEmailQueue] as const,
+  [
+    Endpoint.local(
+      Endpoint.module(
+        () => import("./north-west-billing.runtime"),
+        (module) => module.NorthWestBillingRuntime,
+      ),
+    ).default,
+    ProcessManager.Endpoint.production(
+      Endpoint.http({
+        transport: ProcessManager.Transport.http({
+          baseUrl: "https://north-west-billing.internal",
+        }),
+      }),
+    ),
+  ],
+) {}
+```
+
+Rules captured from the CLI/daemon design discussion:
+
+- The CLI is the entrypoint for commands; `ProcessManager` sends commands and
+  does not run group fibers in-process.
+- `Endpoint.module` uses a dynamic import thunk plus an optional selector so
+  TypeScript validates the file path and export shape.
+- A module endpoint launches a child runtime that exposes its own
+  `ControlService`; same-process control is reserved for tests.
+- Each endpoint item has a label, and exactly one group-bundled endpoint may be
+  marked with `.default`.
+- Explicit config layers override group-bundled endpoint config.
+- Local groups can report `pending`, `online`, `offline`, or contract drift after
+  bounded probes.
+- Logs should be a sibling transport capability so operators can follow merged
+  group logs while still issuing commands.
+- A future daemon can reuse the same endpoint config items while taking over
+  child process ownership, run-state files, and log aggregation.
 
 ## Implemented command flow
 
