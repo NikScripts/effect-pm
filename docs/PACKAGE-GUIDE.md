@@ -21,6 +21,14 @@ see
 for the operator flow. Multi-host coordination, `RemoteService`, and
 remote queue enqueue stay planned until schema-backed queue item contracts land.
 
+`Endpoint` is also exported directly and available as `ProcessManager.Endpoint`.
+The callable form remains the endpoint-service factory; attached helpers such as
+`Endpoint.local(...)`, `Endpoint.production(...)`, `Endpoint.define(...)`,
+`Endpoint.http(...)`, and `Endpoint.module(...)` build group-bundled endpoint
+config items for the future launcher/daemon CLI. `ProcessGroup.Service` and
+`ProcessGroup.make` now accept a third config-item array and service definitions
+expose that array as `Group.config`.
+
 ---
 
 ## Mental model (keep this picture)

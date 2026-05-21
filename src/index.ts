@@ -195,21 +195,30 @@ export { createCli, runCli } from "./cli";
 
 // Process Manager
 export {
+  Endpoint,
   ProcessManager,
   ProcessManagerConnectionError,
   ProcessManagerConnectionRegistry,
   ProcessManagerRequestError,
+  Transport,
 } from "./ProcessManager";
 export type {
+  ProcessManagerEndpointConfigItem,
   ProcessManagerConnectionConfigMap,
   ProcessManagerCliConfig,
   ProcessManagerConnectionMap,
   ProcessManagerConnectionRegistryService,
+  ProcessManagerEndpointDefinition,
   RemoteProcessManager,
   RemoteProcessControls,
   RemoteQueueControls,
   ProcessManagerEndpointConfig,
   ProcessManagerEndpoint,
+  ProcessManagerGroupConfigItem,
+  ProcessManagerHttpEndpointDefinition,
+  ProcessManagerHttpTransport,
+  ProcessManagerLocalRuntimeDefinition,
+  ProcessManagerModuleEndpointDefinition,
 } from "./ProcessManager";
 
 // Process Store

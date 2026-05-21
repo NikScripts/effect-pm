@@ -87,6 +87,199 @@ export type ProcessManagerEndpointConfig =
     };
 
 /**
+ * HTTP transport descriptor used by group-bundled endpoint config.
+ *
+ * @public
+ */
+export interface ProcessManagerHttpTransport {
+  readonly _tag: "ProcessManagerHttpTransport";
+  readonly baseUrl: string;
+}
+
+/**
+ * Transport descriptor namespace for future protocol-agnostic endpoint config.
+ *
+ * @public
+ */
+export const Transport = {
+  http: (config: { readonly baseUrl: string }): ProcessManagerHttpTransport => ({
+    _tag: "ProcessManagerHttpTransport",
+    baseUrl: config.baseUrl,
+  }),
+};
+
+/**
+ * Type-preserving descriptor for a local runtime module. It records the group,
+ * application layer, and control layer without running them in the CLI process.
+ *
+ * @public
+ */
+export interface ProcessManagerLocalRuntimeDefinition<
+  Group extends ContractSource<AnyProcessGroupContract>,
+  RuntimeLayer,
+  ControlLayer,
+> {
+  readonly _tag: "ProcessManagerLocalRuntime";
+  readonly group: Group;
+  readonly layer: RuntimeLayer;
+  readonly control: ControlLayer;
+}
+
+type AnyProcessManagerLocalRuntimeDefinition = ProcessManagerLocalRuntimeDefinition<
+  ContractSource<AnyProcessGroupContract>,
+  unknown,
+  unknown
+>;
+
+const isProcessManagerLocalRuntimeDefinition = (
+  value: unknown,
+): value is AnyProcessManagerLocalRuntimeDefinition =>
+  typeof value === "object" &&
+  value !== null &&
+  "_tag" in value &&
+  value._tag === "ProcessManagerLocalRuntime";
+
+/**
+ * Create a type-preserving descriptor for a local group runtime. The descriptor
+ * is intended for child-runtime launchers; constructing it does not run the
+ * group.
+ *
+ * @public
+ */
+export const LocalRuntime = <
+  const Group extends ContractSource<AnyProcessGroupContract>,
+  RuntimeLayer,
+  ControlLayer,
+>(
+  group: Group,
+  config: {
+    readonly layer: RuntimeLayer;
+    readonly control: ControlLayer;
+  },
+): ProcessManagerLocalRuntimeDefinition<Group, RuntimeLayer, ControlLayer> => ({
+  _tag: "ProcessManagerLocalRuntime",
+  group,
+  layer: config.layer,
+  control: config.control,
+});
+
+/**
+ * HTTP endpoint definition. The endpoint will provide a ControlTransportClient
+ * when interpreted by a CLI/daemon runtime.
+ *
+ * @public
+ */
+export interface ProcessManagerHttpEndpointDefinition {
+  readonly _tag: "ProcessManagerHttpEndpoint";
+  readonly transport: ProcessManagerHttpTransport;
+}
+
+/**
+ * Module endpoint definition. The loader is a real dynamic import thunk so
+ * TypeScript can validate module paths and selected exports in TS config files.
+ *
+ * @public
+ */
+export interface ProcessManagerModuleEndpointDefinition<
+  Runtime extends AnyProcessManagerLocalRuntimeDefinition,
+> {
+  readonly _tag: "ProcessManagerModuleEndpoint";
+  readonly load: () => Promise<unknown>;
+  readonly select: (module: unknown) => Runtime;
+}
+
+/**
+ * Endpoint definitions that can appear in a group config item array.
+ *
+ * @public
+ */
+export type ProcessManagerEndpointDefinition =
+  | ProcessManagerHttpEndpointDefinition
+  | ProcessManagerModuleEndpointDefinition<AnyProcessManagerLocalRuntimeDefinition>;
+
+/**
+ * Labeled endpoint config item contributed by a ProcessGroup config array.
+ *
+ * @public
+ */
+export interface ProcessManagerEndpointConfigItem<
+  Label extends string,
+  Definition extends ProcessManagerEndpointDefinition,
+  IsDefault extends boolean,
+> {
+  readonly _tag: "ProcessManagerEndpointConfigItem";
+  readonly label: Label;
+  readonly endpoint: Definition;
+  readonly isDefault: IsDefault;
+  readonly default: ProcessManagerEndpointConfigItem<Label, Definition, true>;
+}
+
+/**
+ * Heterogeneous group config item. Endpoint items are the first supported item
+ * type; logs, fallback, daemon, and security items can join this union later.
+ *
+ * @public
+ */
+export type ProcessManagerGroupConfigItem =
+  ProcessManagerEndpointConfigItem<string, ProcessManagerEndpointDefinition, boolean>;
+
+const makeEndpointConfigItem = <
+  const Label extends string,
+  const Definition extends ProcessManagerEndpointDefinition,
+  const IsDefault extends boolean,
+>(
+  label: Label,
+  endpoint: Definition,
+  isDefault: IsDefault,
+): ProcessManagerEndpointConfigItem<Label, Definition, IsDefault> => ({
+  _tag: "ProcessManagerEndpointConfigItem",
+  label,
+  endpoint,
+  isDefault,
+  get default() {
+    return makeEndpointConfigItem(label, endpoint, true);
+  },
+});
+
+const endpointHttp = (
+  config: { readonly transport: ProcessManagerHttpTransport },
+): ProcessManagerHttpEndpointDefinition => ({
+  _tag: "ProcessManagerHttpEndpoint",
+  transport: config.transport,
+});
+
+function endpointModule<
+  const Module extends { readonly default: AnyProcessManagerLocalRuntimeDefinition },
+>(
+  load: () => Promise<Module>,
+): ProcessManagerModuleEndpointDefinition<Module["default"]>;
+function endpointModule<
+  const Module,
+  const Runtime extends AnyProcessManagerLocalRuntimeDefinition,
+>(
+  load: () => Promise<Module>,
+  select: (module: Module) => Runtime,
+): ProcessManagerModuleEndpointDefinition<Runtime>;
+function endpointModule(
+  load: () => Promise<unknown>,
+  select?: (module: unknown) => AnyProcessManagerLocalRuntimeDefinition,
+): ProcessManagerModuleEndpointDefinition<AnyProcessManagerLocalRuntimeDefinition> {
+  return {
+    _tag: "ProcessManagerModuleEndpoint",
+    load,
+    select: select ?? ((module) => {
+      if (typeof module === "object" && module !== null && "default" in module) {
+        const value = module.default;
+        if (isProcessManagerLocalRuntimeDefinition(value)) {
+          return value;
+        }
+      }
+      throw new TypeError("Endpoint.module default export must be a ProcessManager.LocalRuntime descriptor");
+    }),
+  };
+}
+
+/**
  * Error returned when a remote ProcessGroup request fails or returns malformed
  * data.
  *
@@ -1287,6 +1480,38 @@ function makeEndpointFactory<Self>() {
 }
 
 /**
+ * Endpoint namespace for both endpoint-service factories and future
+ * group-bundled endpoint config items.
+ *
+ * @remarks
+ * The callable form remains the existing injectable endpoint service factory:
+ * `ProcessManager.Endpoint<Self>()(Group)`. The attached helpers build labeled
+ * endpoint config items for `ProcessGroup.Service(..., configItems)`.
+ *
+ * @public
+ */
+export const Endpoint = Object.assign(makeEndpointFactory, {
+  http: endpointHttp,
+  module: endpointModule,
+  local: <const Definition extends ProcessManagerEndpointDefinition>(
+    endpoint: Definition,
+  ): ProcessManagerEndpointConfigItem<"local", Definition, false> =>
+    makeEndpointConfigItem("local", endpoint, false),
+  production: <const Definition extends ProcessManagerEndpointDefinition>(
+    endpoint: Definition,
+  ): ProcessManagerEndpointConfigItem<"production", Definition, false> =>
+    makeEndpointConfigItem("production", endpoint, false),
+  define: <
+    const Label extends string,
+    const Definition extends ProcessManagerEndpointDefinition,
+  >(
+    label: Label,
+    endpoint: Definition,
+  ): ProcessManagerEndpointConfigItem<Label, Definition, false> =>
+    makeEndpointConfigItem(label, endpoint, false),
+});
+
+/**
  * Remote ProcessManager namespace.
  *
  * @public
@@ -1298,5 +1523,7 @@ export const ProcessManager = {
     layer: makeConnectionRegistryLayer,
     layerConfig: makeConnectionRegistryConfigLayer,
   },
-  Endpoint: makeEndpointFactory,
-} as const;
+  Endpoint,
+  Transport,
+  LocalRuntime,
+};

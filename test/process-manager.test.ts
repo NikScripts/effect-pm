@@ -6,6 +6,7 @@ import {
   ControlRouter,
   ControlService,
   ControlTransportClient,
+  Endpoint,
   makeControlProtocolResponseEnvelope,
   makeControlProtocolRouter,
   Process,
@@ -30,6 +31,41 @@ const waitForQueueCompleted = (
   });
 
 describe("ProcessManager", () => {
+  it("builds endpoint config items from the direct Endpoint export", () => {
+    const httpEndpoint = Endpoint.http({
+      transport: ProcessManager.Transport.http({
+        baseUrl: "http://127.0.0.1:32130",
+      }),
+    });
+    const local = Endpoint.local(httpEndpoint).default;
+    const production = ProcessManager.Endpoint.production(httpEndpoint);
+    const preview = Endpoint.define("preview", httpEndpoint);
+
+    expect(Endpoint).toBe(ProcessManager.Endpoint);
+    expect(httpEndpoint).toEqual({
+      _tag: "ProcessManagerHttpEndpoint",
+      transport: {
+        _tag: "ProcessManagerHttpTransport",
+        baseUrl: "http://127.0.0.1:32130",
+      },
+    });
+    expect(local).toMatchObject({
+      _tag: "ProcessManagerEndpointConfigItem",
+      label: "local",
+      isDefault: true,
+    });
+    expect(production).toMatchObject({
+      _tag: "ProcessManagerEndpointConfigItem",
+      label: "production",
+      isDefault: false,
+    });
+    expect(preview).toMatchObject({
+      _tag: "ProcessManagerEndpointConfigItem",
+      label: "preview",
+      isDefault: false,
+    });
+  });
+
   it.live("connects through an in-memory control transport without HTTP", () =>
     Effect.gen(function* () {
       const runs = yield* Ref.make(0);

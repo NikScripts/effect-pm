@@ -219,8 +219,8 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### Construction forms
 
-- **`ProcessGroup.make(id, entries as const)`** — `Effect` yielding **`TypedProcessGroup`**; requires env for all queue entry tags.
-- **`ProcessGroup.Service(id, entries)`** — injectable class: static **`id`**, **`entries`**, **`contract`**, **`make`**, **`layer`**; yieldable as group service.
+- **`ProcessGroup.make(id, entries as const, configItems?)`** — `Effect` yielding **`TypedProcessGroup`**; requires env for all queue entry tags.
+- **`ProcessGroup.Service(id, entries, configItems?)`** — injectable class: static **`id`**, **`entries`**, **`config`**, **`contract`**, **`make`**, **`layer`**; yieldable as group service.
 - **`ProcessGroup.remoteLayer(GroupService, Endpoint)`** — same service key, HTTP-backed; see Remote group.
 
 ### Entry forms in tuple
@@ -376,6 +376,15 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 - **`ProcessManager.Endpoint<Self>()(Group)`** — registry-backed.
 - **`ProcessManager.Endpoint<Self>()(Group, { baseUrl })`** — inline URL.
+- **`Endpoint`** — direct export alias for `ProcessManager.Endpoint`.
+- **`Endpoint.http({ transport })`** — endpoint definition for an HTTP control
+  transport descriptor.
+- **`Endpoint.module(load, select?)`** — typed module endpoint descriptor for a
+  future out-of-process local runtime launcher.
+- **`Endpoint.local(definition).default`**, **`Endpoint.production(definition)`**,
+  **`Endpoint.define(label, definition)`** — labeled endpoint config items for a
+  `ProcessGroup.Service(..., configItems)` / `ProcessGroup.make(..., configItems)`
+  third argument.
 
 ### `RemoteProcessManager` API
 

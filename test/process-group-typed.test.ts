@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Context, Duration, Effect, Exit, Layer, Ref, Schema } from "effect";
 import type { HttpClient } from "effect/unstable/http";
 import {
+  Endpoint,
   Process,
   ProcessGroup,
   ProcessGroupControlError,
@@ -67,6 +68,30 @@ class TypeGroup extends ProcessGroup.Service<TypeGroup>()("@test/TypeGroup", [
   TypeInvoiceQueue,
 ] as const) {}
 
+const TypeRuntime = ProcessManager.LocalRuntime(TypeGroup, {
+  layer: TypeGroup.layer,
+  control: Layer.empty,
+});
+
+const TypeModuleEndpoint = Endpoint.module(
+  () => Promise.resolve({ default: TypeRuntime }),
+);
+
+class TypeConfiguredGroup extends ProcessGroup.Service<TypeConfiguredGroup>()(
+  "@test/TypeConfiguredGroup",
+  [TypeProcess, TypeEmailQueue] as const,
+  [
+    Endpoint.local(TypeModuleEndpoint).default,
+    ProcessManager.Endpoint.production(
+      Endpoint.http({
+        transport: ProcessManager.Transport.http({
+          baseUrl: "http://127.0.0.1:32135",
+        }),
+      }),
+    ),
+  ],
+) {}
+
 /**
  * @effect-expect-leaking HttpClient.HttpClient
  */
@@ -127,6 +152,7 @@ export const processGroupTypeChecks = Effect.gen(function* () {
     },
   );
   const _registryConnect = ProcessManager.connect(TypeGroup);
+  const _configuredGroupConfig = TypeConfiguredGroup.config;
 
   type DirectGroupId = typeof directGroup.id;
   type DirectQueueEnqueueError = EffectError<ReturnType<typeof _directQueueControls.enqueue>>;
@@ -136,6 +162,7 @@ export const processGroupTypeChecks = Effect.gen(function* () {
   type HookQueueLayerIn = LayerIn<typeof _hookQueueLayer>;
   type RegistryLayerOut = LayerOut<typeof _registryLayer>;
   type RegistryConnectIn = Effect.Services<typeof _registryConnect>;
+  type ConfiguredGroupDefault = typeof _configuredGroupConfig[0]["isDefault"];
 
   assertType<Assert<IsEqual<DirectGroupId, "@test/TypeDirectGroup">>>();
   assertType<Assert<IsEqual<DirectQueueEnqueueError, ProcessGroupErrors>>>();
@@ -147,6 +174,7 @@ export const processGroupTypeChecks = Effect.gen(function* () {
   assertType<Assert<IsEqual<HookQueueLayerIn, TypeQueueHookService>>>();
   assertType<Assert<IsEqual<RegistryLayerOut, ProcessManagerConnectionRegistry>>>();
   assertType<Assert<IsEqual<RegistryConnectIn, ProcessManagerConnectionRegistry>>>();
+  assertType<Assert<IsEqual<ConfiguredGroupDefault, true>>>();
 
   if (false) {
     // @ts-expect-error queues are not valid process lifecycle targets

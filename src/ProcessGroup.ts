@@ -29,7 +29,7 @@ import type {
   QueueResourceDefinition,
   QueueResourceServiceDefinition,
 } from "./QueueResource";
-import type { RemoteProcessManager } from "./ProcessManager";
+import type { ProcessManagerGroupConfigItem, RemoteProcessManager } from "./ProcessManager";
 import {
   QueueBatchValidationError,
   QueueItemCodecDescriptorSchema,
@@ -195,6 +195,8 @@ type ProcessGroupBundledQueueLayerContext<Entries extends readonly ProcessGroupE
 /** @internal */
 type ProcessGroupServiceLayerProvided<Entries extends readonly ProcessGroupEntry[]> =
   ProcessGroupServiceLayerRequirements<Entries> | ProcessGroupBundledQueueLayerContext<Entries>;
+
+const emptyProcessGroupConfigItems: readonly [] = [];
 
 /**
  * Combined process requirements for a typed ProcessGroup entry tuple.
@@ -946,6 +948,19 @@ export function makeTypedProcessGroupEffect<
   TypedProcessGroupQueueRequirements<Entries>
 >;
 export function makeTypedProcessGroupEffect<
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+  const ConfigItems extends readonly ProcessManagerGroupConfigItem[],
+>(
+  id: Id,
+  entries: Entries,
+  config: ConfigItems,
+): Effect.Effect<
+  TypedProcessGroup<Id, Entries>,
+  ProcessGroupErrors,
+  TypedProcessGroupQueueRequirements<Entries>
+>;
+export function makeTypedProcessGroupEffect<
   const Queues extends ReadonlyArray<ProcessGroupQueueTag>,
   const Processes extends readonly Process<any>[],
 >(config: {
@@ -964,6 +979,7 @@ export function makeTypedProcessGroupEffect(
         readonly processes: readonly Process<any>[];
       },
   entries?: readonly ProcessGroupEntry[],
+  _config?: readonly ProcessManagerGroupConfigItem[],
 ) {
   if (typeof idOrConfig === "string") {
     return makeTypedProcessGroup(idOrConfig, entries ?? []);
@@ -1102,6 +1118,7 @@ export interface ProcessGroupServiceDefinition<
   Self,
   Id extends string,
   Entries extends readonly ProcessGroupEntry[],
+  ConfigItems extends readonly ProcessManagerGroupConfigItem[] = readonly [],
 > extends Context.ServiceClass<
     Self,
     Id,
@@ -1110,6 +1127,7 @@ export interface ProcessGroupServiceDefinition<
   readonly id: Id;
   readonly kind: "group";
   readonly entries: Entries;
+  readonly config: ConfigItems;
   readonly contract: ProcessGroupContract<Id, Entries>;
   /**
    * Build the local group implementation.
@@ -1486,22 +1504,33 @@ const queueContributionLayersFrom = <Entries extends readonly ProcessGroupEntry[
     )
     .map((q) => q.layer);
 
-// ============================================================================
-// Public namespace
-// ============================================================================
-
-/**
- * ProcessGroup namespace.
- *
- * @public
- */
-export const ProcessGroup = {
-  make: makeTypedProcessGroupEffect,
-  Service: <Self>() =>
-  <const Id extends string, const Entries extends readonly ProcessGroupEntry[]>(
+function makeProcessGroupServiceFactory<Self>() {
+  function service<
+    const Id extends string,
+    const Entries extends readonly ProcessGroupEntry[],
+  >(
     id: Id,
     entries: Entries,
-  ) => {
+  ): ProcessGroupServiceDefinition<Self, Id, Entries>;
+  function service<
+    const Id extends string,
+    const Entries extends readonly ProcessGroupEntry[],
+    const ConfigItems extends readonly ProcessManagerGroupConfigItem[],
+  >(
+    id: Id,
+    entries: Entries,
+    configItems: ConfigItems,
+  ): ProcessGroupServiceDefinition<Self, Id, Entries, ConfigItems>;
+  function service<
+    const Id extends string,
+    const Entries extends readonly ProcessGroupEntry[],
+    const ConfigItems extends readonly ProcessManagerGroupConfigItem[],
+  >(
+    id: Id,
+    entries: Entries,
+    configItems?: ConfigItems,
+  ) {
+    const groupConfigItems = configItems ?? emptyProcessGroupConfigItems;
     const base = Context.Service<
       Self,
       TypedProcessGroup<Id, Entries, ProcessGroupControlError>
@@ -1520,18 +1549,34 @@ export const ProcessGroup = {
     const layer: Layer.Layer<Self, ProcessGroupErrors, ProcessGroupServiceLayerProvided<Entries>> =
       bundledForBuild === undefined ? built : Layer.merge(built, bundledForBuild);
     // Match Effect's class-based service style: the class is yieldable, and the
-    // static fields expose group identity/contract data for control surfaces.
+    // static fields expose group identity/contract/config data for control surfaces.
     return Object.assign(base, {
       id,
       kind: processGroupKind,
       entries,
+      config: groupConfigItems,
       contract,
       make,
       layer,
     });
-  },
+  }
+  return service;
+}
+
+// ============================================================================
+// Public namespace
+// ============================================================================
+
+/**
+ * ProcessGroup namespace.
+ *
+ * @public
+ */
+export const ProcessGroup = {
+  make: makeTypedProcessGroupEffect,
+  Service: makeProcessGroupServiceFactory,
   remoteLayer,
-} as const;
+};
 
 export { QueueItemValidationError, QueueBatchValidationError } from "./QueueResource";
 
