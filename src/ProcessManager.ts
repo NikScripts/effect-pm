@@ -164,6 +164,17 @@ export const LocalRuntime = <
 });
 
 /**
+ * Error returned when endpoint configuration cannot be interpreted safely.
+ *
+ * @public
+ */
+export class ProcessManagerEndpointConfigError extends Data.TaggedError(
+  "ProcessManagerEndpointConfigError",
+)<{
+  readonly reason: string;
+}> {}
+
+/**
  * HTTP endpoint definition. The endpoint will provide a ControlTransportClient
  * when interpreted by a CLI/daemon runtime.
  *
@@ -185,7 +196,9 @@ export interface ProcessManagerModuleEndpointDefinition<
 > {
   readonly _tag: "ProcessManagerModuleEndpoint";
   readonly load: () => Promise<unknown>;
-  readonly select: (module: unknown) => Runtime;
+  readonly select: (
+    module: unknown,
+  ) => Effect.Effect<Runtime, ProcessManagerEndpointConfigError>;
 }
 
 /**
@@ -267,15 +280,28 @@ function endpointModule(
   return {
     _tag: "ProcessManagerModuleEndpoint",
     load,
-    select: select ?? ((module) => {
-      if (typeof module === "object" && module !== null && "default" in module) {
-        const value = module.default;
-        if (isProcessManagerLocalRuntimeDefinition(value)) {
-          return value;
-        }
+    select: (module) => {
+      if (select !== undefined) {
+        return Effect.try({
+          try: () => select(module),
+          catch: (error) =>
+            new ProcessManagerEndpointConfigError({
+              reason: `Endpoint.module selector failed: ${String(error)}`,
+            }),
+        });
       }
-      throw new TypeError("Endpoint.module default export must be a ProcessManager.LocalRuntime descriptor");
-    }),
+      return Effect.gen(function* () {
+        if (typeof module === "object" && module !== null && "default" in module) {
+          const value = module.default;
+          if (isProcessManagerLocalRuntimeDefinition(value)) {
+            return value;
+          }
+        }
+        return yield* new ProcessManagerEndpointConfigError({
+          reason: "Endpoint.module default export must be a ProcessManager.LocalRuntime descriptor",
+        });
+      });
+    },
   };
 }
 

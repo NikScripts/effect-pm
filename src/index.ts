@@ -199,6 +199,7 @@ export {
   ProcessManager,
   ProcessManagerConnectionError,
   ProcessManagerConnectionRegistry,
+  ProcessManagerEndpointConfigError,
   ProcessManagerRequestError,
   Transport,
 } from "./ProcessManager";

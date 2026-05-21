@@ -12,6 +12,7 @@ import {
   Process,
   ProcessGroup,
   ProcessManager,
+  ProcessManagerEndpointConfigError,
   ProcessStore,
   QueueResource,
 } from "../src";
@@ -65,6 +66,24 @@ describe("ProcessManager", () => {
       isDefault: false,
     });
   });
+
+  it.effect("surfaces module selector failures as checked endpoint config errors", () =>
+    Effect.gen(function* () {
+      const endpoint = Endpoint.module(
+        () => Promise.resolve({}),
+        () => {
+          throw new Error("bad selector");
+        },
+      );
+
+      const error = yield* endpoint.select({}).pipe(
+        Effect.flip,
+      );
+
+      expect(error).toBeInstanceOf(ProcessManagerEndpointConfigError);
+      expect(error.reason).toContain("bad selector");
+    }),
+  );
 
   it.live("connects through an in-memory control transport without HTTP", () =>
     Effect.gen(function* () {
