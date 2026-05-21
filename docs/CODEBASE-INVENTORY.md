@@ -314,6 +314,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 ### HTTP routes
 
 - **`GET /health`** — probe.
+- **`POST /control`** — canonical transport route carrying a protocol envelope.
 - **`GET /contract`** — serializable group contract.
 - **`GET /status`** — combined process + queue status.
 - **`GET /processes`** — list processes.

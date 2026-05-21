@@ -4,7 +4,7 @@
  * @module ControlProtocol
  */
 
-import { Context, Data, Effect, Layer, Schema, Scope } from "effect";
+import { Clock, Context, Data, Effect, Layer, Schema, Scope } from "effect";
 import type {
   ProcessGroupEntry,
   ProcessGroupEntryRequirements,
@@ -108,6 +108,36 @@ export const ControlProtocolRequestSchema = Schema.Union([
   }),
 ]);
 
+/** @public */
+export interface ControlProtocolMetadata {
+  readonly actor?: string;
+  readonly reason?: string;
+  readonly traceId?: string;
+}
+
+/** @public */
+export const ControlProtocolMetadataSchema = Schema.Struct({
+  actor: Schema.optional(Schema.String),
+  reason: Schema.optional(Schema.String),
+  traceId: Schema.optional(Schema.String),
+});
+
+/** @public */
+export interface ControlProtocolRequestEnvelope {
+  readonly id: string;
+  readonly sentAt: number;
+  readonly metadata?: ControlProtocolMetadata;
+  readonly request: ControlProtocolRequest;
+}
+
+/** @public */
+export const ControlProtocolRequestEnvelopeSchema = Schema.Struct({
+  id: Schema.String,
+  sentAt: Schema.Number,
+  metadata: Schema.optional(ControlProtocolMetadataSchema),
+  request: ControlProtocolRequestSchema,
+});
+
 /**
  * Transport-neutral response envelope for group controls.
  *
@@ -124,6 +154,60 @@ export type ControlProtocolResponse =
       readonly status: number;
       readonly body: ControlResponse<unknown>;
     };
+
+/** @public */
+export const ControlProtocolResponseSchema = Schema.Union([
+  Schema.TaggedStruct("Contract", {
+    status: Schema.Number,
+    body: Schema.Unknown,
+  }),
+  Schema.TaggedStruct("Control", {
+    status: Schema.Number,
+    body: ControlResponseSchema,
+  }),
+]);
+
+/** @public */
+export interface ControlProtocolResponseEnvelope {
+  readonly id: string;
+  readonly receivedAt: number;
+  readonly response: ControlProtocolResponse;
+}
+
+/** @public */
+export const ControlProtocolResponseEnvelopeSchema = Schema.Struct({
+  id: Schema.String,
+  receivedAt: Schema.Number,
+  response: ControlProtocolResponseSchema,
+});
+
+let controlProtocolEnvelopeId = 0;
+
+/** @public */
+export const makeControlProtocolRequestEnvelope = (
+  request: ControlProtocolRequest,
+  metadata?: ControlProtocolMetadata,
+): Effect.Effect<ControlProtocolRequestEnvelope> =>
+  Effect.map(Clock.currentTimeMillis, (sentAt) => {
+    controlProtocolEnvelopeId++;
+    return {
+      id: `control-${String(sentAt)}-${String(controlProtocolEnvelopeId)}`,
+      sentAt,
+      ...(metadata === undefined ? {} : { metadata }),
+      request,
+    };
+  });
+
+/** @public */
+export const makeControlProtocolResponseEnvelope = (
+  request: ControlProtocolRequestEnvelope,
+  response: ControlProtocolResponse,
+): Effect.Effect<ControlProtocolResponseEnvelope> =>
+  Effect.map(Clock.currentTimeMillis, (receivedAt) => ({
+    id: request.id,
+    receivedAt,
+    response,
+  }));
 
 /**
  * Protocol router backed by a typed process group.
@@ -176,8 +260,8 @@ export class ControlTransportError extends Data.TaggedError(
  */
 export interface ControlTransportClientShape<Requirements = never> {
   readonly request: (
-    request: ControlProtocolRequest,
-  ) => Effect.Effect<ControlProtocolResponse, ControlTransportError, Requirements>;
+    envelope: ControlProtocolRequestEnvelope,
+  ) => Effect.Effect<ControlProtocolResponseEnvelope, ControlTransportError, Requirements>;
 }
 
 /**

@@ -129,7 +129,7 @@ helpers remain planned.
 1. **`ProcessGroup.make(id, entries)`** returns an `Effect` that requires the **queue tag identifiers** from queue entries (so queues are acquired exactly once in that scope).
 2. **Forking** `process.effect` needs **`R | ProcessStore`** where `R` is whatever remains on the process after optional inlined `polling` / `schedule` layers. Use **`ProcessSupervisorRequirements<C>`** (exported type) if you build configs generically.
 3. Prefer **`Layer.mergeAll(...)`** + **one** `Effect.provide` at the app root when you have many independent layers (clearer dependency graph; matches Effect lint guidance).
-4. **Control service** listens on **127.0.0.1** only — designed for local ops, not public exposure.
+4. **Control service** listens on **127.0.0.1** only — designed for local ops, not public exposure. The canonical HTTP transport endpoint is `POST /control` with a protocol envelope; REST-shaped routes remain operator-friendly aliases.
 5. **Remote control assumes a private network today.** Do not expose a
    `ControlService` or `ProcessManager` target on the public internet. Current
    HTTP control routes have no built-in authentication, authorization, replay

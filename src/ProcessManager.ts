@@ -13,11 +13,13 @@ import { Config, ConfigProvider, Console, Context, Data, Effect, Layer, Schema }
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import type { HttpClient } from "effect/unstable/http";
 import type {
+  ControlProtocolMetadata,
   ControlProtocolRequest,
   ControlResponse,
   ControlTransportClientShape,
   ControlTransportError,
 } from "./ControlProtocol";
+import { makeControlProtocolRequestEnvelope } from "./ControlProtocol";
 import { ControlTransportClient as ControlTransportClientTag } from "./ControlProtocol";
 import { makeControlTransportHttpClient } from "./ControlTransportHttp";
 import { ProcessGroupContractSchema } from "./ProcessGroup";
@@ -236,8 +238,15 @@ const requestErrorFromTransport = (
 const requestProtocol = <R>(
   transport: ControlTransportClientShape<R>,
   request: ControlProtocolRequest,
+  metadata?: ControlProtocolMetadata,
 ) =>
-  transport.request(request).pipe(Effect.mapError(requestErrorFromTransport));
+  Effect.flatMap(
+    makeControlProtocolRequestEnvelope(request, metadata),
+    (envelope) => transport.request(envelope),
+  ).pipe(
+    Effect.map((envelope) => envelope.response),
+    Effect.mapError(requestErrorFromTransport),
+  );
 
 const requestContract = <R>(
   transport: ControlTransportClientShape<R>,

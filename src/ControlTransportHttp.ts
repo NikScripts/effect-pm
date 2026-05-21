@@ -8,13 +8,17 @@ import { Effect, Layer, Schema } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http";
 import {
   ControlRouter,
-  ControlResponseSchema,
+  ControlProtocolRequestEnvelopeSchema,
+  ControlProtocolResponseEnvelopeSchema,
   ControlTransportClient,
   ControlTransportError,
   ControlTransportServer,
   errorResponse,
+  makeControlProtocolResponseEnvelope,
   type ControlProtocolRequest,
+  type ControlProtocolRequestEnvelope,
   type ControlProtocolResponse,
+  type ControlProtocolResponseEnvelope,
   type ControlTransportClientShape,
   type ControlTransportServerShape,
 } from "./ControlProtocol";
@@ -48,6 +52,9 @@ interface JsonResponse {
 interface JsonRequest {
   readonly method?: string | undefined;
   readonly url?: string | undefined;
+  on(event: "data", listener: (chunk: Uint8Array | string) => void): void;
+  on(event: "end", listener: () => void): void;
+  on(event: "error", listener: (error: Error) => void): void;
 }
 
 interface RouteResponse {
@@ -129,6 +136,31 @@ const routeResponseFromProtocol = (
   status: response.status,
   body: response.body,
 });
+
+const readRequestText = (req: JsonRequest): Effect.Effect<string, ControlTransportError> =>
+  Effect.callback((resume) => {
+    const chunks: string[] = [];
+    req.on("data", (chunk) => {
+      chunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+    });
+    req.on("end", () => {
+      resume(Effect.succeed(chunks.join("")));
+    });
+    req.on("error", (error) => {
+      resume(Effect.fail(transportError(error.message)));
+    });
+  });
+
+const readControlEnvelope = (req: JsonRequest): Effect.Effect<ControlProtocolRequestEnvelope, ControlTransportError> =>
+  Effect.gen(function* () {
+    const text = yield* readRequestText(req);
+    const parsed = yield* Schema.decodeUnknownEffect(responseBodyJson)(text).pipe(
+      Effect.mapError((cause) => transportError(`Malformed JSON request: ${String(cause)}`, 400)),
+    );
+    return yield* Schema.decodeUnknownEffect(ControlProtocolRequestEnvelopeSchema)(parsed).pipe(
+      Effect.mapError((cause) => transportError(`Malformed control envelope: ${String(cause)}`, 400)),
+    );
+  });
 
 const requestFromRestRoute = (
   method: string | undefined,
@@ -252,144 +284,14 @@ const requestFromRestRoute = (
   return { _tag: "NotFound" };
 };
 
-const decodeControlResponse = (
+const decodeEnvelopeResponse = (
   response: HttpClientResponse.HttpClientResponse,
-): Effect.Effect<ControlProtocolResponse, ControlTransportError> =>
-  HttpClientResponse.schemaBodyJson(ControlResponseSchema)(response).pipe(
-    Effect.map(
-      (body): ControlProtocolResponse => ({
-        _tag: "Control",
-        status: response.status,
-        body,
-      }),
-    ),
-    Effect.mapError(
-      (cause) =>
-        transportError(
-          `Malformed control response: ${String(cause)}`,
-          response.status,
-        ),
+): Effect.Effect<ControlProtocolResponseEnvelope, ControlTransportError> =>
+  HttpClientResponse.schemaBodyJson(ControlProtocolResponseEnvelopeSchema)(response).pipe(
+    Effect.mapError((cause) =>
+      transportError(`Malformed control envelope response: ${String(cause)}`, response.status)
     ),
   );
-
-const decodeContractResponse = (
-  response: HttpClientResponse.HttpClientResponse,
-): Effect.Effect<ControlProtocolResponse, ControlTransportError> => {
-  if (response.status < 200 || response.status >= 300) {
-    return Effect.fail(transportError(`HTTP ${response.status}`, response.status));
-  }
-  return response.json.pipe(
-    Effect.map(
-      (body): ControlProtocolResponse => ({
-        _tag: "Contract",
-        status: response.status,
-        body,
-      }),
-    ),
-    Effect.mapError(
-      (cause) =>
-        transportError(
-          `Malformed JSON response: ${String(cause)}`,
-          response.status,
-        ),
-    ),
-  );
-};
-
-interface HttpControlRoute {
-  readonly method: "GET" | "POST";
-  readonly path: string;
-  readonly response: "contract" | "control";
-}
-
-const routeFor = (request: ControlProtocolRequest): HttpControlRoute => {
-  switch (request._tag) {
-    case "GetContract":
-      return { method: "GET", path: "/contract", response: "contract" };
-    case "ReadGroupStatus":
-      return { method: "GET", path: "/status", response: "control" };
-    case "ListProcesses":
-      return { method: "GET", path: "/processes", response: "control" };
-    case "ReadProcessStatus":
-      return {
-        method: "GET",
-        path: `/processes/${encodeURIComponent(request.processId)}`,
-        response: "control",
-      };
-    case "StartProcess":
-      return {
-        method: "POST",
-        path: `/processes/${encodeURIComponent(request.processId)}/start`,
-        response: "control",
-      };
-    case "StopProcess":
-      return {
-        method: "POST",
-        path: `/processes/${encodeURIComponent(request.processId)}/stop`,
-        response: "control",
-      };
-    case "RestartProcess":
-      return {
-        method: "POST",
-        path: `/processes/${encodeURIComponent(request.processId)}/restart`,
-        response: "control",
-      };
-    case "RunProcessImmediately":
-      return {
-        method: "POST",
-        path: `/processes/${encodeURIComponent(request.processId)}/now`,
-        response: "control",
-      };
-    case "ListQueues":
-      return { method: "GET", path: "/queues", response: "control" };
-    case "ReadQueueStatus":
-      return {
-        method: "GET",
-        path: `/queues/${encodeURIComponent(request.queueId)}`,
-        response: "control",
-      };
-    case "StartQueue":
-      return {
-        method: "POST",
-        path: `/queues/${encodeURIComponent(request.queueId)}/start`,
-        response: "control",
-      };
-    case "PauseQueue":
-      return {
-        method: "POST",
-        path: `/queues/${encodeURIComponent(request.queueId)}/pause`,
-        response: "control",
-      };
-    case "ResumeQueue":
-      return {
-        method: "POST",
-        path: `/queues/${encodeURIComponent(request.queueId)}/resume`,
-        response: "control",
-      };
-    case "ClearQueue":
-      return {
-        method: "POST",
-        path: `/queues/${encodeURIComponent(request.queueId)}/clear`,
-        response: "control",
-      };
-  }
-};
-
-const httpRequest = (
-  baseUrl: string,
-  route: HttpControlRoute,
-) =>
-  route.method === "GET"
-    ? HttpClientRequest.get(joinUrl(baseUrl, route.path))
-    : HttpClientRequest.post(joinUrl(baseUrl, route.path));
-
-const decodeResponse = (
-  route: HttpControlRoute,
-  response: HttpClientResponse.HttpClientResponse,
-): Effect.Effect<ControlProtocolResponse, ControlTransportError> =>
-  route.response === "contract"
-    ? decodeContractResponse(response)
-    : decodeControlResponse(response);
 
 /**
  * Build an HTTP client for the control protocol.
@@ -399,15 +301,17 @@ const decodeResponse = (
 export const makeControlTransportHttpClient = (
   config: ControlTransportHttpClientConfig,
 ): ControlTransportClientShape<HttpClient.HttpClient> => ({
-  request: (request) =>
-    Effect.succeed(routeFor(request)).pipe(
-      Effect.flatMap((route) =>
-        HttpClient.execute(httpRequest(config.baseUrl, route)).pipe(
+  request: (envelope) =>
+    HttpClientRequest.post(joinUrl(config.baseUrl, "/control")).pipe(
+      (request) => HttpClientRequest.bodyJson(request, envelope),
+      Effect.mapError(transportErrorFromCause),
+      Effect.flatMap((request) =>
+        HttpClient.execute(request).pipe(
           Effect.mapError(transportErrorFromCause),
-          Effect.flatMap((response) => decodeResponse(route, response)),
-        )
+          Effect.flatMap(decodeEnvelopeResponse),
+        ),
       ),
-    ),
+    )
 });
 
 /**
@@ -441,6 +345,27 @@ export const makeControlTransportHttpServer = (
 
             if (url.pathname === "/health") {
               yield* writeJson(res, 200, { status: "ok" });
+              return;
+            }
+
+            if (req.method === "POST" && url.pathname === "/control") {
+              const envelope = yield* readControlEnvelope(req).pipe(
+                Effect.catch((error) =>
+                  Effect.gen(function* () {
+                    yield* writeJson(res, error.status ?? 400, errorResponse(error.reason));
+                    return undefined;
+                  })
+                ),
+              );
+              if (envelope === undefined) {
+                return;
+              }
+              const protocolResponse = yield* router.handle(envelope.request);
+              const responseEnvelope = yield* makeControlProtocolResponseEnvelope(
+                envelope,
+                protocolResponse,
+              );
+              yield* writeJson(res, protocolResponse.status, responseEnvelope);
               return;
             }
 
@@ -521,8 +446,8 @@ export const ControlTransportHttp = {
         const httpClient = yield* HttpClient.HttpClient;
         const client = makeControlTransportHttpClient(config);
         return {
-          request: (request: ControlProtocolRequest) =>
-            client.request(request).pipe(
+          request: (envelope: ControlProtocolRequestEnvelope) =>
+            client.request(envelope).pipe(
               Effect.provideService(HttpClient.HttpClient, httpClient),
             ),
         };

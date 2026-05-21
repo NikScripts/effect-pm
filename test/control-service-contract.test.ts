@@ -3,7 +3,9 @@ import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import { Effect, Layer, Ref, Schema } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import {
+  ControlProtocolResponseEnvelopeSchema,
   ControlService,
+  makeControlProtocolRequestEnvelope,
   Process,
   ProcessGroup,
   ProcessGroupContractSchema,
@@ -38,6 +40,32 @@ const requestJson = (
     return {
       statusCode: response.status,
       body,
+    };
+  });
+
+const postJson = (
+  port: number,
+  path: string,
+  body: unknown,
+): Effect.Effect<{
+  readonly statusCode: number;
+  readonly body: unknown;
+}, never, HttpClient.HttpClient> =>
+  Effect.gen(function* () {
+    const request = yield* HttpClientRequest.bodyJson(
+      HttpClientRequest.post(`http://127.0.0.1:${String(port)}${path}`),
+      body,
+    ).pipe(Effect.orDie);
+    const response = yield* HttpClient.execute(request).pipe(Effect.orDie);
+    const parsed = yield* response.text.pipe(
+      Effect.flatMap((text) =>
+        Schema.decodeUnknownEffect(responseBodyJson)(text)
+      ),
+      Effect.orDie,
+    );
+    return {
+      statusCode: response.status,
+      body: parsed,
     };
   });
 
@@ -248,6 +276,61 @@ describe("ControlService — contract route", () => {
           success: false,
           error: "Queue '@test/MissingQueue' not found",
         });
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            SyncProcess.layer,
+            EmailQueue.layer,
+            ProcessStore.layer,
+            NodeHttpClient.layerUndici,
+          ),
+        ),
+      );
+    }),
+  );
+
+  it.live("serves canonical protocol envelopes at POST /control", () =>
+    Effect.gen(function* () {
+      const runs = yield* Ref.make(0);
+
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()("@test/ControlEnvelopeEmail", {
+        effect: (_email) => Effect.void,
+      }) {}
+      class SyncProcess extends Process.Service<SyncProcess>()("@test/ControlEnvelopeProcess", {
+        effect: Ref.update(runs, (count) => count + 1),
+      }) {}
+
+      yield* Effect.gen(function* () {
+        const group = yield* ProcessGroup.make("@test/ControlEnvelopeGroup", [
+          SyncProcess,
+          EmailQueue,
+        ] as const);
+
+        yield* ControlService.make({
+          port: 32131,
+          group,
+        });
+
+        const envelope = yield* makeControlProtocolRequestEnvelope({
+          _tag: "RunProcessImmediately",
+          processId: SyncProcess.id,
+        }, {
+          actor: "test",
+          reason: "canonical route",
+        });
+        const response = yield* postJson(32131, "/control", envelope);
+        const responseEnvelope = yield* Schema.decodeUnknownEffect(
+          ControlProtocolResponseEnvelopeSchema,
+        )(response.body);
+
+        expect(response.statusCode).toBe(200);
+        expect(responseEnvelope.id).toBe(envelope.id);
+        expect(responseEnvelope.response).toMatchObject({
+          _tag: "Control",
+          status: 200,
+          body: { success: true },
+        });
+        expect(yield* Ref.get(runs)).toBe(1);
       }).pipe(
         Effect.provide(
           Layer.mergeAll(

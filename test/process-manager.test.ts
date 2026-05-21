@@ -6,6 +6,7 @@ import {
   ControlRouter,
   ControlService,
   ControlTransportClient,
+  makeControlProtocolResponseEnvelope,
   makeControlProtocolRouter,
   Process,
   ProcessGroup,
@@ -57,7 +58,11 @@ describe("ProcessManager", () => {
         const router = makeControlProtocolRouter(group);
         const manager = ProcessManager.connect(BillingGroup, {
           transport: {
-            request: router.handle,
+            request: (envelope) =>
+              Effect.flatMap(
+                router.handle(envelope.request),
+                (response) => makeControlProtocolResponseEnvelope(envelope, response),
+              ),
           },
         });
 
@@ -127,7 +132,11 @@ describe("ProcessManager", () => {
       const inMemoryTransportLayer = Layer.effect(
         ControlTransportClient,
         Effect.map(ControlRouter, (router) => ({
-          request: router.handle,
+          request: (envelope) =>
+            Effect.flatMap(
+              router.handle(envelope.request),
+              (response) => makeControlProtocolResponseEnvelope(envelope, response),
+            ),
         })),
       );
 

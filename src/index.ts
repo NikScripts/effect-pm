@@ -103,6 +103,12 @@ export {
   ControlTransportError,
   ControlTransportServer,
   ControlProtocolRequestSchema,
+  ControlProtocolRequestEnvelopeSchema,
+  ControlProtocolMetadataSchema,
+  ControlProtocolResponseEnvelopeSchema,
+  ControlProtocolResponseSchema,
+  makeControlProtocolRequestEnvelope,
+  makeControlProtocolResponseEnvelope,
   makeControlProtocolRouter,
 } from "./ControlProtocol";
 export {
@@ -112,8 +118,11 @@ export {
 } from "./ControlTransportHttp";
 export type {
   ControlRouterShape,
+  ControlProtocolMetadata,
   ControlProtocolRequest,
+  ControlProtocolRequestEnvelope,
   ControlProtocolResponse,
+  ControlProtocolResponseEnvelope,
   ControlProtocolRouter,
   ControlTransportClientShape,
   ControlTransportServerShape,
