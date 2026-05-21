@@ -264,6 +264,33 @@ export interface ProcessManagerGroupConfig<
 }
 
 /**
+ * Observed status for a configured ProcessManager group endpoint.
+ *
+ * @public
+ */
+export type ProcessManagerGroupEndpointStatus =
+  | {
+      readonly _tag: "Configured";
+      readonly reason?: string;
+    }
+  | {
+      readonly _tag: "Pending";
+      readonly reason?: string;
+    }
+  | {
+      readonly _tag: "Online";
+    }
+  | {
+      readonly _tag: "Offline";
+      readonly reason: string;
+      readonly status?: number;
+    }
+  | {
+      readonly _tag: "ContractDrift";
+      readonly reason: string;
+    };
+
+/**
  * Service used to override group-bundled ProcessManager endpoint config.
  *
  * @public
@@ -955,6 +982,48 @@ const managerFromEndpoint = (
   }
 };
 
+const isContractDriftError = (error: ProcessManagerRequestError): boolean =>
+  error.reason.includes("did not match") ||
+  error.reason.includes("Malformed group contract");
+
+const probeEndpointStatus = (
+  group: ConfigSource,
+  selected: NormalizedEndpoint,
+): Effect.Effect<ProcessManagerGroupEndpointStatus, never, HttpClient.HttpClient> => {
+  const endpoint = selected.endpoint;
+  switch (endpoint._tag) {
+    case "ProcessManagerHttpEndpoint":
+      return Effect.gen(function* () {
+        const manager = makeRemoteProcessManager(
+          makeControlTransportHttpClient({ baseUrl: endpoint.transport.baseUrl }),
+          group.contract,
+        );
+        yield* manager.verifyContract;
+        return { _tag: "Online" as const };
+      }).pipe(
+        Effect.catch((error: ProcessManagerRequestError) =>
+          Effect.succeed(
+            isContractDriftError(error)
+              ? {
+                  _tag: "ContractDrift" as const,
+                  reason: error.reason,
+                }
+              : {
+                  _tag: "Offline" as const,
+                  reason: error.reason,
+                  ...(error.status === undefined ? {} : { status: error.status }),
+                },
+          )
+        ),
+      );
+    case "ProcessManagerModuleEndpoint":
+      return Effect.succeed({
+        _tag: "Configured",
+        reason: "Module endpoint configured; local runtime launching is not implemented yet",
+      });
+  }
+};
+
 const asOptionalGroupConfig = (
   config: ProcessManagerGroupConfig,
 ): ProcessManagerGroupConfig | undefined => config;
@@ -1027,6 +1096,18 @@ const cliFooterList =
   "IDs are canonical. Short CLI targets must match exactly one entry across all listed groups.";
 const cliFooterVerify =
   "Compared each group's remote GET /contract payload to the imported local contract.";
+
+const formatEndpointStatus = (status: ProcessManagerGroupEndpointStatus): string =>
+  status._tag === "Online"
+    ? "online"
+    : status._tag === "Configured"
+      ? "configured"
+      : status._tag === "Pending"
+        ? "pending"
+        : status._tag === "ContractDrift"
+          ? `contract-drift: ${status.reason}`
+          : `offline: ${status.reason}`;
+
 const prettyPrintCliJsonLine = (minifiedJson: string): string => {
   try {
     return JSON.stringify(JSON.parse(minifiedJson), null, 2);
@@ -1288,15 +1369,16 @@ const runGroupsCommand = (
 ): Effect.Effect<
   void,
   ProcessManagerConnectionError | ProcessManagerRequestError | ProcessManagerEndpointConfigError,
-  ProcessManagerConnectionRegistry
+  ProcessManagerConnectionRegistry | HttpClient.HttpClient
 > =>
   Effect.gen(function* () {
     const rows: Array<{
       readonly groupId: string;
       readonly endpoint: string;
+      readonly status: ProcessManagerGroupEndpointStatus;
       readonly target: string;
     }> = [];
-    const lines: string[] = ["GROUP\tTARGET\tENDPOINT"];
+    const lines: string[] = ["GROUP\tTARGET\tSTATUS\tENDPOINT"];
     for (const group of groups) {
       const configOption = yield* Effect.serviceOption(ProcessManagerConfig).pipe(
         Effect.flatMap(
@@ -1315,14 +1397,19 @@ const runGroupsCommand = (
         const endpoint = selected.endpoint._tag === "ProcessManagerHttpEndpoint"
           ? selected.endpoint.transport.baseUrl
           : selected.endpoint._tag;
-        rows.push({ groupId: group.id, target: selected.label, endpoint });
-        lines.push(`${group.id}\t${selected.label}\t${endpoint}`);
+        const status = yield* probeEndpointStatus(group, selected);
+        rows.push({ groupId: group.id, target: selected.label, endpoint, status });
+        lines.push(`${group.id}\t${selected.label}\t${formatEndpointStatus(status)}\t${endpoint}`);
         continue;
       }
       const registry = yield* ProcessManagerConnectionRegistry;
       const baseUrl = yield* registry.baseUrl(group.id);
-      rows.push({ groupId: group.id, target: "registry", endpoint: baseUrl });
-      lines.push(`${group.id}\tregistry\t${baseUrl}`);
+      const status: ProcessManagerGroupEndpointStatus = {
+        _tag: "Configured",
+        reason: "ConnectionRegistry endpoint configured; no endpoint config probe available",
+      };
+      rows.push({ groupId: group.id, target: "registry", endpoint: baseUrl, status });
+      lines.push(`${group.id}\tregistry\t${formatEndpointStatus(status)}\t${baseUrl}`);
     }
     if (options.json) {
       yield* Console.log(yield* encodeCliJson({ groups: rows }));

@@ -101,6 +101,8 @@ Implemented commands:
 `--json` is implemented for `groups`, `ls`, `verify`, and `status <target>`.
 Endpoint labels can be selected with `--target <label>` for endpoint-backed
 groups; groups without endpoint config continue using the connection registry.
+For endpoint-backed groups, `groups` reports endpoint status as `online`,
+`offline`, `contract-drift`, or `configured`.
 
 List configured groups first:
 

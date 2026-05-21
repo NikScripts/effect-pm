@@ -33,7 +33,9 @@ expose that array as `Group.config`.
 overrides, and `ProcessManager.Config.layer([...])` can replace group-bundled
 config at the application edge. Runtime CLI commands accept `--target <label>`
 for HTTP endpoint config and fall back to the existing connection registry when
-no endpoint config is present.
+no endpoint config is present. `effect-pm groups` probes selected HTTP endpoint
+contracts and reports `online`, `offline`, or `contract-drift`; module and
+registry endpoints report `configured` until launch/status support exists.
 
 ---
 

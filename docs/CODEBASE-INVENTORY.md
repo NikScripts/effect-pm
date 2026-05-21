@@ -390,6 +390,8 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 - **`ProcessManager.Config.layer(configs)`** — explicit endpoint config override
   layer. CLI endpoint selection uses this layer first, then group-bundled
   `Group.config`, then the legacy `ConnectionRegistry` fallback.
+- **`ProcessManagerGroupEndpointStatus`** — `groups` command status model:
+  `Configured`, `Pending`, `Online`, `Offline`, `ContractDrift`.
 
 ### `RemoteProcessManager` API
 
@@ -406,6 +408,11 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 **Flags:** `--json` on `groups`, `ls`, `verify`, `status`; `--target <label>`
 on endpoint-backed runtime commands.
+
+**`groups` status:** selected HTTP endpoint configs are probed with contract
+verification and reported as `online`, `offline`, or `contract-drift`; module and
+registry-backed endpoints report `configured` until launcher/status support
+exists.
 
 **Behavior:** resolves **canonical id or normalized suffix alias**; **preflight** contract for requested control (e.g. `now` requires `runImmediately` on contract); runs **`verifyContract`** before mutations in command paths. Human **`ls`** lists each group's entries as `KIND`, `ID`, and **contract controls** (`(none)` if empty); human **`groups`**, **`verify`**, **`status`** append short footer or pretty-print embedded status JSON respectively.
 

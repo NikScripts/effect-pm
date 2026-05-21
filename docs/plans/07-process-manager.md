@@ -895,6 +895,9 @@ Implementation order:
    `ProcessGroup.make`, with external config-layer overrides. **Implemented.**
 3. Add endpoint label selection for HTTP endpoint config. **Implemented.**
 4. Add configured group status (`pending`, `online`, `offline`, drift).
+   **Partially implemented for `groups`: HTTP endpoints probe `online` /
+   `offline` / `contract-drift`; module and registry endpoints report
+   `configured`; `pending` waits for launcher/daemon work.**
 5. Add `Endpoint.http` as the first real transport endpoint. **Implemented.**
 6. Add `Endpoint.module` type shape and `LocalRuntime` descriptor, but keep
    execution out-of-process. **Implemented as descriptors; launch remains future.**

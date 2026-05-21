@@ -705,6 +705,7 @@ describe("ProcessManager", () => {
           "--target",
           "production",
         ]);
+        yield* cli(["groups"]);
         yield* cli(["groups", "--target", "production"]);
         yield* cli(["verify", "--target", "production"]);
 
@@ -758,6 +759,110 @@ describe("ProcessManager", () => {
 
       expect(error).toBeInstanceOf(ProcessManagerEndpointConfigError);
       expect(error.reason).toContain("exactly one default endpoint");
+    }),
+  );
+
+  it.live("reports offline endpoint status without failing the groups command", () =>
+    Effect.gen(function* () {
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
+        "@test/OfflineEndpointStatusEmailQueue",
+        {
+          effect: (_email) => Effect.void,
+        },
+      ) {}
+
+      class SyncProcess extends Process.Service<SyncProcess>()(
+        "@test/OfflineEndpointStatusProcess",
+        {
+          effect: Effect.void,
+        },
+      ) {}
+
+      class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+        "@test/OfflineEndpointStatusGroup",
+        [SyncProcess, EmailQueue] as const,
+        [
+          Endpoint.local(
+            Endpoint.http({
+              transport: ProcessManager.Transport.http({
+                baseUrl: "http://127.0.0.1:32999",
+              }),
+            }),
+          ).default,
+        ],
+      ) {}
+
+      const cli = ProcessManager.cli([BillingGroup] as const);
+      yield* cli(["groups"]);
+    }).pipe(
+      Effect.provide(Layer.mergeAll(NodeServices.layer, NodeHttpClient.layerUndici)),
+    ),
+  );
+
+  it.live("reports contract drift endpoint status without failing the groups command", () =>
+    Effect.gen(function* () {
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
+        "@test/DriftEndpointStatusEmailQueue",
+        {
+          effect: (_email) => Effect.void,
+        },
+      ) {}
+
+      class LocalProcess extends Process.Service<LocalProcess>()(
+        "@test/DriftEndpointStatusLocalProcess",
+        {
+          effect: Effect.void,
+        },
+      ) {}
+
+      class RemoteProcess extends Process.Service<RemoteProcess>()(
+        "@test/DriftEndpointStatusRemoteProcess",
+        {
+          effect: Effect.void,
+        },
+      ) {}
+
+      class LocalGroup extends ProcessGroup.Service<LocalGroup>()(
+        "@test/DriftEndpointStatusGroup",
+        [LocalProcess, EmailQueue] as const,
+        [
+          Endpoint.local(
+            Endpoint.http({
+              transport: ProcessManager.Transport.http({
+                baseUrl: "http://127.0.0.1:32145",
+              }),
+            }),
+          ).default,
+        ],
+      ) {}
+
+      class RemoteGroup extends ProcessGroup.Service<RemoteGroup>()(
+        "@test/DriftEndpointStatusGroup",
+        [RemoteProcess, EmailQueue] as const,
+      ) {}
+
+      yield* Effect.gen(function* () {
+        const remoteGroup = yield* RemoteGroup;
+        const cli = ProcessManager.cli([LocalGroup] as const);
+
+        yield* ControlService.make({
+          port: 32145,
+          group: remoteGroup,
+        });
+
+        yield* cli(["groups"]);
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            RemoteGroup.layer.pipe(
+              Layer.provide(Layer.mergeAll(EmailQueue.layer, RemoteProcess.layer, ProcessStore.layer)),
+            ),
+            ProcessStore.layer,
+            NodeServices.layer,
+            NodeHttpClient.layerUndici,
+          ),
+        ),
+      );
     }),
   );
 

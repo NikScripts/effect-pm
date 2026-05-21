@@ -218,6 +218,7 @@ export type {
   RemoteQueueControls,
   ProcessManagerEndpointConfig,
   ProcessManagerEndpoint,
+  ProcessManagerGroupEndpointStatus,
   ProcessManagerGroupConfigItem,
   ProcessManagerGroupConfig,
   ProcessManagerHttpEndpointDefinition,
