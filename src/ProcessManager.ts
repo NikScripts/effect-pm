@@ -241,7 +241,12 @@ type ConfigSource<Contract extends AnyProcessGroupContract = AnyProcessGroupCont
     readonly config?: readonly ProcessManagerGroupConfigItem[];
   };
 
-interface NormalizedEndpoint {
+/**
+ * Normalized endpoint selected from a ProcessManager group config.
+ *
+ * @public
+ */
+export interface ProcessManagerEndpointSelection {
   readonly label: string;
   readonly endpoint: ProcessManagerEndpointDefinition;
   readonly isDefault: boolean;
@@ -259,7 +264,7 @@ export interface ProcessManagerGroupConfig<
   readonly _tag: "ProcessManagerGroupConfig";
   readonly group: ConnectionSource<Contract>;
   readonly groupId: Id;
-  readonly endpoints: ReadonlyArray<NormalizedEndpoint>;
+  readonly endpoints: ReadonlyArray<ProcessManagerEndpointSelection>;
   readonly defaultEndpoint: string;
 }
 
@@ -927,7 +932,7 @@ const targetCandidatesFrom = (
 const selectEndpoint = (
   config: ProcessManagerGroupConfig,
   label: string | undefined,
-): Effect.Effect<NormalizedEndpoint, ProcessManagerEndpointConfigError> => {
+): Effect.Effect<ProcessManagerEndpointSelection, ProcessManagerEndpointConfigError> => {
   const selectedLabel = label ?? config.defaultEndpoint;
   const selected = config.endpoints.find((endpoint) => endpoint.label === selectedLabel);
   return selected === undefined
@@ -959,7 +964,7 @@ const bundledGroupConfig = (
 
 const managerFromEndpoint = (
   group: ConfigSource,
-  selected: NormalizedEndpoint,
+  selected: ProcessManagerEndpointSelection,
 ): Effect.Effect<
   RemoteProcessManager<AnyProcessGroupContract>,
   ProcessManagerEndpointConfigError
@@ -988,7 +993,7 @@ const isContractDriftError = (error: ProcessManagerRequestError): boolean =>
 
 const probeEndpointStatus = (
   group: ConfigSource,
-  selected: NormalizedEndpoint,
+  selected: ProcessManagerEndpointSelection,
 ): Effect.Effect<ProcessManagerGroupEndpointStatus, never, HttpClient.HttpClient> => {
   const endpoint = selected.endpoint;
   switch (endpoint._tag) {

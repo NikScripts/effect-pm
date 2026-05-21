@@ -212,6 +212,7 @@ export type {
   ProcessManagerConnectionMap,
   ProcessManagerConnectionRegistryService,
   ProcessManagerEndpointDefinition,
+  ProcessManagerEndpointSelection,
   ProcessManagerConfigService,
   RemoteProcessManager,
   RemoteProcessControls,

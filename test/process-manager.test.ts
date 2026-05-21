@@ -759,6 +759,14 @@ describe("ProcessManager", () => {
 
       expect(error).toBeInstanceOf(ProcessManagerEndpointConfigError);
       expect(error.reason).toContain("exactly one default endpoint");
+
+      const duplicateLabel = yield* ProcessManager.GroupConfig(BillingGroup, [
+        Endpoint.define("local", httpEndpoint).default,
+        Endpoint.define("local", httpEndpoint),
+      ]).pipe(Effect.flip);
+
+      expect(duplicateLabel).toBeInstanceOf(ProcessManagerEndpointConfigError);
+      expect(duplicateLabel.reason).toContain("duplicate endpoint label");
     }),
   );
 

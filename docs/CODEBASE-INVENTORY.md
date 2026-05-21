@@ -392,6 +392,8 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
   `Group.config`, then the legacy `ConnectionRegistry` fallback.
 - **`ProcessManagerGroupEndpointStatus`** — `groups` command status model:
   `Configured`, `Pending`, `Online`, `Offline`, `ContractDrift`.
+- **`ProcessManagerEndpointSelection`** — normalized endpoint entry exposed by
+  `ProcessManagerGroupConfig.endpoints`.
 
 ### `RemoteProcessManager` API
 
