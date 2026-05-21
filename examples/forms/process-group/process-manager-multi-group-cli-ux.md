@@ -76,7 +76,10 @@ Rules captured from the CLI/daemon design discussion:
   `ControlService`; same-process control is reserved for tests.
 - Each endpoint item has a label, and exactly one group-bundled endpoint may be
   marked with `.default`.
-- Explicit config layers override group-bundled endpoint config.
+- Explicit `ProcessManager.Config.layer(...)` config layers override
+  group-bundled endpoint config.
+- Runtime commands can select endpoint labels with `--target <label>`; no label
+  uses the endpoint item marked with `.default`.
 - Local groups can report `pending`, `online`, `offline`, or contract drift after
   bounded probes.
 - Logs should be a sibling transport capability so operators can follow merged
@@ -96,6 +99,8 @@ Implemented commands:
 - queue controls: `pause`, `resume`, `clear`
 
 `--json` is implemented for `groups`, `ls`, `verify`, and `status <target>`.
+Endpoint labels can be selected with `--target <label>` for endpoint-backed
+groups; groups without endpoint config continue using the connection registry.
 
 List configured groups first:
 

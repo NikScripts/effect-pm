@@ -9,7 +9,7 @@
  * @module ProcessManager
  */
 
-import { Config, ConfigProvider, Console, Context, Data, Effect, Layer, Schema } from "effect";
+import { Config, ConfigProvider, Console, Context, Data, Effect, Layer, Option, Schema } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import type { HttpClient } from "effect/unstable/http";
 import type {
@@ -236,6 +236,54 @@ export interface ProcessManagerEndpointConfigItem<
 export type ProcessManagerGroupConfigItem =
   ProcessManagerEndpointConfigItem<string, ProcessManagerEndpointDefinition, boolean>;
 
+type ConfigSource<Contract extends AnyProcessGroupContract = AnyProcessGroupContract> =
+  ConnectionSource<Contract> & {
+    readonly config?: readonly ProcessManagerGroupConfigItem[];
+  };
+
+interface NormalizedEndpoint {
+  readonly label: string;
+  readonly endpoint: ProcessManagerEndpointDefinition;
+  readonly isDefault: boolean;
+}
+
+/**
+ * Normalized endpoint configuration for one ProcessGroup.
+ *
+ * @public
+ */
+export interface ProcessManagerGroupConfig<
+  Id extends string = string,
+  Contract extends AnyProcessGroupContract = AnyProcessGroupContract,
+> {
+  readonly _tag: "ProcessManagerGroupConfig";
+  readonly group: ConnectionSource<Contract>;
+  readonly groupId: Id;
+  readonly endpoints: ReadonlyArray<NormalizedEndpoint>;
+  readonly defaultEndpoint: string;
+}
+
+/**
+ * Service used to override group-bundled ProcessManager endpoint config.
+ *
+ * @public
+ */
+export interface ProcessManagerConfigService {
+  readonly groupConfig: (
+    groupId: string,
+  ) => Effect.Effect<ProcessManagerGroupConfig, ProcessManagerEndpointConfigError>;
+}
+
+/**
+ * Override layer for ProcessManager endpoint config.
+ *
+ * @public
+ */
+export class ProcessManagerConfig extends Context.Service<
+  ProcessManagerConfig,
+  ProcessManagerConfigService
+>()("@nikscripts/effect-pm/ProcessManager/ProcessManagerConfig") {}
+
 const makeEndpointConfigItem = <
   const Label extends string,
   const Definition extends ProcessManagerEndpointDefinition,
@@ -260,6 +308,82 @@ const endpointHttp = (
   _tag: "ProcessManagerHttpEndpoint",
   transport: config.transport,
 });
+
+const endpointItemsFrom = (
+  items: readonly ProcessManagerGroupConfigItem[],
+): ReadonlyArray<ProcessManagerEndpointConfigItem<string, ProcessManagerEndpointDefinition, boolean>> =>
+  items.filter((item): item is ProcessManagerEndpointConfigItem<string, ProcessManagerEndpointDefinition, boolean> =>
+    item._tag === "ProcessManagerEndpointConfigItem"
+  );
+
+const normalizeEndpointItems = <
+  const Source extends ConnectionSource<AnyProcessGroupContract>,
+>(
+  group: Source,
+  items: readonly ProcessManagerGroupConfigItem[],
+): Effect.Effect<ProcessManagerGroupConfig<Source["id"], ContractFromSource<Source>>, ProcessManagerEndpointConfigError> =>
+  Effect.gen(function* () {
+    const endpoints = endpointItemsFrom(items);
+    if (endpoints.length === 0) {
+      return yield* new ProcessManagerEndpointConfigError({
+        reason: `Group '${group.id}' does not declare any ProcessManager endpoints`,
+      });
+    }
+
+    const labels = new Set<string>();
+    for (const endpoint of endpoints) {
+      if (labels.has(endpoint.label)) {
+        return yield* new ProcessManagerEndpointConfigError({
+          reason: `Group '${group.id}' declares duplicate endpoint label '${endpoint.label}'`,
+        });
+      }
+      labels.add(endpoint.label);
+    }
+
+    const defaults = endpoints.filter((endpoint) => endpoint.isDefault);
+    if (defaults.length !== 1) {
+      return yield* new ProcessManagerEndpointConfigError({
+        reason: `Group '${group.id}' must declare exactly one default endpoint; found ${defaults.length}`,
+      });
+    }
+
+    return {
+      _tag: "ProcessManagerGroupConfig",
+      group,
+      groupId: group.id,
+      endpoints,
+      defaultEndpoint: defaults[0]!.label,
+    };
+  });
+
+export const GroupConfig = <
+  const Source extends ConfigSource<AnyProcessGroupContract>,
+>(
+  group: Source,
+  items: readonly ProcessManagerGroupConfigItem[] = group.config ?? [],
+): Effect.Effect<ProcessManagerGroupConfig<Source["id"], ContractFromSource<Source>>, ProcessManagerEndpointConfigError> =>
+  normalizeEndpointItems(group, items);
+
+const makeProcessManagerConfigLayer = (
+  configs: ReadonlyArray<ProcessManagerGroupConfig>,
+): Layer.Layer<ProcessManagerConfig> => {
+  const byGroupId = new Map<string, ProcessManagerGroupConfig>();
+  for (const config of configs) {
+    byGroupId.set(config.groupId, config);
+  }
+  return Layer.succeed(ProcessManagerConfig, {
+    groupConfig: (groupId) => {
+      const config = byGroupId.get(groupId);
+      return config === undefined
+        ? Effect.fail(
+            new ProcessManagerEndpointConfigError({
+              reason: `Group '${groupId}' is not registered in ProcessManager.Config`,
+            }),
+          )
+        : Effect.succeed(config);
+    },
+  });
+};
 
 function endpointModule<
   const Module extends { readonly default: AnyProcessManagerLocalRuntimeDefinition },
@@ -356,6 +480,7 @@ export interface ProcessManagerCliConfig {
 
 interface ProcessManagerCliOptions {
   readonly json: boolean;
+  readonly endpointLabel?: string;
 }
 
 /**
@@ -755,7 +880,7 @@ const connectFromTransportService = <
   );
 
 const targetCandidatesFrom = (
-  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  groups: ReadonlyArray<ConfigSource>,
 ): ReadonlyArray<ProcessManagerTargetCandidate> =>
   groups.flatMap((group) => [
     ...group.contract.processes.map((process) => ({
@@ -772,12 +897,75 @@ const targetCandidatesFrom = (
     })),
   ]);
 
-const managerFor = (
-  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
-  groupId: string,
+const selectEndpoint = (
+  config: ProcessManagerGroupConfig,
+  label: string | undefined,
+): Effect.Effect<NormalizedEndpoint, ProcessManagerEndpointConfigError> => {
+  const selectedLabel = label ?? config.defaultEndpoint;
+  const selected = config.endpoints.find((endpoint) => endpoint.label === selectedLabel);
+  return selected === undefined
+    ? Effect.fail(
+        new ProcessManagerEndpointConfigError({
+          reason: `Group '${config.groupId}' does not declare endpoint '${selectedLabel}'. Available endpoints: ${
+            config.endpoints.map((endpoint) => endpoint.label).join(", ")
+          }`,
+        }),
+      )
+    : Effect.succeed(selected);
+};
+
+const hasBundledEndpointConfig = (
+  group: ConfigSource,
+): group is ConfigSource & { readonly config: readonly ProcessManagerGroupConfigItem[] } =>
+  Array.isArray(group.config) && endpointItemsFrom(group.config).length > 0;
+
+const bundledGroupConfig = (
+  group: ConfigSource,
+): Effect.Effect<ProcessManagerGroupConfig, ProcessManagerEndpointConfigError> =>
+  hasBundledEndpointConfig(group)
+    ? GroupConfig(group, group.config)
+    : Effect.fail(
+        new ProcessManagerEndpointConfigError({
+          reason: `Group '${group.id}' does not have bundled ProcessManager endpoint config`,
+        }),
+      );
+
+const managerFromEndpoint = (
+  group: ConfigSource,
+  selected: NormalizedEndpoint,
 ): Effect.Effect<
   RemoteProcessManager<AnyProcessGroupContract>,
-  ProcessManagerConnectionError,
+  ProcessManagerEndpointConfigError
+> => {
+  switch (selected.endpoint._tag) {
+    case "ProcessManagerHttpEndpoint":
+      return Effect.succeed(
+        makeRemoteProcessManager(
+          makeControlTransportHttpClient({ baseUrl: selected.endpoint.transport.baseUrl }),
+          group.contract,
+        ),
+      );
+    case "ProcessManagerModuleEndpoint":
+      return Effect.fail(
+        new ProcessManagerEndpointConfigError({
+          reason:
+            `Endpoint '${selected.label}' for group '${group.id}' is a module endpoint; local runtime launching is not implemented yet`,
+        }),
+      );
+  }
+};
+
+const asOptionalGroupConfig = (
+  config: ProcessManagerGroupConfig,
+): ProcessManagerGroupConfig | undefined => config;
+
+const managerFor = (
+  groups: ReadonlyArray<ConfigSource>,
+  groupId: string,
+  endpointLabel?: string,
+): Effect.Effect<
+  RemoteProcessManager<AnyProcessGroupContract>,
+  ProcessManagerConnectionError | ProcessManagerEndpointConfigError,
   ProcessManagerConnectionRegistry
 > => {
   const group = groups.find((candidate) => candidate.id === groupId);
@@ -789,7 +977,20 @@ const managerFor = (
       }),
     );
   }
-  return connectFromRegistry(group);
+  return Effect.gen(function* () {
+    const configOption = yield* Effect.serviceOption(ProcessManagerConfig);
+    if (Option.isSome(configOption)) {
+      const config = yield* configOption.value.groupConfig(group.id);
+      const endpoint = yield* selectEndpoint(config, endpointLabel);
+      return yield* managerFromEndpoint(group, endpoint);
+    }
+    if (hasBundledEndpointConfig(group) || endpointLabel !== undefined) {
+      const config = yield* bundledGroupConfig(group);
+      const endpoint = yield* selectEndpoint(config, endpointLabel);
+      return yield* managerFromEndpoint(group, endpoint);
+    }
+    return yield* connectFromRegistry(group);
+  });
 };
 
 const formatAmbiguousTarget = (
@@ -820,7 +1021,7 @@ const cliHintContractSource =
   "Controls come from your imported group contract. Run `verify` to compare each remote group to that contract.";
 
 const cliFooterGroups =
-  "Each row pairs a declared group id with its remote base URL from ConnectionRegistry.";
+  "Each row pairs a declared group id with the selected endpoint label and transport target.";
 
 const cliFooterList =
   "IDs are canonical. Short CLI targets must match exactly one entry across all listed groups.";
@@ -844,7 +1045,7 @@ const encodeCliJson = (
   );
 
 const resolveCliTarget = (
-  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  groups: ReadonlyArray<ConfigSource>,
   input: string,
   expectedKind: "process" | "queue",
 ): Effect.Effect<ProcessManagerTargetCandidate, ProcessManagerConnectionError> => {
@@ -902,7 +1103,7 @@ const processControlFor = (
 
 const targetResolutionError = (
   input: string,
-  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  groups: ReadonlyArray<ConfigSource>,
 ): ProcessManagerConnectionError | undefined => {
   const resolution = resolveProcessManagerTarget(input, targetCandidatesFrom(groups));
   if (resolution._tag === "Missing") {
@@ -921,7 +1122,7 @@ const targetResolutionError = (
 };
 
 const resolveCliAnyTarget = (
-  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  groups: ReadonlyArray<ConfigSource>,
   input: string,
 ): Effect.Effect<ProcessManagerTargetCandidate, ProcessManagerConnectionError> => {
   const resolution = resolveProcessManagerTarget(input, targetCandidatesFrom(groups));
@@ -939,15 +1140,16 @@ const resolveCliAnyTarget = (
 };
 
 const verifiedManagerForTarget = (
-  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  groups: ReadonlyArray<ConfigSource>,
   target: ProcessManagerTargetCandidate,
+  endpointLabel?: string,
 ): Effect.Effect<
   RemoteProcessManager<AnyProcessGroupContract>,
-  ProcessManagerConnectionError | ProcessManagerRequestError,
+  ProcessManagerConnectionError | ProcessManagerRequestError | ProcessManagerEndpointConfigError,
   ProcessManagerConnectionRegistry | HttpClient.HttpClient
 > =>
   Effect.gen(function* () {
-    const manager = yield* managerFor(groups, target.groupId);
+    const manager = yield* managerFor(groups, target.groupId, endpointLabel);
     // CLI controls are contract-first: verify before every mutation/read so
     // stale imported contracts fail before the wrong remote operation runs.
     yield* manager.verifyContract;
@@ -987,52 +1189,54 @@ const runRemoteQueueOperation = (
 };
 
 const runProcessCommand = (
-  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  groups: ReadonlyArray<ConfigSource>,
   input: string,
   operation: "start" | "stop" | "restart" | "now",
+  options: Pick<ProcessManagerCliOptions, "endpointLabel">,
 ): Effect.Effect<
   void,
-  ProcessManagerConnectionError | ProcessManagerRequestError,
+  ProcessManagerConnectionError | ProcessManagerRequestError | ProcessManagerEndpointConfigError,
   ProcessManagerConnectionRegistry | HttpClient.HttpClient
 > =>
   Effect.gen(function* () {
     const target = yield* resolveCliTarget(groups, input, "process");
     yield* assertTargetControl(target, processControlFor(operation));
-    const manager = yield* verifiedManagerForTarget(groups, target);
+    const manager = yield* verifiedManagerForTarget(groups, target, options.endpointLabel);
     yield* runRemoteProcessOperation(manager.process(target.id), operation);
     yield* Console.log(`OK process ${target.id} ${operation} requested`);
   });
 
 const runQueueCommand = (
-  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  groups: ReadonlyArray<ConfigSource>,
   input: string,
   operation: "start" | "pause" | "resume" | "clear",
+  options: Pick<ProcessManagerCliOptions, "endpointLabel">,
 ): Effect.Effect<
   void,
-  ProcessManagerConnectionError | ProcessManagerRequestError,
+  ProcessManagerConnectionError | ProcessManagerRequestError | ProcessManagerEndpointConfigError,
   ProcessManagerConnectionRegistry | HttpClient.HttpClient
 > =>
   Effect.gen(function* () {
     const target = yield* resolveCliTarget(groups, input, "queue");
     yield* assertTargetControl(target, operation);
-    const manager = yield* verifiedManagerForTarget(groups, target);
+    const manager = yield* verifiedManagerForTarget(groups, target, options.endpointLabel);
     yield* runRemoteQueueOperation(manager.queue(target.id), operation);
     yield* Console.log(`OK queue ${target.id} ${operation} requested`);
   });
 
 const runStatusCommand = (
-  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  groups: ReadonlyArray<ConfigSource>,
   input: string,
   options: ProcessManagerCliOptions,
 ): Effect.Effect<
   void,
-  ProcessManagerConnectionError | ProcessManagerRequestError,
+  ProcessManagerConnectionError | ProcessManagerRequestError | ProcessManagerEndpointConfigError,
   ProcessManagerConnectionRegistry | HttpClient.HttpClient
 > =>
   Effect.gen(function* () {
     const target = yield* resolveCliAnyTarget(groups, input);
     yield* assertTargetControl(target, "status");
-    const manager = yield* verifiedManagerForTarget(groups, target);
+    const manager = yield* verifiedManagerForTarget(groups, target, options.endpointLabel);
     const response = target.kind === "process"
       ? yield* manager.process(target.id).status
       : yield* manager.queue(target.id).status;
@@ -1052,17 +1256,17 @@ const runStatusCommand = (
   });
 
 const runVerifyCommand = (
-  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  groups: ReadonlyArray<ConfigSource>,
   options: ProcessManagerCliOptions,
 ): Effect.Effect<
   void,
-  ProcessManagerConnectionError | ProcessManagerRequestError,
+  ProcessManagerConnectionError | ProcessManagerRequestError | ProcessManagerEndpointConfigError,
   ProcessManagerConnectionRegistry | HttpClient.HttpClient
 > =>
   Effect.gen(function* () {
     const verified: Array<{ readonly groupId: string }> = [];
     for (const group of groups) {
-      const manager = yield* managerFor(groups, group.id);
+      const manager = yield* managerFor(groups, group.id, options.endpointLabel);
       yield* manager.verifyContract;
       verified.push({ groupId: group.id });
       if (options.json) {
@@ -1079,21 +1283,46 @@ const runVerifyCommand = (
   });
 
 const runGroupsCommand = (
-  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  groups: ReadonlyArray<ConfigSource>,
   options: ProcessManagerCliOptions,
 ): Effect.Effect<
   void,
-  ProcessManagerConnectionError | ProcessManagerRequestError,
+  ProcessManagerConnectionError | ProcessManagerRequestError | ProcessManagerEndpointConfigError,
   ProcessManagerConnectionRegistry
 > =>
   Effect.gen(function* () {
-    const registry = yield* ProcessManagerConnectionRegistry;
-    const rows: Array<{ readonly groupId: string; readonly baseUrl: string }> = [];
-    const lines: string[] = ["GROUP\tENDPOINT"];
+    const rows: Array<{
+      readonly groupId: string;
+      readonly endpoint: string;
+      readonly target: string;
+    }> = [];
+    const lines: string[] = ["GROUP\tTARGET\tENDPOINT"];
     for (const group of groups) {
+      const configOption = yield* Effect.serviceOption(ProcessManagerConfig).pipe(
+        Effect.flatMap(
+          Option.match({
+            onNone: () =>
+              hasBundledEndpointConfig(group) || options.endpointLabel !== undefined
+                ? Effect.map(bundledGroupConfig(group), asOptionalGroupConfig)
+                : Effect.sync((): ProcessManagerGroupConfig | undefined => undefined),
+            onSome: (config) =>
+              Effect.map(config.groupConfig(group.id), asOptionalGroupConfig),
+          }),
+        ),
+      );
+      if (configOption !== undefined) {
+        const selected = yield* selectEndpoint(configOption, options.endpointLabel);
+        const endpoint = selected.endpoint._tag === "ProcessManagerHttpEndpoint"
+          ? selected.endpoint.transport.baseUrl
+          : selected.endpoint._tag;
+        rows.push({ groupId: group.id, target: selected.label, endpoint });
+        lines.push(`${group.id}\t${selected.label}\t${endpoint}`);
+        continue;
+      }
+      const registry = yield* ProcessManagerConnectionRegistry;
       const baseUrl = yield* registry.baseUrl(group.id);
-      rows.push({ groupId: group.id, baseUrl });
-      lines.push(`${group.id}\t${baseUrl}`);
+      rows.push({ groupId: group.id, target: "registry", endpoint: baseUrl });
+      lines.push(`${group.id}\tregistry\t${baseUrl}`);
     }
     if (options.json) {
       yield* Console.log(yield* encodeCliJson({ groups: rows }));
@@ -1103,7 +1332,7 @@ const runGroupsCommand = (
   });
 
 const runListCommand = (
-  groups: ReadonlyArray<ConnectionSource<AnyProcessGroupContract>>,
+  groups: ReadonlyArray<ConfigSource>,
   options: ProcessManagerCliOptions,
 ): Effect.Effect<void, ProcessManagerRequestError> =>
   Effect.gen(function* () {
@@ -1140,39 +1369,42 @@ const runListCommand = (
   });
 
 const makeCli = <
-  const Groups extends readonly ConnectionSource<AnyProcessGroupContract>[],
+  const Groups extends readonly ConfigSource[],
 >(
   groups: Groups,
   config: ProcessManagerCliConfig = {},
 ) => {
   const target = Argument.string("target");
   const jsonOption = Flag.boolean("json").pipe(Flag.withDefault(false));
-  const groupsCommand = Command.make("groups", { json: jsonOption }, ({ json }) =>
-    runGroupsCommand(groups, { json })
+  const endpointLabelOption = Flag.string("target").pipe(Flag.optional);
+  const endpointLabelFrom = (endpointLabel: Option.Option<string>): string | undefined =>
+    Option.isSome(endpointLabel) ? endpointLabel.value : undefined;
+  const groupsCommand = Command.make("groups", { json: jsonOption, endpointLabel: endpointLabelOption }, ({ json, endpointLabel }) =>
+    runGroupsCommand(groups, { json, endpointLabel: endpointLabelFrom(endpointLabel) })
   );
   const listCommand = Command.make("ls", { json: jsonOption }, ({ json }) =>
     runListCommand(groups, { json })
   );
-  const verifyCommand = Command.make("verify", { json: jsonOption }, ({ json }) =>
-    runVerifyCommand(groups, { json })
+  const verifyCommand = Command.make("verify", { json: jsonOption, endpointLabel: endpointLabelOption }, ({ json, endpointLabel }) =>
+    runVerifyCommand(groups, { json, endpointLabel: endpointLabelFrom(endpointLabel) })
   );
-  const statusCommand = Command.make("status", { target, json: jsonOption }, ({ target, json }) =>
-    runStatusCommand(groups, target, { json })
+  const statusCommand = Command.make("status", { target, json: jsonOption, endpointLabel: endpointLabelOption }, ({ target, json, endpointLabel }) =>
+    runStatusCommand(groups, target, { json, endpointLabel: endpointLabelFrom(endpointLabel) })
   );
   const processCommand = (
     name: "start" | "stop" | "restart" | "now",
     operation: "start" | "stop" | "restart" | "now",
   ) =>
-    Command.make(name, { target }, ({ target }) =>
-      runProcessCommand(groups, target, operation)
+    Command.make(name, { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
+      runProcessCommand(groups, target, operation, { endpointLabel: endpointLabelFrom(endpointLabel) })
     );
   const queueCommand = (name: "pause" | "resume" | "clear") =>
-    Command.make(name, { target }, ({ target }) =>
-      runQueueCommand(groups, target, name),
+    Command.make(name, { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
+      runQueueCommand(groups, target, name, { endpointLabel: endpointLabelFrom(endpointLabel) }),
     );
 
-  const queueStartCommand = Command.make("queue-start", { target }, ({ target }) =>
-    runQueueCommand(groups, target, "start"),
+  const queueStartCommand = Command.make("queue-start", { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
+    runQueueCommand(groups, target, "start", { endpointLabel: endpointLabelFrom(endpointLabel) }),
   );
 
   const root = Command.make(
@@ -1549,6 +1781,10 @@ export const ProcessManager = {
     layer: makeConnectionRegistryLayer,
     layerConfig: makeConnectionRegistryConfigLayer,
   },
+  Config: {
+    layer: makeProcessManagerConfigLayer,
+  },
+  GroupConfig,
   Endpoint,
   Transport,
   LocalRuntime,

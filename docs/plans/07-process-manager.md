@@ -890,18 +890,18 @@ should remain the same: group + endpoint label + command.
 Implementation order:
 
 1. Add group config item types and `Endpoint` direct export /
-   `ProcessManager.Endpoint` access.
+   `ProcessManager.Endpoint` access. **Implemented.**
 2. Add group-bundled endpoint items on `ProcessGroup.Service` /
-   `ProcessGroup.make`, with external config-layer overrides.
-3. Add endpoint label selection and configured group status (`pending`,
-   `online`, `offline`, drift).
-4. Add `Endpoint.http` as the first real transport endpoint.
-5. Add `Endpoint.module` type shape and `LocalRuntime` descriptor, but keep
-   execution out-of-process.
-6. Add child runtime launcher/run-state/log files for local endpoints.
-7. Route all runtime commands through `ProcessManager`.
-8. Add local file-backed log streaming, then remote log transport.
-9. Add the daemon endpoint after direct launcher behavior works.
+   `ProcessGroup.make`, with external config-layer overrides. **Implemented.**
+3. Add endpoint label selection for HTTP endpoint config. **Implemented.**
+4. Add configured group status (`pending`, `online`, `offline`, drift).
+5. Add `Endpoint.http` as the first real transport endpoint. **Implemented.**
+6. Add `Endpoint.module` type shape and `LocalRuntime` descriptor, but keep
+   execution out-of-process. **Implemented as descriptors; launch remains future.**
+7. Add child runtime launcher/run-state/log files for local endpoints.
+8. Route all runtime commands through `ProcessManager`.
+9. Add local file-backed log streaming, then remote log transport.
+10. Add the daemon endpoint after direct launcher behavior works.
 
 ### Resolved remote layer decisions
 
@@ -1274,19 +1274,19 @@ Implemented initial surface:
   semantics are decided.
 - Do not implement queue/process remote layers by erasing remote failures.
 
-Next endpoint-config surface:
+Endpoint-config surface:
 
 - Add an `Endpoint` namespace export that is also available as
-  `ProcessManager.Endpoint`.
+  `ProcessManager.Endpoint`. **Implemented.**
 - Add endpoint config items for `Endpoint.local`, `Endpoint.http`, and
-  `Endpoint.module`.
+  `Endpoint.module`. **Implemented.**
 - Let `ProcessGroup.Service` / `ProcessGroup.make` accept a heterogeneous config
   item array as the third argument, with endpoint items as the first supported
-  item type.
+  item type. **Implemented.**
 - Add `ProcessManager.GroupConfig(Group, ...)` for external config layers, while
-  letting group-bundled endpoint items wrap that config internally.
+  letting group-bundled endpoint items wrap that config internally. **Implemented.**
 - Add `ProcessManager.LocalRuntime(Group, ...)` as the module target used by
-  child-process launches.
+  child-process launches. **Implemented as a descriptor.**
 - Keep same-process endpoints test-only.
 - Add log transport config as a sibling endpoint capability before building a
   rich daemon UX.

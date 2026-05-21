@@ -29,6 +29,12 @@ config items for the future launcher/daemon CLI. `ProcessGroup.Service` and
 `ProcessGroup.make` now accept a third config-item array and service definitions
 expose that array as `Group.config`.
 
+`ProcessManager.GroupConfig(Group, items)` validates endpoint config for external
+overrides, and `ProcessManager.Config.layer([...])` can replace group-bundled
+config at the application edge. Runtime CLI commands accept `--target <label>`
+for HTTP endpoint config and fall back to the existing connection registry when
+no endpoint config is present.
+
 ---
 
 ## Mental model (keep this picture)

@@ -385,6 +385,11 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
   **`Endpoint.define(label, definition)`** — labeled endpoint config items for a
   `ProcessGroup.Service(..., configItems)` / `ProcessGroup.make(..., configItems)`
   third argument.
+- **`ProcessManager.GroupConfig(Group, items?)`** — validate and normalize
+  endpoint items for a group.
+- **`ProcessManager.Config.layer(configs)`** — explicit endpoint config override
+  layer. CLI endpoint selection uses this layer first, then group-bundled
+  `Group.config`, then the legacy `ConnectionRegistry` fallback.
 
 ### `RemoteProcessManager` API
 
@@ -399,7 +404,8 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 **Subcommands:** `groups`, `ls`, `verify`, `status <target>`, `start <target>`, `stop <target>`, `restart <target>`, `now <target>`, `pause <target>`, `resume <target>`, `clear <target>`.
 
-**Flags:** `--json` on `groups`, `ls`, `verify`, `status`.
+**Flags:** `--json` on `groups`, `ls`, `verify`, `status`; `--target <label>`
+on endpoint-backed runtime commands.
 
 **Behavior:** resolves **canonical id or normalized suffix alias**; **preflight** contract for requested control (e.g. `now` requires `runImmediately` on contract); runs **`verifyContract`** before mutations in command paths. Human **`ls`** lists each group's entries as `KIND`, `ID`, and **contract controls** (`(none)` if empty); human **`groups`**, **`verify`**, **`status`** append short footer or pretty-print embedded status JSON respectively.
 

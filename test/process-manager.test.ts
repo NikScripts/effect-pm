@@ -647,6 +647,181 @@ describe("ProcessManager", () => {
     }),
   );
 
+  it.live("runs CLI controls through group-bundled endpoint config targets", () =>
+    Effect.gen(function* () {
+      const runs = yield* Ref.make(0);
+
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
+        "@test/ConfiguredCliEmailQueue",
+        {
+          effect: (_email) => Effect.void,
+        },
+      ) {}
+
+      class SyncProcess extends Process.Service<SyncProcess>()(
+        "@test/ConfiguredCliSyncProcess",
+        {
+          effect: Ref.update(runs, (count) => count + 1),
+        },
+      ) {}
+
+      const localEndpoint = Endpoint.http({
+        transport: ProcessManager.Transport.http({
+          baseUrl: "http://127.0.0.1:32141",
+        }),
+      });
+      const productionEndpoint = Endpoint.http({
+        transport: ProcessManager.Transport.http({
+          baseUrl: "http://127.0.0.1:32142",
+        }),
+      });
+
+      class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+        "@test/ConfiguredCliBillingGroup",
+        [SyncProcess, EmailQueue] as const,
+        [
+          Endpoint.local(localEndpoint).default,
+          ProcessManager.Endpoint.production(productionEndpoint),
+        ],
+      ) {}
+
+      yield* Effect.gen(function* () {
+        const group = yield* BillingGroup;
+        const cli = ProcessManager.cli([BillingGroup] as const);
+
+        yield* ControlService.make({
+          port: 32141,
+          group,
+        });
+        yield* ControlService.make({
+          port: 32142,
+          group,
+        });
+
+        yield* cli(["now", "configured-cli-sync-process"]);
+        yield* cli([
+          "now",
+          "configured-cli-sync-process",
+          "--target",
+          "production",
+        ]);
+        yield* cli(["groups", "--target", "production"]);
+        yield* cli(["verify", "--target", "production"]);
+
+        expect(yield* Ref.get(runs)).toBe(2);
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            BillingGroup.layer.pipe(
+              Layer.provide(Layer.mergeAll(EmailQueue.layer, SyncProcess.layer, ProcessStore.layer)),
+            ),
+            ProcessStore.layer,
+            NodeServices.layer,
+            NodeHttpClient.layerUndici,
+          ),
+        ),
+      );
+    }),
+  );
+
+  it.effect("validates endpoint config defaults", () =>
+    Effect.gen(function* () {
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
+        "@test/InvalidEndpointDefaultEmailQueue",
+        {
+          effect: (_email) => Effect.void,
+        },
+      ) {}
+
+      class SyncProcess extends Process.Service<SyncProcess>()(
+        "@test/InvalidEndpointDefaultProcess",
+        {
+          effect: Effect.void,
+        },
+      ) {}
+
+      const httpEndpoint = Endpoint.http({
+        transport: ProcessManager.Transport.http({
+          baseUrl: "http://127.0.0.1:32143",
+        }),
+      });
+
+      class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+        "@test/InvalidEndpointDefaultGroup",
+        [SyncProcess, EmailQueue] as const,
+      ) {}
+
+      const error = yield* ProcessManager.GroupConfig(BillingGroup, [
+        Endpoint.local(httpEndpoint),
+        Endpoint.production(httpEndpoint),
+      ]).pipe(Effect.flip);
+
+      expect(error).toBeInstanceOf(ProcessManagerEndpointConfigError);
+      expect(error.reason).toContain("exactly one default endpoint");
+    }),
+  );
+
+  it.live("uses explicit ProcessManager config layers as endpoint overrides", () =>
+    Effect.gen(function* () {
+      const runs = yield* Ref.make(0);
+
+      class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
+        "@test/ConfigLayerEndpointEmailQueue",
+        {
+          effect: (_email) => Effect.void,
+        },
+      ) {}
+
+      class SyncProcess extends Process.Service<SyncProcess>()(
+        "@test/ConfigLayerEndpointProcess",
+        {
+          effect: Ref.update(runs, (count) => count + 1),
+        },
+      ) {}
+
+      class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+        "@test/ConfigLayerEndpointGroup",
+        [SyncProcess, EmailQueue] as const,
+      ) {}
+
+      const config = yield* ProcessManager.GroupConfig(BillingGroup, [
+        Endpoint.local(
+          Endpoint.http({
+            transport: ProcessManager.Transport.http({
+              baseUrl: "http://127.0.0.1:32144",
+            }),
+          }),
+        ).default,
+      ]);
+
+      yield* Effect.gen(function* () {
+        const group = yield* BillingGroup;
+        const cli = ProcessManager.cli([BillingGroup] as const);
+
+        yield* ControlService.make({
+          port: 32144,
+          group,
+        });
+
+        yield* cli(["now", "config-layer-endpoint-process"]);
+
+        expect(yield* Ref.get(runs)).toBe(1);
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            BillingGroup.layer.pipe(
+              Layer.provide(Layer.mergeAll(EmailQueue.layer, SyncProcess.layer, ProcessStore.layer)),
+            ),
+            ProcessManager.Config.layer([config]),
+            ProcessStore.layer,
+            NodeServices.layer,
+            NodeHttpClient.layerUndici,
+          ),
+        ),
+      );
+    }),
+  );
+
   it.live("reads remote queue status by typed queue id", () =>
     Effect.gen(function* () {
       const delivered = yield* Ref.make<ReadonlyArray<string>>([]);
