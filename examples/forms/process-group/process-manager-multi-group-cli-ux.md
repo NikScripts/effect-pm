@@ -93,6 +93,7 @@ Implemented commands:
 
 - `groups`
 - `ls`
+- `group-start <group>`
 - `status <target>`
 - `verify`
 - process controls: `start`, `stop`, `restart`, `now`
@@ -103,6 +104,8 @@ Endpoint labels can be selected with `--target <label>` for endpoint-backed
 groups; groups without endpoint config continue using the connection registry.
 For endpoint-backed groups, `groups` reports endpoint status as `online`,
 `offline`, `contract-drift`, or `configured`.
+`group-start <group> --target <label>` launches module endpoints with launch
+config, writes run-state/log files, and waits for their HTTP control endpoint.
 
 List configured groups first:
 

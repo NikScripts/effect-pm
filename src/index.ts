@@ -225,6 +225,7 @@ export type {
   ProcessManagerHttpEndpointDefinition,
   ProcessManagerHttpTransport,
   ProcessManagerLocalRuntimeDefinition,
+  ProcessManagerModuleEndpointLaunchConfig,
   ProcessManagerModuleEndpointDefinition,
 } from "./ProcessManager";
 

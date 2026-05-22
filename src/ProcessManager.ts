@@ -9,9 +9,10 @@
  * @module ProcessManager
  */
 
-import { Config, ConfigProvider, Console, Context, Data, Effect, Layer, Option, Schema } from "effect";
+import { Clock, Config, ConfigProvider, Console, Context, Data, DateTime, Duration, Effect, Exit, FileSystem, Layer, Option, Path, Schema, Scope } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import type { HttpClient } from "effect/unstable/http";
+import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import type {
   ControlProtocolMetadata,
   ControlProtocolRequest,
@@ -28,6 +29,7 @@ import type {
   ProcessGroupEntry,
 } from "./ProcessGroup";
 import {
+  normalizeProcessManagerTarget,
   resolveProcessManagerTarget,
   type ProcessManagerTargetCandidate,
 } from "./ProcessManagerTargetResolver";
@@ -125,10 +127,12 @@ export interface ProcessManagerLocalRuntimeDefinition<
   readonly control: ControlLayer;
 }
 
+// Existential runtime descriptor: once a runtime is loaded from a dynamic module,
+// the concrete layer environment/error types are intentionally hidden.
 type AnyProcessManagerLocalRuntimeDefinition = ProcessManagerLocalRuntimeDefinition<
-  ContractSource<AnyProcessGroupContract>,
-  unknown,
-  unknown
+  any,
+  any,
+  any
 >;
 
 const isProcessManagerLocalRuntimeDefinition = (
@@ -196,9 +200,42 @@ export interface ProcessManagerModuleEndpointDefinition<
 > {
   readonly _tag: "ProcessManagerModuleEndpoint";
   readonly load: () => Promise<unknown>;
+  readonly launch?: ProcessManagerModuleEndpointLaunchConfig;
   readonly select: (
     module: unknown,
   ) => Effect.Effect<Runtime, ProcessManagerEndpointConfigError>;
+}
+
+/**
+ * Out-of-process launcher config for a module endpoint.
+ *
+ * @public
+ */
+export interface ProcessManagerModuleEndpointLaunchConfig {
+  readonly command: string;
+  readonly args: ReadonlyArray<string>;
+  readonly control: ProcessManagerHttpEndpointDefinition;
+  readonly cwd?: string;
+  readonly env?: Readonly<Record<string, string>>;
+  readonly logDirectory?: string;
+  readonly runDirectory?: string;
+  readonly pollInterval?: Duration.Input;
+  readonly startupTimeout?: Duration.Input;
+}
+
+interface ProcessManagerRunState {
+  readonly args: ReadonlyArray<string>;
+  readonly command: string;
+  readonly controlBaseUrl: string;
+  readonly cwd?: string;
+  readonly endpointLabel: string;
+  readonly groupId: string;
+  readonly logPaths: {
+    readonly stderr: string;
+    readonly stdout: string;
+  };
+  readonly pid: number;
+  readonly startedAt: string;
 }
 
 /**
@@ -417,6 +454,146 @@ const makeProcessManagerConfigLayer = (
   });
 };
 
+const safePathSegment = (input: string): string =>
+  normalizeProcessManagerTarget(input).replace(/\//g, "__") || "group";
+
+const moduleEndpointLaunchConfig = (
+  group: ConfigSource,
+  selected: ProcessManagerEndpointSelection,
+): Effect.Effect<ProcessManagerModuleEndpointLaunchConfig, ProcessManagerEndpointConfigError> => {
+  if (selected.endpoint._tag !== "ProcessManagerModuleEndpoint") {
+    return Effect.fail(
+      new ProcessManagerEndpointConfigError({
+        reason: `Endpoint '${selected.label}' for group '${group.id}' is not a module endpoint`,
+      }),
+    );
+  }
+  return selected.endpoint.launch === undefined
+    ? Effect.fail(
+        new ProcessManagerEndpointConfigError({
+          reason: `Endpoint '${selected.label}' for group '${group.id}' does not include launch config`,
+        }),
+      )
+    : Effect.succeed(selected.endpoint.launch);
+};
+
+const writeRunState = (
+  runFile: string,
+  state: ProcessManagerRunState,
+): Effect.Effect<void, ProcessManagerEndpointConfigError, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const encoded = yield* Schema.encodeUnknownEffect(Schema.UnknownFromJsonString)(state).pipe(
+      Effect.mapError(
+        (error) =>
+          new ProcessManagerEndpointConfigError({
+            reason: `Unable to encode ProcessManager run state for '${runFile}': ${String(error)}`,
+          }),
+      ),
+    );
+    yield* fs.writeFileString(runFile, encoded);
+  }).pipe(
+    Effect.mapError(
+      (error) =>
+        new ProcessManagerEndpointConfigError({
+          reason: `Unable to write ProcessManager run state '${runFile}': ${String(error)}`,
+        }),
+    ),
+  );
+
+const launchDetachedProcess = (
+  launch: ProcessManagerModuleEndpointLaunchConfig,
+  stdoutPath: string,
+  stderrPath: string,
+): Effect.Effect<
+  number,
+  ProcessManagerEndpointConfigError,
+  FileSystem.FileSystem | ChildProcessSpawner.ChildProcessSpawner | Scope.Scope
+> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.writeFileString(stdoutPath, "", { flag: "a" }).pipe(
+      Effect.mapError(
+        (error) =>
+          new ProcessManagerEndpointConfigError({
+            reason: `Unable to create stdout log file '${stdoutPath}': ${String(error)}`,
+          }),
+      ),
+    );
+    yield* fs.writeFileString(stderrPath, "", { flag: "a" }).pipe(
+      Effect.mapError(
+        (error) =>
+          new ProcessManagerEndpointConfigError({
+            reason: `Unable to create stderr log file '${stderrPath}': ${String(error)}`,
+          }),
+      ),
+    );
+    const handle = yield* ChildProcess.make(launch.command, launch.args, {
+      cwd: launch.cwd,
+      detached: true,
+      env: launch.env,
+      stderr: "ignore",
+      stdin: "ignore",
+      stdout: "ignore",
+    }).pipe(
+      Effect.mapError(
+        (error) =>
+          new ProcessManagerEndpointConfigError({
+            reason: `Unable to launch ProcessManager module endpoint: ${String(error)}`,
+          }),
+      ),
+    );
+    const _reref = yield* handle.unref.pipe(
+      Effect.mapError(
+        (error) =>
+          new ProcessManagerEndpointConfigError({
+            reason: `Unable to unref ProcessManager module endpoint: ${String(error)}`,
+          }),
+      ),
+    );
+    void _reref;
+    return handle.pid;
+  });
+
+const waitForEndpointReady = (
+  group: ConfigSource,
+  launch: ProcessManagerModuleEndpointLaunchConfig,
+): Effect.Effect<
+  void,
+  ProcessManagerEndpointConfigError,
+  HttpClient.HttpClient
+> =>
+  Effect.gen(function* () {
+    const timeoutMs = Duration.toMillis(
+      Duration.fromInputUnsafe(launch.startupTimeout ?? Duration.seconds(10)),
+    );
+    const interval = launch.pollInterval ?? Duration.millis(250);
+    const startedAt = yield* Clock.currentTimeMillis;
+    const manager = makeRemoteProcessManager(
+      makeControlTransportHttpClient({ baseUrl: launch.control.transport.baseUrl }),
+      group.contract,
+    );
+    while (true) {
+      const result = yield* Effect.exit(manager.verifyContract);
+      if (Exit.isSuccess(result)) {
+        return;
+      }
+      const now = yield* Clock.currentTimeMillis;
+      if (now - startedAt >= timeoutMs) {
+        return yield* new ProcessManagerEndpointConfigError({
+          reason: `Timed out waiting for group '${group.id}' endpoint '${launch.control.transport.baseUrl}' to become ready`,
+        });
+      }
+      yield* Effect.sleep(interval);
+    }
+  });
+
+function endpointModule<
+  const Module extends { readonly default: AnyProcessManagerLocalRuntimeDefinition },
+>(
+  load: () => Promise<Module>,
+  options: { readonly launch?: ProcessManagerModuleEndpointLaunchConfig },
+): ProcessManagerModuleEndpointDefinition<Module["default"]>;
 function endpointModule<
   const Module extends { readonly default: AnyProcessManagerLocalRuntimeDefinition },
 >(
@@ -428,14 +605,21 @@ function endpointModule<
 >(
   load: () => Promise<Module>,
   select: (module: Module) => Runtime,
+  options?: { readonly launch?: ProcessManagerModuleEndpointLaunchConfig },
 ): ProcessManagerModuleEndpointDefinition<Runtime>;
 function endpointModule(
   load: () => Promise<unknown>,
-  select?: (module: unknown) => AnyProcessManagerLocalRuntimeDefinition,
+  selectOrOptions?: ((module: unknown) => AnyProcessManagerLocalRuntimeDefinition) | {
+    readonly launch?: ProcessManagerModuleEndpointLaunchConfig;
+  },
+  options?: { readonly launch?: ProcessManagerModuleEndpointLaunchConfig },
 ): ProcessManagerModuleEndpointDefinition<AnyProcessManagerLocalRuntimeDefinition> {
+  const select = typeof selectOrOptions === "function" ? selectOrOptions : undefined;
+  const launch = typeof selectOrOptions === "function" ? options?.launch : selectOrOptions?.launch;
   return {
     _tag: "ProcessManagerModuleEndpoint",
     load,
+    ...(launch === undefined ? {} : { launch }),
     select: (module) => {
       if (select !== undefined) {
         return Effect.try({
@@ -978,12 +1162,21 @@ const managerFromEndpoint = (
         ),
       );
     case "ProcessManagerModuleEndpoint":
-      return Effect.fail(
-        new ProcessManagerEndpointConfigError({
-          reason:
-            `Endpoint '${selected.label}' for group '${group.id}' is a module endpoint; local runtime launching is not implemented yet`,
-        }),
-      );
+      return selected.endpoint.launch === undefined
+        ? Effect.fail(
+            new ProcessManagerEndpointConfigError({
+              reason:
+                `Endpoint '${selected.label}' for group '${group.id}' is a module endpoint without launch config`,
+            }),
+          )
+        : Effect.succeed(
+            makeRemoteProcessManager(
+              makeControlTransportHttpClient({
+                baseUrl: selected.endpoint.launch.control.transport.baseUrl,
+              }),
+              group.contract,
+            ),
+          );
   }
 };
 
@@ -1022,10 +1215,15 @@ const probeEndpointStatus = (
         ),
       );
     case "ProcessManagerModuleEndpoint":
-      return Effect.succeed({
-        _tag: "Configured",
-        reason: "Module endpoint configured; local runtime launching is not implemented yet",
-      });
+      return endpoint.launch === undefined
+        ? Effect.succeed({
+            _tag: "Configured",
+            reason: "Module endpoint configured; local runtime launching is not implemented yet",
+          })
+        : probeEndpointStatus(group, {
+            ...selected,
+            endpoint: endpoint.launch.control,
+          });
   }
 };
 
@@ -1066,6 +1264,98 @@ const managerFor = (
     return yield* connectFromRegistry(group);
   });
 };
+
+const resolveGroup = (
+  groups: ReadonlyArray<ConfigSource>,
+  input: string,
+): Effect.Effect<ConfigSource, ProcessManagerConnectionError> => {
+  const normalizedInput = normalizeProcessManagerTarget(input);
+  const indexed = groups.map((group) => ({
+    group,
+    normalizedId: normalizeProcessManagerTarget(group.id),
+  }));
+  const matches = indexed.filter(({ normalizedId }) =>
+    normalizedId === normalizedInput || normalizedId.endsWith(`/${normalizedInput}`)
+  );
+  if (matches.length === 1) {
+    return Effect.succeed(matches[0]!.group);
+  }
+  if (matches.length > 1) {
+    return Effect.fail(
+      new ProcessManagerConnectionError({
+        groupId: "",
+        reason: `Ambiguous group '${input}'. Candidates: ${matches.map(({ group }) => group.id).join(", ")}`,
+      }),
+    );
+  }
+  return Effect.fail(
+    new ProcessManagerConnectionError({
+      groupId: "",
+      reason: `No group matched '${input}'`,
+    }),
+  );
+};
+
+const launchModuleEndpointForGroup = (
+  groups: ReadonlyArray<ConfigSource>,
+  input: string,
+  endpointLabel: string | undefined,
+): Effect.Effect<
+  ProcessManagerRunState,
+  ProcessManagerConnectionError | ProcessManagerEndpointConfigError,
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | HttpClient.HttpClient | Path.Path | Scope.Scope
+> =>
+  Effect.gen(function* () {
+    const group = yield* resolveGroup(groups, input);
+    const configOption = yield* Effect.serviceOption(ProcessManagerConfig);
+    const config = Option.isSome(configOption)
+      ? yield* configOption.value.groupConfig(group.id)
+      : yield* bundledGroupConfig(group);
+    const selected = yield* selectEndpoint(config, endpointLabel);
+    const launch = yield* moduleEndpointLaunchConfig(group, selected);
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const safeGroupId = safePathSegment(group.id);
+    const runDirectory = launch.runDirectory ?? path.join(".effect-pm", "run", "groups");
+    const logDirectory = launch.logDirectory ?? path.join(".effect-pm", "logs");
+    yield* fs.makeDirectory(runDirectory, { recursive: true }).pipe(
+      Effect.mapError(
+        (error) =>
+          new ProcessManagerEndpointConfigError({
+            reason: `Unable to create ProcessManager run directory '${runDirectory}': ${String(error)}`,
+          }),
+      ),
+    );
+    yield* fs.makeDirectory(logDirectory, { recursive: true }).pipe(
+      Effect.mapError(
+        (error) =>
+          new ProcessManagerEndpointConfigError({
+            reason: `Unable to create ProcessManager log directory '${logDirectory}': ${String(error)}`,
+          }),
+      ),
+    );
+    const stdoutPath = path.join(logDirectory, `${safeGroupId}.out.log`);
+    const stderrPath = path.join(logDirectory, `${safeGroupId}.err.log`);
+    const pid = yield* launchDetachedProcess(launch, stdoutPath, stderrPath);
+    const startedAtMs = yield* Clock.currentTimeMillis;
+    const state: ProcessManagerRunState = {
+      args: launch.args,
+      command: launch.command,
+      controlBaseUrl: launch.control.transport.baseUrl,
+      ...(launch.cwd === undefined ? {} : { cwd: launch.cwd }),
+      endpointLabel: selected.label,
+      groupId: group.id,
+      logPaths: {
+        stderr: stderrPath,
+        stdout: stdoutPath,
+      },
+      pid,
+      startedAt: DateTime.formatIso(DateTime.makeUnsafe(startedAtMs)),
+    };
+    yield* writeRunState(path.join(runDirectory, `${safeGroupId}.json`), state);
+    yield* waitForEndpointReady(group, launch);
+    return state;
+  });
 
 const formatAmbiguousTarget = (
   input: string,
@@ -1368,6 +1658,22 @@ const runVerifyCommand = (
     }
   });
 
+const runGroupStartCommand = (
+  groups: ReadonlyArray<ConfigSource>,
+  input: string,
+  options: Pick<ProcessManagerCliOptions, "endpointLabel">,
+): Effect.Effect<
+  void,
+  ProcessManagerConnectionError | ProcessManagerEndpointConfigError,
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | HttpClient.HttpClient | Path.Path | Scope.Scope
+> =>
+  Effect.gen(function* () {
+    const state = yield* launchModuleEndpointForGroup(groups, input, options.endpointLabel);
+    yield* Console.log(
+      `OK group ${state.groupId} started with pid ${String(state.pid)} at ${state.controlBaseUrl}`,
+    );
+  });
+
 const runGroupsCommand = (
   groups: ReadonlyArray<ConfigSource>,
   options: ProcessManagerCliOptions,
@@ -1480,6 +1786,9 @@ const makeCli = <
   const verifyCommand = Command.make("verify", { json: jsonOption, endpointLabel: endpointLabelOption }, ({ json, endpointLabel }) =>
     runVerifyCommand(groups, { json, endpointLabel: endpointLabelFrom(endpointLabel) })
   );
+  const groupStartCommand = Command.make("group-start", { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
+    runGroupStartCommand(groups, target, { endpointLabel: endpointLabelFrom(endpointLabel) })
+  );
   const statusCommand = Command.make("status", { target, json: jsonOption, endpointLabel: endpointLabelOption }, ({ target, json, endpointLabel }) =>
     runStatusCommand(groups, target, { json, endpointLabel: endpointLabelFrom(endpointLabel) })
   );
@@ -1511,6 +1820,7 @@ const makeCli = <
       groupsCommand,
       listCommand,
       verifyCommand,
+      groupStartCommand,
       statusCommand,
       processCommand("start", "start"),
       processCommand("stop", "stop"),

@@ -36,6 +36,9 @@ for HTTP endpoint config and fall back to the existing connection registry when
 no endpoint config is present. `effect-pm groups` probes selected HTTP endpoint
 contracts and reports `online`, `offline`, or `contract-drift`; module and
 registry endpoints report `configured` until launch/status support exists.
+`pm group-start <group> --target <label>` can launch module endpoints that
+include launch config, writes `.effect-pm/run/groups/<group>.json`, and then
+continues to control them through their configured HTTP control endpoint.
 
 ---
 

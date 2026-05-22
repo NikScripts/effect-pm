@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Config, ConfigProvider, Effect, Layer, Ref } from "effect";
+import { Config, ConfigProvider, Effect, FileSystem, Layer, Ref } from "effect";
 import {
   ControlRouter,
   ControlService,
@@ -16,6 +16,7 @@ import {
   ProcessStore,
   QueueResource,
 } from "../src";
+import { ModuleEndpointGroup } from "./fixtures/process-manager-module-definition";
 
 interface Email {
   readonly to: string;
@@ -30,6 +31,19 @@ const waitForQueueCompleted = (
       yield* Effect.sleep("5 millis");
     }
   });
+
+const readRunStatePid = (text: string): number => {
+  const value: unknown = JSON.parse(text);
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "pid" in value &&
+    typeof value.pid === "number"
+  ) {
+    return value.pid;
+  }
+  throw new Error("run state did not include a numeric pid");
+};
 
 describe("ProcessManager", () => {
   it("builds endpoint config items from the direct Endpoint export", () => {
@@ -929,6 +943,80 @@ describe("ProcessManager", () => {
             ProcessStore.layer,
             NodeServices.layer,
             NodeHttpClient.layerUndici,
+          ),
+        ),
+      );
+    }),
+  );
+
+  it.live("starts module endpoints out of process and writes run state", () =>
+    Effect.gen(function* () {
+      const runRoot = ".effect-pm-test";
+      const runDirectory = `${runRoot}/run/groups`;
+      const logDirectory = `${runRoot}/logs`;
+      const pidRef = yield* Ref.make<number | undefined>(undefined);
+      const moduleEndpoint = Endpoint.module(
+        () => import("./fixtures/process-manager-module-definition.js"),
+        (module) => module.ModuleEndpointRuntime,
+        {
+          launch: {
+            command: process.execPath,
+            args: [
+              "--import",
+              "tsx",
+              "test/fixtures/process-manager-module-runner.ts",
+            ],
+            control: Endpoint.http({
+              transport: ProcessManager.Transport.http({
+                baseUrl: "http://127.0.0.1:32146",
+              }),
+            }),
+            logDirectory,
+            pollInterval: "100 millis",
+            runDirectory,
+            startupTimeout: "10 seconds",
+          },
+        },
+      );
+      const config = yield* ProcessManager.GroupConfig(ModuleEndpointGroup, [
+        Endpoint.local(moduleEndpoint).default,
+      ]);
+      const program = Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        yield* fs.remove(runRoot, { recursive: true, force: true });
+
+        const cli = ProcessManager.cli([ModuleEndpointGroup] as const);
+        yield* cli(["group-start", "module-endpoint-group"]);
+        yield* cli(["status", "module-endpoint-process"]);
+
+        const stateText = yield* fs.readFileString(
+          `${runDirectory}/test__module-endpoint-group.json`,
+        );
+        const pid = readRunStatePid(stateText);
+        yield* Ref.set(pidRef, pid);
+        expect(pid).toBeGreaterThan(0);
+      });
+
+      yield* program.pipe(
+        Effect.ensuring(
+          Effect.gen(function* () {
+            const pid = yield* Ref.get(pidRef);
+            if (pid !== undefined) {
+              yield* Effect.sync(() => {
+                process.kill(pid, "SIGTERM");
+              }).pipe(Effect.catch(() => Effect.void));
+            }
+            const fs = yield* FileSystem.FileSystem;
+            yield* fs.remove(runRoot, { recursive: true, force: true }).pipe(
+              Effect.catch(() => Effect.void),
+            );
+          }),
+        ),
+        Effect.provide(
+          Layer.mergeAll(
+            ProcessManager.Config.layer([config]),
+            NodeHttpClient.layerUndici,
+            NodeServices.layer,
           ),
         ),
       );

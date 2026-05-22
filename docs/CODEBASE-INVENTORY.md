@@ -380,7 +380,8 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 - **`Endpoint.http({ transport })`** — endpoint definition for an HTTP control
   transport descriptor.
 - **`Endpoint.module(load, select?)`** — typed module endpoint descriptor for a
-  future out-of-process local runtime launcher.
+  local runtime. When launch config is supplied, `group-start` starts its
+  configured command out of process and waits for the HTTP control endpoint.
 - **`Endpoint.local(definition).default`**, **`Endpoint.production(definition)`**,
   **`Endpoint.define(label, definition)`** — labeled endpoint config items for a
   `ProcessGroup.Service(..., configItems)` / `ProcessGroup.make(..., configItems)`
@@ -406,7 +407,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### ProcessManager CLI (`ProcessManager.cli(groups, config?)`)
 
-**Subcommands:** `groups`, `ls`, `verify`, `status <target>`, `start <target>`, `stop <target>`, `restart <target>`, `now <target>`, `pause <target>`, `resume <target>`, `clear <target>`.
+**Subcommands:** `groups`, `ls`, `verify`, `group-start <group>`, `status <target>`, `start <target>`, `stop <target>`, `restart <target>`, `now <target>`, `pause <target>`, `resume <target>`, `clear <target>`.
 
 **Flags:** `--json` on `groups`, `ls`, `verify`, `status`; `--target <label>`
 on endpoint-backed runtime commands.
