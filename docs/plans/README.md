@@ -23,6 +23,7 @@ numbered plan details.
 | 05 | [Control service v2](./05-control-service-v2.md) | Track remaining local control work beyond the current contract-aligned REST surface. |
 | 06 | [Process lifecycle hooks](./06-process-lifecycle-hooks.md) | Add process-level hooks without hiding user work under polling or schedule configuration. |
 | 07 | [Typed ProcessGroup and remote ProcessManager](./07-process-manager.md) | Track typed group contracts and remaining remote `ProcessManager` work after the first implemented slices. |
+| 07b | [ProcessGroup endpoint DX](./process-group-endpoint-dx.md) | Approved third-arg API (`Transport`, `Endpoint.local/production/define`), pre-1.0 **removals**, alternatives matrix, child launcher. |
 | 08 | [Lifecycle machine](./08-lifecycle-machine.md) | Explore an internal typed lifecycle kernel for queues, processes, schedules, and control eligibility. |
 | 09 | [Strict any/unknown rule](./09-strict-any-unknown.md) | Re-enable `anyUnknownInErrorContext` when the queue/process typing boundary can support it. |
 | 10 | [Plan 01 phase one: ProcessStore read foundation](./10-process-store-phase-one.md) | Detailed first implementation slice for plan **01**; reconcile with plan **11** before adding more feature-specific store methods. |

@@ -227,7 +227,7 @@ export type {
   ProcessManagerLocalRuntimeDefinition,
   ProcessManagerModuleEndpointLaunchConfig,
   ProcessManagerModuleEndpointDefinition,
-  ProcessManagerGroupLocalRuntimeOptions,
+  ProcessManagerChildEndpointDefinition,
 } from "./ProcessManager";
 
 // Process Store

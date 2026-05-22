@@ -68,27 +68,14 @@ class TypeGroup extends ProcessGroup.Service<TypeGroup>()("@test/TypeGroup", [
   TypeInvoiceQueue,
 ] as const) {}
 
-const TypeRuntime = ProcessManager.LocalRuntime(TypeGroup, {
-  layer: TypeGroup.layer,
-  control: Layer.empty,
-});
-
-const TypeModuleEndpoint = Endpoint.module(
-  () => Promise.resolve({ default: TypeRuntime }),
-);
+const typeTransport = ProcessManager.Transport.http("http://127.0.0.1:32135");
 
 class TypeConfiguredGroup extends ProcessGroup.Service<TypeConfiguredGroup>()(
   "@test/TypeConfiguredGroup",
   [TypeProcess, TypeEmailQueue] as const,
   [
-    Endpoint.local(TypeModuleEndpoint).default,
-    ProcessManager.Endpoint.production(
-      Endpoint.http({
-        transport: ProcessManager.Transport.http({
-          baseUrl: "http://127.0.0.1:32135",
-        }),
-      }),
-    ),
+    Endpoint.local(typeTransport, "file:///type-configured-group.ts").default,
+    ProcessManager.Endpoint.production(typeTransport),
   ],
 ) {}
 

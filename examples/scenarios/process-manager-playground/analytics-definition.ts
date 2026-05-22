@@ -1,7 +1,7 @@
 /**
  * @module examples/scenarios/process-manager-playground/analytics-definition
  *
- * Analytics group: sampler process + counter queue + `AnalyticsRuntime`. Launched via `pnpm run demo:pm -- group-start analytics-group`.
+ * Analytics group: sampler process + counter queue. Launched via `pnpm run demo:pm -- group-start analytics-group`.
  */
 
 import { Clock, Duration, Effect } from "effect";
@@ -11,13 +11,18 @@ import {
   Process,
   ProcessGroup,
   ProcessManager,
-  type ProcessManagerGroupConfigItem,
   ProcessSchedule,
   QueueResource,
+  Transport,
 } from "../../../src";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { utcDateFromMillis } from "../../../src/utcDate";
-import { moduleLaunch } from "./launch";
-import { analyticsBaseUrl, analyticsPort } from "./ports";
+import { analyticsPort } from "./ports";
+
+const analyticsEntry = pathToFileURL(
+  join(process.cwd(), "examples/scenarios/process-manager-playground/analytics-definition.ts"),
+).href;
 
 export class CounterQueue extends QueueResource.Service<CounterQueue, number, never>()(
   "@demo/playground/Analytics/CounterQueue",
@@ -45,32 +50,13 @@ export class Sampler extends Process.Service<Sampler>()("@demo/playground/Analyt
   }),
 }) {}
 
-const analyticsGroupEndpoints = (): readonly ProcessManagerGroupConfigItem[] => [
-  Endpoint.local(
-    Endpoint.module(
-      () => import("./analytics-runtime.js"),
-      (module) => module.AnalyticsRuntime,
-      {
-        launch: moduleLaunch(
-          "examples/scenarios/process-manager-playground/analytics-runtime.ts",
-          analyticsBaseUrl,
-        ),
-      },
-    ),
-  ).default,
-  ProcessManager.Endpoint.production(
-    Endpoint.http({
-      transport: ProcessManager.Transport.http({ baseUrl: analyticsBaseUrl }),
-    }),
-  ),
-];
+const analytics = Transport.http(analyticsPort);
 
 export class AnalyticsGroup extends ProcessGroup.Service<AnalyticsGroup>()(
   "@demo/playground/AnalyticsGroup",
   [Sampler, CounterQueue] as const,
-  analyticsGroupEndpoints(),
+  [
+    Endpoint.local(analytics, analyticsEntry).default,
+    ProcessManager.Endpoint.production(analytics),
+  ],
 ) {}
-
-export const AnalyticsRuntime = ProcessManager.groupLocalRuntime(AnalyticsGroup, {
-  port: analyticsPort,
-});

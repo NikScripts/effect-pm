@@ -61,12 +61,10 @@ pnpm run demo:pm -- group-stop analytics-group
 
 | File | Role |
 | --- | --- |
-| `workshop-definition.ts` | `WorkshopGroup`, processes, queues, `WorkshopRuntime` via `groupLocalRuntime`; endpoints import `./workshop-runtime.js` |
-| `workshop-runtime.ts` | Child entry + re-exports `WorkshopRuntime` (test `module-runner` pattern) |
+| `workshop-definition.ts` | `WorkshopGroup`, processes, queues, inline `Endpoint.local` / `production` |
 | `analytics-definition.ts` | Same layout for analytics |
-| `analytics-runtime.ts` | Child entry + re-exports `AnalyticsRuntime` |
 | `cli.ts` | `ProcessManager.cli([WorkshopGroup, AnalyticsGroup])` |
-| `launch.ts` | Shared `Endpoint.module` launch config |
+| `ports.ts` | Default localhost control ports |
 
 ## Related docs
 

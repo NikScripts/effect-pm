@@ -114,5 +114,11 @@
     ]
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "repos", "examples/scenarios/nwslsoccer"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "repos",
+    "examples/scenarios/nwslsoccer",
+    "src/bin/**"
+  ]
 }

@@ -25,5 +25,5 @@ export class ModuleEndpointGroup extends ProcessGroup.Service<ModuleEndpointGrou
 ) {}
 
 export const ModuleEndpointRuntime = ProcessManager.groupLocalRuntime(ModuleEndpointGroup, {
-  port: 32146,
+  controlBaseUrl: "http://127.0.0.1:32146",
 });

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Config, ConfigProvider, Effect, FileSystem, Layer, Ref } from "effect";
 import {
   ControlRouter,
@@ -17,6 +19,13 @@ import {
   QueueResource,
 } from "../src";
 import { ModuleEndpointGroup } from "./fixtures/process-manager-module-definition";
+
+const testLocalEntry = "file:///test-process-group-entry.ts";
+const moduleFixtureEntry = pathToFileURL(
+  join(process.cwd(), "test/fixtures/process-manager-module-definition.ts"),
+).href;
+const groupChildScript = join(process.cwd(), "src/bin/effect-pm-group-child.ts");
+
 
 interface Email {
   readonly to: string;
@@ -47,17 +56,21 @@ const readRunStatePid = (text: string): number => {
 
 describe("ProcessManager", () => {
   it("builds endpoint config items from the direct Endpoint export", () => {
-    const httpEndpoint = Endpoint.http({
-      transport: ProcessManager.Transport.http({
-        baseUrl: "http://127.0.0.1:32130",
-      }),
-    });
-    const local = Endpoint.local(httpEndpoint).default;
-    const production = ProcessManager.Endpoint.production(httpEndpoint);
-    const preview = Endpoint.define("preview", httpEndpoint);
+    const transport = ProcessManager.Transport.http("http://127.0.0.1:32130");
+    const local = Endpoint.local(transport, testLocalEntry).default;
+    const production = ProcessManager.Endpoint.production(transport);
+    const preview = Endpoint.define("preview", transport);
 
     expect(Endpoint).toBe(ProcessManager.Endpoint);
-    expect(httpEndpoint).toEqual({
+    expect(local.endpoint).toEqual({
+      _tag: "ProcessManagerChildEndpoint",
+      entry: testLocalEntry,
+      transport: {
+        _tag: "ProcessManagerHttpTransport",
+        baseUrl: "http://127.0.0.1:32130",
+      },
+    });
+    expect(production.endpoint).toEqual({
       _tag: "ProcessManagerHttpEndpoint",
       transport: {
         _tag: "ProcessManagerHttpTransport",
@@ -83,7 +96,7 @@ describe("ProcessManager", () => {
 
   it.effect("surfaces module selector failures as checked endpoint config errors", () =>
     Effect.gen(function* () {
-      const endpoint = Endpoint.module(
+      const endpoint = Endpoint.runner(
         () => Promise.resolve({}),
         () => {
           throw new Error("bad selector");
@@ -679,23 +692,15 @@ describe("ProcessManager", () => {
         },
       ) {}
 
-      const localEndpoint = Endpoint.http({
-        transport: ProcessManager.Transport.http({
-          baseUrl: "http://127.0.0.1:32141",
-        }),
-      });
-      const productionEndpoint = Endpoint.http({
-        transport: ProcessManager.Transport.http({
-          baseUrl: "http://127.0.0.1:32142",
-        }),
-      });
+      const localTransport = ProcessManager.Transport.http("http://127.0.0.1:32141");
+      const productionTransport = ProcessManager.Transport.http("http://127.0.0.1:32142");
 
       class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
         "@test/ConfiguredCliBillingGroup",
         [SyncProcess, EmailQueue] as const,
         [
-          Endpoint.local(localEndpoint).default,
-          ProcessManager.Endpoint.production(productionEndpoint),
+          Endpoint.local(localTransport, testLocalEntry).default,
+          ProcessManager.Endpoint.production(productionTransport),
         ],
       ) {}
 
@@ -755,11 +760,7 @@ describe("ProcessManager", () => {
         },
       ) {}
 
-      const httpEndpoint = Endpoint.http({
-        transport: ProcessManager.Transport.http({
-          baseUrl: "http://127.0.0.1:32143",
-        }),
-      });
+      const transport = ProcessManager.Transport.http("http://127.0.0.1:32143");
 
       class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
         "@test/InvalidEndpointDefaultGroup",
@@ -767,16 +768,16 @@ describe("ProcessManager", () => {
       ) {}
 
       const error = yield* ProcessManager.GroupConfig(BillingGroup, [
-        Endpoint.local(httpEndpoint),
-        Endpoint.production(httpEndpoint),
+        Endpoint.local(transport, testLocalEntry),
+        Endpoint.production(transport),
       ]).pipe(Effect.flip);
 
       expect(error).toBeInstanceOf(ProcessManagerEndpointConfigError);
       expect(error.reason).toContain("exactly one default endpoint");
 
       const duplicateLabel = yield* ProcessManager.GroupConfig(BillingGroup, [
-        Endpoint.define("local", httpEndpoint).default,
-        Endpoint.define("local", httpEndpoint),
+        Endpoint.define("local", transport).default,
+        Endpoint.define("local", transport),
       ]).pipe(Effect.flip);
 
       expect(duplicateLabel).toBeInstanceOf(ProcessManagerEndpointConfigError);
@@ -804,13 +805,7 @@ describe("ProcessManager", () => {
         "@test/OfflineEndpointStatusGroup",
         [SyncProcess, EmailQueue] as const,
         [
-          Endpoint.local(
-            Endpoint.http({
-              transport: ProcessManager.Transport.http({
-                baseUrl: "http://127.0.0.1:32999",
-              }),
-            }),
-          ).default,
+          Endpoint.local(ProcessManager.Transport.http("http://127.0.0.1:32999"), testLocalEntry).default,
         ],
       ) {}
 
@@ -848,13 +843,7 @@ describe("ProcessManager", () => {
         "@test/DriftEndpointStatusGroup",
         [LocalProcess, EmailQueue] as const,
         [
-          Endpoint.local(
-            Endpoint.http({
-              transport: ProcessManager.Transport.http({
-                baseUrl: "http://127.0.0.1:32145",
-              }),
-            }),
-          ).default,
+          Endpoint.local(ProcessManager.Transport.http("http://127.0.0.1:32145"), testLocalEntry).default,
         ],
       ) {}
 
@@ -912,13 +901,7 @@ describe("ProcessManager", () => {
       ) {}
 
       const config = yield* ProcessManager.GroupConfig(BillingGroup, [
-        Endpoint.local(
-          Endpoint.http({
-            transport: ProcessManager.Transport.http({
-              baseUrl: "http://127.0.0.1:32144",
-            }),
-          }),
-        ).default,
+        Endpoint.local(ProcessManager.Transport.http("http://127.0.0.1:32144"), testLocalEntry).default,
       ]);
 
       yield* Effect.gen(function* () {
@@ -953,33 +936,17 @@ describe("ProcessManager", () => {
     Effect.gen(function* () {
       const runRoot = ".effect-pm-test";
       const runDirectory = `${runRoot}/run/groups`;
-      const logDirectory = `${runRoot}/logs`;
       const pidRef = yield* Ref.make<number | undefined>(undefined);
-      const moduleEndpoint = Endpoint.module(
-        () => import("./fixtures/process-manager-module-definition.js"),
-        (module) => module.ModuleEndpointRuntime,
-        {
-          launch: {
-            command: process.execPath,
-            args: [
-              "--import",
-              "tsx",
-              "test/fixtures/process-manager-module-runner.ts",
-            ],
-            control: Endpoint.http({
-              transport: ProcessManager.Transport.http({
-                baseUrl: "http://127.0.0.1:32146",
-              }),
-            }),
-            logDirectory,
-            pollInterval: "100 millis",
-            runDirectory,
-            startupTimeout: "10 seconds",
-          },
-        },
-      );
+      yield* Effect.sync(() => {
+        process.env.EFFECT_PM_GROUP_CHILD_SCRIPT = groupChildScript;
+        process.env.EFFECT_PM_RUN_DIRECTORY = runDirectory;
+        process.env.EFFECT_PM_LOG_DIRECTORY = `${runRoot}/logs`;
+      });
       const config = yield* ProcessManager.GroupConfig(ModuleEndpointGroup, [
-        Endpoint.local(moduleEndpoint).default,
+        Endpoint.local(
+          ProcessManager.Transport.http("http://127.0.0.1:32146"),
+          moduleFixtureEntry,
+        ).default,
       ]);
       const program = Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
@@ -1061,36 +1028,19 @@ describe("ProcessManager", () => {
 
   it.live("cleans stale module endpoint run state on group-stop", () =>
     Effect.gen(function* () {
-      const runRoot = ".effect-pm-stale-test";
-      const runDirectory = `${runRoot}/run/groups`;
-      const logDirectory = `${runRoot}/logs`;
-      const moduleEndpoint = Endpoint.module(
-        () => import("./fixtures/process-manager-module-definition.js"),
-        (module) => module.ModuleEndpointRuntime,
-        {
-          launch: {
-            command: process.execPath,
-            args: [
-              "--import",
-              "tsx",
-              "test/fixtures/process-manager-module-runner.ts",
-            ],
-            control: Endpoint.http({
-              transport: ProcessManager.Transport.http({
-                baseUrl: "http://127.0.0.1:32146",
-              }),
-            }),
-            logDirectory,
-            runDirectory,
-          },
-        },
-      );
+      const runDirectory = ".effect-pm/run/groups";
+      yield* Effect.sync(() => {
+        process.env.EFFECT_PM_GROUP_CHILD_SCRIPT = groupChildScript;
+        delete process.env.EFFECT_PM_RUN_DIRECTORY;
+      });
       const config = yield* ProcessManager.GroupConfig(ModuleEndpointGroup, [
-        Endpoint.local(moduleEndpoint).default,
+        Endpoint.local(
+          ProcessManager.Transport.http("http://127.0.0.1:32146"),
+          moduleFixtureEntry,
+        ).default,
       ]);
       const program = Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
-        yield* fs.remove(runRoot, { recursive: true, force: true });
         yield* fs.makeDirectory(runDirectory, { recursive: true });
         yield* fs.writeFileString(
           `${runDirectory}/test__module-endpoint-group.json`,
@@ -1102,7 +1052,7 @@ describe("ProcessManager", () => {
             "  \"endpointLabel\": \"local\",",
             "  \"groupId\": \"@test/ModuleEndpointGroup\",",
             "  \"logPaths\": {",
-            "    \"stderr\": \".effect-pm-stale-test/logs/test__module-endpoint-group.err.log\",",
+            "    \"stderr\": \".effect-pm/logs/test__module-endpoint-group.err.log\",",
             "    \"stdout\": \".effect-pm-stale-test/logs/test__module-endpoint-group.out.log\"",
             "  },",
             "  \"pid\": 999999,",
@@ -1120,7 +1070,7 @@ describe("ProcessManager", () => {
         Effect.ensuring(
           Effect.gen(function* () {
             const fs = yield* FileSystem.FileSystem;
-            yield* fs.remove(runRoot, { recursive: true, force: true }).pipe(
+            yield* fs.remove(".effect-pm/run/groups/test__module-endpoint-group.json", { force: true }).pipe(
               Effect.catch(() => Effect.void),
             );
           }),

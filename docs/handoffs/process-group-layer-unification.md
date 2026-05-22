@@ -1,7 +1,8 @@
 # Handoff: ProcessGroup layer unification & dependency typing
 
 **Date:** 2026-05-21  
-**Status:** Slices 1–3 implemented (playground, types, `localEnvLayer` / `groupLocalRuntime`); slice 4 (bundle process layers into `Service.layer`) not started  
+**Status:** Investigation complete; layer helpers may be partial; endpoint DX specified  
+**Endpoint DX:** [process-group-endpoint-dx.md](../plans/process-group-endpoint-dx.md) — canonical third arg, pre-1.0 removals, alternatives when canonical cannot apply.  
 **Primary goal:** Unify groups so **as much wiring as possible lives in the group definition file** (processes, queues, endpoints, env layer, `LocalRuntime`) — not scattered `mergeAll` / duplicate queue-store layers.
 
 ---

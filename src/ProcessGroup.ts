@@ -192,15 +192,9 @@ type ProcessGroupBundledQueueLayerContext<Entries extends readonly ProcessGroupE
         : never
     : never;
 
-/**
- * Requirement channel for {@link ProcessGroup.Service.layer} after queue layers are
- * bundled and re-merged (queue tags may remain in `R` for control handlers).
- *
- * @public
- */
-export type ProcessGroupServiceLayerProvided<
-  Entries extends readonly ProcessGroupEntry[],
-> = ProcessGroupServiceLayerRequirements<Entries> | ProcessGroupBundledQueueLayerContext<Entries>;
+/** @internal */
+type ProcessGroupServiceLayerProvided<Entries extends readonly ProcessGroupEntry[]> =
+  ProcessGroupServiceLayerRequirements<Entries> | ProcessGroupBundledQueueLayerContext<Entries>;
 
 const emptyProcessGroupConfigItems: readonly [] = [];
 
@@ -1151,15 +1145,8 @@ export interface ProcessGroupServiceDefinition<
   readonly layer: Layer.Layer<
     Self,
     ProcessGroupErrors,
-    ProcessGroupServiceLayerProvided<Entries>
+    ProcessGroupServiceLayerRequirements<Entries>
   >;
-  /**
-   * Compose a child/runtime env layer: {@link layer} with process layers (queue
-   * deps satisfied from group entries) and {@link ProcessStore}.
-   */
-  readonly localEnvLayer: (
-    options?: ProcessGroupLocalEnvLayerOptions,
-  ) => Layer.Layer<Self, ProcessGroupErrors, ProcessGroupServiceLayerProvided<Entries>>;
 }
 
 /**
@@ -1500,7 +1487,6 @@ const makeTypedProcessGroup = <
 
 // Merge queue resource layers bundled on typed entries into the group layer so
 // `yield*` / `runPromise` callers do not have to compose queue Layers manually.
-
 const queueContributionLayersFrom = <Entries extends readonly ProcessGroupEntry[]>(
   entries: Entries,
 ): ReadonlyArray<
@@ -1518,13 +1504,65 @@ const queueContributionLayersFrom = <Entries extends readonly ProcessGroupEntry[
     )
     .map((q) => q.layer);
 
+function makeProcessGroupServiceFactory<Self>() {
+  function service<
+    const Id extends string,
+    const Entries extends readonly ProcessGroupEntry[],
+  >(
+    id: Id,
+    entries: Entries,
+  ): ProcessGroupServiceDefinition<Self, Id, Entries>;
+  function service<
+    const Id extends string,
+    const Entries extends readonly ProcessGroupEntry[],
+    const ConfigItems extends readonly ProcessManagerGroupConfigItem[],
+  >(
+    id: Id,
+    entries: Entries,
+    configItems: ConfigItems,
+  ): ProcessGroupServiceDefinition<Self, Id, Entries, ConfigItems>;
+  function service<
+    const Id extends string,
+    const Entries extends readonly ProcessGroupEntry[],
+    const ConfigItems extends readonly ProcessManagerGroupConfigItem[],
+  >(
+    id: Id,
+    entries: Entries,
+    configItems?: ConfigItems,
+  ) {
+    const groupConfigItems = configItems ?? emptyProcessGroupConfigItems;
+    const base = Context.Service<
+      Self,
+      TypedProcessGroup<Id, Entries, ProcessGroupControlError>
+    >()(id);
+    const contract = makeProcessGroupContract(id, entries);
+    const make = makeTypedProcessGroup(id, entries);
+    const queueContrib = queueContributionLayersFrom(entries);
+    const bundledForBuild =
+      queueContrib.length === 0
+        ? undefined
+        : mergeBundledQueueLayersFor<Entries>(queueContrib[0]!, queueContrib.slice(1));
+    const baseLayer = Layer.effect(base)(make);
+    const built =
+      bundledForBuild === undefined ? baseLayer : baseLayer.pipe(Layer.provide(bundledForBuild));
+    /** Re-merge queue layers so the same tags stay in scope for handlers (e.g. ControlService) after `yield* Group`. */
+    const layer: Layer.Layer<Self, ProcessGroupErrors, ProcessGroupServiceLayerProvided<Entries>> =
+      bundledForBuild === undefined ? built : Layer.merge(built, bundledForBuild);
+    // Match Effect's class-based service style: the class is yieldable, and the
+    // static fields expose group identity/contract/config data for control surfaces.
+    return Object.assign(base, {
+      id,
+      kind: processGroupKind,
+      entries,
+      config: groupConfigItems,
+      contract,
+      make,
+      layer,
+    });
+  }
+  return service;
+}
 
-/**
- * Options for {@link ProcessGroup.localEnvLayer} and
- * {@link ProcessGroupServiceDefinition.localEnvLayer}.
- *
- * @public
- */
 export interface ProcessGroupLocalEnvLayerOptions {
   /**
    * Analytics/lifecycle store for process supervisors. Defaults to
@@ -1613,67 +1651,6 @@ export const localEnvLayer = <
   group: ProcessGroupServiceDefinition<Self, Id, Entries, ConfigItems>,
   options?: ProcessGroupLocalEnvLayerOptions,
 ) => buildLocalEnvLayer(group.layer, group.entries, options);
-
-function makeProcessGroupServiceFactory<Self>() {
-  function service<
-    const Id extends string,
-    const Entries extends readonly ProcessGroupEntry[],
-  >(
-    id: Id,
-    entries: Entries,
-  ): ProcessGroupServiceDefinition<Self, Id, Entries>;
-  function service<
-    const Id extends string,
-    const Entries extends readonly ProcessGroupEntry[],
-    const ConfigItems extends readonly ProcessManagerGroupConfigItem[],
-  >(
-    id: Id,
-    entries: Entries,
-    configItems: ConfigItems,
-  ): ProcessGroupServiceDefinition<Self, Id, Entries, ConfigItems>;
-  function service<
-    const Id extends string,
-    const Entries extends readonly ProcessGroupEntry[],
-    const ConfigItems extends readonly ProcessManagerGroupConfigItem[],
-  >(
-    id: Id,
-    entries: Entries,
-    configItems?: ConfigItems,
-  ) {
-    const groupConfigItems = configItems ?? emptyProcessGroupConfigItems;
-    const base = Context.Service<
-      Self,
-      TypedProcessGroup<Id, Entries, ProcessGroupControlError>
-    >()(id);
-    const contract = makeProcessGroupContract(id, entries);
-    const make = makeTypedProcessGroup(id, entries);
-    const queueContrib = queueContributionLayersFrom(entries);
-    const bundledForBuild =
-      queueContrib.length === 0
-        ? undefined
-        : mergeBundledQueueLayersFor<Entries>(queueContrib[0]!, queueContrib.slice(1));
-    const baseLayer = Layer.effect(base)(make);
-    const built =
-      bundledForBuild === undefined ? baseLayer : baseLayer.pipe(Layer.provide(bundledForBuild));
-    /** Re-merge queue layers so the same tags stay in scope for handlers (e.g. ControlService) after `yield* Group`. */
-    const layer: Layer.Layer<Self, ProcessGroupErrors, ProcessGroupServiceLayerProvided<Entries>> =
-      bundledForBuild === undefined ? built : Layer.merge(built, bundledForBuild);
-    // Match Effect's class-based service style: the class is yieldable, and the
-    // static fields expose group identity/contract/config data for control surfaces.
-    return Object.assign(base, {
-      id,
-      kind: processGroupKind,
-      entries,
-      config: groupConfigItems,
-      contract,
-      make,
-      layer,
-      localEnvLayer: (options?: ProcessGroupLocalEnvLayerOptions) =>
-        buildLocalEnvLayer(layer, entries, options),
-    });
-  }
-  return service;
-}
 
 // ============================================================================
 // Public namespace

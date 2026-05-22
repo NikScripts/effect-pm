@@ -766,7 +766,20 @@ heterogeneous config item array. Endpoint items are the first item type, but the
 shape should also have room for logs, fallback, daemon, security, auth, and
 future transport policy without growing another positional options object.
 
-Endpoint items should be builders, not raw objects:
+Endpoint items should be builders, not raw objects.
+
+**Approved target DX:** [process-group-endpoint-dx.md](./process-group-endpoint-dx.md) (pre-1.0: remove nested
+`Endpoint.module` / `Endpoint.http` public shapes; keep documented alternatives).
+
+```typescript
+[
+  Endpoint.local(Transport.http(32130), import.meta.url).default,
+  Endpoint.production(Transport.http(32130)),
+  Endpoint.define("preview", Transport.http("https://billing.preview.internal")),
+]
+```
+
+**Historical (remove on implementation):**
 
 ```typescript
 [

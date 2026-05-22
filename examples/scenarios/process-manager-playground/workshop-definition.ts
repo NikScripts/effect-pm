@@ -11,13 +11,18 @@ import {
   Process,
   ProcessGroup,
   ProcessManager,
-  type ProcessManagerGroupConfigItem,
   ProcessSchedule,
   QueueResource,
+  Transport,
 } from "../../../src";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { utcDateFromMillis } from "../../../src/utcDate";
-import { moduleLaunch } from "./launch";
-import { workshopBaseUrl, workshopPort } from "./ports";
+import { workshopPort } from "./ports";
+
+const workshopEntry = pathToFileURL(
+  join(process.cwd(), "examples/scenarios/process-manager-playground/workshop-definition.ts"),
+).href;
 
 export class WorkshopJobError extends Data.TaggedError("WorkshopJobError")<{
   readonly jobId: string;
@@ -84,32 +89,13 @@ export class Feeder extends Process.Service<Feeder>()(
   ]),
 ) {}
 
-const workshopGroupEndpoints = (): readonly ProcessManagerGroupConfigItem[] => [
-  Endpoint.local(
-    Endpoint.module(
-      () => import("./workshop-runtime.js"),
-      (module) => module.WorkshopRuntime,
-      {
-        launch: moduleLaunch(
-          "examples/scenarios/process-manager-playground/workshop-runtime.ts",
-          workshopBaseUrl,
-        ),
-      },
-    ),
-  ).default,
-  ProcessManager.Endpoint.production(
-    Endpoint.http({
-      transport: ProcessManager.Transport.http({ baseUrl: workshopBaseUrl }),
-    }),
-  ),
-];
+const workshop = Transport.http(workshopPort);
 
 export class WorkshopGroup extends ProcessGroup.Service<WorkshopGroup>()(
   "@demo/playground/WorkshopGroup",
   [Feeder, JobQueue] as const,
-  workshopGroupEndpoints(),
+  [
+    Endpoint.local(workshop, workshopEntry).default,
+    ProcessManager.Endpoint.production(workshop),
+  ],
 ) {}
-
-export const WorkshopRuntime = ProcessManager.groupLocalRuntime(WorkshopGroup, {
-  port: workshopPort,
-});

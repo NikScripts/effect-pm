@@ -97,7 +97,8 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "effect-pm": "./dist/bin/effect-pm.js"
+    "effect-pm": "./dist/bin/effect-pm.js",
+    "effect-pm-group-child": "./dist/bin/effect-pm-group-child.js"
   },
   "files": [
     "dist",
