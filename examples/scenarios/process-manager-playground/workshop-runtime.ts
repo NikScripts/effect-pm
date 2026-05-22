@@ -11,6 +11,7 @@ import { WorkshopRuntime } from "./workshop-definition.js";
 export { WorkshopRuntime };
 
 void Effect.runPromise(
+  // @ts-ignore Requirement channel does not narrow to never on composed group + control layers.
   Effect.never.pipe(
     Effect.provide(WorkshopRuntime.control.pipe(Layer.provide(WorkshopRuntime.layer))),
     Effect.scoped,

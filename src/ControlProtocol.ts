@@ -13,6 +13,7 @@ import type {
   ProcessGroupServiceDefinition,
   TypedProcessGroup,
 } from "./ProcessGroup";
+import type { ProcessManagerGroupConfigItem } from "./ProcessManager";
 import type { ProcessStore } from "./ProcessStore";
 
 /**
@@ -668,8 +669,9 @@ export namespace ControlRouter {
     Self,
     const Id extends string,
     const Entries extends readonly ProcessGroupEntry[],
+    const ConfigItems extends readonly ProcessManagerGroupConfigItem[] = readonly [],
   >(
-    group: ProcessGroupServiceDefinition<Self, Id, Entries>,
+    group: ProcessGroupServiceDefinition<Self, Id, Entries, ConfigItems>,
   ): Layer.Layer<
     ControlRouter,
     never,

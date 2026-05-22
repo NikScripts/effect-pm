@@ -192,9 +192,15 @@ type ProcessGroupBundledQueueLayerContext<Entries extends readonly ProcessGroupE
         : never
     : never;
 
-/** @internal */
-type ProcessGroupServiceLayerProvided<Entries extends readonly ProcessGroupEntry[]> =
-  ProcessGroupServiceLayerRequirements<Entries> | ProcessGroupBundledQueueLayerContext<Entries>;
+/**
+ * Requirement channel for {@link ProcessGroup.Service.layer} after queue layers are
+ * bundled and re-merged (queue tags may remain in `R` for control handlers).
+ *
+ * @public
+ */
+export type ProcessGroupServiceLayerProvided<
+  Entries extends readonly ProcessGroupEntry[],
+> = ProcessGroupServiceLayerRequirements<Entries> | ProcessGroupBundledQueueLayerContext<Entries>;
 
 const emptyProcessGroupConfigItems: readonly [] = [];
 
@@ -1145,8 +1151,15 @@ export interface ProcessGroupServiceDefinition<
   readonly layer: Layer.Layer<
     Self,
     ProcessGroupErrors,
-    ProcessGroupServiceLayerRequirements<Entries>
+    ProcessGroupServiceLayerProvided<Entries>
   >;
+  /**
+   * Compose a child/runtime env layer: {@link layer} with process layers (queue
+   * deps satisfied from group entries) and {@link ProcessStore}.
+   */
+  readonly localEnvLayer: (
+    options?: ProcessGroupLocalEnvLayerOptions,
+  ) => Layer.Layer<Self, ProcessGroupErrors, ProcessGroupServiceLayerProvided<Entries>>;
 }
 
 /**
@@ -1487,6 +1500,7 @@ const makeTypedProcessGroup = <
 
 // Merge queue resource layers bundled on typed entries into the group layer so
 // `yield*` / `runPromise` callers do not have to compose queue Layers manually.
+
 const queueContributionLayersFrom = <Entries extends readonly ProcessGroupEntry[]>(
   entries: Entries,
 ): ReadonlyArray<
@@ -1503,6 +1517,102 @@ const queueContributionLayersFrom = <Entries extends readonly ProcessGroupEntry[
         e.layer !== undefined,
     )
     .map((q) => q.layer);
+
+
+/**
+ * Options for {@link ProcessGroup.localEnvLayer} and
+ * {@link ProcessGroupServiceDefinition.localEnvLayer}.
+ *
+ * @public
+ */
+export interface ProcessGroupLocalEnvLayerOptions {
+  /**
+   * Analytics/lifecycle store for process supervisors. Defaults to
+   * {@link ProcessStore.layer}.
+   */
+  readonly store?: Layer.Layer<ProcessStore>;
+}
+
+const processEntryIsService = (
+  entry: Extract<ProcessGroupEntry, { readonly kind: "process" }>,
+): entry is ProcessServiceDefinition<any, string, any> => "layer" in entry;
+
+const processContributionLayersFrom = <Entries extends readonly ProcessGroupEntry[]>(
+  entries: Entries,
+): ReadonlyArray<Layer.Layer<never, never, unknown>> => {
+  const layers: Array<Layer.Layer<never, never, unknown>> = [];
+  for (const entry of processEntriesFrom(entries)) {
+    if (processEntryIsService(entry)) {
+      layers.push(entry.layer);
+    }
+  }
+  return layers;
+};
+
+const buildLocalEnvLayer = <
+  Self,
+  const Entries extends readonly ProcessGroupEntry[],
+>(
+  groupLayer: Layer.Layer<
+    Self,
+    ProcessGroupErrors,
+    ProcessGroupServiceLayerProvided<Entries>
+  >,
+  entries: Entries,
+  options: ProcessGroupLocalEnvLayerOptions = {},
+)=> {
+  const store = options.store ?? ProcessStore.layer;
+  const processLayers = processContributionLayersFrom(entries);
+  const queueContrib = queueContributionLayersFrom(entries);
+  const bundledQueues =
+    queueContrib.length === 0
+      ? undefined
+      : mergeBundledQueueLayersFor<Entries>(queueContrib[0]!, queueContrib.slice(1));
+
+  if (processLayers.length === 0) {
+    return groupLayer.pipe(Layer.provide(store));
+  }
+
+  const processLayersWithQueues =
+    bundledQueues === undefined
+      ? processLayers
+      : processLayers.map((processLayer) => processLayer.pipe(Layer.provide(bundledQueues)));
+
+  const mergedProcessLayers: Layer.Layer<never, never, unknown> =
+    processLayersWithQueues.length === 1
+      ? processLayersWithQueues[0]!
+      : processLayersWithQueues.reduce<Layer.Layer<never, never, unknown>>(
+          (acc, processLayer) => Layer.merge(acc, processLayer),
+          processLayersWithQueues[0]!,
+        );
+
+  const inner = groupLayer.pipe(Layer.provide(Layer.merge(mergedProcessLayers, store)));
+  if (bundledQueues === undefined) {
+    return Layer.merge(inner, store);
+  }
+  return Layer.merge(Layer.merge(inner, bundledQueues), store);
+};
+
+/**
+ * Build the env layer for a local group child runtime: {@link ProcessGroup.Service.layer}
+ * with process layers (group queue layers satisfy process `R`) and {@link ProcessStore}.
+ *
+ * @remarks
+ * Queue layers are already bundled on the group layer; this helper does **not**
+ * duplicate them at the root. Process layers receive bundled queue layers only to
+ * close each process effect's requirements.
+ *
+ * @public
+ */
+export const localEnvLayer = <
+  Self,
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+  const ConfigItems extends readonly ProcessManagerGroupConfigItem[] = readonly [],
+>(
+  group: ProcessGroupServiceDefinition<Self, Id, Entries, ConfigItems>,
+  options?: ProcessGroupLocalEnvLayerOptions,
+) => buildLocalEnvLayer(group.layer, group.entries, options);
 
 function makeProcessGroupServiceFactory<Self>() {
   function service<
@@ -1558,6 +1668,8 @@ function makeProcessGroupServiceFactory<Self>() {
       contract,
       make,
       layer,
+      localEnvLayer: (options?: ProcessGroupLocalEnvLayerOptions) =>
+        buildLocalEnvLayer(layer, entries, options),
     });
   }
   return service;
@@ -1576,6 +1688,7 @@ export const ProcessGroup = {
   make: makeTypedProcessGroupEffect,
   Service: makeProcessGroupServiceFactory,
   remoteLayer,
+  localEnvLayer,
 };
 
 export { QueueItemValidationError, QueueBatchValidationError } from "./QueueResource";

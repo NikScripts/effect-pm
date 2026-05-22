@@ -4,9 +4,8 @@
  * Workshop group contract: feeder process + job queue. Run via `pnpm run demo:pm -- group-start workshop-group`.
  */
 
-import { Cause, Clock, Data, Duration, Effect, Exit, Layer } from "effect";
+import { Cause, Clock, Data, Duration, Effect, Exit } from "effect";
 import {
-  ControlService,
   Endpoint,
   Polling,
   Process,
@@ -14,7 +13,6 @@ import {
   ProcessManager,
   type ProcessManagerGroupConfigItem,
   ProcessSchedule,
-  ProcessStore,
   QueueResource,
 } from "../../../src";
 import { utcDateFromMillis } from "../../../src/utcDate";
@@ -112,21 +110,6 @@ export class WorkshopGroup extends ProcessGroup.Service<WorkshopGroup>()(
   workshopGroupEndpoints(),
 ) {}
 
-export const workshopEnvLayer = Layer.mergeAll(
-  WorkshopGroup.layer.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        Feeder.layer.pipe(Layer.provide(JobQueue.layer)),
-        JobQueue.layer,
-        ProcessStore.layer,
-      ),
-    ),
-  ),
-  JobQueue.layer,
-  ProcessStore.layer,
-);
-
-export const WorkshopRuntime = ProcessManager.LocalRuntime(WorkshopGroup, {
-  layer: workshopEnvLayer,
-  control: ControlService.layerHttp(WorkshopGroup, { port: workshopPort }),
+export const WorkshopRuntime = ProcessManager.groupLocalRuntime(WorkshopGroup, {
+  port: workshopPort,
 });

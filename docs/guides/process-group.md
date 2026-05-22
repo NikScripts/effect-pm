@@ -83,23 +83,33 @@ Use **`Service`** when the group is a first-class dependency (recommended for ap
 
 ---
 
-## Runtime wiring with `ProcessManager.LocalRuntime`
+## Runtime wiring with `ProcessManager.groupLocalRuntime`
 
-Out-of-process ops (**`group-start`**) need a **descriptor** that pairs app layers with control HTTP:
+Out-of-process ops (**`group-start`**) need a **descriptor** that pairs app layers with control HTTP. Prefer the one-liner (queues are already bundled on **`BillingGroup.layer`** — no duplicate root merges):
+
+```typescript
+export const BillingRuntime = ProcessManager.groupLocalRuntime(BillingGroup, {
+  port: 3001,
+});
+```
+
+Manual split when you need overrides:
 
 ```typescript
 export const BillingRuntime = ProcessManager.LocalRuntime(BillingGroup, {
-  layer: BillingGroup.layer.pipe(
-    Layer.provide(Layer.mergeAll(SyncInvoices.layer, EmailQueue.layer, ProcessStore.layer)),
-  ),
+  layer: ProcessGroup.localEnvLayer(BillingGroup),
   control: ControlService.layerHttp(BillingGroup, { port: 3001 }),
 });
 ```
 
-- **`layer`** — runs the real group (processes, queues, store).
+Or on the group class: **`BillingGroup.localEnvLayer()`**.
+
+- **`layer`** — group layer + process layers (queue deps from group entries) + **`ProcessStore`**.
 - **`control`** — localhost **`ControlService`** for REST + protocol clients.
 
-Point **`Endpoint.module`** at a module that exports this runtime (see [`process-manager.md`](./process-manager.md)).
+Point **`Endpoint.module`** at a **runner** module that exports this runtime (not the definition file — avoids TS2310). See [`process-manager.md`](./process-manager.md).
+
+**Typing note:** Child runner entries (`Effect.never` + `control.pipe(Layer.provide(layer))`) may still show a non-`never` requirement channel (`unknown` or queue tags) even when the env layer is correct at runtime. The playground runners use `// @ts-ignore` with a short comment. Prefer **`groupLocalRuntime`** so the env recipe lives in the group definition file.
 
 ---
 

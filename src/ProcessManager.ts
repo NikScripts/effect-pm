@@ -23,10 +23,13 @@ import type {
 import { makeControlProtocolRequestEnvelope } from "./ControlProtocol";
 import { ControlTransportClient as ControlTransportClientTag } from "./ControlProtocol";
 import { makeControlTransportHttpClient } from "./ControlTransportHttp";
-import { ProcessGroupContractSchema } from "./ProcessGroup";
+import { ControlService } from "./ControlService";
+import { ProcessGroupContractSchema, localEnvLayer } from "./ProcessGroup";
 import type {
   ProcessGroupContract,
   ProcessGroupEntry,
+  ProcessGroupLocalEnvLayerOptions,
+  ProcessGroupServiceDefinition,
 } from "./ProcessGroup";
 import {
   normalizeProcessManagerTarget,
@@ -168,10 +171,40 @@ export const LocalRuntime = <
 });
 
 /**
+ * Options for {@link ProcessManager.groupLocalRuntime}.
+ *
+ * @public
+ */
+export interface ProcessManagerGroupLocalRuntimeOptions
+  extends ProcessGroupLocalEnvLayerOptions {
+  readonly port: number;
+}
+
+/**
+ * One-liner {@link LocalRuntime} descriptor: {@link localEnvLayer} + HTTP control.
+ *
+ * @public
+ */
+export const groupLocalRuntime = <
+  Self,
+  const Id extends string,
+  const Entries extends readonly ProcessGroupEntry[],
+  const ConfigItems extends readonly ProcessManagerGroupConfigItem[] = readonly [],
+>(
+  group: ProcessGroupServiceDefinition<Self, Id, Entries, ConfigItems>,
+  options: ProcessManagerGroupLocalRuntimeOptions,
+) =>
+  LocalRuntime(group, {
+    layer: localEnvLayer(group, options),
+    control: ControlService.layerHttp(group, { port: options.port }),
+  });
+
+/**
  * Error returned when endpoint configuration cannot be interpreted safely.
  *
  * @public
  */
+
 export class ProcessManagerEndpointConfigError extends Data.TaggedError(
   "ProcessManagerEndpointConfigError",
 )<{
@@ -2365,4 +2398,5 @@ export const ProcessManager = {
   Endpoint,
   Transport,
   LocalRuntime,
+  groupLocalRuntime,
 };

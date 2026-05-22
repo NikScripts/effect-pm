@@ -83,13 +83,23 @@ import { Endpoint, ProcessManager } from "@nikscripts/effect-pm";
 
 ---
 
-## `ProcessManager.LocalRuntime`
+## `ProcessManager.groupLocalRuntime` / `LocalRuntime`
 
-Bundles **app layer** + **control layer** without running them in the CLI process:
+**`groupLocalRuntime`** bundles **`ProcessGroup.localEnvLayer`** + **`ControlService.layerHttp`** without running them in the CLI process:
+
+```typescript
+export const BillingRuntime = ProcessManager.groupLocalRuntime(BillingGroup, {
+  port: 3001,
+});
+```
+
+For custom store layers, pass **`store: ProcessStore.layer`** (or your override) in the same options object.
+
+Manual split when needed:
 
 ```typescript
 export const BillingRuntime = ProcessManager.LocalRuntime(BillingGroup, {
-  layer: /* BillingGroup.layer + process/queue/store */,
+  layer: ProcessGroup.localEnvLayer(BillingGroup),
   control: ControlService.layerHttp(BillingGroup, { port: 3001 }),
 });
 ```

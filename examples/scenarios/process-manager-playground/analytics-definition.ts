@@ -4,9 +4,8 @@
  * Analytics group: sampler process + counter queue + `AnalyticsRuntime`. Launched via `pnpm run demo:pm -- group-start analytics-group`.
  */
 
-import { Clock, Duration, Effect, Layer } from "effect";
+import { Clock, Duration, Effect } from "effect";
 import {
-  ControlService,
   Endpoint,
   Polling,
   Process,
@@ -14,7 +13,6 @@ import {
   ProcessManager,
   type ProcessManagerGroupConfigItem,
   ProcessSchedule,
-  ProcessStore,
   QueueResource,
 } from "../../../src";
 import { utcDateFromMillis } from "../../../src/utcDate";
@@ -73,21 +71,6 @@ export class AnalyticsGroup extends ProcessGroup.Service<AnalyticsGroup>()(
   analyticsGroupEndpoints(),
 ) {}
 
-export const analyticsEnvLayer = Layer.mergeAll(
-  AnalyticsGroup.layer.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        Sampler.layer.pipe(Layer.provide(CounterQueue.layer)),
-        CounterQueue.layer,
-        ProcessStore.layer,
-      ),
-    ),
-  ),
-  CounterQueue.layer,
-  ProcessStore.layer,
-);
-
-export const AnalyticsRuntime = ProcessManager.LocalRuntime(AnalyticsGroup, {
-  layer: analyticsEnvLayer,
-  control: ControlService.layerHttp(AnalyticsGroup, { port: analyticsPort }),
+export const AnalyticsRuntime = ProcessManager.groupLocalRuntime(AnalyticsGroup, {
+  port: analyticsPort,
 });

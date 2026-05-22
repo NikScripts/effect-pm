@@ -1,12 +1,5 @@
-import { Layer, Effect } from "effect";
-import {
-  ControlService,
-  Process,
-  ProcessGroup,
-  ProcessManager,
-  ProcessStore,
-  QueueResource,
-} from "../../src";
+import { Effect } from "effect";
+import { Process, ProcessGroup, ProcessManager, QueueResource } from "../../src";
 
 interface ModuleEmail {
   readonly to: string;
@@ -31,18 +24,6 @@ export class ModuleEndpointGroup extends ProcessGroup.Service<ModuleEndpointGrou
   [ModuleEndpointProcess, ModuleEndpointQueue] as const,
 ) {}
 
-export const ModuleEndpointRuntime = ProcessManager.LocalRuntime(ModuleEndpointGroup, {
-  layer: Layer.mergeAll(
-    ModuleEndpointGroup.layer.pipe(
-      Layer.provide(
-        Layer.mergeAll(
-          ModuleEndpointProcess.layer,
-          ModuleEndpointQueue.layer,
-          ProcessStore.layer,
-        ),
-      ),
-    ),
-    ProcessStore.layer,
-  ),
-  control: ControlService.layerHttp(ModuleEndpointGroup, { port: 32146 }),
+export const ModuleEndpointRuntime = ProcessManager.groupLocalRuntime(ModuleEndpointGroup, {
+  port: 32146,
 });

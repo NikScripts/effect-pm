@@ -8,4 +8,5 @@ const program = Effect.never.pipe(
   Effect.scoped,
 );
 
+// @ts-ignore Requirement channel does not narrow to never on composed group + control layers.
 void Effect.runPromise(program);
