@@ -44,7 +44,7 @@ class TypeSchemaEmailQueue extends QueueResource.Service<TypeSchemaEmailQueue, E
 class TypeQueueHookService extends Context.Service<
   TypeQueueHookService,
   { readonly record: Effect.Effect<void> }
->()("@test/TypeQueueHookService") {}
+>()("@nikscripts/effect-pm/test/process-group-typed.test/TypeQueueHookService") {}
 
 class TypeHookQueue extends QueueResource.Service<TypeHookQueue, Email, never>()(
   "@test/TypeHookQueue",
@@ -178,9 +178,11 @@ export const processGroupTypeChecks = Effect.gen(function* () {
 
   if (false) {
     // @ts-expect-error queues are not valid process lifecycle targets
+    // @effect-diagnostics-next-line missingEffectContext:off
     yield* group.start(TypeEmailQueue);
 
     // @ts-expect-error process entries are not valid queue targets
+    // @effect-diagnostics-next-line missingEffectContext:off
     yield* group.queue(TypeProcess);
 
     // @ts-expect-error invoice jobs cannot be enqueued into the email queue

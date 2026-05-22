@@ -1043,8 +1043,12 @@ describe("ProcessManager", () => {
         const pid = yield* Ref.get(pidRef);
         if (pid !== undefined) {
           yield* Effect.sync(() => {
-            process.kill(pid, "SIGTERM");
-          }).pipe(Effect.catch(() => Effect.void));
+            try {
+              process.kill(pid, "SIGTERM");
+            } catch {
+              // process may already have exited after group-stop
+            }
+          });
         }
         yield* fsAfterStop.remove(runRoot, { recursive: true, force: true }).pipe(
           Effect.catch(() => Effect.void),

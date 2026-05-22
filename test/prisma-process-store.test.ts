@@ -154,12 +154,7 @@ describe("PrismaProcessStore — placeholder", () => {
         PrismaProcessStore.prismaClientLayer({ client: makeFakeClient() }),
       );
       const exit = yield* Effect.exit(
-        Effect.gen(function* () {
-          yield* ProcessStore;
-        }).pipe(
-          Effect.provide(layer),
-          Effect.scoped,
-        ),
+        ProcessStore.pipe(Effect.provide(layer), Effect.scoped),
       );
 
       expect(Exit.isFailure(exit)).toBe(true);

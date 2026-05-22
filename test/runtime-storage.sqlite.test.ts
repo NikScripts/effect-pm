@@ -1,10 +1,9 @@
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { describe, expect, it } from "@effect/vitest";
-import { Context, DateTime, Effect, Layer, Scope } from "effect";
+import { Context, DateTime, Effect, FileSystem, Layer, Path, Scope } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { randomUUID } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Key, ProcessId } from "../src";
 import { RuntimeStorage } from "../src/RuntimeStorage";
@@ -22,15 +21,15 @@ describeRuntimeStorageContract("SQLiteRuntimeStorage contract", inMemoryStorage)
 describe("SQLiteRuntimeStorage persistence", () => {
   it.live("survives separate database connections on disk", () =>
     Effect.gen(function* () {
-      const baseDir = join(tmpdir(), `effect-pm-sqlite-${randomUUID()}`);
+      const path = yield* Path.Path;
+      const fs = yield* FileSystem.FileSystem;
+      const baseDir = path.join(tmpdir(), `effect-pm-sqlite-${randomUUID()}`);
       const dir = yield* Effect.acquireRelease(
-        Effect.gen(function* () {
-          yield* Effect.promise(() => mkdir(baseDir, { recursive: true }));
-          return baseDir;
-        }),
-        (d) => Effect.promise(() => rm(d, { recursive: true, force: true })),
+        fs.makeDirectory(baseDir, { recursive: true }).pipe(Effect.as(baseDir)),
+        (d) =>
+          fs.remove(d, { recursive: true, force: true }).pipe(Effect.ignore),
       );
-      const filename = join(dir, "runtime.db");
+      const filename = path.join(dir, "runtime.db");
 
       yield* Effect.scoped(
         Effect.gen(function* () {
@@ -58,7 +57,7 @@ describe("SQLiteRuntimeStorage persistence", () => {
           expect(DateTime.formatIso(row!.occurredAt)).toBe("2026-02-01T12:00:00.000Z");
         }),
       );
-    }),
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 });
 
