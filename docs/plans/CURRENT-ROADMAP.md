@@ -130,6 +130,30 @@ Primary references:
 - [07 - Typed ProcessGroup and remote ProcessManager](./07-process-manager.md)
 - [02 - Queue controls, schema, handoff, and lifecycle hooks](./02-queue-controls-and-hooks.md)
 
+## Phase E2 - Log transport (PubNub + storage history)
+
+Build after the structured log relay is stable on the branch (capture →
+`ProcessManagerLogEntry` → relay → operator replay). Does not require Phase D
+queue schema work, but **storage backfill** should reuse Phase C storage/query
+patterns rather than a one-off log database.
+
+Candidate work:
+
+1. **Log transport port** — Extract HTTP `/logs/stream` behind a
+   `LogTransport`-style client/server (mirror control transport).
+2. **Storage option** — Persist entries on child publish; operator passes an
+   `after` timestamp (or entry id) to load older rows from DB/storage, then
+   optionally `--follow` on PubNub or HTTP for live tail.
+3. **PubNub** — Publish NDJSON lines per entry on a group channel; operator
+   subscribe feeds the same `decode → replayLogEntry` path (multi-host,
+   multi-subscriber).
+
+Primary references:
+
+- [13 - ProcessManager log transport](./13-process-manager-log-transport.md)
+- [07 - Typed ProcessGroup and remote ProcessManager](./07-process-manager.md)
+- [11 - Runtime state, listener hooks, history, and mutable config](./11-runtime-state-hooks-and-config.md)
+
 ## Phase F - RemoteService and per-entry remote layers
 
 This phase remains deliberately deferred.
@@ -175,12 +199,17 @@ Primary references:
 ```text
 Landed typed group + remote control
   -> Phase B CLI/control polish
+  -> Phase E2 log transport (HTTP port, storage after-cursor, PubNub)  [can parallel late B]
   -> Phase C runtime state/facts
       -> Phase D queue schema/control v2
           -> Phase E remote enqueue + handoff
               -> Phase F RemoteService / remoteLayers
   -> Phase G lifecycle/hooks/strictness after state model stabilizes
 ```
+
+Storage-heavy log backfill (Phase E2 slice 2) is easiest once Phase C query/append
+patterns exist; PubNub live fan-out (slice 3) can land earlier behind the
+transport port (slice 1).
 
 ## How to choose the next task
 

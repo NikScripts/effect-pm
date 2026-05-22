@@ -920,7 +920,10 @@ Implementation order:
    run state.**
 8. Route all runtime commands through `ProcessManager`. **Implemented for
    endpoint-backed controls; `group-start` launches only, then controls use PM.**
-9. Add local file-backed log streaming, then remote log transport.
+9. Add pluggable log transport after structured capture/relay: HTTP adapter port,
+   optional **storage** backfill (`after` timestamp / cursor), and **PubNub**
+   live fan-out. See [13 - ProcessManager log transport](./13-process-manager-log-transport.md).
+   (Supersedes file-backed stdout/stderr tailing.)
 10. Add the daemon endpoint after direct launcher behavior works.
 
 ### Resolved remote layer decisions
@@ -1309,7 +1312,8 @@ Endpoint-config surface:
   child-process launches. **Implemented as a descriptor.**
 - Keep same-process endpoints test-only.
 - Add log transport config as a sibling endpoint capability before building a
-  rich daemon UX.
+  rich daemon UX (`http`, `pubnub`, `storage`, or composite). Details in
+  [13 - ProcessManager log transport](./13-process-manager-log-transport.md).
 
 ### Slice 7 - Activation and handoff
 

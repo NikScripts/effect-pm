@@ -29,6 +29,7 @@ numbered plan details.
 | 10 | [Plan 01 phase one: ProcessStore read foundation](./10-process-store-phase-one.md) | Detailed first implementation slice for plan **01**; reconcile with plan **11** before adding more feature-specific store methods. |
 | 11 | [Runtime state, listener hooks, history, and mutable config](./11-runtime-state-hooks-and-config.md) | Planned direction for state snapshots/history, external listeners, stable storage primitives, per-resource data, and config changes after start. |
 | 12 | [Standalone instance spawns](./12-standalone-instance-spawns.md) | **`Process.spawn`** (multi-instance supervised processes outside **`ProcessGroup`**) plus **`suspend`/`wake`** vs schedule **`armed`**; mirrored **`QueueResource.open`** ergonomics and identity/logging conventions. |
+| 13 | [ProcessManager log transport](./13-process-manager-log-transport.md) | Pluggable log egress/ingress (HTTP adapter refactor, **PubNub** live fan-out, **storage** cursor backfill via timestamps) on top of structured `ProcessManagerLogEntry` relay. |
 
 ## Historical implementation order
 
@@ -45,7 +46,8 @@ each other.
 7. **Process hooks and lifecycle kernel** — Use [06](./06-process-lifecycle-hooks.md) and [08](./08-lifecycle-machine.md) once the state/signal vocabulary is real.
 8. **Control service v2** — Continue [05](./05-control-service-v2.md) beyond the current contract-driven REST API with streaming/events and richer projections.
 9. **Remote ProcessManager** — Continue the remote portions of [07](./07-process-manager.md): harden connection/CLI/layer behavior, then add schema-backed enqueue, deployment handoff, and richer multi-host coordination.
-10. **Strict LS rule** — Re-enable [09](./09-strict-any-unknown.md) after the public boundaries are typed without broad `unknown` error channels.
+10. **Log transport** — After structured capture/relay is stable, implement [13](./13-process-manager-log-transport.md): transport port, storage `after` cursor history, then PubNub (depends on [11](./11-runtime-state-hooks-and-config.md) / storage adapters).
+11. **Strict LS rule** — Re-enable [09](./09-strict-any-unknown.md) after the public boundaries are typed without broad `unknown` error channels.
 
 ## Explicitly discarded from active planning
 
