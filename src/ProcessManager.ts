@@ -10,6 +10,7 @@
  */
 
 import { Clock, Config, ConfigProvider, Console, Context, Data, DateTime, Duration, Effect, Exit, FileSystem, Layer, Logger, Option, Path, Schema, Scope } from "effect";
+import type { Terminal } from "effect/Terminal";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import type { HttpClient } from "effect/unstable/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
@@ -60,9 +61,9 @@ import {
   type ProcessManagerRunState,
 } from "./processManagerRunState.js";
 import {
-  streamGroupLogs,
   ProcessManagerGroupLogError,
 } from "./processManagerGroupLogs.js";
+import { watchGroupLogs } from "./processManagerGroupLogsInteractive.js";
 import { httpEndpoint } from "./processManagerTransport.js";
 
 type AnyProcessGroupContract = ProcessGroupContract<
@@ -1669,17 +1670,27 @@ const runGroupStartCommand = (
   });
 
 
+const stdinIsInteractive = (): boolean => {
+  if (typeof process === "undefined") {
+    return false;
+  }
+  const stdin = process.stdin;
+  return typeof stdin !== "undefined" && stdin.isTTY === true;
+};
+
 const runGroupLogsCommand = (
   groups: ReadonlyArray<ConfigSource>,
   input: string,
   options: {
     readonly endpointLabel?: string;
-    readonly follow: boolean;
+    readonly lines: number;
+    readonly interactive: boolean;
+    readonly live: boolean;
   },
 ): Effect.Effect<
   void,
   ProcessManagerConnectionError | ProcessManagerEndpointConfigError | ProcessManagerGroupLogError,
-  HttpClient.HttpClient | FileSystem.FileSystem | Path.Path
+  FileSystem.FileSystem | HttpClient.HttpClient | Path.Path | Terminal
 > =>
   Effect.gen(function* () {
     const controlBaseUrl = yield* resolveGroupControlBaseUrl(
@@ -1687,12 +1698,14 @@ const runGroupLogsCommand = (
       input,
       options.endpointLabel,
     );
-    yield* Console.log(
-      `Streaming structured logs from ${controlBaseUrl}${options.follow ? " (follow)" : ""}`,
-    );
-    yield* streamGroupLogs({
+    if (!options.live && !options.interactive) {
+      yield* Console.log(`Snapshot from ${controlBaseUrl} (up to ${String(options.lines)} lines)`);
+    }
+    yield* watchGroupLogs({
       controlBaseUrl,
-      follow: options.follow,
+      preludeLines: options.lines,
+      interactive: options.interactive,
+      live: options.live,
     });
   });
 
@@ -1814,7 +1827,9 @@ const makeCli = <
   const target = Argument.string("target");
   const jsonOption = Flag.boolean("json").pipe(Flag.withDefault(false));
   const endpointLabelOption = Flag.string("target").pipe(Flag.optional);
-  const followOption = Flag.boolean("follow").pipe(Flag.withAlias("f"), Flag.withDefault(false));
+  const linesOption = Flag.integer("lines").pipe(Flag.withAlias("n"), Flag.withDefault(100));
+  const snapshotOption = Flag.boolean("snapshot").pipe(Flag.withDefault(false));
+  const noInteractiveOption = Flag.boolean("no-interactive").pipe(Flag.withDefault(false));
   const endpointLabelFrom = (endpointLabel: Option.Option<string>): string | undefined =>
     Option.isSome(endpointLabel) ? endpointLabel.value : undefined;
   const groupsCommand = Command.make("groups", { json: jsonOption, endpointLabel: endpointLabelOption }, ({ json, endpointLabel }) =>
@@ -1837,12 +1852,16 @@ const makeCli = <
     {
       target,
       endpointLabel: endpointLabelOption,
-      follow: followOption,
+      lines: linesOption,
+      snapshot: snapshotOption,
+      noInteractive: noInteractiveOption,
     },
-    ({ target, endpointLabel, follow }) =>
+    ({ target, endpointLabel, lines, snapshot, noInteractive }) =>
       runGroupLogsCommand(groups, target, {
         endpointLabel: endpointLabelFrom(endpointLabel),
-        follow,
+        lines,
+        interactive: stdinIsInteractive() && !noInteractive,
+        live: !snapshot,
       }),
   );
   const statusCommand = Command.make("status", { target, json: jsonOption, endpointLabel: endpointLabelOption }, ({ target, json, endpointLabel }) =>
@@ -2260,7 +2279,7 @@ export const Endpoint = Object.assign(makeEndpointFactory, {
  */
 /**
  * Default operator CLI logger (pretty console). Merge into the PM CLI runtime so
- * {@link streamGroupLogs} replays child entries with the same formatting as the operator.
+ * {@link watchGroupLogs} replays child entries with the same formatting as the operator.
  *
  * @public
  */

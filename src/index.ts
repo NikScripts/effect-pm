@@ -233,6 +233,10 @@ export {
   ProcessManagerGroupLogError,
   type ProcessManagerGroupLogOptions,
 } from "./processManagerGroupLogs.js";
+export {
+  watchGroupLogs,
+  type ProcessManagerGroupLogWatchOptions,
+} from "./processManagerGroupLogsInteractive.js";
 export type {
   ProcessManagerEndpointConfigItem,
   ProcessManagerConnectionConfigMap,

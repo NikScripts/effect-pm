@@ -41,10 +41,10 @@ These are the default assumptions for implementation unless `/grill-me` changes 
 | ---- | ----- | -------- |
 | **Default (live)** | `group-logs <group>` (no storage flags) | Always attach live transport. Print relay **snapshot prelude** (bounded, see below), then stream new entries until interrupt. |
 | **Storage export** | **Requires** `--from` + `--to` ISO range (or `--since` duration) | Query `ProcessStore` only; print matching rows and **exit** — no infinite scroll, no implicit follow. |
-| **Storage + live** | explicit range flags **and** `--follow` | Optional: print storage window first, then prelude + live (dedupe by `entryId`). |
+| **Storage + live** | explicit range **and** live default (future) | Optional: print storage window first, then prelude + live (dedupe by `entryId`). |
 
 - `--lines` / `-n` (default **100**) — cap relay snapshot prelude lines before live tail (fits terminal without bloat; not storage).
-- `--no-follow` — snapshot prelude only, then exit (debug/CI).
+- `--snapshot` — relay prelude only, then exit (debug/CI); no live tail.
 - Storage cursors (`--after` / `--before` / `entryId`) — advanced; still subordinate to **required date range** when reading storage.
 
 **Dedup rule:** When merging storage stream + live stream, drop any live entry with `entryId <= lastIdFromStorage`.
@@ -54,7 +54,7 @@ These are the default assumptions for implementation unless `/grill-me` changes 
 1. **Default is always live** — `pm group-logs my-group` ≡ follow live logs. Storage is never queried unless the operator passes an explicit **time range**.
 2. **Prelude without bloat** — Before live tail: replay relay snapshot up to `--lines` (default 100, max 500 = relay capacity). No “load everything from DB” on default path.
 3. **Storage requires a window** — e.g. `--from 2026-05-22T19:00:00Z --to 2026-05-22T20:00:00Z` (both required). Optional `--limit` caps rows. Rejects open-ended storage reads at CLI parse time.
-4. **Interactive follow (aspirational)** — While following live logs in a TTY, single-key or `:` commands (see Slice 7). Not required for v1 transport port; flag the UX as the north star.
+4. **Interactive follow (live)** — While following live logs in a TTY, single-key commands (see Slice 7). Implemented for live path; storage history interactive deferred until `--from` / `--to` exists.
 
 ### Storage placement
 
@@ -173,9 +173,9 @@ Operator group-logs
 
 - `--preserve-timestamps` on `group-logs` / replay path.
 
-### Slice 7 (optional) — Interactive log session (TTY)
+### Slice 7 — Interactive log session (TTY, live)
 
-When stdin is a TTY and `--interactive` (or default-on-TTY TBD in grill), attach a minimal log **session** on top of live follow:
+When stdin is a TTY (use `--no-interactive` to disable), attach a minimal log **session** on top of live follow:
 
 | Input | Action |
 | ----- | ------ |
@@ -199,23 +199,20 @@ pm group-logs my-group
 pm group-logs my-group --lines 20
 
 # Snapshot only, no live
-pm group-logs my-group --no-follow
+pm group-logs my-group --snapshot
 
-# Storage export (range required) — no follow unless explicitly combined
+# Storage export (range required) — no live
 pm group-logs my-group --from 2026-05-22T19:00:00Z --to 2026-05-22T20:00:00Z
 
-# Storage window then live (explicit)
-pm group-logs my-group --from 2026-05-22T19:00:00Z --to 2026-05-22T20:00:00Z --follow
-
-# Interactive live session (future)
-pm group-logs my-group --interactive
+# Disable TTY keys (e.g. piping)
+pm group-logs my-group --no-interactive
 ```
 
 ## Remaining open questions (for `/grill-me`)
 
 - `entryId` format: uint64 sequence vs ULID (sortable, multi-instance safe).
 - Interactive: default-on-TTY vs `--interactive` only.
-- Whether `--follow` remains as alias when live is already default (keep for compatibility).
+- No `--follow` flag on CLI (live is default; `--snapshot` for prelude-only).
 - Retention/TTL and compaction (deployment policy vs library default).
 - Whether HTTP live stream still sends pre-storage 500 snapshot when storage is enabled.
 - Auth matrix when PubNub + remote control coexist.

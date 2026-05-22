@@ -367,7 +367,16 @@ export const makeControlTransportHttpServer = (
                 Connection: follow ? "keep-alive" : "close",
               });
               const snapshot = yield* relay.snapshot;
-              for (const entry of snapshot) {
+              const linesParam = url.searchParams.get("lines");
+              const preludeLimit =
+                linesParam !== null && linesParam.length > 0
+                  ? Math.max(0, Math.min(500, Number.parseInt(linesParam, 10) || 0))
+                  : snapshot.length;
+              const prelude =
+                preludeLimit < snapshot.length
+                  ? snapshot.slice(snapshot.length - preludeLimit)
+                  : snapshot;
+              for (const entry of prelude) {
                 const line = yield* encodeProcessManagerLogEntryNdjson(entry);
                 res.write(`${line}
 `);

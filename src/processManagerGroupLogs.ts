@@ -23,15 +23,20 @@ export class ProcessManagerGroupLogError extends Data.TaggedError(
 export interface ProcessManagerGroupLogOptions {
   readonly controlBaseUrl: string;
   readonly follow: boolean;
+  /** Recent in-memory lines from relay snapshot (HTTP `lines` query param). */
+  readonly preludeLines?: number;
 }
 
 const joinUrl = (baseUrl: string, path: string): string =>
   `${baseUrl.replace(/\/+$/, "")}${path}`;
 
-const logStreamUrl = (controlBaseUrl: string, follow: boolean): string => {
-  const url = new URL(joinUrl(controlBaseUrl, "/logs/stream"));
-  if (follow) {
+const logStreamUrl = (options: ProcessManagerGroupLogOptions): string => {
+  const url = new URL(joinUrl(options.controlBaseUrl, "/logs/stream"));
+  if (options.follow) {
     url.searchParams.set("follow", "true");
+  }
+  if (options.preludeLines !== undefined) {
+    url.searchParams.set("lines", String(options.preludeLines));
   }
   return url.toString();
 };
@@ -61,7 +66,7 @@ export const groupLogEntryStream = (
   HttpClient.HttpClient
 > =>
   Stream.unwrap(
-    HttpClient.get(logStreamUrl(options.controlBaseUrl, options.follow)).pipe(
+    HttpClient.get(logStreamUrl(options)).pipe(
       Effect.mapError(
         (error) =>
           new ProcessManagerGroupLogError({
