@@ -1,35 +1,33 @@
 /**
- * File-backed ProcessStore adapter.
+ * Legacy file-backed ProcessStore adapter (append-only NDJSON).
  *
  * @remarks
- * Prefer this package subpath for local durable analytics storage:
+ * **Do not use for new code.** This path bypasses {@link RuntimeStorage} and exists
+ * only for backward compatibility with early local analytics demos and tests.
  *
- * ```ts
- * import { fileLayer } from "@nikscripts/effect-pm/storage/file";
- * ```
+ * For durable storage, use {@link ProcessStore.layerRuntimeStorage} with
+ * `@nikscripts/effect-pm/storage/sqlite` or structured logs via `@nikscripts/effect-pm/Logs`.
  *
+ * @deprecated Prefer `@nikscripts/effect-pm/storage/sqlite` and `@nikscripts/effect-pm/Logs`.
  * @module storage/file
  */
 
 import { ProcessStore } from "../ProcessStore";
 
 /**
- * Build a file-backed ProcessStore effect.
- *
+ * @deprecated Do not use for new code. See module doc.
  * @public
  */
 export const file = ProcessStore.file;
 
 /**
- * Build a file-backed ProcessStore layer.
- *
+ * @deprecated Do not use for new code. See module doc.
  * @public
  */
 export const fileLayer = ProcessStore.fileLayer;
 
 /**
- * Namespace-style file adapter facade.
- *
+ * @deprecated Do not use for new code. See module doc.
  * @public
  */
 export const FileProcessStore = {

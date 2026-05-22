@@ -3,7 +3,7 @@ import { Data, Effect, FileSystem, Layer, Path } from "effect";
 import type { ProcessGroupEntry, ProcessGroupServiceDefinition } from "./ProcessGroup.js";
 import { resolveChildLaunchPaths } from "./processManagerChildLaunch.js";
 import { groupLocalRuntime } from "./processManagerGroupRuntime.js";
-import { groupLogStoreLayer, groupLogStoreSqlitePath, layerWithProcessStore } from "./processManagerLogStore.js";
+import * as Logs from "./Logs.js";
 import { captureLoggerLayer } from "./processManagerLogRelay.js";
 
 /** @public */
@@ -90,22 +90,22 @@ export const runGroupChildProgram = (args: {
       });
     }
     const paths = yield* resolveChildLaunchPaths();
-    const logStorePath = groupLogStoreSqlitePath(paths.logDirectory, args.groupId);
+    const logStorePath = Logs.sqlitePath(paths.logDirectory, args.groupId);
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     yield* fs.makeDirectory(path.dirname(logStorePath), { recursive: true }).pipe(Effect.orDie);
     const runtime = groupLocalRuntime(group, {
       controlBaseUrl: args.controlBaseUrl,
-      store: groupLogStoreLayer(logStorePath),
+      store: Logs.layer(logStorePath),
     });
     const envLayer = runtime.layer.pipe(
-      Layer.provideMerge(layerWithProcessStore),
+      Layer.provideMerge(Logs.relayLayer),
       Layer.provideMerge(captureLoggerLayer),
     );
     return yield* Effect.never.pipe(
       Effect.provide(
         runtime.control.pipe(
-          Layer.provideMerge(layerWithProcessStore),
+          Layer.provideMerge(Logs.relayLayer),
           Layer.provide(envLayer),
         ),
       ),

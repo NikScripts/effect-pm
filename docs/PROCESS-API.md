@@ -342,11 +342,12 @@ and the gated effect behavior is unchanged.
 
 When `RuntimeObserver.layerProcessStore` is provided, runtime facts are
 persisted through `ProcessStore` as `runtime.fact.recorded` analytics events.
-Memory, file-backed, and Prisma reads support those generic events through
-`ProcessStore.events(query)`. Prefer `fileLayer(path)` from
-`@nikscripts/effect-pm/storage/file` with Effect `FileSystem`/`Path` platform
-layers for local durable NDJSON storage. Root `ProcessStore.file` /
-`ProcessStore.fileLayer` remain available as current compatibility helpers.
+Memory, SQLite-backed `RuntimeStorage`, and Prisma reads support those generic
+events through `ProcessStore.events(query)`. Prefer
+`ProcessStore.layerRuntimeStorage` with `@nikscripts/effect-pm/storage/sqlite`
+for durable local storage. `@nikscripts/effect-pm/Logs` covers structured group
+log history. `@nikscripts/effect-pm/storage/file` and `ProcessStore.fileLayer` are
+**legacy** NDJSON compatibility only — do not use for new code.
 State changes are persisted as `runtime.state.changed` events when
 `RuntimeObserver.layerProcessStore` is provided. `ProcessStore.runtime.stateHistory(...)`
 and `ProcessStore.runtime.latestState(...)` derive state projections from the

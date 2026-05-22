@@ -15,7 +15,8 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 | `src/QueueResource.ts` | Priority queue resource factory. |
 | `src/ProcessStore.ts` | Analytics + lifecycle event append/read. |
 | `src/ControlService.ts` | Localhost HTTP JSON control API. |
-| `src/processManagerLog*.ts` | Structured log capture, relay, `pm watch` / `pm logs`, ProcessStore persistence. |
+| `src/Logs.ts` | Structured log persistence (`Logs.record`, `Logs.query`, SQLite layer). |
+| `src/processManagerLog*.ts` | Log capture relay, `pm watch` / `pm logs` CLI wiring. |
 | `src/processManagerGroupLogs*.ts` | HTTP stream client and interactive TTY watch. |
 | `src/ProcessManager.ts` | Typed remote client and endpoint service for group control contracts. |
 | `src/cli.ts` | `createCli` / `runCli` — HTTP client for control API. |

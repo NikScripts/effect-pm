@@ -256,7 +256,8 @@ const program = Effect.gen(function* () {
  * supervisor there; you do **not** need to provide them again at the program root.
  *
  * NOTE: ProcessStore.layer is in-memory, so data is lost on restart. For local
- * durable analytics without a database, use `ProcessStore.fileLayer(filePath)`
+ * durable analytics without a database, use `ProcessStore.layerRuntimeStorage`
+ * with `SQLiteRuntimeStorage.layer({ filename })` (see `@nikscripts/effect-pm/storage/sqlite`)
  * with Effect FileSystem / Path platform layers. For SQL-backed persistence,
  * use `PrismaProcessStore.layer({ client })` from
  * `@nikscripts/effect-pm/storage/prisma`.

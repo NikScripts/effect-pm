@@ -1,10 +1,8 @@
 /**
- * @module examples/forms/process-store/process-store-events-file-layer
+ * @module examples/forms/process-store/process-store-events-sqlite-layer
  *
- * **Legacy** ProcessStore NDJSON file storage (do not copy for new code).
- * Prefer `process-store-events-sqlite-layer.ts` and `ProcessStore.layerRuntimeStorage`.
- *
- * Run: `npx tsx examples/forms/process-store/process-store-events-file-layer.ts`
+ * ProcessStore generic events + SQLite RuntimeStorage.
+ * Run: `npx tsx examples/forms/process-store/process-store-events-sqlite-layer.ts`
  */
 
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
@@ -16,7 +14,7 @@ import {
   RuntimeObserver,
   type AnalyticsEvent,
 } from "../../../src";
-import { fileLayer } from "../../../src/storage/file";
+import { SQLiteRuntimeStorage } from "../../../src/storage/sqlite";
 
 const platformLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
@@ -32,26 +30,26 @@ const program = Effect.gen(function* () {
   const path = yield* Path.Path;
   const fs = yield* FileSystem.FileSystem;
 
-  const filePath = path.join(
+  const sqlitePath = path.join(
     ".tmp",
     "examples",
-    "process-store-events.ndjson",
+    "process-store-events.sqlite",
   );
 
-  // Keep the demo deterministic while leaving the final NDJSON file inspectable.
-  yield* fs.remove(filePath).pipe(Effect.catch(() => Effect.void));
+  yield* fs.remove(sqlitePath).pipe(Effect.catch(() => Effect.void));
+  yield* fs.makeDirectory(path.dirname(sqlitePath), { recursive: true }).pipe(Effect.orDie);
 
-  const storeLayer = fileLayer(filePath);
-  const observerLayer = Layer.provide(
-    RuntimeObserver.layerProcessStore,
-    storeLayer,
-  );
+  const storeLayer = Layer.provide(
+    ProcessStore.layerRuntimeStorage,
+    SQLiteRuntimeStorage.layer({ filename: sqlitePath }),
+  ).pipe(Layer.orDie);
+  const observerLayer = Layer.provide(RuntimeObserver.layerProcessStore, storeLayer);
   const live = Layer.mergeAll(storeLayer, observerLayer);
 
   yield* Effect.gen(function* () {
     const store = yield* ProcessStore;
     const gate = yield* RunResource.make({
-      name: "examples/FileBackedGate",
+      name: "examples/SqliteBackedGate",
       effect: (n: number) => Effect.succeed(n + 1),
       concurrency: 1,
     });
@@ -70,7 +68,7 @@ const program = Effect.gen(function* () {
 
     const runtimeFacts = yield* store.events({
       entityType: "run-resource",
-      entityId: "examples/FileBackedGate",
+      entityId: "examples/SqliteBackedGate",
       types: runtimeFactTypes,
     });
 
@@ -86,16 +84,8 @@ const program = Effect.gen(function* () {
     yield* Effect.log(
       `process lifecycle events: ${processEvents.map((event) => event.id).join(", ")}`,
     );
-
-    // File storage is append-only NDJSON. Malformed rows are skipped on reads so
-    // one bad line does not poison the whole local analytics file.
-    yield* fs.writeFileString(filePath, "not json\n", { flag: "a" });
-    const afterMalformedRow = yield* store.events();
-    yield* Effect.log(
-      `events after malformed row is skipped: ${String(afterMalformedRow.length)}`,
-    );
-    yield* Effect.log(`file-backed store path: ${filePath}`);
-  }).pipe(Effect.provide(live));
+    yield* Effect.log(`sqlite-backed store path: ${sqlitePath}`);
+  }).pipe(Effect.provide(live), Effect.scoped);
 }).pipe(Effect.provide(platformLayer));
 
 void Effect.runPromise(program);

@@ -25,6 +25,7 @@ export default defineConfig([
       RuntimeStorage: "src/RuntimeStorage.ts",
       ProcessManager: "src/ProcessManager.ts",
       ControlService: "src/ControlService.ts",
+      Logs: "src/Logs.ts",
       "storage/file": "src/storage/file.ts",
       "storage/sqlite": "src/storage/sqlite/index.ts",
       "storage/prisma": "src/storage/prisma.ts",

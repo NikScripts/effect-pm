@@ -59,13 +59,16 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | File | Teaches |
 |------|---------|
 | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) | `ProcessStore.layer` / `memory` + `events(query)` |
-| [`forms/process-store/process-store-events-file-layer.ts`](./forms/process-store/process-store-events-file-layer.ts) | `ProcessStore.events(query)` + `ProcessStore.fileLayer(filePath)` with Effect `FileSystem` / `Path` |
+| [`forms/process-store/process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) | `ProcessStore.events(query)` + `ProcessStore.layerRuntimeStorage` + SQLite adapter |
+| [`forms/process-store/process-store-events-file-layer.ts`](./forms/process-store/process-store-events-file-layer.ts) | **Legacy** NDJSON `fileLayer` (do not copy) |
 | [`forms/process-store/process-store-prisma-structural-client.ts`](./forms/process-store/process-store-prisma-structural-client.ts) | Placeholder showing Prisma adapter unavailability pending RuntimeStorage rewrite |
 
 Storage options:
 
 - `ProcessStore.layer` / `ProcessStore.memory` — in-memory analytics for tests and demos.
-- `file(filePath)` / `fileLayer(filePath)` from `@nikscripts/effect-pm/storage/file` — local append-only NDJSON storage backed by Effect `FileSystem` / `Path`; reads skip malformed rows.
+- `ProcessStore.layerRuntimeStorage` + `@nikscripts/effect-pm/storage/sqlite` — durable local SQLite runtime records (preferred).
+- `@nikscripts/effect-pm/Logs` — structured group log history (`Logs.record`, `Logs.query`, `Logs.layer`).
+- `file(filePath)` / `fileLayer(filePath)` from `@nikscripts/effect-pm/storage/file` — **legacy** NDJSON only; do not use for new code.
 - `PrismaProcessStore` from `@nikscripts/effect-pm/storage/prisma` — placeholder for the upcoming RuntimeStorage-backed Prisma rewrite.
 
 ### Schedule

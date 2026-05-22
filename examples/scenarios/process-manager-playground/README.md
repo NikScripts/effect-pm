@@ -1,6 +1,6 @@
 # ProcessManager playground
 
-Two typed **ProcessGroup** runtimes you launch from the CLI, then drive with **process** and **queue** controls. Good for trying `group-start`, `ls`, `status`, `pause` / `resume`, and contract-aware targets.
+Two typed **ProcessGroup** runtimes you launch from the CLI, then drive with **process** and **queue** controls. Good for trying `start <group>`, `ls`, `status`, `pause` / `resume`, and contract-aware targets.
 
 ## Prerequisites
 
@@ -20,8 +20,8 @@ pnpm run demo:pm -- ls
 ## Terminal 2 — start runtimes (out-of-process)
 
 ```bash
-pnpm run demo:pm -- group-start workshop-group
-pnpm run demo:pm -- group-start analytics-group
+pnpm run demo:pm -- start workshop-group
+pnpm run demo:pm -- start analytics-group
 ```
 
 Child processes write logs under `.effect-pm/logs/` and run state under `.effect-pm/run/groups/`.

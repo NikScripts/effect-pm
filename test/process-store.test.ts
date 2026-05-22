@@ -530,7 +530,8 @@ describe("ProcessStore.memory", () => {
   )
 })
 
-describe("ProcessStore.file", () => {
+/** @deprecated legacy NDJSON adapter — kept for compatibility coverage only */
+describe("ProcessStore.file (legacy)", () => {
   const platform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)
 
   it.live("persists generic events across file store instances", () =>

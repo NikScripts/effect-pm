@@ -7,7 +7,10 @@
  * analytics events from those records for compatibility.
  *
  * Default implementation: {@link ProcessStore} service class with an in-memory store.
- * Use {@link ProcessStore.fileLayer} for local durable NDJSON storage.
+ * For durable storage, compose {@link ProcessStore.layerRuntimeStorage} with
+ * {@link RuntimeStorage} adapters (SQLite via `@nikscripts/effect-pm/storage/sqlite`,
+ * Prisma when ready). **Do not** use {@link ProcessStore.fileLayer} for new code — it is
+ * legacy NDJSON compatibility only.
  *
  * @module ProcessStore
  */
@@ -1511,12 +1514,17 @@ export namespace ProcessStore {
   /**
    * Raw `Effect` that materializes a file-backed {@link ProcessStoreInterface}.
    *
+   * @deprecated **Do not use for new code.** Legacy append-only NDJSON compatibility
+   * only. Prefer {@link ProcessStore.layerRuntimeStorage} with SQLite or Prisma adapters.
+   *
    * @public
    */
   export const file = makeFileProcessStore;
 
   /**
    * `Layer` that provides {@link ProcessStore} backed by an append-only NDJSON file.
+   *
+   * @deprecated **Do not use for new code.** See {@link ProcessStore.file}.
    *
    * @public
    */

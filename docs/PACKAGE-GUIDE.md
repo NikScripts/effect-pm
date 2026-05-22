@@ -102,14 +102,13 @@ dedicated subpaths for focused imports:
 - `@nikscripts/effect-pm/ProcessStore`
 - `@nikscripts/effect-pm/ProcessManager`
 - `@nikscripts/effect-pm/ControlService`
-- `@nikscripts/effect-pm/storage/file`
+- `@nikscripts/effect-pm/Logs`
 - `@nikscripts/effect-pm/storage/sqlite`
 - `@nikscripts/effect-pm/storage/prisma`
+- `@nikscripts/effect-pm/storage/file` (legacy only)
 
-Storage adapters use lowercase path segments. File-backed NDJSON analytics
-storage is preferred from `@nikscripts/effect-pm/storage/file`; root
-`ProcessStore.file` / `ProcessStore.fileLayer` remain current compatibility
-helpers. Durable normalized runtime records can use
+Structured group logs use `@nikscripts/effect-pm/Logs` (`Logs.record`,
+`Logs.query`, `Logs.layer` with SQLite). Durable normalized runtime records use
 `@nikscripts/effect-pm/storage/sqlite` (`SQLiteRuntimeStorage`) with
 `ProcessStore.layerRuntimeStorage`. Run `SQLiteRuntimeStorage.make` under
 `Effect.scoped` (or `it.live`) so the underlying `SqlClient` stays open for the
