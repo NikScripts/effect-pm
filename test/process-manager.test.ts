@@ -937,10 +937,11 @@ describe("ProcessManager", () => {
       const runRoot = ".effect-pm-test";
       const runDirectory = `${runRoot}/run/groups`;
       const pidRef = yield* Ref.make<number | undefined>(undefined);
-      yield* Effect.sync(() => {
-        process.env.EFFECT_PM_GROUP_CHILD_SCRIPT = groupChildScript;
-        process.env.EFFECT_PM_RUN_DIRECTORY = runDirectory;
-        process.env.EFFECT_PM_LOG_DIRECTORY = `${runRoot}/logs`;
+      const childLaunchLayer = ProcessManager.ChildLaunch.layerConfig({
+        ...ProcessManager.ChildLaunch.defaultPaths(),
+        scriptPath: groupChildScript,
+        logDirectory: `${runRoot}/logs`,
+        runDirectory,
       });
       const config = yield* ProcessManager.GroupConfig(ModuleEndpointGroup, [
         Endpoint.local(
@@ -970,6 +971,7 @@ describe("ProcessManager", () => {
           Effect.provide(
             Layer.mergeAll(
               ProcessManager.Config.layer([config]),
+              childLaunchLayer,
               NodeHttpClient.layerUndici,
               NodeServices.layer,
             ),
@@ -993,6 +995,7 @@ describe("ProcessManager", () => {
           Effect.provide(
             Layer.mergeAll(
               ProcessManager.Config.layer([config]),
+              childLaunchLayer,
               NodeHttpClient.layerUndici,
               NodeServices.layer,
             ),
@@ -1029,9 +1032,9 @@ describe("ProcessManager", () => {
   it.live("cleans stale module endpoint run state on group-stop", () =>
     Effect.gen(function* () {
       const runDirectory = ".effect-pm/run/groups";
-      yield* Effect.sync(() => {
-        process.env.EFFECT_PM_GROUP_CHILD_SCRIPT = groupChildScript;
-        delete process.env.EFFECT_PM_RUN_DIRECTORY;
+      const childLaunchLayer = ProcessManager.ChildLaunch.layerConfig({
+        ...ProcessManager.ChildLaunch.defaultPaths(),
+        scriptPath: groupChildScript,
       });
       const config = yield* ProcessManager.GroupConfig(ModuleEndpointGroup, [
         Endpoint.local(
@@ -1078,6 +1081,7 @@ describe("ProcessManager", () => {
         Effect.provide(
           Layer.mergeAll(
             ProcessManager.Config.layer([config]),
+            childLaunchLayer,
             NodeHttpClient.layerUndici,
             NodeServices.layer,
           ),

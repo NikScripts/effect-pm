@@ -37,9 +37,11 @@ import { responseBodyJson } from "./internal/json";
 import {
   buildChildLaunchConfig,
   defaultChildLaunchPaths,
+  layerConfig as childLaunchLayerConfig,
+  layerFromEnv as childLaunchLayerFromEnv,
+  resolveChildLaunchPaths,
   resolveEntryUrl,
   type ProcessManagerChildLaunchConfig,
-  type ProcessManagerChildLaunchPaths,
 } from "./processManagerChildLaunch.js";
 import {
   Transport,
@@ -464,49 +466,41 @@ const makeProcessManagerConfigLayer = (
 const safePathSegment = (input: string): string =>
   normalizeProcessManagerTarget(input).replace(/\//g, "__") || "group";
 
-// @effect-diagnostics-next-line processEnv:off — optional operator overrides for child launcher paths
-const readChildLaunchEnv = (name: string): string | undefined => process.env[name];
-
-const resolveChildLaunchPaths = (): ProcessManagerChildLaunchPaths => {
-  const defaults = defaultChildLaunchPaths();
-  return {
-    scriptPath: readChildLaunchEnv("EFFECT_PM_GROUP_CHILD_SCRIPT") ?? defaults.scriptPath,
-    executorImport: readChildLaunchEnv("EFFECT_PM_EXECUTOR_IMPORT") ?? defaults.executorImport,
-    logDirectory: readChildLaunchEnv("EFFECT_PM_LOG_DIRECTORY") ?? defaults.logDirectory,
-    runDirectory: readChildLaunchEnv("EFFECT_PM_RUN_DIRECTORY") ?? defaults.runDirectory,
-  };
-};
-
 const spawnEndpointLaunchConfig = (
   group: ConfigSource,
   selected: ProcessManagerEndpointSelection,
-): Effect.Effect<ProcessManagerModuleEndpointLaunchConfig, ProcessManagerEndpointConfigError> => {
-  switch (selected.endpoint._tag) {
-    case "ProcessManagerChildEndpoint":
-      return Effect.succeed(
-        buildChildLaunchConfig(
+): Effect.Effect<ProcessManagerModuleEndpointLaunchConfig, ProcessManagerEndpointConfigError> =>
+  Effect.gen(function* () {
+    switch (selected.endpoint._tag) {
+      case "ProcessManagerChildEndpoint": {
+        const paths = yield* resolveChildLaunchPaths().pipe(
+          Effect.mapError(
+            (error) =>
+              new ProcessManagerEndpointConfigError({
+                reason: `Child launch paths: ${String(error)}`,
+              }),
+          ),
+        );
+        return buildChildLaunchConfig(
           group.id,
           selected.endpoint.entry,
           selected.endpoint.transport,
-          resolveChildLaunchPaths(),
-        ),
-      );
-    case "ProcessManagerModuleEndpoint":
-      return selected.endpoint.launch === undefined
-        ? Effect.fail(
-            new ProcessManagerEndpointConfigError({
-              reason: `Endpoint '${selected.label}' for group '${group.id}' does not include launch config`,
-            }),
-          )
-        : Effect.succeed(selected.endpoint.launch);
-    default:
-      return Effect.fail(
-        new ProcessManagerEndpointConfigError({
+          paths,
+        );
+      }
+      case "ProcessManagerModuleEndpoint":
+        if (selected.endpoint.launch === undefined) {
+          return yield* new ProcessManagerEndpointConfigError({
+            reason: `Endpoint '${selected.label}' for group '${group.id}' does not include launch config`,
+          });
+        }
+        return selected.endpoint.launch;
+      default:
+        return yield* new ProcessManagerEndpointConfigError({
           reason: `Endpoint '${selected.label}' for group '${group.id}' is not a spawn endpoint`,
-        }),
-      );
-  }
-};
+        });
+    }
+  });
 
 const runStateFileFor = (
   group: ConfigSource,
@@ -2407,6 +2401,11 @@ export const Endpoint = Object.assign(makeEndpointFactory, {
 export const ProcessManager = {
   cli: makeCli,
   connect,
+  ChildLaunch: {
+    layerConfig: childLaunchLayerConfig,
+    layerFromEnv: childLaunchLayerFromEnv,
+    defaultPaths: defaultChildLaunchPaths,
+  },
   ConnectionRegistry: {
     layer: makeConnectionRegistryLayer,
     layerConfig: makeConnectionRegistryConfigLayer,
