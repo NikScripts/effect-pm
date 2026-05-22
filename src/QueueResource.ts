@@ -757,6 +757,24 @@ export type QueueResourceConfig<T, E, R> =
   | QueueResourceConfigWithoutItemSchema<T, E, R>
   | QueueResourceConfigWithItemSchema<T, E, R>;
 
+/** @public Config fields for {@link QueueResource.make} / {@link QueueResource.Service} without `effect`. */
+export type QueueResourceOptionsWithoutItemSchema<T, E, R> = Omit<
+  QueueResourceConfigWithoutItemSchema<T, E, R>,
+  "effect"
+>;
+
+/** @public Config fields when `itemSchema` is set (still omit `effect`). */
+export type QueueResourceOptionsWithItemSchema<T, E, R> = Omit<
+  QueueResourceConfigWithItemSchema<T, E, R>,
+  "effect"
+>;
+
+/** @public Worker body passed as the second argument to queue factories. */
+export type QueueWorkerEffect<T, E, EEnqueue = never, R = never> = (
+  item: T,
+  ctx: EffectContext<T, EEnqueue, R>,
+) => Effect.Effect<void, E, R>;
+
 // ============================================================================
 // Errors
 // ============================================================================
@@ -866,6 +884,15 @@ export type InferQueueWorkerRequirements<
 const hasItemSchema = <T, E, R>(
   config: QueueResourceConfig<T, E, R>,
 ): config is QueueResourceConfigWithItemSchema<T, E, R> => config.itemSchema !== undefined;
+
+/** @public Merged config shape for positional queue factories. */
+export type QueueConfigFromEffect<
+  F extends QueueWorkerEffect<any, any, any, any>,
+  O extends
+    | QueueResourceOptionsWithoutItemSchema<any, any, any>
+    | QueueResourceOptionsWithItemSchema<any, any, any>
+    | undefined = undefined,
+> = { readonly effect: F } & (O extends undefined ? {} : O);
 
 /**
  * Runtime callbacks and hooks for {@link makeQueueRuntime}, parameterized by the
@@ -1146,6 +1173,31 @@ const makeQueueEffectWithSchema = <
   );
 };
 
+const makeQueueEffectFromConfig = (
+  config: QueueResourceConfig<any, any, any>,
+): Effect.Effect<
+  QueueHandle<unknown, unknown, unknown, unknown>,
+  never,
+  Scope.Scope | unknown
+> =>
+  hasItemSchema(config)
+    ? makeQueueEffectWithSchema(config)
+    : makeQueueEffectWithoutSchema(config);
+
+function makeQueueEffect<
+  F extends QueueWorkerEffect<any, any, any, any>,
+  O extends
+    | QueueResourceOptionsWithoutItemSchema<any, any, any>
+    | QueueResourceOptionsWithItemSchema<any, any, any>
+    | undefined = undefined,
+>(
+  effect: F,
+  options?: O,
+): Effect.Effect<
+  MakeQueueEffectResult<QueueConfigFromEffect<F, O>>,
+  never,
+  Scope.Scope | InferQueueWorkerRequirements<QueueConfigFromEffect<F, O>>
+>;
 function makeQueueEffect<const C extends QueueResourceConfig<any, any, any>>(
   config: Types.NoInfer<C>,
 ): Effect.Effect<
@@ -1153,18 +1205,18 @@ function makeQueueEffect<const C extends QueueResourceConfig<any, any, any>>(
   never,
   Scope.Scope | InferQueueWorkerRequirements<C>
 >;
-
-/** @internal widening — public typing comes from the `const C` overload above */
 function makeQueueEffect(
-  config: QueueResourceConfig<any, any, any>,
+  effectOrConfig: QueueWorkerEffect<any, any, any, any> | QueueResourceConfig<any, any, any>,
+  options?: QueueResourceOptionsWithoutItemSchema<any, any, any> | QueueResourceOptionsWithItemSchema<any, any, any>,
 ): Effect.Effect<
   QueueHandle<unknown, unknown, unknown, unknown>,
   never,
   Scope.Scope | unknown
 > {
-  return hasItemSchema(config)
-    ? makeQueueEffectWithSchema(config)
-    : makeQueueEffectWithoutSchema(config);
+  if (typeof effectOrConfig === "function") {
+    return makeQueueEffectFromConfig({ ...(options ?? {}), effect: effectOrConfig });
+  }
+  return makeQueueEffectFromConfig(effectOrConfig);
 }
 
 type ValidateForEnqueue<T, EEnqueue> = (
@@ -2034,21 +2086,44 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 // Public API
 // ============================================================================
 
-function queueResourceLayer<Self, T, E, R>(
-  tag: Context.Key<Self, QueueHandle<T, E, never, R>>,
-  config: QueueResourceConfigWithoutItemSchema<T, E, R>,
-): Layer.Layer<Self, never, R>;
-function queueResourceLayer<Self, T, E, R>(
-  tag: Context.Key<Self, QueueHandle<T, E, QueueEnqueueErrors, R>>,
-  config: QueueResourceConfigWithItemSchema<T, E, R>,
-): Layer.Layer<Self, never, R>;
-function queueResourceLayer<Self, T, E, R>(
-  tag: Context.Key<Self, QueueHandle<T, E, never | QueueEnqueueErrors, R>>,
-  config: QueueResourceConfig<T, E, R>,
-): Layer.Layer<Self, never, R> {
-  return hasItemSchema(config)
-    ? Layer.effect(tag)(makeQueueEffectWithSchema(config))
-    : Layer.effect(tag)(makeQueueEffectWithoutSchema(config));
+const queueResourceLayerFromConfig = (
+  tag: Context.Key<any, QueueHandle<any, any, any, any>>,
+  config: QueueResourceConfig<any, any, any>,
+): Layer.Layer<any, never, any> => Layer.effect(tag)(makeQueueEffectFromConfig(config));
+
+function queueResourceLayer<
+  Self,
+  F extends QueueWorkerEffect<any, any, any, any>,
+  O extends
+    | QueueResourceOptionsWithoutItemSchema<any, any, any>
+    | QueueResourceOptionsWithItemSchema<any, any, any>
+    | undefined = undefined,
+>(
+  tag: Context.Key<Self, QueueHandle<any, any, any, any>>,
+  effect: F,
+  options?: O,
+): Layer.Layer<Self, never, InferQueueWorkerRequirements<QueueConfigFromEffect<F, O>>>;
+function queueResourceLayer<Self, const C extends QueueResourceConfig<any, any, any>>(
+  tag: Context.Key<
+    Self,
+    QueueHandle<
+      InferQueueItem<C>,
+      InferQueueWorkerError<C>,
+      InferQueueEnqueueError<C>,
+      InferQueueWorkerRequirements<C>
+    >
+  >,
+  config: C,
+): Layer.Layer<Self, never, InferQueueWorkerRequirements<C>>;
+function queueResourceLayer(
+  tag: Context.Key<any, QueueHandle<any, any, any, any>>,
+  effectOrConfig: QueueWorkerEffect<any, any, any, any> | QueueResourceConfig<any, any, any>,
+  options?: QueueResourceOptionsWithoutItemSchema<any, any, any> | QueueResourceOptionsWithItemSchema<any, any, any>,
+): Layer.Layer<any, never, any> {
+  if (typeof effectOrConfig === "function") {
+    return queueResourceLayerFromConfig(tag, { ...(options ?? {}), effect: effectOrConfig });
+  }
+  return queueResourceLayerFromConfig(tag, effectOrConfig);
 }
 
 const queueResourceServiceWithoutSchema = <
@@ -2119,6 +2194,27 @@ const queueResourceServiceWithSchema = <
   });
 };
 
+const queueResourceServiceFromConfig = <
+  Self,
+  T,
+  E,
+  const Name extends string,
+>(
+  serviceName: Name,
+  config: QueueResourceConfig<T, E, any>,
+): QueueResourceServiceDefinition<Self, Name, any, any, any, any> => {
+  if (hasItemSchema(config)) {
+    return queueResourceServiceWithSchema<Self, Name, QueueResourceConfigWithItemSchema<T, E, any>>(
+      serviceName,
+      config,
+    );
+  }
+  return queueResourceServiceWithoutSchema<Self, Name, QueueResourceConfigWithoutItemSchema<T, E, any>>(
+    serviceName,
+    config,
+  );
+};
+
 /**
  * QueueResource namespace — managed priority queue with workers.
  *
@@ -2134,10 +2230,10 @@ export const QueueResource = {
    *
    * @example
    * ```ts
-   * const queue = yield* QueueResource.make({
-   *   effect: (item) => processItem(item),
-   *   concurrency: 10,
-   * })
+   * const queue = yield* QueueResource.make(
+   *   (item) => processItem(item),
+   *   { concurrency: 10 },
+   * )
    * ```
    */
   make: makeQueueEffect,
@@ -2149,8 +2245,7 @@ export const QueueResource = {
    *
    * @example
    * ```ts
-   * const MyQueueLive = QueueResource.layer(MyQueue, {
-   *   effect: (item) => processItem(item),
+   * const MyQueueLive = QueueResource.layer(MyQueue, (item) => processItem(item), {
    *   concurrency: 5,
    * })
    * ```
@@ -2170,7 +2265,8 @@ export const QueueResource = {
    * ```ts
    * const EmailQueue = QueueResource.Service<typeof EmailQueue, Email, SmtpError>()(
    *   "@app/EmailQueue",
-   *   { effect: (email) => sendEmail(email).pipe(Effect.asVoid), concurrency: 5 },
+   *   (email) => sendEmail(email).pipe(Effect.asVoid),
+   *   { concurrency: 5 },
    * )
    *
    * // Use:
@@ -2179,6 +2275,25 @@ export const QueueResource = {
    * ```
    */
   Service: <Self, T, E = never>() => {
+    function queueResourceService<
+      const Name extends string,
+      F extends QueueWorkerEffect<T, E, any, any>,
+      O extends
+        | QueueResourceOptionsWithoutItemSchema<T, E, any>
+        | QueueResourceOptionsWithItemSchema<T, E, any>
+        | undefined = undefined,
+    >(
+      name: Name,
+      effect: F,
+      options?: O,
+    ): QueueResourceServiceDefinition<
+      Self,
+      Name,
+      InferQueueItem<QueueConfigFromEffect<F, O>>,
+      InferQueueWorkerError<QueueConfigFromEffect<F, O>>,
+      InferQueueEnqueueError<QueueConfigFromEffect<F, O>>,
+      NormalizeQueueRequirements<InferQueueWorkerRequirements<QueueConfigFromEffect<F, O>>>
+    >;
     function queueResourceService<
       const Name extends string,
       R,
@@ -2195,18 +2310,16 @@ export const QueueResource = {
     ): QueueResourceServiceDefinition<Self, Name, T, E, QueueEnqueueErrors, NormalizeQueueRequirements<R>>;
     function queueResourceService<const Name extends string>(
       name: Name,
-      config: QueueResourceConfig<T, E, any>,
+      effectOrConfig: QueueWorkerEffect<T, E, any, any> | QueueResourceConfig<T, E, any>,
+      options?: QueueResourceOptionsWithoutItemSchema<T, E, any> | QueueResourceOptionsWithItemSchema<T, E, any>,
     ): QueueResourceServiceDefinition<Self, Name, any, any, any, any> {
-      if (hasItemSchema(config)) {
-        return queueResourceServiceWithSchema<Self, Name, QueueResourceConfigWithItemSchema<T, E, any>>(
-          name,
-          config,
-        );
+      if (typeof effectOrConfig === "function") {
+        return queueResourceServiceFromConfig<Self, T, E, Name>(name, {
+          ...(options ?? {}),
+          effect: effectOrConfig,
+        });
       }
-      return queueResourceServiceWithoutSchema<Self, Name, QueueResourceConfigWithoutItemSchema<T, E, any>>(
-        name,
-        config,
-      );
+      return queueResourceServiceFromConfig<Self, T, E, Name>(name, effectOrConfig);
     }
     return queueResourceService;
   },

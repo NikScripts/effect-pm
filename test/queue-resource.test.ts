@@ -461,6 +461,18 @@ describe("QueueResource.layer + Tag", () => {
       expect(c).toBe(1);
     }).pipe(Effect.scoped),
   );
+
+  it.live("positional make matches config object form", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make((_n: number) => Effect.void, {
+        name: "test-positional-make",
+        ...fastConfig,
+      });
+      yield* queue.add([7]);
+      yield* waitUntilCompleted(queue, 1);
+      expect(yield* queue.completed).toBe(1);
+    }).pipe(Effect.scoped),
+  );
 });
 
 describe("QueueResource.make — hooks", () => {
