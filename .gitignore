@@ -45,6 +45,7 @@ coverage/
 # Misc
 .turbo
 .cache/
+.effect-pm/
 
 # OS
 Thumbs.db

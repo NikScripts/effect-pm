@@ -23,6 +23,7 @@ import type {
   ProcessGroupServiceDefinition,
   TypedProcessGroup,
 } from "./ProcessGroup";
+import type { ProcessManagerGroupConfigItem } from "./ProcessManager";
 import type { ProcessStore } from "./ProcessStore";
 import {
   ControlRouter,
@@ -170,8 +171,9 @@ const controlServiceLayerFromGroup = <
   Self,
   const Id extends string,
   const Entries extends readonly ProcessGroupEntry[],
+  const ConfigItems extends readonly ProcessManagerGroupConfigItem[] = readonly [],
 >(
-  group: ProcessGroupServiceDefinition<Self, Id, Entries>,
+  group: ProcessGroupServiceDefinition<Self, Id, Entries, ConfigItems>,
 ): Layer.Layer<
   never,
   ControlTransportError,
@@ -186,8 +188,9 @@ const controlServiceHttpLayer = <
   Self,
   const Id extends string,
   const Entries extends readonly ProcessGroupEntry[],
+  const ConfigItems extends readonly ProcessManagerGroupConfigItem[] = readonly [],
 >(
-  group: ProcessGroupServiceDefinition<Self, Id, Entries>,
+  group: ProcessGroupServiceDefinition<Self, Id, Entries, ConfigItems>,
   options: { readonly port?: number } = {},
 ): Layer.Layer<
   never,

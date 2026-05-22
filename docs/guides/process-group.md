@@ -118,7 +118,7 @@ For **`autoStart: false`** queues, **`startAll`** calls **`queue.start`** before
 
 ---
 
-## Typed controls (no string names)
+## Typed controls
 
 ### `group.process(SyncInvoices)`
 
@@ -152,17 +152,6 @@ Remote **`ProcessManager`** does **not** enqueue over the network — enqueue in
 ## `ProcessGroup.remoteLayer(GroupService, Endpoint)`
 
 Same **group service key** in the consumer app; controls go to a remote **`ControlService`** URL from **`ProcessManager.Endpoint`**. Use for split CLI/app processes, not for in-process **`yield* BillingGroup`**.
-
----
-
-## Do not use in new code
-
-| Removed / legacy | Use instead |
-| --- | --- |
-| `ProcessGroup.make({ queues, processes })` | `make(id, […] as const)` or **`Service`** |
-| `group.start("string-id")` | `group.start(SyncInvoices)` |
-| `group.getQueue("…")` | `group.queue(EmailQueue)` or `yield* EmailQueue` |
-| Forking `process.effect` yourself | **`group.start`** (future **`Process.spawn`**) |
 
 ---
 

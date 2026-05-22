@@ -35,14 +35,7 @@ class EmailQueue extends QueueResource.Service<EmailQueue, Email, SmtpError>()(
 ) {}
 ```
 
-Config-object form (same runtime):
-
-```typescript
-class EmailQueueLegacy extends QueueResource.Service<EmailQueueLegacy, Email, SmtpError>()(
-  "@app/EmailQueue",
-  { effect: (email) => sendEmail(email).pipe(Effect.asVoid), concurrency: 10 },
-) {}
-```
+For many hooks or **`itemSchema`**, use the config-object overload: `(id, { effect, … })` — same runtime as positional args.
 
 **Benefits**
 
@@ -286,4 +279,4 @@ onEvent: (event, queue) =>
   ),
 ```
 
-**Why consider it:** exhaustive handling, one place for metrics/logging, Effect-idiomatic pattern matching. **Why not rush it:** existing per-hook config stays clear for small queues; migration would need a deprecation path for the current `on*` fields. Declarative **`retry: { times }` / `Schedule`** could land alongside or before `onEvent`.
+**Why consider it:** exhaustive handling, one place for metrics/logging, Effect-idiomatic pattern matching. **Why not rush it:** existing per-hook config stays clear for small queues. Declarative **`retry: { times }` / `Schedule`** could land alongside or before `onEvent`.

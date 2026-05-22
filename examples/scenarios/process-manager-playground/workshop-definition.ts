@@ -1,0 +1,132 @@
+/**
+ * @module examples/scenarios/process-manager-playground/workshop-definition
+ *
+ * Workshop group contract: feeder process + job queue. Run via `pnpm run demo:pm -- group-start workshop-group`.
+ */
+
+import { Cause, Clock, Data, Duration, Effect, Exit, Layer } from "effect";
+import {
+  ControlService,
+  Endpoint,
+  Polling,
+  Process,
+  ProcessGroup,
+  ProcessManager,
+  type ProcessManagerGroupConfigItem,
+  ProcessSchedule,
+  ProcessStore,
+  QueueResource,
+} from "../../../src";
+import { utcDateFromMillis } from "../../../src/utcDate";
+import { moduleLaunch } from "./launch";
+import { workshopBaseUrl, workshopPort } from "./ports";
+
+export class WorkshopJobError extends Data.TaggedError("WorkshopJobError")<{
+  readonly jobId: string;
+  readonly reason: string;
+}> {}
+
+export interface WorkshopJob {
+  readonly id: string;
+  readonly label: string;
+}
+
+/** Processes string jobs; ids ending in `7` fail once so retries show up in logs. */
+export class JobQueue extends QueueResource.Service<
+  JobQueue,
+  WorkshopJob,
+  WorkshopJobError
+>()("@demo/playground/Workshop/JobQueue", {
+  concurrency: 2,
+  capacity: 200,
+  retries: 1,
+  effect: (job, ctx) =>
+    Effect.gen(function* () {
+      yield* Effect.logInfo(
+        `[JobQueue] attempt ${String(ctx.attempts)} · ${job.id} · ${job.label}`,
+      );
+      yield* Effect.sleep(Duration.millis(400));
+      if (job.id.endsWith("7")) {
+        return yield* new WorkshopJobError({
+          jobId: job.id,
+          reason: "simulated flaky worker (id ends with 7)",
+        });
+      }
+      yield* Effect.logInfo(`[JobQueue] done ${job.id}`);
+    }),
+  onExit: ({ entry, exit }) =>
+    Exit.match(exit, {
+      onFailure: (cause) =>
+        Effect.logWarning(
+          `[JobQueue] failed ${entry.item.id}: ${Cause.pretty(cause)}`,
+        ),
+      onSuccess: () => Effect.void,
+    }),
+}) {}
+
+/** Every ~6s while armed, enqueues a batch of workshop jobs (start via CLI). */
+export class Feeder extends Process.Service<Feeder>()(
+  "@demo/playground/Workshop/Feeder",
+  Effect.gen(function* () {
+    const queue = yield* JobQueue;
+    const now = yield* Clock.currentTimeMillis;
+    const batch = [0, 1, 2].map((n) => ({
+      id: `job-${now + n}`,
+      label: `batch@${String(now)}#${String(n)}`,
+    }));
+    yield* Effect.logInfo(`[Feeder] enqueue ${String(batch.length)} jobs`);
+    yield* queue.add(batch);
+  }),
+  Polling.spaced(Duration.seconds(6)),
+  ProcessSchedule.inMemory([
+    ProcessSchedule.at(
+      "@demo/playground/Workshop/Feeder",
+      utcDateFromMillis(0),
+    ),
+  ]),
+) {}
+
+const workshopGroupEndpoints = (): readonly ProcessManagerGroupConfigItem[] => [
+  Endpoint.local(
+    Endpoint.module(
+      () => import("./workshop-runtime.js"),
+      (module) => module.WorkshopRuntime,
+      {
+        launch: moduleLaunch(
+          "examples/scenarios/process-manager-playground/workshop-runtime.ts",
+          workshopBaseUrl,
+        ),
+      },
+    ),
+  ).default,
+  ProcessManager.Endpoint.production(
+    Endpoint.http({
+      transport: ProcessManager.Transport.http({ baseUrl: workshopBaseUrl }),
+    }),
+  ),
+];
+
+export class WorkshopGroup extends ProcessGroup.Service<WorkshopGroup>()(
+  "@demo/playground/WorkshopGroup",
+  [Feeder, JobQueue] as const,
+  workshopGroupEndpoints(),
+) {}
+
+export const workshopEnvLayer = Layer.mergeAll(
+  WorkshopGroup.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        Feeder.layer.pipe(Layer.provide(JobQueue.layer)),
+        JobQueue.layer,
+        ProcessStore.layer,
+      ),
+    ),
+  ),
+  JobQueue.layer,
+  ProcessStore.layer,
+);
+
+export const WorkshopRuntime = ProcessManager.LocalRuntime(WorkshopGroup, {
+  layer: workshopEnvLayer,
+  control: ControlService.layerHttp(WorkshopGroup, { port: workshopPort }),
+});

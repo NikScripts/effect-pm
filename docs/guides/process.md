@@ -14,7 +14,7 @@ The process **id** is always the first argument. After that you either pass the 
 
 ### `Process.make(id, effect, …layers?)`
 
-Returns a **`Process<R>`** handle: `name`, `effect` (driver), `runImmediately()`, `getStatus()`. Use the handle as a **`ProcessGroup`** entry (legacy `processes: [proc]` array) or pass the same shape via config overload.
+Returns a **`Process<R>`** handle: `name`, `effect` (driver), `runImmediately()`, `getStatus()`. Prefer **`Process.Service`** for **`ProcessGroup`** entries; `make` is for one-off definitions and tests.
 
 ```typescript
 import { Duration, Effect } from "effect";
@@ -103,7 +103,7 @@ class GameSync extends Process.Service<GameSync>()("@app/GameSync", {
 
 ## Registering on a group
 
-Typed groups take **service classes** (or legacy `Process` handles):
+Typed groups take **process and queue service classes**:
 
 ```typescript
 import { ProcessGroup } from "@nikscripts/effect-pm";
@@ -139,9 +139,9 @@ Positional layers must be **effect-pm polling or schedule presets** (registered 
 | Goal | Prefer |
 | --- | --- |
 | Typed `ProcessGroup` entry | `Process.Service` |
-| Legacy group `processes: [proc]` array | `Process.make` |
-| Schedule initializer or `scheduleLayer` | Config-object `make` or `Service` |
-| Production default | Inline polling + schedule on `Service` / `make` |
+| Schedule initializer or `scheduleLayer` | `Process.make(id, config)` or `Service` config overload |
+| One-off definition or test | `Process.make(id, effect, …)` |
+| Production default | `Process.Service` with inline polling + schedule |
 
 ---
 

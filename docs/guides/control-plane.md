@@ -2,7 +2,7 @@
 
 **ControlService** exposes a **localhost-only** HTTP server for one **typed `ProcessGroup`**. It is the server side of **`ProcessManager.connect`** and of operator tools.
 
-**Default ops path:** [`process-manager.md`](./process-manager.md) (`ProcessManager.cli`, `group-start`, endpoint config). This guide is the **server contract** and a **legacy single-group CLI**.
+**Operators:** [`process-manager.md`](./process-manager.md) (`ProcessManager.cli`, `group-start`, endpoint config). This guide documents the **HTTP server** those clients call.
 
 ---
 
@@ -10,10 +10,10 @@
 
 | Client | Transport |
 | --- | --- |
-| **`ProcessManager`** (connect, CLI mutations) | **`POST /control`** — JSON **protocol envelope** (`ControlProtocolRequest`) |
-| **`createCli` / `runCli`** | **REST** paths below (`GET` / `POST` per resource) |
+| **`ProcessManager`** (`connect`, CLI) | **`POST /control`** — JSON **protocol envelope** (`ControlProtocolRequest`) |
+| Direct HTTP / tooling | **REST** paths below (`GET` / `POST` per resource) |
 
-Both hit the same router; REST routes are translated to the same protocol handlers internally.
+REST routes are translated to the same protocol handlers as **`/control`**.
 
 ---
 
@@ -44,7 +44,7 @@ Router + transport only — you supply **`ControlTransportHttp.serverLayer`** yo
 
 ---
 
-## REST routes (what `createCli` uses)
+## REST routes
 
 Encode ids in paths: **`encodeURIComponent(id)`** for ids like `@app/Billing/SyncInvoices`.
 
@@ -83,24 +83,7 @@ Responses use **`ControlResponse`**: `{ success, type?, data?, error? }`. Routes
 
 ---
 
-## Legacy dev CLI: `createCli` / `runCli`
-
-Re-exported from **`ControlService`** and the package root. One group, one port, no endpoint catalog:
-
-```typescript
-import { createCli } from "@nikscripts/effect-pm";
-
-const cli = createCli({ name: "billing-ctl", version: "1.0.0", port: 3001 });
-// Effect.provide(NodeHttpClient.layer) + cli(process.argv)
-```
-
-Commands: `ls`, `status`, `start`, `stop`, `restart`, `now`, `pause`, `resume`, `clear`, `queues`.
-
-Use when you already have a server on a known port and do not need **`groups`**, **`verify`**, or **`group-start`**. For new projects, prefer **`ProcessManager.cli`**.
-
----
-
-## Typical layouts (current)
+## Typical layouts
 
 ### A — Module launch (recommended for local ops)
 

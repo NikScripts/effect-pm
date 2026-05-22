@@ -26,7 +26,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 
 | Track | Read / run in this order |
 |-------|--------------------------|
-| **Start here** | [`scenarios/full-process-group-with-queues-and-control-cli.ts`](./scenarios/full-process-group-with-queues-and-control-cli.ts) → [`forms/process-group/`](./forms/process-group/) → [`cli.ts`](./cli.ts) |
+| **Start here** | [`scenarios/process-manager-playground/`](./scenarios/process-manager-playground/) (`pnpm run demo:pm`) → [`scenarios/full-process-group-with-queues-and-control-cli.ts`](./scenarios/full-process-group-with-queues-and-control-cli.ts) → [`forms/process-group/`](./forms/process-group/) |
 | **Queues** | [`forms/queue/queue-resource-priority-retry.ts`](./forms/queue/queue-resource-priority-retry.ts) → main scenario |
 | **Schedule controls** | `pnpm run example:schedule-control-basics` → `example:schedule-control-surfaces` → [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) |
 | **Process runtime** | `pnpm run example:process-supervisor-patterns` → [`scenarios/game-window-polling-with-process-group.ts`](./scenarios/game-window-polling-with-process-group.ts) |
@@ -108,7 +108,8 @@ Storage options:
 
 | File | Teaches |
 |------|---------|
-| [`scenarios/full-process-group-with-queues-and-control-cli.ts`](./scenarios/full-process-group-with-queues-and-control-cli.ts) | End-to-end ProcessGroup + queues + `ControlService.make` + `awaitShutdown` + CLI |
+| [`scenarios/process-manager-playground/`](./scenarios/process-manager-playground/) | **ProcessManager.cli** — two groups, `group-start` / `group-stop`, processes + queues |
+| [`scenarios/full-process-group-with-queues-and-control-cli.ts`](./scenarios/full-process-group-with-queues-and-control-cli.ts) | End-to-end ProcessGroup + queues + `ControlService.make` + `awaitShutdown` + legacy `pnpm run cli` |
 | [`scenarios/game-window-polling-with-process-group.ts`](./scenarios/game-window-polling-with-process-group.ts) | `ProcessGroup.start` + schedule windows + `TestClock` |
 | [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) | DB-to-runtime schedule sync pattern |
 | [`scenarios/nwslsoccer/`](./scenarios/nwslsoccer/) | Real HttpApi client against NWSL SDP (optional local tree) |
@@ -119,7 +120,8 @@ Storage options:
 
 | Script | What it runs |
 |--------|----------------|
-| `pnpm run example` | Main scenario (`full-process-group-with-queues-and-control-cli`) |
+| `pnpm run demo:pm -- …` | ProcessManager playground CLI (`groups`, `group-start`, `start`, queue controls) |
+| `pnpm run example` | In-process scenario (`full-process-group-with-queues-and-control-cli`) + legacy `pnpm run cli` |
 | `pnpm run example:typed-process-group` | ProcessGroup + ProcessManager forms |
 | `pnpm run example:queue-resource` | Queue form |
 | `pnpm run cli …` | CLI against the demo control port |

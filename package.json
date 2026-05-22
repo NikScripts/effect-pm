@@ -136,6 +136,7 @@
     "example:http-api-resource": "tsx examples/forms/resource/http-api-resource-tag-layer.ts",
     "example:nwsl-http-api-resource": "node scripts/nwsl-local.mjs example",
     "cli": "tsx examples/cli.ts",
+    "demo:pm": "tsx examples/scenarios/process-manager-playground/cli.ts",
     "example:http-api-resource-layer-effect": "tsx examples/forms/resource/http-api-resource-layer-effect.ts",
     "example:form:schedule-at": "tsx examples/forms/schedule/schedule-at.ts",
     "example:form:schedule-window": "tsx examples/forms/schedule/schedule-window.ts",

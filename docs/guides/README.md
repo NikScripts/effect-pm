@@ -1,10 +1,10 @@
 # Guides (current API)
 
-These guides describe the **runtime-foundation** stack on `main`: id-first **`Process`**, positional **`QueueResource`**, typed **`ProcessGroup.Service`**, **`ProcessManager.cli`** + **endpoint config**, and **`ControlService.layerHttp`**.
+How to wire the runtime on `main`: id-first **`Process`**, positional **`QueueResource`**, typed **`ProcessGroup.Service`**, **`ProcessManager.cli`** + endpoint config, and **`ControlService.layerHttp`**.
 
-They intentionally **do not** document removed or legacy paths (`Process.make({ name })`, `providePolling`, `{ queues, processes }` group shape) except where called out as “do not use.”
+**Upgrading from commit `26b262b`?** See [MIGRATION-26b262b.md](./MIGRATION-26b262b.md).
 
-Older inventory-style dumps live in [`docs/CODEBASE-INVENTORY.md`](../CODEBASE-INVENTORY.md); treat these guides as the source of truth for how to wire apps today.
+Detail tables also live in [`docs/PROCESS-API.md`](../PROCESS-API.md), [`docs/RESOURCE-API.md`](../RESOURCE-API.md), and [`docs/CODEBASE-INVENTORY.md`](../CODEBASE-INVENTORY.md).
 
 ---
 
@@ -23,7 +23,7 @@ Older inventory-style dumps live in [`docs/CODEBASE-INVENTORY.md`](../CODEBASE-I
 | --- | --- |
 | [process-group.md](./process-group.md) | **`ProcessGroup.Service`**, contract, typed `start` / `queue()`, `LocalRuntime` |
 | [process-manager.md](./process-manager.md) | **`ProcessManager.cli`**, endpoints, `group-start`, `connect`, `remoteLayer` |
-| [control-plane.md](./control-plane.md) | **`ControlService`** HTTP (REST + `/control`), legacy `createCli` |
+| [control-plane.md](./control-plane.md) | **`ControlService`** HTTP (REST + `/control`) |
 
 ---
 

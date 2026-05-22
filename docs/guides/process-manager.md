@@ -118,7 +118,7 @@ const manager = yield* ProcessManager.connect(BillingGroup, {
 | Inline URL | `connect(Group, { baseUrl })` |
 | Raw contract | `connect({ baseUrl, contract })` |
 
-HTTP client uses the **control protocol envelope** (`POST /control`). The server also exposes **REST** routes (see [`control-plane.md`](./control-plane.md)); **`createCli`** calls REST directly.
+HTTP client uses the **control protocol envelope** (`POST /control`). The server also exposes **REST** routes for the same operations (see [`control-plane.md`](./control-plane.md)).
 
 ---
 
@@ -154,15 +154,6 @@ Same remote limits: **no enqueue**, **no `awaitShutdown`**.
 `ProcessManagerConnectionError` · `ProcessManagerRequestError` · `ProcessManagerEndpointConfigError` · `UnsupportedRemoteControlError` · `ProcessGroupRemoteControlError`
 
 Target resolution helpers (`normalizeProcessManagerTarget`, `resolveProcessManagerTarget`) live in **`ProcessManagerTargetResolver`** (not always re-exported from the main barrel).
-
----
-
-## vs `createCli`
-
-| Tool | When |
-| --- | --- |
-| **`ProcessManager.cli`** | Multi-group, endpoints, module launch, contract verify — **default for ops** |
-| **`ControlService.createCli` / `runCli`** | Single fixed port, quick dev against one already-running server — see [`control-plane.md`](./control-plane.md) |
 
 ---
 
