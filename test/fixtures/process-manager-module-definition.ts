@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { Process, ProcessGroup, ProcessManager, QueueResource } from "../../src";
+import { Process, ProcessGroup, QueueResource } from "../../src";
 
 interface ModuleEmail {
   readonly to: string;
@@ -24,6 +24,3 @@ export class ModuleEndpointGroup extends ProcessGroup.Service<ModuleEndpointGrou
   [ModuleEndpointProcess, ModuleEndpointQueue] as const,
 ) {}
 
-export const ModuleEndpointRuntime = ProcessManager.groupLocalRuntime(ModuleEndpointGroup, {
-  controlBaseUrl: "http://127.0.0.1:32146",
-});

@@ -1,7 +1,57 @@
 import { Config, Context, Effect, Layer } from "effect";
 import type { Duration } from "effect";
 import { createRequire } from "node:module";
+
+const pathDirname = (filePath: string): string => {
+  const normalized = filePath.replace(/\\/g, "/");
+  const index = normalized.lastIndexOf("/");
+  if (index <= 0) {
+    return normalized.startsWith("/") ? "/" : ".";
+  }
+  return normalized.slice(0, index);
+};
+
+const pathJoin = (...segments: ReadonlyArray<string>): string =>
+  segments
+    .filter((segment) => segment.length > 0)
+    .join("/")
+    .replace(/\/+/g, "/");
+
 import type { ProcessManagerTransport } from "./processManagerTransport.js";
+
+
+const readPackageName = (packageJsonPath: string): string | undefined => {
+  try {
+    const req = createRequire(packageJsonPath);
+    const pkg = req(packageJsonPath) as { readonly name?: string };
+    return pkg.name;
+  } catch {
+    return undefined;
+  }
+};
+
+/** @internal */
+export const findEffectPmPackageRoot = (startDirectory: string = process.cwd()): string => {
+  let current = startDirectory;
+  for (;;) {
+    const packageJsonPath = pathJoin(current, "package.json");
+    try {
+      const req = createRequire(packageJsonPath);
+      req.resolve("./package.json");
+      if (readPackageName(packageJsonPath) === "@nikscripts/effect-pm") {
+        return current;
+      }
+    } catch {
+      // not a package root
+    }
+    const parent = pathDirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+  return startDirectory;
+};
 
 /** @internal */
 export const resolveEntryUrl = (entry: string | ImportMeta): string =>
@@ -62,11 +112,8 @@ export class ProcessManagerChildLaunch extends Context.Service<
   ProcessManagerChildLaunchService
 >()("@nikscripts/effect-pm/processManagerChildLaunch") {}
 
-const requireFromPackageRoot = (): NodeRequire =>
-  createRequire(`${process.cwd()}/package.json`);
-
 const resolveDefaultScriptPath = (): string => {
-  const req = requireFromPackageRoot();
+  const req = createRequire(pathJoin(findEffectPmPackageRoot(), "package.json"));
   try {
     return req.resolve("./dist/bin/effect-pm-group-child.js");
   } catch {
@@ -93,7 +140,11 @@ export const endpointHttpFromTransport = (
   transport,
 });
 
-/** @internal */
+/**
+ * Resolved argv and control transport used when spawning a group child process.
+ *
+ * @public
+ */
 export interface ProcessManagerChildLaunchConfig {
   readonly command: string;
   readonly args: ReadonlyArray<string>;

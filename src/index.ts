@@ -210,9 +210,9 @@ export {
   ProcessManagerEndpointConfigError,
   ProcessManagerRequestError,
   Transport,
-  LocalRuntime,
 } from "./ProcessManager";
 export { httpEndpoint } from "./processManagerTransport.js";
+export { groupLocalRuntime } from "./processManagerGroupRuntime.js";
 export type {
   ProcessManagerEndpointConfigItem,
   ProcessManagerConnectionConfigMap,
@@ -232,10 +232,8 @@ export type {
   ProcessManagerGroupConfig,
   ProcessManagerHttpEndpointDefinition,
   ProcessManagerHttpTransport,
-  ProcessManagerLocalRuntimeDefinition,
-  ProcessManagerModuleEndpointLaunchConfig,
-  ProcessManagerModuleEndpointDefinition,
   ProcessManagerChildEndpointDefinition,
+  ProcessManagerChildLaunchConfig,
 } from "./ProcessManager";
 
 // Process Store

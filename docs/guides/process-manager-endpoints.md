@@ -23,7 +23,7 @@ export class WorkshopGroup extends ProcessGroup.Service<WorkshopGroup>()(
 - **`Transport.http`** — protocol descriptor (`port`, `host + port`, or full `baseUrl`).
 - **`Endpoint.local(transport, entry)`** — child process launcher via packaged `effect-pm-group-child` (no separate `*-runtime.ts` required).
 - **`Endpoint.production(transport)`** — remote control plane at `transport.baseUrl`.
-- **`Endpoint.http({ transport })`** — builds an HTTP endpoint definition (used in launch `control` metadata and legacy module runners).
+- **`Endpoint.http({ transport })`** — builds an HTTP endpoint definition for remote-only endpoints.
 
 ## Child launch configuration
 
@@ -66,7 +66,11 @@ Child entry binary: **`effect-pm-group-child`** (also `pnpm exec effect-pm-group
 | `groupChild.ts` | Child argv CLI + dynamic import |
 | `ProcessManager.ts` | Remote client, endpoint normalization, operator CLI |
 
-## Legacy escape hatches
+## Injectable remote client
 
-- **`Endpoint.runner` / `Endpoint.module`** — typed `LocalRuntime` module descriptors (split `*-runtime.ts` files). Prefer **`Endpoint.local`** for new groups.
 - **`Endpoint` injectable factory** — `ProcessManager.Endpoint<MyTag>()(Group, { baseUrl })` for app-injected remote clients.
+
+
+## Log files
+
+`group-start` records paths like `.effect-pm/logs/<group>.out.log` and `.err.log` in run state. The operator drains the child process **stdout** and **stderr** streams into those files (append mode) via background fibers, so the paths reflect real process output instead of empty placeholder files.

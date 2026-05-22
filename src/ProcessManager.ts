@@ -9,7 +9,7 @@
  * @module ProcessManager
  */
 
-import { Clock, Config, ConfigProvider, Console, Context, Data, DateTime, Duration, Effect, Exit, FileSystem, Layer, Option, Path, Schema, Scope } from "effect";
+import { Clock, Config, ConfigProvider, Console, Context, Data, DateTime, Duration, Effect, Exit, FileSystem, Layer, Option, Path, Schema, Scope, Stream } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import type { HttpClient } from "effect/unstable/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
@@ -50,6 +50,7 @@ import {
 } from "./processManagerTransport.js";
 
 export type { ProcessManagerHttpTransport, ProcessManagerTransport } from "./processManagerTransport.js";
+export type { ProcessManagerChildLaunchConfig } from "./processManagerChildLaunch.js";
 export { Transport } from "./processManagerTransport.js";
 import { groupLocalRuntime } from "./processManagerGroupRuntime.js";
 export { groupLocalRuntime };
@@ -125,63 +126,6 @@ export interface ProcessManagerChildEndpointDefinition {
 }
 
 /**
- * Type-preserving descriptor for a local runtime module. It records the group,
- * application layer, and control layer without running them in the CLI process.
- *
- * @public
- */
-export interface ProcessManagerLocalRuntimeDefinition<
-  Group extends ContractSource<AnyProcessGroupContract>,
-  RuntimeLayer,
-  ControlLayer,
-> {
-  readonly _tag: "ProcessManagerLocalRuntime";
-  readonly group: Group;
-  readonly layer: RuntimeLayer;
-  readonly control: ControlLayer;
-}
-
-// Existential runtime descriptor: once a runtime is loaded from a dynamic module,
-// the concrete layer environment/error types are intentionally hidden.
-type AnyProcessManagerLocalRuntimeDefinition = ProcessManagerLocalRuntimeDefinition<
-  any,
-  any,
-  any
->;
-
-const isProcessManagerLocalRuntimeDefinition = (
-  value: unknown,
-): value is AnyProcessManagerLocalRuntimeDefinition =>
-  typeof value === "object" &&
-  value !== null &&
-  "_tag" in value &&
-  value._tag === "ProcessManagerLocalRuntime";
-
-/**
- * Create a type-preserving descriptor for a local group runtime. The descriptor
- * is intended for child-runtime launchers; constructing it does not run the
- * group.
- *
- * @public
- */
-export const LocalRuntime = <
-  const Group extends ContractSource<AnyProcessGroupContract>,
-  RuntimeLayer,
-  ControlLayer,
->(
-  group: Group,
-  config: {
-    readonly layer: RuntimeLayer;
-    readonly control: ControlLayer;
-  },
-): ProcessManagerLocalRuntimeDefinition<Group, RuntimeLayer, ControlLayer> => ({
-  _tag: "ProcessManagerLocalRuntime",
-  group,
-  layer: config.layer,
-  control: config.control,
-});
-
-/**
  * Error returned when endpoint configuration cannot be interpreted safely.
  *
  * @public
@@ -205,41 +149,13 @@ export interface ProcessManagerHttpEndpointDefinition {
 }
 
 /**
- * Module endpoint definition. The loader is a real dynamic import thunk so
- * TypeScript can validate module paths and selected exports in TS config files.
- *
- * @public
- */
-export interface ProcessManagerModuleEndpointDefinition<
-  Runtime extends AnyProcessManagerLocalRuntimeDefinition,
-> {
-  readonly _tag: "ProcessManagerModuleEndpoint";
-  readonly load: () => Promise<unknown>;
-  readonly launch?: ProcessManagerModuleEndpointLaunchConfig;
-  readonly select: (
-    module: unknown,
-  ) => Effect.Effect<Runtime, ProcessManagerEndpointConfigError>;
-}
-
-/**
- * Out-of-process launcher config for a module endpoint.
- *
- * @public
- */
-export type ProcessManagerModuleEndpointLaunchConfig = ProcessManagerChildLaunchConfig;
-
-
-
-
-/**
  * Endpoint definitions that can appear in a group config item array.
  *
  * @public
  */
 export type ProcessManagerEndpointDefinition =
   | ProcessManagerHttpEndpointDefinition
-  | ProcessManagerChildEndpointDefinition
-  | ProcessManagerModuleEndpointDefinition<AnyProcessManagerLocalRuntimeDefinition>;
+  | ProcessManagerChildEndpointDefinition;
 
 /**
  * Labeled endpoint config item contributed by a ProcessGroup config array.
@@ -465,42 +381,32 @@ const safePathSegment = (input: string): string =>
 const spawnEndpointLaunchConfig = (
   group: ConfigSource,
   selected: ProcessManagerEndpointSelection,
-): Effect.Effect<ProcessManagerModuleEndpointLaunchConfig, ProcessManagerEndpointConfigError> =>
+): Effect.Effect<ProcessManagerChildLaunchConfig, ProcessManagerEndpointConfigError> =>
   Effect.gen(function* () {
-    switch (selected.endpoint._tag) {
-      case "ProcessManagerChildEndpoint": {
-        const paths = yield* resolveChildLaunchPaths().pipe(
-          Effect.mapError(
-            (error) =>
-              new ProcessManagerEndpointConfigError({
-                reason: `Child launch paths: ${String(error)}`,
-              }),
-          ),
-        );
-        return buildChildLaunchConfig(
-          group.id,
-          selected.endpoint.entry,
-          selected.endpoint.transport,
-          paths,
-        );
-      }
-      case "ProcessManagerModuleEndpoint":
-        if (selected.endpoint.launch === undefined) {
-          return yield* new ProcessManagerEndpointConfigError({
-            reason: `Endpoint '${selected.label}' for group '${group.id}' does not include launch config`,
-          });
-        }
-        return selected.endpoint.launch;
-      default:
-        return yield* new ProcessManagerEndpointConfigError({
-          reason: `Endpoint '${selected.label}' for group '${group.id}' is not a spawn endpoint`,
-        });
+    if (selected.endpoint._tag !== "ProcessManagerChildEndpoint") {
+      return yield* new ProcessManagerEndpointConfigError({
+        reason: `Endpoint '${selected.label}' for group '${group.id}' is not a local child endpoint`,
+      });
     }
+    const paths = yield* resolveChildLaunchPaths().pipe(
+      Effect.mapError(
+        (error) =>
+          new ProcessManagerEndpointConfigError({
+            reason: `Child launch paths: ${String(error)}`,
+          }),
+      ),
+    );
+    return buildChildLaunchConfig(
+      group.id,
+      selected.endpoint.entry,
+      selected.endpoint.transport,
+      paths,
+    );
   });
 
 const runStateFileFor = (
   group: ConfigSource,
-  launch: ProcessManagerModuleEndpointLaunchConfig,
+  launch: ProcessManagerChildLaunchConfig,
 ): Effect.Effect<string, never, Path.Path> =>
   Effect.map(Path.Path, (path) => {
     const runDirectory = launch.runDirectory ?? path.join(".effect-pm", "run", "groups");
@@ -611,7 +517,7 @@ const isPidRunning = (pid: number): Effect.Effect<boolean> =>
   );
 
 const launchDetachedProcess = (
-  launch: ProcessManagerModuleEndpointLaunchConfig,
+  launch: ProcessManagerChildLaunchConfig,
   stdoutPath: string,
   stderrPath: string,
 ): Effect.Effect<
@@ -621,52 +527,56 @@ const launchDetachedProcess = (
 > =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    yield* fs.writeFileString(stdoutPath, "", { flag: "a" }).pipe(
-      Effect.mapError(
-        (error) =>
-          new ProcessManagerEndpointConfigError({
-            reason: `Unable to create stdout log file '${stdoutPath}': ${String(error)}`,
-          }),
-      ),
-    );
-    yield* fs.writeFileString(stderrPath, "", { flag: "a" }).pipe(
-      Effect.mapError(
-        (error) =>
-          new ProcessManagerEndpointConfigError({
-            reason: `Unable to create stderr log file '${stderrPath}': ${String(error)}`,
-          }),
-      ),
-    );
-    const handle = yield* ChildProcess.make(launch.command, launch.args, {
+    const stdoutSink = fs.sink(stdoutPath, { flag: "a" });
+    const stderrSink = fs.sink(stderrPath, { flag: "a" });
+    const handle = yield* ChildProcess.make(launch.command, [...launch.args], {
       cwd: launch.cwd,
       detached: true,
       env: launch.env,
-      stderr: "ignore",
+      stderr: "pipe",
       stdin: "ignore",
-      stdout: "ignore",
+      stdout: "pipe",
     }).pipe(
       Effect.mapError(
         (error) =>
           new ProcessManagerEndpointConfigError({
-            reason: `Unable to launch ProcessManager module endpoint: ${String(error)}`,
+            reason: `Unable to launch ProcessManager child endpoint: ${String(error)}`,
           }),
       ),
     );
-    const _reref = yield* handle.unref.pipe(
+    const mapDrainError = (stream: "stdout" | "stderr") => (error: unknown) =>
+      new ProcessManagerEndpointConfigError({
+        reason: `Unable to drain child ${stream} to log file: ${String(error)}`,
+      });
+    yield* Effect.forkChild(
+      Stream.run(handle.stdout, stdoutSink).pipe(
+        Effect.mapError(mapDrainError("stdout")),
+        Effect.ignore,
+      ),
+      { startImmediately: true },
+    );
+    yield* Effect.forkChild(
+      Stream.run(handle.stderr, stderrSink).pipe(
+        Effect.mapError(mapDrainError("stderr")),
+        Effect.ignore,
+      ),
+      { startImmediately: true },
+    );
+    const reref = yield* handle.unref.pipe(
       Effect.mapError(
         (error) =>
           new ProcessManagerEndpointConfigError({
-            reason: `Unable to unref ProcessManager module endpoint: ${String(error)}`,
+            reason: `Unable to unref ProcessManager child endpoint: ${String(error)}`,
           }),
       ),
     );
-    void _reref;
+    void reref;
     return handle.pid;
   });
 
 const waitForEndpointReady = (
   group: ConfigSource,
-  launch: ProcessManagerModuleEndpointLaunchConfig,
+  launch: ProcessManagerChildLaunchConfig,
 ): Effect.Effect<
   void,
   ProcessManagerEndpointConfigError,
@@ -696,63 +606,6 @@ const waitForEndpointReady = (
       yield* Effect.sleep(interval);
     }
   });
-
-function endpointRunner<
-  const Module extends { readonly default: AnyProcessManagerLocalRuntimeDefinition },
->(
-  load: () => Promise<Module>,
-  options: { readonly launch?: ProcessManagerModuleEndpointLaunchConfig },
-): ProcessManagerModuleEndpointDefinition<Module["default"]>;
-function endpointRunner<
-  const Module extends { readonly default: AnyProcessManagerLocalRuntimeDefinition },
->(
-  load: () => Promise<Module>,
-): ProcessManagerModuleEndpointDefinition<Module["default"]>;
-function endpointRunner<
-  const Module,
-  const Runtime extends AnyProcessManagerLocalRuntimeDefinition,
->(
-  load: () => Promise<Module>,
-  select: (module: Module) => Runtime,
-  options?: { readonly launch?: ProcessManagerModuleEndpointLaunchConfig },
-): ProcessManagerModuleEndpointDefinition<Runtime>;
-function endpointRunner(
-  load: () => Promise<unknown>,
-  selectOrOptions?: ((module: unknown) => AnyProcessManagerLocalRuntimeDefinition) | {
-    readonly launch?: ProcessManagerModuleEndpointLaunchConfig;
-  },
-  options?: { readonly launch?: ProcessManagerModuleEndpointLaunchConfig },
-): ProcessManagerModuleEndpointDefinition<AnyProcessManagerLocalRuntimeDefinition> {
-  const select = typeof selectOrOptions === "function" ? selectOrOptions : undefined;
-  const launch = typeof selectOrOptions === "function" ? options?.launch : selectOrOptions?.launch;
-  return {
-    _tag: "ProcessManagerModuleEndpoint",
-    load,
-    ...(launch === undefined ? {} : { launch }),
-    select: (module) => {
-      if (select !== undefined) {
-        return Effect.try({
-          try: () => select(module),
-          catch: (error) =>
-            new ProcessManagerEndpointConfigError({
-              reason: `Endpoint.runner selector failed: ${String(error)}`,
-            }),
-        });
-      }
-      return Effect.gen(function* () {
-        if (typeof module === "object" && module !== null && "default" in module) {
-          const value = module.default;
-          if (isProcessManagerLocalRuntimeDefinition(value)) {
-            return value;
-          }
-        }
-        return yield* new ProcessManagerEndpointConfigError({
-          reason: "Endpoint.runner default export must be a ProcessManager.LocalRuntime descriptor",
-        });
-      });
-    },
-  };
-}
 
 /**
  * Error returned when a remote ProcessGroup request fails or returns malformed
@@ -1264,12 +1117,6 @@ const managerFromEndpoint = (
 > => {
   switch (selected.endpoint._tag) {
     case "ProcessManagerHttpEndpoint":
-      return Effect.succeed(
-        makeRemoteProcessManager(
-          makeControlTransportHttpClient({ baseUrl: selected.endpoint.transport.baseUrl }),
-          group.contract,
-        ),
-      );
     case "ProcessManagerChildEndpoint":
       return Effect.succeed(
         makeRemoteProcessManager(
@@ -1277,22 +1124,6 @@ const managerFromEndpoint = (
           group.contract,
         ),
       );
-    case "ProcessManagerModuleEndpoint":
-      return selected.endpoint.launch === undefined
-        ? Effect.fail(
-            new ProcessManagerEndpointConfigError({
-              reason:
-                `Endpoint '${selected.label}' for group '${group.id}' is a module endpoint without launch config`,
-            }),
-          )
-        : Effect.succeed(
-            makeRemoteProcessManager(
-              makeControlTransportHttpClient({
-                baseUrl: selected.endpoint.launch.control.transport.baseUrl,
-              }),
-              group.contract,
-            ),
-          );
     default:
       return Effect.fail(
         new ProcessManagerEndpointConfigError({
@@ -1344,16 +1175,6 @@ const probeEndpointStatus = (
           transport: endpoint.transport,
         },
       });
-    case "ProcessManagerModuleEndpoint":
-      return endpoint.launch === undefined
-        ? Effect.succeed({
-            _tag: "Configured",
-            reason: "Runner endpoint configured without launch metadata",
-          })
-        : probeEndpointStatus(group, {
-            ...selected,
-            endpoint: endpoint.launch.control,
-          });
   }
 };
 
@@ -2377,11 +2198,6 @@ export const Endpoint = Object.assign(makeEndpointFactory, {
   ): ProcessManagerEndpointConfigItem<"local", ProcessManagerChildEndpointDefinition, false> =>
     makeEndpointConfigItem("local", childEndpointDefinition(transport, entry), false),
 
-  localDefinition: (
-    definition: ProcessManagerEndpointDefinition,
-  ): ProcessManagerEndpointConfigItem<string, ProcessManagerEndpointDefinition, false> =>
-    makeEndpointConfigItem("local", definition, false),
-
   production: (
     transportOrDefinition: ProcessManagerTransport | ProcessManagerHttpEndpointDefinition,
   ): ProcessManagerEndpointConfigItem<"production", ProcessManagerHttpEndpointDefinition, false> =>
@@ -2400,11 +2216,6 @@ export const Endpoint = Object.assign(makeEndpointFactory, {
       remoteEndpointFromTransport(transportFromEndpointInput(transportOrDefinition)),
       false,
     ),
-
-  /** @deprecated Use {@link Endpoint.runner} or child `Endpoint.local(transport, entry)`. */
-  module: endpointRunner,
-
-  runner: endpointRunner,
 });
 
 /**
@@ -2436,7 +2247,6 @@ export const ProcessManager = {
   GroupConfig,
   Endpoint,
   Transport,
-  LocalRuntime,
   groupLocalRuntime,
 };
 

@@ -49,64 +49,41 @@ Pass every **`ProcessGroup.Service`** class you want in the operator catalog. En
 Declare on **`ProcessGroup.Service`** (or **`make`’s third argument**):
 
 ```typescript
-import { Endpoint, ProcessManager } from "@nikscripts/effect-pm";
+import { Endpoint, ProcessManager, Transport } from "@nikscripts/effect-pm";
+
+const billing = Transport.http(3001);
 
 [
-  Endpoint.local(
-    Endpoint.module(
-      () => import("./billing-runtime.js"),
-      (mod) => mod.BillingRuntime,
-    ),
-  ).default,
-  Endpoint.production(
-    Endpoint.http({
-      transport: ProcessManager.Transport.http({
-        baseUrl: "http://127.0.0.1:3001",
-      }),
-    }),
-  ),
-  Endpoint.define("staging", Endpoint.http({ transport: … })),
+  Endpoint.local(billing, import.meta.url).default,
+  Endpoint.production(billing),
+  Endpoint.define("staging", billing),
 ]
 ```
 
 | Builder | Role |
 | --- | --- |
-| **`Endpoint.http` + `Transport.http`** | Fixed base URL (already-running control server) |
-| **`Endpoint.module`** | Dynamic import + **`LocalRuntime`** selector; optional **`launch`** for `group-start` |
+| **`Transport.http`** | Protocol descriptor (`port`, `host:port`, or full `baseUrl`) |
+| **`Endpoint.local(transport, entry)`** | Spawns packaged **`effect-pm-group-child`** for `group-start` (entry = module URL or path) |
 | **`Endpoint.local(…).default`** | Marks dev default for `--target` |
-| **`Endpoint.production(…)`** | Production-labeled URL |
-| **`Endpoint.define(label, …)`** | Named target for CLI |
+| **`Endpoint.production(transport)`** | Remote control plane at `transport.baseUrl` |
+| **`Endpoint.define(label, transport)`** | Named target for CLI |
+| **`Endpoint.http({ transport })`** | HTTP endpoint definition object (remote-only) |
 
 **`ProcessManager.GroupConfig(Group, items?)`** — validate/normalize items.
 
 **`ProcessManager.Config.layer(configs)`** — override selection (wins over bundled group config, then connection registry).
 
+**`ProcessManager.ChildLaunch`** — resolves child script paths via Effect `Config` (`EFFECT_PM_GROUP_CHILD_SCRIPT`, etc.). Use **`ProcessManager.operatorLayer`** in the CLI, or **`ChildLaunch.layerConfig({ … })`** in tests.
+
+See also [`process-manager-endpoints.md`](./process-manager-endpoints.md).
+
 ---
 
-## `ProcessManager.groupLocalRuntime` / `LocalRuntime`
+## `group-start` / `group-stop`
 
-**`groupLocalRuntime`** bundles **`ProcessGroup.localEnvLayer`** + **`ControlService.layerHttp`** without running them in the CLI process:
+**`group-start`** builds launch argv from the selected **`Endpoint.local`** child endpoint, spawns a detached Node child, drains **stdout** / **stderr** into `.effect-pm/logs/<group>.out.log` and `.err.log`, and records PID + paths under `.effect-pm/run/groups/`.
 
-```typescript
-export const BillingRuntime = ProcessManager.groupLocalRuntime(BillingGroup, {
-  port: 3001,
-});
-```
-
-For custom store layers, pass **`store: ProcessStore.layer`** (or your override) in the same options object.
-
-Manual split when needed:
-
-```typescript
-export const BillingRuntime = ProcessManager.LocalRuntime(BillingGroup, {
-  layer: ProcessGroup.localEnvLayer(BillingGroup),
-  control: ControlService.layerHttp(BillingGroup, { port: 3001 }),
-});
-```
-
-**`Endpoint.module`**’s `select` must return this descriptor (see `test/fixtures/process-manager-module-definition.ts`).
-
-**`group-start`** uses **`launch`** on the module endpoint (command, args, control URL, run/log dirs under `.effect-pm/run/groups`).
+**`group-stop`** reads that run state, signals the PID, and removes the JSON file.
 
 ---
 

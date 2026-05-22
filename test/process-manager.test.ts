@@ -85,24 +85,6 @@ describe("ProcessManager", () => {
     });
   });
 
-  it.effect("surfaces module selector failures as checked endpoint config errors", () =>
-    Effect.gen(function* () {
-      const endpoint = Endpoint.runner(
-        () => Promise.resolve({}),
-        () => {
-          throw new Error("bad selector");
-        },
-      );
-
-      const error = yield* endpoint.select({}).pipe(
-        Effect.flip,
-      );
-
-      expect(error).toBeInstanceOf(ProcessManagerEndpointConfigError);
-      expect(error.reason).toContain("bad selector");
-    }),
-  );
-
   it.live("connects through an in-memory control transport without HTTP", () =>
     Effect.gen(function* () {
       const runs = yield* Ref.make(0);
@@ -923,7 +905,7 @@ describe("ProcessManager", () => {
     }),
   );
 
-  it.live("starts module endpoints out of process and writes run state", () =>
+  it.live("starts child endpoints out of process and writes run state", () =>
     Effect.gen(function* () {
       const runRoot = ".effect-pm-test";
       const runDirectory = `${runRoot}/run/groups`;
@@ -1020,7 +1002,7 @@ describe("ProcessManager", () => {
     }),
   );
 
-  it.live("cleans stale module endpoint run state on group-stop", () =>
+  it.live("cleans stale child endpoint run state on group-stop", () =>
     Effect.gen(function* () {
       const runDirectory = ".effect-pm/run/groups";
       const childLaunchLayer = ProcessManager.ChildLaunch.layerConfig({
