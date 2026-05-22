@@ -226,4 +226,4 @@ Merged `polling` / `schedule` on `make` are excluded from fork-time `R`.
 | `src/ProcessStore.ts` | Analytics |
 | `src/processLayerBrand.ts` | Preset layer discrimination for positional `make` |
 
-See also [queue-resource.md](./queue-resource.md). Planned: **ProcessGroup**, **ProcessManager**.
+See also [queue-resource.md](./queue-resource.md), [process-group.md](./process-group.md), [process-manager.md](./process-manager.md), [control-plane.md](./control-plane.md). Planned: **`Process.spawn`**.

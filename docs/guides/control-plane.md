@@ -1,171 +1,131 @@
-# Control plane (ControlService & CLI)
+# Control plane (ControlService)
 
-The **control plane** exposes a **localhost HTTP JSON API** for one **typed `ProcessGroup`**, plus optional **CLI** commands that call the same routes. **`ProcessManager`** is the multi-group **client** for those endpoints — see [`process-manager.md`](./process-manager.md).
+**ControlService** exposes a **localhost-only** HTTP server for one **typed `ProcessGroup`**. It is the server side of **`ProcessManager.connect`** and of operator tools.
 
-**Scope:** binding, routes, response shape, and **`createCli` / `runCli`**. Assumes the group is already defined ([`process-group.md`](./process-group.md)) and processes/queues registered.
+**Default ops path:** [`process-manager.md`](./process-manager.md) (`ProcessManager.cli`, `group-start`, endpoint config). This guide is the **server contract** and a **legacy single-group CLI**.
 
 ---
 
-## ControlService
+## How clients talk to the server
 
-### `ControlService.make({ port?, group })`
+| Client | Transport |
+| --- | --- |
+| **`ProcessManager`** (connect, CLI mutations) | **`POST /control`** — JSON **protocol envelope** (`ControlProtocolRequest`) |
+| **`createCli` / `runCli`** | **REST** paths below (`GET` / `POST` per resource) |
 
-Scoped effect: starts **127.0.0.1** HTTP server until scope closes. Default **port 3001**.
+Both hit the same router; REST routes are translated to the same protocol handlers internally.
+
+---
+
+## Starting the server
+
+### `ControlService.layerHttp(GroupService, { port? })`
+
+Preferred when the group is a **`ProcessGroup.Service`**:
 
 ```typescript
-import { Effect } from "effect";
-import { ControlService, ProcessGroup } from "@nikscripts/effect-pm";
-
-const program = Effect.gen(function* () {
-  const group = yield* ProcessGroup.make("@app/Billing", [SyncProcess, EmailQueue] as const);
-  yield* ControlService.make({ port: 3001, group });
-  yield* Effect.never;
-}).pipe(Effect.scoped);
+const AppLayer = Layer.mergeAll(
+  BillingGroup.layer.pipe(
+    Layer.provide(Layer.mergeAll(/* process + queue + ProcessStore */)),
+  ),
+  ControlService.layerHttp(BillingGroup, { port: 3001 }),
+);
 ```
 
-Provide queue/process layers before `make` (or use **`ProcessGroup.Service.layer`**).
+### `ControlService.make({ group, port? })`
 
-### Layer variants
+Scoped effect inside **`Effect.scoped`** — same HTTP stack, blocks until scope ends.
 
-| API | Role |
-| --- | --- |
-| `ControlService.layer(group)` | Control router + external transport server tag |
-| `ControlService.layerHttp(group, { port? })` | Default localhost HTTP stack |
+### `ControlService.layer(group)`
 
-Use layers when the HTTP server is composed with the rest of the app `Layer` tree instead of a standalone `make` effect.
+Router + transport only — you supply **`ControlTransportHttp.serverLayer`** yourself.
 
-**Security (documented assumption):** localhost only, no auth/TLS — suitable for dev and private operator networks, not public internet.
+**Binding:** `127.0.0.1` only · default port **3001** · no auth (private/dev assumption).
 
 ---
 
-## HTTP routes
+## REST routes (what `createCli` uses)
 
-| Method | Path | Role |
+Encode ids in paths: **`encodeURIComponent(id)`** for ids like `@app/Billing/SyncInvoices`.
+
+| Method | Path | Control |
 | --- | --- | --- |
-| `GET` | `/health` | Probe |
-| `GET` | `/contract` | `ProcessGroupContract` JSON |
-| `GET` | `/status` | All processes + queues |
-| `GET` | `/processes` | Process list |
-| `GET` | `/processes/:id` | One process status |
+| `GET` | `/health` | Liveness |
+| `GET` | `/contract` | `ProcessGroupContract` |
+| `GET` | `/status` | Full group status |
+| `GET` | `/processes` | List processes |
+| `GET` | `/processes/:id` | Process status |
 | `POST` | `/processes/:id/start` | Start driver |
 | `POST` | `/processes/:id/stop` | Stop |
 | `POST` | `/processes/:id/restart` | Restart |
 | `POST` | `/processes/:id/now` | `runImmediately` |
-| `GET` | `/queues` | Queue list |
+| `GET` | `/queues` | List queues |
 | `GET` | `/queues/:id` | Queue status |
 | `POST` | `/queues/:id/start` | Start workers (`autoStart: false`) |
 | `POST` | `/queues/:id/pause` | Pause |
 | `POST` | `/queues/:id/resume` | Resume |
 | `POST` | `/queues/:id/clear` | Clear pending |
-| `POST` | `/control` | Canonical protocol envelope |
-| `OPTIONS` | `*` | CORS-style empty response |
 
-Routes check the group **contract** before running (same idea as ProcessManager preflight).
+| Method | Path | Role |
+| --- | --- | --- |
+| `POST` | `/control` | Protocol envelope (ProcessManager) |
+| `OPTIONS` | `*` | CORS-style empty body |
 
-### Response envelope — `ControlResponse`
+Responses use **`ControlResponse`**: `{ success, type?, data?, error? }`. Routes check the group **contract** before executing.
+
+---
+
+## Not on the HTTP surface
+
+- Schedule `set` / `add` / `clear` / `reconcile`
+- Polling `requestWake` / `resetCadence`
+- Remote enqueue via **ProcessManager** (in-process **`group.queue`** only)
+
+---
+
+## Legacy dev CLI: `createCli` / `runCli`
+
+Re-exported from **`ControlService`** and the package root. One group, one port, no endpoint catalog:
 
 ```typescript
-{
-  success: boolean;
-  type?: "process" | "queue";
-  data?: unknown;
-  error?: string;
-}
+import { createCli } from "@nikscripts/effect-pm";
+
+const cli = createCli({ name: "billing-ctl", version: "1.0.0", port: 3001 });
+// Effect.provide(NodeHttpClient.layer) + cli(process.argv)
 ```
 
----
+Commands: `ls`, `status`, `start`, `stop`, `restart`, `now`, `pause`, `resume`, `clear`, `queues`.
 
-## What the control plane does not expose
-
-| Surface | Notes |
-| --- | --- |
-| Schedule CRUD | Use `Process.scheduleControls` / `ProcessSchedule` service in-app |
-| Polling wake / reset | In-process `Polling` only |
-| Remote enqueue via ProcessManager | Local HTTP may reflect full group queue handle; PM client blocks enqueue |
+Use when you already have a server on a known port and do not need **`groups`**, **`verify`**, or **`group-start`**. For new projects, prefer **`ProcessManager.cli`**.
 
 ---
 
-## Single-group CLI — `createCli` / `runCli`
+## Typical layouts (current)
 
-Re-exported from **`ControlService`** and main package. Talks to **`http://127.0.0.1:{port}`** (default **3001**).
+### A — Module launch (recommended for local ops)
 
-### `createCli({ name, version, port? })`
+1. **`ProcessGroup.Service`** + endpoint config with **`Endpoint.module`** + **`LocalRuntime`**
+2. Terminal: **`pm group-start BillingGroup`** (or your CLI binary)
+3. Terminal: **`pm start @app/Billing/SyncInvoices`**, **`pm ls`**, etc.
 
-Returns an Effect CLI runner (Effect `Command.runWith`).
+### B — App + control in one process
 
-### `runCli(config, argv?)`
+1. **`BillingGroup.layer`** + **`ControlService.layerHttp(BillingGroup)`**
+2. **`yield* BillingGroup`** → **`group.startAll()`** → **`Effect.never`**
+3. Optional second shell: **`ProcessManager.cli`** with **`Endpoint.http`** pointing at the same port
 
-Convenience: `createCli` + `process.argv`.
+### C — Remote consumer
 
-### Commands
-
-| Command | Maps to |
-| --- | --- |
-| `ls` | List processes and queues |
-| `status [name]` | Process or aggregate status |
-| `start <name>` | POST start |
-| `stop <name>` | POST stop |
-| `restart <name>` | POST restart |
-| `now <name>` | POST now |
-| `pause <name>` | Queue pause |
-| `resume <name>` | Queue resume |
-| `clear <name>` | Queue clear |
-| `queues` | Queue listing |
-
-Requires **`HttpClient`** in the environment (e.g. `@effect/platform-node/NodeHttpClient`).
-
-**Port** must match the running **`ControlService`**.
+**`ProcessGroup.remoteLayer`** + **`ProcessManager.Endpoint`** in another service (see process-manager guide).
 
 ---
 
-## ControlProtocol (related)
+## ControlProtocol
 
-Shared between server and client:
-
-- **`ControlProtocolRequest`** / **`ControlResponse`** envelopes
-- **`ControlRouter`** — dispatches to `ProcessGroup` controls
-- **`ControlTransportHttp`** — server + client transports
-
-Used by **`ControlService`**, **`ProcessManager`**, and tests — not usually imported for app business logic.
+**`ControlRouter`**, **`makeControlProtocolRequestEnvelope`**, **`ControlTransportHttp`** — shared by server and **`ProcessManager`**. Import when building custom transports, not for everyday app code.
 
 ---
 
-## Typical layouts
+## Related
 
-### Dev: app + control in one Node process
-
-1. `ProcessGroup.Service` with entries  
-2. `Effect.provide(BillingGroup.layer)`  
-3. `yield* BillingGroup` → `yield* ControlService.make({ group })`  
-4. Optional: second terminal with `runCli({ port })`
-
-### Dev: daemon + operator CLI
-
-1. App runs `ControlService.make` + `Effect.never`  
-2. Operator runs `runCli` or `ProcessManager.cli` pointing at same port  
-
-### Prod: remote PM
-
-1. Deployed app exposes `ControlService` on configured port (still localhost or behind your proxy)  
-2. `ProcessManager.ConnectionRegistry` + `ProcessManager.cli` for ops  
-
----
-
-## Related tools
-
-| Tool | Role |
-| --- | --- |
-| **`ProcessGroup`** | Control target — [`process-group.md`](./process-group.md) |
-| **`ProcessManager`** | Multi-group client — [`process-manager.md`](./process-manager.md) |
-| **`ProcessStore`** | Richer status when layer provided at group fork site |
-
----
-
-## Implementation reference
-
-| Location | Contents |
-| --- | --- |
-| `src/ControlService.ts` | `make`, `layer`, `layerHttp`, CLI re-exports |
-| `src/cli.ts` | `createCli`, `runCli` |
-| `src/ControlProtocol.ts` | Protocol + router |
-| `src/ControlTransportHttp.ts` | HTTP server/client |
+[process-group.md](./process-group.md) · [process-manager.md](./process-manager.md)

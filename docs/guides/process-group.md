@@ -1,173 +1,176 @@
 # ProcessGroup
 
-A **process group** registers **process** and **queue** entries under one id, tracks **running fibers** for each process, and exposes **typed controls** (`start`, `enqueue`, `pause`, …) plus a **contract** (`ProcessGroupContract`) that HTTP and remote clients use for discovery and preflight checks.
+A **process group** is the runtime bundle for your app: **process** and **queue** entries share one canonical **id**, one **contract** (`ProcessGroupContract`), and one set of **typed controls**. **`ProcessManager`** and **`ControlService`** talk to that contract over HTTP — they do not replace the group; they remote-control it.
 
-**Scope:** how to **define** a group, start/stop work, and wire control surfaces. Processes are defined with [`process.md`](./process.md); queues with [`queue-resource.md`](./queue-resource.md). Runtime is **in-process** — the group does not replace your app `Layer` tree; it orchestrates entries you already declared.
+Define processes with [`process.md`](./process.md) and queues with [`queue-resource.md`](./queue-resource.md) first. This guide covers **group composition** and **lifecycle** only.
 
-Spec tables: [`docs/SCHEDULE-AND-PROCESSGROUP.md`](../SCHEDULE-AND-PROCESSGROUP.md), [`docs/CODEBASE-INVENTORY.md`](../CODEBASE-INVENTORY.md) (ProcessGroup section).
+---
+
+## Canonical shape: `ProcessGroup.Service`
+
+```typescript
+import { Effect, Layer } from "effect";
+import {
+  Endpoint,
+  Process,
+  ProcessGroup,
+  ProcessManager,
+  ProcessStore,
+  QueueResource,
+} from "@nikscripts/effect-pm";
+
+class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
+  "@app/Billing/EmailQueue",
+  (email) => sendEmail(email).pipe(Effect.asVoid),
+  { concurrency: 10 },
+) {}
+
+class SyncInvoices extends Process.Service<SyncInvoices>()(
+  "@app/Billing/SyncInvoices",
+  syncEffect,
+  Polling.spaced("30 seconds"),
+  ProcessSchedule.alwaysArmed,
+) {}
+
+class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+  "@app/Billing/BillingGroup",
+  [SyncInvoices, EmailQueue] as const,
+  [
+    Endpoint.local(
+      Endpoint.module(
+        () => import("./billing-runtime.js"),
+        (mod) => mod.BillingRuntime,
+      ),
+    ).default,
+    Endpoint.production(
+      Endpoint.http({
+        transport: ProcessManager.Transport.http({
+          baseUrl: "http://127.0.0.1:3001",
+        }),
+      }),
+    ),
+  ],
+) {}
+```
+
+**What you get on the class**
+
+| Field | Role |
+| --- | --- |
+| `id` | Group id (canonical, slash-separated) |
+| `entries` | Tuple of process/queue **service classes** |
+| `config` | Endpoint items for **`ProcessManager.cli`** (`--target`) |
+| `contract` | `ProcessGroupContract` (`version: "v1"`) |
+| `layer` | Acquires group + merges queue layers for handlers |
+| `make` | `Effect` yielding **`TypedProcessGroup`** |
+
+**`as const` on the entries tuple is required** for literal process/queue ids in the contract.
+
+---
+
+## `ProcessGroup.make(id, entries, configItems?)`
+
+Same runtime as **`Service`**, without a group Context tag:
+
+```typescript
+const group = yield* ProcessGroup.make("@app/Billing/BillingGroup", [
+  SyncInvoices,
+  EmailQueue,
+] as const);
+```
+
+Use **`Service`** when the group is a first-class dependency (recommended for apps + PM endpoints).
+
+---
+
+## Runtime wiring with `ProcessManager.LocalRuntime`
+
+Out-of-process ops (**`group-start`**) need a **descriptor** that pairs app layers with control HTTP:
+
+```typescript
+export const BillingRuntime = ProcessManager.LocalRuntime(BillingGroup, {
+  layer: BillingGroup.layer.pipe(
+    Layer.provide(Layer.mergeAll(SyncInvoices.layer, EmailQueue.layer, ProcessStore.layer)),
+  ),
+  control: ControlService.layerHttp(BillingGroup, { port: 3001 }),
+});
+```
+
+- **`layer`** — runs the real group (processes, queues, store).
+- **`control`** — localhost **`ControlService`** for REST + protocol clients.
+
+Point **`Endpoint.module`** at a module that exports this runtime (see [`process-manager.md`](./process-manager.md)).
 
 ---
 
 ## Mental model
 
-| Moment | What happens |
+| Step | State |
 | --- | --- |
-| **`ProcessGroup.make` / `Service.layer`** | Registers processes and queues; process status is **stopped**; queue tags are acquired (workers per queue `autoStart`). |
-| **`group.start(Entry)`** / **`startAll`** | Forks **`process.effect`** (schedule driver). For queues with **`autoStart: false`**, **`startAll`** calls **`queue.start`** first. |
-| **Schedule armed** | Driver runs; instances tick when schedule entries cover “now” (see schedule guide). |
-| **`group.stop` / `stopAll`** | Interrupts process fibers; lifecycle **Stopped**. |
+| Provide **`BillingGroup.layer`** (or `make`) | Processes **stopped**; queue tags live; workers per queue `autoStart` |
+| **`group.start(SyncInvoices)`** or **`startAll`** | Forks **`process.effect`** (schedule driver) |
+| Schedule **armed** | Instances run poll → user `effect` while entries cover “now” |
+| **`group.stop(…)`** | Interrupts drivers |
 
-**`make` does not “start the app.”** It builds the orchestrator. **`start`** attaches drivers.
+**`make` / `layer` does not start work.** **`start`** does.
+
+For **`autoStart: false`** queues, **`startAll`** calls **`queue.start`** before starting processes.
 
 ---
 
-## Ways to define a group
+## Typed controls (no string names)
 
-### `ProcessGroup.make(id, entries as const)`
+### `group.process(SyncInvoices)`
 
-Typed tuple of **`Process.Service`** classes and/or **`QueueResource.Service`** classes (legacy: `Process.make` handles + queue tags in `{ queues, processes }` — prefer the tuple form for contracts).
+`start` · `stop` · `restart` · `runImmediately` · `status`
 
-```typescript
-import { Effect } from "effect";
-import { ProcessGroup } from "@nikscripts/effect-pm";
+### `group.queue(EmailQueue)`
 
-const group = yield* ProcessGroup.make("@app/Billing", [
-  SyncProcess,
-  EmailQueue,
-] as const);
-```
+`add` / `enqueue` · `prioritize` · `defer` · `start` · `pause` · `resume` · `clear` · `status`
 
-**Benefits**
+With **`itemSchema`**, contract queue controls include **`release`**; enqueue can fail validation at the type level.
 
-- **`group.contract`** — schema-backed `ProcessGroupContract` (`version: "v1"`).
-- **`group.process(SyncProcess)`** / **`group.queue(EmailQueue)`** — typed controls, no string typos.
-- Requirement inference: env must provide all queue tags (and process deps when forking).
+### Group
 
-**Tradeoffs**
-
-- Tuple must be `as const` for full literal inference.
-- All queue layers must be in scope when calling `make` (or use `Service.layer` below).
-
----
-
-### `ProcessGroup.Service<Self>(id, entries, configItems?)`
-
-Injectable group: **`id`**, **`entries`**, **`contract`**, **`make`**, **`layer`**. Merges bundled queue layers into **`layer`** so **`yield* BillingGroup`** and **`ControlService`** see the same queue tags.
-
-```typescript
-class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
-  "@app/Billing",
-  [SyncProcess, EmailQueue] as const,
-) {}
-```
-
-Optional third argument: **`ProcessManagerGroupConfigItem[]`** for endpoint labels (HTTP module launch, production URL, etc.) — see [`process-manager.md`](./process-manager.md).
-
----
-
-### Legacy `ProcessGroup.make({ queues, processes })`
-
-Untyped **`ProcessGroup<R>`** with **string** names (`group.start("id")`). Still supported; typed tuple is preferred for contracts and `ProcessManager`.
-
----
-
-## Entry forms
-
-| Entry | Form |
-| --- | --- |
-| Process | `Process.Service` class or `Process.make` handle |
-| Queue | `QueueResource.Service` class (baked `.layer`) |
-| Queue (DI) | `QueueResource.Tag` + provide `QueueResource.layer` in app env |
-
-Empty queue list is valid (process-only group).
-
----
-
-## Typed controls
-
-### Processes — `group.process(ProcessEntry)`
-
-| Control | Effect |
-| --- | --- |
-| `start` | Fork `process.effect` (schedule driver) |
-| `stop` | Interrupt driver + instances |
-| `restart` | `stop` then `start` |
-| `runImmediately` | One tracked tick without requiring armed schedule |
-| `status` | `ProcessGroupDetails` snapshot |
-
-### Queues — `group.queue(QueueEntry)`
-
-| Control | Effect |
-| --- | --- |
-| `add` / `enqueue` | Normal priority batch |
-| `prioritize` / `defer` | High / low priority |
-| `start` | Fork workers when `autoStart: false` |
-| `pause` / `resume` | Worker latch |
-| `clear` | Drain pending; returns count |
-| `status` | `QueueDetails` |
-
-When the queue declares **`itemSchema`**, contract includes **`release`** and enqueue may fail validation; typed enqueue errors flow from `QueueResource`.
-
-### Group-level
-
-| API | Role |
-| --- | --- |
-| `startAll` / `stopAll` | All entries |
-| `status` | All processes + queues |
-| `health` | Aggregate counts |
-| `awaitShutdown` | Node SIGINT/SIGTERM → `stopAll` (local only) |
+`startAll` · `stopAll` · `status` · `health` · `awaitShutdown` (local Node signals only)
 
 ---
 
 ## Contract
 
-**`ProcessGroupContract`:** `id`, `kind: "group"`, `version: "v1"`, `processes[]`, `queues[]`.
+Exported on **`BillingGroup.contract`** and **`GET /contract`**:
 
-Each process entry lists allowed **`controls`**: `start`, `stop`, `restart`, `runImmediately`, `status`.
+- Processes: `start`, `stop`, `restart`, `runImmediately`, `status`
+- Queues: `enqueue`, `start`, `pause`, `resume`, `clear`, `status` (+ `release` when schema-backed)
 
-Each queue entry lists **`controls`**: `enqueue`, `start`, `pause`, `resume`, `clear`, `status` (plus `release` when schema present). The **`enqueue`** bit describes capability; **remote** clients still do not enqueue over HTTP (see process-manager guide).
+**`ProcessManager.verifyContract`** and HTTP routes preflight against this list.
 
-**Schemas:** `ProcessGroupContractSchema`, `ProcessGroupProcessControlSchema`, `ProcessGroupQueueControlSchema` — used by `ProcessManager.verifyContract` and control routes.
-
----
-
-## Remote group — `ProcessGroup.remoteLayer(GroupService, Endpoint)`
-
-Same **service key** as local group, but controls go over HTTP to a **`ControlService`**. Requires **`ProcessManager.Endpoint`** (or compatible) for base URL.
-
-**Supported remotely:** process lifecycle, queue pause/resume/clear/status, group status/health.
-
-**Not supported remotely:** queue enqueue/add, `awaitShutdown`.
-
-Errors widen to **`ProcessGroupRemoteControlError`**, **`UnsupportedRemoteControlError`**, etc.
+Remote **`ProcessManager`** does **not** enqueue over the network — enqueue in-process via **`group.queue(EmailQueue)`**.
 
 ---
 
-## Errors
+## `ProcessGroup.remoteLayer(GroupService, Endpoint)`
 
-| Error | When |
+Same **group service key** in the consumer app; controls go to a remote **`ControlService`** URL from **`ProcessManager.Endpoint`**. Use for split CLI/app processes, not for in-process **`yield* BillingGroup`**.
+
+---
+
+## Do not use in new code
+
+| Removed / legacy | Use instead |
 | --- | --- |
-| `ProcessNotFoundError` | Unknown process name |
-| `ProcessAlreadyRunningError` | `start` when already running |
-| `ProcessNotRunningError` | `stop` when stopped |
-| `ProcessGroupControlError` | Union on typed group |
+| `ProcessGroup.make({ queues, processes })` | `make(id, […] as const)` or **`Service`** |
+| `group.start("string-id")` | `group.start(SyncInvoices)` |
+| `group.getQueue("…")` | `group.queue(EmailQueue)` or `yield* EmailQueue` |
+| Forking `process.effect` yourself | **`group.start`** (future **`Process.spawn`**) |
 
 ---
 
-## Related tools
+## Related
 
-| Tool | Role |
+| Guide | Topic |
 | --- | --- |
-| **`ControlService`** | Localhost HTTP for one group — [`control-plane.md`](./control-plane.md) |
-| **`ProcessManager`** | Multi-group remote client + CLI — [`process-manager.md`](./process-manager.md) |
-| **`ProcessStore`** | Execution + lifecycle events when layer provided |
-
----
-
-## Implementation reference
-
-| Location | Contents |
-| --- | --- |
-| `src/ProcessGroup.ts` | `make`, `Service`, `remoteLayer`, contracts |
-| `src/ControlProtocol.ts` | Envelopes + router |
-| `src/ControlTransportHttp.ts` | HTTP server |
+| [process-manager.md](./process-manager.md) | CLI, endpoints, `group-start` |
+| [control-plane.md](./control-plane.md) | HTTP server, REST routes |
+| [process.md](./process.md) | Process definitions |
+| [queue-resource.md](./queue-resource.md) | Queue definitions |

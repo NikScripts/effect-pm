@@ -1,24 +1,42 @@
-# Guides
+# Guides (current API)
 
-Long-form API guides (definition forms, config, types, related tools). Narrative rewrite: [`docs/rewrite/`](../rewrite/). Spec tables: [`docs/PROCESS-API.md`](../PROCESS-API.md), [`docs/RESOURCE-API.md`](../RESOURCE-API.md), [`docs/CODEBASE-INVENTORY.md`](../CODEBASE-INVENTORY.md).
+These guides describe the **runtime-foundation** stack on `main`: id-first **`Process`**, positional **`QueueResource`**, typed **`ProcessGroup.Service`**, **`ProcessManager.cli`** + **endpoint config**, and **`ControlService.layerHttp`**.
 
-## Resources
+They intentionally **do not** document removed or legacy paths (`Process.make({ name })`, `providePolling`, `{ queues, processes }` group shape) except where called out as “do not use.”
+
+Older inventory-style dumps live in [`docs/CODEBASE-INVENTORY.md`](../CODEBASE-INVENTORY.md); treat these guides as the source of truth for how to wire apps today.
+
+---
+
+## Resources (define workers)
 
 | Guide | Topic |
 | --- | --- |
-| [process.md](./process.md) | `Process.make`, `Process.Service`, config, group registration |
-| [queue-resource.md](./queue-resource.md) | `QueueResource.Service`, `Tag`/`layer`, `make`, hooks (incl. planned `onEvent`) |
+| [process.md](./process.md) | `Process.make` / `Process.Service` — register on a group; do not fork drivers ad hoc |
+| [queue-resource.md](./queue-resource.md) | `QueueResource.Service(id, effect, options?)` and hooks |
 
-## Orchestration & control
+---
+
+## Orchestration & ops (run and control)
 
 | Guide | Topic |
 | --- | --- |
-| [process-group.md](./process-group.md) | `ProcessGroup.make`, `Service`, contract, typed controls, `remoteLayer` |
-| [process-manager.md](./process-manager.md) | `ProcessManager.connect`, endpoints, multi-group CLI, remote limits |
-| [control-plane.md](./control-plane.md) | `ControlService`, HTTP routes, `createCli` / `runCli`, `ControlProtocol` |
+| [process-group.md](./process-group.md) | **`ProcessGroup.Service`**, contract, typed `start` / `queue()`, `LocalRuntime` |
+| [process-manager.md](./process-manager.md) | **`ProcessManager.cli`**, endpoints, `group-start`, `connect`, `remoteLayer` |
+| [control-plane.md](./control-plane.md) | **`ControlService`** HTTP (REST + `/control`), legacy `createCli` |
+
+---
 
 ## Reading order
 
-1. Define **processes** and **queues** (resource guides).  
-2. Register them on a **ProcessGroup**.  
-3. Expose **ControlService** locally and/or use **ProcessManager** remotely.
+1. Define **queues** and **processes** (positional factories where it helps).
+2. Declare **`ProcessGroup.Service(id, entries, endpoints?)`** and **`LocalRuntime`** for module launch.
+3. Run **`ProcessManager.cli`** (`group-start`, then `start` / `ls` / `status`).
+4. Optionally embed **`ControlService.layerHttp`** in the same Node process as the group.
+
+---
+
+## Planned
+
+- Tagged **`QueueEvent`** + **`onEvent`** with **`Match.tag`** — [queue-resource.md](./queue-resource.md#planned-tagged-onevent-hooks)
+- **`Process.spawn`** — group-owned process fibers without manual `group.start` ergonomics
