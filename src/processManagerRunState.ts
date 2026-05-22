@@ -12,10 +12,6 @@ export interface ProcessManagerRunState {
   readonly cwd?: string;
   readonly endpointLabel: string;
   readonly groupId: string;
-  readonly logPaths: {
-    readonly stderr: string;
-    readonly stdout: string;
-  };
   readonly pid: number;
   readonly startedAt: string;
 }
@@ -30,10 +26,6 @@ export const ProcessManagerRunStateSchema = Schema.Struct({
   cwd: Schema.optional(Schema.String),
   endpointLabel: Schema.String,
   groupId: Schema.String,
-  logPaths: Schema.Struct({
-    stderr: Schema.String,
-    stdout: Schema.String,
-  }),
   pid: Schema.Number,
   startedAt: Schema.String,
 });

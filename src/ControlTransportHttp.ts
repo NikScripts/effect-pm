@@ -4,7 +4,7 @@
  * @module ControlTransportHttp
  */
 
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Layer, Option, Schema, Stream } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http";
 import {
   ControlRouter,
@@ -22,7 +22,9 @@ import {
   type ControlTransportClientShape,
   type ControlTransportServerShape,
 } from "./ControlProtocol";
-import { responseBodyJson } from "./internal/json";
+import { responseBodyJson } from "./internal/json.js";
+import { encodeProcessManagerLogEntryNdjson } from "./processManagerLogEntry.js";
+import { ProcessManagerLogRelay } from "./processManagerLogRelay.js";
 
 /**
  * HTTP transport client configuration.
@@ -45,6 +47,7 @@ export interface ControlTransportHttpServerConfig {
 /** Minimal surface used from Node’s `ServerResponse` (avoids `node:http` type imports). */
 interface JsonResponse {
   writeHead(statusCode: number, headers?: { readonly [k: string]: string }): void;
+  write(chunk: string): void;
   end(chunk?: string): void;
 }
 
@@ -347,6 +350,47 @@ export const makeControlTransportHttpServer = (
               yield* writeJson(res, 200, { status: "ok" });
               return;
             }
+
+            if (req.method === "GET" && url.pathname === "/logs/stream") {
+              const follow =
+                url.searchParams.get("follow") === "true" ||
+                url.searchParams.get("follow") === "1";
+              const relayOption = yield* Effect.serviceOption(ProcessManagerLogRelay);
+              if (Option.isNone(relayOption)) {
+                yield* writeJson(res, 503, errorResponse("Log relay is not available"));
+                return;
+              }
+              const relay = relayOption.value;
+              res.writeHead(200, {
+                "Content-Type": "application/x-ndjson; charset=utf-8",
+                "Cache-Control": "no-cache",
+                Connection: follow ? "keep-alive" : "close",
+              });
+              const snapshot = yield* relay.snapshot;
+              for (const entry of snapshot) {
+                const line = yield* encodeProcessManagerLogEntryNdjson(entry);
+                res.write(`${line}
+`);
+              }
+              if (!follow) {
+                res.end();
+                return;
+              }
+              yield* relay.stream.pipe(
+                Stream.runForEach((entry) =>
+                  Effect.gen(function* () {
+                    const line = yield* encodeProcessManagerLogEntryNdjson(entry);
+                    yield* Effect.sync(() => {
+                      res.write(`${line}
+`);
+                    });
+                  }),
+                ),
+                Effect.ensuring(Effect.sync(() => res.end())),
+              );
+              return;
+            }
+
 
             if (req.method === "POST" && url.pathname === "/control") {
               const envelope = yield* readControlEnvelope(req).pipe(

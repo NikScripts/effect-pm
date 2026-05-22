@@ -2,6 +2,7 @@ import { Command, Flag } from "effect/unstable/cli";
 import { Data, Effect, Layer } from "effect";
 import type { ProcessGroupEntry, ProcessGroupServiceDefinition } from "./ProcessGroup.js";
 import { groupLocalRuntime } from "./processManagerGroupRuntime.js";
+import { captureLoggerLayer, layer as logRelayLayer } from "./processManagerLogRelay.js";
 
 /** @public */
 export class GroupChildArgvError extends Data.TaggedError("GroupChildArgvError")<{
@@ -87,8 +88,17 @@ export const runGroupChildProgram = (args: {
       });
     }
     const runtime = groupLocalRuntime(group, { controlBaseUrl: args.controlBaseUrl });
+    const envLayer = runtime.layer.pipe(
+      Layer.provideMerge(logRelayLayer),
+      Layer.provideMerge(captureLoggerLayer),
+    );
     return yield* Effect.never.pipe(
-      Effect.provide(runtime.control.pipe(Layer.provide(runtime.layer))),
+      Effect.provide(
+        runtime.control.pipe(
+          Layer.provideMerge(logRelayLayer),
+          Layer.provide(envLayer),
+        ),
+      ),
       Effect.scoped,
     );
   });

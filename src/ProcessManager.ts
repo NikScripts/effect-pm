@@ -9,7 +9,7 @@
  * @module ProcessManager
  */
 
-import { Clock, Config, ConfigProvider, Console, Context, Data, DateTime, Duration, Effect, Exit, FileSystem, Layer, Option, Path, Schema, Scope, Stream } from "effect";
+import { Clock, Config, ConfigProvider, Console, Context, Data, DateTime, Duration, Effect, Exit, FileSystem, Layer, Logger, Option, Path, Schema, Scope } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import type { HttpClient } from "effect/unstable/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
@@ -61,8 +61,7 @@ import {
 } from "./processManagerRunState.js";
 import {
   streamGroupLogs,
-  type ProcessManagerGroupLogPaths,
-  type ProcessManagerGroupLogStream,
+  ProcessManagerGroupLogError,
 } from "./processManagerGroupLogs.js";
 import { httpEndpoint } from "./processManagerTransport.js";
 
@@ -523,24 +522,19 @@ const isPidRunning = (pid: number): Effect.Effect<boolean> =>
 
 const launchDetachedProcess = (
   launch: ProcessManagerChildLaunchConfig,
-  stdoutPath: string,
-  stderrPath: string,
 ): Effect.Effect<
   number,
   ProcessManagerEndpointConfigError,
-  FileSystem.FileSystem | ChildProcessSpawner.ChildProcessSpawner | Scope.Scope
+  ChildProcessSpawner.ChildProcessSpawner | Scope.Scope
 > =>
   Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const stdoutSink = fs.sink(stdoutPath, { flag: "a" });
-    const stderrSink = fs.sink(stderrPath, { flag: "a" });
     const handle = yield* ChildProcess.make(launch.command, [...launch.args], {
       cwd: launch.cwd,
       detached: true,
       env: launch.env,
-      stderr: "pipe",
+      stderr: "ignore",
       stdin: "ignore",
-      stdout: "pipe",
+      stdout: "ignore",
     }).pipe(
       Effect.mapError(
         (error) =>
@@ -548,24 +542,6 @@ const launchDetachedProcess = (
             reason: `Unable to launch ProcessManager child endpoint: ${String(error)}`,
           }),
       ),
-    );
-    const mapDrainError = (stream: "stdout" | "stderr") => (error: unknown) =>
-      new ProcessManagerEndpointConfigError({
-        reason: `Unable to drain child ${stream} to log file: ${String(error)}`,
-      });
-    yield* Effect.forkChild(
-      Stream.run(handle.stdout, stdoutSink).pipe(
-        Effect.mapError(mapDrainError("stdout")),
-        Effect.ignore,
-      ),
-      { startImmediately: true },
-    );
-    yield* Effect.forkChild(
-      Stream.run(handle.stderr, stderrSink).pipe(
-        Effect.mapError(mapDrainError("stderr")),
-        Effect.ignore,
-      ),
-      { startImmediately: true },
     );
     const reref = yield* handle.unref.pipe(
       Effect.mapError(
@@ -1273,21 +1249,12 @@ const launchModuleEndpointForGroup = (
     const path = yield* Path.Path;
     const safeGroupId = safePathSegment(group.id);
     const runDirectory = launch.runDirectory ?? path.join(".effect-pm", "run", "groups");
-    const logDirectory = launch.logDirectory ?? path.join(".effect-pm", "logs");
     const runFile = path.join(runDirectory, `${safeGroupId}.json`);
     yield* fs.makeDirectory(runDirectory, { recursive: true }).pipe(
       Effect.mapError(
         (error) =>
           new ProcessManagerEndpointConfigError({
             reason: `Unable to create ProcessManager run directory '${runDirectory}': ${String(error)}`,
-          }),
-      ),
-    );
-    yield* fs.makeDirectory(logDirectory, { recursive: true }).pipe(
-      Effect.mapError(
-        (error) =>
-          new ProcessManagerEndpointConfigError({
-            reason: `Unable to create ProcessManager log directory '${logDirectory}': ${String(error)}`,
           }),
       ),
     );
@@ -1299,9 +1266,7 @@ const launchModuleEndpointForGroup = (
       }
       yield* removeRunState(runFile);
     }
-    const stdoutPath = path.join(logDirectory, `${safeGroupId}.out.log`);
-    const stderrPath = path.join(logDirectory, `${safeGroupId}.err.log`);
-    const pid = yield* launchDetachedProcess(launch, stdoutPath, stderrPath);
+    const pid = yield* launchDetachedProcess(launch);
     const startedAtMs = yield* Clock.currentTimeMillis;
     const state: ProcessManagerRunState = {
       args: launch.args,
@@ -1310,10 +1275,6 @@ const launchModuleEndpointForGroup = (
       ...(launch.cwd === undefined ? {} : { cwd: launch.cwd }),
       endpointLabel: selected.label,
       groupId: group.id,
-      logPaths: {
-        stderr: stderrPath,
-        stdout: stdoutPath,
-      },
       pid,
       startedAt: DateTime.formatIso(DateTime.makeUnsafe(startedAtMs)),
     };
@@ -1365,12 +1326,12 @@ const stopModuleEndpointForGroup = (
   });
 
 
-const resolveGroupLogPaths = (
+const resolveGroupControlBaseUrl = (
   groups: ReadonlyArray<ConfigSource>,
   input: string,
   endpointLabel: string | undefined,
 ): Effect.Effect<
-  ProcessManagerGroupLogPaths,
+  string,
   ProcessManagerConnectionError | ProcessManagerEndpointConfigError,
   FileSystem.FileSystem | Path.Path
 > =>
@@ -1385,15 +1346,9 @@ const resolveGroupLogPaths = (
     const runFile = yield* runStateFileFor(group, launch);
     const stateOption = yield* readRunState(runFile);
     if (Option.isSome(stateOption)) {
-      return stateOption.value.logPaths;
+      return stateOption.value.controlBaseUrl;
     }
-    const path = yield* Path.Path;
-    const safeGroupId = safePathSegment(group.id);
-    const logDirectory = launch.logDirectory ?? path.join(".effect-pm", "logs");
-    return {
-      stdout: path.join(logDirectory, `${safeGroupId}.out.log`),
-      stderr: path.join(logDirectory, `${safeGroupId}.err.log`),
-    };
+    return launch.control.transport.baseUrl;
   });
 
 const formatAmbiguousTarget = (
@@ -1720,24 +1675,24 @@ const runGroupLogsCommand = (
   options: {
     readonly endpointLabel?: string;
     readonly follow: boolean;
-    readonly lines: number;
-    readonly stream: ProcessManagerGroupLogStream;
   },
 ): Effect.Effect<
   void,
-  ProcessManagerConnectionError | ProcessManagerEndpointConfigError,
-  FileSystem.FileSystem | Path.Path
+  ProcessManagerConnectionError | ProcessManagerEndpointConfigError | ProcessManagerGroupLogError,
+  HttpClient.HttpClient | FileSystem.FileSystem | Path.Path
 > =>
   Effect.gen(function* () {
-    const paths = yield* resolveGroupLogPaths(groups, input, options.endpointLabel);
+    const controlBaseUrl = yield* resolveGroupControlBaseUrl(
+      groups,
+      input,
+      options.endpointLabel,
+    );
     yield* Console.log(
-      `Logs for group (stdout: ${paths.stdout}, stderr: ${paths.stderr})${options.follow ? " — following" : ""}`,
+      `Streaming structured logs from ${controlBaseUrl}${options.follow ? " (follow)" : ""}`,
     );
     yield* streamGroupLogs({
-      paths,
-      lines: options.lines,
+      controlBaseUrl,
       follow: options.follow,
-      stream: options.stream,
     });
   });
 
@@ -1860,9 +1815,6 @@ const makeCli = <
   const jsonOption = Flag.boolean("json").pipe(Flag.withDefault(false));
   const endpointLabelOption = Flag.string("target").pipe(Flag.optional);
   const followOption = Flag.boolean("follow").pipe(Flag.withAlias("f"), Flag.withDefault(false));
-  const linesOption = Flag.integer("lines").pipe(Flag.withAlias("n"), Flag.withDefault(50));
-  const stderrLogOption = Flag.boolean("stderr").pipe(Flag.withDefault(false));
-  const stdoutLogOption = Flag.boolean("stdout").pipe(Flag.withDefault(false));
   const endpointLabelFrom = (endpointLabel: Option.Option<string>): string | undefined =>
     Option.isSome(endpointLabel) ? endpointLabel.value : undefined;
   const groupsCommand = Command.make("groups", { json: jsonOption, endpointLabel: endpointLabelOption }, ({ json, endpointLabel }) =>
@@ -1886,30 +1838,12 @@ const makeCli = <
       target,
       endpointLabel: endpointLabelOption,
       follow: followOption,
-      lines: linesOption,
-      stderr: stderrLogOption,
-      stdout: stdoutLogOption,
     },
-    ({ target, endpointLabel, follow, lines, stderr, stdout }) => {
-      if (stderr && stdout) {
-        return Effect.fail(
-          new ProcessManagerEndpointConfigError({
-            reason: "Use at most one of --stderr and --stdout",
-          }),
-        );
-      }
-      const stream: ProcessManagerGroupLogStream = stderr
-        ? "stderr"
-        : stdout
-          ? "stdout"
-          : "both";
-      return runGroupLogsCommand(groups, target, {
+    ({ target, endpointLabel, follow }) =>
+      runGroupLogsCommand(groups, target, {
         endpointLabel: endpointLabelFrom(endpointLabel),
         follow,
-        lines,
-        stream,
-      });
-    },
+      }),
   );
   const statusCommand = Command.make("status", { target, json: jsonOption, endpointLabel: endpointLabelOption }, ({ target, json, endpointLabel }) =>
     runStatusCommand(groups, target, { json, endpointLabel: endpointLabelFrom(endpointLabel) })
@@ -2324,6 +2258,16 @@ export const Endpoint = Object.assign(makeEndpointFactory, {
  *
  * @public
  */
+/**
+ * Default operator CLI logger (pretty console). Merge into the PM CLI runtime so
+ * {@link streamGroupLogs} replays child entries with the same formatting as the operator.
+ *
+ * @public
+ */
+export const operatorLoggerLayer = Logger.layer([Logger.consolePretty()], {
+  mergeWithExisting: true,
+});
+
 export const ProcessManager = {
   cli: makeCli,
   connect,
@@ -2338,6 +2282,7 @@ export const ProcessManager = {
    * Merge with Node platform layers (`NodeServices`, `NodeHttpClient`, …).
    */
   operatorLayer: childLaunchLayerFromEnv(),
+  operatorLoggerLayer,
   ConnectionRegistry: {
     layer: makeConnectionRegistryLayer,
     layerConfig: makeConnectionRegistryConfigLayer,

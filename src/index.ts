@@ -210,14 +210,28 @@ export {
   ProcessManagerEndpointConfigError,
   ProcessManagerRequestError,
   Transport,
+  operatorLoggerLayer,
 } from "./ProcessManager";
 export { httpEndpoint } from "./processManagerTransport.js";
+export {
+  encodeProcessManagerLogEntryNdjson,
+  decodeProcessManagerLogEntryNdjson,
+  processManagerLogEntryFromLoggerOptions,
+  ProcessManagerLogEntrySchema,
+  type ProcessManagerLogEntry,
+} from "./processManagerLogEntry.js";
+export {
+  ProcessManagerLogRelay,
+  captureLoggerLayer,
+  replayLogEntry,
+  layer as processManagerLogRelayLayer,
+} from "./processManagerLogRelay.js";
 export { groupLocalRuntime } from "./processManagerGroupRuntime.js";
 export {
+  groupLogEntryStream,
   streamGroupLogs,
+  ProcessManagerGroupLogError,
   type ProcessManagerGroupLogOptions,
-  type ProcessManagerGroupLogPaths,
-  type ProcessManagerGroupLogStream,
 } from "./processManagerGroupLogs.js";
 export type {
   ProcessManagerEndpointConfigItem,

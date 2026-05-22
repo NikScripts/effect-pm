@@ -53,13 +53,11 @@ Tests and custom CLIs should prefer **`ProcessManager.ChildLaunch.layerConfig({ 
 
 ```bash
 pnpm run demo:pm -- group-logs workshop-group --follow
-pnpm run demo:pm -- group-logs workshop-group --lines 100 --stderr
 ```
 
-- **`group-logs`** — tail stdout/stderr log files from run state (or default `.effect-pm/logs` paths)
-- **`--follow` / `-f`** — poll for new log bytes until interrupted
-- **`--lines` / `-n`** — number of initial lines per stream (default `50`)
-- **`--stdout`** / **`--stderr`** — limit to one stream (default: both, prefixed `[stdout]` / `[stderr]`)
+- **`group-logs`** — stream structured Effect log entries from the child control plane (`GET /logs/stream`, NDJSON)
+- **`--follow` / `-f`** — keep the HTTP stream open and replay new entries as they arrive
+- Merge **`ProcessManager.operatorLoggerLayer`** into the operator CLI runtime so replay uses the same pretty/json logger as the PM process
 
 
 `ProcessManager.cli(groups)` requires platform layers plus `ProcessManager.operatorLayer` (or `ChildLaunch.layerConfig` in tests).
@@ -82,6 +80,13 @@ Child entry binary: **`effect-pm-group-child`** (also `pnpm exec effect-pm-group
 - **`Endpoint` injectable factory** — `ProcessManager.Endpoint<MyTag>()(Group, { baseUrl })` for app-injected remote clients.
 
 
-## Log files
+## Structured log relay
 
-`group-start` records paths like `.effect-pm/logs/<group>.out.log` and `.err.log` in run state. The operator drains the child process **stdout** and **stderr** streams into those files (append mode) via background fibers, so the paths reflect real process output instead of empty placeholder files.
+| Piece | Role |
+|-------|------|
+| Child `captureLoggerLayer` | Captures Effect `Logger` calls as `ProcessManagerLogEntry` values |
+| `ProcessManagerLogRelay` | In-process PubSub + tail history on the child |
+| `GET /logs/stream` | NDJSON snapshot (+ live stream when `?follow=true`) |
+| `streamGroupLogs` / `groupLogEntryStream` | PM operator HTTP client decodes entries and `replayLogEntry` through ambient `Logger` |
+
+The child does not format logs locally for the operator; the PM CLI replays through `operatorLoggerLayer`.
