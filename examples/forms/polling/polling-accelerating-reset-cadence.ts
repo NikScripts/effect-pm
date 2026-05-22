@@ -18,10 +18,10 @@ import {
 
 const scheduleStartAtUnixEpoch = DateTime.toDateUtc(DateTime.makeUnsafe(0));
 
-const pollLayer = Polling.acceleratingScoped({
-  minIntervalMs: 25,
-  maxIntervalMs: 500,
-  decayK: 0.55,
+const pollLayer = Polling.accelerating({
+  fastest: "25 millis",
+  slowest: "500 millis",
+  decay: 0.55,
 });
 const scheduleLayer = ProcessSchedule.inMemory([
   ProcessSchedule.at("sports-accel-simple", scheduleStartAtUnixEpoch),

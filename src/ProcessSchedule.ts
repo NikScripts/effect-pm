@@ -42,7 +42,7 @@
  */
 
 import { Context, DateTime, Deferred, Effect, Layer, Option, Ref } from "effect";
-import { brandScheduleLayer } from "./processLayerBrand.js";
+import { registerScheduleLayer } from "./processLayerBrand.js";
 
 // ============================================================================
 // Public Types
@@ -311,7 +311,7 @@ const buildInMemoryService = (
 const inMemoryLayer = (
   initial: ReadonlyArray<ProcessScheduleEntry> = [],
 ): Layer.Layer<ProcessScheduleTag> =>
-  brandScheduleLayer(
+  registerScheduleLayer(
     Layer.effect(ProcessScheduleTag, buildInMemoryService(initial)),
   );
 

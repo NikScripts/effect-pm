@@ -145,6 +145,7 @@ function startControlService(
   return ControlTransportHttp.server({
     port: options.port,
   }).serve.pipe(
+    // @effect-diagnostics-next-line strictEffectProvide:off — HTTP transport entry binds router layer to the server effect.
     Effect.provide(ControlRouter.layer(options.group)),
   );
 }
@@ -161,6 +162,7 @@ const controlServiceLayerFromValue = <
   ControlTransportServer | ProcessGroupEntryRequirements<Entries> | ProcessStore
 > =>
   scopedDiscard(
+    // @effect-diagnostics-next-line strictEffectProvide:off — scoped layer factory entry point.
     serveWithTransport.pipe(Effect.provide(ControlRouter.layer(group))),
   );
 
@@ -176,6 +178,7 @@ const controlServiceLayerFromGroup = <
   ControlTransportServer | Self | ProcessGroupEntryRequirements<Entries> | ProcessStore
 > =>
   scopedDiscard(
+    // @effect-diagnostics-next-line strictEffectProvide:off — scoped layer factory entry point.
     serveWithTransport.pipe(Effect.provide(ControlRouter.layerFromGroup(group))),
   );
 

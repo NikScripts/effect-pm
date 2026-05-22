@@ -38,7 +38,6 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 | **`Polling.jittered(interval, { jitter })`** | Fixed ± `jitter` fraction of base | same as spaced | no-op | base interval (not jittered value) |
 | **`Polling.backoff({ initial, max, factor? })`** | Multiply delay each tick, cap at `max`; default `factor` 2 | reset delay to `initial` + wake | multiply current delay | current delay from ref |
 | **`Polling.accelerating({ fastest, slowest, decay?, excitement? })`** | Exponential decay from `slowest` toward `fastest` as iteration rises | iteration → 0 + wake | increment iteration | delay for current iteration |
-| **`Polling.acceleratingScoped({ minIntervalMs, maxIntervalMs, decayK })`** | **Deprecated** — maps to `accelerating` with ms fields | (via accelerating) | (via accelerating) | (via accelerating) |
 | **`Polling.acceleratingWithRefs({ config, iteration, excitement })`** | Same curve but **`Ref`**-backed config/iteration/excitement for live tuning from outside the tick | iteration ref → 0 + wake | increment iteration ref | read all refs |
 
 ### Custom form
@@ -47,9 +46,8 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### Ways to attach polling to a process
 
-- **`Process.make(id, { polling: SomePollingLayer })`** — merged into `process.effect`; **`PollingTag` removed from process `R`** at fork time.
+- **`Process.make(id, { polling: SomePollingLayer })`** or **`Process.make(id, effect, pollingLayer, …)`** — merged into `process.effect`; **`PollingTag` removed from process `R`** at fork time. Positional args accept **preset** layers only (`Polling.spaced`, `Polling.accelerating`, …); custom layers belong on the config object.
 - **Omit `polling` on `Process.make`** — caller must provide `Polling` in environment when forking/running `process.effect` (same merge rules if provided at fork site).
-- **`Process.providePolling(id, config, layer)`** — attach/replace polling layer before `make`.
 
 ### In-process control (during a running instance)
 
@@ -162,9 +160,8 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### Construction forms
 
-- **`Process.make(id, { effect, polling?, schedule?, scheduleLayer? })`** — returns handle + baked layers (`process.name === id`).
-- **`Process.Service<Self>()(id, { effect, polling?, schedule?, scheduleLayer? })`** — class-style Context tag + `.layer` for typed `ProcessGroup` entries; id becomes `name`.
-- **`Process.providePolling(id, base, layer)`** / **`Process.provideSchedule(id, base, layer)`** — build with an extra layer.
+- **`Process.make(id, { effect, polling?, schedule?, scheduleLayer? })`** or **`Process.make(id, effect, polling?, schedule?)`** — returns handle + baked layers (`process.name === id`). Third/fourth positional args may be polling preset, schedule preset, or schedule initializer (order-independent).
+- **`Process.Service<Self>()(id, effect, …)`** / **`Process.Service<Self>()(id, { effect, … })`** — class-style Context tag + `.layer` for typed `ProcessGroup` entries; id becomes `name`.
 
 ### Config fields (`ProcessMakeOptions`)
 
@@ -201,11 +198,6 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 - **`ProcessSupervisorRequirements<C>`** — fork-time `R` from config.
 - **`ProcessEffectRequirements<P>`** — extract `R` from process type.
 - **`ProcessDefinition`**, **`ProcessServiceDefinition`**, **`ProcessInterface`** (type export name).
-
-### Deprecated aliases
-
-- **`ScheduledProcessDetails`** → `ProcessDetails`.
-- **`CronDetails`** — pre-v0.7 cron shape; deprecated.
 
 ### Remote / HTTP / CLI
 

@@ -64,10 +64,10 @@ describe("Polling.accelerating", () => {
       expect(resetMs).toBe(firstMs);
     }).pipe(
       Effect.provide(
-        Polling.acceleratingScoped({
-          minIntervalMs: 100,
-          maxIntervalMs: 2_000,
-          decayK: 1,
+        Polling.accelerating({
+          fastest: "100 millis",
+          slowest: "2 seconds",
+          decay: 1,
         }),
       ),
     ),
@@ -84,10 +84,10 @@ describe("Polling.accelerating", () => {
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
-          Polling.acceleratingScoped({
-            minIntervalMs: 100,
-            maxIntervalMs: 60_000,
-            decayK: 1,
+          Polling.accelerating({
+            fastest: "100 millis",
+            slowest: "60 seconds",
+            decay: 1,
           }),
           TestClock.layer(),
         ),

@@ -1,7 +1,7 @@
 /**
  * @module examples/forms/polling/polling-accelerating
  *
- * Polling.acceleratingScoped only — no feed, no resetCadence. Run: `pnpm run example:form:polling-accelerating`
+ * Polling.accelerating only — no feed, no resetCadence. Run: `pnpm run example:form:polling-accelerating`
  */
 
 import { Duration, Effect, Fiber, Layer, Ref } from "effect";
@@ -12,10 +12,10 @@ import { utcDateFromMillis } from "../../../src/utcDate";
 
 const runtime = Layer.mergeAll(
   ProcessStore.layer,
-  Polling.acceleratingScoped({
-    minIntervalMs: 40,
-    maxIntervalMs: 400,
-    decayK: 0.4,
+  Polling.accelerating({
+    fastest: "40 millis",
+    slowest: "400 millis",
+    decay: 0.4,
   }),
   ProcessSchedule.inMemory([
     ProcessSchedule.at("polling-accelerating", utcDateFromMillis(0)),

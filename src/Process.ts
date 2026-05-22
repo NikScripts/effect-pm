@@ -16,7 +16,7 @@
  * @module Process
  */
 
-import { Cause, Clock, Context, DateTime, Duration, Effect, Fiber, Layer, MutableRef, Option } from "effect";
+import { Cause, Clock, Context, Data, DateTime, Duration, Effect, Fiber, Layer, MutableRef, Option } from "effect";
 import { isPollingLayer, isScheduleLayer } from "./processLayerBrand.js";
 import { ProcessStore } from "./ProcessStore";
 import { Polling, PollingTag } from "./Polling";
@@ -187,6 +187,13 @@ export const scheduleControls: Effect.Effect<ProcessScheduleControls, never, nev
 // ============================================================================
 // Internal
 // ============================================================================
+
+/** @public Thrown when a positional {@link Process.make} argument is not a recognized preset layer or schedule initializer. */
+export class ProcessMakeInvalidLayerArgument extends Data.TaggedError("ProcessMakeInvalidLayerArgument")<{
+  /** 1-based index of the invalid argument (`3` or `4`). */
+  readonly argumentIndex: 3 | 4;
+  readonly reason: string;
+}> {}
 
 /** @public Optional polling layer argument to {@link Process.make}. */
 export type ProcessPollingInput = Layer.Layer<PollingTag, never, never>;
@@ -941,21 +948,45 @@ const collectPollingAndSchedule = <RUser>(
   let schedule: ProcessScheduleInitializer<RUser> | undefined;
   let scheduleLayer: AnyScheduleLayer | undefined;
 
-  for (const arg of [third, fourth]) {
+  const fail = (argumentIndex: 3 | 4, reason: string): never => {
+    throw new ProcessMakeInvalidLayerArgument({ argumentIndex, reason });
+  };
+
+  for (const [index, arg] of [[3, third], [4, fourth]] as const) {
     if (arg === undefined) {
       continue;
     }
     if (typeof arg === "function") {
+      if (schedule !== undefined) {
+        fail(index, "only one schedule initializer is allowed");
+      }
       schedule = arg;
       continue;
     }
     if (isPollingLayer(arg)) {
-      polling = arg as AnyPollingLayer;
+      if (polling !== undefined) {
+        fail(index, "only one polling layer is allowed");
+      }
+      polling = arg;
       continue;
     }
     if (isScheduleLayer(arg)) {
-      scheduleLayer = arg as AnyScheduleLayer;
+      if (scheduleLayer !== undefined) {
+        fail(index, "only one schedule layer is allowed");
+      }
+      scheduleLayer = arg;
+      continue;
     }
+    if (Layer.isLayer(arg)) {
+      fail(
+        index,
+        "custom Layer values are not supported as positional arguments; pass polling and schedule on the config object instead",
+      );
+    }
+    fail(
+      index,
+      "expected a Polling preset layer, ProcessSchedule preset layer, or schedule initializer function",
+    );
   }
 
   return {

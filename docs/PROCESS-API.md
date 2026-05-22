@@ -67,7 +67,7 @@ Built-in factories:
 | Factory | Behavior |
 |---------|----------|
 | **`Polling.spaced(duration)`** | Fixed delay between ticks; `resetCadence` = `requestWake`. |
-| **`Polling.acceleratingScoped(initial)`** | Allocates refs and returns a layer: delay **shortens** with each tick (`afterTick` increments iteration); **`resetCadence`** sets iteration **0** + **wake** (back toward initial long spacing). |
+| **`Polling.accelerating({ fastest, slowest, decay?, excitement? })`** | Delay **shortens** with each tick (`afterTick` increments iteration); **`resetCadence`** sets iteration **0** + **wake** (back toward initial long spacing). |
 | **`Polling.accelerating({ config, iteration, excitement })`** | Same curve; you own the `Ref`s (e.g. wire HTTP handlers to tweak `excitement` or `config`). |
 
 ### `PollingService` methods

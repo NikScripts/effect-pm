@@ -244,7 +244,7 @@ To run once outside trigger cadence (even when schedule is disarmed), call `proc
 
 ### Accelerating polling (speeds up, then reset)
 
-Use **`Polling.acceleratingScoped`** (or **`Polling.accelerating`** with your own refs) when intervals should **shorten** after each tick. **`yield* Polling.resetCadence`** sets the iteration back to zero and **wakes** the current wait so spacing returns toward the configured **maximum**. Any effect that calls `resetCadence` must see the **same** `Polling` layer instance as the process (merge the layer once at the app / `ProcessGroup` boundary). For **scores-feed** forms (**basic spaced poll → minimal `resetCadence` → verbose `peekCadence`**), see **`examples/forms/polling/`** with **`examples/shared/sports-score-feed.ts`** and **`examples/shared/demo-harness.ts`** (`pnpm run example:sports-polling-accelerating`).
+Use **`Polling.accelerating`** (or **`Polling.acceleratingWithRefs`** when you need externally owned refs) when intervals should **shorten** after each tick. **`yield* Polling.resetCadence`** sets the iteration back to zero and **wakes** the current wait so spacing returns toward the configured **maximum**. Any effect that calls `resetCadence` must see the **same** `Polling` layer instance as the process (merge the layer once at the app / `ProcessGroup` boundary). For **scores-feed** forms (**basic spaced poll → minimal `resetCadence` → verbose `peekCadence`**), see **`examples/forms/polling/`** with **`examples/shared/sports-score-feed.ts`** and **`examples/shared/demo-harness.ts`** (`pnpm run example:sports-polling-accelerating`).
 
 Runnable demo (with `TestClock`): `pnpm run example:process-supervisor-patterns`.
 

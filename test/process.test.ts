@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process, ProcessSchedule, ProcessStore } from "../src";
+import { Polling, Process, ProcessMakeInvalidLayerArgument, ProcessSchedule, ProcessStore } from "../src";
 import { utcDateFromMillis } from "../src/utcDate.js";
 
 const alwaysOnEntry = {
@@ -21,6 +21,21 @@ describe("Process.make", () => {
     const id = "test/make-positional" as const;
     const proc = Process.make(id, Effect.void);
     expect(proc.name).toBe(id);
+  });
+
+  it("throws ProcessMakeInvalidLayerArgument for unregistered positional layers", () => {
+    const customPolling = Layer.succeed(Polling, {
+      overlap: "serial",
+      awaitNextTick: Effect.void,
+      requestWake: Effect.void,
+      resetCadence: Effect.void,
+      afterTick: Effect.void,
+      peekCadence: Effect.succeed(Option.none()),
+    });
+
+    expect(() =>
+      Process.make("test/invalid-positional", Effect.void, customPolling),
+    ).toThrowError(ProcessMakeInvalidLayerArgument);
   });
 
 });

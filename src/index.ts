@@ -81,7 +81,7 @@ export {
 } from "./disarmedIdleSleep";
 
 // Namespace exports (these export objects with .make methods)
-export { Process } from "./Process";
+export { Process, ProcessMakeInvalidLayerArgument } from "./Process";
 export { Polling } from "./Polling";
 export { ProcessSchedule } from "./ProcessSchedule";
 export { ProcessGroup } from "./ProcessGroup";

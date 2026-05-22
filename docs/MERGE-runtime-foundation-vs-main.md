@@ -40,11 +40,10 @@ Process.make("@app/MyProcess", {
 });
 ```
 
-**`Process.providePolling` / `Process.provideSchedule`** also take **`id`** first:
+**Positional `Process.make`** accepts preset polling/schedule layers in either order:
 
 ```ts
-Process.providePolling("@app/MyProcess", { effect: Effect.void }, Polling.layer);
-Process.provideSchedule("@app/MyProcess", { effect: Effect.void }, scheduleLayer);
+Process.make("@app/MyProcess", Effect.void, Polling.spaced("1 second"), ProcessSchedule.alwaysArmed);
 ```
 
 Public config shape is **`ProcessMakeOptions`** — the **`name` field does not exist** on that type (the process id is the first argument to **`make`**).

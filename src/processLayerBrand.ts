@@ -2,38 +2,32 @@ import { Layer } from "effect";
 import type { PollingTag } from "./Polling.js";
 import type { ProcessScheduleTag } from "./ProcessSchedule.js";
 
-/** @internal Marks layers produced by effect-pm polling presets for {@link Process.make} arg parsing. */
-export const pollingLayerBrand: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/PollingLayerBrand",
-);
+/** @internal */
+const pollingLayerRegistry = new WeakMap<object, true>();
 
-/** @internal Marks layers produced by effect-pm schedule presets for {@link Process.make} arg parsing. */
-export const scheduleLayerBrand: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/ScheduleLayerBrand",
-);
+/** @internal */
+const scheduleLayerRegistry = new WeakMap<object, true>();
 
-type BrandedLayer<L> = L & {
-  readonly [pollingLayerBrand]?: true;
-  readonly [scheduleLayerBrand]?: true;
+/** @internal Register a polling preset layer without mutating the layer value. */
+export const registerPollingLayer = <I, E, R>(
+  layer: Layer.Layer<I, E, R>,
+): Layer.Layer<I, E, R> => {
+  pollingLayerRegistry.set(layer, true);
+  return layer;
+};
+
+/** @internal Register a schedule preset layer without mutating the layer value. */
+export const registerScheduleLayer = <I, E, R>(
+  layer: Layer.Layer<I, E, R>,
+): Layer.Layer<I, E, R> => {
+  scheduleLayerRegistry.set(layer, true);
+  return layer;
 };
 
 /** @internal */
-export const brandPollingLayer = <I, E, R>(layer: Layer.Layer<I, E, R>): Layer.Layer<I, E, R> =>
-  Object.assign(layer, { [pollingLayerBrand]: true as const });
-
-/** @internal */
-export const brandScheduleLayer = <I, E, R>(layer: Layer.Layer<I, E, R>): Layer.Layer<I, E, R> =>
-  Object.assign(layer, { [scheduleLayerBrand]: true as const });
-
-const hasBrand = (layer: Layer.Layer<unknown, unknown, unknown>, brand: symbol): boolean =>
-  (layer as unknown as BrandedLayer<Layer.Layer<unknown, unknown, unknown>>)[brand as keyof BrandedLayer<
-    Layer.Layer<unknown, unknown, unknown>
-  >] === true;
-
-/** @internal */
 export const isPollingLayer = (u: unknown): u is Layer.Layer<PollingTag, never, never> =>
-  Layer.isLayer(u) && hasBrand(u, pollingLayerBrand);
+  Layer.isLayer(u) && pollingLayerRegistry.has(u);
 
 /** @internal */
 export const isScheduleLayer = (u: unknown): u is Layer.Layer<ProcessScheduleTag, never, never> =>
-  Layer.isLayer(u) && hasBrand(u, scheduleLayerBrand);
+  Layer.isLayer(u) && scheduleLayerRegistry.has(u);

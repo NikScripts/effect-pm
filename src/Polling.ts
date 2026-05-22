@@ -13,7 +13,7 @@
  * | `Polling.jittered` | Fixed interval ± random jitter (prevents thundering herd) |
  * | `Polling.backoff` | Exponential backoff: initial → max (resetCadence resets) |
  * | `Polling.accelerating` | Exponential decay: starts slow, speeds up with excitement |
- * | `Polling.acceleratingScoped` | Same as accelerating, refs scoped to the layer |
+ * | `Polling.acceleratingWithRefs` | Accelerating cadence with externally-owned refs |
  *
  * ## Usage
  *
@@ -32,7 +32,7 @@
  */
 
 import { Context, Duration, Effect, Layer, Option, Random, Ref, Deferred } from "effect";
-import { brandPollingLayer } from "./processLayerBrand.js";
+import { registerPollingLayer } from "./processLayerBrand.js";
 
 // ============================================================================
 // Service interface
@@ -114,7 +114,7 @@ const spacedLayer = (
   interval: Duration.Input,
 ): Layer.Layer<PollingTag> => {
   const dur = Duration.fromInputUnsafe(interval);
-  return brandPollingLayer(
+  return registerPollingLayer(
     Layer.effect(
       PollingTag,
       Effect.map(makeWakeableAwait(dur), ({ awaitNextTick, requestWake }): PollingService => ({
@@ -150,7 +150,7 @@ const jitteredLayer = (
   const baseMs = Duration.toMillis(Duration.fromInputUnsafe(interval));
   const jitterFraction = Math.abs(options.jitter);
 
-  return brandPollingLayer(
+  return registerPollingLayer(
     Layer.effect(
       PollingTag,
       Effect.gen(function* () {
@@ -207,7 +207,7 @@ const backoffLayer = (options: {
   const maxMs = Duration.toMillis(Duration.fromInputUnsafe(options.max));
   const factor = options.factor ?? 2;
 
-  return brandPollingLayer(
+  return registerPollingLayer(
     Layer.effect(
       PollingTag,
       Effect.gen(function* () {
@@ -312,7 +312,7 @@ const acceleratingLayer = (config: AcceleratingPollConfig): Layer.Layer<PollingT
   const decay = config.decay ?? 0.3;
   const excitement = config.excitement ?? 1;
 
-  return brandPollingLayer(
+  return registerPollingLayer(
     Layer.effect(
       PollingTag,
       Effect.gen(function* () {
@@ -351,16 +351,9 @@ const acceleratingLayer = (config: AcceleratingPollConfig): Layer.Layer<PollingT
   );
 };
 
-// ============================================================================
-// Legacy: acceleratingScoped (external refs)
-// ============================================================================
-
 /**
- * Accelerating with externally-managed refs for live tuning.
- * Prefer `Polling.accelerating` unless you need runtime parameter changes.
- *
- * @deprecated Use `Polling.accelerating` with its simpler config. This variant
- * is retained for advanced use cases requiring live ref access.
+ * Accelerating cadence with externally-managed refs for live tuning.
+ * Prefer {@link accelerating} unless you need runtime parameter changes via refs.
  *
  * @public
  */
@@ -369,7 +362,7 @@ const acceleratingWithRefs = (options: {
   readonly iteration: Ref.Ref<number>;
   readonly excitement: Ref.Ref<number>;
 }): Layer.Layer<PollingTag> =>
-  brandPollingLayer(
+  registerPollingLayer(
     Layer.effect(
       PollingTag,
       Effect.gen(function* () {
@@ -414,46 +407,16 @@ const acceleratingWithRefs = (options: {
  *
  * @public
  */
-/**
- * Legacy config shape for `acceleratingScoped`. Accepts the old field names.
- * @deprecated Use `AcceleratingPollConfig` instead.
- */
-interface LegacyAcceleratingConfig {
-  readonly minIntervalMs: number;
-  readonly maxIntervalMs: number;
-  readonly decayK: number;
-}
-
-/**
- * Legacy `acceleratingScoped` — allocates refs internally from the old config shape.
- * @deprecated Use `Polling.accelerating` instead.
- */
-const acceleratingScopedLayer = (
-  initial: LegacyAcceleratingConfig,
-): Layer.Layer<PollingTag> =>
-  acceleratingLayer({
-    fastest: Duration.millis(initial.minIntervalMs),
-    slowest: Duration.millis(initial.maxIntervalMs),
-    decay: initial.decayK,
-  });
-
-/**
- * Polling — cadence presets and Context tag.
- *
- * @public
- */
 export const Polling: typeof PollingTag & {
   readonly spaced: typeof spacedLayer;
   readonly jittered: typeof jitteredLayer;
   readonly backoff: typeof backoffLayer;
   readonly accelerating: typeof acceleratingLayer;
-  readonly acceleratingScoped: typeof acceleratingScopedLayer;
   readonly acceleratingWithRefs: typeof acceleratingWithRefs;
 } = Object.assign(PollingTag, {
   spaced: spacedLayer,
   jittered: jitteredLayer,
   backoff: backoffLayer,
   accelerating: acceleratingLayer,
-  acceleratingScoped: acceleratingScopedLayer,
   acceleratingWithRefs,
 });
