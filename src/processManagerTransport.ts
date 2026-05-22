@@ -67,6 +67,21 @@ export const Transport = {
 };
 
 /**
+ * Build an HTTP endpoint definition from a transport descriptor.
+ *
+ * @public
+ */
+export const httpEndpoint = (
+  transport: ProcessManagerTransport,
+): {
+  readonly _tag: "ProcessManagerHttpEndpoint";
+  readonly transport: ProcessManagerTransport;
+} => ({
+  _tag: "ProcessManagerHttpEndpoint",
+  transport,
+});
+
+/**
  * @public
  */
 export const transportBaseUrl = (transport: ProcessManagerTransport): string =>

@@ -1,3 +1,4 @@
+import { Command, Flag } from "effect/unstable/cli";
 import { Data, Effect, Layer } from "effect";
 import type { ProcessGroupEntry, ProcessGroupServiceDefinition } from "./ProcessGroup.js";
 import { groupLocalRuntime } from "./processManagerGroupRuntime.js";
@@ -53,53 +54,17 @@ export const findGroupExportById = (
   return undefined;
 };
 
-/** @internal */
-export const parseGroupChildArgv = (
-  argv: ReadonlyArray<string>,
-): Effect.Effect<
-  { readonly entry: string; readonly groupId: string; readonly controlBaseUrl: string },
-  GroupChildArgvError
-> =>
+/**
+ * Run the group child entrypoint from parsed CLI flags.
+ *
+ * @public
+ */
+export const runGroupChildProgram = (args: {
+  readonly entry: string;
+  readonly groupId: string;
+  readonly controlBaseUrl: string;
+}) =>
   Effect.gen(function* () {
-    let entry: string | undefined;
-    let groupId: string | undefined;
-    let controlBaseUrl: string | undefined;
-    for (let i = 2; i < argv.length; i++) {
-      const flag = argv[i];
-      const value = argv[i + 1];
-      if (flag === "--entry" && value !== undefined) {
-        entry = value;
-        i++;
-        continue;
-      }
-      if (flag === "--group-id" && value !== undefined) {
-        groupId = value;
-        i++;
-        continue;
-      }
-      if (flag === "--control-base-url" && value !== undefined) {
-        controlBaseUrl = value;
-        i++;
-      }
-    }
-    if (entry === undefined) {
-      return yield* new GroupChildArgvError({ reason: "Missing --entry <module-url>" });
-    }
-    if (groupId === undefined) {
-      return yield* new GroupChildArgvError({ reason: "Missing --group-id <group-id>" });
-    }
-    if (controlBaseUrl === undefined) {
-      return yield* new GroupChildArgvError({
-        reason: "Missing --control-base-url <url>",
-      });
-    }
-    return { entry, groupId, controlBaseUrl };
-  });
-
-/** @public */
-export const runGroupChildProgram = (argv: ReadonlyArray<string>) =>
-  Effect.gen(function* () {
-    const args = yield* parseGroupChildArgv(argv);
     const moduleUnknown: unknown = yield* Effect.tryPromise({
       try: (): Promise<unknown> => import(args.entry),
       catch: (error) =>
@@ -127,3 +92,24 @@ export const runGroupChildProgram = (argv: ReadonlyArray<string>) =>
       Effect.scoped,
     );
   });
+
+const groupChildFlags = {
+  entry: Flag.string("entry"),
+  groupId: Flag.string("group-id"),
+  controlBaseUrl: Flag.string("control-base-url"),
+};
+
+const groupChildRoot = Command.make(
+  "effect-pm-group-child",
+  groupChildFlags,
+  ({ entry, groupId, controlBaseUrl }) =>
+    runGroupChildProgram({ entry, groupId, controlBaseUrl }),
+);
+
+/**
+ * Effect CLI runner for the packaged group child binary.
+ *
+ * @public
+ */
+export const runGroupChildCli = (argv: ReadonlyArray<string> = process.argv) =>
+  Command.runWith(groupChildRoot, { version: "0.0.0" })(argv);

@@ -18,6 +18,7 @@ import {
   ProcessStore,
   QueueResource,
 } from "../src";
+import { decodeProcessManagerRunStateJson } from "../src/processManagerRunState.js";
 import { ModuleEndpointGroup } from "./fixtures/process-manager-module-definition";
 
 const testLocalEntry = "file:///test-process-group-entry.ts";
@@ -41,18 +42,8 @@ const waitForQueueCompleted = (
     }
   });
 
-const readRunStatePid = (text: string): number => {
-  const value: unknown = JSON.parse(text);
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "pid" in value &&
-    typeof value.pid === "number"
-  ) {
-    return value.pid;
-  }
-  throw new Error("run state did not include a numeric pid");
-};
+const readRunStatePid = (text: string) =>
+  Effect.map(decodeProcessManagerRunStateJson(text), (state) => state.pid);
 
 describe("ProcessManager", () => {
   it("builds endpoint config items from the direct Endpoint export", () => {
@@ -961,7 +952,7 @@ describe("ProcessManager", () => {
         const stateText = yield* fs.readFileString(
           `${runDirectory}/test__module-endpoint-group.json`,
         );
-        const pid = readRunStatePid(stateText);
+        const pid = yield* readRunStatePid(stateText);
         yield* Ref.set(pidRef, pid);
         expect(pid).toBeGreaterThan(0);
       });

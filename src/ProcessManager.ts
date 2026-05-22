@@ -53,6 +53,12 @@ export type { ProcessManagerHttpTransport, ProcessManagerTransport } from "./pro
 export { Transport } from "./processManagerTransport.js";
 import { groupLocalRuntime } from "./processManagerGroupRuntime.js";
 export { groupLocalRuntime };
+import {
+  decodeProcessManagerRunStateJson,
+  encodeProcessManagerRunStateJson,
+  type ProcessManagerRunState,
+} from "./processManagerRunState.js";
+import { httpEndpoint } from "./processManagerTransport.js";
 
 type AnyProcessGroupContract = ProcessGroupContract<
   string,
@@ -222,35 +228,8 @@ export interface ProcessManagerModuleEndpointDefinition<
  */
 export type ProcessManagerModuleEndpointLaunchConfig = ProcessManagerChildLaunchConfig;
 
-interface ProcessManagerRunState {
-  readonly args: ReadonlyArray<string>;
-  readonly command: string;
-  readonly controlBaseUrl: string;
-  readonly cwd?: string;
-  readonly endpointLabel: string;
-  readonly groupId: string;
-  readonly logPaths: {
-    readonly stderr: string;
-    readonly stdout: string;
-  };
-  readonly pid: number;
-  readonly startedAt: string;
-}
 
-const processManagerRunStateSchema = Schema.Struct({
-  args: Schema.Array(Schema.String),
-  command: Schema.String,
-  controlBaseUrl: Schema.String,
-  cwd: Schema.optional(Schema.String),
-  endpointLabel: Schema.String,
-  groupId: Schema.String,
-  logPaths: Schema.Struct({
-    stderr: Schema.String,
-    stdout: Schema.String,
-  }),
-  pid: Schema.Number,
-  startedAt: Schema.String,
-});
+
 
 /**
  * Endpoint definitions that can appear in a group config item array.
@@ -387,6 +366,23 @@ const makeEndpointConfigItem = <
 });
 
 
+const endpointHttp = (
+  config: { readonly transport: ProcessManagerHttpTransport },
+): ProcessManagerHttpEndpointDefinition => httpEndpoint(config.transport);
+
+const isHttpEndpointDefinition = (
+  input: ProcessManagerTransport | ProcessManagerHttpEndpointDefinition,
+): input is ProcessManagerHttpEndpointDefinition =>
+  typeof input === "object" &&
+  input !== null &&
+  "_tag" in input &&
+  input._tag === "ProcessManagerHttpEndpoint";
+
+const transportFromEndpointInput = (
+  input: ProcessManagerTransport | ProcessManagerHttpEndpointDefinition,
+): ProcessManagerTransport =>
+  isHttpEndpointDefinition(input) ? input.transport : input;
+
 const endpointItemsFrom = (
   items: readonly ProcessManagerGroupConfigItem[],
 ): ReadonlyArray<ProcessManagerEndpointConfigItem<string, ProcessManagerEndpointDefinition, boolean>> =>
@@ -517,7 +513,7 @@ const writeRunState = (
 ): Effect.Effect<void, ProcessManagerEndpointConfigError, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const encoded = yield* Schema.encodeUnknownEffect(Schema.UnknownFromJsonString)(state).pipe(
+    const encoded = yield* encodeProcessManagerRunStateJson(state).pipe(
       Effect.mapError(
         (error) =>
           new ProcessManagerEndpointConfigError({
@@ -539,7 +535,7 @@ const decodeRunState = (
   runFile: string,
   text: string,
 ): Effect.Effect<ProcessManagerRunState, ProcessManagerEndpointConfigError> =>
-  Schema.decodeUnknownEffect(Schema.fromJsonString(processManagerRunStateSchema))(text).pipe(
+  decodeProcessManagerRunStateJson(text).pipe(
     Effect.mapError(
       (error) =>
         new ProcessManagerEndpointConfigError({
@@ -2373,22 +2369,40 @@ const remoteEndpointFromTransport = (
 });
 
 export const Endpoint = Object.assign(makeEndpointFactory, {
+  http: endpointHttp,
+
   local: (
     transport: ProcessManagerTransport,
     entry: string | ImportMeta,
   ): ProcessManagerEndpointConfigItem<"local", ProcessManagerChildEndpointDefinition, false> =>
     makeEndpointConfigItem("local", childEndpointDefinition(transport, entry), false),
 
+  localDefinition: (
+    definition: ProcessManagerEndpointDefinition,
+  ): ProcessManagerEndpointConfigItem<string, ProcessManagerEndpointDefinition, false> =>
+    makeEndpointConfigItem("local", definition, false),
+
   production: (
-    transport: ProcessManagerTransport,
+    transportOrDefinition: ProcessManagerTransport | ProcessManagerHttpEndpointDefinition,
   ): ProcessManagerEndpointConfigItem<"production", ProcessManagerHttpEndpointDefinition, false> =>
-    makeEndpointConfigItem("production", remoteEndpointFromTransport(transport), false),
+    makeEndpointConfigItem(
+      "production",
+      remoteEndpointFromTransport(transportFromEndpointInput(transportOrDefinition)),
+      false,
+    ),
 
   define: <const Label extends string>(
     label: Label,
-    transport: ProcessManagerTransport,
+    transportOrDefinition: ProcessManagerTransport | ProcessManagerHttpEndpointDefinition,
   ): ProcessManagerEndpointConfigItem<Label, ProcessManagerHttpEndpointDefinition, false> =>
-    makeEndpointConfigItem(label, remoteEndpointFromTransport(transport), false),
+    makeEndpointConfigItem(
+      label,
+      remoteEndpointFromTransport(transportFromEndpointInput(transportOrDefinition)),
+      false,
+    ),
+
+  /** @deprecated Use {@link Endpoint.runner} or child `Endpoint.local(transport, entry)`. */
+  module: endpointRunner,
 
   runner: endpointRunner,
 });
@@ -2405,7 +2419,13 @@ export const ProcessManager = {
     layerConfig: childLaunchLayerConfig,
     layerFromEnv: childLaunchLayerFromEnv,
     defaultPaths: defaultChildLaunchPaths,
+    buildLaunchConfig: buildChildLaunchConfig,
   },
+  /**
+   * Layers required for operator commands (`group-start`, `group-stop`, `groups`, …).
+   * Merge with Node platform layers (`NodeServices`, `NodeHttpClient`, …).
+   */
+  operatorLayer: childLaunchLayerFromEnv(),
   ConnectionRegistry: {
     layer: makeConnectionRegistryLayer,
     layerConfig: makeConnectionRegistryConfigLayer,
@@ -2419,3 +2439,12 @@ export const ProcessManager = {
   LocalRuntime,
   groupLocalRuntime,
 };
+
+export type { ProcessManagerRunState } from "./processManagerRunState.js";
+export {
+  encodeProcessManagerRunStateJson,
+  decodeProcessManagerRunStateJson,
+  ProcessManagerRunStateSchema,
+} from "./processManagerRunState.js";
+
+

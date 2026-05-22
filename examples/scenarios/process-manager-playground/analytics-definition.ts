@@ -5,21 +5,21 @@
  */
 
 import { Clock, Duration, Effect } from "effect";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   Endpoint,
   Polling,
   Process,
   ProcessGroup,
-  ProcessManager,
   ProcessSchedule,
   QueueResource,
   Transport,
 } from "../../../src";
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { utcDateFromMillis } from "../../../src/utcDate";
 import { analyticsPort } from "./ports";
 
+const analyticsTransport = Transport.http(analyticsPort);
 const analyticsEntry = pathToFileURL(
   join(process.cwd(), "examples/scenarios/process-manager-playground/analytics-definition.ts"),
 ).href;
@@ -50,13 +50,11 @@ export class Sampler extends Process.Service<Sampler>()("@demo/playground/Analyt
   }),
 }) {}
 
-const analytics = Transport.http(analyticsPort);
-
 export class AnalyticsGroup extends ProcessGroup.Service<AnalyticsGroup>()(
   "@demo/playground/AnalyticsGroup",
   [Sampler, CounterQueue] as const,
   [
-    Endpoint.local(analytics, analyticsEntry).default,
-    ProcessManager.Endpoint.production(analytics),
+    Endpoint.local(analyticsTransport, analyticsEntry).default,
+    Endpoint.production(analyticsTransport),
   ],
 ) {}

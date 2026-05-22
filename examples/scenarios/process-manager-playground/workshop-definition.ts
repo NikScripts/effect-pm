@@ -5,21 +5,21 @@
  */
 
 import { Cause, Clock, Data, Duration, Effect, Exit } from "effect";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   Endpoint,
   Polling,
   Process,
   ProcessGroup,
-  ProcessManager,
   ProcessSchedule,
   QueueResource,
   Transport,
 } from "../../../src";
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { utcDateFromMillis } from "../../../src/utcDate";
 import { workshopPort } from "./ports";
 
+const workshopTransport = Transport.http(workshopPort);
 const workshopEntry = pathToFileURL(
   join(process.cwd(), "examples/scenarios/process-manager-playground/workshop-definition.ts"),
 ).href;
@@ -89,13 +89,11 @@ export class Feeder extends Process.Service<Feeder>()(
   ]),
 ) {}
 
-const workshop = Transport.http(workshopPort);
-
 export class WorkshopGroup extends ProcessGroup.Service<WorkshopGroup>()(
   "@demo/playground/WorkshopGroup",
   [Feeder, JobQueue] as const,
   [
-    Endpoint.local(workshop, workshopEntry).default,
-    ProcessManager.Endpoint.production(workshop),
+    Endpoint.local(workshopTransport, workshopEntry).default,
+    Endpoint.production(workshopTransport),
   ],
 ) {}

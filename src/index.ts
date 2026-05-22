@@ -192,6 +192,12 @@ export type {
 
 // CLI
 export { createCli, runCli } from "./cli";
+export {
+  decodeProcessManagerRunStateJson,
+  encodeProcessManagerRunStateJson,
+  ProcessManagerRunStateSchema,
+} from "./processManagerRunState.js";
+export type { ProcessManagerRunState } from "./processManagerRunState.js";
 
 // Process Manager
 export {
@@ -204,7 +210,9 @@ export {
   ProcessManagerEndpointConfigError,
   ProcessManagerRequestError,
   Transport,
+  LocalRuntime,
 } from "./ProcessManager";
+export { httpEndpoint } from "./processManagerTransport.js";
 export type {
   ProcessManagerEndpointConfigItem,
   ProcessManagerConnectionConfigMap,
@@ -408,3 +416,10 @@ export type {
 export type {
   ControlResponse,
 } from "./ControlProtocol";
+
+export {
+  GroupChildArgvError,
+  GroupChildImportError,
+  GroupChildNotFoundError,
+  runGroupChildCli,
+} from "./groupChild.js";

@@ -170,3 +170,6 @@ export const resolveChildLaunchPaths = (
     }
     return yield* pathsFromConfig(defaults);
   });
+
+/** @public */
+export { buildChildLaunchConfig as buildLaunchConfig };
