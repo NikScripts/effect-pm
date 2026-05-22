@@ -1,4 +1,4 @@
-import { FileSystem, Layer, Path } from "effect";
+import { Layer, Scope } from "effect";
 import { ControlService } from "./ControlService.js";
 import { localEnvLayer } from "./ProcessGroup.js";
 import type { ProcessGroupEntry, ProcessGroupServiceDefinition } from "./ProcessGroup.js";
@@ -19,7 +19,7 @@ export const groupLocalRuntime = <
   group: ProcessGroupServiceDefinition<Self, Id, Entries>,
   options: {
     readonly controlBaseUrl: string;
-    readonly store?: Layer.Layer<ProcessStore, never, FileSystem.FileSystem | Path.Path>;
+    readonly store?: Layer.Layer<ProcessStore, never, Scope.Scope>;
   },
 ) => {
   const transport: ProcessManagerTransport = {

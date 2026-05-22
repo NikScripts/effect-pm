@@ -1,4 +1,4 @@
-import { Effect, FileSystem, Option, Path } from "effect";
+import { Effect, Option, Scope } from "effect";
 import type { ProcessManagerLogScope } from "./processManagerLogContext.js";
 import { logScopeGroupId } from "./processManagerLogContext.js";
 import {
@@ -6,9 +6,9 @@ import {
   ProcessManagerLogQueryError,
 } from "./processManagerLogQuery.js";
 import {
-  groupLogStoreFilePath,
-  loadGroupLogEntriesFromFile,
-  queryGroupLogsFromFile,
+  groupLogStoreSqlitePath,
+  loadGroupLogEntriesFromSqlite,
+  queryGroupLogsFromSqlite,
 } from "./processManagerLogStore.js";
 import { replayLogQueryResults } from "./processManagerLogQuery.js";
 import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
@@ -19,7 +19,7 @@ type GroupCatalogEntry = {
 };
 
 const storeMissingMessage = (filePath: string): string =>
-  `No log history at ${filePath}. Start the group child (pm group-start) and emit logs before running pm logs.`;
+  `No log history at ${filePath}. Start the group child (pm start <group>) and emit logs before running pm logs.`;
 
 /**
  * Run `pm logs` against on-disk group log stores under the child log directory.
@@ -40,7 +40,7 @@ export const queryGroupLogsForCatalog = (
 ): Effect.Effect<
   void,
   ProcessManagerLogQueryError,
-  FileSystem.FileSystem | Path.Path
+  Scope.Scope
 > =>
   Effect.gen(function* () {
     const paths = yield* resolveChildLaunchPaths().pipe(
@@ -68,9 +68,9 @@ export const queryGroupLogsForCatalog = (
       );
       const merged: ProcessManagerLogEntry[] = [];
       for (const group of groups) {
-        const filePath = groupLogStoreFilePath(paths.logDirectory, group.id);
+        const filePath = groupLogStoreSqlitePath(paths.logDirectory, group.id);
         const groupQuery = { ...query, groupId: group.id, limit: perGroupLimit };
-        const loaded = yield* loadGroupLogEntriesFromFile(filePath, groupQuery).pipe(
+        const loaded = yield* loadGroupLogEntriesFromSqlite(filePath, groupQuery).pipe(
           Effect.option,
         );
         if (Option.isSome(loaded)) {
@@ -79,7 +79,7 @@ export const queryGroupLogsForCatalog = (
       }
       if (merged.length === 0) {
         return yield* new ProcessManagerLogQueryError({
-          reason: `No log history found under ${paths.logDirectory}. ${storeMissingMessage("(group)/events.ndjson")}`,
+          reason: `No log history found under ${paths.logDirectory}. ${storeMissingMessage("(group)/logs.sqlite")}`,
         });
       }
       const sorted = [...merged].sort((left, right) => {
@@ -98,6 +98,6 @@ export const queryGroupLogsForCatalog = (
         reason: "Log history query requires a resolved group scope",
       });
     }
-    const filePath = groupLogStoreFilePath(paths.logDirectory, groupId);
-    yield* queryGroupLogsFromFile(filePath, query);
+    const filePath = groupLogStoreSqlitePath(paths.logDirectory, groupId);
+    yield* queryGroupLogsFromSqlite(filePath, query);
   });

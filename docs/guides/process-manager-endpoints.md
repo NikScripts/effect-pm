@@ -72,7 +72,7 @@ pnpm run demo:pm -- logs workshop-group --from 2026-05-22T19:00:00Z --to 2026-05
 - **`--from` / `--to`** — optional ISO date bounds (both ends optional; if both set, `from` ≤ `to`)
 - **`--after` / `--before`** — optional cursor bounds (entry id or ISO, per storage adapter)
 - **`--limit`**, **`--sort asc|desc`**
-- Reads file-backed `ProcessStore` history at `.effect-pm/logs/<group>/events.ndjson` (written by the group child). Start the child and emit logs before querying.
+- Reads SQLite-backed `ProcessStore` history at `.effect-pm/logs/<group>/logs.sqlite` (written by the group child). Start the child and emit logs before querying.
 - Merge **`ProcessManager.operatorLoggerLayer`** into the operator CLI runtime so replay uses the same pretty/json logger as the PM process
 
 

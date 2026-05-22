@@ -20,7 +20,7 @@
  * @module ProcessGroup
  */
 
-import { Cause, Clock, Context, Data, DateTime, Duration, Effect, FiberMap, FileSystem, Layer, Option, Path, Ref, Schema, Scope } from "effect";
+import { Cause, Clock, Context, Data, DateTime, Duration, Effect, FiberMap, Layer, Option, Ref, Schema, Scope } from "effect";
 import type { HttpClient } from "effect/unstable/http";
 import type { Process, ProcessDefinition, ProcessServiceDefinition } from "./Process";
 import type {
@@ -1569,7 +1569,7 @@ export interface ProcessGroupLocalEnvLayerOptions {
    * Analytics/lifecycle store for process supervisors. Defaults to
    * {@link ProcessStore.layer}.
    */
-  readonly store?: Layer.Layer<ProcessStore, never, FileSystem.FileSystem | Path.Path>;
+  readonly store?: Layer.Layer<ProcessStore, never, Scope.Scope>;
 }
 
 const processEntryIsService = (

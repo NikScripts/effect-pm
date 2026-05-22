@@ -1,12 +1,13 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
-import { Effect, FileSystem, Layer } from "effect";
+import { Effect, FileSystem, Layer, Path } from "effect";
 import { ProcessManagerLogAnnotationKeys } from "../src/processManagerLogContext.js";
 import {
-  groupLogStoreFilePath,
+  groupLogStoreLayer,
+  groupLogStoreSqlitePath,
   makeGroupLogEntryRecordedEvent,
-  queryGroupLogsFromFile,
+  queryGroupLogsFromSqlite,
 } from "../src/processManagerLogStore.js";
 import { ProcessStore, isGroupLogEntryRecorded } from "../src/ProcessStore.js";
 
@@ -16,9 +17,11 @@ describe("processManagerLogStore", () => {
   it.effect("persists and queries group log entries by process annotation", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
       const directory = yield* fs.makeTempDirectory();
-      const filePath = groupLogStoreFilePath(directory, "workshop-group");
-      const storeLayer = ProcessStore.fileLayer(filePath);
+      const sqlitePath = groupLogStoreSqlitePath(directory, "workshop-group");
+      yield* fs.makeDirectory(path.dirname(sqlitePath), { recursive: true });
+      const storeLayer = groupLogStoreLayer(sqlitePath);
 
       const event = makeGroupLogEntryRecordedEvent("workshop-group", "1", {
         date: "2026-05-22T20:00:00.000Z",
@@ -50,7 +53,7 @@ describe("processManagerLogStore", () => {
       assert.ok(row !== undefined && isGroupLogEntryRecorded(row));
       assert.strictEqual(row.log.entry.annotations[ProcessManagerLogAnnotationKeys.processId], "billing/sync");
 
-      yield* queryGroupLogsFromFile(filePath, {
+      yield* queryGroupLogsFromSqlite(sqlitePath, {
         groupId: "workshop-group",
         processId: "billing/sync",
         limit: 10,

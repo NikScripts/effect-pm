@@ -1,4 +1,4 @@
-import { Cause, Duration, Effect, FileSystem, Layer, Option, Path, PubSub, Ref, Schedule, Scope, Stream } from "effect";
+import { Cause, Duration, Effect, Layer, Option, PubSub, Ref, Schedule, Scope, Stream } from "effect";
 import type { LogLevel } from "effect/LogLevel";
 import {
   ProcessGroupLogContext,
@@ -17,19 +17,49 @@ import {
   ProcessStore,
   type StoreEventQuery,
 } from "./ProcessStore.js";
+import { SQLiteRuntimeStorage } from "./storage/sqlite/index.js";
+import type { SqlError } from "effect/unstable/sql/SqlError";
 
 const storeFlushInterval = Duration.millis(250);
 const storeFlushBatchSize = 64;
 
+const safeGroupStoreSegment = (groupId: string): string =>
+  groupId.replace(/[^a-zA-Z0-9._-]+/g, "_");
+
 /**
- * NDJSON {@link ProcessStore} path for a group's persisted log history.
+ * SQLite {@link ProcessStore} path for a group's persisted log history.
  *
  * @public
  */
-export const groupLogStoreFilePath = (
+export const groupLogStoreSqlitePath = (
   logDirectory: string,
   groupId: string,
-): string => `${logDirectory.replace(/\/+$/, "")}/${groupId}/events.ndjson`;
+): string =>
+  `${logDirectory.replace(/\/+$/, "")}/${safeGroupStoreSegment(groupId)}/logs.sqlite`;
+
+/**
+ * `Layer` providing {@link ProcessStore} backed by SQLite for one group child.
+ *
+ * @public
+ */
+export const groupLogStoreLayer = (
+  sqlitePath: string,
+): Layer.Layer<ProcessStore, never, Scope.Scope> =>
+  Layer.provide(
+    ProcessStore.layerRuntimeStorage,
+    SQLiteRuntimeStorage.layer({ filename: sqlitePath }),
+  ).pipe(Layer.orDie);
+
+const mapSqliteLogQueryError = <A, R>(
+  effect: Effect.Effect<A, ProcessManagerLogQueryError | SqlError, R>,
+): Effect.Effect<A, ProcessManagerLogQueryError, R> =>
+  effect.pipe(
+    Effect.mapError((error) =>
+      error._tag === "ProcessManagerLogQueryError"
+        ? error
+        : new ProcessManagerLogQueryError({ reason: `Log store query failed: ${String(error)}` }),
+    ),
+  );
 
 const logEntryFromStored = (
   stored: GroupLogEntryRecordedEvent["log"]["entry"],
@@ -196,21 +226,23 @@ export const loadGroupLogEntriesFromStore = (
   });
 
 /**
- * Load a group's on-disk log store entries (no replay).
+ * Load a group's SQLite log store entries (no replay).
  *
  * @public
  */
-export const loadGroupLogEntriesFromFile = (
-  filePath: string,
+export const loadGroupLogEntriesFromSqlite = (
+  sqlitePath: string,
   query: ProcessManagerLogQuery,
 ): Effect.Effect<
   ReadonlyArray<ProcessManagerLogEntry>,
   ProcessManagerLogQueryError,
-  FileSystem.FileSystem | Path.Path
+  Scope.Scope
 > =>
-  loadGroupLogEntriesFromStore(query).pipe(
-    Effect.provide(ProcessStore.fileLayer(filePath)),
-    Effect.scoped,
+  mapSqliteLogQueryError(
+    loadGroupLogEntriesFromStore(query).pipe(
+      Effect.provide(groupLogStoreLayer(sqlitePath)),
+      Effect.scoped,
+    ),
   );
 
 /**
@@ -227,17 +259,19 @@ export const queryGroupLogsFromStore = (
   });
 
 /**
- * Query a group's on-disk log store file (operator `pm logs`).
+ * Query a group's SQLite log store (operator `pm logs`).
  *
  * @public
  */
-export const queryGroupLogsFromFile = (
-  filePath: string,
+export const queryGroupLogsFromSqlite = (
+  sqlitePath: string,
   query: ProcessManagerLogQuery,
-): Effect.Effect<void, ProcessManagerLogQueryError, FileSystem.FileSystem | Path.Path> =>
-  queryGroupLogsFromStore(query).pipe(
-    Effect.provide(ProcessStore.fileLayer(filePath)),
-    Effect.scoped,
+): Effect.Effect<void, ProcessManagerLogQueryError, Scope.Scope> =>
+  mapSqliteLogQueryError(
+    queryGroupLogsFromStore(query).pipe(
+      Effect.provide(groupLogStoreLayer(sqlitePath)),
+      Effect.scoped,
+    ),
   );
 
 type PendingLogAppend = {

@@ -1238,6 +1238,31 @@ const resolveGroup = (
   );
 };
 
+const resolveGroupOption = (
+  groups: ReadonlyArray<ConfigSource>,
+  input: string,
+): Effect.Effect<Option.Option<ConfigSource>, ProcessManagerConnectionError> => {
+  const normalizedInput = normalizeProcessManagerTarget(input);
+  const matches = groups.filter((group) => {
+    const normalizedId = normalizeProcessManagerTarget(group.id);
+    return (
+      normalizedId === normalizedInput || normalizedId.endsWith(`/${normalizedInput}`)
+    );
+  });
+  if (matches.length === 1) {
+    return Effect.succeed(Option.some(matches[0]!));
+  }
+  if (matches.length > 1) {
+    return Effect.fail(
+      new ProcessManagerConnectionError({
+        groupId: "",
+        reason: `Ambiguous group '${input}'. Candidates: ${matches.map((group) => group.id).join(", ")}`,
+      }),
+    );
+  }
+  return Effect.succeed(Option.none());
+};
+
 const launchModuleEndpointForGroup = (
   groups: ReadonlyArray<ConfigSource>,
   input: string,
@@ -1449,7 +1474,7 @@ const resolveCliTarget = (
   if (resolution.candidate.kind !== expectedKind) {
     const processHint = "use start, stop, restart, or now with a process id.";
     const queueHint =
-      "use queue-start, pause, resume, or clear with a queue id.";
+      "use start, pause, resume, or clear with a queue id.";
     return Effect.fail(
       new ProcessManagerConnectionError({
         groupId: resolution.candidate.groupId,
@@ -1604,6 +1629,63 @@ const runQueueCommand = (
     yield* Console.log(`OK queue ${target.id} ${operation} requested`);
   });
 
+const runStartCommand = (
+  groups: ReadonlyArray<ConfigSource>,
+  input: string,
+  options: Pick<ProcessManagerCliOptions, "endpointLabel">,
+): Effect.Effect<
+  void,
+  | ProcessManagerConnectionError
+  | ProcessManagerRequestError
+  | ProcessManagerEndpointConfigError,
+  | ProcessManagerConnectionRegistry
+  | HttpClient.HttpClient
+  | ChildProcessSpawner.ChildProcessSpawner
+  | FileSystem.FileSystem
+  | Path.Path
+  | Scope.Scope
+> =>
+  Effect.gen(function* () {
+    const groupOption = yield* resolveGroupOption(groups, input);
+    if (Option.isSome(groupOption)) {
+      return yield* runGroupStartCommand(groups, input, options);
+    }
+    const target = yield* resolveCliAnyTarget(groups, input);
+    if (target.kind === "process") {
+      return yield* runProcessCommand(groups, input, "start", options);
+    }
+    return yield* runQueueCommand(groups, input, "start", options);
+  });
+
+const runStopCommand = (
+  groups: ReadonlyArray<ConfigSource>,
+  input: string,
+  options: Pick<ProcessManagerCliOptions, "endpointLabel">,
+): Effect.Effect<
+  void,
+  | ProcessManagerConnectionError
+  | ProcessManagerRequestError
+  | ProcessManagerEndpointConfigError,
+  | ProcessManagerConnectionRegistry
+  | HttpClient.HttpClient
+  | FileSystem.FileSystem
+  | Path.Path
+> =>
+  Effect.gen(function* () {
+    const groupOption = yield* resolveGroupOption(groups, input);
+    if (Option.isSome(groupOption)) {
+      return yield* runGroupStopCommand(groups, input, options);
+    }
+    const target = yield* resolveCliAnyTarget(groups, input);
+    if (target.kind === "process") {
+      return yield* runProcessCommand(groups, input, "stop", options);
+    }
+    return yield* new ProcessManagerConnectionError({
+      groupId: target.groupId,
+      reason: `Target '${input}' is a queue; queues do not expose 'stop'. Use pause, resume, or clear.`,
+    });
+  });
+
 const runStatusCommand = (
   groups: ReadonlyArray<ConfigSource>,
   input: string,
@@ -1755,7 +1837,7 @@ const runLogsCommand = (
 ): Effect.Effect<
   void,
   ProcessManagerConnectionError | ProcessManagerLogQueryError,
-  FileSystem.FileSystem | Path.Path
+  Scope.Scope
 > =>
   Effect.gen(function* () {
     const scope = yield* resolveLogScopeForCli(groups, target);
@@ -1901,12 +1983,6 @@ const makeCli = <
   const verifyCommand = Command.make("verify", { json: jsonOption, endpointLabel: endpointLabelOption }, ({ json, endpointLabel }) =>
     runVerifyCommand(groups, { json, endpointLabel: endpointLabelFrom(endpointLabel) })
   );
-  const groupStartCommand = Command.make("group-start", { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
-    runGroupStartCommand(groups, target, { endpointLabel: endpointLabelFrom(endpointLabel) })
-  );
-  const groupStopCommand = Command.make("group-stop", { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
-    runGroupStopCommand(groups, target, { endpointLabel: endpointLabelFrom(endpointLabel) })
-  );
   const watchCommand = Command.make(
     "watch",
     {
@@ -1953,10 +2029,6 @@ const makeCli = <
       runQueueCommand(groups, target, name, { endpointLabel: endpointLabelFrom(endpointLabel) }),
     );
 
-  const queueStartCommand = Command.make("queue-start", { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
-    runQueueCommand(groups, target, "start", { endpointLabel: endpointLabelFrom(endpointLabel) }),
-  );
-
   const root = Command.make(
     "pm",
     {},
@@ -1969,16 +2041,17 @@ const makeCli = <
       groupsCommand,
       listCommand,
       verifyCommand,
-      groupStartCommand,
-      groupStopCommand,
       watchCommand,
       logsCommand,
       statusCommand,
-      processCommand("start", "start"),
-      processCommand("stop", "stop"),
+      Command.make("start", { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
+        runStartCommand(groups, target, { endpointLabel: endpointLabelFrom(endpointLabel) }),
+      ),
+      Command.make("stop", { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
+        runStopCommand(groups, target, { endpointLabel: endpointLabelFrom(endpointLabel) }),
+      ),
       processCommand("restart", "restart"),
       processCommand("now", "now"),
-      queueStartCommand,
       queueCommand("pause"),
       queueCommand("resume"),
       queueCommand("clear"),
@@ -2372,7 +2445,7 @@ export const ProcessManager = {
     buildLaunchConfig: buildChildLaunchConfig,
   },
   /**
-   * Layers required for operator commands (`group-start`, `group-stop`, `groups`, …).
+   * Layers required for operator commands (`start`, `stop`, `groups`, …).
    * Merge with Node platform layers (`NodeServices`, `NodeHttpClient`, …).
    */
   operatorLayer: childLaunchLayerFromEnv(),

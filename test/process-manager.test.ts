@@ -539,7 +539,7 @@ describe("ProcessManager", () => {
           "north-west/billing-group/billing-email-queue",
         ]);
         yield* cli([
-          "queue-start",
+          "start",
           "north-west/billing-group/billing-email-queue",
         ]);
         yield* cli([
@@ -927,9 +927,9 @@ describe("ProcessManager", () => {
         yield* fs.remove(runRoot, { recursive: true, force: true });
 
         const cli = ProcessManager.cli([ModuleEndpointGroup] as const);
-        yield* cli(["group-start", "module-endpoint-group"]);
+        yield* cli(["start", "module-endpoint-group"]);
         yield* cli(["status", "module-endpoint-process"]);
-        yield* cli(["group-start", "module-endpoint-group"]);
+        yield* cli(["start", "module-endpoint-group"]);
 
         const stateText = yield* fs.readFileString(
           `${runDirectory}/test__module-endpoint-group.json`,
@@ -962,7 +962,7 @@ describe("ProcessManager", () => {
 
       yield* Effect.scoped(
         ProcessManager.cli([ModuleEndpointGroup] as const)([
-          "group-stop",
+          "stop",
           "module-endpoint-group",
         ]).pipe(
           Effect.provide(
@@ -989,7 +989,7 @@ describe("ProcessManager", () => {
             try {
               process.kill(pid, "SIGTERM");
             } catch {
-              // process may already have exited after group-stop
+              // process may already have exited after stop
             }
           });
         }
@@ -1002,7 +1002,7 @@ describe("ProcessManager", () => {
     }),
   );
 
-  it.live("cleans stale child endpoint run state on group-stop", () =>
+  it.live("cleans stale child endpoint run state on stop", () =>
     Effect.gen(function* () {
       const runDirectory = ".effect-pm/run/groups";
       const childLaunchLayer = ProcessManager.ChildLaunch.layerConfig({
@@ -1038,7 +1038,7 @@ describe("ProcessManager", () => {
         );
 
         const cli = ProcessManager.cli([ModuleEndpointGroup] as const);
-        yield* cli(["group-stop", "module-endpoint-group"]);
+        yield* cli(["stop", "module-endpoint-group"]);
         expect(yield* fs.exists(`${runDirectory}/test__module-endpoint-group.json`)).toBe(false);
       });
 

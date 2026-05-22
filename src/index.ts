@@ -256,13 +256,14 @@ export {
   type ProcessManagerLogScope,
 } from "./processManagerLogContext.js";
 export {
-  groupLogStoreFilePath,
+  groupLogStoreSqlitePath,
+  groupLogStoreLayer,
   layerWithProcessStore,
   makeGroupLogEntryRecordedEvent,
-  queryGroupLogsFromFile,
+  queryGroupLogsFromSqlite,
   queryGroupLogsFromStore,
   storeEventQueryFromLogQuery,
-  loadGroupLogEntriesFromFile,
+  loadGroupLogEntriesFromSqlite,
   loadGroupLogEntriesFromStore,
 } from "./processManagerLogStore.js";
 export { queryGroupLogsForCatalog } from "./processManagerLogHistory.js";
