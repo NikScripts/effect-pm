@@ -71,6 +71,10 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
   extra boolean flags for behavior that can be derived.
 - Hooks should be powerful extension points, but core persistence/analytics
   should be automatic through services such as `ProcessStore`.
+- End responses in a way that keeps development moving: identify the next
+  sensible slice, call out blockers or uncertainty, and ask for clarification
+  when a decision is needed. Avoid passive endings that only summarize completed
+  work; leave the user with the concrete next plan or next question.
 
 ---
 
