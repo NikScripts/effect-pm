@@ -9,116 +9,195 @@ Implemented relay behavior belongs in regular docs (`docs/guides/process-manager
 ## Intent
 
 1. **Protocol-agnostic payload** — Keep `ProcessManagerLogEntry` + schema/NDJSON as the wire message; transports are interchangeable.
-2. **Log transport abstraction** — Mirror `ControlTransportClient` / `ControlTransportServer`: a small port for `subscribe(group, cursor?) → Stream<ProcessManagerLogEntry>` (operator) and optional `publish` (child egress).
-3. **PubNub** — First remote/live fan-out transport when the operator is not localhost-adjacent to the child.
-4. **Storage-backed history** — Optional persistence so the operator can request entries **older than their current cursor** (timestamp- or id-based), not only the relay’s bounded memory snapshot.
+2. **Log transport abstraction** — Mirror `ControlTransportClient` / `ControlTransportServer`: subscribe/publish ports for operator ingress and child egress.
+3. **PubNub** — Remote/live fan-out when the operator is not localhost-adjacent to the child.
+4. **Storage-backed history** — Durable append + cursor queries so the operator can load **what they do not already have** (catch-up forward or scroll-back older), without relying on the relay’s 500-entry memory buffer.
 
 ## Relationship to other plans
 
 | Plan | Role |
 | ---- | ---- |
-| [07](./07-process-manager.md) | Endpoint config, `group-logs`, multi-host PM; item 9 becomes “log transport adapters” (see below). |
-| [01](./01-process-store-service.md) / [10](./10-process-store-phase-one.md) / [11](./11-runtime-state-hooks-and-config.md) | Durable append + query primitives for log rows (facts or dedicated log table). |
-| [05](./05-control-service-v2.md) | Separate concern: ProcessStore **lifecycle** SSE; do not conflate with group **application** logs. |
+| [07](./07-process-manager.md) | Endpoint config, `group-logs`, multi-host PM; item 9 → log transport adapters. |
+| [01](./01-process-store-service.md) / [10](./10-process-store-phase-one.md) / [11](./11-runtime-state-hooks-and-config.md) | Append + `events(query)` for persisted log rows (no ad hoc DB API). |
+| [05](./05-control-service-v2.md) | ProcessStore **lifecycle** SSE — separate from group **application** logs. |
 
-## Core decisions
+## Resolved decisions (pre–grill-me baseline)
 
-1. **Capture stays in the child** — `captureLoggerLayer` → `ProcessManagerLogRelay.publish` does not change per transport.
-2. **Egress and ingress are adapters** — HTTP `/logs/stream` becomes `LogTransportHttp`; PubNub and storage are additional adapters, not forks of replay logic.
-3. **Replay stays on the operator** — `streamGroupLogs` / `replayLogEntry` / `operatorLoggerLayer` consume `Stream<ProcessManagerLogEntry>` regardless of source.
-4. **History uses stored `date` (ISO)** — Operator passes a cursor (`after` timestamp or monotonic entry id); storage returns rows strictly older than live tail or merges `history ++ live` without duplicates.
-5. **Endpoint config owns transport choice** — Sibling to control `transport: http(...)`, e.g. `logs: { transport: "http" | "pubnub" | "storage" | composite }` on group endpoint items (see [07](./07-process-manager.md) “log transport config”).
+These are the default assumptions for implementation unless `/grill-me` changes them.
+
+### Cursor model
+
+| Cursor | Meaning | Storage predicate | Typical UX |
+| ------ | ------- | ----------------- | ---------- |
+| **`after`** (primary for reconnect) | Operator already has entries up to cursor; fetch the **next** rows | `entryId > after` (preferred) or `date > after` (ISO, exclusive) | Reconnect, gap fill, then `--follow` |
+| **`before`** (primary for scroll-back) | Operator already has the **newest** tail; fetch **older** rows | `entryId < before` or `date < before` (exclusive) | Terminal/UI “load older logs” |
+| **`until`** (optional bound) | Stop at this cursor when scanning history | paired with `after` or `before` | Bounded export / time window |
+
+**Default cursor field:** monotonic **`entryId`** per `(groupId, endpointLabel, childGeneration)` — assigned at append time (uint64 or ULID). **`date`** remains on the payload for display and secondary indexes, not as the sole cursor (clock skew, duplicate ms).
+
+**CLI mapping:**
+
+- `--after <entryId|iso>` — catch-up forward (exclusive).
+- `--before <entryId|iso>` — history backward (exclusive).
+- `--follow` — after backfill slice completes, attach live `LogTransport` (HTTP or PubNub).
+- If both `after` and `before` omitted and storage enabled: default to relay snapshot + live (today’s HTTP behavior) or “last N from storage” (TBD in grill).
+
+**Dedup rule:** When merging storage stream + live stream, drop any live entry with `entryId <= lastIdFromStorage`.
+
+### Storage placement
+
+- **No separate `GroupLogStore` service** in v1. Append through **`ProcessStore`** (or `RuntimeStorage` port) as an analytics/event row:
+  - Event type: `group.log.entry` (name TBD, stable string).
+  - Payload: `ProcessManagerLogEntry` + `groupId` + `endpointLabel` + `entryId` + optional `childPid` / `runId`.
+- Reads: **`ProcessStore.events(query)`** with filters on `groupId`, cursor, limit — same pattern as `runtime.fact.recorded` in [11](./11-runtime-state-hooks-and-config.md).
+- Indexes: at minimum `(groupId, entryId)` and `(groupId, date)` on Prisma/SQLite adapters when added.
+
+### PubNub vs storage
+
+- **Storage = authoritative history** (backfill, audit, reconnect).
+- **PubNub = live fan-out only** — message body is one NDJSON line; do not depend on PubNub Message Persistence for backfill in v1.
+- **HTTP `/logs/stream`** remains valid localhost/dev transport behind `LogTransportHttp`.
+
+### Append performance
+
+- Child `publish` triggers **async batched append** (default: flush every **250ms** or **64 entries**, whichever first).
+- Append failure: log metric + continue capture/relay (do not fail user `Effect.log`).
+
+### Replay fidelity
+
+- v1 operator replay keeps **“now”** timestamps (current `replayLogEntry` behavior).
+- v2 (same plan, later slice): optional `--preserve-timestamps` replay using stored `entry.date` for faithful UIs.
+
+### Endpoint config (shape sketch)
+
+```typescript
+// Sibling to control transport on endpoint config items
+logs: {
+  transport: "composite", // "http" | "pubnub" | "storage" | "composite"
+  storage: { enabled: true }, // uses ProcessStore from child layer
+  live: { _tag: "pubnub", channel: "effect-pm.logs.${groupId}", ... },
+  // localhost dev: live: { _tag: "http" } // inherits control baseUrl
+}
+```
+
+## Core decisions (unchanged)
+
+1. **Capture stays in the child** — `captureLoggerLayer` → `ProcessManagerLogRelay.publish`.
+2. **Egress and ingress are adapters** — HTTP, PubNub, storage query are interchangeable behind `LogTransport` / `LogHistory`.
+3. **Replay stays on the operator** — `decode → replayLogEntry → operatorLoggerLayer`.
 
 ## Architecture
 
 ```text
-Child                          Operator
-─────                          ────────
-Effect.log
-  → captureLogger
-  → ProcessManagerLogEntry
-  → relay.publish ──┬──► LogTransport egress (HTTP / PubNub / …)
-                    └──► LogStorage.append (optional, async)
+Child
+  Effect.log → captureLogger → ProcessManagerLogEntry (+ entryId at append)
+    → relay.publish ──┬──► LogTransport egress (HTTP / PubNub)
+                      └──► ProcessStore.append(group.log.entry)  [batched]
 
-Operator group-logs:
-  cursor? ──► LogStorage.query(groupId, after: cursor)  // older than what UI already has
-           ++ LogTransport.subscribe(follow)             // live tail
-           → decode → replayLogEntry → operatorLoggerLayer
+Operator group-logs
+  optional LogHistory.query(groupId, after|before, limit)
+  optional LogTransport.subscribe(follow)
+  → merge/dedupe by entryId → decode → replayLogEntry
 ```
 
-**PubNub (live / multi-subscriber)**
+## Persisted row shape
 
-- Child: fork publisher on `relay.stream` (or hook `publish`); message body = one NDJSON line per `ProcessManagerLogEntry`.
-- Channel naming: configurable per group/endpoint (e.g. `effect-pm.logs.{groupId}`).
-- Operator: subscribe → `Stream.mapEffect(decodeProcessManagerLogEntryNdjson)` → existing replay path.
-- Auth: PubNub keys + channel ACLs replace “localhost only” for log **viewers**; control plane may still be HTTP-local until broader auth lands.
+```typescript
+// Logical record (storage envelope + payload)
+{
+  readonly type: "group.log.entry";
+  readonly groupId: string;
+  readonly endpointLabel: string;
+  readonly entryId: string; // monotonic per child run
+  readonly childPid?: number;
+  readonly entry: ProcessManagerLogEntry; // includes date ISO, level, message, ...
+}
+```
 
-**Storage (history / catch-up)**
+`entryId` is **not** on the wire NDJSON line unless we add it for PubNub/HTTP live messages too (recommended: include in encoded payload once storage lands so live and stored shapes match).
 
-- Child (or relay hook): append each entry to `ProcessStore` / `RuntimeStorage` (or dedicated `GroupLogStore`) with indexed `(groupId, date, entryId?)`.
-- Operator: if client already has entries up to `T`, query `WHERE groupId = ? AND date > ? ORDER BY date` (or `entryId > cursor`) for **backfill**, then attach live transport from `T` (or “now”) forward.
-- Replaces reliance on relay’s fixed **500-entry** memory snapshot for late joiners and reconnects.
-- Retention/TTL: policy per deployment (not fixed in v1 plan).
-
-## Implementation slices
+## Implementation slices (ordered)
 
 ### Slice 1 — Log transport port + HTTP adapter
 
-- Introduce `LogTransport` (names TBD) client/server shapes analogous to [ControlProtocol](./ControlProtocol.ts) transports.
-- Move current `ControlTransportHttp` `/logs/stream` behavior behind `LogTransportHttp`.
-- `groupLogEntryStream` depends on `LogTransportClient`, not raw `HttpClient.get`.
+- `LogTransportClient` / `LogTransportServer` (names TBD), analogous to control transport.
+- Move `/logs/stream` to `LogTransportHttp`.
+- `groupLogEntryStream` depends on `LogTransportClient`.
+
+**Exit:** existing `group-logs` tests pass unchanged.
 
 ### Slice 2 — Storage append + cursor query
 
-- Define persisted row shape (= `ProcessManagerLogEntry` + `groupId` + optional `entryId`).
-- Append on child `publish` (batched Effect, failure must not break capture).
-- Operator API: `after?: string` (ISO timestamp) or `afterId?: string` on `group-logs` / `groupLogEntryStream`.
-- Query implementation via existing storage adapters (memory, file, SQLite, Prisma) from [01](./01-process-store-service.md) / [11](./11-runtime-state-hooks-and-config.md).
+- Assign `entryId` at `relay.publish` (or append hook).
+- Batched `ProcessStore` append on child.
+- `LogHistory.query({ groupId, after?, before?, limit })` implemented via `events(query)`.
+- CLI: `--after`, `--before`, optional `--limit`.
 
-### Slice 3 — PubNub adapter
+**Exit:** memory + file (or SQLite) adapter proves forward catch-up and backward scroll in tests.
 
-- `LogTransportPubNub` config: subscribe/publish keys, channel template, optional presence.
-- Child layer: publisher fiber + graceful shutdown on group stop.
-- Operator: subscribe stream; optional “no storage” mode for pure live fan-out.
-- Tests: mock PubNub client; no network in CI.
+### Slice 3 — Wire `entryId` on live transports
 
-### Slice 4 — Endpoint config + composite mode
+- Extend `ProcessManagerLogEntry` schema (or envelope) with `entryId` for NDJSON live lines.
+- HTTP snapshot/stream and PubNub publish the same shape storage uses.
 
-- Group endpoint config: `logs: { transport, ... }` per [07](./07-process-manager.md).
-- **Composite** (recommended default when storage enabled): `storage.query(after)` then `pubnub|http.subscribe` for live — same operator UX as “give me what I’m missing, then follow.”
+**Exit:** dedup between storage tail and live head is deterministic.
+
+### Slice 4 — PubNub adapter
+
+- `LogTransportPubNub` child publisher + operator subscriber.
+- Mock client in tests; example config in playground.
+
+**Exit:** operator replay path unchanged; multi-subscriber manual test documented.
+
+### Slice 5 — Endpoint config + composite
+
+- `logs:` config on endpoint items; composite = `history.query` then `live.subscribe`.
+- Document in [07](./07-process-manager.md) and guides.
+
+**Exit:** select transport without forking `ProcessManager.cli` internals.
+
+### Slice 6 (optional) — Faithful replay timestamps
+
+- `--preserve-timestamps` on `group-logs` / replay path.
 
 ## CLI / operator UX (target)
 
 ```bash
-# Live only (today’s behavior, any transport)
+# Live only (today)
 pm group-logs my-group --follow
 
-# Backfill from DB then follow (storage + live)
-pm group-logs my-group --after 2026-05-22T20:00:00.000Z --follow
+# Reconnect: fill gap since last seen id, then follow
+pm group-logs my-group --after 00000042 --follow
 
-# History only (no follow)
-pm group-logs my-group --after 2026-05-22T19:00:00.000Z --until 2026-05-22T20:00:00.000Z
+# Scroll back: older than oldest line in terminal
+pm group-logs my-group --before 2026-05-22T20:00:00.000Z --limit 200
+
+# Window
+pm group-logs my-group --after 2026-05-22T19:00:00.000Z --before 2026-05-22T20:00:00.000Z
 ```
 
-Exact flags are design details; the invariant is **cursor + storage query + optional live transport**.
+## Remaining open questions (for `/grill-me`)
 
-## Open questions
-
-- Dedicated `GroupLogStore` vs reusing `ProcessStore.events` / `runtime.fact` — prefer one append API and a typed projection read (align with [11](./11-runtime-state-hooks-and-config.md)).
-- Whether `entry.date` in replay should use stored timestamp for faithful UIs (today replay uses “now”).
-- PubNub Message Persistence vs our DB for history — use our storage for authoritative backfill; PubNub for fan-out only unless product requires otherwise.
-- Write amplification: sync append per log line vs batch flush interval.
+- Default when no cursor: “relay snapshot only” vs “last N from storage” vs “storage tail + follow”.
+- `entryId` format: uint64 sequence vs ULID (sortable, multi-instance safe).
+- Retention/TTL and compaction (deployment policy vs library default).
+- Whether HTTP live stream still sends pre-storage 500 snapshot when storage is enabled.
+- Auth matrix when PubNub + remote control coexist.
 
 ## Non-goals
 
-- Replacing ProcessStore lifecycle event streaming ([05](./05-control-service-v2.md)).
-- File-based stdout/stderr tailing (superseded by structured capture).
-- Authentication design for remote control (track separately; PubNub ACLs are log-viewer scoped only).
+- ProcessStore lifecycle SSE ([05](./05-control-service-v2.md)).
+- File-based stdout/stderr tailing.
+- Full control-plane authentication (PubNub ACLs are log-viewer scoped only).
 
 ## Graduation criteria
 
-- `LogTransport` port documented and exported; HTTP implementation passes existing `group-logs` tests.
-- Storage adapter proves `after` cursor backfill across at least two storage backends.
-- PubNub adapter documented with example config; operator replay path unchanged.
-- Endpoint config selects transport without forking `ProcessManager.cli` per transport.
-- Implemented sections move to `docs/guides/` and shrink this plan to residual future items.
+- `LogTransport` port exported; HTTP adapter passes `group-logs` tests.
+- Storage proves `after` and `before` on ≥2 backends.
+- PubNub adapter + example config; replay path unchanged.
+- Endpoint `logs:` config selects transport without CLI forks.
+- Implemented behavior moves to `docs/guides/`; this plan keeps only residual future items.
+
+## Grill-me entrypoint
+
+When resuming implementation, run `/grill-me` starting from **Slice 1** unless storage ([11](./11-runtime-state-hooks-and-config.md)) blockers force Slice 2 first. First grill branch: confirm cursor defaults and `entryId` on wire vs storage-only.

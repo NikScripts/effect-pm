@@ -141,9 +141,10 @@ Candidate work:
 
 1. **Log transport port** — Extract HTTP `/logs/stream` behind a
    `LogTransport`-style client/server (mirror control transport).
-2. **Storage option** — Persist entries on child publish; operator passes an
-   `after` timestamp (or entry id) to load older rows from DB/storage, then
-   optionally `--follow` on PubNub or HTTP for live tail.
+2. **Storage option** — Persist entries on child publish (`group.log.entry` via
+   `ProcessStore.events`); operator uses **`--after`** (catch-up forward) or
+   **`--before`** (scroll-back older than current tail) with **`entryId`** as the
+   primary cursor, then optionally `--follow` on PubNub or HTTP.
 3. **PubNub** — Publish NDJSON lines per entry on a group channel; operator
    subscribe feeds the same `decode → replayLogEntry` path (multi-host,
    multi-subscriber).
