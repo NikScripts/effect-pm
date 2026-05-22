@@ -17,7 +17,7 @@ Implemented relay behavior belongs in regular docs (`docs/guides/process-manager
 
 | Plan | Role |
 | ---- | ---- |
-| [07](./07-process-manager.md) | Endpoint config, `group-logs`, multi-host PM; item 9 → log transport adapters. |
+| [07](./07-process-manager.md) | Endpoint config, `watch` / `logs`, multi-host PM; item 9 → log transport adapters. |
 | [01](./01-process-store-service.md) / [10](./10-process-store-phase-one.md) / [11](./11-runtime-state-hooks-and-config.md) | Append + `events(query)` for persisted log rows (no ad hoc DB API). |
 | [05](./05-control-service-v2.md) | ProcessStore **lifecycle** SSE — separate from group **application** logs. |
 
@@ -35,26 +35,38 @@ These are the default assumptions for implementation unless `/grill-me` changes 
 
 **Default cursor field:** monotonic **`entryId`** per `(groupId, endpointLabel, childGeneration)` — assigned at append time (uint64 or ULID). **`date`** remains on the payload for display and secondary indexes, not as the sole cursor (clock skew, duplicate ms).
 
-**CLI mapping (live vs storage):**
+**CLI commands (live vs storage):**
 
-| Mode | Flags | Behavior |
-| ---- | ----- | -------- |
-| **Default (live)** | `group-logs <group>` (no storage flags) | Always attach live transport. Print relay **snapshot prelude** (bounded, see below), then stream new entries until interrupt. |
-| **Storage export** | **Requires** `--from` + `--to` ISO range (or `--since` duration) | Query `ProcessStore` only; print matching rows and **exit** — no infinite scroll, no implicit follow. |
-| **Storage + live** | explicit range **and** live default (future) | Optional: print storage window first, then prelude + live (dedupe by `entryId`). |
+| Command | Role |
+| ------- | ---- |
+| **`pm watch <group>`** | Live + in-memory relay prelude only (never hits storage). |
+| **`pm logs [group]`** | Storage history query (DB-shaped); never attaches live unless a future explicit flag says so. |
 
-- `--lines` / `-n` (default **100**) — cap relay snapshot prelude lines before live tail (fits terminal without bloat; not storage).
-- `--snapshot` — relay prelude only, then exit (debug/CI); no live tail.
-- Storage cursors (`--after` / `--before` / `entryId`) — advanced; still subordinate to **required date range** when reading storage.
+**`pm logs` query flags:**
+
+| Flag | Role |
+| ---- | ---- |
+| *(no args)* | All groups, default `--limit` (100), `--sort desc` |
+| `<group>` positional | Filter `groupId` |
+| `--from` / `--to` | Optional ISO date bounds |
+| `--after` / `--before` | Optional cursor bounds |
+| `--limit` | Row cap (default 100, max 10_000) |
+| `--sort asc\|desc` | Default `desc` |
+
+**`pm watch` flags:**
+
+- `--lines` / `-n` (default **100**) — cap relay snapshot prelude before live tail.
+- `--snapshot` — prelude only, no live.
+- `--no-interactive` — non-TTY / CI.
 
 **Dedup rule:** When merging storage stream + live stream, drop any live entry with `entryId <= lastIdFromStorage`.
 
 ### Operator CLI UX (product — agreed)
 
-1. **Default is always live** — `pm group-logs my-group` ≡ follow live logs. Storage is never queried unless the operator passes an explicit **time range**.
-2. **Prelude without bloat** — Before live tail: replay relay snapshot up to `--lines` (default 100, max 500 = relay capacity). No “load everything from DB” on default path.
-3. **Storage requires a window** — e.g. `--from 2026-05-22T19:00:00Z --to 2026-05-22T20:00:00Z` (both required). Optional `--limit` caps rows. Rejects open-ended storage reads at CLI parse time.
-4. **Interactive follow (live)** — While following live logs in a TTY, single-key commands (see Slice 7). Implemented for live path; storage history interactive deferred until `--from` / `--to` exists.
+1. **`watch` is live-only** — `pm watch my-group` ≡ relay prelude + live stream. Never queries storage.
+2. **`logs` is storage-only** — `pm logs` ≡ query stored rows (`ProcessStore` / `LogHistory`); flags are the query. No args ⇒ all groups, default limit + sort. Optional group positional, optional `--from` / `--to`, cursors, `--limit`, `--sort`.
+3. **Prelude without bloat** — `watch` uses relay tail capped by `--lines` (max 500 in-memory). `logs` never pulls the full relay buffer unless a query matches stored rows.
+4. **Interactive follow (live)** — TTY keys on `watch` (Slice 7). Interactive scroll on `logs` waits until storage + paging UX exist.
 
 ### Storage placement
 
@@ -106,7 +118,7 @@ Child
     → relay.publish ──┬──► LogTransport egress (HTTP / PubNub)
                       └──► ProcessStore.append(group.log.entry)  [batched]
 
-Operator group-logs
+Operator watch / logs
   optional LogHistory.query(groupId, after|before, limit)
   optional LogTransport.subscribe(follow)
   → merge/dedupe by entryId → decode → replayLogEntry
@@ -192,20 +204,18 @@ Implementation sketch: raw mode + line buffer; live `Stream` into session mailbo
 ## CLI / operator UX (target)
 
 ```bash
-# Default: prelude (100 lines) + live follow until Ctrl+C
-pm group-logs my-group
+# Live: prelude (100 lines) + stream until Ctrl+C
+pm watch my-group
 
-# Shorter prelude
-pm group-logs my-group --lines 20
+pm watch my-group --lines 20
+pm watch my-group --snapshot
+pm watch my-group --no-interactive
 
-# Snapshot only, no live
-pm group-logs my-group --snapshot
-
-# Storage export (range required) — no live
-pm group-logs my-group --from 2026-05-22T19:00:00Z --to 2026-05-22T20:00:00Z
-
-# Disable TTY keys (e.g. piping)
-pm group-logs my-group --no-interactive
+# History: DB-shaped query (storage slice 2)
+pm logs
+pm logs --limit 500 --sort asc
+pm logs my-group --from 2026-05-22T19:00:00Z --to 2026-05-22T20:00:00Z
+pm logs my-group --after <entryId> --limit 200
 ```
 
 ## Remaining open questions (for `/grill-me`)

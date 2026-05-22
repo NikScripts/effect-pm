@@ -52,14 +52,26 @@ Tests and custom CLIs should prefer **`ProcessManager.ChildLaunch.layerConfig({ 
 ## Operator CLI
 
 ```bash
-pnpm run demo:pm -- group-logs workshop-group
+pnpm run demo:pm -- watch workshop-group
+pnpm run demo:pm -- logs --limit 50
+pnpm run demo:pm -- logs workshop-group --from 2026-05-22T19:00:00Z --to 2026-05-22T20:00:00Z
 ```
 
-- **`group-logs`** — default: recent in-memory relay prelude (`--lines` / `-n`, default 100) + live structured logs (`GET /logs/stream?follow=true&lines=…`, NDJSON). No `--follow` flag — live is implicit.
-- **`--snapshot`** — relay prelude only, then exit (no live tail)
+### `watch` (live + in-memory relay)
+
+- **`watch <group>`** — recent relay prelude (`--lines` / `-n`, default 100) + live structured logs (`GET /logs/stream?follow=true&lines=…`, NDJSON). Live is implicit (no `--follow`).
+- **`--snapshot`** — relay prelude only, then exit
 - **`--no-interactive`** — disable TTY keys; non-TTY stdin disables interactive automatically
 - Interactive keys (TTY): `f` freeze/unfreeze, `?` / `h` help, `q` or Ctrl+C quit
-- Planned: log history requires explicit `--from` / `--to` when storage exists (see [plan 13](../plans/13-process-manager-log-transport.md))
+
+### `logs` (storage history — query-shaped)
+
+- **`logs`** — query stored log rows (like a DB query). No args ⇒ all groups, default **`--limit`** (100), default **`--sort desc`** (newest first).
+- Optional **`logs <group>`** — filter by group id
+- **`--from` / `--to`** — optional ISO date bounds (both ends optional; if both set, `from` ≤ `to`)
+- **`--after` / `--before`** — optional cursor bounds (entry id or ISO, per storage adapter)
+- **`--limit`**, **`--sort asc|desc`**
+- Storage append/query is not wired yet; the command validates flags and fails with a clear message until [plan 13](../plans/13-process-manager-log-transport.md) slice 2 lands
 - Merge **`ProcessManager.operatorLoggerLayer`** into the operator CLI runtime so replay uses the same pretty/json logger as the PM process
 
 

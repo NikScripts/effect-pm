@@ -237,6 +237,13 @@ export {
   watchGroupLogs,
   type ProcessManagerGroupLogWatchOptions,
 } from "./processManagerGroupLogsInteractive.js";
+export {
+  buildProcessManagerLogQuery,
+  queryGroupLogs,
+  ProcessManagerLogQueryError,
+  type ProcessManagerLogQuery,
+  type ProcessManagerLogSort,
+} from "./processManagerLogQuery.js";
 export type {
   ProcessManagerEndpointConfigItem,
   ProcessManagerConnectionConfigMap,

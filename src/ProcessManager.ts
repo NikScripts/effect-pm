@@ -64,6 +64,13 @@ import {
   ProcessManagerGroupLogError,
 } from "./processManagerGroupLogs.js";
 import { watchGroupLogs } from "./processManagerGroupLogsInteractive.js";
+import {
+  buildProcessManagerLogQuery,
+  ProcessManagerLogQueryError,
+  queryGroupLogs,
+} from "./processManagerLogQuery.js";
+
+const defaultLogQueryLimit = 100;
 import { httpEndpoint } from "./processManagerTransport.js";
 
 type AnyProcessGroupContract = ProcessGroupContract<
@@ -1678,7 +1685,30 @@ const stdinIsInteractive = (): boolean => {
   return typeof stdin !== "undefined" && stdin.isTTY === true;
 };
 
-const runGroupLogsCommand = (
+const resolveOptionalGroupId = (
+  groups: ReadonlyArray<ConfigSource>,
+  input: Option.Option<string>,
+): Effect.Effect<string | undefined, ProcessManagerEndpointConfigError> =>
+  Option.match(input, {
+    onNone: () => Effect.succeed(undefined),
+    onSome: (value) =>
+      Effect.gen(function* () {
+        const normalizedInput = normalizeProcessManagerTarget(value);
+        const match = groups.find(
+          (group) => normalizeProcessManagerTarget(group.id) === normalizedInput,
+        );
+        if (match === undefined) {
+          return yield* Effect.fail(
+            new ProcessManagerEndpointConfigError({
+              reason: `Unknown group target: ${value}`,
+            }),
+          );
+        }
+        return match.id;
+      }),
+  });
+
+const runWatchCommand = (
   groups: ReadonlyArray<ConfigSource>,
   input: string,
   options: {
@@ -1707,6 +1737,35 @@ const runGroupLogsCommand = (
       interactive: options.interactive,
       live: options.live,
     });
+  });
+
+const runLogsCommand = (
+  groups: ReadonlyArray<ConfigSource>,
+  target: Option.Option<string>,
+  options: {
+    readonly from: Option.Option<string>;
+    readonly to: Option.Option<string>;
+    readonly after: Option.Option<string>;
+    readonly before: Option.Option<string>;
+    readonly limit: number;
+    readonly sort: "asc" | "desc";
+  },
+): Effect.Effect<
+  void,
+  ProcessManagerEndpointConfigError | ProcessManagerLogQueryError
+> =>
+  Effect.gen(function* () {
+    const groupId = yield* resolveOptionalGroupId(groups, target);
+    const query = yield* buildProcessManagerLogQuery({
+      groupId,
+      from: options.from,
+      to: options.to,
+      after: options.after,
+      before: options.before,
+      limit: options.limit,
+      sort: options.sort,
+    });
+    yield* queryGroupLogs(query);
   });
 
 const runGroupStopCommand = (
@@ -1825,11 +1884,18 @@ const makeCli = <
   config: ProcessManagerCliConfig = {},
 ) => {
   const target = Argument.string("target");
+  const optionalTarget = Argument.optional(target);
   const jsonOption = Flag.boolean("json").pipe(Flag.withDefault(false));
   const endpointLabelOption = Flag.string("target").pipe(Flag.optional);
   const linesOption = Flag.integer("lines").pipe(Flag.withAlias("n"), Flag.withDefault(100));
   const snapshotOption = Flag.boolean("snapshot").pipe(Flag.withDefault(false));
   const noInteractiveOption = Flag.boolean("no-interactive").pipe(Flag.withDefault(false));
+  const fromOption = Flag.string("from").pipe(Flag.optional);
+  const toOption = Flag.string("to").pipe(Flag.optional);
+  const afterOption = Flag.string("after").pipe(Flag.optional);
+  const beforeOption = Flag.string("before").pipe(Flag.optional);
+  const limitOption = Flag.integer("limit").pipe(Flag.withDefault(defaultLogQueryLimit));
+  const sortOption = Flag.choice("sort", ["asc", "desc"] as const).pipe(Flag.withDefault("desc"));
   const endpointLabelFrom = (endpointLabel: Option.Option<string>): string | undefined =>
     Option.isSome(endpointLabel) ? endpointLabel.value : undefined;
   const groupsCommand = Command.make("groups", { json: jsonOption, endpointLabel: endpointLabelOption }, ({ json, endpointLabel }) =>
@@ -1847,8 +1913,8 @@ const makeCli = <
   const groupStopCommand = Command.make("group-stop", { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
     runGroupStopCommand(groups, target, { endpointLabel: endpointLabelFrom(endpointLabel) })
   );
-  const groupLogsCommand = Command.make(
-    "group-logs",
+  const watchCommand = Command.make(
+    "watch",
     {
       target,
       endpointLabel: endpointLabelOption,
@@ -1857,12 +1923,26 @@ const makeCli = <
       noInteractive: noInteractiveOption,
     },
     ({ target, endpointLabel, lines, snapshot, noInteractive }) =>
-      runGroupLogsCommand(groups, target, {
+      runWatchCommand(groups, target, {
         endpointLabel: endpointLabelFrom(endpointLabel),
         lines,
         interactive: stdinIsInteractive() && !noInteractive,
         live: !snapshot,
       }),
+  );
+  const logsCommand = Command.make(
+    "logs",
+    {
+      target: optionalTarget,
+      from: fromOption,
+      to: toOption,
+      after: afterOption,
+      before: beforeOption,
+      limit: limitOption,
+      sort: sortOption,
+    },
+    ({ target, from, to, after, before, limit, sort }) =>
+      runLogsCommand(groups, target, { from, to, after, before, limit, sort }),
   );
   const statusCommand = Command.make("status", { target, json: jsonOption, endpointLabel: endpointLabelOption }, ({ target, json, endpointLabel }) =>
     runStatusCommand(groups, target, { json, endpointLabel: endpointLabelFrom(endpointLabel) })
@@ -1897,7 +1977,8 @@ const makeCli = <
       verifyCommand,
       groupStartCommand,
       groupStopCommand,
-      groupLogsCommand,
+      watchCommand,
+      logsCommand,
       statusCommand,
       processCommand("start", "start"),
       processCommand("stop", "stop"),
