@@ -407,7 +407,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### ProcessManager CLI (`ProcessManager.cli(groups, config?)`)
 
-**Subcommands:** `groups`, `ls`, `verify`, `group-start <group>`, `status <target>`, `start <target>`, `stop <target>`, `restart <target>`, `now <target>`, `pause <target>`, `resume <target>`, `clear <target>`.
+**Subcommands:** `groups`, `ls`, `verify`, `group-start <group>`, `group-stop <group>`, `status <target>`, `start <target>`, `stop <target>`, `restart <target>`, `now <target>`, `pause <target>`, `resume <target>`, `clear <target>`.
 
 **Flags:** `--json` on `groups`, `ls`, `verify`, `status`; `--target <label>`
 on endpoint-backed runtime commands.
@@ -416,6 +416,10 @@ on endpoint-backed runtime commands.
 verification and reported as `online`, `offline`, or `contract-drift`; module and
 registry-backed endpoints report `configured` until launcher/status support
 exists.
+
+**Local run state:** `group-start` reuses an existing live PID from run state
+instead of launching duplicates. `group-stop` sends `SIGTERM` to the recorded PID
+and removes stale run state when the process no longer exists.
 
 **Behavior:** resolves **canonical id or normalized suffix alias**; **preflight** contract for requested control (e.g. `now` requires `runImmediately` on contract); runs **`verifyContract`** before mutations in command paths. Human **`ls`** lists each group's entries as `KIND`, `ID`, and **contract controls** (`(none)` if empty); human **`groups`**, **`verify`**, **`status`** append short footer or pretty-print embedded status JSON respectively.
 

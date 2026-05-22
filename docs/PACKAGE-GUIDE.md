@@ -39,6 +39,9 @@ registry endpoints report `configured` until launch/status support exists.
 `pm group-start <group> --target <label>` can launch module endpoints that
 include launch config, writes `.effect-pm/run/groups/<group>.json`, and then
 continues to control them through their configured HTTP control endpoint.
+`pm group-stop <group> --target <label>` reads that run state, sends `SIGTERM`
+to the recorded PID, and removes stale run-state files when the PID no longer
+exists.
 
 ---
 

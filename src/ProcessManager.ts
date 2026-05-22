@@ -238,6 +238,21 @@ interface ProcessManagerRunState {
   readonly startedAt: string;
 }
 
+const processManagerRunStateSchema = Schema.Struct({
+  args: Schema.Array(Schema.String),
+  command: Schema.String,
+  controlBaseUrl: Schema.String,
+  cwd: Schema.optional(Schema.String),
+  endpointLabel: Schema.String,
+  groupId: Schema.String,
+  logPaths: Schema.Struct({
+    stderr: Schema.String,
+    stdout: Schema.String,
+  }),
+  pid: Schema.Number,
+  startedAt: Schema.String,
+});
+
 /**
  * Endpoint definitions that can appear in a group config item array.
  *
@@ -477,6 +492,15 @@ const moduleEndpointLaunchConfig = (
     : Effect.succeed(selected.endpoint.launch);
 };
 
+const runStateFileFor = (
+  group: ConfigSource,
+  launch: ProcessManagerModuleEndpointLaunchConfig,
+): Effect.Effect<string, never, Path.Path> =>
+  Effect.map(Path.Path, (path) => {
+    const runDirectory = launch.runDirectory ?? path.join(".effect-pm", "run", "groups");
+    return path.join(runDirectory, `${safePathSegment(group.id)}.json`);
+  });
+
 const writeRunState = (
   runFile: string,
   state: ProcessManagerRunState,
@@ -499,6 +523,85 @@ const writeRunState = (
           reason: `Unable to write ProcessManager run state '${runFile}': ${String(error)}`,
         }),
     ),
+  );
+
+const decodeRunState = (
+  runFile: string,
+  text: string,
+): Effect.Effect<ProcessManagerRunState, ProcessManagerEndpointConfigError> =>
+  Schema.decodeUnknownEffect(Schema.fromJsonString(processManagerRunStateSchema))(text).pipe(
+    Effect.mapError(
+      (error) =>
+        new ProcessManagerEndpointConfigError({
+          reason: `Unable to decode ProcessManager run state '${runFile}': ${String(error)}`,
+        }),
+    ),
+  );
+
+const readRunState = (
+  runFile: string,
+): Effect.Effect<
+  Option.Option<ProcessManagerRunState>,
+  ProcessManagerEndpointConfigError,
+  FileSystem.FileSystem
+> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const exists = yield* fs.exists(runFile).pipe(
+      Effect.mapError(
+        (error) =>
+          new ProcessManagerEndpointConfigError({
+            reason: `Unable to inspect ProcessManager run state '${runFile}': ${String(error)}`,
+          }),
+      ),
+    );
+    if (!exists) {
+      return Option.none();
+    }
+    const text = yield* fs.readFileString(runFile).pipe(
+      Effect.mapError(
+        (error) =>
+          new ProcessManagerEndpointConfigError({
+            reason: `Unable to read ProcessManager run state '${runFile}': ${String(error)}`,
+          }),
+      ),
+    );
+    return Option.some(yield* decodeRunState(runFile, text));
+  });
+
+const removeRunState = (
+  runFile: string,
+): Effect.Effect<void, ProcessManagerEndpointConfigError, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.remove(runFile, { force: true }).pipe(
+      Effect.mapError(
+        (error) =>
+          new ProcessManagerEndpointConfigError({
+            reason: `Unable to remove ProcessManager run state '${runFile}': ${String(error)}`,
+          }),
+      ),
+    );
+  });
+
+const signalPid = (
+  pid: number,
+  signal: NodeJS.Signals | 0,
+): Effect.Effect<void, ProcessManagerEndpointConfigError> =>
+  Effect.try({
+    try: () => {
+      process.kill(pid, signal);
+    },
+    catch: (error) =>
+      new ProcessManagerEndpointConfigError({
+        reason: `Unable to signal pid ${String(pid)}: ${String(error)}`,
+      }),
+  });
+
+const isPidRunning = (pid: number): Effect.Effect<boolean> =>
+  signalPid(pid, 0).pipe(
+    Effect.as(true),
+    Effect.catch(() => Effect.succeed(false)),
   );
 
 const launchDetachedProcess = (
@@ -1318,6 +1421,7 @@ const launchModuleEndpointForGroup = (
     const safeGroupId = safePathSegment(group.id);
     const runDirectory = launch.runDirectory ?? path.join(".effect-pm", "run", "groups");
     const logDirectory = launch.logDirectory ?? path.join(".effect-pm", "logs");
+    const runFile = path.join(runDirectory, `${safeGroupId}.json`);
     yield* fs.makeDirectory(runDirectory, { recursive: true }).pipe(
       Effect.mapError(
         (error) =>
@@ -1334,6 +1438,14 @@ const launchModuleEndpointForGroup = (
           }),
       ),
     );
+    const existing = yield* readRunState(runFile);
+    if (Option.isSome(existing)) {
+      const running = yield* isPidRunning(existing.value.pid);
+      if (running) {
+        return existing.value;
+      }
+      yield* removeRunState(runFile);
+    }
     const stdoutPath = path.join(logDirectory, `${safeGroupId}.out.log`);
     const stderrPath = path.join(logDirectory, `${safeGroupId}.err.log`);
     const pid = yield* launchDetachedProcess(launch, stdoutPath, stderrPath);
@@ -1352,9 +1464,51 @@ const launchModuleEndpointForGroup = (
       pid,
       startedAt: DateTime.formatIso(DateTime.makeUnsafe(startedAtMs)),
     };
-    yield* writeRunState(path.join(runDirectory, `${safeGroupId}.json`), state);
+    yield* writeRunState(runFile, state);
     yield* waitForEndpointReady(group, launch);
     return state;
+  });
+
+const stopModuleEndpointForGroup = (
+  groups: ReadonlyArray<ConfigSource>,
+  input: string,
+  endpointLabel: string | undefined,
+): Effect.Effect<
+  { readonly _tag: "Stopped" | "Stale"; readonly pid: number; readonly groupId: string },
+  ProcessManagerConnectionError | ProcessManagerEndpointConfigError,
+  FileSystem.FileSystem | Path.Path
+> =>
+  Effect.gen(function* () {
+    const group = yield* resolveGroup(groups, input);
+    const configOption = yield* Effect.serviceOption(ProcessManagerConfig);
+    const config = Option.isSome(configOption)
+      ? yield* configOption.value.groupConfig(group.id)
+      : yield* bundledGroupConfig(group);
+    const selected = yield* selectEndpoint(config, endpointLabel);
+    const launch = yield* moduleEndpointLaunchConfig(group, selected);
+    const runFile = yield* runStateFileFor(group, launch);
+    const stateOption = yield* readRunState(runFile);
+    if (Option.isNone(stateOption)) {
+      return yield* new ProcessManagerEndpointConfigError({
+        reason: `Group '${group.id}' does not have recorded run state`,
+      });
+    }
+    const state = stateOption.value;
+    const running = yield* isPidRunning(state.pid);
+    yield* removeRunState(runFile);
+    if (!running) {
+      return {
+        _tag: "Stale" as const,
+        groupId: group.id,
+        pid: state.pid,
+      };
+    }
+    yield* signalPid(state.pid, "SIGTERM");
+    return {
+      _tag: "Stopped" as const,
+      groupId: group.id,
+      pid: state.pid,
+    };
   });
 
 const formatAmbiguousTarget = (
@@ -1674,6 +1828,23 @@ const runGroupStartCommand = (
     );
   });
 
+const runGroupStopCommand = (
+  groups: ReadonlyArray<ConfigSource>,
+  input: string,
+  options: Pick<ProcessManagerCliOptions, "endpointLabel">,
+): Effect.Effect<
+  void,
+  ProcessManagerConnectionError | ProcessManagerEndpointConfigError,
+  FileSystem.FileSystem | Path.Path
+> =>
+  Effect.gen(function* () {
+    const result = yield* stopModuleEndpointForGroup(groups, input, options.endpointLabel);
+    const verb = result._tag === "Stopped" ? "stopped" : "removed stale run state for";
+    yield* Console.log(
+      `OK group ${result.groupId} ${verb} pid ${String(result.pid)}`,
+    );
+  });
+
 const runGroupsCommand = (
   groups: ReadonlyArray<ConfigSource>,
   options: ProcessManagerCliOptions,
@@ -1789,6 +1960,9 @@ const makeCli = <
   const groupStartCommand = Command.make("group-start", { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
     runGroupStartCommand(groups, target, { endpointLabel: endpointLabelFrom(endpointLabel) })
   );
+  const groupStopCommand = Command.make("group-stop", { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
+    runGroupStopCommand(groups, target, { endpointLabel: endpointLabelFrom(endpointLabel) })
+  );
   const statusCommand = Command.make("status", { target, json: jsonOption, endpointLabel: endpointLabelOption }, ({ target, json, endpointLabel }) =>
     runStatusCommand(groups, target, { json, endpointLabel: endpointLabelFrom(endpointLabel) })
   );
@@ -1821,6 +1995,7 @@ const makeCli = <
       listCommand,
       verifyCommand,
       groupStartCommand,
+      groupStopCommand,
       statusCommand,
       processCommand("start", "start"),
       processCommand("stop", "stop"),

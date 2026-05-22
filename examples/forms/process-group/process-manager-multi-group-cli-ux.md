@@ -94,6 +94,7 @@ Implemented commands:
 - `groups`
 - `ls`
 - `group-start <group>`
+- `group-stop <group>`
 - `status <target>`
 - `verify`
 - process controls: `start`, `stop`, `restart`, `now`
@@ -106,6 +107,8 @@ For endpoint-backed groups, `groups` reports endpoint status as `online`,
 `offline`, `contract-drift`, or `configured`.
 `group-start <group> --target <label>` launches module endpoints with launch
 config, writes run-state/log files, and waits for their HTTP control endpoint.
+`group-stop <group> --target <label>` stops recorded local PIDs and cleans stale
+run-state files.
 
 List configured groups first:
 

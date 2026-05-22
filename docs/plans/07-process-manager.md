@@ -903,7 +903,8 @@ Implementation order:
    execution out-of-process. **Implemented as descriptors; launch remains future.**
 7. Add child runtime launcher/run-state/log files for local endpoints.
    **Implemented for module endpoints with explicit launch commands and HTTP
-   control endpoints.**
+   control endpoints. `group-stop` now stops recorded PIDs and cleans stale
+   run state.**
 8. Route all runtime commands through `ProcessManager`. **Implemented for
    endpoint-backed controls; `group-start` launches only, then controls use PM.**
 9. Add local file-backed log streaming, then remote log transport.

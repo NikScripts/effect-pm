@@ -988,6 +988,7 @@ describe("ProcessManager", () => {
         const cli = ProcessManager.cli([ModuleEndpointGroup] as const);
         yield* cli(["group-start", "module-endpoint-group"]);
         yield* cli(["status", "module-endpoint-process"]);
+        yield* cli(["group-start", "module-endpoint-group"]);
 
         const stateText = yield* fs.readFileString(
           `${runDirectory}/test__module-endpoint-group.json`,
@@ -1017,19 +1018,116 @@ describe("ProcessManager", () => {
         });
       }
 
+      yield* Effect.scoped(
+        ProcessManager.cli([ModuleEndpointGroup] as const)([
+          "group-stop",
+          "module-endpoint-group",
+        ]).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              ProcessManager.Config.layer([config]),
+              NodeHttpClient.layerUndici,
+              NodeServices.layer,
+            ),
+          ),
+        ),
+      );
+
       yield* Effect.gen(function* () {
+        const fsAfterStop = yield* FileSystem.FileSystem;
+        const stateExistsAfterStop = yield* fsAfterStop.exists(
+          `${runDirectory}/test__module-endpoint-group.json`,
+        );
+        expect(stateExistsAfterStop).toBe(false);
+
         const pid = yield* Ref.get(pidRef);
         if (pid !== undefined) {
           yield* Effect.sync(() => {
             process.kill(pid, "SIGTERM");
           }).pipe(Effect.catch(() => Effect.void));
         }
-        const fs = yield* FileSystem.FileSystem;
-        yield* fs.remove(runRoot, { recursive: true, force: true }).pipe(
+        yield* fsAfterStop.remove(runRoot, { recursive: true, force: true }).pipe(
           Effect.catch(() => Effect.void),
         );
       }).pipe(
         Effect.provide(NodeServices.layer),
+      );
+    }),
+  );
+
+  it.live("cleans stale module endpoint run state on group-stop", () =>
+    Effect.gen(function* () {
+      const runRoot = ".effect-pm-stale-test";
+      const runDirectory = `${runRoot}/run/groups`;
+      const logDirectory = `${runRoot}/logs`;
+      const moduleEndpoint = Endpoint.module(
+        () => import("./fixtures/process-manager-module-definition.js"),
+        (module) => module.ModuleEndpointRuntime,
+        {
+          launch: {
+            command: process.execPath,
+            args: [
+              "--import",
+              "tsx",
+              "test/fixtures/process-manager-module-runner.ts",
+            ],
+            control: Endpoint.http({
+              transport: ProcessManager.Transport.http({
+                baseUrl: "http://127.0.0.1:32146",
+              }),
+            }),
+            logDirectory,
+            runDirectory,
+          },
+        },
+      );
+      const config = yield* ProcessManager.GroupConfig(ModuleEndpointGroup, [
+        Endpoint.local(moduleEndpoint).default,
+      ]);
+      const program = Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        yield* fs.remove(runRoot, { recursive: true, force: true });
+        yield* fs.makeDirectory(runDirectory, { recursive: true });
+        yield* fs.writeFileString(
+          `${runDirectory}/test__module-endpoint-group.json`,
+          [
+            "{",
+            "  \"args\": [],",
+            "  \"command\": \"node\",",
+            "  \"controlBaseUrl\": \"http://127.0.0.1:32146\",",
+            "  \"endpointLabel\": \"local\",",
+            "  \"groupId\": \"@test/ModuleEndpointGroup\",",
+            "  \"logPaths\": {",
+            "    \"stderr\": \".effect-pm-stale-test/logs/test__module-endpoint-group.err.log\",",
+            "    \"stdout\": \".effect-pm-stale-test/logs/test__module-endpoint-group.out.log\"",
+            "  },",
+            "  \"pid\": 999999,",
+            "  \"startedAt\": \"2026-01-01T00:00:00.000Z\"",
+            "}",
+          ].join("\n"),
+        );
+
+        const cli = ProcessManager.cli([ModuleEndpointGroup] as const);
+        yield* cli(["group-stop", "module-endpoint-group"]);
+        expect(yield* fs.exists(`${runDirectory}/test__module-endpoint-group.json`)).toBe(false);
+      });
+
+      yield* program.pipe(
+        Effect.ensuring(
+          Effect.gen(function* () {
+            const fs = yield* FileSystem.FileSystem;
+            yield* fs.remove(runRoot, { recursive: true, force: true }).pipe(
+              Effect.catch(() => Effect.void),
+            );
+          }),
+        ),
+        Effect.provide(
+          Layer.mergeAll(
+            ProcessManager.Config.layer([config]),
+            NodeHttpClient.layerUndici,
+            NodeServices.layer,
+          ),
+        ),
       );
     }),
   );
