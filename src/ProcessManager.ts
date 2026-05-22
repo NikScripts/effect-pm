@@ -59,6 +59,11 @@ import {
   encodeProcessManagerRunStateJson,
   type ProcessManagerRunState,
 } from "./processManagerRunState.js";
+import {
+  streamGroupLogs,
+  type ProcessManagerGroupLogPaths,
+  type ProcessManagerGroupLogStream,
+} from "./processManagerGroupLogs.js";
 import { httpEndpoint } from "./processManagerTransport.js";
 
 type AnyProcessGroupContract = ProcessGroupContract<
@@ -1359,6 +1364,38 @@ const stopModuleEndpointForGroup = (
     };
   });
 
+
+const resolveGroupLogPaths = (
+  groups: ReadonlyArray<ConfigSource>,
+  input: string,
+  endpointLabel: string | undefined,
+): Effect.Effect<
+  ProcessManagerGroupLogPaths,
+  ProcessManagerConnectionError | ProcessManagerEndpointConfigError,
+  FileSystem.FileSystem | Path.Path
+> =>
+  Effect.gen(function* () {
+    const group = yield* resolveGroup(groups, input);
+    const configOption = yield* Effect.serviceOption(ProcessManagerConfig);
+    const config = Option.isSome(configOption)
+      ? yield* configOption.value.groupConfig(group.id)
+      : yield* bundledGroupConfig(group);
+    const selected = yield* selectEndpoint(config, endpointLabel);
+    const launch = yield* spawnEndpointLaunchConfig(group, selected);
+    const runFile = yield* runStateFileFor(group, launch);
+    const stateOption = yield* readRunState(runFile);
+    if (Option.isSome(stateOption)) {
+      return stateOption.value.logPaths;
+    }
+    const path = yield* Path.Path;
+    const safeGroupId = safePathSegment(group.id);
+    const logDirectory = launch.logDirectory ?? path.join(".effect-pm", "logs");
+    return {
+      stdout: path.join(logDirectory, `${safeGroupId}.out.log`),
+      stderr: path.join(logDirectory, `${safeGroupId}.err.log`),
+    };
+  });
+
 const formatAmbiguousTarget = (
   input: string,
   candidates: ReadonlyArray<{
@@ -1676,6 +1713,34 @@ const runGroupStartCommand = (
     );
   });
 
+
+const runGroupLogsCommand = (
+  groups: ReadonlyArray<ConfigSource>,
+  input: string,
+  options: {
+    readonly endpointLabel?: string;
+    readonly follow: boolean;
+    readonly lines: number;
+    readonly stream: ProcessManagerGroupLogStream;
+  },
+): Effect.Effect<
+  void,
+  ProcessManagerConnectionError | ProcessManagerEndpointConfigError,
+  FileSystem.FileSystem | Path.Path
+> =>
+  Effect.gen(function* () {
+    const paths = yield* resolveGroupLogPaths(groups, input, options.endpointLabel);
+    yield* Console.log(
+      `Logs for group (stdout: ${paths.stdout}, stderr: ${paths.stderr})${options.follow ? " — following" : ""}`,
+    );
+    yield* streamGroupLogs({
+      paths,
+      lines: options.lines,
+      follow: options.follow,
+      stream: options.stream,
+    });
+  });
+
 const runGroupStopCommand = (
   groups: ReadonlyArray<ConfigSource>,
   input: string,
@@ -1794,6 +1859,10 @@ const makeCli = <
   const target = Argument.string("target");
   const jsonOption = Flag.boolean("json").pipe(Flag.withDefault(false));
   const endpointLabelOption = Flag.string("target").pipe(Flag.optional);
+  const followOption = Flag.boolean("follow").pipe(Flag.withAlias("f"), Flag.withDefault(false));
+  const linesOption = Flag.integer("lines").pipe(Flag.withAlias("n"), Flag.withDefault(50));
+  const stderrLogOption = Flag.boolean("stderr").pipe(Flag.withDefault(false));
+  const stdoutLogOption = Flag.boolean("stdout").pipe(Flag.withDefault(false));
   const endpointLabelFrom = (endpointLabel: Option.Option<string>): string | undefined =>
     Option.isSome(endpointLabel) ? endpointLabel.value : undefined;
   const groupsCommand = Command.make("groups", { json: jsonOption, endpointLabel: endpointLabelOption }, ({ json, endpointLabel }) =>
@@ -1810,6 +1879,37 @@ const makeCli = <
   );
   const groupStopCommand = Command.make("group-stop", { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
     runGroupStopCommand(groups, target, { endpointLabel: endpointLabelFrom(endpointLabel) })
+  );
+  const groupLogsCommand = Command.make(
+    "group-logs",
+    {
+      target,
+      endpointLabel: endpointLabelOption,
+      follow: followOption,
+      lines: linesOption,
+      stderr: stderrLogOption,
+      stdout: stdoutLogOption,
+    },
+    ({ target, endpointLabel, follow, lines, stderr, stdout }) => {
+      if (stderr && stdout) {
+        return Effect.fail(
+          new ProcessManagerEndpointConfigError({
+            reason: "Use at most one of --stderr and --stdout",
+          }),
+        );
+      }
+      const stream: ProcessManagerGroupLogStream = stderr
+        ? "stderr"
+        : stdout
+          ? "stdout"
+          : "both";
+      return runGroupLogsCommand(groups, target, {
+        endpointLabel: endpointLabelFrom(endpointLabel),
+        follow,
+        lines,
+        stream,
+      });
+    },
   );
   const statusCommand = Command.make("status", { target, json: jsonOption, endpointLabel: endpointLabelOption }, ({ target, json, endpointLabel }) =>
     runStatusCommand(groups, target, { json, endpointLabel: endpointLabelFrom(endpointLabel) })
@@ -1844,6 +1944,7 @@ const makeCli = <
       verifyCommand,
       groupStartCommand,
       groupStopCommand,
+      groupLogsCommand,
       statusCommand,
       processCommand("start", "start"),
       processCommand("stop", "stop"),
@@ -2251,10 +2352,3 @@ export const ProcessManager = {
 };
 
 export type { ProcessManagerRunState } from "./processManagerRunState.js";
-export {
-  encodeProcessManagerRunStateJson,
-  decodeProcessManagerRunStateJson,
-  ProcessManagerRunStateSchema,
-} from "./processManagerRunState.js";
-
-

@@ -213,6 +213,12 @@ export {
 } from "./ProcessManager";
 export { httpEndpoint } from "./processManagerTransport.js";
 export { groupLocalRuntime } from "./processManagerGroupRuntime.js";
+export {
+  streamGroupLogs,
+  type ProcessManagerGroupLogOptions,
+  type ProcessManagerGroupLogPaths,
+  type ProcessManagerGroupLogStream,
+} from "./processManagerGroupLogs.js";
 export type {
   ProcessManagerEndpointConfigItem,
   ProcessManagerConnectionConfigMap,

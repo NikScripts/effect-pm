@@ -51,6 +51,17 @@ Tests and custom CLIs should prefer **`ProcessManager.ChildLaunch.layerConfig({ 
 
 ## Operator CLI
 
+```bash
+pnpm run demo:pm -- group-logs workshop-group --follow
+pnpm run demo:pm -- group-logs workshop-group --lines 100 --stderr
+```
+
+- **`group-logs`** — tail stdout/stderr log files from run state (or default `.effect-pm/logs` paths)
+- **`--follow` / `-f`** — poll for new log bytes until interrupted
+- **`--lines` / `-n`** — number of initial lines per stream (default `50`)
+- **`--stdout`** / **`--stderr`** — limit to one stream (default: both, prefixed `[stdout]` / `[stderr]`)
+
+
 `ProcessManager.cli(groups)` requires platform layers plus `ProcessManager.operatorLayer` (or `ChildLaunch.layerConfig` in tests).
 
 Child entry binary: **`effect-pm-group-child`** (also `pnpm exec effect-pm-group-child` from the package).
