@@ -1,8 +1,11 @@
 import { Command, Flag } from "effect/unstable/cli";
 import { Data, Effect, Layer } from "effect";
 import type { ProcessGroupEntry, ProcessGroupServiceDefinition } from "./ProcessGroup.js";
+import { resolveChildLaunchPaths } from "./processManagerChildLaunch.js";
 import { groupLocalRuntime } from "./processManagerGroupRuntime.js";
-import { captureLoggerLayer, layer as logRelayLayer } from "./processManagerLogRelay.js";
+import { groupLogStoreFilePath, layerWithProcessStore } from "./processManagerLogStore.js";
+import { captureLoggerLayer } from "./processManagerLogRelay.js";
+import { ProcessStore } from "./ProcessStore.js";
 
 /** @public */
 export class GroupChildArgvError extends Data.TaggedError("GroupChildArgvError")<{
@@ -87,15 +90,20 @@ export const runGroupChildProgram = (args: {
         groupId: args.groupId,
       });
     }
-    const runtime = groupLocalRuntime(group, { controlBaseUrl: args.controlBaseUrl });
+    const paths = yield* resolveChildLaunchPaths();
+    const logStorePath = groupLogStoreFilePath(paths.logDirectory, args.groupId);
+    const runtime = groupLocalRuntime(group, {
+      controlBaseUrl: args.controlBaseUrl,
+      store: ProcessStore.fileLayer(logStorePath),
+    });
     const envLayer = runtime.layer.pipe(
-      Layer.provideMerge(logRelayLayer),
+      Layer.provideMerge(layerWithProcessStore),
       Layer.provideMerge(captureLoggerLayer),
     );
     return yield* Effect.never.pipe(
       Effect.provide(
         runtime.control.pipe(
-          Layer.provideMerge(logRelayLayer),
+          Layer.provideMerge(layerWithProcessStore),
           Layer.provide(envLayer),
         ),
       ),

@@ -1,7 +1,9 @@
 import { Data, Effect, Option } from "effect";
-import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
+import { ProcessStore } from "./ProcessStore.js";
 import type { ProcessManagerLogScope } from "./processManagerLogContext.js";
+import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
 import { replayLogEntry } from "./processManagerLogRelay.js";
+import { queryGroupLogsFromStore } from "./processManagerLogStore.js";
 
 const defaultLogQueryLimit = 100;
 const maxLogQueryLimit = 10_000;
@@ -142,22 +144,15 @@ export const buildProcessManagerLogQuery = (input: {
     };
   });
 
-const storageNotConfiguredMessage =
-  "Log history storage is not configured yet. Use `pm watch <group>` for live and in-memory relay logs. See docs/plans/13-process-manager-log-transport.md (slice 2).";
-
 /**
  * Run a storage-backed log query and replay matching entries through the operator logger.
  *
  * @public
  */
 export const queryGroupLogs = (
-  _query: ProcessManagerLogQuery,
-): Effect.Effect<void, ProcessManagerLogQueryError> =>
-  Effect.fail(
-    new ProcessManagerLogQueryError({
-      reason: storageNotConfiguredMessage,
-    }),
-  );
+  query: ProcessManagerLogQuery,
+): Effect.Effect<void, ProcessManagerLogQueryError, ProcessStore> =>
+  queryGroupLogsFromStore(query);
 
 /**
  * Replay log rows returned from a future storage adapter.

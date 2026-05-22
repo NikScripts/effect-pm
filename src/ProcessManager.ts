@@ -69,11 +69,8 @@ import {
   resolveLogScope,
   type ProcessManagerLogScope,
 } from "./processManagerLogContext.js";
-import {
-  buildProcessManagerLogQuery,
-  ProcessManagerLogQueryError,
-  queryGroupLogs,
-} from "./processManagerLogQuery.js";
+import { ProcessManagerLogQueryError } from "./processManagerLogQuery.js";
+import { queryGroupLogsForCatalog } from "./processManagerLogHistory.js";
 
 const defaultLogQueryLimit = 100;
 import { httpEndpoint } from "./processManagerTransport.js";
@@ -1757,19 +1754,14 @@ const runLogsCommand = (
     readonly limit: number;
     readonly sort: "asc" | "desc";
   },
-): Effect.Effect<void, ProcessManagerConnectionError | ProcessManagerLogQueryError> =>
+): Effect.Effect<
+  void,
+  ProcessManagerConnectionError | ProcessManagerLogQueryError,
+  FileSystem.FileSystem | Path.Path
+> =>
   Effect.gen(function* () {
     const scope = yield* resolveLogScopeForCli(groups, target);
-    const query = yield* buildProcessManagerLogQuery({
-      scope,
-      from: options.from,
-      to: options.to,
-      after: options.after,
-      before: options.before,
-      limit: options.limit,
-      sort: options.sort,
-    });
-    yield* queryGroupLogs(query);
+    yield* queryGroupLogsForCatalog(groups, scope, options);
   });
 
 const runGroupStopCommand = (

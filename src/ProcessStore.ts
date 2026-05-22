@@ -407,6 +407,27 @@ export interface RuntimeStateChangedEvent extends AnalyticsEventBase {
   change: RuntimeStateChange;
 }
 
+/**
+ * Structured group log line persisted for operator `pm logs` history.
+ *
+ * @public
+ */
+export interface GroupLogEntryRecordedEvent extends AnalyticsEventBase {
+  type: "group.log.entry";
+  entityType: "group";
+  log: {
+    readonly entryId: string;
+    readonly entry: {
+      readonly date: string;
+      readonly level: string;
+      readonly message: string;
+      readonly cause?: string;
+      readonly annotations: Readonly<Record<string, string>>;
+      readonly spans: ReadonlyArray<string>;
+    };
+  };
+}
+
 // ============================================================================
 // Event Union
 // ============================================================================
@@ -422,7 +443,8 @@ export type AnalyticsEvent =
   | QueueItemCompletedEvent
   | QueueLifecycleChangedEvent
   | RuntimeFactRecordedEvent
-  | RuntimeStateChangedEvent;
+  | RuntimeStateChangedEvent
+  | GroupLogEntryRecordedEvent;
 
 /**
  * Storage port implemented by the in-memory service and the Prisma-backed adapter
@@ -524,6 +546,14 @@ const isQueueLifecycleChanged = (
   event: AnalyticsEvent,
 ): event is QueueLifecycleChangedEvent =>
   event.type === "queue.lifecycle.changed" && event.entityType === "queue";
+
+/**
+ * @public
+ */
+export const isGroupLogEntryRecorded = (
+  event: AnalyticsEvent,
+): event is GroupLogEntryRecordedEvent =>
+  event.type === "group.log.entry" && event.entityType === "group";
 
 const matchesRuntimeFactQuery =
   (query: RuntimeFactQuery | undefined) =>
@@ -706,6 +736,7 @@ const isLegacyEventRecordType = (type: string): type is Exclude<
     case "queue.item.completed":
     case "queue.lifecycle.changed":
     case "runtime.state.changed":
+    case "group.log.entry":
       return true;
     default:
       return false;

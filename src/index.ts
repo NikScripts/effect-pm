@@ -255,6 +255,17 @@ export {
   withQueueLogAnnotations,
   type ProcessManagerLogScope,
 } from "./processManagerLogContext.js";
+export {
+  groupLogStoreFilePath,
+  layerWithProcessStore,
+  makeGroupLogEntryRecordedEvent,
+  queryGroupLogsFromFile,
+  queryGroupLogsFromStore,
+  storeEventQueryFromLogQuery,
+} from "./processManagerLogStore.js";
+export { queryGroupLogsForCatalog } from "./processManagerLogHistory.js";
+export type { GroupLogEntryRecordedEvent } from "./ProcessStore.js";
+export { isGroupLogEntryRecorded } from "./ProcessStore.js";
 export type {
   ProcessManagerEndpointConfigItem,
   ProcessManagerConnectionConfigMap,

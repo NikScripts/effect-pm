@@ -110,7 +110,7 @@ export const logEntryMatchesScope = (
     return false;
   }
   if (scope._tag === "group") {
-    return group === scope.groupId;
+    return group === undefined || group === scope.groupId;
   }
   if (scope._tag === "process") {
     return (

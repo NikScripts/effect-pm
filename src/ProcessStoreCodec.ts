@@ -14,6 +14,7 @@ import type {
   QueueItemStatus,
   QueueLifecycleChangedEvent,
   QueueLifecycleTag,
+  GroupLogEntryRecordedEvent,
   RuntimeFactRecordedEvent,
   RuntimeStateChangedEvent,
 } from "./ProcessStore";
@@ -180,6 +181,16 @@ export const encodeEvent = (event: AnalyticsEvent): EffectPmEventCreateInput => 
         attributes,
         payload: encodeRuntimeStatePayload(event),
       };
+    case "group.log.entry":
+      return {
+        id: event.id,
+        type: event.type,
+        occurredAt: dateFromMillis(event.occurredAt),
+        entityType: event.entityType,
+        entityId: event.entityId,
+        attributes,
+        payload: encodeGroupLogEntryPayload(event),
+      };
   }
 };
 
@@ -261,6 +272,13 @@ const encodeRuntimeStatePayload = (
   change: toJsonValue(event.change),
 });
 
+const encodeGroupLogEntryPayload = (
+  event: GroupLogEntryRecordedEvent,
+): JsonValue => ({
+  entryId: event.log.entryId,
+  entry: toJsonValue(event.log.entry),
+});
+
 const toJsonValue = (value: unknown): JsonValue => {
   if (value === null) return null;
   if (value instanceof Date) return value.toISOString();
@@ -301,6 +319,8 @@ export const decodeEventRow = (
       return decodeRuntimeFact(row);
     case "runtime.state.changed":
       return decodeRuntimeState(row);
+    case "group.log.entry":
+      return decodeGroupLogEntry(row);
     default:
       return new ProcessStoreEventDecodeError({
         rowId: row.id,
@@ -673,6 +693,77 @@ const decodeRuntimeState = (
     entityId: row.entityId,
     attributes: decodeAttributes(row.attributes),
     change,
+  };
+};
+
+const decodeLogEntryPayload = (
+  value: unknown,
+): GroupLogEntryRecordedEvent["log"]["entry"] | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const date = value["date"];
+  const level = value["level"];
+  const message = value["message"];
+  const cause = value["cause"];
+  const annotations = value["annotations"];
+  const spans = value["spans"];
+  if (!isString(date) || !isString(level) || !isString(message)) {
+    return null;
+  }
+  if (!isRecord(annotations)) {
+    return null;
+  }
+  const annotationOut: Record<string, string> = {};
+  for (const [key, item] of Object.entries(annotations)) {
+    if (!isString(item)) {
+      return null;
+    }
+    annotationOut[key] = item;
+  }
+  if (!Array.isArray(spans)) {
+    return null;
+  }
+  const spanOut: string[] = [];
+  for (const span of spans) {
+    if (!isString(span)) {
+      return null;
+    }
+    spanOut.push(span);
+  }
+  return {
+    date,
+    level,
+    message,
+    ...(isString(cause) ? { cause } : {}),
+    annotations: annotationOut,
+    spans: spanOut,
+  };
+};
+
+const decodeGroupLogEntry = (
+  row: EffectPmEventRow,
+): GroupLogEntryRecordedEvent | ProcessStoreEventDecodeError => {
+  const payload = row.payload;
+  if (!isRecord(payload)) {
+    return new ProcessStoreEventDecodeError({
+      rowId: row.id,
+      reason: "payload is not an object",
+    });
+  }
+  const entryId = payload["entryId"];
+  const entry = decodeLogEntryPayload(payload["entry"]);
+  if (!isString(entryId) || entry === null) {
+    return failPayload(row, "log");
+  }
+  return {
+    id: row.id,
+    type: "group.log.entry",
+    occurredAt: row.occurredAt.getTime(),
+    entityType: "group",
+    entityId: row.entityId,
+    attributes: decodeAttributes(row.attributes),
+    log: { entryId, entry },
   };
 };
 
