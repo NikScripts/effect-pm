@@ -35,14 +35,26 @@ These are the default assumptions for implementation unless `/grill-me` changes 
 
 **Default cursor field:** monotonic **`entryId`** per `(groupId, endpointLabel, childGeneration)` — assigned at append time (uint64 or ULID). **`date`** remains on the payload for display and secondary indexes, not as the sole cursor (clock skew, duplicate ms).
 
-**CLI mapping:**
+**CLI mapping (live vs storage):**
 
-- `--after <entryId|iso>` — catch-up forward (exclusive).
-- `--before <entryId|iso>` — history backward (exclusive).
-- `--follow` — after backfill slice completes, attach live `LogTransport` (HTTP or PubNub).
-- If both `after` and `before` omitted and storage enabled: default to relay snapshot + live (today’s HTTP behavior) or “last N from storage” (TBD in grill).
+| Mode | Flags | Behavior |
+| ---- | ----- | -------- |
+| **Default (live)** | `group-logs <group>` (no storage flags) | Always attach live transport. Print relay **snapshot prelude** (bounded, see below), then stream new entries until interrupt. |
+| **Storage export** | **Requires** `--from` + `--to` ISO range (or `--since` duration) | Query `ProcessStore` only; print matching rows and **exit** — no infinite scroll, no implicit follow. |
+| **Storage + live** | explicit range flags **and** `--follow` | Optional: print storage window first, then prelude + live (dedupe by `entryId`). |
+
+- `--lines` / `-n` (default **100**) — cap relay snapshot prelude lines before live tail (fits terminal without bloat; not storage).
+- `--no-follow` — snapshot prelude only, then exit (debug/CI).
+- Storage cursors (`--after` / `--before` / `entryId`) — advanced; still subordinate to **required date range** when reading storage.
 
 **Dedup rule:** When merging storage stream + live stream, drop any live entry with `entryId <= lastIdFromStorage`.
+
+### Operator CLI UX (product — agreed)
+
+1. **Default is always live** — `pm group-logs my-group` ≡ follow live logs. Storage is never queried unless the operator passes an explicit **time range**.
+2. **Prelude without bloat** — Before live tail: replay relay snapshot up to `--lines` (default 100, max 500 = relay capacity). No “load everything from DB” on default path.
+3. **Storage requires a window** — e.g. `--from 2026-05-22T19:00:00Z --to 2026-05-22T20:00:00Z` (both required). Optional `--limit` caps rows. Rejects open-ended storage reads at CLI parse time.
+4. **Interactive follow (aspirational)** — While following live logs in a TTY, single-key or `:` commands (see Slice 7). Not required for v1 transport port; flag the UX as the north star.
 
 ### Storage placement
 
@@ -151,7 +163,8 @@ Operator group-logs
 
 ### Slice 5 — Endpoint config + composite
 
-- `logs:` config on endpoint items; composite = `history.query` then `live.subscribe`.
+- `logs:` config on endpoint items; **default operator path** = live transport only (relay prelude + follow).
+- Storage + PubNub configured on endpoint; CLI chooses mode via flags, not implicit composite backfill.
 - Document in [07](./07-process-manager.md) and guides.
 
 **Exit:** select transport without forking `ProcessManager.cli` internals.
@@ -160,26 +173,49 @@ Operator group-logs
 
 - `--preserve-timestamps` on `group-logs` / replay path.
 
+### Slice 7 (optional) — Interactive log session (TTY)
+
+When stdin is a TTY and `--interactive` (or default-on-TTY TBD in grill), attach a minimal log **session** on top of live follow:
+
+| Input | Action |
+| ----- | ------ |
+| `q` / Ctrl+C | Quit session, drain fibers |
+| `f` | Freeze/unfreeze live output |
+| `:` then `history` | Prompt for `--from` / `--to`, fetch storage window, print, resume live |
+| `:` then `help` | List commands |
+| `?` | Same as help |
+
+Implementation sketch: raw mode + line buffer; live `Stream` into session mailbox; commands run as short `Effect` interrupts (reuse `ProcessManager` remote controls where useful, e.g. `:` `status <process>` later). Keep v1 command set tiny to avoid CLI bloat.
+
+**Non-goal for Slice 7:** full shell, infinite scroll, or mouse support.
+
 ## CLI / operator UX (target)
 
 ```bash
-# Live only (today)
-pm group-logs my-group --follow
+# Default: prelude (100 lines) + live follow until Ctrl+C
+pm group-logs my-group
 
-# Reconnect: fill gap since last seen id, then follow
-pm group-logs my-group --after 00000042 --follow
+# Shorter prelude
+pm group-logs my-group --lines 20
 
-# Scroll back: older than oldest line in terminal
-pm group-logs my-group --before 2026-05-22T20:00:00.000Z --limit 200
+# Snapshot only, no live
+pm group-logs my-group --no-follow
 
-# Window
-pm group-logs my-group --after 2026-05-22T19:00:00.000Z --before 2026-05-22T20:00:00.000Z
+# Storage export (range required) — no follow unless explicitly combined
+pm group-logs my-group --from 2026-05-22T19:00:00Z --to 2026-05-22T20:00:00Z
+
+# Storage window then live (explicit)
+pm group-logs my-group --from 2026-05-22T19:00:00Z --to 2026-05-22T20:00:00Z --follow
+
+# Interactive live session (future)
+pm group-logs my-group --interactive
 ```
 
 ## Remaining open questions (for `/grill-me`)
 
-- Default when no cursor: “relay snapshot only” vs “last N from storage” vs “storage tail + follow”.
 - `entryId` format: uint64 sequence vs ULID (sortable, multi-instance safe).
+- Interactive: default-on-TTY vs `--interactive` only.
+- Whether `--follow` remains as alias when live is already default (keep for compatibility).
 - Retention/TTL and compaction (deployment policy vs library default).
 - Whether HTTP live stream still sends pre-storage 500 snapshot when storage is enabled.
 - Auth matrix when PubNub + remote control coexist.
@@ -200,4 +236,8 @@ pm group-logs my-group --after 2026-05-22T19:00:00.000Z --before 2026-05-22T20:0
 
 ## Grill-me entrypoint
 
-When resuming implementation, run `/grill-me` starting from **Slice 1** unless storage ([11](./11-runtime-state-hooks-and-config.md)) blockers force Slice 2 first. First grill branch: confirm cursor defaults and `entryId` on wire vs storage-only.
+When resuming implementation, run `/grill-me` starting from **Slice 1** unless storage ([11](./11-runtime-state-hooks-and-config.md)) blockers force Slice 2 first.
+
+**Resolved:** default = live + bounded relay prelude; storage = explicit `--from`/`--to` only.
+
+**Next grill branch:** interactive session scope (Slice 7) vs defer until after PubNub.

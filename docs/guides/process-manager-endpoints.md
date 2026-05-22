@@ -52,11 +52,11 @@ Tests and custom CLIs should prefer **`ProcessManager.ChildLaunch.layerConfig({ 
 ## Operator CLI
 
 ```bash
-pnpm run demo:pm -- group-logs workshop-group --follow
+pnpm run demo:pm -- group-logs workshop-group
 ```
 
-- **`group-logs`** — stream structured Effect log entries from the child control plane (`GET /logs/stream`, NDJSON)
-- **`--follow` / `-f`** — keep the HTTP stream open and replay new entries as they arrive
+- **`group-logs`** — default: bounded relay prelude + live structured logs (`GET /logs/stream`, NDJSON). Planned: storage reads require an explicit `--from` / `--to` range (see [plan 13](../plans/13-process-manager-log-transport.md)).
+- **`--follow` / `-f`** — alias when live is default; **`--no-follow`** for snapshot-only
 - Merge **`ProcessManager.operatorLoggerLayer`** into the operator CLI runtime so replay uses the same pretty/json logger as the PM process
 
 
