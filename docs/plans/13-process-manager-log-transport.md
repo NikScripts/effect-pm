@@ -47,7 +47,7 @@ These are the default assumptions for implementation unless `/grill-me` changes 
 | Flag | Role |
 | ---- | ---- |
 | *(no args)* | All groups, default `--limit` (100), `--sort desc` |
-| `<group>` positional | Filter `groupId` |
+| `<target>` positional | Resolved group, process, or queue (no type flag); filters on captured `groupId` / `processId` / `queueId` annotations |
 | `--from` / `--to` | Optional ISO date bounds |
 | `--after` / `--before` | Optional cursor bounds |
 | `--limit` | Row cap (default 100, max 10_000) |

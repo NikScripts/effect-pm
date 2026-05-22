@@ -35,6 +35,7 @@ import {
   QueueItemCodecDescriptorSchema,
   QueueItemValidationError,
 } from "./QueueResource";
+import { layerProcessGroupLogContext } from "./processManagerLogContext.js";
 import {
   ProcessStore,
   type ProcessLifecycleChangedEvent,
@@ -1591,6 +1592,7 @@ const buildLocalEnvLayer = <
   Self,
   const Entries extends readonly ProcessGroupEntry[],
 >(
+  groupId: string,
   groupLayer: Layer.Layer<
     Self,
     ProcessGroupErrors,
@@ -1600,6 +1602,7 @@ const buildLocalEnvLayer = <
   options: ProcessGroupLocalEnvLayerOptions = {},
 )=> {
   const store = options.store ?? ProcessStore.layer;
+  const logContext = layerProcessGroupLogContext(groupId);
   const processLayers = processContributionLayersFrom(entries);
   const queueContrib = queueContributionLayersFrom(entries);
   const bundledQueues =
@@ -1608,7 +1611,7 @@ const buildLocalEnvLayer = <
       : mergeBundledQueueLayersFor<Entries>(queueContrib[0]!, queueContrib.slice(1));
 
   if (processLayers.length === 0) {
-    return groupLayer.pipe(Layer.provide(store));
+    return groupLayer.pipe(Layer.provide(store), Layer.provideMerge(logContext));
   }
 
   const processLayersWithQueues =
@@ -1624,7 +1627,10 @@ const buildLocalEnvLayer = <
           processLayersWithQueues[0]!,
         );
 
-  const inner = groupLayer.pipe(Layer.provide(Layer.merge(mergedProcessLayers, store)));
+  const inner = groupLayer.pipe(
+    Layer.provide(Layer.merge(mergedProcessLayers, store)),
+    Layer.provideMerge(logContext),
+  );
   if (bundledQueues === undefined) {
     return Layer.merge(inner, store);
   }
@@ -1650,7 +1656,7 @@ export const localEnvLayer = <
 >(
   group: ProcessGroupServiceDefinition<Self, Id, Entries, ConfigItems>,
   options?: ProcessGroupLocalEnvLayerOptions,
-) => buildLocalEnvLayer(group.layer, group.entries, options);
+) => buildLocalEnvLayer(group.id, group.layer, group.entries, options);
 
 // ============================================================================
 // Public namespace

@@ -1,5 +1,6 @@
 import { Data, Effect, Option } from "effect";
 import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
+import type { ProcessManagerLogScope } from "./processManagerLogContext.js";
 import { replayLogEntry } from "./processManagerLogRelay.js";
 
 const defaultLogQueryLimit = 100;
@@ -24,6 +25,10 @@ export type ProcessManagerLogSort = "asc" | "desc";
 export interface ProcessManagerLogQuery {
   /** When set, restrict to this process group id. */
   readonly groupId?: string;
+  /** When set, restrict to logs annotated with this process id. */
+  readonly processId?: string;
+  /** When set, restrict to logs annotated with this queue id. */
+  readonly queueId?: string;
   readonly from?: Date;
   readonly to?: Date;
   /** Exclusive lower bound (`entryId` or ISO date per storage adapter). */
@@ -94,8 +99,23 @@ const validateRange = (
  *
  * @public
  */
+const scopeToQueryFields = (
+  scope: ProcessManagerLogScope,
+): Pick<ProcessManagerLogQuery, "groupId" | "processId" | "queueId"> => {
+  switch (scope._tag) {
+    case "all":
+      return {};
+    case "group":
+      return { groupId: scope.groupId };
+    case "process":
+      return { groupId: scope.groupId, processId: scope.processId };
+    case "queue":
+      return { groupId: scope.groupId, queueId: scope.queueId };
+  }
+};
+
 export const buildProcessManagerLogQuery = (input: {
-  readonly groupId?: string;
+  readonly scope: ProcessManagerLogScope;
   readonly from: Option.Option<string>;
   readonly to: Option.Option<string>;
   readonly after: Option.Option<string>;
@@ -112,7 +132,7 @@ export const buildProcessManagerLogQuery = (input: {
     const before = Option.getOrUndefined(input.before);
 
     return {
-      groupId: input.groupId,
+      ...scopeToQueryFields(input.scope),
       from: Option.getOrUndefined(from),
       to: Option.getOrUndefined(to),
       after,

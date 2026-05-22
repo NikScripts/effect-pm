@@ -65,6 +65,11 @@ import {
 } from "./processManagerGroupLogs.js";
 import { watchGroupLogs } from "./processManagerGroupLogsInteractive.js";
 import {
+  logScopeGroupId,
+  resolveLogScope,
+  type ProcessManagerLogScope,
+} from "./processManagerLogContext.js";
+import {
   buildProcessManagerLogQuery,
   ProcessManagerLogQueryError,
   queryGroupLogs,
@@ -1685,28 +1690,19 @@ const stdinIsInteractive = (): boolean => {
   return typeof stdin !== "undefined" && stdin.isTTY === true;
 };
 
-const resolveOptionalGroupId = (
+const resolveLogScopeForCli = (
   groups: ReadonlyArray<ConfigSource>,
-  input: Option.Option<string>,
-): Effect.Effect<string | undefined, ProcessManagerEndpointConfigError> =>
-  Option.match(input, {
-    onNone: () => Effect.succeed(undefined),
-    onSome: (value) =>
-      Effect.gen(function* () {
-        const normalizedInput = normalizeProcessManagerTarget(value);
-        const match = groups.find(
-          (group) => normalizeProcessManagerTarget(group.id) === normalizedInput,
-        );
-        if (match === undefined) {
-          return yield* Effect.fail(
-            new ProcessManagerEndpointConfigError({
-              reason: `Unknown group target: ${value}`,
-            }),
-          );
-        }
-        return match.id;
-      }),
-  });
+  target: Option.Option<string>,
+): Effect.Effect<ProcessManagerLogScope, ProcessManagerConnectionError> =>
+  resolveLogScope(groups, target, targetCandidatesFrom(groups)).pipe(
+    Effect.mapError(
+      (error) =>
+        new ProcessManagerConnectionError({
+          groupId: "",
+          reason: error.reason,
+        }),
+    ),
+  );
 
 const runWatchCommand = (
   groups: ReadonlyArray<ConfigSource>,
@@ -1723,9 +1719,19 @@ const runWatchCommand = (
   FileSystem.FileSystem | HttpClient.HttpClient | Path.Path | Terminal
 > =>
   Effect.gen(function* () {
+    const scope = yield* resolveLogScopeForCli(groups, Option.some(input));
+    const groupId = logScopeGroupId(scope);
+    if (groupId === undefined) {
+      return yield* Effect.fail(
+        new ProcessManagerConnectionError({
+          groupId: "",
+          reason: "watch requires a group, process, or queue target",
+        }),
+      );
+    }
     const controlBaseUrl = yield* resolveGroupControlBaseUrl(
       groups,
-      input,
+      groupId,
       options.endpointLabel,
     );
     if (!options.live && !options.interactive) {
@@ -1736,6 +1742,7 @@ const runWatchCommand = (
       preludeLines: options.lines,
       interactive: options.interactive,
       live: options.live,
+      scope: scope._tag === "all" ? undefined : scope,
     });
   });
 
@@ -1750,14 +1757,11 @@ const runLogsCommand = (
     readonly limit: number;
     readonly sort: "asc" | "desc";
   },
-): Effect.Effect<
-  void,
-  ProcessManagerEndpointConfigError | ProcessManagerLogQueryError
-> =>
+): Effect.Effect<void, ProcessManagerConnectionError | ProcessManagerLogQueryError> =>
   Effect.gen(function* () {
-    const groupId = yield* resolveOptionalGroupId(groups, target);
+    const scope = yield* resolveLogScopeForCli(groups, target);
     const query = yield* buildProcessManagerLogQuery({
-      groupId,
+      scope,
       from: options.from,
       to: options.to,
       after: options.after,

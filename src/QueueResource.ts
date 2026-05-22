@@ -71,6 +71,7 @@ import {
   Semaphore,
   Types,
 } from "effect";
+import { withQueueLogAnnotations } from "./processManagerLogContext.js";
 import { ProcessStore } from "./ProcessStore";
 import { isJsonValue } from "./internal/json";
 import type { JsonValue } from "./ProcessStoreEvent";
@@ -1700,19 +1701,22 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
      * `pause` are held until resume, preserving priority ordering.
      */
     const workerLoop = (workerId: number): Effect.Effect<void, never, R> =>
-      Effect.annotateLogs(
-        Effect.forever(
-          Effect.gen(function* () {
-            const shutdown = yield* Ref.get(isShutdownRef);
-            if (shutdown) return yield* Effect.interrupt;
+      withQueueLogAnnotations(
+        queueName,
+        Effect.annotateLogs(
+          Effect.forever(
+            Effect.gen(function* () {
+              const shutdown = yield* Ref.get(isShutdownRef);
+              if (shutdown) return yield* Effect.interrupt;
 
-            yield* latch.await;
-            const internal = yield* takeNext;
-            yield* latch.await;
-            yield* processItem(internal);
-          }),
+              yield* latch.await;
+              const internal = yield* takeNext;
+              yield* latch.await;
+              yield* processItem(internal);
+            }),
+          ),
+          { "queue.worker": String(workerId) },
         ),
-        { "queue.name": queueName, "queue.worker": String(workerId) },
       );
 
     const autoStart = config.autoStart ?? true;

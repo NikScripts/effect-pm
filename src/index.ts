@@ -244,6 +244,17 @@ export {
   type ProcessManagerLogQuery,
   type ProcessManagerLogSort,
 } from "./processManagerLogQuery.js";
+export {
+  ProcessGroupLogContext,
+  ProcessManagerLogAnnotationKeys,
+  layerProcessGroupLogContext,
+  logEntryMatchesScope,
+  logScopeGroupId,
+  resolveLogScope,
+  withProcessLogAnnotations,
+  withQueueLogAnnotations,
+  type ProcessManagerLogScope,
+} from "./processManagerLogContext.js";
 export type {
   ProcessManagerEndpointConfigItem,
   ProcessManagerConnectionConfigMap,

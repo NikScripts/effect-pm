@@ -6,6 +6,8 @@ import {
   ProcessManagerGroupLogError,
   type ProcessManagerGroupLogOptions,
 } from "./processManagerGroupLogs.js";
+import type { ProcessManagerLogScope } from "./processManagerLogContext.js";
+import { logEntryMatchesScope } from "./processManagerLogContext.js";
 import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
 import { replayLogEntry } from "./processManagerLogRelay.js";
 
@@ -25,6 +27,8 @@ export interface ProcessManagerGroupLogWatchOptions {
   readonly interactive?: boolean;
   /** When false, read snapshot only (HTTP without follow) and exit. */
   readonly live?: boolean;
+  /** When set, only replay entries matching this scope (process / queue / group). */
+  readonly scope?: ProcessManagerLogScope;
 }
 
 const clampPreludeLines = (lines: number | undefined): number => {
@@ -69,8 +73,14 @@ const drainBuffer = (
     }
   });
 
+const shouldReplay = (
+  entry: ProcessManagerLogEntry,
+  scope: ProcessManagerLogScope | undefined,
+): boolean => scope === undefined || logEntryMatchesScope(entry, scope);
+
 const runInteractiveWatch = (
   streamOptions: ProcessManagerGroupLogOptions,
+  scope: ProcessManagerLogScope | undefined,
 ): Effect.Effect<void, ProcessManagerGroupLogError, HttpClient.HttpClient | Terminal.Terminal> =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -95,6 +105,9 @@ const runInteractiveWatch = (
 
       const handleEntry = (entry: ProcessManagerLogEntry): Effect.Effect<void, ProcessManagerGroupLogError> =>
         Effect.gen(function* () {
+          if (!shouldReplay(entry, scope)) {
+            return;
+          }
           if (preludeRemaining > 0) {
             preludeRemaining -= 1;
             yield* replayLogEntry(entry);
@@ -166,23 +179,27 @@ export const watchGroupLogs = (
 > => {
   const preludeLines = clampPreludeLines(options.preludeLines);
   const live = options.live ?? true;
+  const scope = options.scope;
   const streamOptions: ProcessManagerGroupLogOptions = {
     controlBaseUrl: options.controlBaseUrl,
     follow: live,
     preludeLines,
   };
 
+  const replayIfMatching = (entry: ProcessManagerLogEntry): Effect.Effect<void> =>
+    shouldReplay(entry, scope) ? replayLogEntry(entry) : Effect.void;
+
   if (!live) {
     return groupLogEntryStream(streamOptions).pipe(
-      Stream.runForEach((entry) => replayLogEntry(entry)),
+      Stream.runForEach(replayIfMatching),
     );
   }
 
   if (options.interactive === false) {
     return groupLogEntryStream(streamOptions).pipe(
-      Stream.runForEach((entry) => replayLogEntry(entry)),
+      Stream.runForEach(replayIfMatching),
     );
   }
 
-  return runInteractiveWatch(streamOptions);
+  return runInteractiveWatch(streamOptions, scope);
 };

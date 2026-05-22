@@ -18,6 +18,7 @@
 
 import { Cause, Clock, Context, Data, DateTime, Duration, Effect, Fiber, Layer, MutableRef, Option } from "effect";
 import { isPollingLayer, isScheduleLayer } from "./processLayerBrand.js";
+import { ProcessManagerLogAnnotationKeys } from "./processManagerLogContext.js";
 import { ProcessStore } from "./ProcessStore";
 import { Polling, PollingTag } from "./Polling";
 import { ProcessSchedule, ProcessScheduleTag } from "./ProcessSchedule";
@@ -827,27 +828,34 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     runImmediately,
   };
 
+  const annotateProcessLogs = (
+    effect: Effect.Effect<void, never, RUser | PollingTag | ProcessScheduleTag | Clock.Clock>,
+  ): Effect.Effect<void, never, RUser | PollingTag | ProcessScheduleTag | Clock.Clock> =>
+    Effect.annotateLogs(effect, {
+      [ProcessManagerLogAnnotationKeys.processId]: name,
+    });
+
   if (state.pollingLayer !== undefined && state.scheduleLayer !== undefined) {
     return {
       ...base,
-      effect: provideStepLayers(supervisedCore, state),
+      effect: annotateProcessLogs(provideStepLayers(supervisedCore, state)),
     };
   }
   if (state.pollingLayer !== undefined) {
     return {
       ...base,
-      effect: provideStepLayers(supervisedCore, state),
+      effect: annotateProcessLogs(provideStepLayers(supervisedCore, state)),
     };
   }
   if (state.scheduleLayer !== undefined) {
     return {
       ...base,
-      effect: provideStepLayers(supervisedCore, state),
+      effect: annotateProcessLogs(provideStepLayers(supervisedCore, state)),
     };
   }
   return {
     ...base,
-    effect: provideStepLayers(supervisedCore, state),
+    effect: annotateProcessLogs(provideStepLayers(supervisedCore, state)),
   };
 }
 

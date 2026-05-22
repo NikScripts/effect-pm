@@ -59,7 +59,8 @@ pnpm run demo:pm -- logs workshop-group --from 2026-05-22T19:00:00Z --to 2026-05
 
 ### `watch` (live + in-memory relay)
 
-- **`watch <group>`** — recent relay prelude (`--lines` / `-n`, default 100) + live structured logs (`GET /logs/stream?follow=true&lines=…`, NDJSON). Live is implicit (no `--follow`).
+- **`watch <target>`** — recent relay prelude (`--lines` / `-n`, default 100) + live structured logs (`GET /logs/stream?follow=true&lines=…`, NDJSON). Live is implicit (no `--follow`).
+- **Target** is resolved like other PM commands: group id, process id, or queue id (no `--group` flag). Process/queue targets connect to that entity’s group and **filter** streamed lines by captured `groupId` / `processId` / `queueId` log annotations.
 - **`--snapshot`** — relay prelude only, then exit
 - **`--no-interactive`** — disable TTY keys; non-TTY stdin disables interactive automatically
 - Interactive keys (TTY): `f` freeze/unfreeze, `?` / `h` help, `q` or Ctrl+C quit
@@ -67,7 +68,7 @@ pnpm run demo:pm -- logs workshop-group --from 2026-05-22T19:00:00Z --to 2026-05
 ### `logs` (storage history — query-shaped)
 
 - **`logs`** — query stored log rows (like a DB query). No args ⇒ all groups, default **`--limit`** (100), default **`--sort desc`** (newest first).
-- Optional **`logs <group>`** — filter by group id
+- Optional **`logs <target>`** — filter by resolved group, process, or queue (same target resolution as `watch`; no type flag)
 - **`--from` / `--to`** — optional ISO date bounds (both ends optional; if both set, `from` ≤ `to`)
 - **`--after` / `--before`** — optional cursor bounds (entry id or ISO, per storage adapter)
 - **`--limit`**, **`--sort asc|desc`**

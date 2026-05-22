@@ -10,6 +10,7 @@ describe("processManagerLogQuery", () => {
   it("builds an open query with defaults when no filters are set", () =>
     Effect.gen(function* () {
       const query = yield* buildProcessManagerLogQuery({
+        scope: { _tag: "all" },
         from: Option.none(),
         to: Option.none(),
         after: Option.none(),
@@ -27,6 +28,7 @@ describe("processManagerLogQuery", () => {
   it("rejects an inverted date range", () =>
     Effect.gen(function* () {
       const result = yield* buildProcessManagerLogQuery({
+        scope: { _tag: "all" },
         from: Option.some("2026-05-22T20:00:00.000Z"),
         to: Option.some("2026-05-22T19:00:00.000Z"),
         after: Option.none(),
@@ -40,7 +42,11 @@ describe("processManagerLogQuery", () => {
   it("fails query execution until storage is wired", () =>
     Effect.gen(function* () {
       const query = yield* buildProcessManagerLogQuery({
-        groupId: "workshop-group",
+        scope: {
+          _tag: "process",
+          groupId: "workshop-group",
+          processId: "billing/sync",
+        },
         from: Option.none(),
         to: Option.none(),
         after: Option.none(),
@@ -48,6 +54,7 @@ describe("processManagerLogQuery", () => {
         limit: 10,
         sort: "desc",
       });
+      assert.strictEqual(query.processId, "billing/sync");
       const error = yield* queryGroupLogs(query).pipe(Effect.flip);
       assert.instanceOf(error, ProcessManagerLogQueryError);
       assert.match(error.reason, /storage is not configured/i);
