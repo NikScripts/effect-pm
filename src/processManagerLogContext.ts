@@ -42,7 +42,7 @@ export const logScopeGroupId = (scope: ProcessManagerLogScope): string | undefin
 export class ProcessGroupLogContext extends Context.Service<
   ProcessGroupLogContext,
   { readonly groupId: string }
->()("@nikscripts/effect-pm/processGroupLogContext") {}
+>()("@nikscripts/effect-pm/processManagerLogContext/ProcessGroupLogContext") {}
 
 /**
  * Scoped {@link Effect.annotateLogsScoped} for every fiber under a group runtime.

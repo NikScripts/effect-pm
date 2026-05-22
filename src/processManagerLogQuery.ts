@@ -1,4 +1,5 @@
 import { Data, Effect, Option } from "effect";
+import { utcDateFromMillis } from "./utcDate.js";
 import { ProcessStore } from "./ProcessStore.js";
 import type { ProcessManagerLogScope } from "./processManagerLogContext.js";
 import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
@@ -62,7 +63,7 @@ const parseIsoDate = (
       }),
     );
   }
-  return Effect.succeed(new Date(ms));
+  return Effect.succeed(utcDateFromMillis(ms));
 };
 
 const parseOptionalIsoDate = (

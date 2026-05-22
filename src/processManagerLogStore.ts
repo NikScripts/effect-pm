@@ -171,6 +171,49 @@ const entriesFromStoreEvents = (
 };
 
 /**
+ * Load persisted group log entries without replaying to the operator logger.
+ *
+ * @public
+ */
+export const loadGroupLogEntriesFromStore = (
+  query: ProcessManagerLogQuery,
+): Effect.Effect<
+  ReadonlyArray<ProcessManagerLogEntry>,
+  ProcessManagerLogQueryError,
+  ProcessStore
+> =>
+  Effect.gen(function* () {
+    const store = yield* ProcessStore;
+    const events = yield* store.events(storeEventQueryFromLogQuery(query));
+    const logEvents = events.filter(isGroupLogEntryRecorded);
+    const entries = entriesFromStoreEvents(logEvents, query);
+    if (entries.length === 0) {
+      return yield* new ProcessManagerLogQueryError({
+        reason: "No log entries matched the query",
+      });
+    }
+    return entries;
+  });
+
+/**
+ * Load a group's on-disk log store entries (no replay).
+ *
+ * @public
+ */
+export const loadGroupLogEntriesFromFile = (
+  filePath: string,
+  query: ProcessManagerLogQuery,
+): Effect.Effect<
+  ReadonlyArray<ProcessManagerLogEntry>,
+  ProcessManagerLogQueryError,
+  FileSystem.FileSystem | Path.Path
+> =>
+  loadGroupLogEntriesFromStore(query).pipe(
+    Effect.provide(ProcessStore.fileLayer(filePath)),
+    Effect.scoped,
+  );
+
+/**
  * Query persisted group logs through {@link ProcessStore}.
  *
  * @public
@@ -179,17 +222,7 @@ export const queryGroupLogsFromStore = (
   query: ProcessManagerLogQuery,
 ): Effect.Effect<void, ProcessManagerLogQueryError, ProcessStore> =>
   Effect.gen(function* () {
-    const store = yield* ProcessStore;
-    const events = yield* store.events(storeEventQueryFromLogQuery(query));
-    const logEvents = events.filter(isGroupLogEntryRecorded);
-    const entries = entriesFromStoreEvents(logEvents, query);
-    if (entries.length === 0) {
-      return yield* Effect.fail(
-        new ProcessManagerLogQueryError({
-          reason: "No log entries matched the query",
-        }),
-      );
-    }
+    const entries = yield* loadGroupLogEntriesFromStore(query);
     yield* replayLogQueryResults(entries, query.sort);
   });
 
@@ -245,6 +278,7 @@ const makePersistingRelay = (
       );
     });
 
+    yield* Effect.addFinalizer(() => flush);
     yield* Effect.forkScoped(Effect.repeat(flush, Schedule.fixed(storeFlushInterval)));
 
     const queueAppend = (entry: ProcessManagerLogEntry): Effect.Effect<void> =>

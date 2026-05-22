@@ -5,7 +5,13 @@ import {
   buildProcessManagerLogQuery,
   ProcessManagerLogQueryError,
 } from "./processManagerLogQuery.js";
-import { groupLogStoreFilePath, queryGroupLogsFromFile } from "./processManagerLogStore.js";
+import {
+  groupLogStoreFilePath,
+  loadGroupLogEntriesFromFile,
+  queryGroupLogsFromFile,
+} from "./processManagerLogStore.js";
+import { replayLogQueryResults } from "./processManagerLogQuery.js";
+import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
 import { resolveChildLaunchPaths } from "./processManagerChildLaunch.js";
 
 type GroupCatalogEntry = {
@@ -56,34 +62,41 @@ export const queryGroupLogsForCatalog = (
     });
 
     if (scope._tag === "all") {
-      let matched = 0;
+      const perGroupLimit = Math.min(
+        10_000,
+        Math.max(input.limit, input.limit * Math.max(groups.length, 1)),
+      );
+      const merged: ProcessManagerLogEntry[] = [];
       for (const group of groups) {
         const filePath = groupLogStoreFilePath(paths.logDirectory, group.id);
-        const groupQuery = { ...query, groupId: group.id };
-        const result = yield* queryGroupLogsFromFile(filePath, groupQuery).pipe(
+        const groupQuery = { ...query, groupId: group.id, limit: perGroupLimit };
+        const loaded = yield* loadGroupLogEntriesFromFile(filePath, groupQuery).pipe(
           Effect.option,
         );
-        if (Option.isSome(result)) {
-          matched += 1;
+        if (Option.isSome(loaded)) {
+          merged.push(...loaded.value);
         }
       }
-      if (matched === 0) {
-        return yield* Effect.fail(
-          new ProcessManagerLogQueryError({
-            reason: `No log history found under ${paths.logDirectory}. ${storeMissingMessage("(group)/events.ndjson")}`,
-          }),
-        );
+      if (merged.length === 0) {
+        return yield* new ProcessManagerLogQueryError({
+          reason: `No log history found under ${paths.logDirectory}. ${storeMissingMessage("(group)/events.ndjson")}`,
+        });
       }
+      const sorted = [...merged].sort((left, right) => {
+        const leftMs = Date.parse(left.date);
+        const rightMs = Date.parse(right.date);
+        return input.sort === "asc" ? leftMs - rightMs : rightMs - leftMs;
+      });
+      const limited = sorted.slice(0, input.limit);
+      yield* replayLogQueryResults(limited, input.sort);
       return;
     }
 
     const groupId = logScopeGroupId(scope);
     if (groupId === undefined) {
-      return yield* Effect.fail(
-        new ProcessManagerLogQueryError({
-          reason: "Log history query requires a resolved group scope",
-        }),
-      );
+      return yield* new ProcessManagerLogQueryError({
+        reason: "Log history query requires a resolved group scope",
+      });
     }
     const filePath = groupLogStoreFilePath(paths.logDirectory, groupId);
     yield* queryGroupLogsFromFile(filePath, query);

@@ -262,6 +262,8 @@ export {
   queryGroupLogsFromFile,
   queryGroupLogsFromStore,
   storeEventQueryFromLogQuery,
+  loadGroupLogEntriesFromFile,
+  loadGroupLogEntriesFromStore,
 } from "./processManagerLogStore.js";
 export { queryGroupLogsForCatalog } from "./processManagerLogHistory.js";
 export type { GroupLogEntryRecordedEvent } from "./ProcessStore.js";

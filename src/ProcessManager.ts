@@ -1719,12 +1719,10 @@ const runWatchCommand = (
     const scope = yield* resolveLogScopeForCli(groups, Option.some(input));
     const groupId = logScopeGroupId(scope);
     if (groupId === undefined) {
-      return yield* Effect.fail(
-        new ProcessManagerConnectionError({
-          groupId: "",
-          reason: "watch requires a group, process, or queue target",
-        }),
-      );
+      return yield* new ProcessManagerConnectionError({
+        groupId: "",
+        reason: "watch requires a group, process, or queue target",
+      });
     }
     const controlBaseUrl = yield* resolveGroupControlBaseUrl(
       groups,
