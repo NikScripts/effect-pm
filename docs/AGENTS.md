@@ -22,7 +22,7 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 | `examples/forms/*` | One API shape per file — minimal teaching references. |
 | `examples/scenarios/*` | Descriptive compositions showing subsystems together. |
 | `examples/shared/*` | Test doubles, harness helpers, shared example utilities. |
-| `docs/guides/*.md` | Runnable-example guides (forms + `pnpm run` commands); merge with `docs/rewrite/` over time. |
+| `docs/guides/*.md` | API guides (definition forms, config, types); merge with `docs/rewrite/` over time. |
 | `docs/plans/*.md` | Future-only roadmap items. Implemented behavior belongs in regular docs and source TSDoc. |
 | `docs/plans/10-process-store-phase-one.md` | Detailed first implementation slice for plan 01: `ProcessStore` read foundation, current-state checks, code sketches, and verification. Read after [`docs/plans/README.md`](./plans/README.md). |
 | `repos/effect/` | Vendored Effect source for read-only agent reference. **Do not import from it.** |

@@ -29,7 +29,6 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | **Start here** | [`scenarios/full-process-group-with-queues-and-control-cli.ts`](./scenarios/full-process-group-with-queues-and-control-cli.ts) → [`forms/process-group/`](./forms/process-group/) → [`cli.ts`](./cli.ts) |
 | **Queues** | [`forms/queue/queue-resource-priority-retry.ts`](./forms/queue/queue-resource-priority-retry.ts) → main scenario |
 | **Schedule controls** | `pnpm run example:schedule-control-basics` → `example:schedule-control-surfaces` → [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) |
-| **Process** | [docs/guides/process.md](../docs/guides/process.md) → `pnpm run example:process-forms` → `pnpm run example:process-supervisor-patterns` |
 | **Process runtime** | `pnpm run example:process-supervisor-patterns` → [`scenarios/game-window-polling-with-process-group.ts`](./scenarios/game-window-polling-with-process-group.ts) |
 | **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
 | **Resource gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → http-client → http-api forms |
@@ -79,17 +78,6 @@ Storage options:
 | [`forms/schedule/schedule-controls-initializer.ts`](./forms/schedule/schedule-controls-initializer.ts) | Controls from `schedule` initializer |
 | [`forms/schedule/schedule-controls-in-effect.ts`](./forms/schedule/schedule-controls-in-effect.ts) | `Process.scheduleControls` in tick body |
 | [`forms/schedule/schedule-controls-external-fiber.ts`](./forms/schedule/schedule-controls-external-fiber.ts) | External fiber via `ProcessSchedule` service |
-
-### Process
-
-| File | Teaches |
-|------|---------|
-| [`forms/process/process-make-minimal.ts`](./forms/process/process-make-minimal.ts) | `Process.make`, inline `polling`, fork `process.effect` |
-| [`forms/process/process-service.ts`](./forms/process/process-service.ts) | `Process.Service` + `.layer` |
-| [`forms/process/process-run-immediately.ts`](./forms/process/process-run-immediately.ts) | `runImmediately()` + `ProcessStore` |
-| [`forms/process/process-external-layers.ts`](./forms/process/process-external-layers.ts) | `Polling` provided when forking `process.effect` |
-
-Guide: [docs/guides/process.md](../docs/guides/process.md). Run all: `pnpm run example:process-forms`.
 
 ### Polling
 

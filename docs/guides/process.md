@@ -1,103 +1,76 @@
-# Process — guide, forms, and runnable examples
+# Process
 
-A **process** in effect-pm is a named unit of background work: you supply an `Effect` that runs on each **repeat**, and the library runs a long-lived **driver** (`process.effect`) that applies optional **polling** (cadence between repeats) and **schedule** (whether repeats are allowed right now). The same body can be run once via `runImmediately()` without starting the driver. With `ProcessStore` in the environment, executions and lifecycle events are recorded for status APIs and (later) control surfaces.
+A **process** is a named unit of background work in effect-pm. You provide an `Effect` that runs to completion on each **repeat**; the library runs a long-lived **driver** (`process.effect`) that coordinates optional **polling** (how long to wait between repeats while allowed) and **schedule** (whether repeats are allowed at the current time). The same repeat body can run once through `runImmediately()` without starting the driver. When `ProcessStore` is in the environment, executions and lifecycle events are recorded for status and control surfaces.
 
-This guide is the **examples-oriented** companion to the narrative rewrite in [`docs/rewrite/02-process.md`](../rewrite/02-process.md) and the spec reference [`docs/PROCESS-API.md`](../PROCESS-API.md). Those stay focused on concepts; this page lists **every main way to define a process**, when to pick each shape, configuration fields, types, related tools, and **commands to run forms**.
-
----
-
-## Runnable examples (commands)
-
-From the package root:
-
-| Command | What it demonstrates |
-| --- | --- |
-| `pnpm run example:form:process-make-minimal` | [`process-make-minimal.ts`](../../examples/forms/process/process-make-minimal.ts) — `Process.make`, inline `polling`, fork driver |
-| `pnpm run example:form:process-service` | [`process-service.ts`](../../examples/forms/process/process-service.ts) — `Process.Service` + `.layer` |
-| `pnpm run example:form:process-run-immediately` | [`process-run-immediately.ts`](../../examples/forms/process/process-run-immediately.ts) — single tracked run, `ProcessStore` |
-| `pnpm run example:form:process-external-layers` | [`process-external-layers.ts`](../../examples/forms/process/process-external-layers.ts) — provide `Polling` when forking `process.effect` |
-| `pnpm run example:form:schedule-delayed-start` | [`schedule-delayed-start.ts`](../../examples/forms/polling/schedule-delayed-start.ts) — `schedule` on env + `TestClock` (pair with inline `schedule` on `make` in production) |
-| `pnpm run example:form:polling-accelerating` | [`polling-accelerating.ts`](../../examples/forms/polling/polling-accelerating.ts) — accelerating cadence inside a process |
-| `pnpm run example:process-patterns` | Chained polling + schedule forms |
-| `pnpm run example:process-game-window` | [`game-window-polling-with-process-group.ts`](../../examples/scenarios/game-window-polling-with-process-group.ts) — process inside a `ProcessGroup` |
-
-Run all process forms in one go:
-
-```bash
-pnpm run example:process-forms
-```
+This guide documents **every supported way to define a process**, when to choose each shape, configuration fields, the handle API, types, and how `Process` fits next to polling, schedule, storage, and groups. It is separate from the narrative chapter [`docs/rewrite/02-process.md`](../rewrite/02-process.md) and the spec tables in [`docs/PROCESS-API.md`](../PROCESS-API.md); those can be merged later.
 
 ---
 
-## Ways to create a process
+## Ways to define a process
 
-All paths share the same **config object** (`ProcessMakeOptions`): a required `effect` and optional `polling`, `schedule`, and `scheduleLayer`. The **id** is always the first argument (or the first argument to `Process.Service`), not a field inside config.
+All definitions share **`ProcessMakeOptions`**: required `effect`, optional `polling`, `schedule`, and `scheduleLayer`. The process **id** is always the first argument to `Process.make` or `Process.Service` — never a field inside the config object.
 
-### 1. `Process.make(id, config)` — value handle
+### `Process.make(id, config)`
 
-**Shape:** returns a `Process<R>` handle with `name`, `effect`, `runImmediately()`, and `getStatus()`.
+Returns a **`Process<R>`** value: a handle with `name`, `effect` (the driver), `runImmediately()`, and `getStatus()`.
 
 ```typescript
 import { Duration, Effect } from "effect";
-import { Polling, Process } from "@nikscripts/effect-pm";
+import { Polling, Process, ProcessSchedule } from "@nikscripts/effect-pm";
 
 const heartbeat = Process.make("@app/Heartbeat", {
   effect: Effect.logInfo("tick"),
   polling: Polling.spaced(Duration.seconds(5)),
+  schedule: ProcessSchedule.empty,
 });
 ```
 
 **Benefits**
 
-- Smallest API surface; no `Context` tag or `Layer` unless you want them.
-- Good for scripts, one-off workers, and tests where the handle is passed around directly.
-- Same config as `Process.Service`; easy to lift into a service class later.
+- Minimal API: no `Context.Tag` or `Layer` unless you choose to add them at the app root.
+- The handle is a plain value — easy to pass into tests, scripts, or ad hoc wiring.
+- Same config shape as `Process.Service`; you can promote to a service class when you need a group entry.
 
 **Tradeoffs**
 
-- Not a `ProcessGroup` entry by itself — groups want a `ProcessDefinition` or `Process.Service` class.
-- You compose `polling` / `schedule` layers yourself at the fork site unless you pass them on `make` (see below).
-
-**Run:** `pnpm run example:form:process-make-minimal`
+- Not a `ProcessGroup` entry on its own; groups expect a `Process.Service` class or a definition produced from `make`.
+- If you omit `polling` / `schedule` on `make`, you must supply them when forking `process.effect` (polling only) or accept baked-in schedule defaults (see [Layer wiring](#layer-wiring-inline-vs-fork-site)).
 
 ---
 
-### 2. `Process.Service<Self>()(id, config)` — class + layer
+### `Process.Service<Self>()(id, config)`
 
-**Shape:** Effect `Context.Service` subclass with static `id`, `kind`, `process`, `layer`, and `tag`. `yield* MyProcess` gives the same `Process<R>` handle as `make`.
+Returns an Effect **`Context.Service`** subclass. Static fields include `id`, `kind: "process"`, `contract` metadata via the group system, `process` (the handle), `layer`, and `tag`. In a program, `yield* MyProcess` is the same `Process<R>` as `Process.make` would produce.
 
 ```typescript
-import { Duration, Effect } from "effect";
-import { Polling, Process } from "@nikscripts/effect-pm";
+import { Duration, Effect, Layer } from "effect";
+import { Polling, Process, ProcessStore } from "@nikscripts/effect-pm";
 
 class Heartbeat extends Process.Service<Heartbeat>()("@app/Heartbeat", {
   effect: Effect.logInfo("tick"),
   polling: Polling.spaced(Duration.seconds(5)),
 }) {}
 
-// In a program:
-const proc = yield* Heartbeat;
-// Provide: Heartbeat.layer (and ProcessStore.layer at app root when recording history)
+// Provide at app root, then:
+// const proc = yield* Heartbeat;
 ```
 
 **Benefits**
 
-- **Typed `ProcessGroup` entries** — pass `Heartbeat` in the group tuple; controls resolve to this id.
-- **Layer-first wiring** — `Heartbeat.layer` fits app roots and test harnesses like other Effect services.
-- **Stable import** — one class symbol for CLI contracts, HTTP control, and `ProcessManager` remotes.
+- **Typed `ProcessGroup` membership** — list `Heartbeat` in the group entry tuple; `group.process(Heartbeat)` / `runImmediately(Heartbeat)` stay type-safe.
+- **Layer-first composition** — `Heartbeat.layer` merges like any other Effect service.
+- **Stable symbol** for contracts, HTTP control, and `ProcessManager` remotes.
 
 **Tradeoffs**
 
-- More ceremony than `make` for a single throwaway worker.
-- Service id should stay stable; renames affect contracts and store `entityId`s.
-
-**Run:** `pnpm run example:form:process-service`
+- More boilerplate than `make` for a one-off worker.
+- The id string is part of your public contract; changing it breaks store `entityId`s and remote control paths.
 
 ---
 
-### 3. `Process.providePolling` / `Process.provideSchedule` — config builders
+### `Process.providePolling` and `Process.provideSchedule`
 
-Attach layers **after** defining base options, without duplicating the whole config:
+Build a handle from a **base config** plus a layer attached in a second step:
 
 ```typescript
 const base = { effect: Effect.logInfo("sync") } as const;
@@ -111,29 +84,31 @@ const withCadence = Process.providePolling(
 const withWindow = Process.provideSchedule(
   "@app/Sync",
   base,
-  ProcessSchedule.inMemory([ProcessSchedule.window("match", start, end)]),
+  ProcessSchedule.inMemory([
+    ProcessSchedule.window("match-1", startAt, stopAt),
+  ]),
 );
 ```
 
 **Benefits**
 
-- Keeps shared `effect` config in one place when cadence and schedule vary by deployment.
-- Same runtime wiring as passing `polling` / `scheduleLayer` on `make`.
+- One shared `effect` (and shared error/requirement typing) with swappable cadence or schedule layers per environment.
+- Identical runtime wiring to passing `polling` / `scheduleLayer` directly on `make`.
 
 **Tradeoffs**
 
-- Still returns a plain handle (not a `Process.Service`); use `Service` when you need a tag.
+- Still a value handle, not a `Process.Service`; use `Service` when the process is a first-class module boundary or group entry.
 
 ---
 
-### 4. Inline layers on `make` vs layers at the fork site
+### Layer wiring: inline vs fork site
 
-| Piece | Inline on `make` | At fork / app root |
+| Concern | On `Process.make` / `Service` | At fork or app root |
 | --- | --- | --- |
-| **`polling`** | Yes — merged into `process.effect` | Yes — when omitted on `make`, provide `Polling` where you fork |
-| **`schedule`** | Yes — always configure here (or via `provideSchedule`) | No — default `alwaysArmed` is baked into the driver; env `ProcessSchedule` does not replace it |
+| **`polling`** | Pass `polling: SomePollingLayer` — merged into `process.effect` | Omit on `make`; `Effect.provide(Polling...)` on `proc.effect` (or parent env) when forking |
+| **`schedule`** | Pass `schedule`, `scheduleLayer`, or `provideSchedule` — always configure here | Providing `ProcessSchedule` only in the parent env **does not** replace the driver’s baked schedule; omitting schedule on `make` defaults to **`ProcessSchedule.alwaysArmed`** inside the driver |
 
-Inline (recommended for most apps):
+**Inline (typical production shape)**
 
 ```typescript
 Process.make("@app/Tick", {
@@ -143,7 +118,7 @@ Process.make("@app/Tick", {
 });
 ```
 
-External **polling** only (provide on the forked driver):
+**External polling only**
 
 ```typescript
 const proc = Process.make("@app/Tick", { effect: body });
@@ -153,25 +128,20 @@ yield* Effect.forkChild(
 );
 ```
 
-Schedule windows belong on `make` (or `provideSchedule`). For delayed `startAt` with `TestClock`, see `pnpm run example:form:schedule-delayed-start`.
-
-**Benefits of inline:** fewer `provide` call sites; `ProcessSupervisorRequirements` excludes merged tags from fork-time `R`.
+**Benefits of inline layers:** fewer `provide` sites; `ProcessSupervisorRequirements` excludes merged `Polling` / `ProcessSchedule` from fork-time `R`.
 
 **Benefits of external polling:** swap cadence implementations in tests without rebuilding the process value.
 
-**Run:** `pnpm run example:form:process-external-layers`
-
 ---
 
-## Which form should I use?
+## Choosing a form
 
 | Goal | Prefer |
 | --- | --- |
-| Script or test with one worker | `Process.make` |
-| Register in `ProcessGroup` / control API | `Process.Service` |
-| Share effect config, vary schedule/polling | `providePolling` / `provideSchedule` |
-| Swap schedule implementation in tests | External layers at fork |
-| Production app defaults | Inline `polling` / `schedule` on `make` or `Service` |
+| Script, spike, or test with one worker | `Process.make` |
+| Entry in `ProcessGroup`, control API, or `ProcessManager` | `Process.Service` |
+| Same tick body, different cadence/schedule per deploy | `providePolling` / `provideSchedule` or inline fields on a shared base config |
+| Production default | Inline `polling` and `schedule` on `make` or `Service` |
 
 ---
 
@@ -179,96 +149,103 @@ Schedule windows belong on `make` (or `provideSchedule`). For delayed `startAt` 
 
 | Field | Required | Role |
 | --- | --- | --- |
-| `effect` | yes | `Effect<void, E, R>` — one **repeat** (full run to completion before next wait). |
-| `polling` | no | `Layer` for cadence between repeats while **armed**. Omit → no polling layer merged (single run per armed window unless you provide `Polling` externally). |
-| `schedule` | no | Schedule **layer**, **initializer** `(controls) => Effect`, or omit → `ProcessSchedule.alwaysArmed`. Use `ProcessSchedule.empty` to start **disarmed** until entries are added. |
-| `scheduleLayer` | no | Explicit schedule layer; wins over `schedule` when both are set. |
+| `effect` | yes | `Effect<void, E, R>` — one repeat; runs to completion before the next wait. |
+| `polling` | no | `Layer` for cadence between repeats while the schedule is **armed** for that entry. If omitted and not provided at fork, each armed window runs the body once (no poll loop). |
+| `schedule` | no | Schedule layer, initializer `(controls) => Effect`, or omit for **`ProcessSchedule.alwaysArmed`**. Use **`ProcessSchedule.empty`** to start disarmed until entries are added. |
+| `scheduleLayer` | no | Explicit schedule layer; takes precedence over `schedule` when both are set. |
 
-### Schedule defaults (quick reference)
+### Schedule behavior
 
 | What you pass | Behavior |
 | --- | --- |
 | Omit `schedule` and `scheduleLayer` | `ProcessSchedule.alwaysArmed` |
+| `schedule: ProcessSchedule.alwaysArmed` | Explicit always-on |
 | `schedule: ProcessSchedule.empty` | Disarmed until `set` / `add` / initializer |
-| `schedule: ProcessSchedule.inMemory([...])` | Starts with fixed entries |
-| `schedule: (controls) => Effect` | Empty in-memory store; initializer runs at driver startup |
+| `schedule: ProcessSchedule.inMemory([...])` | Starts with the given entries |
+| `schedule: (controls) => Effect` | In-memory store; initializer runs once when the driver starts |
 
 ### Inside the running `effect`
 
 | API | Purpose |
 | --- | --- |
-| `Process.currentScheduleId` | Optional id of the active schedule entry for this instance |
-| `Process.scheduleControls` | `entries`, `set`, `add`, `clear` from inside the process body |
+| `Process.currentScheduleId` | Optional id of the schedule entry for the current instance |
+| `Process.scheduleControls` | `entries`, `set`, `add`, `clear` from inside the tick body |
 
-Deeper schedule and polling behavior: [`docs/PROCESS-API.md`](../PROCESS-API.md), [`docs/SCHEDULE-AND-PROCESSGROUP.md`](../SCHEDULE-AND-PROCESSGROUP.md).
+Schedule vs cadence semantics and `ProcessGroup.start`: [`docs/SCHEDULE-AND-PROCESSGROUP.md`](../SCHEDULE-AND-PROCESSGROUP.md). Polling factories and service methods: [`docs/PROCESS-API.md`](../PROCESS-API.md).
 
 ---
 
-## Handle API (after `make` or `yield* Service`)
+## Driver and handle API
+
+Fork **`process.effect`** inside a **scoped** program (or let **`ProcessGroup`** fork it). That starts the supervisor: it watches the schedule, and while armed runs the repeat loop (wait → `effect` → cadence update → wait).
 
 | Member | Description |
 | --- | --- |
-| `name` | Stable process id (same string passed to `make` / `Service`). |
-| `effect` | Driver — fork once per process lifecycle in this runtime (or let `ProcessGroup` fork it). |
-| `runImmediately()` | One tracked execution; does **not** require schedule armed. |
-| `getStatus(range?)` | Runtime snapshot; uses `ProcessStore` when available. |
+| `name` | Stable id (same string as passed to `make` / `Service`). |
+| `effect` | Driver `Effect` — long-lived supervisor. |
+| `runImmediately()` | One tracked repeat; schedule does not need to be armed. |
+| `getStatus(range?)` | Runtime snapshot; reads `ProcessStore` when available. |
 
-**Run driver (scoped):**
+**Start and stop the driver**
 
 ```typescript
+import { Effect, Fiber } from "effect";
+
 const program = Effect.gen(function* () {
   const fiber = yield* Effect.forkChild(heartbeat.effect);
-  // ...
+  // ... application runs ...
   yield* Fiber.interrupt(fiber);
 }).pipe(Effect.scoped);
 ```
 
-**Run:** `pnpm run example:form:process-make-minimal`
-
-**One shot:**
+**Single repeat**
 
 ```typescript
 yield* heartbeat.runImmediately();
 ```
 
-**Run:** `pnpm run example:form:process-run-immediately`
+Provide **`ProcessStore.layer`** (and any `R` from your `effect`) at the application root when you want execution history and richer `getStatus`.
 
 ---
 
-## Types and typing notes
+## Types
 
 | Symbol | Meaning |
 | --- | --- |
-| `Process<R>` | Handle; `R` is what **you** must still provide at fork when layers are **not** inlined on `make`. |
-| `ProcessSupervisorRequirements<C>` | Inferred env for `process.effect` / `runImmediately()` from a config object `C`. |
-| `ProcessDefinition<Id, R>` | `{ id, kind: "process", process }` — produced by `Process.Service` for groups |
-| `ProcessMakeOptions<E, R>` | Config second argument to `make` / `Service` |
+| `Process<R>` | Handle after `make` or `yield* Service`. `R` is user requirements not merged into `process.effect`. |
+| `ProcessMakeOptions<E, R>` | Config object (second argument). |
+| `ProcessSupervisorRequirements<C>` | Inferred environment for `process.effect` / `runImmediately()` from config `C`. |
+| `ProcessDefinition<Id, R>` | `{ id, kind: "process", process }` — carried on `Process.Service` for groups. |
 
-When `polling` or schedule layers are passed on `make`, they are merged into `process.effect`, so fork-time `R` typically excludes `Polling` and `ProcessSchedule` tags.
-
----
-
-## Related tools (same package)
-
-| Tool | How it relates to `Process` |
-| --- | --- |
-| **`Polling`** | Cadence between repeats (`spaced`, `accelerating`, …). |
-| **`ProcessSchedule`** | Armed/disarmed windows, live `set` / `add`. |
-| **`ProcessStore`** | Execution rows + lifecycle events (`ProcessStore.layer` at app root). |
-| **`ProcessGroup`** | Owns fibers, `start` / `stop`, typed `process(Entry)` / `runImmediately(Entry)`; entries are `Process.Service` classes or `Process.make` definitions in a tuple. |
-| **`ControlService`** | Localhost HTTP JSON over a running group. |
-| **`ProcessManager`** | Typed remote client; see process-group forms. |
-
-**Next guides (planned):** `QueueResource`, `ProcessGroup`, `ProcessManager` — same layout (paragraph → forms → config → types → commands).
+When `polling` or schedule layers are set on `make`, they are merged into `process.effect`, so fork-time `R` usually excludes `Polling` and `ProcessSchedule`.
 
 ---
 
-## File map
+## Related tools
 
-| Path | Role |
+| Tool | Role relative to `Process` |
 | --- | --- |
-| `src/Process.ts` | `Process.make`, `Service`, `provide*`, driver implementation |
-| `examples/forms/process/` | Minimal runnable forms for this guide |
-| `examples/forms/polling/` | Polling + schedule + process interaction |
-| `docs/rewrite/02-process.md` | Narrative “book” chapter |
-| `docs/PROCESS-API.md` | Spec-style API reference |
+| **`Polling`** | Cadence between repeats (`spaced`, `acceleratingScoped`, custom layers). |
+| **`ProcessSchedule`** | Armed/disarmed windows; `set` / `add` / `clear` / `changed`. |
+| **`ProcessStore`** | Execution and lifecycle events; optional at app root via `ProcessStore.layer`. |
+| **`ProcessGroup`** | Fiber ownership, `start` / `stop`, typed controls; process entries are `Process.Service` or definitions from `make`. |
+| **`ControlService`** | Localhost HTTP JSON control for a running group. |
+| **`ProcessManager`** | Typed remote client over a group contract. |
+
+---
+
+## Implementation reference
+
+| Location | Contents |
+| --- | --- |
+| `src/Process.ts` | `make`, `Service`, `providePolling`, `provideSchedule`, driver |
+| `src/Polling.ts` | Cadence layers and `PollingService` |
+| `src/ProcessSchedule.ts` | Schedule storage and presets |
+| `src/ProcessStore.ts` | Analytics facade |
+| `src/ProcessGroup.ts` | Orchestration over processes and queues |
+
+---
+
+## Planned doc work
+
+Later guides in this series (same structure: overview → definition forms → config → types → related tools): **QueueResource**, **ProcessGroup**, **ProcessManager**. Runnable example commands will be added when dedicated example scripts exist; this page does not depend on them.
