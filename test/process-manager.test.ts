@@ -997,28 +997,39 @@ describe("ProcessManager", () => {
         expect(pid).toBeGreaterThan(0);
       });
 
-      yield* program.pipe(
-        Effect.ensuring(
-          Effect.gen(function* () {
-            const pid = yield* Ref.get(pidRef);
-            if (pid !== undefined) {
-              yield* Effect.sync(() => {
-                process.kill(pid, "SIGTERM");
-              }).pipe(Effect.catch(() => Effect.void));
-            }
-            const fs = yield* FileSystem.FileSystem;
-            yield* fs.remove(runRoot, { recursive: true, force: true }).pipe(
-              Effect.catch(() => Effect.void),
-            );
-          }),
-        ),
-        Effect.provide(
-          Layer.mergeAll(
-            ProcessManager.Config.layer([config]),
-            NodeHttpClient.layerUndici,
-            NodeServices.layer,
+      yield* Effect.scoped(
+        program.pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              ProcessManager.Config.layer([config]),
+              NodeHttpClient.layerUndici,
+              NodeServices.layer,
+            ),
           ),
         ),
+      );
+
+      const pidAfterScope = yield* Ref.get(pidRef);
+      expect(pidAfterScope).toBeDefined();
+      if (pidAfterScope !== undefined) {
+        yield* Effect.sync(() => {
+          process.kill(pidAfterScope, 0);
+        });
+      }
+
+      yield* Effect.gen(function* () {
+        const pid = yield* Ref.get(pidRef);
+        if (pid !== undefined) {
+          yield* Effect.sync(() => {
+            process.kill(pid, "SIGTERM");
+          }).pipe(Effect.catch(() => Effect.void));
+        }
+        const fs = yield* FileSystem.FileSystem;
+        yield* fs.remove(runRoot, { recursive: true, force: true }).pipe(
+          Effect.catch(() => Effect.void),
+        );
+      }).pipe(
+        Effect.provide(NodeServices.layer),
       );
     }),
   );
