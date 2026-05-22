@@ -17,14 +17,13 @@
  */
 
 import { Cause, Clock, Context, DateTime, Duration, Effect, Fiber, Layer, MutableRef, Option } from "effect";
+import { isPollingLayer, isScheduleLayer } from "./processLayerBrand.js";
 import { ProcessStore } from "./ProcessStore";
-import { Polling } from "./Polling";
-import { ProcessSchedule } from "./ProcessSchedule";
-import type { PollingTag } from "./Polling";
+import { Polling, PollingTag } from "./Polling";
+import { ProcessSchedule, ProcessScheduleTag } from "./ProcessSchedule";
 import type {
   ProcessScheduleEntry,
   ProcessScheduleService,
-  ProcessScheduleTag,
 } from "./ProcessSchedule";
 // ============================================================================
 // Public types
@@ -52,24 +51,6 @@ export interface ProcessDetails {
   readonly activeInstances: number;
   /** Best-effort next trigger run (currently none for generic schedules). */
   readonly nextTriggerRun: Option.Option<Date>;
-}
-
-/**
- * @deprecated Use {@link ProcessDetails}. Retained as alias for searchability.
- * @public
- */
-export type ScheduledProcessDetails = ProcessDetails;
-
-/**
- * @deprecated Cron-only shape from pre–v0.7 `Process`. Use {@link ProcessDetails}.
- * @public
- */
-export interface CronDetails {
-  readonly lastRun: Date | null;
-  readonly executions: number;
-  readonly nextRun: Date;
-  readonly firstStartup: Date | null;
-  readonly crons: readonly never[];
 }
 
 /**
@@ -207,8 +188,24 @@ export const scheduleControls: Effect.Effect<ProcessScheduleControls, never, nev
 // Internal
 // ============================================================================
 
-type AnyPollingLayer = Layer.Layer<PollingTag, never, never>;
-type AnyScheduleLayer = Layer.Layer<ProcessScheduleTag, never, never>;
+/** @public Optional polling layer argument to {@link Process.make}. */
+export type ProcessPollingInput = Layer.Layer<PollingTag, never, never>;
+
+/** @public Optional schedule layer argument to {@link Process.make}. */
+export type ProcessScheduleLayerInput = Layer.Layer<ProcessScheduleTag, never, never>;
+
+/** @public Optional schedule layer or initializer argument to {@link Process.make}. */
+export type ProcessScheduleInput<R = never> =
+  | ProcessScheduleLayerInput
+  | ProcessScheduleInitializer<R>;
+
+type AnyPollingLayer = ProcessPollingInput;
+type AnyScheduleLayer = ProcessScheduleLayerInput;
+
+type ProcessMakeLayerArg<RUser> =
+  | AnyPollingLayer
+  | AnyScheduleLayer
+  | ProcessScheduleInitializer<RUser>;
 
 interface ProcessMirror {
   readonly armed: MutableRef.MutableRef<boolean>;
@@ -866,7 +863,7 @@ export type ProcessSupervisorRequirements<C extends ProcessMakeOptions<unknown, 
     : never;
 
 /**
- * Configuration for {@link Process.make} (second argument; id is passed separately).
+ * Configuration for {@link Process.make} when using the config-object form (id is separate).
  *
  * @public
  */
@@ -936,6 +933,52 @@ const buildProcess = <E, RUser>(
   });
 };
 
+const collectPollingAndSchedule = <RUser>(
+  third?: ProcessMakeLayerArg<RUser>,
+  fourth?: ProcessMakeLayerArg<RUser>,
+): Pick<ProcessMakeOptions<never, RUser>, "polling" | "schedule" | "scheduleLayer"> => {
+  let polling: AnyPollingLayer | undefined;
+  let schedule: ProcessScheduleInitializer<RUser> | undefined;
+  let scheduleLayer: AnyScheduleLayer | undefined;
+
+  for (const arg of [third, fourth]) {
+    if (arg === undefined) {
+      continue;
+    }
+    if (typeof arg === "function") {
+      schedule = arg;
+      continue;
+    }
+    if (isPollingLayer(arg)) {
+      polling = arg as AnyPollingLayer;
+      continue;
+    }
+    if (isScheduleLayer(arg)) {
+      scheduleLayer = arg as AnyScheduleLayer;
+    }
+  }
+
+  return {
+    ...(polling !== undefined ? { polling } : {}),
+    ...(schedule !== undefined ? { schedule } : {}),
+    ...(scheduleLayer !== undefined ? { scheduleLayer } : {}),
+  };
+};
+
+const resolveProcessMakeConfig = <E, RUser>(
+  effectOrConfig: Effect.Effect<void, E, RUser> | ProcessMakeOptions<E, RUser>,
+  third?: ProcessMakeLayerArg<RUser>,
+  fourth?: ProcessMakeLayerArg<RUser>,
+): ProcessMakeOptions<E, RUser> => {
+  if (Effect.isEffect(effectOrConfig)) {
+    return {
+      effect: effectOrConfig,
+      ...collectPollingAndSchedule(third, fourth),
+    };
+  }
+  return effectOrConfig;
+};
+
 /**
  * Create a managed {@link Process}.
  *
@@ -943,10 +986,62 @@ const buildProcess = <E, RUser>(
  */
 function make<const Id extends string, E, RUser>(
   id: Id,
+  effect: Effect.Effect<void, E, RUser>,
+): Process<RUser>;
+function make<const Id extends string, E, RUser>(
+  id: Id,
+  effect: Effect.Effect<void, E, RUser>,
+  polling: AnyPollingLayer,
+): Process<RUser>;
+function make<const Id extends string, E, RUser>(
+  id: Id,
+  effect: Effect.Effect<void, E, RUser>,
+  schedule: AnyScheduleLayer,
+): Process<RUser>;
+function make<const Id extends string, E, RUser, RSchedule>(
+  id: Id,
+  effect: Effect.Effect<void, E, RUser>,
+  schedule: ProcessScheduleInitializer<RSchedule>,
+): Process<RUser | RSchedule>;
+function make<const Id extends string, E, RUser>(
+  id: Id,
+  effect: Effect.Effect<void, E, RUser>,
+  polling: AnyPollingLayer,
+  schedule: AnyScheduleLayer,
+): Process<RUser>;
+function make<const Id extends string, E, RUser, RSchedule>(
+  id: Id,
+  effect: Effect.Effect<void, E, RUser>,
+  polling: AnyPollingLayer,
+  schedule: ProcessScheduleInitializer<RSchedule>,
+): Process<RUser | RSchedule>;
+function make<const Id extends string, E, RUser>(
+  id: Id,
+  effect: Effect.Effect<void, E, RUser>,
+  schedule: AnyScheduleLayer,
+  polling: AnyPollingLayer,
+): Process<RUser>;
+function make<const Id extends string, E, RUser, RSchedule>(
+  id: Id,
+  effect: Effect.Effect<void, E, RUser>,
+  schedule: ProcessScheduleInitializer<RSchedule>,
+  polling: AnyPollingLayer,
+): Process<RUser | RSchedule>;
+function make<const Id extends string, E, RUser>(
+  id: Id,
   config: ProcessMakeOptions<E, RUser>,
+): Process<RUser>;
+function make<const Id extends string, E, RUser>(
+  id: Id,
+  effectOrConfig: Effect.Effect<void, E, RUser> | ProcessMakeOptions<E, RUser>,
+  third?: ProcessMakeLayerArg<RUser>,
+  fourth?: ProcessMakeLayerArg<RUser>,
 ): Process<RUser> {
-  return buildProcess(id, config);
+  return buildProcess(id, resolveProcessMakeConfig(effectOrConfig, third, fourth));
 }
+
+/** @public */
+export type ProcessMake = typeof make;
 
 const processDefinitionKind = "process" as const;
 
@@ -962,40 +1057,86 @@ const makeProcessDefinition = <const Id extends string, E, RUser>(
   };
 };
 
-/**
- * Attach a {@link Polling} layer after defining base config.
- *
- * @public
- */
-function providePolling<const Id extends string, E, RUser>(
-  id: Id,
-  base: ProcessMakeOptions<E, RUser>,
-  layer: AnyPollingLayer,
-): Process<RUser> {
-  return make(id, { ...base, polling: layer });
-}
+const defineProcessService = <Self>() => {
+  function service<const Id extends string, E, RUser>(
+    id: Id,
+    effect: Effect.Effect<void, E, RUser>,
+  ): ProcessServiceDefinition<Self, Id, RUser>;
+  function service<const Id extends string, E, RUser>(
+    id: Id,
+    effect: Effect.Effect<void, E, RUser>,
+    polling: AnyPollingLayer,
+  ): ProcessServiceDefinition<Self, Id, RUser>;
+  function service<const Id extends string, E, RUser>(
+    id: Id,
+    effect: Effect.Effect<void, E, RUser>,
+    schedule: AnyScheduleLayer,
+  ): ProcessServiceDefinition<Self, Id, RUser>;
+  function service<const Id extends string, E, RUser, RSchedule>(
+    id: Id,
+    effect: Effect.Effect<void, E, RUser>,
+    schedule: ProcessScheduleInitializer<RSchedule>,
+  ): ProcessServiceDefinition<Self, Id, RUser | RSchedule>;
+  function service<const Id extends string, E, RUser>(
+    id: Id,
+    effect: Effect.Effect<void, E, RUser>,
+    polling: AnyPollingLayer,
+    schedule: AnyScheduleLayer,
+  ): ProcessServiceDefinition<Self, Id, RUser>;
+  function service<const Id extends string, E, RUser, RSchedule>(
+    id: Id,
+    effect: Effect.Effect<void, E, RUser>,
+    polling: AnyPollingLayer,
+    schedule: ProcessScheduleInitializer<RSchedule>,
+  ): ProcessServiceDefinition<Self, Id, RUser | RSchedule>;
+  function service<const Id extends string, E, RUser>(
+    id: Id,
+    effect: Effect.Effect<void, E, RUser>,
+    schedule: AnyScheduleLayer,
+    polling: AnyPollingLayer,
+  ): ProcessServiceDefinition<Self, Id, RUser>;
+  function service<const Id extends string, E, RUser, RSchedule>(
+    id: Id,
+    effect: Effect.Effect<void, E, RUser>,
+    schedule: ProcessScheduleInitializer<RSchedule>,
+    polling: AnyPollingLayer,
+  ): ProcessServiceDefinition<Self, Id, RUser | RSchedule>;
+  function service<const Id extends string, E, RUser>(
+    id: Id,
+    config: ProcessMakeOptions<E, RUser>,
+  ): ProcessServiceDefinition<Self, Id, RUser>;
+  function service<const Id extends string, E, RUser>(
+    id: Id,
+    effectOrConfig: Effect.Effect<void, E, RUser> | ProcessMakeOptions<E, RUser>,
+    third?: ProcessMakeLayerArg<RUser>,
+    fourth?: ProcessMakeLayerArg<RUser>,
+  ): ProcessServiceDefinition<Self, Id, RUser> {
+    const process = makeProcessDefinition(
+      id,
+      resolveProcessMakeConfig(effectOrConfig, third, fourth),
+    );
+    const base = Context.Service<Self, Process<RUser>>()(id);
+    return Object.assign(base, {
+      ...process,
+      tag: base,
+      layer: Layer.succeed(base, process.process),
+    });
+  }
+  return service;
+};
 
-/**
- * Attach a {@link ProcessSchedule} layer after defining base config.
- *
- * @public
- */
-function provideSchedule<const Id extends string, E, RUser>(
-  id: Id,
-  base: ProcessMakeOptions<E, RUser>,
-  layer: AnyScheduleLayer,
-): Process<RUser> {
-  return make(id, { ...base, scheduleLayer: layer });
-}
+/** @public */
+export type ProcessServiceBuilder<Self> = ReturnType<typeof defineProcessService<Self>>;
+
+/** @public */
+export type ProcessServiceFactory = typeof defineProcessService;
 
 /**
  * Managed process factories and schedule helpers.
  *
  * @remarks
- * - **`make`** — construct a {@link Process} from `effect` plus optional inline `polling` /
- *   `schedule` layers (merged into requirements for accurate typing).
- * - **`providePolling` / `provideSchedule`** — attach layers after the fact while preserving
- *   the same runtime wiring as `make`.
+ * - **`make`** — construct a {@link Process} from an `effect`, optional `polling` / `schedule`
+ *   layers in any order, or a config object.
  * - **`currentScheduleId` / `scheduleControls`** — ergonomic access to schedule metadata and
  *   mutators from inside a running process instance.
  *
@@ -1003,23 +1144,7 @@ function provideSchedule<const Id extends string, E, RUser>(
  */
 export const Process = {
   make,
-  Service: <Self>() =>
-  <const Id extends string, E, RUser>(
-    id: Id,
-    config: ProcessMakeOptions<E, RUser>,
-  ): ProcessServiceDefinition<Self, Id, RUser> => {
-    const process = makeProcessDefinition(id, config);
-    const base = Context.Service<Self, Process<RUser>>()(id);
-    // Keep the service yieldable as Process<RUser>, and attach declaration
-    // metadata for typed ProcessGroup registration on the same class value.
-    return Object.assign(base, {
-      ...process,
-      tag: base,
-      layer: Layer.succeed(base, process.process),
-    });
-  },
-  providePolling,
-  provideSchedule,
+  Service: defineProcessService,
   currentScheduleId,
   scheduleControls,
 } as const;

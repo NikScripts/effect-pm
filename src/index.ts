@@ -11,7 +11,7 @@
  *   a trigger-driven runtime: a long-lived driver follows an Effect `Schedule` and spawns
  *   process instances; each instance checks `ProcessSchedule` and exits naturally when
  *   disarmed while `Polling` controls in-instance repeat cadence. Optional `polling` /
- *   `schedule` layers on `Process.make(id, config)` are merged into `process.effect` so fork-time
+ *   `schedule` layers on `Process.make` are merged into `process.effect` so fork-time
  *   requirements stay accurate in TypeScript.
  * - **`ProcessGroup`** — Bundle **process and queue entries**; `start` /
  *   `startAll` fork supervisors; contracts power the **localhost** control HTTP API
@@ -318,8 +318,12 @@ export type {
   ProcessMakeConfig,
   ProcessMakeOptions,
   ProcessSupervisorRequirements,
-  CronDetails,
-  ScheduledProcessDetails,
+  ProcessPollingInput,
+  ProcessScheduleInput,
+  ProcessScheduleLayerInput,
+  ProcessMake,
+  ProcessServiceBuilder,
+  ProcessServiceFactory,
 } from "./Process";
 
 // Types - Polling / ProcessSchedule

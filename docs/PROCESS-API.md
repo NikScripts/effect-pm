@@ -35,11 +35,14 @@ This document complements the [README](../README.md) with a concise **spec-style
 | `schedule` | no | Either a `ProcessScheduleInitializer` (`({ set, add, clear }) => Effect`) or a `Layer.Layer<ProcessScheduleService, never, never>`. When omitted, defaults to `ProcessSchedule.alwaysArmed`. Use `ProcessSchedule.empty` for an empty store (disarmed until mutation). |
 | `scheduleLayer` | no | Explicit schedule service layer; takes precedence over `schedule`. When both are omitted, `ProcessSchedule.alwaysArmed` is used. |
 
-### Static helpers
+### `Process.make` overloads
 
-- **`Process.make(id, config)`** — build handle + baked layers from config.
-- **`Process.providePolling(id, base, layer)`** — set/replace polling layer before building.
-- **`Process.provideSchedule(id, base, layer)`** — set/replace schedule layer before building.
+- **`Process.make(id, effect)`** — repeat body only.
+- **`Process.make(id, effect, polling)`** / **`Process.make(id, effect, schedule)`** — one layer; order between polling and schedule does not matter when both are passed.
+- **`Process.make(id, effect, polling, schedule)`** — both layers (either order).
+- **`Process.make(id, config)`** — `ProcessMakeOptions` (initializer, `scheduleLayer`, etc.).
+
+`Process.Service` exposes the same overloads.
 
 ### Handle shape `Process<R>`
 

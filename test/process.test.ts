@@ -16,10 +16,34 @@ describe("Process.make", () => {
     const proc = Process.make(id, { effect: Effect.void });
     expect(proc.name).toBe(id);
   });
+
+  it("sets process.name for positional effect overload", () => {
+    const id = "test/make-positional" as const;
+    const proc = Process.make(id, Effect.void);
+    expect(proc.name).toBe(id);
+  });
+
 });
 
 describe("Process runtime with schedule windows", () => {
   const storeAndClock = Layer.mergeAll(ProcessStore.layer, TestClock.layer());
+
+  it.effect("positional make runs driver with polling before schedule in args", () =>
+    Effect.gen(function* () {
+      const proc = Process.make(
+        "test/positional-order",
+        Effect.void,
+        Polling.spaced(Duration.millis(100)),
+        ProcessSchedule.inMemory([alwaysOnEntry]),
+      );
+
+      const fib = yield* Effect.forkChild(proc.effect);
+      yield* TestClock.adjust(Duration.millis(250));
+      const status = yield* proc.getStatus();
+      expect(status.executions).toBeGreaterThanOrEqual(1);
+      yield* Fiber.interrupt(fib);
+    }).pipe(Effect.provide(storeAndClock), Effect.scoped),
+  );
 
   it.effect("omitted schedule defaults to always armed so polling ticks without manual set", () =>
     Effect.gen(function* () {
