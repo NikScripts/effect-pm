@@ -18,7 +18,7 @@
  * **Do not** add parallel “log storage layers”, file-backed `ProcessStore` shortcuts for
  * new code, or domain modules that compose SQLite under their own name. Provide
  * `RuntimeStorage` (or `ProcessStore.layer` / {@link ProcessStore.layerRuntimeStorage} /
- * at app/child launch; use store facets (`Logs`, `QueueStore`) for domain operations.
+ * at app/child launch; use {@link ProcessStore.Logs} and {@link ProcessStore.QueueResource}.
  *
  * Default in-memory: {@link ProcessStore.layer}. Durable local:
  * `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`.
@@ -40,7 +40,16 @@ import {
   Semaphore,
   Schema,
 } from "effect";
-import { makeProcessStoreLogs, type ProcessStoreLogsApi } from "./ProcessStoreLogs.js";
+import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
+import type { ProcessManagerLogQuery } from "./processManagerLogQuery.js";
+import { ProcessManagerLogQueryError } from "./processManagerLogQuery.js";
+import {
+  makeProcessStoreLogs,
+  makeRecordedEvent as buildLogRecordedEvent,
+  storeEventQueryFromLogQuery as logQueryToStoreEventQuery,
+  type ProcessStoreLogsApi,
+} from "./ProcessStoreLogs.js";
+import { logsRelayLayer } from "./processManagerLogsRelay.js";
 import {
   And,
   Key,
@@ -226,13 +235,12 @@ export type ProcessStoreWriteError =
   | ProcessStoreDuplicateRecordError
   | ProcessStoreReadonlyRecordError;
 
-/** @public */
 /**
- * Queue semantic storage facet on {@link ProcessStoreInterface.QueueStore}.
+ * Queue semantic storage facet on {@link ProcessStoreInterface.QueueResource}.
  *
  * @public
  */
-export interface QueueStoreApi {
+export interface ProcessStoreQueueResourceApi {
   readonly withQueue: <A, E, R>(
     queueId: string,
     use: Effect.Effect<A, E, R>,
@@ -479,7 +487,7 @@ export interface ProcessStoreInterface {
   events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>;
   records: (query?: RuntimeRecordQuery) => Effect.Effect<RuntimeRecord[]>;
   readonly Logs: ProcessStoreLogsApi;
-  readonly QueueStore: QueueStoreApi;
+  readonly QueueResource: ProcessStoreQueueResourceApi;
   getProcessExecutions: (
     processId: string,
     opts?: QueryOpts,
@@ -948,7 +956,7 @@ const dedupePayload = (
 export const makeProcessStoreQueueResource = (config: {
   readonly append: (event: AnalyticsEvent) => Effect.Effect<void, ProcessStoreWriteError, never>;
   readonly records: (query?: RuntimeRecordQuery) => Effect.Effect<RuntimeRecord[], never, never>;
-}): QueueStoreApi => {
+}): ProcessStoreQueueResourceApi => {
   let sequence = 0;
 
   const nextFactId = (queueId: string, type: string, occurredAt: number): string => {
@@ -1295,7 +1303,7 @@ const makeRuntimeStorageProcessStore = (
         appendBatch: (batch) => Effect.forEach(batch, appendEvent, { discard: true }),
         events: readEvents,
       });
-      return { Logs: logs, QueueStore: queueStore };
+      return { Logs: logs, QueueResource: queueStore };
     })(),
 
     getProcessExecutions: (processId, opts) =>
@@ -1461,7 +1469,7 @@ const makeFileProcessStore = (
             ),
           events: (query) => semaphore.withPermits(1)(queryEvents(query)),
         });
-        return { Logs: logs, QueueStore: queueStore };
+        return { Logs: logs, QueueResource: queueStore };
       })(),
       getProcessExecutions: (processId, opts) =>
         semaphore.withPermits(1)(
@@ -1620,5 +1628,109 @@ export namespace ProcessStore {
         opts,
       }),
   } as const;
+
+  /**
+   * Structured log helpers (require {@link ProcessStore} in context).
+   *
+   * @public
+   */
+  export namespace Logs {
+    export const makeRecordedEvent = buildLogRecordedEvent;
+    export const storeEventQueryFromLogQuery = logQueryToStoreEventQuery;
+    export const relayLayer = logsRelayLayer;
+
+    export const record = (
+      groupId: string,
+      entryId: string,
+      entry: ProcessManagerLogEntry,
+    ): Effect.Effect<void, ProcessStoreWriteError, ProcessStore> =>
+      Effect.flatMap(ProcessStore, (store) => store.Logs.record(groupId, entryId, entry));
+
+    export const recordBatch = (
+      groupId: string,
+      rows: ReadonlyArray<{ readonly entryId: string; readonly entry: ProcessManagerLogEntry }>,
+    ): Effect.Effect<void, ProcessStoreWriteError, ProcessStore> =>
+      Effect.flatMap(ProcessStore, (store) => store.Logs.recordBatch(groupId, rows));
+
+    export const load = (
+      query: ProcessManagerLogQuery,
+    ): Effect.Effect<ReadonlyArray<ProcessManagerLogEntry>, ProcessManagerLogQueryError, ProcessStore> =>
+      Effect.flatMap(ProcessStore, (store) => store.Logs.load(query));
+
+    export const query = (
+      logQuery: ProcessManagerLogQuery,
+    ): Effect.Effect<void, ProcessManagerLogQueryError, ProcessStore> =>
+      Effect.flatMap(ProcessStore, (store) => store.Logs.query(logQuery));
+  }
+
+  /**
+   * Queue semantic storage helpers (require {@link ProcessStore} in context).
+   *
+   * @public
+   */
+  export namespace QueueResource {
+    export const withQueue = <A, E, R>(queueId: string, use: Effect.Effect<A, E, R>) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.withQueue(queueId, use));
+
+    export const withEntry = <A, E, R>(entryId: string, use: Effect.Effect<A, E, R>) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.withEntry(entryId, use));
+
+    export const withBatch = <A, E, R>(batchId: string, use: Effect.Effect<A, E, R>) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.withBatch(batchId, use));
+
+    export const withDedupeKey = <A, E, R>(key: string, use: Effect.Effect<A, E, R>) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.withDedupeKey(key, use));
+
+    export const entryEnqueued = (input?: ProcessStoreQueueResourceEntryInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.entryEnqueued(input));
+
+    export const entryStarted = (input?: ProcessStoreQueueResourceEntryInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.entryStarted(input));
+
+    export const entryCompleted = (input?: ProcessStoreQueueResourceEntryInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.entryCompleted(input));
+
+    export const entryFailed = (input?: ProcessStoreQueueResourceEntryInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.entryFailed(input));
+
+    export const entryRetried = (input?: ProcessStoreQueueResourceEntryInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.entryRetried(input));
+
+    export const entryExhausted = (input?: ProcessStoreQueueResourceEntryInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.entryExhausted(input));
+
+    export const entryReleased = (input?: ProcessStoreQueueResourceEntryInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.entryReleased(input));
+
+    export const entryDeadLettered = (input?: ProcessStoreQueueResourceEntryInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.entryDeadLettered(input));
+
+    export const entryDropped = (input?: ProcessStoreQueueResourceEntryInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.entryDropped(input));
+
+    export const lifecycleChanged = (input: ProcessStoreQueueResourceLifecycleInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.lifecycleChanged(input));
+
+    export const dedupeKeyAdded = (input?: ProcessStoreQueueResourceDedupeKeyInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.dedupeKeyAdded(input));
+
+    export const dedupeKeyReleased = (input?: ProcessStoreQueueResourceDedupeKeyInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.dedupeKeyReleased(input));
+
+    export const dedupeKeyHydrated = (input?: ProcessStoreQueueResourceDedupeKeyInput) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.dedupeKeyHydrated(input));
+
+    export const entries = (queueId?: string, query?: RuntimeRecordQuery) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.entries(queueId, query));
+
+    export const entry = (entryId: string, query?: RuntimeRecordQuery) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.entry(entryId, query));
+
+    export const entriesByKey = (key: string, query?: RuntimeRecordQuery) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.entriesByKey(key, query));
+
+    export const dedupeKeys = (queueId?: string, query?: RuntimeRecordQuery) =>
+      Effect.flatMap(ProcessStore, (store) => store.QueueResource.dedupeKeys(queueId, query));
+  }
 }
 

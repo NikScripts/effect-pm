@@ -1,70 +1,21 @@
 /**
- * `@nikscripts/effect-pm/Logs` — re-exports the {@link ProcessStoreInterface.Logs} facet.
+ * Process-manager log capture relay (persists via {@link ProcessStore.Logs}).
  *
- * @remarks
- * **Storage:** compose `RuntimeStorage` + `ProcessStore` at launch (e.g.
- * `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`). This module does not
- * provide storage layers.
- *
- * Prefer:
- *
- * ```ts
- * const { Logs } = yield* ProcessStore;
- * yield* Logs.query({ groupId: "g1", limit: 100, sort: "desc" });
- * ```
- *
- * Top-level `record` / `query` helpers delegate to `store.Logs` when {@link ProcessStore}
- * is in context. {@link relayLayer} is process-manager capture (not part of the store API).
- *
- * @module Logs
+ * @module processManagerLogsRelay
  */
 
 import { Cause, Duration, Effect, Layer, Option, PubSub, Ref, Schedule, Scope, Stream } from "effect";
-import {
-  ProcessGroupLogContext,
-} from "./processManagerLogContext.js";
+import { ProcessGroupLogContext } from "./processManagerLogContext.js";
 import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
 import {
   ProcessManagerLogRelay,
   type ProcessManagerLogRelayService,
 } from "./processManagerLogRelay.js";
-import type { ProcessManagerLogQuery } from "./processManagerLogQuery.js";
-import { ProcessManagerLogQueryError } from "./processManagerLogQuery.js";
-import { ProcessStore, type ProcessStoreWriteError } from "./ProcessStore.js";
-import type { ProcessStoreLogsApi } from "./ProcessStoreLogs.js";
-import {
-  makeRecordedEvent,
-  storeEventQueryFromLogQuery,
-} from "./ProcessStoreLogs.js";
-
-export type { ProcessStoreLogsApi };
-export { makeRecordedEvent, storeEventQueryFromLogQuery };
-
-export const record = (
-  groupId: string,
-  entryId: string,
-  entry: ProcessManagerLogEntry,
-): Effect.Effect<void, ProcessStoreWriteError, ProcessStore> =>
-  Effect.flatMap(ProcessStore, (store) => store.Logs.record(groupId, entryId, entry));
-
-export const recordBatch = (
-  groupId: string,
-  rows: Parameters<ProcessStoreLogsApi["recordBatch"]>[1],
-): Effect.Effect<void, ProcessStoreWriteError, ProcessStore> =>
-  Effect.flatMap(ProcessStore, (store) => store.Logs.recordBatch(groupId, rows));
-
-export const load = (
-  query: ProcessManagerLogQuery,
-): Effect.Effect<ReadonlyArray<ProcessManagerLogEntry>, ProcessManagerLogQueryError, ProcessStore> =>
-  Effect.flatMap(ProcessStore, (store) => store.Logs.load(query));
-
-export const query = (
-  logQuery: ProcessManagerLogQuery,
-): Effect.Effect<void, ProcessManagerLogQueryError, ProcessStore> =>
-  Effect.flatMap(ProcessStore, (store) => store.Logs.query(logQuery));
+import { ProcessStore } from "./ProcessStore.js";
 
 const storeFlushInterval = Duration.millis(250);
 const storeFlushBatchSize = 64;
+const historyCapacity = 500;
 
 type PendingLogAppend = {
   readonly entryId: string;
@@ -94,7 +45,7 @@ const makePersistingRelay = (
       }
       yield* storeOption.value.Logs.recordBatch(group.groupId, batch).pipe(
         Effect.catchCause((cause) =>
-          Effect.logWarning("ProcessStore Logs.recordBatch failed").pipe(
+          Effect.logWarning("ProcessStore.Logs.recordBatch failed").pipe(
             Effect.annotateLogs("cause", Cause.pretty(cause)),
           ),
         ),
@@ -128,14 +79,12 @@ const makePersistingRelay = (
     });
   });
 
-const historyCapacity = 500;
-
 /**
- * Relay layer with in-memory tail plus batched flush into `store.Logs`.
+ * Relay layer with in-memory tail plus batched flush into {@link ProcessStore.Logs}.
  *
  * @public
  */
-export const relayLayer: Layer.Layer<
+export const logsRelayLayer: Layer.Layer<
   ProcessManagerLogRelay,
   never,
   ProcessGroupLogContext | ProcessStore
@@ -161,3 +110,6 @@ export const relayLayer: Layer.Layer<
     return yield* makePersistingRelay(base);
   }),
 );
+
+/** @public Root export alias for process-manager wiring. */
+export const relayLayer = logsRelayLayer;

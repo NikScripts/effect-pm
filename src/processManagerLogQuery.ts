@@ -152,7 +152,7 @@ export const buildProcessManagerLogQuery = (input: {
 export const queryGroupLogs = (
   query: ProcessManagerLogQuery,
 ): Effect.Effect<void, ProcessManagerLogQueryError, ProcessStore> =>
-  Effect.flatMap(ProcessStore, (store) => store.Logs.query(query));
+  ProcessStore.Logs.query(query);
 
 /**
  * Replay log rows returned from a future storage adapter.

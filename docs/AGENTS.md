@@ -16,8 +16,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/ProcessStore.ts` | Analytics + lifecycle event append/read. |
 | `src/ControlService.ts` | Localhost HTTP JSON control API. |
 | `src/ProcessStoreLogs.ts` | `ProcessStoreInterface.Logs` facet implementation. |
-| `src/Logs.ts` | Re-exports `Logs` facet + `relayLayer` (no storage). |
-| `src/QueueStore.ts` | Re-exports `QueueStore` facet helpers. |
+| `src/processManagerLogsRelay.ts` | `ProcessStore.Logs.relayLayer` for group child capture. |
 | `src/processManagerLog*.ts` | Log capture relay, `pm watch` / `pm logs` CLI wiring. |
 | `src/processManagerGroupLogs*.ts` | HTTP stream client and interactive TTY watch. |
 | `src/ProcessManager.ts` | Typed remote client and endpoint service for group control contracts. |
@@ -41,7 +40,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 2. **`Process.effect` typing** — `Process<R>`: `effect` needs `R | ProcessStore`. Inlined `polling` / `schedule` on `Process.make` are merged into the supervisor so **`R` excludes those services** when present (overload-resolved in `Process.ts`).
 3. **ProcessGroup combined requirements** — `AllGroupProcessesRequirements` unions `Effect.Services<p["effect"]>` across processes; app must provide that environment when calling `startAll`, etc.
 4. **Control API security** — `ControlService` binds to **127.0.0.1** only.
-5. **Storage** — `RuntimeStorage` owns raw record I/O; `ProcessStore` is the client (`Logs` / `QueueStore` facets). SQLite: `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite` only. **Never** add storage layers on `Logs` or domain modules. See [STORAGE.md](./STORAGE.md).
+5. **Storage** — `RuntimeStorage` + `ProcessStore`; use **`ProcessStore.Logs`** and **`ProcessStore.QueueResource`** (merged namespace, not separate subpaths). SQLite: `layerProcessStore` from `storage/sqlite` only. See [STORAGE.md](./STORAGE.md).
 
 ---
 

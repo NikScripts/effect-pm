@@ -439,12 +439,11 @@ Records written by `QueueResource`:
 - `queue.entry.retried` / `queue.entry.exhausted` — retry lifecycle
 - `queue.lifecycle.started|paused|resumed|shutdown|cleared|drained`
 
-Query queue records through the `QueueStore` facet:
+Query queue records through `ProcessStore.QueueResource`:
 
 ```typescript
-const { QueueStore } = yield* ProcessStore
-const entries = yield* QueueStore.entries("email-queue")
-const byKey = yield* QueueStore.entriesByKey("delivery-123")
+const entries = yield* ProcessStore.QueueResource.entries("email-queue")
+const byKey = yield* ProcessStore.QueueResource.entriesByKey("delivery-123")
 ```
 
 `queue.release()` exports decoded pending entries without losing payloads,

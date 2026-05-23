@@ -153,8 +153,8 @@ When adding a built-in adapter:
   module-facing `ProcessStore`.
 - `ProcessStore.fileLayer` is **legacy** append-only NDJSON compatibility only
   (**do not use for new code**). It is not a `RuntimeStorage` adapter.
-- `@nikscripts/effect-pm/Logs` persists structured group logs via
-  `ProcessStore.layerRuntimeStorage` + SQLite.
+- `ProcessStore.Logs` persists structured group logs via `ProcessStore` backed by
+  `layerRuntimeStorage` + SQLite.
 - Prisma paths currently expose a placeholder. The legacy `EffectPmEvent`
   adapter is intentionally disabled until Prisma is rebuilt as a
   `RuntimeStorage` adapter over normalized `RuntimeRecord` rows.

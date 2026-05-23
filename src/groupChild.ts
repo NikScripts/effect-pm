@@ -3,7 +3,7 @@ import { Data, Effect, FileSystem, Layer, Path } from "effect";
 import type { ProcessGroupEntry, ProcessGroupServiceDefinition } from "./ProcessGroup.js";
 import { resolveChildLaunchPaths } from "./processManagerChildLaunch.js";
 import { groupLocalRuntime } from "./processManagerGroupRuntime.js";
-import * as Logs from "./Logs.js";
+import { ProcessStore } from "./ProcessStore.js";
 import { groupLogSqlitePath } from "./processManagerChildLaunch.js";
 import { layerProcessStore } from "./storage/sqlite/index.js";
 import { captureLoggerLayer } from "./processManagerLogRelay.js";
@@ -101,13 +101,13 @@ export const runGroupChildProgram = (args: {
       store: layerProcessStore({ filename: logStorePath }),
     });
     const envLayer = runtime.layer.pipe(
-      Layer.provideMerge(Logs.relayLayer),
+      Layer.provideMerge(ProcessStore.Logs.relayLayer),
       Layer.provideMerge(captureLoggerLayer),
     );
     return yield* Effect.never.pipe(
       Effect.provide(
         runtime.control.pipe(
-          Layer.provideMerge(Logs.relayLayer),
+          Layer.provideMerge(ProcessStore.Logs.relayLayer),
           Layer.provide(envLayer),
         ),
       ),

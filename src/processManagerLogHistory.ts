@@ -5,7 +5,7 @@ import {
   buildProcessManagerLogQuery,
   ProcessManagerLogQueryError,
 } from "./processManagerLogQuery.js";
-import * as Logs from "./Logs.js";
+import { ProcessStore } from "./ProcessStore.js";
 import { groupLogSqlitePath } from "./processManagerChildLaunch.js";
 import { layerProcessStore } from "./storage/sqlite/index.js";
 import { replayLogQueryResults } from "./processManagerLogQuery.js";
@@ -68,7 +68,7 @@ export const queryGroupLogsForCatalog = (
       for (const group of groups) {
         const sqliteFilename = groupLogSqlitePath(paths.logDirectory, group.id);
         const groupQuery = { ...query, groupId: group.id, limit: perGroupLimit };
-        const loaded = yield* Logs.load(groupQuery).pipe(
+        const loaded = yield* ProcessStore.Logs.load(groupQuery).pipe(
           Effect.provide(layerProcessStore({ filename: sqliteFilename })),
           Effect.scoped,
           Effect.option,
@@ -99,7 +99,7 @@ export const queryGroupLogsForCatalog = (
       });
     }
     const sqliteFilename = groupLogSqlitePath(paths.logDirectory, groupId);
-    yield* Logs.query(query).pipe(
+    yield* ProcessStore.Logs.query(query).pipe(
       Effect.provide(layerProcessStore({ filename: sqliteFilename })),
       Effect.scoped,
     );
