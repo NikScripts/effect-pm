@@ -53,6 +53,7 @@ import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { Context, Effect, Layer, Scope } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import type { SqlError } from "effect/unstable/sql/SqlError";
+import { ProcessStore } from "../../ProcessStore.js";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import type {
   DeleteResult,
@@ -123,8 +124,23 @@ export const fromSqlClient = (
  *
  * @public
  */
+/**
+ * `ProcessStore` backed by SQLite {@link RuntimeStorage}.
+ *
+ * @remarks
+ * Import from `@nikscripts/effect-pm/storage/sqlite` when you need durable local storage.
+ * Keeps `@effect/sql-sqlite-node` off the core `ProcessStore` entry.
+ *
+ * @public
+ */
+export const layerProcessStore = (
+  config: SQLiteRuntimeStorageConfig,
+): Layer.Layer<ProcessStore, never, Scope.Scope> =>
+  Layer.provide(ProcessStore.layerRuntimeStorage, layerRuntimeStorage(config)).pipe(Layer.orDie);
+
 export const SQLiteRuntimeStorage = {
   make: makeRuntimeStorage,
   layer: layerRuntimeStorage,
+  layerProcessStore,
   fromSqlClient,
 } as const;

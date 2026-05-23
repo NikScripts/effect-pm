@@ -1,59 +1,51 @@
 # Storage model (mandatory)
 
-**There is one persistence stack. Do not invent another.**
+**One persistence stack. No parallel storage APIs on domain modules.**
 
 ## Layers
 
 | Layer | Role |
 |-------|------|
-| **`RuntimeStorage`** | Raw port over normalized `RuntimeRecord` rows. Swap adapters here: `RuntimeStorage.memory`, `SQLiteRuntimeStorage`, Prisma (future), … |
-| **`ProcessStore`** | Client API on top of `RuntimeStorage`: `append`, `events`, queue helpers, runtime projections |
-
-Domain modules (`Logs`, `QueueResource`, processes) **use `ProcessStore`**. They **do not** expose their own storage `Layer`s or SQLite/file shortcuts.
-
-## How to compose durability
+| **`RuntimeStorage`** | Raw port over normalized `RuntimeRecord` rows. Swap adapters: memory, SQLite (`@nikscripts/effect-pm/storage/sqlite`), Prisma (future). |
+| **`ProcessStore`** | Client API: `append`, `events`, `records`, and **facets** `Logs` / `QueueStore`. |
 
 ```ts
 import { Layer } from "effect";
 import { ProcessStore } from "@nikscripts/effect-pm/ProcessStore";
-import { SQLiteRuntimeStorage } from "@nikscripts/effect-pm/storage/sqlite";
+import { layerProcessStore } from "@nikscripts/effect-pm/storage/sqlite";
 
-// Canonical local durable stack (preferred helper):
-const storeLayer = ProcessStore.layerSqlite({ filename: ".effect-pm/data.sqlite" });
+// Durable local (pulls in @effect/sql-sqlite-node only when you import this subpath):
+const storeLayer = layerProcessStore({ filename: ".effect-pm/data.sqlite" });
 
-// Equivalent explicit form:
-const storeLayerExplicit = Layer.provide(
-  ProcessStore.layerRuntimeStorage,
-  SQLiteRuntimeStorage.layer({ filename: ".effect-pm/data.sqlite" }),
-);
-
-// Tests / demos without disk:
+// In-memory tests:
 const memoryLayer = ProcessStore.layer;
 ```
 
-Provide the chosen `ProcessStore` layer at **app or group-child launch**. Every effect that needs persistence runs with that layer in scope.
+`ProcessStore` core entry **does not** import SQLite. Use `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`.
 
-## Logs
+## Store facets
 
-`@nikscripts/effect-pm/Logs` only encodes and queries `group.log.entry` events **through `ProcessStore`**:
+After `const store = yield* ProcessStore` (or destructure):
 
-- `Logs.record` / `Logs.recordBatch` → `ProcessStore.append`
-- `Logs.load` / `Logs.query` → `ProcessStore.events`
+```ts
+const { Logs, QueueStore } = yield* ProcessStore;
 
-**No `Logs.layer`.** Group child uses `ProcessStore.layerSqlite` + `groupLogSqlitePath` (path convention under `processManagerChildLaunch`, not storage API).
+yield* Logs.record("my-group", "1", entry);
+yield* Logs.query({ groupId: "my-group", limit: 100, sort: "desc" });
 
-## Do not use for new code
+yield* QueueStore.withQueue("email-queue", QueueStore.entryEnqueued({ key: "x" }));
+```
 
-- `ProcessStore.file` / `ProcessStore.fileLayer`
-- `@nikscripts/effect-pm/storage/file`
-- Any new “log store layer”, “analytics file layer”, or domain module that composes SQLite under its own name
+`@nikscripts/effect-pm/Logs` and `@nikscripts/effect-pm/QueueStore` re-export the same APIs via `Effect.flatMap(ProcessStore, …)` when you want top-level helpers without destructuring.
+
+## Do not
+
+- Add `Logs.layer`, `QueueStore.layer`, or other storage composition under domain modules.
+- Use `ProcessStore.file` / `storage/file` for new code.
+- Duplicate the `ProcessStore.QueueResource` namespace — use `store.QueueStore` or `@nikscripts/effect-pm/QueueStore`.
 
 ## Agent checklist
 
-Before adding persistence code, answer:
-
-1. Am I writing to **`RuntimeStorage`** (adapter) or **`ProcessStore`** (client)?
-2. Is the `RuntimeStorage` adapter composed at the **root** only?
-3. Did I avoid adding storage `Layer`s to `Logs`, `ProcessManager`, or other domain modules?
-
-If any answer is wrong, stop and fix the composition site.
+1. Adapter composed at **launch** (`layerProcessStore`, `layerRuntimeStorage` + custom adapter, or `ProcessStore.layer`).
+2. Domain code uses **`store.Logs` / `store.QueueStore`** or subpath re-exports — not new storage layers.
+3. SQLite dep only via `@nikscripts/effect-pm/storage/sqlite`.

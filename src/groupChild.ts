@@ -5,7 +5,7 @@ import { resolveChildLaunchPaths } from "./processManagerChildLaunch.js";
 import { groupLocalRuntime } from "./processManagerGroupRuntime.js";
 import * as Logs from "./Logs.js";
 import { groupLogSqlitePath } from "./processManagerChildLaunch.js";
-import { ProcessStore } from "./ProcessStore.js";
+import { layerProcessStore } from "./storage/sqlite/index.js";
 import { captureLoggerLayer } from "./processManagerLogRelay.js";
 
 /** @public */
@@ -98,7 +98,7 @@ export const runGroupChildProgram = (args: {
     yield* fs.makeDirectory(path.dirname(logStorePath), { recursive: true }).pipe(Effect.orDie);
     const runtime = groupLocalRuntime(group, {
       controlBaseUrl: args.controlBaseUrl,
-      store: ProcessStore.layerSqlite({ filename: logStorePath }),
+      store: layerProcessStore({ filename: logStorePath }),
     });
     const envLayer = runtime.layer.pipe(
       Layer.provideMerge(Logs.relayLayer),

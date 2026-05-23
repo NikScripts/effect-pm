@@ -1,25 +1,27 @@
 /**
- * Structured log helpers on top of {@link ProcessStore} only.
+ * `@nikscripts/effect-pm/Logs` — re-exports the {@link ProcessStoreInterface.Logs} facet.
  *
  * @remarks
- * **Logs does not own storage.** There is no `Logs.layer`, no SQLite path helper, and no
- * second persistence port. All reads and writes require {@link ProcessStore} in the
- * environment; durability comes from whichever `RuntimeStorage` adapter you composed at
- * launch (see {@link ProcessStore.layerSqlite}, {@link ProcessStore.layerRuntimeStorage},
- * {@link ProcessStore.layer}).
+ * **Storage:** compose `RuntimeStorage` + `ProcessStore` at launch (e.g.
+ * `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`). This module does not
+ * provide storage layers.
  *
- * Use {@link record} / {@link recordBatch} to append `group.log.entry` events,
- * {@link load} / {@link query} to read them, and {@link relayLayer} for capture + batched
- * flush into the provided `ProcessStore`.
+ * Prefer:
+ *
+ * ```ts
+ * const { Logs } = yield* ProcessStore;
+ * yield* Logs.query({ groupId: "g1", limit: 100, sort: "desc" });
+ * ```
+ *
+ * Top-level `record` / `query` helpers delegate to `store.Logs` when {@link ProcessStore}
+ * is in context. {@link relayLayer} is process-manager capture (not part of the store API).
  *
  * @module Logs
  */
 
 import { Cause, Duration, Effect, Layer, Option, PubSub, Ref, Schedule, Scope, Stream } from "effect";
-import type { LogLevel } from "effect/LogLevel";
 import {
   ProcessGroupLogContext,
-  ProcessManagerLogAnnotationKeys,
 } from "./processManagerLogContext.js";
 import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
 import {
@@ -27,223 +29,42 @@ import {
   type ProcessManagerLogRelayService,
 } from "./processManagerLogRelay.js";
 import type { ProcessManagerLogQuery } from "./processManagerLogQuery.js";
-import { ProcessManagerLogQueryError, replayLogQueryResults } from "./processManagerLogQuery.js";
+import { ProcessManagerLogQueryError } from "./processManagerLogQuery.js";
+import { ProcessStore, type ProcessStoreWriteError } from "./ProcessStore.js";
+import type { ProcessStoreLogsApi } from "./ProcessStoreLogs.js";
 import {
-  GroupLogEntryRecordedEvent,
-  isGroupLogEntryRecorded,
-  ProcessStore,
-  type ProcessStoreWriteError,
-  type StoreEventQuery,
-} from "./ProcessStore.js";
+  makeRecordedEvent,
+  storeEventQueryFromLogQuery,
+} from "./ProcessStoreLogs.js";
 
-const storeFlushInterval = Duration.millis(250);
-const storeFlushBatchSize = 64;
+export type { ProcessStoreLogsApi };
+export { makeRecordedEvent, storeEventQueryFromLogQuery };
 
-const logEntryFromStored = (
-  stored: GroupLogEntryRecordedEvent["log"]["entry"],
-): ProcessManagerLogEntry => ({
-  date: stored.date,
-  level: stored.level as LogLevel,
-  message: stored.message,
-  ...(stored.cause === undefined ? {} : { cause: stored.cause }),
-  annotations: stored.annotations,
-  spans: stored.spans,
-});
-
-const entryMatchesQuery = (
-  entry: ProcessManagerLogEntry,
-  query: ProcessManagerLogQuery,
-): boolean => {
-  if (query.processId !== undefined) {
-    const processId = entry.annotations[ProcessManagerLogAnnotationKeys.processId];
-    if (processId !== query.processId) {
-      return false;
-    }
-  }
-  if (query.queueId !== undefined) {
-    const queueId = entry.annotations[ProcessManagerLogAnnotationKeys.queueId];
-    if (queueId !== query.queueId) {
-      return false;
-    }
-  }
-  if (query.groupId !== undefined) {
-    const groupId = entry.annotations[ProcessManagerLogAnnotationKeys.groupId];
-    if (groupId !== undefined && groupId !== query.groupId) {
-      return false;
-    }
-  }
-  return true;
-};
-
-const parseCursorMillis = (cursor: string | undefined): number | undefined => {
-  if (cursor === undefined) {
-    return undefined;
-  }
-  const asNumber = Number(cursor);
-  if (Number.isFinite(asNumber)) {
-    return asNumber;
-  }
-  const parsed = Date.parse(cursor);
-  return Number.isNaN(parsed) ? undefined : parsed;
-};
-
-/**
- * Map {@link ProcessManagerLogQuery} to {@link StoreEventQuery}.
- *
- * @public
- */
-export const storeEventQueryFromLogQuery = (
-  query: ProcessManagerLogQuery,
-): StoreEventQuery => {
-  const afterMs =
-    parseCursorMillis(query.after) ?? (query.from === undefined ? undefined : query.from.getTime());
-  const beforeMs =
-    parseCursorMillis(query.before) ?? (query.to === undefined ? undefined : query.to.getTime());
-  const prefetch =
-    query.processId !== undefined || query.queueId !== undefined
-      ? Math.min(query.limit * 8, 10_000)
-      : query.limit;
-  return {
-    entityType: query.groupId === undefined ? undefined : "group",
-    entityId: query.groupId,
-    types: ["group.log.entry"],
-    opts: {
-      limit: prefetch,
-      after: afterMs,
-      before: beforeMs,
-    },
-  };
-};
-
-const sortEntries = (
-  entries: ReadonlyArray<ProcessManagerLogEntry>,
-  sort: ProcessManagerLogQuery["sort"],
-): ReadonlyArray<ProcessManagerLogEntry> => {
-  const rows = [...entries];
-  rows.sort((left, right) => {
-    const leftMs = Date.parse(left.date);
-    const rightMs = Date.parse(right.date);
-    return sort === "asc" ? leftMs - rightMs : rightMs - leftMs;
-  });
-  return rows;
-};
-
-/**
- * Build a `group.log.entry` analytics event for {@link ProcessStore.append}.
- *
- * @public
- */
-export const makeRecordedEvent = (
-  groupId: string,
-  entryId: string,
-  entry: ProcessManagerLogEntry,
-): GroupLogEntryRecordedEvent => {
-  const occurredAt = Date.parse(entry.date);
-  return {
-    id: `${groupId}-log-${entryId}`,
-    type: "group.log.entry",
-    occurredAt: Number.isNaN(occurredAt) ? 0 : occurredAt,
-    entityType: "group",
-    entityId: groupId,
-    log: {
-      entryId,
-      entry: {
-        date: entry.date,
-        level: entry.level,
-        message: entry.message,
-        ...(entry.cause === undefined ? {} : { cause: entry.cause }),
-        annotations: entry.annotations,
-        spans: entry.spans,
-      },
-    },
-  };
-};
-
-/**
- * Persist one structured log entry through {@link ProcessStore}.
- *
- * @public
- */
 export const record = (
   groupId: string,
   entryId: string,
   entry: ProcessManagerLogEntry,
 ): Effect.Effect<void, ProcessStoreWriteError, ProcessStore> =>
-  Effect.flatMap(ProcessStore, (store) =>
-    store.append(makeRecordedEvent(groupId, entryId, entry)),
-  );
+  Effect.flatMap(ProcessStore, (store) => store.Logs.record(groupId, entryId, entry));
 
-/**
- * Persist a batch of structured log entries through {@link ProcessStore}.
- *
- * @public
- */
 export const recordBatch = (
   groupId: string,
-  rows: ReadonlyArray<{ readonly entryId: string; readonly entry: ProcessManagerLogEntry }>,
+  rows: Parameters<ProcessStoreLogsApi["recordBatch"]>[1],
 ): Effect.Effect<void, ProcessStoreWriteError, ProcessStore> =>
-  Effect.flatMap(ProcessStore, (store) =>
-    store.appendBatch(rows.map((row) => makeRecordedEvent(groupId, row.entryId, row.entry))),
-  );
+  Effect.flatMap(ProcessStore, (store) => store.Logs.recordBatch(groupId, rows));
 
-const entriesFromStoreEvents = (
-  events: ReadonlyArray<GroupLogEntryRecordedEvent>,
-  query: ProcessManagerLogQuery,
-): ReadonlyArray<ProcessManagerLogEntry> => {
-  const rows: ProcessManagerLogEntry[] = [];
-  for (const event of events) {
-    const entry = logEntryFromStored(event.log.entry);
-    if (!entryMatchesQuery(entry, query)) {
-      continue;
-    }
-    if (query.after !== undefined && event.log.entryId <= query.after) {
-      continue;
-    }
-    if (query.before !== undefined && event.log.entryId >= query.before) {
-      continue;
-    }
-    rows.push(entry);
-  }
-  return sortEntries(rows, query.sort).slice(0, query.limit);
-};
-
-/**
- * Load persisted log entries without replaying to the operator logger.
- *
- * @public
- */
 export const load = (
   query: ProcessManagerLogQuery,
-): Effect.Effect<
-  ReadonlyArray<ProcessManagerLogEntry>,
-  ProcessManagerLogQueryError,
-  ProcessStore
-> =>
-  Effect.gen(function* () {
-    const store = yield* ProcessStore;
-    const events = yield* store.events(storeEventQueryFromLogQuery(query));
-    const logEvents = events.filter(isGroupLogEntryRecorded);
-    const entries = entriesFromStoreEvents(logEvents, query);
-    if (entries.length === 0) {
-      return yield* new ProcessManagerLogQueryError({
-        reason: "No log entries matched the query",
-      });
-    }
-    return entries;
-  });
+): Effect.Effect<ReadonlyArray<ProcessManagerLogEntry>, ProcessManagerLogQueryError, ProcessStore> =>
+  Effect.flatMap(ProcessStore, (store) => store.Logs.load(query));
 
-/**
- * Query persisted logs through {@link ProcessStore} and replay to the operator logger.
- *
- * @public
- */
 export const query = (
   logQuery: ProcessManagerLogQuery,
 ): Effect.Effect<void, ProcessManagerLogQueryError, ProcessStore> =>
-  Effect.gen(function* () {
-    const entries = yield* load(logQuery);
-    yield* replayLogQueryResults(entries, logQuery.sort);
-  });
+  Effect.flatMap(ProcessStore, (store) => store.Logs.query(logQuery));
+
+const storeFlushInterval = Duration.millis(250);
+const storeFlushBatchSize = 64;
 
 type PendingLogAppend = {
   readonly entryId: string;
@@ -271,10 +92,9 @@ const makePersistingRelay = (
       if (batch.length === 0) {
         return;
       }
-      yield* recordBatch(group.groupId, batch).pipe(
-        Effect.provideService(ProcessStore, storeOption.value),
+      yield* storeOption.value.Logs.recordBatch(group.groupId, batch).pipe(
         Effect.catchCause((cause) =>
-          Effect.logWarning("Logs recordBatch failed").pipe(
+          Effect.logWarning("ProcessStore Logs.recordBatch failed").pipe(
             Effect.annotateLogs("cause", Cause.pretty(cause)),
           ),
         ),
@@ -311,7 +131,7 @@ const makePersistingRelay = (
 const historyCapacity = 500;
 
 /**
- * Relay layer with in-memory tail plus batched {@link recordBatch} into {@link ProcessStore}.
+ * Relay layer with in-memory tail plus batched flush into `store.Logs`.
  *
  * @public
  */

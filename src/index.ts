@@ -46,8 +46,8 @@
  * **`@nikscripts/effect-pm/ControlService`**.
  *
  * **`@nikscripts/effect-pm/Logs`** — log event helpers on {@link ProcessStore} only
- * (`record`, `query`); storage is composed via {@link ProcessStore.layerSqlite} /
- * {@link RuntimeStorage}, not via `Logs`.
+ * (`record`, `query`); storage is `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`
+ * or other `RuntimeStorage` + `ProcessStore` composition — not via `Logs`.
  *
  * Storage adapters use lower-case subpaths:
  * **`@nikscripts/effect-pm/storage/sqlite`** and **`@nikscripts/effect-pm/storage/prisma`**
@@ -260,6 +260,7 @@ export {
   withQueueLogAnnotations,
   type ProcessManagerLogScope,
 } from "./processManagerLogContext.js";
+export type { ProcessStoreLogsApi } from "./ProcessStoreLogs.js";
 export {
   relayLayer,
   makeRecordedEvent,
@@ -269,6 +270,7 @@ export {
   query,
   storeEventQueryFromLogQuery,
 } from "./Logs.js";
+export * as QueueStore from "./QueueStore.js";
 export { groupLogSqlitePath } from "./processManagerChildLaunch.js";
 export { queryGroupLogsForCatalog } from "./processManagerLogHistory.js";
 export type { GroupLogEntryRecordedEvent } from "./ProcessStore.js";
@@ -314,7 +316,7 @@ export {
   type QueueItemCompletedEvent,
   type QueueLifecycleTag,
   type QueueLifecycleChangedEvent,
-  type ProcessStoreQueueResourceApi,
+  type QueueStoreApi,
   type ProcessStoreQueueResourceContext,
   type ProcessStoreQueueResourceDedupeKeyInput,
   type ProcessStoreQueueResourceDedupeKeyStatus,

@@ -1312,7 +1312,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       },
     ): Effect.Effect<void> => {
       if (Option.isNone(storeOption)) return Effect.void;
-      const api = storeOption.value.queueResource;
+      const api = storeOption.value.QueueStore;
       const input = {
         entryId: internal.entryId,
         key: internal.key,
@@ -1347,7 +1347,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       itemsCleared?: number,
     ): Effect.Effect<void> => {
       if (Option.isNone(storeOption)) return Effect.void;
-      const api = storeOption.value.queueResource;
+      const api = storeOption.value.QueueStore;
       return recordStoreWrite(
         `lifecycle ${tag}`,
         api.withQueue(
@@ -1945,7 +1945,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           });
         }
         if (isQueueEntry(selector) && Option.isSome(storeOption)) {
-          const api = storeOption.value.queueResource;
+          const api = storeOption.value.QueueStore;
           const input = {
             entryId: selector.entryId,
             key: selector.key,

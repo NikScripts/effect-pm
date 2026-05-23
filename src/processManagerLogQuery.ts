@@ -4,7 +4,6 @@ import { ProcessStore } from "./ProcessStore.js";
 import type { ProcessManagerLogScope } from "./processManagerLogContext.js";
 import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
 import { replayLogEntry } from "./processManagerLogRelay.js";
-import * as Logs from "./Logs.js";
 
 const defaultLogQueryLimit = 100;
 const maxLogQueryLimit = 10_000;
@@ -153,7 +152,7 @@ export const buildProcessManagerLogQuery = (input: {
 export const queryGroupLogs = (
   query: ProcessManagerLogQuery,
 ): Effect.Effect<void, ProcessManagerLogQueryError, ProcessStore> =>
-  Logs.query(query);
+  Effect.flatMap(ProcessStore, (store) => store.Logs.query(query));
 
 /**
  * Replay log rows returned from a future storage adapter.

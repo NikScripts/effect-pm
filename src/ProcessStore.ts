@@ -18,10 +18,10 @@
  * **Do not** add parallel “log storage layers”, file-backed `ProcessStore` shortcuts for
  * new code, or domain modules that compose SQLite under their own name. Provide
  * `RuntimeStorage` (or `ProcessStore.layer` / {@link ProcessStore.layerRuntimeStorage} /
- * {@link ProcessStore.layerSqlite}) at app/child launch; use {@link Logs} (and similar)
- * only for encoding and querying event shapes through `ProcessStore`.
+ * at app/child launch; use store facets (`Logs`, `QueueStore`) for domain operations.
  *
- * Default in-memory: {@link ProcessStore.layer}. Durable local: {@link ProcessStore.layerSqlite}.
+ * Default in-memory: {@link ProcessStore.layer}. Durable local:
+ * `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`.
  * **Legacy only:** {@link ProcessStore.fileLayer} (NDJSON, not `RuntimeStorage`).
  *
  * @module ProcessStore
@@ -37,12 +37,10 @@ import {
   Layer,
   Option,
   Path,
-  Scope,
   Semaphore,
   Schema,
 } from "effect";
-import { SQLiteRuntimeStorage } from "./storage/sqlite/index.js";
-import type { SQLiteRuntimeStorageConfig } from "./storage/sqlite/public-types.js";
+import { makeProcessStoreLogs, type ProcessStoreLogsApi } from "./ProcessStoreLogs.js";
 import {
   And,
   Key,
@@ -229,7 +227,12 @@ export type ProcessStoreWriteError =
   | ProcessStoreReadonlyRecordError;
 
 /** @public */
-export interface ProcessStoreQueueResourceApi {
+/**
+ * Queue semantic storage facet on {@link ProcessStoreInterface.QueueStore}.
+ *
+ * @public
+ */
+export interface QueueStoreApi {
   readonly withQueue: <A, E, R>(
     queueId: string,
     use: Effect.Effect<A, E, R>,
@@ -475,7 +478,8 @@ export interface ProcessStoreInterface {
   appendBatch: (events: ReadonlyArray<AnalyticsEvent>) => Effect.Effect<void, ProcessStoreWriteError>;
   events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>;
   records: (query?: RuntimeRecordQuery) => Effect.Effect<RuntimeRecord[]>;
-  queueResource: ProcessStoreQueueResourceApi;
+  readonly Logs: ProcessStoreLogsApi;
+  readonly QueueStore: QueueStoreApi;
   getProcessExecutions: (
     processId: string,
     opts?: QueryOpts,
@@ -944,7 +948,7 @@ const dedupePayload = (
 export const makeProcessStoreQueueResource = (config: {
   readonly append: (event: AnalyticsEvent) => Effect.Effect<void, ProcessStoreWriteError, never>;
   readonly records: (query?: RuntimeRecordQuery) => Effect.Effect<RuntimeRecord[], never, never>;
-}): ProcessStoreQueueResourceApi => {
+}): QueueStoreApi => {
   let sequence = 0;
 
   const nextFactId = (queueId: string, type: string, occurredAt: number): string => {
@@ -1281,10 +1285,18 @@ const makeRuntimeStorageProcessStore = (
 
     records: readRecords,
 
-    queueResource: makeProcessStoreQueueResource({
-      append: appendEvent,
-      records: readRecords,
-    }),
+    ...(() => {
+      const queueStore = makeProcessStoreQueueResource({
+        append: appendEvent,
+        records: readRecords,
+      });
+      const logs = makeProcessStoreLogs({
+        append: appendEvent,
+        appendBatch: (batch) => Effect.forEach(batch, appendEvent, { discard: true }),
+        events: readEvents,
+      });
+      return { Logs: logs, QueueStore: queueStore };
+    })(),
 
     getProcessExecutions: (processId, opts) =>
       Effect.map(readEvents({
@@ -1432,10 +1444,25 @@ const makeFileProcessStore = (
         ),
       events: (query) => semaphore.withPermits(1)(queryEvents(query)),
       records: readSerializedRecords,
-      queueResource: makeProcessStoreQueueResource({
-        append: appendSerializedEvent,
-        records: readSerializedRecords,
-      }),
+      ...(() => {
+        const queueStore = makeProcessStoreQueueResource({
+          append: appendSerializedEvent,
+          records: readSerializedRecords,
+        });
+        const logs = makeProcessStoreLogs({
+          append: appendSerializedEvent,
+          appendBatch: (batch) =>
+            semaphore.withPermits(1)(
+              Effect.gen(function* () {
+                for (const event of batch) {
+                  yield* appendOne(event);
+                }
+              }),
+            ),
+          events: (query) => semaphore.withPermits(1)(queryEvents(query)),
+        });
+        return { Logs: logs, QueueStore: queueStore };
+      })(),
       getProcessExecutions: (processId, opts) =>
         semaphore.withPermits(1)(
           Effect.map(
@@ -1519,23 +1546,6 @@ export namespace ProcessStore {
     Layer.effect(ProcessStore, makeProcessStoreFromRuntimeStorage);
 
   /**
-   * `ProcessStore` backed by SQLite {@link RuntimeStorage} (canonical durable local stack).
-   *
-   * @remarks
-   * Equivalent to `Layer.provide(layerRuntimeStorage, SQLiteRuntimeStorage.layer(config))`.
-   * Use at composition root (group child, tests, examples)—not inside `Logs` or other
-   * domain modules.
-   *
-   * @public
-   */
-  export const layerSqlite = (
-    config: SQLiteRuntimeStorageConfig,
-  ): Layer.Layer<ProcessStore, never, Scope.Scope> =>
-    Layer.provide(layerRuntimeStorage, SQLiteRuntimeStorage.layer(config)).pipe(
-      Layer.orDie,
-    );
-
-  /**
    * Raw `Effect` that materializes {@link ProcessStoreInterface} (no `Layer` wrapper).
    * Useful in tests that call `Effect.provideService` manually.
    *
@@ -1562,50 +1572,6 @@ export namespace ProcessStore {
    */
   export const fileLayer = (filePath: string) =>
     Layer.effect(ProcessStore, makeFileProcessStore(filePath));
-
-  /**
-   * QueueResource semantic storage helpers.
-   *
-   * @public
-   */
-  export const QueueResource = {
-    withQueue: <A, E, R>(queueId: string, use: Effect.Effect<A, E, R>) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.withQueue(queueId, use)),
-    withEntry: <A, E, R>(entryId: string, use: Effect.Effect<A, E, R>) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.withEntry(entryId, use)),
-    withBatch: <A, E, R>(batchId: string, use: Effect.Effect<A, E, R>) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.withBatch(batchId, use)),
-    withDedupeKey: <A, E, R>(key: string, use: Effect.Effect<A, E, R>) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.withDedupeKey(key, use)),
-    entryEnqueued: (input?: ProcessStoreQueueResourceEntryInput) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.entryEnqueued(input)),
-    entryStarted: (input?: ProcessStoreQueueResourceEntryInput) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.entryStarted(input)),
-    entryCompleted: (input?: ProcessStoreQueueResourceEntryInput) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.entryCompleted(input)),
-    entryFailed: (input?: ProcessStoreQueueResourceEntryInput) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.entryFailed(input)),
-    entryRetried: (input?: ProcessStoreQueueResourceEntryInput) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.entryRetried(input)),
-    entryExhausted: (input?: ProcessStoreQueueResourceEntryInput) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.entryExhausted(input)),
-    lifecycleChanged: (input: ProcessStoreQueueResourceLifecycleInput) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.lifecycleChanged(input)),
-    dedupeKeyAdded: (input?: ProcessStoreQueueResourceDedupeKeyInput) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.dedupeKeyAdded(input)),
-    dedupeKeyReleased: (input?: ProcessStoreQueueResourceDedupeKeyInput) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.dedupeKeyReleased(input)),
-    dedupeKeyHydrated: (input?: ProcessStoreQueueResourceDedupeKeyInput) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.dedupeKeyHydrated(input)),
-    entries: (queueId?: string, query?: RuntimeRecordQuery) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.entries(queueId, query)),
-    entry: (entryId: string, query?: RuntimeRecordQuery) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.entry(entryId, query)),
-    entriesByKey: (key: string, query?: RuntimeRecordQuery) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.entriesByKey(key, query)),
-    dedupeKeys: (queueId?: string, query?: RuntimeRecordQuery) =>
-      Effect.flatMap(ProcessStore, (store) => store.queueResource.dedupeKeys(queueId, query)),
-  };
 
   /**
    * Generic runtime projections derived from {@link ProcessStoreInterface.events}.

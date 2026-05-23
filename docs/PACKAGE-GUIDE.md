@@ -108,7 +108,7 @@ dedicated subpaths for focused imports:
 - `@nikscripts/effect-pm/storage/file` (legacy only)
 
 Structured group logs use `@nikscripts/effect-pm/Logs` (`Logs.record`, `Logs.query`)
-with `ProcessStore` composed at launch (`ProcessStore.layerSqlite`). Durable
+with `ProcessStore` composed at launch (`layerProcessStore` from `storage/sqlite`). Durable
 normalized runtime records use
 `@nikscripts/effect-pm/storage/sqlite` (`SQLiteRuntimeStorage`) with
 `ProcessStore.layerRuntimeStorage`. Run `SQLiteRuntimeStorage.make` under

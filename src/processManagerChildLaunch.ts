@@ -229,7 +229,8 @@ const safeGroupStoreSegment = (groupId: string): string =>
  * On-disk SQLite file path for a group's {@link ProcessStore} (ops layout only).
  *
  * @remarks
- * Not a storage API. Compose {@link ProcessStore.layerSqlite} with this path at
+ * Not a storage API. Compose `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`
+ * with this path at
  * child launch; use {@link Logs} for log event encoding/querying.
  *
  * @public

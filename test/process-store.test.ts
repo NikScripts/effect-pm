@@ -19,6 +19,7 @@ import {
   type QueueLifecycleChangedEvent,
   type RuntimeStateChangedEvent,
 } from "../src"
+import * as QueueStore from "../src/QueueStore.js";
 import { utcDateFromIso } from "../src/utcDate.js";
 
 describe("ProcessStore.memory", () => {
@@ -325,23 +326,23 @@ describe("ProcessStore.memory", () => {
       const first = DateTime.makeUnsafe("2026-01-01T03:50:00.000Z")
       const second = DateTime.makeUnsafe("2026-01-01T03:51:00.000Z")
 
-      yield* ProcessStore.QueueResource.withQueue(
+      yield* QueueStore.withQueue(
         "email-queue",
-        ProcessStore.QueueResource.withBatch(
+        QueueStore.withBatch(
           "batch-1",
           Effect.all(
             [
-              ProcessStore.QueueResource.withEntry(
+              QueueStore.withEntry(
                 "entry-1",
-                ProcessStore.QueueResource.entryEnqueued({
+                QueueStore.entryEnqueued({
                   key: "delivery-1",
                   priority: "high",
                   occurredAt: first,
                 }),
               ),
-              ProcessStore.QueueResource.withEntry(
+              QueueStore.withEntry(
                 "entry-1",
-                ProcessStore.QueueResource.entryCompleted({
+                QueueStore.entryCompleted({
                   key: "delivery-1",
                   priority: "high",
                   attempts: 1,
@@ -349,9 +350,9 @@ describe("ProcessStore.memory", () => {
                   occurredAt: second,
                 }),
               ),
-              ProcessStore.QueueResource.withDedupeKey(
+              QueueStore.withDedupeKey(
                 "delivery-1",
-                ProcessStore.QueueResource.dedupeKeyAdded({ occurredAt: first }),
+                QueueStore.dedupeKeyAdded({ occurredAt: first }),
               ),
             ],
             { discard: true },
@@ -359,10 +360,10 @@ describe("ProcessStore.memory", () => {
         ),
       )
 
-      const entries = yield* ProcessStore.QueueResource.entries("email-queue")
-      const byKey = yield* ProcessStore.QueueResource.entriesByKey("delivery-1")
-      const entry = yield* ProcessStore.QueueResource.entry("entry-1")
-      const dedupeKeys = yield* ProcessStore.QueueResource.dedupeKeys("email-queue")
+      const entries = yield* QueueStore.entries("email-queue")
+      const byKey = yield* QueueStore.entriesByKey("delivery-1")
+      const entry = yield* QueueStore.entry("entry-1")
+      const dedupeKeys = yield* QueueStore.dedupeKeys("email-queue")
 
       expect(entries.map((row) => row.type)).toEqual([
         "queue.entry.completed",

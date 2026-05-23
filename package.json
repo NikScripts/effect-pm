@@ -79,6 +79,11 @@
       "import": "./dist/Logs.mjs",
       "require": "./dist/Logs.js"
     },
+    "./QueueStore": {
+      "types": "./dist/QueueStore.d.ts",
+      "import": "./dist/QueueStore.mjs",
+      "require": "./dist/QueueStore.js"
+    },
     "./storage/file": {
       "types": "./dist/storage/file.d.ts",
       "import": "./dist/storage/file.mjs",
