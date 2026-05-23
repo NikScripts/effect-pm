@@ -2,6 +2,8 @@
 
 Start with [`docs/AGENTS.md`](./docs/AGENTS.md) for this package's architecture, invariants, and verification commands.
 
+**Persistence:** [`docs/STORAGE.md`](./docs/STORAGE.md) — one stack only: `RuntimeStorage` + `ProcessStore`. Do not add storage layers to `Logs` or other domain modules.
+
 ## Vendored repositories
 
 External repositories live under `repos/` as read-only reference material for agents.

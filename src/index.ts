@@ -45,8 +45,9 @@
  * **`@nikscripts/effect-pm/ProcessManager`**, and
  * **`@nikscripts/effect-pm/ControlService`**.
  *
- * **`@nikscripts/effect-pm/Logs`** — structured log persistence via {@link ProcessStore}
- * and SQLite {@link RuntimeStorage} (not legacy file NDJSON).
+ * **`@nikscripts/effect-pm/Logs`** — log event helpers on {@link ProcessStore} only
+ * (`record`, `query`); storage is composed via {@link ProcessStore.layerSqlite} /
+ * {@link RuntimeStorage}, not via `Logs`.
  *
  * Storage adapters use lower-case subpaths:
  * **`@nikscripts/effect-pm/storage/sqlite`** and **`@nikscripts/effect-pm/storage/prisma`**
@@ -260,26 +261,15 @@ export {
   type ProcessManagerLogScope,
 } from "./processManagerLogContext.js";
 export {
-  sqlitePath,
-  layer,
   relayLayer,
   makeRecordedEvent,
   record,
   recordBatch,
   load,
-  scopedLoad,
   query,
-  scopedQuery,
   storeEventQueryFromLogQuery,
-  sqlitePath as groupLogStoreSqlitePath,
-  layer as groupLogStoreLayer,
-  relayLayer as layerWithProcessStore,
-  makeRecordedEvent as makeGroupLogEntryRecordedEvent,
-  scopedQuery as queryGroupLogsFromSqlite,
-  query as queryGroupLogsFromStore,
-  scopedLoad as loadGroupLogEntriesFromSqlite,
-  load as loadGroupLogEntriesFromStore,
 } from "./Logs.js";
+export { groupLogSqlitePath } from "./processManagerChildLaunch.js";
 export { queryGroupLogsForCatalog } from "./processManagerLogHistory.js";
 export type { GroupLogEntryRecordedEvent } from "./ProcessStore.js";
 export { isGroupLogEntryRecorded } from "./ProcessStore.js";

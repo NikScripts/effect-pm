@@ -1,11 +1,16 @@
 /**
- * Structured log persistence through {@link ProcessStore} and {@link RuntimeStorage}.
+ * Structured log helpers on top of {@link ProcessStore} only.
  *
  * @remarks
- * **Do not** use {@link ProcessStore.fileLayer} or `@nikscripts/effect-pm/storage/file`
- * for log history or new durable analytics. Compose {@link Logs.layer} with SQLite
- * (`ProcessStore.layerRuntimeStorage` + `SQLiteRuntimeStorage`) or in-memory
- * `ProcessStore.layer` for tests.
+ * **Logs does not own storage.** There is no `Logs.layer`, no SQLite path helper, and no
+ * second persistence port. All reads and writes require {@link ProcessStore} in the
+ * environment; durability comes from whichever `RuntimeStorage` adapter you composed at
+ * launch (see {@link ProcessStore.layerSqlite}, {@link ProcessStore.layerRuntimeStorage},
+ * {@link ProcessStore.layer}).
+ *
+ * Use {@link record} / {@link recordBatch} to append `group.log.entry` events,
+ * {@link load} / {@link query} to read them, and {@link relayLayer} for capture + batched
+ * flush into the provided `ProcessStore`.
  *
  * @module Logs
  */
@@ -30,49 +35,9 @@ import {
   type ProcessStoreWriteError,
   type StoreEventQuery,
 } from "./ProcessStore.js";
-import { SQLiteRuntimeStorage } from "./storage/sqlite/index.js";
-import type { SqlError } from "effect/unstable/sql/SqlError";
 
 const storeFlushInterval = Duration.millis(250);
 const storeFlushBatchSize = 64;
-
-const safeGroupStoreSegment = (groupId: string): string =>
-  groupId.replace(/[^a-zA-Z0-9._-]+/g, "_");
-
-/**
- * SQLite {@link ProcessStore} path for a group's persisted log history.
- *
- * @public
- */
-export const sqlitePath = (
-  logDirectory: string,
-  groupId: string,
-): string =>
-  `${logDirectory.replace(/\/+$/, "")}/${safeGroupStoreSegment(groupId)}/logs.sqlite`;
-
-/**
- * `Layer` providing {@link ProcessStore} backed by SQLite for one group's log store.
- *
- * @public
- */
-export const layer = (
-  sqliteFilename: string,
-): Layer.Layer<ProcessStore, never, Scope.Scope> =>
-  Layer.provide(
-    ProcessStore.layerRuntimeStorage,
-    SQLiteRuntimeStorage.layer({ filename: sqliteFilename }),
-  ).pipe(Layer.orDie);
-
-const mapSqliteLogQueryError = <A, R>(
-  effect: Effect.Effect<A, ProcessManagerLogQueryError | SqlError, R>,
-): Effect.Effect<A, ProcessManagerLogQueryError, R> =>
-  effect.pipe(
-    Effect.mapError((error) =>
-      error._tag === "ProcessManagerLogQueryError"
-        ? error
-        : new ProcessManagerLogQueryError({ reason: `Log store query failed: ${String(error)}` }),
-    ),
-  );
 
 const logEntryFromStored = (
   stored: GroupLogEntryRecordedEvent["log"]["entry"],
@@ -195,7 +160,7 @@ export const makeRecordedEvent = (
 };
 
 /**
- * Persist one structured log entry.
+ * Persist one structured log entry through {@link ProcessStore}.
  *
  * @public
  */
@@ -209,7 +174,7 @@ export const record = (
   );
 
 /**
- * Persist a batch of structured log entries.
+ * Persist a batch of structured log entries through {@link ProcessStore}.
  *
  * @public
  */
@@ -268,23 +233,6 @@ export const load = (
   });
 
 /**
- * Load entries from a scoped SQLite log store (no replay).
- *
- * @public
- */
-export const scopedLoad = (
-  sqliteFilename: string,
-  query: ProcessManagerLogQuery,
-): Effect.Effect<
-  ReadonlyArray<ProcessManagerLogEntry>,
-  ProcessManagerLogQueryError,
-  Scope.Scope
-> =>
-  mapSqliteLogQueryError(
-    load(query).pipe(Effect.provide(layer(sqliteFilename)), Effect.scoped),
-  );
-
-/**
  * Query persisted logs through {@link ProcessStore} and replay to the operator logger.
  *
  * @public
@@ -296,19 +244,6 @@ export const query = (
     const entries = yield* load(logQuery);
     yield* replayLogQueryResults(entries, logQuery.sort);
   });
-
-/**
- * Query a scoped SQLite log store and replay (operator `pm logs`).
- *
- * @public
- */
-export const scopedQuery = (
-  sqliteFilename: string,
-  logQuery: ProcessManagerLogQuery,
-): Effect.Effect<void, ProcessManagerLogQueryError, Scope.Scope> =>
-  mapSqliteLogQueryError(
-    query(logQuery).pipe(Effect.provide(layer(sqliteFilename)), Effect.scoped),
-  );
 
 type PendingLogAppend = {
   readonly entryId: string;
@@ -376,7 +311,7 @@ const makePersistingRelay = (
 const historyCapacity = 500;
 
 /**
- * Relay layer with in-memory tail plus batched {@link Logs.recordBatch} persistence.
+ * Relay layer with in-memory tail plus batched {@link recordBatch} into {@link ProcessStore}.
  *
  * @public
  */

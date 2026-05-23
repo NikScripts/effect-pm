@@ -6,6 +6,8 @@ import {
   ProcessManagerLogQueryError,
 } from "./processManagerLogQuery.js";
 import * as Logs from "./Logs.js";
+import { groupLogSqlitePath } from "./processManagerChildLaunch.js";
+import { ProcessStore } from "./ProcessStore.js";
 import { replayLogQueryResults } from "./processManagerLogQuery.js";
 import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
 import { resolveChildLaunchPaths } from "./processManagerChildLaunch.js";
@@ -64,9 +66,11 @@ export const queryGroupLogsForCatalog = (
       );
       const merged: ProcessManagerLogEntry[] = [];
       for (const group of groups) {
-        const filePath = Logs.sqlitePath(paths.logDirectory, group.id);
+        const sqliteFilename = groupLogSqlitePath(paths.logDirectory, group.id);
         const groupQuery = { ...query, groupId: group.id, limit: perGroupLimit };
-        const loaded = yield* Logs.scopedLoad(filePath, groupQuery).pipe(
+        const loaded = yield* Logs.load(groupQuery).pipe(
+          Effect.provide(ProcessStore.layerSqlite({ filename: sqliteFilename })),
+          Effect.scoped,
           Effect.option,
         );
         if (Option.isSome(loaded)) {
@@ -94,6 +98,9 @@ export const queryGroupLogsForCatalog = (
         reason: "Log history query requires a resolved group scope",
       });
     }
-    const filePath = Logs.sqlitePath(paths.logDirectory, groupId);
-    yield* Logs.scopedQuery(filePath, query);
+    const sqliteFilename = groupLogSqlitePath(paths.logDirectory, groupId);
+    yield* Logs.query(query).pipe(
+      Effect.provide(ProcessStore.layerSqlite({ filename: sqliteFilename })),
+      Effect.scoped,
+    );
   });

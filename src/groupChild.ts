@@ -4,6 +4,8 @@ import type { ProcessGroupEntry, ProcessGroupServiceDefinition } from "./Process
 import { resolveChildLaunchPaths } from "./processManagerChildLaunch.js";
 import { groupLocalRuntime } from "./processManagerGroupRuntime.js";
 import * as Logs from "./Logs.js";
+import { groupLogSqlitePath } from "./processManagerChildLaunch.js";
+import { ProcessStore } from "./ProcessStore.js";
 import { captureLoggerLayer } from "./processManagerLogRelay.js";
 
 /** @public */
@@ -90,13 +92,13 @@ export const runGroupChildProgram = (args: {
       });
     }
     const paths = yield* resolveChildLaunchPaths();
-    const logStorePath = Logs.sqlitePath(paths.logDirectory, args.groupId);
+    const logStorePath = groupLogSqlitePath(paths.logDirectory, args.groupId);
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     yield* fs.makeDirectory(path.dirname(logStorePath), { recursive: true }).pipe(Effect.orDie);
     const runtime = groupLocalRuntime(group, {
       controlBaseUrl: args.controlBaseUrl,
-      store: Logs.layer(logStorePath),
+      store: ProcessStore.layerSqlite({ filename: logStorePath }),
     });
     const envLayer = runtime.layer.pipe(
       Layer.provideMerge(Logs.relayLayer),

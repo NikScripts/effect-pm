@@ -6,11 +6,23 @@
  * implementation persists normalized runtime records and projects legacy
  * analytics events from those records for compatibility.
  *
- * Default implementation: {@link ProcessStore} service class with an in-memory store.
- * For durable storage, compose {@link ProcessStore.layerRuntimeStorage} with
- * {@link RuntimeStorage} adapters (SQLite via `@nikscripts/effect-pm/storage/sqlite`,
- * Prisma when ready). **Do not** use {@link ProcessStore.fileLayer} for new code — it is
- * legacy NDJSON compatibility only.
+ * ## Storage model (read this before adding persistence)
+ *
+ * There is **one** persistence stack:
+ *
+ * 1. **`RuntimeStorage`** — raw port over normalized {@link RuntimeRecord} rows
+ *    (create/read/update/delete). Swap adapters here (memory, SQLite, Prisma, …).
+ * 2. **`ProcessStore`** — module-facing client on top of `RuntimeStorage`: append/read
+ *    analytics events, queue resource helpers, runtime projections.
+ *
+ * **Do not** add parallel “log storage layers”, file-backed `ProcessStore` shortcuts for
+ * new code, or domain modules that compose SQLite under their own name. Provide
+ * `RuntimeStorage` (or `ProcessStore.layer` / {@link ProcessStore.layerRuntimeStorage} /
+ * {@link ProcessStore.layerSqlite}) at app/child launch; use {@link Logs} (and similar)
+ * only for encoding and querying event shapes through `ProcessStore`.
+ *
+ * Default in-memory: {@link ProcessStore.layer}. Durable local: {@link ProcessStore.layerSqlite}.
+ * **Legacy only:** {@link ProcessStore.fileLayer} (NDJSON, not `RuntimeStorage`).
  *
  * @module ProcessStore
  */
@@ -25,9 +37,12 @@ import {
   Layer,
   Option,
   Path,
+  Scope,
   Semaphore,
   Schema,
 } from "effect";
+import { SQLiteRuntimeStorage } from "./storage/sqlite/index.js";
+import type { SQLiteRuntimeStorageConfig } from "./storage/sqlite/public-types.js";
 import {
   And,
   Key,
@@ -1502,6 +1517,23 @@ export namespace ProcessStore {
    */
   export const layerRuntimeStorage: Layer.Layer<ProcessStore, never, RuntimeStorage> =
     Layer.effect(ProcessStore, makeProcessStoreFromRuntimeStorage);
+
+  /**
+   * `ProcessStore` backed by SQLite {@link RuntimeStorage} (canonical durable local stack).
+   *
+   * @remarks
+   * Equivalent to `Layer.provide(layerRuntimeStorage, SQLiteRuntimeStorage.layer(config))`.
+   * Use at composition root (group child, tests, examples)—not inside `Logs` or other
+   * domain modules.
+   *
+   * @public
+   */
+  export const layerSqlite = (
+    config: SQLiteRuntimeStorageConfig,
+  ): Layer.Layer<ProcessStore, never, Scope.Scope> =>
+    Layer.provide(layerRuntimeStorage, SQLiteRuntimeStorage.layer(config)).pipe(
+      Layer.orDie,
+    );
 
   /**
    * Raw `Effect` that materializes {@link ProcessStoreInterface} (no `Layer` wrapper).

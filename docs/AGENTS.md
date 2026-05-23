@@ -1,6 +1,6 @@
 # Agent guide — effect-pm (`@nikscripts/effect-pm`)
 
-Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [RESOURCE-API.md](./RESOURCE-API.md), [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) (schedule vs `ProcessGroup.start` / API gates), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
+Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any persistence change**), [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [RESOURCE-API.md](./RESOURCE-API.md), [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) (schedule vs `ProcessGroup.start` / API gates), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
 
 ---
 
@@ -15,7 +15,7 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 | `src/QueueResource.ts` | Priority queue resource factory. |
 | `src/ProcessStore.ts` | Analytics + lifecycle event append/read. |
 | `src/ControlService.ts` | Localhost HTTP JSON control API. |
-| `src/Logs.ts` | Structured log persistence (`Logs.record`, `Logs.query`, SQLite layer). |
+| `src/Logs.ts` | Log event helpers on `ProcessStore` only (`Logs.record`, `Logs.query`) — **no storage layers**. |
 | `src/processManagerLog*.ts` | Log capture relay, `pm watch` / `pm logs` CLI wiring. |
 | `src/processManagerGroupLogs*.ts` | HTTP stream client and interactive TTY watch. |
 | `src/ProcessManager.ts` | Typed remote client and endpoint service for group control contracts. |
@@ -39,6 +39,7 @@ Use this file **together with** [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS
 2. **`Process.effect` typing** — `Process<R>`: `effect` needs `R | ProcessStore`. Inlined `polling` / `schedule` on `Process.make` are merged into the supervisor so **`R` excludes those services** when present (overload-resolved in `Process.ts`).
 3. **ProcessGroup combined requirements** — `AllGroupProcessesRequirements` unions `Effect.Services<p["effect"]>` across processes; app must provide that environment when calling `startAll`, etc.
 4. **Control API security** — `ControlService` binds to **127.0.0.1** only.
+5. **Storage** — `RuntimeStorage` owns raw record I/O; `ProcessStore` is the only module-facing client. Compose adapters at launch (`ProcessStore.layerSqlite`, `ProcessStore.layerRuntimeStorage`, `ProcessStore.layer`). **Never** add parallel storage layers on `Logs` or other domain modules. See [STORAGE.md](./STORAGE.md).
 
 ---
 

@@ -14,7 +14,6 @@ import {
   RuntimeObserver,
   type AnalyticsEvent,
 } from "../../../src";
-import { SQLiteRuntimeStorage } from "../../../src/storage/sqlite";
 
 const platformLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
@@ -39,10 +38,7 @@ const program = Effect.gen(function* () {
   yield* fs.remove(sqlitePath).pipe(Effect.catch(() => Effect.void));
   yield* fs.makeDirectory(path.dirname(sqlitePath), { recursive: true }).pipe(Effect.orDie);
 
-  const storeLayer = Layer.provide(
-    ProcessStore.layerRuntimeStorage,
-    SQLiteRuntimeStorage.layer({ filename: sqlitePath }),
-  ).pipe(Layer.orDie);
+  const storeLayer = ProcessStore.layerSqlite({ filename: sqlitePath });
   const observerLayer = Layer.provide(RuntimeObserver.layerProcessStore, storeLayer);
   const live = Layer.mergeAll(storeLayer, observerLayer);
 

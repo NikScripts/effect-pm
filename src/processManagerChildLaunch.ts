@@ -222,5 +222,23 @@ export const resolveChildLaunchPaths = (
     return yield* pathsFromConfig(defaults);
   });
 
+const safeGroupStoreSegment = (groupId: string): string =>
+  groupId.replace(/[^a-zA-Z0-9._-]+/g, "_");
+
+/**
+ * On-disk SQLite file path for a group's {@link ProcessStore} (ops layout only).
+ *
+ * @remarks
+ * Not a storage API. Compose {@link ProcessStore.layerSqlite} with this path at
+ * child launch; use {@link Logs} for log event encoding/querying.
+ *
+ * @public
+ */
+export const groupLogSqlitePath = (
+  logDirectory: string,
+  groupId: string,
+): string =>
+  `${logDirectory.replace(/\/+$/, "")}/${safeGroupStoreSegment(groupId)}/logs.sqlite`;
+
 /** @public */
 export { buildChildLaunchConfig as buildLaunchConfig };
