@@ -74,6 +74,11 @@
       "import": "./dist/ControlService.mjs",
       "require": "./dist/ControlService.js"
     },
+    "./Logs": {
+      "types": "./dist/Logs.d.ts",
+      "import": "./dist/Logs.mjs",
+      "require": "./dist/Logs.js"
+    },
     "./storage/file": {
       "types": "./dist/storage/file.d.ts",
       "import": "./dist/storage/file.mjs",

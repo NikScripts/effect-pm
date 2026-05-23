@@ -18,7 +18,8 @@
  * **Do not** add parallel “log storage layers”, file-backed `ProcessStore` shortcuts for
  * new code, or domain modules that compose SQLite under their own name. Provide
  * `RuntimeStorage` (or `ProcessStore.layer` / {@link ProcessStore.layerRuntimeStorage} /
- * at app/child launch; use {@link ProcessStore.Logs} and {@link ProcessStore.QueueResource}.
+ * at app/child launch; use {@link ProcessStore.GroupLog} and {@link ProcessStore.QueueResource}.
+ * Capture/relay: `@nikscripts/effect-pm/Logs` (see `src/Logs.ts`).
  *
  * Default in-memory: {@link ProcessStore.layer}. Durable local:
  * `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`.
@@ -47,9 +48,8 @@ import {
   makeProcessStoreLogs,
   makeRecordedEvent as buildLogRecordedEvent,
   storeEventQueryFromLogQuery as logQueryToStoreEventQuery,
-  type ProcessStoreLogsApi,
+  type ProcessStoreGroupLogApi,
 } from "./ProcessStoreLogs.js";
-import { logsRelayLayer } from "./processManagerLogsRelay.js";
 import {
   And,
   Key,
@@ -486,7 +486,7 @@ export interface ProcessStoreInterface {
   appendBatch: (events: ReadonlyArray<AnalyticsEvent>) => Effect.Effect<void, ProcessStoreWriteError>;
   events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>;
   records: (query?: RuntimeRecordQuery) => Effect.Effect<RuntimeRecord[]>;
-  readonly Logs: ProcessStoreLogsApi;
+  readonly GroupLog: ProcessStoreGroupLogApi;
   readonly QueueResource: ProcessStoreQueueResourceApi;
   getProcessExecutions: (
     processId: string,
@@ -1303,7 +1303,7 @@ const makeRuntimeStorageProcessStore = (
         appendBatch: (batch) => Effect.forEach(batch, appendEvent, { discard: true }),
         events: readEvents,
       });
-      return { Logs: logs, QueueResource: queueStore };
+      return { GroupLog: logs, QueueResource: queueStore };
     })(),
 
     getProcessExecutions: (processId, opts) =>
@@ -1469,7 +1469,7 @@ const makeFileProcessStore = (
             ),
           events: (query) => semaphore.withPermits(1)(queryEvents(query)),
         });
-        return { Logs: logs, QueueResource: queueStore };
+        return { GroupLog: logs, QueueResource: queueStore };
       })(),
       getProcessExecutions: (processId, opts) =>
         semaphore.withPermits(1)(
@@ -1630,37 +1630,37 @@ export namespace ProcessStore {
   } as const;
 
   /**
-   * Structured log helpers (require {@link ProcessStore} in context).
+   * Structured group log persistence (require {@link ProcessStore} in context).
+   * For capture/relay use `@nikscripts/effect-pm/Logs`, not this namespace.
    *
    * @public
    */
-  export namespace Logs {
+  export namespace GroupLog {
     export const makeRecordedEvent = buildLogRecordedEvent;
     export const storeEventQueryFromLogQuery = logQueryToStoreEventQuery;
-    export const relayLayer = logsRelayLayer;
 
     export const record = (
       groupId: string,
       entryId: string,
       entry: ProcessManagerLogEntry,
     ): Effect.Effect<void, ProcessStoreWriteError, ProcessStore> =>
-      Effect.flatMap(ProcessStore, (store) => store.Logs.record(groupId, entryId, entry));
+      Effect.flatMap(ProcessStore, (store) => store.GroupLog.record(groupId, entryId, entry));
 
     export const recordBatch = (
       groupId: string,
       rows: ReadonlyArray<{ readonly entryId: string; readonly entry: ProcessManagerLogEntry }>,
     ): Effect.Effect<void, ProcessStoreWriteError, ProcessStore> =>
-      Effect.flatMap(ProcessStore, (store) => store.Logs.recordBatch(groupId, rows));
+      Effect.flatMap(ProcessStore, (store) => store.GroupLog.recordBatch(groupId, rows));
 
     export const load = (
       query: ProcessManagerLogQuery,
     ): Effect.Effect<ReadonlyArray<ProcessManagerLogEntry>, ProcessManagerLogQueryError, ProcessStore> =>
-      Effect.flatMap(ProcessStore, (store) => store.Logs.load(query));
+      Effect.flatMap(ProcessStore, (store) => store.GroupLog.load(query));
 
     export const query = (
       logQuery: ProcessManagerLogQuery,
     ): Effect.Effect<void, ProcessManagerLogQueryError, ProcessStore> =>
-      Effect.flatMap(ProcessStore, (store) => store.Logs.query(logQuery));
+      Effect.flatMap(ProcessStore, (store) => store.GroupLog.query(logQuery));
   }
 
   /**

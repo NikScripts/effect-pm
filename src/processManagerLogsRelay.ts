@@ -1,5 +1,5 @@
 /**
- * Process-manager log capture relay (persists via {@link ProcessStore.Logs}).
+ * Process-manager log capture relay (persists via {@link ProcessStore.GroupLog}).
  *
  * @module processManagerLogsRelay
  */
@@ -43,9 +43,9 @@ const makePersistingRelay = (
       if (batch.length === 0) {
         return;
       }
-      yield* storeOption.value.Logs.recordBatch(group.groupId, batch).pipe(
+      yield* storeOption.value.GroupLog.recordBatch(group.groupId, batch).pipe(
         Effect.catchCause((cause) =>
-          Effect.logWarning("ProcessStore.Logs.recordBatch failed").pipe(
+          Effect.logWarning("ProcessStore.GroupLog.recordBatch failed").pipe(
             Effect.annotateLogs("cause", Cause.pretty(cause)),
           ),
         ),
@@ -80,7 +80,7 @@ const makePersistingRelay = (
   });
 
 /**
- * Relay layer with in-memory tail plus batched flush into {@link ProcessStore.Logs}.
+ * Relay layer with in-memory tail plus batched flush into {@link ProcessStore.GroupLog}.
  *
  * @public
  */

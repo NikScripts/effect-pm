@@ -295,7 +295,7 @@ describe("RunResource.make (raw scoped)", () => {
           Ref.update(events, (items) => [...items, ...batch]),
         events: () => Effect.map(Ref.get(events), (items) => [...items]),
         records: () => Effect.succeed([]),
-        Logs: baseStore.Logs,
+        GroupLog: baseStore.GroupLog,
         QueueResource: baseStore.QueueResource,
         getProcessExecutions: () => Effect.succeed([]),
         getProcessLifecycle: () => Effect.succeed([]),

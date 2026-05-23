@@ -345,7 +345,7 @@ persisted through `ProcessStore` as `runtime.fact.recorded` analytics events.
 Memory, SQLite-backed `RuntimeStorage`, and Prisma reads support those generic
 events through `ProcessStore.events(query)`. Prefer
 `ProcessStore.layerRuntimeStorage` with `@nikscripts/effect-pm/storage/sqlite`
-for durable local storage. `ProcessStore.Logs` covers structured group log history.
+for durable local storage. `ProcessStore.GroupLog` covers structured group log history; capture/relay uses `@nikscripts/effect-pm/Logs`.
 `@nikscripts/effect-pm/storage/file` and `ProcessStore.fileLayer` are
 **legacy** NDJSON compatibility only — do not use for new code.
 State changes are persisted as `runtime.state.changed` events when

@@ -7,7 +7,7 @@
 | Layer | Role |
 |-------|------|
 | **`RuntimeStorage`** | Raw port over normalized `RuntimeRecord` rows. |
-| **`ProcessStore`** | Client API: `append`, `events`, `records`, plus **`ProcessStore.Logs`** and **`ProcessStore.QueueResource`**. |
+| **`ProcessStore`** | Client API: `append`, `events`, `records`, plus **`ProcessStore.GroupLog`** (target name; persistence only) and **`ProcessStore.QueueResource`**. |
 
 ```ts
 import { ProcessStore } from "@nikscripts/effect-pm/ProcessStore";
@@ -21,8 +21,8 @@ SQLite stays on `@nikscripts/effect-pm/storage/sqlite` so the core `ProcessStore
 ## Usage
 
 ```ts
-yield* ProcessStore.Logs.record("my-group", "1", entry);
-yield* ProcessStore.Logs.query({ groupId: "my-group", limit: 100, sort: "desc" });
+yield* ProcessStore.GroupLog.record("my-group", "1", entry);
+yield* ProcessStore.GroupLog.load({ groupId: "my-group", limit: 100, sort: "desc" });
 
 yield* ProcessStore.QueueResource.withQueue("email-queue", …);
 ```
@@ -30,12 +30,15 @@ yield* ProcessStore.QueueResource.withQueue("email-queue", …);
 Instance facets remain available when you already have the store:
 
 ```ts
-const { Logs, QueueResource } = yield* ProcessStore;
-yield* Logs.query({ … });
+const { GroupLog, QueueResource } = yield* ProcessStore;
+yield* GroupLog.load({ … });
 ```
+
+Capture and live tail (group child, `pm watch`) use **`@nikscripts/effect-pm/Logs`** (`captureLoggerLayer`, `relayLayer`). Durable history uses **`ProcessStore.GroupLog`**. See [ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md](./ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md).
 
 ## Do not
 
 - Add storage `Layer`s on domain modules.
 - Use `ProcessStore.file` / `storage/file` for new code.
-- Add separate `@nikscripts/effect-pm/Logs` or `QueueStore` packages (use `ProcessStore.Logs` / `ProcessStore.QueueResource`).
+- Put `relayLayer` or `captureLoggerLayer` on `ProcessStore` (use `Logs` subpath only).
+- Use two public names `Logs` (store facet + package export).

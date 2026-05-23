@@ -68,7 +68,7 @@ export const queryGroupLogsForCatalog = (
       for (const group of groups) {
         const sqliteFilename = groupLogSqlitePath(paths.logDirectory, group.id);
         const groupQuery = { ...query, groupId: group.id, limit: perGroupLimit };
-        const loaded = yield* ProcessStore.Logs.load(groupQuery).pipe(
+        const loaded = yield* ProcessStore.GroupLog.load(groupQuery).pipe(
           Effect.provide(layerProcessStore({ filename: sqliteFilename })),
           Effect.scoped,
           Effect.option,
@@ -99,7 +99,7 @@ export const queryGroupLogsForCatalog = (
       });
     }
     const sqliteFilename = groupLogSqlitePath(paths.logDirectory, groupId);
-    yield* ProcessStore.Logs.query(query).pipe(
+    yield* ProcessStore.GroupLog.query(query).pipe(
       Effect.provide(layerProcessStore({ filename: sqliteFilename })),
       Effect.scoped,
     );

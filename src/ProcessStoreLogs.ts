@@ -23,11 +23,11 @@ const isGroupLogEntryRecorded = (
   event.type === "group.log.entry" && event.entityType === "group";
 
 /**
- * Log operations exposed on {@link ProcessStoreInterface.Logs}.
+ * Log operations exposed on {@link ProcessStoreInterface.GroupLog}.
  *
  * @public
  */
-export interface ProcessStoreLogsApi {
+export interface ProcessStoreGroupLogApi {
   readonly record: (
     groupId: string,
     entryId: string,
@@ -191,7 +191,7 @@ export const makeProcessStoreLogs = (deps: {
   readonly append: (event: AnalyticsEvent) => Effect.Effect<void, ProcessStoreWriteError>;
   readonly appendBatch: (events: ReadonlyArray<AnalyticsEvent>) => Effect.Effect<void, ProcessStoreWriteError>;
   readonly events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>;
-}): ProcessStoreLogsApi => ({
+}): ProcessStoreGroupLogApi => ({
   record: (groupId, entryId, entry) =>
     deps.append(makeRecordedEvent(groupId, entryId, entry)),
 

@@ -1,6 +1,6 @@
 # Agent guide — effect-pm (`@nikscripts/effect-pm`)
 
-Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any persistence change**), [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [RESOURCE-API.md](./RESOURCE-API.md), [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) (schedule vs `ProcessGroup.start` / API gates), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
+Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any persistence change**), [ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md](./ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md) (audit + target `Logs` vs `ProcessStore.GroupLog` split), [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [RESOURCE-API.md](./RESOURCE-API.md), [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) (schedule vs `ProcessGroup.start` / API gates), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
 
 ---
 
@@ -15,8 +15,10 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/QueueResource.ts` | Priority queue resource factory. |
 | `src/ProcessStore.ts` | Analytics + lifecycle event append/read. |
 | `src/ControlService.ts` | Localhost HTTP JSON control API. |
-| `src/ProcessStoreLogs.ts` | `ProcessStoreInterface.Logs` facet implementation. |
-| `src/processManagerLogsRelay.ts` | `ProcessStore.Logs.relayLayer` for group child capture. |
+| `src/Logs.ts` | PM capture/relay only (`captureLoggerLayer`, `relayLayer`) — package subpath `@nikscripts/effect-pm/Logs`. |
+| `src/ProcessStoreLogs.ts` | Store persistence for `group.log.entry` (`ProcessStore.GroupLog` facet). |
+| `src/processManagerLogsRelay.ts` | Batched flush into `store.GroupLog` (imported by `Logs.ts`). |
+| `docs/ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md` | Full audit checklist and logs/storage naming contract. |
 | `src/processManagerLog*.ts` | Log capture relay, `pm watch` / `pm logs` CLI wiring. |
 | `src/processManagerGroupLogs*.ts` | HTTP stream client and interactive TTY watch. |
 | `src/ProcessManager.ts` | Typed remote client and endpoint service for group control contracts. |
@@ -40,7 +42,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 2. **`Process.effect` typing** — `Process<R>`: `effect` needs `R | ProcessStore`. Inlined `polling` / `schedule` on `Process.make` are merged into the supervisor so **`R` excludes those services** when present (overload-resolved in `Process.ts`).
 3. **ProcessGroup combined requirements** — `AllGroupProcessesRequirements` unions `Effect.Services<p["effect"]>` across processes; app must provide that environment when calling `startAll`, etc.
 4. **Control API security** — `ControlService` binds to **127.0.0.1** only.
-5. **Storage** — `RuntimeStorage` + `ProcessStore`; use **`ProcessStore.Logs`** and **`ProcessStore.QueueResource`** (merged namespace, not separate subpaths). SQLite: `layerProcessStore` from `storage/sqlite` only. See [STORAGE.md](./STORAGE.md).
+5. **Storage** — `RuntimeStorage` + `ProcessStore`; use **`ProcessStore.GroupLog`** (persistence only) and **`ProcessStore.QueueResource`**. Capture/relay: **`@nikscripts/effect-pm/Logs` only** — never `ProcessStore.Logs.relayLayer`. SQLite: `layerProcessStore` from `storage/sqlite`. See [STORAGE.md](./STORAGE.md) and [ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md](./ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md).
 
 ---
 

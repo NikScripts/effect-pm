@@ -42,11 +42,11 @@
  * **`@nikscripts/effect-pm/QueueResource`**,
  * **`@nikscripts/effect-pm/ProcessGroup`**,
  * **`@nikscripts/effect-pm/ProcessStore`**,
- * **`@nikscripts/effect-pm/ProcessManager`**, and
+ * **`@nikscripts/effect-pm/ProcessManager`**, **`@nikscripts/effect-pm/Logs`**, and
  * **`@nikscripts/effect-pm/ControlService`**.
  *
- * Log and queue helpers live on the merged {@link ProcessStore} namespace:
- * `ProcessStore.Logs`, `ProcessStore.QueueResource`. Storage is `layerProcessStore` from
+ * Group log persistence: `ProcessStore.GroupLog`. Capture/relay: `@nikscripts/effect-pm/Logs`.
+ * Queue helpers: `ProcessStore.QueueResource`. Storage is `layerProcessStore` from
  * `@nikscripts/effect-pm/storage/sqlite` or other `RuntimeStorage` + `ProcessStore` composition.
  *
  * Storage adapters use lower-case subpaths:
@@ -227,10 +227,13 @@ export {
 } from "./processManagerLogEntry.js";
 export {
   ProcessManagerLogRelay,
+  captureLogger,
   captureLoggerLayer,
+  relayLayer,
+  logsRelayLayer,
   replayLogEntry,
-  layer as processManagerLogRelayLayer,
-} from "./processManagerLogRelay.js";
+  relayOnlyLayer as processManagerLogRelayLayer,
+} from "./Logs.js";
 export { groupLocalRuntime } from "./processManagerGroupRuntime.js";
 export {
   groupLogEntryStream,
@@ -260,8 +263,7 @@ export {
   withQueueLogAnnotations,
   type ProcessManagerLogScope,
 } from "./processManagerLogContext.js";
-export type { ProcessStoreLogsApi } from "./ProcessStoreLogs.js";
-export { relayLayer, logsRelayLayer } from "./processManagerLogsRelay.js";
+export type { ProcessStoreGroupLogApi } from "./ProcessStoreLogs.js";
 export { makeRecordedEvent, storeEventQueryFromLogQuery } from "./ProcessStoreLogs.js";
 export { groupLogSqlitePath } from "./processManagerChildLaunch.js";
 export { queryGroupLogsForCatalog } from "./processManagerLogHistory.js";

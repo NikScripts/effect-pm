@@ -3,10 +3,9 @@ import { Data, Effect, FileSystem, Layer, Path } from "effect";
 import type { ProcessGroupEntry, ProcessGroupServiceDefinition } from "./ProcessGroup.js";
 import { resolveChildLaunchPaths } from "./processManagerChildLaunch.js";
 import { groupLocalRuntime } from "./processManagerGroupRuntime.js";
-import { ProcessStore } from "./ProcessStore.js";
+import { captureLoggerLayer, relayLayer } from "./Logs.js";
 import { groupLogSqlitePath } from "./processManagerChildLaunch.js";
 import { layerProcessStore } from "./storage/sqlite/index.js";
-import { captureLoggerLayer } from "./processManagerLogRelay.js";
 
 /** @public */
 export class GroupChildArgvError extends Data.TaggedError("GroupChildArgvError")<{
@@ -101,16 +100,11 @@ export const runGroupChildProgram = (args: {
       store: layerProcessStore({ filename: logStorePath }),
     });
     const envLayer = runtime.layer.pipe(
-      Layer.provideMerge(ProcessStore.Logs.relayLayer),
+      Layer.provideMerge(relayLayer),
       Layer.provideMerge(captureLoggerLayer),
     );
     return yield* Effect.never.pipe(
-      Effect.provide(
-        runtime.control.pipe(
-          Layer.provideMerge(ProcessStore.Logs.relayLayer),
-          Layer.provide(envLayer),
-        ),
-      ),
+      Effect.provide(runtime.control.pipe(Layer.provide(envLayer))),
       Effect.scoped,
     );
   });
