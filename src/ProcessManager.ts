@@ -10,7 +10,7 @@
  */
 
 import { Clock, Config, ConfigProvider, Console, Context, Data, DateTime, Duration, Effect, Exit, FileSystem, Layer, Logger, Option, Path, Schema, Scope } from "effect";
-import type { Terminal } from "effect/Terminal";
+import * as Terminal from "effect/Terminal";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import type { HttpClient } from "effect/unstable/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
@@ -1632,18 +1632,20 @@ const runQueueCommand = (
 const runStartCommand = (
   groups: ReadonlyArray<ConfigSource>,
   input: string,
-  options: Pick<ProcessManagerCliOptions, "endpointLabel">,
+  options: Pick<ProcessManagerCliOptions, "endpointLabel"> & { readonly noWatch: boolean },
 ): Effect.Effect<
   void,
   | ProcessManagerConnectionError
   | ProcessManagerRequestError
-  | ProcessManagerEndpointConfigError,
+  | ProcessManagerEndpointConfigError
+  | ProcessManagerGroupLogError,
   | ProcessManagerConnectionRegistry
   | HttpClient.HttpClient
   | ChildProcessSpawner.ChildProcessSpawner
   | FileSystem.FileSystem
   | Path.Path
   | Scope.Scope
+  | Terminal.Terminal
 > =>
   Effect.gen(function* () {
     const groupOption = yield* resolveGroupOption(groups, input);
@@ -1747,17 +1749,27 @@ const runVerifyCommand = (
 const runGroupStartCommand = (
   groups: ReadonlyArray<ConfigSource>,
   input: string,
-  options: Pick<ProcessManagerCliOptions, "endpointLabel">,
+  options: Pick<ProcessManagerCliOptions, "endpointLabel"> & { readonly noWatch: boolean },
 ): Effect.Effect<
   void,
-  ProcessManagerConnectionError | ProcessManagerEndpointConfigError,
-  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | HttpClient.HttpClient | Path.Path | Scope.Scope
+  ProcessManagerConnectionError | ProcessManagerEndpointConfigError | ProcessManagerGroupLogError,
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | HttpClient.HttpClient | Path.Path | Scope.Scope | Terminal.Terminal
 > =>
   Effect.gen(function* () {
     const state = yield* launchModuleEndpointForGroup(groups, input, options.endpointLabel);
     yield* Console.log(
       `OK group ${state.groupId} started with pid ${String(state.pid)} at ${state.controlBaseUrl}`,
     );
+    if (options.noWatch) {
+      return;
+    }
+    const scope = yield* resolveLogScopeForCli(groups, Option.some(input));
+    yield* watchGroupLogs({
+      controlBaseUrl: state.controlBaseUrl,
+      interactive: stdinIsInteractive(),
+      live: true,
+      scope: scope._tag === "all" ? undefined : scope,
+    });
   });
 
 
@@ -1795,7 +1807,7 @@ const runWatchCommand = (
 ): Effect.Effect<
   void,
   ProcessManagerConnectionError | ProcessManagerEndpointConfigError | ProcessManagerGroupLogError,
-  FileSystem.FileSystem | HttpClient.HttpClient | Path.Path | Terminal
+  FileSystem.FileSystem | HttpClient.HttpClient | Path.Path | Terminal.Terminal
 > =>
   Effect.gen(function* () {
     const scope = yield* resolveLogScopeForCli(groups, Option.some(input));
@@ -1966,6 +1978,10 @@ const makeCli = <
   const linesOption = Flag.integer("lines").pipe(Flag.withAlias("n"), Flag.withDefault(100));
   const snapshotOption = Flag.boolean("snapshot").pipe(Flag.withDefault(false));
   const noInteractiveOption = Flag.boolean("no-interactive").pipe(Flag.withDefault(false));
+  const noWatchOption = Flag.boolean("no-watch").pipe(
+    Flag.withDescription("Start the group without tailing live logs"),
+    Flag.withDefault(false),
+  );
   const fromOption = Flag.string("from").pipe(Flag.optional);
   const toOption = Flag.string("to").pipe(Flag.optional);
   const afterOption = Flag.string("after").pipe(Flag.optional);
@@ -2044,8 +2060,14 @@ const makeCli = <
       watchCommand,
       logsCommand,
       statusCommand,
-      Command.make("start", { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
-        runStartCommand(groups, target, { endpointLabel: endpointLabelFrom(endpointLabel) }),
+      Command.make(
+        "start",
+        { target, endpointLabel: endpointLabelOption, noWatch: noWatchOption },
+        ({ target, endpointLabel, noWatch }) =>
+          runStartCommand(groups, target, {
+            endpointLabel: endpointLabelFrom(endpointLabel),
+            noWatch,
+          }),
       ),
       Command.make("stop", { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
         runStopCommand(groups, target, { endpointLabel: endpointLabelFrom(endpointLabel) }),

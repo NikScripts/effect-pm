@@ -138,7 +138,7 @@ For durable adapter work, start with
 TSDoc on each module repeats details; this guide stays **concept-shaped**.
 
 `RunResource` publishes runtime facts and `RunResourceState` transitions through
-the optional `RuntimeObserver` service. `RuntimeObserver.layerProcessStore`
+the optional `RuntimeObserver` service. `RuntimeObserver.layerFromProcessStore`
 persists facts as `runtime.fact.recorded` events and state changes as
 `runtime.state.changed` events. Scoped listener layers are implemented; stream
 helpers remain planned.

@@ -2,7 +2,7 @@
 
 This document records a critical review of the current `@nikscripts/effect-pm` storage and logging design, plus **target rules** for fixing naming and dependency direction. It supersedes informal chat summaries for these topics.
 
-**Related:** [`STORAGE.md`](./STORAGE.md) (storage invariants), [`docs/AGENTS.md`](./AGENTS.md) (agent map).
+**Related:** [`STORAGE.md`](./STORAGE.md) (storage invariants), [`STORAGE-INTEGRATION-INVENTORY.md`](./STORAGE-INTEGRATION-INVENTORY.md) (**every module** + parallel agent handoff), [`docs/AGENTS.md`](./AGENTS.md) (agent map).
 
 ---
 
@@ -42,7 +42,7 @@ Two symbols must not share one name:
 | `layerProcessStore` | `storage/sqlite` | SQLite `RuntimeStorage` + `ProcessStore` |
 | `RuntimeObserver.layerProcessStore` | `RuntimeState.ts` | `RuntimeObserver` backed by an existing `ProcessStore` |
 
-Rename one of these in a follow-up (e.g. `RuntimeObserver.layerFromProcessStore` vs `SQLiteRuntimeStorage.layerProcessStore`).
+**Resolved:** `RuntimeObserver.layerFromProcessStore` (deprecated alias `RuntimeObserver.layerProcessStore`). Sqlite keeps `layerProcessStore` on `@nikscripts/effect-pm/storage/sqlite`.
 
 ---
 
@@ -203,8 +203,8 @@ Use this as the PR sequence; each item should have tests/docs updated in the sam
 - [x] **L5** — `groupChild.ts` composes `relayLayer` + `captureLoggerLayer` once on `envLayer`.
 - [x] **L6** — Root `index.ts` re-exports capture/relay from `./Logs.js`.
 - [x] **L7** — `STORAGE.md`, `PROCESS-API.md`, `PACKAGE-GUIDE.md`, `examples/README.md` updated.
-- [ ] **L8** — Add integration test: capture → relay → SQLite → `ProcessStore.GroupLog.load`.
-- [ ] **L9** — Rename conflicting `RuntimeObserver.layerProcessStore` or sqlite `layerProcessStore`.
+- [x] **L8** — Integration test: capture → relay → SQLite → `ProcessStore.GroupLog.load` (`test/process-manager-log-pipeline.test.ts`).
+- [x] **L9** — `RuntimeObserver.layerFromProcessStore` (+ deprecated alias).
 - [ ] **L10** — Changeset (user approval) for public API rename `Logs` → `GroupLog` on store and restored `./Logs` subpath.
 
 ---

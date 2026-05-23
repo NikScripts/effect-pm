@@ -334,7 +334,7 @@ describe("RunResource.make (raw scoped)", () => {
       }).pipe(
         Effect.provide(
           Layer.provide(
-            RuntimeObserver.layerProcessStore,
+            RuntimeObserver.layerFromProcessStore,
             Layer.succeed(ProcessStore, store),
           ),
         ),

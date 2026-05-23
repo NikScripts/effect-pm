@@ -246,12 +246,14 @@ Remote queue `add`, `enqueue`, `prioritize`, and `defer` remain unsupported.
 as `Process`, `QueueResource`, `RunResource`, `HttpApiResource`, and
 `ProcessGroup` should depend on `ProcessStore`, not on storage adapters.
 
-`RuntimeStorage` is the planned generic swappable persistence port underneath
-`ProcessStore`. Today's memory, file-backed, and Prisma adapters still provide
-`ProcessStore` directly; when `RuntimeStorage` is extracted, adapters should
-persist generic records rather than grow module-specific methods. `ProcessStore`
-owns conversion from module-specific operations into generic `RuntimeFact` and
-`RuntimeStateChange` records, plus redaction and projections.
+`RuntimeStorage` is the generic swappable persistence port underneath
+`ProcessStore` (see `src/RuntimeStorage.ts` and
+[RUNTIME-STORAGE-ADAPTER-GUIDE.md](./RUNTIME-STORAGE-ADAPTER-GUIDE.md)). The
+default in-memory store and the SQLite adapter (`@nikscripts/effect-pm/storage/sqlite`,
+`layerProcessStore`) both use `ProcessStore.layerRuntimeStorage`. Adapters persist
+normalized `RuntimeRecord` rows; `ProcessStore` facets (`GroupLog`, `QueueResource`,
+`runtime` projections) map module operations onto those rows. The optional Prisma
+export is not a full store yet (`PrismaProcessStoreUnavailableError` on read paths).
 
 The current bridge writes runtime facts and state changes through today's
 `ProcessStore` analytics event envelope as `runtime.fact.recorded` and
@@ -285,7 +287,7 @@ const filePath = ".tmp/effect-pm/events.ndjson";
 const platform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 const storeLayer = fileLayer(filePath);
 const observerLayer = Layer.provide(
-  RuntimeObserver.layerProcessStore,
+  RuntimeObserver.layerFromProcessStore,
   storeLayer,
 );
 
@@ -326,7 +328,8 @@ use `@nikscripts/effect-pm/storage/sqlite` and compose
 | `RuntimeObserver` | Optional service for publishing runtime facts and state changes. |
 | `RuntimeObserver.publishFact(fact)` | Publishes a fact when the service is present; otherwise no-ops. |
 | `RuntimeObserver.publishStateChange(change)` | Publishes a state transition when the service is present; otherwise no-ops. |
-| `RuntimeObserver.layerProcessStore` | Observer layer that persists runtime facts and state changes through `ProcessStore`. |
+| `RuntimeObserver.layerFromProcessStore` | Observer layer that persists runtime facts and state changes through `ProcessStore`. |
+| `RuntimeObserver.layerProcessStore` | **Deprecated** alias of `layerFromProcessStore` (name collided with sqlite `layerProcessStore`). |
 | `RuntimeObserver.layerListeners(listeners)` | Observer layer that forwards facts/state changes to scoped listeners and isolates listener failures. |
 | `ProcessStore.runtime.facts(query)` | Generic projection over persisted `runtime.fact.recorded` events. |
 | `ProcessStore.runtime.stateHistory({ ref, opts })` | Generic projection over persisted `runtime.state.changed` events. |
@@ -340,16 +343,16 @@ interrupted runs when `RuntimeObserver` is provided. Observation is optional:
 when no `RuntimeObserver` service is in the environment, publish helpers no-op
 and the gated effect behavior is unchanged.
 
-When `RuntimeObserver.layerProcessStore` is provided, runtime facts are
+When `RuntimeObserver.layerFromProcessStore` is provided, runtime facts are
 persisted through `ProcessStore` as `runtime.fact.recorded` analytics events.
-Memory, SQLite-backed `RuntimeStorage`, and Prisma reads support those generic
-events through `ProcessStore.events(query)`. Prefer
-`ProcessStore.layerRuntimeStorage` with `@nikscripts/effect-pm/storage/sqlite`
-for durable local storage. `ProcessStore.GroupLog` covers structured group log history; capture/relay uses `@nikscripts/effect-pm/Logs`.
-`@nikscripts/effect-pm/storage/file` and `ProcessStore.fileLayer` are
-**legacy** NDJSON compatibility only — do not use for new code.
+Memory and SQLite-backed `RuntimeStorage` support those generic events through
+`ProcessStore.events(query)`. Prefer `layerProcessStore` from
+`@nikscripts/effect-pm/storage/sqlite` for durable local storage.
+`ProcessStore.GroupLog` covers structured group log history; capture/relay uses
+`@nikscripts/effect-pm/Logs`. `@nikscripts/effect-pm/storage/file` and
+`ProcessStore.fileLayer` are **legacy** NDJSON compatibility only — do not use for new code.
 State changes are persisted as `runtime.state.changed` events when
-`RuntimeObserver.layerProcessStore` is provided. `ProcessStore.runtime.stateHistory(...)`
+`RuntimeObserver.layerFromProcessStore` is provided. `ProcessStore.runtime.stateHistory(...)`
 and `ProcessStore.runtime.latestState(...)` derive state projections from the
 same generic event stream.
 `RuntimeObserver.layerListeners(...)` can observe both facts and state changes

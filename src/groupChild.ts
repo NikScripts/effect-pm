@@ -99,6 +99,7 @@ export const runGroupChildProgram = (args: {
       controlBaseUrl: args.controlBaseUrl,
       store: layerProcessStore({ filename: logStorePath }),
     });
+    // Minimal child stack (H2): sqlite ProcessStore + relay + capture once on envLayer.
     const envLayer = runtime.layer.pipe(
       Layer.provideMerge(relayLayer),
       Layer.provideMerge(captureLoggerLayer),

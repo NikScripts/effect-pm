@@ -1,6 +1,6 @@
 # Agent guide — effect-pm (`@nikscripts/effect-pm`)
 
-Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any persistence change**), [ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md](./ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md) (audit + target `Logs` vs `ProcessStore.GroupLog` split), [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [RESOURCE-API.md](./RESOURCE-API.md), [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) (schedule vs `ProcessGroup.start` / API gates), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
+Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any persistence change**), [STORAGE-INTEGRATION-INVENTORY.md](./STORAGE-INTEGRATION-INVENTORY.md) (**all modules** needing optional `ProcessStore` + agent handoff), [ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md](./ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md) (audit + target `Logs` vs `ProcessStore.GroupLog` split), [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [RESOURCE-API.md](./RESOURCE-API.md), [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) (schedule vs `ProcessGroup.start` / API gates), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
 
 ---
 

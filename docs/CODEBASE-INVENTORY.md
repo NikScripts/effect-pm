@@ -645,7 +645,7 @@ and removes stale run state when the process no longer exists.
 
 - **Process** supervisor — executions + lifecycle when store present.
 - **QueueResource** — item + lifecycle events when store present.
-- **RuntimeObserver.layerProcessStore** — runtime facts/state as analytics events.
+- **RuntimeObserver.layerFromProcessStore** — runtime facts/state as analytics events.
 
 ### Remote
 
@@ -667,7 +667,7 @@ and removes stale run state when the process no longer exists.
 
 ### Layer forms
 
-- **`RuntimeObserver.layerProcessStore`** — persist as `runtime.fact.recorded` / `runtime.state.changed` via ProcessStore.
+- **`RuntimeObserver.layerFromProcessStore`** — persist as `runtime.fact.recorded` / `runtime.state.changed` via ProcessStore.
 - **`RuntimeObserver.layerListeners(listeners[])`** — fan-out; listener failures **ignored**; no persistence.
 
 ### Listener shape (`RuntimeObserverListener`)

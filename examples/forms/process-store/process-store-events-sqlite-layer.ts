@@ -40,7 +40,7 @@ const program = Effect.gen(function* () {
   yield* fs.makeDirectory(path.dirname(sqlitePath), { recursive: true }).pipe(Effect.orDie);
 
   const storeLayer = layerProcessStore({ filename: sqlitePath });
-  const observerLayer = Layer.provide(RuntimeObserver.layerProcessStore, storeLayer);
+  const observerLayer = Layer.provide(RuntimeObserver.layerFromProcessStore, storeLayer);
   const live = Layer.mergeAll(storeLayer, observerLayer);
 
   yield* Effect.gen(function* () {

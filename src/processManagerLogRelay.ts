@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Logger, PubSub, Ref, Stream } from "effect";
+import { Context, Effect, Layer, Logger, Option, PubSub, Ref, Stream } from "effect";
 import * as LogLevel from "effect/LogLevel";
 import { CurrentLogAnnotations, CurrentLogSpans } from "effect/References";
 import {
@@ -66,35 +66,44 @@ export const layer = Layer.effect(
 /**
  * Logger that captures pure {@link ProcessManagerLogEntry} values into {@link ProcessManagerLogRelay}.
  *
+ * @remarks
+ * Effect v4 invokes `log` synchronously and does not run effect-returning loggers.
+ * Publish is scheduled on the logging fiber's dispatcher with its context.
+ *
  * @public
  */
-export const captureLogger: Logger.Logger<unknown, Effect.Effect<void, never, ProcessManagerLogRelay>> =
-  Logger.make((options) =>
-    Effect.gen(function* () {
-      const relay = yield* ProcessManagerLogRelay;
-      const annotations = options.fiber.getRef(CurrentLogAnnotations);
-      const spans = options.fiber.getRef(CurrentLogSpans);
-      yield* relay.publish(
-        processManagerLogEntryFromLoggerOptions({
-          message: options.message,
-          logLevel: options.logLevel,
-          cause: options.cause,
-          date: options.date,
-          annotations,
-          spans,
-        }),
-      );
-    }),
+export const captureLogger: Logger.Logger<unknown, void> = Logger.make((options) => {
+  const relayOption = Context.getOption(ProcessManagerLogRelay)(options.fiber.context);
+  if (Option.isNone(relayOption)) {
+    return;
+  }
+  const relay = relayOption.value;
+  const entry = processManagerLogEntryFromLoggerOptions({
+    message: options.message,
+    logLevel: options.logLevel,
+    cause: options.cause,
+    date: options.date,
+    annotations: options.fiber.getRef(CurrentLogAnnotations),
+    spans: options.fiber.getRef(CurrentLogSpans),
+  });
+  const context = Context.add(options.fiber.context, ProcessManagerLogRelay, relay);
+  options.fiber.currentDispatcher.scheduleTask(
+    () => {
+      Effect.runForkWith(context)(relay.publish(entry));
+    },
+    0,
   );
+});
 
 /**
  * Install capture-only logging in the child process (no local console formatting).
  *
  * @public
  */
-export const captureLoggerLayer: Layer.Layer<never> = Logger.layer([captureLogger], {
-  mergeWithExisting: false,
-});
+export const captureLoggerLayer: Layer.Layer<never, never, ProcessManagerLogRelay> = Logger.layer(
+  [captureLogger],
+  { mergeWithExisting: false },
+);
 
 const logAtLevel = (
   level: LogLevel.LogLevel,

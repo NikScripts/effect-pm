@@ -927,9 +927,9 @@ describe("ProcessManager", () => {
         yield* fs.remove(runRoot, { recursive: true, force: true });
 
         const cli = ProcessManager.cli([ModuleEndpointGroup] as const);
-        yield* cli(["start", "module-endpoint-group"]);
+        yield* cli(["start", "module-endpoint-group", "--no-watch"]);
         yield* cli(["status", "module-endpoint-process"]);
-        yield* cli(["start", "module-endpoint-group"]);
+        yield* cli(["start", "module-endpoint-group", "--no-watch"]);
 
         const stateText = yield* fs.readFileString(
           `${runDirectory}/test__module-endpoint-group.json`,

@@ -24,26 +24,22 @@ type PendingLogAppend = {
 
 const makePersistingRelay = (
   base: ProcessManagerLogRelayService,
-): Effect.Effect<
-  ProcessManagerLogRelayService,
-  never,
-  ProcessGroupLogContext | ProcessStore | Scope.Scope
-> =>
+): Effect.Effect<ProcessManagerLogRelayService, never, Scope.Scope> =>
   Effect.gen(function* () {
-    const group = yield* ProcessGroupLogContext;
-    const storeOption = yield* Effect.serviceOption(ProcessStore);
     const entryCounter = yield* Ref.make(0);
     const buffer = yield* Ref.make<ReadonlyArray<PendingLogAppend>>([]);
 
     const flush = Effect.gen(function* () {
-      if (Option.isNone(storeOption)) {
+      const storeOption = yield* Effect.serviceOption(ProcessStore);
+      const groupOption = yield* Effect.serviceOption(ProcessGroupLogContext);
+      if (Option.isNone(storeOption) || Option.isNone(groupOption)) {
         return;
       }
       const batch = yield* Ref.getAndSet(buffer, []);
       if (batch.length === 0) {
         return;
       }
-      yield* storeOption.value.GroupLog.recordBatch(group.groupId, batch).pipe(
+      yield* storeOption.value.GroupLog.recordBatch(groupOption.value.groupId, batch).pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning("ProcessStore.GroupLog.recordBatch failed").pipe(
             Effect.annotateLogs("cause", Cause.pretty(cause)),
@@ -57,6 +53,7 @@ const makePersistingRelay = (
 
     const queueAppend = (entry: ProcessManagerLogEntry): Effect.Effect<void> =>
       Effect.gen(function* () {
+        const storeOption = yield* Effect.serviceOption(ProcessStore);
         if (Option.isNone(storeOption)) {
           return;
         }
@@ -73,6 +70,7 @@ const makePersistingRelay = (
         Effect.gen(function* () {
           yield* base.publish(entry);
           yield* queueAppend(entry);
+          yield* flush;
         }),
       snapshot: base.snapshot,
       stream: base.stream,
@@ -84,11 +82,8 @@ const makePersistingRelay = (
  *
  * @public
  */
-export const logsRelayLayer: Layer.Layer<
-  ProcessManagerLogRelay,
-  never,
-  ProcessGroupLogContext | ProcessStore
-> = Layer.effect(
+export const logsRelayLayer: Layer.Layer<ProcessManagerLogRelay, never, Scope.Scope> =
+  Layer.effect(
   ProcessManagerLogRelay,
   Effect.gen(function* () {
     const pubsub = yield* PubSub.unbounded<ProcessManagerLogEntry>();

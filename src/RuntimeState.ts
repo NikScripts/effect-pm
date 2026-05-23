@@ -184,7 +184,14 @@ export namespace RuntimeObserver {
    *
    * @public
    */
-  export const layerProcessStore: Layer.Layer<RuntimeObserver, never, ProcessStore> =
+  /**
+   * Observer layer that persists facts and state changes through an existing
+   * {@link ProcessStore}. Not the same symbol as sqlite {@link layerProcessStore}
+   * on `@nikscripts/effect-pm/storage/sqlite`.
+   *
+   * @public
+   */
+  export const layerFromProcessStore: Layer.Layer<RuntimeObserver, never, ProcessStore> =
     Layer.effect(
       RuntimeObserver,
       Effect.gen(function* () {
@@ -203,6 +210,15 @@ export namespace RuntimeObserver {
         };
       }),
     );
+
+  /**
+   * @deprecated Use {@link layerFromProcessStore}. Kept for compatibility; name
+   * collided with sqlite `layerProcessStore`.
+   *
+   * @public
+   */
+  export const layerProcessStore: Layer.Layer<RuntimeObserver, never, ProcessStore> =
+    layerFromProcessStore;
 
   /**
    * Observer layer that forwards facts and state changes to scoped listeners.

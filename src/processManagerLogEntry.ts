@@ -68,6 +68,12 @@ const encodeAnnotationValue = (value: unknown): string => {
 };
 
 const encodeMessage = (message: unknown): string => {
+  if (Array.isArray(message)) {
+    if (message.length === 1) {
+      return encodeMessage(message[0]);
+    }
+    return message.map((part) => encodeMessage(part)).join(" ");
+  }
   if (typeof message === "string") {
     return message;
   }

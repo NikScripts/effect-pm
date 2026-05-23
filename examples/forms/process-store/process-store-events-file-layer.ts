@@ -43,7 +43,7 @@ const program = Effect.gen(function* () {
 
   const storeLayer = fileLayer(filePath);
   const observerLayer = Layer.provide(
-    RuntimeObserver.layerProcessStore,
+    RuntimeObserver.layerFromProcessStore,
     storeLayer,
   );
   const live = Layer.mergeAll(storeLayer, observerLayer);
