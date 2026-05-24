@@ -1,58 +1,40 @@
 /**
  * **ProcessStore** — runtime record storage facade for processes and resources.
  *
- * @remarks
- * `ProcessStore` is the module-facing storage facade. The default in-memory
- * implementation persists normalized runtime records and projects legacy
- * analytics events from those records for compatibility.
- *
- * ## Storage model (read this before adding persistence)
- *
- * There is **one** persistence stack:
- *
- * 1. **`RuntimeStorage`** — raw port over normalized {@link RuntimeRecord} rows
- *    (create/read/update/delete). Swap adapters here (memory, SQLite, Prisma, …).
- * 2. **`ProcessStore`** — module-facing client on top of `RuntimeStorage`: append/read
- *    analytics events, runtime projections.
- *
- * Facet services (separate context tags, composable via {@link ProcessStore.layer}):
- * - {@link ProcessStoreGroupLog} — structured `group.log.entry` persistence
- * - {@link ProcessStoreQueueResource} — queue semantic runtime facts
- *
- * **Do not** add parallel “log storage layers”, file-backed `ProcessStore` shortcuts for
- * new code, or domain modules that compose SQLite under their own name. Provide
- * `RuntimeStorage` (or `ProcessStore.layer` / {@link ProcessStore.layerRuntimeStorage}) at
- * app/child launch; use {@link ProcessStoreGroupLog} and {@link ProcessStoreQueueResource}
- * for facet-specific helpers.
- * Capture/relay: `@nikscripts/effect-pm/Logs` (see `src/Logs.ts`).
- *
- * Default in-memory: {@link ProcessStore.layer}. Durable local:
- * `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`.
- * **Legacy only:** {@link ProcessStore.fileLayer} (NDJSON, not `RuntimeStorage`).
- *
  * @module ProcessStore
  */
 
-import { Context, Effect, Layer, Option } from "effect";
+import type { Effect } from "effect";
+import { Context, Effect as Effect_, Layer, Option } from "effect";
 import {
   makeFileProcessStore,
   makeInMemoryProcessStore,
   makeProcessStoreFromRuntimeStorage,
-} from "./ProcessStoreComposite";
-import { ProcessStoreGroupLog } from "./ProcessStoreGroupLog";
-import { ProcessStoreQueueResource } from "./ProcessStoreQueueResource";
+} from "./internal/store/composite";
+import { ProcessStoreGroupLog } from "./internal/store/groupLog";
+import type { ProcessStoreGroupLogApi } from "./internal/store/groupLog";
+import { ProcessStoreQueueResource } from "./internal/store/queueResource";
+import type { ProcessStoreQueueResourceApi } from "./internal/store/queueResource";
 import {
   runtimeFactStoreQuery,
   runtimeFactsFromEvents,
   runtimeStateChangesFromEvents,
   runtimeStateStoreQuery,
-} from "./processStoreSpine";
+} from "./internal/store/spine";
 import type {
-  ProcessStoreInterface,
+  AnalyticsEvent,
+  ProcessExecutionCompletedEvent,
+  ProcessLifecycleChangedEvent,
+  ProcessStoreWriteError,
   QueryOpts,
+  QueueItemCompletedEvent,
+  QueueLifecycleChangedEvent,
   RuntimeFactQuery,
   RuntimeStateHistoryQuery,
-} from "./ProcessStoreTypes";
+  StoreEventQuery,
+} from "./ProcessStoreEvent";
+import type { RuntimeRecordQuery } from "./Query";
+import type { RuntimeRecord } from "./RuntimeStorage";
 import type { RuntimeFact, RuntimeRef, RuntimeStateBase, RuntimeStateChange } from "./RuntimeState";
 import { RuntimeStorage } from "./RuntimeStorage";
 
@@ -73,15 +55,18 @@ export type {
   RuntimeStateChangedEvent,
   GroupLogEntryRecordedEvent,
   AnalyticsEvent,
-  ProcessStoreInterface,
   ProcessStoreWriteError,
-} from "./ProcessStoreTypes";
+  JsonValue,
+  EffectPmEventRow,
+} from "./ProcessStoreEvent";
 
 export {
   ProcessStoreDuplicateRecordError,
   ProcessStoreReadonlyRecordError,
   isGroupLogEntryRecorded,
-} from "./ProcessStoreTypes";
+} from "./ProcessStoreEvent";
+
+export { ProcessStoreQueueResourceContextError } from "./internal/store/queueResource";
 
 export type {
   ProcessStoreQueueResourceApi,
@@ -93,25 +78,42 @@ export type {
   ProcessStoreQueueResourceLifecycleInput,
   ProcessStoreQueueResourceLifecycleTag,
   ProcessStoreQueueResourcePriority,
-} from "./ProcessStoreQueueResource";
+} from "./internal/store/queueResource";
 
-export {
-  ProcessStoreQueueResource,
-  ProcessStoreQueueResourceContextError,
-} from "./ProcessStoreQueueResource";
-
-export type { ProcessStoreGroupLogApi } from "./ProcessStoreGroupLog";
-
-export {
-  ProcessStoreGroupLog,
-  makeRecordedEvent,
-  storeEventQueryFromLogQuery,
-  makeProcessStoreGroupLog,
-  makeProcessStoreLogs,
-} from "./ProcessStoreGroupLog";
+export type { ProcessStoreGroupLogApi } from "./internal/store/groupLog";
 
 /**
- * Context tag for {@link ProcessStoreInterface} (in-memory implementation by default).
+ * Storage port implemented by the in-memory service and durable adapters.
+ *
+ * @public
+ */
+export interface ProcessStoreInterface {
+  append: (event: AnalyticsEvent) => Effect.Effect<void, ProcessStoreWriteError>;
+  appendBatch: (events: ReadonlyArray<AnalyticsEvent>) => Effect.Effect<void, ProcessStoreWriteError>;
+  events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>;
+  records: (query?: RuntimeRecordQuery) => Effect.Effect<RuntimeRecord[]>;
+  readonly GroupLog: ProcessStoreGroupLogApi;
+  readonly QueueResource: ProcessStoreQueueResourceApi;
+  getProcessExecutions: (
+    processId: string,
+    opts?: QueryOpts,
+  ) => Effect.Effect<ProcessExecutionCompletedEvent[]>;
+  getProcessLifecycle: (
+    processId: string,
+    opts?: QueryOpts,
+  ) => Effect.Effect<ProcessLifecycleChangedEvent[]>;
+  getQueueItemCompletions: (
+    queueId: string,
+    opts?: QueryOpts,
+  ) => Effect.Effect<QueueItemCompletedEvent[]>;
+  getQueueLifecycle: (
+    queueId: string,
+    opts?: QueryOpts,
+  ) => Effect.Effect<QueueLifecycleChangedEvent[]>;
+}
+
+/**
+ * Context tag for {@link ProcessStoreInterface}.
  *
  * @public
  */
@@ -130,7 +132,7 @@ export namespace ProcessStore {
 
   /**
    * `Layer` that provides {@link ProcessStore} from injected {@link RuntimeStorage}
-   * plus facet services.
+   * plus internal facet services used by {@link QueueResource} and log relay.
    *
    * @public
    */
@@ -143,66 +145,45 @@ export namespace ProcessStore {
     Layer.provide(Layer.effect(ProcessStore, makeProcessStoreFromRuntimeStorage), facetLayers),
   );
 
-  /**
-   * `Layer` that provides {@link ProcessStore}, {@link ProcessStoreGroupLog}, and
-   * {@link ProcessStoreQueueResource} backed by in-memory {@link RuntimeStorage}.
-   *
-   * @public
-   */
+  /** @public */
   export const layer = Layer.provide(ProcessStore.layerRuntimeStorage, RuntimeStorage.layer);
 
-  /**
-   * Raw `Effect` that materializes {@link ProcessStoreInterface} (no `Layer` wrapper).
-   * Useful in tests that call `Effect.provideService` manually.
-   *
-   * @public
-   */
+  /** @public */
   export const memory = makeInMemoryProcessStore;
 
   /**
-   * Raw `Effect` that materializes a file-backed {@link ProcessStoreInterface}.
-   *
-   * @deprecated **Do not use for new code.** Legacy append-only NDJSON compatibility
-   * only. Prefer {@link ProcessStore.layerRuntimeStorage} with SQLite or Prisma adapters.
-   *
+   * @deprecated Legacy NDJSON only. Prefer {@link ProcessStore.layerRuntimeStorage} with SQLite.
    * @public
    */
   export const file = makeFileProcessStore;
 
   /**
-   * `Layer` that provides {@link ProcessStore} backed by an append-only NDJSON file.
-   *
-   * @deprecated **Do not use for new code.** See {@link ProcessStore.file}.
-   *
+   * @deprecated See {@link ProcessStore.file}.
    * @public
    */
   export const fileLayer = (filePath: string) =>
     Layer.effect(ProcessStore, makeFileProcessStore(filePath));
 
-  /**
-   * Generic runtime projections derived from {@link ProcessStoreInterface.events}.
-   *
-   * @public
-   */
+  /** @public */
   export const runtime = {
-    facts: (query?: RuntimeFactQuery): Effect.Effect<RuntimeFact[], never, ProcessStore> =>
-      Effect.gen(function* () {
+    facts: (query?: RuntimeFactQuery): Effect_.Effect<RuntimeFact[], never, ProcessStore> =>
+      Effect_.gen(function* () {
         const store = yield* ProcessStore;
         const events = yield* store.events(runtimeFactStoreQuery(query));
         return runtimeFactsFromEvents(events, query);
       }),
     stateHistory: (
       query: RuntimeStateHistoryQuery,
-    ): Effect.Effect<RuntimeStateChange[], never, ProcessStore> =>
-      Effect.gen(function* () {
+    ): Effect_.Effect<RuntimeStateChange[], never, ProcessStore> =>
+      Effect_.gen(function* () {
         const store = yield* ProcessStore;
         const events = yield* store.events(runtimeStateStoreQuery(query));
         return runtimeStateChangesFromEvents(events);
       }),
     latestState: (
       ref: RuntimeRef,
-    ): Effect.Effect<Option.Option<RuntimeStateBase>, never, ProcessStore> =>
-      Effect.map(
+    ): Effect_.Effect<Option.Option<RuntimeStateBase>, never, ProcessStore> =>
+      Effect_.map(
         ProcessStore.runtime.stateHistory({ ref, opts: { limit: 1 } }),
         (changes) =>
           changes[0] === undefined
@@ -211,16 +192,12 @@ export namespace ProcessStore {
       ),
   } as const;
 
-  /**
-   * Typed RunResource projections derived from generic runtime facts.
-   *
-   * @public
-   */
+  /** @public */
   export const runResource = {
     history: (
       resourceId: string,
       opts?: QueryOpts,
-    ): Effect.Effect<RuntimeFact[], never, ProcessStore> =>
+    ): Effect_.Effect<RuntimeFact[], never, ProcessStore> =>
       ProcessStore.runtime.facts({
         ref: { kind: "run-resource", id: resourceId },
         opts,

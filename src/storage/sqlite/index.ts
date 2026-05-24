@@ -54,8 +54,8 @@ import { Context, Effect, Layer, Scope } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import type { SqlError } from "effect/unstable/sql/SqlError";
 import { ProcessStore } from "../../ProcessStore";
-import type { ProcessStoreGroupLog } from "../../ProcessStoreGroupLog";
-import type { ProcessStoreQueueResource } from "../../ProcessStoreQueueResource";
+import type { ProcessStoreGroupLog } from "../../internal/store/groupLog";
+import type { ProcessStoreQueueResource } from "../../internal/store/queueResource";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import type {
   DeleteResult,

@@ -9,7 +9,7 @@ import { TestClock } from "effect/testing";
 import { Polling, Process, ProcessStore } from "../../src";
 import type { ProcessScheduleEntry } from "../../src/ProcessSchedule";
 import { runNodeProgramWithLayer } from "../shared/demo-harness";
-import { utcDateFromMillis } from "../../src/utcDate";
+import { utcDateFromMillis } from "../../src/internal/utcDate";
 
 interface DbScheduleRow {
   readonly id: string;

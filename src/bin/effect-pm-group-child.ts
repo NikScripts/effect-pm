@@ -2,7 +2,7 @@
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer, ManagedRuntime } from "effect";
-import { runGroupChildCli } from "../groupChild.js";
+import { runGroupChildCli } from "../internal/manager/groupChild";
 
 const platform = Layer.mergeAll(NodeServices.layer, NodeHttpClient.layerUndici);
 const runtime = ManagedRuntime.make(platform);

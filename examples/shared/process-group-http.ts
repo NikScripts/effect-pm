@@ -6,7 +6,7 @@
 
 import { Duration, Effect, Schema } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { responseBodyJson } from "../../src/internal/json.js";
+import { responseBodyJson } from "../../src/internal/json";
 
 export const requestJson = (
   port: number,

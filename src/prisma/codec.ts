@@ -8,4 +8,4 @@ export {
   decodeEventRow,
   encodeEvent,
   ProcessStoreEventDecodeError as PrismaProcessStoreDecodeError,
-} from "../ProcessStoreCodec";
+} from "../internal/store/codec";

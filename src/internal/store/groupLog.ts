@@ -6,22 +6,22 @@
 
 import { Clock, Context, Effect, Layer } from "effect";
 import type { LogLevel } from "effect/LogLevel";
-import { ProcessManagerLogAnnotationKeys } from "./processManagerLogContext";
-import type { ProcessManagerLogEntry } from "./processManagerLogEntry";
-import type { ProcessManagerLogQuery } from "./processManagerLogQuery";
-import { ProcessManagerLogQueryError, replayLogQueryResults } from "./processManagerLogQuery";
+import { ProcessManagerLogAnnotationKeys } from "../../LogContext";
+import type { ProcessManagerLogEntry } from "../../LogEntry";
+import type { ProcessManagerLogQuery } from "../manager/logQuery";
+import { ProcessManagerLogQueryError, replayLogQueryResults } from "../manager/logQuery";
 import {
   makeProcessStoreSpine,
   makeRunId,
-} from "./processStoreSpine";
+} from "./spine";
 import type {
   AnalyticsEvent,
   GroupLogEntryRecordedEvent,
   ProcessStoreWriteError,
   StoreEventQuery,
-} from "./ProcessStoreTypes";
-import { isGroupLogEntryRecorded } from "./ProcessStoreTypes";
-import { RuntimeStorage } from "./RuntimeStorage";
+} from "../../ProcessStoreEvent";
+import { isGroupLogEntryRecorded } from "../../ProcessStoreEvent";
+import { RuntimeStorage } from "../../RuntimeStorage";
 
 /**
  * Log operations exposed on {@link ProcessStoreInterface.GroupLog}.
@@ -252,7 +252,7 @@ const makeProcessStoreGroupLogFromRuntimeStorage: Effect.Effect<
 export class ProcessStoreGroupLog extends Context.Service<
   ProcessStoreGroupLog,
   ProcessStoreGroupLogApi
->()("@nikscripts/effect-pm/ProcessStoreGroupLog", {
+>()("@nikscripts/effect-pm/internal/store/groupLog/ProcessStoreGroupLog", {
   make: makeProcessStoreGroupLogFromRuntimeStorage,
 }) {}
 

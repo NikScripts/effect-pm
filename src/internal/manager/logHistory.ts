@@ -1,16 +1,15 @@
 import { Effect, Option, Scope } from "effect";
-import type { ProcessManagerLogScope } from "./processManagerLogContext";
-import { logScopeGroupId } from "./processManagerLogContext";
+import type { ProcessManagerLogScope } from "./logScope";
+import { logScopeGroupId } from "./logScope";
 import {
   buildProcessManagerLogQuery,
   ProcessManagerLogQueryError,
-} from "./processManagerLogQuery";
-import { ProcessStoreGroupLog } from "./ProcessStoreGroupLog";
-import { groupLogSqlitePath } from "./processManagerChildLaunch";
-import { layerProcessStore } from "./storage/sqlite/index";
-import { replayLogQueryResults } from "./processManagerLogQuery";
-import type { ProcessManagerLogEntry } from "./processManagerLogEntry";
-import { resolveChildLaunchPaths } from "./processManagerChildLaunch";
+  replayLogQueryResults,
+} from "./logQuery";
+import { ProcessStoreGroupLog } from "../store/groupLog";
+import { groupLogSqlitePath, resolveChildLaunchPaths } from "./childLaunch";
+import { layerProcessStore } from "../../storage/sqlite/index";
+import type { ProcessManagerLogEntry } from "../../LogEntry";
 
 // @effect-diagnostics strictEffectProvide:off — pm logs opens per-group sqlite stores from resolved disk paths.
 

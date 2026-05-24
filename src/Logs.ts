@@ -14,6 +14,8 @@
  * @module Logs
  */
 
+import { Layer } from "effect";
+
 export {
   ProcessManagerLogRelay,
   captureLogger,
@@ -21,6 +23,17 @@ export {
   layer as relayOnlyLayer,
   replayLogEntry,
   type ProcessManagerLogRelayService,
-} from "./processManagerLogRelay.js";
+} from "./internal/manager/logCapture";
 
-export { logsRelayLayer, relayLayer } from "./processManagerLogsRelay.js";
+export { logsRelayLayer, relayLayer } from "./internal/manager/logPersistRelay";
+import { captureLoggerLayer as captureLoggerLayerImpl } from "./internal/manager/logCapture";
+import { relayLayer as relayLayerImpl } from "./internal/manager/logPersistRelay";
+
+/**
+ * Composes {@link relayLayer} then {@link captureLoggerLayer} for child runtimes.
+ *
+ * @public
+ */
+export const relayWithCaptureLoggerLayer = relayLayerImpl.pipe(
+  Layer.provideMerge(captureLoggerLayerImpl),
+);

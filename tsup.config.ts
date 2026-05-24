@@ -21,8 +21,6 @@ export default defineConfig([
       QueueResource: "src/QueueResource.ts",
       ProcessGroup: "src/ProcessGroup.ts",
       ProcessStore: "src/ProcessStore.ts",
-      ProcessStoreGroupLog: "src/ProcessStoreGroupLog.ts",
-      ProcessStoreQueueResource: "src/ProcessStoreQueueResource.ts",
       Query: "src/Query.ts",
       RuntimeStorage: "src/RuntimeStorage.ts",
       ProcessManager: "src/ProcessManager.ts",

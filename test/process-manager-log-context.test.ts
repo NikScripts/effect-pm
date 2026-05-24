@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Option } from "effect";
-import { logEntryMatchesScope, resolveLogScope } from "../src/processManagerLogContext.js";
-import type { ProcessManagerLogEntry } from "../src/processManagerLogEntry.js";
+import { logEntryMatchesScope, resolveLogScope } from "../src/internal/manager/logScope";
+import type { ProcessManagerLogEntry } from "../src/LogEntry";
 
 const entry = (
   annotations: ProcessManagerLogEntry["annotations"],

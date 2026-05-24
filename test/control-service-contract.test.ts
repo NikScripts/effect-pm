@@ -12,7 +12,7 @@ import {
   ProcessStore,
   QueueResource,
 } from "../src";
-import { responseBodyJson } from "../src/internal/json.js";
+import { responseBodyJson } from "../src/internal/json";
 
 interface Email {
   readonly to: string;

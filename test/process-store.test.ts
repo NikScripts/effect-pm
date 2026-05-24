@@ -7,7 +7,6 @@ import {
   OrderBy,
   ProcessId,
   ProcessStore,
-  ProcessStoreQueueResource,
   ProcessStoreDuplicateRecordError,
   RuntimeStorage,
   Select,
@@ -20,7 +19,8 @@ import {
   type QueueLifecycleChangedEvent,
   type RuntimeStateChangedEvent,
 } from "../src"
-import { utcDateFromIso } from "../src/utcDate.js";
+import { ProcessStoreQueueResource } from "../src/internal/store/queueResource"
+import { utcDateFromIso } from "../src/internal/utcDate";
 
 describe("ProcessStore.memory", () => {
   it.live("maps RuntimeStorage duplicate writes to ProcessStore errors", () =>

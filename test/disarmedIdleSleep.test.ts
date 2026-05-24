@@ -8,7 +8,7 @@ import {
   MIN_SCHEDULE_POLL_WHILE_DISARMED,
   resolveDisarmedFallbackPoll,
 } from "../src/disarmedIdleSleep";
-import { utcDateFromMillis } from "../src/utcDate.js";
+import { utcDateFromMillis } from "../src/internal/utcDate";
 
 const expectDuration = (actual: Duration.Duration, expected: Duration.Duration) => {
   expect(Duration.equals(actual, expected)).toBe(true);

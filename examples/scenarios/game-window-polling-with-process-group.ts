@@ -15,7 +15,7 @@ import {
   ProcessStore,
 } from "../../src";
 import { runNodeProgramWithLayer } from "../shared/demo-harness";
-import { utcDateFromMillis } from "../../src/utcDate";
+import { utcDateFromMillis } from "../../src/internal/utcDate";
 
 /** Shared tick counter across runs (script exits after one invocation). */
 const pollTicks = Effect.runSync(Ref.make(0));

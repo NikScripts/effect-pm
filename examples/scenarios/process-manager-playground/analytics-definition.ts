@@ -14,7 +14,7 @@ import {
   QueueResource,
   Transport,
 } from "../../../src";
-import { utcDateFromMillis } from "../../../src/utcDate";
+import { utcDateFromMillis } from "../../../src/internal/utcDate";
 import { analyticsPort } from "./ports";
 
 const analyticsTransport = Transport.http(analyticsPort);

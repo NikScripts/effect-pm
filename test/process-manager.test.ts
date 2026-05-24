@@ -16,7 +16,7 @@ import {
   ProcessStore,
   QueueResource,
 } from "../src";
-import { decodeProcessManagerRunStateJson } from "../src/processManagerRunState.js";
+import { decodeProcessManagerRunStateJson } from "../src/internal/manager/runState";
 import { ModuleEndpointGroup } from "./fixtures/process-manager-module-definition";
 
 const testLocalEntry = "file:///test-process-group-entry.ts";

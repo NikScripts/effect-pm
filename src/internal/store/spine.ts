@@ -19,17 +19,16 @@ import {
   decodeEventRow,
   encodeEvent,
   ProcessStoreEventDecodeError,
-} from "./ProcessStoreCodec";
-import type { EffectPmEventRow, JsonValue } from "./ProcessStoreEvent";
-import type { ProcessStoreGroupLogApi } from "./ProcessStoreGroupLog";
-import type { ProcessStoreQueueResourceApi } from "./ProcessStoreQueueResource";
+} from "./codec";
+import type { EffectPmEventRow, JsonValue } from "../../ProcessStoreEvent";
+import type { ProcessStoreGroupLogApi } from "./groupLog";
+import type { ProcessStoreQueueResourceApi } from "./queueResource";
 import {
   ProcessStoreDuplicateRecordError,
   ProcessStoreReadonlyRecordError,
   type AnalyticsEvent,
   type ProcessExecutionCompletedEvent,
   type ProcessLifecycleChangedEvent,
-  type ProcessStoreInterface,
   type ProcessStoreWriteError,
   type QueryOpts,
   type QueueItemCompletedEvent,
@@ -37,16 +36,17 @@ import {
   type RuntimeFactQuery,
   type RuntimeStateHistoryQuery,
   type StoreEventQuery,
-} from "./ProcessStoreTypes";
-import type { RuntimeFact, RuntimeStateChange } from "./RuntimeState";
+} from "../../ProcessStoreEvent";
+import type { ProcessStoreInterface } from "../../ProcessStore";
+import type { RuntimeFact, RuntimeStateChange } from "../../RuntimeState";
 import {
   dateFromUnknown,
   isJsonValue,
   isRecord,
   isString,
   unknownJsonString,
-} from "./internal/json";
-import type { RuntimeRecordQuery } from "./Query";
+} from "../json";
+import type { RuntimeRecordQuery } from "../../Query";
 import {
   RuntimeStorageDuplicateRecordError,
   RuntimeStorageReadonlyRecordError,
@@ -54,7 +54,7 @@ import {
   type RuntimeRecord,
   type RuntimeStorageError,
   type RuntimeStorageService,
-} from "./RuntimeStorage";
+} from "../../RuntimeStorage";
 
 /** @internal */
 export const applyQueryOpts = <T>(

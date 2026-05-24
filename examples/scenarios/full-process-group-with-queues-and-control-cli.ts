@@ -25,7 +25,7 @@ import {
   ProcessSchedule,
   ControlService,
 } from "../../src";
-import { utcDateFromMillis } from "../../src/utcDate";
+import { utcDateFromMillis } from "../../src/internal/utcDate";
 
 /**
  * ============================================================================

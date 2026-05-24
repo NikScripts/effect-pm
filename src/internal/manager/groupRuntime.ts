@@ -1,10 +1,10 @@
 import { Layer, Scope } from "effect";
-import { ControlService } from "./ControlService.js";
-import { localEnvLayer } from "./ProcessGroup.js";
-import type { ProcessGroupEntry, ProcessGroupServiceDefinition } from "./ProcessGroup.js";
-import type { ProcessStore } from "./ProcessStore.js";
-import { parsePortFromTransport } from "./processManagerTransport.js";
-import type { ProcessManagerTransport } from "./processManagerTransport.js";
+import { ControlService } from "../../ControlService";
+import { localEnvLayer } from "../../ProcessGroup";
+import type { ProcessGroupEntry, ProcessGroupServiceDefinition } from "../../ProcessGroup";
+import type { ProcessStore } from "../../ProcessStore";
+import { parsePortFromTransport } from "../../Transport";
+import type { ProcessManagerTransport } from "../../Transport";
 
 /**
  * Build a local runtime descriptor for a group child process.

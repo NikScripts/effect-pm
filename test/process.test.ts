@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process, ProcessMakeInvalidLayerArgument, ProcessSchedule, ProcessStore } from "../src";
-import { utcDateFromMillis } from "../src/utcDate.js";
+import { utcDateFromMillis } from "../src/internal/utcDate";
 
 const alwaysOnEntry = {
   id: Option.none<string>(),

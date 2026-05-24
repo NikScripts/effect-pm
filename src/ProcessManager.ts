@@ -33,7 +33,7 @@ import {
   normalizeProcessManagerTarget,
   resolveProcessManagerTarget,
   type ProcessManagerTargetCandidate,
-} from "./ProcessManagerTargetResolver";
+} from "./internal/manager/targetResolver";
 import { responseBodyJson } from "./internal/json";
 import {
   buildChildLaunchConfig,
@@ -43,37 +43,37 @@ import {
   resolveChildLaunchPaths,
   resolveEntryUrl,
   type ProcessManagerChildLaunchConfig,
-} from "./processManagerChildLaunch.js";
+} from "./internal/manager/childLaunch";
 import {
   Transport,
   type ProcessManagerHttpTransport,
   type ProcessManagerTransport,
-} from "./processManagerTransport.js";
+} from "./Transport";
 
-export type { ProcessManagerHttpTransport, ProcessManagerTransport } from "./processManagerTransport.js";
-export type { ProcessManagerChildLaunchConfig } from "./processManagerChildLaunch.js";
-export { Transport } from "./processManagerTransport.js";
-import { groupLocalRuntime } from "./processManagerGroupRuntime.js";
+export type { ProcessManagerHttpTransport, ProcessManagerTransport } from "./Transport";
+export type { ProcessManagerChildLaunchConfig } from "./internal/manager/childLaunch";
+export { Transport } from "./Transport";
+import { groupLocalRuntime } from "./internal/manager/groupRuntime";
 export { groupLocalRuntime };
 import {
   decodeProcessManagerRunStateJson,
   encodeProcessManagerRunStateJson,
   type ProcessManagerRunState,
-} from "./processManagerRunState.js";
+} from "./internal/manager/runState";
 import {
   ProcessManagerGroupLogError,
-} from "./processManagerGroupLogs.js";
-import { watchGroupLogs } from "./processManagerGroupLogsInteractive.js";
+} from "./internal/manager/groupLogWatch";
+import { watchGroupLogs } from "./internal/manager/groupLogWatchInteractive";
 import {
   logScopeGroupId,
   resolveLogScope,
   type ProcessManagerLogScope,
-} from "./processManagerLogContext.js";
-import { ProcessManagerLogQueryError } from "./processManagerLogQuery.js";
-import { queryGroupLogsForCatalog } from "./processManagerLogHistory.js";
+} from "./internal/manager/logScope";
+import { ProcessManagerLogQueryError } from "./internal/manager/logQuery";
+import { queryGroupLogsForCatalog } from "./internal/manager/logHistory";
 
 const defaultLogQueryLimit = 100;
-import { httpEndpoint } from "./processManagerTransport.js";
+import { httpEndpoint } from "./Transport";
 
 type AnyProcessGroupContract = ProcessGroupContract<
   string,
@@ -2485,4 +2485,4 @@ export const ProcessManager = {
   groupLocalRuntime,
 };
 
-export type { ProcessManagerRunState } from "./processManagerRunState.js";
+export type { ProcessManagerRunState } from "./internal/manager/runState";

@@ -17,8 +17,8 @@
  */
 
 import { Cause, Clock, Context, Data, DateTime, Duration, Effect, Fiber, Layer, MutableRef, Option } from "effect";
-import { isPollingLayer, isScheduleLayer } from "./processLayerBrand.js";
-import { ProcessManagerLogAnnotationKeys } from "./processManagerLogContext.js";
+import { isPollingLayer, isScheduleLayer } from "./internal/processLayerBrand";
+import { ProcessManagerLogAnnotationKeys } from "./LogContext";
 import { ProcessStore } from "./ProcessStore";
 import { Polling, PollingTag } from "./Polling";
 import { ProcessSchedule, ProcessScheduleTag } from "./ProcessSchedule";

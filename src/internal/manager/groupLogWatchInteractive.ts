@@ -5,11 +5,11 @@ import {
   groupLogEntryStream,
   ProcessManagerGroupLogError,
   type ProcessManagerGroupLogOptions,
-} from "./processManagerGroupLogs.js";
-import type { ProcessManagerLogScope } from "./processManagerLogContext.js";
-import { logEntryMatchesScope } from "./processManagerLogContext.js";
-import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
-import { replayLogEntry } from "./processManagerLogRelay.js";
+} from "./groupLogWatch";
+import type { ProcessManagerLogScope } from "./logScope";
+import { logEntryMatchesScope } from "./logScope";
+import type { ProcessManagerLogEntry } from "../../LogEntry";
+import { replayLogEntry } from "./logCapture";
 
 const defaultPreludeLines = 100;
 const maxPreludeLines = 500;

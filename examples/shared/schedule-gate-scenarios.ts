@@ -1,4 +1,4 @@
-import { utcDateFromMillis } from "../../src/utcDate";
+import { utcDateFromMillis } from "../../src/internal/utcDate";
 /**
  * @module examples/shared/schedule-gate-scenarios
  *

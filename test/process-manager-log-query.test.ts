@@ -4,7 +4,7 @@ import {
   buildProcessManagerLogQuery,
   ProcessManagerLogQueryError,
   queryGroupLogs,
-} from "../src/processManagerLogQuery.js";
+} from "../src/internal/manager/logQuery";
 
 describe("processManagerLogQuery", () => {
   it("builds an open query with defaults when no filters are set", () =>

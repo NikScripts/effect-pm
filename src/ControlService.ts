@@ -16,6 +16,8 @@
  * @module ControlService
  */
 
+// @effect-diagnostics strictEffectProvide:off — control transport entry wiring provides router layers per serve/group.
+
 import { Effect, Layer, Scope } from "effect";
 import type {
   ProcessGroupEntry,

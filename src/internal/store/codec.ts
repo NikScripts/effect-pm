@@ -17,18 +17,18 @@ import type {
   GroupLogEntryRecordedEvent,
   RuntimeFactRecordedEvent,
   RuntimeStateChangedEvent,
-} from "./ProcessStoreTypes";
+} from "../../ProcessStoreEvent";
 import type {
   EffectPmEventCreateInput,
   EffectPmEventRow,
   JsonValue,
-} from "./ProcessStoreEvent";
+} from "../../ProcessStoreEvent";
 import type {
   RuntimeFact,
   RuntimeRef,
   RuntimeStateBase,
   RuntimeStateChange,
-} from "./RuntimeState";
+} from "../../RuntimeState";
 import {
   dateFromMillis,
   epochMillisFromUnknown,
@@ -36,7 +36,7 @@ import {
   isFiniteNumber,
   isRecord,
   isString,
-} from "./internal/json";
+} from "../json";
 
 /**
  * Raised when a persisted event row does not conform to a known

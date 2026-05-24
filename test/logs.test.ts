@@ -2,11 +2,11 @@ import { assert, describe, it } from "@effect/vitest";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Effect, FileSystem, Layer, Path } from "effect";
-import { groupLogSqlitePath } from "../src/processManagerChildLaunch.js";
-import { ProcessStore, isGroupLogEntryRecorded } from "../src/ProcessStore.js";
-import { layerProcessStore } from "../src/storage/sqlite/index.js";
-import { ProcessManagerLogAnnotationKeys } from "../src/processManagerLogContext.js";
-import type { ProcessManagerLogEntry } from "../src/processManagerLogEntry.js";
+import { groupLogSqlitePath } from "../src/internal/manager/childLaunch";
+import { ProcessStore, isGroupLogEntryRecorded } from "../src/ProcessStore";
+import { layerProcessStore } from "../src/storage/sqlite/index";
+import { ProcessManagerLogAnnotationKeys } from "../src/LogContext";
+import type { ProcessManagerLogEntry } from "../src/LogEntry";
 
 const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 

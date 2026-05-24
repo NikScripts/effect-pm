@@ -17,7 +17,7 @@ const pathJoin = (...segments: ReadonlyArray<string>): string =>
     .join("/")
     .replace(/\/+/g, "/");
 
-import type { ProcessManagerTransport } from "./processManagerTransport.js";
+import type { ProcessManagerTransport } from "../../Transport";
 
 
 const readPackageName = (packageJsonPath: string): string | undefined => {
@@ -110,7 +110,7 @@ export interface ProcessManagerChildLaunchService {
 export class ProcessManagerChildLaunch extends Context.Service<
   ProcessManagerChildLaunch,
   ProcessManagerChildLaunchService
->()("@nikscripts/effect-pm/processManagerChildLaunch") {}
+>()("@nikscripts/effect-pm/internal/manager/childLaunch/ProcessManagerChildLaunch") {}
 
 const resolveDefaultScriptPath = (): string => {
   const req = createRequire(pathJoin(findEffectPmPackageRoot(), "package.json"));

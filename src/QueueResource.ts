@@ -71,8 +71,8 @@ import {
   Semaphore,
   Types,
 } from "effect";
-import { withQueueLogAnnotations } from "./processManagerLogContext";
-import { ProcessStoreQueueResource } from "./ProcessStoreQueueResource";
+import { withQueueLogAnnotations } from "./LogContext";
+import { ProcessStoreQueueResource } from "./internal/store/queueResource";
 import { isJsonValue } from "./internal/json";
 import type { JsonValue } from "./ProcessStoreEvent";
 

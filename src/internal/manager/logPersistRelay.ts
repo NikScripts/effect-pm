@@ -5,13 +5,13 @@
  */
 
 import { Cause, Duration, Effect, Layer, Option, PubSub, Ref, Schedule, Scope, Stream } from "effect";
-import { ProcessGroupLogContext } from "./processManagerLogContext";
-import type { ProcessManagerLogEntry } from "./processManagerLogEntry";
+import { ProcessGroupLogContext } from "../../LogContext";
+import type { ProcessManagerLogEntry } from "../../LogEntry";
 import {
   ProcessManagerLogRelay,
   type ProcessManagerLogRelayService,
-} from "./processManagerLogRelay";
-import { ProcessStoreGroupLog } from "./ProcessStoreGroupLog";
+} from "./logCapture";
+import { ProcessStoreGroupLog } from "../store/groupLog";
 
 const storeFlushInterval = Duration.millis(250);
 const storeFlushBatchSize = 64;

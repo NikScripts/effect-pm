@@ -1,26 +1,23 @@
-import { Context, Effect, Layer, Option } from "effect";
-import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
+/**
+ * Operator log scope resolution for `pm watch` / `pm logs`.
+ *
+ * @module internal/manager/logScope
+ * @internal
+ */
+
+import { Effect, Option } from "effect";
+import type { ProcessManagerLogEntry } from "../../LogEntry";
+import { ProcessManagerLogAnnotationKeys } from "../../LogContext";
 import {
   normalizeProcessManagerTarget,
   resolveProcessManagerTarget,
   type ProcessManagerTargetCandidate,
-} from "./ProcessManagerTargetResolver.js";
-
-/**
- * Standard log annotation keys for effect-pm (captured into {@link ProcessManagerLogEntry}).
- *
- * @public
- */
-export const ProcessManagerLogAnnotationKeys = {
-  groupId: "groupId",
-  processId: "processId",
-  queueId: "queueId",
-} as const;
+} from "./targetResolver";
 
 /**
  * Resolved operator log filter from a single user-entered target string.
  *
- * @public
+ * @internal
  */
 export type ProcessManagerLogScope =
   | { readonly _tag: "all" }
@@ -28,76 +25,16 @@ export type ProcessManagerLogScope =
   | { readonly _tag: "process"; readonly groupId: string; readonly processId: string }
   | { readonly _tag: "queue"; readonly groupId: string; readonly queueId: string };
 
-/**
- * Group id for the child control plane when watching live logs.
- *
- * @public
- */
+/** @internal */
 export const logScopeGroupId = (scope: ProcessManagerLogScope): string | undefined =>
   scope._tag === "all" ? undefined : scope.groupId;
-
-/**
- * @public
- */
-export class ProcessGroupLogContext extends Context.Service<
-  ProcessGroupLogContext,
-  { readonly groupId: string }
->()("@nikscripts/effect-pm/processManagerLogContext/ProcessGroupLogContext") {}
-
-/**
- * Scoped {@link Effect.annotateLogsScoped} for every fiber under a group runtime.
- *
- * @public
- */
-export const layerProcessGroupLogContext = (
-  groupId: string,
-): Layer.Layer<ProcessGroupLogContext> =>
-  Layer.effect(
-    ProcessGroupLogContext,
-    Effect.gen(function* () {
-      yield* Effect.annotateLogsScoped({
-        [ProcessManagerLogAnnotationKeys.groupId]: groupId,
-      });
-      return { groupId };
-    }),
-  );
-
-/**
- * Annotate logs emitted from a process supervisor fiber.
- *
- * @public
- */
-export const withProcessLogAnnotations = <A, E, R>(
-  processId: string,
-  effect: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E, R> =>
-  Effect.annotateLogs(effect, {
-    [ProcessManagerLogAnnotationKeys.processId]: processId,
-  });
-
-/**
- * Annotate logs emitted from a queue worker fiber.
- *
- * @public
- */
-export const withQueueLogAnnotations = <A, E, R>(
-  queueId: string,
-  effect: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E, R> =>
-  Effect.annotateLogs(effect, {
-    [ProcessManagerLogAnnotationKeys.queueId]: queueId,
-  });
 
 const annotationValue = (
   annotations: Readonly<Record<string, string>>,
   key: string,
 ): string | undefined => annotations[key];
 
-/**
- * Returns true when a captured entry should be shown for the resolved scope.
- *
- * @public
- */
+/** @internal */
 export const logEntryMatchesScope = (
   entry: ProcessManagerLogEntry,
   scope: ProcessManagerLogScope,
@@ -144,11 +81,7 @@ const resolveGroupFromInput = <G extends GroupCatalogEntry>(
   return Option.none();
 };
 
-/**
- * Resolve a user target string to a log scope (group, process, or queue).
- *
- * @public
- */
+/** @internal */
 export const resolveLogScope = <G extends GroupCatalogEntry>(
   groups: ReadonlyArray<G>,
   input: Option.Option<string>,

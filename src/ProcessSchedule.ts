@@ -42,7 +42,7 @@
  */
 
 import { Context, DateTime, Deferred, Effect, Layer, Option, Ref } from "effect";
-import { registerScheduleLayer } from "./processLayerBrand.js";
+import { registerScheduleLayer } from "./internal/processLayerBrand";
 
 // ============================================================================
 // Public Types

@@ -1,6 +1,6 @@
 import { Layer } from "effect";
-import type { PollingTag } from "./Polling.js";
-import type { ProcessScheduleTag } from "./ProcessSchedule.js";
+import type { PollingTag } from "../Polling";
+import type { ProcessScheduleTag } from "../ProcessSchedule";
 
 /** @internal */
 const pollingLayerRegistry = new WeakMap<object, true>();

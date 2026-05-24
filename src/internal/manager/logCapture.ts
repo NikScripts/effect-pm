@@ -4,7 +4,7 @@ import { CurrentLogAnnotations, CurrentLogSpans } from "effect/References";
 import {
   processManagerLogEntryFromLoggerOptions,
   type ProcessManagerLogEntry,
-} from "./processManagerLogEntry.js";
+} from "../../LogEntry";
 
 const historyCapacity = 500;
 
@@ -27,7 +27,7 @@ export interface ProcessManagerLogRelayService {
 export class ProcessManagerLogRelay extends Context.Service<
   ProcessManagerLogRelay,
   ProcessManagerLogRelayService
->()("@nikscripts/effect-pm/processManagerLogRelay") {}
+>()("@nikscripts/effect-pm/internal/manager/logCapture/ProcessManagerLogRelay") {}
 
 const pushHistory = (
   history: Ref.Ref<ReadonlyArray<ProcessManagerLogEntry>>,
@@ -100,10 +100,10 @@ export const captureLogger: Logger.Logger<unknown, void> = Logger.make((options)
  *
  * @public
  */
-export const captureLoggerLayer: Layer.Layer<never> = Logger.layer(
+export const captureLoggerLayer = Logger.layer(
   [captureLogger],
   { mergeWithExisting: false },
-);
+) satisfies Layer.Layer<never, never, ProcessManagerLogRelay>;
 
 const logAtLevel = (
   level: LogLevel.LogLevel,

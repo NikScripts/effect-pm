@@ -45,9 +45,9 @@
  * **`@nikscripts/effect-pm/ProcessManager`**, **`@nikscripts/effect-pm/Logs`**, and
  * **`@nikscripts/effect-pm/ControlService`**.
  *
- * Group log persistence: `ProcessStoreGroupLog`. Capture/relay: `@nikscripts/effect-pm/Logs`.
- * Queue helpers: `ProcessStoreQueueResource`. Storage is `layerProcessStore` from
- * `@nikscripts/effect-pm/storage/sqlite` or other `RuntimeStorage` + `ProcessStore` composition.
+ * Group log persistence: `ProcessStore.GroupLog` on the composed store. Capture/relay: `@nikscripts/effect-pm/Logs`.
+ * Queue analytics: optional `ProcessStore.QueueResource` facet (internal service, composed by `ProcessStore.layer`).
+ * Storage is `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite` or other `RuntimeStorage` + `ProcessStore` composition.
  *
  * Storage adapters use lower-case subpaths:
  * **`@nikscripts/effect-pm/storage/sqlite`** and **`@nikscripts/effect-pm/storage/prisma`**
@@ -197,12 +197,6 @@ export type {
 
 // CLI
 export { createCli, runCli } from "./cli";
-export {
-  decodeProcessManagerRunStateJson,
-  encodeProcessManagerRunStateJson,
-  ProcessManagerRunStateSchema,
-} from "./processManagerRunState.js";
-export type { ProcessManagerRunState } from "./processManagerRunState.js";
 
 // Process Manager
 export {
@@ -216,15 +210,16 @@ export {
   ProcessManagerRequestError,
   Transport,
   operatorLoggerLayer,
+  groupLocalRuntime,
 } from "./ProcessManager";
-export { httpEndpoint } from "./processManagerTransport.js";
+export { httpEndpoint } from "./Transport";
 export {
   encodeProcessManagerLogEntryNdjson,
   decodeProcessManagerLogEntryNdjson,
   processManagerLogEntryFromLoggerOptions,
   ProcessManagerLogEntrySchema,
   type ProcessManagerLogEntry,
-} from "./processManagerLogEntry.js";
+} from "./LogEntry";
 export {
   ProcessManagerLogRelay,
   captureLogger,
@@ -233,46 +228,17 @@ export {
   logsRelayLayer,
   replayLogEntry,
   relayOnlyLayer as processManagerLogRelayLayer,
-} from "./Logs.js";
-export { groupLocalRuntime } from "./processManagerGroupRuntime.js";
-export {
-  groupLogEntryStream,
-  streamGroupLogs,
-  ProcessManagerGroupLogError,
-  type ProcessManagerGroupLogOptions,
-} from "./processManagerGroupLogs.js";
-export {
-  watchGroupLogs,
-  type ProcessManagerGroupLogWatchOptions,
-} from "./processManagerGroupLogsInteractive.js";
-export {
-  buildProcessManagerLogQuery,
-  queryGroupLogs,
-  ProcessManagerLogQueryError,
-  type ProcessManagerLogQuery,
-  type ProcessManagerLogSort,
-} from "./processManagerLogQuery.js";
+} from "./Logs";
 export {
   ProcessGroupLogContext,
   ProcessManagerLogAnnotationKeys,
   layerProcessGroupLogContext,
-  logEntryMatchesScope,
-  logScopeGroupId,
-  resolveLogScope,
   withProcessLogAnnotations,
   withQueueLogAnnotations,
-  type ProcessManagerLogScope,
-} from "./processManagerLogContext.js";
-export type { ProcessStoreGroupLogApi } from "./ProcessStoreGroupLog.js";
-export {
-  ProcessStoreGroupLog,
-  makeRecordedEvent,
-  storeEventQueryFromLogQuery,
-} from "./ProcessStoreGroupLog.js";
-export { groupLogSqlitePath } from "./processManagerChildLaunch.js";
-export { queryGroupLogsForCatalog } from "./processManagerLogHistory.js";
-export type { GroupLogEntryRecordedEvent } from "./ProcessStore.js";
-export { isGroupLogEntryRecorded } from "./ProcessStore.js";
+} from "./LogContext";
+export type { ProcessManagerRunState } from "./ProcessManager";
+export type { GroupLogEntryRecordedEvent } from "./ProcessStore";
+export { isGroupLogEntryRecorded } from "./ProcessStore";
 export type {
   ProcessManagerEndpointConfigItem,
   ProcessManagerConnectionConfigMap,
@@ -299,7 +265,6 @@ export type {
 // Process Store
 export {
   ProcessStore,
-  ProcessStoreQueueResource,
   ProcessStoreDuplicateRecordError,
   ProcessStoreQueueResourceContextError,
   ProcessStoreReadonlyRecordError,
@@ -327,6 +292,7 @@ export {
   type RuntimeFactRecordedEvent,
   type RuntimeStateChangedEvent,
   type AnalyticsEvent,
+  type ProcessStoreGroupLogApi,
   type ProcessStoreInterface,
   type ProcessStoreWriteError,
 } from "./ProcessStore";
@@ -475,10 +441,3 @@ export type {
 export type {
   ControlResponse,
 } from "./ControlProtocol";
-
-export {
-  GroupChildArgvError,
-  GroupChildImportError,
-  GroupChildNotFoundError,
-  runGroupChildCli,
-} from "./groupChild.js";

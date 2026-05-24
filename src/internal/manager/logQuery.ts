@@ -1,9 +1,9 @@
 import { Data, Effect, Option } from "effect";
-import { utcDateFromMillis } from "./utcDate";
-import { ProcessStoreGroupLog } from "./ProcessStoreGroupLog";
-import type { ProcessManagerLogScope } from "./processManagerLogContext";
-import type { ProcessManagerLogEntry } from "./processManagerLogEntry";
-import { replayLogEntry } from "./processManagerLogRelay";
+import { utcDateFromMillis } from "../utcDate";
+import { ProcessStoreGroupLog } from "../store/groupLog";
+import type { ProcessManagerLogScope } from "./logScope";
+import type { ProcessManagerLogEntry } from "../../LogEntry";
+import { replayLogEntry } from "./logCapture";
 
 const defaultLogQueryLimit = 100;
 const maxLogQueryLimit = 10_000;

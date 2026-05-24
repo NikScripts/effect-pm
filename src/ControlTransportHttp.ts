@@ -22,9 +22,9 @@ import {
   type ControlTransportClientShape,
   type ControlTransportServerShape,
 } from "./ControlProtocol";
-import { responseBodyJson } from "./internal/json.js";
-import { encodeProcessManagerLogEntryNdjson } from "./processManagerLogEntry.js";
-import { ProcessManagerLogRelay } from "./processManagerLogRelay.js";
+import { responseBodyJson } from "./internal/json";
+import { encodeProcessManagerLogEntryNdjson } from "./LogEntry";
+import { ProcessManagerLogRelay } from "./internal/manager/logCapture";
 
 /**
  * HTTP transport client configuration.

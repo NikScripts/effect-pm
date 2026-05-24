@@ -3,8 +3,8 @@ import { HttpClient } from "effect/unstable/http";
 import {
   decodeProcessManagerLogEntryNdjson,
   type ProcessManagerLogEntry,
-} from "./processManagerLogEntry.js";
-import { replayLogEntry } from "./processManagerLogRelay.js";
+} from "../../LogEntry";
+import { replayLogEntry } from "./logCapture";
 
 /**
  * @public

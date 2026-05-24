@@ -4,9 +4,9 @@ import {
   decodeProcessManagerLogEntryNdjson,
   encodeProcessManagerLogEntryNdjson,
   processManagerLogEntryFromLoggerOptions,
-} from "../src/processManagerLogEntry.js";
-import { replayLogEntry } from "../src/processManagerLogRelay.js";
-import { utcDateFromIso } from "../src/utcDate.js";
+} from "../src/LogEntry";
+import { replayLogEntry } from "../src/internal/manager/logCapture";
+import { utcDateFromIso } from "../src/internal/utcDate";
 
 const ndjsonRoundTripDate = utcDateFromIso("2024-01-01T00:00:00.000Z");
 

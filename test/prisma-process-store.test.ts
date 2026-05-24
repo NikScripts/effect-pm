@@ -18,7 +18,7 @@ import {
   type EffectPmEventRow,
   type PrismaProcessStoreClient,
 } from "../src/prisma";
-import { utcDateFromIso, utcDateFromMillis } from "../src/utcDate.js";
+import { utcDateFromIso, utcDateFromMillis } from "../src/internal/utcDate";
 
 const utcMillisFromIso = (iso: string): number => utcDateFromIso(iso).getTime();
 

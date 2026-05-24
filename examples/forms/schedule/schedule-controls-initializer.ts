@@ -8,7 +8,7 @@ import { Duration, Effect, Fiber, Layer, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process, ProcessSchedule, ProcessStore } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
-import { utcDateFromMillis } from "../../../src/utcDate";
+import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
 const env = Layer.mergeAll(ProcessStore.layer, TestClock.layer());
 

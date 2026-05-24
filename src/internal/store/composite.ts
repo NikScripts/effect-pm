@@ -6,18 +6,18 @@
  */
 
 import { Clock, Effect, FileSystem, Path } from "effect";
-import { makeProcessStoreGroupLog } from "./ProcessStoreGroupLog";
-import { ProcessStoreGroupLog } from "./ProcessStoreGroupLog";
-import { makeProcessStoreQueueResource } from "./ProcessStoreQueueResource";
-import { ProcessStoreQueueResource } from "./ProcessStoreQueueResource";
+import { makeProcessStoreGroupLog } from "./groupLog";
+import { ProcessStoreGroupLog } from "./groupLog";
+import { makeProcessStoreQueueResource } from "./queueResource";
+import { ProcessStoreQueueResource } from "./queueResource";
 import {
   assembleProcessStoreInterface,
   makeFileProcessStoreSpine,
   makeProcessStoreSpine,
   makeRunId,
-} from "./processStoreSpine";
-import type { ProcessStoreInterface } from "./ProcessStoreTypes";
-import { RuntimeStorage } from "./RuntimeStorage";
+} from "./spine";
+import type { ProcessStoreInterface } from "../../ProcessStore";
+import { RuntimeStorage } from "../../RuntimeStorage";
 
 /** @internal */
 export const makeFileProcessStore = (

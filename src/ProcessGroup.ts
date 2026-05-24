@@ -35,7 +35,7 @@ import {
   QueueItemCodecDescriptorSchema,
   QueueItemValidationError,
 } from "./QueueResource";
-import { layerProcessGroupLogContext } from "./processManagerLogContext.js";
+import { layerProcessGroupLogContext } from "./LogContext";
 import {
   ProcessStore,
   type ProcessLifecycleChangedEvent,

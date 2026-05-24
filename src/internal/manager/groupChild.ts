@@ -1,11 +1,12 @@
 import { Command, Flag } from "effect/unstable/cli";
 import { Data, Effect, FileSystem, Layer, Path } from "effect";
-import type { ProcessGroupEntry, ProcessGroupServiceDefinition } from "./ProcessGroup.js";
-import { resolveChildLaunchPaths } from "./processManagerChildLaunch.js";
-import { groupLocalRuntime } from "./processManagerGroupRuntime.js";
-import { captureLoggerLayer, relayLayer } from "./Logs.js";
-import { groupLogSqlitePath } from "./processManagerChildLaunch.js";
-import { layerProcessStore } from "./storage/sqlite/index.js";
+
+// @effect-diagnostics strictEffectProvide:off — group-child bin entry composes control + env layers at process root.
+import type { ProcessGroupEntry, ProcessGroupServiceDefinition } from "../../ProcessGroup";
+import { resolveChildLaunchPaths, groupLogSqlitePath } from "./childLaunch";
+import { groupLocalRuntime } from "./groupRuntime";
+import { relayWithCaptureLoggerLayer } from "../../Logs";
+import { layerProcessStore } from "../../storage/sqlite/index";
 
 /** @public */
 export class GroupChildArgvError extends Data.TaggedError("GroupChildArgvError")<{
@@ -100,10 +101,7 @@ export const runGroupChildProgram = (args: {
       store: layerProcessStore({ filename: logStorePath }),
     });
     // Minimal child stack (H2): sqlite ProcessStore + relay + capture once on envLayer.
-    const envLayer = runtime.layer.pipe(
-      Layer.provideMerge(relayLayer),
-      Layer.provideMerge(captureLoggerLayer),
-    );
+    const envLayer = runtime.layer.pipe(Layer.provideMerge(relayWithCaptureLoggerLayer));
     return yield* Effect.never.pipe(
       Effect.provide(runtime.control.pipe(Layer.provide(envLayer))),
       Effect.scoped,

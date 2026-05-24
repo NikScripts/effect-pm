@@ -9,7 +9,7 @@ import {
   makeQueueItemCodecDescriptor,
 } from "../src/QueueResource";
 import { ProcessStore } from "../src/ProcessStore";
-import { ProcessStoreQueueResource } from "../src/ProcessStoreQueueResource.js";
+import { ProcessStoreQueueResource } from "../src/internal/store/queueResource";
 
 const fastConfig = { concurrency: 2 };
 

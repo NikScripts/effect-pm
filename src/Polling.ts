@@ -32,7 +32,7 @@
  */
 
 import { Context, Duration, Effect, Layer, Option, Random, Ref, Deferred } from "effect";
-import { registerPollingLayer } from "./processLayerBrand.js";
+import { registerPollingLayer } from "./internal/processLayerBrand";
 
 // ============================================================================
 // Service interface

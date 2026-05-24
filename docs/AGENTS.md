@@ -13,14 +13,13 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/ProcessGroup.ts` | Orchestration, `make`, fork/stop, typed controls, `awaitShutdown`. |
 | `src/Polling.ts`, `src/ProcessSchedule.ts` | Cadence + gate services and preset `Layer`s. |
 | `src/QueueResource.ts` | Priority queue resource factory. |
-| `src/ProcessStore.ts` | Analytics + lifecycle event append/read. |
+| `src/ProcessStore.ts`, `src/ProcessStoreEvent.ts` | Analytics + lifecycle events; composite `ProcessStore` facade. |
+| `src/LogContext.ts`, `src/LogEntry.ts`, `src/Transport.ts` | PM log annotations, NDJSON log entries, transport config. |
+| `src/internal/store/*` | `ProcessStore` facets (`groupLog`, `queueResource`, spine, codec) — **internal**. |
+| `src/internal/manager/*` | PM child launch, log capture/relay/query, group watch — **internal**. |
 | `src/ControlService.ts` | Localhost HTTP JSON control API. |
 | `src/Logs.ts` | PM capture/relay only (`captureLoggerLayer`, `relayLayer`) — package subpath `@nikscripts/effect-pm/Logs`. |
-| `src/ProcessStoreGroupLog.ts` | Store persistence for `group.log.entry` (`ProcessStoreGroupLog` service). |
-| `src/processManagerLogsRelay.ts` | Batched flush into `store.GroupLog` (imported by `Logs.ts`). |
 | `docs/ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md` | Full audit checklist and logs/storage naming contract. |
-| `src/processManagerLog*.ts` | Log capture relay, `pm watch` / `pm logs` CLI wiring. |
-| `src/processManagerGroupLogs*.ts` | HTTP stream client and interactive TTY watch. |
 | `src/ProcessManager.ts` | Typed remote client and endpoint service for group control contracts. |
 | `src/cli.ts` | `createCli` / `runCli` — HTTP client for control API. |
 | `src/disarmedIdleSleep.ts` | Pure policy for disarmed idle sleep (shared with tests). |
@@ -42,7 +41,17 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 2. **`Process.effect` typing** — `Process<R>`: `effect` needs `R | ProcessStore`. Inlined `polling` / `schedule` on `Process.make` are merged into the supervisor so **`R` excludes those services** when present (overload-resolved in `Process.ts`).
 3. **ProcessGroup combined requirements** — `AllGroupProcessesRequirements` unions `Effect.Services<p["effect"]>` across processes; app must provide that environment when calling `startAll`, etc.
 4. **Control API security** — `ControlService` binds to **127.0.0.1** only.
-5. **Storage** — `RuntimeStorage` + `ProcessStore`; use **`ProcessStoreGroupLog`** (persistence only) and **`ProcessStoreQueueResource`**. Capture/relay: **`@nikscripts/effect-pm/Logs` only** — never `ProcessStore.Logs.relayLayer`. SQLite: `layerProcessStore` from `storage/sqlite`. See [STORAGE.md](./STORAGE.md) and [ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md](./ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md).
+5. **Storage** — `RuntimeStorage` + `ProcessStore`; group logs and queue resource facets live under `src/internal/store/` and are composed by `ProcessStore.layer`. Capture/relay: **`@nikscripts/effect-pm/Logs` only** — never a `ProcessStore.Logs` export. SQLite: `layerProcessStore` from `storage/sqlite`. See [STORAGE.md](./STORAGE.md) and [ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md](./ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md).
+
+---
+
+## Public vs internal modules
+
+**Rule:** If consumers import it in their app → public module under `src/` (PascalCase) and
+documented export (`index.ts` or a `package.json` subpath). If only other package modules
+use it → `src/internal/` — not exported from `index.ts`, no new subpath.
+
+See [`.cursor/rules/public-vs-internal.mdc`](../.cursor/rules/public-vs-internal.mdc).
 
 ---
 

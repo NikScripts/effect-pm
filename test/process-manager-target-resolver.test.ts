@@ -3,7 +3,7 @@ import {
   normalizeProcessManagerTarget,
   resolveProcessManagerTarget,
   type ProcessManagerTargetCandidate,
-} from "../src/ProcessManagerTargetResolver";
+} from "../src/internal/manager/targetResolver";
 
 const candidates: ReadonlyArray<ProcessManagerTargetCandidate> = [
   {

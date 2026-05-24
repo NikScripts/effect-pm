@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Fiber, Option } from "effect";
 import { ProcessSchedule } from "../src";
-import { utcDateFromMillis } from "../src/utcDate.js";
+import { utcDateFromMillis } from "../src/internal/utcDate";
 
 describe("ProcessSchedule.inMemory", () => {
   it.effect("lists initial entries by process", () =>
