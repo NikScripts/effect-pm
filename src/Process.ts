@@ -13,6 +13,13 @@
  *
  * Default overlap policy is **parallel** because the driver forks each instance.
  *
+ * ## Optional execution analytics
+ *
+ * When a store layer is composed at the app or {@link ProcessGroup.localEnvLayer}
+ * boundary, finished runs emit `process.execution.completed` rows. Without a store,
+ * supervisor behavior is unchanged — writes are silent no-ops. Target integration is
+ * the internal `ProcessStoreProcessExecution` facet (see storage handbook Part C).
+ *
  * @module Process
  */
 
@@ -20,6 +27,12 @@ import { Cause, Clock, Context, Data, DateTime, Duration, Effect, Fiber, Layer, 
 import { isPollingLayer, isScheduleLayer } from "./internal/processLayerBrand";
 import { ProcessManagerLogAnnotationKeys } from "./LogContext";
 import { ProcessStore } from "./ProcessStore";
+import type {
+  ProcessExecutionCompletedEvent,
+  ProcessExecutionRecordInput,
+  ProcessExecutionStatus,
+  QueryOpts,
+} from "./ProcessStoreEvent";
 import { Polling, PollingTag } from "./Polling";
 import { ProcessSchedule, ProcessScheduleTag } from "./ProcessSchedule";
 import type {
@@ -66,7 +79,8 @@ export interface Process<out R> {
   readonly type: "managed";
   /**
    * Long-running trigger driver that spawns run instances.
-   * ProcessStore is optional — analytics are recorded when available, silently skipped when absent.
+   * Optional `ProcessStoreProcessExecution` facet — execution rows are recorded when
+   * present, silently skipped when absent (compose at app / {@link ProcessGroup.localEnvLayer}).
    */
   readonly effect: Effect.Effect<void, never, R>;
   readonly getStatus: (dateRange?: {
@@ -75,7 +89,7 @@ export interface Process<out R> {
   }) => Effect.Effect<ProcessDetails>;
   /**
    * Runs the user `effect` once with tracking, independent of trigger cadence.
-   * ProcessStore is optional — execution is tracked when available.
+   * Optional execution facet — same no-op semantics as {@link Process.effect}.
    */
   readonly runImmediately: () => Effect.Effect<void, never, R>;
 }
@@ -344,6 +358,88 @@ function provideStepLayers<R>(
   return step;
 }
 
+// ============================================================================
+// Internal: optional execution persistence (ProcessStore bridge)
+//
+// Invariants:
+// - Process never adds storage to its Layer graph.
+// - serviceOption(ProcessStore) → silent no-op when absent.
+// - append failures are logged, never propagated to the supervisor.
+// - Target migration: ProcessStoreProcessExecution facet (same input shape).
+// ============================================================================
+
+/** @internal Per-runtime id suffix; not durable across restarts or isolates. */
+let processExecutionSeq = 0;
+
+/** @internal */
+const makeProcessExecutionEvent = (
+  input: ProcessExecutionRecordInput,
+  occurredAtMs: number,
+): ProcessExecutionCompletedEvent => {
+  processExecutionSeq += 1;
+  return {
+    id: `${input.processId}-execution-${String(processExecutionSeq)}`,
+    type: "process.execution.completed",
+    occurredAt: occurredAtMs,
+    entityType: "process",
+    entityId: input.processId,
+    execution: {
+      scheduleKey: input.scheduleKey,
+      startedAt: input.startedAt,
+      completedAt: input.completedAt,
+      durationMs: Math.max(0, input.completedAt - input.startedAt),
+      status: input.status,
+      ...(input.error !== undefined ? { error: String(input.error) } : {}),
+      isStartupRun: input.isStartupRun,
+    },
+  };
+};
+
+/**
+ * Best-effort `process.execution.completed` append.
+ *
+ * @internal
+ */
+const recordProcessExecution = (
+  input: ProcessExecutionRecordInput,
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const storeOption = yield* Effect.serviceOption(ProcessStore);
+    if (Option.isNone(storeOption)) {
+      return;
+    }
+    const event = makeProcessExecutionEvent(input, input.completedAt);
+    yield* storeOption.value.append(event).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning(
+          `Process execution store write failed for process "${input.processId}" (${input.status})`,
+        ).pipe(Effect.annotateLogs("cause", Cause.pretty(cause))),
+      ),
+    );
+  });
+
+/** @internal Legacy read path until ProcessStoreProcessExecution facet exists. */
+const listProcessExecutions = (
+  processId: string,
+  opts?: QueryOpts,
+): Effect.Effect<ReadonlyArray<ProcessExecutionCompletedEvent>> =>
+  Effect.gen(function* () {
+    const storeOption = yield* Effect.serviceOption(ProcessStore);
+    if (Option.isNone(storeOption)) {
+      return [];
+    }
+    return yield* storeOption.value.getProcessExecutions(processId, opts);
+  });
+
+/** @internal */
+const hasPriorProcessExecutions = (
+  processId: string,
+): Effect.Effect<boolean> =>
+  Effect.map(
+    listProcessExecutions(processId, { limit: 1 }),
+    (rows) => rows.length > 0,
+  );
+
 function createProcess<E, RUser>(
   state: ProcessBuildStateWithPollingAndSchedule<E, RUser>,
 ): Process<RUser>;
@@ -383,45 +479,22 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     nextTriggerRun: MutableRef.make<Option.Option<Date>>(Option.none()),
   };
 
-  let executionRecordId = 0;
-
   const recordExecutionEvent = (args: {
     readonly scheduleKey: string | null;
     readonly startedAt: number;
     readonly completedAt: number;
-    readonly status: "completed" | "failed" | "interrupted";
+    readonly status: ProcessExecutionStatus;
     readonly error?: unknown;
     readonly isStartupRun: boolean;
   }): Effect.Effect<void> =>
-    Effect.gen(function* () {
-      const storeOption = yield* Effect.serviceOption(ProcessStore);
-      if (Option.isNone(storeOption)) return;
-      executionRecordId += 1;
-      yield* storeOption.value.append({
-        id: `${name}-execution-${executionRecordId}`,
-        type: "process.execution.completed",
-        occurredAt: args.completedAt,
-        entityType: "process",
-        entityId: name,
-        execution: {
-          scheduleKey: args.scheduleKey,
-          startedAt: args.startedAt,
-          completedAt: args.completedAt,
-          durationMs: Math.max(
-            0,
-            args.completedAt - args.startedAt,
-          ),
-          status: args.status,
-          error: args.error === undefined ? undefined : String(args.error),
-          isStartupRun: args.isStartupRun,
-        },
-      }).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning(`ProcessStore write failed for process "${name}" execution event`).pipe(
-            Effect.annotateLogs("cause", Cause.pretty(cause)),
-          )
-        ),
-      );
+    recordProcessExecution({
+      processId: name,
+      scheduleKey: args.scheduleKey,
+      startedAt: args.startedAt,
+      completedAt: args.completedAt,
+      status: args.status,
+      ...(args.error !== undefined ? { error: String(args.error) } : {}),
+      isStartupRun: args.isStartupRun,
     });
 
   const trackedProgram = (
@@ -429,10 +502,10 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     controls: ProcessScheduleControls,
   ): Effect.Effect<void, never, RUser> =>
     Effect.gen(function* () {
-      const storeOption = yield* Effect.serviceOption(ProcessStore);
       const executedAt = yield* Clock.currentTimeMillis;
-      const isStartupRun = Option.isSome(storeOption)
-        ? (yield* storeOption.value.getProcessExecutions(name, { limit: 1 })).length === 0
+      const storePresent = Option.isSome(yield* Effect.serviceOption(ProcessStore));
+      const isStartupRun = storePresent
+        ? !(yield* hasPriorProcessExecutions(name))
         : true;
 
       yield* Effect.matchEffect(
@@ -775,10 +848,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     end: Date;
   }): Effect.Effect<ProcessDetails> =>
     Effect.gen(function* () {
-      const storeOption = yield* Effect.serviceOption(ProcessStore);
-      const allExecutions = Option.isSome(storeOption)
-        ? yield* storeOption.value.getProcessExecutions(name)
-        : [];
+      const allExecutions = yield* listProcessExecutions(name);
       const inRange = dateRange === undefined
         ? allExecutions
         : allExecutions.filter(

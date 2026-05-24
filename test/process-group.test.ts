@@ -36,6 +36,12 @@ const makeTickProcess = (
 })
 
 describe("ProcessGroup — process lifecycle", () => {
+  /**
+   * Tests in this block use explicit in-memory {@link ProcessStore.layer}.
+   * Lifecycle rows are not durable across restarts. For sqlite-backed history,
+   * provide `layerProcessStore` (see ProcessGroup.localEnvLayer TSDoc).
+   */
+
   it.live("started process keeps running after start caller fiber exits", () =>
     Effect.gen(function* () {
       const ticks = yield* Ref.make(0)
@@ -90,7 +96,51 @@ describe("ProcessGroup — process lifecycle", () => {
 
       const store = yield* ProcessStore
       const history = yield* store.getProcessLifecycle(process.name)
+      // Events are appended after each control; newest-first query order → Stopped before Started
       expect(history.map((row) => row.lifecycle.tag)).toEqual(["Stopped", "Started"])
     }).pipe(Effect.provide(ProcessStore.layer)),
+  )
+
+  it.live("restart on a running process writes Stopped, Started, and Restarted", () =>
+    Effect.gen(function* () {
+      const ticks = yield* Ref.make(0)
+      const process = makeTickProcess("test/pg-restart-lifecycle", ticks)
+      const group = yield* ProcessGroup.make({
+        queues: [],
+        processes: [process],
+      })
+
+      yield* group.start(process.name)
+      yield* waitUntilTicked(ticks)
+      yield* group.restart(process.name)
+      yield* waitUntilTicked(ticks)
+      yield* group.stop(process.name)
+
+      const store = yield* ProcessStore
+      const history = yield* store.getProcessLifecycle(process.name)
+      const tags = history.map((row) => row.lifecycle.tag)
+      expect(tags.filter((tag) => tag === "Started")).toHaveLength(2)
+      expect(tags.filter((tag) => tag === "Stopped")).toHaveLength(2)
+      expect(tags.filter((tag) => tag === "Restarted")).toHaveLength(1)
+    }).pipe(Effect.provide(ProcessStore.layer)),
+  )
+
+  it.live("lifecycle recording is a no-op when ProcessStore is absent", () =>
+    Effect.gen(function* () {
+      const ticks = yield* Ref.make(0)
+      const process = makeTickProcess("test/pg-no-store-lifecycle", ticks)
+      const group = yield* ProcessGroup.make({
+        queues: [],
+        processes: [process],
+      })
+
+      // Controls must succeed without analytics storage in context
+      yield* group.start(process.name)
+      yield* waitUntilTicked(ticks)
+      yield* group.stop(process.name)
+
+      const storeOption = yield* Effect.serviceOption(ProcessStore)
+      expect(storeOption._tag).toBe("None")
+    }),
   )
 })

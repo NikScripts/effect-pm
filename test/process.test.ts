@@ -135,6 +135,33 @@ describe("Process runtime with schedule windows", () => {
       }).pipe(Effect.provide(ProcessStore.layer));
   });
 
+  it.effect("runImmediately is a no-op for storage when ProcessStore is absent", () =>
+    Effect.gen(function* () {
+      const proc = Process.make("test/run-immediately-no-store", {
+        effect: Effect.void,
+      });
+      yield* proc.runImmediately();
+      const status = yield* proc.getStatus();
+      expect(status.executions).toBe(0);
+      expect(status.lastRun).toBeNull();
+    }),
+  );
+
+  it.effect("getStatus returns zero executions without ProcessStore", () =>
+    Effect.gen(function* () {
+      const proc = Process.make("test/status-no-store", {
+        effect: Effect.void,
+        polling: Polling.spaced(Duration.millis(100)),
+        schedule: ProcessSchedule.inMemory([alwaysOnEntry]),
+      });
+      const fib = yield* Effect.forkChild(proc.effect);
+      yield* TestClock.adjust(Duration.millis(250));
+      const status = yield* proc.getStatus();
+      expect(status.executions).toBe(0);
+      yield* Fiber.interrupt(fib);
+    }).pipe(Effect.provide(TestClock.layer()), Effect.scoped),
+  );
+
   it.effect("exposes current schedule id inside the running effect", () =>
     Effect.gen(function* () {
         const seenIds = yield* Ref.make<ReadonlyArray<string>>([]);

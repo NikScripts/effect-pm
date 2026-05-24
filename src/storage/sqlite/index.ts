@@ -56,6 +56,7 @@ import type { SqlError } from "effect/unstable/sql/SqlError";
 import { ProcessStore } from "../../ProcessStore";
 import type { ProcessStoreGroupLog } from "../../internal/store/groupLog";
 import type { ProcessStoreQueueResource } from "../../internal/store/queueResource";
+import type { ProcessStoreRuntime } from "../../ProcessStoreRuntime";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import type {
   DeleteResult,
@@ -138,7 +139,7 @@ export const fromSqlClient = (
 export const layerProcessStore = (
   config: SQLiteRuntimeStorageConfig,
 ): Layer.Layer<
-  ProcessStore | ProcessStoreGroupLog | ProcessStoreQueueResource,
+  ProcessStore | ProcessStoreGroupLog | ProcessStoreQueueResource | ProcessStoreRuntime,
   never,
   Scope.Scope
 > =>

@@ -152,7 +152,10 @@ export const buildProcessManagerLogQuery = (input: {
 export const queryGroupLogs = (
   query: ProcessManagerLogQuery,
 ): Effect.Effect<void, ProcessManagerLogQueryError, ProcessStoreGroupLog> =>
-  ProcessStoreGroupLog.query(query);
+  Effect.gen(function* () {
+    const groupLog = yield* ProcessStoreGroupLog;
+    yield* groupLog.query(query);
+  });
 
 /**
  * Replay log rows returned from a future storage adapter.

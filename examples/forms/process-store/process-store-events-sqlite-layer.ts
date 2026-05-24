@@ -10,6 +10,7 @@ import * as NodePath from "@effect/platform-node/NodePath";
 import { Clock, Effect, FileSystem, Layer, Path } from "effect";
 import {
   ProcessStore,
+  ProcessStoreRuntime,
   RunResource,
   RuntimeObserver,
   type AnalyticsEvent,
@@ -17,10 +18,6 @@ import {
 import { layerProcessStore } from "../../../src/storage/sqlite";
 
 const platformLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
-
-const runtimeFactTypes: ReadonlyArray<AnalyticsEvent["type"]> = [
-  "runtime.fact.recorded",
-];
 
 const processLifecycleTypes: ReadonlyArray<AnalyticsEvent["type"]> = [
   "process.lifecycle.changed",
@@ -40,7 +37,7 @@ const program = Effect.gen(function* () {
   yield* fs.makeDirectory(path.dirname(sqlitePath), { recursive: true }).pipe(Effect.orDie);
 
   const storeLayer = layerProcessStore({ filename: sqlitePath });
-  const observerLayer = Layer.provide(RuntimeObserver.layerFromProcessStore, storeLayer);
+  const observerLayer = Layer.provide(RuntimeObserver.layer, storeLayer);
   const live = Layer.mergeAll(storeLayer, observerLayer);
 
   yield* Effect.gen(function* () {
@@ -63,10 +60,10 @@ const program = Effect.gen(function* () {
 
     yield* gate(41);
 
-    const runtimeFacts = yield* store.events({
-      entityType: "run-resource",
-      entityId: "examples/SqliteBackedGate",
-      types: runtimeFactTypes,
+    const runtime = yield* ProcessStoreRuntime;
+    const runtimeFacts = yield* runtime.facts({
+      ref: { kind: "run-resource", id: "examples/SqliteBackedGate" },
+      types: ["run-resource.run.started", "run-resource.run.completed"],
     });
 
     const processEvents = yield* store.events({
@@ -76,7 +73,7 @@ const program = Effect.gen(function* () {
     });
 
     yield* Effect.log(
-      `runtime facts persisted: ${runtimeFacts.map((event) => event.id).join(", ")}`,
+      `runtime facts persisted: ${runtimeFacts.map((fact) => `${fact.type}@${String(fact.occurredAt)}`).join(", ")}`,
     );
     yield* Effect.log(
       `process lifecycle events: ${processEvents.map((event) => event.id).join(", ")}`,

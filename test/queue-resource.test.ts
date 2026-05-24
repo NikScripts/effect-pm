@@ -126,8 +126,9 @@ describe("QueueResource.make — ProcessStore records", () => {
       yield* waitUntilCompleted(queue, 1);
       yield* Effect.sleep(Duration.millis(20));
 
-      const entries = yield* ProcessStoreQueueResource.entries("test-store-records");
-      const byKey = yield* ProcessStoreQueueResource.entriesByKey("job-1");
+      const queueResource = yield* ProcessStoreQueueResource;
+      const entries = yield* queueResource.entries("test-store-records");
+      const byKey = yield* queueResource.entriesByKey("job-1");
       const completed = entries.find((row) => row.type === "queue.entry.completed");
 
       expect(entries.map((row) => row.type).sort()).toEqual([

@@ -2,6 +2,8 @@
 
 **Purpose:** Every runtime module that should integrate with optional **`ProcessStore`** (and, at compose time, **`RuntimeStorage`** adapters). Use this to split work across parallel agents. Not limited to modules that already call legacy `append` / `getProcessExecutions`.
 
+**Agent prompts (A–Z):** [**STORAGE-AGENT-HANDBOOK.md**](./STORAGE-AGENT-HANDBOOK.md) — share with an agent: *“Do Part C”*.
+
 **Rules:** [`STORAGE.md`](./STORAGE.md), [`ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md`](./ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md).
 
 **Pattern:** Domain modules use `Effect.serviceOption(ProcessStoreGroupLog | ProcessStoreQueueResource | ProcessStore)` (or `RuntimeObserver`) — analytics when the layer is present, silent no-op when absent. Writes go through **facet services** (`ProcessStoreQueueResource`, `ProcessStoreGroupLog`, future `ProcessStore.ProcessExecution`, etc.), not ad-hoc `append` from feature code. Slim imports: e.g. `QueueResource` depends only on `ProcessStoreQueueResource`.

@@ -79,7 +79,7 @@ const program = Effect.scoped(
           BillingGroup.layer.pipe(
             Layer.provide(Layer.mergeAll(SyncProcess.layer, EmailQueue.layer)),
           ),
-          ProcessStore.layer,
+          ProcessStore.layer, // in-memory analytics; use layerProcessStore for durable lifecycle history
         ),
       ),
     );

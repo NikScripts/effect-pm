@@ -1,5 +1,7 @@
 # Storage model (mandatory)
 
+**Target (in progress):** `ProcessStore` is a **layer combiner only** — not a `Context.Service` with `append`. Facets (`ProcessStoreGroupLog`, `ProcessStoreQueueResource`, `ProcessStoreRuntime`, …) are separate tags with `layerRuntimeStorage`. See [**STORAGE-AGENT-HANDBOOK.md**](./STORAGE-AGENT-HANDBOOK.md) “Target architecture”. The sections below describe the **transitional** codebase until Part P lands.
+
 **One persistence stack. Facets are separate context services with their own layers.**
 
 ## Layers

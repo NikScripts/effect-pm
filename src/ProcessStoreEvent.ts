@@ -132,6 +132,45 @@ export interface AnalyticsEventBase {
 }
 
 /**
+ * Terminal status for a tracked process run.
+ *
+ * @public
+ */
+export type ProcessExecutionStatus = "completed" | "failed" | "interrupted";
+
+/**
+ * Facet-aligned write input for one finished process run.
+ *
+ * @remarks
+ * Used by {@link Process} today via the legacy `ProcessStore` bridge; the target
+ * is `ProcessStoreProcessExecution` (internal facet, Part C build step).
+ *
+ * @public
+ */
+export interface ProcessExecutionRecordInput {
+  readonly processId: string;
+  readonly scheduleKey: string | null;
+  /** Epoch millis when the execution started. */
+  readonly startedAt: number;
+  /** Epoch millis when the execution completed. */
+  readonly completedAt: number;
+  readonly status: ProcessExecutionStatus;
+  readonly error?: string;
+  readonly isStartupRun: boolean;
+}
+
+/**
+ * Query for process execution history (process id + optional time window / schedule key).
+ *
+ * @public
+ */
+export interface ProcessExecutionQuery {
+  readonly processId: string;
+  readonly scheduleKey?: string | null;
+  readonly opts?: QueryOpts;
+}
+
+/**
  * One finished process run (success, failure, or interrupt).
  *
  * @public
@@ -146,7 +185,7 @@ export interface ProcessExecutionCompletedEvent extends AnalyticsEventBase {
     /** Epoch millis when the execution completed. */
     completedAt: number;
     durationMs: number;
-    status: "completed" | "failed" | "interrupted";
+    status: ProcessExecutionStatus;
     error?: string;
     isStartupRun: boolean;
   };

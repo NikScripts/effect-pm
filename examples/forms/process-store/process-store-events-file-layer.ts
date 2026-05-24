@@ -12,6 +12,7 @@ import * as NodePath from "@effect/platform-node/NodePath";
 import { Clock, Effect, FileSystem, Layer, Path } from "effect";
 import {
   ProcessStore,
+  ProcessStoreRuntime,
   RunResource,
   RuntimeObserver,
   type AnalyticsEvent,
@@ -19,10 +20,6 @@ import {
 import { fileLayer } from "../../../src/storage/file";
 
 const platformLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
-
-const runtimeFactTypes: ReadonlyArray<AnalyticsEvent["type"]> = [
-  "runtime.fact.recorded",
-];
 
 const processLifecycleTypes: ReadonlyArray<AnalyticsEvent["type"]> = [
   "process.lifecycle.changed",
@@ -42,11 +39,9 @@ const program = Effect.gen(function* () {
   yield* fs.remove(filePath).pipe(Effect.catch(() => Effect.void));
 
   const storeLayer = fileLayer(filePath);
-  const observerLayer = Layer.provide(
-    RuntimeObserver.layerFromProcessStore,
-    storeLayer,
-  );
-  const live = Layer.mergeAll(storeLayer, observerLayer);
+  const runtimeLayer = ProcessStoreRuntime.layer;
+  const observerLayer = Layer.provide(RuntimeObserver.layer, runtimeLayer);
+  const live = Layer.mergeAll(storeLayer, runtimeLayer, observerLayer);
 
   yield* Effect.gen(function* () {
     const store = yield* ProcessStore;
@@ -68,10 +63,9 @@ const program = Effect.gen(function* () {
 
     yield* gate(41);
 
-    const runtimeFacts = yield* store.events({
-      entityType: "run-resource",
-      entityId: "examples/FileBackedGate",
-      types: runtimeFactTypes,
+    const runtime = yield* ProcessStoreRuntime;
+    const runtimeFacts = yield* runtime.facts({
+      ref: { kind: "run-resource", id: "examples/FileBackedGate" },
     });
 
     const processEvents = yield* store.events({
@@ -81,7 +75,7 @@ const program = Effect.gen(function* () {
     });
 
     yield* Effect.log(
-      `runtime facts persisted: ${runtimeFacts.map((event) => event.id).join(", ")}`,
+      `runtime facts persisted: ${runtimeFacts.map((fact) => fact.id).join(", ")}`,
     );
     yield* Effect.log(
       `process lifecycle events: ${processEvents.map((event) => event.id).join(", ")}`,

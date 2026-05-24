@@ -297,6 +297,12 @@ export {
   type ProcessStoreWriteError,
 } from "./ProcessStore";
 
+export {
+  ProcessStoreRuntime,
+  persistRuntimeObservation,
+  type ProcessStoreRuntimeApi,
+} from "./ProcessStoreRuntime";
+
 // Types - ProcessGroup
 export type {
   ProcessGroup as ProcessGroupInterface,
@@ -422,9 +428,18 @@ export {
 export type {
   RunResourceConfig,
   RunGate,
+  RunResourceFact,
+  RunResourceFactPayload,
+  RunResourceFactType,
+  RunResourceRef,
+  RunResourceRunCompletedPayload,
+  RunResourceRunFailedPayload,
+  RunResourceRunStartedPayload,
   RunResourceRunner,
   RunResourceRunnerConfig,
   RunResourceState,
+  RunResourceStateChange,
+  RunResourceStateChangeReason,
 } from "./RunResource";
 
 // Types - RuntimeState

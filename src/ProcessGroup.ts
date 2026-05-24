@@ -1,22 +1,85 @@
 /**
- * ProcessGroup — thin orchestrator for processes and queues.
+ * ProcessGroup — orchestrates process supervisor fibers and queue handles.
  *
- * Owns process supervisor fibers (via `FiberMap`) and queue references.
- * Status is derived from fiber liveness — no redundant state tracking.
+ * @remarks
+ * Live `running` / `stopped` status comes from {@link FiberMap} membership in **this**
+ * runtime. The group does not maintain a separate status registry or read persisted
+ * lifecycle rows for {@link ProcessGroupDetails}.
+ *
+ * ## Entry points
+ *
+ * | API | Purpose |
+ * |-----|---------|
+ * | {@link ProcessGroup.make} | Build a typed or untyped group handle |
+ * | {@link ProcessGroup.Service} | Declare an injectable group tag with `.layer` |
+ * | {@link ProcessGroup.localEnvLayer} | **Child runtime env** — group + processes + store + log context |
+ * | {@link ProcessGroup.remoteLayer} | Network-backed group; lifecycle writes occur on the **remote** host |
+ *
+ * ## Optional lifecycle analytics
+ *
+ * `start`, `stop`, and `restart` append `process.lifecycle.changed` events when
+ * {@link ProcessStore} is in context. No store → identical control behavior, zero
+ * analytics I/O (same optional pattern as {@link QueueResource} +
+ * `ProcessStoreQueueResource`).
+ *
+ * | Control | Tag(s) written | Notes |
+ * |---------|----------------|-------|
+ * | `start` | `Started` | After fiber is forked into `FiberMap` |
+ * | `stop` | `Stopped` | After fiber is removed |
+ * | `restart` | `Stopped`, `Started`, `Restarted` | When already running: delegates to `stop` then `start`, then appends `Restarted` |
+ *
+ * Event shape: {@link ProcessLifecycleChangedEvent}. Tags like `Errored` /
+ * `Recovered` are emitted by {@link Process} supervisors, not ProcessGroup controls.
+ *
+ * Store write failures are logged and swallowed — they never fail control effects.
+ *
+ * ## Where to provide storage
+ *
+ * **`ProcessGroup.make` and `ProcessGroup.Service.layer` never include a store.**
+ * Choose one compose point:
+ *
+ * 1. **App / test root** — `Effect.provide(ProcessStore.layer)` or `layerProcessStore`
+ * 2. **Group child** — {@link ProcessGroup.localEnvLayer} (recommended; merges store + log context)
+ *
+ * {@link ProcessGroup.localEnvLayer} defaults to {@link ProcessStore.layer}
+ * (**in-memory** — lifecycle history lost on restart). For durable local analytics,
+ * pass sqlite via {@link ProcessGroupLocalEnvLayerOptions.store}.
  *
  * ## Usage
  *
  * ```ts
- * const group = yield* ProcessGroup.make({
- *   processes: [emailSync, dataPoller],
- *   queues: [EmailQueue, NotificationQueue],
+ * import { Effect, Layer } from "effect"
+ * import { ProcessGroup, ProcessStore } from "@nikscripts/effect-pm"
+ *
+ * const program = Effect.gen(function* () {
+ *   const group = yield* ProcessGroup.make({
+ *     processes: [emailSync],
+ *     queues: [EmailQueue],
+ *   })
+ *   yield* group.startAll()
+ *   yield* group.status
  * })
  *
- * yield* group.startAll() // forks deferred queue workers (`autoStart: false`), then starts processes
- * yield* group.status
- * yield* ProcessGroup.awaitShutdown(group)
+ * // Analytics optional — omit ProcessStore.layer for silent no-op writes
+ * program.pipe(Effect.provide(Layer.mergeAll(EmailQueue.layer, ProcessStore.layer)))
  * ```
  *
+ * @example Durable lifecycle history for a group child
+ * ```ts
+ * import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem"
+ * import * as NodePath from "@effect/platform-node/NodePath"
+ * import { Layer } from "effect"
+ * import { ProcessGroup } from "@nikscripts/effect-pm"
+ * import { layerProcessStore } from "@nikscripts/effect-pm/storage/sqlite"
+ *
+ * const platform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)
+ * const store = Layer.provide(layerProcessStore({ filename: ".data/group.sqlite" }), platform)
+ *
+ * const env = ProcessGroup.localEnvLayer(BillingGroup, { store })
+ * ```
+ *
+ * @see {@link ProcessLifecycleChangedEvent}
+ * @see {@link ProcessGroupLocalEnvLayerOptions.store}
  * @module ProcessGroup
  */
 
@@ -36,10 +99,11 @@ import {
   QueueItemValidationError,
 } from "./QueueResource";
 import { layerProcessGroupLogContext } from "./LogContext";
-import {
-  ProcessStore,
-  type ProcessLifecycleChangedEvent,
-} from "./ProcessStore";
+import { ProcessStore } from "./ProcessStore";
+import type {
+  ProcessLifecycleChangedEvent,
+  ProcessLifecycleTag,
+} from "./ProcessStoreEvent";
 
 // ============================================================================
 // Public Types
@@ -57,17 +121,8 @@ type TagIdentifier<T> = Extract<
 type ProcessGroupQueueTag = Context.Key<any, QueueHandle<any, any, any, any>>;
 
 /**
- * Service identifiers referenced by typed queue registrations in {@link Entries}.
- *
- * @remarks
- * Entries use structurally narrowed `id` / `key` fields (see {@link ProcessGroupQueueRegistration})
- * so this type stays grounded in **string literal** identifiers even though the underlying
- * `Context.Service` brands use invariant class/`Self` types at runtime.
- *
- * @public
- */
-/**
  * Extract the service requirements from a Process handle.
+ *
  * @public
  */
 export type ProcessEffectRequirements<P> = P extends Process<infer R> ? R : never;
@@ -364,13 +419,27 @@ export interface ProcessGroupContract<
 }
 
 /**
- * Process runtime status.
+ * Live supervisor state for a managed process in **this** runtime.
+ *
+ * @remarks
+ * Derived from {@link FiberMap} membership, not from persisted lifecycle rows.
+ * A process may show `stopped` here while the store still holds a prior `Started`
+ * event from an earlier run.
+ *
  * @public
  */
 export type ProcessStatus = "running" | "stopped";
 
 /**
- * Process status details for monitoring.
+ * Process status details returned by {@link ProcessGroup.status} and control APIs.
+ *
+ * @remarks
+ * | Field group | Source |
+ * |-------------|--------|
+ * | `status`, `uptime`, `startTime` | {@link FiberMap} liveness + group start-time ref |
+ * | `lastRun`, `executions`, `armed`, schedule/polling fields | {@link Process.getStatus} |
+ * | *(none)* | Persisted lifecycle rows — write-only today; not used for live status |
+ *
  * @public
  */
 export interface ProcessGroupDetails {
@@ -390,17 +459,24 @@ export interface ProcessGroupDetails {
 }
 
 /**
- * Queue status details for monitoring.
+ * Queue depth and completion counters for group status views.
+ *
  * @public
  */
 export interface QueueDetails {
   readonly name: string;
   readonly size: { readonly high: number; readonly normal: number; readonly low: number; readonly total: number };
+  /** Items completed since the queue handle was created in this runtime. */
   readonly completed: number;
 }
 
 /**
- * Health summary for the group.
+ * Aggregate health summary for dashboards and control CLI headers.
+ *
+ * @remarks
+ * `healthy` is `true` when every registered process fiber is running (`stopped === 0`).
+ * Queue health is not evaluated beyond counting registered queues.
+ *
  * @public
  */
 export interface GroupHealth {
@@ -528,42 +604,90 @@ export type ProcessGroupQueueEnqueueRequirements<Queue> =
 // ============================================================================
 
 /**
- * The ProcessGroup handle — controls processes and reads queue status.
+ * The ProcessGroup handle — process/queue controls and live status reads.
  *
- * @typeParam R - Combined environment for all managed process effects
+ * @remarks
+ * Lifecycle controls optionally persist analytics when {@link ProcessStore} is provided
+ * (see module doc). {@link ProcessGroup.status} and {@link ProcessGroup.processStatus}
+ * never query the store — they reflect fiber liveness and {@link Process.getStatus} only.
+ *
+ * @typeParam R - Union of all managed process effect requirements
+ * @typeParam Error - Control errors (`ProcessGroupErrors` locally; widened for remote)
  *
  * @public
  */
 export interface ProcessGroup<R, Error = ProcessGroupErrors> {
-  // ─── Process lifecycle ───
+  /**
+   * Fork the named process supervisor fiber.
+   *
+   * @remarks Appends lifecycle `Started` when store is present.
+   * @throws {@link ProcessNotFoundError}
+   * @throws {@link ProcessAlreadyRunningError}
+   */
   readonly start: (name: string) => Effect.Effect<void, Error, R>;
+
+  /**
+   * Interrupt the named supervisor fiber and remove it from the group fiber map.
+   *
+   * @remarks Appends lifecycle `Stopped` when store is present.
+   * @throws {@link ProcessNotFoundError}
+   * @throws {@link ProcessNotRunningError}
+   */
   readonly stop: (name: string) => Effect.Effect<void, Error>;
+
+  /**
+   * Stop when running, then start. Appends `Stopped`, `Started`, and `Restarted`
+   * when the process was already running and store is present.
+   *
+   * @throws {@link ProcessNotFoundError}
+   * @throws {@link ProcessAlreadyRunningError} from the inner `start` when misused directly
+   */
   readonly restart: (name: string) => Effect.Effect<void, Error, R>;
+
+  /** Start all deferred queue workers, then start every process that is not running. */
   readonly startAll: () => Effect.Effect<void, Error, R>;
+
+  /** Stop every running process in registration order. */
   readonly stopAll: () => Effect.Effect<void, Error>;
+
+  /** Invoke {@link Process.runImmediately} on the named process. */
   readonly runImmediately: (name: string) => Effect.Effect<void, Error, R>;
 
-  // ─── Status (derived from fiber liveness + ProcessStore) ───
+  /** Live snapshots for all processes and queues in this runtime. */
   readonly status: Effect.Effect<{
     readonly processes: ReadonlyArray<ProcessGroupDetails>;
     readonly queues: ReadonlyArray<QueueDetails>;
   }, Error>;
+
+  /** Live {@link ProcessGroupDetails} for one process. */
   readonly processStatus: (name: string) => Effect.Effect<ProcessGroupDetails, Error>;
+
+  /** Running/stopped counts; `healthy` when no process is stopped. */
   readonly health: Effect.Effect<GroupHealth, Error>;
 
-  // ─── Queue control (delegates to queue handle) ───
   readonly listQueues: () => Effect.Effect<ReadonlyArray<QueueDetails>, Error>;
+
+  /** @throws {@link ProcessNotFoundError} when the queue name is not registered */
   readonly getQueue: (name: string) => Effect.Effect<QueueHandle<any, any, any, any>, Error>;
+
   readonly pauseQueue: (name: string) => Effect.Effect<void, Error>;
   readonly resumeQueue: (name: string) => Effect.Effect<void, Error>;
   readonly clearQueue: (name: string) => Effect.Effect<number, Error, R>;
 
-  // ─── Shutdown ───
+  /**
+   * Wait for SIGINT/SIGTERM, log, then {@link stopAll}.
+   *
+   * @remarks Requires {@link Scope.Scope} for signal handler registration.
+   */
   readonly awaitShutdown: (options?: { readonly logMessage?: (signal: string) => string }) => Effect.Effect<void, Error, Scope.Scope>;
 }
 
 /**
  * Typed controls for one process entry in a typed ProcessGroup.
+ *
+ * @remarks
+ * Lifecycle controls on this handle emit the same optional `process.lifecycle.changed`
+ * rows as the untyped {@link ProcessGroup} methods.
  *
  * @public
  */
@@ -572,6 +696,7 @@ export interface TypedProcessControls<R, Error = ProcessGroupErrors> {
   readonly stop: Effect.Effect<void, Error>;
   readonly restart: Effect.Effect<void, Error, R>;
   readonly runImmediately: Effect.Effect<void, Error, R>;
+  /** Live {@link ProcessGroupDetails} for this process entry (not store-backed). */
   readonly status: Effect.Effect<ProcessGroupDetails, Error>;
 }
 
@@ -604,6 +729,12 @@ export interface TypedQueueControls<
 
 /**
  * ProcessGroup handle typed from a canonical entry tuple.
+ *
+ * @remarks
+ * Lifecycle analytics behave identically to {@link ProcessGroup}: optional store
+ * writes on `start` / `stop` / `restart`. Storage is never bundled on
+ * {@link ProcessGroupServiceDefinition.layer} — compose {@link ProcessStore} or use
+ * {@link ProcessGroup.localEnvLayer}.
  *
  * @public
  */
@@ -649,46 +780,73 @@ export interface TypedProcessGroup<
 }
 
 // ============================================================================
-// Internal: lifecycle event recording (optional ProcessStore)
+// Internal: optional lifecycle persistence (ProcessStore bridge)
+//
+// Invariants:
+// - ProcessGroup never adds storage to its Layer graph.
+// - serviceOption(ProcessStore) → silent no-op when absent.
+// - append failures are logged, never propagated to controls.
+// - Target migration: ProcessStoreProcessLifecycle facet (same input shape).
 // ============================================================================
 
-const recordLifecycle = (event: ProcessLifecycleChangedEvent): Effect.Effect<void> =>
-  Effect.flatMap(
-    Effect.serviceOption(ProcessStore),
-    Option.match({
-      onNone: () => Effect.void,
-      onSome: (store) =>
-        store.append(event).pipe(
-          Effect.catchCause((cause) =>
-            Effect.logWarning(`ProcessStore write failed for process lifecycle "${event.entityId}"`).pipe(
-              Effect.annotateLogs("cause", Cause.pretty(cause)),
-            )
-          ),
-        ),
-    }),
-  );
+/** @internal Facet-aligned write input — keep in sync with future processLifecycle facet. */
+interface ProcessLifecycleRecordInput {
+  readonly processId: string;
+  readonly tag: ProcessLifecycleTag;
+  readonly error?: string;
+}
 
-let lifecycleSeq = 0;
-const makeLifecycleEvent = (
-  name: string,
-  tag: ProcessLifecycleChangedEvent["lifecycle"]["tag"],
-): Effect.Effect<ProcessLifecycleChangedEvent> =>
-  Effect.map(Clock.currentTimeMillis, (now): ProcessLifecycleChangedEvent => {
-    lifecycleSeq++;
-    return {
-      id: `${name}-lifecycle-${tag.toLowerCase()}-${String(lifecycleSeq)}`,
-      type: "process.lifecycle.changed",
-      occurredAt: now,
-      entityType: "process",
-      entityId: name,
-      lifecycle: { tag },
-    };
+/** @internal Per-runtime id suffix; not durable across restarts or isolates. */
+let processLifecycleSeq = 0;
+
+/** @internal */
+const makeProcessLifecycleEvent = (
+  input: ProcessLifecycleRecordInput,
+  occurredAtMs: number,
+): ProcessLifecycleChangedEvent => {
+  processLifecycleSeq++;
+  return {
+    id: `${input.processId}-lifecycle-${input.tag.toLowerCase()}-${String(processLifecycleSeq)}`,
+    type: "process.lifecycle.changed",
+    occurredAt: occurredAtMs,
+    entityType: "process",
+    entityId: input.processId,
+    lifecycle: {
+      tag: input.tag,
+      ...(input.error !== undefined ? { error: input.error } : {}),
+    },
+  };
+};
+
+/**
+ * Best-effort `process.lifecycle.changed` append.
+ *
+ * @internal
+ */
+const recordProcessLifecycleChange = (
+  input: ProcessLifecycleRecordInput,
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const storeOption = yield* Effect.serviceOption(ProcessStore);
+    if (Option.isNone(storeOption)) {
+      return;
+    }
+    const occurredAtMs = yield* Clock.currentTimeMillis;
+    const event = makeProcessLifecycleEvent(input, occurredAtMs);
+    yield* storeOption.value.append(event).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning(
+          `Process lifecycle store write failed for process "${input.processId}" (${input.tag})`,
+        ).pipe(Effect.annotateLogs("cause", Cause.pretty(cause))),
+      ),
+    );
   });
 
 // ============================================================================
 // Internal: build process details from fiber state
 // ============================================================================
 
+/** @internal Live status only — see {@link ProcessGroupDetails} field-source table. */
 const buildProcessDetails = (
   name: string,
   // Internal helper: details only read covariant outputs (`getStatus`), so the
@@ -723,6 +881,10 @@ const buildProcessDetails = (
 
 /**
  * Create a ProcessGroup orchestrator.
+ *
+ * @remarks
+ * Does **not** provide {@link ProcessStore}. Optional lifecycle analytics require
+ * composing storage at the app root or via {@link ProcessGroup.localEnvLayer}.
  *
  * @public
  */
@@ -772,7 +934,7 @@ export const makeProcessGroup = <
           DateTime.toDateUtc(DateTime.makeUnsafe(ms)),
         );
         yield* Ref.update(startTimes, (m) => new Map([...m, [name, startedAt]]));
-        yield* Effect.flatMap(makeLifecycleEvent(name, "Started"), recordLifecycle);
+        yield* recordProcessLifecycleChange({ processId: name, tag: "Started" });
         yield* Effect.logInfo(`Process '${name}' is running`);
       });
 
@@ -786,7 +948,7 @@ export const makeProcessGroup = <
 
         yield* FiberMap.remove(fibers, name);
         yield* Ref.update(startTimes, (m) => { const next = new Map(m); next.delete(name); return next; });
-        yield* Effect.flatMap(makeLifecycleEvent(name, "Stopped"), recordLifecycle);
+        yield* recordProcessLifecycleChange({ processId: name, tag: "Stopped" });
         yield* Effect.logInfo(`Process '${name}' stopped`);
       });
 
@@ -795,7 +957,9 @@ export const makeProcessGroup = <
         const running = yield* FiberMap.has(fibers, name);
         if (running) yield* stop(name);
         yield* start(name);
-        yield* Effect.flatMap(makeLifecycleEvent(name, "Restarted"), recordLifecycle);
+        // When the process was running, stop+start already wrote Stopped+Started;
+        // this adds the summary Restarted row operators expect in lifecycle timelines.
+        yield* recordProcessLifecycleChange({ processId: name, tag: "Restarted" });
       });
 
     const startAll = (): Effect.Effect<void, ProcessGroupErrors, R> =>
@@ -1110,8 +1274,12 @@ interface RemoteControlResponse<T = unknown> {
 }
 
 /**
- * Injectable typed group service declaration produced by
- * {@link ProcessGroup.Service}.
+ * Injectable typed group service from {@link ProcessGroup.Service}.
+ *
+ * @remarks
+ * **`layer` does not include {@link ProcessStore}.** For a child runtime that needs
+ * lifecycle analytics, log context, and process Layers merged together, use
+ * {@link ProcessGroup.localEnvLayer} instead of providing `group.layer` alone.
  *
  * @public
  */
@@ -1143,6 +1311,11 @@ export interface ProcessGroupServiceDefinition<
     ProcessGroupErrors,
     TypedProcessGroupQueueRequirements<Entries>
   >;
+  /**
+   * Layer for the group handle and bundled queue Layers from entries.
+   *
+   * @remarks Excludes analytics storage — see {@link ProcessGroup.localEnvLayer}.
+   */
   readonly layer: Layer.Layer<
     Self,
     ProcessGroupErrors,
@@ -1351,15 +1524,13 @@ const makeRemoteTypedProcessGroup = <
 };
 
 /**
- * Provide a {@link ProcessGroup.Service} key with a network-backed implementation
- * from a {@link ProcessManager.Endpoint}.
+ * Network-backed {@link ProcessGroup.Service} from a {@link ProcessManager.Endpoint}.
  *
  * @remarks
- * The caller still yields the same group service key, but controls are routed
- * through the endpoint transport requirements. Process controls and
- * queue start/pause/resume/clear/status are supported. Queue enqueue-style methods
- * fail with {@link UnsupportedRemoteControlError} until queue item schemas are
- * represented in the group contract.
+ * Controls are HTTP-forwarded to the remote host. **This Layer performs no local
+ * lifecycle writes** — analytics land in whatever store the remote runtime provides.
+ * Queue enqueue-style methods fail with {@link UnsupportedRemoteControlError} until
+ * item schemas are on the group contract.
  *
  * @public
  */
@@ -1564,10 +1735,33 @@ function makeProcessGroupServiceFactory<Self>() {
   return service;
 }
 
+/**
+ * Options for {@link ProcessGroup.localEnvLayer}.
+ *
+ * @public
+ */
 export interface ProcessGroupLocalEnvLayerOptions {
   /**
-   * Analytics/lifecycle store for process supervisors. Defaults to
-   * {@link ProcessStore.layer}.
+   * Analytics storage Layer merged into the child runtime environment.
+   *
+   * @remarks
+   * | Value | Durability | Use when |
+   * |-------|------------|----------|
+   * | *(default)* {@link ProcessStore.layer} | In-memory | Tests, demos, ephemeral dev |
+   * | `layerProcessStore({ filename })` | SQLite file | Local child / operator analytics |
+   *
+   * The composite store Layer also carries facet layers for queue analytics and group
+   * logs when using {@link ProcessStore.layerRuntimeStorage} / `layerProcessStore`.
+   *
+   * Requires {@link Scope.Scope} for the default in-memory adapter. Sqlite needs
+   * platform FileSystem / Path layers — see module `@example`.
+   *
+   * @example Durable sqlite
+   * ```ts
+   * ProcessGroup.localEnvLayer(MyGroup, {
+   *   store: Layer.provide(layerProcessStore({ filename: ".data/g.sqlite" }), platform),
+   * })
+   * ```
    */
   readonly store?: Layer.Layer<ProcessStore, never, Scope.Scope>;
 }
@@ -1588,6 +1782,7 @@ const processContributionLayersFrom = <Entries extends readonly ProcessGroupEntr
   return layers;
 };
 
+/** @internal See {@link ProcessGroup.localEnvLayer} for the public contract. */
 const buildLocalEnvLayer = <
   Self,
   const Entries extends readonly ProcessGroupEntry[],
@@ -1638,13 +1833,16 @@ const buildLocalEnvLayer = <
 };
 
 /**
- * Build the env layer for a local group child runtime: {@link ProcessGroup.Service.layer}
- * with process layers (group queue layers satisfy process `R`) and {@link ProcessStore}.
+ * Child-runtime environment: group + process Layers + store + log context.
  *
  * @remarks
- * Queue layers are already bundled on the group layer; this helper does **not**
- * duplicate them at the root. Process layers receive bundled queue layers only to
- * close each process effect's requirements.
+ * Merges {@link ProcessGroupServiceDefinition.layer}, per-process Layers from service
+ * entries, {@link ProcessGroupLocalEnvLayerOptions.store} (default in-memory), and
+ * {@link layerProcessGroupLogContext}. Prefer this over `group.layer` alone when
+ * launching group children or wiring PM capture.
+ *
+ * @param group - {@link ProcessGroup.Service} declaration
+ * @param options.store - Override analytics storage; see {@link ProcessGroupLocalEnvLayerOptions}
  *
  * @public
  */
@@ -1664,6 +1862,8 @@ export const localEnvLayer = <
 
 /**
  * ProcessGroup namespace.
+ *
+ * @see {@link ProcessGroup.localEnvLayer} — include store when launching group children
  *
  * @public
  */

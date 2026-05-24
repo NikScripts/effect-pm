@@ -274,27 +274,4 @@ export namespace ProcessStoreGroupLog {
     layerRuntimeStorage,
     RuntimeStorage.layer,
   );
-
-  export const record = (
-    groupId: string,
-    entryId: string,
-    entry: ProcessManagerLogEntry,
-  ): Effect.Effect<void, ProcessStoreWriteError, ProcessStoreGroupLog> =>
-    Effect.flatMap(ProcessStoreGroupLog, (store) => store.record(groupId, entryId, entry));
-
-  export const recordBatch = (
-    groupId: string,
-    rows: ReadonlyArray<{ readonly entryId: string; readonly entry: ProcessManagerLogEntry }>,
-  ): Effect.Effect<void, ProcessStoreWriteError, ProcessStoreGroupLog> =>
-    Effect.flatMap(ProcessStoreGroupLog, (store) => store.recordBatch(groupId, rows));
-
-  export const load = (
-    query: ProcessManagerLogQuery,
-  ): Effect.Effect<ReadonlyArray<ProcessManagerLogEntry>, ProcessManagerLogQueryError, ProcessStoreGroupLog> =>
-    Effect.flatMap(ProcessStoreGroupLog, (store) => store.load(query));
-
-  export const query = (
-    logQuery: ProcessManagerLogQuery,
-  ): Effect.Effect<void, ProcessManagerLogQueryError, ProcessStoreGroupLog> =>
-    Effect.flatMap(ProcessStoreGroupLog, (store) => store.query(logQuery));
 }

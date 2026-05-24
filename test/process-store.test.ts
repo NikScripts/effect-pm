@@ -8,6 +8,7 @@ import {
   ProcessId,
   ProcessStore,
   ProcessStoreDuplicateRecordError,
+  ProcessStoreRuntime,
   RuntimeStorage,
   Select,
   SubjectId,
@@ -20,6 +21,10 @@ import {
   type RuntimeStateChangedEvent,
 } from "../src"
 import { ProcessStoreQueueResource } from "../src/internal/store/queueResource"
+import {
+  runtimeFactsFromEvents,
+  runtimeStateChangesFromEvents,
+} from "../src/internal/store/spine"
 import { utcDateFromIso } from "../src/internal/utcDate";
 
 describe("ProcessStore.memory", () => {
@@ -244,12 +249,13 @@ describe("ProcessStore.memory", () => {
         types: ["runtime.fact.recorded"],
         opts: { limit: 1 },
       })
-      const runtimeFacts = yield* ProcessStore.runtime.facts({
+      const runtime = yield* ProcessStoreRuntime
+      const runtimeFacts = yield* runtime.facts({
         ref: { kind: "run-resource", id: "@test/RunGate" },
         types: ["run-resource.run.completed"],
         opts: { limit: 1 },
       })
-      const runHistory = yield* ProcessStore.runResource.history("@test/RunGate")
+      const runHistory = yield* runtime.runResourceFacts("@test/RunGate")
 
       expect(rows.map((row) => row.id)).toEqual(["runtime-completed"])
       expect(runtimeFacts.map((fact) => fact.id)).toEqual(["run-1/completed"])
@@ -326,23 +332,25 @@ describe("ProcessStore.memory", () => {
       const first = DateTime.makeUnsafe("2026-01-01T03:50:00.000Z")
       const second = DateTime.makeUnsafe("2026-01-01T03:51:00.000Z")
 
-      yield* ProcessStoreQueueResource.withQueue(
+      const queueResource = yield* ProcessStoreQueueResource
+
+      yield* queueResource.withQueue(
         "email-queue",
-        ProcessStoreQueueResource.withBatch(
+        queueResource.withBatch(
           "batch-1",
           Effect.all(
             [
-              ProcessStoreQueueResource.withEntry(
+              queueResource.withEntry(
                 "entry-1",
-                ProcessStoreQueueResource.entryEnqueued({
+                queueResource.entryEnqueued({
                   key: "delivery-1",
                   priority: "high",
                   occurredAt: first,
                 }),
               ),
-              ProcessStoreQueueResource.withEntry(
+              queueResource.withEntry(
                 "entry-1",
-                ProcessStoreQueueResource.entryCompleted({
+                queueResource.entryCompleted({
                   key: "delivery-1",
                   priority: "high",
                   attempts: 1,
@@ -350,9 +358,9 @@ describe("ProcessStore.memory", () => {
                   occurredAt: second,
                 }),
               ),
-              ProcessStoreQueueResource.withDedupeKey(
+              queueResource.withDedupeKey(
                 "delivery-1",
-                ProcessStoreQueueResource.dedupeKeyAdded({ occurredAt: first }),
+                queueResource.dedupeKeyAdded({ occurredAt: first }),
               ),
             ],
             { discard: true },
@@ -360,10 +368,10 @@ describe("ProcessStore.memory", () => {
         ),
       )
 
-      const entries = yield* ProcessStoreQueueResource.entries("email-queue")
-      const byKey = yield* ProcessStoreQueueResource.entriesByKey("delivery-1")
-      const entry = yield* ProcessStoreQueueResource.entry("entry-1")
-      const dedupeKeys = yield* ProcessStoreQueueResource.dedupeKeys("email-queue")
+      const entries = yield* queueResource.entries("email-queue")
+      const byKey = yield* queueResource.entriesByKey("delivery-1")
+      const entry = yield* queueResource.entry("entry-1")
+      const dedupeKeys = yield* queueResource.dedupeKeys("email-queue")
 
       expect(entries.map((row) => row.type)).toEqual([
         "queue.entry.completed",
@@ -522,8 +530,9 @@ describe("ProcessStore.memory", () => {
 
       yield* store.append(changed)
 
-      const history = yield* ProcessStore.runtime.stateHistory({ ref })
-      const latest = yield* ProcessStore.runtime.latestState(ref)
+      const runtime = yield* ProcessStoreRuntime
+      const history = yield* runtime.stateHistory({ ref })
+      const latest = yield* runtime.latestState(ref)
 
       expect(history.map((change) => change.id)).toEqual(["change-2"])
       expect(Option.getOrNull(latest)).toEqual(second)
@@ -612,9 +621,9 @@ describe("ProcessStore.file (legacy)", () => {
         entityId: "@test/FileRunGate",
         types: ["runtime.fact.recorded"],
       })
-      const runtimeFacts = yield* ProcessStore.runtime.facts({
+      const runtimeFacts = runtimeFactsFromEvents(rows, {
         ref: { kind: "run-resource", id: "@test/FileRunGate" },
-      }).pipe(Effect.provideService(ProcessStore, second))
+      })
 
       expect(rows.map((row) => row.id)).toEqual(["file-runtime-started"])
       expect(runtimeFacts.map((fact) => fact.id)).toEqual(["file-run-1/start"])
@@ -627,9 +636,12 @@ describe("ProcessStore.file (legacy)", () => {
       const lifecycle = yield* second.getQueueLifecycle("file-email-queue")
       expect(lifecycle.map((row) => row.lifecycle.tag)).toEqual(["Cleared"])
 
-      const stateHistory = yield* ProcessStore.runtime.stateHistory({
-        ref: { kind: "run-resource", id: "@test/FileRunGate" },
-      }).pipe(Effect.provideService(ProcessStore, second))
+      const stateEvents = yield* second.events({
+        entityType: "run-resource",
+        entityId: "@test/FileRunGate",
+        types: ["runtime.state.changed"],
+      })
+      const stateHistory = runtimeStateChangesFromEvents(stateEvents)
       expect(stateHistory.map((change) => change.reason)).toEqual([
         "run-resource.run.completed",
       ])

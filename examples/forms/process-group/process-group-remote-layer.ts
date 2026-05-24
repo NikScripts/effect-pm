@@ -158,7 +158,7 @@ const program = Effect.scoped(
             Layer.provide(Layer.mergeAll(SyncProcess.layer, EmailQueue.layer)),
           ),
           EmailQueue.layer,
-          ProcessStore.layer,
+          ProcessStore.layer, // in-memory analytics; use layerProcessStore for durable lifecycle history
         ),
       ),
     );

@@ -4,8 +4,7 @@
  * @module ProcessStore
  */
 
-import type { Effect } from "effect";
-import { Context, Effect as Effect_, Layer, Option } from "effect";
+import { Context, Effect, Layer } from "effect";
 import {
   makeFileProcessStore,
   makeInMemoryProcessStore,
@@ -15,12 +14,7 @@ import { ProcessStoreGroupLog } from "./internal/store/groupLog";
 import type { ProcessStoreGroupLogApi } from "./internal/store/groupLog";
 import { ProcessStoreQueueResource } from "./internal/store/queueResource";
 import type { ProcessStoreQueueResourceApi } from "./internal/store/queueResource";
-import {
-  runtimeFactStoreQuery,
-  runtimeFactsFromEvents,
-  runtimeStateChangesFromEvents,
-  runtimeStateStoreQuery,
-} from "./internal/store/spine";
+import { ProcessStoreRuntime } from "./ProcessStoreRuntime";
 import type {
   AnalyticsEvent,
   ProcessExecutionCompletedEvent,
@@ -29,13 +23,10 @@ import type {
   QueryOpts,
   QueueItemCompletedEvent,
   QueueLifecycleChangedEvent,
-  RuntimeFactQuery,
-  RuntimeStateHistoryQuery,
   StoreEventQuery,
 } from "./ProcessStoreEvent";
 import type { RuntimeRecordQuery } from "./Query";
 import type { RuntimeRecord } from "./RuntimeStorage";
-import type { RuntimeFact, RuntimeRef, RuntimeStateBase, RuntimeStateChange } from "./RuntimeState";
 import { RuntimeStorage } from "./RuntimeStorage";
 
 export type {
@@ -81,6 +72,8 @@ export type {
 } from "./internal/store/queueResource";
 
 export type { ProcessStoreGroupLogApi } from "./internal/store/groupLog";
+
+export type { ProcessStoreRuntimeApi } from "./ProcessStoreRuntime";
 
 /**
  * Storage port implemented by the in-memory service and durable adapters.
@@ -128,16 +121,20 @@ export namespace ProcessStore {
   const facetLayers = Layer.mergeAll(
     ProcessStoreGroupLog.layerRuntimeStorage,
     ProcessStoreQueueResource.layerRuntimeStorage,
+    ProcessStoreRuntime.layerRuntimeStorage,
   );
 
   /**
    * `Layer` that provides {@link ProcessStore} from injected {@link RuntimeStorage}
-   * plus internal facet services used by {@link QueueResource} and log relay.
+   * plus facet services used by {@link QueueResource}, log relay, and runtime observation.
    *
    * @public
    */
   export const layerRuntimeStorage: Layer.Layer<
-    ProcessStore | ProcessStoreGroupLog | ProcessStoreQueueResource,
+    | ProcessStore
+    | ProcessStoreGroupLog
+    | ProcessStoreQueueResource
+    | ProcessStoreRuntime,
     never,
     RuntimeStorage
   > = Layer.mergeAll(
@@ -163,44 +160,4 @@ export namespace ProcessStore {
    */
   export const fileLayer = (filePath: string) =>
     Layer.effect(ProcessStore, makeFileProcessStore(filePath));
-
-  /** @public */
-  export const runtime = {
-    facts: (query?: RuntimeFactQuery): Effect_.Effect<RuntimeFact[], never, ProcessStore> =>
-      Effect_.gen(function* () {
-        const store = yield* ProcessStore;
-        const events = yield* store.events(runtimeFactStoreQuery(query));
-        return runtimeFactsFromEvents(events, query);
-      }),
-    stateHistory: (
-      query: RuntimeStateHistoryQuery,
-    ): Effect_.Effect<RuntimeStateChange[], never, ProcessStore> =>
-      Effect_.gen(function* () {
-        const store = yield* ProcessStore;
-        const events = yield* store.events(runtimeStateStoreQuery(query));
-        return runtimeStateChangesFromEvents(events);
-      }),
-    latestState: (
-      ref: RuntimeRef,
-    ): Effect_.Effect<Option.Option<RuntimeStateBase>, never, ProcessStore> =>
-      Effect_.map(
-        ProcessStore.runtime.stateHistory({ ref, opts: { limit: 1 } }),
-        (changes) =>
-          changes[0] === undefined
-            ? Option.none()
-            : Option.some(changes[0].current),
-      ),
-  } as const;
-
-  /** @public */
-  export const runResource = {
-    history: (
-      resourceId: string,
-      opts?: QueryOpts,
-    ): Effect_.Effect<RuntimeFact[], never, ProcessStore> =>
-      ProcessStore.runtime.facts({
-        ref: { kind: "run-resource", id: resourceId },
-        opts,
-      }),
-  } as const;
 }

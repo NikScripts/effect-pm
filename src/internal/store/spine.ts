@@ -111,6 +111,29 @@ export const isProcessExecutionCompleted = (
   event.type === "process.execution.completed" &&
   event.entityType === "process";
 
+/** @internal Store query for process execution events — shared by monolith reads and future facet. */
+export const processExecutionStoreQuery = (
+  processId: string,
+  opts?: QueryOpts,
+): StoreEventQuery => ({
+  entityType: "process",
+  entityId: processId,
+  types: ["process.execution.completed"],
+  opts,
+});
+
+/** @internal Project execution rows from an in-memory event batch. */
+export const processExecutionsFromEvents = (
+  events: ReadonlyArray<AnalyticsEvent>,
+  processId: string,
+  opts?: QueryOpts,
+): ProcessExecutionCompletedEvent[] =>
+  selectEvents(
+    events,
+    processExecutionStoreQuery(processId, opts),
+    isProcessExecutionCompleted,
+  );
+
 /** @internal */
 export const isProcessLifecycleChanged = (
   event: AnalyticsEvent,
@@ -478,17 +501,9 @@ export const assembleProcessStoreInterface = (
   GroupLog: groupLog,
   QueueResource: queue,
   getProcessExecutions: (processId, opts) =>
-    Effect.map(spine.events({
-      entityType: "process",
-      entityId: processId,
-      types: ["process.execution.completed"],
-      opts,
-    }), (events) =>
-      selectEvents(
-        events,
-        { entityType: "process", entityId: processId, types: ["process.execution.completed"], opts },
-        isProcessExecutionCompleted,
-      ),
+    Effect.map(
+      spine.events(processExecutionStoreQuery(processId, opts)),
+      (events) => processExecutionsFromEvents(events, processId, opts),
     ),
   getProcessLifecycle: (processId, opts) =>
     Effect.map(spine.events({

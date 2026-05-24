@@ -1,7 +1,12 @@
 /**
  * @module examples/forms/resource/run-resource-runtime-observer
  *
- * RunResource runtime facts and state changes through RuntimeObserver listeners.
+ * RunResource runtime facts and state changes through RuntimeObserver.
+ *
+ * - **In-process:** `RuntimeObserver.layerListeners` (this script).
+ * - **Durable:** compose `layerProcessStore` + `RuntimeObserver.layer`
+ *   at app scope (see {@link RunResource} module doc).
+ *
  * Run: `npx tsx examples/forms/resource/run-resource-runtime-observer.ts`
  */
 
@@ -65,7 +70,9 @@ const program = Effect.gen(function* () {
     const observedFactTypes = yield* Ref.get(factTypes);
     const observedStateReasons = yield* Ref.get(stateReasons);
     const observedChanges = yield* Ref.get(stateChanges);
-    const runStates = observedChanges.map((change) => change.current).filter(isRunResourceState);
+    const runStates = observedChanges
+      .map((change) => change.current)
+      .filter(isRunResourceState);
     const latestState = runStates.at(-1);
 
     yield* Effect.log(

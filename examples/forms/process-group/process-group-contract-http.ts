@@ -34,7 +34,7 @@ class ContractProcess extends Process.Service<ContractProcess>()("@examples/Cont
 const envLayer = Layer.mergeAll(
   ContractProcess.layer,
   EmailQueue.layer,
-  ProcessStore.layer,
+  ProcessStore.layer, // in-memory analytics; use layerProcessStore for durable lifecycle history
   NodeHttpClient.layerUndici,
 );
 

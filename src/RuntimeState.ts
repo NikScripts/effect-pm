@@ -5,17 +5,21 @@
  * @remarks
  * This module is intentionally small. Runtime components can publish facts or
  * state changes when they mutate, while storage/projection layers can subscribe
- * without forcing feature-specific methods onto `ProcessStore`.
+ * without forcing feature-specific methods onto a monolithic store.
+ *
+ * For durable history, compose {@link RuntimeObserver.layer} with
+ * {@link ProcessStoreRuntime.layerRuntimeStorage} (or `ProcessStore.layerRuntimeStorage` /
+ * `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`) at app or
+ * group-child scope — not inside feature modules.
  *
  * @module RuntimeState
  */
 
-import { Cause, Context, Effect, Layer, Option } from "effect";
+import { Context, Effect, Layer, Option } from "effect";
 import {
-  ProcessStore,
-  type RuntimeFactRecordedEvent,
-  type RuntimeStateChangedEvent,
-} from "./ProcessStore";
+  ProcessStoreRuntime,
+  persistRuntimeObservation,
+} from "./ProcessStoreRuntime";
 
 /**
  * Stable identity for a runtime component.
@@ -123,96 +127,70 @@ export namespace RuntimeObserver {
       { discard: true },
     );
 
-  const factToAnalyticsEvent = (fact: RuntimeFact): RuntimeFactRecordedEvent => ({
-    id: `runtime.fact/${fact.id}`,
-    type: "runtime.fact.recorded",
-    occurredAt: fact.occurredAt,
-    entityType: fact.ref.kind,
-    entityId: fact.ref.id,
-    attributes: fact.attributes,
-    fact,
-  });
-
-  const stateChangeToAnalyticsEvent = (
-    change: RuntimeStateChange,
-  ): RuntimeStateChangedEvent => ({
-    id: `runtime.state/${change.id}`,
-    type: "runtime.state.changed",
-    occurredAt: change.changedAt,
-    entityType: change.ref.kind,
-    entityId: change.ref.id,
-    change,
-  });
-
   /**
    * Publish a state change if a {@link RuntimeObserver} is present.
+   *
+   * @remarks
+   * Observer and persistence failures are ignored so the publishing runtime
+   * mutation keeps its original success/error channel.
    *
    * @public
    */
   export const publishStateChange = (
     change: RuntimeStateChange,
   ): Effect.Effect<void> =>
-    Effect.flatMap(
-      Effect.serviceOption(RuntimeObserver),
-      Option.match({
-        onNone: () => Effect.void,
-        onSome: (observer) => observer.publishStateChange(change).pipe(Effect.ignore),
-      }),
+    Effect.serviceOption(RuntimeObserver).pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.void,
+          onSome: (observer) => observer.publishStateChange(change),
+        }),
+      ),
+      Effect.ignore,
     );
 
   /**
    * Publish a fact if a {@link RuntimeObserver} is present.
    *
+   * @remarks
+   * Observer and persistence failures are ignored so the publishing runtime
+   * mutation keeps its original success/error channel.
+   *
    * @public
    */
   export const publishFact = (fact: RuntimeFact): Effect.Effect<void> =>
-    Effect.flatMap(
-      Effect.serviceOption(RuntimeObserver),
-      Option.match({
-        onNone: () => Effect.void,
-        onSome: (observer) => observer.publishFact(fact).pipe(Effect.ignore),
-      }),
+    Effect.serviceOption(RuntimeObserver).pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.void,
+          onSome: (observer) => observer.publishFact(fact),
+        }),
+      ),
+      Effect.ignore,
     );
 
   /**
-   * Observer layer that persists facts and state changes through an existing
-   * {@link ProcessStore}. Not the same symbol as sqlite {@link layerProcessStore}
-   * on `@nikscripts/effect-pm/storage/sqlite`.
+   * Observer layer that persists facts and state changes through
+   * {@link ProcessStoreRuntime}.
    *
    * @remarks
-   * Facts are persisted as `runtime.fact.recorded` events, and state changes are
-   * persisted as `runtime.state.changed` events.
+   * Not the same symbol as sqlite `layerProcessStore` on
+   * `@nikscripts/effect-pm/storage/sqlite`.
    *
    * @public
    */
-  export const layerFromProcessStore: Layer.Layer<RuntimeObserver, never, ProcessStore> =
+  export const layer: Layer.Layer<RuntimeObserver, never, ProcessStoreRuntime> =
     Layer.effect(
       RuntimeObserver,
-      Effect.gen(function* () {
-        const store = yield* ProcessStore;
-        const appendObservation = (event: RuntimeFactRecordedEvent | RuntimeStateChangedEvent) =>
-          store.append(event).pipe(
-            Effect.catchCause((cause) =>
-              Effect.logWarning("ProcessStore write failed for runtime observation").pipe(
-                Effect.annotateLogs("cause", Cause.pretty(cause)),
-              )
-            ),
-          );
-        return {
-          publishStateChange: (change) => appendObservation(stateChangeToAnalyticsEvent(change)),
-          publishFact: (fact) => appendObservation(factToAnalyticsEvent(fact)),
-        };
-      }),
+      ProcessStoreRuntime.pipe(
+        Effect.map((runtime) => ({
+          publishStateChange: (change) =>
+            persistRuntimeObservation(runtime.recordStateChange(change)),
+          publishFact: (fact) =>
+            persistRuntimeObservation(runtime.recordFact(fact)),
+        })),
+      ),
     );
-
-  /**
-   * @deprecated Use {@link layerFromProcessStore}. Kept for compatibility; name
-   * collided with sqlite `layerProcessStore`.
-   *
-   * @public
-   */
-  export const layerProcessStore: Layer.Layer<RuntimeObserver, never, ProcessStore> =
-    layerFromProcessStore;
 
   /**
    * Observer layer that forwards facts and state changes to scoped listeners.
