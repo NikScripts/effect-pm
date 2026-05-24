@@ -16,7 +16,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/ProcessStore.ts` | Analytics + lifecycle event append/read. |
 | `src/ControlService.ts` | Localhost HTTP JSON control API. |
 | `src/Logs.ts` | PM capture/relay only (`captureLoggerLayer`, `relayLayer`) — package subpath `@nikscripts/effect-pm/Logs`. |
-| `src/ProcessStoreLogs.ts` | Store persistence for `group.log.entry` (`ProcessStore.GroupLog` facet). |
+| `src/ProcessStoreGroupLog.ts` | Store persistence for `group.log.entry` (`ProcessStoreGroupLog` service). |
 | `src/processManagerLogsRelay.ts` | Batched flush into `store.GroupLog` (imported by `Logs.ts`). |
 | `docs/ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md` | Full audit checklist and logs/storage naming contract. |
 | `src/processManagerLog*.ts` | Log capture relay, `pm watch` / `pm logs` CLI wiring. |
@@ -42,7 +42,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 2. **`Process.effect` typing** — `Process<R>`: `effect` needs `R | ProcessStore`. Inlined `polling` / `schedule` on `Process.make` are merged into the supervisor so **`R` excludes those services** when present (overload-resolved in `Process.ts`).
 3. **ProcessGroup combined requirements** — `AllGroupProcessesRequirements` unions `Effect.Services<p["effect"]>` across processes; app must provide that environment when calling `startAll`, etc.
 4. **Control API security** — `ControlService` binds to **127.0.0.1** only.
-5. **Storage** — `RuntimeStorage` + `ProcessStore`; use **`ProcessStore.GroupLog`** (persistence only) and **`ProcessStore.QueueResource`**. Capture/relay: **`@nikscripts/effect-pm/Logs` only** — never `ProcessStore.Logs.relayLayer`. SQLite: `layerProcessStore` from `storage/sqlite`. See [STORAGE.md](./STORAGE.md) and [ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md](./ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md).
+5. **Storage** — `RuntimeStorage` + `ProcessStore`; use **`ProcessStoreGroupLog`** (persistence only) and **`ProcessStoreQueueResource`**. Capture/relay: **`@nikscripts/effect-pm/Logs` only** — never `ProcessStore.Logs.relayLayer`. SQLite: `layerProcessStore` from `storage/sqlite`. See [STORAGE.md](./STORAGE.md) and [ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md](./ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md).
 
 ---
 

@@ -17,7 +17,7 @@ import type {
   GroupLogEntryRecordedEvent,
   RuntimeFactRecordedEvent,
   RuntimeStateChangedEvent,
-} from "./ProcessStore";
+} from "./ProcessStoreTypes";
 import type {
   EffectPmEventCreateInput,
   EffectPmEventRow,

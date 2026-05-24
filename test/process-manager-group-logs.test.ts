@@ -6,6 +6,9 @@ import {
   processManagerLogEntryFromLoggerOptions,
 } from "../src/processManagerLogEntry.js";
 import { replayLogEntry } from "../src/processManagerLogRelay.js";
+import { utcDateFromIso } from "../src/utcDate.js";
+
+const ndjsonRoundTripDate = utcDateFromIso("2024-01-01T00:00:00.000Z");
 
 describe("processManagerGroupLogs", () => {
   it("round-trips a structured log entry as NDJSON", () =>
@@ -14,7 +17,7 @@ describe("processManagerGroupLogs", () => {
         message: "hello",
         logLevel: "Info",
         cause: Cause.empty,
-        date: new Date("2024-01-01T00:00:00.000Z"),
+        date: ndjsonRoundTripDate,
         annotations: { requestId: "abc" },
         spans: [["span-a", 0]],
       });
@@ -24,13 +27,12 @@ describe("processManagerGroupLogs", () => {
     }));
 
   it.effect("replays an entry through the logger", () =>
-    Effect.gen(function* () {
-      yield* replayLogEntry({
-        date: "2024-01-01T00:00:00.000Z",
-        level: "Warn",
-        message: "warn message",
-        annotations: { key: "value" },
-        spans: ["span-b"],
-      });
-    }));
+    replayLogEntry({
+      date: "2024-01-01T00:00:00.000Z",
+      level: "Warn",
+      message: "warn message",
+      annotations: { key: "value" },
+      spans: ["span-b"],
+    }),
+  );
 });

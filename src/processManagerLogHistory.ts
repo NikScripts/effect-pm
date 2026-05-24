@@ -1,16 +1,18 @@
 import { Effect, Option, Scope } from "effect";
-import type { ProcessManagerLogScope } from "./processManagerLogContext.js";
-import { logScopeGroupId } from "./processManagerLogContext.js";
+import type { ProcessManagerLogScope } from "./processManagerLogContext";
+import { logScopeGroupId } from "./processManagerLogContext";
 import {
   buildProcessManagerLogQuery,
   ProcessManagerLogQueryError,
-} from "./processManagerLogQuery.js";
-import { ProcessStore } from "./ProcessStore.js";
-import { groupLogSqlitePath } from "./processManagerChildLaunch.js";
-import { layerProcessStore } from "./storage/sqlite/index.js";
-import { replayLogQueryResults } from "./processManagerLogQuery.js";
-import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
-import { resolveChildLaunchPaths } from "./processManagerChildLaunch.js";
+} from "./processManagerLogQuery";
+import { ProcessStoreGroupLog } from "./ProcessStoreGroupLog";
+import { groupLogSqlitePath } from "./processManagerChildLaunch";
+import { layerProcessStore } from "./storage/sqlite/index";
+import { replayLogQueryResults } from "./processManagerLogQuery";
+import type { ProcessManagerLogEntry } from "./processManagerLogEntry";
+import { resolveChildLaunchPaths } from "./processManagerChildLaunch";
+
+// @effect-diagnostics strictEffectProvide:off — pm logs opens per-group sqlite stores from resolved disk paths.
 
 type GroupCatalogEntry = {
   readonly id: string;
@@ -68,7 +70,7 @@ export const queryGroupLogsForCatalog = (
       for (const group of groups) {
         const sqliteFilename = groupLogSqlitePath(paths.logDirectory, group.id);
         const groupQuery = { ...query, groupId: group.id, limit: perGroupLimit };
-        const loaded = yield* ProcessStore.GroupLog.load(groupQuery).pipe(
+        const loaded = yield* ProcessStoreGroupLog.load(groupQuery).pipe(
           Effect.provide(layerProcessStore({ filename: sqliteFilename })),
           Effect.scoped,
           Effect.option,
@@ -99,7 +101,7 @@ export const queryGroupLogsForCatalog = (
       });
     }
     const sqliteFilename = groupLogSqlitePath(paths.logDirectory, groupId);
-    yield* ProcessStore.GroupLog.query(query).pipe(
+    yield* ProcessStoreGroupLog.query(query).pipe(
       Effect.provide(layerProcessStore({ filename: sqliteFilename })),
       Effect.scoped,
     );

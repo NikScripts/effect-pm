@@ -5,8 +5,6 @@
  */
 
 import { Clock, Duration, Effect } from "effect";
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import {
   Endpoint,
   Polling,
@@ -20,9 +18,7 @@ import { utcDateFromMillis } from "../../../src/utcDate";
 import { analyticsPort } from "./ports";
 
 const analyticsTransport = Transport.http(analyticsPort);
-const analyticsEntry = pathToFileURL(
-  join(process.cwd(), "examples/scenarios/process-manager-playground/analytics-definition.ts"),
-).href;
+const analyticsEntry = `file://${process.cwd()}/examples/scenarios/process-manager-playground/analytics-definition.ts`;
 
 export class CounterQueue extends QueueResource.Service<CounterQueue, number, never>()(
   "@demo/playground/Analytics/CounterQueue",

@@ -54,6 +54,16 @@
       "import": "./dist/ProcessStore.mjs",
       "require": "./dist/ProcessStore.js"
     },
+    "./ProcessStoreGroupLog": {
+      "types": "./dist/ProcessStoreGroupLog.d.ts",
+      "import": "./dist/ProcessStoreGroupLog.mjs",
+      "require": "./dist/ProcessStoreGroupLog.js"
+    },
+    "./ProcessStoreQueueResource": {
+      "types": "./dist/ProcessStoreQueueResource.d.ts",
+      "import": "./dist/ProcessStoreQueueResource.mjs",
+      "require": "./dist/ProcessStoreQueueResource.js"
+    },
     "./Query": {
       "types": "./dist/Query.d.ts",
       "import": "./dist/Query.mjs",

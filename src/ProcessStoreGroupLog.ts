@@ -1,26 +1,27 @@
 /**
  * Structured log facet for {@link ProcessStoreInterface}.
  *
- * @module ProcessStoreLogs
+ * @module ProcessStoreGroupLog
  */
 
-import { Effect } from "effect";
+import { Clock, Context, Effect, Layer } from "effect";
 import type { LogLevel } from "effect/LogLevel";
-import { ProcessManagerLogAnnotationKeys } from "./processManagerLogContext.js";
-import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
-import type { ProcessManagerLogQuery } from "./processManagerLogQuery.js";
-import { ProcessManagerLogQueryError, replayLogQueryResults } from "./processManagerLogQuery.js";
+import { ProcessManagerLogAnnotationKeys } from "./processManagerLogContext";
+import type { ProcessManagerLogEntry } from "./processManagerLogEntry";
+import type { ProcessManagerLogQuery } from "./processManagerLogQuery";
+import { ProcessManagerLogQueryError, replayLogQueryResults } from "./processManagerLogQuery";
+import {
+  makeProcessStoreSpine,
+  makeRunId,
+} from "./processStoreSpine";
 import type {
   AnalyticsEvent,
   GroupLogEntryRecordedEvent,
   ProcessStoreWriteError,
   StoreEventQuery,
-} from "./ProcessStore.js";
-
-const isGroupLogEntryRecorded = (
-  event: AnalyticsEvent,
-): event is GroupLogEntryRecordedEvent =>
-  event.type === "group.log.entry" && event.entityType === "group";
+} from "./ProcessStoreTypes";
+import { isGroupLogEntryRecorded } from "./ProcessStoreTypes";
+import { RuntimeStorage } from "./RuntimeStorage";
 
 /**
  * Log operations exposed on {@link ProcessStoreInterface.GroupLog}.
@@ -187,7 +188,7 @@ const entriesFromStoreEvents = (
 /**
  * @public
  */
-export const makeProcessStoreLogs = (deps: {
+export const makeProcessStoreGroupLog = (deps: {
   readonly append: (event: AnalyticsEvent) => Effect.Effect<void, ProcessStoreWriteError>;
   readonly appendBatch: (events: ReadonlyArray<AnalyticsEvent>) => Effect.Effect<void, ProcessStoreWriteError>;
   readonly events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>;
@@ -224,3 +225,76 @@ export const makeProcessStoreLogs = (deps: {
       yield* replayLogQueryResults(entries, logQuery.sort);
     }),
 });
+
+/** @internal @deprecated Use {@link makeProcessStoreGroupLog}. */
+export const makeProcessStoreLogs = makeProcessStoreGroupLog;
+
+const makeProcessStoreGroupLogFromRuntimeStorage: Effect.Effect<
+  ProcessStoreGroupLogApi,
+  never,
+  RuntimeStorage
+> = Effect.gen(function* () {
+  const storage = yield* RuntimeStorage;
+  const now = yield* Clock.currentTimeMillis;
+  const spine = makeProcessStoreSpine(storage, makeRunId(now));
+  return makeProcessStoreGroupLog({
+    append: spine.append,
+    appendBatch: spine.appendBatch,
+    events: spine.events,
+  });
+});
+
+/**
+ * Context tag for {@link ProcessStoreGroupLogApi}.
+ *
+ * @public
+ */
+export class ProcessStoreGroupLog extends Context.Service<
+  ProcessStoreGroupLog,
+  ProcessStoreGroupLogApi
+>()("@nikscripts/effect-pm/ProcessStoreGroupLog", {
+  make: makeProcessStoreGroupLogFromRuntimeStorage,
+}) {}
+
+export namespace ProcessStoreGroupLog {
+  /**
+   * `Layer` that provides {@link ProcessStoreGroupLog} from injected {@link RuntimeStorage}.
+   *
+   * @public
+   */
+  export const layerRuntimeStorage: Layer.Layer<ProcessStoreGroupLog, never, RuntimeStorage> =
+    Layer.effect(ProcessStoreGroupLog, makeProcessStoreGroupLogFromRuntimeStorage);
+
+  /**
+   * `Layer` backed by in-memory {@link RuntimeStorage}.
+   *
+   * @public
+   */
+  export const layer: Layer.Layer<ProcessStoreGroupLog, never, never> = Layer.provide(
+    layerRuntimeStorage,
+    RuntimeStorage.layer,
+  );
+
+  export const record = (
+    groupId: string,
+    entryId: string,
+    entry: ProcessManagerLogEntry,
+  ): Effect.Effect<void, ProcessStoreWriteError, ProcessStoreGroupLog> =>
+    Effect.flatMap(ProcessStoreGroupLog, (store) => store.record(groupId, entryId, entry));
+
+  export const recordBatch = (
+    groupId: string,
+    rows: ReadonlyArray<{ readonly entryId: string; readonly entry: ProcessManagerLogEntry }>,
+  ): Effect.Effect<void, ProcessStoreWriteError, ProcessStoreGroupLog> =>
+    Effect.flatMap(ProcessStoreGroupLog, (store) => store.recordBatch(groupId, rows));
+
+  export const load = (
+    query: ProcessManagerLogQuery,
+  ): Effect.Effect<ReadonlyArray<ProcessManagerLogEntry>, ProcessManagerLogQueryError, ProcessStoreGroupLog> =>
+    Effect.flatMap(ProcessStoreGroupLog, (store) => store.load(query));
+
+  export const query = (
+    logQuery: ProcessManagerLogQuery,
+  ): Effect.Effect<void, ProcessManagerLogQueryError, ProcessStoreGroupLog> =>
+    Effect.flatMap(ProcessStoreGroupLog, (store) => store.query(logQuery));
+}

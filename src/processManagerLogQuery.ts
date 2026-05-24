@@ -1,9 +1,9 @@
 import { Data, Effect, Option } from "effect";
-import { utcDateFromMillis } from "./utcDate.js";
-import { ProcessStore } from "./ProcessStore.js";
-import type { ProcessManagerLogScope } from "./processManagerLogContext.js";
-import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
-import { replayLogEntry } from "./processManagerLogRelay.js";
+import { utcDateFromMillis } from "./utcDate";
+import { ProcessStoreGroupLog } from "./ProcessStoreGroupLog";
+import type { ProcessManagerLogScope } from "./processManagerLogContext";
+import type { ProcessManagerLogEntry } from "./processManagerLogEntry";
+import { replayLogEntry } from "./processManagerLogRelay";
 
 const defaultLogQueryLimit = 100;
 const maxLogQueryLimit = 10_000;
@@ -151,8 +151,8 @@ export const buildProcessManagerLogQuery = (input: {
  */
 export const queryGroupLogs = (
   query: ProcessManagerLogQuery,
-): Effect.Effect<void, ProcessManagerLogQueryError, ProcessStore> =>
-  ProcessStore.GroupLog.query(query);
+): Effect.Effect<void, ProcessManagerLogQueryError, ProcessStoreGroupLog> =>
+  ProcessStoreGroupLog.query(query);
 
 /**
  * Replay log rows returned from a future storage adapter.

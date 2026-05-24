@@ -5,8 +5,6 @@
  */
 
 import { Cause, Clock, Data, Duration, Effect, Exit } from "effect";
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import {
   Endpoint,
   Polling,
@@ -20,9 +18,7 @@ import { utcDateFromMillis } from "../../../src/utcDate";
 import { workshopPort } from "./ports";
 
 const workshopTransport = Transport.http(workshopPort);
-const workshopEntry = pathToFileURL(
-  join(process.cwd(), "examples/scenarios/process-manager-playground/workshop-definition.ts"),
-).href;
+const workshopEntry = `file://${process.cwd()}/examples/scenarios/process-manager-playground/workshop-definition.ts`;
 
 export class WorkshopJobError extends Data.TaggedError("WorkshopJobError")<{
   readonly jobId: string;

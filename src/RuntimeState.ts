@@ -175,19 +175,13 @@ export namespace RuntimeObserver {
     );
 
   /**
-   * Observer layer that persists runtime facts through the current
-   * {@link ProcessStore} analytics event envelope.
+   * Observer layer that persists facts and state changes through an existing
+   * {@link ProcessStore}. Not the same symbol as sqlite {@link layerProcessStore}
+   * on `@nikscripts/effect-pm/storage/sqlite`.
    *
    * @remarks
    * Facts are persisted as `runtime.fact.recorded` events, and state changes are
    * persisted as `runtime.state.changed` events.
-   *
-   * @public
-   */
-  /**
-   * Observer layer that persists facts and state changes through an existing
-   * {@link ProcessStore}. Not the same symbol as sqlite {@link layerProcessStore}
-   * on `@nikscripts/effect-pm/storage/sqlite`.
    *
    * @public
    */

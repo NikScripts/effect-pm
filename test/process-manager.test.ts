@@ -1,8 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { Config, ConfigProvider, Effect, FileSystem, Layer, Ref } from "effect";
 import {
   ControlRouter,
@@ -22,11 +20,10 @@ import { decodeProcessManagerRunStateJson } from "../src/processManagerRunState.
 import { ModuleEndpointGroup } from "./fixtures/process-manager-module-definition";
 
 const testLocalEntry = "file:///test-process-group-entry.ts";
-const moduleFixtureEntry = pathToFileURL(
-  join(process.cwd(), "test/fixtures/process-manager-module-definition.ts"),
-).href;
-const groupChildScript = join(process.cwd(), "src/bin/effect-pm-group-child.ts");
-
+const projectFileUrl = (relativePath: string): string =>
+  `file://${process.cwd()}/${relativePath}`;
+const moduleFixtureEntry = projectFileUrl("test/fixtures/process-manager-module-definition.ts");
+const groupChildScript = `${process.cwd()}/src/bin/effect-pm-group-child.ts`;
 
 interface Email {
   readonly to: string;

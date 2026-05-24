@@ -14,20 +14,18 @@ import { layerProcessStore } from "../src/storage/sqlite/index.js";
 const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
 describe("process manager log pipeline (H6)", () => {
-  it.live("captureLoggerLayer → relayLayer → GroupLog → SQLite load", () => {
-    const program = Effect.gen(function* () {
+  it.live("captureLoggerLayer → relayLayer → GroupLog → SQLite load", () =>
+    Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const directory = yield* fs.makeTempDirectory();
       const sqliteFilename = path.join(directory, "logs.sqlite");
       const groupId = "pipeline-test-group";
 
-      const storeLayer = layerProcessStore({ filename: sqliteFilename });
-      const storeAndLogContext = Layer.mergeAll(
-        storeLayer,
+      const childEnv = Layer.mergeAll(
+        layerProcessStore({ filename: sqliteFilename }),
         Layer.succeed(ProcessGroupLogContext, { groupId }),
-      );
-      const childEnv = storeAndLogContext.pipe(
+      ).pipe(
         Layer.provideMerge(relayLayer),
         Layer.provideMerge(captureLoggerLayer),
       );
@@ -61,8 +59,6 @@ describe("process manager log pipeline (H6)", () => {
         assert.strictEqual(loaded.length, 1);
         assert.strictEqual(loaded[0]?.message, "relay pipeline tick");
       }).pipe(Effect.provide(childEnv), Effect.scoped);
-    }).pipe(Effect.provide(nodePlatform));
-
-    return program;
-  });
+    }).pipe(Effect.provide(nodePlatform)),
+  );
 });

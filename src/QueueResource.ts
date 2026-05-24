@@ -71,8 +71,8 @@ import {
   Semaphore,
   Types,
 } from "effect";
-import { withQueueLogAnnotations } from "./processManagerLogContext.js";
-import { ProcessStore } from "./ProcessStore";
+import { withQueueLogAnnotations } from "./processManagerLogContext";
+import { ProcessStoreQueueResource } from "./ProcessStoreQueueResource";
 import { isJsonValue } from "./internal/json";
 import type { JsonValue } from "./ProcessStoreEvent";
 
@@ -1268,11 +1268,11 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
     yield* Effect.logDebug(`Queue "${queueName}" initializing: concurrency=${String(concurrency)}, capacity=${String(capacity)}`);
 
-    // ─── Internal: optional ProcessStore analytics ───
-    // If ProcessStore is available in context, emit events. If not, silent no-op.
-    // This makes analytics automatic when ProcessStore is provided, but never required.
+    // ─── Internal: optional ProcessStoreQueueResource analytics ───
+    // If ProcessStoreQueueResource is available in context, emit events. If not, silent no-op.
+    // This makes analytics automatic when the queue facet layer is provided, but never required.
 
-    const storeOption = yield* Effect.serviceOption(ProcessStore);
+    const storeOption = yield* Effect.serviceOption(ProcessStoreQueueResource);
     let entrySeq = 0;
     let releaseSeq = 0;
 
@@ -1292,7 +1292,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     ): Effect.Effect<void> =>
       effect.pipe(
         Effect.catchCause((cause) =>
-          Effect.logWarning(`ProcessStore write failed for queue "${queueName}" ${label}`).pipe(
+          Effect.logWarning(`ProcessStoreQueueResource write failed for queue "${queueName}" ${label}`).pipe(
             Effect.annotateLogs("cause", Cause.pretty(cause)),
           )
         ),
@@ -1312,7 +1312,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       },
     ): Effect.Effect<void> => {
       if (Option.isNone(storeOption)) return Effect.void;
-      const api = storeOption.value.QueueResource;
+      const api = storeOption.value;
       const input = {
         entryId: internal.entryId,
         key: internal.key,
@@ -1347,7 +1347,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       itemsCleared?: number,
     ): Effect.Effect<void> => {
       if (Option.isNone(storeOption)) return Effect.void;
-      const api = storeOption.value.QueueResource;
+      const api = storeOption.value;
       return recordStoreWrite(
         `lifecycle ${tag}`,
         api.withQueue(
@@ -1945,7 +1945,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           });
         }
         if (isQueueEntry(selector) && Option.isSome(storeOption)) {
-          const api = storeOption.value.QueueResource;
+          const api = storeOption.value;
           const input = {
             entryId: selector.entryId,
             key: selector.key,

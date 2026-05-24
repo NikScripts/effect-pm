@@ -53,7 +53,9 @@ import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { Context, Effect, Layer, Scope } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import type { SqlError } from "effect/unstable/sql/SqlError";
-import { ProcessStore } from "../../ProcessStore.js";
+import { ProcessStore } from "../../ProcessStore";
+import type { ProcessStoreGroupLog } from "../../ProcessStoreGroupLog";
+import type { ProcessStoreQueueResource } from "../../ProcessStoreQueueResource";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import type {
   DeleteResult,
@@ -135,7 +137,11 @@ export const fromSqlClient = (
  */
 export const layerProcessStore = (
   config: SQLiteRuntimeStorageConfig,
-): Layer.Layer<ProcessStore, never, Scope.Scope> =>
+): Layer.Layer<
+  ProcessStore | ProcessStoreGroupLog | ProcessStoreQueueResource,
+  never,
+  Scope.Scope
+> =>
   Layer.provide(ProcessStore.layerRuntimeStorage, layerRuntimeStorage(config)).pipe(Layer.orDie);
 
 export const SQLiteRuntimeStorage = {

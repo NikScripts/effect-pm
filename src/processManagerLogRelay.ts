@@ -100,7 +100,7 @@ export const captureLogger: Logger.Logger<unknown, void> = Logger.make((options)
  *
  * @public
  */
-export const captureLoggerLayer: Layer.Layer<never, never, ProcessManagerLogRelay> = Logger.layer(
+export const captureLoggerLayer: Layer.Layer<never> = Logger.layer(
   [captureLogger],
   { mergeWithExisting: false },
 );

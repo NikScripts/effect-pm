@@ -8,7 +8,8 @@ interface Email {
 const EmailSchema = Schema.Struct({ to: Schema.String });
 
 // @ts-expect-error QueueResource.make requires effect or config
-QueueResource.make({ concurrency: 1 });
+const _invalidMake = QueueResource.make({ concurrency: 1 });
+void _invalidMake;
 
 class EmailQueue extends QueueResource.Service<EmailQueue, Email, never>()(
   "@app/EmailQueue",

@@ -10,7 +10,7 @@ import type { ProcessManagerLogEntry } from "../src/processManagerLogEntry.js";
 
 const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
-describe("ProcessStore.GroupLog", () => {
+describe("ProcessStoreGroupLog", () => {
   it.effect("record, load, and query via namespace and layerProcessStore", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -31,7 +31,7 @@ describe("ProcessStore.GroupLog", () => {
         spans: [],
       };
 
-      yield* ProcessStore.GroupLog.record("workshop-group", "1", entry).pipe(
+      yield* Effect.flatMap(ProcessStore, (store) => store.GroupLog.record("workshop-group", "1", entry)).pipe(
         Effect.provide(storeLayer),
         Effect.scoped,
       );
@@ -50,12 +50,12 @@ describe("ProcessStore.GroupLog", () => {
       assert.ok(row !== undefined && isGroupLogEntryRecorded(row));
       assert.strictEqual(row.log.entry.annotations[ProcessManagerLogAnnotationKeys.processId], "billing/sync");
 
-      yield* ProcessStore.GroupLog.query({
+      yield* Effect.flatMap(ProcessStore, (store) => store.GroupLog.query({
         groupId: "workshop-group",
         processId: "billing/sync",
         limit: 10,
         sort: "desc",
-      }).pipe(Effect.provide(storeLayer), Effect.scoped, Effect.provide(nodePlatform));
+      })).pipe(Effect.provide(storeLayer), Effect.scoped, Effect.provide(nodePlatform));
     }).pipe(Effect.provide(nodePlatform)),
   );
 });

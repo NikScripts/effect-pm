@@ -4,7 +4,7 @@
 
 **Rules:** [`STORAGE.md`](./STORAGE.md), [`ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md`](./ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md).
 
-**Pattern:** Domain modules use `Effect.serviceOption(ProcessStore)` (or `RuntimeObserver`) — analytics when the layer is present, silent no-op when absent. Writes go through **facets** (`ProcessStore.QueueResource`, `ProcessStore.GroupLog`, future `ProcessStore.ProcessExecution`, etc.), not ad-hoc `append` from feature code.
+**Pattern:** Domain modules use `Effect.serviceOption(ProcessStoreGroupLog | ProcessStoreQueueResource | ProcessStore)` (or `RuntimeObserver`) — analytics when the layer is present, silent no-op when absent. Writes go through **facet services** (`ProcessStoreQueueResource`, `ProcessStoreGroupLog`, future `ProcessStore.ProcessExecution`, etc.), not ad-hoc `append` from feature code. Slim imports: e.g. `QueueResource` depends only on `ProcessStoreQueueResource`.
 
 ---
 
@@ -27,13 +27,13 @@
 |--------|----------------------|-------|-------------------|-------|
 | **`Process`** | **Yes** | Optional `append` (`process.execution.completed`); reads via `getProcessExecutions` | `ProcessStore.ProcessExecution` (record + query); stop using raw `append` / legacy getter | **C** |
 | **`ProcessGroup`** | **Yes** | Optional `append` (`process.lifecycle.changed`); status derived from process + store | `ProcessStore.ProcessLifecycle` + projection helpers for group `status` / `ls` | **D** |
-| **`QueueResource`** | **Yes** | Optional writes via **`ProcessStore.QueueResource`** facet | **Done** — extend queries/analytics only if product needs more | — |
+| **`QueueResource`** | **Yes** | Optional writes via **`ProcessStoreQueueResource`** service | **Done** — extend queries/analytics only if product needs more | — |
 | **`RunResource`** | **Yes** | Publishes via **`RuntimeObserver`** (`publishFact` / `publishStateChange`) | Persist through **`ProcessStore.Runtime`** facet writes (not raw `append` in observer layer) | **C** (shared with runtime) |
 | **`HttpApiResource`** | **Yes** | **No integration today** | Same as `RunResource`: in-flight / completed / failed HTTP run facts + optional state snapshots | **E** |
 | **`Polling`** | **Yes** (telemetry) | No store | Tick/armed/disarmed or skip events tied to process id (or schedule key) | **F** |
 | **`ProcessSchedule`** | **Yes** (telemetry) | No store | Schedule arm/disarm / window transitions for analytics | **F** |
 | **`RuntimeState` / `RuntimeObserver`** | **Yes** (infra) | `layerFromProcessStore` uses raw `append` for facts/state | **`ProcessStore.Runtime`** facet: `recordFact`, `recordStateChange`, queries = current `ProcessStore.runtime.*` | **B** |
-| **`Logs`** (`@nikscripts/effect-pm/Logs`) | **Yes** (capture) | `relayLayer` → **`GroupLog.recordBatch`** | **Done** for persistence path | — |
+| **`Logs`** (`@nikscripts/effect-pm/Logs`) | **Yes** (capture) | `relayLayer` → **`ProcessStoreGroupLog.recordBatch`** | **Done** for persistence path | — |
 | **`ProcessManager`** (operator) | **Yes** (read) | `GroupLog.load` / `query`, sqlite paths for `pm logs` | No new facet; wire richer filters / cross-target queries | Playground agent |
 | **`groupChild`** | **Yes** (compose) | `layerProcessStore` + `Logs` stack | Document only; no domain writes | — |
 | **`ControlService`** | **No writes** | `ProcessStore` in **type** requirements for group entry | Stays transport-only; persistence is child/group responsibility | — |

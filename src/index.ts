@@ -45,8 +45,8 @@
  * **`@nikscripts/effect-pm/ProcessManager`**, **`@nikscripts/effect-pm/Logs`**, and
  * **`@nikscripts/effect-pm/ControlService`**.
  *
- * Group log persistence: `ProcessStore.GroupLog`. Capture/relay: `@nikscripts/effect-pm/Logs`.
- * Queue helpers: `ProcessStore.QueueResource`. Storage is `layerProcessStore` from
+ * Group log persistence: `ProcessStoreGroupLog`. Capture/relay: `@nikscripts/effect-pm/Logs`.
+ * Queue helpers: `ProcessStoreQueueResource`. Storage is `layerProcessStore` from
  * `@nikscripts/effect-pm/storage/sqlite` or other `RuntimeStorage` + `ProcessStore` composition.
  *
  * Storage adapters use lower-case subpaths:
@@ -263,8 +263,12 @@ export {
   withQueueLogAnnotations,
   type ProcessManagerLogScope,
 } from "./processManagerLogContext.js";
-export type { ProcessStoreGroupLogApi } from "./ProcessStoreLogs.js";
-export { makeRecordedEvent, storeEventQueryFromLogQuery } from "./ProcessStoreLogs.js";
+export type { ProcessStoreGroupLogApi } from "./ProcessStoreGroupLog.js";
+export {
+  ProcessStoreGroupLog,
+  makeRecordedEvent,
+  storeEventQueryFromLogQuery,
+} from "./ProcessStoreGroupLog.js";
 export { groupLogSqlitePath } from "./processManagerChildLaunch.js";
 export { queryGroupLogsForCatalog } from "./processManagerLogHistory.js";
 export type { GroupLogEntryRecordedEvent } from "./ProcessStore.js";
@@ -295,6 +299,7 @@ export type {
 // Process Store
 export {
   ProcessStore,
+  ProcessStoreQueueResource,
   ProcessStoreDuplicateRecordError,
   ProcessStoreQueueResourceContextError,
   ProcessStoreReadonlyRecordError,

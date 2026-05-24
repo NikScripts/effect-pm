@@ -1,17 +1,17 @@
 /**
- * Process-manager log capture relay (persists via {@link ProcessStore.GroupLog}).
+ * Process-manager log capture relay (persists via {@link ProcessStoreGroupLog}).
  *
  * @module processManagerLogsRelay
  */
 
 import { Cause, Duration, Effect, Layer, Option, PubSub, Ref, Schedule, Scope, Stream } from "effect";
-import { ProcessGroupLogContext } from "./processManagerLogContext.js";
-import type { ProcessManagerLogEntry } from "./processManagerLogEntry.js";
+import { ProcessGroupLogContext } from "./processManagerLogContext";
+import type { ProcessManagerLogEntry } from "./processManagerLogEntry";
 import {
   ProcessManagerLogRelay,
   type ProcessManagerLogRelayService,
-} from "./processManagerLogRelay.js";
-import { ProcessStore } from "./ProcessStore.js";
+} from "./processManagerLogRelay";
+import { ProcessStoreGroupLog } from "./ProcessStoreGroupLog";
 
 const storeFlushInterval = Duration.millis(250);
 const storeFlushBatchSize = 64;
@@ -30,18 +30,18 @@ const makePersistingRelay = (
     const buffer = yield* Ref.make<ReadonlyArray<PendingLogAppend>>([]);
 
     const flush = Effect.gen(function* () {
-      const storeOption = yield* Effect.serviceOption(ProcessStore);
+      const groupLogOption = yield* Effect.serviceOption(ProcessStoreGroupLog);
       const groupOption = yield* Effect.serviceOption(ProcessGroupLogContext);
-      if (Option.isNone(storeOption) || Option.isNone(groupOption)) {
+      if (Option.isNone(groupLogOption) || Option.isNone(groupOption)) {
         return;
       }
       const batch = yield* Ref.getAndSet(buffer, []);
       if (batch.length === 0) {
         return;
       }
-      yield* storeOption.value.GroupLog.recordBatch(groupOption.value.groupId, batch).pipe(
+      yield* groupLogOption.value.recordBatch(groupOption.value.groupId, batch).pipe(
         Effect.catchCause((cause) =>
-          Effect.logWarning("ProcessStore.GroupLog.recordBatch failed").pipe(
+          Effect.logWarning("ProcessStoreGroupLog.recordBatch failed").pipe(
             Effect.annotateLogs("cause", Cause.pretty(cause)),
           ),
         ),
@@ -53,8 +53,8 @@ const makePersistingRelay = (
 
     const queueAppend = (entry: ProcessManagerLogEntry): Effect.Effect<void> =>
       Effect.gen(function* () {
-        const storeOption = yield* Effect.serviceOption(ProcessStore);
-        if (Option.isNone(storeOption)) {
+        const groupLogOption = yield* Effect.serviceOption(ProcessStoreGroupLog);
+        if (Option.isNone(groupLogOption)) {
           return;
         }
         const entryId = String((yield* Ref.getAndUpdate(entryCounter, (n) => n + 1)));
@@ -78,7 +78,7 @@ const makePersistingRelay = (
   });
 
 /**
- * Relay layer with in-memory tail plus batched flush into {@link ProcessStore.GroupLog}.
+ * Relay layer with in-memory tail plus batched flush into {@link ProcessStoreGroupLog}.
  *
  * @public
  */
