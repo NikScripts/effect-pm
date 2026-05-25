@@ -54,7 +54,9 @@ import { Context, Effect, Layer, Scope } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import type { SqlError } from "effect/unstable/sql/SqlError";
 import { ProcessStore } from "../../ProcessStore";
-import type { ProcessStoreGroupLog } from "../../store/groupLog";
+import type { ProcessStoreLog } from "../../store/log";
+import type { ProcessStoreProcessExecution } from "../../store/processExecution";
+import type { ProcessStoreProcessGroup } from "../../store/processGroup";
 import type { ProcessStoreProcessLifecycle } from "../../store/processLifecycle";
 import type { ProcessStoreRunResource } from "../../store/runResource";
 import { RuntimeStorage } from "../../RuntimeStorage";
@@ -140,9 +142,11 @@ export const layerProcessStore = (
   config: SQLiteRuntimeStorageConfig,
 ): Layer.Layer<
   | ProcessStore
-  | ProcessStoreGroupLog
+  | ProcessStoreLog
   | ProcessStoreRunResource
-  | ProcessStoreProcessLifecycle,
+  | ProcessStoreProcessExecution
+  | ProcessStoreProcessLifecycle
+  | ProcessStoreProcessGroup,
   never,
   Scope.Scope
 > =>

@@ -271,15 +271,19 @@ If your old module exported domain-specific aliases that wrapped the generic env
 
 ```ts
 const facetLayers = Layer.mergeAll(
-  ProcessStoreGroupLog.layerRuntimeStorage,
+  ProcessStoreLog.layerRuntimeStorage,
   ProcessStoreQueueResource.layerRuntimeStorage,
   ProcessStoreMyDomain.layerRuntimeStorage,        // ← add yours
   ProcessStoreProcessLifecycle.layerRuntimeStorage,
+  Layer.provide(
+    ProcessStoreProcessGroup.layerRuntimeStorage,
+    ProcessStoreProcessLifecycle.layerRuntimeStorage,
+  ),
 );
 
 export const layerRuntimeStorage: Layer.Layer<
   | ProcessStore
-  | ProcessStoreGroupLog
+  | ProcessStoreLog
   | ProcessStoreQueueResource
   | ProcessStoreMyDomain                            // ← add yours
   | ProcessStoreProcessLifecycle,

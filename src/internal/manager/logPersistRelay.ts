@@ -1,5 +1,5 @@
 /**
- * Process-manager log capture relay (persists via {@link ProcessStoreGroupLog}).
+ * Process-manager log capture relay (persists via {@link ProcessStoreLog}).
  *
  * @module processManagerLogsRelay
  */
@@ -11,7 +11,7 @@ import {
   ProcessManagerLogRelay,
   type ProcessManagerLogRelayService,
 } from "./logCapture";
-import { ProcessStoreGroupLog } from "../../store/groupLog";
+import { ProcessStoreLog } from "../../store/log";
 
 const storeFlushInterval = Duration.millis(250);
 const storeFlushBatchSize = 64;
@@ -30,18 +30,18 @@ const makePersistingRelay = (
     const buffer = yield* Ref.make<ReadonlyArray<PendingLogAppend>>([]);
 
     const flush = Effect.gen(function* () {
-      const groupLogOption = yield* Effect.serviceOption(ProcessStoreGroupLog);
+      const logOption = yield* Effect.serviceOption(ProcessStoreLog);
       const groupOption = yield* Effect.serviceOption(ProcessGroupLogContext);
-      if (Option.isNone(groupLogOption) || Option.isNone(groupOption)) {
+      if (Option.isNone(logOption) || Option.isNone(groupOption)) {
         return;
       }
       const batch = yield* Ref.getAndSet(buffer, []);
       if (batch.length === 0) {
         return;
       }
-      yield* groupLogOption.value.recordBatch(groupOption.value.groupId, batch).pipe(
+      yield* logOption.value.recordBatch(groupOption.value.groupId, batch).pipe(
         Effect.catchCause((cause) =>
-          Effect.logWarning("ProcessStoreGroupLog.recordBatch failed").pipe(
+          Effect.logWarning("ProcessStoreLog.recordBatch failed").pipe(
             Effect.annotateLogs("cause", Cause.pretty(cause)),
           ),
         ),
@@ -53,8 +53,8 @@ const makePersistingRelay = (
 
     const queueAppend = (entry: ProcessManagerLogEntry): Effect.Effect<void> =>
       Effect.gen(function* () {
-        const groupLogOption = yield* Effect.serviceOption(ProcessStoreGroupLog);
-        if (Option.isNone(groupLogOption)) {
+        const logOption = yield* Effect.serviceOption(ProcessStoreLog);
+        if (Option.isNone(logOption)) {
           return;
         }
         const entryId = String((yield* Ref.getAndUpdate(entryCounter, (n) => n + 1)));
@@ -78,7 +78,7 @@ const makePersistingRelay = (
   });
 
 /**
- * Relay layer with in-memory tail plus batched flush into {@link ProcessStoreGroupLog}.
+ * Relay layer with in-memory tail plus batched flush into {@link ProcessStoreLog}.
  *
  * @public
  */

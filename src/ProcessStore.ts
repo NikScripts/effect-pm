@@ -10,15 +10,16 @@ import {
   makeInMemoryProcessStore,
   makeProcessStoreFromRuntimeStorage,
 } from "./internal/store/composite";
-import { ProcessStoreGroupLog } from "./store/groupLog";
-import type { ProcessStoreGroupLogApi } from "./store/groupLog";
+import { ProcessStoreLog } from "./store/log";
+import type { ProcessStoreLogApi } from "./store/log";
 import { ProcessStoreQueueResource } from "./store/queueResource";
 import type { ProcessStoreQueueResourceApi } from "./store/queueResource";
+import { ProcessStoreProcessExecution } from "./store/processExecution";
 import { ProcessStoreProcessLifecycle } from "./store/processLifecycle";
+import { ProcessStoreProcessGroup } from "./store/processGroup";
 import { ProcessStoreRunResource } from "./store/runResource";
 import type {
   AnalyticsEvent,
-  ProcessExecutionCompletedEvent,
   ProcessLifecycleChangedEvent,
   ProcessStoreWriteError,
   QueryOpts,
@@ -43,7 +44,7 @@ export type {
   QueueLifecycleChangedEvent,
   RunResourceFactRecordedEvent,
   RunResourceStateChangedEvent,
-  GroupLogEntryRecordedEvent,
+  LogEntryRecordedEvent,
   AnalyticsEvent,
   ProcessStoreWriteError,
   JsonValue,
@@ -53,7 +54,7 @@ export type {
 export {
   ProcessStoreDuplicateRecordError,
   ProcessStoreReadonlyRecordError,
-  isGroupLogEntryRecorded,
+  isLogEntryRecorded,
 } from "./ProcessStoreEvent";
 
 export { ProcessStoreQueueResourceContextError } from "./store/queueResource";
@@ -70,12 +71,15 @@ export type {
   ProcessStoreQueueResourcePriority,
 } from "./store/queueResource";
 
-export type { ProcessStoreGroupLogApi } from "./store/groupLog";
+export type { ProcessStoreLogApi } from "./store/log";
 
 export type {
   ProcessLifecycleRecordInput,
-  ProcessStoreProcessLifecycleApi,
 } from "./store/processLifecycle";
+
+export type {
+  ProcessGroupMemberLifecycleInput,
+} from "./store/processGroup";
 
 /**
  * Storage port implemented by the in-memory service and durable adapters.
@@ -87,12 +91,8 @@ export interface ProcessStoreInterface {
   appendBatch: (events: ReadonlyArray<AnalyticsEvent>) => Effect.Effect<void, ProcessStoreWriteError>;
   events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>;
   records: (query?: RuntimeRecordQuery) => Effect.Effect<RuntimeRecord[]>;
-  readonly GroupLog: ProcessStoreGroupLogApi;
+  readonly Log: ProcessStoreLogApi;
   readonly QueueResource: ProcessStoreQueueResourceApi;
-  getProcessExecutions: (
-    processId: string,
-    opts?: QueryOpts,
-  ) => Effect.Effect<ProcessExecutionCompletedEvent[]>;
   getProcessLifecycle: (
     processId: string,
     opts?: QueryOpts,
@@ -120,26 +120,36 @@ export class ProcessStore extends Context.Service<
 }) {}
 
 export namespace ProcessStore {
+  const processLifecycleLayer = ProcessStoreProcessLifecycle.layerRuntimeStorage;
+  const processGroupLayer = Layer.provide(
+    ProcessStoreProcessGroup.layerRuntimeStorage,
+    processLifecycleLayer,
+  );
+
   const facetLayers = Layer.mergeAll(
-    ProcessStoreGroupLog.layerRuntimeStorage,
+    ProcessStoreLog.layerRuntimeStorage,
     ProcessStoreQueueResource.layerRuntimeStorage,
     ProcessStoreRunResource.layerRuntimeStorage,
-    ProcessStoreProcessLifecycle.layerRuntimeStorage,
+    ProcessStoreProcessExecution.layerRuntimeStorage,
+    processLifecycleLayer,
+    processGroupLayer,
   );
 
   /**
    * `Layer` that provides {@link ProcessStore} from injected {@link RuntimeStorage}
    * plus per-domain facets used by {@link QueueResource}, log relay,
-   * `RunResource`, and process lifecycle.
+   * `RunResource`, process execution, and lifecycle.
    *
    * @public
    */
   export const layerRuntimeStorage: Layer.Layer<
     | ProcessStore
-    | ProcessStoreGroupLog
+    | ProcessStoreLog
     | ProcessStoreQueueResource
     | ProcessStoreRunResource
-    | ProcessStoreProcessLifecycle,
+    | ProcessStoreProcessExecution
+    | ProcessStoreProcessLifecycle
+    | ProcessStoreProcessGroup,
     never,
     RuntimeStorage
   > = Layer.mergeAll(

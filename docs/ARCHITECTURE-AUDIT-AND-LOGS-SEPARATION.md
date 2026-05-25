@@ -1,8 +1,8 @@
 # Architecture audit and logs separation
 
-This document records a critical review of the current `@nikscripts/effect-pm` storage and logging design, plus **target rules** for fixing naming and dependency direction. It supersedes informal chat summaries for these topics.
+> **Historical document.** This page captured the rationale for splitting capture/relay (`@nikscripts/effect-pm/Logs`) from durable persistence (originally `ProcessStore.GroupLog`, **renamed to `ProcessStoreLog`** with wire event `log.entry`). The split has shipped; the per-domain facet rules in [`STORAGE.md`](./STORAGE.md) and the open work in [`STORAGE-AGENT-HANDBOOK.md`](./STORAGE-AGENT-HANDBOOK.md) are the current source of truth. Read this only for the historical "why".
 
-**Related:** [`STORAGE.md`](./STORAGE.md) (storage invariants), [`STORAGE-INTEGRATION-INVENTORY.md`](./STORAGE-INTEGRATION-INVENTORY.md) (**every module** + parallel agent handoff), [`docs/AGENTS.md`](./AGENTS.md) (agent map).
+**Related:** [`STORAGE.md`](./STORAGE.md) (current storage invariants), [`STORAGE-INTEGRATION-INVENTORY.md`](./STORAGE-INTEGRATION-INVENTORY.md) (per-module audit + infrastructure debt), [`STORAGE-AGENT-HANDBOOK.md`](./STORAGE-AGENT-HANDBOOK.md) (open per-module assignments), [`docs/AGENTS.md`](./AGENTS.md) (agent map).
 
 ---
 

@@ -8,7 +8,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ## Cross-cutting (how pieces combine)
 
-- **Effect `Layer`** — polling, schedule, queues, ProcessStore (with the `ProcessStoreRunResource` / `ProcessStoreGroupLog` / `ProcessStoreQueueResource` / `ProcessStoreProcessLifecycle` facets), platform (`FileSystem`/`Path`, `HttpClient`) merged at app root; `Process.make` can inline polling/schedule into `process.effect` so fork-time `R` excludes those tags when merged.
+- **Effect `Layer`** — polling, schedule, queues, ProcessStore (with the `ProcessStoreRunResource` / `ProcessStoreLog` / `ProcessStoreQueueResource` / `ProcessStoreProcessLifecycle` / `ProcessStoreProcessGroup` / `ProcessStoreProcessExecution` facets), platform (`FileSystem`/`Path`, `HttpClient`) merged at app root; `Process.make` can inline polling/schedule into `process.effect` so fork-time `R` excludes those tags when merged.
 - **`Effect.scoped`** — `QueueResource.make`, `ControlService.make`, remote layers acquire/release with scope.
 - **`ProcessStore` optional** — when present in env, processes/queues/resources append analytics; when absent, behavior continues without failing.
 - **Canonical ids** — slash-separated strings (`@scope/Segment/ServiceName`); CLI/remote accept normalized kebab suffix aliases; ambiguous suffixes error with candidate list.

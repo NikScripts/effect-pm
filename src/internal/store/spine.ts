@@ -21,7 +21,7 @@ import {
   ProcessStoreEventDecodeError,
 } from "./codec";
 import type { EffectPmEventRow, JsonValue } from "../../ProcessStoreEvent";
-import type { ProcessStoreGroupLogApi } from "../../store/groupLog";
+import type { ProcessStoreLogApi } from "../../store/log";
 import type { ProcessStoreQueueResourceApi } from "../../store/queueResource";
 import {
   ProcessStoreDuplicateRecordError,
@@ -454,7 +454,7 @@ const isLegacyEventRecordType = (type: string): type is Exclude<
     case "runtime.state.changed":
     case "run-resource.fact.recorded":
     case "run-resource.state.changed":
-    case "group.log.entry":
+    case "log.entry":
       return true;
     default:
       return false;
@@ -626,20 +626,15 @@ export const makeProcessStoreSpine = (
 /** @internal */
 export const assembleProcessStoreInterface = (
   spine: ProcessStoreSpine,
-  groupLog: ProcessStoreGroupLogApi,
+  log: ProcessStoreLogApi,
   queue: ProcessStoreQueueResourceApi,
 ): ProcessStoreInterface => ({
   append: spine.append,
   appendBatch: spine.appendBatch,
   events: spine.events,
   records: spine.records,
-  GroupLog: groupLog,
+  Log: log,
   QueueResource: queue,
-  getProcessExecutions: (processId, opts) =>
-    Effect.map(
-      spine.events(processExecutionStoreQuery(processId, opts)),
-      (events) => processExecutionsFromEvents(events, processId, opts),
-    ),
   getProcessLifecycle: (processId, opts) =>
     Effect.map(
       spine.events(processLifecycleStoreQuery(processId, opts)),

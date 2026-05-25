@@ -64,15 +64,25 @@
       "import": "./dist/store/QueueResource.mjs",
       "require": "./dist/store/QueueResource.js"
     },
-    "./store/GroupLog": {
-      "types": "./dist/store/GroupLog.d.ts",
-      "import": "./dist/store/GroupLog.mjs",
-      "require": "./dist/store/GroupLog.js"
+    "./store/Log": {
+      "types": "./dist/store/Log.d.ts",
+      "import": "./dist/store/Log.mjs",
+      "require": "./dist/store/Log.js"
     },
     "./store/ProcessLifecycle": {
       "types": "./dist/store/ProcessLifecycle.d.ts",
       "import": "./dist/store/ProcessLifecycle.mjs",
       "require": "./dist/store/ProcessLifecycle.js"
+    },
+    "./store/ProcessGroup": {
+      "types": "./dist/store/ProcessGroup.d.ts",
+      "import": "./dist/store/ProcessGroup.mjs",
+      "require": "./dist/store/ProcessGroup.js"
+    },
+    "./store/ProcessExecution": {
+      "types": "./dist/store/ProcessExecution.d.ts",
+      "import": "./dist/store/ProcessExecution.mjs",
+      "require": "./dist/store/ProcessExecution.js"
     },
     "./Query": {
       "types": "./dist/Query.d.ts",

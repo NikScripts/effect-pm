@@ -6,9 +6,9 @@
  * only for backward compatibility with early local analytics demos and tests.
  *
  * For durable storage, use {@link ProcessStore.layerRuntimeStorage} with
- * `@nikscripts/effect-pm/storage/sqlite` or `ProcessStore.GroupLog`.
+ * `@nikscripts/effect-pm/storage/sqlite` or `ProcessStoreLog`.
  *
- * @deprecated Prefer `@nikscripts/effect-pm/storage/sqlite` and `ProcessStore.GroupLog`.
+ * @deprecated Prefer `@nikscripts/effect-pm/storage/sqlite` and `ProcessStoreLog`.
  * @module storage/file
  */
 

@@ -7,7 +7,7 @@ shipped (see [STORAGE.md](../STORAGE.md), [STORAGE-AGENT-HANDBOOK.md](../STORAGE
 [STORAGE-FACET-AUTHORING-GUIDE.md](../STORAGE-FACET-AUTHORING-GUIDE.md)). The
 generic `RuntimeFact` / `RuntimeRef` / `RuntimeStateChange` vocabulary discussed
 below has been **removed from the public API** in favour of per-domain facets
-(`ProcessStoreRunResource`, `ProcessStoreQueueResource`, `ProcessStoreGroupLog`,
+(`ProcessStoreRunResource`, `ProcessStoreQueueResource`, `ProcessStoreLog`,
 `ProcessStoreProcessLifecycle`, …). The original `Phase 0–6` narrative is kept
 below as historical context only — do **not** treat it as the current target
 shape. New facets must follow the per-domain rule in

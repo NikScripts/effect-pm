@@ -17,11 +17,12 @@
  *
  * ## Optional lifecycle analytics
  *
- * `start`, `stop`, and `restart` append `process.lifecycle.changed` events when
- * {@link ProcessStoreProcessLifecycle} is in context (via {@link ProcessStore.layer}
- * or {@link ProcessGroup.localEnvLayer}). No facet → identical control behavior, zero
- * analytics I/O (same optional pattern as {@link QueueResource} +
- * `ProcessStoreQueueResource`).
+ * `start`, `stop`, and `restart` append `process.lifecycle.changed` events when the
+ * store stack is composed ({@link ProcessStore.layer} or
+ * {@link ProcessGroup.localEnvLayer}). Typed groups with an `id` use
+ * {@link ProcessStoreProcessGroup} (rows include `attributes.groupId`). Untyped
+ * {@link makeProcessGroup} without `id` uses {@link ProcessStoreProcessLifecycle}
+ * only. No facet layer → identical control behavior, zero analytics I/O.
  *
  * | Control | Tag(s) written | Notes |
  * |---------|----------------|-------|
@@ -84,7 +85,7 @@
  * @module ProcessGroup
  */
 
-import { Clock, Context, Data, DateTime, Duration, Effect, FiberMap, Layer, Option, Ref, Schema, Scope } from "effect";
+import { Clock, Context, Data, DateTime, Effect, FiberMap, Layer, Ref, Schema, Scope } from "effect";
 import type { HttpClient } from "effect/unstable/http";
 import type { Process, ProcessDefinition, ProcessServiceDefinition } from "./Process";
 import type {
@@ -101,11 +102,10 @@ import {
 } from "./QueueResource";
 import { layerProcessGroupLogContext } from "./LogContext";
 import { ProcessStore } from "./ProcessStore";
-import {
-  persistProcessLifecycle,
-  ProcessStoreProcessLifecycle,
-  type ProcessLifecycleRecordInput,
-} from "./store/processLifecycle";
+import type { ProcessLifecycleTag } from "./ProcessStoreEvent";
+import { ProcessStoreProcessGroup } from "./store/processGroup";
+import { ProcessStoreProcessExecution } from "./store/processExecution";
+import { ProcessStoreProcessLifecycle } from "./store/processLifecycle";
 
 // ============================================================================
 // Public Types
@@ -439,7 +439,8 @@ export type ProcessStatus = "running" | "stopped";
  * | Field group | Source |
  * |-------------|--------|
  * | `status`, `uptime`, `startTime` | {@link FiberMap} liveness + group start-time ref |
- * | `lastRun`, `executions`, `armed`, schedule/polling fields | {@link Process.getStatus} |
+ * | `lastRun`, `executions`, `firstStartup` | {@link ProcessStoreProcessExecution.executions} |
+ * | `armed`, schedule/polling fields, `activeInstances` | Placeholder until live-runtime helpers ship |
  * | *(none)* | Persisted lifecycle rows — write-only today; not used for live status |
  *
  * @public
@@ -611,7 +612,7 @@ export type ProcessGroupQueueEnqueueRequirements<Queue> =
  * @remarks
  * Lifecycle controls optionally persist analytics when {@link ProcessStore} is provided
  * (see module doc). {@link ProcessGroup.status} and {@link ProcessGroup.processStatus}
- * never query the store — they reflect fiber liveness and {@link Process.getStatus} only.
+ * never query the store — they reflect fiber liveness only.
  *
  * @typeParam R - Union of all managed process effect requirements
  * @typeParam Error - Control errors (`ProcessGroupErrors` locally; widened for remote)
@@ -735,7 +736,8 @@ export interface TypedQueueControls<
  * @remarks
  * Lifecycle analytics behave identically to {@link ProcessGroup}: optional store
  * writes on `start` / `stop` / `restart`. Compose
- * {@link ProcessStoreProcessLifecycle} via {@link ProcessGroup.localEnvLayer} or the app root —
+ * {@link ProcessStoreProcessGroup} / {@link ProcessStoreProcessLifecycle} via
+ * {@link ProcessGroup.localEnvLayer} or the app root —
  * not on {@link ProcessGroupServiceDefinition.layer}.
  *
  * @public
@@ -782,19 +784,17 @@ export interface TypedProcessGroup<
 }
 
 // ============================================================================
-// Internal: optional lifecycle persistence (ProcessStoreProcessLifecycle)
+// Internal: optional lifecycle persistence (group vs process facets)
 // ============================================================================
 
 const recordProcessLifecycleChange = (
-  input: ProcessLifecycleRecordInput,
+  groupId: string | undefined,
+  processId: string,
+  tag: ProcessLifecycleTag,
 ): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    const lifecycleOption = yield* Effect.serviceOption(ProcessStoreProcessLifecycle);
-    if (Option.isNone(lifecycleOption)) {
-      return;
-    }
-    yield* persistProcessLifecycle(lifecycleOption.value.lifecycleChanged(input));
-  });
+  groupId === undefined
+    ? ProcessStoreProcessLifecycle.lifecycleChanged({ processId, tag })
+    : ProcessStoreProcessGroup.recordMemberLifecycle(groupId, { processId, tag });
 
 // ============================================================================
 // Internal: build process details from fiber state
@@ -803,31 +803,44 @@ const recordProcessLifecycleChange = (
 /** @internal Live status only — see {@link ProcessGroupDetails} field-source table. */
 const buildProcessDetails = (
   name: string,
-  // Internal helper: details only read covariant outputs (`getStatus`), so the
-  // requirement parameter is irrelevant here.
   process: Process<any>,
   isRunning: boolean,
   startTime: Date | null,
   nowMs: number,
 ): Effect.Effect<ProcessGroupDetails> =>
-  Effect.map(process.getStatus(), (details): ProcessGroupDetails => ({
-    name,
-    type: process.type,
-    status: isRunning ? "running" : "stopped",
-    uptime: startTime !== null ? nowMs - startTime.getTime() : 0,
-    startTime,
-    lastRun: details.lastRun,
-    executions: details.executions,
-    firstStartup: details.firstStartup,
-    armed: details.armed,
-    nextScheduleTransition: Option.getOrNull(details.nextScheduleTransition),
-    nextPollCadence: Option.match(details.nextPollCadence, {
-      onNone: () => null,
-      onSome: (d) => Duration.toMillis(d),
-    }),
-    activeInstances: details.activeInstances,
-    nextTriggerRun: Option.getOrNull(details.nextTriggerRun),
-  }));
+  Effect.gen(function* () {
+    const allExecutions = yield* ProcessStoreProcessExecution.executions({
+      processId: name,
+    });
+    const lastRunMillis = allExecutions[0]?.execution.startedAt;
+    const lastRun =
+      lastRunMillis === undefined
+        ? null
+        : DateTime.toDateUtc(DateTime.makeUnsafe(lastRunMillis));
+    const firstStartupMillis = allExecutions.find(
+      (event) => event.execution.isStartupRun,
+    )?.execution.startedAt;
+    const firstStartup =
+      firstStartupMillis === undefined
+        ? null
+        : DateTime.toDateUtc(DateTime.makeUnsafe(firstStartupMillis));
+
+    return {
+      name,
+      type: process.type,
+      status: isRunning ? "running" : "stopped",
+      uptime: startTime !== null ? nowMs - startTime.getTime() : 0,
+      startTime,
+      lastRun,
+      executions: allExecutions.length,
+      firstStartup,
+      armed: false,
+      nextScheduleTransition: null,
+      nextPollCadence: null,
+      activeInstances: 0,
+      nextTriggerRun: null,
+    } satisfies ProcessGroupDetails;
+  });
 
 // ============================================================================
 // Core: ProcessGroup.make
@@ -846,6 +859,11 @@ export const makeProcessGroup = <
   const Queues extends ReadonlyArray<ProcessGroupQueueTag>,
   const Processes extends readonly Process<any>[],
 >(config: {
+  /**
+   * When set (typed {@link ProcessGroup.Service} groups), lifecycle rows are written
+   * through {@link ProcessStoreProcessGroup} with `attributes.groupId`.
+   */
+  readonly id?: string;
   readonly queues: Queues;
   readonly processes: Processes;
 }): Effect.Effect<
@@ -855,6 +873,7 @@ export const makeProcessGroup = <
 > =>
   Effect.gen(function* () {
     type R = AllGroupProcessesRequirements<Processes>;
+    const groupId = config.id;
 
     // ─── Resolve queue tags from context ───
     const queueMap: Record<string, QueueHandle<unknown, unknown, unknown, any>> = {};
@@ -888,7 +907,7 @@ export const makeProcessGroup = <
           DateTime.toDateUtc(DateTime.makeUnsafe(ms)),
         );
         yield* Ref.update(startTimes, (m) => new Map([...m, [name, startedAt]]));
-        yield* recordProcessLifecycleChange({ processId: name, tag: "Started" });
+        yield* recordProcessLifecycleChange(groupId, name, "Started");
         yield* Effect.logInfo(`Process '${name}' is running`);
       });
 
@@ -902,7 +921,7 @@ export const makeProcessGroup = <
 
         yield* FiberMap.remove(fibers, name);
         yield* Ref.update(startTimes, (m) => { const next = new Map(m); next.delete(name); return next; });
-        yield* recordProcessLifecycleChange({ processId: name, tag: "Stopped" });
+        yield* recordProcessLifecycleChange(groupId, name, "Stopped");
         yield* Effect.logInfo(`Process '${name}' stopped`);
       });
 
@@ -913,7 +932,7 @@ export const makeProcessGroup = <
         yield* start(name);
         // When the process was running, stop+start already wrote Stopped+Started;
         // this adds the summary Restarted row operators expect in lifecycle timelines.
-        yield* recordProcessLifecycleChange({ processId: name, tag: "Restarted" });
+        yield* recordProcessLifecycleChange(groupId, name, "Restarted");
       });
 
     const startAll = (): Effect.Effect<void, ProcessGroupErrors, R> =>
@@ -1552,6 +1571,7 @@ const makeTypedProcessGroup = <
       .map((queue) => queue.tag);
 
     const runtime = yield* makeProcessGroup({
+      id,
       processes: processes.map((process) => process.process),
       queues: queuesRuntime,
     });

@@ -14,7 +14,7 @@ import type {
   QueueItemStatus,
   QueueLifecycleChangedEvent,
   QueueLifecycleTag,
-  GroupLogEntryRecordedEvent,
+  LogEntryRecordedEvent,
   RunResourceFactRecordedEvent,
   RunResourceStateChangedEvent,
   RuntimeFactRecordedEvent,
@@ -233,7 +233,7 @@ export const encodeEvent = (event: AnalyticsEvent): EffectPmEventCreateInput => 
         attributes,
         payload: encodeRunResourceStatePayload(event),
       };
-    case "group.log.entry":
+    case "log.entry":
       return {
         id: event.id,
         type: event.type,
@@ -241,7 +241,7 @@ export const encodeEvent = (event: AnalyticsEvent): EffectPmEventCreateInput => 
         entityType: event.entityType,
         entityId: event.entityId,
         attributes,
-        payload: encodeGroupLogEntryPayload(event),
+        payload: encodeLogEntryPayload(event),
       };
   }
 };
@@ -336,8 +336,8 @@ const encodeRunResourceStatePayload = (
   change: toJsonValue(event.change),
 });
 
-const encodeGroupLogEntryPayload = (
-  event: GroupLogEntryRecordedEvent,
+const encodeLogEntryPayload = (
+  event: LogEntryRecordedEvent,
 ): JsonValue => ({
   entryId: event.log.entryId,
   entry: toJsonValue(event.log.entry),
@@ -387,8 +387,8 @@ export const decodeEventRow = (
       return decodeRunResourceFact(row);
     case "run-resource.state.changed":
       return decodeRunResourceState(row);
-    case "group.log.entry":
-      return decodeGroupLogEntry(row);
+    case "log.entry":
+      return decodeLogEntry(row);
     default:
       return new ProcessStoreEventDecodeError({
         rowId: row.id,
@@ -973,7 +973,7 @@ const decodeRunResourceState = (
 
 const decodeLogEntryPayload = (
   value: unknown,
-): GroupLogEntryRecordedEvent["log"]["entry"] | null => {
+): LogEntryRecordedEvent["log"]["entry"] | null => {
   if (!isRecord(value)) {
     return null;
   }
@@ -1016,9 +1016,9 @@ const decodeLogEntryPayload = (
   };
 };
 
-const decodeGroupLogEntry = (
+const decodeLogEntry = (
   row: EffectPmEventRow,
-): GroupLogEntryRecordedEvent | ProcessStoreEventDecodeError => {
+): LogEntryRecordedEvent | ProcessStoreEventDecodeError => {
   const payload = row.payload;
   if (!isRecord(payload)) {
     return new ProcessStoreEventDecodeError({
@@ -1033,9 +1033,9 @@ const decodeGroupLogEntry = (
   }
   return {
     id: row.id,
-    type: "group.log.entry",
+    type: "log.entry",
     occurredAt: row.occurredAt.getTime(),
-    entityType: "group",
+    entityType: "log",
     entityId: row.entityId,
     attributes: decodeAttributes(row.attributes),
     log: { entryId, entry },

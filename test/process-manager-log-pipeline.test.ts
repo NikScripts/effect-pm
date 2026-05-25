@@ -13,7 +13,7 @@ import { layerProcessStore } from "../src/storage/sqlite/index";
 const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
 describe("process manager log pipeline (H6)", () => {
-  it.live("captureLoggerLayer → relayLayer → GroupLog → SQLite load", () =>
+  it.live("captureLoggerLayer → relayLayer → Log → SQLite load", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -45,12 +45,12 @@ describe("process manager log pipeline (H6)", () => {
           yield* Effect.sleep(Duration.millis(500));
           const store = yield* ProcessStore;
           const events = yield* store.events({
-            types: ["group.log.entry"],
-            entityType: "group",
+            types: ["log.entry"],
+            entityType: "log",
             entityId: groupId,
           });
           assert.strictEqual(events.length, 1);
-          const loaded = yield* store.GroupLog.load({
+          const loaded = yield* store.Log.load({
             groupId,
             limit: 10,
             sort: "desc",

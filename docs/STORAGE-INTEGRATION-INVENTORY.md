@@ -1,103 +1,65 @@
-# ProcessStore / RuntimeStorage integration inventory
+# Storage integration inventory
 
-**Purpose:** Every runtime module that should integrate with optional **`ProcessStore`** (and, at compose time, **`RuntimeStorage`** adapters). Use this to split work across parallel agents. Not limited to modules that already call legacy `append` / `getProcessExecutions`.
+**Purpose.** Per-source-module view of how each runtime module relates to storage today: which facet it uses, whether it should grow one, or whether it correctly stays storage-free. **Complements** [STORAGE-AGENT-HANDBOOK.md](./STORAGE-AGENT-HANDBOOK.md) — the handbook is the assignment dispatcher for per-module facet setup, this file is the audit snapshot.
 
-**Agent prompts (A–Z):** [**STORAGE-AGENT-HANDBOOK.md**](./STORAGE-AGENT-HANDBOOK.md) — share with an agent: *“Do Part C”*.
-
-**Rules:** [`STORAGE.md`](./STORAGE.md), [`ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md`](./ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md).
-
-**Pattern:** Domain modules use `Effect.serviceOption(ProcessStoreGroupLog | ProcessStoreQueueResource | ProcessStore)` (or `RuntimeObserver`) — analytics when the layer is present, silent no-op when absent. Writes go through **facet services** (`ProcessStoreQueueResource`, `ProcessStoreGroupLog`, future `ProcessStore.ProcessExecution`, etc.), not ad-hoc `append` from feature code. Slim imports: e.g. `QueueResource` depends only on `ProcessStoreQueueResource`.
+- **Rules** → [`STORAGE.md`](./STORAGE.md), [`AGENTS.md`](./AGENTS.md), [`.cursor/rules/public-vs-internal.mdc`](../.cursor/rules/public-vs-internal.mdc)
+- **How to build a facet** → [`STORAGE-FACET-AUTHORING-GUIDE.md`](./STORAGE-FACET-AUTHORING-GUIDE.md)
+- **Per-module assignments** → [`STORAGE-AGENT-HANDBOOK.md`](./STORAGE-AGENT-HANDBOOK.md)
 
 ---
 
-## High severity audit (owner: main agent — status)
+## Per-module inventory
 
-| ID | Issue | Status |
-|----|--------|--------|
-| **H1** | `ProcessStore` must not import PM relay | **Fixed** — no `processManagerLogsRelay` import in `ProcessStore.ts` |
-| **H2** | Duplicate `relayLayer` in group child | **Fixed** — single merge on `envLayer` in `groupChild.ts` |
-| **H3** | Two `layerProcessStore` symbols | **Fixed** — `RuntimeObserver.layerFromProcessStore`; deprecated alias `layerProcessStore` |
-| **H4** | Docs say RuntimeStorage “planned” | **Fixed** — `PROCESS-API.md` aligned with implementation |
-| **H5** | File-backed second persistence model | **Quarantined** — `@deprecated` on `ProcessStore.file` / `fileLayer`; use only via `@nikscripts/effect-pm/storage/file`. **Follow-up agent:** file layer on `RuntimeStorage` or removal |
-| **H6** | No capture → relay → SQLite test | **Fixed** — `test/process-manager-log-pipeline.test.ts`; also fixed Effect v4 `captureLogger` (void + scheduled publish) and relay flush-on-publish |
+| Module | Storage relationship today | Open assignment |
+|---|---|---|
+| `Process` | Uses `ProcessStoreProcessExecution` static optional emitters (`recordCompleted` / `recordFailed`) + `Effect.serviceOption(ProcessStoreProcessExecution)` for reads. No raw `append`. | — |
+| `ProcessGroup` | Uses `ProcessStoreProcessGroup.recordMemberLifecycle` (typed groups with `id`) or `ProcessStoreProcessLifecycle.lifecycleChanged` (un-typed). No raw `append`. | — |
+| `QueueResource` | Publishes through `ProcessStoreQueueResource` (hand-rolled `Context.Service`) — currently wraps writes in `runtime.fact.recorded` envelope with `queue.*` fact subtypes. | [Handbook Assignment 1](./STORAGE-AGENT-HANDBOOK.md#assignment-1--migrate-processstorequeueresource-off-the-internal-factenvelope) |
+| `RunResource` | Publishes through `ProcessStoreRunResource` per-type static emitters (`recordRunStarted` / `recordRunCompleted` / `recordRunFailed` / `recordStateChange`). Reference facet implementation. | — |
+| `HttpApiResource` | Concurrency gating only. No analytics. | [Handbook Assignment 3](./STORAGE-AGENT-HANDBOOK.md#assignment-3--design-proposal-telemetry-for-polling-processschedule-httpapiresource) (design proposal) |
+| `HttpClientRunGate` | Thin `HttpClient.transform` wrapper. Delegates to `RunResource` runner instrumentation. No storage. | — |
+| `Polling` | No telemetry. | [Handbook Assignment 3](./STORAGE-AGENT-HANDBOOK.md#assignment-3--design-proposal-telemetry-for-polling-processschedule-httpapiresource) (design proposal) |
+| `ProcessSchedule` | No telemetry. | [Handbook Assignment 3](./STORAGE-AGENT-HANDBOOK.md#assignment-3--design-proposal-telemetry-for-polling-processschedule-httpapiresource) (design proposal) |
+| `Resource` | Generic helper. No storage. | — |
+| `Logs` (`@nikscripts/effect-pm/Logs`) | Capture + relay. Persistence flows into `ProcessStoreLog.recordBatch`. | [Handbook Assignment 2](./STORAGE-AGENT-HANDBOOK.md#assignment-2--decide-processstorelog-builder-or-documented-exception) (builder migration or hand-rolled exception) |
+| `ProcessManager` (operator) | Reads via `ProcessStoreLog.load` / `.query`; opens per-group SQLite in operator paths. | — (extend filters / pagination if product needs it) |
+| `ControlService`, `ControlProtocol`, `ControlTransportHttp`, `cli.ts` | Transport / wire / CLI only. No persistence. Persistence is the child / group's responsibility. | — |
+| `disarmedIdleSleep`, `Query`, `LogContext`, `LogEntry`, `Transport`, `processLayerBrand` | Pure policy / types / utilities. No storage. | — |
 
----
+### Infrastructure debt (tracked here, not in the handbook)
 
-## Agent handoff matrix (all modules)
+The handbook is scoped to **per-module storage-service setup**. Cross-cutting infrastructure work below is real but doesn't fit that frame. Open new assignments when scheduled.
 
-| Module | Needs `ProcessStore`? | Today | Target facet / API | Agent |
-|--------|----------------------|-------|-------------------|-------|
-| **`Process`** | **Yes** | Optional `append` (`process.execution.completed`); reads via `getProcessExecutions` | `ProcessStore.ProcessExecution` (record + query); stop using raw `append` / legacy getter | **C** |
-| **`ProcessGroup`** | **Yes** | Optional `append` (`process.lifecycle.changed`); status derived from process + store | `ProcessStore.ProcessLifecycle` + projection helpers for group `status` / `ls` | **D** |
-| **`QueueResource`** | **Yes** | Optional writes via **`ProcessStoreQueueResource`** service | **Done** — extend queries/analytics only if product needs more | — |
-| **`RunResource`** | **Yes** | Publishes via **`RuntimeObserver`** (`publishFact` / `publishStateChange`) | Persist through **`ProcessStore.Runtime`** facet writes (not raw `append` in observer layer) | **C** (shared with runtime) |
-| **`HttpApiResource`** | **Yes** | **No integration today** | Same as `RunResource`: in-flight / completed / failed HTTP run facts + optional state snapshots | **E** |
-| **`Polling`** | **Yes** (telemetry) | No store | Tick/armed/disarmed or skip events tied to process id (or schedule key) | **F** |
-| **`ProcessSchedule`** | **Yes** (telemetry) | No store | Schedule arm/disarm / window transitions for analytics | **F** |
-| **`RuntimeState` / `RuntimeObserver`** | **Yes** (infra) | `layerFromProcessStore` uses raw `append` for facts/state | **`ProcessStore.Runtime`** facet: `recordFact`, `recordStateChange`, queries = current `ProcessStore.runtime.*` | **B** |
-| **`Logs`** (`@nikscripts/effect-pm/Logs`) | **Yes** (capture) | `relayLayer` → **`ProcessStoreGroupLog.recordBatch`** | **Done** for persistence path | — |
-| **`ProcessManager`** (operator) | **Yes** (read) | `GroupLog.load` / `query`, sqlite paths for `pm logs` | No new facet; wire richer filters / cross-target queries | Playground agent |
-| **`groupChild`** | **Yes** (compose) | `layerProcessStore` + `Logs` stack | Document only; no domain writes | — |
-| **`ControlService`** | **No writes** | `ProcessStore` in **type** requirements for group entry | Stays transport-only; persistence is child/group responsibility | — |
-| **`ControlProtocol` / `ControlTransportHttp`** | **No** | — | — | — |
-| **`cli.ts`** (package) | **No** | HTTP client | — | — |
-| **`disarmedIdleSleep`** | **No** | Pure policy | — | — |
-| **`Query.ts`** | **No** | Generic query helpers | — | — |
-| **`prisma/*`** | **Adapter** | Not production-ready | `RuntimeStorage` + `ProcessStore.layerRuntimeStorage` adapter | **File/sqlite agent** (after file layer) |
+| Module | Current state | Debt |
+|---|---|---|
+| `ProcessStore` (combiner module) | Still a `Context.Service` + `ProcessStoreInterface` monolith alongside the namespace combiner. `memory` / `file` / `fileLayer` deprecated. | Demolish the monolith — every per-domain facet ships its own writers/readers; only the namespace combiner remains. |
+| `RuntimeStorage` | Normalized `RuntimeRecord` port. Implemented by `storage/sqlite`. Prisma placeholder. | Prisma rebuild — replace `PrismaProcessStoreUnavailableError` with a real adapter over `storage/prisma`. |
+| `storage/sqlite` | `layerProcessStore` over `Layer.orDie`. | Surface typed errors instead of `Layer.orDie`. |
+| `storage/file` | Legacy NDJSON. `@deprecated`. | Delete — the only blessed durable adapter is `storage/sqlite`. |
+| `prisma/*` | `PrismaProcessStoreUnavailableError` placeholder; legacy codec only. | Tracked with `RuntimeStorage` Prisma rebuild above. |
 
-### Infrastructure (not feature agents)
-
-| Module | Role | Agent |
-|--------|------|-------|
-| **`RuntimeStorage`** | Port | **B** (with observer facet) |
-| **`ProcessStore`** | Facade + codec | **B** (facet growth only) |
-| **`ProcessStoreCodec` / `ProcessStoreEvent`** | Encode/decode | With whichever facet adds event types |
-| **`storage/sqlite`** | `layerProcessStore` | **B** (M7: surface `SqlError` vs `orDie`) |
-| **`storage/file`** | Legacy NDJSON | **File storage agent** — H5: RuntimeStorage-backed file or delete |
-
-### ProcessManager support modules (no separate storage facet)
+### ProcessManager support modules (no facet of their own)
 
 | Module | Role |
-|--------|------|
-| `processManagerLogsRelay`, `processManagerLogRelay`, `processManagerLogQuery`, `processManagerLogHistory` | PM log pipeline (uses `GroupLog`) |
-| `processManagerGroupLogs`, `processManagerGroupLogsInteractive` | `pm watch` |
-| `processManagerGroupRuntime`, `processManagerChildLaunch` | Compose store + logs paths |
-| `processManagerLogContext` | Annotations / scopes |
-| `ProcessManagerTargetResolver` | Target resolution for watch/logs |
+|---|---|
+| `logCapture`, `logPersistRelay`, `logHistory`, `logQuery`, `groupLogWatch*` | PM log pipeline — uses `ProcessStoreLog`. |
+| `groupChild`, `groupRuntime`, `childLaunch` | Compose `layerProcessStore` + capture/relay stack at the child process boundary. |
+| `processManagerLogContext`, `ProcessManagerTargetResolver` | Scope annotations and target lookup; pure types. |
 
 ---
 
-## Event types already in the spine
+## Wire event types in the spine
 
-| Event type | Written by | Read by |
-|------------|------------|---------|
-| `process.execution.completed` | `Process.ts` (raw append) | `getProcessExecutions` |
-| `process.lifecycle.changed` | `ProcessGroup.ts` (raw append) | `events` / status derivation |
-| `queue.*` | `QueueResource` → **QueueResource facet** | **QueueResource** queries |
-| `run-resource.fact.recorded` | `ProcessStoreRunResource.recordRunStarted` / `recordRunCompleted` / `recordRunFailed` static optional emitters | `ProcessStoreRunResource.facts` / `.runs` / `.byRun` |
-| `run-resource.state.changed` | `ProcessStoreRunResource.recordStateChange` | `ProcessStoreRunResource.stateHistory` / `.latestState` |
-| `runtime.fact.recorded` *(internal envelope)* | `ProcessStoreQueueResource` plumbing only — not a public emitter | internal spine helpers in `src/internal/store/spine.ts` |
-| `runtime.state.changed` *(internal envelope)* | same | same |
-| `group.log.entry` | **GroupLog** facet / relay | `GroupLog.load` / `query` |
-
----
-
-## Recommended parallel agents (1–5+)
-
-1. **Agent B — Runtime facet + sqlite hardening** — `ProcessStore.Runtime` write API; migrate `RuntimeObserver.layerFromProcessStore`; optional M7 (`orDie` → surfaced `SqlError`).
-2. **Agent C — Process + RunResource** — `ProcessExecution` facet; migrate `Process.ts`; align `RunResource` fact types with facet.
-3. **Agent D — ProcessGroup lifecycle** — lifecycle facet; group status projections from store.
-4. **Agent E — HttpApiResource** — optional observer/facts for gated HTTP client (mirror `RunResource`).
-5. **Agent F — Schedule/Polling telemetry** — arm/disarm/tick events when `ProcessStore` present.
-6. **Agent G — File storage layer** (after B) — replace NDJSON `makeFileProcessStore` with `RuntimeStorage` adapter or remove from public surface.
-7. **Playground agent** — README + manual `watch` / `logs` recipes; optional smoke script.
+| `type` literal | Public writer | Public reader | Notes |
+|---|---|---|---|
+| `process.execution.completed` | `ProcessStoreProcessExecution.recordCompleted` / `recordFailed` static emitters | `ProcessStoreProcessExecution.executions(processId)` | — |
+| `process.lifecycle.changed` | `ProcessStoreProcessLifecycle.lifecycleChanged` *(no group id)* or `ProcessStoreProcessGroup.recordMemberLifecycle(groupId, …)` *(typed group)* | `ProcessStoreProcessLifecycle.lifecycle(processId)` / `ProcessStoreProcessGroup.lifecycleByGroup(groupId)` | Typed groups annotate rows with `attributes.groupId`. |
+| `run-resource.fact.recorded` | `ProcessStoreRunResource.recordRunStarted` / `recordRunCompleted` / `recordRunFailed` | `ProcessStoreRunResource.facts` / `.runs` / `.byRun` | Per-domain, fully concrete shapes. |
+| `run-resource.state.changed` | `ProcessStoreRunResource.recordStateChange` | `ProcessStoreRunResource.stateHistory` / `.latestState` | — |
+| `runtime.fact.recorded` *(internal envelope)* | `ProcessStoreQueueResource` writes — currently wraps `queue.*` payloads in the internal envelope | internal spine helpers (`src/internal/store/spine.ts`) | Migrates to `queue.*` wire types in [Handbook Assignment 1](./STORAGE-AGENT-HANDBOOK.md#assignment-1--migrate-processstorequeueresource-off-the-internal-factenvelope). |
+| `runtime.state.changed` *(internal envelope)* | same | same | — |
+| `log.entry` | `ProcessStoreLog.recordBatch` (via the relay) | `ProcessStoreLog.load` / `.query` | `entityType: "log"`, `entityId` is the relay-supplied log bucket. |
 
 ---
 
-## Verification per agent
-
-- `pnpm run typecheck`
-- `pnpm test` (add facet tests beside `test/runtime-storage.conformance.ts`, `test/logs.test.ts`, `test/process-manager-log-pipeline.test.ts`)
-- No new storage `Layer`s on domain modules (compose at app/child only)
-
-*Linked from [`ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md`](./ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md).*
+*Linked from [`AGENTS.md`](./AGENTS.md), [`STORAGE.md`](./STORAGE.md), [`STORAGE-AGENT-HANDBOOK.md`](./STORAGE-AGENT-HANDBOOK.md), [`STORAGE-FACET-AUTHORING-GUIDE.md`](./STORAGE-FACET-AUTHORING-GUIDE.md), [`ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md`](./ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md).*

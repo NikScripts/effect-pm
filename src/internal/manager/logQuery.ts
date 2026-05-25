@@ -1,6 +1,6 @@
 import { Data, Effect, Option } from "effect";
 import { utcDateFromMillis } from "../utcDate";
-import { ProcessStoreGroupLog } from "../../store/groupLog";
+import { ProcessStoreLog } from "../../store/log";
 import type { ProcessManagerLogScope } from "./logScope";
 import type { ProcessManagerLogEntry } from "../../LogEntry";
 import { replayLogEntry } from "./logCapture";
@@ -151,10 +151,10 @@ export const buildProcessManagerLogQuery = (input: {
  */
 export const queryGroupLogs = (
   query: ProcessManagerLogQuery,
-): Effect.Effect<void, ProcessManagerLogQueryError, ProcessStoreGroupLog> =>
+): Effect.Effect<void, ProcessManagerLogQueryError, ProcessStoreLog> =>
   Effect.gen(function* () {
-    const groupLog = yield* ProcessStoreGroupLog;
-    yield* groupLog.query(query);
+    const log = yield* ProcessStoreLog;
+    yield* log.query(query);
   });
 
 /**

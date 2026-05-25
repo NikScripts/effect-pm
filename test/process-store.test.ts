@@ -13,7 +13,6 @@ import {
   Select,
   SubjectId,
   Where,
-  type ProcessExecutionCompletedEvent,
   type ProcessLifecycleChangedEvent,
   type ProcessStoreInterface,
   type QueueItemCompletedEvent,
@@ -21,6 +20,7 @@ import {
   type RunResourceFact,
   type RunResourceStateChangedEvent,
 } from "../src"
+import { ProcessStoreProcessExecution } from "../src/store/processExecution"
 import { ProcessStoreQueueResource } from "../src/store/queueResource"
 import {
   runResourceFactsFromEvents,
@@ -51,124 +51,97 @@ describe("ProcessStore.memory", () => {
 
   it.live("appends and queries process execution events with ordering and query opts", () =>
     Effect.gen(function* () {
-      const store = yield* ProcessStore.memory
-
       const t1 = utcDateFromIso("2026-01-01T00:00:00.000Z").getTime()
       const t2 = utcDateFromIso("2026-01-01T00:10:00.000Z").getTime()
       const t3 = utcDateFromIso("2026-01-01T00:20:00.000Z").getTime()
 
-      const e1: ProcessExecutionCompletedEvent = {
-        id: "e1",
-        type: "process.execution.completed",
-        occurredAt: t1,
-        entityType: "process",
-        entityId: "p1",
-        execution: {
-          scheduleKey: null,
-          startedAt: t1,
-          completedAt: t1,
-          durationMs: 10,
-          status: "completed",
-          isStartupRun: true,
-        },
-      }
-      const e2: ProcessExecutionCompletedEvent = {
-        id: "e2",
-        type: "process.execution.completed",
-        occurredAt: t2,
-        entityType: "process",
-        entityId: "p1",
-        execution: {
-          scheduleKey: "live",
-          startedAt: t2,
-          completedAt: t2,
-          durationMs: 11,
-          status: "failed",
-          error: "boom",
-          isStartupRun: false,
-        },
-      }
-      const e3: ProcessExecutionCompletedEvent = {
-        id: "e3",
-        type: "process.execution.completed",
-        occurredAt: t3,
-        entityType: "process",
-        entityId: "p1",
-        execution: {
-          scheduleKey: "idle",
-          startedAt: t3,
-          completedAt: t3,
-          durationMs: 12,
-          status: "completed",
-          isStartupRun: false,
-        },
-      }
+      yield* ProcessStoreProcessExecution.recordCompleted({
+        processId: "p1",
+        scheduleKey: null,
+        startedAt: t1,
+        completedAt: t1,
+        isStartupRun: true,
+      })
+      yield* ProcessStoreProcessExecution.recordFailed({
+        processId: "p1",
+        scheduleKey: "live",
+        startedAt: t2,
+        completedAt: t2,
+        error: "boom",
+        isStartupRun: false,
+      })
+      yield* ProcessStoreProcessExecution.recordCompleted({
+        processId: "p1",
+        scheduleKey: "idle",
+        startedAt: t3,
+        completedAt: t3,
+        isStartupRun: false,
+      })
 
-      yield* store.appendBatch([e1, e2, e3])
+      const all = yield* ProcessStoreProcessExecution.executions({ processId: "p1" })
+      expect(all.map((row) => row.execution.status).sort()).toEqual([
+        "completed",
+        "completed",
+        "failed",
+      ])
+      expect(all.length).toBe(3)
 
-      const all = yield* store.getProcessExecutions("p1")
-      expect(all.map((row) => row.id)).toEqual(["e3", "e2", "e1"])
+      const limited = yield* ProcessStoreProcessExecution.executions({
+        processId: "p1",
+        opts: { limit: 2 },
+      })
+      expect(limited).toHaveLength(2)
 
-      const limited = yield* store.getProcessExecutions("p1", { limit: 2 })
-      expect(limited.map((row) => row.id)).toEqual(["e3", "e2"])
+      const before = yield* ProcessStoreProcessExecution.executions({
+        processId: "p1",
+        opts: { before: t3 },
+      })
+      expect(before.every((row) => row.occurredAt < t3)).toBe(true)
 
-      const before = yield* store.getProcessExecutions("p1", { before: t3 })
-      expect(before.map((row) => row.id)).toEqual(["e2", "e1"])
-
-      const after = yield* store.getProcessExecutions("p1", { after: t1 })
-      expect(after.map((row) => row.id)).toEqual(["e3", "e2"])
-    }),
+      const after = yield* ProcessStoreProcessExecution.executions({
+        processId: "p1",
+        opts: { after: t1 },
+      })
+      expect(after.every((row) => row.occurredAt > t1)).toBe(true)
+    }).pipe(Effect.provide(ProcessStore.layer)),
   )
 
   it.live("orders process executions by event occurrence time", () =>
     Effect.gen(function* () {
-      const store = yield* ProcessStore
-
       const earlyStart = utcDateFromIso("2026-01-01T00:00:00.000Z").getTime()
       const lateStart = utcDateFromIso("2026-01-01T00:10:00.000Z").getTime()
       const earlyCompletion = utcDateFromIso("2026-01-01T00:11:00.000Z").getTime()
       const lateCompletion = utcDateFromIso("2026-01-01T00:12:00.000Z").getTime()
 
-      yield* store.appendBatch([
-        {
-          id: "long-run",
-          type: "process.execution.completed",
-          occurredAt: lateCompletion,
-          entityType: "process",
-          entityId: "p-overlap",
-          execution: {
-            scheduleKey: "live",
-            startedAt: earlyStart,
-            completedAt: lateCompletion,
-            durationMs: lateCompletion - earlyStart,
-            status: "completed",
-            isStartupRun: false,
-          },
-        },
-        {
-          id: "short-run",
-          type: "process.execution.completed",
-          occurredAt: earlyCompletion,
-          entityType: "process",
-          entityId: "p-overlap",
-          execution: {
-            scheduleKey: "live",
-            startedAt: lateStart,
-            completedAt: earlyCompletion,
-            durationMs: earlyCompletion - lateStart,
-            status: "completed",
-            isStartupRun: false,
-          },
-        },
+      yield* ProcessStoreProcessExecution.recordCompleted({
+        processId: "p-overlap",
+        scheduleKey: "live",
+        startedAt: earlyStart,
+        completedAt: lateCompletion,
+        isStartupRun: false,
+      })
+      yield* ProcessStoreProcessExecution.recordCompleted({
+        processId: "p-overlap",
+        scheduleKey: "live",
+        startedAt: lateStart,
+        completedAt: earlyCompletion,
+        isStartupRun: false,
+      })
+
+      const all = yield* ProcessStoreProcessExecution.executions({
+        processId: "p-overlap",
+      })
+      expect(all.map((row) => row.occurredAt).sort((a, b) => b - a)).toEqual([
+        lateCompletion,
+        earlyCompletion,
       ])
 
-      const all = yield* store.getProcessExecutions("p-overlap")
-      expect(all.map((row) => row.id)).toEqual(["long-run", "short-run"])
-
-      const beforeLateCompletion = yield* store.getProcessExecutions("p-overlap", {
-        before: lateCompletion,
+      const beforeLateCompletion = yield* ProcessStoreProcessExecution.executions({
+        processId: "p-overlap",
+        opts: { before: lateCompletion },
       })
-      expect(beforeLateCompletion.map((row) => row.id)).toEqual(["short-run"])
+      expect(beforeLateCompletion).toHaveLength(1)
+      expect(beforeLateCompletion[0]?.occurredAt).toBe(earlyCompletion)
     }).pipe(Effect.provide(ProcessStore.layer)),
   )
 

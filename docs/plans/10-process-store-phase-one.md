@@ -6,7 +6,7 @@
 the underlying spine API in `src/internal/store/spine.ts`, but the public
 shape has moved on: `ProcessStore` is a layer combiner only, and all reads
 live on **per-domain facets** (`ProcessStoreRunResource`,
-`ProcessStoreQueueResource`, `ProcessStoreGroupLog`, `ProcessStoreProcessLifecycle`).
+`ProcessStoreQueueResource`, `ProcessStoreLog`, `ProcessStoreProcessLifecycle`).
 References to a generic `runtime.fact.recorded` reader on `ProcessStore`,
 `RuntimeObserver.layerProcessStore`, or a singleton `ProcessStoreInterface`
 should be read as historical context only. Current rules and migration

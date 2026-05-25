@@ -45,7 +45,9 @@
  * **`@nikscripts/effect-pm/ProcessManager`**, **`@nikscripts/effect-pm/Logs`**, and
  * **`@nikscripts/effect-pm/ControlService`**.
  *
- * Group log persistence: `ProcessStore.GroupLog` on the composed store. Capture/relay: `@nikscripts/effect-pm/Logs`.
+ * Structured log persistence: `ProcessStore.Log` (also exported as the
+ * dedicated `ProcessStoreLog` facet) on the composed store. Capture/relay
+ * pipeline: `@nikscripts/effect-pm/Logs`.
  * Queue analytics: optional `ProcessStore.QueueResource` facet (internal service, composed by `ProcessStore.layer`).
  * Storage is `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite` or other `RuntimeStorage` + `ProcessStore` composition.
  *
@@ -237,8 +239,8 @@ export {
   withQueueLogAnnotations,
 } from "./LogContext";
 export type { ProcessManagerRunState } from "./ProcessManager";
-export type { GroupLogEntryRecordedEvent } from "./ProcessStore";
-export { isGroupLogEntryRecorded } from "./ProcessStore";
+export type { LogEntryRecordedEvent } from "./ProcessStore";
+export { isLogEntryRecorded } from "./ProcessStore";
 export type {
   ProcessManagerEndpointConfigItem,
   ProcessManagerConnectionConfigMap,
@@ -290,12 +292,27 @@ export {
   type RunResourceFactRecordedEvent,
   type RunResourceStateChangedEvent,
   type AnalyticsEvent,
-  type ProcessStoreGroupLogApi,
+  type ProcessStoreLogApi,
   type ProcessStoreInterface,
   type ProcessStoreWriteError,
 } from "./ProcessStore";
 
+export { ProcessStoreLog } from "./store/log";
 export { ProcessStoreRunResource } from "./store/runResource";
+export { ProcessStoreProcessExecution } from "./store/processExecution";
+export { ProcessStoreProcessLifecycle } from "./store/processLifecycle";
+export { ProcessStoreProcessGroup } from "./store/processGroup";
+export type {
+  ProcessExecutionFinishInput,
+  ProcessExecutionQuery,
+} from "./store/processExecution";
+export type { ProcessExecutionStatus } from "./ProcessStoreEvent";
+export type {
+  ProcessLifecycleRecordInput,
+} from "./store/processLifecycle";
+export type {
+  ProcessGroupMemberLifecycleInput,
+} from "./store/processGroup";
 export type {
   RunResourceFact,
   RunResourceFactQuery,
@@ -365,7 +382,6 @@ export type {
   Process as ProcessInterface,
   ProcessDefinition,
   ProcessServiceDefinition,
-  ProcessDetails,
   ProcessMakeConfig,
   ProcessMakeOptions,
   ProcessSupervisorRequirements,

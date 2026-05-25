@@ -1,7 +1,16 @@
 /**
- * Structured log facet for {@link ProcessStoreInterface}.
+ * Structured log persistence facet — the durable sink for the
+ * `@nikscripts/effect-pm/Logs` capture/relay pipeline.
  *
- * @module ProcessStoreGroupLog
+ * @remarks
+ * The `groupId` parameter is an opaque partition key supplied by the
+ * process-manager log relay (today it carries the PM log-bucket annotation
+ * from {@link LogContext}). It is not tied to a {@link ProcessGroup.Service}
+ * id; the facet itself is about persisting and querying
+ * {@link ProcessManagerLogEntry} rows, regardless of which kind of "group"
+ * happens to scope them.
+ *
+ * @module store/Log
  */
 
 import { Clock, Context, Effect, Layer } from "effect";
@@ -16,19 +25,19 @@ import {
 } from "../internal/store/spine";
 import type {
   AnalyticsEvent,
-  GroupLogEntryRecordedEvent,
+  LogEntryRecordedEvent,
   ProcessStoreWriteError,
   StoreEventQuery,
 } from "../ProcessStoreEvent";
-import { isGroupLogEntryRecorded } from "../ProcessStoreEvent";
+import { isLogEntryRecorded } from "../ProcessStoreEvent";
 import { RuntimeStorage } from "../RuntimeStorage";
 
 /**
- * Log operations exposed on {@link ProcessStoreInterface.GroupLog}.
+ * Service shape for {@link ProcessStoreLog}.
  *
  * @public
  */
-export interface ProcessStoreGroupLogApi {
+export interface ProcessStoreLogApi {
   readonly record: (
     groupId: string,
     entryId: string,
@@ -45,7 +54,7 @@ export interface ProcessStoreGroupLogApi {
 }
 
 const logEntryFromStored = (
-  stored: GroupLogEntryRecordedEvent["log"]["entry"],
+  stored: LogEntryRecordedEvent["log"]["entry"],
 ): ProcessManagerLogEntry => ({
   date: stored.date,
   level: stored.level as LogLevel,
@@ -109,9 +118,9 @@ export const storeEventQueryFromLogQuery = (
       ? Math.min(query.limit * 8, 10_000)
       : query.limit;
   return {
-    entityType: query.groupId === undefined ? undefined : "group",
+    entityType: query.groupId === undefined ? undefined : "log",
     entityId: query.groupId,
-    types: ["group.log.entry"],
+    types: ["log.entry"],
     opts: {
       limit: prefetch,
       after: afterMs,
@@ -134,7 +143,7 @@ const sortEntries = (
 };
 
 /**
- * Build a `group.log.entry` analytics event for {@link ProcessStoreInterface.append}.
+ * Build a `log.entry` analytics event ready for spine append.
  *
  * @public
  */
@@ -142,13 +151,13 @@ export const makeRecordedEvent = (
   groupId: string,
   entryId: string,
   entry: ProcessManagerLogEntry,
-): GroupLogEntryRecordedEvent => {
+): LogEntryRecordedEvent => {
   const occurredAt = Date.parse(entry.date);
   return {
     id: `${groupId}-log-${entryId}`,
-    type: "group.log.entry",
+    type: "log.entry",
     occurredAt: Number.isNaN(occurredAt) ? 0 : occurredAt,
-    entityType: "group",
+    entityType: "log",
     entityId: groupId,
     log: {
       entryId,
@@ -165,7 +174,7 @@ export const makeRecordedEvent = (
 };
 
 const entriesFromStoreEvents = (
-  events: ReadonlyArray<GroupLogEntryRecordedEvent>,
+  events: ReadonlyArray<LogEntryRecordedEvent>,
   query: ProcessManagerLogQuery,
 ): ReadonlyArray<ProcessManagerLogEntry> => {
   const rows: ProcessManagerLogEntry[] = [];
@@ -188,11 +197,11 @@ const entriesFromStoreEvents = (
 /**
  * @public
  */
-export const makeProcessStoreGroupLog = (deps: {
+export const makeProcessStoreLog = (deps: {
   readonly append: (event: AnalyticsEvent) => Effect.Effect<void, ProcessStoreWriteError>;
   readonly appendBatch: (events: ReadonlyArray<AnalyticsEvent>) => Effect.Effect<void, ProcessStoreWriteError>;
   readonly events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>;
-}): ProcessStoreGroupLogApi => ({
+}): ProcessStoreLogApi => ({
   record: (groupId, entryId, entry) =>
     deps.append(makeRecordedEvent(groupId, entryId, entry)),
 
@@ -202,7 +211,7 @@ export const makeProcessStoreGroupLog = (deps: {
   load: (query) =>
     Effect.gen(function* () {
       const events = yield* deps.events(storeEventQueryFromLogQuery(query));
-      const logEvents = events.filter(isGroupLogEntryRecorded);
+      const logEvents = events.filter(isLogEntryRecorded);
       const entries = entriesFromStoreEvents(logEvents, query);
       if (entries.length === 0) {
         return yield* new ProcessManagerLogQueryError({
@@ -215,7 +224,7 @@ export const makeProcessStoreGroupLog = (deps: {
   query: (logQuery) =>
     Effect.gen(function* () {
       const events = yield* deps.events(storeEventQueryFromLogQuery(logQuery));
-      const logEvents = events.filter(isGroupLogEntryRecorded);
+      const logEvents = events.filter(isLogEntryRecorded);
       const entries = entriesFromStoreEvents(logEvents, logQuery);
       if (entries.length === 0) {
         return yield* new ProcessManagerLogQueryError({
@@ -226,18 +235,15 @@ export const makeProcessStoreGroupLog = (deps: {
     }),
 });
 
-/** @internal @deprecated Use {@link makeProcessStoreGroupLog}. */
-export const makeProcessStoreLogs = makeProcessStoreGroupLog;
-
-const makeProcessStoreGroupLogFromRuntimeStorage: Effect.Effect<
-  ProcessStoreGroupLogApi,
+const makeProcessStoreLogFromRuntimeStorage: Effect.Effect<
+  ProcessStoreLogApi,
   never,
   RuntimeStorage
 > = Effect.gen(function* () {
   const storage = yield* RuntimeStorage;
   const now = yield* Clock.currentTimeMillis;
   const spine = makeProcessStoreSpine(storage, makeRunId(now));
-  return makeProcessStoreGroupLog({
+  return makeProcessStoreLog({
     append: spine.append,
     appendBatch: spine.appendBatch,
     events: spine.events,
@@ -245,32 +251,32 @@ const makeProcessStoreGroupLogFromRuntimeStorage: Effect.Effect<
 });
 
 /**
- * Context tag for {@link ProcessStoreGroupLogApi}.
+ * Context tag for {@link ProcessStoreLogApi}.
  *
  * @public
  */
-export class ProcessStoreGroupLog extends Context.Service<
-  ProcessStoreGroupLog,
-  ProcessStoreGroupLogApi
->()("@nikscripts/effect-pm/store/groupLog/ProcessStoreGroupLog", {
-  make: makeProcessStoreGroupLogFromRuntimeStorage,
+export class ProcessStoreLog extends Context.Service<
+  ProcessStoreLog,
+  ProcessStoreLogApi
+>()("@nikscripts/effect-pm/store/log/ProcessStoreLog", {
+  make: makeProcessStoreLogFromRuntimeStorage,
 }) {}
 
-export namespace ProcessStoreGroupLog {
+export namespace ProcessStoreLog {
   /**
-   * `Layer` that provides {@link ProcessStoreGroupLog} from injected {@link RuntimeStorage}.
+   * `Layer` that provides {@link ProcessStoreLog} from injected {@link RuntimeStorage}.
    *
    * @public
    */
-  export const layerRuntimeStorage: Layer.Layer<ProcessStoreGroupLog, never, RuntimeStorage> =
-    Layer.effect(ProcessStoreGroupLog, makeProcessStoreGroupLogFromRuntimeStorage);
+  export const layerRuntimeStorage: Layer.Layer<ProcessStoreLog, never, RuntimeStorage> =
+    Layer.effect(ProcessStoreLog, makeProcessStoreLogFromRuntimeStorage);
 
   /**
    * `Layer` backed by in-memory {@link RuntimeStorage}.
    *
    * @public
    */
-  export const layer: Layer.Layer<ProcessStoreGroupLog, never, never> = Layer.provide(
+  export const layer: Layer.Layer<ProcessStoreLog, never, never> = Layer.provide(
     layerRuntimeStorage,
     RuntimeStorage.layer,
   );

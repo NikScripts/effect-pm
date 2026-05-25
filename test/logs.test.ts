@@ -3,14 +3,14 @@ import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Effect, FileSystem, Layer, Path } from "effect";
 import { groupLogSqlitePath } from "../src/internal/manager/childLaunch";
-import { ProcessStore, isGroupLogEntryRecorded } from "../src/ProcessStore";
+import { ProcessStore, isLogEntryRecorded } from "../src/ProcessStore";
 import { layerProcessStore } from "../src/storage/sqlite/index";
 import { ProcessManagerLogAnnotationKeys } from "../src/LogContext";
 import type { ProcessManagerLogEntry } from "../src/LogEntry";
 
 const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
-describe("ProcessStoreGroupLog", () => {
+describe("ProcessStoreLog", () => {
   it.effect("record, load, and query via namespace and layerProcessStore", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -31,7 +31,7 @@ describe("ProcessStoreGroupLog", () => {
         spans: [],
       };
 
-      yield* Effect.flatMap(ProcessStore, (store) => store.GroupLog.record("workshop-group", "1", entry)).pipe(
+      yield* Effect.flatMap(ProcessStore, (store) => store.Log.record("workshop-group", "1", entry)).pipe(
         Effect.provide(storeLayer),
         Effect.scoped,
       );
@@ -39,18 +39,18 @@ describe("ProcessStoreGroupLog", () => {
       const loaded = yield* Effect.gen(function* () {
         const store = yield* ProcessStore;
         return yield* store.events({
-          types: ["group.log.entry"],
-          entityType: "group",
+          types: ["log.entry"],
+          entityType: "log",
           entityId: "workshop-group",
         });
       }).pipe(Effect.provide(storeLayer), Effect.scoped);
 
       assert.strictEqual(loaded.length, 1);
       const row = loaded[0];
-      assert.ok(row !== undefined && isGroupLogEntryRecorded(row));
+      assert.ok(row !== undefined && isLogEntryRecorded(row));
       assert.strictEqual(row.log.entry.annotations[ProcessManagerLogAnnotationKeys.processId], "billing/sync");
 
-      yield* Effect.flatMap(ProcessStore, (store) => store.GroupLog.query({
+      yield* Effect.flatMap(ProcessStore, (store) => store.Log.query({
         groupId: "workshop-group",
         processId: "billing/sync",
         limit: 10,

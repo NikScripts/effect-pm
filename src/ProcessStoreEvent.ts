@@ -127,38 +127,6 @@ export interface AnalyticsEventBase {
 export type ProcessExecutionStatus = "completed" | "failed" | "interrupted";
 
 /**
- * Facet-aligned write input for one finished process run.
- *
- * @remarks
- * Used by {@link Process} today via the legacy `ProcessStore` bridge; the target
- * is `ProcessStoreProcessExecution` (internal facet, Part C build step).
- *
- * @public
- */
-export interface ProcessExecutionRecordInput {
-  readonly processId: string;
-  readonly scheduleKey: string | null;
-  /** Epoch millis when the execution started. */
-  readonly startedAt: number;
-  /** Epoch millis when the execution completed. */
-  readonly completedAt: number;
-  readonly status: ProcessExecutionStatus;
-  readonly error?: string;
-  readonly isStartupRun: boolean;
-}
-
-/**
- * Query for process execution history (process id + optional time window / schedule key).
- *
- * @public
- */
-export interface ProcessExecutionQuery {
-  readonly processId: string;
-  readonly scheduleKey?: string | null;
-  readonly opts?: QueryOpts;
-}
-
-/**
  * One finished process run (success, failure, or interrupt).
  *
  * @public
@@ -301,13 +269,15 @@ export type RuntimeFact = FactEnvelope;
 export type RuntimeStateChange = FactEnvelopeStateChange;
 
 /**
- * Structured group log line persisted for operator `pm logs` history.
+ * Structured log line persisted by {@link ProcessStoreLog} for operator
+ * `pm logs` / `pm watch` history. `entityId` is an opaque log-bucket id
+ * supplied by the relay (today: the PM log annotation).
  *
  * @public
  */
-export interface GroupLogEntryRecordedEvent extends AnalyticsEventBase {
-  type: "group.log.entry";
-  entityType: "group";
+export interface LogEntryRecordedEvent extends AnalyticsEventBase {
+  type: "log.entry";
+  entityType: "log";
   log: {
     readonly entryId: string;
     readonly entry: {
@@ -344,12 +314,14 @@ export type AnalyticsEvent =
   | RunResourceStateChangedEvent
   | RuntimeFactRecordedEvent
   | RuntimeStateChangedEvent
-  | GroupLogEntryRecordedEvent;
+  | LogEntryRecordedEvent;
 
 /**
+ * Narrows an {@link AnalyticsEvent} to {@link LogEntryRecordedEvent}.
+ *
  * @public
  */
-export const isGroupLogEntryRecorded = (
+export const isLogEntryRecorded = (
   event: AnalyticsEvent,
-): event is GroupLogEntryRecordedEvent =>
-  event.type === "group.log.entry" && event.entityType === "group";
+): event is LogEntryRecordedEvent =>
+  event.type === "log.entry" && event.entityType === "log";

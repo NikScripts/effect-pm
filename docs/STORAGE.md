@@ -6,7 +6,7 @@ and [STORAGE-FACET-AUTHORING-GUIDE.md](./STORAGE-FACET-AUTHORING-GUIDE.md).
 
 **One facet per domain.** Each domain owns concrete fact / state / query types and its own wire event types — no shared generic envelope appears in any facet's public API.
 
-**Transitional:** Legacy `ProcessStore` monolith until Part P. Facets are in `src/store/` (camelCase filenames).
+**Transitional:** The legacy `ProcessStore` monolith (`Context.Service` + `ProcessStoreInterface`) still ships alongside the combiner. Removal is tracked under "Infrastructure debt" in [STORAGE-INTEGRATION-INVENTORY.md](./STORAGE-INTEGRATION-INVENTORY.md). Facets live in `src/store/` (camelCase filenames).
 
 ---
 
@@ -18,6 +18,8 @@ src/store/
   groupLog.ts
   runResource.ts
   processLifecycle.ts
+  processGroup.ts
+  processExecution.ts
 src/internal/store/
   spine.ts, codec.ts, composite.ts   ← internal only
   factEnvelope.ts                    ← internal-only generic envelope still used by QueueResource
@@ -35,10 +37,11 @@ src/internal/store/
 |-------------|---------|------|
 | `ProcessStoreRunResource` | `store/RunResource` | `src/store/runResource.ts` |
 | `ProcessStoreQueueResource` | `store/QueueResource` | `src/store/queueResource.ts` |
-| `ProcessStoreGroupLog` | `store/GroupLog` | `src/store/groupLog.ts` |
-| `ProcessStoreProcessLifecycle` | `store/ProcessLifecycle` | `src/store/processLifecycle.ts` |
+| `ProcessStoreLog` | `store/Log` | `src/store/log.ts` — structured `log.entry` rows; durable sink for the `@nikscripts/effect-pm/Logs` capture/relay pipeline |
+| `ProcessStoreProcessLifecycle` | `store/ProcessLifecycle` | `src/store/processLifecycle.ts` — process-scoped `process.lifecycle.changed` |
+| `ProcessStoreProcessGroup` | `store/ProcessGroup` | `src/store/processGroup.ts` — group member lifecycle + `lifecycleByGroup` (requires lifecycle facet) |
 | `RuntimeStorage` | `RuntimeStorage` | row port (not a store facet) |
-| `ProcessStore` | `ProcessStore` | combiner + legacy monolith (Part P) |
+| `ProcessStore` | `ProcessStore` | combiner namespace (monolith demolition tracked under "Infrastructure debt" in [STORAGE-INTEGRATION-INVENTORY.md](./STORAGE-INTEGRATION-INVENTORY.md)) |
 
 > The previous `ProcessStoreRuntime` facet (`@nikscripts/effect-pm/store/Runtime`) was a **generic shared sink** for runtime facts and has been renamed and re-scoped to `ProcessStoreRunResource`, tailored specifically for the `RunResource` concurrency gate. The generic `RuntimeFact` / `RuntimeRef` / `RuntimeStateChange` / `RuntimeStateBase` vocabulary is no longer part of the public API. Other domains (process executions, schedules, …) that need similar observation must publish their **own** concrete event types via their own facets — see [STORAGE-FACET-AUTHORING-GUIDE.md](./STORAGE-FACET-AUTHORING-GUIDE.md).
 

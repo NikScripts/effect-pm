@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process, ProcessMakeInvalidLayerArgument, ProcessSchedule, ProcessStore } from "../src";
+import { ProcessStoreProcessExecution } from "../src/store/processExecution";
 import { utcDateFromMillis } from "../src/internal/utcDate";
 
 const alwaysOnEntry = {
@@ -54,8 +55,10 @@ describe("Process runtime with schedule windows", () => {
 
       const fib = yield* Effect.forkChild(proc.effect);
       yield* TestClock.adjust(Duration.millis(250));
-      const status = yield* proc.getStatus();
-      expect(status.executions).toBeGreaterThanOrEqual(1);
+      const rows = yield* ProcessStoreProcessExecution.executions({
+        processId: proc.name,
+      });
+      expect(rows.length).toBeGreaterThanOrEqual(1);
       yield* Fiber.interrupt(fib);
     }).pipe(Effect.provide(storeAndClock), Effect.scoped),
   );
@@ -128,36 +131,40 @@ describe("Process runtime with schedule windows", () => {
 
     return Effect.gen(function* () {
         yield* proc.runImmediately();
-        const store = yield* ProcessStore;
-        const rows = yield* store.getProcessExecutions(proc.name);
+        const rows = yield* ProcessStoreProcessExecution.executions({
+          processId: proc.name,
+        });
         expect(rows.length).toBe(1);
         expect(rows[0]?.execution.status).toBe("completed");
       }).pipe(Effect.provide(ProcessStore.layer));
   });
 
-  it.effect("runImmediately is a no-op for storage when ProcessStore is absent", () =>
+  it.effect("runImmediately leaves no execution rows when the facet layer is absent", () =>
     Effect.gen(function* () {
       const proc = Process.make("test/run-immediately-no-store", {
         effect: Effect.void,
       });
       yield* proc.runImmediately();
-      const status = yield* proc.getStatus();
-      expect(status.executions).toBe(0);
-      expect(status.lastRun).toBeNull();
+      const rows = yield* ProcessStoreProcessExecution.executions({
+        processId: proc.name,
+      });
+      expect(rows).toHaveLength(0);
     }),
   );
 
-  it.effect("getStatus returns zero executions without ProcessStore", () =>
+  it.effect("driver leaves no execution rows when the facet layer is absent", () =>
     Effect.gen(function* () {
-      const proc = Process.make("test/status-no-store", {
+      const proc = Process.make("test/driver-no-store", {
         effect: Effect.void,
         polling: Polling.spaced(Duration.millis(100)),
         schedule: ProcessSchedule.inMemory([alwaysOnEntry]),
       });
       const fib = yield* Effect.forkChild(proc.effect);
       yield* TestClock.adjust(Duration.millis(250));
-      const status = yield* proc.getStatus();
-      expect(status.executions).toBe(0);
+      const rows = yield* ProcessStoreProcessExecution.executions({
+        processId: proc.name,
+      });
+      expect(rows).toHaveLength(0);
       yield* Fiber.interrupt(fib);
     }).pipe(Effect.provide(TestClock.layer()), Effect.scoped),
   );
@@ -351,8 +358,6 @@ describe("Process runtime with schedule windows", () => {
         const fib = yield* Effect.forkChild(proc.effect);
         yield* TestClock.adjust(Duration.seconds(1));
         yield* Effect.yieldNow;
-        const status = yield* proc.getStatus();
-        expect(Option.getOrNull(status.nextTriggerRun)?.getTime()).toBe(30_000);
 
         yield* TestClock.adjust(Duration.seconds(14));
         yield* Effect.yieldNow;
@@ -364,24 +369,4 @@ describe("Process runtime with schedule windows", () => {
     ),
 );
 
-  it.effect("status reports activeInstances for overlapping live windows", () =>
-    Effect.gen(function* () {
-        const proc = Process.make("test/status-active-instances", {
-          schedule: ProcessSchedule.inMemory([
-            ProcessSchedule.window("a", utcDateFromMillis(0), utcDateFromMillis(60_000)),
-            ProcessSchedule.window("b", utcDateFromMillis(0), utcDateFromMillis(60_000)),
-          ]),
-          effect: Effect.sleep(Duration.days(1)),
-        });
-
-        const fib = yield* Effect.forkChild(proc.effect);
-        yield* Effect.yieldNow;
-        const status = yield* proc.getStatus();
-        expect(status.activeInstances).toBe(2);
-        yield* Fiber.interrupt(fib);
-      }).pipe(
-      Effect.provide(storeAndClock),
-      Effect.scoped,
-    ),
-);
 });

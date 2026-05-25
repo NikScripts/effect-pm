@@ -251,7 +251,7 @@ as `Process`, `QueueResource`, `RunResource`, `HttpApiResource`, and
 [RUNTIME-STORAGE-ADAPTER-GUIDE.md](./RUNTIME-STORAGE-ADAPTER-GUIDE.md)). The
 default in-memory store and the SQLite adapter (`@nikscripts/effect-pm/storage/sqlite`,
 `layerProcessStore`) both use `ProcessStore.layerRuntimeStorage`. Adapters persist
-normalized `RuntimeRecord` rows; `ProcessStore` facets (`GroupLog`, `QueueResource`,
+normalized `RuntimeRecord` rows; `ProcessStore` facets (`Log`, `QueueResource`,
 `runtime` projections) map module operations onto those rows. The optional Prisma
 export is not a full store yet (`PrismaProcessStoreUnavailableError` on read paths).
 
@@ -354,7 +354,7 @@ When `ProcessStoreRunResource.layerRuntimeStorage` (or the full-stack
 `ProcessStore.layerRuntimeStorage` / `layerProcessStore` from
 `@nikscripts/effect-pm/storage/sqlite`) is composed, facts and state changes
 are persisted as `run-resource.fact.recorded` / `run-resource.state.changed`
-analytics events. `ProcessStore.GroupLog` covers structured group log
+analytics events. `ProcessStoreLog` covers structured log
 history; capture/relay uses `@nikscripts/effect-pm/Logs`.
 `@nikscripts/effect-pm/storage/file` and `ProcessStore.fileLayer` are
 **legacy** NDJSON compatibility only — do not use for new code.

@@ -2,7 +2,7 @@
 
 Start with [`docs/AGENTS.md`](./docs/AGENTS.md) for this package's architecture, invariants, and verification commands.
 
-**Persistence:** [`docs/STORAGE.md`](./docs/STORAGE.md) — one stack only: `RuntimeStorage` + `ProcessStore`. **Logs:** capture/relay live in [`@nikscripts/effect-pm/Logs`](./docs/ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md) only; store persistence uses `ProcessStore.GroupLog` (not two exports named `Logs`). See [`docs/ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md`](./docs/ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md).
+**Persistence:** [`docs/STORAGE.md`](./docs/STORAGE.md) — one stack only: `RuntimeStorage` + per-domain `ProcessStore*` facets composed via the `ProcessStore` namespace. **Logs:** capture/relay live in [`@nikscripts/effect-pm/Logs`](./docs/ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md) only; durable history uses `ProcessStoreLog` (`store/log.ts`). See [`docs/ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md`](./docs/ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md).
 
 ## Vendored repositories
 

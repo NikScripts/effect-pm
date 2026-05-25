@@ -67,7 +67,7 @@ Storage options:
 
 - `ProcessStore.layer` / `ProcessStore.memory` — in-memory analytics for tests and demos.
 - `ProcessStore.layerRuntimeStorage` + `@nikscripts/effect-pm/storage/sqlite` — durable local SQLite runtime records (preferred).
-- `ProcessStore.GroupLog` — structured group log history (`record`, `query`); `@nikscripts/effect-pm/Logs` for capture/relay in group children.
+- `ProcessStoreLog` (also exposed as `ProcessStore.Log` on the composed store) — structured log history (`record`, `load`, `query`); `@nikscripts/effect-pm/Logs` for capture/relay in group children.
 - `ProcessStore.QueueResource` — queue semantic storage helpers.
 - `file(filePath)` / `fileLayer(filePath)` from `@nikscripts/effect-pm/storage/file` — **legacy** NDJSON only; do not use for new code.
 - `PrismaProcessStore` from `@nikscripts/effect-pm/storage/prisma` — placeholder for the upcoming RuntimeStorage-backed Prisma rewrite.

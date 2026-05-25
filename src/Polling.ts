@@ -54,7 +54,7 @@ export interface PollingService {
   readonly resetCadence: Effect.Effect<void>;
   /** Run after each successful user effect completion (e.g., increment iteration). */
   readonly afterTick: Effect.Effect<void>;
-  /** Best-effort hint for Process.getStatus (none if unknown). */
+  /** Best-effort cadence hint for status UIs (none if unknown). */
   readonly peekCadence: Effect.Effect<Option.Option<Duration.Duration>>;
 }
 

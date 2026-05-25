@@ -1,39 +1,38 @@
 /**
- * Process supervisor lifecycle persistence on {@link RuntimeStorage}.
+ * Process lifecycle storage facet — `process.lifecycle.changed` by process id.
  *
  * @remarks
- * Records `process.lifecycle.changed` events from {@link ProcessGroup} controls
- * (`Started`, `Stopped`, `Restarted`, …). Apps compose
- * {@link ProcessStoreProcessLifecycle.layerRuntimeStorage} via
- * {@link ProcessStore.layerRuntimeStorage} or `layerProcessStore` from
- * `@nikscripts/effect-pm/storage/sqlite`.
+ * Process-scoped analytics: {@link Process.spawn}, supervisors, and any writer
+ * that records lifecycle without a group. For group control paths
+ * (`start` / `stop` / `restart` with a `groupId`), use
+ * {@link ProcessStoreProcessGroup} instead — it stamps `attributes.groupId`
+ * and exposes group-scoped queries.
+ *
+ * Compose via {@link ProcessStoreProcessLifecycle.layerRuntimeStorage} or
+ * {@link ProcessStore.layerRuntimeStorage}.
  *
  * @module store/ProcessLifecycle
  */
 
-import { Cause, Clock, Context, Effect, Layer } from "effect";
+import { Clock, Effect } from "effect";
 import {
   applyQueryOpts,
   byTimestampDesc,
   isProcessLifecycleChanged,
-  makeProcessStoreSpine,
-  makeRunId,
   processLifecycleFromEvents,
   processLifecycleStoreQuery,
 } from "../internal/store/spine";
+import { ProcessStoreBuilder } from "../ProcessStoreBuilder";
 import type {
   AnalyticsEvent,
   JsonValue,
   ProcessLifecycleChangedEvent,
   ProcessLifecycleTag,
-  ProcessStoreWriteError,
   QueryOpts,
-  StoreEventQuery,
 } from "../ProcessStoreEvent";
-import { RuntimeStorage } from "../RuntimeStorage";
 
 /**
- * Write input for a process lifecycle transition.
+ * Write input for a process lifecycle transition (no group scope).
  *
  * @public
  */
@@ -41,59 +40,15 @@ export interface ProcessLifecycleRecordInput {
   readonly processId: string;
   readonly tag: ProcessLifecycleTag;
   readonly error?: string;
-  /** Optional group id stored on `attributes.groupId` for {@link ProcessStoreProcessLifecycleApi.lifecycleByGroup}. */
-  readonly groupId?: string;
   /** Epoch millis; defaults to {@link Clock.currentTimeMillis}. */
   readonly occurredAt?: number;
   readonly attributes?: { readonly [key: string]: JsonValue };
 }
 
-/**
- * Process lifecycle write/read port backed by {@link RuntimeStorage}.
- *
- * @public
- */
-export interface ProcessStoreProcessLifecycleApi {
-  readonly lifecycleChanged: (
-    input: ProcessLifecycleRecordInput,
-  ) => Effect.Effect<void, ProcessStoreWriteError>;
-  readonly lifecycle: (
-    processId: string,
-    opts?: QueryOpts,
-  ) => Effect.Effect<ProcessLifecycleChangedEvent[]>;
-  readonly lifecycleForProcesses: (
-    processIds: ReadonlyArray<string>,
-    opts?: QueryOpts,
-  ) => Effect.Effect<ProcessLifecycleChangedEvent[]>;
-  readonly lifecycleByGroup: (
-    groupId: string,
-    opts?: QueryOpts,
-  ) => Effect.Effect<ProcessLifecycleChangedEvent[]>;
-  readonly latestLifecycleByProcess: (
-    processIds: ReadonlyArray<string>,
-  ) => Effect.Effect<ReadonlyMap<string, ProcessLifecycleTag>>;
-}
-
-/**
- * Log lifecycle persistence failures without failing group controls.
- *
- * @public
- */
-export const persistProcessLifecycle = (
-  effect: Effect.Effect<void, ProcessStoreWriteError>,
-): Effect.Effect<void> =>
-  effect.pipe(
-    Effect.catchCause((cause) =>
-      Effect.logWarning("ProcessStoreProcessLifecycle write failed for process lifecycle").pipe(
-        Effect.annotateLogs("cause", Cause.pretty(cause)),
-      ),
-    ),
-  );
-
 let processLifecycleSeq = 0;
 
 const lifecycleEventAttributes = (
-  input: ProcessLifecycleRecordInput,
+  input: ProcessLifecycleRecordInput & { readonly groupId?: string },
 ): Record<string, unknown> | undefined => {
   const merged: Record<string, unknown> = {
     ...(input.groupId !== undefined ? { groupId: input.groupId } : {}),
@@ -102,8 +57,13 @@ const lifecycleEventAttributes = (
   return Object.keys(merged).length === 0 ? undefined : merged;
 };
 
-const makeProcessLifecycleChangedEvent = (
-  input: ProcessLifecycleRecordInput,
+/**
+ * Builds a `process.lifecycle.changed` wire event.
+ *
+ * @internal Shared with {@link ProcessStoreProcessGroup} member writes.
+ */
+export const makeProcessLifecycleChangedEvent = (
+  input: ProcessLifecycleRecordInput & { readonly groupId?: string },
   occurredAtMs: number,
 ): ProcessLifecycleChangedEvent => {
   processLifecycleSeq++;
@@ -137,112 +97,58 @@ const lifecycleEventsForProcesses = (
   return applyQueryOpts(rows, opts, (event) => event.occurredAt);
 };
 
-const lifecycleEventsForGroup = (
-  events: ReadonlyArray<AnalyticsEvent>,
-  groupId: string,
-  opts?: QueryOpts,
-): ProcessLifecycleChangedEvent[] => {
-  const rows = events
-    .filter((event): event is ProcessLifecycleChangedEvent => {
-      if (!isProcessLifecycleChanged(event)) {
-        return false;
-      }
-      const attributes = event.attributes;
-      return attributes !== undefined && attributes["groupId"] === groupId;
-    })
-    .sort(byTimestampDesc((event) => event.occurredAt));
-  return applyQueryOpts(rows, opts, (event) => event.occurredAt);
-};
-
-/** @internal */
-export const makeProcessStoreProcessLifecycle = (deps: {
-  readonly append: (
-    event: ProcessLifecycleChangedEvent,
-  ) => Effect.Effect<void, ProcessStoreWriteError>;
-  readonly events: (
-    query?: StoreEventQuery,
-  ) => Effect.Effect<ReadonlyArray<AnalyticsEvent>, never>;
-}): ProcessStoreProcessLifecycleApi => ({
-  lifecycleChanged: (input) =>
-    Effect.gen(function* () {
-      const occurredAtMs = input.occurredAt ?? (yield* Clock.currentTimeMillis);
-      yield* deps.append(makeProcessLifecycleChangedEvent(input, occurredAtMs));
-    }),
-  lifecycle: (processId, opts) =>
-    deps.events(processLifecycleStoreQuery(processId, opts)).pipe(
-      Effect.map((events) => processLifecycleFromEvents(events, processId, opts)),
-    ),
-  lifecycleForProcesses: (processIds, opts) =>
-    deps.events({
-      entityType: "process",
-      types: ["process.lifecycle.changed"],
-      opts,
-    }).pipe(
-      Effect.map((events) => lifecycleEventsForProcesses(events, processIds, opts)),
-    ),
-  lifecycleByGroup: (groupId, opts) =>
-    deps.events({
-      entityType: "process",
-      types: ["process.lifecycle.changed"],
-      opts,
-    }).pipe(
-      Effect.map((events) => lifecycleEventsForGroup(events, groupId, opts)),
-    ),
-  latestLifecycleByProcess: (processIds) =>
-    Effect.gen(function* () {
-      const latest = new Map<string, ProcessLifecycleTag>();
-      for (const processId of processIds) {
-        const rows = yield* deps.events(processLifecycleStoreQuery(processId));
-        const event = processLifecycleFromEvents(rows, processId, { limit: 1 })[0];
-        if (event !== undefined) {
-          latest.set(processId, event.lifecycle.tag);
-        }
-      }
-      return latest;
-    }),
-});
-
-const makeProcessStoreProcessLifecycleFromRuntimeStorage = Effect.gen(function* () {
-  const storage = yield* RuntimeStorage;
-  const now = yield* Clock.currentTimeMillis;
-  const spine = makeProcessStoreSpine(storage, makeRunId(now));
-  return makeProcessStoreProcessLifecycle({
-    append: spine.append,
-    events: spine.events,
-  });
-});
-
 /**
- * Context tag for {@link ProcessStoreProcessLifecycleApi}.
+ * Process lifecycle storage facet (see module doc).
  *
  * @public
  */
-export class ProcessStoreProcessLifecycle extends Context.Service<
-  ProcessStoreProcessLifecycle,
-  ProcessStoreProcessLifecycleApi
->()("@nikscripts/effect-pm/store/processLifecycle/ProcessStoreProcessLifecycle", {
-  make: makeProcessStoreProcessLifecycleFromRuntimeStorage,
-}) {}
+export class ProcessStoreProcessLifecycle extends ProcessStoreBuilder.Service<
+  ProcessStoreProcessLifecycle
+>()(
+  "@nikscripts/effect-pm/store/processLifecycle/ProcessStoreProcessLifecycle",
+  ProcessStoreBuilder.record((s) => ({
+    lifecycleChanged: (input: ProcessLifecycleRecordInput) =>
+      Effect.gen(function* () {
+        const occurredAtMs = input.occurredAt ?? (yield* Clock.currentTimeMillis);
+        yield* s.append(makeProcessLifecycleChangedEvent(input, occurredAtMs));
+      }),
+  })),
+  ProcessStoreBuilder.read((s) => ({
+    lifecycle: (processId: string, opts?: QueryOpts) =>
+      s.events(processLifecycleStoreQuery(processId, opts)).pipe(
+        Effect.map((events) => processLifecycleFromEvents(events, processId, opts)),
+      ),
+    lifecycleForProcesses: (processIds: ReadonlyArray<string>, opts?: QueryOpts) =>
+      s.events({
+        entityType: "process",
+        types: ["process.lifecycle.changed"],
+        opts,
+      }).pipe(
+        Effect.map((events) => lifecycleEventsForProcesses(events, processIds, opts)),
+      ),
+    latestLifecycleByProcess: (processIds: ReadonlyArray<string>) =>
+      Effect.gen(function* () {
+        const latest = new Map<string, ProcessLifecycleTag>();
+        for (const processId of processIds) {
+          const rows = yield* s.events(processLifecycleStoreQuery(processId));
+          const event = processLifecycleFromEvents(rows, processId, { limit: 1 })[0];
+          if (event !== undefined) {
+            latest.set(processId, event.lifecycle.tag);
+          }
+        }
+        return latest;
+      }),
+  })),
+) {}
 
-export namespace ProcessStoreProcessLifecycle {
-  /**
-   * `Layer` that provides {@link ProcessStoreProcessLifecycle} from injected {@link RuntimeStorage}.
-   *
-   * @public
-   */
-  export const layerRuntimeStorage: Layer.Layer<
-    ProcessStoreProcessLifecycle,
-    never,
-    RuntimeStorage
-  > = Layer.effect(ProcessStoreProcessLifecycle, makeProcessStoreProcessLifecycleFromRuntimeStorage);
-
-  /**
-   * `Layer` backed by in-memory {@link RuntimeStorage}.
-   *
-   * @public
-   */
-  export const layer: Layer.Layer<ProcessStoreProcessLifecycle, never, never> = Layer.provide(
-    layerRuntimeStorage,
-    RuntimeStorage.layer,
-  );
+/**
+ * @public
+ */
+export declare namespace ProcessStoreProcessLifecycle {
+  export type Type = ProcessStoreBuilder.Service.Type<
+    typeof ProcessStoreProcessLifecycle
+  >;
+  export type EmitType = ProcessStoreBuilder.Service.EmitType<
+    typeof ProcessStoreProcessLifecycle
+  >;
 }

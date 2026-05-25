@@ -74,9 +74,10 @@ types and never depend on it.
 
 1. Keep `ProcessStore` as the public storage **combiner** name; per-domain
    facets (`ProcessStoreRunResource`, `ProcessStoreQueueResource`,
-   `ProcessStoreGroupLog`, `ProcessStoreProcessLifecycle`, …) own their concrete
-   `*Ref` / `*Fact` / `*StateChange` / `*State` types. `RuntimeStorage` remains
-   the generic swappable storage boundary underneath them.
+   `ProcessStoreLog`, `ProcessStoreProcessLifecycle`, `ProcessStoreProcessGroup`,
+   `ProcessStoreProcessExecution`) own their concrete `*Ref` / `*Fact` /
+   `*StateChange` / `*State` types. `RuntimeStorage` remains the generic
+   swappable storage boundary underneath them.
 2. `RunResource` was the first observed runtime because it is a low-risk gate
    with no queue payloads, no schema work, and no background workers. It now
    publishes run started/completed/failed facts plus `RunResourceState` changes
@@ -156,8 +157,8 @@ Candidate work:
 
 1. **Log transport port** — Extract HTTP `/logs/stream` behind a
    `LogTransport`-style client/server (mirror control transport).
-2. **Storage option** — Persist entries on child publish (`group.log.entry` via
-   `ProcessStore.events`); operator uses **`--after`** (catch-up forward) or
+2. **Storage option** — Persist entries on child publish (`log.entry` via
+   `ProcessStoreLog.record` / `recordBatch`); operator uses **`--after`** (catch-up forward) or
    **`--before`** (scroll-back older than current tail) with **`entryId`** as the
    primary cursor, then optionally `--follow` on PubNub or HTTP.
 3. **PubNub** — Publish NDJSON lines per entry on a group channel; operator

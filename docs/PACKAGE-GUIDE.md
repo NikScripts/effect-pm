@@ -106,7 +106,7 @@ dedicated subpaths for focused imports:
 - `@nikscripts/effect-pm/storage/prisma`
 - `@nikscripts/effect-pm/storage/file` (legacy only)
 
-Structured group logs use `ProcessStore.GroupLog` (`record`, `query`) with `ProcessStore` composed; child capture uses `@nikscripts/effect-pm/Logs` (`captureLoggerLayer`, `relayLayer`)
+Structured logs use `ProcessStoreLog` (`record`, `load`, `query`) with `ProcessStore` composed; child capture uses `@nikscripts/effect-pm/Logs` (`captureLoggerLayer`, `relayLayer`)
 at launch (`layerProcessStore` from `storage/sqlite`). Durable
 normalized runtime records use
 `@nikscripts/effect-pm/storage/sqlite` (`SQLiteRuntimeStorage`) with

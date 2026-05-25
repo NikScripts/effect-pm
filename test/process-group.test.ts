@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Duration, Effect, Fiber, Option, Ref } from "effect"
+import { Duration, Effect, Fiber, Ref } from "effect"
 import { ProcessGroup, ProcessStore } from "../src"
-import type { Process, ProcessDetails } from "../src"
+import type { Process } from "../src"
 
 const waitUntilTicked = (ticks: Ref.Ref<number>) =>
   Effect.gen(function* () {
@@ -21,17 +21,6 @@ const makeTickProcess = (
       Effect.andThen(Ref.update(ticks, (n) => n + 1)),
     ),
   ),
-  getStatus: () =>
-    Effect.succeed({
-      lastRun: null,
-      executions: 0,
-      firstStartup: null,
-      armed: false,
-      nextScheduleTransition: Option.none(),
-      nextPollCadence: Option.none(),
-      activeInstances: 0,
-      nextTriggerRun: Option.none(),
-    } satisfies ProcessDetails),
   runImmediately: () => Effect.void,
 })
 
