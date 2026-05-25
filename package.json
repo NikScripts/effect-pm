@@ -54,6 +54,11 @@
       "import": "./dist/ProcessStore.mjs",
       "require": "./dist/ProcessStore.js"
     },
+    "./ProcessStorage": {
+      "types": "./dist/ProcessStorage.d.ts",
+      "import": "./dist/ProcessStorage.mjs",
+      "require": "./dist/ProcessStorage.js"
+    },
     "./store/RunResource": {
       "types": "./dist/store/RunResource.d.ts",
       "import": "./dist/store/RunResource.mjs",
@@ -108,11 +113,6 @@
       "types": "./dist/Logs.d.ts",
       "import": "./dist/Logs.mjs",
       "require": "./dist/Logs.js"
-    },
-    "./storage/file": {
-      "types": "./dist/storage/file.d.ts",
-      "import": "./dist/storage/file.mjs",
-      "require": "./dist/storage/file.js"
     },
     "./storage/sqlite": {
       "types": "./dist/storage/sqlite.d.ts",

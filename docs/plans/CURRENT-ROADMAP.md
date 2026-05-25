@@ -66,7 +66,6 @@ landed a generic `RuntimeFact` / `RuntimeRef` / `RuntimeStateChange` vocabulary
 and a generic `ProcessStoreRuntime` facet (plus a separate `RuntimeObserver`).
 Both have since been removed from the public API in favour of **one facet per
 domain** with concrete typed shapes. See
-[STORAGE-FACET-AUTHORING-GUIDE.md](../STORAGE-FACET-AUTHORING-GUIDE.md) and
 [STORAGE.md](../STORAGE.md) for the current rules. The generic envelope still
 exists at `src/internal/store/factEnvelope.ts` as internal-only plumbing for
 `ProcessStoreQueueResource`; new facets must publish their own concrete event

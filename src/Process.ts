@@ -397,7 +397,14 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   ): Effect.Effect<void, never, RUser> =>
     Effect.gen(function* () {
       const executedAt = yield* Clock.currentTimeMillis;
-      const hasPrior = yield* ProcessStoreProcessExecution.hasPriorExecutions(name);
+      const hasPrior = yield* Effect.serviceOption(ProcessStoreProcessExecution).pipe(
+        Effect.flatMap(
+          Option.match({
+            onNone: () => Effect.succeed(false),
+            onSome: (store) => store.hasPriorExecutions(name),
+          }),
+        ),
+      );
       const isStartupRun = !hasPrior;
 
       yield* Effect.matchEffect(

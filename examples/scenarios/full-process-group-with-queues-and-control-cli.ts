@@ -1,3 +1,4 @@
+import { ProcessStorage } from "../../src/ProcessStorage";
 /**
  * @module examples/scenarios/full-process-group-with-queues-and-control-cli
  *
@@ -18,8 +19,7 @@ import {
 } from "effect";
 import {
   Process,
-  ProcessStore,
-  QueueResource,
+    QueueResource,
   ProcessGroup,
   Polling,
   ProcessSchedule,
@@ -184,7 +184,7 @@ const mainLayer = Layer.mergeAll(
   ),
   DemoQueue.layer,
   DemoTwoQueue.layer,
-  ProcessStore.layer, // In-memory storage (no external dependencies)
+  ProcessStorage.layer, // In-memory storage (no external dependencies)
   Layer.succeed(References.MinimumLogLevel, "Debug"),
 );
 
@@ -246,7 +246,7 @@ const program = Effect.gen(function* () {
  * LAYER COMPOSITION:
  * - DemoQueue.layer: Provides the DemoQueue resource
  * - DemoTwoQueue.layer: Provides the DemoTwoQueue resource
- * - ProcessStore.layer: Provides in-memory analytics for executions + lifecycle
+ * - ProcessStorage.layer: Provides in-memory analytics for executions + lifecycle
  * - Logger.pretty: Provides nice formatted console logging
  *
  * A **single** `Effect.provide(Layer.mergeAll(...))` is used so Effect builds one merged
@@ -255,8 +255,8 @@ const program = Effect.gen(function* () {
  * `Polling` / `ProcessSchedule` passed to {@link Process.make} are merged into the
  * supervisor there; you do **not** need to provide them again at the program root.
  *
- * NOTE: ProcessStore.layer is in-memory, so data is lost on restart. For local
- * durable analytics without a database, use `ProcessStore.layerRuntimeStorage`
+ * NOTE: ProcessStorage.layer is in-memory, so data is lost on restart. For local
+ * durable analytics without a database, use `ProcessStorage.layerRuntimeStorage`
  * with `SQLiteRuntimeStorage.layer({ filename })` (see `@nikscripts/effect-pm/storage/sqlite`)
  * with Effect FileSystem / Path platform layers. For SQL-backed persistence,
  * use `PrismaProcessStore.layer({ client })` from

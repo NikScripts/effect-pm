@@ -18,7 +18,7 @@
  * ## Optional lifecycle analytics
  *
  * `start`, `stop`, and `restart` append `process.lifecycle.changed` events when the
- * store stack is composed ({@link ProcessStore.layer} or
+ * store stack is composed ({@link ProcessStorage.layer} or
  * {@link ProcessGroup.localEnvLayer}). Typed groups with an `id` use
  * {@link ProcessStoreProcessGroup} (rows include `attributes.groupId`). Untyped
  * {@link makeProcessGroup} without `id` uses {@link ProcessStoreProcessLifecycle}
@@ -40,10 +40,10 @@
  * **`ProcessGroup.make` and `ProcessGroup.Service.layer` never include a store.**
  * Choose one compose point:
  *
- * 1. **App / test root** — `Effect.provide(ProcessStore.layer)` or `layerProcessStore`
+ * 1. **App / test root** — `Effect.provide(ProcessStorage.layer)` or `layerProcessStore`
  * 2. **Group child** — {@link ProcessGroup.localEnvLayer} (recommended; merges store + log context)
  *
- * {@link ProcessGroup.localEnvLayer} defaults to {@link ProcessStore.layer}
+ * {@link ProcessGroup.localEnvLayer} defaults to {@link ProcessStorage.layer}
  * (**in-memory** — lifecycle history lost on restart). For durable local analytics,
  * pass sqlite via {@link ProcessGroupLocalEnvLayerOptions.store}.
  *
@@ -62,8 +62,8 @@
  *   yield* group.status
  * })
  *
- * // Analytics optional — omit ProcessStore.layer for silent no-op writes
- * program.pipe(Effect.provide(Layer.mergeAll(EmailQueue.layer, ProcessStore.layer)))
+ * // Analytics optional — omit ProcessStorage.layer for silent no-op writes
+ * program.pipe(Effect.provide(Layer.mergeAll(EmailQueue.layer, ProcessStorage.layer)))
  * ```
  *
  * @example Durable lifecycle history for a group child
@@ -85,7 +85,7 @@
  * @module ProcessGroup
  */
 
-import { Clock, Context, Data, DateTime, Effect, FiberMap, Layer, Ref, Schema, Scope } from "effect";
+import { Clock, Context, Data, DateTime, Effect, FiberMap, Layer, Option, Ref, Schema, Scope } from "effect";
 import type { HttpClient } from "effect/unstable/http";
 import type { Process, ProcessDefinition, ProcessServiceDefinition } from "./Process";
 import type {
@@ -101,7 +101,7 @@ import {
   QueueItemValidationError,
 } from "./QueueResource";
 import { layerProcessGroupLogContext } from "./LogContext";
-import { ProcessStore } from "./ProcessStore";
+import { ProcessStorage } from "./ProcessStorage";
 import type { ProcessLifecycleTag } from "./ProcessStoreEvent";
 import { ProcessStoreProcessGroup } from "./store/processGroup";
 import { ProcessStoreProcessExecution } from "./store/processExecution";
@@ -439,7 +439,7 @@ export type ProcessStatus = "running" | "stopped";
  * | Field group | Source |
  * |-------------|--------|
  * | `status`, `uptime`, `startTime` | {@link FiberMap} liveness + group start-time ref |
- * | `lastRun`, `executions`, `firstStartup` | {@link ProcessStoreProcessExecution.executions} |
+ * | `lastRun`, `executions`, `firstStartup` | `yield* ProcessStoreProcessExecution` → `.executions` |
  * | `armed`, schedule/polling fields, `activeInstances` | Placeholder until live-runtime helpers ship |
  * | *(none)* | Persisted lifecycle rows — write-only today; not used for live status |
  *
@@ -809,9 +809,14 @@ const buildProcessDetails = (
   nowMs: number,
 ): Effect.Effect<ProcessGroupDetails> =>
   Effect.gen(function* () {
-    const allExecutions = yield* ProcessStoreProcessExecution.executions({
-      processId: name,
-    });
+    const allExecutions = yield* Effect.serviceOption(ProcessStoreProcessExecution).pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.succeed([]),
+          onSome: (store) => store.executions({ processId: name }),
+        }),
+      ),
+    );
     const lastRunMillis = allExecutions[0]?.execution.startedAt;
     const lastRun =
       lastRunMillis === undefined
@@ -1721,11 +1726,11 @@ export interface ProcessGroupLocalEnvLayerOptions {
    * @remarks
    * | Value | Durability | Use when |
    * |-------|------------|----------|
-   * | *(default)* {@link ProcessStore.layer} | In-memory | Tests, demos, ephemeral dev |
+   * | *(default)* {@link ProcessStorage.layer} | In-memory | Tests, demos, ephemeral dev |
    * | `layerProcessStore({ filename })` | SQLite file | Local child / operator analytics |
    *
    * The composite store Layer also carries facet layers for queue analytics and group
-   * logs when using {@link ProcessStore.layerRuntimeStorage} / `layerProcessStore`.
+   * logs when using {@link ProcessStorage.layerRuntimeStorage} / `layerProcessStore`.
    *
    * Requires {@link Scope.Scope} for the default in-memory adapter. Sqlite needs
    * platform FileSystem / Path layers — see module `@example`.
@@ -1737,7 +1742,7 @@ export interface ProcessGroupLocalEnvLayerOptions {
    * })
    * ```
    */
-  readonly store?: Layer.Layer<ProcessStore, never, Scope.Scope>;
+  readonly store?: Layer.Layer<ProcessStorage.Services, never, Scope.Scope>;
 }
 
 const processEntryIsService = (
@@ -1770,7 +1775,7 @@ const buildLocalEnvLayer = <
   entries: Entries,
   options: ProcessGroupLocalEnvLayerOptions = {},
 )=> {
-  const store = options.store ?? ProcessStore.layer;
+  const store = options.store ?? ProcessStorage.layer;
   const logContext = layerProcessGroupLogContext(groupId);
   const processLayers = processContributionLayersFrom(entries);
   const queueContrib = queueContributionLayersFrom(entries);

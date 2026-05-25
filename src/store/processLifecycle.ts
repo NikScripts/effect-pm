@@ -9,7 +9,7 @@
  * and exposes group-scoped queries.
  *
  * Compose via {@link ProcessStoreProcessLifecycle.layerRuntimeStorage} or
- * {@link ProcessStore.layerRuntimeStorage}.
+ * {@link ProcessStorage.layerRuntimeStorage}.
  *
  * @module store/ProcessLifecycle
  */
@@ -22,7 +22,7 @@ import {
   processLifecycleFromEvents,
   processLifecycleStoreQuery,
 } from "../internal/store/spine";
-import { ProcessStoreBuilder } from "../ProcessStoreBuilder";
+import { ProcessStore } from "../ProcessStore";
 import type {
   AnalyticsEvent,
   JsonValue,
@@ -102,18 +102,18 @@ const lifecycleEventsForProcesses = (
  *
  * @public
  */
-export class ProcessStoreProcessLifecycle extends ProcessStoreBuilder.Service<
+export class ProcessStoreProcessLifecycle extends ProcessStore.Service<
   ProcessStoreProcessLifecycle
 >()(
   "@nikscripts/effect-pm/store/processLifecycle/ProcessStoreProcessLifecycle",
-  ProcessStoreBuilder.record((s) => ({
+  ProcessStore.record((s) => ({
     lifecycleChanged: (input: ProcessLifecycleRecordInput) =>
       Effect.gen(function* () {
         const occurredAtMs = input.occurredAt ?? (yield* Clock.currentTimeMillis);
         yield* s.append(makeProcessLifecycleChangedEvent(input, occurredAtMs));
       }),
   })),
-  ProcessStoreBuilder.read((s) => ({
+  ProcessStore.read((s) => ({
     lifecycle: (processId: string, opts?: QueryOpts) =>
       s.events(processLifecycleStoreQuery(processId, opts)).pipe(
         Effect.map((events) => processLifecycleFromEvents(events, processId, opts)),
@@ -145,10 +145,10 @@ export class ProcessStoreProcessLifecycle extends ProcessStoreBuilder.Service<
  * @public
  */
 export declare namespace ProcessStoreProcessLifecycle {
-  export type Type = ProcessStoreBuilder.Service.Type<
+  export type Type = ProcessStore.Service.Type<
     typeof ProcessStoreProcessLifecycle
   >;
-  export type EmitType = ProcessStoreBuilder.Service.EmitType<
+  export type EmitType = ProcessStore.Service.EmitType<
     typeof ProcessStoreProcessLifecycle
   >;
 }

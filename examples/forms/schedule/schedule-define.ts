@@ -1,3 +1,4 @@
+import { ProcessStorage } from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/schedule/schedule-define
  *
@@ -6,11 +7,11 @@
 
 import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process, ProcessSchedule, ProcessStore } from "../../../src";
+import { Polling, Process, ProcessSchedule } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
-const env = Layer.mergeAll(ProcessStore.layer, TestClock.layer());
+const env = Layer.mergeAll(ProcessStorage.layer, TestClock.layer());
 
 const program = Effect.gen(function* () {
   const seen = yield* Ref.make<ReadonlyArray<string>>([]);

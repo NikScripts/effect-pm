@@ -7,7 +7,7 @@ import {
   ProcessGroupLogContext,
   ProcessManagerLogAnnotationKeys,
 } from "../src/LogContext";
-import { ProcessStore } from "../src/ProcessStore";
+import { ProcessStoreLog } from "../src/store/log";
 import { layerProcessStore } from "../src/storage/sqlite/index";
 
 const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
@@ -43,14 +43,8 @@ describe("process manager log pipeline (H6)", () => {
           assert.strictEqual(snap[0]?.message, "relay pipeline tick");
           yield* Effect.yieldNow;
           yield* Effect.sleep(Duration.millis(500));
-          const store = yield* ProcessStore;
-          const events = yield* store.events({
-            types: ["log.entry"],
-            entityType: "log",
-            entityId: groupId,
-          });
-          assert.strictEqual(events.length, 1);
-          const loaded = yield* store.Log.load({
+          const log = yield* ProcessStoreLog;
+          const loaded = yield* log.load({
             groupId,
             limit: 10,
             sort: "desc",

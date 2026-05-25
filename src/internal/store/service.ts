@@ -1,7 +1,7 @@
 /**
- * Internal factory powering {@link ProcessStoreBuilder.Service}.
+ * Internal factory powering {@link ProcessStore.Service}.
  *
- * @module ProcessStoreService
+ * @module ProcessStoreFacetService
  * @internal
  */
 
@@ -21,9 +21,15 @@ type EmitMethod<F> = F extends (...args: infer A) => unknown
   ? (...args: A) => EmitEffect
   : never;
 
-type ReadMethod<F> = F extends (...args: infer A) => infer R
-  ? (...args: A) => R
-  : never;
+/**
+ * Type-only hooks on the facet constructor; never read at runtime.
+ *
+ * @internal
+ */
+export type ProcessStoreFacetBrand<EmitApi, ReadApi> = {
+  readonly __processStoreEmit?: EmitApi;
+  readonly __processStoreRead?: ReadApi;
+};
 
 /** @internal */
 export interface ProcessStoreRecordSection<EmitApi> {
@@ -78,12 +84,7 @@ export type OptionalEmitStatics<EmitApi> = {
 };
 
 /** @internal */
-export type OptionalReadStatics<ReadApi> = {
-  readonly [K in keyof ReadApi & string]: ReadMethod<ReadApi[K]>;
-};
-
-/** @internal */
-export type ProcessStoreServiceClass<
+export type ProcessStoreFacetClass<
   Self,
   Id extends string,
   EmitApi,
@@ -92,21 +93,23 @@ export type ProcessStoreServiceClass<
   readonly make: Effect.Effect<EmitApi & ReadApi, never, RuntimeStorage>;
   readonly layerRuntimeStorage: Layer.Layer<Self, never, RuntimeStorage>;
   readonly layer: Layer.Layer<Self, never, never>;
-  readonly Type: EmitApi & ReadApi;
-  readonly EmitType: EmitApi;
-} & OptionalEmitStatics<EmitApi> &
-  OptionalReadStatics<ReadApi>;
+} & ProcessStoreFacetBrand<EmitApi, ReadApi> &
+  OptionalEmitStatics<EmitApi>;
 
 /** @internal */
-export type ProcessStoreServiceShape<T> = T extends { readonly Type: infer S }
-  ? S
+export type ProcessStoreFacetShape<T> = T extends ProcessStoreFacetBrand<
+  infer EmitApi,
+  infer ReadApi
+>
+  ? EmitApi & ReadApi
   : never;
 
 /** @internal */
-export type ProcessStoreServiceEmitShape<T> = T extends {
-  readonly EmitType: infer E;
-}
-  ? E
+export type ProcessStoreFacetEmitShape<T> = T extends ProcessStoreFacetBrand<
+  infer EmitApi,
+  infer _ReadApi
+>
+  ? EmitApi
   : never;
 
 const wrapEmitForFacet =
@@ -121,25 +124,28 @@ const wrapEmitForFacet =
       Effect.asVoid,
     );
 
-const mergeServiceShape = <EmitApi extends Record<string, unknown>, ReadApi>(
+const mergeServiceShape = <EmitApi extends Record<string, unknown>, ReadApi extends Record<string, unknown>>(
   recordPart: EmitApi,
   readPart: ReadApi,
-): EmitApi & ReadApi => ({ ...recordPart, ...readPart });
+): EmitApi & ReadApi =>
+  ({ ...recordPart, ...readPart }) satisfies EmitApi & ReadApi;
 
-const invokePersistMethod = (
-  api: unknown,
-  methodName: string,
+const callPersistMethod = <Api extends Record<string, unknown>>(
+  api: Api,
+  methodName: keyof Api & string,
   args: ReadonlyArray<unknown>,
 ): PersistEffect => {
-  if (typeof api !== "object" || api === null) {
-    return Effect.die(`ProcessStore API is not an object`);
-  }
-  const method = (api as Record<string, unknown>)[methodName];
+  const method = api[methodName];
   if (typeof method !== "function") {
-    return Effect.die(`ProcessStore method missing: ${methodName}`);
+    return Effect.die(`ProcessStore method missing: ${String(methodName)}`);
   }
-  return Reflect.apply(method, api, args) as PersistEffect;
+  return Reflect.apply(method, api, args) satisfies PersistEffect;
 };
+
+const isCompleteEmitStatics = <EmitApi extends Record<string, unknown>>(
+  out: { [P in keyof EmitApi & string]?: EmitMethod<EmitApi[P]> },
+  keys: ReadonlyArray<keyof EmitApi & string>,
+): out is OptionalEmitStatics<EmitApi> => keys.every((key) => out[key] !== undefined);
 
 const buildEmitStatics = <
   Self,
@@ -160,48 +166,17 @@ const buildEmitStatics = <
           Effect.flatMap(
             Option.match({
               onNone: (): PersistEffect => Effect.void,
-              onSome: (api): PersistEffect => invokePersistMethod(api, emitKey, args),
+              onSome: (api): PersistEffect => callPersistMethod(api, emitKey, args),
             }),
           ),
         ),
       )) as EmitMethod<EmitApi[typeof emitKey]>;
   }
-  return out as OptionalEmitStatics<EmitApi>;
-};
-
-const buildReadStatics = <
-  Self,
-  Id extends string,
-  EmitApi,
-  ReadApi extends Record<string, unknown>,
->(
-  readKeys: ReadonlyArray<keyof ReadApi & string>,
-  stubReadApi: ReadApi,
-  Base: Context.ServiceClass<Self, Id, EmitApi & ReadApi>,
-): OptionalReadStatics<ReadApi> => {
-  const out: { [K in keyof ReadApi & string]?: ReadMethod<ReadApi[K]> } = {};
-  for (const readKey of readKeys) {
-    out[readKey] = ((...args: ReadonlyArray<unknown>) =>
-      Effect.serviceOption(Base).pipe(
-        Effect.flatMap(
-          Option.match({
-            onNone: () => invokePersistMethod(stubReadApi, readKey, args),
-            onSome: (api) => invokePersistMethod(api, readKey, args),
-          }),
-        ),
-      )) as ReadMethod<ReadApi[typeof readKey]>;
+  if (!isCompleteEmitStatics(out, emitKeys)) {
+    throw new Error(`ProcessStore facet ${id}: incomplete emit statics`);
   }
-  return out as OptionalReadStatics<ReadApi>;
+  return out satisfies OptionalEmitStatics<EmitApi>;
 };
-
-/** Type-only phantoms for `typeof Facet.Type` / `typeof Facet.EmitType` (never read at runtime). */
-const facetTypePhantoms = <EmitApi, ReadApi>(): {
-  readonly Type: EmitApi & ReadApi;
-  readonly EmitType: EmitApi;
-} => ({
-  Type: undefined as EmitApi & ReadApi,
-  EmitType: undefined as EmitApi,
-});
 
 const assembleFacetClass = <
   Self,
@@ -213,23 +188,24 @@ const assembleFacetClass = <
   layerRuntimeStorage: Layer.Layer<Self, never, RuntimeStorage>,
   layer: Layer.Layer<Self, never, never>,
   emitStatics: OptionalEmitStatics<EmitApi>,
-  readStatics: OptionalReadStatics<ReadApi>,
-): ProcessStoreServiceClass<Self, Id, EmitApi, ReadApi> =>
-  Object.assign(
+): ProcessStoreFacetClass<Self, Id, EmitApi, ReadApi> => {
+  const facetBrand = {} satisfies ProcessStoreFacetBrand<EmitApi, ReadApi>;
+  const assembled = Object.assign(
     Base,
     { layerRuntimeStorage, layer },
     emitStatics,
-    readStatics,
-    facetTypePhantoms<EmitApi, ReadApi>(),
-  ) as ProcessStoreServiceClass<Self, Id, EmitApi, ReadApi>;
+    facetBrand,
+  );
+  return assembled as ProcessStoreFacetClass<Self, Id, EmitApi, ReadApi>;
+};
 
 /** @internal */
-export const defineProcessStoreService = <Self>() =>
+export const defineProcessStoreFacet = <Self>() =>
   <const Id extends string, EmitApi extends Record<string, unknown>, ReadApi extends Record<string, unknown>>(
     id: Id,
     recordSection: ProcessStoreRecordSection<EmitApi>,
     readSection: ProcessStoreReadSection<ReadApi>,
-  ): ProcessStoreServiceClass<Self, Id, EmitApi, ReadApi> => {
+  ): ProcessStoreFacetClass<Self, Id, EmitApi, ReadApi> => {
     const make: Effect.Effect<EmitApi & ReadApi, never, RuntimeStorage> = Effect.gen(
       function* () {
         const s = yield* buildStore;
@@ -239,14 +215,10 @@ export const defineProcessStoreService = <Self>() =>
 
     const Base = Context.Service<Self, EmitApi & ReadApi>()(id, { make });
 
-    const stubReadApi = readSection.fn(stubSpine());
-    const readKeys = Object.keys(stubReadApi) as Array<keyof ReadApi & string>;
-
     const emitStatics = buildEmitStatics(id, recordSection.emitKeys, Base);
-    const readStatics = buildReadStatics(readKeys, stubReadApi, Base);
 
     const layerRuntimeStorage = Layer.effect(Base, make);
     const layer = Layer.provide(layerRuntimeStorage, RuntimeStorage.layer);
 
-    return assembleFacetClass(Base, layerRuntimeStorage, layer, emitStatics, readStatics);
+    return assembleFacetClass(Base, layerRuntimeStorage, layer, emitStatics);
   };

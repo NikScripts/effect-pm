@@ -3,15 +3,14 @@
 ## Status
 
 **Partially landed; superseded in part.** The combiner / facet split has
-shipped (see [STORAGE.md](../STORAGE.md), [STORAGE-AGENT-HANDBOOK.md](../STORAGE-AGENT-HANDBOOK.md),
-[STORAGE-FACET-AUTHORING-GUIDE.md](../STORAGE-FACET-AUTHORING-GUIDE.md)). The
+shipped (see [STORAGE.md](../STORAGE.md)). The
 generic `RuntimeFact` / `RuntimeRef` / `RuntimeStateChange` vocabulary discussed
 below has been **removed from the public API** in favour of per-domain facets
 (`ProcessStoreRunResource`, `ProcessStoreQueueResource`, `ProcessStoreLog`,
 `ProcessStoreProcessLifecycle`, …). The original `Phase 0–6` narrative is kept
 below as historical context only — do **not** treat it as the current target
 shape. New facets must follow the per-domain rule in
-[STORAGE-FACET-AUTHORING-GUIDE.md](../STORAGE-FACET-AUTHORING-GUIDE.md).
+[STORAGE.md](../STORAGE.md).
 
 ## Intent
 

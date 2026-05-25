@@ -2,7 +2,7 @@ import { Layer, Scope } from "effect";
 import { ControlService } from "../../ControlService";
 import { localEnvLayer } from "../../ProcessGroup";
 import type { ProcessGroupEntry, ProcessGroupServiceDefinition } from "../../ProcessGroup";
-import type { ProcessStore } from "../../ProcessStore";
+import type { ProcessStorage } from "../../ProcessStorage";
 import { parsePortFromTransport } from "../../Transport";
 import type { ProcessManagerTransport } from "../../Transport";
 
@@ -19,7 +19,7 @@ export const groupLocalRuntime = <
   group: ProcessGroupServiceDefinition<Self, Id, Entries>,
   options: {
     readonly controlBaseUrl: string;
-    readonly store?: Layer.Layer<ProcessStore, never, Scope.Scope>;
+    readonly store?: Layer.Layer<ProcessStorage.Services, never, Scope.Scope>;
   },
 ) => {
   const transport: ProcessManagerTransport = {

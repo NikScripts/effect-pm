@@ -10,8 +10,7 @@ live on **per-domain facets** (`ProcessStoreRunResource`,
 References to a generic `runtime.fact.recorded` reader on `ProcessStore`,
 `RuntimeObserver.layerProcessStore`, or a singleton `ProcessStoreInterface`
 should be read as historical context only. Current rules and migration
-recipe: [STORAGE.md](../STORAGE.md), [STORAGE-AGENT-HANDBOOK.md](../STORAGE-AGENT-HANDBOOK.md),
-[STORAGE-FACET-AUTHORING-GUIDE.md](../STORAGE-FACET-AUTHORING-GUIDE.md).
+recipe: [STORAGE.md](../STORAGE.md).
 
 ## Purpose
 

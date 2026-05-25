@@ -1,7 +1,8 @@
+import { ProcessStorage } from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process, ProcessMakeInvalidLayerArgument, ProcessSchedule, ProcessStore } from "../src";
+import { Polling, Process, ProcessMakeInvalidLayerArgument, ProcessSchedule } from "../src";
 import { ProcessStoreProcessExecution } from "../src/store/processExecution";
 import { utcDateFromMillis } from "../src/internal/utcDate";
 
@@ -42,7 +43,7 @@ describe("Process.make", () => {
 });
 
 describe("Process runtime with schedule windows", () => {
-  const storeAndClock = Layer.mergeAll(ProcessStore.layer, TestClock.layer());
+  const storeAndClock = Layer.mergeAll(ProcessStorage.layer, TestClock.layer());
 
   it.effect("positional make runs driver with polling before schedule in args", () =>
     Effect.gen(function* () {
@@ -55,7 +56,8 @@ describe("Process runtime with schedule windows", () => {
 
       const fib = yield* Effect.forkChild(proc.effect);
       yield* TestClock.adjust(Duration.millis(250));
-      const rows = yield* ProcessStoreProcessExecution.executions({
+      const store = yield* ProcessStoreProcessExecution;
+      const rows = yield* store.executions({
         processId: proc.name,
       });
       expect(rows.length).toBeGreaterThanOrEqual(1);
@@ -131,12 +133,13 @@ describe("Process runtime with schedule windows", () => {
 
     return Effect.gen(function* () {
         yield* proc.runImmediately();
-        const rows = yield* ProcessStoreProcessExecution.executions({
+        const store = yield* ProcessStoreProcessExecution;
+      const rows = yield* store.executions({
           processId: proc.name,
         });
         expect(rows.length).toBe(1);
         expect(rows[0]?.execution.status).toBe("completed");
-      }).pipe(Effect.provide(ProcessStore.layer));
+      }).pipe(Effect.provide(ProcessStorage.layer));
   });
 
   it.effect("runImmediately leaves no execution rows when the facet layer is absent", () =>
@@ -145,9 +148,10 @@ describe("Process runtime with schedule windows", () => {
         effect: Effect.void,
       });
       yield* proc.runImmediately();
-      const rows = yield* ProcessStoreProcessExecution.executions({
-        processId: proc.name,
-      });
+      const rows = yield* Effect.gen(function* () {
+        const store = yield* ProcessStoreProcessExecution;
+        return yield* store.executions({ processId: proc.name });
+      }).pipe(Effect.provide(ProcessStorage.layer));
       expect(rows).toHaveLength(0);
     }),
   );
@@ -161,9 +165,10 @@ describe("Process runtime with schedule windows", () => {
       });
       const fib = yield* Effect.forkChild(proc.effect);
       yield* TestClock.adjust(Duration.millis(250));
-      const rows = yield* ProcessStoreProcessExecution.executions({
-        processId: proc.name,
-      });
+      const rows = yield* Effect.gen(function* () {
+        const store = yield* ProcessStoreProcessExecution;
+        return yield* store.executions({ processId: proc.name });
+      }).pipe(Effect.provide(ProcessStorage.layer));
       expect(rows).toHaveLength(0);
       yield* Fiber.interrupt(fib);
     }).pipe(Effect.provide(TestClock.layer()), Effect.scoped),
@@ -324,7 +329,7 @@ describe("Process runtime with schedule windows", () => {
         const values = yield* Ref.get(seen);
         expect(values.length).toBe(1);
         expect(Option.isNone(values[0] ?? Option.none())).toBe(true);
-      }).pipe(Effect.provide(ProcessStore.layer)),
+      }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
   it.effect("schedule mutation cancels stale pending starts", () =>

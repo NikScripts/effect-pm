@@ -1,19 +1,13 @@
 /**
- * Internal spine and projection helpers for {@link ProcessStoreInterface}.
+ * Internal spine and projection helpers for process-store facets.
  *
  * @module processStoreSpine
  * @internal
  */
 
 import {
-  Clock,
   DateTime,
   Effect,
-  FileSystem,
-  Option,
-  Path,
-  Schema,
-  Semaphore,
 } from "effect";
 import {
   decodeEventRow,
@@ -21,8 +15,6 @@ import {
   ProcessStoreEventDecodeError,
 } from "./codec";
 import type { EffectPmEventRow, JsonValue } from "../../ProcessStoreEvent";
-import type { ProcessStoreLogApi } from "../../store/log";
-import type { ProcessStoreQueueResourceApi } from "../../store/queueResource";
 import {
   ProcessStoreDuplicateRecordError,
   ProcessStoreReadonlyRecordError,
@@ -35,7 +27,6 @@ import {
   type QueueLifecycleChangedEvent,
   type StoreEventQuery,
 } from "../../ProcessStoreEvent";
-import type { ProcessStoreInterface } from "../../ProcessStore";
 import type {
   FactEnvelope,
   FactEnvelopeQuery,
@@ -48,17 +39,14 @@ import type {
   RunResourceStateChange,
 } from "../../store/runResource";
 import {
-  dateFromUnknown,
   isJsonValue,
   isRecord,
   isString,
-  unknownJsonString,
 } from "../json";
 import type { RuntimeRecordQuery } from "../../Query";
 import {
   RuntimeStorageDuplicateRecordError,
   RuntimeStorageReadonlyRecordError,
-  selectRuntimeRecords,
   type RuntimeRecord,
   type RuntimeStorageError,
   type RuntimeStorageService,
@@ -623,206 +611,3 @@ export const makeProcessStoreSpine = (
   };
 };
 
-/** @internal */
-export const assembleProcessStoreInterface = (
-  spine: ProcessStoreSpine,
-  log: ProcessStoreLogApi,
-  queue: ProcessStoreQueueResourceApi,
-): ProcessStoreInterface => ({
-  append: spine.append,
-  appendBatch: spine.appendBatch,
-  events: spine.events,
-  records: spine.records,
-  Log: log,
-  QueueResource: queue,
-  getProcessLifecycle: (processId, opts) =>
-    Effect.map(
-      spine.events(processLifecycleStoreQuery(processId, opts)),
-      (events) => processLifecycleFromEvents(events, processId, opts),
-    ),
-  getQueueItemCompletions: (queueId, opts) =>
-    Effect.map(spine.events({
-      entityType: "queue",
-      entityId: queueId,
-      types: ["queue.item.completed"],
-      opts,
-    }), (events) =>
-      selectEvents(
-        events,
-        { entityType: "queue", entityId: queueId, types: ["queue.item.completed"], opts },
-        isQueueItemCompleted,
-      ),
-    ),
-  getQueueLifecycle: (queueId, opts) =>
-    Effect.map(spine.events({
-      entityType: "queue",
-      entityId: queueId,
-      types: ["queue.lifecycle.changed"],
-      opts,
-    }), (events) =>
-      selectEvents(
-        events,
-        { entityType: "queue", entityId: queueId, types: ["queue.lifecycle.changed"], opts },
-        isQueueLifecycleChanged,
-      ),
-    ),
-});
-
-const encodeJsonLine = (value: unknown): string | null =>
-  Option.match(Schema.encodeUnknownOption(unknownJsonString)(value), {
-    onNone: () => null,
-    onSome: (line) => line,
-  });
-
-const decodeJsonLine = (line: string): unknown | null =>
-  Option.match(Schema.decodeUnknownOption(unknownJsonString)(line), {
-    onNone: () => null,
-    onSome: (value) => value,
-  });
-
-const decodeFileRow = (value: unknown): EffectPmEventRow | null => {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const id = value["id"];
-  const type = value["type"];
-  const occurredAt = dateFromUnknown(value["occurredAt"]);
-  const entityType = value["entityType"];
-  const entityId = value["entityId"];
-  const attributes = value["attributes"];
-  const payload = value["payload"];
-  const createdAt = dateFromUnknown(value["createdAt"]) ?? occurredAt;
-
-  if (
-    !isString(id) ||
-    !isString(type) ||
-    occurredAt === null ||
-    !isString(entityType) ||
-    !isString(entityId) ||
-    !isJsonValue(payload) ||
-    !(attributes === undefined || attributes === null || isJsonValue(attributes)) ||
-    createdAt === null
-  ) {
-    return null;
-  }
-
-  return {
-    id,
-    type,
-    occurredAt,
-    entityType,
-    entityId,
-    attributes: attributes === undefined ? null : attributes,
-    payload,
-    createdAt,
-  };
-};
-
-const decodeFileContents = (contents: string): AnalyticsEvent[] => {
-  const out: AnalyticsEvent[] = [];
-  for (const line of contents.split("\n")) {
-    if (line.trim().length === 0) {
-      continue;
-    }
-    const value = decodeJsonLine(line);
-    const row = value === null ? null : decodeFileRow(value);
-    if (row === null) {
-      continue;
-    }
-    const event = decodeStoredEvent(row);
-    if (event !== null) {
-      out.push(event);
-    }
-  }
-  return out;
-};
-
-const encodeFileEventLine = (
-  event: AnalyticsEvent,
-  createdAt: number,
-): string | null => {
-  const encoded = encodeEvent(event);
-  const row: { [key: string]: JsonValue } = {
-    id: encoded.id,
-    type: encoded.type,
-    occurredAt: event.occurredAt,
-    entityType: encoded.entityType,
-    entityId: encoded.entityId,
-    attributes: encoded.attributes ?? null,
-    payload: encoded.payload,
-    createdAt,
-  };
-  const line = encodeJsonLine(row);
-  return line === null ? null : `${line}\n`;
-};
-
-/** @internal */
-export const makeFileProcessStoreSpine = (
-  filePath: string,
-): Effect.Effect<
-  ProcessStoreSpine,
-  never,
-  FileSystem.FileSystem | Path.Path
-> =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const semaphore = yield* Semaphore.make(1);
-    const directory = path.dirname(filePath);
-    const ensureDirectory = fs
-      .makeDirectory(directory, { recursive: true })
-      .pipe(Effect.orDie);
-
-    const readEvents = Effect.gen(function* () {
-      yield* ensureDirectory;
-      const exists = yield* fs.exists(filePath).pipe(Effect.orDie);
-      if (!exists) {
-        return [];
-      }
-      const contents = yield* fs.readFileString(filePath).pipe(Effect.orDie);
-      return decodeFileContents(contents);
-    });
-
-    const appendOne = (event: AnalyticsEvent) =>
-      Effect.gen(function* () {
-        yield* ensureDirectory;
-        const now = yield* Clock.currentTimeMillis;
-        const line = encodeFileEventLine(event, now);
-        if (line !== null) {
-          yield* fs.writeFileString(filePath, line, { flag: "a" }).pipe(Effect.orDie);
-        }
-      });
-
-    const queryEvents = (query: StoreEventQuery | undefined) =>
-      Effect.map(readEvents, (storedEvents) => {
-        const rows = storedEvents
-          .filter(matchesStoreEventQuery(query))
-          .sort(byTimestampDesc((event) => event.occurredAt, (event) => event.id));
-        return applyQueryOpts(rows, query?.opts, (event) => event.occurredAt);
-      });
-
-    const queryRecords = (query: RuntimeRecordQuery | undefined) =>
-      Effect.map(readEvents, (storedEvents) =>
-        selectRuntimeRecords(
-          storedEvents.map((event) => eventToRuntimeRecord(event, "file-store")),
-          query,
-        )
-      );
-    const appendSerializedEvent = (event: AnalyticsEvent) =>
-      semaphore.withPermits(1)(appendOne(event));
-
-    return {
-      append: appendSerializedEvent,
-      appendBatch: (batch) =>
-        semaphore.withPermits(1)(
-          Effect.gen(function* () {
-            for (const event of batch) {
-              yield* appendOne(event);
-            }
-          }),
-        ),
-      events: (query) => semaphore.withPermits(1)(queryEvents(query)),
-      records: (query) => semaphore.withPermits(1)(queryRecords(query)),
-    };
-  });

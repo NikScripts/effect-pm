@@ -1,7 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Exit, Layer } from "effect";
 import {
-  ProcessStore,
   type ProcessExecutionCompletedEvent,
   type QueueItemCompletedEvent,
   type QueueLifecycleChangedEvent,
@@ -19,6 +18,7 @@ import {
   type PrismaProcessStoreClient,
 } from "../src/prisma";
 import { utcDateFromIso, utcDateFromMillis } from "../src/internal/utcDate";
+import { RuntimeStorage } from "../src/RuntimeStorage";
 
 const utcMillisFromIso = (iso: string): number => utcDateFromIso(iso).getTime();
 
@@ -162,7 +162,7 @@ describe("PrismaProcessStore — placeholder", () => {
         PrismaProcessStore.prismaClientLayer({ client: makeFakeClient() }),
       );
       const exit = yield* Effect.exit(
-        ProcessStore.pipe(Effect.provide(layer), Effect.scoped),
+        RuntimeStorage.pipe(Effect.provide(layer), Effect.scoped),
       );
 
       expect(Exit.isFailure(exit)).toBe(true);

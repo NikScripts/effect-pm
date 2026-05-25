@@ -248,7 +248,7 @@ as `Process`, `QueueResource`, `RunResource`, `HttpApiResource`, and
 
 `RuntimeStorage` is the generic swappable persistence port underneath
 `ProcessStore` (see `src/RuntimeStorage.ts` and
-[RUNTIME-STORAGE-ADAPTER-GUIDE.md](./RUNTIME-STORAGE-ADAPTER-GUIDE.md)). The
+[STORAGE.md](./STORAGE.md)). The
 default in-memory store and the SQLite adapter (`@nikscripts/effect-pm/storage/sqlite`,
 `layerProcessStore`) both use `ProcessStore.layerRuntimeStorage`. Adapters persist
 normalized `RuntimeRecord` rows; `ProcessStore` facets (`Log`, `QueueResource`,
@@ -306,7 +306,7 @@ For durable **normalized `RuntimeRecord` rows** (the `RuntimeStorage` contract),
 use `@nikscripts/effect-pm/storage/sqlite` and compose
 `ProcessStore.layerRuntimeStorage` with `SQLiteRuntimeStorage.layer` or
 `SQLiteRuntimeStorage.make` (under an ambient `Scope`, typically via
-`Effect.scoped` or `it.live`). See [RUNTIME-STORAGE-ADAPTER-GUIDE.md](./RUNTIME-STORAGE-ADAPTER-GUIDE.md).
+`Effect.scoped` or `it.live`). See [STORAGE.md](./STORAGE.md).
 
 ---
 

@@ -86,7 +86,7 @@ exists.
 | Schedule + **`ProcessGroup`** / API-driven arm | [docs/SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + [examples/scenarios/game-window-polling-with-process-group.ts](../examples/scenarios/game-window-polling-with-process-group.ts) |
 | Understand process runtime semantics | [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + `src/Process.ts` TSDoc |
 | API tables (make, Polling, Schedule, ProcessGroup) | [PROCESS-API.md](./PROCESS-API.md) |
-| ProcessStore storage (memory / file / future SQLite/Prisma) | [PROCESS-API.md](./PROCESS-API.md) + [RUNTIME-STORAGE-ADAPTER-GUIDE.md](./RUNTIME-STORAGE-ADAPTER-GUIDE.md) + [examples/forms/process-store/](../examples/forms/process-store/) |
+| ProcessStore storage (memory / file / future SQLite/Prisma) | [PROCESS-API.md](./PROCESS-API.md) + [STORAGE.md](./STORAGE.md) + [examples/forms/process-store/](../examples/forms/process-store/) |
 | AI / agent onboarding (repo map, conventions) | [AGENTS.md](./AGENTS.md) |
 
 ---
@@ -116,7 +116,7 @@ whole usage window. Prisma paths are currently placeholders
 pending a RuntimeStorage-backed rewrite.
 
 For durable adapter work, start with
-[RUNTIME-STORAGE-ADAPTER-GUIDE.md](./RUNTIME-STORAGE-ADAPTER-GUIDE.md).
+[STORAGE.md](./STORAGE.md).
 
 ---
 

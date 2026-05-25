@@ -145,6 +145,22 @@ const isRunResourceStateChangeReason = (
 ): value is RunResourceStateChangeReason =>
   isString(value) && includesString(runResourceStateChangeReasons, value);
 
+const logLevels: ReadonlyArray<LogEntryRecordedEvent["log"]["entry"]["level"]> = [
+  "All",
+  "Fatal",
+  "Error",
+  "Warn",
+  "Info",
+  "Debug",
+  "Trace",
+  "None",
+];
+
+const isLogLevel = (
+  value: unknown,
+): value is LogEntryRecordedEvent["log"]["entry"]["level"] =>
+  isString(value) && includesString(logLevels, value);
+
 /**
  * Convert an {@link AnalyticsEvent} into a storage create input.
  *
@@ -983,7 +999,7 @@ const decodeLogEntryPayload = (
   const cause = value["cause"];
   const annotations = value["annotations"];
   const spans = value["spans"];
-  if (!isString(date) || !isString(level) || !isString(message)) {
+  if (!isString(date) || !isLogLevel(level) || !isString(message)) {
     return null;
   }
   if (!isRecord(annotations)) {

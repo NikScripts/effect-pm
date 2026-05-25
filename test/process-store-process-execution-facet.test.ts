@@ -1,10 +1,10 @@
+import { ProcessStorage } from "../src/ProcessStorage";
 /**
  * Conformance suite for the {@link ProcessStoreProcessExecution} facet.
  */
 
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Logger } from "effect";
-import { ProcessStore } from "../src/ProcessStore";
 import { ProcessStoreProcessExecution } from "../src/store/processExecution";
 import type { ProcessExecutionFinishInput } from "../src/store/processExecution";
 import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
@@ -41,10 +41,11 @@ describe("ProcessStoreProcessExecution — static optional emitters", () => {
         completedAt: 1_700_000_000_005,
         isStartupRun: false,
       });
-      const rows = yield* ProcessStoreProcessExecution.executions({ processId });
+      const store = yield* ProcessStoreProcessExecution;
+      const rows = yield* store.executions({ processId });
       expect(rows).toHaveLength(1);
       expect(rows[0]?.execution.status).toBe("interrupted");
-    }).pipe(Effect.provide(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
   it.live("persists through the spine when the facet is provided", () =>
@@ -60,13 +61,13 @@ describe("ProcessStoreProcessExecution — static optional emitters", () => {
           error: "boom",
         }),
       );
-      const facet = yield* ProcessStoreProcessExecution;
-      const rows = yield* facet.executions({ processId });
+      const store = yield* ProcessStoreProcessExecution;
+      const rows = yield* store.executions({ processId });
       expect(rows.map((row) => row.execution.status).sort()).toEqual([
         "completed",
         "failed",
       ]);
-    }).pipe(Effect.provide(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
   it.live("isolates write failures behind a warning log", () => {
@@ -129,23 +130,23 @@ describe("ProcessStoreProcessExecution — projections", () => {
           completedAt: 1_700_000_000_210,
         }),
       );
-      const facet = yield* ProcessStoreProcessExecution;
-      const onlyA = yield* facet.executions({
+      const store = yield* ProcessStoreProcessExecution;
+      const onlyA = yield* store.executions({
         processId,
         scheduleKey: "window-a",
       });
       expect(onlyA).toHaveLength(1);
       expect(onlyA[0]?.execution.scheduleKey).toBe("window-a");
-    }).pipe(Effect.provide(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
   it.live("hasPriorExecutions reflects persisted rows", () =>
     Effect.gen(function* () {
-      const facet = yield* ProcessStoreProcessExecution;
-      expect(yield* facet.hasPriorExecutions(processId)).toBe(false);
+      const store = yield* ProcessStoreProcessExecution;
+      expect(yield* store.hasPriorExecutions(processId)).toBe(false);
       yield* ProcessStoreProcessExecution.recordCompleted(finish(processId));
-      expect(yield* facet.hasPriorExecutions(processId)).toBe(true);
-    }).pipe(Effect.provide(ProcessStore.layer)),
+      expect(yield* store.hasPriorExecutions(processId)).toBe(true);
+    }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 });
 

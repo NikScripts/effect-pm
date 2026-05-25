@@ -1,54 +1,35 @@
 /**
- * **ProcessStore** — runtime record storage facade for processes and resources.
+ * **ProcessStore** — builder helpers for storage facets.
  *
  * @module ProcessStore
  */
 
-import { Context, Effect, Layer } from "effect";
 import {
-  makeFileProcessStore,
-  makeInMemoryProcessStore,
-  makeProcessStoreFromRuntimeStorage,
-} from "./internal/store/composite";
-import { ProcessStoreLog } from "./store/log";
-import type { ProcessStoreLogApi } from "./store/log";
-import { ProcessStoreQueueResource } from "./store/queueResource";
-import type { ProcessStoreQueueResourceApi } from "./store/queueResource";
-import { ProcessStoreProcessExecution } from "./store/processExecution";
-import { ProcessStoreProcessLifecycle } from "./store/processLifecycle";
-import { ProcessStoreProcessGroup } from "./store/processGroup";
-import { ProcessStoreRunResource } from "./store/runResource";
-import type {
-  AnalyticsEvent,
-  ProcessLifecycleChangedEvent,
-  ProcessStoreWriteError,
-  QueryOpts,
-  QueueItemCompletedEvent,
-  QueueLifecycleChangedEvent,
-  StoreEventQuery,
-} from "./ProcessStoreEvent";
-import type { RuntimeRecordQuery } from "./Query";
-import type { RuntimeRecord } from "./RuntimeStorage";
-import { RuntimeStorage } from "./RuntimeStorage";
+  defineProcessStoreFacet,
+  processStoreRead,
+  processStoreRecord,
+  type ProcessStoreFacetEmitShape,
+  type ProcessStoreFacetShape,
+} from "./internal/store/service";
 
 export type {
-  QueryOpts,
-  StoreEventQuery,
+  AnalyticsEvent,
   AnalyticsEventBase,
+  EffectPmEventRow,
+  JsonValue,
+  LogEntryRecordedEvent,
   ProcessExecutionCompletedEvent,
-  ProcessLifecycleTag,
   ProcessLifecycleChangedEvent,
-  QueueItemStatus,
+  ProcessLifecycleTag,
+  ProcessStoreWriteError,
+  QueryOpts,
   QueueItemCompletedEvent,
-  QueueLifecycleTag,
+  QueueItemStatus,
   QueueLifecycleChangedEvent,
+  QueueLifecycleTag,
   RunResourceFactRecordedEvent,
   RunResourceStateChangedEvent,
-  LogEntryRecordedEvent,
-  AnalyticsEvent,
-  ProcessStoreWriteError,
-  JsonValue,
-  EffectPmEventRow,
+  StoreEventQuery,
 } from "./ProcessStoreEvent";
 
 export {
@@ -82,97 +63,27 @@ export type {
 } from "./store/processGroup";
 
 /**
- * Storage port implemented by the in-memory service and durable adapters.
+ * Declares a storage facet with one record section, one read section, and one
+ * shared runtime-storage-backed implementation.
  *
  * @public
  */
-export interface ProcessStoreInterface {
-  append: (event: AnalyticsEvent) => Effect.Effect<void, ProcessStoreWriteError>;
-  appendBatch: (events: ReadonlyArray<AnalyticsEvent>) => Effect.Effect<void, ProcessStoreWriteError>;
-  events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>;
-  records: (query?: RuntimeRecordQuery) => Effect.Effect<RuntimeRecord[]>;
-  readonly Log: ProcessStoreLogApi;
-  readonly QueueResource: ProcessStoreQueueResourceApi;
-  getProcessLifecycle: (
-    processId: string,
-    opts?: QueryOpts,
-  ) => Effect.Effect<ProcessLifecycleChangedEvent[]>;
-  getQueueItemCompletions: (
-    queueId: string,
-    opts?: QueryOpts,
-  ) => Effect.Effect<QueueItemCompletedEvent[]>;
-  getQueueLifecycle: (
-    queueId: string,
-    opts?: QueryOpts,
-  ) => Effect.Effect<QueueLifecycleChangedEvent[]>;
-}
+export const ProcessStore = {
+  Service: defineProcessStoreFacet,
+  record: processStoreRecord,
+  read: processStoreRead,
+} as const;
 
 /**
- * Context tag for {@link ProcessStoreInterface}.
+ * Type-level helpers merged into the {@link ProcessStore} value via declaration
+ * merging. Facet modules use these to expose `<Facet>.Type` and
+ * `<Facet>.EmitType`.
  *
  * @public
  */
-export class ProcessStore extends Context.Service<
-  ProcessStore,
-  ProcessStoreInterface
->()("@nikscripts/effect-pm/ProcessStore", {
-  make: makeInMemoryProcessStore,
-}) {}
-
-export namespace ProcessStore {
-  const processLifecycleLayer = ProcessStoreProcessLifecycle.layerRuntimeStorage;
-  const processGroupLayer = Layer.provide(
-    ProcessStoreProcessGroup.layerRuntimeStorage,
-    processLifecycleLayer,
-  );
-
-  const facetLayers = Layer.mergeAll(
-    ProcessStoreLog.layerRuntimeStorage,
-    ProcessStoreQueueResource.layerRuntimeStorage,
-    ProcessStoreRunResource.layerRuntimeStorage,
-    ProcessStoreProcessExecution.layerRuntimeStorage,
-    processLifecycleLayer,
-    processGroupLayer,
-  );
-
-  /**
-   * `Layer` that provides {@link ProcessStore} from injected {@link RuntimeStorage}
-   * plus per-domain facets used by {@link QueueResource}, log relay,
-   * `RunResource`, process execution, and lifecycle.
-   *
-   * @public
-   */
-  export const layerRuntimeStorage: Layer.Layer<
-    | ProcessStore
-    | ProcessStoreLog
-    | ProcessStoreQueueResource
-    | ProcessStoreRunResource
-    | ProcessStoreProcessExecution
-    | ProcessStoreProcessLifecycle
-    | ProcessStoreProcessGroup,
-    never,
-    RuntimeStorage
-  > = Layer.mergeAll(
-    facetLayers,
-    Layer.provide(Layer.effect(ProcessStore, makeProcessStoreFromRuntimeStorage), facetLayers),
-  );
-
-  /** @public */
-  export const layer = Layer.provide(ProcessStore.layerRuntimeStorage, RuntimeStorage.layer);
-
-  /** @public */
-  export const memory = makeInMemoryProcessStore;
-
-  /**
-   * @deprecated Legacy NDJSON only. Prefer {@link ProcessStore.layerRuntimeStorage} with SQLite.
-   * @public
-   */
-  export const file = makeFileProcessStore;
-
-  /**
-   * @deprecated See {@link ProcessStore.file}.
-   * @public
-   */
-  export const fileLayer = (filePath: string) =>
-    Layer.effect(ProcessStore, makeFileProcessStore(filePath));
+export declare namespace ProcessStore {
+  export namespace Service {
+    export type Type<T> = ProcessStoreFacetShape<T>;
+    export type EmitType<T> = ProcessStoreFacetEmitShape<T>;
+  }
 }

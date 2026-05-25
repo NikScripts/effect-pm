@@ -1,3 +1,4 @@
+import { ProcessStorage } from "../../src/ProcessStorage";
 /**
  * @module examples/scenarios/schedule-sync-from-external-db
  *
@@ -6,7 +7,7 @@
 
 import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process, ProcessStore } from "../../src";
+import { Polling, Process } from "../../src";
 import type { ProcessScheduleEntry } from "../../src/ProcessSchedule";
 import { runNodeProgramWithLayer } from "../shared/demo-harness";
 import { utcDateFromMillis } from "../../src/internal/utcDate";
@@ -63,6 +64,6 @@ const program = Effect.gen(function* () {
 
 runNodeProgramWithLayer(
   program,
-  Layer.mergeAll(TestClock.layer(), ProcessStore.layer),
+  Layer.mergeAll(TestClock.layer(), ProcessStorage.layer),
   "scenario:schedule-sync-from-external-db finished",
 );

@@ -10,10 +10,7 @@
  */
 
 import { Context, Data, Effect, Layer } from "effect";
-import {
-  ProcessStore,
-  type ProcessStoreInterface,
-} from "../ProcessStore";
+import { RuntimeStorage } from "../RuntimeStorage";
 import type { PrismaProcessStoreClient } from "./types";
 
 /**
@@ -63,7 +60,7 @@ export const prismaClientLayer = (config: {
  */
 export const make = (
   _client: PrismaProcessStoreClient,
-): ProcessStoreInterface => {
+): never => {
   throw unavailable();
 };
 
@@ -78,8 +75,8 @@ export const make = (
  */
 export const layer = (_config: {
   readonly client: PrismaProcessStoreClient;
-}): Layer.Layer<ProcessStore> =>
-  Layer.effect(ProcessStore, Effect.die(unavailable()));
+}): Layer.Layer<RuntimeStorage> =>
+  Layer.effect(RuntimeStorage, Effect.die(unavailable()));
 
 /**
  * Legacy Prisma ProcessStore layer that consumes {@link PrismaClientService}.
@@ -87,10 +84,10 @@ export const layer = (_config: {
  * @public
  */
 export const layerFromContext: Layer.Layer<
-  ProcessStore,
+  RuntimeStorage,
   never,
   PrismaClientService
 > = Layer.effect(
-  ProcessStore,
+  RuntimeStorage,
   Effect.flatMap(PrismaClientService, () => Effect.die(unavailable())),
 );

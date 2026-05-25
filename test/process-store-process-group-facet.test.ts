@@ -1,10 +1,10 @@
+import { ProcessStorage } from "../src/ProcessStorage";
 /**
  * Conformance suite for {@link ProcessStoreProcessGroup}.
  */
 
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
-import { ProcessStore } from "../src/ProcessStore";
 import { RuntimeStorage } from "../src/RuntimeStorage";
 import { ProcessStoreProcessGroup } from "../src/store/processGroup";
 import { ProcessStoreProcessLifecycle } from "../src/store/processLifecycle";
@@ -53,7 +53,7 @@ describe("ProcessStoreProcessGroup — static optional emitters", () => {
     }).pipe(Effect.provide(groupStoreLayer)),
   );
 
-  it.effect("ProcessStore.layer provides both lifecycle and group facets", () =>
+  it.effect("ProcessStorage.layer provides both lifecycle and group facets", () =>
     Effect.gen(function* () {
       yield* ProcessStoreProcessGroup.recordMemberStarted("@test/Full", "proc");
       const group = yield* ProcessStoreProcessGroup;
@@ -63,6 +63,6 @@ describe("ProcessStoreProcessGroup — static optional emitters", () => {
       const lifecycle = yield* ProcessStoreProcessLifecycle;
       const byProcess = yield* lifecycle.lifecycle("proc");
       expect(byProcess).toHaveLength(1);
-    }).pipe(Effect.provide(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 });

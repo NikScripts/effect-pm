@@ -5,18 +5,19 @@
  * Records `process.execution.completed` rows from {@link Process} tracked runs
  * (success, failure, or interrupt). Apps compose
  * {@link ProcessStoreProcessExecution.layerRuntimeStorage} via
- * {@link ProcessStore.layerRuntimeStorage} or `layerProcessStore` from
+ * {@link ProcessStorage.layerRuntimeStorage} or `layerProcessStore` from
  * `@nikscripts/effect-pm/storage/sqlite`.
  *
  * ## Emit (optional)
  *
- * {@link Process} calls the **static** shortcuts on this class
+ * {@link Process} calls the **static** emitters on this class
  * (`ProcessStoreProcessExecution.recordCompleted`, `.recordFailed`,
- * `.recordInterrupted`). Query via `.executions` / `.hasPriorExecutions` (same
- * optional-presence semantics). When the facet layer is not composed each call is a
- * silent no-op; when composed it writes through the spine. The builder wraps
- * every static emitter with a built-in `catchCause + Effect.logWarning` so
- * storage failures never propagate into the supervisor success/error channel.
+ * `.recordInterrupted`). When the facet layer is not composed each emit is a
+ * silent no-op; when composed it writes through the spine. Reads use
+ * `Effect.serviceOption(ProcessStoreProcessExecution)` and instance methods on the
+ * resolved service — not static methods on this class.
+ * The builder wraps every static emitter with `catchCause + Effect.logWarning`
+ * so storage failures never propagate into the supervisor success/error channel.
  *
  * @module store/ProcessExecution
  */
@@ -26,7 +27,7 @@ import {
   processExecutionStoreQuery,
   processExecutionsFromEvents,
 } from "../internal/store/spine";
-import { ProcessStoreBuilder } from "../ProcessStoreBuilder";
+import { ProcessStore } from "../ProcessStore";
 import type {
   ProcessExecutionCompletedEvent,
   ProcessExecutionStatus,
@@ -112,11 +113,11 @@ const filterByScheduleKey = (
  *
  * @public
  */
-export class ProcessStoreProcessExecution extends ProcessStoreBuilder.Service<
+export class ProcessStoreProcessExecution extends ProcessStore.Service<
   ProcessStoreProcessExecution
 >()(
   "@nikscripts/effect-pm/store/processExecution/ProcessStoreProcessExecution",
-  ProcessStoreBuilder.record((s) => ({
+  ProcessStore.record((s) => ({
     recordCompleted: (input: ProcessExecutionFinishInput) =>
       s.append(toExecutionEvent(input, "completed")),
     recordFailed: (input: ProcessExecutionFinishInput) =>
@@ -124,7 +125,7 @@ export class ProcessStoreProcessExecution extends ProcessStoreBuilder.Service<
     recordInterrupted: (input: ProcessExecutionFinishInput) =>
       s.append(toExecutionEvent(input, "interrupted")),
   })),
-  ProcessStoreBuilder.read((s) => ({
+  ProcessStore.read((s) => ({
     executions: (query: ProcessExecutionQuery) =>
       s.events(processExecutionStoreQuery(query.processId, query.opts)).pipe(
         Effect.map((events) =>
@@ -145,10 +146,10 @@ export class ProcessStoreProcessExecution extends ProcessStoreBuilder.Service<
 ) {}
 
 export declare namespace ProcessStoreProcessExecution {
-  export type Type = ProcessStoreBuilder.Service.Type<
+  export type Type = ProcessStore.Service.Type<
     typeof ProcessStoreProcessExecution
   >;
-  export type EmitType = ProcessStoreBuilder.Service.EmitType<
+  export type EmitType = ProcessStore.Service.EmitType<
     typeof ProcessStoreProcessExecution
   >;
 }

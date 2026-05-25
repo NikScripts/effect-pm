@@ -1,3 +1,4 @@
+import { ProcessStorage } from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/polling/polling-accelerating-peek-cadence
  *
@@ -6,7 +7,7 @@
 
 import { DateTime, Duration, Effect, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Process, Polling, ProcessSchedule, ProcessStore } from "../../../src";
+import { Process, Polling, ProcessSchedule } from "../../../src";
 import {
   forkSupervisedAndSideThenAdvanceTime,
   runNodeProgramWithLayer,
@@ -31,7 +32,7 @@ const scheduleLayer = ProcessSchedule.inMemory([
 
 const env = Layer.mergeAll(
   TestClock.layer(),
-  ProcessStore.layer,
+  ProcessStorage.layer,
   pollLayer,
   scheduleLayer,
 );

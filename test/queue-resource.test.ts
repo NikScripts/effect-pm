@@ -1,3 +1,4 @@
+import { ProcessStorage } from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Exit, Ref, Schema } from "effect";
 import {
@@ -8,7 +9,6 @@ import {
   QueueResource,
   makeQueueItemCodecDescriptor,
 } from "../src/QueueResource";
-import { ProcessStore } from "../src/ProcessStore";
 import { ProcessStoreQueueResource } from "../src/store/queueResource";
 
 const fastConfig = { concurrency: 2 };
@@ -142,7 +142,7 @@ describe("QueueResource.make — ProcessStore records", () => {
       expect(completed?.subjectId).toBe("test-store-records-entry-1");
       expect(completed?.key).toBe("job-1");
       expect(byKey).toHaveLength(3);
-    }).pipe(Effect.provide(ProcessStore.layer), Effect.scoped),
+    }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
   );
 });
 

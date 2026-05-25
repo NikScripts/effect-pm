@@ -69,10 +69,13 @@ export const queryGroupLogsForCatalog = (
       for (const group of groups) {
         const sqliteFilename = groupLogSqlitePath(paths.logDirectory, group.id);
         const groupQuery = { ...query, groupId: group.id, limit: perGroupLimit };
-        const loaded = yield* Effect.gen(function* () {
-          const log = yield* ProcessStoreLog;
-          return yield* log.load(groupQuery);
-        }).pipe(
+        const loaded = yield* Effect.serviceOption(ProcessStoreLog).pipe(
+          Effect.flatMap(
+            Option.match({
+              onNone: () => Effect.succeed([]),
+              onSome: (log) => log.load(groupQuery),
+            }),
+          ),
           Effect.provide(layerProcessStore({ filename: sqliteFilename })),
           Effect.scoped,
           Effect.option,
@@ -103,10 +106,19 @@ export const queryGroupLogsForCatalog = (
       });
     }
     const sqliteFilename = groupLogSqlitePath(paths.logDirectory, groupId);
-    yield* Effect.gen(function* () {
-      const log = yield* ProcessStoreLog;
-      yield* log.query(query);
-    }).pipe(
+    yield* Effect.serviceOption(ProcessStoreLog).pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () =>
+            Effect.fail(
+              new ProcessManagerLogQueryError({
+                reason:
+                  "ProcessStoreLog layer is not provided; compose ProcessStorage.layer or layerProcessStore(...) before reading log history.",
+              }),
+            ),
+          onSome: (log) => log.query(query),
+        }),
+      ),
       Effect.provide(layerProcessStore({ filename: sqliteFilename })),
       Effect.scoped,
     );

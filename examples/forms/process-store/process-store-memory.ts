@@ -1,43 +1,27 @@
+import { ProcessStorage } from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/process-store/process-store-memory
  *
- * ProcessStore in-memory storage + generic events query.
+ * ProcessStorage in-memory storage + lifecycle facet query.
  * Run: `npx tsx examples/forms/process-store/process-store-memory.ts`
  */
 
-import { Clock, Effect } from "effect";
-import {
-  ProcessStore,
-  type AnalyticsEvent,
-} from "../../../src/ProcessStore";
+import { Effect } from "effect";
+import { ProcessStoreProcessLifecycle } from "../../../src/store/processLifecycle";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
-const processLifecycleTypes: ReadonlyArray<AnalyticsEvent["type"]> = [
-  "process.lifecycle.changed",
-];
-
 const program = Effect.gen(function* () {
-  const store = yield* ProcessStore;
-  const occurredAt = yield* Clock.currentTimeMillis;
-
-  yield* store.append({
-    id: "memory-process-started",
-    type: "process.lifecycle.changed",
-    occurredAt,
-    entityType: "process",
-    entityId: "examples/MemoryProcess",
-    lifecycle: { tag: "Started" },
+  yield* ProcessStoreProcessLifecycle.lifecycleChanged({
+    processId: "examples/MemoryProcess",
+    tag: "Started",
   });
 
-  const events = yield* store.events({
-    entityType: "process",
-    entityId: "examples/MemoryProcess",
-    types: processLifecycleTypes,
-  });
+  const lifecycle = yield* ProcessStoreProcessLifecycle;
+  const events = yield* lifecycle.lifecycle("examples/MemoryProcess");
 
   yield* Effect.log(
     `memory events: ${events.map((event) => event.id).join(", ")}`,
   );
 });
 
-runNodeProgramWithLayer(program, ProcessStore.layer, "memory store example finished");
+runNodeProgramWithLayer(program, ProcessStorage.layer, "memory store example finished");

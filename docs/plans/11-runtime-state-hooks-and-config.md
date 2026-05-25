@@ -18,8 +18,7 @@ recipe for any further domains (process executions, schedules, queues, etc.)
 live in:
 
 - [STORAGE.md](../STORAGE.md)
-- [STORAGE-AGENT-HANDBOOK.md](../STORAGE-AGENT-HANDBOOK.md)
-- [STORAGE-FACET-AUTHORING-GUIDE.md](../STORAGE-FACET-AUTHORING-GUIDE.md) (the
+- [STORAGE.md](../STORAGE.md) (the
   copy-paste recipe for re-implementing an existing storage integration on
   `ProcessStoreBuilder.Service`)
 

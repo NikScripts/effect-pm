@@ -32,7 +32,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | **Process runtime** | `pnpm run example:process-supervisor-patterns` → [`scenarios/game-window-polling-with-process-group.ts`](./scenarios/game-window-polling-with-process-group.ts) |
 | **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
 | **Resource gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → http-client → http-api forms |
-| **Storage** | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) → [`process-store-events-file-layer.ts`](./forms/process-store/process-store-events-file-layer.ts) → [`process-store-prisma-structural-client.ts`](./forms/process-store/process-store-prisma-structural-client.ts) |
+| **Storage** | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) → [`process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) → [`process-store-prisma-structural-client.ts`](./forms/process-store/process-store-prisma-structural-client.ts) |
 
 ---
 
@@ -60,7 +60,6 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 |------|---------|
 | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) | `ProcessStore.layer` / `memory` + `events(query)` |
 | [`forms/process-store/process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) | `ProcessStore.events(query)` + `ProcessStore.layerRuntimeStorage` + SQLite adapter |
-| [`forms/process-store/process-store-events-file-layer.ts`](./forms/process-store/process-store-events-file-layer.ts) | **Legacy** NDJSON `fileLayer` (do not copy) |
 | [`forms/process-store/process-store-prisma-structural-client.ts`](./forms/process-store/process-store-prisma-structural-client.ts) | Placeholder showing Prisma adapter unavailability pending RuntimeStorage rewrite |
 
 Storage options:
@@ -69,7 +68,6 @@ Storage options:
 - `ProcessStore.layerRuntimeStorage` + `@nikscripts/effect-pm/storage/sqlite` — durable local SQLite runtime records (preferred).
 - `ProcessStoreLog` (also exposed as `ProcessStore.Log` on the composed store) — structured log history (`record`, `load`, `query`); `@nikscripts/effect-pm/Logs` for capture/relay in group children.
 - `ProcessStore.QueueResource` — queue semantic storage helpers.
-- `file(filePath)` / `fileLayer(filePath)` from `@nikscripts/effect-pm/storage/file` — **legacy** NDJSON only; do not use for new code.
 - `PrismaProcessStore` from `@nikscripts/effect-pm/storage/prisma` — placeholder for the upcoming RuntimeStorage-backed Prisma rewrite.
 
 ### Schedule

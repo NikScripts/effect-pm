@@ -12,7 +12,7 @@
  *
  * Compose {@link ProcessStoreProcessGroup.layerRuntimeStorage} together with
  * {@link ProcessStoreProcessLifecycle.layerRuntimeStorage} (this layer
- * requires the lifecycle facet). {@link ProcessStore.layerRuntimeStorage}
+ * requires the lifecycle facet). {@link ProcessStorage.layerRuntimeStorage}
  * merges both.
  *
  * @module store/ProcessGroup
@@ -24,7 +24,7 @@ import {
   byTimestampDesc,
   isProcessLifecycleChanged,
 } from "../internal/store/spine";
-import { ProcessStoreBuilder } from "../ProcessStoreBuilder";
+import { ProcessStore } from "../ProcessStore";
 import type {
   AnalyticsEvent,
   JsonValue,
@@ -84,11 +84,11 @@ const memberLifecycleInput = (
  *
  * @public
  */
-export class ProcessStoreProcessGroup extends ProcessStoreBuilder.Service<
+export class ProcessStoreProcessGroup extends ProcessStore.Service<
   ProcessStoreProcessGroup
 >()(
   "@nikscripts/effect-pm/store/processGroup/ProcessStoreProcessGroup",
-  ProcessStoreBuilder.record((s) => ({
+  ProcessStore.record((s) => ({
     recordMemberLifecycle: (
       groupId: string,
       input: ProcessGroupMemberLifecycleInput,
@@ -130,7 +130,7 @@ export class ProcessStoreProcessGroup extends ProcessStoreBuilder.Service<
         );
       }),
   })),
-  ProcessStoreBuilder.read((s) => ({
+  ProcessStore.read((s) => ({
     lifecycleByGroup: (groupId: string, opts?: QueryOpts) =>
       s.events({
         entityType: "process",
@@ -146,8 +146,8 @@ export class ProcessStoreProcessGroup extends ProcessStoreBuilder.Service<
  * @public
  */
 export declare namespace ProcessStoreProcessGroup {
-  export type Type = ProcessStoreBuilder.Service.Type<typeof ProcessStoreProcessGroup>;
-  export type EmitType = ProcessStoreBuilder.Service.EmitType<
+  export type Type = ProcessStore.Service.Type<typeof ProcessStoreProcessGroup>;
+  export type EmitType = ProcessStore.Service.EmitType<
     typeof ProcessStoreProcessGroup
   >;
 }

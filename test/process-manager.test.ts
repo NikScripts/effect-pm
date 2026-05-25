@@ -1,3 +1,4 @@
+import { ProcessStorage } from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -13,8 +14,7 @@ import {
   ProcessGroup,
   ProcessManager,
   ProcessManagerEndpointConfigError,
-  ProcessStore,
-  QueueResource,
+    QueueResource,
 } from "../src";
 import { decodeProcessManagerRunStateJson } from "../src/internal/manager/runState";
 import { ModuleEndpointGroup } from "./fixtures/process-manager-module-definition";
@@ -139,11 +139,11 @@ describe("ProcessManager", () => {
                 Layer.mergeAll(
                   EmailQueue.layer,
                   SyncProcess.layer,
-                  ProcessStore.layer,
+                  ProcessStorage.layer,
                 ),
               ),
             ),
-            ProcessStore.layer,
+            ProcessStorage.layer,
           ),
         ),
       );
@@ -227,11 +227,11 @@ describe("ProcessManager", () => {
           Layer.mergeAll(
             BillingGroup.layer.pipe(
               Layer.provide(
-                Layer.mergeAll(EmailQueue.layer, SyncProcess.layer, ProcessStore.layer),
+                Layer.mergeAll(EmailQueue.layer, SyncProcess.layer, ProcessStorage.layer),
               ),
             ),
             EmailQueue.layer,
-            ProcessStore.layer,
+            ProcessStorage.layer,
           ),
         ),
       );
@@ -317,11 +317,11 @@ describe("ProcessManager", () => {
                   OtherProcess.layer,
                   EmailQueue.layer,
                   SyncProcess.layer,
-                  ProcessStore.layer,
+                  ProcessStorage.layer,
                 ),
               ),
             ),
-            ProcessStore.layer,
+            ProcessStorage.layer,
             NodeHttpClient.layerUndici,
           ),
         ),
@@ -380,13 +380,13 @@ describe("ProcessManager", () => {
                 Layer.mergeAll(
                   EmailQueue.layer,
                   SyncProcess.layer,
-                  ProcessStore.layer,
+                  ProcessStorage.layer,
                   billingRegistryLayer,
                 ),
               ),
             ),
             billingRegistryLayer,
-            ProcessStore.layer,
+            ProcessStorage.layer,
             NodeHttpClient.layerUndici,
           ),
         ),
@@ -453,13 +453,13 @@ describe("ProcessManager", () => {
                 Layer.mergeAll(
                   EmailQueue.layer,
                   SyncProcess.layer,
-                  ProcessStore.layer,
+                  ProcessStorage.layer,
                   billingRegistryLayer,
                 ),
               ),
             ),
             billingRegistryLayer,
-            ProcessStore.layer,
+            ProcessStorage.layer,
             NodeHttpClient.layerUndici,
           ),
         ),
@@ -630,7 +630,7 @@ describe("ProcessManager", () => {
               SouthGroup.layer.pipe(
                 Layer.provide(Layer.mergeAll(SouthQueue.layer, SouthSync.layer)),
               ),
-              ProcessStore.layer,
+              ProcessStorage.layer,
               NodeServices.layer,
               ProcessManager.ConnectionRegistry.layer([NorthGroup, SouthGroup] as const, {
                 [NorthGroup.id]: "http://127.0.0.1:32138",
@@ -703,9 +703,9 @@ describe("ProcessManager", () => {
         Effect.provide(
           Layer.mergeAll(
             BillingGroup.layer.pipe(
-              Layer.provide(Layer.mergeAll(EmailQueue.layer, SyncProcess.layer, ProcessStore.layer)),
+              Layer.provide(Layer.mergeAll(EmailQueue.layer, SyncProcess.layer, ProcessStorage.layer)),
             ),
-            ProcessStore.layer,
+            ProcessStorage.layer,
             NodeServices.layer,
             NodeHttpClient.layerUndici,
           ),
@@ -836,9 +836,9 @@ describe("ProcessManager", () => {
         Effect.provide(
           Layer.mergeAll(
             RemoteGroup.layer.pipe(
-              Layer.provide(Layer.mergeAll(EmailQueue.layer, RemoteProcess.layer, ProcessStore.layer)),
+              Layer.provide(Layer.mergeAll(EmailQueue.layer, RemoteProcess.layer, ProcessStorage.layer)),
             ),
-            ProcessStore.layer,
+            ProcessStorage.layer,
             NodeServices.layer,
             NodeHttpClient.layerUndici,
           ),
@@ -890,10 +890,10 @@ describe("ProcessManager", () => {
         Effect.provide(
           Layer.mergeAll(
             BillingGroup.layer.pipe(
-              Layer.provide(Layer.mergeAll(EmailQueue.layer, SyncProcess.layer, ProcessStore.layer)),
+              Layer.provide(Layer.mergeAll(EmailQueue.layer, SyncProcess.layer, ProcessStorage.layer)),
             ),
             ProcessManager.Config.layer([config]),
-            ProcessStore.layer,
+            ProcessStorage.layer,
             NodeServices.layer,
             NodeHttpClient.layerUndici,
           ),
@@ -1120,12 +1120,12 @@ describe("ProcessManager", () => {
                 Layer.mergeAll(
                   EmailQueue.layer,
                   SyncProcess.layer,
-                  ProcessStore.layer,
+                  ProcessStorage.layer,
                 ),
               ),
             ),
             EmailQueue.layer,
-            ProcessStore.layer,
+            ProcessStorage.layer,
             NodeHttpClient.layerUndici,
           ),
         ),
@@ -1195,13 +1195,13 @@ describe("ProcessManager", () => {
                 Layer.mergeAll(
                   EmailQueue.layer,
                   SyncProcess.layer,
-                  ProcessStore.layer,
+                  ProcessStorage.layer,
                   billingEndpointProvisionedLive,
                 ),
               ),
             ),
             billingEndpointProvisionedLive,
-            ProcessStore.layer,
+            ProcessStorage.layer,
             NodeHttpClient.layerUndici,
           ),
         ),
@@ -1257,11 +1257,11 @@ describe("ProcessManager", () => {
                 Layer.mergeAll(
                   EmailQueue.layer,
                   SyncProcess.layer,
-                  ProcessStore.layer,
+                  ProcessStorage.layer,
                 ),
               ),
             ),
-            ProcessStore.layer,
+            ProcessStorage.layer,
             NodeHttpClient.layerUndici,
           ),
         ),
@@ -1338,10 +1338,10 @@ describe("ProcessManager", () => {
           Layer.mergeAll(
             LocalGroup.layer.pipe(
               Layer.provide(
-                Layer.mergeAll(EmailQueue.layer, SyncProcess.layer, ProcessStore.layer),
+                Layer.mergeAll(EmailQueue.layer, SyncProcess.layer, ProcessStorage.layer),
               ),
             ),
-            ProcessStore.layer,
+            ProcessStorage.layer,
             NodeHttpClient.layerUndici,
           ),
         ),
@@ -1473,11 +1473,11 @@ describe("ProcessManager", () => {
           Layer.mergeAll(
             BillingGroup.layer.pipe(
               Layer.provide(
-                Layer.mergeAll(EmailQueue.layer, SyncProcess.layer, ProcessStore.layer),
+                Layer.mergeAll(EmailQueue.layer, SyncProcess.layer, ProcessStorage.layer),
               ),
             ),
             EmailQueue.layer,
-            ProcessStore.layer,
+            ProcessStorage.layer,
             NodeHttpClient.layerUndici,
           ),
         ),

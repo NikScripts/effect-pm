@@ -1,5 +1,5 @@
 /**
- * Queue semantic storage facet for {@link ProcessStoreInterface.QueueResource}.
+ * Queue semantic storage facet for queue resources.
  *
  * @module ProcessStoreQueueResource
  */
@@ -114,7 +114,7 @@ export class ProcessStoreQueueResourceContextError extends Data.TaggedError(
 }> {}
 
 /**
- * Queue semantic storage facet on {@link ProcessStoreInterface.QueueResource}.
+ * Queue semantic storage facet for queue resources.
  *
  * @public
  */

@@ -1,7 +1,7 @@
+import { ProcessStorage } from "../src/ProcessStorage";
 import { it, describe, expect } from "@effect/vitest";
 import { Effect, Layer, Option, Ref } from "effect";
 import { RunResource } from "../src/RunResource";
-import { ProcessStore } from "../src/ProcessStore";
 import { ProcessStoreRunResource } from "../src/store/runResource";
 import type {
   RunResourceFact,
@@ -65,7 +65,7 @@ const listenerRunResourceFacet = (
   };
 };
 
-const runResourceObservationLayer = ProcessStore.layer;
+const runResourceObservationLayer = ProcessStorage.layer;
 
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
   Effect.gen(function* () {

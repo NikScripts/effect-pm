@@ -1,3 +1,4 @@
+import { ProcessStorage } from "../../src/ProcessStorage";
 /**
  * @module examples/scenarios/game-window-polling-with-process-group
  *
@@ -12,8 +13,7 @@ import {
   ProcessGroup,
   type ProcessGroupErrors,
   ProcessSchedule,
-  ProcessStore,
-} from "../../src";
+  } from "../../src";
 import { runNodeProgramWithLayer } from "../shared/demo-harness";
 import { utcDateFromMillis } from "../../src/internal/utcDate";
 
@@ -78,7 +78,7 @@ runNodeProgramWithLayer(
   program,
   Layer.mergeAll(
     TestClock.layer(),
-    ProcessStore.layer,
+    ProcessStorage.layer,
     GameWindowPoller.layer,
   ),
   "scenario:game-window-polling-with-process-group finished",

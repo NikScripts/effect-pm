@@ -1,7 +1,9 @@
+import { ProcessStorage } from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest"
 import { Duration, Effect, Fiber, Ref } from "effect"
-import { ProcessGroup, ProcessStore } from "../src"
+import { ProcessGroup } from "../src"
 import type { Process } from "../src"
+import { ProcessStoreProcessLifecycle } from "../src/store/processLifecycle"
 
 const waitUntilTicked = (ticks: Ref.Ref<number>) =>
   Effect.gen(function* () {
@@ -26,7 +28,7 @@ const makeTickProcess = (
 
 describe("ProcessGroup — process lifecycle", () => {
   /**
-   * Tests in this block use explicit in-memory {@link ProcessStore.layer}.
+   * Tests in this block use explicit in-memory {@link ProcessStorage.layer}.
    * Lifecycle rows are not durable across restarts. For sqlite-backed history,
    * provide `layerProcessStore` (see ProcessGroup.localEnvLayer TSDoc).
    */
@@ -48,7 +50,7 @@ describe("ProcessGroup — process lifecycle", () => {
 
       expect(yield* Ref.get(ticks)).toBeGreaterThan(0)
       yield* group.stop(process.name)
-    }).pipe(Effect.provide(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStorage.layer)),
   )
 
   it.live("stop closes the process scope and stops future work", () =>
@@ -67,7 +69,7 @@ describe("ProcessGroup — process lifecycle", () => {
       const stoppedAt = yield* Ref.get(ticks)
       yield* Effect.sleep(Duration.millis(80))
       expect(yield* Ref.get(ticks)).toBe(stoppedAt)
-    }).pipe(Effect.provide(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStorage.layer)),
   )
 
   it.live("writes lifecycle events to ProcessStore when provided", () =>
@@ -83,11 +85,11 @@ describe("ProcessGroup — process lifecycle", () => {
       yield* waitUntilTicked(ticks)
       yield* group.stop(process.name)
 
-      const store = yield* ProcessStore
-      const history = yield* store.getProcessLifecycle(process.name)
+      const lifecycle = yield* ProcessStoreProcessLifecycle
+      const history = yield* lifecycle.lifecycle(process.name)
       // Events are appended after each control; newest-first query order → Stopped before Started
       expect(history.map((row) => row.lifecycle.tag)).toEqual(["Stopped", "Started"])
-    }).pipe(Effect.provide(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStorage.layer)),
   )
 
   it.live("restart on a running process writes Stopped, Started, and Restarted", () =>
@@ -105,13 +107,13 @@ describe("ProcessGroup — process lifecycle", () => {
       yield* waitUntilTicked(ticks)
       yield* group.stop(process.name)
 
-      const store = yield* ProcessStore
-      const history = yield* store.getProcessLifecycle(process.name)
+      const lifecycle = yield* ProcessStoreProcessLifecycle
+      const history = yield* lifecycle.lifecycle(process.name)
       const tags = history.map((row) => row.lifecycle.tag)
       expect(tags.filter((tag) => tag === "Started")).toHaveLength(2)
       expect(tags.filter((tag) => tag === "Stopped")).toHaveLength(2)
       expect(tags.filter((tag) => tag === "Restarted")).toHaveLength(1)
-    }).pipe(Effect.provide(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStorage.layer)),
   )
 
   it.live("lifecycle recording is a no-op when ProcessStore is absent", () =>
@@ -128,7 +130,7 @@ describe("ProcessGroup — process lifecycle", () => {
       yield* waitUntilTicked(ticks)
       yield* group.stop(process.name)
 
-      const storeOption = yield* Effect.serviceOption(ProcessStore)
+      const storeOption = yield* Effect.serviceOption(ProcessStoreProcessLifecycle)
       expect(storeOption._tag).toBe("None")
     }),
   )

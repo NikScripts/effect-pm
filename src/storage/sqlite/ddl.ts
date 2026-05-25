@@ -9,7 +9,7 @@
  * Statements are executed through {@link SqlClient} (one statement at a time)
  * so they never rely on multi-statement `Database#exec` behavior.
  *
- * Index coverage follows `docs/RUNTIME-STORAGE-ADAPTER-GUIDE.md`. The adapter
+ * Index coverage follows `docs/STORAGE.md`. The adapter
  * still evaluates predicates in TypeScript via {@link selectRuntimeRecords}; the
  * indexes exist so future query push-down or ad hoc SQL stays practical without
  * requiring another migration pass for the obvious access paths.

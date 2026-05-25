@@ -3,7 +3,7 @@ import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Effect, FileSystem, Layer, Path } from "effect";
 import { groupLogSqlitePath } from "../src/internal/manager/childLaunch";
-import { ProcessStore, isLogEntryRecorded } from "../src/ProcessStore";
+import { ProcessStoreLog } from "../src/store/log";
 import { layerProcessStore } from "../src/storage/sqlite/index";
 import { ProcessManagerLogAnnotationKeys } from "../src/LogContext";
 import type { ProcessManagerLogEntry } from "../src/LogEntry";
@@ -31,31 +31,33 @@ describe("ProcessStoreLog", () => {
         spans: [],
       };
 
-      yield* Effect.flatMap(ProcessStore, (store) => store.Log.record("workshop-group", "1", entry)).pipe(
+      yield* ProcessStoreLog.record("workshop-group", "1", entry).pipe(
         Effect.provide(storeLayer),
         Effect.scoped,
       );
 
       const loaded = yield* Effect.gen(function* () {
-        const store = yield* ProcessStore;
-        return yield* store.events({
-          types: ["log.entry"],
-          entityType: "log",
-          entityId: "workshop-group",
+        const log = yield* ProcessStoreLog;
+        return yield* log.load({
+          groupId: "workshop-group",
+          processId: "billing/sync",
+          limit: 10,
+          sort: "desc",
         });
       }).pipe(Effect.provide(storeLayer), Effect.scoped);
 
       assert.strictEqual(loaded.length, 1);
-      const row = loaded[0];
-      assert.ok(row !== undefined && isLogEntryRecorded(row));
-      assert.strictEqual(row.log.entry.annotations[ProcessManagerLogAnnotationKeys.processId], "billing/sync");
+      assert.strictEqual(loaded[0]?.annotations[ProcessManagerLogAnnotationKeys.processId], "billing/sync");
 
-      yield* Effect.flatMap(ProcessStore, (store) => store.Log.query({
-        groupId: "workshop-group",
-        processId: "billing/sync",
-        limit: 10,
-        sort: "desc",
-      })).pipe(Effect.provide(storeLayer), Effect.scoped, Effect.provide(nodePlatform));
+      yield* Effect.gen(function* () {
+        const log = yield* ProcessStoreLog;
+        yield* log.query({
+          groupId: "workshop-group",
+          processId: "billing/sync",
+          limit: 10,
+          sort: "desc",
+        });
+      }).pipe(Effect.provide(storeLayer), Effect.scoped, Effect.provide(nodePlatform));
     }).pipe(Effect.provide(nodePlatform)),
   );
 });

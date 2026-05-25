@@ -14,7 +14,7 @@ import type {
   TypedProcessGroup,
 } from "./ProcessGroup";
 import type { ProcessManagerGroupConfigItem } from "./ProcessManager";
-import type { ProcessStore } from "./ProcessStore";
+import type { ProcessStorage } from "./ProcessStorage";
 
 /**
  * Control API response.
@@ -433,7 +433,7 @@ export const makeControlProtocolRouter = <
   Error,
 >(
   group: TypedProcessGroup<Id, Entries, Error>,
-): ControlProtocolRouter<ProcessGroupEntryRequirements<Entries> | ProcessStore> => ({
+): ControlProtocolRouter<ProcessGroupEntryRequirements<Entries> | ProcessStorage.Services> => ({
   handle: (request) =>
     Effect.gen(function* () {
       switch (request._tag) {
@@ -627,7 +627,7 @@ const makeProvidedControlRouter = <
   Error,
 >(
   group: TypedProcessGroup<Id, Entries, Error>,
-  context: Context.Context<ProcessGroupEntryRequirements<Entries> | ProcessStore>,
+  context: Context.Context<ProcessGroupEntryRequirements<Entries> | ProcessStorage.Services>,
 ): ControlRouterShape => {
   const router = makeControlProtocolRouter(group);
   return {
@@ -650,12 +650,12 @@ export namespace ControlRouter {
   ): Layer.Layer<
     ControlRouter,
     never,
-    ProcessGroupEntryRequirements<Entries> | ProcessStore
+    ProcessGroupEntryRequirements<Entries> | ProcessStorage.Services
   > =>
     Layer.effect(
       ControlRouter,
       Effect.map(
-        Effect.context<ProcessGroupEntryRequirements<Entries> | ProcessStore>(),
+        Effect.context<ProcessGroupEntryRequirements<Entries> | ProcessStorage.Services>(),
         (context) => makeProvidedControlRouter(group, context),
       ),
     );
@@ -675,14 +675,14 @@ export namespace ControlRouter {
   ): Layer.Layer<
     ControlRouter,
     never,
-    Self | ProcessGroupEntryRequirements<Entries> | ProcessStore
+    Self | ProcessGroupEntryRequirements<Entries> | ProcessStorage.Services
   > =>
     Layer.effect(
       ControlRouter,
       Effect.gen(function* () {
         const value = yield* group;
         const context = yield* Effect.context<
-          ProcessGroupEntryRequirements<Entries> | ProcessStore
+          ProcessGroupEntryRequirements<Entries> | ProcessStorage.Services
         >();
         return makeProvidedControlRouter(value, context);
       }),

@@ -1,15 +1,15 @@
+import { ProcessStorage } from "../src/ProcessStorage";
 /**
  * Conformance suite for the {@link ProcessStoreRunResource} facet.
  *
  * Verifies (a) the no-op vs persist semantics of the static optional
- * emitters built by `ProcessStoreBuilder.Service`, (b) the built-in
+ * emitters built by `ProcessStore.Service`, (b) the built-in
  * failure-isolation `catchCause + logWarning` wrap, (c) the `runs()`
  * projection pairing, (d) `byRun` filtering, and (e) `latestState`.
  */
 
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Logger, Option } from "effect";
-import { ProcessStore } from "../src/ProcessStore";
 import { ProcessStoreRunResource } from "../src/store/runResource";
 import type {
   RunResourceFact,
@@ -111,7 +111,7 @@ describe("ProcessStoreRunResource — static optional emitters", () => {
         "run-resource.run.completed",
         "run-resource.run.started",
       ]);
-    }).pipe(Effect.provide(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
   it.live("isolates write failures behind a warning log", () => {
@@ -228,7 +228,7 @@ describe("ProcessStoreRunResource — projections", () => {
         `${resourceId}/run/2`,
         `${resourceId}/run/1`,
       ]);
-    }).pipe(Effect.provide(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
   it.live("byRun returns only facts for the requested run", () =>
@@ -243,7 +243,7 @@ describe("ProcessStoreRunResource — projections", () => {
         "run-resource.run.failed",
         "run-resource.run.started",
       ]);
-    }).pipe(Effect.provide(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
   it.live("latestState returns the most recent recorded state", () =>
@@ -256,7 +256,7 @@ describe("ProcessStoreRunResource — projections", () => {
       expect(value?.completed).toBe(1);
       expect(value?.failed).toBe(1);
       expect(value?.resourceId).toBe(resourceId);
-    }).pipe(Effect.provide(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 });
 

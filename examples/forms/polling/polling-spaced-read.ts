@@ -1,3 +1,4 @@
+import { ProcessStorage } from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/polling/polling-spaced-read
  *
@@ -6,7 +7,7 @@
 
 import { DateTime, Duration, Effect, Layer } from "effect";
 import { TestClock } from "effect/testing";
-import { Process, Polling, ProcessSchedule, ProcessStore } from "../../../src";
+import { Process, Polling, ProcessSchedule } from "../../../src";
 import {
   forkSupervisedAndSideThenAdvanceTime,
   runNodeProgramWithLayer,
@@ -15,7 +16,7 @@ import { makeSportsScoreFeedTestDouble } from "../../shared/sports-score-feed";
 
 const scheduleStartAtUnixEpoch = DateTime.toDateUtc(DateTime.makeUnsafe(0));
 
-const env = Layer.mergeAll(ProcessStore.layer, TestClock.layer());
+const env = Layer.mergeAll(ProcessStorage.layer, TestClock.layer());
 
 const program = Effect.gen(function* () {
   const feed = yield* makeSportsScoreFeedTestDouble();

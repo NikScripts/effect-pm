@@ -73,7 +73,7 @@ These are the default assumptions for implementation unless `/grill-me` changes 
 - Persist through the dedicated **`ProcessStoreLog`** facet (`src/store/log.ts`) — no separate log-store service. The facet writes through `RuntimeStorage` so adapters (SQLite, future Prisma) compose without log-specific changes:
   - Event type: `log.entry` (stable string; `entityType: "log"`, `entityId` is the relay's log-bucket id).
   - Payload: `ProcessManagerLogEntry` + `groupId` + `endpointLabel` + `entryId` + optional `childPid` / `runId`.
-- Reads: **`ProcessStore.events(query)`** with filters on `groupId`, cursor, limit — same pattern as `run-resource.fact.recorded` on the per-domain `ProcessStoreRunResource` facet (see [STORAGE.md](../STORAGE.md) and [STORAGE-FACET-AUTHORING-GUIDE.md](../STORAGE-FACET-AUTHORING-GUIDE.md)).
+- Reads: **`ProcessStore.events(query)`** with filters on `groupId`, cursor, limit — same pattern as `run-resource.fact.recorded` on the per-domain `ProcessStoreRunResource` facet (see [STORAGE.md](../STORAGE.md)).
 - Indexes: at minimum `(groupId, entryId)` and `(groupId, date)` on Prisma/SQLite adapters when added.
 
 ### PubNub vs storage

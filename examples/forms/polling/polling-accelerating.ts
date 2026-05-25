@@ -1,3 +1,4 @@
+import { ProcessStorage } from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/polling/polling-accelerating
  *
@@ -6,12 +7,12 @@
 
 import { Duration, Effect, Fiber, Layer, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process, ProcessSchedule, ProcessStore } from "../../../src";
+import { Polling, Process, ProcessSchedule } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
 const runtime = Layer.mergeAll(
-  ProcessStore.layer,
+  ProcessStorage.layer,
   Polling.accelerating({
     fastest: "40 millis",
     slowest: "400 millis",

@@ -20,7 +20,7 @@
  * - `upsert` fails with {@link RuntimeStorageReadonlyRecordError} when the stored
  *   row is marked readonly.
  * - `update` / `delete` follow the same readonly counting and skip rules documented
- *   in `docs/RUNTIME-STORAGE-ADAPTER-GUIDE.md`.
+ *   in `docs/STORAGE.md`.
  *
  * The implementation achieves parity by loading the full table and delegating
  * to {@link selectRuntimeRecords} and {@link applyRuntimeRecordPatch} from
@@ -53,11 +53,12 @@ import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { Context, Effect, Layer, Scope } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import type { SqlError } from "effect/unstable/sql/SqlError";
-import { ProcessStore } from "../../ProcessStore";
+import { ProcessStorage } from "../../ProcessStorage";
 import type { ProcessStoreLog } from "../../store/log";
 import type { ProcessStoreProcessExecution } from "../../store/processExecution";
 import type { ProcessStoreProcessGroup } from "../../store/processGroup";
 import type { ProcessStoreProcessLifecycle } from "../../store/processLifecycle";
+import type { ProcessStoreQueueResource } from "../../store/queueResource";
 import type { ProcessStoreRunResource } from "../../store/runResource";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import type {
@@ -141,8 +142,8 @@ export const fromSqlClient = (
 export const layerProcessStore = (
   config: SQLiteRuntimeStorageConfig,
 ): Layer.Layer<
-  | ProcessStore
   | ProcessStoreLog
+  | ProcessStoreQueueResource
   | ProcessStoreRunResource
   | ProcessStoreProcessExecution
   | ProcessStoreProcessLifecycle
@@ -150,7 +151,7 @@ export const layerProcessStore = (
   never,
   Scope.Scope
 > =>
-  Layer.provide(ProcessStore.layerRuntimeStorage, layerRuntimeStorage(config)).pipe(Layer.orDie);
+  Layer.provide(ProcessStorage.layerRuntimeStorage, layerRuntimeStorage(config)).pipe(Layer.orDie);
 
 export const SQLiteRuntimeStorage = {
   make: makeRuntimeStorage,

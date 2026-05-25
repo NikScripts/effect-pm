@@ -1,3 +1,4 @@
+import { ProcessStorage } from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import { Effect, Layer, Ref, Schema } from "effect";
@@ -9,8 +10,7 @@ import {
   Process,
   ProcessGroup,
   ProcessGroupContractSchema,
-  ProcessStore,
-  QueueResource,
+    QueueResource,
 } from "../src";
 import { responseBodyJson } from "../src/internal/json";
 
@@ -93,12 +93,12 @@ describe("ControlService — contract route", () => {
                     Layer.mergeAll(
                       SyncProcess.layer,
                       EmailQueue.layer,
-                      ProcessStore.layer,
+                      ProcessStorage.layer,
                     ),
                   ),
                 ),
               ),
-              Layer.provide(ProcessStore.layer),
+              Layer.provide(ProcessStorage.layer),
             ),
             NodeHttpClient.layerUndici,
           ),
@@ -145,7 +145,7 @@ describe("ControlService — contract route", () => {
           Layer.mergeAll(
             SyncProcess.layer,
             EmailQueue.layer,
-            ProcessStore.layer,
+            ProcessStorage.layer,
             NodeHttpClient.layerUndici,
           ),
         ),
@@ -281,7 +281,7 @@ describe("ControlService — contract route", () => {
           Layer.mergeAll(
             SyncProcess.layer,
             EmailQueue.layer,
-            ProcessStore.layer,
+            ProcessStorage.layer,
             NodeHttpClient.layerUndici,
           ),
         ),
@@ -336,7 +336,7 @@ describe("ControlService — contract route", () => {
           Layer.mergeAll(
             SyncProcess.layer,
             EmailQueue.layer,
-            ProcessStore.layer,
+            ProcessStorage.layer,
             NodeHttpClient.layerUndici,
           ),
         ),

@@ -13,16 +13,12 @@
  * @module store/Log
  */
 
-import { Clock, Context, Effect, Layer } from "effect";
-import type { LogLevel } from "effect/LogLevel";
+import { Effect } from "effect";
 import { ProcessManagerLogAnnotationKeys } from "../LogContext";
 import type { ProcessManagerLogEntry } from "../LogEntry";
 import type { ProcessManagerLogQuery } from "../internal/manager/logQuery";
 import { ProcessManagerLogQueryError, replayLogQueryResults } from "../internal/manager/logQuery";
-import {
-  makeProcessStoreSpine,
-  makeRunId,
-} from "../internal/store/spine";
+import { ProcessStore } from "../ProcessStore";
 import type {
   AnalyticsEvent,
   LogEntryRecordedEvent,
@@ -30,7 +26,6 @@ import type {
   StoreEventQuery,
 } from "../ProcessStoreEvent";
 import { isLogEntryRecorded } from "../ProcessStoreEvent";
-import { RuntimeStorage } from "../RuntimeStorage";
 
 /**
  * Service shape for {@link ProcessStoreLog}.
@@ -57,7 +52,7 @@ const logEntryFromStored = (
   stored: LogEntryRecordedEvent["log"]["entry"],
 ): ProcessManagerLogEntry => ({
   date: stored.date,
-  level: stored.level as LogLevel,
+  level: stored.level,
   message: stored.message,
   ...(stored.cause === undefined ? {} : { cause: stored.cause }),
   annotations: stored.annotations,
@@ -194,10 +189,33 @@ const entriesFromStoreEvents = (
   return sortEntries(rows, query.sort).slice(0, query.limit);
 };
 
-/**
- * @public
- */
-export const makeProcessStoreLog = (deps: {
+const loadEntries = (
+  events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>,
+  query: ProcessManagerLogQuery,
+): Effect.Effect<ReadonlyArray<ProcessManagerLogEntry>, ProcessManagerLogQueryError> =>
+  Effect.gen(function* () {
+    const eventsResult = yield* events(storeEventQueryFromLogQuery(query));
+    const logEvents = eventsResult.filter(isLogEntryRecorded);
+    const entries = entriesFromStoreEvents(logEvents, query);
+    if (entries.length === 0) {
+      return yield* new ProcessManagerLogQueryError({
+        reason: "No log entries matched the query",
+      });
+    }
+    return entries;
+  });
+
+const queryEntries = (
+  events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>,
+  logQuery: ProcessManagerLogQuery,
+): Effect.Effect<void, ProcessManagerLogQueryError> =>
+  Effect.gen(function* () {
+    const entries = yield* loadEntries(events, logQuery);
+    yield* replayLogQueryResults(entries, logQuery.sort);
+  });
+
+/** @internal */
+export const makeProcessStoreLogApi = (deps: {
   readonly append: (event: AnalyticsEvent) => Effect.Effect<void, ProcessStoreWriteError>;
   readonly appendBatch: (events: ReadonlyArray<AnalyticsEvent>) => Effect.Effect<void, ProcessStoreWriteError>;
   readonly events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>;
@@ -208,46 +226,9 @@ export const makeProcessStoreLog = (deps: {
   recordBatch: (groupId, rows) =>
     deps.appendBatch(rows.map((row) => makeRecordedEvent(groupId, row.entryId, row.entry))),
 
-  load: (query) =>
-    Effect.gen(function* () {
-      const events = yield* deps.events(storeEventQueryFromLogQuery(query));
-      const logEvents = events.filter(isLogEntryRecorded);
-      const entries = entriesFromStoreEvents(logEvents, query);
-      if (entries.length === 0) {
-        return yield* new ProcessManagerLogQueryError({
-          reason: "No log entries matched the query",
-        });
-      }
-      return entries;
-    }),
+  load: (query) => loadEntries(deps.events, query),
 
-  query: (logQuery) =>
-    Effect.gen(function* () {
-      const events = yield* deps.events(storeEventQueryFromLogQuery(logQuery));
-      const logEvents = events.filter(isLogEntryRecorded);
-      const entries = entriesFromStoreEvents(logEvents, logQuery);
-      if (entries.length === 0) {
-        return yield* new ProcessManagerLogQueryError({
-          reason: "No log entries matched the query",
-        });
-      }
-      yield* replayLogQueryResults(entries, logQuery.sort);
-    }),
-});
-
-const makeProcessStoreLogFromRuntimeStorage: Effect.Effect<
-  ProcessStoreLogApi,
-  never,
-  RuntimeStorage
-> = Effect.gen(function* () {
-  const storage = yield* RuntimeStorage;
-  const now = yield* Clock.currentTimeMillis;
-  const spine = makeProcessStoreSpine(storage, makeRunId(now));
-  return makeProcessStoreLog({
-    append: spine.append,
-    appendBatch: spine.appendBatch,
-    events: spine.events,
-  });
+  query: (logQuery) => queryEntries(deps.events, logQuery),
 });
 
 /**
@@ -255,29 +236,30 @@ const makeProcessStoreLogFromRuntimeStorage: Effect.Effect<
  *
  * @public
  */
-export class ProcessStoreLog extends Context.Service<
-  ProcessStoreLog,
-  ProcessStoreLogApi
->()("@nikscripts/effect-pm/store/log/ProcessStoreLog", {
-  make: makeProcessStoreLogFromRuntimeStorage,
-}) {}
+export class ProcessStoreLog extends ProcessStore.Service<
+  ProcessStoreLog
+>()(
+  "@nikscripts/effect-pm/store/log/ProcessStoreLog",
+  ProcessStore.record((s) => ({
+    record: (groupId: string, entryId: string, entry: ProcessManagerLogEntry) =>
+      s.append(makeRecordedEvent(groupId, entryId, entry)),
+    recordBatch: (
+      groupId: string,
+      rows: ReadonlyArray<{ readonly entryId: string; readonly entry: ProcessManagerLogEntry }>,
+    ) => s.appendBatch(rows.map((row) => makeRecordedEvent(groupId, row.entryId, row.entry))),
+  })),
+  ProcessStore.read((s) => ({
+    load: (query: ProcessManagerLogQuery) => loadEntries(s.events, query),
+    query: (logQuery: ProcessManagerLogQuery) => queryEntries(s.events, logQuery),
+  })),
+) {}
 
-export namespace ProcessStoreLog {
-  /**
-   * `Layer` that provides {@link ProcessStoreLog} from injected {@link RuntimeStorage}.
-   *
-   * @public
-   */
-  export const layerRuntimeStorage: Layer.Layer<ProcessStoreLog, never, RuntimeStorage> =
-    Layer.effect(ProcessStoreLog, makeProcessStoreLogFromRuntimeStorage);
-
-  /**
-   * `Layer` backed by in-memory {@link RuntimeStorage}.
-   *
-   * @public
-   */
-  export const layer: Layer.Layer<ProcessStoreLog, never, never> = Layer.provide(
-    layerRuntimeStorage,
-    RuntimeStorage.layer,
-  );
+/**
+ * Type accessors for {@link ProcessStoreLog}.
+ *
+ * @public
+ */
+export declare namespace ProcessStoreLog {
+  export type Type = ProcessStore.Service.Type<typeof ProcessStoreLog>;
+  export type EmitType = ProcessStore.Service.EmitType<typeof ProcessStoreLog>;
 }

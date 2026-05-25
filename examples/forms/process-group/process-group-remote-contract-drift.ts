@@ -1,3 +1,4 @@
+import { ProcessStorage } from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/process-group/process-group-remote-contract-drift
  *
@@ -12,8 +13,7 @@ import {
   Process,
   ProcessGroup,
   ProcessManager,
-  ProcessStore,
-  QueueResource,
+    QueueResource,
 } from "../../../src";
 
 interface EmailJob {
@@ -101,7 +101,7 @@ const program = Effect.scoped(
           BillingGroup.layer.pipe(
             Layer.provide(Layer.mergeAll(SyncProcess.layer, EmailQueue.layer)),
           ),
-          ProcessStore.layer, // in-memory analytics; use layerProcessStore for durable lifecycle history
+          ProcessStorage.layer, // in-memory analytics; use layerProcessStore for durable lifecycle history
         ),
       ),
     );

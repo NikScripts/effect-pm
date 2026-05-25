@@ -12,7 +12,7 @@
  * **No shared generic vocabulary.** This facet does **not** use the
  * removed `RuntimeFact` / `RuntimeRef` / `RuntimeStateChange` envelope.
  * Each per-domain facet (queue, process, schedule, …) owns its own
- * concrete types — see `docs/STORAGE-FACET-AUTHORING-GUIDE.md`.
+ * concrete types — see `docs/STORAGE.md`.
  *
  * ## Emit (optional)
  *
@@ -30,7 +30,7 @@
  *   injected {@link RuntimeStorage}.
  * - `ProcessStoreRunResource.layer` — facet + in-memory `RuntimeStorage`
  *   (dev/test only).
- * - Composed by `ProcessStore.layerRuntimeStorage` and `layerProcessStore`
+ * - Composed by `ProcessStorage.layerRuntimeStorage` and `layerProcessStore`
  *   from `@nikscripts/effect-pm/storage/sqlite`.
  *
  * ## Query (after compose)
@@ -56,7 +56,7 @@ import {
   runResourceStateChangedEventQuery,
   runResourceStateChangesFromEvents,
 } from "../internal/store/spine";
-import { ProcessStoreBuilder } from "../ProcessStoreBuilder";
+import { ProcessStore } from "../ProcessStore";
 import type {
   QueryOpts,
   RunResourceFactRecordedEvent,
@@ -344,11 +344,11 @@ const sortedStateChanges = (
  *
  * @public
  */
-export class ProcessStoreRunResource extends ProcessStoreBuilder.Service<
+export class ProcessStoreRunResource extends ProcessStore.Service<
   ProcessStoreRunResource
 >()(
   "@nikscripts/effect-pm/store/runResource/ProcessStoreRunResource",
-  ProcessStoreBuilder.record((s) => ({
+  ProcessStore.record((s) => ({
     recordRunStarted: (fact: RunResourceRunStartedFact) =>
       s.append(makeRunResourceFactRecordedEvent(fact)),
     recordRunCompleted: (fact: RunResourceRunCompletedFact) =>
@@ -363,7 +363,7 @@ export class ProcessStoreRunResource extends ProcessStoreBuilder.Service<
       changes: ReadonlyArray<RunResourceStateChange>,
     ) => s.appendBatch(changes.map(makeRunResourceStateChangedEvent)),
   })),
-  ProcessStoreBuilder.read((s) => ({
+  ProcessStore.read((s) => ({
     facts: (query?: RunResourceFactQuery) =>
       s.events(runResourceFactStoreQuery(query)).pipe(
         Effect.map((events) => runResourceFactsFromEvents(events, query)),
@@ -422,10 +422,10 @@ export class ProcessStoreRunResource extends ProcessStoreBuilder.Service<
  * @public
  */
 export declare namespace ProcessStoreRunResource {
-  export type Type = ProcessStoreBuilder.Service.Type<
+  export type Type = ProcessStore.Service.Type<
     typeof ProcessStoreRunResource
   >;
-  export type EmitType = ProcessStoreBuilder.Service.EmitType<
+  export type EmitType = ProcessStore.Service.EmitType<
     typeof ProcessStoreRunResource
   >;
 }

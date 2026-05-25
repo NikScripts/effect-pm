@@ -76,7 +76,7 @@
  * import { layerProcessStore } from "@nikscripts/effect-pm/storage/sqlite"
  *
  * const live = layerProcessStore({ filename: ".effect-pm/data.sqlite" })
- * // or ProcessStore.layer for in-memory dev
+ * // or ProcessStorage.layer for in-memory dev
  * ```
  *
  * Query persisted runs via {@link ProcessStoreRunResource}:

@@ -1,3 +1,4 @@
+import { ProcessStorage } from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/process-group/process-group-remote-layer
  *
@@ -12,8 +13,7 @@ import {
   Process,
   ProcessGroup,
   ProcessManager,
-  ProcessStore,
-  QueueResource,
+    QueueResource,
 } from "../../../src";
 import { waitForCompleted } from "../../shared/process-group-http";
 
@@ -158,7 +158,7 @@ const program = Effect.scoped(
             Layer.provide(Layer.mergeAll(SyncProcess.layer, EmailQueue.layer)),
           ),
           EmailQueue.layer,
-          ProcessStore.layer, // in-memory analytics; use layerProcessStore for durable lifecycle history
+          ProcessStorage.layer, // in-memory analytics; use layerProcessStore for durable lifecycle history
         ),
       ),
     );

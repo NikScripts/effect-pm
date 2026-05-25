@@ -4,7 +4,7 @@
  * @module processManagerLogsRelay
  */
 
-import { Cause, Duration, Effect, Layer, Option, PubSub, Ref, Schedule, Scope, Stream } from "effect";
+import { Duration, Effect, Layer, Option, PubSub, Ref, Schedule, Scope, Stream } from "effect";
 import { ProcessGroupLogContext } from "../../LogContext";
 import type { ProcessManagerLogEntry } from "../../LogEntry";
 import {
@@ -30,22 +30,15 @@ const makePersistingRelay = (
     const buffer = yield* Ref.make<ReadonlyArray<PendingLogAppend>>([]);
 
     const flush = Effect.gen(function* () {
-      const logOption = yield* Effect.serviceOption(ProcessStoreLog);
       const groupOption = yield* Effect.serviceOption(ProcessGroupLogContext);
-      if (Option.isNone(logOption) || Option.isNone(groupOption)) {
+      if (Option.isNone(groupOption)) {
         return;
       }
       const batch = yield* Ref.getAndSet(buffer, []);
       if (batch.length === 0) {
         return;
       }
-      yield* logOption.value.recordBatch(groupOption.value.groupId, batch).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning("ProcessStoreLog.recordBatch failed").pipe(
-            Effect.annotateLogs("cause", Cause.pretty(cause)),
-          ),
-        ),
-      );
+      yield* ProcessStoreLog.recordBatch(groupOption.value.groupId, batch);
     });
 
     yield* Effect.addFinalizer(() => flush);
@@ -53,8 +46,8 @@ const makePersistingRelay = (
 
     const queueAppend = (entry: ProcessManagerLogEntry): Effect.Effect<void> =>
       Effect.gen(function* () {
-        const logOption = yield* Effect.serviceOption(ProcessStoreLog);
-        if (Option.isNone(logOption)) {
+        const groupOption = yield* Effect.serviceOption(ProcessGroupLogContext);
+        if (Option.isNone(groupOption)) {
           return;
         }
         const entryId = String((yield* Ref.getAndUpdate(entryCounter, (n) => n + 1)));

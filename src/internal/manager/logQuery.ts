@@ -151,11 +151,21 @@ export const buildProcessManagerLogQuery = (input: {
  */
 export const queryGroupLogs = (
   query: ProcessManagerLogQuery,
-): Effect.Effect<void, ProcessManagerLogQueryError, ProcessStoreLog> =>
-  Effect.gen(function* () {
-    const log = yield* ProcessStoreLog;
-    yield* log.query(query);
-  });
+): Effect.Effect<void, ProcessManagerLogQueryError> =>
+  Effect.serviceOption(ProcessStoreLog).pipe(
+    Effect.flatMap(
+      Option.match({
+        onNone: () =>
+          Effect.fail(
+            new ProcessManagerLogQueryError({
+              reason:
+                "ProcessStoreLog layer is not provided; compose ProcessStorage.layer or layerProcessStore(...) before reading log history.",
+            }),
+          ),
+        onSome: (log) => log.query(query),
+      }),
+    ),
+  );
 
 /**
  * Replay log rows returned from a future storage adapter.

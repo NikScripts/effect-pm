@@ -5,11 +5,10 @@
  */
 
 import { Data } from "effect";
+import type { LogLevel } from "effect/LogLevel";
 import type {
   FactEnvelope,
-  FactEnvelopeRecordedEvent,
   FactEnvelopeStateChange,
-  FactEnvelopeStateChangedEvent,
 } from "./internal/store/factEnvelope";
 import type {
   RunResourceFact,
@@ -179,6 +178,14 @@ export interface ProcessLifecycleChangedEvent extends AnalyticsEventBase {
 export type QueueItemStatus = "completed" | "failed" | "retried" | "exhausted";
 
 /** @public */
+export type QueueLifecycleTag =
+  | "Started"
+  | "Paused"
+  | "Resumed"
+  | "Shutdown"
+  | "Cleared";
+
+/** @public */
 export interface QueueItemCompletedEvent extends AnalyticsEventBase {
   type: "queue.item.completed";
   entityType: "queue";
@@ -192,14 +199,6 @@ export interface QueueItemCompletedEvent extends AnalyticsEventBase {
 }
 
 /** @public */
-export type QueueLifecycleTag =
-  | "Started"
-  | "Paused"
-  | "Resumed"
-  | "Shutdown"
-  | "Cleared";
-
-/** @public */
 export interface QueueLifecycleChangedEvent extends AnalyticsEventBase {
   type: "queue.lifecycle.changed";
   entityType: "queue";
@@ -207,6 +206,18 @@ export interface QueueLifecycleChangedEvent extends AnalyticsEventBase {
     tag: QueueLifecycleTag;
     itemsCleared?: number;
   };
+}
+
+/** @public */
+export interface RuntimeFactRecordedEvent extends AnalyticsEventBase {
+  type: "runtime.fact.recorded";
+  fact: FactEnvelope;
+}
+
+/** @public */
+export interface RuntimeStateChangedEvent extends AnalyticsEventBase {
+  type: "runtime.state.changed";
+  change: FactEnvelopeStateChange;
 }
 
 /**
@@ -234,41 +245,6 @@ export interface RunResourceStateChangedEvent extends AnalyticsEventBase {
 }
 
 /**
- * Generic envelope wire event used by older facets that still persist
- * through the shared {@link FactEnvelope} (currently
- * {@link ProcessStoreQueueResource}). Per-domain facets should publish
- * their own concrete event types and stop relying on this envelope — see
- * `docs/STORAGE-FACET-AUTHORING-GUIDE.md`.
- *
- * @internal
- */
-export type RuntimeFactRecordedEvent = FactEnvelopeRecordedEvent;
-
-/**
- * Generic envelope wire event for state changes recorded through the
- * shared {@link FactEnvelope}. See {@link RuntimeFactRecordedEvent}.
- *
- * @internal
- */
-export type RuntimeStateChangedEvent = FactEnvelopeStateChangedEvent;
-
-/**
- * Generic envelope re-export retained for internal callers in the spine
- * and codec. Use a per-domain `*Query` type from the owning facet.
- *
- * @internal
- */
-export type RuntimeFact = FactEnvelope;
-
-/**
- * Generic envelope re-export retained for internal callers in the spine
- * and codec. Use a per-domain `*StateChange` type from the owning facet.
- *
- * @internal
- */
-export type RuntimeStateChange = FactEnvelopeStateChange;
-
-/**
  * Structured log line persisted by {@link ProcessStoreLog} for operator
  * `pm logs` / `pm watch` history. `entityId` is an opaque log-bucket id
  * supplied by the relay (today: the PM log annotation).
@@ -282,7 +258,7 @@ export interface LogEntryRecordedEvent extends AnalyticsEventBase {
     readonly entryId: string;
     readonly entry: {
       readonly date: string;
-      readonly level: string;
+      readonly level: LogLevel;
       readonly message: string;
       readonly cause?: string;
       readonly annotations: Readonly<Record<string, string>>;
@@ -295,25 +271,20 @@ export interface LogEntryRecordedEvent extends AnalyticsEventBase {
  * Closed union of supported analytics payloads.
  *
  * @remarks
- * Per-domain facets contribute concrete event types here
- * (`RunResourceFactRecordedEvent`, `RunResourceStateChangedEvent`, …).
- * The generic envelope events (`RuntimeFactRecordedEvent`,
- * `RuntimeStateChangedEvent`) are retained for facets that still use
- * the shared envelope; future per-domain facets should publish their own
- * event types and stop relying on the envelope — see
- * `docs/STORAGE-FACET-AUTHORING-GUIDE.md`.
+ * Per-domain facets contribute concrete event types here. There is no
+ * shared envelope wire type — see `docs/STORAGE.md`.
  *
  * @public
  */
 export type AnalyticsEvent =
   | ProcessExecutionCompletedEvent
   | ProcessLifecycleChangedEvent
-  | QueueItemCompletedEvent
-  | QueueLifecycleChangedEvent
   | RunResourceFactRecordedEvent
   | RunResourceStateChangedEvent
   | RuntimeFactRecordedEvent
   | RuntimeStateChangedEvent
+  | QueueItemCompletedEvent
+  | QueueLifecycleChangedEvent
   | LogEntryRecordedEvent;
 
 /**

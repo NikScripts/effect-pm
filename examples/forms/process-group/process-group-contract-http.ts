@@ -1,3 +1,4 @@
+import { ProcessStorage } from "../../../src/ProcessStorage";
 /**
  * @module examples/forms/process-group/process-group-contract-http
  *
@@ -12,8 +13,7 @@ import {
   ProcessGroup,
   ProcessGroupContractSchema,
   ProcessManager,
-  ProcessStore,
-  QueueResource,
+    QueueResource,
 } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { requestJson } from "../../shared/process-group-http";
@@ -34,7 +34,7 @@ class ContractProcess extends Process.Service<ContractProcess>()("@examples/Cont
 const envLayer = Layer.mergeAll(
   ContractProcess.layer,
   EmailQueue.layer,
-  ProcessStore.layer, // in-memory analytics; use layerProcessStore for durable lifecycle history
+  ProcessStorage.layer, // in-memory analytics; use layerProcessStore for durable lifecycle history
   NodeHttpClient.layerUndici,
 );
 

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": minor
+"@nikscripts/effect-pm": major
 ---
 
 Replace the generic `ProcessStoreRuntime` facet with a per-domain
@@ -10,7 +10,7 @@ public vocabulary is now strictly per-domain — there is no shared generic
 fact / ref / state-change envelope in any public API.
 
 `ProcessStoreRunResource` is built via
-`ProcessStoreBuilder.Service<ProcessStoreRunResource>()(...)` — one canonical
+`ProcessStore.Service<ProcessStoreRunResource>()(...)` — one canonical
 class-style facet with a single `record` + `read` block. The class exposes:
 
 - Static **per-type** optional emitters:
@@ -20,11 +20,9 @@ class-style facet with a single `record` + `read` block. The class exposes:
   absent and persist when composed. Every static emitter is wrapped by a
   built-in `catchCause + logWarning` inside the builder so observation
   failures never reach the caller's success/error channel.
-- Reads via `yield* ProcessStoreRunResource`:
-  `.facts({ resourceId, runId?, types? })`,
-  `.stateHistory({ resourceId })`, `.latestState(resourceId)`,
-  `.runs(resourceId)` (paired started + ended history per run),
-  `.byRun(runId)` (all facts for one specific run).
+- Reads via `Effect.serviceOption(ProcessStoreRunResource)` then instance
+  methods (`.facts`, `.stateHistory`, `.latestState`, `.runs`, `.byRun`) —
+  never static methods on the class.
 - Layer accessors: `ProcessStoreRunResource.layerRuntimeStorage` (requires
   `RuntimeStorage`) and `ProcessStoreRunResource.layer` (in-memory).
 - Type accessors via declaration merging: `ProcessStoreRunResource.Type`
@@ -41,7 +39,8 @@ class-style facet with a single `record` + `read` block. The class exposes:
 
 - Remove the public `ProcessStoreRuntime` facet (`@nikscripts/effect-pm/store/Runtime`).
   Use `ProcessStoreRunResource` (`@nikscripts/effect-pm/store/RunResource`)
-  instead. `yield* ProcessStoreRunResource` then call the per-type reads.
+  instead. Read via `Effect.serviceOption(ProcessStoreRunResource)` and
+  service instance methods.
 - Remove the generic `RuntimeFact`, `RuntimeRef`, `RuntimeStateBase`,
   `RuntimeStateChange`, `RuntimeFactQuery`, `RuntimeStateHistoryQuery`,
   `RuntimeFactRecordedEvent`, `RuntimeStateChangedEvent` types from the
@@ -50,7 +49,7 @@ class-style facet with a single `record` + `read` block. The class exposes:
   `RunResourceStateHistoryQuery`, `RunResourceFactRecordedEvent`,
   `RunResourceStateChangedEvent` types exported from
   `@nikscripts/effect-pm/store/RunResource`. New domains must publish their
-  own concrete types — see [`docs/STORAGE-FACET-AUTHORING-GUIDE.md`](../docs/STORAGE-FACET-AUTHORING-GUIDE.md).
+  own concrete types — see [`docs/STORAGE.md`](../docs/STORAGE.md).
 - Remove `ProcessStore.runtime`, `ProcessStore.runResource`, and
   `RuntimeObserver` / `RuntimeObserver.layerFromProcessStore` /
   `RuntimeObserver.layerListeners` / `RuntimeObserver.publishFact` /
@@ -63,7 +62,7 @@ class-style facet with a single `record` + `read` block. The class exposes:
   fan-out pattern.
 - Remove `persistRuntimeObservation` from the public API. The same
   failure-isolation behavior is now built into every static emitter by the
-  `ProcessStoreBuilder` factory; consumers no longer wire it manually.
+  `ProcessStore.Service` factory; consumers no longer wire it manually.
 - Remove the public `ProcessStoreRuntimeApi` type alias and
   `RuntimeObservationListener` interface. Use `ProcessStoreRunResource.Type`
   instead, and declare the local listener bag shape inline in the consumer

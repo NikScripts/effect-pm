@@ -4,12 +4,12 @@
 
 ## Rules
 
-- **Stack:** `RuntimeStorage` (rows) + per-domain facets in `src/store/` (`@nikscripts/effect-pm/store/*`). `ProcessStore` = layer combiner only; legacy `ProcessStoreInterface` (`append`, `events`, `getProcessLifecycle`, …) is being removed.
+- **Stack:** `RuntimeStorage` (rows) + per-domain facets in `src/store/` (`@nikscripts/effect-pm/store/*`). `ProcessStore` = facet builder. `ProcessStorage` = combined built-in facet layers. The legacy monolith service is removed.
 - **One facet per domain.** Concrete wire event types. No public `RuntimeFact` / `runtime.fact.recorded` on new facets (`ProcessStoreQueueResource` still on envelope — fix listed below).
-- **Optional storage.** Domain code uses **static emitters** on facet classes (`ProcessStoreX.recordY(...)`). No-op without layer; write failures logged, never change caller success/error (`ProcessStoreBuilder` wraps emits).
-- **Reads:** static methods on facet classes (`ProcessStoreProcessExecution.executions(...)`) or `yield* Facet` for instance API. No `Effect.serviceOption(ProcessStore)` in domain modules.
+- **Optional storage.** Domain code uses **static emitters** on facet classes (`ProcessStoreX.recordY(...)`). No-op without layer; write failures logged, never change caller success/error (`ProcessStore` wraps emits).
+- **Reads:** `Effect.serviceOption(ProcessStoreX)` then `Option.match({ onNone, onSome: (store) => store.read(...) })` — never static read methods on the facet class. No `Effect.serviceOption(ProcessStore)` monolith in domain modules.
 - **No backward compat.** Delete legacy APIs; no `@deprecated` shims.
-- **Logs:** capture/relay → `@nikscripts/effect-pm/Logs`. Durable rows → `ProcessStoreLog` (`log.entry`). Not `ProcessStoreGroupLog`.
+- **Logs:** capture/relay → `@nikscripts/effect-pm/Logs`. Durable rows → `ProcessStoreLog` (`log.entry`), backed by `ProcessStore`. Not `ProcessStoreGroupLog`.
 - **Durable:** `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`. Do not add `ProcessStore.file` / NDJSON.
 
 Verify: `pnpm typecheck && pnpm test && pnpm lint && pnpm build`
@@ -20,11 +20,12 @@ Verify: `pnpm typecheck && pnpm test && pnpm lint && pnpm build`
 
 | Module | Facet | Work |
 |--------|-------|------|
-| `src/QueueResource.ts` | `ProcessStoreQueueResource` | **Now:** hand-rolled + `runtime.fact.recorded` envelope. **Target:** `ProcessStoreBuilder.Service` + concrete `queue.*` wire types; static emitters in `QueueResource.ts` (see Assignment 1). |
-| `src/store/log.ts` + `internal/manager/log*` | `ProcessStoreLog` | Hand-rolled. Assignment 2: builder migration or documented exception (relay shared state). |
-| `src/ProcessStore.ts` | combiner | Remove monolith `ProcessStoreInterface`; keep facet merge only. |
-| `src/internal/store/composite.ts` | — | Shrink when monolith goes. |
-| `src/storage/file.ts` | — | Delete (Assignment 4). |
+| `src/QueueResource.ts` | `ProcessStoreQueueResource` | **Now:** hand-rolled + `runtime.fact.recorded` envelope. **Target:** `ProcessStore.Service` + concrete `queue.*` wire types; static emitters in `QueueResource.ts` (see Assignment 1). |
+| `src/store/log.ts` + `internal/manager/log*` | `ProcessStoreLog` | Done — builder facet; relay uses static `record` / `recordBatch`; reads via `yield* ProcessStoreLog`. |
+| `src/ProcessStore.ts` | builder | Done — facet builder only. |
+| `src/ProcessStorage.ts` | combiner | Done — combined built-in facet layers. |
+| `src/internal/store/composite.ts` | — | Deleted. |
+| `src/storage/file.ts` | — | Deleted. |
 | `src/prisma/*` | — | Rebuild as `RuntimeStorage` adapter (Assignment 5). |
 | `src/storage/sqlite/index.ts` | — | Replace `Layer.orDie` with typed errors (Assignment 6). |
 | `src/RunResource.ts` | `ProcessStoreRunResource` | Done — reference |
@@ -33,18 +34,18 @@ Verify: `pnpm typecheck && pnpm test && pnpm lint && pnpm build`
 | `src/Polling.ts`, `src/ProcessSchedule.ts`, `src/HttpApiResource.ts` | — | Assignment 3: proposal only |
 | `src/HttpClientRunGate.ts`, `src/Resource.ts`, Control/*, `cli.ts` | — | No storage |
 
-### Tests / examples still on legacy monolith
+### Removed legacy monolith callers
 
 | Path | Use instead |
 |------|-------------|
-| `test/process-store.test.ts` | Facet APIs; drop `ProcessStore.file` block when file storage deleted |
-| `test/process-group.test.ts` | `ProcessStoreProcessLifecycle.lifecycle` |
-| `test/logs.test.ts`, `test/process-manager-log-pipeline.test.ts` | `ProcessStoreLog` |
-| `examples/forms/process-store/*` | Facet + `layerProcessStore` |
+| `test/process-store.test.ts` | Deleted; facet suites own storage behavior |
+| `test/process-group.test.ts` | Uses `ProcessStoreProcessLifecycle.lifecycle` |
+| `test/logs.test.ts`, `test/process-manager-log-pipeline.test.ts` | Use `yield* ProcessStoreLog` for reads |
+| `examples/forms/process-store/*` | Use facets + `ProcessStorage` / `layerProcessStore` |
 
 ### OK for now (combiner host only)
 
-Anything that only `Effect.provide(ProcessStore.layer)` and does not call `store.append` / `getProcessLifecycle` / `getQueue*`.
+Anything that only `Effect.provide(ProcessStorage.layer)` and resolves facet services.
 
 ---
 
@@ -58,7 +59,8 @@ Anything that only `Effect.provide(ProcessStore.layer)` and does not call `store
 | `ProcessStoreProcessLifecycle` | `store/ProcessLifecycle` | `src/store/processLifecycle.ts` |
 | `ProcessStoreProcessGroup` | `store/ProcessGroup` | `src/store/processGroup.ts` |
 | `ProcessStoreProcessExecution` | `store/ProcessExecution` | `src/store/processExecution.ts` |
-| `ProcessStore` | `ProcessStore` | combiner + legacy monolith |
+| `ProcessStore` | `ProcessStore` | facet builder |
+| `ProcessStorage` | `ProcessStorage` | combined built-in facet layers |
 | `RuntimeStorage` | `RuntimeStorage` | `src/RuntimeStorage.ts` |
 
 Internal only: `src/internal/store/{spine,codec,composite,service,factEnvelope}.ts`
@@ -73,11 +75,11 @@ Import `store/QueueResource` for the **storage facet**, not `@nikscripts/effect-
 
 | `type` | Writer | Reader |
 |--------|--------|--------|
-| `process.execution.completed` | `ProcessStoreProcessExecution.recordCompleted` / `recordFailed` / `recordInterrupted` | `.executions` |
-| `process.lifecycle.changed` | `ProcessStoreProcessLifecycle.lifecycleChanged` or `ProcessStoreProcessGroup.recordMember*` | `.lifecycle` / `.lifecycleByGroup` |
-| `run-resource.fact.recorded` | `ProcessStoreRunResource.recordRun*` | `.facts`, `.runs`, `.byRun` |
-| `run-resource.state.changed` | `ProcessStoreRunResource.recordStateChange` | `.stateHistory`, `.latestState` |
-| `log.entry` | `ProcessStoreLog` via relay | `.load`, `.query` |
+| `process.execution.completed` | static `recordCompleted` / `recordFailed` / `recordInterrupted` | `yield* ProcessStoreProcessExecution` → `.executions` |
+| `process.lifecycle.changed` | static `lifecycleChanged` / `recordMember*` | `yield* ProcessStoreProcessLifecycle` / `ProcessStoreProcessGroup` → read methods |
+| `run-resource.fact.recorded` | static `recordRun*` | `yield* ProcessStoreRunResource` → `.facts`, `.runs`, `.byRun` |
+| `run-resource.state.changed` | static `recordStateChange` | `yield* ProcessStoreRunResource` → `.stateHistory`, `.latestState` |
+| `log.entry` | static `record` / `recordBatch` (relay) | `yield* ProcessStoreLog` → `.load`, `.query` |
 | `runtime.fact.recorded` | `ProcessStoreQueueResource` only (legacy) | `records` — remove |
 | `queue.item.completed`, `queue.lifecycle.changed` | monolith `append` only | monolith `getQueue*` — remove |
 
@@ -90,49 +92,55 @@ import { layerProcessStore } from "@nikscripts/effect-pm/storage/sqlite";
 import { ProcessStoreProcessExecution } from "@nikscripts/effect-pm/store/ProcessExecution";
 
 yield* ProcessStoreProcessExecution.recordCompleted(input);
-const rows = yield* ProcessStoreProcessExecution.executions({ processId: "billing/sync" });
+
+const rows = yield* Effect.serviceOption(ProcessStoreProcessExecution).pipe(
+  Effect.flatMap(
+    Option.match({
+      onNone: () => Effect.succeed([]),
+      onSome: (store) => store.executions({ processId: "billing/sync" }),
+    }),
+  ),
+);
 ```
 
 ```ts
-import { ProcessStore } from "@nikscripts/effect-pm";
+import { ProcessStorage } from "@nikscripts/effect-pm";
 
-Effect.provide(program, ProcessStore.layer); // in-memory, all facets
+Effect.provide(program, ProcessStorage.layer); // in-memory, all facets
 Effect.provide(program, layerProcessStore({ filename: ".effect-pm/data.sqlite" }));
 ```
 
 ---
 
-## Authoring a facet (`ProcessStoreBuilder.Service`)
+## Authoring a facet (`ProcessStore.Service`)
 
 Template: `src/store/runResource.ts`, tests: `test/process-store-run-resource-facet.test.ts`.
 
 ```ts
-export class ProcessStoreMyDomain extends ProcessStoreBuilder.Service<ProcessStoreMyDomain>()(
+export class ProcessStoreMyDomain extends ProcessStore.Service<ProcessStoreMyDomain>()(
   "@nikscripts/effect-pm/store/myDomain/ProcessStoreMyDomain",
-  ProcessStoreBuilder.record((s) => ({
+  ProcessStore.record((s) => ({
     recordThing: (fact: MyFact) => s.append(toWireEvent(fact)),
   })),
-  ProcessStoreBuilder.read((s) => ({
+  ProcessStore.read((s) => ({
     facts: (query?: MyQuery) =>
       s.events(myStoreQuery(query)).pipe(Effect.map(project)),
   })),
 ) {}
 
 export declare namespace ProcessStoreMyDomain {
-  export type Type = ProcessStoreBuilder.Service.Type<typeof ProcessStoreMyDomain>;
-  export type EmitType = ProcessStoreBuilder.Service.EmitType<typeof ProcessStoreMyDomain>;
+  export type Type = ProcessStore.Service.Type<typeof ProcessStoreMyDomain>;
+  export type EmitType = ProcessStore.Service.EmitType<typeof ProcessStoreMyDomain>;
 }
 ```
 
-Builder gives: shared spine per layer, static emitters (optional + failure-isolated), static readers (stub when layer absent), `layerRuntimeStorage`, `layer`.
+Builder gives: shared spine per layer, static emitters only (optional + failure-isolated), reads via `Effect.serviceOption` on the facet tag + service methods, `layerRuntimeStorage`, `layer`.
 
-**Cut-over checklist:** domain types → wire events in `ProcessStoreEvent.ts` → codec/spine → facet file → feature module static emitters → `ProcessStore.layerRuntimeStorage` merge + `package.json` subpath → delete legacy → conformance test.
+**Cut-over checklist:** domain types → wire events in `ProcessStoreEvent.ts` → codec/spine → facet file → feature module static emitters → `ProcessStorage.layerRuntimeStorage` merge + `package.json` subpath → conformance test.
 
 **Do not:** public envelope types; `store.append` from apps; hand-roll `serviceOption` in feature modules; `ProcessStore.<domain>.*` namespaces on monolith.
 
-**When builder is not enough:** shared per-layer state (e.g. log relay buffer). Either defer streaming/`live()` or hand-roll `Context.Service` and document why. `ProcessStoreLog` is the open case (Assignment 2).
-
-**Adapters:** implement `RuntimeStorageService` in `RuntimeStorage.ts`; wire via `ProcessStore.layerRuntimeStorage` or `layerProcessStore`. Do not implement `ProcessStoreInterface` for new backends.
+**Adapters:** implement `RuntimeStorageService` in `RuntimeStorage.ts`; wire via `ProcessStorage.layerRuntimeStorage` or `layerProcessStore`. Do not implement domain APIs in adapters.
 
 ---
 
@@ -156,9 +164,13 @@ Verify: pnpm typecheck && pnpm test && pnpm lint && pnpm build
 
 **Done when:** builder facet; static emitters from `QueueResource`; no `serviceOption(ProcessStoreQueueResource)`; conformance tests; legacy SQLite envelope rows still decode; changeset for breaking wire rename.
 
-### 2 — `ProcessStoreLog`: builder or documented exception
+### 2 — `ProcessStoreLog` → `ProcessStore.Service` — done
 
-**Phase 1 only:** `docs/storage-proposals/log-builder.md` — option A extend builder with shared `make` context vs B keep hand-rolled + shared emitter helper. No `src/` edits.
+**Goal.** Replace hand-rolled `Context.Service` in `src/store/log.ts` with `ProcessStore.Service` (same pattern as `ProcessStoreRunResource`). Wire stays `log.entry`.
+
+**Files:** `src/store/log.ts`, `src/internal/manager/logPersistRelay.ts`, `src/internal/manager/logHistory.ts`, `src/internal/manager/logQuery.ts`, `test/logs.test.ts`, `test/process-manager-log-pipeline.test.ts`, new `test/process-store-log-facet.test.ts` (mirror run-resource conformance).
+
+**Done when:** `ProcessStoreLog extends ProcessStore.Service`; static `record` / `recordBatch` only; reads via `yield* ProcessStoreLog`; relay uses static emitters; conformance tests pass.
 
 ### 3 — Telemetry proposals (`Polling`, `ProcessSchedule`, `HttpApiResource`)
 

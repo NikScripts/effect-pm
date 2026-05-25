@@ -26,7 +26,7 @@ import type {
   TypedProcessGroup,
 } from "./ProcessGroup";
 import type { ProcessManagerGroupConfigItem } from "./ProcessManager";
-import type { ProcessStore } from "./ProcessStore";
+import type { ProcessStorage } from "./ProcessStorage";
 import {
   ControlRouter,
   ControlTransportError,
@@ -140,11 +140,11 @@ function startControlService<
 ): Effect.Effect<
   void,
   ControlTransportError,
-  Scope.Scope | ProcessGroupEntryRequirements<Entries> | ProcessStore
+  Scope.Scope | ProcessGroupEntryRequirements<Entries> | ProcessStorage.Services
 >;
 function startControlService(
   options: TypedControlServiceOptions<string, readonly ProcessGroupEntry[], unknown>,
-): Effect.Effect<void, ControlTransportError, Scope.Scope | unknown | ProcessStore> {
+): Effect.Effect<void, ControlTransportError, Scope.Scope | unknown | ProcessStorage.Services> {
   return ControlTransportHttp.server({
     port: options.port,
   }).serve.pipe(
@@ -161,7 +161,7 @@ const controlServiceLayerFromValue = <
 ): Layer.Layer<
   never,
   ControlTransportError,
-  ControlTransportServer | ProcessGroupEntryRequirements<Entries> | ProcessStore
+  ControlTransportServer | ProcessGroupEntryRequirements<Entries> | ProcessStorage.Services
 > =>
   scopedDiscard(
     serveWithTransport.pipe(Effect.provide(ControlRouter.layer(group))),
@@ -177,7 +177,7 @@ const controlServiceLayerFromGroup = <
 ): Layer.Layer<
   never,
   ControlTransportError,
-  ControlTransportServer | Self | ProcessGroupEntryRequirements<Entries> | ProcessStore
+  ControlTransportServer | Self | ProcessGroupEntryRequirements<Entries> | ProcessStorage.Services
 > =>
   scopedDiscard(
     serveWithTransport.pipe(Effect.provide(ControlRouter.layerFromGroup(group))),
@@ -194,7 +194,7 @@ const controlServiceHttpLayer = <
 ): Layer.Layer<
   never,
   ControlTransportError,
-  Self | ProcessGroupEntryRequirements<Entries> | ProcessStore
+  Self | ProcessGroupEntryRequirements<Entries> | ProcessStorage.Services
 > =>
   controlServiceLayerFromGroup(group).pipe(
     Layer.provide(ControlTransportHttp.serverLayer(options)),
@@ -221,7 +221,7 @@ function controlServiceLayer<
 ): Layer.Layer<
   never,
   ControlTransportError,
-  ControlTransportServer | ProcessGroupEntryRequirements<Entries> | ProcessStore
+  ControlTransportServer | ProcessGroupEntryRequirements<Entries> | ProcessStorage.Services
 >;
 function controlServiceLayer<
   Self,
@@ -232,7 +232,7 @@ function controlServiceLayer<
 ): Layer.Layer<
   never,
   ControlTransportError,
-  ControlTransportServer | Self | ProcessGroupEntryRequirements<Entries> | ProcessStore
+  ControlTransportServer | Self | ProcessGroupEntryRequirements<Entries> | ProcessStorage.Services
 >;
 function controlServiceLayer(
   group:
@@ -241,7 +241,7 @@ function controlServiceLayer(
 ): Layer.Layer<
   never,
   ControlTransportError,
-  ControlTransportServer | unknown | ProcessStore
+  ControlTransportServer | unknown | ProcessStorage.Services
 > {
   return isProcessGroupServiceDefinition(group)
     ? controlServiceLayerFromGroup(group)

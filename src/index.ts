@@ -48,12 +48,12 @@
  * Structured log persistence: `ProcessStore.Log` (also exported as the
  * dedicated `ProcessStoreLog` facet) on the composed store. Capture/relay
  * pipeline: `@nikscripts/effect-pm/Logs`.
- * Queue analytics: optional `ProcessStore.QueueResource` facet (internal service, composed by `ProcessStore.layer`).
+ * Queue analytics: optional `ProcessStore.QueueResource` facet (internal service, composed by `ProcessStorage.layer`).
  * Storage is `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite` or other `RuntimeStorage` + `ProcessStore` composition.
  *
  * Storage adapters use lower-case subpaths:
  * **`@nikscripts/effect-pm/storage/sqlite`** and **`@nikscripts/effect-pm/storage/prisma`**
- * for durable runtime records. **`@nikscripts/effect-pm/storage/file`** is legacy-only.
+ * for durable runtime records.
  * The legacy
  * **`@nikscripts/effect-pm/prisma`** subpath remains available for
  * compatibility.
@@ -101,7 +101,7 @@ export {
   type HttpApiResourceLayerEffectConfig,
 } from "./HttpApiResource";
 export { Resource } from "./Resource";
-export { ProcessStoreBuilder } from "./ProcessStoreBuilder";
+export { ProcessStorage } from "./ProcessStorage";
 export { ControlService } from "./ControlService";
 export {
   ControlRouter,
@@ -293,7 +293,6 @@ export {
   type RunResourceStateChangedEvent,
   type AnalyticsEvent,
   type ProcessStoreLogApi,
-  type ProcessStoreInterface,
   type ProcessStoreWriteError,
 } from "./ProcessStore";
 

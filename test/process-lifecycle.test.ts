@@ -1,10 +1,10 @@
+import { ProcessStorage } from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
-import { ProcessStore } from "../src/ProcessStore"
 import { ProcessStoreProcessLifecycle } from "../src/store/processLifecycle"
 
 describe("ProcessStoreProcessLifecycle", () => {
-  it.effect("lifecycleChanged + lifecycle round-trip via ProcessStore.layer", () =>
+  it.effect("lifecycleChanged + lifecycle round-trip via ProcessStorage.layer", () =>
     Effect.gen(function* () {
       yield* ProcessStoreProcessLifecycle.lifecycleChanged({
         processId: "billing/sync",
@@ -18,7 +18,7 @@ describe("ProcessStoreProcessLifecycle", () => {
       const lifecycle = yield* ProcessStoreProcessLifecycle
       const rows = yield* lifecycle.lifecycle("billing/sync")
       expect(rows.map((row) => row.lifecycle.tag)).toEqual(["Stopped", "Started"])
-    }).pipe(Effect.provide(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStorage.layer)),
   )
 
   it.effect("latestLifecycleByProcess returns newest tag per process id", () =>
@@ -32,7 +32,7 @@ describe("ProcessStoreProcessLifecycle", () => {
       expect(latest.get("p1")).toBe("Stopped")
       expect(latest.get("p2")).toBe("Started")
       expect(latest.has("missing")).toBe(false)
-    }).pipe(Effect.provide(ProcessStore.layer)),
+    }).pipe(Effect.provide(ProcessStorage.layer)),
   )
 
   it.live("static lifecycleChanged no-ops when the facet layer is absent", () =>
