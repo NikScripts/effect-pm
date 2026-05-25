@@ -58,16 +58,16 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 
 | File | Teaches |
 |------|---------|
-| [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) | `ProcessStore.layer` / `memory` + `events(query)` |
-| [`forms/process-store/process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) | `ProcessStore.events(query)` + `ProcessStore.layerRuntimeStorage` + SQLite adapter |
+| [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) | `ProcessStorage.layer` + lifecycle facet reads |
+| [`forms/process-store/process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) | `layerProcessStore` + facet reads on SQLite |
 | [`forms/process-store/process-store-prisma-structural-client.ts`](./forms/process-store/process-store-prisma-structural-client.ts) | Placeholder showing Prisma adapter unavailability pending RuntimeStorage rewrite |
 
 Storage options:
 
-- `ProcessStore.layer` / `ProcessStore.memory` — in-memory analytics for tests and demos.
-- `ProcessStore.layerRuntimeStorage` + `@nikscripts/effect-pm/storage/sqlite` — durable local SQLite runtime records (preferred).
-- `ProcessStoreLog` (also exposed as `ProcessStore.Log` on the composed store) — structured log history (`record`, `load`, `query`); `@nikscripts/effect-pm/Logs` for capture/relay in group children.
-- `ProcessStore.QueueResource` — queue semantic storage helpers.
+- `ProcessStorage.layer` — in-memory built-in storage facets for tests and demos.
+- `ProcessStorage.layerRuntimeStorage` + `@nikscripts/effect-pm/storage/sqlite` — durable local SQLite runtime records.
+- `ProcessStoreLog` — structured log history (`record`, `load`, `query`); `@nikscripts/effect-pm/Logs` handles capture/relay in group children.
+- `ProcessStoreQueueResource` — queue semantic storage facet.
 - `PrismaProcessStore` from `@nikscripts/effect-pm/storage/prisma` — placeholder for the upcoming RuntimeStorage-backed Prisma rewrite.
 
 ### Schedule

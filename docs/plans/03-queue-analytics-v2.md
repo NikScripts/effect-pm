@@ -17,7 +17,7 @@ custom persistence hook to learn what happened inside a queue.
 Queue item and lifecycle events exist, and `QueueResource` writes some of them
 when a store is available. The read side is incomplete:
 
-- `ProcessStoreInterface` has process read APIs, but no queue read APIs.
+- Queue storage has moved to per-domain facets; `ProcessStoreInterface` no longer exists.
 - Queue item events do not yet capture the full lifecycle.
 - There are no first-class queue projections or summaries.
 - There is no event stream for live dashboards.
@@ -115,7 +115,7 @@ events should describe what the runtime observed, not what hooks chose to do.
 
 ## Graduation criteria
 
-- Queue read APIs exist on `ProcessStoreInterface`.
+- Queue read APIs exist on `ProcessStoreQueueResource`.
 - Memory and Prisma stores implement queue reads.
 - Queue events cover enqueue, start, completion, retry, exhaustion, and
   lifecycle transitions.

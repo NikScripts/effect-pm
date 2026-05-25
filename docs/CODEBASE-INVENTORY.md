@@ -8,9 +8,9 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ## Cross-cutting (how pieces combine)
 
-- **Effect `Layer`** — polling, schedule, queues, ProcessStore (with the `ProcessStoreRunResource` / `ProcessStoreLog` / `ProcessStoreQueueResource` / `ProcessStoreProcessLifecycle` / `ProcessStoreProcessGroup` / `ProcessStoreProcessExecution` facets), platform (`FileSystem`/`Path`, `HttpClient`) merged at app root; `Process.make` can inline polling/schedule into `process.effect` so fork-time `R` excludes those tags when merged.
+- **Effect `Layer`** — polling, schedule, queues, storage facets (`ProcessStoreRunResource`, `ProcessStoreLog`, `ProcessStoreQueueResource`, `ProcessStoreProcessLifecycle`, `ProcessStoreProcessGroup`, `ProcessStoreProcessExecution`), platform (`FileSystem`/`Path`, `HttpClient`) merged at app root; `Process.make` can inline polling/schedule into `process.effect` so fork-time `R` excludes those tags when merged.
 - **`Effect.scoped`** — `QueueResource.make`, `ControlService.make`, remote layers acquire/release with scope.
-- **`ProcessStore` optional** — when present in env, processes/queues/resources append analytics; when absent, behavior continues without failing.
+- **Storage optional** — when relevant facets are present in env, processes/queues/resources append analytics; when absent, behavior continues without failing.
 - **Canonical ids** — slash-separated strings (`@scope/Segment/ServiceName`); CLI/remote accept normalized kebab suffix aliases; ambiguous suffixes error with candidate list.
 - **Contract-first control** — each process/queue entry declares which controls exist; HTTP and CLI check locally before mutating; remote `verifyContract` compares local contract to `GET /contract`.
 - **Three lifetimes to keep separate** — (1) group constructed, (2) process driver **started** (`start`/`startAll`), (3) schedule **armed** (entries cover “now”) vs instance **ticking** (polling between user `effect` runs).
@@ -173,7 +173,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 ### Handle members
 
 - **`name`**, **`type`**, **`effect`**, **`getStatus(dateRange?)`**, **`runImmediately()`**.
-- **`effect` requirements** — `R` after inline layer merge, plus **`ProcessStore` optional** (analytics when present).
+- **`effect` requirements** — `R` after inline layer merge, plus optional storage facets (analytics when present).
 - **`getStatus`** — returns **`ProcessDetails`**; uses store for execution history when available.
 - **`runImmediately`** — one tracked tick **without** requiring armed schedule; separate from supervisor loop.
 
@@ -190,7 +190,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 - **Outer loop** — schedule driver: waits for arm state / schedule changes.
 - **Inner loop** (per spawned instance while armed) — `awaitNextTick` → user `effect` → polling `afterTick`; instance ends when entry window closes or stop check fails.
-- **Failures in user `effect`** — logged; **`process.execution.completed`** with `failed` when `ProcessStore` present.
+- **Failures in user `effect`** — logged; **`process.execution.completed`** with `failed` when storage facets are present.
 - **Execution record fields** — `scheduleKey`, `startedAt`, `completedAt`, `durationMs`, `status` (`completed` | `failed` | `interrupted`), optional `error`, `isStartupRun`.
 
 ### Typing helpers
@@ -258,7 +258,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 - **`QueueDetails`** — name, size `{ high, normal, low, total }`, completed count.
 - **`GroupHealth`** — healthy flag, processes running/stopped counts, queues active count.
 
-### Process lifecycle store events (when ProcessStore present)
+### Process lifecycle store events (when storage facets are present)
 
 **Tags on `process.lifecycle.changed`:** `Started`, `Stopped`, `Restarted`, `Errored`, `Recovered`, `Disabled`, `Enabled`.
 
@@ -489,7 +489,7 @@ and removes stale run state when the process no longer exists.
 - **`QueueShutdownError`** — enqueue after shutdown (often logged/dropped in practice).
 - **`QueueItemValidationError`**, **`QueueBatchValidationError`** — schema path.
 
-### ProcessStore events (when store in env)
+### Queue store events (when storage facets are present)
 
 - **`queue.item.completed`** — `status`: `completed` | `failed` | `retried` | `exhausted`; priority, durationMs, attempts, optional error.
 - **`queue.lifecycle.changed`** — `Started`, `Paused`, `Resumed`, `Shutdown`, `Cleared` (+ optional `itemsCleared`).
@@ -581,26 +581,30 @@ and removes stale run state when the process no longer exists.
 
 ---
 
-## ProcessStore
+## ProcessStore / ProcessStorage
 
-**What it is:** Runtime record storage facade; default in-memory uses `RuntimeStorage`, with optional file / Prisma adapters.
+**What it is:** `ProcessStore` is the facet builder. `ProcessStorage` composes
+the built-in facets over `RuntimeStorage`.
 
-### Service acquisition forms
+### Layer forms
 
-- **`yield* ProcessStore`** — default tag instance.
-- **`ProcessStore.layer`** — in-memory layer.
-- **`ProcessStore.memory`** — raw `Effect<ProcessStoreInterface>`.
-- **`ProcessStore.file(path)`** / **`ProcessStore.fileLayer(path)`** — NDJSON append-only local file.
-- **`@nikscripts/effect-pm/storage/file`** — `file`, `fileLayer`, `FileProcessStore` facade.
-- **`@nikscripts/effect-pm/storage/sqlite`** — `SQLiteRuntimeStorage` durable `RuntimeStorageService` via `@effect/sql-sqlite-node` / `SqlClient`.
-- **`PrismaProcessStore.layer({ client })`** / **`layerFromContext`** / **`make(client)`** — intentionally unavailable until Prisma is rebuilt as a `RuntimeStorage` adapter.
-- **`@nikscripts/effect-pm/storage/prisma`** or legacy **`@nikscripts/effect-pm/prisma`** — placeholder surface for the upcoming rewrite.
+- **`ProcessStorage.layer`** — all built-in facets + in-memory `RuntimeStorage`.
+- **`ProcessStorage.layerRuntimeStorage`** — all built-in facets over an injected
+  `RuntimeStorage`.
+- **`@nikscripts/effect-pm/storage/sqlite`** — `SQLiteRuntimeStorage` durable
+  `RuntimeStorageService` and `layerProcessStore({ filename })`.
+- **`@nikscripts/effect-pm/storage/prisma`** or legacy **`@nikscripts/effect-pm/prisma`** — placeholder surface for the upcoming `RuntimeStorage` adapter rewrite.
 
-### `ProcessStoreInterface` write/read
+### Facet write/read
 
-**Write:** `append`, `appendBatch`, plus semantic module helpers such as `ProcessStore.QueueResource`. Writes can fail with `ProcessStoreDuplicateRecordError` / `ProcessStoreReadonlyRecordError`; runtime modules that treat storage as best-effort log and swallow those errors explicitly.
+**Write:** domain code calls static emitters such as
+`ProcessStoreProcessExecution.recordCompleted(...)` or
+`ProcessStoreRunResource.recordRunStarted(...)`. Static emitters no-op when the
+facet is absent and log write failures instead of changing caller behavior.
 
-**Read:** `records(query?)`, `events(query?)`, `getProcessExecutions(processId, opts?)`, `getProcessLifecycle`, `getQueueItemCompletions`, `getQueueLifecycle`.
+**Read:** acquire the owning facet (`yield* ProcessStoreLog`,
+`yield* ProcessStoreProcessExecution`, `yield* ProcessStoreRunResource`, etc.)
+and call its domain read methods.
 
 ### Query types
 
@@ -630,24 +634,20 @@ and removes stale run state when the process no longer exists.
 - **`runs(resourceId)`** — paired started + ended history per run.
 - **`byRun(runId)`** — all facts for one specific run, ordered.
 
-### File backend behavior
+### Adapter behavior
 
-- One NDJSON line per event; **malformed lines skipped** on read (don't poison file).
-
-### Prisma backend behavior
-
-- **`create` / `createMany`** append; reads filter in DB; decode failures **skipped** (best-effort analytics).
-- **Structural client** — no hard dependency on `@prisma/client` in adapter package code.
+- SQLite stores normalized `RuntimeRecord` rows.
+- Prisma is intentionally unavailable until rebuilt as a `RuntimeStorage` adapter.
 
 ### Codec (storage row mapping)
 
-- **`encodeEvent`**, **`decodeEventRow`**, **`ProcessStoreEventDecodeError`** — shared memory/file/prisma.
+- **`encodeEvent`**, **`decodeEventRow`**, **`ProcessStoreEventDecodeError`** — shared runtime-row event codec.
 - Prisma alias **`PrismaProcessStoreDecodeError`**.
 
 ### Automatic writers (no extra config)
 
-- **Process** supervisor — executions + lifecycle when store present.
-- **QueueResource** — item + lifecycle events when store present.
+- **Process** supervisor — executions + lifecycle when relevant facets are present.
+- **QueueResource** — item + lifecycle events when relevant facets are present.
 - **`ProcessStoreRunResource` facet** — RunResource facts/state persisted as analytics events through the per-type static optional emitters on the tag.
 
 ### Remote
@@ -673,7 +673,7 @@ and removes stale run state when the process no longer exists.
 
 - **`ProcessStoreRunResource.layerRuntimeStorage`** — facet on top of injected `RuntimeStorage`.
 - **`ProcessStoreRunResource.layer`** — facet + in-memory `RuntimeStorage` (dev/test).
-- Composed by `ProcessStore.layerRuntimeStorage` and `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`.
+- Composed by `ProcessStorage.layerRuntimeStorage` and `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`.
 
 ### In-process listeners (no durability)
 
@@ -750,7 +750,7 @@ Provide a custom service whose shape matches **`ProcessStoreRunResource.Type`** 
 ## Package import surfaces (for doc “where do I import X”)
 
 - **Root** `@nikscripts/effect-pm` — barrel in §index exports (Process, Polling, Schedule, Group, Queue, Run, Http*, Store, Manager, Control, CLI, disarmed helpers, types).
-- **Subpaths** — `/Process`, `/QueueResource`, `/ProcessGroup`, `/ProcessStore`, `/ProcessManager`, `/ControlService`, `/storage/file`, `/storage/sqlite`, `/storage/prisma`, `/prisma` (legacy).
+- **Subpaths** — `/Process`, `/QueueResource`, `/ProcessGroup`, `/ProcessStore`, `/ProcessStorage`, `/ProcessManager`, `/ControlService`, `/storage/sqlite`, `/storage/prisma`, `/prisma` (legacy Prisma compatibility).
 
 ---
 
@@ -758,7 +758,7 @@ Provide a custom service whose shape matches **`ProcessStoreRunResource.Type`** 
 
 Use plans for intended design; verify against `src/` before teaching as shipped.
 
-- **`RuntimeStorage`** generic port under ProcessStore.
+- **`RuntimeStorage`** generic port under store facets.
 - **Queue item schema in group contract** → remote enqueue / handoff / release.
 - **Queue analytics v2** — richer projections.
 - **Schedule identity + persistence** — DB sync, stable ids, removal cleanup.

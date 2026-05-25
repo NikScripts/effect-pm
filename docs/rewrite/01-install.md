@@ -41,18 +41,18 @@ Subpaths such as `@nikscripts/effect-pm/Process` exist for focused imports; the 
 
 If you already use Effect in production, enable [**@effect/language-service**](https://www.npmjs.com/package/@effect/language-service) in `tsconfig.json` the same way the [Effect docs](https://effect.website/) describe. It is recommended but not required to follow this guide.
 
-## Optional: `ProcessStore`
+## Optional: `ProcessStorage`
 
-Processes can append **execution** and **lifecycle** events when a `ProcessStore` service is in the environment. Without it, processes still run; history is simply not persisted.
+Processes can append **execution** and **lifecycle** events when storage facets are in the environment. Without them, processes still run; history is simply not persisted.
 
 ```typescript
-import { ProcessStore } from "@nikscripts/effect-pm";
+import { ProcessStorage } from "@nikscripts/effect-pm";
 
 // Provide at your application root, for example:
-ProcessStore.layer
+ProcessStorage.layer
 ```
 
-File-backed storage is covered in later pages. Prisma storage will return as a
+SQLite storage is covered in later pages. Prisma storage will return as a
 RuntimeStorage adapter.
 
 ## Optional: Prisma

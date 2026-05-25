@@ -14,8 +14,6 @@ This document helps you upgrade code written against commit **`26b262b`** (`test
 | Operators | [process-manager.md](./process-manager.md) |
 | HTTP server | [control-plane.md](./control-plane.md) |
 
-For a branch-merge narrative aimed at `feature/runtime-foundation`, see [`docs/MERGE-runtime-foundation-vs-main.md`](../MERGE-runtime-foundation-vs-main.md). That file predates some `main` fixes; **this guide and the guides above supersede it** where they disagree (for example **`POST /control` is still the ProcessManager transport** alongside REST).
-
 ---
 
 ## Summary
@@ -27,7 +25,7 @@ Between **`26b262b`** and **`main`** (~45 commits), the runtime foundation lande
 3. **QueueResource** — removed `persist` / `refill` / `onEmpty`; unified lifecycle hooks; positional `Service` / `layer` / `make`; `releaseEncoded` and pending release controls.
 4. **ProcessGroup** — optional **third argument** for ProcessManager endpoint config (`configItems`).
 5. **ProcessManager** — `LocalRuntime`, `Endpoint.module`, `group-start` / `group-stop`, richer CLI; endpoint config on the group instead of only ad hoc `Endpoint()(group, { baseUrl })`.
-6. **Storage** — `RuntimeStorage` contract, SQLite adapter, ProcessStore backed by semantic runtime records and query APIs.
+6. **Storage** — `RuntimeStorage` contract, SQLite adapter, `ProcessStore` builder, `ProcessStorage` layers, and per-domain facet query APIs.
 7. **Control** — protocol **envelopes** on `POST /control` (REST routes unchanged in role).
 8. **Toolchain** — Effect `^4.0.0-beta.65` → `^4.0.0-beta.69`.
 
@@ -46,7 +44,7 @@ Use this as a PR checklist after bumping the package.
 - [ ] Optionally adopt **`QueueResource.Service(id, effect, options?)`** instead of `(id, { effect, … })` only.
 - [ ] Add **`ProcessGroup.Service(..., configItems?)`** (or `make` third arg) if you use **`ProcessManager.cli`** with **`group-start`** / **`--target`**.
 - [ ] Introduce **`ProcessManager.LocalRuntime`** + **`Endpoint.module`** for module launch, or keep **`Endpoint.http`** for fixed URLs.
-- [ ] Wire **`RuntimeStorage`** / **`ProcessStore`** if you relied on in-memory-only analytics or new query surfaces.
+- [ ] Wire **`RuntimeStorage`** / **`ProcessStorage`** if you relied on in-memory-only analytics or new query surfaces.
 - [ ] Run **`ProcessManager.cli`** `verify` after deploy; fix contract drift.
 - [ ] Re-run **`pnpm check`** / tests; fix **`ProcessMakeInvalidLayerArgument`** at compile time where positional args are wrong.
 
@@ -162,7 +160,7 @@ At **`26b262b`** the queue config and handle still supported **refill-oriented**
 
 | Removed / renamed | Replacement |
 | --- | --- |
-| **`persist`** on enqueue | Use normal enqueue + your own storage, or **ProcessStore** / **RuntimeStorage** records |
+| **`persist`** on enqueue | Use normal enqueue + your own storage, or queue storage facet / **`RuntimeStorage`** records |
 | **`refill`** config + **`handle.refill()`** | **`onDrained`** (empty after work or **`clear`**, not cold-start idle) and/or **`onEnqueued`** |
 | **`onEmpty`** (`Effect` hook) | **`onDrained`** with event + controls |
 | **`onEnqueue`** | **`onEnqueued`** (batch + controls) |
@@ -305,13 +303,13 @@ REST handlers and **`/control`** share the same protocol router. See [control-pl
 
 ## ProcessStore and RuntimeStorage
 
-At **`26b262b`** there was **no** `src/RuntimeStorage.ts`; ProcessStore already emitted some **runtime.fact** events, but the **storage adapter boundary**, **SQLite adapter**, **semantic queue/process records**, and **query options** (`QueryOpts`, fact/history queries) landed after that commit.
+At **`26b262b`** there was **no** `src/RuntimeStorage.ts`; storage already emitted some **runtime.fact** events, but the **storage adapter boundary**, **SQLite adapter**, **semantic queue/process facets**, and **query options** (`QueryOpts`, fact/history queries) landed after that commit.
 
 **Migration steps:**
 
-1. If you only used **`ProcessStore.layer`** in memory — no change required; you gain richer records automatically when store is provided.
-2. For durable analytics / audit — provide **`RuntimeStorage`** (file or SQLite adapter under `src/storage/sqlite/`) and compose **`ProcessStore`** as documented in package exports.
-3. Handle **`ProcessStore` write errors** surfaced to callers (`3cb585e`) where you previously ignored silent drops.
+1. Replace **`ProcessStore.layer`** with **`ProcessStorage.layer`** for in-memory storage facets.
+2. For durable analytics / audit, use **`layerProcessStore({ filename })`** from `@nikscripts/effect-pm/storage/sqlite`.
+3. Read through the relevant facet (`ProcessStoreProcessExecution`, `ProcessStoreProcessLifecycle`, `ProcessStoreRunResource`, `ProcessStoreLog`, etc.) instead of the removed monolith service.
 
 ---
 

@@ -18,7 +18,7 @@ Implemented relay behavior belongs in regular docs (`docs/guides/process-manager
 | Plan | Role |
 | ---- | ---- |
 | [07](./07-process-manager.md) | Endpoint config, `watch` / `logs`, multi-host PM; item 9 → log transport adapters. |
-| [01](./01-process-store-service.md) / [10](./10-process-store-phase-one.md) / [11](./11-runtime-state-hooks-and-config.md) | Append + `events(query)` for persisted log rows (no ad hoc DB API). |
+| [STORAGE](../STORAGE.md) / [11](./11-runtime-state-hooks-and-config.md) | Persisted log rows through `ProcessStoreLog` and `RuntimeStorage` (no ad hoc DB API). |
 | [05](./05-control-service-v2.md) | ProcessStore **lifecycle** SSE — separate from group **application** logs. |
 
 ## Resolved decisions (pre–grill-me baseline)
@@ -64,7 +64,7 @@ These are the default assumptions for implementation unless `/grill-me` changes 
 ### Operator CLI UX (product — agreed)
 
 1. **`watch` is live-only** — `pm watch my-group` ≡ relay prelude + live stream. Never queries storage.
-2. **`logs` is storage-only** — `pm logs` ≡ query stored rows (`ProcessStore` / `LogHistory`); flags are the query. No args ⇒ all groups, default limit + sort. Optional group positional, optional `--from` / `--to`, cursors, `--limit`, `--sort`.
+2. **`logs` is storage-only** — `pm logs` ≡ query stored rows (`ProcessStoreLog` / `LogHistory`); flags are the query. No args ⇒ all groups, default limit + sort. Optional group positional, optional `--from` / `--to`, cursors, `--limit`, `--sort`.
 3. **Prelude without bloat** — `watch` uses relay tail capped by `--lines` (max 500 in-memory). `logs` never pulls the full relay buffer unless a query matches stored rows.
 4. **Interactive follow (live)** — TTY keys on `watch` (Slice 7). Interactive scroll on `logs` waits until storage + paging UX exist.
 
@@ -73,7 +73,7 @@ These are the default assumptions for implementation unless `/grill-me` changes 
 - Persist through the dedicated **`ProcessStoreLog`** facet (`src/store/log.ts`) — no separate log-store service. The facet writes through `RuntimeStorage` so adapters (SQLite, future Prisma) compose without log-specific changes:
   - Event type: `log.entry` (stable string; `entityType: "log"`, `entityId` is the relay's log-bucket id).
   - Payload: `ProcessManagerLogEntry` + `groupId` + `endpointLabel` + `entryId` + optional `childPid` / `runId`.
-- Reads: **`ProcessStore.events(query)`** with filters on `groupId`, cursor, limit — same pattern as `run-resource.fact.recorded` on the per-domain `ProcessStoreRunResource` facet (see [STORAGE.md](../STORAGE.md)).
+- Reads: **`ProcessStoreLog.query(...)`** with filters on group/log bucket, cursor, and limit — same facet-owned read pattern as `ProcessStoreRunResource` (see [STORAGE.md](../STORAGE.md)).
 - Indexes: at minimum `(groupId, entryId)` and `(groupId, date)` on Prisma/SQLite adapters when added.
 
 ### PubNub vs storage
@@ -98,7 +98,7 @@ These are the default assumptions for implementation unless `/grill-me` changes 
 // Sibling to control transport on endpoint config items
 logs: {
   transport: "composite", // "http" | "pubnub" | "storage" | "composite"
-  storage: { enabled: true }, // uses ProcessStore from child layer
+  storage: { enabled: true }, // uses ProcessStoreLog from child layer
   live: { _tag: "pubnub", channel: "effect-pm.logs.${groupId}", ... },
   // localhost dev: live: { _tag: "http" } // inherits control baseUrl
 }
@@ -153,11 +153,11 @@ Operator watch / logs
 ### Slice 2 — Storage append + cursor query
 
 - Assign `entryId` at `relay.publish` (or append hook).
-- Batched `ProcessStore` append on child.
-- `LogHistory.query({ groupId, after?, before?, limit })` implemented via `events(query)`.
+- Batched `ProcessStoreLog.recordBatch` on child.
+- `LogHistory.query({ groupId, after?, before?, limit })` implemented via `ProcessStoreLog.query`.
 - CLI: `--after`, `--before`, optional `--limit`.
 
-**Exit:** memory + file (or SQLite) adapter proves forward catch-up and backward scroll in tests.
+**Exit:** memory + SQLite adapter proves forward catch-up and backward scroll in tests.
 
 ### Slice 3 — Wire `entryId` on live transports
 
@@ -229,7 +229,7 @@ pm logs my-group --after <entryId> --limit 200
 
 ## Non-goals
 
-- ProcessStore lifecycle SSE ([05](./05-control-service-v2.md)).
+- Process lifecycle SSE ([05](./05-control-service-v2.md)).
 - File-based stdout/stderr tailing.
 - Full control-plane authentication (PubNub ACLs are log-viewer scoped only).
 

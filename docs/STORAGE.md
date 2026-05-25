@@ -24,8 +24,6 @@ Verify: `pnpm typecheck && pnpm test && pnpm lint && pnpm build`
 | `src/store/log.ts` + `internal/manager/log*` | `ProcessStoreLog` | Done — builder facet; relay uses static `record` / `recordBatch`; reads via `yield* ProcessStoreLog`. |
 | `src/ProcessStore.ts` | builder | Done — facet builder only. |
 | `src/ProcessStorage.ts` | combiner | Done — combined built-in facet layers. |
-| `src/internal/store/composite.ts` | — | Deleted. |
-| `src/storage/file.ts` | — | Deleted. |
 | `src/prisma/*` | — | Rebuild as `RuntimeStorage` adapter (Assignment 5). |
 | `src/storage/sqlite/index.ts` | — | Replace `Layer.orDie` with typed errors (Assignment 6). |
 | `src/RunResource.ts` | `ProcessStoreRunResource` | Done — reference |
@@ -43,10 +41,6 @@ Verify: `pnpm typecheck && pnpm test && pnpm lint && pnpm build`
 | `test/logs.test.ts`, `test/process-manager-log-pipeline.test.ts` | Use `yield* ProcessStoreLog` for reads |
 | `examples/forms/process-store/*` | Use facets + `ProcessStorage` / `layerProcessStore` |
 
-### OK for now (combiner host only)
-
-Anything that only `Effect.provide(ProcessStorage.layer)` and resolves facet services.
-
 ---
 
 ## Facets and layout
@@ -63,7 +57,7 @@ Anything that only `Effect.provide(ProcessStorage.layer)` and resolves facet ser
 | `ProcessStorage` | `ProcessStorage` | combined built-in facet layers |
 | `RuntimeStorage` | `RuntimeStorage` | `src/RuntimeStorage.ts` |
 
-Internal only: `src/internal/store/{spine,codec,composite,service,factEnvelope}.ts`
+Internal only: `src/internal/store/{spine,codec,service,factEnvelope}.ts`
 
 Context key: `@nikscripts/effect-pm/store/<file>/<ServiceTag>`
 
@@ -81,7 +75,6 @@ Import `store/QueueResource` for the **storage facet**, not `@nikscripts/effect-
 | `run-resource.state.changed` | static `recordStateChange` | `yield* ProcessStoreRunResource` → `.stateHistory`, `.latestState` |
 | `log.entry` | static `record` / `recordBatch` (relay) | `yield* ProcessStoreLog` → `.load`, `.query` |
 | `runtime.fact.recorded` | `ProcessStoreQueueResource` only (legacy) | `records` — remove |
-| `queue.item.completed`, `queue.lifecycle.changed` | monolith `append` only | monolith `getQueue*` — remove |
 
 ---
 
@@ -176,9 +169,9 @@ Verify: pnpm typecheck && pnpm test && pnpm lint && pnpm build
 
 **Phase 1 only:** three files under `docs/storage-proposals/` (≤300 lines each): facet yes/no, wire types, cardinality, correlation, layers, open questions. No code.
 
-### 4 — Delete NDJSON
+### 4 — Delete NDJSON — done
 
-Remove `src/storage/file.ts`, `ProcessStore.file` / `fileLayer`, file examples/tests.
+`src/storage/file.ts`, `ProcessStore.file` / `fileLayer`, the file example, and legacy monolith tests are removed.
 
 ### 5 — Prisma `RuntimeStorage` adapter
 

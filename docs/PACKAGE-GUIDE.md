@@ -86,7 +86,7 @@ exists.
 | Schedule + **`ProcessGroup`** / API-driven arm | [docs/SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + [examples/scenarios/game-window-polling-with-process-group.ts](../examples/scenarios/game-window-polling-with-process-group.ts) |
 | Understand process runtime semantics | [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + `src/Process.ts` TSDoc |
 | API tables (make, Polling, Schedule, ProcessGroup) | [PROCESS-API.md](./PROCESS-API.md) |
-| ProcessStore storage (memory / file / future SQLite/Prisma) | [PROCESS-API.md](./PROCESS-API.md) + [STORAGE.md](./STORAGE.md) + [examples/forms/process-store/](../examples/forms/process-store/) |
+| Process storage facets (`ProcessStorage`, SQLite, Prisma placeholder) | [PROCESS-API.md](./PROCESS-API.md) + [STORAGE.md](./STORAGE.md) + [examples/forms/process-store/](../examples/forms/process-store/) |
 | AI / agent onboarding (repo map, conventions) | [AGENTS.md](./AGENTS.md) |
 
 ---
@@ -104,13 +104,12 @@ dedicated subpaths for focused imports:
 - `@nikscripts/effect-pm/ControlService`
 - `@nikscripts/effect-pm/storage/sqlite`
 - `@nikscripts/effect-pm/storage/prisma`
-- `@nikscripts/effect-pm/storage/file` (legacy only)
 
-Structured logs use `ProcessStoreLog` (`record`, `load`, `query`) with `ProcessStore` composed; child capture uses `@nikscripts/effect-pm/Logs` (`captureLoggerLayer`, `relayLayer`)
+Structured logs use `ProcessStoreLog` (`record`, `load`, `query`) with `ProcessStorage` or `layerProcessStore` composed; child capture uses `@nikscripts/effect-pm/Logs` (`captureLoggerLayer`, `relayLayer`)
 at launch (`layerProcessStore` from `storage/sqlite`). Durable
 normalized runtime records use
 `@nikscripts/effect-pm/storage/sqlite` (`SQLiteRuntimeStorage`) with
-`ProcessStore.layerRuntimeStorage`. Run `SQLiteRuntimeStorage.make` under
+`ProcessStorage.layerRuntimeStorage`. Run `SQLiteRuntimeStorage.make` under
 `Effect.scoped` (or `it.live`) so the underlying `SqlClient` stays open for the
 whole usage window. Prisma paths are currently placeholders
 pending a RuntimeStorage-backed rewrite.
@@ -128,7 +127,7 @@ For durable adapter work, start with
 | `ProcessGroup` | Orchestrate processes + queues; typed contracts, controls, and `awaitShutdown`. |
 | `ProcessManager` | Typed remote client and endpoint service for group control contracts. |
 | `QueueResource` | Priority queues + workers. Public handle: `QueueHandle<T, E, EEnqueue, R>` (**requirements `R` last**); class services: `QueueResource.Service<Self, T, E>` infer `R` from config. Optional **`autoStart: false`** defers worker fibers until **`yield* queue.start`. |
-| `ProcessStore` | Runtime records and semantic resource facts, including queue entry/lifecycle records. |
+| `ProcessStore` / `ProcessStorage` | Facet builder and combined storage layers for runtime records and semantic resource facts. |
 | `RunResource`, `HttpClientRunGate` | Concurrency + throttle gates for arbitrary effects / `HttpClient`. |
 | `HttpApiResource`, `Resource` | Typed HttpApi client as a service + layers. |
 | `ControlService` | Localhost JSON control server consumed by `createCli` / `runCli`. |
@@ -142,7 +141,7 @@ through the static optional emitters on the per-domain `ProcessStoreRunResource`
 facet (`ProcessStoreRunResource.recordRunStarted` / `recordRunCompleted` /
 `recordRunFailed` / `recordStateChange`). Composing
 `ProcessStoreRunResource.layerRuntimeStorage` (or the full-stack
-`ProcessStore.layerRuntimeStorage` / `layerProcessStore` from
+`ProcessStorage.layerRuntimeStorage` / `layerProcessStore` from
 `@nikscripts/effect-pm/storage/sqlite`) persists facts as
 `run-resource.fact.recorded` events and state changes as
 `run-resource.state.changed` events. For in-process listeners (no
@@ -155,7 +154,7 @@ streaming projection is planned.
 ## Dependencies and layers (practical rules)
 
 1. **`ProcessGroup.make(id, entries)`** returns an `Effect` that requires the **queue tag identifiers** from queue entries (so queues are acquired exactly once in that scope).
-2. **Forking** `process.effect` needs **`R | ProcessStore`** where `R` is whatever remains on the process after optional inlined `polling` / `schedule` layers. Use **`ProcessSupervisorRequirements<C>`** (exported type) if you build configs generically.
+2. **Forking** `process.effect` needs **`R` plus any storage facets you choose to compose** where `R` is whatever remains on the process after optional inlined `polling` / `schedule` layers. Use **`ProcessSupervisorRequirements<C>`** (exported type) if you build configs generically.
 3. Prefer **`Layer.mergeAll(...)`** + **one** `Effect.provide` at the app root when you have many independent layers (clearer dependency graph; matches Effect lint guidance).
 4. **Control service** listens on **127.0.0.1** only — designed for local ops, not public exposure. The canonical HTTP transport endpoint is `POST /control` with a protocol envelope; REST-shaped routes remain operator-friendly aliases.
 5. **Remote control assumes a private network today.** Do not expose a

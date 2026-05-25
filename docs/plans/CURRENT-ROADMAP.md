@@ -57,9 +57,9 @@ Primary references:
 This phase should come before richer analytics, streaming, dashboards, or
 mutable config.
 
-Use [11](./11-runtime-state-hooks-and-config.md) as the active implementation
-plan for this phase, and reconcile storage work with
-[10](./10-process-store-phase-one.md) before adding public store methods.
+Use [STORAGE.md](../STORAGE.md) as the source of truth for storage shape and
+[11](./11-runtime-state-hooks-and-config.md) only for remaining future
+state/listener/config ideas.
 
 **Status note (Phase C cut-over to per-domain facets):** The original Phase C
 landed a generic `RuntimeFact` / `RuntimeRef` / `RuntimeStateChange` vocabulary
@@ -71,8 +71,9 @@ exists at `src/internal/store/factEnvelope.ts` as internal-only plumbing for
 `ProcessStoreQueueResource`; new facets must publish their own concrete event
 types and never depend on it.
 
-1. Keep `ProcessStore` as the public storage **combiner** name; per-domain
-   facets (`ProcessStoreRunResource`, `ProcessStoreQueueResource`,
+1. Keep `ProcessStore` as the public storage **facet builder** and
+   `ProcessStorage` as the combined layer host. Per-domain facets
+   (`ProcessStoreRunResource`, `ProcessStoreQueueResource`,
    `ProcessStoreLog`, `ProcessStoreProcessLifecycle`, `ProcessStoreProcessGroup`,
    `ProcessStoreProcessExecution`) own their concrete `*Ref` / `*Fact` /
    `*StateChange` / `*State` types. `RuntimeStorage` remains the generic
@@ -87,27 +88,21 @@ types and never depend on it.
    / `.recordRunCompleted` / `.recordRunFailed` / `.recordStateChange`, persisting
    as `run-resource.fact.recorded` / `run-resource.state.changed` analytics
    events when the facet layer is composed.
-4. `ProcessStore.events(query)` reads the new `run-resource.fact.recorded` and
-   existing analytics events across memory, file-backed, and SQLite stores
-   without feature-specific read methods.
-5. The file-backed `ProcessStore` adapter now uses Effect `FileSystem`; it is
-   append-only and generic so it can later become a full `RuntimeStorage`
-   adapter. SQLite is the production target via `layerProcessStore` from
-   `@nikscripts/effect-pm/storage/sqlite`.
+4. Reads live on the domain facet that owns the event shape.
+5. The file-backed store is removed. SQLite is the durable local target via
+   `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`.
 6. Per-domain projections live on each facet (e.g.
    `ProcessStoreRunResource.facts({ resourceId, runId?, types? })`,
    `.runs(resourceId)`, `.byRun(runId)`, `.stateHistory({ resourceId })`,
    `.latestState(resourceId)`) — there is **no** `ProcessStore.runtime.*` /
    `ProcessStore.runResource.*` namespace on the combiner.
-7. Keep `RuntimeStorage` as the generic storage port under the combiner,
-   with memory/file-backed/SQLite adapters implementing that port rather than
+7. Keep `RuntimeStorage` as the generic storage port under the facets,
+   with memory/SQLite/custom adapters implementing that port rather than
    module-specific APIs.
 
 Primary references:
 
 - [11 - Runtime state, listener hooks, history, and mutable config](./11-runtime-state-hooks-and-config.md)
-- [10 - ProcessStore read foundation](./10-process-store-phase-one.md)
-- [01 - ProcessStore as the storage service](./01-process-store-service.md)
 
 ## Phase D - Queue v2 foundation
 

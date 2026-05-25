@@ -24,8 +24,8 @@ The queue service exposes core controls, but callback contexts are narrower:
   `onEmpty`, `onRetryExhausted`.
 
 The special `persist` and `refill` names mix storage behavior with lifecycle
-behavior. Storage should move into `ProcessStore`; lifecycle hooks should receive
-powerful queue controls.
+behavior. Storage should move into `ProcessStoreQueueResource`; lifecycle hooks
+should receive powerful queue controls.
 
 The target enqueue input must stay narrower than broad `Iterable<T>`. Broad
 iterables can treat strings as batches of characters and make single versus
@@ -603,7 +603,7 @@ Meaning:
 
 - `manualRelease` keeps keys after processing; callers must remove or clear
   them explicitly.
-- `storeKey` persists key state through `ProcessStore`.
+- `storeKey` persists key state through `ProcessStoreQueueResource`.
 - `manualRelease` and `storeKey` are separate: a key can be manually retained
   in memory, stored durably, or both.
 
@@ -613,14 +613,14 @@ The three first-class policies:
    (pending or processing). The key is released after processing completes.
 2. **`manualRelease`** — keep the key in memory after processing for the
    lifetime of the current run, until manually removed or cleared.
-3. **`storeKey`** — store key lifecycle through `ProcessStore` and hydrate stored
+3. **`storeKey`** — store key lifecycle through `ProcessStoreQueueResource` and hydrate stored
    active keys when the queue starts, so dedupe can survive process restarts.
 
 Stored-key startup rules:
 
-- when `storeKey` is configured and `ProcessStore` is present, `queue.start`
+- when `storeKey` is configured and `ProcessStoreQueueResource` is present, `queue.start`
   should load active stored keys before workers accept/process work,
-- if no `ProcessStore` is present, the queue still works with in-memory dedupe
+- if no queue storage facet is present, the queue still works with in-memory dedupe
   semantics and logs no hard failure,
 - persisted keys are scoped by queue `processId` / resource id,
 - stored key records use the indexed runtime record envelope from the storage
@@ -651,7 +651,7 @@ yield* queue.dedupe.remove(key)
 yield* queue.dedupe.clear
 ```
 
-Candidate `ProcessStore` integration for stored keys:
+Candidate queue storage integration for stored keys:
 
 - key added,
 - key rejected as duplicate,
@@ -660,16 +660,13 @@ Candidate `ProcessStore` integration for stored keys:
 - key manually removed,
 - keys cleared.
 
-`ProcessStore` should expose package-level dedupe semantics; storage adapters
-remain the swappable persistence implementation underneath.
+`ProcessStoreQueueResource` should expose package-level dedupe semantics;
+storage adapters remain the swappable persistence implementation underneath.
 
-Use the indexed runtime record envelope from
-[01 - ProcessStore as the storage service](./01-process-store-service.md) for
-stored queue entries, dedupe key facts, release/handoff rows, enqueue
-rejections, and queue config changes. `QueueResource` should emit semantic queue
-facts; `ProcessStore.queue.*` maps queue fields such as `batchId`, `releaseId`,
-`sourceResourceId`, `entryId`, and dedupe `key` into generic indexed storage
-columns.
+Use [STORAGE.md](../STORAGE.md) for the current facet rules. `QueueResource`
+should emit semantic queue facts; `ProcessStoreQueueResource` maps queue fields
+such as `batchId`, `releaseId`, `sourceResourceId`, `entryId`, and dedupe `key`
+into runtime storage rows.
 
 Queue entry storage should not store the full entry snapshot on every state
 change:
@@ -679,11 +676,12 @@ change:
 - started/completed/failed/retried/exhausted/interrupted records store only
   indexed ids, key, type, `occurredAt`, and relevant deltas.
 
-`ProcessStore.queue.entry({ entryId })` should project one combined entry report
-by grouping entry records and merging deltas. `ProcessStore.queue.entriesByKey({
-key })` should return a list because the same dedupe key can be used by multiple
-entries over time. Retry grouping comes from enqueue metadata: every retry gets a
-new `entryId`, appends that id to `identifiers`, and increments `attempts`.
+`ProcessStoreQueueResource.entry({ entryId })` should project one combined entry
+report by grouping entry records and merging deltas.
+`ProcessStoreQueueResource.entriesByKey({ key })` should return a list because
+the same dedupe key can be used by multiple entries over time. Retry grouping
+comes from enqueue metadata: every retry gets a new `entryId`, appends that id
+to `identifiers`, and increments `attempts`.
 
 ## Enqueue filters
 
@@ -709,8 +707,8 @@ Rules:
 - Filters run after item schema decode/validation and before internal enqueue.
 - Filter rejection must be structured and visible in the enqueue error channel.
 - Filter rejection must not call the item effect.
-- Filter rejection should be recordable as a runtime fact / queue event through
-  `ProcessStore` once queue event storage grows.
+- Filter rejection should be recordable as a queue event through
+  `ProcessStoreQueueResource` once queue event storage grows.
 - Filters must be updateable by the mutable config API below.
 
 ## Mutable queue config
@@ -940,7 +938,7 @@ Replace special storage-oriented callbacks with lifecycle hooks:
 - `onDrainCompleted(result, controls)`
 - `onDrainFailed(error, controls)`
 
-`persist` is unnecessary because `ProcessStore` handles storage.
+`persist` is unnecessary because `ProcessStoreQueueResource` handles storage.
 `refill` is replaced by `onStart` for bootstrap loading and `onDrained` for
 drain-triggered loading; both receive queue-bound controls.
 
@@ -1077,7 +1075,7 @@ yielding the queue service itself from either a local or remote provider require
   completion, failure, settlement, retry, exhaustion, dead-letter, drop, empty,
   drain, pause, resume, quiesce, shutdown, clear, release start, release
   success, and release failure.
-- `persist` and `refill` are removed in favor of `ProcessStore`, `onStart`, and `onDrained`.
+- `persist` and `refill` are removed in favor of `ProcessStoreQueueResource`, `onStart`, and `onDrained`.
 - Queue tests cover hook-triggered enqueue, retry, drained work loading, and lifecycle
   operations.
 - Handoff tests cover schema-compatible and schema-incompatible target queues.

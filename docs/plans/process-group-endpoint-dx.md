@@ -2,7 +2,7 @@
 
 **Status:** Approved design — not yet implemented  
 **Date:** 2026-05-22 (updated: pre-1.0 removal policy, alternatives matrix)  
-**Relates to:** [07-process-manager.md](./07-process-manager.md), [process-group-layer-unification handoff](../handoffs/process-group-layer-unification.md), [process-group.md](../guides/process-group.md), [process-manager.md](../guides/process-manager.md)
+**Relates to:** [07-process-manager.md](./07-process-manager.md), [process-group.md](../guides/process-group.md), [process-manager.md](../guides/process-manager.md)
 
 **Source of truth** for the third-argument endpoint API, `Transport`, consolidated `Endpoint.*` labels, child launcher, and TS2506 rules. Graduate to `docs/guides/process-manager.md` when shipped.
 

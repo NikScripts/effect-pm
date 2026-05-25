@@ -110,7 +110,7 @@ yield* group.startAll();
 
 ```typescript
 import { Effect, Logger } from "effect";
-import { ProcessStore } from "@nikscripts/effect-pm";
+import { ProcessStorage } from "@nikscripts/effect-pm";
 
 const program = Effect.gen(function* () {
   const group = yield* ProcessGroup.make({
@@ -124,7 +124,7 @@ const program = Effect.gen(function* () {
 Effect.runPromise(
   program.pipe(
     Effect.provide(EmailQueue.layer),
-    Effect.provide(ProcessStore.layer), // analytics: in-memory by default
+    Effect.provide(ProcessStorage.layer), // in-memory storage facets
     Effect.provide(Logger.pretty),
   )
 );
@@ -353,51 +353,45 @@ const groupBad = yield* ProcessGroup.make({
 });
 ```
 
-## ProcessStore (Analytics & Lifecycle)
+## Process Storage
 
-`ProcessStore` is the unified analytics service used by `Process` and
-`ProcessGroup`. It is event-first: a single `append` path with a typed
-envelope, plus typed read helpers.
+`ProcessStore` is the builder used by storage facets. `ProcessStorage` is the
+combined layer host you provide at the application root.
 
-Supported event types out of the box:
+Built-in facets record:
 
 - `process.execution.completed` — every successful or failed run
 - `process.lifecycle.changed` — `Started` / `Stopped` / `Restarted` / etc.
+- `run-resource.fact.recorded` / `run-resource.state.changed` — `RunResource`
+  facts and state transitions
+- `log.entry` — structured process-manager logs
 
 ### In-memory (development / tests)
 
 ```typescript
-import { ProcessStore } from "@nikscripts/effect-pm";
+import { ProcessStorage } from "@nikscripts/effect-pm";
 
 program.pipe(
-  Effect.provide(ProcessStore.layer), // in-memory; data lost on restart
+  Effect.provide(ProcessStorage.layer), // in-memory; data lost on restart
   Effect.runPromise,
 );
 ```
 
-### Persistent: Prisma
+### Durable: SQLite
 
-`@nikscripts/effect-pm` ships a Prisma adapter on a subpath import. It uses a
-single envelope-shaped table (`EffectPmEvent`) so adding new event types in
-the future does not require schema migrations.
+Use `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite` for durable
+local storage.
 
-#### One-time setup
+```typescript
+import { layerProcessStore } from "@nikscripts/effect-pm/storage/sqlite";
 
-```bash
-# Add the EffectPmEvent model to your Prisma schema (idempotent).
-npx effect-pm add prisma
-
-# Then generate the client and migrate as usual.
-npx prisma generate
-npx prisma migrate dev --name add_effect_pm_event
+program.pipe(
+  Effect.provide(layerProcessStore({ filename: ".effect-pm/data.sqlite" })),
+  Effect.runPromise,
+);
 ```
 
-The rewriter detects single-file (`prisma/schema.prisma`) and multi-file
-(`prisma/schema/`) layouts. Use `--dry-run` to preview, `--separate-file` /
-`--no-separate-file` to override the placement, or `npx effect-pm prisma:print-schema`
-to copy the fragment manually.
-
-#### Prisma adapter status
+### Prisma adapter status
 
 The old Prisma event-table adapter has been intentionally disabled while storage
 moves to normalized `RuntimeRecord` rows. Prisma will return as a
@@ -525,7 +519,7 @@ See [examples/scenarios/full-process-group-with-queues-and-control-cli.ts](./exa
 - `QueueResource.Service()` / `QueueResource.Tag()` - Create queue services and queue service contracts
 - `Process.make(id, config)` — Create a managed process (`polling` + `schedule` layers)
 - `Polling` / `ProcessSchedule` — Cadence and gate services with preset layers
-- `ProcessStore` - Unified analytics & lifecycle service (in-memory by default)
+- `ProcessStore` / `ProcessStorage` - Storage facet builder and combined in-memory/durable storage layers
 - `PrismaProcessStore` - placeholder for the upcoming RuntimeStorage-backed Prisma adapter (preferred subpath: `@nikscripts/effect-pm/storage/prisma`; legacy `@nikscripts/effect-pm/prisma` remains available)
 - `ControlService` - HTTP control API utilities
 
@@ -541,7 +535,7 @@ See [examples/scenarios/full-process-group-with-queues-and-control-cli.ts](./exa
 - `QueueDetails` - Queue status information
 - `QueueHandle<T, E, EEnqueue, R>` - Queue handle API (`yield*` the queue service tag)
 - `Process<R>` - Process interface
-- `ProcessStoreInterface` - Service contract for implementing a custom store
+- `RuntimeStorageService` - Storage adapter contract for normalized runtime records
 - `AnalyticsEvent` / `ProcessExecutionCompletedEvent` / `ProcessLifecycleChangedEvent` - Event envelope and concrete event types
 
 ### Errors

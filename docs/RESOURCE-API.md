@@ -413,21 +413,21 @@ const MyClientLive = HttpApiResource.layerEffect(MyClient, myCustomMake, {
 
 ---
 
-## ProcessStore Integration
+## ProcessStorage Integration
 
-Resource modules automatically record runtime facts to `ProcessStore` when it's available in the environment. No configuration needed.
+Resource modules automatically record runtime facts when the relevant storage facet is available in the environment. No configuration is needed beyond composing `ProcessStorage.layer` or a durable storage layer.
 
 ```typescript
-import { ProcessStore } from "@nikscripts/effect-pm"
+import { ProcessStorage } from "@nikscripts/effect-pm"
 
-// Without ProcessStore — resources work fine, no analytics
+// Without storage — resources work fine, no analytics
 program.pipe(Effect.provide(EmailQueue.layer))
 
-// With ProcessStore — queue/run records are written automatically
+// With storage — queue/run records are written automatically
 program.pipe(
   Effect.provide(Layer.mergeAll(
     EmailQueue.layer,
-    ProcessStore.layer,  // just by being here, records activate
+    ProcessStorage.layer,  // just by being here, records activate
   ))
 )
 ```
@@ -439,11 +439,14 @@ Records written by `QueueResource`:
 - `queue.entry.retried` / `queue.entry.exhausted` — retry lifecycle
 - `queue.lifecycle.started|paused|resumed|shutdown|cleared|drained`
 
-Query queue records through `ProcessStore.QueueResource`:
+Query queue records through the queue storage facet:
 
 ```typescript
-const entries = yield* ProcessStore.QueueResource.entries("email-queue")
-const byKey = yield* ProcessStore.QueueResource.entriesByKey("delivery-123")
+import { ProcessStoreQueueResource } from "@nikscripts/effect-pm/store/QueueResource"
+
+const queueStore = yield* ProcessStoreQueueResource
+const entries = yield* queueStore.entries("email-queue")
+const byKey = yield* queueStore.entriesByKey("delivery-123")
 ```
 
 `queue.release()` exports decoded pending entries without losing payloads,

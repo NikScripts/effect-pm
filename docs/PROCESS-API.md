@@ -11,7 +11,7 @@ This document complements the [README](../README.md) with a concise **spec-style
 | **`Process`** | Builds `process.effect`: a long-lived **schedule driver** forked by `ProcessGroup`. Each schedule entry can spawn one run instance. |
 | **`ProcessSchedule`** | Stores run windows (`startAt`, optional `stopAt`, optional `id`) and notifies the driver when entries change. |
 | **`Polling`** | **Cadence** between repeats inside a running instance (`awaitNextTick` → user `effect` → `afterTick`). |
-| **`ProcessStore`** | Optional analytics: execution rows + lifecycle events. |
+| **Storage facets** | Optional analytics: execution rows + lifecycle events via `ProcessStorage` / durable adapters. |
 | **`ProcessGroup`** | Owns scopes, fibers, typed process/queue controls, group contracts, control HTTP/CLI. |
 | **`ProcessManager`** | Typed remote client for a `ProcessGroup` contract. |
 
@@ -30,7 +30,7 @@ This document complements the [README](../README.md) with a concise **spec-style
 
 | Field | Required | Description |
 |--------|----------|-------------|
-| `effect` | yes | `Effect<void, E, R>` — one **tick** body; failures logged + recorded when `ProcessStore` is provided. |
+| `effect` | yes | `Effect<void, E, R>` — one **tick** body; failures logged + recorded when storage facets are provided. |
 | `polling` | no | `Layer.Layer<PollingService, never, never>` — repeat cadence inside an instance. Omit and provide at fork time. |
 | `schedule` | no | Either a `ProcessScheduleInitializer` (`({ set, add, clear }) => Effect`) or a `Layer.Layer<ProcessScheduleService, never, never>`. When omitted, defaults to `ProcessSchedule.alwaysArmed`. Use `ProcessSchedule.empty` for an empty store (disarmed until mutation). |
 | `scheduleLayer` | no | Explicit schedule service layer; takes precedence over `schedule`. When both are omitted, `ProcessSchedule.alwaysArmed` is used. |
@@ -50,9 +50,9 @@ This document complements the [README](../README.md) with a concise **spec-style
 |--------|---------------------|--------|
 | `name` | `string` | |
 | `type` | `"managed"` | |
-| `effect` | `Effect<void, never, R \| ProcessStore>` | Schedule-driven runtime. If `polling` / schedule layers are passed on `Process.make`, those layers are merged into `process.effect`. |
-| `getStatus(range?)` | `Effect<ProcessDetails, never, ProcessStore>` | Execution stats + mirror of last gate/cadence hints. |
-| `runImmediately()` | `Effect<void, never, R \| ProcessStore>` | One tracked tick **even when disarmed** (separate from supervisor loop). |
+| `effect` | `Effect<void, never, R \| storage facets>` | Schedule-driven runtime. If `polling` / schedule layers are passed on `Process.make`, those layers are merged into `process.effect`. |
+| `getStatus(range?)` | `Effect<ProcessDetails, never, storage facets>` | Execution stats + mirror of last gate/cadence hints. |
+| `runImmediately()` | `Effect<void, never, R \| storage facets>` | One tracked tick **even when disarmed** (separate from supervisor loop). |
 
 ### `ProcessDetails`
 
@@ -128,7 +128,7 @@ These exports remain for custom schedule implementations; the schedule-driven ru
 
 ## `ProcessGroup` (process lifecycle and group contracts)
 
-Typical control (requires the group’s `R` + `ProcessStore` where applicable):
+Typical control (requires the group’s `R` plus storage facets where applicable):
 
 - `start(name)` / `stop(name)` / `restart(name)`
 - `startAll()` / `stopAll()`
@@ -240,73 +240,46 @@ Remote queue `add`, `enqueue`, `prioritize`, and `defer` remain unsupported.
 
 ---
 
-## `ProcessStore` / `RuntimeStorage` boundary
+## `ProcessStore`, `ProcessStorage`, and `RuntimeStorage`
 
-`ProcessStore` is the rich module-facing singleton facade. Runtime modules such
-as `Process`, `QueueResource`, `RunResource`, `HttpApiResource`, and
-`ProcessGroup` should depend on `ProcessStore`, not on storage adapters.
+`ProcessStore` is the public builder used by storage facets
+(`ProcessStore.Service`, `ProcessStore.record`, `ProcessStore.read`).
+Applications do not `yield* ProcessStore`.
 
-`RuntimeStorage` is the generic swappable persistence port underneath
-`ProcessStore` (see `src/RuntimeStorage.ts` and
-[STORAGE.md](./STORAGE.md)). The
-default in-memory store and the SQLite adapter (`@nikscripts/effect-pm/storage/sqlite`,
-`layerProcessStore`) both use `ProcessStore.layerRuntimeStorage`. Adapters persist
-normalized `RuntimeRecord` rows; `ProcessStore` facets (`Log`, `QueueResource`,
-`runtime` projections) map module operations onto those rows. The optional Prisma
-export is not a full store yet (`PrismaProcessStoreUnavailableError` on read paths).
+`ProcessStorage` is the combined built-in storage layer host. Use
+`ProcessStorage.layer` for in-memory development/tests, or
+`@nikscripts/effect-pm/storage/sqlite`'s `layerProcessStore({ filename })` for
+durable local storage. Both provide the same per-domain facets.
 
-The current bridge writes RunResource facts and state changes through the
-`ProcessStoreRunResource` facet as `run-resource.fact.recorded` and
-`run-resource.state.changed` analytics events.
+`RuntimeStorage` is the generic row storage port underneath those facets. Storage
+adapters persist normalized `RuntimeRecord` rows; facets map domain operations
+onto those rows and expose domain reads.
 
 Dependency direction:
 
 ```text
-runtime module -> ProcessStore -> RuntimeStorage -> memory / Prisma / custom
+runtime module -> store facet -> RuntimeStorage -> memory / SQLite / custom
 ```
 
-`ProcessStore.events(query)` reads generic analytics events across memory,
-file-backed, and Prisma stores. Dedicated queue completion/lifecycle reads and
-runtime projections are implemented on top of the same event stream. Queue
-schema validation, remote queue enqueue, release, and handoff remain later
-phases.
-
-File-backed storage is local-process oriented and append-only: each encoded
-analytics row is written as one NDJSON line for a single local runtime/process.
-Reads decode valid rows and skip malformed lines, so a bad local row does not
-poison the whole file.
+Read through the facet that owns the domain:
 
 ```typescript
-import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
-import * as NodePath from "@effect/platform-node/NodePath";
-import { Effect, Layer } from "effect";
-import { ProcessStore } from "@nikscripts/effect-pm";
-import { fileLayer } from "@nikscripts/effect-pm/storage/file";
-
-const filePath = ".tmp/effect-pm/events.ndjson";
-const platform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
-const storeLayer = fileLayer(filePath);
+import { Effect } from "effect";
+import { ProcessStorage } from "@nikscripts/effect-pm";
+import { ProcessStoreRunResource } from "@nikscripts/effect-pm/store/RunResource";
 
 const program = Effect.gen(function* () {
-  const store = yield* ProcessStore;
-  const events = yield* store.events({
-    types: ["run-resource.fact.recorded"],
-  });
-
-  yield* Effect.log(`run-resource facts: ${String(events.length)}`);
+  const runs = yield* ProcessStoreRunResource;
+  const facts = yield* runs.facts({ resourceId: "examples/Gate" });
+  yield* Effect.log(`run-resource facts: ${String(facts.length)}`);
 });
 
-void Effect.runPromise(program.pipe(
-  Effect.provide(storeLayer),
-  Effect.provide(platform),
-));
+void Effect.runPromise(program.pipe(Effect.provide(ProcessStorage.layer)));
 ```
 
-For durable **normalized `RuntimeRecord` rows** (the `RuntimeStorage` contract),
-use `@nikscripts/effect-pm/storage/sqlite` and compose
-`ProcessStore.layerRuntimeStorage` with `SQLiteRuntimeStorage.layer` or
-`SQLiteRuntimeStorage.make` (under an ambient `Scope`, typically via
-`Effect.scoped` or `it.live`). See [STORAGE.md](./STORAGE.md).
+The removed monolith service (`yield* ProcessStore`, `ProcessStore.events`,
+`ProcessStore.file`, `@nikscripts/effect-pm/storage/file`) is intentionally not
+documented as a compatibility path.
 
 ---
 
@@ -351,13 +324,11 @@ environment, the static emitters no-op and the gated effect behavior is
 unchanged.
 
 When `ProcessStoreRunResource.layerRuntimeStorage` (or the full-stack
-`ProcessStore.layerRuntimeStorage` / `layerProcessStore` from
+`ProcessStorage.layerRuntimeStorage` / `layerProcessStore` from
 `@nikscripts/effect-pm/storage/sqlite`) is composed, facts and state changes
 are persisted as `run-resource.fact.recorded` / `run-resource.state.changed`
 analytics events. `ProcessStoreLog` covers structured log
 history; capture/relay uses `@nikscripts/effect-pm/Logs`.
-`@nikscripts/effect-pm/storage/file` and `ProcessStore.fileLayer` are
-**legacy** NDJSON compatibility only — do not use for new code.
 
 For in-process listeners (no durability), provide a custom service typed as
 `ProcessStoreRunResource.Type` via `Effect.provideService` or

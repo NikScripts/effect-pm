@@ -183,7 +183,7 @@ Used by the **config-object** overload only.
 | `runImmediately()` | One tracked repeat via group **`runImmediately`** or local call; schedule need not be armed. |
 | `getStatus(range?)` | Snapshot; uses **`ProcessStore`** when available. |
 
-Provide **`ProcessStore.layer`** at the app/group root when you want execution history.
+Provide **`ProcessStorage.layer`** or `layerProcessStore({ filename })` at the app/group root when you want execution history.
 
 ---
 

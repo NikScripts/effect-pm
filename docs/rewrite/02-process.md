@@ -152,13 +152,13 @@ class Heartbeat extends Process.Service<Heartbeat>()("@app/Heartbeat", {
 
 ## Running the driver
 
-Run the driver inside a **scoped** program so child fibers can be interrupted when the scope closes. Provide `ProcessStore.layer` at the application root when you want execution history persisted.
+Run the driver inside a **scoped** program so child fibers can be interrupted when the scope closes. Provide `ProcessStorage.layer` at the application root when you want execution history persisted.
 
 Example (Forking the driver and stopping)
 
 ```typescript
 import { Duration, Effect, Fiber } from "effect"
-import { ProcessStore } from "@nikscripts/effect-pm"
+import { ProcessStorage } from "@nikscripts/effect-pm"
 
 const program = Effect.gen(function* () {
   const driverFiber = yield* Effect.forkChild(heartbeat.effect)
@@ -168,12 +168,12 @@ const program = Effect.gen(function* () {
   yield* Fiber.interrupt(driverFiber)
 }).pipe(Effect.scoped)
 
-Effect.runPromise(program.pipe(Effect.provide(ProcessStore.layer)))
+Effect.runPromise(program.pipe(Effect.provide(ProcessStorage.layer)))
 ```
 
 Forking `heartbeat.effect` starts the supervisor. While the schedule is armed, it repeats: wait, run your effect, update cadence. Interrupting the driver fiber stops further repeats.
 
-If the repeat effect needs other services (a database, `HttpClient`, and so on), provide those layers together with `ProcessStore.layer` where you run the program.
+If the repeat effect needs other services (a database, `HttpClient`, and so on), provide those layers together with `ProcessStorage.layer` where you run the program.
 
 ## Running one repeat
 
@@ -183,15 +183,16 @@ Example (Using `runImmediately`)
 
 ```typescript
 import { Effect } from "effect"
-import { ProcessStore } from "@nikscripts/effect-pm"
+import { ProcessStorage } from "@nikscripts/effect-pm"
+import { ProcessStoreProcessExecution } from "@nikscripts/effect-pm/store/ProcessExecution"
 
 const once = Effect.gen(function* () {
   yield* heartbeat.runImmediately()
 
-  const store = yield* ProcessStore
-  const rows = yield* store.getProcessExecutions(heartbeat.name)
+  const store = yield* ProcessStoreProcessExecution
+  const rows = yield* store.executions({ processId: heartbeat.name })
   console.log(`executions recorded: ${rows.length}`)
-}).pipe(Effect.provide(ProcessStore.layer))
+}).pipe(Effect.provide(ProcessStorage.layer))
 
 Effect.runPromise(once)
 ```
