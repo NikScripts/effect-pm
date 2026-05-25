@@ -51,7 +51,12 @@ export const findGroupExportById = (
   moduleExports: Record<string, unknown>,
   groupId: string,
 ): GroupSource | undefined => {
-  for (const value of Object.values(moduleExports)) {
+  const defaultExport = moduleExports.default;
+  const values = isModuleExportsRecord(defaultExport)
+    ? [...Object.values(moduleExports), ...Object.values(defaultExport)]
+    : Object.values(moduleExports);
+
+  for (const value of values) {
     if (isProcessGroupServiceDefinition(value) && value.id === groupId) {
       return value;
     }

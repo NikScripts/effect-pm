@@ -16,6 +16,7 @@ import {
   ProcessManagerEndpointConfigError,
     QueueResource,
 } from "../src";
+import { findGroupExportById } from "../src/internal/manager/groupChild";
 import { decodeProcessManagerRunStateJson } from "../src/internal/manager/runState";
 import { ModuleEndpointGroup } from "./fixtures/process-manager-module-definition";
 
@@ -43,6 +44,14 @@ const readRunStatePid = (text: string) =>
   Effect.map(decodeProcessManagerRunStateJson(text), (state) => state.pid);
 
 describe("ProcessManager", () => {
+  it("finds group exports nested under a transpiler default object", () => {
+    const found = findGroupExportById({
+      default: { ModuleEndpointGroup },
+    }, ModuleEndpointGroup.id);
+
+    expect(found).toBe(ModuleEndpointGroup);
+  });
+
   it("builds endpoint config items from the direct Endpoint export", () => {
     const transport = ProcessManager.Transport.http("http://127.0.0.1:32130");
     const local = Endpoint.local(transport, testLocalEntry).default;
