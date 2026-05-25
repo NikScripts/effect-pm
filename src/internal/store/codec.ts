@@ -7,18 +7,12 @@
 import { Data } from "effect";
 import type {
   AnalyticsEvent,
+  LogEntryRecordedEvent,
   ProcessExecutionCompletedEvent,
   ProcessLifecycleChangedEvent,
   ProcessLifecycleTag,
-  QueueItemCompletedEvent,
-  QueueItemStatus,
-  QueueLifecycleChangedEvent,
-  QueueLifecycleTag,
-  LogEntryRecordedEvent,
   RunResourceFactRecordedEvent,
   RunResourceStateChangedEvent,
-  RuntimeFactRecordedEvent,
-  RuntimeStateChangedEvent,
 } from "../../ProcessStoreEvent";
 import type {
   EffectPmEventCreateInput,
@@ -26,11 +20,50 @@ import type {
   JsonValue,
 } from "../../ProcessStoreEvent";
 import type {
-  FactEnvelope,
-  FactEnvelopeRef,
-  FactEnvelopeStateBase,
-  FactEnvelopeStateChange,
-} from "./factEnvelope";
+  QueueDedupeKeyAddedChange,
+  QueueDedupeKeyAddedEvent,
+  QueueDedupeKeyChange,
+  QueueDedupeKeyChangedEvent,
+  QueueDedupeKeyHydratedChange,
+  QueueDedupeKeyHydratedEvent,
+  QueueDedupeKeyReleasedChange,
+  QueueDedupeKeyReleasedEvent,
+  QueueEntryCompletedEvent,
+  QueueEntryCompletedFact,
+  QueueEntryDeadLetteredEvent,
+  QueueEntryDeadLetteredFact,
+  QueueEntryDroppedEvent,
+  QueueEntryDroppedFact,
+  QueueEntryEnqueuedEvent,
+  QueueEntryEnqueuedFact,
+  QueueEntryExhaustedEvent,
+  QueueEntryExhaustedFact,
+  QueueEntryFact,
+  QueueEntryFailedEvent,
+  QueueEntryFailedFact,
+  QueueEntryRecordedEvent,
+  QueueEntryReleasedEvent,
+  QueueEntryReleasedFact,
+  QueueEntryRetriedEvent,
+  QueueEntryRetriedFact,
+  QueueEntryStartedEvent,
+  QueueEntryStartedFact,
+  QueueLifecycleChange,
+  QueueLifecycleChangedEvent,
+  QueueLifecycleClearedChange,
+  QueueLifecycleClearedEvent,
+  QueueLifecycleDrainedChange,
+  QueueLifecycleDrainedEvent,
+  QueueLifecyclePausedChange,
+  QueueLifecyclePausedEvent,
+  QueueLifecycleResumedChange,
+  QueueLifecycleResumedEvent,
+  QueueLifecycleShutdownChange,
+  QueueLifecycleShutdownEvent,
+  QueueLifecycleStartedChange,
+  QueueLifecycleStartedEvent,
+  ProcessStoreQueueResourcePriority,
+} from "../../store/queueResource";
 import type {
   RunResourceFact,
   RunResourceFactType,
@@ -43,6 +76,7 @@ import {
   epochMillisFromUnknown,
   isBoolean,
   isFiniteNumber,
+  isJsonValue,
   isRecord,
   isString,
 } from "../json";
@@ -88,18 +122,7 @@ const isExecutionStatus = (
 ): value is ProcessExecutionCompletedEvent["execution"]["status"] =>
   isString(value) && includesString(executionStatuses, value);
 
-const queueItemStatuses: ReadonlyArray<QueueItemStatus> = [
-  "completed",
-  "failed",
-  "retried",
-  "exhausted",
-];
-
-const isQueueItemStatus = (value: unknown): value is QueueItemStatus =>
-  isString(value) &&
-  includesString(queueItemStatuses, value);
-
-const queuePriorities: ReadonlyArray<QueueItemCompletedEvent["item"]["priority"]> = [
+const queuePriorities: ReadonlyArray<ProcessStoreQueueResourcePriority> = [
   "high",
   "normal",
   "low",
@@ -107,20 +130,8 @@ const queuePriorities: ReadonlyArray<QueueItemCompletedEvent["item"]["priority"]
 
 const isQueuePriority = (
   value: unknown,
-): value is QueueItemCompletedEvent["item"]["priority"] =>
+): value is ProcessStoreQueueResourcePriority =>
   isString(value) && includesString(queuePriorities, value);
-
-const queueLifecycleTags: ReadonlyArray<QueueLifecycleTag> = [
-  "Started",
-  "Paused",
-  "Resumed",
-  "Shutdown",
-  "Cleared",
-];
-
-const isQueueLifecycleTag = (value: unknown): value is QueueLifecycleTag =>
-  isString(value) &&
-  includesString(queueLifecycleTags, value);
 
 const runResourceFactTypes: ReadonlyArray<RunResourceFactType> = [
   "run-resource.run.started",
@@ -189,7 +200,15 @@ export const encodeEvent = (event: AnalyticsEvent): EffectPmEventCreateInput => 
         attributes,
         payload: encodeLifecyclePayload(event),
       };
-    case "queue.item.completed":
+    case "queue.entry.enqueued":
+    case "queue.entry.started":
+    case "queue.entry.completed":
+    case "queue.entry.failed":
+    case "queue.entry.retried":
+    case "queue.entry.exhausted":
+    case "queue.entry.released":
+    case "queue.entry.dead-lettered":
+    case "queue.entry.dropped":
       return {
         id: event.id,
         type: event.type,
@@ -197,9 +216,14 @@ export const encodeEvent = (event: AnalyticsEvent): EffectPmEventCreateInput => 
         entityType: event.entityType,
         entityId: event.entityId,
         attributes,
-        payload: encodeQueueItemPayload(event),
+        payload: { fact: toJsonValue(event.fact) },
       };
-    case "queue.lifecycle.changed":
+    case "queue.lifecycle.started":
+    case "queue.lifecycle.paused":
+    case "queue.lifecycle.resumed":
+    case "queue.lifecycle.shutdown":
+    case "queue.lifecycle.cleared":
+    case "queue.lifecycle.drained":
       return {
         id: event.id,
         type: event.type,
@@ -207,9 +231,11 @@ export const encodeEvent = (event: AnalyticsEvent): EffectPmEventCreateInput => 
         entityType: event.entityType,
         entityId: event.entityId,
         attributes,
-        payload: encodeQueueLifecyclePayload(event),
+        payload: { change: toJsonValue(event.change) },
       };
-    case "runtime.fact.recorded":
+    case "queue.dedupe-key.added":
+    case "queue.dedupe-key.released":
+    case "queue.dedupe-key.hydrated":
       return {
         id: event.id,
         type: event.type,
@@ -217,17 +243,7 @@ export const encodeEvent = (event: AnalyticsEvent): EffectPmEventCreateInput => 
         entityType: event.entityType,
         entityId: event.entityId,
         attributes,
-        payload: encodeRuntimeFactPayload(event),
-      };
-    case "runtime.state.changed":
-      return {
-        id: event.id,
-        type: event.type,
-        occurredAt: dateFromMillis(event.occurredAt),
-        entityType: event.entityType,
-        entityId: event.entityId,
-        attributes,
-        payload: encodeRuntimeStatePayload(event),
+        payload: { change: toJsonValue(event.change) },
       };
     case "run-resource.fact.recorded":
       return {
@@ -301,45 +317,6 @@ const encodeLifecyclePayload = (
   return payload;
 };
 
-const encodeQueueItemPayload = (
-  event: QueueItemCompletedEvent,
-): JsonValue => {
-  const payload: { [key: string]: JsonValue } = {
-    status: event.item.status,
-    priority: event.item.priority,
-    durationMs: event.item.durationMs,
-    attempts: event.item.attempts,
-  };
-  if (event.item.error !== undefined) {
-    payload["error"] = event.item.error;
-  }
-  return payload;
-};
-
-const encodeQueueLifecyclePayload = (
-  event: QueueLifecycleChangedEvent,
-): JsonValue => {
-  const payload: { [key: string]: JsonValue } = {
-    tag: event.lifecycle.tag,
-  };
-  if (event.lifecycle.itemsCleared !== undefined) {
-    payload["itemsCleared"] = event.lifecycle.itemsCleared;
-  }
-  return payload;
-};
-
-const encodeRuntimeFactPayload = (
-  event: RuntimeFactRecordedEvent,
-): JsonValue => ({
-  fact: toJsonValue(event.fact),
-});
-
-const encodeRuntimeStatePayload = (
-  event: RuntimeStateChangedEvent,
-): JsonValue => ({
-  change: toJsonValue(event.change),
-});
-
 const encodeRunResourceFactPayload = (
   event: RunResourceFactRecordedEvent,
 ): JsonValue => ({
@@ -391,14 +368,27 @@ export const decodeEventRow = (
       return decodeExecution(row);
     case "process.lifecycle.changed":
       return decodeLifecycle(row);
-    case "queue.item.completed":
-      return decodeQueueItem(row);
-    case "queue.lifecycle.changed":
-      return decodeQueueLifecycle(row);
-    case "runtime.fact.recorded":
-      return decodeRuntimeFact(row);
-    case "runtime.state.changed":
-      return decodeRuntimeState(row);
+    case "queue.entry.enqueued":
+    case "queue.entry.started":
+    case "queue.entry.completed":
+    case "queue.entry.failed":
+    case "queue.entry.retried":
+    case "queue.entry.exhausted":
+    case "queue.entry.released":
+    case "queue.entry.dead-lettered":
+    case "queue.entry.dropped":
+      return decodeQueueEntryRecorded(row);
+    case "queue.lifecycle.started":
+    case "queue.lifecycle.paused":
+    case "queue.lifecycle.resumed":
+    case "queue.lifecycle.shutdown":
+    case "queue.lifecycle.cleared":
+    case "queue.lifecycle.drained":
+      return decodeQueueLifecycleChanged(row);
+    case "queue.dedupe-key.added":
+    case "queue.dedupe-key.released":
+    case "queue.dedupe-key.hydrated":
+      return decodeQueueDedupeKeyChanged(row);
     case "run-resource.fact.recorded":
       return decodeRunResourceFact(row);
     case "run-resource.state.changed":
@@ -411,108 +401,6 @@ export const decodeEventRow = (
         reason: `unknown event type: ${row.type}`,
       });
   }
-};
-
-const decodeRuntimeRef = (
-  value: unknown,
-): FactEnvelopeRef | null => {
-  if (!isRecord(value)) {
-    return null;
-  }
-  const kind = value["kind"];
-  const id = value["id"];
-  if (!isString(kind) || !isString(id)) {
-    return null;
-  }
-  return { kind, id };
-};
-
-const decodeRuntimeFactValue = (
-  value: unknown,
-): FactEnvelope | null => {
-  if (!isRecord(value)) {
-    return null;
-  }
-  const id = value["id"];
-  const ref = decodeRuntimeRef(value["ref"]);
-  const type = value["type"];
-  const occurredAt = value["occurredAt"];
-  if (
-    !isString(id) ||
-    ref === null ||
-    !isString(type) ||
-    !isFiniteNumber(occurredAt)
-  ) {
-    return null;
-  }
-  const attributes = decodeAttributes(
-    value["attributes"] === undefined ? null : toJsonValue(value["attributes"]),
-  );
-  return {
-    id,
-    ref,
-    type,
-    occurredAt,
-    payload: value["payload"],
-    ...(attributes === undefined ? {} : { attributes }),
-  };
-};
-
-const decodeRuntimeStateValue = (
-  value: unknown,
-): FactEnvelopeStateBase | null => {
-  if (!isRecord(value)) {
-    return null;
-  }
-  const ref = decodeRuntimeRef(value["ref"]);
-  const observedAt = value["observedAt"];
-  const configVersion = value["configVersion"];
-  if (
-    ref === null ||
-    !isFiniteNumber(observedAt) ||
-    !isFiniteNumber(configVersion)
-  ) {
-    return null;
-  }
-  return {
-    ...value,
-    ref,
-    observedAt,
-    configVersion,
-  };
-};
-
-const decodeRuntimeStateChangeValue = (
-  value: unknown,
-): FactEnvelopeStateChange | null => {
-  if (!isRecord(value)) {
-    return null;
-  }
-  const id = value["id"];
-  const ref = decodeRuntimeRef(value["ref"]);
-  const changedAt = value["changedAt"];
-  const reason = value["reason"];
-  const previousRaw = value["previous"];
-  const previous = previousRaw === null ? null : decodeRuntimeStateValue(previousRaw);
-  const current = decodeRuntimeStateValue(value["current"]);
-  if (
-    !isString(id) ||
-    ref === null ||
-    !isFiniteNumber(changedAt) ||
-    !isString(reason) ||
-    (previousRaw !== null && previous === null) ||
-    current === null
-  ) {
-    return null;
-  }
-  return {
-    id,
-    ref,
-    changedAt,
-    reason,
-    previous,
-    current,
-  };
 };
 
 const decodeRunResourceFactValue = (
@@ -790,13 +678,246 @@ const decodeLifecycle = (
   };
 };
 
-const decodeQueueItem = (
+// ============================================================================
+// Queue resource decoders
+// ============================================================================
+
+const QUEUE_RESOURCE_ENTITY_TYPE = "queue-resource";
+
+interface QueueEntryFactCommonDecoded {
+  readonly id: string;
+  readonly queueId: string;
+  readonly entryId: string;
+  readonly occurredAt: number;
+  readonly key: string | undefined;
+  readonly priority: ProcessStoreQueueResourcePriority | undefined;
+  readonly attempts: number | undefined;
+  readonly batchId: string | undefined;
+  readonly attributes: Record<string, unknown> | undefined;
+}
+
+const decodeQueueEntryFactCommon = (
+  raw: { readonly [key: string]: unknown },
+): QueueEntryFactCommonDecoded | null => {
+  const id = raw["id"];
+  const queueId = raw["queueId"];
+  const entryId = raw["entryId"];
+  const occurredAt = raw["occurredAt"];
+  if (
+    !isString(id) ||
+    !isString(queueId) ||
+    !isString(entryId) ||
+    !isFiniteNumber(occurredAt)
+  ) {
+    return null;
+  }
+
+  const keyRaw = raw["key"];
+  const priorityRaw = raw["priority"];
+  const attemptsRaw = raw["attempts"];
+  const batchIdRaw = raw["batchId"];
+
+  if (keyRaw !== undefined && !isString(keyRaw)) return null;
+  if (priorityRaw !== undefined && !isQueuePriority(priorityRaw)) return null;
+  if (attemptsRaw !== undefined && !isFiniteNumber(attemptsRaw)) return null;
+  if (batchIdRaw !== undefined && !isString(batchIdRaw)) return null;
+
+  return {
+    id,
+    queueId,
+    entryId,
+    occurredAt,
+    key: keyRaw,
+    priority: priorityRaw,
+    attempts: attemptsRaw,
+    batchId: batchIdRaw,
+    attributes: decodeAttributes(
+      raw["attributes"] === undefined
+        ? null
+        : toJsonValue(raw["attributes"]),
+    ),
+  };
+};
+
+interface QueueEntryFactCommonExpanded {
+  readonly id: string;
+  readonly queueId: string;
+  readonly entryId: string;
+  readonly occurredAt: number;
+  readonly key?: string;
+  readonly priority?: ProcessStoreQueueResourcePriority;
+  readonly attempts?: number;
+  readonly batchId?: string;
+  readonly attributes?: Record<string, unknown>;
+}
+
+const expandEntryCommon = (
+  common: QueueEntryFactCommonDecoded,
+): QueueEntryFactCommonExpanded => ({
+  id: common.id,
+  queueId: common.queueId,
+  entryId: common.entryId,
+  occurredAt: common.occurredAt,
+  ...(common.key === undefined ? {} : { key: common.key }),
+  ...(common.priority === undefined ? {} : { priority: common.priority }),
+  ...(common.attempts === undefined ? {} : { attempts: common.attempts }),
+  ...(common.batchId === undefined ? {} : { batchId: common.batchId }),
+  ...(common.attributes === undefined ? {} : { attributes: common.attributes }),
+});
+
+const decodeQueueEntryEnqueuedFact = (
+  raw: { readonly [key: string]: unknown },
+): QueueEntryEnqueuedFact | null => {
+  const common = decodeQueueEntryFactCommon(raw);
+  if (common === null) return null;
+  const enqueuedAt = raw["enqueuedAt"];
+  if (!isFiniteNumber(enqueuedAt)) return null;
+  const payload = raw["payload"];
+  if (payload !== undefined && !isJsonValue(payload)) return null;
+  return {
+    ...expandEntryCommon(common),
+    type: "queue.entry.enqueued",
+    enqueuedAt,
+    ...(payload === undefined ? {} : { payload }),
+  };
+};
+
+const decodeQueueEntryStartedFact = (
+  raw: { readonly [key: string]: unknown },
+): QueueEntryStartedFact | null => {
+  const common = decodeQueueEntryFactCommon(raw);
+  if (common === null) return null;
+  const startedAt = raw["startedAt"];
+  if (!isFiniteNumber(startedAt)) return null;
+  return {
+    ...expandEntryCommon(common),
+    type: "queue.entry.started",
+    startedAt,
+  };
+};
+
+const decodeQueueEntryCompletedFact = (
+  raw: { readonly [key: string]: unknown },
+): QueueEntryCompletedFact | null => {
+  const common = decodeQueueEntryFactCommon(raw);
+  if (common === null) return null;
+  const startedAt = raw["startedAt"];
+  const durationMs = raw["durationMs"];
+  if (!isFiniteNumber(startedAt) || !isFiniteNumber(durationMs)) return null;
+  return {
+    ...expandEntryCommon(common),
+    type: "queue.entry.completed",
+    startedAt,
+    durationMs,
+  };
+};
+
+const decodeQueueEntryFailedFact = (
+  raw: { readonly [key: string]: unknown },
+): QueueEntryFailedFact | null => {
+  const common = decodeQueueEntryFactCommon(raw);
+  if (common === null) return null;
+  const startedAt = raw["startedAt"];
+  const durationMs = raw["durationMs"];
+  const errorRaw = raw["error"];
+  if (!isFiniteNumber(startedAt) || !isFiniteNumber(durationMs)) return null;
+  if (errorRaw !== undefined && !isString(errorRaw)) return null;
+  return {
+    ...expandEntryCommon(common),
+    type: "queue.entry.failed",
+    startedAt,
+    durationMs,
+    ...(errorRaw === undefined ? {} : { error: errorRaw }),
+  };
+};
+
+const decodeQueueEntryRetriedFact = (
+  raw: { readonly [key: string]: unknown },
+): QueueEntryRetriedFact | null => {
+  const common = decodeQueueEntryFactCommon(raw);
+  if (common === null) return null;
+  const errorRaw = raw["error"];
+  if (errorRaw !== undefined && !isString(errorRaw)) return null;
+  return {
+    ...expandEntryCommon(common),
+    type: "queue.entry.retried",
+    ...(errorRaw === undefined ? {} : { error: errorRaw }),
+  };
+};
+
+const decodeQueueEntryExhaustedFact = (
+  raw: { readonly [key: string]: unknown },
+): QueueEntryExhaustedFact | null => {
+  const common = decodeQueueEntryFactCommon(raw);
+  if (common === null) return null;
+  const errorRaw = raw["error"];
+  if (errorRaw !== undefined && !isString(errorRaw)) return null;
+  return {
+    ...expandEntryCommon(common),
+    type: "queue.entry.exhausted",
+    ...(errorRaw === undefined ? {} : { error: errorRaw }),
+  };
+};
+
+const decodeQueueEntryReleasedFact = (
+  raw: { readonly [key: string]: unknown },
+): QueueEntryReleasedFact | null => {
+  const common = decodeQueueEntryFactCommon(raw);
+  if (common === null) return null;
+  const releaseId = raw["releaseId"];
+  const interruptedAtRaw = raw["interruptedAt"];
+  if (!isString(releaseId)) return null;
+  if (interruptedAtRaw !== undefined && !isFiniteNumber(interruptedAtRaw)) {
+    return null;
+  }
+  return {
+    ...expandEntryCommon(common),
+    type: "queue.entry.released",
+    releaseId,
+    ...(interruptedAtRaw === undefined
+      ? {}
+      : { interruptedAt: interruptedAtRaw }),
+  };
+};
+
+const decodeQueueEntryDeadLetteredFact = (
+  raw: { readonly [key: string]: unknown },
+): QueueEntryDeadLetteredFact | null => {
+  const common = decodeQueueEntryFactCommon(raw);
+  if (common === null) return null;
+  const reasonRaw = raw["reason"];
+  const errorRaw = raw["error"];
+  if (reasonRaw !== undefined && !isString(reasonRaw)) return null;
+  if (errorRaw !== undefined && !isString(errorRaw)) return null;
+  return {
+    ...expandEntryCommon(common),
+    type: "queue.entry.dead-lettered",
+    ...(reasonRaw === undefined ? {} : { reason: reasonRaw }),
+    ...(errorRaw === undefined ? {} : { error: errorRaw }),
+  };
+};
+
+const decodeQueueEntryDroppedFact = (
+  raw: { readonly [key: string]: unknown },
+): QueueEntryDroppedFact | null => {
+  const common = decodeQueueEntryFactCommon(raw);
+  if (common === null) return null;
+  const reasonRaw = raw["reason"];
+  if (reasonRaw !== undefined && !isString(reasonRaw)) return null;
+  return {
+    ...expandEntryCommon(common),
+    type: "queue.entry.dropped",
+    ...(reasonRaw === undefined ? {} : { reason: reasonRaw }),
+  };
+};
+
+const decodeQueueEntryRecorded = (
   row: EffectPmEventRow,
-): QueueItemCompletedEvent | ProcessStoreEventDecodeError => {
-  if (row.entityType !== "queue") {
+): QueueEntryRecordedEvent | ProcessStoreEventDecodeError => {
+  if (row.entityType !== QUEUE_RESOURCE_ENTITY_TYPE) {
     return new ProcessStoreEventDecodeError({
       rowId: row.id,
-      reason: `entityType must be "queue" for queue item events, got ${row.entityType}`,
+      reason: `entityType must be "${QUEUE_RESOURCE_ENTITY_TYPE}" for queue entry events, got ${row.entityType}`,
     });
   }
   const payload = row.payload;
@@ -806,46 +927,189 @@ const decodeQueueItem = (
       reason: "payload is not an object",
     });
   }
-  const status = payload["status"];
-  const priority = payload["priority"];
-  const durationMs = payload["durationMs"];
-  const attempts = payload["attempts"];
-  const errorRaw = payload["error"];
-  if (!isQueueItemStatus(status)) return failPayload(row, "status");
-  if (!isQueuePriority(priority)) return failPayload(row, "priority");
-  if (!isFiniteNumber(durationMs)) return failPayload(row, "durationMs");
-  if (!isFiniteNumber(attempts)) return failPayload(row, "attempts");
-  const error =
-    errorRaw === undefined
-      ? undefined
-      : isString(errorRaw)
-        ? errorRaw
-        : null;
-  if (error === null) return failPayload(row, "error");
+  const factRaw = payload["fact"];
+  if (!isRecord(factRaw)) return failPayload(row, "fact");
+  if (factRaw["type"] !== row.type) return failPayload(row, "fact.type");
+  const occurredAt = row.occurredAt.getTime();
+  const entityId = row.entityId;
+  const attributes = decodeAttributes(row.attributes);
+  switch (row.type) {
+    case "queue.entry.enqueued": {
+      const fact = decodeQueueEntryEnqueuedFact(factRaw);
+      if (fact === null) return failPayload(row, "fact");
+      return {
+        id: row.id,
+        type: "queue.entry.enqueued",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        fact,
+      };
+    }
+    case "queue.entry.started": {
+      const fact = decodeQueueEntryStartedFact(factRaw);
+      if (fact === null) return failPayload(row, "fact");
+      return {
+        id: row.id,
+        type: "queue.entry.started",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        fact,
+      };
+    }
+    case "queue.entry.completed": {
+      const fact = decodeQueueEntryCompletedFact(factRaw);
+      if (fact === null) return failPayload(row, "fact");
+      return {
+        id: row.id,
+        type: "queue.entry.completed",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        fact,
+      };
+    }
+    case "queue.entry.failed": {
+      const fact = decodeQueueEntryFailedFact(factRaw);
+      if (fact === null) return failPayload(row, "fact");
+      return {
+        id: row.id,
+        type: "queue.entry.failed",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        fact,
+      };
+    }
+    case "queue.entry.retried": {
+      const fact = decodeQueueEntryRetriedFact(factRaw);
+      if (fact === null) return failPayload(row, "fact");
+      return {
+        id: row.id,
+        type: "queue.entry.retried",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        fact,
+      };
+    }
+    case "queue.entry.exhausted": {
+      const fact = decodeQueueEntryExhaustedFact(factRaw);
+      if (fact === null) return failPayload(row, "fact");
+      return {
+        id: row.id,
+        type: "queue.entry.exhausted",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        fact,
+      };
+    }
+    case "queue.entry.released": {
+      const fact = decodeQueueEntryReleasedFact(factRaw);
+      if (fact === null) return failPayload(row, "fact");
+      return {
+        id: row.id,
+        type: "queue.entry.released",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        fact,
+      };
+    }
+    case "queue.entry.dead-lettered": {
+      const fact = decodeQueueEntryDeadLetteredFact(factRaw);
+      if (fact === null) return failPayload(row, "fact");
+      return {
+        id: row.id,
+        type: "queue.entry.dead-lettered",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        fact,
+      };
+    }
+    case "queue.entry.dropped": {
+      const fact = decodeQueueEntryDroppedFact(factRaw);
+      if (fact === null) return failPayload(row, "fact");
+      return {
+        id: row.id,
+        type: "queue.entry.dropped",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        fact,
+      };
+    }
+    default:
+      return new ProcessStoreEventDecodeError({
+        rowId: row.id,
+        reason: `unsupported queue entry type: ${row.type}`,
+      });
+  }
+};
+
+interface QueueLifecycleChangeCommonDecoded {
+  readonly id: string;
+  readonly queueId: string;
+  readonly changedAt: number;
+  readonly attributes: Record<string, unknown> | undefined;
+}
+
+interface QueueLifecycleChangeCommonExpanded {
+  readonly id: string;
+  readonly queueId: string;
+  readonly changedAt: number;
+  readonly attributes?: Record<string, unknown>;
+}
+
+const decodeQueueLifecycleChangeCommon = (
+  raw: { readonly [key: string]: unknown },
+): QueueLifecycleChangeCommonDecoded | null => {
+  const id = raw["id"];
+  const queueId = raw["queueId"];
+  const changedAt = raw["changedAt"];
+  if (!isString(id) || !isString(queueId) || !isFiniteNumber(changedAt)) {
+    return null;
+  }
   return {
-    id: row.id,
-    type: "queue.item.completed",
-    occurredAt: row.occurredAt.getTime(),
-    entityType: "queue",
-    entityId: row.entityId,
-    attributes: decodeAttributes(row.attributes),
-    item: {
-      status,
-      priority,
-      durationMs,
-      attempts,
-      ...(error === undefined ? {} : { error }),
-    },
+    id,
+    queueId,
+    changedAt,
+    attributes: decodeAttributes(
+      raw["attributes"] === undefined
+        ? null
+        : toJsonValue(raw["attributes"]),
+    ),
   };
 };
 
-const decodeQueueLifecycle = (
+const expandLifecycleCommon = (
+  common: QueueLifecycleChangeCommonDecoded,
+): QueueLifecycleChangeCommonExpanded => ({
+  id: common.id,
+  queueId: common.queueId,
+  changedAt: common.changedAt,
+  ...(common.attributes === undefined ? {} : { attributes: common.attributes }),
+});
+
+const decodeQueueLifecycleChanged = (
   row: EffectPmEventRow,
 ): QueueLifecycleChangedEvent | ProcessStoreEventDecodeError => {
-  if (row.entityType !== "queue") {
+  if (row.entityType !== QUEUE_RESOURCE_ENTITY_TYPE) {
     return new ProcessStoreEventDecodeError({
       rowId: row.id,
-      reason: `entityType must be "queue" for queue lifecycle events, got ${row.entityType}`,
+      reason: `entityType must be "${QUEUE_RESOURCE_ENTITY_TYPE}" for queue lifecycle events, got ${row.entityType}`,
     });
   }
   const payload = row.payload;
@@ -855,54 +1119,182 @@ const decodeQueueLifecycle = (
       reason: "payload is not an object",
     });
   }
-  const tag = payload["tag"];
-  const itemsCleared = payload["itemsCleared"];
-  if (!isQueueLifecycleTag(tag)) return failPayload(row, "tag");
-  if (itemsCleared !== undefined && !isFiniteNumber(itemsCleared)) {
-    return failPayload(row, "itemsCleared");
+  const changeRaw = payload["change"];
+  if (!isRecord(changeRaw)) return failPayload(row, "change");
+  if (changeRaw["type"] !== row.type) return failPayload(row, "change.type");
+  const common = decodeQueueLifecycleChangeCommon(changeRaw);
+  if (common === null) return failPayload(row, "change");
+  const occurredAt = row.occurredAt.getTime();
+  const entityId = row.entityId;
+  const attributes = decodeAttributes(row.attributes);
+  const expanded = expandLifecycleCommon(common);
+  switch (row.type) {
+    case "queue.lifecycle.started": {
+      const change: QueueLifecycleStartedChange = {
+        ...expanded,
+        type: "queue.lifecycle.started",
+      };
+      return {
+        id: row.id,
+        type: "queue.lifecycle.started",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        change,
+      };
+    }
+    case "queue.lifecycle.paused": {
+      const change: QueueLifecyclePausedChange = {
+        ...expanded,
+        type: "queue.lifecycle.paused",
+      };
+      return {
+        id: row.id,
+        type: "queue.lifecycle.paused",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        change,
+      };
+    }
+    case "queue.lifecycle.resumed": {
+      const change: QueueLifecycleResumedChange = {
+        ...expanded,
+        type: "queue.lifecycle.resumed",
+      };
+      return {
+        id: row.id,
+        type: "queue.lifecycle.resumed",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        change,
+      };
+    }
+    case "queue.lifecycle.shutdown": {
+      const change: QueueLifecycleShutdownChange = {
+        ...expanded,
+        type: "queue.lifecycle.shutdown",
+      };
+      return {
+        id: row.id,
+        type: "queue.lifecycle.shutdown",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        change,
+      };
+    }
+    case "queue.lifecycle.cleared": {
+      const itemsCleared = changeRaw["itemsCleared"];
+      if (!isFiniteNumber(itemsCleared)) {
+        return failPayload(row, "change.itemsCleared");
+      }
+      const change: QueueLifecycleClearedChange = {
+        ...expanded,
+        type: "queue.lifecycle.cleared",
+        itemsCleared,
+      };
+      return {
+        id: row.id,
+        type: "queue.lifecycle.cleared",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        change,
+      };
+    }
+    case "queue.lifecycle.drained": {
+      const change: QueueLifecycleDrainedChange = {
+        ...expanded,
+        type: "queue.lifecycle.drained",
+      };
+      return {
+        id: row.id,
+        type: "queue.lifecycle.drained",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        change,
+      };
+    }
+    default:
+      return new ProcessStoreEventDecodeError({
+        rowId: row.id,
+        reason: `unsupported queue lifecycle type: ${row.type}`,
+      });
+  }
+};
+
+interface QueueDedupeKeyChangeCommonDecoded {
+  readonly id: string;
+  readonly queueId: string;
+  readonly key: string;
+  readonly changedAt: number;
+  readonly attributes: Record<string, unknown> | undefined;
+}
+
+interface QueueDedupeKeyChangeCommonExpanded {
+  readonly id: string;
+  readonly queueId: string;
+  readonly key: string;
+  readonly changedAt: number;
+  readonly attributes?: Record<string, unknown>;
+}
+
+const decodeQueueDedupeKeyChangeCommon = (
+  raw: { readonly [key: string]: unknown },
+): QueueDedupeKeyChangeCommonDecoded | null => {
+  const id = raw["id"];
+  const queueId = raw["queueId"];
+  const key = raw["key"];
+  const changedAt = raw["changedAt"];
+  if (
+    !isString(id) ||
+    !isString(queueId) ||
+    !isString(key) ||
+    !isFiniteNumber(changedAt)
+  ) {
+    return null;
   }
   return {
-    id: row.id,
-    type: "queue.lifecycle.changed",
-    occurredAt: row.occurredAt.getTime(),
-    entityType: "queue",
-    entityId: row.entityId,
-    attributes: decodeAttributes(row.attributes),
-    lifecycle: {
-      tag,
-      ...(itemsCleared === undefined ? {} : { itemsCleared }),
-    },
+    id,
+    queueId,
+    key,
+    changedAt,
+    attributes: decodeAttributes(
+      raw["attributes"] === undefined
+        ? null
+        : toJsonValue(raw["attributes"]),
+    ),
   };
 };
 
-const decodeRuntimeFact = (
-  row: EffectPmEventRow,
-): RuntimeFactRecordedEvent | ProcessStoreEventDecodeError => {
-  const payload = row.payload;
-  if (!isRecord(payload)) {
-    return new ProcessStoreEventDecodeError({
-      rowId: row.id,
-      reason: "payload is not an object",
-    });
-  }
-  const fact = decodeRuntimeFactValue(payload["fact"]);
-  if (fact === null) {
-    return failPayload(row, "fact");
-  }
-  return {
-    id: row.id,
-    type: "runtime.fact.recorded",
-    occurredAt: row.occurredAt.getTime(),
-    entityType: row.entityType,
-    entityId: row.entityId,
-    attributes: decodeAttributes(row.attributes),
-    fact,
-  };
-};
+const expandDedupeCommon = (
+  common: QueueDedupeKeyChangeCommonDecoded,
+): QueueDedupeKeyChangeCommonExpanded => ({
+  id: common.id,
+  queueId: common.queueId,
+  key: common.key,
+  changedAt: common.changedAt,
+  ...(common.attributes === undefined ? {} : { attributes: common.attributes }),
+});
 
-const decodeRuntimeState = (
+const decodeQueueDedupeKeyChanged = (
   row: EffectPmEventRow,
-): RuntimeStateChangedEvent | ProcessStoreEventDecodeError => {
+): QueueDedupeKeyChangedEvent | ProcessStoreEventDecodeError => {
+  if (row.entityType !== QUEUE_RESOURCE_ENTITY_TYPE) {
+    return new ProcessStoreEventDecodeError({
+      rowId: row.id,
+      reason: `entityType must be "${QUEUE_RESOURCE_ENTITY_TYPE}" for queue dedupe-key events, got ${row.entityType}`,
+    });
+  }
   const payload = row.payload;
   if (!isRecord(payload)) {
     return new ProcessStoreEventDecodeError({
@@ -910,19 +1302,67 @@ const decodeRuntimeState = (
       reason: "payload is not an object",
     });
   }
-  const change = decodeRuntimeStateChangeValue(payload["change"]);
-  if (change === null) {
-    return failPayload(row, "change");
+  const changeRaw = payload["change"];
+  if (!isRecord(changeRaw)) return failPayload(row, "change");
+  if (changeRaw["type"] !== row.type) return failPayload(row, "change.type");
+  const common = decodeQueueDedupeKeyChangeCommon(changeRaw);
+  if (common === null) return failPayload(row, "change");
+  const occurredAt = row.occurredAt.getTime();
+  const entityId = row.entityId;
+  const attributes = decodeAttributes(row.attributes);
+  const expanded = expandDedupeCommon(common);
+  switch (row.type) {
+    case "queue.dedupe-key.added": {
+      const change: QueueDedupeKeyAddedChange = {
+        ...expanded,
+        type: "queue.dedupe-key.added",
+      };
+      return {
+        id: row.id,
+        type: "queue.dedupe-key.added",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        change,
+      };
+    }
+    case "queue.dedupe-key.released": {
+      const change: QueueDedupeKeyReleasedChange = {
+        ...expanded,
+        type: "queue.dedupe-key.released",
+      };
+      return {
+        id: row.id,
+        type: "queue.dedupe-key.released",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        change,
+      };
+    }
+    case "queue.dedupe-key.hydrated": {
+      const change: QueueDedupeKeyHydratedChange = {
+        ...expanded,
+        type: "queue.dedupe-key.hydrated",
+      };
+      return {
+        id: row.id,
+        type: "queue.dedupe-key.hydrated",
+        occurredAt,
+        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
+        entityId,
+        attributes,
+        change,
+      };
+    }
+    default:
+      return new ProcessStoreEventDecodeError({
+        rowId: row.id,
+        reason: `unsupported queue dedupe-key type: ${row.type}`,
+      });
   }
-  return {
-    id: row.id,
-    type: "runtime.state.changed",
-    occurredAt: row.occurredAt.getTime(),
-    entityType: row.entityType,
-    entityId: row.entityId,
-    attributes: decodeAttributes(row.attributes),
-    change,
-  };
 };
 
 const decodeRunResourceFact = (

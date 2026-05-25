@@ -7,9 +7,10 @@
 import { Data } from "effect";
 import type { LogLevel } from "effect/LogLevel";
 import type {
-  FactEnvelope,
-  FactEnvelopeStateChange,
-} from "./internal/store/factEnvelope";
+  QueueDedupeKeyChangedEvent,
+  QueueEntryRecordedEvent,
+  QueueLifecycleChangedEvent,
+} from "./store/queueResource";
 import type {
   RunResourceFact,
   RunResourceStateChange,
@@ -174,51 +175,11 @@ export interface ProcessLifecycleChangedEvent extends AnalyticsEventBase {
   };
 }
 
-/** @public */
-export type QueueItemStatus = "completed" | "failed" | "retried" | "exhausted";
-
-/** @public */
-export type QueueLifecycleTag =
-  | "Started"
-  | "Paused"
-  | "Resumed"
-  | "Shutdown"
-  | "Cleared";
-
-/** @public */
-export interface QueueItemCompletedEvent extends AnalyticsEventBase {
-  type: "queue.item.completed";
-  entityType: "queue";
-  item: {
-    status: QueueItemStatus;
-    priority: "high" | "normal" | "low";
-    durationMs: number;
-    attempts: number;
-    error?: string;
-  };
-}
-
-/** @public */
-export interface QueueLifecycleChangedEvent extends AnalyticsEventBase {
-  type: "queue.lifecycle.changed";
-  entityType: "queue";
-  lifecycle: {
-    tag: QueueLifecycleTag;
-    itemsCleared?: number;
-  };
-}
-
-/** @public */
-export interface RuntimeFactRecordedEvent extends AnalyticsEventBase {
-  type: "runtime.fact.recorded";
-  fact: FactEnvelope;
-}
-
-/** @public */
-export interface RuntimeStateChangedEvent extends AnalyticsEventBase {
-  type: "runtime.state.changed";
-  change: FactEnvelopeStateChange;
-}
+export type {
+  QueueDedupeKeyChangedEvent,
+  QueueEntryRecordedEvent,
+  QueueLifecycleChangedEvent,
+} from "./store/queueResource";
 
 /**
  * Per-domain wire event for a {@link RunResourceFact} written by
@@ -279,12 +240,11 @@ export interface LogEntryRecordedEvent extends AnalyticsEventBase {
 export type AnalyticsEvent =
   | ProcessExecutionCompletedEvent
   | ProcessLifecycleChangedEvent
+  | QueueEntryRecordedEvent
+  | QueueLifecycleChangedEvent
+  | QueueDedupeKeyChangedEvent
   | RunResourceFactRecordedEvent
   | RunResourceStateChangedEvent
-  | RuntimeFactRecordedEvent
-  | RuntimeStateChangedEvent
-  | QueueItemCompletedEvent
-  | QueueLifecycleChangedEvent
   | LogEntryRecordedEvent;
 
 /**

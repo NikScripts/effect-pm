@@ -23,10 +23,9 @@ export type {
   ProcessLifecycleTag,
   ProcessStoreWriteError,
   QueryOpts,
-  QueueItemCompletedEvent,
-  QueueItemStatus,
+  QueueDedupeKeyChangedEvent,
+  QueueEntryRecordedEvent,
   QueueLifecycleChangedEvent,
-  QueueLifecycleTag,
   RunResourceFactRecordedEvent,
   RunResourceStateChangedEvent,
   StoreEventQuery,
@@ -38,18 +37,44 @@ export {
   isLogEntryRecorded,
 } from "./ProcessStoreEvent";
 
-export { ProcessStoreQueueResourceContextError } from "./store/queueResource";
+export {
+  isQueueDedupeKeyChangedEvent,
+  isQueueEntryRecordedEvent,
+  isQueueLifecycleChangedEvent,
+} from "./store/queueResource";
 
 export type {
-  ProcessStoreQueueResourceApi,
-  ProcessStoreQueueResourceContext,
-  ProcessStoreQueueResourceDedupeKeyInput,
   ProcessStoreQueueResourceDedupeKeyStatus,
-  ProcessStoreQueueResourceEntryInput,
   ProcessStoreQueueResourceEntryStatus,
-  ProcessStoreQueueResourceLifecycleInput,
   ProcessStoreQueueResourceLifecycleTag,
   ProcessStoreQueueResourcePriority,
+  QueueDedupeKeyAddedChange,
+  QueueDedupeKeyChange,
+  QueueDedupeKeyChangeType,
+  QueueDedupeKeyHydratedChange,
+  QueueDedupeKeyQuery,
+  QueueDedupeKeyReleasedChange,
+  QueueEntryCompletedFact,
+  QueueEntryDeadLetteredFact,
+  QueueEntryDroppedFact,
+  QueueEntryEnqueuedFact,
+  QueueEntryExhaustedFact,
+  QueueEntryFact,
+  QueueEntryFactType,
+  QueueEntryFailedFact,
+  QueueEntryQuery,
+  QueueEntryReleasedFact,
+  QueueEntryRetriedFact,
+  QueueEntryStartedFact,
+  QueueLifecycleChange,
+  QueueLifecycleChangeType,
+  QueueLifecycleClearedChange,
+  QueueLifecycleDrainedChange,
+  QueueLifecyclePausedChange,
+  QueueLifecycleQuery,
+  QueueLifecycleResumedChange,
+  QueueLifecycleShutdownChange,
+  QueueLifecycleStartedChange,
 } from "./store/queueResource";
 
 export type { ProcessStoreLogApi } from "./store/log";
