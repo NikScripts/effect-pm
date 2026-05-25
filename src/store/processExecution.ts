@@ -117,14 +117,14 @@ export class ProcessStoreProcessExecution extends ProcessStore.Service<
   ProcessStoreProcessExecution
 >()(
   "@nikscripts/effect-pm/store/processExecution/ProcessStoreProcessExecution",
-  ProcessStore.record((s) => ({
-    recordCompleted: (input: ProcessExecutionFinishInput) =>
+  ProcessStore.record({
+    recordCompleted: (s) => (input: ProcessExecutionFinishInput) =>
       s.append(toExecutionEvent(input, "completed")),
-    recordFailed: (input: ProcessExecutionFinishInput) =>
+    recordFailed: (s) => (input: ProcessExecutionFinishInput) =>
       s.append(toExecutionEvent(input, "failed")),
-    recordInterrupted: (input: ProcessExecutionFinishInput) =>
+    recordInterrupted: (s) => (input: ProcessExecutionFinishInput) =>
       s.append(toExecutionEvent(input, "interrupted")),
-  })),
+  }),
   ProcessStore.read((s) => ({
     executions: (query: ProcessExecutionQuery) =>
       s.events(processExecutionStoreQuery(query.processId, query.opts)).pipe(

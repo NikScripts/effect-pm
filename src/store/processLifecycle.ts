@@ -106,13 +106,13 @@ export class ProcessStoreProcessLifecycle extends ProcessStore.Service<
   ProcessStoreProcessLifecycle
 >()(
   "@nikscripts/effect-pm/store/processLifecycle/ProcessStoreProcessLifecycle",
-  ProcessStore.record((s) => ({
-    lifecycleChanged: (input: ProcessLifecycleRecordInput) =>
+  ProcessStore.record({
+    lifecycleChanged: (s) => (input: ProcessLifecycleRecordInput) =>
       Effect.gen(function* () {
         const occurredAtMs = input.occurredAt ?? (yield* Clock.currentTimeMillis);
         yield* s.append(makeProcessLifecycleChangedEvent(input, occurredAtMs));
       }),
-  })),
+  }),
   ProcessStore.read((s) => ({
     lifecycle: (processId: string, opts?: QueryOpts) =>
       s.events(processLifecycleStoreQuery(processId, opts)).pipe(

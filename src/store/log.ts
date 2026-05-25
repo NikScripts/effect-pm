@@ -240,14 +240,26 @@ export class ProcessStoreLog extends ProcessStore.Service<
   ProcessStoreLog
 >()(
   "@nikscripts/effect-pm/store/log/ProcessStoreLog",
-  ProcessStore.record((s) => ({
-    record: (groupId: string, entryId: string, entry: ProcessManagerLogEntry) =>
-      s.append(makeRecordedEvent(groupId, entryId, entry)),
-    recordBatch: (
-      groupId: string,
-      rows: ReadonlyArray<{ readonly entryId: string; readonly entry: ProcessManagerLogEntry }>,
-    ) => s.appendBatch(rows.map((row) => makeRecordedEvent(groupId, row.entryId, row.entry))),
-  })),
+  ProcessStore.record({
+    record:
+      (s) =>
+      (groupId: string, entryId: string, entry: ProcessManagerLogEntry) =>
+        s.append(makeRecordedEvent(groupId, entryId, entry)),
+    recordBatch:
+      (s) =>
+      (
+        groupId: string,
+        rows: ReadonlyArray<{
+          readonly entryId: string;
+          readonly entry: ProcessManagerLogEntry;
+        }>,
+      ) =>
+        s.appendBatch(
+          rows.map((row) =>
+            makeRecordedEvent(groupId, row.entryId, row.entry),
+          ),
+        ),
+  }),
   ProcessStore.read((s) => ({
     load: (query: ProcessManagerLogQuery) => loadEntries(s.events, query),
     query: (logQuery: ProcessManagerLogQuery) => queryEntries(s.events, logQuery),

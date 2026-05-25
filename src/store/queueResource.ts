@@ -1036,20 +1036,22 @@ export class ProcessStoreQueueResource extends ProcessStore.Service<
   ProcessStoreQueueResource
 >()(
   "@nikscripts/effect-pm/store/queueResource/ProcessStoreQueueResource",
-  ProcessStore.record((s) => ({
-    recordEntry: (fact: QueueEntryFact) =>
+  ProcessStore.record({
+    recordEntry: (s) => (fact: QueueEntryFact) =>
       s.append(makeQueueEntryEvent(fact)),
-    recordEntryBatch: (facts: ReadonlyArray<QueueEntryFact>) =>
+    recordEntryBatch: (s) => (facts: ReadonlyArray<QueueEntryFact>) =>
       s.appendBatch(facts.map(makeQueueEntryEvent)),
-    recordLifecycle: (change: QueueLifecycleChange) =>
+    recordLifecycle: (s) => (change: QueueLifecycleChange) =>
       s.append(makeQueueLifecycleEvent(change)),
-    recordLifecycleBatch: (changes: ReadonlyArray<QueueLifecycleChange>) =>
-      s.appendBatch(changes.map(makeQueueLifecycleEvent)),
-    recordDedupeKey: (change: QueueDedupeKeyChange) =>
+    recordLifecycleBatch:
+      (s) => (changes: ReadonlyArray<QueueLifecycleChange>) =>
+        s.appendBatch(changes.map(makeQueueLifecycleEvent)),
+    recordDedupeKey: (s) => (change: QueueDedupeKeyChange) =>
       s.append(makeQueueDedupeKeyEvent(change)),
-    recordDedupeKeyBatch: (changes: ReadonlyArray<QueueDedupeKeyChange>) =>
-      s.appendBatch(changes.map(makeQueueDedupeKeyEvent)),
-  })),
+    recordDedupeKeyBatch:
+      (s) => (changes: ReadonlyArray<QueueDedupeKeyChange>) =>
+        s.appendBatch(changes.map(makeQueueDedupeKeyEvent)),
+  }),
   ProcessStore.read((s) => ({
     entries: (query?: QueueEntryQuery) =>
       s

@@ -16,23 +16,13 @@ import {
 } from "./codec";
 import type { EffectPmEventRow, JsonValue } from "../../ProcessStoreEvent";
 import {
-  ProcessStoreDuplicateRecordError,
-  ProcessStoreReadonlyRecordError,
   type AnalyticsEvent,
   type ProcessExecutionCompletedEvent,
   type ProcessLifecycleChangedEvent,
   type ProcessStoreWriteError,
   type QueryOpts,
-  type QueueItemCompletedEvent,
-  type QueueLifecycleChangedEvent,
   type StoreEventQuery,
 } from "../../ProcessStoreEvent";
-import type {
-  FactEnvelope,
-  FactEnvelopeQuery,
-  FactEnvelopeStateChange,
-  FactEnvelopeStateHistoryQuery,
-} from "./factEnvelope";
 import type {
   RunResourceFact,
   RunResourceFactQuery,
@@ -43,14 +33,17 @@ import {
   isRecord,
   isString,
 } from "../json";
-import type { RuntimeRecordQuery } from "../../Query";
-import {
-  RuntimeStorageDuplicateRecordError,
-  RuntimeStorageReadonlyRecordError,
-  type RuntimeRecord,
-  type RuntimeStorageError,
-  type RuntimeStorageService,
+import { processStoreWriteErrorFromRuntimeStorage } from "./helpers";
+import type {
+  DeleteResult,
+  RuntimeRecord,
+  RuntimeStorageService,
+  UpdateResult,
 } from "../../RuntimeStorage";
+import type {
+  RuntimeRecordPatch,
+  RuntimeRecordQuery,
+} from "../../Query";
 
 /** @internal */
 export const applyQueryOpts = <T>(
@@ -178,91 +171,6 @@ export const processLifecycleFromEvents = (
     isProcessLifecycleChanged,
   );
 
-/** @internal */
-export const isQueueItemCompleted = (
-  event: AnalyticsEvent,
-): event is QueueItemCompletedEvent =>
-  event.type === "queue.item.completed" && event.entityType === "queue";
-
-/** @internal */
-export const isQueueLifecycleChanged = (
-  event: AnalyticsEvent,
-): event is QueueLifecycleChangedEvent =>
-  event.type === "queue.lifecycle.changed" && event.entityType === "queue";
-
-const matchesFactEnvelopeQuery =
-  (query: FactEnvelopeQuery | undefined) =>
-  (fact: FactEnvelope): boolean => {
-    if (query?.ref !== undefined) {
-      if (fact.ref.kind !== query.ref.kind || fact.ref.id !== query.ref.id) {
-        return false;
-      }
-    }
-    if (
-      query?.types !== undefined &&
-      query.types.length > 0 &&
-      !query.types.includes(fact.type)
-    ) {
-      return false;
-    }
-    return true;
-  };
-
-/** @internal Used by {@link ProcessStoreQueueResource} read paths. */
-export const factEnvelopeStoreQuery = (
-  query: FactEnvelopeQuery | undefined,
-): StoreEventQuery => ({
-  entityType: query?.ref?.kind,
-  entityId: query?.ref?.id,
-  types: ["runtime.fact.recorded"],
-  opts: query?.opts === undefined
-    ? undefined
-    : {
-        before: query.opts.before,
-        after: query.opts.after,
-      },
-});
-
-/** @internal */
-export const factEnvelopesFromEvents = (
-  events: ReadonlyArray<AnalyticsEvent>,
-  query: FactEnvelopeQuery | undefined,
-): FactEnvelope[] => {
-  const out: FactEnvelope[] = [];
-  for (const event of events) {
-    if (
-      event.type === "runtime.fact.recorded" &&
-      matchesFactEnvelopeQuery(query)(event.fact)
-    ) {
-      out.push(event.fact);
-    }
-  }
-  return applyQueryOpts(out, query?.opts, (fact) => fact.occurredAt);
-};
-
-/** @internal */
-export const factEnvelopeStateStoreQuery = (
-  query: FactEnvelopeStateHistoryQuery,
-): StoreEventQuery => ({
-  entityType: query.ref.kind,
-  entityId: query.ref.id,
-  types: ["runtime.state.changed"],
-  opts: query.opts,
-});
-
-/** @internal */
-export const factEnvelopeStateChangesFromEvents = (
-  events: ReadonlyArray<AnalyticsEvent>,
-): FactEnvelopeStateChange[] => {
-  const out: FactEnvelopeStateChange[] = [];
-  for (const event of events) {
-    if (event.type === "runtime.state.changed") {
-      out.push(event.change);
-    }
-  }
-  return out;
-};
-
 // ============================================================================
 // RunResource per-domain helpers (run-resource.fact.recorded /
 // run-resource.state.changed wire event types)
@@ -360,14 +268,6 @@ export const selectEvents = <T extends AnalyticsEvent>(
   return applyQueryOpts(rows, query.opts, (event) => event.occurredAt);
 };
 
-let inMemoryProcessStoreRunCounter = 0;
-
-/** @internal */
-export const makeRunId = (now: number): string => {
-  inMemoryProcessStoreRunCounter++;
-  return `run-${String(now)}-${String(inMemoryProcessStoreRunCounter)}`;
-};
-
 const stringAttribute = (
   attributes: Record<string, unknown> | undefined,
   key: string,
@@ -395,18 +295,9 @@ const stringArrayAttribute = (
 };
 
 const runtimeRecordPayload = (event: AnalyticsEvent): JsonValue | undefined => {
-  if (event.type === "runtime.fact.recorded") {
-    return isJsonValue(event.fact.payload) ? event.fact.payload : undefined;
-  }
   const payload = encodeEvent(event).payload;
   return isJsonValue(payload) ? payload : undefined;
 };
-
-const runtimeRecordType = (event: AnalyticsEvent): string =>
-  event.type === "runtime.fact.recorded" ? event.fact.type : event.type;
-
-const runtimeRecordOccurredAt = (event: AnalyticsEvent): number =>
-  event.type === "runtime.fact.recorded" ? event.fact.occurredAt : event.occurredAt;
 
 const runtimeRecordAttributes = (event: AnalyticsEvent): JsonValue | undefined => {
   const out: { [key: string]: JsonValue } = {};
@@ -423,23 +314,33 @@ const runtimeRecordAttributes = (event: AnalyticsEvent): JsonValue | undefined =
       }
     }
   }
-  if (event.type === "runtime.fact.recorded") {
-    out["factId"] = event.fact.id;
-    hasAttributes = true;
-  }
   return hasAttributes ? out : undefined;
 };
 
-const isLegacyEventRecordType = (type: string): type is Exclude<
-  AnalyticsEvent["type"],
-  "runtime.fact.recorded"
-> => {
+const isKnownEventRecordType = (
+  type: string,
+): type is AnalyticsEvent["type"] => {
   switch (type) {
     case "process.execution.completed":
     case "process.lifecycle.changed":
-    case "queue.item.completed":
-    case "queue.lifecycle.changed":
-    case "runtime.state.changed":
+    case "queue.entry.enqueued":
+    case "queue.entry.started":
+    case "queue.entry.completed":
+    case "queue.entry.failed":
+    case "queue.entry.retried":
+    case "queue.entry.exhausted":
+    case "queue.entry.released":
+    case "queue.entry.dead-lettered":
+    case "queue.entry.dropped":
+    case "queue.lifecycle.started":
+    case "queue.lifecycle.paused":
+    case "queue.lifecycle.resumed":
+    case "queue.lifecycle.shutdown":
+    case "queue.lifecycle.cleared":
+    case "queue.lifecycle.drained":
+    case "queue.dedupe-key.added":
+    case "queue.dedupe-key.released":
+    case "queue.dedupe-key.hydrated":
     case "run-resource.fact.recorded":
     case "run-resource.state.changed":
     case "log.entry":
@@ -449,21 +350,8 @@ const isLegacyEventRecordType = (type: string): type is Exclude<
   }
 };
 
-const recordAttributes = (
-  value: JsonValue | undefined,
-): Record<string, unknown> | undefined => {
-  if (value === undefined || !isRecord(value)) {
-    return undefined;
-  }
-  const out: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value)) {
-    out[key] = item;
-  }
-  return out;
-};
-
 const recordToStoredEventRow = (record: RuntimeRecord): EffectPmEventRow | null => {
-  if (!isLegacyEventRecordType(record.type)) {
+  if (!isKnownEventRecordType(record.type)) {
     return null;
   }
   const payload = record.payload;
@@ -492,28 +380,10 @@ const decodeStoredEvent = (row: EffectPmEventRow): AnalyticsEvent | null => {
 
 const recordToAnalyticsEvent = (record: RuntimeRecord): AnalyticsEvent | null => {
   const row = recordToStoredEventRow(record);
-  if (row !== null) {
-    return decodeStoredEvent(row);
+  if (row === null) {
+    return null;
   }
-  const occurredAt = DateTime.toEpochMillis(record.occurredAt);
-  const attributes = recordAttributes(record.attributes);
-  const factId = stringAttribute(attributes, "factId") ?? record.id;
-  return {
-    id: record.id,
-    type: "runtime.fact.recorded",
-    occurredAt,
-    entityType: record.processType,
-    entityId: record.processId,
-    attributes,
-    fact: {
-      id: factId,
-      ref: { kind: record.processType, id: record.processId },
-      type: record.type,
-      occurredAt,
-      payload: record.payload ?? null,
-      attributes,
-    },
-  };
+  return decodeStoredEvent(row);
 };
 
 /** @internal */
@@ -531,31 +401,18 @@ export const recordsToEvents = (
 };
 
 /** @internal */
-export const processStoreWriteErrorFromRuntimeStorage = (
-  error: RuntimeStorageError,
-): ProcessStoreWriteError => {
-  if (error instanceof RuntimeStorageDuplicateRecordError) {
-    return new ProcessStoreDuplicateRecordError({ id: error.id });
-  }
-  if (error instanceof RuntimeStorageReadonlyRecordError) {
-    return new ProcessStoreReadonlyRecordError({ id: error.id });
-  }
-  return error;
-};
-
-/** @internal */
 export const eventToRuntimeRecord = (
   event: AnalyticsEvent,
   runId: string,
 ): RuntimeRecord => {
   const attributes = event.attributes;
   const recordAttrs = runtimeRecordAttributes(event);
-  const occurredAt = DateTime.makeUnsafe(runtimeRecordOccurredAt(event));
+  const occurredAt = DateTime.makeUnsafe(event.occurredAt);
   return {
     id: event.id,
-    type: runtimeRecordType(event),
+    type: event.type,
     occurredAt,
-    createdAt: DateTime.makeUnsafe(event.occurredAt),
+    createdAt: occurredAt,
     runId,
     processType: stringAttribute(attributes, "processType") ?? event.entityType,
     processId: stringAttribute(attributes, "processId") ?? event.entityId,
@@ -576,11 +433,50 @@ export const eventToRuntimeRecord = (
   };
 };
 
+/**
+ * Per-facet handle into the underlying {@link RuntimeStorage}.
+ *
+ * @remarks
+ * The shape exposes both the new `RuntimeRecord`-direct API
+ * (`runId`, `create`, `createBatch`, `read`, `upsert`, `update`, `delete`)
+ * that all facets are migrating to, and the legacy `AnalyticsEvent`-flavored
+ * shims (`append`, `appendBatch`, `events`, `records`) used by facets that
+ * have not yet been migrated. The legacy methods are removed at the end
+ * of the migration.
+ *
+ * @internal
+ */
 export interface ProcessStoreSpine {
-  readonly append: (event: AnalyticsEvent) => Effect.Effect<void, ProcessStoreWriteError>;
-  readonly appendBatch: (events: ReadonlyArray<AnalyticsEvent>) => Effect.Effect<void, ProcessStoreWriteError>;
-  readonly events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>;
-  readonly records: (query?: RuntimeRecordQuery) => Effect.Effect<RuntimeRecord[]>;
+  readonly runId: string;
+  readonly create: (
+    record: Omit<RuntimeRecord, "runId" | "createdAt">,
+  ) => Effect.Effect<void, ProcessStoreWriteError>;
+  readonly createBatch: (
+    records: ReadonlyArray<Omit<RuntimeRecord, "runId" | "createdAt">>,
+  ) => Effect.Effect<void, ProcessStoreWriteError>;
+  readonly read: (
+    query?: RuntimeRecordQuery,
+  ) => Effect.Effect<RuntimeRecord[]>;
+  readonly upsert: (
+    record: Omit<RuntimeRecord, "runId" | "createdAt">,
+  ) => Effect.Effect<void, ProcessStoreWriteError>;
+  readonly update: (
+    query: RuntimeRecordQuery,
+    patch: RuntimeRecordPatch,
+  ) => Effect.Effect<UpdateResult>;
+  readonly delete: (query: RuntimeRecordQuery) => Effect.Effect<DeleteResult>;
+  readonly append: (
+    event: AnalyticsEvent,
+  ) => Effect.Effect<void, ProcessStoreWriteError>;
+  readonly appendBatch: (
+    events: ReadonlyArray<AnalyticsEvent>,
+  ) => Effect.Effect<void, ProcessStoreWriteError>;
+  readonly events: (
+    query?: StoreEventQuery,
+  ) => Effect.Effect<AnalyticsEvent[]>;
+  readonly records: (
+    query?: RuntimeRecordQuery,
+  ) => Effect.Effect<RuntimeRecord[]>;
 }
 
 /** @internal */
@@ -588,26 +484,55 @@ export const makeProcessStoreSpine = (
   storage: RuntimeStorageService,
   runId: string,
 ): ProcessStoreSpine => {
+  const stamp = (
+    record: Omit<RuntimeRecord, "runId" | "createdAt">,
+  ): RuntimeRecord => ({ ...record, runId, createdAt: record.occurredAt });
+  const create = (record: Omit<RuntimeRecord, "runId" | "createdAt">) =>
+    storage
+      .create(stamp(record))
+      .pipe(Effect.mapError(processStoreWriteErrorFromRuntimeStorage));
+  const createBatch = (
+    records: ReadonlyArray<Omit<RuntimeRecord, "runId" | "createdAt">>,
+  ) => Effect.forEach(records, create, { discard: true });
+  const upsert = (record: Omit<RuntimeRecord, "runId" | "createdAt">) =>
+    storage
+      .upsert(stamp(record))
+      .pipe(Effect.mapError(processStoreWriteErrorFromRuntimeStorage));
+  const read = (query: RuntimeRecordQuery | undefined) => storage.read(query);
+  const update = (query: RuntimeRecordQuery, patch: RuntimeRecordPatch) =>
+    storage.update(query, patch);
+  const remove = (query: RuntimeRecordQuery) => storage.delete(query);
+
   const appendEvent = (event: AnalyticsEvent) =>
-    storage.create(eventToRuntimeRecord(event, runId)).pipe(
-      Effect.mapError(processStoreWriteErrorFromRuntimeStorage),
-    );
-  const readRecords = (query: RuntimeRecordQuery | undefined) =>
-    storage.read(query);
+    storage
+      .create(eventToRuntimeRecord(event, runId))
+      .pipe(Effect.mapError(processStoreWriteErrorFromRuntimeStorage));
   const readEvents = (query: StoreEventQuery | undefined) =>
     Effect.map(storage.read(), (records) => {
       const rows = recordsToEvents(records)
         .filter(matchesStoreEventQuery(query))
-        .sort(byTimestampDesc((event) => event.occurredAt, (event) => event.id));
+        .sort(
+          byTimestampDesc(
+            (event) => event.occurredAt,
+            (event) => event.id,
+          ),
+        );
       return applyQueryOpts(rows, query?.opts, (event) => event.occurredAt);
     });
 
   return {
+    runId,
+    create,
+    createBatch,
+    read,
+    upsert,
+    update,
+    delete: remove,
     append: appendEvent,
     appendBatch: (batch) =>
       Effect.forEach(batch, appendEvent, { discard: true }),
     events: readEvents,
-    records: readRecords,
+    records: read,
   };
 };
 

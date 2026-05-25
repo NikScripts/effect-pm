@@ -348,21 +348,21 @@ export class ProcessStoreRunResource extends ProcessStore.Service<
   ProcessStoreRunResource
 >()(
   "@nikscripts/effect-pm/store/runResource/ProcessStoreRunResource",
-  ProcessStore.record((s) => ({
-    recordRunStarted: (fact: RunResourceRunStartedFact) =>
+  ProcessStore.record({
+    recordRunStarted: (s) => (fact: RunResourceRunStartedFact) =>
       s.append(makeRunResourceFactRecordedEvent(fact)),
-    recordRunCompleted: (fact: RunResourceRunCompletedFact) =>
+    recordRunCompleted: (s) => (fact: RunResourceRunCompletedFact) =>
       s.append(makeRunResourceFactRecordedEvent(fact)),
-    recordRunFailed: (fact: RunResourceRunFailedFact) =>
+    recordRunFailed: (s) => (fact: RunResourceRunFailedFact) =>
       s.append(makeRunResourceFactRecordedEvent(fact)),
-    recordStateChange: (change: RunResourceStateChange) =>
+    recordStateChange: (s) => (change: RunResourceStateChange) =>
       s.append(makeRunResourceStateChangedEvent(change)),
-    recordFactBatch: (facts: ReadonlyArray<RunResourceFact>) =>
+    recordFactBatch: (s) => (facts: ReadonlyArray<RunResourceFact>) =>
       s.appendBatch(facts.map(makeRunResourceFactRecordedEvent)),
-    recordStateChangeBatch: (
-      changes: ReadonlyArray<RunResourceStateChange>,
-    ) => s.appendBatch(changes.map(makeRunResourceStateChangedEvent)),
-  })),
+    recordStateChangeBatch:
+      (s) => (changes: ReadonlyArray<RunResourceStateChange>) =>
+        s.appendBatch(changes.map(makeRunResourceStateChangedEvent)),
+  }),
   ProcessStore.read((s) => ({
     facts: (query?: RunResourceFactQuery) =>
       s.events(runResourceFactStoreQuery(query)).pipe(

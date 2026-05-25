@@ -8,7 +8,9 @@ import {
   defineProcessStoreFacet,
   processStoreRead,
   processStoreRecord,
+  processStoreWithIdentifier,
   type ProcessStoreFacetEmitShape,
+  type ProcessStoreFacetIdentifierShape,
   type ProcessStoreFacetShape,
 } from "./internal/store/service";
 
@@ -32,16 +34,13 @@ export type {
 } from "./ProcessStoreEvent";
 
 export {
+  isQueueDedupeKeyChangedEvent,
+  isQueueEntryRecordedEvent,
+  isQueueLifecycleChangedEvent,
   ProcessStoreDuplicateRecordError,
   ProcessStoreReadonlyRecordError,
   isLogEntryRecorded,
 } from "./ProcessStoreEvent";
-
-export {
-  isQueueDedupeKeyChangedEvent,
-  isQueueEntryRecordedEvent,
-  isQueueLifecycleChangedEvent,
-} from "./store/queueResource";
 
 export type {
   ProcessStoreQueueResourceDedupeKeyStatus,
@@ -97,6 +96,7 @@ export const ProcessStore = {
   Service: defineProcessStoreFacet,
   record: processStoreRecord,
   read: processStoreRead,
+  withIdentifier: processStoreWithIdentifier,
 } as const;
 
 /**
@@ -110,5 +110,6 @@ export declare namespace ProcessStore {
   export namespace Service {
     export type Type<T> = ProcessStoreFacetShape<T>;
     export type EmitType<T> = ProcessStoreFacetEmitShape<T>;
+    export type IdentifierType<T> = ProcessStoreFacetIdentifierShape<T>;
   }
 }

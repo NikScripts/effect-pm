@@ -256,3 +256,66 @@ export const isLogEntryRecorded = (
   event: AnalyticsEvent,
 ): event is LogEntryRecordedEvent =>
   event.type === "log.entry" && event.entityType === "log";
+
+/**
+ * Narrows an {@link AnalyticsEvent} to {@link QueueEntryRecordedEvent}.
+ *
+ * @public
+ */
+export const isQueueEntryRecordedEvent = (
+  event: AnalyticsEvent,
+): event is QueueEntryRecordedEvent => {
+  switch (event.type) {
+    case "queue.entry.enqueued":
+    case "queue.entry.started":
+    case "queue.entry.completed":
+    case "queue.entry.failed":
+    case "queue.entry.retried":
+    case "queue.entry.exhausted":
+    case "queue.entry.released":
+    case "queue.entry.dropped":
+    case "queue.entry.dead-lettered":
+      return true;
+    default:
+      return false;
+  }
+};
+
+/**
+ * Narrows an {@link AnalyticsEvent} to {@link QueueLifecycleChangedEvent}.
+ *
+ * @public
+ */
+export const isQueueLifecycleChangedEvent = (
+  event: AnalyticsEvent,
+): event is QueueLifecycleChangedEvent => {
+  switch (event.type) {
+    case "queue.lifecycle.started":
+    case "queue.lifecycle.paused":
+    case "queue.lifecycle.resumed":
+    case "queue.lifecycle.shutdown":
+    case "queue.lifecycle.cleared":
+    case "queue.lifecycle.drained":
+      return true;
+    default:
+      return false;
+  }
+};
+
+/**
+ * Narrows an {@link AnalyticsEvent} to {@link QueueDedupeKeyChangedEvent}.
+ *
+ * @public
+ */
+export const isQueueDedupeKeyChangedEvent = (
+  event: AnalyticsEvent,
+): event is QueueDedupeKeyChangedEvent => {
+  switch (event.type) {
+    case "queue.dedupe-key.added":
+    case "queue.dedupe-key.released":
+    case "queue.dedupe-key.hydrated":
+      return true;
+    default:
+      return false;
+  }
+};

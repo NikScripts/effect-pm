@@ -53,6 +53,23 @@ describe("ProcessStoreProcessGroup — static optional emitters", () => {
     }).pipe(Effect.provide(groupStoreLayer)),
   );
 
+  it.effect("binds group-scoped methods with for(identifier)", () =>
+    Effect.gen(function* () {
+      const billingGroup = { id: "@test/BillingGroup" };
+      const billing = yield* ProcessStoreProcessGroup.for(billingGroup);
+
+      yield* billing.recordMemberStarted("worker-a");
+      yield* billing.recordMemberStopped("worker-a");
+      yield* ProcessStoreProcessGroup.recordMemberStarted("@test/OtherGroup", "worker-b");
+
+      const rows = yield* billing.lifecycle();
+      expect(rows.map((row) => row.entityId)).toEqual(["worker-a", "worker-a"]);
+      expect(new Set(rows.map((row) => row.lifecycle.tag))).toEqual(
+        new Set(["Started", "Stopped"]),
+      );
+    }).pipe(Effect.provide(groupStoreLayer)),
+  );
+
   it.effect("ProcessStorage.layer provides both lifecycle and group facets", () =>
     Effect.gen(function* () {
       yield* ProcessStoreProcessGroup.recordMemberStarted("@test/Full", "proc");
