@@ -1,8 +1,9 @@
 import { ProcessStorage } from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest";
-import { Duration, Effect, Exit, Ref, Schema } from "effect";
+import { Data, Duration, Effect, Exit, Ref, Schema } from "effect";
 import {
   QueueBatchValidationError,
+  QueueEntry,
   QueueHandle,
   QueueMissingItemSchemaError,
   QueueItemValidationError,
@@ -398,6 +399,168 @@ describe("QueueResource.make — ProcessStore records", () => {
           "dl-1",
           "dr-1",
         ]);
+      }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
+  );
+
+  it.live(
+    "writes paired queue.dedupe-key.released + added across a retry cycle",
+    () =>
+      Effect.gen(function* () {
+        class TransientFailure extends Data.TaggedError(
+          "TransientFailure",
+        )<{ readonly attempt: number }> {}
+        const attempts = yield* Ref.make(0);
+        const queue = yield* QueueResource.make({
+          name: "test-store-dedupe-retry",
+          key: (item: { readonly id: string }) => item.id,
+          // The hook drives retry via `exitEvent.retry`; the worker has
+          // no implicit retry policy.
+          retries: 1,
+          onFailed: ({ retry }) => retry,
+          effect: (_item) =>
+            Effect.gen(function* () {
+              const n = yield* Ref.updateAndGet(attempts, (i) => i + 1);
+              if (n === 1) {
+                return yield* new TransientFailure({ attempt: n });
+              }
+            }),
+          concurrency: 1,
+        });
+
+        yield* queue.add({ id: "rk-1" });
+        yield* waitUntilCompleted(queue, 1);
+        yield* Effect.sleep(Duration.millis(50));
+
+        const queueResource = yield* ProcessStoreQueueResource;
+        const allChanges = yield* queueResource.dedupeKeys({
+          queueId: "test-store-dedupe-retry",
+          key: "rk-1",
+        });
+
+        // The retry cycle for "rk-1" must produce exactly:
+        //   enqueue            → added    (initial)
+        //   failed processItem → released (worker)
+        //   retry re-enqueue   → added    (retryInternal → enqueueInternal)
+        //   success processItem → released (worker)
+        // Strict chronological ordering is unreliable because multiple ops
+        // can land in the same wall-clock millisecond; instead assert the
+        // multiset and that each id encodes its kind, plus the per-cycle
+        // invariant that retry's added has a strictly larger seq than the
+        // failure's released (encoded in the id suffix).
+        const counts = allChanges.reduce<Record<string, number>>(
+          (acc, row) => {
+            acc[row.type] = (acc[row.type] ?? 0) + 1;
+            return acc;
+          },
+          {},
+        );
+        expect(counts).toEqual({
+          "queue.dedupe-key.added": 2,
+          "queue.dedupe-key.released": 2,
+        });
+        expect(allChanges.every((row) => row.key === "rk-1")).toBe(true);
+
+        const seqOf = (id: string): number => {
+          const tail = id.split("/").pop();
+          return tail === undefined ? -1 : Number.parseInt(tail, 10);
+        };
+        const sortedSeqsForType = (
+          type: "queue.dedupe-key.added" | "queue.dedupe-key.released",
+        ): readonly [number, number] => {
+          const seqs = allChanges
+            .filter((row) => row.type === type)
+            .map((row) => seqOf(row.id))
+            .sort((a, b) => a - b);
+          if (seqs.length !== 2) {
+            throw new Error(
+              `expected 2 dedupe-key ${type} changes, got ${String(
+                seqs.length,
+              )}`,
+            );
+          }
+          const [first, second] = seqs;
+          if (first === undefined || second === undefined) {
+            throw new Error("unreachable: seqs.length === 2");
+          }
+          return [first, second];
+        };
+        const [firstAdded, secondAdded] = sortedSeqsForType(
+          "queue.dedupe-key.added",
+        );
+        const [firstReleased, secondReleased] = sortedSeqsForType(
+          "queue.dedupe-key.released",
+        );
+        // Initial added (seq=1) precedes failure released (seq=2) precedes
+        // retry added (seq=3) precedes success released (seq=4). The seq
+        // counter is monotonic regardless of clock granularity, so this
+        // captures the post-fix ordering without sub-ms timing assumptions.
+        expect(firstAdded).toBeLessThan(firstReleased);
+        expect(firstReleased).toBeLessThan(secondAdded);
+        expect(secondAdded).toBeLessThan(secondReleased);
+        expect(yield* Ref.get(attempts)).toBe(2);
+      }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
+  );
+
+  it.live(
+    "writes queue.dedupe-key.released for keys evicted by release()",
+    () =>
+      Effect.gen(function* () {
+        const queue = yield* QueueResource.make({
+          name: "test-store-dedupe-release",
+          paused: true,
+          key: (item: { readonly id: string }) => item.id,
+          effect: (_item) => Effect.void,
+          concurrency: 1,
+        });
+
+        yield* queue.add([{ id: "rl-1" }, { id: "rl-2" }]);
+        yield* queue.release({ releaseId: "release-x" });
+        yield* Effect.sleep(Duration.millis(20));
+
+        const queueResource = yield* ProcessStoreQueueResource;
+        const released = yield* queueResource.dedupeKeys({
+          queueId: "test-store-dedupe-release",
+          types: ["queue.dedupe-key.released"],
+        });
+        expect(released.map((row) => row.key).sort()).toEqual(["rl-1", "rl-2"]);
+      }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
+  );
+
+  it.live(
+    "drop(QueueEntry) emits a top-level reason on the entry fact",
+    () =>
+      Effect.gen(function* () {
+        const captured = yield* Ref.make<ReadonlyArray<QueueEntry<{ readonly id: string }>>>([]);
+        const queue = yield* QueueResource.make({
+          name: "test-store-route-entry-path",
+          paused: true,
+          key: (item: { readonly id: string }) => item.id,
+          effect: (_item) => Effect.void,
+          onEnqueued: ({ entries }) =>
+            Ref.update(captured, (xs) => [...xs, ...entries]),
+          concurrency: 1,
+        });
+
+        yield* queue.add({ id: "e-1" });
+        yield* Effect.sleep(Duration.millis(20));
+        const [entry] = yield* Ref.get(captured);
+        if (entry === undefined) {
+          throw new Error("expected captured entry from onEnqueued");
+        }
+        yield* queue.drop(entry, { reason: "manual-drop-by-handle" });
+        yield* Effect.sleep(Duration.millis(20));
+
+        const queueResource = yield* ProcessStoreQueueResource;
+        const dropped = yield* queueResource.entries({
+          queueId: "test-store-route-entry-path",
+          types: ["queue.entry.dropped"],
+        });
+        expect(dropped).toHaveLength(1);
+        const fact = dropped[0];
+        if (fact?.type !== "queue.entry.dropped") {
+          throw new Error("expected queue.entry.dropped fact");
+        }
+        expect(fact.reason).toBe("manual-drop-by-handle");
       }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
   );
 });

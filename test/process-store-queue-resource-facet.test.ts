@@ -16,6 +16,8 @@ import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
 import {
   ProcessStoreQueueResource,
   type QueueDedupeKeyChange,
+  type QueueEntryCompletedFact,
+  type QueueEntryEnqueuedFact,
   type QueueEntryFact,
   type QueueLifecycleChange,
 } from "../src/store/queueResource";
@@ -24,8 +26,8 @@ const enqueued = (
   queueId: string,
   entryId: string,
   occurredAt: number,
-  overrides?: Partial<QueueEntryFact>,
-): QueueEntryFact => ({
+  overrides?: Partial<QueueEntryEnqueuedFact>,
+): QueueEntryEnqueuedFact => ({
   id: `${queueId}/${entryId}/enqueued`,
   queueId,
   entryId,
@@ -34,7 +36,7 @@ const enqueued = (
   enqueuedAt: occurredAt,
   priority: "normal",
   attempts: 1,
-  ...(overrides as Record<string, never>),
+  ...overrides,
 });
 
 const completed = (
@@ -43,8 +45,8 @@ const completed = (
   occurredAt: number,
   startedAt: number,
   durationMs: number,
-  overrides?: Partial<QueueEntryFact>,
-): QueueEntryFact => ({
+  overrides?: Partial<QueueEntryCompletedFact>,
+): QueueEntryCompletedFact => ({
   id: `${queueId}/${entryId}/completed`,
   queueId,
   entryId,
@@ -54,7 +56,7 @@ const completed = (
   durationMs,
   priority: "normal",
   attempts: 1,
-  ...(overrides as Record<string, never>),
+  ...overrides,
 });
 
 const failed = (
@@ -340,7 +342,7 @@ describe("ProcessStoreQueueResource — entry projections", () => {
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
-  it.live("entries respects opts.limit after post-filtering", () =>
+  it.live("entries({ queueId, opts: { limit } }) caps the result", () =>
     Effect.gen(function* () {
       yield* fixtures;
       const facet = yield* ProcessStoreQueueResource;
@@ -350,6 +352,41 @@ describe("ProcessStoreQueueResource — entry projections", () => {
       });
       expect(rows).toHaveLength(1);
     }).pipe(Effect.provide(ProcessStorage.layer)),
+  );
+
+  it.live(
+    "entriesByKey isolates the requested key when many keys share storage",
+    () =>
+      Effect.gen(function* () {
+        // Establishes that `entriesByKey(target)` is a pushed Key.equals,
+        // not a post-filter — the result MUST contain only "target" rows
+        // even when storage holds many rows for unrelated keys, with any
+        // `limit` applied to the per-key projection.
+        const facet = yield* ProcessStoreQueueResource;
+        const baseT = 1_700_000_000_000;
+        for (let i = 0; i < 5; i++) {
+          yield* facet.recordEntry(
+            enqueued("@test/Bulk", `entry/noise-${String(i)}`, baseT + i, {
+              key: "noise",
+            }),
+          );
+        }
+        for (let i = 0; i < 3; i++) {
+          yield* facet.recordEntry(
+            enqueued("@test/Bulk", `entry/target-${String(i)}`, baseT + 100 + i, {
+              key: "target",
+            }),
+          );
+        }
+        const all = yield* facet.entriesByKey("target");
+        expect(all).toHaveLength(3);
+        expect(all.every((row) => row.key === "target")).toBe(true);
+        const limited = yield* facet.entriesByKey("target", {
+          opts: { limit: 2 },
+        });
+        expect(limited).toHaveLength(2);
+        expect(limited.every((row) => row.key === "target")).toBe(true);
+      }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 });
 

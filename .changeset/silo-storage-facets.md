@@ -106,10 +106,33 @@ Queue dedupe-key emit
 ---------------------
 
 `QueueResource` now writes `queue.dedupe-key.added` rows when items
-acquire a dedupe key on enqueue, and `queue.dedupe-key.released` rows
-on completion, drop, dead-letter, retry-restore, and `clear`. The
-previously-documented dedupe projection (`.dedupeKeys`) is now backed
-by real data instead of being unwired.
+acquire a dedupe key on enqueue or when a previously-extracted batch
+is restored after a failed `releaseEncoded`, and
+`queue.dedupe-key.released` rows on completion, `release`, drop,
+dead-letter, and `clear`. The previously-documented dedupe projection
+(`.dedupeKeys`) is now backed by real data instead of being unwired.
+
+Queue retry hook race fix
+-------------------------
+
+`QueueResource.processItem` now releases the dedupe key (and emits the
+`released` change) BEFORE forking the exit hooks, instead of after.
+Hooks that synchronously call `retry` from inside `onFailed` /
+`onExit` no longer race the main fiber for the `activeKeys` ref, and
+the emitted `dedupe-key.released` always precedes the retry's
+re-enqueue `dedupe-key.added` change.
+
+Queue enqueue → worker race fix
+-------------------------------
+
+`QueueResource.enqueueInternal` now records its `entry.enqueued` and
+`dedupe-key.added` changes BEFORE waking the worker (`signalWorkerWake`
+is now the last step). The worker thread shares the dedupe-key seq
+counter with the enqueue path; signalling first allowed the worker to
+process and `release` an item before the matching `added` was built,
+producing out-of-order analytics for the same dedupe-key cycle. The
+internal `activeKeys` ref is updated under the enqueue's gate before
+either record/wake step, so the runtime dedup invariant is unchanged.
 
 Worker route fix
 ----------------

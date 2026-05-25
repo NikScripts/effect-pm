@@ -1706,14 +1706,22 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
         if (toEnqueue.length === 0) return;
 
+        // Record analytics for the new batch BEFORE waking workers. The
+        // dedupe-key seq counter is shared between the enqueue path and
+        // the worker's `processItem` release path; if we signal first the
+        // worker can race in and emit a `released` (with the next seq)
+        // before this enqueue's `added` has been built, producing
+        // out-of-order analytics for the same dedupe-key cycle. The
+        // internal `activeKeys` ref is already updated above so the
+        // dedup invariant holds either way.
         yield* Queue.offerAll(queueForPriority(priority), toEnqueue);
-        yield* signalWorkerWake;
         yield* Effect.forEach(
           toEnqueue,
           (internal) => recordEntryEvent("enqueued", internal),
           { discard: true },
         );
         yield* recordDedupeKeyChanges("added", addedDedupeKeys);
+        yield* signalWorkerWake;
 
         const handle = queueHandleSlot.current;
         if (handle === undefined) {
@@ -1901,6 +1909,19 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             },
           );
 
+          // Release dedup key BEFORE forking exit hooks. Hooks may
+          // synchronously invoke `retry`, which re-enqueues the item; that
+          // re-enqueue must observe a free dedupe key so its `HashSet.has`
+          // check passes, and its emitted `added` change must follow the
+          // main fiber's `released` change in the analytics stream. Doing
+          // this work post-fork would race the hook fiber against the main
+          // fiber, producing a transiently inconsistent `activeKeys` and
+          // out-of-order `dedupe-key.added` / `released` records.
+          if (config.key !== undefined && internal.key !== undefined) {
+            yield* Ref.update(activeKeys, HashSet.remove(internal.key));
+            yield* recordDedupeKeyChange("released", internal.key);
+          }
+
           const entry = queueEntryFromInternal(internal, { startedAt, completedAt });
           const retry = retryInternal(internal, exit);
           const exitEvent: QueueExitEvent<T, E, R> = { entry, exit, elapsed, retry };
@@ -1923,12 +1944,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
               }
             }),
           );
-
-          // Release dedup key so future items with same key can enter
-          if (config.key !== undefined && internal.key !== undefined) {
-            yield* Ref.update(activeKeys, HashSet.remove(internal.key));
-            yield* recordDedupeKeyChange("released", internal.key);
-          }
 
           if (Exit.isFailure(exit) && config.onExit === undefined && config.onFailed === undefined) {
             yield* Effect.logWarning(

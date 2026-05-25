@@ -51,7 +51,7 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 | `log.entry` | static `record` / `recordBatch` (relay) | `yield* ProcessStoreLog` → `.load`, `.query` |
 | `queue.entry.<status>` × 9 | `QueueResource` worker → static `recordEntry` / `recordEntryBatch` | `yield* ProcessStoreQueueResource` → `.entries`, `.entriesByKey` |
 | `queue.lifecycle.<tag>` × 6 | `QueueResource` worker → static `recordLifecycle` / `recordLifecycleBatch` (Started, Paused, Resumed, Shutdown, Cleared, Drained) | `.lifecycle` |
-| `queue.dedupe-key.<status>` × 3 | `QueueResource` worker → static `recordDedupeKey` / `recordDedupeKeyBatch` (`added` on enqueue, `released` on completion / clear / drop / dead-letter) | `.dedupeKeys` |
+| `queue.dedupe-key.<status>` × 3 | `QueueResource` worker → static `recordDedupeKey` / `recordDedupeKeyBatch`. Worker emits `added` on enqueue and on `releaseEncoded` rollback (`restorePending`); `released` on completion, `release`, drop, dead-letter, and `clear`. The `hydrated` variant is decode-only — defined for future warm-start adapters that rebuild `activeKeys` from durable state. | `.dedupeKeys` |
 
 ---
 
@@ -93,9 +93,25 @@ export class ProcessStoreMyDomain extends ProcessStore.Service<ProcessStoreMyDom
     recordThing: (s) => (fact: MyFact) => s.create(makeMyDomainRecord(fact)),
   }),
   ProcessStore.read((s) => ({
+    // Pure-storage read: every filter is pushed into the predicate, so
+    // `query?.opts` (including `limit`) flows straight through.
     things: (query?: MyQuery) =>
       s.read(runtimeRecordQuery(myDomainPredicates(query), query?.opts)).pipe(
-        Effect.map((records) => projectMyDomain(records, query)),
+        Effect.map((records) => decodeThings(records)),
+      ),
+    // Post-filter read: an `attributes.X` filter that storage cannot push
+    // down. Strip `limit` from the storage query (`windowOpts`) and apply
+    // it to the projected result via `applyQueryOpts` — otherwise a
+    // sparse post-filter can collapse a `limit: N` query to zero rows.
+    thingsScopedByAttribute: (scope: string, opts?: QueryOpts) =>
+      s.read(runtimeRecordQuery(myDomainPredicates(undefined), windowOpts(opts))).pipe(
+        Effect.map((records) =>
+          applyQueryOpts(
+            decodeThingsForScope(records, scope),
+            opts,
+            (thing) => thing.occurredAt,
+          ),
+        ),
       ),
   })),
 ) {}
@@ -121,6 +137,7 @@ The facet **owns** all wire-shape work:
 - **Encoders** (`makeMyDomainRecord`, etc.) build `Omit<RuntimeRecord, "runId" | "createdAt">` from the facet's domain types.
 - **Decoders** project `RuntimeRecord[]` back to the facet's domain types.
 - **Predicates** push `processId` / `type` / `key` / `indexA-H` filters into `RuntimeRecordQuery`. Things you cannot index (e.g. payload sub-fields) post-filter after `s.read`.
+- **Limit semantics**: when *all* filters compile to `RuntimeRecordPredicate`, pass `query?.opts` straight through — the storage `limit` and the projection `limit` agree. When *any* filter is post-applied in TypeScript, swap to `windowOpts(opts)` at the storage call and `applyQueryOpts(rows, opts, ...)` after decode (see `src/store/processGroup.ts` and `src/store/processExecution.ts` for live examples).
 
 **Cut-over checklist:** domain types in the facet file → encoders / decoders / predicates inline → static emitters in the feature module that owns the writes → `ProcessStorage.layerRuntimeStorage` merge + `package.json` subpath → conformance test (mirror `test/process-store-run-resource-facet.test.ts`).
 

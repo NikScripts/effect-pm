@@ -68,7 +68,6 @@ import {
   recordAttributesObject,
   runtimeRecordQuery,
   toJsonValue,
-  windowOpts,
 } from "../internal/store/helpers";
 import { ProcessStore } from "../ProcessStore";
 import type { JsonValue, QueryOpts } from "../ProcessStoreEvent";
@@ -989,9 +988,18 @@ export class ProcessStoreQueueResource extends ProcessStore.Service<
         s.createBatch(changes.map(makeQueueDedupeKeyRecord)),
   }),
   ProcessStore.read((s) => ({
+    // Every queue read pushes its filters to storage as indexed
+    // `RuntimeRecordPredicate`s — there is no post-filter on a
+    // payload sub-field — so `query?.opts` (including `limit`) is
+    // safe to pass through. The decode step (`recordToQueue*`) can
+    // still drop rows on malformed payload, in which case the result
+    // length may fall below `limit`; for projection-correct limits
+    // when post-filtering is required, see the `windowOpts` +
+    // `applyQueryOpts` pattern in `processGroup.ts` /
+    // `processExecution.ts`.
     entries: (query?: QueueEntryQuery) =>
       s
-        .read(runtimeRecordQuery(entryPredicates(query), windowOpts(query?.opts)))
+        .read(runtimeRecordQuery(entryPredicates(query), query?.opts))
         .pipe(
           Effect.map((records) =>
             queueEntryFactsFromRecords(records, query),
@@ -1000,9 +1008,7 @@ export class ProcessStoreQueueResource extends ProcessStore.Service<
     entriesByKey: (key: string, query?: Omit<QueueEntryQuery, "key">) => {
       const merged: QueueEntryQuery = { ...query, key };
       return s
-        .read(
-          runtimeRecordQuery(entryPredicates(merged), windowOpts(merged.opts)),
-        )
+        .read(runtimeRecordQuery(entryPredicates(merged), merged.opts))
         .pipe(
           Effect.map((records) =>
             queueEntryFactsFromRecords(records, merged),
@@ -1011,12 +1017,7 @@ export class ProcessStoreQueueResource extends ProcessStore.Service<
     },
     lifecycle: (query?: QueueLifecycleQuery) =>
       s
-        .read(
-          runtimeRecordQuery(
-            lifecyclePredicates(query),
-            windowOpts(query?.opts),
-          ),
-        )
+        .read(runtimeRecordQuery(lifecyclePredicates(query), query?.opts))
         .pipe(
           Effect.map((records) =>
             queueLifecycleChangesFromRecords(records, query),
@@ -1024,9 +1025,7 @@ export class ProcessStoreQueueResource extends ProcessStore.Service<
         ),
     dedupeKeys: (query?: QueueDedupeKeyQuery) =>
       s
-        .read(
-          runtimeRecordQuery(dedupePredicates(query), windowOpts(query?.opts)),
-        )
+        .read(runtimeRecordQuery(dedupePredicates(query), query?.opts))
         .pipe(
           Effect.map((records) =>
             queueDedupeKeyChangesFromRecords(records, query),

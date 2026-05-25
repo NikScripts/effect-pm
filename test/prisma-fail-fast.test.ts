@@ -17,7 +17,19 @@ import {
 } from "../src/prisma/PrismaProcessStore";
 import type { PrismaProcessStoreClient } from "../src/prisma/types";
 
-const stubClient: PrismaProcessStoreClient = {} as PrismaProcessStoreClient;
+// Structural stub. The legacy adapter dies at layer acquisition before
+// touching the client, so a no-op delegate that satisfies
+// `PrismaProcessStoreClient` is sufficient — and avoids casts.
+const stubClient: PrismaProcessStoreClient = {
+  effectPmEvent: {
+    create: () =>
+      Promise.reject(new Error("stub client.create called unexpectedly")),
+    createMany: () =>
+      Promise.reject(new Error("stub client.createMany called unexpectedly")),
+    findMany: () =>
+      Promise.reject(new Error("stub client.findMany called unexpectedly")),
+  },
+};
 
 describe("Prisma adapter — fail-fast safety net", () => {
   it.effect("layer dies with PrismaProcessStoreUnavailableError", () =>
