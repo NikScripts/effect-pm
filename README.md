@@ -536,7 +536,7 @@ See [examples/scenarios/full-process-group-with-queues-and-control-cli.ts](./exa
 - `QueueHandle<T, E, EEnqueue, R>` - Queue handle API (`yield*` the queue service tag)
 - `Process<R>` - Process interface
 - `RuntimeStorageService` - Storage adapter contract for normalized runtime records
-- `AnalyticsEvent` / `ProcessExecutionCompletedEvent` / `ProcessLifecycleChangedEvent` - Event envelope and concrete event types
+- `ProcessExecutionCompletedEvent` / `ProcessLifecycleChangedEvent` / `LogEntryRecordedEvent` / `QueueEntryFact` / `QueueLifecycleChange` / `QueueDedupeKeyChange` — per-facet wire event / fact / change types (re-exported from their owning `@nikscripts/effect-pm/store/*` subpath)
 
 ### Errors
 
@@ -544,7 +544,7 @@ See [examples/scenarios/full-process-group-with-queues-and-control-cli.ts](./exa
 - `ProcessNotFoundError` - Process not found
 - `ProcessAlreadyRunningError` - Process already running
 - `ProcessNotRunningError` - Process not running
-- `PrismaProcessStoreDecodeError` - Prisma row failed to decode into a typed event
+- `PrismaProcessStoreUnavailableError` - Prisma adapter is intentionally unavailable until the RuntimeStorage-backed rewrite lands
 
 ## License
 

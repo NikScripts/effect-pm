@@ -4,42 +4,15 @@
 
 ## Rules
 
-- **Stack:** `RuntimeStorage` (rows) + per-domain facets in `src/store/` (`@nikscripts/effect-pm/store/*`). `ProcessStore` = facet builder. `ProcessStorage` = combined built-in facet layers. The legacy monolith service is removed.
-- **One facet per domain.** Concrete wire event types. No public `RuntimeFact` / `runtime.fact.recorded` on new facets (`ProcessStoreQueueResource` still on envelope — fix listed below).
+- **Stack:** `RuntimeStorage` (rows) + per-domain facets in `src/store/` (`@nikscripts/effect-pm/store/*`). `ProcessStore` = facet builder. `ProcessStorage` = combined built-in facet layers.
+- **One facet per domain.** Each facet owns its concrete fact / change types **and** its row codec — encoders, decoders, predicate builders. No shared envelope. No public `runtime.fact.recorded` wire type.
 - **Optional storage.** Domain code uses **static emitters** on facet classes (`ProcessStoreX.recordY(...)`). No-op without layer; write failures logged, never change caller success/error (`ProcessStore` wraps emits).
 - **Reads:** `Effect.serviceOption(ProcessStoreX)` then `Option.match({ onNone, onSome: (store) => store.read(...) })` — never static read methods on the facet class. No `Effect.serviceOption(ProcessStore)` monolith in domain modules.
 - **No backward compat.** Delete legacy APIs; no `@deprecated` shims.
-- **Logs:** capture/relay → `@nikscripts/effect-pm/Logs`. Durable rows → `ProcessStoreLog` (`log.entry`), backed by `ProcessStore`. Not `ProcessStoreGroupLog`.
-- **Durable:** `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`. Do not add `ProcessStore.file` / NDJSON.
+- **Logs:** capture/relay → `@nikscripts/effect-pm/Logs`. Durable rows → `ProcessStoreLog` (`log.entry`).
+- **Durable:** `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`.
 
 Verify: `pnpm typecheck && pnpm test && pnpm lint && pnpm build`
-
----
-
-## Modules to refactor
-
-| Module | Facet | Work |
-|--------|-------|------|
-| `src/QueueResource.ts` | `ProcessStoreQueueResource` | **Now:** hand-rolled + `runtime.fact.recorded` envelope. **Target:** `ProcessStore.Service` + concrete `queue.*` wire types; static emitters in `QueueResource.ts` (see Assignment 1). |
-| `src/store/log.ts` + `internal/manager/log*` | `ProcessStoreLog` | Done — builder facet; relay uses static `record` / `recordBatch`; reads via `yield* ProcessStoreLog`. |
-| `src/ProcessStore.ts` | builder | Done — facet builder only. |
-| `src/ProcessStorage.ts` | combiner | Done — combined built-in facet layers. |
-| `src/prisma/*` | — | Rebuild as `RuntimeStorage` adapter (Assignment 5). |
-| `src/storage/sqlite/index.ts` | — | Replace `Layer.orDie` with typed errors (Assignment 6). |
-| `src/RunResource.ts` | `ProcessStoreRunResource` | Done — reference |
-| `src/Process.ts` | `ProcessStoreProcessExecution` | Done |
-| `src/ProcessGroup.ts` | `ProcessStoreProcessLifecycle`, `ProcessStoreProcessGroup` | Done |
-| `src/Polling.ts`, `src/ProcessSchedule.ts`, `src/HttpApiResource.ts` | — | Assignment 3: proposal only |
-| `src/HttpClientRunGate.ts`, `src/Resource.ts`, Control/*, `cli.ts` | — | No storage |
-
-### Removed legacy monolith callers
-
-| Path | Use instead |
-|------|-------------|
-| `test/process-store.test.ts` | Deleted; facet suites own storage behavior |
-| `test/process-group.test.ts` | Uses `ProcessStoreProcessLifecycle.lifecycle` |
-| `test/logs.test.ts`, `test/process-manager-log-pipeline.test.ts` | Use `yield* ProcessStoreLog` for reads |
-| `examples/forms/process-store/*` | Use facets + `ProcessStorage` / `layerProcessStore` |
 
 ---
 
@@ -57,7 +30,7 @@ Verify: `pnpm typecheck && pnpm test && pnpm lint && pnpm build`
 | `ProcessStorage` | `ProcessStorage` | combined built-in facet layers |
 | `RuntimeStorage` | `RuntimeStorage` | `src/RuntimeStorage.ts` |
 
-Internal only: `src/internal/store/{spine,codec,service,factEnvelope}.ts`
+Internal only: `src/internal/store/{spine,service,helpers}.ts` — type-agnostic plumbing (per-facet handle into `RuntimeStorage`, builder, predicate / window helpers). Facet-specific encoders / decoders never live here.
 
 Context key: `@nikscripts/effect-pm/store/<file>/<ServiceTag>`
 
@@ -67,6 +40,8 @@ Import `store/QueueResource` for the **storage facet**, not `@nikscripts/effect-
 
 ## Wire events
 
+Each facet writes one or more `RuntimeRecord.type` strings. Records carry `processType` / `processId` / optional `subjectType` / `subjectId` / `key` / `indexA-H` columns the facet uses for indexed predicates; everything else lives in `payload` JSON owned by the facet.
+
 | `type` | Writer | Reader |
 |--------|--------|--------|
 | `process.execution.completed` | static `recordCompleted` / `recordFailed` / `recordInterrupted` | `yield* ProcessStoreProcessExecution` → `.executions` |
@@ -74,7 +49,9 @@ Import `store/QueueResource` for the **storage facet**, not `@nikscripts/effect-
 | `run-resource.fact.recorded` | static `recordRun*` | `yield* ProcessStoreRunResource` → `.facts`, `.runs`, `.byRun` |
 | `run-resource.state.changed` | static `recordStateChange` | `yield* ProcessStoreRunResource` → `.stateHistory`, `.latestState` |
 | `log.entry` | static `record` / `recordBatch` (relay) | `yield* ProcessStoreLog` → `.load`, `.query` |
-| `runtime.fact.recorded` | `ProcessStoreQueueResource` only (legacy) | `records` — remove |
+| `queue.entry.<status>` × 9 | `QueueResource` worker → static `recordEntry` / `recordEntryBatch` | `yield* ProcessStoreQueueResource` → `.entries`, `.entriesByKey` |
+| `queue.lifecycle.<tag>` × 6 | `QueueResource` worker → static `recordLifecycle` / `recordLifecycleBatch` (Started, Paused, Resumed, Shutdown, Cleared, Drained) | `.lifecycle` |
+| `queue.dedupe-key.<status>` × 3 | `QueueResource` worker → static `recordDedupeKey` / `recordDedupeKeyBatch` (`added` on enqueue, `released` on completion / clear / drop / dead-letter) | `.dedupeKeys` |
 
 ---
 
@@ -112,12 +89,14 @@ Template: `src/store/runResource.ts`, tests: `test/process-store-run-resource-fa
 ```ts
 export class ProcessStoreMyDomain extends ProcessStore.Service<ProcessStoreMyDomain>()(
   "@nikscripts/effect-pm/store/myDomain/ProcessStoreMyDomain",
-  ProcessStore.record((s) => ({
-    recordThing: (fact: MyFact) => s.append(toWireEvent(fact)),
-  })),
+  ProcessStore.record({
+    recordThing: (s) => (fact: MyFact) => s.create(makeMyDomainRecord(fact)),
+  }),
   ProcessStore.read((s) => ({
-    facts: (query?: MyQuery) =>
-      s.events(myStoreQuery(query)).pipe(Effect.map(project)),
+    things: (query?: MyQuery) =>
+      s.read(runtimeRecordQuery(myDomainPredicates(query), query?.opts)).pipe(
+        Effect.map((records) => projectMyDomain(records, query)),
+      ),
   })),
 ) {}
 
@@ -127,56 +106,34 @@ export declare namespace ProcessStoreMyDomain {
 }
 ```
 
-Builder gives: shared spine per layer, static emitters only (optional + failure-isolated), reads via `Effect.serviceOption` on the facet tag + service methods, `layerRuntimeStorage`, `layer`.
+The `ProcessStoreSpine` handle (`s`) exposes the storage primitives only:
 
-**Cut-over checklist:** domain types → wire events in `ProcessStoreEvent.ts` → codec/spine → facet file → feature module static emitters → `ProcessStorage.layerRuntimeStorage` merge + `package.json` subpath → conformance test.
+| Method | Purpose |
+|--------|---------|
+| `s.runId` | Stable per-layer run id stamped onto every write |
+| `s.create` / `s.createBatch` | Insert one / many records |
+| `s.upsert` | Insert-or-replace one record |
+| `s.read(query?)` | Run a `RuntimeRecordQuery` (predicate, orderBy, limit, offset) |
+| `s.update(query, patch)` / `s.delete(query)` | Mutating reads |
 
-**Do not:** public envelope types; `store.append` from apps; hand-roll `serviceOption` in feature modules; `ProcessStore.<domain>.*` namespaces on monolith.
+The facet **owns** all wire-shape work:
 
-**Adapters:** implement `RuntimeStorageService` in `RuntimeStorage.ts`; wire via `ProcessStorage.layerRuntimeStorage` or `layerProcessStore`. Do not implement domain APIs in adapters.
+- **Encoders** (`makeMyDomainRecord`, etc.) build `Omit<RuntimeRecord, "runId" | "createdAt">` from the facet's domain types.
+- **Decoders** project `RuntimeRecord[]` back to the facet's domain types.
+- **Predicates** push `processId` / `type` / `key` / `indexA-H` filters into `RuntimeRecordQuery`. Things you cannot index (e.g. payload sub-fields) post-filter after `s.read`.
+
+**Cut-over checklist:** domain types in the facet file → encoders / decoders / predicates inline → static emitters in the feature module that owns the writes → `ProcessStorage.layerRuntimeStorage` merge + `package.json` subpath → conformance test (mirror `test/process-store-run-resource-facet.test.ts`).
+
+**Do not:** add a shared envelope; expose row codecs from `ProcessStore` or `internal/store/`; hand-roll `serviceOption` in feature modules.
+
+**Adapters:** implement `RuntimeStorageService` (e.g. `src/storage/sqlite/`); wire via `ProcessStorage.layerRuntimeStorage` or `layerProcessStore`. Adapters never speak the facet vocabulary — they store and query generic `RuntimeRecord` rows.
 
 ---
 
-## Agent assignments
+## Pending work
 
-One assignment per agent run. No PR/commit unless asked.
-
-```
-Do "<title>" from docs/STORAGE.md § Agent assignments.
-
-Read docs/STORAGE.md only. Stay in listed files. No backward-compat shims.
-
-Verify: pnpm typecheck && pnpm test && pnpm lint && pnpm build
-```
-
-### 1 — `ProcessStoreQueueResource` → builder + `queue.*` wire types
-
-**Files:** `src/store/queueResource.ts`, `src/QueueResource.ts`, `src/ProcessStoreEvent.ts`, `src/internal/store/codec.ts`, `src/internal/store/spine.ts`, `test/queue-resource.test.ts`, `test/process-store.test.ts` (queue parts), new `test/process-store-queue-resource-facet.test.ts`.
-
-**Off limits:** other `src/store/*` except as needed for combiner exports.
-
-**Done when:** builder facet; static emitters from `QueueResource`; no `serviceOption(ProcessStoreQueueResource)`; conformance tests; legacy SQLite envelope rows still decode; changeset for breaking wire rename.
-
-### 2 — `ProcessStoreLog` → `ProcessStore.Service` — done
-
-**Goal.** Replace hand-rolled `Context.Service` in `src/store/log.ts` with `ProcessStore.Service` (same pattern as `ProcessStoreRunResource`). Wire stays `log.entry`.
-
-**Files:** `src/store/log.ts`, `src/internal/manager/logPersistRelay.ts`, `src/internal/manager/logHistory.ts`, `src/internal/manager/logQuery.ts`, `test/logs.test.ts`, `test/process-manager-log-pipeline.test.ts`, new `test/process-store-log-facet.test.ts` (mirror run-resource conformance).
-
-**Done when:** `ProcessStoreLog extends ProcessStore.Service`; static `record` / `recordBatch` only; reads via `yield* ProcessStoreLog`; relay uses static emitters; conformance tests pass.
-
-### 3 — Telemetry proposals (`Polling`, `ProcessSchedule`, `HttpApiResource`)
-
-**Phase 1 only:** three files under `docs/storage-proposals/` (≤300 lines each): facet yes/no, wire types, cardinality, correlation, layers, open questions. No code.
-
-### 4 — Delete NDJSON — done
-
-`src/storage/file.ts`, `ProcessStore.file` / `fileLayer`, the file example, and legacy monolith tests are removed.
-
-### 5 — Prisma `RuntimeStorage` adapter
-
-Replace `PrismaProcessStoreUnavailableError` stub.
-
-### 6 — SQLite typed errors
-
-`storage/sqlite` — stop `Layer.orDie` for storage failures.
+| Area | Notes |
+|------|-------|
+| Prisma `RuntimeStorage` adapter | Today `src/prisma/PrismaProcessStore.ts` is a stub that fails at acquisition. The next pass rebuilds it as a `RuntimeStorageService` over normalized `RuntimeRecord` rows. |
+| SQLite typed errors | `storage/sqlite` still uses `Layer.orDie` for storage init failures; surface typed errors instead. |
+| Telemetry proposals | `Polling`, `ProcessSchedule`, `HttpApiResource`: facet yes/no docs in `docs/storage-proposals/` (Phase 1 — proposal only). |

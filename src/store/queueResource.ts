@@ -14,6 +14,23 @@
  * Each per-domain facet (queue, run-resource, process, …) owns its own
  * concrete types — see `docs/STORAGE.md`.
  *
+ * ## Storage shape
+ *
+ * Every queue record carries `processType: "queue-resource"` and
+ * `processId: <queueId>`; the kind is encoded as `subjectType`:
+ *
+ * - `subjectType: "queue-entry"` — `queue.entry.<status>`. `subjectId =
+ *   entryId`, `key = fact.key`, `indexA = batchId`, `indexB = releaseId`
+ *   (only on `queue.entry.released`), `payload = { fact }`.
+ * - `subjectType: "queue-lifecycle"` — `queue.lifecycle.<tag>`.
+ *   `subjectId = queueId`, `payload = { change }`.
+ * - `subjectType: "queue-dedupe-key"` — `queue.dedupe-key.<status>`.
+ *   `subjectId = key`, `key = key`, `payload = { change }`.
+ *
+ * Indexed fields make per-key, per-batch, per-release lookups push
+ * cleanly into SQL via `RuntimeRecordQuery` predicates without scanning
+ * the JSON payload column.
+ *
  * ## Emit (optional)
  *
  * `QueueResource.make` calls the **static** record helpers on this class
@@ -38,28 +55,35 @@
  * yield* queue.dedupeKeys({ queueId: "@app/Email" });
  * ```
  *
- * ## Compose
- *
- * - `ProcessStoreQueueResource.layerRuntimeStorage` — facet on top of
- *   injected {@link RuntimeStorage}.
- * - `ProcessStoreQueueResource.layer` — facet + in-memory
- *   {@link RuntimeStorage} (dev/test only).
- * - Composed by `ProcessStorage.layerRuntimeStorage` and
- *   `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`.
- *
  * @module store/QueueResource
  */
 
-import { Effect } from "effect";
-import { applyQueryOpts } from "../internal/store/spine";
+import { DateTime, Effect } from "effect";
+import {
+  applyQueryOpts,
+  isFiniteNumber,
+  isJsonValue,
+  isRecord,
+  isString,
+  recordAttributesObject,
+  runtimeRecordQuery,
+  toJsonValue,
+  windowOpts,
+} from "../internal/store/helpers";
 import { ProcessStore } from "../ProcessStore";
-import type {
-  AnalyticsEvent,
-  AnalyticsEventBase,
-  JsonValue,
-  QueryOpts,
-  StoreEventQuery,
-} from "../ProcessStoreEvent";
+import type { JsonValue, QueryOpts } from "../ProcessStoreEvent";
+import {
+  IndexA,
+  IndexB,
+  Key,
+  ProcessId,
+  ProcessType,
+  SubjectId,
+  SubjectType,
+  Type,
+  type RuntimeRecordPredicate,
+} from "../Query";
+import type { RuntimeRecord } from "../RuntimeStorage";
 
 // ============================================================================
 // Public type-level vocabulary
@@ -315,176 +339,6 @@ export type QueueDedupeKeyChange =
   | QueueDedupeKeyHydratedChange;
 
 // ============================================================================
-// Wire events — one concrete type per fact / change discriminator
-// ============================================================================
-
-/** @public */
-export interface QueueEntryEnqueuedEvent extends AnalyticsEventBase {
-  type: "queue.entry.enqueued";
-  entityType: "queue-resource";
-  fact: QueueEntryEnqueuedFact;
-}
-
-/** @public */
-export interface QueueEntryStartedEvent extends AnalyticsEventBase {
-  type: "queue.entry.started";
-  entityType: "queue-resource";
-  fact: QueueEntryStartedFact;
-}
-
-/** @public */
-export interface QueueEntryCompletedEvent extends AnalyticsEventBase {
-  type: "queue.entry.completed";
-  entityType: "queue-resource";
-  fact: QueueEntryCompletedFact;
-}
-
-/** @public */
-export interface QueueEntryFailedEvent extends AnalyticsEventBase {
-  type: "queue.entry.failed";
-  entityType: "queue-resource";
-  fact: QueueEntryFailedFact;
-}
-
-/** @public */
-export interface QueueEntryRetriedEvent extends AnalyticsEventBase {
-  type: "queue.entry.retried";
-  entityType: "queue-resource";
-  fact: QueueEntryRetriedFact;
-}
-
-/** @public */
-export interface QueueEntryExhaustedEvent extends AnalyticsEventBase {
-  type: "queue.entry.exhausted";
-  entityType: "queue-resource";
-  fact: QueueEntryExhaustedFact;
-}
-
-/** @public */
-export interface QueueEntryReleasedEvent extends AnalyticsEventBase {
-  type: "queue.entry.released";
-  entityType: "queue-resource";
-  fact: QueueEntryReleasedFact;
-}
-
-/** @public */
-export interface QueueEntryDeadLetteredEvent extends AnalyticsEventBase {
-  type: "queue.entry.dead-lettered";
-  entityType: "queue-resource";
-  fact: QueueEntryDeadLetteredFact;
-}
-
-/** @public */
-export interface QueueEntryDroppedEvent extends AnalyticsEventBase {
-  type: "queue.entry.dropped";
-  entityType: "queue-resource";
-  fact: QueueEntryDroppedFact;
-}
-
-/**
- * Closed union of every persisted queue-entry wire event. Contributed
- * to {@link AnalyticsEvent} via re-export from `ProcessStoreEvent.ts`.
- *
- * @public
- */
-export type QueueEntryRecordedEvent =
-  | QueueEntryEnqueuedEvent
-  | QueueEntryStartedEvent
-  | QueueEntryCompletedEvent
-  | QueueEntryFailedEvent
-  | QueueEntryRetriedEvent
-  | QueueEntryExhaustedEvent
-  | QueueEntryReleasedEvent
-  | QueueEntryDeadLetteredEvent
-  | QueueEntryDroppedEvent;
-
-/** @public */
-export interface QueueLifecycleStartedEvent extends AnalyticsEventBase {
-  type: "queue.lifecycle.started";
-  entityType: "queue-resource";
-  change: QueueLifecycleStartedChange;
-}
-
-/** @public */
-export interface QueueLifecyclePausedEvent extends AnalyticsEventBase {
-  type: "queue.lifecycle.paused";
-  entityType: "queue-resource";
-  change: QueueLifecyclePausedChange;
-}
-
-/** @public */
-export interface QueueLifecycleResumedEvent extends AnalyticsEventBase {
-  type: "queue.lifecycle.resumed";
-  entityType: "queue-resource";
-  change: QueueLifecycleResumedChange;
-}
-
-/** @public */
-export interface QueueLifecycleShutdownEvent extends AnalyticsEventBase {
-  type: "queue.lifecycle.shutdown";
-  entityType: "queue-resource";
-  change: QueueLifecycleShutdownChange;
-}
-
-/** @public */
-export interface QueueLifecycleClearedEvent extends AnalyticsEventBase {
-  type: "queue.lifecycle.cleared";
-  entityType: "queue-resource";
-  change: QueueLifecycleClearedChange;
-}
-
-/** @public */
-export interface QueueLifecycleDrainedEvent extends AnalyticsEventBase {
-  type: "queue.lifecycle.drained";
-  entityType: "queue-resource";
-  change: QueueLifecycleDrainedChange;
-}
-
-/**
- * Closed union of every persisted queue-lifecycle wire event.
- *
- * @public
- */
-export type QueueLifecycleChangedEvent =
-  | QueueLifecycleStartedEvent
-  | QueueLifecyclePausedEvent
-  | QueueLifecycleResumedEvent
-  | QueueLifecycleShutdownEvent
-  | QueueLifecycleClearedEvent
-  | QueueLifecycleDrainedEvent;
-
-/** @public */
-export interface QueueDedupeKeyAddedEvent extends AnalyticsEventBase {
-  type: "queue.dedupe-key.added";
-  entityType: "queue-resource";
-  change: QueueDedupeKeyAddedChange;
-}
-
-/** @public */
-export interface QueueDedupeKeyReleasedEvent extends AnalyticsEventBase {
-  type: "queue.dedupe-key.released";
-  entityType: "queue-resource";
-  change: QueueDedupeKeyReleasedChange;
-}
-
-/** @public */
-export interface QueueDedupeKeyHydratedEvent extends AnalyticsEventBase {
-  type: "queue.dedupe-key.hydrated";
-  entityType: "queue-resource";
-  change: QueueDedupeKeyHydratedChange;
-}
-
-/**
- * Closed union of every persisted queue-dedupe-key wire event.
- *
- * @public
- */
-export type QueueDedupeKeyChangedEvent =
-  | QueueDedupeKeyAddedEvent
-  | QueueDedupeKeyReleasedEvent
-  | QueueDedupeKeyHydratedEvent;
-
-// ============================================================================
 // Query types
 // ============================================================================
 
@@ -518,10 +372,10 @@ export interface QueueDedupeKeyQuery {
 // Constants and type guards
 // ============================================================================
 
-const QUEUE_RESOURCE_ENTITY_TYPE = "queue-resource" as const;
-const QUEUE_ENTRY_SUBJECT_TYPE = "queue-entry" as const;
-const QUEUE_LIFECYCLE_SUBJECT_TYPE = "queue-lifecycle" as const;
-const QUEUE_DEDUPE_KEY_SUBJECT_TYPE = "queue-dedupe-key" as const;
+const QUEUE_RESOURCE_PROCESS_TYPE = "queue-resource";
+const QUEUE_ENTRY_SUBJECT_TYPE = "queue-entry";
+const QUEUE_LIFECYCLE_SUBJECT_TYPE = "queue-lifecycle";
+const QUEUE_DEDUPE_KEY_SUBJECT_TYPE = "queue-dedupe-key";
 const QUEUE_RESOURCE_INDEX_NAMES = [
   "batchId",
   "releaseId",
@@ -559,456 +413,538 @@ export const queueDedupeKeyChangeTypes: ReadonlyArray<QueueDedupeKeyChangeType> 
     "queue.dedupe-key.hydrated",
   ];
 
-/**
- * Narrows an {@link AnalyticsEvent} to {@link QueueEntryRecordedEvent}.
- *
- * @public
- */
-export const isQueueEntryRecordedEvent = (
-  event: AnalyticsEvent,
-): event is QueueEntryRecordedEvent => {
-  switch (event.type) {
+const isQueueEntryFactType = (value: unknown): value is QueueEntryFactType =>
+  isString(value) && queueEntryFactTypes.some((type) => type === value);
+
+const isQueueLifecycleChangeType = (
+  value: unknown,
+): value is QueueLifecycleChangeType =>
+  isString(value) && queueLifecycleChangeTypes.some((type) => type === value);
+
+const isQueueDedupeKeyChangeType = (
+  value: unknown,
+): value is QueueDedupeKeyChangeType =>
+  isString(value) && queueDedupeKeyChangeTypes.some((type) => type === value);
+
+const queuePriorities: ReadonlyArray<ProcessStoreQueueResourcePriority> = [
+  "high",
+  "normal",
+  "low",
+];
+
+const isQueuePriority = (
+  value: unknown,
+): value is ProcessStoreQueueResourcePriority =>
+  isString(value) && queuePriorities.some((p) => p === value);
+
+// ============================================================================
+// Encoders (fact / change → RuntimeRecord)
+// ============================================================================
+
+const queueEntryFactAsJson = (fact: QueueEntryFact): JsonValue => {
+  const out: { [key: string]: JsonValue } = {
+    id: fact.id,
+    queueId: fact.queueId,
+    entryId: fact.entryId,
+    type: fact.type,
+    occurredAt: fact.occurredAt,
+  };
+  if (fact.key !== undefined) out["key"] = fact.key;
+  if (fact.priority !== undefined) out["priority"] = fact.priority;
+  if (fact.attempts !== undefined) out["attempts"] = fact.attempts;
+  if (fact.batchId !== undefined) out["batchId"] = fact.batchId;
+  if (fact.attributes !== undefined) {
+    out["attributes"] = toJsonValue(fact.attributes);
+  }
+  switch (fact.type) {
     case "queue.entry.enqueued":
+      out["enqueuedAt"] = fact.enqueuedAt;
+      if (fact.payload !== undefined) out["payload"] = fact.payload;
+      break;
     case "queue.entry.started":
+      out["startedAt"] = fact.startedAt;
+      break;
     case "queue.entry.completed":
+      out["startedAt"] = fact.startedAt;
+      out["durationMs"] = fact.durationMs;
+      break;
     case "queue.entry.failed":
+      out["startedAt"] = fact.startedAt;
+      out["durationMs"] = fact.durationMs;
+      if (fact.error !== undefined) out["error"] = fact.error;
+      break;
     case "queue.entry.retried":
+      if (fact.error !== undefined) out["error"] = fact.error;
+      break;
     case "queue.entry.exhausted":
+      if (fact.error !== undefined) out["error"] = fact.error;
+      break;
     case "queue.entry.released":
+      out["releaseId"] = fact.releaseId;
+      if (fact.interruptedAt !== undefined) {
+        out["interruptedAt"] = fact.interruptedAt;
+      }
+      break;
     case "queue.entry.dead-lettered":
+      if (fact.reason !== undefined) out["reason"] = fact.reason;
+      if (fact.error !== undefined) out["error"] = fact.error;
+      break;
     case "queue.entry.dropped":
-      return true;
-    default:
-      return false;
-  }
-};
-
-/**
- * Narrows an {@link AnalyticsEvent} to {@link QueueLifecycleChangedEvent}.
- *
- * @public
- */
-export const isQueueLifecycleChangedEvent = (
-  event: AnalyticsEvent,
-): event is QueueLifecycleChangedEvent => {
-  switch (event.type) {
-    case "queue.lifecycle.started":
-    case "queue.lifecycle.paused":
-    case "queue.lifecycle.resumed":
-    case "queue.lifecycle.shutdown":
-    case "queue.lifecycle.cleared":
-    case "queue.lifecycle.drained":
-      return true;
-    default:
-      return false;
-  }
-};
-
-/**
- * Narrows an {@link AnalyticsEvent} to {@link QueueDedupeKeyChangedEvent}.
- *
- * @public
- */
-export const isQueueDedupeKeyChangedEvent = (
-  event: AnalyticsEvent,
-): event is QueueDedupeKeyChangedEvent => {
-  switch (event.type) {
-    case "queue.dedupe-key.added":
-    case "queue.dedupe-key.released":
-    case "queue.dedupe-key.hydrated":
-      return true;
-    default:
-      return false;
-  }
-};
-
-// ============================================================================
-// Encoders (fact / change → wire event)
-// ============================================================================
-
-const mergeAttributes = (
-  base: Record<string, unknown>,
-  user: Record<string, unknown> | undefined,
-): Record<string, unknown> => {
-  if (user === undefined) return base;
-  const out: Record<string, unknown> = { ...base };
-  for (const [key, value] of Object.entries(user)) {
-    if (out[key] === undefined) out[key] = value;
+      if (fact.reason !== undefined) out["reason"] = fact.reason;
+      break;
   }
   return out;
 };
 
-const baseEntryAttributes = (fact: QueueEntryFact): Record<string, unknown> => {
-  const base: Record<string, unknown> = {
+const lifecycleChangeAsJson = (change: QueueLifecycleChange): JsonValue => {
+  const out: { [key: string]: JsonValue } = {
+    id: change.id,
+    queueId: change.queueId,
+    type: change.type,
+    changedAt: change.changedAt,
+  };
+  if (change.attributes !== undefined) {
+    out["attributes"] = toJsonValue(change.attributes);
+  }
+  if (change.type === "queue.lifecycle.cleared") {
+    out["itemsCleared"] = change.itemsCleared;
+  }
+  return out;
+};
+
+const dedupeChangeAsJson = (change: QueueDedupeKeyChange): JsonValue => ({
+  id: change.id,
+  queueId: change.queueId,
+  key: change.key,
+  type: change.type,
+  changedAt: change.changedAt,
+  ...(change.attributes !== undefined
+    ? { attributes: toJsonValue(change.attributes) }
+    : {}),
+});
+
+/**
+ * Build a runtime record from a queue entry fact.
+ *
+ * @internal
+ */
+export const makeQueueEntryRecord = (
+  fact: QueueEntryFact,
+): Omit<RuntimeRecord, "runId" | "createdAt"> => {
+  type Mutable = {
+    -readonly [K in keyof Omit<RuntimeRecord, "runId" | "createdAt">]:
+      Omit<RuntimeRecord, "runId" | "createdAt">[K];
+  };
+  const out: Mutable = {
+    id: `queue.entry/${fact.id}`,
+    type: fact.type,
+    occurredAt: DateTime.makeUnsafe(fact.occurredAt),
+    processType: QUEUE_RESOURCE_PROCESS_TYPE,
+    processId: fact.queueId,
     subjectType: QUEUE_ENTRY_SUBJECT_TYPE,
     subjectId: fact.entryId,
     indexNames: QUEUE_RESOURCE_INDEX_NAMES,
+    payload: { fact: queueEntryFactAsJson(fact) },
   };
-  if (fact.key !== undefined) base["key"] = fact.key;
-  if (fact.batchId !== undefined) base["indexA"] = fact.batchId;
-  if (fact.type === "queue.entry.released") {
-    base["indexB"] = fact.releaseId;
+  if (fact.key !== undefined) out.key = fact.key;
+  if (fact.batchId !== undefined) out.indexA = fact.batchId;
+  if (fact.type === "queue.entry.released") out.indexB = fact.releaseId;
+  if (fact.attributes !== undefined) {
+    out.attributes = toJsonValue(fact.attributes);
   }
-  return mergeAttributes(base, fact.attributes);
+  return out;
 };
 
-const baseLifecycleAttributes = (
+/**
+ * Build a runtime record from a queue lifecycle change.
+ *
+ * @internal
+ */
+export const makeQueueLifecycleRecord = (
   change: QueueLifecycleChange,
-): Record<string, unknown> => {
-  const base: Record<string, unknown> = {
+): Omit<RuntimeRecord, "runId" | "createdAt"> => {
+  const out: Omit<RuntimeRecord, "runId" | "createdAt"> = {
+    id: `queue.lifecycle/${change.id}`,
+    type: change.type,
+    occurredAt: DateTime.makeUnsafe(change.changedAt),
+    processType: QUEUE_RESOURCE_PROCESS_TYPE,
+    processId: change.queueId,
     subjectType: QUEUE_LIFECYCLE_SUBJECT_TYPE,
     subjectId: change.queueId,
+    payload: { change: lifecycleChangeAsJson(change) },
+    ...(change.attributes !== undefined
+      ? { attributes: toJsonValue(change.attributes) }
+      : {}),
   };
-  return mergeAttributes(base, change.attributes);
+  return out;
 };
 
-const baseDedupeAttributes = (
+/**
+ * Build a runtime record from a queue dedupe-key change.
+ *
+ * @internal
+ */
+export const makeQueueDedupeKeyRecord = (
   change: QueueDedupeKeyChange,
-): Record<string, unknown> => {
-  const base: Record<string, unknown> = {
-    subjectType: QUEUE_DEDUPE_KEY_SUBJECT_TYPE,
-    subjectId: change.key,
-    key: change.key,
-  };
-  return mergeAttributes(base, change.attributes);
-};
-
-/** @internal */
-export const makeQueueEntryEvent = (
-  fact: QueueEntryFact,
-): QueueEntryRecordedEvent => {
-  const id = `queue.entry/${fact.id}`;
-  const occurredAt = fact.occurredAt;
-  const entityId = fact.queueId;
-  const attributes = baseEntryAttributes(fact);
-  switch (fact.type) {
-    case "queue.entry.enqueued":
-      return {
-        id,
-        type: "queue.entry.enqueued",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        fact,
-      };
-    case "queue.entry.started":
-      return {
-        id,
-        type: "queue.entry.started",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        fact,
-      };
-    case "queue.entry.completed":
-      return {
-        id,
-        type: "queue.entry.completed",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        fact,
-      };
-    case "queue.entry.failed":
-      return {
-        id,
-        type: "queue.entry.failed",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        fact,
-      };
-    case "queue.entry.retried":
-      return {
-        id,
-        type: "queue.entry.retried",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        fact,
-      };
-    case "queue.entry.exhausted":
-      return {
-        id,
-        type: "queue.entry.exhausted",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        fact,
-      };
-    case "queue.entry.released":
-      return {
-        id,
-        type: "queue.entry.released",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        fact,
-      };
-    case "queue.entry.dead-lettered":
-      return {
-        id,
-        type: "queue.entry.dead-lettered",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        fact,
-      };
-    case "queue.entry.dropped":
-      return {
-        id,
-        type: "queue.entry.dropped",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        fact,
-      };
-  }
-};
-
-/** @internal */
-export const makeQueueLifecycleEvent = (
-  change: QueueLifecycleChange,
-): QueueLifecycleChangedEvent => {
-  const id = `queue.lifecycle/${change.id}`;
-  const occurredAt = change.changedAt;
-  const entityId = change.queueId;
-  const attributes = baseLifecycleAttributes(change);
-  switch (change.type) {
-    case "queue.lifecycle.started":
-      return {
-        id,
-        type: "queue.lifecycle.started",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        change,
-      };
-    case "queue.lifecycle.paused":
-      return {
-        id,
-        type: "queue.lifecycle.paused",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        change,
-      };
-    case "queue.lifecycle.resumed":
-      return {
-        id,
-        type: "queue.lifecycle.resumed",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        change,
-      };
-    case "queue.lifecycle.shutdown":
-      return {
-        id,
-        type: "queue.lifecycle.shutdown",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        change,
-      };
-    case "queue.lifecycle.cleared":
-      return {
-        id,
-        type: "queue.lifecycle.cleared",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        change,
-      };
-    case "queue.lifecycle.drained":
-      return {
-        id,
-        type: "queue.lifecycle.drained",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        change,
-      };
-  }
-};
-
-/** @internal */
-export const makeQueueDedupeKeyEvent = (
-  change: QueueDedupeKeyChange,
-): QueueDedupeKeyChangedEvent => {
-  const id = `queue.dedupe-key/${change.id}`;
-  const occurredAt = change.changedAt;
-  const entityId = change.queueId;
-  const attributes = baseDedupeAttributes(change);
-  switch (change.type) {
-    case "queue.dedupe-key.added":
-      return {
-        id,
-        type: "queue.dedupe-key.added",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        change,
-      };
-    case "queue.dedupe-key.released":
-      return {
-        id,
-        type: "queue.dedupe-key.released",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        change,
-      };
-    case "queue.dedupe-key.hydrated":
-      return {
-        id,
-        type: "queue.dedupe-key.hydrated",
-        occurredAt,
-        entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-        entityId,
-        attributes,
-        change,
-      };
-  }
-};
-
-// ============================================================================
-// Store-level query helpers (StoreEventQuery → AnalyticsEvent[])
-// ============================================================================
-
-/** @internal */
-export const queueEntryStoreQuery = (
-  query: QueueEntryQuery | undefined,
-): StoreEventQuery => ({
-  entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-  entityId: query?.queueId,
-  types: query?.types ?? queueEntryFactTypes,
-  opts:
-    query?.opts === undefined
-      ? undefined
-      : { before: query.opts.before, after: query.opts.after },
-});
-
-/** @internal */
-export const queueLifecycleStoreQuery = (
-  query: QueueLifecycleQuery | undefined,
-): StoreEventQuery => ({
-  entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-  entityId: query?.queueId,
-  types: query?.types ?? queueLifecycleChangeTypes,
-  opts:
-    query?.opts === undefined
-      ? undefined
-      : { before: query.opts.before, after: query.opts.after },
-});
-
-/** @internal */
-export const queueDedupeKeyStoreQuery = (
-  query: QueueDedupeKeyQuery | undefined,
-): StoreEventQuery => ({
-  entityType: QUEUE_RESOURCE_ENTITY_TYPE,
-  entityId: query?.queueId,
-  types: query?.types ?? queueDedupeKeyChangeTypes,
-  opts:
-    query?.opts === undefined
-      ? undefined
-      : { before: query.opts.before, after: query.opts.after },
+): Omit<RuntimeRecord, "runId" | "createdAt"> => ({
+  id: `queue.dedupe-key/${change.id}`,
+  type: change.type,
+  occurredAt: DateTime.makeUnsafe(change.changedAt),
+  processType: QUEUE_RESOURCE_PROCESS_TYPE,
+  processId: change.queueId,
+  subjectType: QUEUE_DEDUPE_KEY_SUBJECT_TYPE,
+  subjectId: change.key,
+  key: change.key,
+  payload: { change: dedupeChangeAsJson(change) },
+  ...(change.attributes !== undefined
+    ? { attributes: toJsonValue(change.attributes) }
+    : {}),
 });
 
 // ============================================================================
-// Projections (AnalyticsEvent[] → typed fact[]/change[])
+// Decoders (RuntimeRecord → fact / change)
 // ============================================================================
 
-const matchesEntryQuery =
-  (query: QueueEntryQuery | undefined) =>
-  (fact: QueueEntryFact): boolean => {
-    if (query === undefined) return true;
-    if (query.entryId !== undefined && fact.entryId !== query.entryId) {
-      return false;
+interface QueueEntryFactCommonDecoded {
+  readonly id: string;
+  readonly queueId: string;
+  readonly entryId: string;
+  readonly occurredAt: number;
+  readonly key?: string;
+  readonly priority?: ProcessStoreQueueResourcePriority;
+  readonly attempts?: number;
+  readonly batchId?: string;
+  readonly attributes?: Record<string, unknown>;
+}
+
+const decodeEntryCommon = (
+  raw: { readonly [key: string]: unknown },
+): QueueEntryFactCommonDecoded | null => {
+  const id = raw["id"];
+  const queueId = raw["queueId"];
+  const entryId = raw["entryId"];
+  const occurredAt = raw["occurredAt"];
+  if (
+    !isString(id) ||
+    !isString(queueId) ||
+    !isString(entryId) ||
+    !isFiniteNumber(occurredAt)
+  ) {
+    return null;
+  }
+  const keyRaw = raw["key"];
+  const priorityRaw = raw["priority"];
+  const attemptsRaw = raw["attempts"];
+  const batchIdRaw = raw["batchId"];
+  if (keyRaw !== undefined && !isString(keyRaw)) return null;
+  if (priorityRaw !== undefined && !isQueuePriority(priorityRaw)) return null;
+  if (attemptsRaw !== undefined && !isFiniteNumber(attemptsRaw)) return null;
+  if (batchIdRaw !== undefined && !isString(batchIdRaw)) return null;
+  const attributes = recordAttributesObject(raw["attributes"]);
+  const out: { -readonly [K in keyof QueueEntryFactCommonDecoded]: QueueEntryFactCommonDecoded[K] } =
+    {
+      id,
+      queueId,
+      entryId,
+      occurredAt,
+    };
+  if (keyRaw !== undefined) out.key = keyRaw;
+  if (priorityRaw !== undefined) out.priority = priorityRaw;
+  if (attemptsRaw !== undefined) out.attempts = attemptsRaw;
+  if (batchIdRaw !== undefined) out.batchId = batchIdRaw;
+  if (attributes !== undefined) out.attributes = attributes;
+  return out;
+};
+
+const decodeQueueEntryFactValue = (
+  type: QueueEntryFactType,
+  value: unknown,
+): QueueEntryFact | null => {
+  if (!isRecord(value)) return null;
+  if (value["type"] !== type) return null;
+  const common = decodeEntryCommon(value);
+  if (common === null) return null;
+  switch (type) {
+    case "queue.entry.enqueued": {
+      const enqueuedAt = value["enqueuedAt"];
+      if (!isFiniteNumber(enqueuedAt)) return null;
+      const payload = value["payload"];
+      if (payload !== undefined && !isJsonValue(payload)) return null;
+      return {
+        ...common,
+        type,
+        enqueuedAt,
+        ...(payload === undefined ? {} : { payload }),
+      };
     }
-    if (query.key !== undefined && fact.key !== query.key) {
-      return false;
+    case "queue.entry.started": {
+      const startedAt = value["startedAt"];
+      if (!isFiniteNumber(startedAt)) return null;
+      return { ...common, type, startedAt };
     }
-    if (query.batchId !== undefined && fact.batchId !== query.batchId) {
-      return false;
-    }
-    if (query.releaseId !== undefined) {
-      if (
-        fact.type !== "queue.entry.released" ||
-        fact.releaseId !== query.releaseId
-      ) {
-        return false;
+    case "queue.entry.completed": {
+      const startedAt = value["startedAt"];
+      const durationMs = value["durationMs"];
+      if (!isFiniteNumber(startedAt) || !isFiniteNumber(durationMs)) {
+        return null;
       }
+      return { ...common, type, startedAt, durationMs };
     }
-    return true;
-  };
-
-const matchesDedupeQuery =
-  (query: QueueDedupeKeyQuery | undefined) =>
-  (change: QueueDedupeKeyChange): boolean => {
-    if (query === undefined) return true;
-    if (query.key !== undefined && change.key !== query.key) {
-      return false;
+    case "queue.entry.failed": {
+      const startedAt = value["startedAt"];
+      const durationMs = value["durationMs"];
+      const errorRaw = value["error"];
+      if (!isFiniteNumber(startedAt) || !isFiniteNumber(durationMs)) {
+        return null;
+      }
+      if (errorRaw !== undefined && !isString(errorRaw)) return null;
+      return {
+        ...common,
+        type,
+        startedAt,
+        durationMs,
+        ...(errorRaw === undefined ? {} : { error: errorRaw }),
+      };
     }
-    return true;
-  };
+    case "queue.entry.retried": {
+      const errorRaw = value["error"];
+      if (errorRaw !== undefined && !isString(errorRaw)) return null;
+      return {
+        ...common,
+        type,
+        ...(errorRaw === undefined ? {} : { error: errorRaw }),
+      };
+    }
+    case "queue.entry.exhausted": {
+      const errorRaw = value["error"];
+      if (errorRaw !== undefined && !isString(errorRaw)) return null;
+      return {
+        ...common,
+        type,
+        ...(errorRaw === undefined ? {} : { error: errorRaw }),
+      };
+    }
+    case "queue.entry.released": {
+      const releaseId = value["releaseId"];
+      if (!isString(releaseId)) return null;
+      const interruptedAtRaw = value["interruptedAt"];
+      if (
+        interruptedAtRaw !== undefined &&
+        !isFiniteNumber(interruptedAtRaw)
+      ) {
+        return null;
+      }
+      return {
+        ...common,
+        type,
+        releaseId,
+        ...(interruptedAtRaw === undefined
+          ? {}
+          : { interruptedAt: interruptedAtRaw }),
+      };
+    }
+    case "queue.entry.dead-lettered": {
+      const reasonRaw = value["reason"];
+      const errorRaw = value["error"];
+      if (reasonRaw !== undefined && !isString(reasonRaw)) return null;
+      if (errorRaw !== undefined && !isString(errorRaw)) return null;
+      return {
+        ...common,
+        type,
+        ...(reasonRaw === undefined ? {} : { reason: reasonRaw }),
+        ...(errorRaw === undefined ? {} : { error: errorRaw }),
+      };
+    }
+    case "queue.entry.dropped": {
+      const reasonRaw = value["reason"];
+      if (reasonRaw !== undefined && !isString(reasonRaw)) return null;
+      return {
+        ...common,
+        type,
+        ...(reasonRaw === undefined ? {} : { reason: reasonRaw }),
+      };
+    }
+  }
+};
 
-/** @internal */
-export const queueEntryFactsFromEvents = (
-  events: ReadonlyArray<AnalyticsEvent>,
+const recordToQueueEntryFact = (record: RuntimeRecord): QueueEntryFact | null => {
+  if (!isQueueEntryFactType(record.type)) return null;
+  if (record.processType !== QUEUE_RESOURCE_PROCESS_TYPE) return null;
+  const payload = record.payload;
+  if (!isRecord(payload)) return null;
+  return decodeQueueEntryFactValue(record.type, payload["fact"]);
+};
+
+const decodeQueueLifecycleChangeValue = (
+  type: QueueLifecycleChangeType,
+  value: unknown,
+): QueueLifecycleChange | null => {
+  if (!isRecord(value)) return null;
+  if (value["type"] !== type) return null;
+  const id = value["id"];
+  const queueId = value["queueId"];
+  const changedAt = value["changedAt"];
+  if (!isString(id) || !isString(queueId) || !isFiniteNumber(changedAt)) {
+    return null;
+  }
+  const attributes = recordAttributesObject(value["attributes"]);
+  const common: QueueLifecycleChangeCommon = {
+    id,
+    queueId,
+    changedAt,
+    ...(attributes === undefined ? {} : { attributes }),
+  };
+  if (type === "queue.lifecycle.cleared") {
+    const itemsCleared = value["itemsCleared"];
+    if (!isFiniteNumber(itemsCleared)) return null;
+    return { ...common, type, itemsCleared };
+  }
+  return { ...common, type };
+};
+
+const recordToQueueLifecycleChange = (
+  record: RuntimeRecord,
+): QueueLifecycleChange | null => {
+  if (!isQueueLifecycleChangeType(record.type)) return null;
+  if (record.processType !== QUEUE_RESOURCE_PROCESS_TYPE) return null;
+  const payload = record.payload;
+  if (!isRecord(payload)) return null;
+  return decodeQueueLifecycleChangeValue(record.type, payload["change"]);
+};
+
+const decodeQueueDedupeKeyChangeValue = (
+  type: QueueDedupeKeyChangeType,
+  value: unknown,
+): QueueDedupeKeyChange | null => {
+  if (!isRecord(value)) return null;
+  if (value["type"] !== type) return null;
+  const id = value["id"];
+  const queueId = value["queueId"];
+  const key = value["key"];
+  const changedAt = value["changedAt"];
+  if (
+    !isString(id) ||
+    !isString(queueId) ||
+    !isString(key) ||
+    !isFiniteNumber(changedAt)
+  ) {
+    return null;
+  }
+  const attributes = recordAttributesObject(value["attributes"]);
+  return {
+    id,
+    queueId,
+    key,
+    changedAt,
+    type,
+    ...(attributes === undefined ? {} : { attributes }),
+  };
+};
+
+const recordToQueueDedupeKeyChange = (
+  record: RuntimeRecord,
+): QueueDedupeKeyChange | null => {
+  if (!isQueueDedupeKeyChangeType(record.type)) return null;
+  if (record.processType !== QUEUE_RESOURCE_PROCESS_TYPE) return null;
+  const payload = record.payload;
+  if (!isRecord(payload)) return null;
+  return decodeQueueDedupeKeyChangeValue(record.type, payload["change"]);
+};
+
+// ============================================================================
+// Read-side query builders
+// ============================================================================
+
+const entryPredicates = (
+  query: QueueEntryQuery | undefined,
+): RuntimeRecordPredicate[] => {
+  const preds: RuntimeRecordPredicate[] = [
+    ProcessType.equals(QUEUE_RESOURCE_PROCESS_TYPE),
+    SubjectType.equals(QUEUE_ENTRY_SUBJECT_TYPE),
+  ];
+  if (query?.queueId !== undefined) preds.push(ProcessId.equals(query.queueId));
+  if (query?.types !== undefined && query.types.length > 0) {
+    preds.push(Type.in(query.types));
+  }
+  if (query?.entryId !== undefined) {
+    preds.push(SubjectId.equals(query.entryId));
+  }
+  if (query?.key !== undefined) preds.push(Key.equals(query.key));
+  if (query?.batchId !== undefined) preds.push(IndexA.equals(query.batchId));
+  if (query?.releaseId !== undefined) {
+    preds.push(IndexB.equals(query.releaseId));
+  }
+  return preds;
+};
+
+const lifecyclePredicates = (
+  query: QueueLifecycleQuery | undefined,
+): RuntimeRecordPredicate[] => {
+  const preds: RuntimeRecordPredicate[] = [
+    ProcessType.equals(QUEUE_RESOURCE_PROCESS_TYPE),
+    SubjectType.equals(QUEUE_LIFECYCLE_SUBJECT_TYPE),
+  ];
+  if (query?.queueId !== undefined) preds.push(ProcessId.equals(query.queueId));
+  if (query?.types !== undefined && query.types.length > 0) {
+    preds.push(Type.in(query.types));
+  }
+  return preds;
+};
+
+const dedupePredicates = (
+  query: QueueDedupeKeyQuery | undefined,
+): RuntimeRecordPredicate[] => {
+  const preds: RuntimeRecordPredicate[] = [
+    ProcessType.equals(QUEUE_RESOURCE_PROCESS_TYPE),
+    SubjectType.equals(QUEUE_DEDUPE_KEY_SUBJECT_TYPE),
+  ];
+  if (query?.queueId !== undefined) preds.push(ProcessId.equals(query.queueId));
+  if (query?.key !== undefined) preds.push(Key.equals(query.key));
+  if (query?.types !== undefined && query.types.length > 0) {
+    preds.push(Type.in(query.types));
+  }
+  return preds;
+};
+
+// ============================================================================
+// Read projections
+// ============================================================================
+
+const queueEntryFactsFromRecords = (
+  records: ReadonlyArray<RuntimeRecord>,
   query: QueueEntryQuery | undefined,
 ): QueueEntryFact[] => {
-  const matches = matchesEntryQuery(query);
   const out: QueueEntryFact[] = [];
-  for (const event of events) {
-    if (!isQueueEntryRecordedEvent(event)) continue;
-    if (!matches(event.fact)) continue;
-    out.push(event.fact);
+  for (const record of records) {
+    const fact = recordToQueueEntryFact(record);
+    if (fact === null) continue;
+    out.push(fact);
   }
   return applyQueryOpts(out, query?.opts, (fact) => fact.occurredAt);
 };
 
-/** @internal */
-export const queueLifecycleChangesFromEvents = (
-  events: ReadonlyArray<AnalyticsEvent>,
+const queueLifecycleChangesFromRecords = (
+  records: ReadonlyArray<RuntimeRecord>,
   query: QueueLifecycleQuery | undefined,
 ): QueueLifecycleChange[] => {
   const out: QueueLifecycleChange[] = [];
-  for (const event of events) {
-    if (!isQueueLifecycleChangedEvent(event)) continue;
-    out.push(event.change);
+  for (const record of records) {
+    const change = recordToQueueLifecycleChange(record);
+    if (change === null) continue;
+    out.push(change);
   }
   return applyQueryOpts(out, query?.opts, (change) => change.changedAt);
 };
 
-/** @internal */
-export const queueDedupeKeyChangesFromEvents = (
-  events: ReadonlyArray<AnalyticsEvent>,
+const queueDedupeKeyChangesFromRecords = (
+  records: ReadonlyArray<RuntimeRecord>,
   query: QueueDedupeKeyQuery | undefined,
 ): QueueDedupeKeyChange[] => {
-  const matches = matchesDedupeQuery(query);
   const out: QueueDedupeKeyChange[] = [];
-  for (const event of events) {
-    if (!isQueueDedupeKeyChangedEvent(event)) continue;
-    if (!matches(event.change)) continue;
-    out.push(event.change);
+  for (const record of records) {
+    const change = recordToQueueDedupeKeyChange(record);
+    if (change === null) continue;
+    out.push(change);
   }
   return applyQueryOpts(out, query?.opts, (change) => change.changedAt);
 };
@@ -1038,49 +974,62 @@ export class ProcessStoreQueueResource extends ProcessStore.Service<
   "@nikscripts/effect-pm/store/queueResource/ProcessStoreQueueResource",
   ProcessStore.record({
     recordEntry: (s) => (fact: QueueEntryFact) =>
-      s.append(makeQueueEntryEvent(fact)),
+      s.create(makeQueueEntryRecord(fact)),
     recordEntryBatch: (s) => (facts: ReadonlyArray<QueueEntryFact>) =>
-      s.appendBatch(facts.map(makeQueueEntryEvent)),
+      s.createBatch(facts.map(makeQueueEntryRecord)),
     recordLifecycle: (s) => (change: QueueLifecycleChange) =>
-      s.append(makeQueueLifecycleEvent(change)),
+      s.create(makeQueueLifecycleRecord(change)),
     recordLifecycleBatch:
       (s) => (changes: ReadonlyArray<QueueLifecycleChange>) =>
-        s.appendBatch(changes.map(makeQueueLifecycleEvent)),
+        s.createBatch(changes.map(makeQueueLifecycleRecord)),
     recordDedupeKey: (s) => (change: QueueDedupeKeyChange) =>
-      s.append(makeQueueDedupeKeyEvent(change)),
+      s.create(makeQueueDedupeKeyRecord(change)),
     recordDedupeKeyBatch:
       (s) => (changes: ReadonlyArray<QueueDedupeKeyChange>) =>
-        s.appendBatch(changes.map(makeQueueDedupeKeyEvent)),
+        s.createBatch(changes.map(makeQueueDedupeKeyRecord)),
   }),
   ProcessStore.read((s) => ({
     entries: (query?: QueueEntryQuery) =>
       s
-        .events(queueEntryStoreQuery(query))
+        .read(runtimeRecordQuery(entryPredicates(query), windowOpts(query?.opts)))
         .pipe(
-          Effect.map((events) => queueEntryFactsFromEvents(events, query)),
+          Effect.map((records) =>
+            queueEntryFactsFromRecords(records, query),
+          ),
         ),
     entriesByKey: (key: string, query?: Omit<QueueEntryQuery, "key">) => {
       const merged: QueueEntryQuery = { ...query, key };
       return s
-        .events(queueEntryStoreQuery(merged))
+        .read(
+          runtimeRecordQuery(entryPredicates(merged), windowOpts(merged.opts)),
+        )
         .pipe(
-          Effect.map((events) => queueEntryFactsFromEvents(events, merged)),
+          Effect.map((records) =>
+            queueEntryFactsFromRecords(records, merged),
+          ),
         );
     },
     lifecycle: (query?: QueueLifecycleQuery) =>
       s
-        .events(queueLifecycleStoreQuery(query))
+        .read(
+          runtimeRecordQuery(
+            lifecyclePredicates(query),
+            windowOpts(query?.opts),
+          ),
+        )
         .pipe(
-          Effect.map((events) =>
-            queueLifecycleChangesFromEvents(events, query),
+          Effect.map((records) =>
+            queueLifecycleChangesFromRecords(records, query),
           ),
         ),
     dedupeKeys: (query?: QueueDedupeKeyQuery) =>
       s
-        .events(queueDedupeKeyStoreQuery(query))
+        .read(
+          runtimeRecordQuery(dedupePredicates(query), windowOpts(query?.opts)),
+        )
         .pipe(
-          Effect.map((events) =>
-            queueDedupeKeyChangesFromEvents(events, query),
+          Effect.map((records) =>
+            queueDedupeKeyChangesFromRecords(records, query),
           ),
         ),
   })),

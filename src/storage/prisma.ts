@@ -9,17 +9,14 @@
  * ```
  *
  * The legacy event-table adapter has been removed. Prisma will return as a
- * RuntimeStorage adapter over normalized RuntimeRecord rows.
+ * {@link RuntimeStorage} adapter over normalized {@link RuntimeRecord} rows.
  *
  * @module storage/prisma
  */
 
 export {
   PrismaProcessStore,
-  PrismaProcessStoreDecodeError,
   PrismaProcessStoreUnavailableError,
-  decodeEventRow,
-  encodeEvent,
 } from "../prisma";
 
 export type {

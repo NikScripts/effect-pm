@@ -26,7 +26,7 @@ Storage facets are **public** under **`src/store/`** with **`@nikscripts/effect-
 
 **Not the worker module:** `@nikscripts/effect-pm/QueueResource` is the queue worker; `@nikscripts/effect-pm/store/QueueResource` is the storage facet.
 
-**`internal/store/`** — spine, codec, composite only. Not facet tags.
+**`internal/store/`** — `spine.ts`, `service.ts`, `helpers.ts`. Type-agnostic plumbing only. No per-facet codecs, no facet tags.
 
 ## Placement
 

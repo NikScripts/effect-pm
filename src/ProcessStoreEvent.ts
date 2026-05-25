@@ -1,23 +1,22 @@
 /**
- * Storage-neutral event row shapes and analytics event types for {@link ProcessStore}.
+ * Storage-neutral primitives shared by every {@link ProcessStore} facet.
+ *
+ * @remarks
+ * After the move to per-domain {@link RuntimeRecord} rows there is no
+ * shared analytics envelope: each facet owns its own row codec and its
+ * own concrete fact / change / event types. This module retains only
+ * the cross-cutting primitives every facet still references —
+ * structural JSON, query options, the legacy `AnalyticsEventBase`
+ * shape used by surviving wire-event types, and the
+ * {@link ProcessStoreWriteError} channel.
  *
  * @module ProcessStoreEvent
  */
 
 import { Data } from "effect";
-import type { LogLevel } from "effect/LogLevel";
-import type {
-  QueueDedupeKeyChangedEvent,
-  QueueEntryRecordedEvent,
-  QueueLifecycleChangedEvent,
-} from "./store/queueResource";
-import type {
-  RunResourceFact,
-  RunResourceStateChange,
-} from "./store/runResource";
 
 /**
- * Structural JSON value compatible with persisted event payloads.
+ * Structural JSON value compatible with persisted record payloads.
  *
  * @public
  */
@@ -30,37 +29,6 @@ export type JsonValue =
   | ReadonlyArray<JsonValue>;
 
 /**
- * Row shape persisted by storage adapters.
- *
- * @public
- */
-export interface EffectPmEventRow {
-  readonly id: string;
-  readonly type: string;
-  readonly occurredAt: Date;
-  readonly entityType: string;
-  readonly entityId: string;
-  readonly attributes: JsonValue | null;
-  readonly payload: JsonValue;
-  readonly createdAt: Date;
-}
-
-/**
- * Create input used by append-style storage adapters.
- *
- * @internal
- */
-export interface EffectPmEventCreateInput {
-  readonly id: string;
-  readonly type: string;
-  readonly occurredAt: Date;
-  readonly entityType: string;
-  readonly entityId: string;
-  readonly attributes?: JsonValue | null;
-  readonly payload: JsonValue;
-}
-
-/**
  * Pagination / time window for historical reads.
  *
  * @public
@@ -71,18 +39,6 @@ export interface QueryOpts {
   before?: number;
   /** Filter: only events after this epoch millis. */
   after?: number;
-}
-
-/**
- * Storage-neutral event query for the append-only analytics envelope.
- *
- * @public
- */
-export interface StoreEventQuery {
-  readonly entityType?: AnalyticsEvent["entityType"];
-  readonly entityId?: string;
-  readonly types?: ReadonlyArray<AnalyticsEvent["type"]>;
-  readonly opts?: QueryOpts;
 }
 
 /** @public */
@@ -105,217 +61,23 @@ export type ProcessStoreWriteError =
   | ProcessStoreReadonlyRecordError;
 
 /**
- * Common fields for every stored analytics row.
+ * Common fields for surviving facet-owned wire event types.
+ *
+ * @remarks
+ * Some facets still expose a public `*Event` interface that mirrors the
+ * old append-only analytics row shape (e.g.
+ * {@link ProcessExecutionCompletedEvent},
+ * {@link ProcessLifecycleChangedEvent}, {@link LogEntryRecordedEvent}).
+ * They each extend this base.
  *
  * @public
  */
 export interface AnalyticsEventBase {
   id: string;
   type: string;
-  /** Epoch milliseconds when the event occurred. Use `Clock.currentTimeMillis` to produce. */
+  /** Epoch milliseconds when the event occurred. */
   occurredAt: number;
   entityType: string;
   entityId: string;
   attributes?: Record<string, unknown>;
 }
-
-/**
- * Terminal status for a tracked process run.
- *
- * @public
- */
-export type ProcessExecutionStatus = "completed" | "failed" | "interrupted";
-
-/**
- * One finished process run (success, failure, or interrupt).
- *
- * @public
- */
-export interface ProcessExecutionCompletedEvent extends AnalyticsEventBase {
-  type: "process.execution.completed";
-  entityType: "process";
-  execution: {
-    scheduleKey: string | null;
-    /** Epoch millis when the execution started. */
-    startedAt: number;
-    /** Epoch millis when the execution completed. */
-    completedAt: number;
-    durationMs: number;
-    status: ProcessExecutionStatus;
-    error?: string;
-    isStartupRun: boolean;
-  };
-}
-
-/**
- * High-level lifecycle labels written by the process supervisor.
- *
- * @public
- */
-export type ProcessLifecycleTag =
-  | "Started"
-  | "Stopped"
-  | "Restarted"
-  | "Errored"
-  | "Recovered"
-  | "Disabled"
-  | "Enabled";
-
-/**
- * Supervisor-observed lifecycle transition for a process id.
- *
- * @public
- */
-export interface ProcessLifecycleChangedEvent extends AnalyticsEventBase {
-  type: "process.lifecycle.changed";
-  entityType: "process";
-  lifecycle: {
-    tag: ProcessLifecycleTag;
-    error?: string;
-  };
-}
-
-export type {
-  QueueDedupeKeyChangedEvent,
-  QueueEntryRecordedEvent,
-  QueueLifecycleChangedEvent,
-} from "./store/queueResource";
-
-/**
- * Per-domain wire event for a {@link RunResourceFact} written by
- * {@link ProcessStoreRunResource}. Wire type: `"run-resource.fact.recorded"`.
- *
- * @public
- */
-export interface RunResourceFactRecordedEvent extends AnalyticsEventBase {
-  type: "run-resource.fact.recorded";
-  entityType: "run-resource";
-  fact: RunResourceFact;
-}
-
-/**
- * Per-domain wire event for a {@link RunResourceStateChange} written by
- * {@link ProcessStoreRunResource}. Wire type: `"run-resource.state.changed"`.
- *
- * @public
- */
-export interface RunResourceStateChangedEvent extends AnalyticsEventBase {
-  type: "run-resource.state.changed";
-  entityType: "run-resource";
-  change: RunResourceStateChange;
-}
-
-/**
- * Structured log line persisted by {@link ProcessStoreLog} for operator
- * `pm logs` / `pm watch` history. `entityId` is an opaque log-bucket id
- * supplied by the relay (today: the PM log annotation).
- *
- * @public
- */
-export interface LogEntryRecordedEvent extends AnalyticsEventBase {
-  type: "log.entry";
-  entityType: "log";
-  log: {
-    readonly entryId: string;
-    readonly entry: {
-      readonly date: string;
-      readonly level: LogLevel;
-      readonly message: string;
-      readonly cause?: string;
-      readonly annotations: Readonly<Record<string, string>>;
-      readonly spans: ReadonlyArray<string>;
-    };
-  };
-}
-
-/**
- * Closed union of supported analytics payloads.
- *
- * @remarks
- * Per-domain facets contribute concrete event types here. There is no
- * shared envelope wire type — see `docs/STORAGE.md`.
- *
- * @public
- */
-export type AnalyticsEvent =
-  | ProcessExecutionCompletedEvent
-  | ProcessLifecycleChangedEvent
-  | QueueEntryRecordedEvent
-  | QueueLifecycleChangedEvent
-  | QueueDedupeKeyChangedEvent
-  | RunResourceFactRecordedEvent
-  | RunResourceStateChangedEvent
-  | LogEntryRecordedEvent;
-
-/**
- * Narrows an {@link AnalyticsEvent} to {@link LogEntryRecordedEvent}.
- *
- * @public
- */
-export const isLogEntryRecorded = (
-  event: AnalyticsEvent,
-): event is LogEntryRecordedEvent =>
-  event.type === "log.entry" && event.entityType === "log";
-
-/**
- * Narrows an {@link AnalyticsEvent} to {@link QueueEntryRecordedEvent}.
- *
- * @public
- */
-export const isQueueEntryRecordedEvent = (
-  event: AnalyticsEvent,
-): event is QueueEntryRecordedEvent => {
-  switch (event.type) {
-    case "queue.entry.enqueued":
-    case "queue.entry.started":
-    case "queue.entry.completed":
-    case "queue.entry.failed":
-    case "queue.entry.retried":
-    case "queue.entry.exhausted":
-    case "queue.entry.released":
-    case "queue.entry.dropped":
-    case "queue.entry.dead-lettered":
-      return true;
-    default:
-      return false;
-  }
-};
-
-/**
- * Narrows an {@link AnalyticsEvent} to {@link QueueLifecycleChangedEvent}.
- *
- * @public
- */
-export const isQueueLifecycleChangedEvent = (
-  event: AnalyticsEvent,
-): event is QueueLifecycleChangedEvent => {
-  switch (event.type) {
-    case "queue.lifecycle.started":
-    case "queue.lifecycle.paused":
-    case "queue.lifecycle.resumed":
-    case "queue.lifecycle.shutdown":
-    case "queue.lifecycle.cleared":
-    case "queue.lifecycle.drained":
-      return true;
-    default:
-      return false;
-  }
-};
-
-/**
- * Narrows an {@link AnalyticsEvent} to {@link QueueDedupeKeyChangedEvent}.
- *
- * @public
- */
-export const isQueueDedupeKeyChangedEvent = (
-  event: AnalyticsEvent,
-): event is QueueDedupeKeyChangedEvent => {
-  switch (event.type) {
-    case "queue.dedupe-key.added":
-    case "queue.dedupe-key.released":
-    case "queue.dedupe-key.hydrated":
-      return true;
-    default:
-      return false;
-  }
-};

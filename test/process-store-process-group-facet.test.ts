@@ -82,4 +82,36 @@ describe("ProcessStoreProcessGroup — static optional emitters", () => {
       expect(byProcess).toHaveLength(1);
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
+
+  it.effect(
+    "lifecycleByGroup applies opts.limit to the post-filter result",
+    () =>
+      Effect.gen(function* () {
+        // Pre-fix this test failed because storage `limit=2` returned the two
+        // most-recent lifecycle rows across *all* groups, which were all
+        // "@test/Other", leaving zero rows for the requested group.
+        yield* ProcessStoreProcessGroup.recordMemberStarted(
+          "@test/Target",
+          "p-1",
+        );
+        yield* ProcessStoreProcessGroup.recordMemberStopped(
+          "@test/Target",
+          "p-1",
+        );
+        for (let i = 0; i < 4; i++) {
+          yield* ProcessStoreProcessGroup.recordMemberStarted(
+            "@test/Other",
+            `q-${String(i)}`,
+          );
+        }
+        const group = yield* ProcessStoreProcessGroup;
+        const limited = yield* group.lifecycleByGroup("@test/Target", {
+          limit: 2,
+        });
+        expect(limited).toHaveLength(2);
+        expect(
+          limited.every((row) => row.attributes?.["groupId"] === "@test/Target"),
+        ).toBe(true);
+      }).pipe(Effect.provide(groupStoreLayer)),
+  );
 });

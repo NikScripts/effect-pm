@@ -16,7 +16,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/ProcessStore.ts`, `src/ProcessStorage.ts`, `src/ProcessStoreEvent.ts` | Storage facet builder, combined facet layers, and shared event types. |
 | `src/store/*.ts` | Storage facets → `@nikscripts/effect-pm/store/*` |
 | `src/LogContext.ts`, `src/LogEntry.ts`, `src/Transport.ts` | PM log annotations, NDJSON log entries, transport config. |
-| `src/internal/store/spine.ts`, `codec.ts`, `service.ts`, `factEnvelope.ts` | Shared storage plumbing — internal. |
+| `src/internal/store/spine.ts`, `service.ts`, `helpers.ts` | Shared storage plumbing — internal. Type-agnostic only; per-facet codecs live next to each facet in `src/store/`. |
 | `src/internal/manager/*` | PM child launch, log capture/relay/query, group watch — **internal**. |
 | `src/ControlService.ts` | Localhost HTTP JSON control API. |
 | `src/Logs.ts` | PM capture/relay only (`captureLoggerLayer`, `relayLayer`) — package subpath `@nikscripts/effect-pm/Logs`. |

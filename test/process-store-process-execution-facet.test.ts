@@ -148,6 +148,46 @@ describe("ProcessStoreProcessExecution — projections", () => {
       expect(yield* store.hasPriorExecutions(processId)).toBe(true);
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
+
+  it.live(
+    "applies opts.limit to the post-filter result when scheduleKey is set",
+    () =>
+      Effect.gen(function* () {
+        const pid = "test/post-filter-limit";
+        // Hot rows are *older* than cold rows. Pre-fix `limit=2` over the
+        // pre-filter stream returns the two newest rows (cold), so the
+        // post-filter for "hot" yields zero. Post-fix the storage query
+        // strips `limit` and the post-filter result is sliced to 2.
+        for (let i = 0; i < 5; i++) {
+          yield* ProcessStoreProcessExecution.recordCompleted(
+            finish(pid, {
+              scheduleKey: "hot",
+              startedAt: 1_700_000_001_000 + i * 10,
+              completedAt: 1_700_000_001_005 + i * 10,
+            }),
+          );
+        }
+        for (let i = 0; i < 5; i++) {
+          yield* ProcessStoreProcessExecution.recordCompleted(
+            finish(pid, {
+              scheduleKey: "cold",
+              startedAt: 1_700_000_002_000 + i * 10,
+              completedAt: 1_700_000_002_005 + i * 10,
+            }),
+          );
+        }
+        const store = yield* ProcessStoreProcessExecution;
+        const limited = yield* store.executions({
+          processId: pid,
+          scheduleKey: "hot",
+          opts: { limit: 2 },
+        });
+        expect(limited).toHaveLength(2);
+        expect(limited.every((row) => row.execution.scheduleKey === "hot")).toBe(
+          true,
+        );
+      }).pipe(Effect.provide(ProcessStorage.layer)),
+  );
 });
 
 describe("ProcessStoreProcessExecution — phantom type accessors", () => {

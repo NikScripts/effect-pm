@@ -127,7 +127,9 @@ describe("QueueResource.make — ProcessStore records", () => {
       yield* Effect.sleep(Duration.millis(20));
 
       const queueResource = yield* ProcessStoreQueueResource;
-      const entries = yield* queueResource.entries("test-store-records");
+      const entries = yield* queueResource.entries({
+        queueId: "test-store-records",
+      });
       const byKey = yield* queueResource.entriesByKey("job-1");
       const completed = entries.find((row) => row.type === "queue.entry.completed");
 
@@ -136,13 +138,267 @@ describe("QueueResource.make — ProcessStore records", () => {
         "queue.entry.enqueued",
         "queue.entry.started",
       ]);
-      expect(completed?.processType).toBe("queue-resource");
-      expect(completed?.processId).toBe("test-store-records");
-      expect(completed?.subjectType).toBe("queue-entry");
-      expect(completed?.subjectId).toBe("test-store-records-entry-1");
+      expect(completed?.queueId).toBe("test-store-records");
+      expect(completed?.entryId).toBe("test-store-records-entry-1");
       expect(completed?.key).toBe("job-1");
       expect(byKey).toHaveLength(3);
     }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
+  );
+
+  it.live("writes lifecycle Started + Cleared rows", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-store-lifecycle-cleared",
+        paused: true,
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+      });
+
+      yield* queue.add([1, 2, 3]);
+      const cleared = yield* queue.clear;
+      expect(cleared).toBe(3);
+      yield* queue.resume;
+      yield* Effect.sleep(Duration.millis(20));
+
+      const queueResource = yield* ProcessStoreQueueResource;
+      const lifecycle = yield* queueResource.lifecycle({
+        queueId: "test-store-lifecycle-cleared",
+      });
+      const types = lifecycle.map((row) => row.type);
+
+      expect(types).toContain("queue.lifecycle.started");
+      expect(types).toContain("queue.lifecycle.cleared");
+
+      const clearedRow = lifecycle.find(
+        (row) => row.type === "queue.lifecycle.cleared",
+      );
+      expect(clearedRow?.type === "queue.lifecycle.cleared"
+        ? clearedRow.itemsCleared
+        : 0).toBe(3);
+    }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
+  );
+
+  it.live("writes lifecycle Drained when queue empties after work", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-store-lifecycle-drained",
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+      });
+
+      yield* queue.add([1]);
+      yield* waitUntilCompleted(queue, 1);
+      yield* Effect.sleep(Duration.millis(30));
+
+      const queueResource = yield* ProcessStoreQueueResource;
+      const lifecycle = yield* queueResource.lifecycle({
+        queueId: "test-store-lifecycle-drained",
+      });
+      const types = lifecycle.map((row) => row.type);
+      expect(types).toContain("queue.lifecycle.drained");
+    }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
+  );
+
+  it.live("writes lifecycle Paused / Resumed", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-store-lifecycle-pauseresume",
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+      });
+
+      yield* queue.pause;
+      yield* queue.resume;
+      yield* Effect.sleep(Duration.millis(20));
+
+      const queueResource = yield* ProcessStoreQueueResource;
+      const lifecycle = yield* queueResource.lifecycle({
+        queueId: "test-store-lifecycle-pauseresume",
+      });
+      const types = lifecycle.map((row) => row.type);
+      expect(types).toContain("queue.lifecycle.paused");
+      expect(types).toContain("queue.lifecycle.resumed");
+    }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
+  );
+
+  it.live("writes queue.entry.dropped with top-level reason", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-store-drop",
+        paused: true,
+        key: (item: { readonly id: string }) => item.id,
+        effect: (_item) => Effect.void,
+        concurrency: 1,
+      });
+
+      yield* queue.add([{ id: "drop-me" }]);
+      yield* queue.drop({ key: "drop-me" }, { reason: "cancelled" });
+      yield* Effect.sleep(Duration.millis(20));
+
+      const queueResource = yield* ProcessStoreQueueResource;
+      const entries = yield* queueResource.entries({
+        queueId: "test-store-drop",
+        types: ["queue.entry.dropped"],
+      });
+      expect(entries).toHaveLength(1);
+      const droppedRow = entries[0];
+      expect(droppedRow?.type).toBe("queue.entry.dropped");
+      expect(droppedRow?.type === "queue.entry.dropped"
+        ? droppedRow.reason
+        : undefined).toBe("cancelled");
+      expect(droppedRow?.key).toBe("drop-me");
+    }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
+  );
+
+  it.live("writes queue.entry.dead-lettered with top-level reason", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-store-deadletter",
+        paused: true,
+        key: (item: { readonly id: string }) => item.id,
+        effect: (_item) => Effect.void,
+        concurrency: 1,
+      });
+
+      yield* queue.add([{ id: "poison" }]);
+      yield* queue.deadLetter({ key: "poison" }, { reason: "bad-payload" });
+      yield* Effect.sleep(Duration.millis(20));
+
+      const queueResource = yield* ProcessStoreQueueResource;
+      const entries = yield* queueResource.entries({
+        queueId: "test-store-deadletter",
+        types: ["queue.entry.dead-lettered"],
+      });
+      expect(entries).toHaveLength(1);
+      const row = entries[0];
+      expect(row?.type === "queue.entry.dead-lettered"
+        ? row.reason
+        : undefined).toBe("bad-payload");
+      expect(row?.key).toBe("poison");
+    }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
+  );
+
+  it.live("writes queue.entry.exhausted when retries are exceeded", () =>
+    Effect.gen(function* () {
+      const attempts = yield* Ref.make(0);
+      const queue = yield* QueueResource.make({
+        name: "test-store-exhausted",
+        effect: (_n: number) =>
+          Effect.gen(function* () {
+            yield* Ref.update(attempts, (n) => n + 1);
+            return yield* Effect.fail("always-fails" as const);
+          }),
+        onExit: ({ exit, retry }) =>
+          Exit.match(exit, {
+            onFailure: () => retry,
+            onSuccess: () => Effect.void,
+          }),
+        retries: 1,
+        concurrency: 1,
+      });
+      yield* queue.add([1]);
+      yield* Effect.sleep(Duration.millis(200));
+
+      const queueResource = yield* ProcessStoreQueueResource;
+      const exhausted = yield* queueResource.entries({
+        queueId: "test-store-exhausted",
+        types: ["queue.entry.exhausted"],
+      });
+      expect(exhausted).toHaveLength(1);
+      const retried = yield* queueResource.entries({
+        queueId: "test-store-exhausted",
+        types: ["queue.entry.retried"],
+      });
+      expect(retried.length).toBeGreaterThanOrEqual(1);
+    }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
+  );
+
+  it.live(
+    "writes queue.dedupe-key.added on enqueue and released on completion",
+    () =>
+      Effect.gen(function* () {
+        const queue = yield* QueueResource.make({
+          name: "test-store-dedupe",
+          key: (item: { readonly id: string }) => item.id,
+          effect: (_item) => Effect.sleep(Duration.millis(5)),
+          concurrency: 1,
+        });
+
+        yield* queue.add([{ id: "k-only" }]);
+        yield* waitUntilCompleted(queue, 1);
+        yield* Effect.sleep(Duration.millis(20));
+
+        const queueResource = yield* ProcessStoreQueueResource;
+        const allChanges = yield* queueResource.dedupeKeys({
+          queueId: "test-store-dedupe",
+        });
+        expect(allChanges.map((row) => row.type).sort()).toEqual([
+          "queue.dedupe-key.added",
+          "queue.dedupe-key.released",
+        ]);
+        expect(allChanges.every((row) => row.key === "k-only")).toBe(true);
+
+        const onlyForKey = yield* queueResource.dedupeKeys({
+          queueId: "test-store-dedupe",
+          key: "k-only",
+        });
+        expect(onlyForKey).toHaveLength(2);
+      }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
+  );
+
+  it.live(
+    "writes queue.dedupe-key.released for keys evicted by clear",
+    () =>
+      Effect.gen(function* () {
+        const queue = yield* QueueResource.make({
+          name: "test-store-dedupe-clear",
+          paused: true,
+          key: (item: { readonly id: string }) => item.id,
+          effect: (_item) => Effect.void,
+          concurrency: 1,
+        });
+
+        yield* queue.add([{ id: "ck1" }, { id: "ck2" }]);
+        const cleared = yield* queue.clear;
+        expect(cleared).toBe(2);
+        yield* Effect.sleep(Duration.millis(20));
+
+        const queueResource = yield* ProcessStoreQueueResource;
+        const released = yield* queueResource.dedupeKeys({
+          queueId: "test-store-dedupe-clear",
+          types: ["queue.dedupe-key.released"],
+        });
+        expect(released.map((row) => row.key).sort()).toEqual(["ck1", "ck2"]);
+      }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
+  );
+
+  it.live(
+    "writes queue.dedupe-key.released for keys evicted by drop / deadLetter",
+    () =>
+      Effect.gen(function* () {
+        const queue = yield* QueueResource.make({
+          name: "test-store-dedupe-route",
+          paused: true,
+          key: (item: { readonly id: string }) => item.id,
+          effect: (_item) => Effect.void,
+          concurrency: 1,
+        });
+
+        yield* queue.add([{ id: "dr-1" }, { id: "dl-1" }]);
+        yield* queue.drop({ key: "dr-1" }, { reason: "skip" });
+        yield* queue.deadLetter({ key: "dl-1" }, { reason: "poison" });
+        yield* Effect.sleep(Duration.millis(20));
+
+        const queueResource = yield* ProcessStoreQueueResource;
+        const released = yield* queueResource.dedupeKeys({
+          queueId: "test-store-dedupe-route",
+          types: ["queue.dedupe-key.released"],
+        });
+        expect(released.map((row) => row.key).sort()).toEqual([
+          "dl-1",
+          "dr-1",
+        ]);
+      }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
   );
 });
 

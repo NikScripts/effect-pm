@@ -286,11 +286,11 @@ documented as a compatibility path.
 ## `ProcessStoreRunResource` (RunResource facts/state)
 
 > The legacy generic `ProcessStoreRuntime` facet and its `RuntimeFact` /
-> `RuntimeRef` / `RuntimeStateChange` / `RuntimeStateBase` vocabulary have
-> been removed from the public API. `RunResource` now owns its own
-> per-domain facet with concrete typed shapes. The generic envelope still
-> exists at `src/internal/store/factEnvelope.ts` as **internal-only**
-> plumbing used by `ProcessStoreQueueResource`.
+> `RuntimeRef` / `RuntimeStateChange` / `RuntimeStateBase` vocabulary,
+> together with the previous `FactEnvelope` plumbing module, have been
+> removed. Each storage facet — `ProcessStoreRunResource`,
+> `ProcessStoreQueueResource`, … — now owns its own per-domain facet
+> with concrete typed shapes and its own `RuntimeRecord` codec.
 
 | Member | Role |
 |--------|------|
@@ -299,8 +299,6 @@ documented as a compatibility path.
 | `RunResourceStateChange` | Transition record with previous/current `RunResourceState`. |
 | `RunResourceRunStartedFact` / `RunResourceRunCompletedFact` / `RunResourceRunFailedFact` | Concrete per-event payload types. |
 | `RunResourceFact` | Union of the three concrete fact types. |
-| `RunResourceFactRecordedEvent` | Analytics event wrapping a persisted `RunResourceFact` (`type: "run-resource.fact.recorded"`). |
-| `RunResourceStateChangedEvent` | Analytics event wrapping a persisted `RunResourceStateChange` (`type: "run-resource.state.changed"`). |
 | `ProcessStoreRunResource` | Storage facet for RunResource facts and state changes (replaces the removed `ProcessStoreRuntime` and `RuntimeObserver`). |
 | `ProcessStoreRunResource.Type` / `.EmitType` | Type accessors merged via declaration namespace — full service shape / record-section emit shape. Use to type custom `Layer.succeed` / `provideService` mocks. |
 | `ProcessStoreRunResource.recordRunStarted(fact)` | Static optional emitter — silent no-op when the facet is absent; persistent write when present. The builder wraps every static emitter with a built-in `catchCause + logWarning` so failures never propagate. |

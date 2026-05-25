@@ -609,22 +609,22 @@ and call its domain read methods.
 ### Query types
 
 - **`QueryOpts`** — `limit`, `before`, `after` (epoch ms).
-- **`StoreEventQuery`** — `entityType`, `entityId`, `types[]`, `opts`.
-- **`RunResourceFactQuery`** — `resourceId`, `runId?`, `types[]?`, `opts?`.
-- **`RunResourceStateHistoryQuery`** — `resourceId`, `opts?`.
+- Per-facet query types (`QueueEntryQuery`, `QueueLifecycleQuery`, `QueueDedupeKeyQuery`, `RunResourceFactQuery`, `RunResourceStateHistoryQuery`, `ProcessExecutionQuery`, …) are owned by the facet that consumes them — there is no shared `StoreEventQuery`.
 
-### Event taxonomy (`AnalyticsEvent` union)
+### Event taxonomy (per-facet, no shared union)
 
-| Type | Entity | Payload highlights |
-|------|--------|-------------------|
-| **`process.execution.completed`** | process | scheduleKey, startedAt, completedAt, durationMs, status, error?, isStartupRun |
-| **`process.lifecycle.changed`** | process | tag: Started/Stopped/Restarted/Errored/Recovered/Disabled/Enabled, error? |
-| **`queue.item.completed`** | queue | status completed/failed/retried/exhausted, priority, durationMs, attempts, error? |
-| **`queue.lifecycle.changed`** | queue | tag Started/Paused/Resumed/Shutdown/Cleared, itemsCleared? |
-| **`run-resource.fact.recorded`** | ref.kind/id | wraps **`RunResourceFact`** |
-| **`run-resource.state.changed`** | ref.kind/id | wraps **`RunResourceStateChange`** |
-| **`runtime.fact.recorded`** *(internal envelope)* | ref.kind/id | wraps internal `FactEnvelope` payload used by `ProcessStoreQueueResource` plumbing only |
-| **`runtime.state.changed`** *(internal envelope)* | ref.kind/id | wraps internal `FactEnvelopeStateChange` used by `ProcessStoreQueueResource` plumbing only |
+`AnalyticsEvent` and the `runtime.fact.recorded` / `runtime.state.changed` generic envelopes have been removed. Each facet now owns its concrete wire-event types:
+
+| Type | Owner | Payload highlights |
+|------|-------|-------------------|
+| **`process.execution.completed`** | `store/processExecution` | scheduleKey, startedAt, completedAt, durationMs, status, error?, isStartupRun |
+| **`process.lifecycle.changed`** | `store/processLifecycle` (+ `store/processGroup` reuses the encoder) | tag: Started/Stopped/Restarted/Errored/Recovered/Disabled/Enabled, error? |
+| **`log.entry`** | `store/log` | level, message, error?, attributes |
+| **`run-resource.fact.<status>`** × 3 | `store/runResource` | per-status `RunResourceFact` (started/completed/failed) |
+| **`run-resource.state.changed`** | `store/runResource` | wraps `RunResourceStateChange` |
+| **`queue.entry.<status>`** × 9 | `store/queueResource` | enqueued, started, completed, failed, retried, exhausted, released, dead-lettered, dropped |
+| **`queue.lifecycle.<tag>`** × 6 | `store/queueResource` | Started, Paused, Resumed, Shutdown, Cleared, Drained |
+| **`queue.dedupe-key.<status>`** × 3 | `store/queueResource` | added, released, hydrated |
 
 ### Per-domain projections (on the `ProcessStoreRunResource` facet)
 
@@ -641,8 +641,8 @@ and call its domain read methods.
 
 ### Codec (storage row mapping)
 
-- **`encodeEvent`**, **`decodeEventRow`**, **`ProcessStoreEventDecodeError`** — shared runtime-row event codec.
-- Prisma alias **`PrismaProcessStoreDecodeError`**.
+- Per-facet `RuntimeRecord` codecs live inside the facet file (`src/store/<facet>.ts`). There is no shared `encodeEvent` / `decodeEventRow`.
+- `src/internal/store/helpers.ts` provides only generic, type-agnostic helpers (`runtimeRecordQuery`, `applyQueryOpts`, `windowOpts`, `byTimestampDesc`, JSON predicates, …) that every facet composes.
 
 ### Automatic writers (no extra config)
 
@@ -658,7 +658,7 @@ and call its domain read methods.
 
 ## ProcessStoreRunResource facet (`@nikscripts/effect-pm/store/RunResource`)
 
-**What it is:** Per-domain storage facet for `RunResource` facts and state changes. Replaces the removed generic `ProcessStoreRuntime` facet and `RuntimeObserver`. The generic envelope (`FactEnvelope` / `FactEnvelopeRef` / …) now lives at `src/internal/store/factEnvelope.ts` as internal-only plumbing used by `ProcessStoreQueueResource`.
+**What it is:** Per-domain storage facet for `RunResource` facts and state changes. Replaces the removed generic `ProcessStoreRuntime` facet and `RuntimeObserver`. The legacy `FactEnvelope` plumbing module has been deleted; every facet now owns its concrete `RuntimeRecord` codec inline.
 
 ### Static optional emitters (on the tag)
 
@@ -685,7 +685,7 @@ Provide a custom service whose shape matches **`ProcessStoreRunResource.Type`** 
 - **`RunResourceFact`** — union of `RunResourceRunStartedFact` / `RunResourceRunCompletedFact` / `RunResourceRunFailedFact`.
 - **`RunResourceState`** — live counters for waiting, in-flight, completed, failed, interrupted, total durationMs.
 - **`RunResourceStateChange`** — id, ref, previous, current, changedAt, optional reason.
-- **`RunResourceFactRecordedEvent`** / **`RunResourceStateChangedEvent`** — wire analytics events.
+- Per-status fact wire types (`run-resource.fact.started` / `…completed` / `…failed`) and `run-resource.state.changed` — emitted directly via `recordRun*` / `recordStateChange`. There is no longer a shared `RunResourceFactRecordedEvent` / `RunResourceStateChangedEvent` envelope.
 
 ### Planned (docs only)
 
@@ -725,10 +725,9 @@ Provide a custom service whose shape matches **`ProcessStoreRunResource.Type`** 
 
 ### `PrismaProcessStore` namespace
 
-- **`make(client)`**, **`layer({ client })`**, **`layerFromContext`** — throw/fail with `PrismaProcessStoreUnavailableError` until the RuntimeStorage-backed rewrite lands.
+- **`make(client)`**, **`layer({ client })`**, **`layerFromContext`** — throw/fail with `PrismaProcessStoreUnavailableError` until the RuntimeStorage-backed rewrite lands. Covered by `test/prisma-fail-fast.test.ts`.
 - **`PrismaClientService`**, **`prismaClientLayer({ client })`**
 - **`schema`**, **`schemaModelMarker`** — legacy `EffectPmEvent` model fragment retained for reference during rewrite.
-- **`decodeEventRow`**, **`encodeEvent`**, **`PrismaProcessStoreDecodeError`**
 
 ### Structural types (`prisma/types`)
 

@@ -114,12 +114,12 @@ type ProcessStoreReadApiOf<Sections extends ReadonlyArray<ProcessStoreFacetAnySe
 
 type ProcessStoreIdentifierApiOf<Sections extends ReadonlyArray<ProcessStoreFacetAnySection>> =
   [ProcessStoreIdentifierSectionOf<Sections>] extends [never]
-    ? {}
+    ? Record<never, never>
     : ProcessStoreIdentifierSectionOf<Sections> extends ProcessStoreIdentifierSection<
       infer IdentifierApi extends Record<string, unknown>
     >
       ? IdentifierApi
-      : {};
+      : Record<never, never>;
 
 type IdentifierFactory<IdentifierApi> = {
   readonly [IDENTIFIER_FACTORY]: (identifier: string) => IdentifierApi;
@@ -241,11 +241,11 @@ type ProcessStoreIdentifierEffect<Self, IdentifierApi> = {
 };
 
 type ProcessStoreIdentifierMember<Self, IdentifierApi> = keyof IdentifierApi extends never
-  ? {}
+  ? Record<never, never>
   : ProcessStoreIdentifierEffect<Self, IdentifierApi>;
 
 type ProcessStoreIdentifierRuntimeMember<Self, IdentifierApi> =
-  | {}
+  | Record<never, never>
   | ProcessStoreIdentifierEffect<Self, IdentifierApi>;
 
 const mergeServiceShape = <EmitApi extends Record<string, unknown>, ReadApi extends Record<string, unknown>>(

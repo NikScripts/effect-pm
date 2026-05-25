@@ -15,16 +15,50 @@
  * @module ProcessStore/Prisma/Types
  */
 
-import type {
-  EffectPmEventCreateInput,
-  EffectPmEventRow,
-} from "../ProcessStoreEvent";
+import type { JsonValue } from "../ProcessStoreEvent";
 
-export type {
-  EffectPmEventCreateInput,
-  EffectPmEventRow,
-  JsonValue,
-} from "../ProcessStoreEvent";
+export type { JsonValue } from "../ProcessStoreEvent";
+
+// ============================================================================
+// Legacy structural row shapes
+// ============================================================================
+
+/**
+ * Row shape for the legacy append-only `EffectPmEvent` Prisma table.
+ *
+ * @remarks
+ * Retained as a structural placeholder type for callers still wiring the
+ * legacy adapter; the runtime adapter has been removed and now fails at
+ * acquisition. Future Prisma support will operate on
+ * {@link RuntimeRecord} rows directly.
+ *
+ * @public
+ */
+export interface EffectPmEventRow {
+  readonly id: string;
+  readonly type: string;
+  readonly occurredAt: Date;
+  readonly entityType: string;
+  readonly entityId: string;
+  readonly attributes: JsonValue | null;
+  readonly payload: JsonValue;
+  readonly createdAt: Date;
+}
+
+/**
+ * Create input for the legacy append-only `EffectPmEvent` Prisma table.
+ *
+ * @public
+ */
+export interface EffectPmEventCreateInput {
+  readonly id: string;
+  readonly type: string;
+  readonly occurredAt: Date;
+  readonly entityType: string;
+  readonly entityId: string;
+  readonly attributes?: JsonValue | null;
+  readonly payload: JsonValue;
+}
 
 // ============================================================================
 // Query criteria

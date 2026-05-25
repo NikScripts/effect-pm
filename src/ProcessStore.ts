@@ -15,76 +15,16 @@ import {
 } from "./internal/store/service";
 
 export type {
-  AnalyticsEvent,
   AnalyticsEventBase,
-  EffectPmEventRow,
   JsonValue,
-  LogEntryRecordedEvent,
-  ProcessExecutionCompletedEvent,
-  ProcessLifecycleChangedEvent,
-  ProcessLifecycleTag,
   ProcessStoreWriteError,
   QueryOpts,
-  QueueDedupeKeyChangedEvent,
-  QueueEntryRecordedEvent,
-  QueueLifecycleChangedEvent,
-  RunResourceFactRecordedEvent,
-  RunResourceStateChangedEvent,
-  StoreEventQuery,
 } from "./ProcessStoreEvent";
 
 export {
-  isQueueDedupeKeyChangedEvent,
-  isQueueEntryRecordedEvent,
-  isQueueLifecycleChangedEvent,
   ProcessStoreDuplicateRecordError,
   ProcessStoreReadonlyRecordError,
-  isLogEntryRecorded,
 } from "./ProcessStoreEvent";
-
-export type {
-  ProcessStoreQueueResourceDedupeKeyStatus,
-  ProcessStoreQueueResourceEntryStatus,
-  ProcessStoreQueueResourceLifecycleTag,
-  ProcessStoreQueueResourcePriority,
-  QueueDedupeKeyAddedChange,
-  QueueDedupeKeyChange,
-  QueueDedupeKeyChangeType,
-  QueueDedupeKeyHydratedChange,
-  QueueDedupeKeyQuery,
-  QueueDedupeKeyReleasedChange,
-  QueueEntryCompletedFact,
-  QueueEntryDeadLetteredFact,
-  QueueEntryDroppedFact,
-  QueueEntryEnqueuedFact,
-  QueueEntryExhaustedFact,
-  QueueEntryFact,
-  QueueEntryFactType,
-  QueueEntryFailedFact,
-  QueueEntryQuery,
-  QueueEntryReleasedFact,
-  QueueEntryRetriedFact,
-  QueueEntryStartedFact,
-  QueueLifecycleChange,
-  QueueLifecycleChangeType,
-  QueueLifecycleClearedChange,
-  QueueLifecycleDrainedChange,
-  QueueLifecyclePausedChange,
-  QueueLifecycleQuery,
-  QueueLifecycleResumedChange,
-  QueueLifecycleShutdownChange,
-  QueueLifecycleStartedChange,
-} from "./store/queueResource";
-
-export type { ProcessStoreLogApi } from "./store/log";
-
-export type {
-  ProcessLifecycleRecordInput,
-} from "./store/processLifecycle";
-
-export type {
-  ProcessGroupMemberLifecycleInput,
-} from "./store/processGroup";
 
 /**
  * Declares a storage facet with one record section, one read section, and one

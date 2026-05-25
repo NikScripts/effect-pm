@@ -72,7 +72,12 @@ import {
   Types,
 } from "effect";
 import { withQueueLogAnnotations } from "./LogContext";
-import { ProcessStoreQueueResource } from "./store/queueResource";
+import {
+  ProcessStoreQueueResource,
+  type QueueDedupeKeyChange,
+  type QueueEntryFact,
+  type QueueLifecycleChange,
+} from "./store/queueResource";
 import { isJsonValue } from "./internal/json";
 import type { JsonValue } from "./ProcessStoreEvent";
 
@@ -1275,6 +1280,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     const storeOption = yield* Effect.serviceOption(ProcessStoreQueueResource);
     let entrySeq = 0;
     let releaseSeq = 0;
+    let entryFactSeq = 0;
+    let lifecycleSeq = 0;
+    let dedupeChangeSeq = 0;
 
     const nextEntryId = (): string => {
       entrySeq++;
@@ -1299,8 +1307,116 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         Effect.asVoid,
       );
 
+    interface EntryFactSource {
+      readonly entryId: string;
+      readonly key?: string;
+      readonly priority: Priority;
+      readonly attempts: number;
+    }
+
+    interface EntryFactOptions {
+      readonly occurredAtMs: number;
+      readonly startedAtMs?: number;
+      readonly durationMs?: number;
+      readonly error?: string;
+      readonly releaseId?: string;
+      readonly reason?: string;
+      readonly interruptedAtMs?: number;
+      readonly attributes?: Record<string, unknown>;
+    }
+
+    type EntryStatus =
+      | "enqueued"
+      | "started"
+      | "completed"
+      | "failed"
+      | "retried"
+      | "exhausted"
+      | "released"
+      | "dead-lettered"
+      | "dropped";
+
+    const buildEntryFact = (
+      status: EntryStatus,
+      source: EntryFactSource,
+      enqueuedAtMs: number,
+      options: EntryFactOptions,
+    ): QueueEntryFact => {
+      entryFactSeq++;
+      const id = `${queueName}/${source.entryId}/${status}/${String(entryFactSeq)}`;
+      const common = {
+        id,
+        queueId: queueName,
+        entryId: source.entryId,
+        occurredAt: options.occurredAtMs,
+        ...(source.key !== undefined ? { key: source.key } : {}),
+        priority: source.priority,
+        attempts: source.attempts,
+        ...(options.attributes !== undefined
+          ? { attributes: options.attributes }
+          : {}),
+      };
+      const startedAt = options.startedAtMs ?? options.occurredAtMs;
+      const durationMs = options.durationMs ?? 0;
+      switch (status) {
+        case "enqueued":
+          return { ...common, type: "queue.entry.enqueued", enqueuedAt: enqueuedAtMs };
+        case "started":
+          return { ...common, type: "queue.entry.started", startedAt };
+        case "completed":
+          return {
+            ...common,
+            type: "queue.entry.completed",
+            startedAt,
+            durationMs,
+          };
+        case "failed":
+          return {
+            ...common,
+            type: "queue.entry.failed",
+            startedAt,
+            durationMs,
+            ...(options.error !== undefined ? { error: options.error } : {}),
+          };
+        case "retried":
+          return {
+            ...common,
+            type: "queue.entry.retried",
+            ...(options.error !== undefined ? { error: options.error } : {}),
+          };
+        case "exhausted":
+          return {
+            ...common,
+            type: "queue.entry.exhausted",
+            ...(options.error !== undefined ? { error: options.error } : {}),
+          };
+        case "released":
+          return {
+            ...common,
+            type: "queue.entry.released",
+            releaseId: options.releaseId ?? "",
+            ...(options.interruptedAtMs !== undefined
+              ? { interruptedAt: options.interruptedAtMs }
+              : {}),
+          };
+        case "dead-lettered":
+          return {
+            ...common,
+            type: "queue.entry.dead-lettered",
+            ...(options.reason !== undefined ? { reason: options.reason } : {}),
+            ...(options.error !== undefined ? { error: options.error } : {}),
+          };
+        case "dropped":
+          return {
+            ...common,
+            type: "queue.entry.dropped",
+            ...(options.reason !== undefined ? { reason: options.reason } : {}),
+          };
+      }
+    };
+
     const recordEntryEvent = (
-      status: "enqueued" | "started" | "completed" | "failed" | "retried" | "exhausted" | "released" | "dead-lettered" | "dropped",
+      status: EntryStatus,
       internal: InternalItem<T>,
       options?: {
         readonly occurredAt?: DateTime.Utc;
@@ -1308,54 +1424,186 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         readonly durationMs?: number;
         readonly error?: string;
         readonly releaseId?: string;
+        readonly reason?: string;
         readonly attributes?: { readonly [key: string]: JsonValue };
       },
-    ): Effect.Effect<void> => {
-      if (Option.isNone(storeOption)) return Effect.void;
-      const api = storeOption.value;
-      const input = {
-        entryId: internal.entryId,
-        key: internal.key,
-        priority: internal.priority,
-        attempts: internal.retries + 1,
-        enqueuedAt: DateTime.makeUnsafe(internal.enqueuedAt),
-        occurredAt: options?.occurredAt,
-        startedAt: options?.startedAt,
-        durationMs: options?.durationMs,
-        error: options?.error,
-        releaseId: options?.releaseId,
-        attributes: options?.attributes,
+    ): Effect.Effect<void> =>
+      Effect.gen(function* () {
+        if (Option.isNone(storeOption)) return;
+        const api = storeOption.value;
+        const occurredAtMs =
+          options?.occurredAt !== undefined
+            ? DateTime.toEpochMillis(options.occurredAt)
+            : yield* Effect.clockWith((c) => c.currentTimeMillis);
+        const fact = buildEntryFact(
+          status,
+          {
+            entryId: internal.entryId,
+            ...(internal.key !== undefined ? { key: internal.key } : {}),
+            priority: internal.priority,
+            attempts: internal.retries + 1,
+          },
+          internal.enqueuedAt,
+          {
+            occurredAtMs,
+            ...(options?.startedAt !== undefined
+              ? { startedAtMs: DateTime.toEpochMillis(options.startedAt) }
+              : {}),
+            ...(options?.durationMs !== undefined
+              ? { durationMs: options.durationMs }
+              : {}),
+            ...(options?.error !== undefined ? { error: options.error } : {}),
+            ...(options?.releaseId !== undefined
+              ? { releaseId: options.releaseId }
+              : {}),
+            ...(options?.reason !== undefined ? { reason: options.reason } : {}),
+            ...(options?.attributes !== undefined
+              ? { attributes: options.attributes }
+              : {}),
+          },
+        );
+        yield* recordStoreWrite(`entry ${status}`, api.recordEntry(fact));
+      });
+
+    const recordEntryEventForQueueEntry = (
+      status: EntryStatus,
+      entry: QueueEntry<T>,
+      options?: {
+        readonly occurredAt?: DateTime.Utc;
+        readonly reason?: string;
+        readonly attributes?: { readonly [key: string]: JsonValue };
+      },
+    ): Effect.Effect<void> =>
+      Effect.gen(function* () {
+        if (Option.isNone(storeOption)) return;
+        const api = storeOption.value;
+        const occurredAtMs =
+          options?.occurredAt !== undefined
+            ? DateTime.toEpochMillis(options.occurredAt)
+            : yield* Effect.clockWith((c) => c.currentTimeMillis);
+        const interruptedAtMs =
+          entry.timestamps.interruptedAt !== undefined
+            ? DateTime.toEpochMillis(entry.timestamps.interruptedAt)
+            : undefined;
+        const startedAtMs =
+          entry.timestamps.startedAt !== undefined
+            ? DateTime.toEpochMillis(entry.timestamps.startedAt)
+            : undefined;
+        const fact = buildEntryFact(
+          status,
+          {
+            entryId: entry.entryId,
+            ...(entry.key !== undefined ? { key: entry.key } : {}),
+            priority: entry.priority,
+            attempts: entry.attempts,
+          },
+          DateTime.toEpochMillis(entry.timestamps.enqueuedAt),
+          {
+            occurredAtMs,
+            ...(startedAtMs !== undefined ? { startedAtMs } : {}),
+            ...(interruptedAtMs !== undefined ? { interruptedAtMs } : {}),
+            ...(options?.reason !== undefined ? { reason: options.reason } : {}),
+            ...(options?.attributes !== undefined
+              ? { attributes: options.attributes }
+              : {}),
+          },
+        );
+        yield* recordStoreWrite(`entry ${status}`, api.recordEntry(fact));
+      });
+
+    const buildLifecycleChange = (
+      tag: "Started" | "Paused" | "Resumed" | "Shutdown" | "Cleared" | "Drained",
+      changedAtMs: number,
+      itemsCleared?: number,
+    ): QueueLifecycleChange => {
+      lifecycleSeq++;
+      const id = `${queueName}/lifecycle/${tag.toLowerCase()}/${String(lifecycleSeq)}`;
+      const common = {
+        id,
+        queueId: queueName,
+        changedAt: changedAtMs,
       };
-      const write =
-        status === "enqueued" ? api.entryEnqueued(input)
-        : status === "started" ? api.entryStarted(input)
-        : status === "completed" ? api.entryCompleted(input)
-        : status === "failed" ? api.entryFailed(input)
-        : status === "retried" ? api.entryRetried(input)
-        : status === "exhausted" ? api.entryExhausted(input)
-        : status === "released" ? api.entryReleased(input)
-        : status === "dead-lettered" ? api.entryDeadLettered(input)
-        : api.entryDropped(input);
-      return recordStoreWrite(
-        `entry ${status}`,
-        api.withQueue(queueName, api.withEntry(internal.entryId, write)),
-      );
+      switch (tag) {
+        case "Started":
+          return { ...common, type: "queue.lifecycle.started" };
+        case "Paused":
+          return { ...common, type: "queue.lifecycle.paused" };
+        case "Resumed":
+          return { ...common, type: "queue.lifecycle.resumed" };
+        case "Shutdown":
+          return { ...common, type: "queue.lifecycle.shutdown" };
+        case "Cleared":
+          return {
+            ...common,
+            type: "queue.lifecycle.cleared",
+            itemsCleared: itemsCleared ?? 0,
+          };
+        case "Drained":
+          return { ...common, type: "queue.lifecycle.drained" };
+      }
     };
 
     const recordLifecycleEvent = (
       tag: "Started" | "Paused" | "Resumed" | "Shutdown" | "Cleared" | "Drained",
       itemsCleared?: number,
-    ): Effect.Effect<void> => {
-      if (Option.isNone(storeOption)) return Effect.void;
-      const api = storeOption.value;
-      return recordStoreWrite(
-        `lifecycle ${tag}`,
-        api.withQueue(
-          queueName,
-          api.lifecycleChanged({ tag, itemsCleared }),
-        ),
-      );
+    ): Effect.Effect<void> =>
+      Effect.gen(function* () {
+        if (Option.isNone(storeOption)) return;
+        const api = storeOption.value;
+        const changedAtMs = yield* Effect.clockWith((c) => c.currentTimeMillis);
+        const change = buildLifecycleChange(tag, changedAtMs, itemsCleared);
+        yield* recordStoreWrite(`lifecycle ${tag}`, api.recordLifecycle(change));
+      });
+
+    const buildDedupeKeyChange = (
+      kind: "added" | "released",
+      key: string,
+      changedAtMs: number,
+    ): QueueDedupeKeyChange => {
+      dedupeChangeSeq++;
+      const id = `${queueName}/dedupe-key/${kind}/${String(dedupeChangeSeq)}`;
+      const common = {
+        id,
+        queueId: queueName,
+        key,
+        changedAt: changedAtMs,
+      };
+      return kind === "added"
+        ? { ...common, type: "queue.dedupe-key.added" }
+        : { ...common, type: "queue.dedupe-key.released" };
     };
+
+    const recordDedupeKeyChange = (
+      kind: "added" | "released",
+      key: string,
+    ): Effect.Effect<void> =>
+      Effect.gen(function* () {
+        if (Option.isNone(storeOption)) return;
+        const api = storeOption.value;
+        const changedAtMs = yield* Effect.clockWith((c) => c.currentTimeMillis);
+        const change = buildDedupeKeyChange(kind, key, changedAtMs);
+        yield* recordStoreWrite(
+          `dedupe-key ${kind}`,
+          api.recordDedupeKey(change),
+        );
+      });
+
+    const recordDedupeKeyChanges = (
+      kind: "added" | "released",
+      keys: ReadonlyArray<string>,
+    ): Effect.Effect<void> =>
+      Effect.gen(function* () {
+        if (keys.length === 0 || Option.isNone(storeOption)) return;
+        const api = storeOption.value;
+        const changedAtMs = yield* Effect.clockWith((c) => c.currentTimeMillis);
+        const changes = keys.map((key) =>
+          buildDedupeKeyChange(kind, key, changedAtMs),
+        );
+        yield* recordStoreWrite(
+          `dedupe-key ${kind} batch`,
+          api.recordDedupeKeyBatch(changes),
+        );
+      });
 
     const runQueueHook = <A, EHook, RHook>(
       hook: string,
@@ -1435,6 +1683,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         }
 
         const toEnqueue: Array<InternalItem<T>> = [];
+        const addedDedupeKeys: Array<string> = [];
 
         for (const item of items) {
           // Dedup: skip items whose key is already in-flight
@@ -1443,6 +1692,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             const keys = yield* Ref.get(activeKeys);
             if (HashSet.has(keys, k)) continue;
             yield* Ref.update(activeKeys, HashSet.add(k));
+            addedDedupeKeys.push(k);
           }
           toEnqueue.push({
             item,
@@ -1463,6 +1713,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           (internal) => recordEntryEvent("enqueued", internal),
           { discard: true },
         );
+        yield* recordDedupeKeyChanges("added", addedDedupeKeys);
 
         const handle = queueHandleSlot.current;
         if (handle === undefined) {
@@ -1676,6 +1927,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           // Release dedup key so future items with same key can enter
           if (config.key !== undefined && internal.key !== undefined) {
             yield* Ref.update(activeKeys, HashSet.remove(internal.key));
+            yield* recordDedupeKeyChange("released", internal.key);
           }
 
           if (Exit.isFailure(exit) && config.onExit === undefined && config.onFailed === undefined) {
@@ -1816,13 +2068,18 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
     const restorePending = (items: ReadonlyArray<InternalItem<T>>): Effect.Effect<void> =>
       Effect.gen(function* () {
+        const restoredKeys: string[] = [];
         for (const item of items) {
           yield* Queue.offer(queueForPriority(item.priority), item);
           yield* restoreActiveKey(item);
+          if (item.key !== undefined) {
+            restoredKeys.push(item.key);
+          }
         }
         if (items.length > 0) {
           yield* signalWorkerWake;
         }
+        yield* recordDedupeKeyChanges("added", restoredKeys);
       });
 
     const extractPending = (
@@ -1830,6 +2087,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     ): Effect.Effect<ReadonlyArray<InternalItem<T>>> =>
       Effect.gen(function* () {
         const extracted: InternalItem<T>[] = [];
+        const releasedKeys: string[] = [];
         const drainQueue = (q: Queue.Queue<InternalItem<T>>): Effect.Effect<void> =>
           Effect.gen(function* () {
             const kept: InternalItem<T>[] = [];
@@ -1841,6 +2099,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
               if (select(item.value)) {
                 extracted.push(item.value);
                 yield* releaseActiveKey(item.value);
+                if (item.value.key !== undefined) {
+                  releasedKeys.push(item.value.key);
+                }
               } else {
                 kept.push(item.value);
               }
@@ -1852,6 +2113,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         yield* drainQueue(highQueue);
         yield* drainQueue(normalQueue);
         yield* drainQueue(lowQueue);
+        yield* recordDedupeKeyChanges("released", releasedKeys);
         return extracted;
       });
 
@@ -1941,28 +2203,19 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             );
         for (const internal of internals) {
           yield* recordEntryEvent(kind, internal, {
-            attributes: { ...options.attributes, reason: options.reason },
+            ...(options.reason !== undefined ? { reason: options.reason } : {}),
+            ...(options.attributes !== undefined
+              ? { attributes: options.attributes }
+              : {}),
           });
         }
-        if (isQueueEntry(selector) && Option.isSome(storeOption)) {
-          const api = storeOption.value;
-          const input = {
-            entryId: selector.entryId,
-            key: selector.key,
-            priority: selector.priority,
-            attempts: selector.attempts,
-            enqueuedAt: selector.timestamps.enqueuedAt,
-            startedAt: selector.timestamps.startedAt,
-            interruptedAt: selector.timestamps.interruptedAt,
-            attributes: { ...options.attributes, reason: options.reason },
-          };
-          const write = kind === "dead-lettered"
-            ? api.entryDeadLettered(input)
-            : api.entryDropped(input);
-          yield* recordStoreWrite(
-            `entry ${kind}`,
-            api.withQueue(queueName, api.withEntry(selector.entryId, write)),
-          );
+        if (isQueueEntry(selector)) {
+          yield* recordEntryEventForQueueEntry(kind, selector, {
+            ...(options.reason !== undefined ? { reason: options.reason } : {}),
+            ...(options.attributes !== undefined
+              ? { attributes: options.attributes }
+              : {}),
+          });
         }
         if (entries.length > 0) {
           const event = { queueId: queueName, entries, reason: options.reason };
@@ -2041,6 +2294,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
       clear: Effect.gen(function* () {
         let count = 0;
+        const releasedKeys: string[] = [];
         const drain = (q: Queue.Queue<InternalItem<T>>): Effect.Effect<void> =>
           Effect.gen(function* () {
             const internal = yield* Queue.poll(q);
@@ -2048,6 +2302,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
               count++;
               if (config.key !== undefined && internal.value.key !== undefined) {
                 yield* Ref.update(activeKeys, HashSet.remove(internal.value.key));
+                releasedKeys.push(internal.value.key);
               }
               yield* drain(q);
             }
@@ -2057,6 +2312,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         yield* drain(lowQueue);
         yield* Ref.set(completedCount, 0);
         yield* recordLifecycleEvent("Cleared", count);
+        yield* recordDedupeKeyChanges("released", releasedKeys);
         if (config.onCleared !== undefined) {
           yield* FiberSet.run(handlerFibers)(
             config.onCleared({ queueId: queueName, count }, queueHandle).pipe(

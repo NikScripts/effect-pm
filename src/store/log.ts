@@ -10,22 +10,79 @@
  * {@link ProcessManagerLogEntry} rows, regardless of which kind of "group"
  * happens to scope them.
  *
+ * ## Storage shape
+ *
+ * Each line writes one {@link RuntimeRecord} with:
+ *
+ * - `type` = `log.entry`
+ * - `processType` = `log`
+ * - `processId` = the supplied `groupId` (log bucket)
+ * - `payload` = `{ entryId, entry: { date, level, message, cause?,
+ *   annotations, spans } }`
+ *
+ * Process / queue annotations stay inside `entry.annotations` so the
+ * existing operator query semantics (substring filters on `processId`,
+ * `queueId`) continue to work unchanged.
+ *
  * @module store/Log
  */
 
-import { Effect } from "effect";
+import { DateTime, Effect } from "effect";
+import type { LogLevel } from "effect/LogLevel";
 import { ProcessManagerLogAnnotationKeys } from "../LogContext";
 import type { ProcessManagerLogEntry } from "../LogEntry";
 import type { ProcessManagerLogQuery } from "../internal/manager/logQuery";
-import { ProcessManagerLogQueryError, replayLogQueryResults } from "../internal/manager/logQuery";
+import {
+  ProcessManagerLogQueryError,
+  replayLogQueryResults,
+} from "../internal/manager/logQuery";
+import {
+  isRecord,
+  isString,
+  runtimeRecordQuery,
+} from "../internal/store/helpers";
 import { ProcessStore } from "../ProcessStore";
 import type {
-  AnalyticsEvent,
-  LogEntryRecordedEvent,
+  AnalyticsEventBase,
   ProcessStoreWriteError,
-  StoreEventQuery,
+  QueryOpts,
 } from "../ProcessStoreEvent";
-import { isLogEntryRecorded } from "../ProcessStoreEvent";
+import { ProcessId, Type } from "../Query";
+import type { RuntimeRecord } from "../RuntimeStorage";
+
+/**
+ * Structured log line persisted by {@link ProcessStoreLog} for operator
+ * `pm logs` / `pm watch` history. `entityId` is an opaque log-bucket id
+ * supplied by the relay (today: the PM log annotation).
+ *
+ * @public
+ */
+export interface LogEntryRecordedEvent extends AnalyticsEventBase {
+  type: "log.entry";
+  entityType: "log";
+  log: {
+    readonly entryId: string;
+    readonly entry: {
+      readonly date: string;
+      readonly level: LogLevel;
+      readonly message: string;
+      readonly cause?: string;
+      readonly annotations: Readonly<Record<string, string>>;
+      readonly spans: ReadonlyArray<string>;
+    };
+  };
+}
+
+/**
+ * Narrows a structurally-shaped `{ type, entityType }` value to
+ * {@link LogEntryRecordedEvent}.
+ *
+ * @public
+ */
+export const isLogEntryRecorded = (
+  event: { readonly type: string; readonly entityType: string },
+): event is LogEntryRecordedEvent =>
+  event.type === "log.entry" && event.entityType === "log";
 
 /**
  * Service shape for {@link ProcessStoreLog}.
@@ -40,88 +97,180 @@ export interface ProcessStoreLogApi {
   ) => Effect.Effect<void, ProcessStoreWriteError>;
   readonly recordBatch: (
     groupId: string,
-    rows: ReadonlyArray<{ readonly entryId: string; readonly entry: ProcessManagerLogEntry }>,
+    rows: ReadonlyArray<{
+      readonly entryId: string;
+      readonly entry: ProcessManagerLogEntry;
+    }>,
   ) => Effect.Effect<void, ProcessStoreWriteError>;
   readonly load: (
     query: ProcessManagerLogQuery,
-  ) => Effect.Effect<ReadonlyArray<ProcessManagerLogEntry>, ProcessManagerLogQueryError>;
-  readonly query: (logQuery: ProcessManagerLogQuery) => Effect.Effect<void, ProcessManagerLogQueryError>;
+  ) => Effect.Effect<
+    ReadonlyArray<ProcessManagerLogEntry>,
+    ProcessManagerLogQueryError
+  >;
+  readonly query: (
+    logQuery: ProcessManagerLogQuery,
+  ) => Effect.Effect<void, ProcessManagerLogQueryError>;
 }
 
-const logEntryFromStored = (
-  stored: LogEntryRecordedEvent["log"]["entry"],
-): ProcessManagerLogEntry => ({
-  date: stored.date,
-  level: stored.level,
-  message: stored.message,
-  ...(stored.cause === undefined ? {} : { cause: stored.cause }),
-  annotations: stored.annotations,
-  spans: stored.spans,
-});
+const LOG_TYPE = "log";
+const LOG_ENTRY_TYPE = "log.entry";
+
+const LOG_LEVELS: ReadonlyArray<LogEntryRecordedEvent["log"]["entry"]["level"]> =
+  [
+    "All",
+    "Fatal",
+    "Error",
+    "Warn",
+    "Info",
+    "Debug",
+    "Trace",
+    "None",
+  ];
+
+const isLogLevel = (
+  value: unknown,
+): value is LogEntryRecordedEvent["log"]["entry"]["level"] =>
+  isString(value) && LOG_LEVELS.some((level) => level === value);
+
+// ============================================================================
+// Wire codec
+// ============================================================================
+
+/**
+ * Build a `log.entry` runtime record ready for spine create.
+ *
+ * @public
+ */
+export const makeLogRecord = (
+  groupId: string,
+  entryId: string,
+  entry: ProcessManagerLogEntry,
+): Omit<RuntimeRecord, "runId" | "createdAt"> => {
+  const occurredAt = Date.parse(entry.date);
+  const occurredAtMs = Number.isNaN(occurredAt) ? 0 : occurredAt;
+  return {
+    id: `${groupId}-log-${entryId}`,
+    type: LOG_ENTRY_TYPE,
+    occurredAt: DateTime.makeUnsafe(occurredAtMs),
+    processType: LOG_TYPE,
+    processId: groupId,
+    payload: {
+      entryId,
+      entry: {
+        date: entry.date,
+        level: entry.level,
+        message: entry.message,
+        ...(entry.cause === undefined ? {} : { cause: entry.cause }),
+        annotations: { ...entry.annotations },
+        spans: [...entry.spans],
+      },
+    },
+  };
+};
+
+const decodeLogEntryPayload = (
+  value: unknown,
+): ProcessManagerLogEntry | null => {
+  if (!isRecord(value)) return null;
+  const date = value["date"];
+  const level = value["level"];
+  const message = value["message"];
+  const cause = value["cause"];
+  const annotations = value["annotations"];
+  const spans = value["spans"];
+  if (!isString(date) || !isLogLevel(level) || !isString(message)) {
+    return null;
+  }
+  if (!isRecord(annotations)) return null;
+  const annotationOut: Record<string, string> = {};
+  for (const [key, item] of Object.entries(annotations)) {
+    if (!isString(item)) return null;
+    annotationOut[key] = item;
+  }
+  if (!Array.isArray(spans)) return null;
+  const spanOut: string[] = [];
+  for (const span of spans) {
+    if (!isString(span)) return null;
+    spanOut.push(span);
+  }
+  return {
+    date,
+    level,
+    message,
+    ...(isString(cause) ? { cause } : {}),
+    annotations: annotationOut,
+    spans: spanOut,
+  };
+};
+
+interface LogRecordView {
+  readonly entryId: string;
+  readonly entry: ProcessManagerLogEntry;
+}
+
+const recordToLogView = (record: RuntimeRecord): LogRecordView | null => {
+  if (record.type !== LOG_ENTRY_TYPE) return null;
+  if (record.processType !== LOG_TYPE) return null;
+  const payload = record.payload;
+  if (!isRecord(payload)) return null;
+  const entryId = payload["entryId"];
+  const entry = decodeLogEntryPayload(payload["entry"]);
+  if (!isString(entryId) || entry === null) return null;
+  return { entryId, entry };
+};
+
+// ============================================================================
+// Query translation + filtering
+// ============================================================================
+
+const parseCursorMillis = (cursor: string | undefined): number | undefined => {
+  if (cursor === undefined) return undefined;
+  const asNumber = Number(cursor);
+  if (Number.isFinite(asNumber)) return asNumber;
+  const parsed = Date.parse(cursor);
+  return Number.isNaN(parsed) ? undefined : parsed;
+};
+
+const queryOptsFromLogQuery = (
+  query: ProcessManagerLogQuery,
+): QueryOpts => {
+  const afterMs =
+    parseCursorMillis(query.after) ??
+    (query.from === undefined ? undefined : query.from.getTime());
+  const beforeMs =
+    parseCursorMillis(query.before) ??
+    (query.to === undefined ? undefined : query.to.getTime());
+  const prefetch =
+    query.processId !== undefined || query.queueId !== undefined
+      ? Math.min(query.limit * 8, 10_000)
+      : query.limit;
+  const opts: { -readonly [K in keyof QueryOpts]: QueryOpts[K] } = {
+    limit: prefetch,
+  };
+  if (afterMs !== undefined) opts.after = afterMs;
+  if (beforeMs !== undefined) opts.before = beforeMs;
+  return opts;
+};
 
 const entryMatchesQuery = (
   entry: ProcessManagerLogEntry,
   query: ProcessManagerLogQuery,
 ): boolean => {
   if (query.processId !== undefined) {
-    const processId = entry.annotations[ProcessManagerLogAnnotationKeys.processId];
-    if (processId !== query.processId) {
-      return false;
-    }
+    const processId =
+      entry.annotations[ProcessManagerLogAnnotationKeys.processId];
+    if (processId !== query.processId) return false;
   }
   if (query.queueId !== undefined) {
     const queueId = entry.annotations[ProcessManagerLogAnnotationKeys.queueId];
-    if (queueId !== query.queueId) {
-      return false;
-    }
+    if (queueId !== query.queueId) return false;
   }
   if (query.groupId !== undefined) {
     const groupId = entry.annotations[ProcessManagerLogAnnotationKeys.groupId];
-    if (groupId !== undefined && groupId !== query.groupId) {
-      return false;
-    }
+    if (groupId !== undefined && groupId !== query.groupId) return false;
   }
   return true;
-};
-
-const parseCursorMillis = (cursor: string | undefined): number | undefined => {
-  if (cursor === undefined) {
-    return undefined;
-  }
-  const asNumber = Number(cursor);
-  if (Number.isFinite(asNumber)) {
-    return asNumber;
-  }
-  const parsed = Date.parse(cursor);
-  return Number.isNaN(parsed) ? undefined : parsed;
-};
-
-/**
- * Map {@link ProcessManagerLogQuery} to {@link StoreEventQuery}.
- *
- * @public
- */
-export const storeEventQueryFromLogQuery = (
-  query: ProcessManagerLogQuery,
-): StoreEventQuery => {
-  const afterMs =
-    parseCursorMillis(query.after) ?? (query.from === undefined ? undefined : query.from.getTime());
-  const beforeMs =
-    parseCursorMillis(query.before) ?? (query.to === undefined ? undefined : query.to.getTime());
-  const prefetch =
-    query.processId !== undefined || query.queueId !== undefined
-      ? Math.min(query.limit * 8, 10_000)
-      : query.limit;
-  return {
-    entityType: query.groupId === undefined ? undefined : "log",
-    entityId: query.groupId,
-    types: ["log.entry"],
-    opts: {
-      limit: prefetch,
-      after: afterMs,
-      before: beforeMs,
-    },
-  };
 };
 
 const sortEntries = (
@@ -137,66 +286,39 @@ const sortEntries = (
   return rows;
 };
 
-/**
- * Build a `log.entry` analytics event ready for spine append.
- *
- * @public
- */
-export const makeRecordedEvent = (
-  groupId: string,
-  entryId: string,
-  entry: ProcessManagerLogEntry,
-): LogEntryRecordedEvent => {
-  const occurredAt = Date.parse(entry.date);
-  return {
-    id: `${groupId}-log-${entryId}`,
-    type: "log.entry",
-    occurredAt: Number.isNaN(occurredAt) ? 0 : occurredAt,
-    entityType: "log",
-    entityId: groupId,
-    log: {
-      entryId,
-      entry: {
-        date: entry.date,
-        level: entry.level,
-        message: entry.message,
-        ...(entry.cause === undefined ? {} : { cause: entry.cause }),
-        annotations: entry.annotations,
-        spans: entry.spans,
-      },
-    },
-  };
-};
-
-const entriesFromStoreEvents = (
-  events: ReadonlyArray<LogEntryRecordedEvent>,
+const entriesFromRecords = (
+  records: ReadonlyArray<RuntimeRecord>,
   query: ProcessManagerLogQuery,
 ): ReadonlyArray<ProcessManagerLogEntry> => {
   const rows: ProcessManagerLogEntry[] = [];
-  for (const event of events) {
-    const entry = logEntryFromStored(event.log.entry);
-    if (!entryMatchesQuery(entry, query)) {
-      continue;
-    }
-    if (query.after !== undefined && event.log.entryId <= query.after) {
-      continue;
-    }
-    if (query.before !== undefined && event.log.entryId >= query.before) {
-      continue;
-    }
-    rows.push(entry);
+  for (const record of records) {
+    const view = recordToLogView(record);
+    if (view === null) continue;
+    if (!entryMatchesQuery(view.entry, query)) continue;
+    if (query.after !== undefined && view.entryId <= query.after) continue;
+    if (query.before !== undefined && view.entryId >= query.before) continue;
+    rows.push(view.entry);
   }
   return sortEntries(rows, query.sort).slice(0, query.limit);
 };
 
 const loadEntries = (
-  events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>,
+  read: (query?: import("../Query").RuntimeRecordQuery) => Effect.Effect<
+    RuntimeRecord[]
+  >,
   query: ProcessManagerLogQuery,
-): Effect.Effect<ReadonlyArray<ProcessManagerLogEntry>, ProcessManagerLogQueryError> =>
+): Effect.Effect<
+  ReadonlyArray<ProcessManagerLogEntry>,
+  ProcessManagerLogQueryError
+> =>
   Effect.gen(function* () {
-    const eventsResult = yield* events(storeEventQueryFromLogQuery(query));
-    const logEvents = eventsResult.filter(isLogEntryRecorded);
-    const entries = entriesFromStoreEvents(logEvents, query);
+    const opts = queryOptsFromLogQuery(query);
+    const predicates = [Type.equals(LOG_ENTRY_TYPE)];
+    if (query.groupId !== undefined) {
+      predicates.push(ProcessId.equals(query.groupId));
+    }
+    const records = yield* read(runtimeRecordQuery(predicates, opts));
+    const entries = entriesFromRecords(records, query);
     if (entries.length === 0) {
       return yield* new ProcessManagerLogQueryError({
         reason: "No log entries matched the query",
@@ -206,45 +328,36 @@ const loadEntries = (
   });
 
 const queryEntries = (
-  events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>,
+  read: (query?: import("../Query").RuntimeRecordQuery) => Effect.Effect<
+    RuntimeRecord[]
+  >,
   logQuery: ProcessManagerLogQuery,
 ): Effect.Effect<void, ProcessManagerLogQueryError> =>
   Effect.gen(function* () {
-    const entries = yield* loadEntries(events, logQuery);
+    const entries = yield* loadEntries(read, logQuery);
     yield* replayLogQueryResults(entries, logQuery.sort);
   });
 
-/** @internal */
-export const makeProcessStoreLogApi = (deps: {
-  readonly append: (event: AnalyticsEvent) => Effect.Effect<void, ProcessStoreWriteError>;
-  readonly appendBatch: (events: ReadonlyArray<AnalyticsEvent>) => Effect.Effect<void, ProcessStoreWriteError>;
-  readonly events: (query?: StoreEventQuery) => Effect.Effect<AnalyticsEvent[]>;
-}): ProcessStoreLogApi => ({
-  record: (groupId, entryId, entry) =>
-    deps.append(makeRecordedEvent(groupId, entryId, entry)),
-
-  recordBatch: (groupId, rows) =>
-    deps.appendBatch(rows.map((row) => makeRecordedEvent(groupId, row.entryId, row.entry))),
-
-  load: (query) => loadEntries(deps.events, query),
-
-  query: (logQuery) => queryEntries(deps.events, logQuery),
-});
+// ============================================================================
+// Facet
+// ============================================================================
 
 /**
  * Context tag for {@link ProcessStoreLogApi}.
  *
  * @public
  */
-export class ProcessStoreLog extends ProcessStore.Service<
-  ProcessStoreLog
->()(
+export class ProcessStoreLog extends ProcessStore.Service<ProcessStoreLog>()(
   "@nikscripts/effect-pm/store/log/ProcessStoreLog",
   ProcessStore.record({
     record:
       (s) =>
-      (groupId: string, entryId: string, entry: ProcessManagerLogEntry) =>
-        s.append(makeRecordedEvent(groupId, entryId, entry)),
+      (
+        groupId: string,
+        entryId: string,
+        entry: ProcessManagerLogEntry,
+      ) =>
+        s.create(makeLogRecord(groupId, entryId, entry)),
     recordBatch:
       (s) =>
       (
@@ -254,15 +367,14 @@ export class ProcessStoreLog extends ProcessStore.Service<
           readonly entry: ProcessManagerLogEntry;
         }>,
       ) =>
-        s.appendBatch(
-          rows.map((row) =>
-            makeRecordedEvent(groupId, row.entryId, row.entry),
-          ),
+        s.createBatch(
+          rows.map((row) => makeLogRecord(groupId, row.entryId, row.entry)),
         ),
   }),
   ProcessStore.read((s) => ({
-    load: (query: ProcessManagerLogQuery) => loadEntries(s.events, query),
-    query: (logQuery: ProcessManagerLogQuery) => queryEntries(s.events, logQuery),
+    load: (query: ProcessManagerLogQuery) => loadEntries(s.read, query),
+    query: (logQuery: ProcessManagerLogQuery) =>
+      queryEntries(s.read, logQuery),
   })),
 ) {}
 

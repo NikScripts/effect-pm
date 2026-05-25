@@ -11,25 +11,63 @@
  * Compose via {@link ProcessStoreProcessLifecycle.layerRuntimeStorage} or
  * {@link ProcessStorage.layerRuntimeStorage}.
  *
+ * ## Storage shape
+ *
+ * Each transition writes one {@link RuntimeRecord} with:
+ *
+ * - `type` = `process.lifecycle.changed`
+ * - `processType` = `process`
+ * - `processId` = the transitioning process id
+ * - `payload` = `{ tag, error? }`
+ * - `attributes` = `{ groupId?, ...extra }` if any extra attributes were
+ *   supplied; otherwise omitted.
+ *
  * @module store/ProcessLifecycle
  */
 
-import { Clock, Effect } from "effect";
+import { Clock, DateTime, Effect } from "effect";
 import {
-  applyQueryOpts,
-  byTimestampDesc,
-  isProcessLifecycleChanged,
-  processLifecycleFromEvents,
-  processLifecycleStoreQuery,
-} from "../internal/store/spine";
+  isRecord,
+  isString,
+  recordAttributesObject,
+  runtimeRecordQuery,
+} from "../internal/store/helpers";
 import { ProcessStore } from "../ProcessStore";
 import type {
-  AnalyticsEvent,
+  AnalyticsEventBase,
   JsonValue,
-  ProcessLifecycleChangedEvent,
-  ProcessLifecycleTag,
   QueryOpts,
 } from "../ProcessStoreEvent";
+import { ProcessId, Type } from "../Query";
+import type { RuntimeRecord } from "../RuntimeStorage";
+
+/**
+ * High-level lifecycle labels written by the process supervisor.
+ *
+ * @public
+ */
+export type ProcessLifecycleTag =
+  | "Started"
+  | "Stopped"
+  | "Restarted"
+  | "Errored"
+  | "Recovered"
+  | "Disabled"
+  | "Enabled";
+
+/**
+ * Supervisor-observed lifecycle transition for a process id.
+ *
+ * @public
+ */
+export interface ProcessLifecycleChangedEvent extends AnalyticsEventBase {
+  type: "process.lifecycle.changed";
+  entityType: "process";
+  lifecycle: {
+    tag: ProcessLifecycleTag;
+    error?: string;
+  };
+}
 
 /**
  * Write input for a process lifecycle transition (no group scope).
@@ -45,56 +83,101 @@ export interface ProcessLifecycleRecordInput {
   readonly attributes?: { readonly [key: string]: JsonValue };
 }
 
-let processLifecycleSeq = 0;
+const PROCESS_TYPE = "process";
+const LIFECYCLE_TYPE = "process.lifecycle.changed";
 
-const lifecycleEventAttributes = (
+const lifecycleTags: ReadonlyArray<ProcessLifecycleTag> = [
+  "Started",
+  "Stopped",
+  "Restarted",
+  "Errored",
+  "Recovered",
+  "Disabled",
+  "Enabled",
+];
+
+const isLifecycleTag = (value: unknown): value is ProcessLifecycleTag =>
+  isString(value) && lifecycleTags.some((tag) => tag === value);
+
+const lifecycleAttributesBlob = (
   input: ProcessLifecycleRecordInput & { readonly groupId?: string },
-): Record<string, unknown> | undefined => {
-  const merged: Record<string, unknown> = {
-    ...(input.groupId !== undefined ? { groupId: input.groupId } : {}),
-    ...(input.attributes ?? {}),
-  };
-  return Object.keys(merged).length === 0 ? undefined : merged;
+): { readonly [key: string]: JsonValue } | undefined => {
+  const out: { [key: string]: JsonValue } = {};
+  if (input.groupId !== undefined) out["groupId"] = input.groupId;
+  if (input.attributes !== undefined) {
+    for (const [key, value] of Object.entries(input.attributes)) {
+      out[key] = value;
+    }
+  }
+  return Object.keys(out).length === 0 ? undefined : out;
 };
 
+let processLifecycleSeq = 0;
+
 /**
- * Builds a `process.lifecycle.changed` wire event.
+ * Build a `process.lifecycle.changed` runtime record.
  *
  * @internal Shared with {@link ProcessStoreProcessGroup} member writes.
  */
-export const makeProcessLifecycleChangedEvent = (
+export const makeProcessLifecycleRecord = (
   input: ProcessLifecycleRecordInput & { readonly groupId?: string },
   occurredAtMs: number,
-): ProcessLifecycleChangedEvent => {
-  processLifecycleSeq++;
-  const attributes = lifecycleEventAttributes(input);
+): Omit<RuntimeRecord, "runId" | "createdAt"> => {
+  processLifecycleSeq += 1;
+  const attributes = lifecycleAttributesBlob(input);
   return {
     id: `${input.processId}-lifecycle-${input.tag.toLowerCase()}-${String(processLifecycleSeq)}`,
-    type: "process.lifecycle.changed",
-    occurredAt: occurredAtMs,
-    entityType: "process",
-    entityId: input.processId,
-    ...(attributes !== undefined ? { attributes } : {}),
-    lifecycle: {
+    type: LIFECYCLE_TYPE,
+    occurredAt: DateTime.makeUnsafe(occurredAtMs),
+    processType: PROCESS_TYPE,
+    processId: input.processId,
+    payload: {
       tag: input.tag,
       ...(input.error !== undefined ? { error: input.error } : {}),
+    },
+    ...(attributes !== undefined ? { attributes } : {}),
+  };
+};
+
+/**
+ * Decode a `process.lifecycle.changed` runtime record back into a typed event.
+ *
+ * @internal Shared with {@link ProcessStoreProcessGroup} member reads.
+ */
+export const recordToLifecycleEvent = (
+  record: RuntimeRecord,
+): ProcessLifecycleChangedEvent | null => {
+  if (record.type !== LIFECYCLE_TYPE) return null;
+  if (record.processType !== PROCESS_TYPE) return null;
+  const payload = record.payload;
+  if (!isRecord(payload)) return null;
+  const tag = payload["tag"];
+  const errorRaw = payload["error"];
+  if (!isLifecycleTag(tag)) return null;
+  if (errorRaw !== undefined && !isString(errorRaw)) return null;
+  return {
+    id: record.id,
+    type: LIFECYCLE_TYPE,
+    occurredAt: DateTime.toEpochMillis(record.occurredAt),
+    entityType: PROCESS_TYPE,
+    entityId: record.processId,
+    attributes: recordAttributesObject(record.attributes),
+    lifecycle: {
+      tag,
+      ...(errorRaw === undefined ? {} : { error: errorRaw }),
     },
   };
 };
 
-const lifecycleEventsForProcesses = (
-  events: ReadonlyArray<AnalyticsEvent>,
-  processIds: ReadonlyArray<string>,
-  opts?: QueryOpts,
+const decodeLifecycleEvents = (
+  records: ReadonlyArray<RuntimeRecord>,
 ): ProcessLifecycleChangedEvent[] => {
-  const allowed = new Set(processIds);
-  const rows = events
-    .filter(
-      (event): event is ProcessLifecycleChangedEvent =>
-        isProcessLifecycleChanged(event) && allowed.has(event.entityId),
-    )
-    .sort(byTimestampDesc((event) => event.occurredAt));
-  return applyQueryOpts(rows, opts, (event) => event.occurredAt);
+  const rows: ProcessLifecycleChangedEvent[] = [];
+  for (const record of records) {
+    const event = recordToLifecycleEvent(record);
+    if (event !== null) rows.push(event);
+  }
+  return rows;
 };
 
 /**
@@ -110,28 +193,48 @@ export class ProcessStoreProcessLifecycle extends ProcessStore.Service<
     lifecycleChanged: (s) => (input: ProcessLifecycleRecordInput) =>
       Effect.gen(function* () {
         const occurredAtMs = input.occurredAt ?? (yield* Clock.currentTimeMillis);
-        yield* s.append(makeProcessLifecycleChangedEvent(input, occurredAtMs));
+        yield* s.create(makeProcessLifecycleRecord(input, occurredAtMs));
       }),
   }),
   ProcessStore.read((s) => ({
     lifecycle: (processId: string, opts?: QueryOpts) =>
-      s.events(processLifecycleStoreQuery(processId, opts)).pipe(
-        Effect.map((events) => processLifecycleFromEvents(events, processId, opts)),
-      ),
-    lifecycleForProcesses: (processIds: ReadonlyArray<string>, opts?: QueryOpts) =>
-      s.events({
-        entityType: "process",
-        types: ["process.lifecycle.changed"],
-        opts,
-      }).pipe(
-        Effect.map((events) => lifecycleEventsForProcesses(events, processIds, opts)),
-      ),
+      s
+        .read(
+          runtimeRecordQuery(
+            [Type.equals(LIFECYCLE_TYPE), ProcessId.equals(processId)],
+            opts,
+          ),
+        )
+        .pipe(Effect.map(decodeLifecycleEvents)),
+
+    lifecycleForProcesses: (
+      processIds: ReadonlyArray<string>,
+      opts?: QueryOpts,
+    ) => {
+      if (processIds.length === 0) {
+        return Effect.succeed<ProcessLifecycleChangedEvent[]>([]);
+      }
+      return s
+        .read(
+          runtimeRecordQuery(
+            [Type.equals(LIFECYCLE_TYPE), ProcessId.in(processIds)],
+            opts,
+          ),
+        )
+        .pipe(Effect.map(decodeLifecycleEvents));
+    },
+
     latestLifecycleByProcess: (processIds: ReadonlyArray<string>) =>
       Effect.gen(function* () {
         const latest = new Map<string, ProcessLifecycleTag>();
         for (const processId of processIds) {
-          const rows = yield* s.events(processLifecycleStoreQuery(processId));
-          const event = processLifecycleFromEvents(rows, processId, { limit: 1 })[0];
+          const records = yield* s.read(
+            runtimeRecordQuery(
+              [Type.equals(LIFECYCLE_TYPE), ProcessId.equals(processId)],
+              { limit: 1 },
+            ),
+          );
+          const event = decodeLifecycleEvents(records)[0];
           if (event !== undefined) {
             latest.set(processId, event.lifecycle.tag);
           }

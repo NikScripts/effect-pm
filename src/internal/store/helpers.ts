@@ -16,7 +16,7 @@ import type {
   RuntimeRecordPredicate,
   RuntimeRecordQuery,
 } from "../../Query";
-import type { QueryOpts } from "../../ProcessStoreEvent";
+import type { JsonValue, QueryOpts } from "../../ProcessStoreEvent";
 import {
   ProcessStoreDuplicateRecordError,
   ProcessStoreReadonlyRecordError,
@@ -27,6 +27,7 @@ import {
   RuntimeStorageReadonlyRecordError,
   type RuntimeStorageError,
 } from "../../RuntimeStorage";
+import { isRecord } from "../json";
 
 export {
   dateFromMillis,
@@ -38,6 +39,88 @@ export {
   isRecord,
   isString,
 } from "../json";
+
+/**
+ * Decode an arbitrary JSON-ish value into a record-shaped object suitable
+ * for the public `AnalyticsEventBase.attributes` field.
+ *
+ * @remarks
+ * Returns `undefined` when the input is absent or is not a JSON object.
+ * Non-record values (string, array, primitive, undefined, null) intentionally
+ * collapse to `undefined` rather than fabricating a `{ value }` wrapper, so
+ * facets that share this helper produce a stable attributes shape on read.
+ * Accepts `unknown` so per-facet decoders can pass nested payload sub-fields
+ * without a cast.
+ *
+ * @internal
+ */
+export const recordAttributesObject = (
+  attributes: unknown,
+): Record<string, unknown> | undefined => {
+  if (!isRecord(attributes)) return undefined;
+  const out: { [key: string]: unknown } = {};
+  for (const [key, value] of Object.entries(attributes)) {
+    out[key] = value;
+  }
+  return out;
+};
+
+/**
+ * Coerce an arbitrary value into a {@link JsonValue}.
+ *
+ * @remarks
+ * Used by per-facet row codecs to serialize `Record<string, unknown>` blobs
+ * (typically a fact / change `attributes` field): `Date` → ISO string,
+ * primitives passed through, arrays / records walked recursively, anything
+ * else (functions, symbols, class instances, etc.) collapsed to `null`.
+ *
+ * @internal
+ */
+export const toJsonValue = (value: unknown): JsonValue => {
+  if (value === null) return null;
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "boolean") return value;
+  if (Array.isArray(value)) return value.map(toJsonValue);
+  if (isRecord(value)) {
+    const out: { [key: string]: JsonValue } = {};
+    for (const [key, item] of Object.entries(value)) {
+      out[key] = toJsonValue(item);
+    }
+    return out;
+  }
+  return null;
+};
+
+/**
+ * Strip `limit` from {@link QueryOpts} while preserving the `before` /
+ * `after` time window.
+ *
+ * @remarks
+ * Use this when the storage query returns a strict superset of the final
+ * projection (e.g. you fetch every row of a wire type and then post-filter
+ * by an `attributes` field that storage cannot push down). The time window
+ * narrows the read, but `limit` must be applied to the projected result —
+ * not the broader stream — to match the expectation that "give me the last
+ * N items matching the post-filter" actually returns N items, not N pre-
+ * filter items that may collapse to zero after filtering.
+ *
+ * Returns `undefined` when the input is `undefined`. Returns an empty
+ * object when the input only carried `limit`, so callers can pass the
+ * result through unchanged to {@link runtimeRecordQuery}.
+ *
+ * @internal
+ */
+export const windowOpts = (
+  opts: QueryOpts | undefined,
+): QueryOpts | undefined => {
+  if (opts === undefined) return undefined;
+  const out: { -readonly [K in keyof QueryOpts]: QueryOpts[K] } = {};
+  if (opts.before !== undefined) out.before = opts.before;
+  if (opts.after !== undefined) out.after = opts.after;
+  return out;
+};
 
 /**
  * Apply a `before` / `after` time window and `limit` to a sorted row list.
@@ -162,8 +245,11 @@ export const timeWindowPredicate = (
 /**
  * Compose a complete {@link RuntimeRecordQuery} from a list of optional
  * predicates plus an optional {@link QueryOpts} window. Always orders by
- * `occurredAt` descending and applies the limit, matching the legacy
- * `StoreEventQuery` semantics.
+ * `occurredAt` descending with an `id` descending tiebreaker, and applies
+ * the limit. The tiebreaker matches the legacy `byTimestampDesc(...,
+ * event.id)` behavior so two rows that share an `occurredAt` (common at
+ * millisecond resolution) come back in deterministic order across the
+ * memory and SQLite adapters.
  *
  * @internal
  */
@@ -175,8 +261,13 @@ export const runtimeRecordQuery = (
     ...predicates,
     timeWindowPredicate(opts),
   ]);
-  const base: { -readonly [K in keyof RuntimeRecordQuery]: RuntimeRecordQuery[K] } = {
-    orderBy: [{ field: "occurredAt", direction: "desc" }],
+  const base: {
+    -readonly [K in keyof RuntimeRecordQuery]: RuntimeRecordQuery[K];
+  } = {
+    orderBy: [
+      { field: "occurredAt", direction: "desc" },
+      { field: "id", direction: "desc" },
+    ],
   };
   if (predicate !== undefined) {
     base.predicate = predicate;

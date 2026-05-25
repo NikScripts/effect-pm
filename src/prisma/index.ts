@@ -8,12 +8,13 @@
  * import { PrismaProcessStore } from "@nikscripts/effect-pm/prisma";
  * ```
  *
- * New code can prefer `@nikscripts/effect-pm/storage/prisma`.
- * The event-table adapter is intentionally unavailable until Prisma is rebuilt
- * as a RuntimeStorage adapter.
+ * New code should prefer `@nikscripts/effect-pm/storage/prisma`.
+ * The event-table adapter is intentionally unavailable until Prisma is
+ * rebuilt as a {@link RuntimeStorage} adapter over normalized
+ * {@link RuntimeRecord} rows.
  *
- * The placeholder still exports structural types and schema helpers for the
- * upcoming rewrite.
+ * The placeholder still exports structural types and schema helpers for
+ * the upcoming rewrite.
  *
  * @module ProcessStore/Prisma
  */
@@ -36,9 +37,7 @@ export type {
   PrismaProcessStoreClient,
 } from "./types";
 
-export { PrismaProcessStoreDecodeError } from "./codec";
 export { PrismaProcessStoreUnavailableError } from "./PrismaProcessStore";
-export { decodeEventRow, encodeEvent } from "./codec";
 
 /**
  * Public surface of the Prisma adapter.

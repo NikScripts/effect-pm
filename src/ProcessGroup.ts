@@ -102,10 +102,12 @@ import {
 } from "./QueueResource";
 import { layerProcessGroupLogContext } from "./LogContext";
 import { ProcessStorage } from "./ProcessStorage";
-import type { ProcessLifecycleTag } from "./ProcessStoreEvent";
 import { ProcessStoreProcessGroup } from "./store/processGroup";
 import { ProcessStoreProcessExecution } from "./store/processExecution";
-import { ProcessStoreProcessLifecycle } from "./store/processLifecycle";
+import {
+  ProcessStoreProcessLifecycle,
+  type ProcessLifecycleTag,
+} from "./store/processLifecycle";
 
 // ============================================================================
 // Public Types

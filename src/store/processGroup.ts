@@ -5,7 +5,8 @@
  * Group control paths ({@link ProcessGroup} `start` / `stop` / `restart`) call
  * the **static** emitters on this class so every row carries
  * `attributes.groupId`. Writes delegate to the same wire type as
- * {@link ProcessStoreProcessLifecycle} (`process.lifecycle.changed`).
+ * {@link ProcessStoreProcessLifecycle} (`process.lifecycle.changed`) by
+ * importing its row encoder/decoder, so the on-disk shape stays identical.
  *
  * Process-scoped lifecycle without a group (future {@link Process.spawn},
  * supervisors) uses {@link ProcessStoreProcessLifecycle} directly.
@@ -15,6 +16,13 @@
  * requires the lifecycle facet). {@link ProcessStorage.layerRuntimeStorage}
  * merges both.
  *
+ * ## Group filter
+ *
+ * `groupId` lives in `record.attributes.groupId`. Group queries fetch the
+ * full set of `process.lifecycle.changed` rows from the storage and
+ * post-filter on the JSON attribute, matching the shape produced by
+ * {@link ProcessStoreProcessLifecycle} writes.
+ *
  * @module store/ProcessGroup
  */
 
@@ -22,20 +30,19 @@ import { Clock, Effect } from "effect";
 import {
   applyQueryOpts,
   byTimestampDesc,
-  isProcessLifecycleChanged,
-  type ProcessStoreSpine,
-} from "../internal/store/spine";
+  runtimeRecordQuery,
+  windowOpts,
+} from "../internal/store/helpers";
 import { ProcessStore } from "../ProcessStore";
-import type {
-  AnalyticsEvent,
-  JsonValue,
-  ProcessLifecycleChangedEvent,
-  ProcessLifecycleTag,
-  QueryOpts,
-} from "../ProcessStoreEvent";
+import type { JsonValue, QueryOpts } from "../ProcessStoreEvent";
+import { Type } from "../Query";
+import type { RuntimeRecord } from "../RuntimeStorage";
 import {
-  makeProcessLifecycleChangedEvent,
+  makeProcessLifecycleRecord,
+  recordToLifecycleEvent,
+  type ProcessLifecycleChangedEvent,
   type ProcessLifecycleRecordInput,
+  type ProcessLifecycleTag,
 } from "./processLifecycle";
 
 /**
@@ -51,22 +58,7 @@ export interface ProcessGroupMemberLifecycleInput {
   readonly attributes?: { readonly [key: string]: JsonValue };
 }
 
-const lifecycleEventsForGroup = (
-  events: ReadonlyArray<AnalyticsEvent>,
-  groupId: string,
-  opts?: QueryOpts,
-): ProcessLifecycleChangedEvent[] => {
-  const rows = events
-    .filter((event): event is ProcessLifecycleChangedEvent => {
-      if (!isProcessLifecycleChanged(event)) {
-        return false;
-      }
-      const attributes = event.attributes;
-      return attributes !== undefined && attributes["groupId"] === groupId;
-    })
-    .sort(byTimestampDesc((event) => event.occurredAt));
-  return applyQueryOpts(rows, opts, (event) => event.occurredAt);
-};
+const LIFECYCLE_TYPE = "process.lifecycle.changed";
 
 const memberLifecycleInput = (
   groupId: string,
@@ -80,76 +72,42 @@ const memberLifecycleInput = (
   groupId,
 });
 
-const recordMemberLifecycle = (
-  s: ProcessStoreSpine,
+const memberLifecycleRecord = (
   groupId: string,
   input: ProcessGroupMemberLifecycleInput,
-) =>
-  Effect.gen(function* () {
-    const occurredAtMs = input.occurredAt ?? (yield* Clock.currentTimeMillis);
-    yield* s.append(
-      makeProcessLifecycleChangedEvent(memberLifecycleInput(groupId, input), occurredAtMs),
-    );
-  });
+  occurredAtMs: number,
+): Omit<RuntimeRecord, "runId" | "createdAt"> =>
+  makeProcessLifecycleRecord(memberLifecycleInput(groupId, input), occurredAtMs);
 
-const recordMemberTag = (
-  s: ProcessStoreSpine,
+const memberTagRecord = (
   groupId: string,
   processId: string,
   tag: ProcessLifecycleTag,
-) =>
-  Effect.gen(function* () {
-    const occurredAtMs = yield* Clock.currentTimeMillis;
-    yield* s.append(
-      makeProcessLifecycleChangedEvent(
-        { processId, tag, groupId },
-        occurredAtMs,
-      ),
-    );
-  });
+  occurredAtMs: number,
+): Omit<RuntimeRecord, "runId" | "createdAt"> =>
+  makeProcessLifecycleRecord({ processId, tag, groupId }, occurredAtMs);
 
-const processGroupRecordApi = {
-  recordMemberLifecycle:
-    (s: ProcessStoreSpine) =>
-    (groupId: string, input: ProcessGroupMemberLifecycleInput) =>
-      recordMemberLifecycle(s, groupId, input),
-  recordMemberStarted:
-    (s: ProcessStoreSpine) => (groupId: string, processId: string) =>
-      recordMemberTag(s, groupId, processId, "Started"),
-  recordMemberStopped:
-    (s: ProcessStoreSpine) => (groupId: string, processId: string) =>
-      recordMemberTag(s, groupId, processId, "Stopped"),
-  recordMemberRestarted:
-    (s: ProcessStoreSpine) => (groupId: string, processId: string) =>
-      recordMemberTag(s, groupId, processId, "Restarted"),
-} as const;
-
-const processGroupReadApi = (s: ProcessStoreSpine) => ({
-  lifecycleByGroup: (groupId: string, opts?: QueryOpts) =>
-    s.events({
-      entityType: "process",
-      types: ["process.lifecycle.changed"],
-      opts,
-    }).pipe(
-      Effect.map((events) => lifecycleEventsForGroup(events, groupId, opts)),
-    ),
-});
-
-const processGroupIdentifierApi = (
-  s: ProcessStoreSpine,
+const lifecycleEventsForGroup = (
+  records: ReadonlyArray<RuntimeRecord>,
   groupId: string,
-) => ({
-  lifecycle: (opts?: QueryOpts) =>
-    processGroupReadApi(s).lifecycleByGroup(groupId, opts),
-  recordMemberLifecycle: (input: ProcessGroupMemberLifecycleInput) =>
-    recordMemberLifecycle(s, groupId, input),
-  recordMemberStarted: (processId: string) =>
-    recordMemberTag(s, groupId, processId, "Started"),
-  recordMemberStopped: (processId: string) =>
-    recordMemberTag(s, groupId, processId, "Stopped"),
-  recordMemberRestarted: (processId: string) =>
-    recordMemberTag(s, groupId, processId, "Restarted"),
-});
+  opts?: QueryOpts,
+): ProcessLifecycleChangedEvent[] => {
+  const matching: ProcessLifecycleChangedEvent[] = [];
+  for (const record of records) {
+    const event = recordToLifecycleEvent(record);
+    if (event === null) continue;
+    if (event.attributes === undefined) continue;
+    if (event.attributes["groupId"] !== groupId) continue;
+    matching.push(event);
+  }
+  matching.sort(
+    byTimestampDesc(
+      (event) => event.occurredAt,
+      (event) => event.id,
+    ),
+  );
+  return applyQueryOpts(matching, opts, (event) => event.occurredAt);
+};
 
 /**
  * `ProcessGroup` storage facet (see module doc).
@@ -160,9 +118,91 @@ export class ProcessStoreProcessGroup extends ProcessStore.Service<
   ProcessStoreProcessGroup
 >()(
   "@nikscripts/effect-pm/store/processGroup/ProcessStoreProcessGroup",
-  ProcessStore.read(processGroupReadApi),
-  ProcessStore.withIdentifier((groupId, s) => processGroupIdentifierApi(s, groupId)),
-  ProcessStore.record(processGroupRecordApi),
+  ProcessStore.read((s) => ({
+    lifecycleByGroup: (groupId: string, opts?: QueryOpts) =>
+      s
+        .read(
+          runtimeRecordQuery([Type.equals(LIFECYCLE_TYPE)], windowOpts(opts)),
+        )
+        .pipe(
+          Effect.map((records) =>
+            lifecycleEventsForGroup(records, groupId, opts),
+          ),
+        ),
+  })),
+  ProcessStore.withIdentifier((groupId, s) => ({
+    lifecycle: (opts?: QueryOpts) =>
+      s
+        .read(
+          runtimeRecordQuery([Type.equals(LIFECYCLE_TYPE)], windowOpts(opts)),
+        )
+        .pipe(
+          Effect.map((records) =>
+            lifecycleEventsForGroup(records, groupId, opts),
+          ),
+        ),
+    recordMemberLifecycle: (input: ProcessGroupMemberLifecycleInput) =>
+      Effect.gen(function* () {
+        const occurredAtMs =
+          input.occurredAt ?? (yield* Clock.currentTimeMillis);
+        yield* s.create(memberLifecycleRecord(groupId, input, occurredAtMs));
+      }),
+    recordMemberStarted: (processId: string) =>
+      Effect.gen(function* () {
+        const occurredAtMs = yield* Clock.currentTimeMillis;
+        yield* s.create(
+          memberTagRecord(groupId, processId, "Started", occurredAtMs),
+        );
+      }),
+    recordMemberStopped: (processId: string) =>
+      Effect.gen(function* () {
+        const occurredAtMs = yield* Clock.currentTimeMillis;
+        yield* s.create(
+          memberTagRecord(groupId, processId, "Stopped", occurredAtMs),
+        );
+      }),
+    recordMemberRestarted: (processId: string) =>
+      Effect.gen(function* () {
+        const occurredAtMs = yield* Clock.currentTimeMillis;
+        yield* s.create(
+          memberTagRecord(groupId, processId, "Restarted", occurredAtMs),
+        );
+      }),
+  })),
+  ProcessStore.record({
+    recordMemberLifecycle:
+      (s) =>
+      (groupId: string, input: ProcessGroupMemberLifecycleInput) =>
+        Effect.gen(function* () {
+          const occurredAtMs =
+            input.occurredAt ?? (yield* Clock.currentTimeMillis);
+          yield* s.create(memberLifecycleRecord(groupId, input, occurredAtMs));
+        }),
+    recordMemberStarted:
+      (s) => (groupId: string, processId: string) =>
+        Effect.gen(function* () {
+          const occurredAtMs = yield* Clock.currentTimeMillis;
+          yield* s.create(
+            memberTagRecord(groupId, processId, "Started", occurredAtMs),
+          );
+        }),
+    recordMemberStopped:
+      (s) => (groupId: string, processId: string) =>
+        Effect.gen(function* () {
+          const occurredAtMs = yield* Clock.currentTimeMillis;
+          yield* s.create(
+            memberTagRecord(groupId, processId, "Stopped", occurredAtMs),
+          );
+        }),
+    recordMemberRestarted:
+      (s) => (groupId: string, processId: string) =>
+        Effect.gen(function* () {
+          const occurredAtMs = yield* Clock.currentTimeMillis;
+          yield* s.create(
+            memberTagRecord(groupId, processId, "Restarted", occurredAtMs),
+          );
+        }),
+  }),
 ) {}
 
 /**

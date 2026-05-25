@@ -239,8 +239,8 @@ export {
   withQueueLogAnnotations,
 } from "./LogContext";
 export type { ProcessManagerRunState } from "./ProcessManager";
-export type { LogEntryRecordedEvent } from "./ProcessStore";
-export { isLogEntryRecorded } from "./ProcessStore";
+export type { LogEntryRecordedEvent } from "./store/log";
+export { isLogEntryRecorded } from "./store/log";
 export type {
   ProcessManagerEndpointConfigItem,
   ProcessManagerConnectionConfigMap,
@@ -268,50 +268,66 @@ export type {
 export {
   ProcessStore,
   ProcessStoreDuplicateRecordError,
-  ProcessStoreQueueResourceContextError,
   ProcessStoreReadonlyRecordError,
-  type QueryOpts,
-  type StoreEventQuery,
   type AnalyticsEventBase,
-  type ProcessExecutionCompletedEvent,
-  type ProcessLifecycleTag,
-  type ProcessLifecycleChangedEvent,
-  type QueueItemStatus,
-  type QueueItemCompletedEvent,
-  type QueueLifecycleTag,
-  type QueueLifecycleChangedEvent,
-  type ProcessStoreQueueResourceApi,
-  type ProcessStoreQueueResourceContext,
-  type ProcessStoreQueueResourceDedupeKeyInput,
-  type ProcessStoreQueueResourceDedupeKeyStatus,
-  type ProcessStoreQueueResourceEntryInput,
-  type ProcessStoreQueueResourceEntryStatus,
-  type ProcessStoreQueueResourceLifecycleInput,
-  type ProcessStoreQueueResourceLifecycleTag,
-  type ProcessStoreQueueResourcePriority,
-  type RunResourceFactRecordedEvent,
-  type RunResourceStateChangedEvent,
-  type AnalyticsEvent,
-  type ProcessStoreLogApi,
   type ProcessStoreWriteError,
+  type QueryOpts,
 } from "./ProcessStore";
 
 export { ProcessStoreLog } from "./store/log";
+export type { ProcessStoreLogApi } from "./store/log";
 export { ProcessStoreRunResource } from "./store/runResource";
 export { ProcessStoreProcessExecution } from "./store/processExecution";
 export { ProcessStoreProcessLifecycle } from "./store/processLifecycle";
 export { ProcessStoreProcessGroup } from "./store/processGroup";
 export type {
+  ProcessExecutionCompletedEvent,
   ProcessExecutionFinishInput,
   ProcessExecutionQuery,
+  ProcessExecutionStatus,
 } from "./store/processExecution";
-export type { ProcessExecutionStatus } from "./ProcessStoreEvent";
 export type {
+  ProcessLifecycleChangedEvent,
   ProcessLifecycleRecordInput,
+  ProcessLifecycleTag,
 } from "./store/processLifecycle";
 export type {
   ProcessGroupMemberLifecycleInput,
 } from "./store/processGroup";
+export type {
+  ProcessStoreQueueResourceDedupeKeyStatus,
+  ProcessStoreQueueResourceEntryStatus,
+  ProcessStoreQueueResourceLifecycleTag,
+  ProcessStoreQueueResourcePriority,
+  QueueDedupeKeyAddedChange,
+  QueueDedupeKeyChange,
+  QueueDedupeKeyChangeType,
+  QueueDedupeKeyHydratedChange,
+  QueueDedupeKeyQuery,
+  QueueDedupeKeyReleasedChange,
+  QueueEntryCompletedFact,
+  QueueEntryDeadLetteredFact,
+  QueueEntryDroppedFact,
+  QueueEntryEnqueuedFact,
+  QueueEntryExhaustedFact,
+  QueueEntryFact,
+  QueueEntryFactType,
+  QueueEntryFailedFact,
+  QueueEntryQuery,
+  QueueEntryReleasedFact,
+  QueueEntryRetriedFact,
+  QueueEntryStartedFact,
+  QueueLifecycleChange,
+  QueueLifecycleChangeType,
+  QueueLifecycleClearedChange,
+  QueueLifecycleDrainedChange,
+  QueueLifecyclePausedChange,
+  QueueLifecycleQuery,
+  QueueLifecycleResumedChange,
+  QueueLifecycleShutdownChange,
+  QueueLifecycleStartedChange,
+} from "./store/queueResource";
+export { ProcessStoreQueueResource } from "./store/queueResource";
 export type {
   RunResourceFact,
   RunResourceFactQuery,
