@@ -1,6 +1,6 @@
 # Agent guide — effect-pm (`@nikscripts/effect-pm`)
 
-Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any persistence change**), [**STORAGE-AGENT-HANDBOOK.md**](./STORAGE-AGENT-HANDBOOK.md) (per-module storage-service assignments), [STORAGE-FACET-AUTHORING-GUIDE.md](./STORAGE-FACET-AUTHORING-GUIDE.md) (how to author a facet on `ProcessStoreBuilder.Service`), [STORAGE-INTEGRATION-INVENTORY.md](./STORAGE-INTEGRATION-INVENTORY.md) (per-source-module audit + infrastructure debt list), [ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md](./ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md) (capture/relay vs persistence split), [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [RESOURCE-API.md](./RESOURCE-API.md), [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) (schedule vs `ProcessGroup.start` / API gates), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
+Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any persistence change** — module refactor list, facet rules, agent assignments), [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [RESOURCE-API.md](./RESOURCE-API.md), [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) (schedule vs `ProcessGroup.start` / API gates), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
 
 ---
 
@@ -20,7 +20,6 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/internal/manager/*` | PM child launch, log capture/relay/query, group watch — **internal**. |
 | `src/ControlService.ts` | Localhost HTTP JSON control API. |
 | `src/Logs.ts` | PM capture/relay only (`captureLoggerLayer`, `relayLayer`) — package subpath `@nikscripts/effect-pm/Logs`. |
-| `docs/ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md` | Full audit checklist and logs/storage naming contract. |
 | `src/ProcessManager.ts` | Typed remote client and endpoint service for group control contracts. |
 | `src/cli.ts` | `createCli` / `runCli` — HTTP client for control API. |
 | `src/disarmedIdleSleep.ts` | Pure policy for disarmed idle sleep (shared with tests). |
@@ -42,7 +41,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 2. **`Process.effect` typing** — `Process<R>`: `effect` needs `R | ProcessStore`. Inlined `polling` / `schedule` on `Process.make` are merged into the supervisor so **`R` excludes those services** when present (overload-resolved in `Process.ts`).
 3. **ProcessGroup combined requirements** — `AllGroupProcessesRequirements` unions `Effect.Services<p["effect"]>` across processes; app must provide that environment when calling `startAll`, etc.
 4. **Control API security** — `ControlService` binds to **127.0.0.1** only.
-5. **Storage** — `RuntimeStorage` + per-domain facets under **`src/store/`** (`store/QueueResource`, `store/Log`, `store/RunResource`, `store/ProcessLifecycle`, `store/ProcessGroup`, `store/ProcessExecution`). One facet per domain — each owns its concrete event types, no shared generic envelope on the public API. `ProcessStore` = combiner namespace; monolith demolition is tracked under "Infrastructure debt" in [STORAGE-INTEGRATION-INVENTORY.md](./STORAGE-INTEGRATION-INVENTORY.md). Logs: **`@nikscripts/effect-pm/Logs`** for capture/relay, **`ProcessStoreLog`** for durable history. SQLite: `layerProcessStore`. See [STORAGE.md](./STORAGE.md), [STORAGE-AGENT-HANDBOOK.md](./STORAGE-AGENT-HANDBOOK.md), and [STORAGE-FACET-AUTHORING-GUIDE.md](./STORAGE-FACET-AUTHORING-GUIDE.md).
+5. **Storage** — See [STORAGE.md](./STORAGE.md) only (`RuntimeStorage` + `src/store/*` facets, `ProcessStore` combiner, logs split, refactor list, agent assignments).
 
 ---
 
