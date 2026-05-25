@@ -8,7 +8,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ## Cross-cutting (how pieces combine)
 
-- **Effect `Layer`** — polling, schedule, queues, ProcessStore, RuntimeObserver, platform (`FileSystem`/`Path`, `HttpClient`) merged at app root; `Process.make` can inline polling/schedule into `process.effect` so fork-time `R` excludes those tags when merged.
+- **Effect `Layer`** — polling, schedule, queues, ProcessStore (with the `ProcessStoreRunResource` / `ProcessStoreGroupLog` / `ProcessStoreQueueResource` / `ProcessStoreProcessLifecycle` facets), platform (`FileSystem`/`Path`, `HttpClient`) merged at app root; `Process.make` can inline polling/schedule into `process.effect` so fork-time `R` excludes those tags when merged.
 - **`Effect.scoped`** — `QueueResource.make`, `ControlService.make`, remote layers acquire/release with scope.
 - **`ProcessStore` optional** — when present in env, processes/queues/resources append analytics; when absent, behavior continues without failing.
 - **Canonical ids** — slash-separated strings (`@scope/Segment/ServiceName`); CLI/remote accept normalized kebab suffix aliases; ambiguous suffixes error with candidate list.
@@ -530,7 +530,7 @@ and removes stale run state when the process no longer exists.
 
 - **`ref`**, **`observedAt`**, **`configVersion`**, **`concurrency`**, **`waiting`**, **`inFlight`**, **`completed`**, **`failed`**, **`interrupted`**, **`totalDurationMs`**.
 
-### RuntimeObserver facts (when observer + store)
+### `ProcessStoreRunResource` facts (when facet layer composed)
 
 **Fact types:** `run-resource.run.started`, `run-resource.run.completed`, `run-resource.run.failed`.
 
@@ -606,8 +606,8 @@ and removes stale run state when the process no longer exists.
 
 - **`QueryOpts`** — `limit`, `before`, `after` (epoch ms).
 - **`StoreEventQuery`** — `entityType`, `entityId`, `types[]`, `opts`.
-- **`RuntimeFactQuery`** — `ref`, `types[]`, `opts`.
-- **`RuntimeStateHistoryQuery`** — `ref`, `opts`.
+- **`RunResourceFactQuery`** — `resourceId`, `runId?`, `types[]?`, `opts?`.
+- **`RunResourceStateHistoryQuery`** — `resourceId`, `opts?`.
 
 ### Event taxonomy (`AnalyticsEvent` union)
 
@@ -617,15 +617,18 @@ and removes stale run state when the process no longer exists.
 | **`process.lifecycle.changed`** | process | tag: Started/Stopped/Restarted/Errored/Recovered/Disabled/Enabled, error? |
 | **`queue.item.completed`** | queue | status completed/failed/retried/exhausted, priority, durationMs, attempts, error? |
 | **`queue.lifecycle.changed`** | queue | tag Started/Paused/Resumed/Shutdown/Cleared, itemsCleared? |
-| **`runtime.fact.recorded`** | ref.kind/id | wraps **`RuntimeFact`** |
-| **`runtime.state.changed`** | ref.kind/id | wraps **`RuntimeStateChange`** |
+| **`run-resource.fact.recorded`** | ref.kind/id | wraps **`RunResourceFact`** |
+| **`run-resource.state.changed`** | ref.kind/id | wraps **`RunResourceStateChange`** |
+| **`runtime.fact.recorded`** *(internal envelope)* | ref.kind/id | wraps internal `FactEnvelope` payload used by `ProcessStoreQueueResource` plumbing only |
+| **`runtime.state.changed`** *(internal envelope)* | ref.kind/id | wraps internal `FactEnvelopeStateChange` used by `ProcessStoreQueueResource` plumbing only |
 
-### Namespaced projections (`ProcessStore.runtime`, `ProcessStore.runResource`)
+### Per-domain projections (on the `ProcessStoreRunResource` facet)
 
-- **`runtime.facts(query?)`** — from `runtime.fact.recorded` events.
-- **`runtime.stateHistory({ ref, opts? })`** — state transitions.
-- **`runtime.latestState(ref)`** — `Option` latest snapshot.
-- **`runResource.history(resourceId, opts?)`** — facts for `run-resource` ref kind.
+- **`facts({ resourceId, runId?, types? })`** — from `run-resource.fact.recorded` events.
+- **`stateHistory({ resourceId })`** — `run-resource.state.changed` transitions.
+- **`latestState(resourceId)`** — `Option` latest snapshot.
+- **`runs(resourceId)`** — paired started + ended history per run.
+- **`byRun(runId)`** — all facts for one specific run, ordered.
 
 ### File backend behavior
 
@@ -645,7 +648,7 @@ and removes stale run state when the process no longer exists.
 
 - **Process** supervisor — executions + lifecycle when store present.
 - **QueueResource** — item + lifecycle events when store present.
-- **RuntimeObserver.layerFromProcessStore** — runtime facts/state as analytics events.
+- **`ProcessStoreRunResource` facet** — RunResource facts/state persisted as analytics events through the per-type static optional emitters on the tag.
 
 ### Remote
 
@@ -653,37 +656,40 @@ and removes stale run state when the process no longer exists.
 
 ---
 
-## RuntimeObserver
+## ProcessStoreRunResource facet (`@nikscripts/effect-pm/store/RunResource`)
 
-**What it is:** Optional publish/subscribe for **`RuntimeFact`** and **`RuntimeStateChange`**; never required for core behavior.
+**What it is:** Per-domain storage facet for `RunResource` facts and state changes. Replaces the removed generic `ProcessStoreRuntime` facet and `RuntimeObserver`. The generic envelope (`FactEnvelope` / `FactEnvelopeRef` / …) now lives at `src/internal/store/factEnvelope.ts` as internal-only plumbing used by `ProcessStoreQueueResource`.
 
-### Service (`RuntimeObserverService`)
+### Static optional emitters (on the tag)
 
-- **`publishFact(fact)`**, **`publishStateChange(change)`**.
+- **`ProcessStoreRunResource.recordRunStarted(fact)`**, **`.recordRunCompleted(fact)`**, **`.recordRunFailed(fact)`**, **`.recordStateChange(change)`**, plus **`recordFactBatch(facts)` / `recordStateChangeBatch(changes)`** — silent no-op when the facet layer is absent; persistent write when present. The builder wraps every static emitter with a built-in `catchCause + logWarning` so write failures are warning-logged and never propagated.
 
-### Standalone helpers (no-op if service absent)
+### Service methods (`yield* ProcessStoreRunResource`)
 
-- **`RuntimeObserver.publishFact`**, **`RuntimeObserver.publishStateChange`**.
+- **Writes** (raw): `recordRunStarted`, `recordRunCompleted`, `recordRunFailed`, `recordStateChange`, `recordFactBatch`, `recordStateChangeBatch` — return `Effect<void, ProcessStoreWriteError>`.
+- **Reads:** `facts({ resourceId, runId?, types? })`, `stateHistory({ resourceId })`, `latestState(resourceId)`, `runs(resourceId)` (paired started + ended history), `byRun(runId)` (facts for one run).
 
-### Layer forms
+### Layers
 
-- **`RuntimeObserver.layerFromProcessStore`** — persist as `runtime.fact.recorded` / `runtime.state.changed` via ProcessStore.
-- **`RuntimeObserver.layerListeners(listeners[])`** — fan-out; listener failures **ignored**; no persistence.
+- **`ProcessStoreRunResource.layerRuntimeStorage`** — facet on top of injected `RuntimeStorage`.
+- **`ProcessStoreRunResource.layer`** — facet + in-memory `RuntimeStorage` (dev/test).
+- Composed by `ProcessStore.layerRuntimeStorage` and `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`.
 
-### Listener shape (`RuntimeObserverListener`)
+### In-process listeners (no durability)
 
-- Optional **`onFact`**, **`onStateChange`** per listener.
+Provide a custom service whose shape matches **`ProcessStoreRunResource.Type`** via `Effect.provideService` / `Layer.succeed` that fans out to scoped callbacks. Type your callback bag with a local interface inside the consumer (the package no longer ships a generic `RuntimeObservationListener`). There is no package-level `layerListeners` helper.
 
 ### Core types
 
-- **`RuntimeRef`** — `{ kind, id }`.
-- **`RuntimeFact`** — id, ref, type, occurredAt, payload, optional attributes.
-- **`RuntimeStateBase`** — ref, observedAt, configVersion.
-- **`RuntimeStateChange`** — id, ref, previous, current, changedAt.
+- **`RunResourceRef`** — `{ kind: "@nikscripts/effect-pm/RunResource", id }`.
+- **`RunResourceFact`** — union of `RunResourceRunStartedFact` / `RunResourceRunCompletedFact` / `RunResourceRunFailedFact`.
+- **`RunResourceState`** — live counters for waiting, in-flight, completed, failed, interrupted, total durationMs.
+- **`RunResourceStateChange`** — id, ref, previous, current, changedAt, optional reason.
+- **`RunResourceFactRecordedEvent`** / **`RunResourceStateChangedEvent`** — wire analytics events.
 
 ### Planned (docs only)
 
-- Stream helpers mentioned in PROCESS-API as **planned**, not shipped.
+- `ProcessStoreRunResource.live(resourceId): Stream<...>` — per-resource subscription stream that will replace the custom-service in-process listener pattern.
 
 ---
 

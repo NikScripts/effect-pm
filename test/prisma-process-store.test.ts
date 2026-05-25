@@ -5,8 +5,8 @@ import {
   type ProcessExecutionCompletedEvent,
   type QueueItemCompletedEvent,
   type QueueLifecycleChangedEvent,
-  type RuntimeFactRecordedEvent,
-  type RuntimeStateChangedEvent,
+  type RunResourceFactRecordedEvent,
+  type RunResourceStateChangedEvent,
 } from "../src";
 import {
   decodeEventRow,
@@ -78,37 +78,45 @@ describe("PrismaProcessStore — codec", () => {
   });
 
   it("round-trips runtime and queue event codecs", () => {
-    const fact: RuntimeFactRecordedEvent = {
+    const fact: RunResourceFactRecordedEvent = {
       id: "runtime-fact-1",
-      type: "runtime.fact.recorded",
+      type: "run-resource.fact.recorded",
       occurredAt: utcMillisFromIso("2026-01-01T02:00:00.000Z"),
       entityType: "run-resource",
       entityId: "@test/RunGate",
       attributes: { source: "test" },
       fact: {
         id: "@test/RunGate/run/1/run-resource.run.completed",
-        ref: { kind: "run-resource", id: "@test/RunGate" },
+        resourceId: "@test/RunGate",
+        runId: "@test/RunGate/run/1",
         type: "run-resource.run.completed",
         occurredAt: utcMillisFromIso("2026-01-01T02:00:00.000Z"),
         payload: { durationMs: 5 },
       },
     };
-    const state: RuntimeStateChangedEvent = {
+    const state: RunResourceStateChangedEvent = {
       id: "runtime-state-1",
-      type: "runtime.state.changed",
+      type: "run-resource.state.changed",
       occurredAt: utcMillisFromIso("2026-01-01T02:10:00.000Z"),
       entityType: "run-resource",
       entityId: "@test/RunGate",
       change: {
         id: "@test/RunGate/state/1",
-        ref: { kind: "run-resource", id: "@test/RunGate" },
+        resourceId: "@test/RunGate",
         changedAt: utcMillisFromIso("2026-01-01T02:10:00.000Z"),
         reason: "run-resource.run.completed",
         previous: null,
         current: {
-          ref: { kind: "run-resource", id: "@test/RunGate" },
+          resourceId: "@test/RunGate",
           observedAt: utcMillisFromIso("2026-01-01T02:10:00.000Z"),
           configVersion: 1,
+          concurrency: 1,
+          waiting: 0,
+          inFlight: 0,
+          completed: 1,
+          failed: 0,
+          interrupted: 0,
+          totalDurationMs: 5,
         },
       },
     };

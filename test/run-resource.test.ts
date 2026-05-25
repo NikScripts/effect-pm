@@ -2,28 +2,70 @@ import { it, describe, expect } from "@effect/vitest";
 import { Effect, Layer, Option, Ref } from "effect";
 import { RunResource } from "../src/RunResource";
 import { ProcessStore } from "../src/ProcessStore";
-import {
-  ProcessStoreRuntime,
-  type ProcessStoreRuntimeApi,
-} from "../src/store/runtime";
-import {
-  RuntimeObserver,
-  type RuntimeFact,
-  type RuntimeObserverListener,
-  type RuntimeStateBase,
-  type RuntimeStateChange,
-} from "../src/RuntimeState";
+import { ProcessStoreRunResource } from "../src/store/runResource";
 import type {
+  RunResourceFact,
   RunResourceFactType,
   RunResourceState,
+  RunResourceStateChange,
   RunResourceStateChangeReason,
-} from "../src/RunResource";
+} from "../src/store/runResource";
 import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
 
-const runtimeObservationLayer = Layer.provideMerge(
-  RuntimeObserver.layer,
-  ProcessStore.layer,
-);
+// Local listener shape used by the in-process fan-out helper below.
+// Until the planned `ProcessStoreRunResource.live(resourceId): Stream<...>`
+// ships, in-process observation works by providing a custom service whose
+// shape matches `ProcessStoreRunResource.Type`. Listener failures are
+// ignored so observation cannot change the gated effect's success/error
+// channel — mirroring the contract that the static
+// `ProcessStoreRunResource.record*` emitters guarantee via the built-in
+// `catchCause + logWarning` wrap on the facet class.
+interface RunResourceObservationListener {
+  readonly onStateChange?: (
+    change: RunResourceStateChange,
+  ) => Effect.Effect<void, unknown>;
+  readonly onFact?: (fact: RunResourceFact) => Effect.Effect<void, unknown>;
+}
+
+const listenerRunResourceFacet = (
+  listeners: ReadonlyArray<RunResourceObservationListener>,
+): ProcessStoreRunResource.Type => {
+  const fanFact = (fact: RunResourceFact): Effect.Effect<void> =>
+    Effect.forEach(
+      listeners,
+      (listener) =>
+        listener.onFact === undefined
+          ? Effect.void
+          : listener.onFact(fact).pipe(Effect.ignore),
+      { discard: true },
+    );
+  const fanState = (change: RunResourceStateChange): Effect.Effect<void> =>
+    Effect.forEach(
+      listeners,
+      (listener) =>
+        listener.onStateChange === undefined
+          ? Effect.void
+          : listener.onStateChange(change).pipe(Effect.ignore),
+      { discard: true },
+    );
+  return {
+    recordRunStarted: fanFact,
+    recordRunCompleted: fanFact,
+    recordRunFailed: fanFact,
+    recordStateChange: fanState,
+    recordFactBatch: (facts) =>
+      Effect.forEach(facts, fanFact, { discard: true }),
+    recordStateChangeBatch: (changes) =>
+      Effect.forEach(changes, fanState, { discard: true }),
+    facts: () => Effect.succeed([]),
+    stateHistory: () => Effect.succeed([]),
+    latestState: () => Effect.succeed(Option.none()),
+    runs: () => Effect.succeed([]),
+    byRun: () => Effect.succeed([]),
+  };
+};
+
+const runResourceObservationLayer = ProcessStore.layer;
 
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
   Effect.gen(function* () {
@@ -34,14 +76,9 @@ const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
     yield* Ref.update(active, (x) => x - 1);
   });
 
-const isRunResourceState = (state: RuntimeStateBase): state is RunResourceState =>
-  state.ref.kind === "run-resource" &&
-  "completed" in state &&
-  typeof state.completed === "number" &&
-  "failed" in state &&
-  typeof state.failed === "number" &&
-  "inFlight" in state &&
-  typeof state.inFlight === "number";
+const isRunResourceState = (
+  state: RunResourceState | null,
+): state is RunResourceState => state !== null;
 
 describe("RunResource.makeRunner", () => {
   it.live("concurrency 1 enforces serial execution", () =>
@@ -164,7 +201,7 @@ describe("RunResource.make (raw scoped)", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.live("runs without RuntimeObserver and does not require storage", () =>
+  it.live("runs without ProcessStoreRunResource and does not require storage", () =>
     Effect.gen(function* () {
       const gate = yield* RunResource.make({
         name: "@test/UnobservedGate",
@@ -177,13 +214,23 @@ describe("RunResource.make (raw scoped)", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.live("publishes runtime facts when RuntimeObserver is provided", () =>
+  it.live("publishes runtime facts when ProcessStoreRunResource is provided", () =>
     Effect.gen(function* () {
-      const facts = yield* Ref.make<ReadonlyArray<RuntimeFact>>([]);
-      const observer = {
-        publishStateChange: () => Effect.void,
-        publishFact: (fact: RuntimeFact) =>
-          Ref.update(facts, (items) => [...items, fact]),
+      const facts = yield* Ref.make<ReadonlyArray<RunResourceFact>>([]);
+      const recordFact = (fact: RunResourceFact) =>
+        Ref.update(facts, (items) => [...items, fact]);
+      const facet: ProcessStoreRunResource.Type = {
+        recordRunStarted: recordFact,
+        recordRunCompleted: recordFact,
+        recordRunFailed: recordFact,
+        recordStateChange: () => Effect.void,
+        recordFactBatch: () => Effect.void,
+        recordStateChangeBatch: () => Effect.void,
+        facts: () => Effect.succeed([]),
+        stateHistory: () => Effect.succeed([]),
+        latestState: () => Effect.succeed(Option.none()),
+        runs: () => Effect.succeed([]),
+        byRun: () => Effect.succeed([]),
       };
 
       yield* Effect.gen(function* () {
@@ -206,22 +253,33 @@ describe("RunResource.make (raw scoped)", () => {
           "run-resource.run.started",
           "run-resource.run.failed",
         ] satisfies ReadonlyArray<RunResourceFactType>);
-        expect(observedFacts.every((fact) => fact.ref.kind === "run-resource")).toBe(true);
-        expect(observedFacts.every((fact) => fact.ref.id === "@test/ObservedGate")).toBe(true);
+        expect(observedFacts.every((fact) => fact.resourceId === "@test/ObservedGate"))
+          .toBe(true);
       }).pipe(
-        Effect.provideService(RuntimeObserver, observer),
+        Effect.provideService(ProcessStoreRunResource, facet),
         Effect.scoped,
       );
     }),
   );
 
-  it.live("publishes runtime state changes when RuntimeObserver is provided", () =>
+  it.live("publishes runtime state changes when ProcessStoreRunResource is provided", () =>
     Effect.gen(function* () {
-      const changes = yield* Ref.make<ReadonlyArray<RuntimeStateChange>>([]);
-      const observer = {
-        publishStateChange: (change: RuntimeStateChange) =>
+      const changes = yield* Ref.make<ReadonlyArray<RunResourceStateChange>>(
+        [],
+      );
+      const facet: ProcessStoreRunResource.Type = {
+        recordStateChange: (change) =>
           Ref.update(changes, (items) => [...items, change]),
-        publishFact: (_fact: RuntimeFact) => Effect.void,
+        recordRunStarted: () => Effect.void,
+        recordRunCompleted: () => Effect.void,
+        recordRunFailed: () => Effect.void,
+        recordFactBatch: () => Effect.void,
+        recordStateChangeBatch: () => Effect.void,
+        facts: () => Effect.succeed([]),
+        stateHistory: () => Effect.succeed([]),
+        latestState: () => Effect.succeed(Option.none()),
+        runs: () => Effect.succeed([]),
+        byRun: () => Effect.succeed([]),
       };
 
       yield* Effect.gen(function* () {
@@ -257,7 +315,7 @@ describe("RunResource.make (raw scoped)", () => {
           throw new Error("Expected final RunResource state change");
         }
       }).pipe(
-        Effect.provideService(RuntimeObserver, observer),
+        Effect.provideService(ProcessStoreRunResource, facet),
         Effect.scoped,
       );
     }),
@@ -268,7 +326,7 @@ describe("RunResource.make (raw scoped)", () => {
       const factCount = yield* Ref.make(0);
       const stateReasons = yield* Ref.make<ReadonlyArray<string>>([]);
       const trailingStateCount = yield* Ref.make(0);
-      const listeners: ReadonlyArray<RuntimeObserverListener> = [
+      const listeners: ReadonlyArray<RunResourceObservationListener> = [
         {
           onFact: () => Ref.update(factCount, (count) => count + 1),
           onStateChange: (change) =>
@@ -305,13 +363,16 @@ describe("RunResource.make (raw scoped)", () => {
         ]);
         expect(trailing).toBe(3);
       }).pipe(
-        Effect.provide(RuntimeObserver.layerListeners(listeners)),
+        Effect.provideService(
+          ProcessStoreRunResource,
+          listenerRunResourceFacet(listeners),
+        ),
         Effect.scoped,
       );
     }),
   );
 
-  it.live("persists observed runtime facts through ProcessStoreRuntime", () =>
+  it.live("persists observed runtime facts through ProcessStoreRunResource", () =>
     Effect.gen(function* () {
       const gate = yield* RunResource.make({
         name: "@test/ObservedStoreGate",
@@ -320,18 +381,22 @@ describe("RunResource.make (raw scoped)", () => {
       });
 
       const result = yield* gate(1);
-      const runtime = yield* ProcessStoreRuntime;
-      const stored = yield* runtime.facts({
-        ref: { kind: "run-resource", id: "@test/ObservedStoreGate" },
+      const runs = yield* ProcessStoreRunResource;
+      const stored = yield* runs.facts({
+        resourceId: "@test/ObservedStoreGate",
       });
-      const stateHistory = yield* runtime.stateHistory({
-        ref: { kind: "run-resource", id: "@test/ObservedStoreGate" },
+      const stateHistory = yield* runs.stateHistory({
+        resourceId: "@test/ObservedStoreGate",
       });
 
       expect(result).toBe(2);
-      expect(stored.map((fact) => fact.type)).toEqual([
-        "run-resource.run.started",
+      // facts() returns DESC by occurredAt; relative order of started vs
+      // completed depends on whether their ms-timestamps tie at runtime
+      // (Effect.succeed is fast enough that ties happen). Assert presence,
+      // not order — and confirm the per-run pairing via runs().
+      expect(stored.map((fact) => fact.type).sort()).toEqual([
         "run-resource.run.completed",
+        "run-resource.run.started",
       ]);
       expect(stateHistory.map((change) => change.reason)).toEqual(
         expect.arrayContaining([
@@ -340,23 +405,24 @@ describe("RunResource.make (raw scoped)", () => {
           "run-resource.run.completed",
         ]),
       );
-    }).pipe(Effect.provide(runtimeObservationLayer), Effect.scoped),
+    }).pipe(Effect.provide(runResourceObservationLayer), Effect.scoped),
   );
 
-  it.live("isolates ProcessStoreRuntime write failures from gated effect success", () => {
-    const failingRuntime: ProcessStoreRuntimeApi = {
-      recordFact: () =>
-        Effect.fail(new ProcessStoreReadonlyRecordError({ id: "fact" })),
-      recordStateChange: () =>
-        Effect.fail(new ProcessStoreReadonlyRecordError({ id: "state" })),
-      recordFactBatch: () =>
-        Effect.fail(new ProcessStoreReadonlyRecordError({ id: "batch-facts" })),
-      recordStateChangeBatch: () =>
-        Effect.fail(new ProcessStoreReadonlyRecordError({ id: "batch-states" })),
+  it.live("isolates ProcessStoreRunResource write failures from gated effect success", () => {
+    const fail = () =>
+      Effect.fail(new ProcessStoreReadonlyRecordError({ id: "x" }));
+    const failingFacet: ProcessStoreRunResource.Type = {
+      recordRunStarted: fail,
+      recordRunCompleted: fail,
+      recordRunFailed: fail,
+      recordStateChange: fail,
+      recordFactBatch: fail,
+      recordStateChangeBatch: fail,
       facts: () => Effect.succeed([]),
-      runResourceFacts: () => Effect.succeed([]),
       stateHistory: () => Effect.succeed([]),
       latestState: () => Effect.succeed(Option.none()),
+      runs: () => Effect.succeed([]),
+      byRun: () => Effect.succeed([]),
     };
 
     return Effect.gen(function* () {
@@ -369,17 +435,12 @@ describe("RunResource.make (raw scoped)", () => {
       const result = yield* gate(1);
       expect(result).toBe(2);
     }).pipe(
-      Effect.provide(
-        Layer.provideMerge(
-          RuntimeObserver.layer,
-          Layer.succeed(ProcessStoreRuntime, failingRuntime),
-        ),
-      ),
+      Effect.provide(Layer.succeed(ProcessStoreRunResource, failingFacet)),
       Effect.scoped,
     );
   });
 
-  it.live("round-trips observed facts through ProcessStoreRuntime queries", () =>
+  it.live("round-trips observed facts through ProcessStoreRunResource queries", () =>
     Effect.gen(function* () {
       const resourceId = "@test/RuntimeQueryGate";
       const gate = yield* RunResource.make({
@@ -389,19 +450,20 @@ describe("RunResource.make (raw scoped)", () => {
       });
 
       const result = yield* gate(41);
-      const runtime = yield* ProcessStoreRuntime;
-      const facts = yield* runtime.facts({
-        ref: { kind: "run-resource", id: resourceId },
+      const runs = yield* ProcessStoreRunResource;
+      const facts = yield* runs.facts({
+        resourceId,
         types: ["run-resource.run.started", "run-resource.run.completed"],
       });
-      const history = yield* runtime.stateHistory({
-        ref: { kind: "run-resource", id: resourceId },
-      });
+      const history = yield* runs.stateHistory({ resourceId });
+      const paired = yield* runs.runs(resourceId);
 
       expect(result).toBe(42);
-      expect(facts.map((fact) => fact.type)).toEqual([
-        "run-resource.run.started",
+      // See note on the previous test: assert presence, not order, for
+      // ms-tied fact pairs.
+      expect(facts.map((fact) => fact.type).sort()).toEqual([
         "run-resource.run.completed",
+        "run-resource.run.started",
       ]);
       expect(history.map((change) => change.reason)).toEqual(
         expect.arrayContaining([
@@ -410,6 +472,9 @@ describe("RunResource.make (raw scoped)", () => {
           "run-resource.run.completed",
         ]),
       );
-    }).pipe(Effect.provide(runtimeObservationLayer), Effect.scoped),
+      expect(paired).toHaveLength(1);
+      expect(paired[0]?.outcome).toBe("completed");
+      expect(paired[0]?.resourceId).toBe(resourceId);
+    }).pipe(Effect.provide(runResourceObservationLayer), Effect.scoped),
   );
 });

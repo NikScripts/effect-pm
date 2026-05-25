@@ -56,7 +56,7 @@ import type { SqlError } from "effect/unstable/sql/SqlError";
 import { ProcessStore } from "../../ProcessStore";
 import type { ProcessStoreGroupLog } from "../../store/groupLog";
 import type { ProcessStoreProcessLifecycle } from "../../store/processLifecycle";
-import type { ProcessStoreRuntime } from "../../store/runtime";
+import type { ProcessStoreRunResource } from "../../store/runResource";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import type {
   DeleteResult,
@@ -141,7 +141,7 @@ export const layerProcessStore = (
 ): Layer.Layer<
   | ProcessStore
   | ProcessStoreGroupLog
-  | ProcessStoreRuntime
+  | ProcessStoreRunResource
   | ProcessStoreProcessLifecycle,
   never,
   Scope.Scope

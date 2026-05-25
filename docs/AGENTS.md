@@ -42,7 +42,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 2. **`Process.effect` typing** — `Process<R>`: `effect` needs `R | ProcessStore`. Inlined `polling` / `schedule` on `Process.make` are merged into the supervisor so **`R` excludes those services** when present (overload-resolved in `Process.ts`).
 3. **ProcessGroup combined requirements** — `AllGroupProcessesRequirements` unions `Effect.Services<p["effect"]>` across processes; app must provide that environment when calling `startAll`, etc.
 4. **Control API security** — `ControlService` binds to **127.0.0.1** only.
-5. **Storage** — `RuntimeStorage` + facets under **`src/store/`** (`store/QueueResource`, `store/GroupLog`, `store/Runtime`). `ProcessStore` = combiner (legacy monolith until Part P). Logs: **`@nikscripts/effect-pm/Logs`**. SQLite: `layerProcessStore`. See [STORAGE.md](./STORAGE.md).
+5. **Storage** — `RuntimeStorage` + per-domain facets under **`src/store/`** (`store/QueueResource`, `store/GroupLog`, `store/RunResource`, `store/ProcessLifecycle`, …). One facet per domain — each owns its concrete event types, no shared generic envelope on the public API. `ProcessStore` = combiner (legacy monolith until Part P). Logs: **`@nikscripts/effect-pm/Logs`**. SQLite: `layerProcessStore`. See [STORAGE.md](./STORAGE.md), [STORAGE-AGENT-HANDBOOK.md](./STORAGE-AGENT-HANDBOOK.md), and [STORAGE-FACET-AUTHORING-GUIDE.md](./STORAGE-FACET-AUTHORING-GUIDE.md).
 
 ---
 

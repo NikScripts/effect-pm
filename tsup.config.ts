@@ -23,7 +23,7 @@ export default defineConfig([
       ProcessStore: "src/ProcessStore.ts",
       "store/QueueResource": "src/store/queueResource.ts",
       "store/GroupLog": "src/store/groupLog.ts",
-      "store/Runtime": "src/store/runtime.ts",
+      "store/RunResource": "src/store/runResource.ts",
       "store/ProcessLifecycle": "src/store/processLifecycle.ts",
       Query: "src/Query.ts",
       RuntimeStorage: "src/RuntimeStorage.ts",

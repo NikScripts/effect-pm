@@ -255,9 +255,9 @@ normalized `RuntimeRecord` rows; `ProcessStore` facets (`GroupLog`, `QueueResour
 `runtime` projections) map module operations onto those rows. The optional Prisma
 export is not a full store yet (`PrismaProcessStoreUnavailableError` on read paths).
 
-The current bridge writes runtime facts and state changes through today's
-`ProcessStore` analytics event envelope as `runtime.fact.recorded` and
-`runtime.state.changed` events.
+The current bridge writes RunResource facts and state changes through the
+`ProcessStoreRunResource` facet as `run-resource.fact.recorded` and
+`run-resource.state.changed` analytics events.
 
 Dependency direction:
 
@@ -280,28 +280,24 @@ poison the whole file.
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Effect, Layer } from "effect";
-import { ProcessStore, RuntimeObserver } from "@nikscripts/effect-pm";
+import { ProcessStore } from "@nikscripts/effect-pm";
 import { fileLayer } from "@nikscripts/effect-pm/storage/file";
 
 const filePath = ".tmp/effect-pm/events.ndjson";
 const platform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 const storeLayer = fileLayer(filePath);
-const observerLayer = Layer.provide(
-  RuntimeObserver.layerFromProcessStore,
-  storeLayer,
-);
 
 const program = Effect.gen(function* () {
   const store = yield* ProcessStore;
   const events = yield* store.events({
-    types: ["runtime.fact.recorded"],
+    types: ["run-resource.fact.recorded"],
   });
 
-  yield* Effect.log(`runtime facts: ${String(events.length)}`);
+  yield* Effect.log(`run-resource facts: ${String(events.length)}`);
 });
 
 void Effect.runPromise(program.pipe(
-  Effect.provide(Layer.mergeAll(storeLayer, observerLayer)),
+  Effect.provide(storeLayer),
   Effect.provide(platform),
 ));
 ```
@@ -314,54 +310,61 @@ use `@nikscripts/effect-pm/storage/sqlite` and compose
 
 ---
 
-## `RuntimeObserver` (runtime facts/state)
+## `ProcessStoreRunResource` (RunResource facts/state)
+
+> The legacy generic `ProcessStoreRuntime` facet and its `RuntimeFact` /
+> `RuntimeRef` / `RuntimeStateChange` / `RuntimeStateBase` vocabulary have
+> been removed from the public API. `RunResource` now owns its own
+> per-domain facet with concrete typed shapes. The generic envelope still
+> exists at `src/internal/store/factEnvelope.ts` as **internal-only**
+> plumbing used by `ProcessStoreQueueResource`.
 
 | Member | Role |
 |--------|------|
-| `RuntimeRef` | Stable `{ kind, id }` identity for a runtime component. |
-| `RuntimeStateBase` | Base shape for live state snapshots with `ref`, `observedAt`, and `configVersion`. |
-| `RuntimeStateChange` | Generic transition record with previous/current state. |
-| `RuntimeFact` | Generic discrete runtime occurrence payload. |
-| `RunResourceState` | Live `RunResource` counters for waiting, in-flight, completed, failed, interrupted, and total duration. |
-| `RuntimeFactRecordedEvent` | ProcessStore analytics event wrapping a persisted `RuntimeFact`. |
-| `RuntimeStateChangedEvent` | ProcessStore analytics event wrapping a persisted `RuntimeStateChange`. |
-| `RuntimeObserver` | Optional service for publishing runtime facts and state changes. |
-| `RuntimeObserver.publishFact(fact)` | Publishes a fact when the service is present; otherwise no-ops. |
-| `RuntimeObserver.publishStateChange(change)` | Publishes a state transition when the service is present; otherwise no-ops. |
-| `RuntimeObserver.layerFromProcessStore` | Observer layer that persists runtime facts and state changes through `ProcessStore`. |
-| `RuntimeObserver.layerProcessStore` | **Deprecated** alias of `layerFromProcessStore` (name collided with sqlite `layerProcessStore`). |
-| `RuntimeObserver.layerListeners(listeners)` | Observer layer that forwards facts/state changes to scoped listeners and isolates listener failures. |
-| `ProcessStore.runtime.facts(query)` | Generic projection over persisted `runtime.fact.recorded` events. |
-| `ProcessStore.runtime.stateHistory({ ref, opts })` | Generic projection over persisted `runtime.state.changed` events. |
-| `ProcessStore.runtime.latestState(ref)` | Latest persisted runtime state snapshot for a runtime ref. |
-| `ProcessStore.runResource.history(resourceId, opts)` | RunResource-specific fact history projection backed by `runtime.facts`. |
+| `RunResourceRef` | Stable `{ kind: "@nikscripts/effect-pm/RunResource", id }` identity for a RunResource. |
+| `RunResourceState` | Live counters for waiting, in-flight, completed, failed, interrupted, and total duration. |
+| `RunResourceStateChange` | Transition record with previous/current `RunResourceState`. |
+| `RunResourceRunStartedFact` / `RunResourceRunCompletedFact` / `RunResourceRunFailedFact` | Concrete per-event payload types. |
+| `RunResourceFact` | Union of the three concrete fact types. |
+| `RunResourceFactRecordedEvent` | Analytics event wrapping a persisted `RunResourceFact` (`type: "run-resource.fact.recorded"`). |
+| `RunResourceStateChangedEvent` | Analytics event wrapping a persisted `RunResourceStateChange` (`type: "run-resource.state.changed"`). |
+| `ProcessStoreRunResource` | Storage facet for RunResource facts and state changes (replaces the removed `ProcessStoreRuntime` and `RuntimeObserver`). |
+| `ProcessStoreRunResource.Type` / `.EmitType` | Type accessors merged via declaration namespace — full service shape / record-section emit shape. Use to type custom `Layer.succeed` / `provideService` mocks. |
+| `ProcessStoreRunResource.recordRunStarted(fact)` | Static optional emitter — silent no-op when the facet is absent; persistent write when present. The builder wraps every static emitter with a built-in `catchCause + logWarning` so failures never propagate. |
+| `ProcessStoreRunResource.recordRunCompleted(fact)` / `recordRunFailed(fact)` | Same isolation semantics for the other lifecycle facts. |
+| `ProcessStoreRunResource.recordStateChange(change)` | Static optional emitter for state transitions; same isolation semantics. |
+| `ProcessStoreRunResource.recordFactBatch(facts)` / `recordStateChangeBatch(changes)` | Batched optional emitters. |
+| `ProcessStoreRunResource.layerRuntimeStorage` / `.layer` | Facet over injected `RuntimeStorage` (or in-memory `layer`). |
+| `(yield* ProcessStoreRunResource).facts({ resourceId, runId?, types? })` | Per-domain projection over persisted `run-resource.fact.recorded` events. |
+| `(yield* ProcessStoreRunResource).stateHistory({ resourceId })` | Per-domain projection over persisted `run-resource.state.changed` events. |
+| `(yield* ProcessStoreRunResource).latestState(resourceId)` | Latest persisted `RunResourceState` snapshot for a resource. |
+| `(yield* ProcessStoreRunResource).runs(resourceId)` | Paired started + ended (completed / failed) history per run. |
+| `(yield* ProcessStoreRunResource).byRun(runId)` | All facts for one specific run, ordered. |
 
 `RunResource` publishes `run-resource.run.started`,
 `run-resource.run.completed`, and `run-resource.run.failed` facts plus
 `RunResourceState` transitions for waiting, started, completed, failed, and
-interrupted runs when `RuntimeObserver` is provided. Observation is optional:
-when no `RuntimeObserver` service is in the environment, publish helpers no-op
-and the gated effect behavior is unchanged.
+interrupted runs through `ProcessStoreRunResource.recordRunStarted` /
+`recordRunCompleted` / `recordRunFailed` / `recordStateChange`. Observation
+is optional: when no `ProcessStoreRunResource` service is in the
+environment, the static emitters no-op and the gated effect behavior is
+unchanged.
 
-When `RuntimeObserver.layerFromProcessStore` is provided, runtime facts are
-persisted through `ProcessStore` as `runtime.fact.recorded` analytics events.
-Memory and SQLite-backed `RuntimeStorage` support those generic events through
-`ProcessStore.events(query)`. Prefer `layerProcessStore` from
-`@nikscripts/effect-pm/storage/sqlite` for durable local storage.
-`ProcessStore.GroupLog` covers structured group log history; capture/relay uses
-`@nikscripts/effect-pm/Logs`. `@nikscripts/effect-pm/storage/file` and
-`ProcessStore.fileLayer` are **legacy** NDJSON compatibility only — do not use for new code.
-State changes are persisted as `runtime.state.changed` events when
-`RuntimeObserver.layerFromProcessStore` is provided. `ProcessStore.runtime.stateHistory(...)`
-and `ProcessStore.runtime.latestState(...)` derive state projections from the
-same generic event stream.
-`RuntimeObserver.layerListeners(...)` can observe both facts and state changes
-without persistence. Multiple listeners can observe the same event, and listener
-failures are ignored so runtime mutations continue unchanged. Stream helpers are
-still planned.
-`ProcessStore.runtime.facts(query)` and `ProcessStore.runResource.history(...)`
-derive projections from generic event reads; they do not add adapter-specific
-storage APIs.
+When `ProcessStoreRunResource.layerRuntimeStorage` (or the full-stack
+`ProcessStore.layerRuntimeStorage` / `layerProcessStore` from
+`@nikscripts/effect-pm/storage/sqlite`) is composed, facts and state changes
+are persisted as `run-resource.fact.recorded` / `run-resource.state.changed`
+analytics events. `ProcessStore.GroupLog` covers structured group log
+history; capture/relay uses `@nikscripts/effect-pm/Logs`.
+`@nikscripts/effect-pm/storage/file` and `ProcessStore.fileLayer` are
+**legacy** NDJSON compatibility only — do not use for new code.
+
+For in-process listeners (no durability), provide a custom service typed as
+`ProcessStoreRunResource.Type` via `Effect.provideService` or
+`Layer.succeed` that fans out to scoped callbacks (see
+`examples/forms/resource/run-resource-runtime-observer.ts`). A planned
+`ProcessStoreRunResource.live(resourceId): Stream<...>` projection will
+replace the custom-service pattern with a proper subscription stream.
 
 ---
 

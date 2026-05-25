@@ -74,8 +74,10 @@
 | `process.execution.completed` | `Process.ts` (raw append) | `getProcessExecutions` |
 | `process.lifecycle.changed` | `ProcessGroup.ts` (raw append) | `events` / status derivation |
 | `queue.*` | `QueueResource` → **QueueResource facet** | **QueueResource** queries |
-| `runtime.fact.recorded` | `RuntimeObserver.layerFromProcessStore` | `ProcessStore.runtime.facts` |
-| `runtime.state.changed` | same | `ProcessStore.runtime.stateHistory` |
+| `run-resource.fact.recorded` | `ProcessStoreRunResource.recordRunStarted` / `recordRunCompleted` / `recordRunFailed` static optional emitters | `ProcessStoreRunResource.facts` / `.runs` / `.byRun` |
+| `run-resource.state.changed` | `ProcessStoreRunResource.recordStateChange` | `ProcessStoreRunResource.stateHistory` / `.latestState` |
+| `runtime.fact.recorded` *(internal envelope)* | `ProcessStoreQueueResource` plumbing only — not a public emitter | internal spine helpers in `src/internal/store/spine.ts` |
+| `runtime.state.changed` *(internal envelope)* | same | same |
 | `group.log.entry` | **GroupLog** facet / relay | `GroupLog.load` / `query` |
 
 ---

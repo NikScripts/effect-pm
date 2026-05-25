@@ -73,7 +73,7 @@ These are the default assumptions for implementation unless `/grill-me` changes 
 - **No separate `GroupLogStore` service** in v1. Append through **`ProcessStore`** (or `RuntimeStorage` port) as an analytics/event row:
   - Event type: `group.log.entry` (name TBD, stable string).
   - Payload: `ProcessManagerLogEntry` + `groupId` + `endpointLabel` + `entryId` + optional `childPid` / `runId`.
-- Reads: **`ProcessStore.events(query)`** with filters on `groupId`, cursor, limit — same pattern as `runtime.fact.recorded` in [11](./11-runtime-state-hooks-and-config.md).
+- Reads: **`ProcessStore.events(query)`** with filters on `groupId`, cursor, limit — same pattern as `run-resource.fact.recorded` on the per-domain `ProcessStoreRunResource` facet (see [STORAGE.md](../STORAGE.md) and [STORAGE-FACET-AUTHORING-GUIDE.md](../STORAGE-FACET-AUTHORING-GUIDE.md)).
 - Indexes: at minimum `(groupId, entryId)` and `(groupId, date)` on Prisma/SQLite adapters when added.
 
 ### PubNub vs storage

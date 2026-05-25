@@ -10,9 +10,8 @@ import * as NodePath from "@effect/platform-node/NodePath";
 import { Clock, Effect, FileSystem, Layer, Path } from "effect";
 import {
   ProcessStore,
-  ProcessStoreRuntime,
+  ProcessStoreRunResource,
   RunResource,
-  RuntimeObserver,
   type AnalyticsEvent,
 } from "../../../src";
 import { layerProcessStore } from "../../../src/storage/sqlite";
@@ -36,9 +35,7 @@ const program = Effect.gen(function* () {
   yield* fs.remove(sqlitePath).pipe(Effect.catch(() => Effect.void));
   yield* fs.makeDirectory(path.dirname(sqlitePath), { recursive: true }).pipe(Effect.orDie);
 
-  const storeLayer = layerProcessStore({ filename: sqlitePath });
-  const observerLayer = Layer.provide(RuntimeObserver.layer, storeLayer);
-  const live = Layer.mergeAll(storeLayer, observerLayer);
+  const live = layerProcessStore({ filename: sqlitePath });
 
   yield* Effect.gen(function* () {
     const store = yield* ProcessStore;
@@ -60,9 +57,9 @@ const program = Effect.gen(function* () {
 
     yield* gate(41);
 
-    const runtime = yield* ProcessStoreRuntime;
-    const runtimeFacts = yield* runtime.facts({
-      ref: { kind: "run-resource", id: "examples/SqliteBackedGate" },
+    const runs = yield* ProcessStoreRunResource;
+    const runtimeFacts = yield* runs.facts({
+      resourceId: "examples/SqliteBackedGate",
       types: ["run-resource.run.started", "run-resource.run.completed"],
     });
 

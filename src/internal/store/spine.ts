@@ -33,12 +33,20 @@ import {
   type QueryOpts,
   type QueueItemCompletedEvent,
   type QueueLifecycleChangedEvent,
-  type RuntimeFactQuery,
-  type RuntimeStateHistoryQuery,
   type StoreEventQuery,
 } from "../../ProcessStoreEvent";
 import type { ProcessStoreInterface } from "../../ProcessStore";
-import type { RuntimeFact, RuntimeStateChange } from "../../RuntimeState";
+import type {
+  FactEnvelope,
+  FactEnvelopeQuery,
+  FactEnvelopeStateChange,
+  FactEnvelopeStateHistoryQuery,
+} from "./factEnvelope";
+import type {
+  RunResourceFact,
+  RunResourceFactQuery,
+  RunResourceStateChange,
+} from "../../store/runResource";
 import {
   dateFromUnknown,
   isJsonValue,
@@ -80,9 +88,27 @@ export const applyQueryOpts = <T>(
   return filtered.slice(0, Math.max(0, opts.limit));
 };
 
-/** @internal */
-export const byTimestampDesc = <T>(getTimestamp: (row: T) => number) => (a: T, b: T) =>
-  getTimestamp(b) - getTimestamp(a);
+/**
+ * Sort comparator: timestamp descending with deterministic tiebreaker.
+ *
+ * When two rows share an `occurredAt` (common at millisecond resolution) the
+ * `getId` projection produces a stable secondary key so the surface order
+ * matches across runs and across adapters (memory + sqlite). Without a
+ * tiebreaker, `Array.prototype.sort` is stable only within a single sort
+ * call — two ties from the spine vs an adapter could swap order, which
+ * surfaced as flaky `.toEqual([...])` tests on dense-emit gates.
+ *
+ * @internal
+ */
+export const byTimestampDesc = <T>(
+  getTimestamp: (row: T) => number,
+  getId?: (row: T) => string,
+) => (a: T, b: T) => {
+  const byTime = getTimestamp(b) - getTimestamp(a);
+  if (byTime !== 0) return byTime;
+  if (getId === undefined) return 0;
+  return getId(b).localeCompare(getId(a));
+};
 
 /** @internal */
 export const matchesStoreEventQuery =
@@ -176,9 +202,9 @@ export const isQueueLifecycleChanged = (
 ): event is QueueLifecycleChangedEvent =>
   event.type === "queue.lifecycle.changed" && event.entityType === "queue";
 
-const matchesRuntimeFactQuery =
-  (query: RuntimeFactQuery | undefined) =>
-  (fact: RuntimeFact): boolean => {
+const matchesFactEnvelopeQuery =
+  (query: FactEnvelopeQuery | undefined) =>
+  (fact: FactEnvelope): boolean => {
     if (query?.ref !== undefined) {
       if (fact.ref.kind !== query.ref.kind || fact.ref.id !== query.ref.id) {
         return false;
@@ -194,9 +220,9 @@ const matchesRuntimeFactQuery =
     return true;
   };
 
-/** @internal */
-export const runtimeFactStoreQuery = (
-  query: RuntimeFactQuery | undefined,
+/** @internal Used by {@link ProcessStoreQueueResource} read paths. */
+export const factEnvelopeStoreQuery = (
+  query: FactEnvelopeQuery | undefined,
 ): StoreEventQuery => ({
   entityType: query?.ref?.kind,
   entityId: query?.ref?.id,
@@ -210,15 +236,15 @@ export const runtimeFactStoreQuery = (
 });
 
 /** @internal */
-export const runtimeFactsFromEvents = (
+export const factEnvelopesFromEvents = (
   events: ReadonlyArray<AnalyticsEvent>,
-  query: RuntimeFactQuery | undefined,
-): RuntimeFact[] => {
-  const out: RuntimeFact[] = [];
+  query: FactEnvelopeQuery | undefined,
+): FactEnvelope[] => {
+  const out: FactEnvelope[] = [];
   for (const event of events) {
     if (
       event.type === "runtime.fact.recorded" &&
-      matchesRuntimeFactQuery(query)(event.fact)
+      matchesFactEnvelopeQuery(query)(event.fact)
     ) {
       out.push(event.fact);
     }
@@ -227,8 +253,8 @@ export const runtimeFactsFromEvents = (
 };
 
 /** @internal */
-export const runtimeStateStoreQuery = (
-  query: RuntimeStateHistoryQuery,
+export const factEnvelopeStateStoreQuery = (
+  query: FactEnvelopeStateHistoryQuery,
 ): StoreEventQuery => ({
   entityType: query.ref.kind,
   entityId: query.ref.id,
@@ -237,14 +263,92 @@ export const runtimeStateStoreQuery = (
 });
 
 /** @internal */
-export const runtimeStateChangesFromEvents = (
+export const factEnvelopeStateChangesFromEvents = (
   events: ReadonlyArray<AnalyticsEvent>,
-): RuntimeStateChange[] => {
-  const out: RuntimeStateChange[] = [];
+): FactEnvelopeStateChange[] => {
+  const out: FactEnvelopeStateChange[] = [];
   for (const event of events) {
     if (event.type === "runtime.state.changed") {
       out.push(event.change);
     }
+  }
+  return out;
+};
+
+// ============================================================================
+// RunResource per-domain helpers (run-resource.fact.recorded /
+// run-resource.state.changed wire event types)
+// ============================================================================
+
+const matchesRunResourceFactQuery =
+  (query: RunResourceFactQuery | undefined) =>
+  (fact: RunResourceFact): boolean => {
+    if (query?.resourceId !== undefined && fact.resourceId !== query.resourceId) {
+      return false;
+    }
+    if (query?.runId !== undefined && fact.runId !== query.runId) {
+      return false;
+    }
+    if (
+      query?.types !== undefined &&
+      query.types.length > 0 &&
+      !query.types.includes(fact.type)
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+/** @internal */
+export const runResourceFactStoreQuery = (
+  query: RunResourceFactQuery | undefined,
+): StoreEventQuery => ({
+  entityType: "run-resource",
+  entityId: query?.resourceId,
+  types: ["run-resource.fact.recorded"],
+  opts: query?.opts === undefined
+    ? undefined
+    : { before: query.opts.before, after: query.opts.after },
+});
+
+/** @internal */
+export const runResourceFactsFromEvents = (
+  events: ReadonlyArray<AnalyticsEvent>,
+  query: RunResourceFactQuery | undefined,
+): RunResourceFact[] => {
+  const out: RunResourceFact[] = [];
+  for (const event of events) {
+    if (
+      event.type === "run-resource.fact.recorded" &&
+      matchesRunResourceFactQuery(query)(event.fact)
+    ) {
+      out.push(event.fact);
+    }
+  }
+  return applyQueryOpts(out, query?.opts, (fact) => fact.occurredAt);
+};
+
+/** @internal */
+export const runResourceStateChangedEventQuery = (
+  resourceId: string | undefined,
+): StoreEventQuery => ({
+  entityType: "run-resource",
+  entityId: resourceId,
+  types: ["run-resource.state.changed"],
+});
+
+/** @internal */
+export const runResourceStateChangesFromEvents = (
+  events: ReadonlyArray<AnalyticsEvent>,
+  resourceId?: string,
+): RunResourceStateChange[] => {
+  const out: RunResourceStateChange[] = [];
+  for (const event of events) {
+    if (event.type !== "run-resource.state.changed") continue;
+    if (resourceId !== undefined && event.change.resourceId !== resourceId) {
+      continue;
+    }
+    out.push(event.change);
   }
   return out;
 };
@@ -348,6 +452,8 @@ const isLegacyEventRecordType = (type: string): type is Exclude<
     case "queue.item.completed":
     case "queue.lifecycle.changed":
     case "runtime.state.changed":
+    case "run-resource.fact.recorded":
+    case "run-resource.state.changed":
     case "group.log.entry":
       return true;
     default:
@@ -504,7 +610,7 @@ export const makeProcessStoreSpine = (
     Effect.map(storage.read(), (records) => {
       const rows = recordsToEvents(records)
         .filter(matchesStoreEventQuery(query))
-        .sort(byTimestampDesc((event) => event.occurredAt));
+        .sort(byTimestampDesc((event) => event.occurredAt, (event) => event.id));
       return applyQueryOpts(rows, query?.opts, (event) => event.occurredAt);
     });
 
@@ -697,7 +803,7 @@ export const makeFileProcessStoreSpine = (
       Effect.map(readEvents, (storedEvents) => {
         const rows = storedEvents
           .filter(matchesStoreEventQuery(query))
-          .sort(byTimestampDesc((event) => event.occurredAt));
+          .sort(byTimestampDesc((event) => event.occurredAt, (event) => event.id));
         return applyQueryOpts(rows, query?.opts, (event) => event.occurredAt);
       });
 

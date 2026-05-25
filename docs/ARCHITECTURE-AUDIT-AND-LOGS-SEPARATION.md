@@ -39,10 +39,11 @@ Two symbols must not share one name:
 
 | Symbol | Location | Meaning |
 |--------|----------|---------|
-| `layerProcessStore` | `storage/sqlite` | SQLite `RuntimeStorage` + `ProcessStore` |
-| `RuntimeObserver.layerProcessStore` | `RuntimeState.ts` | `RuntimeObserver` backed by an existing `ProcessStore` |
+| `layerProcessStore` | `storage/sqlite` | SQLite `RuntimeStorage` + full `ProcessStore` (combiner of facet layers) |
+| `ProcessStoreRunResource.layerRuntimeStorage` | `store/RunResource` | `ProcessStoreRunResource` facet on top of injected `RuntimeStorage` |
+| `ProcessStoreRunResource.layer` | `store/RunResource` | `ProcessStoreRunResource` facet + in-memory `RuntimeStorage` (dev/test) |
 
-**Resolved:** `RuntimeObserver.layerFromProcessStore` (deprecated alias `RuntimeObserver.layerProcessStore`). Sqlite keeps `layerProcessStore` on `@nikscripts/effect-pm/storage/sqlite`.
+**Resolved:** the legacy `RuntimeObserver` and generic `ProcessStoreRuntime` facet are removed. Persistence now flows through the per-domain `ProcessStoreRunResource` facet's per-type static optional emitters (`recordRunStarted` / `recordRunCompleted` / `recordRunFailed` / `recordStateChange`) and the facet layer composed at app/group scope. New domains follow the per-domain rule — see [STORAGE-FACET-AUTHORING-GUIDE.md](./STORAGE-FACET-AUTHORING-GUIDE.md).
 
 ---
 
@@ -204,7 +205,7 @@ Use this as the PR sequence; each item should have tests/docs updated in the sam
 - [x] **L6** — Root `index.ts` re-exports capture/relay from `./Logs.js`.
 - [x] **L7** — `STORAGE.md`, `PROCESS-API.md`, `PACKAGE-GUIDE.md`, `examples/README.md` updated.
 - [x] **L8** — Integration test: capture → relay → SQLite → `ProcessStore.GroupLog.load` (`test/process-manager-log-pipeline.test.ts`).
-- [x] **L9** — `RuntimeObserver.layerFromProcessStore` (+ deprecated alias).
+- [x] **L9** — `ProcessStoreRunResource` (per-domain replacement for the removed generic `ProcessStoreRuntime` facet) replaces `RuntimeObserver.layerFromProcessStore` (legacy observer removed).
 - [ ] **L10** — Changeset (user approval) for public API rename `Logs` → `GroupLog` on store and restored `./Logs` subpath.
 
 ---

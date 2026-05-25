@@ -1,5 +1,18 @@
 # 10 - Plan 01 phase one: ProcessStore read foundation
 
+## Status
+
+**Largely superseded.** Phase one's generic `events(query)` reader is still
+the underlying spine API in `src/internal/store/spine.ts`, but the public
+shape has moved on: `ProcessStore` is a layer combiner only, and all reads
+live on **per-domain facets** (`ProcessStoreRunResource`,
+`ProcessStoreQueueResource`, `ProcessStoreGroupLog`, `ProcessStoreProcessLifecycle`).
+References to a generic `runtime.fact.recorded` reader on `ProcessStore`,
+`RuntimeObserver.layerProcessStore`, or a singleton `ProcessStoreInterface`
+should be read as historical context only. Current rules and migration
+recipe: [STORAGE.md](../STORAGE.md), [STORAGE-AGENT-HANDBOOK.md](../STORAGE-AGENT-HANDBOOK.md),
+[STORAGE-FACET-AUTHORING-GUIDE.md](../STORAGE-FACET-AUTHORING-GUIDE.md).
+
 ## Purpose
 
 This document replaces the old cross-plan roadmap with a focused implementation

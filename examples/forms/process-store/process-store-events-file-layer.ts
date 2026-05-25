@@ -12,9 +12,8 @@ import * as NodePath from "@effect/platform-node/NodePath";
 import { Clock, Effect, FileSystem, Layer, Path } from "effect";
 import {
   ProcessStore,
-  ProcessStoreRuntime,
+  ProcessStoreRunResource,
   RunResource,
-  RuntimeObserver,
   type AnalyticsEvent,
 } from "../../../src";
 import { fileLayer } from "../../../src/storage/file";
@@ -38,10 +37,7 @@ const program = Effect.gen(function* () {
   // Keep the demo deterministic while leaving the final NDJSON file inspectable.
   yield* fs.remove(filePath).pipe(Effect.catch(() => Effect.void));
 
-  const storeLayer = fileLayer(filePath);
-  const runtimeLayer = ProcessStoreRuntime.layer;
-  const observerLayer = Layer.provide(RuntimeObserver.layer, runtimeLayer);
-  const live = Layer.mergeAll(storeLayer, runtimeLayer, observerLayer);
+  const live = Layer.mergeAll(fileLayer(filePath), ProcessStoreRunResource.layer);
 
   yield* Effect.gen(function* () {
     const store = yield* ProcessStore;
@@ -63,9 +59,9 @@ const program = Effect.gen(function* () {
 
     yield* gate(41);
 
-    const runtime = yield* ProcessStoreRuntime;
-    const runtimeFacts = yield* runtime.facts({
-      ref: { kind: "run-resource", id: "examples/FileBackedGate" },
+    const runs = yield* ProcessStoreRunResource;
+    const runtimeFacts = yield* runs.facts({
+      resourceId: "examples/FileBackedGate",
     });
 
     const processEvents = yield* store.events({

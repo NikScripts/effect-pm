@@ -99,7 +99,7 @@ export {
   type HttpApiResourceLayerEffectConfig,
 } from "./HttpApiResource";
 export { Resource } from "./Resource";
-export { RuntimeObserver } from "./RuntimeState";
+export { ProcessStoreBuilder } from "./ProcessStoreBuilder";
 export { ControlService } from "./ControlService";
 export {
   ControlRouter,
@@ -270,8 +270,6 @@ export {
   ProcessStoreReadonlyRecordError,
   type QueryOpts,
   type StoreEventQuery,
-  type RuntimeFactQuery,
-  type RuntimeStateHistoryQuery,
   type AnalyticsEventBase,
   type ProcessExecutionCompletedEvent,
   type ProcessLifecycleTag,
@@ -289,19 +287,32 @@ export {
   type ProcessStoreQueueResourceLifecycleInput,
   type ProcessStoreQueueResourceLifecycleTag,
   type ProcessStoreQueueResourcePriority,
-  type RuntimeFactRecordedEvent,
-  type RuntimeStateChangedEvent,
+  type RunResourceFactRecordedEvent,
+  type RunResourceStateChangedEvent,
   type AnalyticsEvent,
   type ProcessStoreGroupLogApi,
   type ProcessStoreInterface,
   type ProcessStoreWriteError,
 } from "./ProcessStore";
 
-export {
-  ProcessStoreRuntime,
-  persistRuntimeObservation,
-  type ProcessStoreRuntimeApi,
-} from "./store/runtime";
+export { ProcessStoreRunResource } from "./store/runResource";
+export type {
+  RunResourceFact,
+  RunResourceFactQuery,
+  RunResourceFactType,
+  RunResourceRef,
+  RunResourceRun,
+  RunResourceRunCompletedFact,
+  RunResourceRunCompletedPayload,
+  RunResourceRunFailedFact,
+  RunResourceRunFailedPayload,
+  RunResourceRunStartedFact,
+  RunResourceRunStartedPayload,
+  RunResourceState,
+  RunResourceStateChange,
+  RunResourceStateChangeReason,
+  RunResourceStateHistoryQuery,
+} from "./store/runResource";
 
 // Types - ProcessGroup
 export type {
@@ -428,29 +439,9 @@ export {
 export type {
   RunResourceConfig,
   RunGate,
-  RunResourceFact,
-  RunResourceFactPayload,
-  RunResourceFactType,
-  RunResourceRef,
-  RunResourceRunCompletedPayload,
-  RunResourceRunFailedPayload,
-  RunResourceRunStartedPayload,
   RunResourceRunner,
   RunResourceRunnerConfig,
-  RunResourceState,
-  RunResourceStateChange,
-  RunResourceStateChangeReason,
 } from "./RunResource";
-
-// Types - RuntimeState
-export type {
-  RuntimeFact,
-  RuntimeObserverService,
-  RuntimeObserverListener,
-  RuntimeRef,
-  RuntimeStateBase,
-  RuntimeStateChange,
-} from "./RuntimeState";
 
 // Types - Control Service
 export type {

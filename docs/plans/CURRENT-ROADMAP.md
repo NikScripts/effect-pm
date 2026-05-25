@@ -61,32 +61,47 @@ Use [11](./11-runtime-state-hooks-and-config.md) as the active implementation
 plan for this phase, and reconcile storage work with
 [10](./10-process-store-phase-one.md) before adding public store methods.
 
-1. Keep `ProcessStore` as the public storage service name for the first slice;
-   `RuntimeRef`, `RuntimeStateBase`, `RuntimeStateChange`, `RuntimeFact`, and
-   optional `RuntimeObserver` are now implemented without renaming storage.
-   `ProcessStore` is the rich module-facing singleton facade; `RuntimeStorage`
-   is the generic swappable storage boundary underneath it.
-2. `RunResource` is the first observed runtime because it is a low-risk gate with
-   no queue payloads, no schema work, and no background workers. It now publishes
-   run started/completed/failed facts plus `RunResourceState` changes when
-   `RuntimeObserver` is provided, supports scoped listener layers, and no-ops
-   when it is absent.
-3. `RuntimeObserver.layerProcessStore` now bridges runtime facts into
-   `ProcessStore` as `runtime.fact.recorded` analytics events and state changes
-   as `runtime.state.changed` analytics events.
-4. `ProcessStore.events(query)` now reads `runtime.fact.recorded` and existing
-   analytics events across memory, file-backed, and Prisma stores without
-   feature-specific read methods.
-5. The first file-backed `ProcessStore` adapter now uses Effect `FileSystem`;
-   it is append-only and generic so it can later become a `RuntimeStorage`
-   adapter.
-6. Dedicated queue completion/lifecycle reads are now available across memory,
-   file-backed, and Prisma stores. `ProcessStore.runtime.facts(query)` and
-   `ProcessStore.runResource.history(...)` now prove typed projections can sit
-   over generic event reads without adapter-specific APIs.
-7. Keep `RuntimeStorage` planned as the generic storage port under
-   `ProcessStore`, with memory/file-backed/Prisma adapters implementing that port
-   rather than module-specific APIs.
+**Status note (Phase C cut-over to per-domain facets):** The original Phase C
+landed a generic `RuntimeFact` / `RuntimeRef` / `RuntimeStateChange` vocabulary
+and a generic `ProcessStoreRuntime` facet (plus a separate `RuntimeObserver`).
+Both have since been removed from the public API in favour of **one facet per
+domain** with concrete typed shapes. See
+[STORAGE-FACET-AUTHORING-GUIDE.md](../STORAGE-FACET-AUTHORING-GUIDE.md) and
+[STORAGE.md](../STORAGE.md) for the current rules. The generic envelope still
+exists at `src/internal/store/factEnvelope.ts` as internal-only plumbing for
+`ProcessStoreQueueResource`; new facets must publish their own concrete event
+types and never depend on it.
+
+1. Keep `ProcessStore` as the public storage **combiner** name; per-domain
+   facets (`ProcessStoreRunResource`, `ProcessStoreQueueResource`,
+   `ProcessStoreGroupLog`, `ProcessStoreProcessLifecycle`, …) own their concrete
+   `*Ref` / `*Fact` / `*StateChange` / `*State` types. `RuntimeStorage` remains
+   the generic swappable storage boundary underneath them.
+2. `RunResource` was the first observed runtime because it is a low-risk gate
+   with no queue payloads, no schema work, and no background workers. It now
+   publishes run started/completed/failed facts plus `RunResourceState` changes
+   through `ProcessStoreRunResource`'s per-type static optional emitters and
+   no-ops when the facet layer is absent.
+3. The legacy `RuntimeObserver.layerProcessStore` bridge has been removed.
+   `RunResource` writes directly through `ProcessStoreRunResource.recordRunStarted`
+   / `.recordRunCompleted` / `.recordRunFailed` / `.recordStateChange`, persisting
+   as `run-resource.fact.recorded` / `run-resource.state.changed` analytics
+   events when the facet layer is composed.
+4. `ProcessStore.events(query)` reads the new `run-resource.fact.recorded` and
+   existing analytics events across memory, file-backed, and SQLite stores
+   without feature-specific read methods.
+5. The file-backed `ProcessStore` adapter now uses Effect `FileSystem`; it is
+   append-only and generic so it can later become a full `RuntimeStorage`
+   adapter. SQLite is the production target via `layerProcessStore` from
+   `@nikscripts/effect-pm/storage/sqlite`.
+6. Per-domain projections live on each facet (e.g.
+   `ProcessStoreRunResource.facts({ resourceId, runId?, types? })`,
+   `.runs(resourceId)`, `.byRun(runId)`, `.stateHistory({ resourceId })`,
+   `.latestState(resourceId)`) — there is **no** `ProcessStore.runtime.*` /
+   `ProcessStore.runResource.*` namespace on the combiner.
+7. Keep `RuntimeStorage` as the generic storage port under the combiner,
+   with memory/file-backed/SQLite adapters implementing that port rather than
+   module-specific APIs.
 
 Primary references:
 

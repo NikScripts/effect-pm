@@ -15,6 +15,8 @@ import type {
   QueueLifecycleChangedEvent,
   QueueLifecycleTag,
   GroupLogEntryRecordedEvent,
+  RunResourceFactRecordedEvent,
+  RunResourceStateChangedEvent,
   RuntimeFactRecordedEvent,
   RuntimeStateChangedEvent,
 } from "../../ProcessStoreEvent";
@@ -24,11 +26,18 @@ import type {
   JsonValue,
 } from "../../ProcessStoreEvent";
 import type {
-  RuntimeFact,
-  RuntimeRef,
-  RuntimeStateBase,
-  RuntimeStateChange,
-} from "../../RuntimeState";
+  FactEnvelope,
+  FactEnvelopeRef,
+  FactEnvelopeStateBase,
+  FactEnvelopeStateChange,
+} from "./factEnvelope";
+import type {
+  RunResourceFact,
+  RunResourceFactType,
+  RunResourceState,
+  RunResourceStateChange,
+  RunResourceStateChangeReason,
+} from "../../store/runResource";
 import {
   dateFromMillis,
   epochMillisFromUnknown,
@@ -113,6 +122,29 @@ const isQueueLifecycleTag = (value: unknown): value is QueueLifecycleTag =>
   isString(value) &&
   includesString(queueLifecycleTags, value);
 
+const runResourceFactTypes: ReadonlyArray<RunResourceFactType> = [
+  "run-resource.run.started",
+  "run-resource.run.completed",
+  "run-resource.run.failed",
+];
+
+const isRunResourceFactType = (value: unknown): value is RunResourceFactType =>
+  isString(value) && includesString(runResourceFactTypes, value);
+
+const runResourceStateChangeReasons: ReadonlyArray<RunResourceStateChangeReason> = [
+  "run-resource.run.waiting",
+  "run-resource.run.started",
+  "run-resource.run.completed",
+  "run-resource.run.failed",
+  "run-resource.run.interrupted",
+  "run-resource.run.wait.interrupted",
+];
+
+const isRunResourceStateChangeReason = (
+  value: unknown,
+): value is RunResourceStateChangeReason =>
+  isString(value) && includesString(runResourceStateChangeReasons, value);
+
 /**
  * Convert an {@link AnalyticsEvent} into a storage create input.
  *
@@ -180,6 +212,26 @@ export const encodeEvent = (event: AnalyticsEvent): EffectPmEventCreateInput => 
         entityId: event.entityId,
         attributes,
         payload: encodeRuntimeStatePayload(event),
+      };
+    case "run-resource.fact.recorded":
+      return {
+        id: event.id,
+        type: event.type,
+        occurredAt: dateFromMillis(event.occurredAt),
+        entityType: event.entityType,
+        entityId: event.entityId,
+        attributes,
+        payload: encodeRunResourceFactPayload(event),
+      };
+    case "run-resource.state.changed":
+      return {
+        id: event.id,
+        type: event.type,
+        occurredAt: dateFromMillis(event.occurredAt),
+        entityType: event.entityType,
+        entityId: event.entityId,
+        attributes,
+        payload: encodeRunResourceStatePayload(event),
       };
     case "group.log.entry":
       return {
@@ -272,6 +324,18 @@ const encodeRuntimeStatePayload = (
   change: toJsonValue(event.change),
 });
 
+const encodeRunResourceFactPayload = (
+  event: RunResourceFactRecordedEvent,
+): JsonValue => ({
+  fact: toJsonValue(event.fact),
+});
+
+const encodeRunResourceStatePayload = (
+  event: RunResourceStateChangedEvent,
+): JsonValue => ({
+  change: toJsonValue(event.change),
+});
+
 const encodeGroupLogEntryPayload = (
   event: GroupLogEntryRecordedEvent,
 ): JsonValue => ({
@@ -319,6 +383,10 @@ export const decodeEventRow = (
       return decodeRuntimeFact(row);
     case "runtime.state.changed":
       return decodeRuntimeState(row);
+    case "run-resource.fact.recorded":
+      return decodeRunResourceFact(row);
+    case "run-resource.state.changed":
+      return decodeRunResourceState(row);
     case "group.log.entry":
       return decodeGroupLogEntry(row);
     default:
@@ -331,7 +399,7 @@ export const decodeEventRow = (
 
 const decodeRuntimeRef = (
   value: unknown,
-): RuntimeRef | null => {
+): FactEnvelopeRef | null => {
   if (!isRecord(value)) {
     return null;
   }
@@ -345,7 +413,7 @@ const decodeRuntimeRef = (
 
 const decodeRuntimeFactValue = (
   value: unknown,
-): RuntimeFact | null => {
+): FactEnvelope | null => {
   if (!isRecord(value)) {
     return null;
   }
@@ -376,7 +444,7 @@ const decodeRuntimeFactValue = (
 
 const decodeRuntimeStateValue = (
   value: unknown,
-): RuntimeStateBase | null => {
+): FactEnvelopeStateBase | null => {
   if (!isRecord(value)) {
     return null;
   }
@@ -400,7 +468,7 @@ const decodeRuntimeStateValue = (
 
 const decodeRuntimeStateChangeValue = (
   value: unknown,
-): RuntimeStateChange | null => {
+): FactEnvelopeStateChange | null => {
   if (!isRecord(value)) {
     return null;
   }
@@ -424,6 +492,151 @@ const decodeRuntimeStateChangeValue = (
   return {
     id,
     ref,
+    changedAt,
+    reason,
+    previous,
+    current,
+  };
+};
+
+const decodeRunResourceFactValue = (
+  value: unknown,
+): RunResourceFact | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const id = value["id"];
+  const resourceId = value["resourceId"];
+  const runId = value["runId"];
+  const type = value["type"];
+  const occurredAt = value["occurredAt"];
+  const payload = value["payload"];
+  if (
+    !isString(id) ||
+    !isString(resourceId) ||
+    !isString(runId) ||
+    !isRunResourceFactType(type) ||
+    !isFiniteNumber(occurredAt) ||
+    !isRecord(payload)
+  ) {
+    return null;
+  }
+  const attributes = decodeAttributes(
+    value["attributes"] === undefined
+      ? null
+      : toJsonValue(value["attributes"]),
+  );
+  switch (type) {
+    case "run-resource.run.started": {
+      const concurrency = payload["concurrency"];
+      if (!isFiniteNumber(concurrency)) return null;
+      return {
+        id,
+        resourceId,
+        runId,
+        type,
+        occurredAt,
+        payload: { concurrency },
+        ...(attributes === undefined ? {} : { attributes }),
+      };
+    }
+    case "run-resource.run.completed": {
+      const durationMs = payload["durationMs"];
+      if (!isFiniteNumber(durationMs)) return null;
+      return {
+        id,
+        resourceId,
+        runId,
+        type,
+        occurredAt,
+        payload: { durationMs },
+        ...(attributes === undefined ? {} : { attributes }),
+      };
+    }
+    case "run-resource.run.failed": {
+      const durationMs = payload["durationMs"];
+      const cause = payload["cause"];
+      if (!isFiniteNumber(durationMs) || !isString(cause)) return null;
+      return {
+        id,
+        resourceId,
+        runId,
+        type,
+        occurredAt,
+        payload: { durationMs, cause },
+        ...(attributes === undefined ? {} : { attributes }),
+      };
+    }
+  }
+};
+
+const decodeRunResourceStateValue = (
+  value: unknown,
+): RunResourceState | null => {
+  if (!isRecord(value)) return null;
+  const resourceId = value["resourceId"];
+  const observedAt = value["observedAt"];
+  const configVersion = value["configVersion"];
+  const concurrency = value["concurrency"];
+  const waiting = value["waiting"];
+  const inFlight = value["inFlight"];
+  const completed = value["completed"];
+  const failed = value["failed"];
+  const interrupted = value["interrupted"];
+  const totalDurationMs = value["totalDurationMs"];
+  if (
+    !isString(resourceId) ||
+    !isFiniteNumber(observedAt) ||
+    !isFiniteNumber(configVersion) ||
+    !isFiniteNumber(concurrency) ||
+    !isFiniteNumber(waiting) ||
+    !isFiniteNumber(inFlight) ||
+    !isFiniteNumber(completed) ||
+    !isFiniteNumber(failed) ||
+    !isFiniteNumber(interrupted) ||
+    !isFiniteNumber(totalDurationMs)
+  ) {
+    return null;
+  }
+  return {
+    resourceId,
+    observedAt,
+    configVersion,
+    concurrency,
+    waiting,
+    inFlight,
+    completed,
+    failed,
+    interrupted,
+    totalDurationMs,
+  };
+};
+
+const decodeRunResourceStateChangeValue = (
+  value: unknown,
+): RunResourceStateChange | null => {
+  if (!isRecord(value)) return null;
+  const id = value["id"];
+  const resourceId = value["resourceId"];
+  const changedAt = value["changedAt"];
+  const reason = value["reason"];
+  const previousRaw = value["previous"];
+  const previous =
+    previousRaw === null ? null : decodeRunResourceStateValue(previousRaw);
+  const current = decodeRunResourceStateValue(value["current"]);
+  if (
+    !isString(id) ||
+    !isString(resourceId) ||
+    !isFiniteNumber(changedAt) ||
+    !isRunResourceStateChangeReason(reason) ||
+    (previousRaw !== null && previous === null) ||
+    current === null
+  ) {
+    return null;
+  }
+  return {
+    id,
+    resourceId,
     changedAt,
     reason,
     previous,
@@ -690,6 +903,68 @@ const decodeRuntimeState = (
     type: "runtime.state.changed",
     occurredAt: row.occurredAt.getTime(),
     entityType: row.entityType,
+    entityId: row.entityId,
+    attributes: decodeAttributes(row.attributes),
+    change,
+  };
+};
+
+const decodeRunResourceFact = (
+  row: EffectPmEventRow,
+): RunResourceFactRecordedEvent | ProcessStoreEventDecodeError => {
+  if (row.entityType !== "run-resource") {
+    return new ProcessStoreEventDecodeError({
+      rowId: row.id,
+      reason: `entityType must be "run-resource" for run-resource fact events, got ${row.entityType}`,
+    });
+  }
+  const payload = row.payload;
+  if (!isRecord(payload)) {
+    return new ProcessStoreEventDecodeError({
+      rowId: row.id,
+      reason: "payload is not an object",
+    });
+  }
+  const fact = decodeRunResourceFactValue(payload["fact"]);
+  if (fact === null) {
+    return failPayload(row, "fact");
+  }
+  return {
+    id: row.id,
+    type: "run-resource.fact.recorded",
+    occurredAt: row.occurredAt.getTime(),
+    entityType: "run-resource",
+    entityId: row.entityId,
+    attributes: decodeAttributes(row.attributes),
+    fact,
+  };
+};
+
+const decodeRunResourceState = (
+  row: EffectPmEventRow,
+): RunResourceStateChangedEvent | ProcessStoreEventDecodeError => {
+  if (row.entityType !== "run-resource") {
+    return new ProcessStoreEventDecodeError({
+      rowId: row.id,
+      reason: `entityType must be "run-resource" for run-resource state events, got ${row.entityType}`,
+    });
+  }
+  const payload = row.payload;
+  if (!isRecord(payload)) {
+    return new ProcessStoreEventDecodeError({
+      rowId: row.id,
+      reason: "payload is not an object",
+    });
+  }
+  const change = decodeRunResourceStateChangeValue(payload["change"]);
+  if (change === null) {
+    return failPayload(row, "change");
+  }
+  return {
+    id: row.id,
+    type: "run-resource.state.changed",
+    occurredAt: row.occurredAt.getTime(),
+    entityType: "run-resource",
     entityId: row.entityId,
     attributes: decodeAttributes(row.attributes),
     change,

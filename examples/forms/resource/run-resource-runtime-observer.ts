@@ -1,39 +1,85 @@
 /**
  * @module examples/forms/resource/run-resource-runtime-observer
  *
- * RunResource runtime facts and state changes through RuntimeObserver.
+ * `RunResource` facts and state changes through `ProcessStoreRunResource`.
  *
- * - **In-process:** `RuntimeObserver.layerListeners` (this script).
- * - **Durable:** compose `layerProcessStore` + `RuntimeObserver.layer`
- *   at app scope (see {@link RunResource} module doc).
+ * - **In-process:** provide a custom `ProcessStoreRunResource`-shaped
+ *   service whose record methods fan out to scoped callbacks. The static
+ *   emitters used by `RunResource.make` wrap each call with a built-in
+ *   `catchCause + logWarning` so a listener that fails cannot change the
+ *   gated effect's success/error channel. A planned future feature
+ *   (`ProcessStoreRunResource.live(resourceId)`) will replace this with a
+ *   proper `Stream` subscription.
+ * - **Durable:** compose `layerProcessStore` at app scope (see the
+ *   {@link RunResource} module doc).
  *
  * Run: `npx tsx examples/forms/resource/run-resource-runtime-observer.ts`
  */
 
-import { Effect, Ref } from "effect";
+import { Effect, Layer, Option, Ref } from "effect";
 import {
+  ProcessStoreRunResource,
   RunResource,
-  RuntimeObserver,
-  type RuntimeObserverListener,
+  type RunResourceFact,
   type RunResourceState,
-  type RuntimeStateBase,
-  type RuntimeStateChange,
+  type RunResourceStateChange,
 } from "../../../src";
 
-const isRunResourceState = (
-  state: RuntimeStateBase,
-): state is RunResourceState => state.ref.kind === "run-resource";
+interface RunResourceObservationListener {
+  readonly onFact?: (fact: RunResourceFact) => Effect.Effect<void, unknown>;
+  readonly onStateChange?: (
+    change: RunResourceStateChange,
+  ) => Effect.Effect<void, unknown>;
+}
+
+const observerFacet = (
+  listeners: ReadonlyArray<RunResourceObservationListener>,
+): ProcessStoreRunResource.Type => {
+  const fanFact = (fact: RunResourceFact): Effect.Effect<void> =>
+    Effect.forEach(
+      listeners,
+      (listener) =>
+        listener.onFact === undefined
+          ? Effect.void
+          : listener.onFact(fact).pipe(Effect.ignore),
+      { discard: true },
+    );
+  const fanState = (change: RunResourceStateChange): Effect.Effect<void> =>
+    Effect.forEach(
+      listeners,
+      (listener) =>
+        listener.onStateChange === undefined
+          ? Effect.void
+          : listener.onStateChange(change).pipe(Effect.ignore),
+      { discard: true },
+    );
+  return {
+    recordRunStarted: fanFact,
+    recordRunCompleted: fanFact,
+    recordRunFailed: fanFact,
+    recordStateChange: fanState,
+    recordFactBatch: (facts) =>
+      Effect.forEach(facts, fanFact, { discard: true }),
+    recordStateChangeBatch: (changes) =>
+      Effect.forEach(changes, fanState, { discard: true }),
+    facts: () => Effect.succeed([]),
+    stateHistory: () => Effect.succeed([]),
+    latestState: () => Effect.succeed(Option.none()),
+    runs: () => Effect.succeed([]),
+    byRun: () => Effect.succeed([]),
+  };
+};
 
 const program = Effect.gen(function* () {
   const factTypes = yield* Ref.make<ReadonlyArray<string>>([]);
   const stateReasons = yield* Ref.make<ReadonlyArray<string>>([]);
-  const stateChanges = yield* Ref.make<ReadonlyArray<RuntimeStateChange>>([]);
+  const stateChanges = yield* Ref.make<ReadonlyArray<RunResourceStateChange>>([]);
 
-  const factListener: RuntimeObserverListener = {
+  const factListener: RunResourceObservationListener = {
     onFact: (fact) => Ref.update(factTypes, (items) => [...items, fact.type]),
   };
 
-  const stateListener: RuntimeObserverListener = {
+  const stateListener: RunResourceObservationListener = {
     onStateChange: (change) =>
       Effect.all(
         [
@@ -44,17 +90,14 @@ const program = Effect.gen(function* () {
       ),
   };
 
-  // Listener failures are ignored by RuntimeObserver.layerListeners so
-  // observation cannot change the gated effect success/error channel.
-  const failingListener: RuntimeObserverListener = {
+  const failingListener: RunResourceObservationListener = {
     onFact: () => Effect.fail("listener failure is isolated"),
   };
 
-  const observerLayer = RuntimeObserver.layerListeners([
-    factListener,
-    stateListener,
-    failingListener,
-  ]);
+  const observerLayer = Layer.succeed(
+    ProcessStoreRunResource,
+    observerFacet([factListener, stateListener, failingListener]),
+  );
 
   yield* Effect.gen(function* () {
     const gate = yield* RunResource.make({
@@ -70,17 +113,11 @@ const program = Effect.gen(function* () {
     const observedFactTypes = yield* Ref.get(factTypes);
     const observedStateReasons = yield* Ref.get(stateReasons);
     const observedChanges = yield* Ref.get(stateChanges);
-    const runStates = observedChanges
-      .map((change) => change.current)
-      .filter(isRunResourceState);
-    const latestState = runStates.at(-1);
+    const latestState: RunResourceState | undefined =
+      observedChanges.at(-1)?.current ?? undefined;
 
-    yield* Effect.log(
-      `fact types: ${observedFactTypes.join(", ")}`,
-    );
-    yield* Effect.log(
-      `state reasons: ${observedStateReasons.join(", ")}`,
-    );
+    yield* Effect.log(`fact types: ${observedFactTypes.join(", ")}`);
+    yield* Effect.log(`state reasons: ${observedStateReasons.join(", ")}`);
     yield* Effect.log(
       latestState === undefined
         ? "latest state: missing"
@@ -88,8 +125,8 @@ const program = Effect.gen(function* () {
     );
   }).pipe(Effect.provide(observerLayer));
 
-  // Observation is optional. Without RuntimeObserver, publish helpers no-op and
-  // the gated effect behavior is unchanged.
+  // Observation is optional. Without ProcessStoreRunResource the static
+  // emitters no-op and the gated effect behavior is unchanged.
   const unobservedGate = yield* RunResource.make({
     name: "examples/UnobservedRunGate",
     effect: (n: number) => Effect.succeed(n * 2),

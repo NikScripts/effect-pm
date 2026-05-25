@@ -50,40 +50,46 @@
  * ## Runtime observation (optional)
  *
  * {@link RunResource.make}, {@link RunResource.layer}, and {@link RunResource.Service}
- * publish {@link RunResourceFact | facts} and {@link RunResourceState | state} through
- * {@link RuntimeObserver} when that service is in context. Without an observer, publishes
- * are silent no-ops and the gate behavior is unchanged.
+ * publish per-run facts and `RunResourceState` transitions through the
+ * domain-specific {@link ProcessStoreRunResource} facet's static optional
+ * emitters (`recordRunStarted`, `recordRunCompleted`, `recordRunFailed`,
+ * `recordStateChange`). When the facet layer is absent each call is a silent
+ * no-op; when present the spine persists the event. The builder wraps every
+ * static emitter with a built-in `catchCause + logWarning` so storage
+ * failures never propagate into the gated effect's success/error channel.
  *
- * {@link RunResource.makeRunner} does **not** emit observations — use `make` when you need
- * per-run analytics.
+ * {@link RunResource.makeRunner} does **not** emit observations — use `make`
+ * when you need per-run analytics.
  *
  * ### In-process listeners (no durability)
  *
- * ```ts
- * const live = RuntimeObserver.layerListeners([{ onFact, onStateChange }])
- * ```
+ * Provide a custom service whose shape matches
+ * {@link ProcessStoreRunResource.Type} via `Effect.provideService` /
+ * `Layer.succeed` and fan out to your callbacks inside each method. A
+ * planned future feature (`ProcessStoreRunResource.live(resourceId)`)
+ * will replace this pattern with a proper `Stream` subscription.
  *
  * **Durable run history (compose at app / `ProcessGroup.localEnvLayer`):**
  *
  * ```ts
- * import { ProcessStore, RuntimeObserver } from "@nikscripts/effect-pm"
+ * import { ProcessStore } from "@nikscripts/effect-pm"
  * import { layerProcessStore } from "@nikscripts/effect-pm/storage/sqlite"
  *
- * const storeLayer = layerProcessStore({ filename: ".effect-pm/data.sqlite" })
+ * const live = layerProcessStore({ filename: ".effect-pm/data.sqlite" })
  * // or ProcessStore.layer for in-memory dev
- * const live = Layer.provideMerge(RuntimeObserver.layer, storeLayer)
  * ```
  *
- * Query persisted runs via {@link ProcessStoreRuntime} — not a `ProcessStore.runResource`
- * namespace on the combiner:
+ * Query persisted runs via {@link ProcessStoreRunResource}:
  *
  * ```ts
- * const runtime = yield* ProcessStoreRuntime
- * yield* runtime.facts({ ref: { kind: "run-resource", id: gateName } })
+ * import { ProcessStoreRunResource } from "@nikscripts/effect-pm/store/RunResource"
+ *
+ * const runs = yield* ProcessStoreRunResource
+ * yield* runs.facts({ resourceId: "@app/FetchPrices" })
+ * yield* runs.runs("@app/FetchPrices") // paired started+ended history
  * ```
  *
- * @see {@link RuntimeObserver.layer} for the persistence bridge.
- * @see {@link ProcessStoreRuntime} for read/query after compose.
+ * @see {@link ProcessStoreRunResource} for emit (optional) and read/query after compose.
  *
  * @module RunResource
  */
@@ -97,13 +103,20 @@ import {
   Ref,
   Semaphore,
 } from "effect";
-import {
-  RuntimeObserver,
-  type RuntimeFact,
-  type RuntimeRef,
-  type RuntimeStateBase,
-  type RuntimeStateChange,
-} from "./RuntimeState";
+import { ProcessStoreRunResource } from "./store/runResource";
+import type {
+  RunResourceFact,
+  RunResourceFactType,
+  RunResourceRunCompletedFact,
+  RunResourceRunCompletedPayload,
+  RunResourceRunFailedFact,
+  RunResourceRunFailedPayload,
+  RunResourceRunStartedFact,
+  RunResourceRunStartedPayload,
+  RunResourceState,
+  RunResourceStateChange,
+  RunResourceStateChangeReason,
+} from "./store/runResource";
 
 // ============================================================================
 // Public Types
@@ -174,96 +187,26 @@ export interface RunResourceRunnerConfig {
 }
 
 /**
- * Stable identity for a {@link RunResource} gate (maps to store `entityId`).
+ * Re-exports of the {@link ProcessStoreRunResource} facet's domain types
+ * for convenience at the consumer module boundary. The owning module is
+ * {@link store/RunResource} — import from
+ * `@nikscripts/effect-pm/store/RunResource` if you only need types.
  *
  * @public
  */
-export type RunResourceRef = RuntimeRef<"run-resource">;
-
-/**
- * Fact types emitted for individual gated runs (stored inside `runtime.fact.recorded`).
- *
- * @public
- */
-export type RunResourceFactType =
-  | "run-resource.run.started"
-  | "run-resource.run.completed"
-  | "run-resource.run.failed";
-
-/**
- * Reasons attached to {@link RunResourceState} transitions (stored inside `runtime.state.changed`).
- *
- * @public
- */
-export type RunResourceStateChangeReason =
-  | "run-resource.run.waiting"
-  | "run-resource.run.started"
-  | "run-resource.run.completed"
-  | "run-resource.run.failed"
-  | "run-resource.run.interrupted"
-  | "run-resource.run.wait.interrupted";
-
-/** @public */
-export interface RunResourceRunStartedPayload {
-  readonly concurrency: number;
-}
-
-/** @public */
-export interface RunResourceRunCompletedPayload {
-  readonly durationMs: number;
-}
-
-/** @public */
-export interface RunResourceRunFailedPayload {
-  readonly durationMs: number;
-  readonly cause: string;
-}
-
-/**
- * Discriminated payloads for {@link RunResourceFactType}.
- *
- * @public
- */
-export type RunResourceFactPayload =
-  | { readonly type: "run-resource.run.started"; readonly payload: RunResourceRunStartedPayload }
-  | { readonly type: "run-resource.run.completed"; readonly payload: RunResourceRunCompletedPayload }
-  | { readonly type: "run-resource.run.failed"; readonly payload: RunResourceRunFailedPayload };
-
-/**
- * A runtime fact published by {@link RunResource.make} (and layer/Service variants).
- *
- * @public
- */
-export type RunResourceFact = RuntimeFact<RunResourceFactPayload["payload"]> & {
-  readonly ref: RunResourceRef;
-  readonly type: RunResourceFactType;
+export type {
+  RunResourceFact,
+  RunResourceFactType,
+  RunResourceRunCompletedFact,
+  RunResourceRunCompletedPayload,
+  RunResourceRunFailedFact,
+  RunResourceRunFailedPayload,
+  RunResourceRunStartedFact,
+  RunResourceRunStartedPayload,
+  RunResourceState,
+  RunResourceStateChange,
+  RunResourceStateChangeReason,
 };
-
-/**
- * A state transition published by {@link RunResource.make}.
- *
- * @public
- */
-export type RunResourceStateChange = RuntimeStateChange<RunResourceState> & {
-  readonly ref: RunResourceRef;
-  readonly reason: RunResourceStateChangeReason;
-};
-
-/**
- * Live state snapshot for a {@link RunResource} gate.
- *
- * @public
- */
-export interface RunResourceState extends RuntimeStateBase {
-  readonly ref: RunResourceRef;
-  readonly concurrency: number;
-  readonly waiting: number;
-  readonly inFlight: number;
-  readonly completed: number;
-  readonly failed: number;
-  readonly interrupted: number;
-  readonly totalDurationMs: number;
-}
 
 // ============================================================================
 // Internal: build the gating wrapper
@@ -297,10 +240,6 @@ const makeRunGateEffect = <T, A, E>(
 ) => {
   const concurrency = config.concurrency ?? 1;
   const resourceId = config.name ?? "anonymous";
-  const ref: RunResourceRef = {
-    kind: "run-resource",
-    id: resourceId,
-  };
   let runSeq = 0;
   const nextRunId = Effect.sync(() => {
     runSeq += 1;
@@ -311,22 +250,51 @@ const makeRunGateEffect = <T, A, E>(
     stateSeq += 1;
     return `${resourceId}/state/${String(stateSeq)}`;
   });
-  const publishRunFact = <const Type extends RunResourceFactType>(
+
+  const publishRunStarted = (
     runId: string,
-    type: Type,
     occurredAt: number,
-    payload: Extract<RunResourceFactPayload, { readonly type: Type }>["payload"],
-  ): Effect.Effect<void> =>
-    RuntimeObserver.publishFact({
-      id: `${runId}/${type}`,
-      ref,
-      type,
+    payload: RunResourceRunStartedPayload,
+  ): Effect.Effect<void, never, never> =>
+    ProcessStoreRunResource.recordRunStarted({
+      id: `${runId}/run-resource.run.started`,
+      resourceId,
+      runId,
+      type: "run-resource.run.started",
       occurredAt,
       payload,
-    } satisfies RunResourceFact);
+    });
+
+  const publishRunCompleted = (
+    runId: string,
+    occurredAt: number,
+    payload: RunResourceRunCompletedPayload,
+  ): Effect.Effect<void, never, never> =>
+    ProcessStoreRunResource.recordRunCompleted({
+      id: `${runId}/run-resource.run.completed`,
+      resourceId,
+      runId,
+      type: "run-resource.run.completed",
+      occurredAt,
+      payload,
+    });
+
+  const publishRunFailed = (
+    runId: string,
+    occurredAt: number,
+    payload: RunResourceRunFailedPayload,
+  ): Effect.Effect<void, never, never> =>
+    ProcessStoreRunResource.recordRunFailed({
+      id: `${runId}/run-resource.run.failed`,
+      resourceId,
+      runId,
+      type: "run-resource.run.failed",
+      occurredAt,
+      payload,
+    });
 
   const makeInitialState = (observedAt: number): RunResourceState => ({
-    ref,
+    resourceId,
     observedAt,
     configVersion: 1,
     concurrency,
@@ -346,7 +314,7 @@ const makeRunGateEffect = <T, A, E>(
     const publishState = (
       reason: RunResourceStateChangeReason,
       update: (state: RunResourceState, observedAt: number) => RunResourceState,
-    ): Effect.Effect<void> =>
+    ): Effect.Effect<void, never, never> =>
       Effect.gen(function* () {
         const id = yield* nextStateChangeId;
         const changedAt = yield* Clock.currentTimeMillis;
@@ -355,7 +323,7 @@ const makeRunGateEffect = <T, A, E>(
           return [
             {
               id,
-              ref,
+              resourceId,
               changedAt,
               reason,
               previous,
@@ -364,7 +332,7 @@ const makeRunGateEffect = <T, A, E>(
             current,
           ] as const;
         });
-        yield* RuntimeObserver.publishStateChange(change);
+        yield* ProcessStoreRunResource.recordStateChange(change);
       });
 
     yield* Effect.logDebug(
@@ -404,9 +372,7 @@ const makeRunGateEffect = <T, A, E>(
               waiting: Math.max(0, state.waiting - 1),
               inFlight: state.inFlight + 1,
             }));
-            yield* publishRunFact(runId, "run-resource.run.started", startedAt, {
-              concurrency,
-            });
+            yield* publishRunStarted(runId, startedAt, { concurrency });
 
             return yield* Effect.matchCauseEffect(config.effect(input), {
               onFailure: (cause) =>
@@ -425,7 +391,7 @@ const makeRunGateEffect = <T, A, E>(
                       totalDurationMs: state.totalDurationMs + durationMs,
                     }),
                   );
-                  yield* publishRunFact(runId, "run-resource.run.failed", failedAt, {
+                  yield* publishRunFailed(runId, failedAt, {
                     durationMs,
                     cause: Cause.pretty(cause),
                   });
@@ -442,9 +408,7 @@ const makeRunGateEffect = <T, A, E>(
                     completed: state.completed + 1,
                     totalDurationMs: state.totalDurationMs + durationMs,
                   }));
-                  yield* publishRunFact(runId, "run-resource.run.completed", completedAt, {
-                    durationMs,
-                  });
+                  yield* publishRunCompleted(runId, completedAt, { durationMs });
                   return value;
                 }),
             });
@@ -574,7 +538,7 @@ export const RunResource = {
   /**
    * Create a generic runner that wraps any effect with concurrency gating.
    *
-   * Does not publish {@link RuntimeObserver} facts or state — only semaphore gating.
+   * Does not publish {@link ProcessStoreRunResource} facts or state — only semaphore gating.
    * Use {@link RunResource.make} when you need durable or in-process run analytics.
    *
    * Returns a Context.Service tag with `.layer`.

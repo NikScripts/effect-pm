@@ -1,5 +1,7 @@
 # Merge guide: `feature/runtime-foundation` → `main` (code-first)
 
+> **Historical document.** This guide describes the original `feature/runtime-foundation` merge and references the now-removed generic `RuntimeObserver` / `ProcessStoreRuntime` / generic `RuntimeFact` vocabulary. The current storage shape is per-domain facets (e.g. `ProcessStoreRunResource`) — see [STORAGE.md](./STORAGE.md), [STORAGE-AGENT-HANDBOOK.md](./STORAGE-AGENT-HANDBOOK.md), and [STORAGE-FACET-AUTHORING-GUIDE.md](./STORAGE-FACET-AUTHORING-GUIDE.md). Keep this file only as a record of the original merge.
+
 Audience: reviewers landing this branch—**migrate by example**, not bullets only.
 
 Quick stats (refresh SHAs before you trust them):

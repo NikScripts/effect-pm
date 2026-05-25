@@ -18,17 +18,15 @@ The multi-group CLI supports `--json` output for `groups`, `ls`, `verify`, and `
 
 The multi-group CLI now checks target contract capabilities before issuing remote status/control requests, so unsupported process and queue commands fail locally before HTTP.
 
-Adds the first runtime state/fact vocabulary and optional `RuntimeObserver`, with `RunResource` publishing run started/completed/failed facts when an observer is provided. `RuntimeObserver.layerProcessStore` persists runtime facts as `runtime.fact.recorded` ProcessStore analytics events and state changes as `runtime.state.changed` events, and the Prisma codec supports those event types.
+Adds the first runtime state/fact vocabulary for `RunResource`. Originally landed as a generic `RuntimeObserver` + `RuntimeFact` model; it has since been re-shaped into a per-domain **`ProcessStoreRunResource`** storage facet (`@nikscripts/effect-pm/store/RunResource`) — see the separate `process-store-runtime-facet` changeset for the breaking shape. `RunResource` publishes `run-resource.run.started` / `run-resource.run.completed` / `run-resource.run.failed` facts plus `RunResourceState` transitions through `ProcessStoreRunResource.recordRunStarted` / `.recordRunCompleted` / `.recordRunFailed` / `.recordStateChange` static optional emitters, which no-op when the facet layer is absent and persist as `run-resource.fact.recorded` / `run-resource.state.changed` analytics events when composed. The Prisma codec supports those event types.
 
-`RuntimeObserver.layerListeners(listeners)` adds scoped fact/state listener support with listener failure isolation.
+In-process listeners are implemented by providing a custom service typed as `ProcessStoreRunResource.Type` via `Effect.provideService` / `Layer.succeed` — there is no `RuntimeObserver.layerListeners` helper.
 
 `ProcessStore.events(query)` now provides a generic storage-neutral event read across memory, file-backed, and Prisma implementations. Dedicated queue completion and lifecycle reads are also available across those stores.
 
-`ProcessStore.runtime.facts(query)` and `ProcessStore.runResource.history(resourceId, opts)` add projections over persisted runtime fact events.
+Per-domain projections live directly on the facet: `ProcessStoreRunResource.facts({ resourceId, runId?, types? })`, `.stateHistory({ resourceId })`, `.latestState(resourceId)`, `.runs(resourceId)` (paired started + ended history per run), and `.byRun(runId)` (facts for one specific run). There is no `ProcessStore.runtime.*` / `ProcessStore.runResource.*` namespace on the combiner.
 
-`ProcessStore.runtime.stateHistory({ ref, opts })` and `ProcessStore.runtime.latestState(ref)` add projections over persisted runtime state changes.
-
-`RunResource` now publishes `RunResourceState` changes for waiting, started, completed, failed, and interrupted runs when `RuntimeObserver` is provided.
+`RunResource` now publishes `RunResourceState` changes for waiting, started, completed, failed, and interrupted runs through `ProcessStoreRunResource.recordStateChange`.
 
 `ProcessStore.file(filePath)` and `ProcessStore.fileLayer(filePath)` add an Effect `FileSystem`-backed NDJSON store for local durable analytics events.
 

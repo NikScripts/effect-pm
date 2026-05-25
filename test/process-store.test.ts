@@ -8,7 +8,7 @@ import {
   ProcessId,
   ProcessStore,
   ProcessStoreDuplicateRecordError,
-  ProcessStoreRuntime,
+  ProcessStoreRunResource,
   RuntimeStorage,
   Select,
   SubjectId,
@@ -18,12 +18,13 @@ import {
   type ProcessStoreInterface,
   type QueueItemCompletedEvent,
   type QueueLifecycleChangedEvent,
-  type RuntimeStateChangedEvent,
+  type RunResourceFact,
+  type RunResourceStateChangedEvent,
 } from "../src"
 import { ProcessStoreQueueResource } from "../src/store/queueResource"
 import {
-  runtimeFactsFromEvents,
-  runtimeStateChangesFromEvents,
+  runResourceFactsFromEvents,
+  runResourceStateChangesFromEvents,
 } from "../src/internal/store/spine"
 import { utcDateFromIso } from "../src/internal/utcDate";
 
@@ -215,13 +216,14 @@ describe("ProcessStore.memory", () => {
       yield* store.appendBatch([
         {
           id: "runtime-started",
-          type: "runtime.fact.recorded",
+          type: "run-resource.fact.recorded",
           occurredAt: t1,
           entityType: "run-resource",
           entityId: "@test/RunGate",
           fact: {
             id: "run-1/start",
-            ref: { kind: "run-resource", id: "@test/RunGate" },
+            resourceId: "@test/RunGate",
+            runId: "@test/RunGate/run/1",
             type: "run-resource.run.started",
             occurredAt: t1,
             payload: { concurrency: 1 },
@@ -229,13 +231,14 @@ describe("ProcessStore.memory", () => {
         },
         {
           id: "runtime-completed",
-          type: "runtime.fact.recorded",
+          type: "run-resource.fact.recorded",
           occurredAt: t2,
           entityType: "run-resource",
           entityId: "@test/RunGate",
           fact: {
             id: "run-1/completed",
-            ref: { kind: "run-resource", id: "@test/RunGate" },
+            resourceId: "@test/RunGate",
+            runId: "@test/RunGate/run/1",
             type: "run-resource.run.completed",
             occurredAt: t2,
             payload: { durationMs: 10 },
@@ -246,20 +249,20 @@ describe("ProcessStore.memory", () => {
       const rows = yield* store.events({
         entityType: "run-resource",
         entityId: "@test/RunGate",
-        types: ["runtime.fact.recorded"],
+        types: ["run-resource.fact.recorded"],
         opts: { limit: 1 },
       })
-      const runtime = yield* ProcessStoreRuntime
-      const runtimeFacts = yield* runtime.facts({
-        ref: { kind: "run-resource", id: "@test/RunGate" },
+      const runs = yield* ProcessStoreRunResource
+      const runtimeFacts = yield* runs.facts({
+        resourceId: "@test/RunGate",
         types: ["run-resource.run.completed"],
         opts: { limit: 1 },
       })
-      const runHistory = yield* runtime.runResourceFacts("@test/RunGate")
+      const runHistory = yield* runs.facts({ resourceId: "@test/RunGate" })
 
       expect(rows.map((row) => row.id)).toEqual(["runtime-completed"])
       expect(runtimeFacts.map((fact) => fact.id)).toEqual(["run-1/completed"])
-      expect(runHistory.map((fact) => fact.id)).toEqual([
+      expect(runHistory.map((fact: RunResourceFact) => fact.id)).toEqual([
         "run-1/completed",
         "run-1/start",
       ])
@@ -498,29 +501,35 @@ describe("ProcessStore.memory", () => {
       const store = yield* ProcessStore
       const t1 = utcDateFromIso("2026-01-01T04:20:00.000Z").getTime()
       const t2 = utcDateFromIso("2026-01-01T04:25:00.000Z").getTime()
-      const ref = { kind: "run-resource", id: "@test/StateGate" }
+      const resourceId = "@test/StateGate"
 
       const first = {
-        ref,
+        resourceId,
         observedAt: t1,
         configVersion: 1,
+        concurrency: 1,
         waiting: 1,
+        inFlight: 0,
+        completed: 0,
+        failed: 0,
+        interrupted: 0,
+        totalDurationMs: 0,
       }
       const second = {
-        ref,
+        ...first,
         observedAt: t2,
-        configVersion: 1,
         waiting: 0,
+        inFlight: 1,
       }
-      const changed: RuntimeStateChangedEvent = {
+      const changed: RunResourceStateChangedEvent = {
         id: "state-change-2",
-        type: "runtime.state.changed",
+        type: "run-resource.state.changed",
         occurredAt: t2,
         entityType: "run-resource",
-        entityId: "@test/StateGate",
+        entityId: resourceId,
         change: {
           id: "change-2",
-          ref,
+          resourceId,
           changedAt: t2,
           reason: "run-resource.run.started",
           previous: first,
@@ -530,9 +539,9 @@ describe("ProcessStore.memory", () => {
 
       yield* store.append(changed)
 
-      const runtime = yield* ProcessStoreRuntime
-      const history = yield* runtime.stateHistory({ ref })
-      const latest = yield* runtime.latestState(ref)
+      const runs = yield* ProcessStoreRunResource
+      const history = yield* runs.stateHistory({ resourceId })
+      const latest = yield* runs.latestState(resourceId)
 
       expect(history.map((change) => change.id)).toEqual(["change-2"])
       expect(Option.getOrNull(latest)).toEqual(second)
@@ -555,21 +564,28 @@ describe("ProcessStore.file (legacy)", () => {
       const first = yield* ProcessStore.file(filePath)
       const occurredAt = utcDateFromIso("2026-01-01T05:00:00.000Z").getTime()
       const fileState = {
-        ref: { kind: "run-resource", id: "@test/FileRunGate" },
+        resourceId: "@test/FileRunGate",
         observedAt: occurredAt + 3,
         configVersion: 1,
+        concurrency: 1,
+        waiting: 0,
+        inFlight: 0,
         completed: 1,
+        failed: 0,
+        interrupted: 0,
+        totalDurationMs: 0,
       }
 
       yield* first.append({
         id: "file-runtime-started",
-        type: "runtime.fact.recorded",
+        type: "run-resource.fact.recorded",
         occurredAt,
         entityType: "run-resource",
         entityId: "@test/FileRunGate",
         fact: {
           id: "file-run-1/start",
-          ref: { kind: "run-resource", id: "@test/FileRunGate" },
+          resourceId: "@test/FileRunGate",
+          runId: "@test/FileRunGate/run/1",
           type: "run-resource.run.started",
           occurredAt,
           payload: { concurrency: 1 },
@@ -599,13 +615,13 @@ describe("ProcessStore.file (legacy)", () => {
       })
       yield* first.append({
         id: "file-state-change",
-        type: "runtime.state.changed",
+        type: "run-resource.state.changed",
         occurredAt: occurredAt + 3,
         entityType: "run-resource",
         entityId: "@test/FileRunGate",
         change: {
           id: "file-state-change/inner",
-          ref: { kind: "run-resource", id: "@test/FileRunGate" },
+          resourceId: "@test/FileRunGate",
           changedAt: occurredAt + 3,
           reason: "run-resource.run.completed",
           previous: null,
@@ -619,10 +635,10 @@ describe("ProcessStore.file (legacy)", () => {
       const rows = yield* second.events({
         entityType: "run-resource",
         entityId: "@test/FileRunGate",
-        types: ["runtime.fact.recorded"],
+        types: ["run-resource.fact.recorded"],
       })
-      const runtimeFacts = runtimeFactsFromEvents(rows, {
-        ref: { kind: "run-resource", id: "@test/FileRunGate" },
+      const runtimeFacts = runResourceFactsFromEvents(rows, {
+        resourceId: "@test/FileRunGate",
       })
 
       expect(rows.map((row) => row.id)).toEqual(["file-runtime-started"])
@@ -639,9 +655,9 @@ describe("ProcessStore.file (legacy)", () => {
       const stateEvents = yield* second.events({
         entityType: "run-resource",
         entityId: "@test/FileRunGate",
-        types: ["runtime.state.changed"],
+        types: ["run-resource.state.changed"],
       })
-      const stateHistory = runtimeStateChangesFromEvents(stateEvents)
+      const stateHistory = runResourceStateChangesFromEvents(stateEvents)
       expect(stateHistory.map((change) => change.reason)).toEqual([
         "run-resource.run.completed",
       ])

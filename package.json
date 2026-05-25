@@ -54,10 +54,10 @@
       "import": "./dist/ProcessStore.mjs",
       "require": "./dist/ProcessStore.js"
     },
-    "./store/Runtime": {
-      "types": "./dist/store/Runtime.d.ts",
-      "import": "./dist/store/Runtime.mjs",
-      "require": "./dist/store/Runtime.js"
+    "./store/RunResource": {
+      "types": "./dist/store/RunResource.d.ts",
+      "import": "./dist/store/RunResource.mjs",
+      "require": "./dist/store/RunResource.js"
     },
     "./store/QueueResource": {
       "types": "./dist/store/QueueResource.d.ts",

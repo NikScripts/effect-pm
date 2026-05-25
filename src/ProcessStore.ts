@@ -15,7 +15,7 @@ import type { ProcessStoreGroupLogApi } from "./store/groupLog";
 import { ProcessStoreQueueResource } from "./store/queueResource";
 import type { ProcessStoreQueueResourceApi } from "./store/queueResource";
 import { ProcessStoreProcessLifecycle } from "./store/processLifecycle";
-import { ProcessStoreRuntime } from "./store/runtime";
+import { ProcessStoreRunResource } from "./store/runResource";
 import type {
   AnalyticsEvent,
   ProcessExecutionCompletedEvent,
@@ -33,8 +33,6 @@ import { RuntimeStorage } from "./RuntimeStorage";
 export type {
   QueryOpts,
   StoreEventQuery,
-  RuntimeFactQuery,
-  RuntimeStateHistoryQuery,
   AnalyticsEventBase,
   ProcessExecutionCompletedEvent,
   ProcessLifecycleTag,
@@ -43,8 +41,8 @@ export type {
   QueueItemCompletedEvent,
   QueueLifecycleTag,
   QueueLifecycleChangedEvent,
-  RuntimeFactRecordedEvent,
-  RuntimeStateChangedEvent,
+  RunResourceFactRecordedEvent,
+  RunResourceStateChangedEvent,
   GroupLogEntryRecordedEvent,
   AnalyticsEvent,
   ProcessStoreWriteError,
@@ -73,8 +71,6 @@ export type {
 } from "./store/queueResource";
 
 export type { ProcessStoreGroupLogApi } from "./store/groupLog";
-
-export type { ProcessStoreRuntimeApi } from "./store/runtime";
 
 export type {
   ProcessLifecycleRecordInput,
@@ -127,13 +123,14 @@ export namespace ProcessStore {
   const facetLayers = Layer.mergeAll(
     ProcessStoreGroupLog.layerRuntimeStorage,
     ProcessStoreQueueResource.layerRuntimeStorage,
-    ProcessStoreRuntime.layerRuntimeStorage,
+    ProcessStoreRunResource.layerRuntimeStorage,
     ProcessStoreProcessLifecycle.layerRuntimeStorage,
   );
 
   /**
    * `Layer` that provides {@link ProcessStore} from injected {@link RuntimeStorage}
-   * plus facet services used by {@link QueueResource}, log relay, and runtime observation.
+   * plus per-domain facets used by {@link QueueResource}, log relay,
+   * `RunResource`, and process lifecycle.
    *
    * @public
    */
@@ -141,7 +138,7 @@ export namespace ProcessStore {
     | ProcessStore
     | ProcessStoreGroupLog
     | ProcessStoreQueueResource
-    | ProcessStoreRuntime
+    | ProcessStoreRunResource
     | ProcessStoreProcessLifecycle,
     never,
     RuntimeStorage

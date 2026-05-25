@@ -2,20 +2,26 @@
 
 ## Status
 
-Partially implemented. `RuntimeRef`, `RuntimeStateBase`,
-`RuntimeStateChange`, `RuntimeFact`, and optional `RuntimeObserver` have landed.
-`RuntimeObserver.publishFact` and `RuntimeObserver.publishStateChange` no-op when
-no observer is provided. `RunResource` publishes run started/completed/failed
-facts and `RunResourceState` changes when `RuntimeObserver` is provided. `RuntimeObserver.layerProcessStore`
-persists runtime facts through `ProcessStore` as `runtime.fact.recorded`
-analytics events and state changes as `runtime.state.changed` analytics events.
-The Prisma codec supports both event types. Generic `ProcessStore.events(query)` and the first
-Effect `FileSystem`-backed store have landed, so projections can use generic
-event reads instead of feature-specific methods. The boundary is now locked:
-`ProcessStore` is the rich module-facing singleton facade, and planned
-`RuntimeStorage` is the generic swappable persistence port underneath it.
-The final public shape must line up with
-[07 - Typed ProcessGroup and remote ProcessManager](./07-process-manager.md).
+**Superseded for `RunResource`; archived as a design discussion for future
+domains.** The generic `RuntimeRef` / `RuntimeStateBase` / `RuntimeStateChange`
+/ `RuntimeFact` / `RuntimeObserver` vocabulary that this plan introduced has
+been **removed from the public API**. The current shape is **one facet per
+domain** with concrete typed shapes — `RunResource`'s observability is now
+implemented by the `ProcessStoreRunResource` facet at `src/store/runResource.ts`
+(`@nikscripts/effect-pm/store/RunResource`). The generic envelope still exists
+at `src/internal/store/factEnvelope.ts` as internal-only plumbing used by
+`ProcessStoreQueueResource`, and must **not** be exposed by new facets.
+
+Use this document as historical context for how the cross-cutting state /
+listener / history model was originally framed. Current rules and migration
+recipe for any further domains (process executions, schedules, queues, etc.)
+live in:
+
+- [STORAGE.md](../STORAGE.md)
+- [STORAGE-AGENT-HANDBOOK.md](../STORAGE-AGENT-HANDBOOK.md)
+- [STORAGE-FACET-AUTHORING-GUIDE.md](../STORAGE-FACET-AUTHORING-GUIDE.md) (the
+  copy-paste recipe for re-implementing an existing storage integration on
+  `ProcessStoreBuilder.Service`)
 
 ## Intent
 

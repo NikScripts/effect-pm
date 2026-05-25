@@ -5,7 +5,16 @@
  */
 
 import { Data } from "effect";
-import type { RuntimeFact, RuntimeRef, RuntimeStateChange } from "./RuntimeState";
+import type {
+  FactEnvelope,
+  FactEnvelopeRecordedEvent,
+  FactEnvelopeStateChange,
+  FactEnvelopeStateChangedEvent,
+} from "./internal/store/factEnvelope";
+import type {
+  RunResourceFact,
+  RunResourceStateChange,
+} from "./store/runResource";
 
 /**
  * Structural JSON value compatible with persisted event payloads.
@@ -73,27 +82,6 @@ export interface StoreEventQuery {
   readonly entityType?: AnalyticsEvent["entityType"];
   readonly entityId?: string;
   readonly types?: ReadonlyArray<AnalyticsEvent["type"]>;
-  readonly opts?: QueryOpts;
-}
-
-/**
- * Storage-neutral query for persisted runtime facts.
- *
- * @public
- */
-export interface RuntimeFactQuery {
-  readonly ref?: RuntimeRef;
-  readonly types?: ReadonlyArray<RuntimeFact["type"]>;
-  readonly opts?: QueryOpts;
-}
-
-/**
- * Storage-neutral query for persisted runtime state changes.
- *
- * @public
- */
-export interface RuntimeStateHistoryQuery {
-  readonly ref: RuntimeRef;
   readonly opts?: QueryOpts;
 }
 
@@ -254,24 +242,63 @@ export interface QueueLifecycleChangedEvent extends AnalyticsEventBase {
 }
 
 /**
- * Generic runtime fact persisted through the current analytics event envelope.
+ * Per-domain wire event for a {@link RunResourceFact} written by
+ * {@link ProcessStoreRunResource}. Wire type: `"run-resource.fact.recorded"`.
  *
  * @public
  */
-export interface RuntimeFactRecordedEvent extends AnalyticsEventBase {
-  type: "runtime.fact.recorded";
-  fact: RuntimeFact;
+export interface RunResourceFactRecordedEvent extends AnalyticsEventBase {
+  type: "run-resource.fact.recorded";
+  entityType: "run-resource";
+  fact: RunResourceFact;
 }
 
 /**
- * Generic runtime state transition persisted through the analytics envelope.
+ * Per-domain wire event for a {@link RunResourceStateChange} written by
+ * {@link ProcessStoreRunResource}. Wire type: `"run-resource.state.changed"`.
  *
  * @public
  */
-export interface RuntimeStateChangedEvent extends AnalyticsEventBase {
-  type: "runtime.state.changed";
-  change: RuntimeStateChange;
+export interface RunResourceStateChangedEvent extends AnalyticsEventBase {
+  type: "run-resource.state.changed";
+  entityType: "run-resource";
+  change: RunResourceStateChange;
 }
+
+/**
+ * Generic envelope wire event used by older facets that still persist
+ * through the shared {@link FactEnvelope} (currently
+ * {@link ProcessStoreQueueResource}). Per-domain facets should publish
+ * their own concrete event types and stop relying on this envelope — see
+ * `docs/STORAGE-FACET-AUTHORING-GUIDE.md`.
+ *
+ * @internal
+ */
+export type RuntimeFactRecordedEvent = FactEnvelopeRecordedEvent;
+
+/**
+ * Generic envelope wire event for state changes recorded through the
+ * shared {@link FactEnvelope}. See {@link RuntimeFactRecordedEvent}.
+ *
+ * @internal
+ */
+export type RuntimeStateChangedEvent = FactEnvelopeStateChangedEvent;
+
+/**
+ * Generic envelope re-export retained for internal callers in the spine
+ * and codec. Use a per-domain `*Query` type from the owning facet.
+ *
+ * @internal
+ */
+export type RuntimeFact = FactEnvelope;
+
+/**
+ * Generic envelope re-export retained for internal callers in the spine
+ * and codec. Use a per-domain `*StateChange` type from the owning facet.
+ *
+ * @internal
+ */
+export type RuntimeStateChange = FactEnvelopeStateChange;
 
 /**
  * Structured group log line persisted for operator `pm logs` history.
@@ -297,6 +324,15 @@ export interface GroupLogEntryRecordedEvent extends AnalyticsEventBase {
 /**
  * Closed union of supported analytics payloads.
  *
+ * @remarks
+ * Per-domain facets contribute concrete event types here
+ * (`RunResourceFactRecordedEvent`, `RunResourceStateChangedEvent`, …).
+ * The generic envelope events (`RuntimeFactRecordedEvent`,
+ * `RuntimeStateChangedEvent`) are retained for facets that still use
+ * the shared envelope; future per-domain facets should publish their own
+ * event types and stop relying on the envelope — see
+ * `docs/STORAGE-FACET-AUTHORING-GUIDE.md`.
+ *
  * @public
  */
 export type AnalyticsEvent =
@@ -304,6 +340,8 @@ export type AnalyticsEvent =
   | ProcessLifecycleChangedEvent
   | QueueItemCompletedEvent
   | QueueLifecycleChangedEvent
+  | RunResourceFactRecordedEvent
+  | RunResourceStateChangedEvent
   | RuntimeFactRecordedEvent
   | RuntimeStateChangedEvent
   | GroupLogEntryRecordedEvent;
