@@ -6,7 +6,7 @@ import {
   ProcessManagerLogQueryError,
   replayLogQueryResults,
 } from "./logQuery";
-import { ProcessStoreGroupLog } from "../store/groupLog";
+import { ProcessStoreGroupLog } from "../../store/groupLog";
 import { groupLogSqlitePath, resolveChildLaunchPaths } from "./childLaunch";
 import { layerProcessStore } from "../../storage/sqlite/index";
 import type { ProcessManagerLogEntry } from "../../LogEntry";

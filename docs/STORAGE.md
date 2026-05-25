@@ -1,60 +1,87 @@
 # Storage model (mandatory)
 
-**Target (in progress):** `ProcessStore` is a **layer combiner only** — not a `Context.Service` with `append`. Facets (`ProcessStoreGroupLog`, `ProcessStoreQueueResource`, `ProcessStoreRuntime`, …) are separate tags with `layerRuntimeStorage`. See [**STORAGE-AGENT-HANDBOOK.md**](./STORAGE-AGENT-HANDBOOK.md) “Target architecture”. The sections below describe the **transitional** codebase until Part P lands.
+**Target:** `ProcessStore` is a **layer combiner only**. Storage facets live under **`src/store/`**
+with **`@nikscripts/effect-pm/store/*`** subpaths. See [STORAGE-AGENT-HANDBOOK.md](./STORAGE-AGENT-HANDBOOK.md).
 
-**One persistence stack. Facets are separate context services with their own layers.**
+**Transitional:** Legacy `ProcessStore` monolith until Part P. Facets are in `src/store/` (camelCase filenames).
+
+---
+
+## Layout
+
+```
+src/store/
+  queueResource.ts
+  groupLog.ts
+  runtime.ts
+  processLifecycle.ts
+src/internal/store/
+  spine.ts, codec.ts, composite.ts   ← internal only
+```
+
+**Subpath** (import): `@nikscripts/effect-pm/store/QueueResource` — **not** the worker `@nikscripts/effect-pm/QueueResource`.
+
+**Context key** (deterministic): `@nikscripts/effect-pm/store/queueResource/ProcessStoreQueueResource` — matches file path.
+
+---
+
+## Public facets
+
+| Service tag | Subpath | File |
+|-------------|---------|------|
+| `ProcessStoreRuntime` | `store/Runtime` | `src/store/runtime.ts` |
+| `ProcessStoreQueueResource` | `store/QueueResource` | `src/store/queueResource.ts` |
+| `ProcessStoreGroupLog` | `store/GroupLog` | `src/store/groupLog.ts` |
+| `ProcessStoreProcessLifecycle` | `store/ProcessLifecycle` | `src/store/processLifecycle.ts` |
+| `RuntimeStorage` | `RuntimeStorage` | row port (not a store facet) |
+| `ProcessStore` | `ProcessStore` | combiner + legacy monolith (Part P) |
+
+---
 
 ## Layers
 
-| Layer | Role |
-|-------|------|
-| **`RuntimeStorage`** | Raw port over normalized `RuntimeRecord` rows. |
-| **`ProcessStore`** | Core client: `append`, `events`, `records`, runtime projections. |
-| **`ProcessStoreGroupLog`** | Structured `group.log.entry` persistence (`record`, `load`, `query`). |
-| **`ProcessStoreQueueResource`** | Queue semantic runtime facts (entry lifecycle, dedupe keys, queries). |
-
 ```ts
-import { ProcessStore } from "@nikscripts/effect-pm/ProcessStore";
-import { ProcessStoreGroupLog } from "@nikscripts/effect-pm/ProcessStoreGroupLog";
-import { ProcessStoreQueueResource } from "@nikscripts/effect-pm/ProcessStoreQueueResource";
+import { Layer } from "effect";
+import { ProcessStoreQueueResource } from "@nikscripts/effect-pm/store/QueueResource";
+import { layerRuntimeStorage } from "@nikscripts/effect-pm/storage/sqlite";
+
+// Queue analytics only
+const queueOnly = Layer.provide(
+  ProcessStoreQueueResource.layerRuntimeStorage,
+  layerRuntimeStorage({ filename: ".effect-pm/queue.sqlite" }),
+);
+
+// Full stack
 import { layerProcessStore } from "@nikscripts/effect-pm/storage/sqlite";
-
-// Full stack (core + both facets, one RuntimeStorage):
-const storeLayer = layerProcessStore({ filename: ".effect-pm/data.sqlite" });
-// equivalent to ProcessStore.layerRuntimeStorage + sqlite RuntimeStorage
-
-// Slim apps — provide only what you need:
-ProcessStoreQueueResource.layerRuntimeStorage; // queue analytics only
-ProcessStoreGroupLog.layerRuntimeStorage; // group log persistence only
+const allFacets = layerProcessStore({ filename: ".effect-pm/data.sqlite" });
 ```
 
-SQLite stays on `@nikscripts/effect-pm/storage/sqlite` so the core `ProcessStore` bundle does not pull in `@effect/sql-sqlite-node`.
+---
 
 ## Usage
 
-Facet helpers require the matching context tag (or the composite `ProcessStore.layer` / `layerProcessStore`, which provides all three):
-
 ```ts
-yield* ProcessStoreGroupLog.record("my-group", "1", entry);
-yield* ProcessStoreGroupLog.load({ groupId: "my-group", limit: 100, sort: "desc" });
+import { ProcessStoreRuntime } from "@nikscripts/effect-pm/store/Runtime";
+import { ProcessStoreQueueResource } from "@nikscripts/effect-pm/store/QueueResource";
 
-yield* ProcessStoreQueueResource.withQueue("email-queue", …);
+const runtime = yield* ProcessStoreRuntime;
+yield* runtime.facts(query);
+
+const qr = yield* Effect.serviceOption(ProcessStoreQueueResource);
+if (Option.isSome(qr)) {
+  yield* qr.value.withQueue("my-queue", qr.value.entryEnqueued({ key: "job-1" }));
+}
 ```
 
-When you already have the composite store, instance facets remain on `ProcessStoreInterface`:
+Facet namespace exports **`layerRuntimeStorage` + `layer` only** — no static `Effect.flatMap` wrappers.
 
-```ts
-const { GroupLog, QueueResource } = yield* ProcessStore;
-yield* GroupLog.load({ … });
-```
+Capture/relay: **`@nikscripts/effect-pm/Logs`**. See [ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md](./ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md).
 
-Domain modules (`QueueResource`, log relay) use `Effect.serviceOption(ProcessStoreQueueResource)` / `ProcessStoreGroupLog` — not the full `ProcessStore` tag — so they stay lightweight when only a facet layer is provided.
-
-Capture and live tail (group child, `pm watch`) use **`@nikscripts/effect-pm/Logs`** (`captureLoggerLayer`, `relayLayer`). Durable history uses **`ProcessStoreGroupLog`**. See [ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md](./ARCHITECTURE-AUDIT-AND-LOGS-SEPARATION.md).
+---
 
 ## Do not
 
-- Add storage `Layer`s on domain modules.
-- Use `ProcessStore.file` / `storage/file` for new code.
-- Put `relayLayer` or `captureLoggerLayer` on `ProcessStore` (use `Logs` subpath only).
-- Re-add static `ProcessStore.GroupLog` / `ProcessStore.QueueResource` namespace boilerplate; use the facet service tags.
+- Put facet tags in `internal/store/` (spine/composite only).
+- Use `@nikscripts/effect-pm/ProcessStoreQueueResource` top-level subpaths — use **`store/*`**.
+- Confuse **`store/QueueResource`** (storage facet) with **`QueueResource`** (worker module).
+- Add namespace wrappers or extend `ProcessStoreInterface`.

@@ -6,9 +6,9 @@
  * Domain modules publish through {@link RuntimeObserver}; apps compose
  * {@link ProcessStoreRuntime.layerRuntimeStorage} with other facet layers via
  * {@link ProcessStore.layerRuntimeStorage} or `layerProcessStore` from
- * `@nikscripts/effect-pm/storage/sqlite`.
+ * `@nikscripts/effect-pm/store/Runtime`.
  *
- * @module ProcessStoreRuntime
+ * @module store/Runtime
  */
 
 import { Cause, Clock, Context, Effect, Layer, Option } from "effect";
@@ -20,7 +20,7 @@ import {
   runtimeFactStoreQuery,
   runtimeFactsFromEvents,
   runtimeStateChangesFromEvents,
-} from "./internal/store/spine";
+} from "../internal/store/spine";
 import type {
   AnalyticsEvent,
   ProcessStoreWriteError,
@@ -30,14 +30,14 @@ import type {
   RuntimeStateChangedEvent,
   RuntimeStateHistoryQuery,
   StoreEventQuery,
-} from "./ProcessStoreEvent";
+} from "../ProcessStoreEvent";
 import type {
   RuntimeFact,
   RuntimeRef,
   RuntimeStateBase,
   RuntimeStateChange,
-} from "./RuntimeState";
-import { RuntimeStorage } from "./RuntimeStorage";
+} from "../RuntimeState";
+import { RuntimeStorage } from "../RuntimeStorage";
 
 const makeRuntimeFactRecordedEvent = (
   fact: RuntimeFact,
@@ -200,7 +200,7 @@ const makeProcessStoreRuntimeFromRuntimeStorage = Effect.all({
 export class ProcessStoreRuntime extends Context.Service<
   ProcessStoreRuntime,
   ProcessStoreRuntimeApi
->()("@nikscripts/effect-pm/ProcessStoreRuntime", {
+>()("@nikscripts/effect-pm/store/runtime/ProcessStoreRuntime", {
   make: makeProcessStoreRuntimeFromRuntimeStorage,
 }) {}
 

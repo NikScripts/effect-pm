@@ -20,7 +20,7 @@ import {
   type QueueLifecycleChangedEvent,
   type RuntimeStateChangedEvent,
 } from "../src"
-import { ProcessStoreQueueResource } from "../src/internal/store/queueResource"
+import { ProcessStoreQueueResource } from "../src/store/queueResource"
 import {
   runtimeFactsFromEvents,
   runtimeStateChangesFromEvents,

@@ -54,10 +54,25 @@
       "import": "./dist/ProcessStore.mjs",
       "require": "./dist/ProcessStore.js"
     },
-    "./ProcessStoreRuntime": {
-      "types": "./dist/ProcessStoreRuntime.d.ts",
-      "import": "./dist/ProcessStoreRuntime.mjs",
-      "require": "./dist/ProcessStoreRuntime.js"
+    "./store/Runtime": {
+      "types": "./dist/store/Runtime.d.ts",
+      "import": "./dist/store/Runtime.mjs",
+      "require": "./dist/store/Runtime.js"
+    },
+    "./store/QueueResource": {
+      "types": "./dist/store/QueueResource.d.ts",
+      "import": "./dist/store/QueueResource.mjs",
+      "require": "./dist/store/QueueResource.js"
+    },
+    "./store/GroupLog": {
+      "types": "./dist/store/GroupLog.d.ts",
+      "import": "./dist/store/GroupLog.mjs",
+      "require": "./dist/store/GroupLog.js"
+    },
+    "./store/ProcessLifecycle": {
+      "types": "./dist/store/ProcessLifecycle.d.ts",
+      "import": "./dist/store/ProcessLifecycle.mjs",
+      "require": "./dist/store/ProcessLifecycle.js"
     },
     "./Query": {
       "types": "./dist/Query.d.ts",

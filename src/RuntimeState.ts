@@ -19,7 +19,7 @@ import { Context, Effect, Layer, Option } from "effect";
 import {
   ProcessStoreRuntime,
   persistRuntimeObservation,
-} from "./ProcessStoreRuntime";
+} from "./store/runtime";
 
 /**
  * Stable identity for a runtime component.

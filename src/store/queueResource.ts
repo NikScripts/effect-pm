@@ -21,20 +21,20 @@ import {
   SubjectId,
   SubjectType,
   type RuntimeRecordPredicate,
-} from "../../Query";
+} from "../Query";
 import {
   makeProcessStoreSpine,
   makeRunId,
-} from "./spine";
+} from "../internal/store/spine";
 import type {
   AnalyticsEvent,
   ProcessStoreWriteError,
   QueueLifecycleTag,
   RuntimeFactRecordedEvent,
-} from "../../ProcessStoreEvent";
-import type { RuntimeRecordQuery } from "../../Query";
-import { RuntimeStorage, type RuntimeRecord } from "../../RuntimeStorage";
-import type { JsonValue } from "../../ProcessStoreEvent";
+} from "../ProcessStoreEvent";
+import type { RuntimeRecordQuery } from "../Query";
+import { RuntimeStorage, type RuntimeRecord } from "../RuntimeStorage";
+import type { JsonValue } from "../ProcessStoreEvent";
 
 /** @public */
 export type ProcessStoreQueueResourcePriority = "high" | "normal" | "low";
@@ -201,7 +201,7 @@ const queueResourceIndexNames = ["batchId", "releaseId"];
 class ProcessStoreQueueResourceContextTag extends Context.Service<
   ProcessStoreQueueResourceContextTag,
   ProcessStoreQueueResourceContext
->()("@nikscripts/effect-pm/internal/store/queueResource/ProcessStoreQueueResourceContextTag") {}
+>()("@nikscripts/effect-pm/store/queueResource/ProcessStoreQueueResourceContextTag") {}
 
 const currentQueueResourceContext: Effect.Effect<ProcessStoreQueueResourceContext> =
   Effect.serviceOption(ProcessStoreQueueResourceContextTag).pipe(
@@ -510,7 +510,7 @@ const makeProcessStoreQueueResourceFromRuntimeStorage: Effect.Effect<
 export class ProcessStoreQueueResource extends Context.Service<
   ProcessStoreQueueResource,
   ProcessStoreQueueResourceApi
->()("@nikscripts/effect-pm/internal/store/queueResource/ProcessStoreQueueResource", {
+>()("@nikscripts/effect-pm/store/queueResource/ProcessStoreQueueResource", {
   make: makeProcessStoreQueueResourceFromRuntimeStorage,
 }) {}
 

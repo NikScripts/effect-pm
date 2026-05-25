@@ -7,43 +7,38 @@ alwaysApply: true
 
 ## Rule
 
-- **Public (`src/*.ts`, PascalCase):** Symbols that **consumers import in their app** — from `@nikscripts/effect-pm`, a documented subpath, or a bin entry.
-- **Internal (`src/internal/`):** Symbols used **only inside this package** by other `src/` modules (including `ProcessManager.ts`, `Logs.ts`, `ControlTransportHttp.ts`, bins).
+- **Public:** Symbols apps import — `@nikscripts/effect-pm`, a documented subpath, or a bin entry.
+- **Internal (`src/internal/`):** Package-only wiring — not composed by apps, not exported.
 
-If only package code imports it, it belongs in `internal/`. Do not export it from `src/index.ts` or add a `package.json` export.
+## Storage facets → `src/store/`
+
+Storage facets are **public** under **`src/store/`** with **`@nikscripts/effect-pm/store/<Domain>`** subpaths.
+
+| File (either naming style) | Subpath | Service tag |
+|----------------------------|---------|-------------|
+| `src/store/queueResource.ts` or `ProcessStoreQueueResource.ts` | `store/QueueResource` | `ProcessStoreQueueResource` |
+| `src/store/groupLog.ts` or `ProcessStoreGroupLog.ts` | `store/GroupLog` | `ProcessStoreGroupLog` |
+| `src/store/runtime.ts` or `ProcessStoreRuntime.ts` | `store/Runtime` | `ProcessStoreRuntime` |
+
+**File naming:** full service name (`ProcessStoreQueueResource.ts`) **or** camelCase domain (`queueResource.ts`) — pick one style per facet, do not invent other names.
+
+**Subpath ≠ filename:** import path is `store/QueueResource`; file may be `queueResource.ts`.
+
+**Not the worker module:** `@nikscripts/effect-pm/QueueResource` is the queue worker; `@nikscripts/effect-pm/store/QueueResource` is the storage facet.
+
+**`internal/store/`** — spine, codec, composite only. Not facet tags.
 
 ## Placement
 
 | Location | Meaning |
 |----------|---------|
-| `src/Process.ts`, `src/Logs.ts`, … | App-facing module |
-| `src/internal/*.ts` | Package-private implementation |
-| `src/storage/*`, `src/prisma/*` | App-facing adapters (documented subpaths) |
-| `src/bin/*` | CLI entrypoints (not imported by apps) |
-
-## Export discipline
-
-- **`src/index.ts`:** Only symbols apps are meant to import from the root package.
-- **Subpaths (`package.json` exports):** One primary module per subpath; no leaking internal helpers.
-- **`@internal` TSDoc:** Implementation detail within a public file (not a substitute for `src/internal/`).
-
-## Examples
-
-```ts
-// ✅ App wires group child logging
-import { captureLoggerLayer, relayLayer } from "@nikscripts/effect-pm/Logs"
-
-// ✅ App configures remote PM
-import { ProcessManager, Transport } from "@nikscripts/effect-pm/ProcessManager"
-
-// ❌ Do not export CLI-only helpers from index
-// queryGroupLogsForCatalog → internal, called only from ProcessManager CLI
-
-// ❌ Do not keep package-only modules at src/ root
-// ProcessManagerTargetResolver → src/internal/ProcessManagerTargetResolver.ts
-```
+| `src/store/*.ts` | Public storage facets |
+| `src/Process.ts`, `src/Logs.ts`, … | Other app-facing modules |
+| `src/internal/store/spine.ts`, `composite.ts` | Package-private plumbing |
+| `src/storage/*` | Durable adapters (`storage/sqlite`, …) |
 
 ## When adding code
 
-1. Will an app import this? → public module + TSDoc + export (index or subpath).
-2. Only other `src/` files? → `src/internal/`; import as `./internal/...` (extensionless).
+1. App composes `Facet.layerRuntimeStorage`? → **`src/store/<name>.ts`** + **`store/<Domain>`** subpath.
+2. Shared spine/composite helpers? → `src/internal/store/`.
+3. CLI-only? → `src/internal/`; no subpath.

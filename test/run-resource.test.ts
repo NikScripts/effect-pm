@@ -5,7 +5,7 @@ import { ProcessStore } from "../src/ProcessStore";
 import {
   ProcessStoreRuntime,
   type ProcessStoreRuntimeApi,
-} from "../src/ProcessStoreRuntime";
+} from "../src/store/runtime";
 import {
   RuntimeObserver,
   type RuntimeFact,

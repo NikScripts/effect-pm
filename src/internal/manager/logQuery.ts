@@ -1,6 +1,6 @@
 import { Data, Effect, Option } from "effect";
 import { utcDateFromMillis } from "../utcDate";
-import { ProcessStoreGroupLog } from "../store/groupLog";
+import { ProcessStoreGroupLog } from "../../store/groupLog";
 import type { ProcessManagerLogScope } from "./logScope";
 import type { ProcessManagerLogEntry } from "../../LogEntry";
 import { replayLogEntry } from "./logCapture";

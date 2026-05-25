@@ -6,10 +6,10 @@
  */
 
 import { Clock, Effect, FileSystem, Path } from "effect";
-import { makeProcessStoreGroupLog } from "./groupLog";
-import { ProcessStoreGroupLog } from "./groupLog";
-import { makeProcessStoreQueueResource } from "./queueResource";
-import { ProcessStoreQueueResource } from "./queueResource";
+import { makeProcessStoreGroupLog } from "../../store/groupLog";
+import { ProcessStoreGroupLog } from "../../store/groupLog";
+import { makeProcessStoreQueueResource } from "../../store/queueResource";
+import { ProcessStoreQueueResource } from "../../store/queueResource";
 import {
   assembleProcessStoreInterface,
   makeFileProcessStoreSpine,
@@ -17,6 +17,7 @@ import {
   makeRunId,
 } from "./spine";
 import type { ProcessStoreInterface } from "../../ProcessStore";
+import { ProcessStoreProcessLifecycle } from "../../store/processLifecycle";
 import { RuntimeStorage } from "../../RuntimeStorage";
 
 /** @internal */
@@ -66,10 +67,14 @@ export const makeInMemoryProcessStore: Effect.Effect<
 export const makeProcessStoreFromRuntimeStorage: Effect.Effect<
   ProcessStoreInterface,
   never,
-  RuntimeStorage | ProcessStoreGroupLog | ProcessStoreQueueResource
+  | RuntimeStorage
+  | ProcessStoreGroupLog
+  | ProcessStoreQueueResource
+  | ProcessStoreProcessLifecycle
 > = Effect.gen(function* () {
   const groupLog = yield* ProcessStoreGroupLog;
   const queue = yield* ProcessStoreQueueResource;
+  yield* ProcessStoreProcessLifecycle;
   const storage = yield* RuntimeStorage;
   const now = yield* Clock.currentTimeMillis;
   const spine = makeProcessStoreSpine(storage, makeRunId(now));

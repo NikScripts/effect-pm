@@ -10,11 +10,12 @@ import {
   makeInMemoryProcessStore,
   makeProcessStoreFromRuntimeStorage,
 } from "./internal/store/composite";
-import { ProcessStoreGroupLog } from "./internal/store/groupLog";
-import type { ProcessStoreGroupLogApi } from "./internal/store/groupLog";
-import { ProcessStoreQueueResource } from "./internal/store/queueResource";
-import type { ProcessStoreQueueResourceApi } from "./internal/store/queueResource";
-import { ProcessStoreRuntime } from "./ProcessStoreRuntime";
+import { ProcessStoreGroupLog } from "./store/groupLog";
+import type { ProcessStoreGroupLogApi } from "./store/groupLog";
+import { ProcessStoreQueueResource } from "./store/queueResource";
+import type { ProcessStoreQueueResourceApi } from "./store/queueResource";
+import { ProcessStoreProcessLifecycle } from "./store/processLifecycle";
+import { ProcessStoreRuntime } from "./store/runtime";
 import type {
   AnalyticsEvent,
   ProcessExecutionCompletedEvent,
@@ -57,7 +58,7 @@ export {
   isGroupLogEntryRecorded,
 } from "./ProcessStoreEvent";
 
-export { ProcessStoreQueueResourceContextError } from "./internal/store/queueResource";
+export { ProcessStoreQueueResourceContextError } from "./store/queueResource";
 
 export type {
   ProcessStoreQueueResourceApi,
@@ -69,11 +70,16 @@ export type {
   ProcessStoreQueueResourceLifecycleInput,
   ProcessStoreQueueResourceLifecycleTag,
   ProcessStoreQueueResourcePriority,
-} from "./internal/store/queueResource";
+} from "./store/queueResource";
 
-export type { ProcessStoreGroupLogApi } from "./internal/store/groupLog";
+export type { ProcessStoreGroupLogApi } from "./store/groupLog";
 
-export type { ProcessStoreRuntimeApi } from "./ProcessStoreRuntime";
+export type { ProcessStoreRuntimeApi } from "./store/runtime";
+
+export type {
+  ProcessLifecycleRecordInput,
+  ProcessStoreProcessLifecycleApi,
+} from "./store/processLifecycle";
 
 /**
  * Storage port implemented by the in-memory service and durable adapters.
@@ -122,6 +128,7 @@ export namespace ProcessStore {
     ProcessStoreGroupLog.layerRuntimeStorage,
     ProcessStoreQueueResource.layerRuntimeStorage,
     ProcessStoreRuntime.layerRuntimeStorage,
+    ProcessStoreProcessLifecycle.layerRuntimeStorage,
   );
 
   /**
@@ -134,7 +141,8 @@ export namespace ProcessStore {
     | ProcessStore
     | ProcessStoreGroupLog
     | ProcessStoreQueueResource
-    | ProcessStoreRuntime,
+    | ProcessStoreRuntime
+    | ProcessStoreProcessLifecycle,
     never,
     RuntimeStorage
   > = Layer.mergeAll(

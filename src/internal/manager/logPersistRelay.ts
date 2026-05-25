@@ -11,7 +11,7 @@ import {
   ProcessManagerLogRelay,
   type ProcessManagerLogRelayService,
 } from "./logCapture";
-import { ProcessStoreGroupLog } from "../store/groupLog";
+import { ProcessStoreGroupLog } from "../../store/groupLog";
 
 const storeFlushInterval = Duration.millis(250);
 const storeFlushBatchSize = 64;

@@ -301,7 +301,7 @@ export {
   ProcessStoreRuntime,
   persistRuntimeObservation,
   type ProcessStoreRuntimeApi,
-} from "./ProcessStoreRuntime";
+} from "./store/runtime";
 
 // Types - ProcessGroup
 export type {

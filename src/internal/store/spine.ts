@@ -21,8 +21,8 @@ import {
   ProcessStoreEventDecodeError,
 } from "./codec";
 import type { EffectPmEventRow, JsonValue } from "../../ProcessStoreEvent";
-import type { ProcessStoreGroupLogApi } from "./groupLog";
-import type { ProcessStoreQueueResourceApi } from "./queueResource";
+import type { ProcessStoreGroupLogApi } from "../../store/groupLog";
+import type { ProcessStoreQueueResourceApi } from "../../store/queueResource";
 import {
   ProcessStoreDuplicateRecordError,
   ProcessStoreReadonlyRecordError,
@@ -141,6 +141,29 @@ export const isProcessLifecycleChanged = (
   event.type === "process.lifecycle.changed" &&
   event.entityType === "process";
 
+/** @internal Store query for process lifecycle events — shared by monolith reads and {@link ProcessStoreProcessLifecycle}. */
+export const processLifecycleStoreQuery = (
+  processId: string,
+  opts?: QueryOpts,
+): StoreEventQuery => ({
+  entityType: "process",
+  entityId: processId,
+  types: ["process.lifecycle.changed"],
+  opts,
+});
+
+/** @internal Project lifecycle rows from an in-memory event batch. */
+export const processLifecycleFromEvents = (
+  events: ReadonlyArray<AnalyticsEvent>,
+  processId: string,
+  opts?: QueryOpts,
+): ProcessLifecycleChangedEvent[] =>
+  selectEvents(
+    events,
+    processLifecycleStoreQuery(processId, opts),
+    isProcessLifecycleChanged,
+  );
+
 /** @internal */
 export const isQueueItemCompleted = (
   event: AnalyticsEvent,
@@ -235,7 +258,13 @@ export const selectEvents = <T extends AnalyticsEvent>(
   const rows = events
     .filter(matchesStoreEventQuery(query))
     .filter(refine)
-    .sort(byTimestampDesc((event) => event.occurredAt));
+    .sort((a, b) => {
+      const byTime = b.occurredAt - a.occurredAt;
+      if (byTime !== 0) {
+        return byTime;
+      }
+      return b.id.localeCompare(a.id);
+    });
   return applyQueryOpts(rows, query.opts, (event) => event.occurredAt);
 };
 
@@ -506,17 +535,9 @@ export const assembleProcessStoreInterface = (
       (events) => processExecutionsFromEvents(events, processId, opts),
     ),
   getProcessLifecycle: (processId, opts) =>
-    Effect.map(spine.events({
-      entityType: "process",
-      entityId: processId,
-      types: ["process.lifecycle.changed"],
-      opts,
-    }), (events) =>
-      selectEvents(
-        events,
-        { entityType: "process", entityId: processId, types: ["process.lifecycle.changed"], opts },
-        isProcessLifecycleChanged,
-      ),
+    Effect.map(
+      spine.events(processLifecycleStoreQuery(processId, opts)),
+      (events) => processLifecycleFromEvents(events, processId, opts),
     ),
   getQueueItemCompletions: (queueId, opts) =>
     Effect.map(spine.events({

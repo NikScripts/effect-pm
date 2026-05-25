@@ -18,7 +18,8 @@
  * ## Optional lifecycle analytics
  *
  * `start`, `stop`, and `restart` append `process.lifecycle.changed` events when
- * {@link ProcessStore} is in context. No store → identical control behavior, zero
+ * {@link ProcessStoreProcessLifecycle} is in context (via {@link ProcessStore.layer}
+ * or {@link ProcessGroup.localEnvLayer}). No facet → identical control behavior, zero
  * analytics I/O (same optional pattern as {@link QueueResource} +
  * `ProcessStoreQueueResource`).
  *
@@ -83,7 +84,7 @@
  * @module ProcessGroup
  */
 
-import { Cause, Clock, Context, Data, DateTime, Duration, Effect, FiberMap, Layer, Option, Ref, Schema, Scope } from "effect";
+import { Clock, Context, Data, DateTime, Duration, Effect, FiberMap, Layer, Option, Ref, Schema, Scope } from "effect";
 import type { HttpClient } from "effect/unstable/http";
 import type { Process, ProcessDefinition, ProcessServiceDefinition } from "./Process";
 import type {
@@ -100,10 +101,11 @@ import {
 } from "./QueueResource";
 import { layerProcessGroupLogContext } from "./LogContext";
 import { ProcessStore } from "./ProcessStore";
-import type {
-  ProcessLifecycleChangedEvent,
-  ProcessLifecycleTag,
-} from "./ProcessStoreEvent";
+import {
+  persistProcessLifecycle,
+  ProcessStoreProcessLifecycle,
+  type ProcessLifecycleRecordInput,
+} from "./store/processLifecycle";
 
 // ============================================================================
 // Public Types
@@ -732,9 +734,9 @@ export interface TypedQueueControls<
  *
  * @remarks
  * Lifecycle analytics behave identically to {@link ProcessGroup}: optional store
- * writes on `start` / `stop` / `restart`. Storage is never bundled on
- * {@link ProcessGroupServiceDefinition.layer} — compose {@link ProcessStore} or use
- * {@link ProcessGroup.localEnvLayer}.
+ * writes on `start` / `stop` / `restart`. Compose
+ * {@link ProcessStoreProcessLifecycle} via {@link ProcessGroup.localEnvLayer} or the app root —
+ * not on {@link ProcessGroupServiceDefinition.layer}.
  *
  * @public
  */
@@ -780,66 +782,18 @@ export interface TypedProcessGroup<
 }
 
 // ============================================================================
-// Internal: optional lifecycle persistence (ProcessStore bridge)
-//
-// Invariants:
-// - ProcessGroup never adds storage to its Layer graph.
-// - serviceOption(ProcessStore) → silent no-op when absent.
-// - append failures are logged, never propagated to controls.
-// - Target migration: ProcessStoreProcessLifecycle facet (same input shape).
+// Internal: optional lifecycle persistence (ProcessStoreProcessLifecycle)
 // ============================================================================
 
-/** @internal Facet-aligned write input — keep in sync with future processLifecycle facet. */
-interface ProcessLifecycleRecordInput {
-  readonly processId: string;
-  readonly tag: ProcessLifecycleTag;
-  readonly error?: string;
-}
-
-/** @internal Per-runtime id suffix; not durable across restarts or isolates. */
-let processLifecycleSeq = 0;
-
-/** @internal */
-const makeProcessLifecycleEvent = (
-  input: ProcessLifecycleRecordInput,
-  occurredAtMs: number,
-): ProcessLifecycleChangedEvent => {
-  processLifecycleSeq++;
-  return {
-    id: `${input.processId}-lifecycle-${input.tag.toLowerCase()}-${String(processLifecycleSeq)}`,
-    type: "process.lifecycle.changed",
-    occurredAt: occurredAtMs,
-    entityType: "process",
-    entityId: input.processId,
-    lifecycle: {
-      tag: input.tag,
-      ...(input.error !== undefined ? { error: input.error } : {}),
-    },
-  };
-};
-
-/**
- * Best-effort `process.lifecycle.changed` append.
- *
- * @internal
- */
 const recordProcessLifecycleChange = (
   input: ProcessLifecycleRecordInput,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
-    const storeOption = yield* Effect.serviceOption(ProcessStore);
-    if (Option.isNone(storeOption)) {
+    const lifecycleOption = yield* Effect.serviceOption(ProcessStoreProcessLifecycle);
+    if (Option.isNone(lifecycleOption)) {
       return;
     }
-    const occurredAtMs = yield* Clock.currentTimeMillis;
-    const event = makeProcessLifecycleEvent(input, occurredAtMs);
-    yield* storeOption.value.append(event).pipe(
-      Effect.catchCause((cause) =>
-        Effect.logWarning(
-          `Process lifecycle store write failed for process "${input.processId}" (${input.tag})`,
-        ).pipe(Effect.annotateLogs("cause", Cause.pretty(cause))),
-      ),
-    );
+    yield* persistProcessLifecycle(lifecycleOption.value.lifecycleChanged(input));
   });
 
 // ============================================================================

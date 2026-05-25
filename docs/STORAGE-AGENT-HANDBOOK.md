@@ -1,6 +1,6 @@
 # Storage integration agent handbook
 
-**How to use:** Share this file with an agent and say **“Do Part B”** (or C, D, …). The agent must read **Part A** first, then only the assigned part.
+**How to use:** Share this file with an agent and say **“Do Part FP”** (facet promotion — do first), **“Do Part B”**, etc. Read **Part A** and **Target architecture** first.
 
 ---
 
@@ -25,37 +25,68 @@ The repo still has transitional code that violates the target:
 ### What we are building toward
 
 ```
-RuntimeStorage                    ← port (records)
+RuntimeStorage                         ← port (records)
     ↑
-    ├── ProcessStoreGroupLog      ← Context.Service + layerRuntimeStorage
-    ├── ProcessStoreQueueResource ← Context.Service + layerRuntimeStorage
-    ├── ProcessStoreRuntime       ← **public** `src/ProcessStoreRuntime.ts` + layerRuntimeStorage (Part B)
-    ├── ProcessStoreProcessExecution  ← (Part C)
-    ├── ProcessStoreProcessLifecycle  ← (Part D)
+    ├── ProcessStoreGroupLog           ← src/store/groupLog.ts (or ProcessStoreGroupLog.ts)
+    ├── ProcessStoreQueueResource      ← src/store/queueResource.ts (or ProcessStoreQueueResource.ts)
+    ├── ProcessStoreRuntime            ← src/store/runtime.ts (or ProcessStoreRuntime.ts)
     └── …
 
-ProcessStore.layerRuntimeStorage  ← Layer.mergeAll(facet layers only)
-ProcessStore.layer                ← Layer.provide(layerRuntimeStorage, RuntimeStorage.layer)
-layerProcessStore (sqlite)        ← Layer.provide(ProcessStore.layerRuntimeStorage, sqlite RuntimeStorage)
+Subpaths: @nikscripts/effect-pm/store/GroupLog | store/QueueResource | store/Runtime
+ProcessStore.layerRuntimeStorage       ← Layer.mergeAll(facet layers)
+layerProcessStore (sqlite)             ← full stack + durable RuntimeStorage
 ```
 
-**Domain modules** call **`Effect.serviceOption(FacetTag)`** then **`facet.value.method(...)`** — never `ProcessStore`, never namespace wrapper functions.
+**Domain modules** call **`Effect.serviceOption(FacetTag)`** once at init (or use module-level publish helpers), then call facet methods — never `ProcessStore`, never per-method namespace wrappers.
 
-**Facet namespace exports layers only.** Each facet’s `export namespace FacetName` may export **`layerRuntimeStorage`** and **`layer`** — nothing else. **Forbidden:** `Effect.flatMap(FacetTag, (s) => s.method(...))` boilerplate (see `ProcessStoreQueueResource` lines 535–597 — **scheduled for removal**, do not copy).
+**Facet namespace exports layers only.** **`layerRuntimeStorage`** and **`layer`** — nothing else.
 
 **Correct usage:**
 
 ```ts
+import { ProcessStoreRuntime } from "@nikscripts/effect-pm/store/Runtime";
+import { ProcessStoreQueueResource } from "@nikscripts/effect-pm/store/QueueResource";
+
 const runtime = yield* ProcessStoreRuntime;
 yield* runtime.facts(query);
 
 const qr = yield* Effect.serviceOption(ProcessStoreQueueResource);
-if (Option.isSome(qr)) yield* qr.value.entryEnqueued(input);
+if (Option.isSome(qr)) yield* qr.value.entryEnqueued({ key: "job-1" });
 ```
 
-**Spine** (`internal/store/spine.ts`) stays **internal** — shared encode/project helpers for facets, not a public API.
+**Spine** (`internal/store/spine.ts`) stays **internal**.
 
-**Only Part P** may shrink/remove the legacy `ProcessStore` service and `ProcessStoreInterface`. Other parts work on **their facet file** + **call sites**, not on growing the combiner module.
+### Public facet modules (`src/store/`)
+
+Facets live in **`src/store/`**, exported via **`@nikscripts/effect-pm/store/<Domain>`** (mirrors `storage/sqlite` pattern).
+
+| Service tag | Subpath | File (either name) |
+|-------------|---------|-------------------|
+| `ProcessStoreRuntime` | `store/Runtime` | `runtime.ts` or `ProcessStoreRuntime.ts` |
+| `ProcessStoreQueueResource` | `store/QueueResource` | `queueResource.ts` or `ProcessStoreQueueResource.ts` |
+| `ProcessStoreGroupLog` | `store/GroupLog` | `groupLog.ts` or `ProcessStoreGroupLog.ts` |
+
+**File naming:** full service name **or** camelCase domain — **not** other variants. Service key matches subpath (e.g. `@nikscripts/effect-pm/store/QueueResource`).
+
+**Not** `@nikscripts/effect-pm/QueueResource` — that is the **worker** module. **`store/QueueResource`** is the storage facet.
+
+**Transitional:** `ProcessStoreRuntime` still at `src/ProcessStoreRuntime.ts` with `@nikscripts/effect-pm/ProcessStoreRuntime` until Part FP moves it. Queue/group still in `internal/store/`.
+
+**`internal/store/`** — spine, codec, composite, optional shared `make*` helpers — **not** facet tags.
+
+### Historical guide mistakes (agents: read this)
+
+Prior handbook versions caused repeatable agent failures:
+
+| Bad instruction | What agents did | Correct approach |
+|-----------------|-----------------|------------------|
+| Extend `ProcessStore` monolith (`ProcessStore.runtime.*`, `append` wiring) | Rebuilt runtime API from monolith on every query | Public **`ProcessStoreRuntime`** facet; delete combiner query namespaces |
+| Put facets in `internal/store/` | Tags + layers not importable by apps | **`src/store/<name>.ts`** + **`store/<Domain>`** subpath |
+| Copy namespace `Effect.flatMap` wrappers | ~65 lines of boilerplate per facet | Namespace exports **`layerRuntimeStorage` + `layer` only**; `yield* FacetTag` then `.method()` |
+| “Do not edit `ProcessStore.ts`” (Part B) | Could not merge facet layers or delete `ProcessStore.runtime` | Limited combiner edits OK: merge facet layers, remove legacy namespaces — **no** new monolith API |
+| Document subpaths in STORAGE.md without shipping exports | Docs lied about import paths | Part FP adds exports; keep STORAGE.md in sync |
+
+**Only Part P** may shrink/remove the legacy `ProcessStore` service and `ProcessStoreInterface`. Other parts work on **their public facet module** + **call sites**, not on growing the combiner module.
 
 ---
 
@@ -65,9 +96,10 @@ if (Option.isSome(qr)) yield* qr.value.entryEnqueued(input);
 
 | File | Who may edit |
 |------|----------------|
-| `src/ProcessStore.ts` | **Part P only** (demolition / layer combiner). Parts B–O: **do not edit**. |
+| `src/ProcessStore.ts` | **Part P** (demolish monolith). **Part FP** (merge facet layers only). Other parts: limited combiner edits to merge **their** facet layer — no new monolith API. |
+| `src/store/*.ts` (public facets) | Part FP and facet owners |
 | `src/internal/store/composite.ts`, `assembleProcessStoreInterface` | **Part P** (+ **Part R** for spine helpers). |
-| Other `src/internal/store/<facet>.ts` | The part that owns that facet (B→runtime, C→processExecution, …). |
+| `src/internal/store/spine.ts`, `codec.ts` | **Part R** (+ facet parts for domain-specific encode helpers). |
 
 **Git:** Work on the **current branch** in the existing workspace. **Do not** create a new branch, open a pull request, or run release/publish steps unless the maintainer asks.
 
@@ -98,7 +130,8 @@ pnpm build
 | Part | Scope | Status today |
 |------|--------|--------------|
 | **A** | **Charter** — standards, invariants, workflow (read first) | — |
-| **B** | `RuntimeState` / `RuntimeObserver` + public **`src/ProcessStoreRuntime.ts`** | Merge facet layer in combiner; delete `ProcessStore.runtime`; **no** namespace wrappers |
+| **FP** | **`src/store/`** + **`store/*`** subpaths | **Done** |
+| **B** | `RuntimeState` / `RuntimeObserver` + **`store/Runtime`** facet | Verify observer; runtime moves to `src/store/` in Part FP |
 | **C** | `Process.ts` + **`ProcessExecution`** facet | Do **not** edit `ProcessStore.ts` |
 | **D** | `ProcessGroup.ts` + **`ProcessLifecycle`** facet | Do **not** edit `ProcessStore.ts` |
 | **E** | `RunResource.ts` | Observer only; persistence via legacy observer layer |
@@ -107,7 +140,7 @@ pnpm build
 | **H** | `Resource.ts` | No storage (confirm N/A or minimal hooks) |
 | **I** | `Polling.ts` | No telemetry |
 | **J** | `ProcessSchedule.ts` | No telemetry |
-| **K** | `QueueResource.ts` + remove `ProcessStoreQueueResource` namespace wrappers | Tests: `yield* ProcessStoreQueueResource` then `.method()` |
+| **K** | `QueueResource.ts` — verify facet integration | Namespace wrappers removed; depends on Part FP for public import path |
 | **L** | `Logs.ts` + `internal/manager/log*` | **Modern** — verification pass |
 | **M** | `ProcessManager.ts` operator log reads | **Modern** — extend filters/queries |
 | **N** | Legacy **`storage/file`** + `ProcessStore.file` | Deprecated NDJSON path |
@@ -135,9 +168,10 @@ You are refactoring persistence integration in `@nikscripts/effect-pm`. Previous
 | Piece | Role |
 |-------|------|
 | **`RuntimeStorage`** | Normalized `RuntimeRecord` port — the only low-level row storage |
-| **Facet services** (`internal/store/*`) | `ProcessStoreGroupLog`, `ProcessStoreQueueResource`, `ProcessStoreRuntime`, … — each has `Context.Service` + `layerRuntimeStorage` |
-| **`ProcessStore` (target)** | **Layer combiner only** — `Layer.mergeAll` of facet layers; optional `layer` = provide in-memory `RuntimeStorage` |
-| **`@nikscripts/effect-pm/Logs`** | Capture + relay only — never a storage facet on the combiner |
+| **Facet services** (`src/store/*.ts`) | Public `Context.Service` + `layerRuntimeStorage`; subpath `@nikscripts/effect-pm/store/<Domain>` |
+| **`internal/store/spine.ts`** | Shared encode/project helpers — **not** facet tags |
+| **`ProcessStore` (target)** | **Layer combiner only** — `Layer.mergeAll` of facet layers |
+| **`@nikscripts/effect-pm/Logs`** | Capture + relay only — never a storage facet |
 | **`layerProcessStore`** (`storage/sqlite`) | `Layer.provide(ProcessStore.layerRuntimeStorage, sqlite RuntimeStorage)` |
 
 **One stack:** `RuntimeStorage` + facet layers. No monolithic `append` service.
@@ -146,15 +180,16 @@ You are refactoring persistence integration in `@nikscripts/effect-pm`. Previous
 
 1. **Optional storage:** `Effect.serviceOption(FacetTag)` — write when present, silent no-op when absent.
 2. **No storage `Layer`s on domain modules** — compose at app / `ProcessGroup.localEnvLayer` / group child only.
-3. **No raw `append` from feature code** — use the facet for that domain (or propose one).
-4. **No `yield* ProcessStore`** in domain modules — that tag is going away.
-5. **Slim imports:** e.g. `QueueResource` → `internal/store/queueResource` only.
-6. **Public vs internal:** See [public-vs-internal rule](../.cursor/rules/public-vs-internal.mdc); facets stay internal unless apps truly need the tag.
+3. **No raw `append` from feature code** — use the facet for that domain.
+4. **No `yield* ProcessStore`** in domain modules — that tag is going away (Part P).
+5. **Import store facets:** e.g. `QueueResource` → `@nikscripts/effect-pm/store/QueueResource` (or `./store/queueResource` inside package).
+6. **File naming in `src/store/`:** `ProcessStoreQueueResource.ts` **or** `queueResource.ts` — not other names. Subpath stays `store/QueueResource`.
+7. **Public vs internal:** If an app may compose `Facet.layerRuntimeStorage`, the facet is **public** under `src/store/`.
 
 ### Effect & TypeScript standards
 
 - **Effect v4 idioms:** `Effect.gen`, `Layer.merge` / `provide` / `provideMerge` at entry points only; inspect `repos/effect/` before guessing APIs.
-- **Context services:** `Context.Service` with **deterministic keys** matching file path (see existing `internal/store/*` keys).
+- **Context services:** deterministic keys match subpath (e.g. `@nikscripts/effect-pm/store/QueueResource`).
 - **No type casts** (`as`, `as any`, `as never`) — refactor types until the compiler is satisfied.
 - **No `@effect-diagnostics strictEffectProvide:off`** unless the file is a **documented entry point** (bin, control server root). Prefer fixing layer composition.
 - **`captureLoggerLayer`:** must retain `satisfies Layer.Layer<never, never, ProcessManagerLogRelay>` (or equivalent) — do not weaken to `Layer<never>` without reason.
@@ -167,7 +202,7 @@ You are refactoring persistence integration in `@nikscripts/effect-pm`. Previous
 - **`@public` / `@internal`** on exported symbols.
 - **TSDoc on every public export:** purpose, `@param`, `@returns`, `@example` when non-obvious, `@see` cross-links to facets and compose points.
 - **Comments:** explain *why* (business logic, scope lifetimes, failure isolation) — not what the code literally does.
-- **No stale references** to removed subpaths (`ProcessStoreGroupLog`, `ProcessStoreQueueResource` as package exports).
+- **No stale docs:** `STORAGE.md` and examples must match **shipped** `package.json` exports.
 
 ### Testing standards
 
@@ -210,48 +245,69 @@ Design for the **next** step (facet implementation). Include:
 
 **Step 3 — Build (only after maintainer approval):**
 
-- Implement facet under `src/internal/store/<name>.ts` with `Context.Service` + `layerRuntimeStorage`
-- Migrate domain module to `Effect.serviceOption(FacetTag)`
-- Tests + doc updates in scope of your part
-- **Do not** add methods to `ProcessStore.ts` — Part P wires the combiner after facets exist
+- Implement facet at **`src/store/<name>.ts`** with subpath **`store/<Domain>`**
+- Shared impl may stay in `internal/store/` (spine, optional `make*` helpers) — **not** the tag/layers apps compose
+- Migrate domain module to `Effect.serviceOption(FacetTag)`; call `facet.value.method(...)`
+- Facet namespace: **`layerRuntimeStorage` + `layer` only** — no `Effect.flatMap` wrappers
+- Tests + doc updates in scope
+- Limited `ProcessStore.ts` edit OK: merge your facet’s `layerRuntimeStorage` into the combiner — **no** new monolith methods
 - Report again with “Changes made” (Step 2 format); still **no PR** unless asked
 
 **Do not** create commits unless the maintainer explicitly requests them.
 
 ---
 
+## Part FP — `src/store/` layout + `store/*` subpaths
+
+**Do this first.** Move all storage facets into **`src/store/`** with **`@nikscripts/effect-pm/store/<Domain>`** exports.
+
+### Copy-paste prompt
+
+```
+Do Part FP from docs/STORAGE-AGENT-HANDBOOK.md.
+
+Read: Target architecture, Part A, docs/STORAGE.md, .cursor/rules/public-vs-internal.mdc.
+
+## Layout
+
+src/store/
+  queueResource.ts       OR ProcessStoreQueueResource.ts
+  groupLog.ts            OR ProcessStoreGroupLog.ts
+  runtime.ts             OR ProcessStoreRuntime.ts  (move from src/ProcessStoreRuntime.ts)
+
+package.json subpaths:
+  @nikscripts/effect-pm/store/QueueResource
+  @nikscripts/effect-pm/store/GroupLog
+  @nikscripts/effect-pm/store/Runtime
+
+File naming: full ProcessStore* name OR camelCase domain — pick one style, stay consistent.
+Service tag names stay ProcessStoreQueueResource etc.
+Service keys match subpaths: @nikscripts/effect-pm/store/QueueResource
+
+NOT @nikscripts/effect-pm/QueueResource — that is the worker module.
+
+## Tasks
+
+1. Create src/store/queueResource.ts (or ProcessStoreQueueResource.ts) from internal/store/queueResource.ts
+2. Create src/store/groupLog.ts (or ProcessStoreGroupLog.ts) from internal/store/groupLog.ts
+3. Move src/ProcessStoreRuntime.ts → src/store/runtime.ts (or ProcessStoreRuntime.ts)
+4. package.json exports: store/QueueResource, store/GroupLog, store/Runtime
+5. tsup.config.ts entry points
+6. Deprecate or remove @nikscripts/effect-pm/ProcessStoreRuntime top-level export
+7. Update ProcessStore.ts combiner, QueueResource.ts, log*, composite, tests, index.ts
+8. Facet namespace: layerRuntimeStorage + layer ONLY
+
+pnpm typecheck && pnpm test && pnpm lint && pnpm build
+No commit unless maintainer asks.
+```
+
+**Files:** `src/store/*`, `package.json`, `tsup.config.ts`, `src/ProcessStore.ts`, `src/QueueResource.ts`, `src/internal/manager/log*.ts`, `src/internal/store/composite.ts`, tests, `docs/STORAGE.md`.
+
+---
+
 ## Part B — `RuntimeState` / `RuntimeObserver` + Runtime facet
 
-**Prompt:** Part B owns **`ProcessStoreRuntime`** in `src/internal/store/runtime.ts` and **`RuntimeState.ts`**. A previous agent added **`ProcessStore.runtime.*`** and refactored through **`ProcessStore.append`** — that is the **wrong direction** (extends the monolith). **Do not touch `src/ProcessStore.ts`.**
-
-**Files you may edit:** `src/RuntimeState.ts`, `src/internal/store/runtime.ts`, `src/internal/store/spine.ts` (helpers only), `test/run-resource.test.ts`, `examples/forms/process-store/process-store-events-sqlite-layer.ts`.
-
-**Files you must not edit:** `src/ProcessStore.ts`, `src/internal/store/composite.ts` (Part P).
-
-**Current problems:**
-
-- `RuntimeObserver.layerFromProcessStore` depends on the legacy `ProcessStore` tag.
-- `makeProcessStoreRuntime` exists as a plain factory, not a `Context.Service` with `layerRuntimeStorage`.
-- `ProcessStore.runtime` namespace on the combiner module (legacy — do not extend; Part P removes it).
-
-**Refactor goals (Phase 1, in-scope files only):**
-
-- Clean up `RuntimeObserver` typing; listener isolation unchanged.
-- Prepare `runtime.ts` for a proper facet tag (deterministic key under `internal/store/runtime`).
-- Observer persistence should target **`ProcessStoreRuntime`** via `serviceOption`, not `ProcessStore.append`.
-
-**Proposed API must define:**
-
-- `ProcessStoreRuntime` `Context.Service` + `ProcessStoreRuntimeApi` (`recordFact`, `recordStateChange`, `facts`, `stateHistory`, `latestState`, batches)
-- `ProcessStoreRuntime.layerRuntimeStorage` (requires `RuntimeStorage`)
-- `RuntimeObserver.layerFromRuntimeStorage` or `layer` that requires **`ProcessStoreRuntime`** (name TBD)
-- Deprecation path for `layerFromProcessStore` and removal of `ProcessStore.runtime` queries (Part P)
-
-**Anti-patterns (instant fail):**
-
-- Adding `ProcessStore.runtime`, `ProcessStore.runResource`, or new methods on `ProcessStoreInterface`
-- Editing `ProcessStore.ts` “to wire things up temporarily”
-- Calling `store.append` from `RuntimeState.ts` after refactor (use facet API only)
+**Status:** Runtime facet exists (transitional path `src/ProcessStoreRuntime.ts`). Part FP moves it to **`src/store/`** + **`store/Runtime`**. Verify observer uses `ProcessStoreRuntime`, not monolith `ProcessStore`.
 
 ---
 
@@ -498,11 +554,9 @@ export namespace ProcessStore {
 
 ## Part R — `internal/store` infrastructure
 
-**Prompt:** Spine, codec, and composite were split during a hurried reorg. **Review for duplication, wrong imports, and missing `@internal` docs.**
+**Prompt:** Spine, codec, composite — **not** facet tags. Facets live in **`src/store/`**.
 
-**Files:** `src/internal/store/spine.ts`, `codec.ts`, `composite.ts`, `groupLog.ts`, `queueResource.ts`.
-
-**Proposed API:** Shared helpers for new facets (event encoding, context tags, `makeProcessStoreSpine` usage) — a short “facet author’s guide” embedded in your proposal.
+**Files:** `src/internal/store/spine.ts`, `codec.ts`, `composite.ts` only. After Part FP, `groupLog.ts` / `queueResource.ts` should be deleted or reduced to impl helpers.
 
 ---
 
@@ -578,7 +632,7 @@ export namespace ProcessStore {
 
 - [ ] **Changeset** for `@nikscripts/effect-pm` (maintainer reminder — do not skip).
 - [ ] `pnpm typecheck` / `test` / `lint` / `build` green.
-- [ ] No new package subpaths for internal facets without explicit approval.
+- [ ] `store/*` subpaths in `package.json` match `STORAGE.md`.
 - [ ] `index.ts` exports match public-vs-internal rule.
 - [ ] Breaking changes documented in changeset body.
 - [ ] Examples run (`examples/README.md` commands).
@@ -616,16 +670,16 @@ export namespace ProcessStore {
 |--------|---------|
 | `Process` | `serviceOption(ProcessStore)` → `append` / `getProcessExecutions` |
 | `ProcessGroup` | `store.append` lifecycle; `localEnvLayer` defaults to `ProcessStore.layer` |
-| `RuntimeObserver.layerFromProcessStore` | reads monolith tag → append |
-| **`ProcessStore.ts` itself** | `ProcessStore.runtime.*` re-fetches monolith — **wrong**; queries belong on **`ProcessStoreRuntime`** facet |
+| `RuntimeObserver` | `ProcessStoreRuntime` via observer layer |
+| **`ProcessStore.ts` (legacy)** | Monolith `append` / `getProcessExecutions` — Part P removes |
 
 ### Modern integration (reference)
 
 | Module | Pattern |
 |--------|---------|
 | `QueueResource` | `ProcessStoreQueueResource` via `serviceOption` |
-| `Logs` / `logPersistRelay` | `ProcessStoreGroupLog.recordBatch` |
-| `ProcessManager` log commands | `GroupLog.load` / `query` + per-group sqlite |
+| `Logs` / `logPersistRelay` | `ProcessStoreGroupLog` via `serviceOption` + `.recordBatch()` |
+| `ProcessManager` log commands | `yield* ProcessStoreGroupLog` then `.load()` / `.query()` |
 | `groupChild` | `layerProcessStore` + `relayWithCaptureLoggerLayer` |
 | `storage/sqlite` | `layerProcessStore` |
 
@@ -644,9 +698,9 @@ export namespace ProcessStore {
 | `process.execution.completed` | `Process.ts` (raw append) | `getProcessExecutions` |
 | `process.lifecycle.changed` | `ProcessGroup.ts` (raw append) | `events` / status |
 | `queue.*` | `QueueResource` → QueueResource facet | facet queries |
-| `runtime.fact.recorded` | `RuntimeObserver.layerFromProcessStore` | `ProcessStore.runtime.facts` |
-| `runtime.state.changed` | same | `ProcessStore.runtime.stateHistory` |
-| `group.log.entry` | GroupLog facet / relay | `GroupLog.load` / `query` |
+| `runtime.fact.recorded` | `RuntimeObserver` → `ProcessStoreRuntime` | `ProcessStoreRuntime.facts` |
+| `runtime.state.changed` | same | `ProcessStoreRuntime.stateHistory` |
+| `group.log.entry` | GroupLog facet / relay | `ProcessStoreGroupLog.load` / `.query` |
 
 ---
 
