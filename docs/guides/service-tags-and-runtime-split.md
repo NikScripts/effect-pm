@@ -63,7 +63,7 @@ Consumers should import **tags** for:
 - **`encodeURIComponent(SomeTag.id)`** for **`ControlService`** REST paths,
 - **`ProdGroup.contract`** for static layout while **`GET /contract`** refreshes live truth.
 
-Widgets never need the **`Layer`** graph at compile-time if they receive a **`controlBaseUrl`** (same-origin `/api/pm`, Tailscale-internal URL behind proxy, etc.).
+Widgets never need the **`Layer`** graph at compile-time if they receive a **`controlBaseUrl`** aimed at your **control gateway** — the server that forwards to private **`ControlService`** (see [dashboard-integration.md](./dashboard-integration.md)).
 
 ## Naming
 

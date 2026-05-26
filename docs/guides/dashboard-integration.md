@@ -25,30 +25,38 @@ Optional peers: **`@tanstack/react-query`** — if hooks use RQ internally, decl
 
 ---
 
-## API topology — who calls whom?
+## API topology — one pattern everywhere
 
-Treat widget HTTP access as **`ControlClient`** (any implementation: `fetch`, ky, openapi‑generated stubs). **`baseUrl`** is injected — **never** hardcode **`127.0.0.1`** inside published components unless explicitly for **local demos**.
-
-### A — Direct to PM (fine for demos + closed networks)
+Treat **everything** — **examples**, Tailscale MVP, eventual Next prod — as the **same** shape:
 
 ```
-Browser ──► reverse proxy ──► ControlService (same Tailscale/host as widgets)
+Browser ──► same‑origin CONTROL GATEWAY ──► (private HTTP) ──► ControlService
 ```
 
-- Example: single home server — **Vite dev proxy** forwards `/api/pm → http://127.0.0.1:3001`.
-- Tailscale substitutes for auth **only operationally**, not architecturally — you still inherit **`ControlService`’s no-auth contract**.
+- **Widgets never target `ControlService` by URL.** They only **`fetch`** a **`baseUrl`** you choose (typically **`https://dash.example.internal/api/control`** during dev/demo, **`/api/...`** in Next).
+- The **gateway** is *whatever* terminates HTTP **before** the PM process — Next route handlers/tRPC adapters, **`express`**, **`fastify`**, **Caddy**, or even **Vite `server.proxy`** in dev (still **`/api/control → http://127.0.0.1:3001`**). Same mental model; only the middleware stack changes.
+- **`ControlService` stays private**: bind **`127.0.0.1`** on the runner, listen on a VPC tailnet iface in prod, reachable **only from** gateway hosts / mesh routes.
 
-### B — Via your backend (required for prod Next apps)
+Because you only develop **widgets + gateway contract + PM runtime**, there is **not** a second “direct browser → PM” product path — at most **unauthenticated forwarding** (`stripPrefix + fetch`) counts as **a gateway with zero policy**, which is deliberate for Tailscale‑only setups until you bolt on auth.
 
-```
-Browser ──► same-origin Next (tRPC/RSC/session) ──► server-only fetch ──► ControlService / droplet VM
-```
+### How this lands **inside `@nikscripts/effect-pm`**
 
-- **`tRPC` stays entirely in Next**: procedures call **`fetch(internalPmUrl`** or **`ProcessManager`**-style typed client running **server-side**.
-- **`ControlService` stays off the public Internet** — reachable only via **VPC interface**, **Tailscale subnet**, **`127.0.0.1` from** the gateway container, etc.
-- No need to replicate tRPC protocols **inside** `effect-pm`; expose **thin route handlers** that forward and attach **Better Auth**, **PATs**, **signed payloads**, **`x-request-id`** for audit logs, etc., when ready.
+Shipping **topology** does **not** mean embedding **Next** or **tRPC** in the library.
 
-Widgets should accept **`getAccessToken`** / **`credentials: "include"`** only at the **boundary you own** — i.e., when **`baseUrl` points at your `/api/` Next routes**, **not** at raw **`ControlService`**.
+| Responsibility | In `@nikscripts/effect-pm` | In your application |
+| --- | --- | --- |
+| **`ControlService` HTTP** contract, docs, **`ControlResponse`** | Yes (today) | — |
+| Optional thin **`ControlClient`** / URL builders | Yes — possible future subpath (e.g. **`/react`**) | — |
+| **React** widgets that call **`fetch(baseUrl, …)`** | Yes — declare **`react`** / **`react-dom`** as **peers** | Compose in pages/layouts |
+| **`baseUrl`**, **`credentials`**, CSRF, extra headers | API surface on components / context | You set per environment |
+| **Authenticated** `/api/control/*` gateway (**Better Auth**, PAT scopes, audit logs) | **Not** shipped | **Next**, **Express**, **Hono**, etc. |
+| **Demo / dev** gateway (forward `stripPrefix` → `127.0.0.1:<port>`) | **`examples/`** reference only (no Next in-tree) | Copy or replace with your server |
+
+`*` If **`@nikscripts/effect-pm/react`** exists, it still only **builds paths** + **decodes responses** — never session tables or route files.
+
+Using **tRPC** for *your mobile ↔ API* remains valid: **tRPC procedures** are just **gateway implementation details** (`ctx` verifies session → **`fetch(processManagerUrl,...)`**) — **`effect-pm` never parses tRPC payloads**.
+
+Widgets should expose hooks for **`credentials: include`**, bearer injection, headers, **`x-correlation-id`**, … only when **`baseUrl` hits your authenticated gateway**.
 
 ---
 
@@ -76,18 +84,20 @@ Publishing React peers **today** doesn’t worsen security provided **`baseURL` 
 
 ---
 
-## Urgent‑path cheat sheet vs package‑shape path
+## Single dev checklist
 
-| Need | Shortcut | Cleaner later |
-| --- | --- | --- |
-| Working UI this week | Vite **`examples/*/demo-ui`**, same-origin **`fetch`/`proxy`** to **`ControlService`**, widgets colocated *(not necessarily published)* | Extract stable **`effect-pm/react`** + peers + semver |
-| Next integration | Duplicate thin **`route.ts`** wrappers that **`fetch`** private PM URL *(session-checked)* | Centralize **`createPmProcedure`** wrapper for tRPC v10 |
-| Identify strings | Import **tags-only** TS module next to **`ProdGroup`** | Same — never fork string ids |
+1. **Tags module** (+ **runtime**) — [service-tags-and-runtime-split.md](./service-tags-and-runtime-split.md).
+2. **Gateway process** (even a **noop-auth** forwarder) so the browser **`baseUrl` never names `127.0.0.1:3001`** directly — Vite **`server.proxy`** or **`tsx examples/.../control-gateway.ts`** both count as **implementations**, not alternate architectures.
+3. **Widgets** use a **`baseUrl` that targets the gateway origin** (path prefix like **`/api/control`**, not the raw PM host/port) everywhere.
+4. **Later**: swap noop gateway internals for authenticated Next routes/tRPC adapters **without** changing widget URLs.
+
+*(Earlier drafts here listed “shortcut vs cleaner” stacks — everything now maps to steps **1‑4**. If you skim old notes referencing **topology A / B**, treat both names as **the same gateway pattern** described above.)*
 
 ---
 
 ## Operational notes / footguns
 
-- **Bind address** — `ControlService` is **`127.0.0.1`**‑only **inside** Node; Tailscale/external browser needs **gateway or proxy**.
-- **CORS** — easier when browser talks **same-origin** to YOUR backend (topology **B**) than **`ControlService` directly**.
-- Roadmap‑only **`plans/`** docs may mention transport upgrades — **`ControlService`** **HTTP contract stays canonical** unless versioned later.
+- **`ControlService`** remains **`127.0.0.1`**‑only inside the runner — **every browser build** terminates at a **gateway** reachable over **Tailscale / VPC / forwarded localhost**.
+- **CORS** mostly vanishes when the UI is served **same‑origin** with that gateway (**recommended**).
+- **Tailscale containment** complements but never replaces intentional **AuthZ** once exposure widens beyond your personal mesh.
+- Roadmap **`plans/`** entries may revise transport bells/whistles — **`ControlService` HTTP verbs + paths remain canonical** until an explicit **`v2`** ships.
