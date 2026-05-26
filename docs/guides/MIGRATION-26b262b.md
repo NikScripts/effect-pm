@@ -1,10 +1,15 @@
-# Migration guide: `26b262b` → current `main`
+# Migration guide: `26b262b` -> current `main`
 
-This document helps you upgrade code written against commit **`26b262b`** (`test: document process-enqueued refill trigger`, 2026-05-20) to the current package API on **`main`** (HEAD at time of writing: **`eabac3e`** — ProcessManager-first guides + positional queue factories).
+This guide helps upgrade code written against commit **`26b262b`**
+(`test: document process-enqueued refill trigger`, 2026-05-18 UTC) to current
+`main` at **`50ad1ac`**.
 
-**Scope:** application and library code that imports `@nikscripts/effect-pm`. It is not a line-by-line changelog; it focuses on **breaking or behavioral changes** you must touch when upgrading.
+The range is **85 commits**. This is not a changelog; it focuses on code and
+data changes app authors are likely to touch.
 
-**Companion docs (current API, no legacy catalog):**
+## Companion Docs
+
+Use these current API docs while migrating:
 
 | Topic | Guide |
 | --- | --- |
@@ -12,355 +17,554 @@ This document helps you upgrade code written against commit **`26b262b`** (`test
 | Queues | [queue-resource.md](./queue-resource.md) |
 | Groups | [process-group.md](./process-group.md) |
 | Operators | [process-manager.md](./process-manager.md) |
-| HTTP server | [control-plane.md](./control-plane.md) |
-
----
+| Endpoints | [process-manager-endpoints.md](./process-manager-endpoints.md) |
+| HTTP control plane | [control-plane.md](./control-plane.md) |
+| Persistence | [../STORAGE.md](../STORAGE.md) |
 
 ## Summary
 
-Between **`26b262b`** and **`main`** (~45 commits), the runtime foundation landed on `main`:
+The biggest change is that runtime observation and operator APIs were made
+more explicit. Processes and queues now prefer positional factory overloads,
+ProcessManager owns a group-catalog CLI with child launch and structured logs,
+and persistence moved from a monolithic `ProcessStore`/file store shape to
+`RuntimeStorage` plus per-domain `store/*` facets.
 
-1. **Process** — positional `make` / `Service`; removed `providePolling` / `provideSchedule`; stricter layer validation.
-2. **Polling** — removed `acceleratingScoped` (and related legacy exports).
-3. **QueueResource** — removed `persist` / `refill` / `onEmpty`; unified lifecycle hooks; positional `Service` / `layer` / `make`; `releaseEncoded` and pending release controls.
-4. **ProcessGroup** — optional **third argument** for ProcessManager endpoint config (`configItems`).
-5. **ProcessManager** — `LocalRuntime`, `Endpoint.module`, `group-start` / `group-stop`, richer CLI; endpoint config on the group instead of only ad hoc `Endpoint()(group, { baseUrl })`.
-6. **Storage** — `RuntimeStorage` contract, SQLite adapter, `ProcessStore` builder, `ProcessStorage` layers, and per-domain facet query APIs.
-7. **Control** — protocol **envelopes** on `POST /control` (REST routes unchanged in role).
-8. **Toolchain** — Effect `^4.0.0-beta.65` → `^4.0.0-beta.69`.
+Treat this upgrade as **semver-major** if you publish it downstream. The range
+contains removed APIs, removed package subpaths, renamed wire event types, and
+storage rows that may need migration.
 
-Publish a **changeset** (semver minor/major as you treat breaking API) when you release this range to npm.
+## Upgrade Checklist
 
----
+- [ ] Align Effect packages from `^4.0.0-beta.65` to `^4.0.0-beta.69`.
+- [ ] Replace `Process.providePolling` / `Process.provideSchedule` with
+      inline `polling` / `schedule` config or positional layers.
+- [ ] Replace `Polling.acceleratingScoped` and `acceleratingWithRefs` with
+      `Polling.accelerating`.
+- [ ] Remove queue `persist`, `refill`, `onEmpty`, and `handle.refill()`;
+      remap behavior to `onDrained`, `onEnqueued`, `onStart`, or explicit app
+      storage.
+- [ ] Rename queue hooks: `onEnqueue` -> `onEnqueued`, `onComplete` ->
+      `onCompleted`.
+- [ ] Move imports from removed storage subpaths (`storage/file`,
+      `store/Runtime`, `store/GroupLog`, legacy facet subpaths) to the current
+      `RuntimeStorage`, `ProcessStorage`, and `store/*` modules.
+- [ ] Replace static facet reads (`ProcessStoreX.facts(...)`,
+      `ProcessStoreX.executions(...)`, etc.) with service reads via
+      `yield* ProcessStoreX` or `Effect.serviceOption(ProcessStoreX)`.
+- [ ] Replace `ProcessStore.layer` / file-backed stores with
+      `ProcessStorage.layer`, `ProcessStorage.layerRuntimeStorage`, or
+      `layerProcessStore({ filename })` from `@nikscripts/effect-pm/storage/sqlite`.
+- [ ] If you stored durable log rows, migrate or discard rows with
+      `type: "group.log.entry"` before reading them as `ProcessStoreLog`.
+- [ ] Update ProcessManager group endpoint config to
+      `Endpoint.local(transport, entry)`, `Endpoint.production(transport)`, or
+      `Endpoint.define(label, transport)`.
+- [ ] Replace old `pm group-start` / `pm group-stop` / `pm queue-start`
+      assumptions with unified `pm start <target>` and `pm stop <target>`.
+- [ ] Run `ProcessManager.cli verify` against deployed control endpoints.
+- [ ] Run `pnpm run typecheck`, `pnpm test`, `pnpm run lint`, and
+      `pnpm run build`.
+- [ ] Add or update a changeset before publishing this migration.
 
-## Upgrade checklist
+## Package and Toolchain
 
-Use this as a PR checklist after bumping the package.
+### Effect Peer Range
 
-- [ ] Replace **`Process.providePolling` / `provideSchedule`** with positional layers or config fields on **`Process.make`** / **`Process.Service`**.
-- [ ] Replace **`Polling.acceleratingScoped`** with **`Polling.accelerating`**.
-- [ ] Remove queue **`persist`**, **`refill`**, **`onEmpty`**, and **`handle.refill()`**; map to **`onDrained`**, **`onStart`**, and/or **`onEnqueued`** (see [Queue hooks](#queueresource-hooks-and-refill-removal)).
-- [ ] Rename queue hooks: **`onEnqueue`** → **`onEnqueued`**, **`onComplete`** → **`onCompleted`**; add **`onExit`** / per-stage hooks where you need finer lifecycle.
-- [ ] Optionally adopt **`QueueResource.Service(id, effect, options?)`** instead of `(id, { effect, … })` only.
-- [ ] Add **`ProcessGroup.Service(..., configItems?)`** (or `make` third arg) if you use **`ProcessManager.cli`** with **`group-start`** / **`--target`**.
-- [ ] Introduce **`ProcessManager.LocalRuntime`** + **`Endpoint.module`** for module launch, or keep **`Endpoint.http`** for fixed URLs.
-- [ ] Wire **`RuntimeStorage`** / **`ProcessStorage`** if you relied on in-memory-only analytics or new query surfaces.
-- [ ] Run **`ProcessManager.cli`** `verify` after deploy; fix contract drift.
-- [ ] Re-run **`pnpm check`** / tests; fix **`ProcessMakeInvalidLayerArgument`** at compile time where positional args are wrong.
+| Dependency | `26b262b` | Current |
+| --- | --- | --- |
+| `effect` peer | `^4.0.0-beta.65` | `^4.0.0-beta.69` |
+| `@effect/platform-node` | `4.0.0-beta.65` | `4.0.0-beta.69` |
+| `@effect/vitest` | `4.0.0-beta.65` | `4.0.0-beta.69` |
 
----
+Upgrade Effect and `effect-pm` together. Mixed beta ranges are likely to show
+up as type incompatibilities before runtime.
 
-## Process
+### Export Changes
 
-### What stayed the same at `26b262b`
+New or promoted public subpaths:
 
-- Process id is the **first argument** to **`Process.make(id, config)`** — there is no `name` field on **`ProcessMakeOptions`** (internal config still carries `name` equal to `id`).
-- Default schedule when both **`schedule`** and **`scheduleLayer`** are omitted is already **`ProcessSchedule.alwaysArmed`**.
-- **`Process.Service`** exists; only the **config-object** overload existed on the service factory.
+| Subpath | Purpose |
+| --- | --- |
+| `@nikscripts/effect-pm/RuntimeStorage` | Generic row storage contract |
+| `@nikscripts/effect-pm/ProcessStorage` | Combined built-in storage facets |
+| `@nikscripts/effect-pm/Query` | Runtime record predicate/query builders |
+| `@nikscripts/effect-pm/Logs` | Process-manager log capture/relay |
+| `@nikscripts/effect-pm/store/QueueResource` | Queue storage facet |
+| `@nikscripts/effect-pm/store/RunResource` | RunResource storage facet |
+| `@nikscripts/effect-pm/store/Log` | Structured log storage facet |
+| `@nikscripts/effect-pm/store/ProcessLifecycle` | Process lifecycle facet |
+| `@nikscripts/effect-pm/store/ProcessGroup` | Process group/member lifecycle facet |
+| `@nikscripts/effect-pm/store/ProcessExecution` | Process execution facet |
+| `@nikscripts/effect-pm/storage/sqlite` | SQLite `RuntimeStorage` adapter |
 
-### What changed
+Removed or replaced subpaths:
 
-#### Positional `Process.make` / `Process.Service`
+| Old subpath/API | Replacement |
+| --- | --- |
+| `@nikscripts/effect-pm/storage/file` | `@nikscripts/effect-pm/storage/sqlite` |
+| `@nikscripts/effect-pm/store/Runtime` | `@nikscripts/effect-pm/store/RunResource` |
+| `@nikscripts/effect-pm/store/GroupLog` | `@nikscripts/effect-pm/store/Log` |
+| `./ProcessStoreGroupLog` / `./ProcessStoreQueueResource` package subpaths | `store/Log` / `store/QueueResource` |
+| `ProcessStoreBuilder` module | `ProcessStore.Service`, `ProcessStore.record`, `ProcessStore.read` |
 
-**Before (`26b262b`):**
+The package now also publishes the `effect-pm-group-child` binary for
+ProcessManager child launch.
 
-```typescript
-const p = Process.make("@app/Worker", {
-  effect: Effect.logInfo("tick"),
-  polling: Polling.spaced(Duration.seconds(5)),
-  schedule: ProcessSchedule.empty,
-});
+## Process and Polling
 
-class Worker extends Process.Service<Worker>()("@app/Worker", {
-  effect: Effect.logInfo("tick"),
-  polling: Polling.spaced(Duration.seconds(5)),
-}) {}
-```
+### Positional `Process.make` / `Process.Service`
 
-**After (current):**
-
-```typescript
-const p = Process.make(
-  "@app/Worker",
-  Effect.logInfo("tick"),
-  Polling.spaced(Duration.seconds(5)),
-  ProcessSchedule.empty,
-);
-
-class Worker extends Process.Service<Worker>()(
-  "@app/Worker",
-  Effect.logInfo("tick"),
-  Polling.spaced(Duration.seconds(5)),
-  ProcessSchedule.empty,
-) {}
-```
-
-Polling and schedule layers may appear in **either order** as the third and fourth arguments. Schedule **initializers** `(controls) => Effect` still require the **config object** form.
-
-Invalid third/fourth arguments throw **`ProcessMakeInvalidLayerArgument`** (fail at construction time, not at `group.start`).
-
-#### Removed `providePolling` / `provideSchedule`
-
-**Before:**
-
-```typescript
-const base = Process.make("@app/Worker", { effect: Effect.void });
-const withPoll = Process.providePolling(base, Polling.spaced(Duration.seconds(1)));
-```
-
-**After:** inline layers on `make` / `Service`, or use the config object:
-
-```typescript
-Process.make("@app/Worker", {
-  effect: Effect.void,
-  polling: Polling.spaced(Duration.seconds(1)),
-});
-```
-
-There is no post-hoc attachment API on the **`Process`** export object anymore.
-
----
-
-## Polling
-
-**Before:** `Polling.acceleratingScoped` (deprecated alias around internal refs).
-
-**After:** use **`Polling.accelerating`** only. `acceleratingScoped` and `acceleratingWithRefs` are **removed** from the public **`Polling`** object.
-
----
-
-## QueueResource
-
-### Positional factories (optional migration)
-
-At **`26b262b`**, **`QueueResource.Service`** only accepted **`(id, config)`** with **`effect` inside the config.
-
-**After:** preferred shape is **`(id, effect, options?)`** where **`options`** is config **without** `effect` (and without `name` — id is the name).
+The config-object form still works and remains required for schedule
+initializers. The preferred form is positional:
 
 ```typescript
 // Before
-class Q extends QueueResource.Service<Q, Item>()("@app/Q", {
-  effect: (item) => work(item),
-  concurrency: 4,
-}) {}
+const worker = Process.make("@app/Worker", {
+  effect: Effect.logInfo("tick"),
+  polling: Polling.spaced("5 seconds"),
+  schedule: ProcessSchedule.alwaysArmed,
+});
 
-// After (equivalent)
-class Q extends QueueResource.Service<Q, Item>()(
-  "@app/Q",
-  (item) => work(item),
+// After
+const worker = Process.make(
+  "@app/Worker",
+  Effect.logInfo("tick"),
+  Polling.spaced("5 seconds"),
+  ProcessSchedule.alwaysArmed,
+);
+```
+
+Polling and schedule layers may appear in either order as the third and fourth
+arguments. Invalid layer-like arguments now fail at construction with
+`ProcessMakeInvalidLayerArgument`.
+
+### Removed Post-Hoc Layer Helpers
+
+`Process.providePolling` and `Process.provideSchedule` are gone. Inline those
+dependencies at creation time:
+
+```typescript
+// Before
+const base = Process.make("@app/Worker", { effect: Effect.void });
+const worker = Process.providePolling(base, Polling.spaced("1 second"));
+
+// After
+const worker = Process.make("@app/Worker", {
+  effect: Effect.void,
+  polling: Polling.spaced("1 second"),
+});
+```
+
+### Polling Aliases
+
+`Polling.acceleratingScoped` and `Polling.acceleratingWithRefs` were removed.
+Use `Polling.accelerating`.
+
+## QueueResource
+
+### Positional Factories
+
+`QueueResource.Service`, `QueueResource.layer`, and `QueueResource.make` now
+support `(id, effect, options?)` or `(effect, options?)` shapes in addition to
+the config object where applicable.
+
+```typescript
+// Before
+class EmailQueue extends QueueResource.Service<EmailQueue, Email>()(
+  "@app/EmailQueue",
+  {
+    effect: (email) => sendEmail(email),
+    concurrency: 4,
+  },
+) {}
+
+// After
+class EmailQueue extends QueueResource.Service<EmailQueue, Email>()(
+  "@app/EmailQueue",
+  (email) => sendEmail(email),
   { concurrency: 4 },
 ) {}
 ```
 
-Same overload pattern applies to **`QueueResource.layer(tag, effect, options?)`** and **`QueueResource.make(effect, options?)`**.
+### Hook and Refill Removal
 
-### Hooks and refill removal
+Queue refill semantics were replaced with lifecycle hooks.
 
-At **`26b262b`** the queue config and handle still supported **refill-oriented** APIs:
-
-| Removed / renamed | Replacement |
+| Old API | Current API |
 | --- | --- |
-| **`persist`** on enqueue | Use normal enqueue + your own storage, or queue storage facet / **`RuntimeStorage`** records |
-| **`refill`** config + **`handle.refill()`** | **`onDrained`** (empty after work or **`clear`**, not cold-start idle) and/or **`onEnqueued`** |
-| **`onEmpty`** (`Effect` hook) | **`onDrained`** with event + controls |
-| **`onEnqueue`** | **`onEnqueued`** (batch + controls) |
-| **`onComplete(item, exit, elapsed)`** | **`onCompleted`** (`{ entry, elapsed }` + controls) |
+| `persist` enqueue option | App storage or `ProcessStoreQueueResource` analytics |
+| `refill` config | `onDrained`, `onEnqueued`, `onStart`, or explicit app scheduling |
+| `handle.refill()` | Enqueue directly through controls (`add`, `enqueue`, etc.) |
+| `onEmpty` | `onDrained` |
+| `onEnqueue` | `onEnqueued` |
+| `onComplete(item, exit, elapsed)` | `onCompleted({ entry, elapsed }, controls)` |
 
-Current lifecycle hooks (all optional, receive **controls** for re-enqueue / pause / etc.):
+`onDrained` means the queue became empty after work or `clear`. It is not a
+cold-start idle trigger. If old `refill` code seeded work at boot, move that
+seed into app startup, `onStart`, or a process that enqueues work.
 
-- **`onStart`**, **`onStarted`**, **`onExit`**, **`onCompleted`**, **`onFailed`**
-- **`onRetryScheduled`**, **`onRetryExhausted`**
-- **`onDrained`**, **`onCleared`**, **`onReleased`**, **`onDeadLettered`**, **`onDropped`**
-
-Hook failures are logged; they no longer fail the worker silently without a trace (see `3133cc1`).
-
-**Example — refill → drain hook:**
+Current lifecycle hooks include `onStart`, `onStarted`, `onExit`,
+`onCompleted`, `onFailed`, `onRetryScheduled`, `onRetryExhausted`,
+`onDrained`, `onCleared`, `onReleased`, `onDeadLettered`, and `onDropped`.
+Hook failures are logged instead of silently disappearing.
 
 ```typescript
-// Before (26b262b)
+// Before
 QueueResource.make({
   name: "@app/Inbox",
   effect: process,
   refill: (handle) =>
-    handle.add(loadMoreFromDb()).pipe(
-      Effect.tap(() => Effect.logInfo("refilled")),
-    ),
+    handle.add(loadMoreFromDb()),
 });
 
 // After
-QueueResource.make({
-  name: "@app/Inbox",
-  effect: process,
-  onDrained: ({ queueId }, handle) =>
-    loadMoreFromDb().pipe(
-      Effect.flatMap((items) => handle.add(items)),
-      Effect.tap(() => Effect.logInfo("refilled after drain", queueId)),
-    ),
+QueueResource.make("@app/Inbox", process, {
+  onDrained: (_event, controls) =>
+    loadMoreFromDb().pipe(Effect.flatMap((items) => controls.add(items))),
 });
 ```
 
-### Release encoding
+### Schema-Backed Release
 
-**`QueueHandle.releaseEncoded`** (and pending release controls on the control plane) accept schema-backed payloads for operator **`release`** actions. If you only used in-process **`release`**, behavior is unchanged; HTTP/CLI callers can use encoded releases when the group contract exposes them.
+`QueueHandle.releaseEncoded` and remote queue `release` controls are available
+when the queue has an `itemSchema`. In-process `release` behavior is otherwise
+unchanged.
 
-### Requirements inference
+### Analytics Ordering Fixes
 
-Queue **`Service`** / **`layer`** **R** type parameters are inferred from optional hook and **`effect`** requirements in config (`d77d061`). After hook renames, fix types where inference widens or narrows.
-
----
+Queue analytics writes are now ordered before worker wakeups, and dedupe-key
+release is recorded before retry hooks can re-enqueue the same key. If you
+assert on stored event order, expect `queue.entry.enqueued` /
+`queue.dedupe-key.added` to precede worker-side completion/release rows.
 
 ## ProcessGroup
 
-### Typed entries (unchanged recommendation)
+### Typed Entries Remain the Target Shape
 
-**`ProcessGroup.Service(id, entries)`** and **`ProcessGroup.make(id, entries)`** were already the typed path at **`26b262b`**.
-
-Legacy **`ProcessGroup.make({ queues, processes })`** still exists internally but is **not** the documented product path; prefer **`[MyProcess, MyQueue] as const`**.
-
-### Endpoint config (new third argument)
-
-**Before:** remote URLs lived in **`ProcessManager.ConnectionRegistry`** and/or per-endpoint services:
-
-```typescript
-class BillingRemote extends ProcessManager.Endpoint<BillingRemote>()(
-  BillingGroup,
-  { baseUrl: "http://127.0.0.1:3001" },
-) {}
-```
-
-**After:** declare endpoints on the **group** (bundled into CLI catalog and **`--target`**):
+Use service entries in a literal tuple:
 
 ```typescript
 export class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
   "@app/Billing",
-  [SyncProcess, InvoiceQueue] as const,
+  [SyncInvoices, EmailQueue] as const,
+) {}
+```
+
+`ProcessGroup.make({ queues, processes })` is legacy-compatible, but typed
+contracts, `ProcessManager.verify`, remote layers, and queue item controls are
+designed around `Process.Service` / `QueueResource.Service` entries.
+
+### Endpoint Config Is Group Metadata
+
+ProcessManager endpoints now belong on the group's third argument. The current
+endpoint helpers are transport-first:
+
+```typescript
+import { Endpoint, ProcessGroup, Transport } from "@nikscripts/effect-pm";
+
+const billingTransport = Transport.http(3001);
+
+export class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+  "@app/Billing",
+  [SyncInvoices, EmailQueue] as const,
   [
-    Endpoint.local(
-      Endpoint.module(
-        () => import("./billing-runtime.js"),
-        (mod) => mod.BillingRuntime,
-      ),
-    ).default,
-    Endpoint.production(
-      Endpoint.http({
-        transport: ProcessManager.Transport.http({
-          baseUrl: "http://prod.example:3001",
-        }),
-      }),
-    ),
+    Endpoint.local(billingTransport, import.meta.url).default,
+    Endpoint.production(billingTransport),
+    Endpoint.define("staging", Transport.http("https://billing-staging.example.com")),
   ],
 ) {}
 ```
 
-**`ProcessManager.Config.layer`** still overrides selection when you need environment-specific wiring without editing the group class.
+`ProcessManager.Config.layer(...)` can still override bundled group config for
+tests or environment-specific CLIs.
 
-**`remoteLayer`** on **`ProcessGroup`** (HTTP client to a remote contract) is unchanged in role; see [process-group.md](./process-group.md).
+### Local Runtime Wiring
 
----
+For normal operator usage, `Endpoint.local(transport, entry)` points the child
+launcher at a module that exports the group. The packaged child process imports
+that module, finds the group by id, and builds the local runtime itself.
 
-## ProcessManager and control plane
-
-### CLI and commands
-
-At **`26b262b`**, **`ProcessManager.cli`** existed with **`connect`** and **`ConnectionRegistry`**, but there was no **`group-start`**, **`LocalRuntime`**, or **`Endpoint.module`**.
-
-**After:**
-
-| Capability | Notes |
-| --- | --- |
-| **`groups`**, **`ls`**, **`verify`**, **`status`** | Endpoint status includes **Configured / Pending / Online / Offline / ContractDrift** |
-| **`group-start` / `group-stop`** | Launches **module** endpoints (child process + control URL under `.effect-pm/run/groups`) |
-| **`--target <label>`** | Selects non-default item from group **`configItems`** |
-| **`start` / `stop` / `restart` / `now`**, queue controls | Canonical ids or unique suffix aliases |
-
-**`createCli` / `runCli`** remain exported for **single-group, fixed-port** local tools; operator docs center on **`ProcessManager.cli`** for multi-group catalogs. See [process-manager.md](./process-manager.md).
-
-### `LocalRuntime` + `Endpoint.module`
-
-Export a descriptor from your runtime entry module:
+When embedding the same wiring manually, use `groupLocalRuntime`:
 
 ```typescript
-export const BillingRuntime = ProcessManager.LocalRuntime(BillingGroup, {
-  layer: /* group + processes + queues + store */,
-  control: ControlService.layerHttp(BillingGroup, { port: 3001 }),
+export const BillingRuntime = ProcessManager.groupLocalRuntime(BillingGroup, {
+  controlBaseUrl: "http://127.0.0.1:3001",
 });
 ```
 
-**`Endpoint.module(() => import("…"), select)`** must return that descriptor. Reference fixture: `test/fixtures/process-manager-module-definition.ts`.
-
-### HTTP: REST + `/control`
-
-**Unchanged assumption:** control server binds **`127.0.0.1`** only.
-
-| Path | Client |
-| --- | --- |
-| REST (`GET /contract`, `POST /processes/:id/start`, …) | Direct HTTP, scripts |
-| **`POST /control`** | **ProcessManager** (envelope **`ControlProtocolRequest`**) |
-
-REST handlers and **`/control`** share the same protocol router. See [control-plane.md](./control-plane.md) — do not assume **`POST /control` was removed** (older merge notes were wrong).
-
----
-
-## ProcessStore and RuntimeStorage
-
-At **`26b262b`** there was **no** `src/RuntimeStorage.ts`; storage already emitted some **runtime.fact** events, but the **storage adapter boundary**, **SQLite adapter**, **semantic queue/process facets**, and **query options** (`QueryOpts`, fact/history queries) landed after that commit.
-
-**Migration steps:**
-
-1. Replace **`ProcessStore.layer`** with **`ProcessStorage.layer`** for in-memory storage facets.
-2. For durable analytics / audit, use **`layerProcessStore({ filename })`** from `@nikscripts/effect-pm/storage/sqlite`.
-3. Read through the relevant facet (`ProcessStoreProcessExecution`, `ProcessStoreProcessLifecycle`, `ProcessStoreRunResource`, `ProcessStoreLog`, etc.) instead of the removed monolith service.
-
----
-
-## Effect version
-
-| | `26b262b` | Current `main` |
-| --- | --- | --- |
-| **peer** | `effect ^4.0.0-beta.65` | `effect ^4.0.0-beta.69` |
-
-Align your app’s Effect version with the peer range before upgrading effect-pm.
-
----
-
-## ProcessGroup legacy `make({ queues, processes })`
-
-Still present for backward compatibility. If you use it at **`26b262b`**, you can keep it short term, but you should migrate to:
+If you need custom layers without `groupLocalRuntime`, compose
+`ProcessGroup.localEnvLayer` with `ControlService.layerHttp` yourself:
 
 ```typescript
-ProcessGroup.Service<MyGroup>()("@app/MyGroup", [QueueA, ProcessB] as const);
+const groupLayer = ProcessGroup.localEnvLayer(BillingGroup);
+const controlLayer = ControlService.layerHttp(BillingGroup, { port: 3001 });
 ```
 
-Typed **`group.start`**, **`group.queue("…")`**, contract generation, and ProcessManager **`verify`** all assume **service entries**, not bare **`Process.make`** handles in a bag.
+Older `Endpoint.module(...)` examples are stale for current `main`; use
+`Endpoint.local(transport, entry)` where `entry` is a module URL/path such as
+`import.meta.url`.
 
----
+## ProcessManager and Control Plane
 
-## Suggested upgrade order
+### CLI Command Changes
 
-1. Bump **Effect**, then **@nikscripts/effect-pm**.
-2. Fix **compile errors** (Process positional layers, removed Polling/Process helpers, queue hook renames).
-3. Run unit/integration tests; fix **refill** / **onEmpty** behavior with **`onDrained`** semantics (cold start no longer triggers refill).
-4. Add **group endpoint config** + **`LocalRuntime`** if you use the CLI operator workflow.
-5. Run **`ProcessManager.cli verify`** against staging endpoints.
-6. Add **changeset** and release notes pointing to this file.
+`ProcessManager.cli(groups)` now operates a group catalog. Current commands:
 
----
-
-## Commit map (high level)
-
-| Area | Representative commits (after `26b262b`) |
+| Command | Notes |
 | --- | --- |
-| Runtime storage / SQLite | `daf28a5` … `22a9861`, `1c4ff15` |
-| Queue hooks / refill removal | `0535cdf`, `c7a6f54`, `3133cc1` |
-| Queue release encoding | `425b636`, `9fcc360` |
-| Control protocol envelopes | `2a3bdcc` |
-| PM endpoint config + module launch | `587cd7b` … `85142ce` |
-| Positional Process API | `7c0c37b`, `ec1546a` |
-| Positional Queue API + guides | `3aaa978`, `eabac3e` |
+| `groups` | Endpoint status for configured groups |
+| `ls` | Processes and queues with contract controls |
+| `verify` | Local contract vs remote contract |
+| `status <target>` | Group, process, or queue status |
+| `start <target>` | Starts a group child, process, or queue depending on target |
+| `stop <target>` | Stops a group child or process; queues use pause/resume/clear |
+| `restart <process>` / `now <process>` | Process controls |
+| `pause` / `resume` / `clear` | Queue controls |
+| `watch <target>` | Live structured logs |
+| `logs [target]` | Stored structured log history |
 
-To regenerate the exact file list:
+Removed command assumptions:
+
+| Old command | Current command |
+| --- | --- |
+| `group-start <group>` | `start <group>` |
+| `group-stop <group>` | `stop <group>` |
+| `queue-start <queue>` | `start <queue>` |
+
+Use `--target <label>` to select a non-default endpoint label from group config.
+Use `--no-watch` with `start <group>` when you want child launch without live log
+tailing.
+
+### Operator Layers
+
+Operator CLIs need platform layers plus ProcessManager operator layers:
+
+```typescript
+const cli = ProcessManager.cli([BillingGroup] as const);
+
+cli(process.argv).pipe(
+  Effect.provide(Layer.mergeAll(
+    NodeServices.layer,
+    NodeHttpClient.layerUndici,
+    ProcessManager.operatorLayer,
+    ProcessManager.operatorLoggerLayer,
+  )),
+  NodeRuntime.runMain,
+);
+```
+
+`createCli` / `runCli` still exist for simpler single-group control tools.
+Use `ProcessManager.cli` for multi-group catalogs, target resolution, child
+launch, `watch`, and `logs`.
+
+### HTTP Protocol
+
+`ControlService` still binds to `127.0.0.1`. Current clients use the protocol
+envelope on `POST /control`; REST routes remain available for direct HTTP
+scripts and contract inspection (`GET /contract`).
+
+## Logs
+
+Structured operator logs moved out of `ProcessStore` and into the `Logs`
+capture/relay module plus the `ProcessStoreLog` storage facet.
+
+Use `@nikscripts/effect-pm/Logs` for capture/relay:
+
+```typescript
+import { relayWithCaptureLoggerLayer } from "@nikscripts/effect-pm/Logs";
+```
+
+Use `@nikscripts/effect-pm/store/Log` for durable reads/writes:
+
+```typescript
+import { ProcessStoreLog } from "@nikscripts/effect-pm/store/Log";
+
+const logs = yield* ProcessStoreLog;
+const rows = yield* logs.load({
+  groupId: "@app/Billing",
+  limit: 50,
+  sort: "desc",
+});
+```
+
+Breaking rename:
+
+| Old | Current |
+| --- | --- |
+| `ProcessStoreGroupLog` | `ProcessStoreLog` |
+| `ProcessStoreGroupLogApi` | `ProcessStoreLogApi` |
+| `makeProcessStoreGroupLog` | `makeProcessStoreLog` |
+| `@nikscripts/effect-pm/store/GroupLog` | `@nikscripts/effect-pm/store/Log` |
+| `group.log.entry` rows | `log.entry` rows |
+
+Existing SQLite rows with `type: "group.log.entry"` do not decode as current
+`ProcessStoreLog` entries. Migrate them to `log.entry` with the current payload
+shape, or discard/rotate that store before upgrade.
+
+## ProcessStore, ProcessStorage, and RuntimeStorage
+
+### New Storage Model
+
+Current storage has three layers:
+
+1. `RuntimeStorage` stores generic `RuntimeRecord` rows.
+2. Each public facet in `src/store/*` owns its domain codec, predicates, write
+   methods, and read methods.
+3. `ProcessStorage` composes all built-in facets.
+
+For in-memory tests/dev:
+
+```typescript
+Effect.provide(program, ProcessStorage.layer);
+```
+
+For durable SQLite:
+
+```typescript
+import { Layer } from "effect";
+import { ProcessStorage } from "@nikscripts/effect-pm";
+import { layerProcessStore } from "@nikscripts/effect-pm/storage/sqlite";
+
+const storage = Layer.provide(
+  ProcessStorage.layerRuntimeStorage,
+  layerProcessStore({ filename: ".effect-pm/data.sqlite" }),
+);
+```
+
+### Facet Reads Are Services, Not Static Methods
+
+Static methods are emitters only. Reads now go through the service instance:
+
+```typescript
+// Before
+const rows = yield* ProcessStoreRunResource.facts({ resourceId: "@app/cache" });
+
+// After
+const rows = yield* Effect.serviceOption(ProcessStoreRunResource).pipe(
+  Effect.flatMap(
+    Option.match({
+      onNone: () => Effect.succeed([]),
+      onSome: (store) => store.facts({ resourceId: "@app/cache" }),
+    }),
+  ),
+);
+```
+
+For dominant identifiers, use the identifier-bound API:
+
+```typescript
+const queue = yield* ProcessStoreQueueResource.for("@app/EmailQueue");
+const entries = yield* queue.entries({ opts: { limit: 100 } });
+
+const runs = yield* ProcessStoreRunResource.for("@app/cache").runs();
+const executions = yield* ProcessStoreProcessExecution
+  .for("@app/Billing/SyncInvoices")
+  .executions();
+```
+
+### Removed Monolith and Generic Event Surface
+
+Removed:
+
+- `ProcessStore.events(query)` as a cross-domain event reader.
+- `ProcessStore.runtime` / `ProcessStore.runResource` namespaces.
+- `RuntimeObserver`, `RuntimeObserver.layerFromProcessStore`,
+  `RuntimeObserver.layerListeners`, `RuntimeObserver.publishFact`,
+  `RuntimeObserver.publishStateChange`.
+- `persistRuntimeObservation`.
+- Generic public runtime types such as `RuntimeFact`, `RuntimeRef`,
+  `RuntimeStateBase`, `RuntimeStateChange`, `RuntimeFactQuery`, and
+  `RuntimeStateHistoryQuery`.
+- `AnalyticsEvent` and `StoreEventQuery`.
+- `EffectPmEventRow` / `EffectPmEventCreateInput` from the package root and
+  `ProcessStoreEvent`.
+- Prisma codec exports such as `decodeEventRow`, `encodeEvent`, and
+  `PrismaProcessStoreDecodeError`.
+
+Use per-domain facets and their concrete query types instead:
+
+| Domain | Current facet |
+| --- | --- |
+| Queue analytics | `ProcessStoreQueueResource` |
+| RunResource facts/state | `ProcessStoreRunResource` |
+| Logs | `ProcessStoreLog` |
+| Process executions | `ProcessStoreProcessExecution` |
+| Process lifecycle | `ProcessStoreProcessLifecycle` |
+| Process group/member lifecycle | `ProcessStoreProcessGroup` |
+
+`ProcessStoreEvent` now only carries shared primitives such as `JsonValue`,
+`QueryOpts`, `AnalyticsEventBase`, and storage write errors.
+
+### Facet Authoring API
+
+If you authored custom facets, replace `ProcessStoreBuilder` and old
+`record((s) => api)` shapes with the current section DSL:
+
+```typescript
+export class ProcessStoreThing extends ProcessStore.Service<ProcessStoreThing>()(
+  "@app/store/thing/ProcessStoreThing",
+  ProcessStore.record({
+    recordThing: (s) => (fact: ThingFact) => s.create(makeThingRecord(fact)),
+  }),
+  ProcessStore.read((s) => ({
+    things: (query?: ThingQuery) =>
+      s.read(runtimeRecordQuery(thingPredicates(query), query?.opts)).pipe(
+        Effect.map(decodeThings),
+      ),
+  })),
+) {}
+```
+
+`ProcessStore.record(...)` now takes an object literal of method factories. This
+is required so static optional emitters can be typed without runtime
+introspection.
+
+### Storage Data Migration Notes
+
+Durable row compatibility is not guaranteed across this range:
+
+- `group.log.entry` was renamed to `log.entry`.
+- Queue analytics moved to concrete row types such as `queue.entry.enqueued`,
+  `queue.lifecycle.drained`, and `queue.dedupe-key.added`.
+- RunResource uses `run-resource.fact.recorded` and
+  `run-resource.state.changed`.
+- The NDJSON/file store was removed.
+- The Prisma adapter is no longer the current durable path; Prisma row codecs
+  were removed while Prisma is being rebuilt as a `RuntimeStorage` adapter.
+
+If old analytics are valuable, export them before upgrading, then write an
+explicit one-off migration into the current `RuntimeRecord` shape. Otherwise,
+rotate the old store and start fresh with SQLite `layerProcessStore`.
+
+## Suggested Upgrade Order
+
+1. Bump Effect and `@nikscripts/effect-pm`.
+2. Fix compile errors from removed exports and renamed imports.
+3. Migrate `Process` and `QueueResource` factories/hooks.
+4. Migrate persistence wiring to `ProcessStorage` and current `store/*` facets.
+5. Decide whether to migrate, archive, or discard old durable analytics rows.
+6. Update ProcessManager endpoint config and CLI command usage.
+7. Run `verify` against staged control endpoints.
+8. Run the full repo checks.
+9. Add a changeset and release notes pointing at this guide.
+
+## Commit Map
+
+| Area | Representative commits |
+| --- | --- |
+| Runtime record contract | `daf28a5`, `1c54b5c`, `0ff3793` |
+| SQLite RuntimeStorage | `d26e7ca`, `d72dc6f`, `a8f213c`, `a6a593b` |
+| Queue hooks/refill removal | `0535cdf`, `c7a6f54`, `3133cc1` |
+| Queue release and analytics ordering | `9fcc360`, `425b636`, `185fc24` |
+| Control protocol and ProcessManager | `2a3bdcc`, `587cd7b`, `44006a4` |
+| Positional Process/Queue APIs | `7c0c37b`, `3aaa978` |
+| Logs and PM watch/logs | `e4160cc`, `700c629`, `e4a11e2`, `8e54b0b` |
+| Storage facet split | `ff1979c`, `f3bcbad`, `09be964`, `216a10f`, `3cfc25a` |
+| Identifier-bound storage reads | `50ad1ac` |
+
+Regenerate the raw range details with:
 
 ```bash
-git diff 26b262b..HEAD --stat
-git log 26b262b..HEAD --oneline
+git log 26b262bf9948fc1244eeb2519dca67877b1f588c..HEAD --oneline
+git diff --stat 26b262bf9948fc1244eeb2519dca67877b1f588c..HEAD
 ```
