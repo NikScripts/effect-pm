@@ -461,6 +461,57 @@ describe("ProcessStoreQueueResource — lifecycle and dedupe-key projections", (
   );
 });
 
+describe("ProcessStoreQueueResource — for(queueId) bound API", () => {
+  const queueA = "@test/ForA";
+  const queueB = "@test/ForB";
+  const t = (ms: number) => 1_700_000_000_000 + ms;
+
+  const fixtures = Effect.gen(function* () {
+    const facet = yield* ProcessStoreQueueResource;
+    yield* facet.recordEntry(
+      enqueued(queueA, `${queueA}/entry/1`, t(0), { key: "shared" }),
+    );
+    yield* facet.recordEntry(
+      enqueued(queueB, `${queueB}/entry/1`, t(0), { key: "shared" }),
+    );
+    yield* facet.recordLifecycle(lifecycleStarted(queueA, t(5)));
+    yield* facet.recordLifecycle(lifecycleStarted(queueB, t(5)));
+    yield* facet.recordDedupeKey(dedupeAdded(queueA, "k1", t(10)));
+    yield* facet.recordDedupeKey(dedupeAdded(queueB, "k1", t(10)));
+  });
+
+  it.live("entries() narrows to the bound queueId", () =>
+    Effect.gen(function* () {
+      yield* fixtures;
+      const bound = yield* ProcessStoreQueueResource.for(queueA);
+      const rows = yield* bound.entries();
+      expect(rows.every((row) => row.queueId === queueA)).toBe(true);
+    }).pipe(Effect.provide(ProcessStorage.layer)),
+  );
+
+  it.live("entriesByKey() narrows to bound queueId AND requested key", () =>
+    Effect.gen(function* () {
+      yield* fixtures;
+      const bound = yield* ProcessStoreQueueResource.for(queueA);
+      const rows = yield* bound.entriesByKey("shared");
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.queueId).toBe(queueA);
+      expect(rows[0]?.key).toBe("shared");
+    }).pipe(Effect.provide(ProcessStorage.layer)),
+  );
+
+  it.live("lifecycle() / dedupeKeys() narrow to the bound queue", () =>
+    Effect.gen(function* () {
+      yield* fixtures;
+      const bound = yield* ProcessStoreQueueResource.for(queueA);
+      const lifecycle = yield* bound.lifecycle();
+      const dedupe = yield* bound.dedupeKeys();
+      expect(lifecycle.every((row) => row.queueId === queueA)).toBe(true);
+      expect(dedupe.every((row) => row.queueId === queueA)).toBe(true);
+    }).pipe(Effect.provide(ProcessStorage.layer)),
+  );
+});
+
 describe("ProcessStoreQueueResource — phantom type accessors", () => {
   it.live(".Type and .EmitType expose the structural shapes", () =>
     Effect.gen(function* () {
@@ -484,8 +535,15 @@ describe("ProcessStoreQueueResource — phantom type accessors", () => {
         recordDedupeKey: fullShape.recordDedupeKey,
         recordDedupeKeyBatch: fullShape.recordDedupeKeyBatch,
       };
+      const boundShape: ProcessStoreQueueResource.IdentifierType = {
+        entries: () => Effect.succeed([]),
+        entriesByKey: () => Effect.succeed([]),
+        lifecycle: () => Effect.succeed([]),
+        dedupeKeys: () => Effect.succeed([]),
+      };
       expect(typeof fullShape.recordEntry).toBe("function");
       expect(typeof emitShape.recordLifecycle).toBe("function");
+      expect(typeof boundShape.entries).toBe("function");
     }),
   );
 });

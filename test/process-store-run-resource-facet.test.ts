@@ -260,6 +260,87 @@ describe("ProcessStoreRunResource — projections", () => {
   );
 });
 
+describe("ProcessStoreRunResource — for(resourceId) bound API", () => {
+  const resourceId = "@test/Bound";
+  const t = (ms: number) => 1_700_000_000_000 + ms;
+
+  it.live("runs(), facts(), latestState() narrow to the bound scope", () =>
+    Effect.gen(function* () {
+      const otherId = "@test/BoundOther";
+      yield* ProcessStoreRunResource.recordRunStarted(
+        started(resourceId, `${resourceId}/run/1`, t(0)),
+      );
+      yield* ProcessStoreRunResource.recordRunCompleted(
+        completed(resourceId, `${resourceId}/run/1`, t(50), 50),
+      );
+      yield* ProcessStoreRunResource.recordRunStarted(
+        started(otherId, `${otherId}/run/1`, t(0)),
+      );
+
+      const bound = yield* ProcessStoreRunResource.for(resourceId);
+      const facts = yield* bound.facts();
+      const runs = yield* bound.runs();
+      expect(
+        facts.every((fact: RunResourceFact) => fact.resourceId === resourceId),
+      ).toBe(true);
+      expect(runs.every((run) => run.resourceId === resourceId)).toBe(true);
+
+      yield* ProcessStoreRunResource.recordStateChange({
+        id: `${resourceId}/state/1`,
+        resourceId,
+        changedAt: t(60),
+        reason: "run-resource.run.completed",
+        previous: state(resourceId, t(0)),
+        current: state(resourceId, t(60), {
+          completed: 1,
+          totalDurationMs: 50,
+        }),
+      } satisfies RunResourceStateChange);
+      const latest = yield* bound.latestState();
+      const value = Option.getOrNull(latest);
+      expect(value?.resourceId).toBe(resourceId);
+      expect(value?.completed).toBe(1);
+    }).pipe(Effect.provide(ProcessStorage.layer)),
+  );
+
+  it.live("byRun() narrows to the bound scope and the requested runId", () =>
+    Effect.gen(function* () {
+      const runIdA = `${resourceId}/run/A`;
+      yield* ProcessStoreRunResource.recordRunStarted(
+        started(resourceId, runIdA, t(0)),
+      );
+      const bound = yield* ProcessStoreRunResource.for(resourceId);
+      const onlyA = yield* bound.byRun(runIdA);
+      expect(
+        onlyA.every(
+          (fact) =>
+            fact.resourceId === resourceId && fact.runId === runIdA,
+        ),
+      ).toBe(true);
+    }).pipe(Effect.provide(ProcessStorage.layer)),
+  );
+
+  it.live("facts({ types }) filter still works through the bound API", () =>
+    Effect.gen(function* () {
+      yield* ProcessStoreRunResource.recordRunStarted(
+        started(resourceId, `${resourceId}/run/types`, t(0)),
+      );
+      yield* ProcessStoreRunResource.recordRunCompleted(
+        completed(resourceId, `${resourceId}/run/types`, t(10), 10),
+      );
+      const bound = yield* ProcessStoreRunResource.for(resourceId);
+      const startedOnly = yield* bound.facts({
+        types: ["run-resource.run.started"],
+      });
+      expect(
+        startedOnly.every(
+          (fact) => fact.type === "run-resource.run.started",
+        ),
+      ).toBe(true);
+    }).pipe(Effect.provide(ProcessStorage.layer)),
+  );
+});
+
 describe("ProcessStoreRunResource — phantom type accessors", () => {
   it.live(".Type and .EmitType expose the structural shapes", () =>
     Effect.gen(function* () {
@@ -286,8 +367,16 @@ describe("ProcessStoreRunResource — phantom type accessors", () => {
         recordFactBatch: fullShape.recordFactBatch,
         recordStateChangeBatch: fullShape.recordStateChangeBatch,
       };
+      const boundShape: ProcessStoreRunResource.IdentifierType = {
+        facts: () => Effect.succeed([]),
+        stateHistory: () => Effect.succeed([]),
+        latestState: () => Effect.succeed(Option.none()),
+        runs: () => Effect.succeed([]),
+        byRun: () => Effect.succeed([]),
+      };
       expect(typeof fullShape.recordRunStarted).toBe("function");
       expect(typeof emitShape.recordStateChange).toBe("function");
+      expect(typeof boundShape.runs).toBe("function");
     }),
   );
 });

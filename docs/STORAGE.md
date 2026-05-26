@@ -86,6 +86,16 @@ Effect.provide(program, layerProcessStore({ filename: ".effect-pm/data.sqlite" }
 
 Template: `src/store/runResource.ts`, tests: `test/process-store-run-resource-facet.test.ts`.
 
+A facet is declared with up to **three** sections passed to `ProcessStore.Service<Self>()(id, ...sections)`:
+
+| Section | Shape | Adds to the facet |
+|--------|-------|-------------------|
+| `ProcessStore.record({ ... })` | `{ [name]: (s) => method }` | Per-method **static optional emitters** (`Facet.recordX(...)`) and instance write methods. |
+| `ProcessStore.read((s) => ({ ... }))` | factory of read methods | Instance read methods (yield the facet to dispatch). |
+| `ProcessStore.withIdentifier((id, s) => ({ ... }))` | factory of identifier-bound methods | `Facet.for(id)` / `Facet.withIdentifier(id)` returning the bound API. |
+
+`record` and `read` are required; `withIdentifier` is optional.
+
 ```ts
 export class ProcessStoreMyDomain extends ProcessStore.Service<ProcessStoreMyDomain>()(
   "@nikscripts/effect-pm/store/myDomain/ProcessStoreMyDomain",
@@ -114,13 +124,50 @@ export class ProcessStoreMyDomain extends ProcessStore.Service<ProcessStoreMyDom
         ),
       ),
   })),
+  // Optional: if your facet has a natural identifier (resourceId, queueId,
+  // processId, …), bind it once via `for(...)` instead of repeating it in
+  // every method call. Reuse the same private read helpers as the
+  // `ProcessStore.read(...)` section so behavior cannot drift.
+  ProcessStore.withIdentifier((thingId, s) => ({
+    things: (query?: Omit<MyQuery, "thingId">) =>
+      readThings(s, { thingId, ...query }),
+  })),
 ) {}
 
 export declare namespace ProcessStoreMyDomain {
   export type Type = ProcessStore.Service.Type<typeof ProcessStoreMyDomain>;
   export type EmitType = ProcessStore.Service.EmitType<typeof ProcessStoreMyDomain>;
+  // Only declare `IdentifierType` when the facet provides `withIdentifier`.
+  export type IdentifierType = ProcessStore.Service.IdentifierType<
+    typeof ProcessStoreMyDomain
+  >;
 }
 ```
+
+### Identifier-bound APIs (`for` / `withIdentifier`)
+
+Facets that have a single dominant identifier expose a sticky-scope binding:
+
+```ts
+const queue = yield* ProcessStoreQueueResource.for("@app/Email");
+yield* queue.entries();              // queueId baked in
+yield* queue.entriesByKey("user-42"); // queueId still baked in
+yield* queue.dedupeKeys();            // queueId still baked in
+```
+
+Equivalent: `yield* ProcessStoreQueueResource.withIdentifier("@app/Email")`.
+
+Both accept either a raw string id or `{ id }`. Implement the section by **delegating to private read helpers** that the `ProcessStore.read` section also calls — that way the bound and unbound shapes share a single code path. See `src/store/queueResource.ts` and `src/store/runResource.ts` for the live pattern.
+
+Built-in `withIdentifier` facets (subpath → bound id):
+
+| Facet | Subpath | Binds |
+|-------|---------|-------|
+| `ProcessStoreQueueResource` | `store/QueueResource` | `queueId` |
+| `ProcessStoreRunResource` | `store/RunResource` | `resourceId` |
+| `ProcessStoreProcessLifecycle` | `store/ProcessLifecycle` | `processId` |
+| `ProcessStoreProcessExecution` | `store/ProcessExecution` | `processId` |
+| `ProcessStoreProcessGroup` | `store/ProcessGroup` | `groupId` |
 
 The `ProcessStoreSpine` handle (`s`) exposes the storage primitives only:
 

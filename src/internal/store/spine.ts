@@ -30,26 +30,40 @@ import { processStoreWriteErrorFromRuntimeStorage } from "./helpers";
 /**
  * Per-facet view of the underlying {@link RuntimeStorageService}.
  *
+ * @remarks
+ * The spine is the **only** surface a facet body uses — it never sees
+ * the raw {@link RuntimeStorage} tag. The factory injects `runId` and
+ * `createdAt` on writes and lifts adapter errors into the public
+ * {@link ProcessStoreWriteError} channel so facets can stay focused on
+ * encoding / decoding their domain rows.
+ *
  * @internal
  */
 export interface ProcessStoreSpine {
+  /** Stable per-layer run id stamped onto every write. */
   readonly runId: string;
+  /** Insert one record. Storage assigns `runId` + `createdAt`. */
   readonly create: (
     record: Omit<RuntimeRecord, "runId" | "createdAt">,
   ) => Effect.Effect<void, ProcessStoreWriteError>;
+  /** Insert many records (sequential under the hood; surfaces the first failure). */
   readonly createBatch: (
     records: ReadonlyArray<Omit<RuntimeRecord, "runId" | "createdAt">>,
   ) => Effect.Effect<void, ProcessStoreWriteError>;
+  /** Run a `RuntimeRecordQuery`. Facets translate domain queries to predicates. */
   readonly read: (
     query?: RuntimeRecordQuery,
   ) => Effect.Effect<RuntimeRecord[]>;
+  /** Insert-or-replace one record. Storage assigns `runId` + `createdAt`. */
   readonly upsert: (
     record: Omit<RuntimeRecord, "runId" | "createdAt">,
   ) => Effect.Effect<void, ProcessStoreWriteError>;
+  /** Patch matching rows. */
   readonly update: (
     query: RuntimeRecordQuery,
     patch: RuntimeRecordPatch,
   ) => Effect.Effect<UpdateResult>;
+  /** Delete matching rows (skips readonly rows unless the predicate explicitly opts in). */
   readonly delete: (query: RuntimeRecordQuery) => Effect.Effect<DeleteResult>;
 }
 

@@ -1,18 +1,22 @@
 /**
- * `RunResource` storage facet — durable + queryable history of gated runs.
+ * **`RunResource` storage facet** — durable, queryable history of every
+ * gated run (started / completed / failed) plus state-machine snapshots.
  *
  * @remarks
  * Per-domain facet for {@link RunResource} (the concurrency gate in
- * `src/RunResource.ts`). Owns its event types
- * (`run-resource.fact.recorded` / `run-resource.state.changed`), its
- * `RunResource`-shaped fact / state / query types, and a `runs()`
- * projection that pairs `started` facts with their matching
- * `completed` / `failed` fact for operator-friendly run history.
+ * `src/RunResource.ts`). Owns its concrete fact / change / query types
+ * and provides a `runs()` projection that pairs each `started` fact
+ * with its matching `completed` / `failed` fact for operator-friendly
+ * run history.
  *
- * **No shared generic vocabulary.** This facet does **not** use the
- * removed `RuntimeFact` / `RuntimeRef` / `RuntimeStateChange` envelope.
- * Each per-domain facet (queue, process, schedule, …) owns its own
- * concrete types — see `docs/STORAGE.md`.
+ * ## At-a-glance
+ *
+ * | Concern | Where |
+ * |--------|-------|
+ * | Wire types | `run-resource.fact.recorded`, `run-resource.state.changed` |
+ * | Static emit | `recordRunStarted` / `recordRunCompleted` / `recordRunFailed` / `recordStateChange` (+ `*Batch`) |
+ * | Reads (instance) | `facts(query?)`, `stateHistory(query?)`, `latestState(id)`, `runs(id)`, `byRun(runId)` |
+ * | Reads (bound, `for(resourceId)`) | `facts(query?)`, `stateHistory(query?)`, `latestState()`, `runs()`, `byRun(runId)` |
  *
  * ## Storage shape
  *
@@ -20,36 +24,33 @@
  * `processId: <resourceId>`:
  *
  * - `run-resource.fact.recorded` — `payload = { fact: <fact-as-json> }`.
+ *   The fact subtype (`run-resource.run.started` / `.completed`
+ *   / `.failed`) and `runId` live inside the payload (not on indexed
+ *   columns); queries by `runId` and inner type post-filter decoded
+ *   facts.
  * - `run-resource.state.changed` — `payload = { change: <change-as-json> }`.
- *
- * The `runId` and fact subtype (`run-resource.run.started` / `.completed`
- * / `.failed`) live inside the payload, not on indexed columns; queries
- * by `runId` and inner type post-filter the decoded facts.
- *
- * ## Emit (optional)
- *
- * `RunResource.make` calls the **static** shortcuts on this class
- * (`ProcessStoreRunResource.recordRunStarted`, `.recordRunCompleted`,
- * `.recordRunFailed`, `.recordStateChange`). When the facet layer is not
- * composed each call is a silent no-op; when composed it writes through
- * the spine.
  *
  * ## Compose
  *
- * - `ProcessStoreRunResource.layerRuntimeStorage` — facet on top of
- *   injected {@link RuntimeStorage}.
- * - `ProcessStoreRunResource.layer` — facet + in-memory `RuntimeStorage`
- *   (dev/test only).
+ * - `ProcessStoreRunResource.layerRuntimeStorage` — facet on top of an
+ *   injected {@link RuntimeStorage} (durable backends).
+ * - `ProcessStoreRunResource.layer` — facet + in-memory storage
+ *   (dev / test).
  *
- * ## Query (after compose)
+ * ## Read (after compose)
  *
  * ```ts
  * const runs = yield* ProcessStoreRunResource;
  * yield* runs.facts({ resourceId: "@app/Gate" });
  * yield* runs.stateHistory({ resourceId: "@app/Gate" });
- * yield* runs.runs("@app/Gate");          // paired started+ended history
- * yield* runs.byRun(`@app/Gate/run/3`);   // facts for one specific run
+ * yield* runs.runs("@app/Gate");           // paired started+ended history
+ * yield* runs.byRun("@app/Gate/run/3");    // facts for one run
  * yield* runs.latestState("@app/Gate");
+ *
+ * // Identifier-bound shortcut:
+ * const gate = yield* ProcessStoreRunResource.for("@app/Gate");
+ * yield* gate.runs();
+ * yield* gate.latestState();
  * ```
  *
  * @module store/RunResource
@@ -66,6 +67,7 @@ import {
   runtimeRecordQuery,
   toJsonValue,
 } from "../internal/store/helpers";
+import type { ProcessStoreSpine } from "../internal/store/spine";
 import { ProcessStore } from "../ProcessStore";
 import type { JsonValue, QueryOpts } from "../ProcessStoreEvent";
 import { ProcessId, Type } from "../Query";
@@ -218,6 +220,28 @@ export interface RunResourceFactQuery {
  */
 export interface RunResourceStateHistoryQuery {
   readonly resourceId: string;
+  readonly opts?: QueryOpts;
+}
+
+/**
+ * Identifier-bound fact filter (the `resourceId` is supplied by
+ * {@link ProcessStoreRunResource.for | for(resourceId)}).
+ *
+ * @public
+ */
+export interface RunResourceScopedFactQuery {
+  readonly runId?: string;
+  readonly types?: ReadonlyArray<RunResourceFactType>;
+  readonly opts?: QueryOpts;
+}
+
+/**
+ * Identifier-bound state-history filter (the `resourceId` is supplied by
+ * {@link ProcessStoreRunResource.for | for(resourceId)}).
+ *
+ * @public
+ */
+export interface RunResourceScopedStateHistoryQuery {
   readonly opts?: QueryOpts;
 }
 
@@ -693,51 +717,85 @@ export class ProcessStoreRunResource extends ProcessStore.Service<
         s.createBatch(changes.map(makeStateChangeRecord)),
   }),
   ProcessStore.read((s) => ({
-    facts: (query?: RunResourceFactQuery) =>
-      s
-        .read(runtimeRecordQuery(factPredicates(query), factWindowOpts(query?.opts)))
-        .pipe(Effect.map((records) => factsFromRecords(records, query))),
+    facts: (query?: RunResourceFactQuery) => readFacts(s, query),
     stateHistory: (query?: RunResourceStateHistoryQuery) =>
-      s
-        .read(runtimeRecordQuery(stateChangedPredicates(query?.resourceId), undefined))
-        .pipe(
-          Effect.map((records) =>
-            sortedStateChanges(
-              stateChangesFromRecords(records, query?.resourceId),
-              query?.opts,
-            ),
-          ),
-        ),
-    latestState: (resourceId: string) =>
-      s
-        .read(runtimeRecordQuery(stateChangedPredicates(resourceId), undefined))
-        .pipe(
-          Effect.map((records) => {
-            const latest = sortedStateChanges(
-              stateChangesFromRecords(records, resourceId),
-              { limit: 1 },
-            )[0];
-            return latest === undefined
-              ? Option.none<RunResourceState>()
-              : Option.some(latest.current);
-          }),
-        ),
-    runs: (resourceId: string) =>
-      s
-        .read(runtimeRecordQuery(factPredicates({ resourceId }), undefined))
-        .pipe(
-          Effect.map((records) =>
-            pairRuns(factsFromRecords(records, { resourceId })),
-          ),
-        ),
+      readStateHistory(s, query),
+    latestState: (resourceId: string) => readLatestState(s, resourceId),
+    runs: (resourceId: string) => readRuns(s, resourceId),
+    byRun: (runId: string) => readByRun(s, runId),
+  })),
+  ProcessStore.withIdentifier((resourceId, s) => ({
+    facts: (query?: RunResourceScopedFactQuery) =>
+      readFacts(s, { resourceId, ...query }),
+    stateHistory: (query?: RunResourceScopedStateHistoryQuery) =>
+      readStateHistory(s, { resourceId, ...query }),
+    latestState: () => readLatestState(s, resourceId),
+    runs: () => readRuns(s, resourceId),
     byRun: (runId: string) =>
-      s
-        .read(runtimeRecordQuery(factPredicates(undefined), undefined))
-        .pipe(
-          Effect.map((records) => factsFromRecords(records, { runId })),
-        ),
+      readFacts(s, { resourceId, runId }),
   })),
 ) {}
+
+const readFacts = (
+  s: ProcessStoreSpine,
+  query: RunResourceFactQuery | undefined,
+): Effect.Effect<RunResourceFact[]> =>
+  s
+    .read(runtimeRecordQuery(factPredicates(query), factWindowOpts(query?.opts)))
+    .pipe(Effect.map((records) => factsFromRecords(records, query)));
+
+const readStateHistory = (
+  s: ProcessStoreSpine,
+  query: RunResourceStateHistoryQuery | undefined,
+): Effect.Effect<RunResourceStateChange[]> =>
+  s
+    .read(runtimeRecordQuery(stateChangedPredicates(query?.resourceId), undefined))
+    .pipe(
+      Effect.map((records) =>
+        sortedStateChanges(
+          stateChangesFromRecords(records, query?.resourceId),
+          query?.opts,
+        ),
+      ),
+    );
+
+const readLatestState = (
+  s: ProcessStoreSpine,
+  resourceId: string,
+): Effect.Effect<Option.Option<RunResourceState>> =>
+  s
+    .read(runtimeRecordQuery(stateChangedPredicates(resourceId), undefined))
+    .pipe(
+      Effect.map((records) => {
+        const latest = sortedStateChanges(
+          stateChangesFromRecords(records, resourceId),
+          { limit: 1 },
+        )[0];
+        return latest === undefined
+          ? Option.none<RunResourceState>()
+          : Option.some(latest.current);
+      }),
+    );
+
+const readRuns = (
+  s: ProcessStoreSpine,
+  resourceId: string,
+): Effect.Effect<RunResourceRun[]> =>
+  s
+    .read(runtimeRecordQuery(factPredicates({ resourceId }), undefined))
+    .pipe(
+      Effect.map((records) =>
+        pairRuns(factsFromRecords(records, { resourceId })),
+      ),
+    );
+
+const readByRun = (
+  s: ProcessStoreSpine,
+  runId: string,
+): Effect.Effect<RunResourceFact[]> =>
+  s
+    .read(runtimeRecordQuery(factPredicates(undefined), undefined))
+    .pipe(Effect.map((records) => factsFromRecords(records, { runId })));
 
 /**
  * Type accessors merged onto {@link ProcessStoreRunResource} via declaration
@@ -761,6 +819,9 @@ export declare namespace ProcessStoreRunResource {
     typeof ProcessStoreRunResource
   >;
   export type EmitType = ProcessStore.Service.EmitType<
+    typeof ProcessStoreRunResource
+  >;
+  export type IdentifierType = ProcessStore.Service.IdentifierType<
     typeof ProcessStoreRunResource
   >;
 }

@@ -1,14 +1,18 @@
 /**
- * Storage-neutral primitives shared by every {@link ProcessStore} facet.
+ * **Cross-cutting primitives** shared by every {@link ProcessStore} facet.
  *
  * @remarks
- * After the move to per-domain {@link RuntimeRecord} rows there is no
- * shared analytics envelope: each facet owns its own row codec and its
- * own concrete fact / change / event types. This module retains only
- * the cross-cutting primitives every facet still references —
- * structural JSON, query options, the legacy `AnalyticsEventBase`
- * shape used by surviving wire-event types, and the
- * {@link ProcessStoreWriteError} channel.
+ * Each storage facet (queue, run-resource, process lifecycle, …) owns
+ * its own concrete fact / change / event types and its own row codec —
+ * there is no shared analytics envelope. This module exposes only the
+ * primitives every facet still touches:
+ *
+ * - {@link JsonValue} — structural JSON allowed in `RuntimeRecord.payload`.
+ * - {@link QueryOpts} — pagination / time-window controls.
+ * - {@link ProcessStoreWriteError} — typed write-failure channel.
+ * - {@link AnalyticsEventBase} — minimal shape used by the small set of
+ *   facet-owned `*Event` interfaces that already mirror an append-only
+ *   row shape (no relation to a previous shared envelope).
  *
  * @module ProcessStoreEvent
  */
@@ -31,9 +35,20 @@ export type JsonValue =
 /**
  * Pagination / time window for historical reads.
  *
+ * @remarks
+ * **Pure-storage queries** (every filter is a pushable
+ * `RuntimeRecordPredicate`) pass `QueryOpts` straight to
+ * `runtimeRecordQuery(...)`. **Post-filter queries** (any filter
+ * applied in TypeScript after decoding) must strip `limit` from the
+ * storage query (`windowOpts(opts)`) and re-apply it via
+ * `applyQueryOpts(rows, opts, ...)` after decoding — see
+ * `src/store/processGroup.ts` and `src/store/processExecution.ts` for
+ * worked examples and `docs/STORAGE.md` for the rationale.
+ *
  * @public
  */
 export interface QueryOpts {
+  /** Maximum number of rows to return. */
   limit?: number;
   /** Filter: only events before this epoch millis. */
   before?: number;
@@ -41,34 +56,47 @@ export interface QueryOpts {
   after?: number;
 }
 
-/** @public */
+/**
+ * Failed write because a row with the same `id` already exists.
+ *
+ * @public
+ */
 export class ProcessStoreDuplicateRecordError extends Data.TaggedError(
   "ProcessStoreDuplicateRecordError",
 )<{
   readonly id: string;
 }> {}
 
-/** @public */
+/**
+ * Failed write on a row marked `readonly: true`.
+ *
+ * @public
+ */
 export class ProcessStoreReadonlyRecordError extends Data.TaggedError(
   "ProcessStoreReadonlyRecordError",
 )<{
   readonly id: string;
 }> {}
 
-/** @public */
+/**
+ * Closed union of every error a facet write can return. The
+ * `ProcessStore.Service` builder wraps every static optional emitter
+ * with `catchCause + logWarning`, so observation paths never see this
+ * channel; mocks supplied via `Layer.succeed` / `Effect.provideService`
+ * may surface it directly.
+ *
+ * @public
+ */
 export type ProcessStoreWriteError =
   | ProcessStoreDuplicateRecordError
   | ProcessStoreReadonlyRecordError;
 
 /**
- * Common fields for surviving facet-owned wire event types.
- *
- * @remarks
- * Some facets still expose a public `*Event` interface that mirrors the
- * old append-only analytics row shape (e.g.
+ * Minimal append-only event shape. Implemented by the small set of
+ * facet-owned `*Event` interfaces that decode a single
+ * {@link RuntimeRecord} into a typed value (currently
  * {@link ProcessExecutionCompletedEvent},
  * {@link ProcessLifecycleChangedEvent}, {@link LogEntryRecordedEvent}).
- * They each extend this base.
  *
  * @public
  */

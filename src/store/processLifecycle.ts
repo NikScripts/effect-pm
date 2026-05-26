@@ -1,15 +1,22 @@
 /**
- * Process lifecycle storage facet — `process.lifecycle.changed` by process id.
+ * **Process lifecycle storage facet** — `process.lifecycle.changed` rows
+ * keyed by process id.
  *
  * @remarks
- * Process-scoped analytics: {@link Process.spawn}, supervisors, and any writer
- * that records lifecycle without a group. For group control paths
- * (`start` / `stop` / `restart` with a `groupId`), use
- * {@link ProcessStoreProcessGroup} instead — it stamps `attributes.groupId`
- * and exposes group-scoped queries.
+ * Process-scoped analytics for {@link Process.spawn}, supervisors, and
+ * any writer that records lifecycle without a group. For group control
+ * paths (`start` / `stop` / `restart` with a `groupId`), use
+ * {@link ProcessStoreProcessGroup} instead — it stamps
+ * `attributes.groupId` and exposes group-scoped queries.
  *
- * Compose via {@link ProcessStoreProcessLifecycle.layerRuntimeStorage} or
- * {@link ProcessStorage.layerRuntimeStorage}.
+ * ## At-a-glance
+ *
+ * | Concern | Where |
+ * |--------|-------|
+ * | Wire type | `process.lifecycle.changed` |
+ * | Static emit | `lifecycleChanged({ processId, tag, error?, ... })` |
+ * | Reads (instance) | `lifecycle(processId, opts?)`, `lifecycleForProcesses([id], opts?)`, `latestLifecycleByProcess([id])` |
+ * | Reads (bound, `for(processId)`) | `lifecycle(opts?)`, `latest()`, `recordTransition({ tag, error?, ... })` |
  *
  * ## Storage shape
  *
@@ -19,13 +26,16 @@
  * - `processType` = `process`
  * - `processId` = the transitioning process id
  * - `payload` = `{ tag, error? }`
- * - `attributes` = `{ groupId?, ...extra }` if any extra attributes were
- *   supplied; otherwise omitted.
+ * - `attributes` = `{ groupId?, ...extra }` if any extra attributes
+ *   were supplied; otherwise omitted.
+ *
+ * Compose via {@link ProcessStoreProcessLifecycle.layerRuntimeStorage}
+ * or {@link ProcessStorage.layerRuntimeStorage}.
  *
  * @module store/ProcessLifecycle
  */
 
-import { Clock, DateTime, Effect } from "effect";
+import { Clock, DateTime, Effect, Option } from "effect";
 import {
   isRecord,
   isString,
@@ -242,6 +252,45 @@ export class ProcessStoreProcessLifecycle extends ProcessStore.Service<
         return latest;
       }),
   })),
+  ProcessStore.withIdentifier((processId, s) => ({
+    lifecycle: (opts?: QueryOpts) =>
+      s
+        .read(
+          runtimeRecordQuery(
+            [Type.equals(LIFECYCLE_TYPE), ProcessId.equals(processId)],
+            opts,
+          ),
+        )
+        .pipe(Effect.map(decodeLifecycleEvents)),
+
+    latest: () =>
+      s
+        .read(
+          runtimeRecordQuery(
+            [Type.equals(LIFECYCLE_TYPE), ProcessId.equals(processId)],
+            { limit: 1 },
+          ),
+        )
+        .pipe(
+          Effect.map((records) => {
+            const event = decodeLifecycleEvents(records)[0];
+            return event === undefined
+              ? Option.none<ProcessLifecycleTag>()
+              : Option.some(event.lifecycle.tag);
+          }),
+        ),
+
+    recordTransition: (
+      input: Omit<ProcessLifecycleRecordInput, "processId">,
+    ) =>
+      Effect.gen(function* () {
+        const occurredAtMs =
+          input.occurredAt ?? (yield* Clock.currentTimeMillis);
+        yield* s.create(
+          makeProcessLifecycleRecord({ processId, ...input }, occurredAtMs),
+        );
+      }),
+  })),
 ) {}
 
 /**
@@ -252,6 +301,9 @@ export declare namespace ProcessStoreProcessLifecycle {
     typeof ProcessStoreProcessLifecycle
   >;
   export type EmitType = ProcessStore.Service.EmitType<
+    typeof ProcessStoreProcessLifecycle
+  >;
+  export type IdentifierType = ProcessStore.Service.IdentifierType<
     typeof ProcessStoreProcessLifecycle
   >;
 }

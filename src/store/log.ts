@@ -1,14 +1,23 @@
 /**
- * Structured log persistence facet — the durable sink for the
+ * **Structured log storage facet** — durable sink for the
  * `@nikscripts/effect-pm/Logs` capture/relay pipeline.
  *
  * @remarks
- * The `groupId` parameter is an opaque partition key supplied by the
- * process-manager log relay (today it carries the PM log-bucket annotation
- * from {@link LogContext}). It is not tied to a {@link ProcessGroup.Service}
- * id; the facet itself is about persisting and querying
- * {@link ProcessManagerLogEntry} rows, regardless of which kind of "group"
- * happens to scope them.
+ * Used by the process-manager log relay; rarely composed directly by
+ * apps. The `groupId` parameter is an opaque log-bucket partition key
+ * supplied by the relay (today it carries the PM log-bucket
+ * annotation from {@link LogContext}). It is **not** tied to a
+ * {@link ProcessGroup.Service} id — the facet persists and queries
+ * {@link ProcessManagerLogEntry} rows regardless of how they were
+ * scoped.
+ *
+ * ## At-a-glance
+ *
+ * | Concern | Where |
+ * |--------|-------|
+ * | Wire type | `log.entry` |
+ * | Static emit | `record(groupId, entryId, entry)`, `recordBatch(groupId, rows)` |
+ * | Reads (instance) | `load(query)` (returns entries), `query(logQuery)` (replays through {@link replayLogQueryResults}) |
  *
  * ## Storage shape
  *

@@ -1,58 +1,54 @@
 /**
- * Queue resource storage facet — durable, queryable history of one
+ * **Queue resource storage facet** — durable, queryable history of one
  * priority-aware {@link QueueResource} worker.
  *
  * @remarks
- * Per-domain facet for {@link QueueResource}. Owns its concrete
- * wire-event types (`queue.entry.<status>`, `queue.lifecycle.<tag>`,
- * `queue.dedupe-key.<status>` — 18 distinct types in total), its
- * `Queue*Fact` / `Queue*Change` value shapes, and per-kind read
- * projections.
+ * Per-domain facet for {@link QueueResource}. Owns 18 concrete
+ * wire-event types and their `Queue*Fact` / `Queue*Change` value
+ * shapes; reads return typed unions, not generic envelopes.
  *
- * **No shared generic vocabulary.** This facet does **not** use the
- * removed `runtime.fact.recorded` / `runtime.state.changed` envelope.
- * Each per-domain facet (queue, run-resource, process, …) owns its own
- * concrete types — see `docs/STORAGE.md`.
+ * ## Wire types at a glance
  *
- * ## Storage shape
+ * | Subject | Wire types | Indexed columns |
+ * |---------|-----------|-----------------|
+ * | `queue-entry` (× 9) | `queue.entry.enqueued`, `.started`, `.completed`, `.failed`, `.retried`, `.exhausted`, `.released`, `.dead-lettered`, `.dropped` | `subjectId = entryId`, `key = fact.key`, `indexA = batchId`, `indexB = releaseId` (released only) |
+ * | `queue-lifecycle` (× 6) | `queue.lifecycle.started`, `.paused`, `.resumed`, `.shutdown`, `.cleared`, `.drained` | `subjectId = queueId` |
+ * | `queue-dedupe-key` (× 3) | `queue.dedupe-key.added`, `.released`, `.hydrated` | `subjectId = key`, `key = key` |
  *
- * Every queue record carries `processType: "queue-resource"` and
- * `processId: <queueId>`; the kind is encoded as `subjectType`:
- *
- * - `subjectType: "queue-entry"` — `queue.entry.<status>`. `subjectId =
- *   entryId`, `key = fact.key`, `indexA = batchId`, `indexB = releaseId`
- *   (only on `queue.entry.released`), `payload = { fact }`.
- * - `subjectType: "queue-lifecycle"` — `queue.lifecycle.<tag>`.
- *   `subjectId = queueId`, `payload = { change }`.
- * - `subjectType: "queue-dedupe-key"` — `queue.dedupe-key.<status>`.
- *   `subjectId = key`, `key = key`, `payload = { change }`.
- *
- * Indexed fields make per-key, per-batch, per-release lookups push
- * cleanly into SQL via `RuntimeRecordQuery` predicates without scanning
- * the JSON payload column.
+ * Every record carries `processType: "queue-resource"` and
+ * `processId: <queueId>`. Indexed columns let per-key, per-batch, and
+ * per-release lookups push down to SQL without scanning the payload.
  *
  * ## Emit (optional)
  *
- * `QueueResource.make` calls the **static** record helpers on this class
- * (`ProcessStoreQueueResource.recordEntry`, `.recordLifecycle`,
+ * `QueueResource.make` calls the **static** record helpers on this
+ * class (`ProcessStoreQueueResource.recordEntry`, `.recordLifecycle`,
  * `.recordDedupeKey`, plus their `*Batch` variants). When the facet
  * layer is not composed each call is a silent no-op; when composed it
  * writes through the spine. The builder wraps every static emitter
- * with a built-in `catchCause + Effect.logWarning` so storage failures
- * never propagate into queue work.
+ * with `catchCause + Effect.logWarning` so storage failures never
+ * propagate into queue work.
  *
- * ## Read (instance-only)
+ * ## Read
  *
- * Read methods live only on the resolved instance — yield it (or call
- * `Effect.serviceOption(ProcessStoreQueueResource)` and pattern-match
- * the optional) and dispatch:
+ * Reads come from the resolved instance (via `yield*` or
+ * `Effect.serviceOption`) **or** the identifier-bound shortcut
+ * `ProcessStoreQueueResource.for(queueId)`:
  *
  * ```ts
+ * // Instance + explicit queueId
  * const queue = yield* ProcessStoreQueueResource;
  * yield* queue.entries({ queueId: "@app/Email" });
  * yield* queue.entriesByKey("user-42");
  * yield* queue.lifecycle({ queueId: "@app/Email" });
  * yield* queue.dedupeKeys({ queueId: "@app/Email" });
+ *
+ * // Identifier-bound shortcut
+ * const email = yield* ProcessStoreQueueResource.for("@app/Email");
+ * yield* email.entries();
+ * yield* email.entriesByKey("user-42");
+ * yield* email.lifecycle();
+ * yield* email.dedupeKeys();
  * ```
  *
  * @module store/QueueResource
@@ -69,6 +65,7 @@ import {
   runtimeRecordQuery,
   toJsonValue,
 } from "../internal/store/helpers";
+import type { ProcessStoreSpine } from "../internal/store/spine";
 import { ProcessStore } from "../ProcessStore";
 import type { JsonValue, QueryOpts } from "../ProcessStoreEvent";
 import {
@@ -997,42 +994,57 @@ export class ProcessStoreQueueResource extends ProcessStore.Service<
     // when post-filtering is required, see the `windowOpts` +
     // `applyQueryOpts` pattern in `processGroup.ts` /
     // `processExecution.ts`.
-    entries: (query?: QueueEntryQuery) =>
-      s
-        .read(runtimeRecordQuery(entryPredicates(query), query?.opts))
-        .pipe(
-          Effect.map((records) =>
-            queueEntryFactsFromRecords(records, query),
-          ),
-        ),
-    entriesByKey: (key: string, query?: Omit<QueueEntryQuery, "key">) => {
-      const merged: QueueEntryQuery = { ...query, key };
-      return s
-        .read(runtimeRecordQuery(entryPredicates(merged), merged.opts))
-        .pipe(
-          Effect.map((records) =>
-            queueEntryFactsFromRecords(records, merged),
-          ),
-        );
-    },
-    lifecycle: (query?: QueueLifecycleQuery) =>
-      s
-        .read(runtimeRecordQuery(lifecyclePredicates(query), query?.opts))
-        .pipe(
-          Effect.map((records) =>
-            queueLifecycleChangesFromRecords(records, query),
-          ),
-        ),
-    dedupeKeys: (query?: QueueDedupeKeyQuery) =>
-      s
-        .read(runtimeRecordQuery(dedupePredicates(query), query?.opts))
-        .pipe(
-          Effect.map((records) =>
-            queueDedupeKeyChangesFromRecords(records, query),
-          ),
-        ),
+    entries: (query?: QueueEntryQuery) => readEntries(s, query),
+    entriesByKey: (key: string, query?: Omit<QueueEntryQuery, "key">) =>
+      readEntries(s, { ...query, key }),
+    lifecycle: (query?: QueueLifecycleQuery) => readLifecycle(s, query),
+    dedupeKeys: (query?: QueueDedupeKeyQuery) => readDedupeKeys(s, query),
+  })),
+  ProcessStore.withIdentifier((queueId, s) => ({
+    entries: (query?: Omit<QueueEntryQuery, "queueId">) =>
+      readEntries(s, { ...query, queueId }),
+    entriesByKey: (
+      key: string,
+      query?: Omit<QueueEntryQuery, "queueId" | "key">,
+    ) => readEntries(s, { ...query, queueId, key }),
+    lifecycle: (query?: Omit<QueueLifecycleQuery, "queueId">) =>
+      readLifecycle(s, { ...query, queueId }),
+    dedupeKeys: (query?: Omit<QueueDedupeKeyQuery, "queueId">) =>
+      readDedupeKeys(s, { ...query, queueId }),
   })),
 ) {}
+
+const readEntries = (
+  s: ProcessStoreSpine,
+  query: QueueEntryQuery | undefined,
+): Effect.Effect<QueueEntryFact[]> =>
+  s
+    .read(runtimeRecordQuery(entryPredicates(query), query?.opts))
+    .pipe(Effect.map((records) => queueEntryFactsFromRecords(records, query)));
+
+const readLifecycle = (
+  s: ProcessStoreSpine,
+  query: QueueLifecycleQuery | undefined,
+): Effect.Effect<QueueLifecycleChange[]> =>
+  s
+    .read(runtimeRecordQuery(lifecyclePredicates(query), query?.opts))
+    .pipe(
+      Effect.map((records) =>
+        queueLifecycleChangesFromRecords(records, query),
+      ),
+    );
+
+const readDedupeKeys = (
+  s: ProcessStoreSpine,
+  query: QueueDedupeKeyQuery | undefined,
+): Effect.Effect<QueueDedupeKeyChange[]> =>
+  s
+    .read(runtimeRecordQuery(dedupePredicates(query), query?.opts))
+    .pipe(
+      Effect.map((records) =>
+        queueDedupeKeyChangesFromRecords(records, query),
+      ),
+    );
 
 /**
  * Type accessors merged onto {@link ProcessStoreQueueResource} via
@@ -1055,6 +1067,9 @@ export declare namespace ProcessStoreQueueResource {
     typeof ProcessStoreQueueResource
   >;
   export type EmitType = ProcessStore.Service.EmitType<
+    typeof ProcessStoreQueueResource
+  >;
+  export type IdentifierType = ProcessStore.Service.IdentifierType<
     typeof ProcessStoreQueueResource
   >;
 }

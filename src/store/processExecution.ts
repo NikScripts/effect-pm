@@ -1,21 +1,20 @@
 /**
- * Process supervisor execution persistence on {@link RuntimeStorage}.
+ * **Process execution storage facet** — `process.execution.completed`
+ * rows for every supervisor-tracked run (success, failure, interrupt).
  *
  * @remarks
- * Records `process.execution.completed` rows from {@link Process} tracked runs
- * (success, failure, or interrupt). Apps compose
- * {@link ProcessStoreProcessExecution.layerRuntimeStorage} via
- * {@link ProcessStorage.layerRuntimeStorage} or `layerProcessStore` from
- * `@nikscripts/effect-pm/storage/sqlite`.
+ * Apps compose {@link ProcessStoreProcessExecution.layerRuntimeStorage}
+ * via {@link ProcessStorage.layerRuntimeStorage} or `layerProcessStore`
+ * from `@nikscripts/effect-pm/storage/sqlite`.
  *
- * ## Emit (optional)
+ * ## At-a-glance
  *
- * {@link Process} calls the **static** emitters on this class
- * (`ProcessStoreProcessExecution.recordCompleted`, `.recordFailed`,
- * `.recordInterrupted`). When the facet layer is not composed each emit is a
- * silent no-op; when composed it writes through the spine. Reads use
- * `Effect.serviceOption(ProcessStoreProcessExecution)` and instance methods on the
- * resolved service — not static methods on this class.
+ * | Concern | Where |
+ * |--------|-------|
+ * | Wire type | `process.execution.completed` |
+ * | Static emit | `recordCompleted` / `recordFailed` / `recordInterrupted` |
+ * | Reads (instance) | `executions({ processId, scheduleKey?, opts? })`, `hasPriorExecutions(processId)` |
+ * | Reads + writes (bound, `for(processId)`) | `executions({ scheduleKey?, opts? })`, `hasPriorExecutions()`, `recordCompleted({ scheduleKey, startedAt, completedAt, isStartupRun, error? })` (+ `Failed` / `Interrupted`) |
  *
  * ## Storage shape
  *
@@ -25,8 +24,15 @@
  * - `processType` = `process`
  * - `processId` = the run's process id
  * - `occurredAt` = the run's `completedAt`
- * - `payload` = `{ scheduleKey, startedAt, completedAt, durationMs, status,
- *   isStartupRun, error? }`
+ * - `payload` = `{ scheduleKey, startedAt, completedAt, durationMs,
+ *   status, isStartupRun, error? }`
+ *
+ * ## scheduleKey + limit semantics
+ *
+ * When `query.scheduleKey` is set, the read post-filters decoded rows
+ * by `scheduleKey` and re-applies `opts.limit` after filtering (via
+ * `windowOpts` / `applyQueryOpts`) so a sparse `scheduleKey` query
+ * cannot collapse a `limit: N` result to zero.
  *
  * @module store/ProcessExecution
  */
@@ -42,6 +48,7 @@ import {
   runtimeRecordQuery,
   windowOpts,
 } from "../internal/store/helpers";
+import type { ProcessStoreSpine } from "../internal/store/spine";
 import { ProcessStore } from "../ProcessStore";
 import type { AnalyticsEventBase, QueryOpts } from "../ProcessStoreEvent";
 import { ProcessId, Type } from "../Query";
@@ -96,12 +103,35 @@ export interface ProcessExecutionFinishInput {
 }
 
 /**
+ * Write input used by the identifier-bound record methods on
+ * {@link ProcessStoreProcessExecution.for | for(processId)}; the
+ * `processId` is supplied by the binding.
+ *
+ * @public
+ */
+export type ProcessExecutionScopedFinishInput = Omit<
+  ProcessExecutionFinishInput,
+  "processId"
+>;
+
+/**
  * Query for process execution history.
  *
  * @public
  */
 export interface ProcessExecutionQuery {
   readonly processId: string;
+  readonly scheduleKey?: string | null;
+  readonly opts?: QueryOpts;
+}
+
+/**
+ * Identifier-bound execution query (the `processId` is supplied by
+ * {@link ProcessStoreProcessExecution.for | for(processId)}).
+ *
+ * @public
+ */
+export interface ProcessExecutionScopedQuery {
   readonly scheduleKey?: string | null;
   readonly opts?: QueryOpts;
 }
@@ -242,42 +272,66 @@ export class ProcessStoreProcessExecution extends ProcessStore.Service<
   }),
   ProcessStore.read((s) => ({
     executions: (query: ProcessExecutionQuery) =>
-      s
-        .read(
-          runtimeRecordQuery(
-            [Type.equals(EXECUTION_TYPE), ProcessId.equals(query.processId)],
-            // When `scheduleKey` is set we post-filter and re-apply the
-            // limit; otherwise the storage query is the final shape and the
-            // limit can stay pushed down.
-            query.scheduleKey !== undefined
-              ? windowOpts(query.opts)
-              : query.opts,
-          ),
-        )
-        .pipe(
-          Effect.map((records) => decodeExecutionsForQuery(records, query)),
-        ),
+      readExecutions(s, query),
     hasPriorExecutions: (processId: string) =>
-      s
-        .read(
-          runtimeRecordQuery(
-            [Type.equals(EXECUTION_TYPE), ProcessId.equals(processId)],
-            { limit: 1 },
-          ),
-        )
-        .pipe(
-          Effect.map((records) =>
-            records.some((record) => recordToExecutionEvent(record) !== null),
-          ),
-        ),
+      readHasPriorExecutions(s, processId),
+  })),
+  ProcessStore.withIdentifier((processId, s) => ({
+    executions: (query?: ProcessExecutionScopedQuery) =>
+      readExecutions(s, { processId, ...query }),
+    hasPriorExecutions: () => readHasPriorExecutions(s, processId),
+    recordCompleted: (input: ProcessExecutionScopedFinishInput) =>
+      s.create(toExecutionRecord({ processId, ...input }, "completed")),
+    recordFailed: (input: ProcessExecutionScopedFinishInput) =>
+      s.create(toExecutionRecord({ processId, ...input }, "failed")),
+    recordInterrupted: (input: ProcessExecutionScopedFinishInput) =>
+      s.create(toExecutionRecord({ processId, ...input }, "interrupted")),
   })),
 ) {}
+
+const readExecutions = (
+  s: ProcessStoreSpine,
+  query: ProcessExecutionQuery,
+): Effect.Effect<ProcessExecutionCompletedEvent[]> =>
+  s
+    .read(
+      runtimeRecordQuery(
+        [Type.equals(EXECUTION_TYPE), ProcessId.equals(query.processId)],
+        // When `scheduleKey` is set we post-filter and re-apply the
+        // limit; otherwise the storage query is the final shape and the
+        // limit can stay pushed down.
+        query.scheduleKey !== undefined
+          ? windowOpts(query.opts)
+          : query.opts,
+      ),
+    )
+    .pipe(Effect.map((records) => decodeExecutionsForQuery(records, query)));
+
+const readHasPriorExecutions = (
+  s: ProcessStoreSpine,
+  processId: string,
+): Effect.Effect<boolean> =>
+  s
+    .read(
+      runtimeRecordQuery(
+        [Type.equals(EXECUTION_TYPE), ProcessId.equals(processId)],
+        { limit: 1 },
+      ),
+    )
+    .pipe(
+      Effect.map((records) =>
+        records.some((record) => recordToExecutionEvent(record) !== null),
+      ),
+    );
 
 export declare namespace ProcessStoreProcessExecution {
   export type Type = ProcessStore.Service.Type<
     typeof ProcessStoreProcessExecution
   >;
   export type EmitType = ProcessStore.Service.EmitType<
+    typeof ProcessStoreProcessExecution
+  >;
+  export type IdentifierType = ProcessStore.Service.IdentifierType<
     typeof ProcessStoreProcessExecution
   >;
 }

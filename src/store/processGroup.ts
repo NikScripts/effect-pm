@@ -1,27 +1,39 @@
 /**
- * `ProcessGroup` storage facet — group-scoped lifecycle and queries.
+ * **`ProcessGroup` storage facet** — group-scoped lifecycle reads and
+ * writes layered on top of {@link ProcessStoreProcessLifecycle}.
  *
  * @remarks
- * Group control paths ({@link ProcessGroup} `start` / `stop` / `restart`) call
- * the **static** emitters on this class so every row carries
+ * Group control paths ({@link ProcessGroup} `start` / `stop` / `restart`)
+ * call the **static** emitters on this class so every row carries
  * `attributes.groupId`. Writes delegate to the same wire type as
  * {@link ProcessStoreProcessLifecycle} (`process.lifecycle.changed`) by
- * importing its row encoder/decoder, so the on-disk shape stays identical.
+ * importing its row encoder/decoder, so the on-disk shape stays
+ * identical. Process-scoped lifecycle without a group (future
+ * {@link Process.spawn}, supervisors) uses
+ * {@link ProcessStoreProcessLifecycle} directly.
  *
- * Process-scoped lifecycle without a group (future {@link Process.spawn},
- * supervisors) uses {@link ProcessStoreProcessLifecycle} directly.
+ * Compose {@link ProcessStoreProcessGroup.layerRuntimeStorage} together
+ * with {@link ProcessStoreProcessLifecycle.layerRuntimeStorage} — this
+ * layer requires the lifecycle facet.
+ * {@link ProcessStorage.layerRuntimeStorage} merges both.
  *
- * Compose {@link ProcessStoreProcessGroup.layerRuntimeStorage} together with
- * {@link ProcessStoreProcessLifecycle.layerRuntimeStorage} (this layer
- * requires the lifecycle facet). {@link ProcessStorage.layerRuntimeStorage}
- * merges both.
+ * ## At-a-glance
+ *
+ * | Concern | Where |
+ * |--------|-------|
+ * | Wire type | `process.lifecycle.changed` (shared with {@link ProcessStoreProcessLifecycle}) |
+ * | Static emit | `recordMemberLifecycle(groupId, input)`, `recordMemberStarted(groupId, processId)` (+ `Stopped` / `Restarted`) |
+ * | Reads (instance) | `lifecycleByGroup(groupId, opts?)` |
+ * | Reads + writes (bound, `for(groupId)`) | `lifecycle(opts?)`, `recordMemberLifecycle(input)`, `recordMemberStarted(processId)`, `recordMemberStopped(processId)`, `recordMemberRestarted(processId)` |
  *
  * ## Group filter
  *
- * `groupId` lives in `record.attributes.groupId`. Group queries fetch the
- * full set of `process.lifecycle.changed` rows from the storage and
- * post-filter on the JSON attribute, matching the shape produced by
- * {@link ProcessStoreProcessLifecycle} writes.
+ * `groupId` lives in `record.attributes.groupId`. Group queries fetch
+ * `process.lifecycle.changed` rows from storage and post-filter on the
+ * JSON attribute (matching the shape produced by
+ * {@link ProcessStoreProcessLifecycle} writes); `windowOpts` defers
+ * `limit` until after the post-filter so a sparse group cannot collapse
+ * a `limit: N` query to zero rows.
  *
  * @module store/ProcessGroup
  */

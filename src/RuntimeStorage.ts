@@ -1,5 +1,20 @@
 /**
- * Generic storage port for normalized runtime records.
+ * **RuntimeStorage** — generic, swappable persistence layer for the
+ * effect-pm package.
+ *
+ * @remarks
+ * Storage adapters (in-memory, SQLite, future Prisma…) implement
+ * {@link RuntimeStorageService} and yield through the
+ * {@link RuntimeStorage} service tag. Per-domain storage facets in
+ * `src/store/*` (queue, run-resource, process lifecycle, …) build their
+ * concrete read/write APIs on top of this generic record shape; the
+ * adapters never speak facet vocabulary.
+ *
+ * The single normalized {@link RuntimeRecord} row carries a small fixed
+ * set of indexed columns plus a generic `payload` JSON blob. Facets pick
+ * which columns they need (and document what `processType`,
+ * `subjectType`, `key`, `indexA-H` mean for their wire types — see
+ * `src/store/queueResource.ts` for a worked example).
  *
  * @module RuntimeStorage
  */
@@ -12,77 +27,146 @@ import type {
 } from "./Query";
 import type { JsonValue } from "./ProcessStoreEvent";
 
-/** @public */
+/**
+ * Normalized row stored by every {@link RuntimeStorageService}.
+ *
+ * @remarks
+ * Facet writers fill in only the fields they need. The shape is
+ * intentionally minimal: small fixed columns for the things storage
+ * needs to **index** and **query** (process / subject / type / key
+ * / time), plus an opaque JSON `payload` for everything domain-specific.
+ *
+ * @public
+ */
 export interface RuntimeRecord {
+  /** Globally-unique id (per-facet convention; storage rejects duplicates). */
   readonly id: string;
+  /** Facet-defined wire type, e.g. `queue.entry.enqueued`. Indexed. */
   readonly type: string;
+  /** When the recorded event happened in domain time. Indexed for sorting. */
   readonly occurredAt: DateTime.Utc;
+  /** When storage observed the row (set by the spine, not the writer). */
   readonly createdAt: DateTime.Utc;
+  /** Stable per-layer run id stamped by the spine for trace correlation. */
   readonly runId: string;
+  /** Process category, e.g. `queue-resource` / `run-resource` / `process`. Indexed. */
   readonly processType: string;
+  /** Process identity within `processType`, e.g. queueId / resourceId / processId. Indexed. */
   readonly processId: string;
+  /** Optional sub-domain, e.g. `queue-entry` / `queue-lifecycle` / `queue-dedupe-key`. Indexed. */
   readonly subjectType?: string;
+  /** Identity within `subjectType`, e.g. an entryId or a dedupe key. Indexed. */
   readonly subjectId?: string;
+  /** Free-form indexed string used for fast lookups (e.g. queue dedupe key). */
   readonly key?: string;
+  /** Generic indexed string slot. Reserved for facet-specific use; see `indexNames`. */
   readonly indexA?: string;
+  /** Generic indexed string slot. Reserved for facet-specific use; see `indexNames`. */
   readonly indexB?: string;
+  /** Generic indexed string slot. Reserved for facet-specific use; see `indexNames`. */
   readonly indexC?: string;
+  /** Generic indexed string slot. Reserved for facet-specific use; see `indexNames`. */
   readonly indexD?: string;
+  /** Generic indexed string slot. Reserved for facet-specific use; see `indexNames`. */
   readonly indexE?: string;
+  /** Generic indexed string slot. Reserved for facet-specific use; see `indexNames`. */
   readonly indexF?: string;
+  /** Generic indexed string slot. Reserved for facet-specific use; see `indexNames`. */
   readonly indexG?: string;
+  /** Generic indexed string slot. Reserved for facet-specific use; see `indexNames`. */
   readonly indexH?: string;
+  /** Names of the populated `indexA-H` slots, for adapter introspection. */
   readonly indexNames?: ReadonlyArray<string>;
+  /** Domain-shaped JSON payload owned by the facet's codec. Not indexed. */
   readonly payload?: JsonValue;
+  /** Free-form attributes (e.g. `groupId`, correlation ids). Not indexed. */
   readonly attributes?: JsonValue;
+  /** When `true` the row rejects updates and bulk deletes. */
   readonly readonly?: boolean;
 }
 
-/** @public */
+/**
+ * Result of {@link RuntimeStorageService.update}.
+ *
+ * @public
+ */
 export interface UpdateResult {
+  /** Number of rows that matched the query. */
   readonly matched: number;
+  /** Number of rows that were actually mutated (excludes readonly hits). */
   readonly updated: number;
 }
 
-/** @public */
+/**
+ * Result of {@link RuntimeStorageService.delete}.
+ *
+ * @public
+ */
 export interface DeleteResult {
+  /** Number of rows that were removed. */
   readonly deleted: number;
 }
 
-/** @public */
+/**
+ * Failed `create` because a row with the same `id` already exists.
+ *
+ * @public
+ */
 export class RuntimeStorageDuplicateRecordError extends Data.TaggedError(
   "RuntimeStorageDuplicateRecordError",
 )<{
   readonly id: string;
 }> {}
 
-/** @public */
+/**
+ * Failed write (`upsert` / `update`) on a row marked `readonly: true`.
+ *
+ * @public
+ */
 export class RuntimeStorageReadonlyRecordError extends Data.TaggedError(
   "RuntimeStorageReadonlyRecordError",
 )<{
   readonly id: string;
 }> {}
 
-/** @public */
+/**
+ * Closed union of every typed error that {@link RuntimeStorageService}
+ * exposes. Adapters must not surface any other failure shape.
+ *
+ * @public
+ */
 export type RuntimeStorageError =
   | RuntimeStorageDuplicateRecordError
   | RuntimeStorageReadonlyRecordError;
 
-/** @public */
+/**
+ * The contract that every {@link RuntimeStorage} adapter implements.
+ *
+ * Adapters operate on generic {@link RuntimeRecord} rows. They never
+ * decode payloads, mint identifiers, or know what `processType` means
+ * — that lives in the per-domain facets in `src/store/*`.
+ *
+ * @public
+ */
 export interface RuntimeStorageService {
+  /** Insert one row. Fails if `record.id` already exists. */
   readonly create: (
     record: RuntimeRecord,
   ) => Effect.Effect<void, RuntimeStorageDuplicateRecordError>;
+  /** Read rows matching a query. Defaults to all rows ordered by `occurredAt` desc. */
   readonly read: (
     query?: RuntimeRecordQuery,
   ) => Effect.Effect<RuntimeRecord[]>;
+  /** Insert-or-replace one row. Fails if the existing row is readonly. */
   readonly upsert: (
     record: RuntimeRecord,
   ) => Effect.Effect<void, RuntimeStorageReadonlyRecordError>;
+  /** Patch matching rows (skipping readonly ones). Returns matched/updated counts. */
   readonly update: (
     query: RuntimeRecordQuery,
     patch: RuntimeRecordPatch,
   ) => Effect.Effect<UpdateResult>;
+  /** Delete matching rows. Readonly rows are skipped unless `readonly: true` is in the predicate. */
   readonly delete: (
     query: RuntimeRecordQuery,
   ) => Effect.Effect<DeleteResult>;
@@ -323,7 +407,15 @@ const makeInMemoryRuntimeStorage: Effect.Effect<
   };
 });
 
-/** @public */
+/**
+ * Service tag for {@link RuntimeStorageService}.
+ *
+ * Apps compose a concrete adapter (e.g. `layerProcessStore` from
+ * `@nikscripts/effect-pm/storage/sqlite`); facets in `src/store/*` yield
+ * this tag through their `*.layerRuntimeStorage` layer to obtain a spine.
+ *
+ * @public
+ */
 export class RuntimeStorage extends Context.Service<
   RuntimeStorage,
   RuntimeStorageService
@@ -332,9 +424,22 @@ export class RuntimeStorage extends Context.Service<
 }) {}
 
 export namespace RuntimeStorage {
-  /** @public */
+  /**
+   * In-memory {@link RuntimeStorageService} factory. Each invocation
+   * returns a fresh, isolated `Map`-backed implementation — useful for
+   * tests that want explicit control over storage lifetime.
+   *
+   * @public
+   */
   export const memory = makeInMemoryRuntimeStorage;
 
-  /** @public */
+  /**
+   * Shared in-memory {@link RuntimeStorage} layer. Suitable for dev /
+   * tests / examples; for durable storage use
+   * `layerProcessStore({ filename })` from
+   * `@nikscripts/effect-pm/storage/sqlite`.
+   *
+   * @public
+   */
   export const layer = Layer.effect(RuntimeStorage, makeInMemoryRuntimeStorage);
 }

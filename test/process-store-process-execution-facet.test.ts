@@ -190,6 +190,101 @@ describe("ProcessStoreProcessExecution — projections", () => {
   );
 });
 
+describe("ProcessStoreProcessExecution — for(processId) bound API", () => {
+  it.live("executions() narrows to the bound processId", () =>
+    Effect.gen(function* () {
+      const a = "test/for/a";
+      const b = "test/for/b";
+      yield* ProcessStoreProcessExecution.recordCompleted(finish(a));
+      yield* ProcessStoreProcessExecution.recordCompleted(finish(b));
+      const boundA = yield* ProcessStoreProcessExecution.for(a);
+      const boundB = yield* ProcessStoreProcessExecution.for(b);
+      const aRows = yield* boundA.executions();
+      const bRows = yield* boundB.executions();
+      expect(aRows).toHaveLength(1);
+      expect(aRows[0]?.entityId).toBe(a);
+      expect(bRows).toHaveLength(1);
+      expect(bRows[0]?.entityId).toBe(b);
+    }).pipe(Effect.provide(ProcessStorage.layer)),
+  );
+
+  it.live("scheduleKey filter still works through the bound API", () =>
+    Effect.gen(function* () {
+      const pid = "test/for/scheduleKey";
+      yield* ProcessStoreProcessExecution.recordCompleted(
+        finish(pid, { scheduleKey: "hot" }),
+      );
+      yield* ProcessStoreProcessExecution.recordCompleted(
+        finish(pid, {
+          scheduleKey: "cold",
+          startedAt: 1_700_000_000_100,
+          completedAt: 1_700_000_000_110,
+        }),
+      );
+      const bound = yield* ProcessStoreProcessExecution.for(pid);
+      const hot = yield* bound.executions({ scheduleKey: "hot" });
+      expect(hot).toHaveLength(1);
+      expect(hot[0]?.execution.scheduleKey).toBe("hot");
+    }).pipe(Effect.provide(ProcessStorage.layer)),
+  );
+
+  it.live("hasPriorExecutions() reflects the bound scope", () =>
+    Effect.gen(function* () {
+      const pid = "test/for/has-prior";
+      const bound = yield* ProcessStoreProcessExecution.for(pid);
+      expect(yield* bound.hasPriorExecutions()).toBe(false);
+      yield* ProcessStoreProcessExecution.recordCompleted(finish(pid));
+      expect(yield* bound.hasPriorExecutions()).toBe(true);
+    }).pipe(Effect.provide(ProcessStorage.layer)),
+  );
+
+  it.live("withIdentifier({ id }) accepts an object identifier", () =>
+    Effect.gen(function* () {
+      const pid = "test/for/object-id";
+      yield* ProcessStoreProcessExecution.recordCompleted(finish(pid));
+      const bound = yield* ProcessStoreProcessExecution.withIdentifier({
+        id: pid,
+      });
+      const rows = yield* bound.executions();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.entityId).toBe(pid);
+    }).pipe(Effect.provide(ProcessStorage.layer)),
+  );
+
+  it.live("bound recordCompleted/Failed/Interrupted persist with the bound id", () =>
+    Effect.gen(function* () {
+      const pid = "test/for/bound-writes";
+      const bound = yield* ProcessStoreProcessExecution.for(pid);
+      yield* bound.recordCompleted({
+        scheduleKey: null,
+        startedAt: 1_700_000_000_000,
+        completedAt: 1_700_000_000_010,
+        isStartupRun: false,
+      });
+      yield* bound.recordFailed({
+        scheduleKey: null,
+        startedAt: 1_700_000_000_100,
+        completedAt: 1_700_000_000_120,
+        isStartupRun: false,
+        error: "boom",
+      });
+      yield* bound.recordInterrupted({
+        scheduleKey: null,
+        startedAt: 1_700_000_000_200,
+        completedAt: 1_700_000_000_205,
+        isStartupRun: false,
+      });
+      const rows = yield* bound.executions();
+      expect(rows.every((row) => row.entityId === pid)).toBe(true);
+      expect(rows.map((row) => row.execution.status).sort()).toEqual([
+        "completed",
+        "failed",
+        "interrupted",
+      ]);
+    }).pipe(Effect.provide(ProcessStorage.layer)),
+  );
+});
+
 describe("ProcessStoreProcessExecution — phantom type accessors", () => {
   it.live(".Type and .EmitType expose the structural shapes", () =>
     Effect.gen(function* () {
@@ -205,8 +300,16 @@ describe("ProcessStoreProcessExecution — phantom type accessors", () => {
         recordFailed: fullShape.recordFailed,
         recordInterrupted: fullShape.recordInterrupted,
       };
+      const boundShape: ProcessStoreProcessExecution.IdentifierType = {
+        executions: () => Effect.succeed([]),
+        hasPriorExecutions: () => Effect.succeed(false),
+        recordCompleted: () => Effect.void,
+        recordFailed: () => Effect.void,
+        recordInterrupted: () => Effect.void,
+      };
       expect(typeof fullShape.executions).toBe("function");
       expect(typeof emitShape.recordFailed).toBe("function");
+      expect(typeof boundShape.executions).toBe("function");
     }),
   );
 });

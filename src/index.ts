@@ -284,6 +284,8 @@ export type {
   ProcessExecutionCompletedEvent,
   ProcessExecutionFinishInput,
   ProcessExecutionQuery,
+  ProcessExecutionScopedFinishInput,
+  ProcessExecutionScopedQuery,
   ProcessExecutionStatus,
 } from "./store/processExecution";
 export type {
@@ -340,6 +342,8 @@ export type {
   RunResourceRunFailedPayload,
   RunResourceRunStartedFact,
   RunResourceRunStartedPayload,
+  RunResourceScopedFactQuery,
+  RunResourceScopedStateHistoryQuery,
   RunResourceState,
   RunResourceStateChange,
   RunResourceStateChangeReason,
