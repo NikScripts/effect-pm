@@ -10,7 +10,7 @@ Start here when browsing the repo in GitHub or an editor.
 | [RESOURCE-API.md](./RESOURCE-API.md) | Everyone | Current `QueueResource`, `RunResource`, `HttpClientRunGate`, and `HttpApiResource` APIs. |
 | [EFFECT-V4-FEATURE-SCOUT.md](./EFFECT-V4-FEATURE-SCOUT.md) | Contributors | Over-complete feature scout: Effect v4 capabilities + codebase use-cases. |
 | [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) | Integrators | Schedule vs **`ProcessGroup.start`**, disarm vs stop, API-driven gates; links to example. |
-| [plans/README.md](./plans/README.md) | Contributors | Canonical architecture specs (read **09** for runtime, **10** for schedule reconcile/removal design). |
+| [plans/README.md](./plans/README.md) | Contributors | **Future-only** roadmap: priority table + topic files (no shipped API truth here). |
 
 **Examples**: [`../examples/README.md`](../examples/README.md).
 

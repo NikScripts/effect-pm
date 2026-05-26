@@ -101,9 +101,9 @@ See [`.cursor/rules/public-vs-internal.mdc`](../.cursor/rules/public-vs-internal
 | Add a public export | Edit `src/index.ts` + add TSDoc `@public` on the symbol in its module. |
 | Change process semantics | Update `src/Process.ts`, tests in `test/process*.ts`, and the relevant regular docs if behavior is contractual. |
 | Add an example | Add a **form** under `examples/forms/<area>/` or a **scenario** under `examples/scenarios/`; document in `examples/README.md`; add `package.json` script if runnable. Put heavy mock / scenario prose in `examples/shared/` when it would drown the entry script. |
-| Verify types (strict Effect rules) | `pnpm run typecheck` (uses `tsgo`). `anyUnknownInErrorContext` is temporarily `"off"`; see [strict any/unknown plan](./plans/09-strict-any-unknown.md). |
+| Verify types (strict Effect rules) | `pnpm run typecheck` (uses `tsgo`). `anyUnknownInErrorContext` is temporarily `"off"`; see [strict any/unknown plan](./plans/10-typescript-strict-unknown.md). |
 | Run tests | `pnpm test` |
-| Implement store / runtime / group roadmap | Follow [`STORAGE.md`](./STORAGE.md) for storage work and [`docs/plans/README.md`](./plans/README.md) for future roadmap sequencing. Use [`07-process-manager.md`](./plans/07-process-manager.md) for typed `ProcessGroup` / remote `ProcessManager` work. |
+| Implement store / runtime / group roadmap | Follow [`STORAGE.md`](./STORAGE.md) for storage work and [`docs/plans/README.md`](./plans/README.md) for priority order. Remote/control/queue-wire topics: [`01-remote-cli-transport-wire.md`](./plans/01-remote-cli-transport-wire.md), [`03-queue-remote-handoff.md`](./plans/03-queue-remote-handoff.md). |
 
 ---
 
