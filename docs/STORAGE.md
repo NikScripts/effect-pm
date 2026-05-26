@@ -36,6 +36,22 @@ Context key: `@nikscripts/effect-pm/store/<file>/<ServiceTag>`
 
 Import `store/QueueResource` for the **storage facet**, not `@nikscripts/effect-pm/QueueResource` (worker).
 
+### `ProcessStorage` facet aliases
+
+`ProcessStorage` combines layers **and** exposes the same **`ProcessStore*`** facet **classes**
+under shorter names (same **`Context`** tags):
+
+| Alias | Canonical class |
+|-------|----------------|
+| **`ProcessStorage.Log`** | **`ProcessStoreLog`** |
+| **`ProcessStorage.QueueResource`** | **`ProcessStoreQueueResource`** *(storage facet)* |
+| **`ProcessStorage.RunResource`** | **`ProcessStoreRunResource`** |
+| **`ProcessStorage.ProcessExecution`** | **`ProcessStoreProcessExecution`** |
+| **`ProcessStorage.ProcessLifecycle`** | **`ProcessStoreProcessLifecycle`** |
+| **`ProcessStorage.ProcessGroup`** | **`ProcessStoreProcessGroup`** *(storage facet)* — not **`ProcessGroup.Service`**. |
+
+Use either import style; **`Effect.serviceOption`**, **`Layer`**, and static emitters behave identically.
+
 ---
 
 ## Wire events
