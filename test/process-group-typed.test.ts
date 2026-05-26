@@ -443,6 +443,9 @@ describe("ProcessGroup.make", () => {
         },
       ) {}
 
+      /**
+       * @effect-expect-leaking EmailQueue
+       */
       class EnqueueProcess extends Process.Service<EnqueueProcess>()(
         "@test/GroupProcessEnqueueDrainedProcess",
         {

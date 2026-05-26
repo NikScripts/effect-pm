@@ -23,6 +23,9 @@ const program = Effect.scoped(
       concurrency: 1,
     }) {}
 
+    /**
+     * @effect-expect-leaking EmailQueue
+     */
     class NotifyOps extends Process.Service<NotifyOps>()("@examples/NotifyOps", {
       effect: Effect.gen(function* () {
         const emailQueue = yield* EmailQueue;

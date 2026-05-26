@@ -2,7 +2,17 @@ import { ProcessStorage } from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Config, ConfigProvider, Effect, FileSystem, Layer, Ref } from "effect";
+import {
+  Config,
+  ConfigProvider,
+  Effect,
+  FileSystem,
+  Layer,
+  Path,
+  Ref,
+  Stream,
+} from "effect";
+import { ChildProcess } from "effect/unstable/process";
 import {
   ControlRouter,
   ControlService,
@@ -14,7 +24,7 @@ import {
   ProcessGroup,
   ProcessManager,
   ProcessManagerEndpointConfigError,
-    QueueResource,
+  QueueResource,
 } from "../src";
 import { findGroupExportById } from "../src/internal/manager/groupChild";
 import { decodeProcessManagerRunStateJson } from "../src/internal/manager/runState";
@@ -25,6 +35,8 @@ const projectFileUrl = (relativePath: string): string =>
   `file://${process.cwd()}/${relativePath}`;
 const moduleFixtureEntry = projectFileUrl("test/fixtures/process-manager-module-definition.ts");
 const groupChildScript = `${process.cwd()}/src/bin/effect-pm-group-child.ts`;
+const sourceIndexEntry = projectFileUrl("src/index.ts");
+const tsxBin = `${process.cwd()}/node_modules/.bin/tsx`;
 
 interface Email {
   readonly to: string;
@@ -43,7 +55,107 @@ const waitForQueueCompleted = (
 const readRunStatePid = (text: string) =>
   Effect.map(decodeProcessManagerRunStateJson(text), (state) => state.pid);
 
+const decodeUtf8 = (chunk: Uint8Array): string => new TextDecoder().decode(chunk);
+
+const installedPackageJson =
+  '{"name":"@nikscripts/effect-pm","type":"module","exports":{".":"./index.ts","./package.json":"./package.json"}}';
+
+const runFromInstalledConsumerCwd = (
+  program: string,
+  options: { readonly withLauncher?: boolean } = {},
+) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "effect-pm-consumer-" });
+    const packageRoot = path.join(cwd, "node_modules", "@nikscripts", "effect-pm");
+    yield* fs.makeDirectory(packageRoot, { recursive: true });
+    yield* fs.writeFileString(
+      path.join(packageRoot, "package.json"),
+      installedPackageJson,
+    );
+    yield* fs.writeFileString(
+      path.join(packageRoot, "index.ts"),
+      `import * as source from "${sourceIndexEntry}"; const root = source.default ?? source; export const ProcessManager = root.ProcessManager;`,
+    );
+    if (options.withLauncher === true) {
+      const launcherPath = path.join(packageRoot, "dist", "bin", "effect-pm-group-child.js");
+      yield* fs.makeDirectory(path.dirname(launcherPath), { recursive: true });
+      yield* fs.writeFileString(launcherPath, "");
+    }
+
+    const handle = yield* ChildProcess.make(tsxBin, ["-e", program], { cwd });
+    const output = yield* Stream.runFold(
+      handle.all,
+      () => "",
+      (acc, chunk) => `${acc}${decodeUtf8(chunk)}`,
+    );
+    const exitCode = yield* handle.exitCode;
+    expect(exitCode).toBe(0);
+    return { output, packageRoot };
+  }).pipe(Effect.scoped);
+
 describe("ProcessManager", () => {
+  it.live("does not resolve child launcher paths while importing from a consumer cwd", () =>
+    Effect.gen(function* () {
+      const { output } = yield* runFromInstalledConsumerCwd(
+        `import("@nikscripts/effect-pm").then(() => process.stdout.write("import ok"))`,
+      );
+
+      expect(output).toBe("import ok");
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.live("resolves default child launcher paths from the effect-pm package root", () =>
+    Effect.gen(function* () {
+      const { output } = yield* runFromInstalledConsumerCwd(
+        `import("@nikscripts/effect-pm").then((mod) => process.stdout.write(mod.ProcessManager.ChildLaunch.defaultPaths().scriptPath))`,
+        { withLauncher: true },
+      );
+
+      expect(output).toMatch(
+        /\/node_modules\/@nikscripts\/effect-pm\/dist\/bin\/effect-pm-group-child\.js$/,
+      );
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.live("resolves default child launcher paths without a consumer package.json", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "effect-pm-consumer-no-pkg-" });
+      const packageRoot = path.join(cwd, "node_modules", "@nikscripts", "effect-pm");
+      yield* fs.makeDirectory(packageRoot, { recursive: true });
+      yield* fs.writeFileString(path.join(packageRoot, "package.json"), installedPackageJson);
+      yield* fs.writeFileString(
+        path.join(packageRoot, "index.ts"),
+        `import * as source from "${sourceIndexEntry}"; const root = source.default ?? source; export const ProcessManager = root.ProcessManager;`,
+      );
+      const launcherPath = path.join(packageRoot, "dist", "bin", "effect-pm-group-child.js");
+      yield* fs.makeDirectory(path.dirname(launcherPath), { recursive: true });
+      yield* fs.writeFileString(launcherPath, "");
+
+      const handle = yield* ChildProcess.make(
+        tsxBin,
+        [
+          "-e",
+          `import("@nikscripts/effect-pm").then((mod) => process.stdout.write(mod.ProcessManager.ChildLaunch.defaultPaths().scriptPath))`,
+        ],
+        { cwd },
+      );
+      const output = yield* Stream.runFold(
+        handle.all,
+        () => "",
+        (acc, chunk) => `${acc}${decodeUtf8(chunk)}`,
+      );
+      const exitCode = yield* handle.exitCode;
+      expect(exitCode).toBe(0);
+      expect(output).toMatch(
+        /\/node_modules\/@nikscripts\/effect-pm\/dist\/bin\/effect-pm-group-child\.js$/,
+      );
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
   it("finds group exports nested under a transpiler default object", () => {
     const found = findGroupExportById({
       default: { ModuleEndpointGroup },

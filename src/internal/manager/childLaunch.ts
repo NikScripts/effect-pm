@@ -1,57 +1,20 @@
-import { Config, Context, Effect, Layer } from "effect";
+import { Config, Context, Effect, Layer, Option } from "effect";
 import type { Duration } from "effect";
 import { createRequire } from "node:module";
-
-const pathDirname = (filePath: string): string => {
-  const normalized = filePath.replace(/\\/g, "/");
-  const index = normalized.lastIndexOf("/");
-  if (index <= 0) {
-    return normalized.startsWith("/") ? "/" : ".";
-  }
-  return normalized.slice(0, index);
-};
-
-const pathJoin = (...segments: ReadonlyArray<string>): string =>
-  segments
-    .filter((segment) => segment.length > 0)
-    .join("/")
-    .replace(/\/+/g, "/");
-
 import type { ProcessManagerTransport } from "../../Transport";
 
+const packageResolverFrom = (startDirectory: string) =>
+  createRequire(`${startDirectory.replace(/[\\/]+$/, "")}/package.json`);
 
-const readPackageName = (packageJsonPath: string): string | undefined => {
-  try {
-    const req = createRequire(packageJsonPath);
-    const pkg = req(packageJsonPath) as { readonly name?: string };
-    return pkg.name;
-  } catch {
-    return undefined;
-  }
-};
+const effectPmPackageJsonPath = (startDirectory: string = process.cwd()): string =>
+  packageResolverFrom(startDirectory).resolve("@nikscripts/effect-pm/package.json");
+
+const effectPmPackageRequire = (startDirectory: string = process.cwd()) =>
+  createRequire(effectPmPackageJsonPath(startDirectory));
 
 /** @internal */
-export const findEffectPmPackageRoot = (startDirectory: string = process.cwd()): string => {
-  let current = startDirectory;
-  for (;;) {
-    const packageJsonPath = pathJoin(current, "package.json");
-    try {
-      const req = createRequire(packageJsonPath);
-      req.resolve("./package.json");
-      if (readPackageName(packageJsonPath) === "@nikscripts/effect-pm") {
-        return current;
-      }
-    } catch {
-      // not a package root
-    }
-    const parent = pathDirname(current);
-    if (parent === current) {
-      break;
-    }
-    current = parent;
-  }
-  return startDirectory;
-};
+export const findEffectPmPackageRoot = (startDirectory: string = process.cwd()): string =>
+  effectPmPackageJsonPath(startDirectory).replace(/[\\/]package\.json$/, "");
 
 /** @internal */
 export const resolveEntryUrl = (entry: string | ImportMeta): string =>
@@ -69,19 +32,43 @@ export interface ProcessManagerChildLaunchPaths {
   readonly runDirectory: string;
 }
 
-const pathsFromConfig = (defaults: ProcessManagerChildLaunchPaths) =>
+const pathsFromConfig = (defaults?: ProcessManagerChildLaunchPaths) =>
   Effect.gen(function* () {
-    const scriptPath = yield* Config.string("EFFECT_PM_GROUP_CHILD_SCRIPT").pipe(
-      Config.withDefault(defaults.scriptPath),
+    const scriptPathOption = yield* Config.option(Config.string("EFFECT_PM_GROUP_CHILD_SCRIPT"));
+    const executorImportOption = yield* Config.option(Config.string("EFFECT_PM_EXECUTOR_IMPORT"));
+    const logDirectoryOption = yield* Config.option(Config.string("EFFECT_PM_LOG_DIRECTORY"));
+    const runDirectoryOption = yield* Config.option(Config.string("EFFECT_PM_RUN_DIRECTORY"));
+
+    if (
+      Option.isSome(scriptPathOption) &&
+      Option.isSome(executorImportOption) &&
+      Option.isSome(logDirectoryOption) &&
+      Option.isSome(runDirectoryOption)
+    ) {
+      return {
+        scriptPath: scriptPathOption.value,
+        executorImport: executorImportOption.value,
+        logDirectory: logDirectoryOption.value,
+        runDirectory: runDirectoryOption.value,
+      };
+    }
+
+    const resolvedDefaults = defaults ?? defaultChildLaunchPaths();
+    const scriptPath = Option.getOrElse(
+      scriptPathOption,
+      () => resolvedDefaults.scriptPath,
     );
-    const executorImport = yield* Config.string("EFFECT_PM_EXECUTOR_IMPORT").pipe(
-      Config.withDefault(defaults.executorImport),
+    const executorImport = Option.getOrElse(
+      executorImportOption,
+      () => resolvedDefaults.executorImport,
     );
-    const logDirectory = yield* Config.string("EFFECT_PM_LOG_DIRECTORY").pipe(
-      Config.withDefault(defaults.logDirectory),
+    const logDirectory = Option.getOrElse(
+      logDirectoryOption,
+      () => resolvedDefaults.logDirectory,
     );
-    const runDirectory = yield* Config.string("EFFECT_PM_RUN_DIRECTORY").pipe(
-      Config.withDefault(defaults.runDirectory),
+    const runDirectory = Option.getOrElse(
+      runDirectoryOption,
+      () => resolvedDefaults.runDirectory,
     );
     return { scriptPath, executorImport, logDirectory, runDirectory };
   });
@@ -113,7 +100,7 @@ export class ProcessManagerChildLaunch extends Context.Service<
 >()("@nikscripts/effect-pm/internal/manager/childLaunch/ProcessManagerChildLaunch") {}
 
 const resolveDefaultScriptPath = (): string => {
-  const req = createRequire(pathJoin(findEffectPmPackageRoot(), "package.json"));
+  const req = effectPmPackageRequire();
   try {
     return req.resolve("./dist/bin/effect-pm-group-child.js");
   } catch {
@@ -201,7 +188,7 @@ export const layerConfig = (
  * @public
  */
 export const layerFromEnv = (
-  defaults: ProcessManagerChildLaunchPaths = defaultChildLaunchPaths(),
+  defaults?: ProcessManagerChildLaunchPaths,
 ): Layer.Layer<ProcessManagerChildLaunch> =>
   Layer.succeed(ProcessManagerChildLaunch, {
     paths: pathsFromConfig(defaults),
@@ -209,7 +196,7 @@ export const layerFromEnv = (
 
 /** @internal */
 export const resolveChildLaunchPaths = (
-  defaults: ProcessManagerChildLaunchPaths = defaultChildLaunchPaths(),
+  defaults?: ProcessManagerChildLaunchPaths,
 ): Effect.Effect<
   ProcessManagerChildLaunchPaths,
   ProcessManagerChildLaunchPathsError

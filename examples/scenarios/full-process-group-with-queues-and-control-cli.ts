@@ -124,6 +124,8 @@ class DemoTwoQueue extends QueueResource.Service<DemoTwoQueue, number, never>()(
  * Managed process: schedule driver runs `effect` on {@link Polling} cadence while
  * the active schedule entry remains open. Here one open-ended entry + spaced polling (~10s)
  * produce a steady “tick” that only needs the two queue services at runtime.
+ *
+ * @effect-expect-leaking DemoQueue | DemoTwoQueue
  */
 class QueueAdderProcess extends Process.Service<QueueAdderProcess>()("queue-adder", {
   polling: Polling.spaced(Duration.seconds(10)),

@@ -63,7 +63,11 @@ export class JobQueue extends QueueResource.Service<
     }),
 }) {}
 
-/** Every ~6s while armed, enqueues a batch of workshop jobs (start via CLI). */
+/**
+ * Every ~6s while armed, enqueues a batch of workshop jobs (start via CLI).
+ *
+ * @effect-expect-leaking JobQueue
+ */
 export class Feeder extends Process.Service<Feeder>()(
   "@demo/playground/Workshop/Feeder",
   Effect.gen(function* () {

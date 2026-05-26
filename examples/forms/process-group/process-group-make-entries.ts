@@ -34,6 +34,9 @@ const program = Effect.scoped(
       concurrency: 1,
     }) {}
 
+    /**
+     * @effect-expect-leaking EmailQueue | InvoiceQueue
+     */
     class SyncBilling extends Process.Service<SyncBilling>()("@examples/SyncBilling", {
       effect: Effect.gen(function* () {
         const emailQueue = yield* EmailQueue;

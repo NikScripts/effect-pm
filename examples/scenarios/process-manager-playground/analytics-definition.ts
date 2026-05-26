@@ -33,6 +33,9 @@ export class CounterQueue extends QueueResource.Service<CounterQueue, number, ne
   },
 ) {}
 
+/**
+ * @effect-expect-leaking CounterQueue
+ */
 export class Sampler extends Process.Service<Sampler>()("@demo/playground/Analytics/Sampler", {
   polling: Polling.spaced(Duration.seconds(8)),
   schedule: ProcessSchedule.inMemory([
