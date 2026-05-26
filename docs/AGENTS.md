@@ -28,7 +28,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `examples/forms/*` | One API shape per file — minimal teaching references. |
 | `examples/scenarios/*` | Descriptive compositions showing subsystems together. |
 | `examples/shared/*` | Test doubles, harness helpers, shared example utilities. |
-| `docs/guides/*.md` | API guides (definition forms, config, types); merge with `docs/rewrite/` over time. |
+| `docs/guides/*.md` | API guides (definition forms, config, types); **`service-tags-and-runtime-split.md`** = bundler‑safe tags vs **`Layer`/runtime`; **`dashboard-integration.md`** = embeddable widgets + **`peerDependency`** + topology. Merge with `docs/rewrite/` over time. |
 | `docs/plans/*.md` | Future-only roadmap items. Implemented behavior belongs in regular docs and source TSDoc. |
 | `repos/effect/` | Vendored Effect source for read-only agent reference. **Do not import from it.** |
 | `test/*.ts` | Vitest suites — run `pnpm test`. |

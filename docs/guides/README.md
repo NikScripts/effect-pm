@@ -25,7 +25,8 @@ Detail tables also live in [`docs/PROCESS-API.md`](../PROCESS-API.md), [`docs/RE
 | [process-group.md](./process-group.md) | **`ProcessGroup.Service`**, contract, typed `start` / `queue()`, `LocalRuntime` |
 | [process-manager.md](./process-manager.md) | **`ProcessManager.cli`**, endpoints, `group-start`, `connect`, `remoteLayer` |
 | [control-plane.md](./control-plane.md) | **`ControlService`** HTTP (REST + `/control`) |
-| [dashboard-integration.md](./dashboard-integration.md) | **Landing page** for a separate web/mobile UI hitting the control HTTP API |
+| [service-tags-and-runtime-split.md](./service-tags-and-runtime-split.md) | **Standard split:** service **tags** vs **Layer/runtime** modules (Vite / React / RN safe) |
+| [dashboard-integration.md](./dashboard-integration.md) | **Embedded React widgets**, demo scope, **`peerDependencies`**, **API topology** (direct vs Next BFF), security notes |
 
 ---
 

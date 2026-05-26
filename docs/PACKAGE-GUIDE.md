@@ -87,6 +87,7 @@ exists.
 | Understand process runtime semantics | [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + `src/Process.ts` TSDoc |
 | API tables (make, Polling, Schedule, ProcessGroup) | [PROCESS-API.md](./PROCESS-API.md) |
 | Process storage facets (`ProcessStorage`, SQLite, Prisma placeholder) | [PROCESS-API.md](./PROCESS-API.md) + [STORAGE.md](./STORAGE.md) + [examples/forms/process-store/](../examples/forms/process-store/) |
+| UI / bundlers importing service classes | [guides/service-tags-and-runtime-split.md](./guides/service-tags-and-runtime-split.md) + [guides/dashboard-integration.md](./guides/dashboard-integration.md) |
 | AI / agent onboarding (repo map, conventions) | [AGENTS.md](./AGENTS.md) |
 
 ---
@@ -162,6 +163,7 @@ streaming projection is planned.
    HTTP control routes have no built-in authentication, authorization, replay
    protection, rate limits, or transport encryption.
 6. **Remote group layers** keep the same group service key, but widen control errors to include remote failures and unsupported controls. Remote queue enqueue-style methods intentionally fail until queue item schemas are part of the group contract.
+7. **Browser or widget bundles importing `Process*` / `QueueResource` services** — keep **`*.tags`** (declaration + identities + `contract`) **separate from** **`Layer` / storage / ControlService** wiring. Avoid co-located “god files” so Vite/client builds never resolve native adapters. Canonical write-up: [guides/service-tags-and-runtime-split.md](./guides/service-tags-and-runtime-split.md). Embeddable React + **`peerDependency`** conventions: [guides/dashboard-integration.md](./guides/dashboard-integration.md).
 
 Planned remote-security work should cover, at minimum:
 
