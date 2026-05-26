@@ -28,7 +28,7 @@ column or label.
 | [docs/SCHEDULE-AND-PROCESSGROUP.md](./docs/SCHEDULE-AND-PROCESSGROUP.md) | `ProcessGroup.start` vs schedule, disarm vs `ProcessGroup.stop`, API-driven **`fromArmedRef`**. |
 | [docs/AGENTS.md](./docs/AGENTS.md) | Repository map and invariants for **AI assistants** (committed; use instead of ad-hoc local notes). |
 | [examples/README.md](./examples/README.md) | **Runnable examples**: commands, learning order, file index. |
-| [docs/plans/README.md](./docs/plans/README.md) | Long-form architecture contracts (plan **09** = process runtime canonical). |
+| [docs/plans/README.md](./docs/plans/README.md) | Future work: numbered plans + roadmap context (**[CURRENT-ROADMAP](./docs/plans/CURRENT-ROADMAP.md)** for suggested order) — **not** shipped API truth. |
 
 The package entry [`src/index.ts`](./src/index.ts) has **`@packageDocumentation`** describing exports at a glance (visible in IDEs that surface it).
 

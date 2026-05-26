@@ -25,6 +25,7 @@ Detail tables also live in [`docs/PROCESS-API.md`](../PROCESS-API.md), [`docs/RE
 | [process-group.md](./process-group.md) | **`ProcessGroup.Service`**, contract, typed `start` / `queue()`, `LocalRuntime` |
 | [process-manager.md](./process-manager.md) | **`ProcessManager.cli`**, endpoints, `group-start`, `connect`, `remoteLayer` |
 | [control-plane.md](./control-plane.md) | **`ControlService`** HTTP (REST + `/control`) |
+| [dashboard-integration.md](./dashboard-integration.md) | **Landing page** for a separate web/mobile UI hitting the control HTTP API |
 
 ---
 

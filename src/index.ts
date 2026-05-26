@@ -32,7 +32,7 @@
  * - Narrative architecture: `docs/PACKAGE-GUIDE.md`
  * - API tables (Process, Polling, Schedule, ProcessGroup): `docs/PROCESS-API.md`
  * - Runnable teaching scripts: `examples/README.md`
- * - Architecture contracts: `docs/plans/README.md` (especially plan **09** for process runtime)
+ * - Future roadmap (priority order, **not** shipped API truth): `docs/plans/README.md`
  * - Agent-oriented repo map: `docs/AGENTS.md`
  *
  * ## Import style
