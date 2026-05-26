@@ -4,10 +4,12 @@ This package ships the **`ControlService`** HTTP API and **`ProcessGroup` contra
 
 | Deliverable | Where | Role |
 | --- | --- | --- |
-| **Embeddable React components** | Future **`@nikscripts/effect-pm/react`** subpath *(or sibling package — TBD)* | Drop into **your** Next app, SPA, etc. Components take **service-class tags** and a **`fetch`/`baseURL` façade** — see [service-tags-and-runtime-split.md](./service-tags-and-runtime-split.md). |
-| **Demo app** | `examples/` (e.g. Vite + Tailwind) | Not the product — proves wiring, proxy pattern, Tailscale-ish base URL usage without pulling Next into this repo. |
+| **Embeddable React components** | Future **`@nikscripts/effect-pm/react`** subpath *(or sibling package — TBD)* | Drop into **your** Next app, SPA, etc. Components take **service-class tags** and a pluggable **control transport** via **`ControlPlanePort`** ([§ below](#transport-agnostic-widgets--controlplaneport--adapters)) — **`fetch`**, **tRPC-shaped client**, **Effect RPC**, etc. |
+| **Demo app** | `examples/` (e.g. Vite + Tailwind) | Not the product — proves wiring, gateway, and a **fetch** (or other) **adapter** without pulling Next into this repo. |
 
-There is **no** requirement to expose **tRPC** or any app-specific RPC to `effect-pm`. The control plane is **plain HTTP** (`GET /contract`, `POST /processes/:id/start`, …).
+There is **no** requirement to expose **tRPC** or any app-specific RPC **from this repo**. The **authoritative** runtime wire for PM control today is **plain HTTP** on **`ControlService`**. Your gateway may re-expose that as **tRPC**, **Effect RPC**, or keep **REST**; widgets depend only on **`ControlPlanePort`**.
+
+Service-class layout for bundlers: [service-tags-and-runtime-split.md](./service-tags-and-runtime-split.md).
 
 ---
 
@@ -33,7 +35,7 @@ Treat **everything** — **examples**, Tailscale MVP, eventual Next prod — as 
 Browser ──► same‑origin CONTROL GATEWAY ──► (private HTTP) ──► ControlService
 ```
 
-- **Widgets never target `ControlService` by URL.** They only **`fetch`** a **`baseUrl`** you choose (typically **`https://dash.example.internal/api/control`** during dev/demo, **`/api/...`** in Next).
+- **Widgets never call `ControlService` by raw URL.** They depend on an injected **`ControlPlanePort`** (see below); **implementations** use **`fetch`**, **your tRPC client**, **Effect RPC**, etc.
 - The **gateway** is *whatever* terminates HTTP **before** the PM process — Next route handlers/tRPC adapters, **`express`**, **`fastify`**, **Caddy**, or even **Vite `server.proxy`** in dev (still **`/api/control → http://127.0.0.1:3001`**). Same mental model; only the middleware stack changes.
 - **`ControlService` stays private**: bind **`127.0.0.1`** on the runner, listen on a VPC tailnet iface in prod, reachable **only from** gateway hosts / mesh routes.
 
@@ -47,16 +49,96 @@ Shipping **topology** does **not** mean embedding **Next** or **tRPC** in the li
 | --- | --- | --- |
 | **`ControlService` HTTP** contract, docs, **`ControlResponse`** | Yes (today) | — |
 | Optional thin **`ControlClient`** / URL builders | Yes — possible future subpath (e.g. **`/react`**) | — |
-| **React** widgets that call **`fetch(baseUrl, …)`** | Yes — declare **`react`** / **`react-dom`** as **peers** | Compose in pages/layouts |
+| **React** widgets consuming a **`ControlPlanePort`** | Yes — **`react`** / **`react-dom`** as **peers** | Provide port via context |
 | **`baseUrl`**, **`credentials`**, CSRF, extra headers | API surface on components / context | You set per environment |
 | **Authenticated** `/api/control/*` gateway (**Better Auth**, PAT scopes, audit logs) | **Not** shipped | **Next**, **Express**, **Hono**, etc. |
 | **Demo / dev** gateway (forward `stripPrefix` → `127.0.0.1:<port>`) | **`examples/`** reference only (no Next in-tree) | Copy or replace with your server |
 
-`*` If **`@nikscripts/effect-pm/react`** exists, it still only **builds paths** + **decodes responses** — never session tables or route files.
+`*` If **`@nikscripts/effect-pm/react`** exists, core exports define **`ControlPlanePort`** + context — not session tables, route files, or any one RPC framework.
 
-Using **tRPC** for *your mobile ↔ API* remains valid: **tRPC procedures** are just **gateway implementation details** (`ctx` verifies session → **`fetch(processManagerUrl,...)`**) — **`effect-pm` never parses tRPC payloads**.
+Using **tRPC** for *your mobile ↔ API* remains valid: **tRPC procedures** implement the **gateway** (`ctx` verifies session → **`fetch(processManagerUrl,...)`**) — **`effect-pm`** ships **optional helpers** that wrap a **minimal client shape**, not **`@trpc/client`** itself (**optional peer** if we ship `createTrpcControlPlaneAdapter`).
 
-Widgets should expose hooks for **`credentials: include`**, bearer injection, headers, **`x-correlation-id`**, … only when **`baseUrl` hits your authenticated gateway**.
+Widgets obtain auth headers / **`credentials`** through **adapter constructors** or a tiny **`getRequestInit()`** hook on the **`ControlPlanePort`**, not by hardcoding **`fetch`**.
+
+---
+
+## Transport-agnostic widgets — `ControlPlanePort` + adapters
+
+### Idea
+
+1. Define a **small semantic port** (methods mirror **operator** intent: contract, status, process mutation, queue mutation). Return **`Promise`** (or **`TaskEither`** later) so React + React Query stay simple.
+2. **Widgets import only that interface** + **`React.createContext`**.
+3. **`createFetchControlPlaneAdapter`**, **`createTrpcControlPlaneAdapter`**, **`createEffectRpcControlPlaneAdapter`** (names TBD) live in **orthogonal entry points** so **`@trpc/client`** / **`@effect/rpc`** stay **optional** dependencies of the **app**, not forced transitive deps.
+
+### Sketch — port (pseudo‑TypeScript)
+
+```typescript
+/** Stable application-facing API — not HTTP paths */
+export interface ControlPlanePort {
+  readonly getContract: () => Promise<ProcessGroupContract<string, readonly unknown[]>>;
+  readonly getStatus: () => Promise<unknown>; // tighten to shipped status DTO
+  readonly getProcess: (id: string) => Promise<unknown>;
+  readonly postProcessAction: (id: string, action: "start" | "stop" | "restart" | "now") => Promise<ControlResponse<unknown>>;
+  readonly getQueue: (id: string) => Promise<unknown>;
+  readonly postQueueAction: (id: string, action: "start" | "pause" | "resume" | "clear") => Promise<ControlResponse<unknown>>;
+}
+```
+
+`createFetchAdapter` accepts `defaultInit` / `mergeRequestInit` beside `baseUrl`. **tRPC** and **Effect RPC** factories attach auth headers on **`trpc`/RPC client** construction instead — do not force **`RequestInit`** onto the core interface unless every adapter needs it.
+
+Components: `const port = useContext(ControlPlaneContext); await port.postProcessAction(tag.id, "start")`.
+
+### Adapter: **`fetch`**
+
+Implementation composes **`baseUrl` + `encodeURIComponent`** + **`ControlResponse`** decode — today’s mental model, moved behind the port.
+
+### Adapter: **tRPC** (duck-typed)
+
+Avoid importing **`@trpc/client`** in core widgets. Accept **any object** that matches the port’s **operational** needs, e.g.:
+
+```typescript
+export function createTrpcControlPlaneAdapter(pm: {
+  contract: { query: () => Promise<ProcessGroupContract<string, readonly unknown[]>> };
+  status: { query: () => Promise<unknown> };
+  processAction: { mutate: (input: { id: string; action: string }) => Promise<ControlResponse<unknown>> };
+  // …mirror your router
+}): ControlPlanePort {
+  return {
+    getContract: () => pm.contract.query(),
+    getStatus: () => pm.status.query(),
+    postProcessAction: (id, action) => pm.processAction.mutate({ id, action }),
+    // ...
+  };
+}
+```
+
+Your **Next router** maps each procedure → **`fetch` to private `ControlService`**. Widgets neither know nor care.
+
+### Adapter: **Effect RPC**
+
+Likely shapes:
+
+| Layer | Responsibility |
+| --- | --- |
+| **RPC server** (gateway host) | Handlers **`Effect.runFork`** **`fetch`/`ProcessManager`** to **`ControlService`**, optionally centralize **`Layer`** with logging/metrics/auth |
+| **RPC client adapter** | `createEffectRpcControlPlaneStub(rpc)` where each port method **`runPromise(effect)`** *(or **`Runtime.runPromise` with shared runtime)* |
+
+**Important:** **`Effect`** must not leak into JSX. **Freeze** **`Effect<A,E,R>` behind `Promise<A>`** inside the adapter (same as SSR bridges today). Optionally expose **advanced hooks** **`useEffectControlPlaneSubscriptions`** later for streams — still optional.
+
+### Optional peer boundaries
+
+| Entry | Depends on |
+| --- | --- |
+| `@nikscripts/effect-pm/react` | `react`, `effect` typings only |
+| `@nikscripts/effect-pm/react/adapters/fetch` | *(none besides global `fetch`)* |
+| `@nikscripts/effect-pm/react/adapters/trpc` | **`@trpc/client`** *optional peer* |
+| `@nikscripts/effect-pm/react/adapters/effect-rpc` | **`@effect/rpc`** *optional peer* |
+
+Ship **tree-shakeable** modules so a **fetch-only** app never resolves tRPC.
+
+### Contract evolution
+
+If **Effect RPC** definitions become **generated from the same `Schema` as `ControlService`**, you get **one source of truth** for request/response shapes; **HTTP** and **RPC** gateways both implement **`ControlPlanePort`** **without** widget churn.
 
 ---
 
