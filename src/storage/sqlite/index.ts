@@ -169,14 +169,36 @@ export const layerProcessStore = (
   | ProcessStoreProcessExecution
   | ProcessStoreProcessLifecycle
   | ProcessStoreProcessGroup,
-  never,
+  RuntimeStorageConnectionError | RuntimeStorageSchemaError,
   Scope.Scope
 > =>
-  Layer.provide(ProcessStorage.layerRuntimeStorage, layerRuntimeStorage(config)).pipe(Layer.orDie);
+  Layer.provide(ProcessStorage.layerRuntimeStorage, layerRuntimeStorage(config));
+
+/**
+ * Convenience facade for apps that prefer acquisition failures as defects.
+ *
+ * @remarks
+ * Use {@link layerProcessStore} when you want typed SQLite acquisition errors.
+ *
+ * @public
+ */
+export const layerProcessStoreOrDie = (
+  config: SQLiteRuntimeStorageConfig,
+): Layer.Layer<
+  | ProcessStoreLog
+  | ProcessStoreQueueResource
+  | ProcessStoreRunResource
+  | ProcessStoreProcessExecution
+  | ProcessStoreProcessLifecycle
+  | ProcessStoreProcessGroup,
+  never,
+  Scope.Scope
+> => layerProcessStore(config).pipe(Layer.orDie);
 
 export const SQLiteRuntimeStorage = {
   make: makeRuntimeStorage,
   layer: layerRuntimeStorage,
   layerProcessStore,
+  layerProcessStoreOrDie,
   fromSqlClient,
 } as const;

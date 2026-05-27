@@ -380,7 +380,8 @@ program.pipe(
 ### Durable: SQLite
 
 Use `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite` for durable
-local storage.
+local storage with typed acquisition errors. Use `layerProcessStoreOrDie` only
+at application edges where opening the database should be a defect.
 
 ```typescript
 import { layerProcessStore } from "@nikscripts/effect-pm/storage/sqlite";

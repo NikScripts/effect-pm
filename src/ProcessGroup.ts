@@ -102,6 +102,7 @@ import {
 } from "./QueueResource";
 import { layerProcessGroupLogContext } from "./LogContext";
 import { ProcessStorage } from "./ProcessStorage";
+import { ProcessStore } from "./ProcessStore";
 import { ProcessStoreProcessGroup } from "./store/processGroup";
 import {
   ProcessStoreProcessExecution,
@@ -798,8 +799,20 @@ const recordProcessLifecycleChange = (
   tag: ProcessLifecycleTag,
 ): Effect.Effect<void> =>
   groupId === undefined
-    ? ProcessStoreProcessLifecycle.lifecycleChanged({ processId, tag })
-    : ProcessStoreProcessGroup.recordMemberLifecycle(groupId, { processId, tag });
+    ? ProcessStoreProcessLifecycle.lifecycleChanged({ processId, tag }).pipe(
+        ProcessStore.catchErrorAndLog({
+          message: "ProcessStoreProcessLifecycle write failed",
+          level: "warning",
+          annotations: { processId, tag },
+        }),
+      )
+    : ProcessStoreProcessGroup.recordMemberLifecycle(groupId, { processId, tag }).pipe(
+        ProcessStore.catchErrorAndLog({
+          message: "ProcessStoreProcessGroup write failed",
+          level: "warning",
+          annotations: { groupId, processId, tag },
+        }),
+      );
 
 // ============================================================================
 // Internal: build process details from fiber state

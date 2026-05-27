@@ -301,9 +301,9 @@ documented as a compatibility path.
 | `RunResourceFact` | Union of the three concrete fact types. |
 | `ProcessStoreRunResource` | Storage facet for RunResource facts and state changes (replaces the removed `ProcessStoreRuntime` and `RuntimeObserver`). |
 | `ProcessStoreRunResource.Type` / `.EmitType` | Type accessors merged via declaration namespace — full service shape / record-section emit shape. Use to type custom `Layer.succeed` / `provideService` mocks. |
-| `ProcessStoreRunResource.recordRunStarted(fact)` | Static optional emitter — silent no-op when the facet is absent; persistent write when present. The builder wraps every static emitter with a built-in `catchCause + logWarning` so failures never propagate. |
-| `ProcessStoreRunResource.recordRunCompleted(fact)` / `recordRunFailed(fact)` | Same isolation semantics for the other lifecycle facts. |
-| `ProcessStoreRunResource.recordStateChange(change)` | Static optional emitter for state transitions; same isolation semantics. |
+| `ProcessStoreRunResource.recordRunStarted(fact)` | Static optional emitter — silent no-op when the facet is absent; persistent write when present. Storage failures surface unless the caller explicitly pipes through `ProcessStore.catchErrorAndLog(...)`. |
+| `ProcessStoreRunResource.recordRunCompleted(fact)` / `recordRunFailed(fact)` | Same failure semantics for the other lifecycle facts. |
+| `ProcessStoreRunResource.recordStateChange(change)` | Static optional emitter for state transitions; same failure semantics. |
 | `ProcessStoreRunResource.recordFactBatch(facts)` / `recordStateChangeBatch(changes)` | Batched optional emitters. |
 | `ProcessStoreRunResource.layerRuntimeStorage` / `.layer` | Facet over injected `RuntimeStorage` (or in-memory `layer`). |
 | `(yield* ProcessStoreRunResource).facts({ resourceId, runId?, types? })` | Per-domain projection over persisted `run-resource.fact.recorded` events. |

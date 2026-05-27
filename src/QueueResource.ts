@@ -78,6 +78,7 @@ import {
   type QueueEntryFact,
   type QueueLifecycleChange,
 } from "./store/queueResource";
+import { ProcessStore } from "./ProcessStore";
 import { isJsonValue } from "./internal/json";
 import type { JsonValue } from "./ProcessStoreEvent";
 import {
@@ -1329,12 +1330,14 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       effect: Effect.Effect<A, EWrite>,
     ): Effect.Effect<void> =>
       effect.pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning(`ProcessStoreQueueResource write failed for queue "${queueName}" ${label}`).pipe(
-            Effect.annotateLogs("cause", Cause.pretty(cause)),
-          )
-        ),
-        Effect.asVoid,
+        ProcessStore.catchErrorAndLog({
+          message: `ProcessStoreQueueResource write failed for queue "${queueName}" ${label}`,
+          level: "warning",
+          annotations: {
+            queueId: queueName,
+            label,
+          },
+        }),
       );
 
     interface EntryFactSource {

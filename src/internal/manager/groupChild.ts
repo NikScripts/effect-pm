@@ -6,7 +6,7 @@ import type { ProcessGroupEntry, ProcessGroupServiceDefinition } from "../../Pro
 import { resolveChildLaunchPaths, groupLogSqlitePath } from "./childLaunch";
 import { groupLocalRuntime } from "./groupRuntime";
 import { relayWithCaptureLoggerLayer } from "../../Logs";
-import { layerProcessStore } from "../../storage/sqlite/index";
+import { layerProcessStoreOrDie } from "../../storage/sqlite/index";
 
 /** @public */
 export class GroupChildArgvError extends Data.TaggedError("GroupChildArgvError")<{
@@ -103,7 +103,7 @@ export const runGroupChildProgram = (args: {
     yield* fs.makeDirectory(path.dirname(logStorePath), { recursive: true }).pipe(Effect.orDie);
     const runtime = groupLocalRuntime(group, {
       controlBaseUrl: args.controlBaseUrl,
-      store: layerProcessStore({ filename: logStorePath }),
+      store: layerProcessStoreOrDie({ filename: logStorePath }),
     });
     // Minimal child stack (H2): sqlite ProcessStore + relay + capture once on envLayer.
     const envLayer = runtime.layer.pipe(Layer.provideMerge(relayWithCaptureLoggerLayer));

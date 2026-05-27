@@ -3,13 +3,14 @@ import { ProcessStorage } from "../src/ProcessStorage";
  * Conformance suite for the {@link ProcessStoreRunResource} facet.
  *
  * Verifies (a) the no-op vs persist semantics of the static optional
- * emitters built by `ProcessStore.Service`, (b) the built-in
- * failure-isolation `catchCause + logWarning` wrap, (c) the `runs()`
+ * emitters built by `ProcessStore.Service`, (b) explicit
+ * failure-isolation through `ProcessStore.catchErrorAndLog`, (c) the `runs()`
  * projection pairing, (d) `byRun` filtering, and (e) `latestState`.
  */
 
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Logger, Option } from "effect";
+import { ProcessStore } from "../src/ProcessStore";
 import { ProcessStoreRunResource } from "../src/store/runResource";
 import type {
   RunResourceFact,
@@ -114,7 +115,7 @@ describe("ProcessStoreRunResource — static optional emitters", () => {
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
-  it.live("isolates write failures behind a warning log", () => {
+  it.live("surfaces write failures unless explicitly caught and logged", () => {
     const captured: string[] = [];
     const captureLogger = Logger.make<unknown, void>(({ message }) => {
       const text =
@@ -152,23 +153,25 @@ describe("ProcessStoreRunResource — static optional emitters", () => {
       runs: () => Effect.succeed([]),
       byRun: () => Effect.succeed([]),
     };
-    return ProcessStoreRunResource.recordRunStarted(
+    const write = ProcessStoreRunResource.recordRunStarted(
       started("@test/Failing", "@test/Failing/run/1", 1),
-    ).pipe(
+    );
+    return Effect.gen(function* () {
+      const error = yield* Effect.flip(write);
+      expect(error).toBeInstanceOf(ProcessStoreReadonlyRecordError);
+      yield* write.pipe(
+        ProcessStore.catchErrorAndLog({
+          message: "test run-resource write failed",
+          annotations: { test: "run-resource-static" },
+        }),
+      );
+      expect(captured.some((m) => m.includes("test run-resource write failed"))).toBe(true);
+    }).pipe(
       Effect.provide(
         Layer.mergeAll(
           Layer.succeed(ProcessStoreRunResource, failingFacet),
           Logger.layer([captureLogger], { mergeWithExisting: false }),
         ),
-      ),
-      Effect.tap(() =>
-        Effect.sync(() => {
-          expect(
-            captured.some((m) =>
-              m.includes("write failed for recordRunStarted"),
-            ),
-          ).toBe(true);
-        }),
       ),
     );
   });

@@ -150,6 +150,7 @@ export type RuntimeStorageOperation =
   | "bootstrap"
   | "create"
   | "read"
+  | "encode"
   | "upsert"
   | "update"
   | "delete"
@@ -225,6 +226,18 @@ export class RuntimeStorageDecodeError extends Data.TaggedError(
 }> {}
 
 /**
+ * A runtime record could not be encoded for durable storage.
+ *
+ * @public
+ */
+export class RuntimeStorageEncodeError extends Data.TaggedError(
+  "RuntimeStorageEncodeError",
+)<RuntimeStorageOperationalFields & {
+  readonly id?: string;
+  readonly field?: string;
+}> {}
+
+/**
  * Logical storage contract failures.
  *
  * @public
@@ -243,6 +256,7 @@ export type RuntimeStorageOperationalError =
   | RuntimeStorageSchemaError
   | RuntimeStorageQueryError
   | RuntimeStorageDecodeError
+  | RuntimeStorageEncodeError
   | RuntimeStorageTransactionError
   | RuntimeStorageUnavailableError;
 

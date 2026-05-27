@@ -91,11 +91,13 @@ export class ProcessStoreStorageError extends Data.TaggedError(
 }> {}
 
 /**
- * Closed union of every error a facet write can return. The
- * `ProcessStore.Service` builder wraps every static optional emitter
- * with `catchCause + logWarning`, so observation paths never see this
- * channel; mocks supplied via `Layer.succeed` / `Effect.provideService`
- * may surface it directly.
+ * Closed union of every error a facet write can return.
+ *
+ * @remarks
+ * Static facet emitters no-op when the facet layer is absent. When storage is
+ * present, write failures surface through this channel. Wrap with
+ * `ProcessStore.catchErrorAndLog(...)` at call sites that intentionally treat
+ * storage as best-effort telemetry.
  *
  * @public
  */

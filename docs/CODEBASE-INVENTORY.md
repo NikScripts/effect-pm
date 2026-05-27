@@ -662,7 +662,7 @@ and call its domain read methods.
 
 ### Static optional emitters (on the tag)
 
-- **`ProcessStoreRunResource.recordRunStarted(fact)`**, **`.recordRunCompleted(fact)`**, **`.recordRunFailed(fact)`**, **`.recordStateChange(change)`**, plus **`recordFactBatch(facts)` / `recordStateChangeBatch(changes)`** — silent no-op when the facet layer is absent; persistent write when present. The builder wraps every static emitter with a built-in `catchCause + logWarning` so write failures are warning-logged and never propagated.
+- **`ProcessStoreRunResource.recordRunStarted(fact)`**, **`.recordRunCompleted(fact)`**, **`.recordRunFailed(fact)`**, **`.recordStateChange(change)`**, plus **`recordFactBatch(facts)` / `recordStateChangeBatch(changes)`** — silent no-op when the facet layer is absent; persistent write when present. Storage failures surface unless the caller explicitly pipes through `ProcessStore.catchErrorAndLog(...)`.
 
 ### Service methods (`yield* ProcessStoreRunResource`)
 

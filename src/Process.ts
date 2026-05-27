@@ -36,6 +36,7 @@ import {
   ProcessStoreProcessExecution,
   type ProcessExecutionFinishInput,
 } from "./store/processExecution";
+import { ProcessStore } from "./ProcessStore";
 import { Polling, PollingTag } from "./Polling";
 import { ProcessSchedule, ProcessScheduleTag } from "./ProcessSchedule";
 import type {
@@ -413,12 +414,24 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const recordExecutionCompleted = (
     args: Parameters<typeof finishInput>[0],
   ): Effect.Effect<void> =>
-    ProcessStoreProcessExecution.recordCompleted(finishInput(args));
+    ProcessStoreProcessExecution.recordCompleted(finishInput(args)).pipe(
+      ProcessStore.catchErrorAndLog({
+        message: "ProcessStoreProcessExecution write failed for completed run",
+        level: "warning",
+        annotations: { processId: name },
+      }),
+    );
 
   const recordExecutionFailed = (
     args: Parameters<typeof finishInput>[0],
   ): Effect.Effect<void> =>
-    ProcessStoreProcessExecution.recordFailed(finishInput(args));
+    ProcessStoreProcessExecution.recordFailed(finishInput(args)).pipe(
+      ProcessStore.catchErrorAndLog({
+        message: "ProcessStoreProcessExecution write failed for failed run",
+        level: "warning",
+        annotations: { processId: name },
+      }),
+    );
 
   const trackedProgram = (
     scheduleIdentifier: Option.Option<string>,

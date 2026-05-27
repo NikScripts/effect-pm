@@ -8,7 +8,11 @@
 import { Clock, Context, Effect, Layer, Option } from "effect";
 import type { ProcessStoreWriteError } from "../../ProcessStoreEvent";
 import { RuntimeStorage } from "../../RuntimeStorage";
-import { makeRunId, wrapEmitForFacet } from "./helpers";
+import {
+  catchErrorAndLog,
+  type ProcessStoreCatchErrorAndLogOptions,
+  makeRunId,
+} from "./helpers";
 import { makeProcessStoreSpine, type ProcessStoreSpine } from "./spine";
 
 const RECORD_TAG = "ProcessStore/record" as const;
@@ -18,7 +22,7 @@ const IDENTIFIER_FACTORY = Symbol.for("@nikscripts/effect-pm/ProcessStore/identi
 
 type PersistEffect = Effect.Effect<void, ProcessStoreWriteError>;
 
-type EmitEffect = Effect.Effect<void>;
+type EmitEffect = Effect.Effect<void, ProcessStoreWriteError>;
 
 /** @internal */
 export type ProcessStoreIdentifierInput =
@@ -178,6 +182,9 @@ export const processStoreWithIdentifier = <IdentifierApi extends Record<string, 
   fn,
 });
 
+export { catchErrorAndLog };
+export type { ProcessStoreCatchErrorAndLogOptions };
+
 const buildStore = Effect.gen(function* () {
   const storage = yield* RuntimeStorage;
   const now = yield* Clock.currentTimeMillis;
@@ -304,16 +311,13 @@ const buildEmitStatics = <
 ): OptionalEmitStatics<EmitApi> => {
   const out: { [K in keyof EmitApi & string]?: EmitMethod<EmitApi[K]> } = {};
   for (const emitKey of emitKeys) {
-    const wrap = wrapEmitForFacet(id, emitKey);
     out[emitKey] = ((...args: ReadonlyArray<unknown>) =>
-      wrap(
-        Effect.serviceOption(Base).pipe(
-          Effect.flatMap(
-            Option.match({
-              onNone: (): PersistEffect => Effect.void,
-              onSome: (api): PersistEffect => callPersistMethod(api, emitKey, args),
-            }),
-          ),
+      Effect.serviceOption(Base).pipe(
+        Effect.flatMap(
+          Option.match({
+            onNone: (): PersistEffect => Effect.void,
+            onSome: (api): PersistEffect => callPersistMethod(api, emitKey, args),
+          }),
         ),
       )) as EmitMethod<EmitApi[typeof emitKey]>;
   }
