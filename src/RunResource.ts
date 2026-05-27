@@ -104,6 +104,11 @@ import {
   Semaphore,
 } from "effect";
 import { ProcessStoreRunResource } from "./store/runResource";
+import {
+  configureLayer,
+  foldConfiguredSpec,
+  type ConfigPatch,
+} from "./ResourceConfigure";
 import type {
   RunResourceFact,
   RunResourceFactType,
@@ -477,7 +482,15 @@ export const RunResource = {
   layer: <Self, T, A, E>(
     tag: Context.Key<Self, RunGate<T, A, E>>,
     config: RunResourceConfig<T, A, E>,
-  ) => Layer.effect(tag)(makeRunGateEffect(config)),
+  ) =>
+    Layer.effect(tag)(
+      Effect.gen(function* () {
+        const resourceId = config.name ?? "anonymous";
+        const defaultSpec = { ...config, name: resourceId };
+        const effective = yield* foldConfiguredSpec(resourceId, defaultSpec);
+        return yield* makeRunGateEffect(effective);
+      }),
+    ),
 
   /**
    * Class factory: creates a Context tag with a baked-in `.layer`.
@@ -509,9 +522,27 @@ export const RunResource = {
     name: Name,
     config: RunResourceConfig<T, A, E>,
   ) => {
+    const defaultSpec = { ...config, name };
     const base = Context.Service<Self, RunGate<T, A, E>>()(name);
-    const layer = Layer.effect(base)(makeRunGateEffect({ ...config, name }));
-    return Object.assign(base, { layer });
+    const buildGate = Effect.gen(function* () {
+      const effective = yield* foldConfiguredSpec(name, defaultSpec);
+      return yield* makeRunGateEffect(effective);
+    });
+    return Object.assign(base, {
+      defaultSpec,
+      configure: (patch: ConfigPatch<RunResourceConfig<T, A, E>>) =>
+        configureLayer(name, patch),
+      wrapGate: (
+        fn: (
+          previous: RunResourceConfig<T, A, E>["effect"],
+        ) => RunResourceConfig<T, A, E>["effect"],
+      ) =>
+        configureLayer<RunResourceConfig<T, A, E>>(name, (previous) => ({
+          ...previous,
+          effect: fn(previous.effect),
+        })),
+      layer: Layer.effect(base)(buildGate),
+    });
   },
 
   /**

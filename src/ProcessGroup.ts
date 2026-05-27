@@ -167,7 +167,7 @@ export interface ProcessGroupQueueRegistration<out Id extends string = string> {
 
 export type ProcessGroupEntry =
   | ProcessDefinition<string, any>
-  | ProcessServiceDefinition<any, string, any>
+  | ProcessServiceDefinition<any, string, any, any>
   | ProcessGroupQueueRegistration
   | QueueResourceServiceDefinition<any, string, any, any, any, any>;
 
@@ -265,7 +265,7 @@ const emptyProcessGroupConfigItems: readonly [] = [];
  */
 type ProcessRequirementsFromEntry<Entry> = Entry extends ProcessDefinition<string, infer R>
   ? R
-  : Entry extends ProcessServiceDefinition<any, string, infer R>
+  : Entry extends ProcessServiceDefinition<any, string, any, infer R>
     ? R
     : never;
 
@@ -1577,9 +1577,17 @@ const makeTypedProcessGroup = <
       .filter(hasProcessGroupRuntimeQueueTag)
       .map((queue) => queue.tag);
 
+    const resolvedProcesses = yield* Effect.forEach(
+      processes,
+      (entry): Effect.Effect<Process<any>, never, never> =>
+        "buildConfiguredProcess" in entry
+          ? entry.buildConfiguredProcess
+          : Effect.succeed(entry.process),
+    );
+
     const runtime = yield* makeProcessGroup({
       id,
-      processes: processes.map((process) => process.process),
+      processes: resolvedProcesses,
       queues: queuesRuntime,
     });
 
@@ -1749,7 +1757,7 @@ export interface ProcessGroupLocalEnvLayerOptions {
 
 const processEntryIsService = (
   entry: Extract<ProcessGroupEntry, { readonly kind: "process" }>,
-): entry is ProcessServiceDefinition<any, string, any> => "layer" in entry;
+): entry is ProcessServiceDefinition<any, string, any, any> => "layer" in entry;
 
 const processContributionLayersFrom = <Entries extends readonly ProcessGroupEntry[]>(
   entries: Entries,

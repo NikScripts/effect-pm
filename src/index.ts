@@ -197,6 +197,14 @@ export type {
   UpdateResult,
 } from "./RuntimeStorage";
 
+// Resource configure (layer-composed patches)
+export {
+  configureLayer,
+  foldConfig,
+  resourceConfigureTagKey,
+} from "./ResourceConfigure";
+export type { ConfigPatch } from "./ResourceConfigure";
+
 // CLI
 export { createCli, runCli } from "./cli";
 

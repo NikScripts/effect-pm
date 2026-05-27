@@ -24,6 +24,11 @@
  */
 
 import { Clock, Context, Data, DateTime, Duration, Effect, Fiber, Layer, MutableRef, Option } from "effect";
+import {
+  configureLayer,
+  foldConfiguredSpec,
+  type ConfigPatch,
+} from "./ResourceConfigure";
 import { isPollingLayer, isScheduleLayer } from "./internal/processLayerBrand";
 import { ProcessManagerLogAnnotationKeys } from "./LogContext";
 import {
@@ -91,11 +96,25 @@ export interface ProcessDefinition<out Id extends string, out R>
  *
  * @public
  */
-export interface ProcessServiceDefinition<Self, Id extends string, R>
+export interface ProcessServiceDefinition<Self, Id extends string, E, R>
   extends Context.ServiceClass<Self, Id, Process<R>>,
     ProcessDefinition<Id, R> {
   readonly tag: Context.Key<Self, Process<R>>;
   readonly layer: Layer.Layer<Self>;
+  /** Default options from the service factory (before configure layers). */
+  readonly defaultSpec: ProcessMakeOptions<E, R>;
+  /** Layer that appends a configure patch (provide or merge with {@link layer}). */
+  readonly configure: (
+    patch: ConfigPatch<ProcessMakeOptions<E, R>>,
+  ) => Layer.Layer<never>;
+  /** Layer that wraps the default supervised `effect`. */
+  readonly wrapEffect: (
+    fn: (
+      previous: ProcessMakeOptions<E, R>["effect"],
+    ) => ProcessMakeOptions<E, R>["effect"],
+  ) => Layer.Layer<never>;
+  /** Build a {@link Process} after folding configure patches in context. */
+  readonly buildConfiguredProcess: Effect.Effect<Process<R>>;
 }
 
 /**
@@ -1027,65 +1046,80 @@ const defineProcessService = <Self>() => {
   function service<const Id extends string, E, RUser>(
     id: Id,
     effect: Effect.Effect<void, E, RUser>,
-  ): ProcessServiceDefinition<Self, Id, RUser>;
+  ): ProcessServiceDefinition<Self, Id, E, RUser>;
   function service<const Id extends string, E, RUser>(
     id: Id,
     effect: Effect.Effect<void, E, RUser>,
     polling: AnyPollingLayer,
-  ): ProcessServiceDefinition<Self, Id, RUser>;
-  function service<const Id extends string, E, RUser>(
-    id: Id,
-    effect: Effect.Effect<void, E, RUser>,
-    schedule: AnyScheduleLayer,
-  ): ProcessServiceDefinition<Self, Id, RUser>;
-  function service<const Id extends string, E, RUser, RSchedule>(
-    id: Id,
-    effect: Effect.Effect<void, E, RUser>,
-    schedule: ProcessScheduleInitializer<RSchedule>,
-  ): ProcessServiceDefinition<Self, Id, RUser | RSchedule>;
-  function service<const Id extends string, E, RUser>(
-    id: Id,
-    effect: Effect.Effect<void, E, RUser>,
-    polling: AnyPollingLayer,
-    schedule: AnyScheduleLayer,
-  ): ProcessServiceDefinition<Self, Id, RUser>;
-  function service<const Id extends string, E, RUser, RSchedule>(
-    id: Id,
-    effect: Effect.Effect<void, E, RUser>,
-    polling: AnyPollingLayer,
-    schedule: ProcessScheduleInitializer<RSchedule>,
-  ): ProcessServiceDefinition<Self, Id, RUser | RSchedule>;
+  ): ProcessServiceDefinition<Self, Id, E, RUser>;
   function service<const Id extends string, E, RUser>(
     id: Id,
     effect: Effect.Effect<void, E, RUser>,
     schedule: AnyScheduleLayer,
+  ): ProcessServiceDefinition<Self, Id, E, RUser>;
+  function service<const Id extends string, E, RUser, RSchedule>(
+    id: Id,
+    effect: Effect.Effect<void, E, RUser>,
+    schedule: ProcessScheduleInitializer<RSchedule>,
+  ): ProcessServiceDefinition<Self, Id, E, RUser | RSchedule>;
+  function service<const Id extends string, E, RUser>(
+    id: Id,
+    effect: Effect.Effect<void, E, RUser>,
     polling: AnyPollingLayer,
-  ): ProcessServiceDefinition<Self, Id, RUser>;
+    schedule: AnyScheduleLayer,
+  ): ProcessServiceDefinition<Self, Id, E, RUser>;
+  function service<const Id extends string, E, RUser, RSchedule>(
+    id: Id,
+    effect: Effect.Effect<void, E, RUser>,
+    polling: AnyPollingLayer,
+    schedule: ProcessScheduleInitializer<RSchedule>,
+  ): ProcessServiceDefinition<Self, Id, E, RUser | RSchedule>;
+  function service<const Id extends string, E, RUser>(
+    id: Id,
+    effect: Effect.Effect<void, E, RUser>,
+    schedule: AnyScheduleLayer,
+    polling: AnyPollingLayer,
+  ): ProcessServiceDefinition<Self, Id, E, RUser>;
   function service<const Id extends string, E, RUser, RSchedule>(
     id: Id,
     effect: Effect.Effect<void, E, RUser>,
     schedule: ProcessScheduleInitializer<RSchedule>,
     polling: AnyPollingLayer,
-  ): ProcessServiceDefinition<Self, Id, RUser | RSchedule>;
+  ): ProcessServiceDefinition<Self, Id, E, RUser | RSchedule>;
   function service<const Id extends string, E, RUser>(
     id: Id,
     config: ProcessMakeOptions<E, RUser>,
-  ): ProcessServiceDefinition<Self, Id, RUser>;
+  ): ProcessServiceDefinition<Self, Id, E, RUser>;
   function service<const Id extends string, E, RUser>(
     id: Id,
     effectOrConfig: Effect.Effect<void, E, RUser> | ProcessMakeOptions<E, RUser>,
     third?: ProcessMakeLayerArg<RUser>,
     fourth?: ProcessMakeLayerArg<RUser>,
-  ): ProcessServiceDefinition<Self, Id, RUser> {
-    const process = makeProcessDefinition(
-      id,
-      resolveProcessMakeConfig(effectOrConfig, third, fourth),
-    );
+  ): ProcessServiceDefinition<Self, Id, E, RUser> {
+    const defaultSpec = resolveProcessMakeConfig(effectOrConfig, third, fourth);
+    const process = makeProcessDefinition(id, defaultSpec);
+    const buildConfiguredProcess = Effect.gen(function* () {
+      const effective = yield* foldConfiguredSpec(id, defaultSpec);
+      return make(id, effective);
+    });
     const base = Context.Service<Self, Process<RUser>>()(id);
     return Object.assign(base, {
       ...process,
       tag: base,
-      layer: Layer.succeed(base, process.process),
+      defaultSpec,
+      configure: (patch: ConfigPatch<ProcessMakeOptions<E, RUser>>) =>
+        configureLayer(id, patch),
+      wrapEffect: (
+        fn: (
+          previous: ProcessMakeOptions<E, RUser>["effect"],
+        ) => ProcessMakeOptions<E, RUser>["effect"],
+      ) =>
+        configureLayer<ProcessMakeOptions<E, RUser>>(id, (previous) => ({
+          ...previous,
+          effect: fn(previous.effect),
+        })),
+      buildConfiguredProcess,
+      layer: Layer.effect(base)(buildConfiguredProcess),
     });
   }
   return service;

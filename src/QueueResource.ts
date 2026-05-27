@@ -80,6 +80,11 @@ import {
 } from "./store/queueResource";
 import { isJsonValue } from "./internal/json";
 import type { JsonValue } from "./ProcessStoreEvent";
+import {
+  configureLayer,
+  foldConfiguredSpec,
+  type ConfigPatch,
+} from "./ResourceConfigure";
 
 // ============================================================================
 // Public Types
@@ -533,6 +538,23 @@ export interface QueueResourceServiceDefinition<
     Omit<QueueResourceMetadata<Id, T, E, EEnqueue, R>, "tag"> {
   readonly tag: Context.Key<Self, QueueHandle<T, E, EEnqueue, R>>;
   readonly layer: Layer.Layer<Self, never, R>;
+  /** Default queue spec from the service factory (before configure layers). */
+  readonly defaultSpec: QueueResourceConfig<T, E, R>;
+  /**
+   * Layer that appends a configure patch. Provide or merge with {@link layer}
+   * before the queue scope acquires.
+   */
+  readonly configure: (
+    patch: ConfigPatch<QueueResourceConfig<T, E, R>>,
+  ) => Layer.Layer<never>;
+  /**
+   * Layer that wraps the default worker `effect` (runs inside worker concurrency).
+   */
+  readonly wrapWorker: (
+    fn: (
+      previous: QueueResourceConfig<T, E, R>["effect"],
+    ) => QueueResourceConfig<T, E, R>["effect"],
+  ) => Layer.Layer<never>;
 }
 
 /**
@@ -1096,12 +1118,20 @@ const validateItemsWithSchema = <T>(
   });
 };
 
-type MakeQueueEffectResult<C extends QueueResourceConfig<any, any, any>> = QueueHandle<
-  InferQueueItem<C>,
-  InferQueueWorkerError<C>,
-  C extends QueueResourceConfigWithItemSchema<any, any, any> ? QueueEnqueueErrors : never,
-  InferQueueWorkerRequirements<C>
->;
+type MakeQueueEffectResult<C extends QueueResourceConfig<any, any, any>> =
+  [C] extends [QueueResourceConfigWithItemSchema<any, any, any>]
+    ? QueueHandle<
+        InferQueueItem<C>,
+        InferQueueWorkerError<C>,
+        QueueEnqueueErrors,
+        InferQueueWorkerRequirements<C>
+      >
+    : QueueHandle<
+        InferQueueItem<C>,
+        InferQueueWorkerError<C>,
+        never,
+        InferQueueWorkerRequirements<C>
+      >;
 
 const makeQueueEffectWithoutSchema = <
   const C extends QueueResourceConfigWithoutItemSchema<any, any, any>,
@@ -2365,7 +2395,15 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 const queueResourceLayerFromConfig = (
   tag: Context.Key<any, QueueHandle<any, any, any, any>>,
   config: QueueResourceConfig<any, any, any>,
-): Layer.Layer<any, never, any> => Layer.effect(tag)(makeQueueEffectFromConfig(config));
+): Layer.Layer<any, never, any> =>
+  Layer.effect(tag)(
+    Effect.gen(function* () {
+      const resourceId = config.name ?? "anonymous";
+      const defaultSpec = { ...config, name: resourceId };
+      const effective = yield* foldConfiguredSpec(resourceId, defaultSpec);
+      return yield* makeQueueEffectFromConfig(effective);
+    }),
+  );
 
 function queueResourceLayer<
   Self,
@@ -2402,6 +2440,36 @@ function queueResourceLayer(
   return queueResourceLayerFromConfig(tag, effectOrConfig);
 }
 
+const queueServiceLayerFromDefaultSpec = <
+  Self,
+  const Name extends string,
+  C extends QueueResourceConfig<any, any, any>,
+  H,
+>(
+  base: Context.Service<Self, H>,
+  resourceId: Name,
+  defaultSpec: C,
+  run: (config: C) => Effect.Effect<H, never, Scope.Scope | InferQueueWorkerRequirements<C>>,
+): Layer.Layer<Self, never, InferQueueWorkerRequirements<C>> =>
+  Layer.effect(base)(Effect.gen(function* () {
+    const effective = yield* foldConfiguredSpec(resourceId, defaultSpec);
+    return yield* run(effective);
+  }));
+
+const queueServiceConfigure = <C extends QueueResourceConfig<any, any, any>>(
+  resourceId: string,
+  patch: ConfigPatch<C>,
+): Layer.Layer<never> => configureLayer(resourceId, patch);
+
+const queueServiceWrapWorker = <C extends QueueResourceConfig<any, any, any>>(
+  resourceId: string,
+  fn: (previous: C["effect"]) => C["effect"],
+): Layer.Layer<never> =>
+  configureLayer<C>(resourceId, (spec) => ({
+    ...spec,
+    effect: fn(spec.effect),
+  }));
+
 const queueResourceServiceWithoutSchema = <
   Self,
   const Name extends string,
@@ -2417,7 +2485,7 @@ const queueResourceServiceWithoutSchema = <
   never,
   InferQueueWorkerRequirements<C>
 > => {
-  const named = { ...config, name };
+  const named = { ...config, name } satisfies C & { readonly name: Name };
   const base = Context.Service<
     Self,
     QueueHandle<
@@ -2427,12 +2495,34 @@ const queueResourceServiceWithoutSchema = <
       InferQueueWorkerRequirements<C>
     >
   >()(name);
+  type Spec = QueueResourceConfig<
+    InferQueueItem<C>,
+    InferQueueWorkerError<C>,
+    InferQueueWorkerRequirements<C>
+  >;
+  type ServiceDef = QueueResourceServiceDefinition<
+    Self,
+    Name,
+    InferQueueItem<C>,
+    InferQueueWorkerError<C>,
+    never,
+    InferQueueWorkerRequirements<C>
+  >;
+  const wrapWorker: ServiceDef["wrapWorker"] = (fn) => queueServiceWrapWorker<Spec>(name, fn);
   return Object.assign(base, {
     id: name,
     kind: queueResourceKind,
     tag: base,
-    layer: Layer.effect(base)(makeQueueEffectWithoutSchema(named)),
-  });
+    defaultSpec: named,
+    configure: (patch: ConfigPatch<Spec>) => queueServiceConfigure(name, patch),
+    wrapWorker,
+    layer: queueServiceLayerFromDefaultSpec(
+      base,
+      name,
+      named,
+      makeQueueEffectWithoutSchema,
+    ),
+  }) satisfies ServiceDef;
 };
 
 const queueResourceServiceWithSchema = <
@@ -2450,7 +2540,7 @@ const queueResourceServiceWithSchema = <
   QueueEnqueueErrors,
   InferQueueWorkerRequirements<C>
 > => {
-  const named = { ...config, name };
+  const named = { ...config, name } satisfies C & { readonly name: Name };
   const base = Context.Service<
     Self,
     QueueHandle<
@@ -2461,34 +2551,35 @@ const queueResourceServiceWithSchema = <
     >
   >()(name);
   const item = makeQueueItemCodecDescriptor(name, config.itemSchema);
+  type Spec = QueueResourceConfig<
+    InferQueueItem<C>,
+    InferQueueWorkerError<C>,
+    InferQueueWorkerRequirements<C>
+  >;
+  type ServiceDef = QueueResourceServiceDefinition<
+    Self,
+    Name,
+    InferQueueItem<C>,
+    InferQueueWorkerError<C>,
+    QueueEnqueueErrors,
+    InferQueueWorkerRequirements<C>
+  >;
+  const wrapWorker: ServiceDef["wrapWorker"] = (fn) => queueServiceWrapWorker<Spec>(name, fn);
   return Object.assign(base, {
     id: name,
     kind: queueResourceKind,
     tag: base,
-    layer: Layer.effect(base)(makeQueueEffectWithSchema(named)),
+    defaultSpec: named,
+    configure: (patch: ConfigPatch<Spec>) => queueServiceConfigure(name, patch),
+    wrapWorker,
+    layer: queueServiceLayerFromDefaultSpec(
+      base,
+      name,
+      named,
+      makeQueueEffectWithSchema,
+    ),
     item,
-  });
-};
-
-const queueResourceServiceFromConfig = <
-  Self,
-  T,
-  E,
-  const Name extends string,
->(
-  serviceName: Name,
-  config: QueueResourceConfig<T, E, any>,
-): QueueResourceServiceDefinition<Self, Name, any, any, any, any> => {
-  if (hasItemSchema(config)) {
-    return queueResourceServiceWithSchema<Self, Name, QueueResourceConfigWithItemSchema<T, E, any>>(
-      serviceName,
-      config,
-    );
-  }
-  return queueResourceServiceWithoutSchema<Self, Name, QueueResourceConfigWithoutItemSchema<T, E, any>>(
-    serviceName,
-    config,
-  );
+  }) satisfies ServiceDef;
 };
 
 /**
@@ -2551,53 +2642,60 @@ export const QueueResource = {
    * ```
    */
   Service: <Self, T, E = never>() => {
-    function queueResourceService<
-      const Name extends string,
-      F extends QueueWorkerEffect<T, E, any, any>,
-      O extends
-        | QueueResourceOptionsWithoutItemSchema<T, E, any>
-        | QueueResourceOptionsWithItemSchema<T, E, any>
-        | undefined = undefined,
-    >(
-      name: Name,
-      effect: F,
-      options?: O,
-    ): QueueResourceServiceDefinition<
-      Self,
-      Name,
-      InferQueueItem<QueueConfigFromEffect<F, O>>,
-      InferQueueWorkerError<QueueConfigFromEffect<F, O>>,
-      InferQueueEnqueueError<QueueConfigFromEffect<F, O>>,
-      NormalizeQueueRequirements<InferQueueWorkerRequirements<QueueConfigFromEffect<F, O>>>
-    >;
-    function queueResourceService<
-      const Name extends string,
-      R,
-    >(
-      name: Name,
-      config: QueueResourceConfigWithoutItemSchema<T, E, R>,
-    ): QueueResourceServiceDefinition<Self, Name, T, E, never, NormalizeQueueRequirements<R>>;
-    function queueResourceService<
-      const Name extends string,
-      R,
-    >(
-      name: Name,
-      config: QueueResourceConfigWithItemSchema<T, E, R>,
-    ): QueueResourceServiceDefinition<Self, Name, T, E, QueueEnqueueErrors, NormalizeQueueRequirements<R>>;
-    function queueResourceService<const Name extends string>(
-      name: Name,
-      effectOrConfig: QueueWorkerEffect<T, E, any, any> | QueueResourceConfig<T, E, any>,
+    type QueueResourceServiceFactory = {
+      <
+        const Name extends string,
+        F extends QueueWorkerEffect<T, E, any, any>,
+        O extends
+          | QueueResourceOptionsWithoutItemSchema<T, E, any>
+          | QueueResourceOptionsWithItemSchema<T, E, any>
+          | undefined,
+      >(
+        name: Name,
+        effect: F,
+        options?: O,
+      ): QueueResourceServiceDefinition<
+        Self,
+        Name,
+        InferQueueItem<QueueConfigFromEffect<F, O>>,
+        InferQueueWorkerError<QueueConfigFromEffect<F, O>>,
+        InferQueueEnqueueError<QueueConfigFromEffect<F, O>>,
+        NormalizeQueueRequirements<InferQueueWorkerRequirements<QueueConfigFromEffect<F, O>>>
+      >;
+      <const Name extends string, R>(
+        name: Name,
+        config: QueueResourceConfigWithoutItemSchema<T, E, R>,
+      ): QueueResourceServiceDefinition<Self, Name, T, E, never, NormalizeQueueRequirements<R>>;
+      <const Name extends string, R>(
+        name: Name,
+        config: QueueResourceConfigWithItemSchema<T, E, R>,
+      ): QueueResourceServiceDefinition<Self, Name, T, E, QueueEnqueueErrors, NormalizeQueueRequirements<R>>;
+    };
+
+    const queueResourceServiceImpl = (
+      name: string,
+      effect: QueueWorkerEffect<T, E, any, any> | QueueResourceConfig<T, E, any>,
       options?: QueueResourceOptionsWithoutItemSchema<T, E, any> | QueueResourceOptionsWithItemSchema<T, E, any>,
-    ): QueueResourceServiceDefinition<Self, Name, any, any, any, any> {
-      if (typeof effectOrConfig === "function") {
-        return queueResourceServiceFromConfig<Self, T, E, Name>(name, {
-          ...(options ?? {}),
-          effect: effectOrConfig,
-        });
+    ) => {
+      if (typeof effect === "function") {
+        if (options !== undefined && options.itemSchema !== undefined) {
+          return queueResourceServiceWithSchema(name, {
+            ...options,
+            effect,
+            name,
+            itemSchema: options.itemSchema,
+          });
+        }
+        return queueResourceServiceWithoutSchema(name, { ...(options ?? {}), effect, name });
       }
-      return queueResourceServiceFromConfig<Self, T, E, Name>(name, effectOrConfig);
-    }
-    return queueResourceService;
+      if (hasItemSchema(effect)) {
+        return queueResourceServiceWithSchema(name, { ...effect, name });
+      }
+      const { itemSchema: _itemSchema, ...rest } = effect;
+      return queueResourceServiceWithoutSchema(name, { ...rest, name });
+    };
+
+    return queueResourceServiceImpl as QueueResourceServiceFactory;
   },
 
   /**
