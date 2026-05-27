@@ -177,3 +177,20 @@ export const configureWrapEffectField = <
     ...spec,
     effect: fn(spec.effect),
   }));
+
+/**
+ * Layer-composed configure patches for resource and process services.
+ *
+ * @remarks
+ * Root imports (`configureLayer`, `foldConfig`, …) match {@link ResourceConfigure}
+ * members. See `docs/guides/resource-configure.md`.
+ *
+ * @public
+ */
+export const ResourceConfigure = {
+  configureLayer,
+  foldConfig,
+  foldConfiguredSpec,
+  tagKey: resourceConfigureTagKey,
+  wrapEffectField: configureWrapEffectField,
+} as const;

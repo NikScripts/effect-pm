@@ -85,6 +85,7 @@ export {
   MIN_SCHEDULE_POLL_WHILE_DISARMED,
   DISARMED_HINT_SLEEP_MIN,
   DISARMED_HINT_SLEEP_MAX,
+  DisarmedIdleSleep,
 } from "./disarmedIdleSleep";
 
 // Namespace exports (these export objects with .make methods)
@@ -140,6 +141,7 @@ export type {
 } from "./ControlTransportHttp";
 
 // Query / Runtime Storage
+export { Query } from "./Query";
 export {
   And,
   Attributes,
@@ -205,11 +207,12 @@ export {
   configureLayer,
   foldConfig,
   resourceConfigureTagKey,
+  ResourceConfigure,
 } from "./ResourceConfigure";
 export type { ConfigPatch } from "./ResourceConfigure";
 
 // CLI
-export { createCli, runCli } from "./cli";
+export { createCli, runCli, Cli } from "./cli";
 
 // Process Manager
 export {

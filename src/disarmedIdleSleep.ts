@@ -83,3 +83,21 @@ export const computeDisarmedIdleSleep = (args: {
     },
   });
 };
+
+/**
+ * Disarmed schedule idle-sleep policy helpers.
+ *
+ * @remarks
+ * Root imports match {@link DisarmedIdleSleep} members (for example
+ * {@link computeDisarmedIdleSleep} === `DisarmedIdleSleep.compute`).
+ *
+ * @public
+ */
+export const DisarmedIdleSleep = {
+  compute: computeDisarmedIdleSleep,
+  resolveFallback: resolveDisarmedFallbackPoll,
+  DEFAULT_POLL: DEFAULT_SCHEDULE_POLL_WHILE_DISARMED,
+  MIN_POLL: MIN_SCHEDULE_POLL_WHILE_DISARMED,
+  HINT_MIN: DISARMED_HINT_SLEEP_MIN,
+  HINT_MAX: DISARMED_HINT_SLEEP_MAX,
+} as const;

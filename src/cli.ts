@@ -497,3 +497,17 @@ export const runCli = (
   return Effect.suspend(() => cli(argv));
 };
 
+/**
+ * Control-plane HTTP CLI factory helpers.
+ *
+ * @remarks
+ * {@link createCli} and {@link runCli} are the same bindings as
+ * {@link Cli.create} and {@link Cli.run}.
+ *
+ * @public
+ */
+export const Cli = {
+  create: createCli,
+  run: runCli,
+} as const;
+
