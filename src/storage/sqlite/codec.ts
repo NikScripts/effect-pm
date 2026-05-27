@@ -15,7 +15,10 @@
 import { DateTime, Effect, Option, Schema } from "effect";
 import type { RuntimeRecordPredicate } from "../../Query";
 import type { JsonValue } from "../../ProcessStoreEvent";
-import type { RuntimeRecord } from "../../RuntimeStorage";
+import {
+  RuntimeStorageEncodeError,
+  type RuntimeRecord,
+} from "../../RuntimeStorage";
 import { isJsonValue, unknownJsonString } from "../../internal/json";
 
 /**
@@ -174,8 +177,21 @@ export const decodeRuntimeRecordRowEffect = (
     catch: (cause) => cause,
   });
 
-const encodeUnknownToJsonStringOrDie = (value: unknown): Effect.Effect<string, never, never> =>
-  Schema.encodeUnknownEffect(unknownJsonString)(value).pipe(Effect.orDie);
+const encodeUnknownToJsonString = (
+  field: string,
+  value: unknown,
+): Effect.Effect<string, RuntimeStorageEncodeError, never> =>
+  Schema.encodeUnknownEffect(unknownJsonString)(value).pipe(
+    Effect.mapError((cause) =>
+      new RuntimeStorageEncodeError({
+        adapter: "sqlite",
+        operation: "encode",
+        field,
+        cause,
+        detail: `Failed to encode ${field} as JSON text`,
+      })
+    ),
+  );
 
 /** Parameter object for SQLite insert helpers. */
 export interface RuntimeRecordInsertParams {
@@ -214,14 +230,14 @@ export interface RuntimeRecordInsertParams {
  */
 export const encodeRuntimeRecordParamsEffect = (
   record: RuntimeRecord,
-): Effect.Effect<RuntimeRecordInsertParams, never, never> =>
+): Effect.Effect<RuntimeRecordInsertParams, RuntimeStorageEncodeError, never> =>
   Effect.gen(function* () {
     const index_names_json =
-      record.indexNames === undefined ? null : yield* encodeUnknownToJsonStringOrDie([...record.indexNames]);
+      record.indexNames === undefined ? null : yield* encodeUnknownToJsonString("indexNames", [...record.indexNames]);
     const payload_json =
-      record.payload === undefined ? null : yield* encodeUnknownToJsonStringOrDie(record.payload);
+      record.payload === undefined ? null : yield* encodeUnknownToJsonString("payload", record.payload);
     const attributes_json =
-      record.attributes === undefined ? null : yield* encodeUnknownToJsonStringOrDie(record.attributes);
+      record.attributes === undefined ? null : yield* encodeUnknownToJsonString("attributes", record.attributes);
 
     return {
       id: record.id,

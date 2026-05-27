@@ -691,9 +691,9 @@ const factWindowOpts = (
  * the raw spine error channel (`ProcessStoreWriteError`) so user-provided
  * mocks supplied via `Effect.provideService` / `Layer.succeed` can exercise
  * failure paths directly. The static optional emitters on the class
- * (`ProcessStoreRunResource.recordRunStarted` etc.) wrap each call with a
- * built-in `catchCause + logWarning` so observation can never change the
- * success/error channel of a gated effect.
+ * (`ProcessStoreRunResource.recordRunStarted` etc.) no-op when the facet is
+ * absent and otherwise surface write failures; callers that need telemetry-only
+ * writes should pipe through `ProcessStore.catchErrorAndLog`.
  *
  * @public
  */

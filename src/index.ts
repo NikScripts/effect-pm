@@ -194,6 +194,7 @@ export {
   RuntimeStorageConnectionError,
   RuntimeStorageDecodeError,
   RuntimeStorageDuplicateRecordError,
+  RuntimeStorageEncodeError,
   RuntimeStorageQueryError,
   RuntimeStorageReadonlyRecordError,
   RuntimeStorageSchemaError,

@@ -30,6 +30,13 @@ const storageLogQueryError = (
         reason: `Unable to read log history from storage: ${String(error)}`,
       });
 
+const storageLayerError = (
+  error: unknown,
+): ProcessManagerLogQueryError =>
+  new ProcessManagerLogQueryError({
+    reason: `Unable to open log history storage: ${String(error)}`,
+  });
+
 /**
  * Run `pm logs` against on-disk group log stores under the child log directory.
  *
@@ -87,6 +94,7 @@ export const queryGroupLogsForCatalog = (
             }),
           ),
           Effect.provide(layerProcessStore({ filename: sqliteFilename })),
+          Effect.mapError(storageLayerError),
           Effect.scoped,
           Effect.option,
         );
@@ -130,6 +138,7 @@ export const queryGroupLogsForCatalog = (
         }),
       ),
       Effect.provide(layerProcessStore({ filename: sqliteFilename })),
+      Effect.mapError(storageLayerError),
       Effect.scoped,
     );
   });

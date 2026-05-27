@@ -955,8 +955,8 @@ const queueDedupeKeyChangesFromRecords = (
  * Static record helpers (`recordEntry`, `recordLifecycle`,
  * `recordDedupeKey`, plus their `*Batch` variants) are silent no-ops
  * when the facet is not in context, and write through the spine when it
- * is. Every static emit wraps with `catchCause + logWarning` so storage
- * failures never propagate to queue work.
+ * is. Storage failures surface through the returned error channel; queue
+ * internals wrap telemetry-only writes with `ProcessStore.catchErrorAndLog`.
  *
  * Read methods (`entries`, `entriesByKey`, `lifecycle`, `dedupeKeys`)
  * are accessed through the resolved instance — `yield*` the facet (or

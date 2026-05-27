@@ -26,6 +26,7 @@ import type {
 import {
   RuntimeStorageDecodeError,
   RuntimeStorageDuplicateRecordError,
+  RuntimeStorageEncodeError,
   RuntimeStorageQueryError,
   RuntimeStorageReadonlyRecordError,
   applyRuntimeRecordPatch,
@@ -41,7 +42,7 @@ import {
   predicateIncludesReadonlyTrue,
 } from "./codec";
 
-const insertRowEffect = (record: RuntimeRecord): Effect.Effect<Record<string, unknown>, never, never> =>
+const insertRowEffect = (record: RuntimeRecord): Effect.Effect<Record<string, unknown>, RuntimeStorageEncodeError, never> =>
   Effect.map(encodeRuntimeRecordParamsEffect(record), (params) => ({ ...params }));
 
 const rowObjectToRecord = (row: object): Record<string, unknown> => {
@@ -315,6 +316,12 @@ const sqliteLoadError = (
 ): RuntimeStorageQueryError | RuntimeStorageDecodeError =>
   error instanceof RuntimeStorageDecodeError ? error : sqliteQueryError(operation, error);
 
+const sqliteWriteError = (
+  operation: "create" | "upsert" | "update",
+  error: SqlError | RuntimeStorageEncodeError,
+): RuntimeStorageQueryError | RuntimeStorageEncodeError =>
+  error instanceof RuntimeStorageEncodeError ? error : sqliteQueryError(operation, error);
+
 /**
  * Construct the storage port for an already-provided {@link SqlClient}.
  *
@@ -326,7 +333,9 @@ export const makeSqliteRuntimeStorageService = (sql: SqlClient): RuntimeStorageS
     Effect.flatMap(insertRowEffect(record), (row) =>
       sql`INSERT INTO ${sql(RUNTIME_RECORDS_TABLE)} ${sql.insert(row)}`.pipe(
         Effect.mapError((error) =>
-          isDuplicateKeySqlError(error)
+          error instanceof RuntimeStorageEncodeError
+            ? error
+            : isDuplicateKeySqlError(error)
             ? new RuntimeStorageDuplicateRecordError({ id: record.id })
             : sqliteQueryError("create", error)
         ),
@@ -358,7 +367,7 @@ export const makeSqliteRuntimeStorageService = (sql: SqlClient): RuntimeStorageS
       yield* Effect.flatMap(insertRowEffect(record), (row) =>
         sql`INSERT OR REPLACE INTO ${sql(RUNTIME_RECORDS_TABLE)} ${sql.insert(row)}`,
       ).pipe(
-        Effect.mapError((error) => sqliteQueryError("upsert", error)),
+        Effect.mapError((error) => sqliteWriteError("upsert", error)),
       );
     }),
 
@@ -377,7 +386,7 @@ export const makeSqliteRuntimeStorageService = (sql: SqlClient): RuntimeStorageS
         yield* Effect.flatMap(insertRowEffect(applyRuntimeRecordPatch(row, patch)), (insertRow) =>
           sql`INSERT OR REPLACE INTO ${sql(RUNTIME_RECORDS_TABLE)} ${sql.insert(insertRow)}`,
         ).pipe(
-          Effect.mapError((error) => sqliteQueryError("update", error)),
+          Effect.mapError((error) => sqliteWriteError("update", error)),
         );
         updated++;
       }
