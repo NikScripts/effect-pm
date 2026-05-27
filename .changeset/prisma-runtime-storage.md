@@ -11,3 +11,5 @@ Add `effect-pm prisma init` for interactively adding the schema fragment to an e
 Add typed `RuntimeStorage` operational errors for durable adapters, mapping Prisma / SQLite driver and decode failures into public storage error tags instead of defects.
 
 **Breaking:** static ProcessStore facet emitters now surface write failures when a storage layer is present. They still no-op when the facet layer is absent. Use the new pipeable `ProcessStore.catchErrorAndLog(...)` helper for writes that should remain best-effort telemetry.
+
+**Breaking:** SQLite `layerProcessStore` now surfaces typed acquisition errors. Use `layerProcessStoreOrDie` to keep the previous defect-on-acquisition behavior at application edges.

@@ -220,6 +220,10 @@ from operational failures (connection, schema, query, decode, transaction,
 unavailable). Durable adapters map driver and decode failures into those public
 tags instead of leaking Prisma / SQLite error types.
 
+SQLite exposes typed acquisition failures from `layerProcessStore`; use
+`layerProcessStoreOrDie` only at application edges that intentionally treat
+database open/schema failures as defects.
+
 ### Storage failure semantics
 
 | Surface | Storage present + failure | Storage absent |
