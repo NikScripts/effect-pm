@@ -259,7 +259,7 @@ const program = Effect.gen(function* () {
  * durable analytics without a database, use `ProcessStorage.layerRuntimeStorage`
  * with `SQLiteRuntimeStorage.layer({ filename })` (see `@nikscripts/effect-pm/storage/sqlite`)
  * with Effect FileSystem / Path platform layers. For SQL-backed persistence,
- * use `PrismaProcessStore.layer({ client })` from
+ * use `PrismaRuntimeStorage.layerProcessStore({ client })` from
  * `@nikscripts/effect-pm/storage/prisma`.
  */
 

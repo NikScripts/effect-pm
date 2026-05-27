@@ -391,15 +391,33 @@ program.pipe(
 );
 ```
 
-### Prisma adapter status
+### Durable: Prisma
 
-The old Prisma event-table adapter has been intentionally disabled while storage
-moves to normalized `RuntimeRecord` rows. Prisma will return as a
-`RuntimeStorage` adapter; use `RuntimeStorage` conformance tests as the target
-contract for that rewrite.
+Use `PrismaRuntimeStorage` when your app already owns a Prisma client and
+migrations.
 
-`@prisma/client` is an **optional peer dependency** — only required when you
-opt into the Prisma subpath.
+```sh
+pnpx @nikscripts/effect-pm prisma init
+pnpm prisma migrate dev --name add_effect_pm_runtime_records
+pnpm prisma generate
+```
+
+```typescript
+import { PrismaClient } from "@prisma/client";
+import { PrismaRuntimeStorage } from "@nikscripts/effect-pm/storage/prisma";
+
+const prisma = new PrismaClient(/* your app's adapter/config */);
+
+program.pipe(
+  Effect.provide(PrismaRuntimeStorage.layerProcessStore({ client: prisma })),
+  Effect.runPromise,
+);
+```
+
+The generated Prisma model is `EffectPmRuntimeRecord` and maps to the
+`effect_pm_runtime_records` table. effect-pm never constructs or disconnects
+your Prisma client; lifecycle stays with the app. `@prisma/client` is an
+optional peer dependency, required only when using the Prisma subpath.
 
 ## Control Service (CLI/API)
 
@@ -520,13 +538,14 @@ See [examples/scenarios/full-process-group-with-queues-and-control-cli.ts](./exa
 - `Process.make(id, config)` — Create a managed process (`polling` + `schedule` layers)
 - `Polling` / `ProcessSchedule` — Cadence and gate services with preset layers
 - `ProcessStore` / `ProcessStorage` - Storage facet builder and combined in-memory/durable storage layers
-- `PrismaProcessStore` - placeholder for the upcoming RuntimeStorage-backed Prisma adapter (preferred subpath: `@nikscripts/effect-pm/storage/prisma`; legacy `@nikscripts/effect-pm/prisma` remains available)
+- `PrismaRuntimeStorage` - Prisma-backed RuntimeStorage adapter from `@nikscripts/effect-pm/storage/prisma`
 - `ControlService` - HTTP control API utilities
 
 ### CLI
 
 - `createCli()` - Create CLI command
 - `runCli()` - Run CLI with config
+- `effect-pm prisma init` - Add the Prisma `EffectPmRuntimeRecord` schema model interactively.
 
 ### Types
 
@@ -544,7 +563,6 @@ See [examples/scenarios/full-process-group-with-queues-and-control-cli.ts](./exa
 - `ProcessNotFoundError` - Process not found
 - `ProcessAlreadyRunningError` - Process already running
 - `ProcessNotRunningError` - Process not running
-- `PrismaProcessStoreUnavailableError` - Prisma adapter is intentionally unavailable until the RuntimeStorage-backed rewrite lands
 
 ## License
 

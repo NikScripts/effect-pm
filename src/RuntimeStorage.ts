@@ -256,8 +256,6 @@ const matchesPredicate = (
       return predicate.predicates.every((item) => matchesPredicate(record, item));
     case "Or":
       return predicate.predicates.some((item) => matchesPredicate(record, item));
-    case "Xor":
-      return predicate.predicates.filter((item) => matchesPredicate(record, item)).length === 1;
   }
 };
 
@@ -272,7 +270,6 @@ const includesReadonlyTrue = (
       return predicate.field === "readonly" && predicate.value === true;
     case "And":
     case "Or":
-    case "Xor":
       return predicate.predicates.some(includesReadonlyTrue);
     default:
       return false;

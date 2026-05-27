@@ -264,7 +264,6 @@ export const predicateIncludesReadonlyTrue = (
       return predicate.field === "readonly" && predicate.value === true;
     case "And":
     case "Or":
-    case "Xor":
       return predicate.predicates.some(predicateIncludesReadonlyTrue);
     default:
       return false;

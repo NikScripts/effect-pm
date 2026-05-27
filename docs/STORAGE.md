@@ -208,12 +208,17 @@ The facet **owns** all wire-shape work:
 
 **Adapters:** implement `RuntimeStorageService` (e.g. `src/storage/sqlite/`); wire via `ProcessStorage.layerRuntimeStorage` or `layerProcessStore`. Adapters never speak the facet vocabulary — they store and query generic `RuntimeRecord` rows.
 
+`PrismaRuntimeStorage` stores the same normalized rows through a consumer-owned
+Prisma client. The generated model is `EffectPmRuntimeRecord`, mapped to the
+`effect_pm_runtime_records` table; JSON-shaped runtime fields are serialized
+into string columns so the adapter can preserve `RuntimeStorage.memory` null /
+unset semantics without importing generated Prisma null sentinels.
+
 ---
 
 ## Pending work
 
 | Area | Notes |
 |------|-------|
-| Prisma `RuntimeStorage` adapter | Today `src/prisma/PrismaProcessStore.ts` is a stub that fails at acquisition. The next pass rebuilds it as a `RuntimeStorageService` over normalized `RuntimeRecord` rows. |
 | SQLite typed errors | `storage/sqlite` still uses `Layer.orDie` for storage init failures; surface typed errors instead. |
 | Telemetry proposals | `Polling`, `ProcessSchedule`, `HttpApiResource`: facet yes/no docs in `docs/storage-proposals/` (Phase 1 — proposal only). |

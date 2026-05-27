@@ -20,7 +20,6 @@ import {
   Update,
   Upsert,
   Where,
-  Xor,
   type RuntimeRecord,
   type RuntimeStorageService,
 } from "../src";
@@ -153,7 +152,7 @@ describe("RuntimeStorage.memory", () => {
     }),
   );
 
-  it.live("supports object patches, unset assignments, and xor predicates", () =>
+  it.live("supports object patches and unset assignments", () =>
     Effect.gen(function* () {
       const storage = yield* RuntimeStorage.memory;
       const source: Effect.Effect<RuntimeStorageService, never, never> = Effect.succeed(storage);
@@ -168,7 +167,7 @@ describe("RuntimeStorage.memory", () => {
 
       const update = yield* pipe(
         source,
-        Where(Xor([Key.equals("key-a"), Key.equals("missing")])),
+        Where(Key.equals("key-a")),
         Update({
           payload: { ok: true },
           indexA: null,

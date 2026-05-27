@@ -17,14 +17,12 @@ Removed
   vocabulary.
 - **`StoreEventQuery`** — replaced by per-facet query types (e.g.
   `QueueEntryQuery`, `RunResourceFactQuery`, `ProcessExecutionQuery`).
-- **`EffectPmEventRow` / `EffectPmEventCreateInput`** are no longer
-  re-exported from the package root or from `ProcessStoreEvent`. They
-  live as structural placeholder types inside `@nikscripts/effect-pm/prisma`
-  for the legacy table shape only.
+- Shared Prisma event-row types are no longer re-exported from the package root
+  or from `ProcessStoreEvent`.
 - **Prisma row codec exports** (`decodeEventRow`, `encodeEvent`,
-  `PrismaProcessStoreDecodeError`) — removed from
-  `@nikscripts/effect-pm/prisma` and `@nikscripts/effect-pm/storage/prisma`.
-  Prisma is being rebuilt as a `RuntimeStorage` adapter and no longer
+  decode errors) — removed from `@nikscripts/effect-pm/prisma` and
+  `@nikscripts/effect-pm/storage/prisma`. Prisma now targets the `RuntimeStorage`
+  adapter contract and no longer
   exposes a row codec at the package boundary.
 - **Per-facet wire-event narrowing helpers**
   (`isQueueEntryRecordedEvent`, `isQueueLifecycleChangedEvent`,

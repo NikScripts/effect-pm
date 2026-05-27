@@ -86,7 +86,7 @@ exists.
 | Schedule + **`ProcessGroup`** / API-driven arm | [docs/SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + [examples/scenarios/game-window-polling-with-process-group.ts](../examples/scenarios/game-window-polling-with-process-group.ts) |
 | Understand process runtime semantics | [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) + `src/Process.ts` TSDoc |
 | API tables (make, Polling, Schedule, ProcessGroup) | [PROCESS-API.md](./PROCESS-API.md) |
-| Process storage facets (`ProcessStorage`, SQLite, Prisma placeholder) | [PROCESS-API.md](./PROCESS-API.md) + [STORAGE.md](./STORAGE.md) + [examples/forms/process-store/](../examples/forms/process-store/) |
+| Process storage facets (`ProcessStorage`, SQLite, Prisma) | [PROCESS-API.md](./PROCESS-API.md) + [STORAGE.md](./STORAGE.md) + [examples/forms/process-store/](../examples/forms/process-store/) |
 | AI / agent onboarding (repo map, conventions) | [AGENTS.md](./AGENTS.md) |
 
 ---
@@ -107,12 +107,12 @@ dedicated subpaths for focused imports:
 
 Structured logs use `ProcessStoreLog` (`record`, `load`, `query`) with `ProcessStorage` or `layerProcessStore` composed; child capture uses `@nikscripts/effect-pm/Logs` (`captureLoggerLayer`, `relayLayer`)
 at launch (`layerProcessStore` from `storage/sqlite`). Durable
-normalized runtime records use
-`@nikscripts/effect-pm/storage/sqlite` (`SQLiteRuntimeStorage`) with
-`ProcessStorage.layerRuntimeStorage`. Run `SQLiteRuntimeStorage.make` under
-`Effect.scoped` (or `it.live`) so the underlying `SqlClient` stays open for the
-whole usage window. Prisma paths are currently placeholders
-pending a RuntimeStorage-backed rewrite.
+normalized runtime records use `@nikscripts/effect-pm/storage/sqlite`
+(`SQLiteRuntimeStorage`) or `@nikscripts/effect-pm/storage/prisma`
+(`PrismaRuntimeStorage`) with `ProcessStorage.layerRuntimeStorage`. Run
+`SQLiteRuntimeStorage.make` under `Effect.scoped` (or `it.live`) so the
+underlying `SqlClient` stays open for the whole usage window; Prisma clients are
+constructed and disconnected by the consuming app.
 
 For durable adapter work, start with
 [STORAGE.md](./STORAGE.md).
