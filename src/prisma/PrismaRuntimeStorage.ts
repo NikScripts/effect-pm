@@ -14,6 +14,7 @@ import { Context, Data, DateTime, Effect, Layer, Option, Schema } from "effect";
 import type {
   RuntimeRecordField,
   RuntimeRecordOrderField,
+  RuntimeRecordPatch,
   RuntimeRecordPredicate,
   RuntimeRecordQuery,
 } from "../Query";
@@ -22,7 +23,6 @@ import { RuntimeStorage } from "../RuntimeStorage";
 import {
   RuntimeStorageDuplicateRecordError,
   RuntimeStorageReadonlyRecordError,
-  applyRuntimeRecordPatch,
   type DeleteResult,
   type RuntimeRecord,
   type RuntimeStorageService,
@@ -194,6 +194,36 @@ const encodeUpdateInput = (
   readonly: record.readonly ?? null,
 });
 
+const encodePatchInput = (
+  patch: RuntimeRecordPatch,
+): EffectPmRuntimeRecordUpdateInput => ({
+  ...(patch.type === undefined ? {} : { type: patch.type }),
+  ...(patch.occurredAt === undefined ? {} : { occurredAt: dateFromUtc(patch.occurredAt) }),
+  ...(patch.runId === undefined ? {} : { runId: patch.runId }),
+  ...(patch.processType === undefined ? {} : { processType: patch.processType }),
+  ...(patch.processId === undefined ? {} : { processId: patch.processId }),
+  ...(patch.subjectType === undefined ? {} : { subjectType: patch.subjectType }),
+  ...(patch.subjectId === undefined ? {} : { subjectId: patch.subjectId }),
+  ...(patch.key === undefined ? {} : { key: patch.key }),
+  ...(patch.indexA === undefined ? {} : { indexA: patch.indexA }),
+  ...(patch.indexB === undefined ? {} : { indexB: patch.indexB }),
+  ...(patch.indexC === undefined ? {} : { indexC: patch.indexC }),
+  ...(patch.indexD === undefined ? {} : { indexD: patch.indexD }),
+  ...(patch.indexE === undefined ? {} : { indexE: patch.indexE }),
+  ...(patch.indexF === undefined ? {} : { indexF: patch.indexF }),
+  ...(patch.indexG === undefined ? {} : { indexG: patch.indexG }),
+  ...(patch.indexH === undefined ? {} : { indexH: patch.indexH }),
+  ...(patch.indexNames === undefined
+    ? {}
+    : { indexNamesJson: patch.indexNames === null ? null : encodeIndexNamesColumn(patch.indexNames) }),
+  ...(patch.payload === undefined
+    ? {}
+    : { payloadJson: patch.payload === null ? null : encodeJsonColumn(patch.payload) }),
+  ...(patch.attributes === undefined
+    ? {}
+    : { attributesJson: patch.attributes === null ? null : encodeJsonColumn(patch.attributes) }),
+});
+
 const decodeRow = (row: EffectPmRuntimeRecordRow): RuntimeRecord => ({
   id: row.id,
   type: row.type,
@@ -327,7 +357,7 @@ const wherePredicate = (
       };
     case "And":
       return predicate.predicates.length === 0
-        ? {}
+        ? impossibleWhere
         : { AND: predicate.predicates.map((item) => wherePredicate(item) ?? {}) };
     case "Or":
       return predicate.predicates.length === 0
@@ -358,6 +388,23 @@ const findManyArgs = (
     ...(query?.offset === undefined ? {} : { skip: Math.max(0, query.offset) }),
   };
 };
+
+const queryWhere = (query: RuntimeRecordQuery | undefined): EffectPmRuntimeRecordWhereInput | undefined =>
+  wherePredicate(query?.predicate);
+
+const mutableWhere = (
+  where: EffectPmRuntimeRecordWhereInput | undefined,
+): EffectPmRuntimeRecordWhereInput => ({
+  AND: [
+    where ?? {},
+    {
+      OR: [
+        { readonly: { equals: null } },
+        { readonly: { not: true } },
+      ],
+    },
+  ],
+});
 
 const includesReadonlyTrue = (
   predicate: RuntimeRecordPredicate | undefined,
@@ -395,47 +442,6 @@ const errorCode = (error: unknown): string | undefined => {
 const isUniqueConstraintError = (error: unknown): boolean =>
   errorCode(error) === "P2002";
 
-interface PrismaTransactionRunner {
-  readonly $transaction: (
-    operations: ReadonlyArray<Promise<EffectPmRuntimeRecordRow>>,
-  ) => PromiseLike<ReadonlyArray<EffectPmRuntimeRecordRow>>;
-}
-
-const transactionRunner = (
-  value: object,
-): PrismaTransactionRunner | undefined => {
-  if (!("$transaction" in value)) {
-    return undefined;
-  }
-  const transaction = Reflect.get(value, "$transaction");
-  if (typeof transaction !== "function") {
-    return undefined;
-  }
-  return {
-    $transaction: (operations) =>
-      Promise.resolve(transaction.call(value, operations)),
-  };
-};
-
-const runWriteBatch = (
-  client: PrismaRuntimeStorageClient,
-  operations: ReadonlyArray<() => Promise<EffectPmRuntimeRecordRow>>,
-): Effect.Effect<void> => {
-  if (operations.length === 0) {
-    return Effect.void;
-  }
-  const transaction = transactionRunner(client);
-  return prismaPromise(() =>
-    transaction !== undefined
-      ? Promise.resolve(transaction.$transaction(operations.map((operation) => operation())))
-          .then(() => undefined)
-      : operations.reduce<Promise<void>>(
-          (previous, operation) => previous.then(() => operation()).then(() => undefined),
-          Promise.resolve(),
-        )
-  ).pipe(Effect.orDie);
-};
-
 /**
  * Construct a Prisma-backed {@link RuntimeStorageService}.
  *
@@ -443,91 +449,79 @@ const runWriteBatch = (
  */
 export const make = (
   client: PrismaRuntimeStorageClient,
-): RuntimeStorageService => ({
-  create: (record) =>
-    prismaPromise(() =>
-      client.effectPmRuntimeRecord.create({ data: encodeCreateInput(record) })
-    ).pipe(
-      Effect.asVoid,
-      Effect.catch((error: PrismaRuntimeStorageDriverError) =>
-        isUniqueConstraintError(error.cause)
-          ? Effect.fail(new RuntimeStorageDuplicateRecordError({ id: record.id }))
-          : Effect.die(error.cause)
+): RuntimeStorageService => {
+  const service: RuntimeStorageService = {
+    create: (record) =>
+      prismaPromise(() =>
+        client.effectPmRuntimeRecord.create({ data: encodeCreateInput(record) })
+      ).pipe(
+        Effect.asVoid,
+        Effect.catch((error: PrismaRuntimeStorageDriverError) =>
+          isUniqueConstraintError(error.cause)
+            ? Effect.fail(new RuntimeStorageDuplicateRecordError({ id: record.id }))
+            : Effect.die(error.cause)
+        ),
       ),
-    ),
 
-  read: (query) =>
-    prismaPromise(() =>
-      client.effectPmRuntimeRecord.findMany(findManyArgs(query))
-    ).pipe(
-      Effect.map((rows) => rows.map(decodeRow)),
-      Effect.orDie,
-    ),
+    read: (query) =>
+      prismaPromise(() =>
+        client.effectPmRuntimeRecord.findMany(findManyArgs(query))
+      ).pipe(
+        Effect.map((rows) => rows.map(decodeRow)),
+        Effect.orDie,
+      ),
 
-  upsert: (record) =>
-    Effect.gen(function* () {
-      const existing = yield* prismaPromise(() =>
-        client.effectPmRuntimeRecord.findMany({
-          where: { id: { equals: record.id } },
-          take: 1,
-        })
-      ).pipe(Effect.orDie);
-      const first = existing[0];
-      if (first?.readonly === true) {
-        return yield* new RuntimeStorageReadonlyRecordError({ id: record.id });
-      }
-      yield* prismaPromise(() =>
-        client.effectPmRuntimeRecord.upsert({
-          where: { id: record.id },
-          create: encodeCreateInput(record),
-          update: encodeUpdateInput(record),
-        })
-      ).pipe(Effect.orDie);
-    }),
-
-  update: (query, patch) =>
-    Effect.gen(function* () {
-      const matching = yield* make(client).read(query);
-      let matched = 0;
-      let updated = 0;
-      const operations: Array<() => Promise<EffectPmRuntimeRecordRow>> = [];
-      for (const record of matching) {
-        matched++;
-        if (record.readonly === true) {
-          continue;
-        }
-        const next = applyRuntimeRecordPatch(record, patch);
-        operations.push(() =>
-          client.effectPmRuntimeRecord.update({
-            where: { id: record.id },
-            data: encodeUpdateInput(next),
+    upsert: (record) =>
+      Effect.gen(function* () {
+        const existing = yield* prismaPromise(() =>
+          client.effectPmRuntimeRecord.findMany({
+            where: { id: { equals: record.id } },
+            take: 1,
           })
-        );
-        updated++;
-      }
-      yield* runWriteBatch(client, operations);
-      return { matched, updated } satisfies UpdateResult;
-    }),
-
-  delete: (query) =>
-    Effect.gen(function* () {
-      const matching = yield* make(client).read(query);
-      const includeReadonly = includesReadonlyTrue(query.predicate);
-      let deleted = 0;
-      const operations: Array<() => Promise<EffectPmRuntimeRecordRow>> = [];
-      for (const record of matching) {
-        if (record.readonly === true && !includeReadonly) {
-          continue;
+        ).pipe(Effect.orDie);
+        const first = existing[0];
+        if (first?.readonly === true) {
+          return yield* new RuntimeStorageReadonlyRecordError({ id: record.id });
         }
-        operations.push(() =>
-          client.effectPmRuntimeRecord.delete({ where: { id: record.id } })
-        );
-        deleted++;
-      }
-      yield* runWriteBatch(client, operations);
-      return { deleted } satisfies DeleteResult;
-    }),
-});
+        yield* prismaPromise(() =>
+          client.effectPmRuntimeRecord.upsert({
+            where: { id: record.id },
+            create: encodeCreateInput(record),
+            update: encodeUpdateInput(record),
+          })
+        ).pipe(Effect.orDie);
+      }),
+
+    update: (query, patch) =>
+      Effect.gen(function* () {
+        const where = queryWhere(query);
+        const matched = yield* prismaPromise(() =>
+          client.effectPmRuntimeRecord.count({ where })
+        ).pipe(Effect.orDie);
+        const update = yield* prismaPromise(() =>
+          client.effectPmRuntimeRecord.updateMany({
+            where: mutableWhere(where),
+            data: encodePatchInput(patch),
+          })
+        ).pipe(Effect.orDie);
+        return { matched, updated: update.count } satisfies UpdateResult;
+      }),
+
+    delete: (query) =>
+      Effect.gen(function* () {
+        const where = queryWhere(query);
+        const deleteWhere = includesReadonlyTrue(query.predicate)
+          ? where
+          : mutableWhere(where);
+        const deleted = yield* prismaPromise(() =>
+          client.effectPmRuntimeRecord.deleteMany({ where: deleteWhere })
+        ).pipe(Effect.orDie);
+        return { deleted: deleted.count } satisfies DeleteResult;
+      }),
+  };
+
+  return service;
+};
 
 /**
  * Layer that provides {@link RuntimeStorage} backed by an injected Prisma client.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Context, DateTime, Effect, Layer, Scope, pipe } from "effect";
+import { Cause, Context, DateTime, Effect, Exit, Layer, Scope, pipe } from "effect";
 import {
+  And,
   Key,
   ProcessId,
   RuntimeStorage,
@@ -268,12 +269,24 @@ const applyUpdate = (
 const uniqueError = () => ({ code: "P2002" });
 
 const makeMemoryPrismaClient = (): PrismaRuntimeStorageClient & {
-  readonly $transaction: <A>(
-    operations: ReadonlyArray<Promise<A>>,
-  ) => Promise<ReadonlyArray<A>>;
+  readonly calls: {
+    count: number;
+    update: number;
+    updateMany: number;
+    delete: number;
+    deleteMany: number;
+  };
 } => {
   const rows = new Map<string, EffectPmRuntimeRecordRow>();
+  const calls = {
+    count: 0,
+    update: 0,
+    updateMany: 0,
+    delete: 0,
+    deleteMany: 0,
+  };
   return {
+    calls,
     effectPmRuntimeRecord: {
       create: async ({ data }) => {
         if (rows.has(data.id)) {
@@ -290,6 +303,10 @@ const makeMemoryPrismaClient = (): PrismaRuntimeStorageClient & {
         const limited = ordered.slice(offset);
         return args?.take === undefined ? limited : limited.slice(0, Math.max(0, args.take));
       },
+      count: async (args) => {
+        calls.count++;
+        return [...rows.values()].filter((row) => matchesWhere(row, args?.where)).length;
+      },
       upsert: async ({ where, create, update }) => {
         const existing = rows.get(where.id);
         if (existing === undefined) {
@@ -302,6 +319,7 @@ const makeMemoryPrismaClient = (): PrismaRuntimeStorageClient & {
         return row;
       },
       update: async ({ where, data }) => {
+        calls.update++;
         const existing = rows.get(where.id);
         if (existing === undefined) {
           throw new Error(`missing row ${where.id}`);
@@ -311,6 +329,7 @@ const makeMemoryPrismaClient = (): PrismaRuntimeStorageClient & {
         return row;
       },
       delete: async ({ where }) => {
+        calls.delete++;
         const existing = rows.get(where.id);
         if (existing === undefined) {
           throw new Error(`missing row ${where.id}`);
@@ -318,8 +337,26 @@ const makeMemoryPrismaClient = (): PrismaRuntimeStorageClient & {
         rows.delete(where.id);
         return existing;
       },
+      updateMany: async ({ where, data }) => {
+        calls.updateMany++;
+        let count = 0;
+        for (const row of [...rows.values()].filter((item) => matchesWhere(item, where))) {
+          rows.set(row.id, applyUpdate(row, data));
+          count++;
+        }
+        return { count };
+      },
+      deleteMany: async (args) => {
+        calls.deleteMany++;
+        let count = 0;
+        for (const row of [...rows.values()].filter((item) => matchesWhere(item, args?.where))) {
+          if (rows.delete(row.id)) {
+            count++;
+          }
+        }
+        return { count };
+      },
     },
-    $transaction: async (operations) => Promise.all(operations),
   };
 };
 
@@ -384,6 +421,93 @@ describe("PrismaRuntimeStorage", () => {
       expect(rows[0]?.attributes).toEqual({ source: "test" });
       expect(rows[0] === undefined ? undefined : DateTime.formatIso(rows[0].occurredAt))
         .toBe("2026-03-01T00:00:00.000Z");
+    }),
+  );
+
+  it.effect("uses aggregate writes for broad update and delete queries", () =>
+    Effect.gen(function* () {
+      const client = makeMemoryPrismaClient();
+      const storage = PrismaRuntimeStorage.make(client);
+      for (let index = 0; index < 25; index++) {
+        yield* storage.create(runtimeStorageRecord(`bulk-${index}`, {
+          key: "bulk",
+        }));
+      }
+
+      const update = yield* storage.update(
+        { predicate: Key.equals("bulk") },
+        { payload: { updated: true } },
+      );
+      const deleted = yield* storage.delete({ predicate: Key.equals("bulk") });
+
+      expect(update).toEqual({ matched: 25, updated: 25 });
+      expect(deleted).toEqual({ deleted: 25 });
+      expect(client.calls.count).toBe(1);
+      expect(client.calls.updateMany).toBe(1);
+      expect(client.calls.deleteMany).toBe(1);
+      expect(client.calls.update).toBe(0);
+      expect(client.calls.delete).toBe(0);
+    }),
+  );
+
+  it.effect("treats an empty And predicate as a guarded no-match query", () =>
+    Effect.gen(function* () {
+      const storage = PrismaRuntimeStorage.make(makeMemoryPrismaClient());
+      yield* storage.create(runtimeStorageRecord("empty-and"));
+
+      const rows = yield* storage.read({ predicate: And([]) });
+
+      expect(rows).toEqual([]);
+    }),
+  );
+
+  it.effect("does not decode corrupt rows excluded by indexed predicates", () =>
+    Effect.gen(function* () {
+      const client = makeMemoryPrismaClient();
+      const storage = PrismaRuntimeStorage.make(client);
+      yield* storage.create(runtimeStorageRecord("good", {
+        key: "good-key",
+        payload: { ok: true },
+      }));
+      yield* Effect.promise(() =>
+        client.effectPmRuntimeRecord.create({
+          data: {
+            id: "corrupt",
+            type: "queue.entry.enqueued",
+            occurredAt: DateTime.toDateUtc(DateTime.makeUnsafe("2026-01-01T00:00:00.000Z")),
+            createdAt: DateTime.toDateUtc(DateTime.makeUnsafe("2026-01-01T00:00:01.000Z")),
+            runId: "run-contract",
+            processType: "queue-resource",
+            processId: "queue-contract",
+            key: "bad-key",
+            payloadJson: "{",
+          },
+        })
+      );
+
+      const rows = yield* storage.read({ predicate: Key.equals("good-key") });
+
+      expect(rows.map((row) => row.id)).toEqual(["good"]);
+      expect(rows[0]?.payload).toEqual({ ok: true });
+    }),
+  );
+
+  it.effect("surfaces driver failures as defects on the closed RuntimeStorage port", () =>
+    Effect.gen(function* () {
+      const client: PrismaRuntimeStorageClient = {
+        effectPmRuntimeRecord: {
+          ...makeMemoryPrismaClient().effectPmRuntimeRecord,
+          findMany: () => Promise.reject(new Error("driver offline")),
+        },
+      };
+      const storage = PrismaRuntimeStorage.make(client);
+
+      const exit = yield* Effect.exit(storage.read());
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        expect(Cause.pretty(exit.cause)).toContain("driver offline");
+      }
     }),
   );
 });

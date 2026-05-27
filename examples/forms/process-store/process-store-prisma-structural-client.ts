@@ -16,9 +16,12 @@ const makeStructuralClient = (): PrismaRuntimeStorageClient => ({
   effectPmRuntimeRecord: {
     create: () => Promise.reject(new Error("example client is not connected")),
     findMany: () => Promise.reject(new Error("example client is not connected")),
+    count: () => Promise.reject(new Error("example client is not connected")),
     upsert: () => Promise.reject(new Error("example client is not connected")),
     update: () => Promise.reject(new Error("example client is not connected")),
     delete: () => Promise.reject(new Error("example client is not connected")),
+    updateMany: () => Promise.reject(new Error("example client is not connected")),
+    deleteMany: () => Promise.reject(new Error("example client is not connected")),
   },
 });
 

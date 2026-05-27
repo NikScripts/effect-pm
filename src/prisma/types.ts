@@ -212,6 +212,43 @@ export interface EffectPmRuntimeRecordFindManyArgs {
 }
 
 /**
+ * Structural subset of Prisma's generated aggregate write result.
+ *
+ * @public
+ */
+export interface EffectPmRuntimeRecordBatchPayload {
+  readonly count: number;
+}
+
+/**
+ * Structural subset of Prisma's generated `count` arguments.
+ *
+ * @public
+ */
+export interface EffectPmRuntimeRecordCountArgs {
+  where?: EffectPmRuntimeRecordWhereInput;
+}
+
+/**
+ * Structural subset of Prisma's generated `updateMany` arguments.
+ *
+ * @public
+ */
+export interface EffectPmRuntimeRecordUpdateManyArgs {
+  where?: EffectPmRuntimeRecordWhereInput;
+  data: EffectPmRuntimeRecordUpdateInput;
+}
+
+/**
+ * Structural subset of Prisma's generated `deleteMany` arguments.
+ *
+ * @public
+ */
+export interface EffectPmRuntimeRecordDeleteManyArgs {
+  where?: EffectPmRuntimeRecordWhereInput;
+}
+
+/**
  * Structural subset of Prisma's generated unique selector.
  *
  * @public
@@ -232,6 +269,9 @@ export interface EffectPmRuntimeRecordDelegate {
   readonly findMany: (
     args?: EffectPmRuntimeRecordFindManyArgs,
   ) => Promise<Array<EffectPmRuntimeRecordRow>>;
+  readonly count: (
+    args?: EffectPmRuntimeRecordCountArgs,
+  ) => Promise<number>;
   readonly upsert: (args: {
     readonly where: EffectPmRuntimeRecordWhereUniqueInput;
     readonly create: EffectPmRuntimeRecordCreateInput;
@@ -244,6 +284,12 @@ export interface EffectPmRuntimeRecordDelegate {
   readonly delete: (args: {
     readonly where: EffectPmRuntimeRecordWhereUniqueInput;
   }) => Promise<EffectPmRuntimeRecordRow>;
+  readonly updateMany: (
+    args: EffectPmRuntimeRecordUpdateManyArgs,
+  ) => Promise<EffectPmRuntimeRecordBatchPayload>;
+  readonly deleteMany: (
+    args?: EffectPmRuntimeRecordDeleteManyArgs,
+  ) => Promise<EffectPmRuntimeRecordBatchPayload>;
 }
 
 /**
