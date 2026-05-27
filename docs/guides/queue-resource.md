@@ -42,6 +42,7 @@ For many hooks or **`itemSchema`**, use the config-object overload: `(id, { effe
 - Typed **`ProcessGroup.make(id, [EmailQueue, …] as const)`** and contract discovery (`item` schema when configured).
 - One import site: **`EmailQueue.layer`** at the app or group root.
 - **`yield* EmailQueue`** for the live **`QueueHandle`** inside programs that already provide the layer.
+- **`.configure` / `.wrapWorker`** — layer patches folded before runtime; see [resource-configure.md](./resource-configure.md).
 
 **Tradeoffs**
 

@@ -1,22 +1,38 @@
 /**
- * Layer-composed configuration patches for resource and process services.
+ * Layer-composed configuration for {@link Process.Service}, {@link QueueResource.Service},
+ * and {@link RunResource.Service}.
  *
  * @remarks
- * Defaults are declared on {@link QueueResource.Service}, {@link RunResource.Service},
- * and {@link Process.Service}. {@link configureLayer} returns a `Layer` that appends
- * patches; the resource `layer` folds patches once at acquisition (before runtime
- * construction such as {@link QueueResource}'s internal `makeQueueRuntime`).
- *
- * Patches are not hot-reloaded after start.
+ * - **Defaults** live on the service factory (`defaultSpec` / factory config).
+ * - **`configureLayer`** appends a {@link ConfigPatch} under a resource id (Context tag).
+ * - The resource **`layer`** calls {@link foldConfiguredSpec} once at acquisition, then builds
+ *   runtime state (for example {@link QueueResource}'s `makeQueueRuntime`).
+ * - Patches are **not** hot-reloaded after the layer is built.
+ * - **`Layer.provide` / `Layer.provideMerge` order** is normal Effect layering (later wins on conflicts).
  *
  * @module ResourceConfigure
  */
 
 import { Context, Effect, Layer, Option } from "effect";
 
+const effectFieldKey = "effect" as const;
+
+type Callable = (...args: never) => unknown;
+
+const isCallable = (value: unknown): value is Callable => typeof value === "function";
+
+const isUnaryUpdater = <F>(
+  patch: F | ((previous: F) => F),
+): patch is (previous: F) => F => isCallable(patch) && patch.length === 1;
+
 /**
- * Patch for a resource/process spec: shallow partial fields, function updaters for
- * function-valued fields (e.g. `effect`), or a full-spec reducer.
+ * Patch for a resource or process spec.
+ *
+ * - **Partial object** — shallow-merge fields; use a function value to replace a field.
+ * - **`effect` field** — a **unary** function `(previous) => next` updates the prior worker /
+ *   supervised body; a **multi-argument** function value replaces `effect` outright (queue workers
+ *   stay two-argument).
+ * - **Full reducer** — `(previous) => next` over the whole spec (see {@link configureLayer}).
  *
  * @public
  */
@@ -26,30 +42,16 @@ type PartialConfigPatch<T> = {
   readonly [K in keyof T]?: PatchFieldValue<T, K>;
 };
 
-type PatchFieldValue<T, K extends keyof T> = T[K] extends (...args: never[]) => unknown
+type PatchFieldValue<T, K extends keyof T> = T[K] extends Callable
   ? T[K] | ((previous: T[K]) => T[K])
   : T[K];
 
-const isFunction = (value: unknown): value is (...args: never) => unknown =>
-  typeof value === "function";
+const applyEffectFieldPatch = <F>(
+  previous: F,
+  patch: F | ((previous: F) => F),
+): F => (isUnaryUpdater(patch) ? patch(previous) : patch);
 
-const applyEffectPatch = <T extends object, K extends keyof T>(
-  previousValue: T[K],
-  patchValue: PatchFieldValue<T, K>,
-): T[K] => {
-  if (isFunction(patchValue) && !isFunction(previousValue)) {
-    return (patchValue as (previous: T[K]) => T[K])(previousValue);
-  }
-  if (
-    isFunction(patchValue) &&
-    isFunction(previousValue) &&
-    patchValue.length === 1 &&
-    previousValue.length > 1
-  ) {
-    return (patchValue as (previous: T[K]) => T[K])(previousValue);
-  }
-  return patchValue as T[K];
-};
+type SpecWithEffectField = { readonly effect: unknown };
 
 const applyPartialPatch = <T extends object>(
   current: T,
@@ -61,19 +63,24 @@ const applyPartialPatch = <T extends object>(
     if (patchValue === undefined) {
       continue;
     }
-    next = {
-      ...next,
-      [key]:
-        key === "effect"
-          ? applyEffectPatch(current[key], patchValue as PatchFieldValue<T, typeof key>)
-          : patchValue,
-    };
+    if (key === effectFieldKey && effectFieldKey in current) {
+      const previousEffect = (current as T & SpecWithEffectField).effect;
+      next = {
+        ...next,
+        [effectFieldKey]: applyEffectFieldPatch(
+          previousEffect,
+          patchValue as PatchFieldValue<T & SpecWithEffectField, typeof effectFieldKey>,
+        ),
+      };
+      continue;
+    }
+    next = { ...next, [key]: patchValue };
   }
   return next;
 };
 
 /**
- * Fold default spec and patches left-to-right (later patches see earlier results).
+ * Fold `base` and `patches` left-to-right; later patches see earlier results.
  *
  * @public
  */
@@ -94,6 +101,8 @@ export const foldConfig = <T extends object>(
   return current;
 };
 
+const emptyPatches = <T extends object>(): ReadonlyArray<ConfigPatch<T>> => [];
+
 /**
  * Context tag key for configure patches scoped to one resource id.
  *
@@ -108,43 +117,39 @@ const resourceConfigureTag = <T extends object>(resourceId: string) =>
   );
 
 /**
- * Collect all configure patches provided for a resource id in the current context.
+ * All configure patches in context for `resourceId`, in merge order.
  *
  * @internal
  */
 export const resourcePatches = <T extends object>(
   resourceId: string,
 ): Effect.Effect<ReadonlyArray<ConfigPatch<T>>> =>
-  Effect.map(
-    Effect.serviceOption(resourceConfigureTag<T>(resourceId)),
-    (option) => Option.getOrElse(option, () => [] as ReadonlyArray<ConfigPatch<T>>),
+  Effect.serviceOption(resourceConfigureTag<T>(resourceId)).pipe(
+    Effect.map(Option.getOrElse(() => emptyPatches<T>())),
   );
 
 /**
- * Build a `Layer` that appends one configure patch for a resource id.
+ * `Layer` that appends one configure patch for `resourceId`.
  *
- * Merge or `Layer.provide` this alongside the resource `layer` so patches are
- * visible when the resource layer is built.
+ * Provide or merge with the resource `.layer` so patches are visible when that layer builds.
  *
  * @public
  */
 export const configureLayer = <T extends object>(
   resourceId: string,
   patch: ConfigPatch<T>,
-): Layer.Layer<never> =>
-  Layer.effect(
-    resourceConfigureTag<T>(resourceId),
-    Effect.map(
-      Effect.serviceOption(resourceConfigureTag<T>(resourceId)),
-      (existing): ReadonlyArray<ConfigPatch<T>> => [
-        ...Option.getOrElse(existing, () => [] as ReadonlyArray<ConfigPatch<T>>),
-        patch,
-      ],
+): Layer.Layer<never> => {
+  const tag = resourceConfigureTag<T>(resourceId);
+  return Layer.effect(
+    tag,
+    resourcePatches<T>(resourceId).pipe(
+      Effect.map((existing) => [...existing, patch]),
     ),
   );
+};
 
 /**
- * Fold the default spec with all configure patches in context for a resource id.
+ * Fold `defaultSpec` with all configure patches in context for `resourceId`.
  *
  * @internal
  */
@@ -152,6 +157,23 @@ export const foldConfiguredSpec = <T extends object>(
   resourceId: string,
   defaultSpec: T,
 ): Effect.Effect<T> =>
-  Effect.map(resourcePatches<T>(resourceId), (patches) =>
-    foldConfig(defaultSpec, ...patches),
+  resourcePatches<T>(resourceId).pipe(
+    Effect.map((patches) => foldConfig(defaultSpec, ...patches)),
   );
+
+/**
+ * {@link configureLayer} that replaces only `effect` via `fn(previous)`.
+ *
+ * @internal
+ */
+export const configureWrapEffectField = <
+  T extends { readonly effect: F },
+  F,
+>(
+  resourceId: string,
+  fn: (previous: F) => F,
+): Layer.Layer<never> =>
+  configureLayer<T>(resourceId, (spec) => ({
+    ...spec,
+    effect: fn(spec.effect),
+  }));

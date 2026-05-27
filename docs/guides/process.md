@@ -94,6 +94,7 @@ class GameSync extends Process.Service<GameSync>()("@app/GameSync", {
 
 - **Typed `ProcessGroup.make(id, [Heartbeat, MyQueue] as const)`** and stable contract ids.
 - Layer-first app wiring (`Heartbeat.layer` merged at the group/app root).
+- **`.configure` / `.wrapEffect` / `buildConfiguredProcess`** — layer patches before group runtime; see [resource-configure.md](./resource-configure.md).
 
 **Tradeoffs**
 
@@ -120,6 +121,12 @@ yield* group.start(SyncProcess);
 ```
 
 See [`docs/SCHEDULE-AND-PROCESSGROUP.md`](../SCHEDULE-AND-PROCESSGROUP.md) for schedule vs `start`/`stop` semantics.
+
+---
+
+## Configure overrides
+
+Per-environment tuning without editing the class body: merge **`SyncProcess.configure({ … })`** or **`SyncProcess.wrapEffect(fn)`** with **`SyncProcess.layer`** (or the group layer). Not hot reload — rebuild the layer stack. Full patterns: [resource-configure.md](./resource-configure.md).
 
 ---
 

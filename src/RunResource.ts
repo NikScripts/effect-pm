@@ -106,6 +106,7 @@ import {
 import { ProcessStoreRunResource } from "./store/runResource";
 import {
   configureLayer,
+  configureWrapEffectField,
   foldConfiguredSpec,
   type ConfigPatch,
 } from "./ResourceConfigure";
@@ -484,12 +485,10 @@ export const RunResource = {
     config: RunResourceConfig<T, A, E>,
   ) =>
     Layer.effect(tag)(
-      Effect.gen(function* () {
-        const resourceId = config.name ?? "anonymous";
-        const defaultSpec = { ...config, name: resourceId };
-        const effective = yield* foldConfiguredSpec(resourceId, defaultSpec);
-        return yield* makeRunGateEffect(effective);
-      }),
+      foldConfiguredSpec(config.name ?? "anonymous", {
+        ...config,
+        name: config.name ?? "anonymous",
+      }).pipe(Effect.flatMap(makeRunGateEffect)),
     ),
 
   /**
@@ -524,10 +523,9 @@ export const RunResource = {
   ) => {
     const defaultSpec = { ...config, name };
     const base = Context.Service<Self, RunGate<T, A, E>>()(name);
-    const buildGate = Effect.gen(function* () {
-      const effective = yield* foldConfiguredSpec(name, defaultSpec);
-      return yield* makeRunGateEffect(effective);
-    });
+    const buildGate = foldConfiguredSpec(name, defaultSpec).pipe(
+      Effect.flatMap(makeRunGateEffect),
+    );
     return Object.assign(base, {
       defaultSpec,
       configure: (patch: ConfigPatch<RunResourceConfig<T, A, E>>) =>
@@ -536,11 +534,7 @@ export const RunResource = {
         fn: (
           previous: RunResourceConfig<T, A, E>["effect"],
         ) => RunResourceConfig<T, A, E>["effect"],
-      ) =>
-        configureLayer<RunResourceConfig<T, A, E>>(name, (previous) => ({
-          ...previous,
-          effect: fn(previous.effect),
-        })),
+      ) => configureWrapEffectField(name, fn),
       layer: Layer.effect(base)(buildGate),
     });
   },

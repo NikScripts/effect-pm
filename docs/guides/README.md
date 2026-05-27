@@ -14,6 +14,7 @@ Detail tables also live in [`docs/PROCESS-API.md`](../PROCESS-API.md), [`docs/RE
 | --- | --- |
 | [process.md](./process.md) | `Process.make` / `Process.Service` — register on a group; do not fork drivers ad hoc |
 | [queue-resource.md](./queue-resource.md) | `QueueResource.Service(id, effect, options?)` and hooks |
+| [resource-configure.md](./resource-configure.md) | `.configure` / `.wrapWorker` / `.wrapEffect` layer patches (no hot reload) |
 
 ---
 

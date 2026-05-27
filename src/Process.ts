@@ -26,6 +26,7 @@
 import { Clock, Context, Data, DateTime, Duration, Effect, Fiber, Layer, MutableRef, Option } from "effect";
 import {
   configureLayer,
+  configureWrapEffectField,
   foldConfiguredSpec,
   type ConfigPatch,
 } from "./ResourceConfigure";
@@ -101,19 +102,28 @@ export interface ProcessServiceDefinition<Self, Id extends string, E, R>
     ProcessDefinition<Id, R> {
   readonly tag: Context.Key<Self, Process<R>>;
   readonly layer: Layer.Layer<Self>;
-  /** Default options from the service factory (before configure layers). */
+  /**
+   * Factory defaults before {@link configure} layers (see `ResourceConfigure` module).
+   */
   readonly defaultSpec: ProcessMakeOptions<E, R>;
-  /** Layer that appends a configure patch (provide or merge with {@link layer}). */
+  /**
+   * Append a configure patch; merge with {@link layer} via `Layer.provideMerge`.
+   */
   readonly configure: (
     patch: ConfigPatch<ProcessMakeOptions<E, R>>,
   ) => Layer.Layer<never>;
-  /** Layer that wraps the default supervised `effect`. */
+  /**
+   * Patch only the supervised repeat `effect`: `fn(previous) => next`.
+   */
   readonly wrapEffect: (
     fn: (
       previous: ProcessMakeOptions<E, R>["effect"],
     ) => ProcessMakeOptions<E, R>["effect"],
   ) => Layer.Layer<never>;
-  /** Build a {@link Process} after folding configure patches in context. */
+  /**
+   * {@link Process} built from {@link defaultSpec} after folding configure patches.
+   * {@link ProcessGroup} uses this when assembling the group runtime.
+   */
   readonly buildConfiguredProcess: Effect.Effect<Process<R>>;
 }
 
@@ -1098,10 +1108,9 @@ const defineProcessService = <Self>() => {
   ): ProcessServiceDefinition<Self, Id, E, RUser> {
     const defaultSpec = resolveProcessMakeConfig(effectOrConfig, third, fourth);
     const process = makeProcessDefinition(id, defaultSpec);
-    const buildConfiguredProcess = Effect.gen(function* () {
-      const effective = yield* foldConfiguredSpec(id, defaultSpec);
-      return make(id, effective);
-    });
+    const buildConfiguredProcess = foldConfiguredSpec(id, defaultSpec).pipe(
+      Effect.map((effective) => make(id, effective)),
+    );
     const base = Context.Service<Self, Process<RUser>>()(id);
     return Object.assign(base, {
       ...process,
@@ -1113,11 +1122,7 @@ const defineProcessService = <Self>() => {
         fn: (
           previous: ProcessMakeOptions<E, RUser>["effect"],
         ) => ProcessMakeOptions<E, RUser>["effect"],
-      ) =>
-        configureLayer<ProcessMakeOptions<E, RUser>>(id, (previous) => ({
-          ...previous,
-          effect: fn(previous.effect),
-        })),
+      ) => configureWrapEffectField(id, fn),
       buildConfiguredProcess,
       layer: Layer.effect(base)(buildConfiguredProcess),
     });

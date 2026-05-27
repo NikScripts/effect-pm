@@ -1577,6 +1577,7 @@ const makeTypedProcessGroup = <
       .filter(hasProcessGroupRuntimeQueueTag)
       .map((queue) => queue.tag);
 
+    // Process.Service entries: fold configure layers before makeProcessGroup sees them.
     const resolvedProcesses = yield* Effect.forEach(
       processes,
       (entry): Effect.Effect<Process<any>, never, never> =>

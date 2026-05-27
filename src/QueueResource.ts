@@ -82,6 +82,7 @@ import { isJsonValue } from "./internal/json";
 import type { JsonValue } from "./ProcessStoreEvent";
 import {
   configureLayer,
+  configureWrapEffectField,
   foldConfiguredSpec,
   type ConfigPatch,
 } from "./ResourceConfigure";
@@ -538,17 +539,16 @@ export interface QueueResourceServiceDefinition<
     Omit<QueueResourceMetadata<Id, T, E, EEnqueue, R>, "tag"> {
   readonly tag: Context.Key<Self, QueueHandle<T, E, EEnqueue, R>>;
   readonly layer: Layer.Layer<Self, never, R>;
-  /** Default queue spec from the service factory (before configure layers). */
+  /** Factory defaults before configure layers (`ResourceConfigure` module). */
   readonly defaultSpec: QueueResourceConfig<T, E, R>;
   /**
-   * Layer that appends a configure patch. Provide or merge with {@link layer}
-   * before the queue scope acquires.
+   * Append a configure patch; merge with {@link layer} before scope acquisition.
    */
   readonly configure: (
     patch: ConfigPatch<QueueResourceConfig<T, E, R>>,
   ) => Layer.Layer<never>;
   /**
-   * Layer that wraps the default worker `effect` (runs inside worker concurrency).
+   * Patch only the worker `effect`: `fn(previous) => next` (item + {@link EffectContext}).
    */
   readonly wrapWorker: (
     fn: (
@@ -2395,15 +2395,15 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 const queueResourceLayerFromConfig = (
   tag: Context.Key<any, QueueHandle<any, any, any, any>>,
   config: QueueResourceConfig<any, any, any>,
-): Layer.Layer<any, never, any> =>
-  Layer.effect(tag)(
-    Effect.gen(function* () {
-      const resourceId = config.name ?? "anonymous";
-      const defaultSpec = { ...config, name: resourceId };
-      const effective = yield* foldConfiguredSpec(resourceId, defaultSpec);
-      return yield* makeQueueEffectFromConfig(effective);
-    }),
+): Layer.Layer<any, never, any> => {
+  const resourceId = config.name ?? "anonymous";
+  const defaultSpec = { ...config, name: resourceId };
+  return Layer.effect(tag)(
+    foldConfiguredSpec(resourceId, defaultSpec).pipe(
+      Effect.flatMap(makeQueueEffectFromConfig),
+    ),
   );
+};
 
 function queueResourceLayer<
   Self,
@@ -2451,10 +2451,9 @@ const queueServiceLayerFromDefaultSpec = <
   defaultSpec: C,
   run: (config: C) => Effect.Effect<H, never, Scope.Scope | InferQueueWorkerRequirements<C>>,
 ): Layer.Layer<Self, never, InferQueueWorkerRequirements<C>> =>
-  Layer.effect(base)(Effect.gen(function* () {
-    const effective = yield* foldConfiguredSpec(resourceId, defaultSpec);
-    return yield* run(effective);
-  }));
+  Layer.effect(base)(
+    foldConfiguredSpec(resourceId, defaultSpec).pipe(Effect.flatMap(run)),
+  );
 
 const queueServiceConfigure = <C extends QueueResourceConfig<any, any, any>>(
   resourceId: string,
@@ -2464,11 +2463,7 @@ const queueServiceConfigure = <C extends QueueResourceConfig<any, any, any>>(
 const queueServiceWrapWorker = <C extends QueueResourceConfig<any, any, any>>(
   resourceId: string,
   fn: (previous: C["effect"]) => C["effect"],
-): Layer.Layer<never> =>
-  configureLayer<C>(resourceId, (spec) => ({
-    ...spec,
-    effect: fn(spec.effect),
-  }));
+): Layer.Layer<never> => configureWrapEffectField(resourceId, fn);
 
 const queueResourceServiceWithoutSchema = <
   Self,
@@ -2642,6 +2637,7 @@ export const QueueResource = {
    * ```
    */
   Service: <Self, T, E = never>() => {
+    // Callable surface uses overloads; runtime dispatcher is a single function + cast.
     type QueueResourceServiceFactory = {
       <
         const Name extends string,

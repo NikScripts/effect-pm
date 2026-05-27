@@ -20,6 +20,14 @@ describe("ResourceConfigure", () => {
     });
   });
 
+  it("foldConfig unary effect updater wraps worker", () => {
+    const base = { effect: (n: number) => n + 1, concurrency: 1 };
+    const effective = foldConfig(base, {
+      effect: (prev: (n: number) => number) => (n: number) => prev(n) * 2,
+    });
+    expect(effective.effect(3)).toBe(8);
+  });
+
   it.effect("QueueResource.Service folds configure layer before runtime", () =>
     Effect.gen(function* () {
       const handled = yield* Ref.make(0);
@@ -27,7 +35,8 @@ describe("ResourceConfigure", () => {
       class TestQueue extends QueueResource.Service<TestQueue, number, never>()(
         "@test/ConfigureQueue",
         {
-          effect: (_item: number, _ctx) => Ref.update(handled, (n) => n + 1),
+          effect: (_item: number, _ctx: EffectContext<number, never, never>) =>
+            Ref.update(handled, (n) => n + 1),
           concurrency: 10,
         },
       ) {}
@@ -35,10 +44,7 @@ describe("ResourceConfigure", () => {
       const configureLayers = Layer.mergeAll(
         TestQueue.configure({ concurrency: 1 }),
         TestQueue.wrapWorker((prev) => (item: number, ctx: EffectContext<number, never, never>) =>
-          Effect.gen(function* () {
-            yield* prev(item, ctx);
-            yield* Ref.update(handled, (n) => n + 100);
-          }),
+          prev(item, ctx).pipe(Effect.tap(() => Ref.update(handled, (n) => n + 100))),
         ),
       );
 
@@ -57,30 +63,24 @@ describe("ResourceConfigure", () => {
     }),
   );
 
-  it.effect("Process.Service resolves configured process for ProcessGroup", () =>
+  it.effect("Process.Service buildConfiguredProcess applies configure patches", () =>
     Effect.scoped(
       Effect.gen(function* () {
-        const ran = yield* Ref.make(false);
-
         class Worker extends Process.Service<Worker>()("@test/ConfigureProcess", {
-          effect: Effect.gen(function* () {
-            yield* Ref.set(ran, true);
-          }),
+          effect: Effect.succeed("default"),
         }) {}
 
         const process = yield* Worker.buildConfiguredProcess.pipe(
           Effect.provide(
-            Worker.configure((prev) => ({
-              ...prev,
-              effect: Effect.gen(function* () {
-                yield* Ref.set(ran, true);
-              }),
+            Worker.configure((spec) => ({
+              ...spec,
+              effect: Effect.succeed("patched"),
             })),
           ),
         );
 
         expect(process.name).toBe("@test/ConfigureProcess");
-        expect(yield* Ref.get(ran)).toBe(false);
+        expect(Worker.defaultSpec.effect).not.toBe(process.effect);
       }),
     ),
   );

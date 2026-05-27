@@ -197,7 +197,10 @@ export type {
   UpdateResult,
 } from "./RuntimeStorage";
 
-// Resource configure (layer-composed patches)
+/**
+ * Layer-composed configure patches for {@link Process.Service}, {@link QueueResource.Service},
+ * and {@link RunResource.Service}. See `docs/guides/resource-configure.md`.
+ */
 export {
   configureLayer,
   foldConfig,
