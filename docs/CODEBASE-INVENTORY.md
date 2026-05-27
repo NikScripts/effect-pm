@@ -593,7 +593,7 @@ the built-in facets over `RuntimeStorage`.
   `RuntimeStorage`.
 - **`@nikscripts/effect-pm/storage/sqlite`** — `SQLiteRuntimeStorage` durable
   `RuntimeStorageService` and `layerProcessStore({ filename })`.
-- **`@nikscripts/effect-pm/storage/prisma`** or legacy **`@nikscripts/effect-pm/prisma`** — placeholder surface for the upcoming `RuntimeStorage` adapter rewrite.
+- **`@nikscripts/effect-pm/storage/prisma`** — `PrismaRuntimeStorage` durable `RuntimeStorageService` and `layerProcessStore({ client })`.
 
 ### Facet write/read
 
@@ -721,17 +721,18 @@ Provide a custom service whose shape matches **`ProcessStoreRunResource.Type`** 
 
 ---
 
-## PrismaProcessStore + effect-pm CLI (storage tooling)
+## PrismaRuntimeStorage + effect-pm CLI (storage tooling)
 
-### `PrismaProcessStore` namespace
+### `PrismaRuntimeStorage` namespace
 
-- **`make(client)`**, **`layer({ client })`**, **`layerFromContext`** — throw/fail with `PrismaProcessStoreUnavailableError` until the RuntimeStorage-backed rewrite lands. Covered by `test/prisma-fail-fast.test.ts`.
+- **`make(client)`**, **`layer({ client })`**, **`layerFromContext`** — provide Prisma-backed `RuntimeStorage`.
+- **`layerProcessStore({ client })`** — provides all built-in storage facets through Prisma-backed runtime records.
 - **`PrismaClientService`**, **`prismaClientLayer({ client })`**
-- **`schema`**, **`schemaModelMarker`** — legacy `EffectPmEvent` model fragment retained for reference during rewrite.
+- **`schema`**, **`schemaModelMarker`** — `EffectPmRuntimeRecord` schema fragment mapped to `effect_pm_runtime_records`.
 
 ### Structural types (`prisma/types`)
 
-- **`PrismaProcessStoreClient`**, **`EffectPmEventDelegate`**, **`EffectPmEventRow`**, **`EffectPmEventCreateInput`**, **`JsonValue`**, query arg types.
+- **`PrismaRuntimeStorageClient`**, **`EffectPmRuntimeRecordDelegate`**, **`EffectPmRuntimeRecordRow`**, **`EffectPmRuntimeRecordCreateInput`**, **`JsonValue`**, query arg types.
 
 ### `addPrismaSchema` (library + CLI)
 
@@ -749,7 +750,7 @@ Provide a custom service whose shape matches **`ProcessStoreRunResource.Type`** 
 ## Package import surfaces (for doc “where do I import X”)
 
 - **Root** `@nikscripts/effect-pm` — barrel in §index exports (Process, Polling, Schedule, Group, Queue, Run, Http*, Store, Manager, Control, CLI, disarmed helpers, types).
-- **Subpaths** — `/Process`, `/QueueResource`, `/ProcessGroup`, `/ProcessStore`, `/ProcessStorage`, `/ProcessManager`, `/ControlService`, `/storage/sqlite`, `/storage/prisma`, `/prisma` (legacy Prisma compatibility).
+- **Subpaths** — `/Process`, `/QueueResource`, `/ProcessGroup`, `/ProcessStore`, `/ProcessStorage`, `/ProcessManager`, `/ControlService`, `/storage/sqlite`, `/storage/prisma`, `/prisma`.
 
 ---
 

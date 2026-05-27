@@ -1,0 +1,9 @@
+---
+"@nikscripts/effect-pm": minor
+---
+
+Ship `PrismaRuntimeStorage` as a Prisma-backed `RuntimeStorage` adapter over normalized runtime records.
+
+The Prisma schema fragment now declares `EffectPmRuntimeRecord` mapped to the `effect_pm_runtime_records` table, with indexed columns stored as scalar fields and runtime JSON blobs serialized into string columns. The adapter expects an injected structural client with an `effectPmRuntimeRecord` delegate. Consumers continue to own Prisma generation, migrations, and client lifecycle.
+
+Add `effect-pm prisma init` for interactively adding the schema fragment to an existing Prisma project, and verify the adapter with both structural mocks and a generated Prisma SQLite client.

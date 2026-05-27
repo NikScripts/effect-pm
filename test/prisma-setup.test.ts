@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   addPrismaSchema,
   AddPrismaError,
+  detectPrismaSchemaTargets,
   type FsAdapter,
 } from "../src/prisma/setup";
 import {
@@ -119,6 +120,17 @@ describe("addPrismaSchema — single-file layout", () => {
     expect("_tag" in result && result._tag).toBe("DryRun");
     expect(fs.readFile(schemaPath)).toBe(before);
   });
+
+  it("appends to an explicit schema file", () => {
+    const cwd = "/proj";
+    const schemaPath = join(cwd, "custom", "schema.prisma");
+    const fs = makeMemoryFs({
+      [schemaPath]: "datasource db { provider = \"sqlite\" }\n",
+    });
+    const result = addPrismaSchema(fs, { cwd, schemaFile: schemaPath });
+    expect("_tag" in result && result._tag).toBe("Wrote");
+    expect(fs.readFile(schemaPath)).toContain(prismaSchemaModelMarker);
+  });
 });
 
 describe("addPrismaSchema — multi-file layout", () => {
@@ -185,5 +197,44 @@ describe("addPrismaSchema — multi-file layout", () => {
       noSeparateFile: true,
     });
     expect(result).toBeInstanceOf(AddPrismaError);
+  });
+
+  it("lists append and create targets for interactive setup", () => {
+    const cwd = "/proj";
+    const dir = join(cwd, "prisma", "schema");
+    const userSchema = join(dir, "main.prisma");
+    const fs = makeMemoryFs({
+      [dir]: null,
+      [userSchema]: "// schema\n",
+    });
+
+    const targets = detectPrismaSchemaTargets(fs, { cwd });
+
+    expect(targets).toEqual([
+      { _tag: "Append", schemaFile: userSchema },
+      { _tag: "Create", schemaFile: join(dir, "effect-pm.prisma") },
+    ]);
+  });
+
+  it("creates an explicit schema file", () => {
+    const cwd = "/proj";
+    const schemaPath = join(cwd, "prisma", "schema", "effect-pm.prisma");
+    const fs = makeMemoryFs({});
+    const result = addPrismaSchema(fs, { cwd, createFile: schemaPath });
+
+    expect("_tag" in result && result._tag).toBe("Wrote");
+    expect(fs.readFile(schemaPath)).toContain(prismaSchemaModelMarker);
+  });
+
+  it("does not overwrite an existing explicit schema file", () => {
+    const cwd = "/proj";
+    const schemaPath = join(cwd, "prisma", "schema", "effect-pm.prisma");
+    const fs = makeMemoryFs({
+      [schemaPath]: "// user-owned schema\n",
+    });
+    const result = addPrismaSchema(fs, { cwd, createFile: schemaPath });
+
+    expect(result).toBeInstanceOf(AddPrismaError);
+    expect(fs.readFile(schemaPath)).toBe("// user-owned schema\n");
   });
 });

@@ -476,10 +476,8 @@ Removed:
   `RuntimeStateBase`, `RuntimeStateChange`, `RuntimeFactQuery`, and
   `RuntimeStateHistoryQuery`.
 - `AnalyticsEvent` and `StoreEventQuery`.
-- `EffectPmEventRow` / `EffectPmEventCreateInput` from the package root and
-  `ProcessStoreEvent`.
-- Prisma codec exports such as `decodeEventRow`, `encodeEvent`, and
-  `PrismaProcessStoreDecodeError`.
+- Shared event-row types from the package root and `ProcessStoreEvent`.
+- Prisma event-row codec exports such as `decodeEventRow` and `encodeEvent`.
 
 Use per-domain facets and their concrete query types instead:
 

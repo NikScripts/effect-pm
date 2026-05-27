@@ -64,6 +64,14 @@ export interface AddPrismaOptions {
    * If `true`, do not write any files; only describe what would happen.
    */
   readonly dryRun?: boolean;
+  /**
+   * Append to this explicit schema file instead of using automatic layout rules.
+   */
+  readonly schemaFile?: string;
+  /**
+   * Create this explicit schema file instead of using automatic layout rules.
+   */
+  readonly createFile?: string;
 }
 
 /**
@@ -112,6 +120,21 @@ interface DetectedLayout {
   readonly existingSchemaFiles: ReadonlyArray<string>;
 }
 
+/**
+ * Candidate destination for the effect-pm Prisma schema fragment.
+ *
+ * @public
+ */
+export type PrismaSchemaTarget =
+  | {
+      readonly _tag: "Append";
+      readonly schemaFile: string;
+    }
+  | {
+      readonly _tag: "Create";
+      readonly schemaFile: string;
+    };
+
 const joinPath = (...parts: ReadonlyArray<string>): string =>
   parts
     .join("/")
@@ -129,6 +152,7 @@ const detectLayout = (
     const files = fs
       .readdir(schemaDir)
       .filter((entry) => entry.endsWith(".prisma"))
+      .sort()
       .map((entry) => joinPath(schemaDir, entry));
     return {
       kind: "multi-file",
@@ -152,6 +176,36 @@ const detectLayout = (
   });
 };
 
+/**
+ * List schema files an interactive CLI can offer for appending / creation.
+ *
+ * @public
+ */
+export const detectPrismaSchemaTargets = (
+  fs: FsAdapter,
+  options: { readonly cwd: string },
+): ReadonlyArray<PrismaSchemaTarget> | AddPrismaError => {
+  const layout = detectLayout(fs, options.cwd);
+  if (layout instanceof AddPrismaError) return layout;
+
+  const appendTargets = layout.existingSchemaFiles.map((schemaFile): PrismaSchemaTarget => ({
+    _tag: "Append",
+    schemaFile,
+  }));
+
+  if (layout.kind === "multi-file") {
+    return [
+      ...appendTargets,
+      {
+        _tag: "Create",
+        schemaFile: joinPath(layout.target, "effect-pm.prisma"),
+      },
+    ];
+  }
+
+  return appendTargets;
+};
+
 // ============================================================================
 // Rewriter
 // ============================================================================
@@ -170,6 +224,70 @@ export const addPrismaSchema = (
       cwd: options.cwd,
       reason: "--separate-file and --no-separate-file are mutually exclusive.",
     });
+  }
+  if (options.schemaFile !== undefined && options.createFile !== undefined) {
+    return new AddPrismaError({
+      cwd: options.cwd,
+      reason: "--schema and --new-file are mutually exclusive.",
+    });
+  }
+
+  if (options.schemaFile !== undefined) {
+    const schemaFile = options.schemaFile;
+    if (!fs.exists(schemaFile)) {
+      return new AddPrismaError({
+        cwd: options.cwd,
+        reason: `schema file does not exist: ${schemaFile}`,
+      });
+    }
+    if (fs.readFile(schemaFile).includes(prismaSchemaModelMarker)) {
+      return { _tag: "AlreadyPresent", schemaFile };
+    }
+    const fragment = `\n${prismaSchema}`;
+    if (options.dryRun === true) {
+      return {
+        _tag: "DryRun",
+        mode: "multi-file-append",
+        schemaFile,
+        bytesPlanned: fragment.length,
+      };
+    }
+    const next = fs.readFile(schemaFile) + fragment;
+    fs.writeFile(schemaFile, next);
+    return {
+      _tag: "Wrote",
+      mode: "multi-file-append",
+      schemaFile,
+      bytesWritten: fragment.length,
+    };
+  }
+
+  if (options.createFile !== undefined) {
+    const schemaFile = options.createFile;
+    if (fs.exists(schemaFile)) {
+      if (fs.readFile(schemaFile).includes(prismaSchemaModelMarker)) {
+        return { _tag: "AlreadyPresent", schemaFile };
+      }
+      return new AddPrismaError({
+        cwd: options.cwd,
+        reason: `refusing to overwrite existing schema file: ${schemaFile}`,
+      });
+    }
+    if (options.dryRun === true) {
+      return {
+        _tag: "DryRun",
+        mode: "multi-file-separate",
+        schemaFile,
+        bytesPlanned: prismaSchema.length,
+      };
+    }
+    fs.writeFile(schemaFile, prismaSchema);
+    return {
+      _tag: "Wrote",
+      mode: "multi-file-separate",
+      schemaFile,
+      bytesWritten: prismaSchema.length,
+    };
   }
 
   const layout = detectLayout(fs, options.cwd);
@@ -242,6 +360,15 @@ export const addPrismaSchema = (
   }
 
   const schemaFile = `${layout.target}/effect-pm.prisma`;
+  if (fs.exists(schemaFile)) {
+    if (fs.readFile(schemaFile).includes(prismaSchemaModelMarker)) {
+      return { _tag: "AlreadyPresent", schemaFile };
+    }
+    return new AddPrismaError({
+      cwd: options.cwd,
+      reason: `refusing to overwrite existing schema file: ${schemaFile}`,
+    });
+  }
   if (options.dryRun === true) {
     return {
       _tag: "DryRun",

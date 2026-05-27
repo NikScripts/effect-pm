@@ -1,67 +1,74 @@
 /**
- * Public entry point for the Prisma-backed {@link ProcessStore} placeholder.
+ * Public entry point for the Prisma-backed {@link RuntimeStorage} adapter.
  *
  * @remarks
- * Imported via the legacy package subpath:
+ * Import directly or through the storage subpath:
  *
  * ```ts
- * import { PrismaProcessStore } from "@nikscripts/effect-pm/prisma";
+ * import { PrismaRuntimeStorage } from "@nikscripts/effect-pm/storage/prisma";
  * ```
  *
- * New code should prefer `@nikscripts/effect-pm/storage/prisma`.
- * The event-table adapter is intentionally unavailable until Prisma is
- * rebuilt as a {@link RuntimeStorage} adapter over normalized
- * {@link RuntimeRecord} rows.
+ * The adapter stores normalized {@link RuntimeRecord} rows through the
+ * consumer's generated Prisma client.
  *
- * The placeholder still exports structural types and schema helpers for
- * the upcoming rewrite.
- *
- * @module ProcessStore/Prisma
+ * @module PrismaRuntimeStorage
  */
 
 import {
   layer,
   layerFromContext,
+  layerProcessStore,
   make,
   PrismaClientService,
-  PrismaProcessStoreUnavailableError,
   prismaClientLayer,
-} from "./PrismaProcessStore";
+} from "./PrismaRuntimeStorage";
 import { prismaSchema, prismaSchemaModelMarker } from "./schema";
 
 export type {
-  EffectPmEventDelegate,
-  EffectPmEventCreateInput,
-  EffectPmEventRow,
+  EffectPmRuntimeRecordCreateInput,
+  EffectPmRuntimeRecordDelegate,
+  EffectPmRuntimeRecordFindManyArgs,
+  EffectPmRuntimeRecordOrderByInput,
+  EffectPmRuntimeRecordRow,
+  EffectPmRuntimeRecordUpdateInput,
+  EffectPmRuntimeRecordWhereInput,
+  EffectPmRuntimeRecordWhereUniqueInput,
   JsonValue,
-  PrismaProcessStoreClient,
+  PrismaRuntimeStorageClient,
 } from "./types";
-
-export { PrismaProcessStoreUnavailableError } from "./PrismaProcessStore";
 
 /**
  * Public surface of the Prisma adapter.
  *
  * @public
  */
-export const PrismaProcessStore = {
-  /** Throws {@link PrismaProcessStoreUnavailableError}. */
+export const PrismaRuntimeStorage = {
+  /** Construct a Prisma-backed RuntimeStorage service. */
   make,
-  /** Fails with {@link PrismaProcessStoreUnavailableError}. */
+  /** Build a Layer providing RuntimeStorage from an injected Prisma client. */
   layer,
   /**
-   * Build a `Layer` providing {@link ProcessStore} from a
+   * Build a `Layer` providing RuntimeStorage from a
    * {@link PrismaClientService} in the Effect environment.
    */
   layerFromContext,
+  /** Build all built-in ProcessStore facets from an injected Prisma client. */
+  layerProcessStore,
   /** Effect Context tag for the structural Prisma client. */
   PrismaClientService,
-  /** Error raised by the placeholder adapter until the RuntimeStorage rewrite lands. */
-  PrismaProcessStoreUnavailableError,
   /** Build a `Layer` providing {@link PrismaClientService} from a client. */
   prismaClientLayer,
-  /** Legacy Prisma schema fragment (single `EffectPmEvent` table). */
+  /** Prisma schema fragment for normalized RuntimeRecord rows. */
   schema: prismaSchema,
   /** Substring used to detect existing effect-pm models. */
   schemaModelMarker: prismaSchemaModelMarker,
-} as const;
+} satisfies {
+  readonly make: typeof make;
+  readonly layer: typeof layer;
+  readonly layerFromContext: typeof layerFromContext;
+  readonly layerProcessStore: typeof layerProcessStore;
+  readonly PrismaClientService: typeof PrismaClientService;
+  readonly prismaClientLayer: typeof prismaClientLayer;
+  readonly schema: typeof prismaSchema;
+  readonly schemaModelMarker: typeof prismaSchemaModelMarker;
+};
