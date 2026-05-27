@@ -1,12 +1,14 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Cause, Context, DateTime, Effect, Exit, Layer, Scope, pipe } from "effect";
+import { Context, DateTime, Effect, Layer, Scope, pipe } from "effect";
 import {
   And,
   Key,
   Occurred,
   ProcessId,
   RuntimeStorage,
+  RuntimeStorageDecodeError,
   RuntimeStorageDuplicateRecordError,
+  RuntimeStorageQueryError,
   Type,
 } from "../src";
 import { PrismaRuntimeStorage } from "../src/storage/prisma";
@@ -533,7 +535,7 @@ describe("PrismaRuntimeStorage", () => {
     }),
   );
 
-  it.effect("surfaces matching corrupt rows as tagged decode defects", () =>
+  it.effect("surfaces matching corrupt rows as typed decode errors", () =>
     Effect.gen(function* () {
       const client = makeMemoryPrismaClient();
       const storage = PrismaRuntimeStorage.make(client);
@@ -553,18 +555,19 @@ describe("PrismaRuntimeStorage", () => {
         })
       );
 
-      const exit = yield* Effect.exit(storage.read({ predicate: Key.equals("bad-key") }));
+      const error = yield* Effect.flip(storage.read({ predicate: Key.equals("bad-key") }));
 
-      expect(Exit.isFailure(exit)).toBe(true);
-      if (Exit.isFailure(exit)) {
-        const text = Cause.pretty(exit.cause);
-        expect(text).toContain("PrismaRuntimeStorageDecodeError");
-        expect(text).toContain("corrupt-selected");
+      expect(error).toBeInstanceOf(RuntimeStorageDecodeError);
+      expect(error._tag).toBe("RuntimeStorageDecodeError");
+      if (error instanceof RuntimeStorageDecodeError) {
+        expect(error.adapter).toBe("prisma");
+        expect(error.operation).toBe("read");
+        expect(error.id).toBe("corrupt-selected");
       }
     }),
   );
 
-  it.effect("surfaces driver failures as defects on the closed RuntimeStorage port", () =>
+  it.effect("surfaces driver failures as typed query errors", () =>
     Effect.gen(function* () {
       const client: PrismaRuntimeStorageClient = {
         effectPmRuntimeRecord: {
@@ -574,11 +577,14 @@ describe("PrismaRuntimeStorage", () => {
       };
       const storage = PrismaRuntimeStorage.make(client);
 
-      const exit = yield* Effect.exit(storage.read());
+      const error = yield* Effect.flip(storage.read());
 
-      expect(Exit.isFailure(exit)).toBe(true);
-      if (Exit.isFailure(exit)) {
-        expect(Cause.pretty(exit.cause)).toContain("driver offline");
+      expect(error).toBeInstanceOf(RuntimeStorageQueryError);
+      expect(error._tag).toBe("RuntimeStorageQueryError");
+      if (error instanceof RuntimeStorageQueryError) {
+        expect(error.adapter).toBe("prisma");
+        expect(error.operation).toBe("read");
+        expect(String(error.cause)).toContain("driver offline");
       }
     }),
   );

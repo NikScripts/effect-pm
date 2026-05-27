@@ -33,10 +33,13 @@ import type {
 import { ProcessStorage } from "../ProcessStorage";
 import { RuntimeStorage } from "../RuntimeStorage";
 import {
+  RuntimeStorageDecodeError,
   RuntimeStorageDuplicateRecordError,
+  RuntimeStorageQueryError,
   RuntimeStorageReadonlyRecordError,
   type DeleteResult,
   type RuntimeRecord,
+  type RuntimeStorageOperation,
   type RuntimeStorageService,
   type UpdateResult,
 } from "../RuntimeStorage";
@@ -90,6 +93,27 @@ class PrismaRuntimeStorageDecodeError extends Data.TaggedError(
   readonly id: string;
   readonly cause: unknown;
 }> {}
+
+const prismaQueryError = (
+  operation: RuntimeStorageOperation,
+  error: PrismaRuntimeStorageDriverError,
+): RuntimeStorageQueryError =>
+  new RuntimeStorageQueryError({
+    adapter: "prisma",
+    operation,
+    cause: error.cause,
+  });
+
+const prismaDecodeError = (
+  error: PrismaRuntimeStorageDecodeError,
+): RuntimeStorageDecodeError =>
+  new RuntimeStorageDecodeError({
+    adapter: "prisma",
+    operation: "read",
+    id: error.id,
+    cause: error.cause,
+    detail: "Failed to decode EffectPmRuntimeRecord row",
+  });
 
 const optionalStringFields: ReadonlySet<RuntimeRecordField> = new Set([
   "subjectType",
@@ -499,20 +523,25 @@ export const make = (
       prismaPromise(() =>
         client.effectPmRuntimeRecord.create({ data: encodeCreateInput(record) })
       ).pipe(
-        Effect.asVoid,
-        Effect.catch((error: PrismaRuntimeStorageDriverError) =>
+        Effect.mapError((error) =>
           isUniqueConstraintError(error.cause)
-            ? Effect.fail(new RuntimeStorageDuplicateRecordError({ id: record.id }))
-            : Effect.die(error.cause)
+            ? new RuntimeStorageDuplicateRecordError({ id: record.id })
+            : prismaQueryError("create", error)
         ),
+        Effect.asVoid,
       ),
 
     read: (query) =>
       prismaPromise(() =>
         client.effectPmRuntimeRecord.findMany(findManyArgs(query))
       ).pipe(
+        Effect.mapError((error) => prismaQueryError("read", error)),
         Effect.flatMap((rows) => Effect.forEach(rows, decodeRowEffect)),
-        Effect.orDie,
+        Effect.mapError((error) =>
+          error instanceof PrismaRuntimeStorageDecodeError
+            ? prismaDecodeError(error)
+            : error
+        ),
       ),
 
     upsert: (record) =>
@@ -522,7 +551,7 @@ export const make = (
             where: { id: { equals: record.id } },
             take: 1,
           })
-        ).pipe(Effect.orDie);
+        ).pipe(Effect.mapError((error) => prismaQueryError("upsert", error)));
         const first = existing[0];
         if (first?.readonly === true) {
           return yield* new RuntimeStorageReadonlyRecordError({ id: record.id });
@@ -533,7 +562,7 @@ export const make = (
             create: encodeCreateInput(record),
             update: encodeUpdateInput(record),
           })
-        ).pipe(Effect.orDie);
+        ).pipe(Effect.mapError((error) => prismaQueryError("upsert", error)));
       }),
 
     update: (query, patch) => {
@@ -542,13 +571,13 @@ export const make = (
       return prismaPromise(() =>
         client.effectPmRuntimeRecord.count({ where })
       ).pipe(
-        Effect.orDie,
+        Effect.mapError((error) => prismaQueryError("update", error)),
         Effect.flatMap((matched) =>
           isEmptyUpdateInput(data)
             ? prismaPromise(() =>
                 client.effectPmRuntimeRecord.count({ where: mutableWhere(where) })
               ).pipe(
-                Effect.orDie,
+                Effect.mapError((error) => prismaQueryError("update", error)),
                 Effect.map((updated) => ({ matched, updated }) satisfies UpdateResult),
               )
             : prismaPromise(() =>
@@ -557,7 +586,7 @@ export const make = (
                   data,
                 })
               ).pipe(
-                Effect.orDie,
+                Effect.mapError((error) => prismaQueryError("update", error)),
                 Effect.map((update) =>
                   ({ matched, updated: update.count }) satisfies UpdateResult
                 ),
@@ -574,7 +603,7 @@ export const make = (
       return prismaPromise(() =>
         client.effectPmRuntimeRecord.deleteMany({ where: deleteWhere })
       ).pipe(
-        Effect.orDie,
+        Effect.mapError((error) => prismaQueryError("delete", error)),
         Effect.map((deleted) => ({ deleted: deleted.count }) satisfies DeleteResult),
       );
     },
