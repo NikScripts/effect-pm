@@ -104,7 +104,7 @@ See [`.cursor/rules/public-vs-internal.mdc`](../.cursor/rules/public-vs-internal
 | Add an example | Add a **form** under `examples/forms/<area>/` or a **scenario** under `examples/scenarios/`; document in `examples/README.md`; add `package.json` script if runnable. Put heavy mock / scenario prose in `examples/shared/` when it would drown the entry script. |
 | Verify types (strict Effect rules) | `pnpm run typecheck` (uses `tsgo`). `anyUnknownInErrorContext` is temporarily `"off"`; see [strict any/unknown plan](./plans/10-typescript-strict-unknown.md). |
 | Run tests | `pnpm test` |
-| Implement store / runtime / group roadmap | Follow [`STORAGE.md`](./STORAGE.md) for storage work and [`docs/plans/README.md`](./plans/README.md) for priority order. Remote/control/queue-wire topics: [`01-remote-cli-transport-wire.md`](./plans/01-remote-cli-transport-wire.md), [`03-queue-remote-handoff.md`](./plans/03-queue-remote-handoff.md). |
+| Implement store / runtime / group roadmap | Follow [`STORAGE.md`](./STORAGE.md) for storage work and [`docs/plans/README.md`](./plans/README.md) for priority order. Remote/control/queue-wire: [`01-remote-cli-transport-wire.md`](./plans/01-remote-cli-transport-wire.md), [`03-queue-remote-handoff.md`](./plans/03-queue-remote-handoff.md). Storage polish: [`11-storage-prisma-follow-up.md`](./plans/11-storage-prisma-follow-up.md). |
 
 ---
 
