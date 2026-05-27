@@ -550,8 +550,7 @@ export const make = (
             take: 1,
           })
         ).pipe(Effect.mapError((error) => prismaQueryError("upsert", error)));
-        const first = existing[0];
-        if (first?.readonly === true) {
+        if (existing[0]?.readonly === true) {
           return yield* new RuntimeStorageReadonlyRecordError({ id: record.id });
         }
         yield* prismaPromise(() =>
@@ -560,7 +559,7 @@ export const make = (
             create: encodeCreateInput(record),
             update: encodeUpdateInput(record),
           })
-        ).pipe(Effect.mapError((error) => prismaQueryError("upsert", error)));
+        ).pipe(Effect.asVoid, Effect.mapError((error) => prismaQueryError("upsert", error)));
       }),
 
     update: (query, patch) => {
