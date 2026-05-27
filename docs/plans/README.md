@@ -7,6 +7,12 @@ guidance belong in regular docs outside `docs/plans`. Some long-running plans
 also include status notes for partially landed slices; treat those notes as
 roadmap context, not as the source of truth for shipped APIs.
 
+### Agent kickoff
+
+| Artifact | Purpose |
+| --- | --- |
+| [**HANDOFF-grill-dashboard-wow-integration.md**](./HANDOFF-grill-dashboard-wow-integration.md) | Copy-paste prompt + checklist for grilling **WOW** (tRPC + Prisma) dashboard integration **before** a cheaper builder agent executes. |
+
 ## Current plan set
 
 Plan numbers are stable references, not strict implementation order. For the
