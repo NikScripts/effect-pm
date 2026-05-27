@@ -402,6 +402,9 @@ pnpm prisma migrate dev --name add_effect_pm_runtime_records
 pnpm prisma generate
 ```
 
+Use `pnpx @nikscripts/effect-pm prisma init --schema prisma/schema.prisma`
+when you already know the target file; without flags, the command prompts.
+
 ```typescript
 import { PrismaClient } from "@prisma/client";
 import { PrismaRuntimeStorage } from "@nikscripts/effect-pm/storage/prisma";

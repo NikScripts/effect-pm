@@ -367,12 +367,24 @@ export const Payload = makeJsonAssignmentColumn("payload");
 /** @public */
 export const Attributes = makeJsonAssignmentColumn("attributes");
 
-/** @public */
+/**
+ * Combine predicates with logical AND.
+ *
+ * @remarks
+ * Empty groups intentionally match no rows. Use `Where()` with no arguments
+ * when you want an unfiltered query.
+ *
+ * @public
+ */
 export const And = (
   predicates: ReadonlyArray<RuntimeRecordPredicate>,
 ): RuntimeRecordPredicate => ({ _tag: "And", predicates });
 
-/** @public */
+/**
+ * Combine predicates with logical OR. Empty groups match no rows.
+ *
+ * @public
+ */
 export const Or = (
   predicates: ReadonlyArray<RuntimeRecordPredicate>,
 ): RuntimeRecordPredicate => ({ _tag: "Or", predicates });

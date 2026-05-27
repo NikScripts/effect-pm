@@ -7,6 +7,16 @@
  * lifetime, and shutdown; this module never imports `@prisma/client` and never
  * calls `$disconnect`.
  *
+ * Public error channels stay aligned with `RuntimeStorage.memory`: only
+ * duplicate ids and readonly upserts are typed failures. Driver failures and
+ * corrupt selected rows are defects on the closed storage port, matching the
+ * durable-adapter policy documented in `docs/STORAGE.md`.
+ *
+ * Prisma's native `Json?` input types use generated null sentinels, so runtime
+ * JSON values are serialized into string columns at the storage boundary. That
+ * keeps generated clients structurally compatible without importing generated
+ * Prisma types into this package.
+ *
  * @module PrismaRuntimeStorage
  */
 
@@ -93,6 +103,8 @@ const impossibleWhere: EffectPmRuntimeRecordWhereInput = {
   ],
 };
 
+// JSON text columns mirror SQLite's storage boundary and avoid Prisma-specific
+// JsonNull / DbNull sentinels in the public structural client interface.
 const jsonColumn = (text: string | null): JsonValue | undefined => {
   if (text === null) {
     return undefined;
@@ -362,6 +374,8 @@ const wherePredicate = (
       };
     case "And":
       return predicate.predicates.length === 0
+        // Treat accidental empty groups as guarded no-matches. `Where()` is the
+        // explicit unfiltered query path.
         ? impossibleWhere
         : { AND: predicate.predicates.map((item) => wherePredicate(item) ?? {}) };
     case "Or":
@@ -402,6 +416,8 @@ const mutableWhere = (
 ): EffectPmRuntimeRecordWhereInput => ({
   AND: [
     where ?? {},
+    // RuntimeStorage update/delete skip readonly rows unless delete explicitly
+    // opts in via `readonly === true`.
     {
       OR: [
         { readonly: { equals: null } },

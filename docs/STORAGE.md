@@ -210,9 +210,10 @@ The facet **owns** all wire-shape work:
 
 `PrismaRuntimeStorage` stores the same normalized rows through a consumer-owned
 Prisma client. The generated model is `EffectPmRuntimeRecord`, mapped to the
-`effect_pm_runtime_records` table; JSON-shaped runtime fields are serialized
-into string columns so the adapter can preserve `RuntimeStorage.memory` null /
-unset semantics without importing generated Prisma null sentinels.
+`effect_pm_runtime_records` table. JSON-shaped runtime fields are serialized
+into `*_json` string columns so the adapter can preserve
+`RuntimeStorage.memory` null / unset semantics without importing generated
+Prisma null sentinels.
 Like SQLite, logical storage errors stay limited to duplicate and readonly
 records. Prisma driver failures and corrupt selected rows are treated as
 defects on the closed `RuntimeStorageService` port; indexed predicates can still

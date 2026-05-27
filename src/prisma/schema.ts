@@ -10,8 +10,9 @@
  * The Prisma model is named `EffectPmRuntimeRecord`, so generated clients expose
  * `client.effectPmRuntimeRecord`. The physical database table is mapped to
  * `effect_pm_runtime_records`, matching the SQLite adapter's table name.
- * Runtime JSON blobs are serialized into string columns to keep null / unset
- * semantics independent of Prisma's generated JSON null sentinel types.
+ * Runtime JSON blobs are serialized into string columns (`*_json`) to keep
+ * null / unset semantics independent of Prisma's generated JSON null sentinel
+ * types.
  *
  * @public
  */
@@ -39,9 +40,9 @@ model EffectPmRuntimeRecord {
   indexF      String?
   indexG      String?
   indexH      String?
-  indexNamesJson String? @map("index_names_json")
-  payloadJson    String? @map("payload_json")
-  attributesJson String? @map("attributes_json")
+  indexNamesJson String?  @map("index_names_json")
+  payloadJson    String?  @map("payload_json")
+  attributesJson String?  @map("attributes_json")
   readonly    Boolean?
 
   @@index([runId])

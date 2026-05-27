@@ -23,6 +23,10 @@ export type SortOrder = "asc" | "desc";
 /**
  * Row shape produced by the generated `EffectPmRuntimeRecord` Prisma model.
  *
+ * @remarks
+ * `*Json` fields are JSON text, not Prisma `Json?` columns. Keeping them as
+ * strings avoids generated Prisma null sentinels in this structural interface.
+ *
  * @public
  */
 export interface EffectPmRuntimeRecordRow {
@@ -162,6 +166,11 @@ export type EffectPmRuntimeRecordBooleanWhere =
 /**
  * Structural subset of Prisma's generated `where` input.
  *
+ * @remarks
+ * This mirrors only the scalar predicates emitted by `RuntimeRecordQuery`.
+ * Avoid adding JSON filters here; facet-owned payload queries should decode
+ * rows and post-filter in the facet layer.
+ *
  * @public
  */
 export interface EffectPmRuntimeRecordWhereInput {
@@ -260,6 +269,10 @@ export interface EffectPmRuntimeRecordWhereUniqueInput {
 /**
  * Subset of the generated `EffectPmRuntimeRecord` delegate used by the adapter.
  *
+ * @remarks
+ * The method set is intentionally narrow but real generated clients type-check
+ * against it in `test/prisma-runtime-storage.generated-client.test.ts`.
+ *
  * @public
  */
 export interface EffectPmRuntimeRecordDelegate {
@@ -298,8 +311,9 @@ export interface EffectPmRuntimeRecordDelegate {
  * @remarks
  * Deliberately excludes `$transaction`: generated Prisma clients vary by
  * version/provider in their transaction overloads, while every supported client
- * exposes the model delegate below. The adapter still uses `$transaction` at
- * runtime when a compatible function is present.
+ * exposes the model delegate below. Aggregate writes use `updateMany` /
+ * `deleteMany`, so the adapter no longer needs transaction overloads for normal
+ * update/delete paths.
  *
  * @public
  */
