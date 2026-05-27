@@ -422,6 +422,21 @@ The generated Prisma model is `EffectPmRuntimeRecord` and maps to the
 your Prisma client; lifecycle stays with the app. `@prisma/client` is an
 optional peer dependency, required only when using the Prisma subpath.
 
+Direct storage and facet reads expose operational storage errors. Static facet
+emitters still log-and-swallow write failures so process/queue work is not
+failed by optional observability.
+
+```typescript
+const executions = yield* ProcessStorage.ProcessExecution
+  .for("@app/Billing/SyncInvoices")
+  .executions()
+  .pipe(
+    Effect.catchTag("RuntimeStorageConnectionError", (error) =>
+      Effect.logError("storage unavailable", error).pipe(Effect.as([])),
+    ),
+  );
+```
+
 ## Control Service (CLI/API)
 
 Start an HTTP control service for external management:

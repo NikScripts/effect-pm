@@ -16,6 +16,11 @@
  * `subjectType`, `key`, `indexA-H` mean for their wire types — see
  * `src/store/queueResource.ts` for a worked example).
  *
+ * Error channels distinguish logical storage outcomes from operational durable
+ * failures. Duplicate ids and readonly rows are logical contract failures.
+ * Connection, schema, query, decode, transaction, and availability failures are
+ * operational errors shared by durable adapters such as SQLite and Prisma.
+ *
  * @module RuntimeStorage
  */
 
