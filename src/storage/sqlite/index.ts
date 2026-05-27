@@ -32,9 +32,8 @@
  *
  * Persistence goes through `effect/unstable/sql`’s {@link SqlClient} via
  * `@effect/sql-sqlite-node` (a scoped `SqliteClient` per configuration). Logical
- * storage errors keep their tagged types; other SQL failures are treated as
- * defects on read/update/delete paths (`Effect.orDie`) so the public port stays
- * aligned with the in-memory reference’s `never` error channel on those methods.
+ * storage errors keep their tagged types; driver and decode failures map to
+ * public `RuntimeStorage*Error` operational tags.
  *
  * ## Lifecycle
  *

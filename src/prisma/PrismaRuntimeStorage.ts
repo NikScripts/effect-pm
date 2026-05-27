@@ -7,12 +7,10 @@
  * lifetime, and shutdown; this module never imports `@prisma/client` and never
  * calls `$disconnect`.
  *
- * Public error channels stay aligned with `RuntimeStorage.memory`: only
- * duplicate ids and readonly upserts are typed failures. Driver failures and
- * corrupt selected rows are defects on the closed storage port, matching the
- * durable-adapter policy documented in `docs/STORAGE.md`. Decode defects are
- * tagged internally with the offending row id before they die, so operational
- * logs identify the corrupt row without widening `RuntimeStorageError`.
+ * Public errors stay adapter-agnostic: duplicate ids and readonly upserts are
+ * logical failures, while driver and decode failures map to
+ * `RuntimeStorageQueryError` / `RuntimeStorageDecodeError`. Internal Prisma
+ * errors are wrapped only long enough to preserve operation and row context.
  *
  * Prisma's native `Json?` input types use generated null sentinels, so runtime
  * JSON values are serialized into string columns at the storage boundary. That

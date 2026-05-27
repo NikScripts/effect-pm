@@ -20,7 +20,7 @@ future agents should continue.
 | JSON storage | Runtime JSON blobs serialize to string columns (`*_json`) to avoid Prisma JSON null sentinel coupling. |
 | Layers | `make`, `layer`, `layerFromContext`, `prismaClientLayer`, and `layerProcessStore`. |
 | Lifecycle | App owns Prisma construction and `$disconnect`. |
-| Errors | Duplicate id and readonly writes remain typed; driver/decode failures are defects on the closed port. |
+| Errors | Duplicate id and readonly writes remain logical typed errors; driver/decode failures map to public operational `RuntimeStorageError` tags. |
 | Tests | Shared conformance, structural mock tests, and generated Prisma SQLite client integration. |
 
 Primary files:
@@ -58,11 +58,9 @@ reads to per-domain facets; there is no event-table compatibility layer.
 Use [`REVIEW-prisma-runtime-storage-improvements.md`](./REVIEW-prisma-runtime-storage-improvements.md)
 as the active backlog. Current open questions:
 
-1. Whether `RuntimeStorageService` should eventually expose typed driver/decode
-   failures across all durable adapters instead of treating them as defects.
-2. Whether Prisma should support provider-specific SQL for even larger bulk
+1. Whether Prisma should support provider-specific SQL for even larger bulk
    mutation/query paths beyond `count` / `updateMany` / `deleteMany`.
-3. Whether generated-client integration tests should remain in default `pnpm
+2. Whether generated-client integration tests should remain in default `pnpm
    test` or become opt-in if CI engine installation becomes too costly.
 
 ---

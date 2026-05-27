@@ -214,12 +214,13 @@ Prisma client. The generated model is `EffectPmRuntimeRecord`, mapped to the
 into `*_json` string columns so the adapter can preserve
 `RuntimeStorage.memory` null / unset semantics without importing generated
 Prisma null sentinels.
-Like SQLite, logical storage errors stay limited to duplicate and readonly
-records. Prisma driver failures and corrupt selected rows are treated as
-defects on the closed `RuntimeStorageService` port. Selected decode failures are
-wrapped in an internal `PrismaRuntimeStorageDecodeError` before dying so logs
-include the bad row id; indexed predicates can still exclude corrupt rows
-because decoding happens after Prisma returns the selected rows.
+
+`RuntimeStorageError` separates logical failures (duplicate id, readonly row)
+from operational failures (connection, schema, query, decode, transaction,
+unavailable). Durable adapters map driver and decode failures into those public
+tags instead of leaking Prisma / SQLite error types. Domain static emitters still
+log-and-swallow write failures; direct storage and facet reads expose the typed
+error channel.
 
 ---
 
@@ -227,5 +228,4 @@ because decoding happens after Prisma returns the selected rows.
 
 | Area | Notes |
 |------|-------|
-| SQLite typed errors | `storage/sqlite` still uses `Layer.orDie` for storage init failures; surface typed errors instead. |
 | Telemetry proposals | `Polling`, `ProcessSchedule`, `HttpApiResource`: facet yes/no docs in `docs/storage-proposals/` (Phase 1 — proposal only). |

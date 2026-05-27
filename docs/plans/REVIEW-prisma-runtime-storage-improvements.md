@@ -18,8 +18,8 @@ repeat completed work.
 | Bounded write calls | Structural mock asserts broad update/delete use aggregate delegate calls, not one call per row. |
 | Empty compound predicates | `And([])` is no-match across memory, SQLite, and Prisma; `Where()` remains the unfiltered path. |
 | Empty patch | Prisma counts mutable rows without sending empty `updateMany` data. |
-| Driver failures | Non-logical Prisma failures remain defects on the closed `RuntimeStorageService` port and are documented. |
-| Decode failures | Selected corrupt rows die with internal `PrismaRuntimeStorageDecodeError` including row id; excluded corrupt rows do not affect good reads. |
+| Driver failures | Prisma and SQLite map driver failures into public operational `RuntimeStorageError` tags. |
+| Decode failures | Selected corrupt rows fail reads with public `RuntimeStorageDecodeError` including row id; excluded corrupt rows do not affect good reads. |
 | Date bounds | Explicit Prisma test covers exclusive `Between(start, end)` semantics. |
 | Migration note | `docs/guides/MIGRATION-26b262b.md` includes the `EffectPmEvent` → `EffectPmRuntimeRecord` checklist. |
 | CI notes | `docs/AGENTS.md` documents Prisma CLI / engine install requirements. |
@@ -27,17 +27,16 @@ repeat completed work.
 
 ---
 
-## Still open: cross-adapter error model
+## Completed: cross-adapter error model
 
-Current durable adapters keep `RuntimeStorageService` typed failures limited to:
+`RuntimeStorageService` now separates logical errors from operational errors:
 
-- `RuntimeStorageDuplicateRecordError`
-- `RuntimeStorageReadonlyRecordError`
+- logical: duplicate id, readonly row
+- operational: connection, schema, query, decode, transaction, unavailable
 
-Everything else (driver failures, schema/corrupt-row decode failures, open/init
-failures in some paths) is a defect. That keeps the port compatible with memory
-storage, but it is not the best long-term operational model. The next step is a
-human-approved cross-adapter proposal before adding plan/docs files.
+Prisma and SQLite map driver/decode failures into public `RuntimeStorageError`
+tags. Domain static emitters still log-and-swallow write failures, while direct
+storage/facet reads expose typed operational errors.
 
 ---
 
