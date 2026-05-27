@@ -3,6 +3,7 @@ import { Cause, Context, DateTime, Effect, Exit, Layer, Scope, pipe } from "effe
 import {
   And,
   Key,
+  Occurred,
   ProcessId,
   RuntimeStorage,
   RuntimeStorageDuplicateRecordError,
@@ -424,6 +425,28 @@ describe("PrismaRuntimeStorage", () => {
     }),
   );
 
+  it.effect("uses exclusive date bounds for Between predicates", () =>
+    Effect.gen(function* () {
+      const start = DateTime.makeUnsafe("2026-04-01T00:00:00.000Z");
+      const middle = DateTime.makeUnsafe("2026-04-01T00:01:00.000Z");
+      const end = DateTime.makeUnsafe("2026-04-01T00:02:00.000Z");
+      const storage = PrismaRuntimeStorage.make(makeMemoryPrismaClient());
+      yield* storage.create(runtimeStorageRecord("before", {
+        occurredAt: DateTime.makeUnsafe("2026-03-31T23:59:59.999Z"),
+      }));
+      yield* storage.create(runtimeStorageRecord("start-boundary", { occurredAt: start }));
+      yield* storage.create(runtimeStorageRecord("middle", { occurredAt: middle }));
+      yield* storage.create(runtimeStorageRecord("end-boundary", { occurredAt: end }));
+      yield* storage.create(runtimeStorageRecord("after", {
+        occurredAt: DateTime.makeUnsafe("2026-04-01T00:02:00.001Z"),
+      }));
+
+      const rows = yield* storage.read({ predicate: Occurred.between(start, end) });
+
+      expect(rows.map((row) => row.id)).toEqual(["middle"]);
+    }),
+  );
+
   it.effect("uses aggregate writes for broad update and delete queries", () =>
     Effect.gen(function* () {
       const client = makeMemoryPrismaClient();
@@ -507,6 +530,37 @@ describe("PrismaRuntimeStorage", () => {
 
       expect(rows.map((row) => row.id)).toEqual(["good"]);
       expect(rows[0]?.payload).toEqual({ ok: true });
+    }),
+  );
+
+  it.effect("surfaces matching corrupt rows as tagged decode defects", () =>
+    Effect.gen(function* () {
+      const client = makeMemoryPrismaClient();
+      const storage = PrismaRuntimeStorage.make(client);
+      yield* Effect.promise(() =>
+        client.effectPmRuntimeRecord.create({
+          data: {
+            id: "corrupt-selected",
+            type: "queue.entry.enqueued",
+            occurredAt: DateTime.toDateUtc(DateTime.makeUnsafe("2026-01-01T00:00:00.000Z")),
+            createdAt: DateTime.toDateUtc(DateTime.makeUnsafe("2026-01-01T00:00:01.000Z")),
+            runId: "run-contract",
+            processType: "queue-resource",
+            processId: "queue-contract",
+            key: "bad-key",
+            payloadJson: "{",
+          },
+        })
+      );
+
+      const exit = yield* Effect.exit(storage.read({ predicate: Key.equals("bad-key") }));
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const text = Cause.pretty(exit.cause);
+        expect(text).toContain("PrismaRuntimeStorageDecodeError");
+        expect(text).toContain("corrupt-selected");
+      }
     }),
   );
 

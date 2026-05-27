@@ -82,6 +82,13 @@ class PrismaRuntimeStorageDriverError extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
+class PrismaRuntimeStorageDecodeError extends Data.TaggedError(
+  "PrismaRuntimeStorageDecodeError",
+)<{
+  readonly id: string;
+  readonly cause: unknown;
+}> {}
+
 const optionalStringFields: ReadonlySet<RuntimeRecordField> = new Set([
   "subjectType",
   "subjectId",
@@ -265,6 +272,20 @@ const decodeRow = (row: EffectPmRuntimeRecordRow): RuntimeRecord => ({
   attributes: jsonColumn(row.attributesJson),
   readonly: row.readonly ?? undefined,
 });
+
+const decodeRowEffect = (
+  row: EffectPmRuntimeRecordRow,
+): Effect.Effect<RuntimeRecord, PrismaRuntimeStorageDecodeError> =>
+  Effect.try({
+    try: () => decodeRow(row),
+    catch: (cause) =>
+      new PrismaRuntimeStorageDecodeError({
+        id: row.id,
+        cause: new Error(`PrismaRuntimeStorage: failed to decode row ${row.id}`, {
+          cause,
+        }),
+      }),
+  });
 
 const comparisonMatchesStringField = (
   field: RuntimeRecordField,
@@ -488,7 +509,7 @@ export const make = (
       prismaPromise(() =>
         client.effectPmRuntimeRecord.findMany(findManyArgs(query))
       ).pipe(
-        Effect.map((rows) => rows.map(decodeRow)),
+        Effect.flatMap((rows) => Effect.forEach(rows, decodeRowEffect)),
         Effect.orDie,
       ),
 
