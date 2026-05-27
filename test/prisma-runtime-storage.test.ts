@@ -450,6 +450,24 @@ describe("PrismaRuntimeStorage", () => {
     }),
   );
 
+  it.effect("counts empty patches without sending empty updateMany data", () =>
+    Effect.gen(function* () {
+      const client = makeMemoryPrismaClient();
+      const storage = PrismaRuntimeStorage.make(client);
+      yield* storage.create(runtimeStorageRecord("empty-patch"));
+      yield* storage.create(runtimeStorageRecord("empty-patch-locked", { readonly: true }));
+
+      const result = yield* storage.update(
+        { predicate: ProcessId.equals("queue-contract") },
+        {},
+      );
+
+      expect(result).toEqual({ matched: 2, updated: 1 });
+      expect(client.calls.count).toBe(2);
+      expect(client.calls.updateMany).toBe(0);
+    }),
+  );
+
   it.effect("treats an empty And predicate as a guarded no-match query", () =>
     Effect.gen(function* () {
       const storage = PrismaRuntimeStorage.make(makeMemoryPrismaClient());

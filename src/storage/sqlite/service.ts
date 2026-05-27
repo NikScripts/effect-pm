@@ -198,7 +198,7 @@ const predicateSql = (predicate: RuntimeRecordPredicate | undefined): SqlSelecti
         params: [dateMillis(predicate.start), dateMillis(predicate.end)],
       };
     case "And":
-      return combineSelections("AND", "1 = 1", predicate.predicates.map(predicateSql).filter((item): item is SqlSelection => item !== undefined));
+      return combineSelections("AND", "1 = 0", predicate.predicates.map(predicateSql).filter((item): item is SqlSelection => item !== undefined));
     case "Or":
       return combineSelections("OR", "1 = 0", predicate.predicates.map(predicateSql).filter((item): item is SqlSelection => item !== undefined));
   }

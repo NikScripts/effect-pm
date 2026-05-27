@@ -6,7 +6,7 @@ import {
   type RuntimeRecord,
   type RuntimeStorageService,
 } from "../src";
-import { Key, ProcessId, Readonly } from "../src/Query";
+import { And, Key, ProcessId, Readonly } from "../src/Query";
 
 const dt = (iso: string): DateTime.Utc => DateTime.makeUnsafe(iso);
 
@@ -87,6 +87,21 @@ export const describeRuntimeStorageContract = <R extends Scope.Scope>(
         expect(update).toEqual({ matched: 2, updated: 1 });
         expect(firstDelete).toEqual({ deleted: 1 });
         expect(secondDelete).toEqual({ deleted: 1 });
+      }),
+    );
+
+    it.live("treats an empty And predicate as no-match", () =>
+      Effect.gen(function* () {
+        const storage = yield* makeStorage;
+        yield* storage.create(runtimeStorageRecord("empty-and"));
+
+        const rows = yield* storage.read({ predicate: And([]) });
+        const update = yield* storage.update({ predicate: And([]) }, { payload: { ignored: true } });
+        const deleted = yield* storage.delete({ predicate: And([]) });
+
+        expect(rows).toEqual([]);
+        expect(update).toEqual({ matched: 0, updated: 0 });
+        expect(deleted).toEqual({ deleted: 0 });
       }),
     );
   });

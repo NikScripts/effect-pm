@@ -224,6 +224,11 @@ const encodePatchInput = (
     : { attributesJson: patch.attributes === null ? null : encodeJsonColumn(patch.attributes) }),
 });
 
+const isEmptyUpdateInput = (
+  input: EffectPmRuntimeRecordUpdateInput,
+): boolean =>
+  Object.keys(input).length === 0;
+
 const decodeRow = (row: EffectPmRuntimeRecordRow): RuntimeRecord => ({
   id: row.id,
   type: row.type,
@@ -492,32 +497,48 @@ export const make = (
         ).pipe(Effect.orDie);
       }),
 
-    update: (query, patch) =>
-      Effect.gen(function* () {
-        const where = queryWhere(query);
-        const matched = yield* prismaPromise(() =>
-          client.effectPmRuntimeRecord.count({ where })
-        ).pipe(Effect.orDie);
-        const update = yield* prismaPromise(() =>
-          client.effectPmRuntimeRecord.updateMany({
-            where: mutableWhere(where),
-            data: encodePatchInput(patch),
-          })
-        ).pipe(Effect.orDie);
-        return { matched, updated: update.count } satisfies UpdateResult;
-      }),
+    update: (query, patch) => {
+      const where = queryWhere(query);
+      const data = encodePatchInput(patch);
+      return prismaPromise(() =>
+        client.effectPmRuntimeRecord.count({ where })
+      ).pipe(
+        Effect.orDie,
+        Effect.flatMap((matched) =>
+          isEmptyUpdateInput(data)
+            ? prismaPromise(() =>
+                client.effectPmRuntimeRecord.count({ where: mutableWhere(where) })
+              ).pipe(
+                Effect.orDie,
+                Effect.map((updated) => ({ matched, updated }) satisfies UpdateResult),
+              )
+            : prismaPromise(() =>
+                client.effectPmRuntimeRecord.updateMany({
+                  where: mutableWhere(where),
+                  data,
+                })
+              ).pipe(
+                Effect.orDie,
+                Effect.map((update) =>
+                  ({ matched, updated: update.count }) satisfies UpdateResult
+                ),
+              )
+        ),
+      );
+    },
 
-    delete: (query) =>
-      Effect.gen(function* () {
-        const where = queryWhere(query);
-        const deleteWhere = includesReadonlyTrue(query.predicate)
-          ? where
-          : mutableWhere(where);
-        const deleted = yield* prismaPromise(() =>
-          client.effectPmRuntimeRecord.deleteMany({ where: deleteWhere })
-        ).pipe(Effect.orDie);
-        return { deleted: deleted.count } satisfies DeleteResult;
-      }),
+    delete: (query) => {
+      const where = queryWhere(query);
+      const deleteWhere = includesReadonlyTrue(query.predicate)
+        ? where
+        : mutableWhere(where);
+      return prismaPromise(() =>
+        client.effectPmRuntimeRecord.deleteMany({ where: deleteWhere })
+      ).pipe(
+        Effect.orDie,
+        Effect.map((deleted) => ({ deleted: deleted.count }) satisfies DeleteResult),
+      );
+    },
   };
 
   return service;

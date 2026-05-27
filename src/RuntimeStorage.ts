@@ -253,7 +253,8 @@ const matchesPredicate = (
         compareDate(value, predicate.end) < 0;
     }
     case "And":
-      return predicate.predicates.every((item) => matchesPredicate(record, item));
+      return predicate.predicates.length > 0 &&
+        predicate.predicates.every((item) => matchesPredicate(record, item));
     case "Or":
       return predicate.predicates.some((item) => matchesPredicate(record, item));
   }
