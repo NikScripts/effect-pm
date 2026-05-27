@@ -1152,4 +1152,7 @@ export const Process = {
   Service: defineProcessService,
   currentScheduleId,
   scheduleControls,
+  Errors: {
+    ProcessMakeInvalidLayerArgument,
+  },
 } as const;

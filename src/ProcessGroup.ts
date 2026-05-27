@@ -1862,9 +1862,21 @@ export const ProcessGroup = {
   Service: makeProcessGroupServiceFactory,
   remoteLayer,
   localEnvLayer,
-};
-
-export { QueueItemValidationError, QueueBatchValidationError } from "./QueueResource";
+  Errors: {
+    ProcessNotFoundError,
+    ProcessAlreadyRunningError,
+    ProcessNotRunningError,
+    ProcessGroupRemoteControlError,
+    UnsupportedRemoteControlError,
+  },
+  Schema: {
+    ProcessControl: ProcessGroupProcessControlSchema,
+    QueueControl: ProcessGroupQueueControlSchema,
+    ProcessContract: ProcessGroupProcessContractSchema,
+    QueueContract: ProcessGroupQueueContractSchema,
+    GroupContract: ProcessGroupContractSchema,
+  },
+} as const;
 
 /**
  * Control surface type used by ControlService.

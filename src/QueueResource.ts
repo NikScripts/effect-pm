@@ -2717,4 +2717,17 @@ export const QueueResource = {
       tag: base,
     });
   },
-};
+
+  Schema: {
+    descriptor: QueueItemCodecDescriptorSchema,
+    makeDescriptor: makeQueueItemCodecDescriptor,
+  },
+
+  Errors: {
+    QueueItemValidationError,
+    QueueBatchValidationError,
+    QueueMissingItemSchemaError,
+    QueueItemEncodingError,
+    QueueShutdownError,
+  },
+} as const;
