@@ -60,9 +60,6 @@
  * Storage adapters use lower-case subpaths:
  * **`@nikscripts/effect-pm/storage/sqlite`** and **`@nikscripts/effect-pm/storage/prisma`**
  * for durable runtime records.
- * The legacy
- * **`@nikscripts/effect-pm/prisma`** subpath remains available for
- * compatibility.
  *
  * ## Source-only helpers
  *
@@ -182,7 +179,6 @@ export {
   Update,
   Upsert,
   Where,
-  Xor,
 } from "./Query";
 export type {
   RuntimeRecordAssignment,
@@ -195,15 +191,26 @@ export type {
 } from "./Query";
 export {
   RuntimeStorage,
+  RuntimeStorageConnectionError,
+  RuntimeStorageDecodeError,
   RuntimeStorageDuplicateRecordError,
+  RuntimeStorageQueryError,
   RuntimeStorageReadonlyRecordError,
+  RuntimeStorageSchemaError,
+  RuntimeStorageTransactionError,
+  RuntimeStorageUnavailableError,
   selectRuntimeRecords,
   applyRuntimeRecordPatch,
 } from "./RuntimeStorage";
 export type {
   DeleteResult,
   RuntimeRecord,
+  RuntimeStorageAdapter,
   RuntimeStorageError,
+  RuntimeStorageLogicalError,
+  RuntimeStorageOperation,
+  RuntimeStorageOperationalFields,
+  RuntimeStorageOperationalError,
   RuntimeStorageService,
   UpdateResult,
 } from "./RuntimeStorage";
@@ -296,6 +303,7 @@ export {
   ProcessStore,
   ProcessStoreDuplicateRecordError,
   ProcessStoreReadonlyRecordError,
+  ProcessStoreStorageError,
   type AnalyticsEventBase,
   type ProcessStoreWriteError,
   type QueryOpts,

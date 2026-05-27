@@ -60,7 +60,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 |------|---------|
 | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) | `ProcessStorage.layer` + lifecycle facet reads |
 | [`forms/process-store/process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) | `layerProcessStore` + facet reads on SQLite |
-| [`forms/process-store/process-store-prisma-structural-client.ts`](./forms/process-store/process-store-prisma-structural-client.ts) | Placeholder showing Prisma adapter unavailability pending RuntimeStorage rewrite |
+| [`forms/process-store/process-store-prisma-structural-client.ts`](./forms/process-store/process-store-prisma-structural-client.ts) | Structural Prisma client shape for `PrismaRuntimeStorage` |
 
 Storage options:
 
@@ -68,7 +68,7 @@ Storage options:
 - `ProcessStorage.layerRuntimeStorage` + `@nikscripts/effect-pm/storage/sqlite` — durable local SQLite runtime records.
 - `ProcessStoreLog` — structured log history (`record`, `load`, `query`); `@nikscripts/effect-pm/Logs` handles capture/relay in group children.
 - `ProcessStoreQueueResource` — queue semantic storage facet.
-- `PrismaProcessStore` from `@nikscripts/effect-pm/storage/prisma` — placeholder for the upcoming RuntimeStorage-backed Prisma rewrite.
+- `PrismaRuntimeStorage` from `@nikscripts/effect-pm/storage/prisma` — Prisma-backed runtime records with app-owned generated client and migrations.
 
 ### Schedule
 
@@ -111,7 +111,7 @@ Storage options:
 | File | Teaches |
 |------|---------|
 | [`scenarios/process-manager-playground/`](./scenarios/process-manager-playground/) | **ProcessManager.cli** — two groups, `group-start` / `group-stop`, processes + queues |
-| [`scenarios/full-process-group-with-queues-and-control-cli.ts`](./scenarios/full-process-group-with-queues-and-control-cli.ts) | End-to-end ProcessGroup + queues + `ControlService.make` + `awaitShutdown` + legacy `pnpm run cli` |
+| [`scenarios/full-process-group-with-queues-and-control-cli.ts`](./scenarios/full-process-group-with-queues-and-control-cli.ts) | End-to-end ProcessGroup + queues + `ControlService.make` + `awaitShutdown` + companion `pnpm run cli` |
 | [`scenarios/game-window-polling-with-process-group.ts`](./scenarios/game-window-polling-with-process-group.ts) | `ProcessGroup.start` + schedule windows + `TestClock` |
 | [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) | DB-to-runtime schedule sync pattern |
 | [`scenarios/nwslsoccer/`](./scenarios/nwslsoccer/) | Real HttpApi client against NWSL SDP (optional local tree) |
@@ -123,7 +123,7 @@ Storage options:
 | Script | What it runs |
 |--------|----------------|
 | `pnpm run demo:pm -- …` | ProcessManager playground CLI (`groups`, `group-start`, `start`, queue controls) |
-| `pnpm run example` | In-process scenario (`full-process-group-with-queues-and-control-cli`) + legacy `pnpm run cli` |
+| `pnpm run example` | In-process scenario (`full-process-group-with-queues-and-control-cli`) + companion `pnpm run cli` |
 | `pnpm run example:typed-process-group` | ProcessGroup + ProcessManager forms |
 | `pnpm run example:queue-resource` | Queue form |
 | `pnpm run cli …` | CLI against the demo control port |

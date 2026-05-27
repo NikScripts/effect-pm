@@ -6,7 +6,10 @@ import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { Key, ProcessId } from "../src";
-import { RuntimeStorage } from "../src/RuntimeStorage";
+import {
+  RuntimeStorage,
+  RuntimeStorageDecodeError,
+} from "../src/RuntimeStorage";
 import {
   SQLiteRuntimeStorage,
   layerRuntimeStorage,
@@ -159,6 +162,40 @@ describe("SQLiteRuntimeStorage extended", () => {
       const storage = yield* makeRuntimeStorage({ filename: ":memory:" }).pipe(Effect.orDie);
       const result = yield* storage.delete({ predicate: ProcessId.equals("no-such-process") });
       expect(result).toEqual({ deleted: 0 });
+    }),
+  );
+
+  it.live("surfaces corrupt selected rows as typed decode errors", () =>
+    Effect.gen(function* () {
+      const scope = yield* Scope.Scope;
+      const context = yield* Layer.buildWithScope(SqliteClient.layer({ filename: ":memory:" }), scope);
+      const sql = Context.get(context, SqlClient);
+      const storage = yield* SQLiteRuntimeStorage.fromSqlClient(sql).pipe(Effect.orDie);
+      yield* sql.unsafe(
+        `INSERT INTO effect_pm_runtime_records
+          (id, type, occurred_at_ms, created_at_ms, run_id, process_type, process_id, key, payload_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          "corrupt-selected",
+          "queue.entry.enqueued",
+          1,
+          1,
+          "run-contract",
+          "queue-resource",
+          "queue-contract",
+          "bad-key",
+          "{",
+        ],
+      ).pipe(Effect.orDie);
+
+      const error = yield* Effect.flip(storage.read({ predicate: Key.equals("bad-key") }));
+
+      expect(error).toBeInstanceOf(RuntimeStorageDecodeError);
+      if (error instanceof RuntimeStorageDecodeError) {
+        expect(error.adapter).toBe("sqlite");
+        expect(error.operation).toBe("read");
+        expect(error.id).toBe("corrupt-selected");
+      }
     }),
   );
 });

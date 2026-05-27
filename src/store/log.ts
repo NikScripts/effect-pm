@@ -57,7 +57,7 @@ import type {
   QueryOpts,
 } from "../ProcessStoreEvent";
 import { ProcessId, Type } from "../Query";
-import type { RuntimeRecord } from "../RuntimeStorage";
+import type { RuntimeRecord, RuntimeStorageOperationalError } from "../RuntimeStorage";
 
 /**
  * Structured log line persisted by {@link ProcessStoreLog} for operator
@@ -313,12 +313,13 @@ const entriesFromRecords = (
 
 const loadEntries = (
   read: (query?: import("../Query").RuntimeRecordQuery) => Effect.Effect<
-    RuntimeRecord[]
+    RuntimeRecord[],
+    RuntimeStorageOperationalError
   >,
   query: ProcessManagerLogQuery,
 ): Effect.Effect<
   ReadonlyArray<ProcessManagerLogEntry>,
-  ProcessManagerLogQueryError
+  ProcessManagerLogQueryError | RuntimeStorageOperationalError
 > =>
   Effect.gen(function* () {
     const opts = queryOptsFromLogQuery(query);
@@ -338,10 +339,11 @@ const loadEntries = (
 
 const queryEntries = (
   read: (query?: import("../Query").RuntimeRecordQuery) => Effect.Effect<
-    RuntimeRecord[]
+    RuntimeRecord[],
+    RuntimeStorageOperationalError
   >,
   logQuery: ProcessManagerLogQuery,
-): Effect.Effect<void, ProcessManagerLogQueryError> =>
+): Effect.Effect<void, ProcessManagerLogQueryError | RuntimeStorageOperationalError> =>
   Effect.gen(function* () {
     const entries = yield* loadEntries(read, logQuery);
     yield* replayLogQueryResults(entries, logQuery.sort);

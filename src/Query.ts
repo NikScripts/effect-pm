@@ -107,10 +107,6 @@ export type RuntimeRecordPredicate =
   | {
       readonly _tag: "Or";
       readonly predicates: ReadonlyArray<RuntimeRecordPredicate>;
-    }
-  | {
-      readonly _tag: "Xor";
-      readonly predicates: ReadonlyArray<RuntimeRecordPredicate>;
     };
 
 /** @public */
@@ -371,20 +367,27 @@ export const Payload = makeJsonAssignmentColumn("payload");
 /** @public */
 export const Attributes = makeJsonAssignmentColumn("attributes");
 
-/** @public */
+/**
+ * Combine predicates with logical AND.
+ *
+ * @remarks
+ * Empty groups intentionally match no rows. Use `Where()` with no arguments
+ * when you want an unfiltered query.
+ *
+ * @public
+ */
 export const And = (
   predicates: ReadonlyArray<RuntimeRecordPredicate>,
 ): RuntimeRecordPredicate => ({ _tag: "And", predicates });
 
-/** @public */
+/**
+ * Combine predicates with logical OR. Empty groups match no rows.
+ *
+ * @public
+ */
 export const Or = (
   predicates: ReadonlyArray<RuntimeRecordPredicate>,
 ): RuntimeRecordPredicate => ({ _tag: "Or", predicates });
-
-/** @public */
-export const Xor = (
-  predicates: ReadonlyArray<RuntimeRecordPredicate>,
-): RuntimeRecordPredicate => ({ _tag: "Xor", predicates });
 
 /** @public */
 export const Where = (

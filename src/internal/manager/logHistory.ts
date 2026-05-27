@@ -10,6 +10,7 @@ import { ProcessStoreLog } from "../../store/log";
 import { groupLogSqlitePath, resolveChildLaunchPaths } from "./childLaunch";
 import { layerProcessStore } from "../../storage/sqlite/index";
 import type { ProcessManagerLogEntry } from "../../LogEntry";
+import type { RuntimeStorageOperationalError } from "../../RuntimeStorage";
 
 // @effect-diagnostics strictEffectProvide:off — pm logs opens per-group sqlite stores from resolved disk paths.
 
@@ -19,6 +20,15 @@ type GroupCatalogEntry = {
 
 const storeMissingMessage = (filePath: string): string =>
   `No log history at ${filePath}. Start the group child (pm start <group>) and emit logs before running pm logs.`;
+
+const storageLogQueryError = (
+  error: ProcessManagerLogQueryError | RuntimeStorageOperationalError,
+): ProcessManagerLogQueryError =>
+  error instanceof ProcessManagerLogQueryError
+    ? error
+    : new ProcessManagerLogQueryError({
+        reason: `Unable to read log history from storage: ${String(error)}`,
+      });
 
 /**
  * Run `pm logs` against on-disk group log stores under the child log directory.
@@ -73,7 +83,7 @@ export const queryGroupLogsForCatalog = (
           Effect.flatMap(
             Option.match({
               onNone: () => Effect.succeed([]),
-              onSome: (log) => log.load(groupQuery),
+          onSome: (log) => log.load(groupQuery).pipe(Effect.mapError(storageLogQueryError)),
             }),
           ),
           Effect.provide(layerProcessStore({ filename: sqliteFilename })),
@@ -116,7 +126,7 @@ export const queryGroupLogsForCatalog = (
                   "ProcessStoreLog layer is not provided; compose ProcessStorage.layer or layerProcessStore(...) before reading log history.",
               }),
             ),
-          onSome: (log) => log.query(query),
+          onSome: (log) => log.query(query).pipe(Effect.mapError(storageLogQueryError)),
         }),
       ),
       Effect.provide(layerProcessStore({ filename: sqliteFilename })),

@@ -52,7 +52,7 @@ import type { ProcessStoreSpine } from "../internal/store/spine";
 import { ProcessStore } from "../ProcessStore";
 import type { AnalyticsEventBase, QueryOpts } from "../ProcessStoreEvent";
 import { ProcessId, Type } from "../Query";
-import type { RuntimeRecord } from "../RuntimeStorage";
+import type { RuntimeRecord, RuntimeStorageOperationalError } from "../RuntimeStorage";
 
 // ============================================================================
 // Public types
@@ -292,7 +292,7 @@ export class ProcessStoreProcessExecution extends ProcessStore.Service<
 const readExecutions = (
   s: ProcessStoreSpine,
   query: ProcessExecutionQuery,
-): Effect.Effect<ProcessExecutionCompletedEvent[]> =>
+): Effect.Effect<ProcessExecutionCompletedEvent[], RuntimeStorageOperationalError> =>
   s
     .read(
       runtimeRecordQuery(
@@ -310,7 +310,7 @@ const readExecutions = (
 const readHasPriorExecutions = (
   s: ProcessStoreSpine,
   processId: string,
-): Effect.Effect<boolean> =>
+): Effect.Effect<boolean, RuntimeStorageOperationalError> =>
   s
     .read(
       runtimeRecordQuery(

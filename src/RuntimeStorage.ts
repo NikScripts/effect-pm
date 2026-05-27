@@ -16,6 +16,11 @@
  * `subjectType`, `key`, `indexA-H` mean for their wire types — see
  * `src/store/queueResource.ts` for a worked example).
  *
+ * Error channels distinguish logical storage outcomes from operational durable
+ * failures. Duplicate ids and readonly rows are logical contract failures.
+ * Connection, schema, query, decode, transaction, and availability failures are
+ * operational errors shared by durable adapters such as SQLite and Prisma.
+ *
  * @module RuntimeStorage
  */
 
@@ -130,14 +135,126 @@ export class RuntimeStorageReadonlyRecordError extends Data.TaggedError(
 }> {}
 
 /**
+ * Storage adapter name reported by operational failures.
+ *
+ * @public
+ */
+export type RuntimeStorageAdapter = "memory" | "sqlite" | "prisma" | (string & {});
+
+/**
+ * Runtime storage operation that encountered an operational failure.
+ *
+ * @public
+ */
+export type RuntimeStorageOperation =
+  | "bootstrap"
+  | "create"
+  | "read"
+  | "upsert"
+  | "update"
+  | "delete"
+  | "transaction";
+
+/**
+ * Common metadata carried by RuntimeStorage operational failures.
+ *
+ * @public
+ */
+export interface RuntimeStorageOperationalFields {
+  readonly adapter: RuntimeStorageAdapter;
+  readonly operation: RuntimeStorageOperation;
+  readonly cause?: unknown;
+  readonly detail?: string;
+}
+
+/**
+ * Storage driver connection, file, network, or availability failure.
+ *
+ * @public
+ */
+export class RuntimeStorageConnectionError extends Data.TaggedError(
+  "RuntimeStorageConnectionError",
+)<RuntimeStorageOperationalFields> {}
+
+/**
+ * Missing or incompatible durable storage schema.
+ *
+ * @public
+ */
+export class RuntimeStorageSchemaError extends Data.TaggedError(
+  "RuntimeStorageSchemaError",
+)<RuntimeStorageOperationalFields> {}
+
+/**
+ * Query or mutation failed after the adapter was acquired.
+ *
+ * @public
+ */
+export class RuntimeStorageQueryError extends Data.TaggedError(
+  "RuntimeStorageQueryError",
+)<RuntimeStorageOperationalFields> {}
+
+/**
+ * Transactional write failed.
+ *
+ * @public
+ */
+export class RuntimeStorageTransactionError extends Data.TaggedError(
+  "RuntimeStorageTransactionError",
+)<RuntimeStorageOperationalFields> {}
+
+/**
+ * Adapter is temporarily unavailable.
+ *
+ * @public
+ */
+export class RuntimeStorageUnavailableError extends Data.TaggedError(
+  "RuntimeStorageUnavailableError",
+)<RuntimeStorageOperationalFields> {}
+
+/**
+ * A persisted row could not be decoded as a {@link RuntimeRecord}.
+ *
+ * @public
+ */
+export class RuntimeStorageDecodeError extends Data.TaggedError(
+  "RuntimeStorageDecodeError",
+)<RuntimeStorageOperationalFields & {
+  readonly id?: string;
+  readonly field?: string;
+}> {}
+
+/**
+ * Logical storage contract failures.
+ *
+ * @public
+ */
+export type RuntimeStorageLogicalError =
+  | RuntimeStorageDuplicateRecordError
+  | RuntimeStorageReadonlyRecordError;
+
+/**
+ * Durable adapter operational failures.
+ *
+ * @public
+ */
+export type RuntimeStorageOperationalError =
+  | RuntimeStorageConnectionError
+  | RuntimeStorageSchemaError
+  | RuntimeStorageQueryError
+  | RuntimeStorageDecodeError
+  | RuntimeStorageTransactionError
+  | RuntimeStorageUnavailableError;
+
+/**
  * Closed union of every typed error that {@link RuntimeStorageService}
- * exposes. Adapters must not surface any other failure shape.
+ * exposes. Adapters must not surface adapter-specific driver failures directly.
  *
  * @public
  */
 export type RuntimeStorageError =
-  | RuntimeStorageDuplicateRecordError
-  | RuntimeStorageReadonlyRecordError;
+  | RuntimeStorageLogicalError
+  | RuntimeStorageOperationalError;
 
 /**
  * The contract that every {@link RuntimeStorage} adapter implements.
@@ -152,24 +269,24 @@ export interface RuntimeStorageService {
   /** Insert one row. Fails if `record.id` already exists. */
   readonly create: (
     record: RuntimeRecord,
-  ) => Effect.Effect<void, RuntimeStorageDuplicateRecordError>;
+  ) => Effect.Effect<void, RuntimeStorageDuplicateRecordError | RuntimeStorageOperationalError>;
   /** Read rows matching a query. Defaults to all rows ordered by `occurredAt` desc. */
   readonly read: (
     query?: RuntimeRecordQuery,
-  ) => Effect.Effect<RuntimeRecord[]>;
+  ) => Effect.Effect<RuntimeRecord[], RuntimeStorageOperationalError>;
   /** Insert-or-replace one row. Fails if the existing row is readonly. */
   readonly upsert: (
     record: RuntimeRecord,
-  ) => Effect.Effect<void, RuntimeStorageReadonlyRecordError>;
+  ) => Effect.Effect<void, RuntimeStorageReadonlyRecordError | RuntimeStorageOperationalError>;
   /** Patch matching rows (skipping readonly ones). Returns matched/updated counts. */
   readonly update: (
     query: RuntimeRecordQuery,
     patch: RuntimeRecordPatch,
-  ) => Effect.Effect<UpdateResult>;
+  ) => Effect.Effect<UpdateResult, RuntimeStorageOperationalError>;
   /** Delete matching rows. Readonly rows are skipped unless `readonly: true` is in the predicate. */
   readonly delete: (
     query: RuntimeRecordQuery,
-  ) => Effect.Effect<DeleteResult>;
+  ) => Effect.Effect<DeleteResult, RuntimeStorageOperationalError>;
 }
 
 const fieldValue = (
@@ -253,11 +370,10 @@ const matchesPredicate = (
         compareDate(value, predicate.end) < 0;
     }
     case "And":
-      return predicate.predicates.every((item) => matchesPredicate(record, item));
+      return predicate.predicates.length > 0 &&
+        predicate.predicates.every((item) => matchesPredicate(record, item));
     case "Or":
       return predicate.predicates.some((item) => matchesPredicate(record, item));
-    case "Xor":
-      return predicate.predicates.filter((item) => matchesPredicate(record, item)).length === 1;
   }
 };
 
@@ -272,7 +388,6 @@ const includesReadonlyTrue = (
       return predicate.field === "readonly" && predicate.value === true;
     case "And":
     case "Or":
-    case "Xor":
       return predicate.predicates.some(includesReadonlyTrue);
     default:
       return false;

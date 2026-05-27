@@ -32,9 +32,8 @@
  *
  * Persistence goes through `effect/unstable/sql`’s {@link SqlClient} via
  * `@effect/sql-sqlite-node` (a scoped `SqliteClient` per configuration). Logical
- * storage errors keep their tagged types; other SQL failures are treated as
- * defects on read/update/delete paths (`Effect.orDie`) so the public port stays
- * aligned with the in-memory reference’s `never` error channel on those methods.
+ * storage errors keep their tagged types; driver and decode failures map to
+ * public `RuntimeStorage*Error` operational tags.
  *
  * ## Lifecycle
  *
@@ -61,6 +60,10 @@ import type { ProcessStoreProcessLifecycle } from "../../store/processLifecycle"
 import type { ProcessStoreQueueResource } from "../../store/queueResource";
 import type { ProcessStoreRunResource } from "../../store/runResource";
 import { RuntimeStorage } from "../../RuntimeStorage";
+import {
+  RuntimeStorageConnectionError,
+  RuntimeStorageSchemaError,
+} from "../../RuntimeStorage";
 import type {
   DeleteResult,
   RuntimeRecord,
@@ -75,6 +78,20 @@ export type { SqliteClientConfig } from "@effect/sql-sqlite-node/SqliteClient";
 export type { SQLiteRuntimeStorageConfig } from "./public-types";
 export type { DeleteResult, RuntimeRecord, RuntimeStorageService, UpdateResult };
 
+const sqliteConnectionError = (error: SqlError): RuntimeStorageConnectionError =>
+  new RuntimeStorageConnectionError({
+    adapter: "sqlite",
+    operation: "bootstrap",
+    cause: error,
+  });
+
+const sqliteSchemaError = (error: SqlError): RuntimeStorageSchemaError =>
+  new RuntimeStorageSchemaError({
+    adapter: "sqlite",
+    operation: "bootstrap",
+    cause: error,
+  });
+
 /**
  * Open a database file (or `:memory:`), install the schema, and return the
  * storage port for the lifetime of the outer {@link Scope.Scope}.
@@ -86,12 +103,14 @@ export type { DeleteResult, RuntimeRecord, RuntimeStorageService, UpdateResult }
  */
 export const makeRuntimeStorage = (
   config: SQLiteRuntimeStorageConfig,
-): Effect.Effect<RuntimeStorageService, SqlError, Scope.Scope> =>
+): Effect.Effect<RuntimeStorageService, RuntimeStorageConnectionError | RuntimeStorageSchemaError, Scope.Scope> =>
   Effect.gen(function* () {
     const scope = yield* Scope.Scope;
-    const context = yield* Layer.buildWithScope(SqliteClient.layer(config), scope);
+    const context = yield* Layer.buildWithScope(SqliteClient.layer(config), scope).pipe(
+      Effect.mapError(sqliteConnectionError),
+    );
     const sql = Context.get(context, SqlClient);
-    yield* installRuntimeRecordsSchema(sql);
+    yield* installRuntimeRecordsSchema(sql).pipe(Effect.mapError(sqliteSchemaError));
     return makeSqliteRuntimeStorageService(sql);
   });
 
@@ -101,14 +120,16 @@ export const makeRuntimeStorage = (
  */
 export const layerRuntimeStorage = (
   config: SQLiteRuntimeStorageConfig,
-): Layer.Layer<RuntimeStorage, SqlError, Scope.Scope> =>
+): Layer.Layer<RuntimeStorage, RuntimeStorageConnectionError | RuntimeStorageSchemaError, Scope.Scope> =>
   Layer.effect(
     RuntimeStorage,
     Effect.gen(function* () {
       const scope = yield* Scope.Scope;
-      const context = yield* Layer.buildWithScope(SqliteClient.layer(config), scope);
+      const context = yield* Layer.buildWithScope(SqliteClient.layer(config), scope).pipe(
+        Effect.mapError(sqliteConnectionError),
+      );
       const sql = Context.get(context, SqlClient);
-      yield* installRuntimeRecordsSchema(sql);
+      yield* installRuntimeRecordsSchema(sql).pipe(Effect.mapError(sqliteSchemaError));
       return makeSqliteRuntimeStorageService(sql);
     }),
   );
@@ -119,9 +140,9 @@ export const layerRuntimeStorage = (
  */
 export const fromSqlClient = (
   sql: SqlClient,
-): Effect.Effect<RuntimeStorageService, SqlError> =>
+): Effect.Effect<RuntimeStorageService, RuntimeStorageSchemaError> =>
   Effect.gen(function* () {
-    yield* installRuntimeRecordsSchema(sql);
+    yield* installRuntimeRecordsSchema(sql).pipe(Effect.mapError(sqliteSchemaError));
     return makeSqliteRuntimeStorageService(sql);
   });
 

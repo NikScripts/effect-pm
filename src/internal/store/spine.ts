@@ -22,6 +22,7 @@ import type { ProcessStoreWriteError } from "../../ProcessStoreEvent";
 import type {
   DeleteResult,
   RuntimeRecord,
+  RuntimeStorageOperationalError,
   RuntimeStorageService,
   UpdateResult,
 } from "../../RuntimeStorage";
@@ -53,7 +54,7 @@ export interface ProcessStoreSpine {
   /** Run a `RuntimeRecordQuery`. Facets translate domain queries to predicates. */
   readonly read: (
     query?: RuntimeRecordQuery,
-  ) => Effect.Effect<RuntimeRecord[]>;
+  ) => Effect.Effect<RuntimeRecord[], RuntimeStorageOperationalError>;
   /** Insert-or-replace one record. Storage assigns `runId` + `createdAt`. */
   readonly upsert: (
     record: Omit<RuntimeRecord, "runId" | "createdAt">,
@@ -62,9 +63,9 @@ export interface ProcessStoreSpine {
   readonly update: (
     query: RuntimeRecordQuery,
     patch: RuntimeRecordPatch,
-  ) => Effect.Effect<UpdateResult>;
+  ) => Effect.Effect<UpdateResult, RuntimeStorageOperationalError>;
   /** Delete matching rows (skips readonly rows unless the predicate explicitly opts in). */
-  readonly delete: (query: RuntimeRecordQuery) => Effect.Effect<DeleteResult>;
+  readonly delete: (query: RuntimeRecordQuery) => Effect.Effect<DeleteResult, RuntimeStorageOperationalError>;
 }
 
 /** @internal */

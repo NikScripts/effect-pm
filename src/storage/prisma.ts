@@ -1,28 +1,32 @@
 /**
- * Prisma-backed ProcessStore adapter placeholder.
+ * Prisma-backed RuntimeStorage adapter.
  *
  * @remarks
- * Prefer this package subpath for future storage-specific imports:
+ * Use this storage subpath for Prisma-backed RuntimeStorage:
  *
  * ```ts
- * import { PrismaProcessStore } from "@nikscripts/effect-pm/storage/prisma";
+ * import { PrismaRuntimeStorage } from "@nikscripts/effect-pm/storage/prisma";
  * ```
  *
- * The legacy event-table adapter has been removed. Prisma will return as a
- * {@link RuntimeStorage} adapter over normalized {@link RuntimeRecord} rows.
+ * The adapter stores normalized {@link RuntimeRecord} rows through a structural
+ * Prisma client supplied by the consuming application.
  *
  * @module storage/prisma
  */
 
 export {
-  PrismaProcessStore,
-  PrismaProcessStoreUnavailableError,
+  PrismaRuntimeStorage,
 } from "../prisma";
 
 export type {
-  EffectPmEventCreateInput,
-  EffectPmEventDelegate,
-  EffectPmEventRow,
+  EffectPmRuntimeRecordCreateInput,
+  EffectPmRuntimeRecordDelegate,
+  EffectPmRuntimeRecordFindManyArgs,
+  EffectPmRuntimeRecordOrderByInput,
+  EffectPmRuntimeRecordRow,
+  EffectPmRuntimeRecordUpdateInput,
+  EffectPmRuntimeRecordWhereInput,
+  EffectPmRuntimeRecordWhereUniqueInput,
   JsonValue,
-  PrismaProcessStoreClient,
+  PrismaRuntimeStorageClient,
 } from "../prisma";

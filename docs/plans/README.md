@@ -7,6 +7,13 @@ guidance belong in regular docs outside `docs/plans`. Some long-running plans
 also include status notes for partially landed slices; treat those notes as
 roadmap context, not as the source of truth for shipped APIs.
 
+### Agent kickoff
+
+| Artifact | Purpose |
+| --- | --- |
+| [**HANDOFF-grill-prisma-runtime-storage.md**](./HANDOFF-grill-prisma-runtime-storage.md) | Copy-paste prompt + checklist for grilling the **Prisma `RuntimeStorage` adapter** (`RuntimeRecord`, injected client, SQLite/memory parity). **WOW dashboard / React / tRPC stay out of this prompt** — maintained separately until the adapter lands. |
+| [**HANDOFF-grill-dashboard-wow-integration.md**](./HANDOFF-grill-dashboard-wow-integration.md) | Superseded stub; points to the Prisma handoff. |
+
 ## Current plan set
 
 Plan numbers are stable references, not strict implementation order. For the
