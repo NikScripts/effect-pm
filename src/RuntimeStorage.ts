@@ -150,7 +150,12 @@ export type RuntimeStorageOperation =
   | "delete"
   | "transaction";
 
-interface RuntimeStorageOperationalFields {
+/**
+ * Common metadata carried by RuntimeStorage operational failures.
+ *
+ * @public
+ */
+export interface RuntimeStorageOperationalFields {
   readonly adapter: RuntimeStorageAdapter;
   readonly operation: RuntimeStorageOperation;
   readonly cause?: unknown;
