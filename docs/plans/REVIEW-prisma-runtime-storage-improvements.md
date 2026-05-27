@@ -36,10 +36,8 @@ Current durable adapters keep `RuntimeStorageService` typed failures limited to:
 
 Everything else (driver failures, schema/corrupt-row decode failures, open/init
 failures in some paths) is a defect. That keeps the port compatible with memory
-storage, but it is not the best long-term operational model.
-
-See [`PROPOSAL-runtime-storage-errors.md`](./PROPOSAL-runtime-storage-errors.md)
-for the recommended cross-adapter plan.
+storage, but it is not the best long-term operational model. The next step is a
+human-approved cross-adapter proposal before adding plan/docs files.
 
 ---
 
