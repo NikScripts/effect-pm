@@ -1,0 +1,32 @@
+/**
+ * Node runtime: ControlService on 127.0.0.1:3001 for the dashboard demo UI.
+ *
+ * Run: `pnpm run example:dashboard-demo:pm`
+ */
+
+import { Effect, Layer } from "effect";
+import { ControlService, ProcessGroup, ProcessStorage } from "../../src";
+import { DashboardTick } from "./demo.tags";
+
+const port = 3001;
+
+const envLayer = Layer.mergeAll(
+  DashboardTick.layer,
+  ProcessStorage.layer,
+);
+
+const program = Effect.gen(function* () {
+  const group = yield* ProcessGroup.make("dashboard-demo-group", [DashboardTick] as const);
+
+  yield* ControlService.make({ group, port });
+  yield* Effect.logInfo(`ControlService listening on http://127.0.0.1:${String(port)}`);
+  yield* Effect.logInfo("Start the UI: pnpm run example:dashboard-demo:ui");
+  yield* group.start(DashboardTick);
+  yield* group.awaitShutdown({
+    logMessage: (signal) => `Received ${signal}, shutting down…`,
+  });
+});
+
+void Effect.runPromise(
+  Effect.scoped(program.pipe(Effect.provide(envLayer))),
+);

@@ -4,7 +4,7 @@ This package ships the **`ControlService`** HTTP API and **`ProcessGroup` contra
 
 | Deliverable | Where | Role |
 | --- | --- | --- |
-| **Embeddable React components** | Future **`@nikscripts/effect-pm/react`** subpath *(or sibling package — TBD)* | Drop into **your** Next app, SPA, etc. Components take **service-class tags** and a pluggable **control transport** via **`ControlPlanePort`** ([§ below](#transport-agnostic-widgets--controlplaneport--adapters)) — **`fetch`**, **tRPC-shaped client**, **Effect RPC**, etc. |
+| **Embeddable React components** | **`@nikscripts/effect-pm/react`** (+ **`react/adapters/fetch`**) | Drop into **your** Next app, SPA, etc. Components take a pluggable **control transport** via **`ControlPlanePort`** ([§ below](#transport-agnostic-widgets--controlplaneport--adapters)) — **`fetch`**, **tRPC-shaped client**, **Effect RPC**, etc. |
 | **Demo app** | `examples/` (e.g. Vite + Tailwind) | Not the product — proves wiring, gateway, and a **fetch** (or other) **adapter** without pulling Next into this repo. |
 
 There is **no** requirement to expose **tRPC** or any app-specific RPC **from this repo**. The **authoritative** runtime wire for PM control today is **plain HTTP** on **`ControlService`**. Your gateway may re-expose that as **tRPC**, **Effect RPC**, or keep **REST**; widgets depend only on **`ControlPlanePort`**.

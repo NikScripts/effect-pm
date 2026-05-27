@@ -9,6 +9,8 @@ const shared = {
   external: [
     "@prisma/client",
     "@effect/sql-sqlite-node",
+    "react",
+    "react-dom",
   ],
 };
 
@@ -39,9 +41,14 @@ export default defineConfig([
       "storage/prisma": "src/storage/prisma.ts",
       "prisma/index": "src/prisma/index.ts",
       "bin/effect-pm": "src/bin/effect-pm.ts",
+      "react/index": "src/react/index.ts",
+      "react/adapters/fetch": "src/react/adapters/fetch.ts",
     },
     dts: true,
     clean: true,
+    esbuildOptions(options) {
+      options.jsx = "automatic";
+    },
   },
   {
     ...shared,

@@ -139,6 +139,16 @@
       "import": "./dist/prisma/index.mjs",
       "require": "./dist/prisma/index.js"
     },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.mjs",
+      "require": "./dist/react/index.js"
+    },
+    "./react/adapters/fetch": {
+      "types": "./dist/react/adapters/fetch.d.ts",
+      "import": "./dist/react/adapters/fetch.mjs",
+      "require": "./dist/react/adapters/fetch.js"
+    },
     "./package.json": "./package.json"
   },
   "bin": {
@@ -167,6 +177,9 @@
     "version": "changeset version",
     "release": "npm run build && changeset publish",
     "example": "tsx examples/scenarios/full-process-group-with-queues-and-control-cli.ts",
+    "example:dashboard-demo:pm": "tsx examples/dashboard-demo/demo.runtime.ts",
+    "example:dashboard-demo:ui": "vite --config examples/dashboard-demo/web/vite.config.ts",
+    "example:dashboard-demo:gateway": "tsx examples/dashboard-demo/control-gateway.ts",
     "example:typed-process-group": "tsx examples/forms/process-group/process-group-make-entries.ts && tsx examples/forms/process-group/process-group-service.ts && tsx examples/forms/process-group/process-group-contract-http.ts && tsx examples/forms/process-group/process-manager-connection-registry.ts && tsx examples/forms/process-group/process-manager-endpoint-service.ts && tsx examples/forms/process-group/process-group-remote-layer.ts && tsx examples/forms/process-group/process-group-remote-contract-drift.ts",
     "example:queue-resource": "tsx examples/forms/queue/queue-resource-priority-retry.ts",
     "example:process-patterns": "tsx examples/forms/polling/polling-accelerating.ts && tsx examples/forms/polling/schedule-delayed-start.ts",
@@ -212,10 +225,15 @@
   },
   "peerDependencies": {
     "@prisma/client": ">=5",
-    "effect": "^4.0.0-beta.69"
+    "effect": "^4.0.0-beta.69",
+    "react": ">=18",
+    "react-dom": ">=18"
   },
   "peerDependenciesMeta": {
     "@prisma/client": {
+      "optional": true
+    },
+    "react-dom": {
       "optional": true
     }
   },
@@ -234,6 +252,12 @@
     "tsup": "^8.5.0",
     "tsx": "^4.21.0",
     "typescript": "~5.9.3",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.5.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "vite": "^6.3.5",
     "typescript-eslint": "^8.59.3",
     "vitest": "^4.1.5"
   },

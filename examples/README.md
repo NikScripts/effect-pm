@@ -27,6 +27,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | Track | Read / run in this order |
 |-------|--------------------------|
 | **Start here** | [`scenarios/process-manager-playground/`](./scenarios/process-manager-playground/) (`pnpm run demo:pm`) → [`scenarios/full-process-group-with-queues-and-control-cli.ts`](./scenarios/full-process-group-with-queues-and-control-cli.ts) → [`forms/process-group/`](./forms/process-group/) |
+| **Dashboard / React control** | [`dashboard-demo/`](./dashboard-demo/) — `example:dashboard-demo:pm` + `example:dashboard-demo:ui` |
 | **Queues** | [`forms/queue/queue-resource-priority-retry.ts`](./forms/queue/queue-resource-priority-retry.ts) → main scenario |
 | **Schedule controls** | `pnpm run example:schedule-control-basics` → `example:schedule-control-surfaces` → [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) |
 | **Process runtime** | `pnpm run example:process-supervisor-patterns` → [`scenarios/game-window-polling-with-process-group.ts`](./scenarios/game-window-polling-with-process-group.ts) |
