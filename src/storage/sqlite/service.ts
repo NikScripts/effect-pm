@@ -201,16 +201,6 @@ const predicateSql = (predicate: RuntimeRecordPredicate | undefined): SqlSelecti
       return combineSelections("AND", "1 = 1", predicate.predicates.map(predicateSql).filter((item): item is SqlSelection => item !== undefined));
     case "Or":
       return combineSelections("OR", "1 = 0", predicate.predicates.map(predicateSql).filter((item): item is SqlSelection => item !== undefined));
-    case "Xor": {
-      if (predicate.predicates.length === 0) {
-        return { text: "1 = 0", params: [] };
-      }
-      const parts = predicate.predicates.map(predicateSql).filter((item): item is SqlSelection => item !== undefined);
-      return {
-        text: parts.map((part) => `(CASE WHEN (${part.text}) THEN 1 ELSE 0 END)`).join(" + ") + " = 1",
-        params: parts.flatMap((part) => part.params),
-      };
-    }
   }
 };
 

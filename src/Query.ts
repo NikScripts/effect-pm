@@ -107,10 +107,6 @@ export type RuntimeRecordPredicate =
   | {
       readonly _tag: "Or";
       readonly predicates: ReadonlyArray<RuntimeRecordPredicate>;
-    }
-  | {
-      readonly _tag: "Xor";
-      readonly predicates: ReadonlyArray<RuntimeRecordPredicate>;
     };
 
 /** @public */
@@ -380,11 +376,6 @@ export const And = (
 export const Or = (
   predicates: ReadonlyArray<RuntimeRecordPredicate>,
 ): RuntimeRecordPredicate => ({ _tag: "Or", predicates });
-
-/** @public */
-export const Xor = (
-  predicates: ReadonlyArray<RuntimeRecordPredicate>,
-): RuntimeRecordPredicate => ({ _tag: "Xor", predicates });
 
 /** @public */
 export const Where = (

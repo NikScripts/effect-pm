@@ -173,7 +173,6 @@ export {
   Update,
   Upsert,
   Where,
-  Xor,
 } from "./Query";
 export type {
   RuntimeRecordAssignment,
