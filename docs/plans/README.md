@@ -11,7 +11,8 @@ roadmap context, not as the source of truth for shipped APIs.
 
 | Artifact | Purpose |
 | --- | --- |
-| [**HANDOFF-grill-dashboard-wow-integration.md**](./HANDOFF-grill-dashboard-wow-integration.md) | Copy-paste prompt + checklist for grilling **WOW** (tRPC + Prisma) dashboard integration **before** a cheaper builder agent executes. |
+| [**HANDOFF-grill-prisma-runtime-storage.md**](./HANDOFF-grill-prisma-runtime-storage.md) | Copy-paste prompt + checklist for grilling the **Prisma `RuntimeStorage` adapter** (`RuntimeRecord`, injected client, SQLite/memory parity). **WOW dashboard / React / tRPC stay out of this prompt** — maintained separately until the adapter lands. |
+| [**HANDOFF-grill-dashboard-wow-integration.md**](./HANDOFF-grill-dashboard-wow-integration.md) | Superseded stub; points to the Prisma handoff. |
 
 ## Current plan set
 
