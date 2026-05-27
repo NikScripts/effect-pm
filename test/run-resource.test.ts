@@ -17,9 +17,8 @@ import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
 // ships, in-process observation works by providing a custom service whose
 // shape matches `ProcessStoreRunResource.Type`. Listener failures are
 // ignored so observation cannot change the gated effect's success/error
-// channel — mirroring the contract that the static
-// `ProcessStoreRunResource.record*` emitters guarantee via the built-in
-// `catchCause + logWarning` wrap on the facet class.
+// channel — mirroring RunResource's explicit `ProcessStore.catchErrorAndLog`
+// wrapping around telemetry writes.
 interface RunResourceObservationListener {
   readonly onStateChange?: (
     change: RunResourceStateChange,

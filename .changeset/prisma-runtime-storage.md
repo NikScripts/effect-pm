@@ -9,3 +9,5 @@ The Prisma schema fragment now declares `EffectPmRuntimeRecord` mapped to the `e
 Add `effect-pm prisma init` for interactively adding the schema fragment to an existing Prisma project, and verify the adapter with both structural mocks and a generated Prisma SQLite client.
 
 Add typed `RuntimeStorage` operational errors for durable adapters, mapping Prisma / SQLite driver and decode failures into public storage error tags instead of defects.
+
+**Breaking:** static ProcessStore facet emitters now surface write failures when a storage layer is present. They still no-op when the facet layer is absent. Use the new pipeable `ProcessStore.catchErrorAndLog(...)` helper for writes that should remain best-effort telemetry.

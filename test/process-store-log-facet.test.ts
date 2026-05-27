@@ -9,6 +9,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Exit, Layer, Logger, Option } from "effect";
 import { ProcessManagerLogAnnotationKeys } from "../src/LogContext";
 import type { ProcessManagerLogEntry } from "../src/LogEntry";
+import { ProcessStore } from "../src/ProcessStore";
 import { ProcessManagerLogQueryError } from "../src/internal/manager/logQuery";
 import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
 import { ProcessStoreLog } from "../src/store/log";
@@ -73,7 +74,7 @@ describe("ProcessStoreLog — static optional emitters", () => {
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
-  it.live("isolates write failures behind a warning log", () => {
+  it.live("surfaces write failures unless explicitly caught and logged", () => {
     const captured: string[] = [];
     const captureLogger = Logger.make<unknown, void>(({ message }) => {
       const text =
@@ -99,19 +100,23 @@ describe("ProcessStoreLog — static optional emitters", () => {
         ),
     };
 
-    return ProcessStoreLog.record("workshop-group", "1", entry("blocked")).pipe(
+    const write = ProcessStoreLog.record("workshop-group", "1", entry("blocked"));
+    return Effect.gen(function* () {
+      const error = yield* Effect.flip(write);
+      expect(error).toBeInstanceOf(ProcessStoreReadonlyRecordError);
+      yield* write.pipe(
+        ProcessStore.catchErrorAndLog({
+          message: "test log write failed",
+          annotations: { test: "log-static" },
+        }),
+      );
+      expect(captured.some((m) => m.includes("test log write failed"))).toBe(true);
+    }).pipe(
       Effect.provide(
         Layer.mergeAll(
           Layer.succeed(ProcessStoreLog, failingFacet),
           Logger.layer([captureLogger], { mergeWithExisting: false }),
         ),
-      ),
-      Effect.tap(() =>
-        Effect.sync(() => {
-          expect(
-            captured.some((m) => m.includes("write failed for record")),
-          ).toBe(true);
-        }),
       ),
     );
   });

@@ -12,6 +12,9 @@
  * - {@link ProcessStore.read} — instance read API (yield the facet).
  * - {@link ProcessStore.withIdentifier} — optional identifier-bound
  *   API exposed via `Facet.for(id)` / `Facet.withIdentifier(id)`.
+ * - {@link ProcessStore.catchErrorAndLog} — explicit best-effort boundary
+ *   for telemetry writes that should log storage failures instead of
+ *   failing process / queue work.
  *
  * The builder produces a `Context.Service` class with two layers:
  * `layer` (in-memory storage, dev/tests) and `layerRuntimeStorage`
@@ -37,16 +40,28 @@
  * }
  * ```
  *
+ * @example Best-effort storage emit
+ * ```ts
+ * yield* ProcessStoreThing.recordThing(fact).pipe(
+ *   ProcessStore.catchErrorAndLog({
+ *     message: "Thing storage write failed",
+ *     annotations: { thingId: fact.id },
+ *   }),
+ * );
+ * ```
+ *
  * See `docs/STORAGE.md` for the full authoring guide.
  *
  * @module ProcessStore
  */
 
 import {
+  catchErrorAndLog,
   defineProcessStoreFacet,
   processStoreRead,
   processStoreRecord,
   processStoreWithIdentifier,
+  type ProcessStoreCatchErrorAndLogOptions,
   type ProcessStoreFacetEmitShape,
   type ProcessStoreFacetIdentifierShape,
   type ProcessStoreFacetShape,
@@ -73,6 +88,8 @@ export {
  * - `read((s) => ({ ... }))` — declare read methods.
  * - `withIdentifier((id, s) => ({ ... }))` — declare identifier-bound
  *   methods, surfaced as `Facet.for(id)` / `Facet.withIdentifier(id)`.
+ * - `catchErrorAndLog(options)` — pipeable helper for explicit best-effort
+ *   storage writes.
  *
  * @public
  */
@@ -81,6 +98,7 @@ export const ProcessStore = {
   record: processStoreRecord,
   read: processStoreRead,
   withIdentifier: processStoreWithIdentifier,
+  catchErrorAndLog,
 } as const;
 
 /**
@@ -110,4 +128,5 @@ export declare namespace ProcessStore {
     export type EmitType<T> = ProcessStoreFacetEmitShape<T>;
     export type IdentifierType<T> = ProcessStoreFacetIdentifierShape<T>;
   }
+  export type CatchErrorAndLogOptions = ProcessStoreCatchErrorAndLogOptions;
 }

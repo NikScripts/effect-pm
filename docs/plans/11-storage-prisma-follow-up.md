@@ -19,9 +19,10 @@ Authoritative shipped docs: [STORAGE.md](../STORAGE.md),
    query profiles beyond current indexed columns.
 4. **Decode error context** — richer public `RuntimeStorageDecodeError` fields
    (e.g. column/path) without leaking Prisma types.
-5. **Failure semantics docs** — document read vs write asymmetry in
-   [STORAGE.md](../STORAGE.md): static facet writes log-and-swallow; facet reads
-   and direct `RuntimeStorageService` calls surface operational errors.
+5. **Failure semantics docs** — document read/write symmetry in
+   [STORAGE.md](../STORAGE.md): static facet writes surface storage failures
+   when storage is present; `ProcessStore.catchErrorAndLog(...)` is the explicit
+   best-effort boundary.
 6. **SQLite encode path** — align `storage/sqlite/codec.ts` `orDie` with
    `RuntimeStorageSchemaError` where encoding can fail, or document as
    layer-construction-only invariant.

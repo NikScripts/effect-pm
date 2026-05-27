@@ -6,7 +6,7 @@
 
 - **Stack:** `RuntimeStorage` (rows) + per-domain facets in `src/store/` (`@nikscripts/effect-pm/store/*`). `ProcessStore` = facet builder. `ProcessStorage` = combined built-in facet layers.
 - **One facet per domain.** Each facet owns its concrete fact / change types **and** its row codec — encoders, decoders, predicate builders. No shared envelope. No public `runtime.fact.recorded` wire type.
-- **Optional storage.** Domain code uses **static emitters** on facet classes (`ProcessStoreX.recordY(...)`). No-op without layer; write failures logged, never change caller success/error (`ProcessStore` wraps emits).
+- **Optional storage.** Domain code uses **static emitters** on facet classes (`ProcessStoreX.recordY(...)`). No-op without layer; when storage is present, read and write failures surface typed errors. Use `ProcessStore.catchErrorAndLog(...)` for explicit best-effort telemetry.
 - **Reads:** `Effect.serviceOption(ProcessStoreX)` then `Option.match({ onNone, onSome: (store) => store.read(...) })` — never static read methods on the facet class. No `Effect.serviceOption(ProcessStore)` monolith in domain modules.
 - **No backward compat.** Delete legacy APIs; no `@deprecated` shims.
 - **Logs:** capture/relay → `@nikscripts/effect-pm/Logs`. Durable rows → `ProcessStoreLog` (`log.entry`).
@@ -218,9 +218,20 @@ Prisma null sentinels.
 `RuntimeStorageError` separates logical failures (duplicate id, readonly row)
 from operational failures (connection, schema, query, decode, transaction,
 unavailable). Durable adapters map driver and decode failures into those public
-tags instead of leaking Prisma / SQLite error types. Domain static emitters still
-log-and-swallow write failures; direct storage and facet reads expose the typed
-error channel.
+tags instead of leaking Prisma / SQLite error types.
+
+### Storage failure semantics
+
+| Surface | Storage present + failure | Storage absent |
+|---------|---------------------------|----------------|
+| `RuntimeStorageService` | Fails with `RuntimeStorageError` | Not applicable |
+| Facet instance reads/writes | Fail with typed storage/facet errors | Not applicable |
+| Static facet emitters | Fail with typed storage/facet errors | No-op success |
+| `ProcessStore.catchErrorAndLog(...)` | Logs structured details and succeeds | Succeeds |
+
+Use static emitters directly when storage failure should fail the caller. Pipe
+through `ProcessStore.catchErrorAndLog(...)` when a write is observability-only
+and must not change process / queue success.
 
 ---
 

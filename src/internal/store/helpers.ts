@@ -200,6 +200,75 @@ export const processStoreWriteErrorFromRuntimeStorage = (
   return new ProcessStoreStorageError({ cause: error });
 };
 
+export interface ProcessStoreCatchErrorAndLogOptions {
+  readonly message?: string;
+  readonly level?: "warning" | "error";
+  readonly annotations?: Readonly<Record<string, string>>;
+}
+
+const errorAnnotations = (error: unknown): Readonly<Record<string, string>> => {
+  if (!isRecord(error)) {
+    return { "storage.error": String(error) };
+  }
+
+  const out: Record<string, string> = {};
+  const tag = error["_tag"];
+  if (typeof tag === "string") out["storage.error._tag"] = tag;
+  const adapter = error["adapter"];
+  if (typeof adapter === "string") out["storage.adapter"] = adapter;
+  const operation = error["operation"];
+  if (typeof operation === "string") out["storage.operation"] = operation;
+  const id = error["id"];
+  if (typeof id === "string") out["storage.record.id"] = id;
+  const field = error["field"];
+  if (typeof field === "string") out["storage.field"] = field;
+  const detail = error["detail"];
+  if (typeof detail === "string") out["storage.detail"] = detail;
+  const cause = error["cause"];
+  if (cause !== undefined) out["storage.cause"] = String(cause);
+  return out;
+};
+
+const annotateAll = <A, E, R>(
+  effect: Effect.Effect<A, E, R>,
+  annotations: Readonly<Record<string, string>>,
+): Effect.Effect<A, E, R> =>
+  Object.entries(annotations).reduce(
+    (acc, [key, value]) => acc.pipe(Effect.annotateLogs(key, value)),
+    effect,
+  );
+
+/**
+ * Explicit best-effort boundary for optional storage writes.
+ *
+ * @internal
+ */
+export const catchErrorAndLog =
+  (options: ProcessStoreCatchErrorAndLogOptions = {}) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<void, never, R> => {
+    const message = options.message ?? "ProcessStore effect failed";
+    const level = options.level ?? "error";
+    const log = level === "error" ? Effect.logError : Effect.logWarning;
+    const logError = (error: unknown) =>
+      annotateAll(
+        log(message),
+        {
+          ...errorAnnotations(error),
+          ...(options.annotations ?? {}),
+        },
+      );
+    return effect.pipe(
+      Effect.catch((error: E) => logError(error)),
+      Effect.catchCause((cause) =>
+        annotateAll(log(message), {
+          cause: Cause.pretty(cause),
+          ...(options.annotations ?? {}),
+        })
+      ),
+      Effect.asVoid,
+    );
+  };
+
 /**
  * Combine a list of optional predicates into a single `And`. Undefined
  * entries are skipped. Returns the lone surviving predicate when only one
@@ -279,21 +348,3 @@ export const runtimeRecordQuery = (
   return base;
 };
 
-/**
- * Wrap a write effect with the standard "log warnings, never propagate
- * storage errors into the caller's success/error channel" wrapper used by
- * static facet emitters.
- *
- * @internal
- */
-export const wrapEmitForFacet =
-  (id: string, method: string) =>
-  (effect: Effect.Effect<void, ProcessStoreWriteError>): Effect.Effect<void> =>
-    effect.pipe(
-      Effect.catchCause((cause) =>
-        Effect.logWarning(`${id} write failed for ${method}`).pipe(
-          Effect.annotateLogs("cause", Cause.pretty(cause)),
-        ),
-      ),
-      Effect.asVoid,
-    );

@@ -12,6 +12,7 @@ import {
   type ProcessManagerLogRelayService,
 } from "./logCapture";
 import { ProcessStoreLog } from "../../store/log";
+import { ProcessStore } from "../../ProcessStore";
 
 const storeFlushInterval = Duration.millis(250);
 const storeFlushBatchSize = 64;
@@ -38,7 +39,13 @@ const makePersistingRelay = (
       if (batch.length === 0) {
         return;
       }
-      yield* ProcessStoreLog.recordBatch(groupOption.value.groupId, batch);
+      yield* ProcessStoreLog.recordBatch(groupOption.value.groupId, batch).pipe(
+        ProcessStore.catchErrorAndLog({
+          message: "ProcessStoreLog write failed while relaying logs",
+          level: "warning",
+          annotations: { groupId: groupOption.value.groupId },
+        }),
+      );
     });
 
     yield* Effect.addFinalizer(() => flush);

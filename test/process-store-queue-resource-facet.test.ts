@@ -2,8 +2,8 @@
  * Conformance suite for the {@link ProcessStoreQueueResource} facet.
  *
  * Verifies (a) the no-op vs persist semantics of the static optional
- * emitters built by `ProcessStore.Service`, (b) the built-in
- * failure-isolation `catchCause + logWarning` wrap, (c) entry / lifecycle
+ * emitters built by `ProcessStore.Service`, (b) explicit
+ * failure-isolation through `ProcessStore.catchErrorAndLog`, (c) entry / lifecycle
  * / dedupe-key read projections including pushable predicates
  * (`queueId`, `entryId`, `batchId`, `releaseId`, `key`), and (d) the
  * phantom type accessors `.Type` / `.EmitType`.
@@ -11,6 +11,7 @@
 
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Logger } from "effect";
+import { ProcessStore } from "../src/ProcessStore";
 import { ProcessStorage } from "../src/ProcessStorage";
 import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
 import {
@@ -165,7 +166,7 @@ describe("ProcessStoreQueueResource — static optional emitters", () => {
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
-  it.live("isolates write failures behind a warning log", () => {
+  it.live("surfaces write failures unless explicitly caught and logged", () => {
     const captured: string[] = [];
     const captureLogger = Logger.make<unknown, void>(({ message }) => {
       const text =
@@ -206,21 +207,25 @@ describe("ProcessStoreQueueResource — static optional emitters", () => {
       lifecycle: () => Effect.succeed([]),
       dedupeKeys: () => Effect.succeed([]),
     };
-    return ProcessStoreQueueResource.recordEntry(
+    const write = ProcessStoreQueueResource.recordEntry(
       enqueued("@test/Failing", "@test/Failing/entry/1", 1),
-    ).pipe(
+    );
+    return Effect.gen(function* () {
+      const error = yield* Effect.flip(write);
+      expect(error).toBeInstanceOf(ProcessStoreReadonlyRecordError);
+      yield* write.pipe(
+        ProcessStore.catchErrorAndLog({
+          message: "test queue write failed",
+          annotations: { test: "queue-static" },
+        }),
+      );
+      expect(captured.some((m) => m.includes("test queue write failed"))).toBe(true);
+    }).pipe(
       Effect.provide(
         Layer.mergeAll(
           Layer.succeed(ProcessStoreQueueResource, failingFacet),
           Logger.layer([captureLogger], { mergeWithExisting: false }),
         ),
-      ),
-      Effect.tap(() =>
-        Effect.sync(() => {
-          expect(
-            captured.some((m) => m.includes("write failed for recordEntry")),
-          ).toBe(true);
-        }),
       ),
     );
   });

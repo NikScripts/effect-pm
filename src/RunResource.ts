@@ -54,9 +54,10 @@
  * domain-specific {@link ProcessStoreRunResource} facet's static optional
  * emitters (`recordRunStarted`, `recordRunCompleted`, `recordRunFailed`,
  * `recordStateChange`). When the facet layer is absent each call is a silent
- * no-op; when present the spine persists the event. The builder wraps every
- * static emitter with a built-in `catchCause + logWarning` so storage
- * failures never propagate into the gated effect's success/error channel.
+ * no-op; when present the spine persists the event. RunResource wraps these
+ * telemetry writes with {@link ProcessStore.catchErrorAndLog} so storage
+ * failures are logged without changing the gated effect's success/error
+ * channel.
  *
  * {@link RunResource.makeRunner} does **not** emit observations — use `make`
  * when you need per-run analytics.
@@ -104,6 +105,7 @@ import {
   Semaphore,
 } from "effect";
 import { ProcessStoreRunResource } from "./store/runResource";
+import { ProcessStore } from "./ProcessStore";
 import {
   configureLayer,
   configureWrapEffectField,
@@ -269,7 +271,13 @@ const makeRunGateEffect = <T, A, E>(
       type: "run-resource.run.started",
       occurredAt,
       payload,
-    });
+    }).pipe(
+      ProcessStore.catchErrorAndLog({
+        message: "ProcessStoreRunResource write failed for run start",
+        level: "warning",
+        annotations: { resourceId, runId },
+      }),
+    );
 
   const publishRunCompleted = (
     runId: string,
@@ -283,7 +291,13 @@ const makeRunGateEffect = <T, A, E>(
       type: "run-resource.run.completed",
       occurredAt,
       payload,
-    });
+    }).pipe(
+      ProcessStore.catchErrorAndLog({
+        message: "ProcessStoreRunResource write failed for run completion",
+        level: "warning",
+        annotations: { resourceId, runId },
+      }),
+    );
 
   const publishRunFailed = (
     runId: string,
@@ -297,7 +311,13 @@ const makeRunGateEffect = <T, A, E>(
       type: "run-resource.run.failed",
       occurredAt,
       payload,
-    });
+    }).pipe(
+      ProcessStore.catchErrorAndLog({
+        message: "ProcessStoreRunResource write failed for run failure",
+        level: "warning",
+        annotations: { resourceId, runId },
+      }),
+    );
 
   const makeInitialState = (observedAt: number): RunResourceState => ({
     resourceId,
@@ -338,7 +358,13 @@ const makeRunGateEffect = <T, A, E>(
             current,
           ] as const;
         });
-        yield* ProcessStoreRunResource.recordStateChange(change);
+        yield* ProcessStoreRunResource.recordStateChange(change).pipe(
+          ProcessStore.catchErrorAndLog({
+            message: "ProcessStoreRunResource write failed for state change",
+            level: "warning",
+            annotations: { resourceId, reason },
+          }),
+        );
       });
 
     yield* Effect.logDebug(

@@ -5,6 +5,7 @@ import { ProcessStorage } from "../src/ProcessStorage";
 
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Logger } from "effect";
+import { ProcessStore } from "../src/ProcessStore";
 import { ProcessStoreProcessExecution } from "../src/store/processExecution";
 import type { ProcessExecutionFinishInput } from "../src/store/processExecution";
 import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
@@ -70,7 +71,7 @@ describe("ProcessStoreProcessExecution — static optional emitters", () => {
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
-  it.live("isolates write failures behind a warning log", () => {
+  it.live("surfaces write failures unless explicitly caught and logged", () => {
     const captured: string[] = [];
     const captureLogger = Logger.make<unknown, void>(({ message }) => {
       const text =
@@ -93,23 +94,23 @@ describe("ProcessStoreProcessExecution — static optional emitters", () => {
       executions: () => Effect.succeed([]),
       hasPriorExecutions: () => Effect.succeed(false),
     };
-    return ProcessStoreProcessExecution.recordCompleted(
-      finish("test/failing"),
-    ).pipe(
+    const write = ProcessStoreProcessExecution.recordCompleted(finish("test/failing"));
+    return Effect.gen(function* () {
+      const error = yield* Effect.flip(write);
+      expect(error).toBeInstanceOf(ProcessStoreReadonlyRecordError);
+      yield* write.pipe(
+        ProcessStore.catchErrorAndLog({
+          message: "test process execution write failed",
+          annotations: { test: "process-execution-static" },
+        }),
+      );
+      expect(captured.some((m) => m.includes("test process execution write failed"))).toBe(true);
+    }).pipe(
       Effect.provide(
         Layer.mergeAll(
           Layer.succeed(ProcessStoreProcessExecution, failingFacet),
           Logger.layer([captureLogger], { mergeWithExisting: false }),
         ),
-      ),
-      Effect.tap(() =>
-        Effect.sync(() => {
-          expect(
-            captured.some((m) =>
-              m.includes("write failed for recordCompleted"),
-            ),
-          ).toBe(true);
-        }),
       ),
     );
   });
