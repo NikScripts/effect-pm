@@ -138,8 +138,9 @@ See [`.cursor/rules/public-vs-internal.mdc`](../.cursor/rules/public-vs-internal
 dependencies are missing in a fresh cloud workspace.
 
 **No external services required for the standard checks.** The Vitest suites and
-examples run in-process. Prisma adapter tests use structural mocks rather than a
-real database. SQLite `RuntimeStorage` tests exercise `@effect/sql-sqlite-node`;
+examples run in-process. SQLite `RuntimeStorage` tests exercise
+`@effect/sql-sqlite-node`. Prisma `RuntimeStorage` tests use both structural
+mocks and a generated Prisma SQLite client in a temporary project.
 `package.json` lists `better-sqlite3` under `pnpm.onlyBuiltDependencies` so the
 transitive native dependency can compile when installs run with ignored scripts
 by default.
@@ -160,6 +161,10 @@ by default.
 - `pnpm install` runs the `prepare` hook, which patches TypeScript with
   `@effect/language-service`; seeing `effect-language-service patch` output is
   expected.
+- The generated Prisma integration test invokes the local `prisma` CLI,
+  `prisma db push`, and `prisma generate`; if a restricted environment blocks
+  Prisma engine install scripts, run `pnpm approve-builds` for `prisma` /
+  `@prisma/engines` and reinstall before testing.
 - Examples using `ControlService` bind to localhost ports. If an example fails
   because a port is already in use, rerun with a free port or stop the specific
   process that owns that port.

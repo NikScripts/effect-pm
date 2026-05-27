@@ -493,6 +493,25 @@ Use per-domain facets and their concrete query types instead:
 `ProcessStoreEvent` now only carries shared primitives such as `JsonValue`,
 `QueryOpts`, `AnalyticsEventBase`, and storage write errors.
 
+### Replacing Prisma event-table storage
+
+The Prisma adapter now stores normalized `RuntimeRecord` rows instead of
+append-only event rows. There is no compatibility shim for an existing
+`EffectPmEvent` model.
+
+Checklist for Prisma consumers:
+
+1. Run `effect-pm prisma init` or append `PrismaRuntimeStorage.schema` to your
+   Prisma schema.
+2. Apply the new `EffectPmRuntimeRecord` model with
+   `prisma migrate dev --name add_effect_pm_runtime_records` or `prisma db push`
+   for prototypes.
+3. Run `prisma generate`.
+4. Compose `PrismaRuntimeStorage.layerProcessStore({ client })` from
+   `@nikscripts/effect-pm/storage/prisma`.
+5. Remove old app code that queried event-table rows directly; use the
+   per-domain storage facets listed above.
+
 ### Facet Authoring API
 
 If you authored custom facets, replace `ProcessStoreBuilder` and old
