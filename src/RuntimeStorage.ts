@@ -442,4 +442,24 @@ export namespace RuntimeStorage {
    * @public
    */
   export const layer = Layer.effect(RuntimeStorage, makeInMemoryRuntimeStorage);
+
+  /**
+   * Filter and order in-memory or adapter-backed rows (same as {@link selectRuntimeRecords}).
+   *
+   * @public
+   */
+  export const select = selectRuntimeRecords;
+
+  /**
+   * Apply a patch to a record without mutating readonly rows (same as {@link applyRuntimeRecordPatch}).
+   *
+   * @public
+   */
+  export const applyPatch = applyRuntimeRecordPatch;
+
+  /** @public */
+  export const DuplicateRecordError = RuntimeStorageDuplicateRecordError;
+
+  /** @public */
+  export const ReadonlyRecordError = RuntimeStorageReadonlyRecordError;
 }

@@ -490,6 +490,8 @@ export const makeControlTransportHttpServer = (
 export const ControlTransportHttp = {
   client: makeControlTransportHttpClient,
   server: makeControlTransportHttpServer,
+  makeClient: makeControlTransportHttpClient,
+  makeServer: makeControlTransportHttpServer,
   clientLayer: (
     config: ControlTransportHttpClientConfig,
   ): Layer.Layer<ControlTransportClient, never, HttpClient.HttpClient> =>

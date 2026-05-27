@@ -688,3 +688,34 @@ export namespace ControlRouter {
       }),
     );
 }
+
+/**
+ * Control protocol schemas, transports, and router factory.
+ *
+ * @remarks
+ * Root imports match {@link ControlProtocol} members (for example
+ * {@link ControlRouter} === `ControlProtocol.Router`).
+ *
+ * @public
+ */
+export const ControlProtocol = {
+  Router: ControlRouter,
+  Transport: {
+    Client: ControlTransportClient,
+    Server: ControlTransportServer,
+    Error: ControlTransportError,
+  },
+  Schema: {
+    ControlResponse: ControlResponseSchema,
+    Request: ControlProtocolRequestSchema,
+    Metadata: ControlProtocolMetadataSchema,
+    RequestEnvelope: ControlProtocolRequestEnvelopeSchema,
+    ProtocolResponse: ControlProtocolResponseSchema,
+    ResponseEnvelope: ControlProtocolResponseEnvelopeSchema,
+  },
+  makeRouter: makeControlProtocolRouter,
+  makeRequestEnvelope: makeControlProtocolRequestEnvelope,
+  makeResponseEnvelope: makeControlProtocolResponseEnvelope,
+  errorResponse,
+  controlErrorStatus,
+} as const;

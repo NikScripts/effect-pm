@@ -104,6 +104,7 @@ export {
 export { Resource } from "./Resource";
 export { ProcessStorage } from "./ProcessStorage";
 export { ControlService } from "./ControlService";
+export { ControlProtocol } from "./ControlProtocol";
 export {
   ControlRouter,
   ControlResponseSchema,
@@ -190,6 +191,8 @@ export {
   RuntimeStorage,
   RuntimeStorageDuplicateRecordError,
   RuntimeStorageReadonlyRecordError,
+  selectRuntimeRecords,
+  applyRuntimeRecordPatch,
 } from "./RuntimeStorage";
 export type {
   DeleteResult,
