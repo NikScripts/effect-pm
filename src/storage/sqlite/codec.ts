@@ -168,7 +168,11 @@ export const decodeRuntimeRecordRow = (row: Readonly<Record<string, unknown>>): 
  */
 export const decodeRuntimeRecordRowEffect = (
   row: Readonly<Record<string, unknown>>,
-): Effect.Effect<RuntimeRecord, never, never> => Effect.sync(() => decodeRuntimeRecordRow(row));
+): Effect.Effect<RuntimeRecord, unknown, never> =>
+  Effect.try({
+    try: () => decodeRuntimeRecordRow(row),
+    catch: (cause) => cause,
+  });
 
 const encodeUnknownToJsonStringOrDie = (value: unknown): Effect.Effect<string, never, never> =>
   Schema.encodeUnknownEffect(unknownJsonString)(value).pipe(Effect.orDie);

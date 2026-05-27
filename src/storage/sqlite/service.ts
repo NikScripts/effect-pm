@@ -24,7 +24,9 @@ import type {
   RuntimeRecordQuery,
 } from "../../Query";
 import {
+  RuntimeStorageDecodeError,
   RuntimeStorageDuplicateRecordError,
+  RuntimeStorageQueryError,
   RuntimeStorageReadonlyRecordError,
   applyRuntimeRecordPatch,
   type DeleteResult,
@@ -52,10 +54,32 @@ const rowObjectToRecord = (row: object): Record<string, unknown> => {
   return out;
 };
 
-const rowToRuntimeRecord = (row: unknown): Effect.Effect<RuntimeRecord, never, never> =>
+const rowId = (row: Readonly<Record<string, unknown>>): string | undefined => {
+  const id = row["id"];
+  return typeof id === "string" ? id : undefined;
+};
+
+const rowToRuntimeRecord = (row: unknown): Effect.Effect<RuntimeRecord, RuntimeStorageDecodeError, never> =>
   typeof row === "object" && row !== null
-    ? decodeRuntimeRecordRowEffect(rowObjectToRecord(row))
-    : Effect.die(new Error("SQLiteRuntimeStorage: expected object row from SELECT *"));
+    ? Effect.mapError(
+        decodeRuntimeRecordRowEffect(rowObjectToRecord(row)),
+        (cause) =>
+          new RuntimeStorageDecodeError({
+            adapter: "sqlite",
+            operation: "read",
+            id: rowId(rowObjectToRecord(row)),
+            cause,
+            detail: "Failed to decode runtime_records row",
+          }),
+      )
+    : Effect.fail(
+        new RuntimeStorageDecodeError({
+          adapter: "sqlite",
+          operation: "read",
+          cause: new Error("SQLiteRuntimeStorage: expected object row from SELECT *"),
+          detail: "Expected object row from SELECT *",
+        }),
+      );
 
 interface SqlSelection {
   readonly text: string;
@@ -233,7 +257,7 @@ const querySql = (query: RuntimeRecordQuery | undefined): SqlSelection => {
 const loadRuntimeRecords = (
   sql: SqlClient,
   query?: RuntimeRecordQuery,
-): Effect.Effect<ReadonlyArray<RuntimeRecord>, SqlError> => {
+): Effect.Effect<ReadonlyArray<RuntimeRecord>, SqlError | RuntimeStorageDecodeError> => {
   const selection = querySql(query);
   return Effect.flatMap(
     sql.unsafe(selection.text, selection.params),
@@ -275,7 +299,21 @@ const isDuplicateKeySqlError = (error: SqlError): boolean => {
   return false;
 };
 
-const dieSql = <A, R>(self: Effect.Effect<A, SqlError, R>): Effect.Effect<A, never, R> => Effect.orDie(self);
+const sqliteQueryError = (
+  operation: "create" | "read" | "upsert" | "update" | "delete",
+  error: SqlError,
+): RuntimeStorageQueryError =>
+  new RuntimeStorageQueryError({
+    adapter: "sqlite",
+    operation,
+    cause: error,
+  });
+
+const sqliteLoadError = (
+  operation: "read" | "update" | "delete",
+  error: SqlError | RuntimeStorageDecodeError,
+): RuntimeStorageQueryError | RuntimeStorageDecodeError =>
+  error instanceof RuntimeStorageDecodeError ? error : sqliteQueryError(operation, error);
 
 /**
  * Construct the storage port for an already-provided {@link SqlClient}.
@@ -287,21 +325,27 @@ export const makeSqliteRuntimeStorageService = (sql: SqlClient): RuntimeStorageS
   create: (record) =>
     Effect.flatMap(insertRowEffect(record), (row) =>
       sql`INSERT INTO ${sql(RUNTIME_RECORDS_TABLE)} ${sql.insert(row)}`.pipe(
-        Effect.catchTag("SqlError", (error) =>
+        Effect.mapError((error) =>
           isDuplicateKeySqlError(error)
-            ? Effect.fail(new RuntimeStorageDuplicateRecordError({ id: record.id }))
-            : Effect.die(error),
+            ? new RuntimeStorageDuplicateRecordError({ id: record.id })
+            : sqliteQueryError("create", error)
         ),
+        Effect.asVoid,
       ),
     ),
 
   read: (query) =>
-    Effect.map(loadRuntimeRecords(sql, query).pipe(dieSql), (rows) => [...rows]),
+    Effect.map(
+      loadRuntimeRecords(sql, query).pipe(
+        Effect.mapError((error) => sqliteLoadError("read", error)),
+      ),
+      (rows) => [...rows],
+    ),
 
   upsert: (record) =>
     Effect.gen(function* () {
       const existing = yield* sql`SELECT readonly_int FROM ${sql(RUNTIME_RECORDS_TABLE)} WHERE id = ${record.id}`.pipe(
-        dieSql,
+        Effect.mapError((error) => sqliteQueryError("upsert", error)),
       );
       const firstUnknown = existing[0];
       const readonlyInt =
@@ -311,16 +355,18 @@ export const makeSqliteRuntimeStorageService = (sql: SqlClient): RuntimeStorageS
       if (firstUnknown !== undefined && Number(readonlyInt) === 1) {
         return yield* new RuntimeStorageReadonlyRecordError({ id: record.id });
       }
-      yield* dieSql(
-        Effect.flatMap(insertRowEffect(record), (row) =>
-          sql`INSERT OR REPLACE INTO ${sql(RUNTIME_RECORDS_TABLE)} ${sql.insert(row)}`,
-        ),
+      yield* Effect.flatMap(insertRowEffect(record), (row) =>
+        sql`INSERT OR REPLACE INTO ${sql(RUNTIME_RECORDS_TABLE)} ${sql.insert(row)}`,
+      ).pipe(
+        Effect.mapError((error) => sqliteQueryError("upsert", error)),
       );
     }),
 
   update: (query, patch) =>
     Effect.gen(function* () {
-      const matching = yield* loadRuntimeRecords(sql, query).pipe(dieSql);
+      const matching = yield* loadRuntimeRecords(sql, query).pipe(
+        Effect.mapError((error) => sqliteLoadError("update", error)),
+      );
       let matched = 0;
       let updated = 0;
       for (const row of matching) {
@@ -328,10 +374,10 @@ export const makeSqliteRuntimeStorageService = (sql: SqlClient): RuntimeStorageS
         if (row.readonly === true) {
           continue;
         }
-        yield* dieSql(
-          Effect.flatMap(insertRowEffect(applyRuntimeRecordPatch(row, patch)), (insertRow) =>
-            sql`INSERT OR REPLACE INTO ${sql(RUNTIME_RECORDS_TABLE)} ${sql.insert(insertRow)}`,
-          ),
+        yield* Effect.flatMap(insertRowEffect(applyRuntimeRecordPatch(row, patch)), (insertRow) =>
+          sql`INSERT OR REPLACE INTO ${sql(RUNTIME_RECORDS_TABLE)} ${sql.insert(insertRow)}`,
+        ).pipe(
+          Effect.mapError((error) => sqliteQueryError("update", error)),
         );
         updated++;
       }
@@ -341,13 +387,17 @@ export const makeSqliteRuntimeStorageService = (sql: SqlClient): RuntimeStorageS
   delete: (query) =>
     Effect.gen(function* () {
       const includeReadonly = predicateIncludesReadonlyTrue(query.predicate);
-      const matching = yield* loadRuntimeRecords(sql, query).pipe(dieSql);
+      const matching = yield* loadRuntimeRecords(sql, query).pipe(
+        Effect.mapError((error) => sqliteLoadError("delete", error)),
+      );
       let deleted = 0;
       for (const row of matching) {
         if (row.readonly === true && !includeReadonly) {
           continue;
         }
-        yield* dieSql(sql`DELETE FROM ${sql(RUNTIME_RECORDS_TABLE)} WHERE id = ${row.id}`);
+        yield* sql`DELETE FROM ${sql(RUNTIME_RECORDS_TABLE)} WHERE id = ${row.id}`.pipe(
+          Effect.mapError((error) => sqliteQueryError("delete", error)),
+        );
         deleted++;
       }
       return { deleted } satisfies DeleteResult;
