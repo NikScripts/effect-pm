@@ -4,4 +4,6 @@
 
 Organize public exports into namespace objects while keeping short root import aliases.
 
-Add `Query`, `ResourceConfigure`, `DisarmedIdleSleep`, and `Cli` namespaces (and additional domain namespaces in follow-up commits) so APIs are easier to browse. Root exports such as `And`, `configureLayer`, `createCli`, and `Endpoint` remain available as the same bindings as their namespace members.
+Add namespaces across runtime, storage, control, and process-manager modules (`Query`, `ResourceConfigure`, `DisarmedIdleSleep`, `Cli`, `RuntimeStorage`, `ControlProtocol`, `Process`/`ProcessGroup`/`QueueResource` nested `Errors`/`Schema`, `Logs`, `LogEntry`, `LogContext`, expanded `ProcessManager`). Root exports such as `And`, `configureLayer`, `createCli`, and `Endpoint` remain the same bindings as their namespace members (`Query.And`, `ProcessManager.Endpoint`, etc.).
+
+New subpaths: `@nikscripts/effect-pm/ResourceConfigure` and `@nikscripts/effect-pm/ControlProtocol`.

@@ -94,6 +94,16 @@
       "import": "./dist/Query.mjs",
       "require": "./dist/Query.js"
     },
+    "./ResourceConfigure": {
+      "types": "./dist/ResourceConfigure.d.ts",
+      "import": "./dist/ResourceConfigure.mjs",
+      "require": "./dist/ResourceConfigure.js"
+    },
+    "./ControlProtocol": {
+      "types": "./dist/ControlProtocol.d.ts",
+      "import": "./dist/ControlProtocol.mjs",
+      "require": "./dist/ControlProtocol.js"
+    },
     "./RuntimeStorage": {
       "types": "./dist/RuntimeStorage.d.ts",
       "import": "./dist/RuntimeStorage.mjs",

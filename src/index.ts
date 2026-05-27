@@ -24,8 +24,8 @@
  *   Optional building blocks for **gated** HTTP and reusable resource patterns.
  * - **`ControlService`** + **`ProcessManager`** + **`createCli` / `runCli`** — Local and
  *   remote **control plane** helpers for ops (used by the examples CLI).
- * - **`disarmedIdleSleep` exports** — Compatibility helpers for custom schedule layers and
- *   migration tooling.
+ * - **`DisarmedIdleSleep`** — Policy helpers for custom schedule layers (root aliases:
+ *   `computeDisarmedIdleSleep`, `DEFAULT_SCHEDULE_POLL_WHILE_DISARMED`, …).
  *
  * ## Where to read next
  *
@@ -35,13 +35,19 @@
  * - Architecture contracts: `docs/plans/README.md` (especially plan **09** for process runtime)
  * - Agent-oriented repo map: `docs/AGENTS.md`
  *
+ * ## Import style
+ *
+ * Every public API lives under a **namespace** in its source module (`Query`,
+ * `ProcessManager`, `ResourceConfigure`, …). The root barrel re-exports the same
+ * bindings under **short names** (`And`, `Endpoint`, `createCli`, …) so you can
+ * choose `import { And }` or `import { Query }` with `Query.And` — they are identical.
+ *
  * ## Dedicated subpaths
  *
- * Root imports remain backwards compatible. Dedicated service/resource subpaths
- * are also available: **`@nikscripts/effect-pm/Process`**,
- * **`@nikscripts/effect-pm/QueueResource`**,
- * **`@nikscripts/effect-pm/ProcessGroup`**,
- * **`@nikscripts/effect-pm/ProcessStore`**,
+ * Service/resource subpaths mirror namespaces: **`@nikscripts/effect-pm/Process`**,
+ * **`@nikscripts/effect-pm/QueueResource`**, **`@nikscripts/effect-pm/Query`**,
+ * **`@nikscripts/effect-pm/ResourceConfigure`**, **`@nikscripts/effect-pm/ProcessGroup`**,
+ * **`@nikscripts/effect-pm/ProcessStore`**, **`@nikscripts/effect-pm/RuntimeStorage`**,
  * **`@nikscripts/effect-pm/ProcessManager`**, **`@nikscripts/effect-pm/Logs`**, and
  * **`@nikscripts/effect-pm/ControlService`**.
  *
