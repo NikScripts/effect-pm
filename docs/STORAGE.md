@@ -216,9 +216,10 @@ into `*_json` string columns so the adapter can preserve
 Prisma null sentinels.
 Like SQLite, logical storage errors stay limited to duplicate and readonly
 records. Prisma driver failures and corrupt selected rows are treated as
-defects on the closed `RuntimeStorageService` port; indexed predicates can still
-exclude corrupt rows because decoding happens after Prisma returns the selected
-rows.
+defects on the closed `RuntimeStorageService` port. Selected decode failures are
+wrapped in an internal `PrismaRuntimeStorageDecodeError` before dying so logs
+include the bad row id; indexed predicates can still exclude corrupt rows
+because decoding happens after Prisma returns the selected rows.
 
 ---
 
