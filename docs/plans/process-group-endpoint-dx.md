@@ -2,7 +2,7 @@
 
 **Status:** Approved design — not yet implemented  
 **Date:** 2026-05-22 (updated: pre-1.0 removal policy, alternatives matrix)  
-**Relates to:** [07-process-manager.md](./07-process-manager.md), [process-group.md](../guides/process-group.md), [process-manager.md](../guides/process-manager.md)
+**Relates to:** [README.md](./README.md) (priority 2), [01-remote-cli-transport-wire.md](./01-remote-cli-transport-wire.md), [process-group.md](../guides/process-group.md), [process-manager.md](../guides/process-manager.md)
 
 **Source of truth** for the third-argument endpoint API, `Transport`, consolidated `Endpoint.*` labels, child launcher, and TS2506 rules. Graduate to `docs/guides/process-manager.md` when shipped.
 
@@ -111,7 +111,7 @@ Endpoint.local.default(
 )
 ```
 
-Implement when `Effect` `ChildProcess` command shape is wired (per plan 07). Readiness probe uses `transport`, not ad-hoc HTTP types in launch config.
+Implement when `Effect` `ChildProcess` command shape is wired (see [01-remote-cli-transport-wire.md](./01-remote-cli-transport-wire.md)). Readiness probe uses `transport`, not ad-hoc HTTP types in launch config.
 
 ### `Endpoint.runner` (alternative local — split module only)
 
@@ -210,7 +210,6 @@ Executor: `EFFECT_PM_EXECUTOR` (`tsx` vs `node`) — launch builder encodes comm
 ### Docs
 
 - [ ] Rewrite `docs/guides/process-manager.md` endpoint section.
-- [ ] Update plan 07 historical nested example (pointer to this doc only).
 
 ---
 

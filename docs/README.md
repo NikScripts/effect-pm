@@ -11,7 +11,7 @@ Start here when browsing the repo in GitHub or an editor.
 | [EFFECT-V4-FEATURE-SCOUT.md](./EFFECT-V4-FEATURE-SCOUT.md) | Contributors | Over-complete feature scout: Effect v4 capabilities + codebase use-cases. |
 | [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) | Integrators | Schedule vs **`ProcessGroup.start`**, disarm vs stop, API-driven gates; links to example. |
 | [guides/README.md](./guides/README.md) | Integrators | How-to guides; **[service-tags-and-runtime-split.md](./guides/service-tags-and-runtime-split.md)** (tags vs layers) and **[dashboard-integration.md](./guides/dashboard-integration.md)** (widgets, peers, topology). |
-| [plans/README.md](./plans/README.md) | Contributors | Numbered futures and dependency context (**[CURRENT-ROADMAP](./plans/CURRENT-ROADMAP.md)** for suggested order — not shipped API truth). |
+| [plans/README.md](./plans/README.md) | Contributors | **Future-only** roadmap: priority table + topic files (no shipped API truth here). |
 
 **Examples**: [`../examples/README.md`](../examples/README.md).
 

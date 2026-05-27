@@ -146,4 +146,4 @@ Target resolution helpers (`normalizeProcessManagerTarget`, `resolveProcessManag
 
 ## Related
 
-[process-group.md](./process-group.md) · [control-plane.md](./control-plane.md) · plan [07-process-manager.md](../plans/07-process-manager.md)
+[process-group.md](./process-group.md) · [control-plane.md](./control-plane.md) · backlog [README.md](../plans/README.md) · [01-remote-cli-transport-wire.md](../plans/01-remote-cli-transport-wire.md)
