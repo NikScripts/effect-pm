@@ -20,6 +20,7 @@ import type { JsonValue, QueryOpts } from "../../ProcessStoreEvent";
 import {
   ProcessStoreDuplicateRecordError,
   ProcessStoreReadonlyRecordError,
+  ProcessStoreStorageError,
   type ProcessStoreWriteError,
 } from "../../ProcessStoreEvent";
 import {
@@ -196,7 +197,7 @@ export const processStoreWriteErrorFromRuntimeStorage = (
   if (error instanceof RuntimeStorageReadonlyRecordError) {
     return new ProcessStoreReadonlyRecordError({ id: error.id });
   }
-  return error;
+  return new ProcessStoreStorageError({ cause: error });
 };
 
 /**

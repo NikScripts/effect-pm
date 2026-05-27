@@ -401,7 +401,16 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
         Effect.flatMap(
           Option.match({
             onNone: () => Effect.succeed(false),
-            onSome: (store) => store.hasPriorExecutions(name),
+            onSome: (store) =>
+              store.hasPriorExecutions(name).pipe(
+                Effect.catch((error: unknown) =>
+                  Effect.logWarning("Process storage read failed while checking startup run").pipe(
+                    Effect.annotateLogs("processId", name),
+                    Effect.annotateLogs("error", String(error)),
+                    Effect.as(false),
+                  )
+                ),
+              ),
           }),
         ),
       );

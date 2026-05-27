@@ -79,6 +79,18 @@ export class ProcessStoreReadonlyRecordError extends Data.TaggedError(
 }> {}
 
 /**
+ * Failed facet write because the underlying RuntimeStorage adapter had an
+ * operational failure.
+ *
+ * @public
+ */
+export class ProcessStoreStorageError extends Data.TaggedError(
+  "ProcessStoreStorageError",
+)<{
+  readonly cause: unknown;
+}> {}
+
+/**
  * Closed union of every error a facet write can return. The
  * `ProcessStore.Service` builder wraps every static optional emitter
  * with `catchCause + logWarning`, so observation paths never see this
@@ -89,7 +101,8 @@ export class ProcessStoreReadonlyRecordError extends Data.TaggedError(
  */
 export type ProcessStoreWriteError =
   | ProcessStoreDuplicateRecordError
-  | ProcessStoreReadonlyRecordError;
+  | ProcessStoreReadonlyRecordError
+  | ProcessStoreStorageError;
 
 /**
  * Minimal append-only event shape. Implemented by the small set of

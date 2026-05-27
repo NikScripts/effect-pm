@@ -79,7 +79,7 @@ import {
   Type,
   type RuntimeRecordPredicate,
 } from "../Query";
-import type { RuntimeRecord } from "../RuntimeStorage";
+import type { RuntimeRecord, RuntimeStorageOperationalError } from "../RuntimeStorage";
 
 // ============================================================================
 // Public type-level vocabulary
@@ -1017,7 +1017,7 @@ export class ProcessStoreQueueResource extends ProcessStore.Service<
 const readEntries = (
   s: ProcessStoreSpine,
   query: QueueEntryQuery | undefined,
-): Effect.Effect<QueueEntryFact[]> =>
+): Effect.Effect<QueueEntryFact[], RuntimeStorageOperationalError> =>
   s
     .read(runtimeRecordQuery(entryPredicates(query), query?.opts))
     .pipe(Effect.map((records) => queueEntryFactsFromRecords(records, query)));
@@ -1025,7 +1025,7 @@ const readEntries = (
 const readLifecycle = (
   s: ProcessStoreSpine,
   query: QueueLifecycleQuery | undefined,
-): Effect.Effect<QueueLifecycleChange[]> =>
+): Effect.Effect<QueueLifecycleChange[], RuntimeStorageOperationalError> =>
   s
     .read(runtimeRecordQuery(lifecyclePredicates(query), query?.opts))
     .pipe(
@@ -1037,7 +1037,7 @@ const readLifecycle = (
 const readDedupeKeys = (
   s: ProcessStoreSpine,
   query: QueueDedupeKeyQuery | undefined,
-): Effect.Effect<QueueDedupeKeyChange[]> =>
+): Effect.Effect<QueueDedupeKeyChange[], RuntimeStorageOperationalError> =>
   s
     .read(runtimeRecordQuery(dedupePredicates(query), query?.opts))
     .pipe(

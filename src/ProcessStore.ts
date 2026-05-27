@@ -62,6 +62,7 @@ export type {
 export {
   ProcessStoreDuplicateRecordError,
   ProcessStoreReadonlyRecordError,
+  ProcessStoreStorageError,
 } from "./ProcessStoreEvent";
 
 /**

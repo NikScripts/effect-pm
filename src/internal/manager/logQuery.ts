@@ -4,6 +4,7 @@ import { ProcessStoreLog } from "../../store/log";
 import type { ProcessManagerLogScope } from "./logScope";
 import type { ProcessManagerLogEntry } from "../../LogEntry";
 import { replayLogEntry } from "./logCapture";
+import type { RuntimeStorageOperationalError } from "../../RuntimeStorage";
 
 const defaultLogQueryLimit = 100;
 const maxLogQueryLimit = 10_000;
@@ -49,6 +50,15 @@ export class ProcessManagerLogQueryError extends Data.TaggedError(
 )<{
   readonly reason: string;
 }> {}
+
+const storageLogQueryError = (
+  error: ProcessManagerLogQueryError | RuntimeStorageOperationalError,
+): ProcessManagerLogQueryError =>
+  error instanceof ProcessManagerLogQueryError
+    ? error
+    : new ProcessManagerLogQueryError({
+        reason: `Unable to read log history from storage: ${String(error)}`,
+      });
 
 const parseIsoDate = (
   field: string,
@@ -162,7 +172,7 @@ export const queryGroupLogs = (
                 "ProcessStoreLog layer is not provided; compose ProcessStorage.layer or layerProcessStore(...) before reading log history.",
             }),
           ),
-        onSome: (log) => log.query(query),
+        onSome: (log) => log.query(query).pipe(Effect.mapError(storageLogQueryError)),
       }),
     ),
   );

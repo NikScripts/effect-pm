@@ -182,13 +182,23 @@ export type {
 } from "./Query";
 export {
   RuntimeStorage,
+  RuntimeStorageConnectionError,
+  RuntimeStorageDecodeError,
   RuntimeStorageDuplicateRecordError,
+  RuntimeStorageQueryError,
   RuntimeStorageReadonlyRecordError,
+  RuntimeStorageSchemaError,
+  RuntimeStorageTransactionError,
+  RuntimeStorageUnavailableError,
 } from "./RuntimeStorage";
 export type {
   DeleteResult,
   RuntimeRecord,
+  RuntimeStorageAdapter,
   RuntimeStorageError,
+  RuntimeStorageLogicalError,
+  RuntimeStorageOperation,
+  RuntimeStorageOperationalError,
   RuntimeStorageService,
   UpdateResult,
 } from "./RuntimeStorage";

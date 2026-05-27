@@ -103,7 +103,10 @@ import {
 import { layerProcessGroupLogContext } from "./LogContext";
 import { ProcessStorage } from "./ProcessStorage";
 import { ProcessStoreProcessGroup } from "./store/processGroup";
-import { ProcessStoreProcessExecution } from "./store/processExecution";
+import {
+  ProcessStoreProcessExecution,
+  type ProcessExecutionCompletedEvent,
+} from "./store/processExecution";
 import {
   ProcessStoreProcessLifecycle,
   type ProcessLifecycleTag,
@@ -814,8 +817,17 @@ const buildProcessDetails = (
     const allExecutions = yield* Effect.serviceOption(ProcessStoreProcessExecution).pipe(
       Effect.flatMap(
         Option.match({
-          onNone: () => Effect.succeed([]),
-          onSome: (store) => store.executions({ processId: name }),
+          onNone: () => Effect.succeed<ProcessExecutionCompletedEvent[]>([]),
+          onSome: (store) =>
+            store.executions({ processId: name }).pipe(
+              Effect.catch((error: unknown) =>
+                Effect.logWarning("Process storage read failed while building process details").pipe(
+                  Effect.annotateLogs("processId", name),
+                  Effect.annotateLogs("error", String(error)),
+                  Effect.as<ProcessExecutionCompletedEvent[]>([]),
+                )
+              ),
+            ),
         }),
       ),
     );

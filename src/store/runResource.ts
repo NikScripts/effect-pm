@@ -71,7 +71,7 @@ import type { ProcessStoreSpine } from "../internal/store/spine";
 import { ProcessStore } from "../ProcessStore";
 import type { JsonValue, QueryOpts } from "../ProcessStoreEvent";
 import { ProcessId, Type } from "../Query";
-import type { RuntimeRecord } from "../RuntimeStorage";
+import type { RuntimeRecord, RuntimeStorageOperationalError } from "../RuntimeStorage";
 
 // ============================================================================
 // Public types
@@ -739,7 +739,7 @@ export class ProcessStoreRunResource extends ProcessStore.Service<
 const readFacts = (
   s: ProcessStoreSpine,
   query: RunResourceFactQuery | undefined,
-): Effect.Effect<RunResourceFact[]> =>
+): Effect.Effect<RunResourceFact[], RuntimeStorageOperationalError> =>
   s
     .read(runtimeRecordQuery(factPredicates(query), factWindowOpts(query?.opts)))
     .pipe(Effect.map((records) => factsFromRecords(records, query)));
@@ -747,7 +747,7 @@ const readFacts = (
 const readStateHistory = (
   s: ProcessStoreSpine,
   query: RunResourceStateHistoryQuery | undefined,
-): Effect.Effect<RunResourceStateChange[]> =>
+): Effect.Effect<RunResourceStateChange[], RuntimeStorageOperationalError> =>
   s
     .read(runtimeRecordQuery(stateChangedPredicates(query?.resourceId), undefined))
     .pipe(
@@ -762,7 +762,7 @@ const readStateHistory = (
 const readLatestState = (
   s: ProcessStoreSpine,
   resourceId: string,
-): Effect.Effect<Option.Option<RunResourceState>> =>
+): Effect.Effect<Option.Option<RunResourceState>, RuntimeStorageOperationalError> =>
   s
     .read(runtimeRecordQuery(stateChangedPredicates(resourceId), undefined))
     .pipe(
@@ -780,7 +780,7 @@ const readLatestState = (
 const readRuns = (
   s: ProcessStoreSpine,
   resourceId: string,
-): Effect.Effect<RunResourceRun[]> =>
+): Effect.Effect<RunResourceRun[], RuntimeStorageOperationalError> =>
   s
     .read(runtimeRecordQuery(factPredicates({ resourceId }), undefined))
     .pipe(
@@ -792,7 +792,7 @@ const readRuns = (
 const readByRun = (
   s: ProcessStoreSpine,
   runId: string,
-): Effect.Effect<RunResourceFact[]> =>
+): Effect.Effect<RunResourceFact[], RuntimeStorageOperationalError> =>
   s
     .read(runtimeRecordQuery(factPredicates(undefined), undefined))
     .pipe(Effect.map((records) => factsFromRecords(records, { runId })));
