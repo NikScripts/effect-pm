@@ -15,8 +15,7 @@
  */
 
 import { Layer } from "effect";
-
-export {
+import {
   ProcessManagerLogRelay,
   captureLogger,
   captureLoggerLayer,
@@ -24,10 +23,20 @@ export {
   replayLogEntry,
   type ProcessManagerLogRelayService,
 } from "./internal/manager/logCapture";
-
-export { logsRelayLayer, relayLayer } from "./internal/manager/logPersistRelay";
+import { logsRelayLayer, relayLayer } from "./internal/manager/logPersistRelay";
 import { captureLoggerLayer as captureLoggerLayerImpl } from "./internal/manager/logCapture";
 import { relayLayer as relayLayerImpl } from "./internal/manager/logPersistRelay";
+
+export {
+  ProcessManagerLogRelay,
+  captureLogger,
+  captureLoggerLayer,
+  relayOnlyLayer,
+  replayLogEntry,
+  type ProcessManagerLogRelayService,
+};
+
+export { logsRelayLayer, relayLayer };
 
 /**
  * Composes {@link relayLayer} then {@link captureLoggerLayer} for child runtimes.
@@ -37,3 +46,24 @@ import { relayLayer as relayLayerImpl } from "./internal/manager/logPersistRelay
 export const relayWithCaptureLoggerLayer = relayLayerImpl.pipe(
   Layer.provideMerge(captureLoggerLayerImpl),
 );
+
+/**
+ * Capture and relay layers for process-manager logging.
+ *
+ * @remarks
+ * Root imports match {@link Logs} members. Durable history uses
+ * {@link ProcessStoreLog} with `layerProcessStore`.
+ *
+ * @public
+ */
+export const Logs = {
+  ProcessManagerLogRelay,
+  captureLogger,
+  captureLoggerLayer,
+  relayLayer,
+  logsRelayLayer,
+  replayLogEntry,
+  relayOnlyLayer,
+  relayWithCaptureLoggerLayer,
+  processManagerLogRelayLayer: relayOnlyLayer,
+} as const;

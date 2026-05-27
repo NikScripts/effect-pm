@@ -2483,6 +2483,11 @@ export const ProcessManager = {
   Endpoint,
   Transport,
   groupLocalRuntime,
-};
+  Errors: {
+    ProcessManagerRequestError,
+    ProcessManagerConnectionError,
+    ProcessManagerEndpointConfigError,
+  },
+} as const;
 
 export type { ProcessManagerRunState } from "./internal/manager/runState";

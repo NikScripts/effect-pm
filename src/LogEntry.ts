@@ -111,3 +111,15 @@ export const processManagerLogEntryFromLoggerOptions = (options: {
   ),
   spans: options.spans.map(([label]) => label),
 });
+
+/**
+ * NDJSON log entry wire format for process-manager capture.
+ *
+ * @public
+ */
+export const LogEntry = {
+  Schema: ProcessManagerLogEntrySchema,
+  encode: encodeProcessManagerLogEntryNdjson,
+  decode: decodeProcessManagerLogEntryNdjson,
+  fromLoggerOptions: processManagerLogEntryFromLoggerOptions,
+} as const;

@@ -70,3 +70,16 @@ export const withQueueLogAnnotations = <A, E, R>(
   Effect.annotateLogs(effect, {
     [ProcessManagerLogAnnotationKeys.queueId]: queueId,
   });
+
+/**
+ * Log annotation keys and scoped context for process-manager children.
+ *
+ * @public
+ */
+export const LogContext = {
+  ProcessGroupLogContext,
+  keys: ProcessManagerLogAnnotationKeys,
+  layer: layerProcessGroupLogContext,
+  withProcessLogAnnotations,
+  withQueueLogAnnotations,
+} as const;

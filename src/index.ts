@@ -237,6 +237,7 @@ export {
   decodeProcessManagerLogEntryNdjson,
   processManagerLogEntryFromLoggerOptions,
   ProcessManagerLogEntrySchema,
+  LogEntry,
   type ProcessManagerLogEntry,
 } from "./LogEntry";
 export {
@@ -247,6 +248,8 @@ export {
   logsRelayLayer,
   replayLogEntry,
   relayOnlyLayer as processManagerLogRelayLayer,
+  relayWithCaptureLoggerLayer,
+  Logs,
 } from "./Logs";
 export {
   ProcessGroupLogContext,
@@ -254,6 +257,7 @@ export {
   layerProcessGroupLogContext,
   withProcessLogAnnotations,
   withQueueLogAnnotations,
+  LogContext,
 } from "./LogContext";
 export type { ProcessManagerRunState } from "./ProcessManager";
 export type { LogEntryRecordedEvent } from "./store/log";
