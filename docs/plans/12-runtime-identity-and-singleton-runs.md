@@ -38,7 +38,8 @@ in-process enforcement is separate and also mandatory.
 | **`runId` (spine)** | Minted once per composed facet spine (`makeRunId` at layer build) | Stamped on **every** row from that spine session. **Insufficient** alone for singleton semantics or per-activation correlation. |
 | **`runId` (RunResource payload)** | Per worker invocation in queue/run facts | Domain telemetry; not the spine session id. |
 | **`instanceId` (required, planned)** | **Live activation** of a logical process (or spawn handle) | Must be designed: minting, persistence, indexed columns, lease lifecycle. **Discuss after doc** (§ Deferred). |
-| **Spawn suffix id** | `@repo/.../MyProcess#instanceName` or `#<generated>` | See [09-standalone-spawns.md](./09-standalone-spawns.md). |
+| **Spawn suffix id** | `@repo/.../MyProcess#instanceName` or `#<generated>` | Only when **multiple instances are allowed** (logs, correlation). See plan 09. |
+| **Service / definition id** | `Process.make("@repo/.../MyProcess")`, `QueueResource` tag key, etc. | **Singleton** — do **not** append `#instanceName` on service classes or group entries meant to be one logical resource. |
 
 ---
 
@@ -129,14 +130,18 @@ queue `rateLimit` as the reference implementation.
 
 ---
 
-## Open questions — next slice vs later
+## Owner decisions (recorded)
 
-### Answer now (before lease / spawn code)
+| Question | Decision |
+|----------|----------|
+| **`#instanceName` on ids** | For **multi-instance** spawns only (logs, correlation). **Service classes / singleton resources** use the base id — **no** `#instance` on `Process.Service`, `QueueResource` tags, etc. |
+| **Storage unavailable at start** | **Log error** (exact fail vs continue — refine when lease API is wired). |
+| **Lease key** | **Deferred** with A4–A5 (`instanceId`); likely base `processId` for singletons, suffixed id only when multi-instance is intentional. |
 
-1. **Lease key:** exclusivity on `processId` only, or `processId#instance` (spawn suffix)?
-2. **Storage-down:** fail closed (refuse start) or allow in-process-only with warning?
-3. **Next code slice order:** (a) `ProcessGroup` duplicate definition validation, (b)
-   `RuntimeStorage.transaction`, (c) lease facet — which first?
+### Still open (next slice vs later)
+
+1. **Next code slice order:** (a) `ProcessGroup` duplicate definition validation, (b)
+   `RuntimeStorage.transaction`, (c) lease facet — owner picks order.
 
 ### Deferred — discuss after doc (documented, not blocking plan write)
 

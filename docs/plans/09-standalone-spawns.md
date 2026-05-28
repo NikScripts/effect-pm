@@ -33,11 +33,13 @@ Process.spawn(process);
 - **One live instance per spawn id** in scope (Layer 1); **storage lease** when
   shared storage is configured (Layer 2 — plan 12).
 
-### `Process.make` id
+### `Process.make` id vs spawn suffix
 
-- Definition id remains the path-style string passed to `Process.make`.
-- Spawn suffix (`#instanceName` or `#<generated>`) is the **runtime logical id**
-  for control, registry, and lease keys.
+- **Definition id** — path-style string on `Process.make`; used on **singleton**
+  `Process.Service` / group entries — **no** `#instance` suffix.
+- **`#instanceName` / `#<generated>`** — only when **multiple instances are allowed**
+  (spawn path): logging, correlation, and controls for that instance — not for
+  singleton service class ids.
 
 ---
 

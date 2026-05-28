@@ -16,10 +16,20 @@ Identity (plan 12) and rate limit share `RuntimeStorage.transaction` and adapter
 ## Storage vision — `RuntimeStorage` is all storage
 
 **Rule (owner):** There is **one** storage surface in effect-pm: **`RuntimeStorage`**.
-Apps compose **one** `ProcessStorage.layerRuntimeStorage(…)`. Facets, queues,
-processes, leases, rate limits, and audit rows **all** go through the spine →
-**`RuntimeStorage`**. No parallel persistence stack beside it (no “also wire
-Effect `layerStoreRedis` at the app root” as a second store).
+Every facet read/write goes through the spine → **`RuntimeStorage`**. No parallel
+persistence stack beside it (no “also wire Effect `layerStoreRedis` at the app root”).
+
+**How you compose layers (not “always all facets”):**
+
+1. **Durable backend** — provide exactly one `RuntimeStorage` adapter, e.g.
+   `Layer.provideMerge(ProcessStorage.layerRuntimeStorage, layerProcessStore({…}))`
+   or Prisma equivalent.
+2. **Facets** — either:
+   - **`ProcessStorage.layerRuntimeStorage`** — all built-in facets at once, or
+   - **Individual** `ProcessStoreQueueResource.layerRuntimeStorage` (etc.) merged
+     with only the facets you use — each still requires **`RuntimeStorage`** in context.
+
+`ProcessStorage.layer` = facets + in-memory `RuntimeStorage` (tests/dev only).
 
 | Kind | Examples | Through |
 |------|----------|---------|
@@ -32,15 +42,14 @@ to more than one durable backend — not “SQL for history + a separate Redis
 rate limiter service the app composes on its own.”
 
 ```text
-App
-  └─ ProcessStorage.layerRuntimeStorage( layerX )
+Your program
+  └─ Layer.provideMerge(
+        ProcessStorage.layerRuntimeStorage   // or subset of facet layers
+        layerRuntimeStorageX,                // ONE adapter below
+     )
         └─ RuntimeStorage   ← ONLY storage service
-              └─ adapter (pick one or compose):
-                    · memory
-                    · sqlite
-                    · prisma
-                    · redis   (full row model on Redis)
-                    · hybrid  (e.g. SQL + Redis inside one adapter)
+              └─ adapter implementation:
+                    · memory | sqlite | prisma | redis | hybrid
 ```
 
 **Adapter shapes (all implement `RuntimeStorageService`):**
@@ -53,6 +62,19 @@ App
 
 Effect `effect/persistence/Redis`, `RateLimiter` Lua scripts, etc. are **implementation
 details inside** a `RuntimeStorage` adapter — not a second public compose point.
+
+### Agent recommendation (storage backend)
+
+| Option | Recommend when |
+|--------|----------------|
+| **Hybrid `RuntimeStorage`** (SQL + Redis **inside one adapter**) | **Default for production** once cross-host leases and `rateLimit` ship: SQL/Prisma for facet rows, history, and dashboard-style reads; Redis inside the same adapter for lease + rate-limit hot keys and multi-writer atomicity. |
+| **SQL / Prisma only** | Single-node or dev until hybrid adapter exists; acceptable when all singleton enforcement is in-process only. |
+| **Redis-only `RuntimeStorage`** | You standardize on Redis as the only durable infra and accept modeling/query tradeoffs for full history in Redis — valid, not the default recommendation for this package. |
+
+**Not recommended:** SQL `RuntimeStorage` at the app layer **plus** a separate Effect `RateLimiter.layerStoreRedis` compose — that violates “`RuntimeStorage` is all storage.”
+
+**Summary:** implement **`layerRuntimeStorageHybrid`** as the target production path;
+keep sqlite/prisma as today; add redis-only if you want a single-infra deployment option.
 
 ---
 

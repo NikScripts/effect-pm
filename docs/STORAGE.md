@@ -4,11 +4,13 @@
 
 ## Rules
 
-- **`RuntimeStorage` is all storage** — one compose (`ProcessStorage.layerRuntimeStorage`).
-  Facts, audit, operational state (leases, rate limits), and reads all go through
-  facets → spine → `RuntimeStorage`. **Hybrid** = one `RuntimeStorage` adapter that
-  routes internally (e.g. SQL + Redis), not a second persistence layer beside it.
-  See [plans/13-queue-rate-limit-and-operational-storage.md](./plans/13-queue-rate-limit-and-operational-storage.md).
+- **`RuntimeStorage` is all storage** — one **`RuntimeStorage`** service in context.
+  Provide one durable adapter (`layerProcessStore`, Prisma, redis, or hybrid).
+  Facets: all via `ProcessStorage.layerRuntimeStorage`, or **individual**
+  `ProcessStore*.layerRuntimeStorage` for only what you use — each still uses the
+  same `RuntimeStorage`. **Hybrid** = one adapter routing internally (e.g. SQL +
+  Redis), not a second store beside it. See
+  [plans/13-queue-rate-limit-and-operational-storage.md](./plans/13-queue-rate-limit-and-operational-storage.md).
 - **Stack:** `RuntimeStorage` (rows) + per-domain facets in `src/store/` (`@nikscripts/effect-pm/store/*`). `ProcessStore` = facet builder. `ProcessStorage` = combined built-in facet layers.
 - **One facet per domain.** Each facet owns its concrete fact / change types **and** its row codec — encoders, decoders, predicate builders. No shared envelope. No public `runtime.fact.recorded` wire type.
 - **Optional storage.** Domain code uses **static emitters** on facet classes (`ProcessStoreX.recordY(...)`). No-op without layer; when storage is present, read and write failures surface typed errors. Use `ProcessStore.catchErrorAndLog(...)` for explicit best-effort telemetry.
