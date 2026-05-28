@@ -149,6 +149,11 @@
       "import": "./dist/react/adapters/fetch.mjs",
       "require": "./dist/react/adapters/fetch.js"
     },
+    "./react/adapters/trpc": {
+      "types": "./dist/react/adapters/trpc.d.ts",
+      "import": "./dist/react/adapters/trpc.mjs",
+      "require": "./dist/react/adapters/trpc.js"
+    },
     "./package.json": "./package.json"
   },
   "bin": {
@@ -227,13 +232,25 @@
     "@prisma/client": ">=5",
     "effect": "^4.0.0-beta.69",
     "react": ">=18",
-    "react-dom": ">=18"
+    "react-dom": ">=18",
+    "@tanstack/react-query": ">=5",
+    "@tanstack/react-table": ">=8",
+    "@trpc/client": ">=11"
   },
   "peerDependenciesMeta": {
     "@prisma/client": {
       "optional": true
     },
     "react-dom": {
+      "optional": true
+    },
+    "@tanstack/react-query": {
+      "optional": true
+    },
+    "@tanstack/react-table": {
+      "optional": true
+    },
+    "@trpc/client": {
       "optional": true
     }
   },

@@ -1,6 +1,6 @@
 import {
   ControlPlaneProvider,
-  ProcessGroupControlPanel,
+  OperatorControlPanel,
 } from "../../../src/react";
 import { createFetchControlPlaneAdapter } from "../../../src/react/adapters/fetch";
 
@@ -16,7 +16,7 @@ export const App = () => (
       Browser calls <code>/api/control</code> (Vite proxy → private ControlService).
     </p>
     <ControlPlaneProvider port={port}>
-      <ProcessGroupControlPanel pollIntervalMs={2000} />
+      <OperatorControlPanel pollIntervalMs={2000} />
     </ControlPlaneProvider>
   </main>
 );

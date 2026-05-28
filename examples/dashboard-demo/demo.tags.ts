@@ -8,6 +8,7 @@ import { Duration, Effect } from "effect";
 import {
   Process,
   ProcessGroup,
+  QueueResource,
   Polling,
   ProcessSchedule,
 } from "../../src";
@@ -24,8 +25,17 @@ export class DashboardTick extends Process.Service<DashboardTick>()("dashboard-t
   }),
 }) {}
 
+export class DashboardDemoQueue extends QueueResource.Service<DashboardDemoQueue, string, never>()(
+  "dashboard-demo-queue",
+  {
+    effect: (item: string) => Effect.logInfo(`queue item: ${item}`),
+    concurrency: 1,
+    paused: true,
+  },
+) {}
+
 /** Typed group exposed through ControlService for the Vite operator panel. */
 export class DashboardDemoGroup extends ProcessGroup.Service<DashboardDemoGroup>()(
   "dashboard-demo-group",
-  [DashboardTick] as const,
+  [DashboardTick, DashboardDemoQueue] as const,
 ) {}

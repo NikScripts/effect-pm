@@ -23,7 +23,7 @@ When publishing React primitives:
 
 Using **peers** prevents nested duplicate React and avoids locking one React version inside the PM package.
 
-Optional peers: **`@tanstack/react-query`** — if hooks use RQ internally, declare it **optional** and document vanilla `fetch` examples.
+Optional peers: **`@tanstack/react-query`**, **`@tanstack/react-table`** — app-owned; use headless hooks + shadcn in WOW. See [dashboard-styling.md](./dashboard-styling.md). Widgets do **not** require Tailwind or shadcn.
 
 ---
 

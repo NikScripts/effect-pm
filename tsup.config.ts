@@ -43,6 +43,7 @@ export default defineConfig([
       "bin/effect-pm": "src/bin/effect-pm.ts",
       "react/index": "src/react/index.ts",
       "react/adapters/fetch": "src/react/adapters/fetch.ts",
+      "react/adapters/trpc": "src/react/adapters/trpc.ts",
     },
     dts: true,
     clean: true,
