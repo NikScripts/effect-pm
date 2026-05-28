@@ -15,7 +15,7 @@ plans; this file is the checklist.
 |------|---------------|---------------|
 | A3 | “Do not use storage for duplicate detection” | **Restrictions required.** Same program: orchestration guarantees. **Elsewhere: storage guarantees** no duplicate running. |
 | `runId` alone | Sufficient as “storage session” for all semantics | **`instanceId` required**; `runId` not sufficient |
-| Redis for rate limits | Sounded required in places | **SQLite + Prisma OK for high volume**; Redis optional scale-out |
+| Redis | Agent described “SQL + bolt-on Effect Redis” | **`RuntimeStorage` is all storage**; hybrid = one adapter (SQL, Redis, or both inside) |
 
 ---
 
