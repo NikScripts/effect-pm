@@ -202,10 +202,21 @@ describe("QueueResourceStore — static optional emitters", () => {
             id: "blocked-dedupe-batch",
           }),
         ),
+      recordRateLimitExceeded: () =>
+        Effect.fail(
+          new ProcessStoreReadonlyRecordError({ id: "blocked-ratelimit" }),
+        ),
+      recordRateLimitExceededBatch: () =>
+        Effect.fail(
+          new ProcessStoreReadonlyRecordError({
+            id: "blocked-ratelimit-batch",
+          }),
+        ),
       entries: () => Effect.succeed([]),
       entriesByKey: () => Effect.succeed([]),
       lifecycle: () => Effect.succeed([]),
       dedupeKeys: () => Effect.succeed([]),
+      rateLimits: () => Effect.succeed([]),
     };
     const write = QueueResourceStore.recordEntry(
       enqueued("@test/Failing", "@test/Failing/entry/1", 1),
@@ -527,10 +538,13 @@ describe("QueueResourceStore — phantom type accessors", () => {
         recordLifecycleBatch: () => Effect.void,
         recordDedupeKey: () => Effect.void,
         recordDedupeKeyBatch: () => Effect.void,
+        recordRateLimitExceeded: () => Effect.void,
+        recordRateLimitExceededBatch: () => Effect.void,
         entries: () => Effect.succeed([]),
         entriesByKey: () => Effect.succeed([]),
         lifecycle: () => Effect.succeed([]),
         dedupeKeys: () => Effect.succeed([]),
+        rateLimits: () => Effect.succeed([]),
       };
       const emitShape: QueueResourceStore.EmitType = {
         recordEntry: fullShape.recordEntry,
@@ -539,12 +553,15 @@ describe("QueueResourceStore — phantom type accessors", () => {
         recordLifecycleBatch: fullShape.recordLifecycleBatch,
         recordDedupeKey: fullShape.recordDedupeKey,
         recordDedupeKeyBatch: fullShape.recordDedupeKeyBatch,
+        recordRateLimitExceeded: fullShape.recordRateLimitExceeded,
+        recordRateLimitExceededBatch: fullShape.recordRateLimitExceededBatch,
       };
       const boundShape: QueueResourceStore.IdentifierType = {
         entries: () => Effect.succeed([]),
         entriesByKey: () => Effect.succeed([]),
         lifecycle: () => Effect.succeed([]),
         dedupeKeys: () => Effect.succeed([]),
+        rateLimits: () => Effect.succeed([]),
       };
       expect(typeof fullShape.recordEntry).toBe("function");
       expect(typeof emitShape.recordLifecycle).toBe("function");

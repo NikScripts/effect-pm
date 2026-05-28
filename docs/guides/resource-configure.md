@@ -45,7 +45,7 @@ const effective = foldConfig(
 ## Queue
 
 ```typescript
-import { Effect, Layer } from "effect";
+import { Duration, Effect, Layer } from "effect";
 import { QueueResource } from "@nikscripts/effect-pm";
 
 class EmailQueue extends QueueResource.Service<EmailQueue, Email, SmtpError>()(
@@ -58,6 +58,9 @@ const EmailQueueConfigured = EmailQueue.layer.pipe(
   Layer.provideMerge(
     Layer.mergeAll(
       EmailQueue.configure({ concurrency: 3 }),
+      EmailQueue.configure({
+        rateLimit: { limit: 100, window: Duration.minutes(1) },
+      }),
       EmailQueue.wrapWorker((prev) => (item, ctx) =>
         prev(item, ctx).pipe(Effect.tap(() => audit(item))),
       ),

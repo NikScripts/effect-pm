@@ -2,7 +2,8 @@
  * QueueResource — Effect-idiomatic managed priority queue with workers.
  *
  * Provides a three-level priority queue (high, normal, low) backed by bounded
- * Effect `Queue`s with configurable concurrency, deduplication, retry,
+ * Effect `Queue`s with configurable concurrency, optional start-gap throttling,
+ * deduplication, retry,
  * and lifecycle hooks. Workers are managed fibers tracked by `FiberSet`; pause/resume
  * is implemented via `Latch`; empty-queue blocking uses a `Deferred` wake signal to
  * avoid priority inversion.
@@ -71,12 +72,22 @@ import {
   Semaphore,
   Types,
 } from "effect";
+import {
+  RateLimiter as RateLimiterTag,
+  RateLimiterError,
+  RateLimitExceeded,
+  type ConsumeResult,
+  layer as rateLimiterLayer,
+  layerStoreMemory,
+} from "effect/unstable/persistence/RateLimiter";
+import type { RateLimiter as EffectRateLimiter } from "effect/unstable/persistence/RateLimiter";
 import { withQueueLogAnnotations } from "./LogContext";
 import {
   QueueResourceStore,
   type QueueDedupeKeyChange,
   type QueueEntryFact,
   type QueueLifecycleChange,
+  type QueueRateLimitExceededFact,
 } from "./store/queueResource";
 import { ProcessStore } from "./ProcessStore";
 import { isJsonValue } from "./internal/json";
@@ -472,6 +483,22 @@ export interface QueueFailedEvent<T, E, R = never> {
   readonly retry: Effect.Effect<void, never, R>;
 }
 
+/**
+ * Fired when an item hits the configured {@link QueueResourceRateLimitOptions}
+ * before worker processing starts (quota exceeded).
+ *
+ * @public
+ */
+export interface QueueRateLimitExceededEvent<T> {
+  readonly queueId: string;
+  readonly entry: QueueEntry<T>;
+  readonly limitKey: string;
+  readonly algorithm: "fixed-window" | "token-bucket";
+  readonly outcome: "delayed" | "rejected";
+  readonly consume?: ConsumeResult;
+  readonly error?: RateLimiterError;
+}
+
 /** @public */
 export interface QueueRetryScheduledEvent<T, E = never> {
   readonly entry: QueueEntry<T>;
@@ -596,6 +623,32 @@ export interface EffectContext<T, EEnqueue = never, R = never> {
  * @public
  */
 /**
+ * Effect {@link RateLimiter.consume} options for queue workers, with optional
+ * `key` (defaults to queue name) and ProcessStore telemetry controls.
+ *
+ * @remarks
+ * Field names match `effect/unstable/persistence` `RateLimiter` (`window`, not
+ * `duration`). New upstream consume fields flow through when Effect adds them.
+ *
+ * @public
+ */
+export type QueueResourceRateLimitOptions = Omit<
+  Parameters<EffectRateLimiter["consume"]>[0],
+  "key"
+> & {
+  /** Shared limit bucket (default: queue `name` / service id). */
+  readonly key?: string;
+  /**
+   * When to emit `queue.ratelimit.exceeded` to {@link QueueResourceStore}.
+   * @default `"exceeded"`
+   */
+  readonly record?: "exceeded" | "off";
+};
+
+/** @public Re-export of Effect rate-limiter consume metadata. */
+export type { ConsumeResult } from "effect/unstable/persistence/RateLimiter";
+
+/**
  * Shared queue configuration fields (see {@link QueueResourceConfig}).
  *
  * @public
@@ -615,6 +668,11 @@ export interface QueueResourceConfigBase<T> {
   readonly autoStart?: boolean;
   /** Max items processing concurrently (worker count). @default 5 */
   readonly concurrency?: number;
+  /**
+   * Optional Effect `RateLimiter` on item workers (before concurrency semaphore).
+   * Omitted = no rate limit (only `concurrency`).
+   */
+  readonly rateLimit?: QueueResourceRateLimitOptions;
   /** Max items per priority queue (bounded backpressure). @default 50_000 */
   readonly capacity?: number;
   /**
@@ -700,6 +758,10 @@ export type QueueResourceConfigWithoutItemSchema<T, E, R> = QueueResourceConfigB
     event: QueueDroppedEvent<T>,
     controls: QueueControls<T, E, never, R>,
   ) => Effect.Effect<void, never, R>;
+  readonly onRateLimitExceeded?: (
+    event: QueueRateLimitExceededEvent<T>,
+    controls: QueueControls<T, E, never, R>,
+  ) => Effect.Effect<void, never, R>;
 };
 
 /**
@@ -769,6 +831,10 @@ export type QueueResourceConfigWithItemSchema<T, E, R> = QueueResourceConfigBase
   ) => Effect.Effect<void, never, R>;
   readonly onDropped?: (
     event: QueueDroppedEvent<T>,
+    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
+  ) => Effect.Effect<void, never, R>;
+  readonly onRateLimitExceeded?: (
+    event: QueueRateLimitExceededEvent<T>,
     controls: QueueControls<T, E, QueueEnqueueErrors, R>,
   ) => Effect.Effect<void, never, R>;
 };
@@ -907,6 +973,7 @@ export type InferQueueWorkerRequirements<
     | InferOptionalPropertyRequirements<C, "onReleased">
     | InferOptionalPropertyRequirements<C, "onDeadLettered">
     | InferOptionalPropertyRequirements<C, "onDropped">
+    | InferOptionalPropertyRequirements<C, "onRateLimitExceeded">
   >;
 
 
@@ -984,6 +1051,10 @@ type QueueRuntimeConfig<T, E, EEnqueue, R> = QueueResourceConfigBase<T> & {
     event: QueueDroppedEvent<T>,
     controls: QueueControls<T, E, EEnqueue, R>,
   ) => Effect.Effect<void, never, R>;
+  readonly onRateLimitExceeded?: (
+    event: QueueRateLimitExceededEvent<T>,
+    controls: QueueControls<T, E, EEnqueue, R>,
+  ) => Effect.Effect<void, never, R>;
 };
 
 type ReleaseEntryEncoder<T> = (
@@ -1042,6 +1113,121 @@ const isQueueEntry = <T>(value: QueueEntrySelector<T> | QueueEntry<T>): value is
 // Core Implementation
 // ============================================================================
 
+type RateLimitAwait<T, R> = (
+  internal: InternalItem<T>,
+) => Effect.Effect<void, RateLimiterError, RateLimiterTag | R>;
+
+interface RateLimitExceededEmit<T> {
+  readonly internal: InternalItem<T>;
+  readonly limitKey: string;
+  readonly algorithm: "fixed-window" | "token-bucket";
+  readonly outcome: "delayed" | "rejected";
+  readonly consume?: ConsumeResult;
+  readonly error?: RateLimiterError;
+}
+
+/**
+ * In-memory {@link RateLimiterTag} + store layers for queues with `rateLimit` set.
+ * Merged automatically on {@link QueueResource.Service} `.layer` when `rateLimit` is
+ * present; compose at the app root for Redis via `RateLimiter.layerStoreRedis`.
+ *
+ * @public
+ */
+export const queueRateLimiterLayer = Layer.provide(rateLimiterLayer, layerStoreMemory);
+
+/** @internal */
+const layerWithQueueRateLimiterIfNeeded = <A, E, R>(
+  layer: Layer.Layer<A, E, R>,
+  config: Pick<QueueResourceConfigBase<unknown>, "rateLimit">,
+): Layer.Layer<A, E, R> =>
+  config.rateLimit === undefined
+    ? layer
+    : Layer.provide(layer, queueRateLimiterLayer);
+
+const resolveRateLimitConsumeOptions = (
+  queueName: string,
+  rateLimit: QueueResourceRateLimitOptions,
+): Parameters<EffectRateLimiter["consume"]>[0] => {
+  const { record: _record, key: limitKey, ...rest } = rateLimit;
+  return {
+    ...rest,
+    key: limitKey ?? queueName,
+    algorithm: rateLimit.algorithm ?? "fixed-window",
+    onExceeded: rateLimit.onExceeded ?? "delay",
+    tokens: rateLimit.tokens,
+  };
+};
+
+const assertValidRateLimit = (rateLimit: QueueResourceRateLimitOptions): void => {
+  if (!(rateLimit.limit > 0) || !Number.isFinite(rateLimit.limit)) {
+    throw new Error(
+      `QueueResource rateLimit.limit must be a positive number, got ${String(rateLimit.limit)}`,
+    );
+  }
+  const windowMs = Duration.toMillis(Duration.fromInputUnsafe(rateLimit.window));
+  if (!(windowMs > 0) || !Number.isFinite(windowMs)) {
+    throw new Error(
+      `QueueResource rateLimit.window must be positive, got ${String(rateLimit.window)}`,
+    );
+  }
+  if (rateLimit.tokens !== undefined) {
+    if (!(rateLimit.tokens > 0) || !Number.isFinite(rateLimit.tokens)) {
+      throw new Error(
+        `QueueResource rateLimit.tokens must be a positive number, got ${String(rateLimit.tokens)}`,
+      );
+    }
+  }
+};
+
+const isRateLimitExceededReason = (
+  reason: RateLimiterError["reason"],
+): reason is RateLimitExceeded => reason._tag === "RateLimitExceeded";
+
+const acquireQueueRateLimitAwait = <T, R>(
+  queueName: string,
+  rateLimit: QueueResourceRateLimitOptions,
+  emitExceeded: (payload: RateLimitExceededEmit<T>) => Effect.Effect<void, never, R>,
+): Effect.Effect<RateLimitAwait<T, R>, never, RateLimiterTag> =>
+  Effect.gen(function* () {
+    assertValidRateLimit(rateLimit);
+    const limiter = yield* RateLimiterTag;
+    const consumeOptions = resolveRateLimitConsumeOptions(queueName, rateLimit);
+    const onExceeded = consumeOptions.onExceeded ?? "delay";
+
+    return (internal: InternalItem<T>) =>
+      onExceeded === "fail"
+        ? limiter.consume(consumeOptions).pipe(
+            Effect.flatMap(() => Effect.void),
+            Effect.catchTag("RateLimiterError", (error) =>
+              Effect.gen(function* () {
+                if (isRateLimitExceededReason(error.reason)) {
+                  yield* emitExceeded({
+                    internal,
+                    limitKey: consumeOptions.key,
+                    algorithm: consumeOptions.algorithm ?? "fixed-window",
+                    outcome: "rejected",
+                    error,
+                  });
+                }
+                return yield* error;
+              }),
+            ),
+          )
+        : Effect.gen(function* () {
+            const result = yield* limiter.consume(consumeOptions);
+            if (!Duration.isZero(result.delay)) {
+              yield* emitExceeded({
+                internal,
+                limitKey: consumeOptions.key,
+                algorithm: consumeOptions.algorithm ?? "fixed-window",
+                outcome: "delayed",
+                consume: result,
+              });
+              yield* Effect.sleep(result.delay);
+            }
+          });
+  });
+
 /**
  * Internal factory: creates the scoped Effect that produces a {@link QueueHandle}.
  *
@@ -1055,6 +1241,7 @@ const isQueueEntry = <T>(value: QueueEntrySelector<T> | QueueEntry<T>): value is
  * - Refill wake: drain-to-empty after an item completes (or after {@link QueueHandleApi.clear}) — independent of idle worker waits.
  * - `Latch` gates worker entry (pause/resume)
  * - `Semaphore` for concurrency control within the worker pool
+ * - Optional Effect `RateLimiter` when `rateLimit` is set on config
  * - Handler effects are forked into a separate `FiberSet` (never block workers)
  */
 const validateItemsWithSchema = <T>(
@@ -1172,42 +1359,49 @@ const makeQueueEffectWithSchema = <
   const codecId = `${queueName}/item@v1`;
   const descriptor = makeQueueItemCodecDescriptor(queueName, config.itemSchema);
   const encodeItem = Schema.encodeUnknownExit(config.itemSchema);
+  const encodeForRelease = (
+    internal: InternalItem<InferQueueItem<C>>,
+    releaseId: string,
+    attributes?: Record<string, unknown>,
+  ) => {
+    const encoded = encodeItem(internal.item);
+    return Exit.match(encoded, {
+      onSuccess: (payload) =>
+        isJsonValue(payload)
+          ? Effect.succeed({
+              ...queueEntryFromInternal(internal, undefined, { releaseId, attributes }),
+              payload,
+              item: descriptor,
+            })
+          : Effect.fail(
+              new QueueItemEncodingError({
+                queue: queueName,
+                entryId: internal.entryId,
+                message: "encoded item is not JSON-compatible",
+                codecId,
+              }),
+            ),
+      onFailure: (cause) =>
+        Effect.fail(
+          new QueueItemEncodingError({
+            queue: queueName,
+            entryId: internal.entryId,
+            message: Cause.pretty(cause),
+            codecId,
+          }),
+        ),
+    });
+  };
   return makeQueueRuntime<
     InferQueueItem<C>,
     InferQueueWorkerError<C>,
     QueueEnqueueErrors,
     InferQueueWorkerRequirements<C>
-  >(config, (items, operation) =>
-    validateItemsWithSchema(queueName, config.itemSchema, codecId, items, operation),
-    (internal, releaseId, attributes) => {
-      const encoded = encodeItem(internal.item);
-      return Exit.match(encoded, {
-        onSuccess: (payload) =>
-          isJsonValue(payload)
-            ? Effect.succeed({
-                ...queueEntryFromInternal(internal, undefined, { releaseId, attributes }),
-                payload,
-                item: descriptor,
-              })
-            : Effect.fail(
-                new QueueItemEncodingError({
-                  queue: queueName,
-                  entryId: internal.entryId,
-                  message: "encoded item is not JSON-compatible",
-                  codecId,
-                }),
-              ),
-        onFailure: (cause) =>
-          Effect.fail(
-            new QueueItemEncodingError({
-              queue: queueName,
-              entryId: internal.entryId,
-              message: Cause.pretty(cause),
-              codecId,
-            }),
-          ),
-      });
-    },
+  >(
+    config,
+    (items, operation) =>
+      validateItemsWithSchema(queueName, config.itemSchema, codecId, items, operation),
+    encodeForRelease,
   );
 };
 
@@ -1221,6 +1415,14 @@ const makeQueueEffectFromConfig = (
   hasItemSchema(config)
     ? makeQueueEffectWithSchema(config)
     : makeQueueEffectWithoutSchema(config);
+
+const provideRateLimiterForMake = <A, E, R>(
+  config: Pick<QueueResourceConfigBase<unknown>, "rateLimit">,
+  effect: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R> =>
+  config.rateLimit === undefined
+    ? effect
+    : effect.pipe(Effect.provide(queueRateLimiterLayer));
 
 function makeQueueEffect<
   F extends QueueWorkerEffect<any, any, any, any>,
@@ -1252,9 +1454,10 @@ function makeQueueEffect(
   Scope.Scope | unknown
 > {
   if (typeof effectOrConfig === "function") {
-    return makeQueueEffectFromConfig({ ...(options ?? {}), effect: effectOrConfig });
+    const config = { ...(options ?? {}), effect: effectOrConfig };
+    return provideRateLimiterForMake(config, makeQueueEffectFromConfig(config));
   }
-  return makeQueueEffectFromConfig(effectOrConfig);
+  return provideRateLimiterForMake(effectOrConfig, makeQueueEffectFromConfig(effectOrConfig));
 }
 
 type ValidateForEnqueue<T, EEnqueue> = (
@@ -1301,8 +1504,16 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     // Managed fiber collections. Scope close interrupts all fibers automatically.
     const workerFibers = yield* FiberSet.make<void>();
     const handlerFibers = yield* FiberSet.make<void>();
+    /** Set before workers process items (autoStart or manual `start`). */
+    const queueHandleSlot: { current?: QueueHandle<T, E, EEnqueue, R> } = {};
 
-    yield* Effect.logDebug(`Queue "${queueName}" initializing: concurrency=${String(concurrency)}, capacity=${String(capacity)}`);
+    const rateLimitLog =
+      config.rateLimit === undefined
+        ? "rateLimit=off"
+        : `rateLimit=${String(config.rateLimit.limit)}/${Duration.format(Duration.fromInputUnsafe(config.rateLimit.window))} key=${config.rateLimit.key ?? queueName} algo=${config.rateLimit.algorithm ?? "fixed-window"} onExceeded=${config.rateLimit.onExceeded ?? "delay"}`;
+    yield* Effect.logDebug(
+      `Queue "${queueName}" initializing: concurrency=${String(concurrency)}, capacity=${String(capacity)}, ${rateLimitLog}`,
+    );
 
     // ─── Internal: optional QueueResourceStore analytics ───
     // If QueueResourceStore is available in context, emit events. If not, silent no-op.
@@ -1314,6 +1525,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     let entryFactSeq = 0;
     let lifecycleSeq = 0;
     let dedupeChangeSeq = 0;
+    let rateLimitExceededSeq = 0;
 
     const nextEntryId = (): string => {
       entrySeq++;
@@ -1651,6 +1863,100 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         Effect.asVoid,
       );
 
+    const shouldRecordRateLimitExceeded =
+      config.rateLimit !== undefined && (config.rateLimit.record ?? "exceeded") !== "off";
+
+    const buildRateLimitExceededFact = (
+      payload: RateLimitExceededEmit<T>,
+      occurredAtMs: number,
+    ): QueueRateLimitExceededFact => {
+      rateLimitExceededSeq++;
+      const consumeOpts =
+        config.rateLimit === undefined
+          ? undefined
+          : resolveRateLimitConsumeOptions(queueName, config.rateLimit);
+      const windowMs =
+        consumeOpts !== undefined
+          ? Duration.toMillis(Duration.fromInputUnsafe(consumeOpts.window))
+          : 0;
+      const tokens = consumeOpts?.tokens ?? 1;
+      const retryAfterMs =
+        payload.outcome === "rejected" &&
+        payload.error !== undefined &&
+        isRateLimitExceededReason(payload.error.reason)
+          ? Duration.toMillis(payload.error.reason.retryAfter)
+          : payload.consume !== undefined
+            ? Duration.toMillis(payload.consume.delay)
+            : undefined;
+      return {
+        id: `${queueName}/${payload.internal.entryId}/ratelimit-exceeded/${String(rateLimitExceededSeq)}`,
+        type: "queue.ratelimit.exceeded",
+        queueId: queueName,
+        entryId: payload.internal.entryId,
+        occurredAt: occurredAtMs,
+        limitKey: payload.limitKey,
+        algorithm: payload.algorithm,
+        limit: consumeOpts?.limit ?? 0,
+        tokens,
+        windowMs,
+        outcome: payload.outcome,
+        delayMs:
+          payload.consume !== undefined
+            ? Duration.toMillis(payload.consume.delay)
+            : retryAfterMs ?? 0,
+        remaining:
+          payload.consume !== undefined
+            ? payload.consume.remaining
+            : payload.error !== undefined && isRateLimitExceededReason(payload.error.reason)
+              ? payload.error.reason.remaining
+              : 0,
+        resetAfterMs:
+          payload.consume !== undefined
+            ? Duration.toMillis(payload.consume.resetAfter)
+            : 0,
+        ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+        ...(payload.error !== undefined ? { error: payload.error.message } : {}),
+        ...(payload.internal.key !== undefined ? { key: payload.internal.key } : {}),
+        priority: payload.internal.priority,
+      };
+    };
+
+    const emitRateLimitExceeded = (
+      payload: RateLimitExceededEmit<T>,
+    ): Effect.Effect<void, never, R> =>
+      Effect.gen(function* () {
+        const occurredAtMs = yield* Effect.clockWith((c) => c.currentTimeMillis);
+        const entry = queueEntryFromInternal(payload.internal);
+        const event: QueueRateLimitExceededEvent<T> = {
+          queueId: queueName,
+          entry,
+          limitKey: payload.limitKey,
+          algorithm: payload.algorithm,
+          outcome: payload.outcome,
+          consume: payload.consume,
+          error: payload.error,
+        };
+
+        if (config.onRateLimitExceeded !== undefined) {
+          const handle = queueHandleSlot.current;
+          if (handle !== undefined) {
+            yield* FiberSet.run(handlerFibers)(
+              config.onRateLimitExceeded(event, handle).pipe((effect) =>
+                runQueueHook("onRateLimitExceeded", effect),
+              ),
+            );
+          }
+        }
+
+        if (!shouldRecordRateLimitExceeded || Option.isNone(storeOption)) return;
+        const api = storeOption.value;
+        const fact = buildRateLimitExceededFact(payload, occurredAtMs);
+        yield* recordStoreWrite(
+          "rate-limit exceeded",
+          api.recordRateLimitExceeded(fact),
+        );
+      });
+
     // ─── Internal: wake signals (workers vs drain monitor) ───
 
     /** Complete the current worker wake signal and allocate a fresh one. */
@@ -1899,9 +2205,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
      * 4. Fire exit lifecycle hooks (forked)
      * 5. Log unhandled failure when no exit/failure hook is configured
      */
-    const processItem = (internal: InternalItem<T>): Effect.Effect<void, never, R> =>
-      semaphore.withPermits(1)(
-        Effect.gen(function* () {
+    const processItemBody = (internal: InternalItem<T>): Effect.Effect<void, never, R> =>
+      Effect.gen(function* () {
           const start = yield* Effect.clockWith((c) => c.currentTimeMillis);
           const startedAt = DateTime.makeUnsafe(start);
           yield* recordEntryEvent("started", internal, {
@@ -1985,8 +2290,36 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           }
 
           yield* wakeDrainedIfAllQueuesEmpty;
-        }),
-      );
+      });
+
+    const skipRateLimitedItem = (internal: InternalItem<T>): Effect.Effect<void, never, R> =>
+      Effect.gen(function* () {
+        const occurredAtMs = yield* Effect.clockWith((c) => c.currentTimeMillis);
+        const occurredAt = DateTime.makeUnsafe(occurredAtMs);
+        yield* recordEntryEvent("dropped", internal, {
+          occurredAt,
+          reason: "rate-limit-exceeded",
+        });
+        if (config.key !== undefined && internal.key !== undefined) {
+          yield* Ref.update(activeKeys, HashSet.remove(internal.key));
+          yield* recordDedupeKeyChange("released", internal.key);
+        }
+      });
+
+    const processItem = (internal: InternalItem<T>): Effect.Effect<void, never, R> =>
+      Effect.gen(function* () {
+        if (rateLimitAwait !== undefined) {
+          const proceed = yield* rateLimitAwait(internal).pipe(
+            Effect.provide(queueRateLimiterLayer),
+            Effect.as(true),
+            Effect.catchTag("RateLimiterError", () =>
+              skipRateLimitedItem(internal).pipe(Effect.as(false)),
+            ),
+          );
+          if (!proceed) return;
+        }
+        yield* semaphore.withPermits(1)(processItemBody(internal));
+      });
 
     // ─── Internal: worker loop ───
 
@@ -2022,8 +2355,18 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
     const autoStart = config.autoStart ?? true;
     const workersStartedRef = yield* Ref.make(false);
-    /** Set synchronously before `forkProcessingFibers` first runs (autoStart or manual `start`). */
-    const queueHandleSlot: { current?: QueueHandle<T, E, EEnqueue, R> } = {};
+
+    const rateLimitAwait: RateLimitAwait<T, R> | undefined =
+      config.rateLimit === undefined
+        ? undefined
+        : yield* Effect.provide(
+            acquireQueueRateLimitAwait<T, R>(
+              queueName,
+              config.rateLimit,
+              emitRateLimitExceeded,
+            ),
+            queueRateLimiterLayer,
+          );
 
     const forkProcessingFibers = Effect.gen(function* () {
       if (yield* Ref.get(isShutdownRef)) {
@@ -2401,10 +2744,13 @@ const queueResourceLayerFromConfig = (
 ): Layer.Layer<any, never, any> => {
   const resourceId = config.name ?? "anonymous";
   const defaultSpec = { ...config, name: resourceId };
-  return Layer.effect(tag)(
-    foldConfiguredSpec(resourceId, defaultSpec).pipe(
-      Effect.flatMap(makeQueueEffectFromConfig),
+  return layerWithQueueRateLimiterIfNeeded(
+    Layer.effect(tag)(
+      foldConfiguredSpec(resourceId, defaultSpec).pipe(
+        Effect.flatMap(makeQueueEffectFromConfig),
+      ),
     ),
+    defaultSpec,
   );
 };
 
@@ -2514,11 +2860,14 @@ const queueResourceServiceWithoutSchema = <
     defaultSpec: named,
     configure: (patch: ConfigPatch<Spec>) => queueServiceConfigure(name, patch),
     wrapWorker,
-    layer: queueServiceLayerFromDefaultSpec(
-      base,
-      name,
+    layer: layerWithQueueRateLimiterIfNeeded(
+      queueServiceLayerFromDefaultSpec(
+        base,
+        name,
+        named,
+        makeQueueEffectWithoutSchema,
+      ),
       named,
-      makeQueueEffectWithoutSchema,
     ),
   }) satisfies ServiceDef;
 };
@@ -2570,11 +2919,14 @@ const queueResourceServiceWithSchema = <
     defaultSpec: named,
     configure: (patch: ConfigPatch<Spec>) => queueServiceConfigure(name, patch),
     wrapWorker,
-    layer: queueServiceLayerFromDefaultSpec(
-      base,
-      name,
+    layer: layerWithQueueRateLimiterIfNeeded(
+      queueServiceLayerFromDefaultSpec(
+        base,
+        name,
+        named,
+        makeQueueEffectWithSchema,
+      ),
       named,
-      makeQueueEffectWithSchema,
     ),
     item,
   }) satisfies ServiceDef;
@@ -2586,6 +2938,14 @@ const queueResourceServiceWithSchema = <
  * @public
  */
 export const QueueResource = {
+  /**
+   * Layers for {@link QueueResourceRateLimitOptions} when not using
+   * {@link QueueResource.Service} `.layer` (which merges this automatically when
+   * `rateLimit` is set). For Redis-backed limits, use `RateLimiter.layerStoreRedis`
+   * from `effect/unstable/persistence` at the app root instead.
+   */
+  rateLimiterLayer: queueRateLimiterLayer,
+
   /**
    * Create a scoped Effect that produces a {@link QueueHandle}.
    *

@@ -1,6 +1,6 @@
 import { ProcessStorage } from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest";
-import { Data, Duration, Effect, Exit, Ref, Schema } from "effect";
+import { Clock, Data, Duration, Effect, Exit, Ref, Schema } from "effect";
 import {
   QueueBatchValidationError,
   QueueEntry,
@@ -1360,6 +1360,75 @@ describe("QueueResource.make — itemSchema", () => {
     expect(descriptor.version).toBe("1.0.0");
     expect(descriptor.encoding).toBe("json");
   });
+
+  it.live("rateLimit enforces minimum gap between item effect starts", () =>
+    Effect.gen(function* () {
+      const starts = yield* Ref.make(0);
+      const queue = yield* QueueResource.make({
+        name: "test-rate-limit",
+        concurrency: 1,
+        rateLimit: { limit: 1, window: Duration.millis(80) },
+        effect: () =>
+          Effect.gen(function* () {
+            yield* Ref.update(starts, (n) => n + 1);
+          }),
+      });
+      const t0 = yield* Clock.currentTimeMillis;
+      yield* queue.add([1, 2, 3]);
+      yield* waitUntilCompleted(queue, 3);
+      const elapsed = (yield* Clock.currentTimeMillis) - t0;
+      expect(yield* Ref.get(starts)).toBe(3);
+      expect(elapsed).toBeGreaterThanOrEqual(140);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("rateLimit records exceeded events and fires onRateLimitExceeded", () =>
+    Effect.gen(function* () {
+      const hookHits = yield* Ref.make(0);
+      const queue = yield* QueueResource.make({
+        name: "test-rate-limit-hook",
+        concurrency: 1,
+        rateLimit: { limit: 1, window: Duration.millis(60) },
+        onRateLimitExceeded: () =>
+          Ref.update(hookHits, (n) => n + 1),
+        effect: () => Effect.void,
+      });
+      yield* queue.add([1, 2]);
+      yield* waitUntilCompleted(queue, 2);
+      yield* Effect.sleep(Duration.millis(20));
+
+      const store = yield* QueueResourceStore;
+      const exceeded = yield* store.rateLimits({
+        queueId: "test-rate-limit-hook",
+      });
+      expect(yield* Ref.get(hookHits)).toBe(1);
+      expect(exceeded).toHaveLength(1);
+      expect(exceeded[0]?.type).toBe("queue.ratelimit.exceeded");
+      expect(exceeded[0]?.outcome).toBe("delayed");
+      expect(exceeded[0]?.limit).toBe(1);
+      expect(exceeded[0]?.delayMs).toBeGreaterThan(0);
+    }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
+  );
+
+  it.live("rateLimit record off skips ProcessStore exceeded rows", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-rate-limit-record-off",
+        concurrency: 1,
+        rateLimit: { limit: 1, window: Duration.millis(40), record: "off" },
+        effect: () => Effect.void,
+      });
+      yield* queue.add([1, 2]);
+      yield* waitUntilCompleted(queue, 2);
+      yield* Effect.sleep(Duration.millis(15));
+
+      const store = yield* QueueResourceStore;
+      const exceeded = yield* store.rateLimits({
+        queueId: "test-rate-limit-record-off",
+      });
+      expect(exceeded).toHaveLength(0);
+    }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
+  );
 
   it.live("releaseEncoded exports JSON payloads for schema-backed queues", () =>
     Effect.gen(function* () {

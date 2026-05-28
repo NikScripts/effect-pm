@@ -8,7 +8,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ## Cross-cutting (how pieces combine)
 
-- **Effect `Layer`** — polling, schedule, queues, storage facets (`RunResourceStore`, `LogStore`, `QueueResourceStore`, `ProcessLifecycleStore`, `ProcessGroupStore`, `ProcessExecutionStore`), platform (`FileSystem`/`Path`, `HttpClient`) merged at app root; `Process.make` can inline polling/schedule into `process.effect` so fork-time `R` excludes those tags when merged.
+- **Effect `Layer`** — polling, schedule, queues, storage facets (`ProcessStoreRunResource`, `ProcessStoreLog`, `ProcessStoreQueueResource`, `ProcessStoreProcessLifecycle`, `ProcessStoreProcessGroup`, `ProcessStoreProcessExecution`), platform (`FileSystem`/`Path`, `HttpClient`) merged at app root; `Process.make` can inline polling/schedule into `process.effect` so fork-time `R` excludes those tags when merged.
 - **`Effect.scoped`** — `QueueResource.make`, `ControlService.make`, remote layers acquire/release with scope.
 - **Storage optional** — when relevant facets are present in env, processes/queues/resources append analytics; when absent, behavior continues without failing.
 - **Canonical ids** — slash-separated strings (`@scope/Segment/ServiceName`); CLI/remote accept normalized kebab suffix aliases; ambiguous suffixes error with candidate list.
@@ -498,9 +498,9 @@ and removes stale run state when the process no longer exists.
 
 - **ProcessManager / remoteLayer** — no remote enqueue; local **TypedQueueControls** and **ControlService** local routes support **start**/pause/resume/clear/status; enqueue available **in-process** on typed/local handle only.
 
-### Package marketing note
+### Queue rate limit
 
-- README/index mention **throttle** alongside concurrency; **implemented gating** for HTTP is via **`RunResource`** / **`HttpApiResource.concurrency`**, not a separate queue throttle field in `QueueResourceConfig`.
+- **`rateLimit?: QueueResourceRateLimitOptions`** on **`QueueResourceConfig`** — Effect **`RateLimiter`** (`effect/unstable/persistence`): linked `consume` shape (`limit`, `window`, `algorithm`, `key`, `onExceeded`, `tokens`, `record`). Runs before semaphore; auto `queue.ratelimit.exceeded` storage when `record` is `"exceeded"` (default). Hook **`onRateLimitExceeded`**. In-memory store auto-composed; app can supply Redis for cross-process limits.
 
 ---
 
@@ -530,7 +530,7 @@ and removes stale run state when the process no longer exists.
 
 - **`ref`**, **`observedAt`**, **`configVersion`**, **`concurrency`**, **`waiting`**, **`inFlight`**, **`completed`**, **`failed`**, **`interrupted`**, **`totalDurationMs`**.
 
-### `RunResourceStore` facts (when facet layer composed)
+### `ProcessStoreRunResource` facts (when facet layer composed)
 
 **Fact types:** `run-resource.run.started`, `run-resource.run.completed`, `run-resource.run.failed`.
 
@@ -598,12 +598,12 @@ the built-in facets over `RuntimeStorage`.
 ### Facet write/read
 
 **Write:** domain code calls static emitters such as
-`ProcessExecutionStore.recordCompleted(...)` or
-`RunResourceStore.recordRunStarted(...)`. Static emitters no-op when the
+`ProcessStoreProcessExecution.recordCompleted(...)` or
+`ProcessStoreRunResource.recordRunStarted(...)`. Static emitters no-op when the
 facet is absent and log write failures instead of changing caller behavior.
 
-**Read:** acquire the owning facet (`yield* LogStore`,
-`yield* ProcessExecutionStore`, `yield* RunResourceStore`, etc.)
+**Read:** acquire the owning facet (`yield* ProcessStoreLog`,
+`yield* ProcessStoreProcessExecution`, `yield* ProcessStoreRunResource`, etc.)
 and call its domain read methods.
 
 ### Query types
@@ -626,7 +626,7 @@ and call its domain read methods.
 | **`queue.lifecycle.<tag>`** × 6 | `store/queueResource` | Started, Paused, Resumed, Shutdown, Cleared, Drained |
 | **`queue.dedupe-key.<status>`** × 3 | `store/queueResource` | added, released, hydrated |
 
-### Per-domain projections (on the `RunResourceStore` facet)
+### Per-domain projections (on the `ProcessStoreRunResource` facet)
 
 - **`facts({ resourceId, runId?, types? })`** — from `run-resource.fact.recorded` events.
 - **`stateHistory({ resourceId })`** — `run-resource.state.changed` transitions.
@@ -648,7 +648,7 @@ and call its domain read methods.
 
 - **Process** supervisor — executions + lifecycle when relevant facets are present.
 - **QueueResource** — item + lifecycle events when relevant facets are present.
-- **`RunResourceStore` facet** — RunResource facts/state persisted as analytics events through the per-type static optional emitters on the tag.
+- **`ProcessStoreRunResource` facet** — RunResource facts/state persisted as analytics events through the per-type static optional emitters on the tag.
 
 ### Remote
 
@@ -656,28 +656,28 @@ and call its domain read methods.
 
 ---
 
-## RunResourceStore facet (`@nikscripts/effect-pm/store/RunResource`)
+## ProcessStoreRunResource facet (`@nikscripts/effect-pm/store/RunResource`)
 
 **What it is:** Per-domain storage facet for `RunResource` facts and state changes. Replaces the removed generic `ProcessStoreRuntime` facet and `RuntimeObserver`. The legacy `FactEnvelope` plumbing module has been deleted; every facet now owns its concrete `RuntimeRecord` codec inline.
 
 ### Static optional emitters (on the tag)
 
-- **`RunResourceStore.recordRunStarted(fact)`**, **`.recordRunCompleted(fact)`**, **`.recordRunFailed(fact)`**, **`.recordStateChange(change)`**, plus **`recordFactBatch(facts)` / `recordStateChangeBatch(changes)`** — silent no-op when the facet layer is absent; persistent write when present. Storage failures surface unless the caller explicitly pipes through `ProcessStore.catchErrorAndLog(...)`.
+- **`ProcessStoreRunResource.recordRunStarted(fact)`**, **`.recordRunCompleted(fact)`**, **`.recordRunFailed(fact)`**, **`.recordStateChange(change)`**, plus **`recordFactBatch(facts)` / `recordStateChangeBatch(changes)`** — silent no-op when the facet layer is absent; persistent write when present. Storage failures surface unless the caller explicitly pipes through `ProcessStore.catchErrorAndLog(...)`.
 
-### Service methods (`yield* RunResourceStore`)
+### Service methods (`yield* ProcessStoreRunResource`)
 
 - **Writes** (raw): `recordRunStarted`, `recordRunCompleted`, `recordRunFailed`, `recordStateChange`, `recordFactBatch`, `recordStateChangeBatch` — return `Effect<void, ProcessStoreWriteError>`.
 - **Reads:** `facts({ resourceId, runId?, types? })`, `stateHistory({ resourceId })`, `latestState(resourceId)`, `runs(resourceId)` (paired started + ended history), `byRun(runId)` (facts for one run).
 
 ### Layers
 
-- **`RunResourceStore.layerRuntimeStorage`** — facet on top of injected `RuntimeStorage`.
-- **`RunResourceStore.layer`** — facet + in-memory `RuntimeStorage` (dev/test).
+- **`ProcessStoreRunResource.layerRuntimeStorage`** — facet on top of injected `RuntimeStorage`.
+- **`ProcessStoreRunResource.layer`** — facet + in-memory `RuntimeStorage` (dev/test).
 - Composed by `ProcessStorage.layerRuntimeStorage` and `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite`.
 
 ### In-process listeners (no durability)
 
-Provide a custom service whose shape matches **`RunResourceStore.Type`** via `Effect.provideService` / `Layer.succeed` that fans out to scoped callbacks. Type your callback bag with a local interface inside the consumer (the package no longer ships a generic `RuntimeObservationListener`). There is no package-level `layerListeners` helper.
+Provide a custom service whose shape matches **`ProcessStoreRunResource.Type`** via `Effect.provideService` / `Layer.succeed` that fans out to scoped callbacks. Type your callback bag with a local interface inside the consumer (the package no longer ships a generic `RuntimeObservationListener`). There is no package-level `layerListeners` helper.
 
 ### Core types
 
@@ -689,7 +689,7 @@ Provide a custom service whose shape matches **`RunResourceStore.Type`** via `Ef
 
 ### Planned (docs only)
 
-- `RunResourceStore.live(resourceId): Stream<...>` — per-resource subscription stream that will replace the custom-service in-process listener pattern.
+- `ProcessStoreRunResource.live(resourceId): Stream<...>` — per-resource subscription stream that will replace the custom-service in-process listener pattern.
 
 ---
 

@@ -147,11 +147,30 @@ Remote **`ProcessManager`** exposes queue **lifecycle** controls (`start`, `paus
 | `name` | `"anonymous"` | Logs and error messages (overridden by service id when using **`Service`**). |
 | `effect` | — | **Required.** `(item, ctx) => Effect<void, E, R>` — processes one item. |
 | `concurrency` | `5` | Worker count. |
+| `rateLimit` | — | Optional {@link QueueResourceRateLimitOptions} — Effect `RateLimiter` (`limit`, `window`, optional `algorithm`, `key`, …). |
 | `capacity` | `50_000` | Max pending items **per priority** level. |
 | `paused` | `false` | Start with workers blocked until **`resume`**. |
 | `autoStart` | `true` | When `false`, call **`queue.start`** (or group start) to fork workers. |
 | `key` | — | Dedup key; drops items already in-flight with the same key. |
 | `retries` | `Infinity` | Cap on hook-driven **`event.retry`** re-enqueues. |
+
+**`rateLimit`** runs Effect **`RateLimiter`** (`effect/unstable/persistence`) **before** the concurrency semaphore (after dequeue). Example: `{ limit: 10, window: Duration.minutes(1) }` allows about ten runs per minute for the limit `key` (default: queue name), **shared across all workers** on that key.
+
+| `rateLimit` field | Default | Role |
+| --- | --- | --- |
+| `limit` | — | Max tokens per window |
+| `window` | — | Window length (`Duration.Input`, same as Effect) |
+| `algorithm` | `"fixed-window"` | `"fixed-window"` or `"token-bucket"` (burst-friendly) |
+| `key` | queue `name` | Shared limit bucket; use for per-tenant / per-API quotas |
+| `onExceeded` | `"delay"` | `"delay"` waits then runs; `"fail"` drops the item (see below) |
+| `tokens` | `1` | Cost per item (e.g. `5` for heavy jobs) |
+| `record` | `"exceeded"` | ProcessStore: `"exceeded"` emits `queue.ratelimit.exceeded`; `"off"` disables |
+
+**`onExceeded`:** `"delay"` (default) sleeps for the returned delay, then processes the item. `"fail"` does **not** wait — the item is dropped (`queue.entry.dropped`, reason `rate-limit-exceeded`) after optional **`onRateLimitExceeded`** and storage.
+
+**`onRateLimitExceeded` hook** — optional; receives full {@link QueueRateLimitExceededEvent} (`ConsumeResult` metadata when delayed).
+
+**`QueueResource.Service` `.layer`** merges `QueueResource.rateLimiterLayer` automatically when `rateLimit` is set. For **Redis-backed limits across processes**, compose `RateLimiter.layerStoreRedis` + `RateLimiter.layer` at the app root instead of `queueRateLimiterLayer`. Patch via **`.configure({ rateLimit: … })`** — [resource-configure.md](./resource-configure.md).
 
 ### Optional `itemSchema`
 
@@ -165,6 +184,7 @@ Fire-and-forget; receive **`QueueControls`** (same surface as **`QueueHandle`** 
 | --- | --- |
 | `onEnqueued` | After a batch is accepted |
 | `onStart` | Worker pool starts |
+| `onRateLimitExceeded` | Quota exceeded before processing (delay or fail path) |
 | `onStarted` | Item begins processing |
 | `onExit` | Item worker finished ( **`retry`** available ) |
 | `onCompleted` | Success path |
@@ -242,7 +262,7 @@ Provide worker **`R`** (SMTP client, DB, etc.) in the layer environment merged a
 | **`ProcessStore`** | Item completed + lifecycle events. |
 | **`ProcessManager`** | Remote lifecycle/status (not remote enqueue). |
 | **`ControlService`** | Local HTTP routes for group controls. |
-| **`RunResource`** / **`HttpApiResource`** | Concurrency gates for HTTP (not queue throttle). |
+| **`RunResource`** / **`HttpApiResource`** | Parallel in-flight caps (`concurrency`); not queue `rateLimit`. |
 
 ---
 

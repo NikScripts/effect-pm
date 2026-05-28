@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Duration, Effect, Layer, Ref } from "effect";
+import { Clock, Duration, Effect, Layer, Ref } from "effect";
 import { Process } from "../src/Process";
 import { foldConfig } from "../src/ResourceConfigure";
 import { type EffectContext, QueueResource } from "../src/QueueResource";
@@ -60,6 +60,48 @@ describe("ResourceConfigure", () => {
         Effect.provide(TestQueue.layer.pipe(Layer.provideMerge(configureLayers))),
         Effect.scoped,
       );
+    }),
+  );
+
+  it.live("QueueResource.Service configure can patch rateLimit", () =>
+    Effect.gen(function* () {
+      const starts = yield* Ref.make(0);
+
+      class RateLimitedQueue extends QueueResource.Service<RateLimitedQueue, number, never>()(
+        "@test/ConfigureRateLimitQueue",
+        {
+          effect: () => Ref.update(starts, (n) => n + 1),
+          concurrency: 1,
+          rateLimit: { limit: 1, window: Duration.seconds(1) },
+        },
+      ) {}
+
+      const t0 = yield* Clock.currentTimeMillis;
+
+      yield* Effect.gen(function* () {
+        const queue = yield* RateLimitedQueue;
+        yield* queue.start;
+        yield* queue.add([1, 2]);
+        while ((yield* queue.completed) < 2) {
+          yield* Effect.sleep(Duration.millis(5));
+        }
+      }).pipe(
+        Effect.provide(
+          RateLimitedQueue.layer.pipe(
+            Layer.provideMerge(
+              RateLimitedQueue.configure({
+                rateLimit: { limit: 1, window: Duration.millis(60) },
+              }),
+            ),
+          ),
+        ),
+        Effect.scoped,
+      );
+
+      const elapsed = (yield* Clock.currentTimeMillis) - t0;
+      expect(yield* Ref.get(starts)).toBe(2);
+      expect(elapsed).toBeGreaterThanOrEqual(50);
+      expect(elapsed).toBeLessThan(800);
     }),
   );
 

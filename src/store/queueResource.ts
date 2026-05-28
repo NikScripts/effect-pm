@@ -3,7 +3,7 @@
  * priority-aware {@link QueueResource} worker.
  *
  * @remarks
- * Per-domain facet for {@link QueueResource}. Owns 18 concrete
+ * Per-domain facet for {@link QueueResource}. Owns 19 concrete
  * wire-event types and their `Queue*Fact` / `Queue*Change` value
  * shapes; reads return typed unions, not generic envelopes.
  *
@@ -14,6 +14,7 @@
  * | `queue-entry` (× 9) | `queue.entry.enqueued`, `.started`, `.completed`, `.failed`, `.retried`, `.exhausted`, `.released`, `.dead-lettered`, `.dropped` | `subjectId = entryId`, `key = fact.key`, `indexA = batchId`, `indexB = releaseId` (released only) |
  * | `queue-lifecycle` (× 6) | `queue.lifecycle.started`, `.paused`, `.resumed`, `.shutdown`, `.cleared`, `.drained` | `subjectId = queueId` |
  * | `queue-dedupe-key` (× 3) | `queue.dedupe-key.added`, `.released`, `.hydrated` | `subjectId = key`, `key = key` |
+ * | `queue-ratelimit` (× 1) | `queue.ratelimit.exceeded` | `subjectId = entryId`, `key = limitKey` |
  *
  * Every record carries `processType: "queue-resource"` and
  * `processId: <queueId>`. Indexed columns let per-key, per-batch, and
@@ -333,6 +334,33 @@ export type QueueDedupeKeyChange =
   | QueueDedupeKeyReleasedChange
   | QueueDedupeKeyHydratedChange;
 
+/** @public */
+export type QueueRateLimitExceededFactType = "queue.ratelimit.exceeded";
+
+/** @public */
+export interface QueueRateLimitExceededFact {
+  readonly type: QueueRateLimitExceededFactType;
+  readonly id: string;
+  readonly queueId: string;
+  readonly entryId: string;
+  /** Epoch milliseconds. */
+  readonly occurredAt: number;
+  readonly limitKey: string;
+  readonly algorithm: "fixed-window" | "token-bucket";
+  readonly limit: number;
+  readonly tokens: number;
+  readonly windowMs: number;
+  readonly outcome: "delayed" | "rejected";
+  readonly delayMs: number;
+  readonly remaining: number;
+  readonly resetAfterMs: number;
+  readonly retryAfterMs?: number;
+  readonly error?: string;
+  readonly key?: string;
+  readonly priority?: QueueResourceStorePriority;
+  readonly attributes?: Record<string, unknown>;
+}
+
 // ============================================================================
 // Query types
 // ============================================================================
@@ -363,6 +391,14 @@ export interface QueueDedupeKeyQuery {
   readonly opts?: QueryOpts;
 }
 
+/** @public */
+export interface QueueRateLimitQuery {
+  readonly queueId?: string;
+  readonly entryId?: string;
+  readonly limitKey?: string;
+  readonly opts?: QueryOpts;
+}
+
 // ============================================================================
 // Constants and type guards
 // ============================================================================
@@ -371,6 +407,7 @@ const QUEUE_RESOURCE_PROCESS_TYPE = "queue-resource";
 const QUEUE_ENTRY_SUBJECT_TYPE = "queue-entry";
 const QUEUE_LIFECYCLE_SUBJECT_TYPE = "queue-lifecycle";
 const QUEUE_DEDUPE_KEY_SUBJECT_TYPE = "queue-dedupe-key";
+const QUEUE_RATELIMIT_SUBJECT_TYPE = "queue-ratelimit";
 const QUEUE_RESOURCE_INDEX_NAMES = [
   "batchId",
   "releaseId",
@@ -407,6 +444,16 @@ export const queueDedupeKeyChangeTypes: ReadonlyArray<QueueDedupeKeyChangeType> 
     "queue.dedupe-key.released",
     "queue.dedupe-key.hydrated",
   ];
+
+/** @internal */
+export const queueRateLimitExceededFactTypes: ReadonlyArray<QueueRateLimitExceededFactType> =
+  ["queue.ratelimit.exceeded"];
+
+const isQueueRateLimitExceededFactType = (
+  value: unknown,
+): value is QueueRateLimitExceededFactType =>
+  isString(value) &&
+  queueRateLimitExceededFactTypes.some((type) => type === value);
 
 const isQueueEntryFactType = (value: unknown): value is QueueEntryFactType =>
   isString(value) && queueEntryFactTypes.some((type) => type === value);
@@ -518,6 +565,33 @@ const dedupeChangeAsJson = (change: QueueDedupeKeyChange): JsonValue => ({
     : {}),
 });
 
+const rateLimitExceededFactAsJson = (fact: QueueRateLimitExceededFact): JsonValue => {
+  const out: { [key: string]: JsonValue } = {
+    id: fact.id,
+    queueId: fact.queueId,
+    entryId: fact.entryId,
+    type: fact.type,
+    occurredAt: fact.occurredAt,
+    limitKey: fact.limitKey,
+    algorithm: fact.algorithm,
+    limit: fact.limit,
+    tokens: fact.tokens,
+    windowMs: fact.windowMs,
+    outcome: fact.outcome,
+    delayMs: fact.delayMs,
+    remaining: fact.remaining,
+    resetAfterMs: fact.resetAfterMs,
+  };
+  if (fact.retryAfterMs !== undefined) out["retryAfterMs"] = fact.retryAfterMs;
+  if (fact.error !== undefined) out["error"] = fact.error;
+  if (fact.key !== undefined) out["key"] = fact.key;
+  if (fact.priority !== undefined) out["priority"] = fact.priority;
+  if (fact.attributes !== undefined) {
+    out["attributes"] = toJsonValue(fact.attributes);
+  }
+  return out;
+};
+
 /**
  * Build a runtime record from a queue entry fact.
  *
@@ -573,6 +647,28 @@ export const makeQueueLifecycleRecord = (
   };
   return out;
 };
+
+/**
+ * Build a runtime record from a queue rate-limit exceeded fact.
+ *
+ * @internal
+ */
+export const makeQueueRateLimitExceededRecord = (
+  fact: QueueRateLimitExceededFact,
+): Omit<RuntimeRecord, "runId" | "createdAt"> => ({
+  id: `queue.ratelimit/${fact.id}`,
+  type: fact.type,
+  occurredAt: DateTime.makeUnsafe(fact.occurredAt),
+  processType: QUEUE_RESOURCE_PROCESS_TYPE,
+  processId: fact.queueId,
+  subjectType: QUEUE_RATELIMIT_SUBJECT_TYPE,
+  subjectId: fact.entryId,
+  key: fact.limitKey,
+  payload: { fact: rateLimitExceededFactAsJson(fact) },
+  ...(fact.attributes !== undefined
+    ? { attributes: toJsonValue(fact.attributes) }
+    : {}),
+});
 
 /**
  * Build a runtime record from a queue dedupe-key change.
@@ -846,6 +942,83 @@ const recordToQueueDedupeKeyChange = (
   return decodeQueueDedupeKeyChangeValue(record.type, payload["change"]);
 };
 
+const decodeQueueRateLimitExceededFactValue = (
+  value: unknown,
+): QueueRateLimitExceededFact | null => {
+  if (!isRecord(value)) return null;
+  if (value["type"] !== "queue.ratelimit.exceeded") return null;
+  const id = value["id"];
+  const queueId = value["queueId"];
+  const entryId = value["entryId"];
+  const occurredAt = value["occurredAt"];
+  const limitKey = value["limitKey"];
+  const algorithm = value["algorithm"];
+  const limit = value["limit"];
+  const tokens = value["tokens"];
+  const windowMs = value["windowMs"];
+  const outcome = value["outcome"];
+  const delayMs = value["delayMs"];
+  const remaining = value["remaining"];
+  const resetAfterMs = value["resetAfterMs"];
+  if (
+    !isString(id) ||
+    !isString(queueId) ||
+    !isString(entryId) ||
+    !isFiniteNumber(occurredAt) ||
+    !isString(limitKey) ||
+    (algorithm !== "fixed-window" && algorithm !== "token-bucket") ||
+    !isFiniteNumber(limit) ||
+    !isFiniteNumber(tokens) ||
+    !isFiniteNumber(windowMs) ||
+    (outcome !== "delayed" && outcome !== "rejected") ||
+    !isFiniteNumber(delayMs) ||
+    !isFiniteNumber(remaining) ||
+    !isFiniteNumber(resetAfterMs)
+  ) {
+    return null;
+  }
+  const retryAfterMs = value["retryAfterMs"];
+  if (retryAfterMs !== undefined && !isFiniteNumber(retryAfterMs)) return null;
+  const error = value["error"];
+  if (error !== undefined && !isString(error)) return null;
+  const key = value["key"];
+  if (key !== undefined && !isString(key)) return null;
+  const priority = value["priority"];
+  if (priority !== undefined && !isQueuePriority(priority)) return null;
+  const attributes = recordAttributesObject(value["attributes"]);
+  return {
+    id,
+    queueId,
+    entryId,
+    type: "queue.ratelimit.exceeded",
+    occurredAt,
+    limitKey,
+    algorithm,
+    limit,
+    tokens,
+    windowMs,
+    outcome,
+    delayMs,
+    remaining,
+    resetAfterMs,
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+    ...(error === undefined ? {} : { error }),
+    ...(key === undefined ? {} : { key }),
+    ...(priority === undefined ? {} : { priority }),
+    ...(attributes === undefined ? {} : { attributes }),
+  };
+};
+
+const recordToQueueRateLimitExceededFact = (
+  record: RuntimeRecord,
+): QueueRateLimitExceededFact | null => {
+  if (!isQueueRateLimitExceededFactType(record.type)) return null;
+  if (record.processType !== QUEUE_RESOURCE_PROCESS_TYPE) return null;
+  const payload = record.payload;
+  if (!isRecord(payload)) return null;
+  return decodeQueueRateLimitExceededFactValue(payload["fact"]);
+};
+
 // ============================================================================
 // Read-side query builders
 // ============================================================================
@@ -901,6 +1074,22 @@ const dedupePredicates = (
   return preds;
 };
 
+const rateLimitPredicates = (
+  query: QueueRateLimitQuery | undefined,
+): RuntimeRecordPredicate[] => {
+  const preds: RuntimeRecordPredicate[] = [
+    ProcessType.equals(QUEUE_RESOURCE_PROCESS_TYPE),
+    SubjectType.equals(QUEUE_RATELIMIT_SUBJECT_TYPE),
+    Type.in(queueRateLimitExceededFactTypes),
+  ];
+  if (query?.queueId !== undefined) preds.push(ProcessId.equals(query.queueId));
+  if (query?.entryId !== undefined) {
+    preds.push(SubjectId.equals(query.entryId));
+  }
+  if (query?.limitKey !== undefined) preds.push(Key.equals(query.limitKey));
+  return preds;
+};
+
 // ============================================================================
 // Read projections
 // ============================================================================
@@ -944,6 +1133,19 @@ const queueDedupeKeyChangesFromRecords = (
   return applyQueryOpts(out, query?.opts, (change) => change.changedAt);
 };
 
+const queueRateLimitExceededFactsFromRecords = (
+  records: ReadonlyArray<RuntimeRecord>,
+  query: QueueRateLimitQuery | undefined,
+): QueueRateLimitExceededFact[] => {
+  const out: QueueRateLimitExceededFact[] = [];
+  for (const record of records) {
+    const fact = recordToQueueRateLimitExceededFact(record);
+    if (fact === null) continue;
+    out.push(fact);
+  }
+  return applyQueryOpts(out, query?.opts, (fact) => fact.occurredAt);
+};
+
 // ============================================================================
 // Facet
 // ============================================================================
@@ -952,12 +1154,12 @@ const queueDedupeKeyChangesFromRecords = (
  * Queue resource storage facet (see module doc).
  *
  * Static record helpers (`recordEntry`, `recordLifecycle`,
- * `recordDedupeKey`, plus their `*Batch` variants) are silent no-ops
+ * `recordDedupeKey`, `recordRateLimitExceeded`, plus their `*Batch` variants) are silent no-ops
  * when the facet is not in context, and write through the spine when it
  * is. Storage failures surface through the returned error channel; queue
  * internals wrap telemetry-only writes with `ProcessStore.catchErrorAndLog`.
  *
- * Read methods (`entries`, `entriesByKey`, `lifecycle`, `dedupeKeys`)
+ * Read methods (`entries`, `entriesByKey`, `lifecycle`, `dedupeKeys`, `rateLimits`)
  * are accessed through the resolved instance — `yield*` the facet (or
  * call `Effect.serviceOption(QueueResourceStore)`) to dispatch.
  *
@@ -982,6 +1184,11 @@ export class QueueResourceStore extends ProcessStore.Service<
     recordDedupeKeyBatch:
       (s) => (changes: ReadonlyArray<QueueDedupeKeyChange>) =>
         s.createBatch(changes.map(makeQueueDedupeKeyRecord)),
+    recordRateLimitExceeded: (s) => (fact: QueueRateLimitExceededFact) =>
+      s.create(makeQueueRateLimitExceededRecord(fact)),
+    recordRateLimitExceededBatch:
+      (s) => (facts: ReadonlyArray<QueueRateLimitExceededFact>) =>
+        s.createBatch(facts.map(makeQueueRateLimitExceededRecord)),
   }),
   ProcessStore.read((s) => ({
     // Every queue read pushes its filters to storage as indexed
@@ -998,6 +1205,7 @@ export class QueueResourceStore extends ProcessStore.Service<
       readEntries(s, { ...query, key }),
     lifecycle: (query?: QueueLifecycleQuery) => readLifecycle(s, query),
     dedupeKeys: (query?: QueueDedupeKeyQuery) => readDedupeKeys(s, query),
+    rateLimits: (query?: QueueRateLimitQuery) => readRateLimits(s, query),
   })),
   ProcessStore.withIdentifier((queueId, s) => ({
     entries: (query?: Omit<QueueEntryQuery, "queueId">) =>
@@ -1010,6 +1218,8 @@ export class QueueResourceStore extends ProcessStore.Service<
       readLifecycle(s, { ...query, queueId }),
     dedupeKeys: (query?: Omit<QueueDedupeKeyQuery, "queueId">) =>
       readDedupeKeys(s, { ...query, queueId }),
+    rateLimits: (query?: Omit<QueueRateLimitQuery, "queueId">) =>
+      readRateLimits(s, { ...query, queueId }),
   })),
 ) {}
 
@@ -1042,6 +1252,18 @@ const readDedupeKeys = (
     .pipe(
       Effect.map((records) =>
         queueDedupeKeyChangesFromRecords(records, query),
+      ),
+    );
+
+const readRateLimits = (
+  s: ProcessStoreSpine,
+  query: QueueRateLimitQuery | undefined,
+): Effect.Effect<QueueRateLimitExceededFact[], RuntimeStorageOperationalError> =>
+  s
+    .read(runtimeRecordQuery(rateLimitPredicates(query), query?.opts))
+    .pipe(
+      Effect.map((records) =>
+        queueRateLimitExceededFactsFromRecords(records, query),
       ),
     );
 

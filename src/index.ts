@@ -17,7 +17,8 @@
  *   `startAll` fork supervisors; contracts power the **localhost** control HTTP API
  *   and remote group layers; `awaitShutdown` waits for OS signals (Node).
  * - **`QueueResource`** — Three-level **priority** queues with **concurrency** and optional
- *   **throttle**; each queue is a **Context** service with a `.layer`.
+ *   **`rateLimit`** (Effect `RateLimiter`); each queue is a **Context**
+ *   service with a `.layer`.
  * - **`ProcessStore`** — In-memory (or **Prisma**) **analytics**: execution rows + lifecycle
  *   events for processes.
  * - **`RunResource`**, **`HttpClientRunGate`**, **`HttpApiResource`**, **`Resource`** —
@@ -52,7 +53,7 @@
  * **`@nikscripts/effect-pm/ControlService`**.
  *
  * Structured log persistence: `ProcessStore.Log` (also exported as the
- * dedicated `LogStore` facet) on the composed store. Capture/relay
+ * dedicated `ProcessStoreLog` facet) on the composed store. Capture/relay
  * pipeline: `@nikscripts/effect-pm/Logs`.
  * Queue analytics: optional `ProcessStore.QueueResource` facet (internal service, composed by `ProcessStorage.layer`).
  * Storage is `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite` or other `RuntimeStorage` + `ProcessStore` composition.
@@ -364,6 +365,9 @@ export type {
   QueueLifecycleResumedChange,
   QueueLifecycleShutdownChange,
   QueueLifecycleStartedChange,
+  QueueRateLimitExceededFact,
+  QueueRateLimitExceededFactType,
+  QueueRateLimitQuery,
 } from "./store/queueResource";
 export { QueueResourceStore } from "./store/queueResource";
 export type {
@@ -462,6 +466,8 @@ export type {
   QueueResourceServiceDefinition,
   QueueResourceConfig,
   QueueResourceConfigBase,
+  QueueResourceRateLimitOptions,
+  QueueRateLimitExceededEvent,
   QueueResourceConfigWithoutItemSchema,
   QueueResourceConfigWithItemSchema,
   QueueResourceOptionsWithoutItemSchema,
@@ -496,6 +502,7 @@ export type {
   InferQueueItem,
   InferQueueWorkerError,
   InferQueueWorkerRequirements,
+  ConsumeResult,
 } from "./QueueResource";
 
 export {
@@ -505,6 +512,7 @@ export {
   QueueBatchValidationError,
   QueueMissingItemSchemaError,
   QueueItemEncodingError,
+  queueRateLimiterLayer,
 } from "./QueueResource";
 
 // Types - RunResource
