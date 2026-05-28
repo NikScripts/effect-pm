@@ -1,5 +1,7 @@
 # Dashboard widgets — styling (Tailwind, shadcn, TanStack Table)
 
+**Styled product UI** lives in **`src/ops-ui/`** (future `@nikscripts/effect-pm-ops-ui`). See [dashboard-ops-ui.md](./dashboard-ops-ui.md).
+
 `@nikscripts/effect-pm/react` ships **headless data hooks**, **optional render slots**, and **unstyled defaults**. It does **not** bundle Tailwind, shadcn/ui, or TanStack Table.
 
 ## Why peers are optional, not required
@@ -84,11 +86,21 @@ function CustomOpsTable() {
 - **Tables:** `@tanstack/react-table` + shadcn `Table` in WOW; data from `useControlPlaneGroupStatus` or analytics tRPC (plane B, separate router).
 - **Charts:** plane B / `ProcessStore` projections (plan 04) — not control plane widgets.
 
-## Demo stays unstyled
+## Demo playground
 
-`examples/dashboard-demo` keeps zero Tailwind so the package example runs without WOW’s design system.
+`examples/dashboard-demo/web` uses **Tailwind** and imports from **`src/ops-ui`** (once Phase 1 lands). WOW must add subtree `src/ops-ui/**` to **Tailwind `content`** when consuming styled widgets.
+
+## WOW import (styled)
+
+```tsx
+import { OperatorDashboard } from "@nikscripts/effect-pm/ops-ui";
+import { createFetchControlPlaneAdapter } from "@nikscripts/effect-pm/react/adapters/fetch";
+```
+
+Provide `ControlPlaneProvider` + port in the app shell, or use `OperatorDashboard` if it wraps both.
 
 ## Related
 
+- [dashboard-ops-ui.md](./dashboard-ops-ui.md) — phased plan
 - [dashboard-integration.md](./dashboard-integration.md) — topology and adapters
 - [service-tags-and-runtime-split.md](./service-tags-and-runtime-split.md) — tags vs runtime

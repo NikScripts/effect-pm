@@ -20,6 +20,8 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/internal/store/spine.ts`, `service.ts`, `helpers.ts` | Shared storage plumbing — internal. Type-agnostic only; per-facet codecs live next to each facet in `src/store/`. |
 | `src/internal/manager/*` | PM child launch, log capture/relay/query, group watch — **internal**. |
 | `src/ControlService.ts` | Localhost HTTP JSON control API. |
+| `src/react/` | Headless `ControlPlanePort`, hooks, adapters (`@nikscripts/effect-pm/react`). |
+| `src/ops-ui/` | Styled ops dashboard (Tailwind/shadcn); future package — [guides/dashboard-ops-ui.md](./guides/dashboard-ops-ui.md). |
 | `src/Logs.ts` | PM capture/relay only (`captureLoggerLayer`, `relayLayer`) — package subpath `@nikscripts/effect-pm/Logs`. |
 | `src/ProcessManager.ts` | Typed remote client and endpoint service for group control contracts. |
 | `src/cli.ts` | `createCli` / `runCli` — HTTP client for control API. |

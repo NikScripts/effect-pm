@@ -4,8 +4,9 @@ This package ships the **`ControlService`** HTTP API and **`ProcessGroup` contra
 
 | Deliverable | Where | Role |
 | --- | --- | --- |
-| **Embeddable React components** | **`@nikscripts/effect-pm/react`** (+ **`react/adapters/fetch`**) | Drop into **your** Next app, SPA, etc. Components take a pluggable **control transport** via **`ControlPlanePort`** ([§ below](#transport-agnostic-widgets--controlplaneport--adapters)) — **`fetch`**, **tRPC-shaped client**, **Effect RPC**, etc. |
-| **Demo app** | `examples/` (e.g. Vite + Tailwind) | Not the product — proves wiring, gateway, and a **fetch** (or other) **adapter** without pulling Next into this repo. |
+| **Headless control UI** | **`@nikscripts/effect-pm/react`** (+ **`react/adapters/fetch`**) | **`ControlPlanePort`**, hooks, optional unstyled panels. Transport-agnostic ([§ below](#transport-agnostic-widgets--controlplaneport--adapters)). |
+| **Styled ops dashboard** | **`@nikscripts/effect-pm/ops-ui`** (`src/ops-ui/`) | Tailwind + shadcn + tables; imports headless layer. [Plan](./dashboard-ops-ui.md). |
+| **Demo app** | `examples/dashboard-demo/` | Vite playground — gateway pattern + styled ops UI. |
 
 There is **no** requirement to expose **tRPC** or any app-specific RPC **from this repo**. The **authoritative** runtime wire for PM control today is **plain HTTP** on **`ControlService`**. Your gateway may re-expose that as **tRPC**, **Effect RPC**, or keep **REST**; widgets depend only on **`ControlPlanePort`**.
 
@@ -23,7 +24,7 @@ When publishing React primitives:
 
 Using **peers** prevents nested duplicate React and avoids locking one React version inside the PM package.
 
-Optional peers: **`@tanstack/react-query`**, **`@tanstack/react-table`** — app-owned; use headless hooks + shadcn in WOW. See [dashboard-styling.md](./dashboard-styling.md). Widgets do **not** require Tailwind or shadcn.
+Optional peers on **`./react`**: **`@tanstack/react-query`**, **`@tanstack/react-table`** — documented for apps building custom UI. **Styled widgets** use normal dependencies in **`src/ops-ui`** (devDeps in-repo until package split). See [dashboard-styling.md](./dashboard-styling.md), [dashboard-ops-ui.md](./dashboard-ops-ui.md).
 
 ---
 
@@ -160,6 +161,7 @@ Publishing React peers **today** doesn’t worsen security provided **`baseURL` 
 
 | Doc | Why |
 | --- | --- |
+| [dashboard-ops-ui.md](./dashboard-ops-ui.md) | Styled **`src/ops-ui`** plan and WOW import. |
 | [service-tags-and-runtime-split.md](./service-tags-and-runtime-split.md) | **Mandatory** split between **tags** (shared with frontend) vs **layers/runtime** (Node only). |
 | [control-plane.md](./control-plane.md) | **`ControlService`** REST, **`encodeURIComponent`** ids, **`ControlResponse`**. |
 | [process-manager.md](./process-manager.md) | Typed **`ProcessManager.connect`** mentally maps to **`POST /control`** on the HTTP side. |

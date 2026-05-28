@@ -2,8 +2,8 @@
 
 **Audience:** Agent (or human) working on / merging the storage follow-up branch.  
 **Reviewer context:** Review performed after merging this branch into `cursor/dashboard-control-slice-1-158c` (2026-05-27).  
-**Branch tip:** `9ad245e` (`origin/cursor/prisma-storage-followup-958b`)  
-**Base (`main`):** `aacf8b8`
+**Branch tip:** `7335c56` — **merged to `main`** (2026-05-27).  
+**Historical base:** `aacf8b8`
 
 ---
 
@@ -11,7 +11,7 @@
 
 | Verdict | Detail |
 |--------|--------|
-| **Merge to `main`** | **Recommended** — focused, tested, documents a real breaking behavior change intentionally. |
+| **Merge to `main`** | **Done** @ `7335c56` — focused, tested, documents a real breaking behavior change intentionally. |
 | **Scope** | **Not** new Prisma adapter work; that already landed on `main`. This branch is **write-failure semantics** + call-site wiring + docs/tests + small SQLite codec/service hardening. |
 | **Risk** | **Breaking** for any consumer that relied on implicit swallow of facet static-emitter failures. Package internals are updated; **app code outside this repo must be audited**. |
 | **Blockers before release** | Fix **stale TSDoc** in `src/store/queueResource.ts` (still describes removed builder `catchCause` behavior). Consider **splitting changeset** breaking notes from Prisma adapter notes. |

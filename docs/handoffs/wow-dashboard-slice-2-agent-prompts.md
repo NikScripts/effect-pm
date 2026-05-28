@@ -4,6 +4,8 @@ Copy-paste sections below into a Cloud Agent (or local agent) working in the **W
 
 **Upstream library:** [NikScripts/effect-pm](https://github.com/NikScripts/effect-pm) is vendored in WOW via **git subtree** (not npm for active development). The agent must **pull upstream commits** into the subtree path before assuming APIs exist.
 
+**Styled dashboard:** After effect-pm Phase 1 lands on **`main`**, import `@nikscripts/effect-pm/ops-ui` — see [dashboard-ops-ui.md](../guides/dashboard-ops-ui.md). Until then use headless `@nikscripts/effect-pm/react` + slots.
+
 **Product owner decisions (accepted for this iteration):**
 
 - Gateway: **Next Route Handler REST proxy first** (`/api/control/*` → private `ControlService`); tRPC gateway later; widgets stay on `ControlPlanePort` + fetch adapter until then.
@@ -22,8 +24,8 @@ Copy-paste sections below into a Cloud Agent (or local agent) working in the **W
 
 | Phase | WOW agent pulls from effect-pm |
 |-------|--------------------------------|
-| **Now (pre-merge)** | Branch `cursor/dashboard-control-slice-1-158c` (or newer dashboard branch owner names in chat) |
-| **After dashboard PR merges** | **`main` only** — stop pinning feature branches |
+| **Now** | **`main` only** — dashboard + storage work merged; record full SHA in WOW PR |
+| **Never** | Pin obsolete feature branches (`cursor/dashboard-control-slice-1-158c`, etc.) |
 
 **Why:** One stable upstream ref (`main`) avoids WOW agents chasing branch names. Until slice 1 merges, pin the branch explicitly and record the **commit SHA** in the WOW PR description.
 

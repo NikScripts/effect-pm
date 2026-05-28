@@ -20,7 +20,9 @@ pnpm run example:dashboard-demo:pm
 pnpm run example:dashboard-demo:ui
 ```
 
-Open http://localhost:5173 — start/stop **dashboard-tick** from the panel.
+Open http://localhost:5173 — control **dashboard-tick** and **dashboard-demo-queue** from the ops UI.
+
+Styled widgets come from **`src/ops-ui`** (see [dashboard-ops-ui.md](../../docs/guides/dashboard-ops-ui.md)). Until Phase 1 lands, the demo may use headless `@nikscripts/effect-pm/react` panels.
 
 ## Optional standalone gateway
 
@@ -38,5 +40,5 @@ Point the UI `baseUrl` at `http://127.0.0.1:3100/api/control` (see `control-gate
 | --- | --- |
 | `demo.tags.ts` | Browser-safe `Process` / `ProcessGroup` tags |
 | `demo.runtime.ts` | Node layers + `ControlService.layerHttp` |
-| `web/` | Vite + React widgets from `@nikscripts/effect-pm/react` |
+| `web/` | Vite + Tailwind; imports `@nikscripts/effect-pm/ops-ui` (or headless `react` during migration) |
 | `control-gateway.ts` | Copy-paste noop forwarder template |
