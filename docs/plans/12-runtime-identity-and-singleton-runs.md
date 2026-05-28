@@ -58,7 +58,7 @@ in-process enforcement is separate and also mandatory.
 | Mechanism | Status | Requirement |
 |-----------|--------|-------------|
 | **Durable exclusivity via `RuntimeStorage`** | **Not shipped** | Before supervisor starts, **acquire** exclusivity for `(logicalId)` or `(logicalId, instanceId)`; on stop/crash, **release** or TTL stale reclaim. Must use **transactions** (see plan 13) for atomic check-and-set. |
-| Optional Redis adapter | **Future** | Same lease API behind storage interface for extreme multi-writer contention — not required for v1. |
+| Hybrid / Redis `RuntimeStorage` adapter | **Planned** | Leases and rate state route inside **one** `RuntimeStorage` (see plan 13) — not a separate app-level Redis layer. |
 
 Storage is **not** optional for multi-runtime deployments: without shared storage,
 only Layer 1 applies.
