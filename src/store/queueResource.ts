@@ -25,9 +25,8 @@
  * class (`ProcessStoreQueueResource.recordEntry`, `.recordLifecycle`,
  * `.recordDedupeKey`, plus their `*Batch` variants). When the facet
  * layer is not composed each call is a silent no-op; when composed it
- * writes through the spine. Queue worker telemetry pipes through
- * `ProcessStore.catchErrorAndLog` at call sites so storage failures
- * do not propagate into queue work.
+ * writes through the spine and surfaces typed write failures. Queue internals
+ * wrap telemetry-only writes with `ProcessStore.catchErrorAndLog`.
  *
  * ## Read
  *
