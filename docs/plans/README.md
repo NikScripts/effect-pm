@@ -36,9 +36,12 @@ Higher items unblock remote operations, operator UX, and honest queue typing.
 | 6 | **Runtime facets: listeners, history shape, mutable config** — beside [STORAGE.md](../STORAGE.md), no revived monolith facade | [06-runtime-hooks-config.md](./06-runtime-hooks-config.md) |
 | 7 | **Schedule identity & persistence boundaries** — stable entry IDs, runtime sync/remove semantics | [07-schedule-identity.md](./07-schedule-identity.md) |
 | 8 | **Lifecycle kernel & process hooks** — explicit transitions + **`Process`** extension hooks without hiding work under schedule/polling alone | [08-lifecycle-kernel-hooks.md](./08-lifecycle-kernel-hooks.md) |
+| **8b** | **Runtime identity & singleton runs** — `instanceId`, in-process + **storage-backed** duplicate prevention, `ProcessGroup` definition validation | [12-runtime-identity-and-singleton-runs.md](./12-runtime-identity-and-singleton-runs.md) |
+| **8c** | **Queue `rateLimit` + operational storage** — Effect limiter, `RateLimiterStore`, `transaction`, extend **`configure`/`Service`** on Process/Run/HttpApi | [13-queue-rate-limit-and-operational-storage.md](./13-queue-rate-limit-and-operational-storage.md) |
 | 9 | **`Process.spawn` / `QueueResource.open`** — multi-instance scripted supervision **outside** `ProcessGroup.make` tuples; blocks honest **`RemoteService` / per-entry remote layers** | [09-standalone-spawns.md](./09-standalone-spawns.md) |
 | 10 | **TypeScript:** re-enable **`anyUnknownInErrorContext`** (keep **`serviceNotAsClass`** off) | [10-typescript-strict-unknown.md](./10-typescript-strict-unknown.md) |
 | — | **Storage / Prisma follow-up** (adapter landed; polish and docs) | [11-storage-prisma-follow-up.md](./11-storage-prisma-follow-up.md) |
+| — | **Conversation index (May 2026)** — checklist; not implementation spec | [14-conversation-capture-may-2026.md](./14-conversation-capture-may-2026.md) |
 
 ### Dependency hints (soft)
 
@@ -48,8 +51,14 @@ Higher items unblock remote operations, operator UX, and honest queue typing.
 
 06 runtime hooks ─► 04 analytics (facts stable first)
 07 schedule identity ─► 08 lifecycle (clear IDs before machine)
+12 identity / leases ─► 09 spawn + cross-host start honesty
+13 transaction ─► 13 rateLimit + 12 storage leases (shared RuntimeStorage.transaction)
 03 ─► 09 RemoteService defer (queue contracts + spawn model)
 ```
+
+**May 2026 design capture:** plans **12–14** record identity, queue rate limit,
+and thread decisions. Resolve **12 § Deferred** before implementing leases or
+spawn; green-light **13** rate limit separately if desired.
 
 ---
 

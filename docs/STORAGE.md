@@ -189,7 +189,7 @@ The `ProcessStoreSpine` handle (`s`) exposes the storage primitives only:
 
 | Method | Purpose |
 |--------|---------|
-| `s.runId` | Stable per-layer run id stamped onto every write |
+| `s.runId` | Id minted when the facet spine is built; stamped on every write from that layer. **Not** sufficient alone for live-instance identity — see [plans/12-runtime-identity-and-singleton-runs.md](./plans/12-runtime-identity-and-singleton-runs.md) (`instanceId`, cross-runtime leases). |
 | `s.create` / `s.createBatch` | Insert one / many records |
 | `s.upsert` | Insert-or-replace one record |
 | `s.read(query?)` | Run a `RuntimeRecordQuery` (predicate, orderBy, limit, offset) |
@@ -243,4 +243,9 @@ and must not change process / queue success.
 
 | Area | Notes |
 |------|-------|
+| **Identity & singleton runs** | `instanceId`, in-process + **durable lease** so the same logical process is not running in another program/host. Plan: [plans/12-runtime-identity-and-singleton-runs.md](./plans/12-runtime-identity-and-singleton-runs.md). |
+| **Operational storage** | One config for facts + **state** + audit; `RuntimeStorage.transaction`; facet state/mutate helpers. Plan: [plans/13-queue-rate-limit-and-operational-storage.md](./plans/13-queue-rate-limit-and-operational-storage.md). |
+| **Queue `rateLimit`** | Effect `RateLimiter` via `RateLimiterStore` on this stack — not shipped. Same plan **13**. |
+| **Extend `configure` / `Service`** | Parity on `Process`, `RunResource`, `HttpApiResource` (see plan **13**). |
 | Telemetry proposals | `Polling`, `ProcessSchedule`, `HttpApiResource`: facet yes/no docs in `docs/storage-proposals/` (Phase 1 — proposal only). |
+| **Thread index** | [plans/14-conversation-capture-may-2026.md](./plans/14-conversation-capture-may-2026.md) |
