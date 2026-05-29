@@ -6,7 +6,7 @@
  * Process-scoped analytics for {@link Process.spawn}, supervisors, and
  * any writer that records lifecycle without a group. For group control
  * paths (`start` / `stop` / `restart` with a `groupId`), use
- * {@link ProcessStoreProcessGroup} instead — it stamps
+ * {@link ProcessGroupStore} instead — it stamps
  * `attributes.groupId` and exposes group-scoped queries.
  *
  * ## At-a-glance
@@ -29,7 +29,7 @@
  * - `attributes` = `{ groupId?, ...extra }` if any extra attributes
  *   were supplied; otherwise omitted.
  *
- * Compose via {@link ProcessStoreProcessLifecycle.layerRuntimeStorage}
+ * Compose via {@link ProcessLifecycleStore.layerRuntimeStorage}
  * or {@link ProcessStorage.layerRuntimeStorage}.
  *
  * @module store/ProcessLifecycle
@@ -127,7 +127,7 @@ let processLifecycleSeq = 0;
 /**
  * Build a `process.lifecycle.changed` runtime record.
  *
- * @internal Shared with {@link ProcessStoreProcessGroup} member writes.
+ * @internal Shared with {@link ProcessGroupStore} member writes.
  */
 export const makeProcessLifecycleRecord = (
   input: ProcessLifecycleRecordInput & { readonly groupId?: string },
@@ -152,7 +152,7 @@ export const makeProcessLifecycleRecord = (
 /**
  * Decode a `process.lifecycle.changed` runtime record back into a typed event.
  *
- * @internal Shared with {@link ProcessStoreProcessGroup} member reads.
+ * @internal Shared with {@link ProcessGroupStore} member reads.
  */
 export const recordToLifecycleEvent = (
   record: RuntimeRecord,
@@ -195,10 +195,10 @@ const decodeLifecycleEvents = (
  *
  * @public
  */
-export class ProcessStoreProcessLifecycle extends ProcessStore.Service<
-  ProcessStoreProcessLifecycle
+export class ProcessLifecycleStore extends ProcessStore.Service<
+  ProcessLifecycleStore
 >()(
-  "@nikscripts/effect-pm/store/processLifecycle/ProcessStoreProcessLifecycle",
+  "@nikscripts/effect-pm/store/processLifecycle/ProcessLifecycleStore",
   ProcessStore.record({
     lifecycleChanged: (s) => (input: ProcessLifecycleRecordInput) =>
       Effect.gen(function* () {
@@ -296,14 +296,14 @@ export class ProcessStoreProcessLifecycle extends ProcessStore.Service<
 /**
  * @public
  */
-export declare namespace ProcessStoreProcessLifecycle {
+export declare namespace ProcessLifecycleStore {
   export type Type = ProcessStore.Service.Type<
-    typeof ProcessStoreProcessLifecycle
+    typeof ProcessLifecycleStore
   >;
   export type EmitType = ProcessStore.Service.EmitType<
-    typeof ProcessStoreProcessLifecycle
+    typeof ProcessLifecycleStore
   >;
   export type IdentifierType = ProcessStore.Service.IdentifierType<
-    typeof ProcessStoreProcessLifecycle
+    typeof ProcessLifecycleStore
   >;
 }

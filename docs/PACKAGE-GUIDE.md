@@ -106,7 +106,7 @@ dedicated subpaths for focused imports:
 - `@nikscripts/effect-pm/storage/sqlite`
 - `@nikscripts/effect-pm/storage/prisma`
 
-Structured logs use `ProcessStoreLog` (`record`, `load`, `query`) with `ProcessStorage` or `layerProcessStore` composed; child capture uses `@nikscripts/effect-pm/Logs` (`captureLoggerLayer`, `relayLayer`)
+Structured logs use `LogStore` (`record`, `load`, `query`) with `ProcessStorage` or `layerProcessStore` composed; child capture uses `@nikscripts/effect-pm/Logs` (`captureLoggerLayer`, `relayLayer`)
 at launch (`layerProcessStore` from `storage/sqlite`). Durable
 normalized runtime records use `@nikscripts/effect-pm/storage/sqlite`
 (`SQLiteRuntimeStorage`) or `@nikscripts/effect-pm/storage/prisma`
@@ -138,16 +138,16 @@ For durable adapter work, start with
 TSDoc on each module repeats details; this guide stays **concept-shaped**.
 
 `RunResource` publishes per-type facts and `RunResourceState` transitions
-through the static optional emitters on the per-domain `ProcessStoreRunResource`
-facet (`ProcessStoreRunResource.recordRunStarted` / `recordRunCompleted` /
+through the static optional emitters on the per-domain `RunResourceStore`
+facet (`RunResourceStore.recordRunStarted` / `recordRunCompleted` /
 `recordRunFailed` / `recordStateChange`). Composing
-`ProcessStoreRunResource.layerRuntimeStorage` (or the full-stack
+`RunResourceStore.layerRuntimeStorage` (or the full-stack
 `ProcessStorage.layerRuntimeStorage` / `layerProcessStore` from
 `@nikscripts/effect-pm/storage/sqlite`) persists facts as
 `run-resource.fact.recorded` events and state changes as
 `run-resource.state.changed` events. For in-process listeners (no
-durability) provide a custom service typed as `ProcessStoreRunResource.Type`
-via `Effect.provideService` / `Layer.succeed`. A `ProcessStoreRunResource.live(resourceId)`
+durability) provide a custom service typed as `RunResourceStore.Type`
+via `Effect.provideService` / `Layer.succeed`. A `RunResourceStore.live(resourceId)`
 streaming projection is planned.
 
 ---

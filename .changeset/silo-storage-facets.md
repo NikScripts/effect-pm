@@ -90,8 +90,8 @@ without runtime introspection. The internal `stubSpine` is gone.
 Read query semantics
 --------------------
 
-`ProcessStoreQueueResource`, `ProcessStoreProcessGroup`, and
-`ProcessStoreProcessExecution` now apply `opts.limit` to the **post-
+`QueueResourceStore`, `ProcessGroupStore`, and
+`ProcessExecutionStore` now apply `opts.limit` to the **post-
 filter** result whenever the storage query is a strict superset of the
 final projection (e.g. group queries that filter by
 `attributes.groupId`, or `executions({ scheduleKey })`). Previously

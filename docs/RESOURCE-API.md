@@ -442,9 +442,9 @@ Records written by `QueueResource`:
 Query queue records through the queue storage facet:
 
 ```typescript
-import { ProcessStoreQueueResource } from "@nikscripts/effect-pm/store/QueueResource"
+import { QueueResourceStore } from "@nikscripts/effect-pm/store/QueueResource"
 
-const queueStore = yield* ProcessStoreQueueResource
+const queueStore = yield* QueueResourceStore
 const entries = yield* queueStore.entries("email-queue")
 const byKey = yield* queueStore.entriesByKey("delivery-123")
 ```

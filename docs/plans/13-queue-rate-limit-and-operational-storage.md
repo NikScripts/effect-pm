@@ -26,7 +26,7 @@ persistence stack beside it (no “also wire Effect `layerStoreRedis` at the app
    or Prisma equivalent.
 2. **Facets** — either:
    - **`ProcessStorage.layerRuntimeStorage`** — all built-in facets at once, or
-   - **Individual** `ProcessStoreQueueResource.layerRuntimeStorage` (etc.) merged
+   - **Individual** `QueueResourceStore.layerRuntimeStorage` (etc.) merged
      with only the facets you use — each still requires **`RuntimeStorage`** in context.
 
 `ProcessStorage.layer` = facets + in-memory `RuntimeStorage` (tests/dev only).
@@ -76,6 +76,9 @@ details inside** a `RuntimeStorage` adapter — not a second public compose poin
 **Summary:** implement **`layerRuntimeStorageHybrid`** as the target production path;
 keep sqlite/prisma as today; add redis-only if you want a single-infra deployment option.
 
+**Full hybrid spec:** [15-runtime-storage-hybrid.md](./15-runtime-storage-hybrid.md)
+(routing, transactions, compose, redis-only vs hybrid).
+
 ---
 
 ## `RuntimeStorage.transaction` (prerequisite)
@@ -116,7 +119,7 @@ type QueueResourceRateLimitOptions =
 | Default `onExceeded` | **`"delay"`** for queues (Effect default is **`"fail"`** if omitted) |
 | Order in worker | **Rate limit before** concurrency semaphore |
 | Hook | Optional **`onRateLimitExceeded`** |
-| Audit | Wire **`queue.ratelimit.exceeded`** on `ProcessStoreQueueResource` when `record: "exceeded"` (default); `record: "off"` skips facet write |
+| Audit | Wire **`queue.ratelimit.exceeded`** on `QueueResourceStore` when `record: "exceeded"` (default); `record: "off"` skips facet write |
 | Enforcement store | Consume path calls **`RuntimeStorage`** only (state row or Redis route inside hybrid adapter); Effect `RateLimiter` math/Lua **inside** adapter if needed |
 
 ### Configure / Service extension (do not forget)

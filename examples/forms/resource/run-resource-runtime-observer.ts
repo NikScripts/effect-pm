@@ -1,14 +1,14 @@
 /**
  * @module examples/forms/resource/run-resource-runtime-observer
  *
- * `RunResource` facts and state changes through `ProcessStoreRunResource`.
+ * `RunResource` facts and state changes through `RunResourceStore`.
  *
- * - **In-process:** provide a custom `ProcessStoreRunResource`-shaped
+ * - **In-process:** provide a custom `RunResourceStore`-shaped
  *   service whose record methods fan out to scoped callbacks. The static
  *   emitters used by `RunResource.make` wrap each call with a built-in
  *   `catchCause + logWarning` so a listener that fails cannot change the
  *   gated effect's success/error channel. A planned future feature
- *   (`ProcessStoreRunResource.live(resourceId)`) will replace this with a
+ *   (`RunResourceStore.live(resourceId)`) will replace this with a
  *   proper `Stream` subscription.
  * - **Durable:** compose `layerProcessStore` at app scope (see the
  *   {@link RunResource} module doc).
@@ -18,7 +18,7 @@
 
 import { Effect, Layer, Option, Ref } from "effect";
 import {
-  ProcessStoreRunResource,
+  RunResourceStore,
   RunResource,
   type RunResourceFact,
   type RunResourceState,
@@ -34,7 +34,7 @@ interface RunResourceObservationListener {
 
 const observerFacet = (
   listeners: ReadonlyArray<RunResourceObservationListener>,
-): ProcessStoreRunResource.Type => {
+): RunResourceStore.Type => {
   const fanFact = (fact: RunResourceFact): Effect.Effect<void> =>
     Effect.forEach(
       listeners,
@@ -95,7 +95,7 @@ const program = Effect.gen(function* () {
   };
 
   const observerLayer = Layer.succeed(
-    ProcessStoreRunResource,
+    RunResourceStore,
     observerFacet([factListener, stateListener, failingListener]),
   );
 
@@ -125,7 +125,7 @@ const program = Effect.gen(function* () {
     );
   }).pipe(Effect.provide(observerLayer));
 
-  // Observation is optional. Without ProcessStoreRunResource the static
+  // Observation is optional. Without RunResourceStore the static
   // emitters no-op and the gated effect behavior is unchanged.
   const unobservedGate = yield* RunResource.make({
     name: "examples/UnobservedRunGate",

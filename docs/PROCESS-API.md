@@ -266,10 +266,10 @@ Read through the facet that owns the domain:
 ```typescript
 import { Effect } from "effect";
 import { ProcessStorage } from "@nikscripts/effect-pm";
-import { ProcessStoreRunResource } from "@nikscripts/effect-pm/store/RunResource";
+import { RunResourceStore } from "@nikscripts/effect-pm/store/RunResource";
 
 const program = Effect.gen(function* () {
-  const runs = yield* ProcessStoreRunResource;
+  const runs = yield* RunResourceStore;
   const facts = yield* runs.facts({ resourceId: "examples/Gate" });
   yield* Effect.log(`run-resource facts: ${String(facts.length)}`);
 });
@@ -283,13 +283,13 @@ documented as a compatibility path.
 
 ---
 
-## `ProcessStoreRunResource` (RunResource facts/state)
+## `RunResourceStore` (RunResource facts/state)
 
 > The legacy generic `ProcessStoreRuntime` facet and its `RuntimeFact` /
 > `RuntimeRef` / `RuntimeStateChange` / `RuntimeStateBase` vocabulary,
 > together with the previous `FactEnvelope` plumbing module, have been
-> removed. Each storage facet — `ProcessStoreRunResource`,
-> `ProcessStoreQueueResource`, … — now owns its own per-domain facet
+> removed. Each storage facet — `RunResourceStore`,
+> `QueueResourceStore`, … — now owns its own per-domain facet
 > with concrete typed shapes and its own `RuntimeRecord` codec.
 
 | Member | Role |
@@ -299,40 +299,40 @@ documented as a compatibility path.
 | `RunResourceStateChange` | Transition record with previous/current `RunResourceState`. |
 | `RunResourceRunStartedFact` / `RunResourceRunCompletedFact` / `RunResourceRunFailedFact` | Concrete per-event payload types. |
 | `RunResourceFact` | Union of the three concrete fact types. |
-| `ProcessStoreRunResource` | Storage facet for RunResource facts and state changes (replaces the removed `ProcessStoreRuntime` and `RuntimeObserver`). |
-| `ProcessStoreRunResource.Type` / `.EmitType` | Type accessors merged via declaration namespace — full service shape / record-section emit shape. Use to type custom `Layer.succeed` / `provideService` mocks. |
-| `ProcessStoreRunResource.recordRunStarted(fact)` | Static optional emitter — silent no-op when the facet is absent; persistent write when present. Storage failures surface unless the caller explicitly pipes through `ProcessStore.catchErrorAndLog(...)`. |
-| `ProcessStoreRunResource.recordRunCompleted(fact)` / `recordRunFailed(fact)` | Same failure semantics for the other lifecycle facts. |
-| `ProcessStoreRunResource.recordStateChange(change)` | Static optional emitter for state transitions; same failure semantics. |
-| `ProcessStoreRunResource.recordFactBatch(facts)` / `recordStateChangeBatch(changes)` | Batched optional emitters. |
-| `ProcessStoreRunResource.layerRuntimeStorage` / `.layer` | Facet over injected `RuntimeStorage` (or in-memory `layer`). |
-| `(yield* ProcessStoreRunResource).facts({ resourceId, runId?, types? })` | Per-domain projection over persisted `run-resource.fact.recorded` events. |
-| `(yield* ProcessStoreRunResource).stateHistory({ resourceId })` | Per-domain projection over persisted `run-resource.state.changed` events. |
-| `(yield* ProcessStoreRunResource).latestState(resourceId)` | Latest persisted `RunResourceState` snapshot for a resource. |
-| `(yield* ProcessStoreRunResource).runs(resourceId)` | Paired started + ended (completed / failed) history per run. |
-| `(yield* ProcessStoreRunResource).byRun(runId)` | All facts for one specific run, ordered. |
+| `RunResourceStore` | Storage facet for RunResource facts and state changes (replaces the removed `ProcessStoreRuntime` and `RuntimeObserver`). |
+| `RunResourceStore.Type` / `.EmitType` | Type accessors merged via declaration namespace — full service shape / record-section emit shape. Use to type custom `Layer.succeed` / `provideService` mocks. |
+| `RunResourceStore.recordRunStarted(fact)` | Static optional emitter — silent no-op when the facet is absent; persistent write when present. Storage failures surface unless the caller explicitly pipes through `ProcessStore.catchErrorAndLog(...)`. |
+| `RunResourceStore.recordRunCompleted(fact)` / `recordRunFailed(fact)` | Same failure semantics for the other lifecycle facts. |
+| `RunResourceStore.recordStateChange(change)` | Static optional emitter for state transitions; same failure semantics. |
+| `RunResourceStore.recordFactBatch(facts)` / `recordStateChangeBatch(changes)` | Batched optional emitters. |
+| `RunResourceStore.layerRuntimeStorage` / `.layer` | Facet over injected `RuntimeStorage` (or in-memory `layer`). |
+| `(yield* RunResourceStore).facts({ resourceId, runId?, types? })` | Per-domain projection over persisted `run-resource.fact.recorded` events. |
+| `(yield* RunResourceStore).stateHistory({ resourceId })` | Per-domain projection over persisted `run-resource.state.changed` events. |
+| `(yield* RunResourceStore).latestState(resourceId)` | Latest persisted `RunResourceState` snapshot for a resource. |
+| `(yield* RunResourceStore).runs(resourceId)` | Paired started + ended (completed / failed) history per run. |
+| `(yield* RunResourceStore).byRun(runId)` | All facts for one specific run, ordered. |
 
 `RunResource` publishes `run-resource.run.started`,
 `run-resource.run.completed`, and `run-resource.run.failed` facts plus
 `RunResourceState` transitions for waiting, started, completed, failed, and
-interrupted runs through `ProcessStoreRunResource.recordRunStarted` /
+interrupted runs through `RunResourceStore.recordRunStarted` /
 `recordRunCompleted` / `recordRunFailed` / `recordStateChange`. Observation
-is optional: when no `ProcessStoreRunResource` service is in the
+is optional: when no `RunResourceStore` service is in the
 environment, the static emitters no-op and the gated effect behavior is
 unchanged.
 
-When `ProcessStoreRunResource.layerRuntimeStorage` (or the full-stack
+When `RunResourceStore.layerRuntimeStorage` (or the full-stack
 `ProcessStorage.layerRuntimeStorage` / `layerProcessStore` from
 `@nikscripts/effect-pm/storage/sqlite`) is composed, facts and state changes
 are persisted as `run-resource.fact.recorded` / `run-resource.state.changed`
-analytics events. `ProcessStoreLog` covers structured log
+analytics events. `LogStore` covers structured log
 history; capture/relay uses `@nikscripts/effect-pm/Logs`.
 
 For in-process listeners (no durability), provide a custom service typed as
-`ProcessStoreRunResource.Type` via `Effect.provideService` or
+`RunResourceStore.Type` via `Effect.provideService` or
 `Layer.succeed` that fans out to scoped callbacks (see
 `examples/forms/resource/run-resource-runtime-observer.ts`). A planned
-`ProcessStoreRunResource.live(resourceId): Stream<...>` projection will
+`RunResourceStore.live(resourceId): Stream<...>` projection will
 replace the custom-service pattern with a proper subscription stream.
 
 ---

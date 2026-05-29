@@ -184,12 +184,12 @@ Example (Using `runImmediately`)
 ```typescript
 import { Effect } from "effect"
 import { ProcessStorage } from "@nikscripts/effect-pm"
-import { ProcessStoreProcessExecution } from "@nikscripts/effect-pm/store/ProcessExecution"
+import { ProcessExecutionStore } from "@nikscripts/effect-pm/store/ProcessExecution"
 
 const once = Effect.gen(function* () {
   yield* heartbeat.runImmediately()
 
-  const store = yield* ProcessStoreProcessExecution
+  const store = yield* ProcessExecutionStore
   const rows = yield* store.executions({ processId: heartbeat.name })
   console.log(`executions recorded: ${rows.length}`)
 }).pipe(Effect.provide(ProcessStorage.layer))

@@ -1,5 +1,5 @@
 /**
- * Conformance suite for the {@link ProcessStoreQueueResource} facet.
+ * Conformance suite for the {@link QueueResourceStore} facet.
  *
  * Verifies (a) the no-op vs persist semantics of the static optional
  * emitters built by `ProcessStore.Service`, (b) explicit
@@ -15,7 +15,7 @@ import { ProcessStore } from "../src/ProcessStore";
 import { ProcessStorage } from "../src/ProcessStorage";
 import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
 import {
-  ProcessStoreQueueResource,
+  QueueResourceStore,
   type QueueDedupeKeyChange,
   type QueueEntryCompletedFact,
   type QueueEntryEnqueuedFact,
@@ -126,16 +126,16 @@ const dedupeReleased = (
   changedAt,
 });
 
-describe("ProcessStoreQueueResource — static optional emitters", () => {
+describe("QueueResourceStore — static optional emitters", () => {
   it.live("no-ops silently when the facet layer is absent", () =>
     Effect.gen(function* () {
-      yield* ProcessStoreQueueResource.recordEntry(
+      yield* QueueResourceStore.recordEntry(
         enqueued("@test/Absent", "@test/Absent/entry/1", 1_700_000_000_000),
       );
-      yield* ProcessStoreQueueResource.recordLifecycle(
+      yield* QueueResourceStore.recordLifecycle(
         lifecycleStarted("@test/Absent", 1_700_000_000_000),
       );
-      yield* ProcessStoreQueueResource.recordDedupeKey(
+      yield* QueueResourceStore.recordDedupeKey(
         dedupeAdded("@test/Absent", "k1", 1_700_000_000_000),
       );
       expect(true).toBe(true);
@@ -145,10 +145,10 @@ describe("ProcessStoreQueueResource — static optional emitters", () => {
   it.live("persists through the spine when the facet is provided", () =>
     Effect.gen(function* () {
       const queueId = "@test/Persist";
-      yield* ProcessStoreQueueResource.recordEntry(
+      yield* QueueResourceStore.recordEntry(
         enqueued(queueId, `${queueId}/entry/1`, 1_700_000_000_000),
       );
-      yield* ProcessStoreQueueResource.recordEntry(
+      yield* QueueResourceStore.recordEntry(
         completed(
           queueId,
           `${queueId}/entry/1`,
@@ -157,7 +157,7 @@ describe("ProcessStoreQueueResource — static optional emitters", () => {
           10,
         ),
       );
-      const facet = yield* ProcessStoreQueueResource;
+      const facet = yield* QueueResourceStore;
       const rows = yield* facet.entries({ queueId });
       expect(rows.map((row) => row.type).sort()).toEqual([
         "queue.entry.completed",
@@ -173,7 +173,7 @@ describe("ProcessStoreQueueResource — static optional emitters", () => {
         typeof message === "string" ? message : JSON.stringify(message);
       captured.push(text);
     });
-    const failingFacet: ProcessStoreQueueResource.Type = {
+    const failingFacet: QueueResourceStore.Type = {
       recordEntry: () =>
         Effect.fail(
           new ProcessStoreReadonlyRecordError({ id: "blocked-entry" }),
@@ -207,7 +207,7 @@ describe("ProcessStoreQueueResource — static optional emitters", () => {
       lifecycle: () => Effect.succeed([]),
       dedupeKeys: () => Effect.succeed([]),
     };
-    const write = ProcessStoreQueueResource.recordEntry(
+    const write = QueueResourceStore.recordEntry(
       enqueued("@test/Failing", "@test/Failing/entry/1", 1),
     );
     return Effect.gen(function* () {
@@ -223,7 +223,7 @@ describe("ProcessStoreQueueResource — static optional emitters", () => {
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
-          Layer.succeed(ProcessStoreQueueResource, failingFacet),
+          Layer.succeed(QueueResourceStore, failingFacet),
           Logger.layer([captureLogger], { mergeWithExisting: false }),
         ),
       ),
@@ -231,13 +231,13 @@ describe("ProcessStoreQueueResource — static optional emitters", () => {
   });
 });
 
-describe("ProcessStoreQueueResource — entry projections", () => {
+describe("QueueResourceStore — entry projections", () => {
   const queueA = "@test/QueueA";
   const queueB = "@test/QueueB";
   const t = (ms: number) => 1_700_000_000_000 + ms;
 
   const fixtures = Effect.gen(function* () {
-    const facet = yield* ProcessStoreQueueResource;
+    const facet = yield* QueueResourceStore;
     yield* facet.recordEntry(
       enqueued(queueA, `${queueA}/entry/1`, t(0), {
         key: "job-1",
@@ -270,7 +270,7 @@ describe("ProcessStoreQueueResource — entry projections", () => {
   it.live("entries({ queueId }) returns rows for the requested queue", () =>
     Effect.gen(function* () {
       yield* fixtures;
-      const facet = yield* ProcessStoreQueueResource;
+      const facet = yield* QueueResourceStore;
       const rows = yield* facet.entries({ queueId: queueA });
       expect(rows.every((row) => row.queueId === queueA)).toBe(true);
       expect(rows.map((row) => row.type).sort()).toEqual([
@@ -285,7 +285,7 @@ describe("ProcessStoreQueueResource — entry projections", () => {
   it.live("entries({ queueId, types }) filters by status", () =>
     Effect.gen(function* () {
       yield* fixtures;
-      const facet = yield* ProcessStoreQueueResource;
+      const facet = yield* QueueResourceStore;
       const rows = yield* facet.entries({
         queueId: queueA,
         types: ["queue.entry.failed"],
@@ -298,7 +298,7 @@ describe("ProcessStoreQueueResource — entry projections", () => {
   it.live("entries({ queueId, entryId }) filters by entry id", () =>
     Effect.gen(function* () {
       yield* fixtures;
-      const facet = yield* ProcessStoreQueueResource;
+      const facet = yield* QueueResourceStore;
       const rows = yield* facet.entries({
         queueId: queueA,
         entryId: `${queueA}/entry/1`,
@@ -316,7 +316,7 @@ describe("ProcessStoreQueueResource — entry projections", () => {
   it.live("entries({ batchId }) and entries({ releaseId }) push indexed predicates", () =>
     Effect.gen(function* () {
       yield* fixtures;
-      const facet = yield* ProcessStoreQueueResource;
+      const facet = yield* QueueResourceStore;
       const byBatch = yield* facet.entries({ batchId: "batch-1" });
       expect(
         byBatch.every(
@@ -338,7 +338,7 @@ describe("ProcessStoreQueueResource — entry projections", () => {
   it.live("entriesByKey returns rows across queues for a shared key", () =>
     Effect.gen(function* () {
       yield* fixtures;
-      const facet = yield* ProcessStoreQueueResource;
+      const facet = yield* QueueResourceStore;
       const rows = yield* facet.entriesByKey("job-1");
       expect(rows.every((row) => row.key === "job-1")).toBe(true);
       const queues = new Set(rows.map((row) => row.queueId));
@@ -350,7 +350,7 @@ describe("ProcessStoreQueueResource — entry projections", () => {
   it.live("entries({ queueId, opts: { limit } }) caps the result", () =>
     Effect.gen(function* () {
       yield* fixtures;
-      const facet = yield* ProcessStoreQueueResource;
+      const facet = yield* QueueResourceStore;
       const rows = yield* facet.entries({
         queueId: queueA,
         opts: { limit: 1 },
@@ -367,7 +367,7 @@ describe("ProcessStoreQueueResource — entry projections", () => {
         // not a post-filter — the result MUST contain only "target" rows
         // even when storage holds many rows for unrelated keys, with any
         // `limit` applied to the per-key projection.
-        const facet = yield* ProcessStoreQueueResource;
+        const facet = yield* QueueResourceStore;
         const baseT = 1_700_000_000_000;
         for (let i = 0; i < 5; i++) {
           yield* facet.recordEntry(
@@ -395,12 +395,12 @@ describe("ProcessStoreQueueResource — entry projections", () => {
   );
 });
 
-describe("ProcessStoreQueueResource — lifecycle and dedupe-key projections", () => {
+describe("QueueResourceStore — lifecycle and dedupe-key projections", () => {
   const queueId = "@test/Lifecycle";
   const t = (ms: number) => 1_700_000_000_000 + ms;
 
   const fixtures = Effect.gen(function* () {
-    const facet = yield* ProcessStoreQueueResource;
+    const facet = yield* QueueResourceStore;
     yield* facet.recordLifecycle(lifecycleStarted(queueId, t(0)));
     yield* facet.recordLifecycle(lifecycleCleared(queueId, t(100), 3));
     yield* facet.recordDedupeKey(dedupeAdded(queueId, "k1", t(10)));
@@ -411,7 +411,7 @@ describe("ProcessStoreQueueResource — lifecycle and dedupe-key projections", (
   it.live("lifecycle({ queueId }) returns ordered lifecycle changes", () =>
     Effect.gen(function* () {
       yield* fixtures;
-      const facet = yield* ProcessStoreQueueResource;
+      const facet = yield* QueueResourceStore;
       const rows = yield* facet.lifecycle({ queueId });
       expect(rows.map((row) => row.type)).toEqual([
         "queue.lifecycle.cleared",
@@ -428,7 +428,7 @@ describe("ProcessStoreQueueResource — lifecycle and dedupe-key projections", (
   it.live("lifecycle filters by type", () =>
     Effect.gen(function* () {
       yield* fixtures;
-      const facet = yield* ProcessStoreQueueResource;
+      const facet = yield* QueueResourceStore;
       const rows = yield* facet.lifecycle({
         queueId,
         types: ["queue.lifecycle.started"],
@@ -441,7 +441,7 @@ describe("ProcessStoreQueueResource — lifecycle and dedupe-key projections", (
   it.live("dedupeKeys({ queueId }) returns all changes for the queue", () =>
     Effect.gen(function* () {
       yield* fixtures;
-      const facet = yield* ProcessStoreQueueResource;
+      const facet = yield* QueueResourceStore;
       const rows = yield* facet.dedupeKeys({ queueId });
       expect(rows.every((row) => row.queueId === queueId)).toBe(true);
       expect(rows.map((row) => row.type).sort()).toEqual([
@@ -455,7 +455,7 @@ describe("ProcessStoreQueueResource — lifecycle and dedupe-key projections", (
   it.live("dedupeKeys filters by key", () =>
     Effect.gen(function* () {
       yield* fixtures;
-      const facet = yield* ProcessStoreQueueResource;
+      const facet = yield* QueueResourceStore;
       const rows = yield* facet.dedupeKeys({ queueId, key: "k1" });
       expect(rows.every((row) => row.key === "k1")).toBe(true);
       expect(rows.map((row) => row.type).sort()).toEqual([
@@ -466,13 +466,13 @@ describe("ProcessStoreQueueResource — lifecycle and dedupe-key projections", (
   );
 });
 
-describe("ProcessStoreQueueResource — for(queueId) bound API", () => {
+describe("QueueResourceStore — for(queueId) bound API", () => {
   const queueA = "@test/ForA";
   const queueB = "@test/ForB";
   const t = (ms: number) => 1_700_000_000_000 + ms;
 
   const fixtures = Effect.gen(function* () {
-    const facet = yield* ProcessStoreQueueResource;
+    const facet = yield* QueueResourceStore;
     yield* facet.recordEntry(
       enqueued(queueA, `${queueA}/entry/1`, t(0), { key: "shared" }),
     );
@@ -488,7 +488,7 @@ describe("ProcessStoreQueueResource — for(queueId) bound API", () => {
   it.live("entries() narrows to the bound queueId", () =>
     Effect.gen(function* () {
       yield* fixtures;
-      const bound = yield* ProcessStoreQueueResource.for(queueA);
+      const bound = yield* QueueResourceStore.for(queueA);
       const rows = yield* bound.entries();
       expect(rows.every((row) => row.queueId === queueA)).toBe(true);
     }).pipe(Effect.provide(ProcessStorage.layer)),
@@ -497,7 +497,7 @@ describe("ProcessStoreQueueResource — for(queueId) bound API", () => {
   it.live("entriesByKey() narrows to bound queueId AND requested key", () =>
     Effect.gen(function* () {
       yield* fixtures;
-      const bound = yield* ProcessStoreQueueResource.for(queueA);
+      const bound = yield* QueueResourceStore.for(queueA);
       const rows = yield* bound.entriesByKey("shared");
       expect(rows).toHaveLength(1);
       expect(rows[0]?.queueId).toBe(queueA);
@@ -508,7 +508,7 @@ describe("ProcessStoreQueueResource — for(queueId) bound API", () => {
   it.live("lifecycle() / dedupeKeys() narrow to the bound queue", () =>
     Effect.gen(function* () {
       yield* fixtures;
-      const bound = yield* ProcessStoreQueueResource.for(queueA);
+      const bound = yield* QueueResourceStore.for(queueA);
       const lifecycle = yield* bound.lifecycle();
       const dedupe = yield* bound.dedupeKeys();
       expect(lifecycle.every((row) => row.queueId === queueA)).toBe(true);
@@ -517,10 +517,10 @@ describe("ProcessStoreQueueResource — for(queueId) bound API", () => {
   );
 });
 
-describe("ProcessStoreQueueResource — phantom type accessors", () => {
+describe("QueueResourceStore — phantom type accessors", () => {
   it.live(".Type and .EmitType expose the structural shapes", () =>
     Effect.gen(function* () {
-      const fullShape: ProcessStoreQueueResource.Type = {
+      const fullShape: QueueResourceStore.Type = {
         recordEntry: () => Effect.void,
         recordEntryBatch: () => Effect.void,
         recordLifecycle: () => Effect.void,
@@ -532,7 +532,7 @@ describe("ProcessStoreQueueResource — phantom type accessors", () => {
         lifecycle: () => Effect.succeed([]),
         dedupeKeys: () => Effect.succeed([]),
       };
-      const emitShape: ProcessStoreQueueResource.EmitType = {
+      const emitShape: QueueResourceStore.EmitType = {
         recordEntry: fullShape.recordEntry,
         recordEntryBatch: fullShape.recordEntryBatch,
         recordLifecycle: fullShape.recordLifecycle,
@@ -540,7 +540,7 @@ describe("ProcessStoreQueueResource — phantom type accessors", () => {
         recordDedupeKey: fullShape.recordDedupeKey,
         recordDedupeKeyBatch: fullShape.recordDedupeKeyBatch,
       };
-      const boundShape: ProcessStoreQueueResource.IdentifierType = {
+      const boundShape: QueueResourceStore.IdentifierType = {
         entries: () => Effect.succeed([]),
         entriesByKey: () => Effect.succeed([]),
         lifecycle: () => Effect.succeed([]),

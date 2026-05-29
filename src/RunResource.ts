@@ -51,7 +51,7 @@
  *
  * {@link RunResource.make}, {@link RunResource.layer}, and {@link RunResource.Service}
  * publish per-run facts and `RunResourceState` transitions through the
- * domain-specific {@link ProcessStoreRunResource} facet's static optional
+ * domain-specific {@link RunResourceStore} facet's static optional
  * emitters (`recordRunStarted`, `recordRunCompleted`, `recordRunFailed`,
  * `recordStateChange`). When the facet layer is absent each call is a silent
  * no-op; when present the spine persists the event. RunResource wraps these
@@ -65,9 +65,9 @@
  * ### In-process listeners (no durability)
  *
  * Provide a custom service whose shape matches
- * {@link ProcessStoreRunResource.Type} via `Effect.provideService` /
+ * {@link RunResourceStore.Type} via `Effect.provideService` /
  * `Layer.succeed` and fan out to your callbacks inside each method. A
- * planned future feature (`ProcessStoreRunResource.live(resourceId)`)
+ * planned future feature (`RunResourceStore.live(resourceId)`)
  * will replace this pattern with a proper `Stream` subscription.
  *
  * **Durable run history (compose at app / `ProcessGroup.localEnvLayer`):**
@@ -80,17 +80,17 @@
  * // or ProcessStorage.layer for in-memory dev
  * ```
  *
- * Query persisted runs via {@link ProcessStoreRunResource}:
+ * Query persisted runs via {@link RunResourceStore}:
  *
  * ```ts
- * import { ProcessStoreRunResource } from "@nikscripts/effect-pm/store/RunResource"
+ * import { RunResourceStore } from "@nikscripts/effect-pm/store/RunResource"
  *
- * const runs = yield* ProcessStoreRunResource
+ * const runs = yield* RunResourceStore
  * yield* runs.facts({ resourceId: "@app/FetchPrices" })
  * yield* runs.runs("@app/FetchPrices") // paired started+ended history
  * ```
  *
- * @see {@link ProcessStoreRunResource} for emit (optional) and read/query after compose.
+ * @see {@link RunResourceStore} for emit (optional) and read/query after compose.
  *
  * @module RunResource
  */
@@ -104,7 +104,7 @@ import {
   Ref,
   Semaphore,
 } from "effect";
-import { ProcessStoreRunResource } from "./store/runResource";
+import { RunResourceStore } from "./store/runResource";
 import { ProcessStore } from "./ProcessStore";
 import {
   configureLayer,
@@ -195,7 +195,7 @@ export interface RunResourceRunnerConfig {
 }
 
 /**
- * Re-exports of the {@link ProcessStoreRunResource} facet's domain types
+ * Re-exports of the {@link RunResourceStore} facet's domain types
  * for convenience at the consumer module boundary. The owning module is
  * {@link store/RunResource} — import from
  * `@nikscripts/effect-pm/store/RunResource` if you only need types.
@@ -264,7 +264,7 @@ const makeRunGateEffect = <T, A, E>(
     occurredAt: number,
     payload: RunResourceRunStartedPayload,
   ): Effect.Effect<void, never, never> =>
-    ProcessStoreRunResource.recordRunStarted({
+    RunResourceStore.recordRunStarted({
       id: `${runId}/run-resource.run.started`,
       resourceId,
       runId,
@@ -273,7 +273,7 @@ const makeRunGateEffect = <T, A, E>(
       payload,
     }).pipe(
       ProcessStore.catchErrorAndLog({
-        message: "ProcessStoreRunResource write failed for run start",
+        message: "RunResourceStore write failed for run start",
         level: "warning",
         annotations: { resourceId, runId },
       }),
@@ -284,7 +284,7 @@ const makeRunGateEffect = <T, A, E>(
     occurredAt: number,
     payload: RunResourceRunCompletedPayload,
   ): Effect.Effect<void, never, never> =>
-    ProcessStoreRunResource.recordRunCompleted({
+    RunResourceStore.recordRunCompleted({
       id: `${runId}/run-resource.run.completed`,
       resourceId,
       runId,
@@ -293,7 +293,7 @@ const makeRunGateEffect = <T, A, E>(
       payload,
     }).pipe(
       ProcessStore.catchErrorAndLog({
-        message: "ProcessStoreRunResource write failed for run completion",
+        message: "RunResourceStore write failed for run completion",
         level: "warning",
         annotations: { resourceId, runId },
       }),
@@ -304,7 +304,7 @@ const makeRunGateEffect = <T, A, E>(
     occurredAt: number,
     payload: RunResourceRunFailedPayload,
   ): Effect.Effect<void, never, never> =>
-    ProcessStoreRunResource.recordRunFailed({
+    RunResourceStore.recordRunFailed({
       id: `${runId}/run-resource.run.failed`,
       resourceId,
       runId,
@@ -313,7 +313,7 @@ const makeRunGateEffect = <T, A, E>(
       payload,
     }).pipe(
       ProcessStore.catchErrorAndLog({
-        message: "ProcessStoreRunResource write failed for run failure",
+        message: "RunResourceStore write failed for run failure",
         level: "warning",
         annotations: { resourceId, runId },
       }),
@@ -358,9 +358,9 @@ const makeRunGateEffect = <T, A, E>(
             current,
           ] as const;
         });
-        yield* ProcessStoreRunResource.recordStateChange(change).pipe(
+        yield* RunResourceStore.recordStateChange(change).pipe(
           ProcessStore.catchErrorAndLog({
-            message: "ProcessStoreRunResource write failed for state change",
+            message: "RunResourceStore write failed for state change",
             level: "warning",
             annotations: { resourceId, reason },
           }),
@@ -589,7 +589,7 @@ export const RunResource = {
   /**
    * Create a generic runner that wraps any effect with concurrency gating.
    *
-   * Does not publish {@link ProcessStoreRunResource} facts or state — only semaphore gating.
+   * Does not publish {@link RunResourceStore} facts or state — only semaphore gating.
    * Use {@link RunResource.make} when you need durable or in-process run analytics.
    *
    * Returns a Context.Service tag with `.layer`.

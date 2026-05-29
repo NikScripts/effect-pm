@@ -31,8 +31,8 @@ Higher items unblock remote operations, operator UX, and honest queue typing.
 | 1 | **Remote controls & transport** — `ProcessManager`/CLI polish, configurable control listen/bind, optional `@effect/rpc` / ingress gates, injection of **`ControlTransportClient`** factories | [01-remote-cli-transport-wire.md](./01-remote-cli-transport-wire.md) |
 | 2 | **ProcessGroup endpoint & child launcher DX** — third-arg `Transport`/`Endpoint.*`, removals, canonical vs alternatives | [process-group-endpoint-dx.md](./process-group-endpoint-dx.md) |
 | 3 | **Queues: unified handles, schemas, remote enqueue & handoff** — `QueueResource`/`ProcessGroup` alignment, **`itemSchema`**, release/handoff, then remote enqueue over `ControlService`/`ProcessManager` | [03-queue-remote-handoff.md](./03-queue-remote-handoff.md) |
-| 4 | **Queue analytics / projections / live reads** — `ProcessStoreQueueResource` completeness, dashboards | [04-queue-analytics.md](./04-queue-analytics.md) |
-| 5 | **Log transport abstraction + durable history + live fan-out** — port like control transport, **`ProcessStoreLog`** cursors, optional PubNub | [05-log-transport.md](./05-log-transport.md) |
+| 4 | **Queue analytics / projections / live reads** — `QueueResourceStore` completeness, dashboards | [04-queue-analytics.md](./04-queue-analytics.md) |
+| 5 | **Log transport abstraction + durable history + live fan-out** — port like control transport, **`LogStore`** cursors, optional PubNub | [05-log-transport.md](./05-log-transport.md) |
 | 6 | **Runtime facets: listeners, history shape, mutable config** — beside [STORAGE.md](../STORAGE.md), no revived monolith facade | [06-runtime-hooks-config.md](./06-runtime-hooks-config.md) |
 | 7 | **Schedule identity & persistence boundaries** — stable entry IDs, runtime sync/remove semantics | [07-schedule-identity.md](./07-schedule-identity.md) |
 | 8 | **Lifecycle kernel & process hooks** — explicit transitions + **`Process`** extension hooks without hiding work under schedule/polling alone | [08-lifecycle-kernel-hooks.md](./08-lifecycle-kernel-hooks.md) |
@@ -41,6 +41,7 @@ Higher items unblock remote operations, operator UX, and honest queue typing.
 | 9 | **`Process.spawn` / `QueueResource.open`** — multi-instance scripted supervision **outside** `ProcessGroup.make` tuples; blocks honest **`RemoteService` / per-entry remote layers** | [09-standalone-spawns.md](./09-standalone-spawns.md) |
 | 10 | **TypeScript:** re-enable **`anyUnknownInErrorContext`** (keep **`serviceNotAsClass`** off) | [10-typescript-strict-unknown.md](./10-typescript-strict-unknown.md) |
 | — | **Storage / Prisma follow-up** (adapter landed; polish and docs) | [11-storage-prisma-follow-up.md](./11-storage-prisma-follow-up.md) |
+| — | **Hybrid `RuntimeStorage`** — one layer, SQL + Redis inside adapter | [15-runtime-storage-hybrid.md](./15-runtime-storage-hybrid.md) |
 | — | **Conversation index (May 2026)** — checklist; not implementation spec | [14-conversation-capture-may-2026.md](./14-conversation-capture-may-2026.md) |
 
 ### Dependency hints (soft)

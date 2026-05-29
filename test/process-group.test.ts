@@ -3,7 +3,7 @@ import { describe, expect, it } from "@effect/vitest"
 import { Duration, Effect, Fiber, Ref } from "effect"
 import { ProcessGroup } from "../src"
 import type { Process } from "../src"
-import { ProcessStoreProcessLifecycle } from "../src/store/processLifecycle"
+import { ProcessLifecycleStore } from "../src/store/processLifecycle"
 
 const waitUntilTicked = (ticks: Ref.Ref<number>) =>
   Effect.gen(function* () {
@@ -85,7 +85,7 @@ describe("ProcessGroup — process lifecycle", () => {
       yield* waitUntilTicked(ticks)
       yield* group.stop(process.name)
 
-      const lifecycle = yield* ProcessStoreProcessLifecycle
+      const lifecycle = yield* ProcessLifecycleStore
       const history = yield* lifecycle.lifecycle(process.name)
       // Events are appended after each control; newest-first query order → Stopped before Started
       expect(history.map((row) => row.lifecycle.tag)).toEqual(["Stopped", "Started"])
@@ -107,7 +107,7 @@ describe("ProcessGroup — process lifecycle", () => {
       yield* waitUntilTicked(ticks)
       yield* group.stop(process.name)
 
-      const lifecycle = yield* ProcessStoreProcessLifecycle
+      const lifecycle = yield* ProcessLifecycleStore
       const history = yield* lifecycle.lifecycle(process.name)
       const tags = history.map((row) => row.lifecycle.tag)
       expect(tags.filter((tag) => tag === "Started")).toHaveLength(2)
@@ -130,7 +130,7 @@ describe("ProcessGroup — process lifecycle", () => {
       yield* waitUntilTicked(ticks)
       yield* group.stop(process.name)
 
-      const storeOption = yield* Effect.serviceOption(ProcessStoreProcessLifecycle)
+      const storeOption = yield* Effect.serviceOption(ProcessLifecycleStore)
       expect(storeOption._tag).toBe("None")
     }),
   )

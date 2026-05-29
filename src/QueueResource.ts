@@ -73,7 +73,7 @@ import {
 } from "effect";
 import { withQueueLogAnnotations } from "./LogContext";
 import {
-  ProcessStoreQueueResource,
+  QueueResourceStore,
   type QueueDedupeKeyChange,
   type QueueEntryFact,
   type QueueLifecycleChange,
@@ -1304,11 +1304,11 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
     yield* Effect.logDebug(`Queue "${queueName}" initializing: concurrency=${String(concurrency)}, capacity=${String(capacity)}`);
 
-    // ─── Internal: optional ProcessStoreQueueResource analytics ───
-    // If ProcessStoreQueueResource is available in context, emit events. If not, silent no-op.
+    // ─── Internal: optional QueueResourceStore analytics ───
+    // If QueueResourceStore is available in context, emit events. If not, silent no-op.
     // This makes analytics automatic when the queue facet layer is provided, but never required.
 
-    const storeOption = yield* Effect.serviceOption(ProcessStoreQueueResource);
+    const storeOption = yield* Effect.serviceOption(QueueResourceStore);
     let entrySeq = 0;
     let releaseSeq = 0;
     let entryFactSeq = 0;
@@ -1331,7 +1331,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     ): Effect.Effect<void> =>
       effect.pipe(
         ProcessStore.catchErrorAndLog({
-          message: `ProcessStoreQueueResource write failed for queue "${queueName}" ${label}`,
+          message: `QueueResourceStore write failed for queue "${queueName}" ${label}`,
           level: "warning",
           annotations: {
             queueId: queueName,

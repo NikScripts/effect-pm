@@ -18,7 +18,7 @@
  * When a store layer is composed at the app or {@link ProcessGroup.localEnvLayer}
  * boundary, finished runs emit `process.execution.completed` rows. Without a store,
  * supervisor behavior is unchanged — writes are silent no-ops. Target integration is
- * {@link ProcessStoreProcessExecution} when composed at app or group boundaries.
+ * {@link ProcessExecutionStore} when composed at app or group boundaries.
  *
  * @module Process
  */
@@ -33,7 +33,7 @@ import {
 import { isPollingLayer, isScheduleLayer } from "./internal/processLayerBrand";
 import { ProcessManagerLogAnnotationKeys } from "./LogContext";
 import {
-  ProcessStoreProcessExecution,
+  ProcessExecutionStore,
   type ProcessExecutionFinishInput,
 } from "./store/processExecution";
 import { ProcessStore } from "./ProcessStore";
@@ -59,7 +59,7 @@ export interface Process<out R> {
   readonly type: "managed";
   /**
    * Long-running trigger driver that spawns run instances.
-   * Optional `ProcessStoreProcessExecution` facet — execution rows are recorded when
+   * Optional `ProcessExecutionStore` facet — execution rows are recorded when
    * present, silently skipped when absent (compose at app / {@link ProcessGroup.localEnvLayer}).
    */
   readonly effect: Effect.Effect<void, never, R>;
@@ -414,9 +414,9 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const recordExecutionCompleted = (
     args: Parameters<typeof finishInput>[0],
   ): Effect.Effect<void> =>
-    ProcessStoreProcessExecution.recordCompleted(finishInput(args)).pipe(
+    ProcessExecutionStore.recordCompleted(finishInput(args)).pipe(
       ProcessStore.catchErrorAndLog({
-        message: "ProcessStoreProcessExecution write failed for completed run",
+        message: "ProcessExecutionStore write failed for completed run",
         level: "warning",
         annotations: { processId: name },
       }),
@@ -425,9 +425,9 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const recordExecutionFailed = (
     args: Parameters<typeof finishInput>[0],
   ): Effect.Effect<void> =>
-    ProcessStoreProcessExecution.recordFailed(finishInput(args)).pipe(
+    ProcessExecutionStore.recordFailed(finishInput(args)).pipe(
       ProcessStore.catchErrorAndLog({
-        message: "ProcessStoreProcessExecution write failed for failed run",
+        message: "ProcessExecutionStore write failed for failed run",
         level: "warning",
         annotations: { processId: name },
       }),
@@ -439,7 +439,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   ): Effect.Effect<void, never, RUser> =>
     Effect.gen(function* () {
       const executedAt = yield* Clock.currentTimeMillis;
-      const hasPrior = yield* Effect.serviceOption(ProcessStoreProcessExecution).pipe(
+      const hasPrior = yield* Effect.serviceOption(ProcessExecutionStore).pipe(
         Effect.flatMap(
           Option.match({
             onNone: () => Effect.succeed(false),

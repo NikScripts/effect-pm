@@ -52,7 +52,7 @@
  * **`@nikscripts/effect-pm/ControlService`**.
  *
  * Structured log persistence: `ProcessStore.Log` (also exported as the
- * dedicated `ProcessStoreLog` facet) on the composed store. Capture/relay
+ * dedicated `LogStore` facet) on the composed store. Capture/relay
  * pipeline: `@nikscripts/effect-pm/Logs`.
  * Queue analytics: optional `ProcessStore.QueueResource` facet (internal service, composed by `ProcessStorage.layer`).
  * Storage is `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite` or other `RuntimeStorage` + `ProcessStore` composition.
@@ -310,12 +310,12 @@ export {
   type QueryOpts,
 } from "./ProcessStore";
 
-export { ProcessStoreLog } from "./store/log";
-export type { ProcessStoreLogApi } from "./store/log";
-export { ProcessStoreRunResource } from "./store/runResource";
-export { ProcessStoreProcessExecution } from "./store/processExecution";
-export { ProcessStoreProcessLifecycle } from "./store/processLifecycle";
-export { ProcessStoreProcessGroup } from "./store/processGroup";
+export { LogStore } from "./store/log";
+export type { LogStoreApi } from "./store/log";
+export { RunResourceStore } from "./store/runResource";
+export { ProcessExecutionStore } from "./store/processExecution";
+export { ProcessLifecycleStore } from "./store/processLifecycle";
+export { ProcessGroupStore } from "./store/processGroup";
 export type {
   ProcessExecutionCompletedEvent,
   ProcessExecutionFinishInput,
@@ -333,10 +333,10 @@ export type {
   ProcessGroupMemberLifecycleInput,
 } from "./store/processGroup";
 export type {
-  ProcessStoreQueueResourceDedupeKeyStatus,
-  ProcessStoreQueueResourceEntryStatus,
-  ProcessStoreQueueResourceLifecycleTag,
-  ProcessStoreQueueResourcePriority,
+  QueueResourceStoreDedupeKeyStatus,
+  QueueResourceStoreEntryStatus,
+  QueueResourceStoreLifecycleTag,
+  QueueResourceStorePriority,
   QueueDedupeKeyAddedChange,
   QueueDedupeKeyChange,
   QueueDedupeKeyChangeType,
@@ -365,7 +365,7 @@ export type {
   QueueLifecycleShutdownChange,
   QueueLifecycleStartedChange,
 } from "./store/queueResource";
-export { ProcessStoreQueueResource } from "./store/queueResource";
+export { QueueResourceStore } from "./store/queueResource";
 export type {
   RunResourceFact,
   RunResourceFactQuery,

@@ -6,7 +6,7 @@ Build on the **relay + NDJSON** surface already documented in **`docs/guides/`**
 
 - **`LogTransportClient`/`Server`** (names TBD) mirroring **`ControlTransport*`** —
   **`ProcessManagerLogEntry`** stays the protocol payload.
-- **Storage append + cursor query** (`after`/`before`) via **`ProcessStoreLog`** /
+- **Storage append + cursor query** (`after`/`before`) via **`LogStore`** /
   **`RuntimeStorage`** adapters.
 - **Optional PubNub (or equivalent)** live fan-out; storage remains source of truth
   for backfill/reconnect.

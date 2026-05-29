@@ -22,7 +22,7 @@
  * ## Emit (optional)
  *
  * `QueueResource.make` calls the **static** record helpers on this
- * class (`ProcessStoreQueueResource.recordEntry`, `.recordLifecycle`,
+ * class (`QueueResourceStore.recordEntry`, `.recordLifecycle`,
  * `.recordDedupeKey`, plus their `*Batch` variants). When the facet
  * layer is not composed each call is a silent no-op; when composed it
  * writes through the spine and surfaces typed write failures. Queue internals
@@ -32,18 +32,18 @@
  *
  * Reads come from the resolved instance (via `yield*` or
  * `Effect.serviceOption`) **or** the identifier-bound shortcut
- * `ProcessStoreQueueResource.for(queueId)`:
+ * `QueueResourceStore.for(queueId)`:
  *
  * ```ts
  * // Instance + explicit queueId
- * const queue = yield* ProcessStoreQueueResource;
+ * const queue = yield* QueueResourceStore;
  * yield* queue.entries({ queueId: "@app/Email" });
  * yield* queue.entriesByKey("user-42");
  * yield* queue.lifecycle({ queueId: "@app/Email" });
  * yield* queue.dedupeKeys({ queueId: "@app/Email" });
  *
  * // Identifier-bound shortcut
- * const email = yield* ProcessStoreQueueResource.for("@app/Email");
+ * const email = yield* QueueResourceStore.for("@app/Email");
  * yield* email.entries();
  * yield* email.entriesByKey("user-42");
  * yield* email.lifecycle();
@@ -85,10 +85,10 @@ import type { RuntimeRecord, RuntimeStorageOperationalError } from "../RuntimeSt
 // ============================================================================
 
 /** @public */
-export type ProcessStoreQueueResourcePriority = "high" | "normal" | "low";
+export type QueueResourceStorePriority = "high" | "normal" | "low";
 
 /** @public */
-export type ProcessStoreQueueResourceEntryStatus =
+export type QueueResourceStoreEntryStatus =
   | "enqueued"
   | "started"
   | "completed"
@@ -100,7 +100,7 @@ export type ProcessStoreQueueResourceEntryStatus =
   | "dropped";
 
 /** @public */
-export type ProcessStoreQueueResourceLifecycleTag =
+export type QueueResourceStoreLifecycleTag =
   | "Started"
   | "Paused"
   | "Resumed"
@@ -109,7 +109,7 @@ export type ProcessStoreQueueResourceLifecycleTag =
   | "Drained";
 
 /** @public */
-export type ProcessStoreQueueResourceDedupeKeyStatus =
+export type QueueResourceStoreDedupeKeyStatus =
   | "added"
   | "released"
   | "hydrated";
@@ -152,7 +152,7 @@ interface QueueEntryFactCommon {
   /** Epoch milliseconds. */
   readonly occurredAt: number;
   readonly key?: string;
-  readonly priority?: ProcessStoreQueueResourcePriority;
+  readonly priority?: QueueResourceStorePriority;
   readonly attempts?: number;
   readonly batchId?: string;
   readonly attributes?: Record<string, unknown>;
@@ -421,7 +421,7 @@ const isQueueDedupeKeyChangeType = (
 ): value is QueueDedupeKeyChangeType =>
   isString(value) && queueDedupeKeyChangeTypes.some((type) => type === value);
 
-const queuePriorities: ReadonlyArray<ProcessStoreQueueResourcePriority> = [
+const queuePriorities: ReadonlyArray<QueueResourceStorePriority> = [
   "high",
   "normal",
   "low",
@@ -429,7 +429,7 @@ const queuePriorities: ReadonlyArray<ProcessStoreQueueResourcePriority> = [
 
 const isQueuePriority = (
   value: unknown,
-): value is ProcessStoreQueueResourcePriority =>
+): value is QueueResourceStorePriority =>
   isString(value) && queuePriorities.some((p) => p === value);
 
 // ============================================================================
@@ -606,7 +606,7 @@ interface QueueEntryFactCommonDecoded {
   readonly entryId: string;
   readonly occurredAt: number;
   readonly key?: string;
-  readonly priority?: ProcessStoreQueueResourcePriority;
+  readonly priority?: QueueResourceStorePriority;
   readonly attempts?: number;
   readonly batchId?: string;
   readonly attributes?: Record<string, unknown>;
@@ -959,14 +959,14 @@ const queueDedupeKeyChangesFromRecords = (
  *
  * Read methods (`entries`, `entriesByKey`, `lifecycle`, `dedupeKeys`)
  * are accessed through the resolved instance — `yield*` the facet (or
- * call `Effect.serviceOption(ProcessStoreQueueResource)`) to dispatch.
+ * call `Effect.serviceOption(QueueResourceStore)`) to dispatch.
  *
  * @public
  */
-export class ProcessStoreQueueResource extends ProcessStore.Service<
-  ProcessStoreQueueResource
+export class QueueResourceStore extends ProcessStore.Service<
+  QueueResourceStore
 >()(
-  "@nikscripts/effect-pm/store/queueResource/ProcessStoreQueueResource",
+  "@nikscripts/effect-pm/store/queueResource/QueueResourceStore",
   ProcessStore.record({
     recordEntry: (s) => (fact: QueueEntryFact) =>
       s.create(makeQueueEntryRecord(fact)),
@@ -1046,29 +1046,29 @@ const readDedupeKeys = (
     );
 
 /**
- * Type accessors merged onto {@link ProcessStoreQueueResource} via
+ * Type accessors merged onto {@link QueueResourceStore} via
  * declaration merging:
  *
- * - `ProcessStoreQueueResource.Type` — full service shape (record + read).
- * - `ProcessStoreQueueResource.EmitType` — record-section emit shape only.
+ * - `QueueResourceStore.Type` — full service shape (record + read).
+ * - `QueueResourceStore.EmitType` — record-section emit shape only.
  *
  * Use these to type custom mocks supplied through `Layer.succeed` /
  * `Effect.provideService`:
  *
  * ```ts
- * const mock: ProcessStoreQueueResource.Type = { ... };
+ * const mock: QueueResourceStore.Type = { ... };
  * ```
  *
  * @public
  */
-export declare namespace ProcessStoreQueueResource {
+export declare namespace QueueResourceStore {
   export type Type = ProcessStore.Service.Type<
-    typeof ProcessStoreQueueResource
+    typeof QueueResourceStore
   >;
   export type EmitType = ProcessStore.Service.EmitType<
-    typeof ProcessStoreQueueResource
+    typeof QueueResourceStore
   >;
   export type IdentifierType = ProcessStore.Service.IdentifierType<
-    typeof ProcessStoreQueueResource
+    typeof QueueResourceStore
   >;
 }

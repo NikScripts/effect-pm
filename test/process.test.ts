@@ -3,7 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Layer, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Process, ProcessMakeInvalidLayerArgument, ProcessSchedule } from "../src";
-import { ProcessStoreProcessExecution } from "../src/store/processExecution";
+import { ProcessExecutionStore } from "../src/store/processExecution";
 import { utcDateFromMillis } from "../src/internal/utcDate";
 
 const alwaysOnEntry = {
@@ -56,7 +56,7 @@ describe("Process runtime with schedule windows", () => {
 
       const fib = yield* Effect.forkChild(proc.effect);
       yield* TestClock.adjust(Duration.millis(250));
-      const store = yield* ProcessStoreProcessExecution;
+      const store = yield* ProcessExecutionStore;
       const rows = yield* store.executions({
         processId: proc.name,
       });
@@ -133,7 +133,7 @@ describe("Process runtime with schedule windows", () => {
 
     return Effect.gen(function* () {
         yield* proc.runImmediately();
-        const store = yield* ProcessStoreProcessExecution;
+        const store = yield* ProcessExecutionStore;
       const rows = yield* store.executions({
           processId: proc.name,
         });
@@ -149,7 +149,7 @@ describe("Process runtime with schedule windows", () => {
       });
       yield* proc.runImmediately();
       const rows = yield* Effect.gen(function* () {
-        const store = yield* ProcessStoreProcessExecution;
+        const store = yield* ProcessExecutionStore;
         return yield* store.executions({ processId: proc.name });
       }).pipe(Effect.provide(ProcessStorage.layer));
       expect(rows).toHaveLength(0);
@@ -166,7 +166,7 @@ describe("Process runtime with schedule windows", () => {
       const fib = yield* Effect.forkChild(proc.effect);
       yield* TestClock.adjust(Duration.millis(250));
       const rows = yield* Effect.gen(function* () {
-        const store = yield* ProcessStoreProcessExecution;
+        const store = yield* ProcessExecutionStore;
         return yield* store.executions({ processId: proc.name });
       }).pipe(Effect.provide(ProcessStorage.layer));
       expect(rows).toHaveLength(0);

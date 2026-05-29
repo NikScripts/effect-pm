@@ -50,7 +50,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | File | Teaches |
 |------|---------|
 | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) | `RunResource.make` unit and input forms + concurrency |
-| [`forms/resource/run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) | `ProcessStoreRunResource` per-type facts + `RunResourceState` transitions |
+| [`forms/resource/run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) | `RunResourceStore` per-type facts + `RunResourceState` transitions |
 | [`forms/resource/http-client-run-gate.ts`](./forms/resource/http-client-run-gate.ts) | `HttpClientRunGate.transformClient` |
 | [`forms/resource/http-api-resource-tag-layer.ts`](./forms/resource/http-api-resource-tag-layer.ts) | `HttpApiResource.make` tag + layer |
 | [`forms/resource/http-api-resource-layer-effect.ts`](./forms/resource/http-api-resource-layer-effect.ts) | `HttpApiResource.layerEffect` + sidecar capture |
@@ -67,8 +67,8 @@ Storage options:
 
 - `ProcessStorage.layer` — in-memory built-in storage facets for tests and demos.
 - `ProcessStorage.layerRuntimeStorage` + `@nikscripts/effect-pm/storage/sqlite` — durable local SQLite runtime records.
-- `ProcessStoreLog` — structured log history (`record`, `load`, `query`); `@nikscripts/effect-pm/Logs` handles capture/relay in group children.
-- `ProcessStoreQueueResource` — queue semantic storage facet.
+- `LogStore` — structured log history (`record`, `load`, `query`); `@nikscripts/effect-pm/Logs` handles capture/relay in group children.
+- `QueueResourceStore` — queue semantic storage facet.
 - `PrismaRuntimeStorage` from `@nikscripts/effect-pm/storage/prisma` — Prisma-backed runtime records with app-owned generated client and migrations.
 
 ### Schedule

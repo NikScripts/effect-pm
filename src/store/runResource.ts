@@ -32,15 +32,15 @@
  *
  * ## Compose
  *
- * - `ProcessStoreRunResource.layerRuntimeStorage` — facet on top of an
+ * - `RunResourceStore.layerRuntimeStorage` — facet on top of an
  *   injected {@link RuntimeStorage} (durable backends).
- * - `ProcessStoreRunResource.layer` — facet + in-memory storage
+ * - `RunResourceStore.layer` — facet + in-memory storage
  *   (dev / test).
  *
  * ## Read (after compose)
  *
  * ```ts
- * const runs = yield* ProcessStoreRunResource;
+ * const runs = yield* RunResourceStore;
  * yield* runs.facts({ resourceId: "@app/Gate" });
  * yield* runs.stateHistory({ resourceId: "@app/Gate" });
  * yield* runs.runs("@app/Gate");           // paired started+ended history
@@ -48,7 +48,7 @@
  * yield* runs.latestState("@app/Gate");
  *
  * // Identifier-bound shortcut:
- * const gate = yield* ProcessStoreRunResource.for("@app/Gate");
+ * const gate = yield* RunResourceStore.for("@app/Gate");
  * yield* gate.runs();
  * yield* gate.latestState();
  * ```
@@ -202,7 +202,7 @@ export interface RunResourceStateChange {
 }
 
 /**
- * Filter for {@link ProcessStoreRunResource.facts} queries.
+ * Filter for {@link RunResourceStore.facts} queries.
  *
  * @public
  */
@@ -214,7 +214,7 @@ export interface RunResourceFactQuery {
 }
 
 /**
- * Filter for {@link ProcessStoreRunResource.stateHistory} queries.
+ * Filter for {@link RunResourceStore.stateHistory} queries.
  *
  * @public
  */
@@ -225,7 +225,7 @@ export interface RunResourceStateHistoryQuery {
 
 /**
  * Identifier-bound fact filter (the `resourceId` is supplied by
- * {@link ProcessStoreRunResource.for | for(resourceId)}).
+ * {@link RunResourceStore.for | for(resourceId)}).
  *
  * @public
  */
@@ -237,7 +237,7 @@ export interface RunResourceScopedFactQuery {
 
 /**
  * Identifier-bound state-history filter (the `resourceId` is supplied by
- * {@link ProcessStoreRunResource.for | for(resourceId)}).
+ * {@link RunResourceStore.for | for(resourceId)}).
  *
  * @public
  */
@@ -246,7 +246,7 @@ export interface RunResourceScopedStateHistoryQuery {
 }
 
 /**
- * Paired run record produced by {@link ProcessStoreRunResource.runs} —
+ * Paired run record produced by {@link RunResourceStore.runs} —
  * joins each `started` fact with its matching `completed` / `failed`
  * fact, ordered by `startedAt` descending.
  *
@@ -687,20 +687,20 @@ const factWindowOpts = (
 /**
  * `RunResource` storage facet (see module doc).
  *
- * Instance methods (resolved via `yield* ProcessStoreRunResource`) return
+ * Instance methods (resolved via `yield* RunResourceStore`) return
  * the raw spine error channel (`ProcessStoreWriteError`) so user-provided
  * mocks supplied via `Effect.provideService` / `Layer.succeed` can exercise
  * failure paths directly. The static optional emitters on the class
- * (`ProcessStoreRunResource.recordRunStarted` etc.) no-op when the facet is
+ * (`RunResourceStore.recordRunStarted` etc.) no-op when the facet is
  * absent and otherwise surface write failures; callers that need telemetry-only
  * writes should pipe through `ProcessStore.catchErrorAndLog`.
  *
  * @public
  */
-export class ProcessStoreRunResource extends ProcessStore.Service<
-  ProcessStoreRunResource
+export class RunResourceStore extends ProcessStore.Service<
+  RunResourceStore
 >()(
-  "@nikscripts/effect-pm/store/runResource/ProcessStoreRunResource",
+  "@nikscripts/effect-pm/store/runResource/RunResourceStore",
   ProcessStore.record({
     recordRunStarted: (s) => (fact: RunResourceRunStartedFact) =>
       s.create(makeFactRecord(fact)),
@@ -798,30 +798,30 @@ const readByRun = (
     .pipe(Effect.map((records) => factsFromRecords(records, { runId })));
 
 /**
- * Type accessors merged onto {@link ProcessStoreRunResource} via declaration
+ * Type accessors merged onto {@link RunResourceStore} via declaration
  * merging:
  *
- * - `ProcessStoreRunResource.Type` — full service shape (record + read).
- * - `ProcessStoreRunResource.EmitType` — record-section emit shape only.
+ * - `RunResourceStore.Type` — full service shape (record + read).
+ * - `RunResourceStore.EmitType` — record-section emit shape only.
  *
  * Use these to type custom mocks supplied through `Layer.succeed` /
  * `Effect.provideService` (the recommended way to fan-out to in-process
  * listeners until the future `live()` stream lands):
  *
  * ```ts
- * const mock: ProcessStoreRunResource.Type = { ... };
+ * const mock: RunResourceStore.Type = { ... };
  * ```
  *
  * @public
  */
-export declare namespace ProcessStoreRunResource {
+export declare namespace RunResourceStore {
   export type Type = ProcessStore.Service.Type<
-    typeof ProcessStoreRunResource
+    typeof RunResourceStore
   >;
   export type EmitType = ProcessStore.Service.EmitType<
-    typeof ProcessStoreRunResource
+    typeof RunResourceStore
   >;
   export type IdentifierType = ProcessStore.Service.IdentifierType<
-    typeof ProcessStoreRunResource
+    typeof RunResourceStore
   >;
 }

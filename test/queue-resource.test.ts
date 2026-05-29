@@ -10,7 +10,7 @@ import {
   QueueResource,
   makeQueueItemCodecDescriptor,
 } from "../src/QueueResource";
-import { ProcessStoreQueueResource } from "../src/store/queueResource";
+import { QueueResourceStore } from "../src/store/queueResource";
 
 const fastConfig = { concurrency: 2 };
 
@@ -127,7 +127,7 @@ describe("QueueResource.make — ProcessStore records", () => {
       yield* waitUntilCompleted(queue, 1);
       yield* Effect.sleep(Duration.millis(20));
 
-      const queueResource = yield* ProcessStoreQueueResource;
+      const queueResource = yield* QueueResourceStore;
       const entries = yield* queueResource.entries({
         queueId: "test-store-records",
       });
@@ -161,7 +161,7 @@ describe("QueueResource.make — ProcessStore records", () => {
       yield* queue.resume;
       yield* Effect.sleep(Duration.millis(20));
 
-      const queueResource = yield* ProcessStoreQueueResource;
+      const queueResource = yield* QueueResourceStore;
       const lifecycle = yield* queueResource.lifecycle({
         queueId: "test-store-lifecycle-cleared",
       });
@@ -191,7 +191,7 @@ describe("QueueResource.make — ProcessStore records", () => {
       yield* waitUntilCompleted(queue, 1);
       yield* Effect.sleep(Duration.millis(30));
 
-      const queueResource = yield* ProcessStoreQueueResource;
+      const queueResource = yield* QueueResourceStore;
       const lifecycle = yield* queueResource.lifecycle({
         queueId: "test-store-lifecycle-drained",
       });
@@ -212,7 +212,7 @@ describe("QueueResource.make — ProcessStore records", () => {
       yield* queue.resume;
       yield* Effect.sleep(Duration.millis(20));
 
-      const queueResource = yield* ProcessStoreQueueResource;
+      const queueResource = yield* QueueResourceStore;
       const lifecycle = yield* queueResource.lifecycle({
         queueId: "test-store-lifecycle-pauseresume",
       });
@@ -236,7 +236,7 @@ describe("QueueResource.make — ProcessStore records", () => {
       yield* queue.drop({ key: "drop-me" }, { reason: "cancelled" });
       yield* Effect.sleep(Duration.millis(20));
 
-      const queueResource = yield* ProcessStoreQueueResource;
+      const queueResource = yield* QueueResourceStore;
       const entries = yield* queueResource.entries({
         queueId: "test-store-drop",
         types: ["queue.entry.dropped"],
@@ -265,7 +265,7 @@ describe("QueueResource.make — ProcessStore records", () => {
       yield* queue.deadLetter({ key: "poison" }, { reason: "bad-payload" });
       yield* Effect.sleep(Duration.millis(20));
 
-      const queueResource = yield* ProcessStoreQueueResource;
+      const queueResource = yield* QueueResourceStore;
       const entries = yield* queueResource.entries({
         queueId: "test-store-deadletter",
         types: ["queue.entry.dead-lettered"],
@@ -300,7 +300,7 @@ describe("QueueResource.make — ProcessStore records", () => {
       yield* queue.add([1]);
       yield* Effect.sleep(Duration.millis(200));
 
-      const queueResource = yield* ProcessStoreQueueResource;
+      const queueResource = yield* QueueResourceStore;
       const exhausted = yield* queueResource.entries({
         queueId: "test-store-exhausted",
         types: ["queue.entry.exhausted"],
@@ -329,7 +329,7 @@ describe("QueueResource.make — ProcessStore records", () => {
         yield* waitUntilCompleted(queue, 1);
         yield* Effect.sleep(Duration.millis(20));
 
-        const queueResource = yield* ProcessStoreQueueResource;
+        const queueResource = yield* QueueResourceStore;
         const allChanges = yield* queueResource.dedupeKeys({
           queueId: "test-store-dedupe",
         });
@@ -364,7 +364,7 @@ describe("QueueResource.make — ProcessStore records", () => {
         expect(cleared).toBe(2);
         yield* Effect.sleep(Duration.millis(20));
 
-        const queueResource = yield* ProcessStoreQueueResource;
+        const queueResource = yield* QueueResourceStore;
         const released = yield* queueResource.dedupeKeys({
           queueId: "test-store-dedupe-clear",
           types: ["queue.dedupe-key.released"],
@@ -390,7 +390,7 @@ describe("QueueResource.make — ProcessStore records", () => {
         yield* queue.deadLetter({ key: "dl-1" }, { reason: "poison" });
         yield* Effect.sleep(Duration.millis(20));
 
-        const queueResource = yield* ProcessStoreQueueResource;
+        const queueResource = yield* QueueResourceStore;
         const released = yield* queueResource.dedupeKeys({
           queueId: "test-store-dedupe-route",
           types: ["queue.dedupe-key.released"],
@@ -431,7 +431,7 @@ describe("QueueResource.make — ProcessStore records", () => {
         yield* waitUntilCompleted(queue, 1);
         yield* Effect.sleep(Duration.millis(50));
 
-        const queueResource = yield* ProcessStoreQueueResource;
+        const queueResource = yield* QueueResourceStore;
         const allChanges = yield* queueResource.dedupeKeys({
           queueId: "test-store-dedupe-retry",
           key: "rk-1",
@@ -517,7 +517,7 @@ describe("QueueResource.make — ProcessStore records", () => {
         yield* queue.release({ releaseId: "release-x" });
         yield* Effect.sleep(Duration.millis(20));
 
-        const queueResource = yield* ProcessStoreQueueResource;
+        const queueResource = yield* QueueResourceStore;
         const released = yield* queueResource.dedupeKeys({
           queueId: "test-store-dedupe-release",
           types: ["queue.dedupe-key.released"],
@@ -550,7 +550,7 @@ describe("QueueResource.make — ProcessStore records", () => {
         yield* queue.drop(entry, { reason: "manual-drop-by-handle" });
         yield* Effect.sleep(Duration.millis(20));
 
-        const queueResource = yield* ProcessStoreQueueResource;
+        const queueResource = yield* QueueResourceStore;
         const dropped = yield* queueResource.entries({
           queueId: "test-store-route-entry-path",
           types: ["queue.entry.dropped"],

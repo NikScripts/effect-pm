@@ -1,19 +1,19 @@
 /**
  * **`ProcessGroup` storage facet** — group-scoped lifecycle reads and
- * writes layered on top of {@link ProcessStoreProcessLifecycle}.
+ * writes layered on top of {@link ProcessLifecycleStore}.
  *
  * @remarks
  * Group control paths ({@link ProcessGroup} `start` / `stop` / `restart`)
  * call the **static** emitters on this class so every row carries
  * `attributes.groupId`. Writes delegate to the same wire type as
- * {@link ProcessStoreProcessLifecycle} (`process.lifecycle.changed`) by
+ * {@link ProcessLifecycleStore} (`process.lifecycle.changed`) by
  * importing its row encoder/decoder, so the on-disk shape stays
  * identical. Process-scoped lifecycle without a group (future
  * {@link Process.spawn}, supervisors) uses
- * {@link ProcessStoreProcessLifecycle} directly.
+ * {@link ProcessLifecycleStore} directly.
  *
- * Compose {@link ProcessStoreProcessGroup.layerRuntimeStorage} together
- * with {@link ProcessStoreProcessLifecycle.layerRuntimeStorage} — this
+ * Compose {@link ProcessGroupStore.layerRuntimeStorage} together
+ * with {@link ProcessLifecycleStore.layerRuntimeStorage} — this
  * layer requires the lifecycle facet.
  * {@link ProcessStorage.layerRuntimeStorage} merges both.
  *
@@ -21,7 +21,7 @@
  *
  * | Concern | Where |
  * |--------|-------|
- * | Wire type | `process.lifecycle.changed` (shared with {@link ProcessStoreProcessLifecycle}) |
+ * | Wire type | `process.lifecycle.changed` (shared with {@link ProcessLifecycleStore}) |
  * | Static emit | `recordMemberLifecycle(groupId, input)`, `recordMemberStarted(groupId, processId)` (+ `Stopped` / `Restarted`) |
  * | Reads (instance) | `lifecycleByGroup(groupId, opts?)` |
  * | Reads + writes (bound, `for(groupId)`) | `lifecycle(opts?)`, `recordMemberLifecycle(input)`, `recordMemberStarted(processId)`, `recordMemberStopped(processId)`, `recordMemberRestarted(processId)` |
@@ -31,7 +31,7 @@
  * `groupId` lives in `record.attributes.groupId`. Group queries fetch
  * `process.lifecycle.changed` rows from storage and post-filter on the
  * JSON attribute (matching the shape produced by
- * {@link ProcessStoreProcessLifecycle} writes); `windowOpts` defers
+ * {@link ProcessLifecycleStore} writes); `windowOpts` defers
  * `limit` until after the post-filter so a sparse group cannot collapse
  * a `limit: N` query to zero rows.
  *
@@ -126,10 +126,10 @@ const lifecycleEventsForGroup = (
  *
  * @public
  */
-export class ProcessStoreProcessGroup extends ProcessStore.Service<
-  ProcessStoreProcessGroup
+export class ProcessGroupStore extends ProcessStore.Service<
+  ProcessGroupStore
 >()(
-  "@nikscripts/effect-pm/store/processGroup/ProcessStoreProcessGroup",
+  "@nikscripts/effect-pm/store/processGroup/ProcessGroupStore",
   ProcessStore.read((s) => ({
     lifecycleByGroup: (groupId: string, opts?: QueryOpts) =>
       s
@@ -220,12 +220,12 @@ export class ProcessStoreProcessGroup extends ProcessStore.Service<
 /**
  * @public
  */
-export declare namespace ProcessStoreProcessGroup {
-  export type Type = ProcessStore.Service.Type<typeof ProcessStoreProcessGroup>;
+export declare namespace ProcessGroupStore {
+  export type Type = ProcessStore.Service.Type<typeof ProcessGroupStore>;
   export type EmitType = ProcessStore.Service.EmitType<
-    typeof ProcessStoreProcessGroup
+    typeof ProcessGroupStore
   >;
   export type IdentifierType = ProcessStore.Service.IdentifierType<
-    typeof ProcessStoreProcessGroup
+    typeof ProcessGroupStore
   >;
 }

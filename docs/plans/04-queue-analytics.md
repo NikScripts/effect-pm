@@ -8,7 +8,7 @@
 
 ## Target
 
-After **`ProcessStoreQueueResource`** emits a complete concrete event story:
+After **`QueueResourceStore`** emits a complete concrete event story:
 
 - Lifecycle + item trajectory events (**started**, **completed**, **retry**,
   **dead-letter**, **`release`** family, **`drained`**, …).

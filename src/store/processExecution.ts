@@ -3,7 +3,7 @@
  * rows for every supervisor-tracked run (success, failure, interrupt).
  *
  * @remarks
- * Apps compose {@link ProcessStoreProcessExecution.layerRuntimeStorage}
+ * Apps compose {@link ProcessExecutionStore.layerRuntimeStorage}
  * via {@link ProcessStorage.layerRuntimeStorage} or `layerProcessStore`
  * from `@nikscripts/effect-pm/storage/sqlite`.
  *
@@ -104,7 +104,7 @@ export interface ProcessExecutionFinishInput {
 
 /**
  * Write input used by the identifier-bound record methods on
- * {@link ProcessStoreProcessExecution.for | for(processId)}; the
+ * {@link ProcessExecutionStore.for | for(processId)}; the
  * `processId` is supplied by the binding.
  *
  * @public
@@ -127,7 +127,7 @@ export interface ProcessExecutionQuery {
 
 /**
  * Identifier-bound execution query (the `processId` is supplied by
- * {@link ProcessStoreProcessExecution.for | for(processId)}).
+ * {@link ProcessExecutionStore.for | for(processId)}).
  *
  * @public
  */
@@ -258,10 +258,10 @@ const decodeExecutionsForQuery = (
  *
  * @public
  */
-export class ProcessStoreProcessExecution extends ProcessStore.Service<
-  ProcessStoreProcessExecution
+export class ProcessExecutionStore extends ProcessStore.Service<
+  ProcessExecutionStore
 >()(
-  "@nikscripts/effect-pm/store/processExecution/ProcessStoreProcessExecution",
+  "@nikscripts/effect-pm/store/processExecution/ProcessExecutionStore",
   ProcessStore.record({
     recordCompleted: (s) => (input: ProcessExecutionFinishInput) =>
       s.create(toExecutionRecord(input, "completed")),
@@ -324,14 +324,14 @@ const readHasPriorExecutions = (
       ),
     );
 
-export declare namespace ProcessStoreProcessExecution {
+export declare namespace ProcessExecutionStore {
   export type Type = ProcessStore.Service.Type<
-    typeof ProcessStoreProcessExecution
+    typeof ProcessExecutionStore
   >;
   export type EmitType = ProcessStore.Service.EmitType<
-    typeof ProcessStoreProcessExecution
+    typeof ProcessExecutionStore
   >;
   export type IdentifierType = ProcessStore.Service.IdentifierType<
-    typeof ProcessStoreProcessExecution
+    typeof ProcessExecutionStore
   >;
 }

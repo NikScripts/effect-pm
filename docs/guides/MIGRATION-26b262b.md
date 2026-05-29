@@ -55,7 +55,7 @@ storage rows that may need migration.
       `ProcessStorage.layer`, `ProcessStorage.layerRuntimeStorage`, or
       `layerProcessStore({ filename })` from `@nikscripts/effect-pm/storage/sqlite`.
 - [ ] If you stored durable log rows, migrate or discard rows with
-      `type: "group.log.entry"` before reading them as `ProcessStoreLog`.
+      `type: "group.log.entry"` before reading them as `LogStore`.
 - [ ] Update ProcessManager group endpoint config to
       `Endpoint.local(transport, entry)`, `Endpoint.production(transport)`, or
       `Endpoint.define(label, transport)`.
@@ -104,7 +104,7 @@ Removed or replaced subpaths:
 | `@nikscripts/effect-pm/storage/file` | `@nikscripts/effect-pm/storage/sqlite` |
 | `@nikscripts/effect-pm/store/Runtime` | `@nikscripts/effect-pm/store/RunResource` |
 | `@nikscripts/effect-pm/store/GroupLog` | `@nikscripts/effect-pm/store/Log` |
-| `./ProcessStoreGroupLog` / `./ProcessStoreQueueResource` package subpaths | `store/Log` / `store/QueueResource` |
+| `./ProcessStoreGroupLog` / `./QueueResourceStore` package subpaths | `store/Log` / `store/QueueResource` |
 | `ProcessStoreBuilder` module | `ProcessStore.Service`, `ProcessStore.record`, `ProcessStore.read` |
 
 The package now also publishes the `effect-pm-group-child` binary for
@@ -192,7 +192,7 @@ Queue refill semantics were replaced with lifecycle hooks.
 
 | Old API | Current API |
 | --- | --- |
-| `persist` enqueue option | App storage or `ProcessStoreQueueResource` analytics |
+| `persist` enqueue option | App storage or `QueueResourceStore` analytics |
 | `refill` config | `onDrained`, `onEnqueued`, `onStart`, or explicit app scheduling |
 | `handle.refill()` | Enqueue directly through controls (`add`, `enqueue`, etc.) |
 | `onEmpty` | `onDrained` |
@@ -366,7 +366,7 @@ scripts and contract inspection (`GET /contract`).
 ## Logs
 
 Structured operator logs moved out of `ProcessStore` and into the `Logs`
-capture/relay module plus the `ProcessStoreLog` storage facet.
+capture/relay module plus the `LogStore` storage facet.
 
 Use `@nikscripts/effect-pm/Logs` for capture/relay:
 
@@ -377,9 +377,9 @@ import { relayWithCaptureLoggerLayer } from "@nikscripts/effect-pm/Logs";
 Use `@nikscripts/effect-pm/store/Log` for durable reads/writes:
 
 ```typescript
-import { ProcessStoreLog } from "@nikscripts/effect-pm/store/Log";
+import { LogStore } from "@nikscripts/effect-pm/store/Log";
 
-const logs = yield* ProcessStoreLog;
+const logs = yield* LogStore;
 const rows = yield* logs.load({
   groupId: "@app/Billing",
   limit: 50,
@@ -391,14 +391,14 @@ Breaking rename:
 
 | Old | Current |
 | --- | --- |
-| `ProcessStoreGroupLog` | `ProcessStoreLog` |
-| `ProcessStoreGroupLogApi` | `ProcessStoreLogApi` |
-| `makeProcessStoreGroupLog` | `makeProcessStoreLog` |
+| `ProcessStoreGroupLog` | `LogStore` |
+| `ProcessStoreGroupLogApi` | `LogStoreApi` |
+| `makeProcessStoreGroupLog` | `makeLogStore` |
 | `@nikscripts/effect-pm/store/GroupLog` | `@nikscripts/effect-pm/store/Log` |
 | `group.log.entry` rows | `log.entry` rows |
 
 Existing SQLite rows with `type: "group.log.entry"` do not decode as current
-`ProcessStoreLog` entries. Migrate them to `log.entry` with the current payload
+`LogStore` entries. Migrate them to `log.entry` with the current payload
 shape, or discard/rotate that store before upgrade.
 
 ## ProcessStore, ProcessStorage, and RuntimeStorage
@@ -437,10 +437,10 @@ Static methods are emitters only. Reads now go through the service instance:
 
 ```typescript
 // Before
-const rows = yield* ProcessStoreRunResource.facts({ resourceId: "@app/cache" });
+const rows = yield* RunResourceStore.facts({ resourceId: "@app/cache" });
 
 // After
-const rows = yield* Effect.serviceOption(ProcessStoreRunResource).pipe(
+const rows = yield* Effect.serviceOption(RunResourceStore).pipe(
   Effect.flatMap(
     Option.match({
       onNone: () => Effect.succeed([]),
@@ -453,11 +453,11 @@ const rows = yield* Effect.serviceOption(ProcessStoreRunResource).pipe(
 For dominant identifiers, use the identifier-bound API:
 
 ```typescript
-const queue = yield* ProcessStoreQueueResource.for("@app/EmailQueue");
+const queue = yield* QueueResourceStore.for("@app/EmailQueue");
 const entries = yield* queue.entries({ opts: { limit: 100 } });
 
-const runs = yield* ProcessStoreRunResource.for("@app/cache").runs();
-const executions = yield* ProcessStoreProcessExecution
+const runs = yield* RunResourceStore.for("@app/cache").runs();
+const executions = yield* ProcessExecutionStore
   .for("@app/Billing/SyncInvoices")
   .executions();
 ```
@@ -483,12 +483,12 @@ Use per-domain facets and their concrete query types instead:
 
 | Domain | Current facet |
 | --- | --- |
-| Queue analytics | `ProcessStoreQueueResource` |
-| RunResource facts/state | `ProcessStoreRunResource` |
-| Logs | `ProcessStoreLog` |
-| Process executions | `ProcessStoreProcessExecution` |
-| Process lifecycle | `ProcessStoreProcessLifecycle` |
-| Process group/member lifecycle | `ProcessStoreProcessGroup` |
+| Queue analytics | `QueueResourceStore` |
+| RunResource facts/state | `RunResourceStore` |
+| Logs | `LogStore` |
+| Process executions | `ProcessExecutionStore` |
+| Process lifecycle | `ProcessLifecycleStore` |
+| Process group/member lifecycle | `ProcessGroupStore` |
 
 `ProcessStoreEvent` now only carries shared primitives such as `JsonValue`,
 `QueryOpts`, `AnalyticsEventBase`, and storage write errors.

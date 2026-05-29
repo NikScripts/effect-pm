@@ -6,7 +6,7 @@ validation errors), align **`ProcessGroup`** queue controls with **`QueueHandle`
 
 ## Depends on / coordinates with
 
-- [STORAGE.md](../STORAGE.md) — **`ProcessStoreQueueResource`** for concrete wire
+- [STORAGE.md](../STORAGE.md) — **`QueueResourceStore`** for concrete wire
   events once shapes stabilize.
 - [01-remote-cli-transport-wire.md](./01-remote-cli-transport-wire.md) for the
   actual remote wire once schemas exist.

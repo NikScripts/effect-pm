@@ -1,5 +1,5 @@
 /**
- * Conformance suite for the {@link ProcessStoreProcessLifecycle} facet.
+ * Conformance suite for the {@link ProcessLifecycleStore} facet.
  *
  * Verifies (a) the no-op vs persist semantics of the static optional
  * `lifecycleChanged` emitter, (b) the `lifecycle` /
@@ -12,7 +12,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Option } from "effect";
 import { ProcessStorage } from "../src/ProcessStorage";
 import {
-  ProcessStoreProcessLifecycle,
+  ProcessLifecycleStore,
   type ProcessLifecycleRecordInput,
   type ProcessLifecycleTag,
 } from "../src/store/processLifecycle";
@@ -29,10 +29,10 @@ const lifecycle = (
   ...overrides,
 });
 
-describe("ProcessStoreProcessLifecycle — static optional emitter", () => {
+describe("ProcessLifecycleStore — static optional emitter", () => {
   it.live("no-ops silently when the facet layer is absent", () =>
     Effect.gen(function* () {
-      yield* ProcessStoreProcessLifecycle.lifecycleChanged(
+      yield* ProcessLifecycleStore.lifecycleChanged(
         lifecycle("test/no-layer", "Started", 1_700_000_000_000),
       );
       expect(true).toBe(true);
@@ -42,13 +42,13 @@ describe("ProcessStoreProcessLifecycle — static optional emitter", () => {
   it.live("persists through the spine when the facet is provided", () =>
     Effect.gen(function* () {
       const processId = "test/lifecycle/persist";
-      yield* ProcessStoreProcessLifecycle.lifecycleChanged(
+      yield* ProcessLifecycleStore.lifecycleChanged(
         lifecycle(processId, "Started", 1_700_000_000_000),
       );
-      yield* ProcessStoreProcessLifecycle.lifecycleChanged(
+      yield* ProcessLifecycleStore.lifecycleChanged(
         lifecycle(processId, "Stopped", 1_700_000_000_010),
       );
-      const facet = yield* ProcessStoreProcessLifecycle;
+      const facet = yield* ProcessLifecycleStore;
       const rows = yield* facet.lifecycle(processId);
       expect(rows.map((row) => row.lifecycle.tag).sort()).toEqual([
         "Started",
@@ -58,19 +58,19 @@ describe("ProcessStoreProcessLifecycle — static optional emitter", () => {
   );
 });
 
-describe("ProcessStoreProcessLifecycle — projections", () => {
+describe("ProcessLifecycleStore — projections", () => {
   const a = "test/lifecycle/a";
   const b = "test/lifecycle/b";
 
   it.live("lifecycleForProcesses returns rows for the requested ids", () =>
     Effect.gen(function* () {
-      yield* ProcessStoreProcessLifecycle.lifecycleChanged(
+      yield* ProcessLifecycleStore.lifecycleChanged(
         lifecycle(a, "Started", 1_700_000_000_000),
       );
-      yield* ProcessStoreProcessLifecycle.lifecycleChanged(
+      yield* ProcessLifecycleStore.lifecycleChanged(
         lifecycle(b, "Started", 1_700_000_000_010),
       );
-      const facet = yield* ProcessStoreProcessLifecycle;
+      const facet = yield* ProcessLifecycleStore;
       const rows = yield* facet.lifecycleForProcesses([a, b]);
       const ids = new Set(rows.map((row) => row.entityId));
       expect(ids.has(a)).toBe(true);
@@ -82,27 +82,27 @@ describe("ProcessStoreProcessLifecycle — projections", () => {
     "latestLifecycleByProcess returns the latest tag per process id",
     () =>
       Effect.gen(function* () {
-        yield* ProcessStoreProcessLifecycle.lifecycleChanged(
+        yield* ProcessLifecycleStore.lifecycleChanged(
           lifecycle(a, "Started", 1_700_000_000_100),
         );
-        yield* ProcessStoreProcessLifecycle.lifecycleChanged(
+        yield* ProcessLifecycleStore.lifecycleChanged(
           lifecycle(a, "Stopped", 1_700_000_000_200),
         );
-        const facet = yield* ProcessStoreProcessLifecycle;
+        const facet = yield* ProcessLifecycleStore;
         const latest = yield* facet.latestLifecycleByProcess([a]);
         expect(latest.get(a)).toBe("Stopped");
       }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 });
 
-describe("ProcessStoreProcessLifecycle — for(processId) bound API", () => {
+describe("ProcessLifecycleStore — for(processId) bound API", () => {
   const pid = "test/lifecycle/for/scope";
 
   it.live(
     "lifecycle() / latest() / recordTransition() narrow to the bound id",
     () =>
       Effect.gen(function* () {
-        const bound = yield* ProcessStoreProcessLifecycle.for(pid);
+        const bound = yield* ProcessLifecycleStore.for(pid);
 
         // Initially empty.
         expect(yield* bound.lifecycle()).toEqual([]);
@@ -127,7 +127,7 @@ describe("ProcessStoreProcessLifecycle — for(processId) bound API", () => {
 
         // Other processes are excluded.
         const otherPid = "test/lifecycle/for/other";
-        yield* ProcessStoreProcessLifecycle.lifecycleChanged(
+        yield* ProcessLifecycleStore.lifecycleChanged(
           lifecycle(otherPid, "Started", 1_700_000_000_020),
         );
         const stillScoped = yield* bound.lifecycle();
@@ -138,7 +138,7 @@ describe("ProcessStoreProcessLifecycle — for(processId) bound API", () => {
   it.live("withIdentifier({ id }) accepts an object identifier", () =>
     Effect.gen(function* () {
       const objPid = "test/lifecycle/for/object";
-      const bound = yield* ProcessStoreProcessLifecycle.withIdentifier({
+      const bound = yield* ProcessLifecycleStore.withIdentifier({
         id: objPid,
       });
       yield* bound.recordTransition({ tag: "Started" });
@@ -148,20 +148,20 @@ describe("ProcessStoreProcessLifecycle — for(processId) bound API", () => {
   );
 });
 
-describe("ProcessStoreProcessLifecycle — phantom type accessors", () => {
+describe("ProcessLifecycleStore — phantom type accessors", () => {
   it.live(".Type / .EmitType / .IdentifierType expose structural shapes", () =>
     Effect.gen(function* () {
-      const fullShape: ProcessStoreProcessLifecycle.Type = {
+      const fullShape: ProcessLifecycleStore.Type = {
         lifecycleChanged: () => Effect.void,
         lifecycle: () => Effect.succeed([]),
         lifecycleForProcesses: () => Effect.succeed([]),
         latestLifecycleByProcess: () =>
           Effect.succeed(new Map<string, ProcessLifecycleTag>()),
       };
-      const emitShape: ProcessStoreProcessLifecycle.EmitType = {
+      const emitShape: ProcessLifecycleStore.EmitType = {
         lifecycleChanged: fullShape.lifecycleChanged,
       };
-      const boundShape: ProcessStoreProcessLifecycle.IdentifierType = {
+      const boundShape: ProcessLifecycleStore.IdentifierType = {
         lifecycle: () => Effect.succeed([]),
         latest: () => Effect.succeed(Option.none()),
         recordTransition: () => Effect.void,

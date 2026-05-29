@@ -6,7 +6,7 @@ import {
   ProcessManagerLogQueryError,
   replayLogQueryResults,
 } from "./logQuery";
-import { ProcessStoreLog } from "../../store/log";
+import { LogStore } from "../../store/log";
 import { groupLogSqlitePath, resolveChildLaunchPaths } from "./childLaunch";
 import { layerProcessStore } from "../../storage/sqlite/index";
 import type { ProcessManagerLogEntry } from "../../LogEntry";
@@ -86,7 +86,7 @@ export const queryGroupLogsForCatalog = (
       for (const group of groups) {
         const sqliteFilename = groupLogSqlitePath(paths.logDirectory, group.id);
         const groupQuery = { ...query, groupId: group.id, limit: perGroupLimit };
-        const loaded = yield* Effect.serviceOption(ProcessStoreLog).pipe(
+        const loaded = yield* Effect.serviceOption(LogStore).pipe(
           Effect.flatMap(
             Option.match({
               onNone: () => Effect.succeed([]),
@@ -124,14 +124,14 @@ export const queryGroupLogsForCatalog = (
       });
     }
     const sqliteFilename = groupLogSqlitePath(paths.logDirectory, groupId);
-    yield* Effect.serviceOption(ProcessStoreLog).pipe(
+    yield* Effect.serviceOption(LogStore).pipe(
       Effect.flatMap(
         Option.match({
           onNone: () =>
             Effect.fail(
               new ProcessManagerLogQueryError({
                 reason:
-                  "ProcessStoreLog layer is not provided; compose ProcessStorage.layer or layerProcessStore(...) before reading log history.",
+                  "LogStore layer is not provided; compose ProcessStorage.layer or layerProcessStore(...) before reading log history.",
               }),
             ),
           onSome: (log) => log.query(query).pipe(Effect.mapError(storageLogQueryError)),

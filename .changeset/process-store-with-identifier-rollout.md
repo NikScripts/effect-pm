@@ -14,16 +14,16 @@ identifier-scoped read (and, where natural, write) API. The unbound
 Added — `for(id)` bindings
 --------------------------
 
-- `ProcessStoreQueueResource.for(queueId)` — `entries(query?)`,
+- `QueueResourceStore.for(queueId)` — `entries(query?)`,
   `entriesByKey(key, query?)`, `lifecycle(query?)`, `dedupeKeys(query?)`.
   All four narrow to the bound `queueId` (and still respect any other
   filters supplied through the bound query).
-- `ProcessStoreRunResource.for(resourceId)` — `facts(query?)`,
+- `RunResourceStore.for(resourceId)` — `facts(query?)`,
   `stateHistory(query?)`, `latestState()`, `runs()`, `byRun(runId)`.
-- `ProcessStoreProcessLifecycle.for(processId)` — `lifecycle(opts?)`,
+- `ProcessLifecycleStore.for(processId)` — `lifecycle(opts?)`,
   `latest()` (returns `Option<ProcessLifecycleTag>`),
   `recordTransition({ tag, error?, occurredAt?, attributes? })`.
-- `ProcessStoreProcessExecution.for(processId)` — `executions(query?)`,
+- `ProcessExecutionStore.for(processId)` — `executions(query?)`,
   `hasPriorExecutions()`, `recordCompleted(input)` /
   `recordFailed(input)` / `recordInterrupted(input)` (each takes
   `Omit<ProcessExecutionFinishInput, "processId">`).
@@ -57,10 +57,10 @@ all six storage facets adds:
 
 - Field-by-field comments on `RuntimeRecord` and per-method comments on
   `ProcessStoreSpine` / `RuntimeStorageService`.
-- "At-a-glance" tables on `ProcessStoreRunResource`,
-  `ProcessStoreQueueResource` (wire types × indexed columns),
-  `ProcessStoreProcessExecution`, `ProcessStoreProcessLifecycle`,
-  `ProcessStoreProcessGroup`, `ProcessStoreLog`.
+- "At-a-glance" tables on `RunResourceStore`,
+  `QueueResourceStore` (wire types × indexed columns),
+  `ProcessExecutionStore`, `ProcessLifecycleStore`,
+  `ProcessGroupStore`, `LogStore`.
 - `@example` blocks on `ProcessStorage.layer` /
   `ProcessStorage.layerRuntimeStorage` and on the `ProcessStore` builder.
 - Reworded `ProcessStoreEvent` module + `AnalyticsEventBase` doc to

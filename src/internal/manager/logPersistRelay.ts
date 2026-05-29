@@ -1,5 +1,5 @@
 /**
- * Process-manager log capture relay (persists via {@link ProcessStoreLog}).
+ * Process-manager log capture relay (persists via {@link LogStore}).
  *
  * @module processManagerLogsRelay
  */
@@ -11,7 +11,7 @@ import {
   ProcessManagerLogRelay,
   type ProcessManagerLogRelayService,
 } from "./logCapture";
-import { ProcessStoreLog } from "../../store/log";
+import { LogStore } from "../../store/log";
 import { ProcessStore } from "../../ProcessStore";
 
 const storeFlushInterval = Duration.millis(250);
@@ -39,9 +39,9 @@ const makePersistingRelay = (
       if (batch.length === 0) {
         return;
       }
-      yield* ProcessStoreLog.recordBatch(groupOption.value.groupId, batch).pipe(
+      yield* LogStore.recordBatch(groupOption.value.groupId, batch).pipe(
         ProcessStore.catchErrorAndLog({
-          message: "ProcessStoreLog write failed while relaying logs",
+          message: "LogStore write failed while relaying logs",
           level: "warning",
           annotations: { groupId: groupOption.value.groupId },
         }),
@@ -78,7 +78,7 @@ const makePersistingRelay = (
   });
 
 /**
- * Relay layer with in-memory tail plus batched flush into {@link ProcessStoreLog}.
+ * Relay layer with in-memory tail plus batched flush into {@link LogStore}.
  *
  * @public
  */

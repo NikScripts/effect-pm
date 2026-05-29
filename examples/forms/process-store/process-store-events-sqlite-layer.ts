@@ -9,10 +9,10 @@ import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Effect, FileSystem, Layer, Path } from "effect";
 import {
-  ProcessStoreRunResource,
+  RunResourceStore,
   RunResource,
 } from "../../../src";
-import { ProcessStoreProcessLifecycle } from "../../../src/store/processLifecycle";
+import { ProcessLifecycleStore } from "../../../src/store/processLifecycle";
 import { layerProcessStore } from "../../../src/storage/sqlite";
 
 const platformLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
@@ -39,20 +39,20 @@ const program = Effect.gen(function* () {
       concurrency: 1,
     });
 
-    yield* ProcessStoreProcessLifecycle.lifecycleChanged({
+    yield* ProcessLifecycleStore.lifecycleChanged({
       processId: "examples/ManualProcess",
       tag: "Started",
     });
 
     yield* gate(41);
 
-    const runs = yield* ProcessStoreRunResource;
+    const runs = yield* RunResourceStore;
     const runtimeFacts = yield* runs.facts({
       resourceId: "examples/SqliteBackedGate",
       types: ["run-resource.run.started", "run-resource.run.completed"],
     });
 
-    const lifecycle = yield* ProcessStoreProcessLifecycle;
+    const lifecycle = yield* ProcessLifecycleStore;
     const processEvents = yield* lifecycle.lifecycle("examples/ManualProcess");
 
     yield* Effect.log(

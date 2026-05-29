@@ -2,7 +2,7 @@ import { ProcessStorage } from "../src/ProcessStorage";
 import { it, describe, expect } from "@effect/vitest";
 import { Effect, Layer, Option, Ref } from "effect";
 import { RunResource } from "../src/RunResource";
-import { ProcessStoreRunResource } from "../src/store/runResource";
+import { RunResourceStore } from "../src/store/runResource";
 import type {
   RunResourceFact,
   RunResourceFactType,
@@ -13,9 +13,9 @@ import type {
 import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
 
 // Local listener shape used by the in-process fan-out helper below.
-// Until the planned `ProcessStoreRunResource.live(resourceId): Stream<...>`
+// Until the planned `RunResourceStore.live(resourceId): Stream<...>`
 // ships, in-process observation works by providing a custom service whose
-// shape matches `ProcessStoreRunResource.Type`. Listener failures are
+// shape matches `RunResourceStore.Type`. Listener failures are
 // ignored so observation cannot change the gated effect's success/error
 // channel — mirroring RunResource's explicit `ProcessStore.catchErrorAndLog`
 // wrapping around telemetry writes.
@@ -28,7 +28,7 @@ interface RunResourceObservationListener {
 
 const listenerRunResourceFacet = (
   listeners: ReadonlyArray<RunResourceObservationListener>,
-): ProcessStoreRunResource.Type => {
+): RunResourceStore.Type => {
   const fanFact = (fact: RunResourceFact): Effect.Effect<void> =>
     Effect.forEach(
       listeners,
@@ -200,7 +200,7 @@ describe("RunResource.make (raw scoped)", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.live("runs without ProcessStoreRunResource and does not require storage", () =>
+  it.live("runs without RunResourceStore and does not require storage", () =>
     Effect.gen(function* () {
       const gate = yield* RunResource.make({
         name: "@test/UnobservedGate",
@@ -213,12 +213,12 @@ describe("RunResource.make (raw scoped)", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.live("publishes runtime facts when ProcessStoreRunResource is provided", () =>
+  it.live("publishes runtime facts when RunResourceStore is provided", () =>
     Effect.gen(function* () {
       const facts = yield* Ref.make<ReadonlyArray<RunResourceFact>>([]);
       const recordFact = (fact: RunResourceFact) =>
         Ref.update(facts, (items) => [...items, fact]);
-      const facet: ProcessStoreRunResource.Type = {
+      const facet: RunResourceStore.Type = {
         recordRunStarted: recordFact,
         recordRunCompleted: recordFact,
         recordRunFailed: recordFact,
@@ -255,18 +255,18 @@ describe("RunResource.make (raw scoped)", () => {
         expect(observedFacts.every((fact) => fact.resourceId === "@test/ObservedGate"))
           .toBe(true);
       }).pipe(
-        Effect.provideService(ProcessStoreRunResource, facet),
+        Effect.provideService(RunResourceStore, facet),
         Effect.scoped,
       );
     }),
   );
 
-  it.live("publishes runtime state changes when ProcessStoreRunResource is provided", () =>
+  it.live("publishes runtime state changes when RunResourceStore is provided", () =>
     Effect.gen(function* () {
       const changes = yield* Ref.make<ReadonlyArray<RunResourceStateChange>>(
         [],
       );
-      const facet: ProcessStoreRunResource.Type = {
+      const facet: RunResourceStore.Type = {
         recordStateChange: (change) =>
           Ref.update(changes, (items) => [...items, change]),
         recordRunStarted: () => Effect.void,
@@ -314,7 +314,7 @@ describe("RunResource.make (raw scoped)", () => {
           throw new Error("Expected final RunResource state change");
         }
       }).pipe(
-        Effect.provideService(ProcessStoreRunResource, facet),
+        Effect.provideService(RunResourceStore, facet),
         Effect.scoped,
       );
     }),
@@ -363,7 +363,7 @@ describe("RunResource.make (raw scoped)", () => {
         expect(trailing).toBe(3);
       }).pipe(
         Effect.provideService(
-          ProcessStoreRunResource,
+          RunResourceStore,
           listenerRunResourceFacet(listeners),
         ),
         Effect.scoped,
@@ -371,7 +371,7 @@ describe("RunResource.make (raw scoped)", () => {
     }),
   );
 
-  it.live("persists observed runtime facts through ProcessStoreRunResource", () =>
+  it.live("persists observed runtime facts through RunResourceStore", () =>
     Effect.gen(function* () {
       const gate = yield* RunResource.make({
         name: "@test/ObservedStoreGate",
@@ -380,7 +380,7 @@ describe("RunResource.make (raw scoped)", () => {
       });
 
       const result = yield* gate(1);
-      const runs = yield* ProcessStoreRunResource;
+      const runs = yield* RunResourceStore;
       const stored = yield* runs.facts({
         resourceId: "@test/ObservedStoreGate",
       });
@@ -407,10 +407,10 @@ describe("RunResource.make (raw scoped)", () => {
     }).pipe(Effect.provide(runResourceObservationLayer), Effect.scoped),
   );
 
-  it.live("isolates ProcessStoreRunResource write failures from gated effect success", () => {
+  it.live("isolates RunResourceStore write failures from gated effect success", () => {
     const fail = () =>
       Effect.fail(new ProcessStoreReadonlyRecordError({ id: "x" }));
-    const failingFacet: ProcessStoreRunResource.Type = {
+    const failingFacet: RunResourceStore.Type = {
       recordRunStarted: fail,
       recordRunCompleted: fail,
       recordRunFailed: fail,
@@ -434,12 +434,12 @@ describe("RunResource.make (raw scoped)", () => {
       const result = yield* gate(1);
       expect(result).toBe(2);
     }).pipe(
-      Effect.provide(Layer.succeed(ProcessStoreRunResource, failingFacet)),
+      Effect.provide(Layer.succeed(RunResourceStore, failingFacet)),
       Effect.scoped,
     );
   });
 
-  it.live("round-trips observed facts through ProcessStoreRunResource queries", () =>
+  it.live("round-trips observed facts through RunResourceStore queries", () =>
     Effect.gen(function* () {
       const resourceId = "@test/RuntimeQueryGate";
       const gate = yield* RunResource.make({
@@ -449,7 +449,7 @@ describe("RunResource.make (raw scoped)", () => {
       });
 
       const result = yield* gate(41);
-      const runs = yield* ProcessStoreRunResource;
+      const runs = yield* RunResourceStore;
       const facts = yield* runs.facts({
         resourceId,
         types: ["run-resource.run.started", "run-resource.run.completed"],

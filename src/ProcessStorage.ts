@@ -35,42 +35,42 @@
  *
  * ### Facet classes (aliases)
  *
- * Each property points at the corresponding **`ProcessStore*`** facet class —
- * shorter names under one import: **`ProcessStorage.QueueResource`** is
- * **`ProcessStoreQueueResource`**, etc. Layers and **`Effect.serviceOption`** work
- * the same whether you import from here or **`@nikscripts/effect-pm/store/*`**.
+ * Each property is a **facet store class** (`QueueResourceStore`, …) under a
+ * shorter import path: **`ProcessStorage.QueueResource`** === **`QueueResourceStore`**.
+ * Layers and **`Effect.serviceOption`** work the same from here or
+ * **`@nikscripts/effect-pm/store/*`**.
  *
  * @module ProcessStorage
  */
 
 import { Layer } from "effect";
 import { RuntimeStorage } from "./RuntimeStorage";
-import { ProcessStoreLog } from "./store/log";
-import { ProcessStoreProcessExecution } from "./store/processExecution";
-import { ProcessStoreProcessGroup } from "./store/processGroup";
-import { ProcessStoreProcessLifecycle } from "./store/processLifecycle";
-import { ProcessStoreQueueResource } from "./store/queueResource";
-import { ProcessStoreRunResource } from "./store/runResource";
+import { LogStore } from "./store/log";
+import { ProcessExecutionStore } from "./store/processExecution";
+import { ProcessGroupStore } from "./store/processGroup";
+import { ProcessLifecycleStore } from "./store/processLifecycle";
+import { QueueResourceStore } from "./store/queueResource";
+import { RunResourceStore } from "./store/runResource";
 
-const processLifecycleLayer = ProcessStoreProcessLifecycle.layerRuntimeStorage;
+const processLifecycleLayer = ProcessLifecycleStore.layerRuntimeStorage;
 
 const processGroupLayer = Layer.provide(
-  ProcessStoreProcessGroup.layerRuntimeStorage,
+  ProcessGroupStore.layerRuntimeStorage,
   processLifecycleLayer,
 );
 
 const facetLayers = Layer.mergeAll(
-  ProcessStoreLog.layerRuntimeStorage,
-  ProcessStoreQueueResource.layerRuntimeStorage,
-  ProcessStoreRunResource.layerRuntimeStorage,
-  ProcessStoreProcessExecution.layerRuntimeStorage,
+  LogStore.layerRuntimeStorage,
+  QueueResourceStore.layerRuntimeStorage,
+  RunResourceStore.layerRuntimeStorage,
+  ProcessExecutionStore.layerRuntimeStorage,
   processLifecycleLayer,
   processGroupLayer,
 );
 
 /**
  * Combined storage **layers** plus **facet class aliases** (same tags as the
- * public `ProcessStore*` services).
+ * public `*Store` facet services).
  *
  * @public
  */
@@ -91,34 +91,34 @@ export const ProcessStorage = {
     RuntimeStorage.layer,
   ),
 
-  /** Alias for {@link ProcessStoreLog} (`log.entry` rows, durable log reads). */
-  Log: ProcessStoreLog,
+  /** Alias for {@link LogStore} (`log.entry` rows, durable log reads). */
+  Log: LogStore,
 
   /**
    * Storage facet for **`QueueResource`** analytics — alias for
-   * {@link ProcessStoreQueueResource}. Not the queue worker service.
+   * {@link QueueResourceStore}. Not the queue worker service.
    */
-  QueueResource: ProcessStoreQueueResource,
+  QueueResource: QueueResourceStore,
 
-  /** Alias for {@link ProcessStoreRunResource}. */
-  RunResource: ProcessStoreRunResource,
+  /** Alias for {@link RunResourceStore}. */
+  RunResource: RunResourceStore,
 
-  /** Alias for {@link ProcessStoreProcessExecution}. */
-  ProcessExecution: ProcessStoreProcessExecution,
+  /** Alias for {@link ProcessExecutionStore}. */
+  ProcessExecution: ProcessExecutionStore,
 
-  /** Alias for {@link ProcessStoreProcessLifecycle}. */
-  ProcessLifecycle: ProcessStoreProcessLifecycle,
+  /** Alias for {@link ProcessLifecycleStore}. */
+  ProcessLifecycle: ProcessLifecycleStore,
 
-  /** Alias for {@link ProcessStoreProcessGroup}. */
-  ProcessGroup: ProcessStoreProcessGroup,
+  /** Alias for {@link ProcessGroupStore}. */
+  ProcessGroup: ProcessGroupStore,
 } as const;
 
 export declare namespace ProcessStorage {
   export type Services =
-    | ProcessStoreLog
-    | ProcessStoreQueueResource
-    | ProcessStoreRunResource
-    | ProcessStoreProcessExecution
-    | ProcessStoreProcessLifecycle
-    | ProcessStoreProcessGroup;
+    | LogStore
+    | QueueResourceStore
+    | RunResourceStore
+    | ProcessExecutionStore
+    | ProcessLifecycleStore
+    | ProcessGroupStore;
 }

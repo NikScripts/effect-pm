@@ -57,6 +57,6 @@ describe("processManagerLogQuery", () => {
       assert.strictEqual(query.processId, "billing/sync");
       const error = yield* queryGroupLogs(query).pipe(Effect.flip);
       assert.instanceOf(error, ProcessManagerLogQueryError);
-      assert.match(error.reason, /ProcessStoreLog layer is not provided/);
+      assert.match(error.reason, /LogStore layer is not provided/);
     }));
 });

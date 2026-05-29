@@ -60,7 +60,7 @@ import { ProcessId, Type } from "../Query";
 import type { RuntimeRecord, RuntimeStorageOperationalError } from "../RuntimeStorage";
 
 /**
- * Structured log line persisted by {@link ProcessStoreLog} for operator
+ * Structured log line persisted by {@link LogStore} for operator
  * `pm logs` / `pm watch` history. `entityId` is an opaque log-bucket id
  * supplied by the relay (today: the PM log annotation).
  *
@@ -94,11 +94,11 @@ export const isLogEntryRecorded = (
   event.type === "log.entry" && event.entityType === "log";
 
 /**
- * Service shape for {@link ProcessStoreLog}.
+ * Service shape for {@link LogStore}.
  *
  * @public
  */
-export interface ProcessStoreLogApi {
+export interface LogStoreApi {
   readonly record: (
     groupId: string,
     entryId: string,
@@ -354,12 +354,12 @@ const queryEntries = (
 // ============================================================================
 
 /**
- * Context tag for {@link ProcessStoreLogApi}.
+ * Context tag for {@link LogStoreApi}.
  *
  * @public
  */
-export class ProcessStoreLog extends ProcessStore.Service<ProcessStoreLog>()(
-  "@nikscripts/effect-pm/store/log/ProcessStoreLog",
+export class LogStore extends ProcessStore.Service<LogStore>()(
+  "@nikscripts/effect-pm/store/log/LogStore",
   ProcessStore.record({
     record:
       (s) =>
@@ -390,11 +390,11 @@ export class ProcessStoreLog extends ProcessStore.Service<ProcessStoreLog>()(
 ) {}
 
 /**
- * Type accessors for {@link ProcessStoreLog}.
+ * Type accessors for {@link LogStore}.
  *
  * @public
  */
-export declare namespace ProcessStoreLog {
-  export type Type = ProcessStore.Service.Type<typeof ProcessStoreLog>;
-  export type EmitType = ProcessStore.Service.EmitType<typeof ProcessStoreLog>;
+export declare namespace LogStore {
+  export type Type = ProcessStore.Service.Type<typeof LogStore>;
+  export type EmitType = ProcessStore.Service.EmitType<typeof LogStore>;
 }

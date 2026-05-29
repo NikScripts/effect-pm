@@ -53,12 +53,12 @@ import { Context, Effect, Layer, Scope } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import type { SqlError } from "effect/unstable/sql/SqlError";
 import { ProcessStorage } from "../../ProcessStorage";
-import type { ProcessStoreLog } from "../../store/log";
-import type { ProcessStoreProcessExecution } from "../../store/processExecution";
-import type { ProcessStoreProcessGroup } from "../../store/processGroup";
-import type { ProcessStoreProcessLifecycle } from "../../store/processLifecycle";
-import type { ProcessStoreQueueResource } from "../../store/queueResource";
-import type { ProcessStoreRunResource } from "../../store/runResource";
+import type { LogStore } from "../../store/log";
+import type { ProcessExecutionStore } from "../../store/processExecution";
+import type { ProcessGroupStore } from "../../store/processGroup";
+import type { ProcessLifecycleStore } from "../../store/processLifecycle";
+import type { QueueResourceStore } from "../../store/queueResource";
+import type { RunResourceStore } from "../../store/runResource";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import {
   RuntimeStorageConnectionError,
@@ -163,12 +163,12 @@ export const fromSqlClient = (
 export const layerProcessStore = (
   config: SQLiteRuntimeStorageConfig,
 ): Layer.Layer<
-  | ProcessStoreLog
-  | ProcessStoreQueueResource
-  | ProcessStoreRunResource
-  | ProcessStoreProcessExecution
-  | ProcessStoreProcessLifecycle
-  | ProcessStoreProcessGroup,
+  | LogStore
+  | QueueResourceStore
+  | RunResourceStore
+  | ProcessExecutionStore
+  | ProcessLifecycleStore
+  | ProcessGroupStore,
   RuntimeStorageConnectionError | RuntimeStorageSchemaError,
   Scope.Scope
 > =>
@@ -185,12 +185,12 @@ export const layerProcessStore = (
 export const layerProcessStoreOrDie = (
   config: SQLiteRuntimeStorageConfig,
 ): Layer.Layer<
-  | ProcessStoreLog
-  | ProcessStoreQueueResource
-  | ProcessStoreRunResource
-  | ProcessStoreProcessExecution
-  | ProcessStoreProcessLifecycle
-  | ProcessStoreProcessGroup,
+  | LogStore
+  | QueueResourceStore
+  | RunResourceStore
+  | ProcessExecutionStore
+  | ProcessLifecycleStore
+  | ProcessGroupStore,
   never,
   Scope.Scope
 > => layerProcessStore(config).pipe(Layer.orDie);

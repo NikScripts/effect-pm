@@ -1,6 +1,6 @@
 import { Data, Effect, Option } from "effect";
 import { utcDateFromMillis } from "../utcDate";
-import { ProcessStoreLog } from "../../store/log";
+import { LogStore } from "../../store/log";
 import type { ProcessManagerLogScope } from "./logScope";
 import type { ProcessManagerLogEntry } from "../../LogEntry";
 import { replayLogEntry } from "./logCapture";
@@ -162,14 +162,14 @@ export const buildProcessManagerLogQuery = (input: {
 export const queryGroupLogs = (
   query: ProcessManagerLogQuery,
 ): Effect.Effect<void, ProcessManagerLogQueryError> =>
-  Effect.serviceOption(ProcessStoreLog).pipe(
+  Effect.serviceOption(LogStore).pipe(
     Effect.flatMap(
       Option.match({
         onNone: () =>
           Effect.fail(
             new ProcessManagerLogQueryError({
               reason:
-                "ProcessStoreLog layer is not provided; compose ProcessStorage.layer or layerProcessStore(...) before reading log history.",
+                "LogStore layer is not provided; compose ProcessStorage.layer or layerProcessStore(...) before reading log history.",
             }),
           ),
         onSome: (log) => log.query(query).pipe(Effect.mapError(storageLogQueryError)),

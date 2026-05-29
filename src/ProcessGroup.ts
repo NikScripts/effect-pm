@@ -20,8 +20,8 @@
  * `start`, `stop`, and `restart` append `process.lifecycle.changed` events when the
  * store stack is composed ({@link ProcessStorage.layer} or
  * {@link ProcessGroup.localEnvLayer}). Typed groups with an `id` use
- * {@link ProcessStoreProcessGroup} (rows include `attributes.groupId`). Untyped
- * {@link makeProcessGroup} without `id` uses {@link ProcessStoreProcessLifecycle}
+ * {@link ProcessGroupStore} (rows include `attributes.groupId`). Untyped
+ * {@link makeProcessGroup} without `id` uses {@link ProcessLifecycleStore}
  * only. No facet layer → identical control behavior, zero analytics I/O.
  *
  * | Control | Tag(s) written | Notes |
@@ -103,13 +103,13 @@ import {
 import { layerProcessGroupLogContext } from "./LogContext";
 import { ProcessStorage } from "./ProcessStorage";
 import { ProcessStore } from "./ProcessStore";
-import { ProcessStoreProcessGroup } from "./store/processGroup";
+import { ProcessGroupStore } from "./store/processGroup";
 import {
-  ProcessStoreProcessExecution,
+  ProcessExecutionStore,
   type ProcessExecutionCompletedEvent,
 } from "./store/processExecution";
 import {
-  ProcessStoreProcessLifecycle,
+  ProcessLifecycleStore,
   type ProcessLifecycleTag,
 } from "./store/processLifecycle";
 
@@ -445,7 +445,7 @@ export type ProcessStatus = "running" | "stopped";
  * | Field group | Source |
  * |-------------|--------|
  * | `status`, `uptime`, `startTime` | {@link FiberMap} liveness + group start-time ref |
- * | `lastRun`, `executions`, `firstStartup` | `yield* ProcessStoreProcessExecution` → `.executions` |
+ * | `lastRun`, `executions`, `firstStartup` | `yield* ProcessExecutionStore` → `.executions` |
  * | `armed`, schedule/polling fields, `activeInstances` | Placeholder until live-runtime helpers ship |
  * | *(none)* | Persisted lifecycle rows — write-only today; not used for live status |
  *
@@ -742,7 +742,7 @@ export interface TypedQueueControls<
  * @remarks
  * Lifecycle analytics behave identically to {@link ProcessGroup}: optional store
  * writes on `start` / `stop` / `restart`. Compose
- * {@link ProcessStoreProcessGroup} / {@link ProcessStoreProcessLifecycle} via
+ * {@link ProcessGroupStore} / {@link ProcessLifecycleStore} via
  * {@link ProcessGroup.localEnvLayer} or the app root —
  * not on {@link ProcessGroupServiceDefinition.layer}.
  *
@@ -799,16 +799,16 @@ const recordProcessLifecycleChange = (
   tag: ProcessLifecycleTag,
 ): Effect.Effect<void> =>
   groupId === undefined
-    ? ProcessStoreProcessLifecycle.lifecycleChanged({ processId, tag }).pipe(
+    ? ProcessLifecycleStore.lifecycleChanged({ processId, tag }).pipe(
         ProcessStore.catchErrorAndLog({
-          message: "ProcessStoreProcessLifecycle write failed",
+          message: "ProcessLifecycleStore write failed",
           level: "warning",
           annotations: { processId, tag },
         }),
       )
-    : ProcessStoreProcessGroup.recordMemberLifecycle(groupId, { processId, tag }).pipe(
+    : ProcessGroupStore.recordMemberLifecycle(groupId, { processId, tag }).pipe(
         ProcessStore.catchErrorAndLog({
-          message: "ProcessStoreProcessGroup write failed",
+          message: "ProcessGroupStore write failed",
           level: "warning",
           annotations: { groupId, processId, tag },
         }),
@@ -827,7 +827,7 @@ const buildProcessDetails = (
   nowMs: number,
 ): Effect.Effect<ProcessGroupDetails> =>
   Effect.gen(function* () {
-    const allExecutions = yield* Effect.serviceOption(ProcessStoreProcessExecution).pipe(
+    const allExecutions = yield* Effect.serviceOption(ProcessExecutionStore).pipe(
       Effect.flatMap(
         Option.match({
           onNone: () => Effect.succeed<ProcessExecutionCompletedEvent[]>([]),
@@ -893,7 +893,7 @@ export const makeProcessGroup = <
 >(config: {
   /**
    * When set (typed {@link ProcessGroup.Service} groups), lifecycle rows are written
-   * through {@link ProcessStoreProcessGroup} with `attributes.groupId`.
+   * through {@link ProcessGroupStore} with `attributes.groupId`.
    */
   readonly id?: string;
   readonly queues: Queues;

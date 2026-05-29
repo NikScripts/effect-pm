@@ -7,16 +7,16 @@ import { ProcessStorage } from "../../../src/ProcessStorage";
  */
 
 import { Effect } from "effect";
-import { ProcessStoreProcessLifecycle } from "../../../src/store/processLifecycle";
+import { ProcessLifecycleStore } from "../../../src/store/processLifecycle";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 const program = Effect.gen(function* () {
-  yield* ProcessStoreProcessLifecycle.lifecycleChanged({
+  yield* ProcessLifecycleStore.lifecycleChanged({
     processId: "examples/MemoryProcess",
     tag: "Started",
   });
 
-  const lifecycle = yield* ProcessStoreProcessLifecycle;
+  const lifecycle = yield* ProcessLifecycleStore;
   const events = yield* lifecycle.lifecycle("examples/MemoryProcess");
 
   yield* Effect.log(

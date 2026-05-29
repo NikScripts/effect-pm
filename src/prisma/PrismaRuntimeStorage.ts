@@ -41,12 +41,12 @@ import {
   type RuntimeStorageService,
   type UpdateResult,
 } from "../RuntimeStorage";
-import type { ProcessStoreLog } from "../store/log";
-import type { ProcessStoreProcessExecution } from "../store/processExecution";
-import type { ProcessStoreProcessGroup } from "../store/processGroup";
-import type { ProcessStoreProcessLifecycle } from "../store/processLifecycle";
-import type { ProcessStoreQueueResource } from "../store/queueResource";
-import type { ProcessStoreRunResource } from "../store/runResource";
+import type { LogStore } from "../store/log";
+import type { ProcessExecutionStore } from "../store/processExecution";
+import type { ProcessGroupStore } from "../store/processGroup";
+import type { ProcessLifecycleStore } from "../store/processLifecycle";
+import type { QueueResourceStore } from "../store/queueResource";
+import type { RunResourceStore } from "../store/runResource";
 import { isJsonValue, unknownJsonString } from "../internal/json";
 import type {
   EffectPmRuntimeRecordCreateInput,
@@ -642,12 +642,12 @@ export const layerFromContext: Layer.Layer<
 export const layerProcessStore = (config: {
   readonly client: PrismaRuntimeStorageClient;
 }): Layer.Layer<
-  | ProcessStoreLog
-  | ProcessStoreQueueResource
-  | ProcessStoreRunResource
-  | ProcessStoreProcessExecution
-  | ProcessStoreProcessLifecycle
-  | ProcessStoreProcessGroup
+  | LogStore
+  | QueueResourceStore
+  | RunResourceStore
+  | ProcessExecutionStore
+  | ProcessLifecycleStore
+  | ProcessGroupStore
 > =>
   Layer.provide(ProcessStorage.layerRuntimeStorage, layer(config));
 
