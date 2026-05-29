@@ -38,6 +38,7 @@ export default defineConfig([
       ControlService: "src/ControlService.ts",
       Logs: "src/Logs.ts",
       "storage/sqlite": "src/storage/sqlite/index.ts",
+      "storage/redis": "src/storage/redis/index.ts",
       "storage/prisma": "src/storage/prisma.ts",
       "prisma/index": "src/prisma/index.ts",
       "bin/effect-pm": "src/bin/effect-pm.ts",
