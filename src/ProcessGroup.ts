@@ -513,11 +513,25 @@ export class ProcessNotRunningError extends Data.TaggedError("ProcessNotRunningE
   readonly processName: string;
 }> {}
 
+/**
+ * Thrown when {@link makeProcessGroup} receives duplicate process names or
+ * duplicate queue tag keys in the group definition.
+ *
+ * @public
+ */
+export class ProcessGroupDuplicateDefinitionError extends Data.TaggedError(
+  "ProcessGroupDuplicateDefinitionError",
+)<{
+  readonly kind: "process" | "queue";
+  readonly id: string;
+}> {}
+
 /** @public */
 export type ProcessGroupErrors =
   | ProcessNotFoundError
   | ProcessAlreadyRunningError
-  | ProcessNotRunningError;
+  | ProcessNotRunningError
+  | ProcessGroupDuplicateDefinitionError;
 
 /**
  * Remote group control failed because the network request, protocol response,
@@ -907,15 +921,27 @@ export const makeProcessGroup = <
     type R = AllGroupProcessesRequirements<Processes>;
     const groupId = config.id;
 
-    // ─── Resolve queue tags from context ───
+    // ─── Resolve queue tags from context (reject duplicate keys) ───
     const queueMap: Record<string, QueueHandle<unknown, unknown, unknown, any>> = {};
     for (const queueTag of config.queues) {
+      if (queueMap[queueTag.key] !== undefined) {
+        return yield* new ProcessGroupDuplicateDefinitionError({
+          kind: "queue",
+          id: queueTag.key,
+        });
+      }
       queueMap[queueTag.key] = yield* queueTag;
     }
 
-    // ─── Build process registry ───
+    // ─── Build process registry (reject duplicate definition ids) ───
     const processMap = new Map<string, Process<R>>();
     for (const p of config.processes) {
+      if (processMap.has(p.name)) {
+        return yield* new ProcessGroupDuplicateDefinitionError({
+          kind: "process",
+          id: p.name,
+        });
+      }
       processMap.set(p.name, p);
     }
 

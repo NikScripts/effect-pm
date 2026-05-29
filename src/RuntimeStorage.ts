@@ -24,7 +24,7 @@
  * @module RuntimeStorage
  */
 
-import { Context, Data, DateTime, Effect, Layer } from "effect";
+import { Context, Data, DateTime, Effect, Exit, Layer } from "effect";
 import type {
   RuntimeRecordPatch,
   RuntimeRecordPredicate,
@@ -301,6 +301,22 @@ export interface RuntimeStorageService {
   readonly delete: (
     query: RuntimeRecordQuery,
   ) => Effect.Effect<DeleteResult, RuntimeStorageOperationalError>;
+  /**
+   * Run `effect` with a transactional view of this storage.
+   *
+   * @remarks
+   * On success, mutations made inside `effect` are committed. On failure, they
+   * are rolled back and the store matches its pre-transaction state. The
+   * callback must use {@link RuntimeStorage} from context (not the outer
+   * service handle) so operations participate in the transaction.
+   */
+  readonly transaction: <A, E, R>(
+    effect: Effect.Effect<A, E, R | RuntimeStorage>,
+  ) => Effect.Effect<
+    A,
+    E | RuntimeStorageTransactionError | RuntimeStorageLogicalError,
+    Exclude<R, RuntimeStorage>
+  >;
 }
 
 const fieldValue = (
@@ -483,14 +499,10 @@ export const applyRuntimeRecordPatch = (
     readonly: record.readonly,
   });
 
-const makeInMemoryRuntimeStorage: Effect.Effect<
-  RuntimeStorageService,
-  never,
-  never
-> = Effect.sync(() => {
-  const records = new Map<string, RuntimeRecord>();
-
-  return {
+/** @internal */
+export const makeInMemoryRuntimeStorageService = (
+  records: Map<string, RuntimeRecord>,
+): RuntimeStorageService => ({
     create: (record) =>
       records.has(record.id)
         ? Effect.fail(new RuntimeStorageDuplicateRecordError({ id: record.id }))
@@ -533,7 +545,35 @@ const makeInMemoryRuntimeStorage: Effect.Effect<
         }
         return { deleted };
       }),
-  };
+
+  transaction: <A, E, R>(effect: Effect.Effect<A, E, R | RuntimeStorage>) =>
+    Effect.gen(function* () {
+      const tx = new Map(records);
+      const txService = makeInMemoryRuntimeStorageService(tx);
+      const exit = yield* effect.pipe(
+        Effect.provideService(RuntimeStorage, txService),
+        Effect.exit,
+      );
+      return yield* Exit.match(exit, {
+        onFailure: Effect.failCause,
+        onSuccess: (value: A) =>
+          Effect.sync(() => {
+            records.clear();
+            for (const [id, row] of tx) {
+              records.set(id, row);
+            }
+          }).pipe(Effect.as(value)),
+      });
+    }),
+});
+
+const makeInMemoryRuntimeStorage: Effect.Effect<
+  RuntimeStorageService,
+  never,
+  never
+> = Effect.sync(() => {
+  const records = new Map<string, RuntimeRecord>();
+  return makeInMemoryRuntimeStorageService(records);
 });
 
 /**

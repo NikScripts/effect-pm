@@ -288,8 +288,7 @@ const makeMemoryPrismaClient = (): PrismaRuntimeStorageClient & {
     delete: 0,
     deleteMany: 0,
   };
-  return {
-    calls,
+  const client: PrismaRuntimeStorageClient = {
     effectPmRuntimeRecord: {
       create: async ({ data }) => {
         if (rows.has(data.id)) {
@@ -360,7 +359,20 @@ const makeMemoryPrismaClient = (): PrismaRuntimeStorageClient & {
         return { count };
       },
     },
+    $transaction: async (fn) => {
+      const backup = new Map(rows);
+      try {
+        return await fn(client);
+      } catch (cause) {
+        rows.clear();
+        for (const [id, row] of backup) {
+          rows.set(id, row);
+        }
+        throw cause;
+      }
+    },
   };
+  return Object.assign(client, { calls });
 };
 
 describeRuntimeStorageContract(
@@ -569,11 +581,13 @@ describe("PrismaRuntimeStorage", () => {
 
   it.effect("surfaces driver failures as typed query errors", () =>
     Effect.gen(function* () {
+      const base = makeMemoryPrismaClient();
       const client: PrismaRuntimeStorageClient = {
         effectPmRuntimeRecord: {
-          ...makeMemoryPrismaClient().effectPmRuntimeRecord,
+          ...base.effectPmRuntimeRecord,
           findMany: () => Promise.reject(new Error("driver offline")),
         },
+        $transaction: base.$transaction,
       };
       const storage = PrismaRuntimeStorage.make(client);
 

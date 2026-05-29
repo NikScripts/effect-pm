@@ -35,6 +35,8 @@ import {
   RuntimeStorageDuplicateRecordError,
   RuntimeStorageQueryError,
   RuntimeStorageReadonlyRecordError,
+  RuntimeStorageTransactionError,
+  type RuntimeStorageLogicalError,
   type DeleteResult,
   type RuntimeRecord,
   type RuntimeStorageOperation,
@@ -604,6 +606,35 @@ export const make = (
         Effect.map((deleted) => ({ deleted: deleted.count }) satisfies DeleteResult),
       );
     },
+
+    transaction: <A, E, R>(
+      effect: Effect.Effect<A, E, R | RuntimeStorage>,
+    ): Effect.Effect<
+      A,
+      E | RuntimeStorageTransactionError | RuntimeStorageLogicalError,
+      Exclude<R, RuntimeStorage>
+    > =>
+      Effect.gen(function* () {
+        const context = yield* Effect.context<R>();
+        return yield* Effect.tryPromise({
+          try: () =>
+            client.$transaction((tx) =>
+              Effect.runPromiseWith(context)(
+                Effect.provideService(effect, RuntimeStorage, make(tx)),
+              ),
+            ),
+          catch: (cause) =>
+            new RuntimeStorageTransactionError({
+              adapter: "prisma",
+              operation: "transaction",
+              cause,
+            }),
+        });
+      }) as Effect.Effect<
+        A,
+        E | RuntimeStorageTransactionError | RuntimeStorageLogicalError,
+        Exclude<R, RuntimeStorage>
+      >,
   };
 
   return service;

@@ -16,7 +16,7 @@
 
 import { DateTime, Effect } from "effect";
 import type { SqlClient } from "effect/unstable/sql/SqlClient";
-import type { SqlError } from "effect/unstable/sql/SqlError";
+import { SqlError } from "effect/unstable/sql/SqlError";
 import type {
   RuntimeRecordField,
   RuntimeRecordOrderField,
@@ -29,6 +29,8 @@ import {
   RuntimeStorageEncodeError,
   RuntimeStorageQueryError,
   RuntimeStorageReadonlyRecordError,
+  RuntimeStorage,
+  RuntimeStorageTransactionError,
   applyRuntimeRecordPatch,
   type DeleteResult,
   type RuntimeRecord,
@@ -301,7 +303,7 @@ const isDuplicateKeySqlError = (error: SqlError): boolean => {
 };
 
 const sqliteQueryError = (
-  operation: "create" | "read" | "upsert" | "update" | "delete",
+  operation: "create" | "read" | "upsert" | "update" | "delete" | "transaction",
   error: SqlError,
 ): RuntimeStorageQueryError =>
   new RuntimeStorageQueryError({
@@ -411,4 +413,23 @@ export const makeSqliteRuntimeStorageService = (sql: SqlClient): RuntimeStorageS
       }
       return { deleted } satisfies DeleteResult;
     }),
+
+  transaction: <A, E, R>(effect: Effect.Effect<A, E, R | RuntimeStorage>) =>
+    sql.withTransaction(
+      effect.pipe(
+        Effect.provideService(RuntimeStorage, makeSqliteRuntimeStorageService(sql)),
+      ),
+    ).pipe(
+      Effect.catchIf(
+        (error): error is SqlError => error instanceof SqlError,
+        (error) =>
+          Effect.fail(
+            new RuntimeStorageTransactionError({
+              adapter: "sqlite",
+              operation: "transaction",
+              cause: error,
+            }),
+          ),
+      ),
+    ),
 });

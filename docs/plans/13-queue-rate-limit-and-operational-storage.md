@@ -179,7 +179,7 @@ public entrypoints for apps.
 
 ## Implementation slices (order: owner)
 
-1. `RuntimeStorage.transaction` + tests (memory, sqlite, prisma, then redis/hybrid).
+1. ~~`RuntimeStorage.transaction` + tests (memory, sqlite, prisma)~~ — shipped; redis/hybrid adapters next.
 2. Adapter(s): redis-only and/or hybrid `RuntimeStorageService` if in scope.
 3. Internal consume helper on `RuntimeStorage` for rate limits (+ plan 12 leases).
 4. `QueueResource` `rateLimit` + configure + worker wiring + tests.

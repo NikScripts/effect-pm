@@ -23,6 +23,7 @@ const makeStructuralClient = (): PrismaRuntimeStorageClient => ({
     updateMany: () => Promise.reject(new Error("example client is not connected")),
     deleteMany: () => Promise.reject(new Error("example client is not connected")),
   },
+  $transaction: () => Promise.reject(new Error("example client is not connected")),
 });
 
 const program = Effect.sync(() => {

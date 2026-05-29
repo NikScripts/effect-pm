@@ -1,7 +1,7 @@
 import { ProcessStorage } from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest"
 import { Duration, Effect, Fiber, Ref } from "effect"
-import { ProcessGroup } from "../src"
+import { ProcessGroup, ProcessGroupDuplicateDefinitionError } from "../src"
 import type { Process } from "../src"
 import { ProcessLifecycleStore } from "../src/store/processLifecycle"
 
@@ -132,6 +132,25 @@ describe("ProcessGroup — process lifecycle", () => {
 
       const storeOption = yield* Effect.serviceOption(ProcessLifecycleStore)
       expect(storeOption._tag).toBe("None")
+    }),
+  )
+})
+
+describe("ProcessGroup — definition validation", () => {
+  it.effect("rejects duplicate process names at make", () =>
+    Effect.gen(function* () {
+      const ticksA = yield* Ref.make(0)
+      const ticksB = yield* Ref.make(0)
+      const a = makeTickProcess("dup/process", ticksA)
+      const b = makeTickProcess("dup/process", ticksB)
+      const error = yield* Effect.flip(
+        ProcessGroup.make({ queues: [], processes: [a, b] }),
+      )
+      expect(error).toBeInstanceOf(ProcessGroupDuplicateDefinitionError)
+      if (error instanceof ProcessGroupDuplicateDefinitionError) {
+        expect(error.kind).toBe("process")
+        expect(error.id).toBe("dup/process")
+      }
     }),
   )
 })

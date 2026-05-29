@@ -1,8 +1,10 @@
 import { describe, expect, it } from "@effect/vitest";
 import { DateTime, Effect, Scope } from "effect";
 import {
+  RuntimeStorage,
   RuntimeStorageDuplicateRecordError,
   RuntimeStorageReadonlyRecordError,
+  RuntimeStorageTransactionError,
   type RuntimeRecord,
   type RuntimeStorageService,
 } from "../src";
@@ -87,6 +89,48 @@ export const describeRuntimeStorageContract = <R extends Scope.Scope>(
         expect(update).toEqual({ matched: 2, updated: 1 });
         expect(firstDelete).toEqual({ deleted: 1 });
         expect(secondDelete).toEqual({ deleted: 1 });
+      }),
+    );
+
+    it.live("transaction commits on success and rolls back on failure", () =>
+      Effect.gen(function* () {
+        const storage = yield* makeStorage;
+        yield* storage.create(runtimeStorageRecord("seed"));
+
+        yield* storage.transaction(
+          Effect.gen(function* () {
+            const tx = yield* RuntimeStorage;
+            yield* tx.create(runtimeStorageRecord("committed"));
+          }),
+        );
+
+        const afterCommit = yield* storage.read({
+          predicate: ProcessId.equals("queue-contract"),
+        });
+        expect(afterCommit.map((row) => row.id).sort()).toEqual(
+          ["committed", "seed"].sort(),
+        );
+
+        const failure = yield* storage.transaction(
+          Effect.gen(function* () {
+            const tx = yield* RuntimeStorage;
+            yield* tx.create(runtimeStorageRecord("rolled-back"));
+            return yield* Effect.fail("rollback");
+          }),
+        ).pipe(Effect.flip);
+
+        if (failure instanceof RuntimeStorageTransactionError) {
+          expect(failure.cause).toBe("rollback");
+        } else {
+          expect(failure).toBe("rollback");
+        }
+
+        const afterRollback = yield* storage.read({
+          predicate: ProcessId.equals("queue-contract"),
+        });
+        expect(afterRollback.map((row) => row.id).sort()).toEqual(
+          ["committed", "seed"].sort(),
+        );
       }),
     );
 

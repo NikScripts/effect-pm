@@ -309,14 +309,14 @@ export interface EffectPmRuntimeRecordDelegate {
  * Structural Prisma client required by {@link PrismaRuntimeStorage}.
  *
  * @remarks
- * Deliberately excludes `$transaction`: generated Prisma clients vary by
- * version/provider in their transaction overloads, while every supported client
- * exposes the model delegate below. Aggregate writes use `updateMany` /
- * `deleteMany`, so the adapter no longer needs transaction overloads for normal
- * update/delete paths.
+ * Includes a minimal `$transaction` callback shape for
+ * {@link RuntimeStorageService.transaction}.
  *
  * @public
  */
 export interface PrismaRuntimeStorageClient {
   readonly effectPmRuntimeRecord: EffectPmRuntimeRecordDelegate;
+  readonly $transaction: <R>(
+    fn: (client: PrismaRuntimeStorageClient) => Promise<R>,
+  ) => Promise<R>;
 }

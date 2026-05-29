@@ -16,9 +16,12 @@ Storage facets are **public** under **`src/store/`** with **`@nikscripts/effect-
 
 | File (either naming style) | Subpath | Service tag |
 |----------------------------|---------|-------------|
-| `src/store/queueResource.ts` or `QueueResourceStore.ts` | `store/QueueResource` | `QueueResourceStore` |
-| `src/store/log.ts` or `LogStore.ts` | `store/Log` | `LogStore` |
-| `src/store/runResource.ts` or `RunResourceStore.ts` | `store/RunResource` | `RunResourceStore` |
+| `src/store/queueResource.ts` | `store/QueueResource` | `QueueResourceStore` |
+| `src/store/log.ts` | `store/Log` | `LogStore` |
+| `src/store/runResource.ts` | `store/RunResource` | `RunResourceStore` |
+| `src/store/processExecution.ts` | `store/ProcessExecution` | `ProcessExecutionStore` |
+| `src/store/processLifecycle.ts` | `store/ProcessLifecycle` | `ProcessLifecycleStore` |
+| `src/store/processGroup.ts` | `store/ProcessGroup` | `ProcessGroupStore` |
 
 **File naming:** full service name (`QueueResourceStore.ts`) **or** camelCase domain (`queueResource.ts`) — pick one style per facet, do not invent other names.
 

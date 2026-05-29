@@ -423,6 +423,7 @@ export {
   ProcessNotFoundError,
   ProcessAlreadyRunningError,
   ProcessNotRunningError,
+  ProcessGroupDuplicateDefinitionError,
   ProcessGroupRemoteControlError,
   UnsupportedRemoteControlError,
   ProcessGroupProcessControlSchema,
