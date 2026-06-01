@@ -5,11 +5,7 @@
  * @remarks
  * Group control paths ({@link ProcessGroup} `start` / `stop` / `restart`)
  * call the **static** emitters on this class so every row carries
- * `attributes.groupId`. Writes delegate to the same wire type as
- * {@link ProcessLifecycleStore} (`process.lifecycle.changed`) by
- * importing its row encoder/decoder, so the on-disk shape stays
- * identical. Process-scoped lifecycle without a group (future
- * {@link Process.spawn}, supervisors) uses
+ * `attributes.groupId`. Process-scoped lifecycle without a group uses
  * {@link ProcessLifecycleStore} directly.
  *
  * Compose {@link ProcessGroupStore.layerRuntimeStorage} together
@@ -21,83 +17,39 @@
  *
  * | Concern | Where |
  * |--------|-------|
- * | Wire type | `process.lifecycle.changed` (shared with {@link ProcessLifecycleStore}) |
- * | Static emit | `recordMemberLifecycle(groupId, input)`, `recordMemberStarted(groupId, processId)` (+ `Stopped` / `Restarted`) |
+ * | Wire types | `Process.Lifecycle.*` (shared with {@link ProcessLifecycleStore}) |
+ * | Static emit | `ProcessGroupScope.run({ groupId }, ProcessGroupMemberScope.run({ processId }, ProcessGroupStore.Lifecycle.Started))` |
  * | Reads (instance) | `lifecycleByGroup(groupId, opts?)` |
- * | Reads + writes (bound, `for(groupId)`) | `lifecycle(opts?)`, `recordMemberLifecycle(input)`, `recordMemberStarted(processId)`, `recordMemberStopped(processId)`, `recordMemberRestarted(processId)` |
+ * | Reads (bound, `for(groupId)`) | `lifecycle(opts?)` |
  *
  * ## Group filter
  *
  * `groupId` lives in `record.attributes.groupId`. Group queries fetch
- * `process.lifecycle.changed` rows from storage and post-filter on the
- * JSON attribute (matching the shape produced by
- * {@link ProcessLifecycleStore} writes); `windowOpts` defers
+ * `Process.Lifecycle.*` rows from storage and post-filter on the
+ * JSON attribute; `windowOpts` defers
  * `limit` until after the post-filter so a sparse group cannot collapse
  * a `limit: N` query to zero rows.
  *
  * @module store/ProcessGroup
  */
 
-import { Clock, Effect } from "effect";
+import { Effect, Schema } from "effect";
 import {
   applyQueryOpts,
   byTimestampDesc,
   runtimeRecordQuery,
   windowOpts,
 } from "../internal/store/helpers";
-import { ProcessStore } from "../ProcessStore";
-import type { JsonValue, QueryOpts } from "../ProcessStoreEvent";
+import { ProcessStore, Telemetry } from "../ProcessStore";
+import type { QueryOpts } from "../ProcessStoreEvent";
 import { Type } from "../Query";
 import type { RuntimeRecord } from "../RuntimeStorage";
+import { ProcessGroupMemberScope, ProcessGroupScope } from "../ProcessGroupScope";
 import {
-  makeProcessLifecycleRecord,
+  processLifecycleWireTypes,
   recordToLifecycleEvent,
   type ProcessLifecycleChangedEvent,
-  type ProcessLifecycleRecordInput,
-  type ProcessLifecycleTag,
 } from "./processLifecycle";
-
-/**
- * Member lifecycle write input (group id is passed separately).
- *
- * @public
- */
-export interface ProcessGroupMemberLifecycleInput {
-  readonly processId: string;
-  readonly tag: ProcessLifecycleTag;
-  readonly error?: string;
-  readonly occurredAt?: number;
-  readonly attributes?: { readonly [key: string]: JsonValue };
-}
-
-const LIFECYCLE_TYPE = "process.lifecycle.changed";
-
-const memberLifecycleInput = (
-  groupId: string,
-  input: ProcessGroupMemberLifecycleInput,
-): ProcessLifecycleRecordInput & { readonly groupId: string } => ({
-  processId: input.processId,
-  tag: input.tag,
-  ...(input.error !== undefined ? { error: input.error } : {}),
-  ...(input.occurredAt !== undefined ? { occurredAt: input.occurredAt } : {}),
-  ...(input.attributes !== undefined ? { attributes: input.attributes } : {}),
-  groupId,
-});
-
-const memberLifecycleRecord = (
-  groupId: string,
-  input: ProcessGroupMemberLifecycleInput,
-  occurredAtMs: number,
-): Omit<RuntimeRecord, "runId" | "createdAt"> =>
-  makeProcessLifecycleRecord(memberLifecycleInput(groupId, input), occurredAtMs);
-
-const memberTagRecord = (
-  groupId: string,
-  processId: string,
-  tag: ProcessLifecycleTag,
-  occurredAtMs: number,
-): Omit<RuntimeRecord, "runId" | "createdAt"> =>
-  makeProcessLifecycleRecord({ processId, tag, groupId }, occurredAtMs);
 
 const lifecycleEventsForGroup = (
   records: ReadonlyArray<RuntimeRecord>,
@@ -121,6 +73,63 @@ const lifecycleEventsForGroup = (
   return applyQueryOpts(matching, opts, (event) => event.occurredAt);
 };
 
+const groupMemberLifecycleFields = {
+  processType: Schema.Literal("process"),
+  groupId: ProcessGroupScope.Schema.State.groupId,
+  processId: ProcessGroupMemberScope.Schema.Leaf.processId,
+  occurredAt: Telemetry.terminal.clockMillis,
+} as const;
+
+class ProcessGroupMemberStarted extends Telemetry.Schema<ProcessGroupMemberStarted>()(
+  ProcessGroupMemberScope,
+)({
+  ...groupMemberLifecycleFields,
+  tag: Schema.Literal("Started"),
+}) {}
+
+class ProcessGroupMemberStopped extends Telemetry.Schema<ProcessGroupMemberStopped>()(
+  ProcessGroupMemberScope,
+)({
+  ...groupMemberLifecycleFields,
+  tag: Schema.Literal("Stopped"),
+}) {}
+
+class ProcessGroupMemberRestarted extends Telemetry.Schema<ProcessGroupMemberRestarted>()(
+  ProcessGroupMemberScope,
+)({
+  ...groupMemberLifecycleFields,
+  tag: Schema.Literal("Restarted"),
+}) {}
+
+class ProcessGroupMemberErrored extends Telemetry.Schema<ProcessGroupMemberErrored>()(
+  ProcessGroupMemberScope,
+)({
+  ...groupMemberLifecycleFields,
+  tag: Schema.Literal("Errored"),
+  error: Telemetry.input.errorString,
+}) {}
+
+class ProcessGroupMemberRecovered extends Telemetry.Schema<ProcessGroupMemberRecovered>()(
+  ProcessGroupMemberScope,
+)({
+  ...groupMemberLifecycleFields,
+  tag: Schema.Literal("Recovered"),
+}) {}
+
+class ProcessGroupMemberDisabled extends Telemetry.Schema<ProcessGroupMemberDisabled>()(
+  ProcessGroupMemberScope,
+)({
+  ...groupMemberLifecycleFields,
+  tag: Schema.Literal("Disabled"),
+}) {}
+
+class ProcessGroupMemberEnabled extends Telemetry.Schema<ProcessGroupMemberEnabled>()(
+  ProcessGroupMemberScope,
+)({
+  ...groupMemberLifecycleFields,
+  tag: Schema.Literal("Enabled"),
+}) {}
+
 /**
  * `ProcessGroup` storage facet (see module doc).
  *
@@ -130,11 +139,87 @@ export class ProcessGroupStore extends ProcessStore.Service<
   ProcessGroupStore
 >()(
   "@nikscripts/effect-pm/store/processGroup/ProcessGroupStore",
+  ProcessStore.telemetry(
+    Telemetry.namespace("Process"),
+    Telemetry.tag("Lifecycle")(
+      Telemetry.event("Started", ProcessGroupMemberStarted).pipe(
+        Telemetry.logWarning(
+          "ProcessGroupStore write failed for Started transition",
+          ({ groupId, processId }) => ({
+            groupId: String(groupId),
+            processId: String(processId),
+            tag: "Started",
+          }),
+        ),
+      ),
+      Telemetry.event("Stopped", ProcessGroupMemberStopped).pipe(
+        Telemetry.logWarning(
+          "ProcessGroupStore write failed for Stopped transition",
+          ({ groupId, processId }) => ({
+            groupId: String(groupId),
+            processId: String(processId),
+            tag: "Stopped",
+          }),
+        ),
+      ),
+      Telemetry.event("Restarted", ProcessGroupMemberRestarted).pipe(
+        Telemetry.logWarning(
+          "ProcessGroupStore write failed for Restarted transition",
+          ({ groupId, processId }) => ({
+            groupId: String(groupId),
+            processId: String(processId),
+            tag: "Restarted",
+          }),
+        ),
+      ),
+      Telemetry.event("Errored", ProcessGroupMemberErrored).pipe(
+        Telemetry.logWarning(
+          ({ groupId, processId }) =>
+            `ProcessGroupStore write failed for Errored transition "${String(groupId)}/${String(processId)}"`,
+          ({ groupId, processId }) => ({
+            groupId: String(groupId),
+            processId: String(processId),
+            tag: "Errored",
+          }),
+        ),
+      ),
+      Telemetry.event("Recovered", ProcessGroupMemberRecovered).pipe(
+        Telemetry.logWarning(
+          "ProcessGroupStore write failed for Recovered transition",
+          ({ groupId, processId }) => ({
+            groupId: String(groupId),
+            processId: String(processId),
+            tag: "Recovered",
+          }),
+        ),
+      ),
+      Telemetry.event("Disabled", ProcessGroupMemberDisabled).pipe(
+        Telemetry.logWarning(
+          "ProcessGroupStore write failed for Disabled transition",
+          ({ groupId, processId }) => ({
+            groupId: String(groupId),
+            processId: String(processId),
+            tag: "Disabled",
+          }),
+        ),
+      ),
+      Telemetry.event("Enabled", ProcessGroupMemberEnabled).pipe(
+        Telemetry.logWarning(
+          "ProcessGroupStore write failed for Enabled transition",
+          ({ groupId, processId }) => ({
+            groupId: String(groupId),
+            processId: String(processId),
+            tag: "Enabled",
+          }),
+        ),
+      ),
+    ),
+  ),
   ProcessStore.query((s) => ({
     lifecycleByGroup: (groupId: string, opts?: QueryOpts) =>
       s
         .read(
-          runtimeRecordQuery([Type.equals(LIFECYCLE_TYPE)], windowOpts(opts)),
+          runtimeRecordQuery([Type.in(processLifecycleWireTypes)], windowOpts(opts)),
         )
         .pipe(
           Effect.map((records) =>
@@ -146,76 +231,25 @@ export class ProcessGroupStore extends ProcessStore.Service<
     lifecycle: (opts?: QueryOpts) =>
       s
         .read(
-          runtimeRecordQuery([Type.equals(LIFECYCLE_TYPE)], windowOpts(opts)),
+          runtimeRecordQuery([Type.in(processLifecycleWireTypes)], windowOpts(opts)),
         )
         .pipe(
           Effect.map((records) =>
             lifecycleEventsForGroup(records, groupId, opts),
           ),
         ),
-    recordMemberLifecycle: (input: ProcessGroupMemberLifecycleInput) =>
-      Effect.gen(function* () {
-        const occurredAtMs =
-          input.occurredAt ?? (yield* Clock.currentTimeMillis);
-        yield* s.create(memberLifecycleRecord(groupId, input, occurredAtMs));
-      }),
-    recordMemberStarted: (processId: string) =>
-      Effect.gen(function* () {
-        const occurredAtMs = yield* Clock.currentTimeMillis;
-        yield* s.create(
-          memberTagRecord(groupId, processId, "Started", occurredAtMs),
-        );
-      }),
-    recordMemberStopped: (processId: string) =>
-      Effect.gen(function* () {
-        const occurredAtMs = yield* Clock.currentTimeMillis;
-        yield* s.create(
-          memberTagRecord(groupId, processId, "Stopped", occurredAtMs),
-        );
-      }),
-    recordMemberRestarted: (processId: string) =>
-      Effect.gen(function* () {
-        const occurredAtMs = yield* Clock.currentTimeMillis;
-        yield* s.create(
-          memberTagRecord(groupId, processId, "Restarted", occurredAtMs),
-        );
-      }),
   })),
-  ProcessStore.record({
-    recordMemberLifecycle:
-      (s) =>
-      (groupId: string, input: ProcessGroupMemberLifecycleInput) =>
-        Effect.gen(function* () {
-          const occurredAtMs =
-            input.occurredAt ?? (yield* Clock.currentTimeMillis);
-          yield* s.create(memberLifecycleRecord(groupId, input, occurredAtMs));
-        }),
-    recordMemberStarted:
-      (s) => (groupId: string, processId: string) =>
-        Effect.gen(function* () {
-          const occurredAtMs = yield* Clock.currentTimeMillis;
-          yield* s.create(
-            memberTagRecord(groupId, processId, "Started", occurredAtMs),
-          );
-        }),
-    recordMemberStopped:
-      (s) => (groupId: string, processId: string) =>
-        Effect.gen(function* () {
-          const occurredAtMs = yield* Clock.currentTimeMillis;
-          yield* s.create(
-            memberTagRecord(groupId, processId, "Stopped", occurredAtMs),
-          );
-        }),
-    recordMemberRestarted:
-      (s) => (groupId: string, processId: string) =>
-        Effect.gen(function* () {
-          const occurredAtMs = yield* Clock.currentTimeMillis;
-          yield* s.create(
-            memberTagRecord(groupId, processId, "Restarted", occurredAtMs),
-          );
-        }),
-  }),
-) {}
+) {
+  declare static Lifecycle: {
+    readonly Started: Effect.Effect<void>;
+    readonly Stopped: Effect.Effect<void>;
+    readonly Restarted: Effect.Effect<void>;
+    readonly Errored: (error: unknown) => Effect.Effect<void>;
+    readonly Recovered: Effect.Effect<void>;
+    readonly Disabled: Effect.Effect<void>;
+    readonly Enabled: Effect.Effect<void>;
+  };
+}
 
 /**
  * @public

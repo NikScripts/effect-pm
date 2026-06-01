@@ -119,7 +119,7 @@ const LIFECYCLE_WIRE: {
 export type ProcessLifecycleWireType =
   typeof LIFECYCLE_WIRE[keyof typeof LIFECYCLE_WIRE];
 
-const lifecycleWireTypes: ReadonlyArray<ProcessLifecycleWireType> =
+export const processLifecycleWireTypes: ReadonlyArray<ProcessLifecycleWireType> =
   Object.values(LIFECYCLE_WIRE);
 
 const lifecycleTags: ReadonlyArray<ProcessLifecycleTag> = [
@@ -136,7 +136,7 @@ const isLifecycleTag = (value: unknown): value is ProcessLifecycleTag =>
   isString(value) && lifecycleTags.some((tag) => tag === value);
 
 const isLifecycleWireType = (value: string): value is ProcessLifecycleWireType =>
-  lifecycleWireTypes.some((wire) => wire === value);
+  processLifecycleWireTypes.some((wire) => wire === value);
 
 const lifecycleAttributesBlob = (
   input: ProcessLifecycleRecordInput & { readonly groupId?: string },
@@ -338,7 +338,7 @@ export class ProcessLifecycleStore extends ProcessStore.Service<
       s
         .read(
           runtimeRecordQuery(
-            [Type.in(lifecycleWireTypes), ProcessId.equals(processId)],
+            [Type.in(processLifecycleWireTypes), ProcessId.equals(processId)],
             opts,
           ),
         )
@@ -354,7 +354,7 @@ export class ProcessLifecycleStore extends ProcessStore.Service<
       return s
         .read(
           runtimeRecordQuery(
-            [Type.in(lifecycleWireTypes), ProcessId.in(processIds)],
+            [Type.in(processLifecycleWireTypes), ProcessId.in(processIds)],
             opts,
           ),
         )
@@ -367,7 +367,7 @@ export class ProcessLifecycleStore extends ProcessStore.Service<
         for (const processId of processIds) {
           const records = yield* s.read(
             runtimeRecordQuery(
-              [Type.in(lifecycleWireTypes), ProcessId.equals(processId)],
+              [Type.in(processLifecycleWireTypes), ProcessId.equals(processId)],
               { limit: 1 },
             ),
           );
@@ -384,7 +384,7 @@ export class ProcessLifecycleStore extends ProcessStore.Service<
       s
         .read(
           runtimeRecordQuery(
-            [Type.in(lifecycleWireTypes), ProcessId.equals(processId)],
+            [Type.in(processLifecycleWireTypes), ProcessId.equals(processId)],
             opts,
           ),
         )
@@ -394,7 +394,7 @@ export class ProcessLifecycleStore extends ProcessStore.Service<
       s
         .read(
           runtimeRecordQuery(
-            [Type.in(lifecycleWireTypes), ProcessId.equals(processId)],
+            [Type.in(processLifecycleWireTypes), ProcessId.equals(processId)],
             { limit: 1 },
           ),
         )

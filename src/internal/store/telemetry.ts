@@ -329,6 +329,9 @@ const makeSchemaRecord = (
     processType: stringField(event, "processType", "telemetry"),
     processId: stringField(event, "processId", wireId),
     payload: event,
+    ...(typeof event["groupId"] === "string"
+      ? { attributes: { groupId: event["groupId"] } }
+      : {}),
   };
 };
 

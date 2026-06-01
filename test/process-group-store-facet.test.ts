@@ -4,31 +4,44 @@ import { ProcessStorage } from "../src/ProcessStorage";
  */
 
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Layer } from "effect";
-import { RuntimeStorage } from "../src/RuntimeStorage";
+import { Effect } from "effect";
+import { ProcessGroupMemberScope, ProcessGroupScope } from "../src/ProcessGroupScope";
 import { ProcessGroupStore } from "../src/store/processGroup";
 import { ProcessLifecycleStore } from "../src/store/processLifecycle";
 
-const groupStoreLayer = Layer.provide(
-  Layer.provide(
-    ProcessGroupStore.layerRuntimeStorage,
-    ProcessLifecycleStore.layerRuntimeStorage,
-  ),
-  RuntimeStorage.layer,
-);
+const groupStoreLayer = ProcessGroupStore.layer;
+
+const emitMember = (
+  groupId: string,
+  processId: string,
+  emit: Effect.Effect<void>,
+): Effect.Effect<void> =>
+  ProcessGroupScope.run(
+    { groupId },
+    ProcessGroupMemberScope.run({ processId }, emit),
+  );
+
+const memberStarted = (groupId: string, processId: string) =>
+  emitMember(groupId, processId, ProcessGroupStore.Lifecycle.Started);
+
+const memberStopped = (groupId: string, processId: string) =>
+  emitMember(groupId, processId, ProcessGroupStore.Lifecycle.Stopped);
+
+const memberRestarted = (groupId: string, processId: string) =>
+  emitMember(groupId, processId, ProcessGroupStore.Lifecycle.Restarted);
 
 describe("ProcessGroupStore — static optional emitters", () => {
   it.live("no-ops silently when the facet layer is absent", () =>
     Effect.gen(function* () {
-      yield* ProcessGroupStore.recordMemberStarted("@test/G", "p1");
+      yield* memberStarted("@test/G", "p1");
       expect(true).toBe(true);
     }),
   );
 
-  it.effect("recordMemberStarted stamps attributes.groupId", () =>
+  it.effect("Lifecycle.Started stamps attributes.groupId", () =>
     Effect.gen(function* () {
-      yield* ProcessGroupStore.recordMemberStarted("@test/BillingGroup", "p-a");
-      yield* ProcessGroupStore.recordMemberStarted("@test/OtherGroup", "p-b");
+      yield* memberStarted("@test/BillingGroup", "p-a");
+      yield* memberStarted("@test/OtherGroup", "p-b");
 
       const group = yield* ProcessGroupStore;
       const billing = yield* group.lifecycleByGroup("@test/BillingGroup");
@@ -37,13 +50,13 @@ describe("ProcessGroupStore — static optional emitters", () => {
     }).pipe(Effect.provide(groupStoreLayer)),
   );
 
-  it.effect("recordMemberStopped and recordMemberRestarted round-trip", () =>
+  it.effect("Lifecycle.Stopped and Lifecycle.Restarted round-trip", () =>
     Effect.gen(function* () {
       const groupId = "@test/Ops";
       const processId = "worker";
-      yield* ProcessGroupStore.recordMemberStarted(groupId, processId);
-      yield* ProcessGroupStore.recordMemberStopped(groupId, processId);
-      yield* ProcessGroupStore.recordMemberRestarted(groupId, processId);
+      yield* memberStarted(groupId, processId);
+      yield* memberStopped(groupId, processId);
+      yield* memberRestarted(groupId, processId);
 
       const group = yield* ProcessGroupStore;
       const rows = yield* group.lifecycleByGroup(groupId);
@@ -58,9 +71,9 @@ describe("ProcessGroupStore — static optional emitters", () => {
       const billingGroup = { id: "@test/BillingGroup" };
       const billing = yield* ProcessGroupStore.for(billingGroup);
 
-      yield* billing.recordMemberStarted("worker-a");
-      yield* billing.recordMemberStopped("worker-a");
-      yield* ProcessGroupStore.recordMemberStarted("@test/OtherGroup", "worker-b");
+      yield* memberStarted(billingGroup.id, "worker-a");
+      yield* memberStopped(billingGroup.id, "worker-a");
+      yield* memberStarted("@test/OtherGroup", "worker-b");
 
       const rows = yield* billing.lifecycle();
       expect(rows.map((row) => row.entityId)).toEqual(["worker-a", "worker-a"]);
@@ -72,7 +85,7 @@ describe("ProcessGroupStore — static optional emitters", () => {
 
   it.effect("ProcessStorage.layer provides both lifecycle and group facets", () =>
     Effect.gen(function* () {
-      yield* ProcessGroupStore.recordMemberStarted("@test/Full", "proc");
+      yield* memberStarted("@test/Full", "proc");
       const group = yield* ProcessGroupStore;
       const rows = yield* group.lifecycleByGroup("@test/Full");
       expect(rows).toHaveLength(1);
@@ -90,16 +103,16 @@ describe("ProcessGroupStore — static optional emitters", () => {
         // Pre-fix this test failed because storage `limit=2` returned the two
         // most-recent lifecycle rows across *all* groups, which were all
         // "@test/Other", leaving zero rows for the requested group.
-        yield* ProcessGroupStore.recordMemberStarted(
+        yield* memberStarted(
           "@test/Target",
           "p-1",
         );
-        yield* ProcessGroupStore.recordMemberStopped(
+        yield* memberStopped(
           "@test/Target",
           "p-1",
         );
         for (let i = 0; i < 4; i++) {
-          yield* ProcessGroupStore.recordMemberStarted(
+          yield* memberStarted(
             "@test/Other",
             `q-${String(i)}`,
           );

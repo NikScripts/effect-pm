@@ -22,6 +22,7 @@ export default defineConfig([
       Process: "src/Process.ts",
       ProcessScope: "src/ProcessScope.ts",
       ProcessLifecycleScope: "src/ProcessLifecycleScope.ts",
+      ProcessGroupScope: "src/ProcessGroupScope.ts",
       QueueResource: "src/QueueResource.ts",
       ProcessGroup: "src/ProcessGroup.ts",
       ProcessStore: "src/ProcessStore.ts",

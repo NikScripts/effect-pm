@@ -94,6 +94,7 @@ export {
 
 // Namespace exports (these export objects with .make methods)
 export { Process, ProcessMakeInvalidLayerArgument } from "./Process";
+export { ProcessGroupScope, ProcessGroupMemberScope } from "./ProcessGroupScope";
 export { ProcessLifecycleScope } from "./ProcessLifecycleScope";
 export { ProcessScope } from "./ProcessScope";
 export { Polling } from "./Polling";
@@ -341,9 +342,6 @@ export type {
   ProcessLifecycleRecordInput,
   ProcessLifecycleTag,
 } from "./store/processLifecycle";
-export type {
-  ProcessGroupMemberLifecycleInput,
-} from "./store/processGroup";
 export type {
   QueueResourceStoreDedupeKeyStatus,
   QueueResourceStoreEntryStatus,

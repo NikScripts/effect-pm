@@ -368,6 +368,58 @@ export declare namespace State {
       readonly [],
       never
     >;
+    export type AnyClass<
+      Self = never,
+      Leaf extends Record<PropertyKey, unknown> = Record<PropertyKey, unknown>,
+      Requirements = never,
+    > = {
+      new(_: never): object;
+    } & Effect.Effect<unknown, never, Self> & {
+      readonly key: string;
+      readonly Leaf: Schema.Top;
+      readonly State: Schema.Top;
+      readonly Schema: {
+        readonly Leaf: { readonly [K in keyof Leaf]: StateFieldSelector };
+        readonly State: Record<PropertyKey, unknown>;
+      };
+      readonly layer: (leaf: Leaf) => Layer.Layer<Self, never, Requirements>;
+      readonly provide: (
+        leaf: Leaf,
+      ) => <A, E, R>(
+        effect: Effect.Effect<A, E, R>,
+      ) => Effect.Effect<A, E, Exclude<R, Self> | Requirements>;
+      readonly run: <A, E, R>(
+        leaf: Leaf,
+        effect: Effect.Effect<A, E, R>,
+      ) => Effect.Effect<A, E, Exclude<R, Self> | Requirements>;
+    };
+    export type ChildClass<
+      Self,
+      Id extends string,
+      Parent,
+      Key extends string,
+      LeafFields extends Schema.Struct.Fields,
+    > = Parent extends StateScopeClass<
+      infer ParentSelf,
+      string,
+      Schema.Struct.Fields,
+      infer ParentStateFields,
+      infer ParentStateShape,
+      infer ParentStateSelectors,
+      infer ParentPath,
+      infer ParentRequirements
+    >
+      ? StateScopeClass<
+          Self,
+          Id,
+          LeafFields,
+          InsertState<ParentStateFields, ParentPath, Key, { readonly [K in keyof LeafFields]: LeafFields[K] }>,
+          InsertState<ParentStateShape, ParentPath, Key, Schema.Struct.Type<LeafFields>>,
+          InsertSelectors<ParentStateSelectors, ParentPath, Key, LeafFields>,
+          readonly [...ParentPath, Key],
+          ParentRequirements | ParentSelf
+        >
+      : never;
     export type Leaf<S extends { readonly Leaf: Schema.Top }> =
       Schema.Schema.Type<S["Leaf"]>;
     export type State<S extends { readonly State: Schema.Top }> =
