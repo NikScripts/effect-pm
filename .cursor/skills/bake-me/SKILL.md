@@ -1,6 +1,6 @@
 ---
 name: bake-me
-description: Guide the user through advanced design decisions as a recipe: each question is a step with code examples, ingredients, rationale, alternatives, and acceptance checks. Use when the user wants a more visual and efficient version of grill-me, asks to "bake" a plan, or wants a design refined before implementation.
+description: "Guide the user through advanced design decisions as a recipe: each question is a step with code examples, ingredients, rationale, alternatives, and acceptance checks. Use when the user wants a more visual and efficient version of grill-me, asks to bake a plan, or wants a design refined before implementation."
 ---
 
 # Bake Me
