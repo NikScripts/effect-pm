@@ -365,11 +365,11 @@ const logEntryMatchesQuery = (
   entry: ProcessManagerLogEntry,
   query: LogStreamQuery,
 ): boolean => {
-  if (
-    query.groupId !== undefined &&
-    entry.annotations[ProcessManagerLogAnnotationKeys.groupId] !== query.groupId
-  ) {
-    return false;
+  if (query.groupId !== undefined) {
+    const groupId = entry.annotations[ProcessManagerLogAnnotationKeys.groupId];
+    if (groupId !== undefined && groupId !== query.groupId) {
+      return false;
+    }
   }
   if (
     query.processId !== undefined &&

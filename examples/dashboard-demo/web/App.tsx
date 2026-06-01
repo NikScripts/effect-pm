@@ -1,8 +1,14 @@
 import {
+  Controls,
   ControlPlaneProvider,
-  OperatorControlPanel,
+  Logs,
 } from "../../../src/react";
 import { createFetchControlPlaneAdapter } from "../../../src/react/adapters/fetch";
+import {
+  DashboardDemoGroup,
+  DashboardDemoQueue,
+  DashboardTick,
+} from "../demo.tags";
 
 const port = createFetchControlPlaneAdapter({
   baseUrl: "/api/control",
@@ -16,7 +22,13 @@ export const App = () => (
       Browser calls <code>/api/control</code> (Vite proxy → private ControlService).
     </p>
     <ControlPlaneProvider port={port}>
-      <OperatorControlPanel pollIntervalMs={2000} />
+      <Controls for={DashboardDemoGroup} pollIntervalMs={2000} />
+      <section>
+        <h2>Scoped controls</h2>
+        <Controls for={DashboardTick} pollIntervalMs={2000} />
+        <Controls for={DashboardDemoQueue} pollIntervalMs={2000} />
+      </section>
+      <Logs for={DashboardDemoGroup} lines={50} />
     </ControlPlaneProvider>
   </main>
 );

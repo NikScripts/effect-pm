@@ -400,6 +400,13 @@ describe("ControlService — contract route", () => {
           },
           spans: [],
         });
+        yield* relay.publish({
+          date: "2026-06-01T00:00:02.000Z",
+          level: "Info",
+          message: "unscoped group-compatible",
+          annotations: {},
+          spans: [],
+        });
 
         const response = yield* requestText(
           32132,
@@ -410,6 +417,15 @@ describe("ControlService — contract route", () => {
         expect(response.statusCode).toBe(200);
         expect(lines).toHaveLength(1);
         expect(lines[0]).toContain("include me");
+
+        const groupResponse = yield* requestText(
+          32132,
+          `/logs/stream?follow=false&groupId=${encodeURIComponent(group.id)}&lines=10`,
+        );
+
+        expect(groupResponse.statusCode).toBe(200);
+        expect(groupResponse.body).toContain("include me");
+        expect(groupResponse.body).toContain("unscoped group-compatible");
       }).pipe(
         Effect.provide(
           Layer.mergeAll(

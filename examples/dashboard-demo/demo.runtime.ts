@@ -6,6 +6,8 @@
 
 import { Effect, Layer } from "effect";
 import { ControlService, ProcessGroup, ProcessStorage } from "../../src";
+import { layerProcessGroupLogContext } from "../../src/LogContext";
+import { relayWithCaptureLoggerLayer } from "../../src/Logs";
 import { DashboardDemoQueue, DashboardTick } from "./demo.tags";
 
 const port = 3001;
@@ -14,6 +16,8 @@ const envLayer = Layer.mergeAll(
   DashboardTick.layer,
   DashboardDemoQueue.layer,
   ProcessStorage.layer,
+  layerProcessGroupLogContext("dashboard-demo-group"),
+  relayWithCaptureLoggerLayer,
 );
 
 const program = Effect.gen(function* () {
