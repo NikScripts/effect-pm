@@ -12,6 +12,15 @@ Start with [`docs/AGENTS.md`](./docs/AGENTS.md) for this package's architecture,
 - Agent-created `cursor/*` branches are the exception: agents may commit and push
   work there as part of normal task progress.
 
+## Effect platform policy
+
+- Use Effect platform/node services for filesystem, process, HTTP, terminal, and
+  other Node runtime work (`FileSystem`, `Path`, `ChildProcess`, NodeServices,
+  etc.).
+- Avoid raw `node:*` APIs in new code when an Effect service exists. If no Effect
+  service exists for the primitive (for example Ed25519 crypto), isolate the
+  Node API behind a small Effect-returning helper.
+
 ## Vendored repositories
 
 External repositories live under `repos/` as read-only reference material for agents.

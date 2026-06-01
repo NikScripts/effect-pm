@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { DateTime, Duration, Effect } from "effect";
 import * as NodeFs from "node:fs";
 import * as NodeOs from "node:os";
@@ -186,7 +187,7 @@ describe("CommandAuth", () => {
     }),
   );
 
-  it.effect("loads a private key record from a PEM file", () =>
+  it.live("loads a private key record from a PEM file", () =>
     Effect.gen(function* () {
       const dir = NodeFs.mkdtempSync(NodePath.join(NodeOs.tmpdir(), "effect-pm-private-key-"));
       const filepath = NodePath.join(dir, "private.pem");
@@ -206,10 +207,10 @@ describe("CommandAuth", () => {
 
       expect(loaded).toEqual(keys.privateKey);
       NodeFs.rmSync(dir, { recursive: true, force: true });
-    }),
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 
-  it.effect("loads and merges public key records from files and directories", () =>
+  it.live("loads and merges public key records from files and directories", () =>
     Effect.gen(function* () {
       const dir = NodeFs.mkdtempSync(NodePath.join(NodeOs.tmpdir(), "effect-pm-keys-"));
       const file = NodePath.join(dir, "keyring.json");
@@ -238,6 +239,6 @@ describe("CommandAuth", () => {
 
       expect(loaded).toEqual([left.publicKey, right.publicKey]);
       NodeFs.rmSync(dir, { recursive: true, force: true });
-    }),
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 });

@@ -10,7 +10,7 @@
  * @module CommandAuth
  */
 
-import { Clock, Context, DateTime, Duration, Effect, Option, Schema } from "effect";
+import { Clock, Context, DateTime, Duration, Effect, FileSystem, Option, Schema } from "effect";
 import type { ControlProtocolRequest, ControlProtocolRequestEnvelope } from "./ControlProtocol";
 import { responseBodyJson } from "./internal/json";
 import { encodeBase64Url, decodeBase64Url } from "./internal/commandAuth/base64url";
@@ -50,43 +50,55 @@ const randomBytes = (size: number): Effect.Effect<Uint8Array, KeyMaterialError> 
 
 const readFileString = (
   path: string,
-): Effect.Effect<string, KeyMaterialError> =>
-  Effect.tryPromise({
-    try: () => import("node:fs/promises").then((fs) => fs.readFile(path, "utf8")),
-    catch: (error) =>
-      new KeyMaterialError({
-        reason: `Unable to read '${path}': ${String(error)}`,
-      }),
+): Effect.Effect<string, KeyMaterialError, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    return yield* fs.readFileString(path).pipe(
+      Effect.mapError(
+        (error) =>
+          new KeyMaterialError({
+            reason: `Unable to read '${path}': ${String(error)}`,
+          }),
+      ),
+    );
   });
 
 const publicKeyRecordFilesInDirectory = (
   directory: string,
-): Effect.Effect<ReadonlyArray<string>, KeyMaterialError> =>
-  Effect.tryPromise({
-    try: () =>
-      Promise.all([import("node:fs/promises"), import("node:path")]).then(
-        ([fs, path]) =>
-          fs.readdir(directory, { withFileTypes: true }).then((entries) =>
-            entries
-          .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
-          .map((entry) => path.join(directory, entry.name))
-              .sort()
-          ).catch((error: unknown) => {
-            if (
-              typeof error === "object" &&
-              error !== null &&
-              "code" in error &&
-              error.code === "ENOENT"
-            ) {
-              return [];
-            }
-            throw error;
-          })
+): Effect.Effect<ReadonlyArray<string>, KeyMaterialError, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const exists = yield* fs.exists(directory).pipe(Effect.catch(() => Effect.succeed(false)));
+    if (!exists) {
+      return [];
+    }
+    const entries = yield* fs.readDirectory(directory).pipe(
+      Effect.mapError(
+        (error) =>
+          new KeyMaterialError({
+            reason: `Unable to read command auth keyring directory '${directory}': ${String(error)}`,
+          }),
       ),
-    catch: (error) =>
-      new KeyMaterialError({
-        reason: `Unable to read command auth keyring directory '${directory}': ${String(error)}`,
-      }),
+    );
+    const files: string[] = [];
+    for (const entry of entries) {
+      if (!entry.endsWith(".json")) {
+        continue;
+      }
+      const filepath = `${directory.replace(/\/+$/, "")}/${entry}`;
+      const info = yield* fs.stat(filepath).pipe(
+        Effect.mapError(
+          (error) =>
+            new KeyMaterialError({
+              reason: `Unable to inspect command auth keyring entry '${filepath}': ${String(error)}`,
+            }),
+        ),
+      );
+      if (info.type === "File") {
+        files.push(filepath);
+      }
+    }
+    return files.sort();
   });
 
 export const PublicKeyRecordSchema = Schema.Struct({
@@ -353,7 +365,7 @@ export const ed25519Signer = (
 
 export const loadPrivateKeyRecord = (
   options: LoadPrivateKeyRecordOptions,
-): Effect.Effect<PrivateKeyRecord, KeyMaterialError> =>
+): Effect.Effect<PrivateKeyRecord, KeyMaterialError, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const privateKeyPem = options.privateKeyPem ??
       (options.privateKeyFile === undefined
@@ -564,12 +576,12 @@ const decodePublicKeyRecordJson = (
 
 const readPublicKeyRecordFile = (
   path: string,
-): Effect.Effect<ReadonlyArray<PublicKeyRecord>, KeyMaterialError> =>
+): Effect.Effect<ReadonlyArray<PublicKeyRecord>, KeyMaterialError, FileSystem.FileSystem> =>
   readFileString(path).pipe(Effect.flatMap(decodePublicKeyRecordJson));
 
 export const loadPublicKeyRecords = (
   options: LoadPublicKeyRecordsOptions,
-): Effect.Effect<ReadonlyArray<PublicKeyRecord>, KeyMaterialError> =>
+): Effect.Effect<ReadonlyArray<PublicKeyRecord>, KeyMaterialError, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const inline = typeof options.inline === "string"
       ? [options.inline]

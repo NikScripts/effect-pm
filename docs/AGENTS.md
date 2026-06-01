@@ -82,6 +82,11 @@ See [`.cursor/rules/public-vs-internal.mdc`](../.cursor/rules/public-vs-internal
   `docs/plans` describes future work only.
 - Prefer existing Effect patterns, services, and local helper APIs over ad hoc
   abstractions.
+- Use Effect platform/node services for filesystem, process, HTTP, terminal, and
+  other Node runtime work (`FileSystem`, `Path`, `ChildProcess`, NodeServices,
+  etc.). Avoid raw `node:*` APIs in new code when an Effect service exists; if
+  no Effect service exists for the primitive (for example Ed25519 crypto),
+  isolate the Node API behind a small Effect-returning helper.
 - Use comments and TSDoc to make intent clear when code relies on non-obvious
   type-level plumbing, Effect layering/order, runtime ownership, or compatibility
   behavior. Lean toward assuming future readers will not have the whole design

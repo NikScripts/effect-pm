@@ -1559,23 +1559,22 @@ const gitignorePatternMayCover = (pattern: string, relativePath: string): boolea
 
 const warnIfDirectoryMayNotBeIgnored = (
   directory: string,
-): Effect.Effect<void, never, FileSystem.FileSystem> =>
+): Effect.Effect<
+  void,
+  never,
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem
+> =>
   Effect.gen(function* () {
     const relativePath = normalizedRelativePath(directory);
-    const gitIgnored = yield* Effect.tryPromise({
-      try: () => import("node:child_process"),
-      catch: () => undefined,
-    }).pipe(
-      Effect.flatMap((childProcess) =>
-        childProcess === undefined
-          ? Effect.succeed(false)
-          : Effect.callback<boolean>((resume) => {
-          const child = childProcess.spawn("git", ["check-ignore", "--quiet", relativePath]);
-          child.on("exit", (code) => resume(Effect.succeed(code === 0)));
-          child.on("error", () => resume(Effect.succeed(false)));
-          })
+    const gitIgnored = yield* ChildProcess.make(
+      "git",
+      ["check-ignore", "--quiet", relativePath],
+    ).pipe(
+      Effect.flatMap((handle) =>
+        Effect.map(handle.exitCode, (exitCode) => exitCode === 0)
       ),
       Effect.catch(() => Effect.succeed(false)),
+      Effect.scoped,
     );
     if (gitIgnored) {
       return;
@@ -2016,7 +2015,7 @@ const runAuthEnrollKeyCommand = (
 ): Effect.Effect<
   void,
   ProcessManagerConnectionError | ProcessManagerRequestError,
-  FileSystem.FileSystem
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem
 > =>
   Effect.gen(function* () {
     if (options.allGroups && Option.isSome(options.group)) {

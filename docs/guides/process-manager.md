@@ -127,6 +127,9 @@ const program = Effect.gen(function* () {
 });
 ```
 
+Run this with your usual Node platform layer (`NodeServices.layer`) so the
+private-key file loader can use Effect's `FileSystem` service.
+
 | Discovery | API |
 | --- | --- |
 | Registry map | `ProcessManager.ConnectionRegistry.layer(groups, { [id]: url })` |

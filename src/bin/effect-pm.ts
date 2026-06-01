@@ -24,7 +24,8 @@
 import * as NodeFs from "node:fs";
 import * as NodePath from "node:path";
 import { createInterface } from "node:readline/promises";
-import { Effect } from "effect";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Effect, FileSystem } from "effect";
 import { CommandAuth, type PublicKeyRecord } from "../CommandAuth";
 import { prismaSchema } from "../prisma/schema";
 import {
@@ -95,14 +96,22 @@ const publicKeyRecordJson = (record: PublicKeyRecord): string =>
     "}",
   ].join("\n");
 
+const parentDirectory = (path: string): string => {
+  const normalized = path.replace(/\\/g, "/");
+  const index = normalized.lastIndexOf("/");
+  return index <= 0 ? "." : normalized.slice(0, index);
+};
+
 const writeFileSecure = (
   filepath: string,
   contents: string,
   mode?: number,
-): void => {
-  NodeFs.mkdirSync(NodePath.dirname(filepath), { recursive: true });
-  NodeFs.writeFileSync(filepath, contents, mode === undefined ? undefined : { mode });
-};
+): Effect.Effect<void, unknown, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.makeDirectory(parentDirectory(filepath), { recursive: true });
+    yield* fs.writeFileString(filepath, contents, mode === undefined ? {} : { mode });
+  });
 
 const requiredValue = (
   argv: ReadonlyArray<string>,
@@ -323,7 +332,7 @@ const runAuthKeygen = (argv: ReadonlyArray<string>): Promise<void> =>
         process.stdout.write(`EFFECT_PM_COMMAND_KEY_EXPIRES_AT=${keys.privateKey.expiresAt}\n`);
         process.stdout.write(keys.privateKey.privateKeyPem);
       } else {
-        writeFileSecure(options.privateKeyOut, keys.privateKey.privateKeyPem, 0o600);
+        yield* writeFileSecure(options.privateKeyOut, keys.privateKey.privateKeyPem, 0o600);
         process.stdout.write(`wrote private key PEM to ${options.privateKeyOut}\n`);
         process.stdout.write(`EFFECT_PM_COMMAND_KEY_ID=${keys.privateKey.keyId}\n`);
         process.stdout.write(`EFFECT_PM_COMMAND_KEY_NAME=${keys.privateKey.name}\n`);
@@ -335,10 +344,10 @@ const runAuthKeygen = (argv: ReadonlyArray<string>): Promise<void> =>
         process.stdout.write("\n# Public command auth registration record.\n");
         process.stdout.write(publicRecord);
       } else {
-        writeFileSecure(options.publicRecordOut, publicRecord);
+        yield* writeFileSecure(options.publicRecordOut, publicRecord);
         process.stdout.write(`wrote public key record to ${options.publicRecordOut}\n`);
       }
-    }),
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 
 const targetLabel = (target: PrismaSchemaTarget): string =>
