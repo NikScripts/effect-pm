@@ -56,6 +56,12 @@ routing.
 - `generateEd25519KeyPair` is public in `CommandAuth`.
 - `canonicalPayload` is public for custom signer/verifier tests.
 - Auth failures are separate tagged error classes.
+- Cut 2 adds signed `GetHealth` to `ControlProtocolRequest`.
+- Cut 2 disables REST shortcuts, unsigned `/health`, and unsigned log streaming
+  whenever `auth` is configured.
+- Cut 2 configures auth through explicit client/server config fields.
+- Cut 2 maps auth failures to `401 ControlTransportError` before routing.
+- Cut 2 tests assert router/process code does not run on auth failure.
 
 ## Open recipe steps
 
@@ -67,6 +73,7 @@ routing.
 - Implementation order and review cuts.
 - Cut 1 `CommandAuth` API details.
 - Cut 2 signed control transport details.
+- Cut 3 operator workflow details.
 
 ## Step 1: Signature primitive and key format
 
@@ -1251,6 +1258,9 @@ Decision steps:
 5. Should Cut 2 tests assert router/process code does not run on auth failure? —
    **Recommended answer:** Yes; that is the main security acceptance condition.
 
+Decision:
+Yes to all five Cut 2 transport steps.
+
 Ingredients:
 Yes to all five. Cut 2 should make signed `/control` the only authenticated
 communication path, keep no-auth behavior opt-in compatible, and prove failed
@@ -1261,6 +1271,159 @@ Signed `ProcessManager` commands work, unsigned/malformed/expired/replayed
 requests return `401`, REST shortcuts and unsigned health/log routes are disabled
 when auth is configured, signed `GetHealth` succeeds, and test counters prove
 failed auth never invokes router/process logic.
+
+## Step 9: Cut 3 operator workflow details
+
+Recipe step: `Cut 3 operator workflow details`
+
+What this decides:
+Cut 3 makes the signed command system usable by operators. It wires local key
+generation, public-key enrollment assistance, documentation, examples, package
+exports/build config, and release notes without changing the already-tested core
+auth or transport semantics.
+
+Recommended ingredients:
+- `effect-pm auth keygen` writes private material only to stdout or an explicit
+  local path — no accidental repository writes.
+- Keygen emits both dotenv snippets and a JSON public key record — env-first apps
+  and config-file apps both get a clean path.
+- `pm auth enroll-key` is a ProcessManager CLI helper, not a direct remote write
+  protocol — v1 has no authorization or remote config mutation system.
+- Enrollment helper supports `--dry-run`, `--group`, `--all-groups`,
+  `--write-env <path>`, and copy/paste output — automation where local config is
+  available, instructions where it is not.
+- Docs update `control-plane.md` and `process-manager.md` with secure setup,
+  direct group setup, PM setup, rotation, expiration, and troubleshooting.
+- Examples include one direct group and one PM-managed multi-group setup.
+- Changeset ships in this cut because public API, package exports, behavior, and
+  CLI commands are now present.
+
+Picture:
+
+```sh
+# Generate local private material and public registration record.
+effect-pm auth keygen \
+  --name nik-laptop \
+  --expires 2026-12-31 \
+  --private-key-out ~/.config/effect-pm/keys/nik-laptop.pem \
+  --public-record-out ~/.config/effect-pm/keys/nik-laptop.public.json
+```
+
+```dotenv
+# Private, local-only signer env.
+EFFECT_PM_COMMAND_KEY_ID=cmd_01jz8w3t...
+EFFECT_PM_COMMAND_PRIVATE_KEY_FILE=/home/nik/.config/effect-pm/keys/nik-laptop.pem
+```
+
+```json
+{
+  "keyId": "cmd_01jz8w3t...",
+  "name": "nik-laptop",
+  "algorithm": "Ed25519",
+  "expiresAt": "2026-12-31T23:59:59.999Z",
+  "publicKeyPem": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n"
+}
+```
+
+```sh
+# Print install snippets for one group.
+pm auth enroll-key ~/.config/effect-pm/keys/nik-laptop.public.json \
+  --group @app/Billing \
+  --dry-run
+```
+
+```dotenv
+# Public verifier env for @app/Billing.
+BILLING_GROUP_COMMAND_KEYS='[
+  {
+    "keyId": "cmd_01jz8w3t...",
+    "name": "nik-laptop",
+    "algorithm": "Ed25519",
+    "expiresAt": "2026-12-31T23:59:59.999Z",
+    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n"
+  }
+]'
+```
+
+```ts
+// Direct group app setup.
+ControlService.layerHttp(BillingGroup, {
+  port: 3001,
+  auth: CommandAuth.ed25519Verifier({
+    keys: Config.array(CommandAuth.Schema.PublicKeyRecord)(
+      "BILLING_GROUP_COMMAND_KEYS",
+    ),
+    replay: CommandAuth.Replay.memory({ window: Duration.minutes(5) }),
+  }),
+});
+```
+
+```ts
+// Operator CLI setup.
+const signer = CommandAuth.ed25519SignerFromConfig({
+  keyId: Config.string("EFFECT_PM_COMMAND_KEY_ID"),
+  privateKeyFile: Config.string("EFFECT_PM_COMMAND_PRIVATE_KEY_FILE"),
+});
+
+const cli = ProcessManager.cli([BillingGroup] as const, {
+  auth: signer,
+});
+```
+
+```md
+Troubleshooting docs:
+- 401 MissingSignatureHeader: configure signer on the CLI/client.
+- 401 UnknownKeyId: enroll the public key with this group/PM receiver.
+- 401 ExpiredKey: generate a replacement key and remove the expired record.
+- 401 ReplayedCommand: retry with a fresh command envelope.
+- 404 strict mode shortcut: use signed POST /control or ProcessManager CLI.
+```
+
+```md
+Changeset:
+---
+"@nikscripts/effect-pm": minor
+---
+
+Adds signed command authentication for ProcessManager and ControlService,
+including CommandAuth APIs, strict signed control transport, key generation, and
+operator enrollment helpers.
+```
+
+Alternatives:
+1. Keygen only, enrollment later — simpler CLI work, but operators still have to
+   hand-build verifier env values.
+2. Enrollment writes remote config over the control plane — attractive long term,
+   but v1 has no permissions or config mutation protocol.
+3. Store private keys in project `.env` by default — convenient, but makes
+   accidental commits more likely; explicit local path is safer.
+4. Docs only, no examples — faster, but this feature needs copy/pasteable setup
+   because mistakes become auth failures.
+
+Decision steps:
+1. Should `effect-pm auth keygen` output private key material only to stdout or
+   explicit local paths? — **Recommended answer:** Yes; never write secrets into
+   the repo implicitly.
+2. Should keygen emit both dotenv snippets and JSON public records? —
+   **Recommended answer:** Yes; it supports env-based and file/config-based apps.
+3. Should `pm auth enroll-key` be a local helper that prints/writes config, not a
+   remote mutation command? — **Recommended answer:** Yes; remote mutation needs
+   future permissions.
+4. Should enrollment support `--dry-run`, `--group`, `--all-groups`, and
+   `--write-env`? — **Recommended answer:** Yes; those cover safe preview,
+   targeted setup, bulk setup, and local automation.
+5. Should Cut 3 include docs, examples, and the changeset? —
+   **Recommended answer:** Yes; the feature is public and operationally sensitive.
+
+Ingredients:
+Yes to all five. Cut 3 should complete the operator path without creating remote
+config mutation or unsafe secret storage.
+
+Acceptance check:
+An operator can generate a local private key, enroll the public key into one or
+more group verifier configs, run signed PM commands using env/file signer config,
+diagnose common auth failures from docs, run direct and PM examples, and review a
+changeset describing the public API/behavior change.
 
 ## Cleanup status
 
