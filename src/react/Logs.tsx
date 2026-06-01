@@ -4,7 +4,7 @@
  * @module react/Logs
  */
 
-import type { CSSProperties } from "react";
+import { Fragment, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { defaultLogRow } from "./defaultSlots.js";
 import {
   useControlPlaneLogs,
@@ -54,6 +54,14 @@ export const Logs = <Target extends DashboardTarget = DashboardTarget>({
     enabled: sharedLogs === undefined ? enabled : false,
   });
   const logs = sharedLogs ?? internalLogs;
+  const logListRef = useRef<HTMLOListElement | null>(null);
+
+  useLayoutEffect(() => {
+    const list = logListRef.current;
+    if (list !== null) {
+      list.scrollTop = list.scrollHeight;
+    }
+  }, [logs.entries.length]);
 
   return (
     <section
@@ -83,13 +91,13 @@ export const Logs = <Target extends DashboardTarget = DashboardTarget>({
         )
       ) : null}
 
-      <ol>
+      <ol ref={logListRef}>
         {logs.entries.map((entry, index) => (
-          <span key={`${entry.date}:${String(index)}`}>
+          <Fragment key={`${entry.date}:${String(index)}`}>
             {slots.logRow !== undefined
               ? slots.logRow({ entry })
               : defaultLogRow({ entry })}
-          </span>
+          </Fragment>
         ))}
       </ol>
 

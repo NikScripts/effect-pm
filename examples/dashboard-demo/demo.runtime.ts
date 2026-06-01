@@ -4,7 +4,7 @@
  * Run: `pnpm run example:dashboard-demo:pm`
  */
 
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Schedule } from "effect";
 import { ControlService, ProcessGroup, ProcessStorage } from "../../src";
 import { layerProcessGroupLogContext } from "../../src/LogContext";
 import { relayWithCaptureLoggerLayer } from "../../src/Logs";
@@ -33,6 +33,11 @@ const program = Effect.gen(function* () {
   yield* group.start(DashboardTick);
   const queue = yield* DashboardDemoQueue;
   yield* queue.add(["hello-queue"]);
+  yield* Effect.forkScoped(
+    Effect.logInfo("dashboard demo heartbeat").pipe(
+      Effect.repeat(Schedule.fixed("3 seconds")),
+    ),
+  );
 
   yield* group.awaitShutdown({
     logMessage: (signal) => `Received ${signal}, shutting down…`,
