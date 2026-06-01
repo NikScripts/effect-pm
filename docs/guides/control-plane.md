@@ -48,16 +48,21 @@ Add `auth` when the control service should reject unsigned commands:
 
 ```typescript
 import { CommandAuth, ControlService } from "@nikscripts/effect-pm";
-import { Config, Duration } from "effect";
+import { Config, Duration, Effect } from "effect";
 
-ControlService.layerHttp(BillingGroup, {
-  port: 3001,
-  auth: CommandAuth.ed25519Verifier({
-    keys: Config.array(CommandAuth.Schema.PublicKeyRecord)(
-      "BILLING_GROUP_COMMAND_KEYS",
-    ),
-    replay: CommandAuth.Replay.memory({ window: Duration.minutes(5) }),
-  }),
+const program = Effect.gen(function* () {
+  const keyJson = yield* Config.string("BILLING_GROUP_COMMAND_KEYS");
+  const keys = yield* CommandAuth.decodePublicKeyRecordsJson(keyJson);
+  const group = yield* BillingGroup;
+
+  yield* ControlService.make({
+    group,
+    port: 3001,
+    auth: CommandAuth.ed25519Verifier({
+      keys,
+      replay: CommandAuth.Replay.memory({ window: Duration.minutes(5) }),
+    }),
+  });
 });
 ```
 

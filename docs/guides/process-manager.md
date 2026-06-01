@@ -103,6 +103,25 @@ For authenticated control services, provide a signer:
 ```typescript
 import { CommandAuth, ProcessManager } from "@nikscripts/effect-pm";
 
+const requiredEnv = (name: string): string => {
+  const value = process.env[name];
+  if (value === undefined) {
+    throw new Error(`Missing ${name}`);
+  }
+  return value;
+};
+
+const privateKeyRecord = {
+  keyId: requiredEnv("EFFECT_PM_COMMAND_KEY_ID"),
+  name: requiredEnv("EFFECT_PM_COMMAND_KEY_NAME"),
+  algorithm: "Ed25519",
+  expiresAt: requiredEnv("EFFECT_PM_COMMAND_KEY_EXPIRES_AT"),
+  privateKeyPem: await fs.promises.readFile(
+    requiredEnv("EFFECT_PM_COMMAND_PRIVATE_KEY_FILE"),
+    "utf8",
+  ),
+};
+
 const manager = ProcessManager.connect(BillingGroup, {
   baseUrl: "http://127.0.0.1:3001",
   auth: CommandAuth.ed25519Signer(privateKeyRecord),

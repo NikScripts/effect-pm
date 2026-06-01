@@ -16,8 +16,9 @@ import {
   sign as cryptoSign,
   verify as cryptoVerify,
 } from "node:crypto";
-import { Clock, Context, DateTime, Duration, Effect, Schema } from "effect";
+import { Clock, Context, DateTime, Duration, Effect, Option, Schema } from "effect";
 import type { ControlProtocolRequest, ControlProtocolRequestEnvelope } from "./ControlProtocol";
+import { responseBodyJson } from "./internal/json";
 import { encodeBase64Url, decodeBase64Url } from "./internal/commandAuth/base64url";
 import {
   canonicalPayload,
@@ -41,6 +42,8 @@ import {
 } from "./internal/commandAuth/errors";
 
 const defaultReplayWindow = Duration.minutes(5);
+const commandAuthAlgorithm = "Ed25519";
+const commandAuthHeaderVersion = "v1";
 
 export const PublicKeyRecordSchema = Schema.Struct({
   keyId: Schema.String,
@@ -113,6 +116,7 @@ export interface CommandAuthReplayStoreReserveInput {
 }
 
 export interface CommandAuthReplayStore {
+  readonly window?: Parameters<typeof Duration.fromInputUnsafe>[0];
   readonly reserve: (
     input: CommandAuthReplayStoreReserveInput,
   ) => Effect.Effect<void, ReplayedCommand | CommandAuthReplayStoreError>;
@@ -171,17 +175,15 @@ const parseExpirationMillis = (
   keyId: string,
   expiresAt: string,
 ): Effect.Effect<number, KeyMaterialError> =>
-  Effect.sync(() => Date.parse(expiresAt)).pipe(
-    Effect.flatMap((millis) =>
-      Number.isNaN(millis)
-        ? Effect.fail(
-            new KeyMaterialError({
-              reason: `Key '${keyId}' has invalid expiresAt '${expiresAt}'`,
-            }),
-          )
-        : Effect.succeed(millis)
-    ),
-  );
+  Option.match(DateTime.make(expiresAt), {
+    onNone: () =>
+      Effect.fail(
+        new KeyMaterialError({
+          reason: `Key '${keyId}' has invalid expiresAt '${expiresAt}'`,
+        }),
+      ),
+    onSome: (dateTime) => Effect.succeed(DateTime.toEpochMillis(dateTime)),
+  });
 
 const assertNotExpired = (
   key: Pick<PublicKeyRecord, "keyId" | "expiresAt">,
@@ -239,14 +241,14 @@ export const generateEd25519KeyPair = (
         publicKey: {
           keyId,
           name: options.name,
-          algorithm: "Ed25519" as const,
+          algorithm: commandAuthAlgorithm,
           publicKeyPem,
           expiresAt: options.expiresAt,
         },
         privateKey: {
           keyId,
           name: options.name,
-          algorithm: "Ed25519" as const,
+          algorithm: commandAuthAlgorithm,
           privateKeyPem,
           expiresAt: options.expiresAt,
         },
@@ -274,8 +276,8 @@ export const ed25519Signer = (
           }),
       });
       return {
-        version: "v1" as const,
-        algorithm: "Ed25519" as const,
+        version: commandAuthHeaderVersion,
+        algorithm: commandAuthAlgorithm,
         keyId: privateKey.keyId,
         signature: encodeBase64Url(signature),
       };
@@ -293,7 +295,7 @@ export const ed25519Verifier = (
 ): CommandAuthVerifierService => {
   const keys = new Map(options.keys.map((key) => [key.keyId, key]));
   const window = Duration.toMillis(
-    Duration.fromInputUnsafe(options.window ?? defaultReplayWindow),
+    Duration.fromInputUnsafe(options.window ?? options.replay?.window ?? defaultReplayWindow),
   );
   const replay = options.replay ?? makeMemoryReplayStore();
 
@@ -346,15 +348,68 @@ export const ed25519Verifier = (
   };
 };
 
+export const decodePublicKeyRecordsJson = (
+  text: string,
+): Effect.Effect<ReadonlyArray<PublicKeyRecord>, KeyMaterialError> =>
+  Effect.gen(function* () {
+    const parsed = yield* Schema.decodeUnknownEffect(responseBodyJson)(text).pipe(
+      Effect.mapError(
+        (error) =>
+          new KeyMaterialError({
+            reason: `Unable to decode command auth public key JSON: ${String(error)}`,
+          }),
+      ),
+    );
+    return yield* Schema.decodeUnknownEffect(Schema.Array(PublicKeyRecordSchema))(parsed).pipe(
+      Effect.mapError(
+        (error) =>
+          new KeyMaterialError({
+            reason: `Invalid command auth public key records: ${String(error)}`,
+          }),
+      ),
+    );
+  });
+
 export const commandAuthErrorMessage = (error: CommandAuthError): string =>
   error.reason;
 
-export const CommandAuth = {
+interface CommandAuthApi {
+  readonly generateEd25519KeyPair: typeof generateEd25519KeyPair;
+  readonly ed25519Signer: typeof ed25519Signer;
+  readonly ed25519Verifier: typeof ed25519Verifier;
+  readonly canonicalPayload: typeof canonicalPayload;
+  readonly canonicalPayloadText: typeof canonicalPayloadText;
+  readonly decodePublicKeyRecordsJson: typeof decodePublicKeyRecordsJson;
+  readonly formatSignatureHeader: typeof formatSignatureHeader;
+  readonly parseSignatureHeader: typeof parseSignatureHeader;
+  readonly Replay: {
+    readonly memory: typeof makeMemoryReplayStore;
+  };
+  readonly Schema: {
+    readonly PublicKeyRecord: typeof PublicKeyRecordSchema;
+    readonly PrivateKeyRecord: typeof PrivateKeyRecordSchema;
+  };
+  readonly Errors: {
+    readonly MissingSignatureHeader: typeof MissingSignatureHeader;
+    readonly MalformedSignatureHeader: typeof MalformedSignatureHeader;
+    readonly UnknownKeyId: typeof UnknownKeyId;
+    readonly ExpiredKey: typeof ExpiredKey;
+    readonly SignatureVerificationFailed: typeof SignatureVerificationFailed;
+    readonly ReplayedCommand: typeof ReplayedCommand;
+    readonly CanonicalPayloadError: typeof CanonicalPayloadError;
+    readonly KeyMaterialError: typeof KeyMaterialError;
+    readonly CommandAuthReplayStoreError: typeof CommandAuthReplayStoreError;
+  };
+  readonly errorMessage: typeof commandAuthErrorMessage;
+}
+
+export const CommandAuth: CommandAuthApi = {
   generateEd25519KeyPair,
   ed25519Signer,
   ed25519Verifier,
   canonicalPayload,
   canonicalPayloadText,
+  decodePublicKeyRecordsJson,
   formatSignatureHeader,
   parseSignatureHeader,
   Replay: {
@@ -376,7 +431,7 @@ export const CommandAuth = {
     CommandAuthReplayStoreError,
   },
   errorMessage: commandAuthErrorMessage,
-} as const;
+};
 
 export {
   canonicalPayload,

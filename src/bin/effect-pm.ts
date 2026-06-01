@@ -319,11 +319,15 @@ const runAuthKeygen = (argv: ReadonlyArray<string>): Promise<void> =>
       if (options.privateKeyOut === undefined) {
         process.stdout.write("# Private command auth key. Store locally; do not commit.\n");
         process.stdout.write(`EFFECT_PM_COMMAND_KEY_ID=${keys.privateKey.keyId}\n`);
+        process.stdout.write(`EFFECT_PM_COMMAND_KEY_NAME=${keys.privateKey.name}\n`);
+        process.stdout.write(`EFFECT_PM_COMMAND_KEY_EXPIRES_AT=${keys.privateKey.expiresAt}\n`);
         process.stdout.write(keys.privateKey.privateKeyPem);
       } else {
         writeFileSecure(options.privateKeyOut, keys.privateKey.privateKeyPem, 0o600);
         process.stdout.write(`wrote private key PEM to ${options.privateKeyOut}\n`);
         process.stdout.write(`EFFECT_PM_COMMAND_KEY_ID=${keys.privateKey.keyId}\n`);
+        process.stdout.write(`EFFECT_PM_COMMAND_KEY_NAME=${keys.privateKey.name}\n`);
+        process.stdout.write(`EFFECT_PM_COMMAND_KEY_EXPIRES_AT=${keys.privateKey.expiresAt}\n`);
         process.stdout.write(`EFFECT_PM_COMMAND_PRIVATE_KEY_FILE=${options.privateKeyOut}\n`);
       }
 

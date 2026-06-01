@@ -24,6 +24,7 @@ export const makeMemoryReplayStore = (
   const maxEntries = options.maxEntries ?? 10_000;
 
   return {
+    ...(options.window === undefined ? {} : { window: options.window }),
     reserve: (input) =>
       Effect.sync(() => {
         for (const [key, expiresAt] of accepted) {

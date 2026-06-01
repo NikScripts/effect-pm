@@ -127,6 +127,7 @@ export {
   ed25519Verifier,
   canonicalPayload,
   canonicalPayloadText,
+  decodePublicKeyRecordsJson,
   formatSignatureHeader,
   parseSignatureHeader,
   commandAuthErrorMessage,

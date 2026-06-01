@@ -1,14 +1,15 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Duration, Effect } from "effect";
+import { DateTime, Duration, Effect } from "effect";
 import {
   CommandAuth,
+  ExpiredKey,
   ReplayedCommand,
   SignatureVerificationFailed,
   UnknownKeyId,
   type CommandAuthSigningInput,
 } from "../src";
 
-const sentAt = Date.parse("2026-06-01T00:00:00.000Z");
+const sentAt = DateTime.toEpochMillis(DateTime.makeUnsafe("2026-06-01T00:00:00.000Z"));
 
 const signingInput: CommandAuthSigningInput = {
   method: "POST",
@@ -88,6 +89,28 @@ describe("CommandAuth", () => {
     }),
   );
 
+  it.effect("honors the replay window configured on the memory replay store", () =>
+    Effect.gen(function* () {
+      const keys = yield* CommandAuth.generateEd25519KeyPair({
+        name: "nik-laptop",
+        expiresAt,
+      });
+      const signer = CommandAuth.ed25519Signer(keys.privateKey);
+      const verifier = CommandAuth.ed25519Verifier({
+        keys: [keys.publicKey],
+        replay: CommandAuth.Replay.memory({ window: Duration.millis(1) }),
+      });
+      const header = yield* signer.sign(signingInput);
+
+      const error = yield* verifier
+        .verify({ header, input: signingInput, now: sentAt + 10 })
+        .pipe(Effect.flip);
+
+      expect(error).toBeInstanceOf(ExpiredKey);
+      expect(error._tag).toBe("ExpiredKey");
+    }),
+  );
+
   it.effect("rejects unknown key ids before signature verification", () =>
     Effect.gen(function* () {
       const signerKeys = yield* CommandAuth.generateEd25519KeyPair({
@@ -143,6 +166,20 @@ describe("CommandAuth", () => {
 
       expect(error).toBeInstanceOf(SignatureVerificationFailed);
       expect(error._tag).toBe("SignatureVerificationFailed");
+    }),
+  );
+
+  it.effect("decodes public key records from JSON", () =>
+    Effect.gen(function* () {
+      const keys = yield* CommandAuth.generateEd25519KeyPair({
+        name: "nik-laptop",
+        expiresAt,
+      });
+      const json = `[{"keyId":"${keys.publicKey.keyId}","name":"nik-laptop","algorithm":"Ed25519","publicKeyPem":"${keys.publicKey.publicKeyPem.replace(/\n/g, "\\n")}","expiresAt":"${expiresAt}"}]`;
+
+      const decoded = yield* CommandAuth.decodePublicKeyRecordsJson(json);
+
+      expect(decoded).toEqual([keys.publicKey]);
     }),
   );
 });
