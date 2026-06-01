@@ -52,6 +52,7 @@ export const ControlResponseSchema = Schema.Struct({
  * @public
  */
 export type ControlProtocolRequest =
+  | { readonly _tag: "GetHealth" }
   | { readonly _tag: "GetContract" }
   | { readonly _tag: "ReadGroupStatus" }
   | { readonly _tag: "ListProcesses" }
@@ -73,6 +74,7 @@ export type ControlProtocolRequest =
  * @public
  */
 export const ControlProtocolRequestSchema = Schema.Union([
+  Schema.TaggedStruct("GetHealth", {}),
   Schema.TaggedStruct("GetContract", {}),
   Schema.TaggedStruct("ReadGroupStatus", {}),
   Schema.TaggedStruct("ListProcesses", {}),
@@ -437,6 +439,13 @@ export const makeControlProtocolRouter = <
   handle: (request) =>
     Effect.gen(function* () {
       switch (request._tag) {
+        case "GetHealth":
+          return {
+            _tag: "Control",
+            status: 200,
+            body: successResponse({ status: "ok" }),
+          };
+
         case "GetContract":
           return {
             _tag: "Contract",
