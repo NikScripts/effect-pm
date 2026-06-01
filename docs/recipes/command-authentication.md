@@ -38,6 +38,8 @@ routing.
   write access and print install instructions for remote groups.
 - V1 signs canonical JSON `{ version, method, path, envelope }` and carries the
   signature in `Effect-PM-Signature`.
+- V1 uses signed timestamp skew plus an in-memory `{ keyId, envelope.id }`
+  replay cache, with an optional replay-store interface for stronger receivers.
 
 ## Open recipe steps
 
@@ -502,6 +504,10 @@ Question:
 Should v1 use signed timestamp skew plus an in-memory `{ keyId, envelope.id }`
 replay cache, with an optional replay-store interface for stronger deployments?
 
+Decision:
+Yes. V1 uses signed timestamp skew plus an in-memory replay cache by default;
+shared/durable replay tracking is an extension point, not a v1 requirement.
+
 Recommended answer:
 Yes. It prevents ordinary capture-and-replay attacks without forcing storage
 into v1, and it leaves a clean path for PM or clustered deployments that need
@@ -511,6 +517,103 @@ Acceptance check:
 The first valid command id for a key succeeds; reusing the same envelope id with
 the same key fails; stale and far-future `sentAt` values fail even with valid
 signatures.
+
+## Step 5: Mandatory auth coverage and REST shortcuts
+
+Recipe step: `Mandatory auth coverage and REST shortcuts`
+
+What this decides:
+The HTTP adapter currently exposes protocol envelopes at `POST /control`, REST
+shortcuts, `GET /health`, and log streaming. This step decides which surfaces
+remain available once a receiver opts into command authentication.
+
+Recommended ingredients:
+- Authenticated mode defaults to `strict` — every HTTP request except `OPTIONS`
+  must carry a valid signature.
+- `POST /control` is the canonical signed command path — it already has a
+  request envelope with id, timestamp, metadata, and typed command.
+- REST shortcuts are disabled in strict mode — they do not naturally carry a
+  client-created envelope, so keeping them would require hidden synthetic
+  envelope rules and more ways to get signing wrong.
+- Health moves behind signed `/control` as `GetHealth` or a signed `GET /health`
+  using a generated envelope id in the signature input — no unauthenticated
+  liveness endpoint in authenticated mode.
+- Log streaming requires a signed one-shot request before the stream opens —
+  the signature authenticates stream creation, not every NDJSON frame.
+
+Picture:
+
+```ts
+// Secure default when auth is present.
+ControlService.layerHttp(BillingGroup, {
+  port: 3001,
+  auth: CommandAuth.ed25519Verifier({ keys, replay }),
+  unauthenticated: "none",
+  restShortcuts: "off",
+});
+```
+
+```http
+POST /control
+Effect-PM-Signature: v1; alg=Ed25519; keyId=cmd_01jz...; signature=...
+
+{
+  "id": "control-1780330000000-1",
+  "sentAt": 1780330000000,
+  "request": { "_tag": "ReadGroupStatus" }
+}
+```
+
+```http
+POST /processes/%40app%2FBilling%2FSyncInvoices/now
+
+HTTP/1.1 404 Not Found
+{"success":false,"error":"REST shortcuts are disabled when command auth is strict; use POST /control"}
+```
+
+```ts
+// Internal HTTP dispatch in strict mode.
+if (authEnabled && req.method !== "OPTIONS" && url.pathname !== "/control") {
+  yield* writeJson(
+    res,
+    404,
+    errorResponse("REST shortcuts are disabled when command auth is strict; use POST /control"),
+  );
+  return;
+}
+```
+
+```ts
+// Optional explicit dev profile, not the secure default.
+ControlService.layerHttp(BillingGroup, {
+  port: 3001,
+  auth: CommandAuth.ed25519Verifier({ keys, replay }),
+  restShortcuts: "signed",
+});
+```
+
+Alternatives:
+1. Sign every REST shortcut — keeps curl ergonomics, but adds a second signing
+   input shape and increases implementation/test surface.
+2. Keep `/health` unauthenticated — convenient for probes, but violates the
+   locked invariant that unsigned communication is rejected.
+3. Keep old localhost no-auth behavior when binding to `127.0.0.1` — good for
+   dev compatibility, but it should be an explicit no-auth server config rather
+   than part of authenticated mode.
+
+Question:
+Should authenticated v1 run in strict mode by default: signed `POST /control`
+only, REST shortcuts disabled, and no unauthenticated `/health`?
+
+Recommended answer:
+Yes. It is the most secure and easiest rule to explain: once auth is enabled,
+unsigned HTTP never reaches routing, and operators use the canonical signed
+protocol path.
+
+Acceptance check:
+With auth configured, unsigned `/control`, REST shortcut requests, `/health`,
+and log stream attempts all fail before route handling; signed `/control`
+requests still support contract, status, process, queue, and health commands.
 
 ## Cleanup status
 
