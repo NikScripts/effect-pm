@@ -280,7 +280,6 @@ const STATE_COMPLETED_WIRE = runResourcePath("State", "Completed");
 const STATE_FAILED_WIRE = runResourcePath("State", "Failed");
 const STATE_INTERRUPTED_WIRE = runResourcePath("State", "Interrupted");
 const STATE_WAIT_INTERRUPTED_WIRE = runResourcePath("State", "WaitInterrupted");
-const STATE_CHANGED_WIRE = runResourcePath("State", "Changed");
 
 const RUN_RESOURCE_STATE_CHANGE_REASONS: ReadonlyArray<
   RunResourceStateChangeReason

@@ -977,10 +977,8 @@ const getCodecHandler = <Output>(
 const makeTelemetryCodec =
   <const Section extends ProcessStoreTelemetrySection<object>>(section: Section) =>
   <
-    const Handlers extends TelemetryCodecHandlersFromMeta<
-      TelemetryMetaOf<Section>,
-      unknown
-    >,
+    const Handlers extends object &
+      TelemetryCodecHandlersFromMeta<TelemetryMetaOf<Section>, unknown>,
   >(
     handlers: Handlers,
   ): TelemetryCodec<Section, Handlers> => {
