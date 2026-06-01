@@ -34,6 +34,8 @@ scope-backed events.
   simple input fields.
 - Event definitions own best-effort logging through `Telemetry.logWarning`.
 - Row `type` is generated from telemetry path: `Namespace.Tag.Event`.
+- Row `type` is always PascalCase. Do not use legacy lowercase/domain
+  discriminators as row type values.
 - For app-specific telemetry, row `processType` / `processId` can come from the
   resource/process tag passed to `ProcessStore.telemetry(ResourceTag)`.
 - For built-in generic store facets (`RunResourceStore`, `QueueResourceStore`),
@@ -68,7 +70,6 @@ Picture:
 class RunStarted extends Telemetry.Schema<RunStarted>()(RunScope)({
   runId: RunState.runId,
   occurredAt: Telemetry.terminal.clockMillis,
-  kind: "run-resource.run.started",
   payload: Schema.Struct({
     concurrency: Schema.Number,
   }),
@@ -183,6 +184,24 @@ Acceptance check:
 `ProcessStore.telemetry(RunResourceScope)(...)` both typecheck. Generated rows
 use tag identity for concrete tags and scope identity for generic facets without
 event schemas mentioning row identity fields.
+
+## Locked row type examples
+
+```ts
+// yes
+"RunResource.Run.Started"
+"RunResource.Run.Completed"
+"RunResource.Run.Failed"
+"RunResource.State.Changed"
+"Queue.Entry.Enqueued"
+"Process.Lifecycle.Started"
+
+// no
+"run-resource.run.started"
+"run-resource.state.changed"
+"queue.entry.enqueued"
+"process.lifecycle.changed"
+```
 
 ## Cleanup status
 
