@@ -12,6 +12,8 @@
  *   Prisma schema fragment.
  * - `effect-pm add prisma [--separate-file|--no-separate-file] [--dry-run]` —
  *   detect the project's Prisma schema and add the effect-pm models.
+ * - `effect-pm auth keygen` — generate a local Ed25519 command key pair and
+ *   print/write the public registration record.
  *
  * Keeps schema rewriting in a pure helper; this file supplies the Node CLI
  * bindings and optional prompt.
@@ -22,6 +24,9 @@
 import * as NodeFs from "node:fs";
 import * as NodePath from "node:path";
 import { createInterface } from "node:readline/promises";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Effect, FileSystem } from "effect";
+import { CommandAuth, type PublicKeyRecord } from "../CommandAuth";
 import { prismaSchema } from "../prisma/schema";
 import {
   addPrismaSchema,
@@ -49,6 +54,78 @@ const nodeFs: FsAdapter = {
   readdir: (dir) => NodeFs.readdirSync(dir),
 };
 
+interface AuthKeygenOptions {
+  readonly name: string;
+  readonly expiresAt: string;
+  readonly privateKeyOut?: string;
+  readonly publicRecordOut?: string;
+}
+
+const escapeJsonString = (value: string): string =>
+  value.replace(/[\u0000-\u001f"\\]/g, (character) => {
+    switch (character) {
+      case "\"":
+        return "\\\"";
+      case "\\":
+        return "\\\\";
+      case "\b":
+        return "\\b";
+      case "\f":
+        return "\\f";
+      case "\n":
+        return "\\n";
+      case "\r":
+        return "\\r";
+      case "\t":
+        return "\\t";
+      default:
+        return `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`;
+    }
+  });
+
+const jsonString = (value: string): string => `"${escapeJsonString(value)}"`;
+
+const publicKeyRecordJson = (record: PublicKeyRecord): string =>
+  [
+    "{",
+    `  "keyId": ${jsonString(record.keyId)},`,
+    `  "name": ${jsonString(record.name)},`,
+    `  "algorithm": ${jsonString(record.algorithm)},`,
+    `  "expiresAt": ${jsonString(record.expiresAt)},`,
+    `  "publicKeyPem": ${jsonString(record.publicKeyPem)}`,
+    "}",
+  ].join("\n");
+
+const parentDirectory = (path: string): string => {
+  const normalized = path.replace(/\\/g, "/");
+  const index = normalized.lastIndexOf("/");
+  return index <= 0 ? "." : normalized.slice(0, index);
+};
+
+const writeFileSecure = (
+  filepath: string,
+  contents: string,
+  mode?: number,
+): Effect.Effect<void, unknown, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.makeDirectory(parentDirectory(filepath), { recursive: true });
+    yield* fs.writeFileString(filepath, contents, mode === undefined ? {} : { mode });
+  });
+
+const requiredValue = (
+  argv: ReadonlyArray<string>,
+  index: number,
+  flag: string,
+): string => {
+  const value = argv[index + 1];
+  if (value === undefined) {
+    process.stderr.write(`${flag} requires a value\n`);
+    process.exit(2);
+  }
+  return value;
+};
+
 const usage = `effect-pm — admin CLI
 
 Usage:
@@ -65,12 +142,23 @@ Usage:
       single-file (prisma/schema.prisma) and multi-file (prisma/schema/)
       layouts. Idempotent.
 
+  effect-pm auth keygen --name <label> --expires <iso>
+      Generate an Ed25519 command-auth key pair. Private key material is printed
+      to stdout unless --private-key-out is provided. The public registration
+      record is printed to stdout unless --public-record-out is provided.
+
 Flags:
   --separate-file       Force a separate effect-pm.prisma file (multi-file only).
   --no-separate-file    Force append to an existing schema file.
   --schema <path>       Append to an explicit schema file (prisma init only).
   --new-file <path>     Create an explicit schema file (prisma init only).
   --dry-run             Describe what would happen; do not write any files.
+  --name <label>        Human-readable command auth key label (auth keygen).
+  --expires <iso>       Command auth key expiration timestamp (auth keygen).
+  --private-key-out <path>
+                        Write private key PEM to an explicit local path.
+  --public-record-out <path>
+                        Write public registration record JSON to a path.
 `;
 
 const parseFlags = (argv: ReadonlyArray<string>): AddPrismaOptions => {
@@ -135,6 +223,55 @@ const parsePrismaInitOptions = (argv: ReadonlyArray<string>): AddPrismaOptions =
   return { cwd: process.cwd(), ...opts };
 };
 
+const parseAuthKeygenOptions = (
+  argv: ReadonlyArray<string>,
+): AuthKeygenOptions => {
+  const opts: {
+    name?: string;
+    expiresAt?: string;
+    privateKeyOut?: string;
+    publicRecordOut?: string;
+  } = {};
+  for (let index = 0; index < argv.length; index++) {
+    const arg = argv[index];
+    switch (arg) {
+      case "--name":
+        opts.name = requiredValue(argv, index, "--name");
+        index++;
+        break;
+      case "--expires":
+        opts.expiresAt = requiredValue(argv, index, "--expires");
+        index++;
+        break;
+      case "--private-key-out":
+        opts.privateKeyOut = requiredValue(argv, index, "--private-key-out");
+        index++;
+        break;
+      case "--public-record-out":
+        opts.publicRecordOut = requiredValue(argv, index, "--public-record-out");
+        index++;
+        break;
+      default:
+        process.stderr.write(`Unknown auth keygen flag: ${arg}\n`);
+        process.exit(2);
+    }
+  }
+  if (opts.name === undefined) {
+    process.stderr.write("auth keygen requires --name <label>\n");
+    process.exit(2);
+  }
+  if (opts.expiresAt === undefined) {
+    process.stderr.write("auth keygen requires --expires <iso>\n");
+    process.exit(2);
+  }
+  return {
+    name: opts.name,
+    expiresAt: opts.expiresAt,
+    ...(opts.privateKeyOut === undefined ? {} : { privateKeyOut: opts.privateKeyOut }),
+    ...(opts.publicRecordOut === undefined ? {} : { publicRecordOut: opts.publicRecordOut }),
+  };
+};
+
 const printAddPrismaResult = (
   result: ReturnType<typeof addPrismaSchema>,
 ): void => {
@@ -177,6 +314,41 @@ const runAddPrisma = (argv: ReadonlyArray<string>): void => {
 const runPrintSchema = (): void => {
   process.stdout.write(prismaSchema);
 };
+
+const runAuthKeygen = (argv: ReadonlyArray<string>): Promise<void> =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const options = parseAuthKeygenOptions(argv);
+      const keys = yield* CommandAuth.generateEd25519KeyPair({
+        name: options.name,
+        expiresAt: options.expiresAt,
+      });
+      const publicRecord = `${publicKeyRecordJson(keys.publicKey)}\n`;
+
+      if (options.privateKeyOut === undefined) {
+        process.stdout.write("# Private command auth key. Store locally; do not commit.\n");
+        process.stdout.write(`EFFECT_PM_COMMAND_KEY_ID=${keys.privateKey.keyId}\n`);
+        process.stdout.write(`EFFECT_PM_COMMAND_KEY_NAME=${keys.privateKey.name}\n`);
+        process.stdout.write(`EFFECT_PM_COMMAND_KEY_EXPIRES_AT=${keys.privateKey.expiresAt}\n`);
+        process.stdout.write(keys.privateKey.privateKeyPem);
+      } else {
+        yield* writeFileSecure(options.privateKeyOut, keys.privateKey.privateKeyPem, 0o600);
+        process.stdout.write(`wrote private key PEM to ${options.privateKeyOut}\n`);
+        process.stdout.write(`EFFECT_PM_COMMAND_KEY_ID=${keys.privateKey.keyId}\n`);
+        process.stdout.write(`EFFECT_PM_COMMAND_KEY_NAME=${keys.privateKey.name}\n`);
+        process.stdout.write(`EFFECT_PM_COMMAND_KEY_EXPIRES_AT=${keys.privateKey.expiresAt}\n`);
+        process.stdout.write(`EFFECT_PM_COMMAND_PRIVATE_KEY_FILE=${options.privateKeyOut}\n`);
+      }
+
+      if (options.publicRecordOut === undefined) {
+        process.stdout.write("\n# Public command auth registration record.\n");
+        process.stdout.write(publicRecord);
+      } else {
+        yield* writeFileSecure(options.publicRecordOut, publicRecord);
+        process.stdout.write(`wrote public key record to ${options.publicRecordOut}\n`);
+      }
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
 
 const targetLabel = (target: PrismaSchemaTarget): string =>
   target._tag === "Append"
@@ -265,6 +437,15 @@ const main = (argv: ReadonlyArray<string>): Promise<void> | void => {
       process.exit(2);
     }
     return runPrismaInit(commandArgs);
+  }
+
+  if (first === "auth") {
+    const [command, ...commandArgs] = rest;
+    if (command !== "keygen") {
+      process.stderr.write(`Unknown 'auth' command: ${String(command)}\n`);
+      process.exit(2);
+    }
+    return runAuthKeygen(commandArgs);
   }
 
   if (first === "add") {

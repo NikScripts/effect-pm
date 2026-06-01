@@ -7,6 +7,12 @@
 import { Effect, Layer, Option, Schema, Stream } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http";
 import {
+  CommandAuth,
+  commandAuthErrorMessage,
+  type CommandAuthSignerService,
+  type CommandAuthVerifierService,
+} from "./CommandAuth";
+import {
   ControlRouter,
   ControlProtocolRequestEnvelopeSchema,
   ControlProtocolResponseEnvelopeSchema,
@@ -33,6 +39,7 @@ import { ProcessManagerLogRelay } from "./internal/manager/logCapture";
  */
 export interface ControlTransportHttpClientConfig {
   readonly baseUrl: string;
+  readonly auth?: CommandAuthSignerService;
 }
 
 /**
@@ -42,6 +49,7 @@ export interface ControlTransportHttpClientConfig {
  */
 export interface ControlTransportHttpServerConfig {
   readonly port?: number;
+  readonly auth?: CommandAuthVerifierService;
 }
 
 /** Minimal surface used from Node’s `ServerResponse` (avoids `node:http` type imports). */
@@ -53,6 +61,7 @@ interface JsonResponse {
 
 /** Minimal surface used from Node’s `IncomingMessage` (avoids `node:http` type imports). */
 interface JsonRequest {
+  readonly headers?: { readonly [k: string]: string | readonly string[] | undefined } | undefined;
   readonly method?: string | undefined;
   readonly url?: string | undefined;
   on(event: "data", listener: (chunk: Uint8Array | string) => void): void;
@@ -94,6 +103,22 @@ const transportErrorFromCause = (
   cause: unknown,
   status?: number,
 ): ControlTransportError => transportError(String(cause), status);
+
+const commandAuthTransportError = (cause: unknown): ControlTransportError =>
+  transportError(
+    typeof cause === "object" && cause !== null && "reason" in cause
+      ? String(cause.reason)
+      : String(cause),
+    401,
+  );
+
+const readSignatureHeader = (req: JsonRequest): string | undefined => {
+  const raw = req.headers?.["effect-pm-signature"];
+  if (typeof raw === "string") {
+    return raw;
+  }
+  return Array.isArray(raw) ? raw[0] : undefined;
+};
 
 const writeJson = (
   res: JsonResponse,
@@ -296,6 +321,24 @@ const decodeEnvelopeResponse = (
     ),
   );
 
+const signControlRequest = (
+  request: HttpClientRequest.HttpClientRequest,
+  envelope: ControlProtocolRequestEnvelope,
+  auth: CommandAuthSignerService | undefined,
+): Effect.Effect<HttpClientRequest.HttpClientRequest, ControlTransportError> =>
+  auth === undefined
+    ? Effect.succeed(request)
+    : auth.sign({ method: "POST", path: "/control", envelope }).pipe(
+        Effect.map((header) =>
+          HttpClientRequest.setHeader(
+            request,
+            "Effect-PM-Signature",
+            CommandAuth.formatSignatureHeader(header),
+          )
+        ),
+        Effect.mapError(commandAuthTransportError),
+      );
+
 /**
  * Build an HTTP client for the control protocol.
  *
@@ -308,6 +351,7 @@ export const makeControlTransportHttpClient = (
     HttpClientRequest.post(joinUrl(config.baseUrl, "/control")).pipe(
       (request) => HttpClientRequest.bodyJson(request, envelope),
       Effect.mapError(transportErrorFromCause),
+      Effect.flatMap((request) => signControlRequest(request, envelope, config.auth)),
       Effect.flatMap((request) =>
         HttpClient.execute(request).pipe(
           Effect.mapError(transportErrorFromCause),
@@ -345,6 +389,18 @@ export const makeControlTransportHttpServer = (
             }
 
             const url = new URL(req.url ?? "/", `http://localhost:${port}`);
+
+            if (
+              config.auth !== undefined &&
+              !(req.method === "POST" && url.pathname === "/control")
+            ) {
+              yield* writeJson(
+                res,
+                404,
+                errorResponse("Authenticated control services accept signed POST /control only"),
+              );
+              return;
+            }
 
             if (url.pathname === "/health") {
               yield* writeJson(res, 200, { status: "ok" });
@@ -412,6 +468,31 @@ export const makeControlTransportHttpServer = (
               );
               if (envelope === undefined) {
                 return;
+              }
+              if (config.auth !== undefined) {
+                const authError = yield* config.auth
+                  .verify({
+                    header: readSignatureHeader(req),
+                    input: { method: "POST", path: "/control", envelope },
+                  })
+                  .pipe(
+                    Effect.as(undefined),
+                    Effect.catch((error) => Effect.succeed(error)),
+                  );
+                if (authError !== undefined) {
+                  const reason = commandAuthErrorMessage(authError);
+                  const protocolResponse: ControlProtocolResponse = {
+                    _tag: "Control",
+                    status: 401,
+                    body: errorResponse(reason),
+                  };
+                  const responseEnvelope = yield* makeControlProtocolResponseEnvelope(
+                    envelope,
+                    protocolResponse,
+                  );
+                  yield* writeJson(res, protocolResponse.status, responseEnvelope);
+                  return;
+                }
               }
               const protocolResponse = yield* router.handle(envelope.request);
               const responseEnvelope = yield* makeControlProtocolResponseEnvelope(

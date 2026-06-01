@@ -49,8 +49,8 @@
  * **`@nikscripts/effect-pm/QueueResource`**, **`@nikscripts/effect-pm/Query`**,
  * **`@nikscripts/effect-pm/ResourceConfigure`**, **`@nikscripts/effect-pm/ProcessGroup`**,
  * **`@nikscripts/effect-pm/ProcessStore`**, **`@nikscripts/effect-pm/RuntimeStorage`**,
- * **`@nikscripts/effect-pm/ProcessManager`**, **`@nikscripts/effect-pm/Logs`**, and
- * **`@nikscripts/effect-pm/ControlService`**.
+ * **`@nikscripts/effect-pm/CommandAuth`**, **`@nikscripts/effect-pm/ProcessManager`**,
+ * **`@nikscripts/effect-pm/Logs`**, and **`@nikscripts/effect-pm/ControlService`**.
  *
  * Structured log persistence: `ProcessStore.Log` (also exported as the
  * dedicated `ProcessStoreLog` facet) on the composed store. Capture/relay
@@ -109,6 +109,53 @@ export { Resource } from "./Resource";
 export { ProcessStorage } from "./ProcessStorage";
 export { ControlService } from "./ControlService";
 export { ControlProtocol } from "./ControlProtocol";
+export {
+  CommandAuth,
+  CommandAuthSigner,
+  CommandAuthVerifier,
+  MissingSignatureHeader,
+  MalformedSignatureHeader,
+  UnknownKeyId,
+  ExpiredKey,
+  SignatureVerificationFailed,
+  ReplayedCommand,
+  CanonicalPayloadError,
+  KeyMaterialError,
+  CommandAuthReplayStoreError,
+  generateEd25519KeyPair,
+  loadPrivateKeyRecord,
+  ed25519Signer,
+  ed25519Verifier,
+  canonicalPayload,
+  canonicalPayloadText,
+  decodePublicKeyRecordsJson,
+  formatSignatureHeader,
+  parseSignatureHeader,
+  commandAuthErrorMessage,
+  loadPublicKeyRecords,
+  publicKeyRecordJson,
+  publicKeyRecordsJson,
+  mergePublicKeyRecords,
+} from "./CommandAuth";
+export type {
+  PublicKeyRecord,
+  PrivateKeyRecord,
+  GeneratedEd25519KeyPair,
+  GenerateEd25519KeyPairOptions,
+  LoadPrivateKeyRecordOptions,
+  LoadPublicKeyRecordsOptions,
+  CanonicalCommandAuthRequest,
+  CommandAuthSigningInput,
+  CommandAuthSignatureHeader,
+  CommandAuthReplayStoreReserveInput,
+  CommandAuthReplayStore,
+  CommandAuthSignerService,
+  CommandAuthVerifyInput,
+  CommandAuthVerifierService,
+  CommandAuthError,
+  Ed25519VerifierOptions,
+} from "./CommandAuth";
+
 export {
   ControlRouter,
   ControlResponseSchema,
