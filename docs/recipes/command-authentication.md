@@ -47,8 +47,7 @@ routing.
 - Trust topology and key enrollment.
 - Canonical signing payload and HTTP header.
 - Replay protection shape.
-- REST shortcut policy under mandatory auth.
-- Tests and docs.
+- V1 implementation slice, test matrix, docs, and changeset.
 
 ## Step 1: Signature primitive and key format
 
@@ -518,102 +517,216 @@ The first valid command id for a key succeeds; reusing the same envelope id with
 the same key fails; stale and far-future `sentAt` values fail even with valid
 signatures.
 
-## Step 5: Mandatory auth coverage and REST shortcuts
+## Step 5: V1 implementation slice
 
-Recipe step: `Mandatory auth coverage and REST shortcuts`
+Recipe step: `V1 implementation slice`
 
 What this decides:
-The HTTP adapter currently exposes protocol envelopes at `POST /control`, REST
-shortcuts, `GET /health`, and log streaming. This step decides which surfaces
-remain available once a receiver opts into command authentication.
+This bundles the remaining v1 shape into one shippable slice: public API,
+transport wiring, CLI key lifecycle, strict HTTP coverage, errors,
+observability, tests, docs, and release bookkeeping. It does not reopen the
+locked cryptography, enrollment, canonical payload, or replay decisions.
 
 Recommended ingredients:
-- Authenticated mode defaults to `strict` — every HTTP request except `OPTIONS`
-  must carry a valid signature.
-- `POST /control` is the canonical signed command path — it already has a
-  request envelope with id, timestamp, metadata, and typed command.
-- REST shortcuts are disabled in strict mode — they do not naturally carry a
-  client-created envelope, so keeping them would require hidden synthetic
-  envelope rules and more ways to get signing wrong.
-- Health moves behind signed `/control` as `GetHealth` or a signed `GET /health`
-  using a generated envelope id in the signature input — no unauthenticated
-  liveness endpoint in authenticated mode.
-- Log streaming requires a signed one-shot request before the stream opens —
-  the signature authenticates stream creation, not every NDJSON frame.
+- `src/CommandAuth.ts` public module and `@nikscripts/effect-pm/CommandAuth`
+  subpath — command auth is app-composed public behavior, not internal plumbing.
+- `src/internal/commandAuth/*` helpers — canonical JSON, base64url, header
+  parse/format, PEM key parsing, Ed25519 crypto calls, and in-memory replay
+  storage stay internal.
+- Strict authenticated HTTP mode — when `auth` is configured, `POST /control`
+  is the only command/control route; REST shortcuts, `/health`, and log streams
+  fail unsigned before routing.
+- Protocol-owned health command — add `GetHealth` to `ControlProtocolRequest`
+  so liveness can be checked through the same signed envelope as other reads.
+- Admin key CLI in `effect-pm auth keygen` — generates Ed25519 key pairs locally,
+  writes private key only to stdout or an explicit local path, and emits the
+  public registration record with `name` and `expiresAt`.
+- PM helper commands in `ProcessManager.cli` — assist enrollment by printing or
+  writing public key records for direct group endpoints where config is local;
+  remote groups get copy/paste instructions.
+- Typed auth failures — map missing, malformed, expired, replayed, and invalid
+  signatures to `401`; never let auth failures look like process or queue
+  failures.
+- Focused tests and docs — test crypto primitives, canonical payload stability,
+  verifier rejection cases, strict HTTP behavior, signed `ProcessManager`
+  commands, CLI keygen output, and direct group vs PM enrollment.
+- Changeset — required when the plan ships because it adds public API,
+  documented behavior, exports, and operator CLI commands.
 
 Picture:
 
 ```ts
-// Secure default when auth is present.
-ControlService.layerHttp(BillingGroup, {
-  port: 3001,
-  auth: CommandAuth.ed25519Verifier({ keys, replay }),
-  unauthenticated: "none",
-  restShortcuts: "off",
-});
-```
-
-```http
-POST /control
-Effect-PM-Signature: v1; alg=Ed25519; keyId=cmd_01jz...; signature=...
-
+// package.json exports
 {
-  "id": "control-1780330000000-1",
-  "sentAt": 1780330000000,
-  "request": { "_tag": "ReadGroupStatus" }
+  "exports": {
+    "./CommandAuth": {
+      "types": "./dist/CommandAuth.d.ts",
+      "import": "./dist/CommandAuth.mjs",
+      "require": "./dist/CommandAuth.js"
+    }
+  }
 }
 ```
 
-```http
-POST /processes/%40app%2FBilling%2FSyncInvoices/now
+```ts
+// src/CommandAuth.ts public surface.
+export class CommandAuthVerifier extends Context.Service<CommandAuthVerifier>()(
+  "@nikscripts/effect-pm/CommandAuth/Verifier",
+)<{
+  readonly verify: (
+    input: CommandAuthVerifyInput,
+  ) => Effect.Effect<void, CommandAuthError>;
+}>() {}
 
-HTTP/1.1 404 Not Found
-{"success":false,"error":"REST shortcuts are disabled when command auth is strict; use POST /control"}
+export class CommandAuthSigner extends Context.Service<CommandAuthSigner>()(
+  "@nikscripts/effect-pm/CommandAuth/Signer",
+)<{
+  readonly sign: (
+    input: CommandAuthSigningInput,
+  ) => Effect.Effect<CommandAuthSignatureHeader, CommandAuthError>;
+}>() {}
+
+export const CommandAuth = {
+  ed25519Signer,
+  ed25519Verifier,
+  canonicalPayload,
+  formatSignatureHeader,
+  parseSignatureHeader,
+  Replay,
+  Schema: {
+    PublicKeyRecord: PublicKeyRecordSchema,
+  },
+} as const;
 ```
 
 ```ts
-// Internal HTTP dispatch in strict mode.
+// src/internal/commandAuth/canonical.ts
+export const canonicalPayload = (
+  input: CommandAuthSigningInput,
+): Effect.Effect<Uint8Array, CommandAuthError> =>
+  stableJsonEncode({
+    version: "effect-pm-command-auth-v1",
+    method: input.method,
+    path: input.path,
+    envelope: input.envelope,
+  }).pipe(Effect.map((text) => new TextEncoder().encode(text)));
+```
+
+```ts
+// Direct group receiver, strict by construction when auth is present.
+ControlService.layerHttp(BillingGroup, {
+  port: 3001,
+  auth: CommandAuth.ed25519Verifier({
+    keys: Config.array(CommandAuth.Schema.PublicKeyRecord)(
+      "BILLING_GROUP_COMMAND_KEYS",
+    ),
+    replay: CommandAuth.Replay.memory({
+      window: Duration.minutes(5),
+      maxEntries: 10_000,
+    }),
+  }),
+});
+```
+
+```ts
+// HTTP server branch: auth gate before router.handle.
 if (authEnabled && req.method !== "OPTIONS" && url.pathname !== "/control") {
   yield* writeJson(
     res,
     404,
-    errorResponse("REST shortcuts are disabled when command auth is strict; use POST /control"),
+    errorResponse("Authenticated control services accept signed POST /control only"),
   );
   return;
+}
+
+if (url.pathname === "/control") {
+  const envelope = yield* readControlEnvelope(req);
+  yield* verifier.verify({
+    header: readSignatureHeader(req.headers),
+    input: { method: "POST", path: "/control", envelope },
+  });
+  const protocolResponse = yield* router.handle(envelope.request);
+  yield* writeProtocolEnvelope(res, envelope, protocolResponse);
 }
 ```
 
 ```ts
-// Optional explicit dev profile, not the secure default.
-ControlService.layerHttp(BillingGroup, {
-  port: 3001,
-  auth: CommandAuth.ed25519Verifier({ keys, replay }),
-  restShortcuts: "signed",
-});
+// Health through the signed protocol instead of unsigned GET /health.
+export type ControlProtocolRequest =
+  | { readonly _tag: "GetHealth" }
+  | { readonly _tag: "GetContract" }
+  | { readonly _tag: "ReadGroupStatus" }
+  // ...
+
+case "GetHealth":
+  return {
+    _tag: "Control",
+    status: 200,
+    body: { success: true, data: { status: "ok" } },
+  };
 ```
 
+```sh
+# Admin CLI: generate local private material and safe public record.
+effect-pm auth keygen \
+  --name nik-laptop \
+  --expires 2026-12-31 \
+  --private-key-out ~/.config/effect-pm/keys/nik-laptop.pem \
+  --public-record-out ~/.config/effect-pm/keys/nik-laptop.public.json
+```
+
+```sh
+# PM CLI helper: one local key can be explicitly enrolled into selected groups.
+pm auth enroll-key ~/.config/effect-pm/keys/nik-laptop.public.json \
+  --group @app/Billing \
+  --write-env .env.local
+```
+
+```ts
+// Test matrix sketch.
+it("rejects unsigned control before routing", () => rejectsBeforeRouter());
+it("rejects malformed signature headers", () => rejectsBeforeRouter());
+it("rejects expired public keys", () => rejectsBeforeRouter());
+it("rejects replayed envelope ids", () => rejectsBeforeRouter());
+it("runs a signed ProcessManager command once", () => runsOnce());
+it("disables REST shortcuts when auth is configured", () => shortcut404s());
+it("uses signed GetHealth in authenticated mode", () => signedHealthOk());
+it("generates key records with name and expiration", () => keygenRecordOk());
+```
+
+Why this recommendation is good:
+- It is secure: no unsigned control path remains once auth is enabled.
+- It is clean: one signed protocol path carries all control operations.
+- It is straightforward: public auth composition lives in `CommandAuth`; HTTP
+  transport only signs/verifies; process and queue routing stay untouched.
+- It matches repo boundaries: public app-composed API under `src/`, type-agnostic
+  helpers under `src/internal/`, and operator commands in the existing bin/PM CLI.
+
 Alternatives:
-1. Sign every REST shortcut — keeps curl ergonomics, but adds a second signing
-   input shape and increases implementation/test surface.
-2. Keep `/health` unauthenticated — convenient for probes, but violates the
-   locked invariant that unsigned communication is rejected.
-3. Keep old localhost no-auth behavior when binding to `127.0.0.1` — good for
-   dev compatibility, but it should be an explicit no-auth server config rather
-   than part of authenticated mode.
+1. Implement strict HTTP first, defer CLI keygen/enrollment — smaller code diff,
+   but the feature is awkward to adopt because users must hand-roll keys.
+2. Keep signed REST shortcuts in v1 — friendlier to curl, but creates a second
+   signing shape and doubles the route test matrix.
+3. Add durable replay/audit in v1 — stronger for clustered deployments, but it
+   mixes persistence design into the first auth slice.
+4. Make `CommandAuth` internal only — fewer public exports, but apps need to
+   compose signers/verifiers, so hiding it fights the package architecture.
 
 Question:
-Should authenticated v1 run in strict mode by default: signed `POST /control`
-only, REST shortcuts disabled, and no unauthenticated `/health`?
+Should v1 ship as this full implementation slice: public `CommandAuth`, internal
+crypto/canonical/replay helpers, strict signed `POST /control`, signed
+`GetHealth`, admin keygen, PM enrollment helpers, focused tests/docs, and a
+changeset?
 
 Recommended answer:
-Yes. It is the most secure and easiest rule to explain: once auth is enabled,
-unsigned HTTP never reaches routing, and operators use the canonical signed
-protocol path.
+Yes. This is the smallest slice that is secure, clean, straightforward, and
+usable without making users invent key-management glue outside the package.
 
 Acceptance check:
-With auth configured, unsigned `/control`, REST shortcut requests, `/health`,
-and log stream attempts all fail before route handling; signed `/control`
-requests still support contract, status, process, queue, and health commands.
+An app can generate a local key, enroll its public record into a direct group,
+run signed PM/group commands, reject every unsigned or replayed control attempt
+before routing, check signed health, and pass focused unit/integration tests plus
+`pnpm run typecheck`, `pnpm test`, `pnpm run lint`, and `pnpm run build`.
 
 ## Cleanup status
 
