@@ -134,6 +134,64 @@ code {
   text-transform: uppercase;
 }
 
+
+.pm-dashboard__toolbar {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.86);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 16px 50px rgba(2, 6, 23, 0.2);
+}
+
+.pm-dashboard__toolbar span {
+  color: #91a3ba;
+  font-size: 0.82rem;
+}
+
+.pm-dashboard__layout-grid {
+  display: grid;
+  grid-auto-flow: row dense;
+  grid-auto-rows: minmax(4rem, auto);
+  gap: 1rem;
+}
+
+.pm-dashboard__grid-widget {
+  min-width: 0;
+  min-height: 12rem;
+}
+
+.pm-dashboard__widget-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.pm-dashboard__widget-edit {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  max-width: 19rem;
+}
+
+.pm-dashboard__widget-edit button {
+  min-height: 1.75rem;
+  border-radius: 0.55rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
 .pm-dashboard__grid {
   display: grid;
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
@@ -434,8 +492,9 @@ code {
 
 @media (max-width: 860px) {
   .pm-dashboard__hero,
-  .pm-dashboard__grid {
-    grid-template-columns: 1fr;
+  .pm-dashboard__grid,
+  .pm-dashboard__layout-grid {
+    grid-template-columns: 1fr !important;
   }
 
   .pm-dashboard__hero {

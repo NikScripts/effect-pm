@@ -73,7 +73,7 @@ surface.
 4. Widget contract: minimal widget descriptors before a registry exists.
 5. Acceptance evidence: demo layout interactions and persistence.
 
-## Recipe step: layout state shape
+## Recipe step: layout state shape (locked)
 
 What this decides:
 How `OperatorDashboard` accepts and persists layout without committing to the
@@ -135,6 +135,11 @@ Acceptance check:
 The demo can resize or reorder at least two grid widgets, reload the page, and
 restore layout from `localStorage`; an app can also pass a controlled layout and
 observe `onLayoutChange` calls.
+
+Decision:
+Accepted. The first layout API supports controlled layout, `onLayoutChange`, and
+optional `layoutStorageKey` local persistence with one `DashboardLayout` object
+for grid plus fixed bars.
 
 ## Future planned widgets
 
