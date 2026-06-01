@@ -282,16 +282,6 @@ const STATE_INTERRUPTED_WIRE = runResourcePath("State", "Interrupted");
 const STATE_WAIT_INTERRUPTED_WIRE = runResourcePath("State", "WaitInterrupted");
 const STATE_CHANGED_WIRE = runResourcePath("State", "Changed");
 
-const factRecordTypes = [
-  RUN_STARTED_WIRE,
-  RUN_COMPLETED_WIRE,
-  RUN_FAILED_WIRE,
-] as const;
-
-const stateRecordTypes = [
-  STATE_CHANGED_WIRE,
-] as const;
-
 const RUN_RESOURCE_STATE_CHANGE_REASONS: ReadonlyArray<
   RunResourceStateChangeReason
 > = [
@@ -353,7 +343,16 @@ const decodeStateValue = (value: unknown): RunResourceState | null => {
   };
 };
 
-const recordToFact = (record: RuntimeRecord): RunResourceFact | null => {
+interface RunResourceRunRecordFields {
+  readonly runId: string;
+  readonly occurredAt: number;
+  readonly payload: Readonly<Record<string, unknown>>;
+  readonly attributes?: Record<string, unknown>;
+}
+
+const decodeRunRecordFields = (
+  record: RuntimeRecord,
+): RunResourceRunRecordFields | null => {
   if (record.processType !== RUN_RESOURCE_TYPE) return null;
   if (!isRecord(record.payload)) return null;
   const runId = record.payload["runId"];
@@ -363,57 +362,76 @@ const recordToFact = (record: RuntimeRecord): RunResourceFact | null => {
     return null;
   }
   const attributes = recordAttributesObject(record.attributes);
-  switch (record.type) {
-    case RUN_STARTED_WIRE: {
-      const concurrency = payload["concurrency"];
-      if (!isFiniteNumber(concurrency)) return null;
-      return {
-        id: record.id,
-        resourceId: record.processId,
-        runId,
-        type: RUN_STARTED_WIRE,
-        occurredAt,
-        payload: { concurrency },
-        ...(attributes === undefined ? {} : { attributes }),
-      };
-    }
-    case RUN_COMPLETED_WIRE: {
-      const durationMs = payload["durationMs"];
-      if (!isFiniteNumber(durationMs)) return null;
-      return {
-        id: record.id,
-        resourceId: record.processId,
-        runId,
-        type: RUN_COMPLETED_WIRE,
-        occurredAt,
-        payload: { durationMs },
-        ...(attributes === undefined ? {} : { attributes }),
-      };
-    }
-    case RUN_FAILED_WIRE: {
-      const durationMs = payload["durationMs"];
-      const cause = payload["cause"];
-      if (!isFiniteNumber(durationMs) || !isString(cause)) return null;
-      return {
-        id: record.id,
-        resourceId: record.processId,
-        runId,
-        type: RUN_FAILED_WIRE,
-        occurredAt,
-        payload: { durationMs, cause },
-        ...(attributes === undefined ? {} : { attributes }),
-      };
-    }
-    default:
-      return null;
-  }
+  return {
+    runId,
+    occurredAt,
+    payload,
+    ...(attributes === undefined ? {} : { attributes }),
+  };
 };
 
-const recordToStateChange = (
+const decodeRunStarted = (
+  record: RuntimeRecord,
+  type: RunResourceRunStartedFact["type"],
+): RunResourceRunStartedFact | null => {
+  const fields = decodeRunRecordFields(record);
+  if (fields === null) return null;
+  const concurrency = fields.payload["concurrency"];
+  if (!isFiniteNumber(concurrency)) return null;
+  return {
+    id: record.id,
+    resourceId: record.processId,
+    runId: fields.runId,
+    type,
+    occurredAt: fields.occurredAt,
+    payload: { concurrency },
+    ...(fields.attributes === undefined ? {} : { attributes: fields.attributes }),
+  };
+};
+
+const decodeRunCompleted = (
+  record: RuntimeRecord,
+  type: RunResourceRunCompletedFact["type"],
+): RunResourceRunCompletedFact | null => {
+  const fields = decodeRunRecordFields(record);
+  if (fields === null) return null;
+  const durationMs = fields.payload["durationMs"];
+  if (!isFiniteNumber(durationMs)) return null;
+  return {
+    id: record.id,
+    resourceId: record.processId,
+    runId: fields.runId,
+    type,
+    occurredAt: fields.occurredAt,
+    payload: { durationMs },
+    ...(fields.attributes === undefined ? {} : { attributes: fields.attributes }),
+  };
+};
+
+const decodeRunFailed = (
+  record: RuntimeRecord,
+  type: RunResourceRunFailedFact["type"],
+): RunResourceRunFailedFact | null => {
+  const fields = decodeRunRecordFields(record);
+  if (fields === null) return null;
+  const durationMs = fields.payload["durationMs"];
+  const cause = fields.payload["cause"];
+  if (!isFiniteNumber(durationMs) || !isString(cause)) return null;
+  return {
+    id: record.id,
+    resourceId: record.processId,
+    runId: fields.runId,
+    type,
+    occurredAt: fields.occurredAt,
+    payload: { durationMs, cause },
+    ...(fields.attributes === undefined ? {} : { attributes: fields.attributes }),
+  };
+};
+
+const decodeStateChanged = (
   record: RuntimeRecord,
 ): RunResourceStateChange | null => {
   if (record.processType !== RUN_RESOURCE_TYPE) return null;
-  if (record.type !== STATE_CHANGED_WIRE) return null;
   if (!isRecord(record.payload)) return null;
   const id = record.payload["id"];
   const reason = record.payload["reason"];
@@ -694,6 +712,28 @@ const RunResourceTelemetry = ProcessStore.telemetry(RunResourceScope)(
     ),
   ),
 );
+
+const RunResourceCodec = Telemetry.codec(RunResourceTelemetry)({
+  Run: {
+    Started: decodeRunStarted,
+    Completed: decodeRunCompleted,
+    Failed: decodeRunFailed,
+  },
+  State: {
+    Changed: decodeStateChanged,
+  },
+});
+
+const factRecordTypes = RunResourceCodec.types("Run");
+const stateRecordTypes = RunResourceCodec.types("State");
+
+const recordToFact = (record: RuntimeRecord): RunResourceFact | null =>
+  RunResourceCodec.decodeTag("Run", record);
+
+const recordToStateChange = (
+  record: RuntimeRecord,
+): RunResourceStateChange | null =>
+  RunResourceCodec.decodeTag("State", record);
 
 // ============================================================================
 // Facet

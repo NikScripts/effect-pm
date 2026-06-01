@@ -308,6 +308,74 @@ export type TelemetryEventWireOf<
     : never
   : never;
 
+type TelemetryMetaOf<Definition> =
+  Definition extends ProcessStoreTelemetrySection<object, infer Meta> ? Meta : never;
+
+type TelemetryCodecEventHandler<Wire extends string, Output> = (
+  record: RuntimeRecord,
+  wire: Wire,
+) => Output | null;
+
+type TelemetryCodecHandlersFromMeta<
+  Meta extends TelemetryWireMeta,
+  Output,
+> = UnionToIntersection<
+  Meta extends TelemetryWireMeta<string, infer Path, infer Event, infer Wire>
+    ? PathEmitApi<
+        Path,
+        { readonly [K in Event]: TelemetryCodecEventHandler<Wire, Output> }
+      >
+    : never
+>;
+
+type TelemetryCodecOutput<Handlers> =
+  Handlers extends (...args: ReadonlyArray<never>) => infer Output
+    ? NonNullable<Output>
+    : Handlers extends object
+      ? { readonly [K in keyof Handlers]: TelemetryCodecOutput<Handlers[K]> }[keyof Handlers]
+      : never;
+
+type SplitDot<Tag extends string> =
+  Tag extends `${infer Head}.${infer Tail}`
+    ? readonly [Head, ...SplitDot<Tail>]
+    : readonly [Tag];
+
+type LookupPath<
+  Value,
+  Path extends ReadonlyArray<string>,
+> = Path extends readonly [
+  infer Head extends string,
+  ...infer Tail extends ReadonlyArray<string>,
+]
+  ? Value extends Readonly<Record<Head, unknown>>
+    ? LookupPath<Value[Head], Tail>
+    : never
+  : Value;
+
+type TelemetryCodecOutputAtTag<
+  Handlers,
+  Tag extends string,
+> = TelemetryCodecOutput<LookupPath<Handlers, SplitDot<Tag>>>;
+
+export interface TelemetryCodec<
+  Section extends ProcessStoreTelemetrySection<object>,
+  Handlers,
+> {
+  readonly types: {
+    (): ReadonlyArray<TelemetryWireOf<Section>>;
+    <const Tag extends string>(
+      tag: Tag,
+    ): ReadonlyArray<TelemetryEventWireOf<Section, Tag>>;
+  };
+  readonly decode: (
+    record: RuntimeRecord,
+  ) => TelemetryCodecOutput<Handlers> | null;
+  readonly decodeTag: <const Tag extends string>(
+    tag: Tag,
+    record: RuntimeRecord,
+  ) => TelemetryCodecOutputAtTag<Handlers, Tag> | null;
+}
+
 const makeEventBuilder = <Name extends string, EmitApi>(
   event: TelemetryEventDef<Name, EmitApi>,
 ): TelemetryEventBuilder<Name, EmitApi> => ({
@@ -887,6 +955,86 @@ function telemetryEvents(
     .map((meta) => meta.wire);
 }
 
+const isTelemetryCodecEventHandler = <Output>(
+  value: unknown,
+): value is TelemetryCodecEventHandler<string, Output> =>
+  typeof value === "function";
+
+const getCodecHandler = <Output>(
+  handlers: object,
+  path: ReadonlyArray<string>,
+): TelemetryCodecEventHandler<string, Output> | undefined => {
+  let current: unknown = handlers;
+  for (const segment of path) {
+    if (!isRecord(current)) {
+      return undefined;
+    }
+    current = current[segment];
+  }
+  return isTelemetryCodecEventHandler<Output>(current) ? current : undefined;
+};
+
+const makeTelemetryCodec =
+  <const Section extends ProcessStoreTelemetrySection<object>>(section: Section) =>
+  <
+    const Handlers extends TelemetryCodecHandlersFromMeta<
+      TelemetryMetaOf<Section>,
+      unknown
+    >,
+  >(
+    handlers: Handlers,
+  ): TelemetryCodec<Section, Handlers> => {
+    const metadataByWire = new Map<string, TelemetryWireMeta>();
+    for (const meta of section.metadata) {
+      metadataByWire.set(meta.wire, meta);
+    }
+
+    function types(): ReadonlyArray<TelemetryWireOf<Section>>;
+    function types<const Tag extends string>(
+      tag: Tag,
+    ): ReadonlyArray<TelemetryEventWireOf<Section, Tag>>;
+    function types(tag?: string): ReadonlyArray<string> {
+      return tag === undefined
+        ? telemetryEvents(section)
+        : telemetryEvents(section, tag);
+    }
+
+    const decode = (
+      record: RuntimeRecord,
+    ): TelemetryCodecOutput<Handlers> | null => {
+      const meta = metadataByWire.get(record.type);
+      if (meta === undefined) {
+        return null;
+      }
+      const handler = getCodecHandler<TelemetryCodecOutput<Handlers>>(
+        handlers,
+        [...meta.tagPath, meta.event],
+      );
+      return handler === undefined ? null : handler(record, meta.wire);
+    };
+
+    const decodeTag = <const Tag extends string>(
+      tag: Tag,
+      record: RuntimeRecord,
+    ): TelemetryCodecOutputAtTag<Handlers, Tag> | null => {
+      const meta = metadataByWire.get(record.type);
+      if (meta === undefined || meta.tagPath.join(".") !== tag) {
+        return null;
+      }
+      const handler = getCodecHandler<TelemetryCodecOutputAtTag<Handlers, Tag>>(
+        handlers,
+        [...meta.tagPath, meta.event],
+      );
+      return handler === undefined ? null : handler(record, meta.wire);
+    };
+
+    return {
+      types,
+      decode,
+      decodeTag,
+    };
+  };
+
 export const Telemetry = {
   namespace: <const Namespace extends string>(
     namespace: Namespace,
@@ -916,6 +1064,7 @@ export const Telemetry = {
     errorString: inputErrorString,
   },
   events: telemetryEvents,
+  codec: makeTelemetryCodec,
   logWarning: telemetryLogWarning,
   annotateLogs: telemetryAnnotateLogsPipeLeg,
 } as const;
