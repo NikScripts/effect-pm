@@ -8,13 +8,13 @@ import type { ReactNode } from "react";
 import {
   ControlPlaneProvider,
   Controls,
-  Logs,
   useControlPlaneGroupStatus,
   type ControlPlanePort,
   type DashboardGroupTarget,
   type DashboardProcessTarget,
   type DashboardQueueTarget,
 } from "../react/index.js";
+import { LogViewer } from "./LogViewer.js";
 import { ProcessStatusTable, QueueStatusTable } from "./StatusTables.js";
 
 export type OperatorDashboardProps = {
@@ -81,7 +81,7 @@ const OperatorDashboardContent = ({
             <p className="pm-dashboard__section-label">Live logs</p>
             <h2>Streaming tail</h2>
           </div>
-          <Logs for={group} lines={logLines} />
+          <LogViewer for={group} processes={processes} queues={queues} lines={logLines === 50 || logLines === 100 || logLines === 250 ? logLines : 100} />
         </article>
       </section>
 
