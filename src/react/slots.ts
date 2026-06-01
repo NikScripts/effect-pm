@@ -5,8 +5,10 @@
  */
 
 import type { ReactNode } from "react";
+import type { ProcessManagerLogEntry } from "../LogEntry.js";
 import type { ProcessGroupDetails, QueueDetails } from "../ProcessGroup.js";
 import type { ControlPlaneProcessAction, ControlPlaneQueueAction } from "./ControlPlanePort.js";
+import type { DashboardTarget } from "./dashboardTarget.js";
 
 /** @public */
 export type ControlPanelActionButtonProps = {
@@ -45,4 +47,20 @@ export type QueueControlPanelSlots = {
   readonly empty?: () => ReactNode;
   readonly queueRow?: (props: QueueRowSlotProps) => ReactNode;
   readonly actionButton?: (props: ControlPanelActionButtonProps) => ReactNode;
+};
+
+/** @public */
+export type LogRowSlotProps = {
+  readonly entry: ProcessManagerLogEntry;
+};
+
+/** @public */
+export type LogsPanelSlots = {
+  readonly header?: (props: {
+    readonly target: DashboardTarget;
+    readonly loading: boolean;
+  }) => ReactNode;
+  readonly error?: (props: { readonly message: string }) => ReactNode;
+  readonly empty?: () => ReactNode;
+  readonly logRow?: (props: LogRowSlotProps) => ReactNode;
 };

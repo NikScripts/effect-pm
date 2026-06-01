@@ -30,6 +30,8 @@ export type QueueControlPanelProps = {
   readonly style?: CSSProperties;
   readonly slots?: QueueControlPanelSlots;
   readonly sharedStatus?: ControlPlaneGroupStatusState;
+  /** Restrict the panel to one queue id. */
+  readonly queueId?: string;
 };
 
 /**
@@ -43,6 +45,7 @@ export const QueueControlPanel = ({
   style,
   slots = {},
   sharedStatus,
+  queueId,
 }: QueueControlPanelProps) => {
   const port = useControlPlane();
   const internalStatus = useControlPlaneGroupStatus({
@@ -53,6 +56,9 @@ export const QueueControlPanel = ({
   const mutation = useControlPlaneMutation();
 
   const displayError = mutation.error ?? status.error;
+  const visibleQueues = queueId === undefined
+    ? status.queues
+    : status.queues.filter((queue) => queue.name === queueId);
 
   const renderAction = (queueName: string, action: ControlPlaneQueueAction): ReactNode => {
     const pending = mutation.pendingKey === `${queueName}:${action}`;
@@ -86,7 +92,7 @@ export const QueueControlPanel = ({
       ) : null}
 
       <ul>
-        {status.queues.map((queue) => {
+        {visibleQueues.map((queue) => {
           const actions = (
             <>
               {queueActions.map((action) => (
@@ -109,7 +115,7 @@ export const QueueControlPanel = ({
         })}
       </ul>
 
-      {status.queues.length === 0 && !status.loading ? (
+      {visibleQueues.length === 0 && !status.loading ? (
         slots.empty !== undefined ? slots.empty() : <p>No queues reported.</p>
       ) : null}
     </section>

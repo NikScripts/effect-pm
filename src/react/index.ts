@@ -5,9 +5,19 @@
  * @module react
  */
 
-export type { ControlPlanePort, ControlPlaneProcessAction, ControlPlaneQueueAction } from "./ControlPlanePort.js";
+export type {
+  ControlPlaneLogSession,
+  ControlPlaneLogsParams,
+  ControlPlanePort,
+  ControlPlaneProcessAction,
+  ControlPlaneQueueAction,
+} from "./ControlPlanePort.js";
 export { ControlPlaneProvider, useControlPlane } from "./ControlPlaneContext.js";
 export type { ControlPlaneProviderProps } from "./ControlPlaneContext.js";
+export { Controls } from "./Controls.js";
+export type { ControlsProps } from "./Controls.js";
+export { Logs } from "./Logs.js";
+export type { LogsProps } from "./Logs.js";
 export { ProcessGroupControlPanel } from "./ProcessGroupControlPanel.js";
 export type { ProcessGroupControlPanelProps } from "./ProcessGroupControlPanel.js";
 export { QueueControlPanel } from "./QueueControlPanel.js";
@@ -23,8 +33,23 @@ export type {
 } from "./hooks/useControlPlaneGroupStatus.js";
 export { useControlPlaneMutation } from "./hooks/useControlPlaneMutation.js";
 export type { UseControlPlaneMutationResult } from "./hooks/useControlPlaneMutation.js";
+export { useControlPlaneLogs } from "./hooks/useControlPlaneLogs.js";
+export type {
+  ControlPlaneLogsState,
+  UseControlPlaneLogsOptions,
+} from "./hooks/useControlPlaneLogs.js";
+export type {
+  DashboardGroupTarget,
+  DashboardLogFilters,
+  DashboardProcessTarget,
+  DashboardQueueTarget,
+  DashboardTarget,
+} from "./dashboardTarget.js";
+export { logFiltersForDashboardTarget } from "./dashboardTarget.js";
 export type {
   ControlPanelActionButtonProps,
+  LogRowSlotProps,
+  LogsPanelSlots,
   ProcessGroupControlPanelSlots,
   ProcessRowSlotProps,
   QueueControlPanelSlots,

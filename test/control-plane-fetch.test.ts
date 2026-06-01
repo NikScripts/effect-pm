@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { Effect } from "effect";
+import type { ProcessManagerLogEntry } from "../src/LogEntry.js";
+import { Process } from "../src/Process.js";
 import { createFetchControlPlaneAdapter } from "../src/react/adapters/fetch.js";
 
 const contractBody = {
@@ -38,6 +41,10 @@ const statusBody = {
 };
 
 describe("createFetchControlPlaneAdapter", () => {
+  class TestProcess extends Process.Service<TestProcess>()("tick", {
+    effect: Effect.void,
+  }) {}
+
   it("maps REST paths under baseUrl", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -74,6 +81,52 @@ describe("createFetchControlPlaneAdapter", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/control/processes/tick/stop",
       expect.objectContaining({ method: "POST", credentials: "same-origin" }),
+    );
+
+    vi.unstubAllGlobals();
+  });
+
+  it("streams decoded log entries with target filters", async () => {
+    const entry = {
+      date: "2026-06-01T00:00:00.000Z",
+      level: "Info",
+      message: "tick log",
+      annotations: { processId: "tick" },
+      spans: [],
+    } as const;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(`${JSON.stringify(entry)}\n`),
+        );
+        controller.close();
+      },
+    });
+    const fetchMock = vi.fn(async () =>
+      new Response(body, {
+        status: 200,
+        headers: { "Content-Type": "application/x-ndjson" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const port = createFetchControlPlaneAdapter({
+      baseUrl: "/api/control",
+    });
+
+    const entries: ProcessManagerLogEntry[] = [];
+    for await (const next of port.logs({
+      for: TestProcess,
+      lines: 5,
+      follow: false,
+    }).entries) {
+      entries.push(next);
+    }
+
+    expect(entries).toEqual([entry]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/control/logs/stream?processId=tick&lines=5&follow=false",
+      expect.objectContaining({ method: "GET" }),
     );
 
     vi.unstubAllGlobals();

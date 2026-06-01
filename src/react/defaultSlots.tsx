@@ -7,6 +7,7 @@
 import type { ReactNode } from "react";
 import type {
   ControlPanelActionButtonProps,
+  LogRowSlotProps,
   ProcessRowSlotProps,
   QueueRowSlotProps,
 } from "./slots.js";
@@ -43,5 +44,14 @@ export const defaultQueueRow = ({ queue, sizeLabel, actions }: QueueRowSlotProps
       — {sizeLabel} · completed {String(queue.completed)}
     </span>
     <div>{actions}</div>
+  </li>
+);
+
+/** @internal */
+export const defaultLogRow = ({ entry }: LogRowSlotProps): ReactNode => (
+  <li>
+    <time dateTime={entry.date}>{entry.date}</time>
+    <span> [{entry.level}] </span>
+    <span>{entry.message}</span>
   </li>
 );
