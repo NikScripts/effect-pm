@@ -50,7 +50,7 @@ const program = Effect.gen(function* () {
     const runs = yield* RunResourceStore;
     const runtimeFacts = yield* runs.facts({
       resourceId: "examples/SqliteBackedGate",
-      types: ["run-resource.run.started", "run-resource.run.completed"],
+      types: ["RunResource.Run.Started", "RunResource.Run.Completed"],
     });
 
     const lifecycle = yield* ProcessLifecycleStore;

@@ -360,14 +360,14 @@ const makeRunGateEffect = <T, A, E>(
       Effect.gen(function* () {
         const runId = yield* nextRunId;
         const acquirePermit = Effect.gen(function* () {
-          yield* publishState("run-resource.run.waiting", (state, observedAt) => ({
+          yield* publishState("RunResource.State.Waiting", (state, observedAt) => ({
             ...state,
             observedAt,
             waiting: state.waiting + 1,
           }));
           yield* sem.take(1).pipe(
             Effect.onInterrupt(() =>
-              publishState("run-resource.run.wait.interrupted", (state, observedAt) => ({
+              publishState("RunResource.State.WaitInterrupted", (state, observedAt) => ({
                 ...state,
                 observedAt,
                 waiting: Math.max(0, state.waiting - 1),
@@ -381,7 +381,7 @@ const makeRunGateEffect = <T, A, E>(
           acquirePermit,
           () => Effect.gen(function* () {
             const startedAt = yield* Clock.currentTimeMillis;
-            yield* publishState("run-resource.run.started", (state, observedAt) => ({
+            yield* publishState("RunResource.State.Started", (state, observedAt) => ({
               ...state,
               observedAt,
               waiting: Math.max(0, state.waiting - 1),
@@ -396,7 +396,7 @@ const makeRunGateEffect = <T, A, E>(
                   const durationMs = Math.max(0, failedAt - startedAt);
                   const wasInterrupted = Cause.hasInterrupts(cause);
                   yield* publishState(
-                    wasInterrupted ? "run-resource.run.interrupted" : "run-resource.run.failed",
+                    wasInterrupted ? "RunResource.State.Interrupted" : "RunResource.State.Failed",
                     (state, observedAt) => ({
                       ...state,
                       observedAt,
@@ -416,7 +416,7 @@ const makeRunGateEffect = <T, A, E>(
                 Effect.gen(function* () {
                   const completedAt = yield* Clock.currentTimeMillis;
                   const durationMs = Math.max(0, completedAt - startedAt);
-                  yield* publishState("run-resource.run.completed", (state, observedAt) => ({
+                  yield* publishState("RunResource.State.Completed", (state, observedAt) => ({
                     ...state,
                     observedAt,
                     inFlight: Math.max(0, state.inFlight - 1),

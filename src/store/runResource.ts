@@ -24,8 +24,6 @@
  * `processId: <resourceId>`:
  *
  * - `RunResource.Run.*` — `payload = { runId, occurredAt, payload }`.
- *   Decoders project these PascalCase wires back to the public
- *   `run-resource.run.*` fact discriminators.
  * - `RunResource.State.Changed` — `payload = { id, changedAt, reason,
  *   previous, current }`.
  *
@@ -66,6 +64,7 @@ import {
   runtimeRecordQuery,
 } from "../internal/store/helpers";
 import type { ProcessStoreSpine } from "../internal/store/spine";
+import type { TelemetryPath } from "../internal/store/telemetry";
 import { ProcessStore, Telemetry } from "../ProcessStore";
 import type { QueryOpts } from "../ProcessStoreEvent";
 import { ProcessId, Type } from "../Query";
@@ -92,9 +91,9 @@ export interface RunResourceRef {
  * @public
  */
 export type RunResourceFactType =
-  | "run-resource.run.started"
-  | "run-resource.run.completed"
-  | "run-resource.run.failed";
+  | TelemetryPath<"RunResource", "Run", "Started">
+  | TelemetryPath<"RunResource", "Run", "Completed">
+  | TelemetryPath<"RunResource", "Run", "Failed">;
 
 /**
  * Reasons attached to {@link RunResourceState} transitions.
@@ -102,12 +101,12 @@ export type RunResourceFactType =
  * @public
  */
 export type RunResourceStateChangeReason =
-  | "run-resource.run.waiting"
-  | "run-resource.run.started"
-  | "run-resource.run.completed"
-  | "run-resource.run.failed"
-  | "run-resource.run.interrupted"
-  | "run-resource.run.wait.interrupted";
+  | TelemetryPath<"RunResource", "State", "Waiting">
+  | TelemetryPath<"RunResource", "State", "Started">
+  | TelemetryPath<"RunResource", "State", "Completed">
+  | TelemetryPath<"RunResource", "State", "Failed">
+  | TelemetryPath<"RunResource", "State", "Interrupted">
+  | TelemetryPath<"RunResource", "State", "WaitInterrupted">;
 
 /** @public */
 export interface RunResourceRunStartedPayload {
@@ -130,7 +129,7 @@ export interface RunResourceRunStartedFact {
   readonly id: string;
   readonly resourceId: string;
   readonly runId: string;
-  readonly type: "run-resource.run.started";
+  readonly type: TelemetryPath<"RunResource", "Run", "Started">;
   readonly occurredAt: number;
   readonly payload: RunResourceRunStartedPayload;
   readonly attributes?: Record<string, unknown>;
@@ -141,7 +140,7 @@ export interface RunResourceRunCompletedFact {
   readonly id: string;
   readonly resourceId: string;
   readonly runId: string;
-  readonly type: "run-resource.run.completed";
+  readonly type: TelemetryPath<"RunResource", "Run", "Completed">;
   readonly occurredAt: number;
   readonly payload: RunResourceRunCompletedPayload;
   readonly attributes?: Record<string, unknown>;
@@ -152,7 +151,7 @@ export interface RunResourceRunFailedFact {
   readonly id: string;
   readonly resourceId: string;
   readonly runId: string;
-  readonly type: "run-resource.run.failed";
+  readonly type: TelemetryPath<"RunResource", "Run", "Failed">;
   readonly occurredAt: number;
   readonly payload: RunResourceRunFailedPayload;
   readonly attributes?: Record<string, unknown>;
@@ -266,12 +265,27 @@ export interface RunResourceRun {
 // ============================================================================
 
 const RUN_RESOURCE_TYPE = "RunResource";
-const FACT_RECORDED_TYPE = "run-resource.fact.recorded";
-const STATE_CHANGED_TYPE = "run-resource.state.changed";
-const RUN_STARTED_WIRE = "RunResource.Run.Started";
-const RUN_COMPLETED_WIRE = "RunResource.Run.Completed";
-const RUN_FAILED_WIRE = "RunResource.Run.Failed";
-const STATE_CHANGED_WIRE = "RunResource.State.Changed";
+const FACT_RECORDED_TYPE = "run-resource.fact.recorded"; // legacy decode only
+const STATE_CHANGED_TYPE = "run-resource.state.changed"; // legacy decode only
+const runResourcePath = <
+  const Tag extends string,
+  const Event extends string,
+>(
+  tag: Tag,
+  event: Event,
+): TelemetryPath<"RunResource", Tag, Event> =>
+  `RunResource.${tag}.${event}`;
+
+const RUN_STARTED_WIRE = runResourcePath("Run", "Started");
+const RUN_COMPLETED_WIRE = runResourcePath("Run", "Completed");
+const RUN_FAILED_WIRE = runResourcePath("Run", "Failed");
+const STATE_WAITING_WIRE = runResourcePath("State", "Waiting");
+const STATE_STARTED_WIRE = runResourcePath("State", "Started");
+const STATE_COMPLETED_WIRE = runResourcePath("State", "Completed");
+const STATE_FAILED_WIRE = runResourcePath("State", "Failed");
+const STATE_INTERRUPTED_WIRE = runResourcePath("State", "Interrupted");
+const STATE_WAIT_INTERRUPTED_WIRE = runResourcePath("State", "WaitInterrupted");
+const STATE_CHANGED_WIRE = runResourcePath("State", "Changed");
 
 const factRecordTypes = [
   FACT_RECORDED_TYPE,
@@ -286,9 +300,9 @@ const stateRecordTypes = [
 ] as const;
 
 const RUN_RESOURCE_FACT_TYPES: ReadonlyArray<RunResourceFactType> = [
-  "run-resource.run.started",
-  "run-resource.run.completed",
-  "run-resource.run.failed",
+  RUN_STARTED_WIRE,
+  RUN_COMPLETED_WIRE,
+  RUN_FAILED_WIRE,
 ];
 
 const isRunResourceFactType = (
@@ -299,12 +313,12 @@ const isRunResourceFactType = (
 const RUN_RESOURCE_STATE_CHANGE_REASONS: ReadonlyArray<
   RunResourceStateChangeReason
 > = [
-  "run-resource.run.waiting",
-  "run-resource.run.started",
-  "run-resource.run.completed",
-  "run-resource.run.failed",
-  "run-resource.run.interrupted",
-  "run-resource.run.wait.interrupted",
+  STATE_WAITING_WIRE,
+  STATE_STARTED_WIRE,
+  STATE_COMPLETED_WIRE,
+  STATE_FAILED_WIRE,
+  STATE_INTERRUPTED_WIRE,
+  STATE_WAIT_INTERRUPTED_WIRE,
 ];
 
 const isStateChangeReason = (
@@ -325,45 +339,53 @@ const decodeFactValue = (value: unknown): RunResourceFact | null => {
   const type = value["type"];
   const occurredAt = value["occurredAt"];
   const payload = value["payload"];
+  const normalizedType =
+    type === "run-resource.run.started"
+      ? RUN_STARTED_WIRE
+      : type === "run-resource.run.completed"
+        ? RUN_COMPLETED_WIRE
+        : type === "run-resource.run.failed"
+          ? RUN_FAILED_WIRE
+          : type;
   if (
     !isString(id) ||
     !isString(resourceId) ||
     !isString(runId) ||
-    !isRunResourceFactType(type) ||
+    !isRunResourceFactType(normalizedType) ||
     !isFiniteNumber(occurredAt) ||
     !isRecord(payload)
   ) {
     return null;
   }
   const attributes = recordAttributesObject(value["attributes"]);
-  switch (type) {
-    case "run-resource.run.started": {
+  switch (normalizedType) {
+    case RUN_STARTED_WIRE: {
       const concurrency = payload["concurrency"];
       if (!isFiniteNumber(concurrency)) return null;
       return {
         id,
         resourceId,
         runId,
-        type,
+        type: normalizedType,
         occurredAt,
         payload: { concurrency },
         ...(attributes === undefined ? {} : { attributes }),
       };
     }
-    case "run-resource.run.completed": {
+    case RUN_COMPLETED_WIRE: {
       const durationMs = payload["durationMs"];
       if (!isFiniteNumber(durationMs)) return null;
       return {
         id,
         resourceId,
         runId,
-        type,
+        type: normalizedType,
         occurredAt,
         payload: { durationMs },
         ...(attributes === undefined ? {} : { attributes }),
       };
     }
-    case "run-resource.run.failed": {
+    case RUN_FAILED_WIRE: {
       const durationMs = payload["durationMs"];
       const cause = payload["cause"];
       if (!isFiniteNumber(durationMs) || !isString(cause)) return null;
@@ -371,7 +393,7 @@ const decodeFactValue = (value: unknown): RunResourceFact | null => {
         id,
         resourceId,
         runId,
-        type,
+        type: normalizedType,
         occurredAt,
         payload: { durationMs, cause },
         ...(attributes === undefined ? {} : { attributes }),
@@ -431,17 +453,31 @@ const decodeStateChangeValue = (
   const previousRaw = value["previous"];
   const previous = previousRaw === null ? null : decodeStateValue(previousRaw);
   const current = decodeStateValue(value["current"]);
+  const normalizedReason =
+    reason === "run-resource.run.waiting"
+      ? STATE_WAITING_WIRE
+      : reason === "run-resource.run.started"
+        ? STATE_STARTED_WIRE
+        : reason === "run-resource.run.completed"
+          ? STATE_COMPLETED_WIRE
+          : reason === "run-resource.run.failed"
+            ? STATE_FAILED_WIRE
+            : reason === "run-resource.run.interrupted"
+              ? STATE_INTERRUPTED_WIRE
+              : reason === "run-resource.run.wait.interrupted"
+                ? STATE_WAIT_INTERRUPTED_WIRE
+                : reason;
   if (
     !isString(id) ||
     !isString(resourceId) ||
     !isFiniteNumber(changedAt) ||
-    !isStateChangeReason(reason) ||
+    !isStateChangeReason(normalizedReason) ||
     (previousRaw !== null && previous === null) ||
     current === null
   ) {
     return null;
   }
-  return { id, resourceId, changedAt, reason, previous, current };
+  return { id, resourceId, changedAt, reason: normalizedReason, previous, current };
 };
 
 const recordToFact = (record: RuntimeRecord): RunResourceFact | null => {
@@ -463,7 +499,7 @@ const recordToFact = (record: RuntimeRecord): RunResourceFact | null => {
           id: record.id,
           resourceId: record.processId,
           runId,
-          type: "run-resource.run.started",
+          type: RUN_STARTED_WIRE,
           occurredAt,
           payload: { concurrency },
           ...(attributes === undefined ? {} : { attributes }),
@@ -476,7 +512,7 @@ const recordToFact = (record: RuntimeRecord): RunResourceFact | null => {
           id: record.id,
           resourceId: record.processId,
           runId,
-          type: "run-resource.run.completed",
+          type: RUN_COMPLETED_WIRE,
           occurredAt,
           payload: { durationMs },
           ...(attributes === undefined ? {} : { attributes }),
@@ -490,7 +526,7 @@ const recordToFact = (record: RuntimeRecord): RunResourceFact | null => {
           id: record.id,
           resourceId: record.processId,
           runId,
-          type: "run-resource.run.failed",
+          type: RUN_FAILED_WIRE,
           occurredAt,
           payload: { durationMs, cause },
           ...(attributes === undefined ? {} : { attributes }),
@@ -616,7 +652,7 @@ const pairRuns = (facts: ReadonlyArray<RunResourceFact>): RunResourceRun[] => {
   >();
 
   for (const fact of facts) {
-    if (fact.type === "run-resource.run.started") {
+    if (fact.type === RUN_STARTED_WIRE) {
       const existing = startedByRun.get(fact.runId);
       if (existing === undefined || fact.occurredAt < existing.occurredAt) {
         startedByRun.set(fact.runId, fact);
@@ -644,7 +680,7 @@ const pairRuns = (facts: ReadonlyArray<RunResourceFact>): RunResourceRun[] => {
       continue;
     }
     const outcome: "completed" | "failed" =
-      ended.type === "run-resource.run.completed" ? "completed" : "failed";
+      ended.type === RUN_COMPLETED_WIRE ? "completed" : "failed";
     runs.push({
       runId,
       resourceId: started.resourceId,
@@ -652,7 +688,7 @@ const pairRuns = (facts: ReadonlyArray<RunResourceFact>): RunResourceRun[] => {
       endedAt: ended.occurredAt,
       durationMs: ended.payload.durationMs,
       outcome,
-      ...(ended.type === "run-resource.run.failed"
+      ...(ended.type === RUN_FAILED_WIRE
         ? { cause: ended.payload.cause }
         : {}),
     });
@@ -756,12 +792,12 @@ class RunResourceStateChanged extends Telemetry.Schema<RunResourceStateChanged>(
   id: Schema.String,
   changedAt: Telemetry.terminal.clockMillis,
   reason: Schema.Literals([
-    "run-resource.run.waiting",
-    "run-resource.run.started",
-    "run-resource.run.completed",
-    "run-resource.run.failed",
-    "run-resource.run.interrupted",
-    "run-resource.run.wait.interrupted",
+    STATE_WAITING_WIRE,
+    STATE_STARTED_WIRE,
+    STATE_COMPLETED_WIRE,
+    STATE_FAILED_WIRE,
+    STATE_INTERRUPTED_WIRE,
+    STATE_WAIT_INTERRUPTED_WIRE,
   ]),
   previous: Schema.NullOr(RunResourceStateSchema),
   current: RunResourceStateSchema,

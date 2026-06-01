@@ -172,14 +172,14 @@ describe("RunResource.make (raw scoped)", () => {
       // (Effect.succeed is fast enough that ties happen). Assert presence,
       // not order — and confirm the per-run pairing via runs().
       expect(stored.map((fact) => fact.type).sort()).toEqual([
-        "run-resource.run.completed",
-        "run-resource.run.started",
+        "RunResource.Run.Completed",
+        "RunResource.Run.Started",
       ]);
       expect(stateHistory.map((change) => change.reason)).toEqual(
         expect.arrayContaining([
-          "run-resource.run.waiting",
-          "run-resource.run.started",
-          "run-resource.run.completed",
+          "RunResource.State.Waiting",
+          "RunResource.State.Started",
+          "RunResource.State.Completed",
         ]),
       );
     }).pipe(Effect.provide(runResourceObservationLayer), Effect.scoped),
@@ -198,7 +198,7 @@ describe("RunResource.make (raw scoped)", () => {
       const runs = yield* RunResourceStore;
       const facts = yield* runs.facts({
         resourceId,
-        types: ["run-resource.run.started", "run-resource.run.completed"],
+        types: ["RunResource.Run.Started", "RunResource.Run.Completed"],
       });
       const history = yield* runs.stateHistory({ resourceId });
       const paired = yield* runs.runs(resourceId);
@@ -207,14 +207,14 @@ describe("RunResource.make (raw scoped)", () => {
       // See note on the previous test: assert presence, not order, for
       // ms-tied fact pairs.
       expect(facts.map((fact) => fact.type).sort()).toEqual([
-        "run-resource.run.completed",
-        "run-resource.run.started",
+        "RunResource.Run.Completed",
+        "RunResource.Run.Started",
       ]);
       expect(history.map((change) => change.reason)).toEqual(
         expect.arrayContaining([
-          "run-resource.run.waiting",
-          "run-resource.run.started",
-          "run-resource.run.completed",
+          "RunResource.State.Waiting",
+          "RunResource.State.Started",
+          "RunResource.State.Completed",
         ]),
       );
       expect(paired).toHaveLength(1);

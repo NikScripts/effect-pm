@@ -26,10 +26,10 @@ const started = (
   runId: string,
   occurredAt: number,
 ): RunResourceRunStartedFact => ({
-  id: `${runId}/run-resource.run.started`,
+  id: `${runId}/RunResource.Run.Started`,
   resourceId,
   runId,
-  type: "run-resource.run.started",
+  type: "RunResource.Run.Started",
   occurredAt,
   payload: { concurrency: 1 },
 });
@@ -40,10 +40,10 @@ const completed = (
   occurredAt: number,
   durationMs: number,
 ): RunResourceRunCompletedFact => ({
-  id: `${runId}/run-resource.run.completed`,
+  id: `${runId}/RunResource.Run.Completed`,
   resourceId,
   runId,
-  type: "run-resource.run.completed",
+  type: "RunResource.Run.Completed",
   occurredAt,
   payload: { durationMs },
 });
@@ -55,10 +55,10 @@ const failed = (
   durationMs: number,
   cause: string,
 ): RunResourceRunFailedFact => ({
-  id: `${runId}/run-resource.run.failed`,
+  id: `${runId}/RunResource.Run.Failed`,
   resourceId,
   runId,
-  type: "run-resource.run.failed",
+  type: "RunResource.Run.Failed",
   occurredAt,
   payload: { durationMs, cause },
 });
@@ -143,8 +143,8 @@ describe("RunResourceStore — static optional emitters", () => {
       const facet = yield* RunResourceStore;
       const facts = yield* facet.facts({ resourceId });
       expect(facts.map((fact: RunResourceFact) => fact.type).sort()).toEqual([
-        "run-resource.run.completed",
-        "run-resource.run.started",
+        "RunResource.Run.Completed",
+        "RunResource.Run.Started",
       ]);
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
@@ -177,7 +177,7 @@ describe("RunResourceStore — projections", () => {
       id: `${resourceId}/state/1`,
       resourceId,
       changedAt: t(160),
-      reason: "run-resource.run.failed",
+      reason: "RunResource.State.Failed",
       previous,
       current,
     } satisfies RunResourceStateChange);
@@ -215,8 +215,8 @@ describe("RunResourceStore — projections", () => {
         true,
       );
       expect(onlyRun2.map((fact) => fact.type).sort()).toEqual([
-        "run-resource.run.failed",
-        "run-resource.run.started",
+        "RunResource.Run.Failed",
+        "RunResource.Run.Started",
       ]);
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
@@ -264,7 +264,7 @@ describe("RunResourceStore — for(resourceId) bound API", () => {
         id: `${resourceId}/state/1`,
         resourceId,
         changedAt: t(60),
-        reason: "run-resource.run.completed",
+        reason: "RunResource.State.Completed",
         previous: state(resourceId, t(0)),
         current: state(resourceId, t(60), {
           completed: 1,
@@ -305,11 +305,11 @@ describe("RunResourceStore — for(resourceId) bound API", () => {
       );
       const bound = yield* RunResourceStore.for(resourceId);
       const startedOnly = yield* bound.facts({
-        types: ["run-resource.run.started"],
+        types: ["RunResource.Run.Started"],
       });
       expect(
         startedOnly.every(
-          (fact) => fact.type === "run-resource.run.started",
+          (fact) => fact.type === "RunResource.Run.Started",
         ),
       ).toBe(true);
     }).pipe(Effect.provide(ProcessStorage.layer)),

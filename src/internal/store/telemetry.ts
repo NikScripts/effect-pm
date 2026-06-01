@@ -229,6 +229,12 @@ export const telemetryWireId = (
   eventName: string,
 ): string => joinWire([namespace, ...tagPath, eventName]);
 
+export type TelemetryPath<
+  Namespace extends string,
+  Tag extends string,
+  Event extends string,
+> = `${Namespace}.${Tag}.${Event}`;
+
 const makeEventBuilder = <Name extends string, EmitApi>(
   event: TelemetryEventDef<Name, EmitApi>,
 ): TelemetryEventBuilder<Name, EmitApi> => ({
