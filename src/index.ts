@@ -131,12 +131,17 @@ export {
   formatSignatureHeader,
   parseSignatureHeader,
   commandAuthErrorMessage,
+  loadPublicKeyRecords,
+  publicKeyRecordJson,
+  publicKeyRecordsJson,
+  mergePublicKeyRecords,
 } from "./CommandAuth";
 export type {
   PublicKeyRecord,
   PrivateKeyRecord,
   GeneratedEd25519KeyPair,
   GenerateEd25519KeyPairOptions,
+  LoadPublicKeyRecordsOptions,
   CanonicalCommandAuthRequest,
   CommandAuthSigningInput,
   CommandAuthSignatureHeader,

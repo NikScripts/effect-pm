@@ -51,8 +51,8 @@ import { CommandAuth, ControlService } from "@nikscripts/effect-pm";
 import { Config, Duration, Effect } from "effect";
 
 const program = Effect.gen(function* () {
-  const keyJson = yield* Config.string("BILLING_GROUP_COMMAND_KEYS");
-  const keys = yield* CommandAuth.decodePublicKeyRecordsJson(keyJson);
+  const keyringFile = yield* Config.string("BILLING_GROUP_COMMAND_KEYS_FILE");
+  const keys = yield* CommandAuth.loadPublicKeyRecords({ file: keyringFile });
   const group = yield* BillingGroup;
 
   yield* ControlService.make({
@@ -65,6 +65,10 @@ const program = Effect.gen(function* () {
   });
 });
 ```
+
+Prefer `*_COMMAND_KEYS_FILE` or `*_COMMAND_KEYS_DIR` for real deployments so
+large PEM records do not bloat env files. Inline JSON env is still useful for
+small local demos and tests.
 
 When `auth` is configured, the HTTP surface is strict: signed `POST /control`
 only. REST shortcuts, unsigned `/health`, and unsigned log streams fail before

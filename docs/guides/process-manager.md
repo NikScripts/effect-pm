@@ -156,11 +156,38 @@ Enroll the public key into one or more group verifier configs:
 ```sh
 pm auth enroll-key ./nik-laptop.public.json \
   --group @app/Billing \
+  --keyring-file .effect-pm/command-keys/billing.json \
   --write-env .env.local
 ```
 
-The private key stays local to the operator. The public record is safe to add to
-the group / PM receiver config. Common failures:
+This writes a compact env pointer:
+
+```dotenv
+APP__BILLING_COMMAND_KEYS_FILE='.effect-pm/command-keys/billing.json'
+```
+
+For many operators, prefer one JSON file per public key:
+
+```sh
+pm auth enroll-key ./nik-laptop.public.json \
+  --group @app/Billing \
+  --keyring-dir .effect-pm/command-keys/billing \
+  --write-env .env.local
+```
+
+`--keyring-dir` prints a warning when the directory is not found in `.gitignore`.
+Public keys are not secret, but generated keyring files are usually local config.
+
+Inline env is still available for small demos:
+
+```sh
+pm auth enroll-key ./nik-laptop.public.json \
+  --group @app/Billing \
+  --write-env .env.local
+```
+
+The private key stays local to the operator. Public records can be stored in the
+group / PM receiver keyring. Common failures:
 
 | Error | Fix |
 | --- | --- |

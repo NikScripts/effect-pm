@@ -16,6 +16,13 @@ import {
   sign as cryptoSign,
   verify as cryptoVerify,
 } from "node:crypto";
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+} from "node:fs";
+import * as NodePath from "node:path";
 import { Clock, Context, DateTime, Duration, Effect, Option, Schema } from "effect";
 import type { ControlProtocolRequest, ControlProtocolRequestEnvelope } from "./ControlProtocol";
 import { responseBodyJson } from "./internal/json";
@@ -74,6 +81,14 @@ export interface GenerateEd25519KeyPairOptions {
   readonly name: string;
   readonly expiresAt: string;
   readonly keyId?: string;
+}
+
+export interface LoadPublicKeyRecordsOptions {
+  readonly inline?: string | ReadonlyArray<string>;
+  readonly file?: string;
+  readonly files?: ReadonlyArray<string>;
+  readonly directory?: string;
+  readonly directories?: ReadonlyArray<string>;
 }
 
 export type CanonicalCommandAuthRequest =
@@ -370,6 +385,160 @@ export const decodePublicKeyRecordsJson = (
     );
   });
 
+const escapeJsonString = (value: string): string =>
+  value.replace(/[\u0000-\u001f"\\]/g, (character) => {
+    switch (character) {
+      case "\"":
+        return "\\\"";
+      case "\\":
+        return "\\\\";
+      case "\b":
+        return "\\b";
+      case "\f":
+        return "\\f";
+      case "\n":
+        return "\\n";
+      case "\r":
+        return "\\r";
+      case "\t":
+        return "\\t";
+      default:
+        return `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`;
+    }
+  });
+
+const jsonString = (value: string): string => `"${escapeJsonString(value)}"`;
+
+export const publicKeyRecordJson = (record: PublicKeyRecord): string =>
+  [
+    "{",
+    `  "keyId": ${jsonString(record.keyId)},`,
+    `  "name": ${jsonString(record.name)},`,
+    `  "algorithm": ${jsonString(record.algorithm)},`,
+    `  "expiresAt": ${jsonString(record.expiresAt)},`,
+    `  "publicKeyPem": ${jsonString(record.publicKeyPem)}`,
+    "}",
+  ].join("\n");
+
+export const publicKeyRecordsJson = (
+  records: ReadonlyArray<PublicKeyRecord>,
+): string => `[${records.map((record) => `\n${publicKeyRecordJson(record)}`).join(",")}\n]`;
+
+const samePublicKeyRecord = (
+  left: PublicKeyRecord,
+  right: PublicKeyRecord,
+): boolean =>
+  left.keyId === right.keyId &&
+  left.name === right.name &&
+  left.algorithm === right.algorithm &&
+  left.expiresAt === right.expiresAt &&
+  left.publicKeyPem === right.publicKeyPem;
+
+export const mergePublicKeyRecords = (
+  records: ReadonlyArray<PublicKeyRecord>,
+): Effect.Effect<ReadonlyArray<PublicKeyRecord>, KeyMaterialError> =>
+  Effect.gen(function* () {
+    const byKeyId = new Map<string, PublicKeyRecord>();
+    for (const record of records) {
+      const existing = byKeyId.get(record.keyId);
+      if (existing !== undefined && !samePublicKeyRecord(existing, record)) {
+        return yield* new KeyMaterialError({
+          reason: `Duplicate command auth keyId '${record.keyId}' has different key material`,
+        });
+      }
+      byKeyId.set(record.keyId, record);
+    }
+    return [...byKeyId.values()].sort((left, right) => left.keyId.localeCompare(right.keyId));
+  });
+
+const decodePublicKeyRecordJson = (
+  text: string,
+): Effect.Effect<ReadonlyArray<PublicKeyRecord>, KeyMaterialError> =>
+  decodePublicKeyRecordsJson(text).pipe(
+    Effect.catch(() =>
+      Effect.gen(function* () {
+        const parsed = yield* Schema.decodeUnknownEffect(responseBodyJson)(text).pipe(
+          Effect.mapError(
+            (error) =>
+              new KeyMaterialError({
+                reason: `Unable to decode command auth public key JSON: ${String(error)}`,
+              }),
+          ),
+        );
+        const record = yield* Schema.decodeUnknownEffect(PublicKeyRecordSchema)(parsed).pipe(
+          Effect.mapError(
+            (error) =>
+              new KeyMaterialError({
+                reason: `Invalid command auth public key record: ${String(error)}`,
+              }),
+          ),
+        );
+        return [record];
+      })
+    ),
+  );
+
+const readPublicKeyRecordFile = (
+  path: string,
+): Effect.Effect<ReadonlyArray<PublicKeyRecord>, KeyMaterialError> =>
+  Effect.try({
+    try: () => readFileSync(path, "utf8"),
+    catch: (error) =>
+      new KeyMaterialError({
+        reason: `Unable to read command auth keyring file '${path}': ${String(error)}`,
+      }),
+  }).pipe(Effect.flatMap(decodePublicKeyRecordJson));
+
+const publicKeyRecordFilesInDirectory = (
+  directory: string,
+): Effect.Effect<ReadonlyArray<string>, KeyMaterialError> =>
+  Effect.try({
+    try: () => {
+      if (!existsSync(directory)) {
+        return [];
+      }
+      return readdirSync(directory)
+        .map((entry) => NodePath.join(directory, entry))
+        .filter((entryPath) => statSync(entryPath).isFile() && entryPath.endsWith(".json"))
+        .sort();
+    },
+    catch: (error) =>
+      new KeyMaterialError({
+        reason: `Unable to read command auth keyring directory '${directory}': ${String(error)}`,
+      }),
+  });
+
+export const loadPublicKeyRecords = (
+  options: LoadPublicKeyRecordsOptions,
+): Effect.Effect<ReadonlyArray<PublicKeyRecord>, KeyMaterialError> =>
+  Effect.gen(function* () {
+    const inline = typeof options.inline === "string"
+      ? [options.inline]
+      : options.inline ?? [];
+    const files = [
+      ...(options.file === undefined ? [] : [options.file]),
+      ...(options.files ?? []),
+    ];
+    const directories = [
+      ...(options.directory === undefined ? [] : [options.directory]),
+      ...(options.directories ?? []),
+    ];
+    const decoded: PublicKeyRecord[] = [];
+    for (const text of inline) {
+      decoded.push(...yield* decodePublicKeyRecordJson(text));
+    }
+    for (const file of files) {
+      decoded.push(...yield* readPublicKeyRecordFile(file));
+    }
+    for (const directory of directories) {
+      const directoryFiles = yield* publicKeyRecordFilesInDirectory(directory);
+      for (const file of directoryFiles) {
+        decoded.push(...yield* readPublicKeyRecordFile(file));
+      }
+    }
+    return yield* mergePublicKeyRecords(decoded);
+  });
+
 export const commandAuthErrorMessage = (error: CommandAuthError): string =>
   error.reason;
 
@@ -380,6 +549,10 @@ interface CommandAuthApi {
   readonly canonicalPayload: typeof canonicalPayload;
   readonly canonicalPayloadText: typeof canonicalPayloadText;
   readonly decodePublicKeyRecordsJson: typeof decodePublicKeyRecordsJson;
+  readonly loadPublicKeyRecords: typeof loadPublicKeyRecords;
+  readonly publicKeyRecordJson: typeof publicKeyRecordJson;
+  readonly publicKeyRecordsJson: typeof publicKeyRecordsJson;
+  readonly mergePublicKeyRecords: typeof mergePublicKeyRecords;
   readonly formatSignatureHeader: typeof formatSignatureHeader;
   readonly parseSignatureHeader: typeof parseSignatureHeader;
   readonly Replay: {
@@ -410,6 +583,10 @@ export const CommandAuth: CommandAuthApi = {
   canonicalPayload,
   canonicalPayloadText,
   decodePublicKeyRecordsJson,
+  loadPublicKeyRecords,
+  publicKeyRecordJson,
+  publicKeyRecordsJson,
+  mergePublicKeyRecords,
   formatSignatureHeader,
   parseSignatureHeader,
   Replay: {

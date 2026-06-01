@@ -1476,10 +1476,10 @@ const encodeCliJson = (
 
 const decodePublicKeyRecordFile = (
   filepath: string,
-): Effect.Effect<PublicKeyRecord, ProcessManagerConnectionError, FileSystem.FileSystem> =>
+): Effect.Effect<ReadonlyArray<PublicKeyRecord>, ProcessManagerConnectionError, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const text = yield* fs.readFileString(filepath).pipe(
+    yield* fs.readFileString(filepath).pipe(
       Effect.mapError(
         (error) =>
           new ProcessManagerConnectionError({
@@ -1488,21 +1488,12 @@ const decodePublicKeyRecordFile = (
           }),
       ),
     );
-    const parsed = yield* Schema.decodeUnknownEffect(responseBodyJson)(text).pipe(
+    return yield* CommandAuth.loadPublicKeyRecords({ file: filepath }).pipe(
       Effect.mapError(
         (error) =>
           new ProcessManagerConnectionError({
             groupId: "",
-            reason: `Malformed public key record JSON '${filepath}': ${String(error)}`,
-          }),
-      ),
-    );
-    return yield* Schema.decodeUnknownEffect(CommandAuth.Schema.PublicKeyRecord)(parsed).pipe(
-      Effect.mapError(
-        (error) =>
-          new ProcessManagerConnectionError({
-            groupId: "",
-            reason: `Invalid public key record '${filepath}': ${String(error)}`,
+            reason: `Invalid public key record '${filepath}': ${error.reason}`,
           }),
       ),
     );
@@ -1516,12 +1507,74 @@ const shellSingleQuote = (value: string): string =>
 
 const publicKeyEnvLine = (
   groupId: string,
-  record: PublicKeyRecord,
+  records: ReadonlyArray<PublicKeyRecord>,
 ): Effect.Effect<string, ProcessManagerRequestError> =>
   Effect.map(
-    encodeCliJson([record]),
+    encodeCliJson(records),
     (json) => `${commandAuthEnvNameForGroup(groupId)}=${shellSingleQuote(json)}`,
   );
+
+const publicKeyFileEnvLine = (
+  groupId: string,
+  filepath: string,
+): string => `${commandAuthEnvNameForGroup(groupId)}_FILE=${shellSingleQuote(filepath)}`;
+
+const publicKeyDirEnvLine = (
+  groupId: string,
+  directory: string,
+): string => `${commandAuthEnvNameForGroup(groupId)}_DIR=${shellSingleQuote(directory)}`;
+
+const normalizedRelativePath = (path: string): string => {
+  const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
+  const cwd = process.cwd().replace(/\\/g, "/").replace(/\/+$/, "");
+  return normalized.startsWith(`${cwd}/`)
+    ? normalized.slice(cwd.length + 1)
+    : normalized;
+};
+
+const parentDirectory = (path: string): string | undefined => {
+  const normalized = path.replace(/\\/g, "/");
+  const index = normalized.lastIndexOf("/");
+  return index <= 0 ? undefined : normalized.slice(0, index);
+};
+
+const gitignorePatternMayCover = (pattern: string, relativePath: string): boolean => {
+  const normalizedPattern = pattern.trim().replace(/\/+$/, "");
+  if (
+    normalizedPattern.length === 0 ||
+    normalizedPattern.startsWith("#") ||
+    normalizedPattern.startsWith("!")
+  ) {
+    return false;
+  }
+  const unrooted = normalizedPattern.startsWith("/")
+    ? normalizedPattern.slice(1)
+    : normalizedPattern;
+  return (
+    relativePath === unrooted ||
+    relativePath.startsWith(`${unrooted}/`) ||
+    (unrooted.endsWith("*") && relativePath.startsWith(unrooted.slice(0, -1)))
+  );
+};
+
+const warnIfDirectoryMayNotBeIgnored = (
+  directory: string,
+): Effect.Effect<void, never, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const relativePath = normalizedRelativePath(directory);
+    const fs = yield* FileSystem.FileSystem;
+    const ignored = yield* fs.readFileString(".gitignore").pipe(
+      Effect.map((text) =>
+        text.split(/\r?\n/).some((line) => gitignorePatternMayCover(line, relativePath))
+      ),
+      Effect.catch(() => Effect.succeed(false)),
+    );
+    if (!ignored) {
+      yield* Console.error(
+        `Warning: command auth keyring directory '${relativePath}' was not found in .gitignore. Public keys are not secret, but generated keyring files are usually local config; add '${relativePath}/' if you do not intend to commit them.`,
+      );
+    }
+  });
 
 const resolveCliTarget = (
   groups: ReadonlyArray<ConfigSource>,
@@ -1938,6 +1991,8 @@ const runAuthEnrollKeyCommand = (
     readonly group: Option.Option<string>;
     readonly allGroups: boolean;
     readonly writeEnv: Option.Option<string>;
+    readonly keyringFile: Option.Option<string>;
+    readonly keyringDir: Option.Option<string>;
     readonly dryRun: boolean;
   },
 ): Effect.Effect<
@@ -1952,7 +2007,13 @@ const runAuthEnrollKeyCommand = (
         reason: "Use either --all-groups or --group, not both",
       });
     }
-    const record = yield* decodePublicKeyRecordFile(publicKeyRecordPath);
+    if (Option.isSome(options.keyringFile) && Option.isSome(options.keyringDir)) {
+      return yield* new ProcessManagerConnectionError({
+        groupId: "",
+        reason: "Use either --keyring-file or --keyring-dir, not both",
+      });
+    }
+    const records = yield* decodePublicKeyRecordFile(publicKeyRecordPath);
     const selectedGroups = options.allGroups
       ? groups
       : Option.isSome(options.group)
@@ -1968,10 +2029,88 @@ const runAuthEnrollKeyCommand = (
     const lines: string[] = [];
     for (const group of selectedGroups) {
       lines.push(`# Public command auth verifier key for ${group.id}`);
-      lines.push(yield* publicKeyEnvLine(group.id, record));
+      if (Option.isSome(options.keyringFile)) {
+        lines.push(publicKeyFileEnvLine(group.id, options.keyringFile.value));
+      } else if (Option.isSome(options.keyringDir)) {
+        lines.push(publicKeyDirEnvLine(group.id, options.keyringDir.value));
+      } else {
+        lines.push(yield* publicKeyEnvLine(group.id, records));
+      }
       lines.push("");
     }
     const output = lines.join("\n");
+    if (Option.isSome(options.keyringFile) && !options.dryRun) {
+      const keyringFile = options.keyringFile.value;
+      const fs = yield* FileSystem.FileSystem;
+      const exists = yield* fs.exists(keyringFile).pipe(Effect.catch(() => Effect.succeed(false)));
+      const existing = exists
+        ? yield* CommandAuth.loadPublicKeyRecords({ file: keyringFile }).pipe(
+            Effect.mapError(
+              (error) =>
+                new ProcessManagerConnectionError({
+                  groupId: "",
+                  reason: error.reason,
+                }),
+            ),
+          )
+        : [];
+      const merged = yield* CommandAuth.mergePublicKeyRecords([...existing, ...records]).pipe(
+        Effect.mapError(
+          (error) =>
+            new ProcessManagerConnectionError({
+              groupId: "",
+              reason: error.reason,
+            }),
+        ),
+      );
+      const parent = parentDirectory(keyringFile);
+      if (parent !== undefined) {
+        yield* fs.makeDirectory(parent, { recursive: true }).pipe(
+          Effect.mapError(
+            (error) =>
+              new ProcessManagerConnectionError({
+                groupId: "",
+                reason: `Unable to create keyring file directory '${parent}': ${String(error)}`,
+              }),
+          ),
+        );
+      }
+      yield* fs.writeFileString(keyringFile, `${CommandAuth.publicKeyRecordsJson(merged)}\n`).pipe(
+        Effect.mapError(
+          (error) =>
+            new ProcessManagerConnectionError({
+              groupId: "",
+              reason: `Unable to write keyring file '${keyringFile}': ${String(error)}`,
+            }),
+        ),
+      );
+    }
+    if (Option.isSome(options.keyringDir) && !options.dryRun) {
+      const keyringDir = options.keyringDir.value;
+      const fs = yield* FileSystem.FileSystem;
+      yield* warnIfDirectoryMayNotBeIgnored(keyringDir);
+      yield* fs.makeDirectory(keyringDir, { recursive: true }).pipe(
+        Effect.mapError(
+          (error) =>
+            new ProcessManagerConnectionError({
+              groupId: "",
+              reason: `Unable to create keyring directory '${keyringDir}': ${String(error)}`,
+            }),
+        ),
+      );
+      for (const record of records) {
+        const filepath = `${keyringDir}/${record.keyId}.json`;
+        yield* fs.writeFileString(filepath, `${CommandAuth.publicKeyRecordJson(record)}\n`).pipe(
+          Effect.mapError(
+            (error) =>
+              new ProcessManagerConnectionError({
+                groupId: "",
+                reason: `Unable to write keyring record '${filepath}': ${String(error)}`,
+              }),
+          ),
+        );
+      }
+    }
     if (Option.isSome(options.writeEnv) && !options.dryRun) {
       const writeEnv = options.writeEnv.value;
       const fs = yield* FileSystem.FileSystem;
@@ -2143,6 +2282,8 @@ const makeCli = <
   const authGroupOption = Flag.string("group").pipe(Flag.optional);
   const allGroupsOption = Flag.boolean("all-groups").pipe(Flag.withDefault(false));
   const writeEnvOption = Flag.string("write-env").pipe(Flag.optional);
+  const keyringFileOption = Flag.string("keyring-file").pipe(Flag.optional);
+  const keyringDirOption = Flag.string("keyring-dir").pipe(Flag.optional);
   const dryRunOption = Flag.boolean("dry-run").pipe(Flag.withDefault(false));
   const endpointLabelFrom = (endpointLabel: Option.Option<string>): string | undefined =>
     Option.isSome(endpointLabel) ? endpointLabel.value : undefined;
@@ -2195,13 +2336,17 @@ const makeCli = <
           group: authGroupOption,
           allGroups: allGroupsOption,
           writeEnv: writeEnvOption,
+          keyringFile: keyringFileOption,
+          keyringDir: keyringDirOption,
           dryRun: dryRunOption,
         },
-        ({ publicKeyRecord, group, allGroups, writeEnv, dryRun }) =>
+        ({ publicKeyRecord, group, allGroups, writeEnv, keyringFile, keyringDir, dryRun }) =>
           runAuthEnrollKeyCommand(groups, publicKeyRecord, {
             group,
             allGroups,
             writeEnv,
+            keyringFile,
+            keyringDir,
             dryRun,
           }),
       ),

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "@effect/vitest";
 import { DateTime, Duration, Effect } from "effect";
+import * as NodeFs from "node:fs";
+import * as NodeOs from "node:os";
+import * as NodePath from "node:path";
 import {
   CommandAuth,
   ExpiredKey,
@@ -180,6 +183,38 @@ describe("CommandAuth", () => {
       const decoded = yield* CommandAuth.decodePublicKeyRecordsJson(json);
 
       expect(decoded).toEqual([keys.publicKey]);
+    }),
+  );
+
+  it.effect("loads and merges public key records from files and directories", () =>
+    Effect.gen(function* () {
+      const dir = NodeFs.mkdtempSync(NodePath.join(NodeOs.tmpdir(), "effect-pm-keys-"));
+      const file = NodePath.join(dir, "keyring.json");
+      const keyDir = NodePath.join(dir, "keyring");
+      NodeFs.mkdirSync(keyDir);
+      const left = yield* CommandAuth.generateEd25519KeyPair({
+        name: "left",
+        expiresAt,
+        keyId: "cmd_left",
+      });
+      const right = yield* CommandAuth.generateEd25519KeyPair({
+        name: "right",
+        expiresAt,
+        keyId: "cmd_right",
+      });
+      NodeFs.writeFileSync(file, `${CommandAuth.publicKeyRecordsJson([left.publicKey])}\n`);
+      NodeFs.writeFileSync(
+        NodePath.join(keyDir, "right.json"),
+        `${CommandAuth.publicKeyRecordJson(right.publicKey)}\n`,
+      );
+
+      const loaded = yield* CommandAuth.loadPublicKeyRecords({
+        file,
+        directory: keyDir,
+      });
+
+      expect(loaded).toEqual([left.publicKey, right.publicKey]);
+      NodeFs.rmSync(dir, { recursive: true, force: true });
     }),
   );
 });
