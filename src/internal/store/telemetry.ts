@@ -4,8 +4,13 @@
  * @internal
  */
 
-import { Effect, Schema } from "effect";
-import type { ProcessStoreWriteError } from "../../ProcessStoreEvent";
+import { Clock, DateTime, Effect, Schema } from "effect";
+import type { JsonValue, ProcessStoreWriteError } from "../../ProcessStoreEvent";
+import type { RuntimeRecord } from "../../RuntimeStorage";
+import {
+  getStateFieldSelectorMetadata,
+  type StateFieldSelectorMetadata,
+} from "../../State";
 import type { ProcessStoreSpine } from "./spine";
 
 const TELEMETRY_TAG = "ProcessStore/telemetry" as const;
@@ -14,18 +19,38 @@ export const TelemetrySchemaTypeId = Symbol.for(
   "@nikscripts/effect-pm/TelemetrySchema",
 );
 
+const TELEMETRY_TERMINAL_KEY = "@nikscripts/effect-pm/TelemetryTerminal" as const;
+
 /** Scope-bound facet row schema (plan 17 §5). @internal */
 export interface TelemetrySchemaDefinition {
   readonly [TelemetrySchemaTypeId]: typeof TelemetrySchemaTypeId;
-  readonly scope: unknown;
-  readonly fields: Readonly<Record<string, unknown>>;
+  readonly scope: Effect.Effect<unknown, never, unknown>;
+  readonly fields: Schema.Struct.Fields;
 }
+
+type TelemetryTerminal = {
+  readonly [TELEMETRY_TERMINAL_KEY]: "clockMillis";
+};
+
+type TelemetryLogAnnotationValue = string | number | boolean;
+
+type TelemetryLogAnnotations =
+  Readonly<Record<string, TelemetryLogAnnotationValue>>;
+
+type TelemetryLogWarning = {
+  readonly message:
+    | string
+    | ((event: Readonly<Record<string, JsonValue>>) => string);
+  readonly annotations?:
+    | TelemetryLogAnnotations
+    | ((event: Readonly<Record<string, JsonValue>>) => TelemetryLogAnnotations);
+};
 
 /** @internal */
 export const isTelemetrySchemaDefinition = (
   value: unknown,
 ): value is TelemetrySchemaDefinition =>
-  typeof value === "object" &&
+  (typeof value === "object" || typeof value === "function") &&
   value !== null &&
   TelemetrySchemaTypeId in value &&
   (value as TelemetrySchemaDefinition)[TelemetrySchemaTypeId] ===
@@ -46,6 +71,7 @@ export type TelemetryEventDef<Name extends string = string> = {
   readonly name: Name;
   readonly store: TelemetryEventStoreLeg;
   readonly telemetrySchema?: TelemetrySchemaDefinition;
+  readonly logWarnings: ReadonlyArray<TelemetryLogWarning>;
   readonly pipes: ReadonlyArray<TelemetryEventPipeLeg>;
 };
 
@@ -143,13 +169,208 @@ const makeEventBuilder = <Name extends string>(
     ),
 });
 
+let telemetrySequence = 0;
+
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const toJsonValue = (value: unknown): JsonValue => {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(toJsonValue);
+  }
+  if (isRecord(value)) {
+    const out: Record<string, JsonValue> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      out[key] = toJsonValue(entry);
+    }
+    return out;
+  }
+  return String(value);
+};
+
+const readPath = (
+  value: unknown,
+  path: ReadonlyArray<string>,
+): unknown => {
+  let current = value;
+  for (const segment of path) {
+    if (!isRecord(current)) {
+      return undefined;
+    }
+    current = current[segment];
+  }
+  return current;
+};
+
+const getTerminal = (value: unknown): TelemetryTerminal | undefined =>
+  isRecord(value) && TELEMETRY_TERMINAL_KEY in value
+    ? (value as TelemetryTerminal)
+    : undefined;
+
+const getLiteral = (value: unknown): JsonValue | undefined => {
+  if (!isRecord(value) || !isRecord(value["ast"])) {
+    return undefined;
+  }
+  const ast = value["ast"];
+  if (ast["_tag"] !== "Literal") {
+    return undefined;
+  }
+  const literal = ast["literal"];
+  return literal === undefined ? undefined : toJsonValue(literal);
+};
+
+const materializeField = (
+  state: unknown,
+  field: unknown,
+): Effect.Effect<JsonValue> => {
+  const selector: StateFieldSelectorMetadata | undefined =
+    getStateFieldSelectorMetadata(field);
+  if (selector !== undefined) {
+    const value = readPath(state, selector.path);
+    return value === undefined
+      ? Effect.die(`Telemetry.Schema scope path missing: ${selector.path.join(".")}`)
+      : Effect.succeed(toJsonValue(value));
+  }
+  const terminal = getTerminal(field);
+  if (terminal?.[TELEMETRY_TERMINAL_KEY] === "clockMillis") {
+    return Clock.currentTimeMillis.pipe(Effect.map(toJsonValue));
+  }
+  const literal = getLiteral(field);
+  if (literal !== undefined) {
+    return Effect.succeed(literal);
+  }
+  return Effect.die("Telemetry.Schema field is missing a scope, terminal, or literal source");
+};
+
+const materializeSchema = (
+  schema: TelemetrySchemaDefinition,
+): Effect.Effect<Readonly<Record<string, JsonValue>>> =>
+  (schema.scope as Effect.Effect<unknown>).pipe(
+    Effect.flatMap((state) =>
+      Effect.forEach(
+        Object.entries(schema.fields),
+        ([key, field]) =>
+          materializeField(state, field).pipe(
+            Effect.map((value) => [key, value] as const),
+          ),
+      ),
+    ),
+    Effect.map((entries) => Object.fromEntries(entries)),
+  );
+
+const stringField = (
+  event: Readonly<Record<string, JsonValue>>,
+  key: string,
+  fallback: string,
+): string => {
+  const value = event[key];
+  return typeof value === "string" ? value : fallback;
+};
+
+const makeSchemaRecord = (
+  wireId: string,
+  event: Readonly<Record<string, JsonValue>>,
+): Omit<RuntimeRecord, "runId" | "createdAt"> => {
+  telemetrySequence += 1;
+  const occurredAt =
+    typeof event["occurredAt"] === "number"
+      ? event["occurredAt"]
+      : typeof event["completedAt"] === "number"
+        ? event["completedAt"]
+        : 0;
+  return {
+    id: `${wireId}-${String(telemetrySequence)}`,
+    type: wireId,
+    occurredAt: DateTime.makeUnsafe(occurredAt),
+    processType: stringField(event, "processType", "telemetry"),
+    processId: stringField(event, "processId", wireId),
+    payload: event,
+  };
+};
+
+const annotateWarning = (
+  effect: Effect.Effect<void>,
+  annotations: TelemetryLogAnnotations,
+): Effect.Effect<void> =>
+  Object.entries(annotations).reduce(
+    (acc, [key, value]) => acc.pipe(Effect.annotateLogs(key, value)),
+    effect,
+  );
+
+const logSchemaWarning = (
+  warning: TelemetryLogWarning,
+  event: Readonly<Record<string, JsonValue>>,
+  error: unknown,
+): Effect.Effect<void> => {
+  const message =
+    typeof warning.message === "function"
+      ? warning.message(event)
+      : warning.message;
+  const annotations =
+    typeof warning.annotations === "function"
+      ? warning.annotations(event)
+      : (warning.annotations ?? {});
+  return annotateWarning(Effect.logWarning(message), {
+    ...annotations,
+    error: String(error),
+  });
+};
+
+const applySchemaWarnings = (
+  effect: Effect.Effect<void, ProcessStoreWriteError>,
+  event: TelemetryEventDef,
+  payload: Readonly<Record<string, JsonValue>>,
+): Effect.Effect<void, ProcessStoreWriteError> => {
+  if (event.logWarnings.length === 0) {
+    return effect;
+  }
+  return effect.pipe(
+    Effect.catch((error: ProcessStoreWriteError) =>
+      Effect.forEach(event.logWarnings, (warning) =>
+        logSchemaWarning(warning, payload, error),
+      ),
+    ),
+  );
+};
+
+const schemaEventStore = (
+  s: ProcessStoreSpine,
+  namespace: string,
+  tagPath: ReadonlyArray<string>,
+  event: TelemetryEventDef,
+): TelemetryEmitEffect => {
+  if (event.telemetrySchema === undefined) {
+    return event.store(s);
+  }
+  const wireId = telemetryWireId(namespace, tagPath, event.name);
+  return materializeSchema(event.telemetrySchema).pipe(
+    Effect.flatMap((payload) =>
+      applySchemaWarnings(
+        s.create(makeSchemaRecord(wireId, payload)),
+        event,
+        payload,
+      ),
+    ),
+  );
+};
+
 const buildNestedApi = (
   s: ProcessStoreSpine,
+  namespace: string,
+  tagPath: ReadonlyArray<string>,
   events: ReadonlyArray<TelemetryEventDef>,
 ): TelemetryNestedEmitApi => {
   const out: Record<string, TelemetryEmitEffect | TelemetryNestedEmitApi> = {};
   for (const event of events) {
-    out[event.name] = event.store(s);
+    out[event.name] = schemaEventStore(s, namespace, tagPath, event);
   }
   return out as TelemetryNestedEmitApi;
 };
@@ -199,7 +420,7 @@ export const processStoreTelemetry = <const Parts extends ReadonlyArray<Telemetr
         namespace = part.namespace;
         break;
       case "tag": {
-        const api = buildNestedApi({} as ProcessStoreSpine, part.events);
+        const api = buildNestedApi({} as ProcessStoreSpine, namespace, part.path, part.events);
         const leaf: Record<string, unknown> = {};
         let node = leaf;
         for (let i = 0; i < part.path.length; i += 1) {
@@ -238,7 +459,7 @@ export const processStoreTelemetry = <const Parts extends ReadonlyArray<Telemetr
     const out: TelemetryNestedEmitApi = {};
     for (const part of parts) {
       if (part._tag !== "tag") continue;
-      const api = buildNestedApi(s, part.events);
+      const api = buildNestedApi(s, namespace, part.path, part.events);
       const leaf: Record<string, unknown> = {};
       let node = leaf;
       for (let i = 0; i < part.path.length; i += 1) {
@@ -273,6 +494,7 @@ const defineTelemetryEvent = <const Name extends string>(
       _tag: "event",
       name,
       telemetrySchema: input,
+      logWarnings: [],
       pipes: [],
       store: () =>
         Effect.die(
@@ -284,6 +506,7 @@ const defineTelemetryEvent = <const Name extends string>(
     _tag: "event",
     name,
     store: input.store,
+    logWarnings: [],
     pipes: [],
   });
 };
@@ -291,13 +514,38 @@ const defineTelemetryEvent = <const Name extends string>(
 /** Identity pipe leg until annotateLogs is implemented. @internal */
 export const telemetryAnnotateLogsPipeLeg: TelemetryEventPipeLeg = (event) => event;
 
-const telemetrySchemaClass = () => (scope: unknown) =>
-(
-  fields: Readonly<Record<string, unknown>>,
-): TelemetrySchemaDefinition => ({
-  [TelemetrySchemaTypeId]: TelemetrySchemaTypeId,
-  scope,
-  fields,
+const telemetryLogWarning =
+  (
+    message: TelemetryLogWarning["message"],
+    annotations?: TelemetryLogWarning["annotations"],
+  ): TelemetryEventPipeLeg =>
+  (event) => ({
+    ...event,
+    logWarnings: [...event.logWarnings, { message, annotations }],
+  });
+
+type TelemetrySchemaClass = TelemetrySchemaDefinition & {
+  new(_: never): object;
+};
+
+const telemetrySchema = <Self extends object>() =>
+<Scope extends Effect.Effect<unknown, never, unknown>>(scope: Scope) =>
+<const Fields extends Schema.Struct.Fields>(
+  fields: Fields,
+): TelemetrySchemaClass => {
+  const Base = Schema.Class<Self>("Telemetry.Schema")(fields) as unknown as {
+    new(_: never): Self;
+  };
+  const definition = {
+    [TelemetrySchemaTypeId]: TelemetrySchemaTypeId,
+    scope,
+    fields,
+  } satisfies TelemetrySchemaDefinition;
+  return Object.assign(Base, definition);
+};
+
+const terminalClockMillis = Object.assign(Schema.Number.annotate({}), {
+  [TELEMETRY_TERMINAL_KEY]: "clockMillis" as const,
 });
 
 export const Telemetry = {
@@ -319,13 +567,13 @@ export const Telemetry = {
     input: TelemetryEventInput,
   ): TelemetryEventBuilder<Name> =>
     defineTelemetryEvent(name, input),
-  Schema: {
+  Schema: Object.assign(telemetrySchema, {
     TypeId: TelemetrySchemaTypeId,
     is: isTelemetrySchemaDefinition,
-    Class: telemetrySchemaClass,
-  },
+  }),
   terminal: {
-    clockMillis: Schema.Number,
+    clockMillis: terminalClockMillis,
   },
+  logWarning: telemetryLogWarning,
   annotateLogs: telemetryAnnotateLogsPipeLeg,
 } as const;

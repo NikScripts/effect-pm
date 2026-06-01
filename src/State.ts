@@ -10,12 +10,28 @@ type StructFields = Schema.Struct.Fields;
 type StructFromFields<Fields extends StructFields> = Schema.Struct<Fields>;
 type ValueOf<Fields extends StructFields> = Schema.Struct.Type<Fields>;
 
+export const StateFieldSelectorTypeId = Symbol.for(
+  "@nikscripts/effect-pm/State/FieldSelector",
+);
+
+export interface StateFieldSelectorMetadata {
+  readonly path: ReadonlyArray<string>;
+}
+
+export type StateFieldSelector = Schema.Top & {
+  readonly [StateFieldSelectorTypeId]: StateFieldSelectorMetadata;
+};
+
+export type StateFieldSelectors<Fields extends StructFields> = {
+  readonly [K in keyof Fields]: StateFieldSelector;
+};
+
 type StateSchemaTree = {
   readonly fields: StructFields;
   readonly children: Readonly<Record<string, StateSchemaTree>>;
 };
 
-type SchemaSelectorTree<Fields extends StructFields> = Fields & {
+type SchemaSelectorTree<Fields extends StructFields> = StateFieldSelectors<Fields> & {
   readonly [key: string]: SchemaSelectorTree<StructFields>;
 };
 
@@ -67,7 +83,7 @@ type StateScopeClass<
   readonly Leaf: StructFromFields<LeafFields>;
   readonly State: StructFromFields<StateFields>;
   readonly Schema: {
-    readonly Leaf: LeafFields;
+    readonly Leaf: StateFieldSelectors<LeafFields>;
     readonly State: StateSelectors;
   };
   readonly layer: (leaf: ValueOf<LeafFields>) => Layer.Layer<Self, never, Requirements>;
@@ -104,6 +120,25 @@ const makeTree = (fields: StructFields): StateSchemaTree => ({
   fields,
   children: {},
 });
+
+export const getStateFieldSelectorMetadata = (
+  value: unknown,
+): StateFieldSelectorMetadata | undefined =>
+  typeof value === "object" &&
+  value !== null &&
+  StateFieldSelectorTypeId in value
+    ? (value as { readonly [StateFieldSelectorTypeId]: StateFieldSelectorMetadata })[
+        StateFieldSelectorTypeId
+      ]
+    : undefined;
+
+const makeStateFieldSelector = (
+  schema: Schema.Top,
+  path: ReadonlyArray<string>,
+): StateFieldSelector =>
+  Object.assign(schema.annotate({}), {
+    [StateFieldSelectorTypeId]: { path },
+  });
 
 const cloneTreeWithChild = (
   tree: StateSchemaTree,
@@ -142,13 +177,19 @@ const buildFields = (tree: StateSchemaTree): StructFields => {
   return fields;
 };
 
-const buildSelectors = (tree: StateSchemaTree): SchemaSelectorTree<StructFields> => {
+const buildSelectors = (
+  tree: StateSchemaTree,
+  path: ReadonlyArray<string>,
+): SchemaSelectorTree<StructFields> => {
   const out: Record<PropertyKey, unknown> = {};
   for (const key of Reflect.ownKeys(tree.fields)) {
-    out[key] = tree.fields[key];
+    out[key] = makeStateFieldSelector(
+      tree.fields[key] as Schema.Top,
+      [...path, String(key)],
+    );
   }
   for (const [key, child] of Object.entries(tree.children)) {
-    out[key] = buildSelectors(child);
+    out[key] = buildSelectors(child, [...path, key]);
   }
   return out as SchemaSelectorTree<StructFields>;
 };
@@ -200,14 +241,18 @@ const makeScopeClass = <
 > => {
   const Leaf = Schema.Struct(options.leafFields);
   const StateSchema = Schema.Struct(buildFields(options.tree)) as StructFromFields<StateFields>;
-  const StateSelectors = buildSelectors(options.tree) as StateSelectors;
+  const LeafSelectors = buildSelectors(
+    makeTree(options.leafFields),
+    options.path,
+  ) as StateFieldSelectors<LeafFields>;
+  const StateSelectors = buildSelectors(options.tree, []) as StateSelectors;
   const Base = Context.Service<Self, StateShape>()(options.id);
 
   class ScopeClass extends Base {
     static readonly Leaf = Leaf;
     static readonly State = StateSchema;
     static readonly Schema = {
-      Leaf: options.leafFields,
+      Leaf: LeafSelectors,
       State: StateSelectors,
     };
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
-import { State } from "../src/State";
+import { getStateFieldSelectorMetadata, State } from "../src/State";
 
 class QueueScope extends State.Scope<QueueScope>()({
   id: Schema.String,
@@ -47,10 +47,18 @@ describe("State.Scope", () => {
     const EntryLeaf = EntryScope.Schema.Leaf;
     const EntryState = EntryScope.Schema.State;
 
-    expect(EntryLeaf.entryId).toBe(Schema.String);
-    expect(EntryState.id).toBe(Schema.String);
-    expect(EntryState.Worker.workerId).toBe(Schema.String);
-    expect(EntryState.Worker.Entry.entryId).toBe(Schema.String);
+    expect(getStateFieldSelectorMetadata(EntryLeaf.entryId)).toEqual({
+      path: ["Worker", "Entry", "entryId"],
+    });
+    expect(getStateFieldSelectorMetadata(EntryState.id)).toEqual({
+      path: ["id"],
+    });
+    expect(getStateFieldSelectorMetadata(EntryState.Worker.workerId)).toEqual({
+      path: ["Worker", "workerId"],
+    });
+    expect(getStateFieldSelectorMetadata(EntryState.Worker.Entry.entryId)).toEqual({
+      path: ["Worker", "Entry", "entryId"],
+    });
   });
 
   it("exposes Leaf and State type helpers", () => {
