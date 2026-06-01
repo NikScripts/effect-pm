@@ -144,15 +144,17 @@ Recommended ingredients:
   the adapter supports it.
 - `useControlPlaneLogs({ for: target, lines, follow })` - React owns lifecycle,
   cancellation, and append state; components stay Promise/stream based.
+- `follow` defaults to `true`; logs are live unless the caller explicitly asks
+  for a static snapshot.
 - Filters derive from the same `for` target - group target includes group logs,
   process target filters `processId`, queue target filters `queueId`.
 
 Picture:
 
 ```tsx
-<Logs for={BillingGroup} lines={200} follow />
-<Logs for={BillingSyncProcess} lines={100} follow />
-<Logs for={EmailQueue} lines={100} follow />
+<Logs for={BillingGroup} lines={200} />
+<Logs for={BillingSyncProcess} lines={100} />
+<Logs for={EmailQueue} lines={100} />
 ```
 
 ```ts
@@ -183,9 +185,91 @@ follow matches the backend model (`LogStore` history plus relay stream) without
 making the UI polling-heavy.
 
 Acceptance check:
-The dashboard demo can render `Logs for={DemoGroup} follow`, show the initial
-tail, append new process/queue log lines, and filter when passed a process or
-queue tag.
+The dashboard demo can render `Logs for={DemoGroup}`, show the initial tail,
+append new process/queue log lines by default, and filter when passed a process
+or queue tag.
+
+Decision:
+Accepted. Logs are history-plus-live, and live follow is the default behavior.
+
+## Recipe step: safe target declarations
+
+What this decides:
+How app authors define process, queue, and group values so React can import them
+without pulling runtime layers or server-only dependencies into browser bundles.
+
+Recommended ingredients:
+
+- `*.tags.ts` exports the actual `Process.Service`, `QueueResource.Service`, and
+  `ProcessGroup.Service` declarations used by `for={...}`.
+- `*.runtime.ts` imports the tags and composes `.layer`, storage, child launcher,
+  `ControlService`, and other Node-only wiring.
+- React imports only from `*.tags.ts` and talks to the runtime through
+  `ControlPlanePort` / same-origin gateway.
+- Code review rule: any module imported by React must not import
+  `ControlService`, storage adapters, `Layer.mergeAll`, SQLite/Prisma runtime,
+  secrets, or server-only platform packages.
+
+Picture:
+
+```ts
+// billing.tags.ts - browser-safe
+export class BillingSync extends Process.Service<BillingSync>()(
+  "@app/BillingSync",
+  { effect: Effect.void },
+) {}
+
+export class EmailQueue extends QueueResource.Service<EmailQueue, Email>()(
+  "@app/EmailQueue",
+  { effect: () => Effect.void, concurrency: 1 },
+) {}
+
+export class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
+  "@app/BillingGroup",
+  [BillingSync, EmailQueue] as const,
+) {}
+```
+
+```ts
+// billing.runtime.ts - server-only
+const layer = Layer.mergeAll(
+  BillingSync.layer,
+  EmailQueue.layer,
+  ControlService.layerHttp(BillingGroup),
+);
+```
+
+```tsx
+// Ops.tsx - browser
+import { BillingGroup, BillingSync, EmailQueue } from "./billing.tags";
+
+<Controls for={BillingGroup} />
+<Logs for={BillingSync} />
+<Controls for={EmailQueue} />
+```
+
+Alternatives:
+
+1. One `billing.ts` module for tags and runtime - fewer files, but browser
+   bundlers can chase server-only imports.
+2. Plain JSON descriptors - bundle-safe, but loses the actual effect-pm
+   declarations and duplicates ids/contracts.
+3. Type-only imports in React - avoids some bundling, but components need runtime
+   `id`/`kind` values, so type-only imports are insufficient.
+
+Question:
+Should examples and docs standardize on `*.tags.ts` as the only module React may
+import for `for={...}` targets, with runtime composition isolated in
+`*.runtime.ts`?
+
+Recommended answer:
+Yes. This is already the documented split and it directly protects agents from
+importing the wrong server-only modules into browser code.
+
+Acceptance check:
+A demo/client file imports targets from `demo.tags.ts`; the runtime file imports
+those same tags and composes layers plus `ControlService`; no React-imported file
+imports runtime wiring.
 
 ## Cleanup status
 
