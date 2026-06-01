@@ -51,6 +51,9 @@ replacement.
 - Terminal gateway transport should be Effect RPC first. Effect HTTP API can be
   used for non-streaming metadata or deployment edges, but terminal sessions
   should not be hand-rolled HTTP routes.
+- V1 backend starts with Effect `ChildProcess` command streaming.
+- PTY support is a later backend behind the same `TerminalSessionService`
+  contract.
 
 ## Open recipe steps
 
@@ -601,6 +604,171 @@ Acceptance check:
 A browser widget can use a `TerminalSessionPort` backed by an Effect RPC client,
 the gateway can implement terminal handlers as an `RpcGroup` layer, terminal
 events stream through RPC, and no custom terminal HTTP route contract is invented.
+
+## Step 5: Backend implementation for v1
+
+Recipe step: `Backend implementation for v1`
+
+What this decides:
+Whether v1 should implement a real pseudo-terminal backend immediately, or start
+with Effect-native command streaming and keep PTY as a later backend plugged into
+the same session contract.
+
+Recommended ingredients:
+- Start with Effect `ChildProcess` command streaming — it exists in Effect,
+  matches repo rules, and proves lifecycle/streaming without native PTY risk.
+- Model backend as `TerminalBackend` — command streaming and future PTY are
+  implementations behind the same `TerminalSessionService`.
+- V1 targets named commands/shell commands through `TerminalCommandPolicy` —
+  configurable policy chooses what can be spawned.
+- Support `input` only when the backend has stdin — for command streaming, stdin
+  is available when the command is opened with pipe input; for one-shot commands,
+  input can fail with `TerminalInputNotSupported`.
+- `resize` is accepted but backend-dependent — command streaming can no-op or
+  emit `TerminalResizeIgnored`; PTY later handles real resize.
+- Always scope process lifetime — session close interrupts/kills the child
+  process and closes output streams.
+- Emit lifecycle events through `Stream` — `Opened`, `Output`, `Exit`, `Closed`,
+  and typed `Error` events if needed.
+
+Picture:
+
+```ts
+export interface TerminalBackend {
+  readonly open: (
+    input: ResolvedTerminalTarget,
+  ) => Effect.Effect<TerminalSessionHandle, TerminalSessionError, Scope.Scope>;
+}
+```
+
+```ts
+export interface ResolvedTerminalTarget {
+  readonly sessionId: string;
+  readonly groupId: string;
+  readonly command: ReadonlyArray<string>;
+  readonly cwd?: string;
+  readonly env?: Readonly<Record<string, string>>;
+  readonly cols?: number;
+  readonly rows?: number;
+}
+```
+
+```ts
+export const childProcessTerminalBackend = (
+  options: {
+    readonly stderr?: "merge" | "separate";
+  } = {},
+): TerminalBackend => ({
+  open: (target) =>
+    Effect.gen(function* () {
+      const [command, ...args] = target.command;
+      if (command === undefined) {
+        return yield* new TerminalCommandDenied({
+          reason: "Terminal target did not resolve to a command",
+        });
+      }
+
+      const process = yield* ChildProcess.make(command, args, {
+        cwd: target.cwd,
+        env: target.env,
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: options.stderr === "merge" ? "stdout" : "pipe",
+      });
+
+      const events = process.stdout.pipe(
+        Stream.map((chunk): TerminalEvent => ({
+          _tag: "Output",
+          sessionId: target.sessionId,
+          chunk,
+        })),
+        Stream.concat(
+          Stream.fromEffect(
+            process.exitCode.pipe(
+              Effect.map((code): TerminalEvent => ({
+                _tag: "Exit",
+                sessionId: target.sessionId,
+                code,
+              })),
+            ),
+          ),
+        ),
+      );
+
+      return {
+        sessionId: target.sessionId,
+        input: (chunk) => process.stdin.write(chunk),
+        resize: () => Effect.void,
+        events,
+        close: process.kill,
+      } satisfies TerminalSessionHandle;
+    }),
+});
+```
+
+```ts
+export const TerminalBackends = {
+  childProcess: childProcessTerminalBackend,
+  // future:
+  // pty: ptyTerminalBackend,
+};
+```
+
+```ts
+export const TerminalServiceLive = (
+  config: {
+    readonly policy: TerminalCommandPolicy;
+    readonly backend?: TerminalBackend;
+  },
+): Layer.Layer<TerminalSessionService, never, ChildProcessSpawner | Scope.Scope> =>
+  Layer.effect(
+    TerminalSessionService,
+    Effect.gen(function* () {
+      const backend = config.backend ?? TerminalBackends.childProcess();
+      return {
+        open: (input) =>
+          Effect.gen(function* () {
+            const target = yield* resolveTerminalTarget(config.policy, input);
+            return yield* backend.open(target);
+          }),
+      };
+    }),
+  );
+```
+
+Why this recommendation is good:
+- It follows the repo rule to use Effect platform/process services.
+- It proves terminal session routing, lifecycle, streaming, close, and gateway
+  behavior without blocking on PTY dependency decisions.
+- It keeps broad control possible through configurable policy.
+- It preserves the same public session contract when PTY lands later.
+
+Alternatives:
+1. PTY first — best terminal fidelity, but introduces native dependency and
+   platform concerns before session semantics are proven.
+2. Shell-only backend — simple, but less flexible for named PM CLI targets and
+   scripted commands.
+3. One-shot command execution only — easy, but not enough for dashboard terminal
+   interaction.
+4. Reuse log streaming machinery — tempting, but terminal input/resize/close
+   semantics make it a different lifecycle.
+
+Ingredients:
+- Use Effect `ChildProcess` command streaming for v1.
+- Keep `TerminalBackend` pluggable.
+- Keep PTY as a later backend.
+- Resolve commands through configurable `TerminalCommandPolicy`.
+- Support stdin when backend supports it; no-op/typed ignore for resize in
+  command streaming.
+- Scope session lifetime and cleanup.
+
+Do you agree with all?
+
+Acceptance check:
+V1 can open a configured command target, stream stdout events over Effect RPC,
+accept input when stdin is piped, close the session by interrupting the child
+process, and later swap in a PTY backend without changing `TerminalSessionPort`
+or `TerminalRpc`.
 
 ## Cleanup status
 
