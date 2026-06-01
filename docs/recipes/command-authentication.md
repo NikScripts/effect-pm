@@ -62,6 +62,13 @@ routing.
 - Cut 2 configures auth through explicit client/server config fields.
 - Cut 2 maps auth failures to `401 ControlTransportError` before routing.
 - Cut 2 tests assert router/process code does not run on auth failure.
+- Cut 3 keygen outputs private key material only to stdout or explicit local
+  paths.
+- Cut 3 keygen emits both dotenv snippets and JSON public key records.
+- Cut 3 `pm auth enroll-key` is a local helper, not a remote mutation command.
+- Cut 3 enrollment supports `--dry-run`, `--group`, `--all-groups`, and
+  `--write-env`.
+- Cut 3 includes docs, examples, and the changeset.
 
 ## Open recipe steps
 
@@ -1415,6 +1422,9 @@ Decision steps:
 5. Should Cut 3 include docs, examples, and the changeset? —
    **Recommended answer:** Yes; the feature is public and operationally sensitive.
 
+Decision:
+Yes to all five Cut 3 operator workflow steps.
+
 Ingredients:
 Yes to all five. Cut 3 should complete the operator path without creating remote
 config mutation or unsafe secret storage.
@@ -1427,4 +1437,6 @@ changeset describing the public API/behavior change.
 
 ## Cleanup status
 
-- Working recipe; remove or promote into durable docs once the design ships.
+- Implementation-ready recipe; keep as the agent memory ledger until the design
+  ships, then promote durable behavior into docs and remove this recipe in a
+  cleanup commit.
