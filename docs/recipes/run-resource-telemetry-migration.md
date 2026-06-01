@@ -33,6 +33,10 @@ scope-backed events.
 - `Telemetry.Schema(scope)(fields)` handles scope, terminal, literal, and
   simple input fields.
 - Event definitions own best-effort logging through `Telemetry.logWarning`.
+- Row `type` is generated from telemetry path: `Namespace.Tag.Event`.
+- Row `processType` / `processId` come from the resource/process tag passed to
+  `ProcessStore.telemetry(ResourceTag)`.
+- Event schemas describe event payload fields, not row identity fields.
 
 ## Open recipe steps
 
@@ -43,38 +47,44 @@ How `RunResourceStore` telemetry events should accept rich domain payloads
 without reintroducing ad hoc per-call record helpers.
 
 Recommended ingredients:
-- Add typed `Telemetry.input.payload<T>()` / `Telemetry.input.field(...)` support
-  for complex event payload fields.
+- Use resource/process tags as telemetry identity: `ProcessStore.telemetry(RunGate)(...)`.
+- Treat plain literal fields as constants appended after validation.
+- Treat regular schema fields as event input fields.
 - Keep `RunResourceStore.Run.Started`, `.Completed`, `.Failed`, and
   `RunResourceStore.State.Changed` as the public emit tree.
 - Let generated emitters be function-shaped only when an event schema includes
-  input fields.
+  regular schema fields.
 
 Picture:
 
 ```ts
 class RunStarted extends Telemetry.Schema<RunStarted>()(RunScope)({
-  processType: Schema.Literal("run-resource"),
-  processId: RunResourceState.resourceId,
   runId: RunState.runId,
   occurredAt: Telemetry.terminal.clockMillis,
-  type: Schema.Literal("run-resource.run.started"),
-  payload: Telemetry.input.field<RunResourceRunStartedPayload>("payload"),
+  kind: "run-resource.run.started",
+  payload: Schema.Struct({
+    concurrency: Schema.Number,
+  }),
 }) {}
 
 class StateChanged extends Telemetry.Schema<StateChanged>()(RunResourceScope)({
-  processType: Schema.Literal("run-resource"),
-  processId: RunResourceState.resourceId,
   changedAt: Telemetry.terminal.clockMillis,
-  change: Telemetry.input.field<RunResourceStateChange>("change"),
+  reason: Schema.Literal("run-resource.run.completed"),
+  previous: Schema.NullOr(RunResourceStateSchema),
+  current: RunResourceStateSchema,
 }) {}
 
-yield* RunScope.run(
-  { runId },
-  RunResourceStore.Run.Started({ payload: { concurrency } }),
+export class RunResourceStore extends ProcessStore.Service<RunResourceStore>()(
+  "@nikscripts/effect-pm/store/runResource/RunResourceStore",
+  ProcessStore.telemetry(MyRunResource)(
+    Telemetry.namespace("RunResource"),
+    Telemetry.tag("Run")(Telemetry.event("Started", RunStarted)),
+  ),
 )
 
-yield* RunResourceStore.State.Changed({ change })
+yield* RunScope.run({ runId }, RunResourceStore.Run.Started({
+  payload: { concurrency },
+}))
 ```
 
 Alternatives:
@@ -86,17 +96,70 @@ Alternatives:
    nested previous/current state snapshots.
 
 Question:
-Should rich domain payloads use a generic typed `Telemetry.input.field<T>(name)`
-ingredient?
+Should rich event payloads use regular schema fields, with tag-derived row
+identity from `ProcessStore.telemetry(ResourceTag)`?
 
 Recommended answer:
-Yes. It keeps event triggers simple, supports rich payloads without facet-local
-store functions, and will also help Queue events later.
+Yes. It removes repeated row identity fields, keeps event schemas focused on
+payload, and avoids a separate `Telemetry.input.field<T>()` DSL.
 
 Acceptance check:
 `RunResourceStore` can declare all run/state writes with `Telemetry.Schema`,
 `RunResource.ts` emits only `RunResourceStore.Run.*` / `State.Changed`, and the
 existing run/state projections still pass without legacy `record*` methods.
+
+## Open recipe steps
+
+### Step 2 — Tag identity source
+
+What this decides:
+Which tag shape can be passed to `ProcessStore.telemetry(...)` to derive
+`processType` / `processId`.
+
+Recommended ingredients:
+- Use tags with `kind` and `id` metadata:
+  - `Process` / `Process.Service`: `kind: "process"`, `id`.
+  - `QueueResource`: `kind: "queue"`, `id`.
+  - `RunResource`: add `kind: "run-resource"`, `id`.
+- `ProcessStore.telemetry(tag)(...)` maps `kind` → `RuntimeRecord.processType`
+  and `id` → `RuntimeRecord.processId`.
+
+Picture:
+
+```ts
+ProcessStore.telemetry(MyRunGate)(
+  Telemetry.namespace("RunResource"),
+  Telemetry.tag("Run")(
+    Telemetry.event("Started", RunStarted),
+  ),
+)
+
+// generated row identity
+{
+  type: "RunResource.Run.Started",
+  processType: "run-resource",
+  processId: MyRunGate.id,
+}
+```
+
+Alternatives:
+1. `Telemetry.facet({ processType, processId })` — explicit and flexible, but
+   repeats identity already present on resource tags.
+2. Per-event identity fields — rejected; too repetitive and poor DX.
+
+Question:
+Should `RunResource.Tag` / `RunResource.Service` grow `kind: "run-resource"` and
+`id` metadata so the tag can be passed directly to `ProcessStore.telemetry(...)`?
+
+Recommended answer:
+Yes. `QueueResource` already has `kind: "queue"` / `id`, and `Process` has
+`kind: "process"` / `id`; adding the same metadata to `RunResource` gives a
+consistent tag-driven telemetry API.
+
+Acceptance check:
+`ProcessStore.telemetry(MyRunGate)(...)` typechecks and generated rows use
+`processType: "run-resource"` plus `processId: MyRunGate.id` without event
+schemas mentioning either field.
 
 ## Cleanup status
 
