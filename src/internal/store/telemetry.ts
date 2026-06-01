@@ -151,13 +151,15 @@ export type TelemetryTagDef<
   readonly events: Events;
 };
 
-export type TelemetryNamespaceDef = {
+export type TelemetryNamespaceDef<
+  Namespace extends string = string,
+> = {
   readonly _tag: "namespace";
-  readonly namespace: string;
+  readonly namespace: Namespace;
 };
 
 export type TelemetryPart =
-  | TelemetryNamespaceDef
+  | TelemetryNamespaceDef<string>
   | TelemetryTagDef<ReadonlyArray<string>, ReadonlyArray<unknown>>;
 
 export type TelemetryNestedEmitApi = Record<string, unknown>;
@@ -234,6 +236,77 @@ export type TelemetryPath<
   Tag extends string,
   Event extends string,
 > = `${Namespace}.${Tag}.${Event}`;
+
+export type TelemetryWireMeta<
+  Namespace extends string = string,
+  TagPath extends ReadonlyArray<string> = ReadonlyArray<string>,
+  Event extends string = string,
+  Wire extends string = string,
+> = {
+  readonly namespace: Namespace;
+  readonly tagPath: TagPath;
+  readonly event: Event;
+  readonly wire: Wire;
+};
+
+type JoinDot<Path extends ReadonlyArray<string>> =
+  Path extends readonly [
+    infer Head extends string,
+    ...infer Tail extends ReadonlyArray<string>,
+  ]
+    ? Tail extends readonly []
+      ? Head
+      : `${Head}.${JoinDot<Tail>}`
+    : "";
+
+type TelemetryWire<
+  Namespace extends string,
+  TagPath extends ReadonlyArray<string>,
+  Event extends string,
+> = JoinDot<TagPath> extends ""
+  ? `${Namespace}.${Event}`
+  : `${Namespace}.${JoinDot<TagPath>}.${Event}`;
+
+type TelemetryMetaFromTag<
+  Namespace extends string,
+  Tag,
+> = Tag extends TelemetryTagDef<infer Path, infer Events>
+  ? Events[number] extends infer Event
+    ? Event extends TelemetryEventDef<infer Name, unknown>
+      ? TelemetryWireMeta<Namespace, Path, Name, TelemetryWire<Namespace, Path, Name>>
+      : never
+    : never
+  : never;
+
+export type TelemetryMetaFromParts<
+  Parts extends ReadonlyArray<unknown>,
+  Namespace extends string = "",
+> = Parts extends readonly [
+  infer Head,
+  ...infer Tail extends ReadonlyArray<unknown>,
+]
+  ? Head extends TelemetryNamespaceDef<infer NextNamespace>
+    ? TelemetryMetaFromParts<Tail, NextNamespace>
+    : Head extends TelemetryTagDef<ReadonlyArray<string>, ReadonlyArray<unknown>>
+      ? TelemetryMetaFromTag<Namespace, Head> | TelemetryMetaFromParts<Tail, Namespace>
+      : TelemetryMetaFromParts<Tail, Namespace>
+  : never;
+
+export type TelemetryWireOf<Definition> =
+  Definition extends ProcessStoreTelemetrySection<object, infer Meta>
+    ? Meta["wire"]
+    : never;
+
+export type TelemetryEventWireOf<
+  Definition,
+  Tag extends string,
+> = Definition extends ProcessStoreTelemetrySection<object, infer Meta>
+  ? Meta extends TelemetryWireMeta<string, infer TagPath, string, infer Wire>
+    ? JoinDot<TagPath> extends Tag
+      ? Wire
+      : never
+    : never
+  : never;
 
 const makeEventBuilder = <Name extends string, EmitApi>(
   event: TelemetryEventDef<Name, EmitApi>,
@@ -544,18 +617,22 @@ const mergeNestedApis = (
 };
 
 /** @internal */
-export interface ProcessStoreTelemetrySection<EmitApi extends object> {
+export interface ProcessStoreTelemetrySection<
+  EmitApi extends object,
+  Meta extends TelemetryWireMeta = TelemetryWireMeta,
+> {
   readonly _tag: typeof TELEMETRY_TAG;
   readonly fn: (s: ProcessStoreSpine) => EmitApi;
   readonly emitTree: TelemetryNestedEmitApi;
   readonly emitPaths: ReadonlyArray<TelemetryEmitPath>;
   readonly wireIds: ReadonlyArray<string>;
+  readonly metadata: ReadonlyArray<Meta>;
 }
 
 const makeProcessStoreTelemetry = <const Parts extends ReadonlyArray<TelemetryPart>>(
   identity: TelemetryIdentity | undefined,
   ...parts: Parts
-): ProcessStoreTelemetrySection<TelemetryEmitApiFromParts<Parts>> => {
+): ProcessStoreTelemetrySection<TelemetryEmitApiFromParts<Parts>, TelemetryMetaFromParts<Parts>> => {
   let namespace = "";
   const emitTree: TelemetryNestedEmitApi = {};
 
@@ -585,13 +662,21 @@ const makeProcessStoreTelemetry = <const Parts extends ReadonlyArray<TelemetryPa
   }
 
   const wireIds: string[] = [];
+  const metadata: TelemetryWireMeta[] = [];
   const emitPaths: TelemetryEmitPath[] = [];
   const collectWire = (
     tagPath: ReadonlyArray<string>,
     events: ReadonlyArray<unknown>,
   ): void => {
     for (const event of events as ReadonlyArray<TelemetryEventDef>) {
-      wireIds.push(telemetryWireId(namespace, tagPath, event.name));
+      const wire = telemetryWireId(namespace, tagPath, event.name);
+      wireIds.push(wire);
+      metadata.push({
+        namespace,
+        tagPath,
+        event: event.name,
+        wire,
+      });
       emitPaths.push({
         path: [...tagPath, event.name],
         input:
@@ -635,18 +720,19 @@ const makeProcessStoreTelemetry = <const Parts extends ReadonlyArray<TelemetryPa
     emitTree,
     emitPaths,
     wireIds,
+    metadata,
   };
 };
 
 /** @internal */
 export function processStoreTelemetry<const Parts extends ReadonlyArray<TelemetryPart>>(
   ...parts: Parts
-): ProcessStoreTelemetrySection<TelemetryEmitApiFromParts<Parts>>;
+): ProcessStoreTelemetrySection<TelemetryEmitApiFromParts<Parts>, TelemetryMetaFromParts<Parts>>;
 export function processStoreTelemetry(identity: unknown): <
   const Parts extends ReadonlyArray<TelemetryPart>,
 >(
   ...parts: Parts
-) => ProcessStoreTelemetrySection<TelemetryEmitApiFromParts<Parts>>;
+) => ProcessStoreTelemetrySection<TelemetryEmitApiFromParts<Parts>, TelemetryMetaFromParts<Parts>>;
 export function processStoreTelemetry(
   firstOrPart?: unknown,
   ...rest: ReadonlyArray<TelemetryPart>
@@ -781,8 +867,29 @@ const inputErrorString = Object.assign(Schema.String.annotate({}), {
   [TELEMETRY_INPUT_KEY]: "errorString" as const,
 });
 
+function telemetryEvents<const Section extends ProcessStoreTelemetrySection<object>>(
+  section: Section,
+): ReadonlyArray<TelemetryWireOf<Section>>;
+function telemetryEvents<
+  const Section extends ProcessStoreTelemetrySection<object>,
+  const Tag extends string,
+>(
+  section: Section,
+  tag: Tag,
+): ReadonlyArray<TelemetryEventWireOf<Section, Tag>>;
+function telemetryEvents(
+  section: ProcessStoreTelemetrySection<object>,
+  tag?: string,
+): ReadonlyArray<string> {
+  return section.metadata
+    .filter((meta) => tag === undefined || meta.tagPath.join(".") === tag)
+    .map((meta) => meta.wire);
+}
+
 export const Telemetry = {
-  namespace: (namespace: string): TelemetryNamespaceDef => ({
+  namespace: <const Namespace extends string>(
+    namespace: Namespace,
+  ): TelemetryNamespaceDef<Namespace> => ({
     _tag: "namespace",
     namespace,
   }),
@@ -807,6 +914,7 @@ export const Telemetry = {
   input: {
     errorString: inputErrorString,
   },
+  events: telemetryEvents,
   logWarning: telemetryLogWarning,
   annotateLogs: telemetryAnnotateLogsPipeLeg,
 } as const;

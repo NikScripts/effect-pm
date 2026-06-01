@@ -10,6 +10,16 @@ import { State } from "../src/State";
 import { runtimeRecordQuery } from "../src/internal/store/helpers";
 import { Type } from "../src/Query";
 
+type Assert<T extends true> = T;
+
+type IsEqual<Left, Right> =
+  (<T>() => T extends Left ? 1 : 2) extends
+    (<T>() => T extends Right ? 1 : 2)
+    ? true
+    : false;
+
+const assertType = <T extends true>(_value?: T): void => undefined;
+
 const TelemetryTestScope = State.Scope("Process", {
   processId: Schema.String,
   subjectId: Schema.String,
@@ -39,24 +49,26 @@ class TelemetryFailed extends Telemetry.Schema<TelemetryFailed>()(
   error: Telemetry.input.errorString,
 }) {}
 
+const TelemetrySchemaTelemetry = ProcessStore.telemetry(
+  TelemetryTestScope,
+)(
+  Telemetry.namespace("Test"),
+  Telemetry.tag("Event")(
+    Telemetry.event("Recorded", TelemetryRecorded).pipe(
+      Telemetry.logWarning(
+        ({ subjectId }) => `schema write failed for ${String(subjectId)}`,
+        ({ subjectId }) => ({
+          subjectId: String(subjectId),
+        }),
+      ),
+    ),
+    Telemetry.event("Failed", TelemetryFailed),
+  ),
+);
+
 class TelemetrySchemaStore extends ProcessStore.Service<TelemetrySchemaStore>()(
   "@test/TelemetrySchemaStore",
-  ProcessStore.telemetry(
-    TelemetryTestScope,
-  )(
-    Telemetry.namespace("Test"),
-    Telemetry.tag("Event")(
-      Telemetry.event("Recorded", TelemetryRecorded).pipe(
-        Telemetry.logWarning(
-          ({ subjectId }) => `schema write failed for ${String(subjectId)}`,
-          ({ subjectId }) => ({
-            subjectId: String(subjectId),
-          }),
-        ),
-      ),
-      Telemetry.event("Failed", TelemetryFailed),
-    ),
-  ),
+  TelemetrySchemaTelemetry,
   ProcessStore.query((s) => ({
     records: () =>
       s.read(runtimeRecordQuery([Type.equals("Test.Event.Recorded")], undefined)),
@@ -64,6 +76,46 @@ class TelemetrySchemaStore extends ProcessStore.Service<TelemetrySchemaStore>()(
       s.read(runtimeRecordQuery([Type.equals("Test.Event.Failed")], undefined)),
   })),
 ) {}
+
+assertType<
+  Assert<
+    IsEqual<
+      Telemetry.Type.Wire<typeof TelemetrySchemaTelemetry>,
+      "Test.Event.Recorded" | "Test.Event.Failed"
+    >
+  >
+>();
+assertType<
+  Assert<
+    IsEqual<
+      Telemetry.Type.Event<typeof TelemetrySchemaTelemetry, "Event">,
+      "Test.Event.Recorded" | "Test.Event.Failed"
+    >
+  >
+>();
+assertType<
+  Assert<
+    IsEqual<Telemetry.Type.Event<typeof TelemetrySchemaTelemetry, "Missing">, never>
+  >
+>();
+assertType<
+  Assert<
+    typeof TelemetrySchemaStore.Event.Recorded extends (
+      input: unknown,
+    ) => Effect.Effect<void, unknown, unknown>
+      ? true
+      : false
+  >
+>();
+assertType<
+  Assert<
+    typeof TelemetrySchemaStore.Event.Failed extends (
+      input: unknown,
+    ) => Effect.Effect<void, unknown, unknown>
+      ? true
+      : false
+  >
+>();
 
 const failingRuntimeStorage: RuntimeStorageService = {
   create: () =>
@@ -92,6 +144,18 @@ const failingRuntimeStorage: RuntimeStorageService = {
 };
 
 describe("ProcessStore telemetry schema", () => {
+  it("exposes literal PascalCase telemetry wire metadata", () => {
+    expect(Telemetry.events(TelemetrySchemaTelemetry)).toEqual([
+      "Test.Event.Recorded",
+      "Test.Event.Failed",
+    ]);
+    expect(Telemetry.events(TelemetrySchemaTelemetry, "Event")).toEqual([
+      "Test.Event.Recorded",
+      "Test.Event.Failed",
+    ]);
+    expect(Telemetry.events(TelemetrySchemaTelemetry, "Missing")).toEqual([]);
+  });
+
   it.live("materializes scope, terminal, and literal fields into a runtime row", () =>
     Effect.gen(function* () {
       yield* TelemetrySchemaStore.Event.Recorded({

@@ -98,6 +98,7 @@ type ProcessStoreFacetAnySection =
       readonly emitTree: TelemetryNestedEmitApi;
       readonly emitPaths: ReadonlyArray<TelemetryEmitPath>;
       readonly wireIds: ReadonlyArray<string>;
+      readonly metadata: ProcessStoreTelemetrySection<TelemetryNestedEmitApi>["metadata"];
     }
   | {
       readonly _tag: typeof QUERY_TAG;

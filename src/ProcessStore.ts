@@ -70,6 +70,10 @@ import {
   type ProcessStoreFacetShape,
 } from "./internal/store/service";
 import { Telemetry as TelemetryBuilders } from "./internal/store/telemetry";
+import type {
+  TelemetryEventWireOf,
+  TelemetryWireOf,
+} from "./internal/store/telemetry";
 
 /**
  * Telemetry event DSL — `namespace`, `tag`, `event`, `Schema`, `terminal`, pipes.
@@ -132,4 +136,16 @@ export declare namespace ProcessStore {
     export type Identifier<T> = ProcessStoreFacetIdentifierShape<T>;
   }
   export type CatchErrorAndLogOptions = ProcessStoreCatchErrorAndLogOptions;
+}
+
+/**
+ * Type helpers for telemetry definitions.
+ *
+ * @public
+ */
+export declare namespace Telemetry {
+  export namespace Type {
+    export type Wire<T> = TelemetryWireOf<T>;
+    export type Event<T, Tag extends string> = TelemetryEventWireOf<T, Tag>;
+  }
 }
