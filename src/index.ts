@@ -340,7 +340,6 @@ export type {
 } from "./store/processExecution";
 export type {
   ProcessLifecycleChangedEvent,
-  ProcessLifecycleRecordInput,
   ProcessLifecycleTag,
 } from "./store/processLifecycle";
 export type {

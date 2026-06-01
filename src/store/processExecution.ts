@@ -72,9 +72,7 @@ export type ProcessExecutionStatus = "completed" | "failed" | "interrupted";
  * @public
  */
 export type ProcessExecutionWireType =
-  | "Process.Execution.Completed"
-  | "Process.Execution.Failed"
-  | "Process.Execution.Interrupted";
+  Telemetry.Type.Event<typeof ProcessExecutionTelemetry, "Execution">;
 
 export interface ProcessExecutionCompletedEvent extends AnalyticsEventBase {
   type: ProcessExecutionWireType;
@@ -119,22 +117,6 @@ export interface ProcessExecutionScopedQuery {
 // ============================================================================
 
 const PROCESS_TYPE = "process";
-
-const EXECUTION_WIRE: {
-  readonly Completed: ProcessExecutionWireType;
-  readonly Failed: ProcessExecutionWireType;
-  readonly Interrupted: ProcessExecutionWireType;
-} = {
-  Completed: "Process.Execution.Completed",
-  Failed: "Process.Execution.Failed",
-  Interrupted: "Process.Execution.Interrupted",
-};
-
-const executionWireTypes: ReadonlyArray<ProcessExecutionWireType> = [
-  EXECUTION_WIRE.Completed,
-  EXECUTION_WIRE.Failed,
-  EXECUTION_WIRE.Interrupted,
-];
 
 const executionStatuses: ReadonlyArray<ProcessExecutionStatus> = [
   "completed",
@@ -254,6 +236,35 @@ class ProcessExecutionInterrupted extends Telemetry.Schema<ProcessExecutionInter
   status: "interrupted",
 }) {}
 
+const ProcessExecutionTelemetry = ProcessStore.telemetry(
+  Telemetry.namespace("Process"),
+  Telemetry.tag("Execution")(
+    Telemetry.event("Completed", ProcessExecutionCompleted).pipe(
+      Telemetry.logWarning(
+        "ProcessExecutionStore write failed for completed run",
+        ({ processId }) => ({ processId: String(processId) }),
+      ),
+    ),
+    Telemetry.event("Failed", ProcessExecutionFailed).pipe(
+      Telemetry.logWarning(
+        ({ processId }) => `ProcessExecutionStore write failed for failed run "${String(processId)}"`,
+        ({ processId }) => ({ processId: String(processId) }),
+      ),
+    ),
+    Telemetry.event("Interrupted", ProcessExecutionInterrupted).pipe(
+      Telemetry.logWarning(
+        "ProcessExecutionStore write failed for interrupted run",
+        ({ processId }) => ({ processId: String(processId) }),
+      ),
+    ),
+  ),
+);
+
+const executionWireTypes = Telemetry.events(
+  ProcessExecutionTelemetry,
+  "Execution",
+);
+
 // ============================================================================
 // Facet
 // ============================================================================
@@ -265,29 +276,7 @@ class ProcessExecutionInterrupted extends Telemetry.Schema<ProcessExecutionInter
  */
 export const ProcessExecutionStore = ProcessStore.Service(
   "@nikscripts/effect-pm/store/processExecution/ProcessExecutionStore",
-  ProcessStore.telemetry(
-    Telemetry.namespace("Process"),
-    Telemetry.tag("Execution")(
-      Telemetry.event("Completed", ProcessExecutionCompleted).pipe(
-        Telemetry.logWarning(
-          "ProcessExecutionStore write failed for completed run",
-          ({ processId }) => ({ processId: String(processId) }),
-        ),
-      ),
-      Telemetry.event("Failed", ProcessExecutionFailed).pipe(
-        Telemetry.logWarning(
-          ({ processId }) => `ProcessExecutionStore write failed for failed run "${String(processId)}"`,
-          ({ processId }) => ({ processId: String(processId) }),
-        ),
-      ),
-      Telemetry.event("Interrupted", ProcessExecutionInterrupted).pipe(
-        Telemetry.logWarning(
-          "ProcessExecutionStore write failed for interrupted run",
-          ({ processId }) => ({ processId: String(processId) }),
-        ),
-      ),
-    ),
-  ),
+  ProcessExecutionTelemetry,
   ProcessStore.query((s) => ({
     executions: (query: ProcessExecutionQuery) =>
       readExecutions(s, query),

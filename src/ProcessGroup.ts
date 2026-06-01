@@ -711,7 +711,7 @@ export interface ProcessGroup<R, Error = ProcessGroupErrors> {
  * Typed controls for one process entry in a typed ProcessGroup.
  *
  * @remarks
- * Lifecycle controls on this handle emit the same optional `process.lifecycle.changed`
+ * Lifecycle controls on this handle emit the same optional `Process.Lifecycle.*`
  * rows as the untyped {@link ProcessGroup} methods.
  *
  * @public

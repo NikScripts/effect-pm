@@ -46,7 +46,6 @@ import { Type } from "../Query";
 import type { RuntimeRecord } from "../RuntimeStorage";
 import { ProcessGroupMemberScope, ProcessGroupScope } from "../ProcessGroupScope";
 import {
-  processLifecycleWireTypes,
   recordToLifecycleEvent,
   type ProcessLifecycleChangedEvent,
 } from "./processLifecycle";
@@ -130,6 +129,88 @@ class ProcessGroupMemberEnabled extends Telemetry.Schema<ProcessGroupMemberEnabl
   tag: "Enabled",
 }) {}
 
+const ProcessGroupTelemetry = ProcessStore.telemetry(
+  Telemetry.namespace("Process"),
+  Telemetry.tag("Lifecycle")(
+    Telemetry.event("Started", ProcessGroupMemberStarted).pipe(
+      Telemetry.logWarning(
+        "ProcessGroupStore write failed for Started transition",
+        ({ groupId, processId }) => ({
+          groupId: String(groupId),
+          processId: String(processId),
+          tag: "Started",
+        }),
+      ),
+    ),
+    Telemetry.event("Stopped", ProcessGroupMemberStopped).pipe(
+      Telemetry.logWarning(
+        "ProcessGroupStore write failed for Stopped transition",
+        ({ groupId, processId }) => ({
+          groupId: String(groupId),
+          processId: String(processId),
+          tag: "Stopped",
+        }),
+      ),
+    ),
+    Telemetry.event("Restarted", ProcessGroupMemberRestarted).pipe(
+      Telemetry.logWarning(
+        "ProcessGroupStore write failed for Restarted transition",
+        ({ groupId, processId }) => ({
+          groupId: String(groupId),
+          processId: String(processId),
+          tag: "Restarted",
+        }),
+      ),
+    ),
+    Telemetry.event("Errored", ProcessGroupMemberErrored).pipe(
+      Telemetry.logWarning(
+        ({ groupId, processId }) =>
+          `ProcessGroupStore write failed for Errored transition "${String(groupId)}/${String(processId)}"`,
+        ({ groupId, processId }) => ({
+          groupId: String(groupId),
+          processId: String(processId),
+          tag: "Errored",
+        }),
+      ),
+    ),
+    Telemetry.event("Recovered", ProcessGroupMemberRecovered).pipe(
+      Telemetry.logWarning(
+        "ProcessGroupStore write failed for Recovered transition",
+        ({ groupId, processId }) => ({
+          groupId: String(groupId),
+          processId: String(processId),
+          tag: "Recovered",
+        }),
+      ),
+    ),
+    Telemetry.event("Disabled", ProcessGroupMemberDisabled).pipe(
+      Telemetry.logWarning(
+        "ProcessGroupStore write failed for Disabled transition",
+        ({ groupId, processId }) => ({
+          groupId: String(groupId),
+          processId: String(processId),
+          tag: "Disabled",
+        }),
+      ),
+    ),
+    Telemetry.event("Enabled", ProcessGroupMemberEnabled).pipe(
+      Telemetry.logWarning(
+        "ProcessGroupStore write failed for Enabled transition",
+        ({ groupId, processId }) => ({
+          groupId: String(groupId),
+          processId: String(processId),
+          tag: "Enabled",
+        }),
+      ),
+    ),
+  ),
+);
+
+const processGroupLifecycleWireTypes = Telemetry.events(
+  ProcessGroupTelemetry,
+  "Lifecycle",
+);
+
 /**
  * `ProcessGroup` storage facet (see module doc).
  *
@@ -137,87 +218,12 @@ class ProcessGroupMemberEnabled extends Telemetry.Schema<ProcessGroupMemberEnabl
  */
 export const ProcessGroupStore = ProcessStore.Service(
   "@nikscripts/effect-pm/store/processGroup/ProcessGroupStore",
-  ProcessStore.telemetry(
-    Telemetry.namespace("Process"),
-    Telemetry.tag("Lifecycle")(
-      Telemetry.event("Started", ProcessGroupMemberStarted).pipe(
-        Telemetry.logWarning(
-          "ProcessGroupStore write failed for Started transition",
-          ({ groupId, processId }) => ({
-            groupId: String(groupId),
-            processId: String(processId),
-            tag: "Started",
-          }),
-        ),
-      ),
-      Telemetry.event("Stopped", ProcessGroupMemberStopped).pipe(
-        Telemetry.logWarning(
-          "ProcessGroupStore write failed for Stopped transition",
-          ({ groupId, processId }) => ({
-            groupId: String(groupId),
-            processId: String(processId),
-            tag: "Stopped",
-          }),
-        ),
-      ),
-      Telemetry.event("Restarted", ProcessGroupMemberRestarted).pipe(
-        Telemetry.logWarning(
-          "ProcessGroupStore write failed for Restarted transition",
-          ({ groupId, processId }) => ({
-            groupId: String(groupId),
-            processId: String(processId),
-            tag: "Restarted",
-          }),
-        ),
-      ),
-      Telemetry.event("Errored", ProcessGroupMemberErrored).pipe(
-        Telemetry.logWarning(
-          ({ groupId, processId }) =>
-            `ProcessGroupStore write failed for Errored transition "${String(groupId)}/${String(processId)}"`,
-          ({ groupId, processId }) => ({
-            groupId: String(groupId),
-            processId: String(processId),
-            tag: "Errored",
-          }),
-        ),
-      ),
-      Telemetry.event("Recovered", ProcessGroupMemberRecovered).pipe(
-        Telemetry.logWarning(
-          "ProcessGroupStore write failed for Recovered transition",
-          ({ groupId, processId }) => ({
-            groupId: String(groupId),
-            processId: String(processId),
-            tag: "Recovered",
-          }),
-        ),
-      ),
-      Telemetry.event("Disabled", ProcessGroupMemberDisabled).pipe(
-        Telemetry.logWarning(
-          "ProcessGroupStore write failed for Disabled transition",
-          ({ groupId, processId }) => ({
-            groupId: String(groupId),
-            processId: String(processId),
-            tag: "Disabled",
-          }),
-        ),
-      ),
-      Telemetry.event("Enabled", ProcessGroupMemberEnabled).pipe(
-        Telemetry.logWarning(
-          "ProcessGroupStore write failed for Enabled transition",
-          ({ groupId, processId }) => ({
-            groupId: String(groupId),
-            processId: String(processId),
-            tag: "Enabled",
-          }),
-        ),
-      ),
-    ),
-  ),
+  ProcessGroupTelemetry,
   ProcessStore.query((s) => ({
     lifecycleByGroup: (groupId: string, opts?: QueryOpts) =>
       s
         .read(
-          runtimeRecordQuery([Type.in(processLifecycleWireTypes)], windowOpts(opts)),
+          runtimeRecordQuery([Type.in(processGroupLifecycleWireTypes)], windowOpts(opts)),
         )
         .pipe(
           Effect.map((records) =>
@@ -229,7 +235,7 @@ export const ProcessGroupStore = ProcessStore.Service(
     lifecycle: (opts?: QueryOpts) =>
       s
         .read(
-          runtimeRecordQuery([Type.in(processLifecycleWireTypes)], windowOpts(opts)),
+          runtimeRecordQuery([Type.in(processGroupLifecycleWireTypes)], windowOpts(opts)),
         )
         .pipe(
           Effect.map((records) =>

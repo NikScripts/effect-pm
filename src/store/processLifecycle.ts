@@ -22,8 +22,7 @@
  *
  * Each transition writes one {@link RuntimeRecord} with:
  *
- * - `type` = one of `Process.Lifecycle.*` (legacy group rows may still use
- *   `process.lifecycle.changed` until `ProcessGroupStore` migrates)
+ * - `type` = one of `Process.Lifecycle.*`
  * - `processType` = `process`
  * - `processId` = the transitioning process id
  * - `payload` = `{ processType, processId, occurredAt, tag, error? }`
@@ -45,7 +44,6 @@ import { ProcessStore, Telemetry } from "../ProcessStore";
 import { ProcessLifecycleScope } from "../ProcessLifecycleScope";
 import type {
   AnalyticsEventBase,
-  JsonValue,
   QueryOpts,
 } from "../ProcessStoreEvent";
 import { ProcessId, Type } from "../Query";
@@ -79,48 +77,10 @@ export interface ProcessLifecycleChangedEvent extends AnalyticsEventBase {
   };
 }
 
-/**
- * Legacy write input retained for `ProcessGroupStore` until the group facet
- * migrates to schema-backed telemetry.
- *
- * @public
- */
-export interface ProcessLifecycleRecordInput {
-  readonly processId: string;
-  readonly tag: ProcessLifecycleTag;
-  readonly error?: string;
-  /** Epoch millis; defaults to {@link Clock.currentTimeMillis}. */
-  readonly occurredAt?: number;
-  readonly attributes?: { readonly [key: string]: JsonValue };
-}
-
 const PROCESS_TYPE = "process";
-const LIFECYCLE_TYPE = "process.lifecycle.changed";
-const LIFECYCLE_WIRE: {
-  readonly Changed: "process.lifecycle.changed";
-  readonly Started: "Process.Lifecycle.Started";
-  readonly Stopped: "Process.Lifecycle.Stopped";
-  readonly Restarted: "Process.Lifecycle.Restarted";
-  readonly Errored: "Process.Lifecycle.Errored";
-  readonly Recovered: "Process.Lifecycle.Recovered";
-  readonly Disabled: "Process.Lifecycle.Disabled";
-  readonly Enabled: "Process.Lifecycle.Enabled";
-} = {
-  Changed: LIFECYCLE_TYPE,
-  Started: "Process.Lifecycle.Started",
-  Stopped: "Process.Lifecycle.Stopped",
-  Restarted: "Process.Lifecycle.Restarted",
-  Errored: "Process.Lifecycle.Errored",
-  Recovered: "Process.Lifecycle.Recovered",
-  Disabled: "Process.Lifecycle.Disabled",
-  Enabled: "Process.Lifecycle.Enabled",
-};
 
 export type ProcessLifecycleWireType =
-  typeof LIFECYCLE_WIRE[keyof typeof LIFECYCLE_WIRE];
-
-export const processLifecycleWireTypes: ReadonlyArray<ProcessLifecycleWireType> =
-  Object.values(LIFECYCLE_WIRE);
+  Telemetry.Type.Event<typeof ProcessLifecycleTelemetry, "Lifecycle">;
 
 const lifecycleTags: ReadonlyArray<ProcessLifecycleTag> = [
   "Started",
@@ -138,50 +98,10 @@ const isLifecycleTag = (value: unknown): value is ProcessLifecycleTag =>
 const isLifecycleWireType = (value: string): value is ProcessLifecycleWireType =>
   processLifecycleWireTypes.some((wire) => wire === value);
 
-const lifecycleAttributesBlob = (
-  input: ProcessLifecycleRecordInput & { readonly groupId?: string },
-): { readonly [key: string]: JsonValue } | undefined => {
-  const out: { [key: string]: JsonValue } = {};
-  if (input.groupId !== undefined) out["groupId"] = input.groupId;
-  if (input.attributes !== undefined) {
-    for (const [key, value] of Object.entries(input.attributes)) {
-      out[key] = value;
-    }
-  }
-  return Object.keys(out).length === 0 ? undefined : out;
-};
-
-let processLifecycleSeq = 0;
-
 /**
- * Build a `process.lifecycle.changed` runtime record.
+ * Decode a lifecycle runtime record back into a typed event.
  *
- * @internal Shared with {@link ProcessGroupStore} member writes.
- */
-export const makeProcessLifecycleRecord = (
-  input: ProcessLifecycleRecordInput & { readonly groupId?: string },
-  occurredAtMs: number,
-): Omit<RuntimeRecord, "runId" | "createdAt"> => {
-  processLifecycleSeq += 1;
-  const attributes = lifecycleAttributesBlob(input);
-  return {
-    id: `${input.processId}-lifecycle-${input.tag.toLowerCase()}-${String(processLifecycleSeq)}`,
-    type: LIFECYCLE_TYPE,
-    occurredAt: DateTime.makeUnsafe(occurredAtMs),
-    processType: PROCESS_TYPE,
-    processId: input.processId,
-    payload: {
-      tag: input.tag,
-      ...(input.error !== undefined ? { error: input.error } : {}),
-    },
-    ...(attributes !== undefined ? { attributes } : {}),
-  };
-};
-
-/**
- * Decode a `process.lifecycle.changed` runtime record back into a typed event.
- *
- * @internal Shared with {@link ProcessGroupStore} member reads.
+ * @internal Shared with {@link ProcessGroupStore} group-scoped reads.
  */
 export const recordToLifecycleEvent = (
   record: RuntimeRecord,
@@ -266,6 +186,59 @@ class ProcessLifecycleEnabled extends Telemetry.Schema<ProcessLifecycleEnabled>(
   tag: "Enabled",
 }) {}
 
+const ProcessLifecycleTelemetry = ProcessStore.telemetry(
+  Telemetry.namespace("Process"),
+  Telemetry.tag("Lifecycle")(
+    Telemetry.event("Started", ProcessLifecycleStarted).pipe(
+      Telemetry.logWarning(
+        "ProcessLifecycleStore write failed for Started transition",
+        ({ processId }) => ({ processId: String(processId), tag: "Started" }),
+      ),
+    ),
+    Telemetry.event("Stopped", ProcessLifecycleStopped).pipe(
+      Telemetry.logWarning(
+        "ProcessLifecycleStore write failed for Stopped transition",
+        ({ processId }) => ({ processId: String(processId), tag: "Stopped" }),
+      ),
+    ),
+    Telemetry.event("Restarted", ProcessLifecycleRestarted).pipe(
+      Telemetry.logWarning(
+        "ProcessLifecycleStore write failed for Restarted transition",
+        ({ processId }) => ({ processId: String(processId), tag: "Restarted" }),
+      ),
+    ),
+    Telemetry.event("Errored", ProcessLifecycleErrored).pipe(
+      Telemetry.logWarning(
+        ({ processId }) => `ProcessLifecycleStore write failed for Errored transition "${String(processId)}"`,
+        ({ processId }) => ({ processId: String(processId), tag: "Errored" }),
+      ),
+    ),
+    Telemetry.event("Recovered", ProcessLifecycleRecovered).pipe(
+      Telemetry.logWarning(
+        "ProcessLifecycleStore write failed for Recovered transition",
+        ({ processId }) => ({ processId: String(processId), tag: "Recovered" }),
+      ),
+    ),
+    Telemetry.event("Disabled", ProcessLifecycleDisabled).pipe(
+      Telemetry.logWarning(
+        "ProcessLifecycleStore write failed for Disabled transition",
+        ({ processId }) => ({ processId: String(processId), tag: "Disabled" }),
+      ),
+    ),
+    Telemetry.event("Enabled", ProcessLifecycleEnabled).pipe(
+      Telemetry.logWarning(
+        "ProcessLifecycleStore write failed for Enabled transition",
+        ({ processId }) => ({ processId: String(processId), tag: "Enabled" }),
+      ),
+    ),
+  ),
+);
+
+export const processLifecycleWireTypes = Telemetry.events(
+  ProcessLifecycleTelemetry,
+  "Lifecycle",
+);
+
 const decodeLifecycleEvents = (
   records: ReadonlyArray<RuntimeRecord>,
 ): ProcessLifecycleChangedEvent[] => {
@@ -284,53 +257,7 @@ const decodeLifecycleEvents = (
  */
 export const ProcessLifecycleStore = ProcessStore.Service(
   "@nikscripts/effect-pm/store/processLifecycle/ProcessLifecycleStore",
-  ProcessStore.telemetry(
-    Telemetry.namespace("Process"),
-    Telemetry.tag("Lifecycle")(
-      Telemetry.event("Started", ProcessLifecycleStarted).pipe(
-        Telemetry.logWarning(
-          "ProcessLifecycleStore write failed for Started transition",
-          ({ processId }) => ({ processId: String(processId), tag: "Started" }),
-        ),
-      ),
-      Telemetry.event("Stopped", ProcessLifecycleStopped).pipe(
-        Telemetry.logWarning(
-          "ProcessLifecycleStore write failed for Stopped transition",
-          ({ processId }) => ({ processId: String(processId), tag: "Stopped" }),
-        ),
-      ),
-      Telemetry.event("Restarted", ProcessLifecycleRestarted).pipe(
-        Telemetry.logWarning(
-          "ProcessLifecycleStore write failed for Restarted transition",
-          ({ processId }) => ({ processId: String(processId), tag: "Restarted" }),
-        ),
-      ),
-      Telemetry.event("Errored", ProcessLifecycleErrored).pipe(
-        Telemetry.logWarning(
-          ({ processId }) => `ProcessLifecycleStore write failed for Errored transition "${String(processId)}"`,
-          ({ processId }) => ({ processId: String(processId), tag: "Errored" }),
-        ),
-      ),
-      Telemetry.event("Recovered", ProcessLifecycleRecovered).pipe(
-        Telemetry.logWarning(
-          "ProcessLifecycleStore write failed for Recovered transition",
-          ({ processId }) => ({ processId: String(processId), tag: "Recovered" }),
-        ),
-      ),
-      Telemetry.event("Disabled", ProcessLifecycleDisabled).pipe(
-        Telemetry.logWarning(
-          "ProcessLifecycleStore write failed for Disabled transition",
-          ({ processId }) => ({ processId: String(processId), tag: "Disabled" }),
-        ),
-      ),
-      Telemetry.event("Enabled", ProcessLifecycleEnabled).pipe(
-        Telemetry.logWarning(
-          "ProcessLifecycleStore write failed for Enabled transition",
-          ({ processId }) => ({ processId: String(processId), tag: "Enabled" }),
-        ),
-      ),
-    ),
-  ),
+  ProcessLifecycleTelemetry,
   ProcessStore.query((s) => ({
     lifecycle: (processId: string, opts?: QueryOpts) =>
       s

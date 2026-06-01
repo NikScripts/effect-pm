@@ -360,9 +360,9 @@ combined layer host you provide at the application root.
 
 Built-in facets record:
 
-- `process.execution.completed` — every successful or failed run
-- `process.lifecycle.changed` — `Started` / `Stopped` / `Restarted` / etc.
-- `run-resource.fact.recorded` / `run-resource.state.changed` — `RunResource`
+- `Process.Execution.*` — every successful, failed, or interrupted run
+- `Process.Lifecycle.*` — `Started` / `Stopped` / `Restarted` / etc.
+- `RunResource.Run.*` / `RunResource.State.Changed` — `RunResource`
   facts and state transitions
 - `log.entry` — structured process-manager logs
 
