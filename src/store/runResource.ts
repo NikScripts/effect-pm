@@ -262,8 +262,6 @@ export interface RunResourceRun {
 // ============================================================================
 
 const RUN_RESOURCE_TYPE = "RunResource";
-const FACT_RECORDED_TYPE = "run-resource.fact.recorded"; // legacy decode only
-const STATE_CHANGED_TYPE = "run-resource.state.changed"; // legacy decode only
 const runResourcePath = <
   const Tag extends string,
   const Event extends string,
@@ -285,14 +283,12 @@ const STATE_WAIT_INTERRUPTED_WIRE = runResourcePath("State", "WaitInterrupted");
 const STATE_CHANGED_WIRE = runResourcePath("State", "Changed");
 
 const factRecordTypes = [
-  FACT_RECORDED_TYPE,
   RUN_STARTED_WIRE,
   RUN_COMPLETED_WIRE,
   RUN_FAILED_WIRE,
 ] as const;
 
 const stateRecordTypes = [
-  STATE_CHANGED_TYPE,
   STATE_CHANGED_WIRE,
 ] as const;
 
@@ -327,77 +323,6 @@ const isStateChangeReason = (
 // ============================================================================
 // Decoders
 // ============================================================================
-
-const decodeFactValue = (value: unknown): RunResourceFact | null => {
-  if (!isRecord(value)) return null;
-  const id = value["id"];
-  const resourceId = value["resourceId"];
-  const runId = value["runId"];
-  const type = value["type"];
-  const occurredAt = value["occurredAt"];
-  const payload = value["payload"];
-  const normalizedType =
-    type === "run-resource.run.started"
-      ? RUN_STARTED_WIRE
-      : type === "run-resource.run.completed"
-        ? RUN_COMPLETED_WIRE
-        : type === "run-resource.run.failed"
-          ? RUN_FAILED_WIRE
-          : type;
-  if (
-    !isString(id) ||
-    !isString(resourceId) ||
-    !isString(runId) ||
-    !isRunResourceFactType(normalizedType) ||
-    !isFiniteNumber(occurredAt) ||
-    !isRecord(payload)
-  ) {
-    return null;
-  }
-  const attributes = recordAttributesObject(value["attributes"]);
-  switch (normalizedType) {
-    case RUN_STARTED_WIRE: {
-      const concurrency = payload["concurrency"];
-      if (!isFiniteNumber(concurrency)) return null;
-      return {
-        id,
-        resourceId,
-        runId,
-        type: normalizedType,
-        occurredAt,
-        payload: { concurrency },
-        ...(attributes === undefined ? {} : { attributes }),
-      };
-    }
-    case RUN_COMPLETED_WIRE: {
-      const durationMs = payload["durationMs"];
-      if (!isFiniteNumber(durationMs)) return null;
-      return {
-        id,
-        resourceId,
-        runId,
-        type: normalizedType,
-        occurredAt,
-        payload: { durationMs },
-        ...(attributes === undefined ? {} : { attributes }),
-      };
-    }
-    case RUN_FAILED_WIRE: {
-      const durationMs = payload["durationMs"];
-      const cause = payload["cause"];
-      if (!isFiniteNumber(durationMs) || !isString(cause)) return null;
-      return {
-        id,
-        resourceId,
-        runId,
-        type: normalizedType,
-        occurredAt,
-        payload: { durationMs, cause },
-        ...(attributes === undefined ? {} : { attributes }),
-      };
-    }
-  }
-};
 
 const decodeStateValue = (value: unknown): RunResourceState | null => {
   if (!isRecord(value)) return null;
@@ -439,139 +364,89 @@ const decodeStateValue = (value: unknown): RunResourceState | null => {
   };
 };
 
-const decodeStateChangeValue = (
-  value: unknown,
-): RunResourceStateChange | null => {
-  if (!isRecord(value)) return null;
-  const id = value["id"];
-  const resourceId = value["resourceId"];
-  const changedAt = value["changedAt"];
-  const reason = value["reason"];
-  const previousRaw = value["previous"];
-  const previous = previousRaw === null ? null : decodeStateValue(previousRaw);
-  const current = decodeStateValue(value["current"]);
-  const normalizedReason =
-    reason === "run-resource.run.waiting"
-      ? STATE_WAITING_WIRE
-      : reason === "run-resource.run.started"
-        ? STATE_STARTED_WIRE
-        : reason === "run-resource.run.completed"
-          ? STATE_COMPLETED_WIRE
-          : reason === "run-resource.run.failed"
-            ? STATE_FAILED_WIRE
-            : reason === "run-resource.run.interrupted"
-              ? STATE_INTERRUPTED_WIRE
-              : reason === "run-resource.run.wait.interrupted"
-                ? STATE_WAIT_INTERRUPTED_WIRE
-                : reason;
-  if (
-    !isString(id) ||
-    !isString(resourceId) ||
-    !isFiniteNumber(changedAt) ||
-    !isStateChangeReason(normalizedReason) ||
-    (previousRaw !== null && previous === null) ||
-    current === null
-  ) {
-    return null;
-  }
-  return { id, resourceId, changedAt, reason: normalizedReason, previous, current };
-};
-
 const recordToFact = (record: RuntimeRecord): RunResourceFact | null => {
   if (record.processType !== RUN_RESOURCE_TYPE) return null;
-  if (record.type !== FACT_RECORDED_TYPE) {
-    if (!isRecord(record.payload)) return null;
-    const runId = record.payload["runId"];
-    const occurredAt = record.payload["occurredAt"];
-    const payload = record.payload["payload"];
-    if (!isString(runId) || !isFiniteNumber(occurredAt) || !isRecord(payload)) {
-      return null;
-    }
-    const attributes = recordAttributesObject(record.attributes);
-    switch (record.type) {
-      case RUN_STARTED_WIRE: {
-        const concurrency = payload["concurrency"];
-        if (!isFiniteNumber(concurrency)) return null;
-        return {
-          id: record.id,
-          resourceId: record.processId,
-          runId,
-          type: RUN_STARTED_WIRE,
-          occurredAt,
-          payload: { concurrency },
-          ...(attributes === undefined ? {} : { attributes }),
-        };
-      }
-      case RUN_COMPLETED_WIRE: {
-        const durationMs = payload["durationMs"];
-        if (!isFiniteNumber(durationMs)) return null;
-        return {
-          id: record.id,
-          resourceId: record.processId,
-          runId,
-          type: RUN_COMPLETED_WIRE,
-          occurredAt,
-          payload: { durationMs },
-          ...(attributes === undefined ? {} : { attributes }),
-        };
-      }
-      case RUN_FAILED_WIRE: {
-        const durationMs = payload["durationMs"];
-        const cause = payload["cause"];
-        if (!isFiniteNumber(durationMs) || !isString(cause)) return null;
-        return {
-          id: record.id,
-          resourceId: record.processId,
-          runId,
-          type: RUN_FAILED_WIRE,
-          occurredAt,
-          payload: { durationMs, cause },
-          ...(attributes === undefined ? {} : { attributes }),
-        };
-      }
-      default:
-        return null;
-    }
+  if (!isRecord(record.payload)) return null;
+  const runId = record.payload["runId"];
+  const occurredAt = record.payload["occurredAt"];
+  const payload = record.payload["payload"];
+  if (!isString(runId) || !isFiniteNumber(occurredAt) || !isRecord(payload)) {
+    return null;
   }
-  const payload = record.payload;
-  if (!isRecord(payload)) return null;
-  return decodeFactValue(payload["fact"]);
+  const attributes = recordAttributesObject(record.attributes);
+  switch (record.type) {
+    case RUN_STARTED_WIRE: {
+      const concurrency = payload["concurrency"];
+      if (!isFiniteNumber(concurrency)) return null;
+      return {
+        id: record.id,
+        resourceId: record.processId,
+        runId,
+        type: RUN_STARTED_WIRE,
+        occurredAt,
+        payload: { concurrency },
+        ...(attributes === undefined ? {} : { attributes }),
+      };
+    }
+    case RUN_COMPLETED_WIRE: {
+      const durationMs = payload["durationMs"];
+      if (!isFiniteNumber(durationMs)) return null;
+      return {
+        id: record.id,
+        resourceId: record.processId,
+        runId,
+        type: RUN_COMPLETED_WIRE,
+        occurredAt,
+        payload: { durationMs },
+        ...(attributes === undefined ? {} : { attributes }),
+      };
+    }
+    case RUN_FAILED_WIRE: {
+      const durationMs = payload["durationMs"];
+      const cause = payload["cause"];
+      if (!isFiniteNumber(durationMs) || !isString(cause)) return null;
+      return {
+        id: record.id,
+        resourceId: record.processId,
+        runId,
+        type: RUN_FAILED_WIRE,
+        occurredAt,
+        payload: { durationMs, cause },
+        ...(attributes === undefined ? {} : { attributes }),
+      };
+    }
+    default:
+      return null;
+  }
 };
 
 const recordToStateChange = (
   record: RuntimeRecord,
 ): RunResourceStateChange | null => {
   if (record.processType !== RUN_RESOURCE_TYPE) return null;
-  if (record.type === STATE_CHANGED_WIRE) {
-    const decoded = decodeStateChangeValue(record.payload);
-    if (decoded !== null) return decoded;
-    if (!isRecord(record.payload)) return null;
-    const id = record.payload["id"];
-    const reason = record.payload["reason"];
-    const previousRaw = record.payload["previous"];
-    const previous = previousRaw === null ? null : decodeStateValue(previousRaw);
-    const current = decodeStateValue(record.payload["current"]);
-    if (
-      !isString(id) ||
-      !isStateChangeReason(reason) ||
-      (previousRaw !== null && previous === null) ||
-      current === null
-    ) {
-      return null;
-    }
-    return {
-      id,
-      resourceId: record.processId,
-      changedAt: DateTime.toEpochMillis(record.occurredAt),
-      reason,
-      previous,
-      current,
-    };
+  if (record.type !== STATE_CHANGED_WIRE) return null;
+  if (!isRecord(record.payload)) return null;
+  const id = record.payload["id"];
+  const reason = record.payload["reason"];
+  const previousRaw = record.payload["previous"];
+  const previous = previousRaw === null ? null : decodeStateValue(previousRaw);
+  const current = decodeStateValue(record.payload["current"]);
+  if (
+    !isString(id) ||
+    !isStateChangeReason(reason) ||
+    (previousRaw !== null && previous === null) ||
+    current === null
+  ) {
+    return null;
   }
-  if (record.type !== STATE_CHANGED_TYPE) return null;
-  const payload = record.payload;
-  if (!isRecord(payload)) return null;
-  return decodeStateChangeValue(payload["change"]);
+  return {
+    id,
+    resourceId: record.processId,
+    changedAt: DateTime.toEpochMillis(record.occurredAt),
+    reason,
+    previous,
+    current,
+  };
 };
 
 // ============================================================================
@@ -724,9 +599,8 @@ const stateChangedPredicates = (
 };
 
 // Drop opts.limit when the storage query is a superset of the post-filter
-// (e.g. when post-filtering by `runId` or fact subtype). Mirrors the legacy
-// `runResourceFactsFromEvents` behavior where the limit applied to the
-// already-narrowed fact list rather than the broader event stream.
+// (e.g. when post-filtering by `runId` or fact subtype) so limits apply to
+// the already-narrowed fact list rather than the broader event stream.
 const factWindowOpts = (
   opts: QueryOpts | undefined,
 ): QueryOpts | undefined => {
