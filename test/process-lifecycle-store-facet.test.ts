@@ -2,39 +2,51 @@
  * Conformance suite for the {@link ProcessLifecycleStore} facet.
  *
  * Verifies (a) the no-op vs persist semantics of the static optional
- * `lifecycleChanged` emitter, (b) the `lifecycle` /
+ * `Lifecycle.*` emitters, (b) the `lifecycle` /
  * `lifecycleForProcesses` / `latestLifecycleByProcess` projections,
  * (c) the identifier-bound `for(processId)` shape, and (d) the phantom
  * type accessors.
  */
 
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Option } from "effect";
+import { Duration, Effect, Option } from "effect";
 import { ProcessStorage } from "../src/ProcessStorage";
+import { ProcessLifecycleScope } from "../src/ProcessLifecycleScope";
 import {
   ProcessLifecycleStore,
-  type ProcessLifecycleRecordInput,
   type ProcessLifecycleTag,
 } from "../src/store/processLifecycle";
 
-const lifecycle = (
+const emitLifecycle = (
   processId: string,
   tag: ProcessLifecycleTag,
-  occurredAt: number,
-  overrides: Partial<ProcessLifecycleRecordInput> = {},
-): ProcessLifecycleRecordInput => ({
-  processId,
-  tag,
-  occurredAt,
-  ...overrides,
-});
+  error?: unknown,
+): Effect.Effect<void> => {
+  const emit = (() => {
+    switch (tag) {
+      case "Started":
+        return ProcessLifecycleStore.Lifecycle.Started;
+      case "Stopped":
+        return ProcessLifecycleStore.Lifecycle.Stopped;
+      case "Restarted":
+        return ProcessLifecycleStore.Lifecycle.Restarted;
+      case "Errored":
+        return ProcessLifecycleStore.Lifecycle.Errored(error ?? "errored");
+      case "Recovered":
+        return ProcessLifecycleStore.Lifecycle.Recovered;
+      case "Disabled":
+        return ProcessLifecycleStore.Lifecycle.Disabled;
+      case "Enabled":
+        return ProcessLifecycleStore.Lifecycle.Enabled;
+    }
+  })();
+  return ProcessLifecycleScope.run({ processId }, emit);
+};
 
 describe("ProcessLifecycleStore — static optional emitter", () => {
   it.live("no-ops silently when the facet layer is absent", () =>
     Effect.gen(function* () {
-      yield* ProcessLifecycleStore.lifecycleChanged(
-        lifecycle("test/no-layer", "Started", 1_700_000_000_000),
-      );
+      yield* emitLifecycle("test/no-layer", "Started");
       expect(true).toBe(true);
     }),
   );
@@ -42,12 +54,8 @@ describe("ProcessLifecycleStore — static optional emitter", () => {
   it.live("persists through the spine when the facet is provided", () =>
     Effect.gen(function* () {
       const processId = "test/lifecycle/persist";
-      yield* ProcessLifecycleStore.lifecycleChanged(
-        lifecycle(processId, "Started", 1_700_000_000_000),
-      );
-      yield* ProcessLifecycleStore.lifecycleChanged(
-        lifecycle(processId, "Stopped", 1_700_000_000_010),
-      );
+      yield* emitLifecycle(processId, "Started");
+      yield* emitLifecycle(processId, "Stopped");
       const facet = yield* ProcessLifecycleStore;
       const rows = yield* facet.lifecycle(processId);
       expect(rows.map((row) => row.lifecycle.tag).sort()).toEqual([
@@ -64,12 +72,8 @@ describe("ProcessLifecycleStore — projections", () => {
 
   it.live("lifecycleForProcesses returns rows for the requested ids", () =>
     Effect.gen(function* () {
-      yield* ProcessLifecycleStore.lifecycleChanged(
-        lifecycle(a, "Started", 1_700_000_000_000),
-      );
-      yield* ProcessLifecycleStore.lifecycleChanged(
-        lifecycle(b, "Started", 1_700_000_000_010),
-      );
+      yield* emitLifecycle(a, "Started");
+      yield* emitLifecycle(b, "Started");
       const facet = yield* ProcessLifecycleStore;
       const rows = yield* facet.lifecycleForProcesses([a, b]);
       const ids = new Set(rows.map((row) => row.entityId));
@@ -82,12 +86,9 @@ describe("ProcessLifecycleStore — projections", () => {
     "latestLifecycleByProcess returns the latest tag per process id",
     () =>
       Effect.gen(function* () {
-        yield* ProcessLifecycleStore.lifecycleChanged(
-          lifecycle(a, "Started", 1_700_000_000_100),
-        );
-        yield* ProcessLifecycleStore.lifecycleChanged(
-          lifecycle(a, "Stopped", 1_700_000_000_200),
-        );
+        yield* emitLifecycle(a, "Started");
+        yield* Effect.sleep(Duration.millis(2));
+        yield* emitLifecycle(a, "Stopped");
         const facet = yield* ProcessLifecycleStore;
         const latest = yield* facet.latestLifecycleByProcess([a]);
         expect(latest.get(a)).toBe("Stopped");
@@ -99,7 +100,7 @@ describe("ProcessLifecycleStore — for(processId) bound API", () => {
   const pid = "test/lifecycle/for/scope";
 
   it.live(
-    "lifecycle() / latest() / recordTransition() narrow to the bound id",
+    "lifecycle() / latest() narrow to the bound id",
     () =>
       Effect.gen(function* () {
         const bound = yield* ProcessLifecycleStore.for(pid);
@@ -108,16 +109,9 @@ describe("ProcessLifecycleStore — for(processId) bound API", () => {
         expect(yield* bound.lifecycle()).toEqual([]);
         expect(Option.isNone(yield* bound.latest())).toBe(true);
 
-        // recordTransition() infers processId from the binding.
-        yield* bound.recordTransition({
-          tag: "Started",
-          occurredAt: 1_700_000_000_000,
-        });
-        yield* bound.recordTransition({
-          tag: "Errored",
-          error: "boom",
-          occurredAt: 1_700_000_000_010,
-        });
+        yield* emitLifecycle(pid, "Started");
+        yield* Effect.sleep(Duration.millis(2));
+        yield* emitLifecycle(pid, "Errored", "boom");
 
         const rows = yield* bound.lifecycle();
         expect(rows.every((row) => row.entityId === pid)).toBe(true);
@@ -127,9 +121,7 @@ describe("ProcessLifecycleStore — for(processId) bound API", () => {
 
         // Other processes are excluded.
         const otherPid = "test/lifecycle/for/other";
-        yield* ProcessLifecycleStore.lifecycleChanged(
-          lifecycle(otherPid, "Started", 1_700_000_000_020),
-        );
+        yield* emitLifecycle(otherPid, "Started");
         const stillScoped = yield* bound.lifecycle();
         expect(stillScoped.every((row) => row.entityId === pid)).toBe(true);
       }).pipe(Effect.provide(ProcessStorage.layer)),
@@ -141,7 +133,7 @@ describe("ProcessLifecycleStore — for(processId) bound API", () => {
       const bound = yield* ProcessLifecycleStore.for({
         id: objPid,
       });
-      yield* bound.recordTransition({ tag: "Started" });
+      yield* emitLifecycle(objPid, "Started");
       const rows = yield* bound.lifecycle();
       expect(rows.every((row) => row.entityId === objPid)).toBe(true);
     }).pipe(Effect.provide(ProcessStorage.layer)),
@@ -152,23 +144,30 @@ describe("ProcessLifecycleStore — phantom type accessors", () => {
   it.live(".Type / .EmitType / .IdentifierType expose structural shapes", () =>
     Effect.gen(function* () {
       const fullShape: ProcessLifecycleStore.Type = {
-        lifecycleChanged: () => Effect.void,
+        Lifecycle: {
+          Started: Effect.void,
+          Stopped: Effect.void,
+          Restarted: Effect.void,
+          Errored: () => Effect.void,
+          Recovered: Effect.void,
+          Disabled: Effect.void,
+          Enabled: Effect.void,
+        },
         lifecycle: () => Effect.succeed([]),
         lifecycleForProcesses: () => Effect.succeed([]),
         latestLifecycleByProcess: () =>
           Effect.succeed(new Map<string, ProcessLifecycleTag>()),
       };
       const emitShape: ProcessLifecycleStore.EmitType = {
-        lifecycleChanged: fullShape.lifecycleChanged,
+        Lifecycle: fullShape.Lifecycle,
       };
       const boundShape: ProcessLifecycleStore.IdentifierType = {
         lifecycle: () => Effect.succeed([]),
         latest: () => Effect.succeed(Option.none()),
-        recordTransition: () => Effect.void,
       };
       expect(typeof fullShape.lifecycle).toBe("function");
-      expect(typeof emitShape.lifecycleChanged).toBe("function");
-      expect(typeof boundShape.recordTransition).toBe("function");
+      expect(typeof emitShape.Lifecycle.Started).toBe("object");
+      expect(typeof boundShape.latest).toBe("function");
     }),
   );
 });

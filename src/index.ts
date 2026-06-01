@@ -94,6 +94,7 @@ export {
 
 // Namespace exports (these export objects with .make methods)
 export { Process, ProcessMakeInvalidLayerArgument } from "./Process";
+export { ProcessLifecycleScope } from "./ProcessLifecycleScope";
 export { ProcessScope } from "./ProcessScope";
 export { Polling } from "./Polling";
 export { ProcessSchedule } from "./ProcessSchedule";

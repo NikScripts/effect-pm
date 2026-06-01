@@ -17,12 +17,13 @@
  *
  * ## Optional lifecycle analytics
  *
- * `start`, `stop`, and `restart` append `process.lifecycle.changed` events when the
- * store stack is composed ({@link ProcessStorage.layer} or
- * {@link ProcessGroup.localEnvLayer}). Typed groups with an `id` use
- * {@link ProcessGroupStore} (rows include `attributes.groupId`). Untyped
+ * `start`, `stop`, and `restart` append lifecycle events when the store stack
+ * is composed ({@link ProcessStorage.layer} or {@link ProcessGroup.localEnvLayer}).
+ * Typed groups with an `id` use {@link ProcessGroupStore} (legacy rows include
+ * `attributes.groupId` until the group facet migrates). Untyped
  * {@link makeProcessGroup} without `id` uses {@link ProcessLifecycleStore}
- * only. No facet layer → identical control behavior, zero analytics I/O.
+ * and {@link ProcessLifecycleScope}. No facet layer → identical control
+ * behavior, zero analytics I/O.
  *
  * | Control | Tag(s) written | Notes |
  * |---------|----------------|-------|
@@ -103,6 +104,7 @@ import {
 import { layerProcessGroupLogContext } from "./LogContext";
 import { ProcessStorage } from "./ProcessStorage";
 import { ProcessStore } from "./ProcessStore";
+import { ProcessLifecycleScope } from "./ProcessLifecycleScope";
 import { ProcessGroupStore } from "./store/processGroup";
 import {
   ProcessExecutionStore,
@@ -811,22 +813,36 @@ const recordProcessLifecycleChange = (
   groupId: string | undefined,
   processId: string,
   tag: ProcessLifecycleTag,
-): Effect.Effect<void> =>
-  groupId === undefined
-    ? ProcessLifecycleStore.lifecycleChanged({ processId, tag }).pipe(
-        ProcessStore.catchErrorAndLog({
-          message: "ProcessLifecycleStore write failed",
-          level: "warning",
-          annotations: { processId, tag },
-        }),
-      )
-    : ProcessGroupStore.recordMemberLifecycle(groupId, { processId, tag }).pipe(
-        ProcessStore.catchErrorAndLog({
-          message: "ProcessGroupStore write failed",
-          level: "warning",
-          annotations: { groupId, processId, tag },
-        }),
-      );
+): Effect.Effect<void> => {
+  if (groupId !== undefined) {
+    return ProcessGroupStore.recordMemberLifecycle(groupId, { processId, tag }).pipe(
+      ProcessStore.catchErrorAndLog({
+        message: "ProcessGroupStore write failed",
+        level: "warning",
+        annotations: { groupId, processId, tag },
+      }),
+    );
+  }
+  const emit = (() => {
+    switch (tag) {
+      case "Started":
+        return ProcessLifecycleStore.Lifecycle.Started;
+      case "Stopped":
+        return ProcessLifecycleStore.Lifecycle.Stopped;
+      case "Restarted":
+        return ProcessLifecycleStore.Lifecycle.Restarted;
+      case "Errored":
+        return ProcessLifecycleStore.Lifecycle.Errored("lifecycle error");
+      case "Recovered":
+        return ProcessLifecycleStore.Lifecycle.Recovered;
+      case "Disabled":
+        return ProcessLifecycleStore.Lifecycle.Disabled;
+      case "Enabled":
+        return ProcessLifecycleStore.Lifecycle.Enabled;
+    }
+  })();
+  return ProcessLifecycleScope.run({ processId }, emit);
+};
 
 // ============================================================================
 // Internal: build process details from fiber state

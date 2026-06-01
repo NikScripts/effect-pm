@@ -12,6 +12,7 @@ import {
   RunResourceStore,
   RunResource,
 } from "../../../src";
+import { ProcessLifecycleScope } from "../../../src/ProcessLifecycleScope";
 import { ProcessLifecycleStore } from "../../../src/store/processLifecycle";
 import { layerProcessStore } from "../../../src/storage/sqlite";
 
@@ -39,10 +40,10 @@ const program = Effect.gen(function* () {
       concurrency: 1,
     });
 
-    yield* ProcessLifecycleStore.lifecycleChanged({
-      processId: "examples/ManualProcess",
-      tag: "Started",
-    });
+    yield* ProcessLifecycleScope.run(
+      { processId: "examples/ManualProcess" },
+      ProcessLifecycleStore.Lifecycle.Started,
+    );
 
     yield* gate(41);
 

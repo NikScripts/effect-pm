@@ -1,6 +1,6 @@
 /**
- * **Process lifecycle storage facet** — `process.lifecycle.changed` rows
- * keyed by process id.
+ * **Process lifecycle storage facet** — `Process.Lifecycle.*` rows keyed
+ * by process id.
  *
  * @remarks
  * Process-scoped analytics for {@link Process.spawn}, supervisors, and
@@ -13,21 +13,20 @@
  *
  * | Concern | Where |
  * |--------|-------|
- * | Wire type | `process.lifecycle.changed` |
- * | Static emit | `lifecycleChanged({ processId, tag, error?, ... })` |
+ * | Wire types | `Process.Lifecycle.Started` / `.Stopped` / `.Restarted` / `.Errored` / `.Recovered` / `.Disabled` / `.Enabled` |
+ * | Static emit | `ProcessLifecycleScope.run({ processId }, ProcessLifecycleStore.Lifecycle.Started)` |
  * | Reads (instance) | `lifecycle(processId, opts?)`, `lifecycleForProcesses([id], opts?)`, `latestLifecycleByProcess([id])` |
- * | Reads (bound, `for(processId)`) | `lifecycle(opts?)`, `latest()`, `recordTransition({ tag, error?, ... })` |
+ * | Reads (bound, `for(processId)`) | `lifecycle(opts?)`, `latest()` |
  *
  * ## Storage shape
  *
  * Each transition writes one {@link RuntimeRecord} with:
  *
- * - `type` = `process.lifecycle.changed`
+ * - `type` = one of `Process.Lifecycle.*` (legacy group rows may still use
+ *   `process.lifecycle.changed` until `ProcessGroupStore` migrates)
  * - `processType` = `process`
  * - `processId` = the transitioning process id
- * - `payload` = `{ tag, error? }`
- * - `attributes` = `{ groupId?, ...extra }` if any extra attributes
- *   were supplied; otherwise omitted.
+ * - `payload` = `{ processType, processId, occurredAt, tag, error? }`
  *
  * Compose via {@link ProcessLifecycleStore.layerRuntimeStorage}
  * or {@link ProcessStorage.layerRuntimeStorage}.
@@ -35,14 +34,15 @@
  * @module store/ProcessLifecycle
  */
 
-import { Clock, DateTime, Effect, Option } from "effect";
+import { DateTime, Effect, Option, Schema } from "effect";
 import {
   isRecord,
   isString,
   recordAttributesObject,
   runtimeRecordQuery,
 } from "../internal/store/helpers";
-import { ProcessStore } from "../ProcessStore";
+import { ProcessStore, Telemetry } from "../ProcessStore";
+import { ProcessLifecycleScope } from "../ProcessLifecycleScope";
 import type {
   AnalyticsEventBase,
   JsonValue,
@@ -71,7 +71,7 @@ export type ProcessLifecycleTag =
  * @public
  */
 export interface ProcessLifecycleChangedEvent extends AnalyticsEventBase {
-  type: "process.lifecycle.changed";
+  type: ProcessLifecycleWireType;
   entityType: "process";
   lifecycle: {
     tag: ProcessLifecycleTag;
@@ -80,7 +80,8 @@ export interface ProcessLifecycleChangedEvent extends AnalyticsEventBase {
 }
 
 /**
- * Write input for a process lifecycle transition (no group scope).
+ * Legacy write input retained for `ProcessGroupStore` until the group facet
+ * migrates to schema-backed telemetry.
  *
  * @public
  */
@@ -95,6 +96,31 @@ export interface ProcessLifecycleRecordInput {
 
 const PROCESS_TYPE = "process";
 const LIFECYCLE_TYPE = "process.lifecycle.changed";
+const LIFECYCLE_WIRE: {
+  readonly Changed: "process.lifecycle.changed";
+  readonly Started: "Process.Lifecycle.Started";
+  readonly Stopped: "Process.Lifecycle.Stopped";
+  readonly Restarted: "Process.Lifecycle.Restarted";
+  readonly Errored: "Process.Lifecycle.Errored";
+  readonly Recovered: "Process.Lifecycle.Recovered";
+  readonly Disabled: "Process.Lifecycle.Disabled";
+  readonly Enabled: "Process.Lifecycle.Enabled";
+} = {
+  Changed: LIFECYCLE_TYPE,
+  Started: "Process.Lifecycle.Started",
+  Stopped: "Process.Lifecycle.Stopped",
+  Restarted: "Process.Lifecycle.Restarted",
+  Errored: "Process.Lifecycle.Errored",
+  Recovered: "Process.Lifecycle.Recovered",
+  Disabled: "Process.Lifecycle.Disabled",
+  Enabled: "Process.Lifecycle.Enabled",
+};
+
+export type ProcessLifecycleWireType =
+  typeof LIFECYCLE_WIRE[keyof typeof LIFECYCLE_WIRE];
+
+const lifecycleWireTypes: ReadonlyArray<ProcessLifecycleWireType> =
+  Object.values(LIFECYCLE_WIRE);
 
 const lifecycleTags: ReadonlyArray<ProcessLifecycleTag> = [
   "Started",
@@ -108,6 +134,9 @@ const lifecycleTags: ReadonlyArray<ProcessLifecycleTag> = [
 
 const isLifecycleTag = (value: unknown): value is ProcessLifecycleTag =>
   isString(value) && lifecycleTags.some((tag) => tag === value);
+
+const isLifecycleWireType = (value: string): value is ProcessLifecycleWireType =>
+  lifecycleWireTypes.some((wire) => wire === value);
 
 const lifecycleAttributesBlob = (
   input: ProcessLifecycleRecordInput & { readonly groupId?: string },
@@ -157,7 +186,7 @@ export const makeProcessLifecycleRecord = (
 export const recordToLifecycleEvent = (
   record: RuntimeRecord,
 ): ProcessLifecycleChangedEvent | null => {
-  if (record.type !== LIFECYCLE_TYPE) return null;
+  if (!isLifecycleWireType(record.type)) return null;
   if (record.processType !== PROCESS_TYPE) return null;
   const payload = record.payload;
   if (!isRecord(payload)) return null;
@@ -167,7 +196,7 @@ export const recordToLifecycleEvent = (
   if (errorRaw !== undefined && !isString(errorRaw)) return null;
   return {
     id: record.id,
-    type: LIFECYCLE_TYPE,
+    type: record.type,
     occurredAt: DateTime.toEpochMillis(record.occurredAt),
     entityType: PROCESS_TYPE,
     entityId: record.processId,
@@ -178,6 +207,64 @@ export const recordToLifecycleEvent = (
     },
   };
 };
+
+const ProcessLifecycleState = ProcessLifecycleScope.Schema.State;
+
+const lifecycleSchemaFields = {
+  processType: Schema.Literal(PROCESS_TYPE),
+  processId: ProcessLifecycleState.processId,
+  occurredAt: Telemetry.terminal.clockMillis,
+} as const;
+
+class ProcessLifecycleStarted extends Telemetry.Schema<ProcessLifecycleStarted>()(
+  ProcessLifecycleScope,
+)({
+  ...lifecycleSchemaFields,
+  tag: Schema.Literal("Started"),
+}) {}
+
+class ProcessLifecycleStopped extends Telemetry.Schema<ProcessLifecycleStopped>()(
+  ProcessLifecycleScope,
+)({
+  ...lifecycleSchemaFields,
+  tag: Schema.Literal("Stopped"),
+}) {}
+
+class ProcessLifecycleRestarted extends Telemetry.Schema<ProcessLifecycleRestarted>()(
+  ProcessLifecycleScope,
+)({
+  ...lifecycleSchemaFields,
+  tag: Schema.Literal("Restarted"),
+}) {}
+
+class ProcessLifecycleErrored extends Telemetry.Schema<ProcessLifecycleErrored>()(
+  ProcessLifecycleScope,
+)({
+  ...lifecycleSchemaFields,
+  tag: Schema.Literal("Errored"),
+  error: Telemetry.input.errorString,
+}) {}
+
+class ProcessLifecycleRecovered extends Telemetry.Schema<ProcessLifecycleRecovered>()(
+  ProcessLifecycleScope,
+)({
+  ...lifecycleSchemaFields,
+  tag: Schema.Literal("Recovered"),
+}) {}
+
+class ProcessLifecycleDisabled extends Telemetry.Schema<ProcessLifecycleDisabled>()(
+  ProcessLifecycleScope,
+)({
+  ...lifecycleSchemaFields,
+  tag: Schema.Literal("Disabled"),
+}) {}
+
+class ProcessLifecycleEnabled extends Telemetry.Schema<ProcessLifecycleEnabled>()(
+  ProcessLifecycleScope,
+)({
+  ...lifecycleSchemaFields,
+  tag: Schema.Literal("Enabled"),
+}) {}
 
 const decodeLifecycleEvents = (
   records: ReadonlyArray<RuntimeRecord>,
@@ -199,19 +286,59 @@ export class ProcessLifecycleStore extends ProcessStore.Service<
   ProcessLifecycleStore
 >()(
   "@nikscripts/effect-pm/store/processLifecycle/ProcessLifecycleStore",
-  ProcessStore.record({
-    lifecycleChanged: (s) => (input: ProcessLifecycleRecordInput) =>
-      Effect.gen(function* () {
-        const occurredAtMs = input.occurredAt ?? (yield* Clock.currentTimeMillis);
-        yield* s.create(makeProcessLifecycleRecord(input, occurredAtMs));
-      }),
-  }),
+  ProcessStore.telemetry(
+    Telemetry.namespace("Process"),
+    Telemetry.tag("Lifecycle")(
+      Telemetry.event("Started", ProcessLifecycleStarted).pipe(
+        Telemetry.logWarning(
+          "ProcessLifecycleStore write failed for Started transition",
+          ({ processId }) => ({ processId: String(processId), tag: "Started" }),
+        ),
+      ),
+      Telemetry.event("Stopped", ProcessLifecycleStopped).pipe(
+        Telemetry.logWarning(
+          "ProcessLifecycleStore write failed for Stopped transition",
+          ({ processId }) => ({ processId: String(processId), tag: "Stopped" }),
+        ),
+      ),
+      Telemetry.event("Restarted", ProcessLifecycleRestarted).pipe(
+        Telemetry.logWarning(
+          "ProcessLifecycleStore write failed for Restarted transition",
+          ({ processId }) => ({ processId: String(processId), tag: "Restarted" }),
+        ),
+      ),
+      Telemetry.event("Errored", ProcessLifecycleErrored).pipe(
+        Telemetry.logWarning(
+          ({ processId }) => `ProcessLifecycleStore write failed for Errored transition "${String(processId)}"`,
+          ({ processId }) => ({ processId: String(processId), tag: "Errored" }),
+        ),
+      ),
+      Telemetry.event("Recovered", ProcessLifecycleRecovered).pipe(
+        Telemetry.logWarning(
+          "ProcessLifecycleStore write failed for Recovered transition",
+          ({ processId }) => ({ processId: String(processId), tag: "Recovered" }),
+        ),
+      ),
+      Telemetry.event("Disabled", ProcessLifecycleDisabled).pipe(
+        Telemetry.logWarning(
+          "ProcessLifecycleStore write failed for Disabled transition",
+          ({ processId }) => ({ processId: String(processId), tag: "Disabled" }),
+        ),
+      ),
+      Telemetry.event("Enabled", ProcessLifecycleEnabled).pipe(
+        Telemetry.logWarning(
+          "ProcessLifecycleStore write failed for Enabled transition",
+          ({ processId }) => ({ processId: String(processId), tag: "Enabled" }),
+        ),
+      ),
+    ),
+  ),
   ProcessStore.query((s) => ({
     lifecycle: (processId: string, opts?: QueryOpts) =>
       s
         .read(
           runtimeRecordQuery(
-            [Type.equals(LIFECYCLE_TYPE), ProcessId.equals(processId)],
+            [Type.in(lifecycleWireTypes), ProcessId.equals(processId)],
             opts,
           ),
         )
@@ -227,7 +354,7 @@ export class ProcessLifecycleStore extends ProcessStore.Service<
       return s
         .read(
           runtimeRecordQuery(
-            [Type.equals(LIFECYCLE_TYPE), ProcessId.in(processIds)],
+            [Type.in(lifecycleWireTypes), ProcessId.in(processIds)],
             opts,
           ),
         )
@@ -240,7 +367,7 @@ export class ProcessLifecycleStore extends ProcessStore.Service<
         for (const processId of processIds) {
           const records = yield* s.read(
             runtimeRecordQuery(
-              [Type.equals(LIFECYCLE_TYPE), ProcessId.equals(processId)],
+              [Type.in(lifecycleWireTypes), ProcessId.equals(processId)],
               { limit: 1 },
             ),
           );
@@ -257,7 +384,7 @@ export class ProcessLifecycleStore extends ProcessStore.Service<
       s
         .read(
           runtimeRecordQuery(
-            [Type.equals(LIFECYCLE_TYPE), ProcessId.equals(processId)],
+            [Type.in(lifecycleWireTypes), ProcessId.equals(processId)],
             opts,
           ),
         )
@@ -267,7 +394,7 @@ export class ProcessLifecycleStore extends ProcessStore.Service<
       s
         .read(
           runtimeRecordQuery(
-            [Type.equals(LIFECYCLE_TYPE), ProcessId.equals(processId)],
+            [Type.in(lifecycleWireTypes), ProcessId.equals(processId)],
             { limit: 1 },
           ),
         )
@@ -279,19 +406,18 @@ export class ProcessLifecycleStore extends ProcessStore.Service<
               : Option.some(event.lifecycle.tag);
           }),
         ),
-
-    recordTransition: (
-      input: Omit<ProcessLifecycleRecordInput, "processId">,
-    ) =>
-      Effect.gen(function* () {
-        const occurredAtMs =
-          input.occurredAt ?? (yield* Clock.currentTimeMillis);
-        yield* s.create(
-          makeProcessLifecycleRecord({ processId, ...input }, occurredAtMs),
-        );
-      }),
   })),
-) {}
+) {
+  declare static Lifecycle: {
+    readonly Started: Effect.Effect<void>;
+    readonly Stopped: Effect.Effect<void>;
+    readonly Restarted: Effect.Effect<void>;
+    readonly Errored: (error: unknown) => Effect.Effect<void>;
+    readonly Recovered: Effect.Effect<void>;
+    readonly Disabled: Effect.Effect<void>;
+    readonly Enabled: Effect.Effect<void>;
+  };
+}
 
 /**
  * @public

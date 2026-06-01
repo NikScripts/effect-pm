@@ -44,6 +44,11 @@
       "import": "./dist/ProcessScope.mjs",
       "require": "./dist/ProcessScope.js"
     },
+    "./ProcessLifecycleScope": {
+      "types": "./dist/ProcessLifecycleScope.d.ts",
+      "import": "./dist/ProcessLifecycleScope.mjs",
+      "require": "./dist/ProcessLifecycleScope.js"
+    },
     "./QueueResource": {
       "types": "./dist/QueueResource.d.ts",
       "import": "./dist/QueueResource.mjs",
