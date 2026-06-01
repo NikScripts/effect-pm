@@ -202,6 +202,8 @@ Recommended ingredients:
 
 - `*.tags.ts` exports the actual `Process.Service`, `QueueResource.Service`, and
   `ProcessGroup.Service` declarations used by `for={...}`.
+- `*.tags.ts` imports effect-pm symbols through dedicated subpaths, not the root
+  barrel, so browser bundles do not see server-oriented exports.
 - `*.runtime.ts` imports the tags and composes `.layer`, storage, child launcher,
   `ControlService`, and other Node-only wiring.
 - React imports only from `*.tags.ts` and talks to the runtime through
@@ -214,6 +216,11 @@ Picture:
 
 ```ts
 // billing.tags.ts - browser-safe
+import { Effect } from "effect";
+import { Process } from "@nikscripts/effect-pm/Process";
+import { ProcessGroup } from "@nikscripts/effect-pm/ProcessGroup";
+import { QueueResource } from "@nikscripts/effect-pm/QueueResource";
+
 export class BillingSync extends Process.Service<BillingSync>()(
   "@app/BillingSync",
   { effect: Effect.void },
@@ -232,6 +239,9 @@ export class BillingGroup extends ProcessGroup.Service<BillingGroup>()(
 
 ```ts
 // billing.runtime.ts - server-only
+import { ControlService } from "@nikscripts/effect-pm/ControlService";
+import { BillingGroup, BillingSync, EmailQueue } from "./billing.tags";
+
 const layer = Layer.mergeAll(
   BillingSync.layer,
   EmailQueue.layer,
@@ -270,6 +280,10 @@ Acceptance check:
 A demo/client file imports targets from `demo.tags.ts`; the runtime file imports
 those same tags and composes layers plus `ControlService`; no React-imported file
 imports runtime wiring.
+
+Decision:
+Accepted. Browser-safe tags files use dedicated effect-pm subpath imports and
+runtime composition stays in `*.runtime.ts`.
 
 ## Cleanup status
 
