@@ -34,8 +34,11 @@ scope-backed events.
   simple input fields.
 - Event definitions own best-effort logging through `Telemetry.logWarning`.
 - Row `type` is generated from telemetry path: `Namespace.Tag.Event`.
-- Row `processType` / `processId` come from the resource/process tag passed to
-  `ProcessStore.telemetry(ResourceTag)`.
+- For app-specific telemetry, row `processType` / `processId` can come from the
+  resource/process tag passed to `ProcessStore.telemetry(ResourceTag)`.
+- For built-in generic store facets (`RunResourceStore`, `QueueResourceStore`),
+  row identity must come from the installed scope because the facet is shared by
+  every app resource instance and has no single concrete tag at declaration time.
 - Event schemas describe event payload fields, not row identity fields.
 
 ## Open recipe steps
@@ -47,7 +50,11 @@ How `RunResourceStore` telemetry events should accept rich domain payloads
 without reintroducing ad hoc per-call record helpers.
 
 Recommended ingredients:
-- Use resource/process tags as telemetry identity: `ProcessStore.telemetry(RunGate)(...)`.
+- Use resource/process tags as telemetry identity for app-specific telemetry:
+  `ProcessStore.telemetry(RunGate)(...)`.
+- Use scope identity for built-in generic facets:
+  `RunResourceScope.Schema.State.resourceId` → row `processId`,
+  scope definition → row `processType`.
 - Treat plain literal fields as constants appended after validation.
 - Treat regular schema fields as event input fields.
 - Keep `RunResourceStore.Run.Started`, `.Completed`, `.Failed`, and
@@ -76,7 +83,7 @@ class StateChanged extends Telemetry.Schema<StateChanged>()(RunResourceScope)({
 
 export class RunResourceStore extends ProcessStore.Service<RunResourceStore>()(
   "@nikscripts/effect-pm/store/runResource/RunResourceStore",
-  ProcessStore.telemetry(MyRunResource)(
+  ProcessStore.telemetry(RunResourceScope)(
     Telemetry.namespace("RunResource"),
     Telemetry.tag("Run")(Telemetry.event("Started", RunStarted)),
   ),
@@ -96,12 +103,14 @@ Alternatives:
    nested previous/current state snapshots.
 
 Question:
-Should rich event payloads use regular schema fields, with tag-derived row
-identity from `ProcessStore.telemetry(ResourceTag)`?
+Should rich event payloads use regular schema fields, with identity derived from
+resource tags when a concrete tag exists and from scope when the generic store
+facet has no concrete tag?
 
 Recommended answer:
 Yes. It removes repeated row identity fields, keeps event schemas focused on
-payload, and avoids a separate `Telemetry.input.field<T>()` DSL.
+payload, avoids a separate `Telemetry.input.field<T>()` DSL, and still works for
+generic built-in facets.
 
 Acceptance check:
 `RunResourceStore` can declare all run/state writes with `Telemetry.Schema`,
@@ -113,20 +122,25 @@ existing run/state projections still pass without legacy `record*` methods.
 ### Step 2 — Tag identity source
 
 What this decides:
-Which tag shape can be passed to `ProcessStore.telemetry(...)` to derive
+Which identity source can be passed to `ProcessStore.telemetry(...)` to derive
 `processType` / `processId`.
 
 Recommended ingredients:
-- Use tags with `kind` and `id` metadata:
+- Use concrete resource/process tags with `kind` and `id` metadata when the
+  telemetry declaration belongs to that one tag:
   - `Process` / `Process.Service`: `kind: "process"`, `id`.
   - `QueueResource`: `kind: "queue"`, `id`.
   - `RunResource`: add `kind: "run-resource"`, `id`.
-- `ProcessStore.telemetry(tag)(...)` maps `kind` → `RuntimeRecord.processType`
+- Use scope classes for built-in generic store facets:
+  - `RunResourceScope` → `processType: "run-resource"`, `processId: resourceId`.
+  - `QueueScope` → `processType: "queue-resource"`, `processId: queueId`.
+- `ProcessStore.telemetry(identity)(...)` maps `kind` → `RuntimeRecord.processType`
   and `id` → `RuntimeRecord.processId`.
 
 Picture:
 
 ```ts
+// App-specific telemetry can use a concrete tag:
 ProcessStore.telemetry(MyRunGate)(
   Telemetry.namespace("RunResource"),
   Telemetry.tag("Run")(
@@ -140,6 +154,14 @@ ProcessStore.telemetry(MyRunGate)(
   processType: "run-resource",
   processId: MyRunGate.id,
 }
+
+// Generic built-in facets use scope identity:
+ProcessStore.telemetry(RunResourceScope)(
+  Telemetry.namespace("RunResource"),
+  Telemetry.tag("Run")(
+    Telemetry.event("Started", RunStarted),
+  ),
+)
 ```
 
 Alternatives:
@@ -148,18 +170,19 @@ Alternatives:
 2. Per-event identity fields — rejected; too repetitive and poor DX.
 
 Question:
-Should `RunResource.Tag` / `RunResource.Service` grow `kind: "run-resource"` and
-`id` metadata so the tag can be passed directly to `ProcessStore.telemetry(...)`?
+Should `ProcessStore.telemetry(...)` accept both concrete resource tags and
+scope classes as identity sources?
 
 Recommended answer:
-Yes. `QueueResource` already has `kind: "queue"` / `id`, and `Process` has
-`kind: "process"` / `id`; adding the same metadata to `RunResource` gives a
-consistent tag-driven telemetry API.
+Yes. Concrete tags are the best DX when the telemetry belongs to one app
+resource, but built-in generic facets need scope-derived identity because they
+serve many resource instances.
 
 Acceptance check:
-`ProcessStore.telemetry(MyRunGate)(...)` typechecks and generated rows use
-`processType: "run-resource"` plus `processId: MyRunGate.id` without event
-schemas mentioning either field.
+`ProcessStore.telemetry(MyRunGate)(...)` and
+`ProcessStore.telemetry(RunResourceScope)(...)` both typecheck. Generated rows
+use tag identity for concrete tags and scope identity for generic facets without
+event schemas mentioning row identity fields.
 
 ## Cleanup status
 
