@@ -64,7 +64,6 @@ import {
   runtimeRecordQuery,
 } from "../internal/store/helpers";
 import type { ProcessStoreSpine } from "../internal/store/spine";
-import type { TelemetryPath } from "../internal/store/telemetry";
 import { ProcessStore, Telemetry } from "../ProcessStore";
 import type { QueryOpts } from "../ProcessStoreEvent";
 import { ProcessId, Type } from "../Query";
@@ -91,9 +90,7 @@ export interface RunResourceRef {
  * @public
  */
 export type RunResourceFactType =
-  | TelemetryPath<"RunResource", "Run", "Started">
-  | TelemetryPath<"RunResource", "Run", "Completed">
-  | TelemetryPath<"RunResource", "Run", "Failed">;
+  Telemetry.Type.Event<typeof RunResourceTelemetry, "Run">;
 
 /**
  * Reasons attached to {@link RunResourceState} transitions.
@@ -101,12 +98,12 @@ export type RunResourceFactType =
  * @public
  */
 export type RunResourceStateChangeReason =
-  | TelemetryPath<"RunResource", "State", "Waiting">
-  | TelemetryPath<"RunResource", "State", "Started">
-  | TelemetryPath<"RunResource", "State", "Completed">
-  | TelemetryPath<"RunResource", "State", "Failed">
-  | TelemetryPath<"RunResource", "State", "Interrupted">
-  | TelemetryPath<"RunResource", "State", "WaitInterrupted">;
+  | "RunResource.State.Waiting"
+  | "RunResource.State.Started"
+  | "RunResource.State.Completed"
+  | "RunResource.State.Failed"
+  | "RunResource.State.Interrupted"
+  | "RunResource.State.WaitInterrupted";
 
 /** @public */
 export interface RunResourceRunStartedPayload {
@@ -129,7 +126,7 @@ export interface RunResourceRunStartedFact {
   readonly id: string;
   readonly resourceId: string;
   readonly runId: string;
-  readonly type: TelemetryPath<"RunResource", "Run", "Started">;
+  readonly type: "RunResource.Run.Started";
   readonly occurredAt: number;
   readonly payload: RunResourceRunStartedPayload;
   readonly attributes?: Record<string, unknown>;
@@ -140,7 +137,7 @@ export interface RunResourceRunCompletedFact {
   readonly id: string;
   readonly resourceId: string;
   readonly runId: string;
-  readonly type: TelemetryPath<"RunResource", "Run", "Completed">;
+  readonly type: "RunResource.Run.Completed";
   readonly occurredAt: number;
   readonly payload: RunResourceRunCompletedPayload;
   readonly attributes?: Record<string, unknown>;
@@ -151,7 +148,7 @@ export interface RunResourceRunFailedFact {
   readonly id: string;
   readonly resourceId: string;
   readonly runId: string;
-  readonly type: TelemetryPath<"RunResource", "Run", "Failed">;
+  readonly type: "RunResource.Run.Failed";
   readonly occurredAt: number;
   readonly payload: RunResourceRunFailedPayload;
   readonly attributes?: Record<string, unknown>;
@@ -273,7 +270,7 @@ const runResourcePath = <
 >(
   tag: Tag,
   event: Event,
-): TelemetryPath<"RunResource", Tag, Event> =>
+): `RunResource.${Tag}.${Event}` =>
   `RunResource.${tag}.${event}`;
 
 const RUN_STARTED_WIRE = runResourcePath("Run", "Started");
@@ -803,6 +800,38 @@ class RunResourceStateChanged extends Telemetry.Schema<RunResourceStateChanged>(
   current: RunResourceStateSchema,
 }) {}
 
+const RunResourceTelemetry = ProcessStore.telemetry(RunResourceScope)(
+  Telemetry.namespace("RunResource"),
+  Telemetry.tag("Run")(
+    Telemetry.event("Started", RunResourceRunStarted).pipe(
+      Telemetry.logWarning(
+        "RunResourceStore write failed for run start",
+        ({ runId }) => ({ runId: String(runId) }),
+      ),
+    ),
+    Telemetry.event("Completed", RunResourceRunCompleted).pipe(
+      Telemetry.logWarning(
+        "RunResourceStore write failed for run completion",
+        ({ runId }) => ({ runId: String(runId) }),
+      ),
+    ),
+    Telemetry.event("Failed", RunResourceRunFailed).pipe(
+      Telemetry.logWarning(
+        "RunResourceStore write failed for run failure",
+        ({ runId }) => ({ runId: String(runId) }),
+      ),
+    ),
+  ),
+  Telemetry.tag("State")(
+    Telemetry.event("Changed", RunResourceStateChanged).pipe(
+      Telemetry.logWarning(
+        "RunResourceStore write failed for state change",
+        ({ reason }) => ({ reason: String(reason) }),
+      ),
+    ),
+  ),
+);
+
 // ============================================================================
 // Facet
 // ============================================================================
@@ -818,37 +847,7 @@ class RunResourceStateChanged extends Telemetry.Schema<RunResourceStateChanged>(
  */
 export const RunResourceStore = ProcessStore.Service(
   "@nikscripts/effect-pm/store/runResource/RunResourceStore",
-  ProcessStore.telemetry(RunResourceScope)(
-    Telemetry.namespace("RunResource"),
-    Telemetry.tag("Run")(
-      Telemetry.event("Started", RunResourceRunStarted).pipe(
-        Telemetry.logWarning(
-          "RunResourceStore write failed for run start",
-          ({ runId }) => ({ runId: String(runId) }),
-        ),
-      ),
-      Telemetry.event("Completed", RunResourceRunCompleted).pipe(
-        Telemetry.logWarning(
-          "RunResourceStore write failed for run completion",
-          ({ runId }) => ({ runId: String(runId) }),
-        ),
-      ),
-      Telemetry.event("Failed", RunResourceRunFailed).pipe(
-        Telemetry.logWarning(
-          "RunResourceStore write failed for run failure",
-          ({ runId }) => ({ runId: String(runId) }),
-        ),
-      ),
-    ),
-    Telemetry.tag("State")(
-      Telemetry.event("Changed", RunResourceStateChanged).pipe(
-        Telemetry.logWarning(
-          "RunResourceStore write failed for state change",
-          ({ reason }) => ({ reason: String(reason) }),
-        ),
-      ),
-    ),
-  ),
+  RunResourceTelemetry,
   ProcessStore.query((s) => ({
     facts: (query?: RunResourceFactQuery) => readFacts(s, query),
     stateHistory: (query?: RunResourceStateHistoryQuery) =>
