@@ -9,11 +9,13 @@ import {
   ControlPlaneProvider,
   Controls,
   Logs,
+  useControlPlaneGroupStatus,
   type ControlPlanePort,
   type DashboardGroupTarget,
   type DashboardProcessTarget,
   type DashboardQueueTarget,
 } from "../react/index.js";
+import { ProcessStatusTable, QueueStatusTable } from "./StatusTables.js";
 
 export type OperatorDashboardProps = {
   readonly port: ControlPlanePort;
@@ -32,13 +34,9 @@ const dashboardClassName = (className: string | undefined): string =>
     ? "pm-dashboard"
     : `pm-dashboard ${className}`;
 
-/**
- * Production-ready shell around the headless React controls/logs primitives.
- *
- * @public
- */
-export const OperatorDashboard = ({
-  port,
+type OperatorDashboardContentProps = Omit<OperatorDashboardProps, "port">;
+
+const OperatorDashboardContent = ({
   for: group,
   processes = [],
   queues = [],
@@ -47,8 +45,12 @@ export const OperatorDashboard = ({
   title = "effect-pm ops",
   description = "Live controls and logs for a process group.",
   className,
-}: OperatorDashboardProps) => (
-  <ControlPlaneProvider port={port}>
+}: OperatorDashboardContentProps) => {
+  const status = useControlPlaneGroupStatus({ pollIntervalMs });
+  const processIds = processes.map((process) => process.id);
+  const queueIds = queues.map((queue) => queue.id);
+
+  return (
     <main className={dashboardClassName(className)} data-pm-ops-ui="dashboard">
       <header className="pm-dashboard__hero">
         <div>
@@ -63,12 +65,15 @@ export const OperatorDashboard = ({
       </header>
 
       <section className="pm-dashboard__grid" aria-label="Dashboard overview">
-        <article className="pm-dashboard__card pm-dashboard__card--controls">
+        <article className="pm-dashboard__card pm-dashboard__card--status">
           <div className="pm-dashboard__card-header">
-            <p className="pm-dashboard__section-label">Group controls</p>
-            <h2>All processes and queues</h2>
+            <p className="pm-dashboard__section-label">Group status</p>
+            <h2>Processes and queues</h2>
           </div>
-          <Controls for={group} pollIntervalMs={pollIntervalMs} />
+          <div className="pm-dashboard__table-stack">
+            <ProcessStatusTable status={status} />
+            <QueueStatusTable status={status} />
+          </div>
         </article>
 
         <article className="pm-dashboard__card pm-dashboard__card--logs">
@@ -82,26 +87,53 @@ export const OperatorDashboard = ({
 
       {processes.length > 0 || queues.length > 0 ? (
         <section className="pm-dashboard__details" aria-label="Scoped controls">
-          {processes.map((process) => (
-            <article className="pm-dashboard__card pm-dashboard__card--detail" key={process.id}>
+          {processes.length > 0 ? (
+            <article className="pm-dashboard__card pm-dashboard__card--detail">
               <div className="pm-dashboard__card-header">
-                <p className="pm-dashboard__section-label">Process</p>
-                <h2>{process.id}</h2>
+                <p className="pm-dashboard__section-label">Scoped processes</p>
+                <h2>Selected process controls</h2>
               </div>
-              <Controls for={process} pollIntervalMs={pollIntervalMs} />
+              <ProcessStatusTable status={status} processIds={processIds} />
+              {processes.map((process) => (
+                <Controls
+                  for={process}
+                  key={process.id}
+                  pollIntervalMs={pollIntervalMs}
+                  sharedStatus={status}
+                />
+              ))}
             </article>
-          ))}
-          {queues.map((queue) => (
-            <article className="pm-dashboard__card pm-dashboard__card--detail" key={queue.id}>
+          ) : null}
+          {queues.length > 0 ? (
+            <article className="pm-dashboard__card pm-dashboard__card--detail">
               <div className="pm-dashboard__card-header">
-                <p className="pm-dashboard__section-label">Queue</p>
-                <h2>{queue.id}</h2>
+                <p className="pm-dashboard__section-label">Scoped queues</p>
+                <h2>Selected queue controls</h2>
               </div>
-              <Controls for={queue} pollIntervalMs={pollIntervalMs} />
+              <QueueStatusTable status={status} queueIds={queueIds} />
+              {queues.map((queue) => (
+                <Controls
+                  for={queue}
+                  key={queue.id}
+                  pollIntervalMs={pollIntervalMs}
+                  sharedStatus={status}
+                />
+              ))}
             </article>
-          ))}
+          ) : null}
         </section>
       ) : null}
     </main>
+  );
+};
+
+/**
+ * Production-ready shell around the headless React controls/logs primitives.
+ *
+ * @public
+ */
+export const OperatorDashboard = ({ port, ...props }: OperatorDashboardProps) => (
+  <ControlPlaneProvider port={port}>
+    <OperatorDashboardContent {...props} />
   </ControlPlaneProvider>
 );

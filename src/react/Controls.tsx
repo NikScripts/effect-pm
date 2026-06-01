@@ -5,7 +5,10 @@
  */
 
 import type { CSSProperties } from "react";
-import { useControlPlaneGroupStatus } from "./hooks/useControlPlaneGroupStatus.js";
+import {
+  useControlPlaneGroupStatus,
+  type ControlPlaneGroupStatusState,
+} from "./hooks/useControlPlaneGroupStatus.js";
 import { ProcessGroupControlPanel } from "./ProcessGroupControlPanel.js";
 import type { ProcessGroupControlPanelProps } from "./ProcessGroupControlPanel.js";
 import { QueueControlPanel } from "./QueueControlPanel.js";
@@ -17,6 +20,8 @@ export type ControlsProps<Target extends DashboardTarget = DashboardTarget> = {
   readonly pollIntervalMs?: number;
   readonly className?: string;
   readonly style?: CSSProperties;
+  /** Share one poll loop from a parent dashboard. */
+  readonly sharedStatus?: ControlPlaneGroupStatusState;
   readonly process?: Omit<
     ProcessGroupControlPanelProps,
     "pollIntervalMs" | "className" | "style" | "sharedStatus" | "processId"
@@ -37,10 +42,15 @@ export const Controls = <Target extends DashboardTarget = DashboardTarget>({
   pollIntervalMs,
   className,
   style,
+  sharedStatus,
   process,
   queue,
 }: ControlsProps<Target>) => {
-  const sharedStatus = useControlPlaneGroupStatus({ pollIntervalMs });
+  const internalStatus = useControlPlaneGroupStatus({
+    pollIntervalMs,
+    enabled: sharedStatus === undefined,
+  });
+  const status = sharedStatus ?? internalStatus;
 
   return (
     <section
@@ -52,14 +62,14 @@ export const Controls = <Target extends DashboardTarget = DashboardTarget>({
     >
       {target.kind === "group" || target.kind === "process" ? (
         <ProcessGroupControlPanel
-          sharedStatus={sharedStatus}
+          sharedStatus={status}
           processId={target.kind === "process" ? target.id : undefined}
           {...process}
         />
       ) : null}
       {target.kind === "group" || target.kind === "queue" ? (
         <QueueControlPanel
-          sharedStatus={sharedStatus}
+          sharedStatus={status}
           queueId={target.kind === "queue" ? target.id : undefined}
           {...queue}
         />
