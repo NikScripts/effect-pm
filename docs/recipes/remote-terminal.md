@@ -51,6 +51,10 @@ replacement.
 - Terminal gateway transport should be Effect RPC first. Effect HTTP API can be
   used for non-streaming metadata or deployment edges, but terminal sessions
   should not be hand-rolled HTTP routes.
+- Separate semantic transports are allowed and preferred when feature semantics
+  differ, but they must share adapter conventions and runtime configuration.
+- `TerminalTransportRpc` is separate from `ControlTransportRpc`, but both use
+  `@effect/rpc` and a shared ProcessManager RPC runtime configuration style.
 - V1 backend starts with Effect `ChildProcess` command streaming.
 - PTY support is a later backend behind the same `TerminalSessionService`
   contract.
@@ -417,8 +421,14 @@ Which Effect transport module owns the terminal gateway contract, and how browse
 widgets talk to it without hand-rolled HTTP route design.
 
 Recommended ingredients:
-- Use `@effect/rpc` as the terminal gateway contract — it models Effect effects
-  and streaming responses directly.
+- Use `@effect/rpc` as the terminal gateway transport implementation — it models
+  Effect effects and streaming responses directly.
+- Keep terminal as its own semantic transport (`TerminalTransportRpc`) — terminal
+  sessions differ from normal control commands enough to deserve a separate
+  module.
+- Share RPC runtime configuration conventions with future `ControlTransportRpc`,
+  `LogTransportRpc`, and `QueueTransportRpc` — users should not relearn setup per
+  feature.
 - Keep `TerminalSessionPort` as the browser/widget facade — it adapts an Effect
   RPC client to Promise/AsyncIterable for React.
 - Define a `TerminalRpc` `RpcGroup` — `Open`, `Input`, `Resize`, `Close`, and
@@ -433,13 +443,14 @@ Recommended ingredients:
   dashboard relay, matching the command-auth gateway pattern.
 - Use Effect HTTP API only for simple metadata/REST compatibility if needed; it
   is not the primary terminal session transport.
+- Do not create one mega ProcessManager transport that owns every feature.
 
 Picture:
 
 ```txt
 Browser TerminalWidget
   -> TerminalSessionPort
-    -> Effect RPC client adapter
+  -> TerminalTransportRpc client adapter
       -> app/dashboard gateway
       -> authenticate user
       -> authorize terminal.open/input/resize/close
@@ -564,6 +575,19 @@ export const createRpcTerminalSessionAdapter = (
 });
 ```
 
+```ts
+export interface ProcessManagerRpcRuntimeConfig {
+  readonly baseUrl: string;
+  readonly headers?: Effect.Effect<Headers.Input>;
+}
+
+const rpcRuntime = ProcessManagerRpcRuntime.make(config);
+
+const control = ControlTransportRpc.client(rpcRuntime);
+const terminal = TerminalTransportRpc.client(rpcRuntime);
+const logs = LogTransportRpc.client(rpcRuntime);
+```
+
 Why this recommendation is good:
 - It uses Effect-native API/RPC tooling instead of custom route design.
 - It matches terminal semantics: request/response for lifecycle commands and
@@ -571,6 +595,7 @@ Why this recommendation is good:
 - It keeps app user auth and PM machine auth separate.
 - It keeps React widgets decoupled behind `TerminalSessionPort`.
 - It supports both direct-to-group and dashboard-relay deployments.
+- It avoids a single mega transport while still giving users one setup style.
 - It leaves Effect HTTP API available for simple REST metadata without making it
   the terminal stream protocol.
 
@@ -597,7 +622,9 @@ Ingredients:
 - Use Effect HTTP API only for non-streaming metadata/compatibility if needed.
 
 Decision:
-Use Effect RPC as the primary terminal gateway transport. Do not hand-roll HTTP
+Use Effect RPC as the primary terminal gateway transport. Keep terminal as a
+separate semantic transport module, but require the same adapter/runtime
+configuration style as other ProcessManager RPC transports. Do not hand-roll HTTP
 routes for terminal v1.
 
 Acceptance check:
