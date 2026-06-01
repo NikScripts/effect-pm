@@ -157,16 +157,19 @@ import { ProcessScope } from "@nikscripts/effect-pm/process/ProcessScope" // pat
 **No author `store:` on events.** No `fromScope`. No `scope:` on tags — scope lives on
 **`Telemetry.Schema`**.
 
-**Event payload** — `Telemetry.Schema.Class` (mirror `Schema.Class`; scope required):
+**Event payload** — `Telemetry.Schema.Class` (mirror `Schema.Class`; scope required).
+Alias scope schema entry points locally to keep declarations readable:
 
 ```ts
+const ProcessState = ProcessScope.Schema.State
+
 class ProcessExecutionCompleted extends Telemetry.Schema.Class<ProcessExecutionCompleted>()(
   ProcessScope,
 )({
-  processId: ProcessScope.Schema.processId,
-  scheduleKey: ProcessScope.Schema.scheduleKey,
-  startedAt: ProcessScope.Schema.startedAt,
-  isStartupRun: ProcessScope.Schema.isStartupRun,
+  processId: ProcessState.processId,
+  scheduleKey: ProcessState.scheduleKey,
+  startedAt: ProcessState.startedAt,
+  isStartupRun: ProcessState.isStartupRun,
   completedAt: Telemetry.terminal.clockMillis,
   status: Schema.Literal("completed"),
 }) {}
@@ -181,9 +184,17 @@ export class ProcessExecutionStore extends ProcessStore.Service<ProcessExecution
     Telemetry.namespace("Process"),
     Telemetry.tag("Execution")(
       Telemetry.event("Completed", ProcessExecutionCompleted).pipe(
-        Telemetry.annotateLogs,
+        Telemetry.logWarning(
+          "ProcessExecutionStore write failed for completed run",
+          ({ processId }) => ({ processId }),
+        ),
       ),
-      Telemetry.event("Failed", ProcessExecutionFailed),
+      Telemetry.event("Failed", ProcessExecutionFailed).pipe(
+        Telemetry.logWarning(
+          ({ processId }) => `ProcessExecutionStore write failed for failed run "${processId}"`,
+          ({ processId }) => ({ processId }),
+        ),
+      ),
       Telemetry.event("Interrupted", ProcessExecutionInterrupted),
     ),
   ),
@@ -201,10 +212,20 @@ export class ProcessExecutionStore extends ProcessStore.Service<ProcessExecution
 | API | Role |
 |-----|------|
 | `Telemetry.event(name, schema)` | Second arg is **only** a `Telemetry.Schema` class (or interim legacy `{ store }` until slice 2). |
-| `Telemetry.event(...).pipe(...)` | Fan-out legs (`annotateLogs`, `span`, …) receive the **materialized row** from schema pick + terminals. Phase 1: store leg only. |
+| `Telemetry.event(...).pipe(...)` | Fan-out legs (`logWarning`, `span`, …) receive the **materialized row** from schema pick + terminals. Phase 1: store leg + warning logs. |
 | `Telemetry.tag("Entry")` | Wire/API path only — **no** `scope:` option. |
-| Scope field schemas | `ProcessScope.Schema.processId` — normal Effect field schemas + pickup metadata (see plan 18). |
+| Scope field schemas | `ProcessScope.Schema.Leaf.*` (current level) and `ProcessScope.Schema.State.*` (full nested yielded state) — normal Effect field schemas + pickup metadata (see plan 18). |
 | Terminals | `Telemetry.terminal.*` or plain `Schema.*` without scope binding (`Clock`, `Failed(error)`). |
+
+`Telemetry.logWarning` accepts either static values or callbacks over the materialized event:
+
+```ts
+Telemetry.logWarning("Run storage write failed", { component: "RunResourceStore" })
+Telemetry.logWarning(
+  ({ runId }) => `Run ${runId} storage write failed`,
+  ({ runId, resourceId }) => ({ runId, resourceId }),
+)
+```
 
 **Deletes:** `ProcessStore.read`, `ProcessStore.withIdentifier`, `Facet.withIdentifier`,
 `fromScope`, per-event options bags, tag-level `scope:`.
@@ -250,7 +271,7 @@ Pseudocode for `Execution.Completed`:
 Effect.gen(function* () {
   const scope = yield* ProcessScope
   const completedAt = yield* Clock.currentTimeMillis
-  const payload = encodeCompleted({ ...pick(scope, fromScope), completedAt, status: "completed", … })
+  const payload = encodeCompleted({ ...materializeSchemaFields(scope), completedAt, status: "completed", … })
   const spine = yield* /* facet make */
   yield* spine.create(makeProcessExecutionRecord(payload))
 })
@@ -264,7 +285,7 @@ Pseudocode for `Execution.Failed(error)`:
     const scope = yield* ProcessScope
     const completedAt = yield* Clock.currentTimeMillis
     const payload = encodeFailed({
-      ...pick(scope, fromScope),
+      ...materializeSchemaFields(scope),
       completedAt,
       error: String(error),
       status: "failed",
@@ -279,8 +300,8 @@ types may include stubs; **phase 1 = store leg only**.
 
 ### 5.5 Reference kernel (`Process.ts` — canonical)
 
-This is the target `trackedProgram` after scope + factory land. Logging / `catchErrorAndLog`
-may pipe on the emit Effects; core structure is fixed.
+This is the target `trackedProgram` after scope + factory land. Logging belongs on
+the event definition (`Telemetry.logWarning(...)`), not in this kernel.
 
 ```ts
 const trackedProgram = (
@@ -394,8 +415,8 @@ interface RuntimeEmitContextShape {
 **API:**
 
 - `RuntimeEmitContext.with(patch, effect)` — kernel wrappers
-- `RuntimeEmitContext.require(...keys)` — inside generated emit (fail typed or die — pick
-  one; prefer typed `RuntimeEmitContextMissingError` mapped to log in `catchErrorAndLog` path)
+- `RuntimeEmitContext.require(...keys)` — inside generated emit for cross-cutting fields only
+  (typed misses can be surfaced through `Telemetry.logWarning` when the event opts into warning logs)
 
 **Who sets context:**
 
@@ -423,14 +444,11 @@ export class QueueResourceStore extends ProcessStore.Service<QueueResourceStore>
   "@nikscripts/effect-pm/store/queueResource/QueueResourceStore",
   ProcessStore.telemetry(
     Telemetry.namespace("Queue"),
-    Telemetry.tag("Entry", { scope: EntryScope })(
-      Telemetry.event("Enqueued", {
-        schema: QueueEntryEnqueuedPayload,
-        fromScope: ["queueId", "Worker", "Worker", "Entry", /* … */],
-      }),
-      Telemetry.event("Started", { schema: …, fromScope: … }),
+    Telemetry.tag("Entry")(
+      Telemetry.event("Enqueued", QueueEntryEnqueued),
+      Telemetry.event("Started", QueueEntryStarted),
     ),
-    Telemetry.tag("Lifecycle", { scope: QueueScope })(/* … */),
+    Telemetry.tag("Lifecycle")(QueueStarted, QueuePaused, QueueResumed),
   ),
   ProcessStore.query((s) => ({ entries, entriesByKey, lifecycle, dedupeKeys, rateLimits })),
   ProcessStore.for((queueId, s) => ({ entries: … })), // queries only
@@ -471,7 +489,7 @@ Facet **class** (runtime):
 - `Context.ServiceClass<Self, Id, Shape>`
 - `layer` / `layerRuntimeStorage`
 - nested static telemetry object (e.g. `Execution.Completed`)
-- `for` / `withIdentifier` when configured
+- `for` when configured
 
 Facet **type** (phantom brand — replace `__processStore*`):
 
@@ -520,8 +538,9 @@ Writes use context (`processId` / `queueId` pre-filled by kernel wrapper) + zero
 
 ### 8.4 Event options block (per `Telemetry.event`)
 
-See **§5.2**. Phase 1 codegen: `schema` + `fromScope` + generated `store` leg. Phase 2+:
-`prepare`, `span`, `annotate`, `metrics`, `debug` (stub types OK earlier).
+See **§5.2**. Phase 1 codegen: `Telemetry.Schema.Class(scope)(fields)` + generated
+`store` leg + `Telemetry.logWarning`. Phase 2+: `prepare`, `span`, `metrics`,
+`debug` (stub types OK earlier).
 
 ### 8.5 Registry / “catalog”
 
@@ -594,8 +613,9 @@ After slice **3**, delete `ProcessStore.record` from the builder (no parallel `r
 
 ## 12. Custom / app facets (follow-on in same factory)
 
-Same declaration rules as **§5** — `Telemetry.event` with `schema` + `fromScope`, scope on tag,
-generated store leg. Apps define their own `State.Scope` chain or use app context scopes.
+Same declaration rules as **§5** — `Telemetry.event(name, schemaClass)` with scope on
+`Telemetry.Schema.Class(scope)(fields)` and a generated store leg. Apps define their
+own `State.Scope` chain or use app context scopes.
 
 **App rule:** `yield* MyFacet.Event.Validated` from app modules — no `ProcessStore` from app
 code. Cross-cutting ids via scope + optional narrowed `RuntimeEmitContext` (§6).
@@ -643,15 +663,15 @@ Revert or replace exploratory `cursor/facet-telemetry-158c` before slice 1.
 
 ### Slice 1 — `State.Scope` factory
 
-1. `src/State.ts` (or subpath) — `State.Scope`, `withState`, `layer` / `provide` / `run`
-2. `State.Scope.Context<S>` / `State<S>` type aliases; key collision errors
+1. `src/State.ts` (or subpath) — `State.Scope<Self>()`, `withState<Self>()`, `layer` / `provide` / `run`
+2. `State.Scope.Leaf<S>` / `State.Scope.State<S>` type aliases; `Leaf` and full nested `State` schema surfaces
 3. Unit tests: queue declaration chain types (no kernel yet)
 
 ### Slice 2 — Telemetry factory core (no Process.ts yet)
 
-1. `internal/store/telemetry.ts` — AST, `telemetryWireId`, `scope:` on tag, **no** author `store`
+1. `internal/store/telemetry.ts` — AST, `telemetryWireId`, schema-bound scope, **no** author `store`
 2. `internal/store/service.ts` — `TELEMETRY_TAG` only; delete `record` paths; `buildTelemetryStatics` per §5.3
-3. Codegen: `fromScope` + `schema` → spine `create` leg
+3. Codegen: `Telemetry.Schema.Class(scope)(fields)` → spine `create` leg
 4. `ProcessStore.ts` — export `Telemetry` sibling; namespace type helpers
 5. `test/process-store-factory.test.ts` — wire ids, emit tree types (Completed vs Failed)
 
@@ -662,7 +682,7 @@ Revert or replace exploratory `cursor/facet-telemetry-158c` before slice 1.
 1. `ProcessScope` class + `ProcessScope.run`
 2. `ProcessExecutionStore` — §5.2 declaration; new wires; delete flat `record*` + `ProcessExecutionFinishInput`
 3. Generated `Execution.Completed` / `Failed(error)` / `Interrupted` per §5.3–5.4
-4. `Process.ts` — §5.5 `trackedProgram` only (plus `catchErrorAndLog` pipes if needed)
+4. `Process.ts` — §5.5 `trackedProgram` only; log pipes live on event definitions
 5. Remove execution use of `withRuntimeEmitContext` for row fields
 6. Tests: facet emit + `test/process*.ts` smoke
 7. STORAGE.md execution row + module TSDoc
@@ -940,7 +960,7 @@ Match existing store facets (`queueResource.ts`, `runResource.ts`):
  *
  * @remarks
  * Domain modules live under `src/store/*` and own their docs, wires, and types.
- * This module is only the section DSL: `telemetry`, `read`, `withIdentifier`.
+ * This module is only the section DSL: `telemetry`, `query`, `for`.
  *
  * @example Declare a facet (see `docs/STORAGE.md` and `src/store/runResource.ts`)
  * ```ts
@@ -949,10 +969,12 @@ Match existing store facets (`queueResource.ts`, `runResource.ts`):
  *   ProcessStore.telemetry(
  *     Telemetry.namespace("My"),
  *     Telemetry.tag("Event")(
- *       Telemetry.event("Happened", { store: (s) => ... }),
+ *       Telemetry.event("Happened", MyEventSchema).pipe(
+ *         Telemetry.logWarning("MyStore write failed"),
+ *       ),
  *     ),
  *   ),
- *   ProcessStore.read((s) => ({ timeline: (q) => ... })),
+ *   ProcessStore.query((s) => ({ timeline: (q) => ... })),
  * ) {}
  * ```
  *
@@ -961,17 +983,15 @@ Match existing store facets (`queueResource.ts`, `runResource.ts`):
 export const ProcessStore = {
   Service: defineProcessStoreFacet,
   telemetry: processStoreTelemetry,
-  read: processStoreRead,
-  withIdentifier: processStoreWithIdentifier,
-  catchErrorAndLog,
-  Telemetry: { namespace, tag, event },
+  query: processStoreQuery,
+  for: processStoreFor,
 } as const
 
 export declare namespace ProcessStore {
   export namespace Service {
     export type Type<F> = ...
     export type EmitType<F> = ...
-    export type ReadType<F> = ...
+    export type QueryType<F> = ...
     export type IdentifierType<F> = ...
   }
   export namespace Telemetry {
@@ -990,8 +1010,8 @@ generated doc sites — default is **effect-pm tables + examples**, not Effect.i
 export class QueueResourceStore extends ProcessStore.Service<QueueResourceStore>()(
   "@nikscripts/effect-pm/store/queueResource/QueueResourceStore",
   ProcessStore.telemetry(/* namespace + tags + events */),
-  ProcessStore.read((s) => ({ entries, entriesByKey, lifecycle, dedupeKeys, rateLimits })),
-  ProcessStore.withIdentifier((queueId, s) => ({
+  ProcessStore.query((s) => ({ entries, entriesByKey, lifecycle, dedupeKeys, rateLimits })),
+  ProcessStore.for((queueId, s) => ({
     entries: (q) => readEntries(s, { queueId, ...q }),
     // reads only — no bound writes
   })),
@@ -1008,14 +1028,11 @@ export declare namespace QueueResourceStore {
 #### Kernel + app call sites (what docs show)
 
 ```ts
-// Kernel — context first, then zero-arg telemetry
-yield* RuntimeEmitContext.with(
-  { processType: "queue-resource", processId: queueId, subjectId: entry.id, ... },
-  store.Entry.Enqueued,
-).pipe(ProcessStore.catchErrorAndLog({ message: "...", annotations: { queueId } }))
+// Kernel — scope first, then zero-arg telemetry
+yield* EntryScope.run(entryState, QueueResourceStore.Entry.Enqueued)
 
-// App custom facet — domain payload only in context, not in emit args
-yield* RuntimeEmitContext.with({ ... }, MyIngestStore.Event.Validated)
+// App custom facet — domain payload comes from scope, not emit args
+yield* MyScope.run(state, MyIngestStore.Event.Validated)
 ```
 
 #### `RuntimeEmitContext` doc (sibling to `LogContext`, not Effect clone)

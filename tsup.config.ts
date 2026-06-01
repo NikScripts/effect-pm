@@ -33,6 +33,7 @@ export default defineConfig([
       Query: "src/Query.ts",
       ResourceConfigure: "src/ResourceConfigure.ts",
       RuntimeStorage: "src/RuntimeStorage.ts",
+      State: "src/State.ts",
       ControlProtocol: "src/ControlProtocol.ts",
       ProcessManager: "src/ProcessManager.ts",
       ControlService: "src/ControlService.ts",

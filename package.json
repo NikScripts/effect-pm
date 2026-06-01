@@ -109,6 +109,11 @@
       "import": "./dist/RuntimeStorage.mjs",
       "require": "./dist/RuntimeStorage.js"
     },
+    "./State": {
+      "types": "./dist/State.d.ts",
+      "import": "./dist/State.mjs",
+      "require": "./dist/State.js"
+    },
     "./ProcessManager": {
       "types": "./dist/ProcessManager.d.ts",
       "import": "./dist/ProcessManager.mjs",

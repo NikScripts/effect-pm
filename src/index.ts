@@ -107,6 +107,7 @@ export {
 } from "./HttpApiResource";
 export { Resource } from "./Resource";
 export { ProcessStorage } from "./ProcessStorage";
+export { State } from "./State";
 export { ControlService } from "./ControlService";
 export { ControlProtocol } from "./ControlProtocol";
 export {
