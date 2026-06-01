@@ -80,7 +80,7 @@ type StateScopeClass<
     leaf: ValueOf<LeafFields>,
     effect: Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E, Exclude<R, Self> | Requirements>;
-  readonly withState: <ChildSelf>() => <
+  readonly withLeaf: <ChildSelf>() => <
     const Key extends string,
     const ChildFields extends StructFields,
   >(
@@ -224,7 +224,7 @@ const makeScopeClass = <
       effect: Effect.Effect<A, E, R>,
     ) => ScopeClass.provide(leaf)(effect);
 
-    static readonly withState =
+    static readonly withLeaf =
       <ChildSelf>() =>
       <const Key extends string, const ChildFields extends StructFields>(
         key: Key,

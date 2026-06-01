@@ -7,18 +7,18 @@ class QueueScope extends State.Scope<QueueScope>()({
   queueId: Schema.String,
 })("@test/QueueScope") {}
 
-class WorkerScope extends QueueScope.withState<WorkerScope>()("Worker", {
+class WorkerScope extends QueueScope.withLeaf<WorkerScope>()("Worker", {
   id: Schema.String,
   workerId: Schema.String,
 })("@test/WorkerScope") {}
 
-class EntryScope extends WorkerScope.withState<EntryScope>()("Entry", {
+class EntryScope extends WorkerScope.withLeaf<EntryScope>()("Entry", {
   id: Schema.String,
   entryId: Schema.String,
 })("@test/EntryScope") {}
 
 describe("State.Scope", () => {
-  it.effect("provides nested state through withState scopes", () =>
+  it.effect("provides nested state through withLeaf scopes", () =>
     Effect.gen(function* () {
       const state = yield* EntryScope.run(
         { id: "entry", entryId: "entry-1" },

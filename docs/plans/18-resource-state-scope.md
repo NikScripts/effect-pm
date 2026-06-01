@@ -12,9 +12,9 @@ scope is [17-facet-telemetry-factory.md](./17-facet-telemetry-factory.md) §5 �
 
 | Term | Meaning |
 |------|---------|
-| **Scope** | `class` extending `State.Scope` / `Parent.withState` — service tag + DI chain |
+| **Scope** | `class` extending `State.Scope` / `Parent.withLeaf` — service tag + DI chain |
 | **Leaf** | Current level **`Schema.Struct`** declared directly by this scope |
-| **State** | Full nested **`Schema.Struct`** available from `yield* Scope` — ancestors at root, children under `withState` keys |
+| **State** | Full nested **`Schema.Struct`** available from `yield* Scope` — ancestors at root, children under `withLeaf` keys |
 
 Not Effect’s `Context` module. Use **scope state** in prose; types use `State.Scope.State<S>`
 for the full yielded value and `State.Scope.Leaf<S>` for the current-level value.
@@ -24,7 +24,7 @@ for the full yielded value and `State.Scope.Leaf<S>` for the current-level value
 ## 1. Declaration & assembly (Effect Schema)
 
 Leaf state is an **Effect `Schema.Struct`** built from the fields passed to
-`State.Scope()` / `withState` (plain `Struct.Fields` — factory wraps scope-field metadata;
+`State.Scope()` / `withLeaf` (plain `Struct.Fields` — factory wraps scope-field metadata;
 see plan 17 §5.2). **Not** a separate TS `interface` plus a duplicate schema.
 
 ```ts
@@ -37,12 +37,12 @@ class ProcessScope extends State.Scope<ProcessScope>()(
   },
 )("@nikscripts/effect-pm/process/ProcessScope") {}
 
-class RunScope extends RunResourceScope.withState<RunScope>()(
+class RunScope extends RunResourceScope.withLeaf<RunScope>()(
   "Run",
   { runId: Schema.String },
 )("@nikscripts/effect-pm/run/RunScope") {}
 
-class EntryScope extends WorkerScope.withState<EntryScope>()(
+class EntryScope extends WorkerScope.withLeaf<EntryScope>()(
   "Entry",
   {
     entryId: Schema.String,
@@ -70,7 +70,7 @@ Types: `State.Scope.Leaf<typeof EntryScope>` (current-level value),
 | `WorkerScope` | `{ queueId, Worker: { workerId } }` |
 | `EntryScope` | `{ queueId, Worker: { workerId, Entry: { … } } }` |
 
-**`withState` key:** must not collide with existing property names on the parent state
+**`withLeaf` key:** must not collide with existing property names on the parent state
 (compile error). Repeated field names inside nested child state are fine because
 `Schema.State` is nested, not flattened.
 
@@ -137,6 +137,6 @@ Facet event `Telemetry.Schema` reads `RunScope` when Run facet migrates.
 
 ## 5. Success criteria
 
-- `State.Scope` + `withState` codegen; compile errors for invalid child keys.
+- `State.Scope` + `withLeaf` codegen; compile errors for invalid child keys.
 - Slice 3: `Process.ts` uses `ProcessScope.run` + plan 17 emit tree (no `finishInput` / execution `RuntimeEmitContext` for row fields).
 - Queue chain typechecks before Queue kernel migration.

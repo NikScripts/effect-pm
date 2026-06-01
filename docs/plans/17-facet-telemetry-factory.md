@@ -157,13 +157,13 @@ import { ProcessScope } from "@nikscripts/effect-pm/process/ProcessScope" // pat
 **No author `store:` on events.** No `fromScope`. No `scope:` on tags — scope lives on
 **`Telemetry.Schema`**.
 
-**Event payload** — `Telemetry.Schema.Class` (mirror `Schema.Class`; scope required).
+**Event payload** — `Telemetry.Schema` (mirror `Schema.Class`; scope required).
 Alias scope schema entry points locally to keep declarations readable:
 
 ```ts
 const ProcessState = ProcessScope.Schema.State
 
-class ProcessExecutionCompleted extends Telemetry.Schema.Class<ProcessExecutionCompleted>()(
+class ProcessExecutionCompleted extends Telemetry.Schema<ProcessExecutionCompleted>()(
   ProcessScope,
 )({
   processId: ProcessState.processId,
@@ -360,7 +360,7 @@ Mark each line **yes / no / revise** in review. Until this passes, §5 is **draf
 | A | **Imports** — `Telemetry` sibling; `ProcessStore.telemetry` only wrapper | §5.1 | Nested `ProcessStore.Telemetry` |
 | B | **Author never writes `store:`** — codegen owns spine leg | §5.2 | Keep author `store` for escape hatch |
 | C | **Scope on `Telemetry.Schema` only** — not on tag | §5.2 | Tag-level `scope:` |
-| D | **Event row = `Telemetry.Schema.Class(scope)(fields)`** — no `fromScope` | §5.2 | Manual encoders / field lists |
+| D | **Event row = `Telemetry.Schema(scope)(fields)`** — no `fromScope` | §5.2 | Manual encoders / field lists |
 | D2 | **`Telemetry.event(name, schema)`** — schema-only second arg | §5.2 | `{ schema, fromScope, store }` options |
 | D3 | **Fan-out via `.pipe()`** on event def | §5.2 | Options on `Telemetry.event` |
 | D4 | **`ProcessStore.query` + `ProcessStore.for`** | §5.2 | `read` / `withIdentifier` |
@@ -538,7 +538,7 @@ Writes use context (`processId` / `queueId` pre-filled by kernel wrapper) + zero
 
 ### 8.4 Event options block (per `Telemetry.event`)
 
-See **§5.2**. Phase 1 codegen: `Telemetry.Schema.Class(scope)(fields)` + generated
+See **§5.2**. Phase 1 codegen: `Telemetry.Schema(scope)(fields)` + generated
 `store` leg + `Telemetry.logWarning`. Phase 2+: `prepare`, `span`, `metrics`,
 `debug` (stub types OK earlier).
 
@@ -614,7 +614,7 @@ After slice **3**, delete `ProcessStore.record` from the builder (no parallel `r
 ## 12. Custom / app facets (follow-on in same factory)
 
 Same declaration rules as **§5** — `Telemetry.event(name, schemaClass)` with scope on
-`Telemetry.Schema.Class(scope)(fields)` and a generated store leg. Apps define their
+`Telemetry.Schema(scope)(fields)` and a generated store leg. Apps define their
 own `State.Scope` chain or use app context scopes.
 
 **App rule:** `yield* MyFacet.Event.Validated` from app modules — no `ProcessStore` from app
@@ -663,7 +663,7 @@ Revert or replace exploratory `cursor/facet-telemetry-158c` before slice 1.
 
 ### Slice 1 — `State.Scope` factory
 
-1. `src/State.ts` (or subpath) — `State.Scope<Self>()`, `withState<Self>()`, `layer` / `provide` / `run`
+1. `src/State.ts` (or subpath) — `State.Scope<Self>()`, `withLeaf<Self>()`, `layer` / `provide` / `run`
 2. `State.Scope.Leaf<S>` / `State.Scope.State<S>` type aliases; `Leaf` and full nested `State` schema surfaces
 3. Unit tests: queue declaration chain types (no kernel yet)
 
@@ -671,7 +671,7 @@ Revert or replace exploratory `cursor/facet-telemetry-158c` before slice 1.
 
 1. `internal/store/telemetry.ts` — AST, `telemetryWireId`, schema-bound scope, **no** author `store`
 2. `internal/store/service.ts` — `TELEMETRY_TAG` only; delete `record` paths; `buildTelemetryStatics` per §5.3
-3. Codegen: `Telemetry.Schema.Class(scope)(fields)` → spine `create` leg
+3. Codegen: `Telemetry.Schema(scope)(fields)` → spine `create` leg
 4. `ProcessStore.ts` — export `Telemetry` sibling; namespace type helpers
 5. `test/process-store-factory.test.ts` — wire ids, emit tree types (Completed vs Failed)
 
