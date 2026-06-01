@@ -14,20 +14,24 @@ how we know it is baked.
 
 ## Core behavior
 
-1. Ask exactly one decision question at a time.
-2. Every question must include:
+1. Ask one decision area at a time, but include every pointed subquestion needed
+   to decide that area quickly. Do not reduce a rich design branch to a single
+   yes/no question unless it is truly the only question.
+2. Every decision area must include:
    - the recipe step,
    - a concise explanation of what the step decides,
    - recommended ingredients,
    - code examples or pseudo-code "pictures",
    - why the recommendation is good,
    - viable alternatives with tradeoffs,
+   - a compact decision question set,
    - an acceptance check.
 3. If repository facts can answer part of the decision, inspect the codebase
    before asking.
 4. Prefer fewer, richer questions over many tiny questions.
-5. Keep each step scoped to one decision branch. Do not combine unrelated
-   decisions.
+5. Keep each step scoped to one decision branch, but load that branch with the
+   related questions, examples, and acceptance checks needed to make the decision
+   in one pass.
 6. Wait for the user's answer before moving to the next recipe step.
 7. When the user selects an option, restate the decision as a locked ingredient
    before continuing.
@@ -95,11 +99,12 @@ Alternatives:
 1. `<alternative>` — `<tradeoff>`
 2. `<alternative>` — `<tradeoff>`
 
-Question:
-`<one pointed question>`
+Decision questions:
+1. `<pointed question>`
+2. `<pointed question>`
 
 Recommended answer:
-`<the answer I recommend and why>`
+`<the answer set I recommend and why>`
 
 Acceptance check:
 `<how we will know this decision worked>`

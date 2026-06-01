@@ -833,13 +833,24 @@ Alternatives:
 3. Build CLI first — good demo value, but it creates command surfaces before the
    verifier and transport contract are proven.
 
-Question:
-Should implementation proceed in these three review cuts: `CommandAuth` core,
-signed control transport, then operator workflow/docs/changeset?
+Decision questions:
+1. Should implementation proceed in these three review cuts: `CommandAuth` core,
+   signed control transport, then operator workflow/docs/changeset?
+2. Should Cut 1 include the public `CommandAuth` export and package subpath, or
+   keep it test-only until transport integration?
+3. Should signed `GetHealth` ship in Cut 2 as part of protocol/transport, or wait
+   for operator docs in Cut 3?
+4. Should `effect-pm auth keygen` and `pm auth enroll-key` land together in Cut
+   3, or should keygen land first with enrollment docs only?
+5. Should the changeset be part of Cut 3, or held until the recipe is promoted
+   into durable docs and code?
 
 Recommended answer:
-Yes. It is the quickest path that still keeps each commit testable, reviewable,
-and useful.
+Yes to the three cuts. Put the public export in Cut 1 so all later code consumes
+the real API. Put signed `GetHealth` in Cut 2 because it is a protocol behavior,
+not operator documentation. Land keygen and enrollment together in Cut 3 so the
+operator workflow is usable end-to-end. Include the changeset in Cut 3 because
+the implementation introduces public API, behavior, exports, and CLI commands.
 
 Acceptance check:
 Each cut compiles and has targeted tests; the final cut passes typecheck, tests,
