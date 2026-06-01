@@ -12,6 +12,11 @@ or implementation strategy with high signal and less back-and-forth than
 The style is a recipe: show the dish, ingredients, steps, alternatives, and
 how we know it is baked.
 
+The chat is the user-facing surface. Always put the full recipe card, decision
+questions, examples, alternatives, and acceptance checks in the chat. The recipe
+file is the agent memory ledger and should mirror the chat; never rely on the
+user opening the recipe file to see the substance of the bake session.
+
 ## Core behavior
 
 1. Ask one decision area at a time, but include every pointed subquestion needed
