@@ -294,6 +294,34 @@ Decision:
 Accepted. Browser-safe tags files use dedicated effect-pm subpath imports and
 runtime composition stays in `*.runtime.ts`.
 
+## Future planned ideas
+
+### Group console primitive
+
+A future `GroupConsole` / terminal primitive may provide an authenticated,
+bidirectional shell attached to a process group. This is not part of the first
+`Controls` / `Logs` build slice.
+
+Planned shape:
+
+```tsx
+<GroupConsole for={BillingGroup} shell="zsh" />
+```
+
+Notes:
+
+- Requires a bidirectional transport such as WebSocket; log streaming stays
+  NDJSON/SSE-friendly, but a console needs stdin, stdout, stderr, and resize
+  events.
+- Requires server-only PTY/session infrastructure; browser code must never
+  import PTY packages or runtime modules.
+- Authn/authz must happen before session allocation, including group id, shell
+  allowlist, cwd, env allowlist, and command capability checks.
+- Session lifecycle needs attach/detach, heartbeat, idle timeout, max duration,
+  cleanup on disconnect, and audit records for start/stop/actor/group/shell.
+- Treat this as a third primitive after `Controls` and `Logs`, not a widget
+  registry feature.
+
 ## Cleanup status
 
 Temporary recipe. Remove it when the design is implemented or moved into durable
