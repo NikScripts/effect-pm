@@ -130,22 +130,23 @@ Decision:
 Accepted. The public author API is `for={ActualTagOrDefinition}` and the
 implementation must protect browser bundles from runtime modules.
 
-## Recipe step: log port contract
+## Recipe step: log port contract (locked)
 
 What this decides:
-Whether the first logs primitive should read a bounded history snapshot, stream
-live logs, or combine both through one React hook.
+How the React control port exposes logs without splitting author-facing history
+and live-follow concerns across separate methods.
 
 Recommended ingredients:
 
-- `ControlPlanePort.getLogs(target, query)` - returns a bounded, decoded history
-  snapshot for initial render and reconnects.
-- `ControlPlanePort.streamLogs(target, options)` - follows live NDJSON logs where
-  the adapter supports it.
-- `useControlPlaneLogs({ for: target, lines, follow })` - React owns lifecycle,
-  cancellation, and append state; components stay Promise/stream based.
-- `follow` defaults to `true`; logs are live unless the caller explicitly asks
-  for a static snapshot.
+- `ControlPlanePort.logs(params)` - one logs surface for history, date ranges,
+  and live follow.
+- `params.for` uses the same browser-safe target contract as `Controls` and
+  `Logs`.
+- `params.lines` requests a bounded recent tail for normal operator views.
+- `params.from` / `params.to` request older history or bounded ranges when
+  durable history is available.
+- `params.follow` defaults to `true`; logs are live unless the caller explicitly
+  asks for a static snapshot.
 - Filters derive from the same `for` target - group target includes group logs,
   process target filters `processId`, queue target filters `queueId`.
 
@@ -154,43 +155,51 @@ Picture:
 ```tsx
 <Logs for={BillingGroup} lines={200} />
 <Logs for={BillingSyncProcess} lines={100} />
-<Logs for={EmailQueue} lines={100} />
+<Logs for={EmailQueue} from={start} to={end} follow={false} />
 ```
 
 ```ts
-type UseControlPlaneLogsOptions<Target extends DashboardTarget> = {
+type ControlPlaneLogsParams<Target extends DashboardTarget> = {
   readonly for: Target;
   readonly lines?: number;
-  readonly follow?: boolean;
+  readonly from?: Date;
+  readonly to?: Date;
+  readonly follow?: boolean; // default true
 };
+
+interface ControlPlanePort {
+  readonly logs: (params: ControlPlaneLogsParams<DashboardTarget>) => ControlPlaneLogs;
+}
 ```
 
 Alternatives:
 
-1. History only - easiest to test and works through plain JSON, but feels stale
-   for an operator console.
-2. Live stream only - matches `/logs/stream` today, but reconnects cannot show
-   older context unless the relay tail still has it.
-3. Push logs through `getStatus` polling - simple adapter shape, but mixes logs
+1. Separate `getLogs` and `streamLogs` - explicit internally, but pushes transport
+   shape into the public React API and makes components coordinate two calls.
+2. History only - easy to test and works through plain JSON, but violates the
+   operator expectation that logs follow by default.
+3. Live stream only - matches `/logs/stream` today, but reconnects and older
+   history need date/limit context.
+4. Push logs through `getStatus` polling - simple adapter shape, but mixes logs
    into the control status payload and wastes bandwidth.
 
 Question:
-Should the first logs API be history-plus-live (`getLogs` for snapshot and
-`streamLogs` for follow), even if the first implementation backs history with
-the existing relay tail before durable query endpoints are added?
+Should logs be one `ControlPlanePort.logs(params)` surface, with `lines` / date
+range history parameters and `follow: true` by default?
 
 Recommended answer:
-Yes. Operators need context plus live updates, and splitting snapshot from live
-follow matches the backend model (`LogStore` history plus relay stream) without
-making the UI polling-heavy.
+Yes. It gives React one conceptual logs operation while still letting adapters
+choose whether they satisfy it via relay tail, durable history, live NDJSON, or
+a combined backend endpoint.
 
 Acceptance check:
 The dashboard demo can render `Logs for={DemoGroup}`, show the initial tail,
-append new process/queue log lines by default, and filter when passed a process
-or queue tag.
+append new process/queue log lines by default, and support a static date/line
+range when `follow={false}` is passed.
 
 Decision:
-Accepted. Logs are history-plus-live, and live follow is the default behavior.
+Accepted. The public port has one logs operation with history parameters and
+live follow enabled by default.
 
 ## Recipe step: safe target declarations
 
