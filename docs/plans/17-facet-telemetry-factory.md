@@ -227,6 +227,35 @@ Telemetry.logWarning(
 )
 ```
 
+### 5.2.1 Deferred helper decisions
+
+Keep the current Effect-style builder DSL. Do **not** add `Telemetry.define(...)`;
+multiple authoring styles make edits less predictable.
+
+Add these now:
+
+- `Telemetry.Type.Wire<TelemetryDef>` — type union of all PascalCase wires in a
+  telemetry definition.
+- `Telemetry.Type.Event<TelemetryDef, "Tag">` — type union of event wires for
+  a tag.
+- `Telemetry.events(def, tag?)` — runtime wire arrays derived from the
+  telemetry definition for query predicates.
+
+Defer these until separate recipes settle the API:
+
+- `Telemetry.match(...)` / `matchTag(...)` — should take inspiration from
+  Effect's match APIs before implementation.
+- `Telemetry.index(...)` — needed for queue `subjectId` / `key` / `indexA-B`,
+  but needs a dedicated Queue indexing recipe.
+- `Telemetry.batch(...)` — desired, but the first implementation destabilized
+  event type inference; revisit after definition-derived type helpers are
+  stable.
+- `Telemetry.project(...)` and `Telemetry.codec(...)` — too much DSL until
+  repeated decoder pain is obvious.
+
+Schema reuse rule: identical payload schemas should be shared. Event names carry
+wire identity; schemas only describe event payload shape.
+
 **Deletes:** `ProcessStore.read`, `ProcessStore.withIdentifier`, `Facet.withIdentifier`,
 `fromScope`, per-event options bags, tag-level `scope:`.
 
