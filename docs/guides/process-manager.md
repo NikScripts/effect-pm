@@ -98,6 +98,17 @@ const manager = yield* ProcessManager.connect(BillingGroup, {
 // manager.process("@app/Billing/SyncInvoices").start
 ```
 
+For authenticated control services, provide a signer:
+
+```typescript
+import { CommandAuth, ProcessManager } from "@nikscripts/effect-pm";
+
+const manager = ProcessManager.connect(BillingGroup, {
+  baseUrl: "http://127.0.0.1:3001",
+  auth: CommandAuth.ed25519Signer(privateKeyRecord),
+});
+```
+
 | Discovery | API |
 | --- | --- |
 | Registry map | `ProcessManager.ConnectionRegistry.layer(groups, { [id]: url })` |
@@ -106,6 +117,39 @@ const manager = yield* ProcessManager.connect(BillingGroup, {
 | Raw contract | `connect({ baseUrl, contract })` |
 
 HTTP client uses the **control protocol envelope** (`POST /control`). The server also exposes **REST** routes for the same operations (see [`control-plane.md`](./control-plane.md)).
+
+---
+
+## Command authentication keys
+
+Generate a local Ed25519 key pair with the admin CLI:
+
+```sh
+effect-pm auth keygen \
+  --name nik-laptop \
+  --expires 2026-12-31T23:59:59.999Z \
+  --private-key-out ~/.config/effect-pm/keys/nik-laptop.pem \
+  --public-record-out ./nik-laptop.public.json
+```
+
+Enroll the public key into one or more group verifier configs:
+
+```sh
+pm auth enroll-key ./nik-laptop.public.json \
+  --group @app/Billing \
+  --write-env .env.local
+```
+
+The private key stays local to the operator. The public record is safe to add to
+the group / PM receiver config. Common failures:
+
+| Error | Fix |
+| --- | --- |
+| `401 MissingSignatureHeader` | Configure a signer on the client / CLI. |
+| `401 UnknownKeyId` | Enroll that public key with the receiver. |
+| `401 ExpiredKey` | Generate and enroll a replacement key. |
+| `401 ReplayedCommand` | Retry with a fresh command envelope. |
+| `404 strict mode shortcut` | Use signed `POST /control` / ProcessManager. |
 
 ---
 
