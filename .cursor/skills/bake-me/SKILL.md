@@ -44,7 +44,36 @@ Before the first question, gather relevant context:
 
 Then summarize only the facts that materially affect the next decision.
 
-### 2. One step per decision
+### 2. Recipe file
+
+Create a committed Markdown recipe file for every baked design thread.
+
+Default location:
+
+- `docs/recipes/<short-topic>.md` when the decision concerns repo behavior,
+  public API, architecture, migration, or testing.
+- `.cursor/recipes/<short-topic>.md` only for agent-local workflow decisions
+  that should not be user-facing docs.
+
+The recipe file is the working decision artifact. It should include:
+
+- goal and non-goals;
+- mise en place findings;
+- locked ingredients;
+- open recipe steps;
+- code pictures;
+- alternatives and rejected substitutions;
+- acceptance checks;
+- cleanup status.
+
+Commit recipe file updates as decisions are locked. When the recipe is fully
+implemented, moved into durable docs, or no longer needed, remove the recipe file
+in a cleanup commit and point to the replacement docs / code / tests in the
+commit message or final summary.
+
+Do not leave stale recipe files behind after the plan has shipped.
+
+### 3. One step per decision
 
 Use this format for every step:
 
@@ -76,7 +105,7 @@ Acceptance check:
 `<how we will know this decision worked>`
 ````
 
-### 3. Decision ledger
+### 4. Decision ledger
 
 Maintain a terse ledger as decisions are locked:
 
@@ -89,7 +118,9 @@ Locked ingredients:
 Show the ledger only when useful, usually after a user answers or before a
 downstream decision depends on it.
 
-### 4. Efficiency rules
+Mirror the ledger into the recipe file whenever a decision is locked.
+
+### 5. Efficiency rules
 
 - Use code examples instead of abstract prose when possible.
 - Collapse obvious low-risk subdecisions into the recommended ingredients.
