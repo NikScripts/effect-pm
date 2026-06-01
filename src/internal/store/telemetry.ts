@@ -622,11 +622,12 @@ export interface ProcessStoreTelemetrySection<
   Meta extends TelemetryWireMeta = TelemetryWireMeta,
 > {
   readonly _tag: typeof TELEMETRY_TAG;
+  readonly _telemetryMeta?: Meta;
   readonly fn: (s: ProcessStoreSpine) => EmitApi;
   readonly emitTree: TelemetryNestedEmitApi;
   readonly emitPaths: ReadonlyArray<TelemetryEmitPath>;
   readonly wireIds: ReadonlyArray<string>;
-  readonly metadata: ReadonlyArray<Meta>;
+  readonly metadata: ReadonlyArray<TelemetryWireMeta>;
 }
 
 const makeProcessStoreTelemetry = <const Parts extends ReadonlyArray<TelemetryPart>>(
