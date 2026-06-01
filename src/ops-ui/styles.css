@@ -1,0 +1,239 @@
+/* Styled shell for the dashboard demo and future Tailwind token mapping. */
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #070b14;
+  color: #e5edf7;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 34rem),
+    radial-gradient(circle at top right, rgba(168, 85, 247, 0.14), transparent 32rem),
+    #070b14;
+}
+
+button {
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #dbeafe;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.45rem 0.8rem;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+button:hover:not(:disabled) {
+  background: rgba(30, 41, 59, 0.94);
+  border-color: rgba(125, 211, 252, 0.72);
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+code {
+  color: #93c5fd;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.pm-dashboard {
+  box-sizing: border-box;
+  width: min(1180px, calc(100vw - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 3rem;
+}
+
+.pm-dashboard *,
+.pm-dashboard *::before,
+.pm-dashboard *::after {
+  box-sizing: border-box;
+}
+
+.pm-dashboard__hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 1.5rem;
+  background: rgba(15, 23, 42, 0.72);
+  box-shadow: 0 24px 80px rgba(2, 6, 23, 0.42);
+}
+
+.pm-dashboard__eyebrow,
+.pm-dashboard__section-label {
+  margin: 0 0 0.4rem;
+  color: #67e8f9;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.pm-dashboard__title {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 4.5rem);
+  letter-spacing: -0.08em;
+  line-height: 0.95;
+}
+
+.pm-dashboard__description {
+  max-width: 42rem;
+  margin: 0.9rem 0 0;
+  color: #a6b4c8;
+  font-size: 1rem;
+}
+
+.pm-dashboard__group-pill {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 14rem;
+  padding: 1rem;
+  border: 1px solid rgba(125, 211, 252, 0.28);
+  border-radius: 1rem;
+  background: rgba(8, 47, 73, 0.4);
+}
+
+.pm-dashboard__group-pill span {
+  color: #8ea4bf;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.pm-dashboard__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 1rem;
+}
+
+.pm-dashboard__details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.pm-dashboard__card {
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 1.25rem;
+  background: rgba(15, 23, 42, 0.76);
+  box-shadow: 0 16px 50px rgba(2, 6, 23, 0.28);
+}
+
+.pm-dashboard__card-header {
+  padding: 1.15rem 1.25rem 0;
+}
+
+.pm-dashboard__card-header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.pm-dashboard section[data-pm-panel],
+.pm-dashboard [data-pm-panel="controls"] {
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+.pm-dashboard [data-pm-panel="controls"] > section,
+.pm-dashboard [data-pm-panel="operator"] > section {
+  padding: 0;
+}
+
+.pm-dashboard [data-pm-panel="controls"] > section + section,
+.pm-dashboard [data-pm-panel="operator"] > section + section {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.pm-dashboard [data-pm-panel="processes"] header,
+.pm-dashboard [data-pm-panel="queues"] header,
+.pm-dashboard [data-pm-panel="logs"] header {
+  margin-bottom: 0.9rem;
+}
+
+.pm-dashboard [data-pm-panel="processes"] h2,
+.pm-dashboard [data-pm-panel="queues"] h2,
+.pm-dashboard [data-pm-panel="logs"] h2 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.pm-dashboard [data-pm-panel="processes"] p,
+.pm-dashboard [data-pm-panel="queues"] p,
+.pm-dashboard [data-pm-panel="logs"] p {
+  margin: 0.25rem 0 0;
+  color: #91a3ba;
+}
+
+.pm-dashboard ul,
+.pm-dashboard ol {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pm-dashboard li {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.8rem;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 0.95rem;
+  background: rgba(15, 23, 42, 0.66);
+}
+
+.pm-dashboard li strong {
+  color: #f8fafc;
+}
+
+.pm-dashboard li span {
+  color: #9fb0c6;
+}
+
+.pm-dashboard li div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pm-dashboard [data-pm-panel="logs"] ol {
+  max-height: 28rem;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.pm-dashboard [data-pm-panel="logs"] li {
+  grid-template-columns: minmax(10rem, auto) auto minmax(0, 1fr);
+  align-items: baseline;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.82rem;
+}
+
+.pm-dashboard [data-pm-panel="logs"] time {
+  color: #7dd3fc;
+}
+
+@media (max-width: 860px) {
+  .pm-dashboard__hero,
+  .pm-dashboard__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pm-dashboard__hero {
+    display: grid;
+  }
+}

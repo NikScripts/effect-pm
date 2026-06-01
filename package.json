@@ -144,6 +144,11 @@
       "import": "./dist/prisma/index.mjs",
       "require": "./dist/prisma/index.js"
     },
+    "./ops-ui": {
+      "types": "./dist/ops-ui/index.d.ts",
+      "import": "./dist/ops-ui/index.mjs",
+      "require": "./dist/ops-ui/index.js"
+    },
     "./react": {
       "types": "./dist/react/index.d.ts",
       "import": "./dist/react/index.mjs",
