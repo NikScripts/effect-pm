@@ -282,9 +282,7 @@ const decodeLifecycleEvents = (
  *
  * @public
  */
-export class ProcessLifecycleStore extends ProcessStore.Service<
-  ProcessLifecycleStore
->()(
+export const ProcessLifecycleStore = ProcessStore.Service(
   "@nikscripts/effect-pm/store/processLifecycle/ProcessLifecycleStore",
   ProcessStore.telemetry(
     Telemetry.namespace("Process"),
@@ -407,29 +405,10 @@ export class ProcessLifecycleStore extends ProcessStore.Service<
           }),
         ),
   })),
-) {
-  declare static Lifecycle: {
-    readonly Started: Effect.Effect<void>;
-    readonly Stopped: Effect.Effect<void>;
-    readonly Restarted: Effect.Effect<void>;
-    readonly Errored: (error: unknown) => Effect.Effect<void>;
-    readonly Recovered: Effect.Effect<void>;
-    readonly Disabled: Effect.Effect<void>;
-    readonly Enabled: Effect.Effect<void>;
-  };
-}
+);
+
+export type ProcessLifecycleStore = typeof ProcessLifecycleStore.Identifier;
 
 /**
  * @public
  */
-export declare namespace ProcessLifecycleStore {
-  export type Type = ProcessStore.Service.Type<
-    typeof ProcessLifecycleStore
-  >;
-  export type EmitType = ProcessStore.Service.EmitType<
-    typeof ProcessLifecycleStore
-  >;
-  export type IdentifierType = ProcessStore.Service.IdentifierType<
-    typeof ProcessLifecycleStore
-  >;
-}

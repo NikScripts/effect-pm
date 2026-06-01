@@ -135,9 +135,7 @@ class ProcessGroupMemberEnabled extends Telemetry.Schema<ProcessGroupMemberEnabl
  *
  * @public
  */
-export class ProcessGroupStore extends ProcessStore.Service<
-  ProcessGroupStore
->()(
+export const ProcessGroupStore = ProcessStore.Service(
   "@nikscripts/effect-pm/store/processGroup/ProcessGroupStore",
   ProcessStore.telemetry(
     Telemetry.namespace("Process"),
@@ -239,27 +237,10 @@ export class ProcessGroupStore extends ProcessStore.Service<
           ),
         ),
   })),
-) {
-  declare static Lifecycle: {
-    readonly Started: Effect.Effect<void>;
-    readonly Stopped: Effect.Effect<void>;
-    readonly Restarted: Effect.Effect<void>;
-    readonly Errored: (error: unknown) => Effect.Effect<void>;
-    readonly Recovered: Effect.Effect<void>;
-    readonly Disabled: Effect.Effect<void>;
-    readonly Enabled: Effect.Effect<void>;
-  };
-}
+);
+
+export type ProcessGroupStore = typeof ProcessGroupStore.Identifier;
 
 /**
  * @public
  */
-export declare namespace ProcessGroupStore {
-  export type Type = ProcessStore.Service.Type<typeof ProcessGroupStore>;
-  export type EmitType = ProcessStore.Service.EmitType<
-    typeof ProcessGroupStore
-  >;
-  export type IdentifierType = ProcessStore.Service.IdentifierType<
-    typeof ProcessGroupStore
-  >;
-}

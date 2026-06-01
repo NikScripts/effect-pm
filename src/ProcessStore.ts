@@ -125,5 +125,11 @@ export declare namespace ProcessStore {
     export type QueryType<T> = Query<T>;
     export type IdentifierType<T> = ProcessStoreFacetIdentifierShape<T>;
   }
+  export namespace Type {
+    export type Shape<T> = ProcessStoreFacetShape<T>;
+    export type Emit<T> = ProcessStoreFacetEmitShape<T>;
+    export type Query<T> = ProcessStoreFacetQueryShape<T>;
+    export type Identifier<T> = ProcessStoreFacetIdentifierShape<T>;
+  }
   export type CatchErrorAndLogOptions = ProcessStoreCatchErrorAndLogOptions;
 }

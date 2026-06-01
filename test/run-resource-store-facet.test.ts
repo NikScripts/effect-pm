@@ -9,6 +9,7 @@ import { ProcessStorage } from "../src/ProcessStorage";
 
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Option } from "effect";
+import { ProcessStore } from "../src/ProcessStore";
 import { RunResourceScope, RunScope } from "../src/RunResourceScope";
 import { RunResourceStore } from "../src/store/runResource";
 import type {
@@ -315,12 +316,12 @@ describe("RunResourceStore — for(resourceId) bound API", () => {
   );
 });
 
-describe("RunResourceStore — phantom type accessors", () => {
-  it.live(".Type and .EmitType expose the structural shapes", () =>
+describe("RunResourceStore — type accessors", () => {
+  it.live("ProcessStore.Type helpers expose the structural shapes", () =>
     Effect.gen(function* () {
       // Type-only smoke check: if these aliases ever drift, the file fails
       // to compile rather than the test failing at runtime.
-      const fullShape: RunResourceStore.Type = {
+      const fullShape: ProcessStore.Type.Shape<typeof RunResourceStore> = {
         Run: {
           Started: () => Effect.void,
           Completed: () => Effect.void,
@@ -335,11 +336,11 @@ describe("RunResourceStore — phantom type accessors", () => {
         runs: () => Effect.succeed([]),
         byRun: () => Effect.succeed([]),
       };
-      const emitShape: RunResourceStore.EmitType = {
+      const emitShape: ProcessStore.Type.Emit<typeof RunResourceStore> = {
         Run: fullShape.Run,
         State: fullShape.State,
       };
-      const boundShape: RunResourceStore.IdentifierType = {
+      const boundShape: ProcessStore.Type.Identifier<typeof RunResourceStore> = {
         facts: () => Effect.succeed([]),
         stateHistory: () => Effect.succeed([]),
         latestState: () => Effect.succeed(Option.none()),

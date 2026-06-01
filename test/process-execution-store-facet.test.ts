@@ -5,6 +5,7 @@ import { ProcessStorage } from "../src/ProcessStorage";
 
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Logger } from "effect";
+import { ProcessStore } from "../src/ProcessStore";
 import { ProcessScope } from "../src/ProcessScope";
 import {
   RuntimeStorage,
@@ -269,23 +270,23 @@ describe("ProcessExecutionStore — for(processId) bound API", () => {
   );
 });
 
-describe("ProcessExecutionStore — phantom type accessors", () => {
-  it.live(".Type and .EmitType expose the structural shapes", () =>
+describe("ProcessExecutionStore — type accessors", () => {
+  it.live("ProcessStore.Type helpers expose the structural shapes", () =>
     Effect.gen(function* () {
       const executionEmit = {
         Completed: Effect.void,
         Failed: () => Effect.void,
         Interrupted: Effect.void,
       };
-      const fullShape: ProcessExecutionStore.Type = {
+      const fullShape: ProcessStore.Type.Shape<typeof ProcessExecutionStore> = {
         Execution: executionEmit,
         executions: () => Effect.succeed([]),
         hasPriorExecutions: () => Effect.succeed(false),
       };
-      const emitShape: ProcessExecutionStore.EmitType = {
+      const emitShape: ProcessStore.Type.Emit<typeof ProcessExecutionStore> = {
         Execution: executionEmit,
       };
-      const boundShape: ProcessExecutionStore.IdentifierType = {
+      const boundShape: ProcessStore.Type.Identifier<typeof ProcessExecutionStore> = {
         executions: () => Effect.succeed([]),
         hasPriorExecutions: () => Effect.succeed(false),
       };

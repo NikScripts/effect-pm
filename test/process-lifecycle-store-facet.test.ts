@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Option } from "effect";
+import { ProcessStore } from "../src/ProcessStore";
 import { ProcessStorage } from "../src/ProcessStorage";
 import { ProcessLifecycleScope } from "../src/ProcessLifecycleScope";
 import {
@@ -140,10 +141,10 @@ describe("ProcessLifecycleStore — for(processId) bound API", () => {
   );
 });
 
-describe("ProcessLifecycleStore — phantom type accessors", () => {
-  it.live(".Type / .EmitType / .IdentifierType expose structural shapes", () =>
+describe("ProcessLifecycleStore — type accessors", () => {
+  it.live("ProcessStore.Type helpers expose structural shapes", () =>
     Effect.gen(function* () {
-      const fullShape: ProcessLifecycleStore.Type = {
+      const fullShape: ProcessStore.Type.Shape<typeof ProcessLifecycleStore> = {
         Lifecycle: {
           Started: Effect.void,
           Stopped: Effect.void,
@@ -158,10 +159,10 @@ describe("ProcessLifecycleStore — phantom type accessors", () => {
         latestLifecycleByProcess: () =>
           Effect.succeed(new Map<string, ProcessLifecycleTag>()),
       };
-      const emitShape: ProcessLifecycleStore.EmitType = {
+      const emitShape: ProcessStore.Type.Emit<typeof ProcessLifecycleStore> = {
         Lifecycle: fullShape.Lifecycle,
       };
-      const boundShape: ProcessLifecycleStore.IdentifierType = {
+      const boundShape: ProcessStore.Type.Identifier<typeof ProcessLifecycleStore> = {
         lifecycle: () => Effect.succeed([]),
         latest: () => Effect.succeed(Option.none()),
       };

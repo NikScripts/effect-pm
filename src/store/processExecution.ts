@@ -263,9 +263,7 @@ class ProcessExecutionInterrupted extends Telemetry.Schema<ProcessExecutionInter
  *
  * @public
  */
-export class ProcessExecutionStore extends ProcessStore.Service<
-  ProcessExecutionStore
->()(
+export const ProcessExecutionStore = ProcessStore.Service(
   "@nikscripts/effect-pm/store/processExecution/ProcessExecutionStore",
   ProcessStore.telemetry(
     Telemetry.namespace("Process"),
@@ -301,13 +299,9 @@ export class ProcessExecutionStore extends ProcessStore.Service<
       readExecutions(s, { processId, ...query }),
     hasPriorExecutions: () => readHasPriorExecutions(s, processId),
   })),
-) {
-  declare static Execution: {
-    readonly Completed: Effect.Effect<void>;
-    readonly Failed: (error: unknown) => Effect.Effect<void>;
-    readonly Interrupted: Effect.Effect<void>;
-  };
-}
+);
+
+export type ProcessExecutionStore = typeof ProcessExecutionStore.Identifier;
 
 const readExecutions = (
   s: ProcessStoreSpine,
@@ -344,14 +338,3 @@ const readHasPriorExecutions = (
       ),
     );
 
-export declare namespace ProcessExecutionStore {
-  export type Type = ProcessStore.Service.Type<
-    typeof ProcessExecutionStore
-  >;
-  export type EmitType = ProcessStore.Service.EmitType<
-    typeof ProcessExecutionStore
-  >;
-  export type IdentifierType = ProcessStore.Service.IdentifierType<
-    typeof ProcessExecutionStore
-  >;
-}

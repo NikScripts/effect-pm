@@ -780,9 +780,7 @@ class RunResourceStateChanged extends Telemetry.Schema<RunResourceStateChanged>(
  *
  * @public
  */
-export class RunResourceStore extends ProcessStore.Service<
-  RunResourceStore
->()(
+export const RunResourceStore = ProcessStore.Service(
   "@nikscripts/effect-pm/store/runResource/RunResourceStore",
   ProcessStore.telemetry(RunResourceScope)(
     Telemetry.namespace("RunResource"),
@@ -833,16 +831,9 @@ export class RunResourceStore extends ProcessStore.Service<
     byRun: (runId: string) =>
       readFacts(s, { resourceId, runId }),
   })),
-) {
-  declare static Run: {
-    readonly Started: (input: unknown) => Effect.Effect<void>;
-    readonly Completed: (input: unknown) => Effect.Effect<void>;
-    readonly Failed: (input: unknown) => Effect.Effect<void>;
-  };
-  declare static State: {
-    readonly Changed: (input: unknown) => Effect.Effect<void>;
-  };
-}
+);
+
+export type RunResourceStore = typeof RunResourceStore.Identifier;
 
 const readFacts = (
   s: ProcessStoreSpine,
@@ -905,31 +896,3 @@ const readByRun = (
     .read(runtimeRecordQuery(factPredicates(undefined), undefined))
     .pipe(Effect.map((records) => factsFromRecords(records, { runId })));
 
-/**
- * Type accessors merged onto {@link RunResourceStore} via declaration
- * merging:
- *
- * - `RunResourceStore.Type` — full service shape (record + read).
- * - `RunResourceStore.EmitType` — record-section emit shape only.
- *
- * Use these to type custom mocks supplied through `Layer.succeed` /
- * `Effect.provideService` (the recommended way to fan-out to in-process
- * listeners until the future `live()` stream lands):
- *
- * ```ts
- * const mock: RunResourceStore.Type = { ... };
- * ```
- *
- * @public
- */
-export declare namespace RunResourceStore {
-  export type Type = ProcessStore.Service.Type<
-    typeof RunResourceStore
-  >;
-  export type EmitType = ProcessStore.Service.EmitType<
-    typeof RunResourceStore
-  >;
-  export type IdentifierType = ProcessStore.Service.IdentifierType<
-    typeof RunResourceStore
-  >;
-}

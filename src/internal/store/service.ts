@@ -508,6 +508,24 @@ export interface ProcessStoreFacetDefinition<Self> {
 }
 
 /** @internal */
+export interface ProcessStoreFacetFactory {
+  <Self>(): ProcessStoreFacetDefinition<Self>;
+  <
+    const Id extends string,
+    const Sections extends ReadonlyArray<ProcessStoreFacetAnySection>,
+  >(
+    id: Id,
+    ...sections: Sections
+  ): ProcessStoreFacet<
+    Id,
+    Id,
+    ProcessStoreEmitApiOf<Sections>,
+    ProcessStoreQueryApiOf<Sections>,
+    ProcessStoreIdentifierApiOf<Sections>
+  >;
+}
+
+/** @internal */
 export type ProcessStoreFacet<
   Self,
   Id extends string,
@@ -517,7 +535,7 @@ export type ProcessStoreFacet<
 > = ProcessStoreFacetClass<Self, Id, EmitApi, QueryApi, IdentifierApi>;
 
 /** @internal */
-export const defineProcessStoreFacet = <Self>(): ProcessStoreFacetDefinition<Self> => {
+const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> => {
   const define = <
     const Id extends string,
     const Sections extends ReadonlyArray<ProcessStoreFacetAnySection>,
@@ -623,3 +641,15 @@ export const defineProcessStoreFacet = <Self>(): ProcessStoreFacetDefinition<Sel
 
   return define;
 };
+
+/** @internal */
+export const defineProcessStoreFacet: ProcessStoreFacetFactory = ((
+  id?: string,
+  ...sections: ReadonlyArray<ProcessStoreFacetAnySection>
+) => {
+  const define = defineProcessStoreFacetFor();
+  if (id === undefined) {
+    return define;
+  }
+  return define(id, ...sections);
+}) as ProcessStoreFacetFactory;
