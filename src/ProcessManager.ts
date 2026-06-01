@@ -1562,6 +1562,24 @@ const warnIfDirectoryMayNotBeIgnored = (
 ): Effect.Effect<void, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const relativePath = normalizedRelativePath(directory);
+    const gitIgnored = yield* Effect.tryPromise({
+      try: () => import("node:child_process"),
+      catch: () => undefined,
+    }).pipe(
+      Effect.flatMap((childProcess) =>
+        childProcess === undefined
+          ? Effect.succeed(false)
+          : Effect.callback<boolean>((resume) => {
+          const child = childProcess.spawn("git", ["check-ignore", "--quiet", relativePath]);
+          child.on("exit", (code) => resume(Effect.succeed(code === 0)));
+          child.on("error", () => resume(Effect.succeed(false)));
+          })
+      ),
+      Effect.catch(() => Effect.succeed(false)),
+    );
+    if (gitIgnored) {
+      return;
+    }
     const fs = yield* FileSystem.FileSystem;
     const ignored = yield* fs.readFileString(".gitignore").pipe(
       Effect.map((text) =>

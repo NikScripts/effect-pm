@@ -10,19 +10,6 @@
  * @module CommandAuth
  */
 
-import {
-  generateKeyPairSync,
-  randomBytes,
-  sign as cryptoSign,
-  verify as cryptoVerify,
-} from "node:crypto";
-import {
-  existsSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-} from "node:fs";
-import * as NodePath from "node:path";
 import { Clock, Context, DateTime, Duration, Effect, Option, Schema } from "effect";
 import type { ControlProtocolRequest, ControlProtocolRequestEnvelope } from "./ControlProtocol";
 import { responseBodyJson } from "./internal/json";
@@ -51,6 +38,56 @@ import {
 const defaultReplayWindow = Duration.minutes(5);
 const commandAuthAlgorithm = "Ed25519";
 const commandAuthHeaderVersion = "v1";
+
+const randomBytes = (size: number): Effect.Effect<Uint8Array, KeyMaterialError> =>
+  Effect.tryPromise({
+    try: () => import("node:crypto").then((crypto) => crypto.randomBytes(size)),
+    catch: (error) =>
+      new KeyMaterialError({
+        reason: `Unable to generate random bytes: ${String(error)}`,
+      }),
+  });
+
+const readFileString = (
+  path: string,
+): Effect.Effect<string, KeyMaterialError> =>
+  Effect.tryPromise({
+    try: () => import("node:fs/promises").then((fs) => fs.readFile(path, "utf8")),
+    catch: (error) =>
+      new KeyMaterialError({
+        reason: `Unable to read '${path}': ${String(error)}`,
+      }),
+  });
+
+const publicKeyRecordFilesInDirectory = (
+  directory: string,
+): Effect.Effect<ReadonlyArray<string>, KeyMaterialError> =>
+  Effect.tryPromise({
+    try: () =>
+      Promise.all([import("node:fs/promises"), import("node:path")]).then(
+        ([fs, path]) =>
+          fs.readdir(directory, { withFileTypes: true }).then((entries) =>
+            entries
+          .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+          .map((entry) => path.join(directory, entry.name))
+              .sort()
+          ).catch((error: unknown) => {
+            if (
+              typeof error === "object" &&
+              error !== null &&
+              "code" in error &&
+              error.code === "ENOENT"
+            ) {
+              return [];
+            }
+            throw error;
+          })
+      ),
+    catch: (error) =>
+      new KeyMaterialError({
+        reason: `Unable to read command auth keyring directory '${directory}': ${String(error)}`,
+      }),
+  });
 
 export const PublicKeyRecordSchema = Schema.Struct({
   keyId: Schema.String,
@@ -89,6 +126,14 @@ export interface LoadPublicKeyRecordsOptions {
   readonly files?: ReadonlyArray<string>;
   readonly directory?: string;
   readonly directories?: ReadonlyArray<string>;
+}
+
+export interface LoadPrivateKeyRecordOptions {
+  readonly keyId: string;
+  readonly name: string;
+  readonly expiresAt: string;
+  readonly privateKeyPem?: string;
+  readonly privateKeyFile?: string;
 }
 
 export type CanonicalCommandAuthRequest =
@@ -184,7 +229,7 @@ export declare namespace CommandAuthVerifier {
   export type Type = CommandAuthVerifierService;
 }
 
-const makeKeyId = (): string => `cmd_${encodeBase64Url(randomBytes(16))}`;
+const makeKeyId = Effect.map(randomBytes(16), (bytes) => `cmd_${encodeBase64Url(bytes)}`);
 
 const parseExpirationMillis = (
   keyId: string,
@@ -237,42 +282,46 @@ const assertWithinSkew = (
 export const generateEd25519KeyPair = (
   options: GenerateEd25519KeyPairOptions,
 ): Effect.Effect<GeneratedEd25519KeyPair, KeyMaterialError> =>
-  Effect.try({
-    try: () => {
-      const keyId = options.keyId ?? makeKeyId();
-      const { publicKey, privateKey } = generateKeyPairSync("ed25519");
-      const publicKeyPem = publicKey.export({
-        type: "spki",
-        format: "pem",
-      });
-      const privateKeyPem = privateKey.export({
-        type: "pkcs8",
-        format: "pem",
-      });
-      if (typeof publicKeyPem !== "string" || typeof privateKeyPem !== "string") {
-        throw new Error("Generated Ed25519 keys were not PEM strings");
-      }
-      return {
-        publicKey: {
-          keyId,
-          name: options.name,
-          algorithm: commandAuthAlgorithm,
-          publicKeyPem,
-          expiresAt: options.expiresAt,
-        },
-        privateKey: {
-          keyId,
-          name: options.name,
-          algorithm: commandAuthAlgorithm,
-          privateKeyPem,
-          expiresAt: options.expiresAt,
-        },
-      };
-    },
-    catch: (error) =>
-      new KeyMaterialError({
-        reason: `Unable to generate Ed25519 key pair: ${String(error)}`,
-      }),
+  Effect.gen(function* () {
+    const keyId = options.keyId ?? (yield* makeKeyId);
+    return yield* Effect.tryPromise({
+      try: () =>
+        import("node:crypto").then((crypto) => {
+        const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
+        const publicKeyPem = publicKey.export({
+          type: "spki",
+          format: "pem",
+        });
+        const privateKeyPem = privateKey.export({
+          type: "pkcs8",
+          format: "pem",
+        });
+        if (typeof publicKeyPem !== "string" || typeof privateKeyPem !== "string") {
+          throw new Error("Generated Ed25519 keys were not PEM strings");
+        }
+        const generated: GeneratedEd25519KeyPair = {
+          publicKey: {
+            keyId,
+            name: options.name,
+            algorithm: commandAuthAlgorithm,
+            publicKeyPem,
+            expiresAt: options.expiresAt,
+          },
+          privateKey: {
+            keyId,
+            name: options.name,
+            algorithm: commandAuthAlgorithm,
+            privateKeyPem,
+            expiresAt: options.expiresAt,
+          },
+        };
+        return generated;
+        }),
+      catch: (error) =>
+        new KeyMaterialError({
+          reason: `Unable to generate Ed25519 key pair: ${String(error)}`,
+        }),
+    });
   });
 
 export const ed25519Signer = (
@@ -283,8 +332,11 @@ export const ed25519Signer = (
       const now = yield* Clock.currentTimeMillis;
       yield* assertNotExpired(privateKey, now);
       const payload = yield* canonicalPayload(input);
-      const signature = yield* Effect.try({
-        try: () => cryptoSign(null, payload, privateKey.privateKeyPem),
+      const signature = yield* Effect.tryPromise({
+        try: () =>
+          import("node:crypto").then((crypto) =>
+            crypto.sign(null, payload, privateKey.privateKeyPem)
+          ),
         catch: (error) =>
           new KeyMaterialError({
             reason: `Unable to sign command payload: ${String(error)}`,
@@ -298,6 +350,35 @@ export const ed25519Signer = (
       };
     }),
 });
+
+export const loadPrivateKeyRecord = (
+  options: LoadPrivateKeyRecordOptions,
+): Effect.Effect<PrivateKeyRecord, KeyMaterialError> =>
+  Effect.gen(function* () {
+    const privateKeyPem = options.privateKeyPem ??
+      (options.privateKeyFile === undefined
+        ? undefined
+        : yield* readFileString(options.privateKeyFile));
+    if (privateKeyPem === undefined) {
+      return yield* new KeyMaterialError({
+        reason: "loadPrivateKeyRecord requires privateKeyPem or privateKeyFile",
+      });
+    }
+    return yield* Schema.decodeUnknownEffect(PrivateKeyRecordSchema)({
+      keyId: options.keyId,
+      name: options.name,
+      algorithm: commandAuthAlgorithm,
+      privateKeyPem,
+      expiresAt: options.expiresAt,
+    }).pipe(
+      Effect.mapError(
+        (error) =>
+          new KeyMaterialError({
+            reason: `Invalid command auth private key record: ${String(error)}`,
+          }),
+      ),
+    );
+  });
 
 export interface Ed25519VerifierOptions {
   readonly keys: ReadonlyArray<PublicKeyRecord>;
@@ -338,8 +419,11 @@ export const ed25519Verifier = (
         }
 
         const payload = yield* canonicalPayload(input.input);
-        const verified = yield* Effect.try({
-          try: () => cryptoVerify(null, payload, key.publicKeyPem, signature),
+        const verified = yield* Effect.tryPromise({
+          try: () =>
+            import("node:crypto").then((crypto) =>
+              crypto.verify(null, payload, key.publicKeyPem, signature)
+            ),
           catch: (error) =>
             new SignatureVerificationFailed({
               keyId: header.keyId,
@@ -481,32 +565,7 @@ const decodePublicKeyRecordJson = (
 const readPublicKeyRecordFile = (
   path: string,
 ): Effect.Effect<ReadonlyArray<PublicKeyRecord>, KeyMaterialError> =>
-  Effect.try({
-    try: () => readFileSync(path, "utf8"),
-    catch: (error) =>
-      new KeyMaterialError({
-        reason: `Unable to read command auth keyring file '${path}': ${String(error)}`,
-      }),
-  }).pipe(Effect.flatMap(decodePublicKeyRecordJson));
-
-const publicKeyRecordFilesInDirectory = (
-  directory: string,
-): Effect.Effect<ReadonlyArray<string>, KeyMaterialError> =>
-  Effect.try({
-    try: () => {
-      if (!existsSync(directory)) {
-        return [];
-      }
-      return readdirSync(directory)
-        .map((entry) => NodePath.join(directory, entry))
-        .filter((entryPath) => statSync(entryPath).isFile() && entryPath.endsWith(".json"))
-        .sort();
-    },
-    catch: (error) =>
-      new KeyMaterialError({
-        reason: `Unable to read command auth keyring directory '${directory}': ${String(error)}`,
-      }),
-  });
+  readFileString(path).pipe(Effect.flatMap(decodePublicKeyRecordJson));
 
 export const loadPublicKeyRecords = (
   options: LoadPublicKeyRecordsOptions,
@@ -544,6 +603,7 @@ export const commandAuthErrorMessage = (error: CommandAuthError): string =>
 
 interface CommandAuthApi {
   readonly generateEd25519KeyPair: typeof generateEd25519KeyPair;
+  readonly loadPrivateKeyRecord: typeof loadPrivateKeyRecord;
   readonly ed25519Signer: typeof ed25519Signer;
   readonly ed25519Verifier: typeof ed25519Verifier;
   readonly canonicalPayload: typeof canonicalPayload;
@@ -578,6 +638,7 @@ interface CommandAuthApi {
 
 export const CommandAuth: CommandAuthApi = {
   generateEd25519KeyPair,
+  loadPrivateKeyRecord,
   ed25519Signer,
   ed25519Verifier,
   canonicalPayload,

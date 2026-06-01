@@ -186,6 +186,29 @@ describe("CommandAuth", () => {
     }),
   );
 
+  it.effect("loads a private key record from a PEM file", () =>
+    Effect.gen(function* () {
+      const dir = NodeFs.mkdtempSync(NodePath.join(NodeOs.tmpdir(), "effect-pm-private-key-"));
+      const filepath = NodePath.join(dir, "private.pem");
+      const keys = yield* CommandAuth.generateEd25519KeyPair({
+        name: "nik-laptop",
+        expiresAt,
+        keyId: "cmd_private_file",
+      });
+      NodeFs.writeFileSync(filepath, keys.privateKey.privateKeyPem);
+
+      const loaded = yield* CommandAuth.loadPrivateKeyRecord({
+        keyId: keys.privateKey.keyId,
+        name: keys.privateKey.name,
+        expiresAt: keys.privateKey.expiresAt,
+        privateKeyFile: filepath,
+      });
+
+      expect(loaded).toEqual(keys.privateKey);
+      NodeFs.rmSync(dir, { recursive: true, force: true });
+    }),
+  );
+
   it.effect("loads and merges public key records from files and directories", () =>
     Effect.gen(function* () {
       const dir = NodeFs.mkdtempSync(NodePath.join(NodeOs.tmpdir(), "effect-pm-keys-"));
