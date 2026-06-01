@@ -36,6 +36,8 @@ routing.
   many receivers, but each enrollment is explicit.
 - PM tooling should automate public key enrollment for groups where it has local
   write access and print install instructions for remote groups.
+- V1 signs canonical JSON `{ version, method, path, envelope }` and carries the
+  signature in `Effect-PM-Signature`.
 
 ## Open recipe steps
 
@@ -398,6 +400,10 @@ Question:
 Should v1 sign a canonical JSON object of `{ version, method, path, envelope }`
 and carry the signature in `Effect-PM-Signature`?
 
+Decision:
+Yes. V1 signs canonical JSON `{ version, method, path, envelope }`; HTTP carries
+the detached signature in `Effect-PM-Signature`.
+
 Recommended answer:
 Yes. It keeps the protocol envelope stable, covers enough context to prevent
 route or payload substitution, and leaves custom transports free to pass auth
@@ -407,6 +413,104 @@ Acceptance check:
 Two clients signing the same logical command produce the same canonical payload;
 changing method, path, envelope id, `sentAt`, metadata, or request invalidates
 the signature.
+
+## Step 4: Replay protection shape
+
+Recipe step: `Replay protection shape`
+
+What this decides:
+A valid signature proves who signed the command, but not whether the same command
+was captured and resent. This step decides the minimum replay defense before
+future durable audit or permissions exist.
+
+Recommended ingredients:
+- Short skew window on signed `envelope.sentAt` — reject commands too far in the
+  past or future before checking replay storage.
+- In-memory replay cache keyed by `{ keyId, envelope.id }` — enough for one
+  running receiver process without adding persistence.
+- Optional external replay store interface — lets long-running PM deployments or
+  clustered receivers plug in durable/shared replay tracking later.
+- Replay insert is part of verification — only the verifier decides whether an
+  id is newly accepted, so route handlers never see replay bookkeeping.
+
+Picture:
+
+```ts
+// Public configuration.
+const auth = CommandAuth.ed25519Verifier({
+  keys: Config.array(CommandAuth.PublicKeyRecordConfig)(
+    "BILLING_GROUP_COMMAND_KEYS",
+  ),
+  replay: CommandAuth.Replay.memory({
+    window: Duration.minutes(5),
+    maxEntries: 10_000,
+  }),
+});
+```
+
+```ts
+// Public extension point for PMs that need shared replay state.
+export interface CommandAuthReplayStore {
+  readonly reserve: (
+    input: {
+      readonly keyId: string;
+      readonly envelopeId: string;
+      readonly sentAt: number;
+      readonly expiresAt: number;
+    },
+  ) => Effect.Effect<void, CommandAuthReplayError>;
+}
+```
+
+```ts
+// Internal verifier flow.
+const verifySignedCommand = (input: VerifyInput) =>
+  Effect.gen(function* () {
+    const header = yield* parseSignatureHeader(input.header);
+    const key = yield* keyring.publicKey(header.keyId);
+    yield* assertNotExpired(key, input.now);
+    yield* assertWithinSkew(input.envelope.sentAt, input.now, config.window);
+    yield* verifyEd25519Signature(key.publicKey, input.payload, header.signature);
+    yield* replayStore.reserve({
+      keyId: header.keyId,
+      envelopeId: input.envelope.id,
+      sentAt: input.envelope.sentAt,
+      expiresAt: input.envelope.sentAt + Duration.toMillis(config.window),
+    });
+  });
+```
+
+```ts
+// Test shape.
+yield* signedClient.process(SyncProcess.id).runImmediately;
+const replay = yield* postSameEnvelopeAgain().pipe(Effect.flip);
+
+expect(replay.status).toBe(401);
+expect(replay.reason).toContain("replayed command");
+expect(yield* Ref.get(runs)).toBe(1);
+```
+
+Alternatives:
+1. Timestamp-only replay defense — stateless and simple, but an attacker can
+   replay within the accepted skew window.
+2. Durable replay store in v1 — stronger across restarts and multiple receivers,
+   but it drags persistence into the first auth slice.
+3. Monotonic sequence numbers per key — robust, but hard for multiple clients
+   using the same key and awkward with retries.
+
+Question:
+Should v1 use signed timestamp skew plus an in-memory `{ keyId, envelope.id }`
+replay cache, with an optional replay-store interface for stronger deployments?
+
+Recommended answer:
+Yes. It prevents ordinary capture-and-replay attacks without forcing storage
+into v1, and it leaves a clean path for PM or clustered deployments that need
+shared replay state.
+
+Acceptance check:
+The first valid command id for a key succeeds; reusing the same envelope id with
+the same key fails; stale and far-future `sentAt` values fail even with valid
+signatures.
 
 ## Cleanup status
 

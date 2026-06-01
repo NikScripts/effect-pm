@@ -73,10 +73,11 @@ See [`.cursor/rules/public-vs-internal.mdc`](../.cursor/rules/public-vs-internal
   release notes are affected. Creating or editing a changeset requires user
   approval.
 - Recommend commits, PRs, or merges when appropriate.
-- Commits, PR creation/update, and merges to branches created by the user
-  require user approval first.
-- Commits, PR creation/update, and pushes on agent-created branches are allowed
-  when needed for the task.
+- Commits, pushes, PR creation/update, and merges on major or user-owned
+  branches (`main`, `develop`, release branches, or branches created by the
+  user) require user approval first.
+- Agent-created `cursor/*` branches are the exception: commits, pushes, and PR
+  creation/update are allowed there when needed for the task.
 - Keep docs and plans separate: regular docs describe implemented behavior;
   `docs/plans` describes future work only.
 - Prefer existing Effect patterns, services, and local helper APIs over ad hoc

@@ -4,6 +4,14 @@ Start with [`docs/AGENTS.md`](./docs/AGENTS.md) for this package's architecture,
 
 **Persistence:** [`docs/STORAGE.md`](./docs/STORAGE.md) only.
 
+## Git commit policy
+
+- Do not commit or push directly on major or user-owned branches such as `main`,
+  `develop`, release branches, or a branch the user created unless the user
+  approves that operation.
+- Agent-created `cursor/*` branches are the exception: agents may commit and push
+  work there as part of normal task progress.
+
 ## Vendored repositories
 
 External repositories live under `repos/` as read-only reference material for agents.
