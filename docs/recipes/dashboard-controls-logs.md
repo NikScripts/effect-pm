@@ -28,12 +28,20 @@ Define the first React dashboard surface around two primitives only:
 - The author API should accept the actual browser-safe group/process/queue
   definition, not `{ kind, id }` wrappers or separate `group=` / `process=` /
   `queue=` props.
+- The existing browser split doc already tells React consumers to import
+  `*.tags.ts` modules for `typeof Notify`, `typeof EmailQueue`,
+  `typeof ProdGroup`, ids, and `ProdGroup.contract`, while keeping runtime
+  layers and `ControlService` in Node-only modules.
 
 ## Locked ingredients
 
 - The first dashboard product surface is only `Controls` and `Logs`.
 - Components use one prop, `for`, with the actual group/process/queue target.
 - `for={...}` is preferred over `target={...}` unless TSX typing proves awkward.
+- `for={...}` accepts only browser-safe tag/definition declarations that carry
+  static `id` and `kind` metadata; runtime layers and arbitrary `{ id: string }`
+  objects are rejected.
+- React examples import from `*.tags.ts`, never from `*.runtime.ts`.
 - Styling and table layout come after the headless contracts work.
 - Public React API changes need a changeset before release.
 
@@ -61,7 +69,7 @@ Define the first React dashboard surface around two primitives only:
 4. Demo acceptance: dashboard demo renders controls and logs through the
    existing `/api/control` gateway.
 
-## Recipe step: target type contract
+## Recipe step: target type contract (locked)
 
 What this decides:
 Which real effect-pm definitions are valid values for the `for` prop, and how
@@ -117,6 +125,67 @@ Acceptance check:
 Type examples compile for `Controls for={BillingGroup}`,
 `Controls for={BillingSyncProcess}`, and `Controls for={EmailQueue}`, while an
 attempt to pass a runtime layer or arbitrary `{ id: string }` object fails.
+
+Decision:
+Accepted. The public author API is `for={ActualTagOrDefinition}` and the
+implementation must protect browser bundles from runtime modules.
+
+## Recipe step: log port contract
+
+What this decides:
+Whether the first logs primitive should read a bounded history snapshot, stream
+live logs, or combine both through one React hook.
+
+Recommended ingredients:
+
+- `ControlPlanePort.getLogs(target, query)` - returns a bounded, decoded history
+  snapshot for initial render and reconnects.
+- `ControlPlanePort.streamLogs(target, options)` - follows live NDJSON logs where
+  the adapter supports it.
+- `useControlPlaneLogs({ for: target, lines, follow })` - React owns lifecycle,
+  cancellation, and append state; components stay Promise/stream based.
+- Filters derive from the same `for` target - group target includes group logs,
+  process target filters `processId`, queue target filters `queueId`.
+
+Picture:
+
+```tsx
+<Logs for={BillingGroup} lines={200} follow />
+<Logs for={BillingSyncProcess} lines={100} follow />
+<Logs for={EmailQueue} lines={100} follow />
+```
+
+```ts
+type UseControlPlaneLogsOptions<Target extends DashboardTarget> = {
+  readonly for: Target;
+  readonly lines?: number;
+  readonly follow?: boolean;
+};
+```
+
+Alternatives:
+
+1. History only - easiest to test and works through plain JSON, but feels stale
+   for an operator console.
+2. Live stream only - matches `/logs/stream` today, but reconnects cannot show
+   older context unless the relay tail still has it.
+3. Push logs through `getStatus` polling - simple adapter shape, but mixes logs
+   into the control status payload and wastes bandwidth.
+
+Question:
+Should the first logs API be history-plus-live (`getLogs` for snapshot and
+`streamLogs` for follow), even if the first implementation backs history with
+the existing relay tail before durable query endpoints are added?
+
+Recommended answer:
+Yes. Operators need context plus live updates, and splitting snapshot from live
+follow matches the backend model (`LogStore` history plus relay stream) without
+making the UI polling-heavy.
+
+Acceptance check:
+The dashboard demo can render `Logs for={DemoGroup} follow`, show the initial
+tail, append new process/queue log lines, and filter when passed a process or
+queue tag.
 
 ## Cleanup status
 
