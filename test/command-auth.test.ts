@@ -1,9 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { DateTime, Duration, Effect } from "effect";
-import * as NodeFs from "node:fs";
-import * as NodeOs from "node:os";
-import * as NodePath from "node:path";
+import { DateTime, Duration, Effect, FileSystem, Path } from "effect";
 import {
   CommandAuth,
   ExpiredKey,
@@ -188,57 +185,63 @@ describe("CommandAuth", () => {
   );
 
   it.live("loads a private key record from a PEM file", () =>
-    Effect.gen(function* () {
-      const dir = NodeFs.mkdtempSync(NodePath.join(NodeOs.tmpdir(), "effect-pm-private-key-"));
-      const filepath = NodePath.join(dir, "private.pem");
-      const keys = yield* CommandAuth.generateEd25519KeyPair({
-        name: "nik-laptop",
-        expiresAt,
-        keyId: "cmd_private_file",
-      });
-      NodeFs.writeFileSync(filepath, keys.privateKey.privateKeyPem);
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const dir = yield* fs.makeTempDirectoryScoped({ prefix: "effect-pm-private-key-" });
+        const filepath = path.join(dir, "private.pem");
+        const keys = yield* CommandAuth.generateEd25519KeyPair({
+          name: "nik-laptop",
+          expiresAt,
+          keyId: "cmd_private_file",
+        });
+        yield* fs.writeFileString(filepath, keys.privateKey.privateKeyPem);
 
-      const loaded = yield* CommandAuth.loadPrivateKeyRecord({
-        keyId: keys.privateKey.keyId,
-        name: keys.privateKey.name,
-        expiresAt: keys.privateKey.expiresAt,
-        privateKeyFile: filepath,
-      });
+        const loaded = yield* CommandAuth.loadPrivateKeyRecord({
+          keyId: keys.privateKey.keyId,
+          name: keys.privateKey.name,
+          expiresAt: keys.privateKey.expiresAt,
+          privateKeyFile: filepath,
+        });
 
-      expect(loaded).toEqual(keys.privateKey);
-      NodeFs.rmSync(dir, { recursive: true, force: true });
-    }).pipe(Effect.provide(NodeServices.layer)),
+        expect(loaded).toEqual(keys.privateKey);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
   );
 
   it.live("loads and merges public key records from files and directories", () =>
-    Effect.gen(function* () {
-      const dir = NodeFs.mkdtempSync(NodePath.join(NodeOs.tmpdir(), "effect-pm-keys-"));
-      const file = NodePath.join(dir, "keyring.json");
-      const keyDir = NodePath.join(dir, "keyring");
-      NodeFs.mkdirSync(keyDir);
-      const left = yield* CommandAuth.generateEd25519KeyPair({
-        name: "left",
-        expiresAt,
-        keyId: "cmd_left",
-      });
-      const right = yield* CommandAuth.generateEd25519KeyPair({
-        name: "right",
-        expiresAt,
-        keyId: "cmd_right",
-      });
-      NodeFs.writeFileSync(file, `${CommandAuth.publicKeyRecordsJson([left.publicKey])}\n`);
-      NodeFs.writeFileSync(
-        NodePath.join(keyDir, "right.json"),
-        `${CommandAuth.publicKeyRecordJson(right.publicKey)}\n`,
-      );
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const dir = yield* fs.makeTempDirectoryScoped({ prefix: "effect-pm-keys-" });
+        const file = path.join(dir, "keyring.json");
+        const keyDir = path.join(dir, "keyring");
+        yield* fs.makeDirectory(keyDir);
+        const left = yield* CommandAuth.generateEd25519KeyPair({
+          name: "left",
+          expiresAt,
+          keyId: "cmd_left",
+        });
+        const right = yield* CommandAuth.generateEd25519KeyPair({
+          name: "right",
+          expiresAt,
+          keyId: "cmd_right",
+        });
+        yield* fs.writeFileString(file, `${CommandAuth.publicKeyRecordsJson([left.publicKey])}\n`);
+        yield* fs.writeFileString(
+          path.join(keyDir, "right.json"),
+          `${CommandAuth.publicKeyRecordJson(right.publicKey)}\n`,
+        );
 
-      const loaded = yield* CommandAuth.loadPublicKeyRecords({
-        file,
-        directory: keyDir,
-      });
+        const loaded = yield* CommandAuth.loadPublicKeyRecords({
+          file,
+          directory: keyDir,
+        });
 
-      expect(loaded).toEqual([left.publicKey, right.publicKey]);
-      NodeFs.rmSync(dir, { recursive: true, force: true });
-    }).pipe(Effect.provide(NodeServices.layer)),
+        expect(loaded).toEqual([left.publicKey, right.publicKey]);
+      }),
+    ).pipe(Effect.provide(NodeServices.layer)),
   );
 });
