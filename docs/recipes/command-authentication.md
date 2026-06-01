@@ -40,6 +40,10 @@ routing.
   signature in `Effect-PM-Signature`.
 - V1 uses signed timestamp skew plus an in-memory `{ keyId, envelope.id }`
   replay cache, with an optional replay-store interface for stronger receivers.
+- V1 ships as one coherent implementation slice: public `CommandAuth`, internal
+  crypto/canonical/replay helpers, strict signed `POST /control`, signed
+  `GetHealth`, admin keygen, PM enrollment helpers, focused tests/docs, and a
+  changeset.
 
 ## Open recipe steps
 
@@ -48,6 +52,7 @@ routing.
 - Canonical signing payload and HTTP header.
 - Replay protection shape.
 - V1 implementation slice, test matrix, docs, and changeset.
+- Implementation order and review cuts.
 
 ## Step 1: Signature primitive and key format
 
@@ -718,6 +723,10 @@ crypto/canonical/replay helpers, strict signed `POST /control`, signed
 `GetHealth`, admin keygen, PM enrollment helpers, focused tests/docs, and a
 changeset?
 
+Decision:
+Yes. V1 ships as the full coherent implementation slice, not a partial strict
+HTTP-only feature that leaves key generation or enrollment for users to invent.
+
 Recommended answer:
 Yes. This is the smallest slice that is secure, clean, straightforward, and
 usable without making users invent key-management glue outside the package.
@@ -727,6 +736,114 @@ An app can generate a local key, enroll its public record into a direct group,
 run signed PM/group commands, reject every unsigned or replayed control attempt
 before routing, check signed health, and pass focused unit/integration tests plus
 `pnpm run typecheck`, `pnpm test`, `pnpm run lint`, and `pnpm run build`.
+
+## Step 6: Implementation order and review cuts
+
+Recipe step: `Implementation order and review cuts`
+
+What this decides:
+The v1 slice is big enough to benefit from reviewable commits, but the commits
+must still land in an order where each one compiles and proves something useful.
+
+Recommended ingredients:
+- Cut 1: `CommandAuth` core — public types, schemas, canonical payload,
+  Ed25519 signing/verifying, header format, in-memory replay, and unit tests.
+- Cut 2: control transport integration — `ControlProtocol.GetHealth`,
+  `ControlTransportHttp` strict auth gate, `ProcessManager.connect` signer
+  plumbing, and integration tests for signed commands and unsigned rejection.
+- Cut 3: operator ergonomics — `effect-pm auth keygen`, PM enrollment helper
+  commands, docs/examples, package export/build wiring, and changeset.
+- Keep old no-auth behavior explicit — existing users keep current behavior
+  until they configure `auth`.
+- Run standard checks at the end of every cut that touches code, with the full
+  suite before final PR summary.
+
+Picture:
+
+```txt
+commit 1: CommandAuth core
+  src/CommandAuth.ts
+  src/internal/commandAuth/{base64url,canonical,ed25519,headers,replay}.ts
+  test/command-auth.test.ts
+
+commit 2: signed control transport
+  src/ControlProtocol.ts
+  src/ControlTransportHttp.ts
+  src/ControlService.ts
+  src/ProcessManager.ts
+  test/control-auth.test.ts
+
+commit 3: operator workflow
+  src/bin/effect-pm.ts
+  src/ProcessManager.ts
+  docs/guides/control-plane.md
+  docs/guides/process-manager.md
+  package.json
+  .changeset/*.md
+```
+
+```ts
+// Cut 1 acceptance: no HTTP involved.
+const keypair = yield* CommandAuth.generateEd25519KeyPair({
+  name: "nik-laptop",
+  expiresAt: "2026-12-31T23:59:59.999Z",
+});
+const header = yield* signer.sign({ method: "POST", path: "/control", envelope });
+yield* verifier.verify({ header, input: { method: "POST", path: "/control", envelope } });
+```
+
+```ts
+// Cut 2 acceptance: signed PM command reaches router once.
+yield* signedManager.process(SyncProcess.id).runImmediately;
+const replay = yield* postSameEnvelopeAgain().pipe(Effect.flip);
+
+expect(yield* Ref.get(runs)).toBe(1);
+expect(replay.status).toBe(401);
+```
+
+```sh
+# Cut 3 acceptance: generated private material stays local.
+effect-pm auth keygen \
+  --name nik-laptop \
+  --expires 2026-12-31 \
+  --private-key-out ~/.config/effect-pm/keys/nik-laptop.pem \
+  --public-record-out ./nik-laptop.public.json
+
+pm auth enroll-key ./nik-laptop.public.json --group @app/Billing --dry-run
+```
+
+```sh
+# Final verification.
+pnpm run typecheck
+pnpm test
+pnpm run lint
+pnpm run build
+```
+
+Why this recommendation is good:
+- It reduces risk without splitting the feature into unusable fragments.
+- It lets crypto correctness stabilize before HTTP and CLI code depend on it.
+- It keeps review focused: core auth, transport behavior, then operator UX.
+
+Alternatives:
+1. One large implementation commit — fastest mechanically, but harder to review
+   and debug when a test fails.
+2. Ship strict HTTP before CLI keygen — smaller first diff, but fails the
+   "straightforward" goal because users must make keys manually.
+3. Build CLI first — good demo value, but it creates command surfaces before the
+   verifier and transport contract are proven.
+
+Question:
+Should implementation proceed in these three review cuts: `CommandAuth` core,
+signed control transport, then operator workflow/docs/changeset?
+
+Recommended answer:
+Yes. It is the quickest path that still keeps each commit testable, reviewable,
+and useful.
+
+Acceptance check:
+Each cut compiles and has targeted tests; the final cut passes typecheck, tests,
+lint, and build, and includes the required changeset.
 
 ## Cleanup status
 
