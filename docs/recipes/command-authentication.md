@@ -50,6 +50,12 @@ routing.
 - Signed `GetHealth` ships in Cut 2 as protocol/transport behavior.
 - `effect-pm auth keygen` and `pm auth enroll-key` land together in Cut 3.
 - The changeset lands in Cut 3.
+- Cut 1 uses separate `CommandAuthSigner` and `CommandAuthVerifier` services.
+- Cut 1 key records use PEM strings plus `name`, `keyId`, `algorithm`, and
+  `expiresAt`.
+- `generateEd25519KeyPair` is public in `CommandAuth`.
+- `canonicalPayload` is public for custom signer/verifier tests.
+- Auth failures are separate tagged error classes.
 
 ## Open recipe steps
 
@@ -60,6 +66,7 @@ routing.
 - V1 implementation slice, test matrix, docs, and changeset.
 - Implementation order and review cuts.
 - Cut 1 `CommandAuth` API details.
+- Cut 2 signed control transport details.
 
 ## Step 1: Signature primitive and key format
 
@@ -842,15 +849,22 @@ Alternatives:
 
 Decision steps:
 1. Should implementation proceed in these three review cuts: `CommandAuth` core,
-   signed control transport, then operator workflow/docs/changeset?
+   signed control transport, then operator workflow/docs/changeset? —
+   **Recommended answer:** Yes; this keeps each commit testable and reviewable.
 2. Should Cut 1 include the public `CommandAuth` export and package subpath, or
-   keep it test-only until transport integration?
+   keep it test-only until transport integration? — **Recommended answer:** Put
+   it in Cut 1 so all later code consumes the real public API.
 3. Should signed `GetHealth` ship in Cut 2 as part of protocol/transport, or wait
-   for operator docs in Cut 3?
+   for operator docs in Cut 3? — **Recommended answer:** Ship it in Cut 2 because
+   it is protocol behavior, not documentation.
 4. Should `effect-pm auth keygen` and `pm auth enroll-key` land together in Cut
-   3, or should keygen land first with enrollment docs only?
+   3, or should keygen land first with enrollment docs only? —
+   **Recommended answer:** Land them together so operator setup is usable
+   end-to-end.
 5. Should the changeset be part of Cut 3, or held until the recipe is promoted
-   into durable docs and code?
+   into durable docs and code? — **Recommended answer:** Include it in Cut 3
+   because the implementation adds public API, behavior, exports, and CLI
+   commands.
 
 Decision:
 Yes to all five implementation-order steps.
@@ -1033,13 +1047,23 @@ Alternatives:
 
 Decision steps:
 1. Should Cut 1 use separate `CommandAuthSigner` and `CommandAuthVerifier`
-   services?
+   services? — **Recommended answer:** Yes; transports need one side at a time
+   and custom signers/verifiers stay easy.
 2. Should key records use PEM strings plus `name`, `keyId`, `algorithm`, and
-   `expiresAt`?
-3. Should `generateEd25519KeyPair` be public in `CommandAuth`?
-4. Should `canonicalPayload` be public for custom signer/verifier tests?
+   `expiresAt`? — **Recommended answer:** Yes; this is easy to store in env,
+   files, and JSON records.
+3. Should `generateEd25519KeyPair` be public in `CommandAuth`? —
+   **Recommended answer:** Yes; CLI and tests should use package code, not
+   duplicate crypto.
+4. Should `canonicalPayload` be public for custom signer/verifier tests? —
+   **Recommended answer:** Yes; custom integrations must be able to sign exactly
+   what the package verifies.
 5. Should auth failures be separate tagged error classes instead of one generic
-   reason string?
+   reason string? — **Recommended answer:** Yes; typed failures make tests and
+   HTTP mapping precise.
+
+Decision:
+Yes to all five Cut 1 API steps.
 
 Ingredients:
 Yes to all five. This gives strong type surfaces, keeps transport wiring simple,
@@ -1049,6 +1073,194 @@ Acceptance check:
 Cut 1 exports compile through root and subpath imports, fixed and generated
 Ed25519 tests pass, canonical payload snapshots are stable, replay rejection is
 typed, and no HTTP transport files are required for the tests.
+
+## Step 8: Cut 2 signed control transport details
+
+Recipe step: `Cut 2 signed control transport details`
+
+What this decides:
+Cut 2 wires the already-tested `CommandAuth` core into the control protocol,
+HTTP adapter, and `ProcessManager` client path without pulling in operator CLI
+key-management work yet.
+
+Recommended ingredients:
+- Add `GetHealth` to `ControlProtocolRequest` — health becomes a signed protocol
+  command instead of a special unauthenticated HTTP shortcut.
+- Keep no-auth behavior as the default when no `auth` is configured — existing
+  localhost users do not break until they opt in.
+- When `auth` is configured, strict mode disables REST shortcuts, unsigned
+  `/health`, and unsigned log streaming — every accepted communication is signed.
+- Add `auth?: CommandAuthVerifier.Type` to server config and
+  `auth?: CommandAuthSigner.Type` to client/manager config — no global mutable
+  auth state.
+- `ControlTransportHttp.client` signs envelopes immediately before HTTP body
+  send; `ControlTransportHttp.server` verifies immediately after envelope decode
+  and before `router.handle`.
+- Map `CommandAuthError` to `ControlTransportError` with HTTP `401` — auth
+  failures are transport failures, not process/queue failures.
+- Tests must prove auth rejection does not route — use a `Ref<boolean>` or
+  process run counter to verify router/process code never runs.
+
+Picture:
+
+```ts
+// src/ControlProtocol.ts
+export type ControlProtocolRequest =
+  | { readonly _tag: "GetHealth" }
+  | { readonly _tag: "GetContract" }
+  | { readonly _tag: "ReadGroupStatus" }
+  | { readonly _tag: "RunProcessImmediately"; readonly processId: string }
+  // ...
+```
+
+```ts
+// src/ControlProtocol.ts router case
+case "GetHealth":
+  return {
+    _tag: "Control",
+    status: 200,
+    body: {
+      success: true,
+      data: { status: "ok" },
+    },
+  };
+```
+
+```ts
+// src/ControlTransportHttp.ts
+export interface ControlTransportHttpClientConfig {
+  readonly baseUrl: string;
+  readonly auth?: CommandAuthSigner.Type;
+}
+
+export interface ControlTransportHttpServerConfig {
+  readonly port?: number;
+  readonly auth?: CommandAuthVerifier.Type;
+}
+```
+
+```ts
+// client signing path
+const request = HttpClientRequest.post(joinUrl(config.baseUrl, "/control")).pipe(
+  (req) => HttpClientRequest.bodyJson(req, envelope),
+  Effect.flatMap((req) =>
+    config.auth === undefined
+      ? Effect.succeed(req)
+      : config.auth.sign({ method: "POST", path: "/control", envelope }).pipe(
+          Effect.map((header) =>
+            HttpClientRequest.setHeader(
+              req,
+              "Effect-PM-Signature",
+              CommandAuth.formatSignatureHeader(header),
+            ),
+          ),
+        ),
+  ),
+);
+```
+
+```ts
+// server verification path
+if (req.method === "POST" && url.pathname === "/control") {
+  const envelope = yield* readControlEnvelope(req);
+
+  if (config.auth !== undefined) {
+    yield* config.auth.verify({
+      header: readSignatureHeader(req),
+      input: { method: "POST", path: "/control", envelope },
+    }).pipe(
+      Effect.mapError((error) => transportError(commandAuthErrorMessage(error), 401)),
+    );
+  }
+
+  const protocolResponse = yield* router.handle(envelope.request);
+  yield* writeProtocolEnvelope(res, envelope, protocolResponse);
+}
+```
+
+```ts
+// strict authenticated mode
+if (config.auth !== undefined && url.pathname !== "/control") {
+  yield* writeJson(
+    res,
+    404,
+    errorResponse("Authenticated control services accept signed POST /control only"),
+  );
+  return;
+}
+```
+
+```ts
+// ProcessManager API
+const manager = ProcessManager.connect(BillingGroup, {
+  baseUrl: "http://127.0.0.1:3001",
+  auth: CommandAuth.ed25519Signer(privateKeyRecord),
+});
+```
+
+```ts
+// test/control-auth.test.ts
+it.live("rejects unsigned control before routing", () =>
+  Effect.gen(function* () {
+    const runs = yield* Ref.make(0);
+    const unsigned = ProcessManager.connect(BillingGroup, {
+      baseUrl: "http://127.0.0.1:32150",
+    });
+
+    const error = yield* unsigned.process(SyncProcess.id).runImmediately.pipe(Effect.flip);
+
+    expect(error.status).toBe(401);
+    expect(yield* Ref.get(runs)).toBe(0);
+  }));
+```
+
+```ts
+it.live("runs a signed command exactly once and rejects replay", () =>
+  Effect.gen(function* () {
+    yield* signed.process(SyncProcess.id).runImmediately;
+    const replay = yield* postSameEnvelopeAgain().pipe(Effect.flip);
+
+    expect(replay.status).toBe(401);
+    expect(yield* Ref.get(runs)).toBe(1);
+  }));
+```
+
+Alternatives:
+1. Preserve signed REST shortcuts in Cut 2 — keeps old curl ergonomics, but adds a
+   second signing path and slows the secure default.
+2. Keep `/health` outside auth — simpler liveness probes, but violates the
+   locked invariant that accepted communication is signed.
+3. Provide signer/verifier through Effect context only — idiomatic, but config
+   object support is easier for `ProcessManager.connect` and tests.
+4. Map auth failures into normal `ControlResponse` bodies with `success: false`
+   — simpler shape, but hides transport authentication failures as command
+   failures.
+
+Decision steps:
+1. Should `GetHealth` be added to `ControlProtocolRequest` in Cut 2? —
+   **Recommended answer:** Yes; health should be signed through the same protocol
+   as other reads.
+2. Should strict mode disable REST shortcuts, unsigned `/health`, and unsigned log
+   streaming whenever `auth` is configured? — **Recommended answer:** Yes; this
+   preserves the locked invariant and keeps the rule simple.
+3. Should auth be configured through explicit client/server config fields rather
+   than global context only? — **Recommended answer:** Yes; config fields are
+   straightforward for HTTP and `ProcessManager.connect`.
+4. Should auth failures map to `401 ControlTransportError` before routing? —
+   **Recommended answer:** Yes; authentication is transport-level failure.
+5. Should Cut 2 tests assert router/process code does not run on auth failure? —
+   **Recommended answer:** Yes; that is the main security acceptance condition.
+
+Ingredients:
+Yes to all five. Cut 2 should make signed `/control` the only authenticated
+communication path, keep no-auth behavior opt-in compatible, and prove failed
+auth never reaches routing.
+
+Acceptance check:
+Signed `ProcessManager` commands work, unsigned/malformed/expired/replayed
+requests return `401`, REST shortcuts and unsigned health/log routes are disabled
+when auth is configured, signed `GetHealth` succeeds, and test counters prove
+failed auth never invokes router/process logic.
 
 ## Cleanup status
 

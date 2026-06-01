@@ -31,7 +31,8 @@ user opening the recipe file to see the substance of the bake session.
    - code examples or pseudo-code "pictures",
    - why the recommendation is good,
    - viable alternatives with tradeoffs,
-   - a compact decision step set,
+   - a compact decision step set with the recommended answer next to each
+     question,
    - an acceptance check.
 3. If repository facts can answer part of the decision, inspect the codebase
    before asking.
@@ -107,11 +108,11 @@ Alternatives:
 2. `<alternative>` — `<tradeoff>`
 
 Decision steps:
-1. `<pointed question>`
-2. `<pointed question>`
+1. `<pointed question>` — **Recommended answer:** `<answer and why>`
+2. `<pointed question>` — **Recommended answer:** `<answer and why>`
 
 Ingredients:
-`<the recommended answer set and why>`
+`<the accepted/recommended answer set summarized as implementation ingredients>`
 
 Acceptance check:
 `<how we will know this decision worked>`
