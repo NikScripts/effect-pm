@@ -87,6 +87,15 @@ export class RuntimeEmitContextMissingError extends Data.TaggedError(
   readonly missing: ReadonlyArray<string>;
 }> {}
 
+const hasRuntimeEmitContextKeys = <
+  const Keys extends ReadonlyArray<keyof RuntimeEmitContextShape>,
+>(
+  ctx: RuntimeEmitContextShape,
+  keys: Keys,
+): ctx is RuntimeEmitContextShape &
+  Required<Pick<RuntimeEmitContextShape, Keys[number]>> =>
+  keys.every((key) => ctx[key] !== undefined);
+
 /**
  * Require named fields on the current emit context.
  *
@@ -102,24 +111,13 @@ export const requireRuntimeEmitContext = <
 > =>
   Effect.gen(function* () {
     const ctx = yield* readContext();
-    const missing: string[] = [];
-    const out: {
-      -readonly [K in keyof RuntimeEmitContextShape]?: RuntimeEmitContextShape[K];
-    } = {};
-    for (const key of keys) {
-      const value = ctx[key];
-      if (value === undefined) {
-        missing.push(String(key));
-      } else {
-        out[key] = value;
-      }
+    if (!hasRuntimeEmitContextKeys(ctx, keys)) {
+      const missing = keys
+        .filter((key) => ctx[key] === undefined)
+        .map((key) => String(key));
+      return yield* new RuntimeEmitContextMissingError({ missing });
     }
-    if (missing.length > 0) {
-      return yield* Effect.fail(
-        new RuntimeEmitContextMissingError({ missing }),
-      );
-    }
-    return out as Required<Pick<RuntimeEmitContextShape, Keys[number]>>;
+    return ctx;
   });
 
 /**

@@ -37,22 +37,25 @@ export type TelemetryEventStoreLeg = (
   s: ProcessStoreSpine,
 ) => TelemetryEmitEffect;
 
-export type TelemetryEventPipeLeg = (
-  event: TelemetryEventDef,
-) => TelemetryEventDef;
+export type TelemetryEventPipeLeg = <Name extends string>(
+  event: TelemetryEventDef<Name>,
+) => TelemetryEventDef<Name>;
 
-export type TelemetryEventDef = {
+export type TelemetryEventDef<Name extends string = string> = {
   readonly _tag: "event";
-  readonly name: string;
+  readonly name: Name;
   readonly store: TelemetryEventStoreLeg;
   readonly telemetrySchema?: TelemetrySchemaDefinition;
   readonly pipes: ReadonlyArray<TelemetryEventPipeLeg>;
 };
 
-export type TelemetryTagDef = {
+export type TelemetryTagDef<
+  Path extends ReadonlyArray<string> = ReadonlyArray<string>,
+  Events extends ReadonlyArray<TelemetryEventDef> = ReadonlyArray<TelemetryEventDef>,
+> = {
   readonly _tag: "tag";
-  readonly path: ReadonlyArray<string>;
-  readonly events: ReadonlyArray<TelemetryEventDef>;
+  readonly path: Path;
+  readonly events: Events;
 };
 
 export type TelemetryNamespaceDef = {
@@ -64,18 +67,50 @@ export type TelemetryPart =
   | TelemetryNamespaceDef
   | TelemetryTagDef;
 
-export type TelemetryNestedEmitApi = {
-  readonly [key: string]: TelemetryEmitEffect | TelemetryNestedEmitApi;
+export type TelemetryNestedEmitApi = Record<string, unknown>;
+
+type UnionToIntersection<Union> =
+  (Union extends unknown ? (value: Union) => void : never) extends
+    (value: infer Intersection) => void
+    ? Intersection
+    : never;
+
+type PathEmitApi<Path extends ReadonlyArray<string>, Leaf> =
+  Path extends readonly [
+    infer Head extends string,
+    ...infer Tail extends ReadonlyArray<string>,
+  ]
+    ? { readonly [K in Head]: PathEmitApi<Tail, Leaf> }
+    : Leaf;
+
+type EventEmitApi<Events extends ReadonlyArray<TelemetryEventDef>> = {
+  readonly [Event in Events[number] as Event["name"]]: TelemetryEmitEffect;
 };
+
+type TagEmitApi<Tag> = Tag extends TelemetryTagDef<infer Path, infer Events>
+  ? PathEmitApi<Path, EventEmitApi<Events>>
+  : never;
+
+export type TelemetryEmitApiFromParts<
+  Parts extends ReadonlyArray<TelemetryPart>,
+> = [Extract<Parts[number], TelemetryTagDef>] extends [never]
+  ? Record<never, never>
+  : UnionToIntersection<TagEmitApi<Extract<Parts[number], TelemetryTagDef>>> extends
+      infer EmitApi
+    ? EmitApi extends object
+      ? EmitApi
+      : Record<never, never>
+    : Record<never, never>;
 
 export type TelemetryEventInput =
   | TelemetrySchemaDefinition
   | { readonly store: TelemetryEventStoreLeg };
 
-export type TelemetryEventBuilder = TelemetryEventDef & {
+export type TelemetryEventBuilder<Name extends string = string> =
+  TelemetryEventDef<Name> & {
   readonly pipe: (
     ...legs: ReadonlyArray<TelemetryEventPipeLeg>
-  ) => TelemetryEventBuilder;
+  ) => TelemetryEventBuilder<Name>;
 };
 
 const isEventDef = (value: unknown): value is TelemetryEventDef =>
@@ -92,13 +127,15 @@ export const telemetryWireId = (
   eventName: string,
 ): string => joinWire([namespace, ...tagPath, eventName]);
 
-const applyEventPipes = (
-  event: TelemetryEventDef,
+const applyEventPipes = <Name extends string>(
+  event: TelemetryEventDef<Name>,
   legs: ReadonlyArray<TelemetryEventPipeLeg>,
-): TelemetryEventDef =>
-  legs.reduce((current, leg) => leg(current), event);
+): TelemetryEventDef<Name> =>
+  legs.reduce<TelemetryEventDef<Name>>((current, leg) => leg(current), event);
 
-const makeEventBuilder = (event: TelemetryEventDef): TelemetryEventBuilder => ({
+const makeEventBuilder = <Name extends string>(
+  event: TelemetryEventDef<Name>,
+): TelemetryEventBuilder<Name> => ({
   ...event,
   pipe: (...legs) =>
     makeEventBuilder(
@@ -142,7 +179,7 @@ const mergeNestedApis = (
 };
 
 /** @internal */
-export interface ProcessStoreTelemetrySection<EmitApi extends TelemetryNestedEmitApi> {
+export interface ProcessStoreTelemetrySection<EmitApi extends object> {
   readonly _tag: typeof TELEMETRY_TAG;
   readonly fn: (s: ProcessStoreSpine) => EmitApi;
   readonly emitTree: TelemetryNestedEmitApi;
@@ -150,9 +187,9 @@ export interface ProcessStoreTelemetrySection<EmitApi extends TelemetryNestedEmi
 }
 
 /** @internal */
-export const processStoreTelemetry = (
-  ...parts: ReadonlyArray<TelemetryPart>
-): ProcessStoreTelemetrySection<TelemetryNestedEmitApi> => {
+export const processStoreTelemetry = <const Parts extends ReadonlyArray<TelemetryPart>>(
+  ...parts: Parts
+): ProcessStoreTelemetrySection<TelemetryEmitApiFromParts<Parts>> => {
   let namespace = "";
   const emitTree: TelemetryNestedEmitApi = {};
 
@@ -197,7 +234,7 @@ export const processStoreTelemetry = (
     }
   }
 
-  const fn = (s: ProcessStoreSpine): TelemetryNestedEmitApi => {
+  const fn = (s: ProcessStoreSpine): TelemetryEmitApiFromParts<Parts> => {
     const out: TelemetryNestedEmitApi = {};
     for (const part of parts) {
       if (part._tag !== "tag") continue;
@@ -216,7 +253,7 @@ export const processStoreTelemetry = (
       }
       mergeNestedApis(out, leaf as TelemetryNestedEmitApi);
     }
-    return out;
+    return out as TelemetryEmitApiFromParts<Parts>;
   };
 
   return {
@@ -227,10 +264,10 @@ export const processStoreTelemetry = (
   };
 };
 
-const defineTelemetryEvent = (
-  name: string,
+const defineTelemetryEvent = <const Name extends string>(
+  name: Name,
   input: TelemetryEventInput,
-): TelemetryEventBuilder => {
+): TelemetryEventBuilder<Name> => {
   if (isTelemetrySchemaDefinition(input)) {
     return makeEventBuilder({
       _tag: "event",
@@ -269,13 +306,18 @@ export const Telemetry = {
     namespace,
   }),
   tag:
-    (...path: ReadonlyArray<string>) =>
-    (...events: ReadonlyArray<TelemetryEventBuilder>): TelemetryTagDef => ({
+    <const Path extends ReadonlyArray<string>>(...path: Path) =>
+    <const Events extends ReadonlyArray<TelemetryEventBuilder>>(
+      ...events: Events
+    ): TelemetryTagDef<Path, Events> => ({
       _tag: "tag",
       path,
       events,
     }),
-  event: (name: string, input: TelemetryEventInput): TelemetryEventBuilder =>
+  event: <const Name extends string>(
+    name: Name,
+    input: TelemetryEventInput,
+  ): TelemetryEventBuilder<Name> =>
     defineTelemetryEvent(name, input),
   Schema: {
     TypeId: TelemetrySchemaTypeId,

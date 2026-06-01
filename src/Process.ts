@@ -32,10 +32,7 @@ import {
 } from "./ResourceConfigure";
 import { isPollingLayer, isScheduleLayer } from "./internal/processLayerBrand";
 import { ProcessManagerLogAnnotationKeys } from "./LogContext";
-import {
-  ProcessExecutionStore,
-  type ProcessExecutionFinishInput,
-} from "./store/processExecution";
+import { ProcessExecutionStore } from "./store/processExecution";
 import { ProcessStore } from "./ProcessStore";
 import { withRuntimeEmitContext } from "./RuntimeEmitContext";
 import { Polling, PollingTag } from "./Polling";
@@ -397,23 +394,16 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     nextTriggerRun: MutableRef.make<Option.Option<Date>>(Option.none()),
   };
 
-  const finishInput = (args: {
+  type ProcessExecutionRunInput = {
     readonly scheduleKey: string | null;
     readonly startedAt: number;
     readonly completedAt: number;
     readonly error?: unknown;
     readonly isStartupRun: boolean;
-  }): ProcessExecutionFinishInput => ({
-    processId: name,
-    scheduleKey: args.scheduleKey,
-    startedAt: args.startedAt,
-    completedAt: args.completedAt,
-    ...(args.error !== undefined ? { error: String(args.error) } : {}),
-    isStartupRun: args.isStartupRun,
-  });
+  };
 
   const executionEmitContext = (
-    args: Parameters<typeof finishInput>[0],
+    args: ProcessExecutionRunInput,
   ) => ({
     processType: "process" as const,
     processId: name,
@@ -425,7 +415,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   });
 
   const recordExecutionCompleted = (
-    args: Parameters<typeof finishInput>[0],
+    args: ProcessExecutionRunInput,
   ): Effect.Effect<void> =>
     withRuntimeEmitContext(
       executionEmitContext(args),
@@ -439,7 +429,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     );
 
   const recordExecutionFailed = (
-    args: Parameters<typeof finishInput>[0],
+    args: ProcessExecutionRunInput,
   ): Effect.Effect<void> =>
     withRuntimeEmitContext(
       executionEmitContext(args),

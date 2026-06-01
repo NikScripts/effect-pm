@@ -46,9 +46,9 @@ type EmitMethod<F> = F extends (...args: infer A) => unknown
  * @internal
  */
 export type ProcessStoreFacetBrand<EmitApi, QueryApi, IdentifierApi> = {
-  readonly Emit?: EmitApi;
-  readonly Query?: QueryApi;
-  readonly Identifier?: IdentifierApi;
+  readonly EmitApi?: EmitApi;
+  readonly QueryApi?: QueryApi;
+  readonly IdentifierApi?: IdentifierApi;
 };
 
 /**
@@ -230,7 +230,8 @@ export type ProcessStoreFacetClass<
   readonly make: Effect.Effect<EmitApi & QueryApi, never, RuntimeStorage>;
   readonly layerRuntimeStorage: Layer.Layer<Self, never, RuntimeStorage>;
   readonly layer: Layer.Layer<Self, never, never>;
-} & ProcessStoreFacetBrand<EmitApi, QueryApi, IdentifierApi> &
+} & EmitApi &
+  ProcessStoreFacetBrand<EmitApi, QueryApi, IdentifierApi> &
   ProcessStoreIdentifierMember<Self, IdentifierApi>;
 
 /** @internal */

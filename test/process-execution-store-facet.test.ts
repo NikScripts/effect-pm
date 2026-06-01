@@ -295,6 +295,7 @@ describe("ProcessExecutionStore — phantom type accessors", () => {
         hasPriorExecutions: () => Effect.succeed(false),
       };
       expect(typeof fullShape.executions).toBe("function");
+      expect(typeof emitShape.Execution.Completed).toBe("object");
       expect(typeof ProcessExecutionStore.Execution.Completed).toBe("object");
       expect(typeof boundShape.executions).toBe("function");
     }),
