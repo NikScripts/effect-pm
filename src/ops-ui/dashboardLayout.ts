@@ -7,20 +7,24 @@
 
 import { useCallback, useMemo, useState } from "react";
 
+export type DashboardWidgetId =
+  | "status"
+  | "logs"
+  | "process-controls"
+  | "queue-controls";
+
 export type DashboardWidgetKind =
   | "status-table"
   | "logs"
   | "process-controls"
   | "queue-controls";
 
-export interface GridWidgetPlacement {
-  readonly id: string;
-  readonly widget: DashboardWidgetKind;
-  readonly x: number;
-  readonly y: number;
-  readonly w: number;
-  readonly h: number;
+export interface WidgetLayout {
+  readonly colSpan: number;
+  readonly order: number;
 }
+
+export type DashboardLayout = Record<DashboardWidgetId, WidgetLayout>;
 
 export interface BarWidgetPlacement {
   readonly id: string;
@@ -32,83 +36,88 @@ export interface DashboardBarLayout {
   readonly widgets: ReadonlyArray<BarWidgetPlacement>;
 }
 
-export interface DashboardLayout {
-  readonly version: 1;
-  readonly grid: ReadonlyArray<GridWidgetPlacement>;
-  readonly bars?: {
-    readonly left?: DashboardBarLayout;
-    readonly right?: DashboardBarLayout;
-    readonly bottom?: DashboardBarLayout;
-  };
-}
-
 export type DashboardLayoutChange = (layout: DashboardLayout) => void;
 
-export const defaultDashboardLayout: DashboardLayout = {
-  version: 1,
-  grid: [
-    { id: "status", widget: "status-table", x: 0, y: 0, w: 7, h: 5 },
-    { id: "logs", widget: "logs", x: 7, y: 0, w: 5, h: 8 },
-    { id: "process-controls", widget: "process-controls", x: 0, y: 5, w: 6, h: 4 },
-    { id: "queue-controls", widget: "queue-controls", x: 6, y: 5, w: 6, h: 4 },
-  ],
-  bars: {
-    left: { hidden: true, widgets: [] },
-    right: { hidden: true, widgets: [] },
-    bottom: { hidden: true, widgets: [] },
-  },
-};
-
-const validWidgetKinds: ReadonlyArray<DashboardWidgetKind> = [
-  "status-table",
+export const dashboardWidgetIds = [
+  "status",
   "logs",
   "process-controls",
   "queue-controls",
-];
+] as const satisfies ReadonlyArray<DashboardWidgetId>;
 
-const hasWidgetKind = (value: unknown): value is DashboardWidgetKind =>
-  typeof value === "string" && validWidgetKinds.some((kind) => kind === value);
+export const dashboardWidgetKinds = {
+  status: "status-table",
+  logs: "logs",
+  "process-controls": "process-controls",
+  "queue-controls": "queue-controls",
+} as const satisfies Record<DashboardWidgetId, DashboardWidgetKind>;
+
+export const defaultDashboardLayout: DashboardLayout = {
+  status: { colSpan: 3, order: 1 },
+  logs: { colSpan: 3, order: 2 },
+  "process-controls": { colSpan: 3, order: 3 },
+  "queue-controls": { colSpan: 3, order: 4 },
+};
+
+const widgetConstraints: Record<DashboardWidgetId, { readonly min: number; readonly max: number }> = {
+  status: { min: 3, max: 8 },
+  logs: { min: 3, max: 8 },
+  "process-controls": { min: 3, max: 8 },
+  "queue-controls": { min: 3, max: 8 },
+};
+
+export const clampWidgetSpan = (id: DashboardWidgetId, span: number): number => {
+  const constraints = widgetConstraints[id];
+  return Math.max(constraints.min, Math.min(constraints.max, Math.trunc(span)));
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const parsePlacement = (value: unknown): GridWidgetPlacement | null => {
+const parseWidgetLayout = (
+  id: DashboardWidgetId,
+  value: unknown,
+): WidgetLayout | null => {
   if (!isRecord(value)) return null;
-  const id = value["id"];
-  const widget = value["widget"];
-  const x = value["x"];
-  const y = value["y"];
-  const w = value["w"];
-  const h = value["h"];
-  if (
-    typeof id !== "string" ||
-    !hasWidgetKind(widget) ||
-    typeof x !== "number" ||
-    typeof y !== "number" ||
-    typeof w !== "number" ||
-    typeof h !== "number"
-  ) {
+  const colSpan = value["colSpan"];
+  const order = value["order"];
+  if (typeof colSpan !== "number" || typeof order !== "number") {
     return null;
   }
   return {
-    id,
-    widget,
-    x: Math.max(0, Math.trunc(x)),
-    y: Math.max(0, Math.trunc(y)),
-    w: Math.max(1, Math.min(12, Math.trunc(w))),
-    h: Math.max(2, Math.trunc(h)),
+    colSpan: clampWidgetSpan(id, colSpan),
+    order: Math.max(1, Math.trunc(order)),
   };
 };
 
+export const normalizeDashboardLayout = (layout: DashboardLayout): DashboardLayout => {
+  const sorted = [...dashboardWidgetIds].sort(
+    (left, right) => layout[left].order - layout[right].order,
+  );
+  return Object.fromEntries(
+    sorted.map((id, index) => [
+      id,
+      {
+        colSpan: clampWidgetSpan(id, layout[id].colSpan),
+        order: index + 1,
+      },
+    ]),
+  ) as DashboardLayout;
+};
+
 export const parseDashboardLayout = (value: unknown): DashboardLayout | null => {
-  if (!isRecord(value) || value["version"] !== 1 || !Array.isArray(value["grid"])) {
+  if (!isRecord(value)) {
     return null;
   }
-  const grid = value["grid"].map(parsePlacement).filter((item) => item !== null);
-  if (grid.length === 0) {
-    return null;
+  const entries: Array<readonly [DashboardWidgetId, WidgetLayout]> = [];
+  for (const id of dashboardWidgetIds) {
+    const parsed = parseWidgetLayout(id, value[id]);
+    if (parsed === null) {
+      return null;
+    }
+    entries.push([id, parsed] as const);
   }
-  return { version: 1, grid };
+  return normalizeDashboardLayout(Object.fromEntries(entries) as DashboardLayout);
 };
 
 const readStoredLayout = (storageKey: string | undefined): DashboardLayout | null => {
@@ -159,11 +168,12 @@ export const useDashboardLayout = ({
 
   const commit = useCallback(
     (next: DashboardLayout) => {
+      const normalized = normalizeDashboardLayout(next);
       if (layout === undefined) {
-        setInternalLayout(next);
-        writeStoredLayout(layoutStorageKey, next);
+        setInternalLayout(normalized);
+        writeStoredLayout(layoutStorageKey, normalized);
       }
-      onLayoutChange?.(next);
+      onLayoutChange?.(normalized);
     },
     [layout, layoutStorageKey, onLayoutChange],
   );
@@ -185,40 +195,41 @@ export const useDashboardLayout = ({
   );
 };
 
+export const sortedDashboardWidgetIds = (layout: DashboardLayout): ReadonlyArray<DashboardWidgetId> =>
+  [...dashboardWidgetIds].sort((left, right) => layout[left].order - layout[right].order);
+
 export const resizeGridWidget = (
   layout: DashboardLayout,
-  id: string,
-  delta: { readonly w?: number; readonly h?: number },
+  id: DashboardWidgetId,
+  colSpan: number,
 ): DashboardLayout => ({
   ...layout,
-  grid: layout.grid.map((item) =>
-    item.id === id
-      ? {
-          ...item,
-          w: Math.max(2, Math.min(12, item.w + (delta.w ?? 0))),
-          h: Math.max(2, item.h + (delta.h ?? 0)),
-        }
-      : item,
-  ),
+  [id]: {
+    ...layout[id],
+    colSpan: clampWidgetSpan(id, colSpan),
+  },
 });
 
-export const moveGridWidget = (
+export const reorderDashboardLayout = (
   layout: DashboardLayout,
-  id: string,
-  direction: "up" | "down",
+  activeId: DashboardWidgetId,
+  overId: DashboardWidgetId,
 ): DashboardLayout => {
-  const index = layout.grid.findIndex((item) => item.id === id);
-  const swapWith = direction === "up" ? index - 1 : index + 1;
-  if (index < 0 || swapWith < 0 || swapWith >= layout.grid.length) {
+  if (activeId === overId) {
     return layout;
   }
-  const grid = [...layout.grid];
-  const current = grid[index];
-  const other = grid[swapWith];
-  if (current === undefined || other === undefined) {
+  const ordered = [...sortedDashboardWidgetIds(layout)];
+  const oldIndex = ordered.indexOf(activeId);
+  const newIndex = ordered.indexOf(overId);
+  if (oldIndex < 0 || newIndex < 0) {
     return layout;
   }
-  grid[index] = { ...current, x: other.x, y: other.y };
-  grid[swapWith] = { ...other, x: current.x, y: current.y };
-  return { ...layout, grid };
+  ordered.splice(oldIndex, 1);
+  ordered.splice(newIndex, 0, activeId);
+  return {
+    ...layout,
+    ...Object.fromEntries(
+      ordered.map((id, index) => [id, { ...layout[id], order: index + 1 }]),
+    ),
+  };
 };

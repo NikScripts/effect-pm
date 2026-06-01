@@ -13,7 +13,6 @@ export { LogViewer } from "./LogViewer.js";
 export type { LogViewerProps } from "./LogViewer.js";
 export {
   defaultDashboardLayout,
-  moveGridWidget,
   parseDashboardLayout,
   resizeGridWidget,
   useDashboardLayout,
@@ -25,6 +24,7 @@ export type {
   DashboardLayoutChange,
   DashboardLayoutState,
   DashboardWidgetKind,
-  GridWidgetPlacement,
+  DashboardWidgetId,
+  WidgetLayout,
   UseDashboardLayoutOptions,
 } from "./dashboardLayout.js";

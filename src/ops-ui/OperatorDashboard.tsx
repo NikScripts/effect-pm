@@ -3,8 +3,25 @@
  *
  * @module ops-ui/OperatorDashboard
  */
+// @effect-diagnostics globalThis:off globalThisInEffect:off — custom resize handles are browser pointer interactions.
 
-import { useState, type ReactNode } from "react";
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  rectSortingStrategy,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { useState, type MouseEvent, type ReactNode } from "react";
 import {
   ControlPlaneProvider,
   Controls,
@@ -15,13 +32,16 @@ import {
   type DashboardQueueTarget,
 } from "../react/index.js";
 import {
-  moveGridWidget,
+  clampWidgetSpan,
+  dashboardWidgetKinds,
+  reorderDashboardLayout,
   resizeGridWidget,
+  sortedDashboardWidgetIds,
   useDashboardLayout,
   type DashboardLayout,
   type DashboardLayoutChange,
+  type DashboardWidgetId,
   type DashboardWidgetKind,
-  type GridWidgetPlacement,
 } from "./dashboardLayout.js";
 import { LogViewer } from "./LogViewer.js";
 import { ProcessStatusTable, QueueStatusTable } from "./StatusTables.js";
@@ -74,52 +94,75 @@ const widgetLabel = (widget: DashboardWidgetKind): string => {
   }
 };
 
-const gridStyle = (placement: GridWidgetPlacement) => ({
-  gridColumn: `${String(placement.x + 1)} / span ${String(placement.w)}`,
-  gridRow: `span ${String(placement.h)}`,
-});
-
-const layoutColumns = "repeat(12, minmax(0, 1fr))";
-
 type WidgetFrameProps = {
-  readonly placement: GridWidgetPlacement;
-  readonly editMode: boolean;
+  readonly id: DashboardWidgetId;
+  readonly widget: DashboardWidgetKind;
+  readonly colSpan: number;
+  readonly resizing: boolean;
   readonly children: ReactNode;
-  readonly onMove: (direction: "up" | "down") => void;
-  readonly onResize: (delta: { readonly w?: number; readonly h?: number }) => void;
+  readonly onResizeStart: (edge: "left" | "right", event: MouseEvent<HTMLDivElement>) => void;
 };
 
 const WidgetFrame = ({
-  placement,
-  editMode,
+  id,
+  widget,
+  colSpan,
+  resizing,
   children,
-  onMove,
-  onResize,
-}: WidgetFrameProps) => (
-  <article
-    className="pm-dashboard__card pm-dashboard__grid-widget"
-    data-pm-widget={placement.widget}
-    style={gridStyle(placement)}
-  >
-    <div className="pm-dashboard__card-header pm-dashboard__widget-header">
-      <div>
-        <p className="pm-dashboard__section-label">{widgetLabel(placement.widget)}</p>
-        <h2>{widgetTitle(placement.widget)}</h2>
-      </div>
-      {editMode ? (
-        <div className="pm-dashboard__widget-edit" aria-label={`${placement.id} layout controls`}>
-          <button type="button" onClick={() => onMove("up")}>Up</button>
-          <button type="button" onClick={() => onMove("down")}>Down</button>
-          <button type="button" onClick={() => onResize({ w: -1 })}>Narrow</button>
-          <button type="button" onClick={() => onResize({ w: 1 })}>Wide</button>
-          <button type="button" onClick={() => onResize({ h: -1 })}>Short</button>
-          <button type="button" onClick={() => onResize({ h: 1 })}>Tall</button>
+  onResizeStart,
+}: WidgetFrameProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+  const style = {
+    gridColumn: `span ${String(colSpan)}`,
+    minWidth: `${String(colSpan * 75)}px`,
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <article
+      className="pm-dashboard__card pm-dashboard__grid-widget"
+      data-dragging={isDragging ? "true" : "false"}
+      data-pm-widget={widget}
+      data-resizing={resizing ? "true" : "false"}
+      ref={setNodeRef}
+      style={style}
+    >
+      <div
+        className="pm-dashboard__drag-handle"
+        title={`Drag to reorder ${id} widget`}
+        {...attributes}
+        {...listeners}
+      />
+      <div
+        aria-hidden="true"
+        className="pm-dashboard__resize-handle pm-dashboard__resize-handle--left"
+        onMouseDown={(event) => onResizeStart("left", event)}
+      />
+      <div
+        aria-hidden="true"
+        className="pm-dashboard__resize-handle pm-dashboard__resize-handle--right"
+        onMouseDown={(event) => onResizeStart("right", event)}
+      />
+      <div className="pm-dashboard__card-header pm-dashboard__widget-header">
+        <div>
+          <p className="pm-dashboard__section-label">{widgetLabel(widget)}</p>
+          <h2>{widgetTitle(widget)}</h2>
         </div>
-      ) : null}
-    </div>
-    {children}
-  </article>
-);
+      </div>
+      {children}
+      {isDragging ? <div className="pm-dashboard__drag-indicator" /> : null}
+      {resizing ? <div className="pm-dashboard__resize-indicator" /> : null}
+    </article>
+  );
+};
 
 const OperatorDashboardContent = ({
   for: group,
@@ -137,15 +180,74 @@ const OperatorDashboardContent = ({
   const status = useControlPlaneGroupStatus({ pollIntervalMs });
   const processIds = processes.map((process) => process.id);
   const queueIds = queues.map((queue) => queue.id);
-  const [editMode, setEditMode] = useState(false);
+  const [resizingId, setResizingId] = useState<DashboardWidgetId | null>(null);
   const dashboardLayout = useDashboardLayout({ layout, layoutStorageKey, onLayoutChange });
+  const orderedWidgetIds = sortedDashboardWidgetIds(dashboardLayout.layout);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
-  const updatePlacement = (update: (layout: DashboardLayout) => DashboardLayout) => {
-    dashboardLayout.setLayout(update);
+  const startResize = (
+    id: DashboardWidgetId,
+    edge: "left" | "right",
+    event: MouseEvent<HTMLDivElement>,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const ordered = sortedDashboardWidgetIds(dashboardLayout.layout);
+    const index = ordered.indexOf(id);
+    const previousId = index > 0 ? ordered[index - 1] : undefined;
+    const startSpan = dashboardLayout.layout[id].colSpan;
+    const previousStartSpan = previousId === undefined
+      ? undefined
+      : dashboardLayout.layout[previousId].colSpan;
+    setResizingId(id);
+
+    const onMove = (moveEvent: globalThis.MouseEvent) => {
+      const columnDelta = Math.round((moveEvent.clientX - startX) / 100);
+      dashboardLayout.setLayout((current) => {
+        if (edge === "right" || previousId === undefined || previousStartSpan === undefined) {
+          return resizeGridWidget(current, id, startSpan + columnDelta);
+        }
+        const nextCurrentSpan = clampWidgetSpan(id, startSpan - columnDelta);
+        const actualCurrentDelta = startSpan - nextCurrentSpan;
+        const nextPreviousSpan = clampWidgetSpan(previousId, previousStartSpan + actualCurrentDelta);
+        const actualPreviousDelta = nextPreviousSpan - previousStartSpan;
+        return resizeGridWidget(
+          resizeGridWidget(current, previousId, nextPreviousSpan),
+          id,
+          startSpan - actualPreviousDelta,
+        );
+      });
+    };
+
+    const onUp = () => {
+      setResizingId(null);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   };
 
-  const renderWidget = (placement: GridWidgetPlacement): ReactNode => {
-    switch (placement.widget) {
+  const handleDragEnd = (event: DragEndEvent) => {
+    const overId = event.over?.id;
+    if (typeof event.active.id === "string" && typeof overId === "string") {
+      dashboardLayout.setLayout((current) =>
+        reorderDashboardLayout(
+          current,
+          event.active.id as DashboardWidgetId,
+          overId as DashboardWidgetId,
+        ),
+      );
+    }
+  };
+
+  const renderWidget = (id: DashboardWidgetId): ReactNode => {
+    switch (dashboardWidgetKinds[id]) {
       case "status-table":
         return (
           <div className="pm-dashboard__table-stack">
@@ -208,34 +310,28 @@ const OperatorDashboardContent = ({
       </header>
 
       <div className="pm-dashboard__toolbar" aria-label="Dashboard layout toolbar">
-        <button type="button" onClick={() => setEditMode((value) => !value)}>
-          {editMode ? "Done" : "Edit layout"}
-        </button>
         <button type="button" onClick={dashboardLayout.resetLayout}>Reset layout</button>
-        <span>{editMode ? "Use controls on cards to resize or reorder." : "Layout persisted locally when configured."}</span>
+        <span>Drag cards by their top edge. Resize from the left or right edge.</span>
       </div>
 
-      <section
-        className="pm-dashboard__layout-grid"
-        style={{ gridTemplateColumns: layoutColumns }}
-        aria-label="Dashboard widgets"
-      >
-        {dashboardLayout.layout.grid.map((placement) => (
-          <WidgetFrame
-            editMode={editMode}
-            key={placement.id}
-            onMove={(direction) => updatePlacement(
-              (current) => moveGridWidget(current, placement.id, direction),
-            )}
-            onResize={(delta) => updatePlacement(
-              (current) => resizeGridWidget(current, placement.id, delta),
-            )}
-            placement={placement}
-          >
-            {renderWidget(placement)}
-          </WidgetFrame>
-        ))}
-      </section>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={[...orderedWidgetIds]} strategy={rectSortingStrategy}>
+          <section className="pm-dashboard__layout-grid" aria-label="Dashboard widgets">
+            {orderedWidgetIds.map((id) => (
+              <WidgetFrame
+                colSpan={dashboardLayout.layout[id].colSpan}
+                id={id}
+                key={id}
+                onResizeStart={(edge, event) => startResize(id, edge, event)}
+                resizing={resizingId === id}
+                widget={dashboardWidgetKinds[id]}
+              >
+                {renderWidget(id)}
+              </WidgetFrame>
+            ))}
+          </section>
+        </SortableContext>
+      </DndContext>
     </main>
   );
 };

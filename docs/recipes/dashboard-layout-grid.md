@@ -96,15 +96,12 @@ Recommended ingredients:
 Picture:
 
 ```ts
-type DashboardLayout = {
-  readonly version: 1;
-  readonly grid: ReadonlyArray<GridWidgetPlacement>;
-  readonly bars?: {
-    readonly left?: DashboardBarLayout;
-    readonly right?: DashboardBarLayout;
-    readonly bottom?: DashboardBarLayout;
-  };
+type WidgetLayout = {
+  readonly colSpan: number;
+  readonly order: number;
 };
+
+type DashboardLayout = Record<string, WidgetLayout>;
 
 type OperatorDashboardProps = {
   readonly layout?: DashboardLayout;
@@ -124,8 +121,8 @@ Alternatives:
 
 Question:
 Should the first layout API support both controlled layout (`layout` /
-`onLayoutChange`) and optional local persistence (`layoutStorageKey`), using one
-`DashboardLayout` object for grid plus fixed bars?
+`onLayoutChange`) and optional local persistence (`layoutStorageKey`), using a
+`DashboardLayout` object keyed by widget id with `{ colSpan, order }` values?
 
 Recommended answer:
 Yes. It gives us a small implementation path now while leaving room for WOW to
@@ -138,8 +135,7 @@ observe `onLayoutChange` calls.
 
 Decision:
 Accepted. The first layout API supports controlled layout, `onLayoutChange`, and
-optional `layoutStorageKey` local persistence with one `DashboardLayout` object
-for grid plus fixed bars.
+optional `layoutStorageKey` local persistence with `DashboardLayout = Record<widgetId, { colSpan, order }>` for the responsive grid. Fixed bars remain planned as widget areas layered around the grid.
 
 ## Future planned widgets
 
@@ -154,3 +150,60 @@ for grid plus fixed bars.
 
 Temporary recipe. Remove it when the layout design ships or moves into durable
 ops-ui docs.
+
+## Recipe step: grid engine choice (locked)
+
+What this decides:
+How the first layout implementation behaves as a real responsive grid rather
+than a fixed 12-column placement system.
+
+Recommended ingredients:
+
+- CSS Grid with `repeat(auto-fit, minmax(100px, 1fr))` — browser owns responsive
+  columns without hardcoded breakpoints.
+- `DashboardLayout = Record<widgetId, { colSpan, order }>` — `order` controls
+  sorting and `colSpan` controls approximate width.
+- `@dnd-kit/core` + `@dnd-kit/sortable` — pointer and keyboard sorting over a
+  two-dimensional grid.
+- Thin top drag handle — avoids interfering with widget content.
+- Custom left/right resize handles — horizontal movement changes `colSpan`; left
+  resize adjusts the previous widget boundary when possible.
+- Immediate local persistence via `layoutStorageKey`; authenticated/server sync
+  can use `onLayoutChange` later.
+
+Picture:
+
+```tsx
+<div
+  className="pm-dashboard__layout-grid"
+  style={{ gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))" }}
+>
+  <SortableWidget style={{ gridColumn: `span ${layout.status.colSpan}` }} />
+</div>
+```
+
+Alternatives:
+
+1. Fixed 12-column `x/y/w/h` placement — exact, but not the desired responsive
+   CSS Grid model.
+2. `react-grid-layout` — featureful, but heavier and not aligned with the known
+   working approach.
+3. Reorder/resize buttons only — accessible fallback, but not the intended grid
+   interaction.
+
+Question:
+Should the first implementation use responsive CSS Grid plus dnd-kit sorting and
+custom edge resize handles, storing only `{ colSpan, order }` per widget?
+
+Recommended answer:
+Yes. This matches the proven approach, keeps the saved layout small, and leaves
+bars/split views/widgets as later layers.
+
+Acceptance check:
+The demo renders multiple widgets side-by-side when width allows, supports
+pointer/keyboard sorting through dnd-kit, supports edge resizing, persists layout
+through reload, and resets to defaults.
+
+Decision:
+Accepted and implemented in `src/ops-ui/dashboardLayout.ts` and
+`src/ops-ui/OperatorDashboard.tsx`.

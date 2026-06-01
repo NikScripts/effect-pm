@@ -159,14 +159,22 @@ code {
 
 .pm-dashboard__layout-grid {
   display: grid;
-  grid-auto-flow: row dense;
-  grid-auto-rows: minmax(4rem, auto);
-  gap: 1rem;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  max-width: 100%;
 }
 
 .pm-dashboard__grid-widget {
+  position: relative;
   min-width: 0;
-  min-height: 12rem;
+  min-height: 490px;
+  overflow: hidden;
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+}
+
+.pm-dashboard__grid-widget[data-dragging="true"],
+.pm-dashboard__grid-widget[data-resizing="true"] {
+  user-select: none;
 }
 
 .pm-dashboard__widget-header {
@@ -176,20 +184,57 @@ code {
   gap: 1rem;
 }
 
-.pm-dashboard__widget-edit {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.35rem;
-  max-width: 19rem;
+.pm-dashboard__drag-handle {
+  position: absolute;
+  inset-inline: 0.5rem;
+  top: 0;
+  z-index: 20;
+  height: 1.5rem;
+  cursor: move;
 }
 
-.pm-dashboard__widget-edit button {
-  min-height: 1.75rem;
-  border-radius: 0.55rem;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.7rem;
-  font-weight: 800;
+.pm-dashboard__resize-handle {
+  position: absolute;
+  top: 0;
+  z-index: 10;
+  width: 0.5rem;
+  height: 100%;
+  cursor: col-resize;
+  opacity: 0;
+  transition: opacity 160ms ease, background 160ms ease;
+}
+
+.pm-dashboard__resize-handle--left {
+  left: 0;
+}
+
+.pm-dashboard__resize-handle--right {
+  right: 0;
+}
+
+.pm-dashboard__grid-widget:hover .pm-dashboard__resize-handle,
+.pm-dashboard__resize-handle:hover {
+  opacity: 1;
+  background: rgba(59, 130, 246, 0.45);
+}
+
+.pm-dashboard__drag-indicator,
+.pm-dashboard__resize-indicator {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  border-radius: 1.25rem;
+}
+
+.pm-dashboard__drag-indicator {
+  border: 2px solid #3b82f6;
+  background: rgba(59, 130, 246, 0.2);
+  box-shadow: 0 20px 60px rgba(59, 130, 246, 0.24);
+}
+
+.pm-dashboard__resize-indicator {
+  border: 2px dashed #3b82f6;
 }
 
 .pm-dashboard__grid {
