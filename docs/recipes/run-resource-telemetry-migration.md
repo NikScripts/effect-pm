@@ -129,12 +129,12 @@ Which identity source can be passed to `ProcessStore.telemetry(...)` to derive
 Recommended ingredients:
 - Use concrete resource/process tags with `kind` and `id` metadata when the
   telemetry declaration belongs to that one tag:
-  - `Process` / `Process.Service`: `kind: "process"`, `id`.
-  - `QueueResource`: `kind: "queue"`, `id`.
-  - `RunResource`: add `kind: "run-resource"`, `id`.
+  - `Process` / `Process.Service`: `kind: "Process"`, `id`.
+  - `QueueResource`: `kind: "QueueResource"`, `id`.
+  - `RunResource`: add `kind: "RunResource"`, `id`.
 - Use scope classes for built-in generic store facets:
-  - `RunResourceScope` → `processType: "run-resource"`, `processId: resourceId`.
-  - `QueueScope` → `processType: "queue-resource"`, `processId: queueId`.
+  - `RunResourceScope` → `processType: "RunResource"`, `processId: resourceId`.
+  - `QueueScope` → `processType: "QueueResource"`, `processId: queueId`.
 - `ProcessStore.telemetry(identity)(...)` maps `kind` → `RuntimeRecord.processType`
   and `id` → `RuntimeRecord.processId`.
 
@@ -152,7 +152,7 @@ ProcessStore.telemetry(MyRunGate)(
 // generated row identity
 {
   type: "RunResource.Run.Started",
-  processType: "run-resource",
+  processType: "RunResource",
   processId: MyRunGate.id,
 }
 

@@ -16,8 +16,8 @@ scope is [17-facet-telemetry-factory.md](./17-facet-telemetry-factory.md) §5 �
 | **Leaf** | Current level **`Schema.Struct`** declared directly by this scope |
 | **State** | Full nested **`Schema.Struct`** available from `yield* Scope` — ancestors at root, children under `withLeaf` keys |
 
-Not Effect’s `Context` module. Use **scope state** in prose; types use `State.Scope.State<S>`
-for the full yielded value and `State.Scope.Leaf<S>` for the current-level value.
+Not Effect’s `Context` module. Use **scope state** in prose; types use `State.Type.State<S>`
+for the full yielded value and `State.Type.Leaf<S>` for the current-level value.
 
 ---
 
@@ -28,28 +28,22 @@ Leaf state is an **Effect `Schema.Struct`** built from the fields passed to
 see plan 17 §5.2). **Not** a separate TS `interface` plus a duplicate schema.
 
 ```ts
-class ProcessScope extends State.Scope<ProcessScope>()(
-  {
-    processId: Schema.String,
-    scheduleKey: Schema.NullOr(Schema.String),
-    startedAt: Schema.Number,
-    isStartupRun: Schema.Boolean,
-  },
-)("@nikscripts/effect-pm/process/ProcessScope") {}
+export const ProcessScope = State.Scope("Process", {
+  processId: Schema.String,
+  scheduleKey: Schema.NullOr(Schema.String),
+  startedAt: Schema.Number,
+  isStartupRun: Schema.Boolean,
+})("@nikscripts/effect-pm/process/ProcessScope")
 
-class RunScope extends RunResourceScope.withLeaf<RunScope>()(
-  "Run",
-  { runId: Schema.String },
-)("@nikscripts/effect-pm/run/RunScope") {}
+export const RunScope = RunResourceScope.withLeaf("Run", {
+  runId: Schema.String,
+})("@nikscripts/effect-pm/run/RunScope")
 
-class EntryScope extends WorkerScope.withLeaf<EntryScope>()(
-  "Entry",
-  {
-    entryId: Schema.String,
-    key: Schema.String,
-    priority: Schema.Number,
-  },
-)("@nikscripts/effect-pm/queue/EntryScope") {}
+export const EntryScope = WorkerScope.withLeaf("Entry", {
+  entryId: Schema.String,
+  key: Schema.String,
+  priority: Schema.Number,
+})("@nikscripts/effect-pm/queue/EntryScope")
 ```
 
 | On scope class | Meaning |
@@ -59,8 +53,8 @@ class EntryScope extends WorkerScope.withLeaf<EntryScope>()(
 | **`EntryScope.Schema.Leaf.entryId`** | Current-level field schema with scope pickup metadata. |
 | **`EntryScope.Schema.State.Worker.Entry.entryId`** | Full nested field schema with scope pickup metadata. |
 
-Types: `State.Scope.Leaf<typeof EntryScope>` (current-level value),
-`State.Scope.State<typeof EntryScope>` (full yielded value).
+Types: `State.Type.Leaf<typeof EntryScope>` (current-level value),
+`State.Type.State<typeof EntryScope>` (full yielded value).
 
 | Scope | State (`yield* Scope`) |
 |-------|---------------------------|

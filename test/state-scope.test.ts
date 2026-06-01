@@ -2,20 +2,20 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
 import { getStateFieldSelectorMetadata, State } from "../src/State";
 
-class QueueScope extends State.Scope<QueueScope>()({
+const QueueScope = State.Scope("Queue", {
   id: Schema.String,
   queueId: Schema.String,
-})("@test/QueueScope") {}
+})("@test/QueueScope");
 
-class WorkerScope extends QueueScope.withLeaf<WorkerScope>()("Worker", {
+const WorkerScope = QueueScope.withLeaf("Worker", {
   id: Schema.String,
   workerId: Schema.String,
-})("@test/WorkerScope") {}
+})("@test/WorkerScope");
 
-class EntryScope extends WorkerScope.withLeaf<EntryScope>()("Entry", {
+const EntryScope = WorkerScope.withLeaf("Entry", {
   id: Schema.String,
   entryId: Schema.String,
-})("@test/EntryScope") {}
+})("@test/EntryScope");
 
 describe("State.Scope", () => {
   it.effect("provides nested state through withLeaf scopes", () =>
@@ -65,7 +65,7 @@ describe("State.Scope", () => {
     const leaf = {
       id: "entry",
       entryId: "entry-1",
-    } satisfies State.Scope.Leaf<typeof EntryScope>;
+    } satisfies State.Type.Leaf<typeof EntryScope>;
 
     const state = {
       id: "queue",
@@ -75,7 +75,7 @@ describe("State.Scope", () => {
         workerId: "worker-1",
         Entry: leaf,
       },
-    } satisfies State.Scope.State<typeof EntryScope>;
+    } satisfies State.Type.State<typeof EntryScope>;
 
     expect(state.Worker.Entry.entryId).toBe("entry-1");
   });

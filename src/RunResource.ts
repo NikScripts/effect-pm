@@ -148,7 +148,7 @@ export interface RunGate<in T, out A, out E> {
 /** @public */
 export interface RunResourceMetadata<Id extends string, T, A, E = never> {
   readonly id: Id;
-  readonly kind: "run-resource";
+  readonly kind: "RunResource";
   readonly tag: Context.Service<Id, RunGate<T, A, E>>;
 }
 
@@ -570,7 +570,7 @@ export const RunResource = {
     );
     return Object.assign(base, {
       id: name,
-      kind: "run-resource" as const,
+      kind: "RunResource" as const,
       tag: base,
       defaultSpec,
       configure: (patch: ConfigPatch<RunResourceConfig<T, A, E>>) =>
@@ -607,7 +607,7 @@ export const RunResource = {
       const base = Context.Service<Self, RunGate<T, A, E>>()(name);
       return Object.assign(base, {
         id: name,
-        kind: "run-resource" as const,
+        kind: "RunResource" as const,
         tag: base,
       });
     },

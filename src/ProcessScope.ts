@@ -7,34 +7,12 @@
 import { Schema } from "effect";
 import { State } from "./State";
 
-const processScopeFields = {
+export const ProcessScope = State.Scope("Process", {
   processId: Schema.String,
   scheduleKey: Schema.NullOr(Schema.String),
   startedAt: Schema.Number,
   isStartupRun: Schema.Boolean,
-} as const;
+})("@nikscripts/effect-pm/process/ProcessScope");
 
-const ProcessScopeBase: State.Scope.Class<
-  ProcessScope,
-  "@nikscripts/effect-pm/process/ProcessScope",
-  typeof processScopeFields
-> = State.Scope<ProcessScope>()(processScopeFields)(
-  "@nikscripts/effect-pm/process/ProcessScope",
-);
-
-/**
- * Scope installed around one supervised process run.
- *
- * @public
- */
-export class ProcessScope extends ProcessScopeBase {}
-
-/**
- * Type helpers for {@link ProcessScope}.
- *
- * @public
- */
-export declare namespace ProcessScope {
-  export type Leaf = State.Scope.Leaf<typeof ProcessScope>;
-  export type State = State.Scope.State<typeof ProcessScope>;
-}
+export type ProcessScopeLeaf = State.Type.Leaf<typeof ProcessScope>;
+export type ProcessScopeState = State.Type.State<typeof ProcessScope>;

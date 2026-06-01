@@ -7,31 +7,9 @@
 import { Schema } from "effect";
 import { State } from "./State";
 
-const processLifecycleScopeFields = {
+export const ProcessLifecycleScope = State.Scope("Process", {
   processId: Schema.String,
-} as const;
+})("@nikscripts/effect-pm/process/ProcessLifecycleScope");
 
-const ProcessLifecycleScopeBase: State.Scope.Class<
-  ProcessLifecycleScope,
-  "@nikscripts/effect-pm/process/ProcessLifecycleScope",
-  typeof processLifecycleScopeFields
-> = State.Scope<ProcessLifecycleScope>()(processLifecycleScopeFields)(
-  "@nikscripts/effect-pm/process/ProcessLifecycleScope",
-);
-
-/**
- * Scope installed around one process lifecycle transition.
- *
- * @public
- */
-export class ProcessLifecycleScope extends ProcessLifecycleScopeBase {}
-
-/**
- * Type helpers for {@link ProcessLifecycleScope}.
- *
- * @public
- */
-export declare namespace ProcessLifecycleScope {
-  export type Leaf = State.Scope.Leaf<typeof ProcessLifecycleScope>;
-  export type State = State.Scope.State<typeof ProcessLifecycleScope>;
-}
+export type ProcessLifecycleScopeLeaf = State.Type.Leaf<typeof ProcessLifecycleScope>;
+export type ProcessLifecycleScopeState = State.Type.State<typeof ProcessLifecycleScope>;

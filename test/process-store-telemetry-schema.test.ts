@@ -10,13 +10,11 @@ import { State } from "../src/State";
 import { runtimeRecordQuery } from "../src/internal/store/helpers";
 import { Type } from "../src/Query";
 
-class TelemetryTestScope extends State.Scope<TelemetryTestScope>()({
+const TelemetryTestScope = State.Scope("Process", {
   processId: Schema.String,
   subjectId: Schema.String,
   startedAt: Schema.Number,
-})("@test/TelemetryTestScope") {
-  static readonly kind = "process";
-}
+})("@test/TelemetryTestScope");
 
 const TelemetryTestState = TelemetryTestScope.Schema.State;
 
@@ -31,7 +29,6 @@ class TelemetryRecorded extends Telemetry.Schema<TelemetryRecorded>()(
   payload: Schema.Struct({
     concurrency: Schema.Number,
   }),
-  kind: Schema.Literal("recorded"),
 }) {}
 
 class TelemetryFailed extends Telemetry.Schema<TelemetryFailed>()(
@@ -40,7 +37,6 @@ class TelemetryFailed extends Telemetry.Schema<TelemetryFailed>()(
   subjectId: TelemetryTestState.subjectId,
   occurredAt: Telemetry.terminal.clockMillis,
   error: Telemetry.input.errorString,
-  kind: Schema.Literal("failed"),
 }) {}
 
 class TelemetrySchemaStore extends ProcessStore.Service<TelemetrySchemaStore>()(
@@ -107,7 +103,7 @@ describe("ProcessStore telemetry schema", () => {
       expect(rows).toHaveLength(1);
       const row = rows[0]!;
       expect(row.type).toBe("Test.Event.Recorded");
-      expect(row.processType).toBe("process");
+      expect(row.processType).toBe("Process");
       expect(row.processId).toBe("process-1");
       expect(row.payload).toMatchObject({
         subjectId: "subject-1",
@@ -115,7 +111,6 @@ describe("ProcessStore telemetry schema", () => {
         startedAt: 1_700_000_000_000,
         completedAt: expect.any(Number),
         durationMs: expect.any(Number),
-        kind: "recorded",
       });
       expect(row.occurredAt).toBeDefined();
     }).pipe(
@@ -139,7 +134,6 @@ describe("ProcessStore telemetry schema", () => {
       expect(rows[0]?.payload).toMatchObject({
         subjectId: "subject-input",
         error: "Error: boom",
-        kind: "failed",
       });
     }).pipe(
       Effect.provide(TelemetrySchemaStore.layer),

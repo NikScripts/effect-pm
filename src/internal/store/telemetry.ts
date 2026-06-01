@@ -73,9 +73,13 @@ type TelemetryIdentity = {
 };
 
 const telemetryIdentityFieldByKind: Readonly<Record<string, string>> = {
+  Process: "processId",
   process: "processId",
+  RunResource: "resourceId",
   "run-resource": "resourceId",
+  QueueResource: "queueId",
   "queue-resource": "queueId",
+  Queue: "queueId",
 };
 
 const telemetryIdentity = (value: unknown): TelemetryIdentity | undefined => {
@@ -87,12 +91,12 @@ const telemetryIdentity = (value: unknown): TelemetryIdentity | undefined => {
   if (typeof kind !== "string") {
     return undefined;
   }
-  const id = record["id"];
-  if (typeof id === "string") {
-    return { kind, id };
-  }
   const schema = record["Schema"];
   if (!isRecord(schema) || !isRecord(schema["State"])) {
+    const id = record["id"];
+    if (typeof id === "string") {
+      return { kind, id };
+    }
     return { kind };
   }
   const field = telemetryIdentityFieldByKind[kind];

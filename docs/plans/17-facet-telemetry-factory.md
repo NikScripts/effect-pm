@@ -663,8 +663,8 @@ Revert or replace exploratory `cursor/facet-telemetry-158c` before slice 1.
 
 ### Slice 1 — `State.Scope` factory
 
-1. `src/State.ts` (or subpath) — `State.Scope<Self>()`, `withLeaf<Self>()`, `layer` / `provide` / `run`
-2. `State.Scope.Leaf<S>` / `State.Scope.State<S>` type aliases; `Leaf` and full nested `State` schema surfaces
+1. `src/State.ts` (or subpath) — `State.Scope(kind, fields)`, `withLeaf(key, fields)`, `layer` / `provide` / `run`
+2. `State.Type.Leaf<S>` / `State.Type.State<S>` type aliases; `Leaf` and full nested `State` schema surfaces
 3. Unit tests: queue declaration chain types (no kernel yet)
 
 ### Slice 2 — Telemetry factory core (no Process.ts yet)

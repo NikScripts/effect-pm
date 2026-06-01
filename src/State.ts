@@ -67,36 +67,35 @@ type InsertSelectors<
       }
     : never;
 
-type StateScopeClass<
-  Self,
+export type StateScope<
   Id extends string,
+  Kind extends string,
   LeafFields extends StructFields,
   StateFields extends StructFields,
   StateShape,
   StateSelectors,
   Path extends ReadonlyArray<string>,
   Requirements,
-> = {
-  new(_: never): object;
-} & Effect.Effect<StateShape, never, Self> & {
-  readonly key: Id;
+> = Context.ServiceClass<Id, Id, StateShape> & {
+  readonly id: Id;
+  readonly kind: Kind;
   readonly Leaf: StructFromFields<LeafFields>;
   readonly State: StructFromFields<StateFields>;
   readonly Schema: {
     readonly Leaf: StateFieldSelectors<LeafFields>;
     readonly State: StateSelectors;
   };
-  readonly layer: (leaf: ValueOf<LeafFields>) => Layer.Layer<Self, never, Requirements>;
+  readonly layer: (leaf: ValueOf<LeafFields>) => Layer.Layer<Id, never, Requirements>;
   readonly provide: (
     leaf: ValueOf<LeafFields>,
   ) => <A, E, R>(
     effect: Effect.Effect<A, E, R>,
-  ) => Effect.Effect<A, E, Exclude<R, Self> | Requirements>;
+  ) => Effect.Effect<A, E, Exclude<R, Id> | Requirements>;
   readonly run: <A, E, R>(
     leaf: ValueOf<LeafFields>,
     effect: Effect.Effect<A, E, R>,
-  ) => Effect.Effect<A, E, Exclude<R, Self> | Requirements>;
-  readonly withLeaf: <ChildSelf>() => <
+  ) => Effect.Effect<A, E, Exclude<R, Id> | Requirements>;
+  readonly withLeaf: <
     const Key extends string,
     const ChildFields extends StructFields,
   >(
@@ -104,15 +103,15 @@ type StateScopeClass<
     fields: ChildFields,
   ) => <const ChildId extends string>(
     id: ChildId,
-  ) => StateScopeClass<
-    ChildSelf,
+  ) => StateScope<
     ChildId,
+    Kind,
     ChildFields,
     InsertState<StateFields, Path, Key, { readonly [K in keyof ChildFields]: ChildFields[K] }>,
     InsertState<StateShape, Path, Key, ValueOf<ChildFields>>,
     InsertSelectors<StateSelectors, Path, Key, ChildFields>,
     readonly [...Path, Key],
-    Requirements | Self
+    Requirements | Id
   >;
 };
 
@@ -214,9 +213,9 @@ const insertStateValue = (
   };
 };
 
-const makeScopeClass = <
-  Self,
+const makeScope = <
   const Id extends string,
+  const Kind extends string,
   const LeafFields extends StructFields,
   StateFields extends StructFields,
   StateShape,
@@ -225,13 +224,14 @@ const makeScopeClass = <
   Requirements,
 >(options: {
   readonly id: Id;
+  readonly kind: Kind;
   readonly leafFields: LeafFields;
   readonly tree: StateSchemaTree;
   readonly path: Path;
   readonly makeState: (leaf: ValueOf<LeafFields>) => Effect.Effect<StateShape, never, Requirements>;
-}): StateScopeClass<
-  Self,
+}): StateScope<
   Id,
+  Kind,
   LeafFields,
   StateFields,
   StateShape,
@@ -246,31 +246,27 @@ const makeScopeClass = <
     options.path,
   ) as StateFieldSelectors<LeafFields>;
   const StateSelectors = buildSelectors(options.tree, []) as StateSelectors;
-  const Base = Context.Service<Self, StateShape>()(options.id);
-
-  class ScopeClass extends Base {
-    static readonly Leaf = Leaf;
-    static readonly State = StateSchema;
-    static readonly Schema = {
+  const Base = Context.Service<Id, StateShape>()(options.id);
+  const scope = Object.assign(Base, {
+    id: options.id,
+    kind: options.kind,
+    Leaf,
+    State: StateSchema,
+    Schema: {
       Leaf: LeafSelectors,
       State: StateSelectors,
-    };
-
-    static readonly layer = (leaf: ValueOf<LeafFields>) =>
-      Layer.effect(ScopeClass, options.makeState(leaf));
-
-    static readonly provide =
+    },
+    layer: (leaf: ValueOf<LeafFields>) =>
+      Layer.effect(Base, options.makeState(leaf)),
+    provide:
       (leaf: ValueOf<LeafFields>) =>
       <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-        effect.pipe(Effect.provide(ScopeClass.layer(leaf)));
-
-    static readonly run = <A, E, R>(
+        effect.pipe(Effect.provide(scope.layer(leaf))),
+    run: <A, E, R>(
       leaf: ValueOf<LeafFields>,
       effect: Effect.Effect<A, E, R>,
-    ) => ScopeClass.provide(leaf)(effect);
-
-    static readonly withLeaf =
-      <ChildSelf>() =>
+    ) => scope.provide(leaf)(effect),
+    withLeaf:
       <const Key extends string, const ChildFields extends StructFields>(
         key: Key,
         fields: ChildFields,
@@ -279,35 +275,35 @@ const makeScopeClass = <
         const childTree = makeTree(fields);
         const tree = cloneTreeWithChild(options.tree, options.path, key, childTree);
         const path = [...options.path, key] as const;
-        return makeScopeClass<
-          ChildSelf,
+        return makeScope<
           ChildId,
+          Kind,
           ChildFields,
           InsertState<StateFields, Path, Key, { readonly [K in keyof ChildFields]: ChildFields[K] }>,
           InsertState<StateShape, Path, Key, ValueOf<ChildFields>>,
           InsertSelectors<StateSelectors, Path, Key, ChildFields>,
           typeof path,
-          Requirements | Self
+          Requirements | Id
         >({
           id,
+          kind: options.kind,
           leafFields: fields,
           tree,
           path,
           makeState: (leaf) =>
-            Effect.map(ScopeClass, (parent) =>
+            Effect.map(scope, (parent) =>
               insertStateValue(parent, options.path, key, leaf),
             ) as Effect.Effect<
               InsertState<StateShape, Path, Key, ValueOf<ChildFields>>,
               never,
-              Requirements | Self
+              Requirements | Id
             >,
         });
-      };
-  }
-
-  return ScopeClass as StateScopeClass<
-    Self,
+      },
+  });
+  return scope as StateScope<
     Id,
+    Kind,
     LeafFields,
     StateFields,
     StateShape,
@@ -318,12 +314,14 @@ const makeScopeClass = <
 };
 
 const Scope =
-  <Self>() =>
-  <const Fields extends StructFields>(fields: Fields) =>
+  <const Kind extends string, const Fields extends StructFields>(
+    kind: Kind,
+    fields: Fields,
+  ) =>
   <const Id extends string>(id: Id) =>
-    makeScopeClass<
-      Self,
+    makeScope<
       Id,
+      Kind,
       Fields,
       Fields,
       ValueOf<Fields>,
@@ -332,6 +330,7 @@ const Scope =
       never
     >({
       id,
+      kind,
       leafFields: fields,
       tree: makeTree(fields),
       path: [],
@@ -353,73 +352,7 @@ export const State = {
  * @public
  */
 export declare namespace State {
-  export namespace Scope {
-    export type Class<
-      Self,
-      Id extends string,
-      LeafFields extends Schema.Struct.Fields,
-    > = StateScopeClass<
-      Self,
-      Id,
-      LeafFields,
-      LeafFields,
-      Schema.Struct.Type<LeafFields>,
-      StateFieldSelectors<LeafFields>,
-      readonly [],
-      never
-    >;
-    export type AnyClass<
-      Self = never,
-      Leaf extends Record<PropertyKey, unknown> = Record<PropertyKey, unknown>,
-      Requirements = never,
-    > = {
-      new(_: never): object;
-    } & Effect.Effect<unknown, never, Self> & {
-      readonly key: string;
-      readonly Leaf: Schema.Top;
-      readonly State: Schema.Top;
-      readonly Schema: {
-        readonly Leaf: { readonly [K in keyof Leaf]: StateFieldSelector };
-        readonly State: Record<PropertyKey, unknown>;
-      };
-      readonly layer: (leaf: Leaf) => Layer.Layer<Self, never, Requirements>;
-      readonly provide: (
-        leaf: Leaf,
-      ) => <A, E, R>(
-        effect: Effect.Effect<A, E, R>,
-      ) => Effect.Effect<A, E, Exclude<R, Self> | Requirements>;
-      readonly run: <A, E, R>(
-        leaf: Leaf,
-        effect: Effect.Effect<A, E, R>,
-      ) => Effect.Effect<A, E, Exclude<R, Self> | Requirements>;
-    };
-    export type ChildClass<
-      Self,
-      Id extends string,
-      Parent,
-      Key extends string,
-      LeafFields extends Schema.Struct.Fields,
-    > = Parent extends StateScopeClass<
-      infer ParentSelf,
-      string,
-      Schema.Struct.Fields,
-      infer ParentStateFields,
-      infer ParentStateShape,
-      infer ParentStateSelectors,
-      infer ParentPath,
-      infer ParentRequirements
-    >
-      ? StateScopeClass<
-          Self,
-          Id,
-          LeafFields,
-          InsertState<ParentStateFields, ParentPath, Key, { readonly [K in keyof LeafFields]: LeafFields[K] }>,
-          InsertState<ParentStateShape, ParentPath, Key, Schema.Struct.Type<LeafFields>>,
-          InsertSelectors<ParentStateSelectors, ParentPath, Key, LeafFields>,
-          readonly [...ParentPath, Key],
-          ParentRequirements | ParentSelf
-        >
-      : never;
+  export namespace Type {
     export type Leaf<S extends { readonly Leaf: Schema.Top }> =
       Schema.Schema.Type<S["Leaf"]>;
     export type State<S extends { readonly State: Schema.Top }> =

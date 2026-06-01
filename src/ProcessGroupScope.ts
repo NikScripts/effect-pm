@@ -7,62 +7,15 @@
 import { Schema } from "effect";
 import { State } from "./State";
 
-const processGroupScopeFields = {
+export const ProcessGroupScope = State.Scope("Process", {
   groupId: Schema.String,
-} as const;
+})("@nikscripts/effect-pm/process/ProcessGroupScope");
 
-const ProcessGroupScopeBase: State.Scope.Class<
-  ProcessGroupScope,
-  "@nikscripts/effect-pm/process/ProcessGroupScope",
-  typeof processGroupScopeFields
-> = State.Scope<ProcessGroupScope>()(processGroupScopeFields)(
-  "@nikscripts/effect-pm/process/ProcessGroupScope",
-);
-
-/**
- * Scope installed around process-group lifecycle telemetry.
- *
- * @public
- */
-export class ProcessGroupScope extends ProcessGroupScopeBase {}
-
-const processGroupMemberScopeFields = {
+export const ProcessGroupMemberScope = ProcessGroupScope.withLeaf("Member", {
   processId: Schema.String,
-} as const;
+})("@nikscripts/effect-pm/process/ProcessGroupMemberScope");
 
-const ProcessGroupMemberScopeBase: State.Scope.AnyClass<
-  ProcessGroupMemberScope,
-  { readonly processId: string },
-  ProcessGroupScope
-> =
-  ProcessGroupScope.withLeaf<ProcessGroupMemberScope>()(
-  "Member",
-  processGroupMemberScopeFields,
-  )("@nikscripts/effect-pm/process/ProcessGroupMemberScope");
-
-/**
- * Scope installed around one process member lifecycle transition.
- *
- * @public
- */
-export class ProcessGroupMemberScope extends ProcessGroupMemberScopeBase {}
-
-/**
- * Type helpers for {@link ProcessGroupScope}.
- *
- * @public
- */
-export declare namespace ProcessGroupScope {
-  export type Leaf = State.Scope.Leaf<typeof ProcessGroupScope>;
-  export type State = State.Scope.State<typeof ProcessGroupScope>;
-}
-
-/**
- * Type helpers for {@link ProcessGroupMemberScope}.
- *
- * @public
- */
-export declare namespace ProcessGroupMemberScope {
-  export type Leaf = State.Scope.Leaf<typeof ProcessGroupMemberScope>;
-  export type State = State.Scope.State<typeof ProcessGroupMemberScope>;
-}
+export type ProcessGroupScopeLeaf = State.Type.Leaf<typeof ProcessGroupScope>;
+export type ProcessGroupScopeState = State.Type.State<typeof ProcessGroupScope>;
+export type ProcessGroupMemberScopeLeaf = State.Type.Leaf<typeof ProcessGroupMemberScope>;
+export type ProcessGroupMemberScopeState = State.Type.State<typeof ProcessGroupMemberScope>;
