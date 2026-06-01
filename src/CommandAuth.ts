@@ -74,6 +74,7 @@ export interface GenerateEd25519KeyPairOptions {
 }
 
 export type CanonicalCommandAuthRequest =
+  | { readonly _tag: "GetHealth" }
   | { readonly _tag: "GetContract" }
   | { readonly _tag: "ReadGroupStatus" }
   | { readonly _tag: "ListProcesses" }

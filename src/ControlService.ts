@@ -25,6 +25,7 @@ import type {
   ProcessGroupServiceDefinition,
   TypedProcessGroup,
 } from "./ProcessGroup";
+import type { CommandAuthVerifierService } from "./CommandAuth";
 import type { ProcessManagerGroupConfigItem } from "./ProcessManager";
 import type { ProcessStorage } from "./ProcessStorage";
 import {
@@ -42,6 +43,7 @@ type TypedControlServiceOptions<
   Error = unknown,
 > = {
   readonly port?: number;
+  readonly auth?: CommandAuthVerifierService;
   readonly group: TypedProcessGroup<Id, Entries, Error>;
 };
 
@@ -147,6 +149,7 @@ function startControlService(
 ): Effect.Effect<void, ControlTransportError, Scope.Scope | unknown | ProcessStorage.Services> {
   return ControlTransportHttp.server({
     port: options.port,
+    auth: options.auth,
   }).serve.pipe(
     Effect.provide(ControlRouter.layer(options.group)),
   );
@@ -190,7 +193,10 @@ const controlServiceHttpLayer = <
   const ConfigItems extends readonly ProcessManagerGroupConfigItem[] = readonly [],
 >(
   group: ProcessGroupServiceDefinition<Self, Id, Entries, ConfigItems>,
-  options: { readonly port?: number } = {},
+  options: {
+    readonly port?: number;
+    readonly auth?: CommandAuthVerifierService;
+  } = {},
 ): Layer.Layer<
   never,
   ControlTransportError,

@@ -14,6 +14,7 @@ import * as Terminal from "effect/Terminal";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import type { HttpClient } from "effect/unstable/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import type { CommandAuthSignerService } from "./CommandAuth";
 import type {
   ControlProtocolMetadata,
   ControlProtocolRequest,
@@ -2191,6 +2192,7 @@ function connect<Source extends ContractSource<AnyProcessGroupContract>>(
   source: Source,
   options: {
     readonly baseUrl: string;
+    readonly auth?: CommandAuthSignerService;
   },
 ): RemoteProcessManager<ContractFromSource<Source>>;
 
@@ -2235,6 +2237,7 @@ function connect<Source extends ContractSource<AnyProcessGroupContract>>(
 function connect<const Contract extends AnyProcessGroupContract>(options: {
   readonly baseUrl: string;
   readonly contract: Contract;
+  readonly auth?: CommandAuthSignerService;
 }): RemoteProcessManager<Contract>;
 
 /**
@@ -2258,6 +2261,7 @@ function connect(
     | {
         readonly baseUrl: string;
         readonly contract: AnyProcessGroupContract;
+        readonly auth?: CommandAuthSignerService;
       }
     | {
         readonly transport: ControlTransportClientShape<unknown>;
@@ -2265,6 +2269,7 @@ function connect(
       },
   options?: {
     readonly baseUrl: string;
+    readonly auth?: CommandAuthSignerService;
   } | {
     readonly transport: ControlTransportClientShape<unknown>;
   } | {
@@ -2287,7 +2292,10 @@ function connect(
   if (options !== undefined) {
     if ("baseUrl" in options) {
       return makeRemoteProcessManager(
-        makeControlTransportHttpClient({ baseUrl: options.baseUrl }),
+        makeControlTransportHttpClient({
+          baseUrl: options.baseUrl,
+          auth: options.auth,
+        }),
         sourceOrOptions.contract,
       );
     }
@@ -2298,7 +2306,10 @@ function connect(
   }
   if ("baseUrl" in sourceOrOptions) {
     return makeRemoteProcessManager(
-      makeControlTransportHttpClient({ baseUrl: sourceOrOptions.baseUrl }),
+      makeControlTransportHttpClient({
+        baseUrl: sourceOrOptions.baseUrl,
+        auth: sourceOrOptions.auth,
+      }),
       sourceOrOptions.contract,
     );
   }

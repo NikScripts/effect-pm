@@ -9,6 +9,7 @@ const canonicalRequest = (
   request: CommandAuthSigningInput["envelope"]["request"],
 ): CanonicalCommandAuthRequest => {
   switch (request._tag) {
+    case "GetHealth":
     case "GetContract":
     case "ReadGroupStatus":
     case "ListProcesses":
@@ -60,6 +61,7 @@ const canonicalRequestText = (
 ): string => {
   switch (request._tag) {
     case "GetContract":
+    case "GetHealth":
     case "ReadGroupStatus":
     case "ListProcesses":
     case "ListQueues":
