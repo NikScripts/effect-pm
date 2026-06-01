@@ -95,18 +95,10 @@ const lifecycleTags: ReadonlyArray<ProcessLifecycleTag> = [
 const isLifecycleTag = (value: unknown): value is ProcessLifecycleTag =>
   isString(value) && lifecycleTags.some((tag) => tag === value);
 
-const isLifecycleWireType = (value: string): value is ProcessLifecycleWireType =>
-  processLifecycleWireTypes.some((wire) => wire === value);
-
-/**
- * Decode a lifecycle runtime record back into a typed event.
- *
- * @internal Shared with {@link ProcessGroupStore} group-scoped reads.
- */
-export const recordToLifecycleEvent = (
+const decodeLifecycleEvent = (
   record: RuntimeRecord,
+  type: ProcessLifecycleWireType,
 ): ProcessLifecycleChangedEvent | null => {
-  if (!isLifecycleWireType(record.type)) return null;
   if (record.processType !== PROCESS_TYPE) return null;
   const payload = record.payload;
   if (!isRecord(payload)) return null;
@@ -116,7 +108,7 @@ export const recordToLifecycleEvent = (
   if (errorRaw !== undefined && !isString(errorRaw)) return null;
   return {
     id: record.id,
-    type: record.type,
+    type,
     occurredAt: DateTime.toEpochMillis(record.occurredAt),
     entityType: PROCESS_TYPE,
     entityId: record.processId,
@@ -234,10 +226,30 @@ const ProcessLifecycleTelemetry = ProcessStore.telemetry(
   ),
 );
 
-export const processLifecycleWireTypes = Telemetry.events(
-  ProcessLifecycleTelemetry,
-  "Lifecycle",
-);
+const ProcessLifecycleCodec = Telemetry.codec(ProcessLifecycleTelemetry)({
+  Lifecycle: {
+    Started: decodeLifecycleEvent,
+    Stopped: decodeLifecycleEvent,
+    Restarted: decodeLifecycleEvent,
+    Errored: decodeLifecycleEvent,
+    Recovered: decodeLifecycleEvent,
+    Disabled: decodeLifecycleEvent,
+    Enabled: decodeLifecycleEvent,
+  },
+});
+
+export const processLifecycleWireTypes =
+  ProcessLifecycleCodec.types("Lifecycle");
+
+/**
+ * Decode a lifecycle runtime record back into a typed event.
+ *
+ * @internal Shared with {@link ProcessGroupStore} group-scoped reads.
+ */
+export const recordToLifecycleEvent = (
+  record: RuntimeRecord,
+): ProcessLifecycleChangedEvent | null =>
+  ProcessLifecycleCodec.decodeTag("Lifecycle", record);
 
 const decodeLifecycleEvents = (
   records: ReadonlyArray<RuntimeRecord>,

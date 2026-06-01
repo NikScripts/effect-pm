@@ -128,13 +128,10 @@ const isExecutionStatus = (value: unknown): value is ProcessExecutionStatus =>
   isString(value) &&
   executionStatuses.some((status) => status === value);
 
-const isExecutionWireType = (value: string): value is ProcessExecutionWireType =>
-  executionWireTypes.some((wire) => wire === value);
-
-const recordToExecutionEvent = (
+const decodeExecutionEvent = (
   record: RuntimeRecord,
+  type: ProcessExecutionWireType,
 ): ProcessExecutionCompletedEvent | null => {
-  if (!isExecutionWireType(record.type)) return null;
   if (record.processType !== PROCESS_TYPE) return null;
   const payload = record.payload;
   if (!isRecord(payload)) return null;
@@ -158,7 +155,7 @@ const recordToExecutionEvent = (
   if (errorRaw !== undefined && !isString(errorRaw)) return null;
   return {
     id: record.id,
-    type: record.type,
+    type,
     occurredAt: DateTime.toEpochMillis(record.occurredAt),
     entityType: PROCESS_TYPE,
     entityId: record.processId,
@@ -260,10 +257,20 @@ const ProcessExecutionTelemetry = ProcessStore.telemetry(
   ),
 );
 
-const executionWireTypes = Telemetry.events(
-  ProcessExecutionTelemetry,
-  "Execution",
-);
+const ProcessExecutionCodec = Telemetry.codec(ProcessExecutionTelemetry)({
+  Execution: {
+    Completed: decodeExecutionEvent,
+    Failed: decodeExecutionEvent,
+    Interrupted: decodeExecutionEvent,
+  },
+});
+
+const executionWireTypes = ProcessExecutionCodec.types("Execution");
+
+const recordToExecutionEvent = (
+  record: RuntimeRecord,
+): ProcessExecutionCompletedEvent | null =>
+  ProcessExecutionCodec.decodeTag("Execution", record);
 
 // ============================================================================
 // Facet
