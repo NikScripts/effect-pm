@@ -34,7 +34,7 @@
  * @module store/ProcessLifecycle
  */
 
-import { DateTime, Effect, Option, Schema } from "effect";
+import { DateTime, Effect, Option } from "effect";
 import {
   isRecord,
   isString,
@@ -211,7 +211,7 @@ export const recordToLifecycleEvent = (
 const ProcessLifecycleState = ProcessLifecycleScope.Schema.State;
 
 const lifecycleSchemaFields = {
-  processType: Schema.Literal(PROCESS_TYPE),
+  processType: PROCESS_TYPE,
   processId: ProcessLifecycleState.processId,
   occurredAt: Telemetry.terminal.clockMillis,
 } as const;
@@ -220,28 +220,28 @@ class ProcessLifecycleStarted extends Telemetry.Schema<ProcessLifecycleStarted>(
   ProcessLifecycleScope,
 )({
   ...lifecycleSchemaFields,
-  tag: Schema.Literal("Started"),
+  tag: "Started",
 }) {}
 
 class ProcessLifecycleStopped extends Telemetry.Schema<ProcessLifecycleStopped>()(
   ProcessLifecycleScope,
 )({
   ...lifecycleSchemaFields,
-  tag: Schema.Literal("Stopped"),
+  tag: "Stopped",
 }) {}
 
 class ProcessLifecycleRestarted extends Telemetry.Schema<ProcessLifecycleRestarted>()(
   ProcessLifecycleScope,
 )({
   ...lifecycleSchemaFields,
-  tag: Schema.Literal("Restarted"),
+  tag: "Restarted",
 }) {}
 
 class ProcessLifecycleErrored extends Telemetry.Schema<ProcessLifecycleErrored>()(
   ProcessLifecycleScope,
 )({
   ...lifecycleSchemaFields,
-  tag: Schema.Literal("Errored"),
+  tag: "Errored",
   error: Telemetry.input.errorString,
 }) {}
 
@@ -249,21 +249,21 @@ class ProcessLifecycleRecovered extends Telemetry.Schema<ProcessLifecycleRecover
   ProcessLifecycleScope,
 )({
   ...lifecycleSchemaFields,
-  tag: Schema.Literal("Recovered"),
+  tag: "Recovered",
 }) {}
 
 class ProcessLifecycleDisabled extends Telemetry.Schema<ProcessLifecycleDisabled>()(
   ProcessLifecycleScope,
 )({
   ...lifecycleSchemaFields,
-  tag: Schema.Literal("Disabled"),
+  tag: "Disabled",
 }) {}
 
 class ProcessLifecycleEnabled extends Telemetry.Schema<ProcessLifecycleEnabled>()(
   ProcessLifecycleScope,
 )({
   ...lifecycleSchemaFields,
-  tag: Schema.Literal("Enabled"),
+  tag: "Enabled",
 }) {}
 
 const decodeLifecycleEvents = (

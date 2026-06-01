@@ -145,6 +145,22 @@ export interface RunGate<in T, out A, out E> {
   (input: T): Effect.Effect<A, E>;
 }
 
+/** @public */
+export interface RunResourceMetadata<Id extends string, T, A, E = never> {
+  readonly id: Id;
+  readonly kind: "run-resource";
+  readonly tag: Context.Service<Id, RunGate<T, A, E>>;
+}
+
+/** @public */
+export type RunResourceDefinition<
+  Id extends string,
+  T,
+  A,
+  E = never,
+> = Context.Service<Id, RunGate<T, A, E>> &
+  RunResourceMetadata<Id, T, A, E>;
+
 /**
  * A generic runner that wraps any effect with concurrency gating.
  * Produced by {@link RunResource.makeRunner}.
@@ -553,6 +569,9 @@ export const RunResource = {
       Effect.flatMap(makeRunGateEffect),
     );
     return Object.assign(base, {
+      id: name,
+      kind: "run-resource" as const,
+      tag: base,
       defaultSpec,
       configure: (patch: ConfigPatch<RunResourceConfig<T, A, E>>) =>
         configureLayer(name, patch),
@@ -584,7 +603,14 @@ export const RunResource = {
    */
   Tag: <Self, T, A, E = never>() =>
   <const Name extends string>(name: Name) =>
-    Context.Service<Self, RunGate<T, A, E>>()(name),
+    {
+      const base = Context.Service<Self, RunGate<T, A, E>>()(name);
+      return Object.assign(base, {
+        id: name,
+        kind: "run-resource" as const,
+        tag: base,
+      });
+    },
 
   /**
    * Create a generic runner that wraps any effect with concurrency gating.

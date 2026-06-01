@@ -14,26 +14,29 @@ class TelemetryTestScope extends State.Scope<TelemetryTestScope>()({
   processId: Schema.String,
   subjectId: Schema.String,
   startedAt: Schema.Number,
-})("@test/TelemetryTestScope") {}
+})("@test/TelemetryTestScope") {
+  static readonly kind = "process";
+}
 
 const TelemetryTestState = TelemetryTestScope.Schema.State;
 
 class TelemetryRecorded extends Telemetry.Schema<TelemetryRecorded>()(
   TelemetryTestScope,
 )({
-  processId: TelemetryTestState.processId,
   subjectId: TelemetryTestState.subjectId,
   startedAt: TelemetryTestState.startedAt,
   occurredAt: Telemetry.terminal.clockMillis,
   completedAt: Telemetry.terminal.clockMillis,
   durationMs: Telemetry.terminal.durationMs,
+  payload: Schema.Struct({
+    concurrency: Schema.Number,
+  }),
   kind: Schema.Literal("recorded"),
 }) {}
 
 class TelemetryFailed extends Telemetry.Schema<TelemetryFailed>()(
   TelemetryTestScope,
 )({
-  processId: TelemetryTestState.processId,
   subjectId: TelemetryTestState.subjectId,
   occurredAt: Telemetry.terminal.clockMillis,
   error: Telemetry.input.errorString,
@@ -43,13 +46,14 @@ class TelemetryFailed extends Telemetry.Schema<TelemetryFailed>()(
 class TelemetrySchemaStore extends ProcessStore.Service<TelemetrySchemaStore>()(
   "@test/TelemetrySchemaStore",
   ProcessStore.telemetry(
+    TelemetryTestScope,
+  )(
     Telemetry.namespace("Test"),
     Telemetry.tag("Event")(
       Telemetry.event("Recorded", TelemetryRecorded).pipe(
         Telemetry.logWarning(
-          ({ processId }) => `schema write failed for ${String(processId)}`,
-          ({ processId, subjectId }) => ({
-            processId: String(processId),
+          ({ subjectId }) => `schema write failed for ${String(subjectId)}`,
+          ({ subjectId }) => ({
             subjectId: String(subjectId),
           }),
         ),
@@ -94,18 +98,20 @@ const failingRuntimeStorage: RuntimeStorageService = {
 describe("ProcessStore telemetry schema", () => {
   it.live("materializes scope, terminal, and literal fields into a runtime row", () =>
     Effect.gen(function* () {
-      yield* TelemetrySchemaStore.Event.Recorded;
+      yield* TelemetrySchemaStore.Event.Recorded({
+        payload: { concurrency: 2 },
+      });
       const store = yield* TelemetrySchemaStore;
       const rows = yield* store.records();
 
       expect(rows).toHaveLength(1);
       const row = rows[0]!;
       expect(row.type).toBe("Test.Event.Recorded");
-      expect(row.processType).toBe("telemetry");
+      expect(row.processType).toBe("process");
       expect(row.processId).toBe("process-1");
       expect(row.payload).toMatchObject({
-        processId: "process-1",
         subjectId: "subject-1",
+        payload: { concurrency: 2 },
         startedAt: 1_700_000_000_000,
         completedAt: expect.any(Number),
         durationMs: expect.any(Number),
@@ -129,8 +135,8 @@ describe("ProcessStore telemetry schema", () => {
       const rows = yield* store.failed();
 
       expect(rows).toHaveLength(1);
+      expect(rows[0]?.processId).toBe("process-input");
       expect(rows[0]?.payload).toMatchObject({
-        processId: "process-input",
         subjectId: "subject-input",
         error: "Error: boom",
         kind: "failed",
@@ -152,8 +158,10 @@ describe("ProcessStore telemetry schema", () => {
     });
 
     return Effect.gen(function* () {
-      yield* TelemetrySchemaStore.Event.Recorded;
-      expect(captured.some((message) => message.includes("schema write failed for process-2"))).toBe(true);
+      yield* TelemetrySchemaStore.Event.Recorded({
+        payload: { concurrency: 1 },
+      });
+      expect(captured.some((message) => message.includes("schema write failed for subject-2"))).toBe(true);
     }).pipe(
       Effect.provide(TelemetrySchemaStore.layerRuntimeStorage),
       Effect.provideService(RuntimeStorage, failingRuntimeStorage),

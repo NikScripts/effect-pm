@@ -33,7 +33,7 @@
  * @module store/ProcessGroup
  */
 
-import { Effect, Schema } from "effect";
+import { Effect } from "effect";
 import {
   applyQueryOpts,
   byTimestampDesc,
@@ -74,7 +74,7 @@ const lifecycleEventsForGroup = (
 };
 
 const groupMemberLifecycleFields = {
-  processType: Schema.Literal("process"),
+  processType: "process",
   groupId: ProcessGroupScope.Schema.State.groupId,
   processId: ProcessGroupMemberScope.Schema.Leaf.processId,
   occurredAt: Telemetry.terminal.clockMillis,
@@ -84,28 +84,28 @@ class ProcessGroupMemberStarted extends Telemetry.Schema<ProcessGroupMemberStart
   ProcessGroupMemberScope,
 )({
   ...groupMemberLifecycleFields,
-  tag: Schema.Literal("Started"),
+  tag: "Started",
 }) {}
 
 class ProcessGroupMemberStopped extends Telemetry.Schema<ProcessGroupMemberStopped>()(
   ProcessGroupMemberScope,
 )({
   ...groupMemberLifecycleFields,
-  tag: Schema.Literal("Stopped"),
+  tag: "Stopped",
 }) {}
 
 class ProcessGroupMemberRestarted extends Telemetry.Schema<ProcessGroupMemberRestarted>()(
   ProcessGroupMemberScope,
 )({
   ...groupMemberLifecycleFields,
-  tag: Schema.Literal("Restarted"),
+  tag: "Restarted",
 }) {}
 
 class ProcessGroupMemberErrored extends Telemetry.Schema<ProcessGroupMemberErrored>()(
   ProcessGroupMemberScope,
 )({
   ...groupMemberLifecycleFields,
-  tag: Schema.Literal("Errored"),
+  tag: "Errored",
   error: Telemetry.input.errorString,
 }) {}
 
@@ -113,21 +113,21 @@ class ProcessGroupMemberRecovered extends Telemetry.Schema<ProcessGroupMemberRec
   ProcessGroupMemberScope,
 )({
   ...groupMemberLifecycleFields,
-  tag: Schema.Literal("Recovered"),
+  tag: "Recovered",
 }) {}
 
 class ProcessGroupMemberDisabled extends Telemetry.Schema<ProcessGroupMemberDisabled>()(
   ProcessGroupMemberScope,
 )({
   ...groupMemberLifecycleFields,
-  tag: Schema.Literal("Disabled"),
+  tag: "Disabled",
 }) {}
 
 class ProcessGroupMemberEnabled extends Telemetry.Schema<ProcessGroupMemberEnabled>()(
   ProcessGroupMemberScope,
 )({
   ...groupMemberLifecycleFields,
-  tag: Schema.Literal("Enabled"),
+  tag: "Enabled",
 }) {}
 
 /**

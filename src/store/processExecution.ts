@@ -37,7 +37,7 @@
  * @module store/ProcessExecution
  */
 
-import { DateTime, Effect, Schema } from "effect";
+import { DateTime, Effect } from "effect";
 import {
   applyQueryOpts,
   isBoolean,
@@ -223,7 +223,7 @@ const decodeExecutionsForQuery = (
 const ProcessState = ProcessScope.Schema.State;
 
 const executionSchemaFields = {
-  processType: Schema.Literal(PROCESS_TYPE),
+  processType: PROCESS_TYPE,
   processId: ProcessState.processId,
   scheduleKey: ProcessState.scheduleKey,
   startedAt: ProcessState.startedAt,
@@ -236,14 +236,14 @@ class ProcessExecutionCompleted extends Telemetry.Schema<ProcessExecutionComplet
   ProcessScope,
 )({
   ...executionSchemaFields,
-  status: Schema.Literal("completed"),
+  status: "completed",
 }) {}
 
 class ProcessExecutionFailed extends Telemetry.Schema<ProcessExecutionFailed>()(
   ProcessScope,
 )({
   ...executionSchemaFields,
-  status: Schema.Literal("failed"),
+  status: "failed",
   error: Telemetry.input.errorString,
 }) {}
 
@@ -251,7 +251,7 @@ class ProcessExecutionInterrupted extends Telemetry.Schema<ProcessExecutionInter
   ProcessScope,
 )({
   ...executionSchemaFields,
-  status: Schema.Literal("interrupted"),
+  status: "interrupted",
 }) {}
 
 // ============================================================================
