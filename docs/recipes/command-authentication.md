@@ -44,6 +44,12 @@ routing.
   crypto/canonical/replay helpers, strict signed `POST /control`, signed
   `GetHealth`, admin keygen, PM enrollment helpers, focused tests/docs, and a
   changeset.
+- Implementation proceeds in three cuts: `CommandAuth` core, signed control
+  transport, then operator workflow/docs/changeset.
+- Cut 1 includes the public `CommandAuth` export and package subpath.
+- Signed `GetHealth` ships in Cut 2 as protocol/transport behavior.
+- `effect-pm auth keygen` and `pm auth enroll-key` land together in Cut 3.
+- The changeset lands in Cut 3.
 
 ## Open recipe steps
 
@@ -53,6 +59,7 @@ routing.
 - Replay protection shape.
 - V1 implementation slice, test matrix, docs, and changeset.
 - Implementation order and review cuts.
+- Cut 1 `CommandAuth` API details.
 
 ## Step 1: Signature primitive and key format
 
@@ -833,7 +840,7 @@ Alternatives:
 3. Build CLI first — good demo value, but it creates command surfaces before the
    verifier and transport contract are proven.
 
-Decision questions:
+Decision steps:
 1. Should implementation proceed in these three review cuts: `CommandAuth` core,
    signed control transport, then operator workflow/docs/changeset?
 2. Should Cut 1 include the public `CommandAuth` export and package subpath, or
@@ -845,7 +852,10 @@ Decision questions:
 5. Should the changeset be part of Cut 3, or held until the recipe is promoted
    into durable docs and code?
 
-Recommended answer:
+Decision:
+Yes to all five implementation-order steps.
+
+Ingredients:
 Yes to the three cuts. Put the public export in Cut 1 so all later code consumes
 the real API. Put signed `GetHealth` in Cut 2 because it is a protocol behavior,
 not operator documentation. Land keygen and enrollment together in Cut 3 so the
@@ -855,6 +865,190 @@ the implementation introduces public API, behavior, exports, and CLI commands.
 Acceptance check:
 Each cut compiles and has targeted tests; the final cut passes typecheck, tests,
 lint, and build, and includes the required changeset.
+
+## Step 7: Cut 1 `CommandAuth` API details
+
+Recipe step: `Cut 1 CommandAuth API details`
+
+What this decides:
+The core module is the foundation for later transport and CLI cuts. This step
+decides the exact public names, data shapes, error model, and test fixtures for
+the first implementation cut.
+
+Recommended ingredients:
+- `CommandAuth` namespace export plus short exports for service tags and errors
+  — matches package public-export conventions.
+- `CommandAuthSigner` and `CommandAuthVerifier` services — lets transports use
+  DI and keeps custom signers/verifiers possible.
+- `PublicKeyRecord` / `PrivateKeyRecord` schemas — keygen, env config, and tests
+  share one typed shape.
+- `CommandAuthError` tagged union — missing/malformed/expired/replay/invalid
+  failures are typed and map cleanly to HTTP `401` later.
+- `generateEd25519KeyPair` in public API — keygen CLI and tests use package code
+  instead of duplicating crypto logic.
+- `canonicalPayload` is public but deterministic and narrow — apps can test
+  custom signers, while implementation remains small.
+- Unit tests use fixed key fixtures and generated keys — fixed fixtures prove
+  deterministic payload/signature behavior; generated keys prove runtime Node
+  crypto wiring.
+
+Picture:
+
+```ts
+// src/CommandAuth.ts
+export interface PublicKeyRecord {
+  readonly keyId: string;
+  readonly name: string;
+  readonly algorithm: "Ed25519";
+  readonly publicKeyPem: string;
+  readonly expiresAt: string;
+}
+
+export interface PrivateKeyRecord {
+  readonly keyId: string;
+  readonly name: string;
+  readonly algorithm: "Ed25519";
+  readonly privateKeyPem: string;
+  readonly expiresAt: string;
+}
+```
+
+```ts
+export type CommandAuthError =
+  | MissingSignatureHeader
+  | MalformedSignatureHeader
+  | UnknownKeyId
+  | ExpiredKey
+  | SignatureVerificationFailed
+  | ReplayedCommand
+  | CanonicalPayloadError
+  | KeyMaterialError;
+```
+
+```ts
+export interface CommandAuthSigningInput {
+  readonly method: "POST";
+  readonly path: "/control";
+  readonly envelope: ControlProtocolRequestEnvelope;
+}
+
+export interface CommandAuthSignatureHeader {
+  readonly version: "v1";
+  readonly algorithm: "Ed25519";
+  readonly keyId: string;
+  readonly signature: string;
+}
+```
+
+```ts
+export class CommandAuthSigner extends Context.Service<CommandAuthSigner>()(
+  "@nikscripts/effect-pm/CommandAuth/Signer",
+)<{
+  readonly sign: (
+    input: CommandAuthSigningInput,
+  ) => Effect.Effect<CommandAuthSignatureHeader, CommandAuthError>;
+}>() {}
+
+export class CommandAuthVerifier extends Context.Service<CommandAuthVerifier>()(
+  "@nikscripts/effect-pm/CommandAuth/Verifier",
+)<{
+  readonly verify: (
+    input: {
+      readonly header: string | CommandAuthSignatureHeader | undefined;
+      readonly input: CommandAuthSigningInput;
+      readonly now?: number;
+    },
+  ) => Effect.Effect<void, CommandAuthError>;
+}>() {}
+```
+
+```ts
+export const CommandAuth = {
+  generateEd25519KeyPair,
+  ed25519Signer,
+  ed25519Verifier,
+  canonicalPayload,
+  formatSignatureHeader,
+  parseSignatureHeader,
+  Replay: {
+    memory: makeMemoryReplayStore,
+  },
+  Schema: {
+    PublicKeyRecord: PublicKeyRecordSchema,
+    PrivateKeyRecord: PrivateKeyRecordSchema,
+  },
+  Errors: {
+    MissingSignatureHeader,
+    MalformedSignatureHeader,
+    UnknownKeyId,
+    ExpiredKey,
+    SignatureVerificationFailed,
+    ReplayedCommand,
+    CanonicalPayloadError,
+    KeyMaterialError,
+  },
+} as const;
+```
+
+```ts
+// test/command-auth.test.ts
+it("round trips a generated Ed25519 command signature", () =>
+  Effect.gen(function* () {
+    const keys = yield* CommandAuth.generateEd25519KeyPair({
+      name: "nik-laptop",
+      expiresAt: "2026-12-31T23:59:59.999Z",
+    });
+    const signer = CommandAuth.ed25519Signer(keys.privateKey);
+    const verifier = CommandAuth.ed25519Verifier({
+      keys: [keys.publicKey],
+      replay: CommandAuth.Replay.memory({ window: Duration.minutes(5) }),
+    });
+
+    const header = yield* signer.sign(signingInput);
+    yield* verifier.verify({ header, input: signingInput, now: signingInput.envelope.sentAt });
+  }));
+```
+
+```ts
+it("rejects replayed envelope ids", () =>
+  Effect.gen(function* () {
+    const header = yield* signer.sign(signingInput);
+
+    yield* verifier.verify({ header, input: signingInput });
+    const error = yield* verifier.verify({ header, input: signingInput }).pipe(Effect.flip);
+
+    expect(error._tag).toBe("ReplayedCommand");
+  }));
+```
+
+Alternatives:
+1. Single `CommandAuthService` instead of signer/verifier services — simpler
+   names, but transports need one side at a time and tests become less direct.
+2. Keep key generation internal to the CLI — less public API, but tests and
+   custom tooling duplicate crypto/key record logic.
+3. Make `canonicalPayload` internal — smaller API, but custom signers cannot
+   verify exactly what the package signs.
+4. Use one generic `CommandAuthError` with `reason` only — less code, but weaker
+   tests and less precise HTTP mapping.
+
+Decision steps:
+1. Should Cut 1 use separate `CommandAuthSigner` and `CommandAuthVerifier`
+   services?
+2. Should key records use PEM strings plus `name`, `keyId`, `algorithm`, and
+   `expiresAt`?
+3. Should `generateEd25519KeyPair` be public in `CommandAuth`?
+4. Should `canonicalPayload` be public for custom signer/verifier tests?
+5. Should auth failures be separate tagged error classes instead of one generic
+   reason string?
+
+Ingredients:
+Yes to all five. This gives strong type surfaces, keeps transport wiring simple,
+and avoids duplicating crypto/key-generation logic in CLI code and tests.
+
+Acceptance check:
+Cut 1 exports compile through root and subpath imports, fixed and generated
+Ed25519 tests pass, canonical payload snapshots are stable, replay rejection is
+typed, and no HTTP transport files are required for the tests.
 
 ## Cleanup status
 

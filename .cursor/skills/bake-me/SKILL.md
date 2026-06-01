@@ -10,10 +10,12 @@ or implementation strategy with high signal and less back-and-forth than
 `grill-me`.
 
 The style is a recipe: show the dish, ingredients, steps, alternatives, and
-how we know it is baked.
+how we know it is baked. Each question is a recipe step. The ingredients are the
+recommended answers for that step.
 
 The chat is the user-facing surface. Always put the full recipe card, decision
-questions, examples, alternatives, and acceptance checks in the chat. The recipe
+steps, examples, alternatives, and acceptance checks in the chat. Use Markdown
+code blocks for code, command, JSON, HTTP, and file-layout pictures. The recipe
 file is the agent memory ledger and should mirror the chat; never rely on the
 user opening the recipe file to see the substance of the bake session.
 
@@ -29,7 +31,7 @@ user opening the recipe file to see the substance of the bake session.
    - code examples or pseudo-code "pictures",
    - why the recommendation is good,
    - viable alternatives with tradeoffs,
-   - a compact decision question set,
+   - a compact decision step set,
    - an acceptance check.
 3. If repository facts can answer part of the decision, inspect the codebase
    before asking.
@@ -104,12 +106,12 @@ Alternatives:
 1. `<alternative>` — `<tradeoff>`
 2. `<alternative>` — `<tradeoff>`
 
-Decision questions:
+Decision steps:
 1. `<pointed question>`
 2. `<pointed question>`
 
-Recommended answer:
-`<the answer set I recommend and why>`
+Ingredients:
+`<the recommended answer set and why>`
 
 Acceptance check:
 `<how we will know this decision worked>`
