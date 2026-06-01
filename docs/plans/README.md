@@ -42,6 +42,7 @@ Higher items unblock remote operations, operator UX, and honest queue typing.
 | 10 | **TypeScript:** re-enable **`anyUnknownInErrorContext`** (keep **`serviceNotAsClass`** off) | [10-typescript-strict-unknown.md](./10-typescript-strict-unknown.md) |
 | — | **Storage / Prisma follow-up** (adapter landed; polish and docs) | [11-storage-prisma-follow-up.md](./11-storage-prisma-follow-up.md) |
 | — | **Hybrid `RuntimeStorage`** — one layer, SQL + Redis inside adapter | [15-runtime-storage-hybrid.md](./15-runtime-storage-hybrid.md) |
+| — | **Effect RPC transport migration** — move control/dashboard/log/terminal transports to Effect RPC / Effect platform adapters while keeping services transport-agnostic | [16-effect-rpc-transport-migration.md](./16-effect-rpc-transport-migration.md) |
 | — | **Conversation index (May 2026)** — checklist; not implementation spec | [14-conversation-capture-may-2026.md](./14-conversation-capture-may-2026.md) |
 
 ### Dependency hints (soft)
