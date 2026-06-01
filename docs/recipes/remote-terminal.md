@@ -48,12 +48,15 @@ replacement.
 - Terminal endpoint config is explicit and opt-in per group endpoint.
 - Terminal transport is separate from normal control transport.
 - Local child endpoint startup can launch terminal runtime when configured.
+- Terminal gateway transport should be Effect RPC first. Effect HTTP API can be
+  used for non-streaming metadata or deployment edges, but terminal sessions
+  should not be hand-rolled HTTP routes.
 
 ## Open recipe steps
 
 - V1 terminal session contract.
 - Runtime placement and endpoint discovery.
-- Gateway/browser adapter contract.
+- Effect RPC gateway/browser adapter contract.
 - Backend implementation: command streaming first vs PTY first.
 - Audit/observability and safety limits.
 - Test plan, docs, examples, and changeset.
@@ -402,165 +405,202 @@ A dashboard can show "terminal available" for configured groups, hide it for
 groups without terminal config, and open a session only after gateway auth/RBAC
 chooses a discovered terminal target.
 
-## Step 4: Gateway/browser adapter contract
+## Step 4: Effect RPC gateway/browser adapter contract
 
-Recipe step: `Gateway/browser adapter contract`
+Recipe step: `Effect RPC gateway/browser adapter contract`
 
 What this decides:
-How the browser terminal widget talks to an app/dashboard gateway without
-holding PM signing keys, and how the gateway maps browser-safe calls onto the
-group-side terminal service.
+Which Effect transport module owns the terminal gateway contract, and how browser
+widgets talk to it without hand-rolled HTTP route design.
 
 Recommended ingredients:
-- Browser consumes a `TerminalSessionPort` — same style as existing
-  `ControlPlanePort`, but separate because terminal sessions are stateful.
-- Gateway exposes a small terminal API — open, input, resize, close, and events.
+- Use `@effect/rpc` as the terminal gateway contract — it models Effect effects
+  and streaming responses directly.
+- Keep `TerminalSessionPort` as the browser/widget facade — it adapts an Effect
+  RPC client to Promise/AsyncIterable for React.
+- Define a `TerminalRpc` `RpcGroup` — `Open`, `Input`, `Resize`, `Close`, and
+  `Events` procedures with schemas.
 - Gateway authenticates user/session and authorizes terminal action before
-  opening or relaying a session.
-- Gateway signs or otherwise authenticates machine-to-machine calls to PM/group
-  services; browser never sees PM command auth private keys.
-- Browser event transport is adapter-owned — v1 can ship fetch + WebSocket/SSE
-  adapter examples without forcing one protocol into the semantic port.
+  calling RPC handlers.
+- Gateway signs or otherwise authenticates machine-to-machine calls to group
+  terminal services; browser never sees PM command auth private keys.
+- Use RPC streaming for terminal events — output/exit/closed are a streamed RPC
+  success, not a custom SSE/WebSocket protocol invented by this package.
 - App can route terminal commands either direct to group terminal service or via a
   dashboard relay, matching the command-auth gateway pattern.
+- Use Effect HTTP API only for simple metadata/REST compatibility if needed; it
+  is not the primary terminal session transport.
 
 Picture:
 
 ```txt
 Browser TerminalWidget
   -> TerminalSessionPort
-    -> app/dashboard gateway
+    -> Effect RPC client adapter
+      -> app/dashboard gateway
       -> authenticate user
       -> authorize terminal.open/input/resize/close
-      -> connect to group TerminalService
+      -> TerminalRpc handlers
+      -> group TerminalService
 ```
 
 ```ts
-export interface TerminalGatewayClient {
-  readonly open: (
-    input: OpenTerminalSession,
-  ) => Promise<{ readonly sessionId: string }>;
+import { Rpc, RpcGroup } from "@effect/rpc";
+import { Schema } from "effect";
 
-  readonly sendInput: (
-    sessionId: string,
-    input: Uint8Array,
-  ) => Promise<void>;
+const OpenTerminalSessionSchema = Schema.Struct({
+  groupId: Schema.String,
+  target: Schema.String,
+  command: Schema.optional(Schema.Array(Schema.String)),
+  cwd: Schema.optional(Schema.String),
+  cols: Schema.optional(Schema.Number),
+  rows: Schema.optional(Schema.Number),
+});
 
-  readonly resize: (
-    sessionId: string,
-    size: { readonly cols: number; readonly rows: number },
-  ) => Promise<void>;
+const TerminalSessionIdSchema = Schema.Struct({
+  sessionId: Schema.String,
+});
 
-  readonly close: (sessionId: string) => Promise<void>;
-
-  readonly events: (
-    sessionId: string,
-  ) => AsyncIterable<TerminalEvent>;
-}
+const TerminalEventSchema = Schema.Union(
+  Schema.TaggedStruct("Opened", {
+    sessionId: Schema.String,
+    groupId: Schema.String,
+  }),
+  Schema.TaggedStruct("Output", {
+    sessionId: Schema.String,
+    chunk: Schema.Uint8ArrayFromSelf,
+  }),
+  Schema.TaggedStruct("Exit", {
+    sessionId: Schema.String,
+    code: Schema.Number,
+  }),
+  Schema.TaggedStruct("Closed", {
+    sessionId: Schema.String,
+    reason: Schema.String,
+  }),
+);
 ```
 
 ```ts
-export const createFetchTerminalSessionAdapter = (
-  options: {
-    readonly baseUrl: string;
-    readonly openEvents: (
-      sessionId: string,
-    ) => AsyncIterable<TerminalEvent>;
-    readonly requestInit?: () => RequestInit;
-  },
+export const TerminalRpc = RpcGroup.make(
+  Rpc.make("Terminal.Open", {
+    payload: OpenTerminalSessionSchema,
+    success: TerminalSessionIdSchema,
+    error: TerminalSessionErrorSchema,
+  }),
+  Rpc.make("Terminal.Input", {
+    payload: Schema.Struct({
+      sessionId: Schema.String,
+      chunk: Schema.Uint8ArrayFromSelf,
+    }),
+    error: TerminalSessionErrorSchema,
+  }),
+  Rpc.make("Terminal.Resize", {
+    payload: Schema.Struct({
+      sessionId: Schema.String,
+      cols: Schema.Number,
+      rows: Schema.Number,
+    }),
+    error: TerminalSessionErrorSchema,
+  }),
+  Rpc.make("Terminal.Close", {
+    payload: Schema.Struct({ sessionId: Schema.String }),
+    error: TerminalSessionErrorSchema,
+  }),
+  Rpc.make("Terminal.Events", {
+    payload: Schema.Struct({ sessionId: Schema.String }),
+    success: TerminalEventSchema,
+    error: TerminalSessionErrorSchema,
+    stream: true,
+  }),
+);
+```
+
+```ts
+export const TerminalRpcLive = TerminalRpc.toLayer({
+  "Terminal.Open": (input, { headers }) =>
+    Effect.gen(function* () {
+      const user = yield* requireUser(headers);
+      yield* authorize(user, {
+        action: "terminal.open",
+        groupId: input.groupId,
+        target: input.target,
+      });
+      const terminal = yield* TerminalGateway.resolve(input.groupId);
+      const session = yield* terminal.open(input);
+      return { sessionId: session.sessionId };
+    }),
+
+  "Terminal.Events": ({ sessionId }, { headers }) =>
+    Stream.unwrap(
+      Effect.gen(function* () {
+        const user = yield* requireUser(headers);
+        yield* authorize(user, {
+          action: "terminal.events",
+          sessionId,
+        });
+        return yield* TerminalGateway.events(sessionId);
+      }),
+    ),
+});
+```
+
+```ts
+export const createRpcTerminalSessionAdapter = (
+  client: RpcClient.FromGroup<typeof TerminalRpc>,
 ): TerminalSessionPort => ({
-  open: (input) =>
-    fetch(`${options.baseUrl}/sessions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-      ...options.requestInit?.(),
-    }).then((response) => response.json()),
-
+  open: (input) => Effect.runPromise(client["Terminal.Open"](input)),
   input: (sessionId, chunk) =>
-    fetch(`${options.baseUrl}/sessions/${encodeURIComponent(sessionId)}/input`, {
-      method: "POST",
-      body: chunk,
-      ...options.requestInit?.(),
-    }).then(() => undefined),
-
+    Effect.runPromise(client["Terminal.Input"]({ sessionId, chunk })),
   resize: (sessionId, size) =>
-    fetch(`${options.baseUrl}/sessions/${encodeURIComponent(sessionId)}/resize`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(size),
-      ...options.requestInit?.(),
-    }).then(() => undefined),
-
+    Effect.runPromise(client["Terminal.Resize"]({ sessionId, ...size })),
   close: (sessionId) =>
-    fetch(`${options.baseUrl}/sessions/${encodeURIComponent(sessionId)}`, {
-      method: "DELETE",
-      ...options.requestInit?.(),
-    }).then(() => undefined),
-
-  events: options.openEvents,
+    Effect.runPromise(client["Terminal.Close"]({ sessionId })),
+  events: (sessionId) =>
+    streamToAsyncIterable(client["Terminal.Events"]({ sessionId })),
 });
-```
-
-```ts
-// App-owned gateway handler sketch.
-const openTerminalRoute = Effect.gen(function* () {
-  const user = yield* requireUser(request);
-  const body = yield* decodeOpenTerminalSession(request);
-
-  yield* authorize(user, {
-    action: "terminal.open",
-    groupId: body.groupId,
-    target: body.target,
-  });
-
-  const terminal = yield* TerminalGateway.resolve(body.groupId);
-  const session = yield* terminal.open(body);
-
-  return json({ sessionId: session.sessionId });
-});
-```
-
-```ts
-// Dashboard relay mode: app server signs/authorizes, relay forwards.
-const terminalRoute: TerminalCommandRoute =
-  config.mode === "direct"
-    ? { _tag: "DirectToGroup", terminalBaseUrl: group.terminal.url }
-    : { _tag: "ViaDashboardRelay", dashboardBaseUrl: config.dashboardUrl };
 ```
 
 Why this recommendation is good:
-- It matches existing dashboard architecture: browser talks to gateway, not raw
-  PM/group URLs.
+- It uses Effect-native API/RPC tooling instead of custom route design.
+- It matches terminal semantics: request/response for lifecycle commands and
+  streamed responses for terminal output.
 - It keeps app user auth and PM machine auth separate.
-- It allows fetch/SSE, WebSocket, tRPC, or Effect RPC adapters without changing
-  widget-facing APIs.
+- It keeps React widgets decoupled behind `TerminalSessionPort`.
 - It supports both direct-to-group and dashboard-relay deployments.
+- It leaves Effect HTTP API available for simple REST metadata without making it
+  the terminal stream protocol.
 
 Alternatives:
-1. Browser connects directly to group terminal service — lowest latency, but
+1. Hand-rolled fetch/SSE/WebSocket routes — flexible, but violates the "use
+   Effect" rule and creates custom protocol surface.
+2. Effect HTTP API as primary terminal transport — good for typed REST, but less
+   natural for bidirectional/streaming terminal sessions than Effect RPC.
+3. Browser connects directly to group terminal service — lowest latency, but
    bypasses app auth/RBAC and exposes internal topology.
-2. Bake WebSocket into `TerminalSessionPort` — practical, but forces one
-   transport into all consumers.
-3. Reuse `ControlPlanePort` adapters — less surface, but terminal lifecycle and
+4. Reuse `ControlPlanePort` adapters — less surface, but terminal lifecycle and
    event streaming are different enough to deserve a separate port.
-4. Gateway re-signs every terminal input frame — more uniform auth, but too heavy
+5. Gateway re-signs every terminal input frame — more uniform auth, but too heavy
    for interactive streams; authorize/open the session, then protect the session
    channel.
 
 Ingredients:
 - Browser uses `TerminalSessionPort`.
+- Gateway API is modeled with `@effect/rpc`.
 - Gateway owns user auth/RBAC.
 - Gateway, PM, or relay owns machine-to-machine terminal auth.
-- Event transport is adapter-owned, not hardcoded into the semantic port.
+- Terminal events use RPC streaming (`stream: true`).
 - Support direct-to-group and dashboard-relay routing behind the gateway.
+- Use Effect HTTP API only for non-streaming metadata/compatibility if needed.
 
-Do you agree with all?
+Decision:
+Use Effect RPC as the primary terminal gateway transport. Do not hand-roll HTTP
+routes for terminal v1.
 
 Acceptance check:
-A browser widget can open/input/resize/close a terminal session through an app
-gateway, while the gateway can choose direct group terminal routing or dashboard
-relay routing without changing widget code.
+A browser widget can use a `TerminalSessionPort` backed by an Effect RPC client,
+the gateway can implement terminal handlers as an `RpcGroup` layer, terminal
+events stream through RPC, and no custom terminal HTTP route contract is invented.
 
 ## Cleanup status
 
