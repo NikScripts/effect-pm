@@ -292,17 +292,6 @@ const stateRecordTypes = [
   STATE_CHANGED_WIRE,
 ] as const;
 
-const RUN_RESOURCE_FACT_TYPES: ReadonlyArray<RunResourceFactType> = [
-  RUN_STARTED_WIRE,
-  RUN_COMPLETED_WIRE,
-  RUN_FAILED_WIRE,
-];
-
-const isRunResourceFactType = (
-  value: unknown,
-): value is RunResourceFactType =>
-  isString(value) && RUN_RESOURCE_FACT_TYPES.some((type) => type === value);
-
 const RUN_RESOURCE_STATE_CHANGE_REASONS: ReadonlyArray<
   RunResourceStateChangeReason
 > = [
