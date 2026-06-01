@@ -33,8 +33,7 @@ import {
 import { isPollingLayer, isScheduleLayer } from "./internal/processLayerBrand";
 import { ProcessManagerLogAnnotationKeys } from "./LogContext";
 import { ProcessExecutionStore } from "./store/processExecution";
-import { ProcessStore } from "./ProcessStore";
-import { withRuntimeEmitContext } from "./RuntimeEmitContext";
+import { ProcessScope } from "./ProcessScope";
 import { Polling, PollingTag } from "./Polling";
 import { ProcessSchedule, ProcessScheduleTag } from "./ProcessSchedule";
 import type {
@@ -394,54 +393,6 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     nextTriggerRun: MutableRef.make<Option.Option<Date>>(Option.none()),
   };
 
-  type ProcessExecutionRunInput = {
-    readonly scheduleKey: string | null;
-    readonly startedAt: number;
-    readonly completedAt: number;
-    readonly error?: unknown;
-    readonly isStartupRun: boolean;
-  };
-
-  const executionEmitContext = (
-    args: ProcessExecutionRunInput,
-  ) => ({
-    processType: "process" as const,
-    processId: name,
-    scheduleKey: args.scheduleKey,
-    startedAt: args.startedAt,
-    completedAt: args.completedAt,
-    isStartupRun: args.isStartupRun,
-    ...(args.error !== undefined ? { error: String(args.error) } : {}),
-  });
-
-  const recordExecutionCompleted = (
-    args: ProcessExecutionRunInput,
-  ): Effect.Effect<void> =>
-    withRuntimeEmitContext(
-      executionEmitContext(args),
-      ProcessExecutionStore.Execution.Completed,
-    ).pipe(
-      ProcessStore.catchErrorAndLog({
-        message: "ProcessExecutionStore write failed for completed run",
-        level: "warning",
-        annotations: { processId: name },
-      }),
-    );
-
-  const recordExecutionFailed = (
-    args: ProcessExecutionRunInput,
-  ): Effect.Effect<void> =>
-    withRuntimeEmitContext(
-      executionEmitContext(args),
-      ProcessExecutionStore.Execution.Failed,
-    ).pipe(
-      ProcessStore.catchErrorAndLog({
-        message: "ProcessExecutionStore write failed for failed run",
-        level: "warning",
-        annotations: { processId: name },
-      }),
-    );
-
   const trackedProgram = (
     scheduleIdentifier: Option.Option<string>,
     controls: ProcessScheduleControls,
@@ -467,42 +418,37 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
       );
       const isStartupRun = !hasPrior;
 
-      yield* Effect.matchEffect(
-        userEffect.pipe(
-          Effect.provideService(ProcessScheduleContextTag, {
-            id: scheduleIdentifier,
-          }),
-          Effect.provideService(ProcessScheduleControlsTag, controls),
-        ),
+      yield* ProcessScope.run(
         {
-          onFailure: (error) =>
-            Effect.gen(function* () {
-              const completedAt = yield* Clock.currentTimeMillis;
-              yield* recordExecutionFailed({
-                scheduleKey: Option.getOrNull(scheduleIdentifier),
-                startedAt: executedAt,
-                completedAt,
-                error,
-                isStartupRun,
-              });
-              yield* Effect.logError(
-                `❌ Process '${name}' run failed at ${String(executedAt)}: ${String(error)}`,
-              );
-            }),
-          onSuccess: () =>
-            Effect.gen(function* () {
-              const completedAt = yield* Clock.currentTimeMillis;
-              yield* recordExecutionCompleted({
-                scheduleKey: Option.getOrNull(scheduleIdentifier),
-                startedAt: executedAt,
-                completedAt,
-                isStartupRun,
-              });
-              yield* Effect.logDebug(
-                `✅ Process '${name}' run completed at ${String(executedAt)}`,
-              );
-            }),
+          processId: name,
+          scheduleKey: Option.getOrNull(scheduleIdentifier),
+          startedAt: executedAt,
+          isStartupRun,
         },
+        Effect.matchEffect(
+          userEffect.pipe(
+            Effect.provideService(ProcessScheduleContextTag, {
+              id: scheduleIdentifier,
+            }),
+            Effect.provideService(ProcessScheduleControlsTag, controls),
+          ),
+          {
+            onFailure: (error) =>
+              Effect.gen(function* () {
+                yield* ProcessExecutionStore.Execution.Failed(error);
+                yield* Effect.logError(
+                  `❌ Process '${name}' run failed at ${String(executedAt)}: ${String(error)}`,
+                );
+              }),
+            onSuccess: () =>
+              Effect.gen(function* () {
+                yield* ProcessExecutionStore.Execution.Completed;
+                yield* Effect.logDebug(
+                  `✅ Process '${name}' run completed at ${String(executedAt)}`,
+                );
+              }),
+          },
+        ),
       );
     });
 

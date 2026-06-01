@@ -17,6 +17,7 @@ import { makeProcessStoreSpine, type ProcessStoreSpine } from "./spine";
 import {
   processStoreTelemetry,
   type ProcessStoreTelemetrySection,
+  type TelemetryEmitPath,
   type TelemetryNestedEmitApi,
   type TelemetryPart,
 } from "./telemetry";
@@ -95,6 +96,7 @@ type ProcessStoreFacetAnySection =
       readonly _tag: typeof TELEMETRY_TAG;
       readonly fn: (s: ProcessStoreSpine) => TelemetryNestedEmitApi;
       readonly emitTree: TelemetryNestedEmitApi;
+      readonly emitPaths: ReadonlyArray<TelemetryEmitPath>;
       readonly wireIds: ReadonlyArray<string>;
     }
   | {
@@ -122,7 +124,7 @@ type ProcessStoreTelemetrySectionOf<
 type ProcessStoreEmitApiOf<Sections extends ReadonlyArray<ProcessStoreFacetAnySection>> =
   [ProcessStoreRecordSectionOf<Sections>] extends [never]
     ? ProcessStoreTelemetrySectionOf<Sections> extends ProcessStoreTelemetrySection<
-      infer EmitApi extends TelemetryNestedEmitApi
+      infer EmitApi extends object
     >
       ? EmitApi
       : never
@@ -285,8 +287,8 @@ type ProcessStoreIdentifierRuntimeMember<Self, IdentifierApi> =
   | ProcessStoreIdentifierEffect<Self, IdentifierApi>;
 
 const mergeServiceShape = <
-  EmitApi extends Record<string, unknown> | TelemetryNestedEmitApi,
-  QueryApi extends Record<string, unknown>,
+  EmitApi extends object,
+  QueryApi extends object,
 >(
   emitPart: EmitApi,
   queryPart: QueryApi,
@@ -298,17 +300,27 @@ const isEmitEffect = (value: unknown): value is EmitEffect =>
   value !== null &&
   typeof (value as EmitEffect).pipe === "function";
 
+const isEmitFunction = (
+  value: unknown,
+): value is (...args: ReadonlyArray<unknown>) => EmitEffect =>
+  typeof value === "function";
+
 const callNestedEmit = (
   api: TelemetryNestedEmitApi,
   path: ReadonlyArray<string>,
+  args: ReadonlyArray<unknown>,
 ): EmitEffect => {
-  let current: TelemetryNestedEmitApi | EmitEffect = api;
+  let current: TelemetryNestedEmitApi | EmitEffect | ((...args: ReadonlyArray<unknown>) => EmitEffect) = api;
   for (const segment of path) {
-    if (!isEmitEffect(current)) {
+    if (!isEmitEffect(current) && !isEmitFunction(current)) {
       current = (current as TelemetryNestedEmitApi)[segment] as
         | TelemetryNestedEmitApi
-        | EmitEffect;
+        | EmitEffect
+        | ((...args: ReadonlyArray<unknown>) => EmitEffect);
     }
+  }
+  if (isEmitFunction(current)) {
+    return current(...args);
   }
   if (!isEmitEffect(current)) {
     return Effect.die(
@@ -322,7 +334,7 @@ const resolveIdentifier = (identifier: ProcessStoreIdentifierInput): string =>
   typeof identifier === "string" ? identifier : identifier.id;
 
 const attachIdentifierFactory = <
-  ServiceApi extends Record<string, unknown>,
+  ServiceApi extends object,
   IdentifierApi extends Record<string, unknown>,
 >(
   service: ServiceApi,
@@ -361,11 +373,12 @@ const buildNestedEmitStatics = <
   Id extends string,
   Shape,
 >(
-  paths: ReadonlyArray<ReadonlyArray<string>>,
+  paths: ReadonlyArray<TelemetryEmitPath>,
   Base: Context.ServiceClass<Self, Id, Shape>,
 ): TelemetryNestedEmitApi => {
   const out: Record<string, unknown> = {};
-  for (const path of paths) {
+  for (const emitPath of paths) {
+    const path = emitPath.path;
     let node = out;
     for (let i = 0; i < path.length - 1; i += 1) {
       const segment = path[i]!;
@@ -374,15 +387,26 @@ const buildNestedEmitStatics = <
       node = next;
     }
     const leaf = path[path.length - 1]!;
-    node[leaf] = Effect.serviceOption(Base).pipe(
-      Effect.flatMap(
-        Option.match({
-          onNone: (): EmitEffect => Effect.void,
-          onSome: (api): EmitEffect =>
-            callNestedEmit(api as TelemetryNestedEmitApi, path),
-        }),
-      ),
-    );
+    node[leaf] = emitPath.input
+      ? (input: unknown) =>
+          Effect.serviceOption(Base).pipe(
+            Effect.flatMap(
+              Option.match({
+                onNone: (): EmitEffect => Effect.void,
+                onSome: (api): EmitEffect =>
+                  callNestedEmit(api as TelemetryNestedEmitApi, path, [input]),
+              }),
+            ),
+          )
+      : Effect.serviceOption(Base).pipe(
+          Effect.flatMap(
+            Option.match({
+              onNone: (): EmitEffect => Effect.void,
+              onSome: (api): EmitEffect =>
+                callNestedEmit(api as TelemetryNestedEmitApi, path, []),
+            }),
+          ),
+        );
   }
   return out as TelemetryNestedEmitApi;
 };
@@ -549,25 +573,6 @@ export const defineProcessStoreFacet = <Self>(): ProcessStoreFacetDefinition<Sel
       );
     }
 
-    const telemetryPaths = (): ReadonlyArray<ReadonlyArray<string>> => {
-      if (telemetrySection === undefined) return [];
-      const paths: string[][] = [];
-      const walk = (
-        tree: TelemetryNestedEmitApi,
-        prefix: ReadonlyArray<string>,
-      ): void => {
-        for (const [key, value] of Object.entries(tree)) {
-          if (isEmitEffect(value)) {
-            paths.push([...prefix, key]);
-          } else {
-            walk(value as TelemetryNestedEmitApi, [...prefix, key]);
-          }
-        }
-      };
-      walk(telemetrySection.emitTree, []);
-      return paths;
-    };
-
     const make: Effect.Effect<EmitApi & QueryApi, never, RuntimeStorage> = Effect.gen(
       function* () {
         const s = yield* buildStore;
@@ -592,7 +597,7 @@ export const defineProcessStoreFacet = <Self>(): ProcessStoreFacetDefinition<Sel
 
     const emitStatics = (
       telemetrySection !== undefined
-        ? buildNestedEmitStatics(telemetryPaths(), Base)
+        ? buildNestedEmitStatics(telemetrySection.emitPaths, Base)
         : buildEmitStatics(
             id,
             recordSection!.emitKeys as ReadonlyArray<keyof EmitApi & string>,

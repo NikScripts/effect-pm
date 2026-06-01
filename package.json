@@ -39,6 +39,11 @@
       "import": "./dist/Process.mjs",
       "require": "./dist/Process.js"
     },
+    "./ProcessScope": {
+      "types": "./dist/ProcessScope.d.ts",
+      "import": "./dist/ProcessScope.mjs",
+      "require": "./dist/ProcessScope.js"
+    },
     "./QueueResource": {
       "types": "./dist/QueueResource.d.ts",
       "import": "./dist/QueueResource.mjs",

@@ -20,6 +20,7 @@ export default defineConfig([
     entry: {
       index: "src/index.ts",
       Process: "src/Process.ts",
+      ProcessScope: "src/ProcessScope.ts",
       QueueResource: "src/QueueResource.ts",
       ProcessGroup: "src/ProcessGroup.ts",
       ProcessStore: "src/ProcessStore.ts",

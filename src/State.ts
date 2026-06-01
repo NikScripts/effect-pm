@@ -327,7 +327,7 @@ const Scope =
       Fields,
       Fields,
       ValueOf<Fields>,
-      Fields,
+      StateFieldSelectors<Fields>,
       readonly [],
       never
     >({
@@ -354,6 +354,20 @@ export const State = {
  */
 export declare namespace State {
   export namespace Scope {
+    export type Class<
+      Self,
+      Id extends string,
+      LeafFields extends Schema.Struct.Fields,
+    > = StateScopeClass<
+      Self,
+      Id,
+      LeafFields,
+      LeafFields,
+      Schema.Struct.Type<LeafFields>,
+      StateFieldSelectors<LeafFields>,
+      readonly [],
+      never
+    >;
     export type Leaf<S extends { readonly Leaf: Schema.Top }> =
       Schema.Schema.Type<S["Leaf"]>;
     export type State<S extends { readonly State: Schema.Top }> =

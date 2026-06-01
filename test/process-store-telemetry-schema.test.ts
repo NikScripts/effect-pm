@@ -13,6 +13,7 @@ import { Type } from "../src/Query";
 class TelemetryTestScope extends State.Scope<TelemetryTestScope>()({
   processId: Schema.String,
   subjectId: Schema.String,
+  startedAt: Schema.Number,
 })("@test/TelemetryTestScope") {}
 
 const TelemetryTestState = TelemetryTestScope.Schema.State;
@@ -22,8 +23,21 @@ class TelemetryRecorded extends Telemetry.Schema<TelemetryRecorded>()(
 )({
   processId: TelemetryTestState.processId,
   subjectId: TelemetryTestState.subjectId,
+  startedAt: TelemetryTestState.startedAt,
   occurredAt: Telemetry.terminal.clockMillis,
+  completedAt: Telemetry.terminal.clockMillis,
+  durationMs: Telemetry.terminal.durationMs,
   kind: Schema.Literal("recorded"),
+}) {}
+
+class TelemetryFailed extends Telemetry.Schema<TelemetryFailed>()(
+  TelemetryTestScope,
+)({
+  processId: TelemetryTestState.processId,
+  subjectId: TelemetryTestState.subjectId,
+  occurredAt: Telemetry.terminal.clockMillis,
+  error: Telemetry.input.errorString,
+  kind: Schema.Literal("failed"),
 }) {}
 
 class TelemetrySchemaStore extends ProcessStore.Service<TelemetrySchemaStore>()(
@@ -40,11 +54,14 @@ class TelemetrySchemaStore extends ProcessStore.Service<TelemetrySchemaStore>()(
           }),
         ),
       ),
+      Telemetry.event("Failed", TelemetryFailed),
     ),
   ),
   ProcessStore.query((s) => ({
     records: () =>
       s.read(runtimeRecordQuery([Type.equals("Test.Event.Recorded")], undefined)),
+    failed: () =>
+      s.read(runtimeRecordQuery([Type.equals("Test.Event.Failed")], undefined)),
   })),
 ) {}
 
@@ -89,6 +106,9 @@ describe("ProcessStore telemetry schema", () => {
       expect(row.payload).toMatchObject({
         processId: "process-1",
         subjectId: "subject-1",
+        startedAt: 1_700_000_000_000,
+        completedAt: expect.any(Number),
+        durationMs: expect.any(Number),
         kind: "recorded",
       });
       expect(row.occurredAt).toBeDefined();
@@ -97,6 +117,30 @@ describe("ProcessStore telemetry schema", () => {
       Effect.provide(TelemetryTestScope.layer({
         processId: "process-1",
         subjectId: "subject-1",
+        startedAt: 1_700_000_000_000,
+      })),
+    ),
+  );
+
+  it.live("materializes input fields into function-shaped emitters", () =>
+    Effect.gen(function* () {
+      yield* TelemetrySchemaStore.Event.Failed(new Error("boom"));
+      const store = yield* TelemetrySchemaStore;
+      const rows = yield* store.failed();
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.payload).toMatchObject({
+        processId: "process-input",
+        subjectId: "subject-input",
+        error: "Error: boom",
+        kind: "failed",
+      });
+    }).pipe(
+      Effect.provide(TelemetrySchemaStore.layer),
+      Effect.provide(TelemetryTestScope.layer({
+        processId: "process-input",
+        subjectId: "subject-input",
+        startedAt: 1_700_000_000_000,
       })),
     ),
   );
@@ -116,6 +160,7 @@ describe("ProcessStore telemetry schema", () => {
       Effect.provide(TelemetryTestScope.layer({
         processId: "process-2",
         subjectId: "subject-2",
+        startedAt: 1_700_000_000_000,
       })),
       Effect.provide(Logger.layer([captureLogger], { mergeWithExisting: false })),
     );

@@ -20,16 +20,27 @@ export const TelemetrySchemaTypeId = Symbol.for(
 );
 
 const TELEMETRY_TERMINAL_KEY = "@nikscripts/effect-pm/TelemetryTerminal" as const;
+const TELEMETRY_INPUT_KEY = "@nikscripts/effect-pm/TelemetryInput" as const;
 
 /** Scope-bound facet row schema (plan 17 §5). @internal */
 export interface TelemetrySchemaDefinition {
   readonly [TelemetrySchemaTypeId]: typeof TelemetrySchemaTypeId;
   readonly scope: Effect.Effect<unknown, never, unknown>;
   readonly fields: Schema.Struct.Fields;
+  readonly inputFields: ReadonlyArray<TelemetryInputField>;
 }
 
 type TelemetryTerminal = {
-  readonly [TELEMETRY_TERMINAL_KEY]: "clockMillis";
+  readonly [TELEMETRY_TERMINAL_KEY]: "clockMillis" | "durationMs";
+};
+
+type TelemetryInput = {
+  readonly [TELEMETRY_INPUT_KEY]: "errorString";
+};
+
+type TelemetryInputField = {
+  readonly field: string;
+  readonly source: TelemetryInput[typeof TELEMETRY_INPUT_KEY];
 };
 
 type TelemetryLogAnnotationValue = string | number | boolean;
@@ -62,22 +73,26 @@ export type TelemetryEventStoreLeg = (
   s: ProcessStoreSpine,
 ) => TelemetryEmitEffect;
 
-export type TelemetryEventPipeLeg = <Name extends string>(
-  event: TelemetryEventDef<Name>,
-) => TelemetryEventDef<Name>;
+export type TelemetryEventPipeLeg = <Name extends string, EmitApi>(
+  event: TelemetryEventDef<Name, EmitApi>,
+) => TelemetryEventDef<Name, EmitApi>;
 
-export type TelemetryEventDef<Name extends string = string> = {
+export type TelemetryEventDef<
+  Name extends string = string,
+  EmitApi = TelemetryEmitEffect,
+> = {
   readonly _tag: "event";
   readonly name: Name;
   readonly store: TelemetryEventStoreLeg;
   readonly telemetrySchema?: TelemetrySchemaDefinition;
   readonly logWarnings: ReadonlyArray<TelemetryLogWarning>;
   readonly pipes: ReadonlyArray<TelemetryEventPipeLeg>;
+  readonly _emit?: EmitApi;
 };
 
 export type TelemetryTagDef<
   Path extends ReadonlyArray<string> = ReadonlyArray<string>,
-  Events extends ReadonlyArray<TelemetryEventDef> = ReadonlyArray<TelemetryEventDef>,
+  Events extends ReadonlyArray<unknown> = ReadonlyArray<unknown>,
 > = {
   readonly _tag: "tag";
   readonly path: Path;
@@ -91,9 +106,14 @@ export type TelemetryNamespaceDef = {
 
 export type TelemetryPart =
   | TelemetryNamespaceDef
-  | TelemetryTagDef;
+  | TelemetryTagDef<ReadonlyArray<string>, ReadonlyArray<unknown>>;
 
 export type TelemetryNestedEmitApi = Record<string, unknown>;
+
+export type TelemetryEmitPath = {
+  readonly path: ReadonlyArray<string>;
+  readonly input: boolean;
+};
 
 type UnionToIntersection<Union> =
   (Union extends unknown ? (value: Union) => void : never) extends
@@ -109,8 +129,13 @@ type PathEmitApi<Path extends ReadonlyArray<string>, Leaf> =
     ? { readonly [K in Head]: PathEmitApi<Tail, Leaf> }
     : Leaf;
 
-type EventEmitApi<Events extends ReadonlyArray<TelemetryEventDef>> = {
-  readonly [Event in Events[number] as Event["name"]]: TelemetryEmitEffect;
+type EventEmitApi<Events extends ReadonlyArray<unknown>> = {
+  readonly [Event in Events[number] as Event extends
+    TelemetryEventDef<infer Name, unknown>
+    ? Name
+    : never]: Event extends TelemetryEventDef<string, infer EmitApi>
+    ? EmitApi
+    : never;
 };
 
 type TagEmitApi<Tag> = Tag extends TelemetryTagDef<infer Path, infer Events>
@@ -128,15 +153,14 @@ export type TelemetryEmitApiFromParts<
       : Record<never, never>
     : Record<never, never>;
 
-export type TelemetryEventInput =
-  | TelemetrySchemaDefinition
-  | { readonly store: TelemetryEventStoreLeg };
-
-export type TelemetryEventBuilder<Name extends string = string> =
-  TelemetryEventDef<Name> & {
+export type TelemetryEventBuilder<
+  Name extends string = string,
+  EmitApi = TelemetryEmitEffect,
+> =
+  TelemetryEventDef<Name, EmitApi> & {
   readonly pipe: (
-    ...legs: ReadonlyArray<TelemetryEventPipeLeg>
-  ) => TelemetryEventBuilder<Name>;
+    leg: TelemetryEventPipeLeg,
+  ) => TelemetryEventBuilder<Name, EmitApi>;
 };
 
 const isEventDef = (value: unknown): value is TelemetryEventDef =>
@@ -153,20 +177,12 @@ export const telemetryWireId = (
   eventName: string,
 ): string => joinWire([namespace, ...tagPath, eventName]);
 
-const applyEventPipes = <Name extends string>(
-  event: TelemetryEventDef<Name>,
-  legs: ReadonlyArray<TelemetryEventPipeLeg>,
-): TelemetryEventDef<Name> =>
-  legs.reduce<TelemetryEventDef<Name>>((current, leg) => leg(current), event);
-
-const makeEventBuilder = <Name extends string>(
-  event: TelemetryEventDef<Name>,
-): TelemetryEventBuilder<Name> => ({
+const makeEventBuilder = <Name extends string, EmitApi>(
+  event: TelemetryEventDef<Name, EmitApi>,
+): TelemetryEventBuilder<Name, EmitApi> => ({
   ...event,
-  pipe: (...legs) =>
-    makeEventBuilder(
-      applyEventPipes(event, [...event.pipes, ...legs]),
-    ),
+  pipe: (leg) =>
+    makeEventBuilder(leg(event)),
 });
 
 let telemetrySequence = 0;
@@ -215,6 +231,11 @@ const getTerminal = (value: unknown): TelemetryTerminal | undefined =>
     ? (value as TelemetryTerminal)
     : undefined;
 
+const getInput = (value: unknown): TelemetryInput | undefined =>
+  isRecord(value) && TELEMETRY_INPUT_KEY in value
+    ? (value as TelemetryInput)
+    : undefined;
+
 const getLiteral = (value: unknown): JsonValue | undefined => {
   if (!isRecord(value) || !isRecord(value["ast"])) {
     return undefined;
@@ -230,6 +251,8 @@ const getLiteral = (value: unknown): JsonValue | undefined => {
 const materializeField = (
   state: unknown,
   field: unknown,
+  input: unknown,
+  current: Readonly<Record<string, JsonValue>>,
 ): Effect.Effect<JsonValue> => {
   const selector: StateFieldSelectorMetadata | undefined =
     getStateFieldSelectorMetadata(field);
@@ -243,6 +266,19 @@ const materializeField = (
   if (terminal?.[TELEMETRY_TERMINAL_KEY] === "clockMillis") {
     return Clock.currentTimeMillis.pipe(Effect.map(toJsonValue));
   }
+  if (terminal?.[TELEMETRY_TERMINAL_KEY] === "durationMs") {
+    const startedAt = current["startedAt"];
+    const completedAt = current["completedAt"];
+    return typeof startedAt === "number" && typeof completedAt === "number"
+      ? Effect.succeed(Math.max(0, completedAt - startedAt))
+      : Effect.die("Telemetry.terminal.durationMs requires numeric startedAt and completedAt fields");
+  }
+  const inputSource = getInput(field);
+  if (inputSource?.[TELEMETRY_INPUT_KEY] === "errorString") {
+    return input === undefined
+      ? Effect.die("Telemetry.input.errorString requires an event input")
+      : Effect.succeed(String(input));
+  }
   const literal = getLiteral(field);
   if (literal !== undefined) {
     return Effect.succeed(literal);
@@ -252,18 +288,18 @@ const materializeField = (
 
 const materializeSchema = (
   schema: TelemetrySchemaDefinition,
+  input: unknown,
 ): Effect.Effect<Readonly<Record<string, JsonValue>>> =>
   (schema.scope as Effect.Effect<unknown>).pipe(
     Effect.flatMap((state) =>
-      Effect.forEach(
-        Object.entries(schema.fields),
-        ([key, field]) =>
-          materializeField(state, field).pipe(
-            Effect.map((value) => [key, value] as const),
-          ),
-      ),
+      Effect.gen(function* () {
+        const out: Record<string, JsonValue> = {};
+        for (const [key, field] of Object.entries(schema.fields)) {
+          out[key] = yield* materializeField(state, field, input, out);
+        }
+        return out;
+      }),
     ),
-    Effect.map((entries) => Object.fromEntries(entries)),
   );
 
 const stringField = (
@@ -346,12 +382,13 @@ const schemaEventStore = (
   namespace: string,
   tagPath: ReadonlyArray<string>,
   event: TelemetryEventDef,
+  input?: unknown,
 ): TelemetryEmitEffect => {
   if (event.telemetrySchema === undefined) {
     return event.store(s);
   }
   const wireId = telemetryWireId(namespace, tagPath, event.name);
-  return materializeSchema(event.telemetrySchema).pipe(
+  return materializeSchema(event.telemetrySchema, input).pipe(
     Effect.flatMap((payload) =>
       applySchemaWarnings(
         s.create(makeSchemaRecord(wireId, payload)),
@@ -366,11 +403,15 @@ const buildNestedApi = (
   s: ProcessStoreSpine,
   namespace: string,
   tagPath: ReadonlyArray<string>,
-  events: ReadonlyArray<TelemetryEventDef>,
+  events: ReadonlyArray<unknown>,
 ): TelemetryNestedEmitApi => {
-  const out: Record<string, TelemetryEmitEffect | TelemetryNestedEmitApi> = {};
-  for (const event of events) {
-    out[event.name] = schemaEventStore(s, namespace, tagPath, event);
+  const out: Record<string, unknown> = {};
+  for (const event of events as ReadonlyArray<TelemetryEventDef>) {
+    out[event.name] =
+      event.telemetrySchema !== undefined &&
+      event.telemetrySchema.inputFields.length > 0
+        ? (input: unknown) => schemaEventStore(s, namespace, tagPath, event, input)
+        : schemaEventStore(s, namespace, tagPath, event);
   }
   return out as TelemetryNestedEmitApi;
 };
@@ -404,6 +445,7 @@ export interface ProcessStoreTelemetrySection<EmitApi extends object> {
   readonly _tag: typeof TELEMETRY_TAG;
   readonly fn: (s: ProcessStoreSpine) => EmitApi;
   readonly emitTree: TelemetryNestedEmitApi;
+  readonly emitPaths: ReadonlyArray<TelemetryEmitPath>;
   readonly wireIds: ReadonlyArray<string>;
 }
 
@@ -440,12 +482,19 @@ export const processStoreTelemetry = <const Parts extends ReadonlyArray<Telemetr
   }
 
   const wireIds: string[] = [];
+  const emitPaths: TelemetryEmitPath[] = [];
   const collectWire = (
     tagPath: ReadonlyArray<string>,
-    events: ReadonlyArray<TelemetryEventDef>,
+    events: ReadonlyArray<unknown>,
   ): void => {
-    for (const event of events) {
+    for (const event of events as ReadonlyArray<TelemetryEventDef>) {
       wireIds.push(telemetryWireId(namespace, tagPath, event.name));
+      emitPaths.push({
+        path: [...tagPath, event.name],
+        input:
+          event.telemetrySchema !== undefined &&
+          event.telemetrySchema.inputFields.length > 0,
+      });
     }
   };
 
@@ -481,14 +530,23 @@ export const processStoreTelemetry = <const Parts extends ReadonlyArray<Telemetr
     _tag: TELEMETRY_TAG,
     fn,
     emitTree,
+    emitPaths,
     wireIds,
   };
 };
 
-const defineTelemetryEvent = <const Name extends string>(
+function defineTelemetryEvent<const Name extends string, EmitApi>(
   name: Name,
-  input: TelemetryEventInput,
-): TelemetryEventBuilder<Name> => {
+  input: TelemetrySchemaClass<EmitApi>,
+): TelemetryEventBuilder<Name, EmitApi>;
+function defineTelemetryEvent<const Name extends string>(
+  name: Name,
+  input: { readonly store: TelemetryEventStoreLeg },
+): TelemetryEventBuilder<Name, TelemetryEmitEffect>;
+function defineTelemetryEvent<const Name extends string>(
+  name: Name,
+  input: TelemetrySchemaClass<unknown> | { readonly store: TelemetryEventStoreLeg },
+): TelemetryEventBuilder<Name, unknown> {
   if (isTelemetrySchemaDefinition(input)) {
     return makeEventBuilder({
       _tag: "event",
@@ -509,7 +567,7 @@ const defineTelemetryEvent = <const Name extends string>(
     logWarnings: [],
     pipes: [],
   });
-};
+}
 
 /** Identity pipe leg until annotateLogs is implemented. @internal */
 export const telemetryAnnotateLogsPipeLeg: TelemetryEventPipeLeg = (event) => event;
@@ -524,28 +582,51 @@ const telemetryLogWarning =
     logWarnings: [...event.logWarnings, { message, annotations }],
   });
 
-type TelemetrySchemaClass = TelemetrySchemaDefinition & {
+type TelemetryInputSchema = Schema.Top & TelemetryInput;
+
+type TelemetrySchemaEmitApi<Fields extends Schema.Struct.Fields> =
+  Extract<Fields[keyof Fields], TelemetryInputSchema> extends never
+    ? Effect.Effect<void>
+    : (input: unknown) => Effect.Effect<void>;
+
+type TelemetrySchemaClass<EmitApi = TelemetryEmitEffect> = TelemetrySchemaDefinition & {
   new(_: never): object;
+  readonly _telemetryEmit?: EmitApi;
 };
 
 const telemetrySchema = <Self extends object>() =>
 <Scope extends Effect.Effect<unknown, never, unknown>>(scope: Scope) =>
 <const Fields extends Schema.Struct.Fields>(
   fields: Fields,
-): TelemetrySchemaClass => {
+): TelemetrySchemaClass<TelemetrySchemaEmitApi<Fields>> => {
   const Base = Schema.Class<Self>("Telemetry.Schema")(fields) as unknown as {
     new(_: never): Self;
   };
+  const inputFields = Object.entries(fields).flatMap(([field, value]) => {
+    const input = getInput(value);
+    return input === undefined
+      ? []
+      : [{ field, source: input[TELEMETRY_INPUT_KEY] }];
+  });
   const definition = {
     [TelemetrySchemaTypeId]: TelemetrySchemaTypeId,
     scope,
     fields,
+    inputFields,
   } satisfies TelemetrySchemaDefinition;
   return Object.assign(Base, definition);
 };
 
 const terminalClockMillis = Object.assign(Schema.Number.annotate({}), {
   [TELEMETRY_TERMINAL_KEY]: "clockMillis" as const,
+});
+
+const terminalDurationMs = Object.assign(Schema.Number.annotate({}), {
+  [TELEMETRY_TERMINAL_KEY]: "durationMs" as const,
+});
+
+const inputErrorString = Object.assign(Schema.String.annotate({}), {
+  [TELEMETRY_INPUT_KEY]: "errorString" as const,
 });
 
 export const Telemetry = {
@@ -555,24 +636,24 @@ export const Telemetry = {
   }),
   tag:
     <const Path extends ReadonlyArray<string>>(...path: Path) =>
-    <const Events extends ReadonlyArray<TelemetryEventBuilder>>(
+    <const Events extends ReadonlyArray<unknown>>(
       ...events: Events
     ): TelemetryTagDef<Path, Events> => ({
       _tag: "tag",
       path,
       events,
     }),
-  event: <const Name extends string>(
-    name: Name,
-    input: TelemetryEventInput,
-  ): TelemetryEventBuilder<Name> =>
-    defineTelemetryEvent(name, input),
+  event: defineTelemetryEvent,
   Schema: Object.assign(telemetrySchema, {
     TypeId: TelemetrySchemaTypeId,
     is: isTelemetrySchemaDefinition,
   }),
   terminal: {
     clockMillis: terminalClockMillis,
+    durationMs: terminalDurationMs,
+  },
+  input: {
+    errorString: inputErrorString,
   },
   logWarning: telemetryLogWarning,
   annotateLogs: telemetryAnnotateLogsPipeLeg,

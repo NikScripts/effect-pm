@@ -12,7 +12,7 @@
  * | Concern | Where |
  * |--------|-------|
  * | Wire types | `Process.Execution.Completed` / `.Failed` / `.Interrupted` |
- * | Telemetry emit | `yield* ProcessExecutionStore.Execution.Completed` (zero-arg; requires {@link RuntimeEmitContext}) |
+ * | Telemetry emit | `yield* ProcessExecutionStore.Execution.Completed` inside {@link ProcessScope.run} |
  * | Reads (instance) | `executions({ processId, scheduleKey?, opts? })`, `hasPriorExecutions(processId)` |
  * | Reads (bound, `for(processId)`) | `executions({ scheduleKey?, opts? })`, `hasPriorExecutions()` |
  *
@@ -37,8 +37,7 @@
  * @module store/ProcessExecution
  */
 
-import { DateTime, Effect } from "effect";
-import type { ProcessStoreWriteError } from "../ProcessStoreEvent";
+import { DateTime, Effect, Schema } from "effect";
 import {
   applyQueryOpts,
   isBoolean,
@@ -52,10 +51,7 @@ import {
 import type { ProcessStoreSpine } from "../internal/store/spine";
 import { ProcessStore, Telemetry } from "../ProcessStore";
 import type { AnalyticsEventBase, QueryOpts } from "../ProcessStoreEvent";
-import {
-  getRuntimeEmitContext,
-  requireRuntimeEmitContext,
-} from "../RuntimeEmitContext";
+import { ProcessScope } from "../ProcessScope";
 import { ProcessId, Type } from "../Query";
 import type { RuntimeRecord, RuntimeStorageOperationalError } from "../RuntimeStorage";
 
@@ -94,22 +90,6 @@ export interface ProcessExecutionCompletedEvent extends AnalyticsEventBase {
     error?: string;
     isStartupRun: boolean;
   };
-}
-
-/**
- * Write input for one finished process run (status chosen by the record method).
- *
- * @public
- */
-export interface ProcessExecutionFinishInput {
-  readonly processId: string;
-  readonly scheduleKey: string | null;
-  /** Epoch millis when the execution started. */
-  readonly startedAt: number;
-  /** Epoch millis when the execution completed. */
-  readonly completedAt: number;
-  readonly error?: string;
-  readonly isStartupRun: boolean;
 }
 
 /**
@@ -165,32 +145,6 @@ const executionStatuses: ReadonlyArray<ProcessExecutionStatus> = [
 const isExecutionStatus = (value: unknown): value is ProcessExecutionStatus =>
   isString(value) &&
   executionStatuses.some((status) => status === value);
-
-let processExecutionSeq = 0;
-
-const toExecutionRecord = (
-  input: ProcessExecutionFinishInput,
-  status: ProcessExecutionStatus,
-  wireType: ProcessExecutionWireType,
-): Omit<RuntimeRecord, "runId" | "createdAt"> => {
-  processExecutionSeq += 1;
-  return {
-    id: `${input.processId}-execution-${status}-${String(processExecutionSeq)}`,
-    type: wireType,
-    occurredAt: DateTime.makeUnsafe(input.completedAt),
-    processType: PROCESS_TYPE,
-    processId: input.processId,
-    payload: {
-      scheduleKey: input.scheduleKey,
-      startedAt: input.startedAt,
-      completedAt: input.completedAt,
-      durationMs: Math.max(0, input.completedAt - input.startedAt),
-      status,
-      isStartupRun: input.isStartupRun,
-      ...(input.error !== undefined ? { error: input.error } : {}),
-    },
-  };
-};
 
 const isExecutionWireType = (value: string): value is ProcessExecutionWireType =>
   executionWireTypes.some((wire) => wire === value);
@@ -266,37 +220,39 @@ const decodeExecutionsForQuery = (
   return rows;
 };
 
-const emitExecution = (
-  s: ProcessStoreSpine,
-  status: ProcessExecutionStatus,
-  wireType: ProcessExecutionWireType,
-): Effect.Effect<void, ProcessStoreWriteError> =>
-  requireRuntimeEmitContext(
-    "processId",
-    "scheduleKey",
-    "startedAt",
-    "completedAt",
-    "isStartupRun",
-  ).pipe(
-    Effect.flatMap((ctx) =>
-      getRuntimeEmitContext.pipe(
-        Effect.flatMap((full) => {
-          const input: ProcessExecutionFinishInput = {
-            processId: ctx.processId,
-            scheduleKey: ctx.scheduleKey ?? null,
-            startedAt: ctx.startedAt,
-            completedAt: ctx.completedAt,
-            isStartupRun: ctx.isStartupRun,
-            ...(full.error !== undefined ? { error: full.error } : {}),
-          };
-          return s.create(toExecutionRecord(input, status, wireType));
-        }),
-      ),
-    ),
-    Effect.catchTag("RuntimeEmitContextMissingError", (error) =>
-      Effect.die(error),
-    ),
-  );
+const ProcessState = ProcessScope.Schema.State;
+
+const executionSchemaFields = {
+  processType: Schema.Literal(PROCESS_TYPE),
+  processId: ProcessState.processId,
+  scheduleKey: ProcessState.scheduleKey,
+  startedAt: ProcessState.startedAt,
+  isStartupRun: ProcessState.isStartupRun,
+  completedAt: Telemetry.terminal.clockMillis,
+  durationMs: Telemetry.terminal.durationMs,
+} as const;
+
+class ProcessExecutionCompleted extends Telemetry.Schema<ProcessExecutionCompleted>()(
+  ProcessScope,
+)({
+  ...executionSchemaFields,
+  status: Schema.Literal("completed"),
+}) {}
+
+class ProcessExecutionFailed extends Telemetry.Schema<ProcessExecutionFailed>()(
+  ProcessScope,
+)({
+  ...executionSchemaFields,
+  status: Schema.Literal("failed"),
+  error: Telemetry.input.errorString,
+}) {}
+
+class ProcessExecutionInterrupted extends Telemetry.Schema<ProcessExecutionInterrupted>()(
+  ProcessScope,
+)({
+  ...executionSchemaFields,
+  status: Schema.Literal("interrupted"),
+}) {}
 
 // ============================================================================
 // Facet
@@ -307,12 +263,6 @@ const emitExecution = (
  *
  * @public
  */
-/** Static telemetry tree (see {@link ProcessExecutionStore}). @public */
-export type ProcessExecutionStoreTelemetryEmit = Effect.Effect<
-  void,
-  ProcessStoreWriteError
->;
-
 export class ProcessExecutionStore extends ProcessStore.Service<
   ProcessExecutionStore
 >()(
@@ -320,15 +270,24 @@ export class ProcessExecutionStore extends ProcessStore.Service<
   ProcessStore.telemetry(
     Telemetry.namespace("Process"),
     Telemetry.tag("Execution")(
-      Telemetry.event("Completed", {
-        store: (s) => emitExecution(s, "completed", EXECUTION_WIRE.Completed),
-      }),
-      Telemetry.event("Failed", {
-        store: (s) => emitExecution(s, "failed", EXECUTION_WIRE.Failed),
-      }),
-      Telemetry.event("Interrupted", {
-        store: (s) => emitExecution(s, "interrupted", EXECUTION_WIRE.Interrupted),
-      }),
+      Telemetry.event("Completed", ProcessExecutionCompleted).pipe(
+        Telemetry.logWarning(
+          "ProcessExecutionStore write failed for completed run",
+          ({ processId }) => ({ processId: String(processId) }),
+        ),
+      ),
+      Telemetry.event("Failed", ProcessExecutionFailed).pipe(
+        Telemetry.logWarning(
+          ({ processId }) => `ProcessExecutionStore write failed for failed run "${String(processId)}"`,
+          ({ processId }) => ({ processId: String(processId) }),
+        ),
+      ),
+      Telemetry.event("Interrupted", ProcessExecutionInterrupted).pipe(
+        Telemetry.logWarning(
+          "ProcessExecutionStore write failed for interrupted run",
+          ({ processId }) => ({ processId: String(processId) }),
+        ),
+      ),
     ),
   ),
   ProcessStore.query((s) => ({
@@ -344,9 +303,9 @@ export class ProcessExecutionStore extends ProcessStore.Service<
   })),
 ) {
   declare static Execution: {
-    readonly Completed: ProcessExecutionStoreTelemetryEmit;
-    readonly Failed: ProcessExecutionStoreTelemetryEmit;
-    readonly Interrupted: ProcessExecutionStoreTelemetryEmit;
+    readonly Completed: Effect.Effect<void>;
+    readonly Failed: (error: unknown) => Effect.Effect<void>;
+    readonly Interrupted: Effect.Effect<void>;
   };
 }
 

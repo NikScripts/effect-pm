@@ -4,52 +4,79 @@ import { ProcessStorage } from "../src/ProcessStorage";
  */
 
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Layer, Logger } from "effect";
-import { ProcessStore } from "../src/ProcessStore";
-import { withRuntimeEmitContext } from "../src/RuntimeEmitContext";
+import { Effect, Logger } from "effect";
+import { ProcessScope } from "../src/ProcessScope";
+import {
+  RuntimeStorage,
+  RuntimeStorageConnectionError,
+  type RuntimeStorageService,
+} from "../src/RuntimeStorage";
 import { ProcessExecutionStore } from "../src/store/processExecution";
-import type { ProcessExecutionFinishInput } from "../src/store/processExecution";
-import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
 
-const finish = (
-  processId: string,
-  overrides: Partial<ProcessExecutionFinishInput> = {},
-): ProcessExecutionFinishInput => ({
+interface ProcessExecutionTestInput {
+  readonly processId: string;
+  readonly scheduleKey: string | null;
+  readonly startedAt: number;
+  readonly error?: unknown;
+  readonly isStartupRun: boolean;
+}
+
+const finish = (processId: string, overrides: Partial<ProcessExecutionTestInput> = {}): ProcessExecutionTestInput => ({
   processId,
   scheduleKey: null,
   startedAt: 1_700_000_000_000,
-  completedAt: 1_700_000_000_010,
   isStartupRun: false,
   ...overrides,
 });
 
-const emitContext = (input: ProcessExecutionFinishInput) => ({
-  processType: "process" as const,
+const withProcessScope = <A, E, R>(
+  input: ProcessExecutionTestInput,
+  effect: Effect.Effect<A, E, R>,
+) =>
+  ProcessScope.run({
   processId: input.processId,
   scheduleKey: input.scheduleKey,
   startedAt: input.startedAt,
-  completedAt: input.completedAt,
   isStartupRun: input.isStartupRun,
-  ...(input.error !== undefined ? { error: input.error } : {}),
-});
+  }, effect);
 
-const emitCompleted = (input: ProcessExecutionFinishInput) =>
-  withRuntimeEmitContext(
-    emitContext(input),
-    ProcessExecutionStore.Execution.Completed,
+const emitCompleted = (input: ProcessExecutionTestInput) =>
+  withProcessScope(input, ProcessExecutionStore.Execution.Completed);
+
+const emitFailed = (input: ProcessExecutionTestInput) =>
+  withProcessScope(
+    input,
+    ProcessExecutionStore.Execution.Failed(input.error ?? "failed"),
   );
 
-const emitFailed = (input: ProcessExecutionFinishInput) =>
-  withRuntimeEmitContext(
-    emitContext(input),
-    ProcessExecutionStore.Execution.Failed,
-  );
+const emitInterrupted = (input: ProcessExecutionTestInput) =>
+  withProcessScope(input, ProcessExecutionStore.Execution.Interrupted);
 
-const emitInterrupted = (input: ProcessExecutionFinishInput) =>
-  withRuntimeEmitContext(
-    emitContext(input),
-    ProcessExecutionStore.Execution.Interrupted,
-  );
+const failingRuntimeStorage: RuntimeStorageService = {
+  create: () =>
+    Effect.fail(
+      new RuntimeStorageConnectionError({
+        adapter: "memory",
+        operation: "create",
+        cause: "expected process execution failure",
+      }),
+    ),
+  read: () => Effect.succeed([]),
+  upsert: () =>
+    Effect.fail(
+      new RuntimeStorageConnectionError({ adapter: "memory", operation: "upsert" }),
+    ),
+  update: () =>
+    Effect.fail(
+      new RuntimeStorageConnectionError({ adapter: "memory", operation: "update" }),
+    ),
+  delete: () =>
+    Effect.fail(
+      new RuntimeStorageConnectionError({ adapter: "memory", operation: "delete" }),
+    ),
+  transaction: (effect) =>
+    Effect.provideService(effect, RuntimeStorage, failingRuntimeStorage),
+};
 
 describe("ProcessExecutionStore — static optional emitters", () => {
   it.live("no-ops silently when the facet layer is absent", () =>
@@ -66,7 +93,6 @@ describe("ProcessExecutionStore — static optional emitters", () => {
         processId,
         scheduleKey: "win",
         startedAt: 1_700_000_000_000,
-        completedAt: 1_700_000_000_005,
         isStartupRun: false,
       });
       const store = yield* ProcessExecutionStore;
@@ -86,7 +112,6 @@ describe("ProcessExecutionStore — static optional emitters", () => {
       yield* emitFailed(
         finish(processId, {
           startedAt: 1_700_000_000_100,
-          completedAt: 1_700_000_000_120,
           error: "boom",
         }),
       );
@@ -99,46 +124,20 @@ describe("ProcessExecutionStore — static optional emitters", () => {
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
-  it.live("surfaces write failures unless explicitly caught and logged", () => {
+  it.live("logs schema write failures through the event definition", () => {
     const captured: string[] = [];
     const captureLogger = Logger.make<unknown, void>(({ message }) => {
       const text =
         typeof message === "string" ? message : JSON.stringify(message);
       captured.push(text);
     });
-    const failingFacet: ProcessExecutionStore.Type = {
-      Execution: {
-        Completed: Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-completed" }),
-        ),
-        Failed: Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-failed" }),
-        ),
-        Interrupted: Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-interrupted" }),
-        ),
-      },
-      executions: () => Effect.succeed([]),
-      hasPriorExecutions: () => Effect.succeed(false),
-    };
-    const write = emitCompleted(finish("test/failing"));
     return Effect.gen(function* () {
-      const error = yield* Effect.flip(write);
-      expect(error).toBeInstanceOf(ProcessStoreReadonlyRecordError);
-      yield* write.pipe(
-        ProcessStore.catchErrorAndLog({
-          message: "test process execution write failed",
-          annotations: { test: "process-execution-static" },
-        }),
-      );
-      expect(captured.some((m) => m.includes("test process execution write failed"))).toBe(true);
+      yield* emitCompleted(finish("test/failing"));
+      expect(captured.some((m) => m.includes("ProcessExecutionStore write failed for completed run"))).toBe(true);
     }).pipe(
-      Effect.provide(
-        Layer.mergeAll(
-          Layer.succeed(ProcessExecutionStore, failingFacet),
-          Logger.layer([captureLogger], { mergeWithExisting: false }),
-        ),
-      ),
+      Effect.provide(ProcessExecutionStore.layerRuntimeStorage),
+      Effect.provideService(RuntimeStorage, failingRuntimeStorage),
+      Effect.provide(Logger.layer([captureLogger], { mergeWithExisting: false })),
     );
   });
 });
@@ -155,7 +154,6 @@ describe("ProcessExecutionStore — projections", () => {
         finish(processId, {
           scheduleKey: "window-b",
           startedAt: 1_700_000_000_200,
-          completedAt: 1_700_000_000_210,
         }),
       );
       const store = yield* ProcessExecutionStore;
@@ -187,7 +185,6 @@ describe("ProcessExecutionStore — projections", () => {
             finish(pid, {
               scheduleKey: "hot",
               startedAt: 1_700_000_001_000 + i * 10,
-              completedAt: 1_700_000_001_005 + i * 10,
             }),
           );
         }
@@ -196,7 +193,6 @@ describe("ProcessExecutionStore — projections", () => {
             finish(pid, {
               scheduleKey: "cold",
               startedAt: 1_700_000_002_000 + i * 10,
-              completedAt: 1_700_000_002_005 + i * 10,
             }),
           );
         }
@@ -240,7 +236,6 @@ describe("ProcessExecutionStore — for(processId) bound API", () => {
         finish(pid, {
           scheduleKey: "cold",
           startedAt: 1_700_000_000_100,
-          completedAt: 1_700_000_000_110,
         }),
       );
       const bound = yield* ProcessExecutionStore.for(pid);
@@ -279,7 +274,7 @@ describe("ProcessExecutionStore — phantom type accessors", () => {
     Effect.gen(function* () {
       const executionEmit = {
         Completed: Effect.void,
-        Failed: Effect.void,
+        Failed: () => Effect.void,
         Interrupted: Effect.void,
       };
       const fullShape: ProcessExecutionStore.Type = {
