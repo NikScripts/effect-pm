@@ -24,6 +24,9 @@ user opening the recipe file to see the substance of the bake session.
 1. Ask one decision area at a time, but include every pointed subquestion needed
    to decide that area quickly. Do not reduce a rich design branch to a single
    yes/no question unless it is truly the only question.
+   - For mostly yes/no decision sets, make the recommended answers the
+     ingredients list and ask for one confirmation ("Do you agree with all?").
+     Save detailed per-question recipe steps for topics that need discussion.
 2. Every decision area must include:
    - the recipe step,
    - a concise explanation of what the step decides,

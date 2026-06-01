@@ -35,6 +35,13 @@ replacement.
   keys.
 - Terminal access is opt-in per group/endpoint and higher privilege than normal
   PM commands.
+- V1 uses a separate `TerminalSessionPort` instead of extending
+  `ControlPlanePort`.
+- Server-side terminal lifecycle is an Effect service.
+- V1 exposes terminal events as a transport-neutral event stream.
+- Session IDs are gateway-issued after app auth/RBAC.
+- Command restrictions are configurable. The recommended default is a configured
+  target list, but apps can opt into broad shell/custom-command control.
 
 ## Open recipe steps
 
@@ -101,8 +108,8 @@ Recommended ingredients:
   lifecycle and runtime dependencies.
 - Streamed events — output, exit, errors, and lifecycle messages flow one way
   from server to client.
-- Commands are explicit — v1 opens either an allowed shell or a configured
-  command; no arbitrary browser-provided command by default.
+- Command policy is configurable — v1 can default to named targets, while apps
+  that want close to full control can enable shell/custom-command execution.
 - Session IDs are gateway-issued — browser asks app server, app server
   authenticates/authorizes and creates/forwards the session.
 - Structured terminal errors — auth denied, group unavailable, command denied,
@@ -113,7 +120,7 @@ Picture:
 ```ts
 export interface OpenTerminalSession {
   readonly groupId: string;
-  readonly target?: "shell" | "pm-cli" | "custom";
+  readonly target: string;
   readonly command?: ReadonlyArray<string>;
   readonly cwd?: string;
   readonly cols?: number;
@@ -189,13 +196,33 @@ export interface TerminalSessionHandle {
 }
 ```
 
+```ts
+export type TerminalCommandPolicy =
+  | {
+      readonly _tag: "NamedTargetsOnly";
+      readonly targets: Readonly<Record<string, TerminalTarget>>;
+    }
+  | {
+      readonly _tag: "Shell";
+      readonly shell: string;
+      readonly cwd?: string;
+    }
+  | {
+      readonly _tag: "CustomCommand";
+      readonly allow: (
+        input: OpenTerminalSession,
+      ) => Effect.Effect<ReadonlyArray<string>, TerminalSessionError>;
+    };
+```
+
 Why this recommendation is good:
 - It matches existing headless React style: widgets depend on a port, not runtime
   details.
 - It keeps Effect-heavy lifecycle in server/runtime code.
 - It lets WebSocket, tRPC subscription, Effect RPC, or CLI all adapt to the same
   contract.
-- It leaves real PTY support as a backend choice rather than a public API rewrite.
+- It leaves command restrictions and real PTY support as backend choices rather
+  than public API rewrites.
 
 Alternatives:
 1. WebSocket protocol first — practical, but leaks transport shape into the core
@@ -207,23 +234,19 @@ Alternatives:
 4. Reuse `ControlPlanePort` — simpler namespace, but terminal sessions are
    stateful streams and deserve a separate port.
 
-Decision steps:
-1. Should v1 define a separate `TerminalSessionPort` instead of extending
-   `ControlPlanePort`? — **Recommended answer:** Yes; terminal sessions are
-   stateful streams, unlike normal control commands.
-2. Should server-side terminal lifecycle be an Effect service? —
-   **Recommended answer:** Yes; it owns runtime dependencies, streams, scopes,
-   process handles, and cleanup.
-3. Should v1 expose terminal events as a transport-neutral event stream? —
-   **Recommended answer:** Yes; WebSocket/CLI/RPC adapters can all map to it.
-4. Should arbitrary browser-provided commands be disallowed by default? —
-   **Recommended answer:** Yes; allow configured shells/targets first.
-5. Should session IDs be gateway-issued after app auth/RBAC? —
-   **Recommended answer:** Yes; browser auth belongs to the app/dashboard server.
-
 Ingredients:
-Yes to all five. Terminal v1 should define a separate, transport-neutral session
-contract with Effect-owned backend lifecycle and browser-safe gateway semantics.
+- Use a separate `TerminalSessionPort`.
+- Use an Effect service for server-side lifecycle.
+- Use transport-neutral terminal events.
+- Let the gateway issue session IDs after app auth/RBAC.
+- Make command restrictions configurable. Recommend named targets as the safe
+  default, but support broad shell/custom-command policies for apps that want
+  close to full control.
+
+Decision:
+Accepted: separate port, Effect service, event stream, gateway-issued sessions.
+Revised: command restrictions are configurable instead of fixed; permissive
+control is an app-owned policy choice.
 
 Acceptance check:
 The API can support a dashboard terminal widget, a future CLI client, and a
