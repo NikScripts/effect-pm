@@ -51,13 +51,11 @@
  *
  * {@link RunResource.make}, {@link RunResource.layer}, and {@link RunResource.Service}
  * publish per-run facts and `RunResourceState` transitions through the
- * domain-specific {@link RunResourceStore} facet's static optional
- * emitters (`recordRunStarted`, `recordRunCompleted`, `recordRunFailed`,
- * `recordStateChange`). When the facet layer is absent each call is a silent
- * no-op; when present the spine persists the event. RunResource wraps these
- * telemetry writes with {@link ProcessStore.catchErrorAndLog} so storage
- * failures are logged without changing the gated effect's success/error
- * channel.
+ * domain-specific {@link RunResourceStore} facet's static optional emitters
+ * (`Run.Started`, `Run.Completed`, `Run.Failed`, `State.Changed`). When the
+ * facet layer is absent each call is a silent no-op; when present the spine
+ * persists the event. Event definitions own storage-failure logging so
+ * telemetry cannot change the gated effect's success/error channel.
  *
  * {@link RunResource.makeRunner} does **not** emit observations — use `make`
  * when you need per-run analytics.
@@ -104,8 +102,8 @@ import {
   Ref,
   Semaphore,
 } from "effect";
+import { RunResourceScope, RunScope } from "./RunResourceScope";
 import { RunResourceStore } from "./store/runResource";
-import { ProcessStore } from "./ProcessStore";
 import {
   configureLayer,
   configureWrapEffectField,
@@ -277,62 +275,29 @@ const makeRunGateEffect = <T, A, E>(
 
   const publishRunStarted = (
     runId: string,
-    occurredAt: number,
     payload: RunResourceRunStartedPayload,
   ): Effect.Effect<void, never, never> =>
-    RunResourceStore.recordRunStarted({
-      id: `${runId}/run-resource.run.started`,
-      resourceId,
-      runId,
-      type: "run-resource.run.started",
-      occurredAt,
-      payload,
-    }).pipe(
-      ProcessStore.catchErrorAndLog({
-        message: "RunResourceStore write failed for run start",
-        level: "warning",
-        annotations: { resourceId, runId },
-      }),
+    RunResourceScope.run(
+      { resourceId },
+      RunScope.run({ runId }, RunResourceStore.Run.Started({ payload })),
     );
 
   const publishRunCompleted = (
     runId: string,
-    occurredAt: number,
     payload: RunResourceRunCompletedPayload,
   ): Effect.Effect<void, never, never> =>
-    RunResourceStore.recordRunCompleted({
-      id: `${runId}/run-resource.run.completed`,
-      resourceId,
-      runId,
-      type: "run-resource.run.completed",
-      occurredAt,
-      payload,
-    }).pipe(
-      ProcessStore.catchErrorAndLog({
-        message: "RunResourceStore write failed for run completion",
-        level: "warning",
-        annotations: { resourceId, runId },
-      }),
+    RunResourceScope.run(
+      { resourceId },
+      RunScope.run({ runId }, RunResourceStore.Run.Completed({ payload })),
     );
 
   const publishRunFailed = (
     runId: string,
-    occurredAt: number,
     payload: RunResourceRunFailedPayload,
   ): Effect.Effect<void, never, never> =>
-    RunResourceStore.recordRunFailed({
-      id: `${runId}/run-resource.run.failed`,
-      resourceId,
-      runId,
-      type: "run-resource.run.failed",
-      occurredAt,
-      payload,
-    }).pipe(
-      ProcessStore.catchErrorAndLog({
-        message: "RunResourceStore write failed for run failure",
-        level: "warning",
-        annotations: { resourceId, runId },
-      }),
+    RunResourceScope.run(
+      { resourceId },
+      RunScope.run({ runId }, RunResourceStore.Run.Failed({ payload })),
     );
 
   const makeInitialState = (observedAt: number): RunResourceState => ({
@@ -374,11 +339,13 @@ const makeRunGateEffect = <T, A, E>(
             current,
           ] as const;
         });
-        yield* RunResourceStore.recordStateChange(change).pipe(
-          ProcessStore.catchErrorAndLog({
-            message: "RunResourceStore write failed for state change",
-            level: "warning",
-            annotations: { resourceId, reason },
+        yield* RunResourceScope.run(
+          { resourceId },
+          RunResourceStore.State.Changed({
+            id: change.id,
+            reason: change.reason,
+            previous: change.previous,
+            current: change.current,
           }),
         );
       });
@@ -420,7 +387,7 @@ const makeRunGateEffect = <T, A, E>(
               waiting: Math.max(0, state.waiting - 1),
               inFlight: state.inFlight + 1,
             }));
-            yield* publishRunStarted(runId, startedAt, { concurrency });
+            yield* publishRunStarted(runId, { concurrency });
 
             return yield* Effect.matchCauseEffect(config.effect(input), {
               onFailure: (cause) =>
@@ -439,7 +406,7 @@ const makeRunGateEffect = <T, A, E>(
                       totalDurationMs: state.totalDurationMs + durationMs,
                     }),
                   );
-                  yield* publishRunFailed(runId, failedAt, {
+                  yield* publishRunFailed(runId, {
                     durationMs,
                     cause: Cause.pretty(cause),
                   });
@@ -456,7 +423,7 @@ const makeRunGateEffect = <T, A, E>(
                     completed: state.completed + 1,
                     totalDurationMs: state.totalDurationMs + durationMs,
                   }));
-                  yield* publishRunCompleted(runId, completedAt, { durationMs });
+                  yield* publishRunCompleted(runId, { durationMs });
                   return value;
                 }),
             });

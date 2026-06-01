@@ -37,6 +37,7 @@ export default defineConfig([
       ResourceConfigure: "src/ResourceConfigure.ts",
       RuntimeStorage: "src/RuntimeStorage.ts",
       State: "src/State.ts",
+      RunResourceScope: "src/RunResourceScope.ts",
       ControlProtocol: "src/ControlProtocol.ts",
       ProcessManager: "src/ProcessManager.ts",
       ControlService: "src/ControlService.ts",

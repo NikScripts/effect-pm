@@ -129,6 +129,11 @@
       "import": "./dist/State.mjs",
       "require": "./dist/State.js"
     },
+    "./RunResourceScope": {
+      "types": "./dist/RunResourceScope.d.ts",
+      "import": "./dist/RunResourceScope.mjs",
+      "require": "./dist/RunResourceScope.js"
+    },
     "./ProcessManager": {
       "types": "./dist/ProcessManager.d.ts",
       "import": "./dist/ProcessManager.mjs",

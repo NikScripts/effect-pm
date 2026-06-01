@@ -111,6 +111,7 @@ export {
 export { Resource } from "./Resource";
 export { ProcessStorage } from "./ProcessStorage";
 export { State } from "./State";
+export { RunResourceScope, RunScope } from "./RunResourceScope";
 export { ControlService } from "./ControlService";
 export { ControlProtocol } from "./ControlProtocol";
 export {

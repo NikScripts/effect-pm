@@ -3,14 +3,13 @@ import { ProcessStorage } from "../src/ProcessStorage";
  * Conformance suite for the {@link RunResourceStore} facet.
  *
  * Verifies (a) the no-op vs persist semantics of the static optional
- * emitters built by `ProcessStore.Service`, (b) explicit
- * failure-isolation through `ProcessStore.catchErrorAndLog`, (c) the `runs()`
- * projection pairing, (d) `byRun` filtering, and (e) `latestState`.
+ * telemetry emitters, (b) the `runs()` projection pairing, (c) `byRun`
+ * filtering, and (d) `latestState`.
  */
 
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Layer, Logger, Option } from "effect";
-import { ProcessStore } from "../src/ProcessStore";
+import { Effect, Option } from "effect";
+import { RunResourceScope, RunScope } from "../src/RunResourceScope";
 import { RunResourceStore } from "../src/store/runResource";
 import type {
   RunResourceFact,
@@ -20,7 +19,6 @@ import type {
   RunResourceState,
   RunResourceStateChange,
 } from "../src/store/runResource";
-import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
 
 const started = (
   resourceId: string,
@@ -82,6 +80,41 @@ const state = (
   ...overrides,
 });
 
+const emitStartedFact = (fact: RunResourceRunStartedFact): Effect.Effect<void> =>
+  RunResourceScope.run(
+    { resourceId: fact.resourceId },
+    RunScope.run({ runId: fact.runId }, RunResourceStore.Run.Started({
+      payload: fact.payload,
+    })),
+  );
+
+const emitCompletedFact = (fact: RunResourceRunCompletedFact): Effect.Effect<void> =>
+  RunResourceScope.run(
+    { resourceId: fact.resourceId },
+    RunScope.run({ runId: fact.runId }, RunResourceStore.Run.Completed({
+      payload: fact.payload,
+    })),
+  );
+
+const emitFailedFact = (fact: RunResourceRunFailedFact): Effect.Effect<void> =>
+  RunResourceScope.run(
+    { resourceId: fact.resourceId },
+    RunScope.run({ runId: fact.runId }, RunResourceStore.Run.Failed({
+      payload: fact.payload,
+    })),
+  );
+
+const emitStateChange = (change: RunResourceStateChange): Effect.Effect<void> =>
+  RunResourceScope.run(
+    { resourceId: change.resourceId },
+    RunResourceStore.State.Changed({
+      id: change.id,
+      reason: change.reason,
+      previous: change.previous,
+      current: change.current,
+    }),
+  );
+
 describe("RunResourceStore — static optional emitters", () => {
   it.live("no-ops silently when the facet layer is absent", () =>
     Effect.gen(function* () {
@@ -90,7 +123,7 @@ describe("RunResourceStore — static optional emitters", () => {
         "@test/Absent/run/1",
         1_700_000_000_000,
       );
-      yield* RunResourceStore.recordRunStarted(fact);
+      yield* emitStartedFact(fact);
       // No assertion required: the emit must not throw / fail.
       expect(true).toBe(true);
     }),
@@ -100,10 +133,10 @@ describe("RunResourceStore — static optional emitters", () => {
     Effect.gen(function* () {
       const resourceId = "@test/PresentFacet";
       const runId = `${resourceId}/run/1`;
-      yield* RunResourceStore.recordRunStarted(
+      yield* emitStartedFact(
         started(resourceId, runId, 1_700_000_000_000),
       );
-      yield* RunResourceStore.recordRunCompleted(
+      yield* emitCompletedFact(
         completed(resourceId, runId, 1_700_000_000_010, 10),
       );
       const facet = yield* RunResourceStore;
@@ -114,86 +147,24 @@ describe("RunResourceStore — static optional emitters", () => {
       ]);
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
-
-  it.live("surfaces write failures unless explicitly caught and logged", () => {
-    const captured: string[] = [];
-    const captureLogger = Logger.make<unknown, void>(({ message }) => {
-      const text =
-        typeof message === "string" ? message : JSON.stringify(message);
-      captured.push(text);
-    });
-    const failingFacet: RunResourceStore.Type = {
-      recordRunStarted: () =>
-        Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-fact" }),
-        ),
-      recordRunCompleted: () =>
-        Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-fact" }),
-        ),
-      recordRunFailed: () =>
-        Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-fact" }),
-        ),
-      recordStateChange: () =>
-        Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-state" }),
-        ),
-      recordFactBatch: () =>
-        Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-batch" }),
-        ),
-      recordStateChangeBatch: () =>
-        Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-batch" }),
-        ),
-      facts: () => Effect.succeed([]),
-      stateHistory: () => Effect.succeed([]),
-      latestState: () => Effect.succeed(Option.none()),
-      runs: () => Effect.succeed([]),
-      byRun: () => Effect.succeed([]),
-    };
-    const write = RunResourceStore.recordRunStarted(
-      started("@test/Failing", "@test/Failing/run/1", 1),
-    );
-    return Effect.gen(function* () {
-      const error = yield* Effect.flip(write);
-      expect(error).toBeInstanceOf(ProcessStoreReadonlyRecordError);
-      yield* write.pipe(
-        ProcessStore.catchErrorAndLog({
-          message: "test run-resource write failed",
-          annotations: { test: "run-resource-static" },
-        }),
-      );
-      expect(captured.some((m) => m.includes("test run-resource write failed"))).toBe(true);
-    }).pipe(
-      Effect.provide(
-        Layer.mergeAll(
-          Layer.succeed(RunResourceStore, failingFacet),
-          Logger.layer([captureLogger], { mergeWithExisting: false }),
-        ),
-      ),
-    );
-  });
 });
 
 describe("RunResourceStore — projections", () => {
   const resourceId = "@test/Projections";
   const t = (ms: number) => 1_700_000_000_000 + ms;
   const fixtures = Effect.gen(function* () {
-    const facet = yield* RunResourceStore;
     // Run 1: started + completed.
-    yield* facet.recordRunStarted(started(resourceId, `${resourceId}/run/1`, t(0)));
-    yield* facet.recordRunCompleted(
+    yield* emitStartedFact(started(resourceId, `${resourceId}/run/1`, t(0)));
+    yield* emitCompletedFact(
       completed(resourceId, `${resourceId}/run/1`, t(50), 50),
     );
     // Run 2: started + failed.
-    yield* facet.recordRunStarted(started(resourceId, `${resourceId}/run/2`, t(100)));
-    yield* facet.recordRunFailed(
+    yield* emitStartedFact(started(resourceId, `${resourceId}/run/2`, t(100)));
+    yield* emitFailedFact(
       failed(resourceId, `${resourceId}/run/2`, t(160), 60, "boom"),
     );
     // Run 3: started, never ended (in-flight).
-    yield* facet.recordRunStarted(started(resourceId, `${resourceId}/run/3`, t(200)));
+    yield* emitStartedFact(started(resourceId, `${resourceId}/run/3`, t(200)));
     // State history.
     const previous = state(resourceId, t(0));
     const current = state(resourceId, t(160), {
@@ -201,7 +172,7 @@ describe("RunResourceStore — projections", () => {
       failed: 1,
       totalDurationMs: 110,
     });
-    yield* facet.recordStateChange({
+    yield* emitStateChange({
       id: `${resourceId}/state/1`,
       resourceId,
       changedAt: t(160),
@@ -270,13 +241,13 @@ describe("RunResourceStore — for(resourceId) bound API", () => {
   it.live("runs(), facts(), latestState() narrow to the bound scope", () =>
     Effect.gen(function* () {
       const otherId = "@test/BoundOther";
-      yield* RunResourceStore.recordRunStarted(
+      yield* emitStartedFact(
         started(resourceId, `${resourceId}/run/1`, t(0)),
       );
-      yield* RunResourceStore.recordRunCompleted(
+      yield* emitCompletedFact(
         completed(resourceId, `${resourceId}/run/1`, t(50), 50),
       );
-      yield* RunResourceStore.recordRunStarted(
+      yield* emitStartedFact(
         started(otherId, `${otherId}/run/1`, t(0)),
       );
 
@@ -288,7 +259,7 @@ describe("RunResourceStore — for(resourceId) bound API", () => {
       ).toBe(true);
       expect(runs.every((run) => run.resourceId === resourceId)).toBe(true);
 
-      yield* RunResourceStore.recordStateChange({
+      yield* emitStateChange({
         id: `${resourceId}/state/1`,
         resourceId,
         changedAt: t(60),
@@ -309,7 +280,7 @@ describe("RunResourceStore — for(resourceId) bound API", () => {
   it.live("byRun() narrows to the bound scope and the requested runId", () =>
     Effect.gen(function* () {
       const runIdA = `${resourceId}/run/A`;
-      yield* RunResourceStore.recordRunStarted(
+      yield* emitStartedFact(
         started(resourceId, runIdA, t(0)),
       );
       const bound = yield* RunResourceStore.for(resourceId);
@@ -325,10 +296,10 @@ describe("RunResourceStore — for(resourceId) bound API", () => {
 
   it.live("facts({ types }) filter still works through the bound API", () =>
     Effect.gen(function* () {
-      yield* RunResourceStore.recordRunStarted(
+      yield* emitStartedFact(
         started(resourceId, `${resourceId}/run/types`, t(0)),
       );
-      yield* RunResourceStore.recordRunCompleted(
+      yield* emitCompletedFact(
         completed(resourceId, `${resourceId}/run/types`, t(10), 10),
       );
       const bound = yield* RunResourceStore.for(resourceId);
@@ -350,12 +321,14 @@ describe("RunResourceStore — phantom type accessors", () => {
       // Type-only smoke check: if these aliases ever drift, the file fails
       // to compile rather than the test failing at runtime.
       const fullShape: RunResourceStore.Type = {
-        recordRunStarted: () => Effect.void,
-        recordRunCompleted: () => Effect.void,
-        recordRunFailed: () => Effect.void,
-        recordStateChange: () => Effect.void,
-        recordFactBatch: () => Effect.void,
-        recordStateChangeBatch: () => Effect.void,
+        Run: {
+          Started: () => Effect.void,
+          Completed: () => Effect.void,
+          Failed: () => Effect.void,
+        },
+        State: {
+          Changed: () => Effect.void,
+        },
         facts: () => Effect.succeed([]),
         stateHistory: () => Effect.succeed([]),
         latestState: () => Effect.succeed(Option.none()),
@@ -363,12 +336,8 @@ describe("RunResourceStore — phantom type accessors", () => {
         byRun: () => Effect.succeed([]),
       };
       const emitShape: RunResourceStore.EmitType = {
-        recordRunStarted: fullShape.recordRunStarted,
-        recordRunCompleted: fullShape.recordRunCompleted,
-        recordRunFailed: fullShape.recordRunFailed,
-        recordStateChange: fullShape.recordStateChange,
-        recordFactBatch: fullShape.recordFactBatch,
-        recordStateChangeBatch: fullShape.recordStateChangeBatch,
+        Run: fullShape.Run,
+        State: fullShape.State,
       };
       const boundShape: RunResourceStore.IdentifierType = {
         facts: () => Effect.succeed([]),
@@ -377,8 +346,8 @@ describe("RunResourceStore — phantom type accessors", () => {
         runs: () => Effect.succeed([]),
         byRun: () => Effect.succeed([]),
       };
-      expect(typeof fullShape.recordRunStarted).toBe("function");
-      expect(typeof emitShape.recordStateChange).toBe("function");
+      expect(typeof fullShape.Run.Started).toBe("function");
+      expect(typeof emitShape.State.Changed).toBe("function");
       expect(typeof boundShape.runs).toBe("function");
     }),
   );

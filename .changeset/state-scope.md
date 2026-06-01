@@ -9,3 +9,4 @@ Add the public `State` scope factory for telemetry state.
 - `ProcessScope` provides the built-in process-run scope used by process execution telemetry
 - `ProcessLifecycleScope` provides the built-in process lifecycle scope used by process lifecycle telemetry
 - `ProcessGroupScope` / `ProcessGroupMemberScope` provide built-in group member lifecycle scopes
+- `RunResourceScope` / `RunScope` provide built-in run resource telemetry scopes

@@ -69,8 +69,8 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 |--------|--------|--------|
 | `Process.Execution.Completed` / `.Failed` / `.Interrupted` | `yield* ProcessExecutionStore.Execution.*` (zero-arg; {@link RuntimeEmitContext}) | `yield* ProcessExecutionStore` → `.executions` |
 | `process.lifecycle.changed` | static `lifecycleChanged` / `recordMember*` | `yield* ProcessLifecycleStore` / `ProcessGroupStore` → read methods |
-| `run-resource.fact.recorded` | static `recordRun*` | `yield* RunResourceStore` → `.facts`, `.runs`, `.byRun` |
-| `run-resource.state.changed` | static `recordStateChange` | `yield* RunResourceStore` → `.stateHistory`, `.latestState` |
+| `RunResource.Run.Started` / `.Completed` / `.Failed` | `RunResource` → `RunResourceStore.Run.*` | `yield* RunResourceStore` → `.facts`, `.runs`, `.byRun` |
+| `RunResource.State.Changed` | `RunResource` → `RunResourceStore.State.Changed` | `yield* RunResourceStore` → `.stateHistory`, `.latestState` |
 | `log.entry` | static `record` / `recordBatch` (relay) | `yield* LogStore` → `.load`, `.query` |
 | `queue.entry.<status>` × 9 | `QueueResource` worker → static `recordEntry` / `recordEntryBatch` | `yield* QueueResourceStore` → `.entries`, `.entriesByKey` |
 | `queue.lifecycle.<tag>` × 6 | `QueueResource` worker → static `recordLifecycle` / `recordLifecycleBatch` (Started, Paused, Resumed, Shutdown, Cleared, Drained) | `.lifecycle` |

@@ -13,22 +13,21 @@
  *
  * | Concern | Where |
  * |--------|-------|
- * | Wire types | `run-resource.fact.recorded`, `run-resource.state.changed` |
- * | Static emit | `recordRunStarted` / `recordRunCompleted` / `recordRunFailed` / `recordStateChange` (+ `*Batch`) |
+ * | Wire types | `RunResource.Run.Started` / `.Completed` / `.Failed`, `RunResource.State.Changed` |
+ * | Static emit | `Run.Started({ payload })` / `Run.Completed({ payload })` / `Run.Failed({ payload })` / `State.Changed({ ... })` |
  * | Reads (instance) | `facts(query?)`, `stateHistory(query?)`, `latestState(id)`, `runs(id)`, `byRun(runId)` |
  * | Reads (bound, `for(resourceId)`) | `facts(query?)`, `stateHistory(query?)`, `latestState()`, `runs()`, `byRun(runId)` |
  *
  * ## Storage shape
  *
- * Two record types share `processType: "run-resource"` and
+ * Run resource records share `processType: "RunResource"` and
  * `processId: <resourceId>`:
  *
- * - `run-resource.fact.recorded` — `payload = { fact: <fact-as-json> }`.
- *   The fact subtype (`run-resource.run.started` / `.completed`
- *   / `.failed`) and `runId` live inside the payload (not on indexed
- *   columns); queries by `runId` and inner type post-filter decoded
- *   facts.
- * - `run-resource.state.changed` — `payload = { change: <change-as-json> }`.
+ * - `RunResource.Run.*` — `payload = { runId, occurredAt, payload }`.
+ *   Decoders project these PascalCase wires back to the public
+ *   `run-resource.run.*` fact discriminators.
+ * - `RunResource.State.Changed` — `payload = { id, changedAt, reason,
+ *   previous, current }`.
  *
  * ## Compose
  *
@@ -56,7 +55,7 @@
  * @module store/RunResource
  */
 
-import { DateTime, Effect, Option } from "effect";
+import { DateTime, Effect, Option, Schema } from "effect";
 import {
   applyQueryOpts,
   byTimestampDesc,
@@ -65,13 +64,13 @@ import {
   isString,
   recordAttributesObject,
   runtimeRecordQuery,
-  toJsonValue,
 } from "../internal/store/helpers";
 import type { ProcessStoreSpine } from "../internal/store/spine";
-import { ProcessStore } from "../ProcessStore";
-import type { JsonValue, QueryOpts } from "../ProcessStoreEvent";
+import { ProcessStore, Telemetry } from "../ProcessStore";
+import type { QueryOpts } from "../ProcessStoreEvent";
 import { ProcessId, Type } from "../Query";
 import type { RuntimeRecord, RuntimeStorageOperationalError } from "../RuntimeStorage";
+import { RunResourceScope, RunScope } from "../RunResourceScope";
 
 // ============================================================================
 // Public types
@@ -266,9 +265,25 @@ export interface RunResourceRun {
 // Wire codec (facet-owned)
 // ============================================================================
 
-const RUN_RESOURCE_TYPE = "run-resource";
+const RUN_RESOURCE_TYPE = "RunResource";
 const FACT_RECORDED_TYPE = "run-resource.fact.recorded";
 const STATE_CHANGED_TYPE = "run-resource.state.changed";
+const RUN_STARTED_WIRE = "RunResource.Run.Started";
+const RUN_COMPLETED_WIRE = "RunResource.Run.Completed";
+const RUN_FAILED_WIRE = "RunResource.Run.Failed";
+const STATE_CHANGED_WIRE = "RunResource.State.Changed";
+
+const factRecordTypes = [
+  FACT_RECORDED_TYPE,
+  RUN_STARTED_WIRE,
+  RUN_COMPLETED_WIRE,
+  RUN_FAILED_WIRE,
+] as const;
+
+const stateRecordTypes = [
+  STATE_CHANGED_TYPE,
+  STATE_CHANGED_WIRE,
+] as const;
 
 const RUN_RESOURCE_FACT_TYPES: ReadonlyArray<RunResourceFactType> = [
   "run-resource.run.started",
@@ -297,76 +312,6 @@ const isStateChangeReason = (
 ): value is RunResourceStateChangeReason =>
   isString(value) &&
   RUN_RESOURCE_STATE_CHANGE_REASONS.some((reason) => reason === value);
-
-const factPayloadAsJson = (fact: RunResourceFact): JsonValue => {
-  switch (fact.type) {
-    case "run-resource.run.started":
-      return { concurrency: fact.payload.concurrency };
-    case "run-resource.run.completed":
-      return { durationMs: fact.payload.durationMs };
-    case "run-resource.run.failed":
-      return {
-        durationMs: fact.payload.durationMs,
-        cause: fact.payload.cause,
-      };
-  }
-};
-
-const factAsJson = (fact: RunResourceFact): JsonValue => ({
-  id: fact.id,
-  resourceId: fact.resourceId,
-  runId: fact.runId,
-  type: fact.type,
-  occurredAt: fact.occurredAt,
-  payload: factPayloadAsJson(fact),
-  ...(fact.attributes !== undefined
-    ? { attributes: toJsonValue(fact.attributes) }
-    : {}),
-});
-
-const stateAsJson = (state: RunResourceState): JsonValue => ({
-  resourceId: state.resourceId,
-  observedAt: state.observedAt,
-  configVersion: state.configVersion,
-  concurrency: state.concurrency,
-  waiting: state.waiting,
-  inFlight: state.inFlight,
-  completed: state.completed,
-  failed: state.failed,
-  interrupted: state.interrupted,
-  totalDurationMs: state.totalDurationMs,
-});
-
-const stateChangeAsJson = (change: RunResourceStateChange): JsonValue => ({
-  id: change.id,
-  resourceId: change.resourceId,
-  changedAt: change.changedAt,
-  reason: change.reason,
-  previous: change.previous === null ? null : stateAsJson(change.previous),
-  current: stateAsJson(change.current),
-});
-
-const makeFactRecord = (
-  fact: RunResourceFact,
-): Omit<RuntimeRecord, "runId" | "createdAt"> => ({
-  id: `run-resource.fact/${fact.id}`,
-  type: FACT_RECORDED_TYPE,
-  occurredAt: DateTime.makeUnsafe(fact.occurredAt),
-  processType: RUN_RESOURCE_TYPE,
-  processId: fact.resourceId,
-  payload: { fact: factAsJson(fact) },
-});
-
-const makeStateChangeRecord = (
-  change: RunResourceStateChange,
-): Omit<RuntimeRecord, "runId" | "createdAt"> => ({
-  id: `run-resource.state/${change.id}`,
-  type: STATE_CHANGED_TYPE,
-  occurredAt: DateTime.makeUnsafe(change.changedAt),
-  processType: RUN_RESOURCE_TYPE,
-  processId: change.resourceId,
-  payload: { change: stateChangeAsJson(change) },
-});
 
 // ============================================================================
 // Decoders
@@ -500,8 +445,61 @@ const decodeStateChangeValue = (
 };
 
 const recordToFact = (record: RuntimeRecord): RunResourceFact | null => {
-  if (record.type !== FACT_RECORDED_TYPE) return null;
   if (record.processType !== RUN_RESOURCE_TYPE) return null;
+  if (record.type !== FACT_RECORDED_TYPE) {
+    if (!isRecord(record.payload)) return null;
+    const runId = record.payload["runId"];
+    const occurredAt = record.payload["occurredAt"];
+    const payload = record.payload["payload"];
+    if (!isString(runId) || !isFiniteNumber(occurredAt) || !isRecord(payload)) {
+      return null;
+    }
+    const attributes = recordAttributesObject(record.attributes);
+    switch (record.type) {
+      case RUN_STARTED_WIRE: {
+        const concurrency = payload["concurrency"];
+        if (!isFiniteNumber(concurrency)) return null;
+        return {
+          id: record.id,
+          resourceId: record.processId,
+          runId,
+          type: "run-resource.run.started",
+          occurredAt,
+          payload: { concurrency },
+          ...(attributes === undefined ? {} : { attributes }),
+        };
+      }
+      case RUN_COMPLETED_WIRE: {
+        const durationMs = payload["durationMs"];
+        if (!isFiniteNumber(durationMs)) return null;
+        return {
+          id: record.id,
+          resourceId: record.processId,
+          runId,
+          type: "run-resource.run.completed",
+          occurredAt,
+          payload: { durationMs },
+          ...(attributes === undefined ? {} : { attributes }),
+        };
+      }
+      case RUN_FAILED_WIRE: {
+        const durationMs = payload["durationMs"];
+        const cause = payload["cause"];
+        if (!isFiniteNumber(durationMs) || !isString(cause)) return null;
+        return {
+          id: record.id,
+          resourceId: record.processId,
+          runId,
+          type: "run-resource.run.failed",
+          occurredAt,
+          payload: { durationMs, cause },
+          ...(attributes === undefined ? {} : { attributes }),
+        };
+      }
+      default:
+        return null;
+    }
+  }
   const payload = record.payload;
   if (!isRecord(payload)) return null;
   return decodeFactValue(payload["fact"]);
@@ -510,8 +508,34 @@ const recordToFact = (record: RuntimeRecord): RunResourceFact | null => {
 const recordToStateChange = (
   record: RuntimeRecord,
 ): RunResourceStateChange | null => {
-  if (record.type !== STATE_CHANGED_TYPE) return null;
   if (record.processType !== RUN_RESOURCE_TYPE) return null;
+  if (record.type === STATE_CHANGED_WIRE) {
+    const decoded = decodeStateChangeValue(record.payload);
+    if (decoded !== null) return decoded;
+    if (!isRecord(record.payload)) return null;
+    const id = record.payload["id"];
+    const reason = record.payload["reason"];
+    const previousRaw = record.payload["previous"];
+    const previous = previousRaw === null ? null : decodeStateValue(previousRaw);
+    const current = decodeStateValue(record.payload["current"]);
+    if (
+      !isString(id) ||
+      !isStateChangeReason(reason) ||
+      (previousRaw !== null && previous === null) ||
+      current === null
+    ) {
+      return null;
+    }
+    return {
+      id,
+      resourceId: record.processId,
+      changedAt: DateTime.toEpochMillis(record.occurredAt),
+      reason,
+      previous,
+      current,
+    };
+  }
+  if (record.type !== STATE_CHANGED_TYPE) return null;
   const payload = record.payload;
   if (!isRecord(payload)) return null;
   return decodeStateChangeValue(payload["change"]);
@@ -646,7 +670,7 @@ const factPredicates = (
   query: RunResourceFactQuery | undefined,
 ): import("../Query").RuntimeRecordPredicate[] => {
   const preds: import("../Query").RuntimeRecordPredicate[] = [
-    Type.equals(FACT_RECORDED_TYPE),
+    Type.in(factRecordTypes),
   ];
   if (query?.resourceId !== undefined) {
     preds.push(ProcessId.equals(query.resourceId));
@@ -658,7 +682,7 @@ const stateChangedPredicates = (
   resourceId: string | undefined,
 ): import("../Query").RuntimeRecordPredicate[] => {
   const preds: import("../Query").RuntimeRecordPredicate[] = [
-    Type.equals(STATE_CHANGED_TYPE),
+    Type.in(stateRecordTypes),
   ];
   if (resourceId !== undefined) {
     preds.push(ProcessId.equals(resourceId));
@@ -680,6 +704,69 @@ const factWindowOpts = (
   return out;
 };
 
+const RunResourceStateSchema = Schema.Struct({
+  resourceId: Schema.String,
+  observedAt: Schema.Number,
+  configVersion: Schema.Number,
+  concurrency: Schema.Number,
+  waiting: Schema.Number,
+  inFlight: Schema.Number,
+  completed: Schema.Number,
+  failed: Schema.Number,
+  interrupted: Schema.Number,
+  totalDurationMs: Schema.Number,
+});
+
+const RunState = RunScope.Schema.State;
+
+class RunResourceRunStarted extends Telemetry.Schema<RunResourceRunStarted>()(
+  RunScope,
+)({
+  runId: RunState.Run.runId,
+  occurredAt: Telemetry.terminal.clockMillis,
+  payload: Schema.Struct({
+    concurrency: Schema.Number,
+  }),
+}) {}
+
+class RunResourceRunCompleted extends Telemetry.Schema<RunResourceRunCompleted>()(
+  RunScope,
+)({
+  runId: RunState.Run.runId,
+  occurredAt: Telemetry.terminal.clockMillis,
+  payload: Schema.Struct({
+    durationMs: Schema.Number,
+  }),
+}) {}
+
+class RunResourceRunFailed extends Telemetry.Schema<RunResourceRunFailed>()(
+  RunScope,
+)({
+  runId: RunState.Run.runId,
+  occurredAt: Telemetry.terminal.clockMillis,
+  payload: Schema.Struct({
+    durationMs: Schema.Number,
+    cause: Schema.String,
+  }),
+}) {}
+
+class RunResourceStateChanged extends Telemetry.Schema<RunResourceStateChanged>()(
+  RunResourceScope,
+)({
+  id: Schema.String,
+  changedAt: Telemetry.terminal.clockMillis,
+  reason: Schema.Literals([
+    "run-resource.run.waiting",
+    "run-resource.run.started",
+    "run-resource.run.completed",
+    "run-resource.run.failed",
+    "run-resource.run.interrupted",
+    "run-resource.run.wait.interrupted",
+  ]),
+  previous: Schema.NullOr(RunResourceStateSchema),
+  current: RunResourceStateSchema,
+}) {}
+
 // ============================================================================
 // Facet
 // ============================================================================
@@ -687,13 +774,9 @@ const factWindowOpts = (
 /**
  * `RunResource` storage facet (see module doc).
  *
- * Instance methods (resolved via `yield* RunResourceStore`) return
- * the raw spine error channel (`ProcessStoreWriteError`) so user-provided
- * mocks supplied via `Effect.provideService` / `Layer.succeed` can exercise
- * failure paths directly. The static optional emitters on the class
- * (`RunResourceStore.recordRunStarted` etc.) no-op when the facet is
- * absent and otherwise surface write failures; callers that need telemetry-only
- * writes should pipe through `ProcessStore.catchErrorAndLog`.
+ * Static optional telemetry emitters no-op when the facet is absent. Event
+ * definitions own storage-failure logging through `Telemetry.logWarning`, so
+ * run telemetry never changes the gated effect's success/error channel.
  *
  * @public
  */
@@ -701,21 +784,37 @@ export class RunResourceStore extends ProcessStore.Service<
   RunResourceStore
 >()(
   "@nikscripts/effect-pm/store/runResource/RunResourceStore",
-  ProcessStore.record({
-    recordRunStarted: (s) => (fact: RunResourceRunStartedFact) =>
-      s.create(makeFactRecord(fact)),
-    recordRunCompleted: (s) => (fact: RunResourceRunCompletedFact) =>
-      s.create(makeFactRecord(fact)),
-    recordRunFailed: (s) => (fact: RunResourceRunFailedFact) =>
-      s.create(makeFactRecord(fact)),
-    recordStateChange: (s) => (change: RunResourceStateChange) =>
-      s.create(makeStateChangeRecord(change)),
-    recordFactBatch: (s) => (facts: ReadonlyArray<RunResourceFact>) =>
-      s.createBatch(facts.map(makeFactRecord)),
-    recordStateChangeBatch:
-      (s) => (changes: ReadonlyArray<RunResourceStateChange>) =>
-        s.createBatch(changes.map(makeStateChangeRecord)),
-  }),
+  ProcessStore.telemetry(RunResourceScope)(
+    Telemetry.namespace("RunResource"),
+    Telemetry.tag("Run")(
+      Telemetry.event("Started", RunResourceRunStarted).pipe(
+        Telemetry.logWarning(
+          "RunResourceStore write failed for run start",
+          ({ runId }) => ({ runId: String(runId) }),
+        ),
+      ),
+      Telemetry.event("Completed", RunResourceRunCompleted).pipe(
+        Telemetry.logWarning(
+          "RunResourceStore write failed for run completion",
+          ({ runId }) => ({ runId: String(runId) }),
+        ),
+      ),
+      Telemetry.event("Failed", RunResourceRunFailed).pipe(
+        Telemetry.logWarning(
+          "RunResourceStore write failed for run failure",
+          ({ runId }) => ({ runId: String(runId) }),
+        ),
+      ),
+    ),
+    Telemetry.tag("State")(
+      Telemetry.event("Changed", RunResourceStateChanged).pipe(
+        Telemetry.logWarning(
+          "RunResourceStore write failed for state change",
+          ({ reason }) => ({ reason: String(reason) }),
+        ),
+      ),
+    ),
+  ),
   ProcessStore.query((s) => ({
     facts: (query?: RunResourceFactQuery) => readFacts(s, query),
     stateHistory: (query?: RunResourceStateHistoryQuery) =>
@@ -734,7 +833,16 @@ export class RunResourceStore extends ProcessStore.Service<
     byRun: (runId: string) =>
       readFacts(s, { resourceId, runId }),
   })),
-) {}
+) {
+  declare static Run: {
+    readonly Started: (input: unknown) => Effect.Effect<void>;
+    readonly Completed: (input: unknown) => Effect.Effect<void>;
+    readonly Failed: (input: unknown) => Effect.Effect<void>;
+  };
+  declare static State: {
+    readonly Changed: (input: unknown) => Effect.Effect<void>;
+  };
+}
 
 const readFacts = (
   s: ProcessStoreSpine,
