@@ -206,7 +206,7 @@ export class ProcessLifecycleStore extends ProcessStore.Service<
         yield* s.create(makeProcessLifecycleRecord(input, occurredAtMs));
       }),
   }),
-  ProcessStore.read((s) => ({
+  ProcessStore.query((s) => ({
     lifecycle: (processId: string, opts?: QueryOpts) =>
       s
         .read(
@@ -252,7 +252,7 @@ export class ProcessLifecycleStore extends ProcessStore.Service<
         return latest;
       }),
   })),
-  ProcessStore.withIdentifier((processId, s) => ({
+  ProcessStore.for((processId, s) => ({
     lifecycle: (opts?: QueryOpts) =>
       s
         .read(

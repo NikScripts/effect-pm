@@ -7,11 +7,12 @@
  * are declared with `ProcessStore.Service<Self>()(id, ...sections)`,
  * where each section is a partial of the facet:
  *
- * - {@link ProcessStore.record} — write API (becomes per-method static
- *   optional emitters AND instance methods).
- * - {@link ProcessStore.read} — instance read API (yield the facet).
- * - {@link ProcessStore.withIdentifier} — optional identifier-bound
- *   API exposed via `Facet.for(id)` / `Facet.withIdentifier(id)`.
+ * - {@link ProcessStore.record} — flat write API (legacy facets; per-method
+ *   static emitters).
+ * - {@link ProcessStore.telemetry} — nested telemetry tree (tag/event DSL).
+ * - {@link ProcessStore.query} — instance query API (yield the facet).
+ * - {@link ProcessStore.for} — optional identifier-bound queries via
+ *   `Facet.for(id)`.
  * - {@link ProcessStore.catchErrorAndLog} — explicit best-effort boundary
  *   for telemetry writes that should log storage failures instead of
  *   failing process / queue work.
@@ -27,7 +28,7 @@
  *   ProcessStore.record({
  *     recordThing: (s) => (fact: ThingFact) => s.create(makeThingRecord(fact)),
  *   }),
- *   ProcessStore.read((s) => ({
+ *   ProcessStore.query((s) => ({
  *     things: (q?: ThingQuery) =>
  *       s.read(runtimeRecordQuery(thingPredicates(q), q?.opts))
  *        .pipe(Effect.map(decodeThings)),
@@ -58,14 +59,28 @@
 import {
   catchErrorAndLog,
   defineProcessStoreFacet,
-  processStoreRead,
+  processStoreFor,
+  processStoreQuery,
   processStoreRecord,
-  processStoreWithIdentifier,
+  processStoreTelemetry,
   type ProcessStoreCatchErrorAndLogOptions,
   type ProcessStoreFacetEmitShape,
   type ProcessStoreFacetIdentifierShape,
+  type ProcessStoreFacetQueryShape,
   type ProcessStoreFacetShape,
 } from "./internal/store/service";
+import { Telemetry as TelemetryBuilders } from "./internal/store/telemetry";
+
+/**
+ * Telemetry event DSL — `namespace`, `tag`, `event`, `Schema`, `terminal`, pipes.
+ *
+ * @remarks
+ * Pass builders to {@link ProcessStore.telemetry}. Import as `Telemetry`, not
+ * `ProcessStore.Telemetry`.
+ *
+ * @public
+ */
+export const Telemetry = TelemetryBuilders;
 
 export type {
   AnalyticsEventBase,
@@ -83,21 +98,14 @@ export {
 /**
  * Builder DSL for storage facets.
  *
- * - `Service` — define a new facet (returns a `Context.Service` class).
- * - `record({ ... })` — declare write methods (factory map).
- * - `read((s) => ({ ... }))` — declare read methods.
- * - `withIdentifier((id, s) => ({ ... }))` — declare identifier-bound
- *   methods, surfaced as `Facet.for(id)` / `Facet.withIdentifier(id)`.
- * - `catchErrorAndLog(options)` — pipeable helper for explicit best-effort
- *   storage writes.
- *
  * @public
  */
 export const ProcessStore = {
   Service: defineProcessStoreFacet,
   record: processStoreRecord,
-  read: processStoreRead,
-  withIdentifier: processStoreWithIdentifier,
+  telemetry: processStoreTelemetry,
+  query: processStoreQuery,
+  for: processStoreFor,
   catchErrorAndLog,
 } as const;
 
@@ -105,27 +113,16 @@ export const ProcessStore = {
  * Type-level helpers merged into the {@link ProcessStore} value via
  * declaration merging.
  *
- * Facet modules expose namespace aliases so callers can spell out a
- * structural mock or a dependency type without importing internal
- * symbols:
- *
- * - `Facet.Type` — full service shape (record + read merged).
- * - `Facet.EmitType` — record-section shape only.
- * - `Facet.IdentifierType` — bound shape returned by
- *   `Facet.for(id)`.
- *
- * @example
- * ```ts
- * const mock: QueueResourceStore.Type = { ... };
- * const bound: QueueResourceStore.IdentifierType = { ... };
- * ```
- *
  * @public
  */
 export declare namespace ProcessStore {
   export namespace Service {
     export type Type<T> = ProcessStoreFacetShape<T>;
-    export type EmitType<T> = ProcessStoreFacetEmitShape<T>;
+    export type Shape<T> = ProcessStoreFacetShape<T>;
+    export type Emit<T> = ProcessStoreFacetEmitShape<T>;
+    export type EmitType<T> = Emit<T>;
+    export type Query<T> = ProcessStoreFacetQueryShape<T>;
+    export type QueryType<T> = Query<T>;
     export type IdentifierType<T> = ProcessStoreFacetIdentifierShape<T>;
   }
   export type CatchErrorAndLogOptions = ProcessStoreCatchErrorAndLogOptions;

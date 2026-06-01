@@ -130,7 +130,7 @@ export class ProcessGroupStore extends ProcessStore.Service<
   ProcessGroupStore
 >()(
   "@nikscripts/effect-pm/store/processGroup/ProcessGroupStore",
-  ProcessStore.read((s) => ({
+  ProcessStore.query((s) => ({
     lifecycleByGroup: (groupId: string, opts?: QueryOpts) =>
       s
         .read(
@@ -142,7 +142,7 @@ export class ProcessGroupStore extends ProcessStore.Service<
           ),
         ),
   })),
-  ProcessStore.withIdentifier((groupId, s) => ({
+  ProcessStore.for((groupId, s) => ({
     lifecycle: (opts?: QueryOpts) =>
       s
         .read(

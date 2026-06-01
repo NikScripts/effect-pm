@@ -303,6 +303,7 @@ export type {
 // Process Store
 export {
   ProcessStore,
+  Telemetry,
   ProcessStoreDuplicateRecordError,
   ProcessStoreReadonlyRecordError,
   ProcessStoreStorageError,
@@ -310,6 +311,14 @@ export {
   type ProcessStoreWriteError,
   type QueryOpts,
 } from "./ProcessStore";
+export {
+  RuntimeEmitContext,
+  getRuntimeEmitContext,
+  withRuntimeEmitContext,
+  requireRuntimeEmitContext,
+  RuntimeEmitContextMissingError,
+  type RuntimeEmitContextShape,
+} from "./RuntimeEmitContext";
 
 export { LogStore } from "./store/log";
 export type { LogStoreApi } from "./store/log";
@@ -321,9 +330,9 @@ export type {
   ProcessExecutionCompletedEvent,
   ProcessExecutionFinishInput,
   ProcessExecutionQuery,
-  ProcessExecutionScopedFinishInput,
   ProcessExecutionScopedQuery,
   ProcessExecutionStatus,
+  ProcessExecutionWireType,
 } from "./store/processExecution";
 export type {
   ProcessLifecycleChangedEvent,

@@ -67,7 +67,7 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 
 | `type` | Writer | Reader |
 |--------|--------|--------|
-| `process.execution.completed` | static `recordCompleted` / `recordFailed` / `recordInterrupted` | `yield* ProcessExecutionStore` → `.executions` |
+| `Process.Execution.Completed` / `.Failed` / `.Interrupted` | `yield* ProcessExecutionStore.Execution.*` (zero-arg; {@link RuntimeEmitContext}) | `yield* ProcessExecutionStore` → `.executions` |
 | `process.lifecycle.changed` | static `lifecycleChanged` / `recordMember*` | `yield* ProcessLifecycleStore` / `ProcessGroupStore` → read methods |
 | `run-resource.fact.recorded` | static `recordRun*` | `yield* RunResourceStore` → `.facts`, `.runs`, `.byRun` |
 | `run-resource.state.changed` | static `recordStateChange` | `yield* RunResourceStore` → `.stateHistory`, `.latestState` |
@@ -85,7 +85,7 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 import { layerProcessStore } from "@nikscripts/effect-pm/storage/sqlite";
 import { ProcessExecutionStore } from "@nikscripts/effect-pm/store/ProcessExecution";
 
-yield* ProcessExecutionStore.recordCompleted(input);
+yield* withRuntimeEmitContext({ processId, scheduleKey, startedAt, completedAt, isStartupRun }, ProcessExecutionStore.Execution.Completed);
 
 const rows = yield* Effect.serviceOption(ProcessExecutionStore).pipe(
   Effect.flatMap(
@@ -110,15 +110,20 @@ Effect.provide(program, layerProcessStore({ filename: ".effect-pm/data.sqlite" }
 
 Template: `src/store/runResource.ts`, tests: `test/run-resource-store-facet.test.ts`.
 
-A facet is declared with up to **three** sections passed to `ProcessStore.Service<Self>()(id, ...sections)`:
+A facet is declared with sections passed to `ProcessStore.Service<Self>()(id, ...sections)`:
 
 | Section | Shape | Adds to the facet |
 |--------|-------|-------------------|
-| `ProcessStore.record({ ... })` | `{ [name]: (s) => method }` | Per-method **static optional emitters** (`Facet.recordX(...)`) and instance write methods. |
-| `ProcessStore.read((s) => ({ ... }))` | factory of read methods | Instance read methods (yield the facet to dispatch). |
-| `ProcessStore.withIdentifier((id, s) => ({ ... }))` | factory of identifier-bound methods | `Facet.for(id)` / `Facet.withIdentifier(id)` returning the bound API. |
+| `ProcessStore.record({ ... })` | `{ [name]: (s) => method }` | Legacy flat writes + static emitters (being replaced by `telemetry`). |
+| `ProcessStore.telemetry(...)` | `Telemetry.namespace` / `tag` / `event` | Nested PascalCase emit tree (see [plan 17](./plans/17-facet-telemetry-factory.md) §5). |
+| `ProcessStore.query((s) => ({ ... }))` | factory of query methods | Instance queries (`yield* store`). |
+| `ProcessStore.for((id, s) => ({ ... }))` | factory of bound queries | `Facet.for(id)` returning the bound API. |
 
-`record` and `read` are required; `withIdentifier` is optional.
+`record` **or** `telemetry` is required for writes; `query` is required. `for` is optional.
+
+**Planned telemetry authoring:** `Telemetry.event("Completed", MyEventSchema).pipe(Telemetry.annotateLogs)` —
+second arg is a `Telemetry.Schema` class only (scope on schema, not on tag). Not fully implemented yet;
+see plan 17.
 
 ```ts
 export class ProcessStoreMyDomain extends ProcessStore.Service<ProcessStoreMyDomain>()(
@@ -126,7 +131,7 @@ export class ProcessStoreMyDomain extends ProcessStore.Service<ProcessStoreMyDom
   ProcessStore.record({
     recordThing: (s) => (fact: MyFact) => s.create(makeMyDomainRecord(fact)),
   }),
-  ProcessStore.read((s) => ({
+  ProcessStore.query((s) => ({
     // Pure-storage read: every filter is pushed into the predicate, so
     // `query?.opts` (including `limit`) flows straight through.
     things: (query?: MyQuery) =>
@@ -151,8 +156,8 @@ export class ProcessStoreMyDomain extends ProcessStore.Service<ProcessStoreMyDom
   // Optional: if your facet has a natural identifier (resourceId, queueId,
   // processId, …), bind it once via `for(...)` instead of repeating it in
   // every method call. Reuse the same private read helpers as the
-  // `ProcessStore.read(...)` section so behavior cannot drift.
-  ProcessStore.withIdentifier((thingId, s) => ({
+  // `ProcessStore.query(...)` section so behavior cannot drift.
+  ProcessStore.for((thingId, s) => ({
     things: (query?: Omit<MyQuery, "thingId">) =>
       readThings(s, { thingId, ...query }),
   })),
@@ -161,16 +166,18 @@ export class ProcessStoreMyDomain extends ProcessStore.Service<ProcessStoreMyDom
 export declare namespace ProcessStoreMyDomain {
   export type Type = ProcessStore.Service.Type<typeof ProcessStoreMyDomain>;
   export type EmitType = ProcessStore.Service.EmitType<typeof ProcessStoreMyDomain>;
-  // Only declare `IdentifierType` when the facet provides `withIdentifier`.
+  // Only declare `IdentifierType` when the facet provides `ProcessStore.for`.
+  export type QueryType = ProcessStore.Service.QueryType<typeof ProcessStoreMyDomain>;
   export type IdentifierType = ProcessStore.Service.IdentifierType<
     typeof ProcessStoreMyDomain
   >;
 }
 ```
 
-### Identifier-bound APIs (`for` / `withIdentifier`)
+### Identifier-bound APIs (`Facet.for`)
 
-Facets that have a single dominant identifier expose a sticky-scope binding:
+Facets that have a single dominant identifier expose a sticky-scope binding via
+`ProcessStore.for((id, s) => …)`:
 
 ```ts
 const queue = yield* QueueResourceStore.for("@app/Email");
@@ -179,11 +186,9 @@ yield* queue.entriesByKey("user-42"); // queueId still baked in
 yield* queue.dedupeKeys();            // queueId still baked in
 ```
 
-Equivalent: `yield* QueueResourceStore.withIdentifier("@app/Email")`.
+Accepts either a raw string id or `{ id }`. Implement the section by **delegating to private read helpers** that the `ProcessStore.query` section also calls — that way the bound and unbound shapes share a single code path. See `src/store/queueResource.ts` and `src/store/runResource.ts`.
 
-Both accept either a raw string id or `{ id }`. Implement the section by **delegating to private read helpers** that the `ProcessStore.read` section also calls — that way the bound and unbound shapes share a single code path. See `src/store/queueResource.ts` and `src/store/runResource.ts` for the live pattern.
-
-Built-in `withIdentifier` facets (subpath → bound id):
+Built-in `ProcessStore.for` facets (subpath → bound id):
 
 | Facet | Subpath | Binds |
 |-------|---------|-------|

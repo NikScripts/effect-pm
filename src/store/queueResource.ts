@@ -1190,7 +1190,7 @@ export class QueueResourceStore extends ProcessStore.Service<
       (s) => (facts: ReadonlyArray<QueueRateLimitExceededFact>) =>
         s.createBatch(facts.map(makeQueueRateLimitExceededRecord)),
   }),
-  ProcessStore.read((s) => ({
+  ProcessStore.query((s) => ({
     // Every queue read pushes its filters to storage as indexed
     // `RuntimeRecordPredicate`s — there is no post-filter on a
     // payload sub-field — so `query?.opts` (including `limit`) is
@@ -1207,7 +1207,7 @@ export class QueueResourceStore extends ProcessStore.Service<
     dedupeKeys: (query?: QueueDedupeKeyQuery) => readDedupeKeys(s, query),
     rateLimits: (query?: QueueRateLimitQuery) => readRateLimits(s, query),
   })),
-  ProcessStore.withIdentifier((queueId, s) => ({
+  ProcessStore.for((queueId, s) => ({
     entries: (query?: Omit<QueueEntryQuery, "queueId">) =>
       readEntries(s, { ...query, queueId }),
     entriesByKey: (

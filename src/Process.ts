@@ -16,7 +16,7 @@
  * ## Optional execution analytics
  *
  * When a store layer is composed at the app or {@link ProcessGroup.localEnvLayer}
- * boundary, finished runs emit `process.execution.completed` rows. Without a store,
+ * boundary, finished runs emit `Process.Execution.*` telemetry rows. Without a store,
  * supervisor behavior is unchanged — writes are silent no-ops. Target integration is
  * {@link ProcessExecutionStore} when composed at app or group boundaries.
  *
@@ -37,6 +37,7 @@ import {
   type ProcessExecutionFinishInput,
 } from "./store/processExecution";
 import { ProcessStore } from "./ProcessStore";
+import { withRuntimeEmitContext } from "./RuntimeEmitContext";
 import { Polling, PollingTag } from "./Polling";
 import { ProcessSchedule, ProcessScheduleTag } from "./ProcessSchedule";
 import type {
@@ -411,10 +412,25 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     isStartupRun: args.isStartupRun,
   });
 
+  const executionEmitContext = (
+    args: Parameters<typeof finishInput>[0],
+  ) => ({
+    processType: "process" as const,
+    processId: name,
+    scheduleKey: args.scheduleKey,
+    startedAt: args.startedAt,
+    completedAt: args.completedAt,
+    isStartupRun: args.isStartupRun,
+    ...(args.error !== undefined ? { error: String(args.error) } : {}),
+  });
+
   const recordExecutionCompleted = (
     args: Parameters<typeof finishInput>[0],
   ): Effect.Effect<void> =>
-    ProcessExecutionStore.recordCompleted(finishInput(args)).pipe(
+    withRuntimeEmitContext(
+      executionEmitContext(args),
+      ProcessExecutionStore.Execution.Completed,
+    ).pipe(
       ProcessStore.catchErrorAndLog({
         message: "ProcessExecutionStore write failed for completed run",
         level: "warning",
@@ -425,7 +441,10 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   const recordExecutionFailed = (
     args: Parameters<typeof finishInput>[0],
   ): Effect.Effect<void> =>
-    ProcessExecutionStore.recordFailed(finishInput(args)).pipe(
+    withRuntimeEmitContext(
+      executionEmitContext(args),
+      ProcessExecutionStore.Execution.Failed,
+    ).pipe(
       ProcessStore.catchErrorAndLog({
         message: "ProcessExecutionStore write failed for failed run",
         level: "warning",

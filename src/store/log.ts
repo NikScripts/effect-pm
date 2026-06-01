@@ -382,7 +382,7 @@ export class LogStore extends ProcessStore.Service<LogStore>()(
           rows.map((row) => makeLogRecord(groupId, row.entryId, row.entry)),
         ),
   }),
-  ProcessStore.read((s) => ({
+  ProcessStore.query((s) => ({
     load: (query: ProcessManagerLogQuery) => loadEntries(s.read, query),
     query: (logQuery: ProcessManagerLogQuery) =>
       queryEntries(s.read, logQuery),

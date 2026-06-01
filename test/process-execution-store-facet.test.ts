@@ -6,6 +6,7 @@ import { ProcessStorage } from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Logger } from "effect";
 import { ProcessStore } from "../src/ProcessStore";
+import { withRuntimeEmitContext } from "../src/RuntimeEmitContext";
 import { ProcessExecutionStore } from "../src/store/processExecution";
 import type { ProcessExecutionFinishInput } from "../src/store/processExecution";
 import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
@@ -22,20 +23,46 @@ const finish = (
   ...overrides,
 });
 
+const emitContext = (input: ProcessExecutionFinishInput) => ({
+  processType: "process" as const,
+  processId: input.processId,
+  scheduleKey: input.scheduleKey,
+  startedAt: input.startedAt,
+  completedAt: input.completedAt,
+  isStartupRun: input.isStartupRun,
+  ...(input.error !== undefined ? { error: input.error } : {}),
+});
+
+const emitCompleted = (input: ProcessExecutionFinishInput) =>
+  withRuntimeEmitContext(
+    emitContext(input),
+    ProcessExecutionStore.Execution.Completed,
+  );
+
+const emitFailed = (input: ProcessExecutionFinishInput) =>
+  withRuntimeEmitContext(
+    emitContext(input),
+    ProcessExecutionStore.Execution.Failed,
+  );
+
+const emitInterrupted = (input: ProcessExecutionFinishInput) =>
+  withRuntimeEmitContext(
+    emitContext(input),
+    ProcessExecutionStore.Execution.Interrupted,
+  );
+
 describe("ProcessExecutionStore — static optional emitters", () => {
   it.live("no-ops silently when the facet layer is absent", () =>
     Effect.gen(function* () {
-      yield* ProcessExecutionStore.recordCompleted(
-        finish("test/no-layer"),
-      );
+      yield* emitCompleted(finish("test/no-layer"));
       expect(true).toBe(true);
     }),
   );
 
-  it.live("recordInterrupted persists interrupted status", () =>
+  it.live("Execution.Interrupted persists interrupted status", () =>
     Effect.gen(function* () {
       const processId = "test/interrupted";
-      yield* ProcessExecutionStore.recordInterrupted({
+      yield* emitInterrupted({
         processId,
         scheduleKey: "win",
         startedAt: 1_700_000_000_000,
@@ -46,16 +73,17 @@ describe("ProcessExecutionStore — static optional emitters", () => {
       const rows = yield* store.executions({ processId });
       expect(rows).toHaveLength(1);
       expect(rows[0]?.execution.status).toBe("interrupted");
+      expect(rows[0]?.type).toBe("Process.Execution.Interrupted");
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
   it.live("persists through the spine when the facet is provided", () =>
     Effect.gen(function* () {
       const processId = "test/present-facet";
-      yield* ProcessExecutionStore.recordCompleted(
+      yield* emitCompleted(
         finish(processId, { isStartupRun: true }),
       );
-      yield* ProcessExecutionStore.recordFailed(
+      yield* emitFailed(
         finish(processId, {
           startedAt: 1_700_000_000_100,
           completedAt: 1_700_000_000_120,
@@ -79,22 +107,21 @@ describe("ProcessExecutionStore — static optional emitters", () => {
       captured.push(text);
     });
     const failingFacet: ProcessExecutionStore.Type = {
-      recordCompleted: () =>
-        Effect.fail(
+      Execution: {
+        Completed: Effect.fail(
           new ProcessStoreReadonlyRecordError({ id: "blocked-completed" }),
         ),
-      recordFailed: () =>
-        Effect.fail(
+        Failed: Effect.fail(
           new ProcessStoreReadonlyRecordError({ id: "blocked-failed" }),
         ),
-      recordInterrupted: () =>
-        Effect.fail(
+        Interrupted: Effect.fail(
           new ProcessStoreReadonlyRecordError({ id: "blocked-interrupted" }),
         ),
+      },
       executions: () => Effect.succeed([]),
       hasPriorExecutions: () => Effect.succeed(false),
     };
-    const write = ProcessExecutionStore.recordCompleted(finish("test/failing"));
+    const write = emitCompleted(finish("test/failing"));
     return Effect.gen(function* () {
       const error = yield* Effect.flip(write);
       expect(error).toBeInstanceOf(ProcessStoreReadonlyRecordError);
@@ -121,10 +148,10 @@ describe("ProcessExecutionStore — projections", () => {
 
   it.live("executions filters by scheduleKey when provided", () =>
     Effect.gen(function* () {
-      yield* ProcessExecutionStore.recordCompleted(
+      yield* emitCompleted(
         finish(processId, { scheduleKey: "window-a", isStartupRun: true }),
       );
-      yield* ProcessExecutionStore.recordCompleted(
+      yield* emitCompleted(
         finish(processId, {
           scheduleKey: "window-b",
           startedAt: 1_700_000_000_200,
@@ -145,7 +172,7 @@ describe("ProcessExecutionStore — projections", () => {
     Effect.gen(function* () {
       const store = yield* ProcessExecutionStore;
       expect(yield* store.hasPriorExecutions(processId)).toBe(false);
-      yield* ProcessExecutionStore.recordCompleted(finish(processId));
+      yield* emitCompleted(finish(processId));
       expect(yield* store.hasPriorExecutions(processId)).toBe(true);
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
@@ -155,12 +182,8 @@ describe("ProcessExecutionStore — projections", () => {
     () =>
       Effect.gen(function* () {
         const pid = "test/post-filter-limit";
-        // Hot rows are *older* than cold rows. Pre-fix `limit=2` over the
-        // pre-filter stream returns the two newest rows (cold), so the
-        // post-filter for "hot" yields zero. Post-fix the storage query
-        // strips `limit` and the post-filter result is sliced to 2.
         for (let i = 0; i < 5; i++) {
-          yield* ProcessExecutionStore.recordCompleted(
+          yield* emitCompleted(
             finish(pid, {
               scheduleKey: "hot",
               startedAt: 1_700_000_001_000 + i * 10,
@@ -169,7 +192,7 @@ describe("ProcessExecutionStore — projections", () => {
           );
         }
         for (let i = 0; i < 5; i++) {
-          yield* ProcessExecutionStore.recordCompleted(
+          yield* emitCompleted(
             finish(pid, {
               scheduleKey: "cold",
               startedAt: 1_700_000_002_000 + i * 10,
@@ -196,8 +219,8 @@ describe("ProcessExecutionStore — for(processId) bound API", () => {
     Effect.gen(function* () {
       const a = "test/for/a";
       const b = "test/for/b";
-      yield* ProcessExecutionStore.recordCompleted(finish(a));
-      yield* ProcessExecutionStore.recordCompleted(finish(b));
+      yield* emitCompleted(finish(a));
+      yield* emitCompleted(finish(b));
       const boundA = yield* ProcessExecutionStore.for(a);
       const boundB = yield* ProcessExecutionStore.for(b);
       const aRows = yield* boundA.executions();
@@ -212,10 +235,8 @@ describe("ProcessExecutionStore — for(processId) bound API", () => {
   it.live("scheduleKey filter still works through the bound API", () =>
     Effect.gen(function* () {
       const pid = "test/for/scheduleKey";
-      yield* ProcessExecutionStore.recordCompleted(
-        finish(pid, { scheduleKey: "hot" }),
-      );
-      yield* ProcessExecutionStore.recordCompleted(
+      yield* emitCompleted(finish(pid, { scheduleKey: "hot" }));
+      yield* emitCompleted(
         finish(pid, {
           scheduleKey: "cold",
           startedAt: 1_700_000_000_100,
@@ -234,16 +255,16 @@ describe("ProcessExecutionStore — for(processId) bound API", () => {
       const pid = "test/for/has-prior";
       const bound = yield* ProcessExecutionStore.for(pid);
       expect(yield* bound.hasPriorExecutions()).toBe(false);
-      yield* ProcessExecutionStore.recordCompleted(finish(pid));
+      yield* emitCompleted(finish(pid));
       expect(yield* bound.hasPriorExecutions()).toBe(true);
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
-  it.live("withIdentifier({ id }) accepts an object identifier", () =>
+  it.live("for({ id }) accepts an object identifier", () =>
     Effect.gen(function* () {
       const pid = "test/for/object-id";
-      yield* ProcessExecutionStore.recordCompleted(finish(pid));
-      const bound = yield* ProcessExecutionStore.withIdentifier({
+      yield* emitCompleted(finish(pid));
+      const bound = yield* ProcessExecutionStore.for({
         id: pid,
       });
       const rows = yield* bound.executions();
@@ -251,65 +272,30 @@ describe("ProcessExecutionStore — for(processId) bound API", () => {
       expect(rows[0]?.entityId).toBe(pid);
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
-
-  it.live("bound recordCompleted/Failed/Interrupted persist with the bound id", () =>
-    Effect.gen(function* () {
-      const pid = "test/for/bound-writes";
-      const bound = yield* ProcessExecutionStore.for(pid);
-      yield* bound.recordCompleted({
-        scheduleKey: null,
-        startedAt: 1_700_000_000_000,
-        completedAt: 1_700_000_000_010,
-        isStartupRun: false,
-      });
-      yield* bound.recordFailed({
-        scheduleKey: null,
-        startedAt: 1_700_000_000_100,
-        completedAt: 1_700_000_000_120,
-        isStartupRun: false,
-        error: "boom",
-      });
-      yield* bound.recordInterrupted({
-        scheduleKey: null,
-        startedAt: 1_700_000_000_200,
-        completedAt: 1_700_000_000_205,
-        isStartupRun: false,
-      });
-      const rows = yield* bound.executions();
-      expect(rows.every((row) => row.entityId === pid)).toBe(true);
-      expect(rows.map((row) => row.execution.status).sort()).toEqual([
-        "completed",
-        "failed",
-        "interrupted",
-      ]);
-    }).pipe(Effect.provide(ProcessStorage.layer)),
-  );
 });
 
 describe("ProcessExecutionStore — phantom type accessors", () => {
   it.live(".Type and .EmitType expose the structural shapes", () =>
     Effect.gen(function* () {
+      const executionEmit = {
+        Completed: Effect.void,
+        Failed: Effect.void,
+        Interrupted: Effect.void,
+      };
       const fullShape: ProcessExecutionStore.Type = {
-        recordCompleted: () => Effect.void,
-        recordFailed: () => Effect.void,
-        recordInterrupted: () => Effect.void,
+        Execution: executionEmit,
         executions: () => Effect.succeed([]),
         hasPriorExecutions: () => Effect.succeed(false),
       };
       const emitShape: ProcessExecutionStore.EmitType = {
-        recordCompleted: fullShape.recordCompleted,
-        recordFailed: fullShape.recordFailed,
-        recordInterrupted: fullShape.recordInterrupted,
+        Execution: executionEmit,
       };
       const boundShape: ProcessExecutionStore.IdentifierType = {
         executions: () => Effect.succeed([]),
         hasPriorExecutions: () => Effect.succeed(false),
-        recordCompleted: () => Effect.void,
-        recordFailed: () => Effect.void,
-        recordInterrupted: () => Effect.void,
       };
       expect(typeof fullShape.executions).toBe("function");
-      expect(typeof emitShape.recordFailed).toBe("function");
+      expect(typeof ProcessExecutionStore.Execution.Completed).toBe("object");
       expect(typeof boundShape.executions).toBe("function");
     }),
   );

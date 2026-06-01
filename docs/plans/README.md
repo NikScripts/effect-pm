@@ -33,6 +33,8 @@ Higher items unblock remote operations, operator UX, and honest queue typing.
 | 3 | **Queues: unified handles, schemas, remote enqueue & handoff** — `QueueResource`/`ProcessGroup` alignment, **`itemSchema`**, release/handoff, then remote enqueue over `ControlService`/`ProcessManager` | [03-queue-remote-handoff.md](./03-queue-remote-handoff.md) |
 | 4 | **Queue analytics / projections / live reads** — `QueueResourceStore` completeness, dashboards | [04-queue-analytics.md](./04-queue-analytics.md) |
 | 5 | **Log transport abstraction + durable history + live fan-out** — port like control transport, **`LogStore`** cursors, optional PubNub | [05-log-transport.md](./05-log-transport.md) |
+| **6a** | **Resource state scope** — `State.Scope` / state vs context / DI layers; runtime toolkit (lifetime / program / combinator / fiber); Run → Process → Queue | [18-resource-state-scope.md](./18-resource-state-scope.md) |
+| **6b** | **Facet telemetry factory + scope** — §5 facet DX finalized; slice 3 = `ProcessExecutionStore` + `ProcessScope` + `Process.ts`; then other facets; see [18](./18-resource-state-scope.md) | [17-facet-telemetry-factory.md](./17-facet-telemetry-factory.md) |
 | 6 | **Runtime facets: listeners, history shape, mutable config** — beside [STORAGE.md](../STORAGE.md), no revived monolith facade | [06-runtime-hooks-config.md](./06-runtime-hooks-config.md) |
 | 7 | **Schedule identity & persistence boundaries** — stable entry IDs, runtime sync/remove semantics | [07-schedule-identity.md](./07-schedule-identity.md) |
 | 8 | **Lifecycle kernel & process hooks** — explicit transitions + **`Process`** extension hooks without hiding work under schedule/polling alone | [08-lifecycle-kernel-hooks.md](./08-lifecycle-kernel-hooks.md) |

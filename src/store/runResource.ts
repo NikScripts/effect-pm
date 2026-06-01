@@ -716,7 +716,7 @@ export class RunResourceStore extends ProcessStore.Service<
       (s) => (changes: ReadonlyArray<RunResourceStateChange>) =>
         s.createBatch(changes.map(makeStateChangeRecord)),
   }),
-  ProcessStore.read((s) => ({
+  ProcessStore.query((s) => ({
     facts: (query?: RunResourceFactQuery) => readFacts(s, query),
     stateHistory: (query?: RunResourceStateHistoryQuery) =>
       readStateHistory(s, query),
@@ -724,7 +724,7 @@ export class RunResourceStore extends ProcessStore.Service<
     runs: (resourceId: string) => readRuns(s, resourceId),
     byRun: (runId: string) => readByRun(s, runId),
   })),
-  ProcessStore.withIdentifier((resourceId, s) => ({
+  ProcessStore.for((resourceId, s) => ({
     facts: (query?: RunResourceScopedFactQuery) =>
       readFacts(s, { resourceId, ...query }),
     stateHistory: (query?: RunResourceScopedStateHistoryQuery) =>

@@ -135,10 +135,10 @@ describe("ProcessLifecycleStore — for(processId) bound API", () => {
       }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
-  it.live("withIdentifier({ id }) accepts an object identifier", () =>
+  it.live("for({ id }) accepts an object identifier", () =>
     Effect.gen(function* () {
       const objPid = "test/lifecycle/for/object";
-      const bound = yield* ProcessLifecycleStore.withIdentifier({
+      const bound = yield* ProcessLifecycleStore.for({
         id: objPid,
       });
       yield* bound.recordTransition({ tag: "Started" });
