@@ -28,3 +28,14 @@ export type {
   WidgetLayout,
   UseDashboardLayoutOptions,
 } from "./dashboardLayout.js";
+export {
+  defaultDashboardChromeState,
+  parseDashboardChromeState,
+  useDashboardChrome,
+} from "./dashboardChrome.js";
+export type {
+  DashboardChromeChange,
+  DashboardChromeController,
+  DashboardChromeState,
+  UseDashboardChromeOptions,
+} from "./dashboardChrome.js";

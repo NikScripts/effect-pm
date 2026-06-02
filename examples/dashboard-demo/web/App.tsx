@@ -19,6 +19,7 @@ export const App = () => (
     processes={[DashboardTick]}
     queues={[DashboardDemoQueue]}
     layoutStorageKey="effect-pm.dashboard-demo.layout.v1"
+    chromeStorageKey="effect-pm.dashboard-demo.chrome.v1"
     title="effect-pm control demo"
     description={(
       <>

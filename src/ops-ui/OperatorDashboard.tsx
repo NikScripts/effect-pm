@@ -44,6 +44,11 @@ import { ScrollArea } from "./components/ui/scroll-area.js";
 import { Separator } from "./components/ui/separator.js";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarHeader } from "./components/ui/sidebar.js";
 import {
+  useDashboardChrome,
+  type DashboardChromeChange,
+  type DashboardChromeState,
+} from "./dashboardChrome.js";
+import {
   clampWidgetSpan,
   dashboardWidgetKinds,
   reorderDashboardLayout,
@@ -71,6 +76,9 @@ export type OperatorDashboardProps = {
   readonly layout?: DashboardLayout;
   readonly layoutStorageKey?: string;
   readonly onLayoutChange?: DashboardLayoutChange;
+  readonly chrome?: DashboardChromeState;
+  readonly chromeStorageKey?: string;
+  readonly onChromeChange?: DashboardChromeChange;
 };
 
 const dashboardClassName = (className: string | undefined): string =>
@@ -200,14 +208,15 @@ const OperatorDashboardContent = ({
   layout,
   layoutStorageKey,
   onLayoutChange,
+  chrome,
+  chromeStorageKey,
+  onChromeChange,
 }: OperatorDashboardContentProps) => {
   const status = useControlPlaneGroupStatus({ pollIntervalMs });
   const processIds = processes.map((process) => process.id);
   const queueIds = queues.map((queue) => queue.id);
   const [resizingId, setResizingId] = useState<DashboardWidgetId | null>(null);
-  const [leftBarOpen, setLeftBarOpen] = useState(true);
-  const [rightBarOpen, setRightBarOpen] = useState(false);
-  const [bottomBarOpen, setBottomBarOpen] = useState(true);
+  const dashboardChrome = useDashboardChrome({ chrome, chromeStorageKey, onChromeChange });
   const dashboardLayout = useDashboardLayout({ layout, layoutStorageKey, onLayoutChange });
   const orderedWidgetIds = sortedDashboardWidgetIds(dashboardLayout.layout);
   const sensors = useSensors(
@@ -353,15 +362,16 @@ const OperatorDashboardContent = ({
 
       <Menubar className="pm-dashboard__topnav" aria-label="Dashboard navigation">
         <strong>Dashboard</strong>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setLeftBarOpen((value) => !value)}>Left bar</Button>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setRightBarOpen((value) => !value)}>Right bar</Button>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setBottomBarOpen((value) => !value)}>Bottom bar</Button>
+        <Button type="button" size="sm" variant="ghost" onClick={dashboardChrome.toggleLeftBar}>Left bar</Button>
+        <Button type="button" size="sm" variant="ghost" onClick={dashboardChrome.toggleRightBar}>Right bar</Button>
+        <Button type="button" size="sm" variant="ghost" onClick={dashboardChrome.toggleBottomBar}>Bottom bar</Button>
         <Separator className="pm-dashboard__topnav-separator" />
+        <Button type="button" size="sm" variant="ghost" onClick={dashboardChrome.resetChrome}>Reset chrome</Button>
         <span>Grid + fixed widget bars</span>
       </Menubar>
 
       <div className="pm-dashboard__workspace">
-        {leftBarOpen ? (
+        {dashboardChrome.chrome.leftBarOpen ? (
           <Sidebar className="pm-dashboard__sidebar pm-dashboard__sidebar--left">
             <SidebarHeader>Widgets</SidebarHeader>
             <SidebarContent>
@@ -423,7 +433,7 @@ const OperatorDashboardContent = ({
           </DndContext>
         </section>
 
-        {rightBarOpen ? (
+        {dashboardChrome.chrome.rightBarOpen ? (
           <Sidebar className="pm-dashboard__sidebar pm-dashboard__sidebar--right">
             <SidebarHeader>Inspector</SidebarHeader>
             <SidebarContent>
@@ -436,7 +446,7 @@ const OperatorDashboardContent = ({
         ) : null}
       </div>
 
-      {bottomBarOpen ? (
+      {dashboardChrome.chrome.bottomBarOpen ? (
         <section className="pm-dashboard__bottom-bar" aria-label="Bottom widget bar">
           <div>
             <strong>Bottom bar</strong>
