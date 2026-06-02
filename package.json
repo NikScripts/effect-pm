@@ -119,6 +119,26 @@
       "import": "./dist/ControlProtocol.mjs",
       "require": "./dist/ControlProtocol.js"
     },
+    "./ControlTransportRpc": {
+      "types": "./dist/ControlTransportRpc.d.ts",
+      "import": "./dist/ControlTransportRpc.mjs",
+      "require": "./dist/ControlTransportRpc.js"
+    },
+    "./Terminal": {
+      "types": "./dist/Terminal.d.ts",
+      "import": "./dist/Terminal.mjs",
+      "require": "./dist/Terminal.js"
+    },
+    "./TerminalRpc": {
+      "types": "./dist/TerminalRpc.d.ts",
+      "import": "./dist/TerminalRpc.mjs",
+      "require": "./dist/TerminalRpc.js"
+    },
+    "./CommandAuth": {
+      "types": "./dist/CommandAuth.d.ts",
+      "import": "./dist/CommandAuth.mjs",
+      "require": "./dist/CommandAuth.js"
+    },
     "./RuntimeStorage": {
       "types": "./dist/RuntimeStorage.d.ts",
       "import": "./dist/RuntimeStorage.mjs",

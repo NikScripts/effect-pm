@@ -6,6 +6,12 @@
  */
 
 export type { ControlPlanePort, ControlPlaneProcessAction, ControlPlaneQueueAction } from "./ControlPlanePort.js";
+export type {
+  OpenTerminalSession,
+  TerminalEvent,
+  TerminalSessionId,
+  TerminalSessionPort,
+} from "./TerminalSessionPort.js";
 export { ControlPlaneProvider, useControlPlane } from "./ControlPlaneContext.js";
 export type { ControlPlaneProviderProps } from "./ControlPlaneContext.js";
 export { ProcessGroupControlPanel } from "./ProcessGroupControlPanel.js";

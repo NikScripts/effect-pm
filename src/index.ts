@@ -49,8 +49,10 @@
  * **`@nikscripts/effect-pm/QueueResource`**, **`@nikscripts/effect-pm/Query`**,
  * **`@nikscripts/effect-pm/ResourceConfigure`**, **`@nikscripts/effect-pm/ProcessGroup`**,
  * **`@nikscripts/effect-pm/ProcessStore`**, **`@nikscripts/effect-pm/RuntimeStorage`**,
- * **`@nikscripts/effect-pm/ProcessManager`**, **`@nikscripts/effect-pm/Logs`**, and
- * **`@nikscripts/effect-pm/ControlService`**.
+ * **`@nikscripts/effect-pm/CommandAuth`**, **`@nikscripts/effect-pm/ProcessManager`**,
+ * **`@nikscripts/effect-pm/Terminal`**, **`@nikscripts/effect-pm/TerminalRpc`**,
+ * **`@nikscripts/effect-pm/Logs`**, **`@nikscripts/effect-pm/ControlService`**,
+ * and **`@nikscripts/effect-pm/ControlTransportRpc`**.
  *
  * Structured log persistence: `ProcessStore.Log` (also exported as the
  * dedicated `ProcessStoreLog` facet) on the composed store. Capture/relay
@@ -115,6 +117,53 @@ export { RunResourceScope, RunScope } from "./RunResourceScope";
 export { ControlService } from "./ControlService";
 export { ControlProtocol } from "./ControlProtocol";
 export {
+  CommandAuth,
+  CommandAuthSigner,
+  CommandAuthVerifier,
+  MissingSignatureHeader,
+  MalformedSignatureHeader,
+  UnknownKeyId,
+  ExpiredKey,
+  SignatureVerificationFailed,
+  ReplayedCommand,
+  CanonicalPayloadError,
+  KeyMaterialError,
+  CommandAuthReplayStoreError,
+  generateEd25519KeyPair,
+  loadPrivateKeyRecord,
+  ed25519Signer,
+  ed25519Verifier,
+  canonicalPayload,
+  canonicalPayloadText,
+  decodePublicKeyRecordsJson,
+  formatSignatureHeader,
+  parseSignatureHeader,
+  commandAuthErrorMessage,
+  loadPublicKeyRecords,
+  publicKeyRecordJson,
+  publicKeyRecordsJson,
+  mergePublicKeyRecords,
+} from "./CommandAuth";
+export type {
+  PublicKeyRecord,
+  PrivateKeyRecord,
+  GeneratedEd25519KeyPair,
+  GenerateEd25519KeyPairOptions,
+  LoadPrivateKeyRecordOptions,
+  LoadPublicKeyRecordsOptions,
+  CanonicalCommandAuthRequest,
+  CommandAuthSigningInput,
+  CommandAuthSignatureHeader,
+  CommandAuthReplayStoreReserveInput,
+  CommandAuthReplayStore,
+  CommandAuthSignerService,
+  CommandAuthVerifyInput,
+  CommandAuthVerifierService,
+  CommandAuthError,
+  Ed25519VerifierOptions,
+} from "./CommandAuth";
+
+export {
   ControlRouter,
   ControlResponseSchema,
   ControlTransportClient,
@@ -134,6 +183,16 @@ export {
   makeControlTransportHttpClient,
   makeControlTransportHttpServer,
 } from "./ControlTransportHttp";
+export {
+  ControlRpc,
+  ControlRpcErrorSchema,
+  ControlTransportRpc,
+  ControlTransportRpcLive,
+  controlRpcErrorFromTransportError,
+  makeControlTransportRpcClient,
+  makeControlTransportRpcServer,
+  rpcErrorToControlTransportError,
+} from "./ControlTransportRpc";
 export type {
   ControlRouterShape,
   ControlProtocolMetadata,
@@ -149,6 +208,36 @@ export type {
   ControlTransportHttpClientConfig,
   ControlTransportHttpServerConfig,
 } from "./ControlTransportHttp";
+export type {
+  ControlRpcClient,
+  ControlRpcError,
+  ControlRpcServerProtocol,
+  ControlTransportRpcApi,
+  ControlTransportRpcServerConfig,
+} from "./ControlTransportRpc";
+export {
+  Terminal,
+  TerminalAuditMetadataSchema,
+  OpenTerminalSessionSchema,
+  TerminalSessionIdSchema,
+  TerminalEventSchema,
+  TerminalSessionErrorSchema,
+  TerminalSessionError,
+  TerminalSessionService,
+} from "./Terminal";
+export type {
+  OpenTerminalSession,
+  TerminalAuditMetadata,
+  TerminalSessionId,
+  TerminalEvent,
+  TerminalSessionPort,
+  TerminalSessionHandle,
+  TerminalSessionServiceShape,
+} from "./Terminal";
+export {
+  TerminalRpc,
+  TerminalRpcGroup,
+} from "./TerminalRpc";
 
 // Query / Runtime Storage
 export { Query } from "./Query";

@@ -10,7 +10,8 @@
 
 | Client | Transport |
 | --- | --- |
-| **`ProcessManager`** (`connect`, CLI) | **`POST /control`** — JSON **protocol envelope** (`ControlProtocolRequest`) |
+| **`ProcessManager`** (`connect`, CLI default) | **`POST /control`** — JSON **protocol envelope** (`ControlProtocolRequest`) |
+| **Effect-native integrations** | **`ControlTransportRpc`** — Effect RPC dispatch of the same protocol envelope |
 | Direct HTTP / tooling | **REST** paths below (`GET` / `POST` per resource) |
 
 REST routes are translated to the same protocol handlers as **`/control`**.
@@ -41,6 +42,39 @@ Scoped effect inside **`Effect.scoped`** — same HTTP stack, blocks until scope
 Router + transport only — you supply **`ControlTransportHttp.serverLayer`** yourself.
 
 **Binding:** `127.0.0.1` only · default port **3001** · no auth (private/dev assumption).
+
+### Signed command authentication
+
+Add `auth` when the control service should reject unsigned commands:
+
+```typescript
+import { CommandAuth, ControlService } from "@nikscripts/effect-pm";
+import { Config, Duration, Effect } from "effect";
+
+const program = Effect.gen(function* () {
+  const keyringFile = yield* Config.string("BILLING_GROUP_COMMAND_KEYS_FILE");
+  const keys = yield* CommandAuth.loadPublicKeyRecords({ file: keyringFile });
+  const group = yield* BillingGroup;
+
+  yield* ControlService.make({
+    group,
+    port: 3001,
+    auth: CommandAuth.ed25519Verifier({
+      keys,
+      replay: CommandAuth.Replay.memory({ window: Duration.minutes(5) }),
+    }),
+  });
+});
+```
+
+Prefer `*_COMMAND_KEYS_FILE` or `*_COMMAND_KEYS_DIR` for real deployments so
+large PEM records do not bloat env files. Inline JSON env is still useful for
+small local demos and tests.
+
+When `auth` is configured, the HTTP surface is strict: signed `POST /control`
+only. REST shortcuts, unsigned `/health`, and unsigned log streams fail before
+the router runs. Use signed `GetHealth` through `ProcessManager` /
+`ControlTransportHttp` for liveness checks.
 
 ---
 
@@ -105,7 +139,58 @@ Responses use **`ControlResponse`**: `{ success, type?, data?, error? }`. Routes
 
 ## ControlProtocol
 
-**`ControlRouter`**, **`makeControlProtocolRequestEnvelope`**, **`ControlTransportHttp`** — shared by server and **`ProcessManager`**. Import when building custom transports, not for everyday app code.
+**`ControlRouter`**, **`makeControlProtocolRequestEnvelope`**,
+**`ControlTransportHttp`**, and **`ControlTransportRpc`** are shared by server
+and **`ProcessManager`**. Import when building custom transports, not for
+everyday app code.
+
+### HTTP and RPC transport adapters
+
+- **HTTP** remains the compatibility/default local adapter. It preserves
+  existing `ControlService` routes, CLI behavior, signed `/control` command
+  authentication, and REST shortcuts.
+- **Effect RPC** is the preferred Effect-native adapter for new integrations.
+  `ControlTransportRpc` exposes one `Control.Dispatch` RPC that carries the
+  existing `ControlProtocolRequestEnvelope` and returns the existing
+  `ControlProtocolResponseEnvelope`.
+- **`ControlProtocol` remains the semantic core.** `ControlRouter` handles
+  process/queue/group requests; adapters own HTTP or RPC framing and
+  adapter-specific errors.
+- **`ProcessManager.connect(Group, { transport })` already accepts either
+  adapter.** Pass `ControlTransportRpc.client(rpcClient)` to use RPC without
+  changing typed process or queue calls.
+
+```typescript
+import { ControlTransportRpc, ProcessManager } from "@nikscripts/effect-pm";
+import { Effect } from "effect";
+import { RpcClient } from "effect/unstable/rpc";
+
+const rpcClient = yield* RpcClient.make(ControlTransportRpc.rpc).pipe(
+  Effect.provide(/* Effect RPC client protocol layer */),
+);
+
+const manager = ProcessManager.connect(BillingGroup, {
+  transport: ControlTransportRpc.client(rpcClient),
+});
+
+yield* manager.verifyContract;
+yield* manager.process(SyncInvoices.id).runImmediately;
+```
+
+```typescript
+import { ControlService, ControlTransportRpc } from "@nikscripts/effect-pm";
+import { Layer } from "effect";
+
+const ControlRpcLayer = ControlService.layer(BillingGroup).pipe(
+  Layer.provide(ControlTransportRpc.serverLayer()),
+  Layer.provide(/* Effect RPC server protocol layer */),
+);
+```
+
+`ControlTransportRpc` imports Effect v4 RPC from `effect/unstable/rpc`, which is
+the Effect RPC entrypoint available to this package version. The standalone
+`@effect/rpc` package should be used only after its published peer range matches
+the package's Effect major.
 
 ---
 

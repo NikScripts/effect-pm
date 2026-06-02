@@ -14,6 +14,11 @@ import * as Terminal from "effect/Terminal";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import type { HttpClient } from "effect/unstable/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import {
+  CommandAuth,
+  type CommandAuthSignerService,
+  type PublicKeyRecord,
+} from "./CommandAuth";
 import type {
   ControlProtocolMetadata,
   ControlProtocolRequest,
@@ -645,11 +650,13 @@ export class ProcessManagerConnectionRegistry extends Context.Service<
 export interface ProcessManagerCliConfig {
   readonly name?: string;
   readonly version?: string;
+  readonly auth?: CommandAuthSignerService;
 }
 
 interface ProcessManagerCliOptions {
   readonly json: boolean;
   readonly endpointLabel?: string;
+  readonly auth?: CommandAuthSignerService;
 }
 
 /**
@@ -1102,6 +1109,7 @@ const bundledGroupConfig = (
 const managerFromEndpoint = (
   group: ConfigSource,
   selected: ProcessManagerEndpointSelection,
+  auth?: CommandAuthSignerService,
 ): Effect.Effect<
   RemoteProcessManager<AnyProcessGroupContract>,
   ProcessManagerEndpointConfigError
@@ -1111,7 +1119,10 @@ const managerFromEndpoint = (
     case "ProcessManagerChildEndpoint":
       return Effect.succeed(
         makeRemoteProcessManager(
-          makeControlTransportHttpClient({ baseUrl: selected.endpoint.transport.baseUrl }),
+          makeControlTransportHttpClient({
+            baseUrl: selected.endpoint.transport.baseUrl,
+            auth,
+          }),
           group.contract,
         ),
       );
@@ -1131,13 +1142,14 @@ const isContractDriftError = (error: ProcessManagerRequestError): boolean =>
 const probeEndpointStatus = (
   group: ConfigSource,
   selected: ProcessManagerEndpointSelection,
+  auth?: CommandAuthSignerService,
 ): Effect.Effect<ProcessManagerGroupEndpointStatus, never, HttpClient.HttpClient> => {
   const endpoint = selected.endpoint;
   switch (endpoint._tag) {
     case "ProcessManagerHttpEndpoint":
       return Effect.gen(function* () {
         const manager = makeRemoteProcessManager(
-          makeControlTransportHttpClient({ baseUrl: endpoint.transport.baseUrl }),
+          makeControlTransportHttpClient({ baseUrl: endpoint.transport.baseUrl, auth }),
           group.contract,
         );
         yield* manager.verifyContract;
@@ -1159,13 +1171,17 @@ const probeEndpointStatus = (
         ),
       );
     case "ProcessManagerChildEndpoint":
-      return probeEndpointStatus(group, {
-        ...selected,
-        endpoint: {
-          _tag: "ProcessManagerHttpEndpoint",
-          transport: endpoint.transport,
+      return probeEndpointStatus(
+        group,
+        {
+          ...selected,
+          endpoint: {
+            _tag: "ProcessManagerHttpEndpoint",
+            transport: endpoint.transport,
+          },
         },
-      });
+        auth,
+      );
   }
 };
 
@@ -1177,6 +1193,7 @@ const managerFor = (
   groups: ReadonlyArray<ConfigSource>,
   groupId: string,
   endpointLabel?: string,
+  auth?: CommandAuthSignerService,
 ): Effect.Effect<
   RemoteProcessManager<AnyProcessGroupContract>,
   ProcessManagerConnectionError | ProcessManagerEndpointConfigError,
@@ -1196,14 +1213,22 @@ const managerFor = (
     if (Option.isSome(configOption)) {
       const config = yield* configOption.value.groupConfig(group.id);
       const endpoint = yield* selectEndpoint(config, endpointLabel);
-      return yield* managerFromEndpoint(group, endpoint);
+      return yield* managerFromEndpoint(group, endpoint, auth);
     }
     if (hasBundledEndpointConfig(group) || endpointLabel !== undefined) {
       const config = yield* bundledGroupConfig(group);
       const endpoint = yield* selectEndpoint(config, endpointLabel);
-      return yield* managerFromEndpoint(group, endpoint);
+      return yield* managerFromEndpoint(group, endpoint, auth);
     }
-    return yield* connectFromRegistry(group);
+    if (auth === undefined) {
+      return yield* connectFromRegistry(group);
+    }
+    const registry = yield* ProcessManagerConnectionRegistry;
+    const baseUrl = yield* registry.baseUrl(group.id);
+    return makeRemoteProcessManager(
+      makeControlTransportHttpClient({ baseUrl, auth }),
+      group.contract,
+    );
   });
 };
 
@@ -1449,6 +1474,125 @@ const encodeCliJson = (
     ),
   );
 
+const decodePublicKeyRecordFile = (
+  filepath: string,
+): Effect.Effect<ReadonlyArray<PublicKeyRecord>, ProcessManagerConnectionError, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.readFileString(filepath).pipe(
+      Effect.mapError(
+        (error) =>
+          new ProcessManagerConnectionError({
+            groupId: "",
+            reason: `Unable to read public key record '${filepath}': ${String(error)}`,
+          }),
+      ),
+    );
+    return yield* CommandAuth.loadPublicKeyRecords({ file: filepath }).pipe(
+      Effect.mapError(
+        (error) =>
+          new ProcessManagerConnectionError({
+            groupId: "",
+            reason: `Invalid public key record '${filepath}': ${error.reason}`,
+          }),
+      ),
+    );
+  });
+
+const commandAuthEnvNameForGroup = (groupId: string): string =>
+  `${safePathSegment(groupId).replace(/[^A-Za-z0-9]/g, "_").toUpperCase()}_COMMAND_KEYS`;
+
+const shellSingleQuote = (value: string): string =>
+  `'${value.replace(/'/g, "'\\''")}'`;
+
+const publicKeyEnvLine = (
+  groupId: string,
+  records: ReadonlyArray<PublicKeyRecord>,
+): Effect.Effect<string, ProcessManagerRequestError> =>
+  Effect.map(
+    encodeCliJson(records),
+    (json) => `${commandAuthEnvNameForGroup(groupId)}=${shellSingleQuote(json)}`,
+  );
+
+const publicKeyFileEnvLine = (
+  groupId: string,
+  filepath: string,
+): string => `${commandAuthEnvNameForGroup(groupId)}_FILE=${shellSingleQuote(filepath)}`;
+
+const publicKeyDirEnvLine = (
+  groupId: string,
+  directory: string,
+): string => `${commandAuthEnvNameForGroup(groupId)}_DIR=${shellSingleQuote(directory)}`;
+
+const normalizedRelativePath = (path: string): string => {
+  const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
+  const cwd = process.cwd().replace(/\\/g, "/").replace(/\/+$/, "");
+  return normalized.startsWith(`${cwd}/`)
+    ? normalized.slice(cwd.length + 1)
+    : normalized;
+};
+
+const parentDirectory = (path: string): string | undefined => {
+  const normalized = path.replace(/\\/g, "/");
+  const index = normalized.lastIndexOf("/");
+  return index <= 0 ? undefined : normalized.slice(0, index);
+};
+
+const gitignorePatternMayCover = (pattern: string, relativePath: string): boolean => {
+  const normalizedPattern = pattern.trim().replace(/\/+$/, "");
+  if (
+    normalizedPattern.length === 0 ||
+    normalizedPattern.startsWith("#") ||
+    normalizedPattern.startsWith("!")
+  ) {
+    return false;
+  }
+  const unrooted = normalizedPattern.startsWith("/")
+    ? normalizedPattern.slice(1)
+    : normalizedPattern;
+  return (
+    relativePath === unrooted ||
+    relativePath.startsWith(`${unrooted}/`) ||
+    (unrooted.endsWith("*") && relativePath.startsWith(unrooted.slice(0, -1)))
+  );
+};
+
+const warnIfDirectoryMayNotBeIgnored = (
+  directory: string,
+): Effect.Effect<
+  void,
+  never,
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem
+> =>
+  Effect.gen(function* () {
+    const relativePath = normalizedRelativePath(directory);
+    const gitIgnored = yield* ChildProcess.make(
+      "git",
+      ["check-ignore", "--quiet", relativePath],
+    ).pipe(
+      Effect.flatMap((handle) =>
+        Effect.map(handle.exitCode, (exitCode) => exitCode === 0)
+      ),
+      Effect.catch(() => Effect.succeed(false)),
+      Effect.scoped,
+    );
+    if (gitIgnored) {
+      return;
+    }
+    const fs = yield* FileSystem.FileSystem;
+    const ignored = yield* fs.readFileString(".gitignore").pipe(
+      Effect.map((text) =>
+        text.split(/\r?\n/).some((line) => gitignorePatternMayCover(line, relativePath))
+      ),
+      Effect.catch(() => Effect.succeed(false)),
+    );
+    if (!ignored) {
+      yield* Console.error(
+        `Warning: command auth keyring directory '${relativePath}' was not found in .gitignore. Public keys are not secret, but generated keyring files are usually local config; add '${relativePath}/' if you do not intend to commit them.`,
+      );
+    }
+  });
+
 const resolveCliTarget = (
   groups: ReadonlyArray<ConfigSource>,
   input: string,
@@ -1548,13 +1692,14 @@ const verifiedManagerForTarget = (
   groups: ReadonlyArray<ConfigSource>,
   target: ProcessManagerTargetCandidate,
   endpointLabel?: string,
+  auth?: CommandAuthSignerService,
 ): Effect.Effect<
   RemoteProcessManager<AnyProcessGroupContract>,
   ProcessManagerConnectionError | ProcessManagerRequestError | ProcessManagerEndpointConfigError,
   ProcessManagerConnectionRegistry | HttpClient.HttpClient
 > =>
   Effect.gen(function* () {
-    const manager = yield* managerFor(groups, target.groupId, endpointLabel);
+    const manager = yield* managerFor(groups, target.groupId, endpointLabel, auth);
     // CLI controls are contract-first: verify before every mutation/read so
     // stale imported contracts fail before the wrong remote operation runs.
     yield* manager.verifyContract;
@@ -1597,7 +1742,7 @@ const runProcessCommand = (
   groups: ReadonlyArray<ConfigSource>,
   input: string,
   operation: "start" | "stop" | "restart" | "now",
-  options: Pick<ProcessManagerCliOptions, "endpointLabel">,
+  options: Pick<ProcessManagerCliOptions, "endpointLabel" | "auth">,
 ): Effect.Effect<
   void,
   ProcessManagerConnectionError | ProcessManagerRequestError | ProcessManagerEndpointConfigError,
@@ -1606,7 +1751,7 @@ const runProcessCommand = (
   Effect.gen(function* () {
     const target = yield* resolveCliTarget(groups, input, "process");
     yield* assertTargetControl(target, processControlFor(operation));
-    const manager = yield* verifiedManagerForTarget(groups, target, options.endpointLabel);
+    const manager = yield* verifiedManagerForTarget(groups, target, options.endpointLabel, options.auth);
     yield* runRemoteProcessOperation(manager.process(target.id), operation);
     yield* Console.log(`OK process ${target.id} ${operation} requested`);
   });
@@ -1615,7 +1760,7 @@ const runQueueCommand = (
   groups: ReadonlyArray<ConfigSource>,
   input: string,
   operation: "start" | "pause" | "resume" | "clear",
-  options: Pick<ProcessManagerCliOptions, "endpointLabel">,
+  options: Pick<ProcessManagerCliOptions, "endpointLabel" | "auth">,
 ): Effect.Effect<
   void,
   ProcessManagerConnectionError | ProcessManagerRequestError | ProcessManagerEndpointConfigError,
@@ -1624,7 +1769,7 @@ const runQueueCommand = (
   Effect.gen(function* () {
     const target = yield* resolveCliTarget(groups, input, "queue");
     yield* assertTargetControl(target, operation);
-    const manager = yield* verifiedManagerForTarget(groups, target, options.endpointLabel);
+    const manager = yield* verifiedManagerForTarget(groups, target, options.endpointLabel, options.auth);
     yield* runRemoteQueueOperation(manager.queue(target.id), operation);
     yield* Console.log(`OK queue ${target.id} ${operation} requested`);
   });
@@ -1632,7 +1777,7 @@ const runQueueCommand = (
 const runStartCommand = (
   groups: ReadonlyArray<ConfigSource>,
   input: string,
-  options: Pick<ProcessManagerCliOptions, "endpointLabel"> & { readonly noWatch: boolean },
+  options: Pick<ProcessManagerCliOptions, "endpointLabel" | "auth"> & { readonly noWatch: boolean },
 ): Effect.Effect<
   void,
   | ProcessManagerConnectionError
@@ -1662,7 +1807,7 @@ const runStartCommand = (
 const runStopCommand = (
   groups: ReadonlyArray<ConfigSource>,
   input: string,
-  options: Pick<ProcessManagerCliOptions, "endpointLabel">,
+  options: Pick<ProcessManagerCliOptions, "endpointLabel" | "auth">,
 ): Effect.Effect<
   void,
   | ProcessManagerConnectionError
@@ -1700,7 +1845,7 @@ const runStatusCommand = (
   Effect.gen(function* () {
     const target = yield* resolveCliAnyTarget(groups, input);
     yield* assertTargetControl(target, "status");
-    const manager = yield* verifiedManagerForTarget(groups, target, options.endpointLabel);
+    const manager = yield* verifiedManagerForTarget(groups, target, options.endpointLabel, options.auth);
     const response = target.kind === "process"
       ? yield* manager.process(target.id).status
       : yield* manager.queue(target.id).status;
@@ -1730,7 +1875,7 @@ const runVerifyCommand = (
   Effect.gen(function* () {
     const verified: Array<{ readonly groupId: string }> = [];
     for (const group of groups) {
-      const manager = yield* managerFor(groups, group.id, options.endpointLabel);
+      const manager = yield* managerFor(groups, group.id, options.endpointLabel, options.auth);
       yield* manager.verifyContract;
       verified.push({ groupId: group.id });
       if (options.json) {
@@ -1856,6 +2001,168 @@ const runLogsCommand = (
     yield* queryGroupLogsForCatalog(groups, scope, options);
   });
 
+const runAuthEnrollKeyCommand = (
+  groups: ReadonlyArray<ConfigSource>,
+  publicKeyRecordPath: string,
+  options: {
+    readonly group: Option.Option<string>;
+    readonly allGroups: boolean;
+    readonly writeEnv: Option.Option<string>;
+    readonly keyringFile: Option.Option<string>;
+    readonly keyringDir: Option.Option<string>;
+    readonly dryRun: boolean;
+  },
+): Effect.Effect<
+  void,
+  ProcessManagerConnectionError | ProcessManagerRequestError,
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem
+> =>
+  Effect.gen(function* () {
+    if (options.allGroups && Option.isSome(options.group)) {
+      return yield* new ProcessManagerConnectionError({
+        groupId: "",
+        reason: "Use either --all-groups or --group, not both",
+      });
+    }
+    if (Option.isSome(options.keyringFile) && Option.isSome(options.keyringDir)) {
+      return yield* new ProcessManagerConnectionError({
+        groupId: "",
+        reason: "Use either --keyring-file or --keyring-dir, not both",
+      });
+    }
+    const records = yield* decodePublicKeyRecordFile(publicKeyRecordPath);
+    const selectedGroups = options.allGroups
+      ? groups
+      : Option.isSome(options.group)
+        ? [yield* resolveGroup(groups, options.group.value)]
+        : undefined;
+    if (selectedGroups === undefined) {
+      return yield* new ProcessManagerConnectionError({
+        groupId: "",
+        reason: "auth enroll-key requires --group <id> or --all-groups",
+      });
+    }
+
+    const lines: string[] = [];
+    for (const group of selectedGroups) {
+      lines.push(`# Public command auth verifier key for ${group.id}`);
+      if (Option.isSome(options.keyringFile)) {
+        lines.push(publicKeyFileEnvLine(group.id, options.keyringFile.value));
+      } else if (Option.isSome(options.keyringDir)) {
+        lines.push(publicKeyDirEnvLine(group.id, options.keyringDir.value));
+      } else {
+        lines.push(yield* publicKeyEnvLine(group.id, records));
+      }
+      lines.push("");
+    }
+    const output = lines.join("\n");
+    if (Option.isSome(options.keyringFile) && !options.dryRun) {
+      const keyringFile = options.keyringFile.value;
+      const fs = yield* FileSystem.FileSystem;
+      const exists = yield* fs.exists(keyringFile).pipe(Effect.catch(() => Effect.succeed(false)));
+      const existing = exists
+        ? yield* CommandAuth.loadPublicKeyRecords({ file: keyringFile }).pipe(
+            Effect.mapError(
+              (error) =>
+                new ProcessManagerConnectionError({
+                  groupId: "",
+                  reason: error.reason,
+                }),
+            ),
+          )
+        : [];
+      const merged = yield* CommandAuth.mergePublicKeyRecords([...existing, ...records]).pipe(
+        Effect.mapError(
+          (error) =>
+            new ProcessManagerConnectionError({
+              groupId: "",
+              reason: error.reason,
+            }),
+        ),
+      );
+      const parent = parentDirectory(keyringFile);
+      if (parent !== undefined) {
+        yield* fs.makeDirectory(parent, { recursive: true }).pipe(
+          Effect.mapError(
+            (error) =>
+              new ProcessManagerConnectionError({
+                groupId: "",
+                reason: `Unable to create keyring file directory '${parent}': ${String(error)}`,
+              }),
+          ),
+        );
+      }
+      yield* fs.writeFileString(keyringFile, `${CommandAuth.publicKeyRecordsJson(merged)}\n`).pipe(
+        Effect.mapError(
+          (error) =>
+            new ProcessManagerConnectionError({
+              groupId: "",
+              reason: `Unable to write keyring file '${keyringFile}': ${String(error)}`,
+            }),
+        ),
+      );
+    }
+    if (Option.isSome(options.keyringDir) && !options.dryRun) {
+      const keyringDir = options.keyringDir.value;
+      const fs = yield* FileSystem.FileSystem;
+      yield* warnIfDirectoryMayNotBeIgnored(keyringDir);
+      yield* fs.makeDirectory(keyringDir, { recursive: true }).pipe(
+        Effect.mapError(
+          (error) =>
+            new ProcessManagerConnectionError({
+              groupId: "",
+              reason: `Unable to create keyring directory '${keyringDir}': ${String(error)}`,
+            }),
+        ),
+      );
+      for (const record of records) {
+        const filepath = `${keyringDir}/${record.keyId}.json`;
+        yield* fs.writeFileString(filepath, `${CommandAuth.publicKeyRecordJson(record)}\n`).pipe(
+          Effect.mapError(
+            (error) =>
+              new ProcessManagerConnectionError({
+                groupId: "",
+                reason: `Unable to write keyring record '${filepath}': ${String(error)}`,
+              }),
+          ),
+        );
+      }
+    }
+    if (Option.isSome(options.writeEnv) && !options.dryRun) {
+      const writeEnv = options.writeEnv.value;
+      const fs = yield* FileSystem.FileSystem;
+      const existing = yield* fs.exists(writeEnv).pipe(
+        Effect.flatMap((exists) =>
+          exists ? fs.readFileString(writeEnv) : Effect.succeed("")
+        ),
+        Effect.mapError(
+          (error) =>
+            new ProcessManagerConnectionError({
+              groupId: "",
+              reason: `Unable to read '${writeEnv}': ${String(error)}`,
+            }),
+        ),
+      );
+      const prefix = existing.length === 0 || existing.endsWith("\n") ? "" : "\n";
+      yield* fs.writeFileString(writeEnv, `${existing}${prefix}${output}`).pipe(
+        Effect.mapError(
+          (error) =>
+            new ProcessManagerConnectionError({
+              groupId: "",
+              reason: `Unable to write '${writeEnv}': ${String(error)}`,
+            }),
+        ),
+      );
+      yield* Console.log(`Wrote command auth public key config to ${writeEnv}`);
+      return;
+    }
+
+    yield* Console.log(output);
+    if (Option.isSome(options.writeEnv) && options.dryRun) {
+      yield* Console.log(`# dry-run: would append to ${options.writeEnv.value}`);
+    }
+  });
+
 const runGroupStopCommand = (
   groups: ReadonlyArray<ConfigSource>,
   input: string,
@@ -1907,7 +2214,7 @@ const runGroupsCommand = (
         const endpoint = selected.endpoint._tag === "ProcessManagerHttpEndpoint"
           ? selected.endpoint.transport.baseUrl
           : selected.endpoint._tag;
-        const status = yield* probeEndpointStatus(group, selected);
+        const status = yield* probeEndpointStatus(group, selected, options.auth);
         rows.push({ groupId: group.id, target: selected.label, endpoint, status });
         lines.push(`${group.id}\t${selected.label}\t${formatEndpointStatus(status)}\t${endpoint}`);
         continue;
@@ -1988,16 +2295,23 @@ const makeCli = <
   const beforeOption = Flag.string("before").pipe(Flag.optional);
   const limitOption = Flag.integer("limit").pipe(Flag.withDefault(defaultLogQueryLimit));
   const sortOption = Flag.choice("sort", ["asc", "desc"] as const).pipe(Flag.withDefault("desc"));
+  const publicKeyRecordArg = Argument.string("public-key-record");
+  const authGroupOption = Flag.string("group").pipe(Flag.optional);
+  const allGroupsOption = Flag.boolean("all-groups").pipe(Flag.withDefault(false));
+  const writeEnvOption = Flag.string("write-env").pipe(Flag.optional);
+  const keyringFileOption = Flag.string("keyring-file").pipe(Flag.optional);
+  const keyringDirOption = Flag.string("keyring-dir").pipe(Flag.optional);
+  const dryRunOption = Flag.boolean("dry-run").pipe(Flag.withDefault(false));
   const endpointLabelFrom = (endpointLabel: Option.Option<string>): string | undefined =>
     Option.isSome(endpointLabel) ? endpointLabel.value : undefined;
   const groupsCommand = Command.make("groups", { json: jsonOption, endpointLabel: endpointLabelOption }, ({ json, endpointLabel }) =>
-    runGroupsCommand(groups, { json, endpointLabel: endpointLabelFrom(endpointLabel) })
+    runGroupsCommand(groups, { json, endpointLabel: endpointLabelFrom(endpointLabel), auth: config.auth })
   );
   const listCommand = Command.make("ls", { json: jsonOption }, ({ json }) =>
     runListCommand(groups, { json })
   );
   const verifyCommand = Command.make("verify", { json: jsonOption, endpointLabel: endpointLabelOption }, ({ json, endpointLabel }) =>
-    runVerifyCommand(groups, { json, endpointLabel: endpointLabelFrom(endpointLabel) })
+    runVerifyCommand(groups, { json, endpointLabel: endpointLabelFrom(endpointLabel), auth: config.auth })
   );
   const watchCommand = Command.make(
     "watch",
@@ -2030,19 +2344,44 @@ const makeCli = <
     ({ target, from, to, after, before, limit, sort }) =>
       runLogsCommand(groups, target, { from, to, after, before, limit, sort }),
   );
+  const authCommand = Command.make("auth").pipe(
+    Command.withSubcommands([
+      Command.make(
+        "enroll-key",
+        {
+          publicKeyRecord: publicKeyRecordArg,
+          group: authGroupOption,
+          allGroups: allGroupsOption,
+          writeEnv: writeEnvOption,
+          keyringFile: keyringFileOption,
+          keyringDir: keyringDirOption,
+          dryRun: dryRunOption,
+        },
+        ({ publicKeyRecord, group, allGroups, writeEnv, keyringFile, keyringDir, dryRun }) =>
+          runAuthEnrollKeyCommand(groups, publicKeyRecord, {
+            group,
+            allGroups,
+            writeEnv,
+            keyringFile,
+            keyringDir,
+            dryRun,
+          }),
+      ),
+    ]),
+  );
   const statusCommand = Command.make("status", { target, json: jsonOption, endpointLabel: endpointLabelOption }, ({ target, json, endpointLabel }) =>
-    runStatusCommand(groups, target, { json, endpointLabel: endpointLabelFrom(endpointLabel) })
+    runStatusCommand(groups, target, { json, endpointLabel: endpointLabelFrom(endpointLabel), auth: config.auth })
   );
   const processCommand = (
     name: "start" | "stop" | "restart" | "now",
     operation: "start" | "stop" | "restart" | "now",
   ) =>
     Command.make(name, { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
-      runProcessCommand(groups, target, operation, { endpointLabel: endpointLabelFrom(endpointLabel) })
+      runProcessCommand(groups, target, operation, { endpointLabel: endpointLabelFrom(endpointLabel), auth: config.auth })
     );
   const queueCommand = (name: "pause" | "resume" | "clear") =>
     Command.make(name, { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
-      runQueueCommand(groups, target, name, { endpointLabel: endpointLabelFrom(endpointLabel) }),
+      runQueueCommand(groups, target, name, { endpointLabel: endpointLabelFrom(endpointLabel), auth: config.auth }),
     );
 
   const root = Command.make(
@@ -2059,6 +2398,7 @@ const makeCli = <
       verifyCommand,
       watchCommand,
       logsCommand,
+      authCommand,
       statusCommand,
       Command.make(
         "start",
@@ -2067,10 +2407,11 @@ const makeCli = <
           runStartCommand(groups, target, {
             endpointLabel: endpointLabelFrom(endpointLabel),
             noWatch,
+            auth: config.auth,
           }),
       ),
       Command.make("stop", { target, endpointLabel: endpointLabelOption }, ({ target, endpointLabel }) =>
-        runStopCommand(groups, target, { endpointLabel: endpointLabelFrom(endpointLabel) }),
+        runStopCommand(groups, target, { endpointLabel: endpointLabelFrom(endpointLabel), auth: config.auth }),
       ),
       processCommand("restart", "restart"),
       processCommand("now", "now"),
@@ -2191,6 +2532,7 @@ function connect<Source extends ContractSource<AnyProcessGroupContract>>(
   source: Source,
   options: {
     readonly baseUrl: string;
+    readonly auth?: CommandAuthSignerService;
   },
 ): RemoteProcessManager<ContractFromSource<Source>>;
 
@@ -2235,6 +2577,7 @@ function connect<Source extends ContractSource<AnyProcessGroupContract>>(
 function connect<const Contract extends AnyProcessGroupContract>(options: {
   readonly baseUrl: string;
   readonly contract: Contract;
+  readonly auth?: CommandAuthSignerService;
 }): RemoteProcessManager<Contract>;
 
 /**
@@ -2258,6 +2601,7 @@ function connect(
     | {
         readonly baseUrl: string;
         readonly contract: AnyProcessGroupContract;
+        readonly auth?: CommandAuthSignerService;
       }
     | {
         readonly transport: ControlTransportClientShape<unknown>;
@@ -2265,6 +2609,7 @@ function connect(
       },
   options?: {
     readonly baseUrl: string;
+    readonly auth?: CommandAuthSignerService;
   } | {
     readonly transport: ControlTransportClientShape<unknown>;
   } | {
@@ -2287,7 +2632,10 @@ function connect(
   if (options !== undefined) {
     if ("baseUrl" in options) {
       return makeRemoteProcessManager(
-        makeControlTransportHttpClient({ baseUrl: options.baseUrl }),
+        makeControlTransportHttpClient({
+          baseUrl: options.baseUrl,
+          auth: options.auth,
+        }),
         sourceOrOptions.contract,
       );
     }
@@ -2298,7 +2646,10 @@ function connect(
   }
   if ("baseUrl" in sourceOrOptions) {
     return makeRemoteProcessManager(
-      makeControlTransportHttpClient({ baseUrl: sourceOrOptions.baseUrl }),
+      makeControlTransportHttpClient({
+        baseUrl: sourceOrOptions.baseUrl,
+        auth: sourceOrOptions.auth,
+      }),
       sourceOrOptions.contract,
     );
   }
