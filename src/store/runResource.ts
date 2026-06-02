@@ -55,13 +55,20 @@
 
 import { DateTime, Effect, Option, Schema } from "effect";
 import {
+  filterMapNullable,
+  nullable,
+  numberValue,
+  recordValue,
+  stringValue,
+  valueWhen,
+} from "../internal/store/decode";
+import {
   applyQueryOpts,
   byTimestampDesc,
-  isFiniteNumber,
-  isRecord,
   isString,
   recordAttributesObject,
   runtimeRecordQuery,
+  windowOpts,
 } from "../internal/store/helpers";
 import type { ProcessStoreSpine } from "../internal/store/spine";
 import { ProcessStore, Telemetry } from "../ProcessStore";
@@ -271,33 +278,6 @@ const isStateChangeReason = (
   isString(value) &&
   RUN_RESOURCE_STATE_CHANGE_REASONS.some((reason) => reason === value);
 
-const nullable = <A>(option: Option.Option<A>): A | null =>
-  option.pipe(
-    Option.match({
-      onNone: () => null,
-      onSome: (value) => value,
-    }),
-  );
-
-const optionFromNullable = <A>(value: A | null): Option.Option<A> =>
-  value === null ? Option.none<A>() : Option.some(value);
-
-const valueWhen = <A>(
-  value: unknown,
-  guard: (value: unknown) => value is A,
-): Option.Option<A> => guard(value) ? Option.some(value) : Option.none();
-
-const stringValue = (value: unknown): Option.Option<string> =>
-  valueWhen(value, isString);
-
-const numberValue = (value: unknown): Option.Option<number> =>
-  valueWhen(value, isFiniteNumber);
-
-const recordValue = (
-  value: unknown,
-): Option.Option<Readonly<Record<string, unknown>>> =>
-  valueWhen(value, isRecord);
-
 // ============================================================================
 // Decoders
 // ============================================================================
@@ -480,9 +460,7 @@ const factsFromRecords = (
   query: RunResourceFactQuery | undefined,
 ): RunResourceFact[] =>
   applyQueryOpts(
-    records
-      .flatMap((record) => Option.toArray(optionFromNullable(recordToFact(record))))
-      .filter(matchesFactQuery(query)),
+    filterMapNullable(records, recordToFact).filter(matchesFactQuery(query)),
     query?.opts,
     (fact) => fact.occurredAt,
   );
@@ -491,10 +469,7 @@ const stateChangesFromRecords = (
   records: ReadonlyArray<RuntimeRecord>,
   resourceId: string | undefined,
 ): RunResourceStateChange[] =>
-  records
-    .flatMap((record) =>
-      Option.toArray(optionFromNullable(recordToStateChange(record))),
-    )
+  filterMapNullable(records, recordToStateChange)
     .filter((change) => resourceId === undefined || change.resourceId === resourceId);
 
 const sortedStateChanges = (
@@ -512,44 +487,66 @@ const sortedStateChanges = (
     (change) => change.changedAt,
   );
 
-const pairRuns = (facts: ReadonlyArray<RunResourceFact>): RunResourceRun[] => {
-  const startedByRun = new Map<string, RunResourceRunStartedFact>();
-  const endedByRun = new Map<
-    string,
-    RunResourceRunCompletedFact | RunResourceRunFailedFact
-  >();
+type RunResourceEndedFact =
+  | RunResourceRunCompletedFact
+  | RunResourceRunFailedFact;
 
-  for (const fact of facts) {
-    if (fact.type === RUN_STARTED_WIRE) {
-      const existing = startedByRun.get(fact.runId);
-      if (existing === undefined || fact.occurredAt < existing.occurredAt) {
-        startedByRun.set(fact.runId, fact);
-      }
-      continue;
-    }
-    const existing = endedByRun.get(fact.runId);
-    if (existing === undefined || fact.occurredAt > existing.occurredAt) {
-      endedByRun.set(fact.runId, fact);
-    }
+type RunPairAccumulator = {
+  readonly startedByRun: Map<string, RunResourceRunStartedFact>;
+  readonly endedByRun: Map<string, RunResourceEndedFact>;
+};
+
+const isStartedFact = (
+  fact: RunResourceFact,
+): fact is RunResourceRunStartedFact =>
+  fact.type === RUN_STARTED_WIRE;
+
+const isEndedFact = (fact: RunResourceFact): fact is RunResourceEndedFact =>
+  fact.type === RUN_COMPLETED_WIRE || fact.type === RUN_FAILED_WIRE;
+
+const setEarlierStart = (
+  map: Map<string, RunResourceRunStartedFact>,
+  fact: RunResourceRunStartedFact,
+): Map<string, RunResourceRunStartedFact> => {
+  const existing = map.get(fact.runId);
+  if (existing === undefined || fact.occurredAt < existing.occurredAt) {
+    map.set(fact.runId, fact);
   }
+  return map;
+};
 
-  const runs: RunResourceRun[] = [];
-  for (const [runId, started] of startedByRun) {
+const setLaterEnd = (
+  map: Map<string, RunResourceEndedFact>,
+  fact: RunResourceEndedFact,
+): Map<string, RunResourceEndedFact> => {
+  const existing = map.get(fact.runId);
+  if (existing === undefined || fact.occurredAt > existing.occurredAt) {
+    map.set(fact.runId, fact);
+  }
+  return map;
+};
+
+const runFromPair = (
+  endedByRun: Map<string, RunResourceEndedFact>,
+) =>
+  ([runId, started]: readonly [
+    string,
+    RunResourceRunStartedFact,
+  ]): RunResourceRun => {
     const ended = endedByRun.get(runId);
     if (ended === undefined) {
-      runs.push({
+      return {
         runId,
         resourceId: started.resourceId,
         startedAt: started.occurredAt,
         endedAt: null,
         durationMs: null,
         outcome: "in-flight",
-      });
-      continue;
+      };
     }
     const outcome: "completed" | "failed" =
       ended.type === RUN_COMPLETED_WIRE ? "completed" : "failed";
-    runs.push({
+    return {
       runId,
       resourceId: started.resourceId,
       startedAt: started.occurredAt,
@@ -559,11 +556,28 @@ const pairRuns = (facts: ReadonlyArray<RunResourceFact>): RunResourceRun[] => {
       ...(ended.type === RUN_FAILED_WIRE
         ? { cause: ended.payload.cause }
         : {}),
-    });
-  }
+    };
+  };
 
-  runs.sort((a, b) => b.startedAt - a.startedAt);
-  return runs;
+const pairRuns = (facts: ReadonlyArray<RunResourceFact>): RunResourceRun[] => {
+  const { endedByRun, startedByRun } = facts.reduce<RunPairAccumulator>(
+    (acc, fact) => {
+      if (isStartedFact(fact)) {
+        setEarlierStart(acc.startedByRun, fact);
+      }
+      if (isEndedFact(fact)) {
+        setLaterEnd(acc.endedByRun, fact);
+      }
+      return acc;
+    },
+    {
+      startedByRun: new Map(),
+      endedByRun: new Map(),
+    },
+  );
+  return [...startedByRun.entries()]
+    .map(runFromPair(endedByRun))
+    .sort((a, b) => b.startedAt - a.startedAt);
 };
 
 // ============================================================================
@@ -572,40 +586,19 @@ const pairRuns = (facts: ReadonlyArray<RunResourceFact>): RunResourceRun[] => {
 
 const factPredicates = (
   query: RunResourceFactQuery | undefined,
-): import("../Query").RuntimeRecordPredicate[] => {
-  const preds: import("../Query").RuntimeRecordPredicate[] = [
+): import("../Query").RuntimeRecordPredicate[] => [
     Type.in(factRecordTypes),
+    ...(query?.resourceId === undefined
+      ? []
+      : [ProcessId.equals(query.resourceId)]),
   ];
-  if (query?.resourceId !== undefined) {
-    preds.push(ProcessId.equals(query.resourceId));
-  }
-  return preds;
-};
 
 const stateChangedPredicates = (
   resourceId: string | undefined,
-): import("../Query").RuntimeRecordPredicate[] => {
-  const preds: import("../Query").RuntimeRecordPredicate[] = [
+): import("../Query").RuntimeRecordPredicate[] => [
     Type.in(stateRecordTypes),
+    ...(resourceId === undefined ? [] : [ProcessId.equals(resourceId)]),
   ];
-  if (resourceId !== undefined) {
-    preds.push(ProcessId.equals(resourceId));
-  }
-  return preds;
-};
-
-// Drop opts.limit when the storage query is a superset of the post-filter
-// (e.g. when post-filtering by `runId` or fact subtype) so limits apply to
-// the already-narrowed fact list rather than the broader event stream.
-const factWindowOpts = (
-  opts: QueryOpts | undefined,
-): QueryOpts | undefined => {
-  if (opts === undefined) return undefined;
-  const out: { -readonly [K in keyof QueryOpts]: QueryOpts[K] } = {};
-  if (opts.before !== undefined) out.before = opts.before;
-  if (opts.after !== undefined) out.after = opts.after;
-  return out;
-};
 
 const RunResourceStateSchema = Schema.Struct({
   resourceId: Schema.String,
@@ -767,7 +760,7 @@ const readFacts = (
   query: RunResourceFactQuery | undefined,
 ): Effect.Effect<RunResourceFact[], RuntimeStorageOperationalError> =>
   s
-    .read(runtimeRecordQuery(factPredicates(query), factWindowOpts(query?.opts)))
+    .read(runtimeRecordQuery(factPredicates(query), windowOpts(query?.opts)))
     .pipe(Effect.map((records) => factsFromRecords(records, query)));
 
 const readStateHistory = (
