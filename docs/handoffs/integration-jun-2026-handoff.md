@@ -6,10 +6,19 @@
 cursor/integration-jun-2026
 ```
 
-Optional second checkout (kept worktree):
+Optional second checkout (kept worktree on the home server):
 
 ```text
-../effect-pm-alt  →  branch cursor/effect-pm-alt (tracks integration tip)
+/Users/nikolasstow/Coding/packages/effect-pm-alt
+  branch: cursor/effect-pm-alt (starts at integration tip; merge integration when it moves)
+```
+
+Setup after creating the worktree:
+
+```bash
+cd /Users/nikolasstow/Coding/packages/effect-pm-alt
+pnpm install
+pnpm run prepare
 ```
 
 ## What merged
