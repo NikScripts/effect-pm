@@ -104,6 +104,11 @@
       "import": "./dist/ControlProtocol.mjs",
       "require": "./dist/ControlProtocol.js"
     },
+    "./ControlTransportRpc": {
+      "types": "./dist/ControlTransportRpc.d.ts",
+      "import": "./dist/ControlTransportRpc.mjs",
+      "require": "./dist/ControlTransportRpc.js"
+    },
     "./CommandAuth": {
       "types": "./dist/CommandAuth.d.ts",
       "import": "./dist/CommandAuth.mjs",

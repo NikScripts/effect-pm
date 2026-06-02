@@ -10,7 +10,8 @@
 
 | Client | Transport |
 | --- | --- |
-| **`ProcessManager`** (`connect`, CLI) | **`POST /control`** — JSON **protocol envelope** (`ControlProtocolRequest`) |
+| **`ProcessManager`** (`connect`, CLI default) | **`POST /control`** — JSON **protocol envelope** (`ControlProtocolRequest`) |
+| **Effect-native integrations** | **`ControlTransportRpc`** — `@effect/rpc` dispatch of the same protocol envelope |
 | Direct HTTP / tooling | **REST** paths below (`GET` / `POST` per resource) |
 
 REST routes are translated to the same protocol handlers as **`/control`**.
@@ -138,7 +139,26 @@ Responses use **`ControlResponse`**: `{ success, type?, data?, error? }`. Routes
 
 ## ControlProtocol
 
-**`ControlRouter`**, **`makeControlProtocolRequestEnvelope`**, **`ControlTransportHttp`** — shared by server and **`ProcessManager`**. Import when building custom transports, not for everyday app code.
+**`ControlRouter`**, **`makeControlProtocolRequestEnvelope`**,
+**`ControlTransportHttp`**, and **`ControlTransportRpc`** are shared by server
+and **`ProcessManager`**. Import when building custom transports, not for
+everyday app code.
+
+### HTTP and RPC transport adapters
+
+- **HTTP** remains the compatibility/default local adapter. It preserves
+  existing `ControlService` routes, CLI behavior, signed `/control` command
+  authentication, and REST shortcuts.
+- **Effect RPC** is the preferred Effect-native adapter for new integrations.
+  `ControlTransportRpc` exposes one `Control.Dispatch` RPC that carries the
+  existing `ControlProtocolRequestEnvelope` and returns the existing
+  `ControlProtocolResponseEnvelope`.
+- **`ControlProtocol` remains the semantic core.** `ControlRouter` handles
+  process/queue/group requests; adapters own HTTP or RPC framing and
+  adapter-specific errors.
+- **`ProcessManager.connect(Group, { transport })` already accepts either
+  adapter.** Pass `ControlTransportRpc.client(rpcClient)` to use RPC without
+  changing typed process or queue calls.
 
 ---
 
