@@ -48,16 +48,17 @@ replacement.
 - Terminal endpoint config is explicit and opt-in per group endpoint.
 - Terminal transport is separate from normal control transport.
 - Local child endpoint startup can launch terminal runtime when configured.
-- Terminal gateway transport should be Effect RPC first. Effect HTTP API can be
+- Terminal gateway transport should use Effect v4 RPC first (`effect/unstable/rpc`).
+  Effect HTTP API can be
   used for non-streaming metadata or deployment edges, but terminal sessions
   should not be hand-rolled HTTP routes.
-- `@effect/rpc` implementation is blocked until an Effect-4-compatible package
-  release is available. The published `@effect/rpc@0.75.1` package tested here
-  targets Effect 3 runtime paths and fails against this repo's Effect 4 beta.
+- Do not use npm `@effect/rpc@0.75.1` with this repo's Effect 4 beta; it targets
+  Effect 3 runtime paths. Use `effect/unstable/rpc` from the installed Effect v4
+  package unless/until a compatible standalone package is available.
 - Separate semantic transports are allowed and preferred when feature semantics
   differ, but they must share adapter conventions and runtime configuration.
 - `TerminalTransportRpc` is separate from `ControlTransportRpc`, but both use
-  `@effect/rpc` and a shared ProcessManager RPC runtime configuration style.
+  Effect v4 RPC and a shared ProcessManager RPC runtime configuration style.
 - V1 backend starts with Effect `ChildProcess` command streaming.
 - PTY support is a later backend behind the same `TerminalSessionService`
   contract.
@@ -431,8 +432,8 @@ Which Effect transport module owns the terminal gateway contract, and how browse
 widgets talk to it without hand-rolled HTTP route design.
 
 Recommended ingredients:
-- Use `@effect/rpc` as the terminal gateway transport implementation — it models
-  Effect effects and streaming responses directly.
+- Use Effect v4 RPC (`effect/unstable/rpc`) as the terminal gateway transport
+  implementation — it models Effect effects and streaming responses directly.
 - Keep terminal as its own semantic transport (`TerminalTransportRpc`) — terminal
   sessions differ from normal control commands enough to deserve a separate
   module.
@@ -469,7 +470,7 @@ Browser TerminalWidget
 ```
 
 ```ts
-import { Rpc, RpcGroup } from "@effect/rpc";
+import { Rpc, RpcGroup } from "effect/unstable/rpc";
 import { Schema } from "effect";
 
 const OpenTerminalSessionSchema = Schema.Struct({
@@ -624,7 +625,7 @@ Alternatives:
 
 Ingredients:
 - Browser uses `TerminalSessionPort`.
-- Gateway API is modeled with `@effect/rpc`.
+- Gateway API is modeled with Effect v4 RPC.
 - Gateway owns user auth/RBAC.
 - Gateway, PM, or relay owns machine-to-machine terminal auth.
 - Terminal events use RPC streaming (`stream: true`).
@@ -1060,10 +1061,9 @@ Recommended ingredients:
 - Cut 3: ProcessManager endpoint config/discovery for terminal capability.
 - Cut 4: RPC gateway adapter + browser `TerminalSessionPort` adapter.
 - Cut 5: docs, examples, changeset, and optional CLI thin client.
-- Add `@effect/rpc` and `@effect/platform` explicitly before code imports them.
-- First verify the installed `@effect/rpc` package is compatible with this repo's
-  Effect 4 beta. Do not commit source imports while the package resolves to an
-  Effect-3-targeted build.
+- Import RPC from `effect/unstable/rpc` for this repo's current Effect v4 beta.
+- Add standalone `@effect/rpc` only if a compatible package line is available and
+  approved.
 - Keep HTTP/fetch adapters out of v1 terminal unless only documenting
   compatibility metadata; do not build terminal streams on hand-rolled HTTP.
 - Every cut that ships code runs typecheck, tests, lint, and build.
@@ -1184,8 +1184,8 @@ standard package checks.
 Implementation note:
 An attempted Cut 1 spike using npm `@effect/rpc@0.75.1` failed at runtime because
 the package imports `effect/dist/GlobalValue.js`, which is not present in the
-current Effect 4 beta dependency. Keep the RPC design, but wait for a compatible
-release or an approved package/version strategy before adding code imports.
+current Effect 4 beta dependency. The correct current import path is
+`effect/unstable/rpc` from the installed Effect v4 package.
 
 ## Cleanup status
 

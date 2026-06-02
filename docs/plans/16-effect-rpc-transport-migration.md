@@ -7,7 +7,8 @@ already provides the right abstraction.
 
 Use Effect transport modules by default.
 
-- Stateful / streaming / bidirectional protocols → `@effect/rpc`.
+- Stateful / streaming / bidirectional protocols → Effect v4 RPC
+  (`effect/unstable/rpc` in the current beta line).
 - Request-response HTTP compatibility and metadata endpoints →
   `@effect/platform` `HttpApi` / `HttpRouter`.
 - Domain services stay transport-agnostic and never know HTTP paths, status
@@ -18,12 +19,12 @@ Use Effect transport modules by default.
 | Surface | Current shape | Target | Notes |
 | --- | --- | --- | --- |
 | `ControlTransportHttp` server | hand-rolled `node:http` JSON routes | `@effect/platform` `HttpApi` or `HttpRouter` adapter | Keep `ControlRouter` / `ControlProtocol` transport-neutral. HTTP status mapping belongs only in adapter. |
-| Control command transport | `POST /control` envelope over HTTP | `@effect/rpc` adapter for `ControlProtocolRequest` dispatch | Keep HTTP adapter for compatibility; RPC should be first-class for new surfaces. |
+| Control command transport | `POST /control` envelope over HTTP | Effect RPC adapter for `ControlProtocolRequest` dispatch | Keep HTTP adapter for compatibility; RPC should be first-class for new surfaces. |
 | ProcessManager remote client | HTTP client factory by default | injectable transport factories + RPC client adapter | `RemoteProcessManager` remains semantic; transport selected at edge. |
 | Dashboard control widgets | `fetch` adapter | Effect RPC adapter first; fetch adapter compatibility only | Widgets keep `ControlPlanePort`; adapter owns protocol. |
-| Log watch / live streams | HTTP NDJSON stream | `@effect/rpc` streaming RPC | Durable log reads stay storage/query APIs; live stream transport becomes RPC. |
-| Remote queue enqueue | not shipped | `@effect/rpc` queue command adapter | Queue item schemas must land first; domain queue service must not know RPC. |
-| Remote terminal | planned | `@effect/rpc` streaming RPC | Terminal events use RPC streaming; no custom terminal HTTP routes. |
+| Log watch / live streams | HTTP NDJSON stream | Effect RPC streaming RPC | Durable log reads stay storage/query APIs; live stream transport becomes RPC. |
+| Remote queue enqueue | not shipped | Effect RPC queue command adapter | Queue item schemas must land first; domain queue service must not know RPC. |
+| Remote terminal | planned | Effect RPC streaming RPC | Terminal events use RPC streaming; no custom terminal HTTP routes. |
 
 ## What should not migrate
 
@@ -65,7 +66,8 @@ Not allowed in domain services:
    - Move all status-code mapping into the adapter.
 
 2. **Control RPC adapter**
-   - Add `ControlTransportRpc` using `@effect/rpc`.
+   - Add `ControlTransportRpc` using `effect/unstable/rpc` for the current Effect
+     v4 beta line.
    - Model a single dispatch RPC carrying `ControlProtocolRequestEnvelope`, or
      one RPC per command after the command set stabilizes.
    - Keep `ControlRouter` unchanged.
@@ -96,3 +98,10 @@ Not allowed in domain services:
 - Live logs / terminal events are represented as Effect streams at the adapter
   boundary.
 - Existing HTTP examples continue to work until deprecated intentionally.
+
+## Version note
+
+Do not install npm `@effect/rpc@0.75.1` with this repo's current
+`effect@4.0.0-beta.*` line. That package targets Effect 3 runtime paths. Use the
+RPC modules shipped under `effect/unstable/rpc` until a compatible standalone
+package line is available.
