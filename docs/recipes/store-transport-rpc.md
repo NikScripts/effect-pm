@@ -27,9 +27,7 @@ registry-driven router.
 
 ## Locked ingredients
 
-_(updated as decisions are made)_
-
-- `_processTag` — explicit second arg to the builder, string literal, stamped on the class
+- `_processTag` — second positional arg `(id, processTag, ...sections)`, `const Tag extends string`, stamped as `static readonly _processTag: Tag` on the class
 - Chain API: `ProcessStore.payload(S).success(S).resolve(fn)` — Effect RPC naming
 - `ProcessStore.for` resolver signature: `(id: string, s: Spine) => (payload) => Effect`
 - `ProcessStore.registry([...facets])` — array input, derives type map from `_processTag` + schemas
