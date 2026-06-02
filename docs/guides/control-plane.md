@@ -160,6 +160,36 @@ everyday app code.
   adapter.** Pass `ControlTransportRpc.client(rpcClient)` to use RPC without
   changing typed process or queue calls.
 
+```typescript
+import { ControlTransportRpc, ProcessManager } from "@nikscripts/effect-pm";
+import { RpcClient } from "effect/unstable/rpc";
+
+const rpcClient = yield* RpcClient.make(ControlTransportRpc.rpc).pipe(
+  Effect.provide(/* Effect RPC client protocol layer */),
+);
+
+const manager = ProcessManager.connect(BillingGroup, {
+  transport: ControlTransportRpc.client(rpcClient),
+});
+
+yield* manager.verifyContract;
+yield* manager.process(SyncInvoices.id).runImmediately;
+```
+
+```typescript
+import { ControlService, ControlTransportRpc } from "@nikscripts/effect-pm";
+
+const ControlRpcLayer = ControlService.layer(BillingGroup).pipe(
+  Layer.provide(ControlTransportRpc.serverLayer()),
+  Layer.provide(/* Effect RPC server protocol layer */),
+);
+```
+
+`ControlTransportRpc` imports Effect v4 RPC from `effect/unstable/rpc`, which is
+the Effect RPC entrypoint available to this package version. The standalone
+`@effect/rpc` package should be used only after its published peer range matches
+the package's Effect major.
+
 ---
 
 ## Related

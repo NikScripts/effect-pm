@@ -1,6 +1,15 @@
 /**
  * Effect RPC adapter for the transport-neutral control protocol.
  *
+ * @remarks
+ * `ControlTransportRpc` models one RPC operation, `Control.Dispatch`, over the
+ * existing {@link ControlProtocolRequestEnvelope}. The adapter owns RPC framing
+ * and adapter-specific failures; {@link ControlRouter} remains the only service
+ * that interprets process and queue requests.
+ *
+ * This package currently targets Effect v4 beta, where RPC modules are exposed
+ * from `effect/unstable/rpc`.
+ *
  * @module ControlTransportRpc
  */
 
@@ -20,8 +29,12 @@ import {
 } from "./ControlProtocol";
 
 /**
- * Schema-backed RPC adapter error. Domain control handlers continue returning
- * protocol envelopes; this DTO is only for RPC framing/client failures.
+ * Schema-backed RPC adapter error.
+ *
+ * @remarks
+ * Domain failures from processes and queues remain encoded as
+ * {@link ControlProtocolResponseEnvelope} values. This error type is reserved
+ * for failures introduced by the RPC adapter boundary.
  *
  * @public
  */
@@ -51,16 +64,24 @@ export const ControlRpc = RpcGroup.make(
 export type ControlRpcClient<E = never> = RpcClient.FromGroup<typeof ControlRpc, E>;
 
 /**
- * Effect RPC server tuning exposed by the adapter. Transport protocol selection
- * remains in Effect RPC layers supplied by the application.
+ * Effect RPC server tuning exposed by the adapter.
+ *
+ * @remarks
+ * Transport protocol selection remains in Effect RPC layers supplied by the
+ * application, for example an HTTP, socket, worker, or test protocol.
  *
  * @public
  */
 export interface ControlTransportRpcServerConfig {
+  /** Disable tracing spans created by Effect RPC server dispatch. */
   readonly disableTracing?: boolean;
+  /** Span name prefix used by Effect RPC server dispatch. */
   readonly spanPrefix?: string;
+  /** Extra attributes attached to Effect RPC server spans. */
   readonly spanAttributes?: Readonly<Record<string, unknown>>;
+  /** Maximum concurrent RPC handler executions, or `"unbounded"`. */
   readonly concurrency?: number | "unbounded";
+  /** Keep server defects inside the RPC response channel when supported. */
   readonly disableFatalDefects?: boolean;
 }
 
@@ -78,24 +99,23 @@ export const controlRpcErrorFromTransportError = (
   error: ControlTransportError,
 ): ControlRpcError => makeControlRpcError(error.reason, error.status);
 
-const hasProperty = <Key extends PropertyKey>(
-  input: unknown,
-  key: Key,
-): input is { readonly [K in Key]: unknown } =>
-  typeof input === "object" && input !== null && key in input;
-
-const isControlRpcError = (input: unknown): input is ControlRpcError =>
-  hasProperty(input, "_tag") &&
-  input._tag === "ControlRpcError" &&
-  hasProperty(input, "reason") &&
-  typeof input.reason === "string" &&
-  (!hasProperty(input, "status") || typeof input.status === "number");
+const isControlRpcError = Schema.is(ControlRpcErrorSchema);
 
 const errorMessage = (input: unknown): string => {
-  if (hasProperty(input, "message") && typeof input.message === "string") {
+  if (
+    typeof input === "object" &&
+    input !== null &&
+    "message" in input &&
+    typeof input.message === "string"
+  ) {
     return input.message;
   }
-  if (hasProperty(input, "reason") && typeof input.reason === "string") {
+  if (
+    typeof input === "object" &&
+    input !== null &&
+    "reason" in input &&
+    typeof input.reason === "string"
+  ) {
     return input.reason;
   }
   return String(input);
@@ -116,6 +136,10 @@ export const rpcErrorToControlTransportError = (
 
 /**
  * Build a control transport client from an Effect RPC client.
+ *
+ * @remarks
+ * The returned value satisfies {@link ControlTransportClientShape}, so it can
+ * be passed directly to `ProcessManager.connect(Group, { transport })`.
  *
  * @public
  */
@@ -140,14 +164,17 @@ export const ControlTransportRpcLive = ControlRpc.toLayer({
       const router = yield* ControlRouter;
       const response = yield* router.handle(envelope.request);
       return yield* makeControlProtocolResponseEnvelope(envelope, response);
-    }).pipe(
-      Effect.mapError(controlRpcErrorFromTransportError),
-    ),
+    }),
 });
 
 /**
  * Build a {@link ControlTransportServerShape} backed by an externally supplied
  * Effect RPC server protocol.
+ *
+ * @remarks
+ * Use this when composing with existing `ControlService.layer(group)` wiring.
+ * Applications still choose and provide the concrete Effect RPC protocol at the
+ * edge; this helper only adapts that protocol to `ControlTransportServer`.
  *
  * @public
  */
