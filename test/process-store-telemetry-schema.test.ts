@@ -55,6 +55,11 @@ const TelemetrySchemaTelemetry = ProcessStore.telemetry(
   Telemetry.namespace("Test"),
   Telemetry.tag("Event")(
     Telemetry.event("Recorded", TelemetryRecorded).pipe(
+      Telemetry.index(({ field }) => ({
+        subjectType: "TelemetrySubject",
+        subjectId: field("subjectId"),
+        indexA: field("subjectId").named("subjectId"),
+      })),
       Telemetry.logWarning(
         ({ subjectId }) => `schema write failed for ${String(subjectId)}`,
         ({ subjectId }) => ({
@@ -109,9 +114,31 @@ assertType<
 >();
 assertType<
   Assert<
+    typeof TelemetrySchemaStore.Event.Recorded extends {
+      readonly batch: (
+        inputs: ReadonlyArray<unknown>,
+      ) => Effect.Effect<void, unknown, unknown>;
+    }
+      ? true
+      : false
+  >
+>();
+assertType<
+  Assert<
     typeof TelemetrySchemaStore.Event.Failed extends (
       input: unknown,
     ) => Effect.Effect<void, unknown, unknown>
+      ? true
+      : false
+  >
+>();
+assertType<
+  Assert<
+    typeof TelemetrySchemaStore.Event.Failed extends {
+      readonly batch: (
+        inputs: ReadonlyArray<unknown>,
+      ) => Effect.Effect<void, unknown, unknown>;
+    }
       ? true
       : false
   >
@@ -169,6 +196,10 @@ describe("ProcessStore telemetry schema", () => {
       expect(row.type).toBe("Test.Event.Recorded");
       expect(row.processType).toBe("Process");
       expect(row.processId).toBe("process-1");
+      expect(row.subjectType).toBe("TelemetrySubject");
+      expect(row.subjectId).toBe("subject-1");
+      expect(row.indexA).toBe("subject-1");
+      expect(row.indexNames).toEqual(["subjectId"]);
       expect(row.payload).toMatchObject({
         subjectId: "subject-1",
         payload: { concurrency: 2 },
@@ -204,6 +235,28 @@ describe("ProcessStore telemetry schema", () => {
       Effect.provide(TelemetryTestScope.layer({
         processId: "process-input",
         subjectId: "subject-input",
+        startedAt: 1_700_000_000_000,
+      })),
+    ),
+  );
+
+  it.live("batch writes input-shaped schema events", () =>
+    Effect.gen(function* () {
+      yield* TelemetrySchemaStore.Event.Failed.batch([
+        new Error("boom-1"),
+        "boom-2",
+      ]);
+      const store = yield* TelemetrySchemaStore;
+      const rows = yield* store.failed();
+
+      expect(rows).toHaveLength(2);
+      expect(rows[0]?.payload).toMatchObject({ error: "Error: boom-1" });
+      expect(rows[1]?.payload).toMatchObject({ error: "boom-2" });
+    }).pipe(
+      Effect.provide(TelemetrySchemaStore.layer),
+      Effect.provide(TelemetryTestScope.layer({
+        processId: "process-batch",
+        subjectId: "subject-batch",
         startedAt: 1_700_000_000_000,
       })),
     ),

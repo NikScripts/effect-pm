@@ -66,6 +66,35 @@ type TelemetryLogWarning = {
     | ((event: Readonly<Record<string, JsonValue>>) => TelemetryLogAnnotations);
 };
 
+type TelemetryIndexFieldSelector = {
+  readonly _tag: "field";
+  readonly field: string;
+  readonly allowMissing: boolean;
+  readonly indexName?: string;
+  readonly optional: () => TelemetryIndexFieldSelector;
+  readonly named: (name: string) => TelemetryIndexFieldSelector;
+};
+
+type TelemetryIndexValue = string | TelemetryIndexFieldSelector;
+
+type TelemetryIndexDefinition = Readonly<{
+  readonly subjectType?: TelemetryIndexValue;
+  readonly subjectId?: TelemetryIndexValue;
+  readonly key?: TelemetryIndexValue;
+  readonly indexA?: TelemetryIndexValue;
+  readonly indexB?: TelemetryIndexValue;
+  readonly indexC?: TelemetryIndexValue;
+  readonly indexD?: TelemetryIndexValue;
+  readonly indexE?: TelemetryIndexValue;
+  readonly indexF?: TelemetryIndexValue;
+  readonly indexG?: TelemetryIndexValue;
+  readonly indexH?: TelemetryIndexValue;
+}>;
+
+type TelemetryIndexBuilder = {
+  readonly field: (field: string) => TelemetryIndexFieldSelector;
+};
+
 type TelemetryIdentity = {
   readonly kind: string;
   readonly id?: string;
@@ -138,6 +167,7 @@ export type TelemetryEventDef<
   readonly store: TelemetryEventStoreLeg;
   readonly telemetrySchema?: TelemetrySchemaDefinition;
   readonly logWarnings: ReadonlyArray<TelemetryLogWarning>;
+  readonly indexes: ReadonlyArray<TelemetryIndexDefinition>;
   readonly pipes: ReadonlyArray<TelemetryEventPipeLeg>;
   readonly _emit?: EmitApi;
 };
@@ -183,12 +213,19 @@ type PathEmitApi<Path extends ReadonlyArray<string>, Leaf> =
     ? { readonly [K in Head]: PathEmitApi<Tail, Leaf> }
     : Leaf;
 
+type WithBatch<EmitApi> =
+  EmitApi extends (input: infer Input) => infer Output
+    ? ((input: Input) => Output) & {
+        readonly batch: (inputs: ReadonlyArray<Input>) => Effect.Effect<void>;
+      }
+    : EmitApi;
+
 type EventEmitApi<Events extends ReadonlyArray<unknown>> = {
   readonly [Event in Events[number] as Event extends
     TelemetryEventDef<infer Name, unknown>
     ? Name
     : never]: Event extends TelemetryEventDef<string, infer EmitApi>
-    ? EmitApi
+    ? WithBatch<EmitApi>
     : never;
 };
 
@@ -389,6 +426,34 @@ let telemetrySequence = 0;
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const telemetryIndexField = (
+  field: string,
+  options: {
+    readonly allowMissing?: boolean;
+    readonly indexName?: string;
+  } = {},
+): TelemetryIndexFieldSelector => ({
+  _tag: "field",
+  field,
+  allowMissing: options.allowMissing ?? false,
+  ...(options.indexName === undefined ? {} : { indexName: options.indexName }),
+  optional: () => ({
+    ...telemetryIndexField(field, {
+      ...options,
+      allowMissing: true,
+    }),
+  }),
+  named: (name) =>
+    telemetryIndexField(field, {
+      ...options,
+      indexName: name,
+    }),
+});
+
+const telemetryIndexBuilder: TelemetryIndexBuilder = {
+  field: telemetryIndexField,
+};
+
 const toJsonValue = (value: unknown): JsonValue => {
   if (
     value === null ||
@@ -541,6 +606,85 @@ const stringField = (
   return typeof value === "string" ? value : fallback;
 };
 
+const resolveIndexValue = (
+  event: Readonly<Record<string, JsonValue>>,
+  value: TelemetryIndexValue,
+): string | undefined => {
+  if (typeof value === "string") {
+    return value;
+  }
+  const field = event[value.field];
+  if (field === undefined && value.allowMissing) {
+    return undefined;
+  }
+  if (typeof field !== "string") {
+    throw new Error(
+      `Telemetry.index field "${value.field}" must resolve to a string`,
+    );
+  }
+  return field;
+};
+
+const setIndexValue = (
+  record: Record<string, unknown>,
+  key: keyof TelemetryIndexDefinition,
+  event: Readonly<Record<string, JsonValue>>,
+  value: TelemetryIndexValue | undefined,
+  indexNames: Set<string>,
+): void => {
+  if (value === undefined) {
+    return;
+  }
+  const resolved = resolveIndexValue(event, value);
+  if (resolved === undefined) {
+    return;
+  }
+  record[key] = resolved;
+  if (
+    typeof value !== "string" &&
+    value.indexName !== undefined &&
+    key.startsWith("index")
+  ) {
+    indexNames.add(value.indexName);
+  }
+};
+
+const applyIndexDefinition = (
+  record: Omit<RuntimeRecord, "runId" | "createdAt">,
+  event: Readonly<Record<string, JsonValue>>,
+  index: TelemetryIndexDefinition,
+): Omit<RuntimeRecord, "runId" | "createdAt"> => {
+  const out: Record<string, unknown> = { ...record };
+  const names = new Set(
+    record.indexNames === undefined ? [] : record.indexNames,
+  );
+  setIndexValue(out, "subjectType", event, index.subjectType, names);
+  setIndexValue(out, "subjectId", event, index.subjectId, names);
+  setIndexValue(out, "key", event, index.key, names);
+  setIndexValue(out, "indexA", event, index.indexA, names);
+  setIndexValue(out, "indexB", event, index.indexB, names);
+  setIndexValue(out, "indexC", event, index.indexC, names);
+  setIndexValue(out, "indexD", event, index.indexD, names);
+  setIndexValue(out, "indexE", event, index.indexE, names);
+  setIndexValue(out, "indexF", event, index.indexF, names);
+  setIndexValue(out, "indexG", event, index.indexG, names);
+  setIndexValue(out, "indexH", event, index.indexH, names);
+  return {
+    ...out,
+    ...(names.size === 0 ? {} : { indexNames: [...names] }),
+  } as Omit<RuntimeRecord, "runId" | "createdAt">;
+};
+
+const applyEventIndexes = (
+  record: Omit<RuntimeRecord, "runId" | "createdAt">,
+  event: Readonly<Record<string, JsonValue>>,
+  definition: TelemetryEventDef,
+): Omit<RuntimeRecord, "runId" | "createdAt"> =>
+  definition.indexes.reduce(
+    (acc, index) => applyIndexDefinition(acc, event, index),
+    record,
+  );
+
 const makeSchemaRecord = (
   wireId: string,
   event: Readonly<Record<string, JsonValue>>,
@@ -619,6 +763,34 @@ const applySchemaWarnings = (
   );
 };
 
+const materializeSchemaRecord = (
+  wireId: string,
+  event: TelemetryEventDef,
+  identity: TelemetryIdentity | undefined,
+  input?: unknown,
+): Effect.Effect<{
+  readonly payload: Readonly<Record<string, JsonValue>>;
+  readonly record: Omit<RuntimeRecord, "runId" | "createdAt">;
+}> => {
+  if (event.telemetrySchema === undefined) {
+    return Effect.die(
+      `Telemetry event "${event.name}" does not have a schema-backed record`,
+    );
+  }
+  return materializeSchema(event.telemetrySchema, input).pipe(
+    Effect.flatMap(({ state, payload }) =>
+      Effect.sync(() => ({
+        payload,
+        record: applyEventIndexes(
+          makeSchemaRecord(wireId, payload, state, identity),
+          payload,
+          event,
+        ),
+      })),
+    ),
+  );
+};
+
 const schemaEventStore = (
   s: ProcessStoreSpine,
   namespace: string,
@@ -631,12 +803,37 @@ const schemaEventStore = (
     return event.store(s);
   }
   const wireId = telemetryWireId(namespace, tagPath, event.name);
-  return materializeSchema(event.telemetrySchema, input).pipe(
-    Effect.flatMap(({ state, payload }) =>
+  return materializeSchemaRecord(wireId, event, identity, input).pipe(
+    Effect.flatMap(({ payload, record }) =>
       applySchemaWarnings(
-        s.create(makeSchemaRecord(wireId, payload, state, identity)),
+        s.create(record),
         event,
         payload,
+      ),
+    ),
+  );
+};
+
+const schemaEventStoreBatch = (
+  s: ProcessStoreSpine,
+  namespace: string,
+  tagPath: ReadonlyArray<string>,
+  event: TelemetryEventDef,
+  identity: TelemetryIdentity | undefined,
+  inputs: ReadonlyArray<unknown>,
+): TelemetryEmitEffect => {
+  if (inputs.length === 0) {
+    return Effect.void;
+  }
+  const wireId = telemetryWireId(namespace, tagPath, event.name);
+  return Effect.forEach(inputs, (input) =>
+    materializeSchemaRecord(wireId, event, identity, input),
+  ).pipe(
+    Effect.flatMap((rows) =>
+      applySchemaWarnings(
+        s.createBatch(rows.map((row) => row.record)),
+        event,
+        { count: rows.length },
       ),
     ),
   );
@@ -651,11 +848,21 @@ const buildNestedApi = (
 ): TelemetryNestedEmitApi => {
   const out: Record<string, unknown> = {};
   for (const event of events as ReadonlyArray<TelemetryEventDef>) {
-    out[event.name] =
+    if (
       event.telemetrySchema !== undefined &&
       event.telemetrySchema.inputFields.length > 0
-        ? (input: unknown) => schemaEventStore(s, namespace, tagPath, event, identity, input)
-        : schemaEventStore(s, namespace, tagPath, event, identity);
+    ) {
+      out[event.name] = Object.assign(
+        (input: unknown) =>
+          schemaEventStore(s, namespace, tagPath, event, identity, input),
+        {
+          batch: (inputs: ReadonlyArray<unknown>) =>
+            schemaEventStoreBatch(s, namespace, tagPath, event, identity, inputs),
+        },
+      );
+    } else {
+      out[event.name] = schemaEventStore(s, namespace, tagPath, event, identity);
+    }
   }
   return out as TelemetryNestedEmitApi;
 };
@@ -838,6 +1045,7 @@ function defineTelemetryEvent<const Name extends string>(
       name,
       telemetrySchema: input,
       logWarnings: [],
+      indexes: [],
       pipes: [],
       store: () =>
         Effect.die(
@@ -850,6 +1058,7 @@ function defineTelemetryEvent<const Name extends string>(
     name,
     store: input.store,
     logWarnings: [],
+    indexes: [],
     pipes: [],
   });
 }
@@ -865,6 +1074,15 @@ const telemetryLogWarning =
   (event) => ({
     ...event,
     logWarnings: [...event.logWarnings, { message, annotations }],
+  });
+
+const telemetryIndex =
+  (
+    build: (builder: TelemetryIndexBuilder) => TelemetryIndexDefinition,
+  ): TelemetryEventPipeLeg =>
+  (event) => ({
+    ...event,
+    indexes: [...event.indexes, build(telemetryIndexBuilder)],
   });
 
 type InputFieldValue = Schema.Top | TelemetryInputSchema;
@@ -1063,6 +1281,7 @@ export const Telemetry = {
   },
   events: telemetryEvents,
   codec: makeTelemetryCodec,
+  index: telemetryIndex,
   logWarning: telemetryLogWarning,
   annotateLogs: telemetryAnnotateLogsPipeLeg,
 } as const;

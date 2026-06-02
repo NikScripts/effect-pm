@@ -31,6 +31,10 @@ const IDENTIFIER_FACTORY = Symbol.for("@nikscripts/effect-pm/ProcessStore/identi
 type PersistEffect = Effect.Effect<void, ProcessStoreWriteError>;
 
 type EmitEffect = Effect.Effect<void, ProcessStoreWriteError>;
+type EmitFunction = (...args: ReadonlyArray<unknown>) => EmitEffect;
+type EmitBatchFunction = EmitFunction & {
+  readonly batch: (args: ReadonlyArray<unknown>) => EmitEffect;
+};
 
 /** @internal */
 export type ProcessStoreIdentifierInput =
@@ -303,8 +307,11 @@ const isEmitEffect = (value: unknown): value is EmitEffect =>
 
 const isEmitFunction = (
   value: unknown,
-): value is (...args: ReadonlyArray<unknown>) => EmitEffect =>
+): value is EmitFunction =>
   typeof value === "function";
+
+const hasEmitBatch = (value: EmitFunction): value is EmitBatchFunction =>
+  typeof (value as { readonly batch?: unknown }).batch === "function";
 
 const callNestedEmit = (
   api: TelemetryNestedEmitApi,
@@ -329,6 +336,28 @@ const callNestedEmit = (
     );
   }
   return current;
+};
+
+const callNestedEmitBatch = (
+  api: TelemetryNestedEmitApi,
+  path: ReadonlyArray<string>,
+  inputs: ReadonlyArray<unknown>,
+): EmitEffect => {
+  let current: TelemetryNestedEmitApi | EmitEffect | EmitFunction = api;
+  for (const segment of path) {
+    if (!isEmitEffect(current) && !isEmitFunction(current)) {
+      current = (current as TelemetryNestedEmitApi)[segment] as
+        | TelemetryNestedEmitApi
+        | EmitEffect
+        | EmitFunction;
+    }
+  }
+  if (!isEmitFunction(current) || !hasEmitBatch(current)) {
+    return Effect.die(
+      `ProcessStore telemetry batch path missing: ${path.join(".")}`,
+    );
+  }
+  return current.batch(inputs);
 };
 
 const resolveIdentifier = (identifier: ProcessStoreIdentifierInput): string =>
@@ -389,16 +418,34 @@ const buildNestedEmitStatics = <
     }
     const leaf = path[path.length - 1]!;
     node[leaf] = emitPath.input
-      ? (input: unknown) =>
-          Effect.serviceOption(Base).pipe(
-            Effect.flatMap(
-              Option.match({
-                onNone: (): EmitEffect => Effect.void,
-                onSome: (api): EmitEffect =>
-                  callNestedEmit(api as TelemetryNestedEmitApi, path, [input]),
-              }),
+      ? Object.assign(
+          (input: unknown) =>
+            Effect.serviceOption(Base).pipe(
+              Effect.flatMap(
+                Option.match({
+                  onNone: (): EmitEffect => Effect.void,
+                  onSome: (api): EmitEffect =>
+                    callNestedEmit(api as TelemetryNestedEmitApi, path, [input]),
+                }),
+              ),
             ),
-          )
+          {
+            batch: (inputs: ReadonlyArray<unknown>) =>
+              Effect.serviceOption(Base).pipe(
+                Effect.flatMap(
+                  Option.match({
+                    onNone: (): EmitEffect => Effect.void,
+                    onSome: (api): EmitEffect =>
+                      callNestedEmitBatch(
+                        api as TelemetryNestedEmitApi,
+                        path,
+                        inputs,
+                      ),
+                  }),
+                ),
+              ),
+          },
+        )
       : Effect.serviceOption(Base).pipe(
           Effect.flatMap(
             Option.match({
