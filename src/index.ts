@@ -205,6 +205,8 @@ export type {
 export type {
   ControlRpcClient,
   ControlRpcError,
+  ControlRpcServerProtocol,
+  ControlTransportRpcApi,
   ControlTransportRpcServerConfig,
 } from "./ControlTransportRpc";
 

@@ -13,7 +13,7 @@
  * @module ControlTransportRpc
  */
 
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Layer, Option, Schema } from "effect";
 import { Rpc, RpcClient, RpcGroup, RpcServer } from "effect/unstable/rpc";
 import {
   ControlProtocolRequestEnvelopeSchema,
@@ -63,6 +63,9 @@ export const ControlRpc = RpcGroup.make(
 /** @public */
 export type ControlRpcClient<E = never> = RpcClient.FromGroup<typeof ControlRpc, E>;
 
+/** @public */
+export type ControlRpcServerProtocol = RpcServer.Protocol["Service"];
+
 /**
  * Effect RPC server tuning exposed by the adapter.
  *
@@ -99,40 +102,53 @@ export const controlRpcErrorFromTransportError = (
   error: ControlTransportError,
 ): ControlRpcError => makeControlRpcError(error.reason, error.status);
 
-const isControlRpcError = Schema.is(ControlRpcErrorSchema);
+const decodeControlRpcError = Schema.decodeUnknownOption(ControlRpcErrorSchema);
 
-const errorMessage = (input: unknown): string => {
-  if (
-    typeof input === "object" &&
-    input !== null &&
-    "message" in input &&
-    typeof input.message === "string"
-  ) {
-    return input.message;
+const stringProperty = (
+  input: unknown,
+  key: "message" | "reason",
+): Option.Option<string> => {
+  if (typeof input !== "object" || input === null) {
+    return Option.none();
   }
-  if (
-    typeof input === "object" &&
-    input !== null &&
-    "reason" in input &&
-    typeof input.reason === "string"
-  ) {
-    return input.reason;
-  }
-  return String(input);
+
+  const value = Object.getOwnPropertyDescriptor(input, key)?.value;
+  return typeof value === "string" ? Option.some(value) : Option.none();
 };
 
-/** @public */
+const errorMessage = (input: unknown): string =>
+  stringProperty(input, "message").pipe(
+    Option.orElse(() => stringProperty(input, "reason")),
+    Option.getOrElse(() => String(input)),
+  );
+
+/**
+ * Convert any RPC client failure into the shared control transport error.
+ *
+ * @remarks
+ * Typed `ControlRpcError` values are decoded through `ControlRpcErrorSchema`.
+ * Unknown protocol/client defects are deliberately collapsed to
+ * `ControlTransportError` because `ProcessManager` only depends on the shared
+ * transport abstraction, not the concrete RPC implementation.
+ *
+ * @public
+ */
 export const rpcErrorToControlTransportError = (
   error: unknown,
 ): ControlTransportError =>
-  isControlRpcError(error)
-    ? new ControlTransportError({
-        reason: error.reason,
-        ...(error.status === undefined ? {} : { status: error.status }),
-      })
-    : new ControlTransportError({
-        reason: errorMessage(error),
-      });
+  decodeControlRpcError(error).pipe(
+    Option.match({
+      onNone: () =>
+        new ControlTransportError({
+          reason: errorMessage(error),
+        }),
+      onSome: (rpcError) =>
+        new ControlTransportError({
+          reason: rpcError.reason,
+          ...(rpcError.status === undefined ? {} : { status: rpcError.status }),
+        }),
+    }),
+  );
 
 /**
  * Build a control transport client from an Effect RPC client.
@@ -145,7 +161,7 @@ export const rpcErrorToControlTransportError = (
  */
 export const makeControlTransportRpcClient = <E>(
   client: ControlRpcClient<E>,
-): ControlTransportClientShape => ({
+): ControlTransportClientShape<never> => ({
   request: (envelope) =>
     client["Control.Dispatch"](envelope).pipe(
       Effect.mapError(rpcErrorToControlTransportError),
@@ -160,11 +176,14 @@ export const makeControlTransportRpcClient = <E>(
  */
 export const ControlTransportRpcLive = ControlRpc.toLayer({
   "Control.Dispatch": (envelope: ControlProtocolRequestEnvelope) =>
-    Effect.gen(function* () {
-      const router = yield* ControlRouter;
-      const response = yield* router.handle(envelope.request);
-      return yield* makeControlProtocolResponseEnvelope(envelope, response);
-    }),
+    Effect.flatMap(
+      ControlRouter,
+      (router) => router.handle(envelope.request),
+    ).pipe(
+      Effect.flatMap((response) =>
+        makeControlProtocolResponseEnvelope(envelope, response)
+      ),
+    ),
 });
 
 /**
@@ -179,7 +198,7 @@ export const ControlTransportRpcLive = ControlRpc.toLayer({
  * @public
  */
 export const makeControlTransportRpcServer = (
-  protocol: RpcServer.Protocol["Service"],
+  protocol: ControlRpcServerProtocol,
   config: ControlTransportRpcServerConfig = {},
 ): ControlTransportServerShape => ({
   serve: RpcServer.make(ControlRpc, config).pipe(
@@ -190,11 +209,38 @@ export const makeControlTransportRpcServer = (
 });
 
 /**
- * Effect RPC control transport helpers.
+ * Public helper namespace for the Effect RPC control transport.
+ *
+ * @remarks
+ * The namespace mirrors other package transport modules:
+ *
+ * - `rpc` is the underlying `RpcGroup`.
+ * - `client` / `makeClient` adapt an Effect RPC client to
+ *   `ControlTransportClientShape`.
+ * - `server` / `makeServer` adapt an Effect RPC server protocol to
+ *   `ControlTransportServerShape`.
+ * - `live` is the handler layer for tests or advanced Effect RPC composition.
+ * - `clientLayer` / `serverLayer` provide the standard Context services.
  *
  * @public
  */
-export const ControlTransportRpc = {
+export interface ControlTransportRpcApi {
+  readonly rpc: typeof ControlRpc;
+  readonly client: typeof makeControlTransportRpcClient;
+  readonly makeClient: typeof makeControlTransportRpcClient;
+  readonly server: typeof makeControlTransportRpcServer;
+  readonly makeServer: typeof makeControlTransportRpcServer;
+  readonly live: typeof ControlTransportRpcLive;
+  readonly clientLayer: <E>(
+    client: ControlRpcClient<E>,
+  ) => Layer.Layer<ControlTransportClient>;
+  readonly serverLayer: (
+    config?: ControlTransportRpcServerConfig,
+  ) => Layer.Layer<ControlTransportServer, never, RpcServer.Protocol>;
+}
+
+/** @public */
+export const ControlTransportRpc: ControlTransportRpcApi = {
   rpc: ControlRpc,
   client: makeControlTransportRpcClient,
   makeClient: makeControlTransportRpcClient,
@@ -214,4 +260,4 @@ export const ControlTransportRpc = {
         makeControlTransportRpcServer(protocol, config)
       ),
     ),
-} as const;
+};

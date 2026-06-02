@@ -162,6 +162,7 @@ everyday app code.
 
 ```typescript
 import { ControlTransportRpc, ProcessManager } from "@nikscripts/effect-pm";
+import { Effect } from "effect";
 import { RpcClient } from "effect/unstable/rpc";
 
 const rpcClient = yield* RpcClient.make(ControlTransportRpc.rpc).pipe(
@@ -178,6 +179,7 @@ yield* manager.process(SyncInvoices.id).runImmediately;
 
 ```typescript
 import { ControlService, ControlTransportRpc } from "@nikscripts/effect-pm";
+import { Layer } from "effect";
 
 const ControlRpcLayer = ControlService.layer(BillingGroup).pipe(
   Layer.provide(ControlTransportRpc.serverLayer()),
