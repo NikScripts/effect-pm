@@ -63,6 +63,8 @@ replacement.
 - Terminal safety limits are configurable per endpoint/target: max duration,
   idle timeout, byte limits, concurrent sessions, env policy, cwd policy, and
   input policy.
+- Implementation proceeds in reviewable cuts: types/RPC contract, child-process
+  backend, endpoint discovery, gateway adapter, docs/examples/changeset.
 
 ## Open recipe steps
 
@@ -1040,6 +1042,138 @@ Acceptance check:
 Terminal v1 can prove every session open/deny/exit/close is observable, raw input
 is not stored by default, limits can be configured per target, and session
 cleanup always emits a terminal lifecycle event.
+
+## Step 7: Implementation cuts, tests, docs, and release
+
+Recipe step: `Implementation cuts, tests, docs, and release`
+
+What this decides:
+How to split terminal implementation into reviewable PRs, what each cut proves,
+which dependencies are added, and when docs/examples/changeset become mandatory.
+
+Recommended ingredients:
+- Cut 1: public terminal contracts and RPC group — no runtime backend yet.
+- Cut 2: Effect `ChildProcess` backend and session lifecycle tests.
+- Cut 3: ProcessManager endpoint config/discovery for terminal capability.
+- Cut 4: RPC gateway adapter + browser `TerminalSessionPort` adapter.
+- Cut 5: docs, examples, changeset, and optional CLI thin client.
+- Add `@effect/rpc` and `@effect/platform` explicitly before code imports them.
+- Keep HTTP/fetch adapters out of v1 terminal unless only documenting
+  compatibility metadata; do not build terminal streams on hand-rolled HTTP.
+- Every cut that ships code runs typecheck, tests, lint, and build.
+
+Picture:
+
+```txt
+cut 1: terminal contract + rpc
+  src/Terminal.ts
+  src/TerminalRpc.ts
+  src/react/TerminalSessionPort.ts
+  package.json exports
+  tests: schema + type/adapter shape
+
+cut 2: child process backend
+  src/internal/terminal/childProcessBackend.ts
+  src/internal/terminal/sessionRegistry.ts
+  tests: open, output, input, close, timeout
+
+cut 3: endpoint config/discovery
+  src/ProcessManager.ts
+  src/Transport.ts or terminal endpoint module
+  tests: group config exposes terminal capability
+
+cut 4: gateway adapters
+  src/react/adapters/rpcTerminal.ts
+  examples/dashboard-demo terminal gateway sketch
+  tests: fake Rpc client -> TerminalSessionPort
+
+cut 5: docs/release
+  docs/guides/terminal.md
+  docs/guides/dashboard-integration.md
+  examples/forms/process-group/terminal-session-rpc.ts
+  .changeset/*.md
+```
+
+```ts
+// Cut 1: contracts only.
+export const TerminalRpc = RpcGroup.make(
+  Rpc.make("Terminal.Open", {
+    payload: OpenTerminalSessionSchema,
+    success: TerminalSessionIdSchema,
+    error: TerminalSessionErrorSchema,
+  }),
+  Rpc.make("Terminal.Events", {
+    payload: Schema.Struct({ sessionId: Schema.String }),
+    success: TerminalEventSchema,
+    error: TerminalSessionErrorSchema,
+    stream: true,
+  }),
+);
+```
+
+```ts
+// Cut 2: backend tests prove lifecycle independent of dashboard.
+it.effect("streams child process output and exit", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const backend = TerminalBackends.childProcess();
+      const session = yield* backend.open({
+        sessionId: "terminal-test",
+        groupId: "@test/Terminal",
+        command: ["node", "-e", "process.stdout.write('ok')"],
+      });
+
+      const events = yield* Stream.runCollect(session.events);
+
+      assert.deepStrictEqual([...events].map((event) => event._tag), ["Output", "Exit"]);
+    }),
+  ),
+);
+```
+
+```ts
+// Cut 4: React-facing adapter keeps Promise/AsyncIterable boundary.
+const port = createRpcTerminalSessionAdapter(rpcClient);
+
+const { sessionId } = await port.open({
+  groupId: "@app/Billing",
+  target: "shell",
+});
+
+for await (const event of port.events(sessionId)) {
+  renderTerminalEvent(event);
+}
+```
+
+Why this recommendation is good:
+- Each cut has a small acceptance surface and minimal conflict risk.
+- Contract/RPC shape lands before runtime complexity.
+- Runtime backend can be tested without dashboard volatility.
+- Endpoint discovery can be reviewed independently of terminal process behavior.
+- Docs/changeset happen only once the user-facing feature is coherent.
+
+Alternatives:
+1. Build all terminal slices in one PR — fastest locally, but too hard to review.
+2. Build dashboard widget first — visually satisfying, but backend/API churn will
+   force rewrites.
+3. Build PTY first — best fidelity, but native dependency risk delays core API.
+4. Defer endpoint discovery — simpler backend work, but dashboard multi-group
+   use becomes hardcoded.
+
+Ingredients:
+- Implement in five cuts: contracts/RPC, backend, discovery, adapter, docs/release.
+- Add explicit Effect dependencies before imports.
+- Keep terminal streams on Effect RPC.
+- Keep widgets transport-agnostic.
+- Verify every code cut with full checks.
+- Add changeset in final coherent feature cut.
+
+Do you agree with all?
+
+Acceptance check:
+The team can assign independent agents to backend and adapter work without
+collisions, and each code cut can prove its behavior with focused tests plus the
+standard package checks.
 
 ## Cleanup status
 
