@@ -6,6 +6,17 @@
 // @effect-diagnostics asyncFunction:off — table action buttons call Promise-based ControlPlanePort methods.
 
 import type { ReactNode } from "react";
+import { Badge } from "./components/ui/badge.js";
+import { Button } from "./components/ui/button.js";
+import { ScrollArea } from "./components/ui/scroll-area.js";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./components/ui/table.js";
 import type { ProcessGroupDetails, QueueDetails } from "../ProcessGroup.js";
 import {
   useControlPlane,
@@ -84,12 +95,21 @@ const actionIcon = (
 const statusTone = (status: ProcessGroupDetails["status"]): "good" | "muted" | "warn" =>
   status === "running" ? "good" : status === "stopped" ? "muted" : "warn";
 
+const badgeVariant = (tone: "good" | "muted" | "warn"): "success" | "secondary" | "warning" => {
+  switch (tone) {
+    case "good":
+      return "success";
+    case "muted":
+      return "secondary";
+    case "warn":
+      return "warning";
+  }
+};
+
 const StatusBadge = ({ tone, children }: {
   readonly tone: "good" | "muted" | "warn";
   readonly children: ReactNode;
-}) => (
-  <span className="pm-dashboard__badge" data-tone={tone}>{children}</span>
-);
+}) => <Badge variant={badgeVariant(tone)}>{children}</Badge>;
 
 type ActionButtonProps = {
   readonly action: ControlPlaneProcessAction | ControlPlaneQueueAction;
@@ -100,19 +120,21 @@ type ActionButtonProps = {
 const ActionButton = ({ action, disabled, onClick }: ActionButtonProps) => {
   const label = actionLabel(action);
   return (
-    <button
+    <Button
       type="button"
       aria-label={label}
       className="pm-action-button"
       data-pm-action={action}
       disabled={disabled}
       onClick={onClick}
+      size="icon"
       title={label}
+      variant="ghost"
     >
       <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
         {actionIcon(action)}
       </svg>
-    </button>
+    </Button>
   );
 };
 
@@ -149,44 +171,44 @@ export const ProcessStatusTable = ({
   };
 
   return (
-    <div className="pm-dashboard__table-wrap" data-pm-table="processes">
+    <ScrollArea className="pm-dashboard__table-wrap" data-pm-table="processes">
       {mutation.error !== null ? <p role="alert">{mutation.error}</p> : null}
-      <table className="pm-dashboard__table">
-        <thead>
-          <tr>
-            <th scope="col">Process</th>
-            <th scope="col">Status</th>
-            <th scope="col">Uptime</th>
-            <th scope="col">Armed</th>
-            <th scope="col">Active</th>
-            <th scope="col">Runs</th>
-            <th scope="col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table className="pm-dashboard__table">
+        <TableHeader>
+          <TableRow>
+            <TableHead scope="col">Process</TableHead>
+            <TableHead scope="col">Status</TableHead>
+            <TableHead scope="col">Uptime</TableHead>
+            <TableHead scope="col">Armed</TableHead>
+            <TableHead scope="col">Active</TableHead>
+            <TableHead scope="col">Runs</TableHead>
+            <TableHead scope="col">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((process) => (
-            <tr key={process.name}>
-              <th scope="row"><code>{process.name}</code></th>
-              <td><StatusBadge tone={statusTone(process.status)}>{process.status}</StatusBadge></td>
-              <td>{formatUptime(process.uptime)}</td>
-              <td>{process.armed ? "yes" : "no"}</td>
-              <td>{String(process.activeInstances)}</td>
-              <td>{String(process.executions)}</td>
-              <td>
+            <TableRow key={process.name}>
+              <TableHead scope="row"><code>{process.name}</code></TableHead>
+              <TableCell><StatusBadge tone={statusTone(process.status)}>{process.status}</StatusBadge></TableCell>
+              <TableCell>{formatUptime(process.uptime)}</TableCell>
+              <TableCell>{process.armed ? "yes" : "no"}</TableCell>
+              <TableCell>{String(process.activeInstances)}</TableCell>
+              <TableCell>{String(process.executions)}</TableCell>
+              <TableCell>
                 <div className="pm-dashboard__table-actions">
                   {processActions.map((action) => (
                     <span key={action}>{renderAction(process.name, action)}</span>
                   ))}
                 </div>
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
           {rows.length === 0 && !status.loading ? (
-            <tr><td colSpan={7}>No processes reported.</td></tr>
+            <TableRow><TableCell colSpan={7}>No processes reported.</TableCell></TableRow>
           ) : null}
-        </tbody>
-      </table>
-    </div>
+        </TableBody>
+      </Table>
+    </ScrollArea>
   );
 };
 
@@ -223,37 +245,37 @@ export const QueueStatusTable = ({
   };
 
   return (
-    <div className="pm-dashboard__table-wrap" data-pm-table="queues">
+    <ScrollArea className="pm-dashboard__table-wrap" data-pm-table="queues">
       {mutation.error !== null ? <p role="alert">{mutation.error}</p> : null}
-      <table className="pm-dashboard__table">
-        <thead>
-          <tr>
-            <th scope="col">Queue</th>
-            <th scope="col">Depth</th>
-            <th scope="col">Completed</th>
-            <th scope="col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table className="pm-dashboard__table">
+        <TableHeader>
+          <TableRow>
+            <TableHead scope="col">Queue</TableHead>
+            <TableHead scope="col">Depth</TableHead>
+            <TableHead scope="col">Completed</TableHead>
+            <TableHead scope="col">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((queue) => (
-            <tr key={queue.name}>
-              <th scope="row"><code>{queue.name}</code></th>
-              <td>{formatQueueSize(queue.size)}</td>
-              <td>{String(queue.completed)}</td>
-              <td>
+            <TableRow key={queue.name}>
+              <TableHead scope="row"><code>{queue.name}</code></TableHead>
+              <TableCell>{formatQueueSize(queue.size)}</TableCell>
+              <TableCell>{String(queue.completed)}</TableCell>
+              <TableCell>
                 <div className="pm-dashboard__table-actions">
                   {queueActions.map((action) => (
                     <span key={action}>{renderAction(queue.name, action)}</span>
                   ))}
                 </div>
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
           {rows.length === 0 && !status.loading ? (
-            <tr><td colSpan={4}>No queues reported.</td></tr>
+            <TableRow><TableCell colSpan={4}>No queues reported.</TableCell></TableRow>
           ) : null}
-        </tbody>
-      </table>
-    </div>
+        </TableBody>
+      </Table>
+    </ScrollArea>
   );
 };

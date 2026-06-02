@@ -5,6 +5,11 @@
  */
 
 import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Button } from "./components/ui/button.js";
+import { Input } from "./components/ui/input.js";
+import { ScrollArea } from "./components/ui/scroll-area.js";
+import { Select } from "./components/ui/select.js";
+import { TabsList, TabsTrigger } from "./components/ui/tabs.js";
 import type { ProcessManagerLogEntry } from "../LogEntry.js";
 import {
   useControlPlaneLogs,
@@ -132,12 +137,11 @@ export const LogViewer = ({
       </header>
 
       <div className="pm-dashboard__log-toolbar" aria-label="Log controls">
-        <div className="pm-dashboard__log-tabs" role="tablist" aria-label="Log target">
+        <TabsList className="pm-dashboard__log-tabs" aria-label="Log target">
           {options.map((option) => {
             const id = `${option.target.kind}:${option.target.id}`;
             return (
-              <button
-                type="button"
+              <TabsTrigger
                 aria-selected={selectedTargetId === id}
                 data-active={selectedTargetId === id ? "true" : "false"}
                 key={id}
@@ -145,24 +149,23 @@ export const LogViewer = ({
                   setTarget(() => option.target);
                   setClearedAt(0);
                 }}
-                role="tab"
               >
                 {option.label}
-              </button>
+              </TabsTrigger>
             );
           })}
-        </div>
+        </TabsList>
 
         <div className="pm-dashboard__log-controls">
-          <button type="button" onClick={() => setFollow((value) => !value)}>
+          <Button type="button" variant="outline" size="sm" onClick={() => setFollow((value) => !value)}>
             {follow ? "Pause" : "Resume"}
-          </button>
-          <button type="button" onClick={() => setClearedAt(logs.entries.length)}>
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setClearedAt(logs.entries.length)}>
             Clear
-          </button>
+          </Button>
           <label>
             <span>Lines</span>
-            <select
+            <Select
               value={lineCount}
               onChange={(event) => {
                 setLineCount(Number(event.currentTarget.value) as LineCount);
@@ -172,7 +175,7 @@ export const LogViewer = ({
               {lineOptions.map((option) => (
                 <option key={option} value={option}>{option}</option>
               ))}
-            </select>
+            </Select>
           </label>
         </div>
 
@@ -180,21 +183,23 @@ export const LogViewer = ({
           {logLevels.map((level) => {
             const active = levels.includes(level);
             return (
-              <button
+              <Button
                 type="button"
                 data-active={active ? "true" : "false"}
                 key={level}
                 onClick={() => setLevels((current) => toggleLevel(current, level))}
+                size="sm"
+                variant="outline"
               >
                 {level}
-              </button>
+              </Button>
             );
           })}
         </div>
 
         <label className="pm-dashboard__log-search">
           <span>Search logs</span>
-          <input
+          <Input
             type="search"
             placeholder="message, span, annotation…"
             value={search}
@@ -204,8 +209,12 @@ export const LogViewer = ({
       </div>
 
       {logs.error !== null ? <p role="alert">{logs.error}</p> : null}
+      <p className="pm-dashboard__log-count" data-pm-log-count="true">
+        Logs: showing {String(visibleEntries.length)} of {String(Math.max(0, logs.entries.length - clearedAt))} entries
+      </p>
 
-      <ol ref={logListRef}>
+      <ScrollArea className="pm-dashboard__log-scroll">
+        <ol ref={logListRef}>
         {visibleEntries.map((entry, index) => (
           <Fragment key={`${entry.date}:${String(index)}`}>
             <li>
@@ -215,7 +224,8 @@ export const LogViewer = ({
             </li>
           </Fragment>
         ))}
-      </ol>
+        </ol>
+      </ScrollArea>
 
       {visibleEntries.length === 0 && !logs.loading ? <p>No logs matched.</p> : null}
     </section>

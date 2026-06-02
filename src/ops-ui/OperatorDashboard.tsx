@@ -21,7 +21,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState, type MouseEvent, type ReactNode } from "react";
+import { useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import {
   ControlPlaneProvider,
   Controls,
@@ -31,6 +31,15 @@ import {
   type DashboardProcessTarget,
   type DashboardQueueTarget,
 } from "../react/index.js";
+import { Button } from "./components/ui/button.js";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "./components/ui/card.js";
+import { ScrollArea } from "./components/ui/scroll-area.js";
 import {
   clampWidgetSpan,
   dashboardWidgetKinds,
@@ -100,7 +109,7 @@ type WidgetFrameProps = {
   readonly colSpan: number;
   readonly resizing: boolean;
   readonly children: ReactNode;
-  readonly onResizeStart: (edge: "left" | "right", event: MouseEvent<HTMLDivElement>) => void;
+  readonly onResizeStart: (edge: "left" | "right", event: PointerEvent<HTMLDivElement> | MouseEvent<HTMLDivElement>) => void;
 };
 
 const WidgetFrame = ({
@@ -127,7 +136,7 @@ const WidgetFrame = ({
   };
 
   return (
-    <article
+    <Card
       className="pm-dashboard__card pm-dashboard__grid-widget"
       data-dragging={isDragging ? "true" : "false"}
       data-pm-widget={widget}
@@ -145,22 +154,28 @@ const WidgetFrame = ({
         aria-hidden="true"
         className="pm-dashboard__resize-handle pm-dashboard__resize-handle--left"
         onMouseDown={(event) => onResizeStart("left", event)}
+        onPointerDown={(event) => onResizeStart("left", event)}
       />
       <div
         aria-hidden="true"
         className="pm-dashboard__resize-handle pm-dashboard__resize-handle--right"
         onMouseDown={(event) => onResizeStart("right", event)}
+        onPointerDown={(event) => onResizeStart("right", event)}
       />
-      <div className="pm-dashboard__card-header pm-dashboard__widget-header">
+      <CardHeader className="pm-dashboard__widget-header">
         <div>
           <p className="pm-dashboard__section-label">{widgetLabel(widget)}</p>
-          <h2>{widgetTitle(widget)}</h2>
+          <CardTitle>{widgetTitle(widget)}</CardTitle>
         </div>
-      </div>
-      {children}
+      </CardHeader>
+      <CardContent className="pm-dashboard__widget-body">
+        <ScrollArea className="pm-dashboard__widget-scroll">
+          {children}
+        </ScrollArea>
+      </CardContent>
       {isDragging ? <div className="pm-dashboard__drag-indicator" /> : null}
       {resizing ? <div className="pm-dashboard__resize-indicator" /> : null}
-    </article>
+    </Card>
   );
 };
 
@@ -191,11 +206,15 @@ const OperatorDashboardContent = ({
   const startResize = (
     id: DashboardWidgetId,
     edge: "left" | "right",
-    event: MouseEvent<HTMLDivElement>,
+    event: PointerEvent<HTMLDivElement> | MouseEvent<HTMLDivElement>,
   ) => {
     event.preventDefault();
     event.stopPropagation();
     const startX = event.clientX;
+    const targetElement = event.currentTarget;
+    if ("pointerId" in event) {
+      targetElement.setPointerCapture(event.pointerId);
+    }
     const ordered = sortedDashboardWidgetIds(dashboardLayout.layout);
     const index = ordered.indexOf(id);
     const previousId = index > 0 ? ordered[index - 1] : undefined;
@@ -205,7 +224,7 @@ const OperatorDashboardContent = ({
       : dashboardLayout.layout[previousId].colSpan;
     setResizingId(id);
 
-    const onMove = (moveEvent: globalThis.MouseEvent) => {
+    const onMove = (moveEvent: globalThis.PointerEvent | globalThis.MouseEvent) => {
       const columnDelta = Math.round((moveEvent.clientX - startX) / 100);
       dashboardLayout.setLayout((current) => {
         if (edge === "right" || previousId === undefined || previousStartSpan === undefined) {
@@ -223,12 +242,23 @@ const OperatorDashboardContent = ({
       });
     };
 
-    const onUp = () => {
+    const onUp = (upEvent: globalThis.PointerEvent | globalThis.MouseEvent) => {
       setResizingId(null);
+      if ("pointerId" in upEvent && targetElement.hasPointerCapture(upEvent.pointerId)) {
+        targetElement.releasePointerCapture(upEvent.pointerId);
+      }
+      targetElement.removeEventListener("pointermove", onMove);
+      targetElement.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
 
+    targetElement.addEventListener("pointermove", onMove);
+    targetElement.addEventListener("pointerup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
   };
@@ -301,7 +331,7 @@ const OperatorDashboardContent = ({
         <div>
           <p className="pm-dashboard__eyebrow">Operator console</p>
           <h1 className="pm-dashboard__title">{title}</h1>
-          <p className="pm-dashboard__description">{description}</p>
+          <CardDescription className="pm-dashboard__description">{description}</CardDescription>
         </div>
         <div className="pm-dashboard__group-pill">
           <span>Group</span>
@@ -310,7 +340,7 @@ const OperatorDashboardContent = ({
       </header>
 
       <div className="pm-dashboard__toolbar" aria-label="Dashboard layout toolbar">
-        <button type="button" onClick={dashboardLayout.resetLayout}>Reset layout</button>
+        <Button type="button" variant="outline" onClick={dashboardLayout.resetLayout}>Reset layout</Button>
         <span>Drag cards by their top edge. Resize from the left or right edge.</span>
       </div>
 
