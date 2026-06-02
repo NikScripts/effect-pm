@@ -271,49 +271,54 @@ const isStateChangeReason = (
   isString(value) &&
   RUN_RESOURCE_STATE_CHANGE_REASONS.some((reason) => reason === value);
 
+const nullable = <A>(option: Option.Option<A>): A | null =>
+  option.pipe(
+    Option.match({
+      onNone: () => null,
+      onSome: (value) => value,
+    }),
+  );
+
+const optionFromNullable = <A>(value: A | null): Option.Option<A> =>
+  value === null ? Option.none<A>() : Option.some(value);
+
+const valueWhen = <A>(
+  value: unknown,
+  guard: (value: unknown) => value is A,
+): Option.Option<A> => guard(value) ? Option.some(value) : Option.none();
+
+const stringValue = (value: unknown): Option.Option<string> =>
+  valueWhen(value, isString);
+
+const numberValue = (value: unknown): Option.Option<number> =>
+  valueWhen(value, isFiniteNumber);
+
+const recordValue = (
+  value: unknown,
+): Option.Option<Readonly<Record<string, unknown>>> =>
+  valueWhen(value, isRecord);
+
 // ============================================================================
 // Decoders
 // ============================================================================
 
-const decodeStateValue = (value: unknown): RunResourceState | null => {
-  if (!isRecord(value)) return null;
-  const resourceId = value["resourceId"];
-  const observedAt = value["observedAt"];
-  const configVersion = value["configVersion"];
-  const concurrency = value["concurrency"];
-  const waiting = value["waiting"];
-  const inFlight = value["inFlight"];
-  const completed = value["completed"];
-  const failed = value["failed"];
-  const interrupted = value["interrupted"];
-  const totalDurationMs = value["totalDurationMs"];
-  if (
-    !isString(resourceId) ||
-    !isFiniteNumber(observedAt) ||
-    !isFiniteNumber(configVersion) ||
-    !isFiniteNumber(concurrency) ||
-    !isFiniteNumber(waiting) ||
-    !isFiniteNumber(inFlight) ||
-    !isFiniteNumber(completed) ||
-    !isFiniteNumber(failed) ||
-    !isFiniteNumber(interrupted) ||
-    !isFiniteNumber(totalDurationMs)
-  ) {
-    return null;
-  }
-  return {
-    resourceId,
-    observedAt,
-    configVersion,
-    concurrency,
-    waiting,
-    inFlight,
-    completed,
-    failed,
-    interrupted,
-    totalDurationMs,
-  };
-};
+const decodeStateValueOption = (value: unknown): Option.Option<RunResourceState> =>
+  recordValue(value).pipe(
+    Option.flatMap((state) =>
+      Option.all({
+        resourceId: stringValue(state["resourceId"]),
+        observedAt: numberValue(state["observedAt"]),
+        configVersion: numberValue(state["configVersion"]),
+        concurrency: numberValue(state["concurrency"]),
+        waiting: numberValue(state["waiting"]),
+        inFlight: numberValue(state["inFlight"]),
+        completed: numberValue(state["completed"]),
+        failed: numberValue(state["failed"]),
+        interrupted: numberValue(state["interrupted"]),
+        totalDurationMs: numberValue(state["totalDurationMs"]),
+      }),
+    ),
+  );
 
 interface RunResourceRunRecordFields {
   readonly runId: string;
@@ -322,108 +327,129 @@ interface RunResourceRunRecordFields {
   readonly attributes?: Record<string, unknown>;
 }
 
-const decodeRunRecordFields = (
+const decodeRunRecordFieldsOption = (
   record: RuntimeRecord,
-): RunResourceRunRecordFields | null => {
-  if (record.processType !== RUN_RESOURCE_TYPE) return null;
-  if (!isRecord(record.payload)) return null;
-  const runId = record.payload["runId"];
-  const occurredAt = record.payload["occurredAt"];
-  const payload = record.payload["payload"];
-  if (!isString(runId) || !isFiniteNumber(occurredAt) || !isRecord(payload)) {
-    return null;
-  }
-  const attributes = recordAttributesObject(record.attributes);
-  return {
-    runId,
-    occurredAt,
-    payload,
-    ...(attributes === undefined ? {} : { attributes }),
-  };
-};
+): Option.Option<RunResourceRunRecordFields> =>
+  record.processType !== RUN_RESOURCE_TYPE
+    ? Option.none()
+    : recordValue(record.payload).pipe(
+        Option.flatMap((payload) =>
+          Option.all({
+            runId: stringValue(payload["runId"]),
+            occurredAt: numberValue(payload["occurredAt"]),
+            payload: recordValue(payload["payload"]),
+          }),
+        ),
+        Option.map((fields) => {
+          const attributes = recordAttributesObject(record.attributes);
+          return {
+            ...fields,
+            ...(attributes === undefined ? {} : { attributes }),
+          };
+        }),
+      );
 
 const decodeRunStarted = (
   record: RuntimeRecord,
   type: "RunResource.Run.Started",
-) => {
-  const fields = decodeRunRecordFields(record);
-  if (fields === null) return null;
-  const concurrency = fields.payload["concurrency"];
-  if (!isFiniteNumber(concurrency)) return null;
-  return {
-    id: record.id,
-    resourceId: record.processId,
-    runId: fields.runId,
-    type,
-    occurredAt: fields.occurredAt,
-    payload: { concurrency },
-    ...(fields.attributes === undefined ? {} : { attributes: fields.attributes }),
-  };
-};
+) =>
+  nullable(
+    decodeRunRecordFieldsOption(record).pipe(
+      Option.flatMap((fields) =>
+        numberValue(fields.payload["concurrency"]).pipe(
+          Option.map((concurrency) => ({
+            id: record.id,
+            resourceId: record.processId,
+            runId: fields.runId,
+            type,
+            occurredAt: fields.occurredAt,
+            payload: { concurrency },
+            ...(fields.attributes === undefined
+              ? {}
+              : { attributes: fields.attributes }),
+          })),
+        ),
+      ),
+    ),
+  );
 
 const decodeRunCompleted = (
   record: RuntimeRecord,
   type: "RunResource.Run.Completed",
-) => {
-  const fields = decodeRunRecordFields(record);
-  if (fields === null) return null;
-  const durationMs = fields.payload["durationMs"];
-  if (!isFiniteNumber(durationMs)) return null;
-  return {
-    id: record.id,
-    resourceId: record.processId,
-    runId: fields.runId,
-    type,
-    occurredAt: fields.occurredAt,
-    payload: { durationMs },
-    ...(fields.attributes === undefined ? {} : { attributes: fields.attributes }),
-  };
-};
+) =>
+  nullable(
+    decodeRunRecordFieldsOption(record).pipe(
+      Option.flatMap((fields) =>
+        numberValue(fields.payload["durationMs"]).pipe(
+          Option.map((durationMs) => ({
+            id: record.id,
+            resourceId: record.processId,
+            runId: fields.runId,
+            type,
+            occurredAt: fields.occurredAt,
+            payload: { durationMs },
+            ...(fields.attributes === undefined
+              ? {}
+              : { attributes: fields.attributes }),
+          })),
+        ),
+      ),
+    ),
+  );
 
 const decodeRunFailed = (
   record: RuntimeRecord,
   type: "RunResource.Run.Failed",
-) => {
-  const fields = decodeRunRecordFields(record);
-  if (fields === null) return null;
-  const durationMs = fields.payload["durationMs"];
-  const cause = fields.payload["cause"];
-  if (!isFiniteNumber(durationMs) || !isString(cause)) return null;
-  return {
-    id: record.id,
-    resourceId: record.processId,
-    runId: fields.runId,
-    type,
-    occurredAt: fields.occurredAt,
-    payload: { durationMs, cause },
-    ...(fields.attributes === undefined ? {} : { attributes: fields.attributes }),
-  };
-};
+) =>
+  nullable(
+    decodeRunRecordFieldsOption(record).pipe(
+      Option.flatMap((fields) =>
+        Option.all({
+          durationMs: numberValue(fields.payload["durationMs"]),
+          cause: stringValue(fields.payload["cause"]),
+        }).pipe(
+          Option.map(({ cause, durationMs }) => ({
+            id: record.id,
+            resourceId: record.processId,
+            runId: fields.runId,
+            type,
+            occurredAt: fields.occurredAt,
+            payload: { durationMs, cause },
+            ...(fields.attributes === undefined
+              ? {}
+              : { attributes: fields.attributes }),
+          })),
+        ),
+      ),
+    ),
+  );
 
 const decodeStateChanged = (record: RuntimeRecord) => {
   if (record.processType !== RUN_RESOURCE_TYPE) return null;
-  if (!isRecord(record.payload)) return null;
-  const id = record.payload["id"];
-  const reason = record.payload["reason"];
-  const previousRaw = record.payload["previous"];
-  const previous = previousRaw === null ? null : decodeStateValue(previousRaw);
-  const current = decodeStateValue(record.payload["current"]);
-  if (
-    !isString(id) ||
-    !isStateChangeReason(reason) ||
-    (previousRaw !== null && previous === null) ||
-    current === null
-  ) {
-    return null;
-  }
-  return {
-    id,
-    resourceId: record.processId,
-    changedAt: DateTime.toEpochMillis(record.occurredAt),
-    reason,
-    previous,
-    current,
-  };
+  return nullable(
+    recordValue(record.payload).pipe(
+      Option.flatMap((payload) => {
+        const previousRaw = payload["previous"];
+        return Option.all({
+          id: stringValue(payload["id"]),
+          reason: valueWhen(payload["reason"], isStateChangeReason),
+          previous:
+            previousRaw === null
+              ? Option.some(null)
+              : decodeStateValueOption(previousRaw),
+          current: decodeStateValueOption(payload["current"]),
+        });
+      }),
+      Option.map(({ current, id, previous, reason }) => ({
+        id,
+        resourceId: record.processId,
+        changedAt: DateTime.toEpochMillis(record.occurredAt),
+        reason,
+        previous,
+        current,
+      })),
+    ),
+  );
 };
 
 // ============================================================================
@@ -455,8 +481,7 @@ const factsFromRecords = (
 ): RunResourceFact[] =>
   applyQueryOpts(
     records
-      .map(recordToFact)
-      .filter((fact): fact is RunResourceFact => fact !== null)
+      .flatMap((record) => Option.toArray(optionFromNullable(recordToFact(record))))
       .filter(matchesFactQuery(query)),
     query?.opts,
     (fact) => fact.occurredAt,
@@ -467,8 +492,9 @@ const stateChangesFromRecords = (
   resourceId: string | undefined,
 ): RunResourceStateChange[] =>
   records
-    .map(recordToStateChange)
-    .filter((change): change is RunResourceStateChange => change !== null)
+    .flatMap((record) =>
+      Option.toArray(optionFromNullable(recordToStateChange(record))),
+    )
     .filter((change) => resourceId === undefined || change.resourceId === resourceId);
 
 const sortedStateChanges = (
