@@ -51,6 +51,9 @@ replacement.
 - Terminal gateway transport should be Effect RPC first. Effect HTTP API can be
   used for non-streaming metadata or deployment edges, but terminal sessions
   should not be hand-rolled HTTP routes.
+- `@effect/rpc` implementation is blocked until an Effect-4-compatible package
+  release is available. The published `@effect/rpc@0.75.1` package tested here
+  targets Effect 3 runtime paths and fails against this repo's Effect 4 beta.
 - Separate semantic transports are allowed and preferred when feature semantics
   differ, but they must share adapter conventions and runtime configuration.
 - `TerminalTransportRpc` is separate from `ControlTransportRpc`, but both use
@@ -1058,6 +1061,9 @@ Recommended ingredients:
 - Cut 4: RPC gateway adapter + browser `TerminalSessionPort` adapter.
 - Cut 5: docs, examples, changeset, and optional CLI thin client.
 - Add `@effect/rpc` and `@effect/platform` explicitly before code imports them.
+- First verify the installed `@effect/rpc` package is compatible with this repo's
+  Effect 4 beta. Do not commit source imports while the package resolves to an
+  Effect-3-targeted build.
 - Keep HTTP/fetch adapters out of v1 terminal unless only documenting
   compatibility metadata; do not build terminal streams on hand-rolled HTTP.
 - Every cut that ships code runs typecheck, tests, lint, and build.
@@ -1174,6 +1180,12 @@ Acceptance check:
 The team can assign independent agents to backend and adapter work without
 collisions, and each code cut can prove its behavior with focused tests plus the
 standard package checks.
+
+Implementation note:
+An attempted Cut 1 spike using npm `@effect/rpc@0.75.1` failed at runtime because
+the package imports `effect/dist/GlobalValue.js`, which is not present in the
+current Effect 4 beta dependency. Keep the RPC design, but wait for a compatible
+release or an approved package/version strategy before adding code imports.
 
 ## Cleanup status
 
