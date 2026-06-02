@@ -34,6 +34,15 @@ registry-driven router.
 
 ---
 
+## Step 4: Router shape
+
+- `StoreRouter` is a `Context.Service`, layer built from `ProcessStoreRegistry`
+- Two dispatch methods: `query` and `queryFor` — full decode → resolve → encode round-trip
+- Transport handler delegates entirely: `Effect.flatMap(StoreRouter, r => r.query(...))`
+- Rich discriminated error taxonomy (not a single `StoreRpcError`) so protocol-agnostic transports can map errors correctly:
+  - `UnknownFacet`, `UnknownMethod`, `PayloadDecodeError`, `ResultEncodeError`, `StorageError`
+- `Store.Query` and `Store.QueryFor` are two separate RPC operations
+
 ## Step 3: Schema exposure on class + registry type inference
 
 - `Facet.schemas` stamped by builder — base query schemas `{ [method]: { payload, success } }`
