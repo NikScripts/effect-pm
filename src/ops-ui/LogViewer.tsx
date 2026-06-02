@@ -8,8 +8,8 @@ import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "./components/ui/button.js";
 import { Input } from "./components/ui/input.js";
 import { ScrollArea } from "./components/ui/scroll-area.js";
-import { Select } from "./components/ui/select.js";
-import { TabsList, TabsTrigger } from "./components/ui/tabs.js";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select.js";
+import { Tabs, TabsList, TabsTrigger } from "./components/ui/tabs.js";
 import type { ProcessManagerLogEntry } from "../LogEntry.js";
 import {
   useControlPlaneLogs,
@@ -137,7 +137,8 @@ export const LogViewer = ({
       </header>
 
       <div className="pm-dashboard__log-toolbar" aria-label="Log controls">
-        <TabsList className="pm-dashboard__log-tabs" aria-label="Log target">
+        <Tabs value={selectedTargetId}>
+          <TabsList className="pm-dashboard__log-tabs" aria-label="Log target">
           {options.map((option) => {
             const id = `${option.target.kind}:${option.target.id}`;
             return (
@@ -149,12 +150,14 @@ export const LogViewer = ({
                   setTarget(() => option.target);
                   setClearedAt(0);
                 }}
+                value={id}
               >
                 {option.label}
               </TabsTrigger>
             );
           })}
         </TabsList>
+        </Tabs>
 
         <div className="pm-dashboard__log-controls">
           <Button type="button" variant="outline" size="sm" onClick={() => setFollow((value) => !value)}>
@@ -166,15 +169,20 @@ export const LogViewer = ({
           <label>
             <span>Lines</span>
             <Select
-              value={lineCount}
-              onChange={(event) => {
-                setLineCount(Number(event.currentTarget.value) as LineCount);
+              value={String(lineCount)}
+              onValueChange={(value) => {
+                setLineCount(Number(value) as LineCount);
                 setClearedAt(0);
               }}
             >
-              {lineOptions.map((option) => (
-                <option key={option} value={option}>{option}</option>
-              ))}
+              <SelectTrigger className="pm-dashboard__log-lines-trigger">
+                <SelectValue placeholder="Lines" />
+              </SelectTrigger>
+              <SelectContent>
+                {lineOptions.map((option) => (
+                  <SelectItem key={option} value={String(option)}>{option}</SelectItem>
+                ))}
+              </SelectContent>
             </Select>
           </label>
         </div>

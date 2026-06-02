@@ -1,9 +1,41 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
 /* Styled shell for the dashboard demo and future Tailwind token mapping. */
-:root {
+
+@custom-variant dark (&:is(.dark *));
+ :root {
   color-scheme: dark;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: #070b14;
   color: #e5edf7;
+  --radius: 0.75rem;
+  --background: oklch(0.129 0.042 264.695);
+  --foreground: oklch(0.984 0.003 247.858);
+  --card: oklch(0.208 0.042 265.755);
+  --card-foreground: oklch(0.984 0.003 247.858);
+  --popover: oklch(0.208 0.042 265.755);
+  --popover-foreground: oklch(0.984 0.003 247.858);
+  --primary: oklch(0.929 0.013 255.508);
+  --primary-foreground: oklch(0.208 0.042 265.755);
+  --secondary: oklch(0.279 0.041 260.031);
+  --secondary-foreground: oklch(0.984 0.003 247.858);
+  --muted: oklch(0.279 0.041 260.031);
+  --muted-foreground: oklch(0.704 0.04 256.788);
+  --accent: oklch(0.279 0.041 260.031);
+  --accent-foreground: oklch(0.984 0.003 247.858);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.551 0.027 264.364);
+  --sidebar: oklch(0.208 0.042 265.755);
+  --sidebar-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-accent: oklch(0.279 0.041 260.031);
+  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.551 0.027 264.364);
 }
 
 body {
@@ -16,8 +48,7 @@ body {
     #070b14;
 }
 
-.ui-button,
-button {
+button:not([data-slot]) {
   border: 1px solid rgba(148, 163, 184, 0.34);
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.82);
@@ -28,15 +59,13 @@ button {
   transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
 }
 
-.ui-button:hover:not(:disabled),
-button:hover:not(:disabled) {
+button:not([data-slot]):hover:not(:disabled) {
   background: rgba(30, 41, 59, 0.94);
   border-color: rgba(125, 211, 252, 0.72);
   transform: translateY(-1px);
 }
 
-.ui-button:disabled,
-button:disabled {
+button:not([data-slot]):disabled {
   cursor: not-allowed;
   opacity: 0.52;
 }
@@ -63,7 +92,6 @@ button:disabled {
 .pm-dashboard .pm-action-button[data-pm-action="now"] {
   color: #fde68a;
 }
-
 
 .ui-card-header {
   padding: 1.25rem 1.35rem 0.75rem;
@@ -125,9 +153,10 @@ code {
 
 .pm-dashboard {
   box-sizing: border-box;
-  width: min(1180px, calc(100vw - 2rem));
-  margin: 0 auto;
-  padding: 2rem 0 3rem;
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 1rem;
 }
 
 .pm-dashboard *,
@@ -190,7 +219,6 @@ code {
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
-
 
 .pm-dashboard__toolbar {
   position: sticky;
@@ -368,7 +396,6 @@ code {
   font-size: 1.05rem;
 }
 
-
 .pm-dashboard__table-stack {
   display: grid;
   gap: 1rem;
@@ -523,7 +550,6 @@ code {
   flex-wrap: wrap;
   gap: 0.5rem;
 }
-
 
 .pm-dashboard__log-toolbar {
   display: grid;
@@ -786,4 +812,26 @@ code {
     width: 100%;
     max-height: 16rem;
   }
+}
+
+.dark {
+  --sidebar: hsl(240 5.9% 10%);
+  --sidebar-foreground: hsl(240 4.8% 95.9%);
+  --sidebar-primary: hsl(224.3 76.3% 48%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(240 3.7% 15.9%);
+  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
+  --sidebar-border: hsl(240 3.7% 15.9%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+}
+
+@theme inline {
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 }

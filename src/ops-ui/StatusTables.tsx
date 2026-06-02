@@ -95,21 +95,10 @@ const actionIcon = (
 const statusTone = (status: ProcessGroupDetails["status"]): "good" | "muted" | "warn" =>
   status === "running" ? "good" : status === "stopped" ? "muted" : "warn";
 
-const badgeVariant = (tone: "good" | "muted" | "warn"): "success" | "secondary" | "warning" => {
-  switch (tone) {
-    case "good":
-      return "success";
-    case "muted":
-      return "secondary";
-    case "warn":
-      return "warning";
-  }
-};
-
 const StatusBadge = ({ tone, children }: {
   readonly tone: "good" | "muted" | "warn";
   readonly children: ReactNode;
-}) => <Badge variant={badgeVariant(tone)}>{children}</Badge>;
+}) => <Badge className="pm-dashboard__badge" data-tone={tone} variant="secondary">{children}</Badge>;
 
 type ActionButtonProps = {
   readonly action: ControlPlaneProcessAction | ControlPlaneQueueAction;

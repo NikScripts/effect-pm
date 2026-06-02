@@ -42,7 +42,7 @@ import {
 import { Menubar } from "./components/ui/menubar.js";
 import { ScrollArea } from "./components/ui/scroll-area.js";
 import { Separator } from "./components/ui/separator.js";
-import { Sidebar, SidebarContent, SidebarGroup, SidebarHeader } from "./components/ui/sidebar.js";
+import { Sidebar, SidebarContent, SidebarGroup, SidebarHeader, SidebarProvider } from "./components/ui/sidebar.js";
 import {
   useDashboardChrome,
   type DashboardChromeChange,
@@ -347,6 +347,7 @@ const OperatorDashboardContent = ({
   };
 
   return (
+    <SidebarProvider>
     <main className={dashboardClassName(className)} data-pm-ops-ui="dashboard">
       <header className="pm-dashboard__hero">
         <div>
@@ -455,6 +456,7 @@ const OperatorDashboardContent = ({
         </section>
       ) : null}
     </main>
+    </SidebarProvider>
   );
 };
 
