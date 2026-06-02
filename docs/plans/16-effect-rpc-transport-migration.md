@@ -16,9 +16,10 @@ Use Effect transport modules by default.
 
 ## Current status
 
-`ControlTransportRpc` now provides the first Effect RPC transport adapter for the
-existing `ControlProtocol` envelope. Existing HTTP transport remains compatible
-and is still the default local/CLI path.
+`ControlTransportRpc` provides the first Effect RPC transport adapter for the
+existing `ControlProtocol` envelope. `LogTransportRpc` provides live relay log
+streaming over Effect RPC. Existing HTTP transport remains compatible and is
+still the default local/CLI path.
 
 ## What should migrate
 
@@ -28,7 +29,7 @@ and is still the default local/CLI path.
 | Control command transport | `POST /control` envelope over HTTP + implemented `ControlTransportRpc` | Effect RPC adapter for `ControlProtocolRequest` dispatch | Keep HTTP adapter for compatibility; RPC is first-class for new Effect integrations. |
 | ProcessManager remote client | HTTP client factory by default + transport injection | injectable transport factories + RPC client adapter | `RemoteProcessManager` remains semantic; `connect(..., { transport })` accepts the RPC adapter. |
 | Dashboard control widgets | `fetch` adapter | Effect RPC adapter first; fetch adapter compatibility only | Widgets keep `ControlPlanePort`; adapter owns protocol. |
-| Log watch / live streams | HTTP NDJSON stream | Effect RPC streaming RPC | Durable log reads stay storage/query APIs; live stream transport becomes RPC. |
+| Log watch / live streams | HTTP NDJSON stream + implemented `LogTransportRpc` | Effect RPC streaming RPC | Durable log reads stay storage/query APIs; live relay stream transport uses RPC. |
 | Remote queue enqueue | not shipped | Effect RPC queue command adapter | Queue item schemas must land first; domain queue service must not know RPC. |
 | Remote terminal | planned | Effect RPC streaming RPC | Terminal events use RPC streaming; no custom terminal HTTP routes. |
 
@@ -87,7 +88,8 @@ Not allowed in domain services:
    - Widgets continue using `ControlPlanePort`.
 
 5. **Live streams**
-   - Move log watch and future terminal events to RPC streaming.
+   - Live relay logs use `LogTransportRpc`.
+   - Move future terminal events to RPC streaming.
    - Keep durable log history in storage/query APIs.
 
 6. **Queue remote enqueue**
@@ -101,8 +103,8 @@ Not allowed in domain services:
 - `ProcessManager.connect(..., { transport })` can use the RPC adapter without
   typed process/queue API changes.
 - React widgets can swap fetch/RPC adapters without prop or hook changes.
-- Live logs / terminal events are represented as Effect streams at the adapter
-  boundary.
+- Live logs are represented as Effect streams at the adapter boundary; terminal
+  events still need their own future adapter.
 - Existing HTTP examples continue to work until deprecated intentionally.
 
 ## Version note
