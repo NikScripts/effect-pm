@@ -11,7 +11,7 @@
 | Client | Transport |
 | --- | --- |
 | **`ProcessManager`** (`connect`, CLI default) | **`POST /control`** — JSON **protocol envelope** (`ControlProtocolRequest`) |
-| **Effect-native integrations** | **`ControlTransportRpc`** — `@effect/rpc` dispatch of the same protocol envelope |
+| **Effect-native integrations** | **`ControlTransportRpc`** — Effect RPC dispatch of the same protocol envelope |
 | Direct HTTP / tooling | **REST** paths below (`GET` / `POST` per resource) |
 
 REST routes are translated to the same protocol handlers as **`/control`**.
