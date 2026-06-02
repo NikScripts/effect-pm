@@ -34,4 +34,12 @@ registry-driven router.
 
 ---
 
+## Step 2: `ProcessStore.payload().success().resolve()` chain
+
+- `ProcessStoreMethod<P, S>` — sealed tagged object `{ _tag, payload, success, resolve }`
+- `ProcessStoreQuerySection` stores `Record<string, ProcessStoreMethod<any, any>>` not `(s) => QueryApi`
+- Spine binding happens at layer construction (`bindMethods`)
+- Payload decoding happens in the **router**, not the resolver — resolver receives decoded types
+- `ProcessStoreMethod` is `@internal`
+
 ## Step 1: `_processTag` on the builder
