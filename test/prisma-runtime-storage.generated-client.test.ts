@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import * as NodeFs from "node:fs/promises";
 import * as NodePath from "node:path";
 import { promisify } from "node:util";
@@ -12,6 +13,8 @@ const workspaceRoot = process.cwd();
 const prismaBin = NodePath.join(workspaceRoot, "node_modules", ".bin", "prisma");
 const tsgoBin = NodePath.join(workspaceRoot, "node_modules", ".bin", "tsgo");
 const tsxBin = NodePath.join(workspaceRoot, "node_modules", ".bin", "tsx");
+const prismaIntegrationReady =
+  existsSync(prismaBin) && existsSync(tsgoBin) && existsSync(tsxBin);
 
 const run = (
   file: string,
@@ -192,7 +195,9 @@ const writeTsconfig = async (dir: string): Promise<string> => {
 };
 
 describe("PrismaRuntimeStorage generated client integration", () => {
-  it("runs against a real generated Prisma SQLite client", async () => {
+  it.skipIf(!prismaIntegrationReady)(
+    "runs against a real generated Prisma SQLite client",
+    async () => {
     const dir = NodePath.join(workspaceRoot, `.prisma-generated-${randomUUID()}`);
     try {
       await writeProject(dir);

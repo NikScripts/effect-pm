@@ -378,7 +378,16 @@ export type {
   QueueRateLimitExceededFactType,
   QueueRateLimitQuery,
 } from "./store/queueResource";
-export { QueueResourceStore } from "./store/queueResource";
+export {
+  emitDedupeKeyChange,
+  emitDedupeKeyChanges,
+  emitEntryFact,
+  emitEntryFacts,
+  emitLifecycleChange,
+  emitLifecycleChanges,
+  emitRateLimitExceededFact,
+  QueueResourceStore,
+} from "./store/queueResource";
 export type {
   RunResourceFact,
   RunResourceFactQuery,

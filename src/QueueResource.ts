@@ -83,7 +83,11 @@ import {
 import type { RateLimiter as EffectRateLimiter } from "effect/unstable/persistence/RateLimiter";
 import { withQueueLogAnnotations } from "./LogContext";
 import {
-  QueueResourceStore,
+  emitDedupeKeyChange,
+  emitDedupeKeyChanges,
+  emitEntryFact,
+  emitLifecycleChange,
+  emitRateLimitExceededFact,
   type QueueDedupeKeyChange,
   type QueueEntryFact,
   type QueueLifecycleChange,
@@ -1511,10 +1515,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     );
 
     // ─── Internal: optional QueueResourceStore analytics ───
-    // If QueueResourceStore is available in context, emit events. If not, silent no-op.
-    // This makes analytics automatic when the queue facet layer is provided, but never required.
+    // Scoped emit helpers delegate to static telemetry emitters (silent no-op
+    // when the facet layer is not composed).
 
-    const storeOption = yield* Effect.serviceOption(QueueResourceStore);
     let entrySeq = 0;
     let releaseSeq = 0;
     let entryFactSeq = 0;
@@ -1600,20 +1603,20 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       const durationMs = options.durationMs ?? 0;
       switch (status) {
         case "enqueued":
-          return { ...common, type: "queue.entry.enqueued", enqueuedAt: enqueuedAtMs };
+          return { ...common, type: "Queue.Entry.Enqueued", enqueuedAt: enqueuedAtMs };
         case "started":
-          return { ...common, type: "queue.entry.started", startedAt };
+          return { ...common, type: "Queue.Entry.Started", startedAt };
         case "completed":
           return {
             ...common,
-            type: "queue.entry.completed",
+            type: "Queue.Entry.Completed",
             startedAt,
             durationMs,
           };
         case "failed":
           return {
             ...common,
-            type: "queue.entry.failed",
+            type: "Queue.Entry.Failed",
             startedAt,
             durationMs,
             ...(options.error !== undefined ? { error: options.error } : {}),
@@ -1621,19 +1624,19 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         case "retried":
           return {
             ...common,
-            type: "queue.entry.retried",
+            type: "Queue.Entry.Retried",
             ...(options.error !== undefined ? { error: options.error } : {}),
           };
         case "exhausted":
           return {
             ...common,
-            type: "queue.entry.exhausted",
+            type: "Queue.Entry.Exhausted",
             ...(options.error !== undefined ? { error: options.error } : {}),
           };
         case "released":
           return {
             ...common,
-            type: "queue.entry.released",
+            type: "Queue.Entry.Released",
             releaseId: options.releaseId ?? "",
             ...(options.interruptedAtMs !== undefined
               ? { interruptedAt: options.interruptedAtMs }
@@ -1642,14 +1645,14 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         case "dead-lettered":
           return {
             ...common,
-            type: "queue.entry.dead-lettered",
+            type: "Queue.Entry.DeadLettered",
             ...(options.reason !== undefined ? { reason: options.reason } : {}),
             ...(options.error !== undefined ? { error: options.error } : {}),
           };
         case "dropped":
           return {
             ...common,
-            type: "queue.entry.dropped",
+            type: "Queue.Entry.Dropped",
             ...(options.reason !== undefined ? { reason: options.reason } : {}),
           };
       }
@@ -1669,8 +1672,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       },
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
-        if (Option.isNone(storeOption)) return;
-        const api = storeOption.value;
         const occurredAtMs =
           options?.occurredAt !== undefined
             ? DateTime.toEpochMillis(options.occurredAt)
@@ -1702,7 +1703,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
               : {}),
           },
         );
-        yield* recordStoreWrite(`entry ${status}`, api.recordEntry(fact));
+        yield* recordStoreWrite(`entry ${status}`, emitEntryFact(fact));
       });
 
     const recordEntryEventForQueueEntry = (
@@ -1715,8 +1716,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       },
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
-        if (Option.isNone(storeOption)) return;
-        const api = storeOption.value;
         const occurredAtMs =
           options?.occurredAt !== undefined
             ? DateTime.toEpochMillis(options.occurredAt)
@@ -1748,7 +1747,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
               : {}),
           },
         );
-        yield* recordStoreWrite(`entry ${status}`, api.recordEntry(fact));
+        yield* recordStoreWrite(`entry ${status}`, emitEntryFact(fact));
       });
 
     const buildLifecycleChange = (
@@ -1765,21 +1764,21 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       };
       switch (tag) {
         case "Started":
-          return { ...common, type: "queue.lifecycle.started" };
+          return { ...common, type: "Queue.Lifecycle.Started" };
         case "Paused":
-          return { ...common, type: "queue.lifecycle.paused" };
+          return { ...common, type: "Queue.Lifecycle.Paused" };
         case "Resumed":
-          return { ...common, type: "queue.lifecycle.resumed" };
+          return { ...common, type: "Queue.Lifecycle.Resumed" };
         case "Shutdown":
-          return { ...common, type: "queue.lifecycle.shutdown" };
+          return { ...common, type: "Queue.Lifecycle.Shutdown" };
         case "Cleared":
           return {
             ...common,
-            type: "queue.lifecycle.cleared",
+            type: "Queue.Lifecycle.Cleared",
             itemsCleared: itemsCleared ?? 0,
           };
         case "Drained":
-          return { ...common, type: "queue.lifecycle.drained" };
+          return { ...common, type: "Queue.Lifecycle.Drained" };
       }
     };
 
@@ -1788,11 +1787,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       itemsCleared?: number,
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
-        if (Option.isNone(storeOption)) return;
-        const api = storeOption.value;
         const changedAtMs = yield* Effect.clockWith((c) => c.currentTimeMillis);
         const change = buildLifecycleChange(tag, changedAtMs, itemsCleared);
-        yield* recordStoreWrite(`lifecycle ${tag}`, api.recordLifecycle(change));
+        yield* recordStoreWrite(`lifecycle ${tag}`, emitLifecycleChange(change));
       });
 
     const buildDedupeKeyChange = (
@@ -1809,8 +1806,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         changedAt: changedAtMs,
       };
       return kind === "added"
-        ? { ...common, type: "queue.dedupe-key.added" }
-        : { ...common, type: "queue.dedupe-key.released" };
+        ? { ...common, type: "Queue.DedupeKey.Added" }
+        : { ...common, type: "Queue.DedupeKey.Released" };
     };
 
     const recordDedupeKeyChange = (
@@ -1818,13 +1815,11 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       key: string,
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
-        if (Option.isNone(storeOption)) return;
-        const api = storeOption.value;
         const changedAtMs = yield* Effect.clockWith((c) => c.currentTimeMillis);
         const change = buildDedupeKeyChange(kind, key, changedAtMs);
         yield* recordStoreWrite(
           `dedupe-key ${kind}`,
-          api.recordDedupeKey(change),
+          emitDedupeKeyChange(change),
         );
       });
 
@@ -1833,15 +1828,14 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       keys: ReadonlyArray<string>,
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
-        if (keys.length === 0 || Option.isNone(storeOption)) return;
-        const api = storeOption.value;
+        if (keys.length === 0) return;
         const changedAtMs = yield* Effect.clockWith((c) => c.currentTimeMillis);
         const changes = keys.map((key) =>
           buildDedupeKeyChange(kind, key, changedAtMs),
         );
         yield* recordStoreWrite(
           `dedupe-key ${kind} batch`,
-          api.recordDedupeKeyBatch(changes),
+          emitDedupeKeyChanges(changes),
         );
       });
 
@@ -1885,7 +1879,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             : undefined;
       return {
         id: `${queueName}/${payload.internal.entryId}/ratelimit-exceeded/${String(rateLimitExceededSeq)}`,
-        type: "queue.ratelimit.exceeded",
+        type: "Queue.RateLimit.Exceeded",
         queueId: queueName,
         entryId: payload.internal.entryId,
         occurredAt: occurredAtMs,
@@ -1943,12 +1937,11 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           }
         }
 
-        if (!shouldRecordRateLimitExceeded || Option.isNone(storeOption)) return;
-        const api = storeOption.value;
+        if (!shouldRecordRateLimitExceeded) return;
         const fact = buildRateLimitExceededFact(payload, occurredAtMs);
         yield* recordStoreWrite(
           "rate-limit exceeded",
-          api.recordRateLimitExceeded(fact),
+          emitRateLimitExceededFact(fact),
         );
       });
 

@@ -11,23 +11,23 @@
  *
  * | Subject | Wire types | Indexed columns |
  * |---------|-----------|-----------------|
- * | `queue-entry` (× 9) | `queue.entry.enqueued`, `.started`, `.completed`, `.failed`, `.retried`, `.exhausted`, `.released`, `.dead-lettered`, `.dropped` | `subjectId = entryId`, `key = fact.key`, `indexA = batchId`, `indexB = releaseId` (released only) |
- * | `queue-lifecycle` (× 6) | `queue.lifecycle.started`, `.paused`, `.resumed`, `.shutdown`, `.cleared`, `.drained` | `subjectId = queueId` |
- * | `queue-dedupe-key` (× 3) | `queue.dedupe-key.added`, `.released`, `.hydrated` | `subjectId = key`, `key = key` |
- * | `queue-ratelimit` (× 1) | `queue.ratelimit.exceeded` | `subjectId = entryId`, `key = limitKey` |
+ * | `QueueEntry` (× 9) | `Queue.Entry.Enqueued`, `.Started`, `.Completed`, `.Failed`, `.Retried`, `.Exhausted`, `.Released`, `.DeadLettered`, `.Dropped` | `subjectId = entryId`, `key`, `indexA = batchId`, `indexB = releaseId` (released only) |
+ * | `QueueLifecycle` (× 6) | `Queue.Lifecycle.Started`, `.Paused`, `.Resumed`, `.Shutdown`, `.Cleared`, `.Drained` | `subjectId = queueId` |
+ * | `QueueDedupeKey` (× 3) | `Queue.DedupeKey.Added`, `.Released`, `.Hydrated` | `subjectId = key`, `key = key` |
+ * | `QueueRateLimit` (× 1) | `Queue.RateLimit.Exceeded` | `subjectId = entryId`, `key = limitKey` |
  *
- * Every record carries `processType: "queue-resource"` and
+ * Every record carries `processType: "QueueResource"` and
  * `processId: <queueId>`. Indexed columns let per-key, per-batch, and
  * per-release lookups push down to SQL without scanning the payload.
  *
  * ## Emit (optional)
  *
- * `QueueResource.make` calls the **static** record helpers on this
- * class (`QueueResourceStore.recordEntry`, `.recordLifecycle`,
- * `.recordDedupeKey`, plus their `*Batch` variants). When the facet
- * layer is not composed each call is a silent no-op; when composed it
- * writes through the spine and surfaces typed write failures. Queue internals
- * wrap telemetry-only writes with `ProcessStore.catchErrorAndLog`.
+ * {@link QueueResource} calls {@link emitEntryFact}, {@link emitLifecycleChange},
+ * {@link emitDedupeKeyChange}, and {@link emitRateLimitExceededFact} (scoped
+ * telemetry under `QueueResourceStore.Entry.*`, `.Lifecycle.*`, etc.). When the
+ * facet layer is not composed each static telemetry emitter is a silent no-op;
+ * when composed, writes surface typed failures. Queue internals wrap
+ * telemetry-only writes with `ProcessStore.catchErrorAndLog`.
  *
  * ## Read
  *
@@ -60,7 +60,6 @@ import {
   nullable,
   numberValue,
   optionalValue,
-  recordValue,
   stringValue,
   valueWhen,
 } from "../internal/store/decode";
@@ -72,10 +71,16 @@ import {
   isString,
   recordAttributesObject,
   runtimeRecordQuery,
-  toJsonValue,
 } from "../internal/store/helpers";
 import type { ProcessStoreSpine } from "../internal/store/spine";
-import { ProcessStore } from "../ProcessStore";
+import {
+  QueueDedupeKeyScope,
+  QueueEntryScope,
+  QueueResourceScope,
+} from "../QueueResourceScope";
+import { ProcessStore, Telemetry } from "../ProcessStore";
+import type { ProcessStoreWriteError } from "../ProcessStoreEvent";
+import { QueueResourceTelemetry } from "./queueResourceTelemetry";
 import type { JsonValue, QueryOpts } from "../ProcessStoreEvent";
 import {
   IndexA,
@@ -125,31 +130,23 @@ export type QueueResourceStoreDedupeKeyStatus =
   | "hydrated";
 
 /** @public */
-export type QueueEntryFactType =
-  | "queue.entry.enqueued"
-  | "queue.entry.started"
-  | "queue.entry.completed"
-  | "queue.entry.failed"
-  | "queue.entry.retried"
-  | "queue.entry.exhausted"
-  | "queue.entry.released"
-  | "queue.entry.dead-lettered"
-  | "queue.entry.dropped";
+/** @public */
+export type QueueEntryFactType = Telemetry.Type.Event<
+  typeof QueueResourceTelemetry,
+  "Entry"
+>;
 
 /** @public */
-export type QueueLifecycleChangeType =
-  | "queue.lifecycle.started"
-  | "queue.lifecycle.paused"
-  | "queue.lifecycle.resumed"
-  | "queue.lifecycle.shutdown"
-  | "queue.lifecycle.cleared"
-  | "queue.lifecycle.drained";
+export type QueueLifecycleChangeType = Telemetry.Type.Event<
+  typeof QueueResourceTelemetry,
+  "Lifecycle"
+>;
 
 /** @public */
-export type QueueDedupeKeyChangeType =
-  | "queue.dedupe-key.added"
-  | "queue.dedupe-key.released"
-  | "queue.dedupe-key.hydrated";
+export type QueueDedupeKeyChangeType = Telemetry.Type.Event<
+  typeof QueueResourceTelemetry,
+  "DedupeKey"
+>;
 
 // ============================================================================
 // Fact / change shapes (per-status concrete types)
@@ -170,27 +167,27 @@ interface QueueEntryFactCommon {
 
 /** @public */
 export interface QueueEntryEnqueuedFact extends QueueEntryFactCommon {
-  readonly type: "queue.entry.enqueued";
+  readonly type: "Queue.Entry.Enqueued";
   readonly enqueuedAt: number;
   readonly payload?: JsonValue;
 }
 
 /** @public */
 export interface QueueEntryStartedFact extends QueueEntryFactCommon {
-  readonly type: "queue.entry.started";
+  readonly type: "Queue.Entry.Started";
   readonly startedAt: number;
 }
 
 /** @public */
 export interface QueueEntryCompletedFact extends QueueEntryFactCommon {
-  readonly type: "queue.entry.completed";
+  readonly type: "Queue.Entry.Completed";
   readonly startedAt: number;
   readonly durationMs: number;
 }
 
 /** @public */
 export interface QueueEntryFailedFact extends QueueEntryFactCommon {
-  readonly type: "queue.entry.failed";
+  readonly type: "Queue.Entry.Failed";
   readonly startedAt: number;
   readonly durationMs: number;
   readonly error?: string;
@@ -198,33 +195,33 @@ export interface QueueEntryFailedFact extends QueueEntryFactCommon {
 
 /** @public */
 export interface QueueEntryRetriedFact extends QueueEntryFactCommon {
-  readonly type: "queue.entry.retried";
+  readonly type: "Queue.Entry.Retried";
   readonly error?: string;
 }
 
 /** @public */
 export interface QueueEntryExhaustedFact extends QueueEntryFactCommon {
-  readonly type: "queue.entry.exhausted";
+  readonly type: "Queue.Entry.Exhausted";
   readonly error?: string;
 }
 
 /** @public */
 export interface QueueEntryReleasedFact extends QueueEntryFactCommon {
-  readonly type: "queue.entry.released";
+  readonly type: "Queue.Entry.Released";
   readonly releaseId: string;
   readonly interruptedAt?: number;
 }
 
 /** @public */
 export interface QueueEntryDeadLetteredFact extends QueueEntryFactCommon {
-  readonly type: "queue.entry.dead-lettered";
+  readonly type: "Queue.Entry.DeadLettered";
   readonly reason?: string;
   readonly error?: string;
 }
 
 /** @public */
 export interface QueueEntryDroppedFact extends QueueEntryFactCommon {
-  readonly type: "queue.entry.dropped";
+  readonly type: "Queue.Entry.Dropped";
   readonly reason?: string;
 }
 
@@ -257,37 +254,37 @@ interface QueueLifecycleChangeCommon {
 /** @public */
 export interface QueueLifecycleStartedChange
   extends QueueLifecycleChangeCommon {
-  readonly type: "queue.lifecycle.started";
+  readonly type: "Queue.Lifecycle.Started";
 }
 
 /** @public */
 export interface QueueLifecyclePausedChange extends QueueLifecycleChangeCommon {
-  readonly type: "queue.lifecycle.paused";
+  readonly type: "Queue.Lifecycle.Paused";
 }
 
 /** @public */
 export interface QueueLifecycleResumedChange
   extends QueueLifecycleChangeCommon {
-  readonly type: "queue.lifecycle.resumed";
+  readonly type: "Queue.Lifecycle.Resumed";
 }
 
 /** @public */
 export interface QueueLifecycleShutdownChange
   extends QueueLifecycleChangeCommon {
-  readonly type: "queue.lifecycle.shutdown";
+  readonly type: "Queue.Lifecycle.Shutdown";
 }
 
 /** @public */
 export interface QueueLifecycleClearedChange
   extends QueueLifecycleChangeCommon {
-  readonly type: "queue.lifecycle.cleared";
+  readonly type: "Queue.Lifecycle.Cleared";
   readonly itemsCleared: number;
 }
 
 /** @public */
 export interface QueueLifecycleDrainedChange
   extends QueueLifecycleChangeCommon {
-  readonly type: "queue.lifecycle.drained";
+  readonly type: "Queue.Lifecycle.Drained";
 }
 
 /**
@@ -316,19 +313,19 @@ interface QueueDedupeKeyChangeCommon {
 
 /** @public */
 export interface QueueDedupeKeyAddedChange extends QueueDedupeKeyChangeCommon {
-  readonly type: "queue.dedupe-key.added";
+  readonly type: "Queue.DedupeKey.Added";
 }
 
 /** @public */
 export interface QueueDedupeKeyReleasedChange
   extends QueueDedupeKeyChangeCommon {
-  readonly type: "queue.dedupe-key.released";
+  readonly type: "Queue.DedupeKey.Released";
 }
 
 /** @public */
 export interface QueueDedupeKeyHydratedChange
   extends QueueDedupeKeyChangeCommon {
-  readonly type: "queue.dedupe-key.hydrated";
+  readonly type: "Queue.DedupeKey.Hydrated";
 }
 
 /**
@@ -344,7 +341,10 @@ export type QueueDedupeKeyChange =
   | QueueDedupeKeyHydratedChange;
 
 /** @public */
-export type QueueRateLimitExceededFactType = "queue.ratelimit.exceeded";
+export type QueueRateLimitExceededFactType = Telemetry.Type.Event<
+  typeof QueueResourceTelemetry,
+  "RateLimit"
+>;
 
 /** @public */
 export interface QueueRateLimitExceededFact {
@@ -412,70 +412,11 @@ export interface QueueRateLimitQuery {
 // Constants and type guards
 // ============================================================================
 
-const QUEUE_RESOURCE_PROCESS_TYPE = "queue-resource";
-const QUEUE_ENTRY_SUBJECT_TYPE = "queue-entry";
-const QUEUE_LIFECYCLE_SUBJECT_TYPE = "queue-lifecycle";
-const QUEUE_DEDUPE_KEY_SUBJECT_TYPE = "queue-dedupe-key";
-const QUEUE_RATELIMIT_SUBJECT_TYPE = "queue-ratelimit";
-const QUEUE_RESOURCE_INDEX_NAMES = [
-  "batchId",
-  "releaseId",
-] as const satisfies ReadonlyArray<string>;
-
-/** @internal */
-export const queueEntryFactTypes: ReadonlyArray<QueueEntryFactType> = [
-  "queue.entry.enqueued",
-  "queue.entry.started",
-  "queue.entry.completed",
-  "queue.entry.failed",
-  "queue.entry.retried",
-  "queue.entry.exhausted",
-  "queue.entry.released",
-  "queue.entry.dead-lettered",
-  "queue.entry.dropped",
-];
-
-/** @internal */
-export const queueLifecycleChangeTypes: ReadonlyArray<QueueLifecycleChangeType> =
-  [
-    "queue.lifecycle.started",
-    "queue.lifecycle.paused",
-    "queue.lifecycle.resumed",
-    "queue.lifecycle.shutdown",
-    "queue.lifecycle.cleared",
-    "queue.lifecycle.drained",
-  ];
-
-/** @internal */
-export const queueDedupeKeyChangeTypes: ReadonlyArray<QueueDedupeKeyChangeType> =
-  [
-    "queue.dedupe-key.added",
-    "queue.dedupe-key.released",
-    "queue.dedupe-key.hydrated",
-  ];
-
-/** @internal */
-export const queueRateLimitExceededFactTypes: ReadonlyArray<QueueRateLimitExceededFactType> =
-  ["queue.ratelimit.exceeded"];
-
-const isQueueRateLimitExceededFactType = (
-  value: unknown,
-): value is QueueRateLimitExceededFactType =>
-  isString(value) &&
-  queueRateLimitExceededFactTypes.some((type) => type === value);
-
-const isQueueEntryFactType = (value: unknown): value is QueueEntryFactType =>
-  isString(value) && queueEntryFactTypes.some((type) => type === value);
-
-const isQueueLifecycleChangeType = (
-  value: unknown,
-): value is QueueLifecycleChangeType =>
-  isString(value) && queueLifecycleChangeTypes.some((type) => type === value);
-
-const isQueueDedupeKeyChangeType = (
-  value: unknown,
-): value is QueueDedupeKeyChangeType =>
-  isString(value) && queueDedupeKeyChangeTypes.some((type) => type === value);
+const QUEUE_RESOURCE_PROCESS_TYPE = "QueueResource";
+const QUEUE_ENTRY_SUBJECT_TYPE = "QueueEntry";
+const QUEUE_LIFECYCLE_SUBJECT_TYPE = "QueueLifecycle";
+const QUEUE_DEDUPE_KEY_SUBJECT_TYPE = "QueueDedupeKey";
+const QUEUE_RATELIMIT_SUBJECT_TYPE = "QueueRateLimit";
 
 const queuePriorities: ReadonlyArray<QueueResourceStorePriority> = [
   "high",
@@ -487,219 +428,6 @@ const isQueuePriority = (
   value: unknown,
 ): value is QueueResourceStorePriority =>
   isString(value) && queuePriorities.some((p) => p === value);
-
-// ============================================================================
-// Encoders (fact / change → RuntimeRecord)
-// ============================================================================
-
-const queueEntryFactAsJson = (fact: QueueEntryFact): JsonValue => {
-  const out: { [key: string]: JsonValue } = {
-    id: fact.id,
-    queueId: fact.queueId,
-    entryId: fact.entryId,
-    type: fact.type,
-    occurredAt: fact.occurredAt,
-  };
-  if (fact.key !== undefined) out["key"] = fact.key;
-  if (fact.priority !== undefined) out["priority"] = fact.priority;
-  if (fact.attempts !== undefined) out["attempts"] = fact.attempts;
-  if (fact.batchId !== undefined) out["batchId"] = fact.batchId;
-  if (fact.attributes !== undefined) {
-    out["attributes"] = toJsonValue(fact.attributes);
-  }
-  switch (fact.type) {
-    case "queue.entry.enqueued":
-      out["enqueuedAt"] = fact.enqueuedAt;
-      if (fact.payload !== undefined) out["payload"] = fact.payload;
-      break;
-    case "queue.entry.started":
-      out["startedAt"] = fact.startedAt;
-      break;
-    case "queue.entry.completed":
-      out["startedAt"] = fact.startedAt;
-      out["durationMs"] = fact.durationMs;
-      break;
-    case "queue.entry.failed":
-      out["startedAt"] = fact.startedAt;
-      out["durationMs"] = fact.durationMs;
-      if (fact.error !== undefined) out["error"] = fact.error;
-      break;
-    case "queue.entry.retried":
-      if (fact.error !== undefined) out["error"] = fact.error;
-      break;
-    case "queue.entry.exhausted":
-      if (fact.error !== undefined) out["error"] = fact.error;
-      break;
-    case "queue.entry.released":
-      out["releaseId"] = fact.releaseId;
-      if (fact.interruptedAt !== undefined) {
-        out["interruptedAt"] = fact.interruptedAt;
-      }
-      break;
-    case "queue.entry.dead-lettered":
-      if (fact.reason !== undefined) out["reason"] = fact.reason;
-      if (fact.error !== undefined) out["error"] = fact.error;
-      break;
-    case "queue.entry.dropped":
-      if (fact.reason !== undefined) out["reason"] = fact.reason;
-      break;
-  }
-  return out;
-};
-
-const lifecycleChangeAsJson = (change: QueueLifecycleChange): JsonValue => {
-  const out: { [key: string]: JsonValue } = {
-    id: change.id,
-    queueId: change.queueId,
-    type: change.type,
-    changedAt: change.changedAt,
-  };
-  if (change.attributes !== undefined) {
-    out["attributes"] = toJsonValue(change.attributes);
-  }
-  if (change.type === "queue.lifecycle.cleared") {
-    out["itemsCleared"] = change.itemsCleared;
-  }
-  return out;
-};
-
-const dedupeChangeAsJson = (change: QueueDedupeKeyChange): JsonValue => ({
-  id: change.id,
-  queueId: change.queueId,
-  key: change.key,
-  type: change.type,
-  changedAt: change.changedAt,
-  ...(change.attributes !== undefined
-    ? { attributes: toJsonValue(change.attributes) }
-    : {}),
-});
-
-const rateLimitExceededFactAsJson = (fact: QueueRateLimitExceededFact): JsonValue => {
-  const out: { [key: string]: JsonValue } = {
-    id: fact.id,
-    queueId: fact.queueId,
-    entryId: fact.entryId,
-    type: fact.type,
-    occurredAt: fact.occurredAt,
-    limitKey: fact.limitKey,
-    algorithm: fact.algorithm,
-    limit: fact.limit,
-    tokens: fact.tokens,
-    windowMs: fact.windowMs,
-    outcome: fact.outcome,
-    delayMs: fact.delayMs,
-    remaining: fact.remaining,
-    resetAfterMs: fact.resetAfterMs,
-  };
-  if (fact.retryAfterMs !== undefined) out["retryAfterMs"] = fact.retryAfterMs;
-  if (fact.error !== undefined) out["error"] = fact.error;
-  if (fact.key !== undefined) out["key"] = fact.key;
-  if (fact.priority !== undefined) out["priority"] = fact.priority;
-  if (fact.attributes !== undefined) {
-    out["attributes"] = toJsonValue(fact.attributes);
-  }
-  return out;
-};
-
-/**
- * Build a runtime record from a queue entry fact.
- *
- * @internal
- */
-export const makeQueueEntryRecord = (
-  fact: QueueEntryFact,
-): Omit<RuntimeRecord, "runId" | "createdAt"> => {
-  type Mutable = {
-    -readonly [K in keyof Omit<RuntimeRecord, "runId" | "createdAt">]:
-      Omit<RuntimeRecord, "runId" | "createdAt">[K];
-  };
-  const out: Mutable = {
-    id: `queue.entry/${fact.id}`,
-    type: fact.type,
-    occurredAt: DateTime.makeUnsafe(fact.occurredAt),
-    processType: QUEUE_RESOURCE_PROCESS_TYPE,
-    processId: fact.queueId,
-    subjectType: QUEUE_ENTRY_SUBJECT_TYPE,
-    subjectId: fact.entryId,
-    indexNames: QUEUE_RESOURCE_INDEX_NAMES,
-    payload: { fact: queueEntryFactAsJson(fact) },
-  };
-  if (fact.key !== undefined) out.key = fact.key;
-  if (fact.batchId !== undefined) out.indexA = fact.batchId;
-  if (fact.type === "queue.entry.released") out.indexB = fact.releaseId;
-  if (fact.attributes !== undefined) {
-    out.attributes = toJsonValue(fact.attributes);
-  }
-  return out;
-};
-
-/**
- * Build a runtime record from a queue lifecycle change.
- *
- * @internal
- */
-export const makeQueueLifecycleRecord = (
-  change: QueueLifecycleChange,
-): Omit<RuntimeRecord, "runId" | "createdAt"> => {
-  const out: Omit<RuntimeRecord, "runId" | "createdAt"> = {
-    id: `queue.lifecycle/${change.id}`,
-    type: change.type,
-    occurredAt: DateTime.makeUnsafe(change.changedAt),
-    processType: QUEUE_RESOURCE_PROCESS_TYPE,
-    processId: change.queueId,
-    subjectType: QUEUE_LIFECYCLE_SUBJECT_TYPE,
-    subjectId: change.queueId,
-    payload: { change: lifecycleChangeAsJson(change) },
-    ...(change.attributes !== undefined
-      ? { attributes: toJsonValue(change.attributes) }
-      : {}),
-  };
-  return out;
-};
-
-/**
- * Build a runtime record from a queue rate-limit exceeded fact.
- *
- * @internal
- */
-export const makeQueueRateLimitExceededRecord = (
-  fact: QueueRateLimitExceededFact,
-): Omit<RuntimeRecord, "runId" | "createdAt"> => ({
-  id: `queue.ratelimit/${fact.id}`,
-  type: fact.type,
-  occurredAt: DateTime.makeUnsafe(fact.occurredAt),
-  processType: QUEUE_RESOURCE_PROCESS_TYPE,
-  processId: fact.queueId,
-  subjectType: QUEUE_RATELIMIT_SUBJECT_TYPE,
-  subjectId: fact.entryId,
-  key: fact.limitKey,
-  payload: { fact: rateLimitExceededFactAsJson(fact) },
-  ...(fact.attributes !== undefined
-    ? { attributes: toJsonValue(fact.attributes) }
-    : {}),
-});
-
-/**
- * Build a runtime record from a queue dedupe-key change.
- *
- * @internal
- */
-export const makeQueueDedupeKeyRecord = (
-  change: QueueDedupeKeyChange,
-): Omit<RuntimeRecord, "runId" | "createdAt"> => ({
-  id: `queue.dedupe-key/${change.id}`,
-  type: change.type,
-  occurredAt: DateTime.makeUnsafe(change.changedAt),
-  processType: QUEUE_RESOURCE_PROCESS_TYPE,
-  processId: change.queueId,
-  subjectType: QUEUE_DEDUPE_KEY_SUBJECT_TYPE,
-  subjectId: change.key,
-  key: change.key,
-  payload: { change: dedupeChangeAsJson(change) },
-  ...(change.attributes !== undefined
-    ? { attributes: toJsonValue(change.attributes) }
-    : {}),
-});
 
 // ============================================================================
 // Decoders (RuntimeRecord → fact / change)
@@ -719,20 +447,33 @@ interface QueueEntryFactCommonDecoded {
 
 const decodeEntryCommon = (
   raw: { readonly [key: string]: unknown },
+  record: RuntimeRecord,
 ): QueueEntryFactCommonDecoded | null =>
   nullable(
     Option.all({
-      id: stringValue(raw["id"]),
-      queueId: stringValue(raw["queueId"]),
-      entryId: stringValue(raw["entryId"]),
-      occurredAt: numberValue(raw["occurredAt"]),
+      id: Option.orElse(stringValue(raw["id"]), () => Option.some(record.id)),
+      queueId: Option.some(record.processId),
+      entryId: Option.orElse(
+        stringValue(raw["entryId"]),
+        () =>
+          record.subjectId === undefined
+            ? Option.none()
+            : Option.some(record.subjectId),
+      ),
+      occurredAt: Option.orElse(
+        numberValue(raw["occurredAt"]),
+        () =>
+          Option.some(DateTime.toEpochMillis(record.occurredAt)),
+      ),
       key: optionalValue(raw["key"], isString),
       priority: optionalValue(raw["priority"], isQueuePriority),
       attempts: optionalValue(raw["attempts"], isFiniteNumber),
       batchId: optionalValue(raw["batchId"], isString),
     }).pipe(
       Option.map(({ attempts, batchId, entryId, id, key, occurredAt, priority, queueId }) => {
-        const attributes = recordAttributesObject(raw["attributes"]);
+        const attributes =
+          recordAttributesObject(raw["attributes"]) ??
+          recordAttributesObject(record.attributes);
         return {
           id,
           queueId,
@@ -749,15 +490,17 @@ const decodeEntryCommon = (
   );
 
 const decodeQueueEntryFactValue = (
+  record: RuntimeRecord,
   type: QueueEntryFactType,
-  value: unknown,
 ): QueueEntryFact | null => {
+  if (record.processType !== QUEUE_RESOURCE_PROCESS_TYPE) return null;
+  if (record.type !== type) return null;
+  const value = record.payload;
   if (!isRecord(value)) return null;
-  if (value["type"] !== type) return null;
-  const common = decodeEntryCommon(value);
+  const common = decodeEntryCommon(value, record);
   if (common === null) return null;
   switch (type) {
-    case "queue.entry.enqueued": {
+    case "Queue.Entry.Enqueued": {
       const enqueuedAt = value["enqueuedAt"];
       if (!isFiniteNumber(enqueuedAt)) return null;
       const payload = value["payload"];
@@ -769,12 +512,12 @@ const decodeQueueEntryFactValue = (
         ...(payload === undefined ? {} : { payload }),
       };
     }
-    case "queue.entry.started": {
+    case "Queue.Entry.Started": {
       const startedAt = value["startedAt"];
       if (!isFiniteNumber(startedAt)) return null;
       return { ...common, type, startedAt };
     }
-    case "queue.entry.completed": {
+    case "Queue.Entry.Completed": {
       const startedAt = value["startedAt"];
       const durationMs = value["durationMs"];
       if (!isFiniteNumber(startedAt) || !isFiniteNumber(durationMs)) {
@@ -782,7 +525,7 @@ const decodeQueueEntryFactValue = (
       }
       return { ...common, type, startedAt, durationMs };
     }
-    case "queue.entry.failed": {
+    case "Queue.Entry.Failed": {
       const startedAt = value["startedAt"];
       const durationMs = value["durationMs"];
       const errorRaw = value["error"];
@@ -798,7 +541,7 @@ const decodeQueueEntryFactValue = (
         ...(errorRaw === undefined ? {} : { error: errorRaw }),
       };
     }
-    case "queue.entry.retried": {
+    case "Queue.Entry.Retried": {
       const errorRaw = value["error"];
       if (errorRaw !== undefined && !isString(errorRaw)) return null;
       return {
@@ -807,7 +550,7 @@ const decodeQueueEntryFactValue = (
         ...(errorRaw === undefined ? {} : { error: errorRaw }),
       };
     }
-    case "queue.entry.exhausted": {
+    case "Queue.Entry.Exhausted": {
       const errorRaw = value["error"];
       if (errorRaw !== undefined && !isString(errorRaw)) return null;
       return {
@@ -816,26 +559,25 @@ const decodeQueueEntryFactValue = (
         ...(errorRaw === undefined ? {} : { error: errorRaw }),
       };
     }
-    case "queue.entry.released": {
-      const releaseId = value["releaseId"];
+    case "Queue.Entry.Released": {
+      const releaseId = value["releaseId"] ?? record.indexB;
       if (!isString(releaseId)) return null;
-      const interruptedAtRaw = value["interruptedAt"];
-      if (
-        interruptedAtRaw !== undefined &&
-        !isFiniteNumber(interruptedAtRaw)
-      ) {
-        return null;
-      }
-      return {
-        ...common,
-        type,
-        releaseId,
-        ...(interruptedAtRaw === undefined
-          ? {}
-          : { interruptedAt: interruptedAtRaw }),
-      };
+      const interruptedAt = optionalValue(value["interruptedAt"], isFiniteNumber);
+      return interruptedAt.pipe(
+        Option.match({
+          onNone: () => null,
+          onSome: (interruptedAtRaw) => ({
+            ...common,
+            type,
+            releaseId,
+            ...(interruptedAtRaw === undefined
+              ? {}
+              : { interruptedAt: interruptedAtRaw }),
+          }),
+        }),
+      );
     }
-    case "queue.entry.dead-lettered": {
+    case "Queue.Entry.DeadLettered": {
       const reasonRaw = value["reason"];
       const errorRaw = value["error"];
       if (reasonRaw !== undefined && !isString(reasonRaw)) return null;
@@ -847,7 +589,7 @@ const decodeQueueEntryFactValue = (
         ...(errorRaw === undefined ? {} : { error: errorRaw }),
       };
     }
-    case "queue.entry.dropped": {
+    case "Queue.Entry.Dropped": {
       const reasonRaw = value["reason"];
       if (reasonRaw !== undefined && !isString(reasonRaw)) return null;
       return {
@@ -859,163 +601,199 @@ const decodeQueueEntryFactValue = (
   }
 };
 
-const recordToQueueEntryFact = (record: RuntimeRecord): QueueEntryFact | null => {
-  if (!isQueueEntryFactType(record.type)) return null;
-  if (record.processType !== QUEUE_RESOURCE_PROCESS_TYPE) return null;
-  const payload = record.payload;
-  if (!isRecord(payload)) return null;
-  return decodeQueueEntryFactValue(record.type, payload["fact"]);
-};
-
 const decodeQueueLifecycleChangeValue = (
+  record: RuntimeRecord,
   type: QueueLifecycleChangeType,
-  value: unknown,
-): QueueLifecycleChange | null =>
-  nullable(
-    recordValue(value).pipe(
-      Option.flatMap((raw) =>
-        raw["type"] !== type
-          ? Option.none<QueueLifecycleChange>()
-          : Option.all({
-              id: stringValue(raw["id"]),
-              queueId: stringValue(raw["queueId"]),
-              changedAt: numberValue(raw["changedAt"]),
-            }).pipe(
-              Option.flatMap((common): Option.Option<QueueLifecycleChange> => {
-                const attributes = recordAttributesObject(raw["attributes"]);
-                const base = {
-                  ...common,
-                  ...(attributes === undefined ? {} : { attributes }),
-                };
-                return type === "queue.lifecycle.cleared"
-                  ? numberValue(raw["itemsCleared"]).pipe(
-                      Option.map((itemsCleared): QueueLifecycleChange => ({
-                        ...base,
-                        type,
-                        itemsCleared,
-                      })),
-                    )
-                  : Option.some<QueueLifecycleChange>({ ...base, type });
-              }),
-            ),
+): QueueLifecycleChange | null => {
+  if (record.processType !== QUEUE_RESOURCE_PROCESS_TYPE) return null;
+  if (record.type !== type) return null;
+  const raw = record.payload;
+  if (!isRecord(raw)) return null;
+  return nullable(
+    Option.all({
+      id: Option.orElse(stringValue(raw["id"]), () => Option.some(record.id)),
+      queueId: Option.some(record.processId),
+      changedAt: Option.orElse(
+        numberValue(raw["changedAt"]),
+        () => Option.some(DateTime.toEpochMillis(record.occurredAt)),
       ),
+    }).pipe(
+      Option.flatMap((common): Option.Option<QueueLifecycleChange> => {
+        const attributes =
+          recordAttributesObject(raw["attributes"]) ??
+          recordAttributesObject(record.attributes);
+        const base = {
+          ...common,
+          ...(attributes === undefined ? {} : { attributes }),
+        };
+        return type === "Queue.Lifecycle.Cleared"
+          ? numberValue(raw["itemsCleared"]).pipe(
+              Option.map((itemsCleared): QueueLifecycleChange => ({
+                ...base,
+                type,
+                itemsCleared,
+              })),
+            )
+          : Option.some<QueueLifecycleChange>({ ...base, type });
+      }),
     ),
   );
-
-const recordToQueueLifecycleChange = (
-  record: RuntimeRecord,
-): QueueLifecycleChange | null => {
-  if (!isQueueLifecycleChangeType(record.type)) return null;
-  if (record.processType !== QUEUE_RESOURCE_PROCESS_TYPE) return null;
-  const payload = record.payload;
-  if (!isRecord(payload)) return null;
-  return decodeQueueLifecycleChangeValue(record.type, payload["change"]);
 };
 
 const decodeQueueDedupeKeyChangeValue = (
+  record: RuntimeRecord,
   type: QueueDedupeKeyChangeType,
-  value: unknown,
-): QueueDedupeKeyChange | null =>
-  nullable(
-    recordValue(value).pipe(
-      Option.flatMap((raw) =>
-        raw["type"] !== type
-          ? Option.none<QueueDedupeKeyChange>()
-          : Option.all({
-              id: stringValue(raw["id"]),
-              queueId: stringValue(raw["queueId"]),
-              key: stringValue(raw["key"]),
-              changedAt: numberValue(raw["changedAt"]),
-            }).pipe(
-              Option.map((fields) => {
-                const attributes = recordAttributesObject(raw["attributes"]);
-                return {
-                  ...fields,
-                  type,
-                  ...(attributes === undefined ? {} : { attributes }),
-                };
-              }),
-            ),
+): QueueDedupeKeyChange | null => {
+  if (record.processType !== QUEUE_RESOURCE_PROCESS_TYPE) return null;
+  if (record.type !== type) return null;
+  const raw = record.payload;
+  if (!isRecord(raw)) return null;
+  return nullable(
+    Option.all({
+      id: Option.orElse(stringValue(raw["id"]), () => Option.some(record.id)),
+      queueId: Option.some(record.processId),
+      key: stringValue(raw["key"]),
+      changedAt: Option.orElse(
+        numberValue(raw["changedAt"]),
+        () => Option.some(DateTime.toEpochMillis(record.occurredAt)),
       ),
+    }).pipe(
+      Option.map((fields) => {
+        const attributes =
+          recordAttributesObject(raw["attributes"]) ??
+          recordAttributesObject(record.attributes);
+        return {
+          ...fields,
+          type,
+          ...(attributes === undefined ? {} : { attributes }),
+        };
+      }),
     ),
   );
-
-const recordToQueueDedupeKeyChange = (
-  record: RuntimeRecord,
-): QueueDedupeKeyChange | null => {
-  if (!isQueueDedupeKeyChangeType(record.type)) return null;
-  if (record.processType !== QUEUE_RESOURCE_PROCESS_TYPE) return null;
-  const payload = record.payload;
-  if (!isRecord(payload)) return null;
-  return decodeQueueDedupeKeyChangeValue(record.type, payload["change"]);
 };
 
 const decodeQueueRateLimitExceededFactValue = (
-  value: unknown,
-): QueueRateLimitExceededFact | null =>
-  nullable(
-    recordValue(value).pipe(
-      Option.flatMap((raw) =>
-        raw["type"] !== "queue.ratelimit.exceeded"
-          ? Option.none<QueueRateLimitExceededFact>()
-          : Option.all({
-              id: stringValue(raw["id"]),
-              queueId: stringValue(raw["queueId"]),
-              entryId: stringValue(raw["entryId"]),
-              occurredAt: numberValue(raw["occurredAt"]),
-              limitKey: stringValue(raw["limitKey"]),
-              algorithm: valueWhen(
-                raw["algorithm"],
-                (algorithm): algorithm is QueueRateLimitExceededFact["algorithm"] =>
-                  algorithm === "fixed-window" || algorithm === "token-bucket",
-              ),
-              limit: numberValue(raw["limit"]),
-              tokens: numberValue(raw["tokens"]),
-              windowMs: numberValue(raw["windowMs"]),
-              outcome: valueWhen(
-                raw["outcome"],
-                (outcome): outcome is QueueRateLimitExceededFact["outcome"] =>
-                  outcome === "delayed" || outcome === "rejected",
-              ),
-              delayMs: numberValue(raw["delayMs"]),
-              remaining: numberValue(raw["remaining"]),
-              resetAfterMs: numberValue(raw["resetAfterMs"]),
-            }).pipe(
-              Option.flatMap((required) =>
-                Option.all({
-                  retryAfterMs: optionalValue(raw["retryAfterMs"], isFiniteNumber),
-                  error: optionalValue(raw["error"], isString),
-                  key: optionalValue(raw["key"], isString),
-                  priority: optionalValue(raw["priority"], isQueuePriority),
-                }).pipe(
-                  Option.map(({ error, key, priority, retryAfterMs }) => {
-                    const attributes = recordAttributesObject(raw["attributes"]);
-                    return {
-                      ...required,
-                      type: "queue.ratelimit.exceeded" as const,
-                      ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
-                      ...(error === undefined ? {} : { error }),
-                      ...(key === undefined ? {} : { key }),
-                      ...(priority === undefined ? {} : { priority }),
-                      ...(attributes === undefined ? {} : { attributes }),
-                    };
-                  }),
-                ),
-              ),
-            ),
+  record: RuntimeRecord,
+  type: QueueRateLimitExceededFactType,
+): QueueRateLimitExceededFact | null => {
+  if (record.processType !== QUEUE_RESOURCE_PROCESS_TYPE) return null;
+  if (record.type !== type) return null;
+  const raw = record.payload;
+  if (!isRecord(raw)) return null;
+  return nullable(
+    Option.all({
+      id: Option.orElse(stringValue(raw["id"]), () => Option.some(record.id)),
+      queueId: Option.some(record.processId),
+      entryId: stringValue(raw["entryId"]),
+      occurredAt: Option.orElse(
+        numberValue(raw["occurredAt"]),
+        () => Option.some(DateTime.toEpochMillis(record.occurredAt)),
+      ),
+      limitKey: stringValue(raw["limitKey"]),
+      algorithm: valueWhen(
+        raw["algorithm"],
+        (algorithm): algorithm is QueueRateLimitExceededFact["algorithm"] =>
+          algorithm === "fixed-window" || algorithm === "token-bucket",
+      ),
+      limit: numberValue(raw["limit"]),
+      tokens: numberValue(raw["tokens"]),
+      windowMs: numberValue(raw["windowMs"]),
+      outcome: valueWhen(
+        raw["outcome"],
+        (outcome): outcome is QueueRateLimitExceededFact["outcome"] =>
+          outcome === "delayed" || outcome === "rejected",
+      ),
+      delayMs: numberValue(raw["delayMs"]),
+      remaining: numberValue(raw["remaining"]),
+      resetAfterMs: numberValue(raw["resetAfterMs"]),
+    }).pipe(
+      Option.flatMap((required) =>
+        Option.all({
+          retryAfterMs: optionalValue(raw["retryAfterMs"], isFiniteNumber),
+          error: optionalValue(raw["error"], isString),
+          key: optionalValue(raw["key"], isString),
+          priority: optionalValue(raw["priority"], isQueuePriority),
+        }).pipe(
+          Option.map(({ error, key, priority, retryAfterMs }) => {
+            const attributes =
+              recordAttributesObject(raw["attributes"]) ??
+              recordAttributesObject(record.attributes);
+            return {
+              ...required,
+              type,
+              ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+              ...(error === undefined ? {} : { error }),
+              ...(key === undefined ? {} : { key }),
+              ...(priority === undefined ? {} : { priority }),
+              ...(attributes === undefined ? {} : { attributes }),
+            };
+          }),
+        ),
       ),
     ),
   );
+};
+
+const QueueResourceCodec = Telemetry.codec(QueueResourceTelemetry)({
+  Entry: {
+    Enqueued: decodeQueueEntryFactValue,
+    Started: decodeQueueEntryFactValue,
+    Completed: decodeQueueEntryFactValue,
+    Failed: decodeQueueEntryFactValue,
+    Retried: decodeQueueEntryFactValue,
+    Exhausted: decodeQueueEntryFactValue,
+    Released: decodeQueueEntryFactValue,
+    DeadLettered: decodeQueueEntryFactValue,
+    Dropped: decodeQueueEntryFactValue,
+  },
+  Lifecycle: {
+    Started: decodeQueueLifecycleChangeValue,
+    Paused: decodeQueueLifecycleChangeValue,
+    Resumed: decodeQueueLifecycleChangeValue,
+    Shutdown: decodeQueueLifecycleChangeValue,
+    Cleared: decodeQueueLifecycleChangeValue,
+    Drained: decodeQueueLifecycleChangeValue,
+  },
+  DedupeKey: {
+    Added: decodeQueueDedupeKeyChangeValue,
+    Released: decodeQueueDedupeKeyChangeValue,
+    Hydrated: decodeQueueDedupeKeyChangeValue,
+  },
+  RateLimit: {
+    Exceeded: decodeQueueRateLimitExceededFactValue,
+  },
+});
+
+/** @internal */
+export const queueEntryFactTypes = QueueResourceCodec.types("Entry");
+
+/** @internal */
+export const queueLifecycleChangeTypes = QueueResourceCodec.types("Lifecycle");
+
+/** @internal */
+export const queueDedupeKeyChangeTypes = QueueResourceCodec.types("DedupeKey");
+
+/** @internal */
+export const queueRateLimitExceededFactTypes =
+  QueueResourceCodec.types("RateLimit");
+
+const recordToQueueEntryFact = (record: RuntimeRecord): QueueEntryFact | null =>
+  QueueResourceCodec.decodeTag("Entry", record);
+
+const recordToQueueLifecycleChange = (
+  record: RuntimeRecord,
+): QueueLifecycleChange | null =>
+  QueueResourceCodec.decodeTag("Lifecycle", record);
+
+const recordToQueueDedupeKeyChange = (
+  record: RuntimeRecord,
+): QueueDedupeKeyChange | null =>
+  QueueResourceCodec.decodeTag("DedupeKey", record);
 
 const recordToQueueRateLimitExceededFact = (
   record: RuntimeRecord,
-): QueueRateLimitExceededFact | null => {
-  if (!isQueueRateLimitExceededFactType(record.type)) return null;
-  if (record.processType !== QUEUE_RESOURCE_PROCESS_TYPE) return null;
-  const payload = record.payload;
-  if (!isRecord(payload)) return null;
-  return decodeQueueRateLimitExceededFactValue(payload["fact"]);
-};
+): QueueRateLimitExceededFact | null =>
+  QueueResourceCodec.decodeTag("RateLimit", record);
 
 // ============================================================================
 // Read-side query builders
@@ -1123,10 +901,10 @@ const queueRateLimitExceededFactsFromRecords = (
 /**
  * Queue resource storage facet (see module doc).
  *
- * Static record helpers (`recordEntry`, `recordLifecycle`,
- * `recordDedupeKey`, `recordRateLimitExceeded`, plus their `*Batch` variants) are silent no-ops
- * when the facet is not in context, and write through the spine when it
- * is. Storage failures surface through the returned error channel; queue
+ * Scoped fact emitters (`emitEntryFact`, …) delegate to static telemetry
+ * on this class (`Entry.Enqueued`, `Lifecycle.Started`, …). They are silent
+ * no-ops when the facet is not in context, and write through the spine when
+ * it is. Storage failures surface through the returned error channel; queue
  * internals wrap telemetry-only writes with `ProcessStore.catchErrorAndLog`.
  *
  * Read methods (`entries`, `entriesByKey`, `lifecycle`, `dedupeKeys`, `rateLimits`)
@@ -1139,27 +917,7 @@ export class QueueResourceStore extends ProcessStore.Service<
   QueueResourceStore
 >()(
   "@nikscripts/effect-pm/store/queueResource/QueueResourceStore",
-  ProcessStore.record({
-    recordEntry: (s) => (fact: QueueEntryFact) =>
-      s.create(makeQueueEntryRecord(fact)),
-    recordEntryBatch: (s) => (facts: ReadonlyArray<QueueEntryFact>) =>
-      s.createBatch(facts.map(makeQueueEntryRecord)),
-    recordLifecycle: (s) => (change: QueueLifecycleChange) =>
-      s.create(makeQueueLifecycleRecord(change)),
-    recordLifecycleBatch:
-      (s) => (changes: ReadonlyArray<QueueLifecycleChange>) =>
-        s.createBatch(changes.map(makeQueueLifecycleRecord)),
-    recordDedupeKey: (s) => (change: QueueDedupeKeyChange) =>
-      s.create(makeQueueDedupeKeyRecord(change)),
-    recordDedupeKeyBatch:
-      (s) => (changes: ReadonlyArray<QueueDedupeKeyChange>) =>
-        s.createBatch(changes.map(makeQueueDedupeKeyRecord)),
-    recordRateLimitExceeded: (s) => (fact: QueueRateLimitExceededFact) =>
-      s.create(makeQueueRateLimitExceededRecord(fact)),
-    recordRateLimitExceededBatch:
-      (s) => (facts: ReadonlyArray<QueueRateLimitExceededFact>) =>
-        s.createBatch(facts.map(makeQueueRateLimitExceededRecord)),
-  }),
+  QueueResourceTelemetry,
   ProcessStore.query((s) => ({
     // Every queue read pushes its filters to storage as indexed
     // `RuntimeRecordPredicate`s — there is no post-filter on a
@@ -1192,6 +950,217 @@ export class QueueResourceStore extends ProcessStore.Service<
       readRateLimits(s, { ...query, queueId }),
   })),
 ) {}
+
+const entryFactInput = (
+  fact: QueueEntryFact,
+): {
+  readonly id: string;
+  readonly entryId: string;
+  readonly occurredAt: number;
+  readonly key?: string;
+  readonly priority?: QueueResourceStorePriority;
+  readonly attempts?: number;
+  readonly batchId?: string;
+} => ({
+  id: fact.id,
+  entryId: fact.entryId,
+  occurredAt: fact.occurredAt,
+  ...(fact.key === undefined ? {} : { key: fact.key }),
+  ...(fact.priority === undefined ? {} : { priority: fact.priority }),
+  ...(fact.attempts === undefined ? {} : { attempts: fact.attempts }),
+  ...(fact.batchId === undefined ? {} : { batchId: fact.batchId }),
+});
+
+/** @public */
+export const emitEntryFact = (
+  fact: QueueEntryFact,
+): Effect.Effect<void, ProcessStoreWriteError> =>
+  QueueResourceScope.run(
+    { queueId: fact.queueId },
+    QueueEntryScope.run(
+      { entryId: fact.entryId },
+      Effect.gen(function* () {
+        const common = entryFactInput(fact);
+        switch (fact.type) {
+          case "Queue.Entry.Enqueued":
+            yield* QueueResourceStore.Entry.Enqueued({
+              ...common,
+              enqueuedAt: fact.enqueuedAt,
+              ...(fact.payload === undefined ? {} : { payload: fact.payload }),
+            });
+            return;
+          case "Queue.Entry.Started":
+            yield* QueueResourceStore.Entry.Started({
+              ...common,
+              startedAt: fact.startedAt,
+            });
+            return;
+          case "Queue.Entry.Completed":
+            yield* QueueResourceStore.Entry.Completed({
+              ...common,
+              startedAt: fact.startedAt,
+              durationMs: fact.durationMs,
+            });
+            return;
+          case "Queue.Entry.Failed":
+            yield* QueueResourceStore.Entry.Failed({
+              ...common,
+              startedAt: fact.startedAt,
+              durationMs: fact.durationMs,
+              ...(fact.error === undefined ? {} : { error: fact.error }),
+            });
+            return;
+          case "Queue.Entry.Retried":
+            yield* QueueResourceStore.Entry.Retried({
+              ...common,
+              ...(fact.error === undefined ? {} : { error: fact.error }),
+            });
+            return;
+          case "Queue.Entry.Exhausted":
+            yield* QueueResourceStore.Entry.Exhausted({
+              ...common,
+              ...(fact.error === undefined ? {} : { error: fact.error }),
+            });
+            return;
+          case "Queue.Entry.Released":
+            yield* QueueResourceStore.Entry.Released({
+              ...common,
+              releaseId: fact.releaseId,
+              ...(fact.interruptedAt === undefined
+                ? {}
+                : { interruptedAt: fact.interruptedAt }),
+            });
+            return;
+          case "Queue.Entry.DeadLettered":
+            yield* QueueResourceStore.Entry.DeadLettered({
+              ...common,
+              ...(fact.reason === undefined ? {} : { reason: fact.reason }),
+              ...(fact.error === undefined ? {} : { error: fact.error }),
+            });
+            return;
+          case "Queue.Entry.Dropped":
+            yield* QueueResourceStore.Entry.Dropped({
+              ...common,
+              ...(fact.reason === undefined ? {} : { reason: fact.reason }),
+            });
+            return;
+          default: {
+            const unknown = fact as { readonly type: string };
+            return yield* Effect.die(
+              `emitEntryFact: unknown entry fact type ${unknown.type}`,
+            );
+          }
+        }
+      }),
+    ),
+  );
+
+/** @public */
+export const emitLifecycleChange = (
+  change: QueueLifecycleChange,
+): Effect.Effect<void, ProcessStoreWriteError> =>
+  QueueResourceScope.run(
+    { queueId: change.queueId },
+    Effect.gen(function* () {
+      const input = { id: change.id, changedAt: change.changedAt };
+      switch (change.type) {
+        case "Queue.Lifecycle.Started":
+          yield* QueueResourceStore.Lifecycle.Started(input);
+          return;
+        case "Queue.Lifecycle.Paused":
+          yield* QueueResourceStore.Lifecycle.Paused(input);
+          return;
+        case "Queue.Lifecycle.Resumed":
+          yield* QueueResourceStore.Lifecycle.Resumed(input);
+          return;
+        case "Queue.Lifecycle.Shutdown":
+          yield* QueueResourceStore.Lifecycle.Shutdown(input);
+          return;
+        case "Queue.Lifecycle.Cleared":
+          yield* QueueResourceStore.Lifecycle.Cleared({
+            ...input,
+            itemsCleared: change.itemsCleared,
+          });
+          return;
+        case "Queue.Lifecycle.Drained":
+          yield* QueueResourceStore.Lifecycle.Drained(input);
+          return;
+      }
+    }),
+  );
+
+/** @public */
+export const emitDedupeKeyChange = (
+  change: QueueDedupeKeyChange,
+): Effect.Effect<void, ProcessStoreWriteError> =>
+  QueueResourceScope.run(
+    { queueId: change.queueId },
+    QueueDedupeKeyScope.run(
+      { key: change.key },
+      Effect.gen(function* () {
+        const input = { id: change.id, changedAt: change.changedAt };
+        switch (change.type) {
+          case "Queue.DedupeKey.Added":
+            yield* QueueResourceStore.DedupeKey.Added(input);
+            return;
+          case "Queue.DedupeKey.Released":
+            yield* QueueResourceStore.DedupeKey.Released(input);
+            return;
+          case "Queue.DedupeKey.Hydrated":
+            yield* QueueResourceStore.DedupeKey.Hydrated(input);
+            return;
+        }
+      }),
+    ),
+  );
+
+/** @public */
+export const emitRateLimitExceededFact = (
+  fact: QueueRateLimitExceededFact,
+): Effect.Effect<void, ProcessStoreWriteError> =>
+  QueueResourceScope.run(
+    { queueId: fact.queueId },
+    QueueEntryScope.run(
+      { entryId: fact.entryId },
+      QueueResourceStore.RateLimit.Exceeded({
+        id: fact.id,
+        occurredAt: fact.occurredAt,
+        limitKey: fact.limitKey,
+        algorithm: fact.algorithm,
+        limit: fact.limit,
+        tokens: fact.tokens,
+        windowMs: fact.windowMs,
+        outcome: fact.outcome,
+        delayMs: fact.delayMs,
+        remaining: fact.remaining,
+        resetAfterMs: fact.resetAfterMs,
+        ...(fact.retryAfterMs === undefined
+          ? {}
+          : { retryAfterMs: fact.retryAfterMs }),
+        ...(fact.error === undefined ? {} : { error: fact.error }),
+        ...(fact.key === undefined ? {} : { key: fact.key }),
+        ...(fact.priority === undefined ? {} : { priority: fact.priority }),
+      }),
+    ),
+  );
+
+/** @public */
+export const emitEntryFacts = (
+  facts: ReadonlyArray<QueueEntryFact>,
+): Effect.Effect<void, ProcessStoreWriteError> =>
+  Effect.forEach(facts, emitEntryFact, { discard: true });
+
+/** @public */
+export const emitLifecycleChanges = (
+  changes: ReadonlyArray<QueueLifecycleChange>,
+): Effect.Effect<void, ProcessStoreWriteError> =>
+  Effect.forEach(changes, emitLifecycleChange, { discard: true });
+
+/** @public */
+export const emitDedupeKeyChanges = (
+  changes: ReadonlyArray<QueueDedupeKeyChange>,
+): Effect.Effect<void, ProcessStoreWriteError> =>
+  Effect.forEach(changes, emitDedupeKeyChange, { discard: true });
 
 const readEntries = (
   s: ProcessStoreSpine,
@@ -1254,12 +1223,8 @@ const readRateLimits = (
  * @public
  */
 export declare namespace QueueResourceStore {
-  export type Type = ProcessStore.Service.Type<
-    typeof QueueResourceStore
-  >;
-  export type EmitType = ProcessStore.Service.EmitType<
-    typeof QueueResourceStore
-  >;
+  export type Type = ProcessStore.Service.Type<typeof QueueResourceStore>;
+  export type EmitType = ProcessStore.Service.EmitType<typeof QueueResourceStore>;
   export type IdentifierType = ProcessStore.Service.IdentifierType<
     typeof QueueResourceStore
   >;

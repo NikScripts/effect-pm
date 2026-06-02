@@ -16,6 +16,12 @@
  * - {@link ProcessStore.catchErrorAndLog} — explicit best-effort boundary
  *   for telemetry writes that should log storage failures instead of
  *   failing process / queue work.
+ * - {@link ProcessStore.optionalFacetEmit} — optional static emit when a
+ *   facet may be absent (no-op without layer).
+ * - {@link ProcessStore.optionalFacetEmitWithBridge} — optional emit with a
+ *   transitional mock path keyed by an own-property method (tests).
+ * - {@link ProcessStore.optionalFacetEmitBatch} — batch variant of optional emit.
+ * - {@link ProcessStore.facetHasOwnMethod} — detects mock facet instances.
  *
  * The builder produces a `Context.Service` class with two layers:
  * `layer` (in-memory storage, dev/tests) and `layerRuntimeStorage`
@@ -56,6 +62,12 @@
  * @module ProcessStore
  */
 
+import {
+  facetHasOwnMethod,
+  optionalFacetEmit,
+  optionalFacetEmitBatch,
+  optionalFacetEmitWithBridge,
+} from "./internal/store/helpers";
 import {
   catchErrorAndLog,
   defineProcessStoreFacet,
@@ -113,7 +125,18 @@ export const ProcessStore = {
   query: processStoreQuery,
   for: processStoreFor,
   catchErrorAndLog,
+  optionalFacetEmit,
+  optionalFacetEmitWithBridge,
+  optionalFacetEmitBatch,
+  facetHasOwnMethod,
 } as const;
+
+export {
+  facetHasOwnMethod,
+  optionalFacetEmit,
+  optionalFacetEmitBatch,
+  optionalFacetEmitWithBridge,
+} from "./internal/store/helpers";
 
 /**
  * Type-level helpers merged into the {@link ProcessStore} value via

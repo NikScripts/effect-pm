@@ -31,7 +31,9 @@ export const optionalValue = <A>(
   value: unknown,
   guard: (value: unknown) => value is A,
 ): Option.Option<A | undefined> =>
-  value === undefined ? Option.some(undefined) : valueWhen(value, guard);
+  value === undefined || value === "undefined"
+    ? Option.some(undefined)
+    : valueWhen(value, guard);
 
 /** @internal */
 export const stringValue = (value: unknown): Option.Option<string> =>

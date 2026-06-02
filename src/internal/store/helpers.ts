@@ -10,7 +10,7 @@
  * @internal
  */
 
-import { Cause, DateTime, Effect } from "effect";
+import { Cause, Context, DateTime, Effect, Option } from "effect";
 import { And, Occurred } from "../../Query";
 import type {
   RuntimeRecordPredicate,
@@ -181,6 +181,84 @@ export const makeRunId = (now: number): string => {
   inMemoryProcessStoreRunCounter += 1;
   return `run-${String(now)}-${String(inMemoryProcessStoreRunCounter)}`;
 };
+
+/**
+ * Whether a facet service value exposes an own-property emit method (test mocks).
+ *
+ * @internal
+ */
+export const facetHasOwnMethod = (
+  value: unknown,
+  method: PropertyKey,
+): boolean =>
+  typeof value === "object" &&
+  value !== null &&
+  Object.prototype.hasOwnProperty.call(value, method);
+
+/**
+ * Optional static emit: no-op when the facet tag is absent, otherwise run
+ * `onSome` with the resolved service instance.
+ *
+ * @remarks
+ * Powers {@link ProcessStore.Service} static telemetry / record emitters and
+ * legacy facet mocks that still expose flat `record*` methods in tests.
+ *
+ * @internal
+ */
+export const optionalFacetEmit = <
+  Self,
+  Id extends string,
+  Shape,
+  E,
+  R,
+>(
+  tag: Context.ServiceClass<Self, Id, Shape>,
+  onSome: (service: Shape) => Effect.Effect<void, E, R>,
+): Effect.Effect<void, E, R> =>
+  Effect.serviceOption(tag).pipe(
+    Effect.flatMap(
+      Option.match({
+        onNone: (): Effect.Effect<void, E, R> => Effect.void,
+        onSome,
+      }),
+    ),
+  );
+
+/**
+ * Optional emit with a transitional mock bridge: when the resolved instance
+ * owns `mockMethod` (typical `Layer.succeed` test double), call `onMock`;
+ * otherwise call `onReal` (schema-backed telemetry path).
+ *
+ * @internal
+ */
+export const optionalFacetEmitWithBridge = <
+  Self,
+  Id extends string,
+  Shape,
+  Mock,
+  E,
+  R,
+>(
+  tag: Context.ServiceClass<Self, Id, Shape>,
+  mockMethod: PropertyKey,
+  onMock: (mock: Mock) => Effect.Effect<void, E, R>,
+  onReal: () => Effect.Effect<void, E, R>,
+): Effect.Effect<void, E, R> =>
+  optionalFacetEmit(tag, (api) =>
+    facetHasOwnMethod(api, mockMethod)
+      ? onMock(api as unknown as Mock)
+      : onReal(),
+  );
+
+/**
+ * Run a static optional emitter for each item (discards results).
+ *
+ * @internal
+ */
+export const optionalFacetEmitBatch = <Item, E, R>(
+  items: ReadonlyArray<Item>,
+  emit: (item: Item) => Effect.Effect<void, E, R>,
+): Effect.Effect<void, E, R> => Effect.forEach(items, emit, { discard: true });
 
 /**
  * Map a {@link RuntimeStorageError} into the public

@@ -1,8 +1,8 @@
 /**
  * Conformance suite for the {@link QueueResourceStore} facet.
  *
- * Verifies (a) the no-op vs persist semantics of the static optional
- * emitters built by `ProcessStore.Service`, (b) explicit
+ * Verifies (a) the no-op vs persist semantics of scoped emit helpers
+ * (`emitEntryFact`, …) and static telemetry, (b) explicit
  * failure-isolation through `ProcessStore.catchErrorAndLog`, (c) entry / lifecycle
  * / dedupe-key read projections including pushable predicates
  * (`queueId`, `entryId`, `batchId`, `releaseId`, `key`), and (d) the
@@ -15,11 +15,15 @@ import { ProcessStore } from "../src/ProcessStore";
 import { ProcessStorage } from "../src/ProcessStorage";
 import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
 import {
+  emitDedupeKeyChange,
+  emitEntryFact,
+  emitLifecycleChange,
   QueueResourceStore,
   type QueueDedupeKeyChange,
   type QueueEntryCompletedFact,
   type QueueEntryEnqueuedFact,
   type QueueEntryFact,
+  type QueueEntryReleasedFact,
   type QueueLifecycleChange,
 } from "../src/store/queueResource";
 
@@ -32,7 +36,7 @@ const enqueued = (
   id: `${queueId}/${entryId}/enqueued`,
   queueId,
   entryId,
-  type: "queue.entry.enqueued",
+  type: "Queue.Entry.Enqueued",
   occurredAt,
   enqueuedAt: occurredAt,
   priority: "normal",
@@ -51,12 +55,28 @@ const completed = (
   id: `${queueId}/${entryId}/completed`,
   queueId,
   entryId,
-  type: "queue.entry.completed",
+  type: "Queue.Entry.Completed",
   occurredAt,
   startedAt,
   durationMs,
   priority: "normal",
   attempts: 1,
+  ...overrides,
+});
+
+const released = (
+  queueId: string,
+  entryId: string,
+  occurredAt: number,
+  releaseId: string,
+  overrides?: Partial<QueueEntryReleasedFact>,
+): QueueEntryReleasedFact => ({
+  id: `${queueId}/${entryId}/released`,
+  queueId,
+  entryId,
+  type: "Queue.Entry.Released",
+  occurredAt,
+  releaseId,
   ...overrides,
 });
 
@@ -71,7 +91,7 @@ const failed = (
   id: `${queueId}/${entryId}/failed`,
   queueId,
   entryId,
-  type: "queue.entry.failed",
+  type: "Queue.Entry.Failed",
   occurredAt,
   startedAt,
   durationMs,
@@ -86,7 +106,7 @@ const lifecycleStarted = (
 ): QueueLifecycleChange => ({
   id: `${queueId}/lifecycle/started`,
   queueId,
-  type: "queue.lifecycle.started",
+  type: "Queue.Lifecycle.Started",
   changedAt,
 });
 
@@ -97,7 +117,7 @@ const lifecycleCleared = (
 ): QueueLifecycleChange => ({
   id: `${queueId}/lifecycle/cleared/${String(changedAt)}`,
   queueId,
-  type: "queue.lifecycle.cleared",
+  type: "Queue.Lifecycle.Cleared",
   changedAt,
   itemsCleared,
 });
@@ -110,7 +130,7 @@ const dedupeAdded = (
   id: `${queueId}/${key}/added`,
   queueId,
   key,
-  type: "queue.dedupe-key.added",
+  type: "Queue.DedupeKey.Added",
   changedAt,
 });
 
@@ -122,20 +142,20 @@ const dedupeReleased = (
   id: `${queueId}/${key}/released`,
   queueId,
   key,
-  type: "queue.dedupe-key.released",
+  type: "Queue.DedupeKey.Released",
   changedAt,
 });
 
 describe("QueueResourceStore — static optional emitters", () => {
   it.live("no-ops silently when the facet layer is absent", () =>
     Effect.gen(function* () {
-      yield* QueueResourceStore.recordEntry(
+      yield* emitEntryFact(
         enqueued("@test/Absent", "@test/Absent/entry/1", 1_700_000_000_000),
       );
-      yield* QueueResourceStore.recordLifecycle(
+      yield* emitLifecycleChange(
         lifecycleStarted("@test/Absent", 1_700_000_000_000),
       );
-      yield* QueueResourceStore.recordDedupeKey(
+      yield* emitDedupeKeyChange(
         dedupeAdded("@test/Absent", "k1", 1_700_000_000_000),
       );
       expect(true).toBe(true);
@@ -145,10 +165,10 @@ describe("QueueResourceStore — static optional emitters", () => {
   it.live("persists through the spine when the facet is provided", () =>
     Effect.gen(function* () {
       const queueId = "@test/Persist";
-      yield* QueueResourceStore.recordEntry(
+      yield* emitEntryFact(
         enqueued(queueId, `${queueId}/entry/1`, 1_700_000_000_000),
       );
-      yield* QueueResourceStore.recordEntry(
+      yield* emitEntryFact(
         completed(
           queueId,
           `${queueId}/entry/1`,
@@ -160,8 +180,8 @@ describe("QueueResourceStore — static optional emitters", () => {
       const facet = yield* QueueResourceStore;
       const rows = yield* facet.entries({ queueId });
       expect(rows.map((row) => row.type).sort()).toEqual([
-        "queue.entry.completed",
-        "queue.entry.enqueued",
+        "Queue.Entry.Completed",
+        "Queue.Entry.Enqueued",
       ]);
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
@@ -173,61 +193,57 @@ describe("QueueResourceStore — static optional emitters", () => {
         typeof message === "string" ? message : JSON.stringify(message);
       captured.push(text);
     });
+    const blocked = Effect.fail(
+      new ProcessStoreReadonlyRecordError({ id: "blocked-entry" }),
+    );
+    const blockedEmit = Object.assign(() => blocked, { batch: () => blocked });
+    const noopEmit = Object.assign(
+      (_input: unknown) => Effect.void,
+      { batch: (_inputs: ReadonlyArray<unknown>) => Effect.void },
+    );
     const failingFacet: QueueResourceStore.Type = {
-      recordEntry: () =>
-        Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-entry" }),
-        ),
-      recordEntryBatch: () =>
-        Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-entry-batch" }),
-        ),
-      recordLifecycle: () =>
-        Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-lifecycle" }),
-        ),
-      recordLifecycleBatch: () =>
-        Effect.fail(
-          new ProcessStoreReadonlyRecordError({
-            id: "blocked-lifecycle-batch",
-          }),
-        ),
-      recordDedupeKey: () =>
-        Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-dedupe" }),
-        ),
-      recordDedupeKeyBatch: () =>
-        Effect.fail(
-          new ProcessStoreReadonlyRecordError({
-            id: "blocked-dedupe-batch",
-          }),
-        ),
-      recordRateLimitExceeded: () =>
-        Effect.fail(
-          new ProcessStoreReadonlyRecordError({ id: "blocked-ratelimit" }),
-        ),
-      recordRateLimitExceededBatch: () =>
-        Effect.fail(
-          new ProcessStoreReadonlyRecordError({
-            id: "blocked-ratelimit-batch",
-          }),
-        ),
+      Entry: {
+        Enqueued: blockedEmit,
+        Started: noopEmit,
+        Completed: noopEmit,
+        Failed: noopEmit,
+        Retried: noopEmit,
+        Exhausted: noopEmit,
+        Released: noopEmit,
+        DeadLettered: noopEmit,
+        Dropped: noopEmit,
+      },
+      Lifecycle: {
+        Started: noopEmit,
+        Paused: noopEmit,
+        Resumed: noopEmit,
+        Shutdown: noopEmit,
+        Cleared: noopEmit,
+        Drained: noopEmit,
+      },
+      DedupeKey: {
+        Added: noopEmit,
+        Released: noopEmit,
+        Hydrated: noopEmit,
+      },
+      RateLimit: {
+        Exceeded: noopEmit,
+      },
       entries: () => Effect.succeed([]),
       entriesByKey: () => Effect.succeed([]),
       lifecycle: () => Effect.succeed([]),
       dedupeKeys: () => Effect.succeed([]),
       rateLimits: () => Effect.succeed([]),
     };
-    const write = QueueResourceStore.recordEntry(
-      enqueued("@test/Failing", "@test/Failing/entry/1", 1),
-    );
+    const fact = enqueued("@test/Failing", "@test/Failing/entry/1", 1);
+    const write = emitEntryFact(fact);
     return Effect.gen(function* () {
       const error = yield* Effect.flip(write);
       expect(error).toBeInstanceOf(ProcessStoreReadonlyRecordError);
       yield* write.pipe(
         ProcessStore.catchErrorAndLog({
           message: "test queue write failed",
-          annotations: { test: "queue-static" },
+          annotations: { test: "queue-emit" },
         }),
       );
       expect(captured.some((m) => m.includes("test queue write failed"))).toBe(true);
@@ -242,38 +258,57 @@ describe("QueueResourceStore — static optional emitters", () => {
   });
 });
 
+describe("QueueResourceStore — released roundtrip", () => {
+  it.live("writes and reads Queue.Entry.Released", () =>
+    Effect.gen(function* () {
+      const queueId = "@test/ReleasedOnly";
+      yield* emitEntryFact(
+        released(queueId, `${queueId}/e1`, 1_700_000_000_200, "release-9"),
+      );
+      yield* emitEntryFact(
+        enqueued(queueId, `${queueId}/e2`, 1_700_000_000_100),
+      );
+      const facet = yield* QueueResourceStore;
+      const all = yield* facet.entries({ queueId });
+      expect(all.map((row) => row.type)).toContain("Queue.Entry.Enqueued");
+      expect(all.map((row) => row.type)).toContain("Queue.Entry.Released");
+      const rows = yield* facet.entries({
+        queueId,
+        types: ["Queue.Entry.Released"],
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.type).toBe("Queue.Entry.Released");
+      if (rows[0]?.type === "Queue.Entry.Released") {
+        expect(rows[0].releaseId).toBe("release-9");
+      }
+    }).pipe(Effect.provide(ProcessStorage.layer)),
+  );
+});
+
 describe("QueueResourceStore — entry projections", () => {
   const queueA = "@test/QueueA";
   const queueB = "@test/QueueB";
   const t = (ms: number) => 1_700_000_000_000 + ms;
 
   const fixtures = Effect.gen(function* () {
-    const facet = yield* QueueResourceStore;
-    yield* facet.recordEntry(
+    yield* emitEntryFact(
       enqueued(queueA, `${queueA}/entry/1`, t(0), {
         key: "job-1",
         batchId: "batch-1",
       }),
     );
-    yield* facet.recordEntry(
+    yield* emitEntryFact(
       completed(queueA, `${queueA}/entry/1`, t(50), t(0), 50, {
         key: "job-1",
       }),
     );
-    yield* facet.recordEntry(
+    yield* emitEntryFact(
       failed(queueA, `${queueA}/entry/2`, t(120), t(60), 60, "boom"),
     );
-    yield* facet.recordEntry({
-      id: `${queueA}/entry/3/released`,
-      queueId: queueA,
-      entryId: `${queueA}/entry/3`,
-      type: "queue.entry.released",
-      occurredAt: t(200),
-      releaseId: "release-9",
-      priority: "high",
-      attempts: 1,
-    });
-    yield* facet.recordEntry(
+    yield* emitEntryFact(
+      released(queueA, `${queueA}/entry/3`, t(200), "release-9"),
+    );
+    yield* emitEntryFact(
       enqueued(queueB, `${queueB}/entry/1`, t(75), { key: "job-1" }),
     );
   });
@@ -285,10 +320,10 @@ describe("QueueResourceStore — entry projections", () => {
       const rows = yield* facet.entries({ queueId: queueA });
       expect(rows.every((row) => row.queueId === queueA)).toBe(true);
       expect(rows.map((row) => row.type).sort()).toEqual([
-        "queue.entry.completed",
-        "queue.entry.enqueued",
-        "queue.entry.failed",
-        "queue.entry.released",
+        "Queue.Entry.Completed",
+        "Queue.Entry.Enqueued",
+        "Queue.Entry.Failed",
+        "Queue.Entry.Released",
       ]);
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
@@ -299,10 +334,10 @@ describe("QueueResourceStore — entry projections", () => {
       const facet = yield* QueueResourceStore;
       const rows = yield* facet.entries({
         queueId: queueA,
-        types: ["queue.entry.failed"],
+        types: ["Queue.Entry.Failed"],
       });
       expect(rows).toHaveLength(1);
-      expect(rows[0]?.type).toBe("queue.entry.failed");
+      expect(rows[0]?.type).toBe("Queue.Entry.Failed");
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
@@ -318,8 +353,8 @@ describe("QueueResourceStore — entry projections", () => {
         true,
       );
       expect(rows.map((row) => row.type).sort()).toEqual([
-        "queue.entry.completed",
-        "queue.entry.enqueued",
+        "Queue.Entry.Completed",
+        "Queue.Entry.Enqueued",
       ]);
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
@@ -332,14 +367,14 @@ describe("QueueResourceStore — entry projections", () => {
       expect(
         byBatch.every(
           (row) =>
-            row.type !== "queue.entry.enqueued" || row.batchId === "batch-1",
+            row.type !== "Queue.Entry.Enqueued" || row.batchId === "batch-1",
         ),
       ).toBe(true);
 
       const byRelease = yield* facet.entries({ releaseId: "release-9" });
       expect(byRelease).toHaveLength(1);
       const first = byRelease[0];
-      if (first?.type !== "queue.entry.released") {
+      if (first?.type !== "Queue.Entry.Released") {
         throw new Error("expected released fact");
       }
       expect(first.releaseId).toBe("release-9");
@@ -381,14 +416,14 @@ describe("QueueResourceStore — entry projections", () => {
         const facet = yield* QueueResourceStore;
         const baseT = 1_700_000_000_000;
         for (let i = 0; i < 5; i++) {
-          yield* facet.recordEntry(
+          yield* emitEntryFact(
             enqueued("@test/Bulk", `entry/noise-${String(i)}`, baseT + i, {
               key: "noise",
             }),
           );
         }
         for (let i = 0; i < 3; i++) {
-          yield* facet.recordEntry(
+          yield* emitEntryFact(
             enqueued("@test/Bulk", `entry/target-${String(i)}`, baseT + 100 + i, {
               key: "target",
             }),
@@ -411,12 +446,11 @@ describe("QueueResourceStore — lifecycle and dedupe-key projections", () => {
   const t = (ms: number) => 1_700_000_000_000 + ms;
 
   const fixtures = Effect.gen(function* () {
-    const facet = yield* QueueResourceStore;
-    yield* facet.recordLifecycle(lifecycleStarted(queueId, t(0)));
-    yield* facet.recordLifecycle(lifecycleCleared(queueId, t(100), 3));
-    yield* facet.recordDedupeKey(dedupeAdded(queueId, "k1", t(10)));
-    yield* facet.recordDedupeKey(dedupeReleased(queueId, "k1", t(50)));
-    yield* facet.recordDedupeKey(dedupeAdded(queueId, "k2", t(20)));
+    yield* emitLifecycleChange(lifecycleStarted(queueId, t(0)));
+    yield* emitLifecycleChange(lifecycleCleared(queueId, t(100), 3));
+    yield* emitDedupeKeyChange(dedupeAdded(queueId, "k1", t(10)));
+    yield* emitDedupeKeyChange(dedupeReleased(queueId, "k1", t(50)));
+    yield* emitDedupeKeyChange(dedupeAdded(queueId, "k2", t(20)));
   });
 
   it.live("lifecycle({ queueId }) returns ordered lifecycle changes", () =>
@@ -425,11 +459,11 @@ describe("QueueResourceStore — lifecycle and dedupe-key projections", () => {
       const facet = yield* QueueResourceStore;
       const rows = yield* facet.lifecycle({ queueId });
       expect(rows.map((row) => row.type)).toEqual([
-        "queue.lifecycle.cleared",
-        "queue.lifecycle.started",
+        "Queue.Lifecycle.Cleared",
+        "Queue.Lifecycle.Started",
       ]);
-      const cleared = rows.find((row) => row.type === "queue.lifecycle.cleared");
-      if (cleared?.type !== "queue.lifecycle.cleared") {
+      const cleared = rows.find((row) => row.type === "Queue.Lifecycle.Cleared");
+      if (cleared?.type !== "Queue.Lifecycle.Cleared") {
         throw new Error("expected cleared change");
       }
       expect(cleared.itemsCleared).toBe(3);
@@ -442,10 +476,10 @@ describe("QueueResourceStore — lifecycle and dedupe-key projections", () => {
       const facet = yield* QueueResourceStore;
       const rows = yield* facet.lifecycle({
         queueId,
-        types: ["queue.lifecycle.started"],
+        types: ["Queue.Lifecycle.Started"],
       });
       expect(rows).toHaveLength(1);
-      expect(rows[0]?.type).toBe("queue.lifecycle.started");
+      expect(rows[0]?.type).toBe("Queue.Lifecycle.Started");
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
 
@@ -456,9 +490,9 @@ describe("QueueResourceStore — lifecycle and dedupe-key projections", () => {
       const rows = yield* facet.dedupeKeys({ queueId });
       expect(rows.every((row) => row.queueId === queueId)).toBe(true);
       expect(rows.map((row) => row.type).sort()).toEqual([
-        "queue.dedupe-key.added",
-        "queue.dedupe-key.added",
-        "queue.dedupe-key.released",
+        "Queue.DedupeKey.Added",
+        "Queue.DedupeKey.Added",
+        "Queue.DedupeKey.Released",
       ]);
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
@@ -470,8 +504,8 @@ describe("QueueResourceStore — lifecycle and dedupe-key projections", () => {
       const rows = yield* facet.dedupeKeys({ queueId, key: "k1" });
       expect(rows.every((row) => row.key === "k1")).toBe(true);
       expect(rows.map((row) => row.type).sort()).toEqual([
-        "queue.dedupe-key.added",
-        "queue.dedupe-key.released",
+        "Queue.DedupeKey.Added",
+        "Queue.DedupeKey.Released",
       ]);
     }).pipe(Effect.provide(ProcessStorage.layer)),
   );
@@ -483,17 +517,16 @@ describe("QueueResourceStore — for(queueId) bound API", () => {
   const t = (ms: number) => 1_700_000_000_000 + ms;
 
   const fixtures = Effect.gen(function* () {
-    const facet = yield* QueueResourceStore;
-    yield* facet.recordEntry(
+    yield* emitEntryFact(
       enqueued(queueA, `${queueA}/entry/1`, t(0), { key: "shared" }),
     );
-    yield* facet.recordEntry(
+    yield* emitEntryFact(
       enqueued(queueB, `${queueB}/entry/1`, t(0), { key: "shared" }),
     );
-    yield* facet.recordLifecycle(lifecycleStarted(queueA, t(5)));
-    yield* facet.recordLifecycle(lifecycleStarted(queueB, t(5)));
-    yield* facet.recordDedupeKey(dedupeAdded(queueA, "k1", t(10)));
-    yield* facet.recordDedupeKey(dedupeAdded(queueB, "k1", t(10)));
+    yield* emitLifecycleChange(lifecycleStarted(queueA, t(5)));
+    yield* emitLifecycleChange(lifecycleStarted(queueB, t(5)));
+    yield* emitDedupeKeyChange(dedupeAdded(queueA, "k1", t(10)));
+    yield* emitDedupeKeyChange(dedupeAdded(queueB, "k1", t(10)));
   });
 
   it.live("entries() narrows to the bound queueId", () =>
@@ -530,31 +563,49 @@ describe("QueueResourceStore — for(queueId) bound API", () => {
 
 describe("QueueResourceStore — phantom type accessors", () => {
   it.live(".Type and .EmitType expose the structural shapes", () =>
-    Effect.gen(function* () {
+    Effect.sync(() => {
+      const noopEmit = Object.assign(
+        (_input: unknown) => Effect.void,
+        {
+          batch: (_inputs: ReadonlyArray<unknown>) => Effect.void,
+        },
+      );
+      const emitShape: QueueResourceStore.EmitType = {
+        Entry: {
+          Enqueued: noopEmit,
+          Started: noopEmit,
+          Completed: noopEmit,
+          Failed: noopEmit,
+          Retried: noopEmit,
+          Exhausted: noopEmit,
+          Released: noopEmit,
+          DeadLettered: noopEmit,
+          Dropped: noopEmit,
+        },
+        Lifecycle: {
+          Started: noopEmit,
+          Paused: noopEmit,
+          Resumed: noopEmit,
+          Shutdown: noopEmit,
+          Cleared: noopEmit,
+          Drained: noopEmit,
+        },
+        DedupeKey: {
+          Added: noopEmit,
+          Released: noopEmit,
+          Hydrated: noopEmit,
+        },
+        RateLimit: {
+          Exceeded: noopEmit,
+        },
+      };
       const fullShape: QueueResourceStore.Type = {
-        recordEntry: () => Effect.void,
-        recordEntryBatch: () => Effect.void,
-        recordLifecycle: () => Effect.void,
-        recordLifecycleBatch: () => Effect.void,
-        recordDedupeKey: () => Effect.void,
-        recordDedupeKeyBatch: () => Effect.void,
-        recordRateLimitExceeded: () => Effect.void,
-        recordRateLimitExceededBatch: () => Effect.void,
+        ...emitShape,
         entries: () => Effect.succeed([]),
         entriesByKey: () => Effect.succeed([]),
         lifecycle: () => Effect.succeed([]),
         dedupeKeys: () => Effect.succeed([]),
         rateLimits: () => Effect.succeed([]),
-      };
-      const emitShape: QueueResourceStore.EmitType = {
-        recordEntry: fullShape.recordEntry,
-        recordEntryBatch: fullShape.recordEntryBatch,
-        recordLifecycle: fullShape.recordLifecycle,
-        recordLifecycleBatch: fullShape.recordLifecycleBatch,
-        recordDedupeKey: fullShape.recordDedupeKey,
-        recordDedupeKeyBatch: fullShape.recordDedupeKeyBatch,
-        recordRateLimitExceeded: fullShape.recordRateLimitExceeded,
-        recordRateLimitExceededBatch: fullShape.recordRateLimitExceededBatch,
       };
       const boundShape: QueueResourceStore.IdentifierType = {
         entries: () => Effect.succeed([]),
@@ -563,8 +614,8 @@ describe("QueueResourceStore — phantom type accessors", () => {
         dedupeKeys: () => Effect.succeed([]),
         rateLimits: () => Effect.succeed([]),
       };
-      expect(typeof fullShape.recordEntry).toBe("function");
-      expect(typeof emitShape.recordLifecycle).toBe("function");
+      expect(typeof fullShape.Entry.Enqueued).toBe("function");
+      expect(typeof emitShape.Lifecycle.Started).toBe("function");
       expect(typeof boundShape.entries).toBe("function");
     }),
   );

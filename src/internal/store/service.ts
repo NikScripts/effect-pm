@@ -5,11 +5,12 @@
  * @internal
  */
 
-import { Clock, Context, Effect, Layer, Option } from "effect";
+import { Clock, Context, Effect, Layer } from "effect";
 import type { ProcessStoreWriteError } from "../../ProcessStoreEvent";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import {
   catchErrorAndLog,
+  optionalFacetEmit,
   type ProcessStoreCatchErrorAndLogOptions,
   makeRunId,
 } from "./helpers";
@@ -420,40 +421,22 @@ const buildNestedEmitStatics = <
     node[leaf] = emitPath.input
       ? Object.assign(
           (input: unknown) =>
-            Effect.serviceOption(Base).pipe(
-              Effect.flatMap(
-                Option.match({
-                  onNone: (): EmitEffect => Effect.void,
-                  onSome: (api): EmitEffect =>
-                    callNestedEmit(api as TelemetryNestedEmitApi, path, [input]),
-                }),
-              ),
+            optionalFacetEmit(Base, (api): EmitEffect =>
+              callNestedEmit(api as TelemetryNestedEmitApi, path, [input]),
             ),
           {
             batch: (inputs: ReadonlyArray<unknown>) =>
-              Effect.serviceOption(Base).pipe(
-                Effect.flatMap(
-                  Option.match({
-                    onNone: (): EmitEffect => Effect.void,
-                    onSome: (api): EmitEffect =>
-                      callNestedEmitBatch(
-                        api as TelemetryNestedEmitApi,
-                        path,
-                        inputs,
-                      ),
-                  }),
+              optionalFacetEmit(Base, (api): EmitEffect =>
+                callNestedEmitBatch(
+                  api as TelemetryNestedEmitApi,
+                  path,
+                  inputs,
                 ),
               ),
           },
         )
-      : Effect.serviceOption(Base).pipe(
-          Effect.flatMap(
-            Option.match({
-              onNone: (): EmitEffect => Effect.void,
-              onSome: (api): EmitEffect =>
-                callNestedEmit(api as TelemetryNestedEmitApi, path, []),
-            }),
-          ),
+      : optionalFacetEmit(Base, (api): EmitEffect =>
+          callNestedEmit(api as TelemetryNestedEmitApi, path, []),
         );
   }
   return out as TelemetryNestedEmitApi;
@@ -472,13 +455,8 @@ const buildEmitStatics = <
   const out: { [K in keyof EmitApi & string]?: EmitMethod<EmitApi[K]> } = {};
   for (const emitKey of emitKeys) {
     out[emitKey] = ((...args: ReadonlyArray<unknown>) =>
-      Effect.serviceOption(Base).pipe(
-        Effect.flatMap(
-          Option.match({
-            onNone: (): PersistEffect => Effect.void,
-            onSome: (api): PersistEffect => callPersistMethod(api, emitKey, args),
-          }),
-        ),
+      optionalFacetEmit(Base, (api): PersistEffect =>
+        callPersistMethod(api, emitKey, args),
       )) as EmitMethod<EmitApi[typeof emitKey]>;
   }
   if (!isCompleteEmitStatics(out, emitKeys)) {

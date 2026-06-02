@@ -30,10 +30,21 @@ events.
 - Built-in generic store facets use scope-derived identity.
 - Regular schema fields are validated event input.
 - Event definitions own best-effort write logging.
+- `QueueResourceScope` + `QueueEntryScope` + `QueueDedupeKeyScope` in `src/QueueResourceScope.ts`.
+- `Telemetry.namespace("Queue")` → wires like `Queue.Entry.Enqueued`.
+- `processType` / scope kind: `QueueResource` (PascalCase, matches {@link RunResourceStore}).
+- Indexed `subjectType` values: `QueueEntry`, `QueueLifecycle`, `QueueDedupeKey`, `QueueRateLimit`.
+- Public scoped emit helpers: `emitEntryFact`, `emitLifecycleChange`, `emitDedupeKeyChange`, `emitRateLimitExceededFact` (+ `*Facts` / `*Changes` batch variants) in `src/store/queueResource.ts`.
+- `QueueResource.ts` calls those helpers (no flat `record*` statics).
+- Telemetry materialization omits omitted optional input fields (never serializes them as `"undefined"` strings); decoders treat legacy `"undefined"` payloads as absent.
+- `Queue.Entry.Released` uses `queueEntryIndex` plus an `indexB` index leg for `releaseId`.
+- `ProcessStore` exports `optionalFacetEmit`, `optionalFacetEmitWithBridge`, `optionalFacetEmitBatch`, `facetHasOwnMethod` for other facets and tests.
 
 ## Open recipe steps
 
 ### Step 1 — Indexed column metadata
+
+**Locked:** yes — use `Telemetry.index(({ field }) => ({ ... }))` on each event (see `docs/recipes/queue-telemetry-index-batch.md`).
 
 What this decides:
 How queue telemetry events populate indexed runtime columns without putting row
@@ -88,4 +99,8 @@ the event emitter.
 
 ## Cleanup status
 
-Open. Delete this recipe once implemented or moved into durable docs.
+Implemented (emit helpers, worker wiring, facet conformance). Remaining optional
+work: migrate `QueueResource.ts` from `buildEntryFact` + `emitEntryFact` to
+direct `QueueResourceStore.Entry.*` / `.batch` calls per
+`docs/recipes/queue-telemetry-index-batch.md`. Delete this recipe after that
+slice or fold into `docs/STORAGE.md`.

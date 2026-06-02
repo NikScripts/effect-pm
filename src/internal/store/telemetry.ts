@@ -580,7 +580,11 @@ const materializeField = (
     if (!isRecord(input)) {
       return Effect.die(`Telemetry.Schema input field "${key}" requires an event input object`);
     }
-    return Effect.sync(() => toJsonValue(field.make(input[key])));
+    const raw = input[key];
+    if (raw === undefined) {
+      return Effect.succeed(undefined);
+    }
+    return Effect.sync(() => toJsonValue(field.make(raw)));
   }
   return Effect.die("Telemetry.Schema field is missing a scope, terminal, or literal source");
 };
@@ -607,7 +611,10 @@ const materializeSchema = (
       Effect.gen(function* () {
         const out: Record<string, JsonValue> = {};
         for (const [key, field] of Object.entries(schema.fields)) {
-          out[key] = yield* materializeField(key, state, field, input, out);
+          const value = yield* materializeField(key, state, field, input, out);
+          if (value !== undefined) {
+            out[key] = value;
+          }
         }
         return { state, payload: out };
       }),
@@ -712,9 +719,11 @@ const makeSchemaRecord = (
   const occurredAt =
     typeof event["occurredAt"] === "number"
       ? event["occurredAt"]
-      : typeof event["completedAt"] === "number"
-        ? event["completedAt"]
-        : 0;
+      : typeof event["changedAt"] === "number"
+        ? event["changedAt"]
+        : typeof event["completedAt"] === "number"
+          ? event["completedAt"]
+          : 0;
   const scopedProcessId =
     identity?.processIdSelector === undefined
       ? undefined

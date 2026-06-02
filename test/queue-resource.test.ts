@@ -132,12 +132,12 @@ describe("QueueResource.make — ProcessStore records", () => {
         queueId: "test-store-records",
       });
       const byKey = yield* queueResource.entriesByKey("job-1");
-      const completed = entries.find((row) => row.type === "queue.entry.completed");
+      const completed = entries.find((row) => row.type === "Queue.Entry.Completed");
 
       expect(entries.map((row) => row.type).sort()).toEqual([
-        "queue.entry.completed",
-        "queue.entry.enqueued",
-        "queue.entry.started",
+        "Queue.Entry.Completed",
+        "Queue.Entry.Enqueued",
+        "Queue.Entry.Started",
       ]);
       expect(completed?.queueId).toBe("test-store-records");
       expect(completed?.entryId).toBe("test-store-records-entry-1");
@@ -167,13 +167,13 @@ describe("QueueResource.make — ProcessStore records", () => {
       });
       const types = lifecycle.map((row) => row.type);
 
-      expect(types).toContain("queue.lifecycle.started");
-      expect(types).toContain("queue.lifecycle.cleared");
+      expect(types).toContain("Queue.Lifecycle.Started");
+      expect(types).toContain("Queue.Lifecycle.Cleared");
 
       const clearedRow = lifecycle.find(
-        (row) => row.type === "queue.lifecycle.cleared",
+        (row) => row.type === "Queue.Lifecycle.Cleared",
       );
-      expect(clearedRow?.type === "queue.lifecycle.cleared"
+      expect(clearedRow?.type === "Queue.Lifecycle.Cleared"
         ? clearedRow.itemsCleared
         : 0).toBe(3);
     }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
@@ -196,7 +196,7 @@ describe("QueueResource.make — ProcessStore records", () => {
         queueId: "test-store-lifecycle-drained",
       });
       const types = lifecycle.map((row) => row.type);
-      expect(types).toContain("queue.lifecycle.drained");
+      expect(types).toContain("Queue.Lifecycle.Drained");
     }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
   );
 
@@ -217,12 +217,12 @@ describe("QueueResource.make — ProcessStore records", () => {
         queueId: "test-store-lifecycle-pauseresume",
       });
       const types = lifecycle.map((row) => row.type);
-      expect(types).toContain("queue.lifecycle.paused");
-      expect(types).toContain("queue.lifecycle.resumed");
+      expect(types).toContain("Queue.Lifecycle.Paused");
+      expect(types).toContain("Queue.Lifecycle.Resumed");
     }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
   );
 
-  it.live("writes queue.entry.dropped with top-level reason", () =>
+  it.live("writes Queue.Entry.Dropped with top-level reason", () =>
     Effect.gen(function* () {
       const queue = yield* QueueResource.make({
         name: "test-store-drop",
@@ -239,19 +239,19 @@ describe("QueueResource.make — ProcessStore records", () => {
       const queueResource = yield* QueueResourceStore;
       const entries = yield* queueResource.entries({
         queueId: "test-store-drop",
-        types: ["queue.entry.dropped"],
+        types: ["Queue.Entry.Dropped"],
       });
       expect(entries).toHaveLength(1);
       const droppedRow = entries[0];
-      expect(droppedRow?.type).toBe("queue.entry.dropped");
-      expect(droppedRow?.type === "queue.entry.dropped"
+      expect(droppedRow?.type).toBe("Queue.Entry.Dropped");
+      expect(droppedRow?.type === "Queue.Entry.Dropped"
         ? droppedRow.reason
         : undefined).toBe("cancelled");
       expect(droppedRow?.key).toBe("drop-me");
     }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
   );
 
-  it.live("writes queue.entry.dead-lettered with top-level reason", () =>
+  it.live("writes Queue.Entry.DeadLettered with top-level reason", () =>
     Effect.gen(function* () {
       const queue = yield* QueueResource.make({
         name: "test-store-deadletter",
@@ -268,18 +268,18 @@ describe("QueueResource.make — ProcessStore records", () => {
       const queueResource = yield* QueueResourceStore;
       const entries = yield* queueResource.entries({
         queueId: "test-store-deadletter",
-        types: ["queue.entry.dead-lettered"],
+        types: ["Queue.Entry.DeadLettered"],
       });
       expect(entries).toHaveLength(1);
       const row = entries[0];
-      expect(row?.type === "queue.entry.dead-lettered"
+      expect(row?.type === "Queue.Entry.DeadLettered"
         ? row.reason
         : undefined).toBe("bad-payload");
       expect(row?.key).toBe("poison");
     }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
   );
 
-  it.live("writes queue.entry.exhausted when retries are exceeded", () =>
+  it.live("writes Queue.Entry.Exhausted when retries are exceeded", () =>
     Effect.gen(function* () {
       const attempts = yield* Ref.make(0);
       const queue = yield* QueueResource.make({
@@ -303,19 +303,19 @@ describe("QueueResource.make — ProcessStore records", () => {
       const queueResource = yield* QueueResourceStore;
       const exhausted = yield* queueResource.entries({
         queueId: "test-store-exhausted",
-        types: ["queue.entry.exhausted"],
+        types: ["Queue.Entry.Exhausted"],
       });
       expect(exhausted).toHaveLength(1);
       const retried = yield* queueResource.entries({
         queueId: "test-store-exhausted",
-        types: ["queue.entry.retried"],
+        types: ["Queue.Entry.Retried"],
       });
       expect(retried.length).toBeGreaterThanOrEqual(1);
     }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
   );
 
   it.live(
-    "writes queue.dedupe-key.added on enqueue and released on completion",
+    "writes Queue.DedupeKey.Added on enqueue and released on completion",
     () =>
       Effect.gen(function* () {
         const queue = yield* QueueResource.make({
@@ -334,8 +334,8 @@ describe("QueueResource.make — ProcessStore records", () => {
           queueId: "test-store-dedupe",
         });
         expect(allChanges.map((row) => row.type).sort()).toEqual([
-          "queue.dedupe-key.added",
-          "queue.dedupe-key.released",
+          "Queue.DedupeKey.Added",
+          "Queue.DedupeKey.Released",
         ]);
         expect(allChanges.every((row) => row.key === "k-only")).toBe(true);
 
@@ -348,7 +348,7 @@ describe("QueueResource.make — ProcessStore records", () => {
   );
 
   it.live(
-    "writes queue.dedupe-key.released for keys evicted by clear",
+    "writes Queue.DedupeKey.Released for keys evicted by clear",
     () =>
       Effect.gen(function* () {
         const queue = yield* QueueResource.make({
@@ -367,14 +367,14 @@ describe("QueueResource.make — ProcessStore records", () => {
         const queueResource = yield* QueueResourceStore;
         const released = yield* queueResource.dedupeKeys({
           queueId: "test-store-dedupe-clear",
-          types: ["queue.dedupe-key.released"],
+          types: ["Queue.DedupeKey.Released"],
         });
         expect(released.map((row) => row.key).sort()).toEqual(["ck1", "ck2"]);
       }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
   );
 
   it.live(
-    "writes queue.dedupe-key.released for keys evicted by drop / deadLetter",
+    "writes Queue.DedupeKey.Released for keys evicted by drop / deadLetter",
     () =>
       Effect.gen(function* () {
         const queue = yield* QueueResource.make({
@@ -393,7 +393,7 @@ describe("QueueResource.make — ProcessStore records", () => {
         const queueResource = yield* QueueResourceStore;
         const released = yield* queueResource.dedupeKeys({
           queueId: "test-store-dedupe-route",
-          types: ["queue.dedupe-key.released"],
+          types: ["Queue.DedupeKey.Released"],
         });
         expect(released.map((row) => row.key).sort()).toEqual([
           "dl-1",
@@ -403,7 +403,7 @@ describe("QueueResource.make — ProcessStore records", () => {
   );
 
   it.live(
-    "writes paired queue.dedupe-key.released + added across a retry cycle",
+    "writes paired Queue.DedupeKey.Released + added across a retry cycle",
     () =>
       Effect.gen(function* () {
         class TransientFailure extends Data.TaggedError(
@@ -455,8 +455,8 @@ describe("QueueResource.make — ProcessStore records", () => {
           {},
         );
         expect(counts).toEqual({
-          "queue.dedupe-key.added": 2,
-          "queue.dedupe-key.released": 2,
+          "Queue.DedupeKey.Added": 2,
+          "Queue.DedupeKey.Released": 2,
         });
         expect(allChanges.every((row) => row.key === "rk-1")).toBe(true);
 
@@ -465,7 +465,7 @@ describe("QueueResource.make — ProcessStore records", () => {
           return tail === undefined ? -1 : Number.parseInt(tail, 10);
         };
         const sortedSeqsForType = (
-          type: "queue.dedupe-key.added" | "queue.dedupe-key.released",
+          type: "Queue.DedupeKey.Added" | "Queue.DedupeKey.Released",
         ): readonly [number, number] => {
           const seqs = allChanges
             .filter((row) => row.type === type)
@@ -485,10 +485,10 @@ describe("QueueResource.make — ProcessStore records", () => {
           return [first, second];
         };
         const [firstAdded, secondAdded] = sortedSeqsForType(
-          "queue.dedupe-key.added",
+          "Queue.DedupeKey.Added",
         );
         const [firstReleased, secondReleased] = sortedSeqsForType(
-          "queue.dedupe-key.released",
+          "Queue.DedupeKey.Released",
         );
         // Initial added (seq=1) precedes failure released (seq=2) precedes
         // retry added (seq=3) precedes success released (seq=4). The seq
@@ -502,7 +502,7 @@ describe("QueueResource.make — ProcessStore records", () => {
   );
 
   it.live(
-    "writes queue.dedupe-key.released for keys evicted by release()",
+    "writes Queue.DedupeKey.Released for keys evicted by release()",
     () =>
       Effect.gen(function* () {
         const queue = yield* QueueResource.make({
@@ -520,7 +520,7 @@ describe("QueueResource.make — ProcessStore records", () => {
         const queueResource = yield* QueueResourceStore;
         const released = yield* queueResource.dedupeKeys({
           queueId: "test-store-dedupe-release",
-          types: ["queue.dedupe-key.released"],
+          types: ["Queue.DedupeKey.Released"],
         });
         expect(released.map((row) => row.key).sort()).toEqual(["rl-1", "rl-2"]);
       }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
@@ -553,12 +553,12 @@ describe("QueueResource.make — ProcessStore records", () => {
         const queueResource = yield* QueueResourceStore;
         const dropped = yield* queueResource.entries({
           queueId: "test-store-route-entry-path",
-          types: ["queue.entry.dropped"],
+          types: ["Queue.Entry.Dropped"],
         });
         expect(dropped).toHaveLength(1);
         const fact = dropped[0];
-        if (fact?.type !== "queue.entry.dropped") {
-          throw new Error("expected queue.entry.dropped fact");
+        if (fact?.type !== "Queue.Entry.Dropped") {
+          throw new Error("expected Queue.Entry.Dropped fact");
         }
         expect(fact.reason).toBe("manual-drop-by-handle");
       }).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped),
@@ -1403,7 +1403,7 @@ describe("QueueResource.make — itemSchema", () => {
       });
       expect(yield* Ref.get(hookHits)).toBe(1);
       expect(exceeded).toHaveLength(1);
-      expect(exceeded[0]?.type).toBe("queue.ratelimit.exceeded");
+      expect(exceeded[0]?.type).toBe("Queue.RateLimit.Exceeded");
       expect(exceeded[0]?.outcome).toBe("delayed");
       expect(exceeded[0]?.limit).toBe(1);
       expect(exceeded[0]?.delayMs).toBeGreaterThan(0);
