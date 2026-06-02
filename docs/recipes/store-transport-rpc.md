@@ -34,6 +34,15 @@ registry-driven router.
 
 ---
 
+## Step 3: Schema exposure on class + registry type inference
+
+- `Facet.schemas` stamped by builder — base query schemas `{ [method]: { payload, success } }`
+- `Facet.forSchemas` stamped separately — identifier-bound schemas `{ [method]: { payload, success } }`
+- Success schemas may be shared/reused between `schemas` and `forSchemas` where methods overlap
+- `ProcessStore.registry` returns both runtime lookup and type map
+- `for` methods get a **separate RPC procedure** (`Store.QueryFor`) — takes `id` + payload, not folded into `Store.Query`
+- Registry exposes both maps: `registry.lookup` (base) and `registry.forLookup` (identifier-bound)
+
 ## Step 2: `ProcessStore.payload().success().resolve()` chain
 
 - `ProcessStoreMethod<P, S>` — sealed tagged object `{ _tag, payload, success, resolve }`
