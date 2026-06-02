@@ -58,6 +58,11 @@ replacement.
 - V1 backend starts with Effect `ChildProcess` command streaming.
 - PTY support is a later backend behind the same `TerminalSessionService`
   contract.
+- Terminal sessions emit audit/lifecycle events for open, deny, input summary,
+  resize, close, exit, timeout, and backend failure.
+- Terminal safety limits are configurable per endpoint/target: max duration,
+  idle timeout, byte limits, concurrent sessions, env policy, cwd policy, and
+  input policy.
 
 ## Open recipe steps
 
@@ -796,6 +801,245 @@ V1 can open a configured command target, stream stdout events over Effect RPC,
 accept input when stdin is piped, close the session by interrupting the child
 process, and later swap in a PTY backend without changing `TerminalSessionPort`
 or `TerminalRpc`.
+
+## Step 6: Audit, observability, and safety limits
+
+Recipe step: `Audit, observability, and safety limits`
+
+What this decides:
+How terminal sessions remain accountable and bounded. Terminal access is more
+powerful than normal PM commands, so v1 needs built-in lifecycle audit hooks and
+configurable guardrails even before durable storage or RBAC are shipped here.
+
+Recommended ingredients:
+- Terminal audit events are semantic domain events — not HTTP/RPC logs. They can
+  later be persisted through a terminal facet or forwarded to app observability.
+- Use Effect observability primitives for v1 fan-out — `Logger`, `Tracer`, and
+  `Metric` where appropriate. Do not introduce custom logging/event buses.
+- Emit lifecycle events: `OpenRequested`, `OpenDenied`, `Opened`, `Input`,
+  `Resize`, `Closed`, `Exited`, `TimedOut`, `BackendFailed`.
+- Do not record raw terminal input by default — record byte counts and metadata,
+  because terminal input can contain secrets.
+- Configurable safety limits per endpoint/target — max duration, idle timeout,
+  max output bytes, max input bytes, max concurrent sessions.
+- Explicit env/cwd policies — default to configured cwd and safe env; broad env
+  inherit is opt-in.
+- Session cleanup is scoped — timeout/close/exit interrupts process and emits a
+  terminal close/exit event.
+- App/gateway owns user identity — terminal audit can accept `actor`, `reason`,
+  and `requestId` metadata from gateway context.
+
+Picture:
+
+```ts
+export interface TerminalAuditMetadata {
+  readonly actor?: string;
+  readonly reason?: string;
+  readonly requestId?: string;
+  readonly source?: "dashboard" | "cli" | "api";
+}
+```
+
+```ts
+export type TerminalAuditEvent =
+  | {
+      readonly _tag: "OpenRequested";
+      readonly sessionId: string;
+      readonly groupId: string;
+      readonly target: string;
+      readonly metadata: TerminalAuditMetadata;
+    }
+  | {
+      readonly _tag: "OpenDenied";
+      readonly groupId: string;
+      readonly target: string;
+      readonly reason: string;
+      readonly metadata: TerminalAuditMetadata;
+    }
+  | {
+      readonly _tag: "Opened";
+      readonly sessionId: string;
+      readonly groupId: string;
+      readonly target: string;
+      readonly command: ReadonlyArray<string>;
+      readonly cwd?: string;
+      readonly metadata: TerminalAuditMetadata;
+    }
+  | {
+      readonly _tag: "Input";
+      readonly sessionId: string;
+      readonly bytes: number;
+      readonly metadata: TerminalAuditMetadata;
+    }
+  | {
+      readonly _tag: "Resize";
+      readonly sessionId: string;
+      readonly cols: number;
+      readonly rows: number;
+      readonly metadata: TerminalAuditMetadata;
+    }
+  | {
+      readonly _tag: "Exited";
+      readonly sessionId: string;
+      readonly code: number;
+      readonly metadata: TerminalAuditMetadata;
+    }
+  | {
+      readonly _tag: "Closed";
+      readonly sessionId: string;
+      readonly reason: "client" | "timeout" | "exit" | "backend-error";
+      readonly metadata: TerminalAuditMetadata;
+    };
+```
+
+```ts
+export interface TerminalSafetyLimits {
+  readonly maxDuration?: Duration.DurationInput;
+  readonly idleTimeout?: Duration.DurationInput;
+  readonly maxOutputBytes?: number;
+  readonly maxInputBytes?: number;
+  readonly maxConcurrentSessions?: number;
+}
+```
+
+```ts
+export type TerminalEnvironmentPolicy =
+  | {
+      readonly _tag: "Configured";
+      readonly env: Readonly<Record<string, string>>;
+    }
+  | {
+      readonly _tag: "InheritAllowList";
+      readonly names: ReadonlyArray<string>;
+    }
+  | {
+      readonly _tag: "InheritAll";
+    };
+```
+
+```ts
+export interface TerminalTarget {
+  readonly id: string;
+  readonly label?: string;
+  readonly command: ReadonlyArray<string>;
+  readonly cwd?: string;
+  readonly env?: TerminalEnvironmentPolicy;
+  readonly limits?: TerminalSafetyLimits;
+}
+```
+
+```ts
+export interface TerminalAuditSink {
+  readonly record: (
+    event: TerminalAuditEvent,
+  ) => Effect.Effect<void, TerminalAuditError>;
+}
+```
+
+```ts
+export const terminalAuditLogger = (
+  event: TerminalAuditEvent,
+): Effect.Effect<void> =>
+  Effect.logInfo("Terminal session event").pipe(
+    Effect.annotateLogs({
+      event: event._tag,
+      sessionId: "sessionId" in event ? event.sessionId : undefined,
+      groupId: "groupId" in event ? event.groupId : undefined,
+    }),
+  );
+```
+
+```ts
+export const terminalSessionMetric = Metric.counter("effect_pm_terminal_sessions", {
+  description: "Terminal session lifecycle events",
+}).pipe(Metric.tagged("component", "terminal"));
+```
+
+```ts
+const openSession = (
+  input: OpenTerminalSession,
+): Effect.Effect<TerminalSessionHandle, TerminalSessionError, TerminalAuditSink> =>
+  Effect.gen(function* () {
+    const audit = yield* TerminalAuditSink;
+    const sessionId = yield* makeSessionId;
+    const metadata = input.metadata ?? {};
+
+    yield* audit.record({
+      _tag: "OpenRequested",
+      sessionId,
+      groupId: input.groupId,
+      target: input.target,
+      metadata,
+    });
+
+    const target = yield* resolveTerminalTarget(policy, input).pipe(
+      Effect.tapError((error) =>
+        audit.record({
+          _tag: "OpenDenied",
+          groupId: input.groupId,
+          target: input.target,
+          reason: error.reason,
+          metadata,
+        }),
+      ),
+    );
+
+    const handle = yield* backend.open(target).pipe(
+      Effect.timeoutFail({
+        duration: target.limits?.maxDuration ?? Duration.hours(1),
+        onTimeout: () => new TerminalTimedOut({ sessionId }),
+      }),
+    );
+
+    yield* audit.record({
+      _tag: "Opened",
+      sessionId,
+      groupId: input.groupId,
+      target: input.target,
+      command: target.command,
+      cwd: target.cwd,
+      metadata,
+    });
+
+    return handle;
+  });
+```
+
+Why this recommendation is good:
+- It keeps terminal observability semantic and transport-independent.
+- It avoids logging secrets by default.
+- It gives app teams the broad control they want while still bounding blast
+  radius through explicit configuration.
+- It creates a natural future storage facet without forcing persistence into v1.
+- It keeps RBAC/user identity in the gateway but gives terminal events places to
+  carry actor metadata.
+
+Alternatives:
+1. No built-in audit hooks — simpler v1, but terminal access is too powerful to
+   be opaque.
+2. Record raw input/output — useful for forensic replay, but too risky by
+   default because secrets may be typed or printed.
+3. Hard-coded safety limits — simpler, but conflicts with user desire for close
+   to full control.
+4. Durable terminal store in v1 — attractive, but persistence can follow once
+   semantic events stabilize.
+
+Ingredients:
+- Emit semantic audit events.
+- Use Effect `Logger`, `Tracer`, and `Metric` for v1 observability fan-out.
+- Do not record raw input by default.
+- Carry gateway actor/reason/request metadata.
+- Make safety limits configurable per endpoint/target.
+- Default env/cwd policies are safe; broad inherit is explicit opt-in.
+- Cleanup is scope-owned and emits close/exit/timeout events.
+- Durable terminal storage is future work, not v1.
+
+Do you agree with all?
+
+Acceptance check:
+Terminal v1 can prove every session open/deny/exit/close is observable, raw input
+is not stored by default, limits can be configured per target, and session
+cleanup always emits a terminal lifecycle event.
 
 ## Cleanup status
 
