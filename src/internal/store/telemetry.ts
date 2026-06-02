@@ -66,7 +66,7 @@ type TelemetryLogWarning = {
     | ((event: Readonly<Record<string, JsonValue>>) => TelemetryLogAnnotations);
 };
 
-type TelemetryIndexFieldSelector = {
+export type TelemetryIndexFieldSelector = {
   readonly _tag: "field";
   readonly field: string;
   readonly allowMissing: boolean;
@@ -75,9 +75,9 @@ type TelemetryIndexFieldSelector = {
   readonly named: (name: string) => TelemetryIndexFieldSelector;
 };
 
-type TelemetryIndexValue = string | TelemetryIndexFieldSelector;
+export type TelemetryIndexValue = string | TelemetryIndexFieldSelector;
 
-type TelemetryIndexDefinition = Readonly<{
+export type TelemetryIndexDefinition = Readonly<{
   readonly subjectType?: TelemetryIndexValue;
   readonly subjectId?: TelemetryIndexValue;
   readonly key?: TelemetryIndexValue;
@@ -91,7 +91,7 @@ type TelemetryIndexDefinition = Readonly<{
   readonly indexH?: TelemetryIndexValue;
 }>;
 
-type TelemetryIndexBuilder = {
+export type TelemetryIndexBuilder = {
   readonly field: (field: string) => TelemetryIndexFieldSelector;
 };
 
