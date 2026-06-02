@@ -1,7 +1,7 @@
 # 16 — Effect RPC transport migration
 
-Future migration plan for removing hand-rolled transport surfaces where Effect
-already provides the right abstraction.
+Migration plan for replacing hand-rolled transport surfaces where Effect already
+provides the right abstraction.
 
 ## Rule
 
@@ -14,13 +14,19 @@ Use Effect transport modules by default.
 - Domain services stay transport-agnostic and never know HTTP paths, status
   codes, headers, or RPC framing.
 
+## Current status
+
+`ControlTransportRpc` now provides the first Effect RPC transport adapter for the
+existing `ControlProtocol` envelope. Existing HTTP transport remains compatible
+and is still the default local/CLI path.
+
 ## What should migrate
 
 | Surface | Current shape | Target | Notes |
 | --- | --- | --- | --- |
 | `ControlTransportHttp` server | hand-rolled `node:http` JSON routes | `@effect/platform` `HttpApi` or `HttpRouter` adapter | Keep `ControlRouter` / `ControlProtocol` transport-neutral. HTTP status mapping belongs only in adapter. |
-| Control command transport | `POST /control` envelope over HTTP | Effect RPC adapter for `ControlProtocolRequest` dispatch | Keep HTTP adapter for compatibility; RPC should be first-class for new surfaces. |
-| ProcessManager remote client | HTTP client factory by default | injectable transport factories + RPC client adapter | `RemoteProcessManager` remains semantic; transport selected at edge. |
+| Control command transport | `POST /control` envelope over HTTP + implemented `ControlTransportRpc` | Effect RPC adapter for `ControlProtocolRequest` dispatch | Keep HTTP adapter for compatibility; RPC is first-class for new Effect integrations. |
+| ProcessManager remote client | HTTP client factory by default + transport injection | injectable transport factories + RPC client adapter | `RemoteProcessManager` remains semantic; `connect(..., { transport })` accepts the RPC adapter. |
 | Dashboard control widgets | `fetch` adapter | Effect RPC adapter first; fetch adapter compatibility only | Widgets keep `ControlPlanePort`; adapter owns protocol. |
 | Log watch / live streams | HTTP NDJSON stream | Effect RPC streaming RPC | Durable log reads stay storage/query APIs; live stream transport becomes RPC. |
 | Remote queue enqueue | not shipped | Effect RPC queue command adapter | Queue item schemas must land first; domain queue service must not know RPC. |
@@ -59,22 +65,20 @@ Not allowed in domain services:
 
 ## Suggested migration order
 
-1. **Control HTTP platform adapter**
+1. **Control RPC adapter** — implemented by `ControlTransportRpc`.
+   - Model one dispatch RPC carrying `ControlProtocolRequestEnvelope`.
+   - Keep `ControlRouter` unchanged.
+   - Keep `ControlTransportHttp` for compatibility.
+
+2. **Control HTTP platform adapter**
    - Rebuild `ControlTransportHttp.server` on `@effect/platform` `HttpApi` /
      `HttpRouter`.
    - Preserve current public HTTP routes for compatibility.
    - Move all status-code mapping into the adapter.
 
-2. **Control RPC adapter**
-   - Add `ControlTransportRpc` using `effect/unstable/rpc` for the current Effect
-     v4 beta line.
-   - Model a single dispatch RPC carrying `ControlProtocolRequestEnvelope`, or
-     one RPC per command after the command set stabilizes.
-   - Keep `ControlRouter` unchanged.
-
-3. **ProcessManager adapter injection**
-   - Stop assuming HTTP in convenience paths.
-   - Let `ProcessManager.connect` accept adapter factories for HTTP/RPC.
+3. **ProcessManager adapter injection polish**
+   - Keep `ProcessManager.connect(..., { transport })` as the semantic entry.
+   - Consider helper docs/examples for HTTP/RPC runtime construction.
    - Keep typed `RemoteProcessManager` unchanged.
 
 4. **Dashboard adapters**
@@ -91,9 +95,11 @@ Not allowed in domain services:
 
 ## Acceptance checks
 
-- Domain services compile without imports from `@effect/platform`,
-  `@effect/rpc`, `fetch`, or HTTP route helpers.
+- Domain services compile without imports from `@effect/platform`, Effect RPC
+  modules, `fetch`, or HTTP route helpers.
 - HTTP and RPC adapters can both dispatch the same semantic command.
+- `ProcessManager.connect(..., { transport })` can use the RPC adapter without
+  typed process/queue API changes.
 - React widgets can swap fetch/RPC adapters without prop or hook changes.
 - Live logs / terminal events are represented as Effect streams at the adapter
   boundary.
