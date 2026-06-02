@@ -321,14 +321,26 @@ describe("RunResourceStore — type accessors", () => {
     Effect.gen(function* () {
       // Type-only smoke check: if these aliases ever drift, the file fails
       // to compile rather than the test failing at runtime.
+      const started = Object.assign(() => Effect.void, {
+        batch: () => Effect.void,
+      });
+      const completed = Object.assign(() => Effect.void, {
+        batch: () => Effect.void,
+      });
+      const failed = Object.assign(() => Effect.void, {
+        batch: () => Effect.void,
+      });
+      const changed = Object.assign(() => Effect.void, {
+        batch: () => Effect.void,
+      });
       const fullShape: ProcessStore.Type.Shape<typeof RunResourceStore> = {
         Run: {
-          Started: () => Effect.void,
-          Completed: () => Effect.void,
-          Failed: () => Effect.void,
+          Started: started,
+          Completed: completed,
+          Failed: failed,
         },
         State: {
-          Changed: () => Effect.void,
+          Changed: changed,
         },
         facts: () => Effect.succeed([]),
         stateHistory: () => Effect.succeed([]),

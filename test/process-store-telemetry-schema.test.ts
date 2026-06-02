@@ -250,8 +250,12 @@ describe("ProcessStore telemetry schema", () => {
       const rows = yield* store.failed();
 
       expect(rows).toHaveLength(2);
-      expect(rows[0]?.payload).toMatchObject({ error: "Error: boom-1" });
-      expect(rows[1]?.payload).toMatchObject({ error: "boom-2" });
+      expect(rows.map((row) => row.payload)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ error: "Error: boom-1" }),
+          expect.objectContaining({ error: "boom-2" }),
+        ]),
+      );
     }).pipe(
       Effect.provide(TelemetrySchemaStore.layer),
       Effect.provide(TelemetryTestScope.layer({

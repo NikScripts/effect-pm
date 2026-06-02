@@ -250,7 +250,7 @@ export type TelemetryEventBuilder<
 > =
   TelemetryEventDef<Name, EmitApi> & {
   readonly pipe: (
-    leg: TelemetryEventPipeLeg,
+    ...legs: ReadonlyArray<TelemetryEventPipeLeg>
   ) => TelemetryEventBuilder<Name, EmitApi>;
 };
 
@@ -417,8 +417,13 @@ const makeEventBuilder = <Name extends string, EmitApi>(
   event: TelemetryEventDef<Name, EmitApi>,
 ): TelemetryEventBuilder<Name, EmitApi> => ({
   ...event,
-  pipe: (leg) =>
-    makeEventBuilder(leg(event)),
+  pipe: (...legs) =>
+    makeEventBuilder(
+      legs.reduce<TelemetryEventDef<Name, EmitApi>>(
+        (acc, leg) => leg(acc),
+        event,
+      ),
+    ),
 });
 
 let telemetrySequence = 0;
@@ -680,7 +685,7 @@ const applyEventIndexes = (
   event: Readonly<Record<string, JsonValue>>,
   definition: TelemetryEventDef,
 ): Omit<RuntimeRecord, "runId" | "createdAt"> =>
-  definition.indexes.reduce(
+  definition.indexes.reduce<Omit<RuntimeRecord, "runId" | "createdAt">>(
     (acc, index) => applyIndexDefinition(acc, event, index),
     record,
   );

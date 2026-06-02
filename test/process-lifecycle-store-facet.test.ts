@@ -144,12 +144,15 @@ describe("ProcessLifecycleStore — for(processId) bound API", () => {
 describe("ProcessLifecycleStore — type accessors", () => {
   it.live("ProcessStore.Type helpers expose structural shapes", () =>
     Effect.gen(function* () {
+      const errored = Object.assign(() => Effect.void, {
+        batch: () => Effect.void,
+      });
       const fullShape: ProcessStore.Type.Shape<typeof ProcessLifecycleStore> = {
         Lifecycle: {
           Started: Effect.void,
           Stopped: Effect.void,
           Restarted: Effect.void,
-          Errored: () => Effect.void,
+          Errored: errored,
           Recovered: Effect.void,
           Disabled: Effect.void,
           Enabled: Effect.void,

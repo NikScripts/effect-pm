@@ -273,9 +273,12 @@ describe("ProcessExecutionStore — for(processId) bound API", () => {
 describe("ProcessExecutionStore — type accessors", () => {
   it.live("ProcessStore.Type helpers expose the structural shapes", () =>
     Effect.gen(function* () {
+      const failed = Object.assign(() => Effect.void, {
+        batch: () => Effect.void,
+      });
       const executionEmit = {
         Completed: Effect.void,
-        Failed: () => Effect.void,
+        Failed: failed,
         Interrupted: Effect.void,
       };
       const fullShape: ProcessStore.Type.Shape<typeof ProcessExecutionStore> = {
