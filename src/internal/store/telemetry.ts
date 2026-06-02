@@ -365,7 +365,7 @@ type TelemetryCodecHandlersFromMeta<
     : never
 >;
 
-type TelemetryCodecOutput<Handlers> =
+export type TelemetryCodecOutput<Handlers> =
   Handlers extends (...args: ReadonlyArray<never>) => infer Output
     ? NonNullable<Output>
     : Handlers extends object
@@ -389,10 +389,22 @@ type LookupPath<
     : never
   : Value;
 
-type TelemetryCodecOutputAtTag<
+export type TelemetryCodecOutputAtTag<
   Handlers,
   Tag extends string,
 > = TelemetryCodecOutput<LookupPath<Handlers, SplitDot<Tag>>>;
+
+export type TelemetryCodecOutputOf<Codec> =
+  Codec extends TelemetryCodec<ProcessStoreTelemetrySection<object>, infer Handlers>
+    ? TelemetryCodecOutput<Handlers>
+    : never;
+
+export type TelemetryCodecTagOutputOf<
+  Codec,
+  Tag extends string,
+> = Codec extends TelemetryCodec<ProcessStoreTelemetrySection<object>, infer Handlers>
+  ? TelemetryCodecOutputAtTag<Handlers, Tag>
+  : never;
 
 export interface TelemetryCodec<
   Section extends ProcessStoreTelemetrySection<object>,

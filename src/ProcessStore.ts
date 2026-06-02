@@ -71,6 +71,8 @@ import {
 } from "./internal/store/service";
 import { Telemetry as TelemetryBuilders } from "./internal/store/telemetry";
 import type {
+  TelemetryCodecOutputOf,
+  TelemetryCodecTagOutputOf,
   TelemetryEventWireOf,
   TelemetryWireOf,
 } from "./internal/store/telemetry";
@@ -147,5 +149,8 @@ export declare namespace Telemetry {
   export namespace Type {
     export type Wire<T> = TelemetryWireOf<T>;
     export type Event<T, Tag extends string> = TelemetryEventWireOf<T, Tag>;
+    export type Codec<T> = TelemetryCodecOutputOf<T>;
+    export type CodecTag<T, Tag extends string> =
+      TelemetryCodecTagOutputOf<T, Tag>;
   }
 }

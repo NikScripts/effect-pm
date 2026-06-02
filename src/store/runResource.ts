@@ -105,64 +105,43 @@ export type RunResourceStateChangeReason =
   | "RunResource.State.Interrupted"
   | "RunResource.State.WaitInterrupted";
 
-/** @public */
-export interface RunResourceRunStartedPayload {
-  readonly concurrency: number;
-}
-
-/** @public */
-export interface RunResourceRunCompletedPayload {
-  readonly durationMs: number;
-}
-
-/** @public */
-export interface RunResourceRunFailedPayload {
-  readonly durationMs: number;
-  readonly cause: string;
-}
-
-/** @public */
-export interface RunResourceRunStartedFact {
-  readonly id: string;
-  readonly resourceId: string;
-  readonly runId: string;
-  readonly type: "RunResource.Run.Started";
-  readonly occurredAt: number;
-  readonly payload: RunResourceRunStartedPayload;
-  readonly attributes?: Record<string, unknown>;
-}
-
-/** @public */
-export interface RunResourceRunCompletedFact {
-  readonly id: string;
-  readonly resourceId: string;
-  readonly runId: string;
-  readonly type: "RunResource.Run.Completed";
-  readonly occurredAt: number;
-  readonly payload: RunResourceRunCompletedPayload;
-  readonly attributes?: Record<string, unknown>;
-}
-
-/** @public */
-export interface RunResourceRunFailedFact {
-  readonly id: string;
-  readonly resourceId: string;
-  readonly runId: string;
-  readonly type: "RunResource.Run.Failed";
-  readonly occurredAt: number;
-  readonly payload: RunResourceRunFailedPayload;
-  readonly attributes?: Record<string, unknown>;
-}
-
 /**
  * Discriminated union of every fact emitted by {@link RunResource}.
  *
  * @public
  */
 export type RunResourceFact =
-  | RunResourceRunStartedFact
-  | RunResourceRunCompletedFact
-  | RunResourceRunFailedFact;
+  Telemetry.Type.CodecTag<typeof RunResourceCodec, "Run">;
+
+/** @public */
+export type RunResourceRunStartedFact = Extract<
+  RunResourceFact,
+  { readonly type: "RunResource.Run.Started" }
+>;
+
+/** @public */
+export type RunResourceRunCompletedFact = Extract<
+  RunResourceFact,
+  { readonly type: "RunResource.Run.Completed" }
+>;
+
+/** @public */
+export type RunResourceRunFailedFact = Extract<
+  RunResourceFact,
+  { readonly type: "RunResource.Run.Failed" }
+>;
+
+/** @public */
+export type RunResourceRunStartedPayload =
+  RunResourceRunStartedFact["payload"];
+
+/** @public */
+export type RunResourceRunCompletedPayload =
+  RunResourceRunCompletedFact["payload"];
+
+/** @public */
+export type RunResourceRunFailedPayload =
+  RunResourceRunFailedFact["payload"];
 
 /**
  * Live state snapshot for a {@link RunResource} gate.
@@ -187,14 +166,8 @@ export interface RunResourceState {
  *
  * @public
  */
-export interface RunResourceStateChange {
-  readonly id: string;
-  readonly resourceId: string;
-  readonly changedAt: number;
-  readonly reason: RunResourceStateChangeReason;
-  readonly previous: RunResourceState | null;
-  readonly current: RunResourceState;
-}
+export type RunResourceStateChange =
+  Telemetry.Type.CodecTag<typeof RunResourceCodec, "State">;
 
 /**
  * Filter for {@link RunResourceStore.facts} queries.
@@ -371,8 +344,8 @@ const decodeRunRecordFields = (
 
 const decodeRunStarted = (
   record: RuntimeRecord,
-  type: RunResourceRunStartedFact["type"],
-): RunResourceRunStartedFact | null => {
+  type: "RunResource.Run.Started",
+) => {
   const fields = decodeRunRecordFields(record);
   if (fields === null) return null;
   const concurrency = fields.payload["concurrency"];
@@ -390,8 +363,8 @@ const decodeRunStarted = (
 
 const decodeRunCompleted = (
   record: RuntimeRecord,
-  type: RunResourceRunCompletedFact["type"],
-): RunResourceRunCompletedFact | null => {
+  type: "RunResource.Run.Completed",
+) => {
   const fields = decodeRunRecordFields(record);
   if (fields === null) return null;
   const durationMs = fields.payload["durationMs"];
@@ -409,8 +382,8 @@ const decodeRunCompleted = (
 
 const decodeRunFailed = (
   record: RuntimeRecord,
-  type: RunResourceRunFailedFact["type"],
-): RunResourceRunFailedFact | null => {
+  type: "RunResource.Run.Failed",
+) => {
   const fields = decodeRunRecordFields(record);
   if (fields === null) return null;
   const durationMs = fields.payload["durationMs"];
@@ -427,9 +400,7 @@ const decodeRunFailed = (
   };
 };
 
-const decodeStateChanged = (
-  record: RuntimeRecord,
-): RunResourceStateChange | null => {
+const decodeStateChanged = (record: RuntimeRecord) => {
   if (record.processType !== RUN_RESOURCE_TYPE) return null;
   if (!isRecord(record.payload)) return null;
   const id = record.payload["id"];
@@ -481,31 +452,24 @@ const matchesFactQuery =
 const factsFromRecords = (
   records: ReadonlyArray<RuntimeRecord>,
   query: RunResourceFactQuery | undefined,
-): RunResourceFact[] => {
-  const matches = matchesFactQuery(query);
-  const facts: RunResourceFact[] = [];
-  for (const record of records) {
-    const fact = recordToFact(record);
-    if (fact === null) continue;
-    if (!matches(fact)) continue;
-    facts.push(fact);
-  }
-  return applyQueryOpts(facts, query?.opts, (fact) => fact.occurredAt);
-};
+): RunResourceFact[] =>
+  applyQueryOpts(
+    records
+      .map(recordToFact)
+      .filter((fact): fact is RunResourceFact => fact !== null)
+      .filter(matchesFactQuery(query)),
+    query?.opts,
+    (fact) => fact.occurredAt,
+  );
 
 const stateChangesFromRecords = (
   records: ReadonlyArray<RuntimeRecord>,
   resourceId: string | undefined,
-): RunResourceStateChange[] => {
-  const changes: RunResourceStateChange[] = [];
-  for (const record of records) {
-    const change = recordToStateChange(record);
-    if (change === null) continue;
-    if (resourceId !== undefined && change.resourceId !== resourceId) continue;
-    changes.push(change);
-  }
-  return changes;
-};
+): RunResourceStateChange[] =>
+  records
+    .map(recordToStateChange)
+    .filter((change): change is RunResourceStateChange => change !== null)
+    .filter((change) => resourceId === undefined || change.resourceId === resourceId);
 
 const sortedStateChanges = (
   changes: ReadonlyArray<RunResourceStateChange>,
