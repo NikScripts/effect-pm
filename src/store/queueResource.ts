@@ -54,7 +54,16 @@
  * @module store/QueueResource
  */
 
-import { DateTime, Effect } from "effect";
+import { DateTime, Effect, Option } from "effect";
+import {
+  filterMapNullable,
+  nullable,
+  numberValue,
+  optionalValue,
+  recordValue,
+  stringValue,
+  valueWhen,
+} from "../internal/store/decode";
 import {
   applyQueryOpts,
   isFiniteNumber,
@@ -710,42 +719,34 @@ interface QueueEntryFactCommonDecoded {
 
 const decodeEntryCommon = (
   raw: { readonly [key: string]: unknown },
-): QueueEntryFactCommonDecoded | null => {
-  const id = raw["id"];
-  const queueId = raw["queueId"];
-  const entryId = raw["entryId"];
-  const occurredAt = raw["occurredAt"];
-  if (
-    !isString(id) ||
-    !isString(queueId) ||
-    !isString(entryId) ||
-    !isFiniteNumber(occurredAt)
-  ) {
-    return null;
-  }
-  const keyRaw = raw["key"];
-  const priorityRaw = raw["priority"];
-  const attemptsRaw = raw["attempts"];
-  const batchIdRaw = raw["batchId"];
-  if (keyRaw !== undefined && !isString(keyRaw)) return null;
-  if (priorityRaw !== undefined && !isQueuePriority(priorityRaw)) return null;
-  if (attemptsRaw !== undefined && !isFiniteNumber(attemptsRaw)) return null;
-  if (batchIdRaw !== undefined && !isString(batchIdRaw)) return null;
-  const attributes = recordAttributesObject(raw["attributes"]);
-  const out: { -readonly [K in keyof QueueEntryFactCommonDecoded]: QueueEntryFactCommonDecoded[K] } =
-    {
-      id,
-      queueId,
-      entryId,
-      occurredAt,
-    };
-  if (keyRaw !== undefined) out.key = keyRaw;
-  if (priorityRaw !== undefined) out.priority = priorityRaw;
-  if (attemptsRaw !== undefined) out.attempts = attemptsRaw;
-  if (batchIdRaw !== undefined) out.batchId = batchIdRaw;
-  if (attributes !== undefined) out.attributes = attributes;
-  return out;
-};
+): QueueEntryFactCommonDecoded | null =>
+  nullable(
+    Option.all({
+      id: stringValue(raw["id"]),
+      queueId: stringValue(raw["queueId"]),
+      entryId: stringValue(raw["entryId"]),
+      occurredAt: numberValue(raw["occurredAt"]),
+      key: optionalValue(raw["key"], isString),
+      priority: optionalValue(raw["priority"], isQueuePriority),
+      attempts: optionalValue(raw["attempts"], isFiniteNumber),
+      batchId: optionalValue(raw["batchId"], isString),
+    }).pipe(
+      Option.map(({ attempts, batchId, entryId, id, key, occurredAt, priority, queueId }) => {
+        const attributes = recordAttributesObject(raw["attributes"]);
+        return {
+          id,
+          queueId,
+          entryId,
+          occurredAt,
+          ...(key === undefined ? {} : { key }),
+          ...(priority === undefined ? {} : { priority }),
+          ...(attempts === undefined ? {} : { attempts }),
+          ...(batchId === undefined ? {} : { batchId }),
+          ...(attributes === undefined ? {} : { attributes }),
+        };
+      }),
+    ),
+  );
 
 const decodeQueueEntryFactValue = (
   type: QueueEntryFactType,
@@ -869,29 +870,37 @@ const recordToQueueEntryFact = (record: RuntimeRecord): QueueEntryFact | null =>
 const decodeQueueLifecycleChangeValue = (
   type: QueueLifecycleChangeType,
   value: unknown,
-): QueueLifecycleChange | null => {
-  if (!isRecord(value)) return null;
-  if (value["type"] !== type) return null;
-  const id = value["id"];
-  const queueId = value["queueId"];
-  const changedAt = value["changedAt"];
-  if (!isString(id) || !isString(queueId) || !isFiniteNumber(changedAt)) {
-    return null;
-  }
-  const attributes = recordAttributesObject(value["attributes"]);
-  const common: QueueLifecycleChangeCommon = {
-    id,
-    queueId,
-    changedAt,
-    ...(attributes === undefined ? {} : { attributes }),
-  };
-  if (type === "queue.lifecycle.cleared") {
-    const itemsCleared = value["itemsCleared"];
-    if (!isFiniteNumber(itemsCleared)) return null;
-    return { ...common, type, itemsCleared };
-  }
-  return { ...common, type };
-};
+): QueueLifecycleChange | null =>
+  nullable(
+    recordValue(value).pipe(
+      Option.flatMap((raw) =>
+        raw["type"] !== type
+          ? Option.none<QueueLifecycleChange>()
+          : Option.all({
+              id: stringValue(raw["id"]),
+              queueId: stringValue(raw["queueId"]),
+              changedAt: numberValue(raw["changedAt"]),
+            }).pipe(
+              Option.flatMap((common): Option.Option<QueueLifecycleChange> => {
+                const attributes = recordAttributesObject(raw["attributes"]);
+                const base = {
+                  ...common,
+                  ...(attributes === undefined ? {} : { attributes }),
+                };
+                return type === "queue.lifecycle.cleared"
+                  ? numberValue(raw["itemsCleared"]).pipe(
+                      Option.map((itemsCleared): QueueLifecycleChange => ({
+                        ...base,
+                        type,
+                        itemsCleared,
+                      })),
+                    )
+                  : Option.some<QueueLifecycleChange>({ ...base, type });
+              }),
+            ),
+      ),
+    ),
+  );
 
 const recordToQueueLifecycleChange = (
   record: RuntimeRecord,
@@ -906,31 +915,30 @@ const recordToQueueLifecycleChange = (
 const decodeQueueDedupeKeyChangeValue = (
   type: QueueDedupeKeyChangeType,
   value: unknown,
-): QueueDedupeKeyChange | null => {
-  if (!isRecord(value)) return null;
-  if (value["type"] !== type) return null;
-  const id = value["id"];
-  const queueId = value["queueId"];
-  const key = value["key"];
-  const changedAt = value["changedAt"];
-  if (
-    !isString(id) ||
-    !isString(queueId) ||
-    !isString(key) ||
-    !isFiniteNumber(changedAt)
-  ) {
-    return null;
-  }
-  const attributes = recordAttributesObject(value["attributes"]);
-  return {
-    id,
-    queueId,
-    key,
-    changedAt,
-    type,
-    ...(attributes === undefined ? {} : { attributes }),
-  };
-};
+): QueueDedupeKeyChange | null =>
+  nullable(
+    recordValue(value).pipe(
+      Option.flatMap((raw) =>
+        raw["type"] !== type
+          ? Option.none<QueueDedupeKeyChange>()
+          : Option.all({
+              id: stringValue(raw["id"]),
+              queueId: stringValue(raw["queueId"]),
+              key: stringValue(raw["key"]),
+              changedAt: numberValue(raw["changedAt"]),
+            }).pipe(
+              Option.map((fields) => {
+                const attributes = recordAttributesObject(raw["attributes"]);
+                return {
+                  ...fields,
+                  type,
+                  ...(attributes === undefined ? {} : { attributes }),
+                };
+              }),
+            ),
+      ),
+    ),
+  );
 
 const recordToQueueDedupeKeyChange = (
   record: RuntimeRecord,
@@ -944,70 +952,60 @@ const recordToQueueDedupeKeyChange = (
 
 const decodeQueueRateLimitExceededFactValue = (
   value: unknown,
-): QueueRateLimitExceededFact | null => {
-  if (!isRecord(value)) return null;
-  if (value["type"] !== "queue.ratelimit.exceeded") return null;
-  const id = value["id"];
-  const queueId = value["queueId"];
-  const entryId = value["entryId"];
-  const occurredAt = value["occurredAt"];
-  const limitKey = value["limitKey"];
-  const algorithm = value["algorithm"];
-  const limit = value["limit"];
-  const tokens = value["tokens"];
-  const windowMs = value["windowMs"];
-  const outcome = value["outcome"];
-  const delayMs = value["delayMs"];
-  const remaining = value["remaining"];
-  const resetAfterMs = value["resetAfterMs"];
-  if (
-    !isString(id) ||
-    !isString(queueId) ||
-    !isString(entryId) ||
-    !isFiniteNumber(occurredAt) ||
-    !isString(limitKey) ||
-    (algorithm !== "fixed-window" && algorithm !== "token-bucket") ||
-    !isFiniteNumber(limit) ||
-    !isFiniteNumber(tokens) ||
-    !isFiniteNumber(windowMs) ||
-    (outcome !== "delayed" && outcome !== "rejected") ||
-    !isFiniteNumber(delayMs) ||
-    !isFiniteNumber(remaining) ||
-    !isFiniteNumber(resetAfterMs)
-  ) {
-    return null;
-  }
-  const retryAfterMs = value["retryAfterMs"];
-  if (retryAfterMs !== undefined && !isFiniteNumber(retryAfterMs)) return null;
-  const error = value["error"];
-  if (error !== undefined && !isString(error)) return null;
-  const key = value["key"];
-  if (key !== undefined && !isString(key)) return null;
-  const priority = value["priority"];
-  if (priority !== undefined && !isQueuePriority(priority)) return null;
-  const attributes = recordAttributesObject(value["attributes"]);
-  return {
-    id,
-    queueId,
-    entryId,
-    type: "queue.ratelimit.exceeded",
-    occurredAt,
-    limitKey,
-    algorithm,
-    limit,
-    tokens,
-    windowMs,
-    outcome,
-    delayMs,
-    remaining,
-    resetAfterMs,
-    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
-    ...(error === undefined ? {} : { error }),
-    ...(key === undefined ? {} : { key }),
-    ...(priority === undefined ? {} : { priority }),
-    ...(attributes === undefined ? {} : { attributes }),
-  };
-};
+): QueueRateLimitExceededFact | null =>
+  nullable(
+    recordValue(value).pipe(
+      Option.flatMap((raw) =>
+        raw["type"] !== "queue.ratelimit.exceeded"
+          ? Option.none<QueueRateLimitExceededFact>()
+          : Option.all({
+              id: stringValue(raw["id"]),
+              queueId: stringValue(raw["queueId"]),
+              entryId: stringValue(raw["entryId"]),
+              occurredAt: numberValue(raw["occurredAt"]),
+              limitKey: stringValue(raw["limitKey"]),
+              algorithm: valueWhen(
+                raw["algorithm"],
+                (algorithm): algorithm is QueueRateLimitExceededFact["algorithm"] =>
+                  algorithm === "fixed-window" || algorithm === "token-bucket",
+              ),
+              limit: numberValue(raw["limit"]),
+              tokens: numberValue(raw["tokens"]),
+              windowMs: numberValue(raw["windowMs"]),
+              outcome: valueWhen(
+                raw["outcome"],
+                (outcome): outcome is QueueRateLimitExceededFact["outcome"] =>
+                  outcome === "delayed" || outcome === "rejected",
+              ),
+              delayMs: numberValue(raw["delayMs"]),
+              remaining: numberValue(raw["remaining"]),
+              resetAfterMs: numberValue(raw["resetAfterMs"]),
+            }).pipe(
+              Option.flatMap((required) =>
+                Option.all({
+                  retryAfterMs: optionalValue(raw["retryAfterMs"], isFiniteNumber),
+                  error: optionalValue(raw["error"], isString),
+                  key: optionalValue(raw["key"], isString),
+                  priority: optionalValue(raw["priority"], isQueuePriority),
+                }).pipe(
+                  Option.map(({ error, key, priority, retryAfterMs }) => {
+                    const attributes = recordAttributesObject(raw["attributes"]);
+                    return {
+                      ...required,
+                      type: "queue.ratelimit.exceeded" as const,
+                      ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+                      ...(error === undefined ? {} : { error }),
+                      ...(key === undefined ? {} : { key }),
+                      ...(priority === undefined ? {} : { priority }),
+                      ...(attributes === undefined ? {} : { attributes }),
+                    };
+                  }),
+                ),
+              ),
+            ),
+      ),
+    ),
+  );
 
 const recordToQueueRateLimitExceededFact = (
   record: RuntimeRecord,
@@ -1025,70 +1023,54 @@ const recordToQueueRateLimitExceededFact = (
 
 const entryPredicates = (
   query: QueueEntryQuery | undefined,
-): RuntimeRecordPredicate[] => {
-  const preds: RuntimeRecordPredicate[] = [
+): RuntimeRecordPredicate[] => [
     ProcessType.equals(QUEUE_RESOURCE_PROCESS_TYPE),
     SubjectType.equals(QUEUE_ENTRY_SUBJECT_TYPE),
+    ...(query?.queueId === undefined ? [] : [ProcessId.equals(query.queueId)]),
+    ...(query?.types === undefined || query.types.length === 0
+      ? []
+      : [Type.in(query.types)]),
+    ...(query?.entryId === undefined ? [] : [SubjectId.equals(query.entryId)]),
+    ...(query?.key === undefined ? [] : [Key.equals(query.key)]),
+    ...(query?.batchId === undefined ? [] : [IndexA.equals(query.batchId)]),
+    ...(query?.releaseId === undefined
+      ? []
+      : [IndexB.equals(query.releaseId)]),
   ];
-  if (query?.queueId !== undefined) preds.push(ProcessId.equals(query.queueId));
-  if (query?.types !== undefined && query.types.length > 0) {
-    preds.push(Type.in(query.types));
-  }
-  if (query?.entryId !== undefined) {
-    preds.push(SubjectId.equals(query.entryId));
-  }
-  if (query?.key !== undefined) preds.push(Key.equals(query.key));
-  if (query?.batchId !== undefined) preds.push(IndexA.equals(query.batchId));
-  if (query?.releaseId !== undefined) {
-    preds.push(IndexB.equals(query.releaseId));
-  }
-  return preds;
-};
 
 const lifecyclePredicates = (
   query: QueueLifecycleQuery | undefined,
-): RuntimeRecordPredicate[] => {
-  const preds: RuntimeRecordPredicate[] = [
+): RuntimeRecordPredicate[] => [
     ProcessType.equals(QUEUE_RESOURCE_PROCESS_TYPE),
     SubjectType.equals(QUEUE_LIFECYCLE_SUBJECT_TYPE),
+    ...(query?.queueId === undefined ? [] : [ProcessId.equals(query.queueId)]),
+    ...(query?.types === undefined || query.types.length === 0
+      ? []
+      : [Type.in(query.types)]),
   ];
-  if (query?.queueId !== undefined) preds.push(ProcessId.equals(query.queueId));
-  if (query?.types !== undefined && query.types.length > 0) {
-    preds.push(Type.in(query.types));
-  }
-  return preds;
-};
 
 const dedupePredicates = (
   query: QueueDedupeKeyQuery | undefined,
-): RuntimeRecordPredicate[] => {
-  const preds: RuntimeRecordPredicate[] = [
+): RuntimeRecordPredicate[] => [
     ProcessType.equals(QUEUE_RESOURCE_PROCESS_TYPE),
     SubjectType.equals(QUEUE_DEDUPE_KEY_SUBJECT_TYPE),
+    ...(query?.queueId === undefined ? [] : [ProcessId.equals(query.queueId)]),
+    ...(query?.key === undefined ? [] : [Key.equals(query.key)]),
+    ...(query?.types === undefined || query.types.length === 0
+      ? []
+      : [Type.in(query.types)]),
   ];
-  if (query?.queueId !== undefined) preds.push(ProcessId.equals(query.queueId));
-  if (query?.key !== undefined) preds.push(Key.equals(query.key));
-  if (query?.types !== undefined && query.types.length > 0) {
-    preds.push(Type.in(query.types));
-  }
-  return preds;
-};
 
 const rateLimitPredicates = (
   query: QueueRateLimitQuery | undefined,
-): RuntimeRecordPredicate[] => {
-  const preds: RuntimeRecordPredicate[] = [
+): RuntimeRecordPredicate[] => [
     ProcessType.equals(QUEUE_RESOURCE_PROCESS_TYPE),
     SubjectType.equals(QUEUE_RATELIMIT_SUBJECT_TYPE),
     Type.in(queueRateLimitExceededFactTypes),
+    ...(query?.queueId === undefined ? [] : [ProcessId.equals(query.queueId)]),
+    ...(query?.entryId === undefined ? [] : [SubjectId.equals(query.entryId)]),
+    ...(query?.limitKey === undefined ? [] : [Key.equals(query.limitKey)]),
   ];
-  if (query?.queueId !== undefined) preds.push(ProcessId.equals(query.queueId));
-  if (query?.entryId !== undefined) {
-    preds.push(SubjectId.equals(query.entryId));
-  }
-  if (query?.limitKey !== undefined) preds.push(Key.equals(query.limitKey));
-  return preds;
-};
 
 // ============================================================================
 // Read projections
@@ -1097,54 +1079,42 @@ const rateLimitPredicates = (
 const queueEntryFactsFromRecords = (
   records: ReadonlyArray<RuntimeRecord>,
   query: QueueEntryQuery | undefined,
-): QueueEntryFact[] => {
-  const out: QueueEntryFact[] = [];
-  for (const record of records) {
-    const fact = recordToQueueEntryFact(record);
-    if (fact === null) continue;
-    out.push(fact);
-  }
-  return applyQueryOpts(out, query?.opts, (fact) => fact.occurredAt);
-};
+): QueueEntryFact[] =>
+  applyQueryOpts(
+    filterMapNullable(records, recordToQueueEntryFact),
+    query?.opts,
+    (fact) => fact.occurredAt,
+  );
 
 const queueLifecycleChangesFromRecords = (
   records: ReadonlyArray<RuntimeRecord>,
   query: QueueLifecycleQuery | undefined,
-): QueueLifecycleChange[] => {
-  const out: QueueLifecycleChange[] = [];
-  for (const record of records) {
-    const change = recordToQueueLifecycleChange(record);
-    if (change === null) continue;
-    out.push(change);
-  }
-  return applyQueryOpts(out, query?.opts, (change) => change.changedAt);
-};
+): QueueLifecycleChange[] =>
+  applyQueryOpts(
+    filterMapNullable(records, recordToQueueLifecycleChange),
+    query?.opts,
+    (change) => change.changedAt,
+  );
 
 const queueDedupeKeyChangesFromRecords = (
   records: ReadonlyArray<RuntimeRecord>,
   query: QueueDedupeKeyQuery | undefined,
-): QueueDedupeKeyChange[] => {
-  const out: QueueDedupeKeyChange[] = [];
-  for (const record of records) {
-    const change = recordToQueueDedupeKeyChange(record);
-    if (change === null) continue;
-    out.push(change);
-  }
-  return applyQueryOpts(out, query?.opts, (change) => change.changedAt);
-};
+): QueueDedupeKeyChange[] =>
+  applyQueryOpts(
+    filterMapNullable(records, recordToQueueDedupeKeyChange),
+    query?.opts,
+    (change) => change.changedAt,
+  );
 
 const queueRateLimitExceededFactsFromRecords = (
   records: ReadonlyArray<RuntimeRecord>,
   query: QueueRateLimitQuery | undefined,
-): QueueRateLimitExceededFact[] => {
-  const out: QueueRateLimitExceededFact[] = [];
-  for (const record of records) {
-    const fact = recordToQueueRateLimitExceededFact(record);
-    if (fact === null) continue;
-    out.push(fact);
-  }
-  return applyQueryOpts(out, query?.opts, (fact) => fact.occurredAt);
-};
+): QueueRateLimitExceededFact[] =>
+  applyQueryOpts(
+    filterMapNullable(records, recordToQueueRateLimitExceededFact),
+    query?.opts,
+    (fact) => fact.occurredAt,
+  );
 
 // ============================================================================
 // Facet
