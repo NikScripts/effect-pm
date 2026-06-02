@@ -87,6 +87,48 @@ See also [`process-manager-endpoints.md`](./process-manager-endpoints.md).
 
 ---
 
+## Live log transport
+
+`pm watch` and existing browser compatibility paths can still consume the
+localhost HTTP NDJSON log stream. New Effect-native integrations should prefer
+`LogTransportRpc` for live logs:
+
+```typescript
+import { LogTransportRpc } from "@nikscripts/effect-pm";
+import { Effect, Layer, Stream } from "effect";
+import { RpcClient } from "effect/unstable/rpc";
+
+const rpcClient = yield* RpcClient.make(LogTransportRpc.rpc).pipe(
+  Effect.provide(/* Effect RPC client protocol layer */),
+);
+
+const entries = yield* LogTransportRpc.client(rpcClient).stream({
+  follow: true,
+  preludeLines: 100,
+  scope: {
+    _tag: "process",
+    groupId: "@app/Billing",
+    processId: "@app/Billing/SyncInvoices",
+  },
+}).pipe(Stream.runCollect);
+```
+
+On the group side, compose the RPC server protocol at the edge and keep the log
+relay as the source of live events:
+
+```typescript
+const LogRpcLayer = LogTransportRpc.serverLayer().pipe(
+  Layer.provide(/* Effect RPC server protocol layer */),
+  Layer.provide(Logs.relayLayer),
+);
+```
+
+Durable history remains storage-backed (`LogStore` / `pm logs`). `LogTransportRpc`
+streams the in-memory relay snapshot plus live relay events; it does not replace
+storage queries.
+
+---
+
 ## In-process client: `ProcessManager.connect`
 
 For app/CI code (not the CLI):

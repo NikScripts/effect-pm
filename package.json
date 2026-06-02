@@ -109,6 +109,11 @@
       "import": "./dist/ControlTransportRpc.mjs",
       "require": "./dist/ControlTransportRpc.js"
     },
+    "./LogTransportRpc": {
+      "types": "./dist/LogTransportRpc.d.ts",
+      "import": "./dist/LogTransportRpc.mjs",
+      "require": "./dist/LogTransportRpc.js"
+    },
     "./CommandAuth": {
       "types": "./dist/CommandAuth.d.ts",
       "import": "./dist/CommandAuth.mjs",
