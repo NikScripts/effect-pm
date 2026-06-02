@@ -342,6 +342,8 @@ describe("queue emit helpers — persistence", () => {
         id: legacyId,
         type: "Queue.Entry.Enqueued",
         occurredAt: DateTime.makeUnsafe(t(0)),
+        createdAt: DateTime.makeUnsafe(t(0)),
+        runId: "legacy-decode-test",
         processType: "QueueResource",
         processId: queueId,
         subjectType: "QueueEntry",

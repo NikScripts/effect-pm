@@ -201,7 +201,7 @@ describe("QueueResourceStore — static optional emitters", () => {
       (_input: unknown) => Effect.void,
       { batch: (_inputs: ReadonlyArray<unknown>) => Effect.void },
     );
-    const failingFacet: QueueResourceStore.Type = {
+    const failingFacet = {
       Entry: {
         Enqueued: blockedEmit,
         Started: noopEmit,
@@ -250,7 +250,7 @@ describe("QueueResourceStore — static optional emitters", () => {
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
-          Layer.succeed(QueueResourceStore, failingFacet),
+          Layer.succeed(QueueResourceStore, failingFacet as QueueResourceStore.Type),
           Logger.layer([captureLogger], { mergeWithExisting: false }),
         ),
       ),

@@ -546,7 +546,7 @@ const materializeField = (
   field: unknown,
   input: unknown,
   current: Readonly<Record<string, JsonValue>>,
-): Effect.Effect<JsonValue> => {
+): Effect.Effect<JsonValue | undefined> => {
   const selector: StateFieldSelectorMetadata | undefined =
     getStateFieldSelectorMetadata(field);
   if (selector !== undefined) {
@@ -582,7 +582,7 @@ const materializeField = (
     }
     const raw = input[key];
     if (raw === undefined) {
-      return Effect.succeed(undefined);
+      return Effect.sync((): JsonValue | undefined => undefined);
     }
     return Effect.sync(() => toJsonValue(field.make(raw)));
   }
