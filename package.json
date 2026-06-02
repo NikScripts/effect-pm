@@ -109,6 +109,16 @@
       "import": "./dist/ControlTransportRpc.mjs",
       "require": "./dist/ControlTransportRpc.js"
     },
+    "./Terminal": {
+      "types": "./dist/Terminal.d.ts",
+      "import": "./dist/Terminal.mjs",
+      "require": "./dist/Terminal.js"
+    },
+    "./TerminalRpc": {
+      "types": "./dist/TerminalRpc.d.ts",
+      "import": "./dist/TerminalRpc.mjs",
+      "require": "./dist/TerminalRpc.js"
+    },
     "./CommandAuth": {
       "types": "./dist/CommandAuth.d.ts",
       "import": "./dist/CommandAuth.mjs",

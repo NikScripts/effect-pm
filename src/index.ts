@@ -50,6 +50,7 @@
  * **`@nikscripts/effect-pm/ResourceConfigure`**, **`@nikscripts/effect-pm/ProcessGroup`**,
  * **`@nikscripts/effect-pm/ProcessStore`**, **`@nikscripts/effect-pm/RuntimeStorage`**,
  * **`@nikscripts/effect-pm/CommandAuth`**, **`@nikscripts/effect-pm/ProcessManager`**,
+ * **`@nikscripts/effect-pm/Terminal`**, **`@nikscripts/effect-pm/TerminalRpc`**,
  * **`@nikscripts/effect-pm/Logs`**, **`@nikscripts/effect-pm/ControlService`**,
  * and **`@nikscripts/effect-pm/ControlTransportRpc`**.
  *
@@ -209,6 +210,29 @@ export type {
   ControlTransportRpcApi,
   ControlTransportRpcServerConfig,
 } from "./ControlTransportRpc";
+export {
+  Terminal,
+  TerminalAuditMetadataSchema,
+  OpenTerminalSessionSchema,
+  TerminalSessionIdSchema,
+  TerminalEventSchema,
+  TerminalSessionErrorSchema,
+  TerminalSessionError,
+  TerminalSessionService,
+} from "./Terminal";
+export type {
+  OpenTerminalSession,
+  TerminalAuditMetadata,
+  TerminalSessionId,
+  TerminalEvent,
+  TerminalSessionPort,
+  TerminalSessionHandle,
+  TerminalSessionServiceShape,
+} from "./Terminal";
+export {
+  TerminalRpc,
+  TerminalRpcGroup,
+} from "./TerminalRpc";
 
 // Query / Runtime Storage
 export { Query } from "./Query";
