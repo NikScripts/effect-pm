@@ -250,7 +250,7 @@ describe("QueueResourceStore — static optional emitters", () => {
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
-          Layer.succeed(QueueResourceStore, failingFacet as QueueResourceStore.Type),
+          Layer.succeed(QueueResourceStore, failingFacet as ProcessStore.Type.Shape<typeof QueueResourceStore>),
           Logger.layer([captureLogger], { mergeWithExisting: false }),
         ),
       ),
@@ -570,7 +570,7 @@ describe("QueueResourceStore — phantom type accessors", () => {
           batch: (_inputs: ReadonlyArray<unknown>) => Effect.void,
         },
       );
-      const emitShape: QueueResourceStore.EmitType = {
+      const emitShape: ProcessStore.Type.Emit<typeof QueueResourceStore> = {
         Entry: {
           Enqueued: noopEmit,
           Started: noopEmit,
@@ -599,7 +599,7 @@ describe("QueueResourceStore — phantom type accessors", () => {
           Exceeded: noopEmit,
         },
       };
-      const fullShape: QueueResourceStore.Type = {
+      const fullShape: ProcessStore.Type.Shape<typeof QueueResourceStore> = {
         ...emitShape,
         entries: () => Effect.succeed([]),
         entriesByKey: () => Effect.succeed([]),
@@ -607,7 +607,7 @@ describe("QueueResourceStore — phantom type accessors", () => {
         dedupeKeys: () => Effect.succeed([]),
         rateLimits: () => Effect.succeed([]),
       };
-      const boundShape: QueueResourceStore.IdentifierType = {
+      const boundShape: ProcessStore.Type.Identifier<typeof QueueResourceStore> = {
         entries: () => Effect.succeed([]),
         entriesByKey: () => Effect.succeed([]),
         lifecycle: () => Effect.succeed([]),

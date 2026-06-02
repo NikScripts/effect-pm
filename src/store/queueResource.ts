@@ -913,9 +913,7 @@ const queueRateLimitExceededFactsFromRecords = (
  *
  * @public
  */
-export class QueueResourceStore extends ProcessStore.Service<
-  QueueResourceStore
->()(
+export const QueueResourceStore = ProcessStore.Service(
   "@nikscripts/effect-pm/store/queueResource/QueueResourceStore",
   QueueResourceTelemetry,
   ProcessStore.query((s) => ({
@@ -949,7 +947,9 @@ export class QueueResourceStore extends ProcessStore.Service<
     rateLimits: (query?: Omit<QueueRateLimitQuery, "queueId">) =>
       readRateLimits(s, { ...query, queueId }),
   })),
-) {}
+);
+
+export type QueueResourceStore = typeof QueueResourceStore.Identifier;
 
 const entryFactInput = (
   fact: QueueEntryFact,
@@ -1206,26 +1206,3 @@ const readRateLimits = (
       ),
     );
 
-/**
- * Type accessors merged onto {@link QueueResourceStore} via
- * declaration merging:
- *
- * - `QueueResourceStore.Type` — full service shape (record + read).
- * - `QueueResourceStore.EmitType` — record-section emit shape only.
- *
- * Use these to type custom mocks supplied through `Layer.succeed` /
- * `Effect.provideService`:
- *
- * ```ts
- * const mock: QueueResourceStore.Type = { ... };
- * ```
- *
- * @public
- */
-export declare namespace QueueResourceStore {
-  export type Type = ProcessStore.Service.Type<typeof QueueResourceStore>;
-  export type EmitType = ProcessStore.Service.EmitType<typeof QueueResourceStore>;
-  export type IdentifierType = ProcessStore.Service.IdentifierType<
-    typeof QueueResourceStore
-  >;
-}

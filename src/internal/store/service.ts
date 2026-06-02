@@ -23,13 +23,10 @@ import {
   type TelemetryPart,
 } from "./telemetry";
 
-const RECORD_TAG = "ProcessStore/record" as const;
 const TELEMETRY_TAG = "ProcessStore/telemetry" as const;
 const QUERY_TAG = "ProcessStore/query" as const;
 const FOR_TAG = "ProcessStore/for" as const;
 const IDENTIFIER_FACTORY = Symbol.for("@nikscripts/effect-pm/ProcessStore/identifierFactory");
-
-type PersistEffect = Effect.Effect<void, ProcessStoreWriteError>;
 
 type EmitEffect = Effect.Effect<void, ProcessStoreWriteError>;
 type EmitFunction = (...args: ReadonlyArray<unknown>) => EmitEffect;
@@ -42,10 +39,6 @@ export type ProcessStoreIdentifierInput =
   | string
   | { readonly id: string };
 
-type EmitMethod<F> = F extends (...args: infer A) => unknown
-  ? (...args: A) => EmitEffect
-  : never;
-
 /**
  * Type-only hooks on the facet constructor; never read at runtime.
  *
@@ -56,28 +49,6 @@ export type ProcessStoreFacetBrand<EmitApi, QueryApi, IdentifierApi> = {
   readonly QueryApi?: QueryApi;
   readonly IdentifierApi?: IdentifierApi;
 };
-
-/**
- * Per-method factory map handed to {@link processStoreRecord}.
- *
- * @remarks
- * Each value is a function `(s) => method` so the builder can read the
- * record's keys from the object literal at module load time without
- * invoking the methods themselves. The methods only ever execute at
- * layer-construction time, with the real spine bound to `s`.
- *
- * @internal
- */
-export type ProcessStoreRecordFactories<EmitApi> = {
-  readonly [K in keyof EmitApi]: (s: ProcessStoreSpine) => EmitApi[K];
-};
-
-/** @internal */
-export interface ProcessStoreRecordSection<EmitApi> {
-  readonly _tag: typeof RECORD_TAG;
-  readonly fn: (s: ProcessStoreSpine) => EmitApi;
-  readonly emitKeys: ReadonlyArray<keyof EmitApi & string>;
-}
 
 /** @internal */
 export interface ProcessStoreQuerySection<QueryApi> {
@@ -92,11 +63,6 @@ export interface ProcessStoreForSection<IdentifierApi> {
 }
 
 type ProcessStoreFacetAnySection =
-  | {
-      readonly _tag: typeof RECORD_TAG;
-      readonly fn: (s: ProcessStoreSpine) => Record<string, unknown>;
-      readonly emitKeys: ReadonlyArray<string>;
-    }
   | {
       readonly _tag: typeof TELEMETRY_TAG;
       readonly fn: (s: ProcessStoreSpine) => TelemetryNestedEmitApi;
@@ -114,9 +80,6 @@ type ProcessStoreFacetAnySection =
       readonly fn: (identifier: string, s: ProcessStoreSpine) => Record<string, unknown>;
     };
 
-type ProcessStoreRecordSectionOf<Sections extends ReadonlyArray<ProcessStoreFacetAnySection>> =
-  Extract<Sections[number], { readonly _tag: typeof RECORD_TAG }>;
-
 type ProcessStoreQuerySectionOf<Sections extends ReadonlyArray<ProcessStoreFacetAnySection>> =
   Extract<Sections[number], { readonly _tag: typeof QUERY_TAG }>;
 
@@ -128,17 +91,11 @@ type ProcessStoreTelemetrySectionOf<
 > = Extract<Sections[number], { readonly _tag: typeof TELEMETRY_TAG }>;
 
 type ProcessStoreEmitApiOf<Sections extends ReadonlyArray<ProcessStoreFacetAnySection>> =
-  [ProcessStoreRecordSectionOf<Sections>] extends [never]
-    ? ProcessStoreTelemetrySectionOf<Sections> extends ProcessStoreTelemetrySection<
-      infer EmitApi extends object
-    >
-      ? EmitApi
-      : never
-    : ProcessStoreRecordSectionOf<Sections> extends ProcessStoreRecordSection<
-      infer EmitApi extends Record<string, unknown>
-    >
-      ? EmitApi
-      : never;
+  ProcessStoreTelemetrySectionOf<Sections> extends ProcessStoreTelemetrySection<
+    infer EmitApi extends object
+  >
+    ? EmitApi
+    : never;
 
 type ProcessStoreQueryApiOf<Sections extends ReadonlyArray<ProcessStoreFacetAnySection>> =
   ProcessStoreQuerySectionOf<Sections> extends ProcessStoreQuerySection<
@@ -158,43 +115,6 @@ type ProcessStoreIdentifierApiOf<Sections extends ReadonlyArray<ProcessStoreFace
 
 type IdentifierFactory<IdentifierApi> = {
   readonly [IDENTIFIER_FACTORY]: (identifier: string) => IdentifierApi;
-};
-
-type EmitApiFromFactories<
-  Factories extends Record<string, (s: ProcessStoreSpine) => unknown>,
-> = { readonly [K in keyof Factories]: ReturnType<Factories[K]> };
-
-/**
- * Declares the record (write) section of a facet.
- *
- * @remarks
- * Pass an object literal whose keys are the emit method names and whose
- * values are factories of shape `(s: ProcessStoreSpine) => method`. The
- * builder reads `Object.keys(...)` to discover the emit keys (used to
- * attach the optional static emitters) and binds each factory against
- * the real spine at layer-construction time.
- *
- * @internal
- */
-export const processStoreRecord = <
-  const Factories extends Record<string, (s: ProcessStoreSpine) => unknown>,
->(
-  factories: Factories,
-): ProcessStoreRecordSection<EmitApiFromFactories<Factories>> => {
-  type EmitApi = EmitApiFromFactories<Factories>;
-  const emitKeys = Object.keys(factories) as Array<keyof EmitApi & string>;
-  const fn = (s: ProcessStoreSpine): EmitApi => {
-    const out: { [key: string]: unknown } = {};
-    for (const [key, factory] of Object.entries(factories)) {
-      out[key] = factory(s);
-    }
-    return out as EmitApi;
-  };
-  return {
-    _tag: RECORD_TAG,
-    fn,
-    emitKeys,
-  };
 };
 
 /** @internal */
@@ -221,11 +141,6 @@ const buildStore = Effect.gen(function* () {
   const now = yield* Clock.currentTimeMillis;
   return makeProcessStoreSpine(storage, makeRunId(now));
 });
-
-/** @internal */
-export type OptionalEmitStatics<EmitApi> = {
-  readonly [K in keyof EmitApi & string]: EmitMethod<EmitApi[K]>;
-};
 
 /** @internal */
 export type ProcessStoreFacetClass<
@@ -382,23 +297,6 @@ const hasIdentifierFactory = <IdentifierApi extends Record<string, unknown>>(
 ): service is IdentifierFactory<IdentifierApi> =>
   typeof service[IDENTIFIER_FACTORY] === "function";
 
-const callPersistMethod = <Api extends Record<string, unknown>>(
-  api: Api,
-  methodName: keyof Api & string,
-  args: ReadonlyArray<unknown>,
-): PersistEffect => {
-  const method = api[methodName];
-  if (typeof method !== "function") {
-    return Effect.die(`ProcessStore method missing: ${String(methodName)}`);
-  }
-  return Reflect.apply(method, api, args) satisfies PersistEffect;
-};
-
-const isCompleteEmitStatics = <EmitApi extends Record<string, unknown>>(
-  out: { [P in keyof EmitApi & string]?: EmitMethod<EmitApi[P]> },
-  keys: ReadonlyArray<keyof EmitApi & string>,
-): out is OptionalEmitStatics<EmitApi> => keys.every((key) => out[key] !== undefined);
-
 const buildNestedEmitStatics = <
   Self,
   Id extends string,
@@ -440,29 +338,6 @@ const buildNestedEmitStatics = <
         );
   }
   return out as TelemetryNestedEmitApi;
-};
-
-const buildEmitStatics = <
-  Self,
-  Id extends string,
-  EmitApi extends Record<string, unknown>,
-  QueryApi,
->(
-  id: Id,
-  emitKeys: ReadonlyArray<keyof EmitApi & string>,
-  Base: Context.ServiceClass<Self, Id, EmitApi & QueryApi>,
-): OptionalEmitStatics<EmitApi> => {
-  const out: { [K in keyof EmitApi & string]?: EmitMethod<EmitApi[K]> } = {};
-  for (const emitKey of emitKeys) {
-    out[emitKey] = ((...args: ReadonlyArray<unknown>) =>
-      optionalFacetEmit(Base, (api): PersistEffect =>
-        callPersistMethod(api, emitKey, args),
-      )) as EmitMethod<EmitApi[typeof emitKey]>;
-  }
-  if (!isCompleteEmitStatics(out, emitKeys)) {
-    throw new Error(`ProcessStore facet ${id}: incomplete emit statics`);
-  }
-  return out satisfies OptionalEmitStatics<EmitApi>;
 };
 
 const assembleFacetClass = <
@@ -579,7 +454,6 @@ const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> =
     type QueryApi = ProcessStoreQueryApiOf<Sections>;
     type IdentifierApi = ProcessStoreIdentifierApiOf<Sections>;
 
-    let recordSection: ProcessStoreRecordSection<Record<string, unknown>> | undefined;
     let telemetrySection:
       | ProcessStoreTelemetrySection<TelemetryNestedEmitApi>
       | undefined;
@@ -588,9 +462,6 @@ const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> =
 
     for (const section of sections) {
       switch (section._tag) {
-        case RECORD_TAG:
-          recordSection = section;
-          break;
         case TELEMETRY_TAG:
           telemetrySection = section;
           break;
@@ -606,25 +477,14 @@ const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> =
     if (querySection === undefined) {
       throw new Error(`ProcessStore facet ${id}: query section is required`);
     }
-    if (recordSection !== undefined && telemetrySection !== undefined) {
-      throw new Error(
-        `ProcessStore facet ${id}: use record or telemetry, not both`,
-      );
-    }
-    if (recordSection === undefined && telemetrySection === undefined) {
-      throw new Error(
-        `ProcessStore facet ${id}: record or telemetry section is required`,
-      );
+    if (telemetrySection === undefined) {
+      throw new Error(`ProcessStore facet ${id}: telemetry section is required`);
     }
 
     const make: Effect.Effect<EmitApi & QueryApi, never, RuntimeStorage> = Effect.gen(
       function* () {
         const s = yield* buildStore;
-        const emitApi = (
-          recordSection !== undefined
-            ? recordSection.fn(s)
-            : telemetrySection!.fn(s)
-        ) as EmitApi;
+        const emitApi = telemetrySection.fn(s) as EmitApi;
         const queryApi = querySection.fn(s) as QueryApi;
         const service = mergeServiceShape(emitApi, queryApi);
         if (forSection === undefined) {
@@ -639,14 +499,9 @@ const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> =
 
     const Base = Context.Service<Self, EmitApi & QueryApi>()(id, { make });
 
-    const emitStatics = (
-      telemetrySection !== undefined
-        ? buildNestedEmitStatics(telemetrySection.emitPaths, Base)
-        : buildEmitStatics(
-            id,
-            recordSection!.emitKeys as ReadonlyArray<keyof EmitApi & string>,
-            Base,
-          )
+    const emitStatics = buildNestedEmitStatics(
+      telemetrySection.emitPaths,
+      Base,
     ) as EmitApi;
 
     const layerRuntimeStorage = Layer.effect(Base, make);

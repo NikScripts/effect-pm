@@ -15,19 +15,19 @@
  *
  * | Concern | Where |
  * |--------|-------|
- * | Wire type | `log.entry` |
- * | Static emit | `record(groupId, entryId, entry)`, `recordBatch(groupId, rows)` |
+ * | Wire type | `Log.Entry.Recorded` |
+ * | Static emit | `LogStore.Entry.Recorded({ entryId, entry })` inside `LogScope.run({ groupId }, ...)` |
+ * | Batch emit | `LogStore.Entry.Recorded.batch(rows)` inside `LogScope.run({ groupId }, ...)` |
  * | Reads (instance) | `load(query)` (returns entries), `query(logQuery)` (replays through {@link replayLogQueryResults}) |
  *
  * ## Storage shape
  *
  * Each line writes one {@link RuntimeRecord} with:
  *
- * - `type` = `log.entry`
- * - `processType` = `log`
- * - `processId` = the supplied `groupId` (log bucket)
- * - `payload` = `{ entryId, entry: { date, level, message, cause?,
- *   annotations, spans } }`
+ * - `type` = `Log.Entry.Recorded`
+ * - `processType` = `Log`
+ * - `processId` = the scope-supplied `groupId` (log bucket)
+ * - `payload` = `{ groupId, entryId, entry: ProcessManagerLogEntry }`
  *
  * Process / queue annotations stay inside `entry.annotations` so the
  * existing operator query semantics (substring filters on `processId`,
@@ -36,10 +36,10 @@
  * @module store/Log
  */
 
-import { DateTime, Effect } from "effect";
-import type { LogLevel } from "effect/LogLevel";
+import { Effect, Schema } from "effect";
 import { ProcessManagerLogAnnotationKeys } from "../LogContext";
 import type { ProcessManagerLogEntry } from "../LogEntry";
+import { LogScope } from "../LogScope";
 import type { ProcessManagerLogQuery } from "../internal/manager/logQuery";
 import {
   ProcessManagerLogQueryError,
@@ -50,133 +50,46 @@ import {
   isString,
   runtimeRecordQuery,
 } from "../internal/store/helpers";
-import { ProcessStore } from "../ProcessStore";
-import type {
-  AnalyticsEventBase,
-  ProcessStoreWriteError,
-  QueryOpts,
-} from "../ProcessStoreEvent";
+import { ProcessStore, Telemetry } from "../ProcessStore";
+import type { QueryOpts } from "../ProcessStoreEvent";
 import { ProcessId, Type } from "../Query";
 import type { RuntimeRecord, RuntimeStorageOperationalError } from "../RuntimeStorage";
 
-/**
- * Structured log line persisted by {@link LogStore} for operator
- * `pm logs` / `pm watch` history. `entityId` is an opaque log-bucket id
- * supplied by the relay (today: the PM log annotation).
- *
- * @public
- */
-export interface LogEntryRecordedEvent extends AnalyticsEventBase {
-  type: "log.entry";
-  entityType: "log";
-  log: {
-    readonly entryId: string;
-    readonly entry: {
-      readonly date: string;
-      readonly level: LogLevel;
-      readonly message: string;
-      readonly cause?: string;
-      readonly annotations: Readonly<Record<string, string>>;
-      readonly spans: ReadonlyArray<string>;
-    };
-  };
+/** Input shape for {@link LogStore.Entry.Recorded}. @public */
+export interface LogEntryRecordedInput {
+  readonly entryId: string;
+  readonly entry: ProcessManagerLogEntry;
 }
 
-/**
- * Narrows a structurally-shaped `{ type, entityType }` value to
- * {@link LogEntryRecordedEvent}.
- *
- * @public
- */
-export const isLogEntryRecorded = (
-  event: { readonly type: string; readonly entityType: string },
-): event is LogEntryRecordedEvent =>
-  event.type === "log.entry" && event.entityType === "log";
+const LOG_ENTRY_WIRE = "Log.Entry.Recorded";
 
-/**
- * Service shape for {@link LogStore}.
- *
- * @public
- */
-export interface LogStoreApi {
-  readonly record: (
-    groupId: string,
-    entryId: string,
-    entry: ProcessManagerLogEntry,
-  ) => Effect.Effect<void, ProcessStoreWriteError>;
-  readonly recordBatch: (
-    groupId: string,
-    rows: ReadonlyArray<{
-      readonly entryId: string;
-      readonly entry: ProcessManagerLogEntry;
-    }>,
-  ) => Effect.Effect<void, ProcessStoreWriteError>;
-  readonly load: (
-    query: ProcessManagerLogQuery,
-  ) => Effect.Effect<
-    ReadonlyArray<ProcessManagerLogEntry>,
-    ProcessManagerLogQueryError
-  >;
-  readonly query: (
-    logQuery: ProcessManagerLogQuery,
-  ) => Effect.Effect<void, ProcessManagerLogQueryError>;
-}
+const LOG_LEVELS = [
+  "All",
+  "Fatal",
+  "Error",
+  "Warn",
+  "Info",
+  "Debug",
+  "Trace",
+  "None",
+] as const;
 
-const LOG_TYPE = "log";
-const LOG_ENTRY_TYPE = "log.entry";
+type LogLevel = (typeof LOG_LEVELS)[number];
 
-const LOG_LEVELS: ReadonlyArray<LogEntryRecordedEvent["log"]["entry"]["level"]> =
-  [
-    "All",
-    "Fatal",
-    "Error",
-    "Warn",
-    "Info",
-    "Debug",
-    "Trace",
-    "None",
-  ];
-
-const isLogLevel = (
-  value: unknown,
-): value is LogEntryRecordedEvent["log"]["entry"]["level"] =>
+const isLogLevel = (value: unknown): value is LogLevel =>
   isString(value) && LOG_LEVELS.some((level) => level === value);
 
 // ============================================================================
-// Wire codec
+// Telemetry schema
 // ============================================================================
 
-/**
- * Build a `log.entry` runtime record ready for spine create.
- *
- * @public
- */
-export const makeLogRecord = (
-  groupId: string,
-  entryId: string,
-  entry: ProcessManagerLogEntry,
-): Omit<RuntimeRecord, "runId" | "createdAt"> => {
-  const occurredAt = Date.parse(entry.date);
-  const occurredAtMs = Number.isNaN(occurredAt) ? 0 : occurredAt;
-  return {
-    id: `${groupId}-log-${entryId}`,
-    type: LOG_ENTRY_TYPE,
-    occurredAt: DateTime.makeUnsafe(occurredAtMs),
-    processType: LOG_TYPE,
-    processId: groupId,
-    payload: {
-      entryId,
-      entry: {
-        date: entry.date,
-        level: entry.level,
-        message: entry.message,
-        ...(entry.cause === undefined ? {} : { cause: entry.cause }),
-        annotations: { ...entry.annotations },
-        spans: [...entry.spans],
-      },
-    },
-  };
-};
+class LogEntryRecordedSchema extends Telemetry.Schema<LogEntryRecordedSchema>()(
+  LogScope,
+)({
+  groupId: LogScope.Schema.State.groupId,
+  entryId: Schema.String,
+  entry: Schema.Unknown,
+}) {}
 
 const decodeLogEntryPayload = (
   value: unknown,
@@ -219,8 +132,7 @@ interface LogRecordView {
 }
 
 const recordToLogView = (record: RuntimeRecord): LogRecordView | null => {
-  if (record.type !== LOG_ENTRY_TYPE) return null;
-  if (record.processType !== LOG_TYPE) return null;
+  if (record.type !== LOG_ENTRY_WIRE) return null;
   const payload = record.payload;
   if (!isRecord(payload)) return null;
   const entryId = payload["entryId"];
@@ -323,7 +235,7 @@ const loadEntries = (
 > =>
   Effect.gen(function* () {
     const opts = queryOptsFromLogQuery(query);
-    const predicates = [Type.equals(LOG_ENTRY_TYPE)];
+    const predicates = [Type.equals(LOG_ENTRY_WIRE)];
     if (query.groupId !== undefined) {
       predicates.push(ProcessId.equals(query.groupId));
     }
@@ -354,47 +266,25 @@ const queryEntries = (
 // ============================================================================
 
 /**
- * Context tag for {@link LogStoreApi}.
+ * Durable log-entry storage facet.
  *
  * @public
  */
-export class LogStore extends ProcessStore.Service<LogStore>()(
+export const LogStore = ProcessStore.Service(
   "@nikscripts/effect-pm/store/log/LogStore",
-  ProcessStore.record({
-    record:
-      (s) =>
-      (
-        groupId: string,
-        entryId: string,
-        entry: ProcessManagerLogEntry,
-      ) =>
-        s.create(makeLogRecord(groupId, entryId, entry)),
-    recordBatch:
-      (s) =>
-      (
-        groupId: string,
-        rows: ReadonlyArray<{
-          readonly entryId: string;
-          readonly entry: ProcessManagerLogEntry;
-        }>,
-      ) =>
-        s.createBatch(
-          rows.map((row) => makeLogRecord(groupId, row.entryId, row.entry)),
-        ),
-  }),
+  ProcessStore.telemetry(LogScope)(
+    Telemetry.namespace("Log"),
+    Telemetry.tag("Entry")(
+      Telemetry.event("Recorded", LogEntryRecordedSchema).pipe(
+        Telemetry.logWarning("LogStore write failed for log entry"),
+      ),
+    ),
+  ),
   ProcessStore.query((s) => ({
     load: (query: ProcessManagerLogQuery) => loadEntries(s.read, query),
     query: (logQuery: ProcessManagerLogQuery) =>
       queryEntries(s.read, logQuery),
   })),
-) {}
+);
 
-/**
- * Type accessors for {@link LogStore}.
- *
- * @public
- */
-export declare namespace LogStore {
-  export type Type = ProcessStore.Service.Type<typeof LogStore>;
-  export type EmitType = ProcessStore.Service.EmitType<typeof LogStore>;
-}
+export type LogStore = typeof LogStore.Identifier;

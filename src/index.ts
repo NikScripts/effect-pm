@@ -392,8 +392,6 @@ export {
   LogContext,
 } from "./LogContext";
 export type { ProcessManagerRunState } from "./ProcessManager";
-export type { LogEntryRecordedEvent } from "./store/log";
-export { isLogEntryRecorded } from "./store/log";
 export type {
   ProcessManagerEndpointConfigItem,
   ProcessManagerConnectionConfigMap,
@@ -438,7 +436,8 @@ export {
 } from "./RuntimeEmitContext";
 
 export { LogStore } from "./store/log";
-export type { LogStoreApi } from "./store/log";
+export type { LogEntryRecordedInput } from "./store/log";
+export { LogScope } from "./LogScope";
 export { RunResourceStore } from "./store/runResource";
 export { ProcessExecutionStore } from "./store/processExecution";
 export { ProcessLifecycleStore } from "./store/processLifecycle";
