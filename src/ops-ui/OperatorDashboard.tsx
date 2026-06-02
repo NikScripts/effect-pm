@@ -109,6 +109,7 @@ type WidgetFrameProps = {
   readonly colSpan: number;
   readonly resizing: boolean;
   readonly children: ReactNode;
+  readonly onResizeStep: (edge: "left" | "right") => void;
   readonly onResizeStart: (edge: "left" | "right", event: PointerEvent<HTMLDivElement> | MouseEvent<HTMLDivElement>) => void;
 };
 
@@ -118,6 +119,7 @@ const WidgetFrame = ({
   colSpan,
   resizing,
   children,
+  onResizeStep,
   onResizeStart,
 }: WidgetFrameProps) => {
   const {
@@ -153,14 +155,18 @@ const WidgetFrame = ({
       <div
         aria-hidden="true"
         className="pm-dashboard__resize-handle pm-dashboard__resize-handle--left"
+        onDoubleClick={() => onResizeStep("left")}
         onMouseDown={(event) => onResizeStart("left", event)}
         onPointerDown={(event) => onResizeStart("left", event)}
+        title="Drag or double-click to resize from the left"
       />
       <div
         aria-hidden="true"
         className="pm-dashboard__resize-handle pm-dashboard__resize-handle--right"
+        onDoubleClick={() => onResizeStep("right")}
         onMouseDown={(event) => onResizeStart("right", event)}
         onPointerDown={(event) => onResizeStart("right", event)}
+        title="Drag or double-click to resize from the right"
       />
       <CardHeader className="pm-dashboard__widget-header">
         <div>
@@ -352,6 +358,21 @@ const OperatorDashboardContent = ({
                 colSpan={dashboardLayout.layout[id].colSpan}
                 id={id}
                 key={id}
+                onResizeStep={(edge) => {
+                  dashboardLayout.setLayout((current) => {
+                    const ordered = sortedDashboardWidgetIds(current);
+                    const index = ordered.indexOf(id);
+                    const previousId = index > 0 ? ordered[index - 1] : undefined;
+                    if (edge === "left" && previousId !== undefined) {
+                      return resizeGridWidget(
+                        resizeGridWidget(current, previousId, current[previousId].colSpan - 1),
+                        id,
+                        current[id].colSpan + 1,
+                      );
+                    }
+                    return resizeGridWidget(current, id, current[id].colSpan + 1);
+                  });
+                }}
                 onResizeStart={(edge, event) => startResize(id, edge, event)}
                 resizing={resizingId === id}
                 widget={dashboardWidgetKinds[id]}

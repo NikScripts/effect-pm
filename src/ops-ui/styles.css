@@ -245,6 +245,12 @@ code {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
+  padding: 1.1rem 1.25rem 0.6rem;
+}
+
+.pm-dashboard__widget-header .ui-card-title {
+  margin: 0;
+  line-height: 1.2;
 }
 
 .pm-dashboard__drag-handle {
@@ -260,12 +266,23 @@ code {
   position: absolute;
   top: 0;
   z-index: 10;
-  width: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
   height: 100%;
   cursor: col-resize;
-  opacity: 0.32;
+  opacity: 0.42;
   pointer-events: auto;
   transition: opacity 160ms ease, background 160ms ease;
+}
+
+.pm-dashboard__resize-handle::after {
+  width: 0.18rem;
+  height: 3.5rem;
+  border-radius: 999px;
+  background: rgba(147, 197, 253, 0.78);
+  content: "";
 }
 
 .pm-dashboard__resize-handle--left {
@@ -279,7 +296,7 @@ code {
 .pm-dashboard__grid-widget:hover .pm-dashboard__resize-handle,
 .pm-dashboard__resize-handle:hover {
   opacity: 1;
-  background: rgba(59, 130, 246, 0.62);
+  background: rgba(59, 130, 246, 0.28);
 }
 
 .pm-dashboard__drag-indicator,
