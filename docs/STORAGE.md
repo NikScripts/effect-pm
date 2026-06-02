@@ -72,7 +72,7 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 | `RunResource.Run.Started` / `.Completed` / `.Failed` | `RunResource` → `RunResourceStore.Run.*` | `yield* RunResourceStore` → `.facts`, `.runs`, `.byRun` |
 | `RunResource.State.Changed` | `RunResource` → `RunResourceStore.State.Changed` | `yield* RunResourceStore` → `.stateHistory`, `.latestState` |
 | `log.entry` | static `record` / `recordBatch` (relay) | `yield* LogStore` → `.load`, `.query` |
-| `Queue.Entry.*` × 9 | `QueueResource` worker → `emitEntryFact` / `emitEntryFacts` (scoped `QueueResourceStore.Entry.*`) | `yield* QueueResourceStore` → `.entries`, `.entriesByKey` |
+| `Queue.Entry.*` × 9 | `QueueResource` worker → `QueueResourceStore.Entry.*` (scoped); apps/tests may use `emitEntryFact` | `yield* QueueResourceStore` → `.entries`, `.entriesByKey` |
 | `Queue.Lifecycle.*` × 6 | `QueueResource` worker → `emitLifecycleChange` / `emitLifecycleChanges` | `.lifecycle` |
 | `Queue.DedupeKey.*` × 3 | `QueueResource` worker → `emitDedupeKeyChange` / `emitDedupeKeyChanges`. Worker emits `Added` on enqueue and on `releaseEncoded` rollback (`restorePending`); `Released` on completion, `release`, drop, dead-letter, and `clear`. `Hydrated` is decode-only — for future warm-start adapters that rebuild `activeKeys` from durable state. | `.dedupeKeys` |
 | `Queue.RateLimit.Exceeded` × 1 | `QueueResource` worker → `emitRateLimitExceededFact` when `rateLimit` quota is exceeded (`record: "exceeded"` default; `"off"` to disable) | `.rateLimits` |

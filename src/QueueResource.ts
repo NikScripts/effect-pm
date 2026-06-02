@@ -82,18 +82,14 @@ import {
 } from "effect/unstable/persistence/RateLimiter";
 import type { RateLimiter as EffectRateLimiter } from "effect/unstable/persistence/RateLimiter";
 import { withQueueLogAnnotations } from "./LogContext";
+import { QueueResourceStore } from "./store/queueResource";
 import {
-  emitDedupeKeyChange,
-  emitDedupeKeyChanges,
-  emitEntryFact,
-  emitLifecycleChange,
-  emitRateLimitExceededFact,
-  type QueueDedupeKeyChange,
-  type QueueEntryFact,
-  type QueueLifecycleChange,
-  type QueueRateLimitExceededFact,
-} from "./store/queueResource";
+  QueueDedupeKeyScope,
+  QueueEntryScope,
+  QueueResourceScope,
+} from "./QueueResourceScope";
 import { ProcessStore } from "./ProcessStore";
+import type { ProcessStoreWriteError } from "./ProcessStoreEvent";
 import { isJsonValue } from "./internal/json";
 import type { JsonValue } from "./ProcessStoreEvent";
 import {
@@ -1535,9 +1531,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       return `${queueName}-release-${String(releaseSeq)}`;
     };
 
-    const recordStoreWrite = <A, EWrite>(
+    const recordStoreWrite = (
       label: string,
-      effect: Effect.Effect<A, EWrite>,
+      effect: Effect.Effect<void, ProcessStoreWriteError>,
     ): Effect.Effect<void> =>
       effect.pipe(
         ProcessStore.catchErrorAndLog({
@@ -1549,6 +1545,26 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           },
         }),
       );
+
+    const nextEntryFactId = (entryId: string, segment: string): string => {
+      entryFactSeq++;
+      return `${queueName}/${entryId}/${segment}/${String(entryFactSeq)}`;
+    };
+
+    const nextLifecycleId = (tag: string): string => {
+      lifecycleSeq++;
+      return `${queueName}/lifecycle/${tag.toLowerCase()}/${String(lifecycleSeq)}`;
+    };
+
+    const nextDedupeChangeId = (kind: string): string => {
+      dedupeChangeSeq++;
+      return `${queueName}/dedupe-key/${kind}/${String(dedupeChangeSeq)}`;
+    };
+
+    const nextRateLimitExceededId = (entryId: string): string => {
+      rateLimitExceededSeq++;
+      return `${queueName}/${entryId}/ratelimit-exceeded/${String(rateLimitExceededSeq)}`;
+    };
 
     interface EntryFactSource {
       readonly entryId: string;
@@ -1565,7 +1581,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       readonly releaseId?: string;
       readonly reason?: string;
       readonly interruptedAtMs?: number;
-      readonly attributes?: Record<string, unknown>;
     }
 
     type EntryStatus =
@@ -1579,84 +1594,93 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       | "dead-lettered"
       | "dropped";
 
-    const buildEntryFact = (
+    const writeEntryEvent = (
       status: EntryStatus,
       source: EntryFactSource,
       enqueuedAtMs: number,
       options: EntryFactOptions,
-    ): QueueEntryFact => {
-      entryFactSeq++;
-      const id = `${queueName}/${source.entryId}/${status}/${String(entryFactSeq)}`;
-      const common = {
-        id,
-        queueId: queueName,
-        entryId: source.entryId,
-        occurredAt: options.occurredAtMs,
-        ...(source.key !== undefined ? { key: source.key } : {}),
-        priority: source.priority,
-        attempts: source.attempts,
-        ...(options.attributes !== undefined
-          ? { attributes: options.attributes }
-          : {}),
-      };
-      const startedAt = options.startedAtMs ?? options.occurredAtMs;
-      const durationMs = options.durationMs ?? 0;
-      switch (status) {
-        case "enqueued":
-          return { ...common, type: "Queue.Entry.Enqueued", enqueuedAt: enqueuedAtMs };
-        case "started":
-          return { ...common, type: "Queue.Entry.Started", startedAt };
-        case "completed":
-          return {
-            ...common,
-            type: "Queue.Entry.Completed",
-            startedAt,
-            durationMs,
-          };
-        case "failed":
-          return {
-            ...common,
-            type: "Queue.Entry.Failed",
-            startedAt,
-            durationMs,
-            ...(options.error !== undefined ? { error: options.error } : {}),
-          };
-        case "retried":
-          return {
-            ...common,
-            type: "Queue.Entry.Retried",
-            ...(options.error !== undefined ? { error: options.error } : {}),
-          };
-        case "exhausted":
-          return {
-            ...common,
-            type: "Queue.Entry.Exhausted",
-            ...(options.error !== undefined ? { error: options.error } : {}),
-          };
-        case "released":
-          return {
-            ...common,
-            type: "Queue.Entry.Released",
-            releaseId: options.releaseId ?? "",
-            ...(options.interruptedAtMs !== undefined
-              ? { interruptedAt: options.interruptedAtMs }
-              : {}),
-          };
-        case "dead-lettered":
-          return {
-            ...common,
-            type: "Queue.Entry.DeadLettered",
-            ...(options.reason !== undefined ? { reason: options.reason } : {}),
-            ...(options.error !== undefined ? { error: options.error } : {}),
-          };
-        case "dropped":
-          return {
-            ...common,
-            type: "Queue.Entry.Dropped",
-            ...(options.reason !== undefined ? { reason: options.reason } : {}),
-          };
-      }
-    };
+    ): Effect.Effect<void, ProcessStoreWriteError> =>
+      QueueResourceScope.run(
+        { queueId: queueName },
+        QueueEntryScope.run(
+          { entryId: source.entryId },
+          Effect.gen(function* () {
+            const common = {
+              id: nextEntryFactId(source.entryId, status),
+              entryId: source.entryId,
+              occurredAt: options.occurredAtMs,
+              ...(source.key !== undefined ? { key: source.key } : {}),
+              priority: source.priority,
+              attempts: source.attempts,
+            };
+            const startedAt = options.startedAtMs ?? options.occurredAtMs;
+            const durationMs = options.durationMs ?? 0;
+            switch (status) {
+              case "enqueued":
+                yield* QueueResourceStore.Entry.Enqueued({
+                  ...common,
+                  enqueuedAt: enqueuedAtMs,
+                });
+                return;
+              case "started":
+                yield* QueueResourceStore.Entry.Started({
+                  ...common,
+                  startedAt,
+                });
+                return;
+              case "completed":
+                yield* QueueResourceStore.Entry.Completed({
+                  ...common,
+                  startedAt,
+                  durationMs,
+                });
+                return;
+              case "failed":
+                yield* QueueResourceStore.Entry.Failed({
+                  ...common,
+                  startedAt,
+                  durationMs,
+                  ...(options.error !== undefined ? { error: options.error } : {}),
+                });
+                return;
+              case "retried":
+                yield* QueueResourceStore.Entry.Retried({
+                  ...common,
+                  ...(options.error !== undefined ? { error: options.error } : {}),
+                });
+                return;
+              case "exhausted":
+                yield* QueueResourceStore.Entry.Exhausted({
+                  ...common,
+                  ...(options.error !== undefined ? { error: options.error } : {}),
+                });
+                return;
+              case "released":
+                yield* QueueResourceStore.Entry.Released({
+                  ...common,
+                  releaseId: options.releaseId ?? "",
+                  ...(options.interruptedAtMs !== undefined
+                    ? { interruptedAt: options.interruptedAtMs }
+                    : {}),
+                });
+                return;
+              case "dead-lettered":
+                yield* QueueResourceStore.Entry.DeadLettered({
+                  ...common,
+                  ...(options.reason !== undefined ? { reason: options.reason } : {}),
+                  ...(options.error !== undefined ? { error: options.error } : {}),
+                });
+                return;
+              case "dropped":
+                yield* QueueResourceStore.Entry.Dropped({
+                  ...common,
+                  ...(options.reason !== undefined ? { reason: options.reason } : {}),
+                });
+                return;
+            }
+          }),
+        ),
+      );
 
     const recordEntryEvent = (
       status: EntryStatus,
@@ -1676,34 +1700,33 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           options?.occurredAt !== undefined
             ? DateTime.toEpochMillis(options.occurredAt)
             : yield* Effect.clockWith((c) => c.currentTimeMillis);
-        const fact = buildEntryFact(
-          status,
-          {
-            entryId: internal.entryId,
-            ...(internal.key !== undefined ? { key: internal.key } : {}),
-            priority: internal.priority,
-            attempts: internal.retries + 1,
-          },
-          internal.enqueuedAt,
-          {
-            occurredAtMs,
-            ...(options?.startedAt !== undefined
-              ? { startedAtMs: DateTime.toEpochMillis(options.startedAt) }
-              : {}),
-            ...(options?.durationMs !== undefined
-              ? { durationMs: options.durationMs }
-              : {}),
-            ...(options?.error !== undefined ? { error: options.error } : {}),
-            ...(options?.releaseId !== undefined
-              ? { releaseId: options.releaseId }
-              : {}),
-            ...(options?.reason !== undefined ? { reason: options.reason } : {}),
-            ...(options?.attributes !== undefined
-              ? { attributes: options.attributes }
-              : {}),
-          },
+        yield* recordStoreWrite(
+          `entry ${status}`,
+          writeEntryEvent(
+            status,
+            {
+              entryId: internal.entryId,
+              ...(internal.key !== undefined ? { key: internal.key } : {}),
+              priority: internal.priority,
+              attempts: internal.retries + 1,
+            },
+            internal.enqueuedAt,
+            {
+              occurredAtMs,
+              ...(options?.startedAt !== undefined
+                ? { startedAtMs: DateTime.toEpochMillis(options.startedAt) }
+                : {}),
+              ...(options?.durationMs !== undefined
+                ? { durationMs: options.durationMs }
+                : {}),
+              ...(options?.error !== undefined ? { error: options.error } : {}),
+              ...(options?.releaseId !== undefined
+                ? { releaseId: options.releaseId }
+                : {}),
+              ...(options?.reason !== undefined ? { reason: options.reason } : {}),
+            },
+          ),
         );
-        yield* recordStoreWrite(`entry ${status}`, emitEntryFact(fact));
       });
 
     const recordEntryEventForQueueEntry = (
@@ -1712,7 +1735,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       options?: {
         readonly occurredAt?: DateTime.Utc;
         readonly reason?: string;
-        readonly attributes?: { readonly [key: string]: JsonValue };
       },
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
@@ -1728,59 +1750,64 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           entry.timestamps.startedAt !== undefined
             ? DateTime.toEpochMillis(entry.timestamps.startedAt)
             : undefined;
-        const fact = buildEntryFact(
-          status,
-          {
-            entryId: entry.entryId,
-            ...(entry.key !== undefined ? { key: entry.key } : {}),
-            priority: entry.priority,
-            attempts: entry.attempts,
-          },
-          DateTime.toEpochMillis(entry.timestamps.enqueuedAt),
-          {
-            occurredAtMs,
-            ...(startedAtMs !== undefined ? { startedAtMs } : {}),
-            ...(interruptedAtMs !== undefined ? { interruptedAtMs } : {}),
-            ...(options?.reason !== undefined ? { reason: options.reason } : {}),
-            ...(options?.attributes !== undefined
-              ? { attributes: options.attributes }
-              : {}),
-          },
+        yield* recordStoreWrite(
+          `entry ${status}`,
+          writeEntryEvent(
+            status,
+            {
+              entryId: entry.entryId,
+              ...(entry.key !== undefined ? { key: entry.key } : {}),
+              priority: entry.priority,
+              attempts: entry.attempts,
+            },
+            DateTime.toEpochMillis(entry.timestamps.enqueuedAt),
+            {
+              occurredAtMs,
+              ...(startedAtMs !== undefined ? { startedAtMs } : {}),
+              ...(interruptedAtMs !== undefined ? { interruptedAtMs } : {}),
+              ...(options?.reason !== undefined ? { reason: options.reason } : {}),
+            },
+          ),
         );
-        yield* recordStoreWrite(`entry ${status}`, emitEntryFact(fact));
       });
 
-    const buildLifecycleChange = (
+    const writeLifecycleEvent = (
       tag: "Started" | "Paused" | "Resumed" | "Shutdown" | "Cleared" | "Drained",
       changedAtMs: number,
       itemsCleared?: number,
-    ): QueueLifecycleChange => {
-      lifecycleSeq++;
-      const id = `${queueName}/lifecycle/${tag.toLowerCase()}/${String(lifecycleSeq)}`;
-      const common = {
-        id,
-        queueId: queueName,
-        changedAt: changedAtMs,
-      };
-      switch (tag) {
-        case "Started":
-          return { ...common, type: "Queue.Lifecycle.Started" };
-        case "Paused":
-          return { ...common, type: "Queue.Lifecycle.Paused" };
-        case "Resumed":
-          return { ...common, type: "Queue.Lifecycle.Resumed" };
-        case "Shutdown":
-          return { ...common, type: "Queue.Lifecycle.Shutdown" };
-        case "Cleared":
-          return {
-            ...common,
-            type: "Queue.Lifecycle.Cleared",
-            itemsCleared: itemsCleared ?? 0,
+    ): Effect.Effect<void, ProcessStoreWriteError> =>
+      QueueResourceScope.run(
+        { queueId: queueName },
+        Effect.gen(function* () {
+          const input = {
+            id: nextLifecycleId(tag),
+            changedAt: changedAtMs,
           };
-        case "Drained":
-          return { ...common, type: "Queue.Lifecycle.Drained" };
-      }
-    };
+          switch (tag) {
+            case "Started":
+              yield* QueueResourceStore.Lifecycle.Started(input);
+              return;
+            case "Paused":
+              yield* QueueResourceStore.Lifecycle.Paused(input);
+              return;
+            case "Resumed":
+              yield* QueueResourceStore.Lifecycle.Resumed(input);
+              return;
+            case "Shutdown":
+              yield* QueueResourceStore.Lifecycle.Shutdown(input);
+              return;
+            case "Cleared":
+              yield* QueueResourceStore.Lifecycle.Cleared({
+                ...input,
+                itemsCleared: itemsCleared ?? 0,
+              });
+              return;
+            case "Drained":
+              yield* QueueResourceStore.Lifecycle.Drained(input);
+              return;
+          }
+        }),
+      );
 
     const recordLifecycleEvent = (
       tag: "Started" | "Paused" | "Resumed" | "Shutdown" | "Cleared" | "Drained",
@@ -1788,27 +1815,34 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
         const changedAtMs = yield* Effect.clockWith((c) => c.currentTimeMillis);
-        const change = buildLifecycleChange(tag, changedAtMs, itemsCleared);
-        yield* recordStoreWrite(`lifecycle ${tag}`, emitLifecycleChange(change));
+        yield* recordStoreWrite(
+          `lifecycle ${tag}`,
+          writeLifecycleEvent(tag, changedAtMs, itemsCleared),
+        );
       });
 
-    const buildDedupeKeyChange = (
+    const writeDedupeKeyChange = (
       kind: "added" | "released",
       key: string,
       changedAtMs: number,
-    ): QueueDedupeKeyChange => {
-      dedupeChangeSeq++;
-      const id = `${queueName}/dedupe-key/${kind}/${String(dedupeChangeSeq)}`;
-      const common = {
-        id,
-        queueId: queueName,
-        key,
-        changedAt: changedAtMs,
-      };
-      return kind === "added"
-        ? { ...common, type: "Queue.DedupeKey.Added" }
-        : { ...common, type: "Queue.DedupeKey.Released" };
-    };
+    ): Effect.Effect<void, ProcessStoreWriteError> =>
+      QueueResourceScope.run(
+        { queueId: queueName },
+        QueueDedupeKeyScope.run(
+          { key },
+          Effect.gen(function* () {
+            const input = {
+              id: nextDedupeChangeId(kind),
+              changedAt: changedAtMs,
+            };
+            if (kind === "added") {
+              yield* QueueResourceStore.DedupeKey.Added(input);
+              return;
+            }
+            yield* QueueResourceStore.DedupeKey.Released(input);
+          }),
+        ),
+      );
 
     const recordDedupeKeyChange = (
       kind: "added" | "released",
@@ -1816,10 +1850,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
         const changedAtMs = yield* Effect.clockWith((c) => c.currentTimeMillis);
-        const change = buildDedupeKeyChange(kind, key, changedAtMs);
         yield* recordStoreWrite(
           `dedupe-key ${kind}`,
-          emitDedupeKeyChange(change),
+          writeDedupeKeyChange(kind, key, changedAtMs),
         );
       });
 
@@ -1830,12 +1863,13 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       Effect.gen(function* () {
         if (keys.length === 0) return;
         const changedAtMs = yield* Effect.clockWith((c) => c.currentTimeMillis);
-        const changes = keys.map((key) =>
-          buildDedupeKeyChange(kind, key, changedAtMs),
-        );
         yield* recordStoreWrite(
           `dedupe-key ${kind} batch`,
-          emitDedupeKeyChanges(changes),
+          Effect.forEach(
+            keys,
+            (key) => writeDedupeKeyChange(kind, key, changedAtMs),
+            { discard: true },
+          ),
         );
       });
 
@@ -1855,11 +1889,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     const shouldRecordRateLimitExceeded =
       config.rateLimit !== undefined && (config.rateLimit.record ?? "exceeded") !== "off";
 
-    const buildRateLimitExceededFact = (
+    const writeRateLimitExceeded = (
       payload: RateLimitExceededEmit<T>,
       occurredAtMs: number,
-    ): QueueRateLimitExceededFact => {
-      rateLimitExceededSeq++;
+    ): Effect.Effect<void, ProcessStoreWriteError> => {
       const consumeOpts =
         config.rateLimit === undefined
           ? undefined
@@ -1877,37 +1910,41 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           : payload.consume !== undefined
             ? Duration.toMillis(payload.consume.delay)
             : undefined;
-      return {
-        id: `${queueName}/${payload.internal.entryId}/ratelimit-exceeded/${String(rateLimitExceededSeq)}`,
-        type: "Queue.RateLimit.Exceeded",
-        queueId: queueName,
-        entryId: payload.internal.entryId,
-        occurredAt: occurredAtMs,
-        limitKey: payload.limitKey,
-        algorithm: payload.algorithm,
-        limit: consumeOpts?.limit ?? 0,
-        tokens,
-        windowMs,
-        outcome: payload.outcome,
-        delayMs:
-          payload.consume !== undefined
-            ? Duration.toMillis(payload.consume.delay)
-            : retryAfterMs ?? 0,
-        remaining:
-          payload.consume !== undefined
-            ? payload.consume.remaining
-            : payload.error !== undefined && isRateLimitExceededReason(payload.error.reason)
-              ? payload.error.reason.remaining
-              : 0,
-        resetAfterMs:
-          payload.consume !== undefined
-            ? Duration.toMillis(payload.consume.resetAfter)
-            : 0,
-        ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
-        ...(payload.error !== undefined ? { error: payload.error.message } : {}),
-        ...(payload.internal.key !== undefined ? { key: payload.internal.key } : {}),
-        priority: payload.internal.priority,
-      };
+      return QueueResourceScope.run(
+        { queueId: queueName },
+        QueueEntryScope.run(
+          { entryId: payload.internal.entryId },
+          QueueResourceStore.RateLimit.Exceeded({
+            id: nextRateLimitExceededId(payload.internal.entryId),
+            occurredAt: occurredAtMs,
+            limitKey: payload.limitKey,
+            algorithm: payload.algorithm,
+            limit: consumeOpts?.limit ?? 0,
+            tokens,
+            windowMs,
+            outcome: payload.outcome,
+            delayMs:
+              payload.consume !== undefined
+                ? Duration.toMillis(payload.consume.delay)
+                : retryAfterMs ?? 0,
+            remaining:
+              payload.consume !== undefined
+                ? payload.consume.remaining
+                : payload.error !== undefined &&
+                    isRateLimitExceededReason(payload.error.reason)
+                  ? payload.error.reason.remaining
+                  : 0,
+            resetAfterMs:
+              payload.consume !== undefined
+                ? Duration.toMillis(payload.consume.resetAfter)
+                : 0,
+            ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+            ...(payload.error !== undefined ? { error: payload.error.message } : {}),
+            ...(payload.internal.key !== undefined ? { key: payload.internal.key } : {}),
+            priority: payload.internal.priority,
+          }),
+        ),
+      );
     };
 
     const emitRateLimitExceeded = (
@@ -1938,10 +1975,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         }
 
         if (!shouldRecordRateLimitExceeded) return;
-        const fact = buildRateLimitExceededFact(payload, occurredAtMs);
         yield* recordStoreWrite(
           "rate-limit exceeded",
-          emitRateLimitExceededFact(fact),
+          writeRateLimitExceeded(payload, occurredAtMs),
         );
       });
 

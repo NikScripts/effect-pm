@@ -99,8 +99,9 @@ the event emitter.
 
 ## Cleanup status
 
-Implemented (emit helpers, worker wiring, facet conformance). Remaining optional
-work: migrate `QueueResource.ts` from `buildEntryFact` + `emitEntryFact` to
-direct `QueueResourceStore.Entry.*` / `.batch` calls per
-`docs/recipes/queue-telemetry-index-batch.md`. Delete this recipe after that
-slice or fold into `docs/STORAGE.md`.
+Implemented: emit helpers in `queueResource.ts`, facet conformance tests, and
+`QueueResource.ts` worker path calling scoped `QueueResourceStore.Entry.*`,
+`.Lifecycle.*`, `.DedupeKey.*`, and `.RateLimit.Exceeded` directly (dedupe
+multi-key batches use per-key scope via `Effect.forEach`, not `.batch`, because
+`key` is scope-backed). Optional follow-up: entry `.batch` at hot enqueue paths;
+fold this recipe into `docs/STORAGE.md` when no longer needed.

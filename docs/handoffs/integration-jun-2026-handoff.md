@@ -48,7 +48,7 @@ Work from `cursor/integration-jun-2026` (or `cursor/effect-pm-alt` worktree). Me
 
 | Topic branch (suggested) | Focus |
 |--------------------------|--------|
-| `cursor/telemetry-direct-emit` | `QueueResource.ts` → direct `QueueResourceStore.Entry.*` |
+| `cursor/telemetry-direct-emit` | Done locally — see [queue-telemetry-direct-emit-handoff.md](./queue-telemetry-direct-emit-handoff.md) (commit + changeset pending) |
 | `cursor/dashboard-polish` | `src/ops-ui/`, `examples/dashboard-demo/` |
 | `cursor/rpc-adapter-migration` | HTTP → RPC for control/logs |
 | `cursor/remote-console` | Remote terminal UX |
@@ -70,6 +70,7 @@ git push -u origin cursor/integration-jun-2026
 | Doc | Use when |
 |-----|----------|
 | [facet-telemetry-158c-handoff.md](./facet-telemetry-158c-handoff.md) | Telemetry factory, codec-backed facets, RunResource/queue store (update branch name to integration) |
+| [queue-telemetry-direct-emit-handoff.md](./queue-telemetry-direct-emit-handoff.md) | Queue worker → direct `QueueResourceStore.*` (this slice; uncommitted) |
 | [remote-terminal-local-handoff.md](./remote-terminal-local-handoff.md) | Terminal RPC, `effect/unstable/rpc`, React `TerminalSessionPort` |
 | [dashboard-ops-ui-local-agent.md](./dashboard-ops-ui-local-agent.md) | Ops UI Phase 1, `OperatorDashboard`, local agent scope |
 | [wow-dashboard-slice-2-agent-prompts.md](./wow-dashboard-slice-2-agent-prompts.md) | WOW repo gateway + subtree sync for dashboard demo |
@@ -84,7 +85,7 @@ git push -u origin cursor/integration-jun-2026
 
 | Doc | Use when |
 |-----|----------|
-| [../recipes/queue-resource-telemetry-migration.md](../recipes/queue-resource-telemetry-migration.md) | Queue store telemetry migration (mostly done; optional direct worker emit) |
+| [../recipes/queue-resource-telemetry-migration.md](../recipes/queue-resource-telemetry-migration.md) | Queue store telemetry migration (worker direct emit done; optional `.batch` perf) |
 | [../recipes/queue-telemetry-index-batch.md](../recipes/queue-telemetry-index-batch.md) | Index metadata + direct `Entry.*` worker calls |
 | [../recipes/dashboard-controls-logs.md](../recipes/dashboard-controls-logs.md) | Dashboard controls + live logs API |
 | [../recipes/dashboard-layout-grid.md](../recipes/dashboard-layout-grid.md) | Persisted grid layout |
