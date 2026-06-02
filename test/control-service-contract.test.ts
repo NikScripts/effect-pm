@@ -12,6 +12,8 @@ import {
   ProcessGroupContractSchema,
     QueueResource,
 } from "../src";
+import { ProcessManagerLogAnnotationKeys } from "../src/LogContext";
+import { ProcessManagerLogRelay, relayOnlyLayer } from "../src/Logs";
 import { responseBodyJson } from "../src/internal/json";
 
 interface Email {
@@ -37,6 +39,23 @@ const requestJson = (
       ),
       Effect.orDie,
     );
+    return {
+      statusCode: response.status,
+      body,
+    };
+  });
+
+const requestText = (
+  port: number,
+  path: string,
+): Effect.Effect<{
+  readonly statusCode: number;
+  readonly body: string;
+}, never, HttpClient.HttpClient> =>
+  Effect.gen(function* () {
+    const request = HttpClientRequest.get(`http://127.0.0.1:${String(port)}${path}`);
+    const response = yield* HttpClient.execute(request).pipe(Effect.orDie);
+    const body = yield* response.text.pipe(Effect.orDie);
     return {
       statusCode: response.status,
       body,
@@ -340,6 +359,83 @@ describe("ControlService — contract route", () => {
             NodeHttpClient.layerUndici,
           ),
         ),
+      );
+    }),
+  );
+
+  it.live("filters log streams by process target", () =>
+    Effect.gen(function* () {
+      class SyncProcess extends Process.Service<SyncProcess>()("@test/LogStreamProcess", {
+        effect: Effect.void,
+      }) {}
+
+      yield* Effect.gen(function* () {
+        const group = yield* ProcessGroup.make("@test/LogStreamGroup", [
+          SyncProcess,
+        ] as const);
+
+        yield* ControlService.make({
+          port: 32132,
+          group,
+        });
+
+        const relay = yield* ProcessManagerLogRelay;
+        yield* relay.publish({
+          date: "2026-06-01T00:00:00.000Z",
+          level: "Info",
+          message: "include me",
+          annotations: {
+            [ProcessManagerLogAnnotationKeys.groupId]: group.id,
+            [ProcessManagerLogAnnotationKeys.processId]: SyncProcess.id,
+          },
+          spans: [],
+        });
+        yield* relay.publish({
+          date: "2026-06-01T00:00:01.000Z",
+          level: "Info",
+          message: "exclude me",
+          annotations: {
+            [ProcessManagerLogAnnotationKeys.groupId]: group.id,
+            [ProcessManagerLogAnnotationKeys.processId]: "@test/OtherProcess",
+          },
+          spans: [],
+        });
+        yield* relay.publish({
+          date: "2026-06-01T00:00:02.000Z",
+          level: "Info",
+          message: "unscoped group-compatible",
+          annotations: {},
+          spans: [],
+        });
+
+        const response = yield* requestText(
+          32132,
+          `/logs/stream?follow=false&processId=${encodeURIComponent(SyncProcess.id)}&lines=10`,
+        );
+        const lines = response.body.trim().split("\n");
+
+        expect(response.statusCode).toBe(200);
+        expect(lines).toHaveLength(1);
+        expect(lines[0]).toContain("include me");
+
+        const groupResponse = yield* requestText(
+          32132,
+          `/logs/stream?follow=false&groupId=${encodeURIComponent(group.id)}&lines=10`,
+        );
+
+        expect(groupResponse.statusCode).toBe(200);
+        expect(groupResponse.body).toContain("include me");
+        expect(groupResponse.body).toContain("unscoped group-compatible");
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            SyncProcess.layer,
+            ProcessStorage.layer,
+            relayOnlyLayer,
+            NodeHttpClient.layerUndici,
+          ),
+        ),
+        Effect.scoped,
       );
     }),
   );

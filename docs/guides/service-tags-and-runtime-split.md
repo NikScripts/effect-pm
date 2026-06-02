@@ -9,7 +9,7 @@ When you expose **`ProcessGroup.Service`**, **`Process.Service`**, or **`QueueRe
 
 | Module role | Imports | Exported to |
 | --- | --- | --- |
-| **Tags only** (`*.tags.ts`) | `@nikscripts/effect-pm`, `effect`; **avoid** `@effect/platform-node`, `better-sqlite3`, adapters, SQLite/Prisma **runtime**, custom server-only deps | Frontend, widgets, CLI type-only consumers, codegen |
+| **Tags only** (`*.tags.ts`) | Dedicated subpaths (`@nikscripts/effect-pm/Process`, `/ProcessGroup`, `/QueueResource`, etc.) plus `effect`; **avoid** root barrel imports, `@effect/platform-node`, `better-sqlite3`, adapters, SQLite/Prisma **runtime**, custom server-only deps | Frontend, widgets, CLI type-only consumers, codegen |
 | **Runtime** (`*.runtime.ts` / `main.ts`) | Tags module + **`Layer.mergeAll`** + **`ControlService.layerHttp`** + storage + whatever your process needs | Node (or Bun) OS edge only |
 
 **Why:** Declaring services **instantiates merged `layer` factories** when you assemble the group. That is harmless in Node but **fatal** if a single file pulls **tags + `Layer.mergeAll` + `layerProcessStore` + SQLite** into a bundle that webpack/Vite analyzes for the client. Splitting avoids accidental resolution of native or platform-only subgraphs while still giving the UI **`typeof MyQueue`**, **`MyQueue.id`**, and **`MyGroup.contract`**.
@@ -18,7 +18,10 @@ When you expose **`ProcessGroup.Service`**, **`Process.Service`**, or **`QueueRe
 
 ```typescript
 // app/groups/production.tags.ts — safe to import from React/Vite
-import { Effect, Process, ProcessGroup, QueueResource } from "@nikscripts/effect-pm";
+import { Effect } from "effect";
+import { Process } from "@nikscripts/effect-pm/Process";
+import { ProcessGroup } from "@nikscripts/effect-pm/ProcessGroup";
+import { QueueResource } from "@nikscripts/effect-pm/QueueResource";
 
 export class EmailQueue extends QueueResource.Service<EmailQueue, { to: string }, never>()(
   "@app/EmailQueue",
@@ -35,7 +38,7 @@ export class ProdGroup extends ProcessGroup.Service<ProdGroup>()("@app/ProdGroup
 ] as const) {}
 ```
 
-- No **`ControlService`**, **`ProcessStorage.layer`**, **SQLite**, **`Endpoint.local(import.meta.url)`** child launcher wiring, secrets, etc.
+- No root **`@nikscripts/effect-pm`** barrel import, **`ControlService`**, **`ProcessStorage.layer`**, **SQLite**, **`Endpoint.local(import.meta.url)`** child launcher wiring, secrets, etc.
 - Effect `Effect` in queue/process config is acceptable as long as the module stays free of native-only transitive imports **you add** beside `effect-pm`.
 
 ## Runtime module (Node edge)
@@ -43,7 +46,7 @@ export class ProdGroup extends ProcessGroup.Service<ProdGroup>()("@app/ProdGroup
 ```typescript
 // app/groups/production.runtime.ts — Node/Bun only
 import { Layer } from "effect";
-import { ControlService } from "@nikscripts/effect-pm";
+import { ControlService } from "@nikscripts/effect-pm/ControlService";
 import { EmailQueue, Notify, ProdGroup } from "./production.tags";
 
 export const prodEdgeLayer = Layer.mergeAll(

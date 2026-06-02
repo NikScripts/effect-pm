@@ -5,20 +5,17 @@
  */
 
 import { Duration, Effect } from "effect";
-import {
-  Process,
-  ProcessGroup,
-  QueueResource,
-  Polling,
-  ProcessSchedule,
-} from "../../src";
-import { utcDateFromMillis } from "../../src/internal/utcDate";
+import { Polling } from "../../src/Polling";
+import { Process } from "../../src/Process";
+import { ProcessGroup } from "../../src/ProcessGroup";
+import { ProcessSchedule } from "../../src/ProcessSchedule";
+import { QueueResource } from "../../src/QueueResource";
 
 /** Managed process polled every five seconds while armed. */
 export class DashboardTick extends Process.Service<DashboardTick>()("dashboard-tick", {
   polling: Polling.spaced(Duration.seconds(5)),
   schedule: ProcessSchedule.inMemory([
-    ProcessSchedule.at("dashboard-tick", utcDateFromMillis(0)),
+    ProcessSchedule.at("dashboard-tick", new Date(0)),
   ]),
   effect: Effect.gen(function* () {
     yield* Effect.logInfo("dashboard tick");

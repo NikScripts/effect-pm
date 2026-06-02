@@ -1,8 +1,11 @@
-import {
-  ControlPlaneProvider,
-  OperatorControlPanel,
-} from "../../../src/react";
+import { OperatorDashboard } from "../../../src/ops-ui";
+import "../../../src/ops-ui/styles.css";
 import { createFetchControlPlaneAdapter } from "../../../src/react/adapters/fetch";
+import {
+  DashboardDemoGroup,
+  DashboardDemoQueue,
+  DashboardTick,
+} from "../demo.tags";
 
 const port = createFetchControlPlaneAdapter({
   baseUrl: "/api/control",
@@ -10,13 +13,19 @@ const port = createFetchControlPlaneAdapter({
 });
 
 export const App = () => (
-  <main style={{ fontFamily: "system-ui, sans-serif", margin: "2rem auto", maxWidth: 720 }}>
-    <h1 style={{ marginTop: 0 }}>effect-pm control demo</h1>
-    <p style={{ opacity: 0.85 }}>
-      Browser calls <code>/api/control</code> (Vite proxy → private ControlService).
-    </p>
-    <ControlPlaneProvider port={port}>
-      <OperatorControlPanel pollIntervalMs={2000} />
-    </ControlPlaneProvider>
-  </main>
+  <OperatorDashboard
+    port={port}
+    for={DashboardDemoGroup}
+    processes={[DashboardTick]}
+    queues={[DashboardDemoQueue]}
+    layoutStorageKey="effect-pm.dashboard-demo.layout.v1"
+    chromeStorageKey="effect-pm.dashboard-demo.chrome.v1"
+    title="effect-pm control demo"
+    description={(
+      <>
+        Browser calls <code>/api/control</code> through the Vite gateway while the
+        private ControlService stays on localhost.
+      </>
+    )}
+  />
 );

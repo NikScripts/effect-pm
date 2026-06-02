@@ -1,28 +1,27 @@
 {
   "$schema": "https://raw.githubusercontent.com/Effect-TS/tsgo/refs/heads/main/schema.json",
   "compilerOptions": {
-    // Language and Environment
     "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "jsx": "react-jsx",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "types": ["node"],
-
-    // Emit
+    "types": [
+      "node"
+    ],
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "./dist",
     "removeComments": false,
-
-    // Interop Constraints
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
-
-    // Type Checking
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
@@ -37,11 +36,7 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
-
-    // Completeness
     "skipLibCheck": true,
-
-    // Advanced
     "resolveJsonModule": true,
     "plugins": [
       {
@@ -111,7 +106,12 @@
           "unnecessaryPipeChain": "error"
         }
       }
-    ]
+    ],
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
   },
   "include": [
     "src/**/*.ts",
