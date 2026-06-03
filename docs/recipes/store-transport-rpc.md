@@ -90,7 +90,12 @@ Code quality must meet or exceed this repo's standards.
 - `StoreQueryClient<R>` structurally satisfies any single facet's `layerRemote` constraint — pass one client to all six `layerRemote` calls
 - Client middleware: `StoreClientMiddleware` — `(options: { rpc: { tag, facet, method }, request: StoreRequestEncoded }) => Effect<StoreRequestEncoded>` — applied globally per-call in order; same chain as `RpcClient.getRpcClientMiddleware`
 ### Step D: `StoreTransportProtocol` + adapters
-### Step E: `ProcessStorage.layerRemote(client)` — dashboard bootstrap
+### Step E: Dashboard bootstrap — locked 2026-06-03
+- `Facet.layerRemote(client)` per facet is the atomic unit — compose only what you use; TypeScript enforces missing layers at the use site, no `serviceOption` anywhere
+- `ProcessStore.registry([...facets])` scopes the client to exactly the facets passed — a single-facet registry produces a single-facet client; unused facet schemas are not carried
+- `ProcessStorage.layerRemote(client)` — convenience combiner of all six `Facet.layerRemote(client)` calls; for dashboards that use everything
+- `makeClient(registry, transport, middlewares?)` accepts full or partial registry; ignores `resolve` (server-only) and reads `payload`/`success` schemas for encode/decode
+- Registry passed to `makeClient` is the same object used server-side — single source of truth, no schema duplication
 
 ---
 
