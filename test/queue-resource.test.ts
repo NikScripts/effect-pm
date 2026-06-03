@@ -1368,10 +1368,7 @@ describe("QueueResource.make — itemSchema", () => {
         name: "test-rate-limit",
         concurrency: 1,
         rateLimit: { limit: 1, window: Duration.millis(80) },
-        effect: () =>
-          Effect.gen(function* () {
-            yield* Ref.update(starts, (n) => n + 1);
-          }),
+        effect: () => Ref.update(starts, (n) => n + 1),
       });
       const t0 = yield* Clock.currentTimeMillis;
       yield* queue.add([1, 2, 3]);
