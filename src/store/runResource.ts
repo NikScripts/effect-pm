@@ -221,6 +221,16 @@ export interface RunResourceScopedStateHistoryQuery {
 }
 
 /**
+ * Identifier-bound run filter for the `byRun` method (the `resourceId` is
+ * supplied by {@link RunResourceStore.for | for(resourceId)}).
+ *
+ * @public
+ */
+export interface RunResourceScopedByRunQuery {
+  readonly runId: string;
+}
+
+/**
  * Paired run record produced by {@link RunResourceStore.runs} —
  * joins each `started` fact with its matching `completed` / `failed`
  * fact, ordered by `startedAt` descending.
@@ -743,7 +753,7 @@ const QueryOptsSchema = Schema.Struct({
 const RunResourceFactQuerySchema = Schema.Struct({
   resourceId: Schema.optional(Schema.String),
   runId:      Schema.optional(Schema.String),
-  types:      Schema.optional(Schema.Array(Schema.String)),
+  types:      Schema.optional(Schema.Array(Schema.Literals([RUN_STARTED_WIRE, RUN_COMPLETED_WIRE, RUN_FAILED_WIRE]))),
   opts:       Schema.optional(QueryOptsSchema),
 });
 
@@ -767,7 +777,7 @@ const RunResourceByRunQuerySchema = Schema.Struct({
 // For-bound (no resourceId — bound by id)
 const RunResourceScopedFactQuerySchema = Schema.Struct({
   runId:  Schema.optional(Schema.String),
-  types:  Schema.optional(Schema.Array(Schema.String)),
+  types:  Schema.optional(Schema.Array(Schema.Literals([RUN_STARTED_WIRE, RUN_COMPLETED_WIRE, RUN_FAILED_WIRE]))),
   opts:   Schema.optional(QueryOptsSchema),
 });
 
@@ -778,8 +788,6 @@ const RunResourceScopedStateHistoryQuerySchema = Schema.Struct({
 const RunResourceScopedByRunQuerySchema = Schema.Struct({
   runId: Schema.String,
 });
-
-type RunResourceScopedByRunQuery = typeof RunResourceScopedByRunQuerySchema.Type;
 
 // Output schemas
 const RunResourceFactCommonFields = {
@@ -859,7 +867,7 @@ const RunResourceLatestStateOutputSchema = Schema.Option(RunResourceStateOutputS
 // Facet
 // ============================================================================
 
-export const RunResourceStore = ProcessStore.Service(
+export class RunResourceStore extends ProcessStore.Service<RunResourceStore>()(
   "@nikscripts/effect-pm/store/runResource/RunResourceStore",
   "RunResource",
   RunResourceTelemetry,
@@ -867,12 +875,12 @@ export const RunResourceStore = ProcessStore.Service(
     facts: ProcessStore
       .payload(RunResourceFactQuerySchema)
       .success(Schema.Array(RunResourceFactOutputSchema))
-      .resolve((s: ProcessStoreSpine) => (query) => readFacts(s, query as RunResourceFactQuery)),
+      .resolve((s: ProcessStoreSpine) => (query) => readFacts(s, query)),
 
     stateHistory: ProcessStore
       .payload(RunResourceStateHistoryQuerySchema)
       .success(Schema.Array(RunResourceStateChangeOutputSchema))
-      .resolve((s: ProcessStoreSpine) => (query) => readStateHistory(s, query as RunResourceStateHistoryQuery)),
+      .resolve((s: ProcessStoreSpine) => (query) => readStateHistory(s, query)),
 
     latestState: ProcessStore
       .payload(RunResourceLatestStateQuerySchema)
@@ -893,37 +901,35 @@ export const RunResourceStore = ProcessStore.Service(
     facts: ProcessStore
       .payload(RunResourceScopedFactQuerySchema)
       .success(Schema.Array(RunResourceFactOutputSchema))
-      .resolve((resourceId: string, s: ProcessStoreSpine) => (query: unknown) =>
-        readFacts(s, { resourceId, ...(query as RunResourceScopedFactQuery) } as RunResourceFactQuery),
+      .resolve((resourceId, s) => (query) =>
+        readFacts(s, { resourceId, ...query }),
       ),
 
     stateHistory: ProcessStore
       .payload(RunResourceScopedStateHistoryQuerySchema)
       .success(Schema.Array(RunResourceStateChangeOutputSchema))
-      .resolve((resourceId: string, s: ProcessStoreSpine) => (query: unknown) =>
-        readStateHistory(s, { resourceId, ...(query as RunResourceScopedStateHistoryQuery) } as RunResourceStateHistoryQuery),
+      .resolve((resourceId, s) => (query) =>
+        readStateHistory(s, { resourceId, ...query }),
       ),
 
     latestState: ProcessStore
       .payload(Schema.Struct({}))
       .success(RunResourceLatestStateOutputSchema)
-      .resolve((resourceId: string, s: ProcessStoreSpine) => (_: unknown) => readLatestState(s, resourceId)),
+      .resolve((resourceId, s) => (_) => readLatestState(s, resourceId)),
 
     runs: ProcessStore
       .payload(Schema.Struct({}))
       .success(Schema.Array(RunResourceRunOutputSchema))
-      .resolve((resourceId: string, s: ProcessStoreSpine) => (_: unknown) => readRuns(s, resourceId)),
+      .resolve((resourceId, s) => (_) => readRuns(s, resourceId)),
 
     byRun: ProcessStore
       .payload(RunResourceScopedByRunQuerySchema)
       .success(Schema.Array(RunResourceFactOutputSchema))
-      .resolve((resourceId: string, s: ProcessStoreSpine) => (query: unknown) =>
-        readFacts(s, { resourceId, ...(query as RunResourceScopedByRunQuery) }),
+      .resolve((resourceId, s) => (query) =>
+        readFacts(s, { resourceId, ...query }),
       ),
   }),
-);
-
-export type RunResourceStore = typeof RunResourceStore.Identifier;
+) {}
 
 const readFacts = (
   s: ProcessStoreSpine,

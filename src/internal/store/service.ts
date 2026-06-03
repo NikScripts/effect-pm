@@ -127,6 +127,19 @@ export interface MethodBuilder<
   S extends Schema.Schema<any>,
 > {
   /**
+   * For-method resolver — `(id, s) => (payload) => Effect`.
+   * Use inside `ProcessStore.for({})`.
+   * Checked first: first param is `string`, distinguishing it from the query resolver.
+   */
+  resolve(
+    fn: (
+      id: string,
+      s: ProcessStoreSpine,
+    ) => (
+      payload: Schema.Schema.Type<P>,
+    ) => Effect.Effect<Schema.Schema.Type<S>, RuntimeStorageOperationalError>,
+  ): ProcessStoreForMethod<P, S>;
+  /**
    * Query method resolver — `(s) => (payload) => Effect`.
    * Use inside `ProcessStore.query({})`.
    */
@@ -137,18 +150,6 @@ export interface MethodBuilder<
       payload: Schema.Schema.Type<P>,
     ) => Effect.Effect<Schema.Schema.Type<S>, RuntimeStorageOperationalError>,
   ): ProcessStoreMethod<P, S>;
-  /**
-   * For-method resolver — `(id, s) => (payload) => Effect`.
-   * Use inside `ProcessStore.for({})`.
-   */
-  resolve(
-    fn: (
-      id: string,
-      s: ProcessStoreSpine,
-    ) => (
-      payload: Schema.Schema.Type<P>,
-    ) => Effect.Effect<Schema.Schema.Type<S>, RuntimeStorageOperationalError>,
-  ): ProcessStoreForMethod<P, S>;
 }
 
 /** @internal */
@@ -263,7 +264,7 @@ export interface ProcessStoreLegacyQuerySection<QueryApi> {
 
 /** @internal */
 export interface ProcessStoreForSection<
-  Methods extends Record<string, ProcessStoreMethod<any, any> | ProcessStoreForMethod<any, any>>,
+  Methods extends Record<string, ProcessStoreForMethod<any, any>>,
 > {
   readonly _tag: typeof FOR_TAG;
   readonly methods: Methods;
@@ -280,7 +281,7 @@ type AnyQuerySection =
   | { readonly _tag: typeof QUERY_TAG; readonly fn: (s: ProcessStoreSpine) => Record<string, unknown> };
 
 type AnyForSection =
-  | { readonly _tag: typeof FOR_TAG; readonly methods: Record<string, ProcessStoreMethod<any, any> | ProcessStoreForMethod<any, any>> }
+  | { readonly _tag: typeof FOR_TAG; readonly methods: Record<string, ProcessStoreForMethod<any, any>> }
   | { readonly _tag: typeof FOR_TAG; readonly fn: (id: string, s: ProcessStoreSpine) => Record<string, unknown> };
 
 type ProcessStoreFacetAnySection =
@@ -343,7 +344,7 @@ type ProcessStoreIdentifierApiOf<Sections extends ReadonlyArray<ProcessStoreFace
   [ProcessStoreForSectionOf<Sections>] extends [never]
     ? Record<never, never>
     : ProcessStoreForSectionOf<Sections> extends ProcessStoreForSection<
-        infer Methods extends Record<string, ProcessStoreMethod<any, any> | ProcessStoreForMethod<any, any>>
+        infer Methods extends Record<string, ProcessStoreForMethod<any, any>>
       >
       ? ForApiFromMethods<Methods>
       : ProcessStoreForSectionOf<Sections> extends ProcessStoreLegacyForSection<
@@ -361,7 +362,7 @@ type ProcessStoreForSchemasOf<Sections extends ReadonlyArray<ProcessStoreFacetAn
   [ProcessStoreForSectionOf<Sections>] extends [never]
     ? Record<never, never>
     : ProcessStoreForSectionOf<Sections> extends ProcessStoreForSection<
-        infer Methods extends Record<string, ProcessStoreMethod<any, any> | ProcessStoreForMethod<any, any>>
+        infer Methods extends Record<string, ProcessStoreForMethod<any, any>>
       >
       ? SchemasFromMethods<Methods>
       : Record<never, never>;
@@ -419,7 +420,7 @@ export const processStoreLegacyQuery = <QueryApi>(
 
 /** @internal */
 export function processStoreFor<
-  const Methods extends Record<string, ProcessStoreMethod<any, any> | ProcessStoreForMethod<any, any>>,
+  const Methods extends Record<string, ProcessStoreForMethod<any, any>>,
 >(methods: Methods): ProcessStoreForSection<Methods>;
 export function processStoreFor<IdentifierApi extends Record<string, unknown>>(
   fn: (identifier: string, s: ProcessStoreSpine) => IdentifierApi,
