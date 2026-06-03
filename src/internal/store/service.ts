@@ -650,7 +650,7 @@ export type ProcessStoreFacetClass<
   readonly make:                Effect.Effect<EmitApi & QueryApi, never, RuntimeStorage>;
   readonly layerRuntimeStorage: Layer.Layer<Self, never, RuntimeStorage>;
   readonly layer:               Layer.Layer<Self, never, never>;
-  readonly layerQuery:          Layer.Layer<Context.Service<any, QueryApi>, never, Self>;
+  readonly layerQuery:          Layer.Layer<Context.Service<any, QueryApi>, never, RuntimeStorage>;
   readonly layerRemote:         (client: ProcessStoreQueryClient) => Layer.Layer<Context.Service<any, QueryApi>, never, never>;
   readonly Query:               Context.Service<any, QueryApi>;
   readonly forQuery:            keyof IdentifierApi extends never
@@ -766,7 +766,7 @@ const assembleFacetClass = <
   emitStatics: EmitApi,
   identifierMember: ProcessStoreIdentifierRuntimeMember<Self, IdentifierApi>,
   queryTag: Context.Service<any, QueryApi>,
-  layerQuery: Layer.Layer<Context.Service<any, QueryApi>, never, Self>,
+  layerQuery: Layer.Layer<Context.Service<any, QueryApi>, never, RuntimeStorage>,
   layerRemote: (client: ProcessStoreQueryClient) => Layer.Layer<Context.Service<any, QueryApi>, never, never>,
   forQueryMember: Record<never, never> | { forQuery: (id: ProcessStoreFullIdentifierInput) => Effect.Effect<IdentifierApi, never, Context.Service<any, QueryApi>> },
   schemas: QuerySchemas,
@@ -1019,14 +1019,16 @@ const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> =
     const queryTagId = `${id}/Query` as const;
     const queryTag = Context.Service<any, QueryApi>()(queryTagId) as unknown as Context.Service<any, QueryApi>;
 
-    // layerQuery — derives read-only query view from the full local facet
-    const layerQuery: Layer.Layer<Context.Service<any, QueryApi>, never, Self> = Layer.effect(
+    // layerQuery — builds a read-only query view directly from RuntimeStorage
+    const layerQuery: Layer.Layer<Context.Service<any, QueryApi>, never, RuntimeStorage> = Layer.effect(
       queryTag as any,
-      Effect.map(Base, (instance) =>
-        queryMethods !== undefined
-          ? Record.map(queryMethods, (_, key) => (instance as any)[key]) as unknown as QueryApi
-          : (instance as unknown as QueryApi),
-      ),
+      Effect.gen(function* () {
+        const s = yield* buildStore;
+        return (queryMethods !== undefined
+          ? bindQueryMethods(queryMethods, s)
+          : "fn" in anyQuerySection! ? (anyQuerySection as any).fn(s) : {}
+        ) as unknown as QueryApi;
+      }),
     ) as any;
 
     // layerRemote — routes queries over RPC, no local dependencies
