@@ -51,6 +51,9 @@ import { ProcessGroupStore } from "./store/processGroup";
 import { ProcessLifecycleStore } from "./store/processLifecycle";
 import { QueueResourceStore } from "./store/queueResource";
 import { RunResourceStore } from "./store/runResource";
+import type { ProcessStoreRegistry } from "./internal/store/service";
+import type { AnyFacetClass } from "./internal/store/service";
+import { toProcessStoreQueryClient, type StoreQueryClient } from "./StoreTransportRpc";
 
 const processLifecycleLayer = ProcessLifecycleStore.layerRuntimeStorage;
 
@@ -111,6 +114,28 @@ export const ProcessStorage = {
 
   /** Alias for {@link ProcessGroupStore}. */
   ProcessGroup: ProcessGroupStore,
+
+  /**
+   * Provide all six facet `Query` sub-tags via a single store transport
+   * client. One transport, all facets — each `Facet.layerRemote(client)`
+   * call shares the same underlying connection.
+   *
+   * For apps that only use a subset of facets, call each facet's
+   * `layerRemote` individually instead.
+   */
+  layerRemote: <R extends ProcessStoreRegistry<ReadonlyArray<AnyFacetClass>>>(
+    client: StoreQueryClient<R>,
+  ) => {
+    const pc = toProcessStoreQueryClient(client);
+    return Layer.mergeAll(
+      LogStore.layerRemote(pc),
+      QueueResourceStore.layerRemote(pc),
+      RunResourceStore.layerRemote(pc),
+      ProcessExecutionStore.layerRemote(pc),
+      ProcessLifecycleStore.layerRemote(pc),
+      ProcessGroupStore.layerRemote(pc),
+    );
+  },
 } as const;
 
 export declare namespace ProcessStorage {

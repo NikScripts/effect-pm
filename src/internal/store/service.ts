@@ -59,8 +59,8 @@ export type ProcessStoreFullIdentifierInput =
  * @internal
  */
 export interface ProcessStoreMethod<
-  P extends Schema.Schema<any>,
-  S extends Schema.Schema<any>,
+  P extends Schema.Codec<any>,
+  S extends Schema.Codec<any>,
 > {
   readonly _tag: typeof METHOD_TAG;
   readonly payload: P;
@@ -78,8 +78,8 @@ export interface ProcessStoreMethod<
  * @internal
  */
 export interface ProcessStoreForMethod<
-  P extends Schema.Schema<any>,
-  S extends Schema.Schema<any>,
+  P extends Schema.Codec<any>,
+  S extends Schema.Codec<any>,
 > {
   readonly _tag: typeof FOR_METHOD_TAG;
   readonly payload: P;
@@ -117,8 +117,8 @@ export interface ProcessStoreQueryClient {
 
 /** @internal */
 export interface MethodBuilder<
-  P extends Schema.Schema<any>,
-  S extends Schema.Schema<any>,
+  P extends Schema.Codec<any>,
+  S extends Schema.Codec<any>,
 > {
   /**
    * For-method resolver — `(id, s) => (payload) => Effect`.
@@ -147,8 +147,8 @@ export interface MethodBuilder<
 }
 
 /** @internal */
-export interface PayloadBuilder<P extends Schema.Schema<any>> {
-  success<S extends Schema.Schema<any>>(schema: S): MethodBuilder<P, S>;
+export interface PayloadBuilder<P extends Schema.Codec<any>> {
+  success<S extends Schema.Codec<any>>(schema: S): MethodBuilder<P, S>;
 }
 
 /**
@@ -156,10 +156,10 @@ export interface PayloadBuilder<P extends Schema.Schema<any>> {
  *
  * @internal
  */
-export const processStorePayload = <P extends Schema.Schema<any>>(
+export const processStorePayload = <P extends Schema.Codec<any>>(
   payload: P,
 ): PayloadBuilder<P> => ({
-  success: <S extends Schema.Schema<any>>(success: S): MethodBuilder<P, S> => ({
+  success: <S extends Schema.Codec<any>>(success: S): MethodBuilder<P, S> => ({
     resolve: (fn: any): any => ({
       _tag: fn.length >= 2 ? FOR_METHOD_TAG : METHOD_TAG,
       payload,
@@ -1011,10 +1011,11 @@ export const defineProcessStoreFacet: ProcessStoreFacetFactory = ((
 // Registry
 // ============================================================================
 
-type AnyFacetClass = {
+/** @internal */
+export type AnyFacetClass = {
   readonly _processTag: string;
-  readonly schemas: Record<string, { payload: Schema.Schema<any>; success: Schema.Schema<any> }>;
-  readonly forSchemas: Record<string, { payload: Schema.Schema<any>; success: Schema.Schema<any> }>;
+  readonly schemas: Record<string, { payload: Schema.Codec<any>; success: Schema.Codec<any> }>;
+  readonly forSchemas: Record<string, { payload: Schema.Codec<any>; success: Schema.Codec<any> }>;
   readonly _methods?: Record<string, ProcessStoreMethod<any, any>>;
   readonly _forMethods?: Record<string, ProcessStoreForMethod<any, any>>;
 };
@@ -1042,13 +1043,13 @@ export interface ProcessStoreRegistry<Facets extends ReadonlyArray<AnyFacetClass
   readonly typeMap:    RegistryTypeMap<Facets>;
   readonly forTypeMap: RegistryForTypeMap<Facets>;
   readonly lookup: Record<string, Record<string, {
-    payload: Schema.Schema<any>;
-    success: Schema.Schema<any>;
+    payload: Schema.Codec<any>;
+    success: Schema.Codec<any>;
     resolve: (s: ProcessStoreSpine) => (p: unknown) => Effect.Effect<unknown, RuntimeStorageOperationalError>;
   }>>;
   readonly forLookup: Record<string, Record<string, {
-    payload: Schema.Schema<any>;
-    success: Schema.Schema<any>;
+    payload: Schema.Codec<any>;
+    success: Schema.Codec<any>;
     resolve: (id: string, s: ProcessStoreSpine) => (p: unknown) => Effect.Effect<unknown, RuntimeStorageOperationalError>;
   }>>;
 }
