@@ -83,7 +83,12 @@ Code quality must meet or exceed this repo's standards.
 - `parseTag(tag)` distinguishes query vs forQuery via `"/for/"` substring; `id` extracted from `payload.id` for forQuery
 - Fiber management, Ack backpressure, interrupt, graceful shutdown — verbatim from `makeNoSerialization`
 - Tracing: `Effect.withSpan(spanPrefix + "." + tag)` per request, span propagation from request headers
-### Step C: Client shape + client middleware
+### Step C: Client shape + client middleware — locked 2026-06-03
+- `StoreQueryClient<R extends ProcessStoreRegistry<any>>` — named nested methods: `client.RunResource.facts(payload)`, `client.for.RunResource(id).byRun(payload)`; return type is `Effect` or `Stream` per method, discriminated from success schema at type level
+- Internal `ProcessStoreQueryClient` in `service.ts` stays `unknown`-based (private impl); `StoreQueryClient<R>` is the public-facing type
+- Encode/decode lives in `layerRemote` (builder): each method encodes payload via `method.payload` schema before calling `client.query`, decodes result via `method.success` schema — client is pure wire
+- `StoreQueryClient<R>` structurally satisfies any single facet's `layerRemote` constraint — pass one client to all six `layerRemote` calls
+- Client middleware: `StoreClientMiddleware` — `(options: { rpc: { tag, facet, method }, request: StoreRequestEncoded }) => Effect<StoreRequestEncoded>` — applied globally per-call in order; same chain as `RpcClient.getRpcClientMiddleware`
 ### Step D: `StoreTransportProtocol` + adapters
 ### Step E: `ProcessStorage.layerRemote(client)` — dashboard bootstrap
 
