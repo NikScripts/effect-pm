@@ -1,5 +1,8 @@
 /**
  * Lossless mapping between persisted SQLite rows and {@link RuntimeRecord}.
+ * 
+ * TODO: Many methods in this module are not written in proper functional style 
+ * Effect. We should rewrite them to be more functional.
  *
  * @remarks
  * This module intentionally mirrors the in-memory adapter's **optional field**
@@ -16,6 +19,7 @@ import { DateTime, Effect, Option, Schema } from "effect";
 import type { RuntimeRecordPredicate } from "../../Query";
 import type { JsonValue } from "../../ProcessStoreEvent";
 import {
+  RuntimeStorageDecodeError,
   RuntimeStorageEncodeError,
   type RuntimeRecord,
 } from "../../RuntimeStorage";
@@ -171,10 +175,17 @@ export const decodeRuntimeRecordRow = (row: Readonly<Record<string, unknown>>): 
  */
 export const decodeRuntimeRecordRowEffect = (
   row: Readonly<Record<string, unknown>>,
-): Effect.Effect<RuntimeRecord, unknown, never> =>
+): Effect.Effect<RuntimeRecord, RuntimeStorageDecodeError, never> =>
   Effect.try({
     try: () => decodeRuntimeRecordRow(row),
-    catch: (cause) => cause,
+    catch: (cause) =>
+      new RuntimeStorageDecodeError({
+        adapter: "sqlite",
+        operation: "read",
+        id: typeof row["id"] === "string" ? row["id"] : undefined,
+        cause,
+        detail: "Failed to decode runtime_records row",
+      }),
   });
 
 const encodeUnknownToJsonString = (
