@@ -917,6 +917,7 @@ export class QueueResourceStore extends ProcessStore.Service<
   QueueResourceStore
 >()(
   "@nikscripts/effect-pm/store/queueResource/QueueResourceStore",
+  "QueueResource",
   QueueResourceTelemetry,
   ProcessStore.query((s) => ({
     // Every queue read pushes its filters to storage as indexed

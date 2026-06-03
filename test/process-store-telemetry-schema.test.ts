@@ -73,6 +73,7 @@ const TelemetrySchemaTelemetry = ProcessStore.telemetry(
 
 class TelemetrySchemaStore extends ProcessStore.Service<TelemetrySchemaStore>()(
   "@test/TelemetrySchemaStore",
+  "TelemetrySchema",
   TelemetrySchemaTelemetry,
   ProcessStore.query((s) => ({
     records: () =>

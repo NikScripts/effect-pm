@@ -218,6 +218,7 @@ const processGroupLifecycleWireTypes = Telemetry.events(
  */
 export const ProcessGroupStore = ProcessStore.Service(
   "@nikscripts/effect-pm/store/processGroup/ProcessGroupStore",
+  "ProcessGroup",
   ProcessGroupTelemetry,
   ProcessStore.query((s) => ({
     lifecycleByGroup: (groupId: string, opts?: QueryOpts) =>

@@ -187,7 +187,7 @@ describe("RunResourceStore — projections", () => {
     Effect.gen(function* () {
       yield* fixtures;
       const facet = yield* RunResourceStore;
-      const paired = yield* facet.runs(resourceId);
+      const paired = yield* facet.runs({ resourceId });
 
       expect(paired).toHaveLength(3);
       const byId = new Map(paired.map((run) => [run.runId, run]));
@@ -210,7 +210,7 @@ describe("RunResourceStore — projections", () => {
     Effect.gen(function* () {
       yield* fixtures;
       const facet = yield* RunResourceStore;
-      const onlyRun2 = yield* facet.byRun(`${resourceId}/run/2`);
+      const onlyRun2 = yield* facet.byRun({ runId: `${resourceId}/run/2` });
       expect(onlyRun2.every((fact) => fact.runId === `${resourceId}/run/2`)).toBe(
         true,
       );
@@ -225,7 +225,7 @@ describe("RunResourceStore — projections", () => {
     Effect.gen(function* () {
       yield* fixtures;
       const facet = yield* RunResourceStore;
-      const latest = yield* facet.latestState(resourceId);
+      const latest = yield* facet.latestState({ resourceId });
       const value = Option.getOrNull(latest);
       expect(value).not.toBeNull();
       expect(value?.completed).toBe(1);
@@ -253,8 +253,8 @@ describe("RunResourceStore — for(resourceId) bound API", () => {
       );
 
       const bound = yield* RunResourceStore.for(resourceId);
-      const facts = yield* bound.facts();
-      const runs = yield* bound.runs();
+      const facts = yield* bound.facts({});
+      const runs = yield* bound.runs({});
       expect(
         facts.every((fact: RunResourceFact) => fact.resourceId === resourceId),
       ).toBe(true);
@@ -271,7 +271,7 @@ describe("RunResourceStore — for(resourceId) bound API", () => {
           totalDurationMs: 50,
         }),
       } satisfies RunResourceStateChange);
-      const latest = yield* bound.latestState();
+      const latest = yield* bound.latestState({});
       const value = Option.getOrNull(latest);
       expect(value?.resourceId).toBe(resourceId);
       expect(value?.completed).toBe(1);
@@ -285,7 +285,7 @@ describe("RunResourceStore — for(resourceId) bound API", () => {
         started(resourceId, runIdA, t(0)),
       );
       const bound = yield* RunResourceStore.for(resourceId);
-      const onlyA = yield* bound.byRun(runIdA);
+      const onlyA = yield* bound.byRun({ runId: runIdA });
       expect(
         onlyA.every(
           (fact) =>

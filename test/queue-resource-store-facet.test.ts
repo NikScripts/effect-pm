@@ -196,7 +196,7 @@ describe("QueueResourceStore — static optional emitters", () => {
     const blocked = Effect.fail(
       new ProcessStoreReadonlyRecordError({ id: "blocked-entry" }),
     );
-    const blockedEmit = Object.assign(() => blocked, { batch: () => blocked });
+    const blockedEmit = Object.assign((_input: unknown) => blocked, { batch: (_inputs: ReadonlyArray<unknown>) => blocked });
     const noopEmit = Object.assign(
       (_input: unknown) => Effect.void,
       { batch: (_inputs: ReadonlyArray<unknown>) => Effect.void },
@@ -250,7 +250,10 @@ describe("QueueResourceStore — static optional emitters", () => {
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
-          Layer.succeed(QueueResourceStore, failingFacet as QueueResourceStore.Type),
+          // @ts-expect-error — intentional test double: instance emitters are typed
+          // Effect<void, never, never> (logWarning absorbed), but blockedEmit fails at
+          // runtime to exercise the static-emitter error path through optionalFacetEmit.
+          Layer.succeed(QueueResourceStore, failingFacet),
           Logger.layer([captureLogger], { mergeWithExisting: false }),
         ),
       ),

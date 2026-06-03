@@ -360,6 +360,7 @@ const queryEntries = (
  */
 export class LogStore extends ProcessStore.Service<LogStore>()(
   "@nikscripts/effect-pm/store/log/LogStore",
+  "Log",
   ProcessStore.record({
     record:
       (s) =>

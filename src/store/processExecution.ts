@@ -283,6 +283,7 @@ const recordToExecutionEvent = (
  */
 export const ProcessExecutionStore = ProcessStore.Service(
   "@nikscripts/effect-pm/store/processExecution/ProcessExecutionStore",
+  "ProcessExecution",
   ProcessExecutionTelemetry,
   ProcessStore.query((s) => ({
     executions: (query: ProcessExecutionQuery) =>

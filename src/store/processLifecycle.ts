@@ -269,6 +269,7 @@ const decodeLifecycleEvents = (
  */
 export const ProcessLifecycleStore = ProcessStore.Service(
   "@nikscripts/effect-pm/store/processLifecycle/ProcessLifecycleStore",
+  "ProcessLifecycle",
   ProcessLifecycleTelemetry,
   ProcessStore.query((s) => ({
     lifecycle: (processId: string, opts?: QueryOpts) =>

@@ -201,7 +201,7 @@ describe("RunResource.make (raw scoped)", () => {
         types: ["RunResource.Run.Started", "RunResource.Run.Completed"],
       });
       const history = yield* runs.stateHistory({ resourceId });
-      const paired = yield* runs.runs(resourceId);
+      const paired = yield* runs.runs({ resourceId });
 
       expect(result).toBe(42);
       // See note on the previous test: assert presence, not order, for
