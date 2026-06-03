@@ -96,6 +96,7 @@ Code quality must meet or exceed this repo's standards.
 - `ProcessStorage.layerRemote(client)` — convenience combiner of all six `Facet.layerRemote(client)` calls; for dashboards that use everything
 - `makeClient(registry, transport, middlewares?)` accepts full or partial registry; ignores `resolve` (server-only) and reads `payload`/`success` schemas for encode/decode
 - Registry passed to `makeClient` is the same object used server-side — single source of truth, no schema duplication
+- **One transport, all facets** — all `Facet.layerRemote(client)` calls share the same `StoreTransportRpc` client and the same underlying connection; tag routing (`"RunResource/facts"`, `"QueueResource/entries"`) distinguishes facets on the wire; no per-facet connections
 
 ---
 
