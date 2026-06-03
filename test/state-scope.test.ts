@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { getStateFieldSelectorMetadata, State } from "../src/State";
 
 const QueueScope = State.Scope("Queue", {
@@ -24,8 +24,14 @@ describe("State.Scope", () => {
         { id: "entry", entryId: "entry-1" },
         EntryScope,
       ).pipe(
-        Effect.provide(WorkerScope.layer({ id: "worker", workerId: "worker-1" })),
-        Effect.provide(QueueScope.layer({ id: "queue", queueId: "queue-1" })),
+        // WorkerScope is a withLeaf of QueueScope and requires it in context.
+        // Layer.provideMerge threads QueueScope through WorkerScope while keeping
+        // QueueScope in the final context — equivalent to the chained provides.
+        Effect.provide(
+          WorkerScope.layer({ id: "worker", workerId: "worker-1" }).pipe(
+            Layer.provideMerge(QueueScope.layer({ id: "queue", queueId: "queue-1" })),
+          ),
+        ),
       );
 
       expect(state).toEqual({

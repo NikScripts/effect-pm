@@ -7,8 +7,6 @@
  * are declared with `ProcessStore.Service<Self>()(id, ...sections)`,
  * where each section is a partial of the facet:
  *
- * - {@link ProcessStore.record} — flat write API (legacy facets; per-method
- *   static emitters).
  * - {@link ProcessStore.telemetry} — nested telemetry tree (tag/event DSL).
  * - {@link ProcessStore.query} — instance query API (yield the facet).
  * - {@link ProcessStore.for} — optional identifier-bound queries via
@@ -31,28 +29,26 @@
  * ```ts
  * export class ProcessStoreThing extends ProcessStore.Service<ProcessStoreThing>()(
  *   "@nikscripts/effect-pm/store/thing/ProcessStoreThing",
- *   ProcessStore.record({
- *     recordThing: (s) => (fact: ThingFact) => s.create(makeThingRecord(fact)),
- *   }),
+ *   ProcessStore.telemetry(
+ *     Telemetry.namespace("Thing"),
+ *     Telemetry.tag("Event")(
+ *       Telemetry.event("Happened", ThingHappenedSchema),
+ *     ),
+ *   ),
  *   ProcessStore.query((s) => ({
  *     things: (q?: ThingQuery) =>
  *       s.read(runtimeRecordQuery(thingPredicates(q), q?.opts))
  *        .pipe(Effect.map(decodeThings)),
  *   })),
  * ) {}
- *
- * export declare namespace ProcessStoreThing {
- *   export type Type = ProcessStore.Service.Type<typeof ProcessStoreThing>;
- *   export type EmitType = ProcessStore.Service.EmitType<typeof ProcessStoreThing>;
- * }
  * ```
  *
  * @example Best-effort storage emit
  * ```ts
- * yield* ProcessStoreThing.recordThing(fact).pipe(
+ * yield* ThingScope.run(state, ProcessStoreThing.Event.Happened).pipe(
  *   ProcessStore.catchErrorAndLog({
  *     message: "Thing storage write failed",
- *     annotations: { thingId: fact.id },
+ *     annotations: { thingId: state.thingId },
  *   }),
  * );
  * ```
@@ -76,7 +72,6 @@ import {
   processStoreLegacyQuery,
   processStorePayload,
   processStoreQuery,
-  processStoreRecord,
   processStoreRegistry,
   processStoreTelemetry,
   type ProcessStoreCatchErrorAndLogOptions,
@@ -127,7 +122,6 @@ export {
  */
 export const ProcessStore = {
   Service:      defineProcessStoreFacet,
-  record:       processStoreRecord,
   telemetry:    processStoreTelemetry,
   payload:      processStorePayload,
   query:        processStoreQuery,

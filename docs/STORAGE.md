@@ -13,7 +13,7 @@
   [plans/13-queue-rate-limit-and-operational-storage.md](./plans/13-queue-rate-limit-and-operational-storage.md).
 - **Stack:** `RuntimeStorage` (rows) + per-domain facets in `src/store/` (`@nikscripts/effect-pm/store/*`). `ProcessStore` = facet builder. `ProcessStorage` = combined built-in facet layers.
 - **One facet per domain.** Each facet owns its concrete fact / change types **and** its row codec — encoders, decoders, predicate builders. No shared envelope. No public `runtime.fact.recorded` wire type.
-- **Optional storage.** Domain code uses **static telemetry** on facet stores (`QueueResourceStore.Entry.Enqueued`, …) or scoped fact helpers (`emitEntryFact`, …). No-op without layer; when storage is present, read and write failures surface typed errors. Use `ProcessStore.catchErrorAndLog(...)` for explicit best-effort telemetry. Shared optional-emit helpers: `ProcessStore.optionalFacetEmit`, `optionalFacetEmitBatch`, `optionalFacetEmitWithBridge`, `facetHasOwnMethod`.
+- **Optional storage.** Domain code uses **static telemetry** on facet stores (`QueueResourceStore.Entry.Enqueued`, …) within the appropriate scopes (`QueueResourceScope.run`, `QueueEntryScope.run`, etc.). No-op without layer; when storage is present, write failures are caught by `Telemetry.logWarning` on each event definition (swallowed to log stream). Use `ProcessStore.catchErrorAndLog(...)` for explicit best-effort telemetry on writes without `logWarning`. Shared optional-emit helpers: `ProcessStore.optionalFacetEmit`, `optionalFacetEmitBatch`, `optionalFacetEmitWithBridge`, `facetHasOwnMethod`.
 - **Reads:** `Effect.serviceOption(QueueResourceStore)` (etc.) then `Option.match({ onNone, onSome: (store) => store.read(...) })` — never static read methods on the facet class. No `Effect.serviceOption(ProcessStore)` monolith in domain modules.
 - **No backward compat.** Delete legacy APIs; no `@deprecated` shims.
 - **Logs:** capture/relay → `@nikscripts/effect-pm/Logs`. Durable rows → `LogStore` (`log.entry`).
@@ -72,10 +72,10 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 | `RunResource.Run.Started` / `.Completed` / `.Failed` | `RunResource` → `RunResourceStore.Run.*` | `yield* RunResourceStore` → `.facts`, `.runs`, `.byRun` |
 | `RunResource.State.Changed` | `RunResource` → `RunResourceStore.State.Changed` | `yield* RunResourceStore` → `.stateHistory`, `.latestState` |
 | `log.entry` | static `record` / `recordBatch` (relay) | `yield* LogStore` → `.load`, `.query` |
-| `Queue.Entry.*` × 9 | `QueueResource` worker → `QueueResourceStore.Entry.*` (scoped); apps/tests may use `emitEntryFact` | `yield* QueueResourceStore` → `.entries`, `.entriesByKey` |
-| `Queue.Lifecycle.*` × 6 | `QueueResource` worker → `emitLifecycleChange` / `emitLifecycleChanges` | `.lifecycle` |
-| `Queue.DedupeKey.*` × 3 | `QueueResource` worker → `emitDedupeKeyChange` / `emitDedupeKeyChanges`. Worker emits `Added` on enqueue and on `releaseEncoded` rollback (`restorePending`); `Released` on completion, `release`, drop, dead-letter, and `clear`. `Hydrated` is decode-only — for future warm-start adapters that rebuild `activeKeys` from durable state. | `.dedupeKeys` |
-| `Queue.RateLimit.Exceeded` × 1 | `QueueResource` worker → `emitRateLimitExceededFact` when `rateLimit` quota is exceeded (`record: "exceeded"` default; `"off"` to disable) | `.rateLimits` |
+| `Queue.Entry.*` × 9 | `QueueResource` worker → `QueueResourceStore.Entry.*` within `QueueResourceScope.run` + `QueueEntryScope.run` | `yield* QueueResourceStore` → `.entries`, `.entriesByKey`, `.entryHistory`, `.latestEntryFact`, `.byBatch` |
+| `Queue.Lifecycle.*` × 6 | `QueueResource` worker → `QueueResourceStore.Lifecycle.*` within `QueueResourceScope.run`. Worker emits `Added` on enqueue, `Released` on completion/release/drop/dead-letter/clear. `Hydrated` is decode-only (warm-start). | `.lifecycle`, `.latestLifecycleEvent` |
+| `Queue.DedupeKey.*` × 3 | `QueueResource` worker → `QueueResourceStore.DedupeKey.*` within `QueueResourceScope.run` + `QueueDedupeKeyScope.run` | `.dedupeKeys` |
+| `Queue.RateLimit.Exceeded` × 1 | `QueueResource` worker → `QueueResourceStore.RateLimit.Exceeded` within `QueueResourceScope.run` + `QueueEntryScope.run` when `rateLimit` quota is exceeded (`record: "exceeded"` default; `"off"` to disable) | `.rateLimits` |
 
 ---
 

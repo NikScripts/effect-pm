@@ -109,6 +109,7 @@ const telemetryIdentityFieldByKind: Readonly<Record<string, string>> = {
   QueueResource: "queueId",
   "queue-resource": "queueId",
   Queue: "queueId",
+  Log: "groupId",
 };
 
 const telemetryIdentity = (value: unknown): TelemetryIdentity | undefined => {

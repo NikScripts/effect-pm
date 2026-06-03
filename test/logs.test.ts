@@ -3,6 +3,7 @@ import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Effect, FileSystem, Layer, Path } from "effect";
 import { groupLogSqlitePath } from "../src/internal/manager/childLaunch";
+import { LogScope } from "../src/LogScope";
 import { LogStore } from "../src/store/log";
 import { layerProcessStore } from "../src/storage/sqlite/index";
 import { ProcessManagerLogAnnotationKeys } from "../src/LogContext";
@@ -31,7 +32,10 @@ describe("LogStore", () => {
         spans: [],
       };
 
-      yield* LogStore.record("workshop-group", "1", entry).pipe(
+      yield* LogScope.run(
+        { groupId: "workshop-group" },
+        LogStore.Entry.Recorded({ entryId: "1", entry }),
+      ).pipe(
         Effect.provide(storeLayer),
         Effect.scoped,
       );

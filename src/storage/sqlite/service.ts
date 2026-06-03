@@ -14,7 +14,7 @@
  * @internal
  */
 
-import { DateTime, Effect } from "effect";
+import { DateTime, Effect, Schema } from "effect";
 import type { SqlClient } from "effect/unstable/sql/SqlClient";
 import { SqlError } from "effect/unstable/sql/SqlError";
 import type {
@@ -57,24 +57,10 @@ const rowObjectToRecord = (row: object): Record<string, unknown> => {
   return out;
 };
 
-const rowId = (row: Readonly<Record<string, unknown>>): string | undefined => {
-  const id = row["id"];
-  return typeof id === "string" ? id : undefined;
-};
 
 const rowToRuntimeRecord = (row: unknown): Effect.Effect<RuntimeRecord, RuntimeStorageDecodeError, never> =>
   typeof row === "object" && row !== null
-    ? Effect.mapError(
-        decodeRuntimeRecordRowEffect(rowObjectToRecord(row)),
-        (cause) =>
-          new RuntimeStorageDecodeError({
-            adapter: "sqlite",
-            operation: "read",
-            id: rowId(rowObjectToRecord(row)),
-            cause,
-            detail: "Failed to decode runtime_records row",
-          }),
-      )
+    ? decodeRuntimeRecordRowEffect(rowObjectToRecord(row))
     : Effect.fail(
         new RuntimeStorageDecodeError({
           adapter: "sqlite",
@@ -421,7 +407,7 @@ export const makeSqliteRuntimeStorageService = (sql: SqlClient): RuntimeStorageS
       ),
     ).pipe(
       Effect.catchIf(
-        (error): error is SqlError => error instanceof SqlError,
+        Schema.is(SqlError),
         (error) =>
           Effect.fail(
             new RuntimeStorageTransactionError({

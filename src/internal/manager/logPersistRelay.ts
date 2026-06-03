@@ -7,6 +7,7 @@
 import { Duration, Effect, Layer, Option, PubSub, Ref, Schedule, Scope, Stream } from "effect";
 import { ProcessGroupLogContext } from "../../LogContext";
 import type { ProcessManagerLogEntry } from "../../LogEntry";
+import { LogScope } from "../../LogScope";
 import {
   ProcessManagerLogRelay,
   type ProcessManagerLogRelayService,
@@ -39,7 +40,10 @@ const makePersistingRelay = (
       if (batch.length === 0) {
         return;
       }
-      yield* LogStore.recordBatch(groupOption.value.groupId, batch).pipe(
+      yield* LogScope.run(
+        { groupId: groupOption.value.groupId },
+        LogStore.Entry.Recorded.batch(batch),
+      ).pipe(
         ProcessStore.catchErrorAndLog({
           message: "LogStore write failed while relaying logs",
           level: "warning",
