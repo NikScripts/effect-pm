@@ -165,8 +165,9 @@ export interface StoreClientMiddleware {
 /**
  * Fully typed client derived from a `ProcessStoreRegistry`.
  *
- * Each facet's methods are accessible as named nested properties:
- * `client.RunResource.facts(payload)` / `client.for.RunResource(id).byRun(payload)`
+ * - Effect methods: `client.RunResource.facts(payload)`
+ * - Stream methods: `client.stream.RunResource.liveEvents(payload)`
+ * - For-bound effect methods: `client.for.RunResource(id).byRun(payload)`
  *
  * @public
  */
@@ -177,6 +178,26 @@ export type StoreQueryClient<
     readonly [Method in keyof R["typeMap"][Facet] & string]: (
       payload: R["typeMap"][Facet][Method]["payload"],
     ) => Effect.Effect<R["typeMap"][Facet][Method]["success"], StoreError>;
+  };
+} & {
+  readonly stream: {
+    readonly [Facet in keyof R["streamTypeMap"] & string]: {
+      readonly [Method in keyof R["streamTypeMap"][Facet] & string]:
+        R["streamTypeMap"][Facet][Method] extends { readonly payload: infer P; readonly success: infer S }
+          ? (payload: P) => Stream.Stream<S, StoreError>
+          : never;
+    };
+  } & {
+    readonly for: {
+      readonly [Facet in keyof R["forStreamTypeMap"] & string]: (
+        id: string,
+      ) => {
+        readonly [Method in keyof R["forStreamTypeMap"][Facet] & string]:
+          R["forStreamTypeMap"][Facet][Method] extends { readonly payload: infer P; readonly success: infer S }
+            ? (payload: P) => Stream.Stream<S, StoreError>
+            : never;
+      };
+    };
   };
 } & {
   readonly for: {
@@ -347,6 +368,87 @@ export const makeClient = <
     );
   };
 
+  const callStreamQuery = (
+    facet: string,
+    method: string,
+    rawPayload: unknown,
+  ): Stream.Stream<unknown, StoreError> => {
+    const entry = registry.streamLookup[facet]?.[method];
+    const tag = makeQueryTag(facet, method);
+
+    const encodeAndSend: Effect.Effect<Stream.Stream<unknown, StoreError>, StoreError> =
+      (entry !== undefined
+        ? Schema.encodeUnknownEffect(entry.payload)(rawPayload).pipe(
+            Effect.mapError(
+              (e) => new PayloadDecodeError({ error: e._tag ?? String(e) }),
+            ),
+          )
+        : Effect.succeed(rawPayload)
+      ).pipe(
+        Effect.flatMap((encoded) =>
+          applyMiddleware(tag, facet, method, encoded, []).pipe(
+            Effect.map((req) => transport.sendStream(req).pipe(
+              Stream.mapEffect((item) => {
+                const entry2 = registry.streamLookup[facet]?.[method];
+                const decode: (v: unknown) => Effect.Effect<unknown, Schema.SchemaError> =
+                  entry2 !== undefined
+                    ? (v) => Schema.decodeUnknownEffect(entry2.success)(v)
+                    : (v) => Effect.succeed(v);
+                return decode(item).pipe(
+                  Effect.mapError(
+                    (e) => new ResultEncodeError({ error: e._tag ?? String(e) }),
+                  ),
+                );
+              }),
+            )),
+          ),
+        ),
+      );
+
+    return Stream.unwrap(encodeAndSend);
+  };
+
+  const callForStreamQuery = (
+    facet: string,
+    id: string,
+    method: string,
+    rawPayload: unknown,
+  ): Stream.Stream<unknown, StoreError> => {
+    const entry = registry.forStreamLookup[facet]?.[method];
+    const tag = makeForQueryTag(facet, method);
+
+    const encodeAndSend: Effect.Effect<Stream.Stream<unknown, StoreError>, StoreError> =
+      (entry !== undefined
+        ? Schema.encodeUnknownEffect(entry.payload)(rawPayload).pipe(
+            Effect.mapError(
+              (e) => new PayloadDecodeError({ error: e._tag ?? String(e) }),
+            ),
+          )
+        : Effect.succeed(rawPayload)
+      ).pipe(
+        Effect.flatMap((encodedPayload) =>
+          applyMiddleware(tag, facet, method, { id, payload: encodedPayload }, []).pipe(
+            Effect.map((req) => transport.sendStream(req).pipe(
+              Stream.mapEffect((item) => {
+                const entry2 = registry.forStreamLookup[facet]?.[method];
+                const decode: (v: unknown) => Effect.Effect<unknown, Schema.SchemaError> =
+                  entry2 !== undefined
+                    ? (v) => Schema.decodeUnknownEffect(entry2.success)(v)
+                    : (v) => Effect.succeed(v);
+                return decode(item).pipe(
+                  Effect.mapError(
+                    (e) => new ResultEncodeError({ error: e._tag ?? String(e) }),
+                  ),
+                );
+              }),
+            )),
+          ),
+        ),
+      );
+
+    return Stream.unwrap(encodeAndSend);
+  };
+
   const queryMethods: Record<string, Record<string, (payload: unknown) => Effect.Effect<unknown, StoreError>>> = {};
   for (const [facet, methods] of Object.entries(registry.lookup)) {
     const facetMethods: Record<string, (payload: unknown) => Effect.Effect<unknown, StoreError>> = {};
@@ -354,6 +456,28 @@ export const makeClient = <
       facetMethods[method] = (payload: unknown) => callQuery(facet, method, payload);
     }
     queryMethods[facet] = facetMethods;
+  }
+
+  // Stream methods live under client.stream (and client.stream.for) so TypeScript
+  // knows they return Stream, not Effect — no cast needed in toProcessStoreQueryClient.
+  const streamFacetMethods: Record<string, Record<string, (payload: unknown) => Stream.Stream<unknown, StoreError>>> = {};
+  for (const [facet, methods] of Object.entries(registry.streamLookup)) {
+    const facetStreamMethods: Record<string, (payload: unknown) => Stream.Stream<unknown, StoreError>> = {};
+    for (const method of Object.keys(methods)) {
+      facetStreamMethods[method] = (payload: unknown) => callStreamQuery(facet, method, payload);
+    }
+    streamFacetMethods[facet] = facetStreamMethods;
+  }
+
+  const streamForMethods: Record<string, (id: string) => Record<string, (payload: unknown) => Stream.Stream<unknown, StoreError>>> = {};
+  for (const [facet, methods] of Object.entries(registry.forStreamLookup)) {
+    streamForMethods[facet] = (id: string) => {
+      const bound: Record<string, (payload: unknown) => Stream.Stream<unknown, StoreError>> = {};
+      for (const method of Object.keys(methods)) {
+        bound[method] = (payload: unknown) => callForStreamQuery(facet, id, method, payload);
+      }
+      return bound;
+    };
   }
 
   const forMethods: Record<string, (id: string) => Record<string, (payload: unknown) => Effect.Effect<unknown, StoreError>>> = {};
@@ -371,7 +495,11 @@ export const makeClient = <
   // (a phantom {}). TypeScript cannot derive it from Record<string,…> even though
   // the runtime keys match exactly — this structural coercion is the boundary between
   // the dynamic build and the typed surface.
-  return { ...queryMethods, for: forMethods } as unknown as StoreQueryClient<ProcessStoreRegistry<Facets>>;
+  return {
+    ...queryMethods,
+    stream: { ...streamFacetMethods, for: streamForMethods },
+    for: forMethods,
+  } as unknown as StoreQueryClient<ProcessStoreRegistry<Facets>>;
 };
 
 // ============================================================================
@@ -394,6 +522,12 @@ export const toProcessStoreQueryClient = (
   queryFor: (facet, id, method, payload) =>
     client.for?.[facet]?.(id)?.[method]?.(payload) ??
     Effect.fail(new UnknownMethod({ facet, method })),
+  queryStream: (facet, method, payload) =>
+    client.stream?.[facet]?.[method]?.(payload) ??
+    Stream.fail(new UnknownMethod({ facet, method })),
+  queryForStream: (facet, id, method, payload) =>
+    client.stream?.for?.[facet]?.(id)?.[method]?.(payload) ??
+    Stream.fail(new UnknownMethod({ facet, method })),
 });
 
 // ============================================================================

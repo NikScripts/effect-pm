@@ -23,6 +23,7 @@ import {
   Queue,
   Scope,
   Semaphore,
+  Stream,
   Tracer,
 } from "effect";
 import * as Schema from "effect/Schema";
@@ -30,12 +31,14 @@ import { RuntimeStorage } from "../../RuntimeStorage";
 import type { AnyFacetClass, ProcessStoreRegistry } from "./service";
 import { makeProcessStoreSpine } from "./spine";
 import type {
+  AckEncoded,
   ClientEnd,
   ExitEncoded,
   FromClientEncoded,
   FromServerEncoded,
   InterruptEncoded,
   RequestEncoded,
+  ResponseChunkEncoded,
   ResponseExitEncoded,
 } from "../../StoreMessage";
 import {
@@ -218,10 +221,12 @@ export const makeNoStore = <
     readonly spanAttributes?: Record<string, unknown> | undefined;
     readonly concurrency?: number | "unbounded" | undefined;
     readonly disableFatalDefects?: boolean | undefined;
+    readonly disableClientAcks?: boolean | undefined;
   },
 ): Effect.Effect<StoreServer, never, RuntimeStorage | Scope.Scope> =>
   Effect.gen(function* () {
     const enableTracing = options.disableTracing !== true;
+    const supportsAck = options.disableClientAcks !== true;
     const spanPrefix = options.spanPrefix ?? "StoreTransport";
     const concurrency = options.concurrency ?? "unbounded";
     const disableFatalDefects = options.disableFatalDefects ?? false;
@@ -241,6 +246,7 @@ export const makeNoStore = <
 
     type Client = {
       readonly id: number;
+      readonly latches: Map<RequestId, Latch.Latch>;
       readonly fibers: Map<RequestId, Fiber.Fiber<void, unknown>>;
       ended: boolean;
     };
@@ -321,6 +327,29 @@ export const makeNoStore = <
         exit,
       } satisfies ResponseExitEncoded);
 
+    const streamEffect = (
+      client: Client,
+      requestId: RequestId,
+      stream: Stream.Stream<unknown, StoreError>,
+    ): Effect.Effect<void, StoreError> => {
+      let latch: Latch.Latch | undefined;
+      if (supportsAck) {
+        latch = Latch.makeUnsafe(true);
+        client.latches.set(requestId, latch);
+      }
+      const capturedLatch = latch;
+      return Stream.runForEach(stream, (item) => {
+        const write = options.onFromServer(client.id, {
+          _tag: "Chunk",
+          requestId: String(requestId),
+          values: [item],
+        } satisfies ResponseChunkEncoded);
+        if (capturedLatch === undefined) return write;
+        capturedLatch.closeUnsafe();
+        return Effect.andThen(write, capturedLatch.await);
+      });
+    };
+
     const applyMiddleware = (
       clientId: number,
       tag: string,
@@ -354,7 +383,16 @@ export const makeNoStore = <
         parsed._tag === "forQuery"
           ? registry.forLookup[parsed.facet]?.[parsed.method]
           : undefined;
-      const entry = lookupEntry ?? forLookupEntry;
+      const streamLookupEntry =
+        parsed._tag === "query"
+          ? registry.streamLookup[parsed.facet]?.[parsed.method]
+          : undefined;
+      const forStreamLookupEntry =
+        parsed._tag === "forQuery"
+          ? registry.forStreamLookup[parsed.facet]?.[parsed.method]
+          : undefined;
+      const isStream = streamLookupEntry !== undefined || forStreamLookupEntry !== undefined;
+      const entry = lookupEntry ?? forLookupEntry ?? streamLookupEntry ?? forStreamLookupEntry;
 
       if (entry === undefined) {
         return sendExit(
@@ -400,6 +438,27 @@ export const makeNoStore = <
               request.headers,
             ).pipe(
               Effect.flatMap(() => {
+                // Stream methods dispatch to streamEffect; effect methods go through the
+                // normal encode-and-send path. Both resolve() calls are typed correctly
+                // (Stream vs Effect) so no cast is needed.
+                if (isStream) {
+                  // Map RuntimeStorageOperationalError → StorageError so the error
+                  // union stays StoreError throughout and matchCauseEffect type-checks.
+                  const resolvedStream =
+                    (streamLookupEntry !== undefined
+                      ? streamLookupEntry.resolve(spine)(decoded)
+                      : forStreamLookupEntry !== undefined && forId !== undefined
+                        ? forStreamLookupEntry.resolve(forId, spine)(decoded)
+                        : Stream.die("unreachable: stream entry existence checked above")
+                    ).pipe(
+                      Stream.mapError((e) => new StorageError({ cause: e })),
+                    );
+
+                  return streamEffect(client, requestId, resolvedStream).pipe(
+                    Effect.andThen(sendExit(client, requestId, encodeExitSuccess(undefined))),
+                  );
+                }
+
                 // Map RuntimeStorageOperationalError → StorageError so the error union
                 // is StoreError throughout and matchCauseEffect can type-check without a cast.
                 const resolvedResult: Effect.Effect<unknown, StorageError> =
@@ -482,6 +541,7 @@ export const makeNoStore = <
       client.fibers.set(requestId, fiber);
       fiber.addObserver(() => {
         client.fibers.delete(requestId);
+        client.latches.delete(requestId);
         if (client.ended && client.fibers.size === 0) {
           runFork(endClient(client));
         }
@@ -498,7 +558,7 @@ export const makeNoStore = <
           if (isShutdown) return Effect.interrupt;
           let client = clients.get(clientId);
           if (client === undefined) {
-            client = { id: clientId, fibers: new Map(), ended: false };
+            client = { id: clientId, latches: new Map(), fibers: new Map(), ended: false };
             clients.set(clientId, client);
           } else if (client.ended) {
             return Effect.interrupt;
@@ -506,8 +566,10 @@ export const makeNoStore = <
           switch (message._tag) {
             case "Request":
               return handleRequest(client, message as RequestEncoded);
-            case "Ack":
-              return Effect.void;
+            case "Ack": {
+              const latch = client.latches.get(RequestId((message as AckEncoded).requestId));
+              return latch !== undefined ? latch.open : Effect.void;
+            }
             case "Interrupt": {
               const fiber = client.fibers.get(RequestId((message as InterruptEncoded).requestId));
               return fiber !== undefined ? Fiber.interrupt(fiber).pipe(Effect.asVoid) : Effect.void;
@@ -554,11 +616,12 @@ export const makeStore = <
   StoreTransportProtocol | RuntimeStorage | Scope.Scope
 > =>
   Effect.gen(function* () {
-    const { run, disconnects, send, end, supportsSpanPropagation } =
+    const { run, disconnects, send, end, supportsAck, supportsSpanPropagation } =
       yield* StoreTransportProtocol;
 
     const server = yield* makeNoStore(registry, {
       ...options,
+      disableClientAcks: !supportsAck,
       disableSpanPropagation: !supportsSpanPropagation,
       onFromServer: (clientId, response) =>
         response._tag === "ClientEnd" ? end(response.clientId) : send(clientId, response),

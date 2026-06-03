@@ -5,7 +5,7 @@
  * @internal
  */
 
-import { Clock, Context, Effect, Layer, Record, Schema } from "effect";
+import { Clock, Context, Effect, Layer, Record, Schema, Stream } from "effect";
 import type { ProcessStoreWriteError } from "../../ProcessStoreEvent";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import type { RuntimeStorageOperationalError } from "../../RuntimeStorage";
@@ -29,6 +29,8 @@ const QUERY_TAG = "ProcessStore/query" as const;
 const FOR_TAG = "ProcessStore/for" as const;
 const METHOD_TAG = "ProcessStore/method" as const;
 const FOR_METHOD_TAG = "ProcessStore/forMethod" as const;
+const STREAM_METHOD_TAG = "ProcessStore/streamMethod" as const;
+const FOR_STREAM_METHOD_TAG = "ProcessStore/forStreamMethod" as const;
 const IDENTIFIER_FACTORY = Symbol.for("@nikscripts/effect-pm/ProcessStore/identifierFactory");
 
 type EmitEffect = Effect.Effect<void, ProcessStoreWriteError>;
@@ -93,6 +95,48 @@ export interface ProcessStoreForMethod<
 }
 
 /**
+ * Stream-returning query method. Resolver receives the spine and returns a
+ * `Stream` instead of an `Effect`. Built via `.resolveStream(fn)` on a
+ * `MethodBuilder`.
+ *
+ * @internal
+ */
+export interface ProcessStoreStreamMethod<
+  P extends Schema.Codec<any>,
+  S extends Schema.Codec<any>,
+> {
+  readonly _tag: typeof STREAM_METHOD_TAG;
+  readonly payload: P;
+  readonly success: S;
+  readonly resolve: (
+    s: ProcessStoreSpine,
+  ) => (
+    payload: Schema.Schema.Type<P>,
+  ) => Stream.Stream<Schema.Schema.Type<S>, RuntimeStorageOperationalError>;
+}
+
+/**
+ * Identifier-bound stream method. Resolver receives `id` before the spine and
+ * returns a `Stream`.
+ *
+ * @internal
+ */
+export interface ProcessStoreForStreamMethod<
+  P extends Schema.Codec<any>,
+  S extends Schema.Codec<any>,
+> {
+  readonly _tag: typeof FOR_STREAM_METHOD_TAG;
+  readonly payload: P;
+  readonly success: S;
+  readonly resolve: (
+    id: string,
+    s: ProcessStoreSpine,
+  ) => (
+    payload: Schema.Schema.Type<P>,
+  ) => Stream.Stream<Schema.Schema.Type<S>, RuntimeStorageOperationalError>;
+}
+
+/**
  * Generic RPC client used by `layerRemote` — decoupled from `StoreTransportRpc`.
  *
  * @internal
@@ -109,6 +153,17 @@ export interface ProcessStoreQueryClient {
     method: string,
     payload: unknown,
   ) => Effect.Effect<unknown, unknown>;
+  readonly queryStream?: (
+    facet: string,
+    method: string,
+    payload: unknown,
+  ) => Stream.Stream<unknown, unknown>;
+  readonly queryForStream?: (
+    facet: string,
+    id: string,
+    method: string,
+    payload: unknown,
+  ) => Stream.Stream<unknown, unknown>;
 }
 
 // ============================================================================
@@ -144,6 +199,29 @@ export interface MethodBuilder<
       payload: Schema.Schema.Type<P>,
     ) => Effect.Effect<Schema.Schema.Type<S>, RuntimeStorageOperationalError>,
   ): ProcessStoreMethod<P, S>;
+  /**
+   * Identifier-bound stream resolver — `(id, s) => (payload) => Stream`.
+   * Use inside `ProcessStore.for({})` when the method returns a stream.
+   */
+  resolveStream(
+    fn: (
+      id: string,
+      s: ProcessStoreSpine,
+    ) => (
+      payload: Schema.Schema.Type<P>,
+    ) => Stream.Stream<Schema.Schema.Type<S>, RuntimeStorageOperationalError>,
+  ): ProcessStoreForStreamMethod<P, S>;
+  /**
+   * Query stream resolver — `(s) => (payload) => Stream`.
+   * Use inside `ProcessStore.query({})` when the method returns a stream.
+   */
+  resolveStream(
+    fn: (
+      s: ProcessStoreSpine,
+    ) => (
+      payload: Schema.Schema.Type<P>,
+    ) => Stream.Stream<Schema.Schema.Type<S>, RuntimeStorageOperationalError>,
+  ): ProcessStoreStreamMethod<P, S>;
 }
 
 /** @internal */
@@ -166,6 +244,12 @@ export const processStorePayload = <P extends Schema.Codec<any>>(
       success,
       resolve: fn,
     }),
+    resolveStream: (fn: any): any => ({
+      _tag: fn.length >= 2 ? FOR_STREAM_METHOD_TAG : STREAM_METHOD_TAG,
+      payload,
+      success,
+      resolve: fn,
+    }),
   }),
 });
 
@@ -173,38 +257,33 @@ export const processStorePayload = <P extends Schema.Codec<any>>(
 // Type-level helpers for methods maps
 // ============================================================================
 
-type QueryApiFromMethods<
-  Methods extends Record<string, ProcessStoreMethod<any, any>>,
-> = {
-  readonly [K in keyof Methods & string]: (
-    payload: Schema.Schema.Type<Methods[K]["payload"]>,
-  ) => Effect.Effect<
-    Schema.Schema.Type<Methods[K]["success"]>,
-    RuntimeStorageOperationalError
-  >;
+type MethodReturnType<M> =
+  M extends ProcessStoreStreamMethod<infer P, infer S>
+    ? (payload: Schema.Schema.Type<P>) => Stream.Stream<Schema.Schema.Type<S>, RuntimeStorageOperationalError>
+    : M extends ProcessStoreForStreamMethod<infer P, infer S>
+      ? (payload: Schema.Schema.Type<P>) => Stream.Stream<Schema.Schema.Type<S>, RuntimeStorageOperationalError>
+      : M extends ProcessStoreMethod<infer P, infer S>
+        ? (payload: Schema.Schema.Type<P>) => Effect.Effect<Schema.Schema.Type<S>, RuntimeStorageOperationalError>
+        : M extends ProcessStoreForMethod<infer P, infer S>
+          ? (payload: Schema.Schema.Type<P>) => Effect.Effect<Schema.Schema.Type<S>, RuntimeStorageOperationalError>
+          : never;
+
+type MethodSchemas<M> =
+  M extends { readonly payload: Schema.Codec<any>; readonly success: Schema.Codec<any> }
+    ? { readonly payload: M["payload"]; readonly success: M["success"] }
+    : never;
+
+type QueryApiFromMethods<Methods> = {
+  readonly [K in keyof Methods & string]: MethodReturnType<Methods[K]>;
 };
 
-type ForApiFromMethods<
-  Methods extends Record<string, ProcessStoreMethod<any, any> | ProcessStoreForMethod<any, any>>,
-> = {
-  readonly [K in keyof Methods & string]: (
-    payload: Schema.Schema.Type<Methods[K]["payload"]>,
-  ) => Effect.Effect<
-    Schema.Schema.Type<Methods[K]["success"]>,
-    RuntimeStorageOperationalError
-  >;
+// ForApiFromMethods is the same shape as QueryApiFromMethods — identifier is bound externally.
+type ForApiFromMethods<Methods> = {
+  readonly [K in keyof Methods & string]: MethodReturnType<Methods[K]>;
 };
 
-type SchemasFromMethods<
-  Methods extends Record<
-    string,
-    ProcessStoreMethod<any, any> | ProcessStoreForMethod<any, any>
-  >,
-> = {
-  readonly [K in keyof Methods]: {
-    readonly payload: Methods[K]["payload"];
-    readonly success: Methods[K]["success"];
-  };
+type SchemasFromMethods<Methods> = {
+  readonly [K in keyof Methods]: MethodSchemas<Methods[K]>;
 };
 
 // ============================================================================
@@ -232,7 +311,7 @@ export type ProcessStoreFacetBrand<
 
 /** @internal */
 export interface ProcessStoreQuerySection<
-  Methods extends Record<string, ProcessStoreMethod<any, any>>,
+  Methods extends Record<string, ProcessStoreMethod<any, any> | ProcessStoreStreamMethod<any, any>>,
 > {
   readonly _tag: typeof QUERY_TAG;
   readonly methods: Methods;
@@ -246,7 +325,7 @@ export interface ProcessStoreLegacyQuerySection<QueryApi> {
 
 /** @internal */
 export interface ProcessStoreForSection<
-  Methods extends Record<string, ProcessStoreForMethod<any, any>>,
+  Methods extends Record<string, ProcessStoreForMethod<any, any> | ProcessStoreForStreamMethod<any, any>>,
 > {
   readonly _tag: typeof FOR_TAG;
   readonly methods: Methods;
@@ -259,11 +338,11 @@ export interface ProcessStoreLegacyForSection<IdentifierApi> {
 }
 
 type AnyQuerySection =
-  | { readonly _tag: typeof QUERY_TAG; readonly methods: Record<string, ProcessStoreMethod<any, any>> }
+  | { readonly _tag: typeof QUERY_TAG; readonly methods: Record<string, ProcessStoreMethod<any, any> | ProcessStoreStreamMethod<any, any>> }
   | { readonly _tag: typeof QUERY_TAG; readonly fn: (s: ProcessStoreSpine) => Record<string, unknown> };
 
 type AnyForSection =
-  | { readonly _tag: typeof FOR_TAG; readonly methods: Record<string, ProcessStoreForMethod<any, any>> }
+  | { readonly _tag: typeof FOR_TAG; readonly methods: Record<string, ProcessStoreForMethod<any, any> | ProcessStoreForStreamMethod<any, any>> }
   | { readonly _tag: typeof FOR_TAG; readonly fn: (id: string, s: ProcessStoreSpine) => Record<string, unknown> };
 
 type ProcessStoreFacetAnySection =
@@ -311,9 +390,7 @@ type ProcessStoreQueryApiOf<Sections extends ReadonlyArray<ProcessStoreFacetAnyS
 type ProcessStoreIdentifierApiOf<Sections extends ReadonlyArray<ProcessStoreFacetAnySection>> =
   [ProcessStoreForSectionOf<Sections>] extends [never]
     ? Record<never, never>
-    : ProcessStoreForSectionOf<Sections> extends ProcessStoreForSection<
-        infer Methods extends Record<string, ProcessStoreForMethod<any, any>>
-      >
+    : ProcessStoreForSectionOf<Sections> extends ProcessStoreForSection<infer Methods>
       ? ForApiFromMethods<Methods>
       : ProcessStoreForSectionOf<Sections> extends ProcessStoreLegacyForSection<
         infer IdentifierApi extends Record<string, unknown>
@@ -329,9 +406,7 @@ type ProcessStoreQuerySchemasOf<Sections extends ReadonlyArray<ProcessStoreFacet
 type ProcessStoreForSchemasOf<Sections extends ReadonlyArray<ProcessStoreFacetAnySection>> =
   [ProcessStoreForSectionOf<Sections>] extends [never]
     ? Record<never, never>
-    : ProcessStoreForSectionOf<Sections> extends ProcessStoreForSection<
-        infer Methods extends Record<string, ProcessStoreForMethod<any, any>>
-      >
+    : ProcessStoreForSectionOf<Sections> extends ProcessStoreForSection<infer Methods>
       ? SchemasFromMethods<Methods>
       : Record<never, never>;
 
@@ -346,14 +421,14 @@ type IdentifierFactory<IdentifierApi> = {
 
 /** @internal */
 export function processStoreQuery<
-  const Methods extends Record<string, ProcessStoreMethod<any, any>>,
+  const Methods extends Record<string, ProcessStoreMethod<any, any> | ProcessStoreStreamMethod<any, any>>,
 >(methods: Methods): ProcessStoreQuerySection<Methods>;
 export function processStoreQuery<QueryApi extends Record<string, unknown>>(
   fn: (s: ProcessStoreSpine) => QueryApi,
 ): ProcessStoreLegacyQuerySection<QueryApi>;
 export function processStoreQuery(
   methodsOrFn:
-    | Record<string, ProcessStoreMethod<any, any>>
+    | Record<string, ProcessStoreMethod<any, any> | ProcessStoreStreamMethod<any, any>>
     | ((s: ProcessStoreSpine) => Record<string, unknown>),
 ): AnyQuerySection {
   if (typeof methodsOrFn === "function") {
@@ -369,14 +444,14 @@ export const processStoreLegacyQuery = <QueryApi>(
 
 /** @internal */
 export function processStoreFor<
-  const Methods extends Record<string, ProcessStoreForMethod<any, any>>,
+  const Methods extends Record<string, ProcessStoreForMethod<any, any> | ProcessStoreForStreamMethod<any, any>>,
 >(methods: Methods): ProcessStoreForSection<Methods>;
 export function processStoreFor<IdentifierApi extends Record<string, unknown>>(
   fn: (identifier: string, s: ProcessStoreSpine) => IdentifierApi,
 ): ProcessStoreLegacyForSection<IdentifierApi>;
 export function processStoreFor(
   methodsOrFn:
-    | Record<string, ProcessStoreForMethod<any, any>>
+    | Record<string, ProcessStoreForMethod<any, any> | ProcessStoreForStreamMethod<any, any>>
     | ((identifier: string, s: ProcessStoreSpine) => Record<string, unknown>),
 ): AnyForSection {
   if (typeof methodsOrFn === "function") {
@@ -404,20 +479,20 @@ const buildStore = Effect.gen(function* () {
 });
 
 const bindQueryMethods = (
-  methods: Record<string, ProcessStoreMethod<any, any>>,
+  methods: Record<string, ProcessStoreMethod<any, any> | ProcessStoreStreamMethod<any, any>>,
   s: ProcessStoreSpine,
-): Record<string, (payload: unknown) => Effect.Effect<unknown, RuntimeStorageOperationalError>> =>
+): Record<string, (payload: unknown) => Effect.Effect<unknown, RuntimeStorageOperationalError> | Stream.Stream<unknown, RuntimeStorageOperationalError>> =>
   Record.map(methods, (m) => m.resolve(s));
 
 const bindForMethods = (
-  methods: Record<string, ProcessStoreMethod<any, any> | ProcessStoreForMethod<any, any>>,
+  methods: Record<string, ProcessStoreMethod<any, any> | ProcessStoreForMethod<any, any> | ProcessStoreStreamMethod<any, any> | ProcessStoreForStreamMethod<any, any>>,
   id: string,
   s: ProcessStoreSpine,
-): Record<string, (payload: unknown) => Effect.Effect<unknown, RuntimeStorageOperationalError>> =>
+): Record<string, (payload: unknown) => Effect.Effect<unknown, RuntimeStorageOperationalError> | Stream.Stream<unknown, RuntimeStorageOperationalError>> =>
   Record.map(methods, (m) =>
-    m._tag === FOR_METHOD_TAG
-      ? (m as ProcessStoreForMethod<any, any>).resolve(id, s)
-      : (m as ProcessStoreMethod<any, any>).resolve(s),
+    m._tag === FOR_METHOD_TAG || m._tag === FOR_STREAM_METHOD_TAG
+      ? (m as ProcessStoreForMethod<any, any> | ProcessStoreForStreamMethod<any, any>).resolve(id, s)
+      : (m as ProcessStoreMethod<any, any> | ProcessStoreStreamMethod<any, any>).resolve(s),
   );
 
 const extractSchemas = (
@@ -857,11 +932,33 @@ const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> =
       throw new Error(`ProcessStore facet ${id}: telemetry section is required`);
     }
 
-    const queryMethods = isMethodsSection(anyQuerySection)
-      ? anyQuerySection.methods as Record<string, ProcessStoreMethod<any, any>>
+    // Separate effect and stream methods so each goes to the right lookup.
+    const allQueryMethods = isMethodsSection(anyQuerySection)
+      ? anyQuerySection.methods as Record<string, ProcessStoreMethod<any, any> | ProcessStoreStreamMethod<any, any>>
       : undefined;
-    const forMethods = anyForSection !== undefined && isMethodsSection(anyForSection)
-      ? anyForSection.methods as Record<string, ProcessStoreMethod<any, any> | ProcessStoreForMethod<any, any>>
+    const queryMethods = allQueryMethods !== undefined
+      ? (Object.fromEntries(
+          Object.entries(allQueryMethods).filter(([, m]) => m._tag !== STREAM_METHOD_TAG),
+        ) as Record<string, ProcessStoreMethod<any, any>>)
+      : undefined;
+    const queryStreamMethods = allQueryMethods !== undefined
+      ? (Object.fromEntries(
+          Object.entries(allQueryMethods).filter(([, m]) => m._tag === STREAM_METHOD_TAG),
+        ) as Record<string, ProcessStoreStreamMethod<any, any>>)
+      : undefined;
+
+    const allForMethods = anyForSection !== undefined && isMethodsSection(anyForSection)
+      ? anyForSection.methods as Record<string, ProcessStoreForMethod<any, any> | ProcessStoreForStreamMethod<any, any>>
+      : undefined;
+    const forMethods = allForMethods !== undefined
+      ? (Object.fromEntries(
+          Object.entries(allForMethods).filter(([, m]) => m._tag !== FOR_STREAM_METHOD_TAG),
+        ) as Record<string, ProcessStoreForMethod<any, any>>)
+      : undefined;
+    const forStreamMethods = allForMethods !== undefined
+      ? (Object.fromEntries(
+          Object.entries(allForMethods).filter(([, m]) => m._tag === FOR_STREAM_METHOD_TAG),
+        ) as Record<string, ProcessStoreForStreamMethod<any, any>>)
       : undefined;
 
     const make: Effect.Effect<EmitApi & QueryApi, never, RuntimeStorage> = Effect.gen(
@@ -869,17 +966,16 @@ const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> =
         const s = yield* buildStore;
         const emitApi = telemetrySection!.fn(s) as EmitApi;
 
-        const queryApi = queryMethods !== undefined
-          ? bindQueryMethods(queryMethods, s) as unknown as QueryApi
+        const queryApi = allQueryMethods !== undefined
+          ? bindQueryMethods(allQueryMethods, s) as unknown as QueryApi
           : ("fn" in anyQuerySection! ? (anyQuerySection as any).fn(s) : {}) as QueryApi;
-
 
         const service = mergeServiceShape(emitApi, queryApi);
 
         if (anyForSection === undefined) return service;
 
-        const boundForFactory = forMethods !== undefined
-          ? (identifier: string) => bindForMethods(forMethods, identifier, s) as unknown as IdentifierApi
+        const boundForFactory = allForMethods !== undefined
+          ? (identifier: string) => bindForMethods(allForMethods, identifier, s) as unknown as IdentifierApi
           : (identifier: string) =>
               ("fn" in anyForSection ? (anyForSection as any).fn(identifier, s) : {}) as IdentifierApi;
 
@@ -912,23 +1008,23 @@ const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> =
       queryTag as any,
       Effect.gen(function* () {
         const s = yield* buildStore;
-        const queryApi = (queryMethods !== undefined
-          ? bindQueryMethods(queryMethods, s)
+        const effectApi = (allQueryMethods !== undefined
+          ? bindQueryMethods(allQueryMethods, s)
           : "fn" in anyQuerySection! ? (anyQuerySection as any).fn(s) : {}
         ) as object;
-        if (forMethods !== undefined) {
-          attachIdentifierFactory(queryApi, (identifier: string) =>
-            bindForMethods(forMethods, identifier, s) as unknown as IdentifierApi & Record<string, unknown>,
+        if (allForMethods !== undefined) {
+          attachIdentifierFactory(effectApi, (identifier: string) =>
+            bindForMethods(allForMethods, identifier, s) as unknown as IdentifierApi & Record<string, unknown>,
           );
         }
-        return queryApi as unknown as QueryApi;
+        return effectApi as unknown as QueryApi;
       }),
     ) as any;
 
     // layerRemote — routes queries over RPC, no local dependencies.
     // Only supported for schema-annotated (methods-based) facets.
     const makeLayerRemote = (client: ProcessStoreQueryClient): Layer.Layer<Context.Service<any, QueryApi>, never, never> => {
-      if (queryMethods === undefined) {
+      if (allQueryMethods === undefined) {
         return Layer.effect(
           queryTag as any,
           Effect.die(
@@ -937,15 +1033,29 @@ const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> =
           ),
         ) as any;
       }
-      const remoteQueryApi = Record.map(queryMethods, (_, methodName) =>
+      const remoteEffectMethods = Record.map(queryMethods ?? {}, (_, methodName) =>
         (payload: unknown) => client.query(processTag, methodName, payload),
-      ) as unknown as object;
-      if (forMethods !== undefined) {
-        attachIdentifierFactory(remoteQueryApi, (identifier: string) =>
-          Record.map(forMethods, (_, methodName) =>
+      );
+      const remoteStreamMethods = Record.map(queryStreamMethods ?? {}, (_, methodName) =>
+        (payload: unknown) =>
+          client.queryStream !== undefined
+            ? client.queryStream(processTag, methodName, payload)
+            : Stream.die(`ProcessStore facet "${processTag}": stream method "${methodName}" requires queryStream support`),
+      );
+      const remoteQueryApi = { ...remoteEffectMethods, ...remoteStreamMethods } as object;
+      if (allForMethods !== undefined) {
+        attachIdentifierFactory(remoteQueryApi, (identifier: string) => {
+          const remoteForEffect = Record.map(forMethods ?? {}, (_, methodName) =>
             (payload: unknown) => client.queryFor(processTag, identifier, methodName, payload),
-          ) as unknown as IdentifierApi & Record<string, unknown>,
-        );
+          );
+          const remoteForStream = Record.map(forStreamMethods ?? {}, (_, methodName) =>
+            (payload: unknown) =>
+              client.queryForStream !== undefined
+                ? client.queryForStream(processTag, identifier, methodName, payload)
+                : Stream.die(`ProcessStore facet "${processTag}": stream for-method "${methodName}" requires queryForStream support`),
+          );
+          return { ...remoteForEffect, ...remoteForStream } as unknown as IdentifierApi & Record<string, unknown>;
+        });
       }
       return Layer.succeed(queryTag as any, remoteQueryApi as unknown as QueryApi) as any;
     };
@@ -955,12 +1065,17 @@ const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> =
       queryTag,
     );
 
+    // schemas covers only effect methods (used by StoreQueryClient type map).
     const schemas = (
-      queryMethods !== undefined ? extractSchemas(queryMethods) : {}
+      queryMethods !== undefined && Object.keys(queryMethods).length > 0
+        ? extractSchemas(queryMethods)
+        : {}
     ) as QuerySchemas;
 
     const forSchemas = (
-      forMethods !== undefined ? extractSchemas(forMethods) : {}
+      forMethods !== undefined && Object.keys(forMethods).length > 0
+        ? extractSchemas(forMethods)
+        : {}
     ) as ForSchemas;
 
     const assembled = assembleFacetClass<Self, Id, Tag, EmitApi, QueryApi & Record<string, unknown>, IdentifierApi & Record<string, unknown>, QuerySchemas, ForSchemas>(
@@ -977,8 +1092,14 @@ const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> =
       schemas,
       forSchemas,
     ) as any;
-    if (queryMethods !== undefined) Object.assign(assembled, { _methods: queryMethods });
-    if (forMethods !== undefined) Object.assign(assembled, { _forMethods: forMethods });
+    if (queryMethods !== undefined && Object.keys(queryMethods).length > 0)
+      Object.assign(assembled, { _methods: queryMethods });
+    if (forMethods !== undefined && Object.keys(forMethods).length > 0)
+      Object.assign(assembled, { _forMethods: forMethods });
+    if (queryStreamMethods !== undefined && Object.keys(queryStreamMethods).length > 0)
+      Object.assign(assembled, { _streamMethods: queryStreamMethods });
+    if (forStreamMethods !== undefined && Object.keys(forStreamMethods).length > 0)
+      Object.assign(assembled, { _forStreamMethods: forStreamMethods });
     return assembled;
   };
 
@@ -1018,6 +1139,8 @@ export type AnyFacetClass = {
   readonly forSchemas: Record<string, { payload: Schema.Codec<any>; success: Schema.Codec<any> }>;
   readonly _methods?: Record<string, ProcessStoreMethod<any, any>>;
   readonly _forMethods?: Record<string, ProcessStoreForMethod<any, any>>;
+  readonly _streamMethods?: Record<string, ProcessStoreStreamMethod<any, any>>;
+  readonly _forStreamMethods?: Record<string, ProcessStoreForStreamMethod<any, any>>;
 };
 
 type RegistryTypeMap<Facets extends ReadonlyArray<AnyFacetClass>> = {
@@ -1038,10 +1161,34 @@ type RegistryForTypeMap<Facets extends ReadonlyArray<AnyFacetClass>> = {
   };
 };
 
+type RegistryStreamTypeMap<Facets extends ReadonlyArray<AnyFacetClass>> = {
+  [F in Facets[number] as F["_processTag"]]: F["_streamMethods"] extends Record<string, ProcessStoreStreamMethod<any, any>>
+    ? {
+        [M in keyof F["_streamMethods"]]: {
+          payload: Schema.Schema.Type<F["_streamMethods"][M]["payload"]>;
+          success: Schema.Schema.Type<F["_streamMethods"][M]["success"]>;
+        };
+      }
+    : Record<never, never>;
+};
+
+type RegistryForStreamTypeMap<Facets extends ReadonlyArray<AnyFacetClass>> = {
+  [F in Facets[number] as F["_processTag"]]: F["_forStreamMethods"] extends Record<string, ProcessStoreForStreamMethod<any, any>>
+    ? {
+        [M in keyof F["_forStreamMethods"]]: {
+          payload: Schema.Schema.Type<F["_forStreamMethods"][M]["payload"]>;
+          success: Schema.Schema.Type<F["_forStreamMethods"][M]["success"]>;
+        };
+      }
+    : Record<never, never>;
+};
+
 /** @public */
 export interface ProcessStoreRegistry<Facets extends ReadonlyArray<AnyFacetClass>> {
-  readonly typeMap:    RegistryTypeMap<Facets>;
-  readonly forTypeMap: RegistryForTypeMap<Facets>;
+  readonly typeMap:          RegistryTypeMap<Facets>;
+  readonly forTypeMap:       RegistryForTypeMap<Facets>;
+  readonly streamTypeMap:    RegistryStreamTypeMap<Facets>;
+  readonly forStreamTypeMap: RegistryForStreamTypeMap<Facets>;
   readonly lookup: Record<string, Record<string, {
     payload: Schema.Codec<any>;
     success: Schema.Codec<any>;
@@ -1051,6 +1198,16 @@ export interface ProcessStoreRegistry<Facets extends ReadonlyArray<AnyFacetClass
     payload: Schema.Codec<any>;
     success: Schema.Codec<any>;
     resolve: (id: string, s: ProcessStoreSpine) => (p: unknown) => Effect.Effect<unknown, RuntimeStorageOperationalError>;
+  }>>;
+  readonly streamLookup: Record<string, Record<string, {
+    payload: Schema.Codec<any>;
+    success: Schema.Codec<any>;
+    resolve: (s: ProcessStoreSpine) => (p: unknown) => Stream.Stream<unknown, RuntimeStorageOperationalError>;
+  }>>;
+  readonly forStreamLookup: Record<string, Record<string, {
+    payload: Schema.Codec<any>;
+    success: Schema.Codec<any>;
+    resolve: (id: string, s: ProcessStoreSpine) => (p: unknown) => Stream.Stream<unknown, RuntimeStorageOperationalError>;
   }>>;
 }
 
@@ -1062,6 +1219,8 @@ export const processStoreRegistry = <
 ): ProcessStoreRegistry<Facets> => {
   const lookup: Record<string, Record<string, any>> = {};
   const forLookup: Record<string, Record<string, any>> = {};
+  const streamLookup: Record<string, Record<string, any>> = {};
+  const forStreamLookup: Record<string, Record<string, any>> = {};
 
   for (const facet of facets) {
     if (facet._methods !== undefined) {
@@ -1078,12 +1237,30 @@ export const processStoreRegistry = <
         resolve: m.resolve,
       }));
     }
+    if (facet._streamMethods !== undefined) {
+      streamLookup[facet._processTag] = Record.map(facet._streamMethods, (m) => ({
+        payload: m.payload,
+        success: m.success,
+        resolve: m.resolve,
+      }));
+    }
+    if (facet._forStreamMethods !== undefined) {
+      forStreamLookup[facet._processTag] = Record.map(facet._forStreamMethods, (m) => ({
+        payload: m.payload,
+        success: m.success,
+        resolve: m.resolve,
+      }));
+    }
   }
 
   return {
-    typeMap:    {} as RegistryTypeMap<Facets>,
-    forTypeMap: {} as RegistryForTypeMap<Facets>,
+    typeMap:          {} as RegistryTypeMap<Facets>,
+    forTypeMap:       {} as RegistryForTypeMap<Facets>,
+    streamTypeMap:    {} as RegistryStreamTypeMap<Facets>,
+    forStreamTypeMap: {} as RegistryForStreamTypeMap<Facets>,
     lookup,
     forLookup,
+    streamLookup,
+    forStreamLookup,
   };
 };
