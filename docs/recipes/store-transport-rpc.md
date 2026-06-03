@@ -74,7 +74,15 @@ Code quality must meet or exceed this repo's standards.
 - `forQuery` encoded as tag suffix: `"${processTag}/for/${method}"` — no new message type; `id` folded into `payload` as `{ id, ...methodPayload }`
 - `parseTag(tag)` helper distinguishes query vs forQuery via `"/for/"` substring
 - `RequestId`: branded `bigint` internally, `string` on wire — identical to Effect RPC
-### Step B: Server loop (`makeNoSerialization` equivalent, registry-direct)
+### Step B: Server loop — locked 2026-06-03
+- `makeNoStore(registry, options)` mirrors `makeNoSerialization` exactly in structure
+- **Shared spine** — built once at server construction from `RuntimeStorage`, `runId: "store-transport"` constant; transport is read-only so `runId` is never stamped
+- Request-scoped state via `FiberRef` — not in the spine; each forked request fiber gets fresh state automatically
+- Schema cache: `Map<string, EntrySchemas>` keyed by `"${facet}/${method}"` string — entries are plain objects, not stable references
+- `StoreError` union: `UnknownFacet | UnknownMethod | PayloadDecodeError | ResultEncodeError | StorageError` — typed in exit schema, not defects; client gets structured errors
+- `parseTag(tag)` distinguishes query vs forQuery via `"/for/"` substring; `id` extracted from `payload.id` for forQuery
+- Fiber management, Ack backpressure, interrupt, graceful shutdown — verbatim from `makeNoSerialization`
+- Tracing: `Effect.withSpan(spanPrefix + "." + tag)` per request, span propagation from request headers
 ### Step C: Client shape + client middleware
 ### Step D: `StoreTransportProtocol` + adapters
 ### Step E: `ProcessStorage.layerRemote(client)` — dashboard bootstrap
