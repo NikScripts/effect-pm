@@ -139,6 +139,16 @@
       "import": "./dist/LogTransportRpc.mjs",
       "require": "./dist/LogTransportRpc.js"
     },
+    "./StoreTransportRpc": {
+      "types": "./dist/StoreTransportRpc.d.ts",
+      "import": "./dist/StoreTransportRpc.mjs",
+      "require": "./dist/StoreTransportRpc.js"
+    },
+    "./StoreMessage": {
+      "types": "./dist/StoreMessage.d.ts",
+      "import": "./dist/StoreMessage.mjs",
+      "require": "./dist/StoreMessage.js"
+    },
     "./CommandAuth": {
       "types": "./dist/CommandAuth.d.ts",
       "import": "./dist/CommandAuth.mjs",

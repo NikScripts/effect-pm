@@ -52,8 +52,10 @@
  * **`@nikscripts/effect-pm/CommandAuth`**, **`@nikscripts/effect-pm/ProcessManager`**,
  * **`@nikscripts/effect-pm/Terminal`**, **`@nikscripts/effect-pm/TerminalRpc`**,
  * **`@nikscripts/effect-pm/Logs`**, **`@nikscripts/effect-pm/ControlService`**,
- * **`@nikscripts/effect-pm/ControlTransportRpc`**, and
- * **`@nikscripts/effect-pm/LogTransportRpc`**.
+ * **`@nikscripts/effect-pm/ControlTransportRpc`**,
+ * **`@nikscripts/effect-pm/LogTransportRpc`**,
+ * **`@nikscripts/effect-pm/StoreTransportRpc`**, and
+ * **`@nikscripts/effect-pm/StoreMessage`**.
  *
  * Structured log persistence: `ProcessStore.Log` (also exported as the
  * dedicated `ProcessStoreLog` facet) on the composed store. Capture/relay
@@ -261,6 +263,53 @@ export type {
   LogTransportRpcApi,
   LogTransportRpcServerConfig,
 } from "./LogTransportRpc";
+export {
+  StoreTransportRpc,
+  StoreTransportProtocol,
+  StoreErrorSchema,
+  UnknownFacet,
+  UnknownMethod,
+  PayloadDecodeError,
+  ResultEncodeError,
+  StorageError,
+  makeClient as makeStoreTransportRpcClient,
+  toProcessStoreQueryClient,
+  layerProtocolFromRpc as layerStoreProtocolFromRpc,
+} from "./StoreTransportRpc";
+export type {
+  StoreQueryClient,
+  StoreClientTransport,
+  StoreClientMiddleware,
+  StoreTransportServerConfig,
+  StoreTransportRpcApi,
+  StoreError,
+  StoreServerMiddleware,
+  ExitEncoded,
+  CauseEncoded,
+  FromClientEncoded,
+  FromServerEncoded,
+  RequestEncoded,
+  AckEncoded,
+  InterruptEncoded,
+  Ping,
+  Eof,
+  ResponseChunkEncoded,
+  ResponseExitEncoded,
+  ResponseDefectEncoded,
+  Pong,
+  ClientEnd,
+  ParsedTag,
+} from "./StoreTransportRpc";
+export {
+  RequestId,
+  makeQueryTag,
+  makeForQueryTag,
+  parseTag,
+  constPong,
+  constPing,
+  constEof,
+  makeResponseDefect,
+} from "./StoreMessage";
 
 // Query / Runtime Storage
 export { Query } from "./Query";

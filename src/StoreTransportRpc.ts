@@ -69,6 +69,21 @@ import {
   makeForQueryTag,
   makeQueryTag,
   type ExitEncoded,
+  type FromClientEncoded,
+  type FromServerEncoded,
+  type RequestEncoded,
+  type AckEncoded,
+  type InterruptEncoded,
+  type Ping,
+  type Eof,
+  type ResponseChunkEncoded,
+  type ResponseExitEncoded,
+  type ResponseDefectEncoded,
+  type Pong,
+  type ClientEnd,
+  type CauseEncoded,
+  type ParsedTag,
+  type RequestId,
 } from "./StoreMessage";
 import type { RuntimeStorage } from "./RuntimeStorage";
 
@@ -82,6 +97,27 @@ export {
   StorageError,
   type StoreError,
   type StoreServerMiddleware,
+};
+
+// Re-export wire message types so transport implementors don't need a separate
+// import from "@nikscripts/effect-pm/StoreMessage".
+export type {
+  ExitEncoded,
+  CauseEncoded,
+  RequestId,
+  FromClientEncoded,
+  FromServerEncoded,
+  RequestEncoded,
+  AckEncoded,
+  InterruptEncoded,
+  Ping,
+  Eof,
+  ResponseChunkEncoded,
+  ResponseExitEncoded,
+  ResponseDefectEncoded,
+  Pong,
+  ClientEnd,
+  ParsedTag,
 };
 
 // ============================================================================
@@ -343,10 +379,11 @@ export const makeClient = <
 // ============================================================================
 
 /**
- * Adapt a `StoreQueryClient` to the internal `ProcessStoreQueryClient`
- * interface used by `Facet.layerRemote`.
+ * Adapt a `StoreQueryClient` to the `ProcessStoreQueryClient` interface
+ * used by `Facet.layerRemote`. Pass the result to any facet's `layerRemote`
+ * to route queries over the transport.
  *
- * @internal
+ * @public
  */
 export const toProcessStoreQueryClient = (
   client: StoreQueryClient<any>,
