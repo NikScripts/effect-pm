@@ -34,6 +34,13 @@ registry-driven router.
 
 ---
 
+## Step 5: `ProcessStore.for` chain
+
+- Same `payload().success().resolve()` chain — arity in resolver distinguishes `query` from `for`
+- `ProcessStoreForMethod` is a separate internal type: resolver is `(id: string, s: Spine) => (payload) => Effect`
+- `Facet.forSchemas` stamped on class — same `{ payload, success }` shape
+- Success schemas defined once, referenced in both `query` and `for` sections
+
 ## Step 4: Router shape
 
 - `StoreRouter` is a `Context.Service`, layer built from `ProcessStoreRegistry`
