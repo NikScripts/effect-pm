@@ -1146,49 +1146,45 @@ export type AnyFacetClass = {
 type RegistryTypeMap<Facets extends ReadonlyArray<AnyFacetClass>> = {
   [F in Facets[number] as F["_processTag"]]: {
     [M in keyof F["schemas"]]: {
+      readonly isStream: false;
       payload: Schema.Schema.Type<F["schemas"][M]["payload"]>;
       success: Schema.Schema.Type<F["schemas"][M]["success"]>;
     };
-  };
-};
-
-type RegistryForTypeMap<Facets extends ReadonlyArray<AnyFacetClass>> = {
-  [F in Facets[number] as F["_processTag"]]: {
-    [M in keyof F["forSchemas"]]: {
-      payload: Schema.Schema.Type<F["forSchemas"][M]["payload"]>;
-      success: Schema.Schema.Type<F["forSchemas"][M]["success"]>;
-    };
-  };
-};
-
-type RegistryStreamTypeMap<Facets extends ReadonlyArray<AnyFacetClass>> = {
-  [F in Facets[number] as F["_processTag"]]: F["_streamMethods"] extends Record<string, ProcessStoreStreamMethod<any, any>>
+  } & (F["_streamMethods"] extends Record<string, ProcessStoreStreamMethod<any, any>>
     ? {
         [M in keyof F["_streamMethods"]]: {
+          readonly isStream: true;
           payload: Schema.Schema.Type<F["_streamMethods"][M]["payload"]>;
           success: Schema.Schema.Type<F["_streamMethods"][M]["success"]>;
         };
       }
-    : Record<never, never>;
+    : Record<never, never>);
 };
 
-type RegistryForStreamTypeMap<Facets extends ReadonlyArray<AnyFacetClass>> = {
-  [F in Facets[number] as F["_processTag"]]: F["_forStreamMethods"] extends Record<string, ProcessStoreForStreamMethod<any, any>>
+// Effect and stream methods are folded into a single map with an isStream
+// discriminator — mirroring how RpcClient.From uses [_Success] extends [RpcSchema.Stream<...>].
+type RegistryForTypeMap<Facets extends ReadonlyArray<AnyFacetClass>> = {
+  [F in Facets[number] as F["_processTag"]]: {
+    [M in keyof F["forSchemas"]]: {
+      readonly isStream: false;
+      payload: Schema.Schema.Type<F["forSchemas"][M]["payload"]>;
+      success: Schema.Schema.Type<F["forSchemas"][M]["success"]>;
+    };
+  } & (F["_forStreamMethods"] extends Record<string, ProcessStoreForStreamMethod<any, any>>
     ? {
         [M in keyof F["_forStreamMethods"]]: {
+          readonly isStream: true;
           payload: Schema.Schema.Type<F["_forStreamMethods"][M]["payload"]>;
           success: Schema.Schema.Type<F["_forStreamMethods"][M]["success"]>;
         };
       }
-    : Record<never, never>;
+    : Record<never, never>);
 };
 
 /** @public */
 export interface ProcessStoreRegistry<Facets extends ReadonlyArray<AnyFacetClass>> {
-  readonly typeMap:          RegistryTypeMap<Facets>;
-  readonly forTypeMap:       RegistryForTypeMap<Facets>;
-  readonly streamTypeMap:    RegistryStreamTypeMap<Facets>;
-  readonly forStreamTypeMap: RegistryForStreamTypeMap<Facets>;
+  readonly typeMap:    RegistryTypeMap<Facets>;
+  readonly forTypeMap: RegistryForTypeMap<Facets>;
   readonly lookup: Record<string, Record<string, {
     payload: Schema.Codec<any>;
     success: Schema.Codec<any>;
@@ -1254,10 +1250,8 @@ export const processStoreRegistry = <
   }
 
   return {
-    typeMap:          {} as RegistryTypeMap<Facets>,
-    forTypeMap:       {} as RegistryForTypeMap<Facets>,
-    streamTypeMap:    {} as RegistryStreamTypeMap<Facets>,
-    forStreamTypeMap: {} as RegistryForStreamTypeMap<Facets>,
+    typeMap:    {} as RegistryTypeMap<Facets>,
+    forTypeMap: {} as RegistryForTypeMap<Facets>,
     lookup,
     forLookup,
     streamLookup,

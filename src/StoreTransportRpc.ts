@@ -165,9 +165,10 @@ export interface StoreClientMiddleware {
 /**
  * Fully typed client derived from a `ProcessStoreRegistry`.
  *
- * - Effect methods: `client.RunResource.facts(payload)`
- * - Stream methods: `client.stream.RunResource.liveEvents(payload)`
- * - For-bound effect methods: `client.for.RunResource(id).byRun(payload)`
+ * Stream and effect methods share the same namespace — mirroring `RpcClient`:
+ * `client.RunResource.facts(payload)` → `Effect`
+ * `client.RunResource.liveEvents(payload)` → `Stream`
+ * `client.for.RunResource(id).byRun(payload)` → `Effect`
  *
  * @public
  */
@@ -175,38 +176,24 @@ export type StoreQueryClient<
   R extends ProcessStoreRegistry<ReadonlyArray<AnyFacetClass>>,
 > = {
   readonly [Facet in keyof R["typeMap"] & string]: {
-    readonly [Method in keyof R["typeMap"][Facet] & string]: (
-      payload: R["typeMap"][Facet][Method]["payload"],
-    ) => Effect.Effect<R["typeMap"][Facet][Method]["success"], StoreError>;
-  };
-} & {
-  readonly stream: {
-    readonly [Facet in keyof R["streamTypeMap"] & string]: {
-      readonly [Method in keyof R["streamTypeMap"][Facet] & string]:
-        R["streamTypeMap"][Facet][Method] extends { readonly payload: infer P; readonly success: infer S }
-          ? (payload: P) => Stream.Stream<S, StoreError>
+    readonly [Method in keyof R["typeMap"][Facet] & string]:
+      R["typeMap"][Facet][Method] extends { readonly isStream: true; readonly payload: infer P; readonly success: infer S }
+        ? (payload: P) => Stream.Stream<S, StoreError>
+        : R["typeMap"][Facet][Method] extends { readonly isStream: false; readonly payload: infer P; readonly success: infer S }
+          ? (payload: P) => Effect.Effect<S, StoreError>
           : never;
-    };
-  } & {
-    readonly for: {
-      readonly [Facet in keyof R["forStreamTypeMap"] & string]: (
-        id: string,
-      ) => {
-        readonly [Method in keyof R["forStreamTypeMap"][Facet] & string]:
-          R["forStreamTypeMap"][Facet][Method] extends { readonly payload: infer P; readonly success: infer S }
-            ? (payload: P) => Stream.Stream<S, StoreError>
-            : never;
-      };
-    };
   };
 } & {
   readonly for: {
     readonly [Facet in keyof R["forTypeMap"] & string]: (
       id: string,
     ) => {
-      readonly [Method in keyof R["forTypeMap"][Facet] & string]: (
-        payload: R["forTypeMap"][Facet][Method]["payload"],
-      ) => Effect.Effect<R["forTypeMap"][Facet][Method]["success"], StoreError>;
+      readonly [Method in keyof R["forTypeMap"][Facet] & string]:
+        R["forTypeMap"][Facet][Method] extends { readonly isStream: true; readonly payload: infer P; readonly success: infer S }
+          ? (payload: P) => Stream.Stream<S, StoreError>
+          : R["forTypeMap"][Facet][Method] extends { readonly isStream: false; readonly payload: infer P; readonly success: infer S }
+            ? (payload: P) => Effect.Effect<S, StoreError>
+            : never;
     };
   };
 };
@@ -301,193 +288,127 @@ export const makeClient = <
     });
   };
 
-  const callQuery = (
+  // Per-method callable — mirrors RpcClient.makeNoSerialization's onRequest():
+  // isStream is captured once at construction, the callable returns Effect or Stream.
+  const makeEffectMethod = (
     facet: string,
     method: string,
-    rawPayload: unknown,
-  ): Effect.Effect<unknown, StoreError> => {
-    const entry = registry.lookup[facet]?.[method];
-    const tag = makeQueryTag(facet, method);
-
-    const encodePayload: Effect.Effect<unknown, StoreError> =
-      entry !== undefined
-        ? Schema.encodeUnknownEffect(entry.payload)(rawPayload).pipe(
-            Effect.mapError(
-              (e) => new PayloadDecodeError({ error: e._tag ?? String(e) }),
-            ),
-          )
-        : Effect.succeed(rawPayload);
-
-    return Effect.flatMap(encodePayload, (encoded) =>
-      applyMiddleware(tag, facet, method, encoded, []).pipe(
-        Effect.flatMap((req) => transport.send(req)),
-        Effect.flatMap((exit) => {
-          const decodeSuccess: (v: unknown) => Effect.Effect<unknown, Schema.SchemaError> =
-            entry !== undefined
-              ? (v) => Schema.decodeUnknownEffect(entry.success)(v)
-              : (v) => Effect.succeed(v);
-          const decodeError = (e: unknown): Effect.Effect<StoreError, Schema.SchemaError> =>
-            Schema.decodeUnknownEffect(StoreErrorSchema)(e);
-          return decodeExitFromWire(exit, decodeSuccess, decodeError);
-        }),
-      ),
-    );
-  };
-
-  const callForQuery = (
-    facet: string,
-    id: string,
-    method: string,
-    rawPayload: unknown,
-  ): Effect.Effect<unknown, StoreError> => {
-    const entry = registry.forLookup[facet]?.[method];
-    const tag = makeForQueryTag(facet, method);
-
-    const encodePayload: Effect.Effect<unknown, StoreError> =
-      entry !== undefined
-        ? Schema.encodeUnknownEffect(entry.payload)(rawPayload).pipe(
-            Effect.mapError(
-              (e) => new PayloadDecodeError({ error: e._tag ?? String(e) }),
-            ),
-          )
-        : Effect.succeed(rawPayload);
-
-    return Effect.flatMap(encodePayload, (encodedPayload) =>
-      applyMiddleware(tag, facet, method, { id, payload: encodedPayload }, []).pipe(
-        Effect.flatMap((req) => transport.send(req)),
-        Effect.flatMap((exit) => {
-          const decodeSuccess: (v: unknown) => Effect.Effect<unknown, Schema.SchemaError> =
-            entry !== undefined
-              ? (v) => Schema.decodeUnknownEffect(entry.success)(v)
-              : (v) => Effect.succeed(v);
-          const decodeError = (e: unknown): Effect.Effect<StoreError, Schema.SchemaError> =>
-            Schema.decodeUnknownEffect(StoreErrorSchema)(e);
-          return decodeExitFromWire(exit, decodeSuccess, decodeError);
-        }),
-      ),
-    );
-  };
-
-  const callStreamQuery = (
-    facet: string,
-    method: string,
-    rawPayload: unknown,
-  ): Stream.Stream<unknown, StoreError> => {
-    const entry = registry.streamLookup[facet]?.[method];
-    const tag = makeQueryTag(facet, method);
-
-    const encodeAndSend: Effect.Effect<Stream.Stream<unknown, StoreError>, StoreError> =
-      (entry !== undefined
-        ? Schema.encodeUnknownEffect(entry.payload)(rawPayload).pipe(
-            Effect.mapError(
-              (e) => new PayloadDecodeError({ error: e._tag ?? String(e) }),
-            ),
-          )
-        : Effect.succeed(rawPayload)
-      ).pipe(
+    rawTag: string,
+    encodePayload: (raw: unknown) => Effect.Effect<unknown, StoreError>,
+    decodeSuccess: (v: unknown) => Effect.Effect<unknown, Schema.SchemaError>,
+  ): (payload: unknown) => Effect.Effect<unknown, StoreError> =>
+    (rawPayload) =>
+      encodePayload(rawPayload).pipe(
         Effect.flatMap((encoded) =>
-          applyMiddleware(tag, facet, method, encoded, []).pipe(
-            Effect.map((req) => transport.sendStream(req).pipe(
-              Stream.mapEffect((item) => {
-                const entry2 = registry.streamLookup[facet]?.[method];
-                const decode: (v: unknown) => Effect.Effect<unknown, Schema.SchemaError> =
-                  entry2 !== undefined
-                    ? (v) => Schema.decodeUnknownEffect(entry2.success)(v)
-                    : (v) => Effect.succeed(v);
-                return decode(item).pipe(
-                  Effect.mapError(
-                    (e) => new ResultEncodeError({ error: e._tag ?? String(e) }),
-                  ),
-                );
-              }),
-            )),
+          applyMiddleware(rawTag, facet, method, encoded, []).pipe(
+            Effect.flatMap((req) => transport.send(req)),
+            Effect.flatMap((exit) => {
+              const decodeError = (e: unknown): Effect.Effect<StoreError, Schema.SchemaError> =>
+                Schema.decodeUnknownEffect(StoreErrorSchema)(e);
+              return decodeExitFromWire(exit, decodeSuccess, decodeError);
+            }),
           ),
         ),
       );
 
-    return Stream.unwrap(encodeAndSend);
-  };
-
-  const callForStreamQuery = (
+  const makeStreamMethod = (
     facet: string,
-    id: string,
     method: string,
-    rawPayload: unknown,
-  ): Stream.Stream<unknown, StoreError> => {
-    const entry = registry.forStreamLookup[facet]?.[method];
-    const tag = makeForQueryTag(facet, method);
-
-    const encodeAndSend: Effect.Effect<Stream.Stream<unknown, StoreError>, StoreError> =
-      (entry !== undefined
-        ? Schema.encodeUnknownEffect(entry.payload)(rawPayload).pipe(
-            Effect.mapError(
-              (e) => new PayloadDecodeError({ error: e._tag ?? String(e) }),
-            ),
-          )
-        : Effect.succeed(rawPayload)
-      ).pipe(
-        Effect.flatMap((encodedPayload) =>
-          applyMiddleware(tag, facet, method, { id, payload: encodedPayload }, []).pipe(
-            Effect.map((req) => transport.sendStream(req).pipe(
-              Stream.mapEffect((item) => {
-                const entry2 = registry.forStreamLookup[facet]?.[method];
-                const decode: (v: unknown) => Effect.Effect<unknown, Schema.SchemaError> =
-                  entry2 !== undefined
-                    ? (v) => Schema.decodeUnknownEffect(entry2.success)(v)
-                    : (v) => Effect.succeed(v);
-                return decode(item).pipe(
-                  Effect.mapError(
-                    (e) => new ResultEncodeError({ error: e._tag ?? String(e) }),
+    rawTag: string,
+    buildPayload: (raw: unknown) => Effect.Effect<unknown, StoreError>,
+    decodeItem: (v: unknown) => Effect.Effect<unknown, Schema.SchemaError>,
+  ): (payload: unknown) => Stream.Stream<unknown, StoreError> =>
+    (rawPayload) =>
+      Stream.unwrap(
+        buildPayload(rawPayload).pipe(
+          Effect.flatMap((encoded) =>
+            applyMiddleware(rawTag, facet, method, encoded, []).pipe(
+              Effect.map((req) =>
+                transport.sendStream(req).pipe(
+                  Stream.mapEffect((item) =>
+                    decodeItem(item).pipe(
+                      Effect.mapError((e) => new ResultEncodeError({ error: e._tag ?? String(e) })),
+                    ),
                   ),
-                );
-              }),
-            )),
+                ),
+              ),
+            ),
           ),
         ),
       );
 
-    return Stream.unwrap(encodeAndSend);
-  };
+  const makeEncodePayload = (
+    entry: { payload: Schema.Codec<any> } | undefined,
+  ): (raw: unknown) => Effect.Effect<unknown, StoreError> =>
+    entry !== undefined
+      ? (raw) =>
+          Schema.encodeUnknownEffect(entry.payload)(raw).pipe(
+            Effect.mapError((e) => new PayloadDecodeError({ error: e._tag ?? String(e) })),
+          )
+      : Effect.succeed;
 
-  const queryMethods: Record<string, Record<string, (payload: unknown) => Effect.Effect<unknown, StoreError>>> = {};
+  const makeDecodeSuccess = (
+    entry: { success: Schema.Codec<any> } | undefined,
+  ): (v: unknown) => Effect.Effect<unknown, Schema.SchemaError> =>
+    entry !== undefined
+      ? (v) => Schema.decodeUnknownEffect(entry.success)(v)
+      : Effect.succeed;
+
+  // Build unified facet method objects — stream and effect methods at the same
+  // level, identical to how RpcClient iterates group.requests.values().
+  const facetMethods: Record<string, Record<string, (payload: unknown) => Effect.Effect<unknown, StoreError> | Stream.Stream<unknown, StoreError>>> = {};
+
   for (const [facet, methods] of Object.entries(registry.lookup)) {
-    const facetMethods: Record<string, (payload: unknown) => Effect.Effect<unknown, StoreError>> = {};
-    for (const method of Object.keys(methods)) {
-      facetMethods[method] = (payload: unknown) => callQuery(facet, method, payload);
+    facetMethods[facet] ??= {};
+    for (const [method, entry] of Object.entries(methods)) {
+      facetMethods[facet]![method] = makeEffectMethod(
+        facet, method, makeQueryTag(facet, method),
+        makeEncodePayload(entry), makeDecodeSuccess(entry),
+      );
     }
-    queryMethods[facet] = facetMethods;
   }
-
-  // Stream methods live under client.stream (and client.stream.for) so TypeScript
-  // knows they return Stream, not Effect — no cast needed in toProcessStoreQueryClient.
-  const streamFacetMethods: Record<string, Record<string, (payload: unknown) => Stream.Stream<unknown, StoreError>>> = {};
   for (const [facet, methods] of Object.entries(registry.streamLookup)) {
-    const facetStreamMethods: Record<string, (payload: unknown) => Stream.Stream<unknown, StoreError>> = {};
-    for (const method of Object.keys(methods)) {
-      facetStreamMethods[method] = (payload: unknown) => callStreamQuery(facet, method, payload);
+    facetMethods[facet] ??= {};
+    for (const [method, entry] of Object.entries(methods)) {
+      facetMethods[facet]![method] = makeStreamMethod(
+        facet, method, makeQueryTag(facet, method),
+        makeEncodePayload(entry), makeDecodeSuccess(entry),
+      );
     }
-    streamFacetMethods[facet] = facetStreamMethods;
   }
 
-  const streamForMethods: Record<string, (id: string) => Record<string, (payload: unknown) => Stream.Stream<unknown, StoreError>>> = {};
-  for (const [facet, methods] of Object.entries(registry.forStreamLookup)) {
-    streamForMethods[facet] = (id: string) => {
-      const bound: Record<string, (payload: unknown) => Stream.Stream<unknown, StoreError>> = {};
-      for (const method of Object.keys(methods)) {
-        bound[method] = (payload: unknown) => callForStreamQuery(facet, id, method, payload);
+  const forMethods: Record<string, (id: string) => Record<string, (payload: unknown) => Effect.Effect<unknown, StoreError> | Stream.Stream<unknown, StoreError>>> = {};
+
+  for (const [facet, methods] of Object.entries(registry.forLookup)) {
+    forMethods[facet] ??= (id: string) => {
+      const bound: Record<string, (payload: unknown) => Effect.Effect<unknown, StoreError>> = {};
+      for (const [method, entry] of Object.entries(methods)) {
+        bound[method] = makeEffectMethod(
+          facet, method, makeForQueryTag(facet, method),
+          (raw) => makeEncodePayload(entry)({ payload: raw }).pipe(
+            Effect.map((encodedPayload) => ({ id, payload: encodedPayload })),
+          ),
+          makeDecodeSuccess(entry),
+        );
       }
       return bound;
     };
   }
-
-  const forMethods: Record<string, (id: string) => Record<string, (payload: unknown) => Effect.Effect<unknown, StoreError>>> = {};
-  for (const [facet, methods] of Object.entries(registry.forLookup)) {
+  for (const [facet, methods] of Object.entries(registry.forStreamLookup)) {
+    const effectFactory = forMethods[facet];
     forMethods[facet] = (id: string) => {
-      const bound: Record<string, (payload: unknown) => Effect.Effect<unknown, StoreError>> = {};
-      for (const method of Object.keys(methods)) {
-        bound[method] = (payload: unknown) => callForQuery(facet, id, method, payload);
+      const effectBound = effectFactory !== undefined ? effectFactory(id) : {};
+      const streamBound: Record<string, (payload: unknown) => Stream.Stream<unknown, StoreError>> = {};
+      for (const [method, entry] of Object.entries(methods)) {
+        streamBound[method] = makeStreamMethod(
+          facet, method, makeForQueryTag(facet, method),
+          (raw) => makeEncodePayload(entry)(raw).pipe(
+            Effect.map((encodedPayload) => ({ id, payload: encodedPayload })),
+          ),
+          makeDecodeSuccess(entry),
+        );
       }
-      return bound;
+      return { ...effectBound, ...streamBound };
     };
   }
 
@@ -495,11 +416,7 @@ export const makeClient = <
   // (a phantom {}). TypeScript cannot derive it from Record<string,…> even though
   // the runtime keys match exactly — this structural coercion is the boundary between
   // the dynamic build and the typed surface.
-  return {
-    ...queryMethods,
-    stream: { ...streamFacetMethods, for: streamForMethods },
-    for: forMethods,
-  } as unknown as StoreQueryClient<ProcessStoreRegistry<Facets>>;
+  return { ...facetMethods, for: forMethods } as unknown as StoreQueryClient<ProcessStoreRegistry<Facets>>;
 };
 
 // ============================================================================
@@ -513,21 +430,36 @@ export const makeClient = <
  *
  * @public
  */
+// Runtime predicates mirroring RpcSchema.isStreamSchema — narrow without casts.
+const isStreamValue = (u: unknown): u is Stream.Stream<unknown, unknown> =>
+  typeof u === "object" && u !== null && Stream.TypeId in u;
+
+const isEffectValue = (u: unknown): u is Effect.Effect<unknown, unknown> =>
+  typeof u === "object" && u !== null && Effect.TypeId in u;
+
 export const toProcessStoreQueryClient = (
   client: StoreQueryClient<any>,
 ): ProcessStoreQueryClient => ({
-  query: (facet, method, payload) =>
-    client[facet]?.[method]?.(payload) ??
-    Effect.fail(new UnknownMethod({ facet, method })),
-  queryFor: (facet, id, method, payload) =>
-    client.for?.[facet]?.(id)?.[method]?.(payload) ??
-    Effect.fail(new UnknownMethod({ facet, method })),
-  queryStream: (facet, method, payload) =>
-    client.stream?.[facet]?.[method]?.(payload) ??
-    Stream.fail(new UnknownMethod({ facet, method })),
-  queryForStream: (facet, id, method, payload) =>
-    client.stream?.for?.[facet]?.(id)?.[method]?.(payload) ??
-    Stream.fail(new UnknownMethod({ facet, method })),
+  query: (facet, method, payload) => {
+    const result = client[facet]?.[method]?.(payload);
+    if (result !== undefined && isEffectValue(result)) return result;
+    return Effect.fail(new UnknownMethod({ facet, method }));
+  },
+  queryFor: (facet, id, method, payload) => {
+    const result = client.for?.[facet]?.(id)?.[method]?.(payload);
+    if (result !== undefined && isEffectValue(result)) return result;
+    return Effect.fail(new UnknownMethod({ facet, method }));
+  },
+  queryStream: (facet, method, payload) => {
+    const result = client[facet]?.[method]?.(payload);
+    if (result !== undefined && isStreamValue(result)) return result;
+    return Stream.fail(new UnknownMethod({ facet, method }));
+  },
+  queryForStream: (facet, id, method, payload) => {
+    const result = client.for?.[facet]?.(id)?.[method]?.(payload);
+    if (result !== undefined && isStreamValue(result)) return result;
+    return Stream.fail(new UnknownMethod({ facet, method }));
+  },
 });
 
 // ============================================================================
