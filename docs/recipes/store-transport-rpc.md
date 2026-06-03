@@ -69,7 +69,11 @@ Code quality must meet or exceed this repo's standards.
 
 ## Open recipe steps
 
-### Step A: Wire message types (`StoreMessage.ts`)
+### Step A: Wire message types (`StoreMessage.ts`) — locked 2026-06-03
+- 10 message types verbatim from `RpcMessage.ts` (`Request`, `Ack`, `Interrupt`, `Ping`, `Eof`, `Chunk`, `Exit`, `Defect`, `Pong`, `ClientEnd`)
+- `forQuery` encoded as tag suffix: `"${processTag}/for/${method}"` — no new message type; `id` folded into `payload` as `{ id, ...methodPayload }`
+- `parseTag(tag)` helper distinguishes query vs forQuery via `"/for/"` substring
+- `RequestId`: branded `bigint` internally, `string` on wire — identical to Effect RPC
 ### Step B: Server loop (`makeNoSerialization` equivalent, registry-direct)
 ### Step C: Client shape + client middleware
 ### Step D: `StoreTransportProtocol` + adapters
