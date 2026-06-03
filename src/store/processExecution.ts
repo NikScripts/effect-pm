@@ -281,7 +281,7 @@ const recordToExecutionEvent = (
  *
  * @public
  */
-export const ProcessExecutionStore = ProcessStore.Service(
+export class ProcessExecutionStore extends ProcessStore.Service<ProcessExecutionStore>()(
   "@nikscripts/effect-pm/store/processExecution/ProcessExecutionStore",
   "ProcessExecution",
   ProcessExecutionTelemetry,
@@ -296,9 +296,7 @@ export const ProcessExecutionStore = ProcessStore.Service(
       readExecutions(s, { processId, ...query }),
     hasPriorExecutions: () => readHasPriorExecutions(s, processId),
   })),
-);
-
-export type ProcessExecutionStore = typeof ProcessExecutionStore.Identifier;
+) {}
 
 const readExecutions = (
   s: ProcessStoreSpine,

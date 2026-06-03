@@ -727,16 +727,10 @@ const buildIdentifierMember = <
 const buildForQueryMember = <QueryApi, IdentifierApi extends Record<string, unknown>>(
   anyForSection: AnyForSection | undefined,
   queryTag: Context.Service<any, QueryApi>,
-  forMethods: Record<string, ProcessStoreMethod<any, any> | ProcessStoreForMethod<any, any>> | undefined,
 ): Record<never, never> | { forQuery: (id: ProcessStoreFullIdentifierInput) => Effect.Effect<IdentifierApi, never, Context.Service<any, QueryApi>> } => {
   if (anyForSection === undefined) return {};
   const forQuery = (input: ProcessStoreFullIdentifierInput): Effect.Effect<IdentifierApi, never, Context.Service<any, QueryApi>> => {
     const id = resolveIdentifier(input);
-    if (forMethods !== undefined) {
-      return Effect.map(queryTag as any, (_s: ProcessStoreSpine) =>
-        bindForMethods(forMethods, id, _s) as unknown as IdentifierApi,
-      );
-    }
     return Effect.flatMap(queryTag as any, (service: unknown) => {
       if (!hasIdentifierFactory<IdentifierApi>(service as any)) {
         return Effect.die("ProcessStore identifier factory missing on Query service");
@@ -912,32 +906,53 @@ const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> =
     const queryTagId = `${id}/Query` as const;
     const queryTag = Context.Service<any, QueryApi>()(queryTagId) as unknown as Context.Service<any, QueryApi>;
 
-    // layerQuery — builds a read-only query view directly from RuntimeStorage
+    // layerQuery — builds a read-only query view directly from RuntimeStorage;
+    // attaches IDENTIFIER_FACTORY when forMethods are present so forQuery(id) works.
     const layerQuery: Layer.Layer<Context.Service<any, QueryApi>, never, RuntimeStorage> = Layer.effect(
       queryTag as any,
       Effect.gen(function* () {
         const s = yield* buildStore;
-        return (queryMethods !== undefined
+        const queryApi = (queryMethods !== undefined
           ? bindQueryMethods(queryMethods, s)
           : "fn" in anyQuerySection! ? (anyQuerySection as any).fn(s) : {}
-        ) as unknown as QueryApi;
+        ) as object;
+        if (forMethods !== undefined) {
+          attachIdentifierFactory(queryApi, (identifier: string) =>
+            bindForMethods(forMethods, identifier, s) as unknown as IdentifierApi & Record<string, unknown>,
+          );
+        }
+        return queryApi as unknown as QueryApi;
       }),
     ) as any;
 
-    // layerRemote — routes queries over RPC, no local dependencies
+    // layerRemote — routes queries over RPC, no local dependencies.
+    // Only supported for schema-annotated (methods-based) facets.
     const makeLayerRemote = (client: ProcessStoreQueryClient): Layer.Layer<Context.Service<any, QueryApi>, never, never> => {
-      const remoteQueryApi = queryMethods !== undefined
-        ? Record.map(queryMethods, (_, methodName) =>
-            (payload: unknown) => client.query(processTag, methodName, payload),
-          ) as unknown as QueryApi
-        : {} as QueryApi;
-      return Layer.succeed(queryTag as any, remoteQueryApi) as any;
+      if (queryMethods === undefined) {
+        return Layer.effect(
+          queryTag as any,
+          Effect.die(
+            `ProcessStore facet "${processTag}": layerRemote requires schema-annotated query methods. ` +
+            `Migrate to ProcessStore.payload().success().resolve().`,
+          ),
+        ) as any;
+      }
+      const remoteQueryApi = Record.map(queryMethods, (_, methodName) =>
+        (payload: unknown) => client.query(processTag, methodName, payload),
+      ) as unknown as object;
+      if (forMethods !== undefined) {
+        attachIdentifierFactory(remoteQueryApi, (identifier: string) =>
+          Record.map(forMethods, (_, methodName) =>
+            (payload: unknown) => client.queryFor(processTag, identifier, methodName, payload),
+          ) as unknown as IdentifierApi & Record<string, unknown>,
+        );
+      }
+      return Layer.succeed(queryTag as any, remoteQueryApi as unknown as QueryApi) as any;
     };
 
     const forQueryMember = buildForQueryMember<QueryApi, IdentifierApi & Record<string, unknown>>(
       anyForSection,
       queryTag,
-      forMethods,
     );
 
     const schemas = (
@@ -948,7 +963,7 @@ const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> =
       forMethods !== undefined ? extractSchemas(forMethods) : {}
     ) as ForSchemas;
 
-    return assembleFacetClass<Self, Id, Tag, EmitApi, QueryApi & Record<string, unknown>, IdentifierApi & Record<string, unknown>, QuerySchemas, ForSchemas>(
+    const assembled = assembleFacetClass<Self, Id, Tag, EmitApi, QueryApi & Record<string, unknown>, IdentifierApi & Record<string, unknown>, QuerySchemas, ForSchemas>(
       Base as any,
       processTag,
       layerRuntimeStorage,
@@ -962,6 +977,9 @@ const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> =
       schemas,
       forSchemas,
     ) as any;
+    if (queryMethods !== undefined) Object.assign(assembled, { _methods: queryMethods });
+    if (forMethods !== undefined) Object.assign(assembled, { _forMethods: forMethods });
+    return assembled;
   };
 
   return define;
@@ -997,6 +1015,8 @@ type AnyFacetClass = {
   readonly _processTag: string;
   readonly schemas: Record<string, { payload: Schema.Schema<any>; success: Schema.Schema<any> }>;
   readonly forSchemas: Record<string, { payload: Schema.Schema<any>; success: Schema.Schema<any> }>;
+  readonly _methods?: Record<string, ProcessStoreMethod<any, any>>;
+  readonly _forMethods?: Record<string, ProcessStoreForMethod<any, any>>;
 };
 
 type RegistryTypeMap<Facets extends ReadonlyArray<AnyFacetClass>> = {
@@ -1043,8 +1063,20 @@ export const processStoreRegistry = <
   const forLookup: Record<string, Record<string, any>> = {};
 
   for (const facet of facets) {
-    lookup[facet._processTag] = facet.schemas;
-    forLookup[facet._processTag] = facet.forSchemas;
+    if (facet._methods !== undefined) {
+      lookup[facet._processTag] = Record.map(facet._methods, (m) => ({
+        payload: m.payload,
+        success: m.success,
+        resolve: m.resolve,
+      }));
+    }
+    if (facet._forMethods !== undefined) {
+      forLookup[facet._processTag] = Record.map(facet._forMethods, (m) => ({
+        payload: m.payload,
+        success: m.success,
+        resolve: m.resolve,
+      }));
+    }
   }
 
   return {

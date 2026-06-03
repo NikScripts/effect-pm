@@ -114,12 +114,11 @@ A facet is declared with sections passed to `ProcessStore.Service<Self>()(id, ..
 
 | Section | Shape | Adds to the facet |
 |--------|-------|-------------------|
-| `ProcessStore.record({ ... })` | `{ [name]: (s) => method }` | Legacy flat writes + static emitters (being replaced by `telemetry`). |
 | `ProcessStore.telemetry(...)` | `Telemetry.namespace` / `tag` / `event` | Nested PascalCase emit tree (see [plan 17](./plans/17-facet-telemetry-factory.md) §5). |
 | `ProcessStore.query((s) => ({ ... }))` | factory of query methods | Instance queries (`yield* store`). |
 | `ProcessStore.for((id, s) => ({ ... }))` | factory of bound queries | `Facet.for(id)` returning the bound API. |
 
-`record` **or** `telemetry` is required for writes; `query` is required. `for` is optional.
+`telemetry` is required for writes; `query` is required. `for` is optional.
 
 **Planned telemetry authoring:** `Telemetry.event("Completed", MyEventSchema).pipe(Telemetry.annotateLogs)` —
 second arg is a `Telemetry.Schema` class only (scope on schema, not on tag). Not fully implemented yet;
@@ -128,9 +127,15 @@ see plan 17.
 ```ts
 export class ProcessStoreMyDomain extends ProcessStore.Service<ProcessStoreMyDomain>()(
   "@nikscripts/effect-pm/store/myDomain/ProcessStoreMyDomain",
-  ProcessStore.record({
-    recordThing: (s) => (fact: MyFact) => s.create(makeMyDomainRecord(fact)),
-  }),
+  "MyDomain",
+  ProcessStore.telemetry(MyDomainScope)(
+    Telemetry.namespace("MyDomain"),
+    Telemetry.tag("Event")(
+      Telemetry.event("Happened", MyEventHappenedSchema).pipe(
+        Telemetry.logWarning("MyDomainStore write failed"),
+      ),
+    ),
+  ),
   ProcessStore.query((s) => ({
     // Pure-storage read: every filter is pushed into the predicate, so
     // `query?.opts` (including `limit`) flows straight through.

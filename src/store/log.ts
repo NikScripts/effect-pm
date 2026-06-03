@@ -270,7 +270,7 @@ const queryEntries = (
  *
  * @public
  */
-export const LogStore = ProcessStore.Service(
+export class LogStore extends ProcessStore.Service<LogStore>()(
   "@nikscripts/effect-pm/store/log/LogStore",
   "Log",
   ProcessStore.telemetry(LogScope)(
@@ -286,6 +286,4 @@ export const LogStore = ProcessStore.Service(
     query: (logQuery: ProcessManagerLogQuery) =>
       queryEntries(s.read, logQuery),
   })),
-);
-
-export type LogStore = typeof LogStore.Identifier;
+) {}

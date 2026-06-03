@@ -216,7 +216,7 @@ const processGroupLifecycleWireTypes = Telemetry.events(
  *
  * @public
  */
-export const ProcessGroupStore = ProcessStore.Service(
+export class ProcessGroupStore extends ProcessStore.Service<ProcessGroupStore>()(
   "@nikscripts/effect-pm/store/processGroup/ProcessGroupStore",
   "ProcessGroup",
   ProcessGroupTelemetry,
@@ -244,9 +244,7 @@ export const ProcessGroupStore = ProcessStore.Service(
           ),
         ),
   })),
-);
-
-export type ProcessGroupStore = typeof ProcessGroupStore.Identifier;
+) {}
 
 /**
  * @public

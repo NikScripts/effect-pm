@@ -267,7 +267,7 @@ const decodeLifecycleEvents = (
  *
  * @public
  */
-export const ProcessLifecycleStore = ProcessStore.Service(
+export class ProcessLifecycleStore extends ProcessStore.Service<ProcessLifecycleStore>()(
   "@nikscripts/effect-pm/store/processLifecycle/ProcessLifecycleStore",
   "ProcessLifecycle",
   ProcessLifecycleTelemetry,
@@ -345,9 +345,7 @@ export const ProcessLifecycleStore = ProcessStore.Service(
           }),
         ),
   })),
-);
-
-export type ProcessLifecycleStore = typeof ProcessLifecycleStore.Identifier;
+) {}
 
 /**
  * @public
