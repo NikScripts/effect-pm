@@ -72,14 +72,21 @@ import {
   catchErrorAndLog,
   defineProcessStoreFacet,
   processStoreFor,
+  processStoreLegacyFor,
+  processStoreLegacyQuery,
+  processStorePayload,
   processStoreQuery,
   processStoreRecord,
+  processStoreRegistry,
   processStoreTelemetry,
   type ProcessStoreCatchErrorAndLogOptions,
   type ProcessStoreFacetEmitShape,
+  type ProcessStoreFacetForSchemas,
   type ProcessStoreFacetIdentifierShape,
+  type ProcessStoreFacetQuerySchemas,
   type ProcessStoreFacetQueryShape,
   type ProcessStoreFacetShape,
+  type ProcessStoreRegistry,
 } from "./internal/store/service";
 import { Telemetry as TelemetryBuilders } from "./internal/store/telemetry";
 import type {
@@ -119,11 +126,17 @@ export {
  * @public
  */
 export const ProcessStore = {
-  Service: defineProcessStoreFacet,
-  record: processStoreRecord,
-  telemetry: processStoreTelemetry,
-  query: processStoreQuery,
-  for: processStoreFor,
+  Service:      defineProcessStoreFacet,
+  record:       processStoreRecord,
+  telemetry:    processStoreTelemetry,
+  payload:      processStorePayload,
+  query:        processStoreQuery,
+  for:          processStoreFor,
+  /** @deprecated Use `ProcessStore.query({ method: ProcessStore.payload(...).success(...).resolve(...) })` */
+  legacyQuery:  processStoreLegacyQuery,
+  /** @deprecated Use `ProcessStore.for({ method: ProcessStore.payload(...).success(...).resolve(...) })` */
+  legacyFor:    processStoreLegacyFor,
+  registry:     processStoreRegistry,
   catchErrorAndLog,
   optionalFacetEmit,
   optionalFacetEmitWithBridge,
@@ -146,19 +159,24 @@ export {
  */
 export declare namespace ProcessStore {
   export namespace Service {
-    export type Type<T> = ProcessStoreFacetShape<T>;
-    export type Shape<T> = ProcessStoreFacetShape<T>;
-    export type Emit<T> = ProcessStoreFacetEmitShape<T>;
-    export type EmitType<T> = Emit<T>;
-    export type Query<T> = ProcessStoreFacetQueryShape<T>;
-    export type QueryType<T> = Query<T>;
+    export type Type<T>           = ProcessStoreFacetShape<T>;
+    export type Shape<T>          = ProcessStoreFacetShape<T>;
+    export type Emit<T>           = ProcessStoreFacetEmitShape<T>;
+    export type EmitType<T>       = Emit<T>;
+    export type Query<T>          = ProcessStoreFacetQueryShape<T>;
+    export type QueryType<T>      = Query<T>;
     export type IdentifierType<T> = ProcessStoreFacetIdentifierShape<T>;
+    export type QuerySchemas<T>   = ProcessStoreFacetQuerySchemas<T>;
+    export type ForSchemas<T>     = ProcessStoreFacetForSchemas<T>;
+    export type Registry<Facets extends ReadonlyArray<any>> = ProcessStoreRegistry<Facets>;
   }
   export namespace Type {
-    export type Shape<T> = ProcessStoreFacetShape<T>;
-    export type Emit<T> = ProcessStoreFacetEmitShape<T>;
-    export type Query<T> = ProcessStoreFacetQueryShape<T>;
+    export type Shape<T>      = ProcessStoreFacetShape<T>;
+    export type Emit<T>       = ProcessStoreFacetEmitShape<T>;
+    export type Query<T>      = ProcessStoreFacetQueryShape<T>;
     export type Identifier<T> = ProcessStoreFacetIdentifierShape<T>;
+    export type QuerySchemas<T> = ProcessStoreFacetQuerySchemas<T>;
+    export type ForSchemas<T>   = ProcessStoreFacetForSchemas<T>;
   }
   export type CatchErrorAndLogOptions = ProcessStoreCatchErrorAndLogOptions;
 }
