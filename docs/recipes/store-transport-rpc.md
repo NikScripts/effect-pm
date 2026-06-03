@@ -58,16 +58,22 @@ Code quality must meet or exceed this repo's standards.
 | JSON-RPC 2.0 compat | ❌ Skip |
 | Primary-key client-side dedup | ❌ Skip |
 
+### Protocol abstraction (locked 2026-06-03)
+- `StoreTransportProtocol` — own `Context.Tag` at `"@nikscripts/effect-pm/StoreTransport/Protocol"`, interface mirrors `RpcServer.Protocol` minus `supportsTransferables` and `initialMessage`
+- `layerProtocolFromRpc: Layer<StoreTransportProtocol, never, RpcServer.Protocol>` — adapts any existing `layerProtocol*` to our tag; zero boilerplate for WebSocket / SocketServer consumers
+- Custom protocol (PubNub, Kafka, etc.) implements `Layer<StoreTransportProtocol, never, never>` directly — no `RpcServer.Protocol` dependency needed
+- Three transports (Control, Log, Store) coexist in one runtime on separate connections without `Protocol` tag collision
+- `RpcSerialization` reused directly — stateless parsers, same tag, no wrapper needed
+
 ---
 
 ## Open recipe steps
 
-### Step A: Wire protocol
-### Step B: StoreTransportRpc message types + serialization
-### Step C: Server loop (registry-direct, mirroring `makeNoSerialization`)
-### Step D: Client shape + client middleware
-### Step E: Protocol adapters (HTTP / WebSocket)
-### Step F: `ProcessStorage.layerRemote(client)` — one-liner for dashboard bootstrap
+### Step A: Wire message types (`StoreMessage.ts`)
+### Step B: Server loop (`makeNoSerialization` equivalent, registry-direct)
+### Step C: Client shape + client middleware
+### Step D: `StoreTransportProtocol` + adapters
+### Step E: `ProcessStorage.layerRemote(client)` — dashboard bootstrap
 
 ---
 
