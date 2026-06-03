@@ -46,6 +46,15 @@ registry-driven router.
 - `ProcessStorage.layerRemote(client)` — merges all six, one-liner for dashboard bootstrap
 - `.Query` tag value type is flat — no `for` on the instance, `forQuery` stays a class static
 
+## Step 7: Builder internals
+
+- `Record.map(methods, (m) => m.resolve(s))` replaces `Object.fromEntries(Object.entries(...).map(...))` — use Effect's `Record` module throughout, `.pipe` everywhere
+- `record` section stays — `LogStore` still uses it. Delete only after `LogStore` migrates to telemetry + schema query DX
+- `ProcessStoreFacetBrand` gains `QuerySchemas` and `ForSchemas` type params — enables `ProcessStore.Service.QuerySchemas<T>` / `ProcessStore.Service.ForSchemas<T>` helpers
+- `ProcessStore.payload()` is a standalone export on the `ProcessStore` namespace
+- `processStoreQuery` and `processStoreFor` take methods-map form only (no backward compat fn form) — all six facets migrate in one PR but only `RunResourceStore` in this branch; others blocked until agent finishes
+- Scope for this branch: migrate `RunResourceStore` only, establish the pattern
+
 ## Step 5: `ProcessStore.for` chain
 
 - Same `payload().success().resolve()` chain — arity in resolver distinguishes `query` from `for`
