@@ -488,8 +488,14 @@ export { LogStore } from "./store/log";
 export type { LogEntryRecordedInput } from "./store/log";
 export { LogScope } from "./LogScope";
 export {
+  RunResourceCompose,
   RunResourceArchiveSinkLayer,
   RunResourceHubTelemetry,
+  RunResourceProjection,
+  RunResourceProjectionHydrateLayer,
+  RunResourceProjectionLiveLayer,
+  RunResourceProjectionLayer,
+  RunResourceProjectionSinkLayer,
   runResourcePersistLayer,
   RunResourceStore,
 } from "./store/runResource";
@@ -563,6 +569,7 @@ export type {
   RunResourceStateChange,
   RunResourceStateChangeReason,
   RunResourceStateHistoryQuery,
+  RunResourceProjectionService,
 } from "./store/runResource";
 
 // Types - ProcessGroup

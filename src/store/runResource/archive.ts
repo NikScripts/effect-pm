@@ -11,7 +11,7 @@
  */
 
 import { DateTime, Effect, Option, Schema } from "effect";
-import { leg } from "../../ArchiveSink";
+import { ArchiveSink } from "../../sink/ArchiveSink";
 import {
   filterMapNullable,
   nullable,
@@ -284,10 +284,10 @@ const encodeStateChangedRecord = (
 
 /** Archive persist legs derived from hub event definitions. @public */
 export const archiveLegs = [
-  leg(RunStarted, (input) => encodeRunFactRecord(RUN_STARTED_WIRE, input)),
-  leg(RunCompleted, (input) => encodeRunFactRecord(RUN_COMPLETED_WIRE, input)),
-  leg(RunFailed, (input) => encodeRunFactRecord(RUN_FAILED_WIRE, input)),
-  leg(StateChanged, encodeStateChangedRecord),
+  ArchiveSink.leg(RunStarted, (input) => encodeRunFactRecord(RUN_STARTED_WIRE, input)),
+  ArchiveSink.leg(RunCompleted, (input) => encodeRunFactRecord(RUN_COMPLETED_WIRE, input)),
+  ArchiveSink.leg(RunFailed, (input) => encodeRunFactRecord(RUN_FAILED_WIRE, input)),
+  ArchiveSink.leg(StateChanged, encodeStateChangedRecord),
 ] as const;
 
 /** @public */

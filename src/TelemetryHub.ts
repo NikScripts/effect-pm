@@ -159,19 +159,25 @@ export const layerState: Layer.Layer<TelemetryHubState> = Layer.effect(
   })),
 );
 
-/**
- * Hub core — exposes hub + shared sink registry state.
- *
- * @public
- */
-export const baseLayer: Layer.Layer<TelemetryHub | TelemetryHubState> =
+const hubCoreLayer: Layer.Layer<TelemetryHub | TelemetryHubState> =
   Layer.mergeAll(
     layerState,
     Layer.provide(Layer.effect(TelemetryHub, makeTelemetryHub), layerState),
   );
 
-/** @public */
-export const layer: Layer.Layer<TelemetryHub | TelemetryHubState> = baseLayer;
+/**
+ * Hub core — exposes hub + shared sink registry state.
+ *
+ * @public
+ */
+export const layer: Layer.Layer<TelemetryHub | TelemetryHubState> = hubCoreLayer;
+
+/**
+ * @deprecated Use {@link TelemetryHub.layer}.
+ * @public
+ */
+export const baseLayer: Layer.Layer<TelemetryHub | TelemetryHubState> =
+  hubCoreLayer;
 
 /**
  * Hub with sinks registered at layer construction (preferred for static compose).
@@ -191,7 +197,7 @@ export const layerWithSinks = (
   );
 
 /**
- * Register one sink. Compose with {@link baseLayer} via `Layer.mergeAll`.
+ * Register one sink. Compose with {@link layer} via `Layer.mergeAll`.
  *
  * @public
  */
@@ -208,4 +214,8 @@ export const sinkLayer = (
 /** @public */
 export namespace TelemetryHub {
   export type Service = TelemetryHubService;
+
+  /** Hub core — default compose entrypoint. */
+  export const layer: Layer.Layer<TelemetryHub | TelemetryHubState> =
+    hubCoreLayer;
 }

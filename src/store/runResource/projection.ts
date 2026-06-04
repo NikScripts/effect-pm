@@ -1,8 +1,10 @@
 /**
- * RunResource projection — stub for slice 6.3.
+ * RunResource projection re-exports.
  *
  * @module store/runResource/projection
  */
 
-/** @public */
-export const RunResourceProjectionStub = "RunResourceProjection lands in slice 6.3" as const;
+export {
+  RunResourceProjection,
+  type RunResourceProjectionService,
+} from "../../RunResourceProjection";

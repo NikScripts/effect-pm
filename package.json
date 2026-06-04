@@ -154,10 +154,45 @@
       "import": "./dist/TelemetryHub.mjs",
       "require": "./dist/TelemetryHub.js"
     },
+    "./RunResourceProjection": {
+      "types": "./dist/RunResourceProjection.d.ts",
+      "import": "./dist/RunResourceProjection.mjs",
+      "require": "./dist/RunResourceProjection.js"
+    },
     "./ArchiveSink": {
       "types": "./dist/ArchiveSink.d.ts",
       "import": "./dist/ArchiveSink.mjs",
       "require": "./dist/ArchiveSink.js"
+    },
+    "./sink/ArchiveSink": {
+      "types": "./dist/sink/ArchiveSink.d.ts",
+      "import": "./dist/sink/ArchiveSink.mjs",
+      "require": "./dist/sink/ArchiveSink.js"
+    },
+    "./ProjectionSink": {
+      "types": "./dist/ProjectionSink.d.ts",
+      "import": "./dist/ProjectionSink.mjs",
+      "require": "./dist/ProjectionSink.js"
+    },
+    "./sink/ProjectionSink": {
+      "types": "./dist/sink/ProjectionSink.d.ts",
+      "import": "./dist/sink/ProjectionSink.mjs",
+      "require": "./dist/sink/ProjectionSink.js"
+    },
+    "./BroadcastSink": {
+      "types": "./dist/BroadcastSink.d.ts",
+      "import": "./dist/BroadcastSink.mjs",
+      "require": "./dist/BroadcastSink.js"
+    },
+    "./sink/BroadcastSink": {
+      "types": "./dist/sink/BroadcastSink.d.ts",
+      "import": "./dist/sink/BroadcastSink.mjs",
+      "require": "./dist/sink/BroadcastSink.js"
+    },
+    "./telemetryTransport": {
+      "types": "./dist/telemetryTransport.d.ts",
+      "import": "./dist/telemetryTransport.mjs",
+      "require": "./dist/telemetryTransport.js"
     },
     "./CommandAuth": {
       "types": "./dist/CommandAuth.d.ts",

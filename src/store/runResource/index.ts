@@ -55,21 +55,51 @@ export {
   type RunResourceStateChangedInput,
 } from "./telemetry";
 
-export { RunResourceProjectionStub } from "./projection";
+export {
+  RunResourceProjection,
+  type RunResourceProjectionService,
+} from "./projection";
 
 import { Layer } from "effect";
-import { layerForStore } from "../../ArchiveSink";
+import { ArchiveSink } from "../../sink/ArchiveSink";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import { archiveLegs, RunResourceStore } from "./archive";
+import { RunResourceProjection } from "./projection";
 
-/** Hub + archive persist sink (requires {@link RuntimeStorage} at compose). @public */
-export const RunResourceArchiveSinkLayer = layerForStore(
-  RunResourceStore,
-  archiveLegs,
-);
+/** RunResource hub compose helpers. @public */
+export namespace RunResourceCompose {
+  /** Hub + archive persist sink (requires {@link RuntimeStorage} at compose). */
+  export const layerArchiveSink = ArchiveSink.layerForStore(
+    RunResourceStore,
+    archiveLegs,
+  );
 
-/** Archive queries + hub + optional persist over in-memory storage. @public */
-export const runResourcePersistLayer = Layer.provide(
-  Layer.mergeAll(RunResourceStore.layerRuntimeStorage, RunResourceArchiveSinkLayer),
-  RuntimeStorage.layer,
-);
+  /** Archive queries + hub + optional persist over in-memory storage. */
+  export const layerPersist = Layer.provide(
+    Layer.mergeAll(RunResourceStore.layerRuntimeStorage, layerArchiveSink),
+    RuntimeStorage.layer,
+  );
+
+  /** Projection service + hub sink (default live compose). */
+  export const layerProjectionLive = RunResourceProjection.layerLive;
+}
+
+/** @deprecated Use {@link RunResourceCompose.layerArchiveSink}. */
+export const RunResourceArchiveSinkLayer = RunResourceCompose.layerArchiveSink;
+
+/** @deprecated Use {@link RunResourceCompose.layerPersist}. */
+export const runResourcePersistLayer = RunResourceCompose.layerPersist;
+
+/** @deprecated Use {@link RunResourceProjection.layer}. */
+export const RunResourceProjectionLayer = RunResourceProjection.layer;
+
+/** @deprecated Use {@link RunResourceProjection.layerHydrateFromArchive}. */
+export const RunResourceProjectionHydrateLayer =
+  RunResourceProjection.layerHydrateFromArchive;
+
+/** @deprecated Use {@link RunResourceProjection.layerLive}. */
+export const RunResourceProjectionLiveLayer = RunResourceProjection.layerLive;
+
+/** @deprecated Use {@link RunResourceProjection.layerWithProjectionSink}. */
+export const RunResourceProjectionSinkLayer =
+  RunResourceProjection.layerWithProjectionSink;

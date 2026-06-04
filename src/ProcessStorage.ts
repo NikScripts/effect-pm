@@ -44,7 +44,7 @@
  */
 
 import { Layer } from "effect";
-import { layerForStore } from "./ArchiveSink";
+import { ArchiveSink } from "./sink/ArchiveSink";
 import { RuntimeStorage } from "./RuntimeStorage";
 import { LogStore } from "./store/log";
 import { ProcessExecutionStore } from "./store/processExecution";
@@ -73,7 +73,7 @@ const facetLayers = Layer.mergeAll(
   processGroupLayer,
 );
 
-const runResourceArchiveSinkLayer = layerForStore(RunResourceStore, archiveLegs);
+const runResourceArchiveSinkLayer = ArchiveSink.layerForStore(RunResourceStore, archiveLegs);
 
 /**
  * All built-in facet layers plus RunResource {@link ArchiveSink} over
