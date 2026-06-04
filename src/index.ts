@@ -271,7 +271,6 @@ export {
   PayloadDecodeError,
   ResultEncodeError,
   StorageError,
-  makeClient as makeStoreTransportRpcClient,
   toProcessStoreQueryClient,
 } from "./storeTransport";
 export type {

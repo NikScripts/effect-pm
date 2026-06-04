@@ -422,29 +422,32 @@ const isEffectValue = (u: unknown): u is Effect.Effect<unknown, unknown> =>
   typeof u === "object" && u !== null && Effect.TypeId in u;
 
 export const toProcessStoreQueryClient = (
-  client: StoreQueryClient<any>,
-): ProcessStoreQueryClient => ({
-  query: (facet, method, payload) => {
-    const result = client[facet]?.[method]?.(payload);
-    if (result !== undefined && isEffectValue(result)) return result;
-    return Effect.fail(new UnknownMethod({ facet, method }));
-  },
-  queryFor: (facet, id, method, payload) => {
-    const result = client.for?.[facet]?.(id)?.[method]?.(payload);
-    if (result !== undefined && isEffectValue(result)) return result;
-    return Effect.fail(new UnknownMethod({ facet, method }));
-  },
-  queryStream: (facet, method, payload) => {
-    const result = client[facet]?.[method]?.(payload);
-    if (result !== undefined && isStreamValue(result)) return result;
-    return Stream.fail(new UnknownMethod({ facet, method }));
-  },
-  queryForStream: (facet, id, method, payload) => {
-    const result = client.for?.[facet]?.(id)?.[method]?.(payload);
-    if (result !== undefined && isStreamValue(result)) return result;
-    return Stream.fail(new UnknownMethod({ facet, method }));
-  },
-});
+  client: unknown,
+): ProcessStoreQueryClient => {
+  const c = client as StoreQueryClient<any>;
+  return {
+    query: (facet, method, payload) => {
+      const result = c[facet]?.[method]?.(payload);
+      if (result !== undefined && isEffectValue(result)) return result;
+      return Effect.fail(new UnknownMethod({ facet, method }));
+    },
+    queryFor: (facet, id, method, payload) => {
+      const result = c.for?.[facet]?.(id)?.[method]?.(payload);
+      if (result !== undefined && isEffectValue(result)) return result;
+      return Effect.fail(new UnknownMethod({ facet, method }));
+    },
+    queryStream: (facet, method, payload) => {
+      const result = c[facet]?.[method]?.(payload);
+      if (result !== undefined && isStreamValue(result)) return result;
+      return Stream.fail(new UnknownMethod({ facet, method }));
+    },
+    queryForStream: (facet, id, method, payload) => {
+      const result = c.for?.[facet]?.(id)?.[method]?.(payload);
+      if (result !== undefined && isStreamValue(result)) return result;
+      return Stream.fail(new UnknownMethod({ facet, method }));
+    },
+  };
+};
 
 // ============================================================================
 // Public namespace
