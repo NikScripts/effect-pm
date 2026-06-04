@@ -279,7 +279,7 @@ export type {
   StoreClientTransport,
   StoreClientMiddleware,
   StoreTransportServerConfig,
-  storeTransportApi,
+  StoreTransportApi,
   StoreError,
   StoreServerMiddleware,
   ExitEncoded,

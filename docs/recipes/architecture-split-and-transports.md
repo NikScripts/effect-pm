@@ -22,9 +22,7 @@ Lock architecture decisions that block the first implementation slices:
 
 - `ProcessStore.Service` **requires** telemetry + query sections; `make` merges emit
   + read and requires `RuntimeStorage` via spine (`src/internal/store/service.ts`).
-- `storeTransport` (shipped as `StoreTransportRpc`) uses a forked
-  `StoreTransportProtocol` + `layerProtocolFromRpc` instead of `RpcServer.Protocol`
-  directly.
+- `storeTransport` uses `RpcServer.Protocol` directly (forked `StoreTransportProtocol` adapter deleted).
 - `ControlTransportHttp` still exposes `GET /logs/stream` — duplicates log transport
   (plan 19).
 - Plan 17 telemetry factory is designed but still modeled as a ProcessStore section.
@@ -127,7 +125,7 @@ Lock architecture decisions that block the first implementation slices:
   only what it uses; shared serialization at app root.
 - **Demux single-socket deferred** — future optimization if dashboard needs one WS.
 - **camelCase transport modules** (`storeTransport.ts`) — PascalCase types only
-  (plan 19); rename `StoreTransportRpc` when touched.
+  (plan 19); rename completed (`storeTransport`).
 
 ### Step 5 — Transport ↔ module mapping (locked 2026-06-03)
 

@@ -16,13 +16,13 @@
  * - **Per-facet opt-in** — pass `ProcessStore.registry([RunResourceStore])`
  *   for a client that only knows about run resources.
  * - **Direct `RpcServer.Protocol`** — compose with
- *   `RpcServer.layerProtocolWebsocket({ path: "/ws/store" })` + `RpcServer.layerNdjson`.
+ *   `RpcServer.layerProtocolWebsocket({ path: "/ws/store" })` + `RpcSerialization.layerNdjson`.
  *
  * @example Server
  * ```ts
  * storeTransport.serverLayer(registry).pipe(
  *   Layer.provide(RpcServer.layerProtocolWebsocket({ path: "/ws/store" })),
- *   Layer.provide(RpcServer.layerNdjson),
+ *   Layer.provide(RpcSerialization.layerNdjson),
  * )
  * ```
  *
@@ -451,7 +451,7 @@ export const toProcessStoreQueryClient = (
 // ============================================================================
 
 /** @public */
-export interface storeTransportApi {
+export interface StoreTransportApi {
   readonly serverLayer: <const Facets extends ReadonlyArray<AnyFacetClass>>(
     registry: ProcessStoreRegistry<Facets>,
     config?: StoreTransportServerConfig,
@@ -471,7 +471,7 @@ export interface storeTransportApi {
 }
 
 /** @public */
-export const storeTransport: storeTransportApi = {
+export const storeTransport: StoreTransportApi = {
   serverLayer: layerStore,
   makeClient,
   toProcessStoreQueryClient,

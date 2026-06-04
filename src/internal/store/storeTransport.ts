@@ -596,7 +596,9 @@ export const makeStore = <
       disableClientAcks: !supportsAck,
       disableSpanPropagation: !supportsSpanPropagation,
       onFromServer: (clientId, response) =>
-        response._tag === "ClientEnd" ? end(response.clientId) : send(clientId, response as any),
+        response._tag === "ClientEnd"
+          ? end(response.clientId)
+          : send(clientId, response),
     });
 
     yield* Effect.forkScoped(
@@ -605,7 +607,7 @@ export const makeStore = <
       ),
     );
 
-    return yield* run((clientId: number, message: any) => server.write(clientId, message)).pipe(
+    return yield* run((clientId, message) => server.write(clientId, message)).pipe(
       Effect.interruptible,
       Effect.asVoid,
     );
