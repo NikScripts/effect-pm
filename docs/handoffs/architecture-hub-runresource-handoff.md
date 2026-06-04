@@ -111,6 +111,8 @@ src/store/runResource/
 
 ### 6.3 — Live projection + `telemetryTransport` v1
 
+**Status:** **Done** on `cursor/hub-runresource-vertical` (`60495a8`+).
+
 **Goal:** **Actually live** — hub updates memory + pushes on wire; **no store poll
 on hot path.**
 
@@ -126,7 +128,7 @@ on hot path.**
   - `BroadcastSink` at app compose: hub → transport publish.
   - Schema-backed stream items (event wire + payload).
 
-**Demo acceptance:**
+**Demo acceptance:** *(verified in `test/run-resource-projection.test.ts` and `test/telemetry-transport.test.ts`)*
 
 1. Emit `State.Changed` → projection `latestState` updates in-process.
 2. Telemetry transport client receives event **without** calling `storeTransport`.

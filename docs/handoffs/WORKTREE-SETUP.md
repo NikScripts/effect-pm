@@ -82,7 +82,7 @@ git checkout rewrite/store-transport
 | --- | --- | --- |
 | 6.1 TelemetryHub | Done | — |
 | 6.2 RunResource + ArchiveSink | Done | — |
-| 6.3 Projection + telemetryTransport | Done on hub tip | — |
-| 6.4 storeTransport Protocol unify | — | Mostly done; test/export gaps |
+| 6.3 Projection + telemetryTransport | **Done** | — |
+| 6.4 storeTransport Protocol unify | — | In progress |
 | 6.5 Control/log dedup | — | Not started |
 | 6.6 terminalTransport v1 | — | Not started |
