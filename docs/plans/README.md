@@ -33,6 +33,8 @@ Higher items unblock remote operations, operator UX, and honest queue typing.
 | 3 | **Queues: unified handles, schemas, remote enqueue & handoff** — `QueueResource`/`ProcessGroup` alignment, **`itemSchema`**, release/handoff, then remote enqueue over `ControlService`/`ProcessManager` | [03-queue-remote-handoff.md](./03-queue-remote-handoff.md) |
 | 4 | **Queue analytics / projections / live reads** — `QueueResourceStore` completeness, dashboards | [04-queue-analytics.md](./04-queue-analytics.md) |
 | 5 | **Log transport abstraction + durable history + live fan-out** — port like control transport, **`LogStore`** cursors, optional PubNub | [05-log-transport.md](./05-log-transport.md) |
+| **5b** | **Transport boundaries** — what belongs in control / store / log / telemetry; shared control for CLI+dashboard; store-transport pattern for all; schemas everywhere; camelCase modules | [19-transport-boundaries.md](./19-transport-boundaries.md) |
+| **5c** | **ProcessStore split** — telemetry without storage (hub + sinks); archive vs projection; unified `RpcServer.Protocol`; unbundle non-telemetry persistence | [20-process-store-split-and-telemetry.md](./20-process-store-split-and-telemetry.md) |
 | **6a** | **Resource state scope** — `State.Scope` / state vs context / DI layers; runtime toolkit (lifetime / program / combinator / fiber); Run → Process → Queue | [18-resource-state-scope.md](./18-resource-state-scope.md) |
 | **6b** | **Facet telemetry factory + scope** — §5 facet DX finalized; slice 3 = `ProcessExecutionStore` + `ProcessScope` + `Process.ts`; then other facets; see [18](./18-resource-state-scope.md) | [17-facet-telemetry-factory.md](./17-facet-telemetry-factory.md) |
 | 6 | **Runtime facets: listeners, history shape, mutable config** — beside [STORAGE.md](../STORAGE.md), no revived monolith facade | [06-runtime-hooks-config.md](./06-runtime-hooks-config.md) |
@@ -44,7 +46,7 @@ Higher items unblock remote operations, operator UX, and honest queue typing.
 | 10 | **TypeScript:** re-enable **`anyUnknownInErrorContext`** (keep **`serviceNotAsClass`** off) | [10-typescript-strict-unknown.md](./10-typescript-strict-unknown.md) |
 | — | **Storage / Prisma follow-up** (adapter landed; polish and docs) | [11-storage-prisma-follow-up.md](./11-storage-prisma-follow-up.md) |
 | — | **Hybrid `RuntimeStorage`** — one layer, SQL + Redis inside adapter | [15-runtime-storage-hybrid.md](./15-runtime-storage-hybrid.md) |
-| — | **Effect RPC transport migration** — move control/dashboard/log/terminal transports to Effect RPC / Effect platform adapters while keeping services transport-agnostic | [16-effect-rpc-transport-migration.md](./16-effect-rpc-transport-migration.md) |
+| — | **Transport implementation migration** — reframe Effect RPC as wire framing only; rebuild control/log on store-transport shape; HTTP/WebSocket adapters | [16-effect-rpc-transport-migration.md](./16-effect-rpc-transport-migration.md) · boundaries [19](./19-transport-boundaries.md) |
 | — | **Conversation index (May 2026)** — checklist; not implementation spec | [14-conversation-capture-may-2026.md](./14-conversation-capture-may-2026.md) |
 
 ### Dependency hints (soft)

@@ -1,18 +1,24 @@
-# 16 — Effect RPC transport migration
+# 16 — Transport implementation migration
 
-Migration plan for replacing hand-rolled transport surfaces where Effect already
-provides the right abstraction.
+Migration plan for converging all network transports on the **store-transport
+pattern** (protocol tag + message schemas + server loop + adapters).
+
+**Boundary decisions:** [19-transport-boundaries.md](./19-transport-boundaries.md).
 
 ## Rule
 
-Use Effect transport modules by default.
-
-- Stateful / streaming / bidirectional protocols → Effect v4 RPC
-  (`effect/unstable/rpc` in the current beta line).
-- Request-response HTTP compatibility and metadata endpoints →
-  `@effect/platform` `HttpApi` / `HttpRouter`.
+- **Transports** are domain modules (`controlTransport`, `storeTransport`,
+  `logTransport`, `telemetryTransport`) — registry- or schema-direct dispatch,
+  every message schema-backed.
+- **Adapters** are HTTP, WebSocket, NDJSON, etc. (`controlTransportHttp`, …).
+  They parse bytes ↔ encoded schemas and call the transport loop.
+- **Effect RPC** (`effect/unstable/rpc`) is **wire framing** inside adapters
+  (chunk/ack/interrupt) — not a separate product surface per domain. Do not
+  model transports as thin `RpcGroup` wrappers.
+- Request-response HTTP compatibility → `@effect/platform` `HttpApi` /
+  `HttpRouter` where appropriate.
 - Domain services stay transport-agnostic and never know HTTP paths, status
-  codes, headers, or RPC framing.
+  codes, headers, or framing.
 
 ## Current status
 
