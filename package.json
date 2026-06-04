@@ -149,6 +149,11 @@
       "import": "./dist/StoreMessage.mjs",
       "require": "./dist/StoreMessage.js"
     },
+    "./TelemetryHub": {
+      "types": "./dist/TelemetryHub.d.ts",
+      "import": "./dist/TelemetryHub.mjs",
+      "require": "./dist/TelemetryHub.js"
+    },
     "./CommandAuth": {
       "types": "./dist/CommandAuth.d.ts",
       "import": "./dist/CommandAuth.mjs",

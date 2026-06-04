@@ -43,6 +43,7 @@ export default defineConfig([
       ControlTransportRpc: "src/ControlTransportRpc.ts",
       StoreTransportRpc: "src/StoreTransportRpc.ts",
       StoreMessage: "src/StoreMessage.ts",
+      TelemetryHub: "src/TelemetryHub.ts",
       Terminal: "src/Terminal.ts",
       TerminalRpc: "src/TerminalRpc.ts",
       LogTransportRpc: "src/LogTransportRpc.ts",
