@@ -16,6 +16,10 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/ResourceConfigure.ts` | Layer-composed `.configure` patches for queue/process/run services. |
 | `src/ProcessStore.ts`, `src/ProcessStorage.ts`, `src/ProcessStoreEvent.ts` | Storage facet builder, combined facet layers, and shared event types. |
 | `src/store/*.ts` | Storage facets → `@nikscripts/effect-pm/store/*` |
+| `src/store/<domain>/` | Domain co-location: `telemetry.ts`, `archive.ts`, `projection.ts` (re-exports) |
+| `src/sink/` | TelemetryHub sink legs → `@nikscripts/effect-pm/sink/*` |
+| `src/TelemetryHub.ts` | Global telemetry router → `@nikscripts/effect-pm/TelemetryHub` |
+| `src/*Projection.ts`, `src/*Transport.ts` | Live projection + semantic transports (camelCase transport filenames) |
 | `src/LogContext.ts`, `src/LogEntry.ts`, `src/Transport.ts` | PM log annotations, NDJSON log entries, transport config. |
 | `src/internal/store/spine.ts`, `service.ts`, `helpers.ts` | Shared storage plumbing — internal. Type-agnostic only; per-facet codecs live next to each facet in `src/store/`. |
 | `src/internal/manager/*` | PM child launch, log capture/relay/query, group watch — **internal**. |
@@ -53,7 +57,8 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 documented export (`index.ts` or a `package.json` subpath). If only other package modules
 use it → `src/internal/` — not exported from `index.ts`, no new subpath.
 
-See [`.cursor/rules/public-vs-internal.mdc`](../.cursor/rules/public-vs-internal.mdc).
+See [`.cursor/rules/public-vs-internal.mdc`](../.cursor/rules/public-vs-internal.mdc) for
+the full **module placement** table (role folders, subpaths, layer exports).
 
 ---
 
