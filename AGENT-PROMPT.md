@@ -3,7 +3,7 @@
 **Worktree:** `effect-pm-alt`  
 **Branch:** `cursor/hub-runresource-vertical`  
 **Tip:** `45a1e70` — TelemetryHub + RunResource split + ArchiveSink landed  
-**Parallel agent:** transport work on `effect-pm-alt-transport` → see [`../effect-pm-alt-transport/AGENT-PROMPT.md`](../effect-pm-alt-transport/AGENT-PROMPT.md)
+**Parallel agent:** transport on `effect-pm-alt-transport` → [`../effect-pm-alt-transport/AGENT-PROMPT.md`](../effect-pm-alt-transport/AGENT-PROMPT.md)
 
 ---
 
@@ -14,7 +14,7 @@
 3. [`docs/recipes/architecture-split-and-transports.md`](./docs/recipes/architecture-split-and-transports.md) — locked architecture
 4. [`docs/handoffs/WORKTREE-SETUP.md`](./docs/handoffs/WORKTREE-SETUP.md) — worktree map + merge coordination
 
-**Do not touch:** `storeTransport` Protocol unify, `ControlTransportHttp` log route removal, `logTransport` / `controlTransport` / `terminalTransport` — parallel agent owns those on `effect-pm`.
+**Do not touch:** `storeTransport` Protocol unify, `ControlTransportHttp` log route removal, `logTransport` / `controlTransport` / `terminalTransport` — transport agent owns those on `cursor/transport-protocol-unify` in worktree `effect-pm-alt-transport`.
 
 ---
 

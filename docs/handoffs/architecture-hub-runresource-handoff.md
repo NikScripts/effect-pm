@@ -2,15 +2,10 @@
 
 ## Branch
 
-```text
-rewrite/store-transport
-```
+**Implement on:** `cursor/hub-runresource-vertical`  
+**Worktree:** `/Users/nikolasstow/Coding/packages/effect-pm-alt` (tmux: `effect-pm-alt`)
 
-Create a topic branch off this tip if preferred:
-
-```text
-cursor/hub-runresource-vertical
-```
+**Merge into (later):** `rewrite/store-transport` after transport agent lands — not an implementation branch.
 
 Merge transport-unify work from the parallel agent (`cursor/transport-protocol-unify`)
 after both pass CI — resolve conflicts in `src/index.ts`, `package.json` exports,
