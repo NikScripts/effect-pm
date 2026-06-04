@@ -137,7 +137,7 @@ export interface ProcessStoreForStreamMethod<
 }
 
 /**
- * Generic RPC client used by `layerRemote` — decoupled from `StoreTransportRpc`.
+ * Generic RPC client used by `layerRemote` — decoupled from `storeTransport`.
  *
  * @internal
  */

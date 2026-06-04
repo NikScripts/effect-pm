@@ -53,7 +53,7 @@ import { QueueResourceStore } from "./store/queueResource";
 import { RunResourceStore } from "./store/runResource";
 import type { ProcessStoreRegistry } from "./internal/store/service";
 import type { AnyFacetClass } from "./internal/store/service";
-import { toProcessStoreQueryClient, type StoreQueryClient } from "./StoreTransportRpc";
+import { toProcessStoreQueryClient, type StoreQueryClient } from "./storeTransport";
 
 const processLifecycleLayer = ProcessLifecycleStore.layerRuntimeStorage;
 

@@ -54,7 +54,7 @@
  * **`@nikscripts/effect-pm/Logs`**, **`@nikscripts/effect-pm/ControlService`**,
  * **`@nikscripts/effect-pm/ControlTransportRpc`**,
  * **`@nikscripts/effect-pm/LogTransportRpc`**,
- * **`@nikscripts/effect-pm/StoreTransportRpc`**, and
+ * **`@nikscripts/effect-pm/storeTransport`**, and
  * **`@nikscripts/effect-pm/StoreMessage`**.
  *
  * Structured log persistence: `ProcessStore.Log` (also exported as the
@@ -264,8 +264,7 @@ export type {
   LogTransportRpcServerConfig,
 } from "./LogTransportRpc";
 export {
-  StoreTransportRpc,
-  StoreTransportProtocol,
+  storeTransport,
   StoreErrorSchema,
   UnknownFacet,
   UnknownMethod,
@@ -274,14 +273,13 @@ export {
   StorageError,
   makeClient as makeStoreTransportRpcClient,
   toProcessStoreQueryClient,
-  layerProtocolFromRpc as layerStoreProtocolFromRpc,
-} from "./StoreTransportRpc";
+} from "./storeTransport";
 export type {
   StoreQueryClient,
   StoreClientTransport,
   StoreClientMiddleware,
   StoreTransportServerConfig,
-  StoreTransportRpcApi,
+  storeTransportApi,
   StoreError,
   StoreServerMiddleware,
   ExitEncoded,
@@ -299,7 +297,7 @@ export type {
   Pong,
   ClientEnd,
   ParsedTag,
-} from "./StoreTransportRpc";
+} from "./storeTransport";
 export {
   RequestId,
   makeQueryTag,

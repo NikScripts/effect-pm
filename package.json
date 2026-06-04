@@ -139,10 +139,10 @@
       "import": "./dist/LogTransportRpc.mjs",
       "require": "./dist/LogTransportRpc.js"
     },
-    "./StoreTransportRpc": {
-      "types": "./dist/StoreTransportRpc.d.ts",
-      "import": "./dist/StoreTransportRpc.mjs",
-      "require": "./dist/StoreTransportRpc.js"
+    "./storeTransport": {
+      "types": "./dist/storeTransport.d.ts",
+      "import": "./dist/storeTransport.mjs",
+      "require": "./dist/storeTransport.js"
     },
     "./StoreMessage": {
       "types": "./dist/StoreMessage.d.ts",

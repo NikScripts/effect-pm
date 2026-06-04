@@ -112,7 +112,7 @@ export interface ResponseChunkEncoded {
 
 /**
  * A single entry in a failure cause array. Matches `RpcMessage.ExitEncoded`
- * cause element format exactly for `layerProtocolFromRpc` compatibility.
+ * cause element format exactly for RpcServer.Protocol compatibility.
  *
  * @public
  */

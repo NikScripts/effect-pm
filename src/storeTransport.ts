@@ -1,12 +1,11 @@
 /**
- * **StoreTransportRpc** — registry-direct RPC transport for ProcessStore
+ * **storeTransport** — registry-direct RPC transport for ProcessStore
  * facet queries.
  *
  * @remarks
  * Mirrors `@effect/rpc` internals (`RpcServer`, `RpcClient`) but dispatches
- * directly from `ProcessStoreRegistry` rather than through `RpcGroup`. All
- * ten wire message types are identical to Effect RPC; the same
- * `layerProtocol*` implementations work via `layerProtocolFromRpc`.
+ * directly from `ProcessStoreRegistry` rather than through `RpcGroup`. Uses
+ * `RpcServer.Protocol` directly — no forked protocol adapter.
  *
  * ## Architecture
  *
@@ -16,15 +15,13 @@
  *   facets on the wire.
  * - **Per-facet opt-in** — pass `ProcessStore.registry([RunResourceStore])`
  *   for a client that only knows about run resources.
- * - **Protocol-agnostic** — provide any `Layer<StoreTransportProtocol>`;
- *   use `layerProtocolFromRpc` to adapt existing Effect RPC protocol
- *   implementations (WebSocket, HTTP, SocketServer).
+ * - **Direct `RpcServer.Protocol`** — compose with
+ *   `RpcServer.layerProtocolWebsocket({ path: "/ws/store" })` + `RpcServer.layerNdjson`.
  *
  * @example Server
  * ```ts
- * StoreTransportRpc.serverLayer(registry).pipe(
- *   Layer.provide(StoreTransportRpc.layerProtocolFromRpc),
- *   Layer.provide(RpcServer.layerProtocolWebsocket({ path: "/store" })),
+ * storeTransport.serverLayer(registry).pipe(
+ *   Layer.provide(RpcServer.layerProtocolWebsocket({ path: "/ws/store" })),
  *   Layer.provide(RpcServer.layerNdjson),
  * )
  * ```
@@ -32,13 +29,13 @@
  * @example Client (individual facet)
  * ```ts
  * const registry = ProcessStore.registry([RunResourceStore])
- * const client   = StoreTransportRpc.makeClient(registry, transport)
+ * const client   = storeTransport.makeClient(registry, transport)
  * RunResourceStore.layerRemote(client)  // Layer<RunResourceStore.Query, never, never>
  * ```
  *
  * @example Client (all facets)
  * ```ts
- * const client = StoreTransportRpc.makeClient(
+ * const client = storeTransport.makeClient(
  *   ProcessStore.registry([...allFacets]),
  *   transport,
  *   [authMiddleware],
@@ -46,7 +43,7 @@
  * ProcessStorage.layerRemote(client)
  * ```
  *
- * @module StoreTransportRpc
+ * @module storeTransport
  */
 
 import { Effect, Layer, Stream } from "effect";
@@ -55,7 +52,6 @@ import { RpcServer } from "effect/unstable/rpc";
 import type { AnyFacetClass, ProcessStoreRegistry, ProcessStoreQueryClient } from "./internal/store/service";
 import {
   layerStore,
-  StoreTransportProtocol,
   UnknownFacet,
   UnknownMethod,
   PayloadDecodeError,
@@ -88,7 +84,6 @@ import {
 import type { RuntimeStorage } from "./RuntimeStorage";
 
 export {
-  StoreTransportProtocol,
   StoreErrorSchema,
   UnknownFacet,
   UnknownMethod,
@@ -99,8 +94,6 @@ export {
   type StoreServerMiddleware,
 };
 
-// Re-export wire message types so transport implementors don't need a separate
-// import from "@nikscripts/effect-pm/StoreMessage".
 export type {
   ExitEncoded,
   CauseEncoded,
@@ -288,8 +281,6 @@ export const makeClient = <
     });
   };
 
-  // Per-method callable — mirrors RpcClient.makeNoSerialization's onRequest():
-  // isStream is captured once at construction, the callable returns Effect or Stream.
   const makeEffectMethod = (
     facet: string,
     method: string,
@@ -354,8 +345,6 @@ export const makeClient = <
       ? (v) => Schema.decodeUnknownEffect(entry.success)(v)
       : Effect.succeed;
 
-  // Build unified facet method objects — stream and effect methods at the same
-  // level, identical to how RpcClient iterates group.requests.values().
   const facetMethods: Record<string, Record<string, (payload: unknown) => Effect.Effect<unknown, StoreError> | Stream.Stream<unknown, StoreError>>> = {};
 
   for (const [facet, methods] of Object.entries(registry.lookup)) {
@@ -412,10 +401,6 @@ export const makeClient = <
     };
   }
 
-  // StoreQueryClient<R> is a phantom-mapped type derived from registry.typeMap
-  // (a phantom {}). TypeScript cannot derive it from Record<string,…> even though
-  // the runtime keys match exactly — this structural coercion is the boundary between
-  // the dynamic build and the typed surface.
   return { ...facetMethods, for: forMethods } as unknown as StoreQueryClient<ProcessStoreRegistry<Facets>>;
 };
 
@@ -430,7 +415,6 @@ export const makeClient = <
  *
  * @public
  */
-// Runtime predicates mirroring RpcSchema.isStreamSchema — narrow without casts.
 const isStreamValue = (u: unknown): u is Stream.Stream<unknown, unknown> =>
   typeof u === "object" && u !== null && Stream.TypeId in u;
 
@@ -463,52 +447,19 @@ export const toProcessStoreQueryClient = (
 });
 
 // ============================================================================
-// Protocol bridge
-// ============================================================================
-
-/**
- * Bridge any `RpcServer.Protocol` implementation to `StoreTransportProtocol`.
- *
- * @public
- */
-export const layerProtocolFromRpc: Layer.Layer<
-  StoreTransportProtocol,
-  never,
-  RpcServer.Protocol
-> = Layer.effect(
-  StoreTransportProtocol,
-  Effect.map(RpcServer.Protocol, (p) =>
-    StoreTransportProtocol.of({
-      // FromClientEncoded is structurally identical to RpcMessage.FromClientEncoded.
-      run: p.run,
-      // FromServerEncoded minus ClientEnd is a structural subtype of RpcFromServerEncoded.
-      // ClientEnd is handled separately via end() in makeStore and never passed to send().
-      send: (clientId, response) => p.send(clientId, response),
-      end: p.end,
-      disconnects: p.disconnects,
-      clientIds: p.clientIds,
-      supportsAck: p.supportsAck,
-      supportsSpanPropagation: p.supportsSpanPropagation,
-    }),
-  ),
-);
-
-// ============================================================================
 // Public namespace
 // ============================================================================
 
 /** @public */
-export interface StoreTransportRpcApi {
+export interface storeTransportApi {
   readonly serverLayer: <const Facets extends ReadonlyArray<AnyFacetClass>>(
     registry: ProcessStoreRegistry<Facets>,
     config?: StoreTransportServerConfig,
-  ) => Layer.Layer<never, never, StoreTransportProtocol | RuntimeStorage>;
+  ) => Layer.Layer<never, never, RpcServer.Protocol | RuntimeStorage>;
 
   readonly makeClient: typeof makeClient;
   readonly toProcessStoreQueryClient: typeof toProcessStoreQueryClient;
-  readonly layerProtocolFromRpc: typeof layerProtocolFromRpc;
 
-  readonly Protocol: typeof StoreTransportProtocol;
   readonly errors: {
     readonly Schema: typeof StoreErrorSchema;
     readonly UnknownFacet: typeof UnknownFacet;
@@ -520,12 +471,10 @@ export interface StoreTransportRpcApi {
 }
 
 /** @public */
-export const StoreTransportRpc: StoreTransportRpcApi = {
+export const storeTransport: storeTransportApi = {
   serverLayer: layerStore,
   makeClient,
   toProcessStoreQueryClient,
-  layerProtocolFromRpc,
-  Protocol: StoreTransportProtocol,
   errors: {
     Schema: StoreErrorSchema,
     UnknownFacet,
