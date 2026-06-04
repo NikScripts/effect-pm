@@ -1,10 +1,13 @@
-import { ProcessStorage } from "../src/ProcessStorage";
-import { it, describe, expect } from "@effect/vitest";
+import { describe, expect, it } from "@effect/vitest";
 import { Effect, Ref } from "effect";
 import { RunResource } from "../src/RunResource";
+import { layer as hubLayer } from "../src/TelemetryHub";
+import { processStorageWithRunResourceArchiveLayer } from "../src/ProcessStorage";
 import { RunResourceStore } from "../src/store/runResource";
 
-const runResourceObservationLayer = ProcessStorage.layer;
+const runResourceObservationLayer = processStorageWithRunResourceArchiveLayer;
+
+const runResourceHubLayer = hubLayer;
 
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
   Effect.gen(function* () {
@@ -31,7 +34,7 @@ describe("RunResource.makeRunner", () => {
       });
       const p = yield* Ref.get(peak);
       expect(p).toBe(1);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.provide(runResourceHubLayer), Effect.scoped),
   );
 
   it.live("respects concurrency limit", () =>
@@ -50,7 +53,7 @@ describe("RunResource.makeRunner", () => {
       const p = yield* Ref.get(peak);
       expect(p).toBeLessThanOrEqual(4);
       expect(p).toBeGreaterThan(1);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.provide(runResourceHubLayer), Effect.scoped),
   );
 });
 
@@ -67,7 +70,7 @@ describe("RunResource.Service (parameterized gate)", () => {
         { concurrency: "unbounded" },
       );
       expect(results).toEqual([10, 20, 30]);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.provide(runResourceHubLayer), Effect.scoped),
   );
 
   it.live("limits concurrency on parameterized gate", () =>
@@ -93,7 +96,7 @@ describe("RunResource.Service (parameterized gate)", () => {
       );
       const p = yield* Ref.get(peak);
       expect(p).toBeLessThanOrEqual(2);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.provide(runResourceHubLayer), Effect.scoped),
   );
 });
 
@@ -119,7 +122,7 @@ describe("RunResource.Tag + layer", () => {
       });
       const result = yield* gate(5);
       expect(result).toBe(105);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.provide(runResourceHubLayer), Effect.scoped),
   );
 });
 
@@ -133,10 +136,10 @@ describe("RunResource.make (raw scoped)", () => {
       });
       const result = yield* gate(7);
       expect(result).toBe(21);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.provide(runResourceHubLayer), Effect.scoped),
   );
 
-  it.live("runs without RunResourceStore and does not require storage", () =>
+  it.live("runs without archive sink and does not require storage", () =>
     Effect.gen(function* () {
       const gate = yield* RunResource.make({
         name: "@test/UnobservedGate",
@@ -146,10 +149,10 @@ describe("RunResource.make (raw scoped)", () => {
 
       const result = yield* gate(9);
       expect(result).toBe(10);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.provide(runResourceHubLayer), Effect.scoped),
   );
 
-  it.live("persists observed runtime facts through RunResourceStore", () =>
+  it.live("persists observed runtime facts through ArchiveSink", () =>
     Effect.gen(function* () {
       const gate = yield* RunResource.make({
         name: "@test/ObservedStoreGate",

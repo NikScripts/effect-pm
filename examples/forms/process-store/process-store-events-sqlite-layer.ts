@@ -9,6 +9,7 @@ import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Effect, FileSystem, Layer, Path } from "effect";
 import {
+  processStorageWithRunResourceArchiveLayer,
   RunResourceStore,
   RunResource,
 } from "../../../src";
@@ -31,7 +32,10 @@ const program = Effect.gen(function* () {
   yield* fs.remove(sqlitePath).pipe(Effect.catch(() => Effect.void));
   yield* fs.makeDirectory(path.dirname(sqlitePath), { recursive: true }).pipe(Effect.orDie);
 
-  const live = layerProcessStore({ filename: sqlitePath });
+  const live = Layer.provide(
+    processStorageWithRunResourceArchiveLayer,
+    layerProcessStore({ filename: sqlitePath }),
+  );
 
   yield* Effect.gen(function* () {
     const gate = yield* RunResource.make({

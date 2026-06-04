@@ -154,6 +154,11 @@
       "import": "./dist/TelemetryHub.mjs",
       "require": "./dist/TelemetryHub.js"
     },
+    "./ArchiveSink": {
+      "types": "./dist/ArchiveSink.d.ts",
+      "import": "./dist/ArchiveSink.mjs",
+      "require": "./dist/ArchiveSink.js"
+    },
     "./CommandAuth": {
       "types": "./dist/CommandAuth.d.ts",
       "import": "./dist/CommandAuth.mjs",

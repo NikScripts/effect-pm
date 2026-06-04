@@ -487,7 +487,13 @@ export {
 export { LogStore } from "./store/log";
 export type { LogEntryRecordedInput } from "./store/log";
 export { LogScope } from "./LogScope";
-export { RunResourceStore } from "./store/runResource";
+export {
+  RunResourceArchiveSinkLayer,
+  RunResourceHubTelemetry,
+  runResourcePersistLayer,
+  RunResourceStore,
+} from "./store/runResource";
+export { processStorageWithRunResourceArchiveLayer } from "./ProcessStorage";
 export { ProcessExecutionStore } from "./store/processExecution";
 export { ProcessLifecycleStore } from "./store/processLifecycle";
 export { ProcessGroupStore } from "./store/processGroup";

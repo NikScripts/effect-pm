@@ -6,6 +6,7 @@
 
 import { Clock, Duration, Effect, Layer } from "effect";
 import { RunResource } from "../../../src";
+import { layer as hubLayer } from "../../../src/TelemetryHub";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 // void input — callable as gate(undefined)
@@ -64,6 +65,6 @@ const program = Effect.gen(function* () {
   yield* Effect.log("");
 });
 
-const mainLayer = Layer.mergeAll(TimedWorkGate.layer, DoubleGate.layer);
+const mainLayer = Layer.mergeAll(TimedWorkGate.layer, DoubleGate.layer, hubLayer);
 
 runNodeProgramWithLayer(program, mainLayer, "form:run-resource-unit-and-input finished OK");

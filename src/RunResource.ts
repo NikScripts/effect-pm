@@ -50,12 +50,10 @@
  * ## Runtime observation (optional)
  *
  * {@link RunResource.make}, {@link RunResource.layer}, and {@link RunResource.Service}
- * publish per-run facts and `RunResourceState` transitions through the
- * domain-specific {@link RunResourceStore} facet's static optional emitters
- * (`Run.Started`, `Run.Completed`, `Run.Failed`, `State.Changed`). When the
- * facet layer is absent each call is a silent no-op; when present the spine
- * persists the event. Event definitions own storage-failure logging so
- * telemetry cannot change the gated effect's success/error channel.
+ * publish per-run facts and `RunResourceState` transitions through
+ * {@link RunResourceHubTelemetry} (`R = TelemetryHub`). Persist optionally
+ * via {@link ArchiveSink.layerForStore | RunResourceArchiveSinkLayer} at app
+ * compose time; emit succeeds with hub only and zero sinks.
  *
  * {@link RunResource.makeRunner} does **not** emit observations — use `make`
  * when you need per-run analytics.
@@ -88,7 +86,7 @@
  * yield* runs.runs("@app/FetchPrices") // paired started+ended history
  * ```
  *
- * @see {@link RunResourceStore} for emit (optional) and read/query after compose.
+ * @see {@link RunResourceStore} for durable read/query after compose.
  *
  * @module RunResource
  */
@@ -102,14 +100,14 @@ import {
   Ref,
   Semaphore,
 } from "effect";
-import { RunResourceScope, RunScope } from "./RunResourceScope";
-import { RunResourceStore } from "./store/runResource";
 import {
   configureLayer,
   configureWrapEffectField,
   foldConfiguredSpec,
   type ConfigPatch,
 } from "./ResourceConfigure";
+import { RunResourceHubTelemetry } from "./store/runResource/telemetry";
+import type { TelemetryHubError } from "./TelemetryHub";
 import type {
   RunResourceFact,
   RunResourceFactType,
@@ -140,7 +138,7 @@ import type {
  * @public
  */
 export interface RunGate<in T, out A, out E> {
-  (input: T): Effect.Effect<A, E>;
+  (input: T): Effect.Effect<A, E | TelemetryHubError, import("./TelemetryHub").TelemetryHub>;
 }
 
 /** @public */
@@ -276,29 +274,44 @@ const makeRunGateEffect = <T, A, E>(
   const publishRunStarted = (
     runId: string,
     payload: RunResourceRunStartedPayload,
-  ): Effect.Effect<void, never, never> =>
-    RunResourceScope.run(
-      { resourceId },
-      RunScope.run({ runId }, RunResourceStore.Run.Started({ payload })),
-    );
+  ): Effect.Effect<void, TelemetryHubError, import("./TelemetryHub").TelemetryHub> =>
+    Effect.gen(function* () {
+      const occurredAt = yield* Clock.currentTimeMillis;
+      yield* RunResourceHubTelemetry.Run.started({
+        resourceId,
+        runId,
+        occurredAt,
+        payload,
+      });
+    });
 
   const publishRunCompleted = (
     runId: string,
     payload: RunResourceRunCompletedPayload,
-  ): Effect.Effect<void, never, never> =>
-    RunResourceScope.run(
-      { resourceId },
-      RunScope.run({ runId }, RunResourceStore.Run.Completed({ payload })),
-    );
+  ): Effect.Effect<void, TelemetryHubError, import("./TelemetryHub").TelemetryHub> =>
+    Effect.gen(function* () {
+      const occurredAt = yield* Clock.currentTimeMillis;
+      yield* RunResourceHubTelemetry.Run.completed({
+        resourceId,
+        runId,
+        occurredAt,
+        payload,
+      });
+    });
 
   const publishRunFailed = (
     runId: string,
     payload: RunResourceRunFailedPayload,
-  ): Effect.Effect<void, never, never> =>
-    RunResourceScope.run(
-      { resourceId },
-      RunScope.run({ runId }, RunResourceStore.Run.Failed({ payload })),
-    );
+  ): Effect.Effect<void, TelemetryHubError, import("./TelemetryHub").TelemetryHub> =>
+    Effect.gen(function* () {
+      const occurredAt = yield* Clock.currentTimeMillis;
+      yield* RunResourceHubTelemetry.Run.failed({
+        resourceId,
+        runId,
+        occurredAt,
+        payload,
+      });
+    });
 
   const makeInitialState = (observedAt: number): RunResourceState => ({
     resourceId,
@@ -321,7 +334,7 @@ const makeRunGateEffect = <T, A, E>(
     const publishState = (
       reason: RunResourceStateChangeReason,
       update: (state: RunResourceState, observedAt: number) => RunResourceState,
-    ): Effect.Effect<void, never, never> =>
+    ): Effect.Effect<void, TelemetryHubError, import("./TelemetryHub").TelemetryHub> =>
       Effect.gen(function* () {
         const id = yield* nextStateChangeId;
         const changedAt = yield* Clock.currentTimeMillis;
@@ -339,15 +352,13 @@ const makeRunGateEffect = <T, A, E>(
             current,
           ] as const;
         });
-        yield* RunResourceScope.run(
-          { resourceId },
-          RunResourceStore.State.Changed({
-            id: change.id,
-            reason: change.reason,
-            previous: change.previous,
-            current: change.current,
-          }),
-        );
+        yield* RunResourceHubTelemetry.State.changed({
+          id: change.id,
+          changedAt: change.changedAt,
+          reason: change.reason,
+          previous: change.previous,
+          current: change.current,
+        });
       });
 
     yield* Effect.logDebug(

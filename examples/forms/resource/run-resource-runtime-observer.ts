@@ -8,7 +8,7 @@
 
 import { Effect } from "effect";
 import {
-  ProcessStorage,
+  processStorageWithRunResourceArchiveLayer,
   RunResource,
   RunResourceStore,
   type RunResourceState,
@@ -44,6 +44,9 @@ const program = Effect.gen(function* () {
       ? "latest state: missing"
       : `latest state: completed=${String(latestState.completed)}, failed=${String(latestState.failed)}, inFlight=${String(latestState.inFlight)}`,
   );
-}).pipe(Effect.provide(ProcessStorage.layer), Effect.scoped);
+}).pipe(
+  Effect.provide(processStorageWithRunResourceArchiveLayer),
+  Effect.scoped,
+);
 
 void Effect.runPromise(program);

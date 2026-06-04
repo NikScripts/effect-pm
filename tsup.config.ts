@@ -44,6 +44,7 @@ export default defineConfig([
       StoreTransportRpc: "src/StoreTransportRpc.ts",
       StoreMessage: "src/StoreMessage.ts",
       TelemetryHub: "src/TelemetryHub.ts",
+      ArchiveSink: "src/ArchiveSink.ts",
       Terminal: "src/Terminal.ts",
       TerminalRpc: "src/TerminalRpc.ts",
       LogTransportRpc: "src/LogTransportRpc.ts",

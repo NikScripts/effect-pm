@@ -44,12 +44,14 @@
  */
 
 import { Layer } from "effect";
+import { layerForStore } from "./ArchiveSink";
 import { RuntimeStorage } from "./RuntimeStorage";
 import { LogStore } from "./store/log";
 import { ProcessExecutionStore } from "./store/processExecution";
 import { ProcessGroupStore } from "./store/processGroup";
 import { ProcessLifecycleStore } from "./store/processLifecycle";
 import { QueueResourceStore } from "./store/queueResource";
+import { archiveLegs } from "./store/runResource/archive";
 import { RunResourceStore } from "./store/runResource";
 import type { ProcessStoreRegistry } from "./internal/store/service";
 import type { AnyFacetClass } from "./internal/store/service";
@@ -69,6 +71,19 @@ const facetLayers = Layer.mergeAll(
   ProcessExecutionStore.layerRuntimeStorage,
   processLifecycleLayer,
   processGroupLayer,
+);
+
+const runResourceArchiveSinkLayer = layerForStore(RunResourceStore, archiveLegs);
+
+/**
+ * All built-in facet layers plus RunResource {@link ArchiveSink} over
+ * in-memory {@link RuntimeStorage}.
+ *
+ * @public
+ */
+export const processStorageWithRunResourceArchiveLayer = Layer.provide(
+  Layer.mergeAll(facetLayers, runResourceArchiveSinkLayer),
+  RuntimeStorage.layer,
 );
 
 /**

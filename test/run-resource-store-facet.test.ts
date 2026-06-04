@@ -1,17 +1,19 @@
-import { ProcessStorage } from "../src/ProcessStorage";
 /**
- * Conformance suite for the {@link RunResourceStore} facet.
+ * Conformance suite for the {@link RunResourceStore} archive facet.
  *
- * Verifies (a) the no-op vs persist semantics of the static optional
- * telemetry emitters, (b) the `runs()` projection pairing, (c) `byRun`
- * filtering, and (d) `latestState`.
+ * Verifies hub telemetry + {@link ArchiveSink} persist, `runs()` projection
+ * pairing, `byRun` filtering, and `latestState`.
  */
 
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Option } from "effect";
+import { Effect, Layer, Option } from "effect";
 import { ProcessStore } from "../src/ProcessStore";
-import { RunResourceScope, RunScope } from "../src/RunResourceScope";
-import { RunResourceStore } from "../src/store/runResource";
+import { layer as hubLayer, type TelemetryHub, type TelemetryHubError } from "../src/TelemetryHub";
+import {
+  runResourcePersistLayer,
+  RunResourceStore,
+  RunResourceHubTelemetry,
+} from "../src/store/runResource";
 import type {
   RunResourceFact,
   RunResourceRunCompletedFact,
@@ -20,6 +22,10 @@ import type {
   RunResourceState,
   RunResourceStateChange,
 } from "../src/store/runResource";
+
+const persistLayer = runResourcePersistLayer;
+
+const hubAndStoreLayer = Layer.provideMerge(hubLayer, RunResourceStore.layer);
 
 const started = (
   resourceId: string,
@@ -81,43 +87,49 @@ const state = (
   ...overrides,
 });
 
-const emitStartedFact = (fact: RunResourceRunStartedFact): Effect.Effect<void> =>
-  RunResourceScope.run(
-    { resourceId: fact.resourceId },
-    RunScope.run({ runId: fact.runId }, RunResourceStore.Run.Started({
-      payload: fact.payload,
-    })),
-  );
+const emitStartedFact = (
+  fact: RunResourceRunStartedFact,
+): Effect.Effect<void, TelemetryHubError, TelemetryHub> =>
+  RunResourceHubTelemetry.Run.started({
+    resourceId: fact.resourceId,
+    runId: fact.runId,
+    occurredAt: fact.occurredAt,
+    payload: fact.payload,
+  });
 
-const emitCompletedFact = (fact: RunResourceRunCompletedFact): Effect.Effect<void> =>
-  RunResourceScope.run(
-    { resourceId: fact.resourceId },
-    RunScope.run({ runId: fact.runId }, RunResourceStore.Run.Completed({
-      payload: fact.payload,
-    })),
-  );
+const emitCompletedFact = (
+  fact: RunResourceRunCompletedFact,
+): Effect.Effect<void, TelemetryHubError, TelemetryHub> =>
+  RunResourceHubTelemetry.Run.completed({
+    resourceId: fact.resourceId,
+    runId: fact.runId,
+    occurredAt: fact.occurredAt,
+    payload: fact.payload,
+  });
 
-const emitFailedFact = (fact: RunResourceRunFailedFact): Effect.Effect<void> =>
-  RunResourceScope.run(
-    { resourceId: fact.resourceId },
-    RunScope.run({ runId: fact.runId }, RunResourceStore.Run.Failed({
-      payload: fact.payload,
-    })),
-  );
+const emitFailedFact = (
+  fact: RunResourceRunFailedFact,
+): Effect.Effect<void, TelemetryHubError, TelemetryHub> =>
+  RunResourceHubTelemetry.Run.failed({
+    resourceId: fact.resourceId,
+    runId: fact.runId,
+    occurredAt: fact.occurredAt,
+    payload: fact.payload,
+  });
 
-const emitStateChange = (change: RunResourceStateChange): Effect.Effect<void> =>
-  RunResourceScope.run(
-    { resourceId: change.resourceId },
-    RunResourceStore.State.Changed({
-      id: change.id,
-      reason: change.reason,
-      previous: change.previous,
-      current: change.current,
-    }),
-  );
+const emitStateChange = (
+  change: RunResourceStateChange,
+): Effect.Effect<void, TelemetryHubError, TelemetryHub> =>
+  RunResourceHubTelemetry.State.changed({
+    id: change.id,
+    changedAt: change.changedAt,
+    reason: change.reason,
+    previous: change.previous,
+    current: change.current,
+  });
 
-describe("RunResourceStore — static optional emitters", () => {
-  it.live("no-ops silently when the facet layer is absent", () =>
+describe("RunResourceStore — hub telemetry + ArchiveSink", () => {
+  it.live("emit without archive sink leaves storage empty", () =>
     Effect.gen(function* () {
       const fact = started(
         "@test/Absent",
@@ -125,12 +137,13 @@ describe("RunResourceStore — static optional emitters", () => {
         1_700_000_000_000,
       );
       yield* emitStartedFact(fact);
-      // No assertion required: the emit must not throw / fail.
-      expect(true).toBe(true);
-    }),
+      const facet = yield* RunResourceStore;
+      const facts = yield* facet.facts({ resourceId: fact.resourceId });
+      expect(facts).toHaveLength(0);
+    }).pipe(Effect.provide(hubAndStoreLayer)),
   );
 
-  it.live("persists through the spine when the facet is provided", () =>
+  it.live("persists through ArchiveSink when sink layer is provided", () =>
     Effect.gen(function* () {
       const resourceId = "@test/PresentFacet";
       const runId = `${resourceId}/run/1`;
@@ -146,7 +159,7 @@ describe("RunResourceStore — static optional emitters", () => {
         "RunResource.Run.Completed",
         "RunResource.Run.Started",
       ]);
-    }).pipe(Effect.provide(ProcessStorage.layer)),
+    }).pipe(Effect.provide(persistLayer)),
   );
 });
 
@@ -203,7 +216,7 @@ describe("RunResourceStore — projections", () => {
         `${resourceId}/run/2`,
         `${resourceId}/run/1`,
       ]);
-    }).pipe(Effect.provide(ProcessStorage.layer)),
+    }).pipe(Effect.provide(persistLayer)),
   );
 
   it.live("byRun returns only facts for the requested run", () =>
@@ -218,7 +231,7 @@ describe("RunResourceStore — projections", () => {
         "RunResource.Run.Failed",
         "RunResource.Run.Started",
       ]);
-    }).pipe(Effect.provide(ProcessStorage.layer)),
+    }).pipe(Effect.provide(persistLayer)),
   );
 
   it.live("latestState returns the most recent recorded state", () =>
@@ -231,7 +244,7 @@ describe("RunResourceStore — projections", () => {
       expect(value?.completed).toBe(1);
       expect(value?.failed).toBe(1);
       expect(value?.resourceId).toBe(resourceId);
-    }).pipe(Effect.provide(ProcessStorage.layer)),
+    }).pipe(Effect.provide(persistLayer)),
   );
 });
 
@@ -275,7 +288,7 @@ describe("RunResourceStore — for(resourceId) bound API", () => {
       const value = Option.getOrNull(latest);
       expect(value?.resourceId).toBe(resourceId);
       expect(value?.completed).toBe(1);
-    }).pipe(Effect.provide(ProcessStorage.layer)),
+    }).pipe(Effect.provide(persistLayer)),
   );
 
   it.live("byRun() narrows to the bound scope and the requested runId", () =>
@@ -292,7 +305,7 @@ describe("RunResourceStore — for(resourceId) bound API", () => {
             fact.resourceId === resourceId && fact.runId === runIdA,
         ),
       ).toBe(true);
-    }).pipe(Effect.provide(ProcessStorage.layer)),
+    }).pipe(Effect.provide(persistLayer)),
   );
 
   it.live("facts({ types }) filter still works through the bound API", () =>
@@ -312,45 +325,19 @@ describe("RunResourceStore — for(resourceId) bound API", () => {
           (fact) => fact.type === "RunResource.Run.Started",
         ),
       ).toBe(true);
-    }).pipe(Effect.provide(ProcessStorage.layer)),
+    }).pipe(Effect.provide(persistLayer)),
   );
 });
 
 describe("RunResourceStore — type accessors", () => {
-  it.live("ProcessStore.Type helpers expose the structural shapes", () =>
+  it.live("ProcessStore.Type helpers expose query shapes", () =>
     Effect.gen(function* () {
-      // Type-only smoke check: if these aliases ever drift, the file fails
-      // to compile rather than the test failing at runtime.
-      const started = Object.assign(() => Effect.void, {
-        batch: () => Effect.void,
-      });
-      const completed = Object.assign(() => Effect.void, {
-        batch: () => Effect.void,
-      });
-      const failed = Object.assign(() => Effect.void, {
-        batch: () => Effect.void,
-      });
-      const changed = Object.assign(() => Effect.void, {
-        batch: () => Effect.void,
-      });
       const fullShape: ProcessStore.Type.Shape<typeof RunResourceStore> = {
-        Run: {
-          Started: started,
-          Completed: completed,
-          Failed: failed,
-        },
-        State: {
-          Changed: changed,
-        },
         facts: () => Effect.succeed([]),
         stateHistory: () => Effect.succeed([]),
         latestState: () => Effect.succeed(Option.none()),
         runs: () => Effect.succeed([]),
         byRun: () => Effect.succeed([]),
-      };
-      const emitShape: ProcessStore.Type.Emit<typeof RunResourceStore> = {
-        Run: fullShape.Run,
-        State: fullShape.State,
       };
       const boundShape: ProcessStore.Type.Identifier<typeof RunResourceStore> = {
         facts: () => Effect.succeed([]),
@@ -359,8 +346,7 @@ describe("RunResourceStore — type accessors", () => {
         runs: () => Effect.succeed([]),
         byRun: () => Effect.succeed([]),
       };
-      expect(typeof fullShape.Run.Started).toBe("function");
-      expect(typeof emitShape.State.Changed).toBe("function");
+      expect(typeof fullShape.facts).toBe("function");
       expect(typeof boundShape.runs).toBe("function");
     }),
   );

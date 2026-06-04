@@ -372,11 +372,13 @@ type ProcessStoreTelemetrySectionOf<
 > = Extract<Sections[number], { readonly _tag: typeof TELEMETRY_TAG }>;
 
 type ProcessStoreEmitApiOf<Sections extends ReadonlyArray<ProcessStoreFacetAnySection>> =
-  ProcessStoreTelemetrySectionOf<Sections> extends ProcessStoreTelemetrySection<
-    infer EmitApi extends object
-  >
-    ? EmitApi
-    : never;
+  [ProcessStoreTelemetrySectionOf<Sections>] extends [never]
+    ? Record<never, never>
+    : ProcessStoreTelemetrySectionOf<Sections> extends ProcessStoreTelemetrySection<
+        infer EmitApi extends object
+      >
+      ? EmitApi
+      : Record<never, never>;
 
 type ProcessStoreQueryApiOf<Sections extends ReadonlyArray<ProcessStoreFacetAnySection>> =
   ProcessStoreQuerySectionOf<Sections> extends ProcessStoreQuerySection<infer Methods>
@@ -928,9 +930,6 @@ const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> =
     if (anyQuerySection === undefined) {
       throw new Error(`ProcessStore facet ${id}: query section is required`);
     }
-    if (telemetrySection === undefined) {
-      throw new Error(`ProcessStore facet ${id}: telemetry section is required`);
-    }
 
     // Separate effect and stream methods so each goes to the right lookup.
     const allQueryMethods = isMethodsSection(anyQuerySection)
@@ -964,7 +963,9 @@ const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> =
     const make: Effect.Effect<EmitApi & QueryApi, never, RuntimeStorage> = Effect.gen(
       function* () {
         const s = yield* buildStore;
-        const emitApi = telemetrySection!.fn(s) as EmitApi;
+        const emitApi = (
+          telemetrySection !== undefined ? telemetrySection.fn(s) : {}
+        ) as EmitApi;
 
         const queryApi = allQueryMethods !== undefined
           ? bindQueryMethods(allQueryMethods, s) as unknown as QueryApi
@@ -985,9 +986,10 @@ const defineProcessStoreFacetFor = <Self>(): ProcessStoreFacetDefinition<Self> =
 
     const Base = Context.Service<Self, EmitApi & QueryApi>()(id, { make });
 
-    const emitStatics = buildNestedEmitStatics(
-      telemetrySection.emitPaths,
-      Base,
+    const emitStatics = (
+      telemetrySection !== undefined
+        ? buildNestedEmitStatics(telemetrySection.emitPaths, Base)
+        : {}
     ) as EmitApi;
 
     const layerRuntimeStorage = Layer.effect(Base, make);
