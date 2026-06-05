@@ -4,8 +4,9 @@
 
 | Handoff | Agent | Worktree | Branch | Prompt |
 | --- | --- | --- | --- | --- |
-| [telemetry-split-bake-handoff.md](./telemetry-split-bake-handoff.md) | **Owner bake** | any | — | Lock model before code |
-| [telemetry-split-bake.md](../recipes/telemetry-split-bake.md) | Owner / bake agent | any | — | Recipe steps 1–7 |
+| [telemetry-split-bake-prompt.md](./telemetry-split-bake-prompt.md) | **Owner — paste to start** | any | — | Docs-only bake; recommended + DX forks |
+| [telemetry-split-bake-handoff.md](./telemetry-split-bake-handoff.md) | Owner bake | any | — | Context + after-bake order |
+| [telemetry-split-bake.md](../recipes/telemetry-split-bake.md) | Bake agent | any | — | Recipe ledger steps 1–7 |
 | [architecture-hub-runresource-handoff.md](./architecture-hub-runresource-handoff.md) | Hub (post-bake) | `effect-pm-alt` | `cursor/hub-runresource-vertical` | [`AGENT-PROMPT.md`](../../AGENT-PROMPT.md) |
 | [queue-telemetry-direct-emit-handoff.md](./queue-telemetry-direct-emit-handoff.md) | Queue (after bake) | `effect-pm-alt-transport` | `cursor/queue-telemetry-hub-migration` | transport `AGENT-PROMPT.md` |
 

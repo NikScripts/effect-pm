@@ -9,26 +9,14 @@
 
 ## Owner — start a bake session
 
-Paste into a new chat (hub worktree or any):
+**Prompt file (paste this):** [telemetry-split-bake-prompt.md](./telemetry-split-bake-prompt.md)
 
-```text
-Bake the telemetry split using docs/recipes/telemetry-split-bake.md.
+Rules baked into that file:
 
-Rules:
-- One open step at a time (steps 1–7 in order).
-- Each step: recommended ingredients, code picture, alternatives, acceptance check.
-- Wait for my confirmation before locking and moving on.
-- Record locked outcomes under "Locked ingredients" in the recipe file.
-- Do not implement code unless I explicitly ask after all steps are locked.
-
-Context you must not get wrong:
-- Process state = State.Scope (kernel only).
-- Telemetry state = in-memory, telemetry path only, never RuntimeStorage.
-- Durable ProcessStore.state = ops storage (plan 13), NOT telemetry state.
-- Telemetry tree = plan 17 DSL on Telemetry.Service, NOT TelemetryHub.defineEvent.
-- Golden tree: git show origin/cursor/facet-telemetry-158c:src/store/runResource.ts
-- Hub branch debt: RunResourceTelemetry.ts defineEvent + RunResource.ts kernel Ref counters.
-```
+- **One step per turn** — more code than prose
+- **Non-DX** → one recommended solution; owner confirms
+- **DX only** (API shape, naming, subpaths) → recommended + at most one alternative
+- **Docs only** — update `docs/recipes/telemetry-split-bake.md`; no `src/` changes
 
 **Success criteria:** all seven checklist items at the bottom of the recipe are checked; plan 21 updated if vocabulary changed; owner sign-off on the four-way state table.
 
@@ -36,21 +24,11 @@ Context you must not get wrong:
 
 ## Prompt for bake agent (same session)
 
-```text
-Run the telemetry split bake from docs/recipes/telemetry-split-bake.md.
+Read repo rules first (`docs/AGENTS.md`, `STORAGE.md`, plan 21, architecture recipe).
 
-Do not implement code in this session unless the owner explicitly asks after all
-steps are locked.
+**Bake only:** update `docs/recipes/telemetry-split-bake.md` (and plan 21 if vocabulary shifts). No `src/`, tests, or config edits.
 
-For each open recipe step (1–7):
-- present recommended ingredients + code picture + alternatives
-- wait for owner confirmation
-- record locked outcome in the recipe file under "Locked ingredients"
-
-When bake completes:
-- update docs/plans/21-state-vocabulary.md with any owner revisions
-- mark checklist at bottom of telemetry-split-bake.md
-```
+For each step: recommended code picture → owner confirms → lock in recipe → next step.
 
 ---
 

@@ -6,8 +6,7 @@ implementation. Fix vocabulary drift and replace hub-branch interim APIs (`defin
 
 **Non-goals:** Implement slices in this session; transport work; dashboard UI.
 
-**Owner prompt to start bake:** “Run the telemetry split bake from
-`docs/recipes/telemetry-split-bake.md`.”
+**Owner prompt to start bake:** paste [telemetry-split-bake-prompt.md](../handoffs/telemetry-split-bake-prompt.md).
 
 **Canonical vocabulary:** [21-state-vocabulary.md](../plans/21-state-vocabulary.md).
 
