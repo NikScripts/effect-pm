@@ -208,6 +208,16 @@ export interface RunResourceScopedStateHistoryQuery {
 }
 
 /**
+ * Filter for {@link RunResourceStore.byRun} queries.
+ *
+ * @public
+ */
+export interface RunResourceByRunQuery {
+  readonly resourceId: string;
+  readonly runId: string;
+}
+
+/**
  * Identifier-bound run filter for the `byRun` method (the `resourceId` is
  * supplied by {@link RunResourceStore.for | for(resourceId)}).
  *
@@ -675,6 +685,7 @@ const RunResourceRunsQuerySchema = Schema.Struct({
 });
 
 const RunResourceByRunQuerySchema = Schema.Struct({
+  resourceId: Schema.String,
   runId: Schema.String,
 });
 
@@ -791,7 +802,9 @@ export class RunResourceStore extends ProcessStore.Service<RunResourceStore>()(
     byRun: ProcessStore
       .payload(RunResourceByRunQuerySchema)
       .success(Schema.Array(RunResourceFactOutputSchema))
-      .resolve((s: ProcessStoreSpine) => ({ runId }) => readByRun(s, runId)),
+      .resolve((s: ProcessStoreSpine) => ({ resourceId, runId }) =>
+        readByRun(s, resourceId, runId),
+      ),
   }),
   ProcessStore.for({
     facts: ProcessStore
@@ -882,9 +895,14 @@ const readRuns = (
 
 const readByRun = (
   s: ProcessStoreSpine,
+  resourceId: string,
   runId: string,
 ): Effect.Effect<RunResourceFact[], RuntimeStorageOperationalError> =>
   s
-    .read(runtimeRecordQuery(factPredicates(undefined), undefined))
-    .pipe(Effect.map((records) => factsFromRecords(records, { runId })));
+    .read(runtimeRecordQuery(factPredicates({ resourceId }), undefined))
+    .pipe(
+      Effect.map((records) =>
+        factsFromRecords(records, { resourceId, runId }),
+      ),
+    );
 

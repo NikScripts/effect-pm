@@ -8,6 +8,7 @@ export {
   RunResourceStore,
   archiveLegs,
   type RunResourceArchiveLegs,
+  type RunResourceByRunQuery,
   type RunResourceFact,
   type RunResourceFactQuery,
   type RunResourceFactType,

@@ -67,6 +67,7 @@ import {
 } from "./internal/manager/runState";
 import {
   ProcessManagerGroupLogError,
+  type ProcessManagerGroupLogRequirements,
 } from "./internal/manager/groupLogWatch";
 import { watchGroupLogs } from "./internal/manager/groupLogWatchInteractive";
 import {
@@ -1789,6 +1790,7 @@ const runStartCommand = (
   | ChildProcessSpawner.ChildProcessSpawner
   | FileSystem.FileSystem
   | Path.Path
+  | ProcessManagerGroupLogRequirements
   | Scope.Scope
   | Terminal.Terminal
 > =>
@@ -1898,7 +1900,7 @@ const runGroupStartCommand = (
 ): Effect.Effect<
   void,
   ProcessManagerConnectionError | ProcessManagerEndpointConfigError | ProcessManagerGroupLogError,
-  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | HttpClient.HttpClient | Path.Path | Scope.Scope | Terminal.Terminal
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | HttpClient.HttpClient | Path.Path | ProcessManagerGroupLogRequirements | Scope.Scope | Terminal.Terminal
 > =>
   Effect.gen(function* () {
     const state = yield* launchModuleEndpointForGroup(groups, input, options.endpointLabel);
@@ -1952,7 +1954,7 @@ const runWatchCommand = (
 ): Effect.Effect<
   void,
   ProcessManagerConnectionError | ProcessManagerEndpointConfigError | ProcessManagerGroupLogError,
-  FileSystem.FileSystem | HttpClient.HttpClient | Path.Path | Terminal.Terminal
+  FileSystem.FileSystem | HttpClient.HttpClient | Path.Path | ProcessManagerGroupLogRequirements | Terminal.Terminal
 > =>
   Effect.gen(function* () {
     const scope = yield* resolveLogScopeForCli(groups, Option.some(input));

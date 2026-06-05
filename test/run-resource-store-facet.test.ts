@@ -223,7 +223,10 @@ describe("RunResourceStore — projections", () => {
     Effect.gen(function* () {
       yield* fixtures;
       const facet = yield* RunResourceStore;
-      const onlyRun2 = yield* facet.byRun({ runId: `${resourceId}/run/2` });
+      const onlyRun2 = yield* facet.byRun({
+        resourceId,
+        runId: `${resourceId}/run/2`,
+      });
       expect(onlyRun2.every((fact) => fact.runId === `${resourceId}/run/2`)).toBe(
         true,
       );
@@ -231,6 +234,29 @@ describe("RunResourceStore — projections", () => {
         "RunResource.Run.Failed",
         "RunResource.Run.Started",
       ]);
+    }).pipe(Effect.provide(persistLayer)),
+  );
+
+  it.live("byRun scopes reads to resourceId and ignores colliding runIds", () =>
+    Effect.gen(function* () {
+      const otherResourceId = "@test/RunResourceOther";
+      const sharedRunId = "shared/run-id";
+      yield* emitStartedFact(
+        started(resourceId, `${resourceId}/${sharedRunId}`, t(0)),
+      );
+      yield* emitStartedFact(
+        started(otherResourceId, `${otherResourceId}/${sharedRunId}`, t(0)),
+      );
+
+      const facet = yield* RunResourceStore;
+      const onlyPrimary = yield* facet.byRun({
+        resourceId,
+        runId: `${resourceId}/${sharedRunId}`,
+      });
+
+      expect(onlyPrimary).toHaveLength(1);
+      expect(onlyPrimary[0]?.resourceId).toBe(resourceId);
+      expect(onlyPrimary[0]?.runId).toBe(`${resourceId}/${sharedRunId}`);
     }).pipe(Effect.provide(persistLayer)),
   );
 

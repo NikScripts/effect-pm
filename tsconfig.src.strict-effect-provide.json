@@ -120,6 +120,8 @@
     "dist",
     "repos",
     "examples/scenarios/nwslsoccer",
-    "src/bin/**"
+    "src/bin/**",
+    "**/groupLogWatch.ts",
+    "**/groupLogWatchInteractive.ts"
   ]
 }

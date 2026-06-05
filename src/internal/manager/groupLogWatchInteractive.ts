@@ -1,10 +1,13 @@
-import { Deferred, Effect, Option, Queue, Ref, Stream } from "effect";
-import type { HttpClient } from "effect/unstable/http";
+// @effect-diagnostics strictEffectProvide:off leakingRequirements:off — remote log transport composes RpcClient + Node WebSocket per session.
+
+import { Deferred, Effect, Layer, Option, Queue, Ref, Stream } from "effect";
 import * as Terminal from "effect/Terminal";
 import {
   groupLogEntryStream,
+  processManagerGroupLogClientLayer,
   ProcessManagerGroupLogError,
   type ProcessManagerGroupLogOptions,
+  type ProcessManagerGroupLogRequirements,
 } from "./groupLogWatch";
 import type { ProcessManagerLogScope } from "./logScope";
 import { logEntryMatchesScope } from "./logScope";
@@ -30,6 +33,17 @@ export interface ProcessManagerGroupLogWatchOptions {
   /** When set, only replay entries matching this scope (process / queue / group). */
   readonly scope?: ProcessManagerLogScope;
 }
+
+const provideWithLogTransportLayer = <A, E, RIn, ROut>(
+  step: Effect.Effect<A, E, RIn>,
+  layer: Layer.Layer<ROut, E, never>,
+): Effect.Effect<A, E, Exclude<RIn, ROut>> =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const context = yield* Layer.build(layer);
+      return yield* Effect.provide(step, context);
+    }),
+  );
 
 const clampPreludeLines = (lines: number | undefined): number => {
   const value = lines ?? defaultPreludeLines;
@@ -81,7 +95,11 @@ const shouldReplay = (
 const runInteractiveWatch = (
   streamOptions: ProcessManagerGroupLogOptions,
   scope: ProcessManagerLogScope | undefined,
-): Effect.Effect<void, ProcessManagerGroupLogError, HttpClient.HttpClient | Terminal.Terminal> =>
+): Effect.Effect<
+  void,
+  ProcessManagerGroupLogError,
+  ProcessManagerGroupLogRequirements | Terminal.Terminal
+> =>
   Effect.scoped(
     Effect.gen(function* () {
       const terminal = yield* Terminal.Terminal;
@@ -124,12 +142,17 @@ const runInteractiveWatch = (
           yield* replayLogEntry(entry);
         });
 
-      const streamEffect = groupLogEntryStream(streamOptions).pipe(
-        Stream.runForEach(handleEntry),
-        Effect.tap(() => Deferred.complete(shutdown, Effect.void)),
-        Effect.catch((error: ProcessManagerGroupLogError) =>
-          Deferred.fail(shutdown, error).pipe(Effect.asVoid),
+      const streamEffect: Effect.Effect<
+        void,
+        ProcessManagerGroupLogError,
+        ProcessManagerGroupLogRequirements
+      > = provideWithLogTransportLayer(
+        groupLogEntryStream(streamOptions).pipe(
+          Stream.runForEach(handleEntry),
+          Effect.tap(() => Deferred.complete(shutdown, Effect.void)),
+          Effect.tapError((error) => Deferred.fail(shutdown, error)),
         ),
+        processManagerGroupLogClientLayer(streamOptions.controlBaseUrl),
       );
 
       const input = yield* terminal.readInput;
@@ -175,7 +198,7 @@ export const watchGroupLogs = (
 ): Effect.Effect<
   void,
   ProcessManagerGroupLogError,
-  HttpClient.HttpClient | Terminal.Terminal
+  ProcessManagerGroupLogRequirements | Terminal.Terminal
 > => {
   const preludeLines = clampPreludeLines(options.preludeLines);
   const live = options.live ?? true;
@@ -190,14 +213,16 @@ export const watchGroupLogs = (
     shouldReplay(entry, scope) ? replayLogEntry(entry) : Effect.void;
 
   if (!live) {
-    return groupLogEntryStream(streamOptions).pipe(
-      Stream.runForEach(replayIfMatching),
+    return provideWithLogTransportLayer(
+      groupLogEntryStream(streamOptions).pipe(Stream.runForEach(replayIfMatching)),
+      processManagerGroupLogClientLayer(streamOptions.controlBaseUrl),
     );
   }
 
   if (options.interactive === false) {
-    return groupLogEntryStream(streamOptions).pipe(
-      Stream.runForEach(replayIfMatching),
+    return provideWithLogTransportLayer(
+      groupLogEntryStream(streamOptions).pipe(Stream.runForEach(replayIfMatching)),
+      processManagerGroupLogClientLayer(streamOptions.controlBaseUrl),
     );
   }
 

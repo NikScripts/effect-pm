@@ -48,6 +48,7 @@ import {
   type LogRpcClient,
   type LogRpcServerProtocol,
   type LogStreamRequest,
+  type LogStreamScope,
   type LogTransportRpcServerConfig,
 } from "./LogTransportRpc";
 import type { ProcessManagerLogRelay } from "./Logs";
@@ -57,9 +58,30 @@ export {
   LogStreamRequestSchema,
   LogStreamScopeSchema,
   type LogStreamRequest,
+  type LogStreamScope,
   type LogRpcClient,
   type LogRpcServerProtocol,
   type LogTransportRpcServerConfig,
+};
+
+/**
+ * Derive the log transport WebSocket URL from a control-plane HTTP base URL.
+ *
+ * @remarks
+ * Control REST routes and log transport share the same origin; only the path
+ * switches from `/status`, `/contract`, etc. to `/ws/log`.
+ *
+ * @public
+ */
+export const logTransportWebSocketUrl = (baseUrl: string): string => {
+  const normalized = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+  if (normalized.startsWith("http://")) {
+    return `${normalized.replace(/^http:/, "ws:")}/ws/log`;
+  }
+  if (normalized.startsWith("https://")) {
+    return `${normalized.replace(/^https:/, "wss:")}/ws/log`;
+  }
+  return `${normalized}/ws/log`;
 };
 
 /**

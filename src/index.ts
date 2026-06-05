@@ -208,11 +208,12 @@ export {
   makeLogTransportRpcClient,
   makeLogTransportRpcServer,
 } from "./LogTransportRpc";
-export {
-  logTransport,
-} from "./logTransport";
 export type {
   LogTransportApi,
+} from "./logTransport";
+export {
+  logTransport,
+  logTransportWebSocketUrl,
 } from "./logTransport";
 export {
   controlTransport,

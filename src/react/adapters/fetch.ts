@@ -10,13 +10,13 @@ import {
   controlHttpGet,
   controlHttpGetContract,
   controlHttpGetGroupStatus,
-  controlHttpLogs,
   controlHttpPost,
   isProcessGroupDetails,
   isQueueDetails,
   type ControlHttpRequestOptions,
   type ControlPlaneGroupStatus,
 } from "../controlHttp.js";
+import { controlHttpLogs } from "../logTransportWebSocket.js";
 import type {
   ControlPlanePort,
   ControlPlaneProcessAction,

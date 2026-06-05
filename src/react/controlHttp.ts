@@ -14,11 +14,6 @@ import {
   type ProcessGroupDetails,
   type QueueDetails,
 } from "../ProcessGroup.js";
-import { type DashboardTarget } from "./dashboardTarget.js";
-import type {
-  ControlPlaneLogSession,
-  ControlPlaneLogsParams,
-} from "./ControlPlanePort.js";
 
 /** Combined group status payload from `GET /status`. */
 export interface ControlPlaneGroupStatus {
@@ -183,19 +178,4 @@ export const controlHttpGetGroupStatus = async (
   return status;
 };
 
-/**
- * @internal
- * @deprecated Live log streaming over control HTTP (`GET /logs/stream`) was removed in
- * 0.7.  Use {@link logTransport} on path `/ws/log` instead.  This function now
- * throws a runtime error to prevent silent 404s.
- */
-export const controlHttpLogs = (
-  _options: ControlHttpRequestOptions,
-  _params: ControlPlaneLogsParams<DashboardTarget>,
-): ControlPlaneLogSession => {
-  throw new ControlPlaneRequestError({
-    reason:
-      "GET /logs/stream was removed from the control HTTP surface. " +
-      "Use the logTransport WebSocket client on /ws/log instead.",
-  });
-};
+export { controlHttpLogs } from "./logTransportWebSocket.js";
