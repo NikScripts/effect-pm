@@ -1,77 +1,41 @@
-# Hub agent — architecture vertical (RunResource pilot + follow-up)
+# Hub agent — post-transport-merge; bake before more telemetry code
 
 **Worktree:** `/Users/nikolasstow/Coding/packages/effect-pm-alt`  
 **Branch:** `cursor/hub-runresource-vertical`  
 **Tmux session:** `effect-pm-alt`
 
-Verify before every commit:
-
-```sh
-pwd && git branch --show-current   # must be cursor/hub-runresource-vertical
-```
+**Stop:** Do not extend `defineEvent` / `RunResourceHubTelemetry`. Run bake first:
+[telemetry-split-bake.md](./docs/recipes/telemetry-split-bake.md).
 
 ---
 
 ## Shipped on this branch
 
-| Slice | Deliverable |
+| Area | Status |
 | --- | --- |
-| 6.1 | `TelemetryHub` — emit with `R = TelemetryHub` only |
-| 6.2 | RunResource telemetry/store **split**; `ArchiveSink` persist leg |
-| 6.3 | `RunResourceProjection`, `ProjectionSink`, `BroadcastSink`, `telemetryTransport` |
-| 6.4–6.6 | Transport unify merged (`storeTransport`, `logTransport`, `controlTransport`, `terminalTransport`) |
-| Layout | Flat PascalCase under `src/store/` — **no domain subfolders** (`RunResource.ts`, `RunResourceStore.ts`, `RunResourceTelemetry.ts`) |
+| `TelemetryHub` + sinks | Shipped — router only (definitions must move to `Telemetry.Service`) |
+| Transport 6.4–6.6 | Merged |
+| `RunResourceStore` without telemetry section | Shipped |
+| `RunResourceProjection` pilot | Shipped |
+| Flat `store/RunResource*.ts` | Shipped |
 
----
+## Debt (replace after bake)
 
-## Telemetry vs storage (RunResource — the target pattern)
-
-**Separated at runtime.** Not a single coupled facet anymore.
-
-| Concern | Module | Requires in `R` |
-| --- | --- | --- |
-| Emit | `RunResourceTelemetry.ts` → hub via `defineEvent` / `emit` | `TelemetryHub` only |
-| Persist (optional) | `ArchiveSink.layerForStore(RunResourceStore, archiveLegs)` | `RuntimeStorage` at **compose** |
-| Query | `RunResourceStore` | `RuntimeStorage` + store layer |
-| Live read | `RunResourceProjection` | hub sink at compose; optional hydrate from archive |
-
-Worker (`src/RunResource.ts`) calls `RunResourceHubTelemetry.Run.started` / `State.changed` — **never** `RunResourceStore` for writes.
-
-**Other facets (Queue, Log, ProcessExecution, …) are still legacy:** telemetry tree passed into `ProcessStore.Service(..., TelemetrySection, query)` and emits go through the store spine.
-
----
-
-## Hub-owned paths (do not overlap)
-
-- `src/TelemetryHub.ts`, `src/sink/*`
-- `src/store/RunResource*.ts`, `src/RunResourceProjection.ts`
-- `src/telemetryTransport.ts`
-- Hub follow-up: `ProcessStorage` → `ProcessArchive` rename, inner split of `RunResourceStore.ts`
-
----
-
-## Parallel agent (Queue migration)
-
-**Other worktree:** `effect-pm-alt-transport` on `cursor/queue-telemetry-hub-migration`  
-See [`../effect-pm-alt-transport/AGENT-PROMPT.md`](../effect-pm-alt-transport/AGENT-PROMPT.md)
-
-Do **not** edit `queueResource.ts` on this branch while queue agent is active (or coordinate merge order).
-
----
-
-## Integration (merge only)
-
-**Worktree:** `effect-pm` on `rewrite/store-transport` — no feature work.  
-Hub is ahead; merge when owner approves. **Changeset required** before release merge.
+| Item | Target |
+| --- | --- |
+| `RunResourceTelemetry.ts` | `Telemetry.Service` + plan 17 tree from `facet-telemetry-158c` |
+| `RunResource.ts` `stateRef` | Telemetry state (in-memory) or emit legs — not kernel |
+| `Telemetry.registry` | Not built |
+| Telemetry state module | Not built — [21-state-vocabulary.md](./docs/plans/21-state-vocabulary.md) |
 
 ---
 
 ## Read first
 
-1. [`docs/handoffs/WORKTREE-SETUP.md`](./docs/handoffs/WORKTREE-SETUP.md)
-2. [`docs/plans/src-reorganization.md`](./docs/plans/src-reorganization.md)
-3. [`docs/recipes/architecture-split-and-transports.md`](./docs/recipes/architecture-split-and-transports.md)
-4. [`docs/plans/20-process-store-split-and-telemetry.md`](./docs/plans/20-process-store-split-and-telemetry.md)
+1. [telemetry-split-bake.md](./docs/recipes/telemetry-split-bake.md)
+2. [21-state-vocabulary.md](./docs/plans/21-state-vocabulary.md)
+3. [architecture-split-and-transports.md](./docs/recipes/architecture-split-and-transports.md)
+4. [20-process-store-split-and-telemetry.md](./docs/plans/20-process-store-split-and-telemetry.md)
 
 ---
 

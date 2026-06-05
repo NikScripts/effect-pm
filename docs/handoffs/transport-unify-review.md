@@ -1,5 +1,8 @@
 # Transport unify branch — critical review (must fix before merge)
 
+> **Historical (Jun 2026):** Transport slices merged into `cursor/hub-runresource-vertical`.
+> Layout note: `src/store/runResource/` was replaced by flat `RunResource*.ts` files.
+
 **Branch:** `cursor/transport-protocol-unify`  
 **Commit reviewed:** `ce191ae` — `refactor(storeTransport): use RpcServer.Protocol; drop StoreTransportProtocol`  
 **Reviewer:** main agent (Cursor)  

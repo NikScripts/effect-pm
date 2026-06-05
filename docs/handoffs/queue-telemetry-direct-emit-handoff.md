@@ -1,5 +1,9 @@
 # Queue worker direct telemetry handoff
 
+> **Gate (Jun 2026):** Queue hub migration waits until RunResource pilot is restored on
+> **`Telemetry.Service`** + registry. Run [telemetry-split-bake.md](../recipes/telemetry-split-bake.md)
+> first. Target branch: `cursor/queue-telemetry-hub-migration` (transport worktree).
+
 ## Branch and working tree
 
 ```text

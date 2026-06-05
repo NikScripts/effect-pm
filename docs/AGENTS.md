@@ -1,6 +1,6 @@
 # Agent guide — effect-pm (`@nikscripts/effect-pm`)
 
-Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any persistence change** — module refactor list, facet rules, agent assignments), [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [RESOURCE-API.md](./RESOURCE-API.md), [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) (schedule vs `ProcessGroup.start` / API gates), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
+Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any persistence change** — module refactor list, facet rules, agent assignments), [plans/21-state-vocabulary.md](./plans/21-state-vocabulary.md) (**telemetry vs process vs projection vs durable ops**), [recipes/telemetry-split-bake.md](./recipes/telemetry-split-bake.md) (**bake before telemetry implementation**), [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [RESOURCE-API.md](./RESOURCE-API.md), [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) (schedule vs `ProcessGroup.start` / API gates), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
 
 ---
 

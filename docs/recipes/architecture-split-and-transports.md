@@ -62,7 +62,8 @@ Lock architecture decisions that block the first implementation slices:
 - **`ProcessStore` shrinks** to archive builder + registry only (no telemetry section);
   implementation namespace may become `Archive`; `ProcessStore` alias OK short-term.
 - **`ProcessStorage` → `ProcessArchive`** — merges archive layers only.
-- **Plan 17 telemetry factory** targets top-level `Telemetry`, not `ProcessStore.telemetry(...)`.
+- **Plan 17 telemetry factory** targets **`Telemetry.Service`** (tree DSL inside), not
+  `ProcessStore.telemetry(...)` as a store section — see [21-state-vocabulary.md](../plans/21-state-vocabulary.md).
 - **Per-domain public namespace** — e.g. `QueueResource.{Telemetry, Store, Projection}`.
 - **Siloing rule (cross-cutting)** — consumers carry only what they use:
   - separate `package.json` subpaths per module (`store/QueueResource`, telemetry tree,
@@ -107,7 +108,8 @@ Lock architecture decisions that block the first implementation slices:
   `Projection.layer`.
 - **Ordering: eventual default** — concurrent hub fan-out; projection/broadcast may lead
   persist; strong ordering deferred.
-- **Domain modules flat under role folders** — e.g. `RunResourceStore.ts`, `RunResourceTelemetry.ts` under `src/store/`; subpaths stay granular (`store/RunResource`).
+- **Domain modules flat under role folders** — e.g. `RunResourceTelemetry.ts`, `RunResourceStore.ts` under `src/store/`; subpaths stay granular (`store/RunResource`).
+- **Two in-memory state kinds** — process state (`State.Scope`) vs telemetry state (telemetry path only, never storage) — [21-state-vocabulary.md](../plans/21-state-vocabulary.md).
 - **Archive builder** — queries only (telemetry section removed from facet builder).
 - **Projection runtime** — no archive reference; hydrate is composition-only.
 
@@ -153,7 +155,8 @@ Lock architecture decisions that block the first implementation slices:
 
 - **Slice order:** 6.1 Hub → 6.2 ArchiveSink → 6.3 Projection + telemetryTransport →
   6.4 store Protocol unify → 6.5 control/log dedup → 6.6 terminalTransport → 6.7
-  ProcessArchive rename + domain folders.
+  ProcessArchive rename + flat PascalCase store files.
+- **Before more facet code:** [telemetry-split-bake.md](./telemetry-split-bake.md).
 - **Pilot domain: `RunResource`** (not Queue) — only facet with completed schema-typed
   archive migration; `latestState` / `State.Changed` ideal for first live projection.
   QueueResource follows after RunResource vertical slice proves the pattern.
@@ -205,8 +208,11 @@ _(record as we go)_
 ## Cleanup status
 
 Architecture bake **complete** (steps 1–6 locked). Recipe stays open until slices
-6.1–6.7 ship or decisions fold into `docs/plans/`.
+6.1–6.7 ship **and** [telemetry-split-bake.md](./telemetry-split-bake.md) closes.
 
-**Handoff pointer for new session:** start with slice **6.1 TelemetryHub** bake or
-implementation; read locked ingredients in this file + [`20-process-store-split-and-telemetry.md`](./plans/20-process-store-split-and-telemetry.md).
-Pilot vertical slice: **RunResource** (`State.Changed` → `RunResourceProjection.latestState`).
+**Implementation debt on hub branch:** interim `defineEvent` API — not the target tree.
+Golden tree reference: `origin/cursor/facet-telemetry-158c`.
+
+**Handoff pointer for new session:** run [telemetry-split-bake.md](./telemetry-split-bake.md)
+before more implementation. Pilot vertical slice: **RunResource** (`Telemetry.Service` +
+hub bridge + telemetry state).

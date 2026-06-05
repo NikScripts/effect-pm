@@ -21,6 +21,12 @@
 
 Verify: `pnpm typecheck && pnpm test && pnpm lint && pnpm build`
 
+**Telemetry / state vocabulary (Jun 2026):** Emit, archive, projection, process state,
+and telemetry state are **different**. Target stack: `Telemetry.Service` + `TelemetryHub` +
+optional sinks — **not** merged emit on `*Store`. Hub branch still uses interim `defineEvent`
+(debt). Canonical table: [plans/21-state-vocabulary.md](./plans/21-state-vocabulary.md).
+Bake before implementation: [recipes/telemetry-split-bake.md](./recipes/telemetry-split-bake.md).
+
 ---
 
 ## Facets and layout
@@ -262,7 +268,8 @@ and must not change process / queue success.
 | Area | Notes |
 |------|-------|
 | **Identity & singleton runs** | `instanceId`, in-process + **durable lease** so the same logical process is not running in another program/host. Plan: [plans/12-runtime-identity-and-singleton-runs.md](./plans/12-runtime-identity-and-singleton-runs.md). |
-| **Operational storage** | One config for facts + **state** + audit; `RuntimeStorage.transaction`; facet state/mutate helpers. Plan: [plans/13-queue-rate-limit-and-operational-storage.md](./plans/13-queue-rate-limit-and-operational-storage.md). |
+| **Operational storage** | One config for facts + **durable ops state** + audit; `RuntimeStorage.transaction`; facet state/mutate helpers. **Not** telemetry state (in-memory only). Plan: [plans/13-queue-rate-limit-and-operational-storage.md](./plans/13-queue-rate-limit-and-operational-storage.md). |
+| **Telemetry split bake** | Lock `Telemetry.Service`, registry, telemetry state; replace `defineEvent`. [recipes/telemetry-split-bake.md](./recipes/telemetry-split-bake.md) |
 | **Queue `rateLimit`** | Effect `RateLimiter` via `RateLimiterStore` on this stack — not shipped. Same plan **13**. |
 | **Extend `configure` / `Service`** | Parity on `Process`, `RunResource`, `HttpApiResource` (see plan **13**). |
 | Telemetry proposals | `Polling`, `ProcessSchedule`, `HttpApiResource`: facet yes/no docs in `docs/storage-proposals/` (Phase 1 — proposal only). |

@@ -1,4 +1,12 @@
-# Facet telemetry branch handoff
+# Facet telemetry branch — golden reference (tree DSL)
+
+> **Jun 2026:** This branch is **not** the merge target for hub work. Use it as the
+> **golden reference** for the plan 17 telemetry **tree DSL** on RunResource — port onto
+> **`Telemetry.Service`** after [telemetry-split-bake.md](../recipes/telemetry-split-bake.md).
+>
+> ```sh
+> git show origin/cursor/facet-telemetry-158c:src/store/runResource.ts
+> ```
 
 Branch: `cursor/facet-telemetry-158c`
 

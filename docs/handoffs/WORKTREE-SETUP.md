@@ -10,8 +10,8 @@ Transport slices 6.4–6.6 are **merged into hub**. The transport-only branch is
 
 | Tmux session | Worktree path | Branch | Agent | Prompt file |
 | --- | --- | --- | --- | --- |
-| **`effect-pm-alt`** | `/Users/nikolasstow/Coding/packages/effect-pm-alt` | `cursor/hub-runresource-vertical` | **Hub** — RunResource pilot, 6.7 follow-up, transport already merged | [`AGENT-PROMPT.md`](../../AGENT-PROMPT.md) |
-| **`effect-pm`** | `/Users/nikolasstow/Coding/packages/effect-pm-alt-transport` | `cursor/queue-telemetry-hub-migration` | **Queue migration** — hub telemetry pattern for QueueResource | [`../effect-pm-alt-transport/AGENT-PROMPT.md`](../../../effect-pm-alt-transport/AGENT-PROMPT.md) |
+| **`effect-pm-alt`** | `/Users/nikolasstow/Coding/packages/effect-pm-alt` | `cursor/hub-runresource-vertical` | **Hub** — **bake first**, then RunResource tree restore | [`AGENT-PROMPT.md`](../../AGENT-PROMPT.md) · [telemetry-split-bake-handoff.md](./telemetry-split-bake-handoff.md) |
+| **`effect-pm`** | `/Users/nikolasstow/Coding/packages/effect-pm-alt-transport` | `cursor/queue-telemetry-hub-migration` | **Queue migration** — after bake + RunResource pilot | transport `AGENT-PROMPT.md` |
 | **`epm-aa`** | `/Users/nikolasstow/Coding/packages/effect-pm` | `rewrite/store-transport` | **Integration only** — merge when ready; no feature work | [`../effect-pm/AGENT-PROMPT.md`](../../../effect-pm/AGENT-PROMPT.md) |
 
 **Do not repoint** the `effect-pm-alt` tmux session or hub worktree branch without owner approval.
@@ -76,15 +76,19 @@ git -C ~/Coding/packages/effect-pm-alt-transport checkout cursor/queue-telemetry
 
 ---
 
-## Architecture status (telemetry vs storage)
+## Architecture status (telemetry / state)
 
-| Facet | Emit path | Store path | Coupled? |
-| --- | --- | --- | --- |
-| **RunResource** (pilot) | `TelemetryHub` via `RunResourceTelemetry` | `RunResourceStore` queries + optional `ArchiveSink` | **No** — split modules, opt-in persist |
-| **QueueResource** | `QueueResourceStore.Entry.*` via `ProcessStore.telemetry` spine | Same facet class | **Yes** — legacy |
-| **Log, ProcessExecution, ProcessGroup, ProcessLifecycle** | `ProcessStore.telemetry(...)` inside facet | Same facet class | **Yes** — legacy |
+Canonical vocabulary: [21-state-vocabulary.md](../plans/21-state-vocabulary.md).
 
-See [`docs/plans/20-process-store-split-and-telemetry.md`](../plans/20-process-store-split-and-telemetry.md).
+| Facet | Emit (target) | Emit (hub branch today) | Store | Telemetry state |
+| --- | --- | --- | --- | --- |
+| **RunResource** | `Telemetry.Service` tree → hub | `defineEvent` (**debt**) | Decoupled queries | **Not built** (kernel `Ref` wrong) |
+| **QueueResource** | Same | `ProcessStore.telemetry` on store | Coupled | — |
+| **Others** | Same | Coupled on store | Coupled | — |
+
+**Next:** [telemetry-split-bake.md](../recipes/telemetry-split-bake.md) — lock model before code.
+
+**Implementation after bake:** hub worktree on `cursor/hub-runresource-vertical`.
 
 ---
 
@@ -93,5 +97,6 @@ See [`docs/plans/20-process-store-split-and-telemetry.md`](../plans/20-process-s
 | Doc | Agent |
 | --- | --- |
 | [architecture-hub-runresource-handoff.md](./architecture-hub-runresource-handoff.md) | Hub |
-| [architecture-split-and-transports.md](../recipes/architecture-split-and-transports.md) | Both |
+| [telemetry-split-bake-handoff.md](./telemetry-split-bake-handoff.md) | Owner / bake agent |
+| [architecture-split-and-transports.md](../recipes/architecture-split-and-transports.md) | All |
 | [src-reorganization.md](../plans/src-reorganization.md) | Both |

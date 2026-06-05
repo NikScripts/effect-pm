@@ -5,6 +5,7 @@ implementation slices.
 
 **Related:** [17-facet-telemetry-factory.md](./17-facet-telemetry-factory.md),
 [19-transport-boundaries.md](./19-transport-boundaries.md),
+[21-state-vocabulary.md](./21-state-vocabulary.md),
 [06-runtime-hooks-config.md](./06-runtime-hooks-config.md),
 [STORAGE.md](../STORAGE.md).
 
@@ -37,9 +38,10 @@ Replace the monolithic facet class with **composable modules** per domain
 (`QueueResource`, `ProcessExecution`, …):
 
 ```text
-Telemetry.*          emit API (schemas + wire ids)     — no storage in R
-Archive.*Store       durable persist + query/for       — RuntimeStorage in R
-Projection.*         live derived reads + optional watch — hub subscriber in R
+Telemetry.Service    emit API (plan 17 tree DSL)         — R = TelemetryHub; not on *Store
+Archive.*Store       durable persist + query/for         — RuntimeStorage in R
+Projection.*         live derived reads                  — hub sink; separate tag
+TelemetryState       in-memory metrics (telemetry only)  — never storage; bake: plan 21
 ```
 
 Public domain export shape (example):
@@ -62,7 +64,7 @@ export namespace QueueResource {
 | `ProcessStore` | Shrinks to **archive builder** + registry, or split into `Archive` + `ArchiveRegistry` |
 | `ProcessStorage` | **`ProcessArchive`** (or `RuntimeArchive`) — merges **archive layers only** |
 | `*Store` facet classes | **Archive facets** — persist sink + reads; may omit telemetry entirely (`LogStore`) |
-| `ProcessStore.telemetry(...)` | Top-level **`Telemetry`** factory (plan 17), not a ProcessStore section |
+| `ProcessStore.telemetry(...)` | **`Telemetry.Service`** class (plan 17 DSL inside), not a ProcessStore section |
 
 ---
 
@@ -77,14 +79,17 @@ Telemetry emit is **not** `spine.create`. It is:
 3. Fan-out to zero or more **sinks** registered on a `TelemetryHub` (or per-domain hub).
 
 ```ts
-yield* QueueTelemetry.Entry.Enqueued({ ... })
+yield* RunResourceTelemetry.Run.Started({ ... })
 // R = TelemetryHub only (always)
 // sinks (optional layers):
-//   ArchiveSink(QueueResourceStore)  → RuntimeStorage.create
-//   ProjectionSink(QueueProjection)  → update in-memory index
-//   BroadcastSink(telemetryTransport)  → push to subscribers
-//   MetricsSink(...)                 → future
+//   ArchiveSink(RunResourceStore)    → RuntimeStorage.create
+//   ProjectionSink(RunResourceProjection) → in-memory read model
+//   BroadcastSink(telemetryTransport)   → push to subscribers
+//   MetricsSink / log legs              → future; may read TelemetryState
 ```
+
+**Interim hub branch (debt):** `defineEvent` + `RunResourceHubTelemetry` — **replace**
+with `Telemetry.Service` + tree DSL; see [telemetry-split-bake.md](../recipes/telemetry-split-bake.md).
 
 **No store layer:** omit `ArchiveSink` — emit + projection + broadcast still work.
 
@@ -93,10 +98,18 @@ yield* QueueTelemetry.Entry.Enqueued({ ... })
 Static emit path (kernel):
 
 ```ts
-ProcessExecutionTelemetry.Execution.Completed  // Effect<void, E, TelemetryHub>
+RunResourceTelemetry.Run.Started(input)  // Effect<void, E, TelemetryHub>
 ```
 
-not `yield* ProcessExecutionStore` merged emit+read instance.
+not `yield* RunResourceStore` merged emit+read instance.
+
+### Telemetry registry (required for siloing)
+
+- **`Telemetry.registry([...Telemetry.Service])`** — wire ids + schemas for hub sinks
+  and transports (bake: [telemetry-split-bake.md](../recipes/telemetry-split-bake.md) step 2).
+- **`ProcessStore.registry([...*Store])`** — archive facets only (queries / storeTransport).
+
+Domains declare events on `Telemetry.Service`; sinks opt in by wire id.
 
 ### Persist sink is optional, not built-in
 
@@ -236,16 +249,15 @@ dispatch tags.
 
 ## Migration phases (suggested)
 
-1. **Introduce `TelemetryHub` + optional sinks** — emit works with hub only; persist
-   sink wraps existing spine create.
-2. **Extract archive facets** — query/for without required telemetry section;
-   `LogStore` as template for telemetry-free archive.
-3. **Add `Projection` module** — one pilot (`QueueProjection.depth`).
-4. **Unify Protocol** — remove `StoreTransportProtocol`; store server uses
-   `RpcServer.Protocol`.
-5. **Shrink `ProcessStore`** — registry + archive builder only; update plan 17
-   slices to target new modules.
-6. **Rename files** — camelCase modules per [19](./19-transport-boundaries.md).
+1. **Introduce `TelemetryHub` + optional sinks** — emit works with hub only (**shipped**;
+   replace interim `defineEvent` with `Telemetry.Service` tree).
+2. **Introduce `Telemetry.Service` + `Telemetry.registry`** — restore plan 17 DSL; decouple from `*Store`.
+3. **Telemetry state (in-memory)** — bake then implement per [21](./21-state-vocabulary.md).
+4. **Extract archive facets** — query/for without telemetry section (**RunResource pilot partial**).
+5. **Projection module** — RunResource pilot **shipped**; extend to Queue.
+6. **Unify Protocol** — **shipped** on hub branch.
+7. **Shrink `ProcessStore`** — archive builder + registries only.
+8. **Rename / flatten files** — PascalCase under role folders per [src-reorganization](./src-reorganization.md).
 
 ---
 
@@ -262,7 +274,9 @@ dispatch tags.
 
 ## Acceptance checks
 
-- [ ] `yield* QueueTelemetry.*` runs with **only** `TelemetryHub.layer` provided.
+- [ ] `yield* RunResourceTelemetry.*` runs with **only** `TelemetryHub.layer` provided.
+- [ ] Telemetry state updates never call `RuntimeStorage`.
+- [ ] Process kernels do not read/write telemetry state.
 - [ ] Archive queries run with **only** `RuntimeStorage` + archive layer — no hub.
 - [ ] Projection live read runs without archive when hydrated in-memory; optional
   archive bootstrap documented.

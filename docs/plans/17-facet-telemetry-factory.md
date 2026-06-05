@@ -10,9 +10,10 @@ dual `record` + `telemetry` on the same facet.
 **Related:** [STORAGE.md](../STORAGE.md), [12](./12-runtime-identity-and-singleton-runs.md),
 [13](./13-queue-rate-limit-and-operational-storage.md), [06](./06-runtime-hooks-config.md).
 
-**Note:** Exploratory code on `cursor/facet-telemetry-158c` is incomplete and should be
-**reverted or replaced** when execution starts from this plan — do not merge partial
-factory changes.
+**Note:** Exploratory code on `cursor/facet-telemetry-158c` holds the **golden RunResource
+tree DSL** — port onto **`Telemetry.Service`** after
+[telemetry-split-bake.md](../recipes/telemetry-split-bake.md); do not merge the branch
+wholesale into hub work.
 
 ---
 
@@ -649,8 +650,11 @@ own `State.Scope` chain or use app context scopes.
 **App rule:** `yield* MyFacet.Event.Validated` from app modules — no `ProcessStore` from app
 code. Cross-cutting ids via scope + optional narrowed `RuntimeEmitContext` (§6).
 
-**State** (`offset.get/set`) — separate `ProcessStore.state` section in a later sub-plan;
+**State** (`offset.get/set`) — separate **`ProcessStore.state`** section in a later sub-plan;
 same factory file, different section tag (`STATE_TAG`), not mixed into telemetry tree.
+
+**This is durable operational state** (rate limits, leases) — **not** [telemetry
+state](./21-state-vocabulary.md) (in-memory, telemetry-only, never storage).
 
 ---
 
@@ -904,7 +908,7 @@ extractors, `Layer` / `yield*` ergonomics, class-as-`Context` tag.
 
 **Do not copy Effect’s public voice:** sparse `@category` / `@since` stubs, generic
 `Context.Service("Key")` function keys, or “storage service with `make`” as the hero
-story. effect-pm advertises **per-facet module docs** (like `runResource.ts` today) and
+story. effect-pm advertises **per-facet module docs** (like `RunResource.ts` today) and
 **telemetry** vocabulary everywhere users read.
 
 #### What “external” means in this package
@@ -921,7 +925,7 @@ The facet file is the README; `ProcessStore` is the compiler.
 
 #### Facet module doc template (this is the external brand)
 
-Match existing store facets (`queueResource.ts`, `runResource.ts`):
+Match existing store facets (`queueResource.ts`, `RunResource.ts` flat under `src/store/`):
 
 ```ts
 /**
@@ -991,7 +995,7 @@ Match existing store facets (`queueResource.ts`, `runResource.ts`):
  * Domain modules live under `src/store/*` and own their docs, wires, and types.
  * This module is only the section DSL: `telemetry`, `query`, `for`.
  *
- * @example Declare a facet (see `docs/STORAGE.md` and `src/store/runResource.ts`)
+ * @example Declare a facet (see `docs/STORAGE.md` and `src/store/RunResource.ts`; golden tree on `facet-telemetry-158c`)
  * ```ts
  * export class MyStore extends ProcessStore.Service<MyStore>()(
  *   "@app/store/my/MyStore",

@@ -5,20 +5,23 @@
 **Implement on:** `cursor/hub-runresource-vertical`  
 **Worktree:** `/Users/nikolasstow/Coding/packages/effect-pm-alt` (tmux: `effect-pm-alt`)
 
-**Merge into (later):** `rewrite/store-transport` after transport agent lands — not an implementation branch.
+**Merge into (later):** `rewrite/store-transport` after bake + pilot restore — not an implementation branch for new telemetry APIs.
 
-Merge transport-unify work from the parallel agent (`cursor/transport-protocol-unify`)
-after both pass CI — resolve conflicts in `src/index.ts`, `package.json` exports,
-`tsup.config.ts` only.
+---
 
-## Role
+## Stop — bake before more telemetry code
 
-**Primary implementer.** Owns the architectural split proof: **TelemetryHub**,
-**RunResource** telemetry/archive/projection modules, and **telemetryTransport v1**
-(live push without DB polling).
+Do **not** extend `TelemetryHub.defineEvent`, `RunResourceHubTelemetry`, or kernel-owned
+telemetry counters. Run the owner bake first:
 
-Do **not** re-implement store transport Protocol refactor or control HTTP cleanup —
-parallel agent owns [`architecture-transport-unify-handoff.md`](./architecture-transport-unify-handoff.md).
+| Doc | Role |
+| --- | --- |
+| [telemetry-split-bake-handoff.md](./telemetry-split-bake-handoff.md) | Agent prompt + context |
+| [telemetry-split-bake.md](../recipes/telemetry-split-bake.md) | Recipe steps 1–7 |
+| [21-state-vocabulary.md](../plans/21-state-vocabulary.md) | Four-way state table |
+
+**Golden tree DSL (port target):** `git show origin/cursor/facet-telemetry-158c:src/store/runResource.ts`  
+Restore as **`Telemetry.Service`**, not on `*Store`, not via `defineEvent`.
 
 ---
 
@@ -26,136 +29,84 @@ parallel agent owns [`architecture-transport-unify-handoff.md`](./architecture-t
 
 | Doc | Why |
 | --- | --- |
-| [`docs/recipes/architecture-split-and-transports.md`](../recipes/architecture-split-and-transports.md) | **Locked architecture** — steps 1–6; do not deviate without owner sign-off |
-| [`docs/plans/20-process-store-split-and-telemetry.md`](../plans/20-process-store-split-and-telemetry.md) | Split rationale + migration phases |
-| [`docs/plans/19-transport-boundaries.md`](../plans/19-transport-boundaries.md) | What belongs on each transport |
-| [`docs/plans/17-facet-telemetry-factory.md`](../plans/17-facet-telemetry-factory.md) | Telemetry SSoT / wire derivation (target API) |
-| [`docs/AGENTS.md`](../AGENTS.md) | Verification, Effect platform policy, public vs internal |
-| [`docs/STORAGE.md`](../STORAGE.md) | Archive facet rules |
-| Root [`AGENTS.md`](../../AGENTS.md) | Git commit policy |
+| [telemetry-split-bake.md](../recipes/telemetry-split-bake.md) | Lock model before implementation |
+| [21-state-vocabulary.md](../plans/21-state-vocabulary.md) | Process vs telemetry vs projection vs durable ops |
+| [architecture-split-and-transports.md](../recipes/architecture-split-and-transports.md) | Locked architecture — steps 1–6 |
+| [20-process-store-split-and-telemetry.md](../plans/20-process-store-split-and-telemetry.md) | Split rationale + migration phases |
+| [19-transport-boundaries.md](../plans/19-transport-boundaries.md) | Transport ownership |
+| [17-facet-telemetry-factory.md](../plans/17-facet-telemetry-factory.md) | Tree DSL (§5) — target lives on `Telemetry.Service` |
+| [src-reorganization.md](../plans/src-reorganization.md) | Flat PascalCase under role folders |
+| [AGENTS.md](../AGENTS.md) | Verification, Effect platform policy |
+| [STORAGE.md](../STORAGE.md) | Archive facet rules |
 
 ---
 
-## Current repo state (do not re-build)
+## Shipped on this branch (keep)
 
-| Already shipped | Where |
+| Area | Where |
 | --- | --- |
-| Schema-typed archive queries (pilot) | `src/store/runResource.ts` — only fully migrated facet |
-| Archive registry + `layerRemote` + store transport loop | `src/internal/store/service.ts`, `src/StoreTransportRpc.ts`, `src/internal/store/storeTransport.ts` |
-| Store wire messages | `src/StoreMessage.ts` |
-| Streaming + Ack on store client/server | store transport modules above |
-| Control / log RPC adapters (legacy RpcGroup shape) | `src/ControlTransportRpc.ts`, `src/LogTransportRpc.ts` |
-| Terminal contracts | `src/Terminal.ts` |
+| `TelemetryHub` + sink layers | `src/TelemetryHub.ts`, `src/sink/*` |
+| Transport slices 6.4–6.6 | Merged from transport-unify |
+| `RunResourceStore` — queries only | `src/store/RunResourceStore.ts` |
+| Flat layout | `src/store/RunResource.ts`, `RunResourceStore.ts`, `RunResourceTelemetry.ts` |
+| `RunResourceProjection` + hydrate | `src/RunResourceProjection.ts` |
+| `telemetryTransport` v1 + `BroadcastSink` | transport modules + tests |
+| `ArchiveSink`, `ProjectionSink` | `src/sink/*` |
+| Schema-typed archive queries (pilot) | `RunResourceStore` |
+| Store transport (Protocol, streaming, Ack) | `src/internal/store/storeTransport.ts`, `StoreTransportRpc.ts` |
+| `State.Scope` + scopes | `src/State.ts`, `*Scope.ts` |
 
-**Tests:** `pnpm test` — 370 passing at handoff time. `pnpm run typecheck` clean.
+**Tests:** run full suite before each slice — `pnpm run typecheck && pnpm test && pnpm run lint && pnpm run build`.
 
-**Stale doc:** [`store-transport-rpc-handoff.md`](./store-transport-rpc-handoff.md) describes pre-ship work — ignore “what remains”; store transport is landed.
+**Stale doc:** [store-transport-rpc-handoff.md](./store-transport-rpc-handoff.md) — store transport landed; ignore “what remains”.
+
+**Historical layout note:** older handoffs mention `src/store/runResource/` — **removed**; flat files only.
 
 ---
 
-## Your slice order (6.1 → 6.2 → 6.3)
+## Vertical slice status
 
-### 6.1 — `TelemetryHub` core
+| Slice | Status | Notes |
+| --- | --- | --- |
+| **6.1** TelemetryHub core | **Done** | Router + wire-id sinks |
+| **6.2** RunResource split + ArchiveSink | **Partial** | Store decoupled; **interim** `defineEvent` telemetry — replace after bake |
+| **6.3** Projection + telemetryTransport | **Done** | Live push without store poll |
+| **6.4–6.6** Transport unify | **Done** | Merged into hub branch |
+| **Post-bake A** `Telemetry.Service` + tree restore | **Not started** | From `facet-telemetry-158c` |
+| **Post-bake B** Hub bridge + `Telemetry.registry` | **Not started** | |
+| **Post-bake C** Telemetry state + kernel cleanup | **Not started** | Remove `RunResource.ts` `stateRef` |
+| **6.7** Queue migration | **Deferred** | Separate branch after RunResource pilot |
 
-**Goal:** `yield* RunResourceTelemetry.State.Changed(...)` runs with **only**
-`TelemetryHub` in `R` — no `RuntimeStorage`.
+---
 
-**Deliverables:**
+## Implementation debt (replace after bake)
 
-- New subpath `@nikscripts/effect-pm/TelemetryHub` (or `src/TelemetryHub.ts`).
-- `TelemetryHub` `Context.Service` — `emit` as functional `Effect` pipeline.
-- Sink registration via composable layers (`TelemetryHub.sinkLayer`), not mutable
-  runtime registry hacks.
-- Sink dispatch by **wire id**; policies: persist = swallow+log (stub ok in 6.1),
-  projection/broadcast = best-effort.
-- **Zero imports** from `src/store/*` inside hub core.
-
-**Pilot event stub:** one `RunResource` event (`State.Changed`) wired through hub —
-full tree can follow plan 17 incrementally.
-
-**Acceptance:**
-
-- Test: emit with hub layer only → succeeds, no storage layer.
-- Test: emit with zero sinks → succeeds.
-- Kernel-type path: emit effect does not list `RuntimeStorage` in `R`.
-
-### 6.2 — RunResource split + `ArchiveSink`
-
-**Goal:** Telemetry SSoT separated from archive; persist is optional sink.
-
-**Deliverables:**
-
-- Domain folder (can land incrementally):
-
-```text
-src/store/
-  RunResource.ts              # subpath entry + RunResourceCompose
-  RunResourceStore.ts         # archive facet — queries only
-  RunResourceTelemetry.ts     # hub telemetry SSoT
-src/RunResourceProjection.ts  # live projection service
-```
-
-- `ArchiveSink.forStore(RunResourceStore)` — encoder **derived from event def**,
-  not duplicate wire strings.
-- Remove telemetry section requirement from archive builder for RunResource (or
-  introduce `Archive.Service` alias — recipe allows `ProcessStore` shrink).
-- Static emit on RunResource moves to telemetry tree → `TelemetryHub.emit`.
-
-**Acceptance:**
-
-- Test: emit + `ArchiveSink` → row in `RuntimeStorage`.
-- Test: emit without archive layer → no storage, still succeeds.
-- Changing event schema fails compile at emit + encoder + (later) reducer sites.
-
-**Coordination:** Do not rename `StoreTransportRpc` → `storeTransport` — parallel agent.
-
-### 6.3 — Live projection + `telemetryTransport` v1
-
-**Status:** **Done** on `cursor/hub-runresource-vertical` (`60495a8`+).
-
-**Goal:** **Actually live** — hub updates memory + pushes on wire; **no store poll
-on hot path.**
-
-**Deliverables:**
-
-- `RunResourceProjection` service — start with `latestState(resourceId)`.
-- `ProjectionSink.for(RunResourceProjection)` — reducer from `State.Changed` schema.
-- `RunResourceProjection.layerHydrateFromArchive` — **one-shot** cold start from
-  archive `latestState` / bounded `stateHistory`; not default on `Projection.layer`.
-- `telemetryTransport` v1:
-  - Path `/ws/telemetry` (may stub router mount until parallel agent merges Protocol
-    unify — use in-process test protocol if needed).
-  - `BroadcastSink` at app compose: hub → transport publish.
-  - Schema-backed stream items (event wire + payload).
-
-**Demo acceptance:** *(verified in `test/run-resource-projection.test.ts` and `test/telemetry-transport.test.ts`)*
-
-1. Emit `State.Changed` → projection `latestState` updates in-process.
-2. Telemetry transport client receives event **without** calling `storeTransport`.
-3. Restart simulation: projection empty → provide hydrate layer → seeded from archive
-   → subsequent emits update without polling loop.
+| Item | Wrong today | Target |
+| --- | --- | --- |
+| `RunResourceTelemetry.ts` | `TelemetryHub.defineEvent`, flat wires | `Telemetry.Service` + plan 17 tree |
+| `RunResource.ts` | Kernel `Ref` for counters | Telemetry state or emit legs only |
+| Wire arrays | Hand-duplicated in store + telemetry | `Telemetry.registry` + codec derivation |
+| Emit `R` at kernel | May still imply storage paths | `TelemetryHub` only |
 
 ---
 
 ## Design rules (locked)
 
 - **Emit `R = TelemetryHub` only** at kernel sites.
-- **Siloing** — opt-in layers/subpaths; no monolithic “all facets + all transports”
-  unless explicitly named (`ProcessArchive.layerRuntimeStorage` = archives only).
-- **SSoT** — one telemetry event def drives wire + encoder + reducer + broadcast.
-- **Functional style** — hub dispatch via `Effect` combinators, not imperative loops.
+- **Telemetry tree SSoT** — plan 17 DSL on **`Telemetry.Service`**; hub routes only.
+- **Two in-memory state kinds** — process (`State.Scope`) vs telemetry (never storage).
+- **Siloing** — opt-in layers/subpaths; combined layers explicitly named.
+- **Role folders only** — `store/`, `sink/`, `transport/`; PascalCase files; no domain subfolders.
+- **Functional style** — hub dispatch via `Effect` combinators.
 - **No DB polling** for live UI — hydrate once, then hub-live.
-- **PascalCase** types, **camelCase** modules/files matching main export (plan 19).
 
 ---
 
 ## Out of scope (defer)
 
-- QueueResource migration (after RunResource vertical slice proves pattern).
-- Plan 17 full wire-string break across all facets.
-- `ProcessStorage` → `ProcessArchive` rename (slice 6.7 — parallel or follow-up).
-- Demux single WebSocket.
-- Strong persist-before-projection ordering.
+- QueueResource migration until RunResource pilot restored on tree + registry.
+- Plan 17 wire-string break across all facets (after bake).
+- `ProcessStorage` → `ProcessArchive` rename (slice 6.7).
 - Dashboard React components.
 
 ---
@@ -169,15 +120,15 @@ pnpm run lint
 pnpm run build
 ```
 
-Recommend **changeset** when public subpaths or exports change (owner approval before
-committing changeset file if policy requires).
+**Changeset** when public subpaths or exports change (owner approval).
 
 ---
 
-## Suggested commits
+## Suggested commits (post-bake)
 
-1. `feat(telemetry): add TelemetryHub core + wire-id sink layers`
-2. `refactor(runResource): split telemetry from archive; ArchiveSink for State.Changed`
-3. `feat(projection): RunResourceProjection + hydrate layer + telemetryTransport v1`
+1. `feat(telemetry): Telemetry.Service factory + RunResource tree from golden branch`
+2. `feat(telemetry): hub emit bridge + Telemetry.registry v1`
+3. `refactor(runResource): telemetry state + kernel boundary cleanup`
+4. `chore: remove defineEvent / RunResourceHubTelemetry`
 
-Push topic branch; open PR against `rewrite/store-transport` when 6.3 acceptance passes.
+Push topic branch; open PR against `rewrite/store-transport` when post-bake acceptance passes.

@@ -1,10 +1,9 @@
 # 18 — Resource state scope system (`State.Scope`)
 
-**Status:** design only (May 2026). **Not implemented.**
-
-Defines **scope / state / context** for effect-pm kernels. **Facet telemetry** that reads
-scope is [17-facet-telemetry-factory.md](./17-facet-telemetry-factory.md) §5 — implement
-**together** in plan 17 **slice 3** (`ProcessExecutionStore` + `ProcessScope` + `Process.ts`).
+**Status:** partially implemented (Jun 2026). **`State.Scope` factory shipped** in
+`src/State.ts`; scopes and `ProcessScope.run` in use. **Two kinds of in-memory state**
+(process vs telemetry) — see [21-state-vocabulary.md](./21-state-vocabulary.md).
+**Telemetry state not shipped.**
 
 ---
 
@@ -14,10 +13,11 @@ scope is [17-facet-telemetry-factory.md](./17-facet-telemetry-factory.md) §5 �
 |------|---------|
 | **Scope** | `class` extending `State.Scope` / `Parent.withLeaf` — service tag + DI chain |
 | **Leaf** | Current level **`Schema.Struct`** declared directly by this scope |
-| **State** | Full nested **`Schema.Struct`** available from `yield* Scope` — ancestors at root, children under `withLeaf` keys |
+| **State** (process state) | Full nested **`Schema.Struct`** from `yield* Scope` — **kernel uses this** |
+| **Telemetry state** | In-memory metrics/scratch — **telemetry path only**; never storage — [21](./21-state-vocabulary.md) |
 
-Not Effect’s `Context` module. Use **scope state** in prose; types use `State.Type.State<S>`
-for the full yielded value and `State.Type.Leaf<S>` for the current-level value.
+Not Effect’s `Context` module. Use **process state** vs **telemetry state** in prose;
+do not call durable ops rows “telemetry state.”
 
 ---
 
