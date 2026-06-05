@@ -220,6 +220,12 @@ export {
 export type {
   ControlTransportApi,
 } from "./controlTransport";
+export {
+  terminalTransport,
+} from "./terminalTransport";
+export type {
+  TerminalTransportApi,
+} from "./terminalTransport";
 export type {
   ControlRouterShape,
   ControlProtocolMetadata,

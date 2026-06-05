@@ -44,6 +44,7 @@ export default defineConfig([
       storeTransport: "src/storeTransport.ts",
       logTransport: "src/logTransport.ts",
       controlTransport: "src/controlTransport.ts",
+      terminalTransport: "src/terminalTransport.ts",
       StoreMessage: "src/StoreMessage.ts",
       Terminal: "src/Terminal.ts",
       TerminalRpc: "src/TerminalRpc.ts",

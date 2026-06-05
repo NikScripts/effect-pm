@@ -154,6 +154,11 @@
       "import": "./dist/controlTransport.mjs",
       "require": "./dist/controlTransport.js"
     },
+    "./terminalTransport": {
+      "types": "./dist/terminalTransport.d.ts",
+      "import": "./dist/terminalTransport.mjs",
+      "require": "./dist/terminalTransport.js"
+    },
     "./StoreMessage": {
       "types": "./dist/StoreMessage.d.ts",
       "import": "./dist/StoreMessage.mjs",
