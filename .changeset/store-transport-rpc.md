@@ -2,34 +2,42 @@
 "@nikscripts/effect-pm": minor
 ---
 
-Add `StoreTransportRpc` — registry-direct RPC transport for `ProcessStore` facet queries.
+Add `storeTransport` — registry-direct RPC transport for `ProcessStore` facet queries, using `RpcServer.Protocol` directly (no forked protocol adapter).
 
-**New exports:**
+**Breaking changes from the previous beta:**
 
-- `StoreTransportRpc` namespace — `serverLayer`, `makeClient`, `toProcessStoreQueryClient`, `layerProtocolFromRpc`, `Protocol`, `errors`
-- `StoreQueryClient<R>` — typed client mapped from a `ProcessStoreRegistry`; methods are `client.RunResource.facts(payload)` / `client.for.RunResource(id).entries()`
+- Renamed: `StoreTransportRpc` → `storeTransport` (camelCase module), subpath `@nikscripts/effect-pm/StoreTransportRpc` → `@nikscripts/effect-pm/storeTransport`
+- Removed: `StoreTransportProtocol`, `layerProtocolFromRpc` (use `RpcServer.Protocol` directly)
+- Removed: `StoreTransportRpc.Protocol`, `StoreTransportRpc.layerProtocolFromRpc`
+- Renamed type: `storeTransportApi` → `StoreTransportApi`
+
+**New exports (unchanged from prior beta):**
+
+- `storeTransport` namespace — `serverLayer`, `makeClient`, `toProcessStoreQueryClient`, `errors`
+- `StoreQueryClient<R>` — typed client mapped from a `ProcessStoreRegistry`
 - `StoreClientTransport` — protocol-agnostic send/sendStream interface
 - `StoreClientMiddleware` — per-request client middleware
-- `StoreTransportServerConfig` — server-side concurrency, tracing, middleware options
+- `StoreTransportServerConfig` — server-side options
 - `StoreMessage` subpath — `FromClientEncoded`, `FromServerEncoded`, `ExitEncoded`, `RequestId`, `parseTag`, `makeQueryTag`, `makeForQueryTag`
-- `ProcessStorage.layerRemote(client)` — provide all six built-in facet `Query` sub-tags from a single `StoreQueryClient`
+- `ProcessStorage.layerRemote(client)` — provide all six built-in facet `Query` sub-tags
 
 **Server usage:**
+
 ```ts
-StoreTransportRpc.serverLayer(registry).pipe(
-  Layer.provide(StoreTransportRpc.layerProtocolFromRpc),
-  Layer.provide(RpcServer.layerProtocolWebsocket({ path: "/store" })),
-  Layer.provide(RpcServer.layerNdjson),
+storeTransport.serverLayer(registry).pipe(
+  Layer.provide(RpcServer.layerProtocolWebsocket({ path: "/ws/store" })),
+  Layer.provide(RpcSerialization.layerNdjson),
 )
 ```
 
 **Client usage:**
+
 ```ts
-const client = StoreTransportRpc.makeClient(
+const client = storeTransport.makeClient(
   ProcessStore.registry([RunResourceStore, QueueResourceStore]),
   transport,
 )
-RunResourceStore.layerRemote(StoreTransportRpc.toProcessStoreQueryClient(client))
+RunResourceStore.layerRemote(storeTransport.toProcessStoreQueryClient(client))
 // or for all facets at once:
 ProcessStorage.layerRemote(client)
 ```

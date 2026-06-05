@@ -139,10 +139,25 @@
       "import": "./dist/LogTransportRpc.mjs",
       "require": "./dist/LogTransportRpc.js"
     },
-    "./StoreTransportRpc": {
-      "types": "./dist/StoreTransportRpc.d.ts",
-      "import": "./dist/StoreTransportRpc.mjs",
-      "require": "./dist/StoreTransportRpc.js"
+    "./storeTransport": {
+      "types": "./dist/storeTransport.d.ts",
+      "import": "./dist/storeTransport.mjs",
+      "require": "./dist/storeTransport.js"
+    },
+    "./logTransport": {
+      "types": "./dist/logTransport.d.ts",
+      "import": "./dist/logTransport.mjs",
+      "require": "./dist/logTransport.js"
+    },
+    "./controlTransport": {
+      "types": "./dist/controlTransport.d.ts",
+      "import": "./dist/controlTransport.mjs",
+      "require": "./dist/controlTransport.js"
+    },
+    "./terminalTransport": {
+      "types": "./dist/terminalTransport.d.ts",
+      "import": "./dist/terminalTransport.mjs",
+      "require": "./dist/terminalTransport.js"
     },
     "./StoreMessage": {
       "types": "./dist/StoreMessage.d.ts",

@@ -175,6 +175,10 @@ export const makeControlTransportRpcClient = <E>(
  * @public
  */
 export const ControlTransportRpcLive = ControlRpc.toLayer({
+  // NOTE: The handler never fails with ControlRpcError — the declared error
+  // type on ControlRpc is aspirational; real adapter-layer failures propagate
+  // as defects.  rpcErrorToControlTransportError catches client-side transport
+  // errors, not server-side dispatch errors.
   "Control.Dispatch": (envelope: ControlProtocolRequestEnvelope) =>
     Effect.flatMap(
       ControlRouter,

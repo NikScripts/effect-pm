@@ -1,5 +1,7 @@
 # Store Transport RPC — handoff
 
+**Status: COMPLETED (2026-06-04)** — see [`docs/recipes/architecture-split-and-transports.md`](../recipes/architecture-split-and-transports.md) for current architecture. Module renamed to `storeTransport` (camelCase), uses `RpcServer.Protocol` directly.
+
 ## Branch
 
 ```

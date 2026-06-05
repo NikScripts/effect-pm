@@ -1,10 +1,14 @@
 /**
  * HTTP adapter for the transport-neutral control protocol.
  *
+ * @remarks
+ * Live log streaming (`GET /logs/stream`) was removed from the control HTTP
+ * surface in 0.7.  Use **`logTransport`** on path `/ws/log` instead.
+ *
  * @module ControlTransportHttp
  */
 
-import { Effect, Layer, Option, Schema, Stream } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http";
 import {
   CommandAuth,
@@ -29,12 +33,6 @@ import {
   type ControlTransportServerShape,
 } from "./ControlProtocol";
 import { responseBodyJson } from "./internal/json";
-import { ProcessManagerLogAnnotationKeys } from "./LogContext";
-import {
-  encodeProcessManagerLogEntryNdjson,
-  type ProcessManagerLogEntry,
-} from "./LogEntry";
-import { ProcessManagerLogRelay } from "./internal/manager/logCapture";
 
 /**
  * HTTP transport client configuration.
@@ -76,15 +74,6 @@ interface JsonRequest {
 interface RouteResponse {
   readonly status: number;
   readonly body: unknown;
-}
-
-interface LogStreamQuery {
-  readonly groupId?: string;
-  readonly processId?: string;
-  readonly queueId?: string;
-  readonly from?: number;
-  readonly to?: number;
-  readonly lines?: number;
 }
 
 type HttpRoute =
@@ -325,109 +314,6 @@ const requestFromRestRoute = (
   return { _tag: "NotFound" };
 };
 
-const optionalQueryParam = (
-  url: URL,
-  key: string,
-): string | undefined => {
-  const value = url.searchParams.get(key);
-  return value !== null && value.length > 0 ? value : undefined;
-};
-
-const parseOptionalDateParam = (
-  url: URL,
-  key: string,
-): RouteResponse | number | undefined => {
-  const value = optionalQueryParam(url, key);
-  if (value === undefined) {
-    return undefined;
-  }
-  const millis = Date.parse(value);
-  if (Number.isNaN(millis)) {
-    return {
-      status: 400,
-      body: errorResponse(`Invalid ${key} log query parameter`),
-    };
-  }
-  return millis;
-};
-
-const parseOptionalLinesParam = (url: URL): number | undefined => {
-  const lines = optionalQueryParam(url, "lines");
-  if (lines === undefined) {
-    return undefined;
-  }
-  return Math.max(0, Math.min(500, Number.parseInt(lines, 10) || 0));
-};
-
-const logStreamQueryFromUrl = (
-  url: URL,
-): RouteResponse | LogStreamQuery => {
-  const from = parseOptionalDateParam(url, "from");
-  if (typeof from === "object") {
-    return from;
-  }
-  const to = parseOptionalDateParam(url, "to");
-  if (typeof to === "object") {
-    return to;
-  }
-  if (from !== undefined && to !== undefined && from > to) {
-    return {
-      status: 400,
-      body: errorResponse("Invalid log query range: from must be before to"),
-    };
-  }
-  return {
-    groupId: optionalQueryParam(url, "groupId"),
-    processId: optionalQueryParam(url, "processId"),
-    queueId: optionalQueryParam(url, "queueId"),
-    from,
-    to,
-    lines: parseOptionalLinesParam(url),
-  };
-};
-
-const logEntryMatchesQuery = (
-  entry: ProcessManagerLogEntry,
-  query: LogStreamQuery,
-): boolean => {
-  if (query.groupId !== undefined) {
-    const groupId = entry.annotations[ProcessManagerLogAnnotationKeys.groupId];
-    if (groupId !== undefined && groupId !== query.groupId) {
-      return false;
-    }
-  }
-  if (
-    query.processId !== undefined &&
-    entry.annotations[ProcessManagerLogAnnotationKeys.processId] !== query.processId
-  ) {
-    return false;
-  }
-  if (
-    query.queueId !== undefined &&
-    entry.annotations[ProcessManagerLogAnnotationKeys.queueId] !== query.queueId
-  ) {
-    return false;
-  }
-  const date = Date.parse(entry.date);
-  if (query.from !== undefined && date < query.from) {
-    return false;
-  }
-  if (query.to !== undefined && date > query.to) {
-    return false;
-  }
-  return true;
-};
-
-const filterLogEntries = (
-  entries: ReadonlyArray<ProcessManagerLogEntry>,
-  query: LogStreamQuery,
-): ReadonlyArray<ProcessManagerLogEntry> => {
-  const filtered = entries.filter((entry) => logEntryMatchesQuery(entry, query));
-  return query.lines !== undefined && query.lines < filtered.length
-    ? filtered.slice(filtered.length - query.lines)
-    : filtered;
-};
-
 const decodeEnvelopeResponse = (
   response: HttpClientResponse.HttpClientResponse,
 ): Effect.Effect<ControlProtocolResponseEnvelope, ControlTransportError> =>
@@ -522,56 +408,6 @@ export const makeControlTransportHttpServer = (
               yield* writeJson(res, 200, { status: "ok" });
               return;
             }
-
-            if (req.method === "GET" && url.pathname === "/logs/stream") {
-              const followParam = url.searchParams.get("follow");
-              const follow =
-                followParam === null ||
-                followParam === "true" ||
-                followParam === "1";
-              const logQuery = logStreamQueryFromUrl(url);
-              if ("status" in logQuery) {
-                yield* writeJson(res, logQuery.status, logQuery.body);
-                return;
-              }
-              const relayOption = yield* Effect.serviceOption(ProcessManagerLogRelay);
-              if (Option.isNone(relayOption)) {
-                yield* writeJson(res, 503, errorResponse("Log relay is not available"));
-                return;
-              }
-              const relay = relayOption.value;
-              res.writeHead(200, {
-                "Content-Type": "application/x-ndjson; charset=utf-8",
-                "Cache-Control": "no-cache",
-                Connection: follow ? "keep-alive" : "close",
-              });
-              const snapshot = yield* relay.snapshot;
-              const prelude = filterLogEntries(snapshot, logQuery);
-              for (const entry of prelude) {
-                const line = yield* encodeProcessManagerLogEntryNdjson(entry);
-                res.write(`${line}
-`);
-              }
-              if (!follow) {
-                res.end();
-                return;
-              }
-              yield* relay.stream.pipe(
-                Stream.filter((entry) => logEntryMatchesQuery(entry, logQuery)),
-                Stream.runForEach((entry) =>
-                  Effect.gen(function* () {
-                    const line = yield* encodeProcessManagerLogEntryNdjson(entry);
-                    yield* Effect.sync(() => {
-                      res.write(`${line}
-`);
-                    });
-                  }),
-                ),
-                Effect.ensuring(Effect.sync(() => res.end())),
-              );
-              return;
-            }
-
 
             if (req.method === "POST" && url.pathname === "/control") {
               const envelope = yield* readControlEnvelope(req).pipe(

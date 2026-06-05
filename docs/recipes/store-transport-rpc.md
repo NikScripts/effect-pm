@@ -2,9 +2,10 @@
 
 ## Goal
 
-Build `StoreTransportRpc` — a registry-direct transport for ProcessStore facet
+Build `storeTransport` — a registry-direct transport for ProcessStore facet
 queries. Design mirrors Effect RPC internals (`@effect/rpc`) as closely as
 possible, deviating only where our registry-driven dispatch replaces `RpcGroup`.
+Uses `RpcServer.Protocol` directly (no forked adapter).
 Code quality must meet or exceed this repo's standards.
 
 ## Non-goals
@@ -58,12 +59,10 @@ Code quality must meet or exceed this repo's standards.
 | JSON-RPC 2.0 compat | ❌ Skip |
 | Primary-key client-side dedup | ❌ Skip |
 
-### Protocol abstraction (locked 2026-06-03)
-- `StoreTransportProtocol` — own `Context.Tag` at `"@nikscripts/effect-pm/StoreTransport/Protocol"`, interface mirrors `RpcServer.Protocol` minus `supportsTransferables` and `initialMessage`
-- `layerProtocolFromRpc: Layer<StoreTransportProtocol, never, RpcServer.Protocol>` — adapts any existing `layerProtocol*` to our tag; zero boilerplate for WebSocket / SocketServer consumers
-- Custom protocol (PubNub, Kafka, etc.) implements `Layer<StoreTransportProtocol, never, never>` directly — no `RpcServer.Protocol` dependency needed
-- Three transports (Control, Log, Store) coexist in one runtime on separate connections without `Protocol` tag collision
-- `RpcSerialization` reused directly — stateless parsers, same tag, no wrapper needed
+### Protocol (unified — 2026-06-04)
+- Uses `RpcServer.Protocol` directly (Effect's `@effect/rpc` Context.Tag) — no forked `StoreTransportProtocol` adapter
+- `makeStore` / `layerStore` require `RpcServer.Protocol` from context; compose with any existing `layerProtocol*` (WebSocket, HTTP, SocketServer)
+- Three transports (Control, Log, Store) coexist in one runtime on separate connections without `Protocol` tag collision — each uses its own `RpcServer.Protocol` via `layerProtocolWebsocket({ path })`
 
 ---
 
@@ -89,14 +88,14 @@ Code quality must meet or exceed this repo's standards.
 - Encode/decode lives in `layerRemote` (builder): each method encodes payload via `method.payload` schema before calling `client.query`, decodes result via `method.success` schema — client is pure wire
 - `StoreQueryClient<R>` structurally satisfies any single facet's `layerRemote` constraint — pass one client to all six `layerRemote` calls
 - Client middleware: `StoreClientMiddleware` — `(options: { rpc: { tag, facet, method }, request: StoreRequestEncoded }) => Effect<StoreRequestEncoded>` — applied globally per-call in order; same chain as `RpcClient.getRpcClientMiddleware`
-### Step D: `StoreTransportProtocol` + adapters
+### Step D: Protocol integration (RpcServer.Protocol directly)
 ### Step E: Dashboard bootstrap — locked 2026-06-03
 - `Facet.layerRemote(client)` per facet is the atomic unit — compose only what you use; TypeScript enforces missing layers at the use site, no `serviceOption` anywhere
 - `ProcessStore.registry([...facets])` scopes the client to exactly the facets passed — a single-facet registry produces a single-facet client; unused facet schemas are not carried
 - `ProcessStorage.layerRemote(client)` — convenience combiner of all six `Facet.layerRemote(client)` calls; for dashboards that use everything
 - `makeClient(registry, transport, middlewares?)` accepts full or partial registry; ignores `resolve` (server-only) and reads `payload`/`success` schemas for encode/decode
 - Registry passed to `makeClient` is the same object used server-side — single source of truth, no schema duplication
-- **One transport, all facets** — all `Facet.layerRemote(client)` calls share the same `StoreTransportRpc` client and the same underlying connection; tag routing (`"RunResource/facts"`, `"QueueResource/entries"`) distinguishes facets on the wire; no per-facet connections
+- **One transport, all facets** — all `Facet.layerRemote(client)` calls share the same `storeTransport` client and the same underlying connection; tag routing (`"RunResource/facts"`, `"QueueResource/entries"`) distinguishes facets on the wire; no per-facet connections
 
 ---
 

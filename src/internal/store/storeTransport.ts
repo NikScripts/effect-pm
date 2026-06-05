@@ -13,13 +13,13 @@
 
 import {
   Cause,
-  Context,
   Data,
   Effect,
   Fiber,
   FiberSet,
   Layer,
   Latch,
+  pipe,
   Queue,
   Scope,
   Semaphore,
@@ -27,12 +27,12 @@ import {
   Tracer,
 } from "effect";
 import * as Schema from "effect/Schema";
+import { RpcServer } from "effect/unstable/rpc";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import type { AnyFacetClass, ProcessStoreRegistry } from "./service";
 import { makeProcessStoreSpine } from "./spine";
 import type {
   AckEncoded,
-  ClientEnd,
   ExitEncoded,
   FromClientEncoded,
   FromServerEncoded,
@@ -80,20 +80,20 @@ export class StorageError extends Data.TaggedError("StorageError")<{
 
 /** @public */
 export const StoreErrorSchema = Schema.Union([
-  Schema.instanceOf(UnknownFacet),
-  Schema.instanceOf(UnknownMethod),
-  Schema.instanceOf(PayloadDecodeError),
-  Schema.instanceOf(ResultEncodeError),
-  Schema.instanceOf(StorageError),
+  Schema.TaggedStruct("UnknownFacet", { facet: Schema.String }),
+  Schema.TaggedStruct("UnknownMethod", { facet: Schema.String, method: Schema.String }),
+  Schema.TaggedStruct("PayloadDecodeError", { error: Schema.String }),
+  Schema.TaggedStruct("ResultEncodeError", { error: Schema.String }),
+  Schema.TaggedStruct("StorageError", { cause: Schema.Unknown }),
 ]);
 
 /** @public */
 export type StoreError =
-  | UnknownFacet
-  | UnknownMethod
-  | PayloadDecodeError
-  | ResultEncodeError
-  | StorageError;
+  | { readonly _tag: "UnknownFacet"; readonly facet: string }
+  | { readonly _tag: "UnknownMethod"; readonly facet: string; readonly method: string }
+  | { readonly _tag: "PayloadDecodeError"; readonly error: string }
+  | { readonly _tag: "ResultEncodeError"; readonly error: string }
+  | { readonly _tag: "StorageError"; readonly cause: unknown };
 
 // ============================================================================
 // Middleware
@@ -147,11 +147,12 @@ const encodeCause = (
   if (Cause.hasFails(cause)) {
     const failReason = cause.reasons.find(Cause.isFailReason);
     if (failReason !== undefined) {
-      return failReason.error.pipe(
+      return pipe(
+        failReason.error,
         schemas.encodeError,
         Effect.matchEffect({
           onSuccess: (encoded) => Effect.succeed(encodeExitFail(encoded)),
-          onFailure: () => failReason.error.pipe(encodeDefectSync, encodeExitDie, Effect.succeed),
+          onFailure: () => pipe(failReason.error, encodeDefectSync, encodeExitDie, Effect.succeed),
         }),
       );
     }
@@ -163,29 +164,6 @@ const encodeCause = (
     encodeExitDie(encodeDefectSync(Cause.squash(cause))),
   );
 };
-
-// ============================================================================
-// Protocol service
-// ============================================================================
-
-/** @public */
-export class StoreTransportProtocol extends Context.Service<
-  StoreTransportProtocol,
-  {
-    readonly run: (
-      f: (clientId: number, data: FromClientEncoded) => Effect.Effect<void>,
-    ) => Effect.Effect<never>;
-    readonly disconnects: Queue.Dequeue<number>;
-    readonly send: (
-      clientId: number,
-      response: Exclude<FromServerEncoded, ClientEnd>,
-    ) => Effect.Effect<void>;
-    readonly end: (clientId: number) => Effect.Effect<void>;
-    readonly clientIds: Effect.Effect<ReadonlySet<number>>;
-    readonly supportsAck: boolean;
-    readonly supportsSpanPropagation: boolean;
-  }
->()("@nikscripts/effect-pm/internal/store/storeTransport/StoreTransportProtocol") {}
 
 // ============================================================================
 // Server handle type
@@ -399,7 +377,10 @@ export const makeNoStore = <
           client,
           requestId,
           encodeExitFail(
-            parsed.facet in registry.lookup
+            parsed.facet in registry.lookup ||
+            parsed.facet in registry.forLookup ||
+            parsed.facet in registry.streamLookup ||
+            parsed.facet in registry.forStreamLookup
               ? new UnknownMethod({ facet: parsed.facet, method: parsed.method })
               : new UnknownFacet({ facet: parsed.facet }),
           ),
@@ -610,34 +591,30 @@ export const makeStore = <
     readonly concurrency?: number | "unbounded" | undefined;
     readonly disableFatalDefects?: boolean | undefined;
   },
-): Effect.Effect<
-  never,
-  never,
-  StoreTransportProtocol | RuntimeStorage | Scope.Scope
-> =>
+) =>
   Effect.gen(function* () {
-    const { run, disconnects, send, end, supportsAck, supportsSpanPropagation } =
-      yield* StoreTransportProtocol;
+    const protocol = yield* RpcServer.Protocol;
+    const { run, disconnects, send, end, supportsAck, supportsSpanPropagation } = protocol;
 
     const server = yield* makeNoStore(registry, {
       ...options,
       disableClientAcks: !supportsAck,
       disableSpanPropagation: !supportsSpanPropagation,
       onFromServer: (clientId, response) =>
-        response._tag === "ClientEnd" ? end(response.clientId) : send(clientId, response),
+        response._tag === "ClientEnd"
+          ? end(response.clientId)
+          : send(clientId, response),
     });
 
-    // Handle disconnects in background
     yield* Effect.forkScoped(
       Effect.forever(
-        Queue.take(disconnects).pipe(
-          Effect.flatMap((clientId) => server.disconnect(clientId)),
-        ),
+        Effect.flatMap(Queue.take(disconnects), (clientId) => server.disconnect(clientId)),
       ),
     );
 
     return yield* run((clientId, message) => server.write(clientId, message)).pipe(
       Effect.interruptible,
+      Effect.asVoid,
     );
   });
 
@@ -650,7 +627,7 @@ export const layerStore = <
 ): Layer.Layer<
   never,
   never,
-  StoreTransportProtocol | RuntimeStorage
+  RpcServer.Protocol | RuntimeStorage
 > =>
   Layer.effectDiscard(
     Effect.forkScoped(makeStore(registry, options)),
