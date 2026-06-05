@@ -1,9 +1,5 @@
 import { Data, Effect, Stream } from "effect";
-import { HttpClient } from "effect/unstable/http";
-import {
-  decodeProcessManagerLogEntryNdjson,
-  type ProcessManagerLogEntry,
-} from "../../LogEntry";
+import type { ProcessManagerLogEntry } from "../../LogEntry";
 import { replayLogEntry } from "./logCapture";
 
 /**
@@ -27,67 +23,20 @@ export interface ProcessManagerGroupLogOptions {
   readonly preludeLines?: number;
 }
 
-const joinUrl = (baseUrl: string, path: string): string =>
-  `${baseUrl.replace(/\/+$/, "")}${path}`;
-
-const logStreamUrl = (options: ProcessManagerGroupLogOptions): string => {
-  const url = new URL(joinUrl(options.controlBaseUrl, "/logs/stream"));
-  if (options.follow) {
-    url.searchParams.set("follow", "true");
-  }
-  if (options.preludeLines !== undefined) {
-    url.searchParams.set("lines", String(options.preludeLines));
-  }
-  return url.toString();
-};
-
-const decodeLine = (
-  line: string,
-): Effect.Effect<ProcessManagerLogEntry, ProcessManagerGroupLogError> =>
-  decodeProcessManagerLogEntryNdjson(line).pipe(
-    Effect.mapError(
-      (error) =>
-        new ProcessManagerGroupLogError({
-          reason: `Malformed log entry: ${String(error)}`,
-        }),
-    ),
-  );
-
 /**
- * HTTP NDJSON log stream from a group child control plane.
- *
- * @public
+ * @internal
+ * @deprecated Live log streaming over control HTTP (`GET /logs/stream`) was removed in
+ * 0.7.  Use {@link logTransport} on path `/ws/log` instead.
  */
 export const groupLogEntryStream = (
-  options: ProcessManagerGroupLogOptions,
-): Stream.Stream<
-  ProcessManagerLogEntry,
-  ProcessManagerGroupLogError,
-  HttpClient.HttpClient
-> =>
-  Stream.unwrap(
-    HttpClient.get(logStreamUrl(options)).pipe(
-      Effect.mapError(
-        (error) =>
-          new ProcessManagerGroupLogError({
-            reason: `Log stream request failed: ${String(error)}`,
-          }),
-      ),
-      Effect.map((response) =>
-        response.stream.pipe(
-          Stream.mapError(
-            (error) =>
-              new ProcessManagerGroupLogError({
-                reason: `Log stream body failed: ${String(error)}`,
-              }),
-          ),
-          Stream.decodeText(),
-          Stream.splitLines,
-          Stream.filter((line) => line.trim().length > 0),
-          Stream.mapEffect(decodeLine),
-        ),
-      ),
-    ),
+  _options: ProcessManagerGroupLogOptions,
+): Stream.Stream<ProcessManagerLogEntry, ProcessManagerGroupLogError> =>
+  Stream.fail(
+    new ProcessManagerGroupLogError({
+      reason:
+        "GET /logs/stream was removed from the control HTTP surface. " +
+        "Use the logTransport WebSocket client on /ws/log instead.",
+    }),
   );
 
 /**
@@ -97,5 +46,5 @@ export const groupLogEntryStream = (
  */
 export const streamGroupLogs = (
   options: ProcessManagerGroupLogOptions,
-): Effect.Effect<void, ProcessManagerGroupLogError, HttpClient.HttpClient> =>
+): Effect.Effect<void, ProcessManagerGroupLogError> =>
   groupLogEntryStream(options).pipe(Stream.runForEach((entry) => replayLogEntry(entry)));

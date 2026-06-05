@@ -77,6 +77,8 @@ export interface ControlTransportApi {
   >;
 
   readonly makeClient: typeof makeControlTransportRpcClient;
+  readonly server: typeof makeControlTransportRpcServer;
+  readonly makeServer: typeof makeControlTransportRpcServer;
   readonly rpc: typeof ControlRpc;
   readonly live: typeof ControlTransportRpcLive;
 
@@ -102,6 +104,9 @@ export const controlTransport: ControlTransportApi = {
     ),
 
   makeClient: makeControlTransportRpcClient,
+
+  server: makeControlTransportRpcServer,
+  makeServer: makeControlTransportRpcServer,
 
   rpc: ControlRpc,
 

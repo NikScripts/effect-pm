@@ -76,6 +76,12 @@ export interface LogTransportClientShape {
 /**
  * Public API namespace for the log transport.
  *
+ * @remarks
+ * `serverLayer` returns `Layer<never, never, ...>` (not `Layer<LogTransportServer, ...>`)
+ * because no `LogTransportServer` service tag exists — the log server is purely
+ * side-effect-driven (handlers are registered on the protocol; no downstream Effect
+ * service consumes the server handle).  This is intentional, not a bug.
+ *
  * @public
  */
 export interface LogTransportApi {
@@ -84,6 +90,8 @@ export interface LogTransportApi {
   ) => Layer.Layer<never, never, RpcServer.Protocol | ProcessManagerLogRelay>;
 
   readonly makeClient: typeof makeLogTransportRpcClient;
+  readonly server: typeof makeLogTransportRpcServer;
+  readonly makeServer: typeof makeLogTransportRpcServer;
   readonly rpc: typeof LogRpc;
   readonly live: typeof LogTransportRpcLive;
 
@@ -108,6 +116,9 @@ export const logTransport: LogTransportApi = {
     ),
 
   makeClient: makeLogTransportRpcClient,
+
+  server: makeLogTransportRpcServer,
+  makeServer: makeLogTransportRpcServer,
 
   rpc: LogRpc,
 

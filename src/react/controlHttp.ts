@@ -10,18 +10,11 @@ import { Data, Schema } from "effect";
 import type { ControlResponse } from "../ControlProtocol.js";
 import { ControlResponseSchema } from "../ControlProtocol.js";
 import {
-  ProcessManagerLogEntrySchema,
-  type ProcessManagerLogEntry,
-} from "../LogEntry.js";
-import {
   ProcessGroupContractSchema,
   type ProcessGroupDetails,
   type QueueDetails,
 } from "../ProcessGroup.js";
-import {
-  logFiltersForDashboardTarget,
-  type DashboardTarget,
-} from "./dashboardTarget.js";
+import { type DashboardTarget } from "./dashboardTarget.js";
 import type {
   ControlPlaneLogSession,
   ControlPlaneLogsParams,
@@ -105,17 +98,6 @@ const mergeInit = (
 
 const controlUrl = (options: ControlHttpRequestOptions, path: string): string =>
   `${normalizeBaseUrl(options.baseUrl)}${path.startsWith("/") ? path : `/${path}`}`;
-
-const controlUrlWithParams = (
-  options: ControlHttpRequestOptions,
-  path: string,
-  params: URLSearchParams,
-): string => {
-  const query = params.toString();
-  return query.length === 0
-    ? controlUrl(options, path)
-    : `${controlUrl(options, path)}?${query}`;
-};
 
 const readJson = async (response: Response): Promise<unknown> => {
   const text = await response.text();
@@ -201,109 +183,19 @@ export const controlHttpGetGroupStatus = async (
   return status;
 };
 
-const appendOptionalParam = (
-  params: URLSearchParams,
-  key: string,
-  value: string | undefined,
-): void => {
-  if (value !== undefined) {
-    params.set(key, value);
-  }
-};
-
-const logSearchParams = (
-  params: ControlPlaneLogsParams<DashboardTarget>,
-): URLSearchParams => {
-  const search = new URLSearchParams();
-  const filters = logFiltersForDashboardTarget(params.for);
-  appendOptionalParam(search, "groupId", filters.groupId);
-  appendOptionalParam(search, "processId", filters.processId);
-  appendOptionalParam(search, "queueId", filters.queueId);
-  if (params.lines !== undefined) {
-    search.set("lines", String(params.lines));
-  }
-  if (params.from !== undefined) {
-    search.set("from", params.from.toISOString());
-  }
-  if (params.to !== undefined) {
-    search.set("to", params.to.toISOString());
-  }
-  search.set("follow", params.follow === false ? "false" : "true");
-  return search;
-};
-
-const decodeLogLine = async (
-  line: string,
-): Promise<ProcessManagerLogEntry> => {
-  let json: unknown;
-  try {
-    json = JSON.parse(line);
-  } catch {
-    throw new ControlPlaneRequestError({ reason: "Log stream line is not valid JSON" });
-  }
-  return Schema.decodeUnknownPromise(ProcessManagerLogEntrySchema)(json);
-};
-
-async function* readLogEntries(
-  response: Response,
-): AsyncIterable<ProcessManagerLogEntry> {
-  if (!response.ok) {
-    const body = await readJson(response);
-    const asControl = decodeControlResponseUnknown(body);
-    throw new ControlPlaneRequestError({
-      reason: asControl.error ?? `HTTP ${String(response.status)}`,
-    });
-  }
-  if (response.body === null) {
-    throw new ControlPlaneRequestError({ reason: "Log stream response has no body" });
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffered = "";
-  try {
-    while (true) {
-      const result = await reader.read();
-      buffered += decoder.decode(result.value, { stream: !result.done });
-      const lines = buffered.split("\n");
-      buffered = lines.pop() ?? "";
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.length > 0) {
-          yield await decodeLogLine(trimmed);
-        }
-      }
-      if (result.done) {
-        const trimmed = buffered.trim();
-        if (trimmed.length > 0) {
-          yield await decodeLogLine(trimmed);
-        }
-        return;
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-}
-
-/** @internal */
+/**
+ * @internal
+ * @deprecated Live log streaming over control HTTP (`GET /logs/stream`) was removed in
+ * 0.7.  Use {@link logTransport} on path `/ws/log` instead.  This function now
+ * throws a runtime error to prevent silent 404s.
+ */
 export const controlHttpLogs = (
-  options: ControlHttpRequestOptions,
-  params: ControlPlaneLogsParams<DashboardTarget>,
+  _options: ControlHttpRequestOptions,
+  _params: ControlPlaneLogsParams<DashboardTarget>,
 ): ControlPlaneLogSession => {
-  const controller = new AbortController();
-  const entries = (async function* () {
-    const response = await fetch(
-      controlUrlWithParams(options, "/logs/stream", logSearchParams(params)),
-      mergeInit(options, {
-        method: "GET",
-        signal: controller.signal,
-      }),
-    );
-    yield* readLogEntries(response);
-  })();
-  return {
-    entries,
-    close: () => controller.abort(),
-  };
+  throw new ControlPlaneRequestError({
+    reason:
+      "GET /logs/stream was removed from the control HTTP surface. " +
+      "Use the logTransport WebSocket client on /ws/log instead.",
+  });
 };

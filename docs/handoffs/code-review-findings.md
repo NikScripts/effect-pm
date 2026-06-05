@@ -1,7 +1,15 @@
 # Code review findings — `cursor/transport-protocol-unify`
 
-Reviewed against repo rules (`AGENTS.md`, `public-vs-internal.mdc`). 13 findings total.
+Reviewed against repo rules (`AGENTS.md`, `public-vs-internal.mdc`).
 Multi-agent review: 4 finder angles × parallel verification × sweep pass.
+
+**Round 1** (pre-6.5): 13 findings.
+**Round 2** (post-6.5 / commits `9f5eef2` + `163c37c`): 3 new findings; findings 2, 6, 7 confirmed fixed.
+
+### Fixed by 6.5 commits
+- ~~Finding 2~~ — `forLookup` payload double-wrap ✅
+- ~~Finding 6~~ — `decodeError` always mapping to `PayloadDecodeError` ✅
+- ~~Finding 7~~ — wrong lookup table for `UnknownFacet` vs `UnknownMethod` ✅
 
 ---
 
@@ -202,9 +210,81 @@ timestamp-skew rejections, leaving `ExpiredKey` exclusively for key lifecycle.
 
 ### 13. `predicateIncludesReadonlyTrue` duplicated across adapters — `src/storage/sqlite/codec.ts` + `src/storage/redis/service.ts`
 
+### 13. `predicateIncludesReadonlyTrue` duplicated across adapters — `src/storage/sqlite/codec.ts` + `src/storage/redis/service.ts`
+
 Structurally identical implementations exist in both files. A new predicate variant (e.g.
 `In`) added to one adapter's copy won't automatically cover the other, causing divergent
 readonly-guard behaviour across storage backends.
 
 **Fix:** Extract to a shared helper in `src/internal/store/helpers.ts` and import from
 both adapters.
+
+---
+
+## Round 2 findings — post-6.5 commits (`9f5eef2` + `163c37c`)
+
+---
+
+## CONFIRMED CRITICAL (Round 2)
+
+### 14. Dead `/logs/stream` callers — `src/react/controlHttp.ts:297` and `src/internal/manager/groupLogWatch.ts:34`
+
+`GET /logs/stream` was removed from `ControlTransportHttp` in the 6.5 commit but two
+callers were not updated:
+
+- `src/react/controlHttp.ts` line 297 (`controlHttpLogs`) still builds a `/logs/stream`
+  fetch request and is wired into `createFetchControlPlaneAdapter` via
+  `src/react/adapters/fetch.ts` line 91 (`logs: (params) => controlHttpLogs(...)`).
+- `src/internal/manager/groupLogWatch.ts` line 34 (`groupLogEntryStream`) hits
+  `/logs/stream` on the child control plane for internal group log streaming.
+
+Both receive 404 at runtime with no compile-time signal. The React dashboard log panel
+and the internal group log watcher are silently broken.
+
+**Fix:** Update both callers to use the WebSocket `logTransport` path (`/ws/log`), or
+explicitly mark them as deprecated pending client migration with a runtime warning. Do not
+leave them pointing at a removed endpoint.
+
+---
+
+## MEDIUM (Round 2)
+
+### 15. `ControlTransportApi` and `LogTransportApi` missing `server`/`makeServer` members — `src/controlTransport.ts`, `src/logTransport.ts`
+
+The underlying `ControlTransportRpc` and `LogTransportRpc` modules both export a
+`server`/`makeServer` function for callers who need to construct the server shape manually
+without going through `serverLayer` (e.g. passing an existing protocol instance directly).
+Neither new facade interface exposes this entry point, leaving advanced composition only
+accessible via the lower-level module import.
+
+**Fix:** Add `server: typeof makeControlTransportRpcServer` (and log equivalent) to each
+`*Api` interface and the namespace object, matching the shape already present on
+`ControlTransportRpcApi`.
+
+---
+
+## LOW (Round 2)
+
+### 16. Zero tests for `controlTransport` and `logTransport` public namespaces — `src/controlTransport.ts`, `src/logTransport.ts`
+
+`test/log-transport-rpc.test.ts` covers the underlying `LogTransportRpc` module but not
+the new `logTransport` wrapper. `controlTransport` has no test coverage at all. The
+deleted log-stream tests (`control-plane-fetch.test.ts`, `control-service-contract.test.ts`)
+covered the removed HTTP surface but have no replacement for the new WebSocket path. If
+the `Layer.effect(ControlTransportServer, ...)` wiring in `controlTransport.serverLayer`
+is wrong, it will not surface until integration.
+
+**Fix:** Add at least one round-trip test for each new namespace — `serverLayer` +
+`clientLayer` composed against an in-memory `RpcServer.Protocol` — matching the pattern
+in `test/control-transport-rpc.test.ts`.
+
+---
+
+## Note — intentional asymmetry (not a bug)
+
+`logTransport.serverLayer` returns `Layer<never, never, RpcServer.Protocol | ProcessManagerLogRelay>`
+while `controlTransport.serverLayer` returns `Layer<ControlTransportServer, never, RpcServer.Protocol>`.
+This is correct: no `LogTransportServer` context tag exists because the log server is
+purely side-effect-driven (handlers are registered on the protocol; no downstream Effect
+service consumes the server handle). The asymmetry should be documented on `LogTransportApi`
+to prevent future maintainers from treating it as a bug.
