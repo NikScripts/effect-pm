@@ -208,6 +208,18 @@ export {
   makeLogTransportRpcClient,
   makeLogTransportRpcServer,
 } from "./LogTransportRpc";
+export {
+  logTransport,
+} from "./logTransport";
+export type {
+  LogTransportApi,
+} from "./logTransport";
+export {
+  controlTransport,
+} from "./controlTransport";
+export type {
+  ControlTransportApi,
+} from "./controlTransport";
 export type {
   ControlRouterShape,
   ControlProtocolMetadata,
