@@ -374,7 +374,7 @@ export const makeClient = <
       for (const [method, entry] of Object.entries(methods)) {
         bound[method] = makeEffectMethod(
           facet, method, makeForQueryTag(facet, method),
-          (raw) => makeEncodePayload(entry)({ payload: raw }).pipe(
+          (raw) => makeEncodePayload(entry)(raw).pipe(
             Effect.map((encodedPayload) => ({ id, payload: encodedPayload })),
           ),
           makeDecodeSuccess(entry),

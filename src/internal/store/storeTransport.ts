@@ -19,6 +19,7 @@ import {
   FiberSet,
   Layer,
   Latch,
+  pipe,
   Queue,
   Scope,
   Semaphore,
@@ -79,20 +80,20 @@ export class StorageError extends Data.TaggedError("StorageError")<{
 
 /** @public */
 export const StoreErrorSchema = Schema.Union([
-  Schema.instanceOf(UnknownFacet),
-  Schema.instanceOf(UnknownMethod),
-  Schema.instanceOf(PayloadDecodeError),
-  Schema.instanceOf(ResultEncodeError),
-  Schema.instanceOf(StorageError),
+  Schema.TaggedStruct("UnknownFacet", { facet: Schema.String }),
+  Schema.TaggedStruct("UnknownMethod", { facet: Schema.String, method: Schema.String }),
+  Schema.TaggedStruct("PayloadDecodeError", { error: Schema.String }),
+  Schema.TaggedStruct("ResultEncodeError", { error: Schema.String }),
+  Schema.TaggedStruct("StorageError", { cause: Schema.Unknown }),
 ]);
 
 /** @public */
 export type StoreError =
-  | UnknownFacet
-  | UnknownMethod
-  | PayloadDecodeError
-  | ResultEncodeError
-  | StorageError;
+  | { readonly _tag: "UnknownFacet"; readonly facet: string }
+  | { readonly _tag: "UnknownMethod"; readonly facet: string; readonly method: string }
+  | { readonly _tag: "PayloadDecodeError"; readonly error: string }
+  | { readonly _tag: "ResultEncodeError"; readonly error: string }
+  | { readonly _tag: "StorageError"; readonly cause: unknown };
 
 // ============================================================================
 // Middleware
@@ -146,11 +147,12 @@ const encodeCause = (
   if (Cause.hasFails(cause)) {
     const failReason = cause.reasons.find(Cause.isFailReason);
     if (failReason !== undefined) {
-      return failReason.error.pipe(
+      return pipe(
+        failReason.error,
         schemas.encodeError,
         Effect.matchEffect({
           onSuccess: (encoded) => Effect.succeed(encodeExitFail(encoded)),
-          onFailure: () => failReason.error.pipe(encodeDefectSync, encodeExitDie, Effect.succeed),
+          onFailure: () => pipe(failReason.error, encodeDefectSync, encodeExitDie, Effect.succeed),
         }),
       );
     }
@@ -375,7 +377,10 @@ export const makeNoStore = <
           client,
           requestId,
           encodeExitFail(
-            parsed.facet in registry.lookup
+            parsed.facet in registry.lookup ||
+            parsed.facet in registry.forLookup ||
+            parsed.facet in registry.streamLookup ||
+            parsed.facet in registry.forStreamLookup
               ? new UnknownMethod({ facet: parsed.facet, method: parsed.method })
               : new UnknownFacet({ facet: parsed.facet }),
           ),
