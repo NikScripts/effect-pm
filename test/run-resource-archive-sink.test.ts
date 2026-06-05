@@ -2,17 +2,17 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Option } from "effect";
 import { RuntimeStorage } from "../src/RuntimeStorage";
 import { layer } from "../src/TelemetryHub";
-import { archiveLegs } from "../src/store/runResource/archive";
+import { archiveLegs } from "../src/store/RunResourceStore";
 import {
   runResourcePersistLayer,
   RunResourceStore,
   type RunResourceStateChangedInput,
-} from "../src/store/runResource";
+} from "../src/store/RunResource";
 import { processStorageWithRunResourceArchiveLayer } from "../src/ProcessStorage";
 import {
   RunResourceHubTelemetry,
   STATE_CHANGED_WIRE,
-} from "../src/store/runResource/telemetry";
+} from "../src/store/RunResourceTelemetry";
 
 const sampleStateChanged = (
   resourceId: string,

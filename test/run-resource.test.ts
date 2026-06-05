@@ -3,7 +3,7 @@ import { Effect, Ref } from "effect";
 import { RunResource } from "../src/RunResource";
 import { layer as hubLayer } from "../src/TelemetryHub";
 import { processStorageWithRunResourceArchiveLayer } from "../src/ProcessStorage";
-import { RunResourceStore } from "../src/store/runResource";
+import { RunResourceStore } from "../src/store/RunResource";
 
 const runResourceObservationLayer = processStorageWithRunResourceArchiveLayer;
 

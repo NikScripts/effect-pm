@@ -88,11 +88,11 @@ full tree can follow plan 17 incrementally.
 - Domain folder (can land incrementally):
 
 ```text
-src/store/runResource/
-  telemetry.ts    # SSoT: State.Changed (+ Run.* as needed)
-  archive.ts      # RunResourceStore — queries only, no telemetry section in builder
-  projection.ts   # stub for 6.3
-  index.ts        # RunResource namespace export
+src/store/
+  RunResource.ts              # subpath entry + RunResourceCompose
+  RunResourceStore.ts         # archive facet — queries only
+  RunResourceTelemetry.ts     # hub telemetry SSoT
+src/RunResourceProjection.ts  # live projection service
 ```
 
 - `ArchiveSink.forStore(RunResourceStore)` — encoder **derived from event def**,

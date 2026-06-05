@@ -32,7 +32,7 @@ import type { ProcessExecutionStore } from "../../store/processExecution";
 import type { ProcessGroupStore } from "../../store/processGroup";
 import type { ProcessLifecycleStore } from "../../store/processLifecycle";
 import type { QueueResourceStore } from "../../store/queueResource";
-import type { RunResourceStore } from "../../store/runResource";
+import type { RunResourceStore } from "../../store/RunResource";
 import { RuntimeStorage } from "../../RuntimeStorage";
 import type { RuntimeStorageService } from "../../RuntimeStorage";
 import type { RedisRuntimeStorageConfig } from "./public-types";

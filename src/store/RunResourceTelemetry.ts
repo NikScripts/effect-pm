@@ -1,7 +1,7 @@
 /**
  * RunResource hub telemetry — SSoT for wire ids, schemas, and emit helpers.
  *
- * @module store/runResource/telemetry
+ * @module store/RunResourceTelemetry
  */
 
 import { Effect, Schema } from "effect";
@@ -10,7 +10,7 @@ import {
   emit,
   telemetryWireId,
   type TelemetryEventDefinition,
-} from "../../TelemetryHub";
+} from "../TelemetryHub";
 
 /** @public */
 export const RUN_RESOURCE_PROCESS_TYPE = "RunResource" as const;
@@ -172,8 +172,8 @@ export const StateChanged: TelemetryEventDefinition<
   schema: RunResourceStateChangedInputSchema,
 });
 
-type HubError = import("../../TelemetryHub").TelemetryHubError;
-type Hub = import("../../TelemetryHub").TelemetryHub;
+type HubError = import("../TelemetryHub").TelemetryHubError;
+type Hub = import("../TelemetryHub").TelemetryHub;
 
 /** @public */
 export const runStarted = (

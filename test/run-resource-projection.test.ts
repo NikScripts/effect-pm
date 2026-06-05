@@ -2,14 +2,14 @@ import { describe, expect, it } from "@effect/vitest";
 import { Deferred, Effect, Fiber, Layer, Option, Stream } from "effect";
 import { BroadcastSink, TelemetryBroadcast } from "../src/sink/BroadcastSink";
 import { TelemetryHub } from "../src/TelemetryHub";
-import { RunResourceCompose } from "../src/store/runResource";
+import { RunResourceCompose } from "../src/store/RunResource";
 import { RuntimeStorage } from "../src/RuntimeStorage";
 import {
   RunResourceProjection,
   RunResourceStore,
   type RunResourceStateChangedInput,
-} from "../src/store/runResource";
-import { RunResourceHubTelemetry, STATE_CHANGED_WIRE } from "../src/store/runResource/telemetry";
+} from "../src/store/RunResource";
+import { RunResourceHubTelemetry, STATE_CHANGED_WIRE } from "../src/store/RunResourceTelemetry";
 import type { TelemetryHubEmitted } from "../src/TelemetryHub";
 
 const sampleStateChanged = (

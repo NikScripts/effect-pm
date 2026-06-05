@@ -10,70 +10,62 @@ alwaysApply: true
 - **Public:** Symbols apps import — `@nikscripts/effect-pm`, a documented subpath, or a bin entry.
 - **Internal (`src/internal/`):** Package-only wiring — not composed by apps, not exported.
 
-## Organize by role first, domain second
+## Role folders only — no domain subfolders
 
-Use **role folders** for cross-cutting kinds. Use **domain subfolders** inside `store/` for
-Telemetry / Archive / Projection co-location (slice 6.7 target).
+Folders are **role suffixes** (`store/`, `transport/`, `sink/`, `state/`, `storage/`).
+Do **not** create domain directories such as `store/runResource/` or `store/QueueResource/`.
+
+Public modules inside a role folder use **PascalCase filenames** matching the primary export
+(class, namespace, or subpath entry). Split large modules into sibling PascalCase files in the
+same role folder — never nest by domain.
+
+When a symbol moves, **update every import**. No legacy shims or re-export stubs.
 
 | Role | Path | Subpath | Examples |
 |------|------|---------|----------|
-| **Worker / orchestration** | `src/<PascalCase>.ts` | `@nikscripts/effect-pm/<Name>` | `Process`, `QueueResource`, `RunResource`, `ProcessGroup` |
-| **Hub router** | `src/TelemetryHub.ts` | `TelemetryHub` | Global fan-out; facets emit here, hub never imports facets |
-| **Hub sinks** | `src/sink/<Name>.ts` | `sink/<Name>` | `ArchiveSink`, `ProjectionSink`, `BroadcastSink` |
-| **Archive facet** | `src/store/<domain>.ts` or `src/store/<domain>/archive.ts` | `store/<Domain>` | `RunResourceStore`, `LogStore` — `*Store` suffix |
-| **Domain telemetry** | `src/store/<domain>/telemetry.ts` | via `store/<Domain>` re-export | Event defs + typed emitters (SSoT for wire + schema) |
-| **Domain projection stub** | `src/store/<domain>/projection.ts` | via `store/<Domain>` re-export | Re-exports only; see live projection row |
-| **Live projection service** | `src/<Domain>Projection.ts` | `<Domain>Projection` | e.g. `RunResourceProjection` — top-level when subpath = service tag |
-| **Transport** | `src/<camelCase>Transport.ts` → `src/transport/` | same as filename | `telemetryTransport`, future `storeTransport` |
-| **Archive compose** | `src/ProcessStorage.ts` | `ProcessStorage` | Merges archive facet layers only (rename → `ProcessArchive` later) |
+| **Worker / orchestration** | `src/<PascalCase>.ts` | `@nikscripts/effect-pm/<Name>` | `Process`, `QueueResource`, `RunResource` |
+| **Hub router** | `src/TelemetryHub.ts` | `TelemetryHub` | Global fan-out |
+| **Hub sinks** | `src/sink/<Name>.ts` | `sink/<Name>` | `ArchiveSink`, `ProjectionSink` |
+| **Store facet entry** | `src/store/<Domain>.ts` | `store/<Domain>` | `RunResource.ts` — namespace + compose |
+| **Store facet modules** | `src/store/<Domain><Role>.ts` | via `store/<Domain>` | `RunResourceStore.ts`, `RunResourceTelemetry.ts` |
+| **Live projection** | `src/<Domain>Projection.ts` | `<Domain>Projection` | `RunResourceProjection.ts` |
+| **Transport** | `src/<camelCase>Transport.ts` → `src/transport/` | same as filename | `logTransport`, `storeTransport` |
+| **Archive compose** | `src/ProcessStorage.ts` | `ProcessStorage` | Merges archive facet layers |
 | **Storage adapter** | `src/storage/<backend>/` | `storage/<backend>` | sqlite, redis, prisma |
-| **Control / logs** | `src/Control*.ts`, `src/Logs.ts` | matching subpaths | Localhost control API, log relay |
-| **UI** | `src/react/`, `src/ops-ui/` | `react`, `ops-ui` | No runtime imports from React into core workers |
-| **Internal** | `src/internal/` | *(none)* | `store/spine`, `manager/*`, hub dispatch |
+| **Internal** | `src/internal/` | *(none)* | spine, manager, hub dispatch |
 
 **Worker ≠ store:** `@nikscripts/effect-pm/QueueResource` is the queue worker;
 `@nikscripts/effect-pm/store/QueueResource` is the archive facet.
 
-**Subpath ≠ filepath:** import path is the contract; file may differ (e.g. `store/RunResource`
-→ `store/runResource.ts` or `store/runResource/index.ts`).
-
-**Shims during migration:** old top-level paths (e.g. `ArchiveSink.ts`) may re-export from
-the canonical role folder until a breaking release.
+**Subpath ≠ filename:** import path is the contract (`store/RunResource`); files are
+`store/RunResource.ts`, `store/RunResourceStore.ts`, etc.
 
 ## Storage facets → `src/store/`
 
-| File (either naming style) | Subpath | Service tag |
-|----------------------------|---------|-------------|
-| `src/store/queueResource.ts` | `store/QueueResource` | `QueueResourceStore` |
-| `src/store/log.ts` | `store/Log` | `LogStore` |
-| `src/store/runResource.ts` | `store/RunResource` | `RunResourceStore` |
-| `src/store/processExecution.ts` | `store/ProcessExecution` | `ProcessExecutionStore` |
-| `src/store/processLifecycle.ts` | `store/ProcessLifecycle` | `ProcessLifecycleStore` |
-| `src/store/processGroup.ts` | `store/ProcessGroup` | `ProcessGroupStore` |
+| Files | Subpath | Service tag |
+|-------|---------|-------------|
+| `RunResource.ts`, `RunResourceStore.ts`, `RunResourceTelemetry.ts` | `store/RunResource` | `RunResourceStore` |
+| `queueResource.ts` (migrate to PascalCase siblings) | `store/QueueResource` | `QueueResourceStore` |
+| `log.ts` (migrate) | `store/Log` | `LogStore` |
+| `processExecution.ts` (migrate) | `store/ProcessExecution` | `ProcessExecutionStore` |
+| `processLifecycle.ts` (migrate) | `store/ProcessLifecycle` | `ProcessLifecycleStore` |
+| `processGroup.ts` (migrate) | `store/ProcessGroup` | `ProcessGroupStore` |
 
-**File naming:** full service name (`QueueResourceStore.ts`) **or** camelCase domain
-(`queueResource.ts`) — pick one style per facet; do not invent other names.
-
-**`internal/store/`** — `spine.ts`, `service.ts`, `helpers.ts`. Type-agnostic plumbing only.
-No per-facet codecs, no facet tags.
+**`internal/store/`** — type-agnostic plumbing only. Per-facet codecs live in `src/store/`.
 
 ## Layer exports
 
-Layers live on the **namespace or class** that owns the service — not as loose PascalCase
-globals.
+Layers live on the namespace or class that owns the service.
 
-| Pattern | Example | Meaning |
-|---------|---------|---------|
-| **`.layer`** | `TelemetryHub.layer`, `BroadcastSink.layer`, `RuntimeStorage.layer` | Default compose entrypoint |
-| **Qualified camelCase** | `RunResourceProjection.layerLive`, `RunResourceCompose.layerPersist` | Variants when default is not enough |
-| **Deprecated aliases** | `RunResourceProjectionLiveLayer`, `baseLayer` | OK short-term; prefer namespace form in new code |
+| Pattern | Example |
+|---------|---------|
+| **`.layer`** | `TelemetryHub.layer`, `RuntimeStorage.layer` |
+| **Qualified** | `RunResourceCompose.layerPersist`, `RunResourceProjection.layerLive` |
 
 ## When adding code
 
-1. App composes archive facet? → **`src/store/<domain>`** + **`store/<Domain>`** subpath.
-2. Hub optional leg (persist / projection / broadcast)? → **`src/sink/`** + **`sink/<Name>`**.
-3. Live projection service? → top-level **`<Domain>Projection.ts`** if subpath matches tag;
-   domain folder holds re-exports + reducers wired via `ProjectionSink`.
-4. Remote wire surface? → **camelCase transport module**; schemas on every message.
-5. Shared spine / manager / hub dispatch? → **`src/internal/`**; no subpath.
-6. CLI-only? → **`src/internal/`** or **`src/bin/`**; no subpath unless bin entry.
+1. Archive facet? → **`src/store/<PascalCase>.ts`** (+ siblings if split) + **`store/<Domain>`** subpath.
+2. Hub sink? → **`src/sink/`** + **`sink/<Name>`**.
+3. Live projection? → **`src/<Domain>Projection.ts`** when subpath matches tag.
+4. Transport wire? → transport role folder / camelCase facade module.
+5. Package-only wiring? → **`src/internal/`** — no subpath.

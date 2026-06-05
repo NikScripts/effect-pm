@@ -514,7 +514,7 @@ export {
   RunResourceProjectionSinkLayer,
   runResourcePersistLayer,
   RunResourceStore,
-} from "./store/runResource";
+} from "./store/RunResource";
 export { processStorageWithRunResourceArchiveLayer } from "./ProcessStorage";
 export { ProcessExecutionStore } from "./store/processExecution";
 export { ProcessLifecycleStore } from "./store/processLifecycle";
@@ -586,7 +586,7 @@ export type {
   RunResourceStateChangeReason,
   RunResourceStateHistoryQuery,
   RunResourceProjectionService,
-} from "./store/runResource";
+} from "./store/RunResource";
 
 // Types - ProcessGroup
 export type {

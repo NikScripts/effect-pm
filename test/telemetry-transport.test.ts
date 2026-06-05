@@ -6,7 +6,7 @@ import {
   STATE_CHANGED_WIRE,
   RunResourceHubTelemetry,
   type RunResourceStateChangedInput,
-} from "../src/store/runResource/telemetry";
+} from "../src/store/RunResourceTelemetry";
 import {
   TelemetryRpc,
   telemetryTransport,

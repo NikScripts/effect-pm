@@ -27,7 +27,7 @@ Verify: `pnpm typecheck && pnpm test && pnpm lint && pnpm build`
 
 | Tag | Subpath | File |
 |-----|---------|------|
-| `RunResourceStore` | `store/RunResource` | `src/store/runResource.ts` |
+| `RunResourceStore` | `store/RunResource` | `src/store/RunResource.ts`, `RunResourceStore.ts`, `RunResourceTelemetry.ts` |
 | `QueueResourceStore` | `store/QueueResource` | `src/store/queueResource.ts` |
 | `LogStore` | `store/Log` | `src/store/log.ts` |
 | `ProcessLifecycleStore` | `store/ProcessLifecycle` | `src/store/processLifecycle.ts` |
@@ -108,7 +108,7 @@ Effect.provide(program, layerProcessStore({ filename: ".effect-pm/data.sqlite" }
 
 ## Authoring a facet (`ProcessStore.Service`)
 
-Template: `src/store/runResource.ts`, tests: `test/run-resource-store-facet.test.ts`.
+Template: `src/store/RunResourceStore.ts`, tests: `test/run-resource-store-facet.test.ts`.
 
 A facet is declared with sections passed to `ProcessStore.Service<Self>()(id, ...sections)`:
 
@@ -191,7 +191,7 @@ yield* queue.entriesByKey("user-42"); // queueId still baked in
 yield* queue.dedupeKeys();            // queueId still baked in
 ```
 
-Accepts either a raw string id or `{ id }`. Implement the section by **delegating to private read helpers** that the `ProcessStore.query` section also calls — that way the bound and unbound shapes share a single code path. See `src/store/queueResource.ts` and `src/store/runResource.ts`.
+Accepts either a raw string id or `{ id }`. Implement the section by **delegating to private read helpers** that the `ProcessStore.query` section also calls — that way the bound and unbound shapes share a single code path. See `src/store/queueResource.ts` and `src/store/RunResourceStore.ts`.
 
 Built-in `ProcessStore.for` facets (subpath → bound id):
 

@@ -107,8 +107,7 @@ Lock architecture decisions that block the first implementation slices:
   `Projection.layer`.
 - **Ordering: eventual default** — concurrent hub fan-out; projection/broadcast may lead
   persist; strong ordering deferred.
-- **Domain folder co-location** — `telemetry.ts` / `archive.ts` / `projection.ts` per
-  domain under e.g. `src/store/queueResource/`; subpaths stay granular.
+- **Domain modules flat under role folders** — e.g. `RunResourceStore.ts`, `RunResourceTelemetry.ts` under `src/store/`; subpaths stay granular (`store/RunResource`).
 - **Archive builder** — queries only (telemetry section removed from facet builder).
 - **Projection runtime** — no archive reference; hydrate is composition-only.
 

@@ -15,8 +15,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/QueueResource.ts` | Priority queue resource factory. |
 | `src/ResourceConfigure.ts` | Layer-composed `.configure` patches for queue/process/run services. |
 | `src/ProcessStore.ts`, `src/ProcessStorage.ts`, `src/ProcessStoreEvent.ts` | Storage facet builder, combined facet layers, and shared event types. |
-| `src/store/*.ts` | Storage facets → `@nikscripts/effect-pm/store/*` |
-| `src/store/<domain>/` | Domain co-location: `telemetry.ts`, `archive.ts`, `projection.ts` (re-exports) |
+| `src/store/*.ts` | Storage facets → `@nikscripts/effect-pm/store/*` (PascalCase files flat under `store/`; no domain subfolders) |
 | `src/sink/` | TelemetryHub sink legs → `@nikscripts/effect-pm/sink/*` |
 | `src/TelemetryHub.ts` | Global telemetry router → `@nikscripts/effect-pm/TelemetryHub` |
 | `src/*Projection.ts`, `src/*Transport.ts` | Live projection + semantic transports (camelCase transport filenames) |

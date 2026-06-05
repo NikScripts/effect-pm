@@ -106,7 +106,7 @@ import {
   foldConfiguredSpec,
   type ConfigPatch,
 } from "./ResourceConfigure";
-import { RunResourceHubTelemetry } from "./store/runResource/telemetry";
+import { RunResourceHubTelemetry } from "./store/RunResourceTelemetry";
 import type { TelemetryHubError } from "./TelemetryHub";
 import type {
   RunResourceFact,
@@ -120,7 +120,7 @@ import type {
   RunResourceState,
   RunResourceStateChange,
   RunResourceStateChangeReason,
-} from "./store/runResource";
+} from "./store/RunResource";
 
 // ============================================================================
 // Public Types

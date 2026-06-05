@@ -11,7 +11,7 @@ import {
   RunResourceHubTelemetry,
   STATE_CHANGED_WIRE,
   type RunResourceStateChangedInput,
-} from "../src/store/runResource/telemetry";
+} from "../src/store/RunResourceTelemetry";
 
 const sampleState = {
   resourceId: "@app/Gate",

@@ -3,15 +3,15 @@
  * gated run (started / completed / failed) plus state-machine snapshots.
  *
  * @remarks
- * Telemetry emits live in {@link ./telemetry | runResource/telemetry} and
- * persist optionally through {@link ArchiveSink}. This module owns row codecs
- * (decode), queries, and {@link RunResourceStore}.
+ * Telemetry emits live in {@link RunResourceTelemetry} and persist optionally
+ * through {@link ArchiveSink}. This module owns row codecs (decode), queries,
+ * and {@link RunResourceStore}.
  *
- * @module store/runResource/archive
+ * @module store/RunResourceStore
  */
 
 import { DateTime, Effect, Option, Schema } from "effect";
-import { ArchiveSink } from "../../sink/ArchiveSink";
+import { ArchiveSink } from "../sink/ArchiveSink";
 import {
   filterMapNullable,
   nullable,
@@ -19,7 +19,7 @@ import {
   recordValue,
   stringValue,
   valueWhen,
-} from "../../internal/store/decode";
+} from "../internal/store/decode";
 import {
   applyQueryOpts,
   byTimestampDesc,
@@ -27,12 +27,12 @@ import {
   recordAttributesObject,
   runtimeRecordQuery,
   windowOpts,
-} from "../../internal/store/helpers";
-import type { ProcessStoreSpine } from "../../internal/store/spine";
-import { ProcessStore } from "../../ProcessStore";
-import type { QueryOpts } from "../../ProcessStoreEvent";
-import { ProcessId, Type } from "../../Query";
-import type { RuntimeRecord, RuntimeStorageOperationalError } from "../../RuntimeStorage";
+} from "../internal/store/helpers";
+import type { ProcessStoreSpine } from "../internal/store/spine";
+import { ProcessStore } from "../ProcessStore";
+import type { QueryOpts } from "../ProcessStoreEvent";
+import { ProcessId, Type } from "../Query";
+import type { RuntimeRecord, RuntimeStorageOperationalError } from "../RuntimeStorage";
 import {
   RUN_COMPLETED_WIRE,
   RUN_FAILED_WIRE,
@@ -50,7 +50,7 @@ import {
   type RunResourceState,
   type RunResourceStateChangeReason,
   type RunResourceStateChangedInput,
-} from "./telemetry";
+} from "./RunResourceTelemetry";
 
 // ============================================================================
 // Public types
@@ -81,7 +81,7 @@ export type RunResourceFactType =
  *
  * @public
  */
-export type { RunResourceStateChangeReason } from "./telemetry";
+export type { RunResourceStateChangeReason } from "./RunResourceTelemetry";
 
 /** @public */
 export interface RunResourceRunStartedPayload {
@@ -147,7 +147,7 @@ export type RunResourceFact =
  *
  * @public
  */
-export type { RunResourceState } from "./telemetry";
+export type { RunResourceState } from "./RunResourceTelemetry";
 
 /**
  * State transition recorded for a {@link RunResource} gate.
@@ -611,7 +611,7 @@ const pairRuns = (facts: ReadonlyArray<RunResourceFact>): RunResourceRun[] => {
 
 const factPredicates = (
   query: RunResourceFactQuery | undefined,
-): import("../../Query").RuntimeRecordPredicate[] => [
+): import("../Query").RuntimeRecordPredicate[] => [
     Type.in(factRecordTypes),
     ...(query?.resourceId === undefined
       ? []
@@ -620,7 +620,7 @@ const factPredicates = (
 
 const stateChangedPredicates = (
   resourceId: string | undefined,
-): import("../../Query").RuntimeRecordPredicate[] => [
+): import("../Query").RuntimeRecordPredicate[] => [
     Type.in(stateRecordTypes),
     ...(resourceId === undefined ? [] : [ProcessId.equals(resourceId)]),
   ];
@@ -776,7 +776,7 @@ const RunResourceLatestStateOutputSchema = Schema.Option(RunResourceStateOutputS
 // ============================================================================
 
 export class RunResourceStore extends ProcessStore.Service<RunResourceStore>()(
-  "@nikscripts/effect-pm/store/runResource/RunResourceStore",
+  "@nikscripts/effect-pm/store/RunResource/RunResourceStore",
   "RunResource",
   ProcessStore.query({
     facts: ProcessStore

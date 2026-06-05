@@ -17,11 +17,11 @@ import type { RuntimeStorageOperationalError } from "./RuntimeStorage";
 import {
   RunResourceStore,
   type RunResourceState,
-} from "./store/runResource/archive";
+} from "./store/RunResourceStore";
 import {
   StateChanged,
   type RunResourceStateChangedInput,
-} from "./store/runResource/telemetry";
+} from "./store/RunResourceTelemetry";
 
 /** Live projection API for RunResource gate snapshots. @public */
 export interface RunResourceProjectionService {

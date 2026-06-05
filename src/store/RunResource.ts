@@ -1,7 +1,7 @@
 /**
- * RunResource domain namespace — telemetry, archive, and projection co-location.
+ * RunResource storage facet — telemetry, archive, and projection exports.
  *
- * @module store/runResource
+ * @module store/RunResource
  */
 
 export {
@@ -27,7 +27,7 @@ export {
   type RunResourceStateChange,
   type RunResourceStateChangeReason,
   type RunResourceStateHistoryQuery,
-} from "./archive";
+} from "./RunResourceStore";
 
 export {
   RunResourceHubTelemetry,
@@ -54,18 +54,18 @@ export {
   type RunResourceRunFailedInput,
   type RunResourceRunStartedInput,
   type RunResourceStateChangedInput,
-} from "./telemetry";
+} from "./RunResourceTelemetry";
 
 export {
   RunResourceProjection,
   type RunResourceProjectionService,
-} from "./projection";
+} from "../RunResourceProjection";
 
 import { Layer } from "effect";
-import { ArchiveSink } from "../../sink/ArchiveSink";
-import { RuntimeStorage } from "../../RuntimeStorage";
-import { archiveLegs, RunResourceStore } from "./archive";
-import { RunResourceProjection } from "./projection";
+import { ArchiveSink } from "../sink/ArchiveSink";
+import { RuntimeStorage } from "../RuntimeStorage";
+import { archiveLegs, RunResourceStore } from "./RunResourceStore";
+import { RunResourceProjection } from "../RunResourceProjection";
 
 /** RunResource hub compose helpers. @public */
 export namespace RunResourceCompose {

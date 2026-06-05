@@ -13,7 +13,7 @@ import {
   runResourcePersistLayer,
   RunResourceStore,
   RunResourceHubTelemetry,
-} from "../src/store/runResource";
+} from "../src/store/RunResource";
 import type {
   RunResourceFact,
   RunResourceRunCompletedFact,
@@ -21,7 +21,7 @@ import type {
   RunResourceRunStartedFact,
   RunResourceState,
   RunResourceStateChange,
-} from "../src/store/runResource";
+} from "../src/store/RunResource";
 
 const persistLayer = runResourcePersistLayer;
 

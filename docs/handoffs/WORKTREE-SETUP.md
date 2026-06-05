@@ -58,7 +58,7 @@ git checkout rewrite/store-transport
 | Hub (`effect-pm-alt`) | Transport (`effect-pm-alt-transport`) |
 | --- | --- |
 | `TelemetryHub`, `sink/*`, `RunResourceProjection`, `telemetryTransport` | `storeTransport` Protocol unify |
-| `src/store/runResource/**` | `ControlTransportHttp` (remove `/logs/stream`) |
+| `src/store/RunResource*.ts`, `RunResourceProjection.ts` | Transport unify (no overlap) |
 | `/ws/telemetry` | `logTransport`, `controlTransport`, `terminalTransport` |
 
 **Shared merge conflicts:** `package.json`, `tsup.config.ts`, `src/index.ts`, `ProcessStorage.ts`.
