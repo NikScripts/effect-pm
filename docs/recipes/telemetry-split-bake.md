@@ -398,6 +398,71 @@ QueueResourceTelemetry.Entry.processEntry(
 
 ---
 
+### Calling API — scope builder (agreed Jun 2026)
+
+**Leading call shape:** operation input first, scope via chained provider (names TBD — `provideLeaf` / `provideRoot` preferred over `setLeaf`):
+
+```ts
+const processEntry = (entry: FullEntry) =>
+  pipe(
+    QueueResourceTelemetry.Entry.processEntry({ name: entry.name })
+      .provideLeaf({ entryId: entry.id, attempts: entry.attempts }),
+    Effect.flatMap((ctx) =>
+      Effect.gen(function* () {
+        yield* ctx.telemetry.Retried;
+        return yield* processItem(entry);
+      }),
+    ),
+  );
+```
+
+`processEntry(input)` returns a **builder** when the tag declares scope; **not** an `Effect` until scope obligation is satisfied.
+
+#### Three operation kinds
+
+| Kind | Scope on tag | Call shape |
+| --- | --- | --- |
+| **Scope-required** | Leaf and/or root declared | `op(input).provideLeaf(…)` / `.provideRoot(…)` / `.assumingLeaf()` / `.assumingRoot()` → `Effect` |
+| **Scope-inheriting** | No scope child (nested under scoped parent) | `op` or `op(input)` → `Effect`; may read inherited context for events |
+| **Scope-free** | No scope child (top-level) | `op(input)` → `Effect` immediately; no provider chain |
+
+Exit-only nested ops (e.g. `rateLimit`) — scope-inheriting; no `provideLeaf`.
+
+#### Satisfying scope on the builder (no type error)
+
+Builder must complete via **one** of:
+
+- **`provideLeaf(leaf)`** — explicit `QueueEntryScope.Leaf` (typed from tag)
+- **`provideRoot(root)`** — when root not ambient; may chain before `provideLeaf`
+- **`assumingLeaf()` / `assumingRoot()`** — scope already in `R` (process bracketed via `Scope.run` / lifetime layer)
+
+**Type error** only when: tag declares scope, scope is **not** ambient, and builder never completes with one of the above → cannot obtain `Effect`.
+
+**Not** satisfied by: mid-op `patch` / nested scope alone (those run **after** scope is established).
+
+#### Process vs telemetry scope setup
+
+- Kernel may establish scope **before** the op (`QueueEntryScope.run` + `.assumingLeaf()`) — process owns values; telemetry documents via `assuming*`.
+- Or telemetry builder **`provideLeaf`** when kernel passes values at op boundary.
+- Operation input remains **separate** — never auto-merged into scope.
+
+#### Mid-operation scope changes (after initial obligation met)
+
+| Need | Mechanism |
+| --- | --- |
+| Patch fields on current leaf | `Scope.patch` (process) — TBD on `State.Scope` |
+| Telemetry-only hidden fields | Layer reducers on emit — not kernel patch |
+| New sub-context | Nested `Scope.run` / nested op — not parent patch |
+| Values unknown at op entry | Split ops, defer start emit, or process bracket before op — **not** “builder completes without scope” |
+
+#### Root vs leaf on builder
+
+- Tag declares **leaf** → typically `provideLeaf`; root ambient from queue lifetime unless `.provideRoot({ queueId })`.
+- Tag declares **root** only (e.g. lifecycle) → `provideRoot`.
+- **`provideRoot` before `provideLeaf`** when both explicit.
+
+---
+
 ### `Telemetry.Service` (implementation API sketch)
 
 Tag alone is not enough — skeleton is used to build the facet **and** the wiring API.
@@ -442,19 +507,18 @@ Plan 18 patterns: lifetime **A** (root on factory), **B** (leaf provide on unit)
 
 ---
 
-### Scope opening strategies (to explore next)
+### Scope opening strategies (reference — superseded by agreed builder rules above)
 
-Operations declare a scope (usually **leaf**, sometimes **root**). Calling API must align without duplicate `Scope.run` wrappers or awkward two-arg calls.
+See **Calling API — scope builder (agreed Jun 2026)** for locked rules. Remaining open: exact names, `.assuming*` vs ambient inference, `Scope.patch` API on `State.Scope`.
 
-| Strategy | Idea | When |
-| --- | --- | --- |
-| **Leaf provide inside op** | `processEntry(input)` calls `QueueEntryScope.run(leaf, …)` internally; leaf values from ??? | Entry-scoped ops; parent root already in context from worker lifetime |
-| **Root provide inside op** | Operation opens `QueueResourceScope` (+ maybe leaf) | Op owns full bracket |
-| **Require ambient scope** | `processEntry(input)` assumes scope already in context from kernel lifetime; only adds op input + start/exit | Worker already under `QueueResourceScope` |
-| **Scope values in operation input** | ❌ rejected as conflating input + scope | — |
-| **Separate scope arg** | ❌ rejected by owner | — |
-
-Open: for Queue `processEntry`, where do `entryId` / `attempts` enter scope — kernel before call, operation opener from kernel's `entry`, or worker lifetime + entry leaf only inside op?
+| Strategy | Status |
+| --- | --- |
+| Builder `provideLeaf` / `provideRoot` | **Agreed** leading shape |
+| `assumingLeaf` / `assumingRoot` | **Agreed** when process already bracketed |
+| Ambient root + explicit leaf on builder | **Agreed** default for Queue `processEntry` |
+| Separate two-arg `(leaf, input)` | Rejected |
+| Outer `Scope.run` + op only | OK as **process** bracket + `.assumingLeaf()` |
+| Mid-op scope without initial obligation | Rejected |
 
 ---
 
@@ -474,15 +538,15 @@ skeleton only. Everything below is open.
 
 ### B. Operations API (calling)
 
-- [ ] Confirm `pipe(processEntry(input), Effect.flatMap(ctx => gen))` as canonical shape
-- [ ] **`OperationContext` fields** — `input`, `telemetry`, … — no `leaf`/`state` conflated with operation input
-- [ ] **Scope opening: leaf vs root vs ambient** — see Discussion log § Scope opening strategies
-- [ ] Rejected: outer `QueueEntryScope.run` + op; rejected: `(scopeLeaf, opInput)` two-arg call
-- [ ] Middle events: `ctx.telemetry.Retried` vs flat `yield* Tag.Entry.Retried` vs both?
-- [ ] Where operation handles live — layer context, module export, or generated from tag+layer?
-- [ ] **Shortcuts v1** — `.gen(input, fn)` only? none?
-- [ ] Nested no-input ops — inherit parent scope; pipe signature?
-- [ ] Type error when yielding events outside active operation context
+- [x] Builder: `op(input).provideLeaf` / `provideRoot` / `assuming*` before `Effect` (agreed)
+- [x] Three op kinds: scope-required, scope-inheriting, scope-free (agreed)
+- [x] Mid-op: patch / nested scope after obligation met — not substitute for builder (agreed)
+- [ ] Exact provider names — `provideLeaf` / `provideRoot` / `assumingLeaf` / `assumingRoot` final?
+- [ ] Ambient scope inference vs explicit `.assuming*` only
+- [ ] Confirm `pipe(op(input).provideLeaf(...), Effect.flatMap, gen)` canonical
+- [ ] **`OperationContext`** — `telemetry` handle; scope via `yield* Scope` not mixed with op input
+- [ ] `Scope.patch` on `State.Scope` — design for mid-op process field updates
+- [ ] Nested no-input ops — inherit scope; pipe signature
 
 ### B2. Implementation API (`Telemetry.Service`)
 
@@ -750,7 +814,7 @@ the operation.
 ## Bake session checklist
 
 - [x] Step 1 — `Telemetry.Tag` skeleton locked
-- [ ] Step 2 — Operations API locked (`pipe` / `flatMap` / `OperationContext`)
+- [x] Step 2 — Operations API scope builder rules (partial — names / patch TBD)
 - [ ] Step 3 — telemetry layer API locked (not on tag)
 - [ ] Step 4 — registry API locked
 - [ ] Step 5 — telemetry state API locked
