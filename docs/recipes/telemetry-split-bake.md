@@ -62,20 +62,20 @@ no telemetry state module.
 | --- | --- | --- | --- |
 | **1** | **`Telemetry.Tag`** | Class + tree DSL | **Skeleton only** — wires, schemas, ops, events. Generates **node handles** (G). |
 | **2** | **Calling** | Static paths on Service | Builder → `{ input, telemetry, scope }` |
-| **3** | **`Telemetry.Layer`** | `Telemetry.Layer.for(Tag)(…)` | **Wiring authored separately** — extend, bind, logWarning. **Not** on Tag. |
-| **∴** | **`Telemetry.Service`** | `Telemetry.Service(Tag, Layer)` | **Tag + Layer** — what facets export from `store/*Telemetry.ts` |
+| **3** | **Service wiring** | 2nd arg to **`Telemetry.Service`** | **`{ extend, nodes }`** — authored separately from Tag, composed via Service |
+| **∴** | **`Telemetry.Service`** | `Telemetry.Service(Tag, wiring)` | Tag + wiring → facet export; **`.layer`** = Effect Layer |
 
 **Internal** kernel/spine code does not import `Telemetry.Service`; it uses Service static paths when the Effect **`Service.layer`** is provided at compose.
 
-### Tag vs Layer vs Service
+### Tag vs Wiring vs Service
 
-| | **Tag** | **Layer** (API 3) | **Service** |
+| | **Tag** | **Wiring** (Service 2nd arg) | **Service** |
 | --- | --- | --- | --- |
-| Tree DSL | skeleton nodes only | wiring keyed by **node handles** | Tag + Layer merged |
-| `Telemetry.extend` | — | ✓ | (from Layer) |
-| `bind` (plain schema fields) | — | ✓ **required** where schema has plain `Schema.*` | (from Layer) |
-| `logWarning` | — | ✓ optional per node | (from Layer) |
-| `.layer` (Effect `Layer`) | — | — | ✓ on composed Service |
+| Tree DSL | skeleton | — | Tag + wiring merged |
+| `extend` | — | ✓ | ✓ |
+| `nodes` / `bind` | — | ✓ **required** for plain `Schema.*` | ✓ |
+| `logWarning` | — | ✓ optional per node | ✓ |
+| Effect **`.layer`** | — | — | ✓ |
 
 ---
 
@@ -85,23 +85,10 @@ Skeleton only. **No** extend, bind, logWarning. Tag factory generates **node han
 
 **On Tag:** namespace, group, operation, event, start, exit, scope ref, wire ids, node handles.
 
-**Not on Tag:** extend, bind, logWarning → **`Telemetry.Layer`**. Effect runtime → **`Telemetry.Service.layer`**.
+**Not on Tag** → **Service wiring** (2nd arg):
 
-The Tag is **not** the facet definition for wiring — only the wire skeleton.
-
-**On the Tag (API 1):**
-
-- `Telemetry.namespace` / `Telemetry.group` / `Telemetry.operation` / `Telemetry.event`
-- `Telemetry.operation<Input>(…)` — input type on **operation**
-- `Telemetry.start(…)` / `Telemetry.exit(…)` — schema refs only, no binding args
-- `State.Scope` reference as first child of each operation
-- Wire ids derived from namespace + group + event name
-- **Node handles** on Tag class — e.g. `RunResourceTag.Run.processEntry.Started`
-
-**Not on Tag** → **`Telemetry.Layer`** (API 3):
-
-- `Telemetry.extend`, `bind`, `logWarning`
-- Effect **`Service.layer`** (from `Telemetry.Service(Tag, Layer)`)
+- `extend`, `nodes` / `bind`, `logWarning`
+- Effect **`Service.layer`** built from Tag + wiring
 
 - A telemetry tag may contain multiple `Telemetry.namespace(...)` blocks.
 - `Telemetry.group(...)` replaces lowercase `Telemetry.tag(...)` to avoid collision with `Telemetry.Tag`.
@@ -568,42 +555,47 @@ Rules:
 
 ---
 
-## API 3 — `Telemetry.Layer` (**locked**, Jun 2026)
+## API 3 — Service wiring (**locked**, Jun 2026)
 
-**Authoring API for everything Tag omits.** Created **separately** from Tag.  
-**`Telemetry.Service(Tag, Layer)`** = Tag + Layer. Effect **`Service.layer`** activates runtime (implementation in `src/internal/telemetry/`).
+**No `Telemetry.Layer.for`.** Wiring is the **second argument** to **`Telemetry.Service`**.  
+Type: **`Telemetry.Wiring<Tag>`** — `{ extend, nodes }`. Tag + wiring = Service.
 
-Owner pick: **G (node handles) + E (nested `nodes` map)** with **exhaustive bind** for plain `Schema.*` fields.
-
-### Entry point
+### Entry point (inline)
 
 ```ts
-export const RunResourceLayer = Telemetry.Layer.for(RunResourceTag)({
+export const RunResourceTelemetry = Telemetry.Service(RunResourceTag, {
   extend: {
-    [RunScope]: {
-      waiting: Telemetry.metric.gauge,
-      inFlight: Telemetry.metric.gauge,
-    },
+    [RunScope]: { waiting: Telemetry.metric.gauge, inFlight: Telemetry.metric.gauge },
   },
   nodes: {
     [RunResourceTag.Run.processEntry.Started]: {
-      bind: {
-        name: Operation.input("name"), // required — plain field on RunResourceRunStarted
-      },
+      bind: { name: Operation.input("name") },
     },
     [RunResourceTag.Run.processEntry.exit.onFailure]: {
-      logWarning: Telemetry.logWarning(
-        "RunResourceStore write failed for run failure",
-        ({ runId }) => ({ runId: String(runId) }),
-      ),
+      logWarning: Telemetry.logWarning("…", ({ runId }) => ({ runId: String(runId) })),
     },
-    // nodes with only scope/terminal/literal fields: omit or `{}`
   },
 })
-
-export const RunResourceTelemetry = Telemetry.Service(RunResourceTag, RunResourceLayer)
 // RunResourceTelemetry.layer — Effect Layer (requires TelemetryHub)
 ```
+
+### Split files (same API)
+
+```ts
+// RunResourceTelemetry.tag.ts
+export class RunResourceTag extends Telemetry.Tag<RunResourceTag>(id)( … ) {}
+
+// RunResourceTelemetry.wiring.ts
+export const runResourceWiring = {
+  extend: { … },
+  nodes: { … },
+} satisfies Telemetry.Wiring<typeof RunResourceTag>
+
+// RunResourceTelemetry.ts
+export const RunResourceTelemetry = Telemetry.Service(RunResourceTag, runResourceWiring)
+```
+
+Optional helper (identity + satisfies only): **`Telemetry.wiring<Tag>(config)`** — not required.
 
 ### Node handles (G)
 
@@ -636,7 +628,7 @@ type LayerNodeConfig<Schema> = PlainFields<Schema> extends never
     }
 ```
 
-**Exhaustiveness:** `Telemetry.Layer.for(Tag)(config)` must include a `nodes` entry (or inferred empty config) for **every** `EventNode` on Tag that has `PlainFields` ≠ never. Missing node → **type error**.
+**Exhaustiveness:** `Telemetry.Service(tag, wiring)` — `wiring.nodes` must account for every Tag `EventNode` with `PlainFields ≠ never`. Missing → **type error**.
 
 Optional: **`logWarning`** on any node regardless of plain fields.
 
@@ -649,21 +641,13 @@ Top-level **`extend`** on Layer config (same as prior bake): scope → hidden te
 ### Service compose
 
 ```ts
-Telemetry.Service(tag, layerDef) → {
-  // merged definition for runtime + calling static paths
-  layer: Layer<TelemetryHub>,  // no-op paths when not provided
-  …Tag static paths (Entry.processEntry, …)
+Telemetry.Service(tag, wiring) → {
+  layer: Layer<TelemetryHub>,
+  …calling static paths from merged Tag + wiring
 }
 ```
 
-Registry, emit pipeline, operation runner — **implementation** of `Service.layer`; not part of Layer authoring API.
-
-### Rejected for API 3
-
-- Mirror full Tag tree in Layer (A)
-- Flat wire-string map (B)
-- Attach combinators only (C/F)
-- Bindings on Tag skeleton
+Rejected: **`Telemetry.Layer.for`**, separate **`Telemetry.layer(tag, config)`** export (naming collision with Effect `Layer` / `Service.layer`).
 
 ---
 
@@ -781,7 +765,7 @@ See **Calling API — scope builder (agreed Jun 2026)** for locked rules. Remain
 ### Quick reference — all locked
 
 - **Tag (API 1):** full tree — `extend`, bindings, `.pipe(logWarning)` on `Telemetry.Tag`
-- **Layer (API 3):** `Telemetry.Layer.for(Tag)({ extend, nodes })` — G handles + exhaustive bind
+- **Wiring (API 3):** `Telemetry.Service(Tag, { extend, nodes })` — G handles + exhaustive bind
 - **Calling (API 2):** builder → `{ input, telemetry, scope }` live view
 - **Registry:** `Telemetry.registry([...])` at compose
 - **Emit:** materialize → metrics → hub → sinks; runner owns start/exit
@@ -818,9 +802,9 @@ Canonical shape, builder, OperationContext — see **Calling API — scope build
 
 ---
 
-### Step 3 — `Telemetry.Layer` (API 3) (**locked**)
+### Step 3 — Service wiring (API 3) (**locked**)
 
-`Telemetry.Layer.for(Tag)({ extend, nodes })`. Service = `Telemetry.Service(Tag, Layer)`.
+`Telemetry.Service(Tag, { extend, nodes })`. Type: `Telemetry.Wiring<Tag>`.
 
 ---
 
@@ -992,7 +976,7 @@ All steps 1–9 locked. Implementation agents may start slices; owner review wel
 | --- | --- |
 | **API 1 Tag** | Full tree — namespace / group / operation / event / extend / bindings / logWarning |
 | **API 2 Calling** | Builder + `{ input, telemetry, scope }` + `provideLeaf` / `assuming*` |
-| **API 3 Layer** | `Telemetry.Layer.for(Tag)` + `Telemetry.Service(Tag, Layer)` |
+| **API 3 Wiring** | `Telemetry.Service(Tag, wiring)` — `Telemetry.Wiring<Tag>` |
 | Registry | `Telemetry.registry([...tags])` at compose |
 | State | Hidden fields via `extend`; entry cleanup on op exit |
 | Emit | materialize → metrics → validate → hub → sinks |
@@ -1033,7 +1017,7 @@ Update [21-state-vocabulary.md](../plans/21-state-vocabulary.md) when bake close
 
 - [x] Step 1 — `Telemetry.Tag` definition (API 1) locked
 - [x] Step 2 — Calling API (API 2) locked
-- [x] Step 3 — `Telemetry.Layer` (API 3) locked
+- [x] Step 3 — Service wiring (API 3) locked
 - [x] Step 4 — registry v1
 - [x] Step 5 — telemetry state + entry cleanup
 - [x] Step 6 — hub bridge flow
