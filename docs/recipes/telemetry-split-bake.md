@@ -486,43 +486,40 @@ Builder must complete via **one** of:
 
 ---
 
-### OperationContext (proposed lock)
+### OperationContext (agreed — option C hybrid)
 
 What `Effect.flatMap` receives after the builder completes:
 
 ```ts
 interface OperationContext<
   Input,
-  Scope extends StateScope<any, any, any, any, any, any, any, any>,
+  ScopeState,      // process-visible scope view (typed from op's declared scope)
   TelemetryHandle,
 > {
-  /** Operation input from `op(input)` — read-only; not scope. */
   readonly input: Input;
-  /** Child events + nested ops declared under this operation on the tag. */
   readonly telemetry: TelemetryHandle;
+  readonly scope: ScopeState;   // live view — same Context provideLeaf opened; not a snapshot
 }
 ```
 
-**Not on `OperationContext`:**
+- **`input`** — operation input from `op(input)`; **not** from scope.
+- **`telemetry`** — child event/op shortcuts (`Retried`, `rateLimit`, …).
+- **`scope`** — read process-visible fields (`ctx.scope.entryId`); backed by active scope Context.
+- **Telemetry hidden fields** — same runtime object; **not** on process `ScopeState` type.
+- **Mutate scope mid-op** — `yield* QueueEntryScope.patch({ … })` (or alias on `ctx`); **does not** replace `provideLeaf`.
 
-- Scope state — use `yield* QueueEntryScope` (or declared scope tag for this op)
-- Telemetry hidden state — materialized on emit; optional `yield* TelemetryState` internal only
-- Operation input duplicated as scope fields
-
-Inside body:
+**Builder still required** when tag declares scope: `provideLeaf` / `provideRoot` / `assuming*` before `Effect`. **`patch`** only updates existing scope inside the body.
 
 ```ts
 Effect.flatMap((ctx) =>
   Effect.gen(function* () {
-    const scope = yield* QueueEntryScope; // process + hidden telemetry fields
     yield* ctx.telemetry.Retried;
-    yield* QueueEntryScope.patch({ startedAt: now }); // mid-op process patch — TBD API
-    return yield* processItem(entry);
+    ctx.input.name;
+    ctx.scope.entryId;
+    yield* QueueEntryScope.patch({ startedAt: now });
   }),
 );
 ```
-
-Nested op context: sub-handle on `ctx.telemetry.rateLimit`; parent `ctx.input` unchanged unless nested op has its own input type.
 
 ---
 
@@ -770,7 +767,8 @@ skeleton only. Everything below is open.
 - [x] Provider names: `provideLeaf`, `provideRoot`, `assumingLeaf`, `assumingRoot` (proposed lock)
 - [x] Explicit `assuming*` — no ambient inference v1 (proposed lock)
 - [x] Canonical: `pipe(op(input).provideLeaf(…), Effect.flatMap, gen)` (proposed lock)
-- [x] `OperationContext`: `{ input, telemetry }`; scope via `yield* Scope` (proposed lock)
+- [x] `OperationContext`: `{ input, telemetry, scope }` — scope is live view (agreed)
+- [x] `provideLeaf` establishes scope; `patch` updates existing scope only (agreed)
 - [x] Nested ops: `effect.pipe(Entry.rateLimit, Effect.flatMap)` (proposed lock)
 - [ ] `Scope.patch` — Ref implementation + hidden-field type firewall
 - [ ] Shortcut `.gen(input, fn)` — v2?
@@ -866,13 +864,11 @@ original bake sequence, updated for `Telemetry.Tag` where noted.
 
 ---
 
-### Step 2 — Operations API (**open**)
+### Step 2 — Operations API (**locked**)
 
-**Decides:** Canonical calling shape (`pipe` + `flatMap` + `gen`), `OperationContext`,
-shortcuts, nested no-input ops.
+Canonical shape, builder, OperationContext — see **Calling API — scope builder** and **OperationContext (agreed)**.
 
-**Acceptance:** Queue `processEntry(entry)` stress case reads as plain Effect code;
-input typed from `Telemetry.operation<Input>`.
+**Acceptance:** Queue `processEntry` stress case in doc; owner confirmed `provideLeaf` + `patch` + `ctx.scope` live view.
 
 ---
 
@@ -1026,14 +1022,63 @@ the operation.
 
 ---
 
+## Bake finish line — close session, start building
+
+### Done (enough to start Slice A)
+
+- `Telemetry.Tag` skeleton DSL
+- Three APIs: Tag / Calling / Implementation (`Telemetry.Service`)
+- Operations: input on `Telemetry.operation<Input>`, builder `provideLeaf` / `assuming*`
+- OperationContext: `{ input, telemetry, scope }` — scope live view; `patch` mid-op
+- Three op kinds; exit-only overload; nested inherit scope
+- Field sources on Service; no auto operation-input routing
+- End-to-end Queue `processEntry` target documented
+
+### Close bake — owner decisions still needed (~1 session)
+
+Pick defaults for v1 so implementation agents do not stall:
+
+| # | Decision | Recommendation for v1 |
+| --- | --- | --- |
+| 1 | **`Telemetry.Service` config shape** | Tag nested inside Service class; `events` map with `fields` + optional `logWarning` (see doc sketch) |
+| 2 | **Registry** | Explicit `Telemetry.registry([...Tags])` at app compose; not module auto-init |
+| 3 | **No telemetry layer** | Emits no-op (hub not required in R for stub); full layer required for real emit |
+| 4 | **Layer matrix** | Approve step 8 table as-is; `RunResourceTelemetry.layer` requires hub |
+| 5 | **Hub bridge order** | materialize → optional metrics leg → `TelemetryHub.emit` → sinks |
+| 6 | **RunResource boundary** | Counters (`waiting`, `inFlight`, …) → telemetry state; gating stays `Semaphore` only |
+| 7 | **Entry telemetry cleanup** | Drop entry hidden state when op exit completes (success/fail/interrupt) |
+| 8 | **Tag file layout** | Single `store/RunResourceTelemetry.ts` Service + re-export tag; identity module sibling |
+| 9 | **Delete list** | Approve step 9 as-is |
+
+Defer to implementation (do not block bake sign-off):
+
+- `Scope.patch` Ref internals
+- Typed `Operation.input("key")` enforcement (ship best-effort v1)
+- `.gen` shortcut, tracer spans, registry auto-discovery
+- Full telemetry state reducer DSL polish
+
+### Implementation slices (after bake sign-off)
+
+| Slice | Deliverable |
+| --- | --- |
+| **A** | `Telemetry.Tag` factory + RunResource skeleton port (`facet-telemetry-158c`) |
+| **B** | `Telemetry.Service` v1 + field sources + `OperationContext` + builder handles |
+| **C** | Layer + hub bridge + `Scope.patch` + telemetry state extend |
+| **D** | Registry + ArchiveSink wiring; delete `defineEvent` on RunResource |
+| **E** | Queue migration (separate branch) |
+
+Update [21-state-vocabulary.md](../plans/21-state-vocabulary.md) when bake closes.
+
+---
+
 ## After bake — implementation handoff
 
-1. Update [21-state-vocabulary.md](../plans/21-state-vocabulary.md) with locked step outcomes.
-2. Slice A: `Telemetry.Tag` skeleton + restore RunResource tree from `facet-telemetry-158c`.
-3. Slice B: Operations API v1 (typed input from `Telemetry.start`).
-4. Slice C: telemetry layer v1 (state, bind, hub bridge).
-5. Slice D: registry v1 + RunResource kernel cleanup.
-6. Slice E: Queue migration on separate branch/worktree.
+1. Update plan 21 with locked outcomes.
+2. Slice A: `Telemetry.Tag` factory + RunResource skeleton port.
+3. Slice B: `Telemetry.Service` + Operations API builder + OperationContext.
+4. Slice C: layer + hub bridge + `Scope.patch` + telemetry state extend.
+5. Slice D: registry + RunResource hub bridge + delete `defineEvent`.
+6. Slice E: Queue on separate branch.
 
 **Verification (every slice):** `pnpm run typecheck && pnpm test && pnpm run lint && pnpm run build`.
 
@@ -1044,15 +1089,15 @@ the operation.
 ## Bake session checklist
 
 - [x] Step 1 — `Telemetry.Tag` skeleton locked
-- [x] Step 2 — Operations API scope builder + OperationContext (proposed — confirm)
-- [ ] Step 2b — Implementation API / Telemetry.Service field sources
-- [ ] Step 3 — telemetry layer API locked (not on tag)
-- [ ] Step 4 — registry API locked
-- [ ] Step 5 — telemetry state API locked
-- [ ] Step 6 — hub bridge flow locked
-- [ ] Step 7 — RunResource kernel boundary locked
-- [ ] Step 8 — layer matrix locked
-- [ ] Step 9 — delete list approved
-- [ ] Plan 21 updated with bake outcomes
-- [ ] Owner sign-off on vocabulary table (four state words)
+- [x] Step 2 — Operations API + OperationContext locked
+- [ ] Step 2b — `Telemetry.Service` config shape (finish line #1)
+- [ ] Step 3 — layer API + no-op policy (finish line #3–5)
+- [ ] Step 4 — registry v1 (finish line #2)
+- [ ] Step 5 — telemetry state + entry cleanup (finish line #7)
+- [ ] Step 6 — hub bridge flow (finish line #5)
+- [ ] Step 7 — RunResource kernel boundary (finish line #6)
+- [ ] Step 8 — layer matrix (finish line #4)
+- [ ] Step 9 — delete list (finish line #9)
+- [ ] Plan 21 updated
+- [ ] Owner bake sign-off
 
