@@ -24,19 +24,21 @@ no telemetry state module.
 
 ## Mise en place (repo facts)
 
-| Area | Shipped | Wrong / missing |
-| --- | --- | --- |
-| `TelemetryHub` + sinks | Yes | Hub used as event definition surface |
-| `ArchiveSink`, `ProjectionSink`, `BroadcastSink` | Yes | Legs wired to `defineEvent`, not tree |
-| `RunResourceStore` decoupled from telemetry section | Yes | Hand-rolled codecs/wires |
-| `RunResourceProjection` | Yes | — |
-| `State.Scope` + scopes | Partial | RunResource kernel ignores `RunScope` |
-| **`Telemetry.Service`** | **No** | Plan 20 target |
-| **`Telemetry.registry`** | **No** | Recipe step 2 |
-| **Telemetry state** (in-memory, telemetry-only) | **No** | Owner model — [plan 21](../plans/21-state-vocabulary.md) |
-| Plan 17 tree DSL on RunResource | **No** on hub | On `facet-telemetry-158c` |
-| Transport 6.4–6.6 | Merged to hub | — |
-| Domain folders under `store/` | Removed | Flat PascalCase — [src-reorganization](../plans/src-reorganization.md) |
+
+| Area                                                | Shipped       | Wrong / missing                                                        |
+| --------------------------------------------------- | ------------- | ---------------------------------------------------------------------- |
+| `TelemetryHub` + sinks                              | Yes           | Hub used as event definition surface                                   |
+| `ArchiveSink`, `ProjectionSink`, `BroadcastSink`    | Yes           | Legs wired to `defineEvent`, not tree                                  |
+| `RunResourceStore` decoupled from telemetry section | Yes           | Hand-rolled codecs/wires                                               |
+| `RunResourceProjection`                             | Yes           | —                                                                      |
+| `State.Scope` + scopes                              | Partial       | RunResource kernel ignores `RunScope`                                  |
+| `**Telemetry.Service`**                             | **No**        | Plan 20 target                                                         |
+| `**Telemetry.registry`**                            | **No**        | Recipe step 2                                                          |
+| **Telemetry state** (in-memory, telemetry-only)     | **No**        | Owner model — [plan 21](../plans/21-state-vocabulary.md)               |
+| Plan 17 tree DSL on RunResource                     | **No** on hub | On `facet-telemetry-158c`                                              |
+| Transport 6.4–6.6                                   | Merged to hub | —                                                                      |
+| Domain folders under `store/`                       | Removed       | Flat PascalCase — [src-reorganization](../plans/src-reorganization.md) |
+
 
 ---
 
@@ -57,7 +59,27 @@ no telemetry state module.
 
 ## Telemetry redesign current locks (supersedes stale steps below)
 
-### Definition surface
+**Only the `Telemetry.Tag` definition DX is locked.** Everything else — runtime
+operation API, telemetry state, layer construction, registry, hub bridge — is
+still open.
+
+Two separate public APIs:
+
+| API | Status | Purpose |
+| --- | --- | --- |
+| **`Telemetry.Tag` definition** | Locked (shape below) | Contract: namespaces, groups, operations, events, scopes, telemetry state fields |
+| **Operation runtime** | Open — explore options | How kernel code runs inside a tracked operation (start/exit, nested ops, local events) |
+| **Telemetry layer** | Open | How definition becomes a `Layer`: hub wiring, scope extension, state, generated handles |
+
+`Procedure.payload().success().failure()` belongs to **`Store.Tag` / RPC only** —
+not telemetry. Telemetry has **`namespace`**, **`group`**, **`operation`**, and
+**`event`**. Wire ids are always **`Namespace.Group.Event`**. Operations nest and
+carry **`Telemetry.start`** / **`Telemetry.exit`** helpers; there are no
+`.success` / `.failure` selectors on telemetry operations.
+
+---
+
+### Definition surface (locked)
 
 - Telemetry definitions move to contract-style `Telemetry.Tag`; runtime / layer creation is separate.
 - `Telemetry.Service` is optional convenience only; built-in package code should not rely on it as the main shape.
@@ -103,30 +125,34 @@ class QueueResourceTelemetry extends Telemetry.Tag<QueueResourceTelemetry>(
 ) {}
 ```
 
-### Operations
+### Operations (definition only — runtime API open)
 
-- `Telemetry.operation(...)` defines a tracked operation.
-- `Telemetry.operation` is a callable namespace: the callable creates operation
-  definitions; attached helpers such as `Telemetry.operation.input(...)`,
-  `.success(...)`, `.failure(...)`, `.causePretty`, and `.durationMs` create
-  typed operation field sources.
-- Generated operation handles expose `.fn`, `.gen`, and `.effect` call-site adapters.
-- Use operations only when the function/effect itself is valuable to track; do not wrap everything.
-- Operation names are camelCase and form operation identity, not wire identity.
-- Operation identity is `${processOrResourceType}/${operation/path}` and is useful for tracing / generated maps.
-- `Telemetry.operation(...)` carries child definitions for local access inside the generated function/effect.
+- `Telemetry.operation(...)` defines a tracked operation in the tag tree.
+- First child is the operation **`State.Scope`** (leaf scope for this operation).
+- Optional `Telemetry.start<Input>(name, event)` — only place operation input is consumed.
+- Optional `Telemetry.exit({ onSuccess, onFailure, onInterrupt, … })` — maps
+  `Effect.Exit` outcomes to **group events** (no `Exit` wire segment).
+- Nested `Telemetry.operation(...)` and `Telemetry.event(...)` are children;
+  they exist for local access inside the operation body and for tracing identity
+  `${typeId}/${operation/path}` — not for wire ids.
+- Operation names are camelCase.
+- Use operations only when tracking the function/effect itself is valuable.
+
+**Draft runtime (not locked — placeholder in docs):**
 
 ```ts
 const processEntry = QueueResourceTelemetry.Entry.processEntry.gen(
   function* (entry, telemetry) {
     yield* telemetry.Retried;
-
     yield* checkRateLimit.pipe(telemetry.rateLimit.effect(entry));
-
     return yield* processItem(entry);
   },
 );
 ```
+
+Problems with this draft: extra `telemetry` param, `.gen` / `.fn` / `.effect`
+multiplicity, awkward pipe for nested ops. See **Operation runtime — options to
+explore** below.
 
 ### `start` and `exit`
 
@@ -135,10 +161,10 @@ const processEntry = QueueResourceTelemetry.Entry.processEntry.gen(
 - `Telemetry.start` may see the operation input and is the only event helper expected to consume operation input.
 - `Telemetry.exit(...)` maps operation outcomes to regular event definitions.
 - `Telemetry.exit` does not create an `Exit` wire segment.
-- `Telemetry.exit` should be configurable for success, failure, interrupt, defect, success value, failure cause, duration, and original input if needed.
-- Operation start/exit events do not receive positional payloads. They materialize
-  from schema field sources: active `State.Scope`, operation input, operation success
-  value, operation failure/cause, operation timing, and telemetry state.
+- How start/exit events materialize fields (scope, input, result, cause, duration,
+  telemetry state) is **open** — resolved when runtime + layer APIs are designed.
+- Middle events and exit events do not take call-site payloads; fields come from
+  scope / telemetry state / operation context established by the layer.
 
 ```ts
 Telemetry.operation("processEntry")(
@@ -154,19 +180,17 @@ Telemetry.operation("processEntry")(
 
 ### Scope, event input, and telemetry state
 
-- Normal event usage should be zero-arg when fields can be derived from active `State.Scope`, terminal values, telemetry state, or exit/cause context:
-  `yield* QueueResourceTelemetry.Entry.Started`.
-- Event statics become functions only when fields truly cannot be derived from those sources.
+- Events have no input, all fields can be derived from active `State.Scope`, terminal values, telemetry state, or exit/cause context:
+`yield* QueueResourceTelemetry.Entry.Started`.
+- The exception is Telemetry.start which is defined like a function but actual implementation is unclear.
 - `Telemetry.operation` first child is the operation scope.
 - Operation input is a TypeScript type parameter, not a schema.
 - Telemetry state imports process scopes and extends them in telemetry definitions; it does not mutate process schemas.
 - Telemetry state inheritance is explicit: a leaf telemetry extension gets parent telemetry fields only when extending from an already-extended parent plus the leaf process scope.
 - Scope identity comes from process `State.Scope`; telemetry state should not create a separate identity tree.
-- String selectors must be type-enforced. Helpers like
-  `Telemetry.operation.input("item")` return typed sources carrying the selected
-  path and expected value type; binding validates the selector against the
-  operation context and event schema field type. Do not accept unchecked string
-  paths.
+- Typed string enforcement applies to **`State.Scope`** field paths and other
+  string-keyed helpers in this package — not Procedure-style `.success` /
+  `.failure` on telemetry (those are store/RPC only).
 
 ```ts
 const QueueTelemetry = Telemetry.State.extend(QueueResourceScope, {
@@ -193,10 +217,10 @@ const QueueEntryTelemetry = QueueTelemetry.extend(QueueEntryScope, {
 ### Module identity files
 
 - Process/resource type identity should not be passed around as unrelated string
-  literals such as `"RunResource"` when the owning service tag cannot be imported
-  without circular dependencies.
+literals such as `"RunResource"` when the owning service tag cannot be imported
+without circular dependencies.
 - Domains that need shared identity across worker, telemetry, store facets, and
-  projections should get a small identity module:
+projections should get a small identity module:
 
 ```ts
 export const TypeTag = "@nikscripts/effect-pm/RunResource";
@@ -204,56 +228,83 @@ export const TypeId: unique symbol = Symbol.for(TypeTag);
 ```
 
 - Facets and telemetry definitions import the identity module, not the worker/service
-  module, when they only need the stable type id.
+module, when they only need the stable type id.
 
-### Still open before layer work
+### Operation runtime — options to explore
 
-Resolve these in the bake before implementing `Telemetry.layer` / emit bridge:
+Goal: less boilerplate than `(entry, telemetry) => …`, no redundant param, nested
+ops feel natural, start/exit automatic from definition, middle events stay
+zero-arg `yield* …Event`.
 
-1. **Operation selector typing** — exact API for `.input` / `.success` / `.failure`
-   / nested paths; whether constraints are captured at `Telemetry.operation(...)` or
-   at schema field binding time.
-2. **`start` / `exit` payload semantics** — which fields receive operation input,
-   success value, failure cause, and duration by default; per-event override shape.
-3. **Telemetry state DX** — field declaration (`Telemetry.State.extend`), reducer
-   hooks, and entry-scope cleanup policy (avoid unbounded maps).
-4. **Layer construction** — registry init, hub bridge sequence, per-domain layer
-   names (see step 4 / 6 below; update for `Telemetry.Tag` not `Telemetry.Service`).
-5. **Identity module convention** — file name, subpath, and which domains get
-   `TypeTag` / `TypeId` first.
+| Option | Sketch | Pros | Cons |
+| --- | --- | --- | --- |
+| **A. Scope-style `run`** | `processEntry.run(entry, Effect.gen(…))` | Mirrors `State.Scope.run`; explicit scope boundary | Still verbose; where do child events live on the handle? |
+| **B. Generated `Effect.fn`** | `const processEntry = Tag.Entry.processEntry(Effect.fn(function*(entry) { … }))` | Familiar Effect.fn; definition attaches at module init | When is layer required vs definition-only export? |
+| **C. Operation as pipe** | `yield* entry.pipe(Tag.Entry.processEntry, Effect.gen(…))` | Composable | Unusual; typing nested ops is hard |
+| **D. Context-only events** | Inside op, `yield* Tag.Entry.Retried` (flat path); layer sets op context | No `telemetry` param; same paths as wire tree | Needs op-context tag; events outside op must fail at type level |
+| **E. Layer-provided service** | `yield* QueueResourceTelemetry.processEntry(entry)` where service wraps body | Clean call site in kernel | Body registration separate from definition unless code-generated |
+| **F. Dual: define + register** | Tag defines contract; `Telemetry.layer({ handlers: { processEntry: … } })` binds bodies | Clean separation definition/runtime | Two places to maintain unless codegen links them |
 
-Ecosystem adapters (workflow, SQL hardening, cluster) are tracked separately:
-[22-effect-ecosystem-adapters.md](../plans/22-effect-ecosystem-adapters.md).
+Open questions for runtime bake:
+
+- One adapter (`.run` only) vs `.fn` / `.gen` / `.effect` at call site?
+- Nested operation invocation: pipe, method on parent op handle, or flat tag path?
+- Is operation input only passed to `run` / outer wrapper, never to middle events?
+- Type error when yielding group events outside an active operation context?
+
+### Telemetry layer — options to explore (open)
+
+The layer turns a `Telemetry.Tag` definition into runtime services. Likely
+responsibilities (exact API not locked):
+
+```ts
+// shape TBD — not locked
+RunResourceTelemetry.layer
+// or
+Telemetry.layer(RunResourceTelemetry, { /* scope extensions, state initializers */ })
+```
+
+| Responsibility | Notes |
+| --- | --- |
+| Register wire ids + schemas | For hub / sinks (registry TBD) |
+| Extend process scopes | Merge telemetry state fields onto `State.Scope` leaves at runtime |
+| Provide operation runners | Whatever runtime option wins above |
+| Hub emit bridge | Materialize event payloads → `TelemetryHub.emit` |
+| Telemetry state lifetime | Per resource / per entry cleanup policy TBD |
+
+See steps 2–4 and 6 below for hub bridge and layer matrix — **must be rewritten
+for `Telemetry.Tag`**, not `Telemetry.Service`.
+
+### Still open (bake order)
+
+1. **Operation runtime API** — pick or hybrid from options A–F.
+2. **Telemetry layer API** — constructor shape, inputs, what it provides to context.
+3. **Telemetry state DX** — `Telemetry.State.extend`, reducers, entry cleanup.
+4. **`start` / `exit` materialization** — what the layer injects into event schemas.
+5. **Registry** — global vs per-compose (step 2 below).
+6. **Identity module convention** — file placement for `TypeTag` / `TypeId`.
+
+Ecosystem adapters: [22-effect-ecosystem-adapters.md](../plans/22-effect-ecosystem-adapters.md).
 
 ---
 
 ## Getting back on track
 
-**Branch:** `cursor/telemetry-redesign-bake-faed` — definition locks live in this
-file; implementation has not started.
+**Branch:** `cursor/telemetry-redesign-bake-faed`.
 
-**Done (definition bake):**
+**Locked:** `Telemetry.Tag` definition DX only (`namespace` / `group` / `operation` /
+`event` / `start` / `exit`, wire rule, nesting rules).
 
-- `Telemetry.Tag` contract-first shape; layer separate from definition.
-- `Telemetry.namespace` / `group` / `operation` / `start` / `exit` / nested operations.
-- Wire rule: `Namespace.Group.Event` only; operations are tracing/local identity.
-- Zero-arg event emit rule; scope + telemetry state inheritance model.
-- `Store.Tag` / `Procedure` / RPC error round-trip decisions.
-- Identity module pattern for circular-import-safe type ids.
+**Not locked:** operation runtime, telemetry layer, telemetry state, registry, hub
+bridge details, identity placement.
 
-**Next bake sessions (in order):**
+**Suggested next bake session:** compare operation runtime options (table above)
+using Queue `processEntry` as the stress case — nested `rateLimit`, middle
+`Retried`, optional start, exit mapping — then derive layer API from the winning
+runtime shape (layer must know scopes, state extensions, and how ops bind to
+bodies).
 
-1. Lock operation selectors + exit payload defaults (items 1–2 above).
-2. Lock telemetry state field API + entry cleanup (item 3).
-3. Rewrite steps 1–7 below for `Telemetry.Tag` (steps still say `Telemetry.Service`).
-4. Lock layer matrix + hub bridge flow (items 4–5).
-5. Owner sign-off → update [21-state-vocabulary.md](../plans/21-state-vocabulary.md).
-6. Implementation slice A: `Telemetry.Tag` + RunResource tree restore.
-
-**Parallel track (does not block telemetry layer):**
-
-- Document and slice workflow/SQL/cluster adapters per
-  [22-effect-ecosystem-adapters.md](../plans/22-effect-ecosystem-adapters.md).
+**Then:** rewrite steps 1–7 below for `Telemetry.Tag`, sign off, implement.
 
 ---
 
@@ -377,14 +428,16 @@ RunResourceTelemetry.Run.Started(input)
 
 **Decides:** Default exports for apps; naming.
 
-| Layer | Requires | Provides |
-| --- | --- | --- |
-| `TelemetryHub.layer` | — | emit |
-| `RunResourceTelemetry.layer` | hub | tree statics + telemetry state |
-| `RunResourceStore.layerRuntimeStorage` | `RuntimeStorage` | queries |
-| `ArchiveSink.layerForStore(...)` | storage + hub | persist leg |
-| `RunResourceProjection.layerLive` | hub | live read |
-| `RunResourceCompose.layerPersist` | **explicit merge** | convenience |
+
+| Layer                                  | Requires           | Provides                       |
+| -------------------------------------- | ------------------ | ------------------------------ |
+| `TelemetryHub.layer`                   | —                  | emit                           |
+| `RunResourceTelemetry.layer`           | hub                | tree statics + telemetry state |
+| `RunResourceStore.layerRuntimeStorage` | `RuntimeStorage`   | queries                        |
+| `ArchiveSink.layerForStore(...)`       | storage + hub      | persist leg                    |
+| `RunResourceProjection.layerLive`      | hub                | live read                      |
+| `RunResourceCompose.layerPersist`      | **explicit merge** | convenience                    |
+
 
 **Acceptance:** Table approved; no monolithic layer pulls all facets + transports without explicit name.
 
@@ -412,12 +465,14 @@ RunResourceTelemetry.Run.Started(input)
 
 ## Rejected substitutions (record during bake)
 
-| Proposal | Reason |
-| --- | --- |
-| `defineEvent` as SSoT | Bypasses plan 17 DSL; caused hub drift |
-| Durable `ProcessStore.state` as “telemetry state” | Wrong vocabulary — ops storage |
-| Domain folders under `store/` | Owner: role folders only |
-| Telemetry counters in kernel `Ref` | Violates telemetry-only boundary |
+
+| Proposal                                          | Reason                                 |
+| ------------------------------------------------- | -------------------------------------- |
+| `defineEvent` as SSoT                             | Bypasses plan 17 DSL; caused hub drift |
+| Durable `ProcessStore.state` as “telemetry state” | Wrong vocabulary — ops storage         |
+| Domain folders under `store/`                     | Owner: role folders only               |
+| Telemetry counters in kernel `Ref`                | Violates telemetry-only boundary       |
+
 
 ---
 
@@ -437,12 +492,13 @@ RunResourceTelemetry.Run.Started(input)
 
 ## Bake session checklist
 
-- [ ] Step 1 — `Telemetry.Service` shape locked
-- [ ] Step 2 — registry API locked
-- [ ] Step 3 — telemetry state API locked
-- [ ] Step 4 — hub bridge flow locked
-- [ ] Step 5 — RunResource kernel boundary locked
-- [ ] Step 6 — layer matrix locked
-- [ ] Step 7 — delete list approved
-- [ ] Plan 21 updated with bake outcomes
-- [ ] Owner sign-off on vocabulary table (four state words)
+- Step 1 — `Telemetry.Service` shape locked
+- Step 2 — registry API locked
+- Step 3 — telemetry state API locked
+- Step 4 — hub bridge flow locked
+- Step 5 — RunResource kernel boundary locked
+- Step 6 — layer matrix locked
+- Step 7 — delete list approved
+- Plan 21 updated with bake outcomes
+- Owner sign-off on vocabulary table (four state words)
+
