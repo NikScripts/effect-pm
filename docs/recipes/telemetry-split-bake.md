@@ -253,6 +253,211 @@ Do not put layer config on the `Telemetry.Tag` class body.
 
 ---
 
+## Discussion log (Jun 2026 bake sessions)
+
+Chronological notes from owner + bake sessions. Use this to resume context.
+
+### Three APIs (do not conflate)
+
+| API | Role |
+| --- | --- |
+| **`Telemetry.Tag`** | Skeleton only: namespace, group, operation, event, scope ref, `Telemetry.operation<Input>`, `start` / `exit` |
+| **Calling API** | How kernel runs an operation — Effect-native (`pipe`, `flatMap`, `gen`); passes operation input |
+| **Implementation API** | Not designed yet — handles operation input routing, scope materialization, logWarning, telemetry state reducers, layer; likely **`Telemetry.Service`** (tag + implementation together) |
+
+`Procedure.payload().success().failure()` is **Store/RPC only**, not telemetry.
+
+---
+
+### Process scope vs telemetry state vs operation input
+
+Three **separate concepts**. Do not merge operation input into scope or events automatically.
+
+| Concept | What it is | Visible to process? | Auto for telemetry events? |
+| --- | --- | --- | --- |
+| **Process scope state** | Identity + process fields in `State.Scope` context | Yes | Yes — events bind scope fields (selectors / materialization) |
+| **Telemetry state** | **Same scope object** as process state, extra fields added by telemetry layer | **No** (hidden) | Yes — when layer extends scope |
+| **Operation input** | Explicit payload to operation call (`processEntry(…)`) | N/A | **No** — never auto-merged into scope or events |
+
+- Process runs fine **without** telemetry layer; telemetry adds hidden fields on top of the same scope.
+- If a value is **already in scope** (because kernel put it there via `Scope.run` / lifetime provide), **do not** pass it again as operation input — telemetry picks it up from scope.
+- Operation input is for telemetry-specific data **not** in scope.
+- **Operation input is not related to scope.**
+
+**Implementation API** receives operation input at op start and **explicitly** decides per configuration: write to telemetry state, include in an event, add to log annotations, or ignore. No automatic routing.
+
+---
+
+### Tag skeleton decisions
+
+**Input type on operation, not on `Telemetry.start`:**
+
+```ts
+Telemetry.operation<QueueEntryInput>("processEntry")(
+  QueueEntryScope,
+  Telemetry.start("Started", QueueEntryStarted),
+  Telemetry.exit({ … }),
+  …
+);
+```
+
+`Telemetry.start` declares the start **event** only. Input type lives on `Telemetry.operation<Input>`.
+
+**Operation input type may differ from function arg type:**
+
+```ts
+// Function processes full entry; telemetry input is explicit subset
+const processEntry = (entry: { id: number; name: string; component: ReactNode }) =>
+  pipe(
+    QueueResourceTelemetry.Entry.processEntry({ name: entry.name }),
+    Effect.flatMap((ctx) => Effect.gen(function* () {
+      yield* ctx.telemetry.Retried;
+      return yield* processItem(entry);
+    })),
+  );
+```
+
+Telemetry does **not** get implicit access to function args — only scope (auto) and operation input (explicit).
+
+**Scope is declared on the operation in the tag** (`QueueEntryScope` as first child). Call sites should not need a redundant outer `QueueEntryScope.run` **if** the operation opens scope — but **how** is open (see rejected / explore below).
+
+**Exit-only operation shorthand** (owner proposal):
+
+```ts
+Telemetry.operation("rateLimit")({
+  onFailure: Telemetry.event("Rejected", QueueRateLimitRejected),
+  onSuccess: Telemetry.event("Accepted", QueueRateLimitAccepted),
+});
+// overload when only exit mapping, no start, no child events/ops
+```
+
+**Nested operations inherit parent scope** when no scope child specified:
+
+```ts
+Telemetry.operation<QueueEntryInput>("processEntry")(
+  QueueEntryScope,
+  Telemetry.start("Started", QueueEntryStarted),
+  Telemetry.operation("rateLimit")({
+    onFailure: Telemetry.event("Rejected", QueueRateLimitRejected),
+  }),
+  …
+);
+```
+
+`rateLimit` uses parent op's active scope — no second scope declaration.
+
+---
+
+### Calling API direction (owner)
+
+Mimic Effect — function returning `Effect`, `pipe` / `flatMap` / `gen`:
+
+```ts
+const processEntry = (entry: QueueEntryInput) =>
+  pipe(
+    QueueResourceTelemetry.Entry.processEntry(entry),
+    Effect.flatMap((ctx) =>
+      Effect.gen(function* () {
+        yield* ctx.telemetry.Retried;
+        yield* checkRateLimit.pipe(ctx.telemetry.rateLimit);
+        return yield* processItem(entry);
+      }),
+    ),
+  );
+
+yield* processEntry(entry);
+```
+
+- `processEntry(input)` — first step; opens operation; returns `Effect` to continue.
+- `ctx` shape open — likely includes `telemetry` handle for nested ops / middle events.
+- Shortcuts (`.gen`) optional later.
+- **Rejected:** extra `telemetry` callback param on generator; `.gen(entry, telemetry)` draft; bodies on `Telemetry.Tag`.
+
+---
+
+### Scope at call site — rejected approach
+
+Because scope is on the tag operation, avoid:
+
+```ts
+QueueEntryScope.run({ entryId, attempts },
+  pipe(QueueResourceTelemetry.Entry.processEntry({ name: entry.name }), …),
+);
+```
+
+**Also rejected (owner):** passing scope leaf as separate first arg:
+
+```ts
+QueueResourceTelemetry.Entry.processEntry(
+  { entryId: entry.id, attempts: entry.attempts }, // scope leaf
+  { name: entry.name },                            // operation input
+);
+```
+
+**Next topic to explore:** how operations open/update scope — from **leaf** vs from **root**; patterns for each. See § Scope opening strategies below.
+
+---
+
+### `Telemetry.Service` (implementation API sketch)
+
+Tag alone is not enough — skeleton is used to build the facet **and** the wiring API.
+
+- **`Telemetry.Tag`** — importable contract; no handlers, no state config, no input routing.
+- **`Telemetry.Service`** (name TBD) — define tag skeleton + implementation together: input routing, scope extension, logWarning, layer, generated operation handles.
+
+Old DX (outdated placement, keep behavior on implementation side):
+
+```ts
+Telemetry.event("Completed", RunResourceRunCompleted).pipe(
+  Telemetry.logWarning(
+    "RunResourceStore write failed for run completion",
+    ({ runId }) => ({ runId: String(runId) }),
+  ),
+);
+```
+
+New home: implementation / `Telemetry.Service` when authoring facet — not on bare tag skeleton.
+
+---
+
+### How scope works today (repo reference)
+
+`State.Scope` (`src/State.ts`): nested Context service; `withLeaf` builds tree; `run(leaf, effect)` / `layer(leaf)` / `provide(leaf)`.
+
+Queue today (`QueueResource.ts`, tests):
+
+```ts
+QueueResourceScope.run({ queueId },
+  QueueEntryScope.run({ entryId },
+    Effect.gen(function* () {
+      yield* QueueResourceStore.Entry.Started({ /* manual payload — debt */ });
+    }),
+  ),
+);
+```
+
+Event schemas (`queueResourceTelemetry.ts`) bind fields via scope selectors e.g. `QueueEntryState.Entry.entryId`. **Target:** zero-arg emit reads scope; kernel stops hand-building payloads.
+
+Plan 18 patterns: lifetime **A** (root on factory), **B** (leaf provide on unit), **D** (`WorkerScope.run` on fiber). Queue target: `QueueResourceScope` on runtime; `EntryScope` per entry execution.
+
+---
+
+### Scope opening strategies (to explore next)
+
+Operations declare a scope (usually **leaf**, sometimes **root**). Calling API must align without duplicate `Scope.run` wrappers or awkward two-arg calls.
+
+| Strategy | Idea | When |
+| --- | --- | --- |
+| **Leaf provide inside op** | `processEntry(input)` calls `QueueEntryScope.run(leaf, …)` internally; leaf values from ??? | Entry-scoped ops; parent root already in context from worker lifetime |
+| **Root provide inside op** | Operation opens `QueueResourceScope` (+ maybe leaf) | Op owns full bracket |
+| **Require ambient scope** | `processEntry(input)` assumes scope already in context from kernel lifetime; only adds op input + start/exit | Worker already under `QueueResourceScope` |
+| **Scope values in operation input** | ❌ rejected as conflating input + scope | — |
+| **Separate scope arg** | ❌ rejected by owner | — |
+
+Open: for Queue `processEntry`, where do `entryId` / `attempts` enter scope — kernel before call, operation opener from kernel's `entry`, or worker lifetime + entry leaf only inside op?
+
+---
+
 ## Open questions (session handoff)
 
 Return to this section in a later bake session. **Locked:** `Telemetry.Tag`
@@ -270,13 +475,23 @@ skeleton only. Everything below is open.
 ### B. Operations API (calling)
 
 - [ ] Confirm `pipe(processEntry(input), Effect.flatMap(ctx => gen))` as canonical shape
-- [ ] **`OperationContext` fields** — `input`, `telemetry`, `leaf`, `state` — what else?
+- [ ] **`OperationContext` fields** — `input`, `telemetry`, … — no `leaf`/`state` conflated with operation input
+- [ ] **Scope opening: leaf vs root vs ambient** — see Discussion log § Scope opening strategies
+- [ ] Rejected: outer `QueueEntryScope.run` + op; rejected: `(scopeLeaf, opInput)` two-arg call
 - [ ] Middle events: `ctx.telemetry.Retried` vs flat `yield* Tag.Entry.Retried` vs both?
 - [ ] Where operation handles live — layer context, module export, or generated from tag+layer?
-- [ ] **Shortcuts v1** — `.gen(input, fn)` only? `.effect(input, effect)`? none?
-- [ ] Nested no-input ops — pipe endomorphism? `ctx.telemetry.rateLimit` signature?
+- [ ] **Shortcuts v1** — `.gen(input, fn)` only? none?
+- [ ] Nested no-input ops — inherit parent scope; pipe signature?
 - [ ] Type error when yielding events outside active operation context
-- [ ] Defect vs failure vs interrupt — caller-visible or layer-only mapping?
+
+### B2. Implementation API (`Telemetry.Service`)
+
+- [ ] Shape for binding operation input → event / telemetry state / log (no auto routing)
+- [ ] Scope field materialization for events (successor to `Telemetry.Schema` + `field()`)
+- [ ] `logWarning` and log annotations — new DX on Service, not tag skeleton
+- [ ] `Telemetry.Service` vs tag file + separate implementation module
+- [ ] Exit-only operation overload syntax
+- [ ] Nested op scope inherit when scope child omitted
 
 ### C. Layer composition
 
@@ -287,7 +502,8 @@ skeleton only. Everything below is open.
 
 ### D. Emit pipeline
 
-- [ ] Materialization rules — which event schema fields come from scope / input / exit result / cause / duration?
+- [ ] Materialization — event fields from **scope** (auto); from **operation input** only via implementation bindings (explicit)
+- [ ] Do **not** auto-merge operation input into scope or events
 - [ ] Prepare → metrics → hub ordering (plan 17 legs)
 - [ ] Wire id helper API (no raw strings in kernel)
 - [ ] Validation before hub emit
@@ -296,8 +512,8 @@ skeleton only. Everything below is open.
 
 ### E. Telemetry state
 
+- [ ] Same object as process scope state; hidden fields; process code cannot read telemetry fields
 - [ ] Layer config DX for fields (gauge, counter, timestamp, duration between fields)
-- [ ] Scope extension — merge onto process scopes; process cannot read telemetry fields
 - [ ] Parent → leaf inheritance rules (explicit extended parent + leaf scope)
 - [ ] Reducers — on which wires / ops updated?
 - [ ] **Entry cleanup policy** — when entry-scoped maps are dropped
@@ -330,10 +546,11 @@ skeleton only. Everything below is open.
 
 ### J. Suggested bake order (next sessions)
 
-1. **B + C** — `OperationContext` + layer constructor sketch (Queue stress case)
-2. **D + E** — materialization + telemetry state config
-3. **F + G** — registry, sinks, RunResource boundary
-4. Sign off → update [21-state-vocabulary.md](../plans/21-state-vocabulary.md) → implement slice A (tag skeleton port)
+1. **Scope opening strategies** — leaf vs root vs ambient for Queue `processEntry` (Discussion log)
+2. **B + B2** — calling API + implementation input routing sketch
+3. **D + E** — scope materialization + telemetry state on same scope object
+4. **F + G** — registry, sinks, RunResource boundary
+5. Sign off → plan 21 → implement tag skeleton port
 
 ---
 
