@@ -13,7 +13,7 @@ implementation. Fix vocabulary drift and replace hub-branch interim APIs (`defin
 **Architecture (locked Jun 2026):** [architecture-split-and-transports.md](./architecture-split-and-transports.md).
 
 **Golden telemetry tree (reference branch):** `origin/cursor/facet-telemetry-158c` —
-`ProcessStore.telemetry` DSL in `runResource.ts` (restore as `Telemetry.Service`, not
+`ProcessStore.telemetry` DSL in `runResource.ts` (port to `Telemetry.Tag`, not
 on `*Store`).
 
 **Current hub branch debt:** `src/store/RunResourceTelemetry.ts` uses `TelemetryHub.defineEvent`;
@@ -42,18 +42,19 @@ no telemetry state module.
 
 ---
 
-## Locked ingredients (do not re-litigate without owner)
+## Architecture principles (still apply — distinct from locked DX)
 
 1. **Isolation / siloing** — opt-in subpaths, layers, registries; combined layers explicitly named.
-2. **Three modules per domain** — `Telemetry.Service`, `*Store` (archive), `*Projection` (optional); separate tags.
+2. **Three modules per domain** — telemetry tag, `*Store` (archive), `*Projection` (optional); separate tags.
 3. **Emit `R = TelemetryHub`** at kernel sites — never `RuntimeStorage` on emit path.
-4. **Telemetry tree DSL** — plan 17 §5 (`Telemetry.namespace` / `tag` / `event` / `logWarning`); **not** `defineEvent`.
-5. **Hub = router only** — validate + fan-out; definitions live on `Telemetry.Service`.
+4. **Telemetry tree DSL** — `Telemetry.Tag` with `namespace` / `group` / `operation` / `event`; **not** `defineEvent`.
+5. **Hub = router only** — validate + fan-out; definitions live on `Telemetry.Tag`.
 6. **Archive optional** — `ArchiveSink` leg; store facet queries only.
 7. **Two in-memory state kinds** — process state (`State.Scope`) vs telemetry state (telemetry path only); see plan 21.
 8. **Telemetry state never touches storage** — not projection, not durable ops.
 9. **Role folders only** — `store/`, `sink/`, `transport/`; PascalCase files; no domain subfolders; no import shims.
 10. **Reference implementation order** — restore RunResource telemetry from `facet-telemetry-158c` → hub bridge → Queue.
+11. **Store/RPC separate** — `Procedure.payload().success().failure()` and `Store.Tag` are not telemetry APIs.
 
 ---
 
@@ -244,6 +245,7 @@ zero-arg `yield* …Event`.
 | **D. Context-only events** | Inside op, `yield* Tag.Entry.Retried` (flat path); layer sets op context | No `telemetry` param; same paths as wire tree | Needs op-context tag; events outside op must fail at type level |
 | **E. Layer-provided service** | `yield* QueueResourceTelemetry.processEntry(entry)` where service wraps body | Clean call site in kernel | Body registration separate from definition unless code-generated |
 | **F. Dual: define + register** | Tag defines contract; `Telemetry.layer({ handlers: { processEntry: … } })` binds bodies | Clean separation definition/runtime | Two places to maintain unless codegen links them |
+| **G. Hybrid (leading candidate)** | Outer `.run(input, body)` or bound `Effect.fn`; nested no-start ops use `.wrap(effect)`; flat tag paths for events | No `telemetry` param; Scope-like boundary; nested ops without start | Layer + type-level op context required |
 
 Open questions for runtime bake:
 
@@ -251,6 +253,50 @@ Open questions for runtime bake:
 - Nested operation invocation: pipe, method on parent op handle, or flat tag path?
 - Is operation input only passed to `run` / outer wrapper, never to middle events?
 - Type error when yielding group events outside an active operation context?
+
+#### Queue `processEntry` stress-case sketches (not locked)
+
+**G1 — Scope-style `.run` + flat event paths (option A + D):**
+
+```ts
+yield* QueueResourceTelemetry.Entry.processEntry.run(entry, Effect.gen(function* () {
+  yield* QueueResourceTelemetry.Entry.Retried;
+  yield* checkRateLimit.pipe(QueueResourceTelemetry.Entry.rateLimit.wrap);
+  return yield* processItem(entry);
+}));
+```
+
+**G2 — Module-level `Effect.fn` bind (option B):**
+
+```ts
+export const processEntry = QueueResourceTelemetry.Entry.processEntry(
+  Effect.fn(function* (entry: QueueEntryInput) {
+    yield* QueueResourceTelemetry.Entry.Retried;
+    yield* checkRateLimit.pipe(QueueResourceTelemetry.Entry.rateLimit.wrap);
+    return yield* processItem(entry);
+  }),
+);
+```
+
+**G3 — Layer handler map (option F):**
+
+```ts
+export const layer = QueueResourceTelemetry.layer({
+  handlers: {
+    processEntry: Effect.fn(function* (entry: QueueEntryInput) {
+      yield* QueueResourceTelemetry.Entry.Retried;
+      yield* checkRateLimit.pipe(QueueResourceTelemetry.Entry.rateLimit.wrap);
+      return yield* processItem(entry);
+    }),
+  },
+});
+```
+
+Notes:
+
+- `rateLimit` has no `Telemetry.start` — nested op uses `.wrap(effect)` only.
+- Middle / exit events stay zero-arg; layer materializes payloads from scope + op context.
+- `.wrap` name is illustrative — final adapter name decided in runtime bake.
 
 ### Telemetry layer — options to explore (open)
 
@@ -310,40 +356,50 @@ bodies).
 
 ## Open recipe steps (bake in order)
 
-### Step 1 — `Telemetry.Service` factory shape
+Steps 1–2 are **locked** vs **open** as marked. Steps 3–9 remain from the
+original bake sequence, updated for `Telemetry.Tag` where noted.
 
-**Decides:** Public class API, relationship to plan 17 DSL, exports, subpath.
+### Step 1 — `Telemetry.Tag` definition (**locked**)
 
-**Recommended ingredients:**
+**Decides:** Public class API, subpath, exports.
 
-```ts
-// Authoring (unchanged DSL — moved off ProcessStore)
-class RunResourceTelemetry extends Telemetry.Service<RunResourceTelemetry>()(
-  RunResourceScope,
-  Telemetry.namespace("RunResource"),
-  Telemetry.tag("Run")(
-    Telemetry.event("Started", RunResourceRunStarted).pipe(
-      Telemetry.logWarning("...", ({ runId }) => ({ runId: String(runId) })),
-    ),
-    // ...
-  ),
-) {}
+**Locked shape:** see **Definition surface** above (`namespace` / `group` /
+`operation` / `event` / `start` / `exit`).
 
-// Kernel
-yield* RunResourceTelemetry.Run.Started(input) // R = TelemetryHub
-```
+**Still to confirm:** subpath (`store/QueueResource` re-export vs dedicated file),
+identity module placement, `Telemetry.logWarning` pipe on event definitions.
 
-- `Telemetry.Service` mirrors `ProcessStore.Service` curried class pattern.
-- Tree builder moves from `ProcessStore.telemetry` to `Telemetry.Service` (or thin alias during migration).
-- Static emit paths attached to **telemetry class**, not `*Store`.
-
-**Alternatives:** const + `attachEmitStatics` (less symmetry); keep `ProcessStore.telemetry` name (rejected in plan 20).
-
-**Acceptance:** Owner confirms class name, subpath (`store/RunResource` re-export vs dedicated), and that DSL is unchanged from golden branch.
+**Acceptance:** Owner confirms exports match role-folder rules; golden tree from
+`facet-telemetry-158c` ports to this shape without DSL changes.
 
 ---
 
-### Step 2 — `Telemetry.registry`
+### Step 2 — Operation runtime API (**open**)
+
+**Decides:** How kernel code runs inside tracked operations; nested op invocation;
+call-site adapter(s).
+
+**Options:** A–G in **Operation runtime — options to explore**; stress-case
+sketches G1–G3.
+
+**Acceptance:** Owner picks runtime shape (or hybrid); nested `rateLimit` without
+start + middle `Retried` typecheck and read cleanly at call site.
+
+---
+
+### Step 3 — Telemetry layer API (**open**)
+
+**Decides:** Constructor shape; what the layer puts in context; relationship to
+runtime handlers.
+
+**Responsibilities:** see **Telemetry layer — options to explore** above.
+
+**Acceptance:** Layer API derivable from step 2 choice; documents requires/provides
+for step 8 matrix.
+
+---
+
+### Step 4 — `Telemetry.registry`
 
 **Decides:** Wire registration, sink subscription, relationship to hub init.
 
@@ -363,7 +419,7 @@ Telemetry.registry([RunResourceTelemetry, QueueResourceTelemetry])
 
 ---
 
-### Step 3 — Telemetry state API
+### Step 5 — Telemetry state API
 
 **Decides:** Service tag, lifetime, who updates, interaction with emit legs.
 
@@ -389,19 +445,23 @@ interface RunResourceTelemetryState {
 
 ---
 
-### Step 4 — Hub emit bridge (internal)
+### Step 6 — Hub emit bridge (internal)
 
 **Decides:** How tree statics reach `TelemetryHub.emit` without spine in emit `R`.
 
 **Recommended flow:**
 
 ```text
-RunResourceTelemetry.Run.Started(input)
-  → materialize from Telemetry.Schema + process scope
+yield* QueueResourceTelemetry.Entry.Retried
+  → materialize from event schema + active scope + telemetry state + op context
   → read/update telemetry state (optional leg)
   → TelemetryHub.emit({ wire, schema, payload })
   → sinks (archive / projection / broadcast / logs)
 ```
+
+Operation start/exit events are emitted by the operation runner (step 2), not by
+manual kernel calls. `Telemetry.start` input is consumed only when the runner opens
+the operation.
 
 - Persist sink uses `ArchiveSink` + spine — **not** inline in emit `R`.
 - `Telemetry.logWarning` applies to archive persist failures on sink path.
@@ -410,7 +470,7 @@ RunResourceTelemetry.Run.Started(input)
 
 ---
 
-### Step 5 — RunResource kernel boundary
+### Step 7 — RunResource kernel boundary
 
 **Decides:** What stays in process vs telemetry for gate counters.
 
@@ -424,7 +484,7 @@ RunResourceTelemetry.Run.Started(input)
 
 ---
 
-### Step 6 — Layer matrix (siloed vs combined)
+### Step 8 — Layer matrix (siloed vs combined)
 
 **Decides:** Default exports for apps; naming.
 
@@ -432,7 +492,7 @@ RunResourceTelemetry.Run.Started(input)
 | Layer                                  | Requires           | Provides                       |
 | -------------------------------------- | ------------------ | ------------------------------ |
 | `TelemetryHub.layer`                   | —                  | emit                           |
-| `RunResourceTelemetry.layer`           | hub                | tree statics + telemetry state |
+| `RunResourceTelemetry.layer`           | hub                | operation runners + telemetry state + emit statics |
 | `RunResourceStore.layerRuntimeStorage` | `RuntimeStorage`   | queries                        |
 | `ArchiveSink.layerForStore(...)`       | storage + hub      | persist leg                    |
 | `RunResourceProjection.layerLive`      | hub                | live read                      |
@@ -443,7 +503,7 @@ RunResourceTelemetry.Run.Started(input)
 
 ---
 
-### Step 7 — Migration & delete list
+### Step 9 — Migration & delete list
 
 **Decides:** What dies on hub branch when bake closes.
 
@@ -471,6 +531,7 @@ RunResourceTelemetry.Run.Started(input)
 | `defineEvent` as SSoT                             | Bypasses plan 17 DSL; caused hub drift |
 | Durable `ProcessStore.state` as “telemetry state” | Wrong vocabulary — ops storage         |
 | Domain folders under `store/`                     | Owner: role folders only               |
+| Procedure `.success` / `.failure` on telemetry    | Store/RPC only — telemetry uses `start` / `exit` + events |
 | Telemetry counters in kernel `Ref`                | Violates telemetry-only boundary       |
 
 
@@ -479,10 +540,11 @@ RunResourceTelemetry.Run.Started(input)
 ## After bake — implementation handoff
 
 1. Update [21-state-vocabulary.md](../plans/21-state-vocabulary.md) with locked step outcomes.
-2. Slice A: `Telemetry.Service` + restore RunResource tree from `facet-telemetry-158c`.
-3. Slice B: hub bridge + registry v1.
-4. Slice C: telemetry state v1 + RunResource kernel cleanup.
-5. Slice D: Queue migration on separate branch/worktree.
+2. Slice A: `Telemetry.Tag` + restore RunResource tree from `facet-telemetry-158c`.
+3. Slice B: operation runtime + telemetry layer v1.
+4. Slice C: hub bridge + registry v1.
+5. Slice D: telemetry state v1 + RunResource kernel cleanup.
+6. Slice E: Queue migration on separate branch/worktree.
 
 **Verification (every slice):** `pnpm run typecheck && pnpm test && pnpm run lint && pnpm run build`.
 
@@ -492,13 +554,15 @@ RunResourceTelemetry.Run.Started(input)
 
 ## Bake session checklist
 
-- Step 1 — `Telemetry.Service` shape locked
-- Step 2 — registry API locked
-- Step 3 — telemetry state API locked
-- Step 4 — hub bridge flow locked
-- Step 5 — RunResource kernel boundary locked
-- Step 6 — layer matrix locked
-- Step 7 — delete list approved
-- Plan 21 updated with bake outcomes
-- Owner sign-off on vocabulary table (four state words)
+- [x] Step 1 — `Telemetry.Tag` definition shape locked
+- [ ] Step 2 — operation runtime API locked
+- [ ] Step 3 — telemetry layer API locked
+- [ ] Step 4 — registry API locked
+- [ ] Step 5 — telemetry state API locked
+- [ ] Step 6 — hub bridge flow locked
+- [ ] Step 7 — RunResource kernel boundary locked
+- [ ] Step 8 — layer matrix locked
+- [ ] Step 9 — delete list approved
+- [ ] Plan 21 updated with bake outcomes
+- [ ] Owner sign-off on vocabulary table (four state words)
 

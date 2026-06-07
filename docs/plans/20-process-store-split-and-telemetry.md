@@ -6,6 +6,7 @@ implementation slices.
 **Related:** [17-facet-telemetry-factory.md](./17-facet-telemetry-factory.md),
 [19-transport-boundaries.md](./19-transport-boundaries.md),
 [21-state-vocabulary.md](./21-state-vocabulary.md),
+[recipes/telemetry-split-bake.md](../recipes/telemetry-split-bake.md) (**`Telemetry.Tag` definition locked; runtime + layer open**),
 [06-runtime-hooks-config.md](./06-runtime-hooks-config.md),
 [STORAGE.md](../STORAGE.md).
 
@@ -38,7 +39,7 @@ Replace the monolithic facet class with **composable modules** per domain
 (`QueueResource`, `ProcessExecution`, …):
 
 ```text
-Telemetry.Service    emit API (plan 17 tree DSL)         — R = TelemetryHub; not on *Store
+Telemetry.Tag    emit contract (namespace/group/operation/event) — R = TelemetryHub; not on *Store
 Archive.*Store       durable persist + query/for         — RuntimeStorage in R
 Projection.*         live derived reads                  — hub sink; separate tag
 TelemetryState       in-memory metrics (telemetry only)  — never storage; bake: plan 21
@@ -64,7 +65,7 @@ export namespace QueueResource {
 | `ProcessStore` | Shrinks to **archive builder** + registry, or split into `Archive` + `ArchiveRegistry` |
 | `ProcessStorage` | **`ProcessArchive`** (or `RuntimeArchive`) — merges **archive layers only** |
 | `*Store` facet classes | **Archive facets** — persist sink + reads; may omit telemetry entirely (`LogStore`) |
-| `ProcessStore.telemetry(...)` | **`Telemetry.Service`** class (plan 17 DSL inside), not a ProcessStore section |
+| `ProcessStore.telemetry(...)` | **`Telemetry.Tag`** class (bake: [telemetry-split-bake.md](../recipes/telemetry-split-bake.md)), not a ProcessStore section |
 
 ---
 
