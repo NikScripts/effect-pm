@@ -142,14 +142,15 @@ class QueueResourceTelemetry extends Telemetry.Tag<QueueResourceTelemetry>(
 ) {}
 ```
 
-### Operations API — calling shape (open, owner direction)
+### Operations API — calling shape (agreed direction)
 
 Mimic Effect: **function that returns `Effect`**, built with `pipe` / `flatMap` / `gen`.
 
 ```ts
-const processEntry = (entry: QueueEntryInput) =>
+const processEntry = (entry: FullEntry) =>
   pipe(
-    QueueResourceTelemetry.Entry.processEntry(entry),
+    QueueResourceTelemetry.Entry.processEntry({ name: entry.name })
+      .provideLeaf({ entryId: entry.id, attempts: entry.attempts }),
     Effect.flatMap((ctx) =>
       Effect.gen(function* () {
         yield* ctx.telemetry.Retried;
@@ -159,16 +160,38 @@ const processEntry = (entry: QueueEntryInput) =>
     ),
   );
 
-// kernel
 yield* processEntry(entry);
 ```
 
-- `processEntry(entry)` — first step: takes input, opens operation, returns `Effect` to continue.
-- `ctx` — operation context (shape open): likely `{ input, telemetry, leaf, state }`.
-- **Shortcuts** (v1 subset TBD): e.g. `.gen(entry, fn)` expanding the pipe above.
-- Nested no-input ops (e.g. `rateLimit`): wrap existing `Effect`, no input arg.
+When process already bracketed scope:
 
-Rejected: extra `telemetry` callback param; bodies on `Telemetry.Tag` class.
+```ts
+QueueEntryScope.run({ entryId: entry.id, attempts: entry.attempts },
+  pipe(
+    QueueResourceTelemetry.Entry.processEntry({ name: entry.name }).assumingLeaf(),
+    Effect.flatMap((ctx) => …),
+  ),
+);
+```
+
+Nested no-input op (scope-inheriting):
+
+```ts
+yield* checkRateLimit.pipe(
+  QueueResourceTelemetry.Entry.rateLimit,
+  Effect.flatMap((ctx) => …),
+);
+```
+
+Scope-free op:
+
+```ts
+yield* QueueResourceTelemetry.Backfill.reconcile({ fromSeq: 100, toSeq: 200 });
+```
+
+Rejected: extra `telemetry` callback param; bodies on `Telemetry.Tag`; two-arg `(leaf, input)`.
+
+Optional shortcut (v2): `.gen(input, fn)` expanding pipe + flatMap.
 
 ---
 
@@ -463,6 +486,209 @@ Builder must complete via **one** of:
 
 ---
 
+### OperationContext (proposed lock)
+
+What `Effect.flatMap` receives after the builder completes:
+
+```ts
+interface OperationContext<
+  Input,
+  Scope extends StateScope<any, any, any, any, any, any, any, any>,
+  TelemetryHandle,
+> {
+  /** Operation input from `op(input)` — read-only; not scope. */
+  readonly input: Input;
+  /** Child events + nested ops declared under this operation on the tag. */
+  readonly telemetry: TelemetryHandle;
+}
+```
+
+**Not on `OperationContext`:**
+
+- Scope state — use `yield* QueueEntryScope` (or declared scope tag for this op)
+- Telemetry hidden state — materialized on emit; optional `yield* TelemetryState` internal only
+- Operation input duplicated as scope fields
+
+Inside body:
+
+```ts
+Effect.flatMap((ctx) =>
+  Effect.gen(function* () {
+    const scope = yield* QueueEntryScope; // process + hidden telemetry fields
+    yield* ctx.telemetry.Retried;
+    yield* QueueEntryScope.patch({ startedAt: now }); // mid-op process patch — TBD API
+    return yield* processItem(entry);
+  }),
+);
+```
+
+Nested op context: sub-handle on `ctx.telemetry.rateLimit`; parent `ctx.input` unchanged unless nested op has its own input type.
+
+---
+
+### Scope providers — naming (proposed lock)
+
+| Method | Meaning |
+| --- | --- |
+| **`provideLeaf(leaf)`** | Open/install leaf scope on this op (`Scope.Leaf` type from tag) |
+| **`provideRoot(root)`** | Open/install root when not ambient |
+| **`assumingLeaf()`** | Leaf already in `R`; builder completes without install |
+| **`assumingRoot()`** | Root already in `R` |
+
+**Explicit `assuming*` over inference** — no magic ambient detection in v1 ( clearer errors; add inference later if noisy).
+
+Builder types (conceptual):
+
+```ts
+type OpBuilder<Input, Needs extends "leaf" | "root" | "none"> =
+  Needs extends "none" ? Effect<OperationContext<Input, …>, …>
+  : { provideLeaf(…): …; assumingLeaf(): Effect<…>; … }
+```
+
+---
+
+### `State.Scope.patch` (proposed)
+
+Process-visible mid-op updates on **current** scope level:
+
+```ts
+yield* QueueEntryScope.patch({ attempts: scope.Entry.attempts + 1 });
+// or partial update API on yielded state shape
+```
+
+Rules:
+
+- **Process code** may patch process-visible fields only (type-enforced vs telemetry hidden fields).
+- **Telemetry layer** may patch hidden fields via reducers on emit — not from kernel.
+- Patch does **not** replace builder obligation at op start.
+- Implementation: Ref-backed scope service or `FiberRef` — bake implementation detail; API on scope tag.
+
+---
+
+### Implementation API — field sources (proposed)
+
+Lives on **`Telemetry.Service`** (tag + wiring together). Event schemas declare fields; **sources** bind at implementation time.
+
+| Source | Use |
+| --- | --- |
+| **`Scope.field(path)`** | Auto from active scope (successor to `QueueEntryState.Entry.entryId`) |
+| **`Operation.input(key)`** | Explicit from operation input — **only where bound** |
+| **`Exit.value`** / **`Exit.cause`** | Exit events |
+| **`Exit.durationMs`** | Exit events |
+| **`Clock.now`** | `occurredAt` |
+| **`Telemetry.state(path)`** | Hidden scope fields / reducers |
+| **`Log.annotation(…)`** | Structured log — not event payload |
+
+Example on Service (shape illustrative):
+
+```ts
+class QueueResourceTelemetry extends Telemetry.Service<QueueResourceTelemetry>(…)({
+  tag: /* Telemetry.Tag skeleton */,
+  events: {
+    "Queue.Entry.Started": {
+      fields: {
+        entryId: Scope.field("Entry", "entryId"),
+        name: Operation.input("name"),           // from op input — explicit
+        occurredAt: Clock.now,
+      },
+      logWarning: {
+        message: "…",
+        annotations: (ctx) => ({ entryId: String(ctx.scope.Entry.entryId) }),
+      },
+    },
+  },
+  operations: {
+    processEntry: {
+      input: { name: Schema.String },
+      scope: QueueEntryScope,
+      start: "Started",
+      exit: { onSuccess: "Completed", onFailure: "Failed", onInterrupt: "Released" },
+    },
+  },
+  state: { … },
+}) {}
+```
+
+**No automatic** `Operation.input` → scope or → all events. Each field names its source.
+
+Operation input routing to **telemetry state** or **logs only** — same explicit map; omit from event fields if unused.
+
+---
+
+### `Telemetry.Service` vs `Telemetry.Tag` (proposed)
+
+| Export | Contents |
+| --- | --- |
+| **`QueueResourceTelemetry` tag class** | Skeleton only — importable without layer deps |
+| **`QueueResourceTelemetry` Service** | Tag + `events` sources + `operations` wiring + `state` + `.layer` |
+| **Generated handles** | `Entry.processEntry`, `Entry.rateLimit`, … from skeleton |
+
+Apps / facets import **Service** when authoring; transport/registry import **Tag** for wire catalog.
+
+File layout (proposal):
+
+```text
+store/QueueResourceTelemetry.ts      — Telemetry.Service (compose)
+store/QueueResourceTelemetryTag.ts — Telemetry.Tag skeleton only (optional split)
+```
+
+Or single file exporting both if Service extends Tag class.
+
+---
+
+### Exit-only operation overload (proposed lock)
+
+```ts
+Telemetry.operation("rateLimit")({
+  onSuccess: Telemetry.event("Accepted", QueueRateLimitAccepted),
+  onFailure: Telemetry.event("Rejected", QueueRateLimitRejected),
+});
+```
+
+Equivalent to `Telemetry.operation("rateLimit")(Telemetry.exit({ … }))` with no scope child, no start, no middle events. Scope-inheriting when nested.
+
+---
+
+### End-to-end Queue `processEntry` (target)
+
+**Tag skeleton:**
+
+```ts
+Telemetry.operation<{ name: string }>("processEntry")(
+  QueueEntryScope,
+  Telemetry.start("Started", QueueEntryStarted),
+  Telemetry.event("Retried", QueueEntryRetried),
+  Telemetry.operation("rateLimit")({
+    onFailure: Telemetry.event("Rejected", QueueRateLimitRejected),
+  }),
+  Telemetry.exit({
+    onSuccess: Telemetry.event("Completed", QueueEntryCompleted),
+    onFailure: Telemetry.event("Failed", QueueEntryFailed),
+    onInterrupt: Telemetry.event("Released", QueueEntryReleased),
+  }),
+);
+```
+
+**Kernel:**
+
+```ts
+yield* pipe(
+  QueueResourceTelemetry.Entry.processEntry({ name: entry.name })
+    .provideLeaf({ entryId: entry.entryId, attempts: entry.retries + 1 }),
+  Effect.flatMap((ctx) =>
+    Effect.gen(function* () {
+      yield* checkRateLimit.pipe(ctx.telemetry.rateLimit);
+      yield* ctx.telemetry.Retried;
+      return yield* handler(entry.payload);
+    }),
+  ),
+);
+```
+
+**Service binds** `Started.name ← Operation.input("name")`, `Started.entryId ← Scope.field(…)`, etc.
+
+---
+
 ### `Telemetry.Service` (implementation API sketch)
 
 Tag alone is not enough — skeleton is used to build the facet **and** the wiring API.
@@ -541,21 +767,24 @@ skeleton only. Everything below is open.
 - [x] Builder: `op(input).provideLeaf` / `provideRoot` / `assuming*` before `Effect` (agreed)
 - [x] Three op kinds: scope-required, scope-inheriting, scope-free (agreed)
 - [x] Mid-op: patch / nested scope after obligation met — not substitute for builder (agreed)
-- [ ] Exact provider names — `provideLeaf` / `provideRoot` / `assumingLeaf` / `assumingRoot` final?
-- [ ] Ambient scope inference vs explicit `.assuming*` only
-- [ ] Confirm `pipe(op(input).provideLeaf(...), Effect.flatMap, gen)` canonical
-- [ ] **`OperationContext`** — `telemetry` handle; scope via `yield* Scope` not mixed with op input
-- [ ] `Scope.patch` on `State.Scope` — design for mid-op process field updates
-- [ ] Nested no-input ops — inherit scope; pipe signature
+- [x] Provider names: `provideLeaf`, `provideRoot`, `assumingLeaf`, `assumingRoot` (proposed lock)
+- [x] Explicit `assuming*` — no ambient inference v1 (proposed lock)
+- [x] Canonical: `pipe(op(input).provideLeaf(…), Effect.flatMap, gen)` (proposed lock)
+- [x] `OperationContext`: `{ input, telemetry }`; scope via `yield* Scope` (proposed lock)
+- [x] Nested ops: `effect.pipe(Entry.rateLimit, Effect.flatMap)` (proposed lock)
+- [ ] `Scope.patch` — Ref implementation + hidden-field type firewall
+- [ ] Shortcut `.gen(input, fn)` — v2?
 
 ### B2. Implementation API (`Telemetry.Service`)
 
-- [ ] Shape for binding operation input → event / telemetry state / log (no auto routing)
-- [ ] Scope field materialization for events (successor to `Telemetry.Schema` + `field()`)
-- [ ] `logWarning` and log annotations — new DX on Service, not tag skeleton
-- [ ] `Telemetry.Service` vs tag file + separate implementation module
-- [ ] Exit-only operation overload syntax
-- [ ] Nested op scope inherit when scope child omitted
+- [x] Field sources: `Scope.field`, `Operation.input`, `Exit.*`, `Clock`, `Telemetry.state` (proposed)
+- [x] No auto routing of operation input (agreed + proposed)
+- [x] `logWarning` on Service event config — not tag skeleton (proposed)
+- [x] Service = tag + events wiring + operations + state + layer (proposed)
+- [x] Exit-only overload syntax (proposed lock)
+- [x] Nested op scope inherit when scope child omitted (proposed lock)
+- [ ] Exact Service config schema (object vs fluent builder)
+- [ ] `Operation.input("name")` typed key enforcement
 
 ### C. Layer composition
 
@@ -610,11 +839,12 @@ skeleton only. Everything below is open.
 
 ### J. Suggested bake order (next sessions)
 
-1. **Scope opening strategies** — leaf vs root vs ambient for Queue `processEntry` (Discussion log)
-2. **B + B2** — calling API + implementation input routing sketch
-3. **D + E** — scope materialization + telemetry state on same scope object
-4. **F + G** — registry, sinks, RunResource boundary
-5. Sign off → plan 21 → implement tag skeleton port
+1. ~~Scope builder + op kinds~~ (done)
+2. ~~OperationContext + providers + nested pipe~~ (proposed — owner confirm)
+3. **Implementation API** — lock Service config schema + typed `Operation.input` / `Scope.field`
+4. **`Scope.patch`** — process vs hidden fields
+5. Emit pipeline order + registry + RunResource boundary
+6. Sign off → plan 21 → tag skeleton port (RunResource)
 
 ---
 
@@ -814,7 +1044,8 @@ the operation.
 ## Bake session checklist
 
 - [x] Step 1 — `Telemetry.Tag` skeleton locked
-- [x] Step 2 — Operations API scope builder rules (partial — names / patch TBD)
+- [x] Step 2 — Operations API scope builder + OperationContext (proposed — confirm)
+- [ ] Step 2b — Implementation API / Telemetry.Service field sources
 - [ ] Step 3 — telemetry layer API locked (not on tag)
 - [ ] Step 4 — registry API locked
 - [ ] Step 5 — telemetry state API locked
