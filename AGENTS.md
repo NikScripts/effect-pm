@@ -2,15 +2,10 @@
 
 Start with [`docs/AGENTS.md`](./docs/AGENTS.md) for this package's architecture, invariants, and verification commands.
 
-**Persistence:** [`docs/STORAGE.md`](./docs/STORAGE.md) only.
-
 ## Git commit policy
 
-- Do not commit or push directly on major or user-owned branches such as `main`,
-  `develop`, release branches, or a branch the user created unless the user
-  approves that operation.
-- Agent-created `cursor/*` branches are the exception: agents may commit and push
-  work there as part of normal task progress.
+- Agents should commit and push changes frequently as part of normal task progress.
+- The exception: Do not commit or push directly to major branches such as `main`, `develop`, release branches, or branches created by the user, unless the user gives explicit approval.
 
 ## Effect platform policy
 
