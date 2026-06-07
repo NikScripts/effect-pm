@@ -2,6 +2,8 @@
 
 **Goal:** ~~Lock the full telemetry model before implementation~~ **Done (Jun 2026).** SSoT for implementation agents. Replace hub-branch interim APIs when slices land.
 
+**Requirements (implementation gate):** [telemetry-requirements.md](./telemetry-requirements.md) — full approved spec, code examples, steps 0–10, verify checklist (CHK-*), change log.
+
 **Non-goals:** Implement slices in this session; transport work; dashboard UI.
 
 **Owner prompt to start bake:** paste [telemetry-split-bake-prompt.md](../handoffs/telemetry-split-bake-prompt.md).
@@ -746,7 +748,6 @@ See **Calling API — scope builder (agreed Jun 2026)** for locked rules. Remain
 ### Quick reference — all locked
 
 - **Tag (API 1):** skeleton + node handles
-- **Wiring (API 3):** `Telemetry.Service(Tag, { extend, nodes })`
 - **Wiring (API 3):** `Telemetry.Service(Tag, { extend, nodes })` — G handles + exhaustive bind
 - **Calling (API 2):** builder → `{ input, telemetry, scope }` live view
 - **Registry:** `Telemetry.registry([...])` at compose
@@ -799,7 +800,7 @@ Layer.provideMerge(
 | --- | --- |
 | Registration | **Explicit compose** — `Telemetry.registry([...tags])` returns a **Layer** |
 | Timing | Layer build — **not** module import side effects |
-| Scope | **`Telemetry.Tag`** definitions only — **`ProcessStore.registry`** = archive facets |
+| Scope | **`Telemetry.Service`** exports (Tag catalog derived from Service) — **`ProcessStore.registry`** = archive facets only |
 | Sink matching | By **wire id** from registry catalog |
 | Global singleton | **Rejected** — per-compose registry layer |
 
@@ -810,7 +811,7 @@ Layer.provideMerge(
 | Decision | v1 lock |
 | --- | --- |
 | Storage | **Same object** as process scope; process types exclude hidden fields |
-| Declaration | **`Telemetry.extend(scope, fields)`** on Tag tree |
+| Declaration | **`extend`** on **Service wiring** (`Telemetry.Wiring`) — not on Tag skeleton |
 | Metric kinds v1 | `gauge`, `counter`, `timestamp`, `duration(from, to)` |
 | Lifetime | Worker / domain compose scope — in-memory only |
 | Writers | Metrics leg + operation runner — **kernel never reads/writes telemetry state** |
@@ -826,7 +827,7 @@ Layer.provideMerge(
 ```text
 yield* handle.Event
   1. resolve scope + OperationContext
-  2. materialize: schema + Tag bindings + Exit.* / op input
+  2. materialize: schema + wiring `bind` + Exit.* / op input
   3. optional metrics leg → telemetry state
   4. validate payload
   5. TelemetryHub.emit
@@ -900,8 +901,8 @@ yield* handle.Event
 
 | Item | v1 lock |
 | --- | --- |
-| Telemetry facet file | `store/<Domain>Telemetry.ts` — **`Telemetry.Tag`** tree |
-| Tag catalog | Tag class is registry source — no separate Service extract |
+| Telemetry facet file | `store/<Domain>Telemetry.ts` — exports **`Telemetry.Service`** (Tag + wiring) |
+| Tag catalog | Tag may live in sibling `<Domain>Tag.ts`; registry accepts **Service** exports |
 | Identity module | `src/<Domain>Identity.ts` — `TypeTag`, `TypeId`; facets import identity, not worker |
 | Subpath | `store/<Domain>Telemetry` for Service; identity at `@nikscripts/effect-pm/<Domain>Identity` |
 | `Telemetry.operation<Input>` | Input type param on **operation** — locked |
@@ -934,7 +935,7 @@ yield* handle.Event
 | Durable `ProcessStore.state` as “telemetry state” | Wrong vocabulary — ops storage         |
 | Domain folders under `store/`                     | Owner: role folders only               |
 | Flat `events` / `operations` maps on Service | Duplicates Tag tree; terrible authoring DX — use same tree + optional bindings |
-| `logWarning` inside binding 3rd arg | Use `.pipe(Telemetry.logWarning(…))` on event node — matches existing facet DSL |
+| `logWarning` on Tag skeleton or `.pipe` on Tag event node | **`logWarning:`** optional property per node in **wiring** (`Telemetry.logWarning(…)`) |
 | **`Telemetry.Layer.for` / `Telemetry.layer(tag, config)`** | Wiring is Service 2nd arg — avoids Layer naming collision |
 | Bindings / extend / logWarning on Tag | On **`Telemetry.Wiring`** via **`Telemetry.Service(Tag, wiring)`** |
 | Global telemetry registry singleton | Per-compose `Telemetry.registry([...])` Layer |
@@ -954,11 +955,11 @@ All steps 1–9 locked. Implementation agents may start slices; owner review wel
 | **API 1 Tag** | Skeleton + node handles — no extend / bind / logWarning |
 | **API 2 Calling** | Builder + `{ input, telemetry, scope }` + `provideLeaf` / `assuming*` |
 | **API 3 Wiring** | `Telemetry.Service(Tag, wiring)` — `Telemetry.Wiring<Tag>` |
-| Registry | `Telemetry.registry([...tags])` at compose |
+| Registry | `Telemetry.registry([...services])` at compose |
 | State | Hidden fields via `extend`; entry cleanup on op exit |
 | Emit | materialize → metrics → validate → hub → sinks |
 | RunResource | Counters off kernel `Ref`; gating = semaphore |
-| Layout | `store/*Telemetry.ts` = Tag; `src/*Identity.ts` |
+| Layout | `store/*Telemetry.ts` = Service; optional `*Tag.ts`; `src/*Identity.ts` |
 | Delete | `defineEvent`, `RunResourceHubTelemetry`, kernel `stateRef`, duplicate wire consts |
 
 ### Implementation slices (for other agents)
