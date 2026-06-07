@@ -282,7 +282,24 @@ Chronological notes from owner + bake sessions. Use this to resume context.
 
 ### Jun 2026 — Service DX correction (owner)
 
-Owner rejected flat `events` / `operations` config on Service. **Service must mirror Tag tree** with optional additions on the same nodes (`Telemetry.start(…, { name: Operation.input("name") })`, `Telemetry.extend(scope, …)`, optional `logWarning` on event nodes). Tag skeleton stays binding-free for catalog imports.
+Owner rejected flat `events` / `operations` config on Service. **Service must mirror Tag tree** with optional additions on the same nodes (`Telemetry.start(…, bindings)`, `Telemetry.extend(scope, …)`, `.pipe(Telemetry.logWarning(…))`). Tag skeleton stays binding-free for catalog imports.
+
+### Jun 2026 — Service bindings + logWarning (owner)
+
+- **`Telemetry.extend(scope, { … })`** — locked as shown (metric timestamp, duration, gauge, …).
+- **Event bindings (3rd arg)** — required **only for schema fields that are plain `Schema.*`** (not scope-bound, not terminal, not literal). Scope selectors, `Telemetry.terminal.*`, and literals materialize automatically; **Service must supply a source for every remaining schema field** (`Operation.input`, `Exit.*`, `Clock`, `Telemetry.state`, …). Type-level completeness on Service declarations.
+- **`Telemetry.logWarning`** — **pipe** on event node (Service only), same as today:
+
+```ts
+Telemetry.event("Changed", RunResourceStateChanged).pipe(
+  Telemetry.logWarning(
+    "RunResourceStore write failed for state change",
+    ({ reason }) => ({ reason: String(reason) }),
+  ),
+),
+```
+
+Not on bare Tag skeleton. Callbacks receive the **materialized event row**.
 
 ---
 
@@ -573,24 +590,34 @@ Lives on **`Telemetry.Service`**: **the same tree DSL as `Telemetry.Tag`**, with
 | Addition | Where in tree | Tag skeleton | Service |
 | --- | --- | --- | --- |
 | Wire + schema | `Telemetry.event` / `start` / `exit` | ✓ | ✓ (same) |
-| **Field bindings** | optional 3rd arg on event/start/exit event | — | `Operation.input`, `Scope.field`, `Exit.*`, `Clock`, `Telemetry.state` |
-| **`logWarning`** | same binding block or `.logWarning()` on node | — | archive persist failure only |
+| **Field bindings** | optional 3rd arg when schema has plain `Schema.*` fields | — | **required** for every such field; `Operation.input`, `Exit.*`, … |
+| **`logWarning`** | `.pipe(Telemetry.logWarning(…))` on event node | — | Service only — archive persist failure |
 | **Telemetry state** | `Telemetry.extend(scope, fields)` under namespace | — | hidden scope fields + reducers |
 | **Layer + handles** | on Service class | — | `.layer`, generated `Entry.processEntry`, … |
 
-**Rule:** If the Tag tree node exists without a binding block, materialization uses **schema + active scope** only (same as today’s selector story). Bindings are **explicit overrides** — especially `Operation.input` and `Exit.*`.
+**Schema field kinds** (from `Telemetry.Schema` — plan 17):
 
-Field source vocabulary (unchanged):
+| Kind | Example | Service binding |
+| --- | --- | --- |
+| **Scope-bound** | `QueueEntryState.Entry.entryId` | Auto from active scope |
+| **Terminal** | `Telemetry.terminal.clockMillis`, duration helpers | Auto at emit |
+| **Literal** | `Schema.Literal("completed")` | Auto |
+| **Plain schema** | `Schema.String`, `Schema.Number`, optional wrappers | **Must bind** on Service — e.g. `Operation.input("name")` |
+
+If an event schema has **no** plain-schema fields, omit the 3rd arg entirely
+(`Telemetry.event("Retried", QueueEntryRetried)`). Tag and Service trees match.
+
+**No automatic** operation-input routing — each plain-schema field names its source explicitly.
+
+Field source vocabulary:
 
 | Source | Use |
 | --- | --- |
-| **`Scope.field(path)`** | From active scope |
-| **`Operation.input(key)`** | From operation input — only where bound |
+| **`Scope.field(path)`** | Rare override; scope-bound schema fields usually need no entry |
+| **`Operation.input(key)`** | From operation input |
 | **`Exit.value`** / **`Exit.cause`** / **`Exit.durationMs`** | Exit events |
-| **`Clock.now`** | `occurredAt` |
+| **`Clock.now`** | When not using terminal |
 | **`Telemetry.state(path)`** | Hidden scope fields / reducers |
-
-**No automatic** operation-input routing. Omit binding → scope/schema only.
 
 ---
 
@@ -626,7 +653,7 @@ class QueueResourceTelemetry extends Telemetry.Tag<QueueResourceTelemetry>(id)(
 ) {}
 ```
 
-**Service** — same tree; only nodes that need wiring get a binding block or `Telemetry.extend`:
+**Service** — same tree; bindings only where schema has plain fields; `logWarning` via pipe:
 
 ```ts
 class QueueResourceTelemetry extends Telemetry.Service<QueueResourceTelemetry>(id)(
@@ -641,7 +668,6 @@ class QueueResourceTelemetry extends Telemetry.Service<QueueResourceTelemetry>(i
         QueueEntryScope,
         Telemetry.start("Started", QueueEntryStarted, {
           name: Operation.input("name"),
-          // entryId, occurredAt: schema + scope — omit when scope covers them
         }),
         Telemetry.event("Retried", QueueEntryRetried),
         Telemetry.operation("rateLimit")({
@@ -649,12 +675,12 @@ class QueueResourceTelemetry extends Telemetry.Service<QueueResourceTelemetry>(i
         }),
         Telemetry.exit({
           onSuccess: Telemetry.event("Completed", QueueEntryCompleted),
-          onFailure: Telemetry.event("Failed", QueueEntryFailed, {
-            logWarning: {
-              message: "Queue entry archive persist failed",
-              annotations: (ctx) => ({ entryId: String(ctx.scope.entryId) }),
-            },
-          }),
+          onFailure: Telemetry.event("Failed", QueueEntryFailed).pipe(
+            Telemetry.logWarning(
+              "QueueResourceStore write failed for Entry.Failed",
+              ({ entryId }) => ({ entryId: String(entryId) }),
+            ),
+          ),
           onInterrupt: Telemetry.event("Released", QueueEntryReleased),
         }),
       ),
@@ -667,14 +693,9 @@ class QueueResourceTelemetry extends Telemetry.Service<QueueResourceTelemetry>(i
 ) {}
 ```
 
-Binding block shape (bake choice — pick one):
+**Binding block:** flat record (3rd arg) — one entry per plain-schema field; TypeScript enforces completeness against the event schema. **`logWarning`:** `.pipe(Telemetry.logWarning(…))` on the event node — not inside the binding record.
 
-1. **Flat record** — third arg is `{ name: Operation.input("name"), … }`; reserved key `logWarning` when needed.
-2. **Pipe** — `Telemetry.start("Started", schema).bind({ name: … }).logWarning(…)` — mirrors old `defineEvent` pipe without leaving the tree.
-
-Leading candidate: **flat record** on the node (minimal diff from Tag); **pipe** for `logWarning` when flat + logWarning feels crowded.
-
-Service class also exposes **`.layer`** and generated operation handles (`Entry.processEntry`, …). Tag class does not.
+Service class also exposes **`.layer`** and generated operation handles. Tag class does not.
 
 ---
 
@@ -751,18 +772,18 @@ Tag alone is not enough — skeleton is used to build the facet **and** the wiri
 - **`Telemetry.Tag`** — importable contract; no handlers, no state config, no input routing.
 - **`Telemetry.Service`** (name TBD) — define tag skeleton + implementation together: input routing, scope extension, logWarning, layer, generated operation handles.
 
-Old DX (outdated placement, keep behavior on implementation side):
+Old DX (keep **`logWarning` pipe** on Service event nodes):
 
 ```ts
-Telemetry.event("Completed", RunResourceRunCompleted).pipe(
+Telemetry.event("Changed", RunResourceStateChanged).pipe(
   Telemetry.logWarning(
-    "RunResourceStore write failed for run completion",
-    ({ runId }) => ({ runId: String(runId) }),
+    "RunResourceStore write failed for state change",
+    ({ reason }) => ({ reason: String(reason) }),
   ),
-);
+),
 ```
 
-New home: implementation / `Telemetry.Service` when authoring facet — not on bare tag skeleton.
+New home: **`Telemetry.Service`** tree — same pipe; not on bare Tag skeleton.
 
 ---
 
@@ -814,7 +835,7 @@ skeleton only. Everything below is open.
 
 - [ ] Subpath/export: `store/QueueResource` re-export vs dedicated telemetry file?
 - [ ] Input type param: `Telemetry.operation<Input>` vs elsewhere?
-- [ ] `Telemetry.logWarning` on event defs — stays on tag decl or layer-only?
+- [ ] `Telemetry.logWarning` — Service pipe only (locked); archive persist failure behavior
 - [ ] Identity module: file name, subpath (`RunResourceIdentity.ts`?)
 
 ### B. Operations API (calling)
@@ -835,12 +856,14 @@ skeleton only. Everything below is open.
 
 - [x] Field sources: `Scope.field`, `Operation.input`, `Exit.*`, `Clock`, `Telemetry.state` (proposed)
 - [x] No auto routing of operation input (agreed + proposed)
-- [x] `logWarning` on Service event config — not tag skeleton (proposed)
-- [x] Service = tag + events wiring + operations + state + layer (proposed)
+- [x] `logWarning` via `.pipe(Telemetry.logWarning(…))` — Service only (locked)
+- [x] Service = Tag tree + bindings + `Telemetry.extend` + layer (locked)
+- [x] Binding 3rd arg: flat record; **required for every plain `Schema.*` field** on event schema (locked)
+- [x] Scope-bound / terminal / literal schema fields — auto; no binding entry (locked)
+- [x] `Telemetry.extend(scope, metrics)` under namespace (locked)
 - [x] Exit-only overload syntax (proposed lock)
 - [x] Nested op scope inherit when scope child omitted (proposed lock)
-- [ ] Exact Service binding block — flat third arg vs `.bind()` / `.logWarning()` pipe (owner)
-- [ ] `Operation.input("name")` typed key enforcement
+- [ ] `Operation.input("name")` typed key enforcement vs operation generic
 
 ### C. Layer composition
 
@@ -915,7 +938,7 @@ original bake sequence, updated for `Telemetry.Tag` where noted.
 
 **Locked shape:** see **Definition surface** above.
 
-**Still to confirm:** subpath, exports, `Telemetry.logWarning` on event defs.
+**Still to confirm:** subpath, exports.
 
 **Acceptance:** Tag file contains skeleton only; golden tree from
 `facet-telemetry-158c` ports without adding runtime concerns.
@@ -1073,6 +1096,7 @@ the operation.
 | Durable `ProcessStore.state` as “telemetry state” | Wrong vocabulary — ops storage         |
 | Domain folders under `store/`                     | Owner: role folders only               |
 | Flat `events` / `operations` maps on Service | Duplicates Tag tree; terrible authoring DX — use same tree + optional bindings |
+| `logWarning` inside binding 3rd arg | Use `.pipe(Telemetry.logWarning(…))` on event node — matches existing facet DSL |
 | Operation bodies / handlers on `Telemetry.Tag`    | Tag is skeleton — Operations API + layer |
 | Telemetry state on `Telemetry.Tag`                | Tag is skeleton — state on layer       |
 | Telemetry counters in kernel `Ref`                | Violates telemetry-only boundary       |
@@ -1098,7 +1122,7 @@ Pick defaults for v1 so implementation agents do not stall:
 
 | # | Decision | Recommendation for v1 |
 | --- | --- | --- |
-| 1 | **`Telemetry.Service` shape** | Same tree as Tag + optional bindings on nodes + `Telemetry.extend` + `.layer` |
+| 1 | **`Telemetry.Service` shape** | Tag tree + `Telemetry.extend` + binding 3rd arg (plain schema fields only) + `.pipe(logWarning)` |
 | 2 | **Registry** | Explicit `Telemetry.registry([...Tags])` at app compose; not module auto-init |
 | 3 | **No telemetry layer** | Emits no-op (hub not required in R for stub); full layer required for real emit |
 | 4 | **Layer matrix** | Approve step 8 table as-is; `RunResourceTelemetry.layer` requires hub |
@@ -1148,7 +1172,7 @@ Update [21-state-vocabulary.md](../plans/21-state-vocabulary.md) when bake close
 
 - [x] Step 1 — `Telemetry.Tag` skeleton locked
 - [x] Step 2 — Operations API + OperationContext locked
-- [ ] Step 2b — Service = Tag tree + bindings (finish line #1; binding block shape: flat vs pipe)
+- [x] Step 2b — Service = Tag tree + extend + bindings + logWarning pipe
 - [ ] Step 3 — layer API + no-op policy (finish line #3–5)
 - [ ] Step 4 — registry v1 (finish line #2)
 - [ ] Step 5 — telemetry state + entry cleanup (finish line #7)
