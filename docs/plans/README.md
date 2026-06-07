@@ -47,6 +47,7 @@ Higher items unblock remote operations, operator UX, and honest queue typing.
 | — | **Storage / Prisma follow-up** (adapter landed; polish and docs) | [11-storage-prisma-follow-up.md](./11-storage-prisma-follow-up.md) |
 | — | **Hybrid `RuntimeStorage`** — one layer, SQL + Redis inside adapter | [15-runtime-storage-hybrid.md](./15-runtime-storage-hybrid.md) |
 | — | **Transport implementation migration** — reframe Effect RPC as wire framing only; rebuild control/log on store-transport shape; HTTP/WebSocket adapters | [16-effect-rpc-transport-migration.md](./16-effect-rpc-transport-migration.md) · boundaries [19](./19-transport-boundaries.md) |
+| — | **Effect ecosystem adapters** — `@effect/sql` substrate hardening; optional `@effect/workflow` / `@effect/cluster` compose adapters | [22-effect-ecosystem-adapters.md](./22-effect-ecosystem-adapters.md) |
 | — | **Conversation index (May 2026)** — checklist; not implementation spec | [14-conversation-capture-may-2026.md](./14-conversation-capture-may-2026.md) |
 
 ### Dependency hints (soft)

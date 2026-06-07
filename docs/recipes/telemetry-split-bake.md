@@ -206,6 +206,55 @@ export const TypeId: unique symbol = Symbol.for(TypeTag);
 - Facets and telemetry definitions import the identity module, not the worker/service
   module, when they only need the stable type id.
 
+### Still open before layer work
+
+Resolve these in the bake before implementing `Telemetry.layer` / emit bridge:
+
+1. **Operation selector typing** — exact API for `.input` / `.success` / `.failure`
+   / nested paths; whether constraints are captured at `Telemetry.operation(...)` or
+   at schema field binding time.
+2. **`start` / `exit` payload semantics** — which fields receive operation input,
+   success value, failure cause, and duration by default; per-event override shape.
+3. **Telemetry state DX** — field declaration (`Telemetry.State.extend`), reducer
+   hooks, and entry-scope cleanup policy (avoid unbounded maps).
+4. **Layer construction** — registry init, hub bridge sequence, per-domain layer
+   names (see step 4 / 6 below; update for `Telemetry.Tag` not `Telemetry.Service`).
+5. **Identity module convention** — file name, subpath, and which domains get
+   `TypeTag` / `TypeId` first.
+
+Ecosystem adapters (workflow, SQL hardening, cluster) are tracked separately:
+[22-effect-ecosystem-adapters.md](../plans/22-effect-ecosystem-adapters.md).
+
+---
+
+## Getting back on track
+
+**Branch:** `cursor/telemetry-redesign-bake-faed` — definition locks live in this
+file; implementation has not started.
+
+**Done (definition bake):**
+
+- `Telemetry.Tag` contract-first shape; layer separate from definition.
+- `Telemetry.namespace` / `group` / `operation` / `start` / `exit` / nested operations.
+- Wire rule: `Namespace.Group.Event` only; operations are tracing/local identity.
+- Zero-arg event emit rule; scope + telemetry state inheritance model.
+- `Store.Tag` / `Procedure` / RPC error round-trip decisions.
+- Identity module pattern for circular-import-safe type ids.
+
+**Next bake sessions (in order):**
+
+1. Lock operation selectors + exit payload defaults (items 1–2 above).
+2. Lock telemetry state field API + entry cleanup (item 3).
+3. Rewrite steps 1–7 below for `Telemetry.Tag` (steps still say `Telemetry.Service`).
+4. Lock layer matrix + hub bridge flow (items 4–5).
+5. Owner sign-off → update [21-state-vocabulary.md](../plans/21-state-vocabulary.md).
+6. Implementation slice A: `Telemetry.Tag` + RunResource tree restore.
+
+**Parallel track (does not block telemetry layer):**
+
+- Document and slice workflow/SQL/cluster adapters per
+  [22-effect-ecosystem-adapters.md](../plans/22-effect-ecosystem-adapters.md).
+
 ---
 
 ## Open recipe steps (bake in order)
