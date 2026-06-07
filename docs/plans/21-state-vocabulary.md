@@ -13,96 +13,58 @@
 
 | Term | Who reads/writes | Lifetime | Storage | Purpose |
 | --- | --- | --- | --- | --- |
-| **Process state** | Kernel / business logic (`State.Scope`) | Fiber / bracket (`Scope.run`) | In-memory only | Run the effect; ids and tick context the process **needs** |
-| **Telemetry state** | Telemetry runtime only (API 3 — emit legs, operation runner) | Worker / compose scope (in-memory) | **Never** `RuntimeStorage` | Hidden scope fields, counters between emits — process **must not** get/set |
-| **Projection state** | Live read API (`*Projection`) | In-memory; optional hydrate once from archive | Not written by emit | Dashboard “now” — **derived from events**, not emit-side scratch |
-| **Durable operational state** | Archive / ops facets (plan 13) | Durable rows | **`RuntimeStorage`** | Rate limits, leases, config rows — **not** telemetry state |
+| **Process state** | Kernel / business logic (`State.Scope`) | Fiber / bracket | In-memory only | Run the effect |
+| **Telemetry state** | Telemetry runtime (`internal/telemetry`) | Worker / compose scope | **Never** `RuntimeStorage` | Hidden scope fields, counters between emits |
+| **Projection state** | Live read API (`*Projection`) | In-memory; optional hydrate | Not written by emit | Dashboard “now” |
+| **Durable operational state** | Archive / ops facets (plan 13) | Durable rows | **`RuntimeStorage`** | Rate limits, leases — **not** telemetry state |
 
-**Common mistakes:**
-
-- Calling durable `ProcessStore.state` “telemetry state” — **wrong**.
-- Putting telemetry counters in kernel `Ref` (`RunResource.ts` today) — **wrong**; delete when API 3 ships.
-- Using `TelemetryHub.defineEvent` as the telemetry tree — **wrong**; use **`Telemetry.Tag`** + plan 17 DSL.
-- Using **`Telemetry.Service`** in this package — **wrong**; use **`Telemetry.Tag`** + **`Telemetry.layer(tag)`**.
+**Common mistakes:** kernel `Ref` counters; `defineEvent` as tree; durable `ProcessStore.state` as telemetry state.
 
 ---
 
-## Three telemetry APIs (locked — do not conflate)
+## Three telemetry APIs (locked)
 
-| # | API | Public | Role |
+| # | API | Surface | Role |
 | --- | --- | --- | --- |
-| **1** | **Definition** | **`Telemetry.Tag`** | Facet tree in `store/*Telemetry.ts` — extend, bindings, logWarning |
-| **2** | **Calling** | Static paths on Tag + layer | Builder → `{ input, telemetry, scope }` |
-| **3** | **Runtime** | **`Telemetry.layer(tag)`** | Implementation in **`src/internal/telemetry/`** — emit, runner, state Refs |
+| **1** | **`Telemetry.Tag`** | Class + tree DSL | **Skeleton** — wires, schemas, ops, events, **node handles** |
+| **2** | **Calling** | Static paths on **Service** | Builder → `{ input, telemetry, scope }` |
+| **3** | **Wiring** | **`Telemetry.Wiring<Tag>`** | `{ extend, nodes }` — 2nd arg to **`Telemetry.Service`** |
+| **∴** | **`Telemetry.Service`** | `Telemetry.Service(Tag, wiring)` | Facet export; **`.layer`** = Effect Layer |
+
+**Internal** spine/kernel does not import Service for wiring — uses Service static paths when **`Service.layer`** is provided.
 
 Store/RPC **`Procedure.payload().success().failure()`** is separate.
 
 ---
 
-## Process state (`State.Scope`)
+## File layout (RunResource example)
 
-**Module:** `src/State.ts`, `*Scope.ts`.
-
-- Kernel provides via builder `provideLeaf`, `Scope.run`, or `Scope.layer`.
-- **`OperationContext.scope`** — live read view.
-- **`Scope.patch(partial)`** — process-visible fields only mid-op.
-
----
-
-## Telemetry state (in-memory, telemetry-exclusive)
-
-**Not shipped.** Bake locked (Jun 2026):
-
-- **`Telemetry.extend(scope, fields)`** on Tag (API 1); Refs in runtime (API 3).
-- Same runtime object as process scope; hidden from process types.
-- Entry cleanup on operation exit.
-- Never `RuntimeStorage`.
+```text
+store/RunResourceTag.ts          — Telemetry.Tag (API 1) — optional split
+store/RunResourceTelemetry.ts    — Telemetry.Service(Tag, wiring) + re-export
+src/RunResourceIdentity.ts       — TypeTag / TypeId
+src/internal/telemetry/          — runtime impl for Service.layer
+```
 
 ---
 
-## Projection state
-
-**Module:** `src/*Projection.ts`, `sink/ProjectionSink.ts`.
-
-- Updated from hub via `ProjectionSink`; separate tag from emit.
-
-**Shipped (pilot):** `RunResourceProjection` only.
-
----
-
-## Durable operational state (plan 13)
-
-**Plan 17 §12 `ProcessStore.state`** — archive/ops only; not telemetry state.
-
----
-
-## Telemetry stack (target — bake locked)
+## Telemetry stack (target)
 
 ```text
 Kernel
-  └── scopes only
   └── QueueResourceTelemetry.Entry.processEntry(...).provideLeaf(...)   // API 2
 
-store/RunResourceTelemetry.ts — Telemetry.Tag (API 1)
-  ├── namespace / group / operation / event
-  ├── Telemetry.extend, bindings, .pipe(logWarning)
+Telemetry.Tag                    // API 1 — skeleton
+Telemetry.Service(Tag, wiring)  // API 3 wiring + compose
+  └── .layer                     // Effect Layer → internal/telemetry/*
 
-Telemetry.layer(RunResourceTelemetry)     // API 3 — internal/telemetry/*
-Telemetry.registry([RunResourceTelemetry, ...])
-
-TelemetryHub → sinks (Archive, Projection, Broadcast)
+Telemetry.registry([...Service tags])
+TelemetryHub → sinks
 ```
 
 **Emit `R` (kernel):** none (stub) or `TelemetryHub` only.
 
-**Interim debt:** `defineEvent`, `RunResourceHubTelemetry`, kernel `stateRef` — replace.
-
----
-
-## Siloing
-
-- Explicit compose layers (`RunResourceCompose.layerPersist`).
-- `Telemetry.registry` scoped to tags the app passes in.
+**Interim debt:** `defineEvent`, `RunResourceHubTelemetry`, kernel `stateRef`.
 
 ---
 
@@ -110,8 +72,7 @@ TelemetryHub → sinks (Archive, Projection, Broadcast)
 
 | Topic | Doc |
 | --- | --- |
-| Process state / scopes | [18](./18-resource-state-scope.md) |
-| Telemetry tree DSL | [17](./17-facet-telemetry-factory.md) §5 |
-| Hub + sinks + split | [20](./20-process-store-split-and-telemetry.md) |
-| **This vocabulary** | **21 (this file)** |
 | **Bake locks (SSoT)** | [telemetry-split-bake.md](../recipes/telemetry-split-bake.md) |
+| Hub + sinks | [20](./20-process-store-split-and-telemetry.md) |
+| Tree DSL | [17](./17-facet-telemetry-factory.md) §5 |
+| Scopes | [18](./18-resource-state-scope.md) |
