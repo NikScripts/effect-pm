@@ -66,7 +66,7 @@ still open — do not conflate them:
 | API | Lives on | Status | Purpose |
 | --- | --- | --- | --- |
 | **`Telemetry.Tag`** | Tag class | **Locked** | Skeleton contract only: namespaces, groups, operations, events, scopes, `start` / `exit` declarations |
-| **Operations API** | Separate from Tag (generated or attached at compose) | Open | Run tracked operations: **typed input** from `Telemetry.start`, body as `(input) => Effect` |
+| **Operations API (calling)** | Operation handles from tag + layer | Open | `(input) => pipe(processEntry(input), Effect.flatMap, gen)` + shortcuts |
 | **Telemetry layer** | `Layer` | Open | Everything else telemetry does: state, scope extension, hub bridge, registry, emit materialization, operation wrappers |
 
 **Tag stays light.** Do not put telemetry state, handlers, registry, or emit
@@ -87,7 +87,8 @@ The tag is a **skeleton** only. It declares shape — not runtime behavior.
 **On the tag:**
 
 - `Telemetry.namespace` / `Telemetry.group` / `Telemetry.operation` / `Telemetry.event`
-- `Telemetry.start<Input>(…)` / `Telemetry.exit(…)` declarations
+- `Telemetry.operation<Input>(…)` — input type on **operation** (leading candidate; not locked)
+- `Telemetry.start(…)` / `Telemetry.exit(…)` declarations — no type param on start
 - `State.Scope` reference as first child of each operation
 - Wire ids derived from namespace + group + event name
 
@@ -111,9 +112,9 @@ class QueueResourceTelemetry extends Telemetry.Tag<QueueResourceTelemetry>(
 )(
   Telemetry.namespace("Queue")(
     Telemetry.group("Entry")(
-      Telemetry.operation("processEntry")(
+      Telemetry.operation<QueueEntryInput>("processEntry")(
         QueueEntryScope,
-        Telemetry.start<QueueEntryInput>("Started", QueueEntryStarted),
+        Telemetry.start("Started", QueueEntryStarted),
         Telemetry.event("Retried", QueueEntryRetried),
         Telemetry.operation("rateLimit")(
           QueueEntryScope,
@@ -141,66 +142,40 @@ class QueueResourceTelemetry extends Telemetry.Tag<QueueResourceTelemetry>(
 ) {}
 ```
 
-### Operations — declaration on tag vs Operations API (open)
+### Operations API — calling shape (open, owner direction)
 
-**On the tag (declaration only):**
-
-- `Telemetry.operation(...)` names the operation and nests child events/operations.
-- First child is the operation **`State.Scope`**.
-- `Telemetry.start<Input>(name, event)` declares the **input type** for this operation.
-  That `Input` type is what the Operations API uses at the call site — it is not
-  a runtime schema on the tag.
-- `Telemetry.exit(…)` declares which group events fire on each exit outcome.
-- Nested operations without `Telemetry.start` take no operation input.
-
-**Operations API (separate — not on the tag):**
-
-An operation with `Telemetry.start<Input>` is a **function that returns an
-Effect**: `(input: Input) => Effect<A, E, R>`. The input type comes from the
-tag's `Telemetry.start<Input>` — single source of truth.
+Mimic Effect: **function that returns `Effect`**, built with `pipe` / `flatMap` / `gen`.
 
 ```ts
-// Input type fixed by tag declaration:
-// Telemetry.start<QueueEntryInput>("Started", QueueEntryStarted)
+const processEntry = (entry: QueueEntryInput) =>
+  pipe(
+    QueueResourceTelemetry.Entry.processEntry(entry),
+    Effect.flatMap((ctx) =>
+      Effect.gen(function* () {
+        yield* ctx.telemetry.Retried;
+        yield* checkRateLimit.pipe(ctx.telemetry.rateLimit);
+        return yield* processItem(entry);
+      }),
+    ),
+  );
 
-// Operations API — shape TBD; must accept typed input:
-yield* processEntry(entry); // entry: QueueEntryInput
-
-// Equivalent: a function returning Effect
-const processEntry: (entry: QueueEntryInput) => Effect<…> = …;
+// kernel
+yield* processEntry(entry);
 ```
 
-Inside the body, middle events stay zero-arg (`yield* …Retried`). The layer
-provides operation context; the tag only declared that those events exist.
+- `processEntry(entry)` — first step: takes input, opens operation, returns `Effect` to continue.
+- `ctx` — operation context (shape open): likely `{ input, telemetry, leaf, state }`.
+- **Shortcuts** (v1 subset TBD): e.g. `.gen(entry, fn)` expanding the pipe above.
+- Nested no-input ops (e.g. `rateLimit`): wrap existing `Effect`, no input arg.
 
-Operations **without** `Telemetry.start` (e.g. nested `rateLimit`) wrap an
-existing `Effect` — no input param:
-
-```ts
-yield* checkRateLimit.pipe(rateLimit); // rateLimit: <A,E,R>(effect: Effect<A,E,R>) => Effect<…>
-```
-
-**Rejected draft** (conflated operations API with tag + extra `telemetry` param):
-
-```ts
-// do not use as target shape
-QueueResourceTelemetry.Entry.processEntry.gen(function* (entry, telemetry) { … });
-```
-
-Open questions for **Operations API** bake:
-
-- Where do `(input) => Effect` handles live — layer output, separate `operations`
-  export, or module-level bind?
-- One adapter vs `.fn` / `.gen` / `.effect` — or always function-of-input?
-- Nested no-input ops: `.wrap(effect)` vs pipe — name and typing.
-- Type error when yielding events outside active operation context.
+Rejected: extra `telemetry` callback param; bodies on `Telemetry.Tag` class.
 
 ---
 
 ### `start` and `exit`
 
-- `Telemetry.start<Input>(name, event)` on the **tag** declares input type + start event wire.
-- At **runtime**, the Operations API takes `input: Input` when invoking the operation.
+- `Telemetry.start(name, event)` on tag declares start **event** only; input type on `Telemetry.operation<Input>`.
+- Operations API: `processEntry(entry)` typed from `Telemetry.operation<QueueEntryInput>`.
 - The **layer** emits the start event and opens scope using that input.
 - `Telemetry.exit(…)` on the tag maps outcomes to group events; the **layer**
   emits them when the operation `Effect` completes — not the kernel manually.
@@ -208,24 +183,14 @@ Open questions for **Operations API** bake:
 - How start/exit event **schemas** get their fields is a **layer** concern.
 
 ```ts
-// Tag skeleton only:
-Telemetry.operation("processEntry")(
+Telemetry.operation<QueueEntryInput>("processEntry")(
   QueueEntryScope,
-  Telemetry.start<QueueEntryInput>("Started", QueueEntryStarted),
-  Telemetry.exit({
-    onSuccess: Telemetry.event("Completed", QueueEntryCompleted),
-    onFailure: Telemetry.event("Failed", QueueEntryFailed),
-    onInterrupt: Telemetry.event("Released", QueueEntryReleased),
-  }),
+  Telemetry.start("Started", QueueEntryStarted),
+  Telemetry.exit({ … }),
 );
 ```
 
-### Scope and events (call site)
-
-- Normal events: `yield* QueueResourceTelemetry.Entry.Retried` — no payload args.
-- Operation input is passed only to the **Operations API** entry point, typed by
-  `Telemetry.start<Input>` on the tag — not to individual events.
-- `Telemetry.operation` first child on the tag is the operation scope (declaration).
+---
 
 ### Telemetry state (layer — not on tag)
 
@@ -277,82 +242,98 @@ module, when they only need the stable type id.
 
 ### Operations API — stress case (Queue `processEntry`, open)
 
-Tag declares `Telemetry.start<QueueEntryInput>(…)`. Operations API must surface
-`QueueEntryInput` at the entry point. Body is `(input) => Effect` or equivalent.
+See **Operations API — calling shape** above. Body bind location (layer vs module export) open.
 
-```ts
-// Kernel call site — input visible, typed from Telemetry.start:
-yield* processEntry(entry);
+### Telemetry layer — runtime platform (open)
 
-// Body bind (wherever it lives — layer config or operations module):
-processEntry: (entry: QueueEntryInput) =>
-  Effect.gen(function* () {
-    yield* QueueResourceTelemetry.Entry.Retried;
-    yield* checkRateLimit.pipe(rateLimit); // no-input nested op
-    return yield* processItem(entry);
-  }),
-```
+Everything not on tag skeleton and not the calling `pipe`/`flatMap` shape. See
+**Open questions (session handoff)** below for full checklist.
 
-`processEntry` and `rateLimit` handles are **not** methods on the tag class —
-they come from the Operations API / layer. The tag only declared their existence
-and input type.
-
-### Telemetry layer API (open)
-
-Everything telemetry does beyond the skeleton tag:
-
-| Responsibility | Notes |
-| --- | --- |
-| Telemetry state | Field declarations, reducers, per-entry cleanup |
-| Scope extension | Merge telemetry fields onto process scopes at runtime |
-| Operations API output | Provide `(input) => Effect` runners typed from `Telemetry.start` |
-| Nested op wrappers | No-input ops: `Effect => Effect` |
-| Hub emit bridge | Materialize event payloads → `TelemetryHub.emit` |
-| Registry | Wire ids + schemas for sinks |
-| Event emit statics | Zero-arg `yield* Tag.Group.Event` inside operation context |
-
-```ts
-// Illustrative — shape not locked:
-export const layer = QueueResourceTelemetry.layer({
-  state: { /* see above */ },
-  operations: {
-    processEntry: (entry) => Effect.gen(function* () { … }),
-  },
-});
-```
-
-Do not put `operations` or `state` on the `Telemetry.Tag` class body.
+Do not put layer config on the `Telemetry.Tag` class body.
 
 ---
 
-### Still open (bake order)
+## Open questions (session handoff)
 
-1. **Operations API** — where `(input: StartInput) => Effect` handles are exported;
-   how input type flows from `Telemetry.start<Input>` on the tag.
-2. **Telemetry layer API** — config shape for state, scope extension, operations
-   bind, hub bridge, registry.
-3. **Telemetry state DX** — field/reducer config on layer; entry cleanup policy.
-4. **`start` / `exit` materialization** — layer injects fields into event schemas.
-5. **Registry** — global vs per-compose (step 4 below).
-6. **Identity module convention** — file placement for `TypeTag` / `TypeId`.
+Return to this section in a later bake session. **Locked:** `Telemetry.Tag`
+skeleton only. Everything below is open.
 
-Ecosystem adapters: [22-effect-ecosystem-adapters.md](../plans/22-effect-ecosystem-adapters.md).
+**Branch:** `cursor/telemetry-redesign-bake-faed` · **Plan:** [20](../plans/20-process-store-split-and-telemetry.md) · **Ecosystem:** [22](../plans/22-effect-ecosystem-adapters.md)
 
----
+### A. Tag skeleton (minor confirms)
 
-## Getting back on track
+- [ ] Subpath/export: `store/QueueResource` re-export vs dedicated telemetry file?
+- [ ] Input type param: `Telemetry.operation<Input>` vs elsewhere?
+- [ ] `Telemetry.logWarning` on event defs — stays on tag decl or layer-only?
+- [ ] Identity module: file name, subpath (`RunResourceIdentity.ts`?)
 
-**Branch:** `cursor/telemetry-redesign-bake-faed`.
+### B. Operations API (calling)
 
-**Locked:** `Telemetry.Tag` **skeleton** only.
+- [ ] Confirm `pipe(processEntry(input), Effect.flatMap(ctx => gen))` as canonical shape
+- [ ] **`OperationContext` fields** — `input`, `telemetry`, `leaf`, `state` — what else?
+- [ ] Middle events: `ctx.telemetry.Retried` vs flat `yield* Tag.Entry.Retried` vs both?
+- [ ] Where operation handles live — layer context, module export, or generated from tag+layer?
+- [ ] **Shortcuts v1** — `.gen(input, fn)` only? `.effect(input, effect)`? none?
+- [ ] Nested no-input ops — pipe endomorphism? `ctx.telemetry.rateLimit` signature?
+- [ ] Type error when yielding events outside active operation context
+- [ ] Defect vs failure vs interrupt — caller-visible or layer-only mapping?
 
-**Not locked — two separate additional APIs:**
+### C. Layer composition
 
-1. **Operations API** — typed input from `Telemetry.start`, `(input) => Effect`
-2. **Telemetry layer** — state, scope merge, emit bridge, operation bind, registry
+- [ ] Layer constructor: `RunResourceTelemetry.layer({ … })` vs `Telemetry.layer(Tag, …)`?
+- [ ] Requires/provides matrix (hub, scopes, sinks) — finalize step 8 table
+- [ ] No-op without layer — stub emit vs fail at type level?
+- [ ] Explicit combined layers naming (`*Compose.layerPersist`)
 
-**Suggested next bake:** Operations API entry-point shape (show input at call
-site), then layer config that produces those runners without bloating the tag.
+### D. Emit pipeline
+
+- [ ] Materialization rules — which event schema fields come from scope / input / exit result / cause / duration?
+- [ ] Prepare → metrics → hub ordering (plan 17 legs)
+- [ ] Wire id helper API (no raw strings in kernel)
+- [ ] Validation before hub emit
+- [ ] OccurredAt vs observedAt stamping
+- [ ] Correlation: `runId`, resource id, entry id — from scope only?
+
+### E. Telemetry state
+
+- [ ] Layer config DX for fields (gauge, counter, timestamp, duration between fields)
+- [ ] Scope extension — merge onto process scopes; process cannot read telemetry fields
+- [ ] Parent → leaf inheritance rules (explicit extended parent + leaf scope)
+- [ ] Reducers — on which wires / ops updated?
+- [ ] **Entry cleanup policy** — when entry-scoped maps are dropped
+- [ ] Snapshot/introspection for dashboards — public or internal only?
+
+### F. Registry & sinks
+
+- [ ] Global registry vs per-compose registration
+- [ ] Registry init timing (module load vs layer)
+- [ ] Sink subscription — by wire id, prefix, facet?
+- [ ] Archive vs projection vs broadcast failure isolation
+- [ ] `Telemetry.logWarning` behavior on archive persist failure
+
+### G. Hub bridge & kernel boundaries
+
+- [ ] RunResource: which counters leave kernel `Ref` → telemetry state?
+- [ ] Gating stays `Semaphore` only — confirm
+- [ ] Delete list when bake closes (`defineEvent`, `RunResourceHubTelemetry`, …)
+
+### H. Effect platform integration
+
+- [ ] Tracer spans at operation boundaries — wire to `${typeId}/op/path`?
+- [ ] Bridge telemetry state → Effect `Metric`?
+- [ ] Test layer — capture emits for assertions
+
+### I. Store/RPC (related, separate from telemetry tag)
+
+- [ ] `Procedure` + `Store.Tag` / `Store.Service` — already decided; implement when?
+- [ ] Effect RPC under store transport (plan 16)
+
+### J. Suggested bake order (next sessions)
+
+1. **B + C** — `OperationContext` + layer constructor sketch (Queue stress case)
+2. **D + E** — materialization + telemetry state config
+3. **F + G** — registry, sinks, RunResource boundary
+4. Sign off → update [21-state-vocabulary.md](../plans/21-state-vocabulary.md) → implement slice A (tag skeleton port)
 
 ---
 
@@ -376,21 +357,21 @@ original bake sequence, updated for `Telemetry.Tag` where noted.
 
 ### Step 2 — Operations API (**open**)
 
-**Decides:** How kernel invokes operations with **typed input** from
-`Telemetry.start<Input>`; `(input) => Effect` shape; nested no-input ops.
+**Decides:** Canonical calling shape (`pipe` + `flatMap` + `gen`), `OperationContext`,
+shortcuts, nested no-input ops.
 
-**Acceptance:** `processEntry(entry: QueueEntryInput)` is typed from tag; input
-visible at call site; not a method on the tag class.
+**Acceptance:** Queue `processEntry(entry)` stress case reads as plain Effect code;
+input typed from `Telemetry.operation<Input>`.
 
 ---
 
 ### Step 3 — Telemetry layer API (**open**)
 
-**Decides:** Layer config for state, scope extension, operation bind, hub bridge,
-registry. Everything not on the tag skeleton.
+**Decides:** Layer config for state, scope extension, emit pipeline, registry,
+operation handle generation. See **Open questions (session handoff)** §C–G.
 
-**Acceptance:** Layer produces Operations API handles; tag file unchanged when
-layer config changes.
+**Acceptance:** Tag file unchanged when layer config changes; layer produces
+`processEntry(input)` handles.
 
 ---
 
@@ -552,7 +533,7 @@ the operation.
 ## Bake session checklist
 
 - [x] Step 1 — `Telemetry.Tag` skeleton locked
-- [ ] Step 2 — Operations API locked (typed input from `Telemetry.start`)
+- [ ] Step 2 — Operations API locked (`pipe` / `flatMap` / `OperationContext`)
 - [ ] Step 3 — telemetry layer API locked (not on tag)
 - [ ] Step 4 — registry API locked
 - [ ] Step 5 — telemetry state API locked
