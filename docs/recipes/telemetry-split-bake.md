@@ -55,6 +55,159 @@ no telemetry state module.
 
 ---
 
+## Telemetry redesign current locks (supersedes stale steps below)
+
+### Definition surface
+
+- Telemetry definitions move to contract-style `Telemetry.Tag`; runtime / layer creation is separate.
+- `Telemetry.Service` is optional convenience only; built-in package code should not rely on it as the main shape.
+- A telemetry tag may contain multiple `Telemetry.namespace(...)` blocks.
+- `Telemetry.group(...)` replaces lowercase `Telemetry.tag(...)` to avoid collision with `Telemetry.Tag`.
+- `Telemetry.group(...)` may not nest. Groups define the event wire path segment.
+- Events may not live directly under a namespace; events live under a group or inside an operation nested in a group.
+- Event wire ids are always `Namespace.Group.Event`. Operation names never contribute to event wire ids.
+
+```ts
+class QueueResourceTelemetry extends Telemetry.Tag<QueueResourceTelemetry>(
+  "@nikscripts/effect-pm/store/QueueResource/QueueResourceTelemetry",
+)(
+  Telemetry.namespace("Queue")(
+    Telemetry.group("Entry")(
+      Telemetry.operation("processEntry")(
+        QueueEntryScope,
+        Telemetry.start<QueueEntryInput>("Started", QueueEntryStarted),
+        Telemetry.event("Retried", QueueEntryRetried),
+        Telemetry.operation("rateLimit")(
+          QueueEntryScope,
+          Telemetry.event("Exceeded", QueueRateLimitExceeded),
+          Telemetry.exit({
+            onSuccess: Telemetry.event("Accepted", QueueRateLimitAccepted),
+            onFailure: Telemetry.event("Rejected", QueueRateLimitRejected),
+          }),
+        ),
+        Telemetry.exit({
+          onSuccess: Telemetry.event("Completed", QueueEntryCompleted),
+          onFailure: Telemetry.event("Failed", QueueEntryFailed),
+          onInterrupt: Telemetry.event("Released", QueueEntryReleased),
+        }),
+      ),
+    ),
+    Telemetry.group("Lifecycle")(
+      Telemetry.event("Started", QueueLifecycleStarted),
+      Telemetry.event("Paused", QueueLifecyclePaused),
+      Telemetry.event("Resumed", QueueLifecycleResumed),
+      Telemetry.event("Drained", QueueLifecycleDrained),
+      Telemetry.event("Shutdown", QueueLifecycleShutdown),
+    ),
+  ),
+) {}
+```
+
+### Operations
+
+- `Telemetry.operation(...)` defines a tracked operation.
+- `Telemetry.operation` is a callable namespace: the callable creates operation
+  definitions; attached helpers such as `Telemetry.operation.input(...)`,
+  `.success(...)`, `.failure(...)`, `.causePretty`, and `.durationMs` create
+  typed operation field sources.
+- Generated operation handles expose `.fn`, `.gen`, and `.effect` call-site adapters.
+- Use operations only when the function/effect itself is valuable to track; do not wrap everything.
+- Operation names are camelCase and form operation identity, not wire identity.
+- Operation identity is `${processOrResourceType}/${operation/path}` and is useful for tracing / generated maps.
+- `Telemetry.operation(...)` carries child definitions for local access inside the generated function/effect.
+
+```ts
+const processEntry = QueueResourceTelemetry.Entry.processEntry.gen(
+  function* (entry, telemetry) {
+    yield* telemetry.Retried;
+
+    yield* checkRateLimit.pipe(telemetry.rateLimit.effect(entry));
+
+    return yield* processItem(entry);
+  },
+);
+```
+
+### `start` and `exit`
+
+- `Telemetry.start<Input>(name, schema)` is a special operation prelude, not an exit case.
+- `Telemetry.start` is optional; not every operation records a start event.
+- `Telemetry.start` may see the operation input and is the only event helper expected to consume operation input.
+- `Telemetry.exit(...)` maps operation outcomes to regular event definitions.
+- `Telemetry.exit` does not create an `Exit` wire segment.
+- `Telemetry.exit` should be configurable for success, failure, interrupt, defect, success value, failure cause, duration, and original input if needed.
+- Operation start/exit events do not receive positional payloads. They materialize
+  from schema field sources: active `State.Scope`, operation input, operation success
+  value, operation failure/cause, operation timing, and telemetry state.
+
+```ts
+Telemetry.operation("processEntry")(
+  QueueEntryScope,
+  Telemetry.start<QueueEntryInput>("Started", QueueEntryStarted),
+  Telemetry.exit({
+    onSuccess: Telemetry.event("Completed", QueueEntryCompleted),
+    onFailure: Telemetry.event("Failed", QueueEntryFailed),
+    onInterrupt: Telemetry.event("Released", QueueEntryReleased),
+  }),
+);
+```
+
+### Scope, event input, and telemetry state
+
+- Normal event usage should be zero-arg when fields can be derived from active `State.Scope`, terminal values, telemetry state, or exit/cause context:
+  `yield* QueueResourceTelemetry.Entry.Started`.
+- Event statics become functions only when fields truly cannot be derived from those sources.
+- `Telemetry.operation` first child is the operation scope.
+- Operation input is a TypeScript type parameter, not a schema.
+- Telemetry state imports process scopes and extends them in telemetry definitions; it does not mutate process schemas.
+- Telemetry state inheritance is explicit: a leaf telemetry extension gets parent telemetry fields only when extending from an already-extended parent plus the leaf process scope.
+- Scope identity comes from process `State.Scope`; telemetry state should not create a separate identity tree.
+- String selectors must be type-enforced. Helpers like
+  `Telemetry.operation.input("item")` return typed sources carrying the selected
+  path and expected value type; binding validates the selector against the
+  operation context and event schema field type. Do not accept unchecked string
+  paths.
+
+```ts
+const QueueTelemetry = Telemetry.State.extend(QueueResourceScope, {
+  depth: Telemetry.metric.gauge,
+  inFlight: Telemetry.metric.gauge,
+});
+
+const QueueEntryTelemetry = QueueTelemetry.extend(QueueEntryScope, {
+  enqueuedAt: Telemetry.metric.timestamp,
+  startedAt: Telemetry.metric.timestamp,
+  waitMs: Telemetry.metric.duration("enqueuedAt", "startedAt"),
+});
+```
+
+### Store / procedure side decisions from this bake
+
+- Rename the neutral procedure builder away from `ProcessStore` to `Procedure`.
+- Keep the triplet chain: `Procedure.payload(Query).success(Result).failure(Error)`.
+- `Store.Tag<Self>("ProcessTag")(id, procedures)` rejects resolved procedures.
+- `Store.Service<Self>("ProcessTag")(id, procedures)` permits `.resolve(...)`.
+- RPC-visible failures are `Schema.TaggedError` classes passed directly on contracts and round-trip through transport failure exits.
+- Protocol failures are also `Schema.TaggedError` classes, but live in a shared transport error union separate from declared method failures.
+
+### Module identity files
+
+- Process/resource type identity should not be passed around as unrelated string
+  literals such as `"RunResource"` when the owning service tag cannot be imported
+  without circular dependencies.
+- Domains that need shared identity across worker, telemetry, store facets, and
+  projections should get a small identity module:
+
+```ts
+export const TypeTag = "@nikscripts/effect-pm/RunResource";
+export const TypeId: unique symbol = Symbol.for(TypeTag);
+```
+
+- Facets and telemetry definitions import the identity module, not the worker/service
+  module, when they only need the stable type id.
+
+---
+
 ## Open recipe steps (bake in order)
 
 ### Step 1 — `Telemetry.Service` factory shape
