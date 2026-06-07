@@ -1,8 +1,6 @@
 # Recipe: Telemetry split — bake session handoff
 
-**Goal:** Lock the full telemetry / archive / projection / state model before more
-implementation. Fix vocabulary drift and replace hub-branch interim APIs (`defineEvent`,
-`RunResourceHubTelemetry`) with the agreed design.
+**Goal:** ~~Lock the full telemetry model before implementation~~ **Done (Jun 2026).** SSoT for implementation agents. Replace hub-branch interim APIs when slices land.
 
 **Non-goals:** Implement slices in this session; transport work; dashboard UI.
 
@@ -826,104 +824,25 @@ See **Calling API — scope builder (agreed Jun 2026)** for locked rules. Remain
 
 ## Open questions (session handoff)
 
-Return to this section in a later bake session. **Locked:** `Telemetry.Tag`
-skeleton only. Everything below is open.
+**Bake closed (Jun 2026).** All decisions live in **Open recipe steps** (steps 1–9, locked) and **Deferred to implementation**. Return here only to revise a lock.
 
-**Branch:** `cursor/telemetry-redesign-bake-faed` · **Plan:** [20](../plans/20-process-store-split-and-telemetry.md) · **Ecosystem:** [22](../plans/22-effect-ecosystem-adapters.md)
+**Branch:** `cursor/telemetry-redesign-bake-faed` · **Plan:** [20](../plans/20-process-store-split-and-telemetry.md) · **Vocabulary:** [21](../plans/21-state-vocabulary.md)
 
-### A. Tag skeleton (minor confirms)
+### Quick reference — all locked
 
-- [ ] Subpath/export: `store/QueueResource` re-export vs dedicated telemetry file?
-- [ ] Input type param: `Telemetry.operation<Input>` vs elsewhere?
-- [ ] `Telemetry.logWarning` — Service pipe only (locked); archive persist failure behavior
-- [ ] Identity module: file name, subpath (`RunResourceIdentity.ts`?)
+- **Tag:** skeleton only — no bindings, no layer, no logWarning
+- **Service:** Tag tree + `extend` + bindings (plain schema fields) + `.pipe(logWarning)`
+- **Calling:** builder → `{ input, telemetry, scope }` live view
+- **Layer:** `DomainTelemetry.layer`; no-op stub without layer
+- **Registry:** `Telemetry.registry([...])` at compose
+- **Emit:** materialize → metrics → hub → sinks; runner owns start/exit
+- **RunResource:** counters → telemetry state; delete `stateRef`
+- **Deferred:** `Scope.patch` internals, `.gen`, tracers, strict `Operation.input` keys
 
-### B. Operations API (calling)
+### I. Store/RPC (separate track — not telemetry bake)
 
-- [x] Builder: `op(input).provideLeaf` / `provideRoot` / `assuming*` before `Effect` (agreed)
-- [x] Three op kinds: scope-required, scope-inheriting, scope-free (agreed)
-- [x] Mid-op: patch / nested scope after obligation met — not substitute for builder (agreed)
-- [x] Provider names: `provideLeaf`, `provideRoot`, `assumingLeaf`, `assumingRoot` (proposed lock)
-- [x] Explicit `assuming*` — no ambient inference v1 (proposed lock)
-- [x] Canonical: `pipe(op(input).provideLeaf(…), Effect.flatMap, gen)` (proposed lock)
-- [x] `OperationContext`: `{ input, telemetry, scope }` — scope is live view (agreed)
-- [x] `provideLeaf` establishes scope; `patch` updates existing scope only (agreed)
-- [x] Nested ops: `effect.pipe(Entry.rateLimit, Effect.flatMap)` (proposed lock)
-- [ ] `Scope.patch` — Ref implementation + hidden-field type firewall
-- [ ] Shortcut `.gen(input, fn)` — v2?
-
-### B2. Implementation API (`Telemetry.Service`)
-
-- [x] Field sources: `Scope.field`, `Operation.input`, `Exit.*`, `Clock`, `Telemetry.state` (proposed)
-- [x] No auto routing of operation input (agreed + proposed)
-- [x] `logWarning` via `.pipe(Telemetry.logWarning(…))` — Service only (locked)
-- [x] Service = Tag tree + bindings + `Telemetry.extend` + layer (locked)
-- [x] Binding 3rd arg: flat record; **required for every plain `Schema.*` field** on event schema (locked)
-- [x] Scope-bound / terminal / literal schema fields — auto; no binding entry (locked)
-- [x] `Telemetry.extend(scope, metrics)` under namespace (locked)
-- [x] Exit-only overload syntax (proposed lock)
-- [x] Nested op scope inherit when scope child omitted (proposed lock)
-- [ ] `Operation.input("name")` typed key enforcement vs operation generic
-
-### C. Layer composition
-
-- [ ] Layer constructor: `RunResourceTelemetry.layer({ … })` vs `Telemetry.layer(Tag, …)`?
-- [ ] Requires/provides matrix (hub, scopes, sinks) — finalize step 8 table
-- [ ] No-op without layer — stub emit vs fail at type level?
-- [ ] Explicit combined layers naming (`*Compose.layerPersist`)
-
-### D. Emit pipeline
-
-- [ ] Materialization — event fields from **scope** (auto); from **operation input** only via implementation bindings (explicit)
-- [ ] Do **not** auto-merge operation input into scope or events
-- [ ] Prepare → metrics → hub ordering (plan 17 legs)
-- [ ] Wire id helper API (no raw strings in kernel)
-- [ ] Validation before hub emit
-- [ ] OccurredAt vs observedAt stamping
-- [ ] Correlation: `runId`, resource id, entry id — from scope only?
-
-### E. Telemetry state
-
-- [ ] Same object as process scope state; hidden fields; process code cannot read telemetry fields
-- [ ] Layer config DX for fields (gauge, counter, timestamp, duration between fields)
-- [ ] Parent → leaf inheritance rules (explicit extended parent + leaf scope)
-- [ ] Reducers — on which wires / ops updated?
-- [ ] **Entry cleanup policy** — when entry-scoped maps are dropped
-- [ ] Snapshot/introspection for dashboards — public or internal only?
-
-### F. Registry & sinks
-
-- [ ] Global registry vs per-compose registration
-- [ ] Registry init timing (module load vs layer)
-- [ ] Sink subscription — by wire id, prefix, facet?
-- [ ] Archive vs projection vs broadcast failure isolation
-- [ ] `Telemetry.logWarning` behavior on archive persist failure
-
-### G. Hub bridge & kernel boundaries
-
-- [ ] RunResource: which counters leave kernel `Ref` → telemetry state?
-- [ ] Gating stays `Semaphore` only — confirm
-- [ ] Delete list when bake closes (`defineEvent`, `RunResourceHubTelemetry`, …)
-
-### H. Effect platform integration
-
-- [ ] Tracer spans at operation boundaries — wire to `${typeId}/op/path`?
-- [ ] Bridge telemetry state → Effect `Metric`?
-- [ ] Test layer — capture emits for assertions
-
-### I. Store/RPC (related, separate from telemetry tag)
-
-- [ ] `Procedure` + `Store.Tag` / `Store.Service` — already decided; implement when?
+- [ ] `Procedure` + `Store.Tag` / `Store.Service` — decided; implement when?
 - [ ] Effect RPC under store transport (plan 16)
-
-### J. Suggested bake order (next sessions)
-
-1. ~~Scope builder + op kinds~~ (done)
-2. ~~OperationContext + providers + nested pipe~~ (proposed — owner confirm)
-3. **Implementation API** — lock Service config schema + typed `Operation.input` / `Scope.field`
-4. **`Scope.patch`** — process vs hidden fields
-5. Emit pipeline order + registry + RunResource boundary
-6. Sign off → plan 21 → tag skeleton port (RunResource)
 
 ---
 
@@ -953,102 +872,89 @@ Canonical shape, builder, OperationContext — see **Calling API — scope build
 
 ---
 
-### Step 3 — Telemetry layer API (**open**)
+### Step 3 — Telemetry layer API (**locked**)
 
-**Decides:** Layer config for state, scope extension, emit pipeline, registry,
-operation handle generation. See **Open questions (session handoff)** §C–G.
-
-**Acceptance:** Tag file unchanged when layer config changes; layer produces
-`processEntry(input)` handles.
+| Decision | v1 lock |
+| --- | --- |
+| Layer home | **`RunResourceTelemetry.layer`** static on Service class — wiring from Service tree |
+| Layer args | **No config object v1** — tree is SSoT; reject `Telemetry.layer(Tag, config)` for facets |
+| **No layer** | Handles + middle-event yields = **no-op**; kernel **`R` excludes `TelemetryHub`** |
+| **With layer** | **Requires** `TelemetryHub`; **provides** emit bridge + telemetry state + operation handles |
+| Combined compose | Explicit only — e.g. `RunResourceCompose.layerPersist`; no implicit all-facets layer |
 
 ---
 
-### Step 4 — `Telemetry.registry`
-
-**Decides:** Wire registration, sink subscription, relationship to hub init.
-
-**Recommended ingredients:**
+### Step 4 — `Telemetry.registry` (**locked**)
 
 ```ts
-Telemetry.registry([RunResourceTelemetry, QueueResourceTelemetry])
-// → hub knows wire ids + schemas for sink matching
-// ArchiveSink / ProjectionSink derive legs from registry + codec — no hand wires
+Layer.provideMerge(
+  Telemetry.registry([RunResourceTelemetry, QueueResourceTelemetry]),
+)
 ```
 
-- Registration at module init or explicit registry layer (bake choice).
-- Sinks opt in by wire id (recipe step 2 locked).
-- Archive registry stays separate (`ProcessStore.registry` → archive facets only).
-
-**Acceptance:** Document minimal v1 API; owner signs off on one global registry vs per-compose registration.
+| Decision | v1 lock |
+| --- | --- |
+| Registration | **Explicit compose** — `Telemetry.registry([...Services])` returns a **Layer** |
+| Timing | Layer build — **not** module import side effects |
+| Scope | Telemetry Services only — **`ProcessStore.registry`** = archive facets |
+| Sink matching | By **wire id** from registry catalog |
+| Global singleton | **Rejected** — per-compose registry layer |
 
 ---
 
-### Step 5 — Telemetry state API
+### Step 5 — Telemetry state API (**locked**)
 
-**Decides:** Service tag, lifetime, who updates, interaction with emit legs.
-
-**Recommended ingredients:**
-
-```ts
-// In-memory only; provided by RunResourceTelemetry.layer (or TelemetryState.layer scoped to domain)
-interface RunResourceTelemetryState {
-  readonly incrementEmit: (wire: string) => Effect.Effect<void>
-  readonly snapshot: Effect.Effect<Readonly<Record<string, number>>>
-}
-
-// Updated only inside emit pipeline / metrics leg — kernel cannot yield* TelemetryState
-```
-
-- Lifetime: same as worker / gate instance (or telemetry compose scope).
-- `prepare` / `metrics` pipe legs (plan 17 phase 2) read/write telemetry state before hub emit.
-- Never serialized to `RuntimeStorage`.
-
-**Alternatives:** Ref inside hub (rejected — not siloed per domain); reuse projection (rejected).
-
-**Acceptance:** Owner confirms fields, lifetime, and that process code never imports telemetry state.
+| Decision | v1 lock |
+| --- | --- |
+| Storage | **Same object** as process scope; process types exclude hidden fields |
+| Declaration | **`Telemetry.extend(scope, fields)`** on Service tree |
+| Metric kinds v1 | `gauge`, `counter`, `timestamp`, `duration(from, to)` |
+| Lifetime | Worker / domain compose scope — in-memory only |
+| Writers | Metrics leg + operation runner — **kernel never reads/writes telemetry state** |
+| Reducers v1 | Counter bumps on configured **exit wires** only |
+| **Entry cleanup** | Drop entry-scoped hidden fields when op **exit** completes |
+| Snapshot API | **`@internal` v1** |
+| Durable storage | **Never** `RuntimeStorage` |
 
 ---
 
-### Step 6 — Hub emit bridge (internal)
-
-**Decides:** How tree statics reach `TelemetryHub.emit` without spine in emit `R`.
-
-**Recommended flow:**
+### Step 6 — Hub emit bridge (**locked**)
 
 ```text
-yield* QueueResourceTelemetry.Entry.Retried
-  → materialize from event schema + active scope + telemetry state + op context
-  → read/update telemetry state (optional leg)
-  → TelemetryHub.emit({ wire, schema, payload })
-  → sinks (archive / projection / broadcast / logs)
+yield* handle.Event
+  1. resolve scope + OperationContext
+  2. materialize: schema + Service bindings + Exit.* / op input
+  3. optional metrics leg → telemetry state
+  4. validate payload
+  5. TelemetryHub.emit
+  6. sinks fan-out (failures isolated per sink)
 ```
 
-Operation start/exit events are emitted by the operation runner (step 2), not by
-manual kernel calls. `Telemetry.start` input is consumed only when the runner opens
-the operation.
-
-- Persist sink uses `ArchiveSink` + spine — **not** inline in emit `R`.
-- `Telemetry.logWarning` applies to archive persist failures on sink path.
-
-**Acceptance:** Sequence diagram signed off; test plan: emit with hub only; emit + archive sink; no store in emit R.
-
----
-
-### Step 7 — RunResource kernel boundary
-
-**Decides:** What stays in process vs telemetry for gate counters.
-
-**Recommended:**
-
-- Process: `Semaphore`, `RunScope.run` with `runId`, user effect.
-- Telemetry: counters (`waiting`, `inFlight`, …) move to **telemetry state** or emit-side reducer; `State.Changed` still emitted via tree.
-- Delete kernel-owned `stateRef` once telemetry state exists.
-
-**Acceptance:** Owner confirms which RunResource counters are telemetry-only vs required for gating (gating uses semaphore only).
+| Decision | v1 lock |
+| --- | --- |
+| Start / exit | **Operation runner** emits |
+| Middle events | **`yield* ctx.telemetry.*`** on handle |
+| Wire ids | **`Telemetry.Wire<typeof Service>`** — no raw strings in kernel |
+| Correlation | From **scope** only |
+| Emit `R` | **None** (stub) or **`TelemetryHub` only** — never store |
+| Archive | **`ArchiveSink`** — not inline in emit |
+| `logWarning` | Persist fail → log + **swallow** (existing behavior) |
 
 ---
 
-### Step 8 — Layer matrix (siloed vs combined)
+### Step 7 — RunResource kernel boundary (**locked**)
+
+| Process | Telemetry |
+| --- | --- |
+| `Semaphore`, user effect, scopes | `waiting`, `inFlight`, `completed`, `failed`, `interrupted`, `totalDurationMs`, `configVersion` |
+| | `State.Changed` from telemetry state snapshot |
+
+- **Delete** kernel `stateRef` when telemetry layer ships.
+- **Gating = semaphore only.**
+
+---
+
+### Step 8 — Layer matrix (**locked**)
 
 **Decides:** Default exports for apps; naming.
 
@@ -1063,11 +969,11 @@ the operation.
 | `RunResourceCompose.layerPersist`      | **explicit merge** | convenience                    |
 
 
-**Acceptance:** Table approved; no monolithic layer pulls all facets + transports without explicit name.
+**Acceptance:** Table is v1 default; no monolithic layer pulls all facets without explicit compose name.
 
 ---
 
-### Step 9 — Migration & delete list
+### Step 9 — Migration & delete list (**locked**)
 
 **Decides:** What dies on hub branch when bake closes.
 
@@ -1083,7 +989,36 @@ the operation.
 
 - `TelemetryHub`, sink modules, projection pilot, transport merge, flat `store/RunResource*.ts`
 
-**Acceptance:** Owner approves delete list; changeset note for breaking emit surface.
+**Acceptance:** Delete list is approved for post-bake migration slices.
+
+---
+
+### Module layout & minor confirms (**locked**)
+
+| Item | v1 lock |
+| --- | --- |
+| Telemetry facet file | `store/<Domain>Telemetry.ts` — **Service** tree + `.layer` |
+| Tag catalog | Extract skeleton from Service for registry / transport — optional split file only if huge |
+| Identity module | `src/<Domain>Identity.ts` — `TypeTag`, `TypeId`; facets import identity, not worker |
+| Subpath | `store/<Domain>Telemetry` for Service; identity at `@nikscripts/effect-pm/<Domain>Identity` |
+| `Telemetry.operation<Input>` | Input type param on **operation** — locked |
+| `Scope.patch` | `yield* QueueEntryScope.patch(partial)` — process-visible fields only; Ref impl deferred |
+| `Operation.input("key")` typing | Best-effort v1 — strict key enforcement deferred |
+
+---
+
+### Deferred to implementation (not blocking bake)
+
+| Item | Default / note |
+| --- | --- |
+| `Scope.patch` Ref + hidden-field type firewall | Implementation detail |
+| `.gen(input, fn)` shortcut | v2 |
+| Tracer spans at op boundaries | v2 — wire `${typeId}/op/path` |
+| Telemetry state → Effect `Metric` bridge | v2 |
+| Test capture layer for emit assertions | Implement with Slice C |
+| General reducer DSL beyond exit-wire counters | v2 |
+| `prepare` pipe leg (plan 17 phase 2) | After metrics leg ships |
+| Store/RPC `Procedure` migration | Separate from telemetry slices |
 
 ---
 
@@ -1099,47 +1034,33 @@ the operation.
 | `logWarning` inside binding 3rd arg | Use `.pipe(Telemetry.logWarning(…))` on event node — matches existing facet DSL |
 | Operation bodies / handlers on `Telemetry.Tag`    | Tag is skeleton — Operations API + layer |
 | Telemetry state on `Telemetry.Tag`                | Tag is skeleton — state on layer       |
-| Telemetry counters in kernel `Ref`                | Violates telemetry-only boundary       |
+| `Telemetry.layer(Tag, config)` for facets | Service tree is SSoT — `.layer` on Service class, no separate config object |
+| Global telemetry registry singleton | Per-compose `Telemetry.registry([...])` Layer |
+| Module import registry side effects | Explicit Layer at compose |
 
 
 ---
 
-## Bake finish line — close session, start building
+## Bake finish line — **closed** (Jun 2026)
 
-### Done (enough to start Slice A)
+All steps 1–9 locked. Implementation agents may start slices; owner review welcome but not blocking.
 
-- `Telemetry.Tag` skeleton DSL
-- Three APIs: Tag / Calling / Implementation (`Telemetry.Service`)
-- Operations: input on `Telemetry.operation<Input>`, builder `provideLeaf` / `assuming*`
-- OperationContext: `{ input, telemetry, scope }` — scope live view; `patch` mid-op
-- Three op kinds; exit-only overload; nested inherit scope
-- Field sources on Service; no auto operation-input routing
-- End-to-end Queue `processEntry` target documented
+### Locked summary
 
-### Close bake — owner decisions still needed (~1 session)
+| Area | Lock |
+| --- | --- |
+| Tag | Skeleton DSL — namespace / group / operation / event / start / exit |
+| Calling | Builder + `{ input, telemetry, scope }` + `provideLeaf` / `assuming*` |
+| Service | Tag tree + `extend` + binding 3rd arg (plain schema only) + `.pipe(logWarning)` |
+| Layer | `DomainTelemetry.layer` on Service; no-op without layer; hub required for real emit |
+| Registry | `Telemetry.registry([...])` as explicit compose Layer |
+| State | Hidden fields on same scope object; entry cleanup on op exit |
+| Emit | materialize → metrics → validate → hub → sinks |
+| RunResource | Counters off kernel `Ref`; gating = semaphore |
+| Layout | `store/*Telemetry.ts`, `src/*Identity.ts` |
+| Delete | `defineEvent`, `RunResourceHubTelemetry`, kernel `stateRef`, duplicate wire consts |
 
-Pick defaults for v1 so implementation agents do not stall:
-
-| # | Decision | Recommendation for v1 |
-| --- | --- | --- |
-| 1 | **`Telemetry.Service` shape** | Tag tree + `Telemetry.extend` + binding 3rd arg (plain schema fields only) + `.pipe(logWarning)` |
-| 2 | **Registry** | Explicit `Telemetry.registry([...Tags])` at app compose; not module auto-init |
-| 3 | **No telemetry layer** | Emits no-op (hub not required in R for stub); full layer required for real emit |
-| 4 | **Layer matrix** | Approve step 8 table as-is; `RunResourceTelemetry.layer` requires hub |
-| 5 | **Hub bridge order** | materialize → optional metrics leg → `TelemetryHub.emit` → sinks |
-| 6 | **RunResource boundary** | Counters (`waiting`, `inFlight`, …) → telemetry state; gating stays `Semaphore` only |
-| 7 | **Entry telemetry cleanup** | Drop entry hidden state when op exit completes (success/fail/interrupt) |
-| 8 | **Tag file layout** | Single `store/RunResourceTelemetry.ts` Service + re-export tag; identity module sibling |
-| 9 | **Delete list** | Approve step 9 as-is |
-
-Defer to implementation (do not block bake sign-off):
-
-- `Scope.patch` Ref internals
-- Typed `Operation.input("key")` enforcement (ship best-effort v1)
-- `.gen` shortcut, tracer spans, registry auto-discovery
-- Full telemetry state reducer DSL polish
-
-### Implementation slices (after bake sign-off)
+### Implementation slices (for other agents)
 
 | Slice | Deliverable |
 | --- | --- |
@@ -1173,13 +1094,13 @@ Update [21-state-vocabulary.md](../plans/21-state-vocabulary.md) when bake close
 - [x] Step 1 — `Telemetry.Tag` skeleton locked
 - [x] Step 2 — Operations API + OperationContext locked
 - [x] Step 2b — Service = Tag tree + extend + bindings + logWarning pipe
-- [ ] Step 3 — layer API + no-op policy (finish line #3–5)
-- [ ] Step 4 — registry v1 (finish line #2)
-- [ ] Step 5 — telemetry state + entry cleanup (finish line #7)
-- [ ] Step 6 — hub bridge flow (finish line #5)
-- [ ] Step 7 — RunResource kernel boundary (finish line #6)
-- [ ] Step 8 — layer matrix (finish line #4)
-- [ ] Step 9 — delete list (finish line #9)
-- [ ] Plan 21 updated
-- [ ] Owner bake sign-off
+- [x] Step 3 — layer API + no-op policy
+- [x] Step 4 — registry v1
+- [x] Step 5 — telemetry state + entry cleanup
+- [x] Step 6 — hub bridge flow
+- [x] Step 7 — RunResource kernel boundary
+- [x] Step 8 — layer matrix
+- [x] Step 9 — delete list
+- [x] Plan 21 updated
+- [x] Bake closed — ready for implementation slices
 
