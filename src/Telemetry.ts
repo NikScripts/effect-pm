@@ -19,6 +19,7 @@ import { isRecord } from "./internal/json";
 import {
   getStateFieldSelectorMetadata,
 } from "./State";
+import { telemetryWireId } from "./TelemetryRouter";
 
 // ============================================================================
 // Schema definition metadata
@@ -67,12 +68,18 @@ export interface TelemetrySchemaDefinition {
 
 /**
  * A `Telemetry.Schema` event-schema class: a `Schema.Class` carrying
- * {@link TelemetrySchemaDefinition} metadata.
+ * {@link TelemetrySchemaDefinition} metadata. Parameterized by its declared
+ * `Fields` (used by wiring to derive `PlainFields`). The constructor instance is
+ * typed `object` so `class X extends Telemetry.Schema<X>()(…)({…})` does not
+ * self-reference.
  *
  * @public
  */
-export type TelemetrySchemaClass<Self = unknown> = TelemetrySchemaDefinition & {
-  new (_: never): Self;
+export type TelemetrySchemaClass<
+  Fields extends TelemetrySchemaFields = TelemetrySchemaFields,
+> = Omit<TelemetrySchemaDefinition, "fields"> & {
+  new (_: never): object;
+  readonly fields: Fields;
 };
 
 const getTerminal = (value: unknown): TelemetryTerminal | undefined =>
@@ -144,10 +151,10 @@ const telemetrySchema =
   <Scope>(scope: Scope) =>
   <const Fields extends TelemetrySchemaFields>(
     fields: Fields,
-  ): TelemetrySchemaClass<Self> => {
+  ): TelemetrySchemaClass<Fields> => {
     const Base = Schema.Class<Self>("Telemetry.Schema")(
       schemaFields(fields),
-    ) as unknown as { new (_: never): Self };
+    ) as unknown as { new (_: never): object };
     const inputFields: Array<TelemetryInputField> = [];
     for (const [field, value] of Object.entries(fields)) {
       const input = getInput(value);
@@ -170,7 +177,7 @@ const telemetrySchema =
       fields,
       inputFields,
     } satisfies TelemetrySchemaDefinition;
-    return Object.assign(Base, definition);
+    return Object.assign(Base, definition) as unknown as TelemetrySchemaClass<Fields>;
   };
 
 // ============================================================================
@@ -282,6 +289,191 @@ const group =
   ): GroupDef<Name, Children> => ({ _tag: "group", name, children });
 
 // ============================================================================
+// Node handles (G) + Tag class
+// ============================================================================
+
+/** @internal */
+export const EventNodeTypeId = Symbol.for(
+  "@nikscripts/effect-pm/Telemetry/EventNode",
+);
+
+/**
+ * A generated wiring key for one emitted event. Carries the event schema as a
+ * phantom so wiring can derive its `PlainFields`. Runtime holds the wire id and
+ * the handle path.
+ *
+ * @public
+ */
+export interface EventNode<S> {
+  readonly [EventNodeTypeId]: typeof EventNodeTypeId;
+  readonly wire: string;
+  readonly path: ReadonlyArray<string>;
+  readonly schema: S;
+}
+
+type UnionToIntersection<U> = (
+  U extends unknown ? (k: U) => void : never
+) extends (k: infer I) => void
+  ? I
+  : never;
+
+type ExitHandles<Legs extends ExitLegs> = {
+  readonly [K in keyof Legs as Legs[K] extends EventDef<string, unknown>
+    ? K
+    : never]: Legs[K] extends EventDef<string, infer S> ? EventNode<S> : never;
+};
+
+type OperationPartHandle<P> = P extends StartDef<infer Name, infer S>
+  ? { readonly [K in Name]: EventNode<S> }
+  : P extends ExitDef<infer Legs>
+    ? { readonly exit: ExitHandles<Legs> }
+    : P extends OperationDef<infer Name, unknown, infer Parts>
+      ? { readonly [K in Name]: OperationHandle<Parts> }
+      : P extends EventDef<infer Name, infer S>
+        ? { readonly [K in Name]: EventNode<S> }
+        : never;
+
+type OperationHandle<Parts extends ReadonlyArray<unknown>> = UnionToIntersection<
+  OperationPartHandle<Parts[number]>
+>;
+
+type GroupChildHandle<C> = C extends OperationDef<infer Name, unknown, infer Parts>
+  ? { readonly [K in Name]: OperationHandle<Parts> }
+  : C extends EventDef<infer Name, infer S>
+    ? { readonly [K in Name]: EventNode<S> }
+    : never;
+
+type GroupHandle<G> = G extends GroupDef<infer Name, infer Children>
+  ? { readonly [K in Name]: UnionToIntersection<GroupChildHandle<Children[number]>> }
+  : never;
+
+type TagHandles<Groups extends ReadonlyArray<unknown>> = UnionToIntersection<
+  GroupHandle<Groups[number]>
+>;
+
+/**
+ * The class produced by {@link Telemetry.Tag} — a skeleton carrying node
+ * handles, the wire namespace, the telemetry `facetId`, and the `target`
+ * domain service. Extend it: `class X extends Telemetry.Tag<X>()(target)(…)`.
+ *
+ * @public
+ */
+export type TelemetryTagClass<
+  Self,
+  Target,
+  Namespace extends string,
+  Groups extends ReadonlyArray<unknown>,
+> = (new (_: never) => object) &
+  TagHandles<Groups> & {
+    readonly namespace: Namespace;
+    readonly facetId: string;
+    readonly target: Target;
+    readonly _self?: Self;
+  };
+
+const makeEventNode = (
+  namespaceName: string,
+  groupName: string,
+  eventName: string,
+  schema: unknown,
+  path: ReadonlyArray<string>,
+): EventNode<unknown> => ({
+  [EventNodeTypeId]: EventNodeTypeId,
+  wire: telemetryWireId(namespaceName, [groupName], eventName),
+  schema,
+  path,
+});
+
+const buildOperationHandles = (
+  namespaceName: string,
+  groupName: string,
+  opPath: ReadonlyArray<string>,
+  parts: ReadonlyArray<OperationPart>,
+): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  for (const part of parts) {
+    if (part._tag === "start" || part._tag === "event") {
+      out[part.name] = makeEventNode(namespaceName, groupName, part.name, part.schema, [
+        ...opPath,
+        part.name,
+      ]);
+    } else if (part._tag === "exit") {
+      const legs: Record<string, unknown> = {};
+      for (const [outcome, leg] of Object.entries(part.legs)) {
+        if (leg !== undefined) {
+          legs[outcome] = makeEventNode(namespaceName, groupName, leg.name, leg.schema, [
+            ...opPath,
+            "exit",
+            outcome,
+          ]);
+        }
+      }
+      out["exit"] = legs;
+    } else if (part._tag === "operation") {
+      out[part.name] = buildOperationHandles(
+        namespaceName,
+        groupName,
+        [...opPath, part.name],
+        part.parts,
+      );
+    }
+  }
+  return out;
+};
+
+const buildGroupHandles = (
+  namespaceName: string,
+  group: GroupDef<string, ReadonlyArray<GroupChild>>,
+): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  for (const child of group.children) {
+    if (child._tag === "event") {
+      out[child.name] = makeEventNode(namespaceName, group.name, child.name, child.schema, [
+        group.name,
+        child.name,
+      ]);
+    } else {
+      out[child.name] = buildOperationHandles(
+        namespaceName,
+        group.name,
+        [group.name, child.name],
+        child.parts,
+      );
+    }
+  }
+  return out;
+};
+
+const Tag =
+  <Self>() =>
+  <Target>(target: Target) =>
+  <
+    const NS extends NamespaceDef<string>,
+    const Groups extends ReadonlyArray<GroupDef<string, ReadonlyArray<GroupChild>>>,
+  >(
+    facetId: string,
+    ns: NS,
+    ...groups: Groups
+  ): TelemetryTagClass<Self, Target, NS["namespace"], Groups> => {
+    const namespaceName = ns.namespace;
+    const statics: Record<string, unknown> = {
+      namespace: namespaceName,
+      facetId,
+      target,
+    };
+    for (const group of groups) {
+      statics[group.name] = buildGroupHandles(namespaceName, group);
+    }
+    const base = class {};
+    return Object.assign(base, statics) as unknown as TelemetryTagClass<
+      Self,
+      Target,
+      NS["namespace"],
+      Groups
+    >;
+  };
+
+// ============================================================================
 // Public DSL
 // ============================================================================
 
@@ -302,6 +494,7 @@ export const Telemetry = {
   input: {
     errorString: inputErrorString,
   },
+  Tag,
   namespace,
   group,
   operation,
