@@ -229,24 +229,35 @@ If a value is **already in scope** via `.provide()` on the op, **do not** duplic
 
 #### RunResource Tag (API 1) — schemas from golden branch, **operations** on call path
 
-Scopes (`src/RunResourceScope.ts`):
+Scopes (`src/RunResourceScope.ts`) — domain id from identity module, **not** the worker:
 
 ```ts
-export const RunResourceScope = State.Scope("RunResource", {
+import { TypeTag as RunResourceTag } from "../RunResourceIdentity";
+
+export const RunResourceScope = State.Scope(RunResourceTag, {
   resourceId: Schema.String,
-})(…);
+})(RunResourceTag);
 
 export const RunScope = RunResourceScope.withLeaf("Run", {
   runId: Schema.String,
-})(…);
+})(`@nikscripts/effect-pm/run/RunScope`);
 ```
 
-Wire helpers (same as `src/store/RunResourceTelemetry.ts` — **not** string literals in kernel):
+Identity (`src/RunResourceIdentity.ts`) — **only** these exports; facets import here, not `@nikscripts/effect-pm/RunResource`:
 
 ```ts
-export const STATE_WAITING_WIRE = telemetryWireId("RunResource", ["State"], "Waiting");
-export const STATE_STARTED_WIRE = telemetryWireId("RunResource", ["State"], "Started");
-// … Completed, Failed, Interrupted, WaitInterrupted …
+export const TypeTag = "@nikscripts/effect-pm/RunResource";
+export const TypeId: unique symbol = Symbol.for(TypeTag);
+```
+
+Wire helpers — derive namespace from **`TypeTag`** inside factory/helpers (no author `Kind` export):
+
+```ts
+import { TypeTag as RunResourceTag } from "../RunResourceIdentity";
+
+export const STATE_WAITING_WIRE = telemetryWireId(RunResourceTag, ["State"], "Waiting");
+// …
+```
 
 export const STATE_CHANGE_REASONS = [
   STATE_WAITING_WIRE,
@@ -721,6 +732,10 @@ Each step has **deliverables**, **code target**, **acceptance**, and **verify co
 export const TypeTag = "@nikscripts/effect-pm/RunResource";
 export const TypeId: unique symbol = Symbol.for(TypeTag);
 ```
+
+Import with a local alias at use sites: `import { TypeTag as RunResourceTag } from "…/RunResourceIdentity"`.
+Use **`RunResourceTag`** for `State.Scope(…)`, `Telemetry.namespace(…)`, wire helpers — **not** a separate `Kind` export or raw `"RunResource"` string.
+Telemetry tree class name **`RunResourceTag`** (API 1) collides with that alias — prefer **`RunResourceTypeTag`** for identity imports if both appear in one file.
 
 **Acceptance:** Docs map matches [§ Module layout](#10-module-layout--exports). No domain subfolders under `store/`.
 

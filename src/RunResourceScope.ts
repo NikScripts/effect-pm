@@ -5,11 +5,12 @@
  */
 
 import { Schema } from "effect";
+import { TypeTag as RunResourceTag } from "./RunResourceIdentity";
 import { State } from "./State";
 
-export const RunResourceScope = State.Scope("RunResource", {
+export const RunResourceScope = State.Scope(RunResourceTag, {
   resourceId: Schema.String,
-})("@nikscripts/effect-pm/run/RunResourceScope");
+})(RunResourceTag);
 
 export const RunScope = RunResourceScope.withLeaf("Run", {
   runId: Schema.String,

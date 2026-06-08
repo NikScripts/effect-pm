@@ -164,6 +164,11 @@
       "import": "./dist/StoreMessage.mjs",
       "require": "./dist/StoreMessage.js"
     },
+    "./TelemetryRouter": {
+      "types": "./dist/TelemetryRouter.d.ts",
+      "import": "./dist/TelemetryRouter.mjs",
+      "require": "./dist/TelemetryRouter.js"
+    },
     "./TelemetryHub": {
       "types": "./dist/TelemetryHub.d.ts",
       "import": "./dist/TelemetryHub.mjs",
@@ -228,6 +233,11 @@
       "types": "./dist/RunResourceScope.d.ts",
       "import": "./dist/RunResourceScope.mjs",
       "require": "./dist/RunResourceScope.js"
+    },
+    "./RunResourceIdentity": {
+      "types": "./dist/RunResourceIdentity.d.ts",
+      "import": "./dist/RunResourceIdentity.mjs",
+      "require": "./dist/RunResourceIdentity.js"
     },
     "./ProcessManager": {
       "types": "./dist/ProcessManager.d.ts",
