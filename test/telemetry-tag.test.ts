@@ -42,7 +42,7 @@ class DemoChanged extends Telemetry.Schema<DemoChanged>()(DemoScope)({
 // Stand-in for the target domain service (only its `.key` identity is used).
 const DemoTarget = { key: "@test/Demo" } as const;
 
-class DemoTelemetry extends Telemetry.Tag<DemoTelemetry>()(DemoTarget)(
+class DemoTelemetry extends Telemetry.Tag<DemoTelemetry>(DemoTarget)(
   "@test/DemoTelemetry",
   Telemetry.namespace("Demo"),
   Telemetry.group("Run")(
@@ -93,5 +93,67 @@ describe("Telemetry.Tag", () => {
     expect(started.schema).toBe(DemoStarted);
     expect(completed.schema).toBe(DemoCompleted);
     expect(changed.schema).toBe(DemoChanged);
+  });
+});
+
+class DemoSnapshot extends Telemetry.Schema<DemoSnapshot>()(DemoScope)({
+  id: DemoScope.Schema.State.id,
+  observedAt: Telemetry.terminal.clockMillis,
+}) {}
+
+class DemoWithSnapshot extends Telemetry.Schema<DemoWithSnapshot>()(DemoScope)({
+  id: Schema.String,
+  changedAt: Telemetry.terminal.clockMillis,
+  current: DemoSnapshot,
+}) {}
+
+describe("Telemetry.Schema.Struct", () => {
+  it("exposes Struct on the schema class", () => {
+    expect(DemoStarted.Struct).toBeDefined();
+    expect(Schema.isSchema(DemoStarted.Struct)).toBe(true);
+  });
+
+  it("Struct normalizes scope selectors and terminals to regular schema fields", () => {
+    const decoded = Schema.decodeUnknownSync(DemoStarted.Struct as never)({
+      runId: "run-1",
+      occurredAt: 1_700_000_000_000,
+      payload: { n: 2 },
+    });
+    expect(decoded).toEqual({
+      runId: "run-1",
+      occurredAt: 1_700_000_000_000,
+      payload: { n: 2 },
+    });
+  });
+
+  it("Type matches Struct.Type (full wire payload)", () => {
+    const fromStruct: typeof DemoStarted.Struct.Type = {
+      runId: "run-1",
+      occurredAt: 1,
+      payload: { n: 1 },
+    };
+    const fromClass: typeof DemoStarted.Type = fromStruct;
+    expect(fromClass).toBeDefined();
+  });
+
+  it("recursively materializes nested Telemetry.Schema classes", () => {
+    const decoded: typeof DemoWithSnapshot.Struct.Type = Schema.decodeUnknownSync(
+      DemoWithSnapshot.Struct as never,
+    )({
+      id: "change-1",
+      changedAt: 42,
+      current: {
+        id: "resource-1",
+        observedAt: 99,
+      },
+    });
+    expect(decoded).toEqual({
+      id: "change-1",
+      changedAt: 42,
+      current: {
+        id: "resource-1",
+        observedAt: 99,
+      },
+    });
   });
 });

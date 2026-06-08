@@ -31,7 +31,7 @@
 | **D2** `[RunResourceScope]` as extend key | **Superseded** — use **`Telemetry.extend(scope, fields)`** |
 | **D3** handle-keyed `nodes` object | **Resolved** — **`Telemetry.bind(handle, fields).pipe(…)`** + **`satisfies WiringConfig<Tag>`** |
 | **D4** golden pipe vs wiring `logWarning` | **Superseded** — **`bind.pipe(Telemetry.logWarning, …)`** on wiring only; **no pipe on Tag** |
-| **D5** `RunResourceStateSchema` home | **Locked** — **`src/store/RunResourceState.ts`** (import in Tag `State.Changed` schema) |
+| **D5** `RunResourceStateSchema` home | **Reopened by owner** — interim **`src/store/RunResourceState.ts`** ok; target: nested `Telemetry.Schema` + `.Struct` |
 | **D6** missing export subpaths | **Still valid** |
 | **"Port from golden"** | **Still valid** — schemas/wires port; **factory is net-new** |
 
@@ -128,6 +128,59 @@ export const runResourceTelemetryLayer = Telemetry.layer(
 | **`TelemetryRouter`** | Validate + fan-out to sinks |
 | **`telemetryTransport`** | Live wire (plan 19) via **`BroadcastSink`** |
 | **Facet Tag / wiring** | Definitions + materialize — **not** on router |
+
+---
+
+## Step 1 review (other agent — Jun 2026)
+
+**Commits:** `0d9d52512` (1a DSL foundation), `ac34a9db4` (1b Tag + handles).
+
+**Shipped and good:**
+
+- `src/Telemetry.ts` — `Telemetry.Schema`, tree builders, `Telemetry.Tag` with node handles
+- Wire ids: `Namespace.Group.Event` (operation segment excluded) — tested
+- `./Telemetry` package export + `test/telemetry-tag.test.ts`
+- Tag signature: `Telemetry.Tag<Self>(domain)(facetId, namespace, …tree)`
+- `EventNode` branded handles with `wire`, `path`, `schema`
+
+**Gaps (expected for Step 1, not bugs):**
+
+- No wiring / layer / materialize / calling API yet
+- RunResource still on debt `defineEvent` (`store/RunResourceTelemetry.ts`)
+- Duplicate `Telemetry.Schema` in `src/internal/store/telemetry.ts` (ProcessStore path) — merge when wiring lands
+
+**Fixed in this pass (locked bake decision):**
+
+- **`Telemetry.Schema.Struct`** — full wire payload as `Schema.Struct` (factory-attached static)
+- **`Telemetry.Schema.Type`** — now backed by full wire fields (not plain-only subset)
+- **`PlainFields`** — `@internal` placeholder until Step 3 wiring types
+
+---
+
+## Locked: `Telemetry.Schema.Struct` (Jun 2026 bake)
+
+| Rule | Lock |
+| --- | --- |
+| **`.Struct`** | Static on every `Telemetry.Schema` class — factory-built, no author boilerplate |
+| **`.Type`** | Full decoded wire payload (same as `Struct.Type`) — **not** plain-only |
+| **Field mapping** | Every author field → regular `Schema.*` (scope → underlying schema, terminals → `Number`, etc.) |
+| **Nested schemas** | Recursive via nested `Telemetry.Schema` class (A1); cycle → throw at factory time |
+| **`PlainFields`** | `@internal` only — wiring exhaustiveness in Step 3, not public API |
+
+**Usage (Store RPC, archive, transport):**
+
+```ts
+class RunResourceRunStarted extends Telemetry.Schema<RunResourceRunStarted>()(RunScope)({ … }) {}
+
+RunResourceRunStarted.Struct          // Schema.Struct value
+typeof RunResourceRunStarted.Type     // decoded payload type
+Procedure.success(RunResourceRunStarted.Struct)
+Schema.decodeUnknownSync(RunResourceRunStarted.Struct)(payload)
+```
+
+**Do not:** hand-duplicate output schemas in `RunResourceStore.ts` once event schemas port to `Telemetry.Schema`.
+
+**D5 note:** Owner reopened snapshot schema placement — `RunResourceState.ts` is interim until Step 2 uses nested `Telemetry.Schema` + `.Struct` for snapshots.
 
 ---
 

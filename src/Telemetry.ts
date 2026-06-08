@@ -39,8 +39,21 @@ type TelemetryInputKind = "errorString";
 type TelemetryTerminal = { readonly [TELEMETRY_TERMINAL_KEY]: TelemetryTerminalKind };
 type TelemetryInput = { readonly [TELEMETRY_INPUT_KEY]: TelemetryInputKind };
 
-/** A telemetry-schema field: a `Schema.*`, a terminal/input marker, or a literal. */
-type TelemetrySchemaField = Schema.Top | TelemetryTerminal | TelemetryInput | string | number | boolean | null;
+/** Nested {@link Telemetry.Schema} class reference allowed in field maps. */
+type TelemetrySchemaFieldClass = TelemetrySchemaDefinition & {
+  readonly Struct: Schema.Struct<Record<string, Schema.Top>>;
+};
+
+/** A telemetry-schema field: a `Schema.*`, a terminal/input marker, a nested schema class, or a literal. */
+type TelemetrySchemaField =
+  | Schema.Top
+  | TelemetrySchemaFieldClass
+  | TelemetryTerminal
+  | TelemetryInput
+  | string
+  | number
+  | boolean
+  | null;
 
 type TelemetrySchemaFields = Readonly<Record<string, TelemetrySchemaField>>;
 
@@ -67,20 +80,35 @@ export interface TelemetrySchemaDefinition {
 }
 
 /**
- * A `Telemetry.Schema` event-schema class: a `Schema.Class` carrying
- * {@link TelemetrySchemaDefinition} metadata. Parameterized by its declared
- * `Fields` (used by wiring to derive `PlainFields`). The constructor instance is
- * typed `object` so `class X extends Telemetry.Schema<X>()(…)({…})` does not
- * self-reference.
+ * A `Telemetry.Schema` event-schema class: a `Schema.Class` backed by the
+ * **full wire payload** (every field normalized to regular `Schema.*`).
+ *
+ * - {@link Schema.Schema.Type} on the class (`MyEvent.Type`) is the decoded wire
+ *   payload — the shape Store RPC, archive decode, and telemetry transport use.
+ * - {@link TelemetrySchemaClass.Struct} is the same shape as a `Schema.Struct`
+ *   value for `Schema.decode`, `Procedure.success`, etc.
+ * - Author-time `fields` retain scope selectors and terminals for wiring
+ *   materialize; {@link PlainFields} (internal) derives bind keys from them.
  *
  * @public
  */
 export type TelemetrySchemaClass<
   Fields extends TelemetrySchemaFields = TelemetrySchemaFields,
-> = Omit<TelemetrySchemaDefinition, "fields"> & {
-  new (_: never): object;
+  WireFields extends Schema.Struct.Fields = Schema.Struct.Fields,
+> = TelemetrySchemaDefinition & {
   readonly fields: Fields;
+  readonly Struct: Schema.Struct<WireFields>;
+  readonly Type: Schema.Schema.Type<Schema.Struct<WireFields>>;
 };
+
+/**
+ * Plain `Schema.*` leaves on a telemetry schema that require wiring `bind`.
+ * Internal to wiring exhaustiveness — not the public wire payload type.
+ * Full type-level computation lands in Step 3 (`WiringConfig`).
+ *
+ * @internal
+ */
+export type PlainFields<_Fields extends TelemetrySchemaFields> = Record<never, never>;
 
 const getTerminal = (value: unknown): TelemetryTerminal | undefined =>
   isRecord(value) && TELEMETRY_TERMINAL_KEY in value
@@ -135,13 +163,53 @@ const inputErrorString: Schema.String & TelemetryInput = Object.assign(
   { [TELEMETRY_INPUT_KEY]: "errorString" as const },
 );
 
-/** Keep only the `Schema.*` fields — terminals/inputs/literals materialize separately. */
-const schemaFields = (fields: TelemetrySchemaFields): Schema.Struct.Fields => {
-  const out: Record<PropertyKey, Schema.Top> = {};
-  for (const [key, value] of Object.entries(fields)) {
-    if (isSchemaLike(value)) {
-      out[key] = value;
+const materializedField = (
+  value: TelemetrySchemaField,
+  visiting: Set<object>,
+): Schema.Top => {
+  if (isTelemetrySchemaDefinition(value)) {
+    if (visiting.has(value)) {
+      throw new Error("Telemetry.Schema cycle detected in nested schema fields");
     }
+    visiting.add(value);
+    const nested = materializedFields(value.fields, visiting);
+    visiting.delete(value);
+    return Schema.Struct(nested);
+  }
+  if (getStateFieldSelectorMetadata(value) !== undefined) {
+    return value as Schema.Top;
+  }
+  const terminal = getTerminal(value);
+  if (terminal !== undefined) {
+    return Schema.Number;
+  }
+  const input = getInput(value);
+  if (input !== undefined) {
+    return Schema.String;
+  }
+  if (value === null) {
+    return Schema.Null;
+  }
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return Schema.Literal(value);
+  }
+  if (isSchemaLike(value)) {
+    return value;
+  }
+  throw new Error("Telemetry.Schema field has no materialized schema mapping");
+};
+
+const materializedFields = (
+  fields: TelemetrySchemaFields,
+  visiting: Set<object> = new Set(),
+): Schema.Struct.Fields => {
+  const out: Record<string, Schema.Top> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    out[key] = materializedField(value, visiting);
   }
   return out;
 };
@@ -151,10 +219,10 @@ const telemetrySchema =
   <Scope>(scope: Scope) =>
   <const Fields extends TelemetrySchemaFields>(
     fields: Fields,
-  ): TelemetrySchemaClass<Fields> => {
-    const Base = Schema.Class<Self>("Telemetry.Schema")(
-      schemaFields(fields),
-    ) as unknown as { new (_: never): object };
+  ) => {
+    const wireFields = materializedFields(fields);
+    const Struct = Schema.Struct(wireFields);
+    const Base = Schema.Class<Self>("Telemetry.Schema")(wireFields);
     const inputFields: Array<TelemetryInputField> = [];
     for (const [field, value] of Object.entries(fields)) {
       const input = getInput(value);
@@ -177,7 +245,13 @@ const telemetrySchema =
       fields,
       inputFields,
     } satisfies TelemetrySchemaDefinition;
-    return Object.assign(Base, definition) as unknown as TelemetrySchemaClass<Fields>;
+    return Object.assign(Base, definition, { Struct }) as unknown as typeof Base & {
+      readonly [TelemetrySchemaTypeId]: typeof TelemetrySchemaTypeId;
+      readonly scope: Scope;
+      readonly fields: Fields;
+      readonly inputFields: ReadonlyArray<TelemetryInputField>;
+      readonly Struct: typeof Struct;
+    };
   };
 
 // ============================================================================
@@ -354,7 +428,7 @@ type TagHandles<Groups extends ReadonlyArray<unknown>> = UnionToIntersection<
 /**
  * The class produced by {@link Telemetry.Tag} — a skeleton carrying node
  * handles, the wire namespace, the telemetry `facetId`, and the `target`
- * domain service. Extend it: `class X extends Telemetry.Tag<X>()(target)(…)`.
+ * domain service. Extend it: `class X extends Telemetry.Tag<X>(domain)(…)`.
  *
  * @public
  */
@@ -445,8 +519,7 @@ const buildGroupHandles = (
 };
 
 const Tag =
-  <Self>() =>
-  <Target>(target: Target) =>
+  <Self, Domain = unknown>(domain: Domain) =>
   <
     const NS extends NamespaceDef<string>,
     const Groups extends ReadonlyArray<GroupDef<string, ReadonlyArray<GroupChild>>>,
@@ -454,12 +527,12 @@ const Tag =
     facetId: string,
     ns: NS,
     ...groups: Groups
-  ): TelemetryTagClass<Self, Target, NS["namespace"], Groups> => {
+  ): TelemetryTagClass<Self, Domain, NS["namespace"], Groups> => {
     const namespaceName = ns.namespace;
     const statics: Record<string, unknown> = {
       namespace: namespaceName,
       facetId,
-      target,
+      target: domain,
     };
     for (const group of groups) {
       statics[group.name] = buildGroupHandles(namespaceName, group);
@@ -467,7 +540,7 @@ const Tag =
     const base = class {};
     return Object.assign(base, statics) as unknown as TelemetryTagClass<
       Self,
-      Target,
+      Domain,
       NS["namespace"],
       Groups
     >;
