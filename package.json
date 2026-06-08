@@ -234,6 +234,11 @@
       "import": "./dist/RunResourceScope.mjs",
       "require": "./dist/RunResourceScope.js"
     },
+    "./Tags": {
+      "types": "./dist/Tags.d.ts",
+      "import": "./dist/Tags.mjs",
+      "require": "./dist/Tags.js"
+    },
     "./RunResourceIdentity": {
       "types": "./dist/RunResourceIdentity.d.ts",
       "import": "./dist/RunResourceIdentity.mjs",
