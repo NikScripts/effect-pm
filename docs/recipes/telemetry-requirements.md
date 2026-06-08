@@ -56,7 +56,7 @@
 - [ ] Implement **`Telemetry.bind.pipe`**, **`satisfies WiringConfig`**, **`Telemetry.layer`**, **`Telemetry.withLayer`**
 - [ ] Rename **`TelemetryHub`** → **`TelemetryRouter`** in new/edited code
 - [ ] **`*.test-d.ts`** for wiring exhaustiveness
-- [ ] Resolve **D5** (`RunResourceStateSchema` home) before deleting debt telemetry file
+- [x] Resolve **D5** (`RunResourceStateSchema` home) — **`src/store/RunResourceState.ts`**
 - [ ] Gate: `pnpm run typecheck && pnpm test && pnpm run lint && pnpm run build`
 
 ---
@@ -1166,6 +1166,7 @@ src/TelemetryRouter.ts                   — emit router (rename from TelemetryH
 src/Tags.ts                              — Tag.RunResource, … (filter inputs)
 src/internal/runResource/service.ts    — RunResource domain Context.Service
 src/internal/telemetry/                  — runtime (materialize, runner, state Refs)
+src/store/RunResourceState.ts            — RunResourceStateSchema (shared snapshot; D5)
 src/store/RunResourceTelemetry.ts        — Tag class (API 1+2) + barrel withLayer
 src/store/RunResourceTelemetry.wiring.ts — satisfies WiringConfig<Tag>
 src/store/RunResourceTelemetry.service.ts — runResourceTelemetryLayer
@@ -1290,6 +1291,7 @@ Procedure.payload(Query).success(Result).failure(Error);
 | **CHK-16** | Router rename | **LOCKED** | **`TelemetryRouter`** replaces **`TelemetryHub`** |
 | **CHK-17** | Bind exhaustiveness proof | **LOCKED** | **`satisfies WiringConfig<Tag>`** at define; **`*.test-d.ts`**; no fake error types |
 | **CHK-18** | Literal fields needing state (`reason`) | **LOCKED** | Count as **PlainFields** when value comes from **`Telemetry.state.from`** |
+| **D5** | `RunResourceStateSchema` home | **LOCKED** | **`src/store/RunResourceState.ts`** — shared snapshot schema; Tag imports it for `State.Changed`; debt `RunResourceTelemetry.ts` re-exports during migration |
 
 **Resolved (do not re-litigate):**
 
@@ -1311,6 +1313,7 @@ Append when implementation adds something **not** in locked sections above.
 | 2026-06-07 | cursor/telemetry-redesign-bake-faed | Calling API locked: op-only `.provide()`, events as Effects, exit-first ops, `Telemetry.start` via runner, root via `State.Scope` at lifetime | yes |
 | 2026-06-08 | cursor/telemetry-redesign-bake-faed | API revision: `Wiring.sections` + `satisfies WiringConfig<Tag>`; `Telemetry.bind(…).pipe(log legs)`; `Telemetry.layer` + `Telemetry.withLayer`; **`TelemetryRouter`** rename; bind exhaustiveness via real types not fake error objects; `telemetryTransport` via BroadcastSink | yes |
 | 2026-06-08 | cursor/telemetry-redesign-bake-faed | **`Telemetry.Tag<Self>(domain)(facetId, …tree)`** — domain in 1st call, facet id 1st arg of 2nd; wires from **`Telemetry.namespace` only**; facet class **`RunResourceTelemetry`**; domain **`RunResource`** service (supersedes `RunResourceIdentity`) | yes |
+| 2026-06-08 | cursor/telemetry-redesign-bake-faed | **D5:** `RunResourceStateSchema` → **`src/store/RunResourceState.ts`** (shared by store, projection, kernel, Tag event schemas) | yes |
 
 ```markdown
 | YYYY-MM-DD | cursor/… | Description | yes/no |

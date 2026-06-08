@@ -11,6 +11,9 @@ import {
   telemetryWireId,
   type TelemetryEventDefinition,
 } from "../TelemetryHub";
+import { RunResourceStateSchema } from "./RunResourceState";
+
+export { RunResourceStateSchema, type RunResourceState } from "./RunResourceState";
 
 /** @public */
 export const RUN_RESOURCE_PROCESS_TYPE = "RunResource" as const;
@@ -54,23 +57,6 @@ export const STATE_CHANGE_REASONS = [
 /** @public */
 export type RunResourceStateChangeReason =
   (typeof STATE_CHANGE_REASONS)[number];
-
-/** @public */
-export const RunResourceStateSchema = Schema.Struct({
-  resourceId: Schema.String,
-  observedAt: Schema.Number,
-  configVersion: Schema.Number,
-  concurrency: Schema.Number,
-  waiting: Schema.Number,
-  inFlight: Schema.Number,
-  completed: Schema.Number,
-  failed: Schema.Number,
-  interrupted: Schema.Number,
-  totalDurationMs: Schema.Number,
-});
-
-/** @public */
-export type RunResourceState = typeof RunResourceStateSchema.Type;
 
 const RunFactCommonSchema = {
   resourceId: Schema.String,

@@ -47,6 +47,7 @@ export default defineConfig([
       controlTransport: "src/controlTransport.ts",
       terminalTransport: "src/terminalTransport.ts",
       StoreMessage: "src/StoreMessage.ts",
+      Telemetry: "src/Telemetry.ts",
       TelemetryRouter: "src/TelemetryRouter.ts",
       TelemetryHub: "src/TelemetryHub.ts",
       RunResourceProjection: "src/RunResourceProjection.ts",

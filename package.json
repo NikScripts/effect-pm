@@ -164,6 +164,11 @@
       "import": "./dist/StoreMessage.mjs",
       "require": "./dist/StoreMessage.js"
     },
+    "./Telemetry": {
+      "types": "./dist/Telemetry.d.ts",
+      "import": "./dist/Telemetry.mjs",
+      "require": "./dist/Telemetry.js"
+    },
     "./TelemetryRouter": {
       "types": "./dist/TelemetryRouter.d.ts",
       "import": "./dist/TelemetryRouter.mjs",

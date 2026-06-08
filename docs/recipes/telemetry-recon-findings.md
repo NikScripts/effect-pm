@@ -101,7 +101,7 @@ is written from scratch.
 | **D2** | `extend` is keyed by a **computed property `[RunResourceScope]`** (spec §4 / Step 3). `RunResourceScope` is a `Context.Service` class — using it as an object key coerces to a string and is **not guaranteed unique or stable** across scopes | **Medium** | Impl must key `extend` by a stable id (e.g. scope `.id` string, which exists) rather than the class object, OR the factory accepts the scope ref and derives the key internally. Affects API 3 ergonomics. |
 | **D3** | **`Telemetry.bind(handle, fields)`** exhaustiveness vs TypeScript object-literal limits | **HIGH — blocker** | The locked **`satisfies WiringConfig<Tag>`** exhaustiveness (requirements §4) must be validated via **`Wiring.sections`** collector + **`RequiredBindMap<Tag>`** — not handle-keyed object literals. See §4 resolution options. Must decide before Step 3 wiring factory. |
 | **D4** | Golden puts `logWarning` as a **`.pipe` leg on the event**; spec puts it as a **`logWarning:` property on the wiring node**. | Low — spec §12 explicitly rejects the pipe form, locked | No action; just noting the golden code does it the old way. |
-| **D5** | Spec's `RunResourceStateSchema` (state snapshot embedded in `State.Changed`) lives today in the **to-be-deleted** `store/RunResourceTelemetry.ts`. The new Tag schema references it. | Low | Need to decide its new home (likely `RunResourceScope` `extend` shape or a shared schema module) so deleting the debt file doesn't orphan it. |
+| **D5** | `RunResourceStateSchema` home | **Locked** | **`src/store/RunResourceState.ts`** — see requirements CHK/D5 table |
 | **D6** | No telemetry/identity **export subpaths** exist in `package.json`. Step 0 lists them as deliverables but the spec's compose examples already import from `@nikscripts/effect-pm/store/RunResourceTelemetry`. | Low | Step 0 mechanical; flagged so it isn't skipped. |
 
 ---
@@ -170,6 +170,6 @@ Everything downstream (wiring/runtime, Steps 3–6) inherits the D3 decision, so
 2. **CHK-03** — confirm **`Telemetry.withLayer`** facet export. *(Locked in requirements.)*
 3. **CHK-04 / CHK-12 / CHK-14** — confirm recommendations above.
 4. **D2** — confirm `extend` keys by scope `.id` (not the class object).
-5. **D5** — confirm new home for `RunResourceStateSchema`.
+5. **D5** — ~~confirm new home for `RunResourceStateSchema`~~ **Locked:** `src/store/RunResourceState.ts`.
 
 Non-blocking (proceed on default): D1, D4, D6.

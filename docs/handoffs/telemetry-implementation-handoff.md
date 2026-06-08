@@ -31,7 +31,7 @@
 | **D2** `[RunResourceScope]` as extend key | **Superseded** — use **`Telemetry.extend(scope, fields)`** |
 | **D3** handle-keyed `nodes` object | **Resolved** — **`Telemetry.bind(handle, fields).pipe(…)`** + **`satisfies WiringConfig<Tag>`** |
 | **D4** golden pipe vs wiring `logWarning` | **Superseded** — **`bind.pipe(Telemetry.logWarning, …)`** on wiring only; **no pipe on Tag** |
-| **D5** `RunResourceStateSchema` home | **Still open** — move before deleting `src/store/RunResourceTelemetry.ts` |
+| **D5** `RunResourceStateSchema` home | **Locked** — **`src/store/RunResourceState.ts`** (import in Tag `State.Changed` schema) |
 | **D6** missing export subpaths | **Still valid** |
 | **"Port from golden"** | **Still valid** — schemas/wires port; **factory is net-new** |
 

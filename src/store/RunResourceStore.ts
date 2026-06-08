@@ -47,10 +47,10 @@ import {
   type RunResourceRunCompletedInput,
   type RunResourceRunFailedInput,
   type RunResourceRunStartedInput,
-  type RunResourceState,
-  type RunResourceStateChangeReason,
   type RunResourceStateChangedInput,
 } from "./RunResourceTelemetry";
+import type { RunResourceState } from "./RunResourceState";
+import type { RunResourceStateChangeReason } from "./RunResourceTelemetry";
 
 // ============================================================================
 // Public types
@@ -147,7 +147,7 @@ export type RunResourceFact =
  *
  * @public
  */
-export type { RunResourceState } from "./RunResourceTelemetry";
+export type { RunResourceState } from "./RunResourceState";
 
 /**
  * State transition recorded for a {@link RunResource} gate.

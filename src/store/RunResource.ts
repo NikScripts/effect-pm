@@ -41,7 +41,6 @@ export {
   RunResourceRunFailedInputSchema,
   RunResourceRunStartedInputSchema,
   RunResourceStateChangedInputSchema,
-  RunResourceStateSchema,
   RunStarted,
   STATE_CHANGED_WIRE,
   STATE_CHANGE_REASONS,
@@ -55,6 +54,10 @@ export {
   type RunResourceRunStartedInput,
   type RunResourceStateChangedInput,
 } from "./RunResourceTelemetry";
+
+export {
+  RunResourceStateSchema,
+} from "./RunResourceState";
 
 export {
   RunResourceProjection,
