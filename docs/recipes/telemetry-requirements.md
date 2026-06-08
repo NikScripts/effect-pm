@@ -1,24 +1,42 @@
 # Telemetry overhaul — requirements & implementation steps
 
-**Status:** Owner-approved bake (Jun 2026). **Implementation gate** for all telemetry work.  
+**Status:** Owner-approved bake (Jun 2026); **API revision** locked Jun 2026 (Tag / Wiring / Router — see [change log](#implementation-change-log)). **Implementation gate** for all telemetry work.  
 **Design rationale & discussion:** [telemetry-split-bake.md](./telemetry-split-bake.md)  
+**Pre-implementation recon:** [telemetry-recon-findings.md](./telemetry-recon-findings.md) (codebase gaps only)  
+**Implementation handoff:** [telemetry-implementation-handoff.md](../handoffs/telemetry-implementation-handoff.md) — **start here if implementing**  
 **Vocabulary:** [21-state-vocabulary.md](../plans/21-state-vocabulary.md)  
-**Architecture:** [20-process-store-split-and-telemetry.md](../plans/20-process-store-split-and-telemetry.md)  
-**Golden tree (port from):** `origin/cursor/facet-telemetry-158c` — `ProcessStore.telemetry` DSL in `runResource.ts`
+**Architecture:** [20-process-store-split-and-telemetry.md](../plans/20-process-store-split-and-telemetry.md) · [architecture-split-and-transports.md](./architecture-split-and-transports.md)  
+**Golden reference (schemas + wire layout only):** `origin/cursor/facet-telemetry-158c` — not a mechanical port of the factory DSL
 
 **Rule for implementers:** If you introduce a behavior, API shape, or default **not written in this doc**, append it to [§ Undocumented / verify](#undocumented--verify-before-merge) and the [change log](#implementation-change-log) in the same PR.
+
+**Doc code rule:** Snippets must match **locked bake APIs** and **shipped schemas/scopes** (`src/`, golden branch). Rebuild tooling only — not a domain redesign.
+
+**Calling invariants (locked — do not regress to `defineEvent` style):**
+
+1. **No event payloads at call sites** — not `{ payload: { concurrency } }`, not hand-built `Started({ id, occurredAt, … })`. Events are **zero-arg**; the layer materializes from scope, operation input, `Telemetry.terminal.*`, wiring `bind`, and `Exit.*`.
+2. **Root / lifetime scope** — install via **`State.Scope.layer` / `.provide` / `.run`** at the kernel boundary that owns that lifetime (Pattern A in [plan 18](../plans/18-resource-state-scope.md)). **Not** on the telemetry operation builder.
+3. **Operation scope** — **`.provide(scopeLeaf)` on operations only** (typed from the scope declared on that op's Tag). **Never** `.provide()` on events.
+4. **Events are `Effect` values** — `yield* RunResourceTelemetry.State.Changed` — **not** `Changed()` (events are not functions).
+5. **Start / exit** — **operation runner** emits when the Tag declares `Telemetry.start` / `Telemetry.exit`. Kernel does **not** `yield* ctx.telemetry.Started` (or any start leg) — start fires immediately on op entry.
+6. **Middle events** — `yield* ctx.telemetry.Retried` etc. **inside** an operation body only — materialize from **op scope + op input** established by `.provide()` on that op.
+7. **Standalone root-scoped events** — `yield* Service.Group.Event` when root scope is already ambient (e.g. `State.Changed` after `RunResourceScope.layer` on the gate). Leaf-scoped facts require an **operation** with `Telemetry.start` / `Telemetry.exit` — not a bare Service event + `.provide()`.
+8. **Exit-first operations** — default op shape is **`Telemetry.exit` only** (how it finished). Add `Telemetry.start` when start matters; add middle `Telemetry.event`s when needed between start and exit.
+9. **Operation input ≠ event payload** — `op(input)` passes only what the Tag declares on `Telemetry.operation<Input>`. Scope fields (`runId`, `entryId`, …) go through **`.provide()` on the op**, not operation input.
+10. **Wire ids / reason literals** — use **`telemetryWireId`** (or Tag-generated helper), e.g. `STATE_CHANGE_REASONS` — never ad-hoc string literals in schemas or kernel.
 
 ---
 
 ## Table of contents
 
+0. [Implementer checklist](#implementer-checklist)
 1. [What we are building](#1-what-we-are-building)
 2. [What we are replacing](#2-what-we-are-replacing)
 3. [Four kinds of state (do not conflate)](#3-four-kinds-of-state-do-not-conflate)
 4. [Three public APIs (locked)](#4-three-public-apis-locked)
 5. [Implementation steps (0–10)](#5-implementation-steps-010)
 6. [RunResource — full target](#6-runresource--full-target)
-7. [Queue — full target (stress case)](#7-queue--full-target-stress-case)
+7. [Queue — full target](#7-queue--full-target)
 8. [Compose, layers, registry](#8-compose-layers-registry)
 9. [Internal emit pipeline](#9-internal-emit-pipeline)
 10. [Module layout & exports](#10-module-layout--exports)
@@ -29,30 +47,53 @@
 
 ---
 
+## Implementer checklist
+
+**Handoff:** [telemetry-implementation-handoff.md](../handoffs/telemetry-implementation-handoff.md)
+
+- [ ] Read handoff + this doc (not split-bake for API shape)
+- [ ] Use recon for **branch gaps** only — API per [change log 2026-06-08](#implementation-change-log)
+- [ ] Implement **`Telemetry.bind.pipe`**, **`satisfies WiringConfig`**, **`Telemetry.layer`**, **`Telemetry.withLayer`**
+- [ ] Rename **`TelemetryHub`** → **`TelemetryRouter`** in new/edited code
+- [ ] **`*.test-d.ts`** for wiring exhaustiveness
+- [ ] Resolve **D5** (`RunResourceStateSchema` home) before deleting debt telemetry file
+- [ ] Gate: `pnpm run typecheck && pnpm test && pnpm run lint && pnpm run build`
+
+---
+
 ## 1. What we are building
 
-Replace hub-branch interim telemetry (`defineEvent`, hand wire consts, kernel `Ref` counters) with a **three-API model** composed at the facet:
+Replace hub-branch interim telemetry (`defineEvent`, hand wire consts, kernel `Ref` counters) with a **three-API model** plus **router** and optional **transport**:
 
 | # | Name | Public surface | Role |
 | --- | --- | --- | --- |
-| **1** | **`Telemetry.Tag`** | Class + tree DSL | **Skeleton only** — namespace, group, operation, event, start, exit, scope ref, wire ids. Generates **node handles (G)**. **No** extend, bind, logWarning. |
-| **2** | **Calling API** | Static paths on **Service** | Builder (`provideLeaf` / `provideRoot` / `assuming*`) → `Effect` → **`OperationContext`**: `{ input, telemetry, scope }`. `scope` is a **live view**, not a snapshot. |
-| **3** | **Service wiring** | 2nd arg to **`Telemetry.Service`** | **`Telemetry.Wiring<Tag>`** = `{ extend, nodes }`. Keyed by Tag **node handles**, not wire strings. |
-| **∴** | **`Telemetry.Service`** | `Telemetry.Service(Tag, wiring)` | Tag + wiring merged; facet export; **`Service.layer`** = Effect `Layer` (requires hub). |
+| **1** | **`Telemetry.Tag`** | `Telemetry.Tag<Self>()(id, …tree)` | **Skeleton + calling paths** — namespace, group, operation, event, start, exit, schemas, wire ids, **node handles (G)**. **No** extend, bind, pipe on events. |
+| **2** | **Calling API** | Static paths on **Tag** (mirrored on facet export) | Operation builder → `{ input, telemetry, scope }`; **zero-arg** events; runner owns start/exit |
+| **3** | **Wiring** | `Wiring.sections(…)` + **`satisfies WiringConfig<Tag>`** | `Telemetry.extend`, `Telemetry.bind(…).pipe(log legs…)` → validated config; **not** a compose function |
+| **∴** | **Facet layer** | `Telemetry.layer(Tag, wiring)` | Facet runtime **`Layer`** (materialize, runner, telemetry state) — requires **`TelemetryRouter`** |
+| **∴** | **Facet export** | `Telemetry.withLayer(Tag, layer)` | Same calling surface as Tag + **`.layer`** only |
+| — | **`TelemetryRouter`** | `TelemetryRouter.layer` (rename of shipped `TelemetryHub`) | In-process validate + fan-out to **sinks** — not definitions, not bind |
+| — | **`telemetryTransport`** | `telemetryTransport.serverLayer` | **Wire** for live events (plan 19) — fed by **`BroadcastSink`**, not the router API |
 
 ```text
-Author time                          Runtime (when Service.layer provided)
-─────────────────────────────────────────────────────────────────────────
-RunResourceTag.ts     API 1          Kernel calls Service static paths
-  skeleton tree       ───────►       Operation runner + materialize + hub
-RunResourceTelemetry.ts  API 3
-  Telemetry.Service(Tag, wiring)
-  + .layer              ───────►       src/internal/telemetry/*
+Author time                              Runtime (when facet .layer + router provided)
+─────────────────────────────────────────────────────────────────────────────────────
+store/RunResourceTag.ts       API 1+2    Kernel: RunResourceTelemetry.* (same paths as Tag)
+  Telemetry.Tag(id, tree)
+
+store/RunResourceTelemetry.wiring.ts  API 3
+  Wiring.sections(extend, bind.pipe…) satisfies WiringConfig<Tag>
+
+store/RunResourceTelemetry.service.ts
+  Telemetry.layer(Tag, wiring)  ───────►  src/internal/telemetry/*  ──emit──►  TelemetryRouter
+                                                                                    │
+store/RunResourceTelemetry.ts                                                     sinks
+  Telemetry.withLayer(Tag, layer)  ──►  .layer          Archive / Projection / Broadcast ──► telemetryTransport
 ```
 
-**Hub** stays router-only (validate + fan-out). **Definitions** live on Tag/Service, not `TelemetryHub.defineEvent`.
+**Router** stays validate + fan-out only. **Definitions + bind** live on Tag + wiring. **Transport** is optional wire to remote subscribers.
 
-**Emit `R` at kernel:** empty (no-op stub) **or** `TelemetryHub` only — **never** `RuntimeStorage`.
+**Emit `R` at kernel:** empty (no-op stub) **or** **`TelemetryRouter` only** — **never** `RuntimeStorage`.
 
 **Reference order:** RunResource Tag port → Service + internal bridge → registry + delete debt → Queue (separate branch).
 
@@ -84,21 +125,27 @@ const stateRef = Ref.make({ waiting: 0, inFlight: 0, … });
 | Hand-duplicated wire const arrays | Flat `store/RunResource*.ts` |
 | Kernel `stateRef` counters | Transport merge, projection pilot |
 
-### Target call site (kernel)
+### Target call site (kernel — RunResource gate)
+
+**Same schemas** as golden branch / hub branch. **Different call shape:** operation builder + zero-arg events.
 
 ```ts
-// No hand-built payloads; no raw wire strings
-yield* RunResourceTelemetry.Run.processEntry({ name: run.name })
-  .provideLeaf({ runId: run.id, resourceId: run.resourceId })
-  .pipe(
-    Effect.flatMap((ctx) =>
-      Effect.gen(function* () {
-        // middle events — zero arg at call site
-        yield* ctx.telemetry.StateChanged;
-        return yield* userEffect(run);
-      }),
-    ),
-  );
+// TODAY — hub debt (DELETE): hand-built event payloads + defineEvent
+yield* RunResourceHubTelemetry.Run.started({
+  resourceId,
+  runId,
+  occurredAt,
+  payload: { concurrency },
+});
+
+// TARGET — operation `run`; runner emits Started/Completed/Failed (zero-arg on wire)
+yield* RunResourceTelemetry.Run.run
+  .provide({ runId })
+  .pipe(Effect.flatMap((ctx) => config.effect(input)));
+
+// State.Changed — Effect (not a function); root ambient from RunResourceScope.layer on gate
+yield* RunResourceTelemetry.State.Changed;
+// metrics leg updates telemetry state before emit; wiring materializes reason/previous/current
 ```
 
 ---
@@ -123,15 +170,38 @@ From [21-state-vocabulary.md](../plans/21-state-vocabulary.md):
 | **Operation input** | N/A | **No** — explicit `bind` only |
 
 ```ts
-// Function arg ≠ telemetry input — telemetry only sees scope + explicit op input
-const processEntry = (entry: { id: number; name: string; component: ReactNode }) =>
-  pipe(
-    QueueResourceTelemetry.Entry.processEntry({ name: entry.name }), // op input subset
-    Effect.flatMap((ctx) => processItem(entry)),                       // full entry in kernel only
-  );
+// Gate lifetime — root via State.Scope (not telemetry builder)
+makeRunGateEffect(config).pipe(
+  Effect.provide(RunResourceScope.layer({ resourceId: config.name ?? "anonymous" })),
+);
+
+// Queue runtime lifetime — root via State.Scope
+makeQueueRuntime(…).pipe(
+  Effect.provide(QueueResourceScope.layer({ queueId: queueName })),
+);
+
+// Operation — .provide() installs op scope only; queueId / resourceId already ambient
+yield* QueueResourceTelemetry.Entry.processEntry({
+  key: internal.key,
+  priority: internal.priority,
+  attempts: internal.attempts,
+}).provide({ entryId: internal.entryId }).pipe(
+  Effect.flatMap((ctx) =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(runUserHandler(internal));
+      if (shouldRetry(exit, ctx.input.attempts)) {
+        yield* ctx.telemetry.Retried; // middle — after work, not first line
+      }
+      return yield* Exit.match(exit, {
+        onFailure: (cause) => Effect.failCause(cause),
+        onSuccess: (value) => Effect.succeed(value),
+      });
+    }),
+  ),
+);
 ```
 
-If a value is **already in scope** (kernel put it there via `Scope.run`), **do not** pass it again as operation input.
+If a value is **already in scope** via `.provide()` on the op, **do not** duplicate it in operation input.
 
 ---
 
@@ -154,150 +224,286 @@ If a value is **already in scope** (kernel put it there via `Scope.run`), **do n
 - Wire ids: **`Namespace.Group.Event`**. Operation names **never** appear in wire ids.
 - Input type on **`Telemetry.operation<Input>`**, not on `Telemetry.start`.
 - Use **`telemetryWireId` helper** (or Tag-generated equivalent) — **not** string literals for reasons/wires.
-- Scope-bound fields (e.g. `runId`) come from **scope at materialize** — **not** passed in kernel payloads.
+- Scope-bound fields (e.g. `runId`, `entryId`) come from **scope at materialize** — **not** re-passed when layer materializes them.
+- **`Telemetry.terminal.clockMillis`** for timestamps where golden branch uses terminal fields.
+
+#### RunResource Tag (API 1) — schemas from golden branch, **operations** on call path
+
+Scopes (`src/RunResourceScope.ts`):
 
 ```ts
-import { Schema } from "effect";
-import { Telemetry } from "@nikscripts/effect-pm/Telemetry";
-import { RunScope } from "../RunResourceScope";
-import {
-  RunResourceRunStarted,
-  RunResourceRunCompleted,
-  RunResourceRunFailed,
-} from "./RunResourceSchemas";
+export const RunResourceScope = State.Scope("RunResource", {
+  resourceId: Schema.String,
+})(…);
 
-export class RunResourceTag extends Telemetry.Tag<RunResourceTag>(id)(
-  Telemetry.namespace("RunResource")(
-    Telemetry.group("Run")(
-      Telemetry.operation<{ name: string }>("processEntry")(
-        RunScope,
-        Telemetry.start("Started", RunResourceRunStarted),
-        Telemetry.exit({
-          onSuccess: Telemetry.event("Completed", RunResourceRunCompleted),
-          onFailure: Telemetry.event("Failed", RunResourceRunFailed),
-        }),
-      ),
-      Telemetry.group("State")(
-        Telemetry.event("Changed", RunResourceStateChanged),
-      ),
-    ),
-  ),
-) {}
-
-// Generated node handles (G):
-// RunResourceTag.Run.processEntry.Started
-// RunResourceTag.Run.processEntry.Completed   (via exit.onSuccess — see CHK-01)
-// RunResourceTag.Run.processEntry.Failed
-// RunResourceTag.Run.State.Changed
+export const RunScope = RunResourceScope.withLeaf("Run", {
+  runId: Schema.String,
+})(…);
 ```
 
-**Exit-only operation overload (locked):**
+Wire helpers (same as `src/store/RunResourceTelemetry.ts` — **not** string literals in kernel):
 
 ```ts
-Telemetry.operation("rateLimit")({
-  onSuccess: Telemetry.event("Accepted", QueueRateLimitAccepted),
-  onFailure: Telemetry.event("Rejected", QueueRateLimitRejected),
-});
-// = exit mapping only; no scope child; no start; scope-inheriting when nested
+export const STATE_WAITING_WIRE = telemetryWireId("RunResource", ["State"], "Waiting");
+export const STATE_STARTED_WIRE = telemetryWireId("RunResource", ["State"], "Started");
+// … Completed, Failed, Interrupted, WaitInterrupted …
+
+export const STATE_CHANGE_REASONS = [
+  STATE_WAITING_WIRE,
+  STATE_STARTED_WIRE,
+  STATE_COMPLETED_WIRE,
+  STATE_FAILED_WIRE,
+  STATE_INTERRUPTED_WIRE,
+  STATE_WAIT_INTERRUPTED_WIRE,
+] as const;
 ```
 
-**Nested operations inherit parent scope** when no scope child:
+Schemas (fields unchanged from golden branch):
 
 ```ts
-Telemetry.operation<QueueEntryInput>("processEntry")(
-  QueueEntryScope,
-  Telemetry.start("Started", QueueEntryStarted),
-  Telemetry.operation("rateLimit")({
-    onFailure: Telemetry.event("Rejected", QueueRateLimitRejected),
-  }),
-  Telemetry.exit({ … }),
-);
-```
+const RunState = RunScope.Schema.State;
 
-**Schema example** — scope-bound fields omit from wiring `bind`:
-
-```ts
-export class RunResourceRunStarted extends Telemetry.Schema<RunResourceRunStarted>(
-  "RunResourceRunStarted",
+class RunResourceRunStarted extends Telemetry.Schema<RunResourceRunStarted>()(
+  RunScope,
 )({
-  resourceId: RunScope.State.resourceId,  // scope-bound — auto at materialize
-  runId: RunScope.State.runId,            // scope-bound — NOT passed at call site
-  occurredAt: Schema.Number,              // plain — requires wiring bind
-  name: Schema.String,                    // plain — bind from Operation.input
+  runId: RunState.Run.runId,
+  occurredAt: Telemetry.terminal.clockMillis,
+  payload: Schema.Struct({ concurrency: Schema.Number }),
+}) {}
+
+class RunResourceRunCompleted extends Telemetry.Schema<RunResourceRunCompleted>()(
+  RunScope,
+)({
+  runId: RunState.Run.runId,
+  occurredAt: Telemetry.terminal.clockMillis,
+  payload: Schema.Struct({ durationMs: Schema.Number }),
+}) {}
+
+class RunResourceRunFailed extends Telemetry.Schema<RunResourceRunFailed>()(
+  RunScope,
+)({
+  runId: RunState.Run.runId,
+  occurredAt: Telemetry.terminal.clockMillis,
+  payload: Schema.Struct({
+    durationMs: Schema.Number,
+    cause: Schema.String,
+  }),
+}) {}
+
+class RunResourceStateChanged extends Telemetry.Schema<RunResourceStateChanged>()(
+  RunResourceScope,
+)({
+  id: Schema.String,
+  changedAt: Telemetry.terminal.clockMillis,
+  reason: Schema.Literals(STATE_CHANGE_REASONS),
+  previous: Schema.NullOr(RunResourceStateSchema),
+  current: RunResourceStateSchema,
 }) {}
 ```
 
+Tag tree — **`run` operation** owns Run start/exit; `State.Changed` standalone event:
+
+```ts
+export class RunResourceTag extends Telemetry.Tag<RunResourceTag>(id)(
+  Telemetry.namespace("RunResource"),
+  Telemetry.group("Run")(
+    Telemetry.operation("run")(
+      RunScope,
+      Telemetry.start("Started", RunResourceRunStarted),
+      Telemetry.exit({
+        onSuccess: Telemetry.event("Completed", RunResourceRunCompleted),
+        onFailure: Telemetry.event("Failed", RunResourceRunFailed),
+      }),
+    ),
+  ),
+  Telemetry.group("State")(
+    Telemetry.event("Changed", RunResourceStateChanged),
+  ),
+) {}
+```
+
+Node handles (G) — wiring keys; wire ids stay `RunResource.Run.Started` (operation name **not** in wire):
+
+```ts
+RunResourceTag.Run.run.Started          // start leg of `run` op
+RunResourceTag.Run.run.exit.onSuccess   // → Completed event handle (CHK-01)
+RunResourceTag.Run.run.exit.onFailure   // → Failed event handle
+RunResourceTag.State.Changed
+```
+
+#### Queue entry operation (API 1) — `processEntry` stress case
+
+Operation input = **`EntryFactSource` fields not on scope leaf** (`key`, `priority`, `attempts`). **`entryId` is scope** via **`.provide()` on the op**. No invented `name` field.
+
+**Exit-first default** — add `Telemetry.start` / middle events only when needed:
+
+```ts
+// Enqueue — start-only op (Enqueued = Telemetry.start; runner emits immediately)
+Telemetry.operation<{
+  key?: string;
+  priority: QueuePriority;
+  attempts: number;
+}>("enqueue")(
+  QueueEntryScope,
+  Telemetry.start("Enqueued", QueueEntryEnqueued),
+);
+
+// Dedupe release — exit-only op (common case: care how it finished)
+Telemetry.operation("releaseDedupeKey")(
+  QueueDedupeKeyScope,
+  Telemetry.exit({
+    onSuccess: Telemetry.event("Released", QueueDedupeKeyReleased),
+  }),
+);
+
+// Worker — start + middle + exit
+Telemetry.operation<{
+  key?: string;
+  priority: QueuePriority;
+  attempts: number;
+}>("processEntry")(
+  QueueEntryScope,
+  Telemetry.start("Started", QueueEntryStarted),
+  Telemetry.event("Retried", QueueEntryRetried),
+  Telemetry.operation("rateLimit")({
+    onFailure: Telemetry.event("Exceeded", QueueRateLimitExceeded),
+  }),
+  Telemetry.exit({
+    onSuccess: Telemetry.event("Completed", QueueEntryCompleted),
+    onFailure: Telemetry.event("Failed", QueueEntryFailed),
+    onInterrupt: Telemetry.event("Released", QueueEntryReleased),
+  }),
+);
+```
+
+**Exit-only nested op** inherits parent `QueueEntryScope`. Root-scoped groups (`Lifecycle`, …) stay **events** on the Tag — bare `yield*` when root ambient.
+
 ---
 
-### API 2 — Calling
+### API 2 — Calling (operations + zero-arg events)
 
-Mimic Effect: **function returning `Effect`**, built with `pipe` / `flatMap` / `gen`.
+**Locked:** telemetry call sites use **Service static paths** — not `Scope.run` + hand-built payload emit.
 
-**Rejected:** extra `telemetry` callback param; bodies on `Telemetry.Tag`; two-arg `(leaf, input)`; `(scopeLeaf, opInput)` as separate positional args.
+#### Events vs operations
+
+| Kind | Type | `.provide()`? | Call |
+| --- | --- | --- | --- |
+| **Event (standalone, root-scoped)** | `Effect` | **No** | `yield* Service.Group.Event` when root ambient |
+| **Operation (exit-only or start+exit)** | builder → `Effect` | **Yes** — op's declared scope leaf | `yield* Service.Group.op(input?).provide({ … })` |
+| **Operation with body** | builder → `Effect` | **Yes** | `.provide({ … }).pipe(Effect.flatMap(ctx => …))` |
+| **Middle event** | `Effect` on `ctx.telemetry` | **No** | `yield* ctx.telemetry.Retried` inside op body |
+| **Nested op** | inherits parent scope | **No** extra provide | `yield* work.pipe(ctx.telemetry.rateLimit)` |
+
+**Events are `Effect` values — not functions.** No `()` on `Changed`, `Enqueued`, `Started`, etc.
+
+**`.provide()` is operation-only.** Events inside an op read **op scope + op input**; they never chain `.provide()`.
+
+#### Operation legs (Tag → runner → kernel)
+
+| Leg | Tag DSL | Runner | Kernel |
+| --- | --- | --- | --- |
+| **Start** (optional) | `Telemetry.start("Enqueued", …)` | emits **immediately** on op entry | **nothing** — do not `yield* ctx.telemetry.Enqueued` |
+| **Middle** (optional) | `Telemetry.event("Retried", …)` | on `yield* ctx.telemetry.Retried` | after user work, before op closes |
+| **Exit** (default) | `Telemetry.exit({ … })` | on op completion / failure / interrupt | **nothing** — do not call Completed/Failed directly |
+
+**Exit-first:** most ops need only `Telemetry.exit`. Add `Telemetry.start` when how it **started** matters (`enqueue` → `Enqueued`, `processEntry` → `Started`).
+
+#### Scope: `State.Scope` vs operation `.provide()`
+
+| Need | API | Example |
+| --- | --- | --- |
+| **Root for lifetime** | `State.Scope.layer` / `.provide` / `.run` at factory | `Effect.provide(RunResourceScope.layer({ resourceId }))` |
+| **Op scope leaf** | **`.provide({ … })` on the operation** | `Run.run.provide({ runId })` — Tag declares `RunScope` |
+| **Other scope level** | that **`State.Scope` directly** | `QueueResourceScope.run({ queueId }, effect)` — not on telemetry builder |
+
+Type of `.provide()` argument = **`Scope.Leaf`** from the scope ref on that operation's Tag.
+
+Builder returns **type error** when: tag declares scope, scope not ambient, `.provide()` not called before the op runs.
+
+**Rejected:** `provideLeaf`, `provideRoot`, `assumingLeaf`, `assumingRoot`; `.provide()` on events; `Event()` function call syntax; extra `telemetry` callback param; bodies on `Telemetry.Tag`; two-arg `(leaf, input)`.
+
+#### RunResource gate (canonical)
+
+```ts
+// Gate factory — root once (Pattern A)
+return makeRunGateBody(config).pipe(
+  Effect.provide(RunResourceScope.layer({ resourceId })),
+);
+
+// Per invocation — metrics leg, then standalone root event
+yield* RunResourceTelemetry.State.Changed;
+
+yield* RunResourceTelemetry.Run.run
+  .provide({ runId })
+  .pipe(Effect.flatMap((ctx) => config.effect(input)));
+// Runner: Started on entry, Completed | Failed on exit — kernel never yields them
+```
+
+#### Queue enqueue (start-only op)
+
+```ts
+yield* QueueResourceTelemetry.Entry.enqueue({
+  key: source.key,
+  priority: source.priority,
+  attempts: source.attempts,
+}).provide({ entryId: source.entryId });
+// Runner emits Enqueued immediately — no flatMap body unless op gains middle legs
+```
+
+#### Queue `processEntry` (start + middle + exit)
+
+```ts
+yield* QueueResourceTelemetry.Entry.processEntry({
+  key: internal.key,
+  priority: internal.priority,
+  attempts: internal.attempts,
+}).provide({ entryId: internal.entryId }).pipe(
+  Effect.flatMap((ctx) =>
+    Effect.gen(function* () {
+      // Started already emitted by runner (Telemetry.start on Tag)
+
+      const exit = yield* Effect.exit(runUserHandler(internal));
+
+      if (shouldRetry(exit, ctx.input.attempts)) {
+        yield* ctx.telemetry.Retried;
+      }
+
+      yield* checkRateLimit.pipe(ctx.telemetry.rateLimit);
+
+      return yield* Exit.match(exit, {
+        onFailure: (cause) => Effect.failCause(cause),
+        onSuccess: (value) => Effect.succeed(value),
+      });
+      // Completed / Failed / Released emitted by runner (Telemetry.exit)
+    }),
+  ),
+);
+```
+
+#### Queue dedupe (exit-only op)
+
+```ts
+yield* QueueResourceTelemetry.DedupeKey.releaseDedupeKey({})
+  .provide({ key: internal.key })
+  .pipe(Effect.flatMap((ctx) => releaseKeyWork(internal)));
+// Runner emits Released on success — no start leg
+```
+
+#### Root-scoped standalone events
+
+```ts
+// queueId / resourceId ambient from State.Scope.layer on runtime
+yield* QueueResourceTelemetry.Lifecycle.Started;
+yield* RunResourceTelemetry.State.Changed;
+```
 
 #### Three operation kinds
 
 | Kind | Scope on tag | Call shape |
 | --- | --- | --- |
-| **Scope-required** | Leaf and/or root declared | `op(input).provideLeaf(…)` / `.provideRoot(…)` / `.assumingLeaf()` / `.assumingRoot()` → `Effect` |
-| **Scope-inheriting** | No scope child (nested) | `op` or `op(input)` → `Effect` immediately |
-| **Scope-free** | No scope child (top-level) | `op(input)` → `Effect` immediately |
-
-#### Scope providers (locked names)
-
-| Method | Meaning |
-| --- | --- |
-| **`provideLeaf(leaf)`** | Install leaf scope for this op |
-| **`provideRoot(root)`** | Install root when not ambient |
-| **`assumingLeaf()`** | Leaf already in `R` (process bracketed) |
-| **`assumingRoot()`** | Root already in `R` |
-
-**Explicit `assuming*` over ambient inference in v1.**
-
-Builder returns **type error** when: tag declares scope, scope not ambient, builder never completes with provide/assuming.
-
-**Mid-op `patch` does not replace builder obligation** at op start.
-
-```ts
-// Pattern A — telemetry opens leaf at op boundary
-const processEntry = (entry: FullEntry) =>
-  pipe(
-    QueueResourceTelemetry.Entry.processEntry({ name: entry.name })
-      .provideLeaf({ entryId: entry.id, attempts: entry.attempts }),
-    Effect.flatMap((ctx) =>
-      Effect.gen(function* () {
-        yield* ctx.telemetry.Retried;
-        yield* checkRateLimit.pipe(ctx.telemetry.rateLimit);
-        return yield* processItem(entry);
-      }),
-    ),
-  );
-
-yield* processEntry(entry);
-```
-
-```ts
-// Pattern B — process already bracketed scope
-QueueEntryScope.run({ entryId: entry.id, attempts: entry.attempts },
-  pipe(
-    QueueResourceTelemetry.Entry.processEntry({ name: entry.name }).assumingLeaf(),
-    Effect.flatMap((ctx) => …),
-  ),
-);
-```
-
-```ts
-// Nested scope-inheriting op
-yield* checkRateLimit.pipe(
-  QueueResourceTelemetry.Entry.rateLimit,
-  Effect.flatMap((ctx) => …),
-);
-```
-
-```ts
-// Scope-free op
-yield* QueueResourceTelemetry.Backfill.reconcile({ fromSeq: 100, toSeq: 200 });
-```
+| **Scope-required** | Scope ref on op | `op(input?).provide(scopeLeaf)` → `Effect`; optional `.pipe(flatMap(ctx => …))` when body needed |
+| **Scope-inheriting** | No scope (nested) | `op` or `op(input)` inside parent — no extra `.provide()` |
+| **Scope-free** | No scope | `op(input)` → `Effect` |
 
 #### `OperationContext` (locked — option C)
 
@@ -308,135 +514,179 @@ interface OperationContext<
   TelemetryHandle,
 > {
   readonly input: Input;
-  readonly telemetry: TelemetryHandle;  // Retried, rateLimit, nested shortcuts
-  readonly scope: ScopeState;          // live view — same Context provideLeaf opened
+  readonly telemetry: TelemetryHandle;  // middle events + nested ops only (not start/exit legs)
+  readonly scope: ScopeState;            // live view — scope opened by op .provide()
 }
 ```
 
 ```ts
 Effect.flatMap((ctx) =>
   Effect.gen(function* () {
+    const attempts = ctx.input.attempts;
+    const entryId = ctx.scope.Entry.entryId;
+    yield* doWork;
     yield* ctx.telemetry.Retried;
-    ctx.input.name;
-    ctx.scope.entryId;
-    yield* QueueEntryScope.patch({ attempts: ctx.scope.attempts + 1 });
   }),
 );
 ```
 
-- **`input`** — from `op(input)` only; not from scope.
-- **`telemetry`** — middle events and nested ops.
+- **`input`** — from `op(input)` only; materialized into middle/exit events via wiring `bind`.
+- **`telemetry`** — **middle events and nested ops only** — not start legs (runner owns those).
 - **`scope`** — process-visible fields only; hidden telemetry fields **not** on `ScopeState` type.
-- **`Scope.patch`** — process-visible mid-op updates; impl deferred (Ref vs FiberRef).
+- **`Scope.patch`** — process-visible mid-op updates on `State.Scope`; impl deferred (Ref vs FiberRef).
 
 Optional v2: `.gen(input, fn)` shortcut — **not v1**.
 
 ---
 
-### API 3 — Wiring + `Telemetry.Service`
+### API 3 — Wiring, facet layer, facet export
 
-**Rejected:** `Telemetry.Layer.for(Tag)(…)`, `Telemetry.layer(tag, config)` as public API (naming collision with Effect `Layer` / `Service.layer`).
+**Rejected:**
 
-**Locked entry point:**
+- `Telemetry.Service(Tag, { extend, nodes })` — wiring object as Service 2nd arg
+- `Telemetry.Wiring<Tag>` hand-authored config objects with handle-keyed maps
+- `{ ERROR: … }` / branded fake error types for exhaustiveness — use **`satisfies WiringConfig<Tag>`** or **`wiring: WiringConfig<Tag>`** assignability
+- `Telemetry.event(…).pipe(…)` on **Tag** — pipe legs are on **`Telemetry.bind` in wiring only**
+- **`TelemetryHub`** name — use **`TelemetryRouter`** (see [§ 8 Router vs transport](#router-vs-transport-locked))
 
-```ts
-export const RunResourceTelemetry = Telemetry.Service(RunResourceTag, {
-  extend: {
-    [RunScope]: {
-      waiting: Telemetry.metric.gauge,
-      inFlight: Telemetry.metric.gauge,
-      completed: Telemetry.metric.counter,
-      failed: Telemetry.metric.counter,
-    },
-  },
-  nodes: {
-    [RunResourceTag.Run.processEntry.Started]: {
-      bind: { name: Operation.input("name") },
-      // occurredAt: Clock.now — if plain field on schema
-    },
-    [RunResourceTag.Run.processEntry.exit.onFailure]: {
-      logWarning: Telemetry.logWarning(
-        "RunResourceStore write failed for Run.Failed",
-        ({ runId }) => ({ runId: String(runId) }),
-      ),
-    },
-  },
-});
-
-// RunResourceTelemetry.layer : Layer<TelemetryHub, …>
-// RunResourceTelemetry.Run.processEntry(…) — Calling API static paths
-```
-
-**Split files (same API):**
+**Locked entry points:**
 
 ```ts
-// store/RunResourceTag.ts
-export class RunResourceTag extends Telemetry.Tag<RunResourceTag>(id)( … ) {}
+// store/RunResourceTag.ts — API 1 + 2
+export class RunResourceTag extends Telemetry.Tag<RunResourceTag>()(
+  "@nikscripts/effect-pm/store/RunResource/RunResourceTag",
+  Telemetry.namespace("RunResource"),
+  Telemetry.group("Run")(
+    Telemetry.operation("run")(
+      RunScope,
+      Telemetry.start("Started", RunResourceRunStarted),
+      Telemetry.exit({
+        onSuccess: Telemetry.event("Completed", RunResourceRunCompleted),
+        onFailure: Telemetry.event("Failed", RunResourceRunFailed),
+      }),
+    ),
+  ),
+  Telemetry.group("State")(
+    Telemetry.event("Changed", RunResourceStateChanged),
+  ),
+) {}
 
-// store/RunResourceTelemetry.wiring.ts
-export const runResourceWiring = {
-  extend: { … },
-  nodes: { … },
-} satisfies Telemetry.Wiring<typeof RunResourceTag>;
-
-// store/RunResourceTelemetry.ts
-export const RunResourceTelemetry = Telemetry.Service(RunResourceTag, runResourceWiring);
-export { RunResourceTag };
-```
-
-#### Node handles (G) + exhaustive bind
-
-Tag factory generates **`EventNode<Schema>`** handles:
-
-```ts
-RunResourceTag.Run.processEntry.Started   // EventNode<typeof RunResourceRunStarted>
-RunResourceTag.Run.State.Changed
-```
-
-**`nodes` map keyed by handles — not wire strings.**
-
-From each event schema, compute **`PlainFields<Schema>`** — keys whose fields are plain `Schema.*` (not scope-bound, not terminal, not literal).
-
-| Schema field kind | Wiring `bind` |
-| --- | --- |
-| Scope-bound (`RunScope.State.runId`) | **Omit** — auto at materialize |
-| Terminal / literal | **Omit** — auto |
-| Plain `Schema.*` | **Required** in `bind` |
-
-```ts
-type LayerNodeConfig<Schema> = PlainFields<Schema> extends never
-  ? { logWarning?: TelemetryLogWarningConfig }
-  : {
-      bind: { [K in PlainFields<Schema>]: FieldSource };
-      logWarning?: TelemetryLogWarningConfig;
-    };
-```
-
-**Exhaustiveness:** every Tag `EventNode` with `PlainFields ≠ never` must appear in `nodes` with complete `bind` — else **compile error**.
-
-**`logWarning`** optional on **any** node (even zero plain-field nodes).
-
-**Field sources:** `Operation.input("key")`, `Exit.value`, `Exit.cause`, `Exit.durationMs`, `Clock.now`, `Telemetry.state`.
-
-**No auto-routing** of operation input to scope or events.
-
-#### Telemetry state (`extend` on wiring)
-
-```ts
-extend: {
-  [RunScope]: {
+// store/RunResourceTelemetry.wiring.ts — API 3 (define + type validation)
+export const runResourceWiring = Wiring.sections(
+  Telemetry.extend(RunResourceScope, {
     waiting: Telemetry.metric.gauge,
     inFlight: Telemetry.metric.gauge,
+    completed: Telemetry.metric.counter,
+    failed: Telemetry.metric.counter,
+    interrupted: Telemetry.metric.counter,
     totalDurationMs: Telemetry.metric.counter,
     configVersion: Telemetry.metric.gauge,
-  },
-  [QueueEntryScope]: {
-    enqueuedAt: Telemetry.metric.timestamp,
-    startedAt: Telemetry.metric.timestamp,
-    waitMs: Telemetry.metric.duration("enqueuedAt", "startedAt"),
-  },
-},
+  }),
+
+  Telemetry.bind(RunResourceTag.Run.run.Started, {
+    payload: { concurrency: Telemetry.state.from((s) => s.gateConcurrency) },
+  }).pipe(
+    Telemetry.logWarning(
+      "RunResourceStore write failed for run start",
+      ({ runId }) => ({ runId: String(runId) }),
+    ),
+  ),
+
+  Telemetry.bind(RunResourceTag.Run.run.exit.onFailure, {
+    payload: { durationMs: Exit.durationMs, cause: Exit.cause },
+  }).pipe(
+    Telemetry.logWarning(
+      "RunResourceStore write failed for run failure",
+      ({ runId }) => ({ runId: String(runId) }),
+    ),
+  ),
+
+  Telemetry.bind(RunResourceTag.State.Changed, {
+    id: Telemetry.state.from((s) => s.stateChangeSeq),
+    reason: Telemetry.state.from((s) => s.pendingReasonWire),
+    previous: Telemetry.state.from((s) => s.pendingPreviousSnapshot),
+    current: Telemetry.state.from((s) => s.pendingCurrentSnapshot),
+  }).pipe(
+    Telemetry.logWarning(
+      "RunResourceStore write failed for state change",
+      ({ reason }) => ({ reason: String(reason) }),
+    ),
+  ),
+) satisfies WiringConfig<typeof RunResourceTag>
+
+// store/RunResourceTelemetry.service.ts — facet runtime Layer (regular Layer typing)
+export const runResourceLayer = Telemetry.layer(RunResourceTag, runResourceWiring)
+
+// store/RunResourceTelemetry.ts — facet export (Tag + .layer)
+export const RunResourceTelemetry = Telemetry.withLayer(RunResourceTag, runResourceLayer)
+export { RunResourceTag }
+
+// Kernel — same paths as Tag
+yield* RunResourceTelemetry.Run.run.provide({ runId }).pipe(…)
+yield* RunResourceTelemetry.State.Changed
 ```
+
+**Identity:** Tag declares **`id` once**. Wiring and layer derive identity from Tag — **no separate id** on wiring or layer factories.
+
+#### `Telemetry.bind` + pipe (log legs)
+
+- **`Telemetry.bind(handle, fields)`** — second arg is **PlainFields shape** (nested like schema), not `{ bind: … }`.
+- **`.pipe(Telemetry.logWarning(…), Telemetry.logInfo(…), Telemetry.annotateLogs(…), …)`** — optional legs on that node; v1 must include **`logWarning`** where archive persist can fail (swallow policy).
+- **Tag:** `Telemetry.event("Changed", Schema)` — **no pipe**.
+
+#### Node handles (G) + PlainFields
+
+Tag factory generates **`EventNode<Schema>`** handles (e.g. `RunResourceTag.Run.run.Started`).
+
+From each event schema, compute **`PlainFields<Schema>`** — plain `Schema.*` leaves not auto-materialized (see table below).
+
+| Schema field kind | Wiring |
+| --- | --- |
+| Scope-bound (`RunScope.State.runId`) | **Omit** — auto at materialize |
+| Terminal (`Telemetry.terminal.*`) | **Omit** — auto |
+| Literal union constrained (`Schema.Literals(STATE_CHANGE_REASONS)`) | **Bind** when value comes from telemetry state (e.g. `reason`) |
+| Plain `Schema.*` / nested struct | **Required** in `Telemetry.bind` |
+
+```ts
+type BindFields<Schema> = /* nested mirror of PlainFields<Schema>; each leaf is FieldSource */
+```
+
+**Exhaustiveness (real types, not fake error objects):**
+
+1. **Define:** `Wiring.sections(…) satisfies WiringConfig<Tag>` → missing bind keys = normal TS missing-property errors.
+2. **Layer build:** `Telemetry.layer(tag, wiring)` accepts **`wiring: WiringConfig<Tag>`** only.
+3. **Per bind:** second arg assignable to **`BindFields<HandleSchema>`**.
+4. **Proof:** `*.test-d.ts` with `@ts-expect-error` for missing/incomplete/wrong-context binds.
+
+**Field sources:** `Operation.input("key")`, `Exit.value` / `Exit.cause` / `Exit.durationMs`, `Clock.now`, `Telemetry.state.from(fn)`.
+
+**No auto-routing** of operation input to events.
+
+#### `WiringConfig<Tag>` shape
+
+```ts
+type WiringConfig<Tag> = {
+  readonly tag: Tag["id"]
+  readonly extend: ReadonlyArray<ExtendEntry>
+  readonly binds: RequiredBindMap<Tag>   // PlainFields exhaustiveness
+  readonly logs: /* accumulated from bind.pipe legs */
+}
+```
+
+`RequiredBindMap<Tag>` includes only handles where **`PlainFields ≠ never`**. Zero-plain-field nodes: **`Telemetry.bind` optional**; use `.pipe(log…)` only when needed.
+
+#### Telemetry state (`Telemetry.extend`)
+
+```ts
+Telemetry.extend(RunResourceScope, {
+  waiting: Telemetry.metric.gauge,
+  inFlight: Telemetry.metric.gauge,
+  totalDurationMs: Telemetry.metric.counter,
+  configVersion: Telemetry.metric.gauge,
+})
+```
+
+Scope passed to **`Telemetry.extend(scope, fields)`** — not as object-literal key. Factory keys internally by **`scope.id`**.
 
 | Rule | Lock |
 | --- | --- |
@@ -448,9 +698,7 @@ extend: {
 | Durable storage | **Never** `RuntimeStorage` |
 | Snapshot API | `@internal` v1 |
 
-Runtime Refs live in **`src/internal/telemetry/`**; activated by **`Service.layer`**.
-
----
+Runtime Refs live in **`src/internal/telemetry/`**; activated by **`Telemetry.layer`**.
 
 ## 5. Implementation steps (0–10)
 
@@ -497,7 +745,7 @@ export const TypeId: unique symbol = Symbol.for(TypeTag);
 export class RunResourceTag extends Telemetry.Tag<RunResourceTag>(id)( … ) {}
 
 // Handles exist at compile time
-type _ = typeof RunResourceTag.Run.processEntry.Started;
+type _ = typeof RunResourceTag.Run.run.Started;
 ```
 
 **Files:** `src/Telemetry.ts` (or split), `src/store/RunResourceTag.ts`, schemas.
@@ -518,29 +766,25 @@ type _ = typeof RunResourceTag.Run.processEntry.Started;
 
 ---
 
-### Step 3 — `Telemetry.Wiring` + `Telemetry.Service` (Slice B)
+### Step 3 — Wiring factory + `WiringConfig` (Slice B)
 
 **Deliverables:**
 
-- Type `Telemetry.Wiring<Tag> = { extend, nodes }`.
-- `PlainFields<Schema>` type-level computation.
-- `Telemetry.Service(tag, wiring)` merge — static Calling paths + wiring metadata.
-- Optional `Telemetry.wiring<Tag>(config)` helper (`satisfies` only).
-- Field source builders: `Operation.input`, `Exit.*`, `Clock.now`, `Telemetry.state`.
+- `Wiring.sections(…)` collector; type **`WiringConfig<Tag>`** with **`RequiredBindMap<Tag>`**.
+- `PlainFields` / **`BindFields<Schema>`** type-level computation.
+- `Telemetry.extend(scope, fields)`, **`Telemetry.bind(handle, fields).pipe(log legs…)`**.
+- Field sources: `Operation.input`, `Exit.*`, `Clock.now`, **`Telemetry.state.from`**.
+- **`*.test-d.ts`** — missing bind, extra keys, wrong leg context.
 
 **Acceptance:**
 
 ```ts
-export const runResourceWiring = {
-  extend: { [RunScope]: { waiting: Telemetry.metric.gauge } },
-  nodes: {
-    [RunResourceTag.Run.processEntry.Started]: {
-      bind: { name: Operation.input("name") },
-    },
-  },
-} satisfies Telemetry.Wiring<typeof RunResourceTag>;
-
-// Missing bind for plain field → @ts-expect-error in *.test-d.ts
+export const runResourceWiring = Wiring.sections(
+  Telemetry.extend(RunResourceScope, { waiting: Telemetry.metric.gauge }),
+  Telemetry.bind(RunResourceTag.Run.run.Started, {
+    payload: { concurrency: Telemetry.state.from((s) => s.gateConcurrency) },
+  }),
+) satisfies WiringConfig<typeof RunResourceTag>
 ```
 
 ---
@@ -549,26 +793,21 @@ export const runResourceWiring = {
 
 **Deliverables:**
 
-- Static operation paths on composed Service.
-- Builder: `provideLeaf`, `provideRoot`, `assumingLeaf`, `assumingRoot`.
+- Calling paths on **Tag**; **mirrored** on **`Telemetry.withLayer`** export.
+- Operation builder: **`.provide(scopeLeaf)`** only (typed from Tag scope ref).
 - `OperationContext` `{ input, telemetry, scope }` after builder completes.
-- Type error when scope obligation unsatisfied.
-- No-op stub when `Service.layer` absent (kernel `R` empty).
+- Type error when scope obligation unsatisfied (missing `.provide()` when not ambient).
+- No-op stub when facet **`.layer`** absent (kernel `R` empty).
 
-**Acceptance:** Queue `processEntry` stress case typechecks:
+**Acceptance:** RunResource `Run.run` + Queue `Entry.enqueue` / `Entry.processEntry` typecheck; **no event payloads** at call sites; events are **`Effect` values** (no `()`).
 
 ```ts
-yield* pipe(
-  QueueResourceTelemetry.Entry.processEntry({ name: entry.name })
-    .provideLeaf({ entryId: entry.entryId, attempts: entry.retries + 1 }),
-  Effect.flatMap((ctx) =>
-    Effect.gen(function* () {
-      yield* checkRateLimit.pipe(ctx.telemetry.rateLimit);
-      yield* ctx.telemetry.Retried;
-      return yield* handler(entry.payload);
-    }),
-  ),
+yield* RunResourceTelemetry.Run.run.provide({ runId }).pipe(
+  Effect.flatMap((ctx) => config.effect(input)),
 );
+
+yield* QueueResourceTelemetry.Entry.enqueue({ key, priority, attempts })
+  .provide({ entryId: source.entryId });
 ```
 
 **Deferred v1:** `.gen` shortcut, strict `Operation.input` key enforcement.
@@ -589,24 +828,25 @@ yield* pipe(
 
 ---
 
-### Step 6 — Operation runner + `Service.layer` + hub bridge (Slice C)
+### Step 6 — Operation runner + `Telemetry.layer` + router bridge (Slice C)
 
 **Deliverables:**
 
-- **`Service.layer`**: `Layer` requiring `TelemetryHub`.
+- **`Telemetry.layer(tag, wiring)`**: `Layer` requiring **`TelemetryRouter`**.
+- **`Telemetry.withLayer(tag, layer)`** facet export.
 - Operation runner emits **start** on op entry, **exit** on op completion.
 - Middle events via `yield* ctx.telemetry.*`.
 - Emit pipeline (see [§ 9](#9-internal-emit-pipeline)).
-- `Telemetry.Wire<typeof Service>` — no raw wire strings in kernel.
-- `logWarning`: persist fail → log + swallow.
+- `Telemetry.Wire<typeof Tag>` — no raw wire strings in kernel.
+- **`bind.pipe` log legs** on persist fail (v1: **`logWarning`** + swallow).
 
-**Acceptance:** Integration test — op start/exit/middle events reach hub; layer absent → no-op.
+**Acceptance:** Integration test — op start/exit/middle events reach router; layer absent → no-op.
 
 ```ts
 // Conceptual runner ownership
-// 1. builder completes → open scope + emit Started
-// 2. user Effect runs with OperationContext
-// 3. on exit → emit Completed/Failed + metrics leg + cleanup entry scope
+// 1. op .provide(scopeLeaf) → install scope + emit Telemetry.start (if declared)
+// 2. user Effect runs with OperationContext (middle events + nested ops)
+// 3. on exit → emit Telemetry.exit legs + metrics + cleanup op scope
 ```
 
 ---
@@ -625,7 +865,7 @@ yield* pipe(
 
 ```ts
 const appLayer = Layer.provideMerge(
-  TelemetryHub.layer,
+  TelemetryRouter.layer,
   RunResourceTelemetry.layer,
   Telemetry.registry([RunResourceTelemetry]),
   ArchiveSink.layerForStore(RunResourceStore, …),
@@ -679,172 +919,144 @@ const appLayer = Layer.provideMerge(
 
 ## 6. RunResource — full target
 
+Golden branch **schemas** + hub **scopes**. Tag adds **`run` operation**. Kernel uses **builder + zero-arg** — not `RunScope.run` + payloads.
+
 ### Tag (API 1)
 
-```ts
-export class RunResourceTag extends Telemetry.Tag<RunResourceTag>(id)(
-  Telemetry.namespace("RunResource")(
-    Telemetry.group("Run")(
-      Telemetry.operation<{ name: string }>("processEntry")(
-        RunScope,
-        Telemetry.start("Started", RunResourceRunStarted),
-        Telemetry.exit({
-          onSuccess: Telemetry.event("Completed", RunResourceRunCompleted),
-          onFailure: Telemetry.event("Failed", RunResourceRunFailed),
-          onInterrupt: Telemetry.event("Interrupted", RunResourceRunInterrupted),
-        }),
-      ),
-    ),
-    Telemetry.group("State")(
-      Telemetry.event("Changed", RunResourceStateChanged),
-    ),
-  ),
-) {}
-```
+See [RunResource Tag (API 1)](#runresource-tag-api-1--schemas-from-golden-branch-operations-on-call-path).
 
 ### Service (API 3)
 
-```ts
-export const RunResourceTelemetry = Telemetry.Service(RunResourceTag, {
-  extend: {
-    [RunScope]: {
-      waiting: Telemetry.metric.gauge,
-      inFlight: Telemetry.metric.gauge,
-      completed: Telemetry.metric.counter,
-      failed: Telemetry.metric.counter,
-      interrupted: Telemetry.metric.counter,
-      totalDurationMs: Telemetry.metric.counter,
-      configVersion: Telemetry.metric.gauge,
-    },
-  },
-  nodes: {
-    [RunResourceTag.Run.processEntry.Started]: {
-      bind: { name: Operation.input("name") },
-    },
-    [RunResourceTag.Run.State.Changed]: {
-      // scope-bound + telemetry state fields — likely PlainFields never or minimal bind
-    },
-  },
-});
-```
+See [API 3 wiring example](#api-3--wiring--telemetryservice) — handles under `Run.run.*`, `State.Changed`.
 
-### Kernel (API 2)
+### Kernel migration (`src/RunResource.ts`)
 
 ```ts
-yield* RunResourceTelemetry.Run.processEntry({ name: spec.name })
-  .provideLeaf({ runId, resourceId })
-  .pipe(
-    Effect.flatMap((ctx) =>
-      Effect.gen(function* () {
-        yield* ctx.telemetry.State.Changed;
-        return yield* runUserEffect(spec);
-      }),
-    ),
-  );
+// BEFORE — delete
+yield* RunResourceHubTelemetry.Run.started({ resourceId, runId, occurredAt, payload: { concurrency } });
+yield* RunResourceHubTelemetry.State.changed({ id, changedAt, reason, previous, current });
+
+// AFTER — gate factory provides root once
+return Effect.gen(function* () {
+  const sem = yield* Semaphore.make(concurrency);
+  return (input: T) =>
+    Effect.gen(function* () {
+      const runId = yield* nextRunId;
+
+      yield* publishStateTransition(/* Waiting */);
+      yield* RunResourceTelemetry.State.Changed;
+
+      yield* Effect.acquireUseRelease(
+        acquirePermit,
+        () =>
+          RunResourceTelemetry.Run.run
+            .provide({ runId })
+            .pipe(
+              Effect.flatMap((ctx) =>
+                Effect.matchCauseEffect(config.effect(input), {
+                  onFailure: (cause) => Effect.failCause(cause),
+                  onSuccess: (value) => Effect.succeed(value),
+                }),
+              ),
+            ),
+        () => Effect.asVoid(sem.release(1)),
+      );
+
+      yield* publishStateTransition(/* terminal reason */);
+      yield* RunResourceTelemetry.State.Changed;
+    });
+}).pipe(Effect.provide(RunResourceScope.layer({ resourceId })));
 ```
 
-### Scope today → target
-
-```ts
-// TODAY (debt) — manual payloads
-RunScope.run({ runId, resourceId },
-  Effect.gen(function* () {
-    yield* RunResourceStore.Run.Started({ resourceId, runId, occurredAt: Date.now() });
-  }),
-);
-
-// TARGET — zero-arg middle/exit reads scope; start wired by runner
-RunScope.run({ runId, resourceId },
-  RunResourceTelemetry.Run.processEntry({ name }).assumingLeaf().pipe(
-    Effect.flatMap((ctx) => …),
-  ),
-);
-```
+Counters off `stateRef` → `extend` on **`RunResourceScope`**. Gating = **semaphore only**.
 
 ---
 
-## 7. Queue — full target (stress case)
+## 7. Queue — full target
 
-Locked end-to-end reference for Calling + wiring + nested ops.
+Entry worker: **`processEntry` operation** (bake stress case). Enqueue path: **`enqueue` operation** with `Telemetry.start("Enqueued", …)`. Dedupe: **exit-only** ops where possible. Root-scoped groups (`Lifecycle`, …) remain **events** on the Tag — bare `yield*` when root ambient.
 
 ### Tag (API 1)
 
+`processEntry` under `Entry` group — see [Queue entry operation](#queue-entry-operation-api-1--processentry-stress-case).
+
+Remaining groups port from `src/store/queueResourceTelemetry.ts` as **events** (not all wrapped in one op):
+
 ```ts
-export class QueueResourceTag extends Telemetry.Tag<QueueResourceTag>(id)(
-  Telemetry.namespace("Queue")(
-    Telemetry.group("Entry")(
-      Telemetry.operation<{ name: string }>("processEntry")(
-        QueueEntryScope,
-        Telemetry.start("Started", QueueEntryStarted),
-        Telemetry.event("Retried", QueueEntryRetried),
-        Telemetry.operation("rateLimit")({
-          onFailure: Telemetry.event("Rejected", QueueRateLimitRejected),
-        }),
-        Telemetry.exit({
-          onSuccess: Telemetry.event("Completed", QueueEntryCompleted),
-          onFailure: Telemetry.event("Failed", QueueEntryFailed),
-          onInterrupt: Telemetry.event("Released", QueueEntryReleased),
-        }),
-      ),
-    ),
-  ),
-) {}
+Telemetry.group("Lifecycle")( /* Started, Paused, … */ ),
+Telemetry.group("DedupeKey")( /* Added, Released, Hydrated */ ),
+Telemetry.group("RateLimit")(
+  Telemetry.event("Exceeded", QueueRateLimitExceeded),
+),
 ```
 
 ### Service (API 3)
 
-```ts
-export const QueueResourceTelemetry = Telemetry.Service(QueueResourceTag, {
-  extend: {
-    [QueueEntryScope]: {
-      enqueuedAt: Telemetry.metric.timestamp,
-      waitMs: Telemetry.metric.duration("enqueuedAt", "startedAt"),
-    },
-  },
-  nodes: {
-    [QueueResourceTag.Entry.processEntry.Started]: {
-      bind: { name: Operation.input("name") },
-    },
-    [QueueResourceTag.Entry.processEntry.exit.onFailure]: {
-      logWarning: Telemetry.logWarning(
-        "QueueResourceStore write failed for Entry.Failed",
-        ({ entryId }) => ({ entryId: String(entryId) }),
-      ),
-    },
-  },
-});
-```
+Wiring keyed by node handles. `processEntry` start/exit/middle legs + `logWarning` from shipped tree. Plain fields on entry schemas (`id`, `startedAt`, `durationMs`, …) bound in `nodes` — **not** passed at call site.
 
-### Kernel (API 2)
+### Kernel (`enqueue` + `processEntry`)
 
 ```ts
-yield* pipe(
-  QueueResourceTelemetry.Entry.processEntry({ name: entry.name })
-    .provideLeaf({ entryId: entry.entryId, attempts: entry.retries + 1 }),
+// Enqueue — start-only op; runner emits Enqueued
+yield* QueueResourceTelemetry.Entry.enqueue({
+  key: source.key,
+  priority: source.priority,
+  attempts: source.attempts,
+}).provide({ entryId: source.entryId });
+
+// Worker — processEntry (see API 2 canonical example)
+yield* QueueResourceTelemetry.Entry.processEntry({
+  key: internal.key,
+  priority: internal.priority,
+  attempts: internal.attempts,
+}).provide({ entryId: internal.entryId }).pipe(
   Effect.flatMap((ctx) =>
     Effect.gen(function* () {
-      yield* checkRateLimit.pipe(ctx.telemetry.rateLimit);
-      yield* ctx.telemetry.Retried;
-      return yield* handler(entry.payload);
+      const exit = yield* Effect.exit(runUserHandler(internal));
+      if (shouldRetry(exit, ctx.input.attempts)) {
+        yield* ctx.telemetry.Retried;
+      }
+      return yield* Exit.match(exit, {
+        onFailure: (cause) => Effect.failCause(cause),
+        onSuccess: (value) => Effect.succeed(value),
+      });
     }),
   ),
 );
+
+// Lifecycle — root ambient from QueueResourceScope.layer on makeQueueRuntime
+yield* QueueResourceTelemetry.Lifecycle.Started;
 ```
+
+Replace `writeEntryEvent` switch for **started → completed/failed** with `processEntry`. Replace enqueue `Enqueued` emit with **`enqueue` operation**. Dedupe **`releaseDedupeKey`** exit-only op replaces bare `Added`/`Released` emits where applicable.
 
 ---
 
 ## 8. Compose, layers, registry
 
+### Router vs transport (locked)
+
+| Piece | Module | Role |
+| --- | --- | --- |
+| **Facet runtime** | `Telemetry.layer(Tag, wiring)` | Materialize, runner, telemetry state → **`TelemetryRouter.emit`** |
+| **Router** | **`TelemetryRouter`** (rename **`TelemetryHub`**) | In-process validate + fan-out to sinks |
+| **Sinks** | `sink/ArchiveSink`, `ProjectionSink`, `BroadcastSink` | Persist / live projection / live broadcast |
+| **Transport** | **`telemetryTransport`** | WebSocket RPC **`/ws/telemetry`** (plan 19); fed by **`BroadcastSink`** |
+
+Durable reads → **`storeTransport`** + archive — not **`telemetryTransport`**.
+
 ### Layer matrix (locked)
 
 | Layer | Requires | Provides |
 | --- | --- | --- |
-| `TelemetryHub.layer` | — | emit router |
-| `RunResourceTelemetry.layer` | hub | telemetry state + Calling API + emit bridge |
-| `RunResourceStore.layerRuntimeStorage` | `RuntimeStorage` | archive queries |
-| `ArchiveSink.layerForStore(…)` | storage + hub | persist leg |
-| `RunResourceProjection.layerLive` | hub | live projection |
-| `RunResourceCompose.layerPersist` | explicit merge | convenience — **named only** |
+| **`TelemetryRouter.layer`** | — | emit router (+ sink registry state) |
+| **`RunResourceTelemetry.layer`** | **`TelemetryRouter`** | facet runtime + calling bridge |
+| **`RunResourceStore.layerRuntimeStorage`** | `RuntimeStorage` | archive queries |
+| **`ArchiveSink.layerForStore(…)`** | storage + router | persist leg |
+| **`RunResourceProjection.layerLive`** | router | live projection |
+| **`BroadcastSink.layer`** | router | **`TelemetryBroadcast`** |
+| **`telemetryTransport.serverLayer`** | broadcast (typical) | live wire stream |
+| **`RunResourceCompose.layerPersist`** | explicit merge | convenience — **named only** |
 
 **No monolithic layer** that pulls all facets without an explicit compose name.
 
@@ -852,45 +1064,44 @@ yield* pipe(
 
 ```ts
 import { Layer } from "effect";
-import { TelemetryHub } from "@nikscripts/effect-pm/TelemetryHub";
+import { TelemetryRouter } from "@nikscripts/effect-pm/TelemetryRouter";
 import { RunResourceTelemetry } from "@nikscripts/effect-pm/store/RunResourceTelemetry";
 import { RunResourceStore } from "@nikscripts/effect-pm/store/RunResource";
 import { ArchiveSink } from "@nikscripts/effect-pm/sink/ArchiveSink";
+import { BroadcastSink } from "@nikscripts/effect-pm/sink/BroadcastSink";
 import { RunResourceProjection } from "@nikscripts/effect-pm/RunResourceProjection";
+import { telemetryTransport } from "@nikscripts/effect-pm/telemetryTransport";
 
 const runResourceStack = Layer.provideMerge(
-  TelemetryHub.layer,
+  TelemetryRouter.layer,
   RunResourceTelemetry.layer,
   Telemetry.registry([RunResourceTelemetry]),
   ArchiveSink.layerForStore(RunResourceStore, { … }),
   RunResourceProjection.layerLive,
+  BroadcastSink.layer,
+  telemetryTransport.serverLayer,   // optional
 );
 
-// Kernel provide — emit works; R = TelemetryHub at emit sites inside layer
+// Kernel — R = TelemetryRouter inside facet layer when composed
 ```
 
 ### Registry rules (locked)
 
 | Decision | Lock |
 | --- | --- |
-| Registration | **`Telemetry.registry([...services])`** returns **`Layer`** |
+| Registration | **`Telemetry.registry([…])`** returns **`Layer`** |
 | Timing | Layer build — **not** import side effects |
-| Members | **`Telemetry.Service`** exports |
-| vs archive | **`ProcessStore.registry`** = archive facets only |
-| Sink matching | By **wire id** from catalog |
+| Members | **`Telemetry.withLayer`** facet exports |
+| vs archive | **`ProcessStore.registry`** = archive only |
+| Sink matching | By **wire id** from Tag catalog |
 | Singleton | **Rejected** |
 
-### Hub fan-out (architecture)
+### Router fan-out (architecture)
 
 ```ts
-// Emit path — no store required
-yield* RunResourceTelemetry.Run.processEntry(…)
-// R = TelemetryHub
-
-// Optional legs at compose:
-// ArchiveSink → RuntimeStorage.create
-// ProjectionSink → in-memory read model
-// BroadcastSink → subscribers
+yield* RunResourceTelemetry.Run.run.provide({ runId }).pipe(…);
+yield* RunResourceTelemetry.State.Changed;
+// facet .layer → TelemetryRouter.emit → sinks → (optional) telemetryTransport
 ```
 
 ---
@@ -900,54 +1111,61 @@ yield* RunResourceTelemetry.Run.processEntry(…)
 **Location:** `src/internal/telemetry/` — **no public subpath**.
 
 ```text
-yield* ctx.telemetry.SomeEvent   (middle)
-  OR operation runner (start/exit)
+yield* Tag/Export.Group.op.provide(scopeLeaf) → OperationContext
+  → runner emits Telemetry.start (if declared — immediately)
+  → yield* ctx.telemetry.* (middle only, zero-arg)
+  → runner emits Telemetry.exit (zero-arg wire; Exit.* → bind)
+OR yield* Tag/Export.Group.Event (standalone Effect — root ambient; no .provide())
     │
     ▼
-1. resolve scope + OperationContext
-2. materialize payload: schema + wiring bind + scope selectors + Exit.* / op input
+1. resolve scope (+ OperationContext when operation)
+2. materialize: schema + wiring bind + scope selectors + op input + Exit.*
 3. metrics leg → telemetry state (extend fields, reducers on exit)
 4. validate payload against schema
-5. TelemetryHub.emit
-6. sinks fan-out (failures isolated per sink; logWarning swallow on archive fail)
+5. **TelemetryRouter.emit**
+6. sinks fan-out (failures isolated per sink; bind.pipe **logWarning** swallow on archive fail)
 ```
 
 | Decision | Lock |
 | --- | --- |
+| Flat events | **Rejected** as call pattern — use operations + zero-arg emits |
 | Start / exit | **Operation runner** |
-| Middle events | **`yield* ctx.telemetry.*`** |
-| Wire ids in kernel | **`Telemetry.Wire<typeof Service>`** |
+| Middle / standalone | **Middle:** `ctx.telemetry.*` inside op. **Standalone:** bare `yield* Tag/Export.Group.Event` when root ambient |
+| Wire ids in kernel | **`Telemetry.Wire<typeof Tag>`** |
 | Correlation | From **scope** only |
-| Emit `R` | None (stub) or **`TelemetryHub`** — never store |
+| Emit `R` | None (stub) or **`TelemetryRouter`** — never store |
 | Archive | **`ArchiveSink`** — not inline in emit |
 
-**Internal spine** does not import facet wiring modules for its own wiring; kernel uses Service static paths when **`Service.layer`** is provided at compose.
+**Internal spine** does not import facet wiring modules; kernel uses facet export static paths when **`.layer`** is provided at compose.
 
 ---
 
 ## 10. Module layout & exports
 
 ```text
-src/Telemetry.ts                    — Tag factory, Service compose, registry, Wiring types
-src/TelemetryHub.ts                 — hub router (existing)
+src/Telemetry.ts                    — Tag, Wiring, layer, withLayer, registry
+src/TelemetryRouter.ts              — emit router (rename from TelemetryHub)
 src/internal/telemetry/             — runtime (materialize, runner, state Refs)
 src/RunResourceIdentity.ts          — TypeTag, TypeId
-store/RunResourceTag.ts             — API 1 skeleton (optional split)
-store/RunResourceTelemetry.ts       — Telemetry.Service export + re-export Tag
-store/RunResourceStore.ts           — archive facet (separate concern)
-store/RunResource.ts                — store/RunResource barrel subpath
+store/RunResourceTag.ts             — API 1 + 2 (optional split)
+store/RunResourceTelemetry.wiring.ts — satisfies WiringConfig<Tag>
+store/RunResourceTelemetry.service.ts — Telemetry.layer
+store/RunResourceTelemetry.ts       — Telemetry.withLayer + re-export Tag
+store/RunResourceStore.ts           — archive facet
 src/RunResource.ts                  — worker kernel
 src/RunResourceProjection.ts        — live projection
+src/telemetryTransport.ts           — live wire (plan 19)
 ```
 
 | Item | Lock |
 | --- | --- |
-| Facet telemetry file | `store/<Domain>Telemetry.ts` → **`Telemetry.Service`** |
-| Tag split | Optional `<Domain>Tag.ts` for catalog-only imports |
-| Identity | `src/<Domain>Identity.ts`; facets import identity, not worker |
-| Subpath | `store/<Domain>Telemetry`; identity `@nikscripts/effect-pm/<Domain>Identity` |
-| Role folders | No domain subfolders (`store/runResource/` forbidden) |
-| Shims | **None** — update every import on move |
+| Facet barrel | `store/<Domain>Telemetry.ts` → **`Telemetry.withLayer`** |
+| Wiring | sibling `*.wiring.ts` — **`satisfies WiringConfig<Tag>`** |
+| Tag split | Optional `<Domain>Tag.ts` for catalog-only |
+| Router subpath | `@nikscripts/effect-pm/TelemetryRouter` |
+| Identity subpath | `@nikscripts/effect-pm/<Domain>Identity` |
+| Role folders | No domain subfolders under `store/` |
+| Shims | **None** |
 
 ### Factory companions (general rule, approved)
 
@@ -1009,17 +1227,27 @@ Procedure.payload(Query).success(Result).failure(Error);
 | `defineEvent` as SSoT | Bypasses tree DSL; caused hub drift |
 | Durable `ProcessStore.state` as “telemetry state” | Wrong vocabulary |
 | Domain folders under `store/` | Role folders only |
-| Flat `events` / `operations` maps on Service | Duplicates Tag tree |
-| `logWarning` on Tag or `.pipe` on Tag event node | **`logWarning:`** property on **wiring** node |
-| `Telemetry.Layer.for` / `Telemetry.layer(tag, config)` | Wiring is Service 2nd arg |
-| extend / bind / logWarning on Tag skeleton | On **`Telemetry.Wiring`** only |
+| Flat `events` / `operations` maps | Duplicates Tag tree |
+| `Telemetry.event(…).pipe(…)` on Tag | Log legs on **`Telemetry.bind(…).pipe(…)`** in wiring only |
+| `Telemetry.Service(Tag, wiringObject)` | **`Wiring.sections` + `Telemetry.layer` + `Telemetry.withLayer`** |
+| Handle-keyed `{ [handle]: bind }` maps | **`Telemetry.bind(handle, fields)`** sections |
+| Fake `{ ERROR: … }` exhaustiveness types | **`satisfies WiringConfig<Tag>`** + **`wiring: WiringConfig<Tag>`** |
+| **`TelemetryHub`** name | **`TelemetryRouter`** |
+| `Telemetry.Layer.for(Tag)(…)` | **`Telemetry.layer(tag, wiring)`** for facet runtime only |
+| extend / bind / log legs on Tag | On **wiring** only |
 | Global telemetry registry singleton | Per-compose Layer |
 | Module import registry side effects | Explicit Layer at compose |
-| Two-arg `(leaf, input)` at call site | Builder `provideLeaf` / `assuming*` |
+| Two-arg `(leaf, input)` at call site | Op `.provide(scopeLeaf)` + separate `op(input)` |
+| `provideLeaf` / `provideRoot` / `assuming*` | Single **`.provide()`** on operations; root via **`State.Scope`** at lifetime |
+| `.provide()` on events | Scope on ops only; events read op scope + input or ambient root |
+| `Event()` function call syntax | Events are **`Effect` values** — `yield* Service.Group.Event` |
+| `yield* ctx.telemetry.*` for start legs | **`Telemetry.start`** — runner emits on op entry |
+| `Scope.run` + hand-built event payload | Operation `.provide` + zero-arg materialize |
 | Extra `telemetry` callback on generator | `ctx.telemetry` on OperationContext |
 | Tag-first “package depends only on Tag” store rule | Rejected — `Store.Tag` is **contract with schemas**, not bare DI |
 | Kernel reads telemetry counters for gating | Semaphore only |
-| `RuntimeStorage` on emit path | Hub only |
+| Invented op fields (e.g. `name` on RunResource) | Operation input must match Tag `Telemetry.operation<Input>` |
+| Ad-hoc wire/reason string literals | `telemetryWireId` + `STATE_CHANGE_REASONS` |
 
 ---
 
@@ -1029,24 +1257,30 @@ Procedure.payload(Query).success(Result).failure(Error);
 
 | ID | Topic | Status | What to decide |
 | --- | --- | --- | --- |
-| **CHK-01** | Exit event node handles | **OPEN** | Wiring uses `RunResourceTag.Run.processEntry.exit.onFailure`. Confirm vs flat `…Failed` / `…Completed` handles. |
-| **CHK-03** | `Telemetry.Service` return shape | **OPEN** | Class instance vs namespace object vs branded const — affects `typeof` + registry. |
-| **CHK-04** | Zero plain-field events in `nodes` | **CLARIFY** | Only `PlainFields ≠ never` required, or must all events appear? |
+| **CHK-01** | Exit event handles | **LOCKED (authoring)** | `RunResourceTag.Run.run.exit.onFailure` etc. — wire ids omit operation name |
+| **CHK-03** | Facet export shape | **LOCKED** | **`Telemetry.withLayer(Tag, layer)`** — Tag paths + `.layer` |
+| **CHK-04** | Zero plain-field events in binds | **LOCKED** | **`Telemetry.bind` optional**; only `PlainFields ≠ never` required in **`WiringConfig.binds`** |
 | **CHK-05** | `Operation.input("key")` strict keys | **DEFERRED v2** | Best-effort v1. |
 | **CHK-06** | `Scope.patch` implementation | **DEFERRED** | API locked; Ref vs FiberRef internal. |
 | **CHK-07** | `.gen(input, fn)` shortcut | **DEFERRED v2** | |
 | **CHK-08** | Tracer spans at op boundaries | **DEFERRED v2** | |
 | **CHK-09** | `prepare` pipe leg | **DEFERRED** | Plan 17 phase 2 |
-| **CHK-12** | Optional plain fields (`Retried.error`) | **CLARIFY** | Required bind vs optional omit? |
-| **CHK-13** | Nested op wiring (`rateLimit.Rejected`) | **OPEN** | Own `nodes` entry if schema has plain fields? |
-| **CHK-14** | Identity subpath exact string | **OPEN** | Confirm on first export. |
+| **CHK-12** | Optional plain fields (`Retried.error`) | **LOCKED** | Optional schema field → optional bind key |
+| **CHK-13** | `RateLimit.Exceeded` wiring | **DEFERRED** | Slice E (Queue) — full bind table there |
+| **CHK-14** | Identity subpath exact string | **LOCKED (authoring)** | `@nikscripts/effect-pm/RunResourceIdentity`; confirm on Step 0 export edit |
+| **CHK-15** | Standalone root-scoped events | **LOCKED** | Bare `yield* Tag/Export.Group.Event` when root ambient via `State.Scope.layer` |
+| **CHK-16** | Router rename | **LOCKED** | **`TelemetryRouter`** replaces **`TelemetryHub`** |
+| **CHK-17** | Bind exhaustiveness proof | **LOCKED** | **`satisfies WiringConfig<Tag>`** at define; **`*.test-d.ts`**; no fake error types |
+| **CHK-18** | Literal fields needing state (`reason`) | **LOCKED** | Count as **PlainFields** when value comes from **`Telemetry.state.from`** |
 
 **Resolved (do not re-litigate):**
 
-- Registry accepts **Service** exports.
-- `extend` on **wiring**, not Tag.
-- Facet file exports **Service**, optional Tag split.
-- `logWarning:` property on wiring nodes.
+- Registry accepts **`Telemetry.withLayer`** exports.
+- **`Telemetry.extend(scope, fields)`** — not scope object keys.
+- **`Telemetry.bind(handle, fields).pipe(log legs…)`** — not `{ bind: … }` wrapper.
+- Facet file exports **`withLayer`**; optional Tag split.
+- **Calling API:** op-only `.provide()`; events are **Effects**; exit-first ops; `Telemetry.start` = runner.
+- **`telemetryTransport`** unchanged; fed by **`BroadcastSink`**.
 
 ---
 
@@ -1056,7 +1290,8 @@ Append when implementation adds something **not** in locked sections above.
 
 | Date | Branch | Decision | Owner OK |
 | --- | --- | --- | --- |
-| — | — | *(none yet)* | — |
+| 2026-06-07 | cursor/telemetry-redesign-bake-faed | Calling API locked: op-only `.provide()`, events as Effects, exit-first ops, `Telemetry.start` via runner, root via `State.Scope` at lifetime | yes |
+| 2026-06-08 | cursor/telemetry-redesign-bake-faed | API revision: `Wiring.sections` + `satisfies WiringConfig<Tag>`; `Telemetry.bind(…).pipe(log legs)`; `Telemetry.layer` + `Telemetry.withLayer`; **`TelemetryRouter`** rename; bind exhaustiveness via real types not fake error objects; `telemetryTransport` via BroadcastSink | yes |
 
 ```markdown
 | YYYY-MM-DD | cursor/… | Description | yes/no |
@@ -1067,12 +1302,13 @@ Append when implementation adds something **not** in locked sections above.
 ## Quick checklist for agents
 
 - [ ] Step matches slice A–E scope
-- [ ] Tag skeleton has no extend/bind/logWarning
-- [ ] Wiring uses node handles (G), not wire strings
-- [ ] PlainFields exhaustive bind type tests in `*.test-d.ts`
-- [ ] Calling API: builder → OperationContext
+- [ ] Tag skeleton has no extend/bind/log pipe
+- [ ] Wiring: **`satisfies WiringConfig<Tag>`** + **`Telemetry.bind(handle, fields).pipe(…)`**
+- [ ] PlainFields exhaustive bind in **`*.test-d.ts`** (real `@ts-expect-error`, no fake ERROR types)
+- [ ] Zero-arg event emits — events are **Effects** (no `()`)
+- [ ] Operations use **`.provide(scopeLeaf)`** only
+- [ ] Root scope via **`State.Scope.layer`** at lifetime
+- [ ] Facet export: **`Telemetry.withLayer`**; layer requires **`TelemetryRouter`**
+- [ ] Compose uses **`TelemetryRouter.layer`** (not TelemetryHub)
 - [ ] No `defineEvent` / no kernel `stateRef` (Step 8+)
 - [ ] Emit `R` never includes `RuntimeStorage`
-- [ ] CHK items flagged, not silently assumed
-- [ ] Change log updated if new decision introduced
-- [ ] `pnpm run typecheck && pnpm test && pnpm run lint && pnpm run build`

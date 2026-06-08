@@ -1,6 +1,14 @@
 # Telemetry overhaul — pre-implementation recon findings
 
-**Status:** Recon only. **No factory code written.** For owner review before Step 1.
+> **Implementers:** start at **[telemetry-implementation-handoff.md](../handoffs/telemetry-implementation-handoff.md)**,
+> then **[telemetry-requirements.md](./telemetry-requirements.md)** (SSoT). This recon file is **codebase
+> gap analysis** — API shape here is **out of date** where it conflicts with requirements (Jun 8 revision).
+
+> **Superseded (Jun 2026):** API decisions → requirements change log **2026-06-08**. **D3** →
+> `Telemetry.bind` + `satisfies WiringConfig<Tag>`. **Service** → `Telemetry.layer` +
+> `Telemetry.withLayer`. **Hub** → **`TelemetryRouter`**.
+
+**Status:** Recon only. **No factory code written.** Baseline for gap analysis; not the API spec.
 **Branch:** `cursor/telemetry-redesign-bake-faed`
 **Gate doc:** [telemetry-requirements.md](./telemetry-requirements.md)
 **Recon date:** 2026-06-08

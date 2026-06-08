@@ -2,7 +2,7 @@
 
 **Goal:** ~~Lock the full telemetry model before implementation~~ **Done (Jun 2026).** SSoT for implementation agents. Replace hub-branch interim APIs when slices land.
 
-**Requirements (implementation gate):** [telemetry-requirements.md](./telemetry-requirements.md) — full approved spec, code examples, steps 0–10, verify checklist (CHK-*), change log.
+**Requirements (implementation gate):** [telemetry-requirements.md](./telemetry-requirements.md) — **canonical code** (scopes, schemas, kernel call sites). This bake doc retains discussion history; prefer requirements doc when they differ.
 
 **Non-goals:** Implement slices in this session; transport work; dashboard UI.
 
@@ -100,20 +100,22 @@ Skeleton only. **No** extend, bind, logWarning. Tag factory generates **node han
 
 ```ts
 export class RunResourceTag extends Telemetry.Tag<RunResourceTag>(id)(
-  Telemetry.namespace("RunResource")(
-    Telemetry.group("Run")(
-      Telemetry.operation<{ name: string }>("processEntry")(
-        RunScope,
-        Telemetry.start("Started", RunResourceRunStarted),
-        Telemetry.exit({
-          onSuccess: Telemetry.event("Completed", RunResourceRunCompleted),
-          onFailure: Telemetry.event("Failed", RunResourceRunFailed),
-        }),
-      ),
+  Telemetry.namespace("RunResource"),
+  Telemetry.group("Run")(
+    Telemetry.operation("run")(
+      RunScope,
+      Telemetry.start("Started", RunResourceRunStarted),
+      Telemetry.exit({
+        onSuccess: Telemetry.event("Completed", RunResourceRunCompleted),
+        onFailure: Telemetry.event("Failed", RunResourceRunFailed),
+      }),
     ),
   ),
+  Telemetry.group("State")(
+    Telemetry.event("Changed", RunResourceStateChanged),
+  ),
 ) {}
-// Generated handles: RunResourceTag.Run.processEntry.Started, .Completed, .Failed
+// Handles: RunResourceTag.Run.run.Started, .State.Changed — see telemetry-requirements.md
 ```
 
 ### Operations API — calling shape (agreed direction)
@@ -384,6 +386,11 @@ QueueResourceTelemetry.Entry.processEntry(
 
 ### Calling API — scope builder (agreed Jun 2026)
 
+> **Superseded (Jun 2026):** Locked calling API is in
+> [telemetry-requirements.md](./telemetry-requirements.md) — **op-only `.provide()`**,
+> events as **Effects** (no `()`), root via **`State.Scope.layer`** at lifetime,
+> **`provideLeaf` / `provideRoot` / `assuming*` rejected**. Discussion below is history.
+
 **Leading call shape:** operation input first, scope via chained provider (names TBD — `provideLeaf` / `provideRoot` preferred over `setLeaf`):
 
 ```ts
@@ -634,71 +641,13 @@ Equivalent to `Telemetry.operation("rateLimit")(Telemetry.exit({ … }))` with n
 
 ---
 
-### End-to-end Queue `processEntry` (locked)
+### End-to-end Queue entry emit (canonical — flat events)
 
-**Tag (API 1):**
+> **Superseded fake `processEntry` examples removed.** Canonical code: [telemetry-requirements.md §7](./telemetry-requirements.md#7-queue--full-target) — matches `src/store/queueResourceTelemetry.ts` + `writeEntryEvent`.
 
-```ts
-export class QueueResourceTag extends Telemetry.Tag<QueueResourceTag>(id)(
-  Telemetry.namespace("Queue")(
-    Telemetry.group("Entry")(
-      Telemetry.operation<{ name: string }>("processEntry")(
-        QueueEntryScope,
-        Telemetry.start("Started", QueueEntryStarted),
-        Telemetry.event("Retried", QueueEntryRetried),
-        Telemetry.operation("rateLimit")({
-          onFailure: Telemetry.event("Rejected", QueueRateLimitRejected),
-        }),
-        Telemetry.exit({
-          onSuccess: Telemetry.event("Completed", QueueEntryCompleted),
-          onFailure: Telemetry.event("Failed", QueueEntryFailed),
-          onInterrupt: Telemetry.event("Released", QueueEntryReleased),
-        }),
-      ),
-    ),
-  ),
-) {}
-```
+**Tag (API 1):** flat `Entry.*` events under `Telemetry.group("Entry")` — see requirements doc.
 
-**Service (Tag + wiring, API 3):**
-
-```ts
-export const QueueResourceTelemetry = Telemetry.Service(QueueResourceTag, {
-  extend: {
-    [QueueEntryScope]: {
-      enqueuedAt: Telemetry.metric.timestamp,
-      waitMs: Telemetry.metric.duration("enqueuedAt", "startedAt"),
-    },
-  },
-  nodes: {
-    [QueueResourceTag.Entry.processEntry.Started]: {
-      bind: { name: Operation.input("name") },
-    },
-    [QueueResourceTag.Entry.processEntry.exit.onFailure]: {
-      logWarning: Telemetry.logWarning(
-        "QueueResourceStore write failed for Entry.Failed",
-        ({ entryId }) => ({ entryId: String(entryId) }),
-      ),
-    },
-  },
-})
-```
-
-**Kernel (API 2):**
-
-```ts
-yield* pipe(
-  QueueResourceTelemetry.Entry.processEntry({ name: entry.name })
-    .provideLeaf({ entryId: entry.entryId, attempts: entry.retries + 1 }),
-  Effect.flatMap((ctx) =>
-    Effect.gen(function* () {
-      yield* checkRateLimit.pipe(ctx.telemetry.rateLimit);
-      yield* ctx.telemetry.Retried;
-      return yield* handler(entry.payload);
-    }),
-  ),
-);
-```
+**Kernel (API 2):** `QueueResourceScope.run` + `QueueEntryScope.run` + `QueueResourceTelemetry.Entry.Started({ … })` — same fields as today.
 
 ---
 

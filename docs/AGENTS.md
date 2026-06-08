@@ -1,6 +1,6 @@
 # Agent guide — effect-pm (`@nikscripts/effect-pm`)
 
-Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any persistence change** — module refactor list, facet rules, agent assignments), [plans/21-state-vocabulary.md](./plans/21-state-vocabulary.md) (**telemetry vs process vs projection vs durable ops**), [recipes/telemetry-split-bake.md](./recipes/telemetry-split-bake.md) (**bake rationale & discussion**), [recipes/telemetry-requirements.md](./recipes/telemetry-requirements.md) (**telemetry implementation — steps 0–10, code examples, CHK list**), [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [RESOURCE-API.md](./RESOURCE-API.md), [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) (schedule vs `ProcessGroup.start` / API gates), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
+Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any persistence change** — module refactor list, facet rules, agent assignments), [plans/21-state-vocabulary.md](./plans/21-state-vocabulary.md) (**telemetry vs process vs projection vs durable ops**), [handoffs/telemetry-implementation-handoff.md](./handoffs/telemetry-implementation-handoff.md) (**telemetry implementation — start here**), [recipes/telemetry-requirements.md](./recipes/telemetry-requirements.md) (**telemetry API SSoT — steps 0–10, CHK list**), [recipes/telemetry-split-bake.md](./recipes/telemetry-split-bake.md) (**bake rationale — historical API sections superseded by requirements**), [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [RESOURCE-API.md](./RESOURCE-API.md), [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) (schedule vs `ProcessGroup.start` / API gates), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
 
 ---
 
@@ -17,7 +17,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/ProcessStore.ts`, `src/ProcessStorage.ts`, `src/ProcessStoreEvent.ts` | Storage facet builder, combined facet layers, and shared event types. |
 | `src/store/*.ts` | Storage facets → `@nikscripts/effect-pm/store/*` (PascalCase files flat under `store/`; no domain subfolders) |
 | `src/sink/` | TelemetryHub sink legs → `@nikscripts/effect-pm/sink/*` |
-| `src/TelemetryHub.ts` | Global telemetry router → `@nikscripts/effect-pm/TelemetryHub` |
+| `src/TelemetryHub.ts` | Global telemetry router → `@nikscripts/effect-pm/TelemetryRouter` (rename in progress; was TelemetryHub) |
 | `src/*Projection.ts`, `src/*Transport.ts` | Live projection + semantic transports (camelCase transport filenames) |
 | `src/LogContext.ts`, `src/LogEntry.ts`, `src/Transport.ts` | PM log annotations, NDJSON log entries, transport config. |
 | `src/internal/store/spine.ts`, `service.ts`, `helpers.ts` | Shared storage plumbing — internal. Type-agnostic only; per-facet codecs live next to each facet in `src/store/`. |

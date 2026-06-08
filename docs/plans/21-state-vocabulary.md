@@ -1,6 +1,6 @@
 # 21 — State vocabulary (process, telemetry, projection, durable ops)
 
-**Status:** locked with [telemetry-split-bake.md](../recipes/telemetry-split-bake.md) (Jun 2026).
+**Status:** locked with [telemetry-requirements.md](../recipes/telemetry-requirements.md) (Jun 2026 API revision).
 
 **Related:** [18-resource-state-scope.md](./18-resource-state-scope.md),
 [17-facet-telemetry-factory.md](./17-facet-telemetry-factory.md),
@@ -26,12 +26,14 @@
 
 | # | API | Surface | Role |
 | --- | --- | --- | --- |
-| **1** | **`Telemetry.Tag`** | Class + tree DSL | **Skeleton** — wires, schemas, ops, events, **node handles** |
-| **2** | **Calling** | Static paths on **Service** | Builder → `{ input, telemetry, scope }` |
-| **3** | **Wiring** | **`Telemetry.Wiring<Tag>`** | `{ extend, nodes }` — 2nd arg to **`Telemetry.Service`** |
-| **∴** | **`Telemetry.Service`** | `Telemetry.Service(Tag, wiring)` | Facet export; **`.layer`** = Effect Layer |
+| **1** | **`Telemetry.Tag`** | `Telemetry.Tag(id, tree…)` | Skeleton + **calling paths** — handles, schemas, wire ids |
+| **2** | **Calling** | Static paths on **Tag** (mirrored on facet export) | Builder → `{ input, telemetry, scope }` |
+| **3** | **Wiring** | **`Wiring.sections(…)` + `satisfies WiringConfig<Tag>`** | `extend`, **`bind.pipe(log…)`** |
+| **∴** | **Facet layer** | **`Telemetry.layer(Tag, wiring)`** | Facet runtime **`Layer`** → **`TelemetryRouter`** |
+| **∴** | **Facet export** | **`Telemetry.withLayer(Tag, layer)`** | Tag + **`.layer`** |
 
-**Internal** spine/kernel does not import Service for wiring — uses Service static paths when **`Service.layer`** is provided.
+**Router:** **`TelemetryRouter`** (rename **`TelemetryHub`**) — in-process fan-out to sinks.  
+**Transport:** **`telemetryTransport`** — live wire (plan 19), fed by **`BroadcastSink`**.
 
 Store/RPC **`Procedure.payload().success().failure()`** is separate.
 
@@ -40,10 +42,13 @@ Store/RPC **`Procedure.payload().success().failure()`** is separate.
 ## File layout (RunResource example)
 
 ```text
-store/RunResourceTag.ts          — Telemetry.Tag (API 1) — optional split
-store/RunResourceTelemetry.ts    — Telemetry.Service(Tag, wiring) + re-export
-src/RunResourceIdentity.ts       — TypeTag / TypeId
-src/internal/telemetry/          — runtime impl for Service.layer
+store/RunResourceTag.ts                   — Telemetry.Tag (API 1 + 2)
+store/RunResourceTelemetry.wiring.ts      — satisfies WiringConfig<Tag> (API 3)
+store/RunResourceTelemetry.service.ts     — Telemetry.layer
+store/RunResourceTelemetry.ts             — Telemetry.withLayer + re-export Tag
+src/RunResourceIdentity.ts                — TypeTag / TypeId
+src/internal/telemetry/                   — runtime for Telemetry.layer
+src/TelemetryRouter.ts                    — emit router (rename TelemetryHub)
 ```
 
 ---
@@ -52,17 +57,18 @@ src/internal/telemetry/          — runtime impl for Service.layer
 
 ```text
 Kernel
-  └── QueueResourceTelemetry.Entry.processEntry(...).provideLeaf(...)   // API 2
+  └── RunResourceTelemetry.Entry.processEntry(…).provide({ entryId })   // API 2
 
-Telemetry.Tag                    // API 1 — skeleton
-Telemetry.Service(Tag, wiring)  // API 3 wiring + compose
-  └── .layer                     // Effect Layer → internal/telemetry/*
+Telemetry.Tag                             // API 1 + 2
+Wiring.sections(…) satisfies WiringConfig // API 3
+Telemetry.layer(Tag, wiring)              // facet runtime Layer
+Telemetry.withLayer(Tag, layer)           // export Tag + .layer
 
-Telemetry.registry([...Service tags])
-TelemetryHub → sinks
+Telemetry.registry([…facet exports…])
+TelemetryRouter → sinks → telemetryTransport (optional)
 ```
 
-**Emit `R` (kernel):** none (stub) or `TelemetryHub` only.
+**Emit `R` (kernel):** none (stub) or **`TelemetryRouter` only**.
 
 **Interim debt:** `defineEvent`, `RunResourceHubTelemetry`, kernel `stateRef`.
 
