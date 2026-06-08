@@ -95,7 +95,7 @@ store/RunResourceTelemetry.ts                                                   
 
 **Emit `R` at kernel:** empty (no-op stub) **or** **`TelemetryRouter` only** — **never** `RuntimeStorage`.
 
-**Reference order:** RunResource Tag port → Service + internal bridge → registry + delete debt → Queue (separate branch).
+**Reference order:** RunResource Tag port → wiring + internal bridge → registry + delete debt → Queue (separate branch).
 
 ---
 

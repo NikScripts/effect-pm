@@ -7,13 +7,16 @@
 import { Schema } from "effect";
 import { State } from "./State";
 
-export const ProcessGroupScope = State.Scope("Process", {
+export class ProcessGroupScope extends State.Scope(
+  "@nikscripts/effect-pm/process/ProcessGroupScope",
+  "Process",
+)({
   groupId: Schema.String,
-})("@nikscripts/effect-pm/process/ProcessGroupScope");
+}) {}
 
-export const ProcessGroupMemberScope = ProcessGroupScope.withLeaf("Member", {
+export class ProcessGroupMemberScope extends ProcessGroupScope.withLeaf("Member", {
   processId: Schema.String,
-})("@nikscripts/effect-pm/process/ProcessGroupMemberScope");
+}) {}
 
 export type ProcessGroupScopeLeaf = State.Type.Leaf<typeof ProcessGroupScope>;
 export type ProcessGroupScopeState = State.Type.State<typeof ProcessGroupScope>;

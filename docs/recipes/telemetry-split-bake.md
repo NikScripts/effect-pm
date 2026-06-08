@@ -110,7 +110,14 @@ export class RunResourceTelemetry extends Telemetry.Tag<RunResourceTelemetry>(Ru
 // Handles: RunResourceTelemetry.Run.run.Started, .State.Changed
 ```
 
-### Operations API — calling shape (agreed direction)
+### Operations API — calling shape (superseded — see requirements § API 2)
+
+> **Superseded (Jun 2026):** Examples below use **`provideLeaf` / `assumingLeaf`** (rejected).
+> Locked shape: **`.provide(scopeLeaf)`** on operations only; root via **`State.Scope.layer`**.
+> Canonical code: [telemetry-requirements.md § API 2](./telemetry-requirements.md#api-2--calling-operationcontext).
+
+<details>
+<summary>Historical calling examples (do not implement)</summary>
 
 Mimic Effect: **function that returns `Effect`**, built with `pipe` / `flatMap` / `gen`.
 
@@ -160,6 +167,8 @@ yield* QueueResourceTelemetry.Backfill.reconcile({ fromSeq: 100, toSeq: 200 });
 Rejected: extra `telemetry` callback param; bodies on `Telemetry.Tag`; two-arg `(leaf, input)`.
 
 Optional shortcut (v2): `.gen(input, fn)` expanding pipe + flatMap.
+
+</details>
 
 ---
 
@@ -736,7 +745,7 @@ See **Calling API — scope builder (agreed Jun 2026)** for locked rules. Remain
 
 ## Open recipe steps (bake in order)
 
-Steps 1–9 **locked**. Three APIs: **Tag** · **Calling** · **Wiring** (`Wiring.sections` + `Telemetry.layer` + `Telemetry.withLayer`).
+Steps 1–10 **locked**. Three APIs: **Tag** · **Calling** · **Wiring** (`Wiring.sections` + `Telemetry.layer` + `Telemetry.withLayer`).
 
 ### Step 1 — `Telemetry.Tag` (**locked**, API 1)
 
@@ -806,7 +815,7 @@ Layer.provideMerge(
 
 ---
 
-### Step 6 — Hub emit bridge (**locked**)
+### Step 7 — Hub emit bridge (**locked**)
 
 ```text
 yield* handle.Event
@@ -830,7 +839,7 @@ yield* handle.Event
 
 ---
 
-### Step 7 — RunResource kernel boundary (**locked**)
+### Step 8 — RunResource kernel boundary (**locked**)
 
 | Process | Telemetry |
 | --- | --- |
@@ -842,7 +851,7 @@ yield* handle.Event
 
 ---
 
-### Step 8 — Layer matrix (**locked**)
+### Step 9 — Layer matrix (**locked**)
 
 **Decides:** Default exports for apps; naming.
 
@@ -861,7 +870,7 @@ yield* handle.Event
 
 ---
 
-### Step 9 — Migration & delete list (**locked**)
+### Step 10 — Migration & delete list (**locked**)
 
 **Decides:** What dies on hub branch when bake closes.
 

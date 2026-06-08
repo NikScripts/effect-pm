@@ -239,11 +239,6 @@
       "import": "./dist/Tags.mjs",
       "require": "./dist/Tags.js"
     },
-    "./RunResourceIdentity": {
-      "types": "./dist/RunResourceIdentity.d.ts",
-      "import": "./dist/RunResourceIdentity.mjs",
-      "require": "./dist/RunResourceIdentity.js"
-    },
     "./ProcessManager": {
       "types": "./dist/ProcessManager.d.ts",
       "import": "./dist/ProcessManager.mjs",

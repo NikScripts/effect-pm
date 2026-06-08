@@ -67,7 +67,7 @@ RunResource.ts                    — public barrel (re-exports only)
 ```ts
 // Tags.ts
 export namespace Tag {
-  export { RunResource } from "./internal/runResource/kernel";
+  export { RunResource } from "./internal/runResource/service";
 }
 ```
 

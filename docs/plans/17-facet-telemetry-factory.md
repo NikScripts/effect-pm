@@ -11,7 +11,7 @@ dual `record` + `telemetry` on the same facet.
 [13](./13-queue-rate-limit-and-operational-storage.md), [06](./06-runtime-hooks-config.md).
 
 **Note:** Exploratory code on `cursor/facet-telemetry-158c` holds the **golden RunResource
-tree DSL** — port onto **`Telemetry.Service`** after
+tree DSL** — port onto **`Telemetry.Tag` + `Wiring.sections` + `Telemetry.layer`** after
 [telemetry-split-bake.md](../recipes/telemetry-split-bake.md); do not merge the branch
 wholesale into hub work.
 

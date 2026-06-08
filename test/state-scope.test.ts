@@ -2,20 +2,20 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Schema } from "effect";
 import { getStateFieldSelectorMetadata, State } from "../src/State";
 
-const QueueScope = State.Scope("Queue", {
+const QueueScope = State.Scope("@test/QueueScope")({
   id: Schema.String,
   queueId: Schema.String,
-})("@test/QueueScope");
+});
 
 const WorkerScope = QueueScope.withLeaf("Worker", {
   id: Schema.String,
   workerId: Schema.String,
-})("@test/WorkerScope");
+});
 
 const EntryScope = WorkerScope.withLeaf("Entry", {
   id: Schema.String,
   entryId: Schema.String,
-})("@test/EntryScope");
+});
 
 describe("State.Scope", () => {
   it.effect("provides nested state through withLeaf scopes", () =>

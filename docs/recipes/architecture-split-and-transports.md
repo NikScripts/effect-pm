@@ -62,7 +62,7 @@ Lock architecture decisions that block the first implementation slices:
 - **`ProcessStore` shrinks** to archive builder + registry only (no telemetry section);
   implementation namespace may become `Archive`; `ProcessStore` alias OK short-term.
 - **`ProcessStorage` → `ProcessArchive`** — merges archive layers only.
-- **Plan 17 telemetry factory** targets **`Telemetry.Service`** (tree DSL inside), not
+- **Plan 17 telemetry factory** targets **`Telemetry.Tag` + wiring stack** (tree DSL), not
   `ProcessStore.telemetry(...)` as a store section — see [21-state-vocabulary.md](../plans/21-state-vocabulary.md).
 - **Per-domain public namespace** — e.g. `QueueResource.{Telemetry, Store, Projection}`.
 - **Siloing rule (cross-cutting)** — consumers carry only what they use:
@@ -214,5 +214,5 @@ Architecture bake **complete** (steps 1–6 locked). Recipe stays open until sli
 Golden tree reference: `origin/cursor/facet-telemetry-158c`.
 
 **Handoff pointer for new session:** run [telemetry-split-bake.md](./telemetry-split-bake.md)
-before more implementation. Pilot vertical slice: **RunResource** (`Telemetry.Service` +
-hub bridge + telemetry state).
+before more implementation. Pilot vertical slice: **RunResource** (`Telemetry.Tag` +
+wiring stack + hub bridge + telemetry state).

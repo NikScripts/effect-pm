@@ -78,12 +78,12 @@ const RunResourceTelemetry = ProcessStore.telemetry(RunResourceScope)(
 
 | Reusable from golden (port) | Net-new for spec (build) |
 | --- | --- |
-| `Telemetry.Schema<Self>()(Scope)({...})` base | `Telemetry.Tag<Self>(id)(...)` **class** factory |
+| `Telemetry.Schema<Self>()(Scope)({...})` base | `Telemetry.Tag<Self>(domain)(facetId, …)` **class** factory |
 | `Telemetry.terminal.clockMillis` / `.durationMs` | `Telemetry.operation<Input>(name)(Scope, ...legs)` |
 | `Telemetry.namespace` | `Telemetry.start` / `Telemetry.exit({onSuccess,onFailure,onInterrupt})` |
 | `Telemetry.event` (name + schema) | Node handles (G) on Tag class statics |
 | `telemetryWireId` machinery | **`Telemetry.layer(Tag, wiring)`** + router bridge |
-| Wire layout `RunResource.Run.Started` etc. | `Telemetry.Wiring<Tag>` = `{ extend, nodes }`, `PlainFields<Schema>` |
+| Wire layout `RunResource.Run.Started` etc. | **`Wiring.sections` + `satisfies WiringConfig<Tag>`** |
 | RunResource schema **fields** | `Telemetry.metric.*`, `Telemetry.state`, field sources (`Operation.input`, `Exit.*`, `Clock.now`) |
 | `Telemetry.logWarning` (golden: pipe leg) | Calling API: op builder `.provide()`, `OperationContext` |
 

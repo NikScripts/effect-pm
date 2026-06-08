@@ -38,7 +38,6 @@ export default defineConfig([
       RuntimeStorage: "src/RuntimeStorage.ts",
       State: "src/State.ts",
       RunResourceScope: "src/RunResourceScope.ts",
-      RunResourceIdentity: "src/RunResourceIdentity.ts",
       Tags: "src/Tags.ts",
       CommandAuth: "src/CommandAuth.ts",
       ControlProtocol: "src/ControlProtocol.ts",

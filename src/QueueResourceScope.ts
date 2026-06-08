@@ -7,17 +7,20 @@
 import { Schema } from "effect";
 import { State } from "./State";
 
-export const QueueResourceScope = State.Scope("QueueResource", {
+export class QueueResourceScope extends State.Scope(
+  "@nikscripts/effect-pm/queue/QueueResourceScope",
+  "QueueResource",
+)({
   queueId: Schema.String,
-})("@nikscripts/effect-pm/queue/QueueResourceScope");
+}) {}
 
-export const QueueEntryScope = QueueResourceScope.withLeaf("Entry", {
+export class QueueEntryScope extends QueueResourceScope.withLeaf("Entry", {
   entryId: Schema.String,
-})("@nikscripts/effect-pm/queue/QueueEntryScope");
+}) {}
 
-export const QueueDedupeKeyScope = QueueResourceScope.withLeaf("DedupeKey", {
+export class QueueDedupeKeyScope extends QueueResourceScope.withLeaf("DedupeKey", {
   key: Schema.String,
-})("@nikscripts/effect-pm/queue/QueueDedupeKeyScope");
+}) {}
 
 export type QueueResourceScopeLeaf = State.Type.Leaf<typeof QueueResourceScope>;
 export type QueueResourceScopeState = State.Type.State<typeof QueueResourceScope>;

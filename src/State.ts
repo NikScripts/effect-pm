@@ -1,6 +1,18 @@
 /**
  * Runtime state scopes for telemetry emitters.
  *
+ * A scope is a `Context.Service` class carrying a typed state tree. Declare the
+ * root with `class X extends State.Scope(serviceOrId)({ fields })` and nest
+ * leaves with `class Y extends X.withLeaf("Key", { fields })`.
+ *
+ * Identity: when a domain service/tag is passed, the scope id is its `.key`;
+ * when a string is passed, that string is the id. Leaf ids derive as
+ * `` `${parentId}/${Key}` ``.
+ *
+ * `kind` is the domain discriminator consumed by the storage telemetry DSL
+ * (`processType`). It defaults to the id's last `/` segment and is inherited by
+ * leaves; pass it explicitly when the domain name differs from that segment.
+ *
  * @module State
  */
 
@@ -67,9 +79,21 @@ type InsertSelectors<
       }
     : never;
 
+/**
+ * A domain service/tag (id taken from its `.key`) or an explicit id string.
+ *
+ * @public
+ */
+export type ScopeIdentity = string | { readonly key: string };
+
+type IdOf<S extends ScopeIdentity> = S extends string
+  ? S
+  : S extends { readonly key: infer K extends string }
+    ? K
+    : never;
+
 export type StateScope<
   Id extends string,
-  Kind extends string,
   LeafFields extends StructFields,
   StateFields extends StructFields,
   StateShape,
@@ -78,7 +102,7 @@ export type StateScope<
   Requirements,
 > = Context.ServiceClass<Id, Id, StateShape> & {
   readonly id: Id;
-  readonly kind: Kind;
+  readonly kind: string;
   readonly Leaf: StructFromFields<LeafFields>;
   readonly State: StructFromFields<StateFields>;
   readonly Schema: {
@@ -101,11 +125,8 @@ export type StateScope<
   >(
     key: Key,
     fields: ChildFields,
-  ) => <const ChildId extends string>(
-    id: ChildId,
   ) => StateScope<
-    ChildId,
-    Kind,
+    `${Id}/${Key}`,
     ChildFields,
     InsertState<StateFields, Path, Key, { readonly [K in keyof ChildFields]: ChildFields[K] }>,
     InsertState<StateShape, Path, Key, ValueOf<ChildFields>>,
@@ -215,7 +236,6 @@ const insertStateValue = (
 
 const makeScope = <
   const Id extends string,
-  const Kind extends string,
   const LeafFields extends StructFields,
   StateFields extends StructFields,
   StateShape,
@@ -224,14 +244,13 @@ const makeScope = <
   Requirements,
 >(options: {
   readonly id: Id;
-  readonly kind: Kind;
+  readonly kind: string;
   readonly leafFields: LeafFields;
   readonly tree: StateSchemaTree;
   readonly path: Path;
   readonly makeState: (leaf: ValueOf<LeafFields>) => Effect.Effect<StateShape, never, Requirements>;
 }): StateScope<
   Id,
-  Kind,
   LeafFields,
   StateFields,
   StateShape,
@@ -266,44 +285,41 @@ const makeScope = <
       leaf: ValueOf<LeafFields>,
       effect: Effect.Effect<A, E, R>,
     ) => scope.provide(leaf)(effect),
-    withLeaf:
-      <const Key extends string, const ChildFields extends StructFields>(
-        key: Key,
-        fields: ChildFields,
-      ) =>
-      <const ChildId extends string>(id: ChildId) => {
-        const childTree = makeTree(fields);
-        const tree = cloneTreeWithChild(options.tree, options.path, key, childTree);
-        const path = [...options.path, key] as const;
-        return makeScope<
-          ChildId,
-          Kind,
-          ChildFields,
-          InsertState<StateFields, Path, Key, { readonly [K in keyof ChildFields]: ChildFields[K] }>,
-          InsertState<StateShape, Path, Key, ValueOf<ChildFields>>,
-          InsertSelectors<StateSelectors, Path, Key, ChildFields>,
-          typeof path,
-          Requirements | Id
-        >({
-          id,
-          kind: options.kind,
-          leafFields: fields,
-          tree,
-          path,
-          makeState: (leaf) =>
-            Effect.map(scope, (parent) =>
-              insertStateValue(parent, options.path, key, leaf),
-            ) as Effect.Effect<
-              InsertState<StateShape, Path, Key, ValueOf<ChildFields>>,
-              never,
-              Requirements | Id
-            >,
-        });
-      },
+    withLeaf: <const Key extends string, const ChildFields extends StructFields>(
+      key: Key,
+      fields: ChildFields,
+    ) => {
+      const childTree = makeTree(fields);
+      const tree = cloneTreeWithChild(options.tree, options.path, key, childTree);
+      const path = [...options.path, key] as const;
+      const childId: `${Id}/${Key}` = `${options.id}/${key}`;
+      return makeScope<
+        `${Id}/${Key}`,
+        ChildFields,
+        InsertState<StateFields, Path, Key, { readonly [K in keyof ChildFields]: ChildFields[K] }>,
+        InsertState<StateShape, Path, Key, ValueOf<ChildFields>>,
+        InsertSelectors<StateSelectors, Path, Key, ChildFields>,
+        typeof path,
+        Requirements | Id
+      >({
+        id: childId,
+        kind: options.kind,
+        leafFields: fields,
+        tree,
+        path,
+        makeState: (leaf) =>
+          Effect.map(scope, (parent) =>
+            insertStateValue(parent, options.path, key, leaf),
+          ) as Effect.Effect<
+            InsertState<StateShape, Path, Key, ValueOf<ChildFields>>,
+            never,
+            Requirements | Id
+          >,
+      });
+    },
   });
   return scope as StateScope<
     Id,
-    Kind,
     LeafFields,
     StateFields,
     StateShape,
@@ -313,15 +329,23 @@ const makeScope = <
   >;
 };
 
+const resolveScopeId = (serviceOrId: ScopeIdentity): string =>
+  typeof serviceOrId === "string" ? serviceOrId : serviceOrId.key;
+
+const lastSegment = (id: string): string => {
+  const segments = id.split("/");
+  return segments[segments.length - 1] ?? id;
+};
+
 const Scope =
-  <const Kind extends string, const Fields extends StructFields>(
-    kind: Kind,
-    fields: Fields,
+  <const ServiceOrId extends ScopeIdentity>(
+    serviceOrId: ServiceOrId,
+    kind?: string,
   ) =>
-  <const Id extends string>(id: Id) =>
-    makeScope<
-      Id,
-      Kind,
+  <const Fields extends StructFields>(fields: Fields) => {
+    const id = resolveScopeId(serviceOrId);
+    return makeScope<
+      IdOf<ServiceOrId>,
       Fields,
       Fields,
       ValueOf<Fields>,
@@ -329,13 +353,14 @@ const Scope =
       readonly [],
       never
     >({
-      id,
-      kind,
+      id: id as IdOf<ServiceOrId>,
+      kind: kind ?? lastSegment(id),
       leafFields: fields,
       tree: makeTree(fields),
       path: [],
       makeState: (leaf) => Effect.succeed(leaf),
     });
+  };
 
 /**
  * State scope factory.

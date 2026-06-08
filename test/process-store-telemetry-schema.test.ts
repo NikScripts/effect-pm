@@ -20,11 +20,11 @@ type IsEqual<Left, Right> =
 
 const assertType = <T extends true>(_value?: T): void => undefined;
 
-const TelemetryTestScope = State.Scope("Process", {
+const TelemetryTestScope = State.Scope("@test/TelemetryTestScope", "Process")({
   processId: Schema.String,
   subjectId: Schema.String,
   startedAt: Schema.Number,
-})("@test/TelemetryTestScope");
+});
 
 const TelemetryTestState = TelemetryTestScope.Schema.State;
 
