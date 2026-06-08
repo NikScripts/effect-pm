@@ -4,9 +4,9 @@
 > then **[telemetry-requirements.md](./telemetry-requirements.md)** (SSoT). This recon file is **codebase
 > gap analysis** — API shape here is **out of date** where it conflicts with requirements (Jun 8 revision).
 
-> **Superseded (Jun 2026):** API decisions → requirements change log **2026-06-08**. **D3** →
-> `Telemetry.bind` + `satisfies WiringConfig<Tag>`. **Service** → `Telemetry.layer` +
-> `Telemetry.withLayer`. **Hub** → **`TelemetryRouter`**.
+> **Superseded (Jun 2026):** **`RunResourceIdentity`** → **`RunResource`** domain service + **`Tags.ts`**.
+> Facet file **`store/RunResourceTelemetry.ts`** (not `RunResourceTag`). Tag signature:
+> **`Telemetry.Tag<Self>(domain)(facetId, …tree)`** — see requirements §4.
 
 **Status:** Recon only. **No factory code written.** Baseline for gap analysis; not the API spec.
 **Branch:** `cursor/telemetry-redesign-bake-faed`
@@ -26,12 +26,12 @@ resolution moves into the requirements doc's CHK table + change log.
 The requirements spec is **buildable**, but **"port from golden" is a misnomer for the
 factory itself**. The golden branch (`origin/cursor/facet-telemetry-158c`) gives us the
 **schemas, wire layout, and a *different, older* DSL**. The spec's three-API surface
-(`Telemetry.Tag` / `operation` / `start` / `exit` / `Service` / `Wiring` / `metric` /
-`state`) **does not exist anywhere** — golden or current branch. It is **net-new code**, not
-a port.
+(`Telemetry.Tag` / `operation` / `start` / `exit` / **`Wiring.sections`** / **`Telemetry.layer`**
+/ `Telemetry.withLayer` / `metric` / `state`) **does not exist anywhere** — golden or current
+branch. It is **net-new code**, not a port.
 
-**One finding (D3) is a genuine type-system blocker** that must be resolved before Step 1, or
-the locked `nodes` API as literally written in the spec cannot deliver the exhaustiveness it
+**One finding (D3) is a genuine type-system blocker** that must be resolved before Step 3 wiring
+factory, or the locked **`WiringConfig<Tag>`** exhaustiveness cannot deliver what the spec
 promises. Details below.
 
 ---
@@ -42,11 +42,10 @@ promises. Details below.
 | --- | --- | --- |
 | `src/Telemetry.ts` (Tag factory, Service, registry, Wiring) | **Does not exist** | Net-new file |
 | `src/internal/telemetry/` runtime | **Does not exist** | Net-new dir |
-| `src/RunResourceIdentity.ts` (`TypeTag`/`TypeId`) | **Does not exist** | Net-new (Step 0) |
-| `store/RunResourceTag.ts` | **Does not exist** | Net-new |
-| Debt to delete: `defineEvent` | Present in `src/TelemetryHub.ts` + `src/store/RunResourceTelemetry.ts` | As documented |
-| Debt to delete: kernel `stateRef` | Present in `src/RunResource.ts` | As documented |
-| Export subpaths for Telemetry/Identity | **Absent** from `package.json` — only `./store/RunResource`, `./ProcessStore`, etc. exist | Step 0 must add `./Telemetry`, `./store/RunResourceTelemetry`, `./store/RunResourceTag`, `./RunResourceIdentity` |
+| `src/RunResourceIdentity.ts` | **Shipped Step 0 — superseded** | Delete on R4; use **`RunResource`** domain service |
+| `store/RunResourceTelemetry.ts` (Tag class) | **Does not exist** | Net-new |
+| `src/Tags.ts` | **Does not exist** | Net-new |
+| Export subpaths for Telemetry / Tags | **Absent** from `package.json` | Add `./Telemetry`, `./Tags`, `./store/RunResourceTelemetry`; **remove** `./RunResourceIdentity` on R4 |
 
 `TelemetryHub` itself is healthy and stays as-is (router only): `emit`, `sink`, `sinkLayer`,
 `layer`, `telemetryWireId`. The new factory bridges into it.
@@ -83,7 +82,7 @@ const RunResourceTelemetry = ProcessStore.telemetry(RunResourceScope)(
 | `Telemetry.terminal.clockMillis` / `.durationMs` | `Telemetry.operation<Input>(name)(Scope, ...legs)` |
 | `Telemetry.namespace` | `Telemetry.start` / `Telemetry.exit({onSuccess,onFailure,onInterrupt})` |
 | `Telemetry.event` (name + schema) | Node handles (G) on Tag class statics |
-| `telemetryWireId` machinery | `Telemetry.Service(Tag, wiring)` + `.layer` |
+| `telemetryWireId` machinery | **`Telemetry.layer(Tag, wiring)`** + router bridge |
 | Wire layout `RunResource.Run.Started` etc. | `Telemetry.Wiring<Tag>` = `{ extend, nodes }`, `PlainFields<Schema>` |
 | RunResource schema **fields** | `Telemetry.metric.*`, `Telemetry.state`, field sources (`Operation.input`, `Exit.*`, `Clock.now`) |
 | `Telemetry.logWarning` (golden: pipe leg) | Calling API: op builder `.provide()`, `OperationContext` |
@@ -100,7 +99,7 @@ is written from scratch.
 | --- | --- | --- | --- |
 | **D1** | Spec renames golden `Telemetry.tag` → `Telemetry.group`; groups do **not** nest (golden `tag` took variadic `...path`, allowing nesting) | Low — spec acknowledges this in §4 DSL rules | Deliberate, locked. No action. |
 | **D2** | `extend` is keyed by a **computed property `[RunResourceScope]`** (spec §4 / Step 3). `RunResourceScope` is a `Context.Service` class — using it as an object key coerces to a string and is **not guaranteed unique or stable** across scopes | **Medium** | Impl must key `extend` by a stable id (e.g. scope `.id` string, which exists) rather than the class object, OR the factory accepts the scope ref and derives the key internally. Affects API 3 ergonomics. |
-| **D3** | `nodes` is keyed by **computed property node handles** (`[RunResourceTag.Run.run.Started]: { bind: {...} }`) **and** the spec requires **per-node exhaustive `bind` typed from `PlainFields<Schema>`** of *that specific node*. **TypeScript computed-key object literals collapse to a single index signature and cannot carry a distinct value type per computed key.** You cannot have both "keys are runtime handles" and "each key's value is type-checked against that key's own schema." | **HIGH — blocker** | The locked `LayerNodeConfig<Schema>` exhaustiveness (spec §4, "compile error if a node with PlainFields≠never is missing") is **unachievable as written** with handle-keyed literals. See §4 resolution options. Must decide before Step 1. |
+| **D3** | **`Telemetry.bind(handle, fields)`** exhaustiveness vs TypeScript object-literal limits | **HIGH — blocker** | The locked **`satisfies WiringConfig<Tag>`** exhaustiveness (requirements §4) must be validated via **`Wiring.sections`** collector + **`RequiredBindMap<Tag>`** — not handle-keyed object literals. See §4 resolution options. Must decide before Step 3 wiring factory. |
 | **D4** | Golden puts `logWarning` as a **`.pipe` leg on the event**; spec puts it as a **`logWarning:` property on the wiring node**. | Low — spec §12 explicitly rejects the pipe form, locked | No action; just noting the golden code does it the old way. |
 | **D5** | Spec's `RunResourceStateSchema` (state snapshot embedded in `State.Changed`) lives today in the **to-be-deleted** `store/RunResourceTelemetry.ts`. The new Tag schema references it. | Low | Need to decide its new home (likely `RunResourceScope` `extend` shape or a shared schema module) so deleting the debt file doesn't orphan it. |
 | **D6** | No telemetry/identity **export subpaths** exist in `package.json`. Step 0 lists them as deliverables but the spec's compose examples already import from `@nikscripts/effect-pm/store/RunResourceTelemetry`. | Low | Step 0 mechanical; flagged so it isn't skipped. |
@@ -146,35 +145,29 @@ Each needs owner OK; then it moves to the requirements CHK table as LOCKED + a c
 
 | CHK | Question | Recommendation | Confidence |
 | --- | --- | --- | --- |
-| **CHK-03** | `Telemetry.Service` return shape (class vs namespace vs branded const) | **Branded const object.** Tag is a `class` (spec uses `class extends Telemetry.Tag<Self>(id)(...)`, matches repo's class-extends convention). Service is `const X = Telemetry.Service(Tag, wiring)` — a frozen branded object carrying Calling paths (`.Run.run`, `.State.Changed`), `.layer`, and catalog metadata, consumed by `Telemetry.registry([...])` via `typeof`. | High |
+| **CHK-03** | Facet export shape | **Locked in requirements:** **`Telemetry.withLayer(Tag, layer)`** — Tag is a `class` (`Telemetry.Tag<Self>(domain)(facetId, …)`); facet export mirrors Tag calling paths + **`.layer`**. Registry accepts **`withLayer`** exports. | High |
 | **CHK-04** | Must zero-plain-field events appear in `nodes`? | **No.** `LayerNodeConfig` already encodes `PlainFields extends never ? { logWarning? } : { bind; logWarning? }`. Zero-plain-field nodes are **optional** in `nodes` (only `logWarning?`). Only `PlainFields ≠ never` nodes are required. | High |
 | **CHK-12** | Optional plain fields (e.g. `Retried.error`) — required bind or omittable? | **Optional schema field → optional `bind` key** (`bind: { error?: FieldSource }`). Required fields stay required. | Medium — confirm against final Queue schemas |
 | **CHK-13** | `RateLimit.Exceeded` wiring (many plain fields) | Defer to Slice E (Queue branch) as the spec says; full bind table authored there. No blocker for RunResource slices A–D. | n/a |
-| **CHK-14** | Identity subpath exact string | `TypeTag = "@nikscripts/effect-pm/RunResource"` (const), file `src/RunResourceIdentity.ts`, **package subpath** `@nikscripts/effect-pm/RunResourceIdentity`. Matches existing scope-id namespacing (`@nikscripts/effect-pm/run/RunResourceScope`). Confirm on first `package.json` export edit (Step 0). | Medium |
+| **CHK-14** | Domain + facet tag | **Superseded** — **`RunResource`** domain service + **`Tag.RunResource`**; facet **`RunResourceTelemetry`**. See requirements CHK-14. |
 
 ---
 
-## 6. Recommended entry point (once D3 + CHKs are signed off)
+## 6. Recommended entry point
 
-Step 0 + Step 1 are then unblocked and sequential:
+1. **RunResource service (R1–R4)** — [run-resource-service-handoff.md](../handoffs/run-resource-service-handoff.md).
+2. **Step 1** — `Telemetry.Tag<Self>(domain)(facetId, …)` factory. **Gate:** `RunResourceTelemetry` compiles.
+3. **Step 2** — port schemas + tree. **D5** before deleting debt file.
 
-1. **Step 0** — add export subpaths (D6), create `src/RunResourceIdentity.ts` (CHK-14),
-   align plan 21 vocabulary. Mechanical.
-2. **Step 1** — build `src/Telemetry.ts` Tag factory (`namespace`/`group`/`operation`/`start`/
-   `exit`/`event`/`Schema`), porting golden's `Telemetry.Schema`/`terminal`/wire-id plumbing;
-   generate node handles. **Gate:** `RunResourceTag` compiles, no extend/bind/logWarning on Tag.
-3. **Step 2** — port RunResource schemas + tree to `RunResourceTag`. **D5**: decide new home
-   for `RunResourceStateSchema` before deleting the debt file.
-
-Everything downstream (Wiring/Service/runtime, Steps 3–6) inherits the D3 decision, so it
-**must land first**.
+Everything downstream (wiring/runtime, Steps 3–6) inherits the D3 decision, so it
+**must land before Step 3 wiring factory**.
 
 ---
 
 ## 7. Blocking decisions for owner (before any code)
 
 1. **D3** — pick resolution A / B / C for `nodes` keying vs. exhaustiveness. *(Recommend A.)*
-2. **CHK-03** — confirm Service = branded const, Tag = class. *(Recommend yes.)*
+2. **CHK-03** — confirm **`Telemetry.withLayer`** facet export. *(Locked in requirements.)*
 3. **CHK-04 / CHK-12 / CHK-14** — confirm recommendations above.
 4. **D2** — confirm `extend` keys by scope `.id` (not the class object).
 5. **D5** — confirm new home for `RunResourceStateSchema`.

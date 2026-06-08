@@ -26,7 +26,7 @@
 
 | # | API | Surface | Role |
 | --- | --- | --- | --- |
-| **1** | **`Telemetry.Tag`** | `Telemetry.Tag(id, tree…)` | Skeleton + **calling paths** — handles, schemas, wire ids |
+| **1** | **`Telemetry.Tag`** | **`Telemetry.Tag<Self>(domain)(facetId, …tree)`** | Skeleton + **calling paths** — handles, schemas, wire ids |
 | **2** | **Calling** | Static paths on **Tag** (mirrored on facet export) | Builder → `{ input, telemetry, scope }` |
 | **3** | **Wiring** | **`Wiring.sections(…)` + `satisfies WiringConfig<Tag>`** | `extend`, **`bind.pipe(log…)`** |
 | **∴** | **Facet layer** | **`Telemetry.layer(Tag, wiring)`** | Facet runtime **`Layer`** → **`TelemetryRouter`** |
@@ -42,13 +42,13 @@ Store/RPC **`Procedure.payload().success().failure()`** is separate.
 ## File layout (RunResource example)
 
 ```text
-store/RunResourceTag.ts                   — Telemetry.Tag (API 1 + 2)
-store/RunResourceTelemetry.wiring.ts      — satisfies WiringConfig<Tag> (API 3)
-store/RunResourceTelemetry.service.ts     — Telemetry.layer
-store/RunResourceTelemetry.ts             — Telemetry.withLayer + re-export Tag
-src/RunResourceIdentity.ts                — TypeTag / TypeId
-src/internal/telemetry/                   — runtime for Telemetry.layer
-src/TelemetryRouter.ts                    — emit router (rename TelemetryHub)
+src/store/RunResourceTelemetry.ts           — Tag class + barrel (withLayer)
+src/store/RunResourceTelemetry.wiring.ts    — satisfies WiringConfig<Tag> (API 3)
+src/store/RunResourceTelemetry.service.ts   — runResourceTelemetryLayer
+src/internal/runResource/service.ts         — RunResource domain Context.Service
+src/Tags.ts                                 — Tag.RunResource
+src/internal/telemetry/                     — runtime for Telemetry.layer
+src/TelemetryRouter.ts                      — emit router (rename TelemetryHub)
 ```
 
 ---
@@ -78,7 +78,8 @@ TelemetryRouter → sinks → telemetryTransport (optional)
 
 | Topic | Doc |
 | --- | --- |
-| **Bake locks (SSoT)** | [telemetry-split-bake.md](../recipes/telemetry-split-bake.md) |
+| **Implementation SSoT** | [telemetry-requirements.md](../recipes/telemetry-requirements.md) |
+| **Bake locks (discussion history)** | [telemetry-split-bake.md](../recipes/telemetry-split-bake.md) |
 | Hub + sinks | [20](./20-process-store-split-and-telemetry.md) |
 | Tree DSL | [17](./17-facet-telemetry-factory.md) §5 |
 | Scopes | [18](./18-resource-state-scope.md) |

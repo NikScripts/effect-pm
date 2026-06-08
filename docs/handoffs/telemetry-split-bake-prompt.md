@@ -1,5 +1,8 @@
 # Telemetry split bake — owner prompt (paste this)
 
+> **Historical prompt (Jun 2026 bake).** **`Telemetry.Service`** / **`RunResourceTag`** names here are **withdrawn**.
+> Implementation SSoT: [telemetry-requirements.md](../recipes/telemetry-requirements.md).
+
 **Relative path:** `docs/handoffs/telemetry-split-bake-prompt.md`
 
 **Recipe ledger (write decisions here):** `docs/recipes/telemetry-split-bake.md`  

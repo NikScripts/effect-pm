@@ -32,7 +32,7 @@ no telemetry state module.
 | `RunResourceStore` decoupled from telemetry section | Yes           | Hand-rolled codecs/wires                                               |
 | `RunResourceProjection`                             | Yes           | —                                                                      |
 | `State.Scope` + scopes                              | Partial       | RunResource kernel ignores `RunScope`                                  |
-| `Telemetry.Tag` + `Telemetry.Service`              | **No**        | Bake locked — replace `defineEvent`                                    |
+| `Telemetry.Tag` + wiring stack       | **No**        | Locked in requirements — replace `defineEvent`                         |
 | `**Telemetry.registry`**                            | **No**        | Recipe step 2                                                          |
 | **Telemetry state** (in-memory, telemetry-only)     | **No**        | Owner model — [plan 21](../plans/21-state-vocabulary.md)               |
 | Plan 17 tree DSL on RunResource                     | **No** on hub | On `facet-telemetry-158c`                                              |
@@ -46,7 +46,7 @@ no telemetry state module.
 
 1. **Isolation / siloing** — opt-in subpaths, layers, registries; combined layers explicitly named.
 2. **Three modules per domain** — telemetry tag, `*Store` (archive), `*Projection` (optional); separate tags.
-3. **Emit `R = TelemetryHub`** at kernel sites — never `RuntimeStorage` on emit path.
+3. **Emit `R = TelemetryRouter`** at kernel sites (legacy **`TelemetryHub`** alias still resolves to same instance) — never `RuntimeStorage` on emit path.
 4. **Telemetry tree DSL** — `Telemetry.Tag` with `namespace` / `group` / `operation` / `event`; **not** `defineEvent`.
 5. **Hub = router only** — validate + fan-out; definitions live on `Telemetry.Tag`.
 6. **Archive optional** — `ArchiveSink` leg; store facet queries only.
@@ -64,42 +64,34 @@ no telemetry state module.
 | --- | --- | --- | --- |
 | **1** | **`Telemetry.Tag`** | Class + tree DSL | **Skeleton only** — wires, schemas, ops, events. Generates **node handles** (G). |
 | **2** | **Calling** | Static paths on Service | Builder → `{ input, telemetry, scope }` |
-| **3** | **Service wiring** | 2nd arg to **`Telemetry.Service`** | **`{ extend, nodes }`** — authored separately from Tag, composed via Service |
-| **∴** | **`Telemetry.Service`** | `Telemetry.Service(Tag, wiring)` | Tag + wiring → facet export; **`.layer`** = Effect Layer |
+| **3** | **Wiring** | **`Wiring.sections(…)` + `satisfies WiringConfig<Tag>`** | `extend`, **`Telemetry.bind(…).pipe(log…)`** — separate from Tag |
+| **∴** | **Facet layer** | **`Telemetry.layer(Tag, wiring)`** | Facet runtime **`Layer`** → **`TelemetryRouter`** |
+| **∴** | **Facet export** | **`Telemetry.withLayer(Tag, layer)`** | Tag calling paths + **`.layer`** for compose |
 
-**Internal** kernel/spine code does not import `Telemetry.Service`; it uses Service static paths when the Effect **`Service.layer`** is provided at compose.
+**Internal** kernel/spine code imports the **Tag** / **`withLayer`** export for calling paths; wiring and layer are composed at the app edge.
 
-### Tag vs Wiring vs Service
+### Tag vs Wiring vs Facet export
 
-| | **Tag** | **Wiring** (Service 2nd arg) | **Service** |
+| | **Tag** | **Wiring** (API 3) | **Facet export** |
 | --- | --- | --- | --- |
-| Tree DSL | skeleton | — | Tag + wiring merged |
-| `extend` | — | ✓ | ✓ |
-| `nodes` / `bind` | — | ✓ **required** for plain `Schema.*` | ✓ |
-| `logWarning` | — | ✓ optional per node | ✓ |
-| Effect **`.layer`** | — | — | ✓ |
+| Tree DSL | skeleton | — | Tag + wiring merged at runtime |
+| `extend` | — | ✓ | ✓ (via layer) |
+| `bind` / `logWarning` | — | ✓ **`Telemetry.bind.pipe`** | ✓ |
+| Effect **`.layer`** | — | — | ✓ on **`withLayer`** export |
 
 ---
 
 ### Definition surface — `Telemetry.Tag` (**locked**, API 1)
 
+**SSoT:** [telemetry-requirements.md §4](./telemetry-requirements.md#4-three-public-apis-locked) — **`Telemetry.Tag<Self>(domain)(facetId, Telemetry.namespace(...), …tree)`**.
+
 Skeleton only. **No** extend, bind, logWarning. Tag factory generates **node handles** (G).
 
-**On Tag:** namespace, group, operation, event, start, exit, scope ref, wire ids, node handles.
-
-**Not on Tag** → **Service wiring** (2nd arg):
-
-- `extend`, `nodes` / `bind`, `logWarning`
-- Effect **`Service.layer`** built from Tag + wiring
-
-- A telemetry tag may contain multiple `Telemetry.namespace(...)` blocks.
-- `Telemetry.group(...)` replaces lowercase `Telemetry.tag(...)` to avoid collision with `Telemetry.Tag`.
-- `Telemetry.group(...)` may not nest. Groups define the event wire path segment.
-- Events may not live directly under a namespace; events live under a group or inside an operation nested in a group.
-- Event wire ids are always `Namespace.Group.Event`. Operation names never contribute to event wire ids.
-
 ```ts
-export class RunResourceTag extends Telemetry.Tag<RunResourceTag>(id)(
+import { RunResource } from "../internal/runResource/service";
+
+export class RunResourceTelemetry extends Telemetry.Tag<RunResourceTelemetry>(RunResource)(
+  "@nikscripts/effect-pm/store/RunResource/RunResourceTelemetry",
   Telemetry.namespace("RunResource"),
   Telemetry.group("Run")(
     Telemetry.operation("run")(
@@ -115,7 +107,7 @@ export class RunResourceTag extends Telemetry.Tag<RunResourceTag>(id)(
     Telemetry.event("Changed", RunResourceStateChanged),
   ),
 ) {}
-// Handles: RunResourceTag.Run.run.Started, .State.Changed — see telemetry-requirements.md
+// Handles: RunResourceTelemetry.Run.run.Started, .State.Changed
 ```
 
 ### Operations API — calling shape (agreed direction)
@@ -193,23 +185,24 @@ Telemetry.operation<QueueEntryInput>("processEntry")(
 
 ### Telemetry state (wiring — not on Tag)
 
-`Telemetry.extend`, hidden fields, reducers, entry cleanup — on **Service wiring** (API 3), not Tag.
+`Telemetry.extend`, hidden fields, reducers, entry cleanup — on **wiring** (API 3), not Tag. See [telemetry-requirements.md § API 3](./telemetry-requirements.md#api-3--wiring-facet-layer-facet-export).
 
 ```ts
-export const QueueResourceTelemetry = Telemetry.Service(QueueResourceTag, {
-  extend: {
-    [QueueResourceScope]: { depth: Telemetry.metric.gauge, inFlight: Telemetry.metric.gauge },
-    [QueueEntryScope]: {
-      enqueuedAt: Telemetry.metric.timestamp,
-      startedAt: Telemetry.metric.timestamp,
-      waitMs: Telemetry.metric.duration("enqueuedAt", "startedAt"),
-    },
-  },
-  nodes: { … },
-})
+export const queueResourceWiring = Wiring.sections(
+  Telemetry.extend(QueueResourceScope, {
+    depth: Telemetry.metric.gauge,
+    inFlight: Telemetry.metric.gauge,
+  }),
+  Telemetry.extend(QueueEntryScope, {
+    enqueuedAt: Telemetry.metric.timestamp,
+    startedAt: Telemetry.metric.timestamp,
+    waitMs: Telemetry.metric.duration("enqueuedAt", "startedAt"),
+  }),
+  /* Telemetry.bind(…).pipe(…) per node */,
+) satisfies WiringConfig<typeof QueueResourceTelemetry>
 ```
 
-Runtime Refs — `src/internal/telemetry/`; activated by **`QueueResourceTelemetry.layer`**.
+Runtime Refs — `src/internal/telemetry/`; activated by **`Telemetry.layer(QueueResourceTelemetry, queueResourceWiring)`**.
 
 ### Store / procedure side decisions from this bake
 
@@ -220,21 +213,23 @@ Runtime Refs — `src/internal/telemetry/`; activated by **`QueueResourceTelemet
 - RPC-visible failures are `Schema.TaggedError` classes passed directly on contracts and round-trip through transport failure exits.
 - Protocol failures are also `Schema.TaggedError` classes, but live in a shared transport error union separate from declared method failures.
 
-### Module identity files
+### Module identity (superseded)
+
+> **Superseded (Jun 2026):** No separate **`RunResourceIdentity.ts`**. Domain identity is
+> **`RunResource`** `Context.Service` + **`Tags.ts`** (`Tag.RunResource`). See
+> [run-resource-service-handoff.md](../handoffs/run-resource-service-handoff.md).
+
+<details>
+<summary>Historical — identity module pattern (withdrawn)</summary>
 
 - Process/resource type identity should not be passed around as unrelated string
 literals such as `"RunResource"` when the owning service tag cannot be imported
 without circular dependencies.
 - Domains that need shared identity across worker, telemetry, store facets, and
-projections should get a small identity module:
+projections were proposed a small identity module (`TypeTag`, `TypeId`) — **withdrawn**
+in favor of the domain **`Context.Service`**.
 
-```ts
-export const TypeTag = "@nikscripts/effect-pm/RunResource";
-export const TypeId: unique symbol = Symbol.for(TypeTag);
-```
-
-- Facets and telemetry definitions import the identity module, not the worker/service
-module, when they only need the stable type id.
+</details>
 
 ### Operations API — stress case (Queue `processEntry`, locked)
 
@@ -246,12 +241,15 @@ See **End-to-end Queue `processEntry`** below.
 
 Chronological notes from owner + bake sessions. Use this to resume context.
 
-### Jun 2026 — API 3 = Service wiring arg (owner)
+### Jun 2026 — API 3 wiring (owner) — **superseded shape**
 
-**`Telemetry.Service(Tag, { extend, nodes })`**. Type **`Telemetry.Wiring<Tag>`**.  
-Rejected: **`Telemetry.Layer.for`**, **`Telemetry.layer(tag, config)`** (naming collision).
+> **Current lock:** **`Wiring.sections`** + **`satisfies WiringConfig<Tag>`** +
+> **`Telemetry.layer(Tag, wiring)`** + **`Telemetry.withLayer`**. Rejected:
+> **`Telemetry.Service(Tag, wiringObject)`**, handle-keyed **`nodes`** maps,
+> **`Telemetry.Layer.for`**.
 
-Wiring may live inline or in a sibling const with `satisfies Telemetry.Wiring<typeof Tag>`.
+Historical note: an earlier bake pass used **`Telemetry.Service(Tag, { extend, nodes })`**
+with type **`Telemetry.Wiring<Tag>`** — withdrawn Jun 2026 API revision.
 
 ---
 
@@ -532,7 +530,14 @@ Rules:
 
 ---
 
-## API 3 — Service wiring (**locked**, Jun 2026)
+## API 3 — Service wiring (**historical — superseded**)
+
+> **Superseded Jun 2026:** **`Telemetry.Service(Tag, wiringObject)`** rejected. Current API:
+> **`Wiring.sections`** + **`Telemetry.bind().pipe()`** + **`Telemetry.layer`** + **`Telemetry.withLayer`**.
+> See [telemetry-requirements.md § API 3](./telemetry-requirements.md#api-3--wiring-facet-layer-facet-export).
+
+<details>
+<summary>Historical draft (do not implement)</summary>
 
 **No `Telemetry.Layer.for`.** Wiring is the **second argument** to **`Telemetry.Service`**.  
 Type: **`Telemetry.Wiring<Tag>`** — `{ extend, nodes }`. Tag + wiring = Service.
@@ -615,16 +620,33 @@ Optional: **`logWarning`** on any node regardless of plain fields.
 
 Top-level **`extend`** on Layer config (same as prior bake): scope → hidden telemetry metric fields.
 
-### Service compose
+</details>
+
+### Service compose (current — see requirements § API 3)
 
 ```ts
-Telemetry.Service(tag, wiring) → {
-  layer: Layer<TelemetryHub>,
-  …calling static paths from merged Tag + wiring
-}
+// wiring file
+export const runResourceWiring = Wiring.sections(
+  Telemetry.extend(RunResourceScope, { … }),
+  Telemetry.bind(RunResourceTelemetry.Run.run.Started, { … }).pipe(…),
+) satisfies WiringConfig<typeof RunResourceTelemetry>
+
+// service file
+export const runResourceTelemetryLayer = Telemetry.layer(
+  RunResourceTelemetry,
+  runResourceWiring,
+)
+
+// barrel
+export const RunResourceTelemetryExport = Telemetry.withLayer(
+  RunResourceTelemetry,
+  runResourceTelemetryLayer,
+)
+// → calling paths + .layer; registry accepts withLayer exports
 ```
 
-Rejected: **`Telemetry.Layer.for`**, separate **`Telemetry.layer(tag, config)`** export (naming collision with Effect `Layer` / `Service.layer`).
+Rejected: **`Telemetry.Service(Tag, wiring)`**, **`Telemetry.Layer.for`**, wiring as a
+second arg to a Service factory (naming collision with Effect `Layer` / domain services).
 
 ---
 
@@ -679,11 +701,11 @@ See **Calling API — scope builder (agreed Jun 2026)** for locked rules. Remain
 
 | Strategy | Status |
 | --- | --- |
-| Builder `provideLeaf` / `provideRoot` | **Agreed** leading shape |
-| `assumingLeaf` / `assumingRoot` | **Agreed** when process already bracketed |
-| Ambient root + explicit leaf on builder | **Agreed** default for Queue `processEntry` |
+| Op-only **`.provide(scopeLeaf)`** | **Locked** — see requirements § API 2 |
+| Root via **`State.Scope.layer` / `.run`** at lifetime | **Locked** |
+| **`provideLeaf` / `provideRoot` / `assuming*`** | **Rejected** — discussion above is history |
 | Separate two-arg `(leaf, input)` | Rejected |
-| Outer `Scope.run` + op only | OK as **process** bracket + `.assumingLeaf()` |
+| Outer `Scope.run` + op with ambient root | OK when root already in `R` |
 | Mid-op scope without initial obligation | Rejected |
 
 ---
@@ -697,9 +719,10 @@ See **Calling API — scope builder (agreed Jun 2026)** for locked rules. Remain
 ### Quick reference — all locked
 
 - **Tag (API 1):** skeleton + node handles
-- **Wiring (API 3):** `Telemetry.Service(Tag, { extend, nodes })` — G handles + exhaustive bind
-- **Calling (API 2):** builder → `{ input, telemetry, scope }` live view
-- **Registry:** `Telemetry.registry([...])` at compose
+- **Wiring (API 3):** **`Wiring.sections`** + **`Telemetry.bind.pipe`** + **`satisfies WiringConfig<Tag>`**
+- **Calling (API 2):** builder → **`.provide()`** → `{ input, telemetry, scope }` live view
+- **Facet export:** **`Telemetry.withLayer(Tag, layer)`**
+- **Registry:** `Telemetry.registry([…withLayer exports…])` at compose
 - **Emit:** materialize → metrics → hub → sinks; runner owns start/exit
 - **RunResource:** counters → telemetry state; delete `stateRef`
 - **Deferred:** `Scope.patch` internals, `.gen`, tracers, strict `Operation.input` keys
@@ -713,7 +736,7 @@ See **Calling API — scope builder (agreed Jun 2026)** for locked rules. Remain
 
 ## Open recipe steps (bake in order)
 
-Steps 1–9 **locked**. Three APIs: **Tag** · **Calling** · **Service wiring** (`Telemetry.Service(Tag, wiring)`).
+Steps 1–9 **locked**. Three APIs: **Tag** · **Calling** · **Wiring** (`Wiring.sections` + `Telemetry.layer` + `Telemetry.withLayer`).
 
 ### Step 1 — `Telemetry.Tag` (**locked**, API 1)
 
@@ -723,21 +746,33 @@ Skeleton only — no extend, bind, logWarning. Node handles (G).
 
 ---
 
-### Step 2 — Calling API (**locked**, API 2)
+### Step 2 — RunResource Tag port (**locked**, API 1)
 
-Canonical shape, builder, OperationContext — see **Calling API — scope builder** and **OperationContext (agreed)**.
+Full RunResource event tree from golden branch as **`RunResourceTelemetry`** skeleton.
+Schemas with scope selectors; export via **`store/RunResourceTelemetry`** barrel.
 
-**Acceptance:** Queue `processEntry` stress case; `provideLeaf` + `patch` + `ctx.scope` live view.
-
----
-
-### Step 3 — Service wiring (API 3) (**locked**)
-
-`Telemetry.Service(Tag, { extend, nodes })`. Type: `Telemetry.Wiring<Tag>`.
+**Acceptance:** Tag module imports without hub layer; no `defineEvent`.
 
 ---
 
-### Step 4 — `Telemetry.registry` (**locked**)
+### Step 3 — Wiring factory + `WiringConfig` (API 3) (**locked**)
+
+**`Wiring.sections(…)`** + **`satisfies WiringConfig<Tag>`** + **`Telemetry.bind(handle, fields).pipe(log…)`**.
+Type: **`WiringConfig<Tag>`** with **`RequiredBindMap<Tag>`** exhaustiveness.
+
+**Acceptance:** `runResourceWiring` satisfies config; `*.test-d.ts` proves bind errors.
+
+---
+
+### Step 4 — Calling API + `OperationContext` (API 2) (**locked**)
+
+Canonical shape, builder, OperationContext — see **Calling API — scope builder** (superseded discussion) and **requirements § API 2**.
+
+**Acceptance:** Queue `processEntry` stress case; **`.provide()`** + `patch` + `ctx.scope` live view.
+
+---
+
+### Step 5 — `Telemetry.registry` (**locked**)
 
 ```ts
 Layer.provideMerge(
@@ -749,18 +784,18 @@ Layer.provideMerge(
 | --- | --- |
 | Registration | **Explicit compose** — `Telemetry.registry([...tags])` returns a **Layer** |
 | Timing | Layer build — **not** module import side effects |
-| Scope | **`Telemetry.Service`** exports (Tag catalog derived from Service) — **`ProcessStore.registry`** = archive facets only |
+| Scope | **`Telemetry.withLayer`** facet exports — **`ProcessStore.registry`** = archive facets only |
 | Sink matching | By **wire id** from registry catalog |
 | Global singleton | **Rejected** — per-compose registry layer |
 
 ---
 
-### Step 5 — Telemetry state API (**locked**)
+### Step 6 — Telemetry state API (**locked**)
 
 | Decision | v1 lock |
 | --- | --- |
 | Storage | **Same object** as process scope; process types exclude hidden fields |
-| Declaration | **`extend`** on **Service wiring** (`Telemetry.Wiring`) — not on Tag skeleton |
+| Declaration | **`extend`** on **wiring** (`Wiring.sections`) — not on Tag skeleton |
 | Metric kinds v1 | `gauge`, `counter`, `timestamp`, `duration(from, to)` |
 | Lifetime | Worker / domain compose scope — in-memory only |
 | Writers | Metrics leg + operation runner — **kernel never reads/writes telemetry state** |
@@ -779,7 +814,7 @@ yield* handle.Event
   2. materialize: schema + wiring `bind` + Exit.* / op input
   3. optional metrics leg → telemetry state
   4. validate payload
-  5. TelemetryHub.emit
+  5. TelemetryRouter.emit
   6. sinks fan-out (failures isolated per sink)
 ```
 
@@ -787,9 +822,9 @@ yield* handle.Event
 | --- | --- |
 | Start / exit | **Operation runner** emits |
 | Middle events | **`yield* ctx.telemetry.*`** on handle |
-| Wire ids | **`Telemetry.Wire<typeof Tag>`** — no raw strings in kernel |
+| Wire ids | From **`Telemetry.namespace` + group/event** — no raw strings in kernel |
 | Correlation | From **scope** only |
-| Emit `R` | **None** (stub) or **`TelemetryHub` only** — never store |
+| Emit `R` | **None** (stub) or **`TelemetryRouter` only** — never store |
 | Archive | **`ArchiveSink`** — not inline in emit |
 | `logWarning` | Persist fail → log + **swallow** (existing behavior) |
 
@@ -814,8 +849,8 @@ yield* handle.Event
 
 | Layer                                  | Requires           | Provides                       |
 | -------------------------------------- | ------------------ | ------------------------------ |
-| `TelemetryHub.layer`                   | —                  | emit                           |
-| `RunResourceTelemetry.layer` (Effect)      | hub                | state + operations API + emit bridge |
+| `TelemetryRouter.layer`                | —                  | emit                           |
+| `runResourceTelemetryLayer`            | router             | state + operations API + emit bridge |
 | `RunResourceStore.layerRuntimeStorage` | `RuntimeStorage`   | queries                        |
 | `ArchiveSink.layerForStore(...)`       | storage + hub      | persist leg                    |
 | `RunResourceProjection.layerLive`      | hub                | live read                      |
@@ -850,10 +885,9 @@ yield* handle.Event
 
 | Item | v1 lock |
 | --- | --- |
-| Telemetry facet file | `store/<Domain>Telemetry.ts` — exports **`Telemetry.Service`** (Tag + wiring) |
-| Tag catalog | Tag may live in sibling `<Domain>Tag.ts`; registry accepts **Service** exports |
-| Identity module | `src/<Domain>Identity.ts` — `TypeTag`, `TypeId`; facets import identity, not worker |
-| Subpath | `store/<Domain>Telemetry` for Service; identity at `@nikscripts/effect-pm/<Domain>Identity` |
+| Telemetry facet files | `src/store/<Domain>Telemetry.ts` (Tag + **`withLayer`** barrel), `<Domain>Telemetry.wiring.ts`, `<Domain>Telemetry.service.ts` |
+| Domain identity | **`RunResource`** `Context.Service` + **`Tags.ts`** — **no** `<Domain>Identity.ts` |
+| Subpath | `store/<Domain>Telemetry` for facet export |
 | `Telemetry.operation<Input>` | Input type param on **operation** — locked |
 | `Scope.patch` | `yield* QueueEntryScope.patch(partial)` — process-visible fields only; Ref impl deferred |
 | `Operation.input("key")` typing | Best-effort v1 — strict key enforcement deferred |
@@ -885,8 +919,8 @@ yield* handle.Event
 | Domain folders under `store/`                     | Owner: role folders only               |
 | Flat `events` / `operations` maps on Service | Duplicates Tag tree; terrible authoring DX — use same tree + optional bindings |
 | `logWarning` on Tag skeleton or `.pipe` on Tag event node | **`logWarning:`** optional property per node in **wiring** (`Telemetry.logWarning(…)`) |
-| **`Telemetry.Layer.for` / `Telemetry.layer(tag, config)`** | Wiring is Service 2nd arg — avoids Layer naming collision |
-| Bindings / extend / logWarning on Tag | On **`Telemetry.Wiring`** via **`Telemetry.Service(Tag, wiring)`** |
+| **`Telemetry.Layer.for` / wiring as Service 2nd arg** | Use **`Wiring.sections` + `Telemetry.layer` + `Telemetry.withLayer`** |
+| Bindings / extend / logWarning on Tag | On **wiring** via **`Telemetry.bind.pipe`** only |
 | Global telemetry registry singleton | Per-compose `Telemetry.registry([...])` Layer |
 | Module import registry side effects | Explicit Layer at compose |
 
@@ -901,14 +935,15 @@ All steps 1–9 locked. Implementation agents may start slices; owner review wel
 
 | Area | Lock |
 | --- | --- |
-| **API 1 Tag** | Skeleton + node handles — no extend / bind / logWarning |
-| **API 2 Calling** | Builder + `{ input, telemetry, scope }` + `provideLeaf` / `assuming*` |
-| **API 3 Wiring** | `Telemetry.Service(Tag, wiring)` — `Telemetry.Wiring<Tag>` |
-| Registry | `Telemetry.registry([...services])` at compose |
+| **API 1 Tag** | **`Telemetry.Tag<Self>(domain)(facetId, …)`** — skeleton + node handles |
+| **API 2 Calling** | Builder + **`.provide()`** → `{ input, telemetry, scope }` |
+| **API 3 Wiring** | **`Wiring.sections` + `Telemetry.bind.pipe` + `satisfies WiringConfig<Tag>`** |
+| **Facet export** | **`Telemetry.withLayer(Tag, layer)`** |
+| Registry | `Telemetry.registry([…withLayer exports…])` at compose |
 | State | Hidden fields via `extend`; entry cleanup on op exit |
-| Emit | materialize → metrics → validate → hub → sinks |
+| Emit | materialize → metrics → **`TelemetryRouter`** → sinks |
 | RunResource | Counters off kernel `Ref`; gating = semaphore |
-| Layout | `store/*Telemetry.ts` = Service; optional `*Tag.ts`; `src/*Identity.ts` |
+| Layout | `src/store/*Telemetry.ts` + wiring/service siblings; **`RunResource`** domain service |
 | Delete | `defineEvent`, `RunResourceHubTelemetry`, kernel `stateRef`, duplicate wire consts |
 
 ### Implementation slices (for other agents)
@@ -916,8 +951,8 @@ All steps 1–9 locked. Implementation agents may start slices; owner review wel
 | Slice | Deliverable |
 | --- | --- |
 | **A** | `Telemetry.Tag` factory + node handles + RunResource Tag port |
-| **B** | `Telemetry.Service` + `Telemetry.Wiring` + Calling API + OperationContext |
-| **C** | `internal/telemetry` — materialize, emit, operation runner, `Service.layer` |
+| **B** | `Wiring.sections` + `WiringConfig` + Calling API + `OperationContext` |
+| **C** | `internal/telemetry` — materialize, emit, operation runner, `Telemetry.layer` |
 | **D** | Registry + ArchiveSink wiring; delete `defineEvent` on RunResource |
 | **E** | Queue migration (separate branch) |
 
@@ -929,8 +964,8 @@ Update [21-state-vocabulary.md](../plans/21-state-vocabulary.md) when bake close
 
 1. Update plan 21 with locked outcomes.
 2. Slice A: `Telemetry.Tag` factory + RunResource Tag port.
-3. Slice B: `Telemetry.Service` + `Telemetry.Wiring` + Calling API + OperationContext.
-4. Slice C: `internal/telemetry` + `Service.layer` + hub bridge + `Scope.patch`.
+3. Slice B: `Wiring.sections` + `WiringConfig` + Calling API + `OperationContext`.
+4. Slice C: `internal/telemetry` + `Telemetry.layer` + router bridge + `Scope.patch`.
 5. Slice D: registry + RunResource hub bridge + delete `defineEvent`.
 6. Slice E: Queue on separate branch.
 

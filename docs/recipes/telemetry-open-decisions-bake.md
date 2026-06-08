@@ -4,67 +4,61 @@
 **Goal:** Lock identifier + factory details before implementer continues Step 1+.  
 **SSoT after bake:** [telemetry-requirements.md](./telemetry-requirements.md) change log.
 
-**RunResource module service (domain tag + kernel split):** **[run-resource-service-handoff.md](../handoffs/run-resource-service-handoff.md)** — implement **R1–R6** before or in parallel with telemetry Step 1 where scope/tag imports block.
+**RunResource domain module:** **[run-resource-service-handoff.md](../handoffs/run-resource-service-handoff.md)** — R1–R6.
 
 ---
 
-## Agreed direction (Jun 8 — owner, updated)
+## Locked (Jun 8 — owner)
 
-### RunResource domain module (locked — see handoff)
+### `Telemetry.Tag` signature
 
-- **`RunResource` = `Context.Service` class** — id `@nikscripts/effect-pm/RunResource`; shape = factory API (`RunResourceApi`).
-- **Drop `RunResourceIdentity.ts`** — domain identity is the service class; internal import from `internal/runResource/service.ts`.
-- **External tag for filters:** `Tag.RunResource` from `@nikscripts/effect-pm/Tags` only.
-- **Tag / kernel split** — kernel imports tag; tag does not import kernel (top-level).
-- **`RunResourceScope`** — class extending `State.Scope(RunResource)({ … })` (needs `State.ts` update).
-- **Do not** derive wire namespace from domain tag strings.
+```ts
+Telemetry.Tag<Self>(domain)(facetId, Telemetry.namespace("…"), …tree)
+```
 
-### Telemetry / facets (unchanged by RunResource service work)
-
-- **Facets are services** — `RunResourceTelemetry`, `RunResourceStore`, … same naming whether built with `.Tag` or `.Service`; **only layer attachment differs**.
-- **No `"Tag"` in service id strings or domain product class names** (e.g. not `RunResourceTag` for domain; telemetry tree name **O6** in handoff).
-- **`Telemetry.namespace("RunResource")`** — wire-only; domain link is a **separate factory arg**, not inside `namespace`.
-- Wire ids from **`Namespace.Group.Event`** — not from domain tag / `.key` / string splits.
-
----
-
-## Mise en place
-
-| Fact | Implication |
+| Slot | Lock |
 | --- | --- |
-| `export const RunResource = { … }` today | Becomes **`class RunResource` + statics**; barrel re-exports from kernel |
-| Step 0 shipped `RunResourceIdentity.ts` | **Delete** — superseded by service class |
-| `RunResourceStore` id `@nikscripts/effect-pm/store/RunResource/RunResourceStore` | Unchanged |
-| Effect v4 | `Context.Service` — domain + facets; see handoff for module layout |
+| **1st call** | Domain module **`Context.Service`** (e.g. **`RunResource`**) |
+| **2nd call, 1st arg** | Facet service id string (e.g. `@nikscripts/effect-pm/store/RunResource/RunResourceTelemetry`) |
+| **2nd call, 2nd arg** | **`Telemetry.namespace("RunResource")`** — wire prefix only |
+| **Wires** | **`Namespace.Group.Event`** from namespace — **not** from domain tag / `split` / `TypeTag` |
+
+### Facet product name
+
+- **`RunResourceTelemetry`** — Tag class + kernel calling export (not `RunResourceTag`).
+
+### Domain module
+
+- **`RunResource`** = `Context.Service` with factory API — see run-resource handoff.
+- **`Tag.RunResource`** from `@nikscripts/effect-pm/Tags` for filter inputs.
+- **Delete** `RunResourceIdentity.ts`.
+
+### Scopes
+
+- **`class RunResourceScope extends State.Scope(RunResource)({ … })`** — requires `State.ts` update (handoff O1).
+
+### Telemetry / facets (unchanged)
+
+- **`Telemetry.namespace`** — wire-only; **not** domain ref inside namespace.
+- Facets: **`RunResourceTelemetry`**, **`RunResourceStore`**, … — layer attachment differs, not product naming.
 
 ---
 
-## Locked ingredients
+## Open (telemetry-only)
 
-*(RunResource domain — see [run-resource-service-handoff.md](../handoffs/run-resource-service-handoff.md) § Locked decisions)*
-
----
-
-## Open recipe steps
-
-### RunResource module (handoff O1–O5)
-
-See [run-resource-service-handoff.md](../handoffs/run-resource-service-handoff.md) § Open decisions.
-
-### Telemetry-only (after R1–R4 / scope ready)
-
-1. **`Telemetry.Tag` factory signature** — domain ref + facet id + wire tree
-2. **Telemetry tree class name** — O6: `RunResourceTelemetry` vs doc `RunResourceTag`
-3. **Generated identity statics** — Effect v4 parity (`.key`, `Context.Service.Identifier`) if needed on facet classes
-4. *(deferred)* D5 snapshot schema, wiring namespace export, log legs, `state.from` typing
+| ID | Topic |
+| --- | --- |
+| **D5** | `RunResourceStateSchema` home before deleting debt telemetry file |
+| *(deferred)* | Wiring namespace export, log legs surface, `state.from` typing |
 
 ---
 
-## Rejected substitutions
+## Rejected
 
-- Hand-maintained `RunResourceIdentity.ts` with manual `TypeTag`/`TypeId` (Step 0 approach — superseded)
-- Hollow domain anchor (tag with no implementation shape)
-- Class or **domain** path names containing `Tag` (`RunResourceTag` as domain product)
-- Passing domain tag into `Telemetry.namespace`
-- Deriving wire prefix from domain service id string
-- `Telemetry.Tag` product named differently from what `.Service` would produce (facet naming)
+- Hand-maintained **`RunResourceIdentity.ts`**
+- **`RunResourceTag`** as facet / domain product name
+- **`Telemetry.Tag<Self>()(facetId, …)`** without **domain** in 1st call
+- **`Telemetry.Tag<…>(id)(`** / **`(id)(`** wrong arity
+- Deriving wire prefix from domain tag string
+- Passing domain into **`Telemetry.namespace`**
+- Hollow domain anchor service

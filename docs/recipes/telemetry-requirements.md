@@ -67,7 +67,7 @@ Replace hub-branch interim telemetry (`defineEvent`, hand wire consts, kernel `R
 
 | # | Name | Public surface | Role |
 | --- | --- | --- | --- |
-| **1** | **`Telemetry.Tag`** | `Telemetry.Tag<Self>()(id, …tree)` | **Skeleton + calling paths** — namespace, group, operation, event, start, exit, schemas, wire ids, **node handles (G)**. **No** extend, bind, pipe on events. |
+| **1** | **`Telemetry.Tag`** | `Telemetry.Tag<Self>(domain)(facetId, …tree)` | **Skeleton + calling paths** — **domain ref** (1st call), **facet id string** (1st arg of 2nd call), then `Telemetry.namespace`, groups, ops, events, schemas, wire ids, **node handles (G)**. **No** extend, bind, pipe on events. |
 | **2** | **Calling API** | Static paths on **Tag** (mirrored on facet export) | Operation builder → `{ input, telemetry, scope }`; **zero-arg** events; runner owns start/exit |
 | **3** | **Wiring** | `Wiring.sections(…)` + **`satisfies WiringConfig<Tag>`** | `Telemetry.extend`, `Telemetry.bind(…).pipe(log legs…)` → validated config; **not** a compose function |
 | **∴** | **Facet layer** | `Telemetry.layer(Tag, wiring)` | Facet runtime **`Layer`** (materialize, runner, telemetry state) — requires **`TelemetryRouter`** |
@@ -78,8 +78,8 @@ Replace hub-branch interim telemetry (`defineEvent`, hand wire consts, kernel `R
 ```text
 Author time                              Runtime (when facet .layer + router provided)
 ─────────────────────────────────────────────────────────────────────────────────────
-store/RunResourceTag.ts       API 1+2    Kernel: RunResourceTelemetry.* (same paths as Tag)
-  Telemetry.Tag(id, tree)
+store/RunResourceTelemetry.ts       API 1+2    Kernel: RunResourceTelemetry.* (same paths as Tag class)
+  Telemetry.Tag(RunResource)(facetId, Telemetry.namespace(...), tree)
 
 store/RunResourceTelemetry.wiring.ts  API 3
   Wiring.sections(extend, bind.pipe…) satisfies WiringConfig<Tag>
@@ -229,33 +229,26 @@ If a value is **already in scope** via `.provide()` on the op, **do not** duplic
 
 #### RunResource Tag (API 1) — schemas from golden branch, **operations** on call path
 
-Scopes (`src/RunResourceScope.ts`) — domain id from identity module, **not** the worker:
+**Domain module tag** — `Context.Service` class `RunResource` (`@nikscripts/effect-pm/RunResource`). Internal import from `internal/runResource/service.ts`; filter inputs via `Tag.RunResource` from `@nikscripts/effect-pm/Tags`. See [run-resource-service-handoff.md](../handoffs/run-resource-service-handoff.md).
+
+**Scopes** (`src/RunResourceScope.ts`) — **class** + domain tag (requires `State.Scope(domain)(fields)` — see plan 18):
 
 ```ts
-import { TypeTag as RunResourceTag } from "../RunResourceIdentity";
+import { RunResource } from "../internal/runResource/service";
 
-export const RunResourceScope = State.Scope(RunResourceTag, {
+class RunResourceScope extends State.Scope(RunResource)({
   resourceId: Schema.String,
-})(RunResourceTag);
+});
 
-export const RunScope = RunResourceScope.withLeaf("Run", {
+class RunScope extends RunResourceScope.withLeaf("Run", {
   runId: Schema.String,
-})(`@nikscripts/effect-pm/run/RunScope`);
+})("@nikscripts/effect-pm/run/RunScope");
 ```
 
-Identity (`src/RunResourceIdentity.ts`) — **only** these exports; facets import here, not `@nikscripts/effect-pm/RunResource`:
+**Wire helpers** — namespace segment **`"RunResource"`** comes from **`Telemetry.namespace("RunResource")`** on the Tag (author-facing). **Do not** derive wires from domain tag strings, `TypeTag`, or `domain.key.split`.
 
 ```ts
-export const TypeTag = "@nikscripts/effect-pm/RunResource";
-export const TypeId: unique symbol = Symbol.for(TypeTag);
-```
-
-Wire helpers — derive namespace from **`TypeTag`** inside factory/helpers (no author `Kind` export):
-
-```ts
-import { TypeTag as RunResourceTag } from "../RunResourceIdentity";
-
-export const STATE_WAITING_WIRE = telemetryWireId(RunResourceTag, ["State"], "Waiting");
+export const STATE_WAITING_WIRE = telemetryWireId("RunResource", ["State"], "Waiting");
 // …
 ```
 
@@ -315,7 +308,10 @@ class RunResourceStateChanged extends Telemetry.Schema<RunResourceStateChanged>(
 Tag tree — **`run` operation** owns Run start/exit; `State.Changed` standalone event:
 
 ```ts
-export class RunResourceTag extends Telemetry.Tag<RunResourceTag>(id)(
+import { RunResource } from "../internal/runResource/service";
+
+export class RunResourceTelemetry extends Telemetry.Tag<RunResourceTelemetry>(RunResource)(
+  "@nikscripts/effect-pm/store/RunResource/RunResourceTelemetry",
   Telemetry.namespace("RunResource"),
   Telemetry.group("Run")(
     Telemetry.operation("run")(
@@ -333,13 +329,15 @@ export class RunResourceTag extends Telemetry.Tag<RunResourceTag>(id)(
 ) {}
 ```
 
+**`Telemetry.Tag` shape (locked):** `Telemetry.Tag<Self>(domain)(facetId, Telemetry.namespace(...), …tree)` — domain in **first** call; facet id string is **first arg of second** call.
+
 Node handles (G) — wiring keys; wire ids stay `RunResource.Run.Started` (operation name **not** in wire):
 
 ```ts
-RunResourceTag.Run.run.Started          // start leg of `run` op
-RunResourceTag.Run.run.exit.onSuccess   // → Completed event handle (CHK-01)
-RunResourceTag.Run.run.exit.onFailure   // → Failed event handle
-RunResourceTag.State.Changed
+RunResourceTelemetry.Run.run.Started          // start leg of `run` op
+RunResourceTelemetry.Run.run.exit.onSuccess   // → Completed event handle (CHK-01)
+RunResourceTelemetry.Run.run.exit.onFailure   // → Failed event handle
+RunResourceTelemetry.State.Changed
 ```
 
 #### Queue entry operation (API 1) — `processEntry` stress case
@@ -563,9 +561,11 @@ Optional v2: `.gen(input, fn)` shortcut — **not v1**.
 **Locked entry points:**
 
 ```ts
-// store/RunResourceTag.ts — API 1 + 2
-export class RunResourceTag extends Telemetry.Tag<RunResourceTag>()(
-  "@nikscripts/effect-pm/store/RunResource/RunResourceTag",
+// store/RunResourceTelemetry.ts — API 1 + 2 (Tag class)
+import { RunResource } from "../internal/runResource/service";
+
+export class RunResourceTelemetry extends Telemetry.Tag<RunResourceTelemetry>(RunResource)(
+  "@nikscripts/effect-pm/store/RunResource/RunResourceTelemetry",
   Telemetry.namespace("RunResource"),
   Telemetry.group("Run")(
     Telemetry.operation("run")(
@@ -594,7 +594,7 @@ export const runResourceWiring = Wiring.sections(
     configVersion: Telemetry.metric.gauge,
   }),
 
-  Telemetry.bind(RunResourceTag.Run.run.Started, {
+  Telemetry.bind(RunResourceTelemetry.Run.run.Started, {
     payload: { concurrency: Telemetry.state.from((s) => s.gateConcurrency) },
   }).pipe(
     Telemetry.logWarning(
@@ -603,7 +603,7 @@ export const runResourceWiring = Wiring.sections(
     ),
   ),
 
-  Telemetry.bind(RunResourceTag.Run.run.exit.onFailure, {
+  Telemetry.bind(RunResourceTelemetry.Run.run.exit.onFailure, {
     payload: { durationMs: Exit.durationMs, cause: Exit.cause },
   }).pipe(
     Telemetry.logWarning(
@@ -612,7 +612,7 @@ export const runResourceWiring = Wiring.sections(
     ),
   ),
 
-  Telemetry.bind(RunResourceTag.State.Changed, {
+  Telemetry.bind(RunResourceTelemetry.State.Changed, {
     id: Telemetry.state.from((s) => s.stateChangeSeq),
     reason: Telemetry.state.from((s) => s.pendingReasonWire),
     previous: Telemetry.state.from((s) => s.pendingPreviousSnapshot),
@@ -623,21 +623,26 @@ export const runResourceWiring = Wiring.sections(
       ({ reason }) => ({ reason: String(reason) }),
     ),
   ),
-) satisfies WiringConfig<typeof RunResourceTag>
+) satisfies WiringConfig<typeof RunResourceTelemetry>
 
 // store/RunResourceTelemetry.service.ts — facet runtime Layer (regular Layer typing)
-export const runResourceLayer = Telemetry.layer(RunResourceTag, runResourceWiring)
+export const runResourceTelemetryLayer = Telemetry.layer(
+  RunResourceTelemetry,
+  runResourceWiring,
+)
 
-// store/RunResourceTelemetry.ts — facet export (Tag + .layer)
-export const RunResourceTelemetry = Telemetry.withLayer(RunResourceTag, runResourceLayer)
-export { RunResourceTag }
+// store/RunResourceTelemetry.ts (barrel) — Telemetry.withLayer(Tag, layer) for compose + kernel
+// (barrel wires withLayer at module load — same static-wiring pattern as domain RunResource)
+```
 
-// Kernel — same paths as Tag
+**Identity:** Tag declares **`facetId` once** (2nd-call first arg). **`RunResource`** (1st call) links facet to domain module tag. Wiring and layer use **`typeof RunResourceTelemetry`** — **no separate id** on wiring or layer factories.
+
+**Kernel** — same paths as Tag class:
+
+```ts
 yield* RunResourceTelemetry.Run.run.provide({ runId }).pipe(…)
 yield* RunResourceTelemetry.State.Changed
 ```
-
-**Identity:** Tag declares **`id` once**. Wiring and layer derive identity from Tag — **no separate id** on wiring or layer factories.
 
 #### `Telemetry.bind` + pipe (log legs)
 
@@ -647,7 +652,7 @@ yield* RunResourceTelemetry.State.Changed
 
 #### Node handles (G) + PlainFields
 
-Tag factory generates **`EventNode<Schema>`** handles (e.g. `RunResourceTag.Run.run.Started`).
+Tag factory generates **`EventNode<Schema>`** handles (e.g. `RunResourceTelemetry.Run.run.Started`).
 
 From each event schema, compute **`PlainFields<Schema>`** — plain `Schema.*` leaves not auto-materialized (see table below).
 
@@ -723,19 +728,11 @@ Each step has **deliverables**, **code target**, **acceptance**, and **verify co
 
 **Deliverables:**
 
-- Export subpaths for `Telemetry`, facet `store/<Domain>Telemetry`, optional `store/<Domain>Tag`.
-- Identity modules: `src/<Domain>Identity.ts` with `TypeTag` / `TypeId`.
+- Export subpaths for `Telemetry`, `store/RunResourceTelemetry`, `Tags`, `TelemetryRouter`.
+- Domain module tag: **`RunResource`** `Context.Service` (see [run-resource-service-handoff.md](../handoffs/run-resource-service-handoff.md)) — **not** `RunResourceIdentity.ts`.
 - Plan 21 vocabulary aligned (four state words, three APIs).
 
-```ts
-// src/RunResourceIdentity.ts
-export const TypeTag = "@nikscripts/effect-pm/RunResource";
-export const TypeId: unique symbol = Symbol.for(TypeTag);
-```
-
-Import with a local alias at use sites: `import { TypeTag as RunResourceTag } from "…/RunResourceIdentity"`.
-Use **`RunResourceTag`** for `State.Scope(…)`, `Telemetry.namespace(…)`, wire helpers — **not** a separate `Kind` export or raw `"RunResource"` string.
-Telemetry tree class name **`RunResourceTag`** (API 1) collides with that alias — prefer **`RunResourceTypeTag`** for identity imports if both appear in one file.
+**Supersedes:** Step 0 `RunResourceIdentity.ts` / `@nikscripts/effect-pm/RunResourceIdentity` — delete on RunResource service migration (R4).
 
 **Acceptance:** Docs map matches [§ Module layout](#10-module-layout--exports). No domain subfolders under `store/`.
 
@@ -745,25 +742,31 @@ Telemetry tree class name **`RunResourceTag`** (API 1) collides with that alias 
 
 **Deliverables:**
 
-- `Telemetry.Tag<Self>(id)(…tree DSL…)` class factory.
+- `Telemetry.Tag<Self>(domain)(facetId, …tree DSL…)` class factory.
+- **`domain`** — domain module `Context.Service` (e.g. `RunResource`) in **first** call.
+- **`facetId`** — facet service id string, **first arg of second** call.
 - `Telemetry.namespace`, `Telemetry.group`, `Telemetry.operation`, `Telemetry.start`, `Telemetry.exit`, `Telemetry.event`.
 - `Telemetry.Schema` base for event schemas.
-- Wire id generation (`Namespace.Group.Event`) — reuse/port `telemetryWireId` from internal store telemetry.
+- Wire id generation (`Namespace.Group.Event`) — **`Telemetry.namespace` only**; reuse/port `telemetryWireId` helper for literals in schemas/debt migration.
 - **Node handle (G) generation** on Tag class static tree.
 
-**Port from:** `origin/cursor/facet-telemetry-158c` `ProcessStore.telemetry` tree → `RunResourceTag`.
+**Port from:** `origin/cursor/facet-telemetry-158c` `ProcessStore.telemetry` tree → `RunResourceTelemetry`.
 
 **Acceptance:**
 
 ```ts
 // Compiles; no extend/bind/logWarning on Tag
-export class RunResourceTag extends Telemetry.Tag<RunResourceTag>(id)( … ) {}
+export class RunResourceTelemetry extends Telemetry.Tag<RunResourceTelemetry>(RunResource)(
+  "@nikscripts/effect-pm/store/RunResource/RunResourceTelemetry",
+  Telemetry.namespace("RunResource"),
+  /* … */
+) {}
 
 // Handles exist at compile time
-type _ = typeof RunResourceTag.Run.run.Started;
+type _ = typeof RunResourceTelemetry.Run.run.Started;
 ```
 
-**Files:** `src/Telemetry.ts` (or split), `src/store/RunResourceTag.ts`, schemas.
+**Files:** `src/Telemetry.ts` (or split), `src/store/RunResourceTelemetry.ts`, schemas.
 
 ---
 
@@ -771,9 +774,9 @@ type _ = typeof RunResourceTag.Run.run.Started;
 
 **Deliverables:**
 
-- Full RunResource event tree from golden branch as **`RunResourceTag`** skeleton.
+- Full RunResource event tree from golden branch as **`RunResourceTelemetry`** skeleton.
 - Schemas with scope selectors (`runId` from `RunScope`, not call-site payload).
-- Export via `store/RunResourceTelemetry` (Tag re-exported from Service file or sibling).
+- Export via `store/RunResourceTelemetry` (`Telemetry.withLayer` barrel).
 
 **Acceptance:** Tag module imports **without** hub layer. Tree matches golden branch wire layout.
 
@@ -796,10 +799,10 @@ type _ = typeof RunResourceTag.Run.run.Started;
 ```ts
 export const runResourceWiring = Wiring.sections(
   Telemetry.extend(RunResourceScope, { waiting: Telemetry.metric.gauge }),
-  Telemetry.bind(RunResourceTag.Run.run.Started, {
+  Telemetry.bind(RunResourceTelemetry.Run.run.Started, {
     payload: { concurrency: Telemetry.state.from((s) => s.gateConcurrency) },
   }),
-) satisfies WiringConfig<typeof RunResourceTag>
+) satisfies WiringConfig<typeof RunResourceTelemetry>
 ```
 
 ---
@@ -1158,27 +1161,27 @@ OR yield* Tag/Export.Group.Event (standalone Effect — root ambient; no .provid
 ## 10. Module layout & exports
 
 ```text
-src/Telemetry.ts                    — Tag, Wiring, layer, withLayer, registry
-src/TelemetryRouter.ts              — emit router (rename from TelemetryHub)
-src/internal/telemetry/             — runtime (materialize, runner, state Refs)
-src/RunResourceIdentity.ts          — TypeTag, TypeId
-store/RunResourceTag.ts             — API 1 + 2 (optional split)
-store/RunResourceTelemetry.wiring.ts — satisfies WiringConfig<Tag>
-store/RunResourceTelemetry.service.ts — Telemetry.layer
-store/RunResourceTelemetry.ts       — Telemetry.withLayer + re-export Tag
-store/RunResourceStore.ts           — archive facet
-src/RunResource.ts                  — worker kernel
-src/RunResourceProjection.ts        — live projection
-src/telemetryTransport.ts           — live wire (plan 19)
+src/Telemetry.ts                         — Tag, Wiring, layer, withLayer, registry
+src/TelemetryRouter.ts                   — emit router (rename from TelemetryHub)
+src/Tags.ts                              — Tag.RunResource, … (filter inputs)
+src/internal/runResource/service.ts    — RunResource domain Context.Service
+src/internal/telemetry/                  — runtime (materialize, runner, state Refs)
+src/store/RunResourceTelemetry.ts        — Tag class (API 1+2) + barrel withLayer
+src/store/RunResourceTelemetry.wiring.ts — satisfies WiringConfig<Tag>
+src/store/RunResourceTelemetry.service.ts — runResourceTelemetryLayer
+src/store/RunResourceStore.ts            — archive facet
+src/RunResource.ts                       — worker barrel (domain module)
+src/RunResourceProjection.ts             — live projection
+src/telemetryTransport.ts                — live wire (plan 19)
 ```
 
 | Item | Lock |
 | --- | --- |
 | Facet barrel | `store/<Domain>Telemetry.ts` → **`Telemetry.withLayer`** |
 | Wiring | sibling `*.wiring.ts` — **`satisfies WiringConfig<Tag>`** |
-| Tag split | Optional `<Domain>Tag.ts` for catalog-only |
+| Domain tag | `internal/<domain>/service.ts` + **`Tags.ts`** — **no** `<Domain>Identity.ts` |
 | Router subpath | `@nikscripts/effect-pm/TelemetryRouter` |
-| Identity subpath | `@nikscripts/effect-pm/<Domain>Identity` |
+| Tags subpath | `@nikscripts/effect-pm/Tags` |
 | Role folders | No domain subfolders under `store/` |
 | Shims | **None** |
 
@@ -1272,7 +1275,7 @@ Procedure.payload(Query).success(Result).failure(Error);
 
 | ID | Topic | Status | What to decide |
 | --- | --- | --- | --- |
-| **CHK-01** | Exit event handles | **LOCKED (authoring)** | `RunResourceTag.Run.run.exit.onFailure` etc. — wire ids omit operation name |
+| **CHK-01** | Exit event handles | **LOCKED (authoring)** | `RunResourceTelemetry.Run.run.exit.onFailure` etc. — wire ids omit operation name |
 | **CHK-03** | Facet export shape | **LOCKED** | **`Telemetry.withLayer(Tag, layer)`** — Tag paths + `.layer` |
 | **CHK-04** | Zero plain-field events in binds | **LOCKED** | **`Telemetry.bind` optional**; only `PlainFields ≠ never` required in **`WiringConfig.binds`** |
 | **CHK-05** | `Operation.input("key")` strict keys | **DEFERRED v2** | Best-effort v1. |
@@ -1282,7 +1285,7 @@ Procedure.payload(Query).success(Result).failure(Error);
 | **CHK-09** | `prepare` pipe leg | **DEFERRED** | Plan 17 phase 2 |
 | **CHK-12** | Optional plain fields (`Retried.error`) | **LOCKED** | Optional schema field → optional bind key |
 | **CHK-13** | `RateLimit.Exceeded` wiring | **DEFERRED** | Slice E (Queue) — full bind table there |
-| **CHK-14** | Identity subpath exact string | **LOCKED (authoring)** | `@nikscripts/effect-pm/RunResourceIdentity`; confirm on Step 0 export edit |
+| **CHK-14** | Domain + facet tag | **LOCKED (authoring)** | Domain: **`RunResource`** `@nikscripts/effect-pm/RunResource` + **`Tag.RunResource`**. Facet: **`RunResourceTelemetry`** `@nikscripts/effect-pm/store/RunResource/RunResourceTelemetry`. **Supersedes** `RunResourceIdentity` subpath. |
 | **CHK-15** | Standalone root-scoped events | **LOCKED** | Bare `yield* Tag/Export.Group.Event` when root ambient via `State.Scope.layer` |
 | **CHK-16** | Router rename | **LOCKED** | **`TelemetryRouter`** replaces **`TelemetryHub`** |
 | **CHK-17** | Bind exhaustiveness proof | **LOCKED** | **`satisfies WiringConfig<Tag>`** at define; **`*.test-d.ts`**; no fake error types |
@@ -1307,6 +1310,7 @@ Append when implementation adds something **not** in locked sections above.
 | --- | --- | --- | --- |
 | 2026-06-07 | cursor/telemetry-redesign-bake-faed | Calling API locked: op-only `.provide()`, events as Effects, exit-first ops, `Telemetry.start` via runner, root via `State.Scope` at lifetime | yes |
 | 2026-06-08 | cursor/telemetry-redesign-bake-faed | API revision: `Wiring.sections` + `satisfies WiringConfig<Tag>`; `Telemetry.bind(…).pipe(log legs)`; `Telemetry.layer` + `Telemetry.withLayer`; **`TelemetryRouter`** rename; bind exhaustiveness via real types not fake error objects; `telemetryTransport` via BroadcastSink | yes |
+| 2026-06-08 | cursor/telemetry-redesign-bake-faed | **`Telemetry.Tag<Self>(domain)(facetId, …tree)`** — domain in 1st call, facet id 1st arg of 2nd; wires from **`Telemetry.namespace` only**; facet class **`RunResourceTelemetry`**; domain **`RunResource`** service (supersedes `RunResourceIdentity`) | yes |
 
 ```markdown
 | YYYY-MM-DD | cursor/… | Description | yes/no |

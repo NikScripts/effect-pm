@@ -1,5 +1,8 @@
 # Handoff: Telemetry split bake session
 
+> **Bake closed (Jun 2026).** Implementation SSoT: [telemetry-requirements.md](../recipes/telemetry-requirements.md).
+> This handoff is **historical** — API names like **`Telemetry.Service`** in the prompt file are **withdrawn**.
+
 **Type:** owner bake (not implementation)  
 **Recipe:** [telemetry-split-bake.md](../recipes/telemetry-split-bake.md)  
 **Vocabulary:** [21-state-vocabulary.md](../plans/21-state-vocabulary.md)  

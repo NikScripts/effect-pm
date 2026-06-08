@@ -218,7 +218,7 @@ Telemetry Step 1+ should **import `RunResource` from internal service** for `Tel
 | **O3** | **`runResourceLayer` compose** | Is domain layer merged in `ProcessGroup.localEnvLayer` by default, or opt-in at app compose? Current namespace API needs no domain layer for static factories. |
 | **O4** | **`RunResourceApi` instance vs empty** | Layer can provide full `runResourceApi` or `{}` if only statics matter. Locked: layer **may** provide full api for `yield* RunResource` parity. |
 | **O5** | **`Tags.ts` subpath** | Confirm `./Tags` export path and barrel re-export from main index (if any). |
-| **O6** | **Telemetry tree class name** | Requirements doc still says `RunResourceTag` (API 1). Owner rule: no `*Tag` product names — likely **`RunResourceTelemetry`**. **Telemetry track — not blocking R1–R4.** |
+| **O6** | **Telemetry facet class name** | **Locked:** **`RunResourceTelemetry`** (not `RunResourceTag`). Tag signature: **`Telemetry.Tag<Self>(RunResource)(facetId, Telemetry.namespace(...), tree)`**. |
 
 ---
 

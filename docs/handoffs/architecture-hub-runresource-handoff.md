@@ -1,5 +1,9 @@
 # Architecture hub + RunResource vertical slice — main agent handoff
 
+> **Superseded (Jun 2026):** Target API is **`Telemetry.Tag` + `Wiring.sections` + `Telemetry.layer` +
+> **`Telemetry.withLayer`** — not **`Telemetry.Service`**. SSoT:
+> [telemetry-requirements.md](../recipes/telemetry-requirements.md).
+
 ## Branch
 
 **Implement on:** `cursor/hub-runresource-vertical`  

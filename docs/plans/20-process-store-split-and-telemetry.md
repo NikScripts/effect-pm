@@ -6,7 +6,8 @@ implementation slices.
 **Related:** [17-facet-telemetry-factory.md](./17-facet-telemetry-factory.md),
 [19-transport-boundaries.md](./19-transport-boundaries.md),
 [21-state-vocabulary.md](./21-state-vocabulary.md),
-[recipes/telemetry-split-bake.md](../recipes/telemetry-split-bake.md) (**`Telemetry.Tag` definition locked; runtime + layer open**),
+[recipes/telemetry-requirements.md](../recipes/telemetry-requirements.md) (**implementation SSoT — Jun 2026 API revision**),
+[recipes/telemetry-split-bake.md](../recipes/telemetry-split-bake.md) (bake discussion history),
 [06-runtime-hooks-config.md](./06-runtime-hooks-config.md),
 [STORAGE.md](../STORAGE.md).
 
@@ -39,7 +40,7 @@ Replace the monolithic facet class with **composable modules** per domain
 (`QueueResource`, `ProcessExecution`, …):
 
 ```text
-Telemetry.Tag    emit contract (namespace/group/operation/event) — R = TelemetryHub; not on *Store
+Telemetry.Tag    emit contract (namespace/group/operation/event) — R = TelemetryRouter; not on *Store
 Archive.*Store       durable persist + query/for         — RuntimeStorage in R
 Projection.*         live derived reads                  — hub sink; separate tag
 TelemetryState       in-memory metrics (telemetry only)  — never storage; bake: plan 21
@@ -77,11 +78,11 @@ Telemetry emit is **not** `spine.create`. It is:
 
 1. Validate payload against event schema (runtime).
 2. Build **domain event** value + wire metadata.
-3. Fan-out to zero or more **sinks** registered on a `TelemetryHub` (or per-domain hub).
+3. Fan-out to zero or more **sinks** registered on **`TelemetryRouter`** (legacy **`TelemetryHub`** alias).
 
 ```ts
-yield* RunResourceTelemetry.Run.Started({ ... })
-// R = TelemetryHub only (always)
+yield* RunResourceTelemetry.Run.run.provide({ runId })
+// R = TelemetryRouter only (always)
 // sinks (optional layers):
 //   ArchiveSink(RunResourceStore)    → RuntimeStorage.create
 //   ProjectionSink(RunResourceProjection) → in-memory read model
@@ -90,7 +91,8 @@ yield* RunResourceTelemetry.Run.Started({ ... })
 ```
 
 **Interim hub branch (debt):** `defineEvent` + `RunResourceHubTelemetry` — **replace**
-with `Telemetry.Service` + tree DSL; see [telemetry-split-bake.md](../recipes/telemetry-split-bake.md).
+with **`Telemetry.Tag` + `Wiring.sections` + `Telemetry.layer` + `Telemetry.withLayer`**;
+see [telemetry-requirements.md](../recipes/telemetry-requirements.md).
 
 **No store layer:** omit `ArchiveSink` — emit + projection + broadcast still work.
 
@@ -99,18 +101,18 @@ with `Telemetry.Service` + tree DSL; see [telemetry-split-bake.md](../recipes/te
 Static emit path (kernel):
 
 ```ts
-RunResourceTelemetry.Run.Started(input)  // Effect<void, E, TelemetryHub>
+RunResourceTelemetry.Run.run.provide({ runId })  // Effect<void, E, TelemetryRouter>
 ```
 
 not `yield* RunResourceStore` merged emit+read instance.
 
 ### Telemetry registry (required for siloing)
 
-- **`Telemetry.registry([...Telemetry.Service])`** — wire ids + schemas for hub sinks
-  and transports (bake: [telemetry-split-bake.md](../recipes/telemetry-split-bake.md) step 2).
+- **`Telemetry.registry([…Telemetry.withLayer exports…])`** — wire ids + schemas for hub sinks
+  and transports (requirements § Step 7).
 - **`ProcessStore.registry([...*Store])`** — archive facets only (queries / storeTransport).
 
-Domains declare events on `Telemetry.Service`; sinks opt in by wire id.
+Domains declare events on **`Telemetry.Tag`**; wiring on **`Wiring.sections`**; sinks opt in by wire id.
 
 ### Persist sink is optional, not built-in
 
@@ -166,7 +168,7 @@ Bottom → top:
 1. RuntimeStorage                    (optional)
 2. Archive.*Store.layerRuntimeStorage (optional, needs 1)
 3. Projection.*.layer                 (optional, in-memory)
-4. TelemetryHub.layer                 (registers sinks from 2–3 + transport)
+4. TelemetryRouter.layer              (registers sinks from 2–3 + transport)
 5. telemetryTransport.serverLayer     (optional broadcast sink)
 6. storeTransport.serverLayer         (archive registry only)
 7. Domain kernel                      (yield* Telemetry.* only)
@@ -250,9 +252,9 @@ dispatch tags.
 
 ## Migration phases (suggested)
 
-1. **Introduce `TelemetryHub` + optional sinks** — emit works with hub only (**shipped**;
-   replace interim `defineEvent` with `Telemetry.Service` tree).
-2. **Introduce `Telemetry.Service` + `Telemetry.registry`** — restore plan 17 DSL; decouple from `*Store`.
+1. **Introduce `TelemetryRouter` + optional sinks** — emit works with router only (**shipped**;
+   replace interim `defineEvent` with **`Telemetry.Tag` + wiring stack**).
+2. **Introduce `Wiring.sections` + `Telemetry.layer` + `Telemetry.registry`** — restore plan 17 DSL; decouple from `*Store`.
 3. **Telemetry state (in-memory)** — bake then implement per [21](./21-state-vocabulary.md).
 4. **Extract archive facets** — query/for without telemetry section (**RunResource pilot partial**).
 5. **Projection module** — RunResource pilot **shipped**; extend to Queue.
@@ -264,7 +266,7 @@ dispatch tags.
 
 ## Open questions
 
-1. **Hub scope** — one global `TelemetryHub` vs per-group/per-process hub tags?
+1. **Router scope** — one global **`TelemetryRouter`** vs per-group/per-process router tags? *(Locked: single global — see architecture recipe.)*
 2. **Projection consistency** — strong (apply before ack persist) vs eventual
    (broadcast before SQLite commit)?
 3. **Registry** — stay on archive builder or move to `storeTransport` only?
@@ -275,7 +277,7 @@ dispatch tags.
 
 ## Acceptance checks
 
-- [ ] `yield* RunResourceTelemetry.*` runs with **only** `TelemetryHub.layer` provided.
+- [ ] `yield* RunResourceTelemetry.*` runs with **only** `TelemetryRouter.layer` (or facet `.layer` requiring router) provided.
 - [ ] Telemetry state updates never call `RuntimeStorage`.
 - [ ] Process kernels do not read/write telemetry state.
 - [ ] Archive queries run with **only** `RuntimeStorage` + archive layer — no hub.
