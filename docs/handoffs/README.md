@@ -4,6 +4,8 @@
 
 | Handoff | Agent | Worktree | Branch | Prompt |
 | --- | --- | --- | --- | --- |
+| [run-resource-service-handoff.md](./run-resource-service-handoff.md) | **RunResource service** | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | Domain `Context.Service` + tag/kernel split; **before telemetry Step 1** |
+| [telemetry-implementation-handoff.md](./telemetry-implementation-handoff.md) | Telemetry impl | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | After / parallel R1–R4 from run-resource handoff |
 | [telemetry-split-bake-prompt.md](./telemetry-split-bake-prompt.md) | **Owner — paste to start** | any | — | Docs-only bake; recommended + DX forks |
 | [telemetry-split-bake-handoff.md](./telemetry-split-bake-handoff.md) | Owner bake | any | — | Context + after-bake order |
 | [telemetry-split-bake.md](../recipes/telemetry-split-bake.md) | Bake agent | any | — | Recipe ledger steps 1–7 |

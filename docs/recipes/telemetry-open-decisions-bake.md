@@ -1,48 +1,70 @@
 # Telemetry open decisions — bake
 
 **Branch:** `cursor/telemetry-redesign-bake-faed`  
-**Goal:** Lock remaining owner decisions while implementation agent ships agreed API (Steps 0–8).  
-**SSoT after bake:** append locked items to [telemetry-requirements.md](./telemetry-requirements.md) change log.
+**Goal:** Lock identifier + factory details before implementer continues Step 1+.  
+**SSoT after bake:** [telemetry-requirements.md](./telemetry-requirements.md) change log.
 
-**Non-goals:** Re-open locked API shape; implement factory code; resolve deferred CHKs 05–09, 13.
+**RunResource module service (domain tag + kernel split):** **[run-resource-service-handoff.md](../handoffs/run-resource-service-handoff.md)** — implement **R1–R6** before or in parallel with telemetry Step 1 where scope/tag imports block.
+
+---
+
+## Agreed direction (Jun 8 — owner, updated)
+
+### RunResource domain module (locked — see handoff)
+
+- **`RunResource` = `Context.Service` class** — id `@nikscripts/effect-pm/RunResource`; shape = factory API (`RunResourceApi`).
+- **Drop `RunResourceIdentity.ts`** — domain identity is the service class; internal import from `internal/runResource/service.ts`.
+- **External tag for filters:** `Tag.RunResource` from `@nikscripts/effect-pm/Tags` only.
+- **Tag / kernel split** — kernel imports tag; tag does not import kernel (top-level).
+- **`RunResourceScope`** — class extending `State.Scope(RunResource)({ … })` (needs `State.ts` update).
+- **Do not** derive wire namespace from domain tag strings.
+
+### Telemetry / facets (unchanged by RunResource service work)
+
+- **Facets are services** — `RunResourceTelemetry`, `RunResourceStore`, … same naming whether built with `.Tag` or `.Service`; **only layer attachment differs**.
+- **No `"Tag"` in service id strings or domain product class names** (e.g. not `RunResourceTag` for domain; telemetry tree name **O6** in handoff).
+- **`Telemetry.namespace("RunResource")`** — wire-only; domain link is a **separate factory arg**, not inside `namespace`.
+- Wire ids from **`Namespace.Group.Event`** — not from domain tag / `.key` / string splits.
 
 ---
 
 ## Mise en place
 
-| Fact | Source |
+| Fact | Implication |
 | --- | --- |
-| `RunResourceStateSchema` lives in debt `store/RunResourceTelemetry.ts` | Used by Store, Projection, kernel, barrel — **not telemetry-only** |
-| `STATE_CHANGE_REASONS` / wire reason literals | Same debt file; Store decode validates against them |
-| Event input schemas (`RunResourceRunStartedInputSchema`, …) | Debt file today → move to Tag/schemas in Step 2 |
-| Hidden telemetry fields (`gateConcurrency`, `pending*`, `stateChangeSeq`) | **Docs only** — names in requirements examples, not in code yet |
-| Log legs | Old `internal/store/telemetry.ts` has `logWarning` + identity `annotateLogs` stub |
-| Wiring examples | Requirements use bare **`Wiring.sections`**; handoff lists namespace as open |
-| Implementer order | Step 0–3 can proceed without D5 if schema extracted early; **Step 8 delete blocked until D5 locked** |
+| `export const RunResource = { … }` today | Becomes **`class RunResource` + statics**; barrel re-exports from kernel |
+| Step 0 shipped `RunResourceIdentity.ts` | **Delete** — superseded by service class |
+| `RunResourceStore` id `@nikscripts/effect-pm/store/RunResource/RunResourceStore` | Unchanged |
+| Effect v4 | `Context.Service` — domain + facets; see handoff for module layout |
 
 ---
 
 ## Locked ingredients
 
-- **`RunResourceIdentity`** — exports **`TypeTag`** + **`TypeId` only**; no separate `Kind` / `"RunResource"` literal at author sites.
-- **Import alias** — `import { TypeTag as RunResourceTag } from "…/RunResourceIdentity"` (or `RunResourceTypeTag` if avoiding collision with telemetry `RunResourceTag` class).
-- **Root scope** — `State.Scope(RunResourceTag, fields)(RunResourceTag)`; wire namespace derived from `TypeTag` inside factories, not a second exported string.
-- **`concurrency` on `RunResourceScope`** — process scope field, not telemetry extend (discussion; not implemented).
-- **`Telemetry.extend` two-arg** — returns `{ scope, schema, … }`; snapshot derived from scope + extend + implicit `observedAt` (discussion; not implemented).
+*(RunResource domain — see [run-resource-service-handoff.md](../handoffs/run-resource-service-handoff.md) § Locked decisions)*
 
 ---
 
 ## Open recipe steps
 
-1. **D5 — `RunResourceStateSchema` home**
-2. **Wiring namespace export**
-3. **Log legs v1 surface**
-4. **`Telemetry.state.from` typing model**
+### RunResource module (handoff O1–O5)
+
+See [run-resource-service-handoff.md](../handoffs/run-resource-service-handoff.md) § Open decisions.
+
+### Telemetry-only (after R1–R4 / scope ready)
+
+1. **`Telemetry.Tag` factory signature** — domain ref + facet id + wire tree
+2. **Telemetry tree class name** — O6: `RunResourceTelemetry` vs doc `RunResourceTag`
+3. **Generated identity statics** — Effect v4 parity (`.key`, `Context.Service.Identifier`) if needed on facet classes
+4. *(deferred)* D5 snapshot schema, wiring namespace export, log legs, `state.from` typing
 
 ---
 
 ## Rejected substitutions
 
-- Derive snapshot schema from `Telemetry.extend` at runtime only (no standalone schema for Store/Projection)
-- Keep schema in debt file through Step 8
-- String-key `Telemetry.state.from("gateConcurrency")`
+- Hand-maintained `RunResourceIdentity.ts` with manual `TypeTag`/`TypeId` (Step 0 approach — superseded)
+- Hollow domain anchor (tag with no implementation shape)
+- Class or **domain** path names containing `Tag` (`RunResourceTag` as domain product)
+- Passing domain tag into `Telemetry.namespace`
+- Deriving wire prefix from domain service id string
+- `Telemetry.Tag` product named differently from what `.Service` would produce (facet naming)
