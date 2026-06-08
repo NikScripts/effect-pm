@@ -26,7 +26,7 @@ import { telemetryWireId } from "./TelemetryRouter";
 // ============================================================================
 
 /** @internal */
-export const TelemetrySchemaTypeId = Symbol.for(
+export const TelemetrySchemaTypeId: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Telemetry/Schema",
 );
 
@@ -60,7 +60,8 @@ type TelemetrySchemaFields = Readonly<Record<string, TelemetrySchemaField>>;
 /** Classification of how each schema field sources its value at materialize. */
 type TelemetryInputFieldSource = TelemetryInputKind | "field";
 
-interface TelemetryInputField {
+/** @internal */
+export interface TelemetryInputField {
   readonly field: string;
   readonly source: TelemetryInputFieldSource;
 }
@@ -245,13 +246,12 @@ const telemetrySchema =
       fields,
       inputFields,
     } satisfies TelemetrySchemaDefinition;
-    return Object.assign(Base, definition, { Struct }) as unknown as typeof Base & {
-      readonly [TelemetrySchemaTypeId]: typeof TelemetrySchemaTypeId;
-      readonly scope: Scope;
-      readonly fields: Fields;
-      readonly inputFields: ReadonlyArray<TelemetryInputField>;
-      readonly Struct: typeof Struct;
-    };
+    return Object.assign(Base, definition, { Struct }) as unknown as typeof Base &
+      Omit<TelemetrySchemaDefinition, "scope" | "fields"> & {
+        readonly scope: Scope;
+        readonly fields: Fields;
+        readonly Struct: typeof Struct;
+      };
   };
 
 // ============================================================================
@@ -367,7 +367,7 @@ const group =
 // ============================================================================
 
 /** @internal */
-export const EventNodeTypeId = Symbol.for(
+export const EventNodeTypeId: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Telemetry/EventNode",
 );
 

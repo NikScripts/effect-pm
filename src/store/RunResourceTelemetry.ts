@@ -5,6 +5,9 @@
  */
 
 import { Effect, Schema } from "effect";
+import { RunResource } from "../internal/runResource/service";
+import { RunResourceScope, RunScope } from "../RunResourceScope";
+import { Telemetry } from "../Telemetry";
 import {
   defineEvent,
   emit,
@@ -196,3 +199,77 @@ export const RunResourceHubTelemetry = {
     changed: stateChanged,
   },
 } as const;
+
+// ============================================================================
+// Telemetry.Tag (Step 2 — new factory). Coexists with the `defineEvent` debt
+// above until the kernel migrates (Step 8), at which point the debt is deleted.
+// Schemas port the golden fields; `State.Changed` reuses the shared snapshot
+// struct (D5) and the wire-reason consts above.
+// ============================================================================
+
+const RunState = RunScope.Schema.State;
+
+/** `RunResource.Run.Started` wire payload. @public */
+export class RunResourceRunStarted extends Telemetry.Schema<RunResourceRunStarted>()(
+  RunScope,
+)({
+  runId: RunState.Run.runId,
+  occurredAt: Telemetry.terminal.clockMillis,
+  payload: Schema.Struct({ concurrency: Schema.Number }),
+}) {}
+
+/** `RunResource.Run.Completed` wire payload. @public */
+export class RunResourceRunCompleted extends Telemetry.Schema<RunResourceRunCompleted>()(
+  RunScope,
+)({
+  runId: RunState.Run.runId,
+  occurredAt: Telemetry.terminal.clockMillis,
+  payload: Schema.Struct({ durationMs: Schema.Number }),
+}) {}
+
+/** `RunResource.Run.Failed` wire payload. @public */
+export class RunResourceRunFailed extends Telemetry.Schema<RunResourceRunFailed>()(
+  RunScope,
+)({
+  runId: RunState.Run.runId,
+  occurredAt: Telemetry.terminal.clockMillis,
+  payload: Schema.Struct({ durationMs: Schema.Number, cause: Schema.String }),
+}) {}
+
+/** `RunResource.State.Changed` wire payload. @public */
+export class RunResourceStateChanged extends Telemetry.Schema<RunResourceStateChanged>()(
+  RunResourceScope,
+)({
+  id: Schema.String,
+  changedAt: Telemetry.terminal.clockMillis,
+  reason: Schema.Literals(STATE_CHANGE_REASONS),
+  previous: Schema.NullOr(RunResourceStateSchema),
+  current: RunResourceStateSchema,
+}) {}
+
+/**
+ * **`RunResourceTelemetry`** — the facet telemetry Tag (API 1). Targets the
+ * {@link RunResource} domain service; `run` operation owns the Run start/exit
+ * legs, `State.Changed` is a standalone root-scoped event.
+ *
+ * @public
+ */
+export class RunResourceTelemetry extends Telemetry.Tag<RunResourceTelemetry>(
+  RunResource,
+)(
+  "@nikscripts/effect-pm/store/RunResource/RunResourceTelemetry",
+  Telemetry.namespace("RunResource"),
+  Telemetry.group("Run")(
+    Telemetry.operation("run")(
+      RunScope,
+      Telemetry.start("Started", RunResourceRunStarted),
+      Telemetry.exit({
+        onSuccess: Telemetry.event("Completed", RunResourceRunCompleted),
+        onFailure: Telemetry.event("Failed", RunResourceRunFailed),
+      }),
+    ),
+  ),
+  Telemetry.group("State")(
+    Telemetry.event("Changed", RunResourceStateChanged),
+  ),
+) {}
