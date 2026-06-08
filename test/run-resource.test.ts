@@ -228,37 +228,92 @@ describe("RunResource.make (raw scoped)", () => {
 });
 
 describe("RunResource service (yield* RunResource, O4)", () => {
-  it.effect("runResourceLayer provides the factory api with static parity", () =>
+  it.effect("runResourceLayer provides the full factory api with static parity", () =>
     Effect.gen(function* () {
       const api = yield* RunResource;
 
-      // Full factory surface is present on the yielded service.
+      // Full factory surface is present on the yielded service…
       expect(typeof api.make).toBe("function");
       expect(typeof api.layer).toBe("function");
       expect(typeof api.Service).toBe("function");
       expect(typeof api.Tag).toBe("function");
       expect(typeof api.makeRunner).toBe("function");
 
-      // The layer provides the same object the statics were attached from.
+      // …and is the very same object the class statics were attached from.
       expect(api.make).toBe(RunResource.make);
+      expect(api.layer).toBe(RunResource.layer);
+      expect(api.Service).toBe(RunResource.Service);
+      expect(api.Tag).toBe(RunResource.Tag);
       expect(api.makeRunner).toBe(RunResource.makeRunner);
     }).pipe(Effect.provide(runResourceLayer)),
   );
 
-  it.live("the yielded api.make builds a working gate", () =>
+  it.live("api.make builds a working gate", () =>
     Effect.gen(function* () {
       const api = yield* RunResource;
       const gate = yield* api.make({
-        name: "@test/o4-gate",
+        name: "@test/o4-make",
         effect: (n: number) => Effect.succeed(n + 1),
         concurrency: 1,
       });
-      const result = yield* gate(41);
-      expect(result).toBe(42);
+      expect(yield* gate(41)).toBe(42);
     }).pipe(
       Effect.provide(runResourceLayer),
       Effect.provide(runResourceHubLayer),
       Effect.scoped,
     ),
+  );
+
+  it.live("api.Service builds a yieldable user gate via its baked layer", () =>
+    Effect.gen(function* () {
+      const api = yield* RunResource;
+      const Gate = api.Service<{ readonly _tag: "O4Svc" }, number, number, never>()(
+        "@test/o4-service",
+        { effect: (n) => Effect.succeed(n * 2), concurrency: 1 },
+      );
+      const result = yield* Effect.gen(function* () {
+        const gate = yield* Gate;
+        return yield* gate(21);
+      }).pipe(
+        Effect.provide(Gate.layer),
+        Effect.provide(runResourceHubLayer),
+        Effect.scoped,
+      );
+      expect(result).toBe(42);
+    }).pipe(Effect.provide(runResourceLayer)),
+  );
+
+  it.live("api.Tag + api.layer wire an identity gate", () =>
+    Effect.gen(function* () {
+      const api = yield* RunResource;
+      const Gate = api.Tag<{ readonly _tag: "O4Tag" }, number, number, never>()(
+        "@test/o4-tag",
+      );
+      const gateLayer = api.layer(Gate, {
+        effect: (n) => Effect.succeed(n + 1),
+        concurrency: 1,
+      });
+      const result = yield* Effect.gen(function* () {
+        const gate = yield* Gate;
+        return yield* gate(41);
+      }).pipe(
+        Effect.provide(gateLayer),
+        Effect.provide(runResourceHubLayer),
+        Effect.scoped,
+      );
+      expect(result).toBe(42);
+    }).pipe(Effect.provide(runResourceLayer)),
+  );
+
+  it.live("api.makeRunner gates an arbitrary effect", () =>
+    Effect.gen(function* () {
+      const api = yield* RunResource;
+      const Runner = api.makeRunner({ name: "@test/o4-runner", concurrency: 1 });
+      const result = yield* Effect.gen(function* () {
+        const run = yield* Runner;
+        return yield* run(Effect.succeed(7));
+      }).pipe(Effect.provide(Runner.layer), Effect.scoped);
+      expect(result).toBe(7);
+    }).pipe(Effect.provide(runResourceLayer)),
   );
 });
