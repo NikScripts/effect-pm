@@ -5,12 +5,12 @@
  */
 
 import { Schema } from "effect";
-import { TypeTag as RunResourceTag } from "./RunResourceIdentity";
+import { TypeTag as RunResourceTypeTag } from "./RunResourceIdentity";
 import { State } from "./State";
 
-export const RunResourceScope = State.Scope(RunResourceTag, {
+export const RunResourceScope = State.Scope(RunResourceTypeTag, {
   resourceId: Schema.String,
-})(RunResourceTag);
+})(RunResourceTypeTag);
 
 export const RunScope = RunResourceScope.withLeaf("Run", {
   runId: Schema.String,

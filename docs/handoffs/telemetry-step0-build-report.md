@@ -40,7 +40,8 @@ A second, transient `ERR_WORKER_OUT_OF_MEMORY` from the DTS worker was seen once
 
 | File | Change |
 | --- | --- |
-| `src/RunResourceIdentity.ts` | **New.** `Kind = "RunResource"`, `TypeTag = "@nikscripts/effect-pm/RunResource"`, `TypeId = Symbol.for(TypeTag)`. Import-free; shared by scope/telemetry/store/projection. |
+| `src/RunResourceIdentity.ts` | **New.** `TypeTag = "@nikscripts/effect-pm/RunResource"`, `TypeId = Symbol.for(TypeTag)` (+ `type TypeId` companion) — **no `Kind`**. Import-free; shared by scope/telemetry/store/projection. |
+| `src/RunResourceScope.ts` | Wired to aliased `TypeTag` — `State.Scope(RunResourceTypeTag, { resourceId })(RunResourceTypeTag)`. |
 | `src/TelemetryRouter.ts` | **New.** Canonical-name alias: `export * from "./TelemetryHub"` + `export { TelemetryHub as TelemetryRouter }`. Same class, same `Context` id `@nikscripts/effect-pm/TelemetryHub` → one shared instance. New telemetry code imports `TelemetryRouter` from here. |
 | `tsup.config.ts` | Added entries `RunResourceIdentity`, `TelemetryRouter`. `TelemetryHub` kept (legacy). |
 | `package.json` | Added exports `./RunResourceIdentity`, `./TelemetryRouter`. `./TelemetryHub` kept (legacy). |
@@ -127,7 +128,7 @@ Pre-existing `logTransportWebSocket.ts` DTS failure — owner has **not** blocke
 | Item | Status |
 | --- | --- |
 | Remove `Kind` from `RunResourceIdentity` | ✅ Exports `TypeTag` + `TypeId` only (`type TypeId` companion kept; no `Kind`, no `"RunResource"` literal). |
-| `RunResourceScope` → aliased `TypeTag` | ✅ `import { TypeTag as RunResourceTag } from "./RunResourceIdentity"` → `State.Scope(RunResourceTag, { resourceId })(RunResourceTag)`. Scope `kind` + `Context` id are now the `TypeTag` string. |
+| `RunResourceScope` → aliased `TypeTag` | ✅ `import { TypeTag as RunResourceTypeTag } from "./RunResourceIdentity"` → `State.Scope(RunResourceTypeTag, { resourceId })(RunResourceTypeTag)`. Scope `kind` + `Context` id are now the `TypeTag` string. (`RunResourceTag` reserved for the API 1 telemetry tree class per owner follow-up.) |
 | `TelemetryRouter` alias direction | ✅ Accepted as interim per review. |
 | Effective gate after corrections | ✅ `typecheck` + `test` (392/392) + `lint` green. `build` still pre-existing red (`logTransportWebSocket.ts`). |
 
@@ -138,3 +139,50 @@ Pre-existing `logTransportWebSocket.ts` DTS failure — owner has **not** blocke
 **Note — `RunScope` leaf id unchanged:** `RunResourceScope.withLeaf("Run", …)("@nikscripts/effect-pm/run/RunScope")` still uses the older `/run/` path. Not directed by the review; flagged for consistency follow-up.
 
 **Recovery note:** a `git stash -u` during the build verification (HEAD comparison) plus an overlapping owner edit pass left the tree partially reset; Step 0 files were recovered surgically from the stash (`RunResourceIdentity.ts` from `^3`, `package.json`/`tsup.config.ts` from the stash tree) and the stash dropped. No work lost.
+
+---
+
+## Follow-up instructions — owner verification 2026-06-08
+
+**Status:** Step 0 identity + router corrections **verified in tree**. You may proceed to **Step 1** (`Telemetry.Tag` factory).
+
+### Doc hygiene (do first)
+
+1. **Fix stale "What landed" table** (§ above) — line 43 still says `Kind = "RunResource"`. Update to match shipped code: `TypeTag` + `TypeId` only; note `RunResourceScope` wired to aliased `TypeTag`.
+
+### Step 1 — implement now
+
+1. **`src/Telemetry.ts`** — Tag factory skeleton per [telemetry-requirements.md § Step 1](../recipes/telemetry-requirements.md).
+2. **Wire namespace from `TypeTag`** — implement derivation inside factory/helper (final `/` segment of `TypeTag` → `"RunResource"` passed to `telemetryWireId`). **Do not** add a `Kind` export or author-facing `"RunResource"` constant.
+3. **Identity import pattern** — `import { TypeTag as RunResourceTypeTag } from "@nikscripts/effect-pm/RunResourceIdentity"` at Tag/scope call sites; reserve **`RunResourceTag`** as the telemetry tree **class** name (API 1).
+4. **`./Telemetry` export** — add `package.json` + `tsup.config.ts` entry when `src/Telemetry.ts` exists and builds.
+5. **New code** — import **`TelemetryRouter`** from `@nikscripts/effect-pm/TelemetryRouter`; do not add new `TelemetryHub` imports.
+
+### Step 2 — after Step 1 gate
+
+1. **`RunResourceTag`** port from golden branch (schemas + tree; no wiring on Tag).
+2. Add **`store/RunResourceTag`** / **`store/RunResourceTelemetry`** subpaths when those modules exist.
+
+### Follow-up (not blocking Step 1)
+
+| Item | When |
+| --- | --- |
+| `RunScope` leaf id `"@nikscripts/effect-pm/run/RunScope"` vs `TypeTag`-based naming | Consistency pass — align with owner before bulk scope migration |
+| `store/RunResourceTelemetry.ts` raw `"RunResource"` wire literals | Replace when Tag factory lands or wire helper accepts `TypeTag` |
+| `TelemetryHub` → physical class/id rename | Final cleanup after all importers use `TelemetryRouter` |
+| `logTransportWebSocket.ts` build DTS failure | Separate track — owner has not blocked telemetry on `build` yet |
+| Requirements change log | Append router alias interim + identity `TypeTag`-only decision when you next edit requirements |
+
+### Gate (unchanged)
+
+```text
+pnpm run typecheck && pnpm test && pnpm run lint
+```
+
+Run **`pnpm run build`** for telemetry-touched files when feasible; full-package `build` may remain red until `logTransportWebSocket.ts` is migrated.
+
+### Do not regress
+
+- **No `Kind` export** on `RunResourceIdentity`.
+- **No raw `"RunResource"`** at new author sites — derive from `TypeTag` or use aliased import.
+- **No `Telemetry.Service` / handle-keyed wiring objects** — see handoff rejected list.
