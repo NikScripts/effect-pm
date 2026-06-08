@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Ref } from "effect";
-import { RunResource } from "../src/RunResource";
+import { RunResource, runResourceLayer } from "../src/RunResource";
 import { layer as hubLayer } from "../src/TelemetryHub";
 import { processStorageWithRunResourceArchiveLayer } from "../src/ProcessStorage";
 import { RunResourceStore } from "../src/store/RunResource";
@@ -224,5 +224,41 @@ describe("RunResource.make (raw scoped)", () => {
       expect(paired[0]?.outcome).toBe("completed");
       expect(paired[0]?.resourceId).toBe(resourceId);
     }).pipe(Effect.provide(runResourceObservationLayer), Effect.scoped),
+  );
+});
+
+describe("RunResource service (yield* RunResource, O4)", () => {
+  it.effect("runResourceLayer provides the factory api with static parity", () =>
+    Effect.gen(function* () {
+      const api = yield* RunResource;
+
+      // Full factory surface is present on the yielded service.
+      expect(typeof api.make).toBe("function");
+      expect(typeof api.layer).toBe("function");
+      expect(typeof api.Service).toBe("function");
+      expect(typeof api.Tag).toBe("function");
+      expect(typeof api.makeRunner).toBe("function");
+
+      // The layer provides the same object the statics were attached from.
+      expect(api.make).toBe(RunResource.make);
+      expect(api.makeRunner).toBe(RunResource.makeRunner);
+    }).pipe(Effect.provide(runResourceLayer)),
+  );
+
+  it.live("the yielded api.make builds a working gate", () =>
+    Effect.gen(function* () {
+      const api = yield* RunResource;
+      const gate = yield* api.make({
+        name: "@test/o4-gate",
+        effect: (n: number) => Effect.succeed(n + 1),
+        concurrency: 1,
+      });
+      const result = yield* gate(41);
+      expect(result).toBe(42);
+    }).pipe(
+      Effect.provide(runResourceLayer),
+      Effect.provide(runResourceHubLayer),
+      Effect.scoped,
+    ),
   );
 });
