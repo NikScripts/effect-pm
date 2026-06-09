@@ -25,12 +25,9 @@ describe("Telemetry wiring (Step 3a value layer)", () => {
         cause: Telemetry.source.exit.cause,
       },
     }),
-    Telemetry.bind(RunResourceTelemetry.State.Changed, {
-      id: Telemetry.state.from((s) => s["stateChangeSeq"]),
-      reason: Telemetry.state.from((s) => s["pendingReasonWire"]),
-      previous: Telemetry.state.from((s) => s["pendingPreviousSnapshot"]),
-      current: Telemetry.state.from((s) => s["pendingCurrentSnapshot"]),
-    }),
+    // NOTE: RunResourceTelemetry.State.Changed binds (id/reason/previous/current)
+    // are deferred — `current` materializes from the State.Root envelope, not
+    // wiring state. See state-root-telemetry-resume-handoff.md §1/§2.
   );
 
   it("collects extend sections keyed nothing, binds keyed by node path", () => {
@@ -42,10 +39,11 @@ describe("Telemetry wiring (Step 3a value layer)", () => {
     expect(Object.keys(wiring.binds).sort()).toEqual([
       "Run.run.Started",
       "Run.run.exit.onFailure",
-      "State.Changed",
     ]);
     expect(wiring.binds["Run.run.Started"]?.wire).toBe("RunResource.Run.Started");
-    expect(wiring.binds["State.Changed"]?.wire).toBe("RunResource.State.Changed");
+    expect(wiring.binds["Run.run.exit.onFailure"]?.wire).toBe(
+      "RunResource.Run.Failed",
+    );
   });
 
   it("accumulates log legs from bind.pipe", () => {

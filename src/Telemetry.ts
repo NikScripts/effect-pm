@@ -18,6 +18,7 @@ import { Layer, Schema } from "effect";
 import { isRecord } from "./internal/json";
 import {
   getStateFieldSelectorMetadata,
+  StateFieldSelectorTypeId,
 } from "./State";
 import { telemetryWireId, TelemetryRouter } from "./TelemetryRouter";
 
@@ -102,14 +103,6 @@ export type TelemetrySchemaClass<
   readonly Type: Schema.Schema.Type<Schema.Struct<WireFields>>;
 };
 
-/**
- * Plain `Schema.*` leaves on a telemetry schema that require wiring `bind`.
- * Internal to wiring exhaustiveness — not the public wire payload type.
- * Full type-level computation lands in Step 3 (`WiringConfig`).
- *
- * @internal
- */
-export type PlainFields<_Fields extends TelemetrySchemaFields> = Record<never, never>;
 
 const getTerminal = (value: unknown): TelemetryTerminal | undefined =>
   isRecord(value) && TELEMETRY_TERMINAL_KEY in value
@@ -378,11 +371,13 @@ export const EventNodeTypeId: unique symbol = Symbol.for(
  *
  * @public
  */
-export interface EventNode<S> {
+export interface EventNode<S, Path extends string = string> {
   readonly [EventNodeTypeId]: typeof EventNodeTypeId;
   readonly wire: string;
   readonly path: ReadonlyArray<string>;
   readonly schema: S;
+  /** Phantom: dot-joined handle path (`Group.op.Event`) — wiring bind key. */
+  readonly _path?: Path;
 }
 
 type UnionToIntersection<U> = (
@@ -391,34 +386,41 @@ type UnionToIntersection<U> = (
   ? I
   : never;
 
-type ExitHandles<Legs extends ExitLegs> = {
+type ExitHandles<Legs extends ExitLegs, Prefix extends string> = {
   readonly [K in keyof Legs as Legs[K] extends EventDef<string, unknown>
     ? K
-    : never]: Legs[K] extends EventDef<string, infer S> ? EventNode<S> : never;
+    : never]: Legs[K] extends EventDef<string, infer S>
+    ? EventNode<S, `${Prefix}.${K & string}`>
+    : never;
 };
 
-type OperationPartHandle<P> = P extends StartDef<infer Name, infer S>
-  ? { readonly [K in Name]: EventNode<S> }
+type OperationPartHandle<P, Prefix extends string> = P extends StartDef<infer Name, infer S>
+  ? { readonly [K in Name]: EventNode<S, `${Prefix}.${Name}`> }
   : P extends ExitDef<infer Legs>
-    ? { readonly exit: ExitHandles<Legs> }
+    ? { readonly exit: ExitHandles<Legs, `${Prefix}.exit`> }
     : P extends OperationDef<infer Name, unknown, infer Parts>
-      ? { readonly [K in Name]: OperationHandle<Parts> }
+      ? { readonly [K in Name]: OperationHandle<Parts, `${Prefix}.${Name}`> }
       : P extends EventDef<infer Name, infer S>
-        ? { readonly [K in Name]: EventNode<S> }
+        ? { readonly [K in Name]: EventNode<S, `${Prefix}.${Name}`> }
         : never;
 
-type OperationHandle<Parts extends ReadonlyArray<unknown>> = UnionToIntersection<
-  OperationPartHandle<Parts[number]>
->;
+type OperationHandle<
+  Parts extends ReadonlyArray<unknown>,
+  Prefix extends string,
+> = UnionToIntersection<OperationPartHandle<Parts[number], Prefix>>;
 
-type GroupChildHandle<C> = C extends OperationDef<infer Name, unknown, infer Parts>
-  ? { readonly [K in Name]: OperationHandle<Parts> }
+type GroupChildHandle<C, Prefix extends string> = C extends OperationDef<
+  infer Name,
+  unknown,
+  infer Parts
+>
+  ? { readonly [K in Name]: OperationHandle<Parts, `${Prefix}.${Name}`> }
   : C extends EventDef<infer Name, infer S>
-    ? { readonly [K in Name]: EventNode<S> }
+    ? { readonly [K in Name]: EventNode<S, `${Prefix}.${Name}`> }
     : never;
 
 type GroupHandle<G> = G extends GroupDef<infer Name, infer Children>
-  ? { readonly [K in Name]: UnionToIntersection<GroupChildHandle<Children[number]>> }
+  ? { readonly [K in Name]: UnionToIntersection<GroupChildHandle<Children[number], Name>> }
   : never;
 
 type TagHandles<Groups extends ReadonlyArray<unknown>> = UnionToIntersection<
@@ -443,6 +445,8 @@ export type TelemetryTagClass<
     readonly facetId: string;
     readonly target: Target;
     readonly _self?: Self;
+    /** Phantom: the tree groups, for `RequiredBindMap` derivation. */
+    readonly _groups?: Groups;
   };
 
 const makeEventNode = (
@@ -656,8 +660,121 @@ const makeBind = (
   },
 });
 
-const bind = (handle: EventNode<unknown>, fields: BindFieldMap): BindSection =>
-  makeBind(handle.path.join("."), handle.wire, fields, []);
+// ── Exhaustiveness (PlainFields → RequiredBindMap) ──────────────────────────
+
+/** A field that materializes automatically (no wiring `bind`). */
+type AutoField<F> = F extends { readonly [StateFieldSelectorTypeId]: unknown }
+  ? true // scope-bound selector
+  : F extends TelemetryTerminal
+    ? true // terminal (clock / duration)
+    : F extends TelemetryInput
+      ? true // op-input marker
+      : [F] extends [string | number | boolean | null]
+        ? true // raw literal value
+        : false;
+
+/**
+ * Keys of an event schema's author fields that require a wiring `bind` — plain
+ * `Schema.*` / nested structs, excluding scope-bound, terminal, input, and
+ * raw-literal fields (which materialize automatically).
+ *
+ * @internal
+ */
+export type PlainFields<Fields extends TelemetrySchemaFields> = keyof {
+  [K in keyof Fields as AutoField<Fields[K]> extends true ? never : K]: 0;
+} &
+  string;
+
+type SchemaFieldsOf<S> = S extends { readonly fields: infer F }
+  ? F extends TelemetrySchemaFields
+    ? F
+    : never
+  : never;
+
+/**
+ * The `bind` field map for an event schema — one entry per {@link PlainFields}
+ * key. Each value is a {@link FieldSource} or a nested map (for struct / nested
+ * schema fields). v1 enforces **key exhaustiveness**; precise per-leaf nesting
+ * is deferred (nested struct types widen through the field-union constraint).
+ *
+ * @internal
+ */
+export type BindFields<Fields extends TelemetrySchemaFields> = {
+  readonly [K in PlainFields<Fields>]: FieldSource | BindFieldMap;
+};
+
+/** A `bind` section carrying its node path literal for exhaustiveness keying. */
+export interface BoundSection<Path extends string> extends BindSection {
+  readonly _bindPath?: Path;
+  readonly pipe: (...legs: ReadonlyArray<BindLeg>) => BoundSection<Path>;
+}
+
+type RequiredBindEntry<Path extends string, S> = [
+  PlainFields<SchemaFieldsOf<S>>,
+] extends [never]
+  ? never
+  : { readonly [P in Path]: unknown };
+
+type ExitBinds<Legs extends ExitLegs, Prefix extends string> = UnionToIntersection<
+  {
+    [K in keyof Legs]: Legs[K] extends EventDef<string, infer S>
+      ? RequiredBindEntry<`${Prefix}.${K & string}`, S>
+      : never;
+  }[keyof Legs]
+>;
+
+type OperationBinds<P, Prefix extends string> = P extends StartDef<infer Name, infer S>
+  ? RequiredBindEntry<`${Prefix}.${Name}`, S>
+  : P extends ExitDef<infer Legs>
+    ? ExitBinds<Legs, `${Prefix}.exit`>
+    : P extends OperationDef<infer Name, unknown, infer Parts>
+      ? UnionToIntersection<OperationBinds<Parts[number], `${Prefix}.${Name}`>>
+      : P extends EventDef<infer Name, infer S>
+        ? RequiredBindEntry<`${Prefix}.${Name}`, S>
+        : never;
+
+type GroupBinds<C, Prefix extends string> = C extends OperationDef<
+  infer Name,
+  unknown,
+  infer Parts
+>
+  ? UnionToIntersection<OperationBinds<Parts[number], `${Prefix}.${Name}`>>
+  : C extends EventDef<infer Name, infer S>
+    ? RequiredBindEntry<`${Prefix}.${Name}`, S>
+    : never;
+
+type TagBinds<G> = G extends GroupDef<infer Name, infer Children>
+  ? UnionToIntersection<GroupBinds<Children[number], Name>>
+  : never;
+
+/**
+ * The exhaustive set of event-node binds a Tag's wiring must supply — every
+ * node whose schema has {@link PlainFields} (zero-plain-field nodes are
+ * optional). Keyed by node path; values unchecked (per-bind shape is enforced
+ * by {@link Telemetry.bind}).
+ *
+ * @internal
+ */
+export type RequiredBindMap<Tag> = Tag extends { readonly _groups?: infer G }
+  ? NonNullable<G> extends ReadonlyArray<unknown>
+    ? UnionToIntersection<TagBinds<NonNullable<G>[number]>>
+    : unknown
+  : unknown;
+
+type BoundPathEntry<S> = S extends BoundSection<infer P>
+  ? { readonly [K in P]: BindSection }
+  : never;
+
+/** The binds a `Wiring.sections(...)` call actually supplied, keyed by path. */
+type BindsOf<Sections extends ReadonlyArray<unknown>> = UnionToIntersection<
+  BoundPathEntry<Sections[number]>
+>;
+
+const bind = <S, Path extends string>(
+  handle: EventNode<S, Path>,
+  fields: BindFields<SchemaFieldsOf<S>>,
+): BoundSection<Path> =>
+  makeBind(handle.path.join("."), handle.wire, fields as BindFieldMap, []);
 
 const logLeg =
   (kind: LogLeg["kind"]) =>
@@ -681,13 +798,21 @@ export type WiringSection = ExtendSection | BindSection;
  *
  * @public
  */
-export interface WiringConfig<_Tag = unknown> {
+export interface WiringConfig<Tag = unknown> {
   readonly extend: ReadonlyArray<ExtendSection>;
-  readonly binds: Readonly<Record<string, BindSection>>;
+  readonly binds: RequiredBindMap<Tag>;
   readonly logs: ReadonlyArray<{ readonly path: string; readonly legs: ReadonlyArray<LogLeg> }>;
 }
 
-const sections = (...parts: ReadonlyArray<WiringSection>): WiringConfig => {
+const sections = <
+  const Sections extends ReadonlyArray<ExtendSection | BoundSection<string>>,
+>(
+  ...parts: Sections
+): {
+  readonly extend: ReadonlyArray<ExtendSection>;
+  readonly binds: BindsOf<Sections>;
+  readonly logs: ReadonlyArray<{ readonly path: string; readonly legs: ReadonlyArray<LogLeg> }>;
+} => {
   const extendSections: Array<ExtendSection> = [];
   const binds: Record<string, BindSection> = {};
   const logs: Array<{ readonly path: string; readonly legs: ReadonlyArray<LogLeg> }> = [];
@@ -701,7 +826,11 @@ const sections = (...parts: ReadonlyArray<WiringSection>): WiringConfig => {
       }
     }
   }
-  return { extend: extendSections, binds, logs };
+  return {
+    extend: extendSections,
+    binds: binds as BindsOf<Sections>,
+    logs,
+  };
 };
 
 /** Facet wiring collector. @public */

@@ -3,6 +3,7 @@
 **Branch:** `cursor/telemetry-redesign-bake-faed`  
 **Audience:** implementation agent (including author of [telemetry-recon-findings.md](../recipes/telemetry-recon-findings.md))  
 **Gate (SSoT):** [telemetry-requirements.md](../recipes/telemetry-requirements.md) — **read this first for API shape**  
+**Resume (Jun 2026):** [state-root-telemetry-resume-handoff.md](./state-root-telemetry-resume-handoff.md) — **`State.Root` lock**, Step 3b/4 continue, **pause Step 5–6**, drop `pending*` scratch fields  
 **Prerequisite:** [run-resource-service-handoff.md](./run-resource-service-handoff.md) **R1–R4** (domain `RunResource` tag before facet Tag / scopes)  
 **Change log:** requirements doc § Implementation change log (**2026-06-08 API revision** + Tag signature)
 

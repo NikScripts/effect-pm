@@ -22,7 +22,7 @@ type StructFields = Schema.Struct.Fields;
 type StructFromFields<Fields extends StructFields> = Schema.Struct<Fields>;
 type ValueOf<Fields extends StructFields> = Schema.Struct.Type<Fields>;
 
-export const StateFieldSelectorTypeId = Symbol.for(
+export const StateFieldSelectorTypeId: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/State/FieldSelector",
 );
 
