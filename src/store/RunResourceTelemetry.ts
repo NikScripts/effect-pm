@@ -5,7 +5,7 @@
  */
 
 import { Effect, Schema } from "effect";
-import { RunResource } from "../internal/runResource/service";
+import { RunResource } from "../RunResource";
 import { RunResourceScope, RunScope } from "../RunResourceScope";
 import { Telemetry } from "../Telemetry";
 import {

@@ -69,8 +69,8 @@ Telemetry.Tag<Self>(domain)(facetId, Telemetry.namespace("…"), …tree)
 
 | ID | Topic | Status |
 | --- | --- | --- |
-| **D5** | **`RunResourceState` snapshot** — plain struct vs `Telemetry.Schema` class vs extend-derived | **Active bake step** |
-| *(deferred)* | Wiring namespace export, log legs surface, `state.from` typing | After D5 + Step 3 |
+| **D5** | **`RunResourceSnapshotSchema`** (nested) | **Locked** | [state-root-bake.md](./state-root-bake.md) § Canonical schemas |
+| *(deferred)* | Wiring namespace export, log legs surface | After `State.Root` impl |
 
 ---
 

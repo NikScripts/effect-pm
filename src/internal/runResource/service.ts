@@ -3,9 +3,14 @@
  * shape. **No kernel import at top level** (one-way dependency: `kernel.ts`
  * imports this module, never the reverse).
  *
+ * {@link RunResource} is declared in {@link ../../RunResource | `RunResource.ts`}
+ * (public module path — Effect `deterministicKeys`). This module holds
+ * {@link RunResourceApi} and related public types only.
+ *
  * The concrete factory implementations live in
  * {@link ../runResource/kernel | `kernel.ts`}, which attaches them as statics on
- * {@link RunResource} and provides them via `runResourceLayer`.
+ * {@link RunResource} and provides them via `runResourceLayer`. Apps import the
+ * factory surface from {@link ../../RunResourceModule | `RunResourceModule.ts`}.
  *
  * @module internal/runResource/service
  * @internal
@@ -200,22 +205,6 @@ export interface RunResourceApi {
     config: RunResourceRunnerConfig & { readonly name: Name },
   ) => RunResourceRunnerDefinition<Name>;
 }
-
-// ============================================================================
-// Domain service tag
-// ============================================================================
-
-/**
- * **`RunResource`** — the concurrency-gate domain service. A real
- * `Context.Service` (id `@nikscripts/effect-pm/RunResource`) whose shape is
- * {@link RunResourceApi}. The factory statics (`make`, `layer`, `Service`,
- * `Tag`, `makeRunner`) are attached in `kernel.ts`.
- *
- * @public
- */
-export class RunResource extends Context.Service<RunResource, RunResourceApi>()(
-  "@nikscripts/effect-pm/RunResource",
-) {}
 
 // Keep the historical re-export name available for downstream imports during
 // migration (the worker barrel re-exports these from here).

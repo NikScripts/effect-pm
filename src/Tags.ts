@@ -4,12 +4,13 @@
  *
  * `Tag.RunResource` is a `Context.Service` class (id
  * `@nikscripts/effect-pm/RunResource`). In-repo modules import the class
- * directly from its service module; this aggregator is for downstream apps.
+ * directly from {@link ./RunResource | `RunResource.ts`}; this aggregator is for
+ * downstream apps.
  *
  * @module Tags
  */
 
-import { RunResource } from "./internal/runResource/kernel";
+import { RunResource } from "./RunResource";
 
 /**
  * Domain tag namespace.
@@ -22,5 +23,5 @@ export const Tag = {
 
 /** @public */
 export declare namespace Tag {
-  export type RunResource = import("./internal/runResource/service").RunResource;
+  export type RunResource = typeof import("./RunResource").RunResource;
 }

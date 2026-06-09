@@ -45,7 +45,10 @@ Store/RPC **`Procedure.payload().success().failure()`** is separate.
 src/store/RunResourceTelemetry.ts           — Tag class + barrel (withLayer)
 src/store/RunResourceTelemetry.wiring.ts    — satisfies WiringConfig<Tag> (API 3)
 src/store/RunResourceTelemetry.service.ts   — runResourceTelemetryLayer
-src/internal/runResource/service.ts         — RunResource domain Context.Service
+src/RunResource.ts                            — RunResource domain tag (Context.Service)
+src/RunResourceModule.ts                      — factory barrel (subpath `./RunResource`)
+src/internal/runResource/service.ts         — types + RunResourceApi only
+src/internal/runResource/kernel.ts          — impl + static attach
 src/Tags.ts                                 — Tag.RunResource
 src/internal/telemetry/                     — runtime for Telemetry.layer
 src/TelemetryRouter.ts                      — emit router (rename TelemetryHub)

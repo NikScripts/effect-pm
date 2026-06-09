@@ -59,6 +59,11 @@
       "import": "./dist/QueueResource.mjs",
       "require": "./dist/QueueResource.js"
     },
+    "./RunResource": {
+      "types": "./dist/RunResource.d.ts",
+      "import": "./dist/RunResource.mjs",
+      "require": "./dist/RunResource.js"
+    },
     "./ProcessGroup": {
       "types": "./dist/ProcessGroup.d.ts",
       "import": "./dist/ProcessGroup.mjs",

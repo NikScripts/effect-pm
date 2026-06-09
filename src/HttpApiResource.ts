@@ -46,7 +46,7 @@ import { HttpApiClient } from "effect/unstable/httpapi";
 import type { HttpApi as HttpApiType, HttpApiGroup } from "effect/unstable/httpapi";
 import { Context, Effect, Layer, Semaphore } from "effect";
 import { HttpClientRunGate } from "./HttpClientRunGate";
-import type { RunResourceRunner } from "./RunResource";
+import type { RunResourceRunner } from "./RunResourceModule";
 
 // ============================================================================
 // Public Types

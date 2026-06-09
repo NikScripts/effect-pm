@@ -1,10 +1,11 @@
 /**
  * RunResource kernel — concurrency-gate implementation plus the
  * {@link RunResourceApi} factory object. Attaches the factory as statics on
- * {@link RunResource} and exposes it through {@link runResourceLayer}.
+ * {@link ../../RunResource | the domain tag} and exposes {@link runResourceLayer}.
  *
- * Depends on {@link ../runResource/service | `service.ts`} (the domain tag);
- * `service.ts` must not import this module at top level.
+ * Depends on {@link ../../RunResource | `RunResource.ts`} (domain tag) and
+ * {@link ../runResource/service | `service.ts`} (types). `service.ts` must not
+ * import this module at top level.
  *
  * @module internal/runResource/kernel
  * @internal
@@ -31,8 +32,8 @@ import type {
 } from "../../store/RunResource";
 import { RunResourceHubTelemetry } from "../../store/RunResourceTelemetry";
 import type { TelemetryHubError, TelemetryRouter } from "../../TelemetryRouter";
+import { RunResource } from "../../RunResource";
 import {
-  RunResource,
   type RunGate,
   type RunResourceApi,
   type RunResourceConfig,
@@ -339,19 +340,8 @@ export const runResourceApi = {
   },
 } satisfies RunResourceApi;
 
-// Attach the factory as statics so `RunResource.make`, `RunResource.Service`,
-// etc. keep working for existing callers.
 const RunResourceWithStatics = Object.assign(RunResource, runResourceApi);
 
-/**
- * Stateless domain layer — provides the {@link RunResourceApi} shape for
- * `yield* RunResource`.
- *
- * @public
- */
-export const runResourceLayer: Layer.Layer<RunResource> = Layer.succeed(
-  RunResource,
-  runResourceApi,
-);
+export const runResourceLayer = Layer.succeed(RunResource, runResourceApi);
 
 export { RunResourceWithStatics as RunResource };

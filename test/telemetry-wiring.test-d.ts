@@ -2,8 +2,8 @@
  * Type-level proof of wiring exhaustiveness + per-bind field shape (Step 3b).
  *
  * `RequiredBindMap` — every event node with PlainFields must be bound.
- * `Telemetry.bind` — fields must match schema `_bindFields` (precomputed at
- * schema definition; looked up from handle — Option 1).
+ * `Telemetry.bind` — fields must match {@link Telemetry.BindShape} for the
+ * handle's schema (precomputed at definition; looked up from handle).
  *
  * RunResource `State.Changed` wiring deferred until State.Root — see
  * state-root-telemetry-resume-handoff.md.
@@ -52,7 +52,7 @@ class DemoTelemetry extends Telemetry.Tag<DemoTelemetry>(demoTarget)(
 
 type DemoWiring = WiringConfig<typeof DemoTelemetry>;
 
-type _BindKeys = keyof typeof DemoStarted._bindFields;
+type _BindKeys = keyof Telemetry.BindShape<typeof DemoStarted>;
 type _ScopeBoundOmittedFromBind = "runId" extends _BindKeys ? false : true;
 const _scopeBoundOmitted: _ScopeBoundOmittedFromBind = true;
 
@@ -87,7 +87,7 @@ const incompleteWiring = Wiring.sections(
 // @ts-expect-error - "Run.run.exit.onSuccess" required by RequiredBindMap
 export const incomplete: DemoWiring = incompleteWiring;
 
-// ── Per-bind field shape (_bindFields on schema class) ─────────────────────
+// ── Per-bind field shape (Telemetry.BindShape) ─────────────────────────────
 
 export const wrongNestedKey = Telemetry.bind(DemoTelemetry.Run.run.Started, {
   // @ts-expect-error - unknown key inside nested payload struct

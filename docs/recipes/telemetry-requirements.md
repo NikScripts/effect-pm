@@ -17,7 +17,7 @@
 1. **No event payloads at call sites** — not `{ payload: { concurrency } }`, not hand-built `Started({ id, occurredAt, … })`. Events are **zero-arg**; the layer materializes from scope, operation input, `Telemetry.terminal.*`, wiring `bind`, and `Exit.*`.
 2. **Root / lifetime scope** — install via **`State.Scope.layer` / `.provide` / `.run`** at the kernel boundary that owns that lifetime (Pattern A in [plan 18](../plans/18-resource-state-scope.md)). **Not** on the telemetry operation builder.
 3. **Operation scope** — **`.provide(scopeLeaf)` on operations only** (typed from the scope declared on that op's Tag). **Never** `.provide()` on events.
-4. **Events are `Effect` values** — `yield* RunResourceTelemetry.State.Changed` — **not** `Changed()` (events are not functions).
+4. **Events are `Effect` values** — `yield* RunResourceTelemetry.State.Changed` — **not** `Changed()` (events are not functions). Each handle is an **`Effectable.Prototype`** value carrying `{ wire, path, schema }` — see [Step 4](#step-4--calling-api--operationcontext-slice-b).
 5. **Start / exit** — **operation runner** emits when the Tag declares `Telemetry.start` / `Telemetry.exit`. Kernel does **not** `yield* ctx.telemetry.Started` (or any start leg) — start fires immediately on op entry.
 6. **Middle events** — `yield* ctx.telemetry.Retried` etc. **inside** an operation body only — materialize from **op scope + op input** established by `.provide()` on that op.
 7. **Standalone root-scoped events** — `yield* Service.Group.Event` when root scope is already ambient (e.g. `State.Changed` after `RunResourceScope.layer` on the gate). Leaf-scoped facts require an **operation** with `Telemetry.start` / `Telemetry.exit` — not a bare Service event + `.provide()`.
@@ -56,7 +56,7 @@
 - [ ] Implement **`Telemetry.bind.pipe`**, **`satisfies WiringConfig`**, **`Telemetry.layer`**, **`Telemetry.withLayer`**
 - [ ] Rename **`TelemetryHub`** → **`TelemetryRouter`** in new/edited code
 - [ ] **`*.test-d.ts`** for wiring exhaustiveness
-- [x] Resolve **D5** (`RunResourceStateSchema` home) — **`src/store/RunResourceState.ts`**
+- [x] Resolve **D5** (snapshot schema) — **`RunResourceSnapshotSchema`** in **`src/store/RunResourceState.ts`** — nested; see [state-root-bake.md](./state-root-bake.md)
 - [ ] Gate: `pnpm run typecheck && pnpm test && pnpm run lint && pnpm run build`
 
 ---
@@ -229,12 +229,12 @@ If a value is **already in scope** via `.provide()` on the op, **do not** duplic
 
 #### RunResource Tag (API 1) — schemas from golden branch, **operations** on call path
 
-**Domain module tag** — `Context.Service` class `RunResource` (`@nikscripts/effect-pm/RunResource`). Internal import from `internal/runResource/service.ts`; filter inputs via `Tag.RunResource` from `@nikscripts/effect-pm/Tags`. See [run-resource-service-handoff.md](../handoffs/run-resource-service-handoff.md).
+**Domain module tag** — `Context.Service` class `RunResource` (`@nikscripts/effect-pm/RunResource`). Internal import from `RunResource.ts` (tag file); filter inputs via `Tag.RunResource` from `@nikscripts/effect-pm/Tags`. Factory API from `RunResourceModule.ts` / subpath `./RunResource`. See [run-resource-service-handoff.md](../handoffs/run-resource-service-handoff.md).
 
 **Scopes** (`src/RunResourceScope.ts`) — **class** + domain tag (requires `State.Scope(domain)(fields)` — see plan 18):
 
 ```ts
-import { RunResource } from "../internal/runResource/service";
+import { RunResource } from "../RunResource";
 
 class RunResourceScope extends State.Scope(RunResource)({
   resourceId: Schema.String,
@@ -300,15 +300,15 @@ class RunResourceStateChanged extends Telemetry.Schema<RunResourceStateChanged>(
   id: Schema.String,
   changedAt: Telemetry.terminal.clockMillis,
   reason: Schema.Literals(STATE_CHANGE_REASONS),
-  previous: Schema.NullOr(RunResourceStateSchema),
-  current: RunResourceStateSchema,
+  previous: Schema.NullOr(RunResourceSnapshotSchema),
+  current: RunResourceSnapshotSchema,
 }) {}
 ```
 
 Tag tree — **`run` operation** owns Run start/exit; `State.Changed` standalone event:
 
 ```ts
-import { RunResource } from "../internal/runResource/service";
+import { RunResource } from "../RunResource";
 
 export class RunResourceTelemetry extends Telemetry.Tag<RunResourceTelemetry>(RunResource)(
   "@nikscripts/effect-pm/store/RunResource/RunResourceTelemetry",
@@ -562,7 +562,7 @@ Optional v2: `.gen(input, fn)` shortcut — **not v1**.
 
 ```ts
 // store/RunResourceTelemetry.ts — API 1 + 2 (Tag class)
-import { RunResource } from "../internal/runResource/service";
+import { RunResource } from "../RunResource";
 
 export class RunResourceTelemetry extends Telemetry.Tag<RunResourceTelemetry>(RunResource)(
   "@nikscripts/effect-pm/store/RunResource/RunResourceTelemetry",
@@ -612,18 +612,16 @@ export const runResourceWiring = Wiring.sections(
     ),
   ),
 
-  Telemetry.bind(RunResourceTelemetry.State.Changed, {
-    id: Telemetry.state.from((s) => s.stateChangeSeq),
-    reason: Telemetry.state.from((s) => s.pendingReasonWire),
-    previous: Telemetry.state.from((s) => s.pendingPreviousSnapshot),
-    current: Telemetry.state.from((s) => s.pendingCurrentSnapshot),
-  }).pipe(
+  Telemetry.bind(RunResourceTelemetry.State.Changed, {}).pipe(
     Telemetry.logWarning(
       "RunResourceStore write failed for state change",
       ({ reason }) => ({ reason: String(reason) }),
     ),
   ),
 ) satisfies WiringConfig<typeof RunResourceTelemetry>
+```
+
+**`State.Changed`:** no bind fields — `id`, `reason`, `previous`, `current` materialize from **`State.transition` frame + `State.Root`**; `changedAt` terminal. See [state-root-bake.md](./state-root-bake.md). **Reject** `pending*` scratch fields.
 
 // store/RunResourceTelemetry.service.ts — facet runtime Layer (regular Layer typing)
 export const runResourceTelemetryLayer = Telemetry.layer(
@@ -671,10 +669,10 @@ type BindFields<Schema> = /* nested mirror of PlainFields<Schema>; each leaf is 
 
 1. **Define:** `Wiring.sections(…) satisfies WiringConfig<Tag>` → missing bind keys = normal TS missing-property errors.
 2. **Layer build:** `Telemetry.layer(tag, wiring)` accepts **`wiring: WiringConfig<Tag>`** only.
-3. **Per bind:** second arg assignable to **`handle.schema._bindFields`** (precomputed on each `Telemetry.Schema` class from author `fields`; nested `Schema.Struct` / nested schemas recurse at definition time).
+3. **Per bind:** second arg assignable to bind shape inferred from the handle (precomputed at schema definition via internal symbol slot; public escape hatch: **`Telemetry.BindShape<Schema>`**).
 4. **Proof:** `*.test-d.ts` with `@ts-expect-error` for missing/incomplete/wrong-context binds.
 
-**Scope-bound fields in schemas:** use scope selectors (`RunScope.Schema.State.Run.runId`, etc.). They are omitted from `_bindFields` via {@link PlainFields} / {@link AutoField}.
+**Scope-bound fields in schemas:** use scope selectors (`RunScope.Schema.State.Run.runId`, etc.). They are omitted from bind shape via internal {@link PlainFields} rules.
 
 **Field sources:** `Operation.input("key")`, `Exit.value` / `Exit.cause` / `Exit.durationMs`, `Clock.now`, `Telemetry.state.from(fn)`.
 
@@ -814,12 +812,46 @@ export const runResourceWiring = Wiring.sections(
 **Deliverables:**
 
 - Calling paths on **Tag**; **mirrored** on **`Telemetry.withLayer`** export.
+- **`EventNode` runtime shape** — each event handle uses **`Effectable.Prototype`** with an `evaluate` hook (same pattern as `Config`, `Statement`, `Activity` in Effect v4). Metadata: `{ wire, path, schema, EventNodeTypeId }`.
 - Operation builder: **`.provide(scopeLeaf)`** only (typed from Tag scope ref).
 - `OperationContext` `{ input, telemetry, scope }` after builder completes.
 - Type error when scope obligation unsatisfied (missing `.provide()` when not ambient).
-- No-op stub when facet **`.layer`** absent (kernel `R` empty).
+- No-op stub when facet **`.layer`** absent (kernel `R` empty) — **`yield* node`** runs `evaluate → noop` until Step 6 wires real emit.
 
-**Acceptance:** RunResource `Run.run` + Queue `Entry.enqueue` / `Entry.processEntry` typecheck; **no event payloads** at call sites; events are **`Effect` values** (no `()`).
+**EventNode mechanism (Effect v4 — preferred order):**
+
+```ts
+// Preferred — Effectable.Prototype (Config / Statement / Activity pattern)
+const EventNodeProto = {
+  ...Effectable.Prototype<EventNode<S>>({
+    label: "EventNode",
+    evaluate() {
+      return noopEmit(); // Step 6: materialize + hub emit
+    },
+  }),
+  [EventNodeTypeId]: EventNodeTypeId,
+};
+
+const makeEventNode = (...): EventNode<S> => {
+  const self = Object.create(EventNodeProto);
+  self.wire = telemetryWireId(...);
+  self.path = path;
+  self.schema = schema;
+  return self;
+};
+```
+
+| Approach | Verdict |
+| --- | --- |
+| **`Effectable.Prototype` + `Object.create`** | **Preferred** — idiomatic v4; `evaluate` hook is the Step 6 swap point; cast-free via annotated return type (Effect's own `Config.make` pattern) |
+| **`Effectable.Prototype` + object spread** | **Equivalent** — Activity uses `{ ...Effectable.Prototype({...}), fields }`; fine when you want a fresh proto per handle |
+| `Effectable.Class` + `override` | **Rejected** — v4 Base `evaluate` returns `this`; `abstract override` is not consumed by the runtime (hangs). No in-repo v4 usages. |
+| `Effectable.Class` + `commit()` | **N/A** — v3 API only; vendored `repos/effect` is stale vs `effect@4.0.0-beta.76` |
+| **`Object.assign(Effect.sync(noop), meta)`** | **Last resort** — cast-free and runtime-correct, but the handle is a frozen Sync primitive; Step 6 must replace the whole emit path rather than swapping `evaluate` |
+
+**Note:** The implementer's v4 empirical test was right about Class looping and Prototype working. The "`Object.create` needs `as` cast" claim was wrong — Effect annotates the factory return type (`Config.make`, `makeEventNode`) without `as` casts.
+
+**Acceptance:** RunResource `Run.run` + Queue `Entry.enqueue` / `Entry.processEntry` typecheck; **no event payloads** at call sites; events are **`Effect` values** (no `()`); **`yield* RunResourceTelemetry.State.Changed`** runs as no-op before facet `.layer`.
 
 ```ts
 yield* RunResourceTelemetry.Run.run.provide({ runId }).pipe(
@@ -1166,14 +1198,16 @@ OR yield* Tag/Export.Group.Event (standalone Effect — root ambient; no .provid
 src/Telemetry.ts                         — Tag, Wiring, layer, withLayer, registry
 src/TelemetryRouter.ts                   — emit router (rename from TelemetryHub)
 src/Tags.ts                              — Tag.RunResource, … (filter inputs)
-src/internal/runResource/service.ts    — RunResource domain Context.Service
-src/internal/telemetry/                  — runtime (materialize, runner, state Refs)
-src/store/RunResourceState.ts            — RunResourceStateSchema (shared snapshot; D5)
-src/store/RunResourceTelemetry.ts        — Tag class (API 1+2) + barrel withLayer
-src/store/RunResourceTelemetry.wiring.ts — satisfies WiringConfig<Tag>
-src/store/RunResourceTelemetry.service.ts — runResourceTelemetryLayer
+src/RunResource.ts                         — RunResource domain tag (Context.Service)
+src/RunResourceModule.ts                   — factory barrel (subpath `./RunResource`)
+src/internal/runResource/service.ts        — types + RunResourceApi only
+src/internal/runResource/kernel.ts         — impl + static attach + runResourceLayer
+src/internal/telemetry/                    — runtime (materialize, runner, state Refs)
+src/store/RunResourceState.ts              — **`RunResourceSnapshotSchema`** (nested D5; supersedes flat struct)
+src/store/RunResourceTelemetry.ts          — Tag class (API 1+2) + barrel withLayer
+src/store/RunResourceTelemetry.wiring.ts   — satisfies WiringConfig<Tag>
+src/store/RunResourceTelemetry.service.ts  — runResourceTelemetryLayer
 src/store/RunResourceStore.ts            — archive facet
-src/RunResource.ts                       — worker barrel (domain module)
 src/RunResourceProjection.ts             — live projection
 src/telemetryTransport.ts                — live wire (plan 19)
 ```
@@ -1182,7 +1216,7 @@ src/telemetryTransport.ts                — live wire (plan 19)
 | --- | --- |
 | Facet barrel | `store/<Domain>Telemetry.ts` → **`Telemetry.withLayer`** |
 | Wiring | sibling `*.wiring.ts` — **`satisfies WiringConfig<Tag>`** |
-| Domain tag | `internal/<domain>/service.ts` + **`Tags.ts`** — **no** `<Domain>Identity.ts` |
+| Domain tag | `src/<Domain>.ts` (tag class matching service id) + **`Tags.ts`** — **no** `<Domain>Identity.ts` |
 | Router subpath | `@nikscripts/effect-pm/TelemetryRouter` |
 | Tags subpath | `@nikscripts/effect-pm/Tags` |
 | Role folders | No domain subfolders under `store/` |
@@ -1262,6 +1296,8 @@ Procedure.payload(Query).success(Result).failure(Error);
 | `provideLeaf` / `provideRoot` / `assuming*` | Single **`.provide()`** on operations; root via **`State.Scope`** at lifetime |
 | `.provide()` on events | Scope on ops only; events read op scope + input or ambient root |
 | `Event()` function call syntax | Events are **`Effect` values** — `yield* Service.Group.Event` |
+| `Effectable.Class` for `EventNode` | v4 Base `evaluate` returns `this` — hangs; use **`Effectable.Prototype`** |
+| `Object.assign(Effect.sync(noop), meta)` as first choice | **Last resort only** — prefer **`Effectable.Prototype`** (`evaluate` hook for Step 6) |
 | `yield* ctx.telemetry.*` for start legs | **`Telemetry.start`** — runner emits on op entry |
 | `Scope.run` + hand-built event payload | Operation `.provide` + zero-arg materialize |
 | Extra `telemetry` callback on generator | `ctx.telemetry` on OperationContext |
@@ -1293,7 +1329,7 @@ Procedure.payload(Query).success(Result).failure(Error);
 | **CHK-16** | Router rename | **LOCKED** | **`TelemetryRouter`** replaces **`TelemetryHub`** |
 | **CHK-17** | Bind exhaustiveness proof | **LOCKED** | **`satisfies WiringConfig<Tag>`** at define; **`*.test-d.ts`**; no fake error types |
 | **CHK-18** | Literal fields needing state (`reason`) | **LOCKED** | Count as **PlainFields** when value comes from **`Telemetry.state.from`** |
-| **D5** | `RunResourceStateSchema` home | **LOCKED** | **`src/store/RunResourceState.ts`** — shared snapshot schema; Tag imports it for `State.Changed`; debt `RunResourceTelemetry.ts` re-exports during migration |
+| **D5** | Snapshot schema | **LOCKED** | **`RunResourceSnapshotSchema`** in **`src/store/RunResourceState.ts`** — nested `CurrentShape`; wire/archive/store match live envelope; see [state-root-bake.md](./state-root-bake.md) |
 
 **Resolved (do not re-litigate):**
 
@@ -1315,7 +1351,9 @@ Append when implementation adds something **not** in locked sections above.
 | 2026-06-07 | cursor/telemetry-redesign-bake-faed | Calling API locked: op-only `.provide()`, events as Effects, exit-first ops, `Telemetry.start` via runner, root via `State.Scope` at lifetime | yes |
 | 2026-06-08 | cursor/telemetry-redesign-bake-faed | API revision: `Wiring.sections` + `satisfies WiringConfig<Tag>`; `Telemetry.bind(…).pipe(log legs)`; `Telemetry.layer` + `Telemetry.withLayer`; **`TelemetryRouter`** rename; bind exhaustiveness via real types not fake error objects; `telemetryTransport` via BroadcastSink | yes |
 | 2026-06-08 | cursor/telemetry-redesign-bake-faed | **`Telemetry.Tag<Self>(domain)(facetId, …tree)`** — domain in 1st call, facet id 1st arg of 2nd; wires from **`Telemetry.namespace` only**; facet class **`RunResourceTelemetry`**; domain **`RunResource`** service (supersedes `RunResourceIdentity`) | yes |
-| 2026-06-08 | cursor/telemetry-redesign-bake-faed | **D5:** `RunResourceStateSchema` → **`src/store/RunResourceState.ts`** (shared by store, projection, kernel, Tag event schemas) | yes |
+| 2026-06-08 | cursor/telemetry-redesign-bake-faed | **D5 (flat):** `RunResourceStateSchema` → `src/store/RunResourceState.ts` | yes — **superseded** |
+| 2026-06-08 | cursor/telemetry-redesign-bake-faed | **State.Root bake:** nested `RunResourceSnapshotSchema`, envelope COW, `State.previous(scope)`, event vs snapshot fields, store decode migration — [state-root-bake.md](./state-root-bake.md) | yes |
+| 2026-06-08 | cursor/telemetry-redesign-bake-faed | **`EventNode` mechanism:** prefer **`Effectable.Prototype`** + `Object.create`; `Object.assign(Effect.sync(noop), meta)` last resort | yes |
 
 ```markdown
 | YYYY-MM-DD | cursor/… | Description | yes/no |

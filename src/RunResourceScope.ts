@@ -5,7 +5,7 @@
  */
 
 import { Schema } from "effect";
-import { RunResource } from "./internal/runResource/service";
+import { RunResource } from "./RunResource";
 import { State } from "./State";
 
 export class RunResourceScope extends State.Scope(RunResource)({

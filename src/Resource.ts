@@ -9,7 +9,7 @@
  * @module Resource
  */
 
-import { RunResource } from "./RunResource";
+import { RunResource } from "./RunResourceModule";
 import { HttpApiResource } from "./HttpApiResource";
 import { QueueResource } from "./QueueResource";
 

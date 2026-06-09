@@ -6,7 +6,8 @@
 | --- | --- | --- | --- | --- |
 | [run-resource-service-handoff.md](./run-resource-service-handoff.md) | **RunResource service** | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | Domain `Context.Service` + tag/kernel split; **before telemetry Step 1** |
 | [telemetry-implementation-handoff.md](./telemetry-implementation-handoff.md) | Telemetry impl | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | After / parallel R1–R4 from run-resource handoff |
-| [state-root-telemetry-resume-handoff.md](./state-root-telemetry-resume-handoff.md) | Telemetry impl | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | **Read before resuming after Step 3a** — `State.Root` lock + pause Step 5–6 |
+| [state-root-telemetry-resume-handoff.md](./state-root-telemetry-resume-handoff.md) | Telemetry impl | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | **Primary resume handoff** — State.Root, EventNode, emit model, issue register |
+| [telemetry-branch-issues.md](./telemetry-branch-issues.md) | Telemetry impl | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | **Issue register** — spec drift, op/event rules, P0–P2 triage |
 | [telemetry-split-bake-prompt.md](./telemetry-split-bake-prompt.md) | **Owner — paste to start** | any | — | Docs-only bake; recommended + DX forks |
 | [telemetry-split-bake-handoff.md](./telemetry-split-bake-handoff.md) | Owner bake | any | — | Context + after-bake order |
 | [telemetry-split-bake.md](../recipes/telemetry-split-bake.md) | Bake agent | any | — | **Historical** bake ledger — prefer requirements doc |

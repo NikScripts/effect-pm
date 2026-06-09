@@ -88,7 +88,7 @@ no telemetry state module.
 Skeleton only. **No** extend, bind, logWarning. Tag factory generates **node handles** (G).
 
 ```ts
-import { RunResource } from "../internal/runResource/service";
+import { RunResource } from "../RunResource";
 
 export class RunResourceTelemetry extends Telemetry.Tag<RunResourceTelemetry>(RunResource)(
   "@nikscripts/effect-pm/store/RunResource/RunResourceTelemetry",

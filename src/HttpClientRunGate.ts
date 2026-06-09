@@ -12,7 +12,7 @@
  */
 
 import { HttpClient } from "effect/unstable/http";
-import type { RunResourceRunner } from "./RunResource";
+import type { RunResourceRunner } from "./RunResourceModule";
 
 /**
  * Pipe-friendly: `client.pipe(HttpClientRunGate.withRunner(runner))`.

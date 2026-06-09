@@ -106,7 +106,7 @@ export { Polling } from "./Polling";
 export { ProcessSchedule } from "./ProcessSchedule";
 export { ProcessGroup } from "./ProcessGroup";
 export { QueueResource } from "./QueueResource";
-export { RunResource } from "./RunResource";
+export { RunResource } from "./RunResourceModule";
 export { HttpClientRunGate } from "./HttpClientRunGate";
 export {
   HttpApiResource,
@@ -719,7 +719,7 @@ export type {
   RunGate,
   RunResourceRunner,
   RunResourceRunnerConfig,
-} from "./RunResource";
+} from "./RunResourceModule";
 
 // Types - Control Service
 export type {

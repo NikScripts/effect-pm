@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Ref } from "effect";
-import { RunResource, runResourceLayer } from "../src/RunResource";
+import { RunResource, runResourceLayer } from "../src/RunResourceModule";
 import { layer as hubLayer } from "../src/TelemetryHub";
 import { processStorageWithRunResourceArchiveLayer } from "../src/ProcessStorage";
 import { RunResourceStore } from "../src/store/RunResource";

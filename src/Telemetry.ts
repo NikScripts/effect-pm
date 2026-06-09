@@ -14,7 +14,7 @@
  * @module Telemetry
  */
 
-import { Layer, Schema } from "effect";
+import { Effect, Effectable, Layer, Schema } from "effect";
 import { isRecord } from "./internal/json";
 import {
   getStateFieldSelectorMetadata,
@@ -90,7 +90,8 @@ export interface TelemetrySchemaDefinition {
  * - {@link TelemetrySchemaClass.Struct} is the same shape as a `Schema.Struct`
  *   value for `Schema.decode`, `Procedure.success`, etc.
  * - Author-time `fields` retain scope selectors and terminals for wiring
- *   materialize; {@link PlainFields} (internal) derives bind keys from them.
+ *   materialize; bind shape for wiring is {@link Telemetry.BindShape} (not a
+ *   static on the schema class).
  *
  * @public
  */
@@ -101,15 +102,17 @@ export type TelemetrySchemaClass<
   readonly fields: Fields;
   readonly Struct: Schema.Struct<WireFields>;
   readonly Type: Schema.Schema.Type<Schema.Struct<WireFields>>;
-  /**
-   * Precomputed wiring bind shape for this schema — computed at class definition
-   * from `fields` so {@link Telemetry.bind} can look up a concrete type without
-   * re-deriving nested {@link BindFields} from an inferred handle (TS collapses
-   * that in the `bind` parameter position).
-   */
-  readonly _bindFields: BindFields<Fields>;
 };
 
+/** @internal Precomputed bind map attached at schema definition (symbol key). */
+export const TelemetryBindShapeTypeId: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Telemetry/BindShape",
+);
+
+/** @internal */
+export type TelemetrySchemaWithBindShape<Fields extends TelemetrySchemaFields> = {
+  readonly [TelemetryBindShapeTypeId]: BindFields<Fields>;
+};
 
 const getTerminal = (value: unknown): TelemetryTerminal | undefined =>
   isRecord(value) && TELEMETRY_TERMINAL_KEY in value
@@ -248,15 +251,14 @@ const telemetrySchema =
     } satisfies TelemetrySchemaDefinition;
     return Object.assign(Base, definition, {
       Struct,
-      // Runtime placeholder only — type is `_bindFields` on the cast below; never read.
-      _bindFields: undefined,
+      // Type-only slot for {@link BindFieldsFromSchema}; never read at runtime.
+      [TelemetryBindShapeTypeId]: undefined,
     }) as unknown as typeof Base &
-      Omit<TelemetrySchemaDefinition, "scope" | "fields"> & {
+      Omit<TelemetrySchemaDefinition, "scope" | "fields"> &
+      TelemetrySchemaWithBindShape<Fields> & {
         readonly scope: Scope;
         readonly fields: Fields;
         readonly Struct: typeof Struct;
-        /** Type-only; precomputed {@link BindFields} for {@link Telemetry.bind}. */
-        readonly _bindFields: BindFields<Fields>;
       };
   };
 
@@ -382,15 +384,36 @@ export const EventNodeTypeId: unique symbol = Symbol.for(
  * phantom so wiring can derive its `PlainFields`. Runtime holds the wire id and
  * the handle path.
  *
+ * It is also a zero-arg `Effect` value: `yield* Service.Group.Event` emits the
+ * event (a no-op until the facet `.layer` runtime lands in Step 6). Standalone
+ * root-scoped facts (e.g. `State.Changed`) and middle events are yielded this
+ * way; **start/exit legs are emitted by the operation runner, not yielded.**
+ *
  * @public
  */
-export interface EventNode<S, Path extends string = string> {
+export interface EventNode<S, Path extends string = string>
+  extends Effect.Effect<void> {
   readonly [EventNodeTypeId]: typeof EventNodeTypeId;
   readonly wire: string;
   readonly path: ReadonlyArray<string>;
   readonly schema: S;
   /** Phantom: dot-joined handle path (`Group.op.Event`) — wiring bind key. */
   readonly _path?: Path;
+}
+
+/**
+ * The context an operation builder yields after `.provide(scopeLeaf)` completes
+ * (locked option C). `input` is the operation input (`void` when the op declares
+ * none); `telemetry` exposes **middle events + nested ops only** (never the
+ * start/exit legs the runner owns); `scope` is the live scope view opened by the
+ * op's `.provide()`.
+ *
+ * @public
+ */
+export interface OperationContext<Input, ScopeState, TelemetryHandle> {
+  readonly input: Input;
+  readonly telemetry: TelemetryHandle;
+  readonly scope: ScopeState;
 }
 
 type UnionToIntersection<U> = (
@@ -462,18 +485,46 @@ export type TelemetryTagClass<
     readonly _groups?: Groups;
   };
 
+/** A fresh no-op emit `Effect` (distinct instance per call — not a singleton). */
+const noopEmit = (): Effect.Effect<void> => Effect.sync(() => {});
+
+/**
+ * Shared prototype for event-node handles — the locked Effect v4 mechanism
+ * (`Effectable.Prototype`; see `state-root-telemetry-resume-handoff` § EventNode).
+ * Each handle is `Object.create(EventNodeProto)` plus its own `{ wire, path,
+ * schema }`, so it is a yieldable `Effect`: `yield* node` runs `evaluate`, a
+ * no-op until the Step 6 runtime swaps it for materialize + `TelemetryRouter`
+ * fan-out. `EventNodeTypeId` lives on the prototype (inherited by every handle).
+ */
+const EventNodeProto = {
+  ...Effectable.Prototype<Effect.Effect<void>>({
+    label: "EventNode",
+    evaluate() {
+      return noopEmit();
+    },
+  }),
+  [EventNodeTypeId]: EventNodeTypeId,
+};
+
+/**
+ * Runtime {@link EventNode}: a yieldable no-op `Effect` carrying the wire id,
+ * handle path, and phantom schema (kept for wiring `PlainFields` derivation).
+ * Cast-free: `Object.create` returns the `EventNode<S>` annotated by this
+ * factory's return type.
+ */
 const makeEventNode = <S>(
   namespaceName: string,
   groupName: string,
   eventName: string,
   schema: S,
   path: ReadonlyArray<string>,
-): EventNode<S> => ({
-  [EventNodeTypeId]: EventNodeTypeId,
-  wire: telemetryWireId(namespaceName, [groupName], eventName),
-  schema,
-  path,
-});
+): EventNode<S> => {
+  const self = Object.create(EventNodeProto);
+  self.wire = telemetryWireId(namespaceName, [groupName], eventName);
+  self.path = path;
+  self.schema = schema;
+  return self;
+};
 
 const buildOperationHandles = (
   namespaceName: string,
@@ -693,7 +744,7 @@ type AutoField<F> = F extends StateFieldSelector
  *
  * @internal
  */
-export type PlainFields<Fields extends TelemetrySchemaFields> = keyof {
+type PlainFields<Fields extends TelemetrySchemaFields> = keyof {
   [K in keyof Fields as AutoField<Fields[K]> extends true ? never : K]: 0;
 } &
   string;
@@ -705,7 +756,9 @@ type SchemaFieldsOf<S> = S extends { readonly fields: infer F }
   : never;
 
 /** One plain author field → bind leaf (nested map or {@link FieldSource}). @internal */
-type BindLeafField<F> = F extends { readonly _bindFields: infer B extends BindFieldMap }
+type BindLeafField<F> = F extends {
+  readonly [TelemetryBindShapeTypeId]: infer B extends BindFieldMap;
+}
   ? B
   : F extends Schema.Struct<infer SF extends Schema.Struct.Fields>
     ? BindFields<SF>
@@ -714,20 +767,32 @@ type BindLeafField<F> = F extends { readonly _bindFields: infer B extends BindFi
 /**
  * The `bind` field map for an event schema — one required entry per
  * {@link PlainFields} key, nested for `Schema.Struct` and nested
- * {@link Telemetry.Schema} classes. Precomputed on each schema class as
- * `_bindFields`; {@link Telemetry.bind} looks up that type from the handle.
+ * {@link Telemetry.Schema} classes.
  *
  * @internal
  */
-export type BindFields<Fields extends TelemetrySchemaFields> = {
+type BindFields<Fields extends TelemetrySchemaFields> = {
   readonly [K in PlainFields<Fields>]: BindLeafField<Fields[K & keyof Fields]>;
 };
 
-type BindFieldsFromSchema<S> = S extends { readonly _bindFields: infer B extends BindFieldMap }
+/** @internal */
+type BindFieldsFromSchema<S> = S extends {
+  readonly [TelemetryBindShapeTypeId]: infer B extends BindFieldMap;
+}
   ? B
   : never;
 
-/** A `bind` section carrying its node path literal for exhaustiveness keying. */
+/**
+ * Wiring bind field map for a {@link Telemetry.Schema} class — one required entry
+ * per plain author field (nested like the schema). Scope-bound selectors,
+ * terminals, and op-input markers are omitted (materialized automatically).
+ *
+ * Prefer {@link Telemetry.bind} with a node handle when authoring wiring; use
+ * this type when debugging bind errors or building generic wiring helpers.
+ *
+ * @public
+ */
+export type BindShape<S> = BindFieldsFromSchema<S>;
 export interface BoundSection<Path extends string> extends BindSection {
   readonly _bindPath?: Path;
   readonly pipe: (...legs: ReadonlyArray<BindLeg>) => BoundSection<Path>;
@@ -936,3 +1001,14 @@ export const Telemetry = {
   layer,
   withLayer,
 } as const;
+
+/**
+ * Type helpers merged onto {@link Telemetry}.
+ *
+ * @public
+ */
+export namespace Telemetry {
+  export type BindShape<S> = BindFieldsFromSchema<S>;
+}
+
+/** A `bind` section carrying its node path literal for exhaustiveness keying. */

@@ -19,7 +19,7 @@
 | --- | --- | --- |
 | 1 | **This doc** | Locked RunResource-as-service layout |
 | 2 | [telemetry-open-decisions-bake.md](../recipes/telemetry-open-decisions-bake.md) | Superseded identity notes + telemetry-only open items |
-| 3 | Current `src/RunResource.ts` | Implementation to move into kernel |
+| 3 | `src/RunResourceModule.ts` + `src/RunResource.ts` | Factory barrel + tag-only module |
 
 **Gate (this track):** `pnpm run typecheck && pnpm test && pnpm run lint`
 
@@ -40,22 +40,25 @@
 ### 2. Tag file and kernel are separate modules (one-way dependency)
 
 ```
-internal/runResource/service.ts   — class RunResource + public types + RunResourceApi
-internal/runResource/kernel.ts    — gate impl, factories, runResourceApi, runResourceLayer
-RunResource.ts                    — public barrel (re-exports only)
+src/RunResource.ts                  — domain tag class only (deterministicKeys path)
+src/RunResourceModule.ts              — public factory barrel (re-exports from kernel)
+internal/runResource/service.ts     — RunResourceApi + public types (no class)
+internal/runResource/kernel.ts        — gate impl, runResourceApi, static attach, runResourceLayer
 ```
 
 **Dependency rule:**
 
 - **`service.ts` must not import `kernel.ts`** (top-level).
-- **`kernel.ts` imports `RunResource` from `service.ts`** — implementation may depend on the domain tag (and will depend on scope/telemetry modules as today).
+- **`RunResource.ts` must not import `kernel.ts`** (tag-only — avoids init cycle with telemetry).
+- **`kernel.ts` imports `RunResource` from `../../RunResource.ts`** — attaches factory statics via `Object.assign`.
 - **No circular imports.**
 
-### 3. Statics wiring lives in kernel (not the public barrel)
+### 3. Statics wiring lives in kernel (not the tag file or barrel)
 
 - Build **`runResourceApi`** object (`satisfies RunResourceApi`).
-- Attach to the class **once in kernel** via `Object.assign(RunResource, runResourceApi)` **or** lazy static getters on the class in `service.ts` that delegate to kernel on first use (see [Optional hardening](#optional-hardening-lazy-static-getters)).
-- **`RunResource.ts` must not** contain `RunResource.make = …` assignment lines — only re-exports.
+- Attach to the tag **once in kernel** via `Object.assign(RunResource, runResourceApi)`.
+- **`RunResourceModule.ts` must not** contain `RunResource.make = …` assignment lines — only re-exports.
+- **`RunResource.ts` must not** attach statics or import kernel.
 
 ### 4. External exports
 
@@ -67,8 +70,9 @@ RunResource.ts                    — public barrel (re-exports only)
 ```ts
 // Tags.ts
 export namespace Tag {
-  export { RunResource } from "./internal/runResource/service";
+  export type RunResource = typeof import("./RunResource").RunResource;
 }
+// Tag.RunResource value: import { RunResource } from "./RunResource" (tag class)
 ```
 
 - **`Tag.RunResource`** is the **only external tag entry point** for cross-module filter inputs.
@@ -77,13 +81,19 @@ export namespace Tag {
 
 ### 5. Internal tag access
 
-In-repo modules (Scope, telemetry, kernel) import the class **directly**:
+In-repo modules (Scope, telemetry, kernel) import the **tag class** from **`RunResource.ts`**:
 
 ```ts
-import { RunResource } from "./internal/runResource/service";
+import { RunResource } from "./RunResource";           // RunResourceScope.ts
+import { RunResource } from "../RunResource";           // RunResourceTelemetry.ts
 ```
 
-`Tags.ts` is **not** required for internal use — it aggregates tags for **external** consumers.
+Apps import the **factory API** from **`RunResourceModule`** / subpath `@nikscripts/effect-pm/RunResource`:
+
+```ts
+import { RunResource, runResourceLayer } from "@nikscripts/effect-pm/RunResource";
+// or from barrel: import { RunResource } from "@nikscripts/effect-pm"
+```
 
 ### 6. Naming
 
@@ -110,7 +120,7 @@ These remain **separate `Context.Service` keys** per user gate (`@app/…`), cre
 **Target** (requires `State.Scope` API change — see [Open](#open-decisions)):
 
 ```ts
-import { RunResource } from "./internal/runResource/service";
+import { RunResource } from "./RunResource";
 
 class RunResourceScope extends State.Scope(RunResource)({
   resourceId: Schema.String,
@@ -144,33 +154,38 @@ Plan 18 already describes class-style scopes; **`src/State.ts` still implements 
 
 ```text
 src/
-  RunResource.ts                         — public barrel
-  Tags.ts                                — Tag namespace (new)
-  RunResourceScope.ts                    — class scopes (after State.Scope)
+  RunResource.ts                         — domain tag class only (@effect deterministicKeys)
+  RunResourceModule.ts                   — public factory barrel (docs, types, kernel re-export)
+  Tags.ts                                — Tag namespace
+  RunResourceScope.ts                    — class scopes (imports tag from RunResource.ts)
   internal/runResource/
-    service.ts                           — RunResource class + RunResourceApi + types
+    service.ts                           — RunResourceApi + types (no class)
     kernel.ts                            — impl + runResourceApi + runResourceLayer + static attach
 
 # Remove:
   RunResourceIdentity.ts
 ```
 
-### `service.ts` (tag + types)
+### `RunResource.ts` (tag)
+
+- `export class RunResource extends Context.Service<RunResource, RunResourceApi>()("@nikscripts/effect-pm/RunResource") {}`
+- **No** kernel import, **no** static attach.
+
+### `service.ts` (types)
 
 - All current public types: `RunGate`, `RunResourceConfig`, `RunResourceDefinition`, etc.
 - `RunResourceApi` interface (explicit signatures).
-- `export class RunResource extends Context.Service<RunResource, RunResourceApi>()("@nikscripts/effect-pm/RunResource") {}`
-- Optional: lazy static getters (see below). No kernel import at top level unless using getters.
 
 ### `kernel.ts` (implementation)
 
-- Move `makeRunGateEffect`, `makeRunnerEffect`, user-gate factories from current `RunResource.ts`.
+- Move `makeRunGateEffect`, `makeRunnerEffect`, user-gate factories from legacy monolithic `RunResource.ts`.
 - `export const runResourceApi = { … } satisfies RunResourceApi`
-- `Object.assign(RunResource, runResourceApi)` (if not using getters-only)
+- `import { RunResource } from "../../RunResource"`
+- `Object.assign(RunResource, runResourceApi)`
 - `export const runResourceLayer = Layer.succeed(RunResource, runResourceApi)`
-- `export { RunResource }` (same constructor reference after assign)
+- `export { RunResourceWithStatics as RunResource }`
 
-### `RunResource.ts` (barrel)
+### `RunResourceModule.ts` (factory barrel)
 
 ```ts
 export type { … } from "./internal/runResource/service";
@@ -196,16 +211,16 @@ const api = (): RunResourceApi => require("./kernel").runResourceApi;
 
 ## Implementation sequence
 
-| Step | Work | Depends on |
+| Step | Work | Status |
 | --- | --- | --- |
-| **R1** | Add `internal/runResource/service.ts` + `kernel.ts`; split current `RunResource.ts` | — |
-| **R2** | Wire barrel; verify examples/tests still use `RunResource.make` / `.Service` / `.Tag` | R1 |
-| **R3** | Add `Tags.ts` + `package.json` / `tsup` export | R1 |
-| **R4** | Remove `RunResourceIdentity.ts` + export | R1, scope migration |
-| **R5** | **`State.Scope` refactor** → `State.Scope(DomainTag)(fields)` + class `extends` | Owner-locked signature |
-| **R6** | Migrate `RunResourceScope` / `RunScope` to classes + `RunResource` tag | R1, R5 |
+| **R1** | Add `internal/runResource/service.ts` + `kernel.ts`; split legacy monolith | ✅ tag → `RunResource.ts`, barrel → `RunResourceModule.ts` |
+| **R2** | Wire barrel; verify examples/tests still use `RunResource.make` / `.Service` / `.Tag` | ✅ |
+| **R3** | Add `Tags.ts` + `package.json` / `tsup` export | ✅ (added `./RunResource` subpath → `RunResourceModule`) |
+| **R4** | Remove `RunResourceIdentity.ts` + export | ✅ (file + exports already gone) |
+| **R5** | **`State.Scope` refactor** → `State.Scope(DomainTag)(fields)` + class `extends` | pending |
+| **R6** | Migrate `RunResourceScope` / `RunScope` to classes + `RunResource` tag | ✅ (imports tag from `RunResource.ts`) |
 
-Telemetry Step 1+ should **import `RunResource` from internal service** for `Telemetry.extend(RunResourceScope, …)` after R6.
+Telemetry Step 1+ should **import `RunResource` from `RunResource.ts`** (tag) for facet `Telemetry.Tag(…)` and scope wiring after R6.
 
 ---
 
@@ -238,13 +253,13 @@ Telemetry Step 1+ should **import `RunResource` from internal service** for `Tel
 
 ## Acceptance checks
 
-- [ ] `import { RunResource } from "@nikscripts/effect-pm/RunResource"` — `make`, `Service`, `Tag`, `layer`, `makeRunner` unchanged for existing tests/examples
-- [ ] `import { Tag } from "@nikscripts/effect-pm/Tags"` — `Tag.RunResource` is `Context.Service` class with id `@nikscripts/effect-pm/RunResource`
-- [ ] `RunResourceIdentity` removed; no broken exports
-- [ ] `internal/runResource/service.ts` importable from Scope without loading kernel (identity); kernel loads when using public `RunResource` subpath
-- [ ] `runResourceLayer` exported; named correctly
-- [ ] No new circular imports (typecheck)
-- [ ] `class RunResourceScope extends State.Scope(RunResource)({ … })` compiles after O1 resolved
+- [x] `import { RunResource } from "@nikscripts/effect-pm/RunResource"` — `make`, `Service`, `Tag`, `layer`, `makeRunner` unchanged
+- [x] `import { Tag } from "@nikscripts/effect-pm/Tags"` — `Tag.RunResource` is tag class from `RunResource.ts`
+- [x] `RunResourceIdentity` removed; no broken exports
+- [x] `RunResource.ts` importable from Scope/Telemetry without loading kernel (tag-only)
+- [x] `runResourceLayer` exported from `@nikscripts/effect-pm/RunResource` (via `RunResourceModule`)
+- [x] No new circular imports (typecheck)
+- [x] `class RunResourceScope extends State.Scope(RunResource)({ … })` compiles after O1 resolved
 
 ---
 
