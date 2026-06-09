@@ -10,6 +10,27 @@
 
 ## Locked (Jun 8 — owner)
 
+### `Telemetry.Schema.Struct` (wire projection)
+
+| Rule | Lock |
+| --- | --- |
+| **`.Struct`** | Static on every `Telemetry.Schema` class — factory-built |
+| **`.Type`** | Full decoded wire payload (same as `Struct.Type`) — **not** plain-only |
+| **Field mapping** | Every author field → regular `Schema.*` (scope → underlying schema, terminals → `Number`, …) |
+| **Nested schemas** | Recursive via nested `Telemetry.Schema` class; cycles throw at factory time |
+| **`PlainFields`** | `@internal` only — wiring exhaustiveness (Step 3), not public API |
+
+```ts
+class RunResourceRunStarted extends Telemetry.Schema<RunResourceRunStarted>()(RunScope)({
+  runId: RunState.Run.runId,
+  occurredAt: Telemetry.terminal.clockMillis,
+  payload: Schema.Struct({ concurrency: Schema.Number }),
+}) {}
+
+RunResourceRunStarted.Struct   // Store RPC / decode
+typeof RunResourceRunStarted.Type
+```
+
 ### `Telemetry.Tag` signature
 
 ```ts
@@ -46,10 +67,10 @@ Telemetry.Tag<Self>(domain)(facetId, Telemetry.namespace("…"), …tree)
 
 ## Open (telemetry-only)
 
-| ID | Topic |
-| --- | --- |
-| **D5** | `RunResourceStateSchema` home before deleting debt telemetry file |
-| *(deferred)* | Wiring namespace export, log legs surface, `state.from` typing |
+| ID | Topic | Status |
+| --- | --- | --- |
+| **D5** | **`RunResourceState` snapshot** — plain struct vs `Telemetry.Schema` class vs extend-derived | **Active bake step** |
+| *(deferred)* | Wiring namespace export, log legs surface, `state.from` typing | After D5 + Step 3 |
 
 ---
 

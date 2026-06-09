@@ -14,12 +14,12 @@
  * @module Telemetry
  */
 
-import { Schema } from "effect";
+import { Layer, Schema } from "effect";
 import { isRecord } from "./internal/json";
 import {
   getStateFieldSelectorMetadata,
 } from "./State";
-import { telemetryWireId } from "./TelemetryRouter";
+import { telemetryWireId, TelemetryRouter } from "./TelemetryRouter";
 
 // ============================================================================
 // Schema definition metadata
@@ -547,6 +547,194 @@ const Tag =
   };
 
 // ============================================================================
+// Wiring (API 3) — value layer
+//
+// 3a: builders + collector + facet layer/withLayer. The `PlainFields`
+// exhaustiveness types (`RequiredBindMap` / strict `WiringConfig`) land in 3b;
+// here `WiringConfig` is structural and `bind` field maps are loosely typed.
+// ============================================================================
+
+/** @internal */
+export const FieldSourceTypeId: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Telemetry/FieldSource",
+);
+
+/**
+ * Where a wiring `bind` field's value comes from at materialize: telemetry
+ * state, operation input, the operation `Exit`, or the clock.
+ *
+ * @public
+ */
+export type FieldSource =
+  | { readonly [FieldSourceTypeId]: typeof FieldSourceTypeId; readonly kind: "state"; readonly read: (state: Readonly<Record<string, unknown>>) => unknown }
+  | { readonly [FieldSourceTypeId]: typeof FieldSourceTypeId; readonly kind: "input"; readonly key: string }
+  | { readonly [FieldSourceTypeId]: typeof FieldSourceTypeId; readonly kind: "exit"; readonly exit: "value" | "cause" | "durationMs" }
+  | { readonly [FieldSourceTypeId]: typeof FieldSourceTypeId; readonly kind: "clock" };
+
+/** A `bind` field map: each leaf is a {@link FieldSource}, nested like the schema. @public */
+export interface BindFieldMap {
+  readonly [key: string]: FieldSource | BindFieldMap;
+}
+
+const stateFrom = (
+  read: (state: Readonly<Record<string, unknown>>) => unknown,
+): FieldSource => ({
+  [FieldSourceTypeId]: FieldSourceTypeId,
+  kind: "state",
+  read,
+});
+
+const operationInput = (key: string): FieldSource => ({
+  [FieldSourceTypeId]: FieldSourceTypeId,
+  kind: "input",
+  key,
+});
+
+const exitValue: FieldSource = { [FieldSourceTypeId]: FieldSourceTypeId, kind: "exit", exit: "value" };
+const exitCause: FieldSource = { [FieldSourceTypeId]: FieldSourceTypeId, kind: "exit", exit: "cause" };
+const exitDurationMs: FieldSource = { [FieldSourceTypeId]: FieldSourceTypeId, kind: "exit", exit: "durationMs" };
+const clockNow: FieldSource = { [FieldSourceTypeId]: FieldSourceTypeId, kind: "clock" };
+
+/** Telemetry-state metric kind (v1). @public */
+export type Metric =
+  | { readonly kind: "gauge" }
+  | { readonly kind: "counter" }
+  | { readonly kind: "timestamp" }
+  | { readonly kind: "duration"; readonly from: string; readonly to: string };
+
+const metric = {
+  gauge: { kind: "gauge" } as Metric,
+  counter: { kind: "counter" } as Metric,
+  timestamp: { kind: "timestamp" } as Metric,
+  duration: (from: string, to: string): Metric => ({ kind: "duration", from, to }),
+} as const;
+
+/** Hidden telemetry-state fields added to a scope. @public */
+export interface ExtendSection {
+  readonly _section: "extend";
+  readonly scopeId: string;
+  readonly metrics: Readonly<Record<string, Metric>>;
+}
+
+const extend = (
+  scope: { readonly id: string },
+  metrics: Readonly<Record<string, Metric>>,
+): ExtendSection => ({ _section: "extend", scopeId: scope.id, metrics });
+
+/** A log leg attached to a `bind` via `.pipe`. @public */
+export interface LogLeg {
+  readonly kind: "warning" | "info" | "error";
+  readonly message: string;
+  readonly annotate?: (event: Readonly<Record<string, unknown>>) => Readonly<Record<string, unknown>>;
+}
+
+type BindLeg = (section: BindSection) => BindSection;
+
+/** A wiring `bind` for one event node, with optional log legs. @public */
+export interface BindSection {
+  readonly _section: "bind";
+  readonly path: string;
+  readonly wire: string;
+  readonly fields: BindFieldMap;
+  readonly logs: ReadonlyArray<LogLeg>;
+  readonly pipe: (...legs: ReadonlyArray<BindLeg>) => BindSection;
+}
+
+const makeBind = (
+  path: string,
+  wire: string,
+  fields: BindFieldMap,
+  logs: ReadonlyArray<LogLeg>,
+): BindSection => ({
+  _section: "bind",
+  path,
+  wire,
+  fields,
+  logs,
+  pipe(...legs) {
+    return legs.reduce<BindSection>((acc, leg) => leg(acc), this);
+  },
+});
+
+const bind = (handle: EventNode<unknown>, fields: BindFieldMap): BindSection =>
+  makeBind(handle.path.join("."), handle.wire, fields, []);
+
+const logLeg =
+  (kind: LogLeg["kind"]) =>
+  (
+    message: string,
+    annotate?: LogLeg["annotate"],
+  ): BindLeg =>
+  (section) =>
+    makeBind(section.path, section.wire, section.fields, [
+      ...section.logs,
+      annotate === undefined ? { kind, message } : { kind, message, annotate },
+    ]);
+
+/** A wiring section: telemetry-state `extend` or an event `bind`. @public */
+export type WiringSection = ExtendSection | BindSection;
+
+/**
+ * Validated facet wiring — `extend` telemetry-state declarations plus event
+ * `bind`s (keyed by node path) and their log legs. 3b tightens `binds` to
+ * `RequiredBindMap<Tag>` for exhaustiveness.
+ *
+ * @public
+ */
+export interface WiringConfig<_Tag = unknown> {
+  readonly extend: ReadonlyArray<ExtendSection>;
+  readonly binds: Readonly<Record<string, BindSection>>;
+  readonly logs: ReadonlyArray<{ readonly path: string; readonly legs: ReadonlyArray<LogLeg> }>;
+}
+
+const sections = (...parts: ReadonlyArray<WiringSection>): WiringConfig => {
+  const extendSections: Array<ExtendSection> = [];
+  const binds: Record<string, BindSection> = {};
+  const logs: Array<{ readonly path: string; readonly legs: ReadonlyArray<LogLeg> }> = [];
+  for (const part of parts) {
+    if (part._section === "extend") {
+      extendSections.push(part);
+    } else {
+      binds[part.path] = part;
+      if (part.logs.length > 0) {
+        logs.push({ path: part.path, legs: part.logs });
+      }
+    }
+  }
+  return { extend: extendSections, binds, logs };
+};
+
+/** Facet wiring collector. @public */
+export const Wiring = { sections } as const;
+
+/**
+ * Build the facet runtime `Layer` from a Tag + wiring. **3a stub** — a no-op
+ * layer requiring {@link TelemetryRouter}; the materialize/runner/state runtime
+ * lands in Steps 5–6 (`src/internal/telemetry/`).
+ *
+ * @public
+ */
+const layer = (
+  _tag: unknown,
+  _wiring: WiringConfig,
+): Layer.Layer<never, never, TelemetryRouter> =>
+  Layer.effectDiscard(TelemetryRouter);
+
+/**
+ * Facet export: the Tag's calling surface plus a `.layer`. **3a stub** —
+ * attaches the layer; the calling API (operation builders) lands in Step 4.
+ *
+ * @public
+ */
+const withLayer = <Tag>(
+  tag: Tag,
+  facetLayer: Layer.Layer<never, never, TelemetryRouter>,
+): Tag & { readonly layer: Layer.Layer<never, never, TelemetryRouter> } =>
+  Object.assign(tag as object, { layer: facetLayer }) as Tag & {
+    readonly layer: Layer.Layer<never, never, TelemetryRouter>;
+  };
+
+// ============================================================================
 // Public DSL
 // ============================================================================
 
@@ -574,4 +762,19 @@ export const Telemetry = {
   start,
   exit,
   event,
+  // Wiring (API 3)
+  extend,
+  bind,
+  metric,
+  state: { from: stateFrom },
+  source: {
+    input: operationInput,
+    exit: { value: exitValue, cause: exitCause, durationMs: exitDurationMs },
+    clock: clockNow,
+  },
+  logWarning: logLeg("warning"),
+  logInfo: logLeg("info"),
+  logError: logLeg("error"),
+  layer,
+  withLayer,
 } as const;
