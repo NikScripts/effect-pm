@@ -1,11 +1,12 @@
 /**
- * Type-level proof of wiring **exhaustiveness + per-bind field shape** (Step 3b,
- * the D3 core): a Tag's wiring must bind every event node with `PlainFields`
- * (`satisfies WiringConfig<Tag>` errors otherwise), and each `Telemetry.bind`
- * must supply exactly its schema's plain fields (struct fields one level deep).
+ * Type-level proof of wiring exhaustiveness + per-bind field shape (Step 3b).
  *
- * The real `RunResourceTelemetry` wiring — incl. `State.Changed` — is deferred
- * until the `State.Root` envelope lands; see state-root-telemetry-resume-handoff.md.
+ * `RequiredBindMap` — every event node with PlainFields must be bound.
+ * `Telemetry.bind` — fields must match schema `_bindFields` (precomputed at
+ * schema definition; looked up from handle — Option 1).
+ *
+ * RunResource `State.Changed` wiring deferred until State.Root — see
+ * state-root-telemetry-resume-handoff.md.
  */
 import { Schema } from "effect";
 import { State } from "../src/State";
@@ -16,17 +17,21 @@ import {
   Wiring,
 } from "../src/Telemetry";
 
-class DemoScope extends State.Scope("@test/demo", "Demo")({
+const DemoScope = State.Scope("@test/demo", "Demo")({
   id: Schema.String,
+});
+
+const DemoRunScope = DemoScope.withLeaf("Run", {
+  runId: Schema.String,
+});
+
+class DemoStarted extends Telemetry.Schema<DemoStarted>()(DemoRunScope)({
+  runId: DemoRunScope.Schema.State.Run.runId,
+  occurredAt: Telemetry.terminal.clockMillis,
+  payload: Schema.Struct({ n: Schema.Number }),
 }) {}
 
-class DemoStarted extends Telemetry.Schema<DemoStarted>()(DemoScope)({
-  id: DemoScope.Schema.State.id, // scope-bound → auto
-  occurredAt: Telemetry.terminal.clockMillis, // terminal → auto
-  payload: Schema.Struct({ n: Schema.Number }), // plain struct → bind { n }
-}) {}
-
-class DemoDone extends Telemetry.Schema<DemoDone>()(DemoScope)({
+class DemoDone extends Telemetry.Schema<DemoDone>()(DemoRunScope)({
   occurredAt: Telemetry.terminal.clockMillis,
   payload: Schema.Struct({ ms: Schema.Number }),
 }) {}
@@ -38,7 +43,7 @@ class DemoTelemetry extends Telemetry.Tag<DemoTelemetry>(demoTarget)(
   Telemetry.namespace("Demo"),
   Telemetry.group("Run")(
     Telemetry.operation("run")(
-      DemoScope,
+      DemoRunScope,
       Telemetry.start("Started", DemoStarted),
       Telemetry.exit({ onSuccess: Telemetry.event("Done", DemoDone) }),
     ),
@@ -47,9 +52,12 @@ class DemoTelemetry extends Telemetry.Tag<DemoTelemetry>(demoTarget)(
 
 type DemoWiring = WiringConfig<typeof DemoTelemetry>;
 
-// ── RequiredBindMap derives the right node-path keys ────────────────────────
+type _BindKeys = keyof typeof DemoStarted._bindFields;
+type _ScopeBoundOmittedFromBind = "runId" extends _BindKeys ? false : true;
+const _scopeBoundOmitted: _ScopeBoundOmittedFromBind = true;
 
-// ✅ Both required nodes present.
+// ── RequiredBindMap (handle exhaustiveness) ───────────────────────────────────
+
 export const requiredOk: RequiredBindMap<typeof DemoTelemetry> = {
   "Run.run.Started": 0 as unknown,
   "Run.run.exit.onSuccess": 0 as unknown,
@@ -60,9 +68,8 @@ export const requiredMissing: RequiredBindMap<typeof DemoTelemetry> = {
   "Run.run.Started": 0 as unknown,
 };
 
-// ── Exhaustiveness through Wiring.sections + satisfies ──────────────────────
+// ── Wiring.sections + satisfies ─────────────────────────────────────────────
 
-// ✅ Complete wiring — every node bound, each field correctly shaped.
 export const complete = Wiring.sections(
   Telemetry.bind(DemoTelemetry.Run.run.Started, {
     payload: { n: Telemetry.source.clock },
@@ -72,7 +79,6 @@ export const complete = Wiring.sections(
   }),
 ) satisfies DemoWiring;
 
-// ❌ Missing the `Run.run.exit.onSuccess` bind → not exhaustive.
 const incompleteWiring = Wiring.sections(
   Telemetry.bind(DemoTelemetry.Run.run.Started, {
     payload: { n: Telemetry.source.clock },
@@ -81,9 +87,32 @@ const incompleteWiring = Wiring.sections(
 // @ts-expect-error - "Run.run.exit.onSuccess" required by RequiredBindMap
 export const incomplete: DemoWiring = incompleteWiring;
 
-// NOTE: per-bind *field* checking (that `payload` is present / shaped `{ n }`)
-// is not yet enforced — TS collapses `BindFields`'s conditional/mapped type in
-// the `Telemetry.bind` parameter position, even though the underlying
-// `PlainFields`/`SchemaFieldsOf` are correct in isolation. Handle-level
-// exhaustiveness (above) is enforced. Per-field precision is a pending owner
-// decision (flatten event schemas vs. deeper type work).
+// ── Per-bind field shape (_bindFields on schema class) ─────────────────────
+
+export const wrongNestedKey = Telemetry.bind(DemoTelemetry.Run.run.Started, {
+  // @ts-expect-error - unknown key inside nested payload struct
+  payload: { totallyWrong: Telemetry.source.clock },
+});
+
+export const missingInner = Telemetry.bind(DemoTelemetry.Run.run.Started, {
+  // @ts-expect-error - missing required inner field `n`
+  payload: {},
+});
+
+export const typoTop = Telemetry.bind(DemoTelemetry.Run.run.Started, {
+  // @ts-expect-error - typo at top-level bind key
+  paylod: { n: Telemetry.source.clock },
+});
+
+// @ts-expect-error - missing required top-level `payload`
+export const missingPayload = Telemetry.bind(DemoTelemetry.Run.run.Started, {});
+
+void complete;
+void incomplete;
+void requiredOk;
+void requiredMissing;
+void wrongNestedKey;
+void missingInner;
+void typoTop;
+void missingPayload;
+void _scopeBoundOmitted;

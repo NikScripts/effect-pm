@@ -18,7 +18,7 @@ import { Layer, Schema } from "effect";
 import { isRecord } from "./internal/json";
 import {
   getStateFieldSelectorMetadata,
-  StateFieldSelectorTypeId,
+  type StateFieldSelector,
 } from "./State";
 import { telemetryWireId, TelemetryRouter } from "./TelemetryRouter";
 
@@ -101,6 +101,13 @@ export type TelemetrySchemaClass<
   readonly fields: Fields;
   readonly Struct: Schema.Struct<WireFields>;
   readonly Type: Schema.Schema.Type<Schema.Struct<WireFields>>;
+  /**
+   * Precomputed wiring bind shape for this schema — computed at class definition
+   * from `fields` so {@link Telemetry.bind} can look up a concrete type without
+   * re-deriving nested {@link BindFields} from an inferred handle (TS collapses
+   * that in the `bind` parameter position).
+   */
+  readonly _bindFields: BindFields<Fields>;
 };
 
 
@@ -239,11 +246,17 @@ const telemetrySchema =
       fields,
       inputFields,
     } satisfies TelemetrySchemaDefinition;
-    return Object.assign(Base, definition, { Struct }) as unknown as typeof Base &
+    return Object.assign(Base, definition, {
+      Struct,
+      // Runtime placeholder only — type is `_bindFields` on the cast below; never read.
+      _bindFields: undefined,
+    }) as unknown as typeof Base &
       Omit<TelemetrySchemaDefinition, "scope" | "fields"> & {
         readonly scope: Scope;
         readonly fields: Fields;
         readonly Struct: typeof Struct;
+        /** Type-only; precomputed {@link BindFields} for {@link Telemetry.bind}. */
+        readonly _bindFields: BindFields<Fields>;
       };
   };
 
@@ -449,13 +462,13 @@ export type TelemetryTagClass<
     readonly _groups?: Groups;
   };
 
-const makeEventNode = (
+const makeEventNode = <S>(
   namespaceName: string,
   groupName: string,
   eventName: string,
-  schema: unknown,
+  schema: S,
   path: ReadonlyArray<string>,
-): EventNode<unknown> => ({
+): EventNode<S> => ({
   [EventNodeTypeId]: EventNodeTypeId,
   wire: telemetryWireId(namespaceName, [groupName], eventName),
   schema,
@@ -662,15 +675,15 @@ const makeBind = (
 
 // ── Exhaustiveness (PlainFields → RequiredBindMap) ──────────────────────────
 
-/** A field that materializes automatically (no wiring `bind`). */
-type AutoField<F> = F extends { readonly [StateFieldSelectorTypeId]: unknown }
-  ? true // scope-bound selector
+/** A field that materializes automatically (no wiring `bind`). @internal */
+type AutoField<F> = F extends StateFieldSelector
+  ? true
   : F extends TelemetryTerminal
-    ? true // terminal (clock / duration)
+    ? true
     : F extends TelemetryInput
-      ? true // op-input marker
+      ? true
       : [F] extends [string | number | boolean | null]
-        ? true // raw literal value
+        ? true
         : false;
 
 /**
@@ -691,20 +704,28 @@ type SchemaFieldsOf<S> = S extends { readonly fields: infer F }
     : never
   : never;
 
+/** One plain author field → bind leaf (nested map or {@link FieldSource}). @internal */
+type BindLeafField<F> = F extends { readonly _bindFields: infer B extends BindFieldMap }
+  ? B
+  : F extends Schema.Struct<infer SF extends Schema.Struct.Fields>
+    ? BindFields<SF>
+    : FieldSource;
+
 /**
- * The `bind` field map for an event schema — **one required entry per
- * {@link PlainFields} key**. Each value is a {@link FieldSource} or a nested map
- * (for struct / nested-schema fields).
- *
- * v1 enforces **field-key exhaustiveness** (every plain field must be bound);
- * the *nested* struct value shape is loose — TS collapses the nested
- * mapped-over-conditional type in this position (see Step 3b notes).
+ * The `bind` field map for an event schema — one required entry per
+ * {@link PlainFields} key, nested for `Schema.Struct` and nested
+ * {@link Telemetry.Schema} classes. Precomputed on each schema class as
+ * `_bindFields`; {@link Telemetry.bind} looks up that type from the handle.
  *
  * @internal
  */
 export type BindFields<Fields extends TelemetrySchemaFields> = {
-  readonly [K in PlainFields<Fields>]: FieldSource | BindFieldMap;
+  readonly [K in PlainFields<Fields>]: BindLeafField<Fields[K & keyof Fields]>;
 };
+
+type BindFieldsFromSchema<S> = S extends { readonly _bindFields: infer B extends BindFieldMap }
+  ? B
+  : never;
 
 /** A `bind` section carrying its node path literal for exhaustiveness keying. */
 export interface BoundSection<Path extends string> extends BindSection {
@@ -773,24 +794,16 @@ type BindsOf<Sections extends ReadonlyArray<unknown>> = UnionToIntersection<
   BoundPathEntry<Sections[number]>
 >;
 
-type BindFieldsOf<H> = H extends EventNode<infer S, string>
-  ? BindFields<SchemaFieldsOf<S>>
-  : never;
-
-type BoundSectionOf<H> = H extends EventNode<unknown, infer Path>
-  ? BoundSection<Path>
-  : never;
-
-const bind = <const H extends EventNode<unknown, string>>(
-  handle: H,
-  fields: BindFieldsOf<H>,
-): BoundSectionOf<H> =>
+const bind = <S, const Path extends string>(
+  handle: EventNode<S, Path>,
+  fields: BindFieldsFromSchema<S>,
+): BoundSection<Path> =>
   makeBind(
     handle.path.join("."),
     handle.wire,
     fields as BindFieldMap,
     [],
-  ) as BoundSection<string> as BoundSectionOf<H>;
+  ) as BoundSection<Path>;
 
 const logLeg =
   (kind: LogLeg["kind"]) =>

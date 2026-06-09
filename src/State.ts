@@ -130,7 +130,7 @@ export type StateScope<
     ChildFields,
     InsertState<StateFields, Path, Key, { readonly [K in keyof ChildFields]: ChildFields[K] }>,
     InsertState<StateShape, Path, Key, ValueOf<ChildFields>>,
-    InsertSelectors<StateSelectors, Path, Key, ChildFields>,
+    InsertSelectors<StateSelectors, Path, Key, StateFieldSelectors<ChildFields>>,
     readonly [...Path, Key],
     Requirements | Id
   >;
@@ -298,7 +298,7 @@ const makeScope = <
         ChildFields,
         InsertState<StateFields, Path, Key, { readonly [K in keyof ChildFields]: ChildFields[K] }>,
         InsertState<StateShape, Path, Key, ValueOf<ChildFields>>,
-        InsertSelectors<StateSelectors, Path, Key, ChildFields>,
+        InsertSelectors<StateSelectors, Path, Key, StateFieldSelectors<ChildFields>>,
         typeof path,
         Requirements | Id
       >({

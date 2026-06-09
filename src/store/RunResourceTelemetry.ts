@@ -207,13 +207,11 @@ export const RunResourceHubTelemetry = {
 // struct (D5) and the wire-reason consts above.
 // ============================================================================
 
-const RunState = RunScope.Schema.State;
-
 /** `RunResource.Run.Started` wire payload. @public */
 export class RunResourceRunStarted extends Telemetry.Schema<RunResourceRunStarted>()(
   RunScope,
 )({
-  runId: RunState.Run.runId,
+  runId: RunScope.Schema.State.Run.runId,
   occurredAt: Telemetry.terminal.clockMillis,
   payload: Schema.Struct({ concurrency: Schema.Number }),
 }) {}
@@ -222,7 +220,7 @@ export class RunResourceRunStarted extends Telemetry.Schema<RunResourceRunStarte
 export class RunResourceRunCompleted extends Telemetry.Schema<RunResourceRunCompleted>()(
   RunScope,
 )({
-  runId: RunState.Run.runId,
+  runId: RunScope.Schema.State.Run.runId,
   occurredAt: Telemetry.terminal.clockMillis,
   payload: Schema.Struct({ durationMs: Schema.Number }),
 }) {}
@@ -231,7 +229,7 @@ export class RunResourceRunCompleted extends Telemetry.Schema<RunResourceRunComp
 export class RunResourceRunFailed extends Telemetry.Schema<RunResourceRunFailed>()(
   RunScope,
 )({
-  runId: RunState.Run.runId,
+  runId: RunScope.Schema.State.Run.runId,
   occurredAt: Telemetry.terminal.clockMillis,
   payload: Schema.Struct({ durationMs: Schema.Number, cause: Schema.String }),
 }) {}

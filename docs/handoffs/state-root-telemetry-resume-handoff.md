@@ -207,11 +207,23 @@ Do **not** invest in expanding the hand-maintained snapshot struct; do **not** a
 - Remove `pendingPreviousSnapshot` / `pendingCurrentSnapshot` / `pendingReasonWire` from **`test/telemetry-wiring.test.ts`** once Step 3b adds real exhaustiveness tests (or mark `State.Changed` bind as TODO blocked on `State.Root`).
 - Do **not** update requirements doc scratch-field examples until owner merges bake edits — treat this handoff as override for `State.Changed` binds.
 
-### Still required for Step 3 completion
+### Step 3b — `Telemetry.bind` type safety (locked Jun 2026)
 
-- Implement **`PlainFields`** (not `Record<never, never>`)
-- **`WiringConfig<Tag>`** with **`RequiredBindMap<Tag>`**
-- **`test/telemetry-wiring.test-d.ts`** per requirements
+**Option 1:** each `Telemetry.Schema` class carries precomputed **`_bindFields`**
+(derived from author `fields` at class definition). `Telemetry.bind(handle, fields)`
+requires `fields` assignable to **`handle.schema._bindFields`** via handle inference
+— **not** `satisfies`, not lazy `BindFields<SchemaFieldsOf<S>>` in the parameter.
+
+Nested `Schema.Struct` and nested `Telemetry.Schema` recurse in `_bindFields` at
+definition time. Wire shape unchanged.
+
+**Implementer:** strict negative cases in `test/telemetry-wiring.test-d.ts`
+(wrong nested key, missing inner field, typo top-level key).
+
+**Prerequisite:** `StateScope.withLeaf` return type must use
+`StateFieldSelectors<ChildFields>` in `InsertSelectors` (interface + impl aligned)
+so nested `Schema.State.*` selectors stay typed as {@link StateFieldSelector}, not
+plain wire `Schema.*`.
 
 ---
 

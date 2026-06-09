@@ -671,8 +671,10 @@ type BindFields<Schema> = /* nested mirror of PlainFields<Schema>; each leaf is 
 
 1. **Define:** `Wiring.sections(…) satisfies WiringConfig<Tag>` → missing bind keys = normal TS missing-property errors.
 2. **Layer build:** `Telemetry.layer(tag, wiring)` accepts **`wiring: WiringConfig<Tag>`** only.
-3. **Per bind:** second arg assignable to **`BindFields<HandleSchema>`**.
+3. **Per bind:** second arg assignable to **`handle.schema._bindFields`** (precomputed on each `Telemetry.Schema` class from author `fields`; nested `Schema.Struct` / nested schemas recurse at definition time).
 4. **Proof:** `*.test-d.ts` with `@ts-expect-error` for missing/incomplete/wrong-context binds.
+
+**Scope-bound fields in schemas:** use scope selectors (`RunScope.Schema.State.Run.runId`, etc.). They are omitted from `_bindFields` via {@link PlainFields} / {@link AutoField}.
 
 **Field sources:** `Operation.input("key")`, `Exit.value` / `Exit.cause` / `Exit.durationMs`, `Clock.now`, `Telemetry.state.from(fn)`.
 
