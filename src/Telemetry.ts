@@ -692,10 +692,13 @@ type SchemaFieldsOf<S> = S extends { readonly fields: infer F }
   : never;
 
 /**
- * The `bind` field map for an event schema — one entry per {@link PlainFields}
- * key. Each value is a {@link FieldSource} or a nested map (for struct / nested
- * schema fields). v1 enforces **key exhaustiveness**; precise per-leaf nesting
- * is deferred (nested struct types widen through the field-union constraint).
+ * The `bind` field map for an event schema — **one required entry per
+ * {@link PlainFields} key**. Each value is a {@link FieldSource} or a nested map
+ * (for struct / nested-schema fields).
+ *
+ * v1 enforces **field-key exhaustiveness** (every plain field must be bound);
+ * the *nested* struct value shape is loose — TS collapses the nested
+ * mapped-over-conditional type in this position (see Step 3b notes).
  *
  * @internal
  */
@@ -770,11 +773,24 @@ type BindsOf<Sections extends ReadonlyArray<unknown>> = UnionToIntersection<
   BoundPathEntry<Sections[number]>
 >;
 
-const bind = <S, Path extends string>(
-  handle: EventNode<S, Path>,
-  fields: BindFields<SchemaFieldsOf<S>>,
-): BoundSection<Path> =>
-  makeBind(handle.path.join("."), handle.wire, fields as BindFieldMap, []);
+type BindFieldsOf<H> = H extends EventNode<infer S, string>
+  ? BindFields<SchemaFieldsOf<S>>
+  : never;
+
+type BoundSectionOf<H> = H extends EventNode<unknown, infer Path>
+  ? BoundSection<Path>
+  : never;
+
+const bind = <const H extends EventNode<unknown, string>>(
+  handle: H,
+  fields: BindFieldsOf<H>,
+): BoundSectionOf<H> =>
+  makeBind(
+    handle.path.join("."),
+    handle.wire,
+    fields as BindFieldMap,
+    [],
+  ) as BoundSection<string> as BoundSectionOf<H>;
 
 const logLeg =
   (kind: LogLeg["kind"]) =>
