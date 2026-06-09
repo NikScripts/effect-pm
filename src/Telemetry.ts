@@ -299,12 +299,25 @@ export interface ExitDef<Legs extends ExitLegs> {
   readonly legs: Legs;
 }
 
+/**
+ * Structural view of a `State.Scope` as the operation-builder runtime uses it: a
+ * yieldable `Effect` (the live scope state) plus a `layer` installer. `layer` is
+ * a method so its parameter stays bivariant — a concrete scope assigns despite
+ * its precise id / leaf / requirements, which are recovered from the captured
+ * `Scope` type in {@link OperationBuilder}, not from this structural bound.
+ *
+ * @internal
+ */
+export interface RuntimeScope extends Effect.Effect<unknown, never, unknown> {
+  layer(leaf: Record<string, unknown>): Layer.Layer<never, never, unknown>;
+}
+
 /** A leg of an operation: a start, a middle event, an exit, or a nested op. @internal */
 export type OperationPart =
   | StartDef<string, unknown>
   | EventDef<string, unknown>
   | ExitDef<ExitLegs>
-  | OperationDef<string, unknown, ReadonlyArray<OperationPart>>;
+  | OperationDef<string, RuntimeScope, ReadonlyArray<OperationPart>>;
 
 /** @internal */
 export interface OperationDef<
@@ -321,7 +334,7 @@ export interface OperationDef<
 /** A child of a group: an event or an operation. @internal */
 export type GroupChild =
   | EventDef<string, unknown>
-  | OperationDef<string, unknown, ReadonlyArray<OperationPart>>;
+  | OperationDef<string, RuntimeScope, ReadonlyArray<OperationPart>>;
 
 /** @internal */
 export interface GroupDef<
@@ -354,7 +367,7 @@ const exit = <const Legs extends ExitLegs>(legs: Legs): ExitDef<Legs> => ({
 
 const operation =
   <const Name extends string>(name: Name) =>
-  <Scope, const Parts extends ReadonlyArray<OperationPart>>(
+  <Scope extends RuntimeScope, const Parts extends ReadonlyArray<OperationPart>>(
     scope: Scope,
     ...parts: Parts
   ): OperationDef<Name, Scope, Parts> => ({
@@ -430,6 +443,63 @@ type ExitHandles<Legs extends ExitLegs, Prefix extends string> = {
     : never;
 };
 
+/** Operation scope leaf value — the `.provide(leaf)` argument type. */
+type ScopeLeafValue<Scope> = Scope extends { readonly Leaf: Schema.Top }
+  ? Schema.Schema.Type<Scope["Leaf"]>
+  : never;
+
+/** Operation live scope view — `OperationContext.scope`. */
+type ScopeStateValue<Scope> = Scope extends { readonly State: Schema.Top }
+  ? Schema.Schema.Type<Scope["State"]>
+  : never;
+
+/** Requirements left after `.provide(leaf)` installs the op scope leaf. */
+type ScopeReqValue<Scope> = Scope extends {
+  readonly layer: (leaf: never) => Layer.Layer<infer _Out, never, infer R>;
+}
+  ? R
+  : never;
+
+/**
+ * `OperationContext.telemetry` — **middle events + nested ops only**. Start/exit
+ * legs (runner-owned) contribute nothing; nested-op handles are deferred to the
+ * Queue slice (Step 4 input ops).
+ */
+type OpTelemetryPartHandle<P, Prefix extends string> = P extends StartDef<string, unknown>
+  ? object
+  : P extends ExitDef<ExitLegs>
+    ? object
+    : P extends EventDef<infer Name, infer S>
+      ? { readonly [K in Name]: EventNode<S, `${Prefix}.${Name}`> }
+      : object;
+
+type OpTelemetryHandle<
+  Parts extends ReadonlyArray<unknown>,
+  Prefix extends string,
+> = UnionToIntersection<OpTelemetryPartHandle<Parts[number], Prefix>>;
+
+/**
+ * The calling surface of a scope-required operation handle: `.provide(scopeLeaf)`
+ * installs the op scope leaf and yields an {@link OperationContext}. No-op for
+ * telemetry emission until the Step 6 runner; the scope install is real so the
+ * op body sees its scope. `void` input until the Queue input-op slice.
+ *
+ * @public
+ */
+export interface OperationBuilder<
+  Scope,
+  Parts extends ReadonlyArray<unknown>,
+  Prefix extends string,
+> {
+  readonly provide: (
+    leaf: ScopeLeafValue<Scope>,
+  ) => Effect.Effect<
+    OperationContext<void, ScopeStateValue<Scope>, OpTelemetryHandle<Parts, Prefix>>,
+    never,
+    ScopeReqValue<Scope>
+  >;
+}
+
 type OperationPartHandle<P, Prefix extends string> = P extends StartDef<infer Name, infer S>
   ? { readonly [K in Name]: EventNode<S, `${Prefix}.${Name}`> }
   : P extends ExitDef<infer Legs>
@@ -447,10 +517,13 @@ type OperationHandle<
 
 type GroupChildHandle<C, Prefix extends string> = C extends OperationDef<
   infer Name,
-  unknown,
+  infer Scope,
   infer Parts
 >
-  ? { readonly [K in Name]: OperationHandle<Parts, `${Prefix}.${Name}`> }
+  ? {
+      readonly [K in Name]: OperationHandle<Parts, `${Prefix}.${Name}`> &
+        OperationBuilder<Scope, Parts, `${Prefix}.${Name}`>;
+    }
   : C extends EventDef<infer Name, infer S>
     ? { readonly [K in Name]: EventNode<S, `${Prefix}.${Name}`> }
     : never;
@@ -526,19 +599,49 @@ const makeEventNode = <S>(
   return self;
 };
 
+/**
+ * The `.provide(leaf)` calling path for a scope-required operation. Installs the
+ * op scope leaf (real — the body sees its scope) and yields the
+ * {@link OperationContext}; telemetry emission is a no-op until the Step 6 runner.
+ * Typed loosely here; the precise {@link OperationBuilder} signature is applied
+ * at the Tag-factory boundary.
+ */
+const makeOpProvide =
+  (scope: RuntimeScope, telemetryHandle: Record<string, unknown>) =>
+  (leaf: Record<string, unknown>): Effect.Effect<unknown, never, unknown> =>
+    Effect.provide(
+      Effect.map(scope, (scopeState) => ({
+        input: undefined,
+        telemetry: telemetryHandle,
+        scope: scopeState,
+      })),
+      scope.layer(leaf),
+    );
+
 const buildOperationHandles = (
   namespaceName: string,
   groupName: string,
   opPath: ReadonlyArray<string>,
   parts: ReadonlyArray<OperationPart>,
+  scope: RuntimeScope,
 ): Record<string, unknown> => {
   const out: Record<string, unknown> = {};
+  // Middle events (not start/exit legs, not nested ops) are exposed on
+  // `OperationContext.telemetry` for `yield* ctx.telemetry.*` inside the op body.
+  const telemetryHandle: Record<string, unknown> = {};
   for (const part of parts) {
-    if (part._tag === "start" || part._tag === "event") {
+    if (part._tag === "start") {
       out[part.name] = makeEventNode(namespaceName, groupName, part.name, part.schema, [
         ...opPath,
         part.name,
       ]);
+    } else if (part._tag === "event") {
+      const node = makeEventNode(namespaceName, groupName, part.name, part.schema, [
+        ...opPath,
+        part.name,
+      ]);
+      out[part.name] = node;
+      telemetryHandle[part.name] = node;
     } else if (part._tag === "exit") {
       const legs: Record<string, unknown> = {};
       for (const [outcome, leg] of Object.entries(part.legs)) {
@@ -557,9 +660,11 @@ const buildOperationHandles = (
         groupName,
         [...opPath, part.name],
         part.parts,
+        part.scope,
       );
     }
   }
+  out["provide"] = makeOpProvide(scope, telemetryHandle);
   return out;
 };
 
@@ -580,6 +685,7 @@ const buildGroupHandles = (
         group.name,
         [group.name, child.name],
         child.parts,
+        child.scope,
       );
     }
   }
