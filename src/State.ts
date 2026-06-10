@@ -16,7 +16,8 @@
  * @module State
  */
 
-import { Context, Duration, Effect, Layer, Option, Ref, Schema } from "effect";
+import { Context, Duration, Effect, Function, Layer, Option, Ref, Schema } from "effect";
+import * as BranchStack from "./internal/state/branchStack";
 
 type StructFields = Schema.Struct.Fields;
 type StructFromFields<Fields extends StructFields> = Schema.Struct<Fields>;
@@ -126,6 +127,8 @@ export type StateScope<
     leaf: ValueOf<LeafFields>,
     effect: Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E, Exclude<R, Id | LayerExtra> | Requirements>;
+  /** Sugar for `patchBranch(scope, partial)` — live-update this scope's branch. */
+  readonly patch: (partial: Record<string, unknown>) => Effect.Effect<void>;
   readonly withLeaf: <
     const Key extends string,
     const ChildFields extends StructFields,
@@ -246,10 +249,20 @@ interface ScopeView {
   readonly leafKeys: ReadonlyArray<string>;
 }
 
-/** Full envelope — internal (materializer / transition emit) only. */
+/**
+ * Full envelope with the **effective** `current` — the Tier 1 shared base merged
+ * with the calling fiber's active branch overlay (Tier 2). Internal only
+ * (materializer / transition emit / scope reads).
+ */
 const Root: Effect.Effect<EnvelopeShape, never, StateRootRef> = Effect.flatMap(
   StateRootRef,
-  (ref) => Ref.get(ref),
+  (ref) =>
+    Effect.flatMap(Ref.get(ref), (env) =>
+      Effect.map(BranchStack.getActiveStack, (stack) => ({
+        ...env,
+        current: BranchStack.mergeBranches(env.current, stack),
+      })),
+    ),
 );
 
 /**
@@ -287,16 +300,22 @@ const transition = (
         return [next, next];
       }),
       (next) =>
-        Effect.flatMap(Effect.serviceOption(StateChangedEmitterTag), (emitter) =>
-          Option.match(emitter, {
-            onNone: () => Effect.void,
-            onSome: (e) => e.onTransition(next),
-          }),
+        Effect.flatMap(BranchStack.getActiveStack, (stack) =>
+          Effect.flatMap(Effect.serviceOption(StateChangedEmitterTag), (emitter) =>
+            Option.match(emitter, {
+              onNone: () => Effect.void,
+              onSome: (e) =>
+                e.onTransition({
+                  ...next,
+                  current: BranchStack.mergeBranches(next.current, stack),
+                }),
+            }),
+          ),
         ),
     ),
   );
 
-/** Process-filtered slice of the live `envelope.current` for a scope. */
+/** Process-filtered slice of the live **effective** `current` for a scope. */
 const currentSlice = (
   scope: ScopeView,
 ): Effect.Effect<Record<string, unknown>, never, StateRootRef> =>
@@ -305,58 +324,71 @@ const currentSlice = (
     return node === null ? {} : pickKeys(node, scope.leafKeys);
   });
 
-const insertAtPath = (
-  node: Record<string, unknown>,
-  path: ReadonlyArray<string>,
-  leaf: Record<string, unknown>,
-): Record<string, unknown> => {
-  const [head, ...rest] = path;
-  if (head === undefined) {
-    return { ...node, ...leaf };
-  }
-  if (rest.length === 0) {
-    return { ...node, [head]: leaf };
-  }
-  const child = isRecord(node[head]) ? node[head] : {};
-  return { ...node, [head]: insertAtPath(child, rest, leaf) };
-};
-
-const removeAtPath = (
-  node: Record<string, unknown>,
-  path: ReadonlyArray<string>,
-): Record<string, unknown> => {
-  const [head, ...rest] = path;
-  if (head === undefined) {
-    return node;
-  }
-  if (rest.length === 0) {
-    const { [head]: _removed, ...keep } = node;
-    return keep;
-  }
-  if (!isRecord(node[head])) {
-    return node;
-  }
-  return { ...node, [head]: removeAtPath(node[head], rest) };
-};
+// ── Branch combinators (Tier 2 — fiber-local; dual data-first / pipe) ─────────
 
 /**
- * Install (or replace) a scope's leaf nest in `envelope.current` — COW, via the
- * single-writer {@link transition}. Used on operation entry / `.provide`.
+ * Install (or replace) a scope's active branch segment on the calling fiber.
+ * Dual: `installBranch(scope, values)` ↔ `scope.pipe(installBranch(values))`.
  */
-const installLeaf = (
-  scope: ScopeView,
-  leaf: Record<string, unknown>,
-): Effect.Effect<void, never, StateRootRef> =>
-  transition((current) => insertAtPath(current, scope.path, leaf));
+const installBranch: {
+  (values: Record<string, unknown>): (scope: ScopeView) => Effect.Effect<void>;
+  (scope: ScopeView, values: Record<string, unknown>): Effect.Effect<void>;
+} = Function.dual(
+  2,
+  (scope: ScopeView, values: Record<string, unknown>): Effect.Effect<void> =>
+    BranchStack.installFrame(scope.path, values),
+);
 
 /**
- * Remove a scope's leaf nest from `envelope.current` — COW, via {@link transition}.
- * Used on operation exit (runner). Root scopes (`path === []`) are a no-op.
+ * Shallow-merge `partial` into a scope's active branch — live for the whole
+ * claim bracket. Dual: `patchBranch(scope, partial)` ↔ `scope.pipe(patchBranch(partial))`.
  */
-const clearLeaf = (scope: ScopeView): Effect.Effect<void, never, StateRootRef> =>
-  scope.path.length === 0
-    ? Effect.void
-    : transition((current) => removeAtPath(current, scope.path));
+const patchBranch: {
+  (partial: Record<string, unknown>): (scope: ScopeView) => Effect.Effect<void>;
+  (scope: ScopeView, partial: Record<string, unknown>): Effect.Effect<void>;
+} = Function.dual(
+  2,
+  (scope: ScopeView, partial: Record<string, unknown>): Effect.Effect<void> =>
+    BranchStack.patchFrame(scope.path, partial),
+);
+
+/**
+ * Remove a scope's active branch segment from the calling fiber.
+ * Dual: `clearBranch(scope)` ↔ `scope.pipe(clearBranch())`.
+ */
+const clearBranch: {
+  (): (scope: ScopeView) => Effect.Effect<void>;
+  (scope: ScopeView): Effect.Effect<void>;
+} = Function.dual(
+  (args: IArguments) => args.length === 1,
+  (scope: ScopeView): Effect.Effect<void> => BranchStack.clearFrame(scope.path),
+);
+
+/**
+ * Bracket: install the branch, run `effect`, clear on exit (success or failure).
+ * Dual: `withBranch(scope, values, effect)` ↔ `scope.pipe(withBranch(values, effect))`.
+ */
+const withBranch: {
+  <A, E, R>(
+    values: Record<string, unknown>,
+    effect: Effect.Effect<A, E, R>,
+  ): (scope: ScopeView) => Effect.Effect<A, E, R>;
+  <A, E, R>(
+    scope: ScopeView,
+    values: Record<string, unknown>,
+    effect: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E, R>;
+} = Function.dual(
+  3,
+  <A, E, R>(
+    scope: ScopeView,
+    values: Record<string, unknown>,
+    effect: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E, R> =>
+    Effect.flatMap(BranchStack.installFrame(scope.path, values), () =>
+      Effect.ensuring(effect, BranchStack.clearFrame(scope.path)),
+    ),
+);
 
 // ============================================================================
 // Emit policy — per-field/event scheduling for State.Changed fan-out
@@ -596,6 +628,7 @@ const makeScope = <
       leaf: ValueOf<LeafFields>,
       effect: Effect.Effect<A, E, R>,
     ) => scope.provide(leaf)(effect),
+    patch: (partial: Record<string, unknown>) => patchBranch(scope, partial),
     withLeaf: <const Key extends string, const ChildFields extends StructFields>(
       key: Key,
       fields: ChildFields,
@@ -703,14 +736,18 @@ export const State = {
   Root,
   /** Process-filtered slice of `envelope.previous` for a scope. */
   previous: previousSlice,
-  /** Process-filtered slice of the live `envelope.current` for a scope. */
+  /** Process-filtered slice of the live effective `current` for a scope. */
   currentSlice,
-  /** Single COW transition of the envelope (internal writer). */
+  /** Single COW transition of the Tier 1 base envelope (internal writer). */
   transition,
-  /** COW install/replace of a scope's leaf nest in `current` (op entry). */
-  installLeaf,
-  /** COW remove of a scope's leaf nest from `current` (op exit). */
-  clearLeaf,
+  /** Install/replace a scope's active branch (fiber-local; dual). */
+  installBranch,
+  /** Live-patch a scope's active branch (fiber-local; dual). */
+  patchBranch,
+  /** Remove a scope's active branch (fiber-local; dual). */
+  clearBranch,
+  /** Bracket install→body→clear for a scope's branch (dual). */
+  withBranch,
   /** Optional post-transition emit hook tag (telemetry runtime provides it). */
   StateChangedEmitter: StateChangedEmitterTag,
   // Emit-policy markers (author-time scheduling for State.Changed fan-out).

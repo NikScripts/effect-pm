@@ -36,10 +36,10 @@ const scopeSession = <
   effect: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E, R> =>
   Effect.gen(function* () {
-    yield* State.installLeaf(scope, leaf);
+    yield* State.installBranch(scope, leaf);
     return yield* Effect.ensuring(
       effect.pipe(Effect.provide(scope.layer(leaf))),
-      State.clearLeaf(scope),
+      State.clearBranch(scope),
     );
   });
 
@@ -135,8 +135,8 @@ describe("conflict behavior — path replace and siblings", () => {
   it("re-install at the same path replaces (no duplicate keys)", () => {
     const env = Effect.runSync(
       Effect.gen(function* () {
-        yield* State.installLeaf(GateRunScope, { runId: "a" });
-        yield* State.installLeaf(GateRunScope, { runId: "b" });
+        yield* State.installBranch(GateRunScope, { runId: "a" });
+        yield* State.installBranch(GateRunScope, { runId: "b" });
         return yield* State.Root;
       }).pipe(Effect.provide(seed())),
     );
@@ -146,12 +146,12 @@ describe("conflict behavior — path replace and siblings", () => {
   it("sibling leaf paths coexist until each is cleared", () => {
     const env = Effect.runSync(
       Effect.gen(function* () {
-        yield* State.installLeaf(EntryScope, { entryId: "e-1" });
-        yield* State.installLeaf(WorkerScope, { workerId: "w-1" });
+        yield* State.installBranch(EntryScope, { entryId: "e-1" });
+        yield* State.installBranch(WorkerScope, { workerId: "w-1" });
         const both = yield* State.Root;
-        yield* State.clearLeaf(WorkerScope);
+        yield* State.clearBranch(WorkerScope);
         const afterWorker = yield* State.Root;
-        yield* State.clearLeaf(EntryScope);
+        yield* State.clearBranch(EntryScope);
         const afterAll = yield* State.Root;
         return { both: both.current, afterWorker: afterWorker.current, afterAll: afterAll.current };
       }).pipe(Effect.provide(queueSeed)),
@@ -174,7 +174,7 @@ describe("memory — Ref lifetime and transition churn", () => {
   it("each root layer() gets a fresh Ref (no cross-run envelope leak)", () => {
     const first = Effect.runSync(
       Effect.gen(function* () {
-        yield* State.installLeaf(GateRunScope, { runId: "leftover" });
+        yield* State.installBranch(GateRunScope, { runId: "leftover" });
         return yield* State.Root;
       }).pipe(Effect.provide(seed({ resourceId: "a" }))),
     );
@@ -225,7 +225,7 @@ describe("concurrency — shared StateRootRef", () => {
   it("interleaved install without session wrapper can leave stale nest (anti-pattern)", () => {
     const env = Effect.runSync(
       Effect.gen(function* () {
-        yield* State.installLeaf(GateRunScope, { runId: "stale" });
+        yield* State.installBranch(GateRunScope, { runId: "stale" });
         // Missing clearLeaf — simulates a bug.
         return yield* State.Root;
       }).pipe(Effect.provide(seed())),

@@ -604,7 +604,7 @@ const makeEventNode = <S>(
 const makeOpProvide =
   (scope: RuntimeScope, telemetryHandle: Record<string, unknown>) =>
   (leaf: Record<string, unknown>): Effect.Effect<unknown, never, StateRootRef> =>
-    Effect.flatMap(State.installLeaf(scope, leaf), () =>
+    Effect.flatMap(State.installBranch(scope, leaf), () =>
       Effect.map(State.currentSlice(scope), (scopeSlice) => ({
         input: undefined,
         telemetry: telemetryHandle,
