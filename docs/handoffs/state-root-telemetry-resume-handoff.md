@@ -10,7 +10,7 @@
 | Doc | Use for |
 | --- | --- |
 | [telemetry-requirements.md](../recipes/telemetry-requirements.md) | API SSoT, Steps 1–8, calling invariants |
-| [state-root-bake.md](../recipes/state-root-bake.md) | Locked snapshot / envelope model (steps 1–7) |
+| [state-transition-op-provide-bake.md](../recipes/state-transition-op-provide-bake.md) | **Locked** two-tier branch model, dual API, steps 1–6 |
 | [telemetry-branch-issues.md](./telemetry-branch-issues.md) | Full issue register (mirrors §9 below) |
 | [run-resource-service-handoff.md](./run-resource-service-handoff.md) | RunResource tag/kernel split (R1–R6) |
 | [telemetry-implementation-handoff.md](./telemetry-implementation-handoff.md) | Original step order |
@@ -24,7 +24,7 @@
 
 Owner locked **`State.Root`** (process-state envelope) and nested **`RunResourceSnapshotSchema`** during bake. This doc is the **single resume point**: what to build next, what to pause, patterns to reject, and **all open issues**.
 
-**Do not implement Step 5–6** (runtime / materialize / kernel migration) until **`State.Root` lands in `src/State.ts`** (§4).
+**Do not implement Step 6 runtime** (materialize + operation runner + real `Telemetry.layer`) until **Phase A–B** in [telemetry-step52-transition-handoff.md](./telemetry-step52-transition-handoff.md) land (**two-tier branch stack**, effective `current`, materialize on `State.Root`).
 
 ---
 
@@ -33,12 +33,15 @@ Owner locked **`State.Root`** (process-state envelope) and nested **`RunResource
 | Kind | Trigger | Call site |
 | --- | --- | --- |
 | **Middle events** | **`yield*`** inside op body | `yield* ctx.telemetry.Retried` |
-| **Root-scoped events** | **`yield*`** when root ambient | `yield* RunResourceTelemetry.State.Changed` |
+| **`State.Changed`** | **`State.transition`** (internal) | **Not** `yield*` — envelope COW + policy-gated fan-out |
+| **Other root-scoped events** | **`yield*`** when root ambient | e.g. `yield* QueueResourceTelemetry.Lifecycle.Started` |
 | **Start / exit legs** | **Operation runner** on op entry/exit | **Do not yield** — runner emits `Telemetry.start` / `Telemetry.exit` legs |
 
 - Events are **zero-arg `Effect` values** — not functions (`Changed()` rejected).
 - **`yield* eventHandle`** is what triggers emit once Step 6 runtime is wired.
 - Materializer builds wire payload from scope, op input, wiring `bind`, terminals, and (for `State.Changed`) **`State.Root` envelope** — no hand-built objects at call sites.
+
+**Emit policy & config overrides:** owner-approved — see [telemetry-requirements § 9](../recipes/telemetry-requirements.md#9-emit-policy--config-overrides). Summary: author markers on scope/schema; runtime overrides via **`RunResourceTelemetry.layer(leaf, wiring, { state \| stateFlat, events \| eventsFlat })`**; extend fields not overridable; no `encoding` field.
 
 **Today on branch:** `yield*` compiles and runs; emit is a **no-op** until `Telemetry.layer` + operation runner land (Step 6). Step 4 stub must not throw when facet `.layer` absent.
 
@@ -85,21 +88,26 @@ const makeEventNode = (...): EventNode<S> => {
 
 ## Current branch status
 
+**Checkpoint (Jun 2026):** HEAD `c7f93f975` — **5.1, 5.2a, 5.2b, 5.4 (emit hook stub).** **Next:** [telemetry-step52-transition-handoff.md](./telemetry-step52-transition-handoff.md) — **Phase A** two-tier branch stack + dual API.
+
 | Area | Status | Notes |
 | --- | --- | --- |
 | R1–R6 RunResource tag/kernel split | ✅ Done | `RunResource.ts` tag-only; `RunResourceModule.ts` barrel; ISSUE-001 fixed |
-| Step 1a/1b `Telemetry.Schema` + `Telemetry.Tag` | ✅ Good | `.Struct`, wire ids, node handles |
+| Step 1a/1b `Telemetry.Schema` + `Telemetry.Tag` | ✅ Done | `.Struct`, wire ids, node handles |
 | Step 2 `RunResourceTelemetry` Tag port | ⚠️ Partial | Correct tree L260+; **debt:** `defineEvent`, `RunResourceHubTelemetry` same file |
-| Step 3a wiring value layer | ⚠️ Skeleton | Builders + collector ok; **`PlainFields` stub**; **`Telemetry.layer` discard stub** |
-| Step 3b PlainFields + `test-d.ts` | ❌ Not started | **Resume here** |
-| Step 4 calling API | ⚠️ Partial | `EventNode` staged (migrate to Prototype); missing op builder, `.provide`, `OperationContext` |
-| Step 5–6 runtime + kernel | ❌ Blocked | **Wait for `State.Root` in `State.ts`** |
-| `State.Root` envelope | ❌ Not started | Bake locked — §4 |
+| Step 3a wiring value layer | ✅ Done | Builders + collector; stub `Telemetry.layer` |
+| Step 3b PlainFields + `test-d.ts` | ✅ Done | `RequiredBindMap`, `BindShape`, negative cases |
+| Step 4 calling API | ✅ Done | `Effectable.Prototype` EventNode; `.provide`; `OperationContext`; `test/telemetry-calling.test.ts` |
+| **5.1** `State.Root` envelope + `transition` | ✅ Done | `21c2be3a3` — `test/state-root.test.ts` |
+| **5.2a** EmitPolicy markers + decode | ✅ Done | Override schema: no `"defer"` (CHK-21) |
+| **5.2b** op `.provide` → envelope | ✅ Done | `747c63a0b` — interim `installLeaf`; rename **branch** in Phase A |
+| **5.4 (stub)** emit hook on `transition` | ✅ Done | `c7f93f975` — no materializer yet |
+| **Phase A–C** branch stack + dual API + live read | ❌ **Next** | step52 handoff |
 | Nested snapshot schema (D5) | ❌ Not started | 8-file checklist in state-root-bake § step 7 |
 | `store/RunResourceTelemetry` export subpath | ❌ Missing | Step 0 gap |
 | Kernel `stateRef` + hub emits | ❌ Debt | Step 8 after runtime |
 
-**412 tests green** on typecheck/test/lint — does **not** validate materialize, exhaustiveness, or real emit.
+**454 tests green** — envelope ↔ op provide covered; branch stack + materialize not yet.
 
 ---
 
@@ -107,11 +115,14 @@ const makeEventNode = (...): EventNode<S> => {
 
 ### Continue now
 
-1. **Step 3b** — `PlainFields` / `RequiredBindMap` / strict `WiringConfig<Tag>`; `Telemetry.BindShape<S>`; `test/telemetry-wiring.test-d.ts` negative cases.
-2. **Step 4** — Migrate `makeEventNode` → **`Effectable.Prototype`**; Tag calling paths; `.provide(scopeLeaf)`; `OperationContext`; no-op when facet `.layer` absent.
-3. **D5 snapshot migration** — can precede `State.Root` if hub emits nested shapes first (state-root-bake § step 7).
+**Primary handoff:** [telemetry-step52-transition-handoff.md](./telemetry-step52-transition-handoff.md) — **Phase A** first.
 
-### Pause until `State.Root` ships
+1. **Phase A** — `StateBranchStackRegistry`, `StateRootRegistry`, `installBranch` / `patchBranch` / `clearBranch` (dual + `Pipeable`), rename interim `installLeaf`.
+2. **Phase B** — `Scope.run` → `withBranch`; `materializeSchema` → effective `State.Root.current`.
+3. **Phase C** — live `yield* Scope`; transition frame; op claim refcount.
+4. **Phase D** — `internal/telemetry/` runner — [telemetry-step5-emit-handoff.md](./telemetry-step5-emit-handoff.md).
+
+### Pause until Phase A–B land
 
 - `src/internal/telemetry/` (materialize, runner, telemetry-state)
 - **`Telemetry.layer` real implementation**
@@ -201,7 +212,7 @@ factory **auto-creates** internal **`State.Root`** envelope per scope instance.
 ### `State.Changed` materialize (Step 6+)
 
 - Wire `previous` / `current` from **`yield* State.Root`** (nested snapshot)
-- **`id`, `reason`** — auto from **`State.transition` frame** (not bind map)
+- **`id`, `operation`** — auto from **`State.transition` frame** (not bind map); **`operation`** = `` `${namespace}/${opPath.join("/")}` ``
 - **`changedAt`** — terminal
 - Transition: one **`Ref.modify`**, COW `previous = structuredClone(current)`, update `current`, emit
 
@@ -269,7 +280,7 @@ Add **`store/RunResourceTelemetry`** to `package.json` exports when module split
 ### Step 4 / EventNode
 
 - [ ] `makeEventNode` uses **`Effectable.Prototype`** (not Class; not assign-first)
-- [ ] `yield* RunResourceTelemetry.State.Changed` no-op before facet `.layer`
+- [ ] `State.transition` schedules `State.Changed` when facet `.layer` + policy allow (not `yield*` at call sites)
 - [ ] Op builder + `.provide(scopeLeaf)` + `OperationContext` stub
 
 ### Step 6 (after State.Root)
@@ -364,7 +375,7 @@ Escalate before coding if unclear:
 | # | Question | Status |
 | --- | --- | --- |
 | 1 | **`RootMetadata.version`** format — semver string only vs integer schema version key | **Open** |
-| 2 | **`State.Changed.reason`** — bind vs auto | **Resolved** — auto from `State.transition` frame |
+| 2 | **`State.Changed.reason`** — bind vs auto | **Resolved** — auto **`operation`** field from Tag op path; **`State.transition`** trigger |
 | 3 | **`State.Root` Context id** — always `` `${domain.key}/Root` `` vs scope segment | **Open** |
 | 4 | Bake step 8 — transition/envelope markers + `Telemetry.nodeLog` | **Paused** — owner approval pending |
 | 5 | Bake steps 9–10 — `State.transition` API, `Run` nest lifecycle | **Not baked** |

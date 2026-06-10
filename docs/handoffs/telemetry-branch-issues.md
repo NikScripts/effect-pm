@@ -3,7 +3,8 @@
 **Branch:** `cursor/telemetry-redesign-bake-faed`  
 **Worktree:** `effect-pm-alt-transport` (shared)  
 **SSoT:** [`docs/recipes/telemetry-requirements.md`](../recipes/telemetry-requirements.md)  
-**Handoff:** [`telemetry-implementation-handoff.md`](./telemetry-implementation-handoff.md) · [`state-root-telemetry-resume-handoff.md`](./state-root-telemetry-resume-handoff.md)  
+**Handoff:** [`telemetry-step52-transition-handoff.md`](./telemetry-step52-transition-handoff.md) (primary) · [`telemetry-implementation-handoff.md`](./telemetry-implementation-handoff.md) · [`state-root-telemetry-resume-handoff.md`](./state-root-telemetry-resume-handoff.md)  
+**Bake:** [`state-transition-op-provide-bake.md`](../recipes/state-transition-op-provide-bake.md) — two-tier branch model, dual API
 **Last reviewed:** Jun 2026
 
 Use this register to triage before claiming a step “done.” Gate per requirements: `pnpm run typecheck && pnpm test && pnpm run lint && pnpm run build`.
@@ -100,11 +101,10 @@ Telemetry.group("State")(
 **Correct target:**
 
 ```ts
-yield* RunResourceTelemetry.State.Changed;
-
 yield* RunResourceTelemetry.Run.run
   .provide({ runId })
   .pipe(Effect.flatMap((ctx) => config.effect(input)));
+// State.Changed — State.transition (internal), not yield* at kernel
 ```
 
 **Impact:** Production emit path is pre-bake debt; new Tag unused at runtime (Step 8).
@@ -198,9 +198,9 @@ Telemetry.operation("processEntry")(
 
 **Path:** `src/Telemetry.ts` (Tag factory — handles only)
 
-**Context:** `EventNode` + `makeEventNode` staged (currently **`Object.assign(Effect.sync(noop), meta)`** — migrate to **`Effectable.Prototype`** per resume handoff). Still missing: `.provide(scopeLeaf)`, `OperationContext`, op builder on Tag.
+**Context:** `EventNode` + `makeEventNode` use **`Effectable.Prototype`**. `.provide(scopeLeaf)`, `OperationContext`, op builder on Tag — **landed** (`test/telemetry-calling.test.ts`).
 
-**Status:** ⚠️ Partial
+**Status:** ✅ **Resolved** (Step 4)
 
 ---
 
@@ -208,9 +208,9 @@ Telemetry.operation("processEntry")(
 
 **Path:** `src/Telemetry.ts` (`makeEventNode`, TSDoc ~L491–525)
 
-**Context:** Effect v4 (`effect@4.0.0-beta.76`) idiomatic pattern is `Effectable.Prototype({ label, evaluate })` + `Object.create` — same as `Config.make`. `Effectable.Class` hangs (Base `evaluate` returns `this`). `Object.assign(Effect.sync(noop), meta)` works but is **last resort**; Step 6 should swap `evaluate`, not frozen Sync primitive.
+**Context:** Effect v4 idiomatic pattern is `Effectable.Prototype({ label, evaluate })` + `Object.create` — landed in `makeEventNode`.
 
-**Status:** ❌ Open — migrate when touching Step 4
+**Status:** ✅ **Resolved**
 
 ---
 

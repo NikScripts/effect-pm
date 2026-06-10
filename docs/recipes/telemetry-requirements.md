@@ -17,13 +17,14 @@
 1. **No event payloads at call sites** — not `{ payload: { concurrency } }`, not hand-built `Started({ id, occurredAt, … })`. Events are **zero-arg**; the layer materializes from scope, operation input, `Telemetry.terminal.*`, wiring `bind`, and `Exit.*`.
 2. **Root / lifetime scope** — install via **`State.Scope.layer` / `.provide` / `.run`** at the kernel boundary that owns that lifetime (Pattern A in [plan 18](../plans/18-resource-state-scope.md)). **Not** on the telemetry operation builder.
 3. **Operation scope** — **`.provide(scopeLeaf)` on operations only** (typed from the scope declared on that op's Tag). **Never** `.provide()` on events.
-4. **Events are `Effect` values** — `yield* RunResourceTelemetry.State.Changed` — **not** `Changed()` (events are not functions). Each handle is an **`Effectable.Prototype`** value carrying `{ wire, path, schema }` — see [Step 4](#step-4--calling-api--operationcontext-slice-b).
+4. **Middle / standalone wire events** — `yield* ctx.telemetry.Retried`, `yield* Service.Group.Event`, etc. — **zero-arg `Effect` values**, not `Event()` functions. Each handle is **`Effectable.Prototype`** with `{ wire, path, schema }` — see [Step 4](#step-4--calling-api--operationcontext-slice-b). **Exception: `State.Changed`** — see invariant 11.
 5. **Start / exit** — **operation runner** emits when the Tag declares `Telemetry.start` / `Telemetry.exit`. Kernel does **not** `yield* ctx.telemetry.Started` (or any start leg) — start fires immediately on op entry.
 6. **Middle events** — `yield* ctx.telemetry.Retried` etc. **inside** an operation body only — materialize from **op scope + op input** established by `.provide()` on that op.
-7. **Standalone root-scoped events** — `yield* Service.Group.Event` when root scope is already ambient (e.g. `State.Changed` after `RunResourceScope.layer` on the gate). Leaf-scoped facts require an **operation** with `Telemetry.start` / `Telemetry.exit` — not a bare Service event + `.provide()`.
+7. **Standalone root-scoped events** — `yield* Service.Group.Event` when root scope is already ambient. Leaf-scoped facts require an **operation** with `Telemetry.start` / `Telemetry.exit` — not a bare Service event + `.provide()`. **`State.Changed` is not in this list** — see invariant 11.
 8. **Exit-first operations** — default op shape is **`Telemetry.exit` only** (how it finished). Add `Telemetry.start` when start matters; add middle `Telemetry.event`s when needed between start and exit.
 9. **Operation input ≠ event payload** — `op(input)` passes only what the Tag declares on `Telemetry.operation<Input>`. Scope fields (`runId`, `entryId`, …) go through **`.provide()` on the op**, not operation input.
-10. **Wire ids / reason literals** — use **`telemetryWireId`** (or Tag-generated helper), e.g. `STATE_CHANGE_REASONS` — never ad-hoc string literals in schemas or kernel.
+10. **Wire ids** — use **`telemetryWireId`** (or Tag-generated helper) — never ad-hoc string literals in schemas or kernel.
+11. **`State.Changed` (locked)** — **auto** on Tag (wire id + schema + bind target); **not** author-declared long-term (interim explicit `Telemetry.event("Changed", …)` ok until Step 6). **Not** emitted via `yield*` at call sites — **`State.transition`** updates envelope (always COW) and schedules fan-out per emit policy. Handle exists for **wiring / log legs** only (`Telemetry.bind(State.Changed, {}).pipe(…)`). Wire field **`operation`** (not `reason`) — precomputed `` `${namespace}/${opPath.join("/")}` `` at Tag build.
 
 ---
 
@@ -38,12 +39,13 @@
 6. [RunResource — full target](#6-runresource--full-target)
 7. [Queue — full target](#7-queue--full-target)
 8. [Compose, layers, registry](#8-compose-layers-registry)
-9. [Internal emit pipeline](#9-internal-emit-pipeline)
-10. [Module layout & exports](#10-module-layout--exports)
-11. [Store / RPC (separate track, approved)](#11-store--rpc-separate-track-approved)
-12. [Rejected (do not build)](#12-rejected-do-not-build)
-13. [Undocumented / verify before merge](#undocumented--verify-before-merge)
-14. [Implementation change log](#implementation-change-log)
+9. [Emit policy & config overrides](#9-emit-policy--config-overrides)
+10. [Internal emit pipeline](#10-internal-emit-pipeline)
+11. [Module layout & exports](#11-module-layout--exports)
+12. [Store / RPC (separate track, approved)](#12-store--rpc-separate-track-approved)
+13. [Rejected (do not build)](#13-rejected-do-not-build)
+14. [Undocumented / verify before merge](#undocumented--verify-before-merge)
+15. [Implementation change log](#implementation-change-log)
 
 ---
 
@@ -143,9 +145,8 @@ yield* RunResourceTelemetry.Run.run
   .provide({ runId })
   .pipe(Effect.flatMap((ctx) => config.effect(input)));
 
-// State.Changed — Effect (not a function); root ambient from RunResourceScope.layer on gate
-yield* RunResourceTelemetry.State.Changed;
-// metrics leg updates telemetry state before emit; wiring materializes reason/previous/current
+// State.Changed — NOT yield* at call sites. Internal State.transition updates envelope
+// and schedules fan-out; materializer reads State.Root + transition frame (operation, id).
 ```
 
 ---
@@ -252,17 +253,21 @@ export const STATE_WAITING_WIRE = telemetryWireId("RunResource", ["State"], "Wai
 // …
 ```
 
-export const STATE_CHANGE_REASONS = [
-  STATE_WAITING_WIRE,
-  STATE_STARTED_WIRE,
-  STATE_COMPLETED_WIRE,
-  STATE_FAILED_WIRE,
-  STATE_INTERRUPTED_WIRE,
-  STATE_WAIT_INTERRUPTED_WIRE,
-] as const;
+**`State.Changed` wire field `operation`** — string path `` `${namespace}/${opPath.join("/")}` `` (e.g. `RunResource/Run/run`), precomputed at Tag build. **Supersedes** hub-era `STATE_CHANGE_REASONS` / `reason` literal union — delete with Step 8 debt.
+
+```ts
+class RunResourceStateChanged extends Telemetry.Schema<RunResourceStateChanged>()(
+  RunResourceScope,
+)({
+  id: Schema.String,
+  changedAt: Telemetry.terminal.clockMillis,
+  operation: Schema.String,
+  previous: Schema.NullOr(RunResourceSnapshotSchema),
+  current: RunResourceSnapshotSchema,
+}) {}
 ```
 
-Schemas (fields unchanged from golden branch):
+Other event schemas (fields unchanged from golden branch):
 
 ```ts
 const RunState = RunScope.Schema.State;
@@ -294,18 +299,8 @@ class RunResourceRunFailed extends Telemetry.Schema<RunResourceRunFailed>()(
   }),
 }) {}
 
-class RunResourceStateChanged extends Telemetry.Schema<RunResourceStateChanged>()(
-  RunResourceScope,
-)({
-  id: Schema.String,
-  changedAt: Telemetry.terminal.clockMillis,
-  reason: Schema.Literals(STATE_CHANGE_REASONS),
-  previous: Schema.NullOr(RunResourceSnapshotSchema),
-  current: RunResourceSnapshotSchema,
-}) {}
-```
-
-Tag tree — **`run` operation** owns Run start/exit; `State.Changed` standalone event:
+// Interim: explicit group until Tag factory auto-injects State.Changed (Step 6).
+Tag tree — **`run` operation** owns Run start/exit; **`State.Changed`** handle for wiring:
 
 ```ts
 import { RunResource } from "../RunResource";
@@ -397,7 +392,7 @@ Telemetry.operation<{
 
 | Kind | Type | `.provide()`? | Call |
 | --- | --- | --- | --- |
-| **Event (standalone, root-scoped)** | `Effect` | **No** | `yield* Service.Group.Event` when root ambient |
+| **Event (standalone, root-scoped)** | `Effect` | **No** | `yield* Service.Group.Event` when root ambient (**not** `State.Changed` — invariant 11) |
 | **Operation (exit-only or start+exit)** | builder → `Effect` | **Yes** — op's declared scope leaf | `yield* Service.Group.op(input?).provide({ … })` |
 | **Operation with body** | builder → `Effect` | **Yes** | `.provide({ … }).pipe(Effect.flatMap(ctx => …))` |
 | **Middle event** | `Effect` on `ctx.telemetry` | **No** | `yield* ctx.telemetry.Retried` inside op body |
@@ -439,9 +434,7 @@ return makeRunGateBody(config).pipe(
   Effect.provide(RunResourceScope.layer({ resourceId })),
 );
 
-// Per invocation — metrics leg, then standalone root event
-yield* RunResourceTelemetry.State.Changed;
-
+// Per invocation — State.transition (internal) updates envelope + schedules State.Changed
 yield* RunResourceTelemetry.Run.run
   .provide({ runId })
   .pipe(Effect.flatMap((ctx) => config.effect(input)));
@@ -503,7 +496,7 @@ yield* QueueResourceTelemetry.DedupeKey.releaseDedupeKey({})
 ```ts
 // queueId / resourceId ambient from State.Scope.layer on runtime
 yield* QueueResourceTelemetry.Lifecycle.Started;
-yield* RunResourceTelemetry.State.Changed;
+// State.Changed — NOT here; emitted by State.transition (invariant 11)
 ```
 
 #### Three operation kinds
@@ -615,13 +608,13 @@ export const runResourceWiring = Wiring.sections(
   Telemetry.bind(RunResourceTelemetry.State.Changed, {}).pipe(
     Telemetry.logWarning(
       "RunResourceStore write failed for state change",
-      ({ reason }) => ({ reason: String(reason) }),
+      ({ operation }) => ({ operation: String(operation) }),
     ),
   ),
 ) satisfies WiringConfig<typeof RunResourceTelemetry>
 ```
 
-**`State.Changed`:** no bind fields — `id`, `reason`, `previous`, `current` materialize from **`State.transition` frame + `State.Root`**; `changedAt` terminal. See [state-root-bake.md](./state-root-bake.md). **Reject** `pending*` scratch fields.
+**`State.Changed`:** no bind fields — `id`, `operation`, `previous`, `current` materialize from **`State.transition` frame + `State.Root`**; `changedAt` terminal. See [state-root-bake.md](./state-root-bake.md). **Reject** `pending*` scratch fields.
 
 // store/RunResourceTelemetry.service.ts — facet runtime Layer (regular Layer typing)
 export const runResourceTelemetryLayer = Telemetry.layer(
@@ -639,7 +632,7 @@ export const runResourceTelemetryLayer = Telemetry.layer(
 
 ```ts
 yield* RunResourceTelemetry.Run.run.provide({ runId }).pipe(…)
-yield* RunResourceTelemetry.State.Changed
+// State.Changed — internal State.transition only; not yield* at kernel
 ```
 
 #### `Telemetry.bind` + pipe (log legs)
@@ -658,7 +651,7 @@ From each event schema, compute **`PlainFields<Schema>`** — plain `Schema.*` l
 | --- | --- |
 | Scope-bound (`RunScope.State.runId`) | **Omit** — auto at materialize |
 | Terminal (`Telemetry.terminal.*`) | **Omit** — auto |
-| Literal union constrained (`Schema.Literals(STATE_CHANGE_REASONS)`) | **Bind** when value comes from telemetry state (e.g. `reason`) |
+| Literal union constrained | **Bind** when value comes from **`Telemetry.state.from`** (not auto-materialized `State.Changed` fields) |
 | Plain `Schema.*` / nested struct | **Required** in `Telemetry.bind` |
 
 ```ts
@@ -734,7 +727,7 @@ Each step has **deliverables**, **code target**, **acceptance**, and **verify co
 
 **Supersedes:** Step 0 `RunResourceIdentity.ts` / `@nikscripts/effect-pm/RunResourceIdentity` — delete on RunResource service migration (R4).
 
-**Acceptance:** Docs map matches [§ Module layout](#10-module-layout--exports). No domain subfolders under `store/`.
+**Acceptance:** Docs map matches [§ Module layout](#11-module-layout--exports). No domain subfolders under `store/`.
 
 ---
 
@@ -851,7 +844,7 @@ const makeEventNode = (...): EventNode<S> => {
 
 **Note:** The implementer's v4 empirical test was right about Class looping and Prototype working. The "`Object.create` needs `as` cast" claim was wrong — Effect annotates the factory return type (`Config.make`, `makeEventNode`) without `as` casts.
 
-**Acceptance:** RunResource `Run.run` + Queue `Entry.enqueue` / `Entry.processEntry` typecheck; **no event payloads** at call sites; events are **`Effect` values** (no `()`); **`yield* RunResourceTelemetry.State.Changed`** runs as no-op before facet `.layer`.
+**Acceptance:** RunResource `Run.run` + Queue `Entry.enqueue` / `Entry.processEntry` typecheck; **no event payloads** at call sites; middle/standalone wire events are **`Effect` values** (no `()`); **`State.Changed`** not emitted via `yield*` (transition machinery only).
 
 ```ts
 yield* RunResourceTelemetry.Run.run.provide({ runId }).pipe(
@@ -888,7 +881,7 @@ yield* QueueResourceTelemetry.Entry.enqueue({ key, priority, attempts })
 - **`Telemetry.withLayer(tag, layer)`** facet export.
 - Operation runner emits **start** on op entry, **exit** on op completion.
 - Middle events via `yield* ctx.telemetry.*`.
-- Emit pipeline (see [§ 9](#9-internal-emit-pipeline)).
+- Emit pipeline (see [§ 10](#10-internal-emit-pipeline)); emit policy (see [§ 9](#9-emit-policy--config-overrides)).
 - `Telemetry.Wire<typeof Tag>` — no raw wire strings in kernel.
 - **`bind.pipe` log legs** on persist fail (v1: **`logWarning`** + swallow).
 
@@ -988,15 +981,14 @@ See [API 3 wiring example](#api-3--wiring--telemetryservice) — handles under `
 yield* RunResourceHubTelemetry.Run.started({ resourceId, runId, occurredAt, payload: { concurrency } });
 yield* RunResourceHubTelemetry.State.changed({ id, changedAt, reason, previous, current });
 
-// AFTER — gate factory provides root once
+// AFTER — gate factory provides root once; envelope + State.Changed via internal State.transition
 return Effect.gen(function* () {
   const sem = yield* Semaphore.make(concurrency);
   return (input: T) =>
     Effect.gen(function* () {
       const runId = yield* nextRunId;
 
-      yield* publishStateTransition(/* Waiting */);
-      yield* RunResourceTelemetry.State.Changed;
+      yield* State.transition(/* internal — waiting / inFlight extend + envelope COW + Changed fan-out */);
 
       yield* Effect.acquireUseRelease(
         acquirePermit,
@@ -1014,8 +1006,7 @@ return Effect.gen(function* () {
         () => Effect.asVoid(sem.release(1)),
       );
 
-      yield* publishStateTransition(/* terminal reason */);
-      yield* RunResourceTelemetry.State.Changed;
+      yield* State.transition(/* internal — terminal extend + envelope + Changed fan-out */);
     });
 }).pipe(Effect.provide(RunResourceScope.layer({ resourceId })));
 ```
@@ -1152,13 +1143,183 @@ const runResourceStack = Layer.provideMerge(
 
 ```ts
 yield* RunResourceTelemetry.Run.run.provide({ runId }).pipe(…);
-yield* RunResourceTelemetry.State.Changed;
-// facet .layer → TelemetryRouter.emit → sinks → (optional) telemetryTransport
+// State.Changed — State.transition → facet .layer → TelemetryRouter.emit → sinks
 ```
 
 ---
 
-## 9. Internal emit pipeline
+## 9. Emit policy & config overrides
+
+**Status:** Owner-approved Jun 2026.
+
+Two surfaces share policy **markers** (`State.noEmit`, `State.deferEmit`, `State.debounceEmit(duration)`,
+`State.rateLimitEmit(duration)`) but compile separate tables:
+
+| Surface | What it schedules | Default source |
+| --- | --- | --- |
+| **State envelope** | Auto **`State.Changed`** fan-out (one emit = full scope snapshot) | `State.Scope` / `withLeaf` + `Telemetry.extend` author markers |
+| **Telemetry wire events** | `Started`, `Completed`, middle legs, … | `Telemetry.Schema` third arg + declared-field pipes |
+
+Author markers compile to internal `EmitPolicy` (`immediate` \| `never` \| `defer` \| `debounce` \| `rateLimit`).
+Config overrides use serializable **`EmitPolicyOverride`** — **`immediate` \| `never` \| debounce \| rateLimit only** (no
+**`defer`** in overrides v1; defer is author-only via scope/schema markers). Decodes to the same internal union minus
+config-only defer.
+
+### Author-time defaults (locked)
+
+**Scope** — third arg applies to **direct fields in that `{ … }` block only** (not nested leaves, not extend):
+
+```ts
+class RunResourceScope extends State.Scope(RunResource)(
+  {
+    resourceId: Schema.String,
+    concurrency: Schema.Number.pipe(State.debounceEmit("50 millis")),
+  },
+  State.noEmit,
+) {}
+
+class RunScope extends RunResourceScope.withLeaf(
+  "Run",
+  { runId: Schema.String },
+  State.deferEmit,
+) {}
+
+Telemetry.extend(RunResourceScope, {
+  inFlight: Schema.Number.pipe(State.deferEmit),
+  waiting: Schema.Number.pipe(State.rateLimitEmit("200 millis")),
+})
+```
+
+Field `.pipe(State.debounceEmit(…))` **overrides** scope third-arg default for that field. **`Telemetry.extend`**
+fields register their own author policy — scope third arg does **not** apply to them.
+
+**Telemetry.Schema** — optional third arg = whole-event schedule; field pipes apply to **declared plain fields in the
+schema body only** (not scope selectors, terminals, nested snapshot schemas, or wiring bind materialized fields):
+
+```ts
+class RunResourceRunStarted extends Telemetry.Schema<RunResourceRunStarted>()(
+  RunScope,
+  State.immediateEmit,
+)({
+  runId: RunScope.Schema.State.Run.runId,
+  occurredAt: Telemetry.terminal.clockMillis,
+  payload: Schema.Struct({
+    concurrency: Schema.Number.pipe(State.debounceEmit("100 millis")),
+  }),
+}) {}
+```
+
+**Tag op gates** — `State.emit` / `State.noEmit` on the Tag tree (namespace / group / op); default **no emit**;
+inherit from ancestors. **Not** runtime-configurable in v1.
+
+**`State.Changed`** — auto-added on Tag; **not** author-defined; fan-out driven by scope field policies + op gates.
+**Not** overridable via `events` / `eventsFlat` — use `state` / `stateFlat` only.
+
+### Config overrides — tree and flat (locked)
+
+**Generated** at scope / Tag build time from a closed **field catalog** (author scope keys + nested leaf keys only):
+
+- **`defaultStateEmitPolicy`** / **`defaultEventEmitPolicy`** — const runtime tables from author markers
+- **`EmitConfigTree`**, **`EmitConfigFlat`**, **`EmitPath`** — TypeScript override shapes
+- **`EmitConfigTreeSchema`**, **`EmitConfigFlatSchema`** — Effect `Config` decode (`onExcessProperty: "error"`)
+
+**Overridable:** author `State.Scope` / `withLeaf` fields only.
+
+**Not overridable (hidden from config types and schemas):**
+
+- **`Telemetry.extend`** fields (`waiting`, `inFlight`, …) — author policy only
+- Scope selectors, terminals, bind materialized fields, envelope internals
+- Tag op gates (`State.emit` / `State.noEmit`)
+
+**No `encoding` field.** Tree vs flat is distinguished by **key names** + mutual-exclusion types + **`layer`
+overloads**:
+
+```ts
+type EmitOverridesTree = {
+  readonly state?: RunResourceScope.EmitConfigTree
+  readonly events?: RunResourceTelemetry.EventEmitConfigTree
+  readonly stateFlat?: never
+  readonly eventsFlat?: never
+}
+
+type EmitOverridesFlat = {
+  readonly stateFlat?: RunResourceScope.EmitConfigFlat
+  readonly eventsFlat?: RunResourceTelemetry.EventEmitConfigFlat
+  readonly state?: never
+  readonly events?: never
+}
+```
+
+**Tree example:**
+
+```ts
+RunResourceTelemetry.layer(
+  { resourceId, concurrency },
+  RunResourceWiring,
+  {
+    state: {
+      resourceId: { debounce: "250 millis" },
+      Run: { runId: { debounce: "100 millis" } },
+    },
+    events: {
+      Started: { debounce: "100 millis" },
+    },
+  },
+)
+```
+
+**Flat example:**
+
+```ts
+RunResourceTelemetry.layer(leaf, wiring, {
+  stateFlat: {
+    resourceId: { debounce: "250 millis" },
+    "Run.runId": { debounce: "100 millis" },
+  },
+  eventsFlat: {
+    "Run.run.Started": { debounce: "100 millis" },
+  },
+})
+```
+
+Mixing tree and flat keys in one object is a **compile error**. Scope-only installs use the same pattern on
+**`RunResourceScope.layer(leaf, { state: … })`** or **`{ stateFlat: … }`**.
+
+Internally: normalize flat → tree → **`mergeEmitPolicyTree(defaults, patch)`**. Reuse **`ResourceConfigure.foldConfig`**
++ patch-list tags (`@nikscripts/effect-pm/StateEmit/…`, `@nikscripts/effect-pm/EventEmit/…`) — **not** exported
+`configureStateEmit` + manual **`Layer.provideMerge`**.
+
+**Effect Config** — app picks one schema:
+
+```ts
+Config.schema(RunResourceTelemetry.EmitConfigTreeSchema, "telemetry.emit.RunResource")
+// or EmitConfigFlatSchema for dotted-path env files
+```
+
+### Facet `layer` overloads (locked)
+
+Codegen on **`Telemetry.withLayer`** export:
+
+```ts
+RunResourceTelemetry.layer(leaf, wiring, overrides?: EmitOverridesTree): Layer
+RunResourceTelemetry.layer(leaf, wiring, overrides: EmitOverridesFlat): Layer
+```
+
+Implementation merges scope + telemetry layers; optional override arg registers patches when the facet layer acquires.
+
+### Type safety (locked)
+
+| Layer | Mechanism |
+| --- | --- |
+| Compile time | Catalog-generated types — unknown keys are TS errors |
+| Schema decode | Struct with exact optional keys only; excess properties fail |
+| Runtime merge | Flat normalized before merge; no silent drops |
+
+Add **`*.test-d.ts`** asserting invalid keys / mixed encodings fail.
+
+---
+
+## 10. Internal emit pipeline
 
 **Location:** `src/internal/telemetry/` — **no public subpath**.
 
@@ -1192,7 +1353,7 @@ OR yield* Tag/Export.Group.Event (standalone Effect — root ambient; no .provid
 
 ---
 
-## 10. Module layout & exports
+## 11. Module layout & exports
 
 ```text
 src/Telemetry.ts                         — Tag, Wiring, layer, withLayer, registry
@@ -1238,7 +1399,7 @@ Layer.effect(MyTag)(makeImpl);
 
 ---
 
-## 11. Store / RPC (separate track, approved)
+## 12. Store / RPC (separate track, approved)
 
 Not blocking telemetry slices A–D; document so agents do not conflate.
 
@@ -1275,7 +1436,7 @@ Procedure.payload(Query).success(Result).failure(Error);
 
 ---
 
-## 12. Rejected (do not build)
+## 13. Rejected (do not build)
 
 | Proposal | Why |
 | --- | --- |
@@ -1304,7 +1465,13 @@ Procedure.payload(Query).success(Result).failure(Error);
 | Tag-first “package depends only on Tag” store rule | Rejected — `Store.Tag` is **contract with schemas**, not bare DI |
 | Kernel reads telemetry counters for gating | Semaphore only |
 | Invented op fields (e.g. `name` on RunResource) | Operation input must match Tag `Telemetry.operation<Input>` |
-| Ad-hoc wire/reason string literals | `telemetryWireId` + `STATE_CHANGE_REASONS` |
+| Ad-hoc wire string literals | `telemetryWireId` + Tag-generated helpers |
+| `yield*` **`State.Changed`** at call sites | **`State.transition`** schedules fan-out (invariant 11) |
+| Hub-era **`reason`** / **`STATE_CHANGE_REASONS`** on Changed wire | **`operation`** string precomputed at Tag build |
+| `ResourceConfigure.configure()` for emit overrides | Use **`Telemetry.layer` / `Scope.layer` optional override arg** (§ 9) |
+| `encoding: "tree" \| "flat"` discriminator | **`state`/`events` vs `stateFlat`/`eventsFlat`** + overloads |
+| Config override of **`Telemetry.extend`** fields | Author markers only — hidden from config catalog |
+| Public **`configureStateEmit`** + manual **`Layer.provideMerge`** | Internal patch tags + folded into facet **`layer`** |
 
 ---
 
@@ -1328,8 +1495,13 @@ Procedure.payload(Query).success(Result).failure(Error);
 | **CHK-15** | Standalone root-scoped events | **LOCKED** | Bare `yield* Tag/Export.Group.Event` when root ambient via `State.Scope.layer` |
 | **CHK-16** | Router rename | **LOCKED** | **`TelemetryRouter`** replaces **`TelemetryHub`** |
 | **CHK-17** | Bind exhaustiveness proof | **LOCKED** | **`satisfies WiringConfig<Tag>`** at define; **`*.test-d.ts`**; no fake error types |
-| **CHK-18** | Literal fields needing state (`reason`) | **LOCKED** | Count as **PlainFields** when value comes from **`Telemetry.state.from`** |
+| **CHK-18** | Literal fields needing state | **LOCKED** | Count as **PlainFields** when value comes from **`Telemetry.state.from`** |
+| **CHK-22** | **`State.Changed` trigger + wire `operation`** | **LOCKED** | **`State.transition`** emits; not `yield*`; **`operation`** not `reason`; see calling invariant 11 |
 | **D5** | Snapshot schema | **LOCKED** | **`RunResourceSnapshotSchema`** in **`src/store/RunResourceState.ts`** — nested `CurrentShape`; wire/archive/store match live envelope; see [state-root-bake.md](./state-root-bake.md) |
+| **CHK-19** | Emit policy markers + scope/schema defaults | **LOCKED** | § [9](#9-emit-policy--config-overrides) — `State.noEmit`, `deferEmit`, `debounceEmit`, `rateLimitEmit`; scope `withLeaf` third arg; schema third arg |
+| **CHK-20** | Emit config overrides (tree + flat) | **LOCKED** | `state`/`events` vs `stateFlat`/`eventsFlat`; mutual exclusion; no `encoding` field; catalog excludes extend/hidden fields |
+| **CHK-21** | Facet `layer` emit overrides | **LOCKED** | **`RunResourceTelemetry.layer(leaf, wiring, overrides?)`** overloads; internal `foldConfig`; reject public `configureStateEmit` + `provideMerge`; **no `defer` in overrides v1** |
+| **CHK-23** | **`defer` author placement** | **LOCKED** | Tag/wiring compile error if `defer` on non-op author fields; extend exception when facet has ops; runtime: no op frame → immediate fan-out |
 
 **Resolved (do not re-litigate):**
 
@@ -1354,6 +1526,8 @@ Append when implementation adds something **not** in locked sections above.
 | 2026-06-08 | cursor/telemetry-redesign-bake-faed | **D5 (flat):** `RunResourceStateSchema` → `src/store/RunResourceState.ts` | yes — **superseded** |
 | 2026-06-08 | cursor/telemetry-redesign-bake-faed | **State.Root bake:** nested `RunResourceSnapshotSchema`, envelope COW, `State.previous(scope)`, event vs snapshot fields, store decode migration — [state-root-bake.md](./state-root-bake.md) | yes |
 | 2026-06-08 | cursor/telemetry-redesign-bake-faed | **`EventNode` mechanism:** prefer **`Effectable.Prototype`** + `Object.create`; `Object.assign(Effect.sync(noop), meta)` last resort | yes |
+| 2026-06-08 | cursor/telemetry-redesign-bake-faed | **Emit policy + config overrides:** author markers; tree (`state`/`events`) vs flat (`stateFlat`/`eventsFlat`); generated catalog types; facet **`layer` overloads**; extend fields not overridable — § 9 | yes |
+| 2026-06-08 | cursor/telemetry-redesign-bake-faed | **`State.Changed`:** **`State.transition`** trigger (not `yield*`); wire **`operation`** replaces **`reason`** / `STATE_CHANGE_REASONS`; calling invariant 11 | yes |
 
 ```markdown
 | YYYY-MM-DD | cursor/… | Description | yes/no |
@@ -1370,7 +1544,7 @@ Append when implementation adds something **not** in locked sections above.
 - [ ] Zero-arg event emits — events are **Effects** (no `()`)
 - [ ] Operations use **`.provide(scopeLeaf)`** only
 - [ ] Root scope via **`State.Scope.layer`** at lifetime
-- [ ] Facet export: **`Telemetry.withLayer`**; layer requires **`TelemetryRouter`**
+- [ ] Facet export: **`Telemetry.withLayer`**; layer requires **`TelemetryRouter`**; optional emit overrides on **`layer(leaf, wiring, overrides?)`** (§ 9)
 - [ ] Compose uses **`TelemetryRouter.layer`** (not TelemetryHub)
 - [ ] No `defineEvent` / no kernel `stateRef` (Step 8+)
 - [ ] Emit `R` never includes `RuntimeStorage`

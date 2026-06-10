@@ -2,7 +2,7 @@
 
 **Branch:** `cursor/telemetry-redesign-bake-faed`  
 **Goal:** Lock how live scope state, telemetry extend fields, and `State.Changed` wire snapshots relate — so implementer can ship `State.Root` and delete scratch/`pending*` patterns.  
-**SSoT after bake:** [telemetry-requirements.md](./telemetry-requirements.md) + [state-root-telemetry-resume-handoff.md](../handoffs/state-root-telemetry-resume-handoff.md)
+**SSoT after bake:** [telemetry-requirements.md](./telemetry-requirements.md) + [state-transition-op-provide-bake.md](./state-transition-op-provide-bake.md) (branch lifecycle, dual API) + [state-root-telemetry-resume-handoff.md](../handoffs/state-root-telemetry-resume-handoff.md)
 
 **Non-goals:** Implement `State.ts`; kernel migration; wiring runtime.
 
@@ -13,7 +13,7 @@
 - **`State.Root`** — auto envelope per domain scope instance; authors never declare it.
 - Envelope top level: optional spread from domain tag **`static Root`** (plain JSON, optional, manual per domain).
 - **`previous: null | CurrentShape`**, **`current: CurrentShape`** — transition machinery owns `previous`; authors write `current`.
-- **`yield* RunResourceScope`** / leaf scopes — process view (unchanged author ergonomics).
+- **`yield* RunResourceScope`** / branch scopes — process view (see [state-transition-op-provide-bake.md](./state-transition-op-provide-bake.md) for two-tier **branch** model).
 - **`yield* State.Root`** — full envelope; **internal only** (`internal/telemetry`, transition emit).
 - **No auto `metadata` field** — only keys authors put in `static Root`.
 - **`RootMetadata` type** — JSON-safe; forbids `previous` / `current` keys on static object.
@@ -74,7 +74,7 @@ root.current;
 | API | Reads | Filter | Who |
 | --- | --- | --- | --- |
 | `yield* RunResourceScope` | `current` | process (no extend) | kernel / process |
-| `yield* RunScope` | `current` | leaf slice | op runner |
+| `yield* RunScope` | `current` | branch slice | op runner |
 | **`yield* State.previous(Scope)`** | **`previous`** | **same as paired scope** | kernel / process |
 | `yield* State.Root` | `previous` + `current` | none (full tree) | `internal/telemetry` only |
 
@@ -103,8 +103,8 @@ root.current;
 ## Open recipe steps (continued)
 
 8. **Auto-materialize field markers + log-only wiring** *(paused — see EventNode lock below)* — `State.Changed` has no bind map
-9. **`State.transition` + `State.Root` service API** — pending
-10. **Leaf nest lifecycle (`Run` in `current`)** — pending
+9. **`State.transition` + op `.provide`** — **locked** [state-transition-op-provide-bake.md](../recipes/state-transition-op-provide-bake.md); implementer handoff: [telemetry-step52-transition-handoff.md](../handoffs/telemetry-step52-transition-handoff.md)
+10. **Leaf nest lifecycle (`Run` in `current`)** — **locked** with step 2 (install on provide, clear on op exit)
 
 ---
 
@@ -151,7 +151,7 @@ class RunResourceStateChanged extends Telemetry.Schema<RunResourceStateChanged>(
 )({
   id: Schema.String,
   changedAt: Telemetry.terminal.clockMillis,
-  reason: Schema.Literals(STATE_CHANGE_REASONS),
+  operation: Schema.String,
   previous: Schema.NullOr(RunResourceSnapshotSchema),
   current: RunResourceSnapshotSchema,
 }) {}
@@ -161,13 +161,15 @@ class RunResourceStateChanged extends Telemetry.Schema<RunResourceStateChanged>(
 | --- | --- | --- |
 | `changedAt` | **event** | `Telemetry.terminal.clockMillis` |
 | `id` | **event** | **Auto** — transition frame (monotonic seq / string id minted in `State.transition`) |
-| `reason` | **event** | **Auto** — `State.transition(reason, …)` argument |
+| `operation` | **event** | **Auto** — precomputed at Tag build: `` `${namespace}/${opPath.join("/")}` `` |
 | `previous` | **snapshot** | **Auto** — `State.Root.previous` |
 | `current` | **snapshot** | **Auto** — `State.Root.current` |
 
+**Emit trigger:** **`State.transition`** schedules fan-out — **not** `yield* RunResourceTelemetry.State.Changed` at call sites.
+
 **`State.Changed` wiring v1:** **no `Telemetry.bind` fields** — optional `.pipe(log…)` only. All payload fields materialize from transition frame + envelope.
 
-**Reject:** `pendingPreviousSnapshot`, `pendingCurrentSnapshot`, `pendingReasonWire`, `observedAt` in snapshot, bind entries for `previous`/`current`/`reason`/`id`.
+**Reject:** `pendingPreviousSnapshot`, `pendingCurrentSnapshot`, `pendingReasonWire`, `observedAt` in snapshot, bind entries for `previous`/`current`/`operation`/`id`, hub-era **`reason`** / **`STATE_CHANGE_REASONS`**.
 
 **Wiring (API 3):**
 
@@ -191,7 +193,7 @@ Telemetry.bind(RunResourceTelemetry.State.Changed, {}).pipe(
 
 **Locked:**
 
-- **All `State.Changed` fields auto-materialize** — transition frame (`id`, `reason`) + envelope (`previous`, `current`) + terminal (`changedAt`). **No bind map**; optional log `.pipe` only.
+- **All `State.Changed` fields auto-materialize** — transition frame (`id`, `operation`) + envelope (`previous`, `current`) + terminal (`changedAt`). **No bind map**; optional log `.pipe` only.
 - Extend counters remain on scope for metrics legs — **not** for stuffing event payload via bind.
 
 ---
@@ -267,7 +269,7 @@ class RunResourceStateChanged extends Telemetry.Schema<RunResourceStateChanged>(
 )({
   id: Schema.String,
   changedAt: Telemetry.terminal.clockMillis,
-  reason: Schema.Literals(STATE_CHANGE_REASONS),
+  operation: Schema.String,
   previous: Schema.NullOr(RunResourceSnapshotSchema),
   current: RunResourceSnapshotSchema,
 }) {}

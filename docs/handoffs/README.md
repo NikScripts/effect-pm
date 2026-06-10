@@ -6,7 +6,9 @@
 | --- | --- | --- | --- | --- |
 | [run-resource-service-handoff.md](./run-resource-service-handoff.md) | **RunResource service** | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | Domain `Context.Service` + tag/kernel split; **before telemetry Step 1** |
 | [telemetry-implementation-handoff.md](./telemetry-implementation-handoff.md) | Telemetry impl | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | After / parallel R1–R4 from run-resource handoff |
-| [state-root-telemetry-resume-handoff.md](./state-root-telemetry-resume-handoff.md) | Telemetry impl | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | **Primary resume handoff** — State.Root, EventNode, emit model, issue register |
+| [telemetry-step52-transition-handoff.md](./telemetry-step52-transition-handoff.md) | Telemetry impl | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | **Start here** — Phase A: two-tier branch stack + dual API ([bake](../recipes/state-transition-op-provide-bake.md)) |
+| [telemetry-step5-emit-handoff.md](./telemetry-step5-emit-handoff.md) | Telemetry impl | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | Broader Step 5–6 emit + runtime roadmap |
+| [state-root-telemetry-resume-handoff.md](./state-root-telemetry-resume-handoff.md) | Telemetry impl | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | State.Root + snapshot bake context; issue register mirror |
 | [telemetry-branch-issues.md](./telemetry-branch-issues.md) | Telemetry impl | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | **Issue register** — spec drift, op/event rules, P0–P2 triage |
 | [telemetry-split-bake-prompt.md](./telemetry-split-bake-prompt.md) | **Owner — paste to start** | any | — | Docs-only bake; recommended + DX forks |
 | [telemetry-split-bake-handoff.md](./telemetry-split-bake-handoff.md) | Owner bake | any | — | Context + after-bake order |

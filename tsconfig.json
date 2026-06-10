@@ -123,6 +123,7 @@
     "node_modules",
     "dist",
     "repos",
+    "test/**/*.validation.test.ts",
     "examples/scenarios/nwslsoccer",
     "examples/dashboard-demo/web/**"
   ]

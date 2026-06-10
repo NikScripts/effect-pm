@@ -3,7 +3,8 @@
 **Branch:** `cursor/telemetry-redesign-bake-faed`  
 **Audience:** implementation agent (including author of [telemetry-recon-findings.md](../recipes/telemetry-recon-findings.md))  
 **Gate (SSoT):** [telemetry-requirements.md](../recipes/telemetry-requirements.md) — **read this first for API shape**  
-**Primary resume (Jun 2026):** [state-root-telemetry-resume-handoff.md](./state-root-telemetry-resume-handoff.md) — **start here** — State.Root, EventNode, emit model, working-tree diff, full issue register  
+**Primary resume (Jun 2026):** [telemetry-step52-transition-handoff.md](./telemetry-step52-transition-handoff.md) — **start here** — Phase A (two-tier branch stack + dual API) after 5.2b  
+**Also:** [state-root-telemetry-resume-handoff.md](./state-root-telemetry-resume-handoff.md) — envelope/snapshot bake context + issue register  
 **Prerequisite:** [run-resource-service-handoff.md](./run-resource-service-handoff.md) **R1–R4** (domain `RunResource` tag before facet Tag / scopes)  
 **Change log:** requirements doc § Implementation change log (**2026-06-08 API revision** + Tag signature)
 
