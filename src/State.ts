@@ -16,7 +16,7 @@
  * @module State
  */
 
-import { Context, Duration, Effect, Layer, Ref, Schema } from "effect";
+import { Context, Duration, Effect, Layer, Option, Ref, Schema } from "effect";
 
 type StructFields = Schema.Struct.Fields;
 type StructFromFields<Fields extends StructFields> = Schema.Struct<Fields>;
@@ -191,6 +191,26 @@ export class StateRootRef extends Context.Service<
   Ref.Ref<EnvelopeShape>
 >()("@nikscripts/effect-pm/State/StateRootRef") {}
 
+/**
+ * Optional hook invoked after each {@link transition}, used by the telemetry
+ * runtime to schedule `State.Changed` fan-out. Absent by default — transitions
+ * are a no-op for emit until a real emitter is provided (no telemetry tax). The
+ * materialize/runner implementation lands in Step 6.
+ *
+ * @internal
+ */
+export interface StateChangedEmitter {
+  readonly onTransition: (
+    envelope: StateEnvelope<Record<string, unknown>>,
+  ) => Effect.Effect<void>;
+}
+
+/** @internal */
+export class StateChangedEmitterTag extends Context.Service<
+  StateChangedEmitterTag,
+  StateChangedEmitter
+>()("@nikscripts/effect-pm/State/StateChangedEmitterTag") {}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -257,11 +277,23 @@ const transition = (
   update: (current: Record<string, unknown>) => Record<string, unknown>,
 ): Effect.Effect<void, never, StateRootRef> =>
   Effect.flatMap(StateRootRef, (ref) =>
-    Ref.update(ref, (env) => ({
-      ...env,
-      previous: structuredClone(env.current),
-      current: update(structuredClone(env.current)),
-    })),
+    Effect.flatMap(
+      Ref.modify(ref, (env): readonly [EnvelopeShape, EnvelopeShape] => {
+        const next: EnvelopeShape = {
+          ...env,
+          previous: structuredClone(env.current),
+          current: update(structuredClone(env.current)),
+        };
+        return [next, next];
+      }),
+      (next) =>
+        Effect.flatMap(Effect.serviceOption(StateChangedEmitterTag), (emitter) =>
+          Option.match(emitter, {
+            onNone: () => Effect.void,
+            onSome: (e) => e.onTransition(next),
+          }),
+        ),
+    ),
   );
 
 /** Process-filtered slice of the live `envelope.current` for a scope. */
@@ -679,6 +711,8 @@ export const State = {
   installLeaf,
   /** COW remove of a scope's leaf nest from `current` (op exit). */
   clearLeaf,
+  /** Optional post-transition emit hook tag (telemetry runtime provides it). */
+  StateChangedEmitter: StateChangedEmitterTag,
   // Emit-policy markers (author-time scheduling for State.Changed fan-out).
   immediateEmit,
   noEmit,
