@@ -264,6 +264,68 @@ const transition = (
     })),
   );
 
+/** Process-filtered slice of the live `envelope.current` for a scope. */
+const currentSlice = (
+  scope: ScopeView,
+): Effect.Effect<Record<string, unknown>, never, StateRootRef> =>
+  Effect.map(Root, (env) => {
+    const node = navigateSlice(env.current, scope.path);
+    return node === null ? {} : pickKeys(node, scope.leafKeys);
+  });
+
+const insertAtPath = (
+  node: Record<string, unknown>,
+  path: ReadonlyArray<string>,
+  leaf: Record<string, unknown>,
+): Record<string, unknown> => {
+  const [head, ...rest] = path;
+  if (head === undefined) {
+    return { ...node, ...leaf };
+  }
+  if (rest.length === 0) {
+    return { ...node, [head]: leaf };
+  }
+  const child = isRecord(node[head]) ? node[head] : {};
+  return { ...node, [head]: insertAtPath(child, rest, leaf) };
+};
+
+const removeAtPath = (
+  node: Record<string, unknown>,
+  path: ReadonlyArray<string>,
+): Record<string, unknown> => {
+  const [head, ...rest] = path;
+  if (head === undefined) {
+    return node;
+  }
+  if (rest.length === 0) {
+    const { [head]: _removed, ...keep } = node;
+    return keep;
+  }
+  if (!isRecord(node[head])) {
+    return node;
+  }
+  return { ...node, [head]: removeAtPath(node[head], rest) };
+};
+
+/**
+ * Install (or replace) a scope's leaf nest in `envelope.current` — COW, via the
+ * single-writer {@link transition}. Used on operation entry / `.provide`.
+ */
+const installLeaf = (
+  scope: ScopeView,
+  leaf: Record<string, unknown>,
+): Effect.Effect<void, never, StateRootRef> =>
+  transition((current) => insertAtPath(current, scope.path, leaf));
+
+/**
+ * Remove a scope's leaf nest from `envelope.current` — COW, via {@link transition}.
+ * Used on operation exit (runner). Root scopes (`path === []`) are a no-op.
+ */
+const clearLeaf = (scope: ScopeView): Effect.Effect<void, never, StateRootRef> =>
+  scope.path.length === 0
+    ? Effect.void
+    : transition((current) => removeAtPath(current, scope.path));
+
 // ============================================================================
 // Emit policy — per-field/event scheduling for State.Changed fan-out
 // ============================================================================
@@ -297,13 +359,16 @@ const rateLimitEmit = (duration: Duration.Input): EmitPolicy => ({
 
 /**
  * Config-wire form of {@link EmitPolicy} (app overrides): a bare schedule tag or
- * a single-key duration object (e.g. `"defer"`, `{ debounce: "250 millis" }`).
- * Decodes to {@link EmitPolicy} via {@link decodeEmitPolicyOverride}.
+ * a single-key duration object (e.g. `"never"`, `{ debounce: "250 millis" }`).
+ *
+ * **`"defer"` is intentionally absent** — defer is an author-only marker
+ * (`State.deferEmit`), not a config override (requirements CHK-21). Decodes via
+ * {@link decodeEmitPolicyOverride}.
  *
  * @public
  */
 export const EmitPolicyOverrideSchema = Schema.Union([
-  Schema.Literals(["immediate", "never", "defer"]),
+  Schema.Literals(["immediate", "never"]),
   Schema.Struct({ debounce: Schema.String }),
   Schema.Struct({ rateLimit: Schema.String }),
 ]);
@@ -321,9 +386,6 @@ const decodeEmitPolicyOverride = (override: EmitPolicyOverride): EmitPolicy => {
   }
   if (override === "never") {
     return noEmit;
-  }
-  if (override === "defer") {
-    return deferEmit;
   }
   return "debounce" in override
     ? { _tag: "debounce", duration: configDuration(override.debounce) }
@@ -609,8 +671,14 @@ export const State = {
   Root,
   /** Process-filtered slice of `envelope.previous` for a scope. */
   previous: previousSlice,
+  /** Process-filtered slice of the live `envelope.current` for a scope. */
+  currentSlice,
   /** Single COW transition of the envelope (internal writer). */
   transition,
+  /** COW install/replace of a scope's leaf nest in `current` (op entry). */
+  installLeaf,
+  /** COW remove of a scope's leaf nest from `current` (op exit). */
+  clearLeaf,
   // Emit-policy markers (author-time scheduling for State.Changed fan-out).
   immediateEmit,
   noEmit,

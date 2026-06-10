@@ -49,15 +49,15 @@ class DemoTelemetry extends Telemetry.Tag<DemoTelemetry>(DemoTarget)(
 ) {}
 
 describe("Telemetry calling API (Step 4)", () => {
-  it("op.provide(leaf) installs the op scope and yields OperationContext", () => {
+  it("op.provide(leaf) installs the op scope into the envelope and yields OperationContext", () => {
     const ctx = Effect.runSync(
       DemoTelemetry.Run.run
         .provide({ runId: "run-1" })
         .pipe(Effect.provide(DemoScope.layer({ id: "res-1" }))),
     );
     expect(ctx.input).toBeUndefined();
-    // live scope view = full nested state tree (root + Run leaf)
-    expect(ctx.scope).toEqual({ id: "res-1", Run: { runId: "run-1" } });
+    // scope view = the op's process-filtered leaf slice (currentSlice of Run)
+    expect(ctx.scope).toEqual({ runId: "run-1" });
     // run has no middle events, so its telemetry handle is empty
     expect(ctx.telemetry).toEqual({});
   });

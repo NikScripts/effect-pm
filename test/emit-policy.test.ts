@@ -32,7 +32,6 @@ describe("EmitPolicyOverride", () => {
   it("decodes bare and duration overrides to EmitPolicy", () => {
     expect(State.decodeEmitPolicyOverride("immediate")).toEqual({ _tag: "immediate" });
     expect(State.decodeEmitPolicyOverride("never")).toEqual({ _tag: "never" });
-    expect(State.decodeEmitPolicyOverride("defer")).toEqual({ _tag: "defer" });
 
     const debounce = State.decodeEmitPolicyOverride({ debounce: "100 millis" });
     expect(debounce._tag).toBe("debounce");
@@ -47,11 +46,17 @@ describe("EmitPolicyOverride", () => {
   });
 
   it("schema accepts the wire forms and rejects junk", () => {
-    expect(Schema.decodeUnknownSync(EmitPolicyOverrideSchema)("defer")).toBe("defer");
+    expect(Schema.decodeUnknownSync(EmitPolicyOverrideSchema)("never")).toBe("never");
     expect(
       Schema.decodeUnknownSync(EmitPolicyOverrideSchema)({ debounce: "250 millis" }),
     ).toEqual({ debounce: "250 millis" });
     expect(() => Schema.decodeUnknownSync(EmitPolicyOverrideSchema)("nonsense")).toThrow();
     expect(() => Schema.decodeUnknownSync(EmitPolicyOverrideSchema)({ wrong: "x" })).toThrow();
+  });
+
+  it("rejects `defer` as a config override (author-marker only)", () => {
+    expect(() => Schema.decodeUnknownSync(EmitPolicyOverrideSchema)("defer")).toThrow();
+    // but defer remains a valid author marker
+    expect(State.deferEmit).toEqual({ _tag: "defer" });
   });
 });

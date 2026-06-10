@@ -18,7 +18,9 @@ import { Effect, Effectable, Layer, Schema } from "effect";
 import { isRecord } from "./internal/json";
 import {
   getStateFieldSelectorMetadata,
+  State,
   type StateFieldSelector,
+  type StateRootRef,
 } from "./State";
 import { telemetryWireId, TelemetryRouter } from "./TelemetryRouter";
 
@@ -300,16 +302,17 @@ export interface ExitDef<Legs extends ExitLegs> {
 }
 
 /**
- * Structural view of a `State.Scope` as the operation-builder runtime uses it: a
- * yieldable `Effect` (the live scope state) plus a `layer` installer. `layer` is
- * a method so its parameter stays bivariant — a concrete scope assigns despite
- * its precise id / leaf / requirements, which are recovered from the captured
- * `Scope` type in {@link OperationBuilder}, not from this structural bound.
+ * Structural view of a `State.Scope` as the operation-builder runtime uses it:
+ * its location (`path` / `leafKeys`) for envelope install + slice reads, and its
+ * `Leaf` schema for typing `.provide`. State mutation goes through
+ * {@link State.installLeaf} on the single-writer envelope — never `scope.layer`.
  *
  * @internal
  */
-export interface RuntimeScope extends Effect.Effect<unknown, never, unknown> {
-  layer(leaf: Record<string, unknown>): Layer.Layer<never, never, unknown>;
+export interface RuntimeScope {
+  readonly path: ReadonlyArray<string>;
+  readonly leafKeys: ReadonlyArray<string>;
+  readonly Leaf: Schema.Top;
 }
 
 /** A leg of an operation: a start, a middle event, an exit, or a nested op. @internal */
@@ -443,21 +446,12 @@ type ExitHandles<Legs extends ExitLegs, Prefix extends string> = {
     : never;
 };
 
-/** Operation scope leaf value — the `.provide(leaf)` argument type. */
+/**
+ * Operation scope leaf value — both the `.provide(leaf)` argument **and**
+ * `OperationContext.scope` (the process-filtered `currentSlice` after install).
+ */
 type ScopeLeafValue<Scope> = Scope extends { readonly Leaf: Schema.Top }
   ? Schema.Schema.Type<Scope["Leaf"]>
-  : never;
-
-/** Operation live scope view — `OperationContext.scope`. */
-type ScopeStateValue<Scope> = Scope extends { readonly State: Schema.Top }
-  ? Schema.Schema.Type<Scope["State"]>
-  : never;
-
-/** Requirements left after `.provide(leaf)` installs the op scope leaf. */
-type ScopeReqValue<Scope> = Scope extends {
-  readonly layer: (leaf: never) => Layer.Layer<infer _Out, never, infer R>;
-}
-  ? R
   : never;
 
 /**
@@ -494,9 +488,9 @@ export interface OperationBuilder<
   readonly provide: (
     leaf: ScopeLeafValue<Scope>,
   ) => Effect.Effect<
-    OperationContext<void, ScopeStateValue<Scope>, OpTelemetryHandle<Parts, Prefix>>,
+    OperationContext<void, ScopeLeafValue<Scope>, OpTelemetryHandle<Parts, Prefix>>,
     never,
-    ScopeReqValue<Scope>
+    StateRootRef
   >;
 }
 
@@ -601,21 +595,21 @@ const makeEventNode = <S>(
 
 /**
  * The `.provide(leaf)` calling path for a scope-required operation. Installs the
- * op scope leaf (real — the body sees its scope) and yields the
- * {@link OperationContext}; telemetry emission is a no-op until the Step 6 runner.
- * Typed loosely here; the precise {@link OperationBuilder} signature is applied
- * at the Tag-factory boundary.
+ * op scope leaf into the single-writer envelope ({@link State.installLeaf}) and
+ * yields the {@link OperationContext} with the live `currentSlice` as `scope`.
+ * Telemetry emission is a no-op until the Step 6 runner; the envelope write is
+ * real so `State.Changed` can materialize from one `current` tree. Typed loosely
+ * here; the precise {@link OperationBuilder} signature applies at the Tag boundary.
  */
 const makeOpProvide =
   (scope: RuntimeScope, telemetryHandle: Record<string, unknown>) =>
-  (leaf: Record<string, unknown>): Effect.Effect<unknown, never, unknown> =>
-    Effect.provide(
-      Effect.map(scope, (scopeState) => ({
+  (leaf: Record<string, unknown>): Effect.Effect<unknown, never, StateRootRef> =>
+    Effect.flatMap(State.installLeaf(scope, leaf), () =>
+      Effect.map(State.currentSlice(scope), (scopeSlice) => ({
         input: undefined,
         telemetry: telemetryHandle,
-        scope: scopeState,
+        scope: scopeSlice,
       })),
-      scope.layer(leaf),
     );
 
 const buildOperationHandles = (
