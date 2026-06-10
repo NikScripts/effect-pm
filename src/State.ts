@@ -16,7 +16,7 @@
  * @module State
  */
 
-import { Context, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer, Ref, Schema } from "effect";
 
 type StructFields = Schema.Struct.Fields;
 type StructFromFields<Fields extends StructFields> = Schema.Struct<Fields>;
@@ -100,25 +100,32 @@ export type StateScope<
   StateSelectors,
   Path extends ReadonlyArray<string>,
   Requirements,
+  LayerExtra = never,
 > = Context.ServiceClass<Id, Id, StateShape> & {
   readonly id: Id;
   readonly kind: string;
+  /** This scope's location in the state tree (root = `[]`). */
+  readonly path: Path;
+  /** This scope's own (leaf) field names — the filter for `State.previous`. */
+  readonly leafKeys: ReadonlyArray<string>;
   readonly Leaf: StructFromFields<LeafFields>;
   readonly State: StructFromFields<StateFields>;
   readonly Schema: {
     readonly Leaf: StateFieldSelectors<LeafFields>;
     readonly State: StateSelectors;
   };
-  readonly layer: (leaf: ValueOf<LeafFields>) => Layer.Layer<Id, never, Requirements>;
+  readonly layer: (
+    leaf: ValueOf<LeafFields>,
+  ) => Layer.Layer<Id | LayerExtra, never, Requirements>;
   readonly provide: (
     leaf: ValueOf<LeafFields>,
   ) => <A, E, R>(
     effect: Effect.Effect<A, E, R>,
-  ) => Effect.Effect<A, E, Exclude<R, Id> | Requirements>;
+  ) => Effect.Effect<A, E, Exclude<R, Id | LayerExtra> | Requirements>;
   readonly run: <A, E, R>(
     leaf: ValueOf<LeafFields>,
     effect: Effect.Effect<A, E, R>,
-  ) => Effect.Effect<A, E, Exclude<R, Id> | Requirements>;
+  ) => Effect.Effect<A, E, Exclude<R, Id | LayerExtra> | Requirements>;
   readonly withLeaf: <
     const Key extends string,
     const ChildFields extends StructFields,
@@ -132,9 +139,130 @@ export type StateScope<
     InsertState<StateShape, Path, Key, ValueOf<ChildFields>>,
     InsertSelectors<StateSelectors, Path, Key, StateFieldSelectors<ChildFields>>,
     readonly [...Path, Key],
-    Requirements | Id
+    Requirements | Id,
+    never
   >;
 };
+
+// ============================================================================
+// State.Root — process-state envelope + transitions (telemetry)
+// ============================================================================
+
+/**
+ * Process-state envelope owned by a root scope instance: the live `current`
+ * tree plus the one-step-back `previous` snapshot (plus any spread from the
+ * domain tag's optional `static Root`). {@link State.transition} is the only
+ * writer; scopes are read-only views.
+ *
+ * @public
+ */
+export interface StateEnvelope<Current> {
+  readonly previous: Current | null;
+  readonly current: Current;
+}
+
+/**
+ * Optional JSON config a domain tag may expose as `static Root`, spread onto the
+ * envelope top level at layer init. `version` is required; `previous` / `current`
+ * are forbidden (owned by the transition machinery).
+ *
+ * @public
+ */
+export type RootMetadata = {
+  readonly version: string;
+  readonly [key: string]: unknown;
+} & {
+  readonly previous?: never;
+  readonly current?: never;
+};
+
+type EnvelopeShape = StateEnvelope<Record<string, unknown>> & Record<string, unknown>;
+
+/**
+ * Internal envelope `Ref` service. **v1:** one per runtime — a root scope's
+ * `layer` provides it (per-domain id is a planned refinement). Internal only;
+ * public code reaches the envelope via {@link State.Root} / {@link State.previous}
+ * / {@link State.transition}.
+ *
+ * @internal
+ */
+export class StateRootRef extends Context.Service<
+  StateRootRef,
+  Ref.Ref<EnvelopeShape>
+>()("@nikscripts/effect-pm/State/StateRootRef") {}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const navigateSlice = (
+  node: Record<string, unknown> | null,
+  path: ReadonlyArray<string>,
+): Record<string, unknown> | null => {
+  let cur = node;
+  for (const key of path) {
+    if (cur === null) return null;
+    const next = cur[key];
+    cur = isRecord(next) ? next : null;
+  }
+  return cur;
+};
+
+const pickKeys = (
+  node: Record<string, unknown>,
+  keys: ReadonlyArray<string>,
+): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  for (const key of keys) {
+    if (key in node) {
+      out[key] = node[key];
+    }
+  }
+  return out;
+};
+
+/** A scope's location + own field keys — the filter for {@link previousSlice}. */
+interface ScopeView {
+  readonly path: ReadonlyArray<string>;
+  readonly leafKeys: ReadonlyArray<string>;
+}
+
+/** Full envelope — internal (materializer / transition emit) only. */
+const Root: Effect.Effect<EnvelopeShape, never, StateRootRef> = Effect.flatMap(
+  StateRootRef,
+  (ref) => Ref.get(ref),
+);
+
+/**
+ * Process-filtered slice of `envelope.previous` for a scope — symmetric to
+ * `yield* scope` for `current`. `null` when there is no prior snapshot or the
+ * scope's nest is absent in `previous`.
+ */
+const previousSlice = (
+  scope: ScopeView,
+): Effect.Effect<Record<string, unknown> | null, never, StateRootRef> =>
+  Effect.map(Root, (env) => {
+    if (env.previous === null) {
+      return null;
+    }
+    const node = navigateSlice(env.previous, scope.path);
+    return node === null ? null : pickKeys(node, scope.leafKeys);
+  });
+
+/**
+ * Single COW transition: `previous` ← clone of `current`, `current` ← `update`
+ * applied to a clone. Static-root spread keys are preserved. Internal only —
+ * scopes never write the envelope directly.
+ */
+const transition = (
+  update: (current: Record<string, unknown>) => Record<string, unknown>,
+): Effect.Effect<void, never, StateRootRef> =>
+  Effect.flatMap(StateRootRef, (ref) =>
+    Ref.update(ref, (env) => ({
+      ...env,
+      previous: structuredClone(env.current),
+      current: update(structuredClone(env.current)),
+    })),
+  );
 
 const makeTree = (fields: StructFields): StateSchemaTree => ({
   fields,
@@ -242,6 +370,7 @@ const makeScope = <
   StateSelectors,
   const Path extends ReadonlyArray<string>,
   Requirements,
+  LayerExtra = never,
 >(options: {
   readonly id: Id;
   readonly kind: string;
@@ -249,6 +378,10 @@ const makeScope = <
   readonly tree: StateSchemaTree;
   readonly path: Path;
   readonly makeState: (leaf: ValueOf<LeafFields>) => Effect.Effect<StateShape, never, Requirements>;
+  /** Top-level scopes own a {@link StateRootRef} envelope; leaves inherit it. */
+  readonly provideEnvelope: boolean;
+  /** Spread onto the envelope top level (domain tag `static Root`). */
+  readonly rootMeta: Record<string, unknown>;
 }): StateScope<
   Id,
   LeafFields,
@@ -256,7 +389,8 @@ const makeScope = <
   StateShape,
   StateSelectors,
   Path,
-  Requirements
+  Requirements,
+  LayerExtra
 > => {
   const Leaf = Schema.Struct(options.leafFields);
   const StateSchema = Schema.Struct(buildFields(options.tree)) as StructFromFields<StateFields>;
@@ -269,14 +403,31 @@ const makeScope = <
   const scope = Object.assign(Base, {
     id: options.id,
     kind: options.kind,
+    path: options.path,
+    leafKeys: Object.keys(options.leafFields),
     Leaf,
     State: StateSchema,
     Schema: {
       Leaf: LeafSelectors,
       State: StateSelectors,
     },
-    layer: (leaf: ValueOf<LeafFields>) =>
-      Layer.effect(Base, options.makeState(leaf)),
+    layer: (leaf: ValueOf<LeafFields>) => {
+      const baseLayer = Layer.effect(Base, options.makeState(leaf));
+      if (!options.provideEnvelope) {
+        return baseLayer;
+      }
+      const envelopeLayer = Layer.effect(
+        StateRootRef,
+        Effect.flatMap(options.makeState(leaf), (current) =>
+          Ref.make<EnvelopeShape>({
+            ...options.rootMeta,
+            previous: null,
+            current: current as Record<string, unknown>,
+          }),
+        ),
+      );
+      return Layer.merge(baseLayer, envelopeLayer);
+    },
     provide:
       (leaf: ValueOf<LeafFields>) =>
       <A, E, R>(effect: Effect.Effect<A, E, R>) =>
@@ -300,13 +451,17 @@ const makeScope = <
         InsertState<StateShape, Path, Key, ValueOf<ChildFields>>,
         InsertSelectors<StateSelectors, Path, Key, StateFieldSelectors<ChildFields>>,
         typeof path,
-        Requirements | Id
+        Requirements | Id,
+        never
       >({
         id: childId,
         kind: options.kind,
         leafFields: fields,
         tree,
         path,
+        // Leaves never own an envelope — they share the root scope's via context.
+        provideEnvelope: false,
+        rootMeta: {},
         makeState: (leaf) =>
           Effect.map(scope, (parent) =>
             insertStateValue(parent, options.path, key, leaf),
@@ -325,12 +480,23 @@ const makeScope = <
     StateShape,
     StateSelectors,
     Path,
-    Requirements
+    Requirements,
+    LayerExtra
   >;
 };
 
 const resolveScopeId = (serviceOrId: ScopeIdentity): string =>
   typeof serviceOrId === "string" ? serviceOrId : serviceOrId.key;
+
+/** A domain tag's optional `static Root` JSON, spread onto the envelope. */
+const resolveRootMeta = (serviceOrId: ScopeIdentity): Record<string, unknown> => {
+  if (typeof serviceOrId === "string") {
+    return {};
+  }
+  const obj: Record<string, unknown> = serviceOrId;
+  const meta = obj["Root"];
+  return isRecord(meta) ? meta : {};
+};
 
 const lastSegment = (id: string): string => {
   const segments = id.split("/");
@@ -351,13 +517,17 @@ const Scope =
       ValueOf<Fields>,
       StateFieldSelectors<Fields>,
       readonly [],
-      never
+      never,
+      StateRootRef
     >({
       id: id as IdOf<ServiceOrId>,
       kind: kind ?? lastSegment(id),
       leafFields: fields,
       tree: makeTree(fields),
       path: [],
+      // Top-level scopes own the envelope; leaves inherit it via context.
+      provideEnvelope: true,
+      rootMeta: resolveRootMeta(serviceOrId),
       makeState: (leaf) => Effect.succeed(leaf),
     });
   };
@@ -369,6 +539,12 @@ const Scope =
  */
 export const State = {
   Scope,
+  /** Full process-state envelope — internal (materializer / transition). */
+  Root,
+  /** Process-filtered slice of `envelope.previous` for a scope. */
+  previous: previousSlice,
+  /** Single COW transition of the envelope (internal writer). */
+  transition,
 } as const;
 
 /**
