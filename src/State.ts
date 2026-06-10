@@ -16,7 +16,7 @@
  * @module State
  */
 
-import { Context, Effect, Layer, Ref, Schema } from "effect";
+import { Context, Duration, Effect, Layer, Ref, Schema } from "effect";
 
 type StructFields = Schema.Struct.Fields;
 type StructFromFields<Fields extends StructFields> = Schema.Struct<Fields>;
@@ -263,6 +263,72 @@ const transition = (
       current: update(structuredClone(env.current)),
     })),
   );
+
+// ============================================================================
+// Emit policy — per-field/event scheduling for State.Changed fan-out
+// ============================================================================
+
+/**
+ * Internal runtime classification of how a state-field change (or event) is
+ * scheduled onto the telemetry emit path. Authored via the {@link State} markers
+ * (`immediateEmit` / `noEmit` / `deferEmit` / `debounceEmit` / `rateLimitEmit`)
+ * and overridable per field via config ({@link EmitPolicyOverride}).
+ *
+ * @public
+ */
+export type EmitPolicy =
+  | { readonly _tag: "immediate" }
+  | { readonly _tag: "never" }
+  | { readonly _tag: "defer" }
+  | { readonly _tag: "debounce"; readonly duration: Duration.Duration }
+  | { readonly _tag: "rateLimit"; readonly duration: Duration.Duration };
+
+const immediateEmit: EmitPolicy = { _tag: "immediate" };
+const noEmit: EmitPolicy = { _tag: "never" };
+const deferEmit: EmitPolicy = { _tag: "defer" };
+const debounceEmit = (duration: Duration.Input): EmitPolicy => ({
+  _tag: "debounce",
+  duration: Duration.fromInputUnsafe(duration),
+});
+const rateLimitEmit = (duration: Duration.Input): EmitPolicy => ({
+  _tag: "rateLimit",
+  duration: Duration.fromInputUnsafe(duration),
+});
+
+/**
+ * Config-wire form of {@link EmitPolicy} (app overrides): a bare schedule tag or
+ * a single-key duration object (e.g. `"defer"`, `{ debounce: "250 millis" }`).
+ * Decodes to {@link EmitPolicy} via {@link decodeEmitPolicyOverride}.
+ *
+ * @public
+ */
+export const EmitPolicyOverrideSchema = Schema.Union([
+  Schema.Literals(["immediate", "never", "defer"]),
+  Schema.Struct({ debounce: Schema.String }),
+  Schema.Struct({ rateLimit: Schema.String }),
+]);
+
+/** @public */
+export type EmitPolicyOverride = typeof EmitPolicyOverrideSchema.Type;
+
+/** Config durations arrive as runtime strings; `Duration` parses them. */
+const configDuration = (value: string): Duration.Duration =>
+  Duration.fromInputUnsafe(value as Duration.Input);
+
+const decodeEmitPolicyOverride = (override: EmitPolicyOverride): EmitPolicy => {
+  if (override === "immediate") {
+    return immediateEmit;
+  }
+  if (override === "never") {
+    return noEmit;
+  }
+  if (override === "defer") {
+    return deferEmit;
+  }
+  return "debounce" in override
+    ? { _tag: "debounce", duration: configDuration(override.debounce) }
+    : { _tag: "rateLimit", duration: configDuration(override.rateLimit) };
+};
 
 const makeTree = (fields: StructFields): StateSchemaTree => ({
   fields,
@@ -545,6 +611,14 @@ export const State = {
   previous: previousSlice,
   /** Single COW transition of the envelope (internal writer). */
   transition,
+  // Emit-policy markers (author-time scheduling for State.Changed fan-out).
+  immediateEmit,
+  noEmit,
+  deferEmit,
+  debounceEmit,
+  rateLimitEmit,
+  /** Decode a config {@link EmitPolicyOverride} to an {@link EmitPolicy}. */
+  decodeEmitPolicyOverride,
 } as const;
 
 /**
