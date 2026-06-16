@@ -24,7 +24,7 @@ Telemetry.Service(Tag, wiring)                → runtime: + wiring + layer
 | Layer | Names |
 |---|---|
 | **State** (operations, scopes) | `State.Tag`; `State.operation`; `State.inner`; `State.branch`; `State.Scope` → `.Branch` → `.Telemetry({…})` |
-| **Telemetry** (events, taxonomy, schemas) | `Telemetry.namespace` / `Telemetry.group`; `Telemetry.event` / `Telemetry.declare`; `Telemetry.start` / `Telemetry.exit`; `Telemetry.success` / `interrupted` / `failure`; `Telemetry.spread`; `Telemetry.Tag` (richer, two ways); `Telemetry.Schema` (reusable base); `Telemetry.metric.*`; `Telemetry.Service`; schema context `e.root` / `e.leaf` / `e.input` / `e.exit` / `e.clock` / `e.runId` |
+| **Telemetry** (events, taxonomy, schemas) | `Telemetry.namespace` / `Telemetry.group`; `Telemetry.event` / `Telemetry.declare`; `Telemetry.start` / `Telemetry.exit`; `Telemetry.success` / `interrupted` / `failure`; `Telemetry.spread`; `Telemetry.Tag` (richer, two ways); `Telemetry.Schema` (reusable base); `Telemetry.metric.*`; `Telemetry.Service`; schema context `e.root` / `e.leaf` / `e.input` / `e.exit` / `e.clock` / `e.state` |
 
 - **State** owns `operation`, `inner` (the `ctx` container — holds nested ops + middle events), scopes. **Telemetry** owns events, taxonomy, legs (`start`/`exit`), schemas.
 - **`start`/`exit` use the bare `State.Tag` API** (`"Started"` / `["Completed","Failed"]` / `Telemetry.start` / `Telemetry.exit`); **`Telemetry.event` names an inner event.** **In `State.Tag` (compose) nothing carries a schema** — start, exit, and inner events are *names only*; their schemas live in the `Telemetry.Tag` tree (§3), keyed by wire. (**Bundle exception:** `Telemetry.declare` may carry a schema to define a multi-placement event once — §1/§4.)
@@ -192,7 +192,7 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
 
 ## 3. Event schemas & `Telemetry.Tag` (compose) ✅
 
-**Events carry ONLY what their schema specifies — nothing is automatic, not even scope.** Every field you want — *including* scope identity (`entryId`, `runId`) — must be listed in the schema (or inherited from the schema it extends / the group `default`), via `e.root.X` / `e.leaf.X` / `e.input.X` / `e.exit.X` / `e.clock`, or a plain `Schema` (PlainField, bound at wiring). **No schema entry + no group `default` = empty payload.** There is no auto-scope; `runId` in an event means a schema wrote `runId: e.runId` (run root identity, from `State.Root`).
+**Events carry ONLY what their schema specifies — nothing is automatic, not even scope.** Every field you want — *including* scope identity (`entryId`, `runId`) — must be listed in the schema (or inherited from the schema it extends / the group `default`), via `e.root.X` / `e.leaf.X` / `e.input.X` / `e.exit.X` / `e.clock`, or a plain `Schema` (PlainField, bound at wiring). **No schema entry + no group `default` = empty payload.** There is no auto-scope; `runId` in an event means a schema wrote `runId: e.state.runId` (run root identity, from `State.Root`).
 
 ### 3.1 The schema tree
 Compose path: `Telemetry.Tag(StateTag, GlobalBase?)(telId, schemaTree)` — its **own required id** (distinct from the `State.Tag`'s), then a **wire-keyed tree** (`Namespace → Group → Event`). `Telemetry.Tag` derives its **telemetry scopes from the schemas** (no scope args). The tree is **sparse** — only the group `default` + events that add extras; **default-only events are omitted** (they're enumerated in `State.Tag`, and resolve to the `default`).
@@ -216,11 +216,11 @@ Compose path: `Telemetry.Tag(StateTag, GlobalBase?)(telId, schemaTree)` — its 
 - 🔶 namespace-level default (root-scoped, layered above group) — deferred.
 
 ### 3.4 `e` (the context)
-`e.root` (the **outermost `State.Scope`** — root of the declared scope tree; navigable: fields + telemetry + nested branches; reachability gated by intersection), `e.leaf` (current deepest branch), `e.input`, `e.exit.*` (exit events only), `e.clock`, `e.runId` (ambient run identity from `State.Root`, the **real** root — needs no scope). **No `e.state`** — telemetry merges into `e.root`/`e.leaf` per level; persistent/comparison state lives at root (leaf is transient). Types inferred from sources; PlainFields carry their own `Schema`.
+**Scope trio** (same names as `ctx.scope`): `e.leaf` (current deepest branch), `e.root` (outermost `State.Scope` — navigable: fields + telemetry + nested branches; reachability gated by intersection), `e.state` (the **state root** = `State.Root`, the real root — run-level/persistent state incl. `runId` via `e.state.runId`; needs no scope). Plus `e.input`, `e.exit.*` (exit events only), `e.clock`. Per-level telemetry merges into `e.leaf`/`e.root` (no separate per-level bag); persistent/comparison state lives on `e.state`. Types inferred from sources; PlainFields carry their own `Schema`.
 
 ### 3.5 Reusable bases
 - `Telemetry.Schema<Self>(ScopeTel)((e) => …)` — reusable, scope-bound base.
-- `Telemetry.Schema<Self>()((e) => …)` — **scope-free base** (ambient only: `e.runId` / `e.clock`); the form used for the global base.
+- `Telemetry.Schema<Self>()((e) => …)` — **scope-free base** (ambient only: `e.state` / `e.clock`); the form used for the global base.
 - `.Schema(ScopeTel)((e) => …)` — extend into another reusable base.
 - finalize as an event: `Base` (as-is) / `Base.extend((e) => …)` (base + extras); inline value `ScopeTel.event((e) => …)`.
 - **Template slot** = a plain `Schema.X` in a base; a later merge resolves it with an assignable source, else it stays a PlainField. **Extension is a flat merge at creation** — no chain.
@@ -267,7 +267,7 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
 
 // global base — scope-free; auto-merged into every event (runId + at everywhere, no extend)
 class BaseEvent extends Telemetry.Schema<BaseEvent>()((e) => ({
-  runId: e.runId,
+  runId: e.state.runId,
   at: e.clock,
 })) {}
 
@@ -319,7 +319,7 @@ export class QueueOps extends State.Tag<QueueOps>(QueueResource)( /* …namespac
 import { QueueScope, EntryScope, QueueOps } from "./QueueOps"
 export class QueueScopeTel extends QueueScope.Telemetry({ inFlight: Telemetry.metric.gauge, lastPriority: Schema.Number }) {}
 export class EntryScopeTel extends EntryScope.Telemetry({ attemptsSoFar: Schema.Number }) {}
-export class BaseEvent extends Telemetry.Schema<BaseEvent>()((e) => ({ runId: e.runId, at: e.clock })) {}
+export class BaseEvent extends Telemetry.Schema<BaseEvent>()((e) => ({ runId: e.state.runId, at: e.clock })) {}
 export class EntryEvent extends Telemetry.Schema<EntryEvent>(EntryScopeTel)((e) => ({ entryId: e.leaf.entryId })) {}
 export class LifecycleEvent extends Telemetry.Schema<LifecycleEvent>(QueueScopeTel)((e) => ({ queueId: e.root.queueId })) {}
 export class QueueTelemetry extends Telemetry.Tag<QueueTelemetry>(QueueOps, BaseEvent)("@scope/queue/QueueTelemetry", { /* …tree… */ }) {}
@@ -353,7 +353,7 @@ class QueueScopeTel extends QueueScope.Telemetry({ inFlight: Telemetry.metric.ga
 class EntryScopeTel extends EntryScope.Telemetry({ attemptsSoFar: Schema.Number }) {}
 const ProcessInput = Schema.Struct({ priority: Schema.Number, attempts: Schema.Number })
 
-class BaseEvent extends Telemetry.Schema<BaseEvent>()((e) => ({ runId: e.runId, at: e.clock })) {}
+class BaseEvent extends Telemetry.Schema<BaseEvent>()((e) => ({ runId: e.state.runId, at: e.clock })) {}
 class EntryEvent extends Telemetry.Schema<EntryEvent>(EntryScopeTel)((e) => ({ entryId: e.leaf.entryId })) {}
 class LifecycleEvent extends Telemetry.Schema<LifecycleEvent>(QueueScopeTel)((e) => ({ queueId: e.root.queueId })) {}
 
@@ -489,7 +489,7 @@ Adjacent: durable archive → `@effect/sql` (`sql-sqlite-node` installed); OTLP 
 
 🔶 Deferred (build on demand): `import`/predefined `wires`; extra sinks; advanced telemetry-state features; **multiple namespaces per Tag** (one namespace per Tag for now).
 
-✅ Resolved: module split (`State` structure / `Telemetry` observability); inferred wire-tree + `declare`; path-local intersection; op↔scope via `R`; inline `leaf`; descendant nesting; operation ≠ event; operation input as `Schema`; triad + `inner`; sibling group-import into `inner` (`Telemetry.spread` flat / `Telemetry.group` nested); flat handles; multi-branch snapshot + path-local reads; telemetry state on extended scopes (`Metric` = export); event reuse + intersection; interrupt optional; **event schemas** — *events carry only what the schema specifies (no auto-scope)*; **wire-keyed schema tree** with group `default` + sparse/omitted entries, scopes derived from schemas; reusable bases (`Telemetry.Schema(Scope)`, `.Schema` extend, `Base`/`Base.extend`/`ScopeTel.event`, template slots, flat-merge); `Telemetry.Event` per-event classes **dropped**; **compose `Telemetry.Tag(StateTag, GlobalBase?)(telId, tree)` (Example 1) locked**; **State.Tag + Telemetry.Tag each carry their own required, distinct id** (`<Resource>/QueueState` vs `<Resource>/QueueTelemetry`); **every scope identity carries an id** (root + leaf; `.Telemetry` derives); **optional global base** (scope-free `Telemetry.Schema()`, `e.runId`/`e.clock`) auto-merged into every event (global ⊕ group `default` ⊕ entry); `declare` is name-only in compose, schema-carrying in the bundle (define multi-placement events once, reference by id); `Telemetry.Service` = + layer; **bundle `Telemetry.Tag(domain, GlobalBase?)(facetId, structure)` (Example 2) locked — schemas inline on legs** (`Telemetry.start/success/interrupted/failure/event(name, schema?)`, group default = `Telemetry.group(name, Default)`), no separate tree; `declare(name, schema)` for cross-site dedup.
+✅ Resolved: module split (`State` structure / `Telemetry` observability); inferred wire-tree + `declare`; path-local intersection; op↔scope via `R`; inline `leaf`; descendant nesting; operation ≠ event; operation input as `Schema`; triad + `inner`; sibling group-import into `inner` (`Telemetry.spread` flat / `Telemetry.group` nested); flat handles; multi-branch snapshot + path-local reads; telemetry state on extended scopes (`Metric` = export); event reuse + intersection; interrupt optional; **event schemas** — *events carry only what the schema specifies (no auto-scope)*; **wire-keyed schema tree** with group `default` + sparse/omitted entries, scopes derived from schemas; reusable bases (`Telemetry.Schema(Scope)`, `.Schema` extend, `Base`/`Base.extend`/`ScopeTel.event`, template slots, flat-merge); `Telemetry.Event` per-event classes **dropped**; **compose `Telemetry.Tag(StateTag, GlobalBase?)(telId, tree)` (Example 1) locked**; **State.Tag + Telemetry.Tag each carry their own required, distinct id** (`<Resource>/QueueState` vs `<Resource>/QueueTelemetry`); **every scope identity carries an id** (root + leaf; `.Telemetry` derives); **optional global base** (scope-free `Telemetry.Schema()`, `e.state`/`e.clock`) auto-merged into every event (global ⊕ group `default` ⊕ entry); `declare` is name-only in compose, schema-carrying in the bundle (define multi-placement events once, reference by id); `Telemetry.Service` = + layer; **bundle `Telemetry.Tag(domain, GlobalBase?)(facetId, structure)` (Example 2) locked — schemas inline on legs** (`Telemetry.start/success/interrupted/failure/event(name, schema?)`, group default = `Telemetry.group(name, Default)`), no separate tree; `declare(name, schema)` for cross-site dedup.
 
 ---
 

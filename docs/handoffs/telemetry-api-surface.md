@@ -16,7 +16,7 @@
 - **S3** · `State.operation(name, scope?, Input?)(…triad)` — **operation** anchor (start / `inner` / exit); define + call covered together (§10 Operations) · ✅
 - **S4** · `State.inner(…)` — the `ctx` surface (middle events, nested ops, group-import) · 🔶
 - **S5** · `State.branch(name, fields)` — inline single-use branch (op scope arg); no id, no telemetry half; `fields` required · ✅
-- **S6** · `State.Root` — the **real root** of the scope tree (run-level state; `runId` → `e.runId`); every `State.Scope` is a branch off it · 🔶
+- **S6** · `State.Root` — the **real root** of the scope tree (run-level state; `runId` → `e.state.runId`); every `State.Scope` is a branch off it · 🔶
 - **S7** · `State.Changed` — internal transition event; `State.Changed.operation` format (§6.6) · 🔶
 
 ## 2. Module functions — `Telemetry`
@@ -71,12 +71,12 @@
 - **C14** · `.layer` — the runtime layer (wiring bound) · 🔶
 
 ## 5. Schema context `e` (inside `Telemetry.Schema` / `.extend` / `.event`)
-- **E1** · `e.root` — the **outermost `State.Scope`** (root of your declared scope tree; navigable: fields + telemetry + nested branches; intersection-gated). `State.Root` (run root) is reached via `e.runId`, not `e.root`. · ✅
-- **E2** · `e.leaf` — current deepest leaf · 🔶
+- **E1** · `e.root` — the **outermost `State.Scope`** (root of your declared scope tree; navigable: fields + telemetry + nested branches; intersection-gated). `State.Root` (run root) is reached via `e.state`, not `e.root`. · ✅
+- **E2** · `e.leaf` — current deepest branch (scope trio with `e.root` / `e.state`) · ✅
 - **E3** · `e.input` — operation input (from `State.operation` `Input`) · 🔶
 - **E4** · `e.exit` — exit-only: `e.exit.duration`, `e.exit.cause`, … · 🔶
 - **E5** · `e.clock` — timestamp source · 🔶
-- **E6** · `e.runId` — ambient run identity (needs no scope) · 🔶
+- **E6** · `e.state` — the **state root** (`State.Root`): run-level/persistent state incl. `runId` (`e.state.runId`); needs no scope · ✅
 
 ## 6. Call / runtime surface (process side)
 - **R1** · `op(input).provide({ …scope })` — invoke an operation with input + scope · 🔶
@@ -131,7 +131,7 @@ declare const Scope: <Domain extends State.Domain>(domain: Domain) =>
 class QueueScope extends State.Scope(QueueResource)("@scope/queue/QueueScope", { queueId: Schema.String }) {}
 // produced class exposes: .Branch (C1), .Telemetry (C2), .layer (C3)
 ```
-Resolved: `leaf`→`branch` for node-creating APIs (`.Branch`/`State.branch`; `e.leaf` kept). `e.root` = outermost `State.Scope`; `State.Root` (run root) via `e.runId`.
+Resolved: `leaf`→`branch` for node-creating APIs (`.Branch`/`State.branch`; `e.leaf` kept). `e.root` = outermost `State.Scope`; `State.Root` (run root) via `e.state`.
 
 ### C1 · `.Branch` ✅
 On a **base** scope — adds a deeper branch (child scope, new identity + id). Curried `(name, fields)(id)`; `fields` required (no empty scopes). Branch the **base** tree only; the Tel half is added per-level with `.Telemetry` (C2). (C5 — branching the Tel half — dropped.)
