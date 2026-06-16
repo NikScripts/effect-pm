@@ -73,7 +73,7 @@ Referenceable classes; `.telemetry({…})` adds the hidden telemetry half (same 
 class QueueScope extends State.Scope(QueueResource)("@scope/queue/QueueScope", { queueId: Schema.String }) {}
 class QueueScopeTel extends QueueScope.telemetry({ inFlight: Telemetry.metric.gauge, lastPriority: Schema.Number }) {}
 
-class EntryScope extends QueueScopeTel.withBranch("Entry", { entryId: Schema.String })("@scope/queue/EntryScope") {}
+class EntryScope extends QueueScope.withBranch("Entry", { entryId: Schema.String })("@scope/queue/EntryScope") {}
 class EntryScopeTel extends EntryScope.telemetry({ attemptsSoFar: Schema.Number }) {}
 ```
 - **Every scope identity carries an id** — `State.Scope(domain)(id, fields)` (top-level branch off `State.Root`) and `.withBranch(name, fields)(id)` (deeper branch) both take one; all or none, and we chose all.

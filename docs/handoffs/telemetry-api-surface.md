@@ -45,13 +45,13 @@
 ## 4. Service classes — methods on produced classes
 
 ### 4a. Scope class — `State.Scope(...)` / `.withBranch(...)` result
-- **C1** · `.withBranch(name, fields)(id)` — child scope (new identity + id) · 🔶
+- **C1** · `.withBranch(name, fields)(id)` — deeper branch off a **base** scope (new identity + id); `fields` required · ✅
 - **C2** · `.telemetry(fields)` — telemetry half (same identity, **no new id**) · 🔶
 - **C3** · `.layer(values)` — provide the scope at a runtime boundary · 🔶
 
 ### 4b. Telemetry scope class — `.telemetry(...)` result (`…Tel`)
 - **C4** · `.event((e) => …)` — inline scope-bound schema value (no base) · 🔶
-- **C5** · `.withBranch(name, fields)(id)` — child scope from the Tel half · 🔶
+- **C5** · ~~`.withBranch` from the Tel half~~ — ⛔ dropped (you branch **base** scopes only; Tel halves are added per-level via `.telemetry`)
 
 ### 4c. Schema base class — `Telemetry.Schema(...)` result
 - **C6** · `.extend((e) => …)` — base + extras (field-adding; **never a bare arrow**) · 🔶
@@ -99,8 +99,18 @@
 
 ---
 
-## 9. Walk order (one at a time)
-S1 → C1, C2, C3 · S2 → C8, C9 · S3 · S4 (+ T14) · S5 · T5, T6 · T9–T13, T10 · T7, T8 · T4 (+ C4, C6, C7) · M1–M4 · E1–E6 · T1 (Compose) + C10–C13 · R1–R6 · S6, S7, T15 (wiring) · **T2 (Bundle) last** · T3 (Service) + C14.
+## 9. Walk order (grouped — finish a group before the next)
+1. **Scope** (State.Scope subsystem): S1 ✅ → C1 `.withBranch` → C2 `.telemetry` → C3 `.layer` → S5 `State.branch` (inline). [C5 dropped; C4 `.event` covered with schemas.]
+2. **State.Tag**: S2 → C8 (op handles) → C9 (`.provide`).
+3. **Operations**: S3 `State.operation` → S4 `State.inner` (+ T14 `spread` / group-import).
+4. **Taxonomy**: T5 `namespace` → T6 `group`.
+5. **Legs**: T9 `start` → T10 `exit` → T11/T12/T13 outcomes.
+6. **Events**: T7 `event` → T8 `declare`.
+7. **Schemas**: T4 `Schema` → C6 `.extend` → C7 `.Schema` → C4 `ScopeTel.event` → M1–M4 metric → E1–E6 context `e`.
+8. **Compose tag**: T1 → C10–C13 (handles, `ctx.telemetry`, `.provide`) → R1–R6 runtime.
+9. **Wiring**: S6 `Root` → S7 `Changed` → T15 `update`.
+10. **Bundle (last)**: T2.
+11. **Service**: T3 → C14.
 
 ---
 
@@ -122,3 +132,18 @@ class QueueScope extends State.Scope(QueueResource)("@scope/queue/QueueScope", {
 // produced class exposes: .withBranch (C1), .telemetry (C2), .layer (C3)
 ```
 Resolved: `leaf`→`branch` for node-creating APIs (`.withBranch`/`State.branch`; `e.leaf` kept). `e.root` = outermost `State.Scope`; `State.Root` (run root) via `e.runId`.
+
+### C1 · `.withBranch` ✅
+On a **base** scope — adds a deeper branch (child scope, new identity + id). Curried `(name, fields)(id)`; `fields` required (no empty scopes). Branch the **base** tree only; the Tel half is added per-level with `.telemetry` (C2). (C5 — branching the Tel half — dropped.)
+```ts
+interface ScopeClass</* … */> {
+  withBranch: <const Name extends string, Fields extends Schema.Struct.Fields>(
+    name: Name,        // branch/scope segment, unique per namespace
+    fields: Fields,    // required, plain Schema only (metric markers → .telemetry / C2)
+  ) => <const Id extends string>(id: Id) => State.ScopeClass</* child */>
+}
+```
+```ts
+class EntryScope   extends QueueScope.withBranch("Entry", { entryId: Schema.String })("@scope/queue/EntryScope") {}
+class AttemptScope extends EntryScope.withBranch("Attempt", { attempt: Schema.Number })("@scope/queue/AttemptScope") {}
+```
