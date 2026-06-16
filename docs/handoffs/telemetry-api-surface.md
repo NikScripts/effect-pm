@@ -15,7 +15,7 @@
 - **S2** · `State.Tag<Self>(domain)(stateId, …parts)` — **structure-only** tag (ops/scopes/handles/spans; no schemas) · 🔶
 - **S3** · `State.operation(name, scope?, Input?)(…triad)` — **operation** anchor (start / `inner` / exit) · 🔶
 - **S4** · `State.inner(…)` — the `ctx.telemetry` surface (middle events, nested ops, group-import) · 🔶
-- **S5** · `State.branch(name, fields)` — inline single-use branch (as an op's scope arg) · 🔶
+- **S5** · `State.branch(name, fields)` — inline single-use branch (op scope arg); no id, no telemetry half; `fields` required · ✅
 - **S6** · `State.Root` — the **real root** of the scope tree (run-level state; `runId` → `e.runId`); every `State.Scope` is a branch off it · 🔶
 - **S7** · `State.Changed` — internal transition event; `State.Changed.operation` format (§6.6) · 🔶
 
@@ -197,5 +197,22 @@ op(input).pipe(
 // escape hatch
 queueRuntime.pipe(
   Effect.provide(QueueScope.layer({ queueId })),
+)
+```
+
+### S5 · `State.branch` ✅
+Inline single-use branch, passed as an op's scope argument — the throwaway counterpart to `.Branch` (C1). Lowercase (inline value, not a class). **No id** (anonymous/single-use), **no telemetry half**, `fields` required.
+```ts
+declare const branch: <
+  const Name extends string,
+  Fields extends Schema.Struct.Fields,
+>(
+  name: Name,
+  fields: Fields,
+) => State.InlineBranch<Name, Fields>
+```
+```ts
+State.operation("checkpoint", State.branch("Checkpoint", { at: Schema.Number }))(
+  ["Saved"],
 )
 ```
