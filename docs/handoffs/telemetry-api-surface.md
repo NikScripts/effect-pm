@@ -46,7 +46,7 @@
 
 ### 4a. Scope class — `State.Scope(...)` / `.withBranch(...)` result
 - **C1** · `.withBranch(name, fields)(id)` — deeper branch off a **base** scope (new identity + id); `fields` required · ✅
-- **C2** · `.telemetry(fields)` — telemetry half (same identity, **no new id**) · 🔶
+- **C2** · `.telemetry(fields)` — telemetry half of any base scope (root or branch); **once per scope**; no new id · ✅
 - **C3** · `.layer(values)` — provide the scope at a runtime boundary · 🔶
 
 ### 4b. Telemetry scope class — `.telemetry(...)` result (`…Tel`)
@@ -144,6 +144,26 @@ interface ScopeClass</* … */> {
 }
 ```
 ```ts
-class EntryScope   extends QueueScope.withBranch("Entry", { entryId: Schema.String })("@scope/queue/EntryScope") {}
+class EntryScope extends QueueScope.withBranch("Entry", { entryId: Schema.String })("@scope/queue/EntryScope") {}
 class AttemptScope extends EntryScope.withBranch("Attempt", { attempt: Schema.Number })("@scope/queue/AttemptScope") {}
+```
+
+### C2 · `.telemetry` ✅
+The telemetry-state half of a base State scope. Works on **any** base scope (root or any branch), **once per scope** (multi-call deferred). No new id — derives the base's identity. `fields` accepts plain `Schema` and/or metric markers (`Telemetry.metric.*`); read by schemas via `e.root`/`e.leaf`; hidden from `ctx.scope`.
+```ts
+interface StateScope</* … */> {
+  telemetry: <Fields extends Telemetry.StateFields>(
+    fields: Fields,
+  ) => Telemetry.ScopeTelClass</* same identity + Fields */>
+}
+```
+```ts
+class QueueScopeTel extends QueueScope.telemetry({
+  inFlight: Telemetry.metric.gauge,
+  lastPriority: Schema.Number,
+}) {}
+
+class EntryScopeTel extends EntryScope.telemetry({
+  attemptsSoFar: Schema.Number,
+}) {}
 ```

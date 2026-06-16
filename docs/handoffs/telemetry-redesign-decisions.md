@@ -77,7 +77,7 @@ class EntryScope extends QueueScope.withBranch("Entry", { entryId: Schema.String
 class EntryScopeTel extends EntryScope.telemetry({ attemptsSoFar: Schema.Number }) {}
 ```
 - **Every scope identity carries an id** — `State.Scope(domain)(id, fields)` (top-level branch off `State.Root`) and `.withBranch(name, fields)(id)` (deeper branch) both take one; all or none, and we chose all.
-- `.telemetry({…})` → same scope's hidden half (**no new id — derives the base's**). **`State.Tag` ops open the BASE scope; the `…Tel` scope belongs to the Telemetry layer (schemas read state via it).** Process view (`ctx.scope`) hides the telemetry half.
+- `.telemetry({…})` → same scope's hidden half (**no new id — derives the base's**); on **any** base scope (root or branch), **once per scope** (multi-call deferred). **`State.Tag` ops open the BASE scope; the `…Tel` scope belongs to the Telemetry layer (schemas read state via it).** Process view (`ctx.scope`) hides the telemetry half.
 - inline single-use branch: `State.branch("Name", { … })` as an op's scope arg.
 
 ### 2.2 The Tag
