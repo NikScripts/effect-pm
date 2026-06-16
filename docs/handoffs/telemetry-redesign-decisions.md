@@ -101,7 +101,10 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
 - **Operation input is a `Schema`** (so it's pullable into schemas): `State.operation(name, scope, InputSchema)`; passed at call as `op(input).provide(scope)`; `ctx.input`.
 - **Parts triad** (type-distinct): `(start, inner, exit)` + duals + singles. start = bare string / `Telemetry.declare` / `Telemetry.start`; inner = `State.inner(…)`; exit = bare array / `Telemetry.exit(…)`.
 - **`State.inner`** = the `ctx.telemetry` surface (middle events, nested ops, **group-import**). Typed collisions = compile error; `ctx.telemetry = inner − this op's own start/exit`.
-- 🔶 **Group-import into `inner`** (deferred — §8; build on demand): events already declared in *another* group, pulled onto `ctx.telemetry` of *this* op without redeclaring them — `Telemetry.group(G)` keeps the group (`ctx.telemetry.Group.Event`), `Telemetry.spread(G)` drops the prefix (`ctx.telemetry.Event`); `G` references an existing group's wire path, spread never *creates* a group. **Not shown in the §2.3/§2.4 forms** since it's not yet live.
+- **Group-import into `inner`** — events already declared in another (sibling) group, pulled onto `ctx.telemetry` of *this* op **without redeclaring them**:
+  - `Telemetry.spread(G)` — **flat-import**: drops the group prefix → `ctx.telemetry.Event`.
+  - `Telemetry.group(G)` — **nested-import**: keeps the group → `ctx.telemetry.Group.Event`.
+  - `G` references an existing group (its name within the namespace; full `"Namespace.Group"` only matters once multi-namespace lands — §8). Spread never *creates* a group.
 - **`Telemetry.exit`** = the 3 free Cause-fold outcomes (success / interrupted / failure); existing positional shorthand (`"Completed", "Failed"`) or `Telemetry.success`/`interrupted`/`failure` wrappers; **each combinator gains an optional trailing `(e) => schema`** (no object/`onSuccess` form).
 - **Ref-shorteners** (`Telemetry.namespace`/`Telemetry.group`): bare strings resolve to the enclosing group; cross-group/namespace via `Telemetry.declare`. Never appear in handles.
 - **Handles:** ops flat by op name; standalone events are always **grouped** (every wire is `Namespace.Group.Event` — there is no ungrouped event); names unique per Tag; nested ops + middle events + imported events are on `ctx.telemetry`, not the Tag.
@@ -115,6 +118,7 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
   "@scope/queue/QueueTelemetry",
   Telemetry.namespace("Queue")(
     Telemetry.group("Lifecycle")("Started", "Paused"),                  // grouped standalone events
+    Telemetry.group("Audit")("Granted", "Denied"),                      // sibling group (imported below)
     Telemetry.group("Entry")(
       State.operation("enqueue", EntryScope)(                           // exit-only, explicit
         Telemetry.exit(
@@ -135,6 +139,8 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
           ),
           State.operation("attempt", AttemptScope)(["Succeeded", "Failed"]), // nested op opens a descendant leaf
           State.operation("checkpoint", State.leaf("Checkpoint", { at: Schema.Number }))(["Saved"]), // inline single-use leaf
+          Telemetry.group("Audit"),                                     // nested-import → ctx.telemetry.Audit.{Granted,Denied}
+          Telemetry.spread("Audit"),                                    // flat-import   → ctx.telemetry.{Granted,Denied}
         ),
         Telemetry.exit(
           Telemetry.success("Completed"),
@@ -153,6 +159,7 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
   "@scope/queue/QueueTelemetry",
   Telemetry.namespace("Queue")(
     Telemetry.group("Lifecycle")("Started", "Paused"),
+    Telemetry.group("Audit")("Granted", "Denied"),
     Telemetry.group("Entry")(
       State.operation("enqueue", EntryScope)(["Enqueued", "Rejected"]),  // bare array = exit
       State.operation("admit", EntryScope)("Admitted"),                  // bare string = start
@@ -164,6 +171,7 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
           State.operation("rateLimit")(Telemetry.exit(Telemetry.failure(Telemetry.declare("RateLimit", "Exceeded")))),
           State.operation("attempt", AttemptScope)(["Succeeded", "Failed"]),
           State.operation("checkpoint", State.leaf("Checkpoint", { at: Schema.Number }))(["Saved"]),
+          Telemetry.spread("Audit"),                                     // flat-import sibling group → ctx.telemetry.{Granted,Denied}
         ),
         ["Completed", "Released", "Failed"],                             // bare array = exit (success, interrupted, failure positional)
       ),
@@ -414,9 +422,9 @@ Adjacent: durable archive → `@effect/sql` (`sql-sqlite-node` installed); OTLP 
 - **wiring layer** — `bind` (fills PlainFields), telemetry-state writes, log legs, exhaustiveness. *Next layer.*
 - schema minor bits (keying, exhaustiveness vs `State.Tag`); `State.Changed.operation` format (§6.6); same-branch default (§6.4); foreign-emit policy; `op.provide` operator+builder typing; namespace-level default (§3.3).
 
-🔶 Deferred (build on demand): `import`/predefined `wires`; extra sinks; advanced telemetry-state features; whole-group `ctx` import via `group`/`spread`; **multiple namespaces per Tag** (one namespace per Tag for now).
+🔶 Deferred (build on demand): `import`/predefined `wires`; extra sinks; advanced telemetry-state features; **multiple namespaces per Tag** (one namespace per Tag for now).
 
-✅ Resolved: module split (`State` structure / `Telemetry` observability); inferred wire-tree + `declare`; path-local intersection; op↔scope via `R`; inline `leaf`; descendant nesting; operation ≠ event; operation input as `Schema`; triad + `inner`; flat handles; multi-branch snapshot + path-local reads; telemetry state on extended scopes (`Metric` = export); event reuse + intersection; interrupt optional; **event schemas** — *events carry only what the schema specifies (no auto-scope)*; **wire-keyed schema tree** with group `default` + sparse/omitted entries, scopes derived from schemas; reusable bases (`Telemetry.Schema(Scope)`, `.Schema` extend, `Base`/`Base.extend`/`ScopeTel.event`, template slots, flat-merge); `Telemetry.Event` per-event classes **dropped**; **compose `Telemetry.Tag(StateTag)(tree)` (Example 1) locked**; **bundle `Telemetry.Tag(domain)(facetId, structure, schemaTree)` (Example 2) locked** — same schema tree, structure inlined, schemas never on legs; `Telemetry.Service` = + layer.
+✅ Resolved: module split (`State` structure / `Telemetry` observability); inferred wire-tree + `declare`; path-local intersection; op↔scope via `R`; inline `leaf`; descendant nesting; operation ≠ event; operation input as `Schema`; triad + `inner`; sibling group-import into `inner` (`Telemetry.spread` flat / `Telemetry.group` nested); flat handles; multi-branch snapshot + path-local reads; telemetry state on extended scopes (`Metric` = export); event reuse + intersection; interrupt optional; **event schemas** — *events carry only what the schema specifies (no auto-scope)*; **wire-keyed schema tree** with group `default` + sparse/omitted entries, scopes derived from schemas; reusable bases (`Telemetry.Schema(Scope)`, `.Schema` extend, `Base`/`Base.extend`/`ScopeTel.event`, template slots, flat-merge); `Telemetry.Event` per-event classes **dropped**; **compose `Telemetry.Tag(StateTag)(tree)` (Example 1) locked**; **bundle `Telemetry.Tag(domain)(facetId, structure, schemaTree)` (Example 2) locked** — same schema tree, structure inlined, schemas never on legs; `Telemetry.Service` = + layer.
 
 ---
 
