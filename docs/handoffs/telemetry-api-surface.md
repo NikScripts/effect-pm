@@ -13,7 +13,7 @@
 ## 1. Module functions — `State`
 - **S1** · `State.Scope(domain)(id, fields)` — declare a **top-level scope** (first **branch** off `State.Root`); `fields` required (no empty scopes) · ✅
 - **S2** · `State.Tag<Self>(domain)(stateId, …parts)` — **structure-only** tag (ops/scopes/handles/spans; no schemas; one namespace; no-op without a telemetry layer) · ✅
-- **S3** · `State.operation(name, scope?, Input?)(…triad)` — **operation** anchor (start / `inner` / exit) · 🔶
+- **S3** · `State.operation(name, scope?, Input?)(…triad)` — **operation** anchor (start / `inner` / exit); define + call covered together (§10 Operations) · ✅
 - **S4** · `State.inner(…)` — the `ctx.telemetry` surface (middle events, nested ops, group-import) · 🔶
 - **S5** · `State.branch(name, fields)` — inline single-use branch (op scope arg); no id, no telemetry half; `fields` required · ✅
 - **S6** · `State.Root` — the **real root** of the scope tree (run-level state; `runId` → `e.runId`); every `State.Scope` is a branch off it · 🔶
@@ -58,8 +58,8 @@
 - **C7** · `.Schema(ScopeTel)((e) => …)` — extend into another reusable base · 🔶
 
 ### 4d. `State.Tag` instance
-- **C8** · operation handles (`.enqueue`, `.processEntry`, …) — invoke ops (wrap work) · 🔶
-- **C9** · `.provide(scopeValues)` — bind scope to a call · 🔶
+- **C8** · operation handles (`.enqueue`, `.processEntry`, …) — every call returns `Effect<ctx>` (§10 Operations) · ✅
+- **C9** · `.provide(scopeValues)` — supply the scope **dependency** (optional; inherited = already in context) · ✅
 
 ### 4e. `Telemetry.Tag` instance
 - **C10** · event handles (`.Lifecycle.Started`, …) — emit standalone events (grouped) · 🔶
@@ -268,3 +268,68 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
 ) {}
 ```
 (The structure internals — `State.operation` S3, `State.inner` S4, `Telemetry.namespace`/`group` T5/T6, legs T9–T13 — are documented as their own items.)
+
+### Operations · `State.operation` (S3) + handles (C8) + `.provide` (C9) ✅
+An operation **wraps work** (span + lifecycle) and is anchored by `State.operation`. Defining and calling are documented together because they're inseparable.
+
+#### Defining — `State.operation(name, scope?, Input?)(…triad)`
+```ts
+// 1 — explicit scope, no input
+State.operation("enqueue", EntryScope)(
+  Telemetry.exit(Telemetry.success("Enqueued"), Telemetry.failure("Rejected")),
+)
+
+// 2 — explicit scope, input as a Schema (pullable into event schemas via e.input)
+State.operation("processEntry", EntryScope, ProcessInput)(
+  Telemetry.start("Started"),
+  // …State.inner, Telemetry.exit
+)
+
+// 3 — explicit scope, input as a TS type (ctx.input only; not a Schema)
+State.operation<{ batchSize: number }>("drainAll", EntryScope)(
+  Telemetry.start("Drained"),
+)
+
+// 4 — no scope arg: the scope dependency is inherited from context
+State.operation("rateLimit")(
+  Telemetry.exit(Telemetry.failure(Telemetry.declare("RateLimit", "Exceeded"))),
+)
+
+// 5 — inline single-use scope (S5)
+State.operation("checkpoint", State.branch("Checkpoint", { at: Schema.Number }))(
+  ["Saved"],
+)
+```
+- **Scope = an Effect `R` dependency.** `State.operation(name, Leaf)` requires `Leaf`'s parent in context and provides `Leaf`. Top-level op → kernel provides root; nested op opening a descendant → satisfied by the enclosing op; `State.operation(name)` → inherits ambient. Unsatisfied parent = type error.
+- **Input** — Schema (in event schemas via `e.input` **and** `ctx.input`) · TS type (`ctx.input` only) · none.
+
+#### Calling — every call returns `Effect<ctx>`
+Whatever the op, a call yields the op's **`ctx`**. So on **any** call you can `yield* it`, `flatMap` it, or pipe work through the handle to wrap it. Four independent axes:
+
+1. **Source** — `QueueOps.op` (top-level, from the Tag) · `ctx.op` (nested, inside a body).
+2. **Input** — `op` · `op(input)`.
+3. **Scope (dependency)** — `.provide({…})` to supply it, **or omit** if already in context. *Inherited is not a different syntax — `.provide` is simply optional; an explicit-scope op can be called without it, and an inheriting op can still be given it.*
+4. **Consume** — `yield* call` · `call.pipe(Effect.flatMap((ctx) => …))` · wrap work: `work.pipe(handle)` / `handle(work)` (data-last / data-first dual).
+
+```ts
+// ── get ctx (works on ANY call: input or not, provided or not) ──
+const ctx = yield* QueueOps.processEntry({ priority, attempts }).provide({ entryId })
+const ctx = yield* QueueOps.processEntry({ priority, attempts })   // scope already in context
+const ctx = yield* QueueOps.enqueue.provide({ entryId })           // no-input op also yields ctx
+const ctx = yield* ctx.rateLimit                                   // nested op, inherited
+
+QueueOps.processEntry({ priority, attempts })
+  .provide({ entryId })
+  .pipe(Effect.flatMap((ctx) => /* body */))
+
+// ── wrap existing work (convenience; provide optional; piped or direct) ──
+work.pipe(QueueOps.enqueue.provide({ entryId }))   // provide · piped
+QueueOps.enqueue.provide({ entryId })(work)         // provide · direct
+work.pipe(QueueOps.enqueue)                          // inherited · piped
+QueueOps.enqueue(work)                               // inherited · direct
+work.pipe(ctx.rateLimit)                             // nested · inherited · piped
+ctx.rateLimit.provide({ … })(work)                  // nested · provide · direct
+```
+- **`.provide` supplies the scope like any dependency** — it can come from `.provide`, an enclosing op, or the root layer; same mechanism.
+- **Nested ops** are reached through `ctx` (exact `ctx` shape — ops/events placement — is the `ctx` topic, next).
+- The `Telemetry.Tag` exposes the **same** handles with typed payloads + emission (C11).
