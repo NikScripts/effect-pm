@@ -17,7 +17,7 @@ The structural layer lives in **`State`**; the observability layer in **`Telemet
 ```
 State.Tag(…)                                  → bare structure: ops, scopes, handles, spans. No schemas. No-op without a layer.
   Telemetry.Tag(StateTag)(schemaTree)         → richer tag: + schema tree + state            (compose — §3, locked)
-  Telemetry.Tag(domain)(facetId, structure, schemaTree)  → richer tag, one definition          (bundle — §4, locked)
+  Telemetry.Tag(domain)(facetId, structure, …)  → richer tag, one definition                    (bundle — §4, ⚠️ schema delivery WIP)
 Telemetry.Service(Tag, wiring)                → runtime: + wiring + layer
 ```
 
@@ -27,7 +27,7 @@ Telemetry.Service(Tag, wiring)                → runtime: + wiring + layer
 | **Telemetry** (events, taxonomy, schemas) | `Telemetry.namespace` / `Telemetry.group`; `Telemetry.event` / `Telemetry.declare`; `Telemetry.start` / `Telemetry.exit`; `Telemetry.success` / `interrupted` / `failure`; `Telemetry.spread`; `Telemetry.Tag` (richer, two ways); `Telemetry.Schema` (reusable base); `Telemetry.metric.*`; `Telemetry.Service`; schema context `e.root` / `e.leaf` / `e.input` / `e.exit` / `e.clock` |
 
 - **State** owns `operation`, `inner` (the `ctx.telemetry` container — holds nested ops + middle events), scopes. **Telemetry** owns events, taxonomy, legs (`start`/`exit`), schemas.
-- **`start`/`exit` use the bare `State.Tag` API** (`"Started"` / `["Completed","Failed"]` / `Telemetry.start` / `Telemetry.exit`); **`Telemetry.event` names an inner event.** **No inline schemas anywhere** — start, exit, inner events, and `declare` are *names only*; every schema lives in the `Telemetry.Tag` tree (§3), keyed by wire.
+- **`start`/`exit` use the bare `State.Tag` API** (`"Started"` / `["Completed","Failed"]` / `Telemetry.start` / `Telemetry.exit`); **`Telemetry.event` names an inner event.** **In `State.Tag` (compose) nothing carries a schema** — start, exit, and inner events are *names only*; their schemas live in the `Telemetry.Tag` tree (§3), keyed by wire. (**Bundle exception:** `Telemetry.declare` may carry a schema to define a multi-placement event once — §1/§4.)
 - **`State.Tag` has no schemas** (optional telemetry: provide no layer → no-op; client-cheap).
 - **`Telemetry.Tag` has schemas + state shape** — the client/RPC contract.
 - **`Telemetry.Service`** = Tag + wiring + layer; "Service" implies the layer, so it's *not* used for the schema-only tag.
@@ -41,13 +41,19 @@ Pipeline: wire strings → `State.Tag` adds per-placement scope → `Telemetry.T
 A wire is **three strings** — `Namespace.Group.Event`. **Inferred** from declarations (default) or imported. Entry points:
 
 - **bare string** — event in the **enclosing `Telemetry.group`**.
-- **`Telemetry.declare(…)`** — **names** cross-group/namespace events so a bare name can reference the same event from multiple sites (explicit, order-independent). **Names only — no schemas;** every event's schema lives in the `Telemetry.Tag` tree (§3), deduped by wire:
+- **`Telemetry.declare(…)`** — names an event so a bare **identifier** can reference the **same** event from multiple sites (explicit, order-independent):
   ```ts
   Telemetry.declare("RateLimit", "Exceeded")                            // name one cross-group event
   Telemetry.declare("ExitGroup", ["Success", "Interrupted", "Failed"])  // name several in a group
   Telemetry.declare("Entry.Retried")                                    // single, dotted path
   ```
   **No dotted refs as values** (inferred → nothing to dot into); cross-namespace via `"Namespace.Group.Event"` / `("Namespace", "Group", …)`.
+  - **Compose (Example 1, §3):** declare is **name-only** — every schema lives in the separate `Telemetry.Tag` tree, deduped by wire.
+  - **Bundle (Example 2, §4):** declare may **carry the schema** (extend form). An event used in **multiple places** is declared **once with its schema**; every other placement references it by **identifier only** — the schema is never repeated:
+    ```ts
+    Telemetry.declare("Entry.Retried", EntryEvent.extend((e) => ({ attempts: e.leaf.attemptsSoFar })))  // define once
+    // other placements: bare "Retried"
+    ```
 - 🔶 **deferred:** `Telemetry.import(…)` + predefined `Telemetry.wires({…})` (cross-facet shared catalogs) — build when a real shared catalog appears.
 
 Properties: wires come only from the three keys (flat at any depth); identical `(NS, Group, Event)` = one wire (deduped, the same event can appear in many places); **`Internal` namespace is reserved** (e.g. `Internal.State.Changed`). Constraints: leaf-scope names unique per namespace; event names unique per group.
@@ -292,9 +298,13 @@ class QueueTelemetry extends Telemetry.Tag<QueueTelemetry>(QueueOps)({
 
 ---
 
-## 4. `Telemetry.Tag` (bundle) ✅
+## 4. `Telemetry.Tag` (bundle) ⚠️ *(schema delivery being finalized — next pass)*
 
-Same as compose (§3), but the **structure is inlined** into the `Telemetry.Tag` call instead of a separate `State.Tag`. **Schemas are the identical tree** (§3 forms: `default`, `Base`, `Base.extend((e) => …)`, `ScopeTel.event((e) => …)`, omit) — **never on legs.** Shape: `Telemetry.Tag(domain)(facetId, structure, schemaTree)`.
+Same as compose (§3), but the **structure is inlined** into the `Telemetry.Tag` call instead of a separate `State.Tag`. **Does not use `State.Tag`.** Shape: `Telemetry.Tag(domain)(facetId, structure, …)`.
+
+**Multi-placement events** are handled by `Telemetry.declare` carrying the schema (§1): declare the event **once with its schema**, reference it by **identifier only** at every other placement — the schema is never repeated.
+
+⚠️ **Open (this is the Example 2 pass):** how schemas attach in the bundle — the separate wire-keyed tree shown below (mirrors §3) **vs** inline placement + `declare` dedup. The example below is the **separate-tree** sketch and may change.
 
 ```ts
 class QueueTelemetry extends Telemetry.Tag<QueueTelemetry>(QueueResource)(
@@ -424,7 +434,9 @@ Adjacent: durable archive → `@effect/sql` (`sql-sqlite-node` installed); OTLP 
 
 🔶 Deferred (build on demand): `import`/predefined `wires`; extra sinks; advanced telemetry-state features; **multiple namespaces per Tag** (one namespace per Tag for now).
 
-✅ Resolved: module split (`State` structure / `Telemetry` observability); inferred wire-tree + `declare`; path-local intersection; op↔scope via `R`; inline `leaf`; descendant nesting; operation ≠ event; operation input as `Schema`; triad + `inner`; sibling group-import into `inner` (`Telemetry.spread` flat / `Telemetry.group` nested); flat handles; multi-branch snapshot + path-local reads; telemetry state on extended scopes (`Metric` = export); event reuse + intersection; interrupt optional; **event schemas** — *events carry only what the schema specifies (no auto-scope)*; **wire-keyed schema tree** with group `default` + sparse/omitted entries, scopes derived from schemas; reusable bases (`Telemetry.Schema(Scope)`, `.Schema` extend, `Base`/`Base.extend`/`ScopeTel.event`, template slots, flat-merge); `Telemetry.Event` per-event classes **dropped**; **compose `Telemetry.Tag(StateTag)(tree)` (Example 1) locked**; **bundle `Telemetry.Tag(domain)(facetId, structure, schemaTree)` (Example 2) locked** — same schema tree, structure inlined, schemas never on legs; `Telemetry.Service` = + layer.
+✅ Resolved: module split (`State` structure / `Telemetry` observability); inferred wire-tree + `declare`; path-local intersection; op↔scope via `R`; inline `leaf`; descendant nesting; operation ≠ event; operation input as `Schema`; triad + `inner`; sibling group-import into `inner` (`Telemetry.spread` flat / `Telemetry.group` nested); flat handles; multi-branch snapshot + path-local reads; telemetry state on extended scopes (`Metric` = export); event reuse + intersection; interrupt optional; **event schemas** — *events carry only what the schema specifies (no auto-scope)*; **wire-keyed schema tree** with group `default` + sparse/omitted entries, scopes derived from schemas; reusable bases (`Telemetry.Schema(Scope)`, `.Schema` extend, `Base`/`Base.extend`/`ScopeTel.event`, template slots, flat-merge); `Telemetry.Event` per-event classes **dropped**; **compose `Telemetry.Tag(StateTag)(tree)` (Example 1) locked**; `declare` is name-only in compose, schema-carrying in the bundle (define multi-placement events once, reference by id); `Telemetry.Service` = + layer.
+
+⚠️ **Not yet locked:** bundle / **Example 2** schema delivery (§4) — separate tree vs inline + `declare` dedup. **This is the next pass.**
 
 ---
 
