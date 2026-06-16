@@ -24,10 +24,10 @@ Telemetry.Service(Tag, wiring)                → runtime: + wiring + layer
 | Layer | Names |
 |---|---|
 | **State** (operations, scopes) | `State.Tag`; `State.operation`; `State.inner`; `State.leaf`; `State.Scope` → `.withLeaf` → `.telemetry({…})` |
-| **Telemetry** (events, taxonomy, schemas) | `Telemetry.namespace` / `Telemetry.group`; `Telemetry.event` / `Telemetry.declare`; `Telemetry.start` / `Telemetry.exit`; `Telemetry.success` / `interrupted` / `failure`; `Telemetry.spread`; `Telemetry.Tag` (richer, two ways); `Telemetry.Event` / `Schema` / `Schemas`; `Telemetry.metric.*`; `Telemetry.Service`; schema context `e.root` / `e.leaf` / `e.input` / `e.exit` / `e.clock` |
+| **Telemetry** (events, taxonomy, schemas) | `Telemetry.namespace` / `Telemetry.group`; `Telemetry.event` / `Telemetry.declare`; `Telemetry.start` / `Telemetry.exit`; `Telemetry.success` / `interrupted` / `failure`; `Telemetry.spread`; `Telemetry.Tag` (richer, two ways); `Telemetry.Schema` (reusable base); `Telemetry.metric.*`; `Telemetry.Service`; schema context `e.root` / `e.leaf` / `e.input` / `e.exit` / `e.clock` |
 
 - **State** owns `operation`, `inner` (the `ctx.telemetry` container — holds nested ops + middle events), scopes. **Telemetry** owns events, taxonomy, legs (`start`/`exit`), schemas.
-- **`start`/`exit` use the bare `State.Tag` API** (`"Started"` / `["Completed","Failed"]` / `Telemetry.start` / `Telemetry.exit`) — **no inline schemas on legs**. **`Telemetry.event` (with optional inline schema) is for inner events only.**
+- **`start`/`exit` use the bare `State.Tag` API** (`"Started"` / `["Completed","Failed"]` / `Telemetry.start` / `Telemetry.exit`); **`Telemetry.event` names an inner event.** **No inline schemas anywhere** — start, exit, inner events, and `declare` are *names only*; every schema lives in the `Telemetry.Tag` tree (§3), keyed by wire.
 - **`State.Tag` has no schemas** (optional telemetry: provide no layer → no-op; client-cheap).
 - **`Telemetry.Tag` has schemas + state shape** — the client/RPC contract.
 - **`Telemetry.Service`** = Tag + wiring + layer; "Service" implies the layer, so it's *not* used for the schema-only tag.
@@ -41,12 +41,11 @@ Pipeline: wire strings → `State.Tag` adds per-placement scope → `Telemetry.T
 A wire is **three strings** — `Namespace.Group.Event`. **Inferred** from declarations (default) or imported. Entry points:
 
 - **bare string** — event in the **enclosing `Telemetry.group`**.
-- **`Telemetry.declare(…)`** — names cross-group/namespace events **and/or defines shared events once** (referenced by bare name elsewhere; explicit, order-independent):
+- **`Telemetry.declare(…)`** — **names** cross-group/namespace events so a bare name can reference the same event from multiple sites (explicit, order-independent). **Names only — no schemas;** every event's schema lives in the `Telemetry.Tag` tree (§3), deduped by wire:
   ```ts
-  Telemetry.declare("RateLimit", "Exceeded")                            // name ref
-  Telemetry.declare("ExitGroup", ["Success", "Interrupted", "Failed"])  // multiple name refs
-  Telemetry.declare("Entry", { Completed: (e) => …, Failed: (e) => … }) // define shared events + schemas
-  Telemetry.declare("Entry.Retried", (e) => …)                          // single, dotted path
+  Telemetry.declare("RateLimit", "Exceeded")                            // name one cross-group event
+  Telemetry.declare("ExitGroup", ["Success", "Interrupted", "Failed"])  // name several in a group
+  Telemetry.declare("Entry.Retried")                                    // single, dotted path
   ```
   **No dotted refs as values** (inferred → nothing to dot into); cross-namespace via `"Namespace.Group.Event"` / `("Namespace", "Group", …)`.
 - 🔶 **deferred:** `Telemetry.import(…)` + predefined `Telemetry.wires({…})` (cross-facet shared catalogs) — build when a real shared catalog appears.
@@ -105,7 +104,7 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
   - `Telemetry.spread(G)` — **flat-import**: drops the group prefix → `ctx.telemetry.Event`.
   - `Telemetry.group(G)` — **nested-import**: keeps the group → `ctx.telemetry.Group.Event`.
   - `G` references an existing group (its name within the namespace; full `"Namespace.Group"` only matters once multi-namespace lands — §8). Spread never *creates* a group.
-- **`Telemetry.exit`** = the 3 free Cause-fold outcomes (success / interrupted / failure); existing positional shorthand (`"Completed", "Failed"`) or `Telemetry.success`/`interrupted`/`failure` wrappers; **each combinator gains an optional trailing `(e) => schema`** (no object/`onSuccess` form).
+- **`Telemetry.exit`** = the 3 free Cause-fold outcomes (success / interrupted / failure); positional shorthand (`"Completed", "Failed"`) or `Telemetry.success`/`interrupted`/`failure` wrappers (no object/`onSuccess` form). **No schemas on these legs** — exit-event schemas live in the tree (§3), keyed by event name.
 - **Ref-shorteners** (`Telemetry.namespace`/`Telemetry.group`): bare strings resolve to the enclosing group; cross-group/namespace via `Telemetry.declare`. Never appear in handles.
 - **Handles:** ops flat by op name; standalone events are always **grouped** (every wire is `Namespace.Group.Event` — there is no ungrouped event); names unique per Tag; nested ops + middle events + imported events are on `ctx.telemetry`, not the Tag.
 
@@ -295,7 +294,7 @@ class QueueTelemetry extends Telemetry.Tag<QueueTelemetry>(QueueOps)({
 
 ## 4. `Telemetry.Tag` (bundle) ✅
 
-Same as compose (§3), but the **structure is inlined** into the `Telemetry.Tag` call instead of a separate `State.Tag`. **Schemas are the identical tree** (§3 forms: `default`, `(e) => extras`, `Base`, `Base.extend`, `ScopeTel.event`, omit) — **never on legs.** Shape: `Telemetry.Tag(domain)(facetId, structure, schemaTree)`.
+Same as compose (§3), but the **structure is inlined** into the `Telemetry.Tag` call instead of a separate `State.Tag`. **Schemas are the identical tree** (§3 forms: `default`, `Base`, `Base.extend((e) => …)`, `ScopeTel.event((e) => …)`, omit) — **never on legs.** Shape: `Telemetry.Tag(domain)(facetId, structure, schemaTree)`.
 
 ```ts
 class QueueTelemetry extends Telemetry.Tag<QueueTelemetry>(QueueResource)(
