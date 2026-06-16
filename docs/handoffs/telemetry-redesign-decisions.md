@@ -290,56 +290,6 @@ class QueueTelemetry extends Telemetry.Tag<QueueTelemetry>(QueueOps)({
 }) {}
 ```
 
-### 3.7 Every form & feature (schema tree)
-```ts
-// ── reusable bases (§3.5) ─────────────────────────────────────────
-// scope-bound base
-class EntryEvent extends Telemetry.Schema<EntryEvent>(EntryScopeTel)((e) => ({
-  entryId: e.leaf.entryId,
-  at: e.clock,
-})) {}
-
-// base extended into another base (flat merge at creation — no chain)
-class EntryAudited extends EntryEvent.Schema<EntryAudited>(EntryScopeTel)((e) => ({
-  actor: Schema.String,            // template slot — plain Schema, resolved at a later merge or stays a PlainField
-})) {}
-
-class LifecycleEvent extends Telemetry.Schema<LifecycleEvent>(QueueScopeTel)((e) => ({
-  queueId: e.root.queueId,
-  at: e.clock,
-})) {}
-
-// ── the tree: every entry form (§3.2) ────────────────────────────
-class QueueTelemetry extends Telemetry.Tag<QueueTelemetry>(QueueOps)({
-  Queue: {
-    Lifecycle: {
-      default: LifecycleEvent,        // group default = a reusable base class
-      // Started, Paused                  ← omitted ⇒ resolve to default
-      Paused: (e) => ({ reason: Schema.String }), // default + extras
-    },
-    Audit: {
-      default: QueueScopeTel.event((e) => ({ at: e.clock })), // default = inline scope-bound value (no base)
-      Granted: EntryAudited,          // a base as-is (no extras)
-      Denied:  EntryAudited.extend((e) => ({ reason: Schema.String })), // base + extras (overrides default's base)
-    },
-    Entry: {
-      default: EntryEvent,
-      Started:   (e) => ({ priority: e.input.priority, inFlight: e.root.inFlight }), // e.input (op input), e.root (telemetry-state)
-      Retried:   (e) => ({ attempts: e.leaf.attemptsSoFar }),                        // e.leaf (deepest leaf)
-      Completed: (e) => ({ durationMs: e.exit.duration, attempts: e.leaf.attemptsSoFar }), // e.exit.* (exit events only)
-      Failed:    (e) => ({ durationMs: e.exit.duration, cause: e.exit.cause, reason: Schema.String }), // PlainField (reason)
-      Released:  EntryScopeTel.event((e) => ({ entryId: e.leaf.entryId })), // inline scope-bound value, no base
-      // Enqueued, Rejected, Succeeded, Saved   ← omitted ⇒ default
-    },
-    RateLimit: {                      // group created by Telemetry.declare("RateLimit", "Exceeded")
-      default: EntryEvent,            // rateLimit inherits Entry scope
-      // Exceeded                          ← omitted ⇒ default
-    },
-  },
-}) {}
-```
-Forms shown: `default` as base-class / inline-value; omitted→default; `(e)=>extras`; `Base`; `Base.extend((e)=>…)`; `ScopeTel.event((e)=>…)`; sources `e.root`/`e.leaf`/`e.input`/`e.exit.*`/`e.clock`; PlainField; base-extends-base + template slot. **Scopes are derived from the schemas — no scope args on `Telemetry.Tag`.**
-
 ---
 
 ## 4. `Telemetry.Tag` (bundle) ✅
