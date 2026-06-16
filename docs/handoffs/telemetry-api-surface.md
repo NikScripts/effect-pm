@@ -44,14 +44,14 @@
 
 ## 4. Service classes — methods on produced classes
 
-### 4a. Scope class — `State.Scope(...)` / `.withBranch(...)` result
-- **C1** · `.withBranch(name, fields)(id)` — deeper branch off a **base** scope (new identity + id); `fields` required · ✅
-- **C2** · `.telemetry(fields)` — telemetry half of any base scope (root or branch); **once per scope**; no new id · ✅
+### 4a. Scope class — `State.Scope(...)` / `.Branch(...)` result
+- **C1** · `.Branch(name, fields)(id)` — deeper branch off a **base** scope (new identity + id); `fields` required · ✅
+- **C2** · `.Telemetry(fields)` — telemetry half of any base scope (root or branch); **once per scope**; no new id · ✅
 - **C3** · `.layer(values)` — provide the scope at a runtime boundary · 🔶
 
-### 4b. Telemetry scope class — `.telemetry(...)` result (`…Tel`)
+### 4b. Telemetry scope class — `.Telemetry(...)` result (`…Tel`)
 - **C4** · `.event((e) => …)` — inline scope-bound schema value (no base) · 🔶
-- **C5** · ~~`.withBranch` from the Tel half~~ — ⛔ dropped (you branch **base** scopes only; Tel halves are added per-level via `.telemetry`)
+- **C5** · ~~`.Branch` from the Tel half~~ — ⛔ dropped (you branch **base** scopes only; Tel halves are added per-level via `.Telemetry`)
 
 ### 4c. Schema base class — `Telemetry.Schema(...)` result
 - **C6** · `.extend((e) => …)` — base + extras (field-adding; **never a bare arrow**) · 🔶
@@ -100,7 +100,7 @@
 ---
 
 ## 9. Walk order (grouped — finish a group before the next)
-1. **Scope** (State.Scope subsystem): S1 ✅ → C1 `.withBranch` → C2 `.telemetry` → C3 `.layer` → S5 `State.branch` (inline). [C5 dropped; C4 `.event` covered with schemas.]
+1. **Scope** (State.Scope subsystem): S1 ✅ → C1 `.Branch` → C2 `.Telemetry` → C3 `.layer` → S5 `State.branch` (inline). [C5 dropped; C4 `.event` covered with schemas.]
 2. **State.Tag**: S2 → C8 (op handles) → C9 (`.provide`).
 3. **Operations**: S3 `State.operation` → S4 `State.inner` (+ T14 `spread` / group-import).
 4. **Taxonomy**: T5 `namespace` → T6 `group`.
@@ -123,47 +123,47 @@ The first branch off `State.Root` (not the root — S6 is). Single call shape; `
 declare const Scope: <Domain extends State.Domain>(domain: Domain) =>
   <const Id extends string, Fields extends Schema.Struct.Fields>(
     id: Id,           // required, "<Resource>/<Name>"
-    fields: Fields,   // required, plain Schema only (metric markers belong to .telemetry / C2)
+    fields: Fields,   // required, plain Schema only (metric markers belong to .Telemetry / C2)
   ) => State.ScopeClass<Domain, Id, Fields>
 ```
 ```ts
 // declare a top-level scope
 class QueueScope extends State.Scope(QueueResource)("@scope/queue/QueueScope", { queueId: Schema.String }) {}
-// produced class exposes: .withBranch (C1), .telemetry (C2), .layer (C3)
+// produced class exposes: .Branch (C1), .Telemetry (C2), .layer (C3)
 ```
-Resolved: `leaf`→`branch` for node-creating APIs (`.withBranch`/`State.branch`; `e.leaf` kept). `e.root` = outermost `State.Scope`; `State.Root` (run root) via `e.runId`.
+Resolved: `leaf`→`branch` for node-creating APIs (`.Branch`/`State.branch`; `e.leaf` kept). `e.root` = outermost `State.Scope`; `State.Root` (run root) via `e.runId`.
 
-### C1 · `.withBranch` ✅
-On a **base** scope — adds a deeper branch (child scope, new identity + id). Curried `(name, fields)(id)`; `fields` required (no empty scopes). Branch the **base** tree only; the Tel half is added per-level with `.telemetry` (C2). (C5 — branching the Tel half — dropped.)
+### C1 · `.Branch` ✅
+On a **base** scope — adds a deeper branch (child scope, new identity + id). Curried `(name, fields)(id)`; `fields` required (no empty scopes). Branch the **base** tree only; the Tel half is added per-level with `.Telemetry` (C2). (C5 — branching the Tel half — dropped.)
 ```ts
 interface ScopeClass</* … */> {
-  withBranch: <const Name extends string, Fields extends Schema.Struct.Fields>(
+  Branch: <const Name extends string, Fields extends Schema.Struct.Fields>(
     name: Name,        // branch/scope segment, unique per namespace
-    fields: Fields,    // required, plain Schema only (metric markers → .telemetry / C2)
+    fields: Fields,    // required, plain Schema only (metric markers → .Telemetry / C2)
   ) => <const Id extends string>(id: Id) => State.ScopeClass</* child */>
 }
 ```
 ```ts
-class EntryScope extends QueueScope.withBranch("Entry", { entryId: Schema.String })("@scope/queue/EntryScope") {}
-class AttemptScope extends EntryScope.withBranch("Attempt", { attempt: Schema.Number })("@scope/queue/AttemptScope") {}
+class EntryScope extends QueueScope.Branch("Entry", { entryId: Schema.String })("@scope/queue/EntryScope") {}
+class AttemptScope extends EntryScope.Branch("Attempt", { attempt: Schema.Number })("@scope/queue/AttemptScope") {}
 ```
 
-### C2 · `.telemetry` ✅
+### C2 · `.Telemetry` ✅
 The telemetry-state half of a base State scope. Works on **any** base scope (root or any branch), **once per scope** (multi-call deferred). No new id — derives the base's identity. `fields` accepts plain `Schema` and/or metric markers (`Telemetry.metric.*`); read by schemas via `e.root`/`e.leaf`; hidden from `ctx.scope`.
 ```ts
 interface StateScope</* … */> {
-  telemetry: <Fields extends Telemetry.StateFields>(
+  Telemetry: <Fields extends Telemetry.StateFields>(
     fields: Fields,
   ) => Telemetry.ScopeTelClass</* same identity + Fields */>
 }
 ```
 ```ts
-class QueueScopeTel extends QueueScope.telemetry({
+class QueueScopeTel extends QueueScope.Telemetry({
   inFlight: Telemetry.metric.gauge,
   lastPriority: Schema.Number,
 }) {}
 
-class EntryScopeTel extends EntryScope.telemetry({
+class EntryScopeTel extends EntryScope.Telemetry({
   attemptsSoFar: Schema.Number,
 }) {}
 ```
