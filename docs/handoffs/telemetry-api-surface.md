@@ -47,7 +47,7 @@
 ### 4a. Scope class — `State.Scope(...)` / `.Branch(...)` result
 - **C1** · `.Branch(name, fields)(id)` — deeper branch off a **base** scope (new identity + id); `fields` required · ✅
 - **C2** · `.Telemetry(fields)` — telemetry half of any base scope (root or branch); **once per scope**; no new id · ✅
-- **C3** · `.layer(values)` — provide the scope at a runtime boundary · 🔶
+- **C3** · `.layer(values)` — `Layer` opening the scope with decoded field values (root scope; via `Effect.provide`) · ✅
 
 ### 4b. Telemetry scope class — `.Telemetry(...)` result (`…Tel`)
 - **C4** · `.event((e) => …)` — inline scope-bound schema value (no base) · 🔶
@@ -166,4 +166,19 @@ class QueueScopeTel extends QueueScope.Telemetry({
 class EntryScopeTel extends EntryScope.Telemetry({
   attemptsSoFar: Schema.Number,
 }) {}
+```
+
+### C3 · `.layer` ✅
+Yields an Effect `Layer` that opens the scope with concrete, **decoded** field values; installed at the runtime boundary via `Effect.provide`. Lowercase — produces a value, not a class. Used for the **root** scope (opened once); deeper branches are opened per-call via `op.provide` (R1 / C9), not `.layer`.
+```ts
+interface StateScope</* …, */ Fields> {
+  layer: (
+    values: Schema.Struct.Type<Fields>,
+  ) => Layer<this /* the scope, in context */>
+}
+```
+```ts
+queueRuntime.pipe(
+  Effect.provide(QueueScope.layer({ queueId })),
+)
 ```
