@@ -263,9 +263,27 @@ Telemetry.operation("processEntry")(
 
 ---
 
-### ISSUE-017 — `State.Root` not implemented
+### ISSUE-017 — `State.Root` not implemented — **RESOLVED (partial)**
 
-**Path:** `src/State.ts` (missing) — see handoff §2. Blocks Step 5–6.
+**Path:** `src/State.ts`
+
+**Landed:** Step 5.1 envelope + transition (`21c2be3a3`); Phase A branch stack + effective read (`027dfe033`).
+
+**Still open:** `StateRootRegistry` (multi-root), effective `previous`, Phase B–D. See [telemetry-phase-a-review.md](./telemetry-phase-a-review.md).
+
+---
+
+### ISSUE-035 — Branch storage must be scope-owned SSOT (P0 — Phase A completion)
+
+**Paths:** `src/internal/state/branchStack.ts`, `src/State.ts`, `src/Telemetry.ts` (`makeOpProvide`)
+
+**Context:** Old model: each scope’s data lived in **Context** via `scope.layer` — dependencies enforced ownership and typing. Phase A stores branch values in a **central fiber map** as `{ path, values: Record<string, unknown> }`. Context nested tree still exists from `makeState` but is **not** updated by `installBranch` — dual representation.
+
+**Owner requirement:** Each branch scope tag (`RunScope`, `EntryScope`, …) **owns** its segment as SSOT. `mergeBranches` is a **derived read view only**, not authority. Writes must be typed via `scope.Leaf` at install/patch boundaries; frame identity should use **scope id**, not anonymous path strings alone.
+
+**Also:** sibling branch exclusivity (one active path) — see Phase A review §Blockers #3.
+
+**Review:** [telemetry-phase-a-review.md](./telemetry-phase-a-review.md) §Architecture
 
 ---
 
