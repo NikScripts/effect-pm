@@ -196,14 +196,15 @@ Compose path: `Telemetry.Tag(StateTag)(schemaTree)` — a **wire-keyed tree** (`
 | form | meaning |
 |---|---|
 | *(omitted)* | resolves to the group `default` |
-| `(e) => ({ … })` | group `default` + these extras |
 | `Base` | a reusable base, as-is (no extras) |
-| `Base.extend((e) => ({ … }))` | base + extras (overrides the group default's base) |
+| `Base.extend((e) => ({ … }))` | **extend** a base with extras — the form for adding fields (no bare-arrow shorthand) |
 | `ScopeTel.event((e) => ({ … }))` | plain, scope-bound (no base) |
+
+**You always extend a schema — a bare `(e) => ({ … })` is not a valid entry.** To add fields you write `Base.extend((e) => …)`; an event with no extras is `Base`; omitted resolves to the group `default`.
 
 ### 3.3 `default` (group base)
 - `default: <schema>` — a scope-bound base (`Telemetry.Schema(ScopeTel)` class, or `ScopeTel.event((e) => …)`). **Reserved key — no event named `default`.**
-- omitted events → `default`; listed `(e) => extras` → `default` + extras; `Base.extend`/`ScopeTel.event` → override the default's base.
+- omitted events → `default`; to add extras you **extend** the base (`EntryEvent.extend((e) => …)`); `Base`/`ScopeTel.event` set the base explicitly. A bare `(e) => extras` is **not** a valid entry.
 - a group with **no** `default` and an omitted event → empty/error (exhaustiveness check vs `State.Tag`).
 - 🔶 namespace-level default (root-scoped, layered above group) — deferred.
 
@@ -275,11 +276,11 @@ class QueueTelemetry extends Telemetry.Tag<QueueTelemetry>(QueueOps)({
     },
     Entry: {
       default: EntryEvent,
-      Rejected:  (e) => ({ reason: Schema.String }),
-      Started:   (e) => ({ priority: e.input.priority, inFlight: e.root.inFlight }),
-      Retried:   (e) => ({ attempts: e.leaf.attemptsSoFar }),
-      Completed: (e) => ({ durationMs: e.exit.duration, attempts: e.leaf.attemptsSoFar }),
-      Failed:    (e) => ({ durationMs: e.exit.duration, cause: e.exit.cause, reason: Schema.String }),
+      Rejected:  EntryEvent.extend((e) => ({ reason: Schema.String })),
+      Started:   EntryEvent.extend((e) => ({ priority: e.input.priority, inFlight: e.root.inFlight })),
+      Retried:   EntryEvent.extend((e) => ({ attempts: e.leaf.attemptsSoFar })),
+      Completed: EntryEvent.extend((e) => ({ durationMs: e.exit.duration, attempts: e.leaf.attemptsSoFar })),
+      Failed:    EntryEvent.extend((e) => ({ durationMs: e.exit.duration, cause: e.exit.cause, reason: Schema.String })),
       // Enqueued, Released → default
     },
     RateLimit: {
@@ -322,11 +323,11 @@ class QueueTelemetry extends Telemetry.Tag<QueueTelemetry>(QueueResource)(
       Lifecycle: { default: LifecycleEvent },
       Entry: {
         default: EntryEvent,
-        Rejected:  (e) => ({ reason: Schema.String }),
-        Started:   (e) => ({ priority: e.input.priority, inFlight: e.root.inFlight }),
-        Retried:   (e) => ({ attempts: e.leaf.attemptsSoFar }),
-        Completed: (e) => ({ durationMs: e.exit.duration, attempts: e.leaf.attemptsSoFar }),
-        Failed:    (e) => ({ durationMs: e.exit.duration, cause: e.exit.cause, reason: Schema.String }),
+        Rejected:  EntryEvent.extend((e) => ({ reason: Schema.String })),
+        Started:   EntryEvent.extend((e) => ({ priority: e.input.priority, inFlight: e.root.inFlight })),
+        Retried:   EntryEvent.extend((e) => ({ attempts: e.leaf.attemptsSoFar })),
+        Completed: EntryEvent.extend((e) => ({ durationMs: e.exit.duration, attempts: e.leaf.attemptsSoFar })),
+        Failed:    EntryEvent.extend((e) => ({ durationMs: e.exit.duration, cause: e.exit.cause, reason: Schema.String })),
       },
       RateLimit: { default: EntryEvent },
     },
