@@ -11,12 +11,12 @@
 ---
 
 ## 1. Module functions — `State`
-- **S1** · `State.Scope(domain)(id, fields)` — declare a **root scope** class · 🔶
+- **S1** · `State.Scope(domain)(id, fields)` — declare a **top-level scope** (first **branch** off `State.Root`); `fields` required (no empty scopes) · ✅
 - **S2** · `State.Tag<Self>(domain)(stateId, …parts)` — **structure-only** tag (ops/scopes/handles/spans; no schemas) · 🔶
 - **S3** · `State.operation(name, scope?, Input?)(…triad)` — **operation** anchor (start / `inner` / exit) · 🔶
 - **S4** · `State.inner(…)` — the `ctx.telemetry` surface (middle events, nested ops, group-import) · 🔶
 - **S5** · `State.leaf(name, fields)` — inline single-use leaf (as an op's scope arg) · 🔶
-- **S6** · `State.Root` — root handle · 🔶
+- **S6** · `State.Root` — the **real root** of the scope tree (run-level state; `runId` → `e.runId`); every `State.Scope` is a branch off it · 🔶
 - **S7** · `State.Changed` — internal transition event; `State.Changed.operation` format (§6.6) · 🔶
 
 ## 2. Module functions — `Telemetry`
@@ -106,3 +106,19 @@ S1 → C1, C2, C3 · S2 → C8, C9 · S3 · S4 (+ T14) · S5 · T5, T6 · T9–T
 
 ## 10. Locked forms
 *(filled as we walk — each item's every shape as a type + usage example.)*
+
+### S1 · `State.Scope` ✅
+The first branch off `State.Root` (not the root — S6 is). Single call shape; `fields` required (no empty scopes).
+```ts
+declare const Scope: <Domain extends State.Domain>(domain: Domain) =>
+  <const Id extends string, Fields extends Schema.Struct.Fields>(
+    id: Id,           // required, "<Resource>/<Name>"
+    fields: Fields,   // required, plain Schema only (metric markers belong to .telemetry / C2)
+  ) => State.ScopeClass<Domain, Id, Fields>
+```
+```ts
+// declare a top-level scope
+class QueueScope extends State.Scope(QueueResource)("@scope/queue/QueueScope", { queueId: Schema.String }) {}
+// produced class exposes: .withBranch (C1), .telemetry (C2), .layer (C3)
+```
+🔶 Open: rename `leaf`→`branch` for node-creating APIs (pending); `e.root` = `State.Root` vs outermost `State.Scope`.
