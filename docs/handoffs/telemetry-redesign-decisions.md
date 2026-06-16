@@ -72,7 +72,7 @@ class EntryScope extends QueueScopeTel.withLeaf("Entry", { entryId: Schema.Strin
 class EntryScopeTel extends EntryScope.telemetry({ attemptsSoFar: Schema.Number }) {}
 ```
 - `.withLeaf(name, fields)(id)` → child scope (new identity).
-- `.telemetry({…})` → same scope's hidden half (no id). Ops open the `…Tel` scope so schemas can read state; process view (`ctx.scope`) still hides it.
+- `.telemetry({…})` → same scope's hidden half (no id). **`State.Tag` ops open the BASE scope; the `…Tel` scope belongs to the Telemetry layer (schemas read state via it).** Process view (`ctx.scope`) hides the telemetry half.
 - inline single-use leaf: `State.leaf("Name", { … })` as an op's scope arg.
 
 ### 2.2 The Tag
@@ -82,8 +82,8 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
   Telemetry.namespace("Queue")(
     Telemetry.group("Lifecycle")("Started", "Paused"),             // standalone events
     Telemetry.group("Entry")(
-      State.operation("enqueue", EntryScopeTel)(Telemetry.exit("Enqueued", "Rejected")),
-      State.operation("processEntry", EntryScopeTel, EntrySource)(
+      State.operation("enqueue", EntryScope)(Telemetry.exit("Enqueued", "Rejected")),
+      State.operation("processEntry", EntryScope, ProcessInput)(
         "Started",
         State.inner(
           "Retried",
