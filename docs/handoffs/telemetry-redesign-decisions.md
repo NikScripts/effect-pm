@@ -303,6 +303,28 @@ class QueueTelemetry extends Telemetry.Tag<QueueTelemetry>(QueueOps, BaseEvent)(
 }) {}
 ```
 
+### 3.7 File layout (compose)
+Two files, split on the State/Telemetry seam: **base (state) scopes bundle with `State.Tag`**; **telemetry scopes bundle with the event schemas**.
+
+```ts
+// QueueOps.ts — base scopes + State.Tag (structure)
+export class QueueScope extends State.Scope(QueueResource)("@scope/queue/QueueScope", { queueId: Schema.String }) {}
+export class EntryScope extends QueueScope.withLeaf("Entry", { entryId: Schema.String })("@scope/queue/EntryScope") {}
+export const ProcessInput = Schema.Struct({ priority: Schema.Number, attempts: Schema.Number })
+export class QueueOps extends State.Tag<QueueOps>(QueueResource)( /* …namespace/groups/ops… */ ) {}
+
+// QueueTelemetry.ts — telemetry scopes + schemas + Telemetry.Tag (compose)
+import { QueueScope, EntryScope, QueueOps } from "./QueueOps"
+export class QueueScopeTel extends QueueScope.telemetry({ inFlight: Telemetry.metric.gauge, lastPriority: Schema.Number }) {}
+export class EntryScopeTel extends EntryScope.telemetry({ attemptsSoFar: Schema.Number }) {}
+export class BaseEvent extends Telemetry.Schema<BaseEvent>()((e) => ({ runId: e.runId, at: e.clock })) {}
+export class EntryEvent extends Telemetry.Schema<EntryEvent>(EntryScopeTel)((e) => ({ entryId: e.leaf.entryId })) {}
+export class LifecycleEvent extends Telemetry.Schema<LifecycleEvent>(QueueScopeTel)((e) => ({ queueId: e.root.queueId })) {}
+export class QueueTelemetry extends Telemetry.Tag<QueueTelemetry>(QueueOps, BaseEvent)({ /* …tree… */ }) {}
+```
+
+**Naming:** the two `Telemetry.Tag` shapes are **Compose** (over a standalone `State.Tag`) and **Bundle** (single tag). No "Form 1 / Form 2". Method inventory: [telemetry-api-surface.md](./telemetry-api-surface.md).
+
 ---
 
 ## 4. `Telemetry.Tag` (bundle) ✅

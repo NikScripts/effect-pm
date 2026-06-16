@@ -13,6 +13,7 @@
 | [telemetry-branch-issues.md](./telemetry-branch-issues.md) | Telemetry impl | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | **Issue register** — spec drift, op/event rules, P0–P2 triage |
 | [telemetry-tag-state-wiring-api-handoff.md](./telemetry-tag-state-wiring-api-handoff.md) | **Owner — API DX bake** | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | Tag / State / Wiring / Service **DX only** — framing superseded by decisions doc |
 | [telemetry-redesign-decisions.md](./telemetry-redesign-decisions.md) | **Owner — redesign** | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | **Working decisions** — catalog + scope/op tree + Effect-primitive backing; supersedes the DX handoff framing |
+| [telemetry-api-surface.md](./telemetry-api-surface.md) | **Owner — API surface** | `effect-pm-alt-transport` | `cursor/telemetry-redesign-bake-faed` | **Method inventory** — every State/Telemetry method + class method; forms documented class-by-class |
 | [telemetry-split-bake-prompt.md](./telemetry-split-bake-prompt.md) | **Owner — paste to start** | any | — | Docs-only bake; recommended + DX forks |
 | [telemetry-split-bake-handoff.md](./telemetry-split-bake-handoff.md) | Owner bake | any | — | Context + after-bake order |
 | [telemetry-split-bake.md](../recipes/telemetry-split-bake.md) | Bake agent | any | — | **Historical** bake ledger — prefer requirements doc |
