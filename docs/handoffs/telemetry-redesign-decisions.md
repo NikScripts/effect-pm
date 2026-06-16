@@ -26,7 +26,7 @@ Telemetry.Service(Tag, wiring)                → runtime: + wiring + layer
 | **State** (operations, scopes) | `State.Tag`; `State.operation`; `State.inner`; `State.branch`; `State.Scope` → `.Branch` → `.Telemetry({…})` |
 | **Telemetry** (events, taxonomy, schemas) | `Telemetry.namespace` / `Telemetry.group`; `Telemetry.event` / `Telemetry.declare`; `Telemetry.start` / `Telemetry.exit`; `Telemetry.success` / `interrupted` / `failure`; `Telemetry.spread`; `Telemetry.Tag` (richer, two ways); `Telemetry.Schema` (reusable base); `Telemetry.metric.*`; `Telemetry.Service`; schema context `e.root` / `e.leaf` / `e.input` / `e.exit` / `e.clock` / `e.runId` |
 
-- **State** owns `operation`, `inner` (the `ctx.telemetry` container — holds nested ops + middle events), scopes. **Telemetry** owns events, taxonomy, legs (`start`/`exit`), schemas.
+- **State** owns `operation`, `inner` (the `ctx` container — holds nested ops + middle events), scopes. **Telemetry** owns events, taxonomy, legs (`start`/`exit`), schemas.
 - **`start`/`exit` use the bare `State.Tag` API** (`"Started"` / `["Completed","Failed"]` / `Telemetry.start` / `Telemetry.exit`); **`Telemetry.event` names an inner event.** **In `State.Tag` (compose) nothing carries a schema** — start, exit, and inner events are *names only*; their schemas live in the `Telemetry.Tag` tree (§3), keyed by wire. (**Bundle exception:** `Telemetry.declare` may carry a schema to define a multi-placement event once — §1/§4.)
 - **`State.Tag` has no schemas** (optional telemetry: provide no layer → no-op; client-cheap).
 - **`Telemetry.Tag` has schemas + state shape** — the client/RPC contract.
@@ -105,14 +105,14 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
 - **Op↔scope via Effect `R`:** `State.operation(name, Leaf)` requires `Leaf`'s parent in `R`, provides `Leaf`; top-level op → kernel provides root; nested op opening a descendant → satisfied by the enclosing op. `State.operation(name)` inherits ambient. Unsatisfied parent = type error.
 - **Operation input is a `Schema`** (so it's pullable into schemas): `State.operation(name, scope, InputSchema)`; passed at call as `op(input).provide(scope)`; `ctx.input`.
 - **Parts triad** (type-distinct): `(start, inner, exit)` + duals + singles. start = bare string / `Telemetry.declare` / `Telemetry.start`; inner = `State.inner(…)`; exit = bare array / `Telemetry.exit(…)`.
-- **`State.inner`** = the `ctx.telemetry` surface (middle events, nested ops, **group-import**). Typed collisions = compile error; `ctx.telemetry = inner − this op's own start/exit`.
-- **Group-import into `inner`** — events already declared in another (sibling) group, pulled onto `ctx.telemetry` of *this* op **without redeclaring them**:
-  - `Telemetry.spread(G)` — **flat-import**: drops the group prefix → `ctx.telemetry.Event`.
-  - `Telemetry.group(G)` — **nested-import**: keeps the group → `ctx.telemetry.Group.Event`.
+- **`State.inner`** = the `ctx` surface (middle events, nested ops, **group-import**). Everything sits on the **`ctx` root**: nested ops are **camelCase**, events are **PascalCase** (enforced at the constructor type level → disjoint key-spaces, so op vs event can't collide). Same-kind duplicates = compile error; `ctx = inner − this op's own start/exit`. Reserved on `ctx`: **`ctx.input`** (decoded op input) and **`ctx.scope`** (process view, path-local: `ctx.scope.leaf` / `ctx.scope.root` / `ctx.scope.state` — current branch / outermost `State.Scope` / `State.Root`).
+- **Group-import into `inner`** — events already declared in another (sibling) group, pulled onto `ctx` of *this* op **without redeclaring them**:
+  - `Telemetry.spread(G)` — **flat-import**: drops the group prefix → `ctx.Event`.
+  - `Telemetry.group(G)` — **nested-import**: keeps the group → `ctx.Group.Event`.
   - `G` references an existing group (its name within the namespace; full `"Namespace.Group"` only matters once multi-namespace lands — §8). Spread never *creates* a group.
 - **`Telemetry.exit`** = the 3 free Cause-fold outcomes (success / interrupted / failure); positional shorthand (`"Completed", "Failed"`) or `Telemetry.success`/`interrupted`/`failure` wrappers (no object/`onSuccess` form). **No schemas on these legs** — exit-event schemas live in the tree (§3), keyed by event name.
 - **Ref-shorteners** (`Telemetry.namespace`/`Telemetry.group`): bare strings resolve to the enclosing group; cross-group/namespace via `Telemetry.declare`. Never appear in handles.
-- **Handles:** ops flat by op name; standalone events are always **grouped** (every wire is `Namespace.Group.Event` — there is no ungrouped event); names unique per Tag; nested ops + middle events + imported events are on `ctx.telemetry`, not the Tag.
+- **Handles:** ops flat by op name; standalone events are always **grouped** (every wire is `Namespace.Group.Event` — there is no ungrouped event); names unique per Tag; nested ops + middle events + imported events are on `ctx`, not the Tag.
 
 ### 2.3 Long form — every form & feature
 ```ts
@@ -144,8 +144,8 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
           ),
           State.operation("attempt", AttemptScope)(["Succeeded", "Failed"]), // nested op opens a descendant branch
           State.operation("checkpoint", State.branch("Checkpoint", { at: Schema.Number }))(["Saved"]), // inline single-use leaf
-          Telemetry.group("Audit"),                                     // nested-import → ctx.telemetry.Audit.{Granted,Denied}
-          Telemetry.spread("Audit"),                                    // flat-import   → ctx.telemetry.{Granted,Denied}
+          Telemetry.group("Audit"),                                     // nested-import → ctx.Audit.{Granted,Denied}
+          Telemetry.spread("Audit"),                                    // flat-import   → ctx.{Granted,Denied}
         ),
         Telemetry.exit(
           Telemetry.success("Completed"),
@@ -176,7 +176,7 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
           State.operation("rateLimit")(Telemetry.exit(Telemetry.failure(Telemetry.declare("RateLimit", "Exceeded")))),
           State.operation("attempt", AttemptScope)(["Succeeded", "Failed"]),
           State.operation("checkpoint", State.branch("Checkpoint", { at: Schema.Number }))(["Saved"]),
-          Telemetry.spread("Audit"),                                     // flat-import sibling group → ctx.telemetry.{Granted,Denied}
+          Telemetry.spread("Audit"),                                     // flat-import sibling group → ctx.{Granted,Denied}
         ),
         ["Completed", "Released", "Failed"],                             // bare array = exit (success, interrupted, failure positional)
       ),
@@ -415,8 +415,8 @@ yield* admitItem(item).pipe(QueueTelemetry.enqueue.provide({ entryId }))  // op 
 yield* QueueTelemetry.processEntry({ priority, attempts }).provide({ entryId }).pipe(
   Effect.flatMap((ctx) =>
     Effect.gen(function* () {
-      const exit = yield* Effect.exit(runHandler(item).pipe(ctx.telemetry.rateLimit))  // nested op
-      if (shouldRetry(exit)) yield* ctx.telemetry.Retried                              // middle event
+      const exit = yield* Effect.exit(runHandler(item).pipe(ctx.rateLimit))  // nested op
+      if (shouldRetry(exit)) yield* ctx.Retried                              // middle event
       return yield* exit
     }),
   ),
@@ -442,7 +442,7 @@ Scope = `Context` services; the scope tag owns its segment (SSOT). Per-op leaf =
 - **Multi-branch awareness confined to the reserved `Internal.State.Changed` / snapshot machinery.** Cross-sibling correlation in a normal event → thread via operation input.
 
 ### 6.3 Nesting
-Scopes and operations nest infinitely (descendant nesting **essential**, kept). Wire stays one segment (innermost leaf) at any depth. Nested ops live on `ctx.telemetry`.
+Scopes and operations nest infinitely (descendant nesting **essential**, kept). Wire stays one segment (innermost leaf) at any depth. Nested ops live on `ctx`.
 
 ### 6.4 Surviving constraints
 - **Same-branch multiplicity on one fiber = silent shadow/overwrite** — fork a fiber each, or model the slot as a keyed collection. 🔶 default.

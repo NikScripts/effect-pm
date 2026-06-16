@@ -14,7 +14,7 @@
 - **S1** · `State.Scope(domain)(id, fields)` — declare a **top-level scope** (first **branch** off `State.Root`); `fields` required (no empty scopes) · ✅
 - **S2** · `State.Tag<Self>(domain)(stateId, …parts)` — **structure-only** tag (ops/scopes/handles/spans; no schemas; one namespace; no-op without a telemetry layer) · ✅
 - **S3** · `State.operation(name, scope?, Input?)(…triad)` — **operation** anchor (start / `inner` / exit); define + call covered together (§10 Operations) · ✅
-- **S4** · `State.inner(…)` — the `ctx.telemetry` surface (middle events, nested ops, group-import) · 🔶
+- **S4** · `State.inner(…)` — the `ctx` surface (middle events, nested ops, group-import) · 🔶
 - **S5** · `State.branch(name, fields)` — inline single-use branch (op scope arg); no id, no telemetry half; `fields` required · ✅
 - **S6** · `State.Root` — the **real root** of the scope tree (run-level state; `runId` → `e.runId`); every `State.Scope` is a branch off it · 🔶
 - **S7** · `State.Changed` — internal transition event; `State.Changed.operation` format (§6.6) · 🔶
@@ -65,7 +65,7 @@
 - **C10** · event handles (`.Lifecycle.Started`, …) — emit standalone events (grouped) · 🔶
 - **C11** · operation handles — invoke ops (typed payloads) · 🔶
 - **C12** · `.provide(scopeValues)` — bind scope to a call · 🔶
-- **C13** · `ctx.telemetry.*` — nested ops + middle + imported events (inside an op) · 🔶
+- **C13** · `ctx.*` — nested ops (camelCase) + middle/imported events (PascalCase) on the `ctx` root (§10 ctx) · ✅
 
 ### 4f. `Telemetry.Service`
 - **C14** · `.layer` — the runtime layer (wiring bound) · 🔶
@@ -81,9 +81,9 @@
 ## 6. Call / runtime surface (process side)
 - **R1** · `op(input).provide({ …scope })` — invoke an operation with input + scope · 🔶
 - **R2** · `Scope.layer({ …fields })` — open a scope at the runtime boundary · 🔶
-- **R3** · `ctx.scope` — process view of the open scope (telemetry half hidden) · 🔶
-- **R4** · `ctx.input` — the operation's input inside the body · 🔶
-- **R5** · `ctx.telemetry` — emit middle/nested/imported events inside an op · 🔶
+- **R3** · `ctx.scope` — process view of the open scope: `.leaf` / `.root` / `.state` (telemetry half hidden) · ✅
+- **R4** · `ctx.input` — the operation's input inside the body · ✅
+- **R5** · `ctx` — the op body surface: nested ops (camelCase) + middle/imported events (PascalCase) on root · ✅
 - **R6** · `Effect.provide(Service.layer)` — install the telemetry runtime · 🔶
 
 ## 7. Reserved / special
@@ -107,7 +107,7 @@
 5. **Legs**: T9 `start` → T10 `exit` → T11/T12/T13 outcomes.
 6. **Events**: T7 `event` → T8 `declare`.
 7. **Schemas**: T4 `Schema` → C6 `.extend` → C7 `.Schema` → C4 `ScopeTel.event` → M1–M4 metric → E1–E6 context `e`.
-8. **Compose tag**: T1 → C10–C13 (handles, `ctx.telemetry`, `.provide`) → R1–R6 runtime.
+8. **Compose tag**: T1 → C10–C13 (handles, `ctx`, `.provide`) → R1–R6 runtime.
 9. **Wiring**: S6 `Root` → S7 `Changed` → T15 `update`.
 10. **Bundle (last)**: T2.
 11. **Service**: T3 → C14.
@@ -331,5 +331,39 @@ work.pipe(ctx.rateLimit)                             // nested · inherited · p
 ctx.rateLimit.provide({ … })(work)                  // nested · provide · direct
 ```
 - **`.provide` supplies the scope like any dependency** — it can come from `.provide`, an enclosing op, or the root layer; same mechanism.
-- **Nested ops** are reached through `ctx` (exact `ctx` shape — ops/events placement — is the `ctx` topic, next).
+- **Nested ops** are reached through `ctx` (§ ctx).
 - The `Telemetry.Tag` exposes the **same** handles with typed payloads + emission (C11).
+
+### `ctx` — the operation context ✅ (R3/R4/R5/C13)
+`ctx` is what an op call yields. It's the in-body surface **for that operation**: what it declared in `State.inner` (S4), plus its input and scope. Each op has its own `ctx`; only *this* op's surface is on it (deeper nested ops appear on *their* `ctx`).
+
+**On the `ctx` root:**
+- **nested ops** — **camelCase** (`ctx.rateLimit`, `ctx.attempt`). Called like any op (yield their own ctx; scope inherited or provided).
+- **middle events** — **PascalCase** (`ctx.Retried`). `yield* ctx.Retried` or `work.pipe(ctx.Retried)`.
+- **imported events** — `Telemetry.spread("Audit")` → flat (`ctx.Granted`); `Telemetry.group("Audit")` → nested (`ctx.Audit.Granted`).
+
+**Reserved members:**
+- **`ctx.input`** — decoded op input (only if the op declared one).
+- **`ctx.scope`** — process view of the open scope, **path-local** (telemetry half hidden):
+  - `ctx.scope.leaf` — current deepest branch
+  - `ctx.scope.root` — outermost `State.Scope` (scope root)
+  - `ctx.scope.state` — `State.Root` (state root, run-level)
+
+**Rules:**
+- **camelCase ops / PascalCase events are enforced at the constructor type level** → disjoint key-spaces, so an op and an event can never collide on `ctx`. `Camel<S> = S extends Uncapitalize<S> ? S : never`; `Pascal<S> = S extends Capitalize<S> ? S : never` (wrong case → readable error type).
+- **same-kind duplicates** (event-event / op-op landing on the same key, e.g. a `spread` import shadowing a middle event) = **compile error**; disambiguate via `Telemetry.group` nested-import or rename.
+- **`input` / `scope` are reserved** — not valid op names.
+- the op's **own start/exit are NOT on `ctx`** (start fires on open; exit synthesized from the `Exit`); only the middle surface is.
+
+```ts
+const ctx = yield* QueueOps.processEntry({ priority, attempts }).provide({ entryId })
+
+ctx.input.priority           // op input
+ctx.scope.leaf.entryId       // current branch
+ctx.scope.root.queueId       // scope root
+ctx.scope.state.runId        // state root (State.Root)
+
+const exit = yield* Effect.exit(runHandler(item).pipe(ctx.rateLimit))  // nested op
+if (shouldRetry(exit)) yield* ctx.Retried                              // middle event
+yield* ctx.Audit.Denied                                                // nested-imported event
+```
