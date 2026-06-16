@@ -148,7 +148,9 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
         ),
       ),
     ),
-    Telemetry.group("Audit")("Granted", "Denied"),                       // the group imported above
+  ),
+  Telemetry.namespace("Audit")(
+    Telemetry.group("Access")("Granted", "Denied"),                     // the group imported above (Audit.Access)
   ),
 ) {}
 ```
@@ -175,7 +177,9 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
         ["Completed", "Released", "Failed"],                             // bare array = exit (success, interrupted, failure positional)
       ),
     ),
-    Telemetry.group("Audit")("Granted", "Denied"),
+  ),
+  Telemetry.namespace("Audit")(
+    Telemetry.group("Access")("Granted", "Denied"),
   ),
 ) {}
 ```
