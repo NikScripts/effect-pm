@@ -14,7 +14,7 @@
 | method | role | forms |
 |---|---|---|
 | `State.Scope(domain)(id, fields)` | declare a **root scope** class | 🔶 |
-| `State.Tag<Self>(domain)(facetId, …parts)` | **structure-only** tag (ops/scopes/handles/spans; no schemas) | 🔶 |
+| `State.Tag<Self>(domain)(stateId, …parts)` | **structure-only** tag (ops/scopes/handles/spans; no schemas); own id `<Resource>/…State` | 🔶 |
 | `State.operation(name, scope?, Input?)(…triad)` | **operation** anchor (start / `inner` / exit) | 🔶 |
 | `State.inner(…)` | the `ctx.telemetry` surface (middle events, nested ops, group-import) | 🔶 |
 | `State.leaf(name, fields)` | inline single-use leaf (as an op's scope arg) | 🔶 |
@@ -24,8 +24,8 @@
 ### `Telemetry`
 | method | role | forms |
 |---|---|---|
-| `Telemetry.Tag<Self>(StateTag, GlobalBase?)(tree)` | **Compose** — richer tag over a `State.Tag` | 🔶 |
-| `Telemetry.Tag<Self>(domain, GlobalBase?)(facetId, structure)` | **Bundle** — single self-contained tag | 🔶 (Bundle pass) |
+| `Telemetry.Tag<Self>(StateTag, GlobalBase?)(telId, tree)` | **Compose** — richer tag over a `State.Tag`; own required id `<Resource>/…Telemetry` | 🔶 |
+| `Telemetry.Tag<Self>(domain, GlobalBase?)(telId, structure)` | **Bundle** — single self-contained tag; own required id | 🔶 (Bundle pass) |
 | `Telemetry.Service(Tag, wiring)` | runtime = tag + wiring + layer | 🔶 |
 | `Telemetry.Schema<Self>(ScopeTel?)((e) => …)` | reusable schema base (scope-bound, or scope-free global) | 🔶 |
 | `Telemetry.namespace(name)(…parts)` | ref-shortener — enclosing namespace | 🔶 |
