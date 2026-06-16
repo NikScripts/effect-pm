@@ -15,7 +15,7 @@
 - **S2** · `State.Tag<Self>(domain)(stateId, …parts)` — **structure-only** tag (ops/scopes/handles/spans; no schemas) · 🔶
 - **S3** · `State.operation(name, scope?, Input?)(…triad)` — **operation** anchor (start / `inner` / exit) · 🔶
 - **S4** · `State.inner(…)` — the `ctx.telemetry` surface (middle events, nested ops, group-import) · 🔶
-- **S5** · `State.leaf(name, fields)` — inline single-use leaf (as an op's scope arg) · 🔶
+- **S5** · `State.branch(name, fields)` — inline single-use branch (as an op's scope arg) · 🔶
 - **S6** · `State.Root` — the **real root** of the scope tree (run-level state; `runId` → `e.runId`); every `State.Scope` is a branch off it · 🔶
 - **S7** · `State.Changed` — internal transition event; `State.Changed.operation` format (§6.6) · 🔶
 
@@ -44,14 +44,14 @@
 
 ## 4. Service classes — methods on produced classes
 
-### 4a. Scope class — `State.Scope(...)` / `.withLeaf(...)` result
-- **C1** · `.withLeaf(name, fields)(id)` — child scope (new identity + id) · 🔶
+### 4a. Scope class — `State.Scope(...)` / `.withBranch(...)` result
+- **C1** · `.withBranch(name, fields)(id)` — child scope (new identity + id) · 🔶
 - **C2** · `.telemetry(fields)` — telemetry half (same identity, **no new id**) · 🔶
 - **C3** · `.layer(values)` — provide the scope at a runtime boundary · 🔶
 
 ### 4b. Telemetry scope class — `.telemetry(...)` result (`…Tel`)
 - **C4** · `.event((e) => …)` — inline scope-bound schema value (no base) · 🔶
-- **C5** · `.withLeaf(name, fields)(id)` — child scope from the Tel half · 🔶
+- **C5** · `.withBranch(name, fields)(id)` — child scope from the Tel half · 🔶
 
 ### 4c. Schema base class — `Telemetry.Schema(...)` result
 - **C6** · `.extend((e) => …)` — base + extras (field-adding; **never a bare arrow**) · 🔶
@@ -71,7 +71,7 @@
 - **C14** · `.layer` — the runtime layer (wiring bound) · 🔶
 
 ## 5. Schema context `e` (inside `Telemetry.Schema` / `.extend` / `.event`)
-- **E1** · `e.root` — navigable scope tree (root fields + telemetry + nested branches; intersection-gated) · 🔶
+- **E1** · `e.root` — the **outermost `State.Scope`** (root of your declared scope tree; navigable: fields + telemetry + nested branches; intersection-gated). `State.Root` (run root) is reached via `e.runId`, not `e.root`. · ✅
 - **E2** · `e.leaf` — current deepest leaf · 🔶
 - **E3** · `e.input` — operation input (from `State.operation` `Input`) · 🔶
 - **E4** · `e.exit` — exit-only: `e.exit.duration`, `e.exit.cause`, … · 🔶
@@ -121,4 +121,4 @@ declare const Scope: <Domain extends State.Domain>(domain: Domain) =>
 class QueueScope extends State.Scope(QueueResource)("@scope/queue/QueueScope", { queueId: Schema.String }) {}
 // produced class exposes: .withBranch (C1), .telemetry (C2), .layer (C3)
 ```
-🔶 Open: rename `leaf`→`branch` for node-creating APIs (pending); `e.root` = `State.Root` vs outermost `State.Scope`.
+Resolved: `leaf`→`branch` for node-creating APIs (`.withBranch`/`State.branch`; `e.leaf` kept). `e.root` = outermost `State.Scope`; `State.Root` (run root) via `e.runId`.

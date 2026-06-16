@@ -23,7 +23,7 @@ Telemetry.Service(Tag, wiring)                → runtime: + wiring + layer
 
 | Layer | Names |
 |---|---|
-| **State** (operations, scopes) | `State.Tag`; `State.operation`; `State.inner`; `State.leaf`; `State.Scope` → `.withLeaf` → `.telemetry({…})` |
+| **State** (operations, scopes) | `State.Tag`; `State.operation`; `State.inner`; `State.branch`; `State.Scope` → `.withBranch` → `.telemetry({…})` |
 | **Telemetry** (events, taxonomy, schemas) | `Telemetry.namespace` / `Telemetry.group`; `Telemetry.event` / `Telemetry.declare`; `Telemetry.start` / `Telemetry.exit`; `Telemetry.success` / `interrupted` / `failure`; `Telemetry.spread`; `Telemetry.Tag` (richer, two ways); `Telemetry.Schema` (reusable base); `Telemetry.metric.*`; `Telemetry.Service`; schema context `e.root` / `e.leaf` / `e.input` / `e.exit` / `e.clock` / `e.runId` |
 
 - **State** owns `operation`, `inner` (the `ctx.telemetry` container — holds nested ops + middle events), scopes. **Telemetry** owns events, taxonomy, legs (`start`/`exit`), schemas.
@@ -56,7 +56,7 @@ A wire is **three strings** — `Namespace.Group.Event`. **Inferred** from decla
     ```
 - 🔶 **deferred:** `Telemetry.import(…)` + predefined `Telemetry.wires({…})` (cross-facet shared catalogs) — build when a real shared catalog appears.
 
-Properties: wires come only from the three keys (flat at any depth); identical `(NS, Group, Event)` = one wire (deduped, the same event can appear in many places); **`Internal` namespace is reserved** (e.g. `Internal.State.Changed`). Constraints: leaf-scope names unique per namespace; event names unique per group.
+Properties: wires come only from the three keys (flat at any depth); identical `(NS, Group, Event)` = one wire (deduped, the same event can appear in many places); **`Internal` namespace is reserved** (e.g. `Internal.State.Changed`). Constraints: branch-scope names unique per namespace; event names unique per group.
 
 ### 1.1 Scope intersection ✅
 The wire tree has no scope; `State.Tag` adds it by where each event sits. An event placed in **multiple** locations may read only the **intersection** of those sites' contexts (single-use → full; widely-reused → narrows toward root). **Path-local** — along root→leaf only, never across siblings (§6.2). Schemas type field access against this intersection.
@@ -73,12 +73,12 @@ Referenceable classes; `.telemetry({…})` adds the hidden telemetry half (same 
 class QueueScope extends State.Scope(QueueResource)("@scope/queue/QueueScope", { queueId: Schema.String }) {}
 class QueueScopeTel extends QueueScope.telemetry({ inFlight: Telemetry.metric.gauge, lastPriority: Schema.Number }) {}
 
-class EntryScope extends QueueScopeTel.withLeaf("Entry", { entryId: Schema.String })("@scope/queue/EntryScope") {}
+class EntryScope extends QueueScopeTel.withBranch("Entry", { entryId: Schema.String })("@scope/queue/EntryScope") {}
 class EntryScopeTel extends EntryScope.telemetry({ attemptsSoFar: Schema.Number }) {}
 ```
-- **Every scope identity carries an id** — `State.Scope(domain)(id, fields)` (root) and `.withLeaf(name, fields)(id)` (child) both take one; all or none, and we chose all.
+- **Every scope identity carries an id** — `State.Scope(domain)(id, fields)` (top-level branch off `State.Root`) and `.withBranch(name, fields)(id)` (deeper branch) both take one; all or none, and we chose all.
 - `.telemetry({…})` → same scope's hidden half (**no new id — derives the base's**). **`State.Tag` ops open the BASE scope; the `…Tel` scope belongs to the Telemetry layer (schemas read state via it).** Process view (`ctx.scope`) hides the telemetry half.
-- inline single-use leaf: `State.leaf("Name", { … })` as an op's scope arg.
+- inline single-use branch: `State.branch("Name", { … })` as an op's scope arg.
 
 ### 2.2 The Tag
 ```ts
@@ -117,7 +117,7 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
 ### 2.3 Long form — every form & feature
 ```ts
 // extra scopes for the catalog
-class AttemptScope extends EntryScope.withLeaf("Attempt", { attempt: Schema.Number })("@scope/queue/AttemptScope") {}
+class AttemptScope extends EntryScope.withBranch("Attempt", { attempt: Schema.Number })("@scope/queue/AttemptScope") {}
 
 class QueueOps extends State.Tag<QueueOps>(QueueResource)(
   "@scope/queue/QueueState",
@@ -142,8 +142,8 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
           State.operation("rateLimit")(                                  // nested op, inherits Entry
             Telemetry.exit(Telemetry.failure(Telemetry.declare("RateLimit", "Exceeded"))),
           ),
-          State.operation("attempt", AttemptScope)(["Succeeded", "Failed"]), // nested op opens a descendant leaf
-          State.operation("checkpoint", State.leaf("Checkpoint", { at: Schema.Number }))(["Saved"]), // inline single-use leaf
+          State.operation("attempt", AttemptScope)(["Succeeded", "Failed"]), // nested op opens a descendant branch
+          State.operation("checkpoint", State.branch("Checkpoint", { at: Schema.Number }))(["Saved"]), // inline single-use leaf
           Telemetry.group("Audit"),                                     // nested-import → ctx.telemetry.Audit.{Granted,Denied}
           Telemetry.spread("Audit"),                                    // flat-import   → ctx.telemetry.{Granted,Denied}
         ),
@@ -175,7 +175,7 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
           "Retried",
           State.operation("rateLimit")(Telemetry.exit(Telemetry.failure(Telemetry.declare("RateLimit", "Exceeded")))),
           State.operation("attempt", AttemptScope)(["Succeeded", "Failed"]),
-          State.operation("checkpoint", State.leaf("Checkpoint", { at: Schema.Number }))(["Saved"]),
+          State.operation("checkpoint", State.branch("Checkpoint", { at: Schema.Number }))(["Saved"]),
           Telemetry.spread("Audit"),                                     // flat-import sibling group → ctx.telemetry.{Granted,Denied}
         ),
         ["Completed", "Released", "Failed"],                             // bare array = exit (success, interrupted, failure positional)
@@ -192,7 +192,7 @@ class QueueOps extends State.Tag<QueueOps>(QueueResource)(
 
 ## 3. Event schemas & `Telemetry.Tag` (compose) ✅
 
-**Events carry ONLY what their schema specifies — nothing is automatic, not even scope.** Every field you want — *including* scope identity (`entryId`, `runId`) — must be listed in the schema (or inherited from the schema it extends / the group `default`), via `e.root.X` / `e.leaf.X` / `e.input.X` / `e.exit.X` / `e.clock`, or a plain `Schema` (PlainField, bound at wiring). **No schema entry + no group `default` = empty payload.** There is no auto-scope; `runId` in an event means a schema wrote `runId: e.root.runId`.
+**Events carry ONLY what their schema specifies — nothing is automatic, not even scope.** Every field you want — *including* scope identity (`entryId`, `runId`) — must be listed in the schema (or inherited from the schema it extends / the group `default`), via `e.root.X` / `e.leaf.X` / `e.input.X` / `e.exit.X` / `e.clock`, or a plain `Schema` (PlainField, bound at wiring). **No schema entry + no group `default` = empty payload.** There is no auto-scope; `runId` in an event means a schema wrote `runId: e.runId` (run root identity, from `State.Root`).
 
 ### 3.1 The schema tree
 Compose path: `Telemetry.Tag(StateTag, GlobalBase?)(telId, schemaTree)` — its **own required id** (distinct from the `State.Tag`'s), then a **wire-keyed tree** (`Namespace → Group → Event`). `Telemetry.Tag` derives its **telemetry scopes from the schemas** (no scope args). The tree is **sparse** — only the group `default` + events that add extras; **default-only events are omitted** (they're enumerated in `State.Tag`, and resolve to the `default`).
@@ -216,7 +216,7 @@ Compose path: `Telemetry.Tag(StateTag, GlobalBase?)(telId, schemaTree)` — its 
 - 🔶 namespace-level default (root-scoped, layered above group) — deferred.
 
 ### 3.4 `e` (the context)
-`e.root` (navigable scope tree — root fields + telemetry + nested branches; reachability gated by intersection), `e.leaf` (current deepest leaf), `e.input`, `e.exit.*` (exit events only), `e.clock`, `e.runId` (ambient run identity — needs no scope). **No `e.state`** — telemetry merges into `e.root`/`e.leaf` per level; persistent/comparison state lives at root (leaf is transient). Types inferred from sources; PlainFields carry their own `Schema`.
+`e.root` (the **outermost `State.Scope`** — root of the declared scope tree; navigable: fields + telemetry + nested branches; reachability gated by intersection), `e.leaf` (current deepest branch), `e.input`, `e.exit.*` (exit events only), `e.clock`, `e.runId` (ambient run identity from `State.Root`, the **real** root — needs no scope). **No `e.state`** — telemetry merges into `e.root`/`e.leaf` per level; persistent/comparison state lives at root (leaf is transient). Types inferred from sources; PlainFields carry their own `Schema`.
 
 ### 3.5 Reusable bases
 - `Telemetry.Schema<Self>(ScopeTel)((e) => …)` — reusable, scope-bound base.
@@ -235,7 +235,7 @@ import { QueueResource } from "../QueueResource"
 
 // base scopes (State.Tag operations) — every identity carries an id
 class QueueScope extends State.Scope(QueueResource)("@scope/queue/QueueScope", { queueId: Schema.String }) {}
-class EntryScope extends QueueScope.withLeaf("Entry", { entryId: Schema.String })("@scope/queue/EntryScope") {}
+class EntryScope extends QueueScope.withBranch("Entry", { entryId: Schema.String })("@scope/queue/EntryScope") {}
 
 // telemetry scopes (state half) — used by the Telemetry layer
 class QueueScopeTel extends QueueScope.telemetry({ inFlight: Telemetry.metric.gauge, lastPriority: Schema.Number }) {}
@@ -311,7 +311,7 @@ Two files, split on the State/Telemetry seam: **base (state) scopes bundle with 
 ```ts
 // QueueOps.ts — base scopes + State.Tag (structure)
 export class QueueScope extends State.Scope(QueueResource)("@scope/queue/QueueScope", { queueId: Schema.String }) {}
-export class EntryScope extends QueueScope.withLeaf("Entry", { entryId: Schema.String })("@scope/queue/EntryScope") {}
+export class EntryScope extends QueueScope.withBranch("Entry", { entryId: Schema.String })("@scope/queue/EntryScope") {}
 export const ProcessInput = Schema.Struct({ priority: Schema.Number, attempts: Schema.Number })
 export class QueueOps extends State.Tag<QueueOps>(QueueResource)( /* …namespace/groups/ops… */ ) {}
 
@@ -348,7 +348,7 @@ One `Telemetry.Tag` call, **no separate `State.Tag` and no separate schema tree.
 ```ts
 // scopes / global base / group bases — identical to §3.6
 class QueueScope extends State.Scope(QueueResource)("@scope/queue/QueueScope", { queueId: Schema.String }) {}
-class EntryScope extends QueueScope.withLeaf("Entry", { entryId: Schema.String })("@scope/queue/EntryScope") {}
+class EntryScope extends QueueScope.withBranch("Entry", { entryId: Schema.String })("@scope/queue/EntryScope") {}
 class QueueScopeTel extends QueueScope.telemetry({ inFlight: Telemetry.metric.gauge, lastPriority: Schema.Number }) {}
 class EntryScopeTel extends EntryScope.telemetry({ attemptsSoFar: Schema.Number }) {}
 const ProcessInput = Schema.Struct({ priority: Schema.Number, attempts: Schema.Number })
