@@ -404,7 +404,9 @@ Compose vs bundle: same scopes/global base/merge order/wire rules; **compose** k
 ## 5. Emission & calling ✅
 
 ```ts
-// runtime boundary — root scope once
+// runtime boundary — open the root scope (symmetric with op.provide)
+program.pipe(QueueScope.provide({ queueId }))
+// composable escape hatch (same values):
 queueRuntime.pipe(Effect.provide(QueueScope.layer({ queueId })))
 
 yield* QueueTelemetry.Lifecycle.Started                         // standalone event (root ambient)

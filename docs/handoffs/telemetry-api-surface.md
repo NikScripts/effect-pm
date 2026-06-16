@@ -47,7 +47,7 @@
 ### 4a. Scope class — `State.Scope(...)` / `.Branch(...)` result
 - **C1** · `.Branch(name, fields)(id)` — deeper branch off a **base** scope (new identity + id); `fields` required · ✅
 - **C2** · `.Telemetry(fields)` — telemetry half of any base scope (root or branch); **once per scope**; no new id · ✅
-- **C3** · `.layer(values)` — `Layer` opening the scope with decoded field values (root scope; via `Effect.provide`) · ✅
+- **C3** · scope entry (root) — primary `.provide(values)` (pipeable, symmetric with op.provide); `.layer(values)` composable escape hatch; decoded values · ✅
 
 ### 4b. Telemetry scope class — `.Telemetry(...)` result (`…Tel`)
 - **C4** · `.event((e) => …)` — inline scope-bound schema value (no base) · 🔶
@@ -168,16 +168,33 @@ class EntryScopeTel extends EntryScope.Telemetry({
 }) {}
 ```
 
-### C3 · `.layer` ✅
-Yields an Effect `Layer` that opens the scope with concrete, **decoded** field values; installed at the runtime boundary via `Effect.provide`. Lowercase — produces a value, not a class. Used for the **root** scope (opened once); deeper branches are opened per-call via `op.provide` (R1 / C9), not `.layer`.
+### C3 · root scope entry ✅
+Opening the root scope is **symmetric with opening a branch in an op** — same `.provide` verb. `.layer` stays as a composable escape hatch. Both take the scope's own **decoded** field values; root scope only (deeper branches open per-call via `op.provide`, R1 / C9).
 ```ts
 interface StateScope</* …, */ Fields> {
+  // primary — pipeable, same shape as op.provide
+  provide: (
+    values: Schema.Struct.Type<Fields>,
+  ) => <A, E, R>(self: Effect<A, E, R>) => Effect<A, E, Exclude<R, this>>
+
+  // escape hatch — composable Layer
   layer: (
     values: Schema.Struct.Type<Fields>,
-  ) => Layer<this /* the scope, in context */>
+  ) => Layer<this>
 }
 ```
 ```ts
+// primary — symmetric with ops
+program.pipe(
+  QueueScope.provide({ queueId }),
+)
+
+// op opens a branch — identical shape
+op(input).pipe(
+  QueueTelemetry.processEntry.provide({ entryId }),
+)
+
+// escape hatch
 queueRuntime.pipe(
   Effect.provide(QueueScope.layer({ queueId })),
 )
