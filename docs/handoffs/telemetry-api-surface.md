@@ -12,7 +12,7 @@
 
 ## 1. Module functions — `State`
 - **S1** · `State.Scope(domain)(id, fields)` — declare a **top-level scope** (first **branch** off `State.Root`); `fields` required (no empty scopes) · ✅
-- **S2** · `State.Tag<Self>(domain)(stateId, …parts)` — **structure-only** tag (ops/scopes/handles/spans; no schemas) · 🔶
+- **S2** · `State.Tag<Self>(domain)(stateId, …parts)` — **structure-only** tag (ops/scopes/handles/spans; no schemas; one namespace; no-op without a telemetry layer) · ✅
 - **S3** · `State.operation(name, scope?, Input?)(…triad)` — **operation** anchor (start / `inner` / exit) · 🔶
 - **S4** · `State.inner(…)` — the `ctx.telemetry` surface (middle events, nested ops, group-import) · 🔶
 - **S5** · `State.branch(name, fields)` — inline single-use branch (op scope arg); no id, no telemetry half; `fields` required · ✅
@@ -216,3 +216,55 @@ State.operation("checkpoint", State.branch("Checkpoint", { at: Schema.Number }))
   ["Saved"],
 )
 ```
+
+### S2 · `State.Tag` ✅
+The **structure-only** tag: operations, scopes, handles, and spans for a domain — **no schemas, no telemetry state**. It's the cheap, client-safe half of the pair; with no `Telemetry.Service` layer installed it is a **no-op** (calls still run, nothing is emitted). The `Telemetry.Tag` (Compose, T1) layers schemas + state on top of it.
+
+**Signature**
+```ts
+declare const Tag: <Self>(
+  domain: Domain,                           // the resource the tag is bound to (QueueResource)
+) => (
+  stateId: string,                          // required id, convention "<Resource>/…State"
+  ...parts: ReadonlyArray<StatePart>,       // the structure (a Telemetry.namespace wrapper)
+) => StateTagClass<Self>                     // class to extend; instance carries the handles
+```
+
+**Call shape** — `State.Tag<Self>(domain)(stateId, …parts)`:
+- `Self` (type param) + `domain` (value) in the **first** call; `stateId` then the structure in the **second**. `Self` is the subclass being declared (self-referential, as with Effect service tags).
+- **`domain`** — the resource (`QueueResource`); ties the tag (and its scopes) to that resource's context.
+- **`stateId`** — **required**, `<Resource>/…State` (e.g. `"@scope/queue/QueueState"`). Distinct from the `Telemetry.Tag`'s id (`…/QueueTelemetry`); the two ids must differ.
+- **`…parts`** — the structure: a single **`Telemetry.namespace(name)(…)`** wrapper containing groups and operations. **One namespace per Tag** for now (multiple namespaces deferred — D3). Parts are pure structure; nothing here carries a schema (start/exit/inner events are *names only* — their schemas live in the `Telemetry.Tag`, keyed by wire).
+
+**Produces** a class you `extend`. Its instance exposes:
+- **operation handles** (C8) — one per `State.operation` (`.enqueue`, `.processEntry`, …), used to invoke the wrapped work.
+- **`.provide(scopeValues)`** (C9) — bind a scope to a call.
+- standalone-event handles are grouped (`.Lifecycle.Started`); every wire is `Namespace.Group.Event`.
+
+**Semantics**
+- **No schemas / no state shape** — that's the `Telemetry.Tag`'s job. Keeping them apart is what makes telemetry *optional* (ship the structure, add observability later).
+- **Scopes vs groups are orthogonal** — scopes are a deep tree (S1/C1), groups are a flat wire label; group is never derived from scope.
+
+**Usage**
+```ts
+class QueueOps extends State.Tag<QueueOps>(QueueResource)(
+  "@scope/queue/QueueState",
+  Telemetry.namespace("Queue")(
+    Telemetry.group("Lifecycle")("Started", "Paused"),
+    Telemetry.group("Entry")(
+      State.operation("enqueue", EntryScope)(["Enqueued", "Rejected"]),
+      State.operation("processEntry", EntryScope, ProcessInput)(
+        "Started",
+        State.inner(
+          "Retried",
+          State.operation("rateLimit")(
+            Telemetry.exit(Telemetry.failure(Telemetry.declare("RateLimit", "Exceeded"))),
+          ),
+        ),
+        ["Completed", "Released", "Failed"],
+      ),
+    ),
+  ),
+) {}
+```
+(The structure internals — `State.operation` S3, `State.inner` S4, `Telemetry.namespace`/`group` T5/T6, legs T9–T13 — are documented as their own items.)
