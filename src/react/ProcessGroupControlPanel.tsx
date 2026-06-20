@@ -32,6 +32,8 @@ export type ProcessGroupControlPanelProps = {
   readonly slots?: ProcessGroupControlPanelSlots;
   /** Share one poll loop (e.g. from {@link OperatorControlPanel}). */
   readonly sharedStatus?: ControlPlaneGroupStatusState;
+  /** Restrict the panel to one process id. */
+  readonly processId?: string;
 };
 
 /**
@@ -45,6 +47,7 @@ export const ProcessGroupControlPanel = ({
   style,
   slots = {},
   sharedStatus,
+  processId,
 }: ProcessGroupControlPanelProps) => {
   const port = useControlPlane();
   const internalStatus = useControlPlaneGroupStatus({
@@ -56,6 +59,9 @@ export const ProcessGroupControlPanel = ({
 
   const groupId = status.contract?.id ?? "…";
   const displayError = mutation.error ?? status.error;
+  const visibleProcesses = processId === undefined
+    ? status.processes
+    : status.processes.filter((process) => process.name === processId);
 
   const renderAction = (processName: string, action: ControlPlaneProcessAction): ReactNode => {
     const pending = mutation.pendingKey === `${processName}:${action}`;
@@ -99,7 +105,7 @@ export const ProcessGroupControlPanel = ({
       ) : null}
 
       <ul>
-        {status.processes.map((process) => {
+        {visibleProcesses.map((process) => {
           const actions = (
             <>
               {processActions.map((action) => (
@@ -122,7 +128,7 @@ export const ProcessGroupControlPanel = ({
         })}
       </ul>
 
-      {status.processes.length === 0 && !status.loading ? (
+      {visibleProcesses.length === 0 && !status.loading ? (
         slots.empty !== undefined ? slots.empty() : <p>No processes reported.</p>
       ) : null}
     </section>

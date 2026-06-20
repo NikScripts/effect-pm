@@ -10,6 +10,7 @@ import {
   controlHttpGet,
   controlHttpGetContract,
   controlHttpGetGroupStatus,
+  controlHttpLogs,
   controlHttpPost,
   isProcessGroupDetails,
   isQueueDetails,
@@ -87,4 +88,5 @@ export const createFetchControlPlaneAdapter = (
     controlHttpGet(options, queuePath(id, "")).then(narrowQueueStatus),
   postQueueAction: (id, action) =>
     controlHttpPost(options, queueActionPath(id, action)),
+  logs: (params) => controlHttpLogs(options, params),
 });

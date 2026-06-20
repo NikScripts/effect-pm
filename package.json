@@ -169,6 +169,11 @@
       "import": "./dist/prisma/index.mjs",
       "require": "./dist/prisma/index.js"
     },
+    "./ops-ui": {
+      "types": "./dist/ops-ui/index.d.ts",
+      "import": "./dist/ops-ui/index.mjs",
+      "require": "./dist/ops-ui/index.js"
+    },
     "./react": {
       "types": "./dist/react/index.d.ts",
       "import": "./dist/react/index.mjs",
@@ -253,10 +258,21 @@
     "prepare": "effect-language-service patch"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@effect/platform-node": "4.0.0-beta.69",
     "@effect/sql-sqlite-node": "4.0.0-beta.69",
+    "class-variance-authority": "^0.7.1",
     "cli-table3": "^0.6.5",
-    "pretty-ms": "^9.3.0"
+    "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "lucide-react": "^1.17.0",
+    "pretty-ms": "^9.3.0",
+    "radix-ui": "^1.4.3",
+    "react-resizable-panels": "^4.11.2",
+    "tailwind-merge": "^3.6.0",
+    "tw-animate-css": "^1.4.0"
   },
   "peerDependencies": {
     "@prisma/client": ">=5",
@@ -291,6 +307,7 @@
     "@effect/vitest": "4.0.0-beta.69",
     "@prisma/adapter-better-sqlite3": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@tailwindcss/vite": "^4.3.0",
     "@types/node": "^20.19.40",
     "@typescript/native-preview": "7.0.0-dev.20260510.1",
     "effect": "4.0.0-beta.69",
@@ -304,6 +321,7 @@
     "@vitejs/plugin-react": "^4.5.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "tailwindcss": "^4.3.0",
     "vite": "^6.3.5",
     "typescript-eslint": "^8.59.3",
     "vitest": "^4.1.5"

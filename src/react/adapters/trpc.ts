@@ -6,7 +6,10 @@
 
 import type { ControlResponse } from "../../ControlProtocol.js";
 import { ProcessGroupContractSchema } from "../../ProcessGroup.js";
-import type { ControlPlaneGroupStatus } from "../controlHttp.js";
+import {
+  ControlPlaneRequestError,
+  type ControlPlaneGroupStatus,
+} from "../controlHttp.js";
 import type {
   ControlPlanePort,
   ControlPlaneProcessAction,
@@ -46,6 +49,20 @@ export interface TrpcControlPlaneClient {
   };
 }
 
+const unsupportedLogs = () => ({
+  entries: {
+    [Symbol.asyncIterator]: () => ({
+      next: () =>
+        Promise.reject(
+          new ControlPlaneRequestError({
+            reason: "tRPC ControlPlanePort logs are not configured",
+          }),
+        ),
+    }),
+  },
+  close: () => undefined,
+});
+
 /**
  * Build a {@link ControlPlanePort} from a duck-typed tRPC client.
  *
@@ -74,4 +91,5 @@ export const createTrpcControlPlaneAdapter = (
       return { success: true, type: "queue", data: queue };
     }),
   postQueueAction: (id, action) => client.queueAction.mutate({ id, action }),
+  logs: unsupportedLogs,
 });
