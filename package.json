@@ -119,6 +119,16 @@
       "import": "./dist/LogTransportRpc.mjs",
       "require": "./dist/LogTransportRpc.js"
     },
+    "./Terminal": {
+      "types": "./dist/Terminal.d.ts",
+      "import": "./dist/Terminal.mjs",
+      "require": "./dist/Terminal.js"
+    },
+    "./TerminalRpc": {
+      "types": "./dist/TerminalRpc.d.ts",
+      "import": "./dist/TerminalRpc.mjs",
+      "require": "./dist/TerminalRpc.js"
+    },
     "./RuntimeStorage": {
       "types": "./dist/RuntimeStorage.d.ts",
       "import": "./dist/RuntimeStorage.mjs",
