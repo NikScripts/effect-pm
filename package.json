@@ -109,6 +109,11 @@
       "import": "./dist/CommandAuth.mjs",
       "require": "./dist/CommandAuth.js"
     },
+    "./ControlTransportRpc": {
+      "types": "./dist/ControlTransportRpc.d.ts",
+      "import": "./dist/ControlTransportRpc.mjs",
+      "require": "./dist/ControlTransportRpc.js"
+    },
     "./RuntimeStorage": {
       "types": "./dist/RuntimeStorage.d.ts",
       "import": "./dist/RuntimeStorage.mjs",

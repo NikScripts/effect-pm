@@ -50,7 +50,8 @@
  * **`@nikscripts/effect-pm/ResourceConfigure`**, **`@nikscripts/effect-pm/ProcessGroup`**,
  * **`@nikscripts/effect-pm/ProcessStore`**, **`@nikscripts/effect-pm/RuntimeStorage`**,
  * **`@nikscripts/effect-pm/CommandAuth`**, **`@nikscripts/effect-pm/ProcessManager`**,
- * **`@nikscripts/effect-pm/Logs`**, and **`@nikscripts/effect-pm/ControlService`**.
+ * **`@nikscripts/effect-pm/Logs`**, **`@nikscripts/effect-pm/ControlService`**,
+ * and **`@nikscripts/effect-pm/ControlTransportRpc`**.
  *
  * Structured log persistence: `ProcessStore.Log` (also exported as the
  * dedicated `ProcessStoreLog` facet) on the composed store. Capture/relay
@@ -176,6 +177,16 @@ export {
   makeControlTransportHttpClient,
   makeControlTransportHttpServer,
 } from "./ControlTransportHttp";
+export {
+  ControlRpc,
+  ControlRpcErrorSchema,
+  ControlTransportRpc,
+  ControlTransportRpcLive,
+  controlRpcErrorFromTransportError,
+  makeControlTransportRpcClient,
+  makeControlTransportRpcServer,
+  rpcErrorToControlTransportError,
+} from "./ControlTransportRpc";
 export type {
   ControlRouterShape,
   ControlProtocolMetadata,
