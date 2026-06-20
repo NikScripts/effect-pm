@@ -36,6 +36,7 @@ export default defineConfig([
       CommandAuth: "src/CommandAuth.ts",
       ControlProtocol: "src/ControlProtocol.ts",
       ControlTransportRpc: "src/ControlTransportRpc.ts",
+      LogTransportRpc: "src/LogTransportRpc.ts",
       ProcessManager: "src/ProcessManager.ts",
       ControlService: "src/ControlService.ts",
       Logs: "src/Logs.ts",

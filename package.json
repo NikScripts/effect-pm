@@ -114,6 +114,11 @@
       "import": "./dist/ControlTransportRpc.mjs",
       "require": "./dist/ControlTransportRpc.js"
     },
+    "./LogTransportRpc": {
+      "types": "./dist/LogTransportRpc.d.ts",
+      "import": "./dist/LogTransportRpc.mjs",
+      "require": "./dist/LogTransportRpc.js"
+    },
     "./RuntimeStorage": {
       "types": "./dist/RuntimeStorage.d.ts",
       "import": "./dist/RuntimeStorage.mjs",
