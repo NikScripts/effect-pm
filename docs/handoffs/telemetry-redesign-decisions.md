@@ -1,6 +1,8 @@
 # Telemetry redesign — working decisions
 
-**Status:** Active redesign (Jun 2026). **Capture doc** — what's agreed in the API bake. The authoring surface (State.Tag → Telemetry.Tag, scopes, schemas) is essentially complete; wiring + runtime remain. Loose ends flagged **OPEN** / **NEEDS ATTENTION**.
+> **⛔ CANCELLED (2026-06-19).** The bespoke Telemetry model is abandoned in favour of building on **Effect + OpenTelemetry** (instrument with Effect spans/metrics, extract data from OTEL). No `Telemetry.*` API, no operations/triad, no wire/schema trees, no `ctx`. `State.Scope` is under review. This doc is **historical** — do not resume the bake.
+
+**Status:** ⛔ Cancelled — superseded by the Effect+OTEL direction. (Was: active redesign / API bake capture doc.)
 
 **Supersedes the framing of:** [telemetry-tag-state-wiring-api-handoff.md](./telemetry-tag-state-wiring-api-handoff.md).
 
