@@ -25,3 +25,8 @@ A scannable, **itemized** list — each KEEP/MIXED item numbered, with file(s) +
 
 ## After inventory
 Owner reviews and **confirms each item.** Cleanup/transplant happens **only after** confirmation — that's Phase 2, not now.
+
+## Workflow / worktree model
+- Spin this agent up in its **own worktree**, branched off `metrics-reset` (so the line can fast-forward later).
+- Phase 1 (inventory, read-only) and Phase 2 (cleanup/transplant, after per-item confirmation) both happen in that worktree.
+- The primary worktree stays on `metrics-reset` for the owner's metrics-design work. **Only one side commits to the `metrics-reset` line at a time** — while this agent is working, the owner holds design commits, so `metrics-reset` can `merge --ff-only` to the agent's branch when done. Design then builds on top.
