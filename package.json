@@ -104,6 +104,11 @@
       "import": "./dist/ControlProtocol.mjs",
       "require": "./dist/ControlProtocol.js"
     },
+    "./CommandAuth": {
+      "types": "./dist/CommandAuth.d.ts",
+      "import": "./dist/CommandAuth.mjs",
+      "require": "./dist/CommandAuth.js"
+    },
     "./RuntimeStorage": {
       "types": "./dist/RuntimeStorage.d.ts",
       "import": "./dist/RuntimeStorage.mjs",

@@ -42,6 +42,39 @@ Router + transport only — you supply **`ControlTransportHttp.serverLayer`** yo
 
 **Binding:** `127.0.0.1` only · default port **3001** · no auth (private/dev assumption).
 
+### Signed command authentication
+
+Add `auth` when the control service should reject unsigned commands:
+
+```typescript
+import { CommandAuth, ControlService } from "@nikscripts/effect-pm";
+import { Config, Duration, Effect } from "effect";
+
+const program = Effect.gen(function* () {
+  const keyringFile = yield* Config.string("BILLING_GROUP_COMMAND_KEYS_FILE");
+  const keys = yield* CommandAuth.loadPublicKeyRecords({ file: keyringFile });
+  const group = yield* BillingGroup;
+
+  yield* ControlService.make({
+    group,
+    port: 3001,
+    auth: CommandAuth.ed25519Verifier({
+      keys,
+      replay: CommandAuth.Replay.memory({ window: Duration.minutes(5) }),
+    }),
+  });
+});
+```
+
+Prefer `*_COMMAND_KEYS_FILE` or `*_COMMAND_KEYS_DIR` for real deployments so
+large PEM records do not bloat env files. Inline JSON env is still useful for
+small local demos and tests.
+
+When `auth` is configured, the HTTP surface is strict: signed `POST /control`
+only. REST shortcuts, unsigned `/health`, and unsigned log streams fail before
+the router runs. Use signed `GetHealth` through `ProcessManager` /
+`ControlTransportHttp` for liveness checks.
+
 ---
 
 ## REST routes
