@@ -2,16 +2,24 @@
  * **Resource toolkit** — schema-defined service tags with local + remote (RPC) layers.
  *
  * @remarks
- * **Slice 1 — the spec → contract foundation.** Lightweight by construction: imports
- * only `Schema` and `effect/unstable/rpc`, never a heavy implementation. This is the
- * single source for a resource's wire contract; the inferred service interface, the
- * client forwarder, and the server handlers all derive from one {@link Spec}.
+ * Lightweight by construction: imports only `Schema` and `effect/unstable/rpc`, never a
+ * heavy implementation. A {@link Spec} is the single source for a resource's wire
+ * contract — the inferred service interface, the client forwarder, and the server
+ * handlers all derive from it.
  *
- * `Resource.Tag` / `Resource.Host` and the client/server layers land in later slices.
+ * Define a tag with {@link Resource.Tag} (one resource) or {@link Resource.tagFor} (a
+ * factory: many instances sharing one contract). The same `yield* Tag` code runs
+ * anywhere; only the layer changes:
+ * - {@link Resource.layer} — run it locally with a real implementation;
+ * - {@link Resource.client} — drive it remotely over RPC, as if local;
+ * - {@link Resource.server} — expose one local impl over RPC;
+ * - {@link Resource.serverFamily} — serve many factory instances behind one group,
+ *   routed by the per-call `id` header.
  *
  * @module Resource
  */
-import { Context, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer, Option, Schema } from "effect";
+import { Headers } from "effect/unstable/http";
 import { Rpc, RpcClient, RpcGroup } from "effect/unstable/rpc";
 
 /**
@@ -174,7 +182,11 @@ const makeTag =
  */
 const tagFor = <const S extends Spec>(spec: S) => {
   const group = buildRpcGroup(spec);
-  return <Self>(id: string) => buildInstanceTag<Self, S>(id, spec, group);
+  const factory = <Self>(id: string) =>
+    buildInstanceTag<Self, S>(id, spec, group);
+  // Stow the shared spec/group on the factory too, so the family server
+  // ({@link serverFamily}) can read the contract without an instance in hand.
+  return Object.assign(factory, { [SpecSym]: spec, [GroupSym]: group });
 };
 
 /**
@@ -211,6 +223,90 @@ const serverLayer = <S extends Spec>(
   // Boundary assertion (runtime-safe): the handlers mirror the same spec the group was
   // built from, and RPC validates every payload/result against the spec schemas at the
   // wire — so the asserted handler shape is enforced at runtime.
+  return group.toLayer(handlers as Parameters<(typeof group)["toLayer"]>[0]);
+};
+
+/** The header carrying the target instance id, set per-call by {@link forwardClient}. */
+const ID_HEADER = "id";
+
+/**
+ * The **family server** layer: serve **many instances of one factory** behind a
+ * single contract group, dispatching each request to the right instance by the
+ * per-call `id` header. Instances share one {@link tagFor} factory (one spec, one
+ * RPC group); each is listed once with its implementation.
+ *
+ * Why an explicit list rather than one-layer-per-instance: composing instances as
+ * sibling layers would silently keep only the last (Effect's `Context` is a map —
+ * same-key layers last-write-wins). Listing them together is the foolproof shape:
+ * every instance is wired, and a duplicate id **throws at assembly**.
+ *
+ * ```ts
+ * const Queue = Resource.tagFor({ pause: Schema.Void, resume: Schema.Void });
+ * class Jobs extends Queue<Jobs>("@app/Jobs") {}
+ * class Mail extends Queue<Mail>("@app/Mail") {}
+ *
+ * const serveAll = Resource.serverFamily(Queue, [
+ *   [Jobs, { pause: …, resume: … }],
+ *   [Mail, { pause: …, resume: … }],
+ * ]);
+ * ```
+ *
+ * @public
+ */
+const serverFamily = <S extends Spec>(
+  factory: {
+    readonly [SpecSym]: S;
+    readonly [GroupSym]: ReturnType<typeof buildRpcGroup>;
+  },
+  instances: ReadonlyArray<readonly [{ readonly id: string }, ServiceOf<S>]>,
+) => {
+  const group = factory[GroupSym];
+  const spec = factory[SpecSym];
+
+  // Build the routing table once, at assembly: id → instance impl. A duplicate id
+  // is a wiring mistake — fail loudly rather than silently shadow an instance.
+  const table = new Map<string, ServiceOf<S>>();
+  for (const [tag, impl] of instances) {
+    if (table.has(tag.id)) {
+      throw new Error(
+        `Resource server family: instance id "${tag.id}" is listed more than once.`,
+      );
+    }
+    table.set(tag.id, impl);
+  }
+
+  // One handler per contract method; each reads the `id` header, looks up the
+  // instance, and dispatches. A missing/unknown id is a protocol-level fault
+  // (the contract is satisfied) → die, not a typed domain error.
+  const handlers: Record<
+    string,
+    (payload: unknown, options: { readonly headers: Headers.Headers }) => unknown
+  > = {};
+  for (const key of Object.keys(spec)) {
+    handlers[key] = (payload, options) => {
+      const id = Option.getOrUndefined(Headers.get(options.headers, ID_HEADER));
+      if (id === undefined) {
+        return Effect.die(
+          new Error(
+            `Resource server family: request for "${key}" is missing the "${ID_HEADER}" header.`,
+          ),
+        );
+      }
+      const impl = table.get(id);
+      if (impl === undefined) {
+        return Effect.die(
+          new Error(
+            `Resource server family: no instance registered for id "${id}".`,
+          ),
+        );
+      }
+      const member = (impl as Record<string, unknown>)[key];
+      return typeof member === "function" ? member(payload) : member;
+    };
+  }
+
+  // Boundary assertion (runtime-safe): handlers mirror the shared spec the group
+  // was built from, and RPC validates every payload/result at the wire.
   return group.toLayer(handlers as Parameters<(typeof group)["toLayer"]>[0]);
 };
 
@@ -304,5 +400,6 @@ export const Resource = {
   tagFor,
   layer: localLayer,
   server: serverLayer,
+  serverFamily,
   client: clientLayer,
 } as const;

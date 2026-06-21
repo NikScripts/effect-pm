@@ -32,3 +32,49 @@ it("client ↔ server round-trips in-memory", () => {
   // provides the whole environment (this test passes), so we run the resolved program.
   return Effect.runPromise(program as Effect.Effect<void, unknown>);
 });
+
+// ── multi-instance: many instances of one factory, one server, routed by id ──
+const Counter = Resource.tagFor({
+  bump: { payload: { by: Schema.Number }, success: Schema.Number },
+  label: Schema.String,
+});
+class Alpha extends Counter<Alpha>("test/Alpha") {}
+class Beta extends Counter<Beta>("test/Beta") {}
+
+it("server family routes calls to the right instance by id header", () => {
+  // Two independent instance impls behind ONE shared contract group.
+  let alphaTotal = 0;
+  let betaTotal = 0;
+  const alphaImpl = {
+    bump: ({ by }: { by: number }) =>
+      Effect.sync(() => (alphaTotal += by)),
+    label: Effect.succeed("alpha"),
+  };
+  const betaImpl = {
+    bump: ({ by }: { by: number }) => Effect.sync(() => (betaTotal += by)),
+    label: Effect.succeed("beta"),
+  };
+
+  const program = Effect.gen(function* () {
+    const rpc = yield* RpcTest.makeClient(groupOf(Counter));
+    const a = forwardClient(rpc, specOf(Counter), Alpha.id);
+    const b = forwardClient(rpc, specOf(Counter), Beta.id);
+
+    // routed by id: each forwarder pins its own instance id as a header
+    expect(yield* a.label).toBe("alpha");
+    expect(yield* b.label).toBe("beta");
+    expect(yield* a.bump({ by: 3 })).toBe(3);
+    expect(yield* b.bump({ by: 10 })).toBe(10);
+    expect(yield* a.bump({ by: 4 })).toBe(7);
+    expect(yield* b.bump({ by: 1 })).toBe(11);
+  }).pipe(
+    Effect.provide(
+      Resource.serverFamily(Counter, [
+        [Alpha, alphaImpl],
+        [Beta, betaImpl],
+      ]),
+    ),
+    Effect.scoped,
+  );
+  return Effect.runPromise(program as Effect.Effect<void, unknown>);
+});
