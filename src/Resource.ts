@@ -162,11 +162,40 @@ const localLayer = <I, S>(tag: Context.Key<I, S>, impl: S): Layer.Layer<I> =>
   Layer.succeed(tag, impl);
 
 /**
- * Resource toolkit — schema-defined service tags with local (and, later, remote) layers.
+ * The **server** handlers layer for a resource: expose a real implementation over RPC by
+ * mounting the contract group's handlers, each delegating to `impl`. Compose with an
+ * `RpcServer` + a `Protocol` layer to actually serve over a transport.
+ *
+ * @public
+ */
+const serverLayer = <S extends Spec>(
+  tag: {
+    readonly [SpecSym]: S;
+    readonly [GroupSym]: ReturnType<typeof buildRpcGroup>;
+  },
+  impl: ServiceOf<S>,
+) => {
+  const group = tag[GroupSym];
+  const handlers: Record<string, (payload: unknown) => unknown> = {};
+  for (const [key, member] of Object.entries(impl)) {
+    // runtime-checked: payload methods are functions (call them); no-payload methods
+    // are `Effect` properties (return as-is, ignoring the payload arg).
+    handlers[key] = (payload) =>
+      typeof member === "function" ? member(payload) : member;
+  }
+  // Boundary assertion (runtime-safe): the handlers mirror the same spec the group was
+  // built from, and RPC validates every payload/result against the spec schemas at the
+  // wire — so the asserted handler shape is enforced at runtime.
+  return group.toLayer(handlers as Parameters<(typeof group)["toLayer"]>[0]);
+};
+
+/**
+ * Resource toolkit — schema-defined service tags with local + remote (server) layers.
  *
  * @public
  */
 export const Resource = {
   Tag: makeTag,
   layer: localLayer,
+  server: serverLayer,
 } as const;
