@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "react"]
+  },
+  "include": ["./**/*.ts", "./**/*.tsx"],
+  "exclude": ["../../node_modules", "../../dist", "./counter-app.test.tsx"]
+}
