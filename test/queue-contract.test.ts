@@ -1,8 +1,14 @@
-import { Effect, Schema } from "effect";
+import { Effect } from "effect";
 import { RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import { QueueControlSpec } from "../src/QueueContract";
-import { Resource, forwardClient, groupOf, specOf } from "../src/Resource";
+import {
+  Resource,
+  forwardClient,
+  groupOf,
+  methodMeta,
+  specOf,
+} from "../src/Resource";
 
 // A queue family built from the control contract: many instances share the "queue" group.
 const Queue = Resource.tagFor("queue", QueueControlSpec);
@@ -86,6 +92,25 @@ it("exposes the expected control verbs", () => {
       "start",
     ].sort(),
   );
-  // sanity: the spec entries are schemas/descriptors usable by the toolkit
-  expect(Schema.isSchema(QueueControlSpec.size)).toBe(true);
+});
+
+// Tool metadata (query/action/destructive/description) drives CLI/TUI/dashboard rendering.
+it("marks each verb query vs action, with destructive hints", () => {
+  const meta = (k: keyof typeof QueueControlSpec) => methodMeta(QueueControlSpec[k]);
+
+  // reads are queries
+  expect(meta("size").kind).toBe("query");
+  expect(meta("isEmpty").kind).toBe("query");
+
+  // mutations are actions
+  expect(meta("pause").kind).toBe("action");
+  expect(meta("start").kind).toBe("action");
+
+  // state-losing actions are flagged destructive
+  expect(meta("shutdown")).toMatchObject({ kind: "action", destructive: true });
+  expect(meta("clear")).toMatchObject({ kind: "action", destructive: true });
+  expect(meta("pause").destructive).toBe(false);
+
+  // descriptions are present for help text
+  expect(meta("size").description).toContain("pending items");
 });

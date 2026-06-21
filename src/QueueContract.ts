@@ -38,22 +38,51 @@ export const QueueSizes = Schema.Struct({
  * @public
  */
 export const QueueControlSpec = {
-  /** Total pending items across all priority levels. */
-  size: Schema.Number,
-  /** Pending item count per priority level. */
-  sizes: QueueSizes,
-  /** Whether all priority queues are empty. */
-  isEmpty: Schema.Boolean,
-  /** Total items that have finished processing (success or failure). */
-  completed: Schema.Number,
-  /** Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown). */
-  start: Schema.Void,
-  /** Pause processing; items can still be enqueued and accumulate. */
-  pause: Schema.Void,
-  /** Resume processing after a pause. */
-  resume: Schema.Void,
-  /** Permanently stop the queue; later enqueues are dropped. */
-  shutdown: Schema.Void,
-  /** Drain all pending items and reset the completed counter; returns the count cleared. */
-  clear: Schema.Number,
+  size: {
+    success: Schema.Number,
+    kind: "query",
+    description: "Total pending items across all priority levels.",
+  },
+  sizes: {
+    success: QueueSizes,
+    kind: "query",
+    description: "Pending item count per priority level.",
+  },
+  isEmpty: {
+    success: Schema.Boolean,
+    kind: "query",
+    description: "Whether all priority queues are empty.",
+  },
+  completed: {
+    success: Schema.Number,
+    kind: "query",
+    description: "Total items that have finished processing (success or failure).",
+  },
+  start: {
+    success: Schema.Void,
+    kind: "action",
+    description: "Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown).",
+  },
+  pause: {
+    success: Schema.Void,
+    kind: "action",
+    description: "Pause processing; items can still be enqueued and accumulate.",
+  },
+  resume: {
+    success: Schema.Void,
+    kind: "action",
+    description: "Resume processing after a pause.",
+  },
+  shutdown: {
+    success: Schema.Void,
+    kind: "action",
+    destructive: true,
+    description: "Permanently stop the queue; later enqueues are dropped.",
+  },
+  clear: {
+    success: Schema.Number,
+    kind: "action",
+    destructive: true,
+    description: "Drain all pending items and reset the completed counter; returns the count cleared.",
+  },
 } satisfies Spec;

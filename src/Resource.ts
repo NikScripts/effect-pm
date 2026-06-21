@@ -23,11 +23,22 @@ import { Headers } from "effect/unstable/http";
 import { Rpc, RpcClient, RpcGroup } from "effect/unstable/rpc";
 
 /**
+ * How a method behaves, for tools (CLI/TUI/dashboard) — **explicit, never inferred**:
+ * - **`query`** — an idempotent read (CLI prints it, dashboard reads it as an Atom);
+ * - **`action`** — a mutation (CLI confirms, dashboard calls it as `runtime.fn`).
+ *
+ * @public
+ */
+export type MethodKind = "query" | "action";
+
+/**
  * One method of a resource contract:
  * - a **bare `Schema`** — its success type, with no payload (`current: Schema.Number`,
- *   `reset: Schema.Void`); or
- * - a **descriptor** — `{ payload?, success?, error? }`, where `error` becomes the
- *   Effect error channel.
+ *   `reset: Schema.Void`); shorthand for a {@link MethodKind} `query`; or
+ * - a **descriptor** — `{ payload?, success?, error? }` (where `error` becomes the Effect
+ *   error channel) plus optional **tool metadata** ({@link MethodSpec.description},
+ *   {@link MethodKind}, `destructive`). The metadata is inert to the type inference and the
+ *   wire contract — it only feeds the tools that render this resource.
  *
  * @public
  */
@@ -37,6 +48,12 @@ export type MethodSpec =
       readonly payload?: Schema.Struct.Fields;
       readonly success?: Schema.Top;
       readonly error?: Schema.Top;
+      /** Help text — CLI/TUI help, dashboard tooltips. */
+      readonly description?: string;
+      /** Query (read) vs action (mutation), explicit. Defaults to `query` when omitted. */
+      readonly kind?: MethodKind;
+      /** An action that loses state (`shutdown`/`clear`/`drop`) → confirm / danger styling. */
+      readonly destructive?: boolean;
     };
 
 /**
@@ -45,6 +62,36 @@ export type MethodSpec =
  * @public
  */
 export type Spec = Record<string, MethodSpec>;
+
+/**
+ * The resolved tool metadata for one method — what CLI/TUI/dashboard read to render it.
+ *
+ * @public
+ */
+export interface MethodMeta {
+  /** Query (read) vs action (mutation). A bare-schema method is a `query`. */
+  readonly kind: MethodKind;
+  /** Help text, if declared. */
+  readonly description: string | undefined;
+  /** Whether the action loses state — only meaningful for `action`s. */
+  readonly destructive: boolean;
+}
+
+/**
+ * Read the tool metadata for a {@link MethodSpec}. A bare schema is a non-destructive
+ * `query`; a descriptor reports its declared `kind` (defaulting to `query`), `description`,
+ * and `destructive` flag. Pure annotation — does not touch the wire contract.
+ *
+ * @public
+ */
+export const methodMeta = (m: MethodSpec): MethodMeta =>
+  Schema.isSchema(m)
+    ? { kind: "query", description: undefined, destructive: false }
+    : {
+        kind: m.kind ?? "query",
+        description: m.description,
+        destructive: m.destructive ?? false,
+      };
 
 // ── type-level inference: one Spec → the service interface ──
 
