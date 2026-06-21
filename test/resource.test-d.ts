@@ -45,3 +45,23 @@ const _layer: Layer.Layer<Counter> = Resource.layer(Counter, {
   current: Effect.succeed(0),
 });
 void _layer;
+
+// ── factory: tagFor bakes a shared spec; instances pass only an id ──
+const Counter2 = Resource.tagFor({
+  tick: Schema.Void,
+  count: Schema.Number,
+});
+class TickA extends Counter2<TickA>("test/TickA") {}
+class TickB extends Counter2<TickB>("test/TickB") {}
+
+// both instances share the same inferred service (spec baked into the factory)
+const _factoryA: Effect.Effect<number, never, TickA> = Effect.gen(function* () {
+  const a = yield* TickA;
+  yield* a.tick;
+  return yield* a.count;
+});
+void _factoryA;
+const _factoryB: Effect.Effect<void, never, TickB> = Effect.gen(function* () {
+  yield* (yield* TickB).tick;
+});
+void _factoryB;

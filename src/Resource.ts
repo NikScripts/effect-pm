@@ -118,6 +118,25 @@ const GroupSym = Symbol.for("@nikscripts/effect-pm/Resource/group");
 const claimedIds = new Set<string>();
 
 /**
+ * The single tag-creation primitive: dup-id guard + `Context.Service` + stow spec/group.
+ * Both {@link makeTag} (per-tag spec) and {@link tagFor} (shared spec) go through it.
+ */
+const buildInstanceTag = <Self, S extends Spec>(
+  id: string,
+  spec: S,
+  group: ReturnType<typeof buildRpcGroup>,
+) => {
+  if (claimedIds.has(id)) {
+    throw new Error(
+      `Resource id "${id}" is already declared — resource ids must be unique.`,
+    );
+  }
+  claimedIds.add(id);
+  const base = Context.Service<Self, ServiceOf<S>>()(id);
+  return Object.assign(base, { id, [SpecSym]: spec, [GroupSym]: group });
+};
+
+/**
  * Create a resource service tag from a {@link Spec}. Extend the result, like
  * `Context.Tag`, but the value type is **inferred from the spec**:
  *
@@ -137,20 +156,26 @@ const claimedIds = new Set<string>();
  */
 const makeTag =
   <Self>(id: string) =>
-  <const S extends Spec>(spec: S) => {
-    if (claimedIds.has(id)) {
-      throw new Error(
-        `Resource id "${id}" is already declared — resource ids must be unique.`,
-      );
-    }
-    claimedIds.add(id);
-    const base = Context.Service<Self, ServiceOf<S>>()(id);
-    return Object.assign(base, {
-      id,
-      [SpecSym]: spec,
-      [GroupSym]: buildRpcGroup(spec),
-    });
-  };
+  <const S extends Spec>(spec: S) =>
+    buildInstanceTag<Self, S>(id, spec, buildRpcGroup(spec));
+
+/**
+ * Build a **factory** tag-maker that bakes a shared {@link Spec} once: every instance
+ * shares the same contract + RPC group, and callers **never pass the spec** — only an id.
+ * Use for resource families (many instances, one contract).
+ *
+ * ```ts
+ * const Queue = Resource.tagFor({ pause: Schema.Void, resume: Schema.Void });
+ * class Jobs extends Queue<Jobs>("@app/Jobs") {}  // spec baked in; just the id
+ * class Mail extends Queue<Mail>("@app/Mail") {}  // shares the same contract + group
+ * ```
+ *
+ * @public
+ */
+const tagFor = <const S extends Spec>(spec: S) => {
+  const group = buildRpcGroup(spec);
+  return <Self>(id: string) => buildInstanceTag<Self, S>(id, spec, group);
+};
 
 /**
  * The **local** layer for a resource: provide a real implementation of its service.
@@ -276,6 +301,7 @@ const clientLayer = <Self, S extends Spec>(
  */
 export const Resource = {
   Tag: makeTag,
+  tagFor,
   layer: localLayer,
   server: serverLayer,
   client: clientLayer,
