@@ -148,13 +148,27 @@ export type HandlerContextOf<S extends Spec> = Rpc.ToHandler<RpcUnionOf<S>>;
 // ── runtime: one Spec → the shared RPC contract group ──
 
 /**
- * Build the shared RPC contract group from a {@link Spec}. A bare `Schema` becomes a
- * payload-free rpc returning that schema; a descriptor maps straight to its parts.
+ * The wire tag of a method on the shared transport: the resource's **group id** prefixes
+ * the bare method name (`queue/pause`, `process/stop`). The prefix namespaces a resource's
+ * procedures so unrelated resource types sharing one `RpcServer` can't collide on a common
+ * method name — it's a transport detail, never part of the logical contract (the type-level
+ * tag and the `yield* Tag` service surface stay the bare method name).
+ */
+const wireTag = (groupId: string, method: string): string => `${groupId}/${method}`;
+
+/**
+ * Build the shared RPC contract group from a {@link Spec}, namespaced by `groupId`. A bare
+ * `Schema` becomes a payload-free rpc returning that schema; a descriptor maps straight to
+ * its parts. Every procedure's wire tag is {@link wireTag}-prefixed by `groupId`.
  *
  * @internal
  */
-export const buildRpcGroup = <const S extends Spec>(spec: S): RpcGroupOf<S> => {
-  const rpcs = Object.entries(spec).map(([tag, m]) => {
+export const buildRpcGroup = <const S extends Spec>(
+  groupId: string,
+  spec: S,
+): RpcGroupOf<S> => {
+  const rpcs = Object.entries(spec).map(([method, m]) => {
+    const tag = wireTag(groupId, method);
     if (Schema.isSchema(m)) {
       return Rpc.make(tag, { success: m });
     }
@@ -170,8 +184,8 @@ export const buildRpcGroup = <const S extends Spec>(spec: S): RpcGroupOf<S> => {
   });
   // Boundary assertion (runtime-correct): each entry is built to be exactly the `Rpc`
   // the type derives from the same `spec` — but `Object.entries` erases the literal keys
-  // to `string`, so the precise per-method type is reattached here. One single source
-  // (the spec) drives both the runtime group and its type.
+  // to `string` (and the wire tag carries the group prefix the logical type omits), so the
+  // precise per-method type is reattached here. One single source (the spec) drives both.
   return RpcGroup.make(...rpcs) as unknown as RpcGroupOf<S>;
 };
 
@@ -182,14 +196,28 @@ const SpecSym = Symbol.for("@nikscripts/effect-pm/Resource/spec");
 /** Where the built RPC group is stowed on a Tag (used by the client/server slices). */
 const GroupSym = Symbol.for("@nikscripts/effect-pm/Resource/group");
 
-/** Claimed ids — duplicate declarations fail fast (Effect won't catch same-key Tags). */
+/** Claimed instance ids — duplicate declarations fail fast (Effect won't catch same-key Tags). */
 const claimedIds = new Set<string>();
+/** Claimed group ids — the wire prefixes; duplicates would collide on a shared `RpcServer`. */
+const claimedGroupIds = new Set<string>();
+
+/** Reserve a group id (wire prefix); a duplicate **throws** — two resources can't share a prefix. */
+const claimGroupId = (groupId: string): void => {
+  if (claimedGroupIds.has(groupId)) {
+    throw new Error(
+      `Resource group id "${groupId}" is already declared — group ids namespace the wire and must be unique.`,
+    );
+  }
+  claimedGroupIds.add(groupId);
+};
 
 /**
- * The single tag-creation primitive: dup-id guard + `Context.Service` + stow spec/group.
- * Both {@link makeTag} (per-tag spec) and {@link tagFor} (shared spec) go through it.
+ * The single tag-creation primitive: dup-id guard + `Context.Service` + stow id/groupId/spec/group.
+ * Both {@link makeTag} (per-tag spec) and {@link tagFor} (shared spec) go through it. `id` is the
+ * instance identity (Context key + routing header); `groupId` is the wire prefix.
  */
 const buildInstanceTag = <Self, S extends Spec>(
+  groupId: string,
   id: string,
   spec: S,
   group: RpcGroupOf<S>,
@@ -201,7 +229,7 @@ const buildInstanceTag = <Self, S extends Spec>(
   }
   claimedIds.add(id);
   const base = Context.Service<Self, ServiceOf<S>>()(id);
-  return Object.assign(base, { id, [SpecSym]: spec, [GroupSym]: group });
+  return Object.assign(base, { id, groupId, [SpecSym]: spec, [GroupSym]: group });
 };
 
 /**
@@ -219,34 +247,43 @@ const buildInstanceTag = <Self, S extends Spec>(
  *
  * Ids must be unique: a duplicate **throws at declaration** — Effect's `Context` is
  * keyed by the id string and silently last-write-wins on collisions, so we guard it.
+ * For a single resource the id is also its **group id** (the wire prefix for its
+ * procedures), so a shared `RpcServer` can host it alongside other resource types.
  *
  * @public
  */
 const makeTag =
   <Self>(id: string) =>
-  <const S extends Spec>(spec: S) =>
-    buildInstanceTag<Self, S>(id, spec, buildRpcGroup(spec));
+  <const S extends Spec>(spec: S) => {
+    // single resource: id doubles as the group id (its wire prefix)
+    claimGroupId(id);
+    return buildInstanceTag<Self, S>(id, id, spec, buildRpcGroup(id, spec));
+  };
 
 /**
- * Build a **factory** tag-maker that bakes a shared {@link Spec} once: every instance
- * shares the same contract + RPC group, and callers **never pass the spec** — only an id.
- * Use for resource families (many instances, one contract).
+ * Build a **factory** tag-maker that bakes a shared {@link Spec} once under a `groupId`:
+ * every instance shares the same contract + RPC group, and callers **never pass the spec**
+ * — only an instance id. Use for resource families (many instances, one contract). The
+ * `groupId` (e.g. `"queue"`) is the wire prefix for the family's procedures, so a shared
+ * `RpcServer` can host this family next to other resource types without tag collisions;
+ * instances are told apart by the per-call `id` header.
  *
  * ```ts
- * const Queue = Resource.tagFor({ pause: Schema.Void, resume: Schema.Void });
- * class Jobs extends Queue<Jobs>("@app/Jobs") {}  // spec baked in; just the id
- * class Mail extends Queue<Mail>("@app/Mail") {}  // shares the same contract + group
+ * const Queue = Resource.tagFor("queue", { pause: Schema.Void, resume: Schema.Void });
+ * class Jobs extends Queue<Jobs>("@app/Jobs") {}  // spec baked in; just the instance id
+ * class Mail extends Queue<Mail>("@app/Mail") {}  // shares contract + group, routed by id
  * ```
  *
  * @public
  */
-const tagFor = <const S extends Spec>(spec: S) => {
-  const group = buildRpcGroup(spec);
+const tagFor = <const S extends Spec>(groupId: string, spec: S) => {
+  claimGroupId(groupId);
+  const group = buildRpcGroup(groupId, spec);
   const factory = <Self>(id: string) =>
-    buildInstanceTag<Self, S>(id, spec, group);
-  // Stow the shared spec/group on the factory too, so the family server
-  // ({@link serverFamily}) can read the contract without an instance in hand.
-  return Object.assign(factory, { [SpecSym]: spec, [GroupSym]: group });
+    buildInstanceTag<Self, S>(groupId, id, spec, group);
+  // Stow the shared groupId/spec/group on the factory too, so the family server
+  // ({@link serverFamily}) can read the contract + prefix without an instance in hand.
+  return Object.assign(factory, { groupId, [SpecSym]: spec, [GroupSym]: group });
 };
 
 /**
@@ -267,6 +304,7 @@ const localLayer = <I, S>(tag: Context.Key<I, S>, impl: S): Layer.Layer<I> =>
  */
 const serverLayer = <S extends Spec>(
   tag: {
+    readonly groupId: string;
     readonly [SpecSym]: S;
     readonly [GroupSym]: RpcGroupOf<S>;
   },
@@ -275,9 +313,10 @@ const serverLayer = <S extends Spec>(
   const group = tag[GroupSym];
   const handlers: Record<string, (payload: unknown) => unknown> = {};
   for (const [key, member] of Object.entries(impl)) {
+    // handlers are keyed by the wire tag (group-prefixed), matching the group's procedures.
     // runtime-checked: payload methods are functions (call them); no-payload methods
     // are `Effect` properties (return as-is, ignoring the payload arg).
-    handlers[key] = (payload) =>
+    handlers[wireTag(tag.groupId, key)] = (payload) =>
       typeof member === "function" ? member(payload) : member;
   }
   // Boundary assertion (runtime-safe): the handlers mirror the same spec the group was
@@ -304,7 +343,7 @@ const ID_HEADER = "id";
  * every instance is wired, and a duplicate id **throws at assembly**.
  *
  * ```ts
- * const Queue = Resource.tagFor({ pause: Schema.Void, resume: Schema.Void });
+ * const Queue = Resource.tagFor("queue", { pause: Schema.Void, resume: Schema.Void });
  * class Jobs extends Queue<Jobs>("@app/Jobs") {}
  * class Mail extends Queue<Mail>("@app/Mail") {}
  *
@@ -318,6 +357,7 @@ const ID_HEADER = "id";
  */
 const serverFamily = <S extends Spec>(
   factory: {
+    readonly groupId: string;
     readonly [SpecSym]: S;
     readonly [GroupSym]: RpcGroupOf<S>;
   },
@@ -346,7 +386,8 @@ const serverFamily = <S extends Spec>(
     (payload: unknown, options: { readonly headers: Headers.Headers }) => unknown
   > = {};
   for (const key of Object.keys(spec)) {
-    handlers[key] = (payload, options) => {
+    // handlers are keyed by the wire tag (group-prefixed), matching the group's procedures.
+    handlers[wireTag(factory.groupId, key)] = (payload, options) => {
       const id = Option.getOrUndefined(Headers.get(options.headers, ID_HEADER));
       if (id === undefined) {
         return Effect.die(
@@ -395,15 +436,17 @@ export const specOf = <S extends Spec>(tag: { readonly [SpecSym]: S }): S =>
   tag[SpecSym];
 
 /**
- * Map an RPC client + a spec into the typed service, forwarding each method with the
- * resource id as a header. Shared by {@link Resource.client} (production, over a real
- * `Protocol`) and the in-memory round-trip test (client from `RpcTest`).
+ * Map an RPC client + a spec into the typed service, forwarding each method to its
+ * group-prefixed wire tag and pinning the instance id as a header. Shared by
+ * {@link Resource.client} (production, over a real `Protocol`) and the in-memory
+ * round-trip test (client from `RpcTest`).
  *
  * @internal
  */
 export const forwardClient = <S extends Spec>(
   rpc: unknown,
   spec: S,
+  groupId: string,
   id: string,
 ): ServiceOf<S> => {
   const headers = { id };
@@ -416,7 +459,8 @@ export const forwardClient = <S extends Spec>(
   >;
   const service: Record<string, unknown> = {};
   for (const [key, m] of Object.entries(spec)) {
-    const call = calls[key];
+    // the wire tag is group-prefixed; the service surface keeps the bare method name
+    const call = calls[wireTag(groupId, key)];
     // completeness check — fail loudly if a contract method isn't on the client
     if (call === undefined) {
       throw new Error(
@@ -444,6 +488,7 @@ export const forwardClient = <S extends Spec>(
 const clientLayer = <Self, S extends Spec>(
   tag: Context.Key<Self, ServiceOf<S>> & {
     readonly id: string;
+    readonly groupId: string;
     readonly [SpecSym]: S;
     readonly [GroupSym]: RpcGroupOf<S>;
   },
@@ -451,7 +496,7 @@ const clientLayer = <Self, S extends Spec>(
   Layer.effect(
     tag,
     Effect.map(RpcClient.make(tag[GroupSym]), (rpc) =>
-      forwardClient(rpc, tag[SpecSym], tag.id),
+      forwardClient(rpc, tag[SpecSym], tag.groupId, tag.id),
     ),
   );
 

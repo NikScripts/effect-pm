@@ -15,7 +15,7 @@ class Echo extends Resource.Tag<Echo>("test/Echo")({
 it("client ↔ server round-trips in-memory", () => {
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Echo));
-    const svc = forwardClient(rpc, specOf(Echo), Echo.id);
+    const svc = forwardClient(rpc, specOf(Echo), Echo.groupId, Echo.id);
 
     expect(yield* svc.ping).toBe("pong");
     expect(yield* svc.shout({ msg: "hi" })).toBe("HI");
@@ -34,7 +34,7 @@ it("client ↔ server round-trips in-memory", () => {
 });
 
 // ── multi-instance: many instances of one factory, one server, routed by id ──
-const Counter = Resource.tagFor({
+const Counter = Resource.tagFor("counter", {
   bump: { payload: { by: Schema.Number }, success: Schema.Number },
   label: Schema.String,
 });
@@ -57,8 +57,8 @@ it("server family routes calls to the right instance by id header", () => {
 
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Counter));
-    const a = forwardClient(rpc, specOf(Counter), Alpha.id);
-    const b = forwardClient(rpc, specOf(Counter), Beta.id);
+    const a = forwardClient(rpc, specOf(Counter), Alpha.groupId, Alpha.id);
+    const b = forwardClient(rpc, specOf(Counter), Beta.groupId, Beta.id);
 
     // routed by id: each forwarder pins its own instance id as a header
     expect(yield* a.label).toBe("alpha");
@@ -74,6 +74,33 @@ it("server family routes calls to the right instance by id header", () => {
         [Beta, betaImpl],
       ]),
     ),
+    Effect.scoped,
+  );
+  return Effect.runPromise(program);
+});
+
+// ── shared server: two DIFFERENT resource types with a same-named method don't collide ──
+class Widgets extends Resource.Tag<Widgets>("widgets")({
+  size: Schema.Number, // same method name as Crates.size, different type
+}) {}
+class Crates extends Resource.Tag<Crates>("crates")({
+  size: Schema.String,
+}) {}
+
+it("two resource types sharing a method name coexist on one server (group prefix)", () => {
+  // One server hosts both: their groups merge into one root, distinguished by group prefix.
+  const root = groupOf(Widgets).merge(groupOf(Crates));
+  const program = Effect.gen(function* () {
+    const rpc = yield* RpcTest.makeClient(root);
+    const widgets = forwardClient(rpc, specOf(Widgets), Widgets.groupId, Widgets.id);
+    const crates = forwardClient(rpc, specOf(Crates), Crates.groupId, Crates.id);
+
+    // each `size` resolves to its own resource despite the shared method name
+    expect(yield* widgets.size).toBe(42);
+    expect(yield* crates.size).toBe("dozen");
+  }).pipe(
+    Effect.provide(Resource.server(Widgets, { size: Effect.succeed(42) })),
+    Effect.provide(Resource.server(Crates, { size: Effect.succeed("dozen") })),
     Effect.scoped,
   );
   return Effect.runPromise(program);

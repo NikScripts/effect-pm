@@ -48,7 +48,7 @@ const _layer: Layer.Layer<Counter> = Resource.layer(Counter, {
 void _layer;
 
 // ── factory: tagFor bakes a shared spec; instances pass only an id ──
-const Counter2 = Resource.tagFor({
+const Counter2 = Resource.tagFor("test/counter", {
   tick: Schema.Void,
   count: Schema.Number,
 });
