@@ -12,7 +12,7 @@
  * @module Resource
  */
 import { Context, Effect, Layer, Schema } from "effect";
-import { Rpc, RpcGroup } from "effect/unstable/rpc";
+import { Rpc, RpcClient, RpcGroup } from "effect/unstable/rpc";
 
 /**
  * One method of a resource contract:
@@ -190,7 +190,87 @@ const serverLayer = <S extends Spec>(
 };
 
 /**
- * Resource toolkit — schema-defined service tags with local + remote (server) layers.
+ * The RPC group built from a tag's spec — used to wire the client/server and tests.
+ *
+ * @internal
+ */
+export const groupOf = (tag: {
+  readonly [GroupSym]: ReturnType<typeof buildRpcGroup>;
+}): ReturnType<typeof buildRpcGroup> => tag[GroupSym];
+
+/**
+ * The {@link Spec} a tag was built from — used to wire the client forwarder and tests.
+ *
+ * @internal
+ */
+export const specOf = <S extends Spec>(tag: { readonly [SpecSym]: S }): S =>
+  tag[SpecSym];
+
+/**
+ * Map an RPC client + a spec into the typed service, forwarding each method with the
+ * resource id as a header. Shared by {@link Resource.client} (production, over a real
+ * `Protocol`) and the in-memory round-trip test (client from `RpcTest`).
+ *
+ * @internal
+ */
+export const forwardClient = <S extends Spec>(
+  rpc: unknown,
+  spec: S,
+  id: string,
+): ServiceOf<S> => {
+  const headers = { id };
+  const calls = rpc as Record<
+    string,
+    (
+      payload: unknown,
+      options?: { readonly headers?: Record<string, string> },
+    ) => Effect.Effect<unknown, unknown>
+  >;
+  const service: Record<string, unknown> = {};
+  for (const [key, m] of Object.entries(spec)) {
+    const call = calls[key];
+    // completeness check — fail loudly if a contract method isn't on the client
+    if (call === undefined) {
+      throw new Error(
+        `Resource client: contract method "${key}" is missing from the RPC client.`,
+      );
+    }
+    service[key] =
+      Schema.isSchema(m) || m.payload === undefined
+        ? call(undefined, { headers })
+        : (payload: unknown) => call(payload, { headers });
+  }
+  // Boundary assertion (runtime-safe): every method verified present above; RPC validates
+  // every payload/result against the spec schemas at the wire.
+  return service as ServiceOf<S>;
+};
+
+/**
+ * The **client** layer for a resource: drive it over RPC **as if it were local** —
+ * the exact same `yield* Tag` code as the local layer, only the provided layer differs,
+ * so it doesn't matter where the resource is actually running. Needs an ambient RPC
+ * `Protocol` (the transport).
+ *
+ * @public
+ */
+const clientLayer = <Self, S extends Spec>(
+  tag: Context.Key<Self, ServiceOf<S>> & {
+    readonly id: string;
+    readonly [SpecSym]: S;
+    readonly [GroupSym]: ReturnType<typeof buildRpcGroup>;
+  },
+) =>
+  Layer.effect(
+    tag,
+    Effect.map(RpcClient.make(tag[GroupSym]), (rpc) =>
+      forwardClient(rpc, tag[SpecSym], tag.id),
+    ),
+  );
+
+/**
+ * Resource toolkit — schema-defined service tags. Same `yield* Tag` everywhere; only the
+ * layer changes: {@link Resource.layer} runs it locally, {@link Resource.client} drives it
+ * remotely, {@link Resource.server} exposes a local impl over RPC.
  *
  * @public
  */
@@ -198,4 +278,5 @@ export const Resource = {
   Tag: makeTag,
   layer: localLayer,
   server: serverLayer,
+  client: clientLayer,
 } as const;
