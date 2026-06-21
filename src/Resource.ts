@@ -23,45 +23,68 @@ import { Headers } from "effect/unstable/http";
 import { Rpc, RpcClient, RpcGroup } from "effect/unstable/rpc";
 
 /**
- * How a method behaves, for tools (CLI/TUI/dashboard) — **explicit, never inferred**:
+ * How a method behaves, for tools (CLI/TUI/dashboard) — **explicit, never inferred**;
+ * encoded by the constructor used ({@link Resource.query} vs {@link Resource.mutate}):
  * - **`query`** — an idempotent read (CLI prints it, dashboard reads it as an Atom);
- * - **`action`** — a mutation (CLI confirms, dashboard calls it as `runtime.fn`).
+ * - **`mutate`** — a mutation (CLI confirms, dashboard calls it as `runtime.fn`).
  *
  * @public
  */
-export type MethodKind = "query" | "action";
+export type MethodKind = "query" | "mutate";
 
 /**
- * One method of a resource contract:
- * - a **bare `Schema`** — its success type, with no payload (`current: Schema.Number`,
- *   `reset: Schema.Void`); shorthand for a {@link MethodKind} `query`; or
- * - a **descriptor** — `{ payload?, success?, error? }` (where `error` becomes the Effect
- *   error channel) plus optional **tool metadata** ({@link MethodSpec.description},
- *   {@link MethodKind}, `destructive`). The metadata is inert to the type inference and the
- *   wire contract — it only feeds the tools that render this resource.
+ * Tool metadata attached to a method via {@link Method.annotate} — the Effect annotation
+ * idiom. Inert to the type inference and the wire contract; it only feeds the tools that
+ * render this resource.
  *
  * @public
  */
-export type MethodSpec =
-  | Schema.Top
-  | {
-      readonly payload?: Schema.Struct.Fields;
-      readonly success?: Schema.Top;
-      readonly error?: Schema.Top;
-      /** Help text — CLI/TUI help, dashboard tooltips. */
-      readonly description?: string;
-      /** Query (read) vs action (mutation), explicit. Defaults to `query` when omitted. */
-      readonly kind?: MethodKind;
-      /** An action that loses state (`shutdown`/`clear`/`drop`) → confirm / danger styling. */
-      readonly destructive?: boolean;
-    };
+export interface MethodAnnotations {
+  /** Help text — CLI/TUI help, dashboard tooltips. */
+  readonly description?: string;
+  /** A `mutate` that loses state (`shutdown`/`clear`/`drop`) → confirm / danger styling. */
+  readonly destructive?: boolean;
+}
+
+/** Brands a {@link Method} so a spec entry is distinguishable from a plain object. */
+const MethodTypeId: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/method");
 
 /**
- * A resource contract: method name → {@link MethodSpec}. The single source of truth.
+ * One method of a resource contract — built by {@link Resource.query} / {@link Resource.mutate}.
+ * Carries its `kind`, schemas (`payload` / `success` / `error`), and tool annotations.
+ * `.annotate({...})` returns a copy with merged annotations, mirroring Effect's schema idiom.
  *
  * @public
  */
-export type Spec = Record<string, MethodSpec>;
+export interface Method<
+  Kind extends MethodKind,
+  P extends Schema.Struct.Fields | undefined,
+  Su extends Schema.Top,
+  E extends Schema.Top,
+> {
+  readonly [MethodTypeId]: typeof MethodTypeId;
+  readonly kind: Kind;
+  readonly payload: P;
+  readonly success: Su;
+  readonly error: E;
+  readonly annotations: MethodAnnotations;
+  readonly annotate: (annotations: MethodAnnotations) => Method<Kind, P, Su, E>;
+}
+
+/** Any {@link Method}, erased — the element type of a {@link Spec}. @public */
+export type AnyMethod = Method<
+  MethodKind,
+  Schema.Struct.Fields | undefined,
+  Schema.Top,
+  Schema.Top
+>;
+
+/**
+ * A resource contract: method name → {@link Method}. The single source of truth.
+ *
+ * @public
+ */
+export type Spec = Record<string, AnyMethod>;
 
 /**
  * The resolved tool metadata for one method — what CLI/TUI/dashboard read to render it.
@@ -69,51 +92,156 @@ export type Spec = Record<string, MethodSpec>;
  * @public
  */
 export interface MethodMeta {
-  /** Query (read) vs action (mutation). A bare-schema method is a `query`. */
+  /** Query (read) vs mutate (mutation). */
   readonly kind: MethodKind;
   /** Help text, if declared. */
   readonly description: string | undefined;
-  /** Whether the action loses state — only meaningful for `action`s. */
+  /** Whether the mutation loses state — only meaningful for `mutate`s. */
   readonly destructive: boolean;
 }
 
 /**
- * Read the tool metadata for a {@link MethodSpec}. A bare schema is a non-destructive
- * `query`; a descriptor reports its declared `kind` (defaulting to `query`), `description`,
- * and `destructive` flag. Pure annotation — does not touch the wire contract.
+ * Read the tool metadata for a {@link Method}: its `kind`, `description`, and `destructive`
+ * flag. Pure annotation — does not touch the wire contract.
  *
  * @public
  */
-export const methodMeta = (m: MethodSpec): MethodMeta =>
-  Schema.isSchema(m)
-    ? { kind: "query", description: undefined, destructive: false }
-    : {
-        kind: m.kind ?? "query",
-        description: m.description,
-        destructive: m.destructive ?? false,
-      };
+export const methodMeta = (m: AnyMethod): MethodMeta => ({
+  kind: m.kind,
+  description: m.annotations.description,
+  destructive: m.annotations.destructive ?? false,
+});
+
+/** The single {@link Method} constructor — both {@link query} and {@link mutate} go through it. */
+const makeMethod = <
+  Kind extends MethodKind,
+  P extends Schema.Struct.Fields | undefined,
+  Su extends Schema.Top,
+  E extends Schema.Top,
+>(
+  kind: Kind,
+  payload: P,
+  success: Su,
+  error: E,
+  annotations: MethodAnnotations,
+): Method<Kind, P, Su, E> => ({
+  [MethodTypeId]: MethodTypeId,
+  kind,
+  payload,
+  success,
+  error,
+  annotations,
+  annotate: (a) =>
+    makeMethod(kind, payload, success, error, { ...annotations, ...a }),
+});
+
+/**
+ * Define a **query** (idempotent read) returning `success`. Add a `payload` and/or `error`
+ * via options; attach help/metadata with `.annotate({ description, ... })`.
+ *
+ * ```ts
+ * size: Resource.query(Schema.Number).annotate({ description: "Total pending." }),
+ * get: Resource.query(Schema.User, { payload: { id: Schema.String } }),
+ * ```
+ *
+ * @public
+ */
+export function query<Su extends Schema.Top>(
+  success: Su,
+): Method<"query", undefined, Su, Schema.Never>;
+export function query<Su extends Schema.Top, const F extends Schema.Struct.Fields>(
+  success: Su,
+  options: { readonly payload: F },
+): Method<"query", F, Su, Schema.Never>;
+export function query<Su extends Schema.Top, E extends Schema.Top>(
+  success: Su,
+  options: { readonly error: E },
+): Method<"query", undefined, Su, E>;
+export function query<
+  Su extends Schema.Top,
+  const F extends Schema.Struct.Fields,
+  E extends Schema.Top,
+>(
+  success: Su,
+  options: { readonly payload: F; readonly error: E },
+): Method<"query", F, Su, E>;
+export function query(
+  success: Schema.Top,
+  options?: {
+    readonly payload?: Schema.Struct.Fields;
+    readonly error?: Schema.Top;
+  },
+): AnyMethod {
+  return makeMethod(
+    "query",
+    options?.payload,
+    success,
+    options?.error ?? Schema.Never,
+    {},
+  );
+}
+
+/**
+ * Define a **mutate** (mutation) returning `success` (use `Schema.Void` when it returns
+ * nothing). Add a `payload` and/or `error` via options; attach help/metadata with
+ * `.annotate({ description, destructive })`.
+ *
+ * ```ts
+ * pause: Resource.mutate(Schema.Void).annotate({ description: "Pause." }),
+ * clear: Resource.mutate(Schema.Number).annotate({ destructive: true }),
+ * enqueue: Resource.mutate(Schema.Void, { payload: { item: Item }, error: Full }),
+ * ```
+ *
+ * @public
+ */
+export function mutate<Su extends Schema.Top>(
+  success: Su,
+): Method<"mutate", undefined, Su, Schema.Never>;
+export function mutate<Su extends Schema.Top, const F extends Schema.Struct.Fields>(
+  success: Su,
+  options: { readonly payload: F },
+): Method<"mutate", F, Su, Schema.Never>;
+export function mutate<Su extends Schema.Top, E extends Schema.Top>(
+  success: Su,
+  options: { readonly error: E },
+): Method<"mutate", undefined, Su, E>;
+export function mutate<
+  Su extends Schema.Top,
+  const F extends Schema.Struct.Fields,
+  E extends Schema.Top,
+>(
+  success: Su,
+  options: { readonly payload: F; readonly error: E },
+): Method<"mutate", F, Su, E>;
+export function mutate(
+  success: Schema.Top,
+  options?: {
+    readonly payload?: Schema.Struct.Fields;
+    readonly error?: Schema.Top;
+  },
+): AnyMethod {
+  return makeMethod(
+    "mutate",
+    options?.payload,
+    success,
+    options?.error ?? Schema.Never,
+    {},
+  );
+}
 
 // ── type-level inference: one Spec → the service interface ──
 
-type SuccessOf<M extends MethodSpec> = M extends Schema.Top
-  ? M["Type"]
-  : M extends { readonly success: Schema.Top }
-    ? M["success"]["Type"]
-    : void;
+type SuccessOf<M extends AnyMethod> = M["success"]["Type"];
 
-type ErrorOf<M extends MethodSpec> = M extends { readonly error: Schema.Top }
-  ? M["error"]["Type"]
+type ErrorOf<M extends AnyMethod> = M["error"]["Type"];
+
+type PayloadOf<M extends AnyMethod> = M["payload"] extends Schema.Struct.Fields
+  ? Schema.Struct<M["payload"]>["Type"]
   : never;
 
-type PayloadOf<M extends MethodSpec> = M extends {
-  readonly payload: infer F extends Schema.Struct.Fields;
-}
-  ? Schema.Struct<F>["Type"]
-  : never;
-
-type HasPayload<M extends MethodSpec> = M extends {
-  readonly payload: Schema.Struct.Fields;
-}
+type HasPayload<M extends AnyMethod> = [M["payload"]] extends [
+  Schema.Struct.Fields,
+]
   ? true
   : false;
 
@@ -123,7 +251,7 @@ type HasPayload<M extends MethodSpec> = M extends {
  *
  * @internal
  */
-export type Method<M extends MethodSpec> = HasPayload<M> extends true
+export type ServiceMethod<M extends AnyMethod> = HasPayload<M> extends true
   ? (payload: PayloadOf<M>) => Effect.Effect<SuccessOf<M>, ErrorOf<M>>
   : Effect.Effect<SuccessOf<M>, ErrorOf<M>>;
 
@@ -133,38 +261,22 @@ export type Method<M extends MethodSpec> = HasPayload<M> extends true
  * @public
  */
 export type ServiceOf<S extends Spec> = {
-  readonly [K in keyof S]: Method<S[K]>;
+  readonly [K in keyof S]: ServiceMethod<S[K]>;
 };
 
 // ── type-level: one Spec → the precisely-typed RPC contract group ──
 
 /** The payload schema of a method: `Schema.Struct<F>` when it declares fields, else `Schema.Void`. */
-type PayloadSchemaOf<M extends MethodSpec> = M extends {
-  readonly payload: infer F extends Schema.Struct.Fields;
-}
-  ? Schema.Struct<F>
+type PayloadSchemaOf<M extends AnyMethod> = M["payload"] extends Schema.Struct.Fields
+  ? Schema.Struct<M["payload"]>
   : Schema.Void;
 
-/** The success schema of a method: bare schema → itself; `{ success }` → that; else `Schema.Void`. */
-type SuccessSchemaOf<M extends MethodSpec> = M extends Schema.Top
-  ? M
-  : M extends { readonly success: infer Su extends Schema.Top }
-    ? Su
-    : Schema.Void;
-
-/** The error schema of a method: `{ error }` → that; else `Schema.Never`. */
-type ErrorSchemaOf<M extends MethodSpec> = M extends {
-  readonly error: infer Er extends Schema.Top;
-}
-  ? Er
-  : Schema.Never;
-
-/** The `Rpc` for one spec method — tag = the method name, schemas from the {@link MethodSpec}. */
-type RpcOf<K extends string, M extends MethodSpec> = Rpc.Rpc<
+/** The `Rpc` for one spec method — tag = the method name, schemas from the {@link Method}. */
+type RpcOf<K extends string, M extends AnyMethod> = Rpc.Rpc<
   K,
   PayloadSchemaOf<M>,
-  SuccessSchemaOf<M>,
-  ErrorSchemaOf<M>
+  M["success"],
+  M["error"]
 >;
 
 /** The union of every method's {@link RpcOf} — the group's full RPC set. */
@@ -216,17 +328,15 @@ export const buildRpcGroup = <const S extends Spec>(
 ): RpcGroupOf<S> => {
   const rpcs = Object.entries(spec).map(([method, m]) => {
     const tag = wireTag(groupId, method);
-    if (Schema.isSchema(m)) {
-      return Rpc.make(tag, { success: m });
-    }
     const options: {
       payload?: Schema.Struct.Fields;
-      success?: Schema.Top;
-      error?: Schema.Top;
-    } = {};
+      success: Schema.Top;
+      error: Schema.Top;
+    } = {
+      success: m.success,
+      error: m.error,
+    };
     if (m.payload !== undefined) options.payload = m.payload;
-    if (m.success !== undefined) options.success = m.success;
-    if (m.error !== undefined) options.error = m.error;
     return Rpc.make(tag, options);
   });
   // Boundary assertion (runtime-correct): each entry is built to be exactly the `Rpc`
@@ -242,6 +352,24 @@ export const buildRpcGroup = <const S extends Spec>(
 const SpecSym = Symbol.for("@nikscripts/effect-pm/Resource/spec");
 /** Where the built RPC group is stowed on a Tag (used by the client/server slices). */
 const GroupSym = Symbol.for("@nikscripts/effect-pm/Resource/group");
+
+/**
+ * The type of a resource tag carrying spec `S` — what {@link Resource.Tag} / a
+ * {@link Resource.tagFor} factory produce (and what you extend). Lets a consumer write
+ * `<S extends Spec>(tag: ResourceTag<Self, S>)` and read the spec through named types
+ * ({@link specOf} / {@link groupOf}) instead of a `Parameters<typeof specOf>` workaround.
+ *
+ * @public
+ */
+export interface ResourceTag<Self, S extends Spec>
+  extends Context.Key<Self, ServiceOf<S>> {
+  /** Instance identity — the Context key and the per-call routing header value. */
+  readonly id: string;
+  /** Wire prefix — namespaces this resource's procedures on a shared `RpcServer`. */
+  readonly groupId: string;
+  readonly [SpecSym]: S;
+  readonly [GroupSym]: RpcGroupOf<S>;
+}
 
 /** Claimed instance ids — duplicate declarations fail fast (Effect won't catch same-key Tags). */
 const claimedIds = new Set<string>();
@@ -285,8 +413,8 @@ const buildInstanceTag = <Self, S extends Spec>(
  *
  * ```ts
  * class Counter extends Resource.Tag<Counter>("Counter")({
- *   increment: { payload: { by: Schema.Number } },
- *   current: Schema.Number,
+ *   increment: Resource.mutate(Schema.Void, { payload: { by: Schema.Number } }),
+ *   current: Resource.query(Schema.Number),
  * }) {}
  *
  * const c = yield* Counter; // { increment: (p) => Effect<void>; current: Effect<number> }
@@ -379,25 +507,47 @@ const serverLayer = <S extends Spec>(
 const ID_HEADER = "id";
 
 /**
+ * One instance of a factory paired with its implementation — the element of
+ * {@link Resource.serverFamily}. Built by {@link Resource.instance}.
+ *
+ * @public
+ */
+export interface ResourceInstance<S extends Spec> {
+  readonly id: string;
+  readonly impl: ServiceOf<S>;
+}
+
+/**
+ * Pair a factory instance tag with its implementation, for {@link Resource.serverFamily}.
+ *
+ * @public
+ */
+const instance = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  impl: ServiceOf<S>,
+): ResourceInstance<S> => ({ id: tag.id, impl });
+
+/**
  * The **family server** layer: serve **many instances of one factory** behind a
  * single contract group, dispatching each request to the right instance by the
  * per-call `id` header. Instances share one {@link tagFor} factory (one spec, one
- * RPC group); each is listed once with its implementation.
+ * RPC group); each is passed once via {@link Resource.instance}.
  *
- * Why an explicit list rather than one-layer-per-instance: composing instances as
+ * Why one variadic call rather than one-layer-per-instance: composing instances as
  * sibling layers would silently keep only the last (Effect's `Context` is a map —
- * same-key layers last-write-wins). Listing them together is the foolproof shape:
+ * same-key layers last-write-wins). Passing them together is the foolproof shape:
  * every instance is wired, and a duplicate id **throws at assembly**.
  *
  * ```ts
- * const Queue = Resource.tagFor("queue", { pause: Schema.Void, resume: Schema.Void });
+ * const Queue = Resource.tagFor("queue", { pause: Resource.mutate(Schema.Void) });
  * class Jobs extends Queue<Jobs>("@app/Jobs") {}
  * class Mail extends Queue<Mail>("@app/Mail") {}
  *
- * const serveAll = Resource.serverFamily(Queue, [
- *   [Jobs, { pause: …, resume: … }],
- *   [Mail, { pause: …, resume: … }],
- * ]);
+ * const serveAll = Resource.serverFamily(
+ *   Queue,
+ *   Resource.instance(Jobs, jobsImpl),
+ *   Resource.instance(Mail, mailImpl),
+ * );
  * ```
  *
  * @public
@@ -408,7 +558,7 @@ const serverFamily = <S extends Spec>(
     readonly [SpecSym]: S;
     readonly [GroupSym]: RpcGroupOf<S>;
   },
-  instances: ReadonlyArray<readonly [{ readonly id: string }, ServiceOf<S>]>,
+  ...instances: ReadonlyArray<ResourceInstance<S>>
 ): Layer.Layer<HandlerContextOf<S>> => {
   const group = factory[GroupSym];
   const spec = factory[SpecSym];
@@ -416,13 +566,13 @@ const serverFamily = <S extends Spec>(
   // Build the routing table once, at assembly: id → instance impl. A duplicate id
   // is a wiring mistake — fail loudly rather than silently shadow an instance.
   const table = new Map<string, ServiceOf<S>>();
-  for (const [tag, impl] of instances) {
-    if (table.has(tag.id)) {
+  for (const { id, impl } of instances) {
+    if (table.has(id)) {
       throw new Error(
-        `Resource server family: instance id "${tag.id}" is listed more than once.`,
+        `Resource server family: instance id "${id}" is listed more than once.`,
       );
     }
-    table.set(tag.id, impl);
+    table.set(id, impl);
   }
 
   // One handler per contract method; each reads the `id` header, looks up the
@@ -515,7 +665,7 @@ export const forwardClient = <S extends Spec>(
       );
     }
     service[key] =
-      Schema.isSchema(m) || m.payload === undefined
+      m.payload === undefined
         ? call(undefined, { headers })
         : (payload: unknown) => call(payload, { headers });
   }
@@ -557,6 +707,9 @@ const clientLayer = <Self, S extends Spec>(
 export const Resource = {
   Tag: makeTag,
   tagFor,
+  query,
+  mutate,
+  instance,
   layer: localLayer,
   server: serverLayer,
   serverFamily,

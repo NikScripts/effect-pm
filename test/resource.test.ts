@@ -5,8 +5,8 @@ import { Resource, forwardClient, groupOf, specOf } from "../src/Resource";
 
 // A resource with both a no-payload method (property) and a payload method.
 class Echo extends Resource.Tag<Echo>("test/Echo")({
-  ping: Schema.String,
-  shout: { payload: { msg: Schema.String }, success: Schema.String },
+  ping: Resource.query(Schema.String),
+  shout: Resource.mutate(Schema.String, { payload: { msg: Schema.String } }),
 }) {}
 
 // True two-sided round-trip in-process: the real `Resource.server` handlers are wired to
@@ -35,8 +35,8 @@ it("client ↔ server round-trips in-memory", () => {
 
 // ── multi-instance: many instances of one factory, one server, routed by id ──
 const Counter = Resource.tagFor("counter", {
-  bump: { payload: { by: Schema.Number }, success: Schema.Number },
-  label: Schema.String,
+  bump: Resource.mutate(Schema.Number, { payload: { by: Schema.Number } }),
+  label: Resource.query(Schema.String),
 });
 class Alpha extends Counter<Alpha>("test/Alpha") {}
 class Beta extends Counter<Beta>("test/Beta") {}
@@ -69,10 +69,11 @@ it("server family routes calls to the right instance by id header", () => {
     expect(yield* b.bump({ by: 1 })).toBe(11);
   }).pipe(
     Effect.provide(
-      Resource.serverFamily(Counter, [
-        [Alpha, alphaImpl],
-        [Beta, betaImpl],
-      ]),
+      Resource.serverFamily(
+        Counter,
+        Resource.instance(Alpha, alphaImpl),
+        Resource.instance(Beta, betaImpl),
+      ),
     ),
     Effect.scoped,
   );
@@ -81,10 +82,10 @@ it("server family routes calls to the right instance by id header", () => {
 
 // ── shared server: two DIFFERENT resource types with a same-named method don't collide ──
 class Widgets extends Resource.Tag<Widgets>("widgets")({
-  size: Schema.Number, // same method name as Crates.size, different type
+  size: Resource.query(Schema.Number), // same method name as Crates.size, different type
 }) {}
 class Crates extends Resource.Tag<Crates>("crates")({
-  size: Schema.String,
+  size: Resource.query(Schema.String),
 }) {}
 
 it("two resource types sharing a method name coexist on one server (group prefix)", () => {

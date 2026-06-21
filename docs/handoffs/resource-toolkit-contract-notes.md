@@ -9,16 +9,21 @@ the spec as resources port onto the toolkit.
 - **`description`** on each method + the resource → CLI/TUI help text, dashboard tooltips.
   Cheapest, highest value.
 - **Read vs command, explicit (not heuristic).** Each method is a **`query`** (idempotent
-  read) or an **`action`** (mutation). Do **not** infer from `void`/payload — mark it.
-  Drives: CLI (queries print, actions confirm), dashboard (read Atom vs `runtime.fn`), TUI
-  panes.
-- **`destructive`** hint on actions (`shutdown`/`clear`/`drop`) → CLI `--yes`/confirm, TUI
+  read) or a **`mutate`** (mutation) — encoded by the constructor used. Do **not** infer
+  from `void`/payload. Drives: CLI (queries print, mutates confirm), dashboard (read Atom
+  vs `runtime.fn`), TUI panes.
+- **`destructive`** hint on mutates (`shutdown`/`clear`/`drop`) → CLI `--yes`/confirm, TUI
   warning, dashboard danger styling.
 
-Status: **implemented (slice).** `MethodSpec` descriptor carries `description?`,
-`kind?: "query" | "action"`, `destructive?`. Bare schema = query shorthand. `methodMeta()`
-accessor reads it; metadata is inert to type inference + the wire contract. **TODO:**
-resource-level `description` (thread through `Tag`/`tagFor`).
+Status: **implemented (Design B).** A method is built by `Resource.query(success, opts?)` /
+`Resource.mutate(success, opts?)` (kind = the constructor) and carries tool metadata via
+`.annotate({ description, destructive })` — the Effect annotation idiom. `methodMeta()`
+reads it; metadata is inert to type inference + the wire contract. `R`/error channels stay
+honest (no `satisfies Spec` on specs — it contextually widens the error channel; the
+`<const S extends Spec>` constraint validates without widening, and no-error overloads
+hardcode `Schema.Never` so the constraint can't bind it). `ResourceTag<Self, S>` exported so
+consumers can type tags. `serverFamily` takes variadic `Resource.instance(tag, impl)` (no
+tuples). **TODO:** resource-level `description` (thread through `Tag`/`tagFor`).
 
 ## 2. The `changes` stream — the live-data primitive (most important for "live")
 

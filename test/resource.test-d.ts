@@ -1,14 +1,19 @@
 import { Effect, Layer, Schema } from "effect";
 import { RpcClient } from "effect/unstable/rpc";
 import { Resource } from "../src/Resource";
-import type { ServiceOf, Spec } from "../src/Resource";
+import type { ServiceOf } from "../src/Resource";
 
 // ── Slice 1: spec → service-interface inference ──
+// (No `satisfies Spec`: it contextually widens each method's error channel to `unknown`.
+// `ServiceOf<typeof _spec>` already enforces `_spec extends Spec` without widening.)
 const _spec = {
-  current: Schema.Number, // bare schema → property, success = number
-  reset: Schema.Void, // bare schema → property, success = void
-  add: { payload: { id: Schema.String }, error: Schema.String }, // descriptor → method, error channel
-} satisfies Spec;
+  current: Resource.query(Schema.Number), // no payload → property, success = number
+  reset: Resource.mutate(Schema.Void), // no payload → property, success = void
+  add: Resource.mutate(Schema.Void, {
+    payload: { id: Schema.String },
+    error: Schema.String,
+  }), // payload → method, error channel
+};
 
 type S = ServiceOf<typeof _spec>;
 declare const s: S;
@@ -25,9 +30,9 @@ void s.current();
 
 // ── Slice 2: Tag + `yield*` + local layer ──
 class Counter extends Resource.Tag<Counter>("Counter")({
-  increment: { payload: { by: Schema.Number } },
-  reset: Schema.Void,
-  current: Schema.Number,
+  increment: Resource.mutate(Schema.Void, { payload: { by: Schema.Number } }),
+  reset: Resource.mutate(Schema.Void),
+  current: Resource.query(Schema.Number),
 }) {}
 
 // `yield* Tag` yields the inferred service; requirement is the Tag itself
@@ -49,8 +54,8 @@ void _layer;
 
 // ── factory: tagFor bakes a shared spec; instances pass only an id ──
 const Counter2 = Resource.tagFor("test/counter", {
-  tick: Schema.Void,
-  count: Schema.Number,
+  tick: Resource.mutate(Schema.Void),
+  count: Resource.query(Schema.Number),
 });
 class TickA extends Counter2<TickA>("test/TickA") {}
 class TickB extends Counter2<TickB>("test/TickB") {}
@@ -71,8 +76,8 @@ void _factoryB;
 // (Locks the precise-group typing: a regression that re-leaked `any` into `R` would
 // make this program's `R` non-`never` and fail to satisfy `runPromise`.)
 class Remote extends Resource.Tag<Remote>("test/Remote")({
-  ping: Schema.String,
-  shout: { payload: { msg: Schema.String }, success: Schema.String },
+  ping: Resource.query(Schema.String),
+  shout: Resource.mutate(Schema.String, { payload: { msg: Schema.String } }),
 }) {}
 
 declare const protocolLayer: Layer.Layer<RpcClient.Protocol>;

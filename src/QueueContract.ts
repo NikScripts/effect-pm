@@ -17,7 +17,7 @@
  * @module QueueContract
  */
 import { Schema } from "effect";
-import type { Spec } from "./Resource";
+import { Resource } from "./Resource";
 
 /**
  * The per-priority pending counts returned by `sizes`.
@@ -38,51 +38,37 @@ export const QueueSizes = Schema.Struct({
  * @public
  */
 export const QueueControlSpec = {
-  size: {
-    success: Schema.Number,
-    kind: "query",
+  size: Resource.query(Schema.Number).annotate({
     description: "Total pending items across all priority levels.",
-  },
-  sizes: {
-    success: QueueSizes,
-    kind: "query",
+  }),
+  sizes: Resource.query(QueueSizes).annotate({
     description: "Pending item count per priority level.",
-  },
-  isEmpty: {
-    success: Schema.Boolean,
-    kind: "query",
+  }),
+  isEmpty: Resource.query(Schema.Boolean).annotate({
     description: "Whether all priority queues are empty.",
-  },
-  completed: {
-    success: Schema.Number,
-    kind: "query",
+  }),
+  completed: Resource.query(Schema.Number).annotate({
     description: "Total items that have finished processing (success or failure).",
-  },
-  start: {
-    success: Schema.Void,
-    kind: "action",
-    description: "Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown).",
-  },
-  pause: {
-    success: Schema.Void,
-    kind: "action",
+  }),
+  start: Resource.mutate(Schema.Void).annotate({
+    description:
+      "Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown).",
+  }),
+  pause: Resource.mutate(Schema.Void).annotate({
     description: "Pause processing; items can still be enqueued and accumulate.",
-  },
-  resume: {
-    success: Schema.Void,
-    kind: "action",
+  }),
+  resume: Resource.mutate(Schema.Void).annotate({
     description: "Resume processing after a pause.",
-  },
-  shutdown: {
-    success: Schema.Void,
-    kind: "action",
-    destructive: true,
+  }),
+  shutdown: Resource.mutate(Schema.Void).annotate({
     description: "Permanently stop the queue; later enqueues are dropped.",
-  },
-  clear: {
-    success: Schema.Number,
-    kind: "action",
     destructive: true,
-    description: "Drain all pending items and reset the completed counter; returns the count cleared.",
-  },
-} satisfies Spec;
+  }),
+  clear: Resource.mutate(Schema.Number).annotate({
+    description:
+      "Drain all pending items and reset the completed counter; returns the count cleared.",
+    destructive: true,
+  }),
+};
+// Note: no `satisfies Spec` — it contextually widens each method's error channel to
+// `unknown`. The spec is validated (without widening) at the `Resource.tagFor` call site.

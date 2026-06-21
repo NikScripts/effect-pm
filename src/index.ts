@@ -109,7 +109,17 @@ export {
   type HttpApiResourceLayerEffectConfig,
 } from "./HttpApiResource";
 export { Resource } from "./Resource";
-export type { MethodSpec, ServiceOf, Spec } from "./Resource";
+export type {
+  AnyMethod,
+  Method,
+  MethodAnnotations,
+  MethodKind,
+  MethodMeta,
+  ResourceInstance,
+  ResourceTag,
+  ServiceOf,
+  Spec,
+} from "./Resource";
 export { ProcessStorage } from "./ProcessStorage";
 export { ControlService } from "./ControlService";
 export { ControlProtocol } from "./ControlProtocol";

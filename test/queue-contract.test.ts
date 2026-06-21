@@ -67,10 +67,11 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
     expect(yield* mail.size).toBe(3); // Mail untouched — routing is per-instance
   }).pipe(
     Effect.provide(
-      Resource.serverFamily(Queue, [
-        [Jobs, jobsImpl],
-        [Mail, mailImpl],
-      ]),
+      Resource.serverFamily(
+        Queue,
+        Resource.instance(Jobs, jobsImpl),
+        Resource.instance(Mail, mailImpl),
+      ),
     ),
     Effect.scoped,
   );
@@ -94,21 +95,21 @@ it("exposes the expected control verbs", () => {
   );
 });
 
-// Tool metadata (query/action/destructive/description) drives CLI/TUI/dashboard rendering.
-it("marks each verb query vs action, with destructive hints", () => {
+// Tool metadata (query/mutate/destructive/description) drives CLI/TUI/dashboard rendering.
+it("marks each verb query vs mutate, with destructive hints", () => {
   const meta = (k: keyof typeof QueueControlSpec) => methodMeta(QueueControlSpec[k]);
 
   // reads are queries
   expect(meta("size").kind).toBe("query");
   expect(meta("isEmpty").kind).toBe("query");
 
-  // mutations are actions
-  expect(meta("pause").kind).toBe("action");
-  expect(meta("start").kind).toBe("action");
+  // mutations are mutates
+  expect(meta("pause").kind).toBe("mutate");
+  expect(meta("start").kind).toBe("mutate");
 
-  // state-losing actions are flagged destructive
-  expect(meta("shutdown")).toMatchObject({ kind: "action", destructive: true });
-  expect(meta("clear")).toMatchObject({ kind: "action", destructive: true });
+  // state-losing mutations are flagged destructive
+  expect(meta("shutdown")).toMatchObject({ kind: "mutate", destructive: true });
+  expect(meta("clear")).toMatchObject({ kind: "mutate", destructive: true });
   expect(meta("pause").destructive).toBe(false);
 
   // descriptions are present for help text
