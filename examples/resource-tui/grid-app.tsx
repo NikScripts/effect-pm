@@ -95,7 +95,7 @@ const X_STRIDE = CELL_WIDTH + 1;
 const Y_STRIDE = 6;
 const GRID_TOP = 3; // header (1) + grid top padding (1), 1-based first cell row
 const GRID_LEFT = 2;
-const FOOTER_H = 4; // command bar (margin + line) + status line + slack
+const FOOTER_H = 5; // command box (rounded, 3 rows) + status line + slack
 
 const Widget = (props: {
   readonly name: string;
@@ -268,7 +268,7 @@ const Grid = (): React.ReactElement => {
     if (stdin === undefined || stdin !== process.stdin || stdin.isTTY !== true) {
       return;
     }
-    stdout?.write("[?1000h[?1006h");
+    stdout?.write("\x1b[?1000h\x1b[?1006h");
     const onData = (data: Buffer) => {
       const re = /\[<(\d+);(\d+);(\d+)([Mm])/g;
       let m: RegExpExecArray | null;
@@ -297,7 +297,7 @@ const Grid = (): React.ReactElement => {
     };
     stdin.on("data", onData);
     return () => {
-      stdout?.write("[?1000l[?1006l");
+      stdout?.write("\x1b[?1000l\x1b[?1006l");
       stdin.off("data", onData);
     };
   }, [stdin, stdout]);
@@ -333,8 +333,8 @@ const Grid = (): React.ReactElement => {
       </Box>
 
       <Box flexDirection="column">
-        {/* command bar — above the shortcuts, padded */}
-        <Box paddingX={2} marginTop={1}>
+        {/* command bar — above the shortcuts, framed like a widget */}
+        <Box borderStyle="round" borderColor="gray" paddingX={1}>
           {mode === "command" ? (
             <Text color="yellowBright">
               :{cmd}
