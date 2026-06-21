@@ -108,7 +108,8 @@ export {
   acceptJson,
   type HttpApiResourceLayerEffectConfig,
 } from "./HttpApiResource";
-export { Resource } from "./Resource";
+// `Resource` barrel archived → archive/Resource.barrel.ts; the name is reserved for the
+// new Resource toolkit (Resource.Tag / Host / tagFor / client / server). Re-add aliases later if wanted.
 export { ProcessStorage } from "./ProcessStorage";
 export { ControlService } from "./ControlService";
 export { ControlProtocol } from "./ControlProtocol";
