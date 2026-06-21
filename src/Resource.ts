@@ -452,20 +452,23 @@ export const buildRpcGroup = <const S extends Spec>(
 
 // ── the Tag: a Context service whose value is `ServiceOf<Spec>` ──
 
-/** Where the contract spec is stowed on a Tag (hidden from the value surface). */
-const specSym = Symbol.for("@nikscripts/effect-pm/Resource/spec");
-/** Where the built RPC group is stowed on a Tag (used by the client/server slices). */
-const groupSym = Symbol.for("@nikscripts/effect-pm/Resource/group");
-/** Where the per-resource local-capability key is stowed on a Tag. */
-const localCapSym = Symbol.for("@nikscripts/effect-pm/Resource/localCap");
-
-/** The (unit) value of a {@link LocalCapability} key — presence is the whole point. */
-interface LocalCapValue {
-  readonly granted: true;
-}
-
-/** The per-resource local-capability key — its Identifier is {@link LocalCapability}. */
-type LocalCapKey<Self> = Context.Key<LocalCapability<Self>, LocalCapValue>;
+/**
+ * Where the contract spec is stowed on a Tag (hidden from the value surface). Exported so
+ * the public {@link ResourceTag} type is nameable across modules.
+ *
+ * @internal
+ */
+export const specSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/spec",
+);
+/** Where the built RPC group is stowed on a Tag. @internal */
+export const groupSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/group",
+);
+/** Where the per-resource local-capability key is stowed on a Tag. @internal */
+export const localCapSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/localCap",
+);
 
 /**
  * The type of a resource tag carrying spec `S` — what {@link Resource.Tag} / a
@@ -485,7 +488,10 @@ export interface ResourceTag<Self, S extends Spec>
   readonly description: string | undefined;
   readonly [specSym]: S;
   readonly [groupSym]: RpcGroupOf<S>;
-  readonly [localCapSym]: LocalCapKey<Self>;
+  readonly [localCapSym]: Context.Key<
+    LocalCapability<Self>,
+    { readonly granted: true }
+  >;
 }
 
 /** Claimed instance ids — duplicate declarations fail fast (Effect won't catch same-key Tags). */
@@ -523,10 +529,10 @@ const buildInstanceTag = <Self, S extends Spec>(
   claimedIds.add(id);
   const base = Context.Service<Self, ServiceOf<S, Self>>()(id);
   // per-resource local capability — granted only by localLayer, never the client.
-  const localCap: LocalCapKey<Self> = Context.Service<
-    LocalCapability<Self>,
-    LocalCapValue
-  >()(`${id}/__local`);
+  const localCap: Context.Key<LocalCapability<Self>, { readonly granted: true }> =
+    Context.Service<LocalCapability<Self>, { readonly granted: true }>()(
+      `${id}/__local`,
+    );
   return Object.assign(base, {
     id,
     groupId,

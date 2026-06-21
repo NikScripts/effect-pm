@@ -10,9 +10,14 @@
  * `pause`, `resume`, `shutdown`, `clear` — all of which have fixed schemas (no item type).
  *
  * The **data-plane** verbs (`add` / `prioritize` / `defer` / `release` / `releaseEncoded`
- * / `deadLetter` / `drop`) involve the per-queue item type `T` and its `itemSchema`, and
- * land in a later slice: the wire `add` is a generic **encoded** rpc, with the per-queue
- * `itemSchema` encoding client-side / decoding server-side via `QueueItemCodecDescriptor`.
+ * / `deadLetter` / `drop`) involve the per-queue item type `T` and its `itemSchema`. Each
+ * queue instance is its **own** resource (its own RPC group, prefixed by its id) — built by
+ * {@link defineQueueTag} from the shared control spec plus per-instance data procedures
+ * whose payload/result schema **is** the instance's `itemSchema`, so Effect RPC validates
+ * items natively on both sides (no codec descriptor, no manual encode/decode). This is the
+ * "model B / fully per-instance" approach; the shared-spec + `id`-header path
+ * ({@link Resource.serveInstances}) remains for resources whose contract is identical
+ * across instances (e.g. RunResource).
  *
  * @module QueueContract
  */
@@ -71,4 +76,27 @@ export const queueControlSpec = {
   }),
 };
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to
-// `unknown`. The spec is validated (without widening) at the `Resource.tagFor` call site.
+// `unknown`. The spec is validated (without widening) at the `Resource.Tag` call site.
+
+/**
+ * Build a queue **instance** spec (model B): the shared {@link queueControlSpec} plus
+ * per-instance data-plane procedures typed by `itemSchema` (slice 1: `add`). Pass the
+ * result to {@link Resource.Tag} — each instance is its own resource (its own RPC group):
+ *
+ * ```ts
+ * class Jobs extends Resource.Tag<Jobs>("@app/Jobs")(queueSpec(JobSchema)) {}
+ * const q = yield* Jobs;
+ * yield* q.add({ item: aJob }); // validated natively against JobSchema on both sides
+ * ```
+ *
+ * `itemSchema` becomes the rpc payload schema, so RPC validates items on the wire — the
+ * client rejects bad items before the round trip and the server re-validates on decode.
+ *
+ * @public
+ */
+export const queueSpec = <Sch extends Schema.Top>(itemSchema: Sch) => ({
+  ...queueControlSpec,
+  add: Resource.mutate(Schema.Void, {
+    payload: { item: itemSchema },
+  }),
+});

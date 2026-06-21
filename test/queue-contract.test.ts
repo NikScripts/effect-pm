@@ -1,7 +1,7 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
-import { queueControlSpec } from "../src/QueueContract";
+import { queueControlSpec, queueSpec } from "../src/QueueContract";
 import {
   Resource,
   forwardClient,
@@ -114,4 +114,31 @@ it("marks each verb query vs mutate, with destructive hints", () => {
 
   // descriptions are present for help text
   expect(meta("size").description).toContain("pending items");
+});
+
+// ── data plane (model B): a per-instance queue with its own group + itemSchema-typed add ──
+class Numbers extends Resource.Tag<Numbers>("test/Numbers")(
+  queueSpec(Schema.Number),
+) {}
+
+it("queue add round-trips with a per-instance item schema (native validation)", () => {
+  const enqueued: number[] = [];
+  const impl = {
+    ...makeImpl(),
+    add: ({ item }: { item: number }) =>
+      Effect.sync(() => {
+        enqueued.push(item);
+      }),
+  };
+  const program = Effect.gen(function* () {
+    const rpc = yield* RpcTest.makeClient(groupOf(Numbers));
+    const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.id);
+    // `add` is typed by the instance's itemSchema; RPC validates the item on the wire.
+    yield* svc.add({ item: 5 });
+    yield* svc.add({ item: 7 });
+    expect(enqueued).toEqual([5, 7]);
+    // the control surface still works on the same per-instance group
+    expect(yield* svc.size).toBe(3);
+  }).pipe(Effect.provide(Resource.server(Numbers, impl)), Effect.scoped);
+  return Effect.runPromise(program);
 });
