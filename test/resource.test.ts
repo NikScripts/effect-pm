@@ -80,6 +80,24 @@ it("server family routes calls to the right instance by id header", () => {
   return Effect.runPromise(program);
 });
 
+// ── resource-level description (tools: section help / panel title) ──
+class Described extends Resource.Tag<Described>("described", {
+  description: "A described resource.",
+})({
+  ping: Resource.query(Schema.String),
+}) {}
+const DescribedFamily = Resource.tagFor(
+  "describedFamily",
+  { tick: Resource.mutate(Schema.Void) },
+  { description: "A described family." },
+);
+class FamA extends DescribedFamily<FamA>("describedFamily/A") {}
+
+it("carries a resource-level description on tags and factory instances", () => {
+  expect(Described.description).toBe("A described resource.");
+  expect(FamA.description).toBe("A described family.");
+});
+
 // ── shared server: two DIFFERENT resource types with a same-named method don't collide ──
 class Widgets extends Resource.Tag<Widgets>("widgets")({
   size: Resource.query(Schema.Number), // same method name as Crates.size, different type

@@ -367,6 +367,8 @@ export interface ResourceTag<Self, S extends Spec>
   readonly id: string;
   /** Wire prefix — namespaces this resource's procedures on a shared `RpcServer`. */
   readonly groupId: string;
+  /** Resource-level help text (CLI/TUI section help, dashboard panel title) — if declared. */
+  readonly description: string | undefined;
   readonly [SpecSym]: S;
   readonly [GroupSym]: RpcGroupOf<S>;
 }
@@ -396,6 +398,7 @@ const buildInstanceTag = <Self, S extends Spec>(
   id: string,
   spec: S,
   group: RpcGroupOf<S>,
+  description: string | undefined,
 ) => {
   if (claimedIds.has(id)) {
     throw new Error(
@@ -404,7 +407,13 @@ const buildInstanceTag = <Self, S extends Spec>(
   }
   claimedIds.add(id);
   const base = Context.Service<Self, ServiceOf<S>>()(id);
-  return Object.assign(base, { id, groupId, [SpecSym]: spec, [GroupSym]: group });
+  return Object.assign(base, {
+    id,
+    groupId,
+    description,
+    [SpecSym]: spec,
+    [GroupSym]: group,
+  });
 };
 
 /**
@@ -428,11 +437,17 @@ const buildInstanceTag = <Self, S extends Spec>(
  * @public
  */
 const makeTag =
-  <Self>(id: string) =>
+  <Self>(id: string, options?: { readonly description?: string }) =>
   <const S extends Spec>(spec: S) => {
     // single resource: id doubles as the group id (its wire prefix)
     claimGroupId(id);
-    return buildInstanceTag<Self, S>(id, id, spec, buildRpcGroup(id, spec));
+    return buildInstanceTag<Self, S>(
+      id,
+      id,
+      spec,
+      buildRpcGroup(id, spec),
+      options?.description,
+    );
   };
 
 /**
@@ -451,14 +466,23 @@ const makeTag =
  *
  * @public
  */
-const tagFor = <const S extends Spec>(groupId: string, spec: S) => {
+const tagFor = <const S extends Spec>(
+  groupId: string,
+  spec: S,
+  options?: { readonly description?: string },
+) => {
   claimGroupId(groupId);
   const group = buildRpcGroup(groupId, spec);
   const factory = <Self>(id: string) =>
-    buildInstanceTag<Self, S>(groupId, id, spec, group);
-  // Stow the shared groupId/spec/group on the factory too, so the family server
-  // ({@link serverFamily}) can read the contract + prefix without an instance in hand.
-  return Object.assign(factory, { groupId, [SpecSym]: spec, [GroupSym]: group });
+    buildInstanceTag<Self, S>(groupId, id, spec, group, options?.description);
+  // Stow the shared groupId/description/spec/group on the factory too, so the family
+  // server ({@link serverFamily}) can read the contract + prefix without an instance.
+  return Object.assign(factory, {
+    groupId,
+    description: options?.description,
+    [SpecSym]: spec,
+    [GroupSym]: group,
+  });
 };
 
 /**
