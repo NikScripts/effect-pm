@@ -63,12 +63,33 @@ const TestEnv = Layer.mergeAll(ServerLive, RpcClient.layerProtocolHttp({ url: "/
 );
 ```
 
-**Open detail to resolve first:** the client request fails with an empty `RpcClientError:
-HttpError`. The server listens on a random port; the relative client `url: "/rpc"` likely
-isn't resolving against `layerTest`'s HttpClient (needs the server's absolute base URL, or a
-`layerTest`/`HttpClient` base-URL config, or the RPC route path doesn't match). Resolve this
-small transport-config detail, then formalize `Resource.Host` / `Resource.host` /
-`Resource.client(tag)` on top.
+**Transport findings (worked through; URL solved, one detail left):**
+
+1. **URL mangling — SOLVED.** `RpcClient.makeProtocolHttp` does `client.post("", …)` and
+   `layerProtocolHttp` does `mapRequest(client, HttpClientRequest.prependUrl(options.url))`,
+   which `joinSegments(options.url, requestUrl)`. Two traps:
+   - Using `Layer.mergeAll(layerProtocolHttp, …, FetchHttpClient)` does **not** wire Fetch
+     *into* the protocol — `layerProtocolHttp` then resolves the **ambient based** HttpClient
+     (e.g. `layerTest`'s, base `http://host:port/`), whose base leaks into the path →
+     `joinSegments("/", "http://host:port/")` = `/http://host:port/`. **Fix:** feed the
+     client in with `Layer.provide`, not `mergeAll`:
+     ```ts
+     RpcClient.layerProtocolHttp({ url }).pipe(
+       Layer.provide(RpcSerialization.layerJson),
+       Layer.provide(FetchHttpClient.layer),   // non-based
+     )
+     ```
+   - `url` must be **absolute** (read it from the server: `yield* HttpServer.HttpServer` →
+     `address.port` → `http://127.0.0.1:${port}`). `joinSegments(absolute, "")` appends a
+     trailing slash (`…/`), so mind the served path.
+   With those, the request is clean (`POST /`, no mangling).
+
+2. **Open: RPC route mounting (404).** With a clean `POST /`, the server returns
+   `RouteNotFound` — `RpcServer.layerHttp({ group, path })` + `HttpRouter.serve(appLayer)`
+   isn't matching at the served path. Next pass: confirm how `layerHttp` registers its route
+   on the served `HttpRouter` (path value, default-router vs the one `HttpRouter.serve` runs,
+   trailing-slash), get a green round-trip, then formalize `Resource.Host` / `Resource.host`
+   / `Resource.client(tag)`.
 
 ## Then
 
