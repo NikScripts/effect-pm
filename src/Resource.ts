@@ -11,7 +11,7 @@
  *
  * @module Resource
  */
-import { Effect, Schema } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 import { Rpc, RpcGroup } from "effect/unstable/rpc";
 
 /**
@@ -106,3 +106,67 @@ export const buildRpcGroup = (spec: Spec) => {
   });
   return RpcGroup.make(...rpcs);
 };
+
+// ── the Tag: a Context service whose value is `ServiceOf<Spec>` ──
+
+/** Where the contract spec is stowed on a Tag (hidden from the value surface). */
+const SpecSym = Symbol.for("@nikscripts/effect-pm/Resource/spec");
+/** Where the built RPC group is stowed on a Tag (used by the client/server slices). */
+const GroupSym = Symbol.for("@nikscripts/effect-pm/Resource/group");
+
+/** Claimed ids — duplicate declarations fail fast (Effect won't catch same-key Tags). */
+const claimedIds = new Set<string>();
+
+/**
+ * Create a resource service tag from a {@link Spec}. Extend the result, like
+ * `Context.Tag`, but the value type is **inferred from the spec**:
+ *
+ * ```ts
+ * class Counter extends Resource.Tag<Counter>("Counter")({
+ *   increment: { payload: { by: Schema.Number } },
+ *   current: Schema.Number,
+ * }) {}
+ *
+ * const c = yield* Counter; // { increment: (p) => Effect<void>; current: Effect<number> }
+ * ```
+ *
+ * Ids must be unique: a duplicate **throws at declaration** — Effect's `Context` is
+ * keyed by the id string and silently last-write-wins on collisions, so we guard it.
+ *
+ * @public
+ */
+const makeTag =
+  <Self>(id: string) =>
+  <const S extends Spec>(spec: S) => {
+    if (claimedIds.has(id)) {
+      throw new Error(
+        `Resource id "${id}" is already declared — resource ids must be unique.`,
+      );
+    }
+    claimedIds.add(id);
+    const base = Context.Service<Self, ServiceOf<S>>()(id);
+    return Object.assign(base, {
+      id,
+      [SpecSym]: spec,
+      [GroupSym]: buildRpcGroup(spec),
+    });
+  };
+
+/**
+ * The **local** layer for a resource: provide a real implementation of its service.
+ * (Remote `client` / `server` layers arrive in a later slice.)
+ *
+ * @public
+ */
+const localLayer = <I, S>(tag: Context.Key<I, S>, impl: S): Layer.Layer<I> =>
+  Layer.succeed(tag, impl);
+
+/**
+ * Resource toolkit — schema-defined service tags with local (and, later, remote) layers.
+ *
+ * @public
+ */
+export const Resource = {
+  Tag: makeTag,
+  layer: localLayer,
+} as const;
