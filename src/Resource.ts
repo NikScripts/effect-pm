@@ -20,6 +20,8 @@ import { Rpc, RpcGroup } from "effect/unstable/rpc";
  *   `reset: Schema.Void`); or
  * - a **descriptor** — `{ payload?, success?, error? }`, where `error` becomes the
  *   Effect error channel.
+ *
+ * @public
  */
 export type MethodSpec =
   | Schema.Top
@@ -29,7 +31,11 @@ export type MethodSpec =
       readonly error?: Schema.Top;
     };
 
-/** A resource contract: method name → {@link MethodSpec}. The single source of truth. */
+/**
+ * A resource contract: method name → {@link MethodSpec}. The single source of truth.
+ *
+ * @public
+ */
 export type Spec = Record<string, MethodSpec>;
 
 // ── type-level inference: one Spec → the service interface ──
@@ -59,12 +65,18 @@ type HasPayload<M extends MethodSpec> = M extends {
 /**
  * The inferred shape of one method: a **property** `Effect<Success, Error>` when there
  * is no payload, or a **function** `(payload) => Effect<Success, Error>` when there is.
+ *
+ * @internal
  */
 export type Method<M extends MethodSpec> = HasPayload<M> extends true
   ? (payload: PayloadOf<M>) => Effect.Effect<SuccessOf<M>, ErrorOf<M>>
   : Effect.Effect<SuccessOf<M>, ErrorOf<M>>;
 
-/** The full service interface inferred from a {@link Spec}. */
+/**
+ * The full service interface inferred from a {@link Spec}.
+ *
+ * @public
+ */
 export type ServiceOf<S extends Spec> = {
   readonly [K in keyof S]: Method<S[K]>;
 };
@@ -74,6 +86,8 @@ export type ServiceOf<S extends Spec> = {
 /**
  * Build the shared RPC contract group from a {@link Spec}. A bare `Schema` becomes a
  * payload-free rpc returning that schema; a descriptor maps straight to its parts.
+ *
+ * @internal
  */
 export const buildRpcGroup = (spec: Spec) => {
   const rpcs = Object.entries(spec).map(([tag, m]) => {
