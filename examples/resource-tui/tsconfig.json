@@ -2,8 +2,19 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
-    "types": ["node", "react"]
+    "types": ["node", "react"],
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnosticSeverity": {
+          "globalTimers": "off",
+          "globalDate": "off",
+          "newPromise": "off",
+          "asyncFunction": "off"
+        }
+      }
+    ]
   },
   "include": ["./**/*.ts", "./**/*.tsx"],
-  "exclude": ["../../node_modules", "../../dist", "./counter-app.test.tsx"]
+  "exclude": ["../../node_modules", "../../dist", "./**/*.test.tsx"]
 }

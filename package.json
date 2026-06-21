@@ -221,6 +221,7 @@
     "example:resource-cli": "tsx examples/resource-cli/counter-cli.ts",
     "example:resource-cli-manager": "tsx examples/resource-cli/manager-cli.ts",
     "example:resource-tui": "esbuild examples/resource-tui/counter-tui.tsx --bundle --platform=node --format=esm --packages=external --jsx=automatic --outfile=examples/resource-tui/.bundle.mjs && node examples/resource-tui/.bundle.mjs",
+    "example:resource-tui-grid": "esbuild examples/resource-tui/grid-tui.tsx --bundle --platform=node --format=esm --packages=external --jsx=automatic --outfile=examples/resource-tui/.bundle.mjs && node examples/resource-tui/.bundle.mjs",
     "example:dashboard-demo:pm": "tsx examples/dashboard-demo/demo.runtime.ts",
     "example:dashboard-demo:ui": "vite --config examples/dashboard-demo/web/vite.config.ts",
     "example:dashboard-demo:gateway": "tsx examples/dashboard-demo/control-gateway.ts",
