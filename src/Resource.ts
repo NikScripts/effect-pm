@@ -27,7 +27,7 @@
  * - {@link Resource.layer} — run it locally with a real implementation;
  * - {@link Resource.client} — drive it remotely over RPC, as if local;
  * - {@link Resource.server} — expose one local impl over RPC;
- * - {@link Resource.serverFamily} — serve many factory instances behind one group,
+ * - {@link Resource.serveInstances} — serve many factory instances behind one group,
  *   routed by the per-call `id` header.
  *
  * @module Resource
@@ -597,7 +597,7 @@ const tagFor = <const S extends Spec>(
   const factory = <Self>(id: string) =>
     buildInstanceTag<Self, S>(groupId, id, spec, group, options?.description);
   // Stow the shared groupId/description/spec/group on the factory too, so the family
-  // server ({@link serverFamily}) can read the contract + prefix without an instance.
+  // server ({@link serveInstances}) can read the contract + prefix without an instance.
   return Object.assign(factory, {
     groupId,
     description: options?.description,
@@ -673,7 +673,7 @@ const ID_HEADER = "id";
 
 /**
  * One instance of a factory paired with its implementation — the element of
- * {@link Resource.serverFamily}. Built by {@link Resource.instance}.
+ * {@link Resource.serveInstances}. Built by {@link Resource.instance}.
  *
  * @public
  */
@@ -683,7 +683,7 @@ export interface ResourceInstance<S extends Spec> {
 }
 
 /**
- * Pair a factory instance tag with its implementation, for {@link Resource.serverFamily}.
+ * Pair a factory instance tag with its implementation, for {@link Resource.serveInstances}.
  *
  * @public
  */
@@ -708,7 +708,7 @@ const instance = <Self, S extends Spec>(
  * class Jobs extends Queue<Jobs>("@app/Jobs") {}
  * class Mail extends Queue<Mail>("@app/Mail") {}
  *
- * const serveAll = Resource.serverFamily(
+ * const serveAll = Resource.serveInstances(
  *   Queue,
  *   Resource.instance(Jobs, jobsImpl),
  *   Resource.instance(Mail, mailImpl),
@@ -717,7 +717,7 @@ const instance = <Self, S extends Spec>(
  *
  * @public
  */
-const serverFamily = <S extends Spec>(
+const serveInstances = <S extends Spec>(
   factory: {
     readonly groupId: string;
     readonly [specSym]: S;
@@ -895,6 +895,6 @@ export const Resource = {
   instance,
   layer: localLayer,
   server: serverLayer,
-  serverFamily,
+  serveInstances,
   client: clientLayer,
 } as const;

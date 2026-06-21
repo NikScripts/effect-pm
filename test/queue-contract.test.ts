@@ -67,7 +67,7 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
     expect(yield* mail.size).toBe(3); // Mail untouched — routing is per-instance
   }).pipe(
     Effect.provide(
-      Resource.serverFamily(
+      Resource.serveInstances(
         Queue,
         Resource.instance(Jobs, jobsImpl),
         Resource.instance(Mail, mailImpl),

@@ -69,7 +69,7 @@ it("server family routes calls to the right instance by id header", () => {
     expect(yield* b.bump({ by: 1 })).toBe(11);
   }).pipe(
     Effect.provide(
-      Resource.serverFamily(
+      Resource.serveInstances(
         Counter,
         Resource.instance(Alpha, alphaImpl),
         Resource.instance(Beta, betaImpl),

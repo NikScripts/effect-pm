@@ -59,7 +59,7 @@ Resource.client(Counter)        // remote: forwards over RPC, needs an ambient P
 
 So a dashboard widget / CLI command is written once against the tag and switched between
 in-process and a running server purely by which layer is provided. (Serving side:
-`Resource.server(tag, impl)` for one, `Resource.serverFamily(factory, ...Resource.instance(tag, impl))`
+`Resource.server(tag, impl)` for one, `Resource.serveInstances(factory, ...Resource.instance(tag, impl))`
 for a family — one `RpcServer` hosts many resource types; wire tags are `groupId/method` so
 they never collide.)
 

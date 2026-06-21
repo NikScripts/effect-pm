@@ -57,7 +57,7 @@ added later as sugar over A if you want the guarantee.)
   otherwise `Effect` as today.
 - `buildRpcGroup`: pass `stream: true` for streaming methods.
 - `forwardClient`: a streaming method returns the client's stream call (already a `Stream`).
-- `serverLayer`/`serverFamily`: handler returns the impl's `Stream` (no change beyond
+- `serverLayer`/`serveInstances`: handler returns the impl's `Stream` (no change beyond
   passing it through).
 - Server impl pattern: hold a `SubscriptionRef<Snapshot>`; `changes = ref.changes`; update
   the ref wherever state changes.
