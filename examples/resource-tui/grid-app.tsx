@@ -1,18 +1,18 @@
 /**
  * @module examples/resource-tui/grid-app
  *
- * A full-screen terminal dashboard: a grid of resource "widgets", a command bar,
- * and a status bar. Each widget is an instance of one `Resource.tagFor` family,
- * rendered via the same `makeResourceAtoms` + `atom-react` the web widget uses.
+ * A full-screen terminal dashboard: a scrollable grid of resource "widgets", a
+ * command bar, and a status/shortcuts bar. Each widget is an instance of one
+ * `Resource.tagFor` family, rendered via the same `makeResourceAtoms` +
+ * `atom-react` the web widget uses.
  *
- * - Keys: arrows / hjkl move selection; i / d / r act on it; `:` opens the command
- *   bar; q quits.
+ * - Keys: arrows / hjkl move selection (auto-scrolls to keep it visible); i / d / r
+ *   act on it; `:` opens the command bar; q quits.
  * - Command bar (`:`): `inc [name] [n]`, `dec [name] [n]`, `reset [name]`,
  *   `sel <name>`, `q`. A name defaults to the selected widget.
- * - Mouse (EXPERIMENTAL): scroll moves the selection; click selects a widget by
- *   hit-testing the grid geometry. Ink has no native mouse support, so this enables
- *   terminal mouse tracking + parses stdin directly; tune GRID_TOP/GRID_LEFT/strides
- *   in your terminal if clicks land off.
+ * - Mouse (EXPERIMENTAL): wheel **pages** the grid; click selects a widget by
+ *   hit-testing the (scrolled) grid geometry. Tune GRID_TOP/GRID_LEFT/strides if
+ *   clicks land off.
  */
 
 import { Box, Text, useApp, useInput, useStdin, useStdout } from "ink";
@@ -34,13 +34,6 @@ const Counter = Resource.tagFor("grid-counter", {
   reset: Resource.mutate(Schema.Void).annotate({ destructive: true }),
 });
 
-class Alpha extends Counter<Alpha>("alpha") {}
-class Bravo extends Counter<Bravo>("bravo") {}
-class Charlie extends Counter<Charlie>("charlie") {}
-class Delta extends Counter<Delta>("delta") {}
-class Echo extends Counter<Echo>("echo") {}
-class Foxtrot extends Counter<Foxtrot>("foxtrot") {}
-
 const impl = (start: number) => {
   let v = start;
   return {
@@ -57,31 +50,52 @@ const impl = (start: number) => {
   };
 };
 
+const PALETTE = [
+  "cyan",
+  "magenta",
+  "yellow",
+  "green",
+  "blue",
+  "red",
+  "cyanBright",
+  "magentaBright",
+];
+
+// Enough instances to overflow the screen so paging is visible. Each is built
+// from the family once (Counter(id)) and reused for its layer + atoms.
+const SPECS = Array.from({ length: 24 }, (_, i) => {
+  const name = `w${i + 1}`;
+  return {
+    name,
+    color: PALETTE[i % PALETTE.length] ?? "white",
+    tag: Counter(name),
+    start: i * 3,
+  };
+});
+
 const runtime = Atom.runtime(
-  Layer.mergeAll(
-    Resource.layer(Alpha, impl(0)),
-    Resource.layer(Bravo, impl(3)),
-    Resource.layer(Charlie, impl(7)),
-    Resource.layer(Delta, impl(1)),
-    Resource.layer(Echo, impl(42)),
-    Resource.layer(Foxtrot, impl(-5)),
+  SPECS.map((s) => Resource.layer(s.tag, impl(s.start))).reduce((a, b) =>
+    Layer.merge(a, b),
   ),
 );
 
-const WIDGETS = [
-  { name: "alpha", color: "cyan", atoms: makeResourceAtoms(runtime, Alpha) },
-  { name: "bravo", color: "magenta", atoms: makeResourceAtoms(runtime, Bravo) },
-  { name: "charlie", color: "yellow", atoms: makeResourceAtoms(runtime, Charlie) },
-  { name: "delta", color: "green", atoms: makeResourceAtoms(runtime, Delta) },
-  { name: "echo", color: "blue", atoms: makeResourceAtoms(runtime, Echo) },
-  { name: "foxtrot", color: "red", atoms: makeResourceAtoms(runtime, Foxtrot) },
-] as const;
+const WIDGETS = SPECS.map((s) => ({
+  name: s.name,
+  color: s.color,
+  atoms: makeResourceAtoms(runtime, s.tag),
+}));
+
+const FIRST = WIDGETS[0];
+if (FIRST === undefined) {
+  throw new Error("grid: no widgets");
+}
 
 const CELL_WIDTH = 22;
-const X_STRIDE = CELL_WIDTH + 1; // + marginRight
-const Y_STRIDE = 6; // cell height 5 + marginBottom 1
+const X_STRIDE = CELL_WIDTH + 1;
+const Y_STRIDE = 6;
 const GRID_TOP = 3; // header (1) + grid top padding (1), 1-based first cell row
-const GRID_LEFT = 2; // grid left padding, 1-based first cell col
+const GRID_LEFT = 2;
+const FOOTER_H = 4; // command bar (margin + line) + status line + slack
 
 const Widget = (props: {
   readonly name: string;
@@ -119,9 +133,15 @@ const Grid = (): React.ReactElement => {
   const { stdin } = useStdin();
   const cols = stdout?.columns ?? 80;
   const rows = stdout?.rows ?? 24;
+
   const perRow = Math.max(1, Math.floor((cols - GRID_LEFT) / X_STRIDE));
+  const totalRows = Math.ceil(WIDGETS.length / perRow);
+  const gridH = Math.max(Y_STRIDE, rows - 1 - FOOTER_H);
+  const visibleRows = Math.max(1, Math.floor(gridH / Y_STRIDE));
+  const maxScroll = Math.max(0, totalRows - visibleRows);
 
   const [sel, setSel] = React.useState(0);
+  const [scrollRow, setScrollRow] = React.useState(0);
   const [mode, setMode] = React.useState<"normal" | "command">("normal");
   const [cmd, setCmd] = React.useState("");
   const [msg, setMsg] = React.useState("type : for a command");
@@ -136,12 +156,23 @@ const Grid = (): React.ReactElement => {
     return () => clearInterval(id);
   }, []);
 
+  const scroll = Math.min(scrollRow, maxScroll);
+
+  // Keep the selection in view when navigating by keyboard.
+  React.useEffect(() => {
+    const selRow = Math.floor(sel / perRow);
+    if (selRow < scroll) {
+      setScrollRow(selRow);
+    } else if (selRow >= scroll + visibleRows) {
+      setScrollRow(selRow - visibleRows + 1);
+    }
+  }, [sel, perRow, visibleRows, scroll]);
+
   const incs = WIDGETS.map((w) => useAtomSet(w.atoms.inc));
   const decs = WIDGETS.map((w) => useAtomSet(w.atoms.dec));
   const resets = WIDGETS.map((w) => useAtomSet(w.atoms.reset));
 
-  const indexOf = (name: string) =>
-    WIDGETS.findIndex((w) => w.name === name);
+  const indexOf = (name: string) => WIDGETS.findIndex((w) => w.name === name);
 
   const run = (verb: string, name: string, count: number) => {
     const i = indexOf(name);
@@ -176,7 +207,7 @@ const Grid = (): React.ReactElement => {
       exit();
       return;
     }
-    let name: string = WIDGETS[sel]?.name ?? "alpha";
+    let name: string = WIDGETS[sel]?.name ?? "w1";
     let count = 1;
     for (const t of parts.slice(1)) {
       if (/^-?\d+$/.test(t)) {
@@ -226,16 +257,20 @@ const Grid = (): React.ReactElement => {
     }
   });
 
-  // ── EXPERIMENTAL mouse: enable SGR tracking, parse stdin directly ──
+  // Mouse handler reads live layout via a ref so enabling tracking stays a
+  // one-time effect (no re-enabling on every scroll).
+  const view = React.useRef({ scroll, perRow, visibleRows, maxScroll });
+  view.current = { scroll, perRow, visibleRows, maxScroll };
+
   React.useEffect(() => {
-    // Only with the real terminal stdin — skips the test's fake stream (which would
+    // Real terminal stdin only — skips the test's fake stream (which would
     // otherwise capture the mouse-enable escape codes as output).
     if (stdin === undefined || stdin !== process.stdin || stdin.isTTY !== true) {
       return;
     }
-    stdout?.write("[?1000h[?1006h"); // enable mouse + SGR extended
+    stdout?.write("[?1000h[?1006h");
     const onData = (data: Buffer) => {
-      const re = /\[<(\d+);(\d+);(\d+)([Mm])/g;
+      const re = /\[<(\d+);(\d+);(\d+)([Mm])/g;
       let m: RegExpExecArray | null;
       const text = data.toString("utf8");
       while ((m = re.exec(text)) !== null) {
@@ -243,15 +278,16 @@ const Grid = (): React.ReactElement => {
         const x = Number(m[2]);
         const y = Number(m[3]);
         const press = m[4] === "M";
+        const v = view.current;
         if (button === 64) {
-          setSel((s) => Math.max(0, s - 1)); // scroll up
+          setScrollRow((s) => Math.max(0, s - 1));
         } else if (button === 65) {
-          setSel((s) => Math.min(WIDGETS.length - 1, s + 1)); // scroll down
+          setScrollRow((s) => Math.min(v.maxScroll, s + 1));
         } else if (button === 0 && press) {
           const row = Math.floor((y - GRID_TOP) / Y_STRIDE);
           const col = Math.floor((x - GRID_LEFT) / X_STRIDE);
-          if (row >= 0 && col >= 0 && col < perRow) {
-            const idx = row * perRow + col;
+          if (row >= 0 && row < v.visibleRows && col >= 0 && col < v.perRow) {
+            const idx = (v.scroll + row) * v.perRow + col;
             if (idx < WIDGETS.length) {
               setSel(idx);
             }
@@ -261,14 +297,18 @@ const Grid = (): React.ReactElement => {
     };
     stdin.on("data", onData);
     return () => {
-      stdout?.write("[?1000l[?1006l");
+      stdout?.write("[?1000l[?1006l");
       stdin.off("data", onData);
     };
-  }, [stdin, stdout, perRow]);
+  }, [stdin, stdout]);
 
-  const selected = WIDGETS[sel] ?? WIDGETS[0];
+  const selected = WIDGETS[sel] ?? FIRST;
   const selResult = useAtomValue(selected.atoms.value);
   const selValue = AsyncResult.isSuccess(selResult) ? selResult.value : 0;
+
+  const start = scroll * perRow;
+  const visible = WIDGETS.slice(start, start + visibleRows * perRow);
+  const more = maxScroll > 0;
 
   return (
     <Box flexDirection="column" width={cols} height={rows}>
@@ -276,27 +316,25 @@ const Grid = (): React.ReactElement => {
         <Text bold color="black" backgroundColor="cyan">
           {" ⬢ resource grid "}
         </Text>
-        <Text dimColor> {WIDGETS.length} widgets</Text>
+        <Text dimColor>
+          {" "}
+          {WIDGETS.length} widgets
+          {more
+            ? `  ·  rows ${scroll + 1}-${Math.min(scroll + visibleRows, totalRows)}/${totalRows} ${scroll < maxScroll ? "▼" : ""}${scroll > 0 ? "▲" : ""}`
+            : ""}
+        </Text>
       </Box>
 
       <Box flexGrow={1} flexDirection="row" flexWrap="wrap" padding={1}>
-        {WIDGETS.map((w, i) => (
-          <Widget key={w.name} {...w} selected={i === sel} />
-        ))}
+        {visible.map((w, vi) => {
+          const i = start + vi;
+          return <Widget key={w.name} {...w} selected={i === sel} />;
+        })}
       </Box>
 
       <Box flexDirection="column">
-        <Box paddingX={1} backgroundColor="gray">
-          <Text color="greenBright" bold>
-            ▸ {selected.name}
-          </Text>
-          <Text color="white"> = {selValue}</Text>
-          <Text dimColor>
-            {"    [hjkl/arrows] move  [i/d/r] act  [:] command  [q] quit   "}
-            {clock}
-          </Text>
-        </Box>
-        <Box paddingX={1}>
+        {/* command bar — above the shortcuts, padded */}
+        <Box paddingX={2} marginTop={1}>
           {mode === "command" ? (
             <Text color="yellowBright">
               :{cmd}
@@ -305,6 +343,18 @@ const Grid = (): React.ReactElement => {
           ) : (
             <Text dimColor>{msg}</Text>
           )}
+        </Box>
+        <Box paddingX={1} backgroundColor="gray">
+          <Text color="greenBright" bold>
+            ▸ {selected.name}
+          </Text>
+          <Text color="white"> = {selValue}</Text>
+          <Text dimColor>
+            {
+              "    [hjkl/arrows] move  [i/d/r] act  [:] command  [scroll] page  [q] quit   "
+            }
+            {clock}
+          </Text>
         </Box>
       </Box>
     </Box>
