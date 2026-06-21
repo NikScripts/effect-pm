@@ -124,6 +124,7 @@
     "dist",
     "repos",
     "examples/scenarios/nwslsoccer",
-    "examples/dashboard-demo/web/**"
+    "examples/dashboard-demo/web/**",
+    "examples/queue-widget/**"
   ]
 }
