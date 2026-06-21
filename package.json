@@ -26,168 +26,135 @@
   },
   "homepage": "https://github.com/nikscripts/effect-pm#readme",
   "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "default": "./dist/index.js"
     },
     "./Process": {
       "types": "./dist/Process.d.ts",
-      "import": "./dist/Process.mjs",
-      "require": "./dist/Process.js"
+      "default": "./dist/Process.js"
     },
     "./QueueResource": {
       "types": "./dist/QueueResource.d.ts",
-      "import": "./dist/QueueResource.mjs",
-      "require": "./dist/QueueResource.js"
+      "default": "./dist/QueueResource.js"
     },
     "./ProcessGroup": {
       "types": "./dist/ProcessGroup.d.ts",
-      "import": "./dist/ProcessGroup.mjs",
-      "require": "./dist/ProcessGroup.js"
+      "default": "./dist/ProcessGroup.js"
     },
     "./ProcessStore": {
       "types": "./dist/ProcessStore.d.ts",
-      "import": "./dist/ProcessStore.mjs",
-      "require": "./dist/ProcessStore.js"
+      "default": "./dist/ProcessStore.js"
     },
     "./ProcessStorage": {
       "types": "./dist/ProcessStorage.d.ts",
-      "import": "./dist/ProcessStorage.mjs",
-      "require": "./dist/ProcessStorage.js"
+      "default": "./dist/ProcessStorage.js"
     },
     "./store/RunResource": {
       "types": "./dist/store/RunResource.d.ts",
-      "import": "./dist/store/RunResource.mjs",
-      "require": "./dist/store/RunResource.js"
+      "default": "./dist/store/RunResource.js"
     },
     "./store/QueueResource": {
       "types": "./dist/store/QueueResource.d.ts",
-      "import": "./dist/store/QueueResource.mjs",
-      "require": "./dist/store/QueueResource.js"
+      "default": "./dist/store/QueueResource.js"
     },
     "./store/Log": {
       "types": "./dist/store/Log.d.ts",
-      "import": "./dist/store/Log.mjs",
-      "require": "./dist/store/Log.js"
+      "default": "./dist/store/Log.js"
     },
     "./store/ProcessLifecycle": {
       "types": "./dist/store/ProcessLifecycle.d.ts",
-      "import": "./dist/store/ProcessLifecycle.mjs",
-      "require": "./dist/store/ProcessLifecycle.js"
+      "default": "./dist/store/ProcessLifecycle.js"
     },
     "./store/ProcessGroup": {
       "types": "./dist/store/ProcessGroup.d.ts",
-      "import": "./dist/store/ProcessGroup.mjs",
-      "require": "./dist/store/ProcessGroup.js"
+      "default": "./dist/store/ProcessGroup.js"
     },
     "./store/ProcessExecution": {
       "types": "./dist/store/ProcessExecution.d.ts",
-      "import": "./dist/store/ProcessExecution.mjs",
-      "require": "./dist/store/ProcessExecution.js"
+      "default": "./dist/store/ProcessExecution.js"
     },
     "./Query": {
       "types": "./dist/Query.d.ts",
-      "import": "./dist/Query.mjs",
-      "require": "./dist/Query.js"
+      "default": "./dist/Query.js"
     },
     "./ResourceConfigure": {
       "types": "./dist/ResourceConfigure.d.ts",
-      "import": "./dist/ResourceConfigure.mjs",
-      "require": "./dist/ResourceConfigure.js"
+      "default": "./dist/ResourceConfigure.js"
     },
     "./ControlProtocol": {
       "types": "./dist/ControlProtocol.d.ts",
-      "import": "./dist/ControlProtocol.mjs",
-      "require": "./dist/ControlProtocol.js"
+      "default": "./dist/ControlProtocol.js"
     },
     "./CommandAuth": {
       "types": "./dist/CommandAuth.d.ts",
-      "import": "./dist/CommandAuth.mjs",
-      "require": "./dist/CommandAuth.js"
+      "default": "./dist/CommandAuth.js"
     },
     "./ControlTransportRpc": {
       "types": "./dist/ControlTransportRpc.d.ts",
-      "import": "./dist/ControlTransportRpc.mjs",
-      "require": "./dist/ControlTransportRpc.js"
+      "default": "./dist/ControlTransportRpc.js"
     },
     "./LogTransportRpc": {
       "types": "./dist/LogTransportRpc.d.ts",
-      "import": "./dist/LogTransportRpc.mjs",
-      "require": "./dist/LogTransportRpc.js"
+      "default": "./dist/LogTransportRpc.js"
     },
     "./Terminal": {
       "types": "./dist/Terminal.d.ts",
-      "import": "./dist/Terminal.mjs",
-      "require": "./dist/Terminal.js"
+      "default": "./dist/Terminal.js"
     },
     "./TerminalRpc": {
       "types": "./dist/TerminalRpc.d.ts",
-      "import": "./dist/TerminalRpc.mjs",
-      "require": "./dist/TerminalRpc.js"
+      "default": "./dist/TerminalRpc.js"
     },
     "./RuntimeStorage": {
       "types": "./dist/RuntimeStorage.d.ts",
-      "import": "./dist/RuntimeStorage.mjs",
-      "require": "./dist/RuntimeStorage.js"
+      "default": "./dist/RuntimeStorage.js"
     },
     "./ProcessManager": {
       "types": "./dist/ProcessManager.d.ts",
-      "import": "./dist/ProcessManager.mjs",
-      "require": "./dist/ProcessManager.js"
+      "default": "./dist/ProcessManager.js"
     },
     "./ControlService": {
       "types": "./dist/ControlService.d.ts",
-      "import": "./dist/ControlService.mjs",
-      "require": "./dist/ControlService.js"
+      "default": "./dist/ControlService.js"
     },
     "./Logs": {
       "types": "./dist/Logs.d.ts",
-      "import": "./dist/Logs.mjs",
-      "require": "./dist/Logs.js"
+      "default": "./dist/Logs.js"
     },
     "./storage/sqlite": {
       "types": "./dist/storage/sqlite.d.ts",
-      "import": "./dist/storage/sqlite.mjs",
-      "require": "./dist/storage/sqlite.js"
+      "default": "./dist/storage/sqlite.js"
     },
     "./storage/redis": {
       "types": "./dist/storage/redis.d.ts",
-      "import": "./dist/storage/redis.mjs",
-      "require": "./dist/storage/redis.js"
+      "default": "./dist/storage/redis.js"
     },
     "./storage/prisma": {
       "types": "./dist/storage/prisma.d.ts",
-      "import": "./dist/storage/prisma.mjs",
-      "require": "./dist/storage/prisma.js"
+      "default": "./dist/storage/prisma.js"
     },
     "./prisma": {
       "types": "./dist/prisma/index.d.ts",
-      "import": "./dist/prisma/index.mjs",
-      "require": "./dist/prisma/index.js"
+      "default": "./dist/prisma/index.js"
     },
     "./ops-ui": {
       "types": "./dist/ops-ui/index.d.ts",
-      "import": "./dist/ops-ui/index.mjs",
-      "require": "./dist/ops-ui/index.js"
+      "default": "./dist/ops-ui/index.js"
     },
     "./react": {
       "types": "./dist/react/index.d.ts",
-      "import": "./dist/react/index.mjs",
-      "require": "./dist/react/index.js"
+      "default": "./dist/react/index.js"
     },
     "./react/adapters/fetch": {
       "types": "./dist/react/adapters/fetch.d.ts",
-      "import": "./dist/react/adapters/fetch.mjs",
-      "require": "./dist/react/adapters/fetch.js"
+      "default": "./dist/react/adapters/fetch.js"
     },
     "./react/adapters/trpc": {
       "types": "./dist/react/adapters/trpc.d.ts",
-      "import": "./dist/react/adapters/trpc.mjs",
-      "require": "./dist/react/adapters/trpc.js"
+      "default": "./dist/react/adapters/trpc.js"
     },
     "./package.json": "./package.json"
   },
@@ -220,8 +187,8 @@
     "example:queue-widget": "vite --config examples/queue-widget/vite.config.ts",
     "example:resource-cli": "tsx examples/resource-cli/counter-cli.ts",
     "example:resource-cli-manager": "tsx examples/resource-cli/manager-cli.ts",
-    "example:resource-tui": "esbuild examples/resource-tui/counter-tui.tsx --bundle --platform=node --format=esm --packages=external --jsx=automatic --outfile=examples/resource-tui/.bundle.mjs && node examples/resource-tui/.bundle.mjs",
-    "example:resource-tui-grid": "esbuild examples/resource-tui/grid-tui.tsx --bundle --platform=node --format=esm --packages=external --jsx=automatic --outfile=examples/resource-tui/.bundle.mjs && node examples/resource-tui/.bundle.mjs",
+    "example:resource-tui": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/counter-tui.tsx",
+    "example:resource-tui-grid": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/grid-tui.tsx",
     "example:dashboard-demo:pm": "tsx examples/dashboard-demo/demo.runtime.ts",
     "example:dashboard-demo:ui": "vite --config examples/dashboard-demo/web/vite.config.ts",
     "example:dashboard-demo:gateway": "tsx examples/dashboard-demo/control-gateway.ts",
@@ -349,5 +316,6 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "type": "module"
 }

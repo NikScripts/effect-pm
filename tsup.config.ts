@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup";
 
 const shared = {
-  format: ["cjs", "esm"] as const,
+  format: ["esm"] as const,
   splitting: false,
   sourcemap: true,
   treeshake: true,

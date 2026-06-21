@@ -1,7 +1,7 @@
 import { defineConfig } from "vitest/config";
 
-// The TUI test is TSX (imports Ink) and Ink is ESM-only (yoga-layout uses
-// top-level await), so it runs under Vite/Vitest, not the root .ts test glob.
+// The TUI tests are TSX and live under examples/, so they run via this config
+// rather than the root test/**/*.ts glob.
 export default defineConfig({
   test: {
     include: ["examples/resource-tui/**/*.test.tsx"],
