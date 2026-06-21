@@ -158,15 +158,19 @@ const Grid = (): React.ReactElement => {
 
   const scroll = Math.min(scrollRow, maxScroll);
 
-  // Keep the selection in view when navigating by keyboard.
+  // Follow the selection ONLY when it moves (keyboard nav). Read the current
+  // scroll via a ref so wheel-paging doesn't re-run this and snap straight back.
+  const scrollRef = React.useRef(scroll);
+  scrollRef.current = scroll;
   React.useEffect(() => {
     const selRow = Math.floor(sel / perRow);
-    if (selRow < scroll) {
+    const cur = scrollRef.current;
+    if (selRow < cur) {
       setScrollRow(selRow);
-    } else if (selRow >= scroll + visibleRows) {
+    } else if (selRow >= cur + visibleRows) {
       setScrollRow(selRow - visibleRows + 1);
     }
-  }, [sel, perRow, visibleRows, scroll]);
+  }, [sel, perRow, visibleRows]);
 
   const incs = WIDGETS.map((w) => useAtomSet(w.atoms.inc));
   const decs = WIDGETS.map((w) => useAtomSet(w.atoms.dec));
@@ -259,8 +263,8 @@ const Grid = (): React.ReactElement => {
 
   // Mouse handler reads live layout via a ref so enabling tracking stays a
   // one-time effect (no re-enabling on every scroll).
-  const view = React.useRef({ scroll, perRow, visibleRows, maxScroll });
-  view.current = { scroll, perRow, visibleRows, maxScroll };
+  const view = React.useRef({ scroll, perRow, visibleRows, maxScroll, rows });
+  view.current = { scroll, perRow, visibleRows, maxScroll, rows };
 
   React.useEffect(() => {
     // Real terminal stdin only — skips the test's fake stream (which would
@@ -284,12 +288,18 @@ const Grid = (): React.ReactElement => {
         } else if (button === 65) {
           setScrollRow((s) => Math.min(v.maxScroll, s + 1));
         } else if (button === 0 && press) {
-          const row = Math.floor((y - GRID_TOP) / Y_STRIDE);
-          const col = Math.floor((x - GRID_LEFT) / X_STRIDE);
-          if (row >= 0 && row < v.visibleRows && col >= 0 && col < v.perRow) {
-            const idx = (v.scroll + row) * v.perRow + col;
-            if (idx < WIDGETS.length) {
-              setSel(idx);
+          if (y >= v.rows - 3 && y <= v.rows - 1) {
+            // click inside the command box → focus it
+            setMode("command");
+            setCmd("");
+          } else {
+            const row = Math.floor((y - GRID_TOP) / Y_STRIDE);
+            const col = Math.floor((x - GRID_LEFT) / X_STRIDE);
+            if (row >= 0 && row < v.visibleRows && col >= 0 && col < v.perRow) {
+              const idx = (v.scroll + row) * v.perRow + col;
+              if (idx < WIDGETS.length) {
+                setSel(idx);
+              }
             }
           }
         }
@@ -351,7 +361,7 @@ const Grid = (): React.ReactElement => {
           <Text color="white"> = {selValue}</Text>
           <Text dimColor>
             {
-              "    [hjkl/arrows] move  [i/d/r] act  [:] command  [scroll] page  [q] quit   "
+              "    [↑↓←→] move  [i/d/r] act  [:] command  [scroll] page  [q] quit   "
             }
             {clock}
           </Text>
