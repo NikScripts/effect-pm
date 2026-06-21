@@ -7,6 +7,20 @@
  * contract — the inferred service interface, the client forwarder, and the server
  * handlers all derive from it.
  *
+ * Each method is built by {@link Resource.query} (idempotent read) or
+ * {@link Resource.mutate} (mutation); tool metadata (help text, destructive hint) rides
+ * `.annotate({...})`:
+ *
+ * ```ts
+ * class Counter extends Resource.Tag<Counter>("@app/Counter")({
+ *   current: Resource.query(Schema.Number).annotate({ description: "Current value." }),
+ *   add: Resource.mutate(Schema.Void, { payload: { by: Schema.Number } }),
+ *   reset: Resource.mutate(Schema.Void).annotate({ destructive: true }),
+ * }) {}
+ *
+ * const c = yield* Counter;        // { current: Effect<number>; add: (p) => Effect<void>; reset: Effect<void> }
+ * ```
+ *
  * Define a tag with {@link Resource.Tag} (one resource) or {@link Resource.tagFor} (a
  * factory: many instances sharing one contract). The same `yield* Tag` code runs
  * anywhere; only the layer changes:
