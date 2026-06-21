@@ -361,7 +361,7 @@ const Grid = (): React.ReactElement => {
           <Text color="white"> = {selValue}</Text>
           <Text dimColor>
             {
-              "    [↑↓←→] move  [i/d/r] act  [:] command  [scroll] page  [q] quit   "
+              "    [↑↓←→] move  [i/d/r] act  [:] command  [q] quit   "
             }
             {clock}
           </Text>
