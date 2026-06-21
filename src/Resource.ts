@@ -89,6 +89,62 @@ export type ServiceOf<S extends Spec> = {
   readonly [K in keyof S]: Method<S[K]>;
 };
 
+// ── type-level: one Spec → the precisely-typed RPC contract group ──
+
+/** The payload schema of a method: `Schema.Struct<F>` when it declares fields, else `Schema.Void`. */
+type PayloadSchemaOf<M extends MethodSpec> = M extends {
+  readonly payload: infer F extends Schema.Struct.Fields;
+}
+  ? Schema.Struct<F>
+  : Schema.Void;
+
+/** The success schema of a method: bare schema → itself; `{ success }` → that; else `Schema.Void`. */
+type SuccessSchemaOf<M extends MethodSpec> = M extends Schema.Top
+  ? M
+  : M extends { readonly success: infer Su extends Schema.Top }
+    ? Su
+    : Schema.Void;
+
+/** The error schema of a method: `{ error }` → that; else `Schema.Never`. */
+type ErrorSchemaOf<M extends MethodSpec> = M extends {
+  readonly error: infer Er extends Schema.Top;
+}
+  ? Er
+  : Schema.Never;
+
+/** The `Rpc` for one spec method — tag = the method name, schemas from the {@link MethodSpec}. */
+type RpcOf<K extends string, M extends MethodSpec> = Rpc.Rpc<
+  K,
+  PayloadSchemaOf<M>,
+  SuccessSchemaOf<M>,
+  ErrorSchemaOf<M>
+>;
+
+/** The union of every method's {@link RpcOf} — the group's full RPC set. */
+type RpcUnionOf<S extends Spec> = {
+  readonly [K in keyof S & string]: RpcOf<K, S[K]>;
+}[keyof S & string];
+
+/**
+ * The **precisely-typed** RPC contract group for a {@link Spec}. Carrying this exact type
+ * (rather than a loose `Rpc<string, …>`) is what keeps the remote client's requirement
+ * channel honest: concrete schemas declare `never` encoding/decoding services, so
+ * `RpcClient.make` infers a real `R` (just the transport `Protocol`) instead of `any`.
+ *
+ * @internal
+ */
+export type RpcGroupOf<S extends Spec> = RpcGroup.RpcGroup<RpcUnionOf<S>>;
+
+/**
+ * The context a server layer for a {@link Spec} provides: the handler for every method.
+ * Used to pin the server layers' output type so their **requirement** channel stays
+ * `never` — `RpcGroup`'s own `ToHandlerFn` defaults that channel to `any`, so without
+ * this the inferred server layer would re-leak `any` into anything that consumes it.
+ *
+ * @internal
+ */
+export type HandlerContextOf<S extends Spec> = Rpc.ToHandler<RpcUnionOf<S>>;
+
 // ── runtime: one Spec → the shared RPC contract group ──
 
 /**
@@ -97,7 +153,7 @@ export type ServiceOf<S extends Spec> = {
  *
  * @internal
  */
-export const buildRpcGroup = (spec: Spec) => {
+export const buildRpcGroup = <const S extends Spec>(spec: S): RpcGroupOf<S> => {
   const rpcs = Object.entries(spec).map(([tag, m]) => {
     if (Schema.isSchema(m)) {
       return Rpc.make(tag, { success: m });
@@ -112,7 +168,11 @@ export const buildRpcGroup = (spec: Spec) => {
     if (m.error !== undefined) options.error = m.error;
     return Rpc.make(tag, options);
   });
-  return RpcGroup.make(...rpcs);
+  // Boundary assertion (runtime-correct): each entry is built to be exactly the `Rpc`
+  // the type derives from the same `spec` — but `Object.entries` erases the literal keys
+  // to `string`, so the precise per-method type is reattached here. One single source
+  // (the spec) drives both the runtime group and its type.
+  return RpcGroup.make(...rpcs) as unknown as RpcGroupOf<S>;
 };
 
 // ── the Tag: a Context service whose value is `ServiceOf<Spec>` ──
@@ -132,7 +192,7 @@ const claimedIds = new Set<string>();
 const buildInstanceTag = <Self, S extends Spec>(
   id: string,
   spec: S,
-  group: ReturnType<typeof buildRpcGroup>,
+  group: RpcGroupOf<S>,
 ) => {
   if (claimedIds.has(id)) {
     throw new Error(
@@ -208,10 +268,10 @@ const localLayer = <I, S>(tag: Context.Key<I, S>, impl: S): Layer.Layer<I> =>
 const serverLayer = <S extends Spec>(
   tag: {
     readonly [SpecSym]: S;
-    readonly [GroupSym]: ReturnType<typeof buildRpcGroup>;
+    readonly [GroupSym]: RpcGroupOf<S>;
   },
   impl: ServiceOf<S>,
-) => {
+): Layer.Layer<HandlerContextOf<S>> => {
   const group = tag[GroupSym];
   const handlers: Record<string, (payload: unknown) => unknown> = {};
   for (const [key, member] of Object.entries(impl)) {
@@ -222,8 +282,11 @@ const serverLayer = <S extends Spec>(
   }
   // Boundary assertion (runtime-safe): the handlers mirror the same spec the group was
   // built from, and RPC validates every payload/result against the spec schemas at the
-  // wire — so the asserted handler shape is enforced at runtime.
-  return group.toLayer(handlers as Parameters<(typeof group)["toLayer"]>[0]);
+  // wire. The output type is pinned to {@link HandlerContextOf} so the layer's
+  // requirement channel stays `never` (RpcGroup's `ToHandlerFn` defaults it to `any`).
+  return group.toLayer(
+    handlers as unknown as Parameters<(typeof group)["toLayer"]>[0],
+  ) as Layer.Layer<HandlerContextOf<S>>;
 };
 
 /** The header carrying the target instance id, set per-call by {@link forwardClient}. */
@@ -256,10 +319,10 @@ const ID_HEADER = "id";
 const serverFamily = <S extends Spec>(
   factory: {
     readonly [SpecSym]: S;
-    readonly [GroupSym]: ReturnType<typeof buildRpcGroup>;
+    readonly [GroupSym]: RpcGroupOf<S>;
   },
   instances: ReadonlyArray<readonly [{ readonly id: string }, ServiceOf<S>]>,
-) => {
+): Layer.Layer<HandlerContextOf<S>> => {
   const group = factory[GroupSym];
   const spec = factory[SpecSym];
 
@@ -306,8 +369,11 @@ const serverFamily = <S extends Spec>(
   }
 
   // Boundary assertion (runtime-safe): handlers mirror the shared spec the group
-  // was built from, and RPC validates every payload/result at the wire.
-  return group.toLayer(handlers as Parameters<(typeof group)["toLayer"]>[0]);
+  // was built from, and RPC validates every payload/result at the wire. Output pinned
+  // to {@link HandlerContextOf} to keep the layer's requirement channel `never`.
+  return group.toLayer(
+    handlers as unknown as Parameters<(typeof group)["toLayer"]>[0],
+  ) as Layer.Layer<HandlerContextOf<S>>;
 };
 
 /**
@@ -315,9 +381,10 @@ const serverFamily = <S extends Spec>(
  *
  * @internal
  */
-export const groupOf = (tag: {
-  readonly [GroupSym]: ReturnType<typeof buildRpcGroup>;
-}): ReturnType<typeof buildRpcGroup> => tag[GroupSym];
+export const groupOf = <S extends Spec>(tag: {
+  readonly [SpecSym]: S;
+  readonly [GroupSym]: RpcGroupOf<S>;
+}): RpcGroupOf<S> => tag[GroupSym];
 
 /**
  * The {@link Spec} a tag was built from — used to wire the client forwarder and tests.
@@ -378,7 +445,7 @@ const clientLayer = <Self, S extends Spec>(
   tag: Context.Key<Self, ServiceOf<S>> & {
     readonly id: string;
     readonly [SpecSym]: S;
-    readonly [GroupSym]: ReturnType<typeof buildRpcGroup>;
+    readonly [GroupSym]: RpcGroupOf<S>;
   },
 ) =>
   Layer.effect(

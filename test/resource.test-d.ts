@@ -1,4 +1,5 @@
 import { Effect, Layer, Schema } from "effect";
+import { RpcClient } from "effect/unstable/rpc";
 import { Resource } from "../src/Resource";
 import type { ServiceOf, Spec } from "../src/Resource";
 
@@ -65,3 +66,23 @@ const _factoryB: Effect.Effect<void, never, TickB> = Effect.gen(function* () {
   yield* (yield* TickB).tick;
 });
 void _factoryB;
+
+// ── remote path: the client layer's only requirement is the transport `Protocol` ──
+// (Locks the precise-group typing: a regression that re-leaked `any` into `R` would
+// make this program's `R` non-`never` and fail to satisfy `runPromise`.)
+class Remote extends Resource.Tag<Remote>("test/Remote")({
+  ping: Schema.String,
+  shout: { payload: { msg: Schema.String }, success: Schema.String },
+}) {}
+
+declare const protocolLayer: Layer.Layer<RpcClient.Protocol>;
+const _remoteRun: Promise<string> = Effect.runPromise(
+  Effect.gen(function* () {
+    const r = yield* Remote;
+    return yield* r.ping;
+  }).pipe(
+    Effect.provide(Resource.client(Remote)),
+    Effect.provide(protocolLayer),
+  ),
+);
+void _remoteRun;

@@ -28,9 +28,9 @@ it("client ↔ server round-trips in-memory", () => {
     ),
     Effect.scoped,
   );
-  // The loose contract group leaks `any` into `R` via RpcTest's client; the runtime
-  // provides the whole environment (this test passes), so we run the resolved program.
-  return Effect.runPromise(program as Effect.Effect<void, unknown>);
+  // The group is precisely typed, so the client's `R` is honest — the program resolves
+  // to `R = never` after providing the server, and runs with no cast.
+  return Effect.runPromise(program);
 });
 
 // ── multi-instance: many instances of one factory, one server, routed by id ──
@@ -76,5 +76,5 @@ it("server family routes calls to the right instance by id header", () => {
     ),
     Effect.scoped,
   );
-  return Effect.runPromise(program as Effect.Effect<void, unknown>);
+  return Effect.runPromise(program);
 });
