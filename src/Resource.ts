@@ -61,7 +61,7 @@ export interface MethodAnnotations {
 }
 
 /** Brands a {@link Method} so a spec entry is distinguishable from a plain object. */
-const MethodTypeId: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/method");
+const methodTypeId: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/method");
 
 /**
  * One method of a resource contract — built by {@link Resource.query} / {@link Resource.mutate}.
@@ -76,7 +76,7 @@ export interface Method<
   Su extends Schema.Top,
   E extends Schema.Top,
 > {
-  readonly [MethodTypeId]: typeof MethodTypeId;
+  readonly [methodTypeId]: typeof methodTypeId;
   readonly kind: Kind;
   readonly payload: P;
   readonly success: Su;
@@ -93,12 +93,71 @@ export type AnyMethod = Method<
   Schema.Top
 >;
 
+/** @internal */
+declare const localCapabilityTypeId: unique symbol;
+
 /**
- * A resource contract: method name → {@link Method}. The single source of truth.
+ * A phantom **capability**, granted *only* by a resource's local layer
+ * ({@link Resource.layer}) — never by {@link Resource.client}. A {@link LocalMethod} carries
+ * it in its requirement channel, so calling a non-serializable method against a client is a
+ * **compile error** (unsatisfied requirement); the same call resolves when the local layer
+ * is provided. Branded by `Self` so one resource's local layer can't unlock another's.
  *
  * @public
  */
-export type Spec = Record<string, AnyMethod>;
+export interface LocalCapability<in out Self> {
+  readonly [localCapabilityTypeId]: Self;
+}
+
+/** Brands a {@link LocalMethod} so a spec entry is distinguishable from a wire {@link Method}. */
+const localMethodTypeId: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/localMethod",
+);
+
+/**
+ * A **local-only** member of a resource contract — built by {@link Resource.local}. It is
+ * *not* part of the wire contract (no schema, no rpc): use it for things that can't cross
+ * RPC simply (a returned function, a raw `Fiber`/`Scope`/`Ref`, a callback). Its declared
+ * type `T` is given directly. In the service it surfaces as
+ * `Effect<T, never, LocalCapability<Self>>` — you `yield*` it to obtain the value, which
+ * requires the local layer's capability.
+ *
+ * @public
+ */
+export interface LocalMethod<T> {
+  readonly [localMethodTypeId]: typeof localMethodTypeId;
+  /** Phantom carrier of the member's local type — type-level only, never set at runtime. */
+  readonly value?: T;
+}
+
+/** Any {@link LocalMethod}, erased. @public */
+export type AnyLocalMethod = LocalMethod<unknown>;
+
+/**
+ * A resource contract: method name → wire {@link Method} or off-wire {@link LocalMethod}.
+ * The single source of truth.
+ *
+ * @public
+ */
+export type Spec = Record<string, AnyMethod | AnyLocalMethod>;
+
+/** Runtime guard: is a spec entry a {@link LocalMethod} (vs a wire {@link Method})? */
+const isLocalMethod = (m: AnyMethod | AnyLocalMethod): m is AnyLocalMethod =>
+  localMethodTypeId in m;
+
+/**
+ * Declare a **local-only** member of type `T` (see {@link LocalMethod}). Not serialized,
+ * not in the wire contract; usable only when the local layer is provided.
+ *
+ * ```ts
+ * subscribe: Resource.local<(cb: (x: number) => void) => Effect.Effect<void>>(),
+ * ```
+ *
+ * @public
+ */
+export const local = <T>(): LocalMethod<T> => ({
+  [localMethodTypeId]: localMethodTypeId,
+});
 
 /**
  * The resolved tool metadata for one method — what CLI/TUI/dashboard read to render it.
@@ -139,7 +198,7 @@ const makeMethod = <
   error: E,
   annotations: MethodAnnotations,
 ): Method<Kind, P, Su, E> => ({
-  [MethodTypeId]: MethodTypeId,
+  [methodTypeId]: methodTypeId,
   kind,
   payload,
   success,
@@ -270,12 +329,39 @@ export type ServiceMethod<M extends AnyMethod> = HasPayload<M> extends true
   : Effect.Effect<SuccessOf<M>, ErrorOf<M>>;
 
 /**
- * The full service interface inferred from a {@link Spec}.
+ * The full service interface inferred from a {@link Spec}. Wire {@link Method}s map to
+ * `Effect`/function members; off-wire {@link LocalMethod}s surface as
+ * `Effect<T, never, LocalCapability<Self>>` — `yield*` to obtain the value, requiring the
+ * local layer's capability (so they're uncallable through {@link Resource.client}).
  *
  * @public
  */
-export type ServiceOf<S extends Spec> = {
-  readonly [K in keyof S]: ServiceMethod<S[K]>;
+export type ServiceOf<S extends Spec, Self = unknown> = {
+  readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
+    ? Effect.Effect<T, never, LocalCapability<Self>>
+    : S[K] extends AnyMethod
+      ? ServiceMethod<S[K]>
+      : never;
+};
+
+/** The wire-only service: just the {@link Method}s (used by the server impl + forwarder). */
+type WireServiceOf<S extends Spec> = {
+  readonly [K in keyof S as S[K] extends AnyMethod ? K : never]: S[K] extends AnyMethod
+    ? ServiceMethod<S[K]>
+    : never;
+};
+
+/**
+ * The **implementation** shape a {@link Resource.layer} expects: wire methods as
+ * `Effect`/functions, and each {@link LocalMethod} as its **raw** value `T` (the toolkit
+ * wraps it to require the {@link LocalCapability}).
+ */
+type ImplOf<S extends Spec> = {
+  readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
+    ? T
+    : S[K] extends AnyMethod
+      ? ServiceMethod<S[K]>
+      : never;
 };
 
 // ── type-level: one Spec → the precisely-typed RPC contract group ──
@@ -293,9 +379,11 @@ type RpcOf<K extends string, M extends AnyMethod> = Rpc.Rpc<
   M["error"]
 >;
 
-/** The union of every method's {@link RpcOf} — the group's full RPC set. */
+/** The union of every wire method's {@link RpcOf} — the group's full RPC set (local methods excluded). */
 type RpcUnionOf<S extends Spec> = {
-  readonly [K in keyof S & string]: RpcOf<K, S[K]>;
+  readonly [K in keyof S & string]: S[K] extends AnyMethod
+    ? RpcOf<K, S[K]>
+    : never;
 }[keyof S & string];
 
 /**
@@ -340,7 +428,9 @@ export const buildRpcGroup = <const S extends Spec>(
   groupId: string,
   spec: S,
 ): RpcGroupOf<S> => {
-  const rpcs = Object.entries(spec).map(([method, m]) => {
+  const rpcs = Object.entries(spec).flatMap(([method, m]) => {
+    // local-only members are off-wire — they get no rpc.
+    if (isLocalMethod(m)) return [];
     const tag = wireTag(groupId, method);
     const options: {
       payload?: Schema.Struct.Fields;
@@ -351,7 +441,7 @@ export const buildRpcGroup = <const S extends Spec>(
       error: m.error,
     };
     if (m.payload !== undefined) options.payload = m.payload;
-    return Rpc.make(tag, options);
+    return [Rpc.make(tag, options)];
   });
   // Boundary assertion (runtime-correct): each entry is built to be exactly the `Rpc`
   // the type derives from the same `spec` — but `Object.entries` erases the literal keys
@@ -363,9 +453,19 @@ export const buildRpcGroup = <const S extends Spec>(
 // ── the Tag: a Context service whose value is `ServiceOf<Spec>` ──
 
 /** Where the contract spec is stowed on a Tag (hidden from the value surface). */
-const SpecSym = Symbol.for("@nikscripts/effect-pm/Resource/spec");
+const specSym = Symbol.for("@nikscripts/effect-pm/Resource/spec");
 /** Where the built RPC group is stowed on a Tag (used by the client/server slices). */
-const GroupSym = Symbol.for("@nikscripts/effect-pm/Resource/group");
+const groupSym = Symbol.for("@nikscripts/effect-pm/Resource/group");
+/** Where the per-resource local-capability key is stowed on a Tag. */
+const localCapSym = Symbol.for("@nikscripts/effect-pm/Resource/localCap");
+
+/** The (unit) value of a {@link LocalCapability} key — presence is the whole point. */
+interface LocalCapValue {
+  readonly granted: true;
+}
+
+/** The per-resource local-capability key — its Identifier is {@link LocalCapability}. */
+type LocalCapKey<Self> = Context.Key<LocalCapability<Self>, LocalCapValue>;
 
 /**
  * The type of a resource tag carrying spec `S` — what {@link Resource.Tag} / a
@@ -376,15 +476,16 @@ const GroupSym = Symbol.for("@nikscripts/effect-pm/Resource/group");
  * @public
  */
 export interface ResourceTag<Self, S extends Spec>
-  extends Context.Key<Self, ServiceOf<S>> {
+  extends Context.Key<Self, ServiceOf<S, Self>> {
   /** Instance identity — the Context key and the per-call routing header value. */
   readonly id: string;
   /** Wire prefix — namespaces this resource's procedures on a shared `RpcServer`. */
   readonly groupId: string;
   /** Resource-level help text (CLI/TUI section help, dashboard panel title) — if declared. */
   readonly description: string | undefined;
-  readonly [SpecSym]: S;
-  readonly [GroupSym]: RpcGroupOf<S>;
+  readonly [specSym]: S;
+  readonly [groupSym]: RpcGroupOf<S>;
+  readonly [localCapSym]: LocalCapKey<Self>;
 }
 
 /** Claimed instance ids — duplicate declarations fail fast (Effect won't catch same-key Tags). */
@@ -420,13 +521,19 @@ const buildInstanceTag = <Self, S extends Spec>(
     );
   }
   claimedIds.add(id);
-  const base = Context.Service<Self, ServiceOf<S>>()(id);
+  const base = Context.Service<Self, ServiceOf<S, Self>>()(id);
+  // per-resource local capability — granted only by localLayer, never the client.
+  const localCap: LocalCapKey<Self> = Context.Service<
+    LocalCapability<Self>,
+    LocalCapValue
+  >()(`${id}/__local`);
   return Object.assign(base, {
     id,
     groupId,
     description,
-    [SpecSym]: spec,
-    [GroupSym]: group,
+    [specSym]: spec,
+    [groupSym]: group,
+    [localCapSym]: localCap,
   });
 };
 
@@ -494,19 +601,39 @@ const tagFor = <const S extends Spec>(
   return Object.assign(factory, {
     groupId,
     description: options?.description,
-    [SpecSym]: spec,
-    [GroupSym]: group,
+    [specSym]: spec,
+    [groupSym]: group,
   });
 };
 
 /**
- * The **local** layer for a resource: provide a real implementation of its service.
- * (Remote `client` / `server` layers arrive in a later slice.)
+ * The **local** layer for a resource: provide a real implementation of its service. Grants
+ * the resource's {@link LocalCapability}, so any {@link Resource.local} (local-only) members
+ * become callable here — they're a compile error under {@link Resource.client}.
  *
  * @public
  */
-const localLayer = <I, S>(tag: Context.Key<I, S>, impl: S): Layer.Layer<I> =>
-  Layer.succeed(tag, impl);
+const localLayer = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  impl: ImplOf<S>,
+): Layer.Layer<Self | LocalCapability<Self>> => {
+  const cap = tag[localCapSym];
+  const spec = tag[specSym];
+  const members = impl as Record<string, unknown>;
+  const service: Record<string, unknown> = {};
+  for (const [key, m] of Object.entries(spec)) {
+    // local members surface as `Effect<T, never, LocalCapability>` — requiring the cap to
+    // obtain the raw value; wire members pass through unchanged.
+    service[key] = isLocalMethod(m)
+      ? Effect.as(cap, members[key])
+      : members[key];
+  }
+  return Layer.merge(
+    // Boundary assertion (runtime-safe): service is built from the same spec, key-for-key.
+    Layer.succeed(tag, service as ServiceOf<S, Self>),
+    Layer.succeed(cap, { granted: true }),
+  );
+};
 
 /**
  * The **server** handlers layer for a resource: expose a real implementation over RPC by
@@ -518,12 +645,12 @@ const localLayer = <I, S>(tag: Context.Key<I, S>, impl: S): Layer.Layer<I> =>
 const serverLayer = <S extends Spec>(
   tag: {
     readonly groupId: string;
-    readonly [SpecSym]: S;
-    readonly [GroupSym]: RpcGroupOf<S>;
+    readonly [specSym]: S;
+    readonly [groupSym]: RpcGroupOf<S>;
   },
-  impl: ServiceOf<S>,
+  impl: WireServiceOf<S>,
 ): Layer.Layer<HandlerContextOf<S>> => {
-  const group = tag[GroupSym];
+  const group = tag[groupSym];
   const handlers: Record<string, (payload: unknown) => unknown> = {};
   for (const [key, member] of Object.entries(impl)) {
     // handlers are keyed by the wire tag (group-prefixed), matching the group's procedures.
@@ -552,7 +679,7 @@ const ID_HEADER = "id";
  */
 export interface ResourceInstance<S extends Spec> {
   readonly id: string;
-  readonly impl: ServiceOf<S>;
+  readonly impl: WireServiceOf<S>;
 }
 
 /**
@@ -562,7 +689,7 @@ export interface ResourceInstance<S extends Spec> {
  */
 const instance = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
-  impl: ServiceOf<S>,
+  impl: WireServiceOf<S>,
 ): ResourceInstance<S> => ({ id: tag.id, impl });
 
 /**
@@ -593,17 +720,17 @@ const instance = <Self, S extends Spec>(
 const serverFamily = <S extends Spec>(
   factory: {
     readonly groupId: string;
-    readonly [SpecSym]: S;
-    readonly [GroupSym]: RpcGroupOf<S>;
+    readonly [specSym]: S;
+    readonly [groupSym]: RpcGroupOf<S>;
   },
   ...instances: ReadonlyArray<ResourceInstance<S>>
 ): Layer.Layer<HandlerContextOf<S>> => {
-  const group = factory[GroupSym];
-  const spec = factory[SpecSym];
+  const group = factory[groupSym];
+  const spec = factory[specSym];
 
   // Build the routing table once, at assembly: id → instance impl. A duplicate id
   // is a wiring mistake — fail loudly rather than silently shadow an instance.
-  const table = new Map<string, ServiceOf<S>>();
+  const table = new Map<string, WireServiceOf<S>>();
   for (const { id, impl } of instances) {
     if (table.has(id)) {
       throw new Error(
@@ -658,17 +785,17 @@ const serverFamily = <S extends Spec>(
  * @internal
  */
 export const groupOf = <S extends Spec>(tag: {
-  readonly [SpecSym]: S;
-  readonly [GroupSym]: RpcGroupOf<S>;
-}): RpcGroupOf<S> => tag[GroupSym];
+  readonly [specSym]: S;
+  readonly [groupSym]: RpcGroupOf<S>;
+}): RpcGroupOf<S> => tag[groupSym];
 
 /**
  * The {@link Spec} a tag was built from — used to wire the client forwarder and tests.
  *
  * @internal
  */
-export const specOf = <S extends Spec>(tag: { readonly [SpecSym]: S }): S =>
-  tag[SpecSym];
+export const specOf = <S extends Spec>(tag: { readonly [specSym]: S }): S =>
+  tag[specSym];
 
 /**
  * Map an RPC client + a spec into the typed service, forwarding each method to its
@@ -683,7 +810,7 @@ export const forwardClient = <S extends Spec>(
   spec: S,
   groupId: string,
   id: string,
-): ServiceOf<S> => {
+): WireServiceOf<S> => {
   const headers = { id };
   const calls = rpc as Record<
     string,
@@ -694,6 +821,8 @@ export const forwardClient = <S extends Spec>(
   >;
   const service: Record<string, unknown> = {};
   for (const [key, m] of Object.entries(spec)) {
+    // local-only members aren't on the wire — the client stubs them (see clientLayer).
+    if (isLocalMethod(m)) continue;
     // the wire tag is group-prefixed; the service surface keeps the bare method name
     const call = calls[wireTag(groupId, key)];
     // completeness check — fail loudly if a contract method isn't on the client
@@ -709,7 +838,7 @@ export const forwardClient = <S extends Spec>(
   }
   // Boundary assertion (runtime-safe): every method verified present above; RPC validates
   // every payload/result against the spec schemas at the wire.
-  return service as ServiceOf<S>;
+  return service as WireServiceOf<S>;
 };
 
 /**
@@ -720,19 +849,34 @@ export const forwardClient = <S extends Spec>(
  *
  * @public
  */
-const clientLayer = <Self, S extends Spec>(
-  tag: Context.Key<Self, ServiceOf<S>> & {
-    readonly id: string;
-    readonly groupId: string;
-    readonly [SpecSym]: S;
-    readonly [GroupSym]: RpcGroupOf<S>;
-  },
-) =>
+const clientLayer = <Self, S extends Spec>(tag: ResourceTag<Self, S>) =>
   Layer.effect(
     tag,
-    Effect.map(RpcClient.make(tag[GroupSym]), (rpc) =>
-      forwardClient(rpc, tag[SpecSym], tag.groupId, tag.id),
-    ),
+    Effect.map(RpcClient.make(tag[groupSym]), (rpc) => {
+      const wire = forwardClient(
+        rpc,
+        tag[specSym],
+        tag.groupId,
+        tag.id,
+      ) as Record<string, unknown>;
+      const cap = tag[localCapSym];
+      const service: Record<string, unknown> = { ...wire };
+      // local-only members: present in the type, but require the LocalCapability the client
+      // never grants — so calling one through a client is a compile error (and unreachable).
+      for (const [key, m] of Object.entries(tag[specSym])) {
+        if (isLocalMethod(m)) {
+          service[key] = Effect.flatMap(cap, () =>
+            Effect.die(
+              new Error(
+                `Resource client: "${key}" is local-only and cannot be called remotely.`,
+              ),
+            ),
+          );
+        }
+      }
+      // Boundary assertion (runtime-safe): built from the spec, key-for-key.
+      return service as ServiceOf<S, Self>;
+    }),
   );
 
 /**
@@ -747,6 +891,7 @@ export const Resource = {
   tagFor,
   query,
   mutate,
+  local,
   instance,
   layer: localLayer,
   server: serverLayer,

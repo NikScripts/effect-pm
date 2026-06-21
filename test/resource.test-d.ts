@@ -91,3 +91,51 @@ const _remoteRun: Promise<string> = Effect.runPromise(
   ),
 );
 void _remoteRun;
+
+// ── local-only methods: a non-serializable member gated by a LocalCapability ──
+// A method that returns a function can't cross RPC. Declared with Resource.local, it
+// surfaces as `Effect<T, never, LocalCapability<Box>>` — callable only when the LOCAL
+// layer (which grants the capability) is provided, a compile error under the client.
+class Box extends Resource.Tag<Box>("test/Box")({
+  read: Resource.query(Schema.Number),
+  onChange:
+    Resource.local<(cb: (n: number) => void) => Effect.Effect<void>>(),
+}) {}
+
+const boxImpl = {
+  read: Effect.succeed(0),
+  onChange: (_cb: (n: number) => void) => Effect.void,
+};
+
+// a program that uses the local-only member
+const useLocal = Effect.gen(function* () {
+  const b = yield* Box;
+  const subscribe = yield* b.onChange; // requires LocalCapability<Box>
+  yield* subscribe(() => {});
+});
+
+// LOCAL layer grants the capability → resolves to R = never, runs.
+const _localOk: Promise<void> = Effect.runPromise(
+  useLocal.pipe(Effect.provide(Resource.layer(Box, boxImpl))),
+);
+void _localOk;
+
+// CLIENT layer never grants the capability → LocalCapability<Box> stays unsatisfied.
+const localViaClient = useLocal.pipe(
+  Effect.provide(Resource.client(Box)),
+  Effect.provide(protocolLayer),
+);
+// @ts-expect-error — onChange is local-only; LocalCapability<Box> unsatisfied via the client.
+const _localViaClient: Promise<void> = Effect.runPromise(localViaClient);
+void _localViaClient;
+
+// the WIRE method is fine through the client (no capability needed).
+const _wireViaClient: Promise<number> = Effect.runPromise(
+  Effect.gen(function* () {
+    return yield* (yield* Box).read;
+  }).pipe(
+    Effect.provide(Resource.client(Box)),
+    Effect.provide(protocolLayer),
+  ),
+);
+void _wireViaClient;

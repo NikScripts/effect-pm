@@ -24,7 +24,7 @@ import { Resource } from "./Resource";
  *
  * @public
  */
-export const QueueSizes = Schema.Struct({
+export const queueSizes = Schema.Struct({
   high: Schema.Number,
   normal: Schema.Number,
   low: Schema.Number,
@@ -37,11 +37,11 @@ export const QueueSizes = Schema.Struct({
  *
  * @public
  */
-export const QueueControlSpec = {
+export const queueControlSpec = {
   size: Resource.query(Schema.Number).annotate({
     description: "Total pending items across all priority levels.",
   }),
-  sizes: Resource.query(QueueSizes).annotate({
+  sizes: Resource.query(queueSizes).annotate({
     description: "Pending item count per priority level.",
   }),
   isEmpty: Resource.query(Schema.Boolean).annotate({

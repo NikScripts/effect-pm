@@ -110,7 +110,10 @@ export {
 } from "./HttpApiResource";
 export { Resource } from "./Resource";
 export type {
+  AnyLocalMethod,
   AnyMethod,
+  LocalCapability,
+  LocalMethod,
   Method,
   MethodAnnotations,
   MethodKind,

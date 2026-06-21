@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
-import { QueueControlSpec } from "../src/QueueContract";
+import { queueControlSpec } from "../src/QueueContract";
 import {
   Resource,
   forwardClient,
@@ -11,7 +11,7 @@ import {
 } from "../src/Resource";
 
 // A queue family built from the control contract: many instances share the "queue" group.
-const Queue = Resource.tagFor("queue", QueueControlSpec);
+const Queue = Resource.tagFor("queue", queueControlSpec);
 class Jobs extends Queue<Jobs>("@app/Jobs") {}
 class Mail extends Queue<Mail>("@app/Mail") {}
 
@@ -80,7 +80,7 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
 
 // The control spec is the fixed-schema half; the data-plane (item-typed) verbs come later.
 it("exposes the expected control verbs", () => {
-  expect(Object.keys(QueueControlSpec).sort()).toEqual(
+  expect(Object.keys(queueControlSpec).sort()).toEqual(
     [
       "clear",
       "completed",
@@ -97,7 +97,7 @@ it("exposes the expected control verbs", () => {
 
 // Tool metadata (query/mutate/destructive/description) drives CLI/TUI/dashboard rendering.
 it("marks each verb query vs mutate, with destructive hints", () => {
-  const meta = (k: keyof typeof QueueControlSpec) => methodMeta(QueueControlSpec[k]);
+  const meta = (k: keyof typeof queueControlSpec) => methodMeta(queueControlSpec[k]);
 
   // reads are queries
   expect(meta("size").kind).toBe("query");

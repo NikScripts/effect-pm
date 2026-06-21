@@ -115,7 +115,7 @@ they're plain schemas; richer UX hints (optional/default → flags, literal unio
   building against `Resource.layer` (in-process)**; keep the client swap as a layer boundary.
 - **Schema-as-UX hints.** No shared reader yet (flags/choices/masking/pretty-print). Render
   from raw schemas for now; don't hard-code formatting you'll want to derive later.
-- **Queue data-plane.** `QueueControlSpec` (control/observation: size/pause/clear/…) works;
+- **Queue data-plane.** `queueControlSpec` (control/observation: size/pause/clear/…) works;
   item verbs (`add`/`release`/…) are **not** ported yet (need per-queue itemSchema encoding).
 - **Package paths.** Final public import subpaths aren't fixed; import from `src/Resource`
   within the repo for now.
