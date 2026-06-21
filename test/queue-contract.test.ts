@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import { RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
-import { queueControlSpec, queueSpec } from "../src/QueueContract";
+import { QueueResource, queueControlSpec } from "../src/QueueContract";
 import {
   Resource,
   forwardClient,
@@ -116,10 +116,8 @@ it("marks each verb query vs mutate, with destructive hints", () => {
   expect(meta("size").description).toContain("pending items");
 });
 
-// ── data plane (model B): a per-instance queue with its own group + itemSchema-typed add ──
-class Numbers extends Resource.Tag<Numbers>("test/Numbers")(
-  queueSpec(Schema.Number),
-) {}
+// ── data plane (model B): the designed form — QueueResource.Tag<Self>()(id, itemSchema) ──
+class Numbers extends QueueResource.Tag<Numbers>()("test/Numbers", Schema.Number) {}
 
 it("queue add round-trips with a per-instance item schema (native validation)", () => {
   const enqueued: number[] = [];

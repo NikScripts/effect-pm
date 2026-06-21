@@ -23,6 +23,7 @@
  */
 import { Schema } from "effect";
 import { Resource } from "./Resource";
+import type { ResourceTag } from "./Resource";
 
 /**
  * The per-priority pending counts returned by `sizes`.
@@ -100,3 +101,43 @@ export const queueSpec = <Sch extends Schema.Top>(itemSchema: Sch) => ({
     payload: { item: itemSchema },
   }),
 });
+
+/** The spec of a queue instance with item schema `Sch` — control surface + data plane. */
+type QueueInstanceSpec<Sch extends Schema.Top> = ReturnType<
+  typeof queueSpec<Sch>
+>;
+
+/**
+ * Define a queue **instance** in the designed form — its own RPC group (model B), item
+ * type and `itemSchema` baked in:
+ *
+ * ```ts
+ * class MyQueue extends QueueResource.Tag<MyQueue>()("@app/MyQueue", JobSchema) {}
+ * const q = yield* MyQueue;
+ * yield* q.add({ item: aJob }); // validated natively against JobSchema on both sides
+ * ```
+ *
+ * `Self` is given explicitly (Effect's `()` two-stage form); the item type is inferred from
+ * `itemSchema`, which becomes the rpc payload schema (native wire validation, no codec).
+ *
+ * @public
+ */
+const queueTag =
+  <Self>() =>
+  <Sch extends Schema.Top>(
+    id: string,
+    itemSchema: Sch,
+    options?: { readonly description?: string },
+  ): ResourceTag<Self, QueueInstanceSpec<Sch>> =>
+    Resource.Tag<Self>(id, options)(queueSpec(itemSchema));
+
+/**
+ * Queue resource toolkit — managed priority queues on the {@link Resource} toolkit.
+ * (Model B: each instance is its own resource; data-plane procedures are typed by the
+ * instance's `itemSchema`.)
+ *
+ * @public
+ */
+export const QueueResource = {
+  Tag: queueTag,
+} as const;

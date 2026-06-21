@@ -479,7 +479,7 @@ export const localCapSym: unique symbol = Symbol.for(
  * @public
  */
 export interface ResourceTag<Self, S extends Spec>
-  extends Context.Key<Self, ServiceOf<S, Self>> {
+  extends Context.ServiceClass<Self, string, ServiceOf<S, Self>> {
   /** Instance identity — the Context key and the per-call routing header value. */
   readonly id: string;
   /** Wire prefix — namespaces this resource's procedures on a shared `RpcServer`. */
