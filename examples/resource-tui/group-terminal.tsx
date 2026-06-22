@@ -1,17 +1,18 @@
 /**
  * @module examples/resource-tui/group-terminal
  *
- * The TUI as a command handler in your own CLI — `Terminal.make(tags)` passed
- * straight to `Command.make`.
+ * A group as the root command, its members as subcommands — each a TUI.
  *
- *   pnpm run example:group-terminal my-group      # launches the dashboard
- *   pnpm run example:group-terminal --help
+ *   pnpm run example:group-terminal my-group Counter        # Counter's TUI
+ *   pnpm run example:group-terminal my-group QueueManager   # QueueManager's TUI
+ *   pnpm run example:group-terminal my-group --help
  */
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer } from "effect";
 import { Command } from "effect/unstable/cli";
+import { Group } from "../resource-cli/group";
 import {
   Counter,
   QueueManager,
@@ -19,16 +20,15 @@ import {
 } from "../resource-cli/manager-resources";
 import { Terminal } from "./terminal";
 
-// one Command.make per tag — the name lives here, the handler is the TUI
-const counter = Command.make("counter", {}, Terminal.make(Counter));
-const queue = Command.make("queue", {}, Terminal.make(QueueManager));
+// pass the tags into the group constructor; get them back out via Group.members
+class MyGroup extends Group.Tag("my-group")([Counter, QueueManager]) {}
 
-// group them with native subcommands
-const acme = Command.make("acme").pipe(
-  Command.withSubcommands([counter, queue]),
+// group as root, members as subcommands (Terminal.all spits out the array)
+const root = Command.make(MyGroup.id).pipe(
+  Command.withSubcommands(Terminal.all(MyGroup)),
 );
 
-const program = Command.runWith(acme, { version: "0.0.0" })(
+const program = Command.runWith(root, { version: "0.0.0" })(
   process.argv.slice(2),
 ).pipe(Effect.provide(Layer.mergeAll(resourcesLayer, NodeServices.layer)));
 
