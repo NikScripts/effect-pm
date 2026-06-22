@@ -32,9 +32,74 @@
  *
  * @module Resource
  */
-import { Context, Effect, Layer, Option, Schema } from "effect";
+import { Context, Data, Effect, Layer, Option, Schema } from "effect";
 import { Headers } from "effect/unstable/http";
 import { Rpc, RpcClient, RpcGroup } from "effect/unstable/rpc";
+
+// ── typed errors (Data.TaggedError — never raw `Error`) ──
+
+/**
+ * Two resources declared the same **instance id**. Effect's `Context` is keyed by the id
+ * string and silently last-write-wins, so we fail fast at declaration.
+ *
+ * @public
+ */
+export class DuplicateResourceId extends Data.TaggedError(
+  "DuplicateResourceId",
+)<{ readonly id: string }> {}
+
+/**
+ * Two resources declared the same **group id** (the wire prefix) — they'd collide on a
+ * shared `RpcServer`.
+ *
+ * @public
+ */
+export class DuplicateGroupId extends Data.TaggedError("DuplicateGroupId")<{
+  readonly groupId: string;
+}> {}
+
+/**
+ * An instance was passed to {@link Resource.serveInstances} more than once.
+ *
+ * @public
+ */
+export class DuplicateInstance extends Data.TaggedError("DuplicateInstance")<{
+  readonly id: string;
+}> {}
+
+/**
+ * A family request reached the server with no routable instance `id` header — a
+ * protocol-level fault (the contract was satisfied), surfaced as a defect.
+ *
+ * @public
+ */
+export class InstanceRoutingError extends Data.TaggedError(
+  "InstanceRoutingError",
+)<{
+  readonly method: string;
+  readonly reason: "missing-id" | "unknown-id";
+  readonly id?: string;
+}> {}
+
+/**
+ * A contract method was absent from the generated RPC client — a wiring bug (the group and
+ * client derive from the same spec, so this should be unreachable).
+ *
+ * @public
+ */
+export class MissingContractMethod extends Data.TaggedError(
+  "MissingContractMethod",
+)<{ readonly method: string }> {}
+
+/**
+ * A {@link Resource.local} (local-only) method was reached through a client. Unreachable by
+ * construction — the {@link LocalCapability} it requires is never granted to a client.
+ *
+ * @public
+ */
+export class LocalOnlyMethod extends Data.TaggedError("LocalOnlyMethod")<{
+  readonly method: string;
+}> {}
 
 /**
  * How a method behaves, for tools (CLI/TUI/dashboard) — **explicit, never inferred**;
@@ -502,9 +567,7 @@ const claimedGroupIds = new Set<string>();
 /** Reserve a group id (wire prefix); a duplicate **throws** — two resources can't share a prefix. */
 const claimGroupId = (groupId: string): void => {
   if (claimedGroupIds.has(groupId)) {
-    throw new Error(
-      `Resource group id "${groupId}" is already declared — group ids namespace the wire and must be unique.`,
-    );
+    throw new DuplicateGroupId({ groupId });
   }
   claimedGroupIds.add(groupId);
 };
@@ -522,9 +585,7 @@ const buildInstanceTag = <Self, S extends Spec>(
   description: string | undefined,
 ) => {
   if (claimedIds.has(id)) {
-    throw new Error(
-      `Resource id "${id}" is already declared — resource ids must be unique.`,
-    );
+    throw new DuplicateResourceId({ id });
   }
   claimedIds.add(id);
   const base = Context.Service<Self, ServiceOf<S, Self>>()(id);
@@ -739,9 +800,7 @@ const serveInstances = <S extends Spec>(
   const table = new Map<string, WireServiceOf<S>>();
   for (const { id, impl } of instances) {
     if (table.has(id)) {
-      throw new Error(
-        `Resource server family: instance id "${id}" is listed more than once.`,
-      );
+      throw new DuplicateInstance({ id });
     }
     table.set(id, impl);
   }
@@ -759,17 +818,13 @@ const serveInstances = <S extends Spec>(
       const id = Option.getOrUndefined(Headers.get(options.headers, ID_HEADER));
       if (id === undefined) {
         return Effect.die(
-          new Error(
-            `Resource server family: request for "${key}" is missing the "${ID_HEADER}" header.`,
-          ),
+          new InstanceRoutingError({ method: key, reason: "missing-id" }),
         );
       }
       const impl = table.get(id);
       if (impl === undefined) {
         return Effect.die(
-          new Error(
-            `Resource server family: no instance registered for id "${id}".`,
-          ),
+          new InstanceRoutingError({ method: key, reason: "unknown-id", id }),
         );
       }
       const member = (impl as Record<string, unknown>)[key];
@@ -833,9 +888,7 @@ export const forwardClient = <S extends Spec>(
     const call = calls[wireTag(groupId, key)];
     // completeness check — fail loudly if a contract method isn't on the client
     if (call === undefined) {
-      throw new Error(
-        `Resource client: contract method "${key}" is missing from the RPC client.`,
-      );
+      throw new MissingContractMethod({ method: key });
     }
     service[key] =
       m.payload === undefined
@@ -872,11 +925,7 @@ const clientLayer = <Self, S extends Spec>(tag: ResourceTag<Self, S>) =>
       for (const [key, m] of Object.entries(tag[specSym])) {
         if (isLocalMethod(m)) {
           service[key] = Effect.flatMap(cap, () =>
-            Effect.die(
-              new Error(
-                `Resource client: "${key}" is local-only and cannot be called remotely.`,
-              ),
-            ),
+            Effect.die(new LocalOnlyMethod({ method: key })),
           );
         }
       }

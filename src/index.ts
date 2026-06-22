@@ -108,7 +108,15 @@ export {
   acceptJson,
   type HttpApiResourceLayerEffectConfig,
 } from "./HttpApiResource";
-export { Resource } from "./Resource";
+export {
+  DuplicateGroupId,
+  DuplicateInstance,
+  DuplicateResourceId,
+  InstanceRoutingError,
+  LocalOnlyMethod,
+  MissingContractMethod,
+  Resource,
+} from "./Resource";
 export type {
   AnyLocalMethod,
   AnyMethod,
