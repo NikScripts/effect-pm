@@ -1,10 +1,10 @@
 /**
  * @module examples/resource-tui/queue-logs-mock
  *
- * Full-screen queue with a **live log tail below it**. The widget is pinned to the
- * top (fixed height); the logs fill the rest and always show the **latest at the
- * bottom** (older lines scroll off the top). This is the shape the real `.events`
- * stream would feed.
+ * Full-screen queue (the **XL widget**) pinned to the top, with a **live log tail
+ * below it**. The widget is fixed height; the logs fill the rest and always show
+ * the latest at the bottom (older lines scroll off the top). This is the shape the
+ * real `.changes`/`.metrics` (widget) + `.events` (logs) streams would feed.
  *
  * Controls locked by default ([l] to unlock — red border warns you); resource
  * controls while unlocked: [p] pause [r] resume [c] clear [x] stop. Quit with Ctrl+C.
@@ -30,10 +30,10 @@ const STATUS_ICON: Record<Status, string> = {
   paused: "‖",
   stopped: "■",
 };
-const SYM: Record<Priority, { symbol: string; color: string }> = {
-  high: { symbol: "▲", color: "red" },
-  normal: { symbol: "•", color: "white" },
-  low: { symbol: "▼", color: "blue" },
+const SYM: Record<Priority, { symbol: string; color: string; label: string }> = {
+  high: { symbol: "▲", color: "red", label: "high" },
+  normal: { symbol: "•", color: "white", label: "normal" },
+  low: { symbol: "▼", color: "blue", label: "low" },
 };
 const LOG: Record<Kind, { icon: string; color: string; label: string }> = {
   started: { icon: "►", color: "gray", label: "started" },
@@ -41,6 +41,7 @@ const LOG: Record<Kind, { icon: string; color: string; label: string }> = {
   failed: { icon: "✗", color: "red", label: "failed" },
   retry: { icon: "↻", color: "yellow", label: "retry" },
 };
+const SPARK = "▁▂▃▄▅▆▇█";
 const BLANK_BORDER = {
   topLeft: " ",
   top: " ",
@@ -64,9 +65,19 @@ const hexKey = (): string =>
     .toString(16)
     .padStart(4, "0");
 const timeStr = (t: number): string => new Date(t).toLocaleTimeString();
+const fmt = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
 const bar = (value: number, max: number, width: number): string => {
   const filled = max <= 0 ? 0 : Math.min(width, Math.round((value / max) * width));
   return "█".repeat(filled) + "░".repeat(width - filled);
+};
+const spark = (vals: ReadonlyArray<number>): string => {
+  if (vals.length === 0) {
+    return "";
+  }
+  const max = Math.max(...vals, 1);
+  return vals
+    .map((v) => SPARK[Math.min(7, Math.floor((v / max) * 7))] ?? " ")
+    .join("");
 };
 
 interface QState {
@@ -94,6 +105,9 @@ const initial = (): QState => ({
   recent: [],
 });
 
+// mock metrics from counts (backlog-proportional wait; low priority waits longest)
+const WAIT_FACTOR: Record<Priority, number> = { high: 350, normal: 700, low: 1600 };
+
 const useTerminalSize = (): { cols: number; rows: number } => {
   const { stdout } = useStdout();
   const [size, setSize] = React.useState({
@@ -113,7 +127,7 @@ const useTerminalSize = (): { cols: number; rows: number } => {
   return size;
 };
 
-const WIDGET_HEIGHT = 8;
+const WIDGET_HEIGHT = 16;
 
 const PrioRow = (props: {
   readonly p: Priority;
@@ -124,14 +138,19 @@ const PrioRow = (props: {
   const s = SYM[props.p];
   return (
     <Box>
-      <Box width={2}>
-        <Text>{s.symbol}</Text>
+      <Box width={8}>
+        <Text>
+          {s.symbol} {s.label}
+        </Text>
       </Box>
       <Box width={props.barWidth + 1}>
         <Text color={s.color}>{bar(props.count, props.max, props.barWidth)}</Text>
       </Box>
-      <Box width={4} justifyContent="flex-end">
+      <Box width={3} justifyContent="flex-end">
         <Text>{props.count}</Text>
+      </Box>
+      <Box width={16} justifyContent="flex-end">
+        <Text dimColor>wait ⌀ {fmt(props.count * WAIT_FACTOR[props.p])}</Text>
       </Box>
     </Box>
   );
@@ -139,43 +158,65 @@ const PrioRow = (props: {
 
 const Widget = (props: {
   readonly q: QState;
+  readonly trend: ReadonlyArray<number>;
   readonly width: number;
 }): React.ReactElement => {
-  const { q, width } = props;
+  const { q, trend, width } = props;
   const pending = q.high + q.normal + q.low;
   const max = Math.max(q.high, q.normal, q.low, 1);
   const throughput = q.recent.length / 5;
-  const barWidth = Math.min(28, Math.max(4, width - 6 - 2 - 1 - 4));
+  const execution = 700 + (q.completed % 5) * 120;
+  const overallWait =
+    pending > 0
+      ? (q.high * WAIT_FACTOR.high +
+          q.normal * WAIT_FACTOR.normal +
+          q.low * WAIT_FACTOR.low) /
+        pending
+      : 0;
+  const total = overallWait + execution;
+  const barWidth = Math.min(30, Math.max(8, width - 4 - 8 - 1 - 3 - 16));
   return (
     <Box
       flexShrink={0}
       flexDirection="column"
       borderStyle="round"
       borderColor={COLOR[q.status]}
-      paddingX={1}
+      paddingX={2}
+      paddingY={1}
       height={WIDGET_HEIGHT}
     >
-      <Box>
-        <Box flexGrow={1}>
-          <Text bold color="cyan">
-            {NAME}
-          </Text>
-        </Box>
+      <Box justifyContent="space-between">
+        <Text bold color="cyan">
+          {NAME}
+        </Text>
         <Text color={COLOR[q.status]}>
           {STATUS_ICON[q.status]} {q.status}
         </Text>
       </Box>
-      <Box>
-        <Box flexGrow={1}>
-          <Text>pending {pending}</Text>
-        </Box>
-        <Text dimColor>
-          completed {q.completed} · {throughput.toFixed(1)}/s
-        </Text>
+      <Box marginTop={1} justifyContent="space-between">
+        <Text bold>PENDING {pending}</Text>
+        <Text bold>COMPLETED {q.completed}</Text>
       </Box>
-      <PrioRow p="high" count={q.high} max={max} barWidth={barWidth} />
-      <PrioRow p="normal" count={q.normal} max={max} barWidth={barWidth} />
-      <PrioRow p="low" count={q.low} max={max} barWidth={barWidth} />
+      <Box marginTop={1} flexDirection="column">
+        <PrioRow p="high" count={q.high} max={max} barWidth={barWidth} />
+        <PrioRow p="normal" count={q.normal} max={max} barWidth={barWidth} />
+        <PrioRow p="low" count={q.low} max={max} barWidth={barWidth} />
+      </Box>
+      <Box marginTop={1}>
+        <Box width={22}>
+          <Text>execution ⌀ {fmt(execution)}</Text>
+        </Box>
+        <Box width={20}>
+          <Text>total ⌀ {fmt(total)}</Text>
+        </Box>
+        <Box flexGrow={1} justifyContent="flex-end">
+          <Text>{throughput.toFixed(1)}/s</Text>
+        </Box>
+      </Box>
+      <Box marginTop={1}>
+        <Text color="green">{spark(trend)}</Text>
+        <Text dimColor> pending · {trend.length}s</Text>
+      </Box>
     </Box>
   );
 };
@@ -209,9 +250,12 @@ const App = (): React.ReactElement => {
   const [locked, setLocked] = React.useState(true);
   const [q, setQ] = React.useState<QState>(initial);
   const [logs, setLogs] = React.useState<ReadonlyArray<LogEntry>>([]);
+  const [trend, setTrend] = React.useState<ReadonlyArray<number>>([]);
 
   const qRef = React.useRef(q);
   qRef.current = q;
+  const sizeRef = React.useRef(0);
+  sizeRef.current = q.high + q.normal + q.low;
 
   // producer + worker + log emitter
   React.useEffect(() => {
@@ -270,6 +314,15 @@ const App = (): React.ReactElement => {
     return () => clearInterval(id);
   }, [q.status]);
 
+  // pending trend sampler
+  React.useEffect(() => {
+    const id = setInterval(
+      () => setTrend((t) => [...t, sizeRef.current].slice(-40)),
+      1000,
+    );
+    return () => clearInterval(id);
+  }, []);
+
   useInput((input) => {
     if (input === "l") {
       setLocked((x) => !x);
@@ -289,8 +342,7 @@ const App = (): React.ReactElement => {
     }
   });
 
-  // how many log lines fit: rows − root border(2) − widget − logs border(2) −
-  // logs header(1) − footer(1) − safety(1)
+  // how many log lines fit below the widget
   const visibleLogs = Math.max(1, rows - WIDGET_HEIGHT - 7);
   const tail = logs.slice(-visibleLogs);
 
@@ -302,7 +354,7 @@ const App = (): React.ReactElement => {
       borderStyle={locked ? BLANK_BORDER : "double"}
       borderColor="red"
     >
-      <Widget q={q} width={cols} />
+      <Widget q={q} trend={trend} width={cols} />
 
       <Box flexGrow={1} flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1}>
         <Box>
