@@ -120,6 +120,7 @@ export {
 export type {
   AnyLocalMethod,
   AnyMethod,
+  HostKey,
   LocalCapability,
   LocalMethod,
   Method,

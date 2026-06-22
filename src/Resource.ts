@@ -534,6 +534,30 @@ export const groupSym: unique symbol = Symbol.for(
 export const localCapSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Resource/localCap",
 );
+/** Where the resource's {@link Host} (if any) is stowed on a Tag. @internal */
+export const hostSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/host",
+);
+
+// ── host: the transport for a resource, carried in the Tag ──
+
+/**
+ * The value of a {@link Host} service: the RPC client transport `Protocol` for that host.
+ * `Resource.host(...)` produces a layer providing exactly this (re-keyed under the host),
+ * and {@link Resource.client} feeds it to `RpcClient.make` as the `RpcClient.Protocol`.
+ *
+ * @internal
+ */
+type HostProtocol = Context.Service.Shape<typeof RpcClient.Protocol>;
+
+/**
+ * The Context key of a {@link Host} (`HSelf` = its identity): a service whose value is the
+ * transport {@link HostProtocol}. Stored on a host-bearing tag under {@link hostSym}; read by
+ * {@link Resource.client} to resolve *where* to connect (its requirement channel).
+ *
+ * @public
+ */
+export type HostKey<HSelf> = Context.Key<HSelf, HostProtocol>;
 
 /**
  * The type of a resource tag carrying spec `S` — what {@link Resource.Tag} / a
@@ -557,6 +581,14 @@ export interface ResourceTag<Self, S extends Spec>
     LocalCapability<Self>,
     { readonly granted: true }
   >;
+  /**
+   * The resource's {@link Host} (its transport), or `undefined` for a hostless tag. Uniform
+   * across all tags (always present) so a host-bearing tag stays assignable wherever a plain
+   * {@link ResourceTag} is expected; the host-bearing tag constructors **narrow** this to a
+   * concrete {@link HostKey} in their return type, which is how {@link Resource.client}
+   * discriminates the host-aware path.
+   */
+  readonly [hostSym]: HostKey<unknown> | undefined;
 }
 
 /** Claimed instance ids — duplicate declarations fail fast (Effect won't catch same-key Tags). */
@@ -583,6 +615,7 @@ const buildInstanceTag = <Self, S extends Spec>(
   spec: S,
   group: RpcGroupOf<S>,
   description: string | undefined,
+  host: HostKey<unknown> | undefined,
 ) => {
   if (claimedIds.has(id)) {
     throw new DuplicateResourceId({ id });
@@ -601,6 +634,7 @@ const buildInstanceTag = <Self, S extends Spec>(
     [specSym]: spec,
     [groupSym]: group,
     [localCapSym]: localCap,
+    [hostSym]: host,
   });
 };
 
@@ -624,9 +658,23 @@ const buildInstanceTag = <Self, S extends Spec>(
  *
  * @public
  */
-const makeTag =
-  <Self>(id: string, options?: { readonly description?: string }) =>
-  <const S extends Spec>(spec: S) => {
+const makeTag = <Self>(
+  id: string,
+  options?: { readonly description?: string },
+) => {
+  // The spec is the inferring call; the optional `host` rides here (not alongside the
+  // explicit `<Self>` above) so its identity `HSelf` can be inferred from the argument —
+  // a `<Self>`-explicit call can't also infer a second type param. Host-bearing returns
+  // narrow `[hostSym]` to a concrete `HostKey`, which is how `Resource.client` discriminates.
+  function build<const S extends Spec>(spec: S): ResourceTag<Self, S>;
+  function build<const S extends Spec, HSelf>(
+    spec: S,
+    host: HostKey<HSelf>,
+  ): ResourceTag<Self, S> & { readonly [hostSym]: HostKey<HSelf> };
+  function build<const S extends Spec>(
+    spec: S,
+    host?: HostKey<unknown>,
+  ): ResourceTag<Self, S> {
     // single resource: id doubles as the group id (its wire prefix)
     claimGroupId(id);
     return buildInstanceTag<Self, S>(
@@ -635,8 +683,11 @@ const makeTag =
       spec,
       buildRpcGroup(id, spec),
       options?.description,
+      host,
     );
-  };
+  }
+  return build;
+};
 
 /**
  * Build a **factory** tag-maker that bakes a shared {@link Spec} once under a `groupId`:
@@ -662,7 +713,14 @@ const tagFor = <const S extends Spec>(
   claimGroupId(groupId);
   const group = buildRpcGroup(groupId, spec);
   const factory = <Self>(id: string) =>
-    buildInstanceTag<Self, S>(groupId, id, spec, group, options?.description);
+    buildInstanceTag<Self, S>(
+      groupId,
+      id,
+      spec,
+      group,
+      options?.description,
+      undefined,
+    );
   // Stow the shared groupId/description/spec/group on the factory too, so the family
   // server ({@link serveInstances}) can read the contract + prefix without an instance.
   return Object.assign(factory, {
@@ -899,38 +957,123 @@ export const forwardClient = <S extends Spec>(
 };
 
 /**
- * The **client** layer for a resource: drive it over RPC **as if it were local** —
- * the exact same `yield* Tag` code as the local layer, only the provided layer differs,
- * so it doesn't matter where the resource is actually running. Needs an ambient RPC
- * `Protocol` (the transport).
+ * Declare a **host** — a named transport endpoint a resource connects to. A `Context.Service`
+ * whose value is the RPC client {@link HostProtocol}; extend it like any Effect service:
+ *
+ * ```ts
+ * class EdgeHost extends Resource.Host<EdgeHost>("edge") {}
+ * ```
+ *
+ * Attach it to a tag (`Resource.Tag<Self>(id)(spec, EdgeHost)`) to make the tag carry its own
+ * transport — then ship only the tag: {@link Resource.client} reads the host to resolve where
+ * to connect, and a consumer wires the transport once with {@link Resource.host}.
  *
  * @public
  */
-const clientLayer = <Self, S extends Spec>(tag: ResourceTag<Self, S>) =>
-  Layer.effect(
+const makeHost = <Self>(name: string) =>
+  Context.Service<Self, HostProtocol>()(name);
+
+/**
+ * Wire a {@link Host}'s transport, **once**, from an RPC client `Protocol` layer (e.g.
+ * `RpcClient.layerProtocolHttp({ url })` fed its serialization + http client). Re-keys that
+ * `Protocol` under the host, so {@link Resource.client} resolves it for every tag bound to
+ * this host; provide one `Resource.host(...)` per host an app talks to.
+ *
+ * ```ts
+ * const EdgeLive = Resource.host(EdgeHost, RpcClient.layerProtocolHttp({ url }).pipe(
+ *   Layer.provide(RpcSerialization.layerJson),
+ *   Layer.provide(FetchHttpClient.layer),
+ * ));
+ * ```
+ *
+ * @public
+ */
+const hostLayer = <Self, RIn>(
+  host: HostKey<Self>,
+  protocol: Layer.Layer<RpcClient.Protocol, never, RIn>,
+): Layer.Layer<Self, never, RIn> =>
+  Layer.effect(host, RpcClient.Protocol).pipe(Layer.provide(protocol));
+
+/**
+ * Build the client-side service for a tag from a wired RPC client: forward every wire method
+ * (group-prefixed, id-pinned), and stub each {@link Resource.local} member with a value that
+ * requires the never-granted {@link LocalCapability} (so calling one through a client is a
+ * compile error, and unreachable at runtime). Shared by both {@link clientLayer} paths.
+ */
+const buildClientService = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  rpc: unknown,
+): ServiceOf<S, Self> => {
+  const wire = forwardClient(rpc, tag[specSym], tag.groupId, tag.id) as Record<
+    string,
+    unknown
+  >;
+  const cap = tag[localCapSym];
+  const service: Record<string, unknown> = { ...wire };
+  for (const [key, m] of Object.entries(tag[specSym])) {
+    if (isLocalMethod(m)) {
+      service[key] = Effect.flatMap(cap, () =>
+        Effect.die(new LocalOnlyMethod({ method: key })),
+      );
+    }
+  }
+  // Boundary assertion (runtime-safe): built from the spec, key-for-key.
+  return service as ServiceOf<S, Self>;
+};
+
+/**
+ * The **client** layer for a resource: drive it over RPC **as if it were local** — the exact
+ * same `yield* Tag` code as the local layer, only the provided layer differs, so it doesn't
+ * matter where the resource actually runs.
+ *
+ * Two paths, by whether the tag carries a {@link Host}:
+ * - **host-bearing tag** — the transport is resolved from the tag's host; the layer's only
+ *   requirement is that host (satisfied by {@link Resource.host}). Ship just the tag.
+ * - **hostless tag** — the transport is taken from the ambient `RpcClient.Protocol`, supplied
+ *   at wire-up. (Remote use stays optional: a hostless resource can also just run locally via
+ *   {@link Resource.layer}, or be served as its own process.)
+ *
+ * @public
+ */
+function clientLayer<Self, S extends Spec, HSelf>(
+  tag: ResourceTag<Self, S> & { readonly [hostSym]: HostKey<HSelf> },
+): Layer.Layer<Self, never, HSelf>;
+function clientLayer<Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+): Layer.Layer<Self, never, RpcClient.Protocol>;
+function clientLayer<Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+): Layer.Layer<Self, never, RpcClient.Protocol> {
+  const group = tag[groupSym];
+  const host = tag[hostSym];
+  // hostless: take the transport from the ambient `RpcClient.Protocol` — fully typed, no cast.
+  if (host === undefined) {
+    return Layer.effect(
+      tag,
+      Effect.map(RpcClient.make(group), (client) =>
+        buildClientService(tag, client),
+      ),
+    );
+  }
+  // host-bearing: resolve the transport from the host and provide it locally to the client, so
+  // the layer requires the host rather than the ambient Protocol. The host's identity is erased
+  // to `unknown` on the base tag; the `host`-overload pins the precise `HSelf` for callers, so
+  // this one contained boundary assertion restates the impl's return type (runtime-safe).
+  const layer = Layer.effect(
     tag,
-    Effect.map(RpcClient.make(tag[groupSym]), (rpc) => {
-      const wire = forwardClient(
-        rpc,
-        tag[specSym],
-        tag.groupId,
-        tag.id,
-      ) as Record<string, unknown>;
-      const cap = tag[localCapSym];
-      const service: Record<string, unknown> = { ...wire };
-      // local-only members: present in the type, but require the LocalCapability the client
-      // never grants — so calling one through a client is a compile error (and unreachable).
-      for (const [key, m] of Object.entries(tag[specSym])) {
-        if (isLocalMethod(m)) {
-          service[key] = Effect.flatMap(cap, () =>
-            Effect.die(new LocalOnlyMethod({ method: key })),
-          );
-        }
-      }
-      // Boundary assertion (runtime-safe): built from the spec, key-for-key.
-      return service as ServiceOf<S, Self>;
-    }),
+    Effect.map(
+      Effect.flatMap(host, (protocol) =>
+        Effect.provideService(
+          RpcClient.make(group),
+          RpcClient.Protocol,
+          protocol,
+        ),
+      ),
+      (client) => buildClientService(tag, client),
+    ),
   );
+  return layer as Layer.Layer<Self, never, RpcClient.Protocol>;
+}
 
 /** A wire-only instance tag for {@link clientInstances} — keyed via the covariant
  * {@link Context.Key} base so distinct `Self`s are accepted without `any`. @internal */
@@ -995,6 +1138,8 @@ const clientInstances = <
 export const Resource = {
   Tag: makeTag,
   tagFor,
+  Host: makeHost,
+  host: hostLayer,
   query,
   mutate,
   local,

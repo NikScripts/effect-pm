@@ -92,7 +92,35 @@ const TestEnv = Layer.mergeAll(ServerLive, RpcClient.layerProtocolHttp({ url: "/
    `NodeHttpServer.layerTest`). Read the ephemeral port from `HttpServer.HttpServer`
    (`address._tag === "TcpAddress" ? address.port : 0` — narrow, no cast).
 
-## Host implementation — what's ready vs the one wrinkle
+## Status — SHIPPED (slice 1: single-resource tags)
+
+Host-in-tag is **built and green** for `Resource.Tag` (single resource):
+
+- `Resource.Host<Self>(name)` — a `Context.Service` whose value is the transport
+  `HostProtocol`; extend it (`class EdgeHost extends Resource.Host<EdgeHost>("edge") {}`).
+- `Resource.host(Host, protocolLayer)` — re-keys an `RpcClient.Protocol` layer under the host
+  (`Layer.effect(host, RpcClient.Protocol).pipe(Layer.provide(protocol))`), **cast-free**.
+- Host on the tag rides the **inferring (spec) call**: `Resource.Tag<Self>(id)(spec, EdgeHost)`
+  (a `<Self>`-explicit outer call can't also infer `HSelf`). Stored on every tag under
+  `hostSym` as `HostKey<unknown> | undefined` (uniform → host-bearing tags stay assignable
+  wherever a plain `ResourceTag` is expected — the reverted wrinkle is gone). The host-bearing
+  return **narrows** `[hostSym]` to a concrete `HostKey<HSelf>`.
+- `Resource.client(tag)` — **two overloads** (no breaking change, per the owner's call):
+  - host-bearing tag → `Layer<Self, never, HSelf>` (transport resolved from the tag's host;
+    ship only the tag);
+  - hostless tag → `Layer<Self, never, RpcClient.Protocol>` (ambient transport, as before).
+  One contained boundary cast in the host branch (the base tag erases `HSelf` to `unknown`;
+  the overload pins it for callers) — consistent with the file's other runtime-safe boundary
+  assertions.
+- Tests: type-level proofs in `test/resource.test-d.ts` (host-bearing client requires the
+  host; `Resource.host` re-keys; full wiring → `R = never`) + a **real-http** round-trip
+  shipping only the tag + `Resource.host(...)` in `test/resource-host-http.test.ts`.
+
+**Remaining (slice 2):** thread the optional host through `Resource.tagFor` (families) and
+`QueueResource.Tag` — same "host in the inferring call" placement; the factory bakes one host
+for all instances (`HSelf` inferred once from the factory call, applied to every instance tag).
+
+## Host implementation — original design notes (kept for reference)
 
 **Cast-free transport re-keying — confirmed.**
 ```ts
