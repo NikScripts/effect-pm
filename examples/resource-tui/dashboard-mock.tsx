@@ -281,6 +281,41 @@ const Cell = (props: {
   );
 };
 
+// bottom bar: a view-specific hint, or the command palette when open. Suggestions
+// are reversed so the top match sits nearest the input line.
+const Bar = (props: {
+  readonly cmd: string | null;
+  readonly suggestions: ReadonlyArray<string>;
+  readonly cmdSel: number;
+  readonly hint: React.ReactElement;
+}): React.ReactElement => {
+  if (props.cmd === null) {
+    return props.hint;
+  }
+  const sel = Math.min(props.cmdSel, Math.max(0, props.suggestions.length - 1));
+  return (
+    <Box flexDirection="column">
+      {props.suggestions
+        .map((name, i) => ({ name, i }))
+        .reverse()
+        .map(({ name, i }) => (
+          <Box key={name} paddingX={1}>
+            <Text color={i === sel ? "cyan" : undefined} dimColor={i !== sel}>
+              {i === sel ? "› " : "  "}
+              {displayName(name)}
+              <Text dimColor> {name}</Text>
+            </Text>
+          </Box>
+        ))}
+      <Box paddingX={1} backgroundColor="gray">
+        <Text color="yellowBright">: {props.cmd}</Text>
+        <Text inverse> </Text>
+        <Text dimColor> · Enter open · Esc cancel</Text>
+      </Box>
+    </Box>
+  );
+};
+
 const App = (): React.ReactElement => {
   const { cols, rows } = useTerminalSize();
   const [queues, setQueues] = React.useState<Record<string, Q>>(initQueues);
@@ -426,9 +461,9 @@ const App = (): React.ReactElement => {
       } else if (key.escape) {
         setCmd(null);
       } else if (key.upArrow) {
-        setCmdSel((s) => Math.max(0, s - 1));
+        setCmdSel((s) => Math.min(suggestions.length - 1, s + 1));
       } else if (key.downArrow) {
-        setCmdSel((s) => s + 1);
+        setCmdSel((s) => Math.max(0, s - 1));
       } else if (key.backspace || key.delete) {
         setCmd((c) => (c ?? "").slice(0, -1));
         setCmdSel(0);
@@ -442,6 +477,11 @@ const App = (): React.ReactElement => {
       setEditMode((x) => !x);
       return;
     }
+    if (input === ":") {
+      setCmd("");
+      setCmdSel(0);
+      return;
+    }
     if (key.escape || key.backspace || key.delete) {
       back();
       return;
@@ -449,10 +489,7 @@ const App = (): React.ReactElement => {
     if (focused !== null) {
       return; // (resource controls would go here in edit mode)
     }
-    if (input === ":") {
-      setCmd("");
-      setCmdSel(0);
-    } else if (input === "h" || key.leftArrow) {
+    if (input === "h" || key.leftArrow) {
       setSel((s) => Math.max(0, s - 1));
     } else if (input === "l" || key.rightArrow) {
       setSel((s) => Math.min(members.length - 1, s + 1));
@@ -469,8 +506,18 @@ const App = (): React.ReactElement => {
   if (focused !== null) {
     const q = queues[focused];
     const view = q === undefined ? undefined : viewOf(focused, q, trend);
-    const visible = Math.max(1, rows - PAGE_HEIGHT - 5);
+    const footerRows = cmd === null ? 1 : suggestions.length + 1;
+    const visible = Math.max(1, rows - PAGE_HEIGHT - 4 - footerRows);
     const tail = logs.filter((e) => e.queue === focused).slice(-visible);
+    const hint = (
+      <Box paddingX={1} backgroundColor="gray">
+        <Text dimColor> Esc back · </Text>
+        <Text color="cyan">:</Text>
+        <Text dimColor> command · </Text>
+        <Text color={editMode ? "red" : "gray"}>{editMode ? "EDIT" : "view"}</Text>
+        <Text dimColor> Ctrl+E</Text>
+      </Box>
+    );
     return (
       <Box flexDirection="column" width={cols} height={rows} borderStyle={editMode ? "double" : BLANK_BORDER} borderColor="red">
         {view !== undefined ? (
@@ -483,7 +530,7 @@ const App = (): React.ReactElement => {
             <Text dimColor>LOGS </Text>
             <Text color="green">live</Text>
           </Box>
-          <Text dimColor>Esc back</Text>
+          <Text dimColor>{tail.length} shown</Text>
         </Box>
         <Box flexGrow={1} flexDirection="column" justifyContent="flex-end" paddingX={1}>
           {tail.map((e) => (
@@ -506,6 +553,7 @@ const App = (): React.ReactElement => {
             </Box>
           ))}
         </Box>
+        <Bar cmd={cmd} suggestions={suggestions} cmdSel={cmdSel} hint={hint} />
       </Box>
     );
   }
@@ -531,37 +579,20 @@ const App = (): React.ReactElement => {
         ))}
       </Box>
 
-      {cmd === null ? (
-        <Box paddingX={1} backgroundColor="gray">
-          <Text dimColor>
-            {" ↑↓←→ move · Enter open · "}
-          </Text>
-          <Text color="cyan">:</Text>
-          <Text dimColor> command · </Text>
-          <Text color={editMode ? "red" : "gray"}>{editMode ? "EDIT" : "view"}</Text>
-          <Text dimColor> Ctrl+E</Text>
-        </Box>
-      ) : (
-        <Box flexDirection="column">
-          {suggestions.map((name, i) => (
-            <Box key={name} paddingX={1}>
-              <Text
-                color={i === Math.min(cmdSel, suggestions.length - 1) ? "cyan" : undefined}
-                dimColor={i !== Math.min(cmdSel, suggestions.length - 1)}
-              >
-                {i === Math.min(cmdSel, suggestions.length - 1) ? "› " : "  "}
-                {displayName(name)}
-                <Text dimColor> {name}</Text>
-              </Text>
-            </Box>
-          ))}
+      <Bar
+        cmd={cmd}
+        suggestions={suggestions}
+        cmdSel={cmdSel}
+        hint={
           <Box paddingX={1} backgroundColor="gray">
-            <Text color="yellowBright">: {cmd}</Text>
-            <Text inverse> </Text>
-            <Text dimColor> · Enter open · Esc cancel</Text>
+            <Text dimColor>{" ↑↓←→ move · Enter open · "}</Text>
+            <Text color="cyan">:</Text>
+            <Text dimColor> command · </Text>
+            <Text color={editMode ? "red" : "gray"}>{editMode ? "EDIT" : "view"}</Text>
+            <Text dimColor> Ctrl+E</Text>
           </Box>
-        </Box>
-      )}
+        }
+      />
     </Box>
   );
 };
