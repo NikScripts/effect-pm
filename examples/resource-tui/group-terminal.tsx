@@ -19,13 +19,14 @@ import {
 } from "../resource-cli/manager-resources";
 import { Terminal } from "./terminal";
 
-const myGroup = Command.make(
-  "my-group",
-  {},
-  Terminal.make([Counter, QueueManager]),
-);
+// one Command.make per tag — the name lives here, the handler is the TUI
+const counter = Command.make("counter", {}, Terminal.make(Counter));
+const queue = Command.make("queue", {}, Terminal.make(QueueManager));
 
-const acme = Command.make("acme").pipe(Command.withSubcommands([myGroup]));
+// group them with native subcommands
+const acme = Command.make("acme").pipe(
+  Command.withSubcommands([counter, queue]),
+);
 
 const program = Command.runWith(acme, { version: "0.0.0" })(
   process.argv.slice(2),

@@ -1,14 +1,17 @@
 /**
  * @module examples/resource-tui/terminal
  *
- * `Terminal.make(tags)` → an `effect/cli` command **handler** that launches the
- * TUI. Drop it straight into `Command.make`:
+ * `Terminal.make(tag)` → an `effect/cli` command **handler** that launches the TUI
+ * for that one tag. Each tag gets its own `Command.make` (which supplies the name);
+ * group them with native `Command.withSubcommands`:
  *
- *   Command.make("my-group", {}, Terminal.make([Counter, QueueManager]))
+ *   const counter = Command.make("counter", {}, Terminal.make(Counter))
+ *   const queue   = Command.make("queue",   {}, Terminal.make(QueueManager))
+ *   const ops     = Command.make("ops").pipe(Command.withSubcommands([counter, queue]))
  *
  * The handler grabs the ambient Effect context (the resources the CLI already
- * provided), wraps it as the atom runtime, renders the dashboard in the alternate
- * screen, and completes when you quit. Tags are keyed by their own id — no naming.
+ * provided), wraps it as the atom runtime, renders in the alternate screen, and
+ * completes when you quit.
  */
 
 import { render } from "ink";
@@ -34,15 +37,14 @@ const renderTui = (App: () => React.ReactElement): Effect.Effect<void> =>
   });
 
 export const Terminal = {
-  /** A command handler that renders the given tags as a TUI (keyed by id). */
+  /** A command handler that renders one tag as a TUI. */
   make:
-    (tags: ReadonlyArray<AnyTag>) =>
+    (tag: AnyTag) =>
     (): Effect.Effect<void, never, unknown> =>
       Effect.gen(function* () {
         const context = yield* Effect.context<never>();
         const runtime = Atom.runtime(Layer.succeedContext(context));
-        const record = Object.fromEntries(tags.map((tag) => [tag.id, tag]));
-        const { App } = makeResourceTui(record, runtime);
+        const { App } = makeResourceTui({ [tag.id]: tag }, runtime);
         yield* renderTui(App);
       }),
 };
