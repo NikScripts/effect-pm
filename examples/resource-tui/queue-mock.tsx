@@ -46,18 +46,18 @@ const COLOR: Record<Status, string> = {
   paused: "yellow",
   stopped: "red",
 };
+// text-presentation glyphs only (no emoji codepoints → no "bubble button" rendering)
 const STATUS_ICON: Record<Status, string> = {
-  running: "▶",
-  paused: "⏸",
-  stopped: "⏹",
+  running: "►",
+  paused: "‖",
+  stopped: "■",
 };
-// key → icon (media-style; ⚡ for a producer burst, ⎋ for quit)
 const KEY = {
-  pause: "⏸",
-  resume: "▶",
+  pause: "‖",
+  resume: "►",
   clear: "⌫",
-  stop: "⏹",
-  burst: "⚡",
+  stop: "■",
+  burst: "↯",
   quit: "⎋",
 };
 const SPARK = "▁▂▃▄▅▆▇█";
