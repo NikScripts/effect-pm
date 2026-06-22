@@ -14,6 +14,7 @@
 
 import { Box, render, Text, useInput, useStdout } from "ink";
 import * as React from "react";
+import { displayName } from "./queue-widget";
 
 type Status = "running" | "paused" | "stopped";
 type Priority = "high" | "normal" | "low";
@@ -56,45 +57,46 @@ type Node =
   | { readonly t: "q"; readonly name: string }
   | { readonly t: "g"; readonly name: string; readonly members: ReadonlyArray<Node> };
 
+// tags are full keys — display names come from the last `/` segment
 const TREE: Extract<Node, { t: "g" }> = {
   t: "g",
-  name: "ops",
+  name: "@acme/queues/Ops",
   members: [
-    { t: "q", name: "mail" },
-    { t: "q", name: "jobs" },
-    { t: "q", name: "billing" },
+    { t: "q", name: "@acme/queues/Mail" },
+    { t: "q", name: "@acme/queues/Jobs" },
+    { t: "q", name: "@acme/queues/Billing" },
     {
       t: "g",
-      name: "workers",
+      name: "@acme/queues/Workers",
       members: [
-        { t: "q", name: "worker-1" },
-        { t: "q", name: "worker-2" },
-        { t: "q", name: "worker-3" },
+        { t: "q", name: "@acme/queues/Worker1" },
+        { t: "q", name: "@acme/queues/Worker2" },
+        { t: "q", name: "@acme/queues/Worker3" },
       ],
     },
-    { t: "q", name: "notify" },
-    { t: "q", name: "exports" },
+    { t: "q", name: "@acme/queues/Notify" },
+    { t: "q", name: "@acme/queues/Exports" },
     {
       t: "g",
-      name: "reports",
+      name: "@acme/queues/Reports",
       members: [
-        { t: "q", name: "daily" },
-        { t: "q", name: "weekly" },
+        { t: "q", name: "@acme/queues/Daily" },
+        { t: "q", name: "@acme/queues/Weekly" },
       ],
     },
   ],
 };
 const QUEUES = [
-  "mail",
-  "jobs",
-  "billing",
-  "worker-1",
-  "worker-2",
-  "worker-3",
-  "notify",
-  "exports",
-  "daily",
-  "weekly",
+  "@acme/queues/Mail",
+  "@acme/queues/Jobs",
+  "@acme/queues/Billing",
+  "@acme/queues/Worker1",
+  "@acme/queues/Worker2",
+  "@acme/queues/Worker3",
+  "@acme/queues/Notify",
+  "@acme/queues/Exports",
+  "@acme/queues/Daily",
+  "@acme/queues/Weekly",
 ];
 
 let rngState = 0x9e3779b1;
@@ -190,7 +192,7 @@ const QueueCard = (props: {
       <Box borderStyle="round" borderColor={COLOR[q.status]} width={width} marginRight={1} marginBottom={1} paddingX={1}>
         <Box flexGrow={1}>
           <Text color={COLOR[q.status]}>{ICON[q.status]} </Text>
-          <Text>{name}</Text>
+          <Text>{displayName(name)}</Text>
         </Box>
         <Box width={4} justifyContent="flex-end">
           <Text>{pending}</Text>
@@ -206,7 +208,7 @@ const QueueCard = (props: {
     <Box flexDirection="column" borderStyle="round" borderColor={COLOR[q.status]} width={width} marginRight={1} marginBottom={1} paddingX={1}>
       <Box>
         <Box flexGrow={1}>
-          <Text bold>{name}</Text>
+          <Text bold>{displayName(name)}</Text>
         </Box>
         <Text color={COLOR[q.status]}>{ICON[q.status]}</Text>
       </Box>
@@ -231,7 +233,7 @@ const XSRow = (props: {
   if (node.t === "g") {
     return (
       <Text dimColor>
-        ▸ {node.name} · {node.members.length}
+        ▸ {displayName(node.name)} · {node.members.length}
       </Text>
     );
   }
@@ -245,7 +247,7 @@ const XSRow = (props: {
         <Text color={COLOR[q.status]}>{ICON[q.status]}</Text>
       </Box>
       <Box flexGrow={1}>
-        <Text>{node.name}</Text>
+        <Text>{displayName(node.name)}</Text>
       </Box>
       <Box width={5} justifyContent="flex-end">
         <Text>{pendingOf(q)}</Text>
@@ -396,7 +398,7 @@ const App = (): React.ReactElement => {
     >
       <Box paddingX={1}>
         <Text bold color="black" backgroundColor="cyan">
-          {` ⬢ ${TREE.name} `}
+          {` ⬢ ${displayName(TREE.name)} `}
         </Text>
         <Text dimColor>
           {" "}

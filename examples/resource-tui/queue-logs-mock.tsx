@@ -24,7 +24,7 @@ import {
 
 type Kind = "started" | "completed" | "failed" | "retry";
 
-const NAME = "mail-queue";
+const NAME = "@acme/queues/MailQueue";
 const LOG: Record<Kind, { icon: string; color: string; label: string }> = {
   started: { icon: "►", color: "gray", label: "started" },
   completed: { icon: "✓", color: "green", label: "done" },

@@ -72,6 +72,9 @@ export const spark = (vals: ReadonlyArray<number>): string => {
     .join("");
 };
 
+/** Display name from a tag key: the last `/` segment of `@repo/package/MyQueue`. */
+export const displayName = (key: string): string => key.split("/").pop() ?? key;
+
 export const variantFor = (cols: number, rows: number): Variant =>
   cols >= 78 && rows >= 18 ? "XL" : cols >= 48 ? "L" : cols >= 34 ? "M" : "S";
 
@@ -84,7 +87,7 @@ const Title = (props: {
 }): React.ReactElement => (
   <Box justifyContent="space-between">
     <Text bold color="cyan">
-      {props.name}
+      {displayName(props.name)}
     </Text>
     <Text color={COLOR[props.status]}>
       {STATUS_ICON[props.status]} {props.status}
@@ -121,7 +124,7 @@ const PrioRow = (props: {
       {props.waitWidth > 0 ? (
         <Box width={props.waitWidth} justifyContent="flex-end">
           <Text dimColor>
-            {props.waitPrefix ?? ""}⌀ {fmt(props.v.wait[props.p])}
+            {props.waitPrefix ?? ""}~{fmt(props.v.wait[props.p])}
           </Text>
         </Box>
       ) : null}
@@ -171,7 +174,7 @@ export const CardM = (props: { readonly v: View }): React.ReactElement => {
       <PrioRow p="low" v={v} barWidth={4} max={max} labelWidth={2} showLabel={false} waitWidth={9} />
       <Box>
         <Box width={14}>
-          <Text dimColor>exec ⌀ {fmt(v.execution)}</Text>
+          <Text dimColor>exec ~{fmt(v.execution)}</Text>
         </Box>
         <Box flexGrow={1} justifyContent="flex-end">
           <Text dimColor>✓ {v.completed}</Text>
@@ -196,10 +199,10 @@ export const CardL = (props: { readonly v: View }): React.ReactElement => {
       <PrioRow p="low" v={v} barWidth={7} max={max} labelWidth={8} showLabel waitWidth={14} waitPrefix="wait " />
       <Box marginTop={1}>
         <Box width={15}>
-          <Text dimColor>exec ⌀ {fmt(v.execution)}</Text>
+          <Text dimColor>exec ~{fmt(v.execution)}</Text>
         </Box>
         <Box width={15}>
-          <Text dimColor>total ⌀ {fmt(v.total)}</Text>
+          <Text dimColor>total ~{fmt(v.total)}</Text>
         </Box>
         <Box flexGrow={1} justifyContent="flex-end">
           <Text dimColor>{v.throughput.toFixed(1)}/s</Text>
@@ -237,10 +240,10 @@ export const PageXL = (props: {
       </Box>
       <Box marginTop={1}>
         <Box width={22}>
-          <Text>execution ⌀ {fmt(v.execution)}</Text>
+          <Text>execution ~{fmt(v.execution)}</Text>
         </Box>
         <Box width={22}>
-          <Text>total ⌀ {fmt(v.total)}</Text>
+          <Text>total ~{fmt(v.total)}</Text>
         </Box>
         <Box flexGrow={1} justifyContent="flex-end">
           <Text>{v.throughput.toFixed(1)}/s</Text>

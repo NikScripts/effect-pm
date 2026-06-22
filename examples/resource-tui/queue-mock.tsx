@@ -29,7 +29,7 @@ import {
   variantFor,
 } from "./queue-widget";
 
-const NAME = "mail-queue";
+const NAME = "@acme/queues/MailQueue";
 const KEY = {
   pause: "‖",
   resume: "►",
