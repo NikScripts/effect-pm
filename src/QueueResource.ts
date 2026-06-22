@@ -1410,7 +1410,11 @@ const makeQueueEffectFromConfig = (
 ): Effect.Effect<
   QueueHandle<unknown, unknown, unknown, unknown>,
   never,
-  Scope.Scope | unknown
+  // Internal erased boundary: the worker's requirement is `any` here (the config is
+  // `any`-typed at this dispatch). `any` — not `unknown` — is the honest erasure: it stays
+  // assignable both ways, and the precise `R` is preserved on the public `makeQueueEffect`
+  // overloads. (`unknown` would assert an unprovidable service → `missingEffectContext`.)
+  Scope.Scope | any
 > =>
   hasItemSchema(config)
     ? makeQueueEffectWithSchema(config)
@@ -1451,7 +1455,10 @@ function makeQueueEffect(
 ): Effect.Effect<
   QueueHandle<unknown, unknown, unknown, unknown>,
   never,
-  Scope.Scope | unknown
+  // Erased overload-impl boundary — the precise `R` (`Scope.Scope |
+  // InferQueueWorkerRequirements<...>`) is on the overloads above; here the worker
+  // requirement is `any`, not `unknown` (see {@link makeQueueEffectFromConfig}).
+  Scope.Scope | any
 > {
   if (typeof effectOrConfig === "function") {
     const config = { ...(options ?? {}), effect: effectOrConfig };
