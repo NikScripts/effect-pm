@@ -1,12 +1,10 @@
 /**
  * @module examples/resource-tui/group-terminal
  *
- * A group as the root command, its members as subcommands — each a TUI. The group
- * is a real tag (Group.Tag); a Command.make per member tag.
+ * A group tag as a TUI command — pass the group straight to `Terminal.make`.
  *
- *   pnpm run example:group-terminal my-group Counter        # Counter's TUI
- *   pnpm run example:group-terminal my-group QueueManager   # QueueManager's TUI
- *   pnpm run example:group-terminal my-group --help
+ *   pnpm run example:group-terminal my-group     # the group's dashboard (all members)
+ *   pnpm run example:group-terminal --help
  */
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
@@ -21,17 +19,13 @@ import {
 } from "../resource-cli/manager-resources";
 import { Terminal } from "./terminal";
 
-// a real tag — pass the members in, get them back out via Group.members
-class MyGroup extends Group.Tag<MyGroup>("my-group")([Counter, QueueManager]) {}
+// a real tag; members are accessors — MyGroup.Counter, MyGroup.QueueManager
+class MyGroup extends Group.Tag<MyGroup>("@nikscripts/effect-pm/MyGroup")({
+  Counter,
+  QueueManager,
+}) {}
 
-// group as root; one Command.make per member tag
-const root = Command.make(MyGroup.id).pipe(
-  Command.withSubcommands(
-    Group.members(MyGroup).map((tag) =>
-      Command.make(tag.id, {}, Terminal.make(tag)),
-    ),
-  ),
-);
+const root = Command.make("my-group", {}, Terminal.make(MyGroup));
 
 const program = Command.runWith(root, { version: "0.0.0" })(
   process.argv.slice(2),
