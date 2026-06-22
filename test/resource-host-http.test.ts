@@ -1,14 +1,14 @@
 import { Effect, Layer, Schema } from "effect";
-import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
-import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
+import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { Resource, groupOf } from "../src/Resource";
+import { Resource } from "../src/Resource";
 
-// Host-in-tag over REAL http: the tag carries its own transport (EdgeHost), so a consumer
-// ships ONLY the tag — `Resource.client(tag)` resolves where to connect from the host, and
-// `Resource.host(EdgeHost, …)` wires the transport once. No per-call `provideService`, no
-// ambient Protocol threaded by hand.
+// Host-in-tag over REAL http, using the batteries-included helpers: the tag carries its own
+// transport (EdgeHost), the server is one `Resource.serveHttp` call, and the client wires the
+// host with one `Resource.connectHttp`. Ship ONLY the tag — `Resource.client(tag)` resolves
+// where to connect from the host. Serialization defaults to ndjson on BOTH helpers, so the
+// two sides can't disagree on the codec.
 class EdgeHost extends Resource.Host<EdgeHost>("hostHttp/edge") {}
 class Echo extends Resource.Tag<Echo>("hostHttp/Echo")(
   {
@@ -18,24 +18,11 @@ class Echo extends Resource.Tag<Echo>("hostHttp/Echo")(
   EdgeHost,
 ) {}
 
-// The server side is unchanged by the host — it just mounts the contract group's handlers.
-const ServerLive = HttpRouter.serve(
-  RpcServer.layerHttp({
-    group: groupOf(Echo),
-    path: "/rpc",
-    protocol: "http",
-  }).pipe(
-    Layer.provide(
-      Resource.server(Echo, {
-        ping: Effect.succeed("pong"),
-        shout: ({ msg }) => Effect.succeed(msg.toUpperCase()),
-      }),
-    ),
-  ),
-).pipe(
-  Layer.provideMerge(RpcSerialization.layerJson),
-  Layer.provideMerge(NodeHttpServer.layerTest),
-);
+// the whole server, collapsed — only the platform HttpServer is left to provide
+const ServerLive = Resource.serveHttp(Echo, {
+  ping: Effect.succeed("pong"),
+  shout: ({ msg }) => Effect.succeed(msg.toUpperCase()),
+}).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
 it("drives a host-bearing resource over real http (ship only the tag)", () => {
   const program = Effect.gen(function* () {
@@ -44,22 +31,16 @@ it("drives a host-bearing resource over real http (ship only the tag)", () => {
       Effect.map((server) => server.address),
     );
     const port = address._tag === "TcpAddress" ? address.port : 0;
-    const EdgeLive = Resource.host(
-      EdgeHost,
-      RpcClient.layerProtocolHttp({
-        url: `http://127.0.0.1:${port}/rpc`,
-      }).pipe(
-        Layer.provide(RpcSerialization.layerJson),
-        Layer.provide(FetchHttpClient.layer),
-      ),
-    );
+    const EdgeLive = Resource.connectHttp(EdgeHost, {
+      url: `http://127.0.0.1:${port}/rpc`,
+    });
 
     yield* Effect.gen(function* () {
       const echo = yield* Echo;
       expect(yield* echo.ping).toBe("pong");
       expect(yield* echo.shout({ msg: "hi" })).toBe("HI");
     }).pipe(
-      // ship only the tag: client(Echo) requires EdgeHost; host(EdgeHost, …) supplies it.
+      // ship only the tag: client(Echo) requires EdgeHost; connectHttp(EdgeHost, …) supplies it.
       Effect.provide(Resource.client(Echo).pipe(Layer.provide(EdgeLive))),
       Effect.scoped,
     );

@@ -171,7 +171,7 @@ void _procClients;
 
 // ── host in the tag: ship only the tag; the client resolves where to connect ──
 // A host-bearing tag carries its own transport. `Resource.client(tag)` then requires the
-// HOST (not the ambient Protocol), and `Resource.host(Host, protocol)` wires it once.
+// HOST (not the ambient Protocol), and `Resource.connect(Host, transport)` wires it once.
 class EdgeHost extends Resource.Host<EdgeHost>("test/edge") {}
 class Hosted extends Resource.Tag<Hosted>("test/Hosted")(
   { ping: Resource.query(Schema.String) },
@@ -183,8 +183,8 @@ const _hostedClient: Layer.Layer<Hosted, never, EdgeHost> =
   Resource.client(Hosted);
 void _hostedClient;
 
-// Resource.host re-keys an RPC `Protocol` layer under the host.
-const _hostLive: Layer.Layer<EdgeHost> = Resource.host(EdgeHost, protocolLayer);
+// Resource.connect re-keys an RPC `Protocol` layer under the host.
+const _hostLive: Layer.Layer<EdgeHost> = Resource.connect(EdgeHost, protocolLayer);
 void _hostLive;
 
 // full wiring: client(Hosted) needs EdgeHost; host(EdgeHost, …) supplies it → R = never.
@@ -192,7 +192,7 @@ const _hostedRun: Promise<string> = Effect.runPromise(
   Effect.flatMap(Hosted, (h) => h.ping).pipe(
     Effect.provide(
       Resource.client(Hosted).pipe(
-        Layer.provide(Resource.host(EdgeHost, protocolLayer)),
+        Layer.provide(Resource.connect(EdgeHost, protocolLayer)),
       ),
     ),
   ),

@@ -37,6 +37,19 @@ export const queueSizes = Schema.Struct({
 });
 
 /**
+ * A queue's whole observable state — the element of its `changes` stream. The single
+ * snapshot a dashboard atom / CLI `--watch` / TUI renders, kept small and encodable (it
+ * crosses RPC).
+ *
+ * @public
+ */
+export const queueSnapshot = Schema.Struct({
+  sizes: queueSizes,
+  paused: Schema.Boolean,
+  completed: Schema.Number,
+});
+
+/**
  * The queue **control + observation** contract: the fixed-schema verbs of a queue handle,
  * shared by every queue instance. The data-plane (item-typed) verbs are added in a later
  * slice. Mirrors the matching members of `QueueResource`'s `QueueHandleApi`.
@@ -74,6 +87,10 @@ export const queueControlSpec = {
     description:
       "Drain all pending items and reset the completed counter; returns the count cleared.",
     destructive: true,
+  }),
+  changes: Resource.stream(queueSnapshot).annotate({
+    description:
+      "Live queue state (per-priority sizes, paused, completed) emitted on every change.",
   }),
 };
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to
@@ -120,7 +137,7 @@ type QueueInstanceSpec<Sch extends Schema.Top> = ReturnType<
  * `Self` is given explicitly (Effect's `()` two-stage form); the item type is inferred from
  * `itemSchema`, which becomes the rpc payload schema (native wire validation, no codec). Pass
  * `options.host` to bind the queue to a {@link Resource.Host} — the tag then carries its own
- * transport (ship only the tag; see {@link Resource.client} / {@link Resource.host}).
+ * transport (ship only the tag; see {@link Resource.client} / {@link Resource.connect}).
  *
  * @public
  */

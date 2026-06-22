@@ -26,15 +26,30 @@
  * anywhere; only the layer changes:
  * - {@link Resource.layer} — run it locally with a real implementation;
  * - {@link Resource.client} — drive it remotely over RPC, as if local;
- * - {@link Resource.server} — expose one local impl over RPC;
+ * - {@link Resource.server} — expose one local impl over RPC (transport-agnostic handlers);
  * - {@link Resource.serveInstances} — serve many factory instances behind one group,
  *   routed by the per-call `id` header.
+ *
+ * Over **http**, the batteries-included pair collapses the transport boilerplate (ndjson by
+ * default on both, so client/server can't disagree on the codec):
+ * - {@link Resource.serveHttp} — expose a resource on an http `RpcServer` in one call;
+ * - {@link Resource.connectHttp} — wire a {@link Resource.Host}'s transport from a `url`.
+ *
+ * A method is {@link Resource.query} (one-shot read), {@link Resource.mutate} (mutation), or
+ * {@link Resource.stream} (a live `Stream` source, e.g. `changes`).
  *
  * @module Resource
  */
 import { Context, Data, Effect, Layer, Option, Schema, Stream } from "effect";
-import { Headers } from "effect/unstable/http";
-import { Rpc, RpcClient, RpcGroup, RpcSchema } from "effect/unstable/rpc";
+import { FetchHttpClient, Headers, HttpRouter } from "effect/unstable/http";
+import {
+  Rpc,
+  RpcClient,
+  RpcGroup,
+  RpcSchema,
+  RpcSerialization,
+  RpcServer,
+} from "effect/unstable/rpc";
 
 // ── typed errors (Data.TaggedError — never raw `Error`) ──
 
@@ -633,7 +648,7 @@ export const hostSym: unique symbol = Symbol.for(
 
 /**
  * The value of a {@link Host} service: the RPC client transport `Protocol` for that host.
- * `Resource.host(...)` produces a layer providing exactly this (re-keyed under the host),
+ * `Resource.connect(...)` produces a layer providing exactly this (re-keyed under the host),
  * and {@link Resource.client} feeds it to `RpcClient.make` as the `RpcClient.Protocol`.
  *
  * @internal
@@ -820,7 +835,7 @@ export interface HostTagFactory<S extends Spec, HSelf> {
  * instances are told apart by the per-call `id` header.
  *
  * Pass `options.host` to bind the whole family to a {@link Host}: every instance becomes a
- * host-bearing tag and ships only-the-tag (see {@link Resource.client} / {@link Resource.host}).
+ * host-bearing tag and ships only-the-tag (see {@link Resource.client} / {@link Resource.connect}).
  *
  * ```ts
  * const Queue = Resource.tagFor("queue", { pause: Resource.mutate(Schema.Void) });
@@ -928,6 +943,42 @@ const serverLayer = <S extends Spec>(
     handlers as unknown as Parameters<(typeof group)["toLayer"]>[0],
   ) as Layer.Layer<HandlerContextOf<S>>;
 };
+
+/**
+ * Expose a resource over **http** in one call — the server mirror of {@link connectHttp}, and
+ * the batteries-included form of {@link serverLayer}. Mounts the contract group on an http
+ * `RpcServer` at `path` (default `/rpc`) with the impl's handlers and the serialization codec
+ * (default {@link defaultSerialization}, matching the client). The only thing left to provide
+ * is an `HttpServer` (platform-specific — e.g. `NodeHttpServer.layer({ port })`), since the
+ * bind address is a deployment concern:
+ *
+ * ```ts
+ * const JobsServer = Resource.serveHttp(Jobs, jobsImpl).pipe(
+ *   Layer.provideMerge(NodeHttpServer.layer({ port: 3001 })),
+ * );
+ * ```
+ *
+ * @public
+ */
+const serveHttp = <S extends Spec>(
+  tag: {
+    readonly groupId: string;
+    readonly [specSym]: S;
+    readonly [groupSym]: RpcGroupOf<S>;
+  },
+  impl: WireServiceOf<S>,
+  options?: {
+    readonly path?: HttpRouter.PathInput;
+    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+  },
+) =>
+  HttpRouter.serve(
+    RpcServer.layerHttp({
+      group: tag[groupSym],
+      path: options?.path ?? "/rpc",
+      protocol: "http",
+    }).pipe(Layer.provide(serverLayer(tag, impl))),
+  ).pipe(Layer.provideMerge(options?.serialization ?? defaultSerialization));
 
 /** The header carrying the target instance id, set per-call by {@link forwardClient}. */
 const ID_HEADER = "id";
@@ -1102,7 +1153,7 @@ export const forwardClient = <S extends Spec>(
  *
  * Attach it to a tag (`Resource.Tag<Self>(id)(spec, EdgeHost)`) to make the tag carry its own
  * transport — then ship only the tag: {@link Resource.client} reads the host to resolve where
- * to connect, and a consumer wires the transport once with {@link Resource.host}.
+ * to connect, and a consumer wires the transport once with {@link Resource.connect}.
  *
  * @public
  */
@@ -1110,25 +1161,58 @@ const makeHost = <Self>(name: string) =>
   Context.Service<Self, HostProtocol>()(name);
 
 /**
- * Wire a {@link Host}'s transport, **once**, from an RPC client `Protocol` layer (e.g.
- * `RpcClient.layerProtocolHttp({ url })` fed its serialization + http client). Re-keys that
- * `Protocol` under the host, so {@link Resource.client} resolves it for every tag bound to
- * this host; provide one `Resource.host(...)` per host an app talks to.
+ * Wire a {@link Host}'s transport, **once**, from any RPC client `Protocol` layer — the
+ * transport-agnostic primitive (use {@link connectHttp} for the batteries-included http case).
+ * Re-keys that `Protocol` under the host, so {@link Resource.client} resolves it for every tag
+ * bound to this host; provide one `Resource.connect(...)` per host an app talks to.
  *
  * ```ts
- * const EdgeLive = Resource.host(EdgeHost, RpcClient.layerProtocolHttp({ url }).pipe(
- *   Layer.provide(RpcSerialization.layerJson),
- *   Layer.provide(FetchHttpClient.layer),
+ * const EdgeLive = Resource.connect(EdgeHost, RpcClient.layerProtocolWebsocket({ url }).pipe(
+ *   Layer.provide(RpcSerialization.layerNdjson),
+ *   Layer.provide(socketLayer),
  * ));
  * ```
  *
  * @public
  */
-const hostLayer = <Self, RIn>(
+const connectLayer = <Self, RIn>(
   host: HostKey<Self>,
   protocol: Layer.Layer<RpcClient.Protocol, never, RIn>,
 ): Layer.Layer<Self, never, RIn> =>
   Layer.effect(host, RpcClient.Protocol).pipe(Layer.provide(protocol));
+
+/** The default RPC serialization: newline-delimited JSON — handles both one-shot and
+ * **streaming** responses, and is shared by {@link connectHttp} + {@link serveHttp} so a
+ * client and server can't silently disagree on the codec. */
+const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization> =
+  RpcSerialization.layerNdjson;
+
+/**
+ * Wire a {@link Host}'s transport over **http**, the common case — `Resource.connect` with
+ * batteries included. Builds the http client `Protocol` (Fetch + serialization) from a `url`
+ * and re-keys it under the host. Serialization defaults to {@link defaultSerialization}
+ * (ndjson), matching {@link serveHttp}'s default so the two sides agree by construction.
+ *
+ * ```ts
+ * const EdgeLive = Resource.connectHttp(EdgeHost, { url: "http://10.0.0.2:3002/rpc" });
+ * ```
+ *
+ * @public
+ */
+const connectHttp = <Self>(
+  host: HostKey<Self>,
+  options: {
+    readonly url: string;
+    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+  },
+): Layer.Layer<Self> =>
+  connectLayer(
+    host,
+    RpcClient.layerProtocolHttp({ url: options.url }).pipe(
+      Layer.provide(options.serialization ?? defaultSerialization),
+      Layer.provide(FetchHttpClient.layer),
+    ),
+  );
 
 /**
  * Build the client-side service for a tag from a wired RPC client: forward every wire method
@@ -1164,7 +1248,7 @@ const buildClientService = <Self, S extends Spec>(
  *
  * Two paths, by whether the tag carries a {@link Host}:
  * - **host-bearing tag** — the transport is resolved from the tag's host; the layer's only
- *   requirement is that host (satisfied by {@link Resource.host}). Ship just the tag.
+ *   requirement is that host (satisfied by {@link Resource.connect}). Ship just the tag.
  * - **hostless tag** — the transport is taken from the ambient `RpcClient.Protocol`, supplied
  *   at wire-up. (Remote use stays optional: a hostless resource can also just run locally via
  *   {@link Resource.layer}, or be served as its own process.)
@@ -1275,7 +1359,8 @@ export const Resource = {
   Tag: makeTag,
   tagFor,
   Host: makeHost,
-  host: hostLayer,
+  connect: connectLayer,
+  connectHttp,
   query,
   mutate,
   stream,
@@ -1283,6 +1368,7 @@ export const Resource = {
   instance,
   layer: localLayer,
   server: serverLayer,
+  serveHttp,
   serveInstances,
   client: clientLayer,
   clientInstances,

@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Layer, Schema, Stream } from "effect";
 import { RpcClient, RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import { QueueResource, queueControlSpec } from "../src/QueueContract";
@@ -42,6 +42,13 @@ const makeImpl = () => {
       void paused;
       return cleared;
     }),
+    // not exercised by the RpcTest control round-trip below (streaming is verified over real
+    // http in resource-stream-http.test.ts); a static snapshot stream satisfies the contract.
+    changes: Stream.make({
+      sizes: { high: 0, normal: pending, low: 0 },
+      paused,
+      completed: done,
+    }),
   };
 };
 
@@ -82,6 +89,7 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
 it("exposes the expected control verbs", () => {
   expect(Object.keys(queueControlSpec).sort()).toEqual(
     [
+      "changes",
       "clear",
       "completed",
       "isEmpty",

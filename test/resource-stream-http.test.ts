@@ -12,6 +12,7 @@ import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { Resource, groupOf } from "../src/Resource";
+import { queueSnapshot } from "../src/QueueContract";
 
 // Streaming `.changes` over a REAL http transport (the in-memory RpcTest path is the blocker
 // the design note flagged — this proves the wire works end to end). Streams need a
@@ -79,6 +80,40 @@ class Status extends Resource.Tag<Status>("stream/Status")({
   set: Resource.mutate(Schema.Void, { payload: { value: Schema.String } }),
   changes: Resource.stream(Schema.String),
 }) {}
+
+// The queue contract's `changes` snapshot streams over http — proves the real `queueSnapshot`
+// (a struct of per-priority sizes + paused + completed) crosses the wire as stream elements,
+// using the batteries-included `serveHttp` (ndjson by default, which streaming needs).
+class QueueWatch extends Resource.Tag<QueueWatch>("stream/QueueWatch")({
+  changes: Resource.stream(queueSnapshot),
+}) {}
+
+const snapA = { sizes: { high: 0, normal: 3, low: 1 }, paused: false, completed: 0 };
+const snapB = { sizes: { high: 0, normal: 0, low: 0 }, paused: true, completed: 4 };
+
+const QueueWatchServer = Resource.serveHttp(QueueWatch, {
+  changes: Stream.fromIterable([snapA, snapB]),
+}).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+
+it("streams the queue snapshot (`changes`) over real http", () => {
+  const program = Effect.gen(function* () {
+    const address = yield* HttpServer.HttpServer.pipe(
+      Effect.map((server) => server.address),
+    );
+    const port = address._tag === "TcpAddress" ? address.port : 0;
+    yield* Effect.gen(function* () {
+      const queue = yield* QueueWatch;
+      const seen = yield* Stream.runCollect(queue.changes);
+      expect(Array.from(seen)).toEqual([snapA, snapB]);
+    }).pipe(
+      Effect.provide(
+        Resource.client(QueueWatch).pipe(Layer.provide(clientHttp(port))),
+      ),
+      Effect.scoped,
+    );
+  }).pipe(Effect.provide(QueueWatchServer), Effect.scoped);
+  return Effect.runPromise(program as Effect.Effect<void, unknown>);
+});
 
 it("a SubscriptionRef-backed `changes` drives live status updates", () => {
   const program = Effect.gen(function* () {

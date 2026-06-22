@@ -135,6 +135,24 @@ Host now threads through factories too:
 
 New public types: `HostKey`, `TagFactory`, `HostTagFactory` (exported from the barrel).
 
+## Status — SHIPPED (slice 3: rename + symmetric http helpers)
+
+- **Renamed** `Resource.host` → **`Resource.connect`** (the transport-agnostic primitive;
+  takes a host + any RPC client `Protocol` layer). The old case-only `Host`/`host` collision
+  is gone.
+- **`Resource.connectHttp(host, { url, serialization? })`** — batteries-included client: builds
+  the http `Protocol` (Fetch + serialization) and re-keys it under the host. One line.
+- **`Resource.serveHttp(tag, impl, { path?, serialization? })`** — the server mirror: mounts
+  the contract group on an http `RpcServer` (path default `/rpc`) with handlers + serialization;
+  the only thing left to provide is a platform `HttpServer` (e.g. `NodeHttpServer.layer({ port })`),
+  since bind address is a deployment concern. Collapses the 6-line server incantation to one.
+- **Serialization SSOT-by-default:** both helpers default to `RpcSerialization.layerNdjson`
+  (handles one-shot **and** streaming), so a client and server can't silently disagree on the
+  codec. Address stays per-side (dial-url vs bind-port are different deployment concerns).
+- Naming avoids near-collisions: `server`/`serveHttp` (low-level/http) and
+  `connect`/`connectHttp` mirror each other.
+- `test/resource-host-http.test.ts` now dogfoods `serveHttp` + `connectHttp`.
+
 ## Host implementation — original design notes (kept for reference)
 
 **Cast-free transport re-keying — confirmed.**
