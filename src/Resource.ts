@@ -32,9 +32,9 @@
  *
  * @module Resource
  */
-import { Context, Data, Effect, Layer, Option, Schema } from "effect";
+import { Context, Data, Effect, Layer, Option, Schema, Stream } from "effect";
 import { Headers } from "effect/unstable/http";
-import { Rpc, RpcClient, RpcGroup } from "effect/unstable/rpc";
+import { Rpc, RpcClient, RpcGroup, RpcSchema } from "effect/unstable/rpc";
 
 // ── typed errors (Data.TaggedError — never raw `Error`) ──
 
@@ -129,9 +129,15 @@ export interface MethodAnnotations {
 const methodTypeId: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/method");
 
 /**
- * One method of a resource contract — built by {@link Resource.query} / {@link Resource.mutate}.
- * Carries its `kind`, schemas (`payload` / `success` / `error`), and tool annotations.
- * `.annotate({...})` returns a copy with merged annotations, mirroring Effect's schema idiom.
+ * One method of a resource contract — built by {@link Resource.query} /
+ * {@link Resource.mutate} / {@link Resource.stream}. Carries its `kind`, schemas
+ * (`payload` / `success` / `error`), whether it's a `stream` (a push source vs a one-shot
+ * read), and tool annotations. `.annotate({...})` returns a copy with merged annotations,
+ * mirroring Effect's schema idiom.
+ *
+ * For a streaming method, `success` is the **element** schema and `error` is the **stream
+ * error** schema — they become an `RpcSchema.Stream` on the wire, and the service member
+ * surfaces as a `Stream` rather than an `Effect`.
  *
  * @public
  */
@@ -140,14 +146,19 @@ export interface Method<
   P extends Schema.Struct.Fields | undefined,
   Su extends Schema.Top,
   E extends Schema.Top,
+  Str extends boolean = false,
 > {
   readonly [methodTypeId]: typeof methodTypeId;
   readonly kind: Kind;
   readonly payload: P;
   readonly success: Su;
   readonly error: E;
+  /** A streaming read (`Stream` member) when `true`; a one-shot `Effect` otherwise. */
+  readonly stream: Str;
   readonly annotations: MethodAnnotations;
-  readonly annotate: (annotations: MethodAnnotations) => Method<Kind, P, Su, E>;
+  readonly annotate: (
+    annotations: MethodAnnotations,
+  ) => Method<Kind, P, Su, E, Str>;
 }
 
 /** Any {@link Method}, erased — the element type of a {@link Spec}. @public */
@@ -155,7 +166,8 @@ export type AnyMethod = Method<
   MethodKind,
   Schema.Struct.Fields | undefined,
   Schema.Top,
-  Schema.Top
+  Schema.Top,
+  boolean
 >;
 
 /** @internal */
@@ -236,11 +248,13 @@ export interface MethodMeta {
   readonly description: string | undefined;
   /** Whether the mutation loses state — only meaningful for `mutate`s. */
   readonly destructive: boolean;
+  /** A streaming read (a live "watch" source) rather than a one-shot value. */
+  readonly streaming: boolean;
 }
 
 /**
- * Read the tool metadata for a {@link Method}: its `kind`, `description`, and `destructive`
- * flag. Pure annotation — does not touch the wire contract.
+ * Read the tool metadata for a {@link Method}: its `kind`, `description`, `destructive`
+ * flag, and whether it `streaming`s. Pure annotation — does not touch the wire contract.
  *
  * @public
  */
@@ -248,29 +262,36 @@ export const methodMeta = (m: AnyMethod): MethodMeta => ({
   kind: m.kind,
   description: m.annotations.description,
   destructive: m.annotations.destructive ?? false,
+  streaming: m.stream,
 });
 
-/** The single {@link Method} constructor — both {@link query} and {@link mutate} go through it. */
+/**
+ * The single {@link Method} constructor — {@link query}, {@link mutate}, and
+ * {@link stream} all go through it.
+ */
 const makeMethod = <
   Kind extends MethodKind,
   P extends Schema.Struct.Fields | undefined,
   Su extends Schema.Top,
   E extends Schema.Top,
+  Str extends boolean,
 >(
   kind: Kind,
   payload: P,
   success: Su,
   error: E,
+  stream: Str,
   annotations: MethodAnnotations,
-): Method<Kind, P, Su, E> => ({
+): Method<Kind, P, Su, E, Str> => ({
   [methodTypeId]: methodTypeId,
   kind,
   payload,
   success,
   error,
+  stream,
   annotations,
   annotate: (a) =>
-    makeMethod(kind, payload, success, error, { ...annotations, ...a }),
+    makeMethod(kind, payload, success, error, stream, { ...annotations, ...a }),
 });
 
 /**
@@ -315,6 +336,7 @@ export function query(
     options?.payload,
     success,
     options?.error ?? Schema.Never,
+    false,
     {},
   );
 }
@@ -363,6 +385,60 @@ export function mutate(
     options?.payload,
     success,
     options?.error ?? Schema.Never,
+    false,
+    {},
+  );
+}
+
+/**
+ * Define a **stream** (a live, idempotent push source) whose elements are `success`. The
+ * service member surfaces as a `Stream<Success, Error>` (a property, or `(payload) => Stream`
+ * when a `payload` is declared) rather than an `Effect` — drive dashboard atoms, a CLI
+ * `--watch`, or a TUI from it. Conventionally named `changes` when it carries a resource's
+ * whole observable state (a snapshot stream); back it with a `SubscriptionRef`'s `.changes`.
+ *
+ * Counts as a `query` for tools (an idempotent read). `success` is the **element** schema and
+ * `error` (if any) is the **stream error** schema; both must be encodable (they cross RPC).
+ *
+ * ```ts
+ * changes: Resource.stream(QueueSnapshot).annotate({ description: "Live queue state." }),
+ * tail: Resource.stream(LogLine, { payload: { since: Schema.Number } }),
+ * ```
+ *
+ * @public
+ */
+export function stream<Su extends Schema.Top>(
+  success: Su,
+): Method<"query", undefined, Su, Schema.Never, true>;
+export function stream<Su extends Schema.Top, const F extends Schema.Struct.Fields>(
+  success: Su,
+  options: { readonly payload: F },
+): Method<"query", F, Su, Schema.Never, true>;
+export function stream<Su extends Schema.Top, E extends Schema.Top>(
+  success: Su,
+  options: { readonly error: E },
+): Method<"query", undefined, Su, E, true>;
+export function stream<
+  Su extends Schema.Top,
+  const F extends Schema.Struct.Fields,
+  E extends Schema.Top,
+>(
+  success: Su,
+  options: { readonly payload: F; readonly error: E },
+): Method<"query", F, Su, E, true>;
+export function stream(
+  success: Schema.Top,
+  options?: {
+    readonly payload?: Schema.Struct.Fields;
+    readonly error?: Schema.Top;
+  },
+): AnyMethod {
+  return makeMethod(
+    "query",
+    options?.payload,
+    success,
+    options?.error ?? Schema.Never,
+    true,
     {},
   );
 }
@@ -384,14 +460,19 @@ type HasPayload<M extends AnyMethod> = [M["payload"]] extends [
   : false;
 
 /**
- * The inferred shape of one method: a **property** `Effect<Success, Error>` when there
- * is no payload, or a **function** `(payload) => Effect<Success, Error>` when there is.
+ * The inferred shape of one method. A non-streaming method is an **`Effect`**; a streaming
+ * method ({@link Resource.stream}) is a **`Stream`**. Either is a **property** when there is
+ * no payload, or a **function** `(payload) => …` when there is.
  *
  * @internal
  */
-export type ServiceMethod<M extends AnyMethod> = HasPayload<M> extends true
-  ? (payload: PayloadOf<M>) => Effect.Effect<SuccessOf<M>, ErrorOf<M>>
-  : Effect.Effect<SuccessOf<M>, ErrorOf<M>>;
+export type ServiceMethod<M extends AnyMethod> = M["stream"] extends true
+  ? HasPayload<M> extends true
+    ? (payload: PayloadOf<M>) => Stream.Stream<SuccessOf<M>, ErrorOf<M>>
+    : Stream.Stream<SuccessOf<M>, ErrorOf<M>>
+  : HasPayload<M> extends true
+    ? (payload: PayloadOf<M>) => Effect.Effect<SuccessOf<M>, ErrorOf<M>>
+    : Effect.Effect<SuccessOf<M>, ErrorOf<M>>;
 
 /**
  * The full service interface inferred from a {@link Spec}. Wire {@link Method}s map to
@@ -436,13 +517,19 @@ type PayloadSchemaOf<M extends AnyMethod> = M["payload"] extends Schema.Struct.F
   ? Schema.Struct<M["payload"]>
   : Schema.Void;
 
-/** The `Rpc` for one spec method — tag = the method name, schemas from the {@link Method}. */
-type RpcOf<K extends string, M extends AnyMethod> = Rpc.Rpc<
-  K,
-  PayloadSchemaOf<M>,
-  M["success"],
-  M["error"]
->;
+/**
+ * The `Rpc` for one spec method — tag = the method name, schemas from the {@link Method}. A
+ * streaming method mirrors `Rpc.make(tag, { …, stream: true })`: its success becomes an
+ * `RpcSchema.Stream` (element + stream-error schemas) and its immediate error is `Never`.
+ */
+type RpcOf<K extends string, M extends AnyMethod> = M["stream"] extends true
+  ? Rpc.Rpc<
+      K,
+      PayloadSchemaOf<M>,
+      RpcSchema.Stream<M["success"], M["error"]>,
+      typeof Schema.Never
+    >
+  : Rpc.Rpc<K, PayloadSchemaOf<M>, M["success"], M["error"]>;
 
 /** The union of every wire method's {@link RpcOf} — the group's full RPC set (local methods excluded). */
 type RpcUnionOf<S extends Spec> = {
@@ -501,11 +588,14 @@ export const buildRpcGroup = <const S extends Spec>(
       payload?: Schema.Struct.Fields;
       success: Schema.Top;
       error: Schema.Top;
+      stream?: boolean;
     } = {
       success: m.success,
       error: m.error,
     };
     if (m.payload !== undefined) options.payload = m.payload;
+    // streaming methods become an `RpcSchema.Stream` on the wire (element + stream-error).
+    if (m.stream) options.stream = true;
     return [Rpc.make(tag, options)];
   });
   // Boundary assertion (runtime-correct): each entry is built to be exactly the `Rpc`
@@ -1188,6 +1278,7 @@ export const Resource = {
   host: hostLayer,
   query,
   mutate,
+  stream,
   local,
   instance,
   layer: localLayer,

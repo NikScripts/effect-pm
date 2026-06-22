@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Layer, Schema, Stream } from "effect";
 import { RpcClient } from "effect/unstable/rpc";
 import { Resource } from "../src/Resource";
 import type { ServiceOf } from "../src/Resource";
@@ -27,6 +27,22 @@ void _add;
 
 // @ts-expect-error a no-payload method is a property, not callable
 void s.current();
+
+// ── stream methods surface as `Stream`, not `Effect` ──
+const _streamSpec = {
+  changes: Resource.stream(Schema.Number), // no payload → Stream property
+  tail: Resource.stream(Schema.String, { payload: { since: Schema.Number } }), // payload → (p) => Stream
+};
+type StreamSvc = ServiceOf<typeof _streamSpec>;
+declare const ss: StreamSvc;
+
+const _changes: Stream.Stream<number, never> = ss.changes;
+void _changes;
+const _tail: Stream.Stream<string, never> = ss.tail({ since: 0 });
+void _tail;
+// @ts-expect-error a stream member is not an Effect
+const _notEffect: Effect.Effect<number> = ss.changes;
+void _notEffect;
 
 // ── Slice 2: Tag + `yield*` + local layer ──
 class Counter extends Resource.Tag<Counter>("Counter")({
