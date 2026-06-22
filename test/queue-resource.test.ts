@@ -195,6 +195,41 @@ describe("QueueResource.make — basic processing", () => {
     }).pipe(Effect.scoped),
   );
 
+  it.live("re-enqueues an entry taken straight off the events stream", () =>
+    Effect.gen(function* () {
+      const seen = yield* Ref.make<Array<number>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-enqueue-roundtrip",
+        effect: (n: number) => Ref.update(seen, (a) => [...a, n]),
+        concurrency: 1,
+      });
+      // capture the first Completed event (carries the QueueEntry)
+      const completedFiber = yield* Effect.forkChild(
+        Stream.runCollect(
+          Stream.take(
+            Stream.filter(
+              queue.events,
+              (
+                e,
+              ): e is Extract<typeof e, { readonly _tag: "Completed" }> =>
+                e._tag === "Completed",
+            ),
+            1,
+          ),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add(7);
+      const event = Array.from(yield* Fiber.join(completedFiber))[0];
+      // the event's entry goes straight back into enqueue — no transformation
+      if (event !== undefined) yield* queue.enqueue(event.entry);
+      yield* waitUntilCompleted(queue, 2);
+      const final = yield* Ref.get(seen);
+      expect(final).toEqual([7, 7]);
+      expect(event?.entry.item).toBe(7);
+    }).pipe(Effect.scoped),
+  );
+
   it.live("treats a single string as one item, not an iterable batch", () =>
     Effect.gen(function* () {
       const results = yield* Ref.make<Array<string>>([]);

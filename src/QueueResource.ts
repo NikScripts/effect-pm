@@ -233,6 +233,20 @@ export interface QueueEnqueue<T, E = never, R = never> {
 }
 
 /**
+ * Re-inject existing {@link QueueEntry}s (single or array) — the inverse of `release`, and the
+ * input you get straight off the {@link QueueHandleApi.events} stream. Unlike {@link QueueEnqueue}
+ * (raw items `T`, you pick the priority), each entry re-enters at **its own** `priority` with its
+ * **`attempts`** count preserved (so a job mid-retry keeps its budget). For handoff / event
+ * round-trips: `yield* queue.enqueue(event.entries)`.
+ *
+ * @public
+ */
+export interface QueueEnqueueEntries<T, R = never> {
+  (entry: QueueEntry<T>): Effect.Effect<void, never, R>;
+  (entries: ReadonlyArray<QueueEntry<T>>): Effect.Effect<void, never, R>;
+}
+
+/**
  * Keeps **`E`** (worker failure channel) nominally observable on {@link QueueHandle}
  * without adding runtime surface area.
  *
@@ -279,6 +293,13 @@ export interface QueueHandleApi<
   readonly prioritize: QueueEnqueue<T, EEnqueue, R>;
   /** Enqueue items at **low** priority (processed after high and normal). */
   readonly defer: QueueEnqueue<T, EEnqueue, R>;
+
+  /**
+   * Re-inject existing {@link QueueEntry}s (e.g. straight off {@link events}, or from
+   * `release`), each at its own priority with its `attempts` preserved. The event-stream
+   * round-trip and the basis for queue handoff.
+   */
+  readonly enqueue: QueueEnqueueEntries<T, R>;
 
   /** Total pending items across all priority levels. */
   readonly size: Effect.Effect<number>;
@@ -2430,6 +2451,31 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         enqueueInternal(validated, priority),
       );
 
+    /**
+     * Re-inject existing entries (the `release`/events round-trip). Reuses `enqueueInternal`
+     * per entry, preserving each entry's **priority**, **attempts** (via the retry count), and
+     * original **enqueuedAt**; the dedup `key` is recomputed identically by `config.key`. A new
+     * `entryId` is minted (the re-injection is a fresh enqueue on this queue).
+     */
+    const enqueueEntries = (
+      input: QueueEntry<T> | ReadonlyArray<QueueEntry<T>>,
+    ): Effect.Effect<void, never, R> => {
+      const entries = Array.isArray(input)
+        ? (input as ReadonlyArray<QueueEntry<T>>)
+        : [input as QueueEntry<T>];
+      return Effect.forEach(
+        entries,
+        (entry) =>
+          enqueueInternal(
+            [entry.item],
+            entry.priority,
+            Math.max(0, entry.attempts - 1),
+            DateTime.toEpochMillis(entry.timestamps.enqueuedAt),
+          ),
+        { discard: true },
+      );
+    };
+
     // ─── Internal: EffectContext (guarded) ───
 
     /**
@@ -3036,6 +3082,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       add: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "normal", "add"),
       prioritize: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "high", "prioritize"),
       defer: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "low", "defer"),
+      enqueue: (input: QueueEntry<T> | ReadonlyArray<QueueEntry<T>>) =>
+        enqueueEntries(input),
 
       // Read all three queue sizes in parallel, combine into total
       size: Effect.map(
