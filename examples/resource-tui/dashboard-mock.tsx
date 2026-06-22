@@ -4,6 +4,7 @@
  * Navigable group dashboard. A responsive grid of widgets you move through:
  *   ↑↓←→ / hjkl  move selection
  *   Enter / Space  open a queue full-screen · or drill into a subgroup
+ *   mouse  wheel moves the selection a row; click selects a cell, click it again to open
  *   Esc / Backspace  back (close the queue, or up a level for nested groups)
  *   :  command bar — type any part of a tag's name (any case) for autocomplete
  *   Ctrl+E  edit mode (resource controls) · Ctrl+C  quit
@@ -50,6 +51,8 @@ const LOG: Record<Kind, { icon: string; color: string; label: string }> = {
   retry: { icon: "~", color: "yellow", label: "retry" },
 };
 const WAIT_FACTOR: Record<Priority, number> = { high: 350, normal: 700, low: 1600 };
+// uniform cell height keeps mouse hit-testing a clean stride
+const CELL_HEIGHT = 7;
 
 const k = (n: string): string => `@acme/queues/${n}`;
 const TREE: Group = {
@@ -231,7 +234,7 @@ const Cell = (props: {
     }, 0);
     const fits = width >= 22;
     return (
-      <Box flexDirection="column" borderStyle={border} borderColor={selected ? "green" : "cyan"} width={width} marginRight={1} marginBottom={1} paddingX={1}>
+      <Box flexDirection="column" borderStyle={border} borderColor={selected ? "green" : "cyan"} height={CELL_HEIGHT} width={width} marginRight={1} marginBottom={1} paddingX={1}>
         <Box>
           <Box flexGrow={1}>
             <Text bold color="cyan">
@@ -261,7 +264,7 @@ const Cell = (props: {
   const barWidth = Math.max(4, width - 4 - (wide ? 7 : 2) - 1 - 4);
   const max = Math.max(q.high, q.normal, q.low, 1);
   return (
-    <Box flexDirection="column" borderStyle={border} borderColor={selected ? "green" : COLOR[q.status]} width={width} marginRight={1} marginBottom={1} paddingX={1}>
+    <Box flexDirection="column" borderStyle={border} borderColor={selected ? "green" : COLOR[q.status]} height={CELL_HEIGHT} width={width} marginRight={1} marginBottom={1} paddingX={1}>
       <Box>
         <Box flexGrow={1}>
           <Text bold>{displayName(node.name)}</Text>
@@ -335,6 +338,17 @@ const App = (): React.ReactElement => {
 
   const focusRef = React.useRef<string | null>(focused);
   focusRef.current = focused;
+
+  // live layout + members for the mouse handler (one-time effect reads these)
+  const membersRef = React.useRef<ReadonlyArray<Node>>(members);
+  membersRef.current = members;
+  const layoutRef = React.useRef({
+    perRow: 1,
+    cellWidth: 16,
+    focused,
+    cmd,
+    sel,
+  });
 
   // sim: advance all queues, stream events
   React.useEffect(() => {
@@ -448,6 +462,64 @@ const App = (): React.ReactElement => {
     cellWidth = Math.floor(avail / perRow) - 1;
   }
   cellWidth = Math.max(16, cellWidth);
+  layoutRef.current = { perRow, cellWidth, focused, cmd, sel };
+
+  // mouse: SGR tracking (like grid-app). Wheel moves the selection a row; click
+  // selects a cell, click again on the selected one opens it.
+  React.useEffect(() => {
+    const stdin = process.stdin;
+    const stdout = process.stdout;
+    if (stdin.isTTY !== true) {
+      return;
+    }
+    stdout.write("\x1b[?1000h\x1b[?1006h");
+    const GRID_TOP = 4; // border(1) + breadcrumb(1) + grid pad(1), 1-based first row
+    const GRID_LEFT = 3; // border(1) + grid pad(1)
+    const onData = (data: Buffer) => {
+      const re = /\[<(\d+);(\d+);(\d+)([Mm])/g;
+      let m: RegExpExecArray | null;
+      const text = data.toString("utf8");
+      while ((m = re.exec(text)) !== null) {
+        const button = Number(m[1]);
+        const x = Number(m[2]);
+        const y = Number(m[3]);
+        const press = m[4] === "M";
+        const v = layoutRef.current;
+        if (button === 64) {
+          setSel((s) => Math.max(0, s - v.perRow));
+        } else if (button === 65) {
+          setSel((s) => Math.min(membersRef.current.length - 1, s + v.perRow));
+        } else if (button === 0 && press && v.focused === null && v.cmd === null) {
+          const row = Math.floor((y - GRID_TOP) / (CELL_HEIGHT + 1));
+          const col = Math.floor((x - GRID_LEFT) / (v.cellWidth + 1));
+          if (row < 0 || col < 0 || col >= v.perRow) {
+            continue;
+          }
+          const idx = row * v.perRow + col;
+          const node = membersRef.current[idx];
+          if (node === undefined) {
+            continue;
+          }
+          if (idx === v.sel) {
+            if (node.t === "g") {
+              setPath((p) => [...p, node]);
+              setSel(0);
+            } else {
+              setTrend([]);
+              setFocused(node.name);
+            }
+          } else {
+            setSel(idx);
+          }
+        }
+      }
+    };
+    stdin.on("data", onData);
+    return () => {
+      stdout.write("\x1b[?1000l\x1b[?1006l");
+      stdin.off("data", onData);
+    };
+  }, []);
 
   useInput((input, key) => {
     if (cmd !== null) {
@@ -601,7 +673,7 @@ const out = process.stdout;
 const tty = out.isTTY === true;
 const restore = () => {
   if (tty) {
-    out.write("\x1b[?1049l");
+    out.write("\x1b[?1000l\x1b[?1006l\x1b[?1049l");
   }
 };
 if (tty) {
