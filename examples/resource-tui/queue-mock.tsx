@@ -203,22 +203,18 @@ const CardS = (props: { readonly v: View }): React.ReactElement => {
     <Box flexDirection="column" borderStyle="round" borderColor={COLOR[v.status]} paddingX={1} width={26}>
       <Title status={v.status} />
       <Box>
-        <Box width={12}>
+        <Box flexGrow={1}>
           <Text>{v.pending} pending</Text>
         </Box>
-        <Box flexGrow={1} justifyContent="flex-end">
-          <Text>{v.completed} ✓</Text>
-        </Box>
+        <Text>{v.completed} ✓</Text>
       </Box>
       <Box>
-        <Box width={12}>
+        <Box flexGrow={1}>
           <Text>
             ▲{v.sizes.high} •{v.sizes.normal} ▼{v.sizes.low}
           </Text>
         </Box>
-        <Box flexGrow={1} justifyContent="flex-end">
-          <Text>{v.throughput.toFixed(1)}/s</Text>
-        </Box>
+        <Text>{v.throughput.toFixed(1)}/s</Text>
       </Box>
     </Box>
   );

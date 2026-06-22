@@ -188,7 +188,8 @@ const QueueCard = (props: {
   }
 
   const wide = width >= 40;
-  const barWidth = Math.max(4, width - (wide ? 8 : 2) - 4 - 3);
+  // inner = width − border(2) − paddingX(2); columns = label + bar + 1 + count(4)
+  const barWidth = Math.max(4, width - 4 - (wide ? 8 : 2) - 1 - 4);
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={COLOR[q.status]} width={width} marginRight={1} marginBottom={1} paddingX={1}>
       <Box>
