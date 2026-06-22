@@ -10,9 +10,9 @@
  * backs up when you stop draining. A worker drains one item (~500ms), highest
  * priority first, while running.
  *
- * TUI controls (always): pick a size [1] S [2] M [3] L [4] XL [0] auto · [l] lock.
- * Resource controls are LOCKED by default — [l] to unlock (a red border warns you):
- * [p] pause [r] resume [c] clear [x] stop · [b] burst. Quit with Ctrl+C.
+ * TUI controls (always): pick a size [1] S [2] M [3] L [4] XL [0] auto.
+ * Resource controls are locked by default — Ctrl+E for edit mode (a red border warns
+ * you): [p] pause [r] resume [c] clear [x] stop · [b] burst. Quit with Ctrl+C.
  *
  *   pnpm run example:queue-mock
  */
@@ -186,8 +186,12 @@ const App = (): React.ReactElement => {
     return () => clearInterval(id);
   }, []);
 
-  useInput((input) => {
+  useInput((input, key) => {
     // TUI controls — always available (separate from resource controls)
+    if (key.ctrl && input === "e") {
+      setLocked((x) => !x);
+      return;
+    }
     if (input === "1") {
       setLock("S");
       return;
@@ -202,9 +206,6 @@ const App = (): React.ReactElement => {
       return;
     } else if (input === "0") {
       setLock("auto");
-      return;
-    } else if (input === "l") {
-      setLocked((x) => !x);
       return;
     }
     // resource controls — only while unlocked (Ctrl+C quits)
@@ -259,13 +260,13 @@ const App = (): React.ReactElement => {
           {` ${variant} `}
         </Text>
         <Text dimColor>{` ${lock === "auto" ? "auto" : "fixed"} · ${cols}×${rows} · [1-4] size [0] auto · `}</Text>
-        <Text color={locked ? "yellow" : "green"}>
-          {locked ? "controls locked" : "controls unlocked"}
+        <Text color={locked ? "gray" : "red"}>
+          {locked ? "view" : "EDIT MODE"}
         </Text>
         <Text dimColor>
           {locked
-            ? ` · [l] unlock`
-            : ` · [l] lock · [p]${KEY.pause} [r]${KEY.resume} [c]${KEY.clear} [x]${KEY.stop} [b]${KEY.burst}`}
+            ? ` · Ctrl+E edit`
+            : ` · Ctrl+E exit · [p]${KEY.pause} [r]${KEY.resume} [c]${KEY.clear} [x]${KEY.stop} [b]${KEY.burst}`}
         </Text>
       </Box>
     </Box>

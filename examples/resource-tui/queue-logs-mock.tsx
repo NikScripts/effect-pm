@@ -5,8 +5,8 @@
  * log tail below it** — newest at the bottom, older lines scroll off the top. The
  * shape the real `.changes`/`.metrics` (widget) + `.events` (logs) streams would feed.
  *
- * Controls locked by default ([l] to unlock — red border warns you); resource
- * controls while unlocked: [p] pause [r] resume [c] clear [x] stop. Quit with Ctrl+C.
+ * Ctrl+E enters edit mode (a red border warns you) for resource controls: [p] pause
+ * [r] resume [c] clear [x] stop. [l] toggles full-screen logs. Quit with Ctrl+C.
  *
  *   pnpm run example:queue-logs
  */
@@ -117,7 +117,8 @@ const LogLine = (props: { readonly entry: LogEntry }): React.ReactElement => {
 
 const App = (): React.ReactElement => {
   const { cols, rows } = useTerminalSize();
-  const [locked, setLocked] = React.useState(true);
+  const [editMode, setEditMode] = React.useState(false); // Ctrl+E to enter
+  const [fullLogs, setFullLogs] = React.useState(false); // [l] full-screen logs
   const [q, setQ] = React.useState<QState>(initial);
   const [logs, setLogs] = React.useState<ReadonlyArray<LogEntry>>([]);
   const [trend, setTrend] = React.useState<ReadonlyArray<number>>([]);
@@ -193,12 +194,18 @@ const App = (): React.ReactElement => {
     return () => clearInterval(id);
   }, []);
 
-  useInput((input) => {
-    if (input === "l") {
-      setLocked((x) => !x);
+  useInput((input, key) => {
+    // TUI controls — always available
+    if (key.ctrl && input === "e") {
+      setEditMode((x) => !x);
       return;
     }
-    if (locked) {
+    if (input === "l") {
+      setFullLogs((x) => !x);
+      return;
+    }
+    // resource controls — only in edit mode (Ctrl+C quits)
+    if (!editMode) {
       return;
     }
     if (input === "p") {
@@ -238,8 +245,8 @@ const App = (): React.ReactElement => {
     trend,
   };
 
-  // how many log lines fit below the widget
-  const visibleLogs = Math.max(1, rows - PAGE_HEIGHT - 7);
+  // how many log lines fit (full-screen logs hides the widget)
+  const visibleLogs = Math.max(1, fullLogs ? rows - 5 : rows - PAGE_HEIGHT - 7);
   const tail = logs.slice(-visibleLogs);
 
   return (
@@ -247,12 +254,14 @@ const App = (): React.ReactElement => {
       flexDirection="column"
       width={cols}
       height={rows}
-      borderStyle={locked ? BLANK_BORDER : "double"}
+      borderStyle={editMode ? "double" : BLANK_BORDER}
       borderColor="red"
     >
-      <Box flexShrink={0}>
-        <PageXL v={view} width={cols - 2} />
-      </Box>
+      {fullLogs ? null : (
+        <Box flexShrink={0}>
+          <PageXL v={view} width={cols - 2} />
+        </Box>
+      )}
 
       <Box flexGrow={1} flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1}>
         <Box>
@@ -270,14 +279,15 @@ const App = (): React.ReactElement => {
       </Box>
 
       <Box paddingX={1} backgroundColor="gray">
-        <Text color={locked ? "yellow" : "green"}>
-          {locked ? "controls locked" : "controls unlocked"}
+        <Text color={editMode ? "red" : "gray"}>
+          {editMode ? "EDIT MODE" : "view"}
         </Text>
         <Text dimColor>
-          {locked
-            ? " · [l] unlock"
-            : " · [l] lock · [p] pause [r] resume [c] clear [x] stop"}
+          {` · Ctrl+E ${editMode ? "exit" : "edit"} · [l] ${fullLogs ? "split view" : "full logs"}`}
         </Text>
+        {editMode ? (
+          <Text dimColor> · [p] pause [r] resume [c] clear [x] stop</Text>
+        ) : null}
       </Box>
     </Box>
   );

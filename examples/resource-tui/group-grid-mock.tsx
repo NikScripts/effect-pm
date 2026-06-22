@@ -5,9 +5,9 @@
  * queue widgets that scales up to big terminals. A subgroup is its own widget that
  * packs XS member rows, collapsing to just the name when the cell is too small.
  *
- * Controls are **locked by default** (so stray keys can't touch resources). TUI
- * controls (lock toggle, resize) are separate from resource controls (pause/resume
- * the queues), and resource controls only fire while unlocked. Quit with Ctrl+C.
+ * Controls are **locked by default** (so stray keys can't touch resources). Ctrl+E
+ * enters edit mode (red border) for the resource controls (pause/resume all); TUI
+ * controls (resize) are always available. Quit with Ctrl+C.
  *
  *   pnpm run example:group-grid
  */
@@ -357,13 +357,13 @@ const App = (): React.ReactElement => {
       return next;
     });
 
-  useInput((input) => {
+  useInput((input, key) => {
     // TUI controls — always available, separate from resource controls
-    if (input === "l") {
+    if (key.ctrl && input === "e") {
       setLocked((x) => !x);
       return;
     }
-    // resource controls — gated by the lock (Ctrl+C quits)
+    // resource controls — only in edit mode (Ctrl+C quits)
     if (locked) {
       return;
     }
@@ -412,13 +412,13 @@ const App = (): React.ReactElement => {
 
       <Box paddingX={1} backgroundColor="gray">
         <Text dimColor>{` ${cols}×${rows} · resize reflows · `}</Text>
-        <Text color={locked ? "yellow" : "green"}>
-          {locked ? "controls locked" : "controls unlocked"}
+        <Text color={locked ? "gray" : "red"}>
+          {locked ? "view" : "EDIT MODE"}
         </Text>
         <Text dimColor>
           {locked
-            ? " · [l] unlock"
-            : " · [l] lock · [p]‖ pause all · [r]► resume"}
+            ? " · Ctrl+E edit"
+            : " · Ctrl+E exit · [p]‖ pause all · [r]► resume"}
         </Text>
       </Box>
     </Box>
