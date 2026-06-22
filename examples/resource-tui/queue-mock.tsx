@@ -1,14 +1,15 @@
 /**
  * @module examples/resource-tui/queue-mock
  *
- * A **responsive, interactive mock** of the queue widget — S / M / L cards and an
- * XL full page, switched live by terminal size (resize your window to see it step).
- * Data is hardcoded but honest to `QueueHandleApi`: pending `sizes` (high/normal/low),
- * total pending, `completed`, `isEmpty`. Status is UI-tracked (the real handle can't
- * read run-state today).
+ * Responsive, interactive queue mock — S / M / L cards + XL full page, enriched
+ * with the planned streams' data:
+ *   .changes  → status + sizes {high, normal, low}
+ *   .metrics  → avg WAIT per priority, avg EXECUTION (overall), TOTAL, throughput
+ * (execution isn't sliced by priority — priority only affects wait, not run time.)
  *
- * Interactive: [a] add · [h] high · [l] low · [p] pause · [r] resume · [c] clear ·
- * [x] shutdown · [q] quit. While running, a worker processes one item every ~800ms.
+ * Pick a size to view it full-screen: [1] S  [2] M  [3] L  [4] XL  [0] auto (resize).
+ * Controls: [a] add [h] high [l] low · [p] pause [r] resume [c] clear [x] stop · [q] quit.
+ * While running a worker drains one item (~500ms), highest priority first.
  *
  *   pnpm run example:queue-mock
  */
@@ -17,13 +18,22 @@ import { Box, render, Text, useApp, useInput, useStdout } from "ink";
 import * as React from "react";
 
 type Status = "running" | "paused" | "stopped";
+type Priority = "high" | "normal" | "low";
+type Variant = "S" | "M" | "L" | "XL";
 
+interface Item {
+  readonly at: number;
+}
 interface QState {
-  readonly high: number;
-  readonly normal: number;
-  readonly low: number;
+  readonly high: ReadonlyArray<Item>;
+  readonly normal: ReadonlyArray<Item>;
+  readonly low: ReadonlyArray<Item>;
   readonly completed: number;
   readonly status: Status;
+  readonly wait: Record<Priority, number>; // EWMA, ms
+  readonly waitOverall: number; // EWMA, ms
+  readonly execution: number; // EWMA, ms
+  readonly recent: ReadonlyArray<number>; // completion timestamps (last 5s)
 }
 
 const NAME = "mail-queue";
@@ -32,11 +42,55 @@ const COLOR: Record<Status, string> = {
   paused: "yellow",
   stopped: "red",
 };
+const SPARK = "▁▂▃▄▅▆▇█";
 
+const ewma = (old: number, v: number): number =>
+  old <= 0 ? v : old * 0.8 + v * 0.2;
+const fmt = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
 const bar = (value: number, max: number, width: number): string => {
   const filled = max <= 0 ? 0 : Math.min(width, Math.round((value / max) * width));
   return "█".repeat(filled) + "░".repeat(width - filled);
 };
+const spark = (vals: ReadonlyArray<number>): string => {
+  if (vals.length === 0) {
+    return "";
+  }
+  const max = Math.max(...vals, 1);
+  return vals
+    .map((v) => SPARK[Math.min(7, Math.floor((v / max) * 7))] ?? " ")
+    .join("");
+};
+
+const seed = (n: number, ageMs: number, now: number): Array<Item> =>
+  Array.from({ length: n }, (_, i) => ({ at: now - ageMs - i * 200 }));
+
+const initial = (): QState => {
+  const now = Date.now();
+  return {
+    high: seed(3, 400, now),
+    normal: seed(7, 2000, now),
+    low: seed(2, 8000, now),
+    completed: 248,
+    status: "running",
+    wait: { high: 400, normal: 2100, low: 8700 },
+    waitOverall: 1800,
+    execution: 850,
+    recent: [],
+  };
+};
+
+// ── derived view passed to the variants ──
+interface View {
+  readonly status: Status;
+  readonly sizes: Record<Priority, number>;
+  readonly pending: number;
+  readonly completed: number;
+  readonly wait: Record<Priority, number>; // ms
+  readonly execution: number; // ms
+  readonly total: number; // ms
+  readonly throughput: number; // per second
+  readonly trend: ReadonlyArray<number>;
+}
 
 const useTerminalSize = (): { cols: number; rows: number } => {
   const { stdout } = useStdout();
@@ -57,151 +111,146 @@ const useTerminalSize = (): { cols: number; rows: number } => {
   return size;
 };
 
-const variantFor = (cols: number, rows: number): "S" | "M" | "L" | "XL" => {
-  if (cols >= 78 && rows >= 18) {
-    return "XL";
-  }
-  if (cols >= 48) {
-    return "L";
-  }
-  if (cols >= 34) {
-    return "M";
-  }
-  return "S";
-};
+const variantFor = (cols: number, rows: number): Variant =>
+  cols >= 78 && rows >= 18 ? "XL" : cols >= 48 ? "L" : cols >= 34 ? "M" : "S";
 
 const Dot = (props: { readonly status: Status }): React.ReactElement => (
   <Text color={COLOR[props.status]}>● {props.status}</Text>
 );
 
-const Row = (props: {
-  readonly symbol: string;
-  readonly color: string;
-  readonly label?: string;
-  readonly value: number;
-  readonly max: number;
-  readonly barWidth: number;
-}): React.ReactElement => (
-  <Text>
-    {props.symbol}
-    {props.label !== undefined ? ` ${props.label.padEnd(7)}` : " "}
-    <Text color={props.color}>{bar(props.value, props.max, props.barWidth)}</Text>{" "}
-    {props.value}
-  </Text>
+const Title = (props: { readonly status: Status }): React.ReactElement => (
+  <Box justifyContent="space-between">
+    <Text bold color="cyan">
+      {NAME}
+    </Text>
+    <Dot status={props.status} />
+  </Box>
 );
 
-const totals = (q: QState) => ({
-  pending: q.high + q.normal + q.low,
-  max: Math.max(q.high, q.normal, q.low, 1),
-});
+const SYM: Record<Priority, { symbol: string; color: string; label: string }> = {
+  high: { symbol: "▲", color: "red", label: "high" },
+  normal: { symbol: "•", color: "white", label: "normal" },
+  low: { symbol: "▼", color: "blue", label: "low" },
+};
 
-const CardS = (props: { readonly q: QState }): React.ReactElement => {
-  const { q } = props;
-  const { pending } = totals(q);
+const PrioBar = (props: {
+  readonly p: Priority;
+  readonly v: View;
+  readonly barWidth: number;
+  readonly max: number;
+  readonly label?: boolean;
+  readonly wait?: "short" | "long";
+}): React.ReactElement => {
+  const s = SYM[props.p];
+  const count = props.v.sizes[props.p];
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={COLOR[q.status]}
-      paddingX={1}
-      width={24}
-    >
-      <Text bold>{NAME}</Text>
+    <Text>
+      {s.symbol}
+      {props.label === true ? ` ${s.label.padEnd(6)}` : " "}
+      <Text color={s.color}>{bar(count, props.max, props.barWidth)}</Text> {count}
+      {props.wait === undefined ? null : (
+        <Text dimColor>
+          {props.wait === "long" ? "   wait ⌀ " : "   ⌀ "}
+          {fmt(props.v.wait[props.p])}
+        </Text>
+      )}
+    </Text>
+  );
+};
+
+const CardS = (props: { readonly v: View }): React.ReactElement => {
+  const { v } = props;
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor={COLOR[v.status]} paddingX={1} width={26}>
+      <Title status={v.status} />
       <Text>
-        {pending} ⏳ {"   "}
-        {q.completed} ✓
+        {v.pending} ⏳ {"   "}
+        {v.completed} ✓
       </Text>
       <Text>
-        ▲{q.high} •{q.normal} ▼{q.low} <Dot status={q.status} />
+        ▲{v.sizes.high} •{v.sizes.normal} ▼{v.sizes.low} {"  "}
+        {v.throughput.toFixed(1)}/s
       </Text>
     </Box>
   );
 };
 
-const CardM = (props: { readonly q: QState }): React.ReactElement => {
-  const { q } = props;
-  const { pending, max } = totals(q);
+const CardM = (props: { readonly v: View }): React.ReactElement => {
+  const { v } = props;
+  const max = Math.max(v.sizes.high, v.sizes.normal, v.sizes.low, 1);
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={COLOR[q.status]}
-      paddingX={1}
-      width={32}
-    >
-      <Box justifyContent="space-between">
-        <Text bold>{NAME}</Text>
-        <Dot status={q.status} />
-      </Box>
-      <Text>pending {pending}</Text>
-      <Row symbol="▲" color="red" value={q.high} max={max} barWidth={5} />
-      <Row symbol="•" color="white" value={q.normal} max={max} barWidth={5} />
-      <Row symbol="▼" color="blue" value={q.low} max={max} barWidth={5} />
-      <Text dimColor>✓ {q.completed} done</Text>
+    <Box flexDirection="column" borderStyle="round" borderColor={COLOR[v.status]} paddingX={1} width={34}>
+      <Title status={v.status} />
+      <Text>
+        pending {v.pending} {"   "}
+        {v.throughput.toFixed(1)}/s
+      </Text>
+      <PrioBar p="high" v={v} barWidth={4} max={max} wait="short" />
+      <PrioBar p="normal" v={v} barWidth={4} max={max} wait="short" />
+      <PrioBar p="low" v={v} barWidth={4} max={max} wait="short" />
+      <Text dimColor>
+        exec ⌀ {fmt(v.execution)} {"  "} ✓ {v.completed}
+      </Text>
     </Box>
   );
 };
 
-const CardL = (props: { readonly q: QState }): React.ReactElement => {
-  const { q } = props;
-  const { pending, max } = totals(q);
+const CardL = (props: { readonly v: View }): React.ReactElement => {
+  const { v } = props;
+  const max = Math.max(v.sizes.high, v.sizes.normal, v.sizes.low, 1);
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={COLOR[q.status]}
-      paddingX={1}
-      width={40}
-    >
+    <Box flexDirection="column" borderStyle="round" borderColor={COLOR[v.status]} paddingX={1} width={44}>
+      <Title status={v.status} />
       <Box justifyContent="space-between">
-        <Text bold>{NAME}</Text>
-        <Dot status={q.status} />
+        <Text>PENDING {v.pending}</Text>
+        <Text>COMPLETED {v.completed}</Text>
       </Box>
+      <PrioBar p="high" v={v} barWidth={6} max={max} label wait="long" />
+      <PrioBar p="normal" v={v} barWidth={6} max={max} label wait="long" />
+      <PrioBar p="low" v={v} barWidth={6} max={max} label wait="long" />
       <Box justifyContent="space-between">
-        <Text>PENDING {pending}</Text>
-        <Text>COMPLETED {q.completed}</Text>
+        <Text dimColor>exec ⌀ {fmt(v.execution)}</Text>
+        <Text dimColor>total ⌀ {fmt(v.total)}</Text>
+        <Text dimColor>{v.throughput.toFixed(1)}/s</Text>
       </Box>
-      <Row symbol="▲" color="red" label="high" value={q.high} max={max} barWidth={10} />
-      <Row symbol="•" color="white" label="normal" value={q.normal} max={max} barWidth={10} />
-      <Row symbol="▼" color="blue" label="low" value={q.low} max={max} barWidth={10} />
-      <Text dimColor>empty: {pending === 0 ? "yes" : "no"}</Text>
       <Text dimColor>a·add p·pause c·clear</Text>
     </Box>
   );
 };
 
 const PageXL = (props: {
-  readonly q: QState;
+  readonly v: View;
   readonly cols: number;
 }): React.ReactElement => {
-  const { q, cols } = props;
-  const { pending, max } = totals(q);
+  const { v } = props;
+  const max = Math.max(v.sizes.high, v.sizes.normal, v.sizes.low, 1);
   return (
     <Box
       flexDirection="column"
       borderStyle="round"
-      borderColor={COLOR[q.status]}
+      borderColor={COLOR[v.status]}
       paddingX={2}
       paddingY={1}
-      width={Math.min(cols - 4, 72)}
+      width={Math.min(props.cols - 4, 74)}
     >
-      <Box justifyContent="space-between">
-        <Text bold color="cyan">
-          {NAME}
-        </Text>
-        <Dot status={q.status} />
-      </Box>
+      <Title status={v.status} />
       <Box marginTop={1} justifyContent="space-between">
-        <Text bold>PENDING {pending}</Text>
-        <Text bold>COMPLETED {q.completed}</Text>
+        <Text bold>PENDING {v.pending}</Text>
+        <Text bold>COMPLETED {v.completed}</Text>
       </Box>
       <Box marginTop={1} flexDirection="column">
-        <Row symbol="▲" color="red" label="high" value={q.high} max={max} barWidth={20} />
-        <Row symbol="•" color="white" label="normal" value={q.normal} max={max} barWidth={20} />
-        <Row symbol="▼" color="blue" label="low" value={q.low} max={max} barWidth={20} />
+        <PrioBar p="high" v={v} barWidth={18} max={max} label wait="long" />
+        <PrioBar p="normal" v={v} barWidth={18} max={max} label wait="long" />
+        <PrioBar p="low" v={v} barWidth={18} max={max} label wait="long" />
+      </Box>
+      <Box marginTop={1} justifyContent="space-between">
+        <Text>execution ⌀ {fmt(v.execution)}</Text>
+        <Text>total ⌀ {fmt(v.total)}</Text>
+        <Text>{v.throughput.toFixed(1)}/s</Text>
       </Box>
       <Box marginTop={1}>
-        <Text dimColor>empty: {pending === 0 ? "yes" : "no"}</Text>
+        <Text color="green">{spark(v.trend)}</Text>
+        <Text dimColor> pending · last {v.trend.length}s</Text>
       </Box>
       <Box marginTop={1}>
         <Text dimColor>
@@ -215,66 +264,115 @@ const PageXL = (props: {
 const App = (): React.ReactElement => {
   const { exit } = useApp();
   const { cols, rows } = useTerminalSize();
-  const variant = variantFor(cols, rows);
-  const [q, setQ] = React.useState<QState>({
-    high: 3,
-    normal: 7,
-    low: 2,
-    completed: 248,
-    status: "running",
-  });
+  const [lock, setLock] = React.useState<"auto" | Variant>("auto");
+  const variant = lock === "auto" ? variantFor(cols, rows) : lock;
 
-  // a worker processes one item (highest priority first) while running
+  const [q, setQ] = React.useState<QState>(initial);
+  const [trend, setTrend] = React.useState<ReadonlyArray<number>>([]);
+
+  const sizeRef = React.useRef(0);
+  sizeRef.current = q.high.length + q.normal.length + q.low.length;
+
+  // worker: drain one item (highest priority first) while running
   React.useEffect(() => {
     if (q.status !== "running") {
       return;
     }
     const id = setInterval(() => {
       setQ((s) => {
-        if (s.high > 0) {
-          return { ...s, high: s.high - 1, completed: s.completed + 1 };
+        const now = Date.now();
+        const pick: Priority | undefined =
+          s.high.length > 0 ? "high" : s.normal.length > 0 ? "normal" : s.low.length > 0 ? "low" : undefined;
+        if (pick === undefined) {
+          return s;
         }
-        if (s.normal > 0) {
-          return { ...s, normal: s.normal - 1, completed: s.completed + 1 };
+        const arr = s[pick];
+        const item = arr[0];
+        if (item === undefined) {
+          return s;
         }
-        if (s.low > 0) {
-          return { ...s, low: s.low - 1, completed: s.completed + 1 };
-        }
-        return s;
+        const rest = arr.slice(1);
+        const waitMs = now - item.at;
+        const execMs = 700 + (s.completed % 5) * 120;
+        return {
+          ...s,
+          high: pick === "high" ? rest : s.high,
+          normal: pick === "normal" ? rest : s.normal,
+          low: pick === "low" ? rest : s.low,
+          completed: s.completed + 1,
+          wait: { ...s.wait, [pick]: ewma(s.wait[pick], waitMs) },
+          waitOverall: ewma(s.waitOverall, waitMs),
+          execution: ewma(s.execution, execMs),
+          recent: [...s.recent, now].filter((t) => now - t < 5000),
+        };
       });
-    }, 800);
+    }, 500);
     return () => clearInterval(id);
   }, [q.status]);
 
+  // throughput/pending trend sampler
+  React.useEffect(() => {
+    const id = setInterval(
+      () => setTrend((t) => [...t, sizeRef.current].slice(-30)),
+      1000,
+    );
+    return () => clearInterval(id);
+  }, []);
+
+  const enqueue = (p: Priority) =>
+    setQ((s) => ({ ...s, [p]: [...s[p], { at: Date.now() }] }));
+
   useInput((input) => {
     if (input === "a") {
-      setQ((s) => ({ ...s, normal: s.normal + 1 }));
+      enqueue("normal");
     } else if (input === "h") {
-      setQ((s) => ({ ...s, high: s.high + 1 }));
+      enqueue("high");
     } else if (input === "l") {
-      setQ((s) => ({ ...s, low: s.low + 1 }));
+      enqueue("low");
     } else if (input === "p") {
       setQ((s) => ({ ...s, status: "paused" }));
     } else if (input === "r" || input === "s") {
       setQ((s) => ({ ...s, status: "running" }));
     } else if (input === "c") {
-      setQ((s) => ({ ...s, high: 0, normal: 0, low: 0, completed: 0 }));
+      setQ((s) => ({ ...s, high: [], normal: [], low: [], completed: 0 }));
     } else if (input === "x") {
       setQ((s) => ({ ...s, status: "stopped" }));
+    } else if (input === "1") {
+      setLock("S");
+    } else if (input === "2") {
+      setLock("M");
+    } else if (input === "3") {
+      setLock("L");
+    } else if (input === "4") {
+      setLock("XL");
+    } else if (input === "0") {
+      setLock("auto");
     } else if (input === "q") {
       exit();
     }
   });
 
+  const v: View = {
+    status: q.status,
+    sizes: { high: q.high.length, normal: q.normal.length, low: q.low.length },
+    pending: q.high.length + q.normal.length + q.low.length,
+    completed: q.completed,
+    wait: q.wait,
+    execution: q.execution,
+    total: q.waitOverall + q.execution,
+    throughput: q.recent.length / 5,
+    trend,
+  };
+
   const widget =
     variant === "XL" ? (
-      <PageXL q={q} cols={cols} />
+      <PageXL v={v} cols={cols} />
     ) : variant === "L" ? (
-      <CardL q={q} />
+      <CardL v={v} />
     ) : variant === "M" ? (
-      <CardM q={q} />
+      <CardM v={v} />
     ) : (
-      <CardS q={q} />
+      <CardS v={v} />
     );
 
   return (
@@ -287,7 +385,7 @@ const App = (): React.ReactElement => {
           {` ${variant} `}
         </Text>
         <Text dimColor>
-          {` ${cols}×${rows} · resize to change size · [a/h/l] enqueue · [p/r] pause/resume · [c] clear · [q] quit`}
+          {` ${lock === "auto" ? "auto" : "locked"} · ${cols}×${rows} · [1]S [2]M [3]L [4]XL [0]auto · a/h/l p/r c x · [q]uit`}
         </Text>
       </Box>
     </Box>
