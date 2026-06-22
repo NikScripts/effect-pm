@@ -7,9 +7,13 @@
  *   .metrics  → avg WAIT per priority, avg EXECUTION (overall), TOTAL, throughput
  * (execution isn't sliced by priority — priority only affects wait, not run time.)
  *
+ * Items arrive on their own (a producer, ~700ms, priority mix) — even while paused,
+ * so the queue backs up when you stop draining. A worker drains one item (~500ms),
+ * highest priority first, while running.
+ *
  * Pick a size to view it full-screen: [1] S  [2] M  [3] L  [4] XL  [0] auto (resize).
- * Controls: [a] add [h] high [l] low · [p] pause [r] resume [c] clear [x] stop · [q] quit.
- * While running a worker drains one item (~500ms), highest priority first.
+ * Controls (the real lifecycle ones): [p] pause [r] resume [c] clear [x] stop ·
+ * [b] burst (a producer surge) · [q] quit.
  *
  *   pnpm run example:queue-mock
  */
@@ -59,6 +63,13 @@ const spark = (vals: ReadonlyArray<number>): string => {
   return vals
     .map((v) => SPARK[Math.min(7, Math.floor((v / max) * 7))] ?? " ")
     .join("");
+};
+
+// deterministic pseudo-random (avoids Math.random) for the producer
+let rngState = 0x2f6e2b1;
+const rng = (): number => {
+  rngState = (rngState * 1664525 + 1013904223) >>> 0;
+  return rngState / 0x100000000;
 };
 
 const seed = (n: number, ageMs: number, now: number): Array<Item> =>
@@ -250,7 +261,7 @@ const CardL = (props: { readonly v: View }): React.ReactElement => {
           <Text dimColor>{v.throughput.toFixed(1)}/s</Text>
         </Box>
       </Box>
-      <Text dimColor>a·add p·pause c·clear</Text>
+      <Text dimColor>p·pause c·clear b·burst</Text>
     </Box>
   );
 };
@@ -297,7 +308,7 @@ const PageXL = (props: {
       </Box>
       <Box marginTop={1}>
         <Text dimColor>
-          [a]dd [h]igh [l]ow {"  "} [p]ause [r]esume [c]lear [x]shutdown {"  "} [q]uit
+          [p]ause [r]esume [c]lear [x]stop {"  "} [b]urst {"  "} [q]uit
         </Text>
       </Box>
     </Box>
@@ -353,6 +364,36 @@ const App = (): React.ReactElement => {
     return () => clearInterval(id);
   }, [q.status]);
 
+  // producer: items arrive over time (a priority mix), even while paused so the
+  // queue backs up when you stop draining
+  React.useEffect(() => {
+    if (q.status === "stopped") {
+      return;
+    }
+    const id = setInterval(() => {
+      setQ((s) => {
+        const now = Date.now();
+        const count = 1 + Math.floor(rng() * 2);
+        let high = s.high;
+        let normal = s.normal;
+        let low = s.low;
+        for (let i = 0; i < count; i++) {
+          const r = rng();
+          const item = { at: now };
+          if (r < 0.18) {
+            high = [...high, item];
+          } else if (r < 0.82) {
+            normal = [...normal, item];
+          } else {
+            low = [...low, item];
+          }
+        }
+        return { ...s, high, normal, low };
+      });
+    }, 700);
+    return () => clearInterval(id);
+  }, [q.status]);
+
   // throughput/pending trend sampler
   React.useEffect(() => {
     const id = setInterval(
@@ -362,16 +403,16 @@ const App = (): React.ReactElement => {
     return () => clearInterval(id);
   }, []);
 
-  const enqueue = (p: Priority) =>
-    setQ((s) => ({ ...s, [p]: [...s[p], { at: Date.now() }] }));
-
   useInput((input) => {
-    if (input === "a") {
-      enqueue("normal");
-    } else if (input === "h") {
-      enqueue("high");
-    } else if (input === "l") {
-      enqueue("low");
+    if (input === "b") {
+      // burst: simulate a producer surge
+      setQ((s) => ({
+        ...s,
+        normal: [
+          ...s.normal,
+          ...Array.from({ length: 10 }, () => ({ at: Date.now() })),
+        ],
+      }));
     } else if (input === "p") {
       setQ((s) => ({ ...s, status: "paused" }));
     } else if (input === "r" || input === "s") {
@@ -428,7 +469,7 @@ const App = (): React.ReactElement => {
           {` ${variant} `}
         </Text>
         <Text dimColor>
-          {` ${lock === "auto" ? "auto" : "locked"} · ${cols}×${rows} · [1]S [2]M [3]L [4]XL [0]auto · a/h/l p/r c x · [q]uit`}
+          {` ${lock === "auto" ? "auto" : "locked"} · ${cols}×${rows} · [1-4] size [0] auto · [p]ause [r]esume [c]lear [x]stop [b]urst · [q]uit`}
         </Text>
       </Box>
     </Box>
