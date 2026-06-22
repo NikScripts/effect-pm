@@ -520,6 +520,5 @@ const restore = () => {
     out.write("\x1b[?1049l");
   }
 };
-const app = render(<App />);
-void app.waitUntilExit().finally(restore);
+render(<App />);
 process.on("exit", restore);

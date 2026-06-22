@@ -24,6 +24,5 @@ const restore = () => {
   }
 };
 
-const app = render(<App />);
-void app.waitUntilExit().finally(restore);
+render(<App />);
 process.on("exit", restore);

@@ -43,8 +43,7 @@ if (argv[0] === "tui") {
       out.write("\x1b[?1049l");
     }
   };
-  const app = render(React.createElement(App));
-  void app.waitUntilExit().finally(restore);
+  render(React.createElement(App));
   process.on("exit", restore);
 } else {
   // ── CLI projection ──

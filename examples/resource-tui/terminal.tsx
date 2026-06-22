@@ -25,16 +25,20 @@ const renderTui = (App: () => React.ReactElement): Effect.Effect<void> =>
   Effect.callback<void>((resume) => {
     const out = process.stdout;
     const tty = out.isTTY === true;
-    if (tty) {
-      out.write("\x1b[?1049h\x1b[2J\x1b[H");
-    }
-    const app = render(React.createElement(App));
-    void app.waitUntilExit().finally(() => {
+    // leave the alt screen only at process exit (the last write) — leaving it in
+    // waitUntilExit's finally runs before Ink's final frame, which then lands on
+    // the main screen and persists.
+    const leave = () => {
       if (tty) {
         out.write("\x1b[?1049l");
       }
-      resume(Effect.void);
-    });
+    };
+    if (tty) {
+      out.write("\x1b[?1049h\x1b[2J\x1b[H");
+    }
+    process.on("exit", leave);
+    const app = render(React.createElement(App));
+    void app.waitUntilExit().finally(() => resume(Effect.void));
   });
 
 /** A single tag, or a group tag (its named members). */

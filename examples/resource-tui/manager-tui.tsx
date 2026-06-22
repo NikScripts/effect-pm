@@ -29,6 +29,5 @@ const restore = () => {
   }
 };
 
-const app = render(React.createElement(App));
-void app.waitUntilExit().finally(restore);
+render(React.createElement(App));
 process.on("exit", restore);
