@@ -12,7 +12,7 @@ import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { Resource, groupOf } from "../src/Resource";
-import { queueSnapshot } from "../src/QueueContract";
+import { queueStatus } from "../src/QueueContract";
 
 // Streaming `.changes` over a REAL http transport (the in-memory RpcTest path is the blocker
 // the design note flagged — this proves the wire works end to end). Streams need a
@@ -81,21 +81,31 @@ class Status extends Resource.Tag<Status>("stream/Status")({
   changes: Resource.stream(Schema.String),
 }) {}
 
-// The queue contract's `changes` snapshot streams over http — proves the real `queueSnapshot`
-// (a struct of per-priority sizes + paused + completed) crosses the wire as stream elements,
+// The queue contract's `status` snapshot streams over http — proves the real `queueStatus`
+// (per-priority sizes + paused + in-flight + completed) crosses the wire as stream elements,
 // using the batteries-included `serveHttp` (ndjson by default, which streaming needs).
 class QueueWatch extends Resource.Tag<QueueWatch>("stream/QueueWatch")({
-  changes: Resource.stream(queueSnapshot),
+  status: Resource.stream(queueStatus),
 }) {}
 
-const snapA = { sizes: { high: 0, normal: 3, low: 1 }, paused: false, completed: 0 };
-const snapB = { sizes: { high: 0, normal: 0, low: 0 }, paused: true, completed: 4 };
+const snapA = {
+  sizes: { high: 0, normal: 3, low: 1 },
+  paused: false,
+  inFlight: 1,
+  completed: 0,
+};
+const snapB = {
+  sizes: { high: 0, normal: 0, low: 0 },
+  paused: true,
+  inFlight: 0,
+  completed: 4,
+};
 
 const QueueWatchServer = Resource.serveHttp(QueueWatch, {
-  changes: Stream.fromIterable([snapA, snapB]),
+  status: Stream.fromIterable([snapA, snapB]),
 }).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
-it("streams the queue snapshot (`changes`) over real http", () => {
+it("streams the queue status snapshot over real http", () => {
   const program = Effect.gen(function* () {
     const address = yield* HttpServer.HttpServer.pipe(
       Effect.map((server) => server.address),
@@ -103,7 +113,7 @@ it("streams the queue snapshot (`changes`) over real http", () => {
     const port = address._tag === "TcpAddress" ? address.port : 0;
     yield* Effect.gen(function* () {
       const queue = yield* QueueWatch;
-      const seen = yield* Stream.runCollect(queue.changes);
+      const seen = yield* Stream.runCollect(queue.status);
       expect(Array.from(seen)).toEqual([snapA, snapB]);
     }).pipe(
       Effect.provide(

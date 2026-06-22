@@ -42,13 +42,11 @@ const makeImpl = () => {
       void paused;
       return cleared;
     }),
-    // not exercised by the RpcTest control round-trip below (streaming is verified over real
-    // http in resource-stream-http.test.ts); a static snapshot stream satisfies the contract.
-    changes: Stream.make({
-      sizes: { high: 0, normal: pending, low: 0 },
-      paused,
-      completed: done,
-    }),
+    // observability streams — not exercised by the RpcTest control round-trip below (streaming
+    // is verified over real http in resource-stream-http.test.ts); empty streams satisfy the
+    // contract. `events` (item-typed) is supplied per-instance where the item schema is known.
+    status: Stream.empty,
+    metrics: Stream.empty,
   };
 };
 
@@ -89,16 +87,17 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
 it("exposes the expected control verbs", () => {
   expect(Object.keys(queueControlSpec).sort()).toEqual(
     [
-      "changes",
       "clear",
       "completed",
       "isEmpty",
+      "metrics",
       "pause",
       "resume",
       "shutdown",
       "size",
       "sizes",
       "start",
+      "status",
     ].sort(),
   );
 });
@@ -135,6 +134,7 @@ it("queue add round-trips with a per-instance item schema (native validation)", 
       Effect.sync(() => {
         enqueued.push(item);
       }),
+    events: Stream.empty,
   };
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Numbers));

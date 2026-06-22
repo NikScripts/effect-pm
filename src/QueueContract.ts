@@ -37,17 +37,143 @@ export const queueSizes = Schema.Struct({
 });
 
 /**
- * A queue's whole observable state — the element of its `changes` stream. The single
- * snapshot a dashboard atom / CLI `--watch` / TUI renders, kept small and encodable (it
- * crosses RPC).
+ * A queue's **current-state** snapshot — the element of the `status` stream. Instantaneous
+ * truth (what *is*), kept small and encodable (it crosses RPC). One snapshot a dashboard
+ * atom / CLI `--watch` / TUI renders. Distinct from `events` (discrete facts) and `metrics`
+ * (windowed aggregates).
  *
  * @public
  */
-export const queueSnapshot = Schema.Struct({
+export const queueStatus = Schema.Struct({
   sizes: queueSizes,
   paused: Schema.Boolean,
+  inFlight: Schema.Number,
   completed: Schema.Number,
 });
+
+/**
+ * **Windowed** queue metrics — the element of the `metrics` stream, emitted once per window.
+ * Counts are per-window deltas; gauges/derived values are as-of the window end. Separate from
+ * `status` (instantaneous) and `events` (discrete) because aggregates are inherently
+ * time-bucketed.
+ *
+ * @public
+ */
+export const queueMetrics = Schema.Struct({
+  windowStart: Schema.DateTimeUtc,
+  windowEnd: Schema.DateTimeUtc,
+  windowMillis: Schema.Number,
+  // per-window counts
+  enqueued: Schema.Number,
+  started: Schema.Number,
+  completed: Schema.Number,
+  failed: Schema.Number,
+  retried: Schema.Number,
+  deadLettered: Schema.Number,
+  dropped: Schema.Number,
+  rateLimitExceeded: Schema.Number,
+  // as-of window end
+  inFlight: Schema.Number,
+  throughputPerSec: Schema.Number,
+  avgLatencyMillis: Schema.optionalKey(Schema.Number),
+});
+
+/** A queue entry's priority level. @public */
+export const queuePriority = Schema.Literals(["high", "normal", "low"]);
+
+/** Timestamps carried by a wire {@link queueEntry}. @public */
+export const queueEntryTimestamps = Schema.Struct({
+  enqueuedAt: Schema.DateTimeUtc,
+  startedAt: Schema.optionalKey(Schema.DateTimeUtc),
+  completedAt: Schema.optionalKey(Schema.DateTimeUtc),
+  interruptedAt: Schema.optionalKey(Schema.DateTimeUtc),
+});
+
+/**
+ * A queue entry on the wire, parameterized by the per-instance `itemSchema`. Mirrors the
+ * engine's `QueueEntry<T>`; used inside {@link queueEvent}.
+ *
+ * @public
+ */
+export const queueEntry = <Sch extends Schema.Top>(itemSchema: Sch) =>
+  Schema.Struct({
+    item: itemSchema,
+    entryId: Schema.String,
+    key: Schema.optionalKey(Schema.String),
+    priority: queuePriority,
+    attempts: Schema.Number,
+    timestamps: queueEntryTimestamps,
+    batchId: Schema.optionalKey(Schema.String),
+    releaseId: Schema.optionalKey(Schema.String),
+    sourceResourceId: Schema.optionalKey(Schema.String),
+    attributes: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)),
+  });
+
+/**
+ * The **lifecycle event** union — the element of the `events` stream: discrete entry / worker
+ * / queue facts. Parameterized by `itemSchema` (events carry entries). A `Schema` tagged
+ * union (encodable; it crosses RPC) — subscribers discriminate on `_tag`.
+ *
+ * Failure-bearing variants carry an encoded `Cause`/`Exit` of `unknown` (the engine's worker
+ * error type isn't part of the queue's wire contract); the non-encodable `retry` affordance
+ * the old callbacks received is dropped — a subscriber holds the handle to drive control.
+ *
+ * @public
+ */
+export const queueEvent = <Sch extends Schema.Top>(itemSchema: Sch) => {
+  const entry = queueEntry(itemSchema);
+  const entries = Schema.Array(entry);
+  const cause = Schema.Cause(Schema.Unknown, Schema.Unknown);
+  const exit = Schema.Exit(Schema.Void, Schema.Unknown, Schema.Unknown);
+  return Schema.Union([
+    Schema.TaggedStruct("Start", { queueId: Schema.String }),
+    Schema.TaggedStruct("Enqueued", {
+      entries,
+      priority: queuePriority,
+      batchId: Schema.optionalKey(Schema.String),
+    }),
+    Schema.TaggedStruct("Started", { entry }),
+    Schema.TaggedStruct("Completed", { entry, elapsed: Schema.Duration }),
+    Schema.TaggedStruct("Failed", { entry, cause, elapsed: Schema.Duration }),
+    Schema.TaggedStruct("Exit", { entry, exit, elapsed: Schema.Duration }),
+    Schema.TaggedStruct("RetryScheduled", {
+      entry,
+      cause,
+      nextAttempt: Schema.Number,
+    }),
+    Schema.TaggedStruct("RetryExhausted", { entry, cause }),
+    Schema.TaggedStruct("Drained", {
+      queueId: Schema.String,
+      completed: Schema.Number,
+    }),
+    Schema.TaggedStruct("Cleared", {
+      queueId: Schema.String,
+      count: Schema.Number,
+    }),
+    Schema.TaggedStruct("Released", {
+      queueId: Schema.String,
+      releaseId: Schema.String,
+      entries,
+    }),
+    Schema.TaggedStruct("DeadLettered", {
+      queueId: Schema.String,
+      entries,
+      reason: Schema.String,
+    }),
+    Schema.TaggedStruct("Dropped", {
+      queueId: Schema.String,
+      entries,
+      reason: Schema.String,
+    }),
+    Schema.TaggedStruct("RateLimitExceeded", {
+      queueId: Schema.String,
+      entry,
+      limitKey: Schema.String,
+      algorithm: Schema.Literals(["fixed-window", "token-bucket"]),
+      outcome: Schema.Literals(["delayed", "rejected"]),
+    }),
+  ]);
+};
 
 /**
  * The queue **control + observation** contract: the fixed-schema verbs of a queue handle,
@@ -88,9 +214,13 @@ export const queueControlSpec = {
       "Drain all pending items and reset the completed counter; returns the count cleared.",
     destructive: true,
   }),
-  changes: Resource.stream(queueSnapshot).annotate({
+  status: Resource.stream(queueStatus).annotate({
     description:
-      "Live queue state (per-priority sizes, paused, completed) emitted on every change.",
+      "Live current-state snapshot (per-priority sizes, paused, in-flight, completed).",
+  }),
+  metrics: Resource.stream(queueMetrics).annotate({
+    description:
+      "Windowed metrics (per-window counts + throughput/latency) emitted once per window.",
   }),
 };
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to
@@ -116,6 +246,9 @@ export const queueSpec = <Sch extends Schema.Top>(itemSchema: Sch) => ({
   ...queueControlSpec,
   add: Resource.mutate(Schema.Void, {
     payload: { item: itemSchema },
+  }),
+  events: Resource.stream(queueEvent(itemSchema)).annotate({
+    description: "Discrete entry / worker / queue lifecycle events.",
   }),
 });
 
