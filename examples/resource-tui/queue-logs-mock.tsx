@@ -1,10 +1,9 @@
 /**
  * @module examples/resource-tui/queue-logs-mock
  *
- * Full-screen queue (the **XL widget**) pinned to the top, with a **live log tail
- * below it**. The widget is fixed height; the logs fill the rest and always show
- * the latest at the bottom (older lines scroll off the top). This is the shape the
- * real `.changes`/`.metrics` (widget) + `.events` (logs) streams would feed.
+ * The shared **XL queue widget** (`./queue-widget`) pinned to the top, with a **live
+ * log tail below it** — newest at the bottom, older lines scroll off the top. The
+ * shape the real `.changes`/`.metrics` (widget) + `.events` (logs) streams would feed.
  *
  * Controls locked by default ([l] to unlock — red border warns you); resource
  * controls while unlocked: [p] pause [r] resume [c] clear [x] stop. Quit with Ctrl+C.
@@ -14,44 +13,26 @@
 
 import { Box, render, Text, useInput, useStdout } from "ink";
 import * as React from "react";
+import {
+  BLANK_BORDER,
+  PageXL,
+  PAGE_HEIGHT,
+  type Priority,
+  type Status,
+  type View,
+} from "./queue-widget";
 
-type Status = "running" | "paused" | "stopped";
-type Priority = "high" | "normal" | "low";
 type Kind = "started" | "completed" | "failed" | "retry";
 
 const NAME = "mail-queue";
-const COLOR: Record<Status, string> = {
-  running: "green",
-  paused: "yellow",
-  stopped: "red",
-};
-const STATUS_ICON: Record<Status, string> = {
-  running: "►",
-  paused: "‖",
-  stopped: "■",
-};
-const SYM: Record<Priority, { symbol: string; color: string; label: string }> = {
-  high: { symbol: "▲", color: "red", label: "high" },
-  normal: { symbol: "•", color: "white", label: "normal" },
-  low: { symbol: "▼", color: "blue", label: "low" },
-};
 const LOG: Record<Kind, { icon: string; color: string; label: string }> = {
   started: { icon: "►", color: "gray", label: "started" },
   completed: { icon: "✓", color: "green", label: "done" },
   failed: { icon: "✗", color: "red", label: "failed" },
   retry: { icon: "↻", color: "yellow", label: "retry" },
 };
-const SPARK = "▁▂▃▄▅▆▇█";
-const BLANK_BORDER = {
-  topLeft: " ",
-  top: " ",
-  topRight: " ",
-  right: " ",
-  bottomRight: " ",
-  bottom: " ",
-  bottomLeft: " ",
-  left: " ",
-};
+// mock metrics from counts (backlog-proportional wait; low priority waits longest)
+const WAIT_FACTOR: Record<Priority, number> = { high: 350, normal: 700, low: 1600 };
 
 let rngState = 0x51ed2701;
 const rng = (): number => {
@@ -65,20 +46,6 @@ const hexKey = (): string =>
     .toString(16)
     .padStart(4, "0");
 const timeStr = (t: number): string => new Date(t).toLocaleTimeString();
-const fmt = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
-const bar = (value: number, max: number, width: number): string => {
-  const filled = max <= 0 ? 0 : Math.min(width, Math.round((value / max) * width));
-  return "█".repeat(filled) + "░".repeat(width - filled);
-};
-const spark = (vals: ReadonlyArray<number>): string => {
-  if (vals.length === 0) {
-    return "";
-  }
-  const max = Math.max(...vals, 1);
-  return vals
-    .map((v) => SPARK[Math.min(7, Math.floor((v / max) * 7))] ?? " ")
-    .join("");
-};
 
 interface QState {
   readonly high: number;
@@ -105,9 +72,6 @@ const initial = (): QState => ({
   recent: [],
 });
 
-// mock metrics from counts (backlog-proportional wait; low priority waits longest)
-const WAIT_FACTOR: Record<Priority, number> = { high: 350, normal: 700, low: 1600 };
-
 const useTerminalSize = (): { cols: number; rows: number } => {
   const { stdout } = useStdout();
   const [size, setSize] = React.useState({
@@ -125,100 +89,6 @@ const useTerminalSize = (): { cols: number; rows: number } => {
     };
   }, [stdout]);
   return size;
-};
-
-const WIDGET_HEIGHT = 16;
-
-const PrioRow = (props: {
-  readonly p: Priority;
-  readonly count: number;
-  readonly max: number;
-  readonly barWidth: number;
-}): React.ReactElement => {
-  const s = SYM[props.p];
-  return (
-    <Box>
-      <Box width={8}>
-        <Text>
-          {s.symbol} {s.label}
-        </Text>
-      </Box>
-      <Box width={props.barWidth + 1}>
-        <Text color={s.color}>{bar(props.count, props.max, props.barWidth)}</Text>
-      </Box>
-      <Box width={3} justifyContent="flex-end">
-        <Text>{props.count}</Text>
-      </Box>
-      <Box width={16} justifyContent="flex-end">
-        <Text dimColor>wait ⌀ {fmt(props.count * WAIT_FACTOR[props.p])}</Text>
-      </Box>
-    </Box>
-  );
-};
-
-const Widget = (props: {
-  readonly q: QState;
-  readonly trend: ReadonlyArray<number>;
-  readonly width: number;
-}): React.ReactElement => {
-  const { q, trend, width } = props;
-  const pending = q.high + q.normal + q.low;
-  const max = Math.max(q.high, q.normal, q.low, 1);
-  const throughput = q.recent.length / 5;
-  const execution = 700 + (q.completed % 5) * 120;
-  const overallWait =
-    pending > 0
-      ? (q.high * WAIT_FACTOR.high +
-          q.normal * WAIT_FACTOR.normal +
-          q.low * WAIT_FACTOR.low) /
-        pending
-      : 0;
-  const total = overallWait + execution;
-  const barWidth = Math.min(30, Math.max(8, width - 4 - 8 - 1 - 3 - 16));
-  return (
-    <Box
-      flexShrink={0}
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={COLOR[q.status]}
-      paddingX={2}
-      paddingY={1}
-      height={WIDGET_HEIGHT}
-    >
-      <Box justifyContent="space-between">
-        <Text bold color="cyan">
-          {NAME}
-        </Text>
-        <Text color={COLOR[q.status]}>
-          {STATUS_ICON[q.status]} {q.status}
-        </Text>
-      </Box>
-      <Box marginTop={1} justifyContent="space-between">
-        <Text bold>PENDING {pending}</Text>
-        <Text bold>COMPLETED {q.completed}</Text>
-      </Box>
-      <Box marginTop={1} flexDirection="column">
-        <PrioRow p="high" count={q.high} max={max} barWidth={barWidth} />
-        <PrioRow p="normal" count={q.normal} max={max} barWidth={barWidth} />
-        <PrioRow p="low" count={q.low} max={max} barWidth={barWidth} />
-      </Box>
-      <Box marginTop={1}>
-        <Box width={22}>
-          <Text>execution ⌀ {fmt(execution)}</Text>
-        </Box>
-        <Box width={20}>
-          <Text>total ⌀ {fmt(total)}</Text>
-        </Box>
-        <Box flexGrow={1} justifyContent="flex-end">
-          <Text>{throughput.toFixed(1)}/s</Text>
-        </Box>
-      </Box>
-      <Box marginTop={1}>
-        <Text color="green">{spark(trend)}</Text>
-        <Text dimColor> pending · {trend.length}s</Text>
-      </Box>
-    </Box>
-  );
 };
 
 const LogLine = (props: { readonly entry: LogEntry }): React.ReactElement => {
@@ -342,8 +212,34 @@ const App = (): React.ReactElement => {
     }
   });
 
+  const pending = q.high + q.normal + q.low;
+  const execution = 700 + (q.completed % 5) * 120;
+  const overallWait =
+    pending > 0
+      ? (q.high * WAIT_FACTOR.high +
+          q.normal * WAIT_FACTOR.normal +
+          q.low * WAIT_FACTOR.low) /
+        pending
+      : 0;
+  const view: View = {
+    name: NAME,
+    status: q.status,
+    sizes: { high: q.high, normal: q.normal, low: q.low },
+    pending,
+    completed: q.completed,
+    wait: {
+      high: q.high * WAIT_FACTOR.high,
+      normal: q.normal * WAIT_FACTOR.normal,
+      low: q.low * WAIT_FACTOR.low,
+    },
+    execution,
+    total: overallWait + execution,
+    throughput: q.recent.length / 5,
+    trend,
+  };
+
   // how many log lines fit below the widget
-  const visibleLogs = Math.max(1, rows - WIDGET_HEIGHT - 7);
+  const visibleLogs = Math.max(1, rows - PAGE_HEIGHT - 7);
   const tail = logs.slice(-visibleLogs);
 
   return (
@@ -354,7 +250,9 @@ const App = (): React.ReactElement => {
       borderStyle={locked ? BLANK_BORDER : "double"}
       borderColor="red"
     >
-      <Widget q={q} trend={trend} width={cols} />
+      <Box flexShrink={0}>
+        <PageXL v={view} width={cols - 2} />
+      </Box>
 
       <Box flexGrow={1} flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1}>
         <Box>

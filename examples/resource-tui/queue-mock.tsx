@@ -1,15 +1,14 @@
 /**
  * @module examples/resource-tui/queue-mock
  *
- * Responsive, interactive queue mock — S / M / L cards + XL full page, enriched
- * with the planned streams' data:
+ * Responsive, interactive queue mock — S / M / L cards + the XL full page (from the
+ * shared `./queue-widget`), enriched with the planned streams' data:
  *   .changes  → status + sizes {high, normal, low}
  *   .metrics  → avg WAIT per priority, avg EXECUTION (overall), TOTAL, throughput
- * (execution isn't sliced by priority — priority only affects wait, not run time.)
  *
- * Items arrive on their own (a producer, ~700ms, priority mix) — even while paused,
- * so the queue backs up when you stop draining. A worker drains one item (~500ms),
- * highest priority first, while running.
+ * Items arrive on their own (a producer, ~700ms) — even while paused, so the queue
+ * backs up when you stop draining. A worker drains one item (~500ms), highest
+ * priority first, while running.
  *
  * TUI controls (always): pick a size [1] S [2] M [3] L [4] XL [0] auto · [l] lock.
  * Resource controls are LOCKED by default — [l] to unlock (a red border warns you):
@@ -20,10 +19,24 @@
 
 import { Box, render, Text, useInput, useStdout } from "ink";
 import * as React from "react";
+import {
+  BLANK_BORDER,
+  QueueWidget,
+  type Priority,
+  type Status,
+  type Variant,
+  type View,
+  variantFor,
+} from "./queue-widget";
 
-type Status = "running" | "paused" | "stopped";
-type Priority = "high" | "normal" | "low";
-type Variant = "S" | "M" | "L" | "XL";
+const NAME = "mail-queue";
+const KEY = {
+  pause: "‖",
+  resume: "►",
+  clear: "⊗",
+  stop: "■",
+  burst: "↯",
+};
 
 interface Item {
   readonly at: number;
@@ -40,58 +53,9 @@ interface QState {
   readonly recent: ReadonlyArray<number>; // completion timestamps (last 5s)
 }
 
-const NAME = "mail-queue";
-const COLOR: Record<Status, string> = {
-  running: "green",
-  paused: "yellow",
-  stopped: "red",
-};
-// text-presentation glyphs only (no emoji codepoints → no "bubble button" rendering)
-const STATUS_ICON: Record<Status, string> = {
-  running: "►",
-  paused: "‖",
-  stopped: "■",
-};
-const KEY = {
-  pause: "‖",
-  resume: "►",
-  clear: "⊗",
-  stop: "■",
-  burst: "↯",
-  quit: "⎋",
-};
-const SPARK = "▁▂▃▄▅▆▇█";
-// an always-present, invisible border (spaces) — reserves the space so toggling the
-// red unlock border never shifts the layout
-const BLANK_BORDER = {
-  topLeft: " ",
-  top: " ",
-  topRight: " ",
-  right: " ",
-  bottomRight: " ",
-  bottom: " ",
-  bottomLeft: " ",
-  left: " ",
-};
-
 const ewma = (old: number, v: number): number =>
   old <= 0 ? v : old * 0.8 + v * 0.2;
-const fmt = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
-const bar = (value: number, max: number, width: number): string => {
-  const filled = max <= 0 ? 0 : Math.min(width, Math.round((value / max) * width));
-  return "█".repeat(filled) + "░".repeat(width - filled);
-};
-const spark = (vals: ReadonlyArray<number>): string => {
-  if (vals.length === 0) {
-    return "";
-  }
-  const max = Math.max(...vals, 1);
-  return vals
-    .map((v) => SPARK[Math.min(7, Math.floor((v / max) * 7))] ?? " ")
-    .join("");
-};
 
-// deterministic pseudo-random (avoids Math.random) for the producer
 let rngState = 0x2f6e2b1;
 const rng = (): number => {
   rngState = (rngState * 1664525 + 1013904223) >>> 0;
@@ -116,19 +80,6 @@ const initial = (): QState => {
   };
 };
 
-// ── derived view passed to the variants ──
-interface View {
-  readonly status: Status;
-  readonly sizes: Record<Priority, number>;
-  readonly pending: number;
-  readonly completed: number;
-  readonly wait: Record<Priority, number>; // ms
-  readonly execution: number; // ms
-  readonly total: number; // ms
-  readonly throughput: number; // per second
-  readonly trend: ReadonlyArray<number>;
-}
-
 const useTerminalSize = (): { cols: number; rows: number } => {
   const { stdout } = useStdout();
   const [size, setSize] = React.useState({
@@ -146,191 +97,6 @@ const useTerminalSize = (): { cols: number; rows: number } => {
     };
   }, [stdout]);
   return size;
-};
-
-const variantFor = (cols: number, rows: number): Variant =>
-  cols >= 78 && rows >= 18 ? "XL" : cols >= 48 ? "L" : cols >= 34 ? "M" : "S";
-
-const Dot = (props: { readonly status: Status }): React.ReactElement => (
-  <Text color={COLOR[props.status]}>
-    {STATUS_ICON[props.status]} {props.status}
-  </Text>
-);
-
-const Title = (props: { readonly status: Status }): React.ReactElement => (
-  <Box justifyContent="space-between">
-    <Text bold color="cyan">
-      {NAME}
-    </Text>
-    <Dot status={props.status} />
-  </Box>
-);
-
-const SYM: Record<Priority, { symbol: string; color: string; label: string }> = {
-  high: { symbol: "▲", color: "red", label: "high" },
-  normal: { symbol: "•", color: "white", label: "normal" },
-  low: { symbol: "▼", color: "blue", label: "low" },
-};
-
-const PrioRow = (props: {
-  readonly p: Priority;
-  readonly v: View;
-  readonly barWidth: number;
-  readonly max: number;
-  readonly labelWidth: number;
-  readonly showLabel: boolean;
-  readonly waitWidth: number; // 0 hides the wait column
-  readonly waitPrefix?: string;
-}): React.ReactElement => {
-  const s = SYM[props.p];
-  const count = props.v.sizes[props.p];
-  return (
-    <Box>
-      <Box width={props.labelWidth}>
-        <Text>
-          {s.symbol}
-          {props.showLabel ? ` ${s.label}` : ""}
-        </Text>
-      </Box>
-      <Box width={props.barWidth + 1}>
-        <Text color={s.color}>{bar(count, props.max, props.barWidth)}</Text>
-      </Box>
-      <Box width={3} justifyContent="flex-end">
-        <Text>{count}</Text>
-      </Box>
-      {props.waitWidth > 0 ? (
-        <Box width={props.waitWidth} justifyContent="flex-end">
-          <Text dimColor>
-            {props.waitPrefix ?? ""}⌀ {fmt(props.v.wait[props.p])}
-          </Text>
-        </Box>
-      ) : null}
-    </Box>
-  );
-};
-
-const CardS = (props: { readonly v: View }): React.ReactElement => {
-  const { v } = props;
-  return (
-    <Box flexDirection="column" borderStyle="round" borderColor={COLOR[v.status]} paddingX={1} width={26}>
-      <Title status={v.status} />
-      <Box>
-        <Box flexGrow={1}>
-          <Text>{v.pending} pending</Text>
-        </Box>
-        <Text>{v.completed} ✓</Text>
-      </Box>
-      <Box>
-        <Box flexGrow={1}>
-          <Text>
-            ▲{v.sizes.high} •{v.sizes.normal} ▼{v.sizes.low}
-          </Text>
-        </Box>
-        <Text>{v.throughput.toFixed(1)}/s</Text>
-      </Box>
-    </Box>
-  );
-};
-
-const CardM = (props: { readonly v: View }): React.ReactElement => {
-  const { v } = props;
-  const max = Math.max(v.sizes.high, v.sizes.normal, v.sizes.low, 1);
-  return (
-    <Box flexDirection="column" borderStyle="round" borderColor={COLOR[v.status]} paddingX={1} width={34}>
-      <Title status={v.status} />
-      <Box>
-        <Box width={14}>
-          <Text>pending {v.pending}</Text>
-        </Box>
-        <Box flexGrow={1} justifyContent="flex-end">
-          <Text>{v.throughput.toFixed(1)}/s</Text>
-        </Box>
-      </Box>
-      <PrioRow p="high" v={v} barWidth={4} max={max} labelWidth={2} showLabel={false} waitWidth={9} />
-      <PrioRow p="normal" v={v} barWidth={4} max={max} labelWidth={2} showLabel={false} waitWidth={9} />
-      <PrioRow p="low" v={v} barWidth={4} max={max} labelWidth={2} showLabel={false} waitWidth={9} />
-      <Box>
-        <Box width={14}>
-          <Text dimColor>exec ⌀ {fmt(v.execution)}</Text>
-        </Box>
-        <Box flexGrow={1} justifyContent="flex-end">
-          <Text dimColor>✓ {v.completed}</Text>
-        </Box>
-      </Box>
-    </Box>
-  );
-};
-
-const CardL = (props: { readonly v: View }): React.ReactElement => {
-  const { v } = props;
-  const max = Math.max(v.sizes.high, v.sizes.normal, v.sizes.low, 1);
-  return (
-    <Box flexDirection="column" borderStyle="round" borderColor={COLOR[v.status]} paddingX={1} width={44}>
-      <Title status={v.status} />
-      <Box justifyContent="space-between">
-        <Text>PENDING {v.pending}</Text>
-        <Text>COMPLETED {v.completed}</Text>
-      </Box>
-      <PrioRow p="high" v={v} barWidth={7} max={max} labelWidth={8} showLabel waitWidth={14} waitPrefix="wait " />
-      <PrioRow p="normal" v={v} barWidth={7} max={max} labelWidth={8} showLabel waitWidth={14} waitPrefix="wait " />
-      <PrioRow p="low" v={v} barWidth={7} max={max} labelWidth={8} showLabel waitWidth={14} waitPrefix="wait " />
-      <Box marginTop={1}>
-        <Box width={15}>
-          <Text dimColor>exec ⌀ {fmt(v.execution)}</Text>
-        </Box>
-        <Box width={15}>
-          <Text dimColor>total ⌀ {fmt(v.total)}</Text>
-        </Box>
-        <Box flexGrow={1} justifyContent="flex-end">
-          <Text dimColor>{v.throughput.toFixed(1)}/s</Text>
-        </Box>
-      </Box>
-    </Box>
-  );
-};
-
-const PageXL = (props: {
-  readonly v: View;
-  readonly cols: number;
-}): React.ReactElement => {
-  const { v } = props;
-  const max = Math.max(v.sizes.high, v.sizes.normal, v.sizes.low, 1);
-  return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={COLOR[v.status]}
-      paddingX={2}
-      paddingY={1}
-      width={Math.min(props.cols - 4, 96)}
-    >
-      <Title status={v.status} />
-      <Box marginTop={1} justifyContent="space-between">
-        <Text bold>PENDING {v.pending}</Text>
-        <Text bold>COMPLETED {v.completed}</Text>
-      </Box>
-      <Box marginTop={1} flexDirection="column">
-        <PrioRow p="high" v={v} barWidth={20} max={max} labelWidth={8} showLabel waitWidth={16} waitPrefix="wait " />
-        <PrioRow p="normal" v={v} barWidth={20} max={max} labelWidth={8} showLabel waitWidth={16} waitPrefix="wait " />
-        <PrioRow p="low" v={v} barWidth={20} max={max} labelWidth={8} showLabel waitWidth={16} waitPrefix="wait " />
-      </Box>
-      <Box marginTop={1}>
-        <Box width={22}>
-          <Text>execution ⌀ {fmt(v.execution)}</Text>
-        </Box>
-        <Box width={22}>
-          <Text>total ⌀ {fmt(v.total)}</Text>
-        </Box>
-        <Box flexGrow={1} justifyContent="flex-end">
-          <Text>{v.throughput.toFixed(1)}/s</Text>
-        </Box>
-      </Box>
-      <Box marginTop={1}>
-        <Text color="green">{spark(v.trend)}</Text>
-        <Text dimColor> pending · last {v.trend.length}s</Text>
-      </Box>
-    </Box>
-  );
 };
 
 const App = (): React.ReactElement => {
@@ -382,8 +148,7 @@ const App = (): React.ReactElement => {
     return () => clearInterval(id);
   }, [q.status]);
 
-  // producer: items arrive over time (a priority mix), even while paused so the
-  // queue backs up when you stop draining
+  // producer: items arrive over time (a priority mix), even while paused
   React.useEffect(() => {
     if (q.status === "stopped") {
       return;
@@ -412,7 +177,7 @@ const App = (): React.ReactElement => {
     return () => clearInterval(id);
   }, [q.status]);
 
-  // throughput/pending trend sampler
+  // pending trend sampler
   React.useEffect(() => {
     const id = setInterval(
       () => setTrend((t) => [...t, sizeRef.current].slice(-30)),
@@ -447,7 +212,6 @@ const App = (): React.ReactElement => {
       return;
     }
     if (input === "b") {
-      // burst: simulate a producer surge
       setQ((s) => ({
         ...s,
         normal: [
@@ -467,6 +231,7 @@ const App = (): React.ReactElement => {
   });
 
   const v: View = {
+    name: NAME,
     status: q.status,
     sizes: { high: q.high.length, normal: q.normal.length, low: q.low.length },
     pending: q.high.length + q.normal.length + q.low.length,
@@ -478,17 +243,6 @@ const App = (): React.ReactElement => {
     trend,
   };
 
-  const widget =
-    variant === "XL" ? (
-      <PageXL v={v} cols={cols} />
-    ) : variant === "L" ? (
-      <CardL v={v} />
-    ) : variant === "M" ? (
-      <CardM v={v} />
-    ) : (
-      <CardS v={v} />
-    );
-
   return (
     <Box
       flexDirection="column"
@@ -498,7 +252,7 @@ const App = (): React.ReactElement => {
       borderColor="red"
     >
       <Box flexGrow={1} alignItems="center" justifyContent="center">
-        {widget}
+        <QueueWidget view={v} variant={variant} cols={cols} />
       </Box>
       <Box paddingX={1} backgroundColor="gray">
         <Text color="black" backgroundColor="cyan">
@@ -520,13 +274,13 @@ const App = (): React.ReactElement => {
 
 const out = process.stdout;
 const tty = out.isTTY === true;
-if (tty) {
-  out.write("\x1b[?1049h\x1b[2J\x1b[H");
-}
 const restore = () => {
   if (tty) {
     out.write("\x1b[?1049l");
   }
 };
-render(<App />);
+if (tty) {
+  out.write("\x1b[?1049h\x1b[2J\x1b[H");
+}
 process.on("exit", restore);
+render(<App />);
