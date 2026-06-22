@@ -18,7 +18,7 @@ import { render } from "ink";
 import * as React from "react";
 import { Effect, Layer } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import { Command } from "effect/unstable/cli";
+import { Command, type Flag } from "effect/unstable/cli";
 import { makeResourceTui, type AnyTag } from "./make-resource-tui";
 
 const renderTui = (App: () => React.ReactElement): Effect.Effect<void> =>
@@ -66,4 +66,24 @@ export const Terminal = {
     Object.entries(record).map(([name, tag]) =>
       Command.make(name, {}, Terminal.make(tag)),
     ),
+
+  /**
+   * `Command.make(name, …, Terminal.make(target))` in one call — no `{}` needed.
+   * Optional middle arg for flags.
+   *
+   *   Terminal.command("my-group", MyGroup)
+   *   Terminal.command("counter", { by: Flag.integer("by") }, Counter)
+   */
+  command: (
+    ...args:
+      | [name: string, target: TuiTarget]
+      | [
+          name: string,
+          flags: Record<string, Flag.Flag<unknown>>,
+          target: TuiTarget,
+        ]
+  ) =>
+    args.length === 2
+      ? Command.make(args[0], {}, Terminal.make(args[1]))
+      : Command.make(args[0], args[1], Terminal.make(args[2])),
 };

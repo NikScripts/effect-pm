@@ -1,9 +1,11 @@
 /**
  * @module examples/resource-tui/group-terminal
  *
- * A group tag as a TUI command — pass the group straight to `Terminal.make`.
+ * The group as the **root** command — no args launches the group dashboard (where
+ * you reach every member's TUI); a subcommand is just an optional shortcut.
  *
- *   pnpm run example:group-terminal my-group     # the group's dashboard (all members)
+ *   pnpm run example:group-terminal           # the group dashboard (root, no args)
+ *   pnpm run example:group-terminal counter   # shortcut straight to Counter's TUI
  *   pnpm run example:group-terminal --help
  */
 
@@ -25,7 +27,11 @@ class MyGroup extends Group.Tag<MyGroup>("@nikscripts/effect-pm/MyGroup")({
   QueueManager,
 }) {}
 
-const root = Command.make("my-group", {}, Terminal.make(MyGroup));
+// the group is the root — `pm` alone launches its dashboard; `pm counter` is a
+// shortcut you opt into (you don't need it — the dashboard reaches every member)
+const root = Terminal.command("my-group", MyGroup).pipe(
+  Command.withSubcommands([Terminal.command("counter", MyGroup.Counter)]),
+);
 
 const program = Command.runWith(root, { version: "0.0.0" })(
   process.argv.slice(2),
