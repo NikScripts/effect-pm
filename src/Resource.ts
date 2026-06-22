@@ -873,21 +873,19 @@ export const forwardClient = <S extends Spec>(
   id: string,
 ): WireServiceOf<S> => {
   const headers = { id };
-  const calls = rpc as Record<
-    string,
-    (
-      payload: unknown,
-      options?: { readonly headers?: Record<string, string> },
-    ) => Effect.Effect<unknown, unknown>
-  >;
+  // narrowest possible assertion: keyed by string only — the precise per-tag signatures are
+  // erased by the dynamic lookup, so we assert nothing about the values and instead verify
+  // each is callable at runtime before use (a malformed client fails loudly, never mis-calls).
+  const calls = rpc as Record<string, unknown>;
   const service: Record<string, unknown> = {};
   for (const [key, m] of Object.entries(spec)) {
     // local-only members aren't on the wire — the client stubs them (see clientLayer).
     if (isLocalMethod(m)) continue;
     // the wire tag is group-prefixed; the service surface keeps the bare method name
     const call = calls[wireTag(groupId, key)];
-    // completeness check — fail loudly if a contract method isn't on the client
-    if (call === undefined) {
+    // completeness + callability check — `typeof` narrows `call` to a callable, so the
+    // invocations below need no further assertion.
+    if (typeof call !== "function") {
       throw new MissingContractMethod({ method: key });
     }
     service[key] =
