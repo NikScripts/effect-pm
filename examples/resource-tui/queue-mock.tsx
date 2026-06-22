@@ -133,28 +133,40 @@ const SYM: Record<Priority, { symbol: string; color: string; label: string }> = 
   low: { symbol: "▼", color: "blue", label: "low" },
 };
 
-const PrioBar = (props: {
+const PrioRow = (props: {
   readonly p: Priority;
   readonly v: View;
   readonly barWidth: number;
   readonly max: number;
-  readonly label?: boolean;
-  readonly wait?: "short" | "long";
+  readonly labelWidth: number;
+  readonly showLabel: boolean;
+  readonly waitWidth: number; // 0 hides the wait column
+  readonly waitPrefix?: string;
 }): React.ReactElement => {
   const s = SYM[props.p];
   const count = props.v.sizes[props.p];
   return (
-    <Text>
-      {s.symbol}
-      {props.label === true ? ` ${s.label.padEnd(6)}` : " "}
-      <Text color={s.color}>{bar(count, props.max, props.barWidth)}</Text> {count}
-      {props.wait === undefined ? null : (
-        <Text dimColor>
-          {props.wait === "long" ? "   wait ⌀ " : "   ⌀ "}
-          {fmt(props.v.wait[props.p])}
+    <Box>
+      <Box width={props.labelWidth}>
+        <Text>
+          {s.symbol}
+          {props.showLabel ? ` ${s.label}` : ""}
         </Text>
-      )}
-    </Text>
+      </Box>
+      <Box width={props.barWidth + 1}>
+        <Text color={s.color}>{bar(count, props.max, props.barWidth)}</Text>
+      </Box>
+      <Box width={3} justifyContent="flex-end">
+        <Text>{count}</Text>
+      </Box>
+      {props.waitWidth > 0 ? (
+        <Box width={props.waitWidth} justifyContent="flex-end">
+          <Text dimColor>
+            {props.waitPrefix ?? ""}⌀ {fmt(props.v.wait[props.p])}
+          </Text>
+        </Box>
+      ) : null}
+    </Box>
   );
 };
 
@@ -163,14 +175,24 @@ const CardS = (props: { readonly v: View }): React.ReactElement => {
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={COLOR[v.status]} paddingX={1} width={26}>
       <Title status={v.status} />
-      <Text>
-        {v.pending} ⏳ {"   "}
-        {v.completed} ✓
-      </Text>
-      <Text>
-        ▲{v.sizes.high} •{v.sizes.normal} ▼{v.sizes.low} {"  "}
-        {v.throughput.toFixed(1)}/s
-      </Text>
+      <Box>
+        <Box width={12}>
+          <Text>{v.pending} pending</Text>
+        </Box>
+        <Box flexGrow={1} justifyContent="flex-end">
+          <Text>{v.completed} ✓</Text>
+        </Box>
+      </Box>
+      <Box>
+        <Box width={12}>
+          <Text>
+            ▲{v.sizes.high} •{v.sizes.normal} ▼{v.sizes.low}
+          </Text>
+        </Box>
+        <Box flexGrow={1} justifyContent="flex-end">
+          <Text>{v.throughput.toFixed(1)}/s</Text>
+        </Box>
+      </Box>
     </Box>
   );
 };
@@ -181,16 +203,25 @@ const CardM = (props: { readonly v: View }): React.ReactElement => {
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={COLOR[v.status]} paddingX={1} width={34}>
       <Title status={v.status} />
-      <Text>
-        pending {v.pending} {"   "}
-        {v.throughput.toFixed(1)}/s
-      </Text>
-      <PrioBar p="high" v={v} barWidth={4} max={max} wait="short" />
-      <PrioBar p="normal" v={v} barWidth={4} max={max} wait="short" />
-      <PrioBar p="low" v={v} barWidth={4} max={max} wait="short" />
-      <Text dimColor>
-        exec ⌀ {fmt(v.execution)} {"  "} ✓ {v.completed}
-      </Text>
+      <Box>
+        <Box width={14}>
+          <Text>pending {v.pending}</Text>
+        </Box>
+        <Box flexGrow={1} justifyContent="flex-end">
+          <Text>{v.throughput.toFixed(1)}/s</Text>
+        </Box>
+      </Box>
+      <PrioRow p="high" v={v} barWidth={4} max={max} labelWidth={2} showLabel={false} waitWidth={9} />
+      <PrioRow p="normal" v={v} barWidth={4} max={max} labelWidth={2} showLabel={false} waitWidth={9} />
+      <PrioRow p="low" v={v} barWidth={4} max={max} labelWidth={2} showLabel={false} waitWidth={9} />
+      <Box>
+        <Box width={14}>
+          <Text dimColor>exec ⌀ {fmt(v.execution)}</Text>
+        </Box>
+        <Box flexGrow={1} justifyContent="flex-end">
+          <Text dimColor>✓ {v.completed}</Text>
+        </Box>
+      </Box>
     </Box>
   );
 };
@@ -205,13 +236,19 @@ const CardL = (props: { readonly v: View }): React.ReactElement => {
         <Text>PENDING {v.pending}</Text>
         <Text>COMPLETED {v.completed}</Text>
       </Box>
-      <PrioBar p="high" v={v} barWidth={6} max={max} label wait="long" />
-      <PrioBar p="normal" v={v} barWidth={6} max={max} label wait="long" />
-      <PrioBar p="low" v={v} barWidth={6} max={max} label wait="long" />
-      <Box justifyContent="space-between">
-        <Text dimColor>exec ⌀ {fmt(v.execution)}</Text>
-        <Text dimColor>total ⌀ {fmt(v.total)}</Text>
-        <Text dimColor>{v.throughput.toFixed(1)}/s</Text>
+      <PrioRow p="high" v={v} barWidth={7} max={max} labelWidth={8} showLabel waitWidth={14} waitPrefix="wait " />
+      <PrioRow p="normal" v={v} barWidth={7} max={max} labelWidth={8} showLabel waitWidth={14} waitPrefix="wait " />
+      <PrioRow p="low" v={v} barWidth={7} max={max} labelWidth={8} showLabel waitWidth={14} waitPrefix="wait " />
+      <Box marginTop={1}>
+        <Box width={15}>
+          <Text dimColor>exec ⌀ {fmt(v.execution)}</Text>
+        </Box>
+        <Box width={15}>
+          <Text dimColor>total ⌀ {fmt(v.total)}</Text>
+        </Box>
+        <Box flexGrow={1} justifyContent="flex-end">
+          <Text dimColor>{v.throughput.toFixed(1)}/s</Text>
+        </Box>
       </Box>
       <Text dimColor>a·add p·pause c·clear</Text>
     </Box>
@@ -239,14 +276,20 @@ const PageXL = (props: {
         <Text bold>COMPLETED {v.completed}</Text>
       </Box>
       <Box marginTop={1} flexDirection="column">
-        <PrioBar p="high" v={v} barWidth={18} max={max} label wait="long" />
-        <PrioBar p="normal" v={v} barWidth={18} max={max} label wait="long" />
-        <PrioBar p="low" v={v} barWidth={18} max={max} label wait="long" />
+        <PrioRow p="high" v={v} barWidth={20} max={max} labelWidth={8} showLabel waitWidth={16} waitPrefix="wait " />
+        <PrioRow p="normal" v={v} barWidth={20} max={max} labelWidth={8} showLabel waitWidth={16} waitPrefix="wait " />
+        <PrioRow p="low" v={v} barWidth={20} max={max} labelWidth={8} showLabel waitWidth={16} waitPrefix="wait " />
       </Box>
-      <Box marginTop={1} justifyContent="space-between">
-        <Text>execution ⌀ {fmt(v.execution)}</Text>
-        <Text>total ⌀ {fmt(v.total)}</Text>
-        <Text>{v.throughput.toFixed(1)}/s</Text>
+      <Box marginTop={1}>
+        <Box width={22}>
+          <Text>execution ⌀ {fmt(v.execution)}</Text>
+        </Box>
+        <Box width={22}>
+          <Text>total ⌀ {fmt(v.total)}</Text>
+        </Box>
+        <Box flexGrow={1} justifyContent="flex-end">
+          <Text>{v.throughput.toFixed(1)}/s</Text>
+        </Box>
       </Box>
       <Box marginTop={1}>
         <Text color="green">{spark(v.trend)}</Text>
