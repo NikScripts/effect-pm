@@ -128,8 +128,10 @@ const queueTag =
     id: string,
     itemSchema: Sch,
     options?: { readonly description?: string },
-  ): ResourceTag<Self, QueueInstanceSpec<Sch>> =>
-    Resource.Tag<Self>(id, options)(queueSpec(itemSchema));
+  ): ResourceTag<Self, QueueInstanceSpec<Sch>> => {
+    const spec = queueSpec(itemSchema);
+    return Resource.Tag<Self>(id, options)(spec);
+  };
 
 /**
  * Queue resource toolkit — managed priority queues on the {@link Resource} toolkit.

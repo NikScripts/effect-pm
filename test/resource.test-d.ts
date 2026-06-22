@@ -67,9 +67,10 @@ const _factoryA: Effect.Effect<number, never, TickA> = Effect.gen(function* () {
   return yield* a.count;
 });
 void _factoryA;
-const _factoryB: Effect.Effect<void, never, TickB> = Effect.gen(function* () {
-  yield* (yield* TickB).tick;
-});
+const _factoryB: Effect.Effect<void, never, TickB> = Effect.flatMap(
+  TickB,
+  (b) => b.tick,
+);
 void _factoryB;
 
 // ── remote path: the client layer's only requirement is the transport `Protocol` ──
@@ -86,8 +87,7 @@ const _remoteRun: Promise<string> = Effect.runPromise(
     const r = yield* Remote;
     return yield* r.ping;
   }).pipe(
-    Effect.provide(Resource.client(Remote)),
-    Effect.provide(protocolLayer),
+    Effect.provide(Resource.client(Remote).pipe(Layer.provide(protocolLayer))),
   ),
 );
 void _remoteRun;
@@ -121,21 +121,20 @@ const _localOk: Promise<void> = Effect.runPromise(
 void _localOk;
 
 // CLIENT layer never grants the capability → LocalCapability<Box> stays unsatisfied.
+// Negative test: the missing context IS the point, so both the TS error and the LSP
+// missing-context diagnostic on `runPromise` are expected and intentionally suppressed.
 const localViaClient = useLocal.pipe(
-  Effect.provide(Resource.client(Box)),
-  Effect.provide(protocolLayer),
+  Effect.provide(Resource.client(Box).pipe(Layer.provide(protocolLayer))),
 );
+// @effect-diagnostics-next-line missingEffectContext:off
 // @ts-expect-error — onChange is local-only; LocalCapability<Box> unsatisfied via the client.
 const _localViaClient: Promise<void> = Effect.runPromise(localViaClient);
 void _localViaClient;
 
 // the WIRE method is fine through the client (no capability needed).
 const _wireViaClient: Promise<number> = Effect.runPromise(
-  Effect.gen(function* () {
-    return yield* (yield* Box).read;
-  }).pipe(
-    Effect.provide(Resource.client(Box)),
-    Effect.provide(protocolLayer),
+  Effect.flatMap(Box, (b) => b.read).pipe(
+    Effect.provide(Resource.client(Box).pipe(Layer.provide(protocolLayer))),
   ),
 );
 void _wireViaClient;

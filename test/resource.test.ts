@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import { Resource, forwardClient, groupOf, specOf } from "../src/Resource";
@@ -118,8 +118,12 @@ it("two resource types sharing a method name coexist on one server (group prefix
     expect(yield* widgets.size).toBe(42);
     expect(yield* crates.size).toBe("dozen");
   }).pipe(
-    Effect.provide(Resource.server(Widgets, { size: Effect.succeed(42) })),
-    Effect.provide(Resource.server(Crates, { size: Effect.succeed("dozen") })),
+    Effect.provide(
+      Layer.mergeAll(
+        Resource.server(Widgets, { size: Effect.succeed(42) }),
+        Resource.server(Crates, { size: Effect.succeed("dozen") }),
+      ),
+    ),
     Effect.scoped,
   );
   return Effect.runPromise(program);
