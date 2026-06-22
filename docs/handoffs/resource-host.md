@@ -84,12 +84,43 @@ const TestEnv = Layer.mergeAll(ServerLive, RpcClient.layerProtocolHttp({ url: "/
      trailing slash (`…/`), so mind the served path.
    With those, the request is clean (`POST /`, no mangling).
 
-2. **Open: RPC route mounting (404).** With a clean `POST /`, the server returns
-   `RouteNotFound` — `RpcServer.layerHttp({ group, path })` + `HttpRouter.serve(appLayer)`
-   isn't matching at the served path. Next pass: confirm how `layerHttp` registers its route
-   on the served `HttpRouter` (path value, default-router vs the one `HttpRouter.serve` runs,
-   trailing-slash), get a green round-trip, then formalize `Resource.Host` / `Resource.host`
-   / `Resource.client(tag)`.
+2. **Route mounting — SOLVED.** `RpcServer.layerHttp` defaults to **websocket**
+   (`options.protocol === "http" ? layerProtocolHttp : layerProtocolWebsocket`). **Pass
+   `protocol: "http"`.** With that, the toolkit round-trips over real http — see the
+   committed test `test/resource-http.test.ts` (`Resource.Tag` + `Resource.server` on an
+   http `RpcServer` + `Resource.client` over `RpcClient`'s http protocol, via
+   `NodeHttpServer.layerTest`). Read the ephemeral port from `HttpServer.HttpServer`
+   (`address._tag === "TcpAddress" ? address.port : 0` — narrow, no cast).
+
+## Host implementation — what's ready vs the one wrinkle
+
+**Cast-free transport re-keying — confirmed.**
+```ts
+type HostProtocol = Context.Service.Shape<typeof RpcClient.Protocol>;
+const makeHost = <Self>(name: string) => Context.Service<Self, HostProtocol>()(name); // Resource.Host
+const hostLayer = (host, protocol /* Layer<RpcClient.Protocol> */) =>
+  Layer.effect(host, RpcClient.Protocol).pipe(Layer.provide(protocol));             // Resource.host
+// Resource.client(tag): Effect.provideService(RpcClient.make(group), RpcClient.Protocol, yield* tag.host)
+```
+All of this typechecks with **no casts**.
+
+**The open wrinkle — host-on-tag gating typing.** `Resource.client` must accept only
+host-bearing tags (hostless → local-only, compile error). That needs `tag.host` to be
+precisely `HostKey<HSelf>` when a host is set and absent/`undefined` when not. A conditional
+field (`host: [HSelf] extends [never] ? undefined : HostKey<HSelf>`) gates `client`
+correctly **but** breaks assignability elsewhere: a host-bearing tag is then *not* assignable
+where `ResourceTag<Self, S>` (HSelf=never → `host: undefined`) is expected (e.g.
+`Resource.instance`). Options for the next pass:
+- **(a, recommended)** overload `makeTag`'s spec call — `(spec)` → `ResourceTag<Self,S>`;
+  `(spec, host)` → `ResourceTag<Self,S> & { host: HostKey<HSelf> }` — with one contained
+  construction cast in the impl (consistent with the existing runtime-safe boundary casts).
+- (b) a distinct `RemoteResourceTag` type for host-bearing tags.
+- (c) keep `host` covariant/optional and gate via a separate marker.
+
+Then thread the optional host through `makeTag` / `tagFor` / `QueueResource.Tag` (host as the
+arg in the inferring call so its `Self` is captured — Self-explicit + host-inferred can't
+share one type-arg list), and the real-http test becomes: ship the tag + `Resource.host(Host,
+httpProtocol)`, no manual `provideService`.
 
 ## Then
 
