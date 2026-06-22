@@ -11,14 +11,14 @@
  * so the queue backs up when you stop draining. A worker drains one item (~500ms),
  * highest priority first, while running.
  *
- * Pick a size to view it full-screen: [1] S  [2] M  [3] L  [4] XL  [0] auto (resize).
- * Controls (the real lifecycle ones): [p] pause [r] resume [c] clear [x] stop ·
- * [b] burst (a producer surge) · [q] quit.
+ * TUI controls (always): pick a size [1] S [2] M [3] L [4] XL [0] auto · [l] lock.
+ * Resource controls are LOCKED by default — [l] to unlock (a red border warns you):
+ * [p] pause [r] resume [c] clear [x] stop · [b] burst. Quit with Ctrl+C.
  *
  *   pnpm run example:queue-mock
  */
 
-import { Box, render, Text, useApp, useInput, useStdout } from "ink";
+import { Box, render, Text, useInput, useStdout } from "ink";
 import * as React from "react";
 
 type Status = "running" | "paused" | "stopped";
@@ -277,9 +277,6 @@ const CardL = (props: { readonly v: View }): React.ReactElement => {
           <Text dimColor>{v.throughput.toFixed(1)}/s</Text>
         </Box>
       </Box>
-      <Text dimColor>
-        [p]{KEY.pause} [c]{KEY.clear} [b]{KEY.burst}
-      </Text>
     </Box>
   );
 };
@@ -297,7 +294,7 @@ const PageXL = (props: {
       borderColor={COLOR[v.status]}
       paddingX={2}
       paddingY={1}
-      width={Math.min(props.cols - 4, 74)}
+      width={Math.min(props.cols - 4, 96)}
     >
       <Title status={v.status} />
       <Box marginTop={1} justifyContent="space-between">
@@ -324,19 +321,14 @@ const PageXL = (props: {
         <Text color="green">{spark(v.trend)}</Text>
         <Text dimColor> pending · last {v.trend.length}s</Text>
       </Box>
-      <Box marginTop={1}>
-        <Text dimColor>
-          [p]{KEY.pause} [r]{KEY.resume} [c]{KEY.clear} [x]{KEY.stop} {"  "} [b]{KEY.burst} {"  "} [q]{KEY.quit}
-        </Text>
-      </Box>
     </Box>
   );
 };
 
 const App = (): React.ReactElement => {
-  const { exit } = useApp();
   const { cols, rows } = useTerminalSize();
   const [lock, setLock] = React.useState<"auto" | Variant>("auto");
+  const [locked, setLocked] = React.useState(true); // resource controls locked by default
   const variant = lock === "auto" ? variantFor(cols, rows) : lock;
 
   const [q, setQ] = React.useState<QState>(initial);
@@ -422,6 +414,30 @@ const App = (): React.ReactElement => {
   }, []);
 
   useInput((input) => {
+    // TUI controls — always available (separate from resource controls)
+    if (input === "1") {
+      setLock("S");
+      return;
+    } else if (input === "2") {
+      setLock("M");
+      return;
+    } else if (input === "3") {
+      setLock("L");
+      return;
+    } else if (input === "4") {
+      setLock("XL");
+      return;
+    } else if (input === "0") {
+      setLock("auto");
+      return;
+    } else if (input === "l") {
+      setLocked((x) => !x);
+      return;
+    }
+    // resource controls — only while unlocked (Ctrl+C quits)
+    if (locked) {
+      return;
+    }
     if (input === "b") {
       // burst: simulate a producer surge
       setQ((s) => ({
@@ -439,18 +455,6 @@ const App = (): React.ReactElement => {
       setQ((s) => ({ ...s, high: [], normal: [], low: [], completed: 0 }));
     } else if (input === "x") {
       setQ((s) => ({ ...s, status: "stopped" }));
-    } else if (input === "1") {
-      setLock("S");
-    } else if (input === "2") {
-      setLock("M");
-    } else if (input === "3") {
-      setLock("L");
-    } else if (input === "4") {
-      setLock("XL");
-    } else if (input === "0") {
-      setLock("auto");
-    } else if (input === "q") {
-      exit();
     }
   });
 
@@ -478,7 +482,13 @@ const App = (): React.ReactElement => {
     );
 
   return (
-    <Box flexDirection="column" width={cols} height={rows}>
+    <Box
+      flexDirection="column"
+      width={cols}
+      height={rows}
+      borderStyle={locked ? undefined : "double"}
+      borderColor="red"
+    >
       <Box flexGrow={1} alignItems="center" justifyContent="center">
         {widget}
       </Box>
@@ -486,8 +496,14 @@ const App = (): React.ReactElement => {
         <Text color="black" backgroundColor="cyan">
           {` ${variant} `}
         </Text>
+        <Text dimColor>{` ${lock === "auto" ? "auto" : "fixed"} · ${cols}×${rows} · [1-4] size [0] auto · `}</Text>
+        <Text color={locked ? "yellow" : "green"}>
+          {locked ? "controls locked" : "controls unlocked"}
+        </Text>
         <Text dimColor>
-          {` ${lock === "auto" ? "auto" : "locked"} · ${cols}×${rows} · [1-4] size [0] auto · [p]${KEY.pause} [r]${KEY.resume} [c]${KEY.clear} [x]${KEY.stop} [b]${KEY.burst} [q]${KEY.quit}`}
+          {locked
+            ? ` · [l] unlock`
+            : ` · [l] lock · [p]${KEY.pause} [r]${KEY.resume} [c]${KEY.clear} [x]${KEY.stop} [b]${KEY.burst}`}
         </Text>
       </Box>
     </Box>
