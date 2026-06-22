@@ -396,12 +396,23 @@ const App = (): React.ReactElement => {
     }
   };
 
+  // suggestions only once there's something to match
   const suggestions =
-    cmd === null
+    cmd === null || cmd.length === 0
       ? []
       : QUEUES.filter((name) =>
           displayName(name).toLowerCase().includes(cmd.toLowerCase()),
         ).slice(0, 6);
+
+  // grid columns — needed here so up/down can move a whole row
+  const avail = cols - 4;
+  let perRow = Math.max(1, Math.floor(avail / 34));
+  let cellWidth = Math.floor(avail / perRow) - 1;
+  while (cellWidth > 46 && perRow < members.length) {
+    perRow += 1;
+    cellWidth = Math.floor(avail / perRow) - 1;
+  }
+  cellWidth = Math.max(16, cellWidth);
 
   useInput((input, key) => {
     if (cmd !== null) {
@@ -446,9 +457,9 @@ const App = (): React.ReactElement => {
     } else if (input === "l" || key.rightArrow) {
       setSel((s) => Math.min(members.length - 1, s + 1));
     } else if (input === "k" || key.upArrow) {
-      setSel((s) => Math.max(0, s - 1));
+      setSel((s) => Math.max(0, s - perRow));
     } else if (input === "j" || key.downArrow) {
-      setSel((s) => Math.min(members.length - 1, s + 1));
+      setSel((s) => Math.min(members.length - 1, s + perRow));
     } else if (key.return || input === " ") {
       open(selectedNode);
     }
@@ -500,14 +511,6 @@ const App = (): React.ReactElement => {
   }
 
   // ── grid: breadcrumb + members + command bar ──
-  const avail = cols - 4;
-  let perRow = Math.max(1, Math.floor(avail / 34));
-  let cellWidth = Math.floor(avail / perRow) - 1;
-  while (cellWidth > 46 && perRow < members.length) {
-    perRow += 1;
-    cellWidth = Math.floor(avail / perRow) - 1;
-  }
-  cellWidth = Math.max(16, cellWidth);
   const crumb = path.map((g) => displayName(g.name)).join(" / ");
 
   return (
