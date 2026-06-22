@@ -1,11 +1,11 @@
 /**
  * @module examples/resource-tui/group-terminal
  *
- * The group as the **root** command — no args launches the group dashboard (where
- * you reach every member's TUI); a subcommand is just an optional shortcut.
+ * The group is the **root** command — running the script launches its dashboard
+ * (where you reach every member's TUI). Nothing sits on top of it; you'd only add
+ * subcommands if you want typed shortcuts.
  *
- *   pnpm run example:group-terminal           # the group dashboard (root, no args)
- *   pnpm run example:group-terminal counter   # shortcut straight to Counter's TUI
+ *   pnpm run example:group-terminal           # runs the root → the group dashboard
  *   pnpm run example:group-terminal --help
  */
 
@@ -27,11 +27,13 @@ class MyGroup extends Group.Tag<MyGroup>("@nikscripts/effect-pm/MyGroup")({
   QueueManager,
 }) {}
 
-// the group is the root — `pm` alone launches its dashboard; `pm counter` is a
-// shortcut you opt into (you don't need it — the dashboard reaches every member)
-const root = Terminal.command("my-group", MyGroup).pipe(
-  Command.withSubcommands([Terminal.command("counter", MyGroup.Counter)]),
-);
+// the group IS the root — running the script launches its dashboard. The name is
+// just the program name (shown in --help), never typed.
+const root = Terminal.command("my-group", MyGroup);
+
+// Only if you want a typed shortcut do you add a subcommand on top, e.g.:
+//   const root = Terminal.command("my-group", MyGroup).pipe(
+//     Command.withSubcommands([Terminal.command("counter", MyGroup.Counter)]));
 
 const program = Command.runWith(root, { version: "0.0.0" })(
   process.argv.slice(2),
