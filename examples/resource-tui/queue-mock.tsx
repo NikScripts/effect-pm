@@ -61,6 +61,18 @@ const KEY = {
   quit: "⎋",
 };
 const SPARK = "▁▂▃▄▅▆▇█";
+// an always-present, invisible border (spaces) — reserves the space so toggling the
+// red unlock border never shifts the layout
+const BLANK_BORDER = {
+  topLeft: " ",
+  top: " ",
+  topRight: " ",
+  right: " ",
+  bottomRight: " ",
+  bottom: " ",
+  bottomLeft: " ",
+  left: " ",
+};
 
 const ewma = (old: number, v: number): number =>
   old <= 0 ? v : old * 0.8 + v * 0.2;
@@ -482,7 +494,7 @@ const App = (): React.ReactElement => {
       flexDirection="column"
       width={cols}
       height={rows}
-      borderStyle={locked ? undefined : "double"}
+      borderStyle={locked ? BLANK_BORDER : "double"}
       borderColor="red"
     >
       <Box flexGrow={1} alignItems="center" justifyContent="center">

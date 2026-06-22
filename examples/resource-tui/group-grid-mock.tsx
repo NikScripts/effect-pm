@@ -32,6 +32,18 @@ const SYM: Record<Priority, { symbol: string; color: string; label: string }> = 
   normal: { symbol: "•", color: "white", label: "normal" },
   low: { symbol: "▼", color: "blue", label: "low" },
 };
+// an always-present, invisible border (spaces) — reserves the space so toggling the
+// red unlock border never shifts the layout
+const BLANK_BORDER = {
+  topLeft: " ",
+  top: " ",
+  topRight: " ",
+  right: " ",
+  bottomRight: " ",
+  bottom: " ",
+  bottomLeft: " ",
+  left: " ",
+};
 
 interface Q {
   readonly high: number;
@@ -365,7 +377,7 @@ const App = (): React.ReactElement => {
   const { cols, rows } = size;
   // pack as many columns as fit (min ~34 wide), then cap cell width (~46) so a
   // cell never stretches absurdly wide — add a column instead.
-  const avail = cols - 2;
+  const avail = cols - 4; // border (2) + grid padding (2)
   let perRow = Math.max(1, Math.floor(avail / 34));
   let cellWidth = Math.floor(avail / perRow) - 1;
   while (cellWidth > 46 && perRow < TREE.members.length) {
@@ -379,7 +391,7 @@ const App = (): React.ReactElement => {
       flexDirection="column"
       width={cols}
       height={rows}
-      borderStyle={locked ? undefined : "double"}
+      borderStyle={locked ? BLANK_BORDER : "double"}
       borderColor="red"
     >
       <Box paddingX={1}>
