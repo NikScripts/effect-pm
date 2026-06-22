@@ -849,8 +849,21 @@ export interface QueueResourceConfigBase<T> {
    */
   readonly key?: (item: T) => string;
   /**
-   * Max times an item may be re-enqueued via `event.retry` in exit/failure hooks.
-   * When exhausted, `onRetryExhausted` is called instead of re-enqueuing.
+   * Max **attempts** for an item — the initial try plus automatic re-enqueues. On failure the
+   * worker re-enqueues the item at its **own priority**, preserving its attempt count, until
+   * `attempts` is reached; then it's exhausted (emits a `RetryExhausted` event). Auto
+   * re-enqueue applies when **no** `onExit`/`onFailed` hook is configured (a hook still drives
+   * retry via `event.retry` for backward compatibility).
+   *
+   * In-place retry of the worker effect is a separate concern — put `Effect.retry(...)` on your
+   * `effect`. Supersedes the deprecated {@link QueueResourceConfigBase.retries}.
+   *
+   * @default 1 (try once; no auto re-enqueue)
+   */
+  readonly attempts?: number;
+  /**
+   * @deprecated Use {@link QueueResourceConfigBase.attempts} (= `retries` + 1). Max times an
+   * item may be re-enqueued via `event.retry` in exit/failure hooks.
    * @default Infinity
    */
   readonly retries?: number;
@@ -1648,7 +1661,17 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     const queueName = config.name ?? "anonymous";
     const concurrency = config.concurrency ?? 5;
     const capacity = config.capacity ?? 50_000;
-    const maxRetries = config.retries ?? Infinity;
+    // `attempts` (preferred) supersedes the deprecated `retries` (= attempts - 1).
+    const maxRetries =
+      config.attempts !== undefined
+        ? Math.max(0, config.attempts - 1)
+        : (config.retries ?? Infinity);
+    // The worker auto re-enqueues failed items (up to `maxRetries`) only when no exit/failure
+    // hook is configured and a bound was given — a hook still drives retry via `event.retry`.
+    const autoReEnqueue =
+      config.onExit === undefined &&
+      config.onFailed === undefined &&
+      (config.attempts !== undefined || config.retries !== undefined);
     // ─── Allocate internal state ───
     // Three bounded queues: one per priority level. Backpressure at `capacity`.
     const highQueue = yield* Queue.bounded<InternalItem<T>>(capacity);
@@ -2691,7 +2714,19 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             }),
           );
 
-          if (Exit.isFailure(exit) && config.onExit === undefined && config.onFailed === undefined) {
+          // Auto re-enqueue on failure (no exit/failure hook configured) up to `attempts`.
+          // Runs in the main fiber after the dedup key was released above, so the re-enqueue's
+          // `added` correctly follows the `released` (preserving the dedupe-key seq invariant).
+          if (Exit.isFailure(exit) && autoReEnqueue) {
+            yield* retryInternal(internal, exit);
+          }
+
+          if (
+            Exit.isFailure(exit) &&
+            config.onExit === undefined &&
+            config.onFailed === undefined &&
+            !autoReEnqueue
+          ) {
             yield* Effect.logWarning(
               `Item failed in queue "${queueName}", no exit hook configured`,
             ).pipe(Effect.annotateLogs("cause", Cause.pretty(exit.cause)));

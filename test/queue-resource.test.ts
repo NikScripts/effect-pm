@@ -230,6 +230,34 @@ describe("QueueResource.make — basic processing", () => {
     }).pipe(Effect.scoped),
   );
 
+  it.live("auto re-enqueues a failing item up to `attempts` (no hook)", () =>
+    Effect.gen(function* () {
+      const tries = yield* Ref.make(0);
+      const queue = yield* QueueResource.make({
+        name: "test-auto-retry",
+        effect: (_n: number) =>
+          Ref.update(tries, (n) => n + 1).pipe(
+            Effect.andThen(Effect.fail("boom" as const)),
+          ),
+        concurrency: 1,
+        attempts: 3,
+      });
+      const collected = yield* Effect.forkChild(
+        Stream.runCollect(
+          Stream.takeUntil(queue.events, (e) => e._tag === "RetryExhausted"),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add(1);
+      const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
+      // 3 attempts → 3 Failed, 2 RetryScheduled, then RetryExhausted
+      expect(tags.filter((t) => t === "Failed").length).toBe(3);
+      expect(tags.filter((t) => t === "RetryScheduled").length).toBe(2);
+      expect(tags).toContain("RetryExhausted");
+      expect(yield* Ref.get(tries)).toBe(3);
+    }).pipe(Effect.scoped),
+  );
+
   it.live("treats a single string as one item, not an iterable batch", () =>
     Effect.gen(function* () {
       const results = yield* Ref.make<Array<string>>([]);
