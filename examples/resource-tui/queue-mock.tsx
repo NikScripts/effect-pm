@@ -55,7 +55,7 @@ const STATUS_ICON: Record<Status, string> = {
 const KEY = {
   pause: "‖",
   resume: "►",
-  clear: "⌫",
+  clear: "⊗",
   stop: "■",
   burst: "↯",
   quit: "⎋",
