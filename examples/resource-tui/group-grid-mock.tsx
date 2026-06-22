@@ -363,9 +363,16 @@ const App = (): React.ReactElement => {
   });
 
   const { cols, rows } = size;
-  // target ~40-wide cells so widgets stay useful; scales out on big screens
-  const perRow = Math.max(1, Math.floor((cols - 2) / 40));
-  const cellWidth = Math.max(16, Math.floor((cols - 2) / perRow) - 1);
+  // pack as many columns as fit (min ~34 wide), then cap cell width (~46) so a
+  // cell never stretches absurdly wide — add a column instead.
+  const avail = cols - 2;
+  let perRow = Math.max(1, Math.floor(avail / 34));
+  let cellWidth = Math.floor(avail / perRow) - 1;
+  while (cellWidth > 46 && perRow < TREE.members.length) {
+    perRow += 1;
+    cellWidth = Math.floor(avail / perRow) - 1;
+  }
+  cellWidth = Math.max(16, cellWidth);
 
   return (
     <Box
