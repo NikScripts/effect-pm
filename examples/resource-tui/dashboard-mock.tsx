@@ -237,7 +237,7 @@ const Cell = (props: {
       <Box flexDirection="column" borderStyle={border} borderColor={selected ? "green" : "cyan"} height={CELL_HEIGHT} width={width} marginRight={1} marginBottom={1} paddingX={1}>
         <Box>
           <Box flexGrow={1}>
-            <Text bold color="cyan">
+            <Text bold color="cyan" wrap="truncate">
               ▸ {displayName(node.name)}
             </Text>
           </Box>
@@ -247,7 +247,7 @@ const Cell = (props: {
         </Box>
         {fits
           ? node.members.slice(0, 4).map((m, i) => (
-              <Text key={`${node.name}-${i}`} dimColor>
+              <Text key={`${node.name}-${i}`} dimColor wrap="truncate">
                 {m.t === "g" ? "▸ " : "  "}
                 {displayName(m.name)}
               </Text>
@@ -267,7 +267,7 @@ const Cell = (props: {
     <Box flexDirection="column" borderStyle={border} borderColor={selected ? "green" : COLOR[q.status]} height={CELL_HEIGHT} width={width} marginRight={1} marginBottom={1} paddingX={1}>
       <Box>
         <Box flexGrow={1}>
-          <Text bold>{displayName(node.name)}</Text>
+          <Text bold wrap="truncate">{displayName(node.name)}</Text>
         </Box>
         <Text color={COLOR[q.status]}>{ICON[q.status]}</Text>
       </Box>
@@ -331,6 +331,7 @@ const App = (): React.ReactElement => {
   const [editMode, setEditMode] = React.useState(false);
   const [cmd, setCmd] = React.useState<string | null>(null); // null = closed
   const [cmdSel, setCmdSel] = React.useState(0);
+  const [scroll, setScroll] = React.useState(0); // top visible grid row
 
   const group = path[path.length - 1] ?? TREE;
   const members = group.members;
@@ -348,6 +349,8 @@ const App = (): React.ReactElement => {
     focused,
     cmd,
     sel,
+    scroll: 0,
+    maxScroll: 0,
   });
 
   // sim: advance all queues, stream events
@@ -462,7 +465,36 @@ const App = (): React.ReactElement => {
     cellWidth = Math.floor(avail / perRow) - 1;
   }
   cellWidth = Math.max(16, cellWidth);
-  layoutRef.current = { perRow, cellWidth, focused, cmd, sel };
+
+  // scroll geometry — keep the selected cell on screen
+  const totalRows = Math.ceil(members.length / perRow);
+  const gridH = Math.max(CELL_HEIGHT, rows - 6); // border2 + crumb1 + pad2 + footer1
+  const visibleRows = Math.max(1, Math.floor(gridH / (CELL_HEIGHT + 1)));
+  const maxScroll = Math.max(0, totalRows - visibleRows);
+  const selRow = Math.floor(sel / perRow);
+  const effScroll = Math.min(scroll, maxScroll);
+  layoutRef.current = {
+    perRow,
+    cellWidth,
+    focused,
+    cmd,
+    sel,
+    scroll: effScroll,
+    maxScroll,
+  };
+
+  // when the selected row moves out of view, scroll to bring it back
+  React.useEffect(() => {
+    setScroll((sc) => {
+      if (selRow < sc) {
+        return selRow;
+      }
+      if (selRow > sc + visibleRows - 1) {
+        return Math.max(0, selRow - visibleRows + 1);
+      }
+      return Math.min(sc, maxScroll);
+    });
+  }, [selRow, visibleRows, maxScroll]);
 
   // mouse: SGR tracking (like grid-app). Wheel moves the selection a row; click
   // selects a cell, click again on the selected one opens it.
@@ -486,16 +518,16 @@ const App = (): React.ReactElement => {
         const press = m[4] === "M";
         const v = layoutRef.current;
         if (button === 64) {
-          setSel((s) => Math.max(0, s - v.perRow));
+          setScroll((s) => Math.max(0, s - 1));
         } else if (button === 65) {
-          setSel((s) => Math.min(membersRef.current.length - 1, s + v.perRow));
+          setScroll((s) => Math.min(v.maxScroll, s + 1));
         } else if (button === 0 && press && v.focused === null && v.cmd === null) {
           const row = Math.floor((y - GRID_TOP) / (CELL_HEIGHT + 1));
           const col = Math.floor((x - GRID_LEFT) / (v.cellWidth + 1));
           if (row < 0 || col < 0 || col >= v.perRow) {
             continue;
           }
-          const idx = row * v.perRow + col;
+          const idx = (v.scroll + row) * v.perRow + col;
           const node = membersRef.current[idx];
           if (node === undefined) {
             continue;
@@ -632,6 +664,9 @@ const App = (): React.ReactElement => {
 
   // ── grid: breadcrumb + members + command bar ──
   const crumb = path.map((g) => displayName(g.name)).join(" / ");
+  const start = effScroll * perRow;
+  const visibleCells = members.slice(start, start + visibleRows * perRow);
+  const more = totalRows - (effScroll + visibleRows);
 
   return (
     <Box flexDirection="column" width={cols} height={rows} borderStyle={editMode ? "double" : BLANK_BORDER} borderColor="red">
@@ -642,12 +677,14 @@ const App = (): React.ReactElement => {
         <Text dimColor>
           {" "}
           {members.length} items{path.length > 1 ? " · Esc up" : ""}
+          {effScroll > 0 ? ` · ↑${effScroll}` : ""}
+          {more > 0 ? ` · ↓${more}` : ""}
         </Text>
       </Box>
 
       <Box flexGrow={1} flexDirection="row" flexWrap="wrap" padding={1}>
-        {members.map((node, i) => (
-          <Cell key={`${node.t}-${node.name}`} node={node} queues={queues} width={cellWidth} selected={i === sel} />
+        {visibleCells.map((node, i) => (
+          <Cell key={`${node.t}-${node.name}`} node={node} queues={queues} width={cellWidth} selected={start + i === sel} />
         ))}
       </Box>
 
