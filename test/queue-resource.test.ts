@@ -148,6 +148,28 @@ describe("QueueResource.make — basic processing", () => {
     }).pipe(Effect.scoped),
   );
 
+  it.live("reflects pending sizes + paused on the status stream", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-status",
+        paused: true,
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+      });
+      const collected = yield* Effect.forkChild(
+        Stream.runCollect(
+          Stream.takeUntil(queue.status, (s) => s.sizes.normal === 2),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add([1, 2]);
+      const snapshots = Array.from(yield* Fiber.join(collected));
+      const last = snapshots[snapshots.length - 1];
+      expect(last?.sizes.normal).toBe(2);
+      expect(last?.paused).toBe(true);
+    }).pipe(Effect.scoped),
+  );
+
   it.live("treats a single string as one item, not an iterable batch", () =>
     Effect.gen(function* () {
       const results = yield* Ref.make<Array<string>>([]);

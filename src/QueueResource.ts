@@ -72,6 +72,7 @@ import {
   Scope,
   Semaphore,
   Stream,
+  SubscriptionRef,
   Types,
 } from "effect";
 import {
@@ -301,6 +302,14 @@ export interface QueueHandleApi<
   readonly events: Stream.Stream<QueueEvent<T>>;
 
   /**
+   * Live **current-state snapshot** stream — emits the current {@link QueueStatus} and every
+   * subsequent change (per-priority sizes, paused, in-flight, completed). Each snapshot is
+   * recomputed from authoritative sources, so it's accurate truth (not an event accumulation).
+   * Backed by a `SubscriptionRef`; a new subscriber gets the current value immediately.
+   */
+  readonly status: Stream.Stream<QueueStatus>;
+
+  /**
    * Fork the worker pool and lifecycle hook monitor. Idempotent — safe to call multiple times.
    * Only needed when {@link QueueResourceConfigBase.autoStart} was `false`; otherwise workers already started at acquisition.
    *
@@ -520,6 +529,24 @@ export interface QueueRetryScheduledEvent<T, E = never> {
 export interface QueueRetryExhaustedEvent<T, E = never> {
   readonly entry: QueueEntry<T>;
   readonly cause: Cause.Cause<E>;
+}
+
+/**
+ * The current-state snapshot — the element of {@link QueueHandleApi.status}. Instantaneous
+ * truth (per-priority pending sizes, paused, in-flight, lifetime completed), recomputed from
+ * authoritative sources. Mirrors the encodable `queueStatus` contract schema.
+ *
+ * @public
+ */
+export interface QueueStatus {
+  readonly sizes: {
+    readonly high: number;
+    readonly normal: number;
+    readonly low: number;
+  };
+  readonly paused: boolean;
+  readonly inFlight: number;
+  readonly completed: number;
 }
 
 /**
@@ -1594,6 +1621,40 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     const publishEvent = (event: QueueEvent<T>): Effect.Effect<void> =>
       Effect.asVoid(PubSub.publish(eventsHub, event));
 
+    // ─── Current-state snapshot (.status) ───
+    // A SubscriptionRef recomputed from authoritative sources (queue sizes + the refs below),
+    // so every snapshot is accurate truth even though the events that trigger refreshes are
+    // lossy. `paused`/`inFlight` are tracked here because the latch/semaphore don't expose them.
+    const pausedRef = yield* Ref.make(config.paused ?? false);
+    const inFlightRef = yield* Ref.make(0);
+    const computeStatus: Effect.Effect<QueueStatus> = Effect.gen(function* () {
+      const [h, n, l] = yield* Effect.all([
+        Queue.size(highQueue),
+        Queue.size(normalQueue),
+        Queue.size(lowQueue),
+      ]);
+      return {
+        sizes: {
+          high: Math.max(0, h),
+          normal: Math.max(0, n),
+          low: Math.max(0, l),
+        },
+        paused: yield* Ref.get(pausedRef),
+        inFlight: yield* Ref.get(inFlightRef),
+        completed: yield* Ref.get(completedCount),
+      };
+    });
+    const statusRef = yield* SubscriptionRef.make(yield* computeStatus);
+    const refreshStatus = Effect.flatMap(computeStatus, (s) =>
+      SubscriptionRef.set(statusRef, s),
+    );
+    // One fiber recomputes the snapshot on each lifecycle event (covers enqueue/start/exit/
+    // drain/release/clear); pause/resume refresh inline (they emit no event). Tied to the
+    // queue scope, so it's interrupted on teardown.
+    yield* Effect.forkScoped(
+      Stream.runForEach(Stream.fromPubSub(eventsHub), () => refreshStatus),
+    );
+
     // Dedup: set of keys currently in-flight (enqueued or processing).
     // A key is added on enqueue and removed after processing completes.
     const activeKeys = yield* Ref.make(HashSet.empty<string>());
@@ -2341,6 +2402,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             _tag: "Started",
             entry: queueEntryFromInternal(internal, { startedAt }),
           });
+          yield* Ref.update(inFlightRef, (n) => n + 1);
           const handle = queueHandleSlot.current;
           if (handle === undefined) {
             return yield* Effect.die(
@@ -2398,6 +2460,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
               ? { _tag: "Completed", entry, elapsed }
               : { _tag: "Failed", entry, cause: exit.cause, elapsed },
           );
+          yield* Ref.update(inFlightRef, (n) => Math.max(0, n - 1));
           yield* FiberSet.run(handlerFibers)(
             Effect.gen(function* () {
               if (config.onExit !== undefined) {
@@ -2838,16 +2901,23 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       // Live lifecycle events — each consumer gets its own subscription
       events: Stream.fromPubSub(eventsHub),
 
+      // Current-state snapshot stream — current value + every change
+      status: SubscriptionRef.changes(statusRef),
+
       start: forkProcessingFibers.pipe(Effect.asVoid),
 
       // Close latch → workers block on next iteration before taking items
       pause: latch.close.pipe(
+        Effect.andThen(Ref.set(pausedRef, true)),
+        Effect.andThen(refreshStatus),
         Effect.andThen(recordLifecycleEvent("Paused")),
         Effect.asVoid,
       ),
 
       // Open latch → blocked workers proceed to take + process
       resume: latch.open.pipe(
+        Effect.andThen(Ref.set(pausedRef, false)),
+        Effect.andThen(refreshStatus),
         Effect.andThen(recordLifecycleEvent("Resumed")),
         Effect.asVoid,
       ),
