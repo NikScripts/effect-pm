@@ -46,6 +46,20 @@ const COLOR: Record<Status, string> = {
   paused: "yellow",
   stopped: "red",
 };
+const STATUS_ICON: Record<Status, string> = {
+  running: "▶",
+  paused: "⏸",
+  stopped: "⏹",
+};
+// key → icon (media-style; ⚡ for a producer burst, ⎋ for quit)
+const KEY = {
+  pause: "⏸",
+  resume: "▶",
+  clear: "⌫",
+  stop: "⏹",
+  burst: "⚡",
+  quit: "⎋",
+};
 const SPARK = "▁▂▃▄▅▆▇█";
 
 const ewma = (old: number, v: number): number =>
@@ -126,7 +140,9 @@ const variantFor = (cols: number, rows: number): Variant =>
   cols >= 78 && rows >= 18 ? "XL" : cols >= 48 ? "L" : cols >= 34 ? "M" : "S";
 
 const Dot = (props: { readonly status: Status }): React.ReactElement => (
-  <Text color={COLOR[props.status]}>● {props.status}</Text>
+  <Text color={COLOR[props.status]}>
+    {STATUS_ICON[props.status]} {props.status}
+  </Text>
 );
 
 const Title = (props: { readonly status: Status }): React.ReactElement => (
@@ -261,7 +277,9 @@ const CardL = (props: { readonly v: View }): React.ReactElement => {
           <Text dimColor>{v.throughput.toFixed(1)}/s</Text>
         </Box>
       </Box>
-      <Text dimColor>p·pause c·clear b·burst</Text>
+      <Text dimColor>
+        [p]{KEY.pause} [c]{KEY.clear} [b]{KEY.burst}
+      </Text>
     </Box>
   );
 };
@@ -308,7 +326,7 @@ const PageXL = (props: {
       </Box>
       <Box marginTop={1}>
         <Text dimColor>
-          [p]ause [r]esume [c]lear [x]stop {"  "} [b]urst {"  "} [q]uit
+          [p]{KEY.pause} [r]{KEY.resume} [c]{KEY.clear} [x]{KEY.stop} {"  "} [b]{KEY.burst} {"  "} [q]{KEY.quit}
         </Text>
       </Box>
     </Box>
@@ -469,7 +487,7 @@ const App = (): React.ReactElement => {
           {` ${variant} `}
         </Text>
         <Text dimColor>
-          {` ${lock === "auto" ? "auto" : "locked"} · ${cols}×${rows} · [1-4] size [0] auto · [p]ause [r]esume [c]lear [x]stop [b]urst · [q]uit`}
+          {` ${lock === "auto" ? "auto" : "locked"} · ${cols}×${rows} · [1-4] size [0] auto · [p]${KEY.pause} [r]${KEY.resume} [c]${KEY.clear} [x]${KEY.stop} [b]${KEY.burst} [q]${KEY.quit}`}
         </Text>
       </Box>
     </Box>
