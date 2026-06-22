@@ -65,11 +65,13 @@ import {
   Latch,
   Layer,
   Option,
+  PubSub,
   Queue,
   Ref,
   Schema,
   Scope,
   Semaphore,
+  Stream,
   Types,
 } from "effect";
 import {
@@ -289,6 +291,14 @@ export interface QueueHandleApi<
   readonly isEmpty: Effect.Effect<boolean>;
   /** Total items that have finished processing (success or failure). */
   readonly completed: Effect.Effect<number>;
+
+  /**
+   * Live **lifecycle events** — a fan-out stream of discrete {@link QueueEvent}s (entry /
+   * worker / queue). Each consumer gets its own subscription; backed by a sliding buffer, so a
+   * slow subscriber never backpressures the worker (lossy under load — use `QueueResourceStore`
+   * for guaranteed delivery). Subscribe for dashboards / CLI `--watch` / a TUI.
+   */
+  readonly events: Stream.Stream<QueueEvent<T>>;
 
   /**
    * Fork the worker pool and lifecycle hook monitor. Idempotent — safe to call multiple times.
@@ -511,6 +521,82 @@ export interface QueueRetryExhaustedEvent<T, E = never> {
   readonly entry: QueueEntry<T>;
   readonly cause: Cause.Cause<E>;
 }
+
+/**
+ * The live **lifecycle event** union — the element of {@link QueueHandleApi.events}. A discrete
+ * fact emitted as the queue runs; subscribe to observe (dashboard / CLI `--watch` / TUI).
+ * Mirrors the encodable `queueEvent` contract union; the worker error is erased to `unknown`
+ * here (the typed `E` isn't part of the observable surface, and this matches the wire form),
+ * and the non-streamable `retry` affordance the old callbacks received is dropped — a
+ * subscriber holds the handle to drive control.
+ *
+ * @public
+ */
+export type QueueEvent<T> =
+  | { readonly _tag: "Start"; readonly queueId: string }
+  | {
+      readonly _tag: "Enqueued";
+      readonly entries: ReadonlyArray<QueueEntry<T>>;
+      readonly priority: Priority;
+      readonly batchId?: string;
+    }
+  | { readonly _tag: "Started"; readonly entry: QueueEntry<T> }
+  | {
+      readonly _tag: "Completed";
+      readonly entry: QueueEntry<T>;
+      readonly elapsed: Duration.Duration;
+    }
+  | {
+      readonly _tag: "Failed";
+      readonly entry: QueueEntry<T>;
+      readonly cause: Cause.Cause<unknown>;
+      readonly elapsed: Duration.Duration;
+    }
+  | {
+      readonly _tag: "Exit";
+      readonly entry: QueueEntry<T>;
+      readonly exit: Exit.Exit<void, unknown>;
+      readonly elapsed: Duration.Duration;
+    }
+  | {
+      readonly _tag: "RetryScheduled";
+      readonly entry: QueueEntry<T>;
+      readonly cause: Cause.Cause<unknown>;
+      readonly nextAttempt: number;
+    }
+  | {
+      readonly _tag: "RetryExhausted";
+      readonly entry: QueueEntry<T>;
+      readonly cause: Cause.Cause<unknown>;
+    }
+  | { readonly _tag: "Drained"; readonly queueId: string; readonly completed: number }
+  | { readonly _tag: "Cleared"; readonly queueId: string; readonly count: number }
+  | {
+      readonly _tag: "Released";
+      readonly queueId: string;
+      readonly releaseId: string;
+      readonly entries: ReadonlyArray<QueueEntry<T>>;
+    }
+  | {
+      readonly _tag: "DeadLettered";
+      readonly queueId: string;
+      readonly entries: ReadonlyArray<QueueEntry<T>>;
+      readonly reason: string;
+    }
+  | {
+      readonly _tag: "Dropped";
+      readonly queueId: string;
+      readonly entries: ReadonlyArray<QueueEntry<T>>;
+      readonly reason: string;
+    }
+  | {
+      readonly _tag: "RateLimitExceeded";
+      readonly queueId: string;
+      readonly entry: QueueEntry<T>;
+      readonly limitKey: string;
+      readonly algorithm: "fixed-window" | "token-bucket";
+      readonly outcome: "delayed" | "rejected";
+    };
 
 /**
  * Queue declaration metadata for {@link QueueResourceDefinition} and
@@ -1499,6 +1585,15 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     const completedCount = yield* Ref.make(0);
     const isShutdownRef = yield* Ref.make(false);
 
+    // ─── Fan-out lifecycle events ───
+    // A sliding PubSub: publishing never blocks the worker (drops oldest when a subscriber
+    // lags), so the fan-out `events` stream can't backpressure or OOM the queue. Guaranteed
+    // delivery stays on the QueueResourceStore tier. Each `events` consumer subscribes
+    // independently via `Stream.fromPubSub`.
+    const eventsHub = yield* PubSub.sliding<QueueEvent<T>>(1024);
+    const publishEvent = (event: QueueEvent<T>): Effect.Effect<void> =>
+      Effect.asVoid(PubSub.publish(eventsHub, event));
+
     // Dedup: set of keys currently in-flight (enqueued or processing).
     // A key is added on enqueue and removed after processing completes.
     const activeKeys = yield* Ref.make(HashSet.empty<string>());
@@ -2157,6 +2252,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
               (effect) => runQueueHook("onRetryExhausted", effect),
             );
           }
+          yield* publishEvent({ _tag: "RetryExhausted", entry, cause });
           yield* recordEntryEvent("exhausted", internal);
           yield* Effect.logDebug(
             `Retry exhausted for item in queue "${queueName}" after ${String(internal.retries + 1)} attempts`,
@@ -2164,6 +2260,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           return;
         }
         yield* recordEntryEvent("retried", internal);
+        yield* publishEvent({
+          _tag: "RetryScheduled",
+          entry,
+          cause,
+          nextAttempt: internal.retries + 2,
+        });
         if (config.onRetryScheduled !== undefined) {
           yield* config.onRetryScheduled({
             entry,
@@ -2220,6 +2322,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             occurredAt: startedAt,
             startedAt,
           });
+          yield* publishEvent({
+            _tag: "Started",
+            entry: queueEntryFromInternal(internal, { startedAt }),
+          });
           const handle = queueHandleSlot.current;
           if (handle === undefined) {
             return yield* Effect.die(
@@ -2270,6 +2376,13 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           const entry = queueEntryFromInternal(internal, { startedAt, completedAt });
           const retry = retryInternal(internal, exit);
           const exitEvent: QueueExitEvent<T, E, R> = { entry, exit, elapsed, retry };
+          // fan-out events (unconditional — the stream always emits, independent of hooks)
+          yield* publishEvent({ _tag: "Exit", entry, exit, elapsed });
+          yield* publishEvent(
+            Exit.isSuccess(exit)
+              ? { _tag: "Completed", entry, elapsed }
+              : { _tag: "Failed", entry, cause: exit.cause, elapsed },
+          );
           yield* FiberSet.run(handlerFibers)(
             Effect.gen(function* () {
               if (config.onExit !== undefined) {
@@ -2668,6 +2781,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
       // Counter incremented after each item completes processing
       completed: Ref.get(completedCount),
+
+      // Live lifecycle events — each consumer gets its own subscription
+      events: Stream.fromPubSub(eventsHub),
 
       start: forkProcessingFibers.pipe(Effect.asVoid),
 

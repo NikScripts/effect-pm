@@ -1,6 +1,16 @@
 import { ProcessStorage } from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest";
-import { Clock, Data, Duration, Effect, Exit, Ref, Schema } from "effect";
+import {
+  Clock,
+  Data,
+  Duration,
+  Effect,
+  Exit,
+  Fiber,
+  Ref,
+  Schema,
+  Stream,
+} from "effect";
 import {
   QueueBatchValidationError,
   QueueEntry,
@@ -52,6 +62,47 @@ describe("QueueResource.make — basic processing", () => {
       const final = yield* Ref.get(results);
       expect(final).toHaveLength(3);
       expect(final.sort()).toEqual([1, 2, 3]);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("emits lifecycle events on the `events` stream", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-events",
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+      });
+      // subscribe before adding (the events hub is sliding — only observed once subscribed)
+      const collected = yield* Effect.forkChild(
+        Stream.runCollect(Stream.take(queue.events, 3)),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add(1);
+      const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
+      // one successful item → Started, then Exit + Completed
+      expect(tags).toContain("Started");
+      expect(tags).toContain("Exit");
+      expect(tags).toContain("Completed");
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("emits a Failed event when an item fails", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-events-failed",
+        effect: (_n: number) => Effect.fail("boom" as const),
+        concurrency: 1,
+      });
+      const collected = yield* Effect.forkChild(
+        Stream.runCollect(Stream.take(queue.events, 3)),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add(1);
+      const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
+      // a failure with no retry hook is terminal → Started, Exit, Failed
+      expect(tags).toContain("Started");
+      expect(tags).toContain("Exit");
+      expect(tags).toContain("Failed");
     }).pipe(Effect.scoped),
   );
 
