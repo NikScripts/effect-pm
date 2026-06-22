@@ -138,3 +138,17 @@ const _wireViaClient: Promise<number> = Effect.runPromise(
   ),
 );
 void _wireViaClient;
+
+// ── clientInstances: one shared client serves many instances of one control shape ──
+// (100 processes that can only start/drop cost ONE client, not one each.)
+const Proc = Resource.tagFor("proc", {
+  start: Resource.mutate(Schema.Void),
+  drop: Resource.mutate(Schema.Void),
+});
+class P1 extends Proc<P1>("@app/p1") {}
+class P2 extends Proc<P2>("@app/p2") {}
+
+// one layer provides BOTH instances; its only requirement is the transport Protocol.
+const _procClients: Layer.Layer<P1 | P2, never, RpcClient.Protocol> =
+  Resource.clientInstances(Proc, P1, P2);
+void _procClients;

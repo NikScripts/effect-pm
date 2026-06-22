@@ -932,6 +932,59 @@ const clientLayer = <Self, S extends Spec>(tag: ResourceTag<Self, S>) =>
     }),
   );
 
+/** A wire-only instance tag for {@link clientInstances} — keyed via the covariant
+ * {@link Context.Key} base so distinct `Self`s are accepted without `any`. @internal */
+type WireInstanceTag<S extends Spec> = Context.Key<unknown, WireServiceOf<S>> & {
+  readonly id: string;
+};
+
+/** The instance identifiers a {@link clientInstances} layer provides (the union of tag `Self`s). */
+type InstanceIdentifiers<
+  Tags extends ReadonlyArray<unknown>,
+  S extends Spec,
+> = Tags[number] extends Context.Key<infer Self, WireServiceOf<S>> ? Self : never;
+
+/**
+ * The **client** layer for **many instances of one factory**, sharing a single RPC client —
+ * the client mirror of {@link Resource.serveInstances}. Builds **one** `RpcClient` for the
+ * family's group and provides every instance's handle from it, each pinned to its own `id`
+ * header. So 100 instances of one control shape cost **one** client (and one shared
+ * connection), not one client each — the contract/group/schemas are already shared.
+ *
+ * Wire-only: instances declaring {@link Resource.local} members aren't accepted (their service
+ * type is wider than the wire) — use {@link Resource.client} per instance for those.
+ *
+ * @public
+ */
+const clientInstances = <
+  S extends Spec,
+  const Tags extends ReadonlyArray<WireInstanceTag<S>>,
+>(
+  factory: {
+    readonly groupId: string;
+    readonly [specSym]: S;
+    readonly [groupSym]: RpcGroupOf<S>;
+  },
+  ...tags: Tags
+): Layer.Layer<InstanceIdentifiers<Tags, S>, never, RpcClient.Protocol> =>
+  Layer.effectContext(
+    Effect.map(RpcClient.make(factory[groupSym]), (rpc) => {
+      let context = Context.empty();
+      for (const tag of tags) {
+        const service = forwardClient(
+          rpc,
+          factory[specSym],
+          factory.groupId,
+          tag.id,
+        );
+        context = Context.add(context, tag, service);
+      }
+      // The only cast here: TS can't track the identifier union accumulated by the
+      // per-instance `Context.add` loop. Runtime-safe — built key-for-key from `tags`.
+      return context as Context.Context<InstanceIdentifiers<Tags, S>>;
+    }),
+  );
+
 /**
  * Resource toolkit — schema-defined service tags. Same `yield* Tag` everywhere; only the
  * layer changes: {@link Resource.layer} runs it locally, {@link Resource.client} drives it
@@ -950,4 +1003,5 @@ export const Resource = {
   server: serverLayer,
   serveInstances,
   client: clientLayer,
+  clientInstances,
 } as const;
