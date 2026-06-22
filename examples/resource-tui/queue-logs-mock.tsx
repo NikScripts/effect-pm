@@ -246,7 +246,7 @@ const App = (): React.ReactElement => {
   };
 
   // how many log lines fit (full-screen logs hides the widget)
-  const visibleLogs = Math.max(1, fullLogs ? rows - 5 : rows - PAGE_HEIGHT - 7);
+  const visibleLogs = Math.max(1, fullLogs ? rows - 5 : rows - PAGE_HEIGHT - 5);
   const tail = logs.slice(-visibleLogs);
 
   return (
@@ -263,8 +263,8 @@ const App = (): React.ReactElement => {
         </Box>
       )}
 
-      <Box flexGrow={1} flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1}>
-        <Box>
+      <Box flexGrow={1} flexDirection="column" paddingX={1}>
+        <Box borderStyle="single" borderTop={false} borderLeft={false} borderRight={false} borderColor="gray">
           <Box flexGrow={1}>
             <Text dimColor>LOGS </Text>
             <Text color="green">live</Text>

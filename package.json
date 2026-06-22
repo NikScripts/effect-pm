@@ -195,6 +195,7 @@
     "example:queue-mock": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/queue-mock.tsx",
     "example:group-grid": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/group-grid-mock.tsx",
     "example:queue-logs": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/queue-logs-mock.tsx",
+    "example:dashboard": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/dashboard-mock.tsx",
     "example:dashboard-demo:pm": "tsx examples/dashboard-demo/demo.runtime.ts",
     "example:dashboard-demo:ui": "vite --config examples/dashboard-demo/web/vite.config.ts",
     "example:dashboard-demo:gateway": "tsx examples/dashboard-demo/control-gateway.ts",
