@@ -2039,6 +2039,15 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           error: payload.error,
         };
 
+        yield* publishEvent({
+          _tag: "RateLimitExceeded",
+          queueId: queueName,
+          entry,
+          limitKey: payload.limitKey,
+          algorithm: payload.algorithm,
+          outcome: payload.outcome,
+        });
+
         if (config.onRateLimitExceeded !== undefined) {
           const handle = queueHandleSlot.current;
           if (handle !== undefined) {
@@ -2163,6 +2172,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         );
         yield* recordDedupeKeyChanges("added", addedDedupeKeys);
         yield* signalWorkerWake;
+
+        yield* publishEvent({
+          _tag: "Enqueued",
+          entries: toEnqueue.map((internal) => queueEntryFromInternal(internal)),
+          priority,
+        });
 
         const handle = queueHandleSlot.current;
         if (handle === undefined) {
@@ -2516,36 +2531,43 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         );
       }
 
+      yield* publishEvent({ _tag: "Start", queueId: queueName });
       if (config.onStart !== undefined) {
         yield* FiberSet.run(handlerFibers)(
           config.onStart({ queueId: queueName }, handle).pipe((effect) => runQueueHook("onStart", effect)),
         );
       }
 
-      if (config.onDrained !== undefined) {
-        const onDrained = config.onDrained;
-        yield* FiberSet.run(workerFibers)(
-          Effect.forever(
-            Effect.gen(function* () {
-              yield* Deferred.await(drainWakeSignal);
+      // Drain monitor runs unconditionally so `events` always emits `Drained`; the optional
+      // `onDrained` hook is still invoked only when configured.
+      yield* FiberSet.run(workerFibers)(
+        Effect.forever(
+          Effect.gen(function* () {
+            yield* Deferred.await(drainWakeSignal);
 
-              const shutdown = yield* Ref.get(isShutdownRef);
-              if (shutdown) return yield* Effect.interrupt;
+            const shutdown = yield* Ref.get(isShutdownRef);
+            if (shutdown) return yield* Effect.interrupt;
 
-              const empty = yield* handle.isEmpty;
-              if (empty) {
-                yield* Effect.logDebug(`Queue "${queueName}" drained, triggering onDrained`);
-                const completed = yield* Ref.get(completedCount);
+            const empty = yield* handle.isEmpty;
+            if (empty) {
+              yield* Effect.logDebug(`Queue "${queueName}" drained`);
+              const completed = yield* Ref.get(completedCount);
+              yield* publishEvent({
+                _tag: "Drained",
+                queueId: queueName,
+                completed,
+              });
+              if (config.onDrained !== undefined) {
                 yield* FiberSet.run(handlerFibers)(
-                  onDrained({ queueId: queueName, completed }, handle).pipe(
+                  config.onDrained({ queueId: queueName, completed }, handle).pipe(
                     (effect) => runQueueHook("onDrained", effect),
                   ),
                 );
               }
-            }),
-          ),
-        );
-      }
+            }
+          }),
+        ),
+      );
     });
 
     const matchesSelector = (
@@ -2644,12 +2666,20 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             attributes: options?.attributes,
           });
         }
-        if (entries.length > 0 && config.onReleased !== undefined) {
-          yield* FiberSet.run(handlerFibers)(
-            config.onReleased({ queueId: queueName, releaseId, entries }, queueHandle).pipe(
-              (effect) => runQueueHook("onReleased", effect),
-            ),
-          );
+        if (entries.length > 0) {
+          yield* publishEvent({
+            _tag: "Released",
+            queueId: queueName,
+            releaseId,
+            entries,
+          });
+          if (config.onReleased !== undefined) {
+            yield* FiberSet.run(handlerFibers)(
+              config.onReleased({ queueId: queueName, releaseId, entries }, queueHandle).pipe(
+                (effect) => runQueueHook("onReleased", effect),
+              ),
+            );
+          }
         }
         yield* wakeDrainedIfAllQueuesEmpty;
         return entries;
@@ -2681,18 +2711,26 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             attributes: options?.attributes,
           });
         }
-        if (encoded.length > 0 && config.onReleased !== undefined) {
+        if (encoded.length > 0) {
           const entries = internals.map((internal) =>
             queueEntryFromInternal(internal, undefined, {
               releaseId,
               attributes: options?.attributes,
             })
           );
-          yield* FiberSet.run(handlerFibers)(
-            config.onReleased({ queueId: queueName, releaseId, entries }, queueHandle).pipe(
-              (effect) => runQueueHook("onReleased", effect),
-            ),
-          );
+          yield* publishEvent({
+            _tag: "Released",
+            queueId: queueName,
+            releaseId,
+            entries,
+          });
+          if (config.onReleased !== undefined) {
+            yield* FiberSet.run(handlerFibers)(
+              config.onReleased({ queueId: queueName, releaseId, entries }, queueHandle).pipe(
+                (effect) => runQueueHook("onReleased", effect),
+              ),
+            );
+          }
         }
         yield* wakeDrainedIfAllQueuesEmpty;
         return encoded;
@@ -2730,6 +2768,21 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         }
         if (entries.length > 0) {
           const event = { queueId: queueName, entries, reason: options.reason };
+          yield* publishEvent(
+            kind === "dead-lettered"
+              ? {
+                  _tag: "DeadLettered",
+                  queueId: queueName,
+                  entries,
+                  reason: options.reason,
+                }
+              : {
+                  _tag: "Dropped",
+                  queueId: queueName,
+                  entries,
+                  reason: options.reason,
+                },
+          );
           if (kind === "dead-lettered" && config.onDeadLettered !== undefined) {
             yield* FiberSet.run(handlerFibers)(
               config.onDeadLettered(event, queueHandle).pipe(
@@ -2826,6 +2879,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         yield* drain(lowQueue);
         yield* Ref.set(completedCount, 0);
         yield* recordLifecycleEvent("Cleared", count);
+        yield* publishEvent({ _tag: "Cleared", queueId: queueName, count });
         yield* recordDedupeKeyChanges("released", releasedKeys);
         if (config.onCleared !== undefined) {
           yield* FiberSet.run(handlerFibers)(

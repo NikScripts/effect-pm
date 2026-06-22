@@ -106,6 +106,48 @@ describe("QueueResource.make — basic processing", () => {
     }).pipe(Effect.scoped),
   );
 
+  it.live("emits queue-level events (Enqueued, Drained)", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-events-lifecycle",
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+      });
+      const collected = yield* Effect.forkChild(
+        Stream.runCollect(
+          Stream.takeUntil(queue.events, (e) => e._tag === "Drained"),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add([1, 2]);
+      const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
+      expect(tags).toContain("Enqueued");
+      expect(tags).toContain("Drained");
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("emits a Cleared event when the queue is cleared", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-events-cleared",
+        paused: true,
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+      });
+      const collected = yield* Effect.forkChild(
+        Stream.runCollect(
+          Stream.takeUntil(queue.events, (e) => e._tag === "Cleared"),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add([1, 2, 3]);
+      yield* queue.clear;
+      const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
+      expect(tags).toContain("Enqueued");
+      expect(tags).toContain("Cleared");
+    }).pipe(Effect.scoped),
+  );
+
   it.live("treats a single string as one item, not an iterable batch", () =>
     Effect.gen(function* () {
       const results = yield* Ref.make<Array<string>>([]);
