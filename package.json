@@ -192,6 +192,7 @@
     "example:resource-tui-manager": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/manager-tui.tsx",
     "example:pm": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/pm.tsx",
     "example:group-terminal": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/group-terminal.tsx",
+    "example:queue-mock": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/queue-mock.tsx",
     "example:dashboard-demo:pm": "tsx examples/dashboard-demo/demo.runtime.ts",
     "example:dashboard-demo:ui": "vite --config examples/dashboard-demo/web/vite.config.ts",
     "example:dashboard-demo:gateway": "tsx examples/dashboard-demo/control-gateway.ts",
