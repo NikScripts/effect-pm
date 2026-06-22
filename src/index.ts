@@ -121,6 +121,7 @@ export type {
   AnyLocalMethod,
   AnyMethod,
   HostKey,
+  HostTagFactory,
   LocalCapability,
   LocalMethod,
   Method,
@@ -131,6 +132,7 @@ export type {
   ResourceTag,
   ServiceOf,
   Spec,
+  TagFactory,
 } from "./Resource";
 export { ProcessStorage } from "./ProcessStorage";
 export { ControlService } from "./ControlService";

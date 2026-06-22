@@ -1,5 +1,5 @@
-import { Effect, Schema } from "effect";
-import { RpcTest } from "effect/unstable/rpc";
+import { Effect, Layer, Schema } from "effect";
+import { RpcClient, RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import { QueueResource, queueControlSpec } from "../src/QueueContract";
 import {
@@ -140,3 +140,20 @@ it("queue add round-trips with a per-instance item schema (native validation)", 
   }).pipe(Effect.provide(Resource.server(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
 });
+
+// ── host in the queue tag (type-level): ship only the tag ──
+// A queue bound to a Host carries its own transport; its client requires the host, not the
+// ambient Protocol. (Compile-time proof — the binding's type is what's asserted.)
+class QueueHost extends Resource.Host<QueueHost>("queue/host") {}
+class HostedNumbers extends QueueResource.Tag<HostedNumbers>()(
+  "test/HostedNumbers",
+  Schema.Number,
+  { host: QueueHost },
+) {}
+const _hostedQueueClient: Layer.Layer<HostedNumbers, never, QueueHost> =
+  Resource.client(HostedNumbers);
+void _hostedQueueClient;
+// a hostless queue keeps the ambient-Protocol client.
+const _hostlessQueueClient: Layer.Layer<Numbers, never, RpcClient.Protocol> =
+  Resource.client(Numbers);
+void _hostlessQueueClient;

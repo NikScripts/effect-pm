@@ -116,9 +116,24 @@ Host-in-tag is **built and green** for `Resource.Tag` (single resource):
   host; `Resource.host` re-keys; full wiring → `R = never`) + a **real-http** round-trip
   shipping only the tag + `Resource.host(...)` in `test/resource-host-http.test.ts`.
 
-**Remaining (slice 2):** thread the optional host through `Resource.tagFor` (families) and
-`QueueResource.Tag` — same "host in the inferring call" placement; the factory bakes one host
-for all instances (`HSelf` inferred once from the factory call, applied to every instance tag).
+## Status — SHIPPED (slice 2: families + queues)
+
+Host now threads through factories too:
+
+- `Resource.tagFor(groupId, spec, { host: EdgeHost })` → a `HostTagFactory<S, HSelf>`; every
+  instance it makes (`Family<Self>(id)`) is a host-bearing tag. Hostless `tagFor` stays a
+  `TagFactory<S>` (unchanged). Overloads discriminate on `options.host` presence (cast-free,
+  like `makeTag`); `HSelf` is inferred once from the factory call and applied to all instances.
+- `QueueResource.Tag<Self>()(id, itemSchema, { host: EdgeHost })` → the queue tag carries its
+  own transport; delegates to `Resource.Tag<Self>(id)(spec, host)`.
+- The host rides each function's **inferring call** with an `options` slot (the spec/factory
+  call for `tagFor`, the `(id, schema, options)` call for `QueueResource.Tag`) — so `host` sits
+  in `options` there rather than as a bare positional (the inferring call already owns an
+  options arg; this keeps existing positional callers unbroken and avoids a runtime guard).
+- Type proofs: hosted family + hosted queue clients require their host; hostless ones keep the
+  ambient Protocol (`test/resource.test-d.ts`, `test/queue-contract.test.ts`).
+
+New public types: `HostKey`, `TagFactory`, `HostTagFactory` (exported from the barrel).
 
 ## Host implementation — original design notes (kept for reference)
 

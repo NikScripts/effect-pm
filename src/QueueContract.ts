@@ -22,8 +22,8 @@
  * @module QueueContract
  */
 import { Schema } from "effect";
-import { Resource } from "./Resource";
-import type { ResourceTag } from "./Resource";
+import { Resource, hostSym } from "./Resource";
+import type { HostKey, ResourceTag } from "./Resource";
 
 /**
  * The per-priority pending counts returned by `sizes`.
@@ -118,20 +118,39 @@ type QueueInstanceSpec<Sch extends Schema.Top> = ReturnType<
  * ```
  *
  * `Self` is given explicitly (Effect's `()` two-stage form); the item type is inferred from
- * `itemSchema`, which becomes the rpc payload schema (native wire validation, no codec).
+ * `itemSchema`, which becomes the rpc payload schema (native wire validation, no codec). Pass
+ * `options.host` to bind the queue to a {@link Resource.Host} — the tag then carries its own
+ * transport (ship only the tag; see {@link Resource.client} / {@link Resource.host}).
  *
  * @public
  */
-const queueTag =
-  <Self>() =>
-  <Sch extends Schema.Top>(
+const queueTag = <Self>() => {
+  function build<Sch extends Schema.Top, HSelf>(
+    id: string,
+    itemSchema: Sch,
+    options: { readonly description?: string; readonly host: HostKey<HSelf> },
+  ): ResourceTag<Self, QueueInstanceSpec<Sch>> & {
+    readonly [hostSym]: HostKey<HSelf>;
+  };
+  function build<Sch extends Schema.Top>(
     id: string,
     itemSchema: Sch,
     options?: { readonly description?: string },
-  ): ResourceTag<Self, QueueInstanceSpec<Sch>> => {
+  ): ResourceTag<Self, QueueInstanceSpec<Sch>>;
+  function build<Sch extends Schema.Top>(
+    id: string,
+    itemSchema: Sch,
+    options?: { readonly description?: string; readonly host?: HostKey<unknown> },
+  ): ResourceTag<Self, QueueInstanceSpec<Sch>> {
     const spec = queueSpec(itemSchema);
-    return Resource.Tag<Self>(id, options)(spec);
-  };
+    const host = options?.host;
+    // host rides the inferring call; `makeTag`'s inner overload narrows the tag's host.
+    return host === undefined
+      ? Resource.Tag<Self>(id, options)(spec)
+      : Resource.Tag<Self>(id, options)(spec, host);
+  }
+  return build;
+};
 
 /**
  * Queue resource toolkit — managed priority queues on the {@link Resource} toolkit.

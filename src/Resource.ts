@@ -690,6 +690,38 @@ const makeTag = <Self>(
 };
 
 /**
+ * A {@link tagFor} factory: `<Self>(id) => tag`, plus the shared family metadata
+ * (`groupId` / `description` / spec / group) that {@link serveInstances} reads without an
+ * instance.
+ *
+ * @public
+ */
+export interface TagFactory<S extends Spec> {
+  <Self>(id: string): ResourceTag<Self, S>;
+  readonly groupId: string;
+  readonly description: string | undefined;
+  readonly [specSym]: S;
+  readonly [groupSym]: RpcGroupOf<S>;
+}
+
+/**
+ * A host-bearing {@link tagFor} factory: every instance it makes carries the family's
+ * {@link Host}, so each is a host-bearing tag ({@link Resource.client} resolves the transport
+ * from it). Otherwise identical to {@link TagFactory}.
+ *
+ * @public
+ */
+export interface HostTagFactory<S extends Spec, HSelf> {
+  <Self>(id: string): ResourceTag<Self, S> & {
+    readonly [hostSym]: HostKey<HSelf>;
+  };
+  readonly groupId: string;
+  readonly description: string | undefined;
+  readonly [specSym]: S;
+  readonly [groupSym]: RpcGroupOf<S>;
+}
+
+/**
  * Build a **factory** tag-maker that bakes a shared {@link Spec} once under a `groupId`:
  * every instance shares the same contract + RPC group, and callers **never pass the spec**
  * — only an instance id. Use for resource families (many instances, one contract). The
@@ -697,21 +729,35 @@ const makeTag = <Self>(
  * `RpcServer` can host this family next to other resource types without tag collisions;
  * instances are told apart by the per-call `id` header.
  *
+ * Pass `options.host` to bind the whole family to a {@link Host}: every instance becomes a
+ * host-bearing tag and ships only-the-tag (see {@link Resource.client} / {@link Resource.host}).
+ *
  * ```ts
- * const Queue = Resource.tagFor("queue", { pause: Schema.Void, resume: Schema.Void });
+ * const Queue = Resource.tagFor("queue", { pause: Resource.mutate(Schema.Void) });
  * class Jobs extends Queue<Jobs>("@app/Jobs") {}  // spec baked in; just the instance id
  * class Mail extends Queue<Mail>("@app/Mail") {}  // shares contract + group, routed by id
  * ```
  *
  * @public
  */
-const tagFor = <const S extends Spec>(
+function tagFor<const S extends Spec, HSelf>(
+  groupId: string,
+  spec: S,
+  options: { readonly description?: string; readonly host: HostKey<HSelf> },
+): HostTagFactory<S, HSelf>;
+function tagFor<const S extends Spec>(
   groupId: string,
   spec: S,
   options?: { readonly description?: string },
-) => {
+): TagFactory<S>;
+function tagFor<const S extends Spec>(
+  groupId: string,
+  spec: S,
+  options?: { readonly description?: string; readonly host?: HostKey<unknown> },
+): TagFactory<S> {
   claimGroupId(groupId);
   const group = buildRpcGroup(groupId, spec);
+  const host = options?.host;
   const factory = <Self>(id: string) =>
     buildInstanceTag<Self, S>(
       groupId,
@@ -719,7 +765,7 @@ const tagFor = <const S extends Spec>(
       spec,
       group,
       options?.description,
-      undefined,
+      host,
     );
   // Stow the shared groupId/description/spec/group on the factory too, so the family
   // server ({@link serveInstances}) can read the contract + prefix without an instance.
@@ -729,7 +775,7 @@ const tagFor = <const S extends Spec>(
     [specSym]: spec,
     [groupSym]: group,
   });
-};
+}
 
 /**
  * The **local** layer for a resource: provide a real implementation of its service. Grants

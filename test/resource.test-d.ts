@@ -182,3 +182,26 @@ const _hostedRun: Promise<string> = Effect.runPromise(
   ),
 );
 void _hostedRun;
+
+// hostless tag: client still takes the ambient Protocol (additive, non-breaking).
+const _hostlessClient: Layer.Layer<Counter, never, RpcClient.Protocol> =
+  Resource.client(Counter);
+void _hostlessClient;
+
+// ── tagFor with a host: the whole family ships only the tag ──
+// One host baked into the factory → every instance is a host-bearing tag.
+const HostedProc = Resource.tagFor(
+  "hostedProc",
+  { start: Resource.mutate(Schema.Void) },
+  { host: EdgeHost },
+);
+class HP1 extends HostedProc<HP1>("@app/hp1") {}
+
+// each instance's client requires the family's host, not the ambient Protocol.
+const _hp1Client: Layer.Layer<HP1, never, EdgeHost> = Resource.client(HP1);
+void _hp1Client;
+
+// a hostless factory's instances keep the ambient-Protocol client (Proc, above).
+const _p1Client: Layer.Layer<P1, never, RpcClient.Protocol> =
+  Resource.client(P1);
+void _p1Client;
