@@ -310,6 +310,15 @@ export interface QueueHandleApi<
   readonly status: Stream.Stream<QueueStatus>;
 
   /**
+   * Live **windowed metrics** stream — one {@link QueueMetrics} per window. Windows are
+   * **dynamic**: a max duration bounds staleness, but a window flushes early on a significant
+   * event (release/drain/clear/dead-letter/drop/shutdown), with a small floor coalescing
+   * bursts. Counts are accumulated inline at the source (accurate, never undercounts under
+   * load); `windowMillis` is the actual elapsed window. The UI-facing metrics surface.
+   */
+  readonly metrics: Stream.Stream<QueueMetrics>;
+
+  /**
    * Fork the worker pool and lifecycle hook monitor. Idempotent — safe to call multiple times.
    * Only needed when {@link QueueResourceConfigBase.autoStart} was `false`; otherwise workers already started at acquisition.
    *
@@ -547,6 +556,30 @@ export interface QueueStatus {
   readonly paused: boolean;
   readonly inFlight: number;
   readonly completed: number;
+}
+
+/**
+ * Windowed metrics — the element of {@link QueueHandleApi.metrics}. Per-window counts (deltas)
+ * plus the as-of-window-end `inFlight`, throughput, and average latency. Windows are dynamic
+ * (variable `windowMillis`). Mirrors the encodable `queueMetrics` contract schema.
+ *
+ * @public
+ */
+export interface QueueMetrics {
+  readonly windowStart: DateTime.Utc;
+  readonly windowEnd: DateTime.Utc;
+  readonly windowMillis: number;
+  readonly enqueued: number;
+  readonly started: number;
+  readonly completed: number;
+  readonly failed: number;
+  readonly retried: number;
+  readonly deadLettered: number;
+  readonly dropped: number;
+  readonly rateLimitExceeded: number;
+  readonly inFlight: number;
+  readonly throughputPerSec: number;
+  readonly avgLatencyMillis?: number;
 }
 
 /**
@@ -1618,8 +1651,123 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     // delivery stays on the QueueResourceStore tier. Each `events` consumer subscribes
     // independently via `Stream.fromPubSub`.
     const eventsHub = yield* PubSub.sliding<QueueEvent<T>>(1024);
+
+    // ─── Windowed metrics (.metrics) ───
+    // Counters are accumulated INLINE in publishEvent (synchronous, at the source), never by
+    // consuming the lossy events hub — so metrics never undercount under load. Windows are
+    // dynamic: `metricsWindowMax` bounds staleness, a significant event flushes early, and
+    // `metricsWindowMin` floors the cadence so a burst (e.g. a takeAll storm) doesn't spam.
+    const metricsWindowMax = Duration.seconds(5);
+    const metricsWindowMin = Duration.millis(100);
+    const metricsHub = yield* PubSub.sliding<QueueMetrics>(256);
+    const nowMs: Effect.Effect<number> = Effect.clockWith(
+      (c) => c.currentTimeMillis,
+    );
+    interface WindowAccum {
+      readonly startedAt: number;
+      readonly enqueued: number;
+      readonly started: number;
+      readonly completed: number;
+      readonly failed: number;
+      readonly retried: number;
+      readonly deadLettered: number;
+      readonly dropped: number;
+      readonly rateLimitExceeded: number;
+      readonly latencySumMs: number;
+      readonly latencyCount: number;
+    }
+    const freshAccum = (startedAt: number): WindowAccum => ({
+      startedAt,
+      enqueued: 0,
+      started: 0,
+      completed: 0,
+      failed: 0,
+      retried: 0,
+      deadLettered: 0,
+      dropped: 0,
+      rateLimitExceeded: 0,
+      latencySumMs: 0,
+      latencyCount: 0,
+    });
+    const accumulate = (acc: WindowAccum, event: QueueEvent<T>): WindowAccum => {
+      switch (event._tag) {
+        case "Enqueued":
+          return { ...acc, enqueued: acc.enqueued + event.entries.length };
+        case "Started":
+          return { ...acc, started: acc.started + 1 };
+        case "Completed":
+          return {
+            ...acc,
+            completed: acc.completed + 1,
+            latencySumMs: acc.latencySumMs + Duration.toMillis(event.elapsed),
+            latencyCount: acc.latencyCount + 1,
+          };
+        case "Failed":
+          return {
+            ...acc,
+            failed: acc.failed + 1,
+            latencySumMs: acc.latencySumMs + Duration.toMillis(event.elapsed),
+            latencyCount: acc.latencyCount + 1,
+          };
+        case "RetryScheduled":
+          return { ...acc, retried: acc.retried + 1 };
+        case "DeadLettered":
+          return { ...acc, deadLettered: acc.deadLettered + event.entries.length };
+        case "Dropped":
+          return { ...acc, dropped: acc.dropped + event.entries.length };
+        case "RateLimitExceeded":
+          return { ...acc, rateLimitExceeded: acc.rateLimitExceeded + 1 };
+        default:
+          return acc;
+      }
+    };
+    // Events that should close the metrics window early (the UI wants to see their effect now).
+    const isSignificant = (event: QueueEvent<T>): boolean =>
+      event._tag === "Drained" ||
+      event._tag === "Cleared" ||
+      event._tag === "Released" ||
+      event._tag === "DeadLettered" ||
+      event._tag === "Dropped";
+    const windowStartMs = yield* nowMs;
+    const windowAccum = yield* Ref.make(freshAccum(windowStartMs));
+    let metricsFlush = yield* Deferred.make<void>();
+    const requestMetricsFlush: Effect.Effect<void> = Effect.asVoid(
+      Deferred.succeed(metricsFlush, undefined),
+    );
+
     const publishEvent = (event: QueueEvent<T>): Effect.Effect<void> =>
-      Effect.asVoid(PubSub.publish(eventsHub, event));
+      Effect.gen(function* () {
+        yield* Ref.update(windowAccum, (acc) => accumulate(acc, event));
+        yield* PubSub.publish(eventsHub, event);
+        if (isSignificant(event)) yield* requestMetricsFlush;
+      });
+
+    const emitMetricsWindow: Effect.Effect<void> = Effect.gen(function* () {
+      const now = yield* nowMs;
+      const acc = yield* Ref.getAndSet(windowAccum, freshAccum(now));
+      const windowMillis = now - acc.startedAt;
+      const inFlight = yield* Ref.get(inFlightRef);
+      const metrics: QueueMetrics = {
+        windowStart: DateTime.makeUnsafe(acc.startedAt),
+        windowEnd: DateTime.makeUnsafe(now),
+        windowMillis,
+        enqueued: acc.enqueued,
+        started: acc.started,
+        completed: acc.completed,
+        failed: acc.failed,
+        retried: acc.retried,
+        deadLettered: acc.deadLettered,
+        dropped: acc.dropped,
+        rateLimitExceeded: acc.rateLimitExceeded,
+        inFlight,
+        throughputPerSec:
+          windowMillis > 0 ? (acc.completed / windowMillis) * 1000 : 0,
+        ...(acc.latencyCount > 0
+          ? { avgLatencyMillis: acc.latencySumMs / acc.latencyCount }
+          : {}),
+      };
+      yield* PubSub.publish(metricsHub, metrics);
+    });
 
     // ─── Current-state snapshot (.status) ───
     // A SubscriptionRef recomputed from authoritative sources (queue sizes + the refs below),
@@ -1653,6 +1801,22 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     // queue scope, so it's interrupted on teardown.
     yield* Effect.forkScoped(
       Stream.runForEach(Stream.fromPubSub(eventsHub), () => refreshStatus),
+    );
+
+    // Dynamic-window metrics timer: emit when a significant event requests a flush OR the max
+    // window elapses (whichever first), then hold for the min window to coalesce bursts.
+    yield* Effect.forkScoped(
+      Effect.forever(
+        Effect.gen(function* () {
+          yield* Effect.race(
+            Effect.sleep(metricsWindowMax),
+            Deferred.await(metricsFlush),
+          );
+          metricsFlush = yield* Deferred.make<void>();
+          yield* emitMetricsWindow;
+          yield* Effect.sleep(metricsWindowMin);
+        }),
+      ),
     );
 
     // Dedup: set of keys currently in-flight (enqueued or processing).
@@ -2904,6 +3068,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       // Current-state snapshot stream — current value + every change
       status: SubscriptionRef.changes(statusRef),
 
+      // Windowed metrics stream (dynamic windows)
+      metrics: Stream.fromPubSub(metricsHub),
+
       start: forkProcessingFibers.pipe(Effect.asVoid),
 
       // Close latch → workers block on next iteration before taking items
@@ -2925,6 +3092,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       // Mark shutdown → wake sleeping workers (so they see the flag) → record
       shutdown: Ref.set(isShutdownRef, true).pipe(
         Effect.andThen(signalShutdownWake),
+        Effect.andThen(requestMetricsFlush),
         Effect.andThen(recordLifecycleEvent("Shutdown")),
         Effect.andThen(Effect.logInfo(`Queue "${queueName}" shutting down`)),
       ),

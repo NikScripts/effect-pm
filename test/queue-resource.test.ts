@@ -170,6 +170,31 @@ describe("QueueResource.make — basic processing", () => {
     }).pipe(Effect.scoped),
   );
 
+  it.live("emits windowed metrics on the metrics stream", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-metrics",
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+      });
+      // the window flushes early on Drained, so we don't wait the full max window
+      const collected = yield* Effect.forkChild(
+        Stream.runCollect(
+          Stream.take(
+            Stream.filter(queue.metrics, (m) => m.completed > 0),
+            1,
+          ),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add([1, 2, 3]);
+      const m = Array.from(yield* Fiber.join(collected))[0];
+      expect(m?.enqueued).toBe(3);
+      expect(m?.completed).toBe(3);
+      expect(m?.windowMillis).toBeGreaterThan(0);
+    }).pipe(Effect.scoped),
+  );
+
   it.live("treats a single string as one item, not an iterable batch", () =>
     Effect.gen(function* () {
       const results = yield* Ref.make<Array<string>>([]);
