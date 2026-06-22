@@ -1,7 +1,8 @@
 /**
  * @module examples/resource-tui/group-terminal
  *
- * A group as the root command, its members as subcommands — each a TUI.
+ * A group as the root command, its members as subcommands — each a TUI. The group
+ * is a real tag (Group.Tag); a Command.make per member tag.
  *
  *   pnpm run example:group-terminal my-group Counter        # Counter's TUI
  *   pnpm run example:group-terminal my-group QueueManager   # QueueManager's TUI
@@ -20,12 +21,16 @@ import {
 } from "../resource-cli/manager-resources";
 import { Terminal } from "./terminal";
 
-// pass the tags into the group constructor; get them back out via Group.members
-class MyGroup extends Group.Tag("my-group")([Counter, QueueManager]) {}
+// a real tag — pass the members in, get them back out via Group.members
+class MyGroup extends Group.Tag<MyGroup>("my-group")([Counter, QueueManager]) {}
 
-// group as root, members as subcommands (Terminal.all spits out the array)
+// group as root; one Command.make per member tag
 const root = Command.make(MyGroup.id).pipe(
-  Command.withSubcommands(Terminal.all(MyGroup)),
+  Command.withSubcommands(
+    Group.members(MyGroup).map((tag) =>
+      Command.make(tag.id, {}, Terminal.make(tag)),
+    ),
+  ),
 );
 
 const program = Command.runWith(root, { version: "0.0.0" })(

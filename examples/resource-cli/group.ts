@@ -1,39 +1,28 @@
 /**
  * @module examples/resource-cli/group
  *
- * `Group.Tag` — a class tag that just holds member tags (and nested groups) and
- * hands them back. No control/config machinery; pure organization, usable by any
- * surface (CLI, TUI, …).
+ * `Group.Tag` — a real Context tag (built on `Context.Service`, like `Resource.Tag`)
+ * that also holds member tags. Declare it like any tag; get the members back out.
  *
- *   class MyGroup extends Group.Tag("my-group")([Counter, QueueManager]) {}
+ *   class MyGroup extends Group.Tag<MyGroup>("my-group")([Counter, QueueManager]) {}
  *
- *   MyGroup.members        // [Counter, QueueManager]
- *   Group.members(MyGroup) // same, via the namespace
+ *   MyGroup.id              // "my-group"
+ *   MyGroup.members         // [Counter, QueueManager]
+ *   Group.members(MyGroup)  // same, via the namespace
  */
 
-export interface GroupTag<
-  Members extends ReadonlyArray<unknown> = ReadonlyArray<unknown>,
-> {
-  readonly id: string;
-  readonly members: Members;
-}
+import { Context } from "effect";
 
 export const Group = {
   Tag:
-    (id: string) =>
+    <Self>(id: string) =>
     <const Members extends ReadonlyArray<unknown>>(members: Members) => {
-      class Base {
-        static readonly id = id;
-        static readonly members: Members = members;
-      }
-      return Base;
+      const base = Context.Service<Self, { readonly members: Members }>()(id);
+      return Object.assign(base, { id, members });
     },
 
   /** Get the member tags back out. */
-  members: <Members extends ReadonlyArray<unknown>>(
-    group: GroupTag<Members>,
-  ): Members => group.members,
-
-  /** Is this a group (vs a bare tag / record)? */
-  is: (source: object): source is GroupTag => "members" in source,
+  members: <Members extends ReadonlyArray<unknown>>(group: {
+    readonly members: Members;
+  }): Members => group.members,
 };

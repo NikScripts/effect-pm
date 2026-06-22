@@ -19,7 +19,6 @@ import * as React from "react";
 import { Effect, Layer } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { Command } from "effect/unstable/cli";
-import type { GroupTag } from "../resource-cli/group";
 import { makeResourceTui, type AnyTag } from "./make-resource-tui";
 
 const renderTui = (App: () => React.ReactElement): Effect.Effect<void> =>
@@ -51,19 +50,13 @@ export const Terminal = {
       }),
 
   /**
-   * Shortcut: a group (members keyed by id) or a `{ name: tag }` record →
-   * an array of TUI commands, ready for `Command.withSubcommands`.
+   * Shortcut: a `{ name: tag }` record → an array of TUI commands, ready for
+   * `Command.withSubcommands`.
    *
-   *   Command.make(MyGroup.id).pipe(Command.withSubcommands(Terminal.all(MyGroup)))
    *   Command.make("ops").pipe(Command.withSubcommands(Terminal.all({ queue: MyQueue })))
    */
-  all: (source: GroupTag<ReadonlyArray<AnyTag>> | Record<string, AnyTag>) => {
-    const entries: ReadonlyArray<readonly [string, AnyTag]> =
-      "members" in source && Array.isArray(source.members)
-        ? source.members.map((tag): readonly [string, AnyTag] => [tag.id, tag])
-        : Object.entries(source);
-    return entries.map(([name, tag]) =>
+  all: (record: Record<string, AnyTag>) =>
+    Object.entries(record).map(([name, tag]) =>
       Command.make(name, {}, Terminal.make(tag)),
-    );
-  },
+    ),
 };
