@@ -478,12 +478,6 @@ type PayloadOf<M extends AnyMethod> = M["payload"] extends Schema.Struct.Fields
   ? Schema.Struct<M["payload"]>["Type"]
   : never;
 
-type HasPayload<M extends AnyMethod> = [M["payload"]] extends [
-  Schema.Struct.Fields,
-]
-  ? true
-  : false;
-
 /**
  * The inferred shape of one method. A non-streaming method is an **`Effect`**; a streaming
  * method ({@link Resource.stream}) is a **`Stream`**. Either is a **property** when there is
@@ -491,13 +485,20 @@ type HasPayload<M extends AnyMethod> = [M["payload"]] extends [
  *
  * @internal
  */
+// Payload presence is gated on `[M["payload"]] extends [undefined]` — the **absence** case —
+// not on `extends [Schema.Struct.Fields]` (the presence case). This matters: `{ item: Sch }
+// extends Schema.Struct.Fields` is *constraint-dependent* (it needs `Sch extends Schema.Top`),
+// so TS defers it whenever `Sch` is a free parameter (the schemas in `M["payload"]` carry it) —
+// and tuple-wrapping does **not** fix that (it only stops distribution). `… extends [undefined]`
+// is instead decidable with `Sch` fully opaque (an object type is never `undefined`, regardless
+// of `Sch`), so it resolves eagerly under a generic spec. `M["stream"]` is a literal boolean.
 export type ServiceMethod<M extends AnyMethod> = M["stream"] extends true
-  ? HasPayload<M> extends true
-    ? (payload: PayloadOf<M>) => Stream.Stream<SuccessOf<M>, ErrorOf<M>>
-    : Stream.Stream<SuccessOf<M>, ErrorOf<M>>
-  : HasPayload<M> extends true
-    ? (payload: PayloadOf<M>) => Effect.Effect<SuccessOf<M>, ErrorOf<M>>
-    : Effect.Effect<SuccessOf<M>, ErrorOf<M>>;
+  ? [M["payload"]] extends [undefined]
+    ? Stream.Stream<SuccessOf<M>, ErrorOf<M>>
+    : (payload: PayloadOf<M>) => Stream.Stream<SuccessOf<M>, ErrorOf<M>>
+  : [M["payload"]] extends [undefined]
+    ? Effect.Effect<SuccessOf<M>, ErrorOf<M>>
+    : (payload: PayloadOf<M>) => Effect.Effect<SuccessOf<M>, ErrorOf<M>>;
 
 /**
  * The full service interface inferred from a {@link Spec}. Wire {@link Method}s map to
@@ -507,19 +508,26 @@ export type ServiceMethod<M extends AnyMethod> = M["stream"] extends true
  *
  * @public
  */
+// NOTE on the gates below: each entry is `AnyMethod | AnyLocalMethod`, so we branch **only** on
+// the `LocalMethod` brand — a symbol check independent of the method's schemas. The old
+// `: S[K] extends AnyMethod ? … : never` else-gate was always true (everything that isn't a
+// local method *is* a method), so its `never` branch was dead — but checking `extends AnyMethod`
+// drags the entry's payload schemas into the conditional, which makes TS **defer** the whole
+// type whenever those schemas contain a free type parameter (e.g. inside a factory generic over
+// the item schema). Dropping the dead gate and narrowing with `Exclude<…, AnyLocalMethod>`
+// keeps the result identical for every concrete spec while letting it reduce under a generic
+// spec too. See `docs/handoffs/resource-toolkit-new-features.md`.
 export type ServiceOf<S extends Spec, Self = unknown> = {
   readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
     ? Effect.Effect<T, never, LocalCapability<Self>>
-    : S[K] extends AnyMethod
-      ? ServiceMethod<S[K]>
-      : never;
+    : ServiceMethod<Exclude<S[K], AnyLocalMethod>>;
 };
 
 /** The wire-only service: just the {@link Method}s (used by the server impl + forwarder). */
 type WireServiceOf<S extends Spec> = {
-  readonly [K in keyof S as S[K] extends AnyMethod ? K : never]: S[K] extends AnyMethod
-    ? ServiceMethod<S[K]>
-    : never;
+  readonly [K in keyof S as S[K] extends AnyLocalMethod ? never : K]: ServiceMethod<
+    Exclude<S[K], AnyLocalMethod>
+  >;
 };
 
 /**
@@ -530,9 +538,7 @@ type WireServiceOf<S extends Spec> = {
 type ImplOf<S extends Spec> = {
   readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
     ? T
-    : S[K] extends AnyMethod
-      ? ServiceMethod<S[K]>
-      : never;
+    : ServiceMethod<Exclude<S[K], AnyLocalMethod>>;
 };
 
 // ── type-level: one Spec → the precisely-typed RPC contract group ──
