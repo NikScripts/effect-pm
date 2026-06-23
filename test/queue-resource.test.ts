@@ -21,6 +21,8 @@ import {
   QueueItemValidationError,
   QueueResource,
   makeQueueItemCodecDescriptor,
+  schemaVersionOf,
+  withSchemaVersion,
 } from "../src/QueueResource";
 import { Resource } from "../src/Resource";
 import { QueueResourceStore } from "../src/store/queueResource";
@@ -1427,11 +1429,20 @@ describe("QueueResource.make — itemSchema", () => {
     }).pipe(Effect.scoped),
   );
 
-  it("itemSchema uses the queue id for codec metadata", () => {
+  it("itemSchema uses the queue id for codec metadata (defaults to v1)", () => {
     const descriptor = makeQueueItemCodecDescriptor("@test/EmailQueue", EmailItem);
     expect(descriptor.id).toBe("@test/EmailQueue/item@v1");
-    expect(descriptor.version).toBe("1.0.0");
+    expect(descriptor.version).toBe("1");
     expect(descriptor.encoding).toBe("json");
+  });
+
+  it("the schema's withSchemaVersion stamp drives the descriptor id + version", () => {
+    const v3 = withSchemaVersion(EmailItem, 3);
+    expect(schemaVersionOf(v3)).toBe(3);
+    expect(schemaVersionOf(EmailItem)).toBe(1); // unannotated → default 1
+    const descriptor = makeQueueItemCodecDescriptor("@test/EmailQueue", v3);
+    expect(descriptor.id).toBe("@test/EmailQueue/item@v3");
+    expect(descriptor.version).toBe("3");
   });
 
   it.live("rateLimit enforces minimum gap between item effect starts", () =>

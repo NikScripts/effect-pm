@@ -108,8 +108,17 @@ engine's internal `onError` sink (not a lifecycle event).
   `enqueue` composition, so it belongs to the **P4 adapter** (decode `queueEncodedEntry` via the
   instance `itemSchema`, then call `enqueue`). The wire-faithful note: `deadLetter`/`drop` take
   a `queueEntrySelector` (over the wire, `entryId` identifies the target).
-- **P4** — adapter (engine handle → toolkit service). The keystone: makes the toolkit
-  `QueueResource.Tag` actually runnable/servable. Concrete design (worked out, ready to build):
+- **[DONE] P4** — `QueueResource.layer(tag, config)` runs the engine behind the toolkit contract.
+  What actually shipped differs from the plan below in two ways, both for the better:
+  (a) the `itemSchema` is recovered from `tag[specSym].add.payload.item` (no extra symbol needed);
+  (b) the generic `ImplOf`/`ServiceOf` deferral was fixed at the **toolkit** level (drop the dead
+  always-true `extends AnyMethod` gate, branch on the `LocalMethod` brand + `[payload] extends
+  [undefined]`) so 15/16 verbs are honestly typed; the 16th (`enqueue`, whose decoded entry type
+  goes opaque over an abstract item schema) uses **one narrow cast** pinned by
+  `test/queue-contract.test-d.ts` (`WireEntry ≅ QueueEntry`, drift fails the build). Remote
+  enqueue validation is locked by `test/queue-contract.test.ts` (decode gate) + `queue-http.test.ts`
+  (real-wire). **Remaining:** `enqueueEncoded`, the `logs` stream, real-http quad test, final guide.
+  Historical design (for reference):
   1. **Thread `itemSchema` onto the tag.** In `QueueContract.queueTag.build`, stash the raw
      `itemSchema` under a new symbol (e.g. `queueItemSchemaSym`) on the returned tag, so the
      layer can recover it (don't dig it back out of `spec.add.payload.item` — stash it).
@@ -142,6 +151,28 @@ engine's internal `onError` sink (not a lifecycle event).
      release round-trip) + a **real-http** quad test (over `NodeHttpServer.layerTest` + ndjson,
      like `resource-stream-http.test.ts`) proving the streams cross the wire.
   7. Final new-features guide pass documenting the runnable toolkit queue.
+
+## Schema versioning + migrations
+
+**[DONE] The version stamp.** Item schemas carry a `schemaVersion` annotation (`withSchemaVersion(schema, n)` / `schemaVersionOf(schema)`, default `1`). `makeQueueItemCodecDescriptor` reads it and stamps the descriptor `id` (`…/item@vN`) and `version` — so every released / handoff entry is **self-describing** from today, feeding the existing `ProcessManager` codec id/version drift check. **The rule:** bump `schemaVersion` on any *breaking* item-shape change; evolve *additively* within a version (so a newer receiver still accepts same-version entries from an older sender — required for zero-downtime / A-B handoff, since the receiver validates against *its* schema).
+
+The reason to do this now and nothing else: the stamp is the only time-sensitive part — entries written un-versioned are ambiguous forever.
+
+**[DEFERRED] `VersionManager` + migrations.** A future typed upcaster, built from an **array** (tuple), genesis at the head:
+
+```ts
+VersionManager.make([
+  { version: 1, schema: EmailV1 },                      // genesis — no `up`
+  { version: 2, schema: EmailV2, up: (v1) => …  },      // up typed (EmailV1.Type) => EmailV2.Type
+  { version: 3, schema: EmailV3, up: (v2) => …  },
+])
+```
+
+- Typed via variadic-tuple inference: element 0 = genesis (no `up`); element `i ≥ 1` has `up: (prev: Type<T[i-1].schema>) => Type<T[i].schema>`. Enforce `version` strictly increasing + head has no `up`.
+- Upcast flow: it **holds every version's schema**, so it decodes an old payload with the *old* schema, runs the typed `up` chain to current, and the receiver re-validates at current — typed end to end (no raw-JSON guessing).
+- Pattern is the event-sourcing **"upcaster"** chain; no Effect/library primitive exists (verified) — `Schema.transform`/annotations are the only building blocks.
+- Open questions to settle before building: decoded vs encoded migrations (lean decoded); plain typed value vs a `Resource`; how it binds to the queue tag's single `itemSchema` (current = head); up-only vs also down-casts for bidirectional A-B; re-validate each step or only at current.
+- Phase 1 = history + typed `migrate(payload, fromVersion)`. Phase 2 = a handoff manager that *consumes* a `VersionManager` (read `descriptor.version` → `migrate` → `enqueueEncoded`), plus an optional pre-enqueue `transform` hook.
 
 Verify every phase: `pnpm typecheck` (both tsconfigs), Effect LSP CLI on touched files,
 `pnpm lint`, `pnpm test`, `pnpm build`. Commit per phase (owner reviews remotely).

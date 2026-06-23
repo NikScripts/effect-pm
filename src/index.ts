@@ -639,6 +639,9 @@ export type {
 export {
   QueueItemCodecDescriptorSchema,
   makeQueueItemCodecDescriptor,
+  schemaVersionAnnotation,
+  withSchemaVersion,
+  schemaVersionOf,
   QueueItemValidationError,
   QueueBatchValidationError,
   QueueMissingItemSchemaError,

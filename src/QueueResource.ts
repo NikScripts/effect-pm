@@ -159,7 +159,40 @@ export const QueueItemCodecDescriptorSchema = Schema.Struct({
 });
 
 /**
- * Build a {@link QueueItemCodecDescriptor} from a live Effect `Schema` value.
+ * Annotation key carrying an item schema's **version** — the anchor for the `@vN` marker that
+ * travels on released / handoff entries and the future upcast/migration history.
+ *
+ * @public
+ */
+export const schemaVersionAnnotation = "schemaVersion";
+
+/**
+ * Stamp an item schema with its version. Bump it on any **breaking** change to the item shape;
+ * evolve **additively** within a version (so a newer receiver still accepts same-version entries
+ * from an older sender). The version flows into {@link makeQueueItemCodecDescriptor}'s `id`
+ * (`…/item@vN`) and `version`, making every released/handoff entry self-describing.
+ *
+ * @public
+ */
+export const withSchemaVersion = <S extends Schema.Top>(
+  schema: S,
+  version: number,
+): S["Rebuild"] => schema.annotate({ schemaVersion: version });
+
+/**
+ * Read an item schema's {@link withSchemaVersion | version}; defaults to `1` when unannotated.
+ *
+ * @public
+ */
+export const schemaVersionOf = (schema: Schema.Top): number => {
+  const annotated = Schema.resolveAnnotations(schema)?.[schemaVersionAnnotation];
+  return typeof annotated === "number" ? annotated : 1;
+};
+
+/**
+ * Build a {@link QueueItemCodecDescriptor} from a live Effect `Schema` value. The descriptor's
+ * `id` (`…/item@vN`) and `version` are taken from the schema's {@link withSchemaVersion} stamp
+ * (default `1`), so the descriptor self-describes the schema version for handoff / drift checks.
  *
  * @public
  */
@@ -168,11 +201,12 @@ export const makeQueueItemCodecDescriptor = <T>(
   itemSchema: Schema.Codec<T, unknown, never, never>,
   options?: { readonly version?: string },
 ): QueueItemCodecDescriptor => {
+  const version = schemaVersionOf(itemSchema);
   const wrapped = Schema.toStandardJSONSchemaV1(itemSchema);
   const jsonSchema = wrapped["~standard"].jsonSchema.input({ target: "draft-07" });
   return {
-    id: `${queueId}/item@v1`,
-    version: options?.version ?? "1.0.0",
+    id: `${queueId}/item@v${String(version)}`,
+    version: options?.version ?? String(version),
     encoding: "json",
     jsonSchema,
   };
@@ -1321,8 +1355,9 @@ const makeQueueEffectWithSchema = <
   Scope.Scope | InferQueueWorkerRequirements<C>
 > => {
   const queueName = config.name ?? "anonymous";
-  const codecId = `${queueName}/item@v1`;
   const descriptor = makeQueueItemCodecDescriptor(queueName, config.itemSchema);
+  // keep the validation/error codec id in lockstep with the descriptor's versioned id.
+  const codecId = descriptor.id;
   const encodeItem = Schema.encodeUnknownExit(config.itemSchema);
   const encodeForRelease = (
     internal: InternalItem<InferQueueItem<C>>,
