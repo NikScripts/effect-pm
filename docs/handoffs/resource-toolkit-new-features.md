@@ -149,6 +149,64 @@ export const queueSnapshot = Schema.Struct({
 
 ---
 
+## 2b. `Resource.runForEachTag` — tag-dispatched stream consumption
+
+Streaming sources whose elements are a **tagged union** (e.g. `QueueResource`'s `events`
+stream, whose element is the `QueueEvent` union) are best consumed by dispatching on `_tag`.
+`Resource.runForEachTag` is a `Stream.runForEach` that only fires for the tag(s) you name —
+no manual `if (e._tag === …)` ladder, **no type casts**, and the handler receives the
+**narrowed** member.
+
+Two forms, combined via overloads, and **dual** (data-first or pipeable):
+
+```ts
+// 1. single tag + handler — the narrowed member is passed to f
+yield* Resource.runForEachTag(queue.events, "Failed", (e) =>
+  Effect.logError(`failed: ${Cause.pretty(e.cause)}`), // e: Extract<QueueEvent, { _tag: "Failed" }>
+);
+
+// 2. handler map — dispatch several tags at once (partial; unmatched tags are ignored)
+yield* queue.events.pipe(
+  Resource.runForEachTag({
+    Enqueued: (e) => Effect.log(`+${e.entries.length}`),
+    Failed:   (e) => Effect.logError(Cause.pretty(e.cause)),
+    Drained:  () => Effect.log("idle"),
+  }),
+);
+```
+
+Both forms run for the whole stream (until it ends or the fiber is interrupted) — fork it
+(`Effect.forkScoped`) to observe in the background while the rest of your program runs.
+
+The error/requirement channels of the resulting `Effect` are the **union** of the handlers'
+channels (inferred — pipe form keeps `R` precise, it does not collapse to `unknown`). Built on
+`Match.type<…>().pipe(Match.tags(handlers), Match.orElse(() => Effect.void))`, so it is
+cast-free and the handler map is type-checked against the union members.
+
+### Catching typed errors off the stream — same as RPC `catchTag`
+
+`QueueEvent`'s failure-bearing variants carry the worker error `E` typed: `Failed` has
+`cause: Cause<E>` and `Exit` has `exit: Exit<void, E>`. Because `Exit` **is** an `Effect`, you
+catch its typed errors with the ordinary `Effect.catchTag(s)` — identical to handling an RPC
+error channel — nested inside the tag dispatch:
+
+```ts
+yield* queue.events.pipe(
+  Resource.runForEachTag({
+    Exit: (e) =>
+      e.exit.pipe(
+        Effect.catchTag("WorkshopJobError", (err) =>
+          Effect.logWarning(`job ${err.jobId}: ${err.reason}`),
+        ),
+        Effect.ignore, // swallow the success/other branches
+      ),
+  }),
+  Effect.forkScoped,
+);
+```
+
+---
+
 ## 3. Hosts — ship only the tag
 
 A **host** is where a resource lives. Put it on the tag and you ship **only the tag**:
@@ -303,6 +361,7 @@ client-side — one group, one connection, routed by the per-call `id` header.
 | `query(success, opts?)` | One-shot read → `Effect`. |
 | `mutate(success, opts?)` | Mutation → `Effect`. |
 | `stream(success, opts?)` | Live source → `Stream`. |
+| `runForEachTag(stream, tag, f)` / `runForEachTag(stream, handlers)` | Consume a tagged-union stream, dispatching on `_tag`. Dual (pipeable). Cast-free. |
 | `local<T>()` | Local-only member (gated by `LocalCapability`; compile error via a client). |
 | `layer(tag, impl)` | Run locally with a real impl. |
 | `server(tag, impl)` | Transport-agnostic RPC handlers layer. |
@@ -313,6 +372,7 @@ client-side — one group, one connection, routed by the per-call `id` header.
 | `instance(tag, impl)` | Pair an instance tag with its impl for `serveInstances`. |
 
 New public **types**: `HostKey<HSelf>`, `TagFactory<S>`, `HostTagFactory<S, HSelf>`,
+`TagHandlers<A, E, R>` (the handler-map shape for `runForEachTag`),
 `Method<Kind, P, Su, E, Str>` (now has a 5th `Str` stream param), `MethodMeta` (now has
 `streaming`).
 

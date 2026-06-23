@@ -80,16 +80,21 @@ engine's internal `onError` sink (not a lifecycle event).
 ## Phases (order)
 
 - **[DONE] P1a** — triad contract shapes (`queueStatus`/`queueEvent`/`queueMetrics` + spec).
-- **P1b** — engine triad wiring: bounded `PubSub` for `events` (publish at the ~14 sites),
-  `SubscriptionRef` for `status` (+ in-flight), windowed `metrics` emitter; register Effect
-  `Metric`s for OTEL; remove the 14 callbacks; keep `onFailure` + `onError`.
+- **[DONE] P1b** — engine triad wired on the **handle** (`QueueHandleApi`): bounded sliding
+  `PubSub` for `events` (published at every lifecycle site), `SubscriptionRef` for `status`
+  (recomputed from authoritative sources, incl. in-flight), dynamic-window `metrics` emitter
+  (counts accumulated inline at the source; flush early on significant events). The 14
+  callbacks are **removed**; observation is via the streams. Typed errors carried on
+  `QueueEvent<T, E>` (`cause: Cause<E>` / `exit: Exit<void, E>`); `attempts` auto re-enqueue;
+  `enqueue` re-injects `QueueEntry`s off `.events`. `Resource.runForEachTag` helper added for
+  tag-dispatched consumption. Tests/examples converted. **Remaining within P1b:** register
+  Effect `Metric`s for OTEL; add the `onFailure` config hook (LOCKED shape above).
 - **P-logs** — generic `logs` on the toolkit: alias `logEntry`, conditional `{ logs: true }`
   member + auto-wired capture/relay, console helper, real-http test.
 - **P3** — data-plane verbs on the contract: `prioritize`/`defer`/`release`/`releaseEncoded`/
-  `deadLetter`/`drop` + `QueueEntry` readers.
-- **P4** — adapter (engine handle → toolkit service) + export from barrel; convert hook-based
-  tests/examples to subscribe to `.events`; real-http triad/quad test; update the new-features
-  guide.
+  `deadLetter`/`drop` + `QueueEntry` readers + `enqueueEncoded` decode.
+- **P4** — adapter (engine handle → toolkit service) + export the ported `QueueResource.Tag`
+  from the barrel; real-http triad/quad test; final new-features guide pass.
 
 Verify every phase: `pnpm typecheck` (both tsconfigs), Effect LSP CLI on touched files,
 `pnpm lint`, `pnpm test`, `pnpm build`. Commit per phase (owner reviews remotely).

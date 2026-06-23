@@ -3,10 +3,16 @@
  *
  * Provides a three-level priority queue (high, normal, low) backed by bounded
  * Effect `Queue`s with configurable concurrency, optional start-gap throttling,
- * deduplication, retry,
- * and lifecycle hooks. Workers are managed fibers tracked by `FiberSet`; pause/resume
- * is implemented via `Latch`; empty-queue blocking uses a `Deferred` wake signal to
- * avoid priority inversion.
+ * deduplication, and automatic re-enqueue retry (`attempts`). Workers are managed
+ * fibers tracked by `FiberSet`; pause/resume is implemented via `Latch`; empty-queue
+ * blocking uses a `Deferred` wake signal to avoid priority inversion.
+ *
+ * **Observability is via streams, not callbacks.** Every handle exposes
+ * {@link QueueHandleApi.events} (discrete {@link QueueEvent}s), {@link QueueHandleApi.status}
+ * (current-state snapshots), and {@link QueueHandleApi.metrics} (windowed). Subscribe with
+ * `Stream.runForEach` / `Resource.runForEachTag`; failures arrive typed on the `Failed`/`Exit`
+ * events (`e.exit.pipe(Effect.catchTag(...))`). Retry is the `attempts` policy — for in-place
+ * effect retry, put `Effect.retry` on your `effect`.
  *
  * ## Entry points
  *
@@ -20,27 +26,28 @@
  * ## Usage
  *
  * ```ts
- * import { Effect, Layer } from "effect"
- * import { QueueResource } from "@nikscripts/effect-pm"
+ * import { Effect, Stream } from "effect"
+ * import { QueueResource, Resource } from "@nikscripts/effect-pm"
  *
  * // Declare service via class factory
  * const EmailQueue = QueueResource.Service<typeof EmailQueue, Email, SmtpError>()(
  *   "@app/EmailQueue",
  *   {
  *     effect: (email, ctx) => sendEmail(email).pipe(Effect.asVoid),
- *     onExit: ({ exit, retry }) =>
- *       Exit.match(exit, {
- *         onFailure: () => retry,
- *         onSuccess: () => Effect.void,
- *       }),
  *     concurrency: 5,
- *     retries: 3,
+ *     attempts: 3, // auto re-enqueue failed items up to 3 attempts
  *   },
  * )
  *
- * // Use in program
+ * // Use in program; observe lifecycle off the events stream
  * const program = Effect.gen(function*() {
  *   const queue = yield* EmailQueue
+ *   yield* queue.events.pipe(
+ *     Resource.runForEachTag({
+ *       Failed: ({ entry, cause }) => Effect.logError(`failed ${entry.entryId}`, cause),
+ *     }),
+ *     Effect.forkScoped,
+ *   )
  *   yield* queue.add([email1, email2])
  * })
  *
@@ -223,7 +230,7 @@ export type QueueReleaseEncodingError = QueueMissingItemSchemaError | QueueItemE
  * Enqueue a single item or a readonly batch of items.
  *
  * @typeParam E - Validation errors when {@link QueueResourceConfig.itemSchema} is set
- * @typeParam R - Dependencies needed to run enqueue-time hooks (`onEnqueued`, …) when called from the ambient program
+ * @typeParam R - Dependencies needed to encode items (schema requirements) when called from the ambient program
  *
  * @public
  */
@@ -268,7 +275,7 @@ export type QueueHandlePhantomWorkerFailures<E = never> = {
  * @typeParam T - Item type processed by this queue
  * @typeParam E - Recoverable/item failure channel of the worker `effect`
  * @typeParam EEnqueue - Errors from schema-backed enqueue validation (see {@link QueueResourceConfig.itemSchema})
- * @typeParam R - Dependencies required while running worker `effect`, `handler`, hooks, and enqueue helpers
+ * @typeParam R - Dependencies required while running the worker `effect` and the enqueue helpers
  *
  * @example
  * ```ts
@@ -341,7 +348,7 @@ export interface QueueHandleApi<
   readonly metrics: Stream.Stream<QueueMetrics>;
 
   /**
-   * Fork the worker pool and lifecycle hook monitor. Idempotent — safe to call multiple times.
+   * Fork the worker pool. Idempotent — safe to call multiple times.
    * Only needed when {@link QueueResourceConfigBase.autoStart} was `false`; otherwise workers already started at acquisition.
    *
    * After {@link shutdown}, `start` is a no-op (warning logged).
@@ -470,97 +477,8 @@ export interface QueueRouteOptions {
   readonly attributes?: Record<string, JsonValue>;
 }
 
-/** @public */
-export type QueueControls<T, E = never, EEnqueue = never, R = never> = QueueHandle<T, E, EEnqueue, R>;
-
-/** @public */
-export interface QueueStartEvent {
-  readonly queueId: string;
-}
-
-/** @public */
-export interface QueueDrainedEvent {
-  readonly queueId: string;
-  readonly completed: number;
-}
-
-/** @public */
-export interface QueueClearedEvent {
-  readonly queueId: string;
-  readonly count: number;
-}
-
-/** @public */
-export interface QueueReleasedEvent<T> {
-  readonly queueId: string;
-  readonly releaseId: string;
-  readonly entries: ReadonlyArray<QueueEntry<T>>;
-}
-
-/** @public */
-export interface QueueDeadLetteredEvent<T> {
-  readonly queueId: string;
-  readonly entries: ReadonlyArray<QueueEntry<T>>;
-  readonly reason: string;
-}
-
-/** @public */
-export interface QueueDroppedEvent<T> {
-  readonly queueId: string;
-  readonly entries: ReadonlyArray<QueueEntry<T>>;
-  readonly reason: string;
-}
-
-/** @public */
-export interface QueueExitEvent<T, E, R = never> {
-  readonly entry: QueueEntry<T>;
-  readonly exit: Exit.Exit<void, E>;
-  readonly elapsed: Duration.Duration;
-  readonly retry: Effect.Effect<void, never, R>;
-}
-
-/** @public */
-export interface QueueCompletedEvent<T> {
-  readonly entry: QueueEntry<T>;
-  readonly elapsed: Duration.Duration;
-}
-
-/** @public */
-export interface QueueFailedEvent<T, E, R = never> {
-  readonly entry: QueueEntry<T>;
-  readonly cause: Cause.Cause<E>;
-  readonly elapsed: Duration.Duration;
-  readonly retry: Effect.Effect<void, never, R>;
-}
-
-/**
- * Fired when an item hits the configured {@link QueueResourceRateLimitOptions}
- * before worker processing starts (quota exceeded).
- *
- * @public
- */
-export interface QueueRateLimitExceededEvent<T> {
-  readonly queueId: string;
-  readonly entry: QueueEntry<T>;
-  readonly limitKey: string;
-  readonly algorithm: "fixed-window" | "token-bucket";
-  readonly outcome: "delayed" | "rejected";
-  readonly consume?: ConsumeResult;
-  readonly error?: RateLimiterError;
-}
-
-/** @public */
-export interface QueueRetryScheduledEvent<T, E = never> {
-  readonly entry: QueueEntry<T>;
-  readonly cause: Cause.Cause<E>;
-  readonly nextAttempt: number;
-}
-
-/** @public */
-export interface QueueRetryExhaustedEvent<T, E = never> {
-  readonly entry: QueueEntry<T>;
-  readonly cause: Cause.Cause<E>;
-}
+// (The per-event payload interfaces and `QueueControls` that the removed lifecycle callbacks
+// used are gone — observe lifecycle via the `events` stream and its {@link QueueEvent} union.)
 
 /**
  * The current-state snapshot — the element of {@link QueueHandleApi.status}. Instantaneous
@@ -760,7 +678,8 @@ export interface QueueResourceServiceDefinition<
  * Attempting to enqueue the same item (by reference or by `key`) logs a warning
  * and silently drops the item to prevent infinite processing loops.
  *
- * Use `event.retry` in **`onExit`** / **`onFailed`** for intentional re-processing.
+ * For intentional re-processing, fail the worker `effect` (auto re-enqueue applies up to
+ * {@link QueueResourceConfigBase.attempts}) or re-inject via `queue.enqueue` off the events stream.
  *
  * @typeParam T - Item type
  *
@@ -786,7 +705,7 @@ export interface EffectContext<T, EEnqueue = never, R = never> {
  *
  * @typeParam T - Item type
  * @typeParam E - Failure channel surfaced as `Exit` failures from the worker `effect`
- * @typeParam R - Dependencies required while running callbacks (`effect` and queue hooks forked alongside workers)
+ * @typeParam R - Dependencies required while running the worker `effect`
  *
  * @public
  */
@@ -827,7 +746,7 @@ export interface QueueResourceConfigBase<T> {
   /** Start with processing paused. Call `resume` to begin. @default false */
   readonly paused?: boolean;
   /**
-   * When `false`, worker fibers (and the lifecycle hook monitor) are **not** forked until
+   * When `false`, worker fibers are **not** forked until
    * {@link QueueHandleApi.start} runs. Enqueue still succeeds; items accumulate until workers exist.
    * `pause` / `resume` update the latch before or after `start` — workers observe it once forked.
    *
@@ -846,15 +765,14 @@ export interface QueueResourceConfigBase<T> {
   /**
    * Extract a deduplication key from each item. When set, items with a key
    * already in-flight (enqueued or processing) are silently dropped.
-   * The key is released after processing completes (including handler).
+   * The key is released after the worker `effect` completes.
    */
   readonly key?: (item: T) => string;
   /**
    * Max **attempts** for an item — the initial try plus automatic re-enqueues. On failure the
    * worker re-enqueues the item at its **own priority**, preserving its attempt count, until
-   * `attempts` is reached; then it's exhausted (emits a `RetryExhausted` event). Auto
-   * re-enqueue applies when **no** `onExit`/`onFailed` hook is configured (a hook still drives
-   * retry via `event.retry` for backward compatibility).
+   * `attempts` is reached; then it's exhausted (emits a `RetryExhausted` event). Observe the
+   * `RetryScheduled` / `RetryExhausted` lifecycle on the {@link QueueHandleApi.events} stream.
    *
    * In-place retry of the worker effect is a separate concern — put `Effect.retry(...)` on your
    * `effect`. Supersedes the deprecated {@link QueueResourceConfigBase.retries}.
@@ -864,7 +782,7 @@ export interface QueueResourceConfigBase<T> {
   readonly attempts?: number;
   /**
    * @deprecated Use {@link QueueResourceConfigBase.attempts} (= `retries` + 1). Max times an
-   * item may be re-enqueued via `event.retry` in exit/failure hooks.
+   * item may be auto re-enqueued on failure.
    * @default Infinity
    */
   readonly retries?: number;
@@ -872,7 +790,7 @@ export interface QueueResourceConfigBase<T> {
 
 /**
  * Queue configuration **without** {@link QueueResourceConfigBase} item schema.
- * Enqueue helpers on {@link QueueHandle} and hook contexts do not fail with
+ * Enqueue helpers on {@link QueueHandle} and the {@link EffectContext} do not fail with
  * schema validation errors.
  *
  * @public
@@ -889,7 +807,7 @@ export type QueueResourceConfigWithoutItemSchema<T, E, R> = QueueResourceConfigB
 
 /**
  * Queue configuration **with** {@link QueueResourceConfigBase} item schema.
- * Public enqueue operations and hook context enqueue helpers can fail with
+ * Public enqueue operations and {@link EffectContext} enqueue helpers can fail with
  * {@link QueueItemValidationError} or {@link QueueBatchValidationError}.
  *
  * @public
@@ -911,7 +829,7 @@ export type QueueResourceConfigWithItemSchema<T, E, R> = QueueResourceConfigBase
  *
  * @typeParam T - Item type
  * @typeParam E - Worker `effect` failure channel
- * @typeParam R - Dependencies required while running callbacks
+ * @typeParam R - Dependencies required while running the worker `effect`
  *
  * @public
  */
@@ -1033,8 +951,8 @@ export type QueueConfigFromEffect<
 > = { readonly effect: F } & (O extends undefined ? {} : O);
 
 /**
- * Runtime callbacks and hooks for {@link makeQueueRuntime}, parameterized by the
- * enqueue error channel carried on public/hook enqueue helpers.
+ * Runtime config for {@link makeQueueRuntime}, parameterized by the
+ * enqueue error channel carried on the public/context enqueue helpers.
  *
  * @internal
  */
@@ -1220,14 +1138,14 @@ const acquireQueueRateLimitAwait = <T, R>(
  * - Three bounded `Queue<InternalItem<T>>` (one per priority level)
  * - N worker fibers (managed by `FiberSet`) that loop: latch → take → latch → process
  * - Optional deferred fork via {@link QueueResourceConfigBase.autoStart}: when `false`,
- *   call {@link QueueHandleApi.start} to fork workers and the lifecycle hook monitor.
- * - `onDrained` waits on a dedicated wake until queues drain empty after processed work (not cold-start empty).
+ *   call {@link QueueHandleApi.start} to fork the worker pool.
+ * - Drain wake: waits until queues drain empty after processed work (not cold-start empty) — emits a `Drained` event.
  * - Worker wake (`takeNext`): enqueue / shutdown — avoids priority inversion vs racing priority queues.
  * - Refill wake: drain-to-empty after an item completes (or after {@link QueueHandleApi.clear}) — independent of idle worker waits.
  * - `Latch` gates worker entry (pause/resume)
  * - `Semaphore` for concurrency control within the worker pool
  * - Optional Effect `RateLimiter` when `rateLimit` is set on config
- * - Handler effects are forked into a separate `FiberSet` (never block workers)
+ * - Lifecycle facts are published to the `events` PubSub (fan-out; never block workers)
  */
 const validateItemsWithSchema = <T>(
   queueName: string,
@@ -1673,7 +1591,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
     // Worker wake: enqueue / shutdown unblock `takeNext` waiters on empty queues.
     let workerWakeSignal = yield* Deferred.make<void>();
-    // Drain wake: distinct so idle workers never pulse lifecycle hooks.
+    // Drain wake: distinct so idle workers never pulse a spurious Drained event.
     let drainWakeSignal = yield* Deferred.make<void>();
 
     // Managed fiber collections. Scope close interrupts all fibers automatically.
@@ -2154,7 +2072,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
      * 2. Dedup key check (skip duplicates)
      * 3. Offer to the target priority queue
      * 4. Wake sleeping workers (`takeNext` waiters)
-     * 5. Fire hooks (onEnqueued)
+     * 5. Publish the `Enqueued` event
      */
     const enqueueInternal = (
       items: ReadonlyArray<T>,
@@ -2357,8 +2275,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
      * 1. Run user's `effect` and capture Exit
      * 2. Increment completed counter
      * 3. Release dedup key
-     * 4. Fire exit lifecycle hooks (forked)
-     * 5. Log unhandled failure when no exit/failure hook is configured
+     * 4. Publish the `Exit` / `Completed` / `Failed` events
+     * 5. Auto re-enqueue on failure up to `attempts`, else log the unhandled failure
      */
     const processItemBody = (internal: InternalItem<T>): Effect.Effect<void, never, R> =>
       Effect.gen(function* () {
@@ -2393,14 +2311,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             },
           );
 
-          // Release dedup key BEFORE forking exit hooks. Hooks may
-          // synchronously invoke `retry`, which re-enqueues the item; that
-          // re-enqueue must observe a free dedupe key so its `HashSet.has`
-          // check passes, and its emitted `added` change must follow the
-          // main fiber's `released` change in the analytics stream. Doing
-          // this work post-fork would race the hook fiber against the main
-          // fiber, producing a transiently inconsistent `activeKeys` and
-          // out-of-order `dedupe-key.added` / `released` records.
+          // Release dedup key BEFORE the auto re-enqueue below. The re-enqueue
+          // must observe a free dedupe key so its `HashSet.has` check passes,
+          // and its emitted `added` change must follow this `released` change
+          // in the analytics stream (preserving the dedupe-key seq invariant).
           if (config.key !== undefined && internal.key !== undefined) {
             yield* Ref.update(activeKeys, HashSet.remove(internal.key));
             yield* recordDedupeKeyChange("released", internal.key);
@@ -2532,7 +2446,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       const handle = queueHandleSlot.current;
       if (handle === undefined) {
         return yield* Effect.die(
-          new Error(`Queue "${queueName}" internal error: handle not wired before lifecycle hooks`),
+          new Error(`Queue "${queueName}" internal error: handle not wired before drain monitor`),
         );
       }
 
