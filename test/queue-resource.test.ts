@@ -19,6 +19,7 @@ import {
   QueueResource,
   makeQueueItemCodecDescriptor,
 } from "../src/QueueResource";
+import { Resource } from "../src/Resource";
 import { QueueResourceStore } from "../src/store/queueResource";
 
 const fastConfig = { concurrency: 2 };
@@ -1520,6 +1521,108 @@ describe("QueueResource.make — itemSchema", () => {
       expect(released[0]?.releaseId).toBe("encoded-release-1");
       expect(released[0]?.item.id).toBe("test-release-encoded/item@v1");
       expect(yield* queue.size).toBe(0);
+    }).pipe(Effect.scoped),
+  );
+});
+
+describe("QueueResource.make — Resource.runForEachTag over .events", () => {
+  it.live("dispatches lifecycle tags from a live queue's events stream", () =>
+    Effect.gen(function* () {
+      const seen = yield* Ref.make<Array<string>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-runforeachtag",
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+      });
+      // the documented consumption pattern: pipeable handler map over .events
+      const fiber = yield* Effect.forkChild(
+        queue.events.pipe(
+          Stream.takeUntil((e) => e._tag === "Drained"),
+          Resource.runForEachTag({
+            Enqueued: (e) =>
+              Ref.update(seen, (a) => [...a, `+${String(e.entries.length)}`]),
+            Completed: () => Ref.update(seen, (a) => [...a, "done"]),
+            // Drained, Start, Started, Exit deliberately unhandled → ignored
+          }),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add([1, 2]);
+      yield* Fiber.join(fiber);
+      const final = yield* Ref.get(seen);
+      // order of Enqueued vs Completed is not guaranteed (Enqueued is published after
+      // items are offered, so a fast worker can race ahead) — assert the multiset.
+      expect(final.filter((s) => s === "+2")).toHaveLength(1);
+      expect(final.filter((s) => s === "done")).toHaveLength(2);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("catches the typed worker error nested under an Exit handler", () =>
+    Effect.gen(function* () {
+      class Boom extends Data.TaggedError("Boom")<{ readonly n: number }> {}
+      const caught = yield* Ref.make<Array<number>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-runforeachtag-catch",
+        effect: (n: number) => Effect.fail(new Boom({ n })),
+        concurrency: 1,
+      });
+      const fiber = yield* Effect.forkChild(
+        queue.events.pipe(
+          Stream.take(3),
+          Resource.runForEachTag({
+            Exit: (e) =>
+              e.exit.pipe(
+                Effect.catchTag("Boom", (err) =>
+                  Ref.update(caught, (a) => [...a, err.n]),
+                ),
+                Effect.ignore,
+              ),
+          }),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add(99);
+      yield* Fiber.join(fiber);
+      expect(yield* Ref.get(caught)).toEqual([99]);
+    }).pipe(Effect.scoped),
+  );
+});
+
+describe("QueueResource.make — enqueue (entry re-injection)", () => {
+  it.live("re-injects a batch of entries off .events preserving priority", () =>
+    Effect.gen(function* () {
+      const seen = yield* Ref.make<Array<number>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-enqueue-batch-roundtrip",
+        paused: true,
+        effect: (n: number) => Ref.update(seen, (a) => [...a, n]),
+        concurrency: 1,
+      });
+      // collect Enqueued entries while paused (no workers consume them)
+      const enqueuedFiber = yield* Effect.forkChild(
+        Stream.runCollect(
+          Stream.take(
+            Stream.filter(
+              queue.events,
+              (e): e is Extract<typeof e, { readonly _tag: "Enqueued" }> =>
+                e._tag === "Enqueued",
+            ),
+            1,
+          ),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.prioritize([10, 20]);
+      const ev = Array.from(yield* Fiber.join(enqueuedFiber))[0];
+      const entries = ev?.entries ?? [];
+      expect(entries).toHaveLength(2);
+      expect(entries.every((e) => e.priority === "high")).toBe(true);
+      // clear the originals, re-inject the captured entries as an array
+      yield* queue.clear;
+      yield* queue.enqueue(entries);
+      yield* queue.resume;
+      yield* waitUntilCompleted(queue, 2);
+      expect([...(yield* Ref.get(seen))].sort((a, b) => a - b)).toEqual([10, 20]);
     }).pipe(Effect.scoped),
   );
 });
