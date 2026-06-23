@@ -12,7 +12,12 @@
  * (current-state snapshots), and {@link QueueHandleApi.metrics} (windowed). Subscribe with
  * `Stream.runForEach` / `Resource.runForEachTag`; failures arrive typed on the `Failed`/`Exit`
  * events (`e.exit.pipe(Effect.catchTag(...))`). Retry is the `attempts` policy — for in-place
- * effect retry, put `Effect.retry` on your `effect`.
+ * effect retry, put `Effect.retry` on your `effect`. For per-error disposition (retry vs
+ * dead-letter vs drop), set the inline {@link QueueOnFailure | onFailure} control hook.
+ *
+ * **OTEL.** Beyond the observation streams, the engine registers Effect `Metric`s (per-queue
+ * tagged `queue_*_total` counters, a `queue_in_flight` gauge, and a
+ * `queue_processing_duration_ms` histogram) so a metric reader exports them to OpenTelemetry.
  *
  * ## Entry points
  *
@@ -71,6 +76,7 @@ import {
   HashSet,
   Latch,
   Layer,
+  Metric,
   Option,
   PubSub,
   Queue,
@@ -789,6 +795,35 @@ export interface QueueResourceConfigBase<T> {
 }
 
 /**
+ * Per-error disposition returned by {@link QueueResourceConfigWithoutItemSchema.onFailure}.
+ *
+ * - `"retry"` — re-enqueue the item at its own priority, honoring the `attempts` budget
+ *   (emits `RetryScheduled`, or `RetryExhausted` once the budget is spent).
+ * - `"deadLetter"` — emit a `DeadLettered` event; do **not** re-enqueue.
+ * - `"drop"` — emit a `Dropped` event; do **not** re-enqueue.
+ * - `"default"` — fall back to the queue's policy (auto re-enqueue when `attempts`/`retries` is
+ *   set, otherwise log a warning).
+ *
+ * @public
+ */
+export type QueueFailureDisposition = "retry" | "deadLetter" | "drop" | "default";
+
+/**
+ * Optional inline failure hook — the one legitimate control callback (a stream is after-the-fact
+ * and can't decide disposition). Runs in the worker `R` on each failed item, returning a
+ * {@link QueueFailureDisposition}. Observation still belongs on the `events` stream; this is
+ * **control**.
+ *
+ * @public
+ */
+export interface QueueOnFailure<T, E, R> {
+  (
+    entry: QueueEntry<T>,
+    cause: Cause.Cause<E>,
+  ): Effect.Effect<QueueFailureDisposition, never, R>;
+}
+
+/**
  * Queue configuration **without** {@link QueueResourceConfigBase} item schema.
  * Enqueue helpers on {@link QueueHandle} and the {@link EffectContext} do not fail with
  * schema validation errors.
@@ -803,6 +838,8 @@ export type QueueResourceConfigWithoutItemSchema<T, E, R> = QueueResourceConfigB
    * the success channel is always **`void`**.
    */
   readonly effect: (item: T, ctx: EffectContext<T, never, R>) => Effect.Effect<void, E, R>;
+  /** Optional inline per-error disposition. See {@link QueueOnFailure}. */
+  readonly onFailure?: QueueOnFailure<T, E, R>;
 };
 
 /**
@@ -822,6 +859,8 @@ export type QueueEnqueueErrors = QueueItemValidationError | QueueBatchValidation
 export type QueueResourceConfigWithItemSchema<T, E, R> = QueueResourceConfigBase<T> & {
   readonly itemSchema: Schema.Codec<T, unknown, never, never>;
   readonly effect: (item: T, ctx: EffectContext<T, QueueEnqueueErrors, R>) => Effect.Effect<void, E, R>;
+  /** Optional inline per-error disposition. See {@link QueueOnFailure}. */
+  readonly onFailure?: QueueOnFailure<T, E, R>;
 };
 
 /**
@@ -925,15 +964,25 @@ type NormalizeQueueRequirements<R> = unknown extends R
     : R
   : R;
 
+/** Requirements contributed by the optional `onFailure` control hook, if present. */
+type InferQueueOnFailureRequirements<C> = C extends {
+  readonly onFailure: (...args: any[]) => Effect.Effect<any, any, infer R>;
+}
+  ? R
+  : never;
+
 /**
- * Service requirements declared on the worker `effect`. (Observation is now via the `events`
- * stream — no hooks contribute requirements.)
+ * Service requirements for the queue worker: those declared on the `effect`, unioned with any
+ * declared on the optional `onFailure` control hook. (Observation is via the `events` stream —
+ * it contributes no requirements.)
  *
  * @public
  */
 export type InferQueueWorkerRequirements<
   C extends { readonly effect: (...args: any[]) => Effect.Effect<void, any, any> },
-> = NormalizeQueueRequirements<Effect.Services<ReturnType<C["effect"]>>>;
+> = NormalizeQueueRequirements<
+  Effect.Services<ReturnType<C["effect"]>> | InferQueueOnFailureRequirements<C>
+>;
 
 
 const hasItemSchema = <T, E, R>(
@@ -958,6 +1007,7 @@ export type QueueConfigFromEffect<
  */
 type QueueRuntimeConfig<T, E, EEnqueue, R> = QueueResourceConfigBase<T> & {
   readonly effect: (item: T, ctx: EffectContext<T, EEnqueue, R>) => Effect.Effect<void, E, R>;
+  readonly onFailure?: QueueOnFailure<T, E, R>;
 };
 
 type ReleaseEntryEncoder<T> = (
@@ -1494,6 +1544,93 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       event._tag === "Released" ||
       event._tag === "DeadLettered" ||
       event._tag === "Dropped";
+
+    // ─── OTEL metrics (Effect `Metric` → exported by the runtime's metric reader) ───
+    // The cumulative counterparts to the windowed `.metrics` stream: that stream is for live UI,
+    // these feed OpenTelemetry. Tagged per-queue so multiple queues stay distinct series.
+    const metricAttributes = { queue: queueName };
+    const enqueuedCounter = Metric.counter("queue_enqueued_total", {
+      incremental: true,
+      description: "Items enqueued",
+      attributes: metricAttributes,
+    });
+    const startedCounter = Metric.counter("queue_started_total", {
+      incremental: true,
+      description: "Items started by a worker",
+      attributes: metricAttributes,
+    });
+    const completedCounter = Metric.counter("queue_completed_total", {
+      incremental: true,
+      description: "Items completed successfully",
+      attributes: metricAttributes,
+    });
+    const failedCounter = Metric.counter("queue_failed_total", {
+      incremental: true,
+      description: "Items whose worker effect failed",
+      attributes: metricAttributes,
+    });
+    const retriedCounter = Metric.counter("queue_retried_total", {
+      incremental: true,
+      description: "Failed items re-enqueued for retry",
+      attributes: metricAttributes,
+    });
+    const deadLetteredCounter = Metric.counter("queue_dead_lettered_total", {
+      incremental: true,
+      description: "Items routed to the dead-letter disposition",
+      attributes: metricAttributes,
+    });
+    const droppedCounter = Metric.counter("queue_dropped_total", {
+      incremental: true,
+      description: "Items dropped",
+      attributes: metricAttributes,
+    });
+    const rateLimitExceededCounter = Metric.counter("queue_rate_limit_exceeded_total", {
+      incremental: true,
+      description: "Worker rate-limit rejections",
+      attributes: metricAttributes,
+    });
+    const inFlightGauge = Metric.gauge("queue_in_flight", {
+      description: "Items currently processing",
+      attributes: metricAttributes,
+    });
+    const latencyHistogram = Metric.histogram("queue_processing_duration_ms", {
+      description: "Item processing duration in milliseconds",
+      attributes: metricAttributes,
+      boundaries: Metric.exponentialBoundaries({
+        start: 1,
+        factor: 2,
+        count: 12,
+      }),
+    });
+    // Mirror each accumulated event onto its OTEL counter (same dispatch as `accumulate`).
+    const recordEventMetric = (event: QueueEvent<T, E>): Effect.Effect<void> => {
+      switch (event._tag) {
+        case "Enqueued":
+          return Metric.update(enqueuedCounter, event.entries.length);
+        case "Started":
+          return Metric.update(startedCounter, 1);
+        case "Completed":
+          return Effect.andThen(
+            Metric.update(completedCounter, 1),
+            Metric.update(latencyHistogram, Duration.toMillis(event.elapsed)),
+          );
+        case "Failed":
+          return Effect.andThen(
+            Metric.update(failedCounter, 1),
+            Metric.update(latencyHistogram, Duration.toMillis(event.elapsed)),
+          );
+        case "RetryScheduled":
+          return Metric.update(retriedCounter, 1);
+        case "DeadLettered":
+          return Metric.update(deadLetteredCounter, event.entries.length);
+        case "Dropped":
+          return Metric.update(droppedCounter, event.entries.length);
+        case "RateLimitExceeded":
+          return Metric.update(rateLimitExceededCounter, 1);
+        default:
+          return Effect.void;
+      }
+    };
     const windowStartMs = yield* nowMs;
     const windowAccum = yield* Ref.make(freshAccum(windowStartMs));
     let metricsFlush = yield* Deferred.make<void>();
@@ -1504,6 +1641,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     const publishEvent = (event: QueueEvent<T, E>): Effect.Effect<void> =>
       Effect.gen(function* () {
         yield* Ref.update(windowAccum, (acc) => accumulate(acc, event));
+        yield* recordEventMetric(event);
         yield* PubSub.publish(eventsHub, event);
         if (isSignificant(event)) yield* requestMetricsFlush;
       });
@@ -2290,7 +2428,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             _tag: "Started",
             entry: queueEntryFromInternal(internal, { startedAt }),
           });
-          yield* Ref.update(inFlightRef, (n) => n + 1);
+          yield* Metric.update(
+            inFlightGauge,
+            yield* Ref.updateAndGet(inFlightRef, (n) => n + 1),
+          );
           const ctx = makeEffectContext(internal);
           const exit = yield* Effect.exit(config.effect(internal.item, ctx));
           const end = yield* Effect.clockWith((c) => c.currentTimeMillis);
@@ -2328,18 +2469,43 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
               ? { _tag: "Completed", entry, elapsed }
               : { _tag: "Failed", entry, cause: exit.cause, elapsed },
           );
-          yield* Ref.update(inFlightRef, (n) => Math.max(0, n - 1));
+          yield* Metric.update(
+            inFlightGauge,
+            yield* Ref.updateAndGet(inFlightRef, (n) => Math.max(0, n - 1)),
+          );
 
-          // Auto re-enqueue on failure, up to `attempts`. Runs in the main fiber after the
-          // dedup key was released above, so the re-enqueue's `added` correctly follows the
-          // `released` (preserving the dedupe-key seq invariant).
+          // Failure disposition. `onFailure` (if set) decides per error; otherwise the queue's
+          // default policy applies. Runs in the main fiber after the dedup key was released
+          // above, so any re-enqueue's `added` correctly follows the `released` (preserving the
+          // dedupe-key seq invariant).
           if (Exit.isFailure(exit)) {
-            if (autoReEnqueue) {
-              yield* retryInternal(internal, exit);
-            } else {
-              yield* Effect.logWarning(
-                `Item failed in queue "${queueName}" (no \`attempts\` set; observe via \`events\`)`,
-              ).pipe(Effect.annotateLogs("cause", Cause.pretty(exit.cause)));
+            const disposition =
+              config.onFailure !== undefined
+                ? yield* config.onFailure(entry, exit.cause)
+                : "default";
+            switch (disposition) {
+              case "retry":
+                yield* retryInternal(internal, exit);
+                break;
+              case "deadLetter":
+                yield* Effect.asVoid(
+                  routePending(entry, { reason: "onFailure" }, "dead-lettered"),
+                );
+                break;
+              case "drop":
+                yield* Effect.asVoid(
+                  routePending(entry, { reason: "onFailure" }, "dropped"),
+                );
+                break;
+              case "default":
+                if (autoReEnqueue) {
+                  yield* retryInternal(internal, exit);
+                } else {
+                  yield* Effect.logWarning(
+                    `Item failed in queue "${queueName}" (no \`attempts\` set; observe via \`events\`)`,
+                  ).pipe(Effect.annotateLogs("cause", Cause.pretty(exit.cause)));
+                }
+                break;
             }
           }
 

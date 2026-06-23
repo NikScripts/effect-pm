@@ -47,8 +47,10 @@ Config keeps **only** decisions the engine must run inline (in the worker `R`) a
 stream can't, being after-the-fact. Config is local-only anyway (the `effect` worker can't
 cross RPC).
 
-- **`onFailure?`** *(LOCKED)* — `(entry, cause) => Effect<"retry" | "deadLetter" | "drop" | "default", never, R>`.
-  Per-error disposition, overriding the default retry policy.
+- **`onFailure?`** *(LOCKED — SHIPPED)* — `(entry, cause) => Effect<"retry" | "deadLetter" | "drop" | "default", never, R>`.
+  Per-error disposition, overriding the default retry policy. `"retry"` re-enqueues honoring the
+  `attempts` budget; `"deadLetter"`/`"drop"` emit the matching event without re-enqueue;
+  `"default"` falls back to the queue policy. Runs inline in the worker `R`.
 - **`onAdmit?`** *(OPTIONAL / deferred)* — `(batch) => Effect<"accept" | "reject", never, R>`.
   Enqueue admission control. Add only if a concrete need appears.
 
@@ -87,8 +89,12 @@ engine's internal `onError` sink (not a lifecycle event).
   callbacks are **removed**; observation is via the streams. Typed errors carried on
   `QueueEvent<T, E>` (`cause: Cause<E>` / `exit: Exit<void, E>`); `attempts` auto re-enqueue;
   `enqueue` re-injects `QueueEntry`s off `.events`. `Resource.runForEachTag` helper added for
-  tag-dispatched consumption. Tests/examples converted. **Remaining within P1b:** register
-  Effect `Metric`s for OTEL; add the `onFailure` config hook (LOCKED shape above).
+  tag-dispatched consumption. The `onFailure` config hook is wired (LOCKED shape: returns
+  `"retry" | "deadLetter" | "drop" | "default"`, runs inline in the worker `R`; its services
+  are folded into `InferQueueWorkerRequirements`). Effect `Metric`s registered for OTEL
+  (per-queue tagged counters `queue_*_total`, an `queue_in_flight` gauge, and a
+  `queue_processing_duration_ms` histogram, updated inline alongside the window accumulator).
+  Tests/examples converted. **P1b is complete.**
 - **P-logs** — generic `logs` on the toolkit: alias `logEntry`, conditional `{ logs: true }`
   member + auto-wired capture/relay, console helper, real-http test.
 - **P3** — data-plane verbs on the contract: `prioritize`/`defer`/`release`/`releaseEncoded`/

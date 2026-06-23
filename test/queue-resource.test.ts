@@ -1,11 +1,14 @@
 import { ProcessStorage } from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest";
 import {
+  Cause,
   Clock,
   Data,
   Duration,
   Effect,
   Fiber,
+  Metric,
+  Option,
   Ref,
   Schema,
   Stream,
@@ -1623,6 +1626,145 @@ describe("QueueResource.make — enqueue (entry re-injection)", () => {
       yield* queue.resume;
       yield* waitUntilCompleted(queue, 2);
       expect([...(yield* Ref.get(seen))].sort((a, b) => a - b)).toEqual([10, 20]);
+    }).pipe(Effect.scoped),
+  );
+});
+
+describe("QueueResource.make — onFailure disposition", () => {
+  it.live("'drop' drops the failed item without re-enqueue (overriding attempts)", () =>
+    Effect.gen(function* () {
+      const tries = yield* Ref.make(0);
+      const queue = yield* QueueResource.make({
+        name: "test-onfailure-drop",
+        effect: (_n: number) =>
+          Ref.update(tries, (n) => n + 1).pipe(
+            Effect.andThen(Effect.fail("boom" as const)),
+          ),
+        onFailure: () => Effect.succeed("drop" as const),
+        concurrency: 1,
+        attempts: 5, // default policy would retry — onFailure overrides
+      });
+      const collected = yield* Effect.forkChild(
+        Stream.runCollect(
+          Stream.takeUntil(queue.events, (e) => e._tag === "Dropped"),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add(1);
+      const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
+      expect(tags).toContain("Dropped");
+      expect(tags).not.toContain("RetryScheduled");
+      expect(yield* Ref.get(tries)).toBe(1);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("'deadLetter' emits DeadLettered and receives the typed cause", () =>
+    Effect.gen(function* () {
+      class Boom extends Data.TaggedError("Boom")<{ readonly n: number }> {}
+      const seenCause = yield* Ref.make<Array<number>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-onfailure-deadletter",
+        effect: (n: number) => Effect.fail(new Boom({ n })),
+        // cause is Cause<Boom> — read the typed failure off it
+        onFailure: (_entry, cause) =>
+          Effect.gen(function* () {
+            const failure = Cause.findErrorOption(cause);
+            if (Option.isSome(failure)) {
+              yield* Ref.update(seenCause, (a) => [...a, failure.value.n]);
+            }
+            return "deadLetter" as const;
+          }),
+        concurrency: 1,
+      });
+      const collected = yield* Effect.forkChild(
+        Stream.runCollect(
+          Stream.takeUntil(queue.events, (e) => e._tag === "DeadLettered"),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add(42);
+      const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
+      expect(tags).toContain("DeadLettered");
+      expect(yield* Ref.get(seenCause)).toEqual([42]);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("'retry' re-enqueues even when attempts is unset", () =>
+    Effect.gen(function* () {
+      const tries = yield* Ref.make(0);
+      const queue = yield* QueueResource.make({
+        name: "test-onfailure-retry",
+        effect: (_n: number) =>
+          Effect.gen(function* () {
+            const t = yield* Ref.updateAndGet(tries, (n) => n + 1);
+            if (t === 1) return yield* Effect.fail("boom" as const);
+          }),
+        onFailure: () => Effect.succeed("retry" as const),
+        concurrency: 1,
+        // no attempts → default policy would NOT re-enqueue; onFailure forces it
+      });
+      const collected = yield* Effect.forkChild(
+        Stream.runCollect(
+          Stream.takeUntil(queue.events, (e) => e._tag === "Completed"),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add(1);
+      const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
+      expect(tags).toContain("RetryScheduled");
+      expect(tags).toContain("Completed");
+      expect(yield* Ref.get(tries)).toBe(2);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("'default' falls back to the queue's auto re-enqueue policy", () =>
+    Effect.gen(function* () {
+      const tries = yield* Ref.make(0);
+      const queue = yield* QueueResource.make({
+        name: "test-onfailure-default",
+        effect: (_n: number) =>
+          Ref.update(tries, (n) => n + 1).pipe(
+            Effect.andThen(Effect.fail("boom" as const)),
+          ),
+        onFailure: () => Effect.succeed("default" as const),
+        concurrency: 1,
+        attempts: 2, // default policy: retry once then exhaust
+      });
+      const collected = yield* Effect.forkChild(
+        Stream.runCollect(
+          Stream.takeUntil(queue.events, (e) => e._tag === "RetryExhausted"),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add(1);
+      const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
+      expect(tags.filter((t) => t === "RetryScheduled").length).toBe(1);
+      expect(tags).toContain("RetryExhausted");
+      expect(yield* Ref.get(tries)).toBe(2);
+    }).pipe(Effect.scoped),
+  );
+});
+
+describe("QueueResource.make — OTEL metrics", () => {
+  it.live("records per-queue counters via Effect Metric", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-otel-metrics",
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+      });
+      yield* queue.add([1, 2, 3]);
+      yield* waitUntilCompleted(queue, 3);
+      // give the Completed events (which carry the metric updates) a beat to drain
+      yield* Effect.sleep(Duration.millis(20));
+      // read the registry snapshot (Metric key includes description, so match by id+attrs)
+      const snapshot = yield* Metric.snapshot;
+      const find = (id: string) =>
+        snapshot.find(
+          (m) => m.id === id && m.attributes?.queue === "test-otel-metrics",
+        );
+      expect(find("queue_enqueued_total")?.state).toMatchObject({ count: 3 });
+      expect(find("queue_completed_total")?.state).toMatchObject({ count: 3 });
     }).pipe(Effect.scoped),
   );
 });

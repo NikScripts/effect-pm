@@ -622,6 +622,8 @@ export type {
   QueueEvent,
   QueueStatus,
   QueueMetrics,
+  QueueFailureDisposition,
+  QueueOnFailure,
   QueueReleaseOptions,
   QueueRouteOptions,
   QueueReleaseEncodingError,
