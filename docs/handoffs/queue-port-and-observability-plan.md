@@ -108,8 +108,40 @@ engine's internal `onError` sink (not a lifecycle event).
   `enqueue` composition, so it belongs to the **P4 adapter** (decode `queueEncodedEntry` via the
   instance `itemSchema`, then call `enqueue`). The wire-faithful note: `deadLetter`/`drop` take
   a `queueEntrySelector` (over the wire, `entryId` identifies the target).
-- **P4** — adapter (engine handle → toolkit service) + export the ported `QueueResource.Tag`
-  from the barrel; real-http triad/quad test; final new-features guide pass.
+- **P4** — adapter (engine handle → toolkit service). The keystone: makes the toolkit
+  `QueueResource.Tag` actually runnable/servable. Concrete design (worked out, ready to build):
+  1. **Thread `itemSchema` onto the tag.** In `QueueContract.queueTag.build`, stash the raw
+     `itemSchema` under a new symbol (e.g. `queueItemSchemaSym`) on the returned tag, so the
+     layer can recover it (don't dig it back out of `spec.add.payload.item` — stash it).
+  2. **Adapter** `adaptQueueHandle(handle): ImplOf<QueueInstanceSpec<Sch>>` — a flat mapping:
+     `size/sizes/isEmpty/completed/start/pause/resume/shutdown/clear/status/metrics/events`
+     pass straight through; `add/prioritize/defer` = `({ item }) => handle.x(item)`;
+     `enqueue` = `({ entries }) => handle.enqueue(entries)`; `release`/`releaseEncoded` =
+     `({ options }) => handle.x(options)`; `deadLetter`/`drop` =
+     `({ selector, options }) => handle.x(selector, options)`. **Watch the no-cast type match**
+     between the engine return types and the schema-**decoded** contract types — especially
+     `events` (engine `QueueEvent<T,E>` vs decoded `queueEvent` union: `Cause<E>` is assignable
+     to `Cause<unknown>`; verify every variant's fields line up — `elapsed: Duration`,
+     `Enqueued.priority`, `RateLimitExceeded`) and the `QueueEntry`/`QueueEncodedEntry` shapes
+     (`attributes: Record<string, unknown>` vs decoded `Record<string, Unknown>`). If a variant
+     doesn't line up, fix the *schema* in `QueueContract` to match the engine (SSOT is the
+     engine), not via a cast.
+  3. **Layer** `QueueResource.layer(tag, config)` = `Layer.unwrap(makeEngine({ ...config,
+     itemSchema: tag[queueItemSchemaSym] }).pipe(Effect.map((h) => Resource.layer(tag,
+     adaptQueueHandle(h)))))`. `makeEngine` = the engine `QueueResource.make`. Result:
+     `Layer<Self, never, WorkerR>` (Scope excluded by `unwrap`). Add a `.Service` combined
+     factory mirroring the engine's, if convenient.
+  4. **`enqueueEncoded`** (deferred from P3): add `enqueueEncoded` to `queueSpec`
+     (`payload { entries: Array(queueEncodedEntry) }`, success Void, error a decode error) and
+     implement in the adapter as: decode each `payload` via the tag's `itemSchema`, rebuild
+     `QueueEntry<T>`, then `handle.enqueue`. (The engine has no `enqueueEncoded` handle method —
+     it's a compose.)
+  5. **Barrel**: export the ported `QueueResource` (toolkit) + the new public schemas/types from
+     `src/index.ts` (currently `QueueContract` is module-path-only).
+  6. **Tests**: a local smoke test (`yield* Tag`, add, observe via `events`/`status`/`metrics`,
+     release round-trip) + a **real-http** quad test (over `NodeHttpServer.layerTest` + ndjson,
+     like `resource-stream-http.test.ts`) proving the streams cross the wire.
+  7. Final new-features guide pass documenting the runnable toolkit queue.
 
 Verify every phase: `pnpm typecheck` (both tsconfigs), Effect LSP CLI on touched files,
 `pnpm lint`, `pnpm test`, `pnpm build`. Commit per phase (owner reviews remotely).
