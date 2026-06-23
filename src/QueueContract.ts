@@ -184,7 +184,7 @@ export const queueEvent = <Sch extends Schema.Top>(itemSchema: Sch) => {
 };
 
 /** Free-form attributes carried by release / route options (wire form). @public */
-const queueAttributes = Schema.Record(Schema.String, Schema.Unknown);
+export const queueAttributes = Schema.Record(Schema.String, Schema.Unknown);
 
 /**
  * Selector for the entry-routing verbs (`deadLetter` / `drop`), parameterized by `itemSchema`
