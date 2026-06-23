@@ -211,23 +211,35 @@ export class QueueBatchValidationError extends Data.TaggedError("QueueBatchValid
 /**
  * Encoded release was requested for a queue without `itemSchema`.
  *
+ * `Schema.TaggedErrorClass` so it is both a yieldable/throwable error **and** wire-encodable —
+ * it is part of the `releaseEncoded` RPC error channel (see `QueueContract`).
+ *
  * @public
  */
-export class QueueMissingItemSchemaError extends Data.TaggedError("QueueMissingItemSchemaError")<{
-  readonly queue: string;
-}> {}
+export class QueueMissingItemSchemaError extends Schema.TaggedErrorClass<QueueMissingItemSchemaError>()(
+  "QueueMissingItemSchemaError",
+  {
+    queue: Schema.String,
+  },
+) {}
 
 /**
  * A queue item failed schema encoding while preparing a wire handoff release.
  *
+ * `Schema.TaggedErrorClass` so it is both a yieldable/throwable error **and** wire-encodable —
+ * it is part of the `releaseEncoded` RPC error channel (see `QueueContract`).
+ *
  * @public
  */
-export class QueueItemEncodingError extends Data.TaggedError("QueueItemEncodingError")<{
-  readonly queue: string;
-  readonly entryId: string;
-  readonly message: string;
-  readonly codecId?: string;
-}> {}
+export class QueueItemEncodingError extends Schema.TaggedErrorClass<QueueItemEncodingError>()(
+  "QueueItemEncodingError",
+  {
+    queue: Schema.String,
+    entryId: Schema.String,
+    message: Schema.String,
+    codecId: Schema.optionalKey(Schema.String),
+  },
+) {}
 
 /** @public */
 export type QueueReleaseEncodingError = QueueMissingItemSchemaError | QueueItemEncodingError;

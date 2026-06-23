@@ -9,11 +9,11 @@
  * **control / observation** verbs only — `size`, `sizes`, `isEmpty`, `completed`, `start`,
  * `pause`, `resume`, `shutdown`, `clear` — all of which have fixed schemas (no item type).
  *
- * The **data-plane** verbs involve the per-queue item type `T` and its `itemSchema`. The
- * Void-success enqueue verbs (`add` / `prioritize` / `defer` / `enqueue`) are wired; the
- * entry-returning verbs (`release` / `releaseEncoded` / `deadLetter` / `drop`) are pending
- * wire-error scaffolding (the engine's encode/route errors are `Data.TaggedError`, not
- * `Schema`-encodable, so they need schema mirrors before they can cross RPC). Each
+ * The **data-plane** verbs involve the per-queue item type `T` and its `itemSchema`: the
+ * enqueue verbs (`add` / `prioritize` / `defer` / `enqueue`) and the entry-returning verbs
+ * (`release` / `releaseEncoded` / `deadLetter` / `drop`) are all wired. `releaseEncoded`'s
+ * failure channel is the engine's encode errors, which are `Schema.TaggedErrorClass` (both
+ * yieldable and wire-encodable), so they cross RPC and `catchTag` works on the client. Each
  * queue instance is its **own** resource (its own RPC group, prefixed by its id) — built by
  * {@link defineQueueTag} from the shared control spec plus per-instance data procedures
  * whose payload/result schema **is** the instance's `itemSchema`, so Effect RPC validates
@@ -27,6 +27,11 @@
 import { Schema } from "effect";
 import { Resource, hostSym } from "./Resource";
 import type { HostKey, ResourceTag } from "./Resource";
+import {
+  QueueItemCodecDescriptorSchema,
+  QueueItemEncodingError,
+  QueueMissingItemSchemaError,
+} from "./QueueResource";
 
 /**
  * The per-priority pending counts returned by `sizes`.
@@ -178,6 +183,70 @@ export const queueEvent = <Sch extends Schema.Top>(itemSchema: Sch) => {
   ]);
 };
 
+/** Free-form attributes carried by release / route options (wire form). @public */
+const queueAttributes = Schema.Record(Schema.String, Schema.Unknown);
+
+/**
+ * Selector for the entry-routing verbs (`deadLetter` / `drop`), parameterized by `itemSchema`
+ * (it can match on `item`). Mirrors the engine's `QueueEntrySelector<T>`. Over the wire a
+ * selector (typically `entryId`) identifies the target — routing a full `QueueEntry` is a local
+ * convenience that reduces to its `entryId`.
+ *
+ * @public
+ */
+export const queueEntrySelector = <Sch extends Schema.Top>(itemSchema: Sch) =>
+  Schema.Struct({
+    entryId: Schema.optionalKey(Schema.String),
+    key: Schema.optionalKey(Schema.String),
+    item: Schema.optionalKey(itemSchema),
+  });
+
+/** Options for `release` / `releaseEncoded` (wire form of `QueueReleaseOptions`). @public */
+export const queueReleaseOptions = Schema.Struct({
+  scope: Schema.optionalKey(Schema.Literal("pendingOnly")),
+  releaseId: Schema.optionalKey(Schema.String),
+  attributes: Schema.optionalKey(queueAttributes),
+});
+
+/** Options for `deadLetter` / `drop` (wire form of `QueueRouteOptions`). @public */
+export const queueRouteOptions = Schema.Struct({
+  reason: Schema.String,
+  attributes: Schema.optionalKey(queueAttributes),
+});
+
+/**
+ * A queue entry in **encoded / wire** form — the element returned by `releaseEncoded`. The
+ * `item` is replaced by its codec descriptor and the value lives in `payload` (already
+ * JSON-encoded), so an encoded entry crosses RPC without the receiver knowing the item schema.
+ * Mirrors the engine's `QueueEncodedEntry`.
+ *
+ * @public
+ */
+export const queueEncodedEntry = Schema.Struct({
+  payload: Schema.Unknown,
+  item: QueueItemCodecDescriptorSchema,
+  entryId: Schema.String,
+  key: Schema.optionalKey(Schema.String),
+  priority: queuePriority,
+  attempts: Schema.Number,
+  timestamps: queueEntryTimestamps,
+  batchId: Schema.optionalKey(Schema.String),
+  releaseId: Schema.optionalKey(Schema.String),
+  sourceResourceId: Schema.optionalKey(Schema.String),
+  attributes: Schema.optionalKey(queueAttributes),
+});
+
+/**
+ * The `releaseEncoded` failure channel — the wire-encodable union of the engine's encode
+ * errors (now `Schema.TaggedErrorClass`, so they are both yieldable and RPC-encodable).
+ *
+ * @public
+ */
+export const queueReleaseEncodingError = Schema.Union([
+  QueueMissingItemSchemaError,
+  QueueItemEncodingError,
+]);
+
 /**
  * The queue **control + observation** contract: the fixed-schema verbs of a queue handle,
  * shared by every queue instance. The data-plane (item-typed) verbs are added in a later
@@ -269,6 +338,39 @@ export const queueSpec = <Sch extends Schema.Top>(itemSchema: Sch) => ({
     description:
       "Re-inject existing entries (e.g. off the events stream / a release) — each re-enters " +
       "at its own priority with its attempts preserved. The handoff / round-trip primitive.",
+  }),
+  release: Resource.mutate(Schema.Array(queueEntry(itemSchema)), {
+    payload: { options: Schema.optionalKey(queueReleaseOptions) },
+  }).annotate({
+    description:
+      "Export pending entries for handoff and remove them from this queue; returns them decoded.",
+    destructive: true,
+  }),
+  releaseEncoded: Resource.mutate(Schema.Array(queueEncodedEntry), {
+    payload: { options: Schema.optionalKey(queueReleaseOptions) },
+    error: queueReleaseEncodingError,
+  }).annotate({
+    description:
+      "Export pending entries in encoded/wire form for remote handoff (requires an itemSchema).",
+    destructive: true,
+  }),
+  deadLetter: Resource.mutate(Schema.Array(queueEntry(itemSchema)), {
+    payload: {
+      selector: queueEntrySelector(itemSchema),
+      options: queueRouteOptions,
+    },
+  }).annotate({
+    description: "Remove pending entries matching the selector and route them to a dead letter.",
+    destructive: true,
+  }),
+  drop: Resource.mutate(Schema.Array(queueEntry(itemSchema)), {
+    payload: {
+      selector: queueEntrySelector(itemSchema),
+      options: queueRouteOptions,
+    },
+  }).annotate({
+    description: "Remove pending entries matching the selector without preserving them.",
+    destructive: true,
   }),
   events: Resource.stream(queueEvent(itemSchema)).annotate({
     description: "Discrete entry / worker / queue lifecycle events.",

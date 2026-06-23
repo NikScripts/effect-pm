@@ -97,14 +97,17 @@ engine's internal `onError` sink (not a lifecycle event).
   Tests/examples converted. **P1b is complete.**
 - **P-logs** — generic `logs` on the toolkit: alias `logEntry`, conditional `{ logs: true }`
   member + auto-wired capture/relay, console helper, real-http test.
-- **P3** — data-plane verbs on the contract. **[DONE]** the Void-success enqueue verbs
-  (`prioritize`/`defer`/`enqueue` — entry re-injection / handoff primitive), mirroring `add`.
-  **Remaining:** the entry-returning verbs `release`/`releaseEncoded`/`deadLetter`/`drop` +
-  `enqueueEncoded` decode. These need **wire-error scaffolding** first — the engine's
-  `QueueItemEncodingError`/`QueueMissingItemSchemaError`/route errors are `Data.TaggedError`,
-  not `Schema`-encodable; mirror them as `Schema.TaggedError` (or parallel schemas) before they
-  can be a method's RPC error channel. Also need wire schemas for `queueEntrySelector`,
-  `queueReleaseOptions`, `queueRouteOptions`, `queueEncodedEntry`.
+- **[DONE] P3** — data-plane verbs on the contract. Enqueue verbs (`prioritize`/`defer`/
+  `enqueue`) and entry-returning verbs (`release`/`releaseEncoded`/`deadLetter`/`drop`) are all
+  wired on `queueSpec`, with wire schemas `queueEntrySelector`/`queueReleaseOptions`/
+  `queueRouteOptions`/`queueEncodedEntry`/`queueReleaseEncodingError`. The engine's
+  `QueueItemEncodingError`/`QueueMissingItemSchemaError` were converted from `Data.TaggedError`
+  to **`Schema.TaggedErrorClass`** (SSOT — one class, both yieldable and wire-encodable), so
+  `releaseEncoded`'s error channel crosses RPC and `catchTag` works client-side (tested).
+  **Remaining:** `enqueueEncoded` — the engine has no such handle method; it's a decode +
+  `enqueue` composition, so it belongs to the **P4 adapter** (decode `queueEncodedEntry` via the
+  instance `itemSchema`, then call `enqueue`). The wire-faithful note: `deadLetter`/`drop` take
+  a `queueEntrySelector` (over the wire, `entryId` identifies the target).
 - **P4** — adapter (engine handle → toolkit service) + export the ported `QueueResource.Tag`
   from the barrel; real-http triad/quad test; final new-features guide pass.
 

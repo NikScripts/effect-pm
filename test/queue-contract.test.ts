@@ -2,6 +2,7 @@ import { DateTime, Effect, Layer, Schema, Stream } from "effect";
 import { RpcClient, RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import { QueueResource, queueControlSpec } from "../src/QueueContract";
+import { QueueMissingItemSchemaError } from "../src/QueueResource";
 import {
   Resource,
   forwardClient,
@@ -137,6 +138,10 @@ it("queue add round-trips with a per-instance item schema (native validation)", 
     prioritize: (_: { item: number }) => Effect.void,
     defer: (_: { item: number }) => Effect.void,
     enqueue: (_: { entries: ReadonlyArray<{ item: number }> }) => Effect.void,
+    release: () => Effect.succeed([]),
+    releaseEncoded: () => Effect.succeed([]),
+    deadLetter: () => Effect.succeed([]),
+    drop: () => Effect.succeed([]),
     events: Stream.empty,
   };
   const program = Effect.gen(function* () {
@@ -164,6 +169,10 @@ it("prioritize / defer / enqueue round-trip over the per-instance group", () => 
       Effect.sync(() => log.push(`lo:${String(item)}`)),
     enqueue: ({ entries }: { entries: ReadonlyArray<{ item: number }> }) =>
       Effect.sync(() => log.push(`re:${entries.map((e) => e.item).join(",")}`)),
+    release: () => Effect.succeed([]),
+    releaseEncoded: () => Effect.succeed([]),
+    deadLetter: () => Effect.succeed([]),
+    drop: () => Effect.succeed([]),
     events: Stream.empty,
   };
   const program = Effect.gen(function* () {
@@ -183,6 +192,46 @@ it("prioritize / defer / enqueue round-trip over the per-instance group", () => 
       ],
     });
     expect(log).toEqual(["hi:1", "lo:2", "re:9"]);
+  }).pipe(Effect.provide(Resource.server(Numbers, impl)), Effect.scoped);
+  return Effect.runPromise(program);
+});
+
+it("release returns entries; releaseEncoded surfaces a typed wire error", () => {
+  const impl = {
+    ...makeImpl(),
+    add: (_: { item: number }) => Effect.void,
+    prioritize: (_: { item: number }) => Effect.void,
+    defer: (_: { item: number }) => Effect.void,
+    enqueue: (_: { entries: ReadonlyArray<{ item: number }> }) => Effect.void,
+    release: () =>
+      Effect.succeed([
+        {
+          item: 3,
+          entryId: "e3",
+          priority: "normal" as const,
+          attempts: 1,
+          timestamps: { enqueuedAt: DateTime.makeUnsafe(0) },
+        },
+      ]),
+    // the engine error is Schema.TaggedErrorClass now → it crosses RPC and catchTag works
+    releaseEncoded: () =>
+      Effect.fail(new QueueMissingItemSchemaError({ queue: "test/Numbers" })),
+    deadLetter: () => Effect.succeed([]),
+    drop: () => Effect.succeed([]),
+    events: Stream.empty,
+  };
+  const program = Effect.gen(function* () {
+    const rpc = yield* RpcTest.makeClient(groupOf(Numbers));
+    const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.id);
+    const released = yield* svc.release({});
+    expect(released.map((e) => e.item)).toEqual([3]);
+
+    const caught = yield* svc.releaseEncoded({}).pipe(
+      Effect.catchTag("QueueMissingItemSchemaError", (e) =>
+        Effect.succeed(`missing:${e.queue}`),
+      ),
+    );
+    expect(caught).toBe("missing:test/Numbers");
   }).pipe(Effect.provide(Resource.server(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
 });
