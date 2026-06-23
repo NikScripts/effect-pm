@@ -1,4 +1,4 @@
-import { DateTime, Effect, Layer, Schema, Stream } from "effect";
+import { DateTime, Duration, Effect, Layer, Ref, Schema, Stream } from "effect";
 import { RpcClient, RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import { QueueResource, queueControlSpec } from "../src/QueueContract";
@@ -233,6 +233,43 @@ it("release returns entries; releaseEncoded surfaces a typed wire error", () => 
     );
     expect(caught).toBe("missing:test/Numbers");
   }).pipe(Effect.provide(Resource.server(Numbers, impl)), Effect.scoped);
+  return Effect.runPromise(program);
+});
+
+// ── QueueResource.layer: the engine wired behind the toolkit tag, run locally ──
+class LocalQueue extends QueueResource.Tag<LocalQueue>()(
+  "test/LocalQueue",
+  Schema.Number,
+) {}
+
+it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
+  const program = Effect.gen(function* () {
+    const seen = yield* Ref.make<Array<number>>([]);
+    const q = yield* LocalQueue;
+    // the same `yield* Tag` surface the contract declares — backed by the live engine
+    yield* Effect.forkScoped(
+      Resource.runForEachTag(q.events, "Completed", (e) =>
+        Ref.update(seen, (a) => [...a, e.entry.item]),
+      ),
+    );
+    // let the (sliding-PubSub) subscription attach before enqueueing
+    yield* Effect.sleep(Duration.millis(20));
+    yield* q.add({ item: 1 });
+    yield* q.prioritize({ item: 2 });
+    while ((yield* q.completed) < 2) {
+      yield* Effect.sleep(Duration.millis(5));
+    }
+    expect([...(yield* Ref.get(seen))].sort((a, b) => a - b)).toEqual([1, 2]);
+    expect(yield* q.isEmpty).toBe(true);
+  }).pipe(
+    Effect.provide(
+      QueueResource.layer(LocalQueue, {
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+      }),
+    ),
+    Effect.scoped,
+  );
   return Effect.runPromise(program);
 });
 

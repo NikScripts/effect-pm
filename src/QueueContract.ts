@@ -24,14 +24,20 @@
  *
  * @module QueueContract
  */
-import { Schema } from "effect";
-import { Resource, hostSym } from "./Resource";
-import type { HostKey, ResourceTag } from "./Resource";
+import { Effect, Layer, Schema } from "effect";
+import { Resource, hostSym, specSym } from "./Resource";
+import type { HostKey, LocalCapability, ResourceTag } from "./Resource";
 import {
   QueueItemCodecDescriptorSchema,
   QueueItemEncodingError,
   QueueMissingItemSchemaError,
+  QueueResource as QueueEngine,
 } from "./QueueResource";
+import type {
+  QueueEntry,
+  QueueResourceConfigWithItemSchema,
+} from "./QueueResource";
+import type { JsonValue } from "./ProcessStoreEvent";
 
 /**
  * The per-priority pending counts returned by `sizes`.
@@ -98,6 +104,40 @@ export const queueEntryTimestamps = Schema.Struct({
 });
 
 /**
+ * Recursive structural JSON value schema — decodes to {@link JsonValue}. Used for the option
+ * `attributes`, which the engine persists as JSON. `Schema.suspend` breaks the self-reference.
+ *
+ * @public
+ */
+export const jsonValue: Schema.Codec<JsonValue> = Schema.Union([
+  Schema.Null,
+  Schema.String,
+  Schema.Number,
+  Schema.Boolean,
+  Schema.Record(
+    Schema.String,
+    Schema.suspend((): Schema.Codec<JsonValue> => jsonValue),
+  ),
+  Schema.Array(Schema.suspend((): Schema.Codec<JsonValue> => jsonValue)),
+]);
+
+/**
+ * Entry/encoded `attributes` — a readonly record of arbitrary values, matching the engine's
+ * `{ readonly [key: string]: unknown }` on `QueueEntry` / `QueueEncodedEntry`.
+ *
+ * @public
+ */
+export const queueEntryAttributes = Schema.Record(Schema.String, Schema.Unknown);
+
+/**
+ * Option `attributes` — a readonly record of {@link JsonValue}, matching the engine's
+ * `{ readonly [key: string]: JsonValue }` on `QueueReleaseOptions` / `QueueRouteOptions`.
+ *
+ * @public
+ */
+export const queueJsonAttributes = Schema.Record(Schema.String, jsonValue);
+
+/**
  * A queue entry on the wire, parameterized by the per-instance `itemSchema`. Mirrors the
  * engine's `QueueEntry<T>`; used inside {@link queueEvent}.
  *
@@ -114,7 +154,7 @@ export const queueEntry = <Sch extends Schema.Top>(itemSchema: Sch) =>
     batchId: Schema.optionalKey(Schema.String),
     releaseId: Schema.optionalKey(Schema.String),
     sourceResourceId: Schema.optionalKey(Schema.String),
-    attributes: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)),
+    attributes: Schema.optionalKey(queueEntryAttributes),
   });
 
 /**
@@ -183,9 +223,6 @@ export const queueEvent = <Sch extends Schema.Top>(itemSchema: Sch) => {
   ]);
 };
 
-/** Free-form attributes carried by release / route options (wire form). @public */
-export const queueAttributes = Schema.Record(Schema.String, Schema.Unknown);
-
 /**
  * Selector for the entry-routing verbs (`deadLetter` / `drop`), parameterized by `itemSchema`
  * (it can match on `item`). Mirrors the engine's `QueueEntrySelector<T>`. Over the wire a
@@ -205,13 +242,13 @@ export const queueEntrySelector = <Sch extends Schema.Top>(itemSchema: Sch) =>
 export const queueReleaseOptions = Schema.Struct({
   scope: Schema.optionalKey(Schema.Literal("pendingOnly")),
   releaseId: Schema.optionalKey(Schema.String),
-  attributes: Schema.optionalKey(queueAttributes),
+  attributes: Schema.optionalKey(queueJsonAttributes),
 });
 
 /** Options for `deadLetter` / `drop` (wire form of `QueueRouteOptions`). @public */
 export const queueRouteOptions = Schema.Struct({
   reason: Schema.String,
-  attributes: Schema.optionalKey(queueAttributes),
+  attributes: Schema.optionalKey(queueJsonAttributes),
 });
 
 /**
@@ -233,7 +270,7 @@ export const queueEncodedEntry = Schema.Struct({
   batchId: Schema.optionalKey(Schema.String),
   releaseId: Schema.optionalKey(Schema.String),
   sourceResourceId: Schema.optionalKey(Schema.String),
-  attributes: Schema.optionalKey(queueAttributes),
+  attributes: Schema.optionalKey(queueEntryAttributes),
 });
 
 /**
@@ -428,6 +465,89 @@ const queueTag = <Self>() => {
 };
 
 /**
+ * The worker config for {@link QueueResource.layer} — the engine queue config **without**
+ * `itemSchema` (the tag already carries it). The item type is the tag's `itemSchema` decoded
+ * type, so `effect: (item, ctx) => …` is typed against it.
+ *
+ * @public
+ */
+export type QueueLayerConfig<A, E, R> = Omit<
+  QueueResourceConfigWithItemSchema<A, E, R>,
+  "itemSchema"
+>;
+
+/**
+ * The **local** layer for a toolkit queue instance: run the live {@link QueueEngine} behind the
+ * tag's contract. It builds the engine handle in a scope and maps it onto the toolkit service
+ * (location-transparent — the same `yield* Tag` then drives the queue locally, or remotely via
+ * {@link Resource.client} when served).
+ *
+ * The tag carries the `itemSchema` (recovered from its spec), so the config only supplies the
+ * worker (`effect`, `concurrency`, `attempts`, `onFailure`, …). The worker `R` is captured at
+ * layer-build time and provided to each method, so the resulting service requires nothing
+ * beyond `R` (which the layer itself requires).
+ *
+ * The enqueue verbs (`add`/`prioritize`/`defer`) re-validate the item in the engine; over RPC
+ * the payload was already validated against `itemSchema`, so that re-validation cannot fail —
+ * its error is therefore `orDie`d to match the contract's no-error enqueue channel.
+ *
+ * @public
+ */
+const layer = <
+  Self,
+  Sch extends Schema.Codec<Sch["Type"], Sch["Encoded"], never, never>,
+  E,
+  R,
+>(
+  tag: ResourceTag<Self, QueueInstanceSpec<Sch>>,
+  config: QueueLayerConfig<Sch["Type"], E, R>,
+): Layer.Layer<Self | LocalCapability<Self>, never, R> => {
+  const itemSchema = tag[specSym].add.payload.item;
+  return Layer.unwrap(
+    Effect.gen(function* () {
+      const context = yield* Effect.context<R>();
+      const handle = yield* QueueEngine.make({ ...config, itemSchema });
+      const provideR = <Out, Err>(
+        effect: Effect.Effect<Out, Err, R>,
+      ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
+      return Resource.layer(tag, {
+        size: handle.size,
+        sizes: handle.sizes,
+        isEmpty: handle.isEmpty,
+        completed: handle.completed,
+        start: provideR(handle.start),
+        pause: handle.pause,
+        resume: handle.resume,
+        shutdown: handle.shutdown,
+        clear: provideR(handle.clear),
+        status: handle.status,
+        metrics: handle.metrics,
+        add: ({ item }) => provideR(handle.add(item)).pipe(Effect.orDie),
+        prioritize: ({ item }) =>
+          provideR(handle.prioritize(item)).pipe(Effect.orDie),
+        defer: ({ item }) => provideR(handle.defer(item)).pipe(Effect.orDie),
+        // The one narrow cast in the port. The wire entry's decoded `.Type` goes opaque over an
+        // abstract item schema (effect Schema's `Type_` can't resolve `keyof` of a struct whose
+        // field optionality depends on a free `Sch`), so the decoded `entries` can't be statically
+        // related to the engine's `QueueEntry<T>` here — even though they are the same shape. That
+        // shape equivalence is pinned by `test/queue-contract.test-d.ts` (`WireEntry` ≅
+        // `QueueEntry`), which fails the build if the two ever drift, keeping this cast sound.
+        enqueue: ({ entries }) =>
+          provideR(
+            handle.enqueue(entries as ReadonlyArray<QueueEntry<Sch["Type"]>>),
+          ),
+        release: ({ options }) => provideR(handle.release(options)),
+        releaseEncoded: ({ options }) => provideR(handle.releaseEncoded(options)),
+        deadLetter: ({ selector, options }) =>
+          provideR(handle.deadLetter(selector, options)),
+        drop: ({ selector, options }) => provideR(handle.drop(selector, options)),
+        events: handle.events,
+      });
+    }),
+  );
+};
+
+/**
  * Queue resource toolkit — managed priority queues on the {@link Resource} toolkit.
  * (Model B: each instance is its own resource; data-plane procedures are typed by the
  * instance's `itemSchema`.)
@@ -436,4 +556,5 @@ const queueTag = <Self>() => {
  */
 export const QueueResource = {
   Tag: queueTag,
+  layer,
 } as const;

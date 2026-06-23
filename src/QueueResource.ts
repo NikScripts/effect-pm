@@ -450,7 +450,7 @@ export interface QueueEntry<T> {
   readonly batchId?: string;
   readonly releaseId?: string;
   readonly sourceResourceId?: string;
-  readonly attributes?: Record<string, unknown>;
+  readonly attributes?: { readonly [key: string]: unknown };
 }
 
 /** @public */
@@ -472,7 +472,7 @@ export interface QueueEncodedEntry {
   readonly batchId?: string;
   readonly releaseId?: string;
   readonly sourceResourceId?: string;
-  readonly attributes?: Record<string, unknown>;
+  readonly attributes?: { readonly [key: string]: unknown };
 }
 
 /** @public */
@@ -486,13 +486,13 @@ export interface QueueEntrySelector<T> {
 export interface QueueReleaseOptions {
   readonly scope?: "pendingOnly";
   readonly releaseId?: string;
-  readonly attributes?: Record<string, JsonValue>;
+  readonly attributes?: { readonly [key: string]: JsonValue };
 }
 
 /** @public */
 export interface QueueRouteOptions {
   readonly reason: string;
-  readonly attributes?: Record<string, JsonValue>;
+  readonly attributes?: { readonly [key: string]: JsonValue };
 }
 
 // (The per-event payload interfaces and `QueueControls` that the removed lifecycle callbacks
