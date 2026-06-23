@@ -1,7 +1,42 @@
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Layer, Schema, Stream } from "effect";
 import { RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import { Resource, forwardClient, groupOf, specOf } from "../src/Resource";
+
+// ── runForEachTag: tag-dispatched stream consumption (cast-free, dual, overloaded) ──
+type Ev =
+  | { readonly _tag: "A"; readonly n: number }
+  | { readonly _tag: "B"; readonly s: string }
+  | { readonly _tag: "C" };
+
+it("runForEachTag dispatches by tag — handler map, pipeable, types inferred", () => {
+  const events = Stream.fromIterable<Ev>([
+    { _tag: "A", n: 1 },
+    { _tag: "B", s: "x" },
+    { _tag: "C" },
+    { _tag: "A", n: 2 },
+  ]);
+  const program = Effect.gen(function* () {
+    const seen: Array<string> = [];
+    // pipeable + handler map; `e.n` / `e.s` only compile if inference narrowed per tag.
+    yield* events.pipe(
+      Resource.runForEachTag({
+        A: (e) => Effect.sync(() => seen.push(`A${e.n}`)),
+        B: (e) => Effect.sync(() => seen.push(`B${e.s}`)),
+        // C deliberately unhandled → ignored
+      }),
+    );
+    expect(seen).toEqual(["A1", "Bx", "A2"]);
+
+    // data-first + single tag
+    const aValues: Array<number> = [];
+    yield* Resource.runForEachTag(events, "A", (e) =>
+      Effect.sync(() => aValues.push(e.n)),
+    );
+    expect(aValues).toEqual([1, 2]);
+  });
+  return Effect.runPromise(program);
+});
 
 // A resource with both a no-payload method (property) and a payload method.
 class Echo extends Resource.Tag<Echo>("test/Echo")({

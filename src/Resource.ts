@@ -40,7 +40,17 @@
  *
  * @module Resource
  */
-import { Context, Data, Effect, Layer, Option, Schema, Stream } from "effect";
+import {
+  Context,
+  Data,
+  Effect,
+  Function as Fn,
+  Layer,
+  Match,
+  Option,
+  Schema,
+  Stream,
+} from "effect";
 import { FetchHttpClient, Headers, HttpRouter } from "effect/unstable/http";
 import {
   Rpc,
@@ -1348,6 +1358,109 @@ const clientInstances = <
     }),
   );
 
+// ── stream helpers: tag-dispatched consumption of an event stream ──
+
+/** Anything with a string discriminant `_tag` — the element of an event stream. @internal */
+type TaggedEvent = { readonly _tag: string };
+
+/**
+ * A partial set of per-`_tag` handlers over a tagged-event union — the handler-map form of
+ * {@link Resource.runForEachTag}. Each handler receives the **narrowed** event for its tag.
+ *
+ * @public
+ */
+export type TagHandlers<A extends TaggedEvent, E, R> = Partial<{
+  readonly [K in A["_tag"]]: (
+    event: Extract<A, { readonly _tag: K }>,
+  ) => Effect.Effect<void, E, R>;
+}>;
+
+/** The union of every handler's error channel (extracted via `infer`, like `Effect.catchTags`). */
+type HandlersError<Cases> = {
+  [K in keyof Cases]: Cases[K] extends (
+    event: never,
+  ) => Effect.Effect<unknown, infer E, unknown>
+    ? E
+    : never;
+}[keyof Cases];
+
+/** The union of every handler's requirement channel — so `R` doesn't leak to `unknown`. */
+type HandlersContext<Cases> = {
+  [K in keyof Cases]: Cases[K] extends (
+    event: never,
+  ) => Effect.Effect<unknown, unknown, infer R>
+    ? R
+    : never;
+}[keyof Cases];
+
+/**
+ * Consume a tagged-event {@link Stream}, dispatching each element to a handler by its `_tag` —
+ * the stream-native replacement for lifecycle callbacks (one off-fiber consumer, not a fiber
+ * per item). Pass a **single tag + handler** or a **handler map**; **data-first or pipeable**.
+ * Built on `Match`, so handlers are fully typed with no casts; unhandled tags are ignored.
+ *
+ * ```ts
+ * yield* jobs.events.pipe(Resource.runForEachTag({
+ *   Failed:  ({ entry, cause }) => Effect.logError(`failed ${entry.entryId}`, cause),
+ *   Drained: ({ completed })    => Effect.log(`drained @ ${completed}`),
+ * }))
+ * yield* Resource.runForEachTag(jobs.events, "Exit", (e) =>
+ *   e.exit.pipe(Effect.catchTags({ Timeout: …, Rejected: … })),
+ * )
+ * ```
+ *
+ * @public
+ */
+export const runForEachTag: {
+  // ── data-last (pipeable) ──
+  // `Cases` is inferred from the literal; E/R are EXTRACTED from the handlers via `infer`
+  // (not inferrable params), so `A` can unify at the pipe site without dragging R to `unknown`.
+  <
+    A extends TaggedEvent,
+    Cases extends TagHandlers<A, unknown, unknown>,
+  >(
+    handlers: Cases,
+  ): (
+    self: Stream.Stream<A>,
+  ) => Effect.Effect<void, HandlersError<Cases>, HandlersContext<Cases>>;
+  <A extends TaggedEvent, const K extends A["_tag"], E, R>(
+    tag: K,
+    f: (event: Extract<A, { readonly _tag: K }>) => Effect.Effect<void, E, R>,
+  ): (self: Stream.Stream<A>) => Effect.Effect<void, E, R>;
+  // ── data-first ──
+  <A extends TaggedEvent, const K extends A["_tag"], E, R>(
+    self: Stream.Stream<A>,
+    tag: K,
+    f: (event: Extract<A, { readonly _tag: K }>) => Effect.Effect<void, E, R>,
+  ): Effect.Effect<void, E, R>;
+  <A extends TaggedEvent, Cases extends TagHandlers<A, unknown, unknown>>(
+    self: Stream.Stream<A>,
+    handlers: Cases,
+  ): Effect.Effect<void, HandlersError<Cases>, HandlersContext<Cases>>;
+} = Fn.dual(
+  (args) => Stream.isStream(args[0]),
+  // Impl is typed over the concrete `TaggedEvent` base so `Match` (which needs a concrete
+  // union, not a generic) type-checks with no casts; the overload signatures above carry the
+  // precise per-tag types to callers.
+  <E, R>(
+    self: Stream.Stream<TaggedEvent>,
+    tagOrHandlers: string | TagHandlers<TaggedEvent, E, R>,
+    f?: (event: TaggedEvent) => Effect.Effect<void, E, R>,
+  ): Effect.Effect<void, E, R> => {
+    const matcher =
+      typeof tagOrHandlers === "string"
+        ? Match.type<TaggedEvent>().pipe(
+            Match.tag(tagOrHandlers, f ?? (() => Effect.void)),
+            Match.orElse(() => Effect.void),
+          )
+        : Match.type<TaggedEvent>().pipe(
+            Match.tags(tagOrHandlers),
+            Match.orElse(() => Effect.void),
+          );
+    return Stream.runForEach(self, matcher);
+  },
+);
+
 /**
  * Resource toolkit — schema-defined service tags. Same `yield* Tag` everywhere; only the
  * layer changes: {@link Resource.layer} runs it locally, {@link Resource.client} drives it
@@ -1372,4 +1485,5 @@ export const Resource = {
   serveInstances,
   client: clientLayer,
   clientInstances,
+  runForEachTag,
 } as const;
