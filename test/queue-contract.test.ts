@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema, Stream } from "effect";
+import { DateTime, Effect, Layer, Schema, Stream } from "effect";
 import { RpcClient, RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import { QueueResource, queueControlSpec } from "../src/QueueContract";
@@ -83,7 +83,7 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
   return Effect.runPromise(program);
 });
 
-// The control spec is the fixed-schema half; the data-plane (item-typed) verbs come later.
+// The control spec is the fixed-schema half; item-typed data-plane verbs live on `queueSpec`.
 it("exposes the expected control verbs", () => {
   expect(Object.keys(queueControlSpec).sort()).toEqual(
     [
@@ -134,6 +134,9 @@ it("queue add round-trips with a per-instance item schema (native validation)", 
       Effect.sync(() => {
         enqueued.push(item);
       }),
+    prioritize: (_: { item: number }) => Effect.void,
+    defer: (_: { item: number }) => Effect.void,
+    enqueue: (_: { entries: ReadonlyArray<{ item: number }> }) => Effect.void,
     events: Stream.empty,
   };
   const program = Effect.gen(function* () {
@@ -145,6 +148,41 @@ it("queue add round-trips with a per-instance item schema (native validation)", 
     expect(enqueued).toEqual([5, 7]);
     // the control surface still works on the same per-instance group
     expect(yield* svc.size).toBe(3);
+  }).pipe(Effect.provide(Resource.server(Numbers, impl)), Effect.scoped);
+  return Effect.runPromise(program);
+});
+
+it("prioritize / defer / enqueue round-trip over the per-instance group", () => {
+  const log: Array<string> = [];
+  const impl = {
+    ...makeImpl(),
+    add: ({ item }: { item: number }) =>
+      Effect.sync(() => log.push(`add:${String(item)}`)),
+    prioritize: ({ item }: { item: number }) =>
+      Effect.sync(() => log.push(`hi:${String(item)}`)),
+    defer: ({ item }: { item: number }) =>
+      Effect.sync(() => log.push(`lo:${String(item)}`)),
+    enqueue: ({ entries }: { entries: ReadonlyArray<{ item: number }> }) =>
+      Effect.sync(() => log.push(`re:${entries.map((e) => e.item).join(",")}`)),
+    events: Stream.empty,
+  };
+  const program = Effect.gen(function* () {
+    const rpc = yield* RpcTest.makeClient(groupOf(Numbers));
+    const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.id);
+    yield* svc.prioritize({ item: 1 });
+    yield* svc.defer({ item: 2 });
+    yield* svc.enqueue({
+      entries: [
+        {
+          item: 9,
+          entryId: "e1",
+          priority: "high",
+          attempts: 1,
+          timestamps: { enqueuedAt: DateTime.makeUnsafe(0) },
+        },
+      ],
+    });
+    expect(log).toEqual(["hi:1", "lo:2", "re:9"]);
   }).pipe(Effect.provide(Resource.server(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
 });

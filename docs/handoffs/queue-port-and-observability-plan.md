@@ -97,8 +97,14 @@ engine's internal `onError` sink (not a lifecycle event).
   Tests/examples converted. **P1b is complete.**
 - **P-logs** — generic `logs` on the toolkit: alias `logEntry`, conditional `{ logs: true }`
   member + auto-wired capture/relay, console helper, real-http test.
-- **P3** — data-plane verbs on the contract: `prioritize`/`defer`/`release`/`releaseEncoded`/
-  `deadLetter`/`drop` + `QueueEntry` readers + `enqueueEncoded` decode.
+- **P3** — data-plane verbs on the contract. **[DONE]** the Void-success enqueue verbs
+  (`prioritize`/`defer`/`enqueue` — entry re-injection / handoff primitive), mirroring `add`.
+  **Remaining:** the entry-returning verbs `release`/`releaseEncoded`/`deadLetter`/`drop` +
+  `enqueueEncoded` decode. These need **wire-error scaffolding** first — the engine's
+  `QueueItemEncodingError`/`QueueMissingItemSchemaError`/route errors are `Data.TaggedError`,
+  not `Schema`-encodable; mirror them as `Schema.TaggedError` (or parallel schemas) before they
+  can be a method's RPC error channel. Also need wire schemas for `queueEntrySelector`,
+  `queueReleaseOptions`, `queueRouteOptions`, `queueEncodedEntry`.
 - **P4** — adapter (engine handle → toolkit service) + export the ported `QueueResource.Tag`
   from the barrel; real-http triad/quad test; final new-features guide pass.
 

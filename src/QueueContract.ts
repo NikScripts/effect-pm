@@ -9,8 +9,11 @@
  * **control / observation** verbs only — `size`, `sizes`, `isEmpty`, `completed`, `start`,
  * `pause`, `resume`, `shutdown`, `clear` — all of which have fixed schemas (no item type).
  *
- * The **data-plane** verbs (`add` / `prioritize` / `defer` / `release` / `releaseEncoded`
- * / `deadLetter` / `drop`) involve the per-queue item type `T` and its `itemSchema`. Each
+ * The **data-plane** verbs involve the per-queue item type `T` and its `itemSchema`. The
+ * Void-success enqueue verbs (`add` / `prioritize` / `defer` / `enqueue`) are wired; the
+ * entry-returning verbs (`release` / `releaseEncoded` / `deadLetter` / `drop`) are pending
+ * wire-error scaffolding (the engine's encode/route errors are `Data.TaggedError`, not
+ * `Schema`-encodable, so they need schema mirrors before they can cross RPC). Each
  * queue instance is its **own** resource (its own RPC group, prefixed by its id) — built by
  * {@link defineQueueTag} from the shared control spec plus per-instance data procedures
  * whose payload/result schema **is** the instance's `itemSchema`, so Effect RPC validates
@@ -228,8 +231,9 @@ export const queueControlSpec = {
 
 /**
  * Build a queue **instance** spec (model B): the shared {@link queueControlSpec} plus
- * per-instance data-plane procedures typed by `itemSchema` (slice 1: `add`). Pass the
- * result to {@link Resource.Tag} — each instance is its own resource (its own RPC group):
+ * per-instance data-plane procedures typed by `itemSchema` — the enqueue verbs (`add`,
+ * `prioritize`, `defer`, `enqueue`) and the `events` stream. Pass the result to
+ * {@link Resource.Tag} — each instance is its own resource (its own RPC group):
  *
  * ```ts
  * class Jobs extends Resource.Tag<Jobs>("@app/Jobs")(queueSpec(JobSchema)) {}
@@ -246,6 +250,25 @@ export const queueSpec = <Sch extends Schema.Top>(itemSchema: Sch) => ({
   ...queueControlSpec,
   add: Resource.mutate(Schema.Void, {
     payload: { item: itemSchema },
+  }).annotate({
+    description: "Enqueue an item at normal priority.",
+  }),
+  prioritize: Resource.mutate(Schema.Void, {
+    payload: { item: itemSchema },
+  }).annotate({
+    description: "Enqueue an item at high priority (processed before normal and low).",
+  }),
+  defer: Resource.mutate(Schema.Void, {
+    payload: { item: itemSchema },
+  }).annotate({
+    description: "Enqueue an item at low priority (processed after high and normal).",
+  }),
+  enqueue: Resource.mutate(Schema.Void, {
+    payload: { entries: Schema.Array(queueEntry(itemSchema)) },
+  }).annotate({
+    description:
+      "Re-inject existing entries (e.g. off the events stream / a release) — each re-enters " +
+      "at its own priority with its attempts preserved. The handoff / round-trip primitive.",
   }),
   events: Resource.stream(queueEvent(itemSchema)).annotate({
     description: "Discrete entry / worker / queue lifecycle events.",
