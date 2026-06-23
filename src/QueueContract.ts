@@ -352,25 +352,30 @@ export const queueControlSpec = {
  *
  * @public
  */
-export const queueSpec = <Sch extends Schema.Top>(itemSchema: Sch) => ({
+export const queueSpec = <F extends Schema.Struct.Fields>(
+  itemSchema: Schema.Struct<F>,
+) => ({
   ...queueControlSpec,
+  // `add`/`prioritize`/`defer` take the **item directly** — the whole item schema is the rpc
+  // payload (a single-schema payload), so the service method is `(item) => Effect`.
   add: Resource.mutate(Schema.Void, {
-    payload: { item: itemSchema },
+    payload: itemSchema,
   }).annotate({
     description: "Enqueue an item at normal priority.",
   }),
   prioritize: Resource.mutate(Schema.Void, {
-    payload: { item: itemSchema },
+    payload: itemSchema,
   }).annotate({
     description: "Enqueue an item at high priority (processed before normal and low).",
   }),
   defer: Resource.mutate(Schema.Void, {
-    payload: { item: itemSchema },
+    payload: itemSchema,
   }).annotate({
     description: "Enqueue an item at low priority (processed after high and normal).",
   }),
+  // `enqueue` takes the entry array directly (same shape `events`/`release` produce).
   enqueue: Resource.mutate(Schema.Void, {
-    payload: { entries: Schema.Array(queueEntry(itemSchema)) },
+    payload: Schema.Array(queueEntry(itemSchema)),
   }).annotate({
     description:
       "Re-inject existing entries (e.g. off the events stream / a release) — each re-enters " +
@@ -414,9 +419,9 @@ export const queueSpec = <Sch extends Schema.Top>(itemSchema: Sch) => ({
   }),
 });
 
-/** The spec of a queue instance with item schema `Sch` — control surface + data plane. */
-type QueueInstanceSpec<Sch extends Schema.Top> = ReturnType<
-  typeof queueSpec<Sch>
+/** The spec of a queue instance whose item is `Schema.Struct<F>` — control surface + data plane. */
+type QueueInstanceSpec<F extends Schema.Struct.Fields> = ReturnType<
+  typeof queueSpec<F>
 >;
 
 /**
@@ -437,23 +442,23 @@ type QueueInstanceSpec<Sch extends Schema.Top> = ReturnType<
  * @public
  */
 const queueTag = <Self>() => {
-  function build<Sch extends Schema.Top, HSelf>(
+  function build<F extends Schema.Struct.Fields, HSelf>(
     id: string,
-    itemSchema: Sch,
+    itemSchema: Schema.Struct<F>,
     options: { readonly description?: string; readonly host: HostKey<HSelf> },
-  ): ResourceTag<Self, QueueInstanceSpec<Sch>> & {
+  ): ResourceTag<Self, QueueInstanceSpec<F>> & {
     readonly [hostSym]: HostKey<HSelf>;
   };
-  function build<Sch extends Schema.Top>(
+  function build<F extends Schema.Struct.Fields>(
     id: string,
-    itemSchema: Sch,
+    itemSchema: Schema.Struct<F>,
     options?: { readonly description?: string },
-  ): ResourceTag<Self, QueueInstanceSpec<Sch>>;
-  function build<Sch extends Schema.Top>(
+  ): ResourceTag<Self, QueueInstanceSpec<F>>;
+  function build<F extends Schema.Struct.Fields>(
     id: string,
-    itemSchema: Sch,
+    itemSchema: Schema.Struct<F>,
     options?: { readonly description?: string; readonly host?: HostKey<unknown> },
-  ): ResourceTag<Self, QueueInstanceSpec<Sch>> {
+  ): ResourceTag<Self, QueueInstanceSpec<F>> {
     const spec = queueSpec(itemSchema);
     const host = options?.host;
     // host rides the inferring call; `makeTag`'s inner overload narrows the tag's host.
@@ -495,14 +500,19 @@ export type QueueLayerConfig<A, E, R> = Omit<
  */
 const layer = <
   Self,
-  Sch extends Schema.Codec<Sch["Type"], Sch["Encoded"], never, never>,
-  E,
-  R,
+  F extends Record<
+    string,
+    Schema.Codec<unknown, unknown, never, never>
+  > = Record<string, Schema.Codec<unknown, unknown, never, never>>,
+  E = never,
+  R = never,
 >(
-  tag: ResourceTag<Self, QueueInstanceSpec<Sch>>,
-  config: QueueLayerConfig<Sch["Type"], E, R>,
+  tag: ResourceTag<Self, QueueInstanceSpec<F>>,
+  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R>,
 ): Layer.Layer<Self | LocalCapability<Self>, never, R> => {
-  const itemSchema = tag[specSym].add.payload.item;
+  // The whole item schema IS the `add` payload (single-schema payload), so recover it directly.
+  const itemSchema: Schema.Codec<Schema.Struct<F>["Type"], unknown, never, never> =
+    tag[specSym].add.payload;
   return Layer.unwrap(
     Effect.gen(function* () {
       const context = yield* Effect.context<R>();
@@ -522,19 +532,22 @@ const layer = <
         clear: provideR(handle.clear),
         status: handle.status,
         metrics: handle.metrics,
-        add: ({ item }) => provideR(handle.add(item)).pipe(Effect.orDie),
-        prioritize: ({ item }) =>
+        // The item IS the payload — `add`/`prioritize`/`defer` take it directly, cast-free.
+        add: (item) => provideR(handle.add(item)).pipe(Effect.orDie),
+        prioritize: (item) =>
           provideR(handle.prioritize(item)).pipe(Effect.orDie),
-        defer: ({ item }) => provideR(handle.defer(item)).pipe(Effect.orDie),
+        defer: (item) => provideR(handle.defer(item)).pipe(Effect.orDie),
         // The one narrow cast in the port. The wire entry's decoded `.Type` goes opaque over an
         // abstract item schema (effect Schema's `Type_` can't resolve `keyof` of a struct whose
-        // field optionality depends on a free `Sch`), so the decoded `entries` can't be statically
+        // field optionality depends on a free `F`), so the decoded `entries` can't be statically
         // related to the engine's `QueueEntry<T>` here — even though they are the same shape. That
         // shape equivalence is pinned by `test/queue-contract.test-d.ts` (`WireEntry` ≅
         // `QueueEntry`), which fails the build if the two ever drift, keeping this cast sound.
-        enqueue: ({ entries }) =>
+        enqueue: (entries) =>
           provideR(
-            handle.enqueue(entries as ReadonlyArray<QueueEntry<Sch["Type"]>>),
+            handle.enqueue(
+              entries as ReadonlyArray<QueueEntry<Schema.Struct<F>["Type"]>>,
+            ),
           ),
         release: ({ options }) => provideR(handle.release(options)),
         releaseEncoded: ({ options }) => provideR(handle.releaseEncoded(options)),

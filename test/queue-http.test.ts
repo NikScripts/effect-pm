@@ -11,10 +11,14 @@ import type { QueueEntry } from "../src/QueueResource";
 // remote queue's `enqueue` over a REAL http transport. This exercises the actual serialization
 // (DateTime ⇄ ISO string, etc.) and the server-side decode — i.e. what a zero-downtime handoff
 // / A-B deploy would do. The in-memory contract tests use RpcTest; this proves the wire.
-class HttpQueue extends QueueResource.Tag<HttpQueue>()("queue-http/Q", Schema.Number) {}
+const NumberItem = Schema.Struct({ n: Schema.Number });
+interface NumberItem {
+  readonly n: number;
+}
+class HttpQueue extends QueueResource.Tag<HttpQueue>()("queue-http/Q", NumberItem) {}
 
 // last entries the server received on `enqueue`, after crossing the wire and decoding.
-const received: Array<QueueEntry<number>> = [];
+const received: Array<QueueEntry<NumberItem>> = [];
 
 const stub = {
   size: Effect.succeed(0),
@@ -28,10 +32,10 @@ const stub = {
   clear: Effect.succeed(0),
   status: Stream.empty,
   metrics: Stream.empty,
-  add: (_: { item: number }) => Effect.void,
-  prioritize: (_: { item: number }) => Effect.void,
-  defer: (_: { item: number }) => Effect.void,
-  enqueue: ({ entries }: { entries: ReadonlyArray<QueueEntry<number>> }) =>
+  add: (_: NumberItem) => Effect.void,
+  prioritize: (_: NumberItem) => Effect.void,
+  defer: (_: NumberItem) => Effect.void,
+  enqueue: (entries: ReadonlyArray<QueueEntry<NumberItem>>) =>
     Effect.sync(() => {
       received.push(...entries);
     }),
@@ -68,22 +72,20 @@ it("enqueue round-trips a full entry (item + metadata) over real http", () => {
 
     yield* Effect.gen(function* () {
       const queue = yield* HttpQueue;
-      yield* queue.enqueue({
-        entries: [
-          {
-            item: 7,
-            entryId: "handoff-1",
-            priority: "high",
-            attempts: 2,
-            timestamps: { enqueuedAt: DateTime.makeUnsafe(0) },
-          },
-        ],
-      });
+      yield* queue.enqueue([
+        {
+          item: { n: 7 },
+          entryId: "handoff-1",
+          priority: "high",
+          attempts: 2,
+          timestamps: { enqueuedAt: DateTime.makeUnsafe(0) },
+        },
+      ]);
 
       // the server received the entry, decoded, with every field intact across the wire
       expect(received).toHaveLength(1);
       const got = received[0];
-      expect(got?.item).toBe(7);
+      expect(got?.item.n).toBe(7);
       expect(got?.entryId).toBe("handoff-1");
       expect(got?.priority).toBe("high");
       expect(got?.attempts).toBe(2);

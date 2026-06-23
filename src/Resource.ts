@@ -168,7 +168,7 @@ const methodTypeId: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/m
  */
 export interface Method<
   Kind extends MethodKind,
-  P extends Schema.Struct.Fields | undefined,
+  P extends Schema.Struct.Fields | Schema.Top | undefined,
   Su extends Schema.Top,
   E extends Schema.Top,
   Str extends boolean = false,
@@ -189,7 +189,7 @@ export interface Method<
 /** Any {@link Method}, erased — the element type of a {@link Spec}. @public */
 export type AnyMethod = Method<
   MethodKind,
-  Schema.Struct.Fields | undefined,
+  Schema.Struct.Fields | Schema.Top | undefined,
   Schema.Top,
   Schema.Top,
   boolean
@@ -296,7 +296,7 @@ export const methodMeta = (m: AnyMethod): MethodMeta => ({
  */
 const makeMethod = <
   Kind extends MethodKind,
-  P extends Schema.Struct.Fields | undefined,
+  P extends Schema.Struct.Fields | Schema.Top | undefined,
   Su extends Schema.Top,
   E extends Schema.Top,
   Str extends boolean,
@@ -386,6 +386,11 @@ export function mutate<Su extends Schema.Top, const F extends Schema.Struct.Fiel
   success: Su,
   options: { readonly payload: F },
 ): Method<"mutate", F, Su, Schema.Never>;
+// whole-schema payload — the value is passed/decoded directly (e.g. `add(item)`).
+export function mutate<Su extends Schema.Top, P extends Schema.Top>(
+  success: Su,
+  options: { readonly payload: P },
+): Method<"mutate", P, Su, Schema.Never>;
 export function mutate<Su extends Schema.Top, E extends Schema.Top>(
   success: Su,
   options: { readonly error: E },
@@ -398,10 +403,18 @@ export function mutate<
   success: Su,
   options: { readonly payload: F; readonly error: E },
 ): Method<"mutate", F, Su, E>;
+export function mutate<
+  Su extends Schema.Top,
+  P extends Schema.Top,
+  E extends Schema.Top,
+>(
+  success: Su,
+  options: { readonly payload: P; readonly error: E },
+): Method<"mutate", P, Su, E>;
 export function mutate(
   success: Schema.Top,
   options?: {
-    readonly payload?: Schema.Struct.Fields;
+    readonly payload?: Schema.Struct.Fields | Schema.Top;
     readonly error?: Schema.Top;
   },
 ): AnyMethod {
@@ -474,9 +487,15 @@ type SuccessOf<M extends AnyMethod> = M["success"]["Type"];
 
 type ErrorOf<M extends AnyMethod> = M["error"]["Type"];
 
-type PayloadOf<M extends AnyMethod> = M["payload"] extends Schema.Struct.Fields
-  ? Schema.Struct<M["payload"]>["Type"]
-  : never;
+// A payload is either a whole **schema** (the value is decoded directly — e.g. `add(item)`), a
+// **fields record** (decoded as a struct), or `undefined` (no payload). The schema branch is
+// checked first; a concrete-shaped schema type (`Schema.Struct<F>`, `Schema.Array<…>`) resolves
+// `extends Schema.Top` even when its inner field/element params are abstract.
+type PayloadOf<M extends AnyMethod> = M["payload"] extends Schema.Top
+  ? M["payload"]["Type"]
+  : M["payload"] extends infer F extends Schema.Struct.Fields
+    ? Schema.Struct<F>["Type"]
+    : never;
 
 /**
  * The inferred shape of one method. A non-streaming method is an **`Effect`**; a streaming
@@ -543,10 +562,13 @@ type ImplOf<S extends Spec> = {
 
 // ── type-level: one Spec → the precisely-typed RPC contract group ──
 
-/** The payload schema of a method: `Schema.Struct<F>` when it declares fields, else `Schema.Void`. */
-type PayloadSchemaOf<M extends AnyMethod> = M["payload"] extends Schema.Struct.Fields
-  ? Schema.Struct<M["payload"]>
-  : Schema.Void;
+/** The rpc payload schema: the schema itself when the payload IS a schema, a `Schema.Struct<F>`
+ * when it declares fields, else `Schema.Void`. */
+type PayloadSchemaOf<M extends AnyMethod> = M["payload"] extends Schema.Top
+  ? M["payload"]
+  : M["payload"] extends infer F extends Schema.Struct.Fields
+    ? Schema.Struct<F>
+    : Schema.Void;
 
 /**
  * The `Rpc` for one spec method — tag = the method name, schemas from the {@link Method}. A
@@ -616,7 +638,7 @@ export const buildRpcGroup = <const S extends Spec>(
     if (isLocalMethod(m)) return [];
     const tag = wireTag(groupId, method);
     const options: {
-      payload?: Schema.Struct.Fields;
+      payload?: Schema.Struct.Fields | Schema.Top;
       success: Schema.Top;
       error: Schema.Top;
       stream?: boolean;

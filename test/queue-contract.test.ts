@@ -3,6 +3,7 @@ import { RpcClient, RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import { QueueResource, queueControlSpec } from "../src/QueueContract";
 import { QueueMissingItemSchemaError } from "../src/QueueResource";
+import type { QueueEntry } from "../src/QueueResource";
 import {
   Resource,
   forwardClient,
@@ -125,19 +126,25 @@ it("marks each verb query vs mutate, with destructive hints", () => {
 });
 
 // ── data plane (model B): the designed form — QueueResource.Tag<Self>()(id, itemSchema) ──
-class Numbers extends QueueResource.Tag<Numbers>()("test/Numbers", Schema.Number) {}
+// The item is a struct; `add`/`prioritize`/`defer` take it DIRECTLY (the whole item schema is
+// the rpc payload), and `enqueue` takes the full entry array directly.
+const NumberItem = Schema.Struct({ n: Schema.Number });
+interface NumberItem {
+  readonly n: number;
+}
+class Numbers extends QueueResource.Tag<Numbers>()("test/Numbers", NumberItem) {}
 
 it("queue add round-trips with a per-instance item schema (native validation)", () => {
   const enqueued: number[] = [];
   const impl = {
     ...makeImpl(),
-    add: ({ item }: { item: number }) =>
+    add: (item: NumberItem) =>
       Effect.sync(() => {
-        enqueued.push(item);
+        enqueued.push(item.n);
       }),
-    prioritize: (_: { item: number }) => Effect.void,
-    defer: (_: { item: number }) => Effect.void,
-    enqueue: (_: { entries: ReadonlyArray<{ item: number }> }) => Effect.void,
+    prioritize: (_: NumberItem) => Effect.void,
+    defer: (_: NumberItem) => Effect.void,
+    enqueue: (_: ReadonlyArray<QueueEntry<NumberItem>>) => Effect.void,
     release: () => Effect.succeed([]),
     releaseEncoded: () => Effect.succeed([]),
     deadLetter: () => Effect.succeed([]),
@@ -148,8 +155,8 @@ it("queue add round-trips with a per-instance item schema (native validation)", 
     const rpc = yield* RpcTest.makeClient(groupOf(Numbers));
     const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.id);
     // `add` is typed by the instance's itemSchema; RPC validates the item on the wire.
-    yield* svc.add({ item: 5 });
-    yield* svc.add({ item: 7 });
+    yield* svc.add({ n: 5 });
+    yield* svc.add({ n: 7 });
     expect(enqueued).toEqual([5, 7]);
     // the control surface still works on the same per-instance group
     expect(yield* svc.size).toBe(3);
@@ -161,14 +168,14 @@ it("prioritize / defer / enqueue round-trip over the per-instance group", () => 
   const log: Array<string> = [];
   const impl = {
     ...makeImpl(),
-    add: ({ item }: { item: number }) =>
-      Effect.sync(() => log.push(`add:${String(item)}`)),
-    prioritize: ({ item }: { item: number }) =>
-      Effect.sync(() => log.push(`hi:${String(item)}`)),
-    defer: ({ item }: { item: number }) =>
-      Effect.sync(() => log.push(`lo:${String(item)}`)),
-    enqueue: ({ entries }: { entries: ReadonlyArray<{ item: number }> }) =>
-      Effect.sync(() => log.push(`re:${entries.map((e) => e.item).join(",")}`)),
+    add: (item: NumberItem) =>
+      Effect.sync(() => log.push(`add:${String(item.n)}`)),
+    prioritize: (item: NumberItem) =>
+      Effect.sync(() => log.push(`hi:${String(item.n)}`)),
+    defer: (item: NumberItem) =>
+      Effect.sync(() => log.push(`lo:${String(item.n)}`)),
+    enqueue: (entries: ReadonlyArray<QueueEntry<NumberItem>>) =>
+      Effect.sync(() => log.push(`re:${entries.map((e) => e.item.n).join(",")}`)),
     release: () => Effect.succeed([]),
     releaseEncoded: () => Effect.succeed([]),
     deadLetter: () => Effect.succeed([]),
@@ -178,19 +185,17 @@ it("prioritize / defer / enqueue round-trip over the per-instance group", () => 
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Numbers));
     const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.id);
-    yield* svc.prioritize({ item: 1 });
-    yield* svc.defer({ item: 2 });
-    yield* svc.enqueue({
-      entries: [
-        {
-          item: 9,
-          entryId: "e1",
-          priority: "high",
-          attempts: 1,
-          timestamps: { enqueuedAt: DateTime.makeUnsafe(0) },
-        },
-      ],
-    });
+    yield* svc.prioritize({ n: 1 });
+    yield* svc.defer({ n: 2 });
+    yield* svc.enqueue([
+      {
+        item: { n: 9 },
+        entryId: "e1",
+        priority: "high",
+        attempts: 1,
+        timestamps: { enqueuedAt: DateTime.makeUnsafe(0) },
+      },
+    ]);
     expect(log).toEqual(["hi:1", "lo:2", "re:9"]);
   }).pipe(Effect.provide(Resource.server(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
@@ -199,14 +204,14 @@ it("prioritize / defer / enqueue round-trip over the per-instance group", () => 
 it("release returns entries; releaseEncoded surfaces a typed wire error", () => {
   const impl = {
     ...makeImpl(),
-    add: (_: { item: number }) => Effect.void,
-    prioritize: (_: { item: number }) => Effect.void,
-    defer: (_: { item: number }) => Effect.void,
-    enqueue: (_: { entries: ReadonlyArray<{ item: number }> }) => Effect.void,
+    add: (_: NumberItem) => Effect.void,
+    prioritize: (_: NumberItem) => Effect.void,
+    defer: (_: NumberItem) => Effect.void,
+    enqueue: (_: ReadonlyArray<QueueEntry<NumberItem>>) => Effect.void,
     release: () =>
       Effect.succeed([
         {
-          item: 3,
+          item: { n: 3 },
           entryId: "e3",
           priority: "normal" as const,
           attempts: 1,
@@ -224,7 +229,7 @@ it("release returns entries; releaseEncoded surfaces a typed wire error", () => 
     const rpc = yield* RpcTest.makeClient(groupOf(Numbers));
     const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.id);
     const released = yield* svc.release({});
-    expect(released.map((e) => e.item)).toEqual([3]);
+    expect(released.map((e) => e.item.n)).toEqual([3]);
 
     const caught = yield* svc.releaseEncoded({}).pipe(
       Effect.catchTag("QueueMissingItemSchemaError", (e) =>
@@ -242,36 +247,37 @@ it("release returns entries; releaseEncoded surfaces a typed wire error", () => 
 // the boundary — the load-bearing guarantee for future handoff (entries carry full metadata).
 // This pins the *whole* entry (item + priority + attempts + timestamps), not just the item.
 it("enqueue's wire schema (the server's decode gate) rejects malformed entries", () => {
-  // the exact payload schema the RPC server decodes incoming `enqueue` calls against
-  const payload = Schema.Struct(specOf(Numbers).enqueue.payload);
+  // the exact payload schema the RPC server decodes incoming `enqueue` calls against — the
+  // payload IS the entry-array schema (single-schema payload), so decode it directly.
+  const payload = specOf(Numbers).enqueue.payload;
   const decode = Schema.decodeUnknownExit(payload);
   const goodEntry = {
-    item: 5,
+    item: { n: 5 },
     entryId: "e1",
     priority: "normal",
     attempts: 1,
     timestamps: { enqueuedAt: DateTime.makeUnsafe(0) },
   };
 
-  expect(Exit.isSuccess(decode({ entries: [goodEntry] }))).toBe(true);
+  expect(Exit.isSuccess(decode([goodEntry]))).toBe(true);
   // wrong item type → rejected by the tag's itemSchema
   expect(
-    Exit.isFailure(decode({ entries: [{ ...goodEntry, item: "not-a-number" }] })),
+    Exit.isFailure(decode([{ ...goodEntry, item: { n: "not-a-number" } }])),
   ).toBe(true);
   // bad priority literal → rejected (metadata is validated too)
   expect(
-    Exit.isFailure(decode({ entries: [{ ...goodEntry, priority: "urgent" }] })),
+    Exit.isFailure(decode([{ ...goodEntry, priority: "urgent" }])),
   ).toBe(true);
   // bad attempts type → rejected
   expect(
-    Exit.isFailure(decode({ entries: [{ ...goodEntry, attempts: "lots" }] })),
+    Exit.isFailure(decode([{ ...goodEntry, attempts: "lots" }])),
   ).toBe(true);
 });
 
 // ── QueueResource.layer: the engine wired behind the toolkit tag, run locally ──
 class LocalQueue extends QueueResource.Tag<LocalQueue>()(
   "test/LocalQueue",
-  Schema.Number,
+  NumberItem,
 ) {}
 
 it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
@@ -281,13 +287,13 @@ it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
     // the same `yield* Tag` surface the contract declares — backed by the live engine
     yield* Effect.forkScoped(
       Resource.runForEachTag(q.events, "Completed", (e) =>
-        Ref.update(seen, (a) => [...a, e.entry.item]),
+        Ref.update(seen, (a) => [...a, e.entry.item.n]),
       ),
     );
     // let the (sliding-PubSub) subscription attach before enqueueing
     yield* Effect.sleep(Duration.millis(20));
-    yield* q.add({ item: 1 });
-    yield* q.prioritize({ item: 2 });
+    yield* q.add({ n: 1 });
+    yield* q.prioritize({ n: 2 });
     while ((yield* q.completed) < 2) {
       yield* Effect.sleep(Duration.millis(5));
     }
@@ -296,7 +302,7 @@ it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
   }).pipe(
     Effect.provide(
       QueueResource.layer(LocalQueue, {
-        effect: (_n: number) => Effect.void,
+        effect: (_item: NumberItem) => Effect.void,
         concurrency: 1,
       }),
     ),
@@ -311,7 +317,7 @@ it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
 class QueueHost extends Resource.Host<QueueHost>("queue/host") {}
 class HostedNumbers extends QueueResource.Tag<HostedNumbers>()(
   "test/HostedNumbers",
-  Schema.Number,
+  NumberItem,
   { host: QueueHost },
 ) {}
 const _hostedQueueClient: Layer.Layer<HostedNumbers, never, QueueHost> =
