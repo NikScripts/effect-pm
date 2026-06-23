@@ -1,4 +1,4 @@
-import { DateTime, Duration, Effect, Layer, Ref, Schema, Stream } from "effect";
+import { DateTime, Duration, Effect, Exit, Layer, Ref, Schema, Stream } from "effect";
 import { RpcClient, RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import { QueueResource, queueControlSpec } from "../src/QueueContract";
@@ -234,6 +234,38 @@ it("release returns entries; releaseEncoded surfaces a typed wire error", () => 
     expect(caught).toBe("missing:test/Numbers");
   }).pipe(Effect.provide(Resource.server(Numbers, impl)), Effect.scoped);
   return Effect.runPromise(program);
+});
+
+// ── remote enqueue is validated against the tag's schema on decode ──
+// The RPC server decodes the enqueue payload against exactly this schema before the handler
+// runs, so an out-of-date / mismatched remote client sending a malformed entry is rejected at
+// the boundary — the load-bearing guarantee for future handoff (entries carry full metadata).
+// This pins the *whole* entry (item + priority + attempts + timestamps), not just the item.
+it("enqueue's wire schema (the server's decode gate) rejects malformed entries", () => {
+  // the exact payload schema the RPC server decodes incoming `enqueue` calls against
+  const payload = Schema.Struct(specOf(Numbers).enqueue.payload);
+  const decode = Schema.decodeUnknownExit(payload);
+  const goodEntry = {
+    item: 5,
+    entryId: "e1",
+    priority: "normal",
+    attempts: 1,
+    timestamps: { enqueuedAt: DateTime.makeUnsafe(0) },
+  };
+
+  expect(Exit.isSuccess(decode({ entries: [goodEntry] }))).toBe(true);
+  // wrong item type → rejected by the tag's itemSchema
+  expect(
+    Exit.isFailure(decode({ entries: [{ ...goodEntry, item: "not-a-number" }] })),
+  ).toBe(true);
+  // bad priority literal → rejected (metadata is validated too)
+  expect(
+    Exit.isFailure(decode({ entries: [{ ...goodEntry, priority: "urgent" }] })),
+  ).toBe(true);
+  // bad attempts type → rejected
+  expect(
+    Exit.isFailure(decode({ entries: [{ ...goodEntry, attempts: "lots" }] })),
+  ).toBe(true);
 });
 
 // ── QueueResource.layer: the engine wired behind the toolkit tag, run locally ──
