@@ -258,6 +258,41 @@ describe("QueueResource.make — basic processing", () => {
     }).pipe(Effect.scoped),
   );
 
+  it.live("Exit events carry the typed worker error (catchTag on the exit)", () =>
+    Effect.gen(function* () {
+      class Boom extends Data.TaggedError("Boom")<{ readonly n: number }> {}
+      const caught = yield* Ref.make<Array<number>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-typed-exit",
+        effect: (n: number) => Effect.fail(new Boom({ n })),
+        concurrency: 1,
+      });
+      const fiber = yield* Effect.forkChild(
+        Stream.runForEach(
+          Stream.take(
+            Stream.filter(
+              queue.events,
+              (e): e is Extract<typeof e, { readonly _tag: "Exit" }> =>
+                e._tag === "Exit",
+            ),
+            1,
+          ),
+          // e.exit is Exit<void, Boom> — catchTag on it, fully typed
+          (e) =>
+            e.exit.pipe(
+              Effect.catchTag("Boom", (err) =>
+                Ref.update(caught, (a) => [...a, err.n]),
+              ),
+            ),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add(42);
+      yield* Fiber.join(fiber);
+      expect(yield* Ref.get(caught)).toEqual([42]);
+    }).pipe(Effect.scoped),
+  );
+
   it.live("treats a single string as one item, not an iterable batch", () =>
     Effect.gen(function* () {
       const results = yield* Ref.make<Array<string>>([]);

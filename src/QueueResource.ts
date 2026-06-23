@@ -284,6 +284,7 @@ export type QueueHandlePhantomWorkerFailures<E = never> = {
  */
 export interface QueueHandleApi<
   in out T,
+  E = never,
   EEnqueue = never,
   R = never,
 > {
@@ -320,7 +321,7 @@ export interface QueueHandleApi<
    * slow subscriber never backpressures the worker (lossy under load — use `QueueResourceStore`
    * for guaranteed delivery). Subscribe for dashboards / CLI `--watch` / a TUI.
    */
-  readonly events: Stream.Stream<QueueEvent<T>>;
+  readonly events: Stream.Stream<QueueEvent<T, E>>;
 
   /**
    * Live **current-state snapshot** stream — emits the current {@link QueueStatus} and every
@@ -403,7 +404,7 @@ export type QueueHandle<
   E = never,
   EEnqueue = never,
   R = never,
-> = QueueHandleApi<T, EEnqueue, R> & QueueHandlePhantomWorkerFailures<E>;
+> = QueueHandleApi<T, E, EEnqueue, R> & QueueHandlePhantomWorkerFailures<E>;
 
 /** @public */
 export interface QueueEntryTimestamps {
@@ -606,14 +607,14 @@ export interface QueueMetrics {
 /**
  * The live **lifecycle event** union — the element of {@link QueueHandleApi.events}. A discrete
  * fact emitted as the queue runs; subscribe to observe (dashboard / CLI `--watch` / TUI).
- * Mirrors the encodable `queueEvent` contract union; the worker error is erased to `unknown`
- * here (the typed `E` isn't part of the observable surface, and this matches the wire form),
- * and the non-streamable `retry` affordance the old callbacks received is dropped — a
- * subscriber holds the handle to drive control.
+ * Failure-bearing variants carry the worker error `E` typed (`Cause<E>` / `Exit<void, E>`), so a
+ * subscriber can `e.exit.pipe(Effect.catchTags(...))` on it; `E` defaults to `unknown` for the
+ * erased / wire form. The non-streamable `retry` affordance the old callbacks received is
+ * dropped — a subscriber holds the handle to drive control.
  *
  * @public
  */
-export type QueueEvent<T> =
+export type QueueEvent<T, E = unknown> =
   | { readonly _tag: "Start"; readonly queueId: string }
   | {
       readonly _tag: "Enqueued";
@@ -630,25 +631,25 @@ export type QueueEvent<T> =
   | {
       readonly _tag: "Failed";
       readonly entry: QueueEntry<T>;
-      readonly cause: Cause.Cause<unknown>;
+      readonly cause: Cause.Cause<E>;
       readonly elapsed: Duration.Duration;
     }
   | {
       readonly _tag: "Exit";
       readonly entry: QueueEntry<T>;
-      readonly exit: Exit.Exit<void, unknown>;
+      readonly exit: Exit.Exit<void, E>;
       readonly elapsed: Duration.Duration;
     }
   | {
       readonly _tag: "RetryScheduled";
       readonly entry: QueueEntry<T>;
-      readonly cause: Cause.Cause<unknown>;
+      readonly cause: Cause.Cause<E>;
       readonly nextAttempt: number;
     }
   | {
       readonly _tag: "RetryExhausted";
       readonly entry: QueueEntry<T>;
-      readonly cause: Cause.Cause<unknown>;
+      readonly cause: Cause.Cause<E>;
     }
   | { readonly _tag: "Drained"; readonly queueId: string; readonly completed: number }
   | { readonly _tag: "Cleared"; readonly queueId: string; readonly count: number }
@@ -1694,7 +1695,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     // lags), so the fan-out `events` stream can't backpressure or OOM the queue. Guaranteed
     // delivery stays on the QueueResourceStore tier. Each `events` consumer subscribes
     // independently via `Stream.fromPubSub`.
-    const eventsHub = yield* PubSub.sliding<QueueEvent<T>>(1024);
+    const eventsHub = yield* PubSub.sliding<QueueEvent<T, E>>(1024);
 
     // ─── Windowed metrics (.metrics) ───
     // Counters are accumulated INLINE in publishEvent (synchronous, at the source), never by
@@ -1733,7 +1734,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       latencySumMs: 0,
       latencyCount: 0,
     });
-    const accumulate = (acc: WindowAccum, event: QueueEvent<T>): WindowAccum => {
+    const accumulate = (acc: WindowAccum, event: QueueEvent<T, E>): WindowAccum => {
       switch (event._tag) {
         case "Enqueued":
           return { ...acc, enqueued: acc.enqueued + event.entries.length };
@@ -1766,7 +1767,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       }
     };
     // Events that should close the metrics window early (the UI wants to see their effect now).
-    const isSignificant = (event: QueueEvent<T>): boolean =>
+    const isSignificant = (event: QueueEvent<T, E>): boolean =>
       event._tag === "Drained" ||
       event._tag === "Cleared" ||
       event._tag === "Released" ||
@@ -1779,7 +1780,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       Deferred.succeed(metricsFlush, undefined),
     );
 
-    const publishEvent = (event: QueueEvent<T>): Effect.Effect<void> =>
+    const publishEvent = (event: QueueEvent<T, E>): Effect.Effect<void> =>
       Effect.gen(function* () {
         yield* Ref.update(windowAccum, (acc) => accumulate(acc, event));
         yield* PubSub.publish(eventsHub, event);
