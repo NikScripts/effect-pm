@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Context, Duration, Effect, Exit, Layer, Ref, Schema } from "effect";
+import { Duration, Effect, Exit, Layer, Ref, Schema, Stream } from "effect";
 import type { HttpClient } from "effect/unstable/http";
 import {
   Endpoint,
@@ -41,22 +41,6 @@ class TypeSchemaEmailQueue extends QueueResource.Service<TypeSchemaEmailQueue, E
   },
 ) {}
 
-class TypeQueueHookService extends Context.Service<
-  TypeQueueHookService,
-  { readonly record: Effect.Effect<void> }
->()("@nikscripts/effect-pm/test/process-group-typed.test/TypeQueueHookService") {}
-
-class TypeHookQueue extends QueueResource.Service<TypeHookQueue, Email, never>()(
-  "@test/TypeHookQueue",
-  {
-    effect: (_email: Email) => Effect.void,
-    onEnqueued: () =>
-      Effect.gen(function* () {
-        const service = yield* TypeQueueHookService;
-        yield* service.record;
-      }),
-  },
-) {}
 
 class TypeProcess extends Process.Service<TypeProcess>()("@test/TypeProcess", {
   effect: Effect.void,
@@ -131,7 +115,6 @@ export const processGroupTypeChecks = Effect.gen(function* () {
   const _directQueueControls = directGroup.queue(TypeEmailQueue);
   const _serviceQueueControls = serviceGroup.queue(TypeEmailQueue);
   const _remoteLayer = ProcessGroup.remoteLayer(TypeGroup, TypeEndpoint);
-  const _hookQueueLayer = TypeHookQueue.layer;
   const _registryLayer = ProcessManager.ConnectionRegistry.layer(
     [TypeGroup] as const,
     {
@@ -146,7 +129,6 @@ export const processGroupTypeChecks = Effect.gen(function* () {
   type ServiceQueueEnqueueError = EffectError<ReturnType<typeof _serviceQueueControls.enqueue>>;
   type RemoteLayerOut = LayerOut<typeof _remoteLayer>;
   type RemoteLayerIn = LayerIn<typeof _remoteLayer>;
-  type HookQueueLayerIn = LayerIn<typeof _hookQueueLayer>;
   type RegistryLayerOut = LayerOut<typeof _registryLayer>;
   type RegistryConnectIn = Effect.Services<typeof _registryConnect>;
   type ConfiguredGroupDefault = typeof _configuredGroupConfig[0]["isDefault"];
@@ -158,7 +140,6 @@ export const processGroupTypeChecks = Effect.gen(function* () {
   assertType<Assert<IsAssignable<UnsupportedRemoteControlError, ServiceQueueEnqueueError>>>();
   assertType<Assert<IsEqual<RemoteLayerOut, TypeGroup>>>();
   assertType<Assert<IsEqual<RemoteLayerIn, TypeEndpoint | HttpClient.HttpClient>>>();
-  assertType<Assert<IsEqual<HookQueueLayerIn, TypeQueueHookService>>>();
   assertType<Assert<IsEqual<RegistryLayerOut, ProcessManagerConnectionRegistry>>>();
   assertType<Assert<IsEqual<RegistryConnectIn, ProcessManagerConnectionRegistry>>>();
   assertType<Assert<IsEqual<ConfiguredGroupDefault, true>>>();
@@ -327,7 +308,6 @@ describe("ProcessGroup.make", () => {
         {
           effect: (_email: Email) => Effect.void,
           concurrency: 1,
-          onDrained: (_q) => Ref.update(drains, (n) => n + 1),
         },
       ) {}
 
@@ -338,12 +318,21 @@ describe("ProcessGroup.make", () => {
 
       yield* Effect.gen(function* () {
         const group = yield* BillingGroup;
+        const drainQueue = yield* EmailQueue;
+        yield* Effect.forkChild(
+          Stream.runForEach(drainQueue.events, (e) =>
+            e._tag === "Drained" ? Ref.update(drains, (n) => n + 1) : Effect.void,
+          ),
+        );
         yield* Effect.sleep(Duration.millis(120));
         expect(yield* Ref.get(drains)).toBe(0);
         void group;
       }).pipe(
         Effect.provide(
-          BillingGroup.layer.pipe(Layer.provide(EmailQueue.layer)),
+          Layer.mergeAll(
+            BillingGroup.layer.pipe(Layer.provide(EmailQueue.layer)),
+            EmailQueue.layer,
+          ),
         ),
       );
     }),
@@ -361,7 +350,6 @@ describe("ProcessGroup.make", () => {
           effect: (email: Email) =>
             Ref.update(handled, (values) => [...values, email.to]),
           concurrency: 1,
-          onDrained: (_q) => Ref.update(drains, (n) => n + 1),
         },
       ) {}
 
@@ -369,6 +357,12 @@ describe("ProcessGroup.make", () => {
         const group = yield* ProcessGroup.make("@test/GroupQueueStartDrainedGroup", [
           EmailQueue,
         ] as const);
+        const drainQueue = yield* EmailQueue;
+        yield* Effect.forkChild(
+          Stream.runForEach(drainQueue.events, (e) =>
+            e._tag === "Drained" ? Ref.update(drains, (n) => n + 1) : Effect.void,
+          ),
+        );
 
         yield* group.queue(EmailQueue).start;
         yield* Effect.sleep(Duration.millis(80));
@@ -400,7 +394,6 @@ describe("ProcessGroup.make", () => {
           effect: (email: Email) =>
             Ref.update(handled, (values) => [...values, email.to]),
           concurrency: 1,
-          onDrained: (_q) => Ref.update(drains, (n) => n + 1),
         },
       ) {}
 
@@ -408,6 +401,12 @@ describe("ProcessGroup.make", () => {
         const group = yield* ProcessGroup.make("@test/GroupStartAllDrainedGroup", [
           EmailQueue,
         ] as const);
+        const drainQueue = yield* EmailQueue;
+        yield* Effect.forkChild(
+          Stream.runForEach(drainQueue.events, (e) =>
+            e._tag === "Drained" ? Ref.update(drains, (n) => n + 1) : Effect.void,
+          ),
+        );
 
         yield* group.startAll();
         yield* Effect.sleep(Duration.millis(80));
@@ -439,7 +438,6 @@ describe("ProcessGroup.make", () => {
           effect: (email: Email) =>
             Ref.update(handled, (values) => [...values, email.to]),
           concurrency: 1,
-          onDrained: (_q) => Ref.update(drains, (n) => n + 1),
         },
       ) {}
 
@@ -463,6 +461,12 @@ describe("ProcessGroup.make", () => {
 
       yield* Effect.gen(function* () {
         const group = yield* BillingGroup;
+        const drainQueue = yield* EmailQueue;
+        yield* Effect.forkChild(
+          Stream.runForEach(drainQueue.events, (e) =>
+            e._tag === "Drained" ? Ref.update(drains, (n) => n + 1) : Effect.void,
+          ),
+        );
         yield* Effect.sleep(Duration.millis(80));
         expect(yield* Ref.get(drains)).toBe(0);
 

@@ -6,12 +6,10 @@ import { ProcessStorage } from "../../src/ProcessStorage";
  */
 
 import {
-  Cause,
   Clock,
   Config,
   Duration,
   Effect,
-  Exit,
   Data,
   Layer,
   Option,
@@ -75,11 +73,6 @@ class DemoQueue extends QueueResource.Service<DemoQueue, string, DemoQueueItemEr
         reason: `Error processing ${item}`,
       });
     }),
-  onExit: ({ entry, exit }) =>
-    Exit.match(exit, {
-      onFailure: (cause) => Effect.logError(`${entry.item}: ${Cause.pretty(cause)}`),
-      onSuccess: () => Effect.void,
-    }),
   concurrency: 3,
   capacity: 100,
 }) {}
@@ -90,11 +83,6 @@ class DemoTwoQueue extends QueueResource.Service<DemoTwoQueue, number, never>()(
       yield* Effect.logInfo(`Processing number: ${item}`);
       yield* Effect.sleep(Duration.millis(1000));
       yield* Effect.logInfo(`Derived value ${String(item * 2)} for demo`);
-    }),
-  onExit: ({ entry, exit }) =>
-    Exit.match(exit, {
-      onFailure: () => Effect.void,
-      onSuccess: () => Effect.logInfo(`Forked: ${String(entry.item)}`),
     }),
   concurrency: 2,
   capacity: 50,

@@ -5,7 +5,6 @@ import {
   Data,
   Duration,
   Effect,
-  Exit,
   Fiber,
   Ref,
   Schema,
@@ -46,6 +45,18 @@ const waitUntilCount = (
       yield* Effect.sleep(Duration.millis(5));
     }
   });
+
+// Counts `Drained` events off the queue's events stream — the replacement for the old
+// `onDrained` hook probe used by the autoStart cold-start tests.
+const forkDrainCounter = <T, E, EE, R>(
+  queue: QueueHandle<T, E, EE, R>,
+  ref: Ref.Ref<number>,
+) =>
+  Effect.forkChild(
+    Stream.runForEach(queue.events, (e) =>
+      e._tag === "Drained" ? Ref.update(ref, (n) => n + 1) : Effect.void,
+    ),
+  );
 
 describe("QueueResource.make — basic processing", () => {
   it.live("processes items added via add", () =>
@@ -1197,7 +1208,7 @@ describe("QueueResource.make — autoStart", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.live("onDrained waits for wake then runs after queues drain empty", () =>
+  it.live("Drained event fires only after queues drain empty (manual start)", () =>
     Effect.gen(function* () {
       const drains = yield* Ref.make(0);
       const queue = yield* QueueResource.make({
@@ -1205,8 +1216,8 @@ describe("QueueResource.make — autoStart", () => {
         autoStart: false,
         effect: (_n: number) => Effect.void,
         concurrency: 1,
-        onDrained: (_q) => Ref.update(drains, (n) => n + 1),
       });
+      yield* forkDrainCounter(queue, drains);
       yield* Effect.sleep(Duration.millis(40));
       expect(yield* Ref.get(drains)).toBe(0);
 
@@ -1222,22 +1233,22 @@ describe("QueueResource.make — autoStart", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.live("onDrained stays idle until drain even with default autoStart", () =>
+  it.live("no Drained event with default autoStart and no work", () =>
     Effect.gen(function* () {
       const drains = yield* Ref.make(0);
       const queue = yield* QueueResource.make({
         name: "test-drained-no-auto-layer-only",
         effect: (_n: number) => Effect.void,
         concurrency: 4,
-        onDrained: (_q) => Ref.update(drains, (n) => n + 1),
       });
+      yield* forkDrainCounter(queue, drains);
       yield* Effect.sleep(Duration.millis(120));
       expect(yield* Ref.get(drains)).toBe(0);
       void queue;
     }).pipe(Effect.scoped),
   );
 
-  it.live("default autoStart onDrained runs only after processed work drains empty", () =>
+  it.live("Drained event fires only after processed work drains empty (default autoStart)", () =>
     Effect.gen(function* () {
       const drains = yield* Ref.make(0);
       const handled = yield* Ref.make<ReadonlyArray<number>>([]);
@@ -1245,8 +1256,8 @@ describe("QueueResource.make — autoStart", () => {
         name: "test-drained-default-autostart-drain",
         effect: (n: number) => Ref.update(handled, (values) => [...values, n]),
         concurrency: 1,
-        onDrained: (_q) => Ref.update(drains, (n) => n + 1),
       });
+      yield* forkDrainCounter(queue, drains);
 
       yield* Effect.sleep(Duration.millis(80));
       expect(yield* Ref.get(drains)).toBe(0);
@@ -1260,28 +1271,11 @@ describe("QueueResource.make — autoStart", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.live("service layer provision does not invoke onDrained before the queue is yielded", () =>
-    Effect.gen(function* () {
-      const drains = yield* Ref.make(0);
+  // (The old "does not invoke onDrained before the queue is yielded" test is dropped: with
+  // callbacks gone, Drained is only observable by subscribing to a yielded queue's `events`,
+  // and it structurally can't fire before start — there's no pre-yield hook to mis-fire.)
 
-      class DrainedQueue extends QueueResource.Service<DrainedQueue, number, never>()(
-        "@test/DrainedLayerProvisionQueue",
-        {
-          effect: (_n: number) => Effect.void,
-          concurrency: 1,
-          onDrained: (_q) => Ref.update(drains, (n) => n + 1),
-        },
-      ) {}
-
-      yield* Effect.sleep(Duration.millis(120)).pipe(
-        Effect.provide(DrainedQueue.layer),
-      );
-
-      expect(yield* Ref.get(drains)).toBe(0);
-    }),
-  );
-
-  it.live("yielding a service-layer queue with default autoStart does not cold-start onDrained", () =>
+  it.live("no Drained event when a service-layer queue is yielded with no work", () =>
     Effect.gen(function* () {
       const drains = yield* Ref.make(0);
 
@@ -1290,12 +1284,12 @@ describe("QueueResource.make — autoStart", () => {
         {
           effect: (_n: number) => Effect.void,
           concurrency: 1,
-          onDrained: (_q) => Ref.update(drains, (n) => n + 1),
         },
       ) {}
 
       yield* Effect.gen(function* () {
         const queue = yield* DrainedQueue;
+        yield* forkDrainCounter(queue, drains);
         yield* Effect.sleep(Duration.millis(120));
         expect(yield* Ref.get(drains)).toBe(0);
         void queue;
@@ -1314,12 +1308,12 @@ describe("QueueResource.make — autoStart", () => {
           autoStart: false,
           effect: (n: number) => Ref.update(handled, (values) => [...values, n]),
           concurrency: 1,
-          onDrained: (_q) => Ref.update(drains, (n) => n + 1),
         },
       ) {}
 
       yield* Effect.gen(function* () {
         const queue = yield* DrainedQueue;
+        yield* forkDrainCounter(queue, drains);
         yield* Effect.sleep(Duration.millis(80));
         expect(yield* Ref.get(drains)).toBe(0);
 
@@ -1349,11 +1343,11 @@ describe("QueueResource.make — autoStart", () => {
       const DrainedQueueLive = QueueResource.layer(DrainedQueue, {
         effect: (_n: number) => Effect.void,
         concurrency: 1,
-        onDrained: (_q) => Ref.update(drains, (n) => n + 1),
       });
 
       yield* Effect.gen(function* () {
         const queue = yield* DrainedQueue;
+        yield* forkDrainCounter(queue, drains);
         yield* Effect.sleep(Duration.millis(120));
         expect(yield* Ref.get(drains)).toBe(0);
         void queue;
@@ -1361,7 +1355,7 @@ describe("QueueResource.make — autoStart", () => {
     }),
   );
 
-  it.live("clear triggers onDrained only after workers have been started", () =>
+  it.live("clear triggers a Drained event only after workers have been started", () =>
     Effect.gen(function* () {
       const drains = yield* Ref.make(0);
       const queue = yield* QueueResource.make({
@@ -1370,8 +1364,8 @@ describe("QueueResource.make — autoStart", () => {
         paused: true,
         effect: (_n: number) => Effect.void,
         concurrency: 1,
-        onDrained: (_q) => Ref.update(drains, (n) => n + 1),
       });
+      yield* forkDrainCounter(queue, drains);
 
       yield* queue.add(1);
       expect(yield* queue.clear).toBe(1);
@@ -1443,10 +1437,7 @@ describe("QueueResource.make — itemSchema", () => {
         name: "test-rate-limit",
         concurrency: 1,
         rateLimit: { limit: 1, window: Duration.millis(80) },
-        effect: () =>
-          Effect.gen(function* () {
-            yield* Ref.update(starts, (n) => n + 1);
-          }),
+        effect: () => Ref.update(starts, (n) => n + 1),
       });
       const t0 = yield* Clock.currentTimeMillis;
       yield* queue.add([1, 2, 3]);
@@ -1457,17 +1448,23 @@ describe("QueueResource.make — itemSchema", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.live("rateLimit records exceeded events and fires onRateLimitExceeded", () =>
+  it.live("rateLimit records exceeded events and emits RateLimitExceeded", () =>
     Effect.gen(function* () {
-      const hookHits = yield* Ref.make(0);
+      const hits = yield* Ref.make(0);
       const queue = yield* QueueResource.make({
         name: "test-rate-limit-hook",
         concurrency: 1,
         rateLimit: { limit: 1, window: Duration.millis(60) },
-        onRateLimitExceeded: () =>
-          Ref.update(hookHits, (n) => n + 1),
         effect: () => Effect.void,
       });
+      yield* Effect.forkChild(
+        Stream.runForEach(queue.events, (e) =>
+          e._tag === "RateLimitExceeded"
+            ? Ref.update(hits, (n) => n + 1)
+            : Effect.void,
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(10));
       yield* queue.add([1, 2]);
       yield* waitUntilCompleted(queue, 2);
       yield* Effect.sleep(Duration.millis(20));
@@ -1476,7 +1473,7 @@ describe("QueueResource.make — itemSchema", () => {
       const exceeded = yield* store.rateLimits({
         queueId: "test-rate-limit-hook",
       });
-      expect(yield* Ref.get(hookHits)).toBe(1);
+      expect(yield* Ref.get(hits)).toBe(1);
       expect(exceeded).toHaveLength(1);
       expect(exceeded[0]?.type).toBe("queue.ratelimit.exceeded");
       expect(exceeded[0]?.outcome).toBe("delayed");
