@@ -36,6 +36,7 @@ const stub = {
     paused: false,
     inFlight: 0,
     completed: 0,
+    phase: "running" as const,
   }),
   metrics: Stream.empty,
   add: (_: NumberItem | ReadonlyArray<NumberItem>) => Effect.void,

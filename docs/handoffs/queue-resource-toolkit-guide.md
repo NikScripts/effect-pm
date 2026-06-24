@@ -145,7 +145,7 @@ works.
 
 - **Reads:** `size`, `sizes`, `isEmpty`, `completed`, `statusNow` (one-shot snapshot — the
   `status` stream's element read once, for a non-`--watch` print / first paint)
-- **Lifecycle:** `start`, `pause`, `resume`, `shutdown`, `clear`
+- **Lifecycle:** `start`, `pause`, `resume`, `shutdown` (graceful — see below), `clear`
 - **Enqueue:** `add`, `prioritize`, `defer` (bare item **or a batch** `item[]`, by priority — one
   call enqueues many, no N round trips); `enqueue` (re-inject full `QueueEntry`s — e.g. straight
   off `events`, the handoff round-trip)
@@ -153,6 +153,14 @@ works.
   for cross-node handoff), `deadLetter`, `drop`
 - **Streams:** `events` (discrete lifecycle facts — tagged union), `status` (current-state
   snapshots), `metrics` (windowed aggregates)
+
+**Graceful shutdown.** `shutdown` returns immediately after *initiating*: the status snapshot's
+**`phase`** goes `running` → `draining` → `off`, and a `ShutdownRequested` then `ShutdownComplete`
+event crosses the `events` stream. New enqueues are rejected from `draining` on. In-flight items
+always finish; already-queued items are handled by the config's **`shutdownMode`**:
+`"drain"` (default) processes them first, `"finishActive"` discards them (emitting a `Dropped`
+event). A UI renders the terminal state off `status.phase === "off"`. (Idempotent — calling
+`shutdown` twice is a no-op.)
 
 `metrics` latency fields: **`avgWaitMillis`** is **per priority** (`{ high?, normal?, low? }` —
 queue wait, enqueue → pickup; a lane is present only if it completed work that window, since wait

@@ -425,8 +425,13 @@ export interface QueueHandleApi<
    */
   readonly resume: Effect.Effect<void>;
   /**
-   * Permanently stop the queue. Enqueue attempts after shutdown are logged
-   * and silently dropped. Workers exit on their next iteration.
+   * Permanently stop the queue (graceful). Returns immediately after **initiating** shutdown:
+   * status `phase` → `"draining"`, new enqueues are rejected (logged + dropped), and once the
+   * queue is empty + idle it emits `ShutdownComplete` and `phase` → `"off"`. How already-queued
+   * items are handled is set by {@link QueueResourceConfigBase.shutdownMode} (`"drain"` processes
+   * them, the default; `"finishActive"` discards them, emitting a `Dropped` event). In-flight
+   * items always finish. Idempotent — a second call is a no-op. Emits `ShutdownRequested` /
+   * `ShutdownComplete` on the {@link QueueHandleApi.events} stream.
    */
   readonly shutdown: Effect.Effect<void>;
   /**
@@ -555,6 +560,14 @@ export interface QueueStatus {
   readonly paused: boolean;
   readonly inFlight: number;
   readonly completed: number;
+  /**
+   * Lifecycle phase — orthogonal to `paused` (a running queue can be paused):
+   * - `"running"` — accepting and processing items.
+   * - `"draining"` — `shutdown` was called; not accepting new items, winding down in-flight (and,
+   *   in `"drain"` mode, the remaining queued items).
+   * - `"off"` — fully shut down (empty + idle); the terminal state a UI renders as stopped.
+   */
+  readonly phase: "running" | "draining" | "off";
 }
 
 /**
@@ -644,6 +657,20 @@ export type QueueEvent<T, E = unknown> =
     }
   | { readonly _tag: "Drained"; readonly queueId: string; readonly completed: number }
   | { readonly _tag: "Cleared"; readonly queueId: string; readonly count: number }
+  | {
+      readonly _tag: "ShutdownRequested";
+      readonly queueId: string;
+      /** How the wind-down treats already-queued items (see `shutdownMode`). */
+      readonly mode: "drain" | "finishActive";
+      /** Items still pending when shutdown was requested. */
+      readonly pending: number;
+    }
+  | {
+      readonly _tag: "ShutdownComplete";
+      readonly queueId: string;
+      /** Total items completed over the queue's lifetime. */
+      readonly completed: number;
+    }
   | {
       readonly _tag: "Released";
       readonly queueId: string;
@@ -859,6 +886,19 @@ export interface QueueResourceConfigBase<T> {
    * @default Infinity
    */
   readonly retries?: number;
+  /**
+   * How {@link QueueHandleApi.shutdown} winds down. Either way it stops accepting new items
+   * immediately (status `phase` → `"draining"`), lets in-flight items finish, and once the queue
+   * is empty + idle emits `ShutdownComplete` and sets `phase` → `"off"`. They differ on the
+   * **already-queued** items:
+   * - `"drain"` — process the remaining queued items first (graceful; nothing is lost). **Default.**
+   * - `"finishActive"` — discard the queued items (emit a `Dropped` event for them) and only let
+   *   the in-flight ones finish (fast stop; with future persistence the discarded items are what a
+   *   restart would rebuild).
+   *
+   * @default "drain"
+   */
+  readonly shutdownMode?: "drain" | "finishActive";
 }
 
 /**
@@ -1501,6 +1541,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
   Effect.gen(function* () {
     const queueName = config.name ?? "anonymous";
     const concurrency = config.concurrency ?? 5;
+    const shutdownMode = config.shutdownMode ?? "drain";
     const capacity = config.capacity ?? 50_000;
     // `attempts` (preferred) supersedes the deprecated `retries` (= attempts - 1).
     const maxRetries =
@@ -1659,7 +1700,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       event._tag === "Cleared" ||
       event._tag === "Released" ||
       event._tag === "DeadLettered" ||
-      event._tag === "Dropped";
+      event._tag === "Dropped" ||
+      event._tag === "ShutdownRequested" ||
+      event._tag === "ShutdownComplete";
 
     // ─── OTEL metrics (Effect `Metric` → exported by the runtime's metric reader) ───
     // The cumulative counterparts to the windowed `.metrics` stream: that stream is for live UI,
@@ -1843,6 +1886,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     // lossy. `paused`/`inFlight` are tracked here because the latch/semaphore don't expose them.
     const pausedRef = yield* Ref.make(config.paused ?? false);
     const inFlightRef = yield* Ref.make(0);
+    // Lifecycle phase, orthogonal to paused. `shutdown` advances running → draining → off.
+    const phaseRef = yield* Ref.make<"running" | "draining" | "off">("running");
     const computeStatus: Effect.Effect<QueueStatus> = Effect.gen(function* () {
       const [h, n, l] = yield* Effect.all([
         Queue.size(highQueue),
@@ -1858,12 +1903,41 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         paused: yield* Ref.get(pausedRef),
         inFlight: yield* Ref.get(inFlightRef),
         completed: yield* Ref.get(completedCount),
+        phase: yield* Ref.get(phaseRef),
       };
     });
     const statusRef = yield* SubscriptionRef.make(yield* computeStatus);
     const refreshStatus = Effect.flatMap(computeStatus, (s) =>
       SubscriptionRef.set(statusRef, s),
     );
+    // Total items pending across all priority lanes (poll-cheap; used by shutdown finalization).
+    const totalPending: Effect.Effect<number> = Effect.gen(function* () {
+      const [h, n, l] = yield* Effect.all([
+        Queue.size(highQueue),
+        Queue.size(normalQueue),
+        Queue.size(lowQueue),
+      ]);
+      return Math.max(0, h) + Math.max(0, n) + Math.max(0, l);
+    });
+    // Finalize shutdown once the queue has drained empty AND no item is in flight: flip
+    // draining → off (exactly once), emit `ShutdownComplete`, and refresh the snapshot so its
+    // `phase` reads `"off"`. Called after each item finishes and at shutdown initiation (covers
+    // the already-idle case). The `getAndSet` guard makes the transition idempotent.
+    const finalizeShutdownIfDrained: Effect.Effect<void> = Effect.gen(function* () {
+      if ((yield* Ref.get(phaseRef)) !== "draining") return;
+      const pending = yield* totalPending;
+      const inFlight = yield* Ref.get(inFlightRef);
+      if (pending > 0 || inFlight > 0) return;
+      const previous = yield* Ref.getAndSet(phaseRef, "off");
+      if (previous !== "draining") return; // another fiber finalized first
+      yield* publishEvent({
+        _tag: "ShutdownComplete",
+        queueId: queueName,
+        completed: yield* Ref.get(completedCount),
+      });
+      yield* refreshStatus;
+      yield* Effect.logInfo(`Queue "${queueName}" shut down (off)`);
+    });
     // One fiber recomputes the snapshot on each lifecycle event (covers enqueue/start/exit/
     // drain/release/clear); pause/resume refresh inline (they emit no event). Tied to the
     // queue scope, so it's interrupted on teardown.
@@ -2565,7 +2639,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       const low = yield* Queue.poll(lowQueue);
       if (Option.isSome(low)) return low.value;
 
-      // All empty — wait for enqueue/shutdown wake then re-poll in priority order
+      // All empty. If shutdown was requested there's nothing left to take (drain is complete, or
+      // finishActive already discarded the queued items) — interrupt this worker so it exits.
+      if (yield* Ref.get(isShutdownRef)) return yield* Effect.interrupt;
+      // Otherwise wait for an enqueue/shutdown wake then re-poll in priority order.
       yield* Deferred.await(workerWakeSignal);
       return yield* takeNext;
     });
@@ -2700,9 +2777,15 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
               skipRateLimitedItem(internal).pipe(Effect.as(false)),
             ),
           );
-          if (!proceed) return;
+          if (!proceed) {
+            // a skipped item still drains the queue — check whether shutdown can now finalize
+            yield* finalizeShutdownIfDrained;
+            return;
+          }
         }
         yield* semaphore.withPermits(1)(processItemBody(internal));
+        // item finished + inFlight decremented — if shutting down and now idle, flip to "off"
+        yield* finalizeShutdownIfDrained;
       });
 
     // ─── Internal: worker loop ───
@@ -2724,8 +2807,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         Effect.annotateLogs(
           Effect.forever(
             Effect.gen(function* () {
-              const shutdown = yield* Ref.get(isShutdownRef);
-              if (shutdown) return yield* Effect.interrupt;
+              // On shutdown: `finishActive` stops pulling immediately (queued items were already
+              // discarded); `drain` keeps pulling until empty, where `takeNext` interrupts. So we
+              // only short-circuit here for finishActive — drain falls through to drain the queue.
+              if (yield* Ref.get(isShutdownRef)) {
+                if (shutdownMode === "finishActive") return yield* Effect.interrupt;
+              }
 
               yield* latch.await;
               const internal = yield* takeNext;
@@ -2829,6 +2916,33 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       internal.key === undefined
         ? Effect.void
         : Ref.update(activeKeys, HashSet.remove(internal.key));
+
+    // finishActive shutdown: drain every pending lane, release their dedup keys, and emit one
+    // `Dropped` event for the discarded entries (reason "shutdown"), so only in-flight items
+    // remain to finish. (drain mode skips this — it processes the queued items instead.)
+    const discardPendingOnShutdown: Effect.Effect<void> = Effect.gen(function* () {
+      const discarded: Array<QueueEntry<T>> = [];
+      const drainLane = (q: Queue.Queue<InternalItem<T>>): Effect.Effect<void> =>
+        Effect.gen(function* () {
+          const polled = yield* Queue.poll(q);
+          if (Option.isSome(polled)) {
+            yield* releaseActiveKey(polled.value);
+            discarded.push(queueEntryFromInternal(polled.value));
+            yield* drainLane(q);
+          }
+        });
+      yield* drainLane(highQueue);
+      yield* drainLane(normalQueue);
+      yield* drainLane(lowQueue);
+      if (discarded.length > 0) {
+        yield* publishEvent({
+          _tag: "Dropped",
+          queueId: queueName,
+          entries: discarded,
+          reason: "shutdown",
+        });
+      }
+    });
 
     const restoreActiveKey = (internal: InternalItem<T>) =>
       internal.key === undefined
@@ -3074,13 +3188,38 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         Effect.asVoid,
       ),
 
-      // Mark shutdown → wake sleeping workers (so they see the flag) → record
-      shutdown: Ref.set(isShutdownRef, true).pipe(
-        Effect.andThen(signalShutdownWake),
-        Effect.andThen(requestMetricsFlush),
-        Effect.andThen(recordLifecycleEvent("Shutdown")),
-        Effect.andThen(Effect.logInfo(`Queue "${queueName}" shutting down`)),
-      ),
+      // Graceful shutdown: stop accepting items (phase → draining), wind down per `shutdownMode`,
+      // and once empty + idle finalize to "off" (see `finalizeShutdownIfDrained`). Idempotent —
+      // only the first call (running → draining) does the work.
+      shutdown: Effect.gen(function* () {
+        const previous = yield* Ref.getAndSet(phaseRef, "draining");
+        if (previous !== "running") return; // already draining or off
+        yield* Ref.set(isShutdownRef, true);
+        const pending = yield* totalPending;
+        yield* publishEvent({
+          _tag: "ShutdownRequested",
+          queueId: queueName,
+          mode: shutdownMode,
+          pending,
+        });
+        yield* recordLifecycleEvent("Shutdown");
+        yield* Effect.logInfo(
+          `Queue "${queueName}" shutting down (${shutdownMode})`,
+        );
+        if (shutdownMode === "finishActive") {
+          // discard the queued items up front so only in-flight remain.
+          yield* discardPendingOnShutdown;
+        } else {
+          // drain: open the latch (and clear paused) so a paused queue still drains its backlog,
+          // rather than hanging in "draining" forever.
+          yield* latch.open;
+          yield* Ref.set(pausedRef, false);
+        }
+        yield* signalShutdownWake; // unblock takeNext waiters + the drain monitor
+        yield* requestMetricsFlush;
+        yield* refreshStatus; // snapshot now reads phase = "draining"
+        yield* finalizeShutdownIfDrained; // already empty + idle? straight to "off"
+      }),
 
       clear: Effect.gen(function* () {
         let count = 0;

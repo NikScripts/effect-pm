@@ -60,6 +60,8 @@ export const queueStatus = Schema.Struct({
   paused: Schema.Boolean,
   inFlight: Schema.Number,
   completed: Schema.Number,
+  // lifecycle phase (orthogonal to `paused`): running → draining (on shutdown) → off (terminal).
+  phase: Schema.Literals(["running", "draining", "off"]),
 });
 
 /**
@@ -205,6 +207,15 @@ export const queueEvent = <Sch extends Schema.Top>(itemSchema: Sch) => {
       queueId: Schema.String,
       count: Schema.Number,
     }),
+    Schema.TaggedStruct("ShutdownRequested", {
+      queueId: Schema.String,
+      mode: Schema.Literals(["drain", "finishActive"]),
+      pending: Schema.Number,
+    }),
+    Schema.TaggedStruct("ShutdownComplete", {
+      queueId: Schema.String,
+      completed: Schema.Number,
+    }),
     Schema.TaggedStruct("Released", {
       queueId: Schema.String,
       releaseId: Schema.String,
@@ -322,7 +333,9 @@ export const queueControlSpec = {
     description: "Resume processing after a pause.",
   }),
   shutdown: Resource.mutate(Schema.Void).annotate({
-    description: "Permanently stop the queue; later enqueues are dropped.",
+    description:
+      "Permanently stop the queue (graceful): phase → draining, later enqueues dropped, " +
+      "in-flight finishes, queued items drained or discarded per shutdownMode, then phase → off.",
     destructive: true,
   }),
   clear: Resource.mutate(Schema.Number).annotate({

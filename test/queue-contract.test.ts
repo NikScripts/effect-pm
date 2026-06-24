@@ -53,6 +53,7 @@ const makeImpl = () => {
       paused,
       inFlight: 0,
       completed: done,
+      phase: "running" as const,
     })),
     metrics: Stream.empty,
   };
@@ -77,6 +78,7 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
       paused: false,
       inFlight: 0,
       completed: 0,
+      phase: "running",
     });
 
     // control verbs route to the right instance

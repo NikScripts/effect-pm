@@ -4,6 +4,7 @@ import {
   Cause,
   Clock,
   Data,
+  Deferred,
   Duration,
   Effect,
   Fiber,
@@ -1216,6 +1217,97 @@ describe("QueueResource.make — autoStart", () => {
       yield* Effect.sleep(Duration.millis(30));
       const r = yield* Ref.get(results);
       expect(r).toHaveLength(0);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("shutdown (drain, default) processes queued items, then phase → off", () =>
+    Effect.gen(function* () {
+      const processed = yield* Ref.make<Array<number>>([]);
+      const events = yield* Ref.make<Array<string>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-shutdown-drain",
+        effect: (n: number) => Ref.update(processed, (a) => [...a, n]),
+        concurrency: 1,
+      });
+      yield* Effect.forkScoped(
+        Stream.runForEach(queue.events, (e) =>
+          Ref.update(events, (a) => [...a, e._tag]),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add([1, 2, 3, 4]);
+      yield* queue.shutdown;
+      // drain finalizes in the background — wait until it reaches the terminal phase
+      while ((yield* queue.statusNow).phase !== "off") {
+        yield* Effect.sleep(Duration.millis(5));
+      }
+      // drain mode processed every queued item before going off
+      expect([...(yield* Ref.get(processed))].sort((a, b) => a - b)).toEqual([
+        1, 2, 3, 4,
+      ]);
+      const ev = yield* Ref.get(events);
+      expect(ev).toContain("ShutdownRequested");
+      expect(ev).toContain("ShutdownComplete");
+      // adds after shutdown are rejected (queue is off)
+      yield* queue.add([5]);
+      expect(yield* queue.size).toBe(0);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("shutdown (finishActive) discards queued items, then phase → off", () =>
+    Effect.gen(function* () {
+      const processed = yield* Ref.make<Array<number>>([]);
+      const dropped = yield* Ref.make<Array<number>>([]);
+      const queue = yield* QueueResource.make({
+        name: "test-shutdown-finish-active",
+        // paused so the items sit queued (nothing in-flight) — finishActive must discard them
+        paused: true,
+        effect: (n: number) => Ref.update(processed, (a) => [...a, n]),
+        concurrency: 1,
+        shutdownMode: "finishActive",
+      });
+      yield* Effect.forkScoped(
+        Stream.runForEach(queue.events, (e) =>
+          e._tag === "Dropped"
+            ? Ref.update(dropped, (a) => [...a, ...e.entries.map((x) => x.item)])
+            : Effect.void,
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add([1, 2, 3]);
+      expect(yield* queue.size).toBe(3);
+      yield* queue.shutdown;
+      while ((yield* queue.statusNow).phase !== "off") {
+        yield* Effect.sleep(Duration.millis(5));
+      }
+      // finishActive discarded the queued items (none processed) and emitted a Dropped event
+      expect(yield* Ref.get(processed)).toEqual([]);
+      expect([...(yield* Ref.get(dropped))].sort((a, b) => a - b)).toEqual([
+        1, 2, 3,
+      ]);
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("shutdown is idempotent and reports the draining phase", () =>
+    Effect.gen(function* () {
+      // worker blocks on a gate so the item stays in-flight → queue stays "draining"
+      const gate = yield* Deferred.make<void>();
+      const queue = yield* QueueResource.make({
+        name: "test-shutdown-idempotent",
+        effect: (_n: number) => Deferred.await(gate),
+        concurrency: 1,
+      });
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add([1]);
+      yield* Effect.sleep(Duration.millis(20)); // let the worker pick it up (in-flight)
+      yield* queue.shutdown;
+      expect((yield* queue.statusNow).phase).toBe("draining"); // in-flight not done yet
+      yield* queue.shutdown; // second call is a no-op (no throw, phase unchanged)
+      expect((yield* queue.statusNow).phase).toBe("draining");
+      yield* Deferred.succeed(gate, undefined); // release → item finishes → off
+      while ((yield* queue.statusNow).phase !== "off") {
+        yield* Effect.sleep(Duration.millis(5));
+      }
     }).pipe(Effect.scoped),
   );
 
