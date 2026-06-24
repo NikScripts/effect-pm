@@ -37,9 +37,15 @@ type Group = Extract<Node, { t: "g" }>;
 const COLOR: Record<Status, string> = {
   running: "green",
   paused: "yellow",
-  stopped: "red",
+  draining: "cyan",
+  off: "red",
 };
-const ICON: Record<Status, string> = { running: "►", paused: "‖", stopped: "■" };
+const ICON: Record<Status, string> = {
+  running: "►",
+  paused: "‖",
+  draining: "↓",
+  off: "■",
+};
 const SYM: Record<Priority, { symbol: string; color: string }> = {
   high: { symbol: "▲", color: "red" },
   normal: { symbol: "•", color: "white" },
