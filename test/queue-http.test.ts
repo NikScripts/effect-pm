@@ -38,9 +38,9 @@ const stub = {
     completed: 0,
   }),
   metrics: Stream.empty,
-  add: (_: NumberItem) => Effect.void,
-  prioritize: (_: NumberItem) => Effect.void,
-  defer: (_: NumberItem) => Effect.void,
+  add: (_: NumberItem | ReadonlyArray<NumberItem>) => Effect.void,
+  prioritize: (_: NumberItem | ReadonlyArray<NumberItem>) => Effect.void,
+  defer: (_: NumberItem | ReadonlyArray<NumberItem>) => Effect.void,
   enqueue: (entries: ReadonlyArray<QueueEntry<NumberItem>>) =>
     Effect.sync(() => {
       received.push(...entries);

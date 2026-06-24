@@ -146,18 +146,22 @@ const NumberItem = Schema.Struct({ n: Schema.Number });
 interface NumberItem {
   readonly n: number;
 }
+// add/prioritize/defer accept an item OR a batch — the contract payload is `item | item[]`.
+type NumberIn = NumberItem | ReadonlyArray<NumberItem>;
+const asItems = (p: NumberIn): ReadonlyArray<NumberItem> =>
+  "n" in p ? [p] : p;
 class Numbers extends QueueResource.Tag<Numbers>()("test/Numbers", NumberItem) {}
 
 it("queue add round-trips with a per-instance item schema (native validation)", () => {
   const enqueued: number[] = [];
   const impl = {
     ...makeImpl(),
-    add: (item: NumberItem) =>
+    add: (p: NumberIn) =>
       Effect.sync(() => {
-        enqueued.push(item.n);
+        for (const it of asItems(p)) enqueued.push(it.n);
       }),
-    prioritize: (_: NumberItem) => Effect.void,
-    defer: (_: NumberItem) => Effect.void,
+    prioritize: (_: NumberIn) => Effect.void,
+    defer: (_: NumberIn) => Effect.void,
     enqueue: (_: ReadonlyArray<QueueEntry<NumberItem>>) => Effect.void,
     release: () => Effect.succeed([]),
     releaseEncoded: () => Effect.succeed([]),
@@ -171,7 +175,9 @@ it("queue add round-trips with a per-instance item schema (native validation)", 
     // `add` is typed by the instance's itemSchema; RPC validates the item on the wire.
     yield* svc.add({ n: 5 });
     yield* svc.add({ n: 7 });
-    expect(enqueued).toEqual([5, 7]);
+    // batch form: one call enqueues many (no N round trips)
+    yield* svc.add([{ n: 8 }, { n: 9 }]);
+    expect(enqueued).toEqual([5, 7, 8, 9]);
     // the control surface still works on the same per-instance group
     expect(yield* svc.size).toBe(3);
   }).pipe(Effect.provide(Resource.server(Numbers, impl)), Effect.scoped);
@@ -182,12 +188,12 @@ it("prioritize / defer / enqueue round-trip over the per-instance group", () => 
   const log: Array<string> = [];
   const impl = {
     ...makeImpl(),
-    add: (item: NumberItem) =>
-      Effect.sync(() => log.push(`add:${String(item.n)}`)),
-    prioritize: (item: NumberItem) =>
-      Effect.sync(() => log.push(`hi:${String(item.n)}`)),
-    defer: (item: NumberItem) =>
-      Effect.sync(() => log.push(`lo:${String(item.n)}`)),
+    add: (p: NumberIn) =>
+      Effect.sync(() => log.push(`add:${asItems(p).map((i) => i.n).join(",")}`)),
+    prioritize: (p: NumberIn) =>
+      Effect.sync(() => log.push(`hi:${asItems(p).map((i) => i.n).join(",")}`)),
+    defer: (p: NumberIn) =>
+      Effect.sync(() => log.push(`lo:${asItems(p).map((i) => i.n).join(",")}`)),
     enqueue: (entries: ReadonlyArray<QueueEntry<NumberItem>>) =>
       Effect.sync(() => log.push(`re:${entries.map((e) => e.item.n).join(",")}`)),
     release: () => Effect.succeed([]),
@@ -218,9 +224,9 @@ it("prioritize / defer / enqueue round-trip over the per-instance group", () => 
 it("release returns entries; releaseEncoded surfaces a typed wire error", () => {
   const impl = {
     ...makeImpl(),
-    add: (_: NumberItem) => Effect.void,
-    prioritize: (_: NumberItem) => Effect.void,
-    defer: (_: NumberItem) => Effect.void,
+    add: (_: NumberIn) => Effect.void,
+    prioritize: (_: NumberIn) => Effect.void,
+    defer: (_: NumberIn) => Effect.void,
     enqueue: (_: ReadonlyArray<QueueEntry<NumberItem>>) => Effect.void,
     release: () =>
       Effect.succeed([
@@ -308,10 +314,12 @@ it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
     yield* Effect.sleep(Duration.millis(20));
     yield* q.add({ n: 1 });
     yield* q.prioritize({ n: 2 });
-    while ((yield* q.completed) < 2) {
+    // batch enqueue through the engine in one call
+    yield* q.add([{ n: 3 }, { n: 4 }]);
+    while ((yield* q.completed) < 4) {
       yield* Effect.sleep(Duration.millis(5));
     }
-    expect([...(yield* Ref.get(seen))].sort((a, b) => a - b)).toEqual([1, 2]);
+    expect([...(yield* Ref.get(seen))].sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
     expect(yield* q.isEmpty).toBe(true);
   }).pipe(
     Effect.provide(

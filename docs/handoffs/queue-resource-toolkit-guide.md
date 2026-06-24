@@ -57,6 +57,8 @@ const dashboard = Effect.gen(function* () {
   // commands — the item is passed DIRECTLY (the item schema is the rpc payload)
   yield* queue.add({ id: "j1", to: "a@x.com" });
   yield* queue.prioritize({ id: "j2", to: "b@x.com" });
+  // …or a batch in one call
+  yield* queue.add([{ id: "j3", to: "c@x.com" }, { id: "j4", to: "d@x.com" }]);
 
   // live streams — render these in the UI
   yield* queue.status.pipe(Stream.runForEach((s) => render(s)), Effect.forkScoped);
@@ -144,8 +146,9 @@ works.
 - **Reads:** `size`, `sizes`, `isEmpty`, `completed`, `statusNow` (one-shot snapshot — the
   `status` stream's element read once, for a non-`--watch` print / first paint)
 - **Lifecycle:** `start`, `pause`, `resume`, `shutdown`, `clear`
-- **Enqueue:** `add`, `prioritize`, `defer` (bare item, by priority); `enqueue` (re-inject full
-  `QueueEntry`s — e.g. straight off `events`, the handoff round-trip)
+- **Enqueue:** `add`, `prioritize`, `defer` (bare item **or a batch** `item[]`, by priority — one
+  call enqueues many, no N round trips); `enqueue` (re-inject full `QueueEntry`s — e.g. straight
+  off `events`, the handoff round-trip)
 - **Routing / handoff:** `release`, `releaseEncoded` (export pending entries; encoded = wire form
   for cross-node handoff), `deadLetter`, `drop`
 - **Streams:** `events` (discrete lifecycle facts — tagged union), `status` (current-state

@@ -356,24 +356,29 @@ export const queueControlSpec = {
  */
 export const queueSpec = <F extends Schema.Struct.Fields>(
   itemSchema: Schema.Struct<F>,
-) => ({
+) => {
+  // `add`/`prioritize`/`defer` take the item **directly**, and also accept a **batch** (the
+  // engine's `QueueEnqueue<T>` is `(item) | (items)`), so one call enqueues many — no N round
+  // trips over RPC. The payload is `item | item[]` (a single-schema union payload); the layer
+  // recovers the bare `itemSchema` from `add.payload.members[0]`.
+  const itemOrItems = Schema.Union([itemSchema, Schema.Array(itemSchema)]);
+  return {
   ...queueControlSpec,
-  // `add`/`prioritize`/`defer` take the **item directly** — the whole item schema is the rpc
-  // payload (a single-schema payload), so the service method is `(item) => Effect`.
   add: Resource.mutate(Schema.Void, {
-    payload: itemSchema,
+    payload: itemOrItems,
   }).annotate({
-    description: "Enqueue an item at normal priority.",
+    description: "Enqueue an item (or a batch) at normal priority.",
   }),
   prioritize: Resource.mutate(Schema.Void, {
-    payload: itemSchema,
+    payload: itemOrItems,
   }).annotate({
-    description: "Enqueue an item at high priority (processed before normal and low).",
+    description:
+      "Enqueue an item (or a batch) at high priority (processed before normal and low).",
   }),
   defer: Resource.mutate(Schema.Void, {
-    payload: itemSchema,
+    payload: itemOrItems,
   }).annotate({
-    description: "Enqueue an item at low priority (processed after high and normal).",
+    description: "Enqueue an item (or a batch) at low priority (processed after high and normal).",
   }),
   // `enqueue` takes the entry array directly (same shape `events`/`release` produce).
   enqueue: Resource.mutate(Schema.Void, {
@@ -419,7 +424,8 @@ export const queueSpec = <F extends Schema.Struct.Fields>(
   events: Resource.stream(queueEvent(itemSchema)).annotate({
     description: "Discrete entry / worker / queue lifecycle events.",
   }),
-});
+  };
+};
 
 /** The spec of a queue instance whose item is `Schema.Struct<F>` — control surface + data plane. */
 type QueueInstanceSpec<F extends Schema.Struct.Fields> = ReturnType<
@@ -512,9 +518,9 @@ const layer = <
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
   config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R>,
 ): Layer.Layer<Self | LocalCapability<Self>, never, R> => {
-  // The whole item schema IS the `add` payload (single-schema payload), so recover it directly.
+  // `add`'s payload is `item | item[]` (a union); the bare item schema is its first member.
   const itemSchema: Schema.Codec<Schema.Struct<F>["Type"], unknown, never, never> =
-    tag[specSym].add.payload;
+    tag[specSym].add.payload.members[0];
   return Layer.unwrap(
     Effect.gen(function* () {
       const context = yield* Effect.context<R>();
@@ -535,11 +541,27 @@ const layer = <
         status: handle.status,
         statusNow: handle.statusNow,
         metrics: handle.metrics,
-        // The item IS the payload — `add`/`prioritize`/`defer` take it directly, cast-free.
-        add: (item) => provideR(handle.add(item)).pipe(Effect.orDie),
-        prioritize: (item) =>
-          provideR(handle.prioritize(item)).pipe(Effect.orDie),
-        defer: (item) => provideR(handle.defer(item)).pipe(Effect.orDie),
+        // The item (or batch) IS the payload — `add`/`prioritize`/`defer` take it directly. The
+        // `Array.isArray` branch only picks the engine's overload (`(item)` vs `(items)`); both
+        // arms forward unchanged. Re-validation can't fail post-decode, so it's `orDie`d.
+        add: (itemOrItems) =>
+          provideR(
+            Array.isArray(itemOrItems)
+              ? handle.add(itemOrItems)
+              : handle.add(itemOrItems),
+          ).pipe(Effect.orDie),
+        prioritize: (itemOrItems) =>
+          provideR(
+            Array.isArray(itemOrItems)
+              ? handle.prioritize(itemOrItems)
+              : handle.prioritize(itemOrItems),
+          ).pipe(Effect.orDie),
+        defer: (itemOrItems) =>
+          provideR(
+            Array.isArray(itemOrItems)
+              ? handle.defer(itemOrItems)
+              : handle.defer(itemOrItems),
+          ).pipe(Effect.orDie),
         // `enqueue` takes the full entry array directly — cast-free. The decoded wire entry
         // (`queueEntry(itemSchema).Type`) and the engine's `QueueEntry<T>` are both derived from
         // the same `Schema.Struct<F>["Type"]` for `item`, so they unify here with no bridge cast.
