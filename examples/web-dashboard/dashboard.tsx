@@ -16,7 +16,7 @@ import {
   type Node,
   type QueueBundle,
 } from "../resource-tui/live-queues";
-import { useAtomSet, useAtomValue } from "../queue-widget/atom-react";
+import { useAtomValue } from "../queue-widget/atom-react";
 
 // inlined (not imported from queue-widget, which pulls in Ink → not browser-safe)
 const displayName = (key: string): string => key.split("/").pop() ?? key;
@@ -183,10 +183,6 @@ const FocusedPanel = (props: {
   const metricsR = useAtomValue(bundle.metrics);
   const logsR = useAtomValue(bundle.logs);
   const trendR = useAtomValue(bundle.trend);
-  const pause = useAtomSet(bundle.pause);
-  const resume = useAtomSet(bundle.resume);
-  const clear = useAtomSet(bundle.clear);
-  const shutdown = useAtomSet(bundle.shutdown);
 
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const m = AsyncResult.isSuccess(metricsR) ? metricsR.value : undefined;
@@ -261,16 +257,16 @@ const FocusedPanel = (props: {
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button type="button" onClick={() => pause()} style={ctrlBtn}>
+        <button type="button" onClick={() => bundle.pause()} style={ctrlBtn}>
           pause
         </button>
-        <button type="button" onClick={() => resume()} style={ctrlBtn}>
+        <button type="button" onClick={() => bundle.resume()} style={ctrlBtn}>
           resume
         </button>
-        <button type="button" onClick={() => clear()} style={ctrlBtn}>
+        <button type="button" onClick={() => bundle.clear()} style={ctrlBtn}>
           clear
         </button>
-        <button type="button" onClick={() => shutdown()} style={{ ...ctrlBtn, borderColor: "#ef444455", color: "#ef4444" }}>
+        <button type="button" onClick={() => bundle.shutdown()} style={{ ...ctrlBtn, borderColor: "#ef444455", color: "#ef4444" }}>
           shutdown
         </button>
       </div>

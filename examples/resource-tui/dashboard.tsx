@@ -22,7 +22,7 @@ import {
   type Node,
   type QueueBundle,
 } from "./live-queues";
-import { RegistryProvider, useAtomSet, useAtomValue } from "../queue-widget/atom-react";
+import { RegistryProvider, useAtomValue } from "../queue-widget/atom-react";
 import {
   bar,
   BLANK_BORDER,
@@ -304,10 +304,6 @@ const App = (): React.ReactElement => {
   const members = group.members;
 
   const focusBundle = focused === null ? undefined : REGISTRY[focused];
-  const pause = useAtomSet(focusBundle?.pause ?? REGISTRY[QUEUES[0] ?? ""]!.pause);
-  const resume = useAtomSet(focusBundle?.resume ?? REGISTRY[QUEUES[0] ?? ""]!.resume);
-  const clear = useAtomSet(focusBundle?.clear ?? REGISTRY[QUEUES[0] ?? ""]!.clear);
-  const shutdown = useAtomSet(focusBundle?.shutdown ?? REGISTRY[QUEUES[0] ?? ""]!.shutdown);
 
   const membersRef = React.useRef<ReadonlyArray<Node>>(members);
   membersRef.current = members;
@@ -457,17 +453,17 @@ const App = (): React.ReactElement => {
       return;
     }
     if (focused !== null) {
-      if (!editMode) {
+      if (!editMode || focusBundle === undefined) {
         return;
       }
       if (input === "p") {
-        pause();
+        focusBundle.pause();
       } else if (input === "r") {
-        resume();
+        focusBundle.resume();
       } else if (input === "c") {
-        clear();
+        focusBundle.clear();
       } else if (input === "x") {
-        shutdown();
+        focusBundle.shutdown();
       }
       return;
     }
