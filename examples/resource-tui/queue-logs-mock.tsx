@@ -215,7 +215,7 @@ const App = (): React.ReactElement => {
     } else if (input === "c") {
       setQ((s) => ({ ...s, high: 0, normal: 0, low: 0 }));
     } else if (input === "x") {
-      setQ((s) => ({ ...s, status: "stopped" }));
+      setQ((s) => ({ ...s, status: "off" }));
     }
   });
 

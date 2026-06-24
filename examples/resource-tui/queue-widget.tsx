@@ -10,7 +10,8 @@
 import { Box, Text } from "ink";
 import * as React from "react";
 
-export type Status = "running" | "paused" | "stopped";
+// mirrors the real queue: lifecycle `phase` (running/draining/off) folded with `paused`
+export type Status = "running" | "paused" | "draining" | "off";
 export type Priority = "high" | "normal" | "low";
 export type Variant = "S" | "M" | "L" | "XL";
 
@@ -31,12 +32,14 @@ export interface View {
 export const COLOR: Record<Status, string> = {
   running: "green",
   paused: "yellow",
-  stopped: "red",
+  draining: "cyan",
+  off: "red",
 };
 export const STATUS_ICON: Record<Status, string> = {
   running: "►",
   paused: "‖",
-  stopped: "■",
+  draining: "↓",
+  off: "■",
 };
 // always-present, invisible border (spaces) so toggling a visible border never shifts layout
 export const BLANK_BORDER = {

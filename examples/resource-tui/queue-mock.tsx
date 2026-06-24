@@ -150,7 +150,7 @@ const App = (): React.ReactElement => {
 
   // producer: items arrive over time (a priority mix), even while paused
   React.useEffect(() => {
-    if (q.status === "stopped") {
+    if (q.status === "off") {
       return;
     }
     const id = setInterval(() => {
@@ -227,7 +227,7 @@ const App = (): React.ReactElement => {
     } else if (input === "c") {
       setQ((s) => ({ ...s, high: [], normal: [], low: [], completed: 0 }));
     } else if (input === "x") {
-      setQ((s) => ({ ...s, status: "stopped" }));
+      setQ((s) => ({ ...s, status: "off" }));
     }
   });
 

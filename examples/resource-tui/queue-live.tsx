@@ -195,7 +195,13 @@ const App = (): React.ReactElement => {
   const paused = status?.paused ?? false;
   const phase = status?.phase ?? "running";
   const displayStatus: Status =
-    phase === "off" ? "stopped" : paused || phase === "draining" ? "paused" : "running";
+    phase === "off"
+      ? "off"
+      : phase === "draining"
+        ? "draining"
+        : paused
+          ? "paused"
+          : "running";
   const view: View = {
     name: NAME,
     status: displayStatus,
