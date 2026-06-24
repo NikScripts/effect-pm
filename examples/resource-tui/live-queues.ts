@@ -92,6 +92,12 @@ export interface LogLine {
   readonly level: string;
   readonly message: string;
 }
+/** A windowed metrics sample for charts. */
+export interface MetricPoint {
+  readonly t: number;
+  readonly throughput: number;
+  readonly latency: number;
+}
 type Snapshot = QueueSvc extends { readonly status: Stream.Stream<infer S, infer _E, infer _R> }
   ? S
   : never;
@@ -128,12 +134,14 @@ const managed = ManagedRuntime.make(AppLayer);
 interface Refs {
   readonly statusRef: SubscriptionRef.SubscriptionRef<Snapshot | undefined>;
   readonly metricsRef: SubscriptionRef.SubscriptionRef<Metrics | undefined>;
+  readonly historyRef: SubscriptionRef.SubscriptionRef<ReadonlyArray<MetricPoint>>;
   readonly logsRef: SubscriptionRef.SubscriptionRef<ReadonlyArray<LogLine>>;
   readonly trendRef: SubscriptionRef.SubscriptionRef<ReadonlyArray<number>>;
 }
 const mkRefs = (): Refs => ({
   statusRef: Effect.runSync(SubscriptionRef.make<Snapshot | undefined>(undefined)),
   metricsRef: Effect.runSync(SubscriptionRef.make<Metrics | undefined>(undefined)),
+  historyRef: Effect.runSync(SubscriptionRef.make<ReadonlyArray<MetricPoint>>([])),
   logsRef: Effect.runSync(SubscriptionRef.make<ReadonlyArray<LogLine>>([])),
   trendRef: Effect.runSync(SubscriptionRef.make<ReadonlyArray<number>>([])),
 });
@@ -152,9 +160,39 @@ const REFS: Record<string, Refs> = {
   [Weekly.id]: mkRefs(),
 };
 
-// per-queue daemons: producer + accumulators draining into the refs
+/** One row of the fleet table — live status + headline metrics per queue. */
+export interface FleetRow {
+  readonly id: string;
+  readonly phase: string;
+  readonly paused: boolean;
+  readonly pending: number;
+  readonly completed: number;
+  readonly inFlight: number;
+  readonly throughput: number;
+  readonly latency: number;
+}
+const fleetRef = Effect.runSync(SubscriptionRef.make<Record<string, FleetRow>>({}));
+/** The whole fleet in one atom — one subscription feeds a sortable table. */
+export const fleetAtom = Atom.make(SubscriptionRef.changes(fleetRef));
+const patchFleet = (id: string, patch: Partial<FleetRow>): Effect.Effect<void> =>
+  SubscriptionRef.update(fleetRef, (f) => {
+    const prev = f[id] ?? {
+      id,
+      phase: "running",
+      paused: false,
+      pending: 0,
+      completed: 0,
+      inFlight: 0,
+      throughput: 0,
+      latency: 0,
+    };
+    return { ...f, [id]: { ...prev, ...patch } };
+  });
+
+// per-queue daemons: producer + accumulators draining into the refs + fleet table
 const daemonsFor = <Id extends AllQueues>(
   tag: QueueTag<Id>,
+  id: string,
   refs: Refs,
 ): Effect.Effect<void, never, Id> =>
   Effect.gen(function* () {
@@ -176,14 +214,30 @@ const daemonsFor = <Id extends AllQueues>(
         ),
       ),
     );
-    yield* Effect.forkDetach(Stream.runForEach(q.metrics, (m) => SubscriptionRef.set(refs.metricsRef, m)));
+    yield* Effect.forkDetach(
+      Stream.runForEach(q.metrics, (m) =>
+        Effect.gen(function* () {
+          yield* SubscriptionRef.set(refs.metricsRef, m);
+          yield* SubscriptionRef.update(refs.historyRef, (acc) =>
+            [...acc, { t: Date.now(), throughput: m.throughputPerSec, latency: m.avgTotalMillis ?? 0 }].slice(-60),
+          );
+          yield* patchFleet(id, { throughput: m.throughputPerSec, latency: m.avgTotalMillis ?? 0 });
+        }),
+      ),
+    );
     yield* Effect.forkDetach(
       Stream.runForEach(q.status, (s) =>
         Effect.gen(function* () {
+          const pending = s.sizes.high + s.sizes.normal + s.sizes.low;
           yield* SubscriptionRef.set(refs.statusRef, s);
-          yield* SubscriptionRef.update(refs.trendRef, (acc) =>
-            [...acc, s.sizes.high + s.sizes.normal + s.sizes.low].slice(-40),
-          );
+          yield* SubscriptionRef.update(refs.trendRef, (acc) => [...acc, pending].slice(-40));
+          yield* patchFleet(id, {
+            phase: s.phase,
+            paused: s.paused,
+            pending,
+            completed: s.completed,
+            inFlight: s.inFlight,
+          });
         }),
       ),
     );
@@ -192,17 +246,17 @@ const daemonsFor = <Id extends AllQueues>(
 // boot the whole fleet once, at module load
 managed.runFork(
   Effect.gen(function* () {
-    yield* daemonsFor(Mail, REFS[Mail.id]!);
-    yield* daemonsFor(Jobs, REFS[Jobs.id]!);
-    yield* daemonsFor(Billing, REFS[Billing.id]!);
-    yield* daemonsFor(Notify, REFS[Notify.id]!);
-    yield* daemonsFor(Worker1, REFS[Worker1.id]!);
-    yield* daemonsFor(Worker2, REFS[Worker2.id]!);
-    yield* daemonsFor(Worker3, REFS[Worker3.id]!);
-    yield* daemonsFor(RegionUS, REFS[RegionUS.id]!);
-    yield* daemonsFor(RegionEU, REFS[RegionEU.id]!);
-    yield* daemonsFor(Daily, REFS[Daily.id]!);
-    yield* daemonsFor(Weekly, REFS[Weekly.id]!);
+    yield* daemonsFor(Mail, Mail.id, REFS[Mail.id]!);
+    yield* daemonsFor(Jobs, Jobs.id, REFS[Jobs.id]!);
+    yield* daemonsFor(Billing, Billing.id, REFS[Billing.id]!);
+    yield* daemonsFor(Notify, Notify.id, REFS[Notify.id]!);
+    yield* daemonsFor(Worker1, Worker1.id, REFS[Worker1.id]!);
+    yield* daemonsFor(Worker2, Worker2.id, REFS[Worker2.id]!);
+    yield* daemonsFor(Worker3, Worker3.id, REFS[Worker3.id]!);
+    yield* daemonsFor(RegionUS, RegionUS.id, REFS[RegionUS.id]!);
+    yield* daemonsFor(RegionEU, RegionEU.id, REFS[RegionEU.id]!);
+    yield* daemonsFor(Daily, Daily.id, REFS[Daily.id]!);
+    yield* daemonsFor(Weekly, Weekly.id, REFS[Weekly.id]!);
     return yield* Effect.never;
   }),
 );
@@ -212,6 +266,7 @@ managed.runFork(
 const bundle = <Id extends AllQueues>(tag: QueueTag<Id>, refs: Refs) => ({
   status: Atom.make(SubscriptionRef.changes(refs.statusRef)),
   metrics: Atom.make(SubscriptionRef.changes(refs.metricsRef)),
+  history: Atom.make(SubscriptionRef.changes(refs.historyRef)),
   logs: Atom.make(SubscriptionRef.changes(refs.logsRef)),
   trend: Atom.make(SubscriptionRef.changes(refs.trendRef)),
   pause: () => void managed.runFork(Effect.flatMap(tag, (q) => q.pause)),

@@ -17,6 +17,7 @@ import {
   type QueueBundle,
 } from "../resource-tui/live-queues";
 import { useAtomValue } from "../queue-widget/atom-react";
+import { DesktopDashboard } from "./desktop";
 
 // inlined (not imported from queue-widget, which pulls in Ink → not browser-safe)
 const displayName = (key: string): string => key.split("/").pop() ?? key;
@@ -373,7 +374,7 @@ const Cell = (props: {
   return b === undefined ? null : <QueueCard id={props.node.name} bundle={b} onOpen={props.onOpenQueue} />;
 };
 
-export const App = (): React.ReactElement => {
+const MobileDashboard = (): React.ReactElement => {
   const [path, setPath] = React.useState<ReadonlyArray<Group>>([TREE]);
   const [focused, setFocused] = React.useState<string | null>(null);
 
@@ -424,3 +425,21 @@ export const App = (): React.ReactElement => {
     </div>
   );
 };
+
+// desktop gets the shadcn / TanStack Table / Recharts layout; narrow screens keep
+// the touch-first drill-down cards.
+const useIsDesktop = (): boolean => {
+  const [wide, setWide] = React.useState(
+    typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches,
+  );
+  React.useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const on = () => setWide(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return wide;
+};
+
+export const App = (): React.ReactElement =>
+  useIsDesktop() ? <DesktopDashboard /> : <MobileDashboard />;
