@@ -1,8 +1,52 @@
-# Resource toolkit — the `changes` stream (note #2 design, for approval)
+# Resource toolkit — the `changes` stream (note #2)
 
-**Status:** designed, **not built** — one API fork needs your call, and a streaming
-round-trip blocker needs investigation (below). This is note #2 from
-`resource-toolkit-contract-notes.md` — the highest-leverage "live" primitive.
+**Status: SHIPPED (Plan A).** `Resource.stream(success, opts?)` is built and proven over a
+**real http transport** (ndjson). The owner ranked this on par with / above the serve+host
+work. The RpcTest blocker below was specific to the in-memory path; the real transport works.
+
+## What shipped
+
+- **`Resource.stream(success, { payload?, error? })`** — a third method constructor beside
+  `query`/`mutate` (Plan A). Counts as a `query` for tools; carries a `stream: true` marker on
+  `Method` (5th type param `Str`). `success` = stream **element** schema, `error` = stream
+  **error** schema.
+- Type wiring: `ServiceMethod` → `Stream<Success, Error>` (property, or `(payload) => Stream`)
+  when `stream`; `RpcOf` → `Rpc<…, RpcSchema.Stream<Success, Error>, Never>`; `buildRpcGroup`
+  passes `stream: true` to `Rpc.make`. `forwardClient` / `serverLayer` / `serveInstances` need
+  **no runtime change** — the client method already returns a `Stream` and the handler returns
+  one; they forward identically (the boundary cast covers the type).
+- `methodMeta` gains `streaming: boolean` (tools can render a "watch" affordance).
+- **Serialization:** streams need a newline-delimited codec for chunked responses — use
+  `RpcSerialization.layerNdjson` (client + server) rather than `layerJson`.
+- Tests: `test/resource-stream-http.test.ts` — (1) a finite snapshot stream over **real http**,
+  chunked + in order; (2) a **`SubscriptionRef`-backed live status** stream (the marquee use
+  case) in-process with a `Deferred` ready-latch (deterministic). Type proof in
+  `test/resource.test-d.ts` (stream member is a `Stream`, not an `Effect`).
+
+## Server impl pattern (live status)
+
+Hold a `SubscriptionRef<Snapshot>`; expose `changes: SubscriptionRef.changes(ref)`; update the
+ref wherever state changes. A subscriber sees the latest value then every subsequent change.
+
+```ts
+const ref = yield* SubscriptionRef.make(initialSnapshot);
+Resource.layer(Status, {
+  set: ({ value }) => SubscriptionRef.set(ref, value),
+  changes: SubscriptionRef.changes(ref),
+});
+```
+
+## Remaining / follow-ups
+
+- Wire a `changes: Resource.stream(queueSnapshot)` into `queueControlSpec` (the queue's live
+  state) — deferred only to avoid destabilizing the RpcTest-based queue tests (the in-memory
+  RpcTest streaming path still has the `_tag undefined` blocker below). Do it alongside a
+  real-http queue test, not the RpcTest one.
+- Investigate the RpcTest streaming blocker if an in-memory streaming test is ever wanted.
+
+---
+
+## Original design notes (kept for reference)
 
 ## Goal
 
@@ -57,7 +101,7 @@ added later as sugar over A if you want the guarantee.)
   otherwise `Effect` as today.
 - `buildRpcGroup`: pass `stream: true` for streaming methods.
 - `forwardClient`: a streaming method returns the client's stream call (already a `Stream`).
-- `serverLayer`/`serverFamily`: handler returns the impl's `Stream` (no change beyond
+- `serverLayer`/`serveInstances`: handler returns the impl's `Stream` (no change beyond
   passing it through).
 - Server impl pattern: hold a `SubscriptionRef<Snapshot>`; `changes = ref.changes`; update
   the ref wherever state changes.

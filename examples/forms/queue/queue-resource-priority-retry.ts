@@ -1,11 +1,12 @@
 /**
  * @module examples/forms/queue/queue-resource-priority-retry
  *
- * QueueResource priority, dedup, lifecycle-hook retry. Run: `pnpm run example:queue-resource`
+ * QueueResource priority, dedup, auto re-enqueue (`attempts`), and observing lifecycle via the
+ * `events` stream with `Resource.runForEachTag`. Run: `pnpm run example:queue-resource`
  */
 
-import { Cause, Data, Duration, Effect, Exit } from "effect";
-import { QueueResource, type QueueHandle } from "../../../src";
+import { Cause, Data, Duration, Effect } from "effect";
+import { QueueResource, Resource, type QueueHandle } from "../../../src";
 
 interface EmailJob {
   readonly id: string;
@@ -37,7 +38,7 @@ class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, SendError>(
     concurrency: 1,
     capacity: 100,
     key: (job) => job.id, // dedup: same id is skipped while in flight
-    retries: 1,
+    attempts: 2, // auto re-enqueue: 2 attempts (1 initial + 1 retry), then exhausted
     effect: (job, ctx) =>
       Effect.gen(function* () {
         yield* Effect.logInfo(
@@ -53,28 +54,28 @@ class EmailQueue extends QueueResource.Service<EmailQueue, EmailJob, SendError>(
 
         yield* Effect.logInfo(`sent:${job.id}`);
       }),
-    // Runs in a forked fiber per item — failures don't block the worker loop.
-    onExit: ({ entry, exit, retry }) =>
-      Exit.match(exit, {
-        onFailure: (cause) =>
-          Effect.gen(function* () {
-            yield* Effect.logWarning(
-              `onExit saw failure for ${entry.item.id}: ${Cause.pretty(cause)}`,
-            );
-            yield* retry;
-          }),
-        onSuccess: () =>
-          Effect.logInfo(`onExit saw success for ${entry.item.id} after ${String(entry.attempts)} attempt(s)`),
-      }),
-    onEnqueued: (batch) =>
-      Effect.logInfo(`enqueued ${String(batch.entries.length)} ${batch.priority} job(s)`),
-    onRetryExhausted: ({ entry, cause }) =>
-      Effect.logError(`dead-letter ${entry.item.id}: ${Cause.pretty(cause)}`),
   },
 ) {}
 
 const program = Effect.gen(function* () {
   const queue = yield* EmailQueue;
+
+  // observe lifecycle off the events stream (replaces the old onExit/onEnqueued/onRetryExhausted
+  // hooks) — one off-fiber subscriber, dispatched by tag.
+  yield* Effect.forkScoped(
+    queue.events.pipe(
+      Resource.runForEachTag({
+        Enqueued: (e) =>
+          Effect.logInfo(`enqueued ${String(e.entries.length)} ${e.priority} job(s)`),
+        Completed: (e) =>
+          Effect.logInfo(`sent ${e.entry.item.id} after ${String(e.entry.attempts)} attempt(s)`),
+        RetryScheduled: (e) =>
+          Effect.logWarning(`retry ${e.entry.item.id}: ${Cause.pretty(e.cause)}`),
+        RetryExhausted: (e) =>
+          Effect.logError(`dead-letter ${e.entry.item.id}: ${Cause.pretty(e.cause)}`),
+      }),
+    ),
+  );
 
   yield* queue.add([
     { id: "welcome", to: "reader@example.com", failFirstAttempt: true },

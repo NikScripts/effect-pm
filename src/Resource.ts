@@ -26,15 +26,107 @@
  * anywhere; only the layer changes:
  * - {@link Resource.layer} — run it locally with a real implementation;
  * - {@link Resource.client} — drive it remotely over RPC, as if local;
- * - {@link Resource.server} — expose one local impl over RPC;
- * - {@link Resource.serverFamily} — serve many factory instances behind one group,
+ * - {@link Resource.server} — expose one local impl over RPC (transport-agnostic handlers);
+ * - {@link Resource.serveInstances} — serve many factory instances behind one group,
  *   routed by the per-call `id` header.
+ *
+ * Over **http**, the batteries-included pair collapses the transport boilerplate (ndjson by
+ * default on both, so client/server can't disagree on the codec):
+ * - {@link Resource.serveHttp} — expose a resource on an http `RpcServer` in one call;
+ * - {@link Resource.connectHttp} — wire a {@link Resource.Host}'s transport from a `url`.
+ *
+ * A method is {@link Resource.query} (one-shot read), {@link Resource.mutate} (mutation), or
+ * {@link Resource.stream} (a live `Stream` source, e.g. `changes`).
  *
  * @module Resource
  */
-import { Context, Effect, Layer, Option, Schema } from "effect";
-import { Headers } from "effect/unstable/http";
-import { Rpc, RpcClient, RpcGroup } from "effect/unstable/rpc";
+import {
+  Context,
+  Data,
+  Effect,
+  Fiber,
+  Function as Fn,
+  Layer,
+  Match,
+  Option,
+  Schema,
+  Scope,
+  Stream,
+} from "effect";
+import { FetchHttpClient, Headers, HttpRouter } from "effect/unstable/http";
+import {
+  Rpc,
+  RpcClient,
+  RpcGroup,
+  RpcSchema,
+  RpcSerialization,
+  RpcServer,
+} from "effect/unstable/rpc";
+
+// ── typed errors (Data.TaggedError — never raw `Error`) ──
+
+/**
+ * Two resources declared the same **instance id**. Effect's `Context` is keyed by the id
+ * string and silently last-write-wins, so we fail fast at declaration.
+ *
+ * @public
+ */
+export class DuplicateResourceId extends Data.TaggedError(
+  "DuplicateResourceId",
+)<{ readonly id: string }> {}
+
+/**
+ * Two resources declared the same **group id** (the wire prefix) — they'd collide on a
+ * shared `RpcServer`.
+ *
+ * @public
+ */
+export class DuplicateGroupId extends Data.TaggedError("DuplicateGroupId")<{
+  readonly groupId: string;
+}> {}
+
+/**
+ * An instance was passed to {@link Resource.serveInstances} more than once.
+ *
+ * @public
+ */
+export class DuplicateInstance extends Data.TaggedError("DuplicateInstance")<{
+  readonly id: string;
+}> {}
+
+/**
+ * A family request reached the server with no routable instance `id` header — a
+ * protocol-level fault (the contract was satisfied), surfaced as a defect.
+ *
+ * @public
+ */
+export class InstanceRoutingError extends Data.TaggedError(
+  "InstanceRoutingError",
+)<{
+  readonly method: string;
+  readonly reason: "missing-id" | "unknown-id";
+  readonly id?: string;
+}> {}
+
+/**
+ * A contract method was absent from the generated RPC client — a wiring bug (the group and
+ * client derive from the same spec, so this should be unreachable).
+ *
+ * @public
+ */
+export class MissingContractMethod extends Data.TaggedError(
+  "MissingContractMethod",
+)<{ readonly method: string }> {}
+
+/**
+ * A {@link Resource.local} (local-only) method was reached through a client. Unreachable by
+ * construction — the {@link LocalCapability} it requires is never granted to a client.
+ *
+ * @public
+ */
+export class LocalOnlyMethod extends Data.TaggedError("LocalOnlyMethod")<{
+  readonly method: string;
+}> {}
 
 /**
  * How a method behaves, for tools (CLI/TUI/dashboard) — **explicit, never inferred**;
@@ -61,44 +153,115 @@ export interface MethodAnnotations {
 }
 
 /** Brands a {@link Method} so a spec entry is distinguishable from a plain object. */
-const MethodTypeId: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/method");
+const methodTypeId: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/method");
 
 /**
- * One method of a resource contract — built by {@link Resource.query} / {@link Resource.mutate}.
- * Carries its `kind`, schemas (`payload` / `success` / `error`), and tool annotations.
- * `.annotate({...})` returns a copy with merged annotations, mirroring Effect's schema idiom.
+ * One method of a resource contract — built by {@link Resource.query} /
+ * {@link Resource.mutate} / {@link Resource.stream}. Carries its `kind`, schemas
+ * (`payload` / `success` / `error`), whether it's a `stream` (a push source vs a one-shot
+ * read), and tool annotations. `.annotate({...})` returns a copy with merged annotations,
+ * mirroring Effect's schema idiom.
+ *
+ * For a streaming method, `success` is the **element** schema and `error` is the **stream
+ * error** schema — they become an `RpcSchema.Stream` on the wire, and the service member
+ * surfaces as a `Stream` rather than an `Effect`.
  *
  * @public
  */
 export interface Method<
   Kind extends MethodKind,
-  P extends Schema.Struct.Fields | undefined,
+  P extends Schema.Struct.Fields | Schema.Top | undefined,
   Su extends Schema.Top,
   E extends Schema.Top,
+  Str extends boolean = false,
 > {
-  readonly [MethodTypeId]: typeof MethodTypeId;
+  readonly [methodTypeId]: typeof methodTypeId;
   readonly kind: Kind;
   readonly payload: P;
   readonly success: Su;
   readonly error: E;
+  /** A streaming read (`Stream` member) when `true`; a one-shot `Effect` otherwise. */
+  readonly stream: Str;
   readonly annotations: MethodAnnotations;
-  readonly annotate: (annotations: MethodAnnotations) => Method<Kind, P, Su, E>;
+  readonly annotate: (
+    annotations: MethodAnnotations,
+  ) => Method<Kind, P, Su, E, Str>;
 }
 
 /** Any {@link Method}, erased — the element type of a {@link Spec}. @public */
 export type AnyMethod = Method<
   MethodKind,
-  Schema.Struct.Fields | undefined,
+  Schema.Struct.Fields | Schema.Top | undefined,
   Schema.Top,
-  Schema.Top
+  Schema.Top,
+  boolean
 >;
 
+/** @internal */
+declare const localCapabilityTypeId: unique symbol;
+
 /**
- * A resource contract: method name → {@link Method}. The single source of truth.
+ * A phantom **capability**, granted *only* by a resource's local layer
+ * ({@link Resource.layer}) — never by {@link Resource.client}. A {@link LocalMethod} carries
+ * it in its requirement channel, so calling a non-serializable method against a client is a
+ * **compile error** (unsatisfied requirement); the same call resolves when the local layer
+ * is provided. Branded by `Self` so one resource's local layer can't unlock another's.
  *
  * @public
  */
-export type Spec = Record<string, AnyMethod>;
+export interface LocalCapability<in out Self> {
+  readonly [localCapabilityTypeId]: Self;
+}
+
+/** Brands a {@link LocalMethod} so a spec entry is distinguishable from a wire {@link Method}. */
+const localMethodTypeId: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/localMethod",
+);
+
+/**
+ * A **local-only** member of a resource contract — built by {@link Resource.local}. It is
+ * *not* part of the wire contract (no schema, no rpc): use it for things that can't cross
+ * RPC simply (a returned function, a raw `Fiber`/`Scope`/`Ref`, a callback). Its declared
+ * type `T` is given directly. In the service it surfaces as
+ * `Effect<T, never, LocalCapability<Self>>` — you `yield*` it to obtain the value, which
+ * requires the local layer's capability.
+ *
+ * @public
+ */
+export interface LocalMethod<T> {
+  readonly [localMethodTypeId]: typeof localMethodTypeId;
+  /** Phantom carrier of the member's local type — type-level only, never set at runtime. */
+  readonly value?: T;
+}
+
+/** Any {@link LocalMethod}, erased. @public */
+export type AnyLocalMethod = LocalMethod<unknown>;
+
+/**
+ * A resource contract: method name → wire {@link Method} or off-wire {@link LocalMethod}.
+ * The single source of truth.
+ *
+ * @public
+ */
+export type Spec = Record<string, AnyMethod | AnyLocalMethod>;
+
+/** Runtime guard: is a spec entry a {@link LocalMethod} (vs a wire {@link Method})? */
+const isLocalMethod = (m: AnyMethod | AnyLocalMethod): m is AnyLocalMethod =>
+  localMethodTypeId in m;
+
+/**
+ * Declare a **local-only** member of type `T` (see {@link LocalMethod}). Not serialized,
+ * not in the wire contract; usable only when the local layer is provided.
+ *
+ * ```ts
+ * subscribe: Resource.local<(cb: (x: number) => void) => Effect.Effect<void>>(),
+ * ```
+ *
+ * @public
+ */
+export const local = <T>(): LocalMethod<T> => ({
+  [localMethodTypeId]: localMethodTypeId,
+});
 
 /**
  * The resolved tool metadata for one method — what CLI/TUI/dashboard read to render it.
@@ -112,11 +275,13 @@ export interface MethodMeta {
   readonly description: string | undefined;
   /** Whether the mutation loses state — only meaningful for `mutate`s. */
   readonly destructive: boolean;
+  /** A streaming read (a live "watch" source) rather than a one-shot value. */
+  readonly streaming: boolean;
 }
 
 /**
- * Read the tool metadata for a {@link Method}: its `kind`, `description`, and `destructive`
- * flag. Pure annotation — does not touch the wire contract.
+ * Read the tool metadata for a {@link Method}: its `kind`, `description`, `destructive`
+ * flag, and whether it `streaming`s. Pure annotation — does not touch the wire contract.
  *
  * @public
  */
@@ -124,29 +289,36 @@ export const methodMeta = (m: AnyMethod): MethodMeta => ({
   kind: m.kind,
   description: m.annotations.description,
   destructive: m.annotations.destructive ?? false,
+  streaming: m.stream,
 });
 
-/** The single {@link Method} constructor — both {@link query} and {@link mutate} go through it. */
+/**
+ * The single {@link Method} constructor — {@link query}, {@link mutate}, and
+ * {@link stream} all go through it.
+ */
 const makeMethod = <
   Kind extends MethodKind,
-  P extends Schema.Struct.Fields | undefined,
+  P extends Schema.Struct.Fields | Schema.Top | undefined,
   Su extends Schema.Top,
   E extends Schema.Top,
+  Str extends boolean,
 >(
   kind: Kind,
   payload: P,
   success: Su,
   error: E,
+  stream: Str,
   annotations: MethodAnnotations,
-): Method<Kind, P, Su, E> => ({
-  [MethodTypeId]: MethodTypeId,
+): Method<Kind, P, Su, E, Str> => ({
+  [methodTypeId]: methodTypeId,
   kind,
   payload,
   success,
   error,
+  stream,
   annotations,
   annotate: (a) =>
-    makeMethod(kind, payload, success, error, { ...annotations, ...a }),
+    makeMethod(kind, payload, success, error, stream, { ...annotations, ...a }),
 });
 
 /**
@@ -191,6 +363,7 @@ export function query(
     options?.payload,
     success,
     options?.error ?? Schema.Never,
+    false,
     {},
   );
 }
@@ -215,6 +388,11 @@ export function mutate<Su extends Schema.Top, const F extends Schema.Struct.Fiel
   success: Su,
   options: { readonly payload: F },
 ): Method<"mutate", F, Su, Schema.Never>;
+// whole-schema payload — the value is passed/decoded directly (e.g. `add(item)`).
+export function mutate<Su extends Schema.Top, P extends Schema.Top>(
+  success: Su,
+  options: { readonly payload: P },
+): Method<"mutate", P, Su, Schema.Never>;
 export function mutate<Su extends Schema.Top, E extends Schema.Top>(
   success: Su,
   options: { readonly error: E },
@@ -227,10 +405,18 @@ export function mutate<
   success: Su,
   options: { readonly payload: F; readonly error: E },
 ): Method<"mutate", F, Su, E>;
+export function mutate<
+  Su extends Schema.Top,
+  P extends Schema.Top,
+  E extends Schema.Top,
+>(
+  success: Su,
+  options: { readonly payload: P; readonly error: E },
+): Method<"mutate", P, Su, E>;
 export function mutate(
   success: Schema.Top,
   options?: {
-    readonly payload?: Schema.Struct.Fields;
+    readonly payload?: Schema.Struct.Fields | Schema.Top;
     readonly error?: Schema.Top;
   },
 ): AnyMethod {
@@ -239,6 +425,60 @@ export function mutate(
     options?.payload,
     success,
     options?.error ?? Schema.Never,
+    false,
+    {},
+  );
+}
+
+/**
+ * Define a **stream** (a live, idempotent push source) whose elements are `success`. The
+ * service member surfaces as a `Stream<Success, Error>` (a property, or `(payload) => Stream`
+ * when a `payload` is declared) rather than an `Effect` — drive dashboard atoms, a CLI
+ * `--watch`, or a TUI from it. Conventionally named `changes` when it carries a resource's
+ * whole observable state (a snapshot stream); back it with a `SubscriptionRef`'s `.changes`.
+ *
+ * Counts as a `query` for tools (an idempotent read). `success` is the **element** schema and
+ * `error` (if any) is the **stream error** schema; both must be encodable (they cross RPC).
+ *
+ * ```ts
+ * changes: Resource.stream(QueueSnapshot).annotate({ description: "Live queue state." }),
+ * tail: Resource.stream(LogLine, { payload: { since: Schema.Number } }),
+ * ```
+ *
+ * @public
+ */
+export function stream<Su extends Schema.Top>(
+  success: Su,
+): Method<"query", undefined, Su, Schema.Never, true>;
+export function stream<Su extends Schema.Top, const F extends Schema.Struct.Fields>(
+  success: Su,
+  options: { readonly payload: F },
+): Method<"query", F, Su, Schema.Never, true>;
+export function stream<Su extends Schema.Top, E extends Schema.Top>(
+  success: Su,
+  options: { readonly error: E },
+): Method<"query", undefined, Su, E, true>;
+export function stream<
+  Su extends Schema.Top,
+  const F extends Schema.Struct.Fields,
+  E extends Schema.Top,
+>(
+  success: Su,
+  options: { readonly payload: F; readonly error: E },
+): Method<"query", F, Su, E, true>;
+export function stream(
+  success: Schema.Top,
+  options?: {
+    readonly payload?: Schema.Struct.Fields;
+    readonly error?: Schema.Top;
+  },
+): AnyMethod {
+  return makeMethod(
+    "query",
+    options?.payload,
+    success,
+    options?.error ?? Schema.Never,
+    true,
     {},
   );
 }
@@ -249,53 +489,108 @@ type SuccessOf<M extends AnyMethod> = M["success"]["Type"];
 
 type ErrorOf<M extends AnyMethod> = M["error"]["Type"];
 
-type PayloadOf<M extends AnyMethod> = M["payload"] extends Schema.Struct.Fields
-  ? Schema.Struct<M["payload"]>["Type"]
-  : never;
-
-type HasPayload<M extends AnyMethod> = [M["payload"]] extends [
-  Schema.Struct.Fields,
-]
-  ? true
-  : false;
+// A payload is either a whole **schema** (the value is decoded directly — e.g. `add(item)`), a
+// **fields record** (decoded as a struct), or `undefined` (no payload). The schema branch is
+// checked first; a concrete-shaped schema type (`Schema.Struct<F>`, `Schema.Array<…>`) resolves
+// `extends Schema.Top` even when its inner field/element params are abstract.
+type PayloadOf<M extends AnyMethod> = M["payload"] extends Schema.Top
+  ? M["payload"]["Type"]
+  : M["payload"] extends infer F extends Schema.Struct.Fields
+    ? Schema.Struct<F>["Type"]
+    : never;
 
 /**
- * The inferred shape of one method: a **property** `Effect<Success, Error>` when there
- * is no payload, or a **function** `(payload) => Effect<Success, Error>` when there is.
+ * The inferred shape of one method. A non-streaming method is an **`Effect`**; a streaming
+ * method ({@link Resource.stream}) is a **`Stream`**. Either is a **property** when there is
+ * no payload, or a **function** `(payload) => …` when there is.
  *
  * @internal
  */
-export type ServiceMethod<M extends AnyMethod> = HasPayload<M> extends true
-  ? (payload: PayloadOf<M>) => Effect.Effect<SuccessOf<M>, ErrorOf<M>>
-  : Effect.Effect<SuccessOf<M>, ErrorOf<M>>;
+// Payload presence is gated on `[M["payload"]] extends [undefined]` — the **absence** case —
+// not on `extends [Schema.Struct.Fields]` (the presence case). This matters: `{ item: Sch }
+// extends Schema.Struct.Fields` is *constraint-dependent* (it needs `Sch extends Schema.Top`),
+// so TS defers it whenever `Sch` is a free parameter (the schemas in `M["payload"]` carry it) —
+// and tuple-wrapping does **not** fix that (it only stops distribution). `… extends [undefined]`
+// is instead decidable with `Sch` fully opaque (an object type is never `undefined`, regardless
+// of `Sch`), so it resolves eagerly under a generic spec. `M["stream"]` is a literal boolean.
+export type ServiceMethod<M extends AnyMethod> = M["stream"] extends true
+  ? [M["payload"]] extends [undefined]
+    ? Stream.Stream<SuccessOf<M>, ErrorOf<M>>
+    : (payload: PayloadOf<M>) => Stream.Stream<SuccessOf<M>, ErrorOf<M>>
+  : [M["payload"]] extends [undefined]
+    ? Effect.Effect<SuccessOf<M>, ErrorOf<M>>
+    : (payload: PayloadOf<M>) => Effect.Effect<SuccessOf<M>, ErrorOf<M>>;
 
 /**
- * The full service interface inferred from a {@link Spec}.
+ * The full service interface inferred from a {@link Spec}. Wire {@link Method}s map to
+ * `Effect`/function members; off-wire {@link LocalMethod}s surface as
+ * `Effect<T, never, LocalCapability<Self>>` — `yield*` to obtain the value, requiring the
+ * local layer's capability (so they're uncallable through {@link Resource.client}).
  *
  * @public
  */
-export type ServiceOf<S extends Spec> = {
-  readonly [K in keyof S]: ServiceMethod<S[K]>;
+// NOTE on the gates below: each entry is `AnyMethod | AnyLocalMethod`, so we branch **only** on
+// the `LocalMethod` brand — a symbol check independent of the method's schemas. The old
+// `: S[K] extends AnyMethod ? … : never` else-gate was always true (everything that isn't a
+// local method *is* a method), so its `never` branch was dead — but checking `extends AnyMethod`
+// drags the entry's payload schemas into the conditional, which makes TS **defer** the whole
+// type whenever those schemas contain a free type parameter (e.g. inside a factory generic over
+// the item schema). Dropping the dead gate and narrowing with `Exclude<…, AnyLocalMethod>`
+// keeps the result identical for every concrete spec while letting it reduce under a generic
+// spec too. See `docs/handoffs/resource-toolkit-new-features.md`.
+export type ServiceOf<S extends Spec, Self = unknown> = {
+  readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
+    ? Effect.Effect<T, never, LocalCapability<Self>>
+    : ServiceMethod<Exclude<S[K], AnyLocalMethod>>;
+};
+
+/** The wire-only service: just the {@link Method}s (used by the server impl + forwarder). */
+type WireServiceOf<S extends Spec> = {
+  readonly [K in keyof S as S[K] extends AnyLocalMethod ? never : K]: ServiceMethod<
+    Exclude<S[K], AnyLocalMethod>
+  >;
+};
+
+/**
+ * The **implementation** shape a {@link Resource.layer} expects: wire methods as
+ * `Effect`/functions, and each {@link LocalMethod} as its **raw** value `T` (the toolkit
+ * wraps it to require the {@link LocalCapability}).
+ */
+type ImplOf<S extends Spec> = {
+  readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
+    ? T
+    : ServiceMethod<Exclude<S[K], AnyLocalMethod>>;
 };
 
 // ── type-level: one Spec → the precisely-typed RPC contract group ──
 
-/** The payload schema of a method: `Schema.Struct<F>` when it declares fields, else `Schema.Void`. */
-type PayloadSchemaOf<M extends AnyMethod> = M["payload"] extends Schema.Struct.Fields
-  ? Schema.Struct<M["payload"]>
-  : Schema.Void;
+/** The rpc payload schema: the schema itself when the payload IS a schema, a `Schema.Struct<F>`
+ * when it declares fields, else `Schema.Void`. */
+type PayloadSchemaOf<M extends AnyMethod> = M["payload"] extends Schema.Top
+  ? M["payload"]
+  : M["payload"] extends infer F extends Schema.Struct.Fields
+    ? Schema.Struct<F>
+    : Schema.Void;
 
-/** The `Rpc` for one spec method — tag = the method name, schemas from the {@link Method}. */
-type RpcOf<K extends string, M extends AnyMethod> = Rpc.Rpc<
-  K,
-  PayloadSchemaOf<M>,
-  M["success"],
-  M["error"]
->;
+/**
+ * The `Rpc` for one spec method — tag = the method name, schemas from the {@link Method}. A
+ * streaming method mirrors `Rpc.make(tag, { …, stream: true })`: its success becomes an
+ * `RpcSchema.Stream` (element + stream-error schemas) and its immediate error is `Never`.
+ */
+type RpcOf<K extends string, M extends AnyMethod> = M["stream"] extends true
+  ? Rpc.Rpc<
+      K,
+      PayloadSchemaOf<M>,
+      RpcSchema.Stream<M["success"], M["error"]>,
+      typeof Schema.Never
+    >
+  : Rpc.Rpc<K, PayloadSchemaOf<M>, M["success"], M["error"]>;
 
-/** The union of every method's {@link RpcOf} — the group's full RPC set. */
+/** The union of every wire method's {@link RpcOf} — the group's full RPC set (local methods excluded). */
 type RpcUnionOf<S extends Spec> = {
-  readonly [K in keyof S & string]: RpcOf<K, S[K]>;
+  readonly [K in keyof S & string]: S[K] extends AnyMethod
+    ? RpcOf<K, S[K]>
+    : never;
 }[keyof S & string];
 
 /**
@@ -340,18 +635,23 @@ export const buildRpcGroup = <const S extends Spec>(
   groupId: string,
   spec: S,
 ): RpcGroupOf<S> => {
-  const rpcs = Object.entries(spec).map(([method, m]) => {
+  const rpcs = Object.entries(spec).flatMap(([method, m]) => {
+    // local-only members are off-wire — they get no rpc.
+    if (isLocalMethod(m)) return [];
     const tag = wireTag(groupId, method);
     const options: {
-      payload?: Schema.Struct.Fields;
+      payload?: Schema.Struct.Fields | Schema.Top;
       success: Schema.Top;
       error: Schema.Top;
+      stream?: boolean;
     } = {
       success: m.success,
       error: m.error,
     };
     if (m.payload !== undefined) options.payload = m.payload;
-    return Rpc.make(tag, options);
+    // streaming methods become an `RpcSchema.Stream` on the wire (element + stream-error).
+    if (m.stream) options.stream = true;
+    return [Rpc.make(tag, options)];
   });
   // Boundary assertion (runtime-correct): each entry is built to be exactly the `Rpc`
   // the type derives from the same `spec` — but `Object.entries` erases the literal keys
@@ -362,10 +662,47 @@ export const buildRpcGroup = <const S extends Spec>(
 
 // ── the Tag: a Context service whose value is `ServiceOf<Spec>` ──
 
-/** Where the contract spec is stowed on a Tag (hidden from the value surface). */
-const SpecSym = Symbol.for("@nikscripts/effect-pm/Resource/spec");
-/** Where the built RPC group is stowed on a Tag (used by the client/server slices). */
-const GroupSym = Symbol.for("@nikscripts/effect-pm/Resource/group");
+/**
+ * Where the contract spec is stowed on a Tag (hidden from the value surface). Exported so
+ * the public {@link ResourceTag} type is nameable across modules.
+ *
+ * @internal
+ */
+export const specSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/spec",
+);
+/** Where the built RPC group is stowed on a Tag. @internal */
+export const groupSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/group",
+);
+/** Where the per-resource local-capability key is stowed on a Tag. @internal */
+export const localCapSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/localCap",
+);
+/** Where the resource's {@link Host} (if any) is stowed on a Tag. @internal */
+export const hostSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/host",
+);
+
+// ── host: the transport for a resource, carried in the Tag ──
+
+/**
+ * The value of a {@link Host} service: the RPC client transport `Protocol` for that host.
+ * `Resource.connect(...)` produces a layer providing exactly this (re-keyed under the host),
+ * and {@link Resource.client} feeds it to `RpcClient.make` as the `RpcClient.Protocol`.
+ *
+ * @internal
+ */
+type HostProtocol = Context.Service.Shape<typeof RpcClient.Protocol>;
+
+/**
+ * The Context key of a {@link Host} (`HSelf` = its identity): a service whose value is the
+ * transport {@link HostProtocol}. Stored on a host-bearing tag under {@link hostSym}; read by
+ * {@link Resource.client} to resolve *where* to connect (its requirement channel).
+ *
+ * @public
+ */
+export type HostKey<HSelf> = Context.Key<HSelf, HostProtocol>;
 
 /**
  * The type of a resource tag carrying spec `S` — what {@link Resource.Tag} / a
@@ -376,15 +713,27 @@ const GroupSym = Symbol.for("@nikscripts/effect-pm/Resource/group");
  * @public
  */
 export interface ResourceTag<Self, S extends Spec>
-  extends Context.Key<Self, ServiceOf<S>> {
+  extends Context.ServiceClass<Self, string, ServiceOf<S, Self>> {
   /** Instance identity — the Context key and the per-call routing header value. */
   readonly id: string;
   /** Wire prefix — namespaces this resource's procedures on a shared `RpcServer`. */
   readonly groupId: string;
   /** Resource-level help text (CLI/TUI section help, dashboard panel title) — if declared. */
   readonly description: string | undefined;
-  readonly [SpecSym]: S;
-  readonly [GroupSym]: RpcGroupOf<S>;
+  readonly [specSym]: S;
+  readonly [groupSym]: RpcGroupOf<S>;
+  readonly [localCapSym]: Context.Key<
+    LocalCapability<Self>,
+    { readonly granted: true }
+  >;
+  /**
+   * The resource's {@link Host} (its transport), or `undefined` for a hostless tag. Uniform
+   * across all tags (always present) so a host-bearing tag stays assignable wherever a plain
+   * {@link ResourceTag} is expected; the host-bearing tag constructors **narrow** this to a
+   * concrete {@link HostKey} in their return type, which is how {@link Resource.client}
+   * discriminates the host-aware path.
+   */
+  readonly [hostSym]: HostKey<unknown> | undefined;
 }
 
 /** Claimed instance ids — duplicate declarations fail fast (Effect won't catch same-key Tags). */
@@ -395,9 +744,7 @@ const claimedGroupIds = new Set<string>();
 /** Reserve a group id (wire prefix); a duplicate **throws** — two resources can't share a prefix. */
 const claimGroupId = (groupId: string): void => {
   if (claimedGroupIds.has(groupId)) {
-    throw new Error(
-      `Resource group id "${groupId}" is already declared — group ids namespace the wire and must be unique.`,
-    );
+    throw new DuplicateGroupId({ groupId });
   }
   claimedGroupIds.add(groupId);
 };
@@ -413,20 +760,26 @@ const buildInstanceTag = <Self, S extends Spec>(
   spec: S,
   group: RpcGroupOf<S>,
   description: string | undefined,
+  host: HostKey<unknown> | undefined,
 ) => {
   if (claimedIds.has(id)) {
-    throw new Error(
-      `Resource id "${id}" is already declared — resource ids must be unique.`,
-    );
+    throw new DuplicateResourceId({ id });
   }
   claimedIds.add(id);
-  const base = Context.Service<Self, ServiceOf<S>>()(id);
+  const base = Context.Service<Self, ServiceOf<S, Self>>()(id);
+  // per-resource local capability — granted only by localLayer, never the client.
+  const localCap: Context.Key<LocalCapability<Self>, { readonly granted: true }> =
+    Context.Service<LocalCapability<Self>, { readonly granted: true }>()(
+      `${id}/__local`,
+    );
   return Object.assign(base, {
     id,
     groupId,
     description,
-    [SpecSym]: spec,
-    [GroupSym]: group,
+    [specSym]: spec,
+    [groupSym]: group,
+    [localCapSym]: localCap,
+    [hostSym]: host,
   });
 };
 
@@ -450,9 +803,23 @@ const buildInstanceTag = <Self, S extends Spec>(
  *
  * @public
  */
-const makeTag =
-  <Self>(id: string, options?: { readonly description?: string }) =>
-  <const S extends Spec>(spec: S) => {
+const makeTag = <Self>(
+  id: string,
+  options?: { readonly description?: string },
+) => {
+  // The spec is the inferring call; the optional `host` rides here (not alongside the
+  // explicit `<Self>` above) so its identity `HSelf` can be inferred from the argument —
+  // a `<Self>`-explicit call can't also infer a second type param. Host-bearing returns
+  // narrow `[hostSym]` to a concrete `HostKey`, which is how `Resource.client` discriminates.
+  function build<const S extends Spec>(spec: S): ResourceTag<Self, S>;
+  function build<const S extends Spec, HSelf>(
+    spec: S,
+    host: HostKey<HSelf>,
+  ): ResourceTag<Self, S> & { readonly [hostSym]: HostKey<HSelf> };
+  function build<const S extends Spec>(
+    spec: S,
+    host?: HostKey<unknown>,
+  ): ResourceTag<Self, S> {
     // single resource: id doubles as the group id (its wire prefix)
     claimGroupId(id);
     return buildInstanceTag<Self, S>(
@@ -461,8 +828,43 @@ const makeTag =
       spec,
       buildRpcGroup(id, spec),
       options?.description,
+      host,
     );
+  }
+  return build;
+};
+
+/**
+ * A {@link tagFor} factory: `<Self>(id) => tag`, plus the shared family metadata
+ * (`groupId` / `description` / spec / group) that {@link serveInstances} reads without an
+ * instance.
+ *
+ * @public
+ */
+export interface TagFactory<S extends Spec> {
+  <Self>(id: string): ResourceTag<Self, S>;
+  readonly groupId: string;
+  readonly description: string | undefined;
+  readonly [specSym]: S;
+  readonly [groupSym]: RpcGroupOf<S>;
+}
+
+/**
+ * A host-bearing {@link tagFor} factory: every instance it makes carries the family's
+ * {@link Host}, so each is a host-bearing tag ({@link Resource.client} resolves the transport
+ * from it). Otherwise identical to {@link TagFactory}.
+ *
+ * @public
+ */
+export interface HostTagFactory<S extends Spec, HSelf> {
+  <Self>(id: string): ResourceTag<Self, S> & {
+    readonly [hostSym]: HostKey<HSelf>;
   };
+  readonly groupId: string;
+  readonly description: string | undefined;
+  readonly [specSym]: S;
+  readonly [groupSym]: RpcGroupOf<S>;
+}
 
 /**
  * Build a **factory** tag-maker that bakes a shared {@link Spec} once under a `groupId`:
@@ -472,41 +874,82 @@ const makeTag =
  * `RpcServer` can host this family next to other resource types without tag collisions;
  * instances are told apart by the per-call `id` header.
  *
+ * Pass `options.host` to bind the whole family to a {@link Host}: every instance becomes a
+ * host-bearing tag and ships only-the-tag (see {@link Resource.client} / {@link Resource.connect}).
+ *
  * ```ts
- * const Queue = Resource.tagFor("queue", { pause: Schema.Void, resume: Schema.Void });
+ * const Queue = Resource.tagFor("queue", { pause: Resource.mutate(Schema.Void) });
  * class Jobs extends Queue<Jobs>("@app/Jobs") {}  // spec baked in; just the instance id
  * class Mail extends Queue<Mail>("@app/Mail") {}  // shares contract + group, routed by id
  * ```
  *
  * @public
  */
-const tagFor = <const S extends Spec>(
+function tagFor<const S extends Spec, HSelf>(
+  groupId: string,
+  spec: S,
+  options: { readonly description?: string; readonly host: HostKey<HSelf> },
+): HostTagFactory<S, HSelf>;
+function tagFor<const S extends Spec>(
   groupId: string,
   spec: S,
   options?: { readonly description?: string },
-) => {
+): TagFactory<S>;
+function tagFor<const S extends Spec>(
+  groupId: string,
+  spec: S,
+  options?: { readonly description?: string; readonly host?: HostKey<unknown> },
+): TagFactory<S> {
   claimGroupId(groupId);
   const group = buildRpcGroup(groupId, spec);
+  const host = options?.host;
   const factory = <Self>(id: string) =>
-    buildInstanceTag<Self, S>(groupId, id, spec, group, options?.description);
+    buildInstanceTag<Self, S>(
+      groupId,
+      id,
+      spec,
+      group,
+      options?.description,
+      host,
+    );
   // Stow the shared groupId/description/spec/group on the factory too, so the family
-  // server ({@link serverFamily}) can read the contract + prefix without an instance.
+  // server ({@link serveInstances}) can read the contract + prefix without an instance.
   return Object.assign(factory, {
     groupId,
     description: options?.description,
-    [SpecSym]: spec,
-    [GroupSym]: group,
+    [specSym]: spec,
+    [groupSym]: group,
   });
-};
+}
 
 /**
- * The **local** layer for a resource: provide a real implementation of its service.
- * (Remote `client` / `server` layers arrive in a later slice.)
+ * The **local** layer for a resource: provide a real implementation of its service. Grants
+ * the resource's {@link LocalCapability}, so any {@link Resource.local} (local-only) members
+ * become callable here — they're a compile error under {@link Resource.client}.
  *
  * @public
  */
-const localLayer = <I, S>(tag: Context.Key<I, S>, impl: S): Layer.Layer<I> =>
-  Layer.succeed(tag, impl);
+const localLayer = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  impl: ImplOf<S>,
+): Layer.Layer<Self | LocalCapability<Self>> => {
+  const cap = tag[localCapSym];
+  const spec = tag[specSym];
+  const members = impl as Record<string, unknown>;
+  const service: Record<string, unknown> = {};
+  for (const [key, m] of Object.entries(spec)) {
+    // local members surface as `Effect<T, never, LocalCapability>` — requiring the cap to
+    // obtain the raw value; wire members pass through unchanged.
+    service[key] = isLocalMethod(m)
+      ? Effect.as(cap, members[key])
+      : members[key];
+  }
+  return Layer.merge(
+    // Boundary assertion (runtime-safe): service is built from the same spec, key-for-key.
+    Layer.succeed(tag, service as ServiceOf<S, Self>),
+    Layer.succeed(cap, { granted: true }),
+  );
+};
 
 /**
  * The **server** handlers layer for a resource: expose a real implementation over RPC by
@@ -518,12 +961,12 @@ const localLayer = <I, S>(tag: Context.Key<I, S>, impl: S): Layer.Layer<I> =>
 const serverLayer = <S extends Spec>(
   tag: {
     readonly groupId: string;
-    readonly [SpecSym]: S;
-    readonly [GroupSym]: RpcGroupOf<S>;
+    readonly [specSym]: S;
+    readonly [groupSym]: RpcGroupOf<S>;
   },
-  impl: ServiceOf<S>,
+  impl: WireServiceOf<S>,
 ): Layer.Layer<HandlerContextOf<S>> => {
-  const group = tag[GroupSym];
+  const group = tag[groupSym];
   const handlers: Record<string, (payload: unknown) => unknown> = {};
   for (const [key, member] of Object.entries(impl)) {
     // handlers are keyed by the wire tag (group-prefixed), matching the group's procedures.
@@ -541,28 +984,64 @@ const serverLayer = <S extends Spec>(
   ) as Layer.Layer<HandlerContextOf<S>>;
 };
 
+/**
+ * Expose a resource over **http** in one call — the server mirror of {@link connectHttp}, and
+ * the batteries-included form of {@link serverLayer}. Mounts the contract group on an http
+ * `RpcServer` at `path` (default `/rpc`) with the impl's handlers and the serialization codec
+ * (default {@link defaultSerialization}, matching the client). The only thing left to provide
+ * is an `HttpServer` (platform-specific — e.g. `NodeHttpServer.layer({ port })`), since the
+ * bind address is a deployment concern:
+ *
+ * ```ts
+ * const JobsServer = Resource.serveHttp(Jobs, jobsImpl).pipe(
+ *   Layer.provideMerge(NodeHttpServer.layer({ port: 3001 })),
+ * );
+ * ```
+ *
+ * @public
+ */
+const serveHttp = <S extends Spec>(
+  tag: {
+    readonly groupId: string;
+    readonly [specSym]: S;
+    readonly [groupSym]: RpcGroupOf<S>;
+  },
+  impl: WireServiceOf<S>,
+  options?: {
+    readonly path?: HttpRouter.PathInput;
+    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+  },
+) =>
+  HttpRouter.serve(
+    RpcServer.layerHttp({
+      group: tag[groupSym],
+      path: options?.path ?? "/rpc",
+      protocol: "http",
+    }).pipe(Layer.provide(serverLayer(tag, impl))),
+  ).pipe(Layer.provideMerge(options?.serialization ?? defaultSerialization));
+
 /** The header carrying the target instance id, set per-call by {@link forwardClient}. */
 const ID_HEADER = "id";
 
 /**
  * One instance of a factory paired with its implementation — the element of
- * {@link Resource.serverFamily}. Built by {@link Resource.instance}.
+ * {@link Resource.serveInstances}. Built by {@link Resource.instance}.
  *
  * @public
  */
 export interface ResourceInstance<S extends Spec> {
   readonly id: string;
-  readonly impl: ServiceOf<S>;
+  readonly impl: WireServiceOf<S>;
 }
 
 /**
- * Pair a factory instance tag with its implementation, for {@link Resource.serverFamily}.
+ * Pair a factory instance tag with its implementation, for {@link Resource.serveInstances}.
  *
  * @public
  */
 const instance = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
-  impl: ServiceOf<S>,
+  impl: WireServiceOf<S>,
 ): ResourceInstance<S> => ({ id: tag.id, impl });
 
 /**
@@ -581,7 +1060,7 @@ const instance = <Self, S extends Spec>(
  * class Jobs extends Queue<Jobs>("@app/Jobs") {}
  * class Mail extends Queue<Mail>("@app/Mail") {}
  *
- * const serveAll = Resource.serverFamily(
+ * const serveAll = Resource.serveInstances(
  *   Queue,
  *   Resource.instance(Jobs, jobsImpl),
  *   Resource.instance(Mail, mailImpl),
@@ -590,25 +1069,23 @@ const instance = <Self, S extends Spec>(
  *
  * @public
  */
-const serverFamily = <S extends Spec>(
+const serveInstances = <S extends Spec>(
   factory: {
     readonly groupId: string;
-    readonly [SpecSym]: S;
-    readonly [GroupSym]: RpcGroupOf<S>;
+    readonly [specSym]: S;
+    readonly [groupSym]: RpcGroupOf<S>;
   },
   ...instances: ReadonlyArray<ResourceInstance<S>>
 ): Layer.Layer<HandlerContextOf<S>> => {
-  const group = factory[GroupSym];
-  const spec = factory[SpecSym];
+  const group = factory[groupSym];
+  const spec = factory[specSym];
 
   // Build the routing table once, at assembly: id → instance impl. A duplicate id
   // is a wiring mistake — fail loudly rather than silently shadow an instance.
-  const table = new Map<string, ServiceOf<S>>();
+  const table = new Map<string, WireServiceOf<S>>();
   for (const { id, impl } of instances) {
     if (table.has(id)) {
-      throw new Error(
-        `Resource server family: instance id "${id}" is listed more than once.`,
-      );
+      throw new DuplicateInstance({ id });
     }
     table.set(id, impl);
   }
@@ -626,17 +1103,13 @@ const serverFamily = <S extends Spec>(
       const id = Option.getOrUndefined(Headers.get(options.headers, ID_HEADER));
       if (id === undefined) {
         return Effect.die(
-          new Error(
-            `Resource server family: request for "${key}" is missing the "${ID_HEADER}" header.`,
-          ),
+          new InstanceRoutingError({ method: key, reason: "missing-id" }),
         );
       }
       const impl = table.get(id);
       if (impl === undefined) {
         return Effect.die(
-          new Error(
-            `Resource server family: no instance registered for id "${id}".`,
-          ),
+          new InstanceRoutingError({ method: key, reason: "unknown-id", id }),
         );
       }
       const member = (impl as Record<string, unknown>)[key];
@@ -658,17 +1131,17 @@ const serverFamily = <S extends Spec>(
  * @internal
  */
 export const groupOf = <S extends Spec>(tag: {
-  readonly [SpecSym]: S;
-  readonly [GroupSym]: RpcGroupOf<S>;
-}): RpcGroupOf<S> => tag[GroupSym];
+  readonly [specSym]: S;
+  readonly [groupSym]: RpcGroupOf<S>;
+}): RpcGroupOf<S> => tag[groupSym];
 
 /**
  * The {@link Spec} a tag was built from — used to wire the client forwarder and tests.
  *
  * @internal
  */
-export const specOf = <S extends Spec>(tag: { readonly [SpecSym]: S }): S =>
-  tag[SpecSym];
+export const specOf = <S extends Spec>(tag: { readonly [specSym]: S }): S =>
+  tag[specSym];
 
 /**
  * Map an RPC client + a spec into the typed service, forwarding each method to its
@@ -683,24 +1156,22 @@ export const forwardClient = <S extends Spec>(
   spec: S,
   groupId: string,
   id: string,
-): ServiceOf<S> => {
+): WireServiceOf<S> => {
   const headers = { id };
-  const calls = rpc as Record<
-    string,
-    (
-      payload: unknown,
-      options?: { readonly headers?: Record<string, string> },
-    ) => Effect.Effect<unknown, unknown>
-  >;
+  // narrowest possible assertion: keyed by string only — the precise per-tag signatures are
+  // erased by the dynamic lookup, so we assert nothing about the values and instead verify
+  // each is callable at runtime before use (a malformed client fails loudly, never mis-calls).
+  const calls = rpc as Record<string, unknown>;
   const service: Record<string, unknown> = {};
   for (const [key, m] of Object.entries(spec)) {
+    // local-only members aren't on the wire — the client stubs them (see clientLayer).
+    if (isLocalMethod(m)) continue;
     // the wire tag is group-prefixed; the service surface keeps the bare method name
     const call = calls[wireTag(groupId, key)];
-    // completeness check — fail loudly if a contract method isn't on the client
-    if (call === undefined) {
-      throw new Error(
-        `Resource client: contract method "${key}" is missing from the RPC client.`,
-      );
+    // completeness + callability check — `typeof` narrows `call` to a callable, so the
+    // invocations below need no further assertion.
+    if (typeof call !== "function") {
+      throw new MissingContractMethod({ method: key });
     }
     service[key] =
       m.payload === undefined
@@ -709,31 +1180,385 @@ export const forwardClient = <S extends Spec>(
   }
   // Boundary assertion (runtime-safe): every method verified present above; RPC validates
   // every payload/result against the spec schemas at the wire.
-  return service as ServiceOf<S>;
+  return service as WireServiceOf<S>;
 };
 
 /**
- * The **client** layer for a resource: drive it over RPC **as if it were local** —
- * the exact same `yield* Tag` code as the local layer, only the provided layer differs,
- * so it doesn't matter where the resource is actually running. Needs an ambient RPC
- * `Protocol` (the transport).
+ * Declare a **host** — a named transport endpoint a resource connects to. A `Context.Service`
+ * whose value is the RPC client {@link HostProtocol}; extend it like any Effect service:
+ *
+ * ```ts
+ * class EdgeHost extends Resource.Host<EdgeHost>("edge") {}
+ * ```
+ *
+ * Attach it to a tag (`Resource.Tag<Self>(id)(spec, EdgeHost)`) to make the tag carry its own
+ * transport — then ship only the tag: {@link Resource.client} reads the host to resolve where
+ * to connect, and a consumer wires the transport once with {@link Resource.connect}.
  *
  * @public
  */
-const clientLayer = <Self, S extends Spec>(
-  tag: Context.Key<Self, ServiceOf<S>> & {
-    readonly id: string;
-    readonly groupId: string;
-    readonly [SpecSym]: S;
-    readonly [GroupSym]: RpcGroupOf<S>;
+const makeHost = <Self>(name: string) =>
+  Context.Service<Self, HostProtocol>()(name);
+
+/**
+ * Wire a {@link Host}'s transport, **once**, from any RPC client `Protocol` layer — the
+ * transport-agnostic primitive (use {@link connectHttp} for the batteries-included http case).
+ * Re-keys that `Protocol` under the host, so {@link Resource.client} resolves it for every tag
+ * bound to this host; provide one `Resource.connect(...)` per host an app talks to.
+ *
+ * ```ts
+ * const EdgeLive = Resource.connect(EdgeHost, RpcClient.layerProtocolWebsocket({ url }).pipe(
+ *   Layer.provide(RpcSerialization.layerNdjson),
+ *   Layer.provide(socketLayer),
+ * ));
+ * ```
+ *
+ * @public
+ */
+const connectLayer = <Self, RIn>(
+  host: HostKey<Self>,
+  protocol: Layer.Layer<RpcClient.Protocol, never, RIn>,
+): Layer.Layer<Self, never, RIn> =>
+  Layer.effect(host, RpcClient.Protocol).pipe(Layer.provide(protocol));
+
+/** The default RPC serialization: newline-delimited JSON — handles both one-shot and
+ * **streaming** responses, and is shared by {@link connectHttp} + {@link serveHttp} so a
+ * client and server can't silently disagree on the codec. */
+const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization> =
+  RpcSerialization.layerNdjson;
+
+/**
+ * Wire a {@link Host}'s transport over **http**, the common case — `Resource.connect` with
+ * batteries included. Builds the http client `Protocol` (Fetch + serialization) from a `url`
+ * and re-keys it under the host. Serialization defaults to {@link defaultSerialization}
+ * (ndjson), matching {@link serveHttp}'s default so the two sides agree by construction.
+ *
+ * ```ts
+ * const EdgeLive = Resource.connectHttp(EdgeHost, { url: "http://10.0.0.2:3002/rpc" });
+ * ```
+ *
+ * @public
+ */
+const connectHttp = <Self>(
+  host: HostKey<Self>,
+  options: {
+    readonly url: string;
+    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
-) =>
-  Layer.effect(
-    tag,
-    Effect.map(RpcClient.make(tag[GroupSym]), (rpc) =>
-      forwardClient(rpc, tag[SpecSym], tag.groupId, tag.id),
+): Layer.Layer<Self> =>
+  connectLayer(
+    host,
+    RpcClient.layerProtocolHttp({ url: options.url }).pipe(
+      Layer.provide(options.serialization ?? defaultSerialization),
+      Layer.provide(FetchHttpClient.layer),
     ),
   );
+
+/**
+ * Build the client-side service for a tag from a wired RPC client: forward every wire method
+ * (group-prefixed, id-pinned), and stub each {@link Resource.local} member with a value that
+ * requires the never-granted {@link LocalCapability} (so calling one through a client is a
+ * compile error, and unreachable at runtime). Shared by both {@link clientLayer} paths.
+ */
+const buildClientService = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  rpc: unknown,
+): ServiceOf<S, Self> => {
+  const wire = forwardClient(rpc, tag[specSym], tag.groupId, tag.id) as Record<
+    string,
+    unknown
+  >;
+  const cap = tag[localCapSym];
+  const service: Record<string, unknown> = { ...wire };
+  for (const [key, m] of Object.entries(tag[specSym])) {
+    if (isLocalMethod(m)) {
+      service[key] = Effect.flatMap(cap, () =>
+        Effect.die(new LocalOnlyMethod({ method: key })),
+      );
+    }
+  }
+  // Boundary assertion (runtime-safe): built from the spec, key-for-key.
+  return service as ServiceOf<S, Self>;
+};
+
+/**
+ * The **client** layer for a resource: drive it over RPC **as if it were local** — the exact
+ * same `yield* Tag` code as the local layer, only the provided layer differs, so it doesn't
+ * matter where the resource actually runs.
+ *
+ * Two paths, by whether the tag carries a {@link Host}:
+ * - **host-bearing tag** — the transport is resolved from the tag's host; the layer's only
+ *   requirement is that host (satisfied by {@link Resource.connect}). Ship just the tag.
+ * - **hostless tag** — the transport is taken from the ambient `RpcClient.Protocol`, supplied
+ *   at wire-up. (Remote use stays optional: a hostless resource can also just run locally via
+ *   {@link Resource.layer}, or be served as its own process.)
+ *
+ * @public
+ */
+function clientLayer<Self, S extends Spec, HSelf>(
+  tag: ResourceTag<Self, S> & { readonly [hostSym]: HostKey<HSelf> },
+): Layer.Layer<Self, never, HSelf>;
+function clientLayer<Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+): Layer.Layer<Self, never, RpcClient.Protocol>;
+function clientLayer<Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+): Layer.Layer<Self, never, RpcClient.Protocol> {
+  const group = tag[groupSym];
+  const host = tag[hostSym];
+  // hostless: take the transport from the ambient `RpcClient.Protocol` — fully typed, no cast.
+  if (host === undefined) {
+    return Layer.effect(
+      tag,
+      Effect.map(RpcClient.make(group), (client) =>
+        buildClientService(tag, client),
+      ),
+    );
+  }
+  // host-bearing: resolve the transport from the host and provide it locally to the client, so
+  // the layer requires the host rather than the ambient Protocol. The host's identity is erased
+  // to `unknown` on the base tag; the `host`-overload pins the precise `HSelf` for callers, so
+  // this one contained boundary assertion restates the impl's return type (runtime-safe).
+  const layer = Layer.effect(
+    tag,
+    Effect.map(
+      Effect.flatMap(host, (protocol) =>
+        Effect.provideService(
+          RpcClient.make(group),
+          RpcClient.Protocol,
+          protocol,
+        ),
+      ),
+      (client) => buildClientService(tag, client),
+    ),
+  );
+  return layer as Layer.Layer<Self, never, RpcClient.Protocol>;
+}
+
+/** A wire-only instance tag for {@link clientInstances} — keyed via the covariant
+ * {@link Context.Key} base so distinct `Self`s are accepted without `any`. @internal */
+type WireInstanceTag<S extends Spec> = Context.Key<unknown, WireServiceOf<S>> & {
+  readonly id: string;
+};
+
+/** The instance identifiers a {@link clientInstances} layer provides (the union of tag `Self`s). */
+type InstanceIdentifiers<
+  Tags extends ReadonlyArray<unknown>,
+  S extends Spec,
+> = Tags[number] extends Context.Key<infer Self, WireServiceOf<S>> ? Self : never;
+
+/**
+ * The **client** layer for **many instances of one factory**, sharing a single RPC client —
+ * the client mirror of {@link Resource.serveInstances}. Builds **one** `RpcClient` for the
+ * family's group and provides every instance's handle from it, each pinned to its own `id`
+ * header. So 100 instances of one control shape cost **one** client (and one shared
+ * connection), not one client each — the contract/group/schemas are already shared.
+ *
+ * Wire-only: instances declaring {@link Resource.local} members aren't accepted (their service
+ * type is wider than the wire) — use {@link Resource.client} per instance for those.
+ *
+ * @public
+ */
+const clientInstances = <
+  S extends Spec,
+  const Tags extends ReadonlyArray<WireInstanceTag<S>>,
+>(
+  factory: {
+    readonly groupId: string;
+    readonly [specSym]: S;
+    readonly [groupSym]: RpcGroupOf<S>;
+  },
+  ...tags: Tags
+): Layer.Layer<InstanceIdentifiers<Tags, S>, never, RpcClient.Protocol> =>
+  Layer.effectContext(
+    Effect.map(RpcClient.make(factory[groupSym]), (rpc) => {
+      let context = Context.empty();
+      for (const tag of tags) {
+        const service = forwardClient(
+          rpc,
+          factory[specSym],
+          factory.groupId,
+          tag.id,
+        );
+        context = Context.add(context, tag, service);
+      }
+      // The only cast here: TS can't track the identifier union accumulated by the
+      // per-instance `Context.add` loop. Runtime-safe — built key-for-key from `tags`.
+      return context as Context.Context<InstanceIdentifiers<Tags, S>>;
+    }),
+  );
+
+// ── stream helpers: tag-dispatched consumption of an event stream ──
+
+/** Anything with a string discriminant `_tag` — the element of an event stream. @internal */
+type TaggedEvent = { readonly _tag: string };
+
+/**
+ * A partial set of per-`_tag` handlers over a tagged-event union — the handler-map form of
+ * {@link Resource.runForEachTag}. Each handler receives the **narrowed** event for its tag.
+ *
+ * @public
+ */
+export type TagHandlers<A extends TaggedEvent, E, R> = Partial<{
+  readonly [K in A["_tag"]]: (
+    event: Extract<A, { readonly _tag: K }>,
+  ) => Effect.Effect<void, E, R>;
+}>;
+
+/** The union of every handler's error channel (extracted via `infer`, like `Effect.catchTags`). */
+type HandlersError<Cases> = {
+  [K in keyof Cases]: Cases[K] extends (
+    event: never,
+  ) => Effect.Effect<unknown, infer E, unknown>
+    ? E
+    : never;
+}[keyof Cases];
+
+/** The union of every handler's requirement channel — so `R` doesn't leak to `unknown`. */
+type HandlersContext<Cases> = {
+  [K in keyof Cases]: Cases[K] extends (
+    event: never,
+  ) => Effect.Effect<unknown, unknown, infer R>
+    ? R
+    : never;
+}[keyof Cases];
+
+/**
+ * Consume a tagged-event {@link Stream}, dispatching each element to a handler by its `_tag` —
+ * the stream-native replacement for lifecycle callbacks (one off-fiber consumer, not a fiber
+ * per item). Pass a **single tag + handler** or a **handler map**; **data-first or pipeable**.
+ * Built on `Match`, so handlers are fully typed with no casts; unhandled tags are ignored.
+ *
+ * ```ts
+ * yield* jobs.events.pipe(Resource.runForEachTag({
+ *   Failed:  ({ entry, cause }) => Effect.logError(`failed ${entry.entryId}`, cause),
+ *   Drained: ({ completed })    => Effect.log(`drained @ ${completed}`),
+ * }))
+ * yield* Resource.runForEachTag(jobs.events, "Exit", (e) =>
+ *   e.exit.pipe(Effect.catchTags({ Timeout: …, Rejected: … })),
+ * )
+ * ```
+ *
+ * @public
+ */
+export const runForEachTag: {
+  // ── data-last (pipeable) ──
+  // `Cases` is inferred from the literal; E/R are EXTRACTED from the handlers via `infer`
+  // (not inferrable params), so `A` can unify at the pipe site without dragging R to `unknown`.
+  <
+    A extends TaggedEvent,
+    Cases extends TagHandlers<A, unknown, unknown>,
+  >(
+    handlers: Cases,
+  ): (
+    self: Stream.Stream<A>,
+  ) => Effect.Effect<void, HandlersError<Cases>, HandlersContext<Cases>>;
+  <A extends TaggedEvent, const K extends A["_tag"], E, R>(
+    tag: K,
+    f: (event: Extract<A, { readonly _tag: K }>) => Effect.Effect<void, E, R>,
+  ): (self: Stream.Stream<A>) => Effect.Effect<void, E, R>;
+  // ── data-first ──
+  <A extends TaggedEvent, const K extends A["_tag"], E, R>(
+    self: Stream.Stream<A>,
+    tag: K,
+    f: (event: Extract<A, { readonly _tag: K }>) => Effect.Effect<void, E, R>,
+  ): Effect.Effect<void, E, R>;
+  <A extends TaggedEvent, Cases extends TagHandlers<A, unknown, unknown>>(
+    self: Stream.Stream<A>,
+    handlers: Cases,
+  ): Effect.Effect<void, HandlersError<Cases>, HandlersContext<Cases>>;
+} = Fn.dual(
+  (args) => Stream.isStream(args[0]),
+  // Impl is typed over the concrete `TaggedEvent` base so `Match` (which needs a concrete
+  // union, not a generic) type-checks with no casts; the overload signatures above carry the
+  // precise per-tag types to callers.
+  <E, R>(
+    self: Stream.Stream<TaggedEvent>,
+    tagOrHandlers: string | TagHandlers<TaggedEvent, E, R>,
+    f?: (event: TaggedEvent) => Effect.Effect<void, E, R>,
+  ): Effect.Effect<void, E, R> => {
+    const matcher =
+      typeof tagOrHandlers === "string"
+        ? Match.type<TaggedEvent>().pipe(
+            Match.tag(tagOrHandlers, f ?? (() => Effect.void)),
+            Match.orElse(() => Effect.void),
+          )
+        : Match.type<TaggedEvent>().pipe(
+            Match.tags(tagOrHandlers),
+            Match.orElse(() => Effect.void),
+          );
+    return Stream.runForEach(self, matcher);
+  },
+);
+
+/**
+ * Like {@link runForEachTag}, but **non-blocking**: it forks the consumer into the enclosing
+ * {@link Scope} ({@link Effect.forkScoped}) and hands back the {@link Fiber}, instead of running
+ * the stream to completion. This is the common case for live observation — start watching the
+ * `events`/`status`/`metrics` of a queue (or any tagged stream) in the background while the rest
+ * of your program runs; the fiber is **interrupted automatically when the scope closes** (the
+ * `Effect.scoped` block ends, or the owning layer is torn down), so you never track or kill it.
+ *
+ * Each handler's error surfaces in the **fiber's** failure channel (not the caller's). If you
+ * instead want to *block* until a (finite) stream drains — e.g. in a test — use
+ * {@link runForEachTag} and `yield*` it directly, or `Fiber.join` the fiber this returns.
+ *
+ * ```ts
+ * // no manual `Effect.forkScoped` — observation runs in the background, bound to the scope
+ * yield* queue.events.pipe(Resource.runForEachTagScoped({
+ *   Completed: ({ entry }) => Effect.log(`done ${entry.entryId}`),
+ *   Failed:    ({ cause }) => Effect.logError("job failed", cause),
+ * }))
+ * ```
+ *
+ * @public
+ */
+export const runForEachTagScoped: {
+  // ── data-last (pipeable) ──
+  <A extends TaggedEvent, Cases extends TagHandlers<A, unknown, unknown>>(
+    handlers: Cases,
+  ): (
+    self: Stream.Stream<A>,
+  ) => Effect.Effect<
+    Fiber.Fiber<void, HandlersError<Cases>>,
+    never,
+    HandlersContext<Cases> | Scope.Scope
+  >;
+  <A extends TaggedEvent, const K extends A["_tag"], E, R>(
+    tag: K,
+    f: (event: Extract<A, { readonly _tag: K }>) => Effect.Effect<void, E, R>,
+  ): (
+    self: Stream.Stream<A>,
+  ) => Effect.Effect<Fiber.Fiber<void, E>, never, R | Scope.Scope>;
+  // ── data-first ──
+  <A extends TaggedEvent, const K extends A["_tag"], E, R>(
+    self: Stream.Stream<A>,
+    tag: K,
+    f: (event: Extract<A, { readonly _tag: K }>) => Effect.Effect<void, E, R>,
+  ): Effect.Effect<Fiber.Fiber<void, E>, never, R | Scope.Scope>;
+  <A extends TaggedEvent, Cases extends TagHandlers<A, unknown, unknown>>(
+    self: Stream.Stream<A>,
+    handlers: Cases,
+  ): Effect.Effect<
+    Fiber.Fiber<void, HandlersError<Cases>>,
+    never,
+    HandlersContext<Cases> | Scope.Scope
+  >;
+} = Fn.dual(
+  (args) => Stream.isStream(args[0]),
+  <E, R>(
+    self: Stream.Stream<TaggedEvent>,
+    tagOrHandlers: string | TagHandlers<TaggedEvent, E, R>,
+    f?: (event: TaggedEvent) => Effect.Effect<void, E, R>,
+  ): Effect.Effect<Fiber.Fiber<void, E>, never, R | Scope.Scope> =>
+    // Delegate to the blocking consumer, then fork it into the enclosing scope. The two-arg
+    // (single-tag) and one-arg (handler-map) shapes are dispatched by `runForEachTag` itself.
+    Effect.forkScoped(
+      f === undefined
+        ? runForEachTag(self, tagOrHandlers as TagHandlers<TaggedEvent, E, R>)
+        : runForEachTag(self, tagOrHandlers as string, f),
+    ),
+);
 
 /**
  * Resource toolkit — schema-defined service tags. Same `yield* Tag` everywhere; only the
@@ -745,11 +1570,20 @@ const clientLayer = <Self, S extends Spec>(
 export const Resource = {
   Tag: makeTag,
   tagFor,
+  Host: makeHost,
+  connect: connectLayer,
+  connectHttp,
   query,
   mutate,
+  stream,
+  local,
   instance,
   layer: localLayer,
   server: serverLayer,
-  serverFamily,
+  serveHttp,
+  serveInstances,
   client: clientLayer,
+  clientInstances,
+  runForEachTag,
+  runForEachTagScoped,
 } as const;

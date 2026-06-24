@@ -7,7 +7,7 @@ exist yet. Build this *with* Host when Host lands, not bolted on afterward.
 
 `src/Resource.ts` is the resource toolkit: schema-defined service tags with
 location-transparent layers (`Resource.layer` local, `Resource.client` remote,
-`Resource.server` / `Resource.serverFamily` to expose impls over RPC). One `RpcServer`
+`Resource.server` / `Resource.serveInstances` to expose impls over RPC). One `RpcServer`
 hosts **many** resource types; procedure wire tags are namespaced by a **group id**
 prefix (`queue/pause`, `process/stop`) so unrelated resources can't collide. A
 `Resource.Host` (deferred) will hold the connection/transport info a remote resource is

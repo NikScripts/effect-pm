@@ -3,10 +3,21 @@
  *
  * Provides a three-level priority queue (high, normal, low) backed by bounded
  * Effect `Queue`s with configurable concurrency, optional start-gap throttling,
- * deduplication, retry,
- * and lifecycle hooks. Workers are managed fibers tracked by `FiberSet`; pause/resume
- * is implemented via `Latch`; empty-queue blocking uses a `Deferred` wake signal to
- * avoid priority inversion.
+ * deduplication, and automatic re-enqueue retry (`attempts`). Workers are managed
+ * fibers tracked by `FiberSet`; pause/resume is implemented via `Latch`; empty-queue
+ * blocking uses a `Deferred` wake signal to avoid priority inversion.
+ *
+ * **Observability is via streams, not callbacks.** Every handle exposes
+ * {@link QueueHandleApi.events} (discrete {@link QueueEvent}s), {@link QueueHandleApi.status}
+ * (current-state snapshots), and {@link QueueHandleApi.metrics} (windowed). Subscribe with
+ * `Stream.runForEach` / `Resource.runForEachTag`; failures arrive typed on the `Failed`/`Exit`
+ * events (`e.exit.pipe(Effect.catchTag(...))`). Retry is the `attempts` policy — for in-place
+ * effect retry, put `Effect.retry` on your `effect`. For per-error disposition (retry vs
+ * dead-letter vs drop), set the inline {@link QueueOnFailure | onFailure} control hook.
+ *
+ * **OTEL.** Beyond the observation streams, the engine registers Effect `Metric`s (per-queue
+ * tagged `queue_*_total` counters, a `queue_in_flight` gauge, and a
+ * `queue_processing_duration_ms` histogram) so a metric reader exports them to OpenTelemetry.
  *
  * ## Entry points
  *
@@ -20,27 +31,28 @@
  * ## Usage
  *
  * ```ts
- * import { Effect, Layer } from "effect"
- * import { QueueResource } from "@nikscripts/effect-pm"
+ * import { Effect, Stream } from "effect"
+ * import { QueueResource, Resource } from "@nikscripts/effect-pm"
  *
  * // Declare service via class factory
  * const EmailQueue = QueueResource.Service<typeof EmailQueue, Email, SmtpError>()(
  *   "@app/EmailQueue",
  *   {
  *     effect: (email, ctx) => sendEmail(email).pipe(Effect.asVoid),
- *     onExit: ({ exit, retry }) =>
- *       Exit.match(exit, {
- *         onFailure: () => retry,
- *         onSuccess: () => Effect.void,
- *       }),
  *     concurrency: 5,
- *     retries: 3,
+ *     attempts: 3, // auto re-enqueue failed items up to 3 attempts
  *   },
  * )
  *
- * // Use in program
+ * // Use in program; observe lifecycle off the events stream
  * const program = Effect.gen(function*() {
  *   const queue = yield* EmailQueue
+ *   yield* queue.events.pipe(
+ *     Resource.runForEachTag({
+ *       Failed: ({ entry, cause }) => Effect.logError(`failed ${entry.entryId}`, cause),
+ *     }),
+ *     Effect.forkScoped,
+ *   )
  *   yield* queue.add([email1, email2])
  * })
  *
@@ -64,12 +76,16 @@ import {
   HashSet,
   Latch,
   Layer,
+  Metric,
   Option,
+  PubSub,
   Queue,
   Ref,
   Schema,
   Scope,
   Semaphore,
+  Stream,
+  SubscriptionRef,
   Types,
 } from "effect";
 import {
@@ -143,7 +159,40 @@ export const QueueItemCodecDescriptorSchema = Schema.Struct({
 });
 
 /**
- * Build a {@link QueueItemCodecDescriptor} from a live Effect `Schema` value.
+ * Annotation key carrying an item schema's **version** — the anchor for the `@vN` marker that
+ * travels on released / handoff entries and the future upcast/migration history.
+ *
+ * @public
+ */
+export const schemaVersionAnnotation = "schemaVersion";
+
+/**
+ * Stamp an item schema with its version. Bump it on any **breaking** change to the item shape;
+ * evolve **additively** within a version (so a newer receiver still accepts same-version entries
+ * from an older sender). The version flows into {@link makeQueueItemCodecDescriptor}'s `id`
+ * (`…/item@vN`) and `version`, making every released/handoff entry self-describing.
+ *
+ * @public
+ */
+export const withSchemaVersion = <S extends Schema.Top>(
+  schema: S,
+  version: number,
+): S["Rebuild"] => schema.annotate({ schemaVersion: version });
+
+/**
+ * Read an item schema's {@link withSchemaVersion | version}; defaults to `1` when unannotated.
+ *
+ * @public
+ */
+export const schemaVersionOf = (schema: Schema.Top): number => {
+  const annotated = Schema.resolveAnnotations(schema)?.[schemaVersionAnnotation];
+  return typeof annotated === "number" ? annotated : 1;
+};
+
+/**
+ * Build a {@link QueueItemCodecDescriptor} from a live Effect `Schema` value. The descriptor's
+ * `id` (`…/item@vN`) and `version` are taken from the schema's {@link withSchemaVersion} stamp
+ * (default `1`), so the descriptor self-describes the schema version for handoff / drift checks.
  *
  * @public
  */
@@ -152,11 +201,12 @@ export const makeQueueItemCodecDescriptor = <T>(
   itemSchema: Schema.Codec<T, unknown, never, never>,
   options?: { readonly version?: string },
 ): QueueItemCodecDescriptor => {
+  const version = schemaVersionOf(itemSchema);
   const wrapped = Schema.toStandardJSONSchemaV1(itemSchema);
   const jsonSchema = wrapped["~standard"].jsonSchema.input({ target: "draft-07" });
   return {
-    id: `${queueId}/item@v1`,
-    version: options?.version ?? "1.0.0",
+    id: `${queueId}/item@v${String(version)}`,
+    version: options?.version ?? String(version),
     encoding: "json",
     jsonSchema,
   };
@@ -195,23 +245,35 @@ export class QueueBatchValidationError extends Data.TaggedError("QueueBatchValid
 /**
  * Encoded release was requested for a queue without `itemSchema`.
  *
+ * `Schema.TaggedErrorClass` so it is both a yieldable/throwable error **and** wire-encodable —
+ * it is part of the `releaseEncoded` RPC error channel (see `QueueContract`).
+ *
  * @public
  */
-export class QueueMissingItemSchemaError extends Data.TaggedError("QueueMissingItemSchemaError")<{
-  readonly queue: string;
-}> {}
+export class QueueMissingItemSchemaError extends Schema.TaggedErrorClass<QueueMissingItemSchemaError>()(
+  "QueueMissingItemSchemaError",
+  {
+    queue: Schema.String,
+  },
+) {}
 
 /**
  * A queue item failed schema encoding while preparing a wire handoff release.
  *
+ * `Schema.TaggedErrorClass` so it is both a yieldable/throwable error **and** wire-encodable —
+ * it is part of the `releaseEncoded` RPC error channel (see `QueueContract`).
+ *
  * @public
  */
-export class QueueItemEncodingError extends Data.TaggedError("QueueItemEncodingError")<{
-  readonly queue: string;
-  readonly entryId: string;
-  readonly message: string;
-  readonly codecId?: string;
-}> {}
+export class QueueItemEncodingError extends Schema.TaggedErrorClass<QueueItemEncodingError>()(
+  "QueueItemEncodingError",
+  {
+    queue: Schema.String,
+    entryId: Schema.String,
+    message: Schema.String,
+    codecId: Schema.optionalKey(Schema.String),
+  },
+) {}
 
 /** @public */
 export type QueueReleaseEncodingError = QueueMissingItemSchemaError | QueueItemEncodingError;
@@ -220,13 +282,27 @@ export type QueueReleaseEncodingError = QueueMissingItemSchemaError | QueueItemE
  * Enqueue a single item or a readonly batch of items.
  *
  * @typeParam E - Validation errors when {@link QueueResourceConfig.itemSchema} is set
- * @typeParam R - Dependencies needed to run enqueue-time hooks (`onEnqueued`, …) when called from the ambient program
+ * @typeParam R - Dependencies needed to encode items (schema requirements) when called from the ambient program
  *
  * @public
  */
 export interface QueueEnqueue<T, E = never, R = never> {
   (item: T): Effect.Effect<void, E, R>;
   (items: ReadonlyArray<T>): Effect.Effect<void, E, R>;
+}
+
+/**
+ * Re-inject existing {@link QueueEntry}s (single or array) — the inverse of `release`, and the
+ * input you get straight off the {@link QueueHandleApi.events} stream. Unlike {@link QueueEnqueue}
+ * (raw items `T`, you pick the priority), each entry re-enters at **its own** `priority` with its
+ * **`attempts`** count preserved (so a job mid-retry keeps its budget). For handoff / event
+ * round-trips: `yield* queue.enqueue(event.entries)`.
+ *
+ * @public
+ */
+export interface QueueEnqueueEntries<T, R = never> {
+  (entry: QueueEntry<T>): Effect.Effect<void, never, R>;
+  (entries: ReadonlyArray<QueueEntry<T>>): Effect.Effect<void, never, R>;
 }
 
 /**
@@ -251,7 +327,7 @@ export type QueueHandlePhantomWorkerFailures<E = never> = {
  * @typeParam T - Item type processed by this queue
  * @typeParam E - Recoverable/item failure channel of the worker `effect`
  * @typeParam EEnqueue - Errors from schema-backed enqueue validation (see {@link QueueResourceConfig.itemSchema})
- * @typeParam R - Dependencies required while running worker `effect`, `handler`, hooks, and enqueue helpers
+ * @typeParam R - Dependencies required while running the worker `effect` and the enqueue helpers
  *
  * @example
  * ```ts
@@ -267,6 +343,7 @@ export type QueueHandlePhantomWorkerFailures<E = never> = {
  */
 export interface QueueHandleApi<
   in out T,
+  E = never,
   EEnqueue = never,
   R = never,
 > {
@@ -276,6 +353,13 @@ export interface QueueHandleApi<
   readonly prioritize: QueueEnqueue<T, EEnqueue, R>;
   /** Enqueue items at **low** priority (processed after high and normal). */
   readonly defer: QueueEnqueue<T, EEnqueue, R>;
+
+  /**
+   * Re-inject existing {@link QueueEntry}s (e.g. straight off {@link events}, or from
+   * `release`), each at its own priority with its `attempts` preserved. The event-stream
+   * round-trip and the basis for queue handoff.
+   */
+  readonly enqueue: QueueEnqueueEntries<T, R>;
 
   /** Total pending items across all priority levels. */
   readonly size: Effect.Effect<number>;
@@ -291,7 +375,39 @@ export interface QueueHandleApi<
   readonly completed: Effect.Effect<number>;
 
   /**
-   * Fork the worker pool and lifecycle hook monitor. Idempotent — safe to call multiple times.
+   * Live **lifecycle events** — a fan-out stream of discrete {@link QueueEvent}s (entry /
+   * worker / queue). Each consumer gets its own subscription; backed by a sliding buffer, so a
+   * slow subscriber never backpressures the worker (lossy under load — use `QueueResourceStore`
+   * for guaranteed delivery). Subscribe for dashboards / CLI `--watch` / a TUI.
+   */
+  readonly events: Stream.Stream<QueueEvent<T, E>>;
+
+  /**
+   * Live **current-state snapshot** stream — emits the current {@link QueueStatus} and every
+   * subsequent change (per-priority sizes, paused, in-flight, completed). Each snapshot is
+   * recomputed from authoritative sources, so it's accurate truth (not an event accumulation).
+   * Backed by a `SubscriptionRef`; a new subscriber gets the current value immediately.
+   */
+  readonly status: Stream.Stream<QueueStatus>;
+
+  /**
+   * **One-shot** current-state snapshot — the same {@link QueueStatus} the {@link status} stream
+   * emits, read once. For a non-`--watch` CLI `status` print, a widget's first paint before the
+   * stream warms up, or any single render. Recomputed from authoritative sources on each read.
+   */
+  readonly statusNow: Effect.Effect<QueueStatus>;
+
+  /**
+   * Live **windowed metrics** stream — one {@link QueueMetrics} per window. Windows are
+   * **dynamic**: a max duration bounds staleness, but a window flushes early on a significant
+   * event (release/drain/clear/dead-letter/drop/shutdown), with a small floor coalescing
+   * bursts. Counts are accumulated inline at the source (accurate, never undercounts under
+   * load); `windowMillis` is the actual elapsed window. The UI-facing metrics surface.
+   */
+  readonly metrics: Stream.Stream<QueueMetrics>;
+
+  /**
+   * Fork the worker pool. Idempotent — safe to call multiple times.
    * Only needed when {@link QueueResourceConfigBase.autoStart} was `false`; otherwise workers already started at acquisition.
    *
    * After {@link shutdown}, `start` is a no-op (warning logged).
@@ -309,8 +425,13 @@ export interface QueueHandleApi<
    */
   readonly resume: Effect.Effect<void>;
   /**
-   * Permanently stop the queue. Enqueue attempts after shutdown are logged
-   * and silently dropped. Workers exit on their next iteration.
+   * Permanently stop the queue (graceful). Returns immediately after **initiating** shutdown:
+   * status `phase` → `"draining"`, new enqueues are rejected (logged + dropped), and once the
+   * queue is empty + idle it emits `ShutdownComplete` and `phase` → `"off"`. How already-queued
+   * items are handled is set by {@link QueueResourceConfigBase.shutdownMode} (`"drain"` processes
+   * them, the default; `"finishActive"` discards them, emitting a `Dropped` event). In-flight
+   * items always finish. Idempotent — a second call is a no-op. Emits `ShutdownRequested` /
+   * `ShutdownComplete` on the {@link QueueHandleApi.events} stream.
    */
   readonly shutdown: Effect.Effect<void>;
   /**
@@ -354,7 +475,7 @@ export type QueueHandle<
   E = never,
   EEnqueue = never,
   R = never,
-> = QueueHandleApi<T, EEnqueue, R> & QueueHandlePhantomWorkerFailures<E>;
+> = QueueHandleApi<T, E, EEnqueue, R> & QueueHandlePhantomWorkerFailures<E>;
 
 /** @public */
 export interface QueueEntryTimestamps {
@@ -375,7 +496,7 @@ export interface QueueEntry<T> {
   readonly batchId?: string;
   readonly releaseId?: string;
   readonly sourceResourceId?: string;
-  readonly attributes?: Record<string, unknown>;
+  readonly attributes?: { readonly [key: string]: unknown };
 }
 
 /** @public */
@@ -397,7 +518,7 @@ export interface QueueEncodedEntry {
   readonly batchId?: string;
   readonly releaseId?: string;
   readonly sourceResourceId?: string;
-  readonly attributes?: Record<string, unknown>;
+  readonly attributes?: { readonly [key: string]: unknown };
 }
 
 /** @public */
@@ -411,106 +532,171 @@ export interface QueueEntrySelector<T> {
 export interface QueueReleaseOptions {
   readonly scope?: "pendingOnly";
   readonly releaseId?: string;
-  readonly attributes?: Record<string, JsonValue>;
+  readonly attributes?: { readonly [key: string]: JsonValue };
 }
 
 /** @public */
 export interface QueueRouteOptions {
   readonly reason: string;
-  readonly attributes?: Record<string, JsonValue>;
+  readonly attributes?: { readonly [key: string]: JsonValue };
 }
 
-/** @public */
-export type QueueControls<T, E = never, EEnqueue = never, R = never> = QueueHandle<T, E, EEnqueue, R>;
-
-/** @public */
-export interface QueueStartEvent {
-  readonly queueId: string;
-}
-
-/** @public */
-export interface QueueDrainedEvent {
-  readonly queueId: string;
-  readonly completed: number;
-}
-
-/** @public */
-export interface QueueClearedEvent {
-  readonly queueId: string;
-  readonly count: number;
-}
-
-/** @public */
-export interface QueueReleasedEvent<T> {
-  readonly queueId: string;
-  readonly releaseId: string;
-  readonly entries: ReadonlyArray<QueueEntry<T>>;
-}
-
-/** @public */
-export interface QueueDeadLetteredEvent<T> {
-  readonly queueId: string;
-  readonly entries: ReadonlyArray<QueueEntry<T>>;
-  readonly reason: string;
-}
-
-/** @public */
-export interface QueueDroppedEvent<T> {
-  readonly queueId: string;
-  readonly entries: ReadonlyArray<QueueEntry<T>>;
-  readonly reason: string;
-}
-
-/** @public */
-export interface QueueExitEvent<T, E, R = never> {
-  readonly entry: QueueEntry<T>;
-  readonly exit: Exit.Exit<void, E>;
-  readonly elapsed: Duration.Duration;
-  readonly retry: Effect.Effect<void, never, R>;
-}
-
-/** @public */
-export interface QueueCompletedEvent<T> {
-  readonly entry: QueueEntry<T>;
-  readonly elapsed: Duration.Duration;
-}
-
-/** @public */
-export interface QueueFailedEvent<T, E, R = never> {
-  readonly entry: QueueEntry<T>;
-  readonly cause: Cause.Cause<E>;
-  readonly elapsed: Duration.Duration;
-  readonly retry: Effect.Effect<void, never, R>;
-}
+// (The per-event payload interfaces and `QueueControls` that the removed lifecycle callbacks
+// used are gone — observe lifecycle via the `events` stream and its {@link QueueEvent} union.)
 
 /**
- * Fired when an item hits the configured {@link QueueResourceRateLimitOptions}
- * before worker processing starts (quota exceeded).
+ * The current-state snapshot — the element of {@link QueueHandleApi.status}. Instantaneous
+ * truth (per-priority pending sizes, paused, in-flight, lifetime completed), recomputed from
+ * authoritative sources. Mirrors the encodable `queueStatus` contract schema.
  *
  * @public
  */
-export interface QueueRateLimitExceededEvent<T> {
-  readonly queueId: string;
-  readonly entry: QueueEntry<T>;
-  readonly limitKey: string;
-  readonly algorithm: "fixed-window" | "token-bucket";
-  readonly outcome: "delayed" | "rejected";
-  readonly consume?: ConsumeResult;
-  readonly error?: RateLimiterError;
+export interface QueueStatus {
+  readonly sizes: {
+    readonly high: number;
+    readonly normal: number;
+    readonly low: number;
+  };
+  readonly paused: boolean;
+  readonly inFlight: number;
+  readonly completed: number;
+  /**
+   * Lifecycle phase — orthogonal to `paused` (a running queue can be paused):
+   * - `"running"` — accepting and processing items.
+   * - `"draining"` — `shutdown` was called; not accepting new items, winding down in-flight (and,
+   *   in `"drain"` mode, the remaining queued items).
+   * - `"off"` — fully shut down (empty + idle); the terminal state a UI renders as stopped.
+   */
+  readonly phase: "running" | "draining" | "off";
 }
 
-/** @public */
-export interface QueueRetryScheduledEvent<T, E = never> {
-  readonly entry: QueueEntry<T>;
-  readonly cause: Cause.Cause<E>;
-  readonly nextAttempt: number;
+/**
+ * Windowed metrics — the element of {@link QueueHandleApi.metrics}. Per-window counts (deltas)
+ * plus the as-of-window-end `inFlight`, throughput, and average latency. Windows are dynamic
+ * (variable `windowMillis`). Mirrors the encodable `queueMetrics` contract schema.
+ *
+ * @public
+ */
+export interface QueueMetrics {
+  readonly windowStart: DateTime.Utc;
+  readonly windowEnd: DateTime.Utc;
+  readonly windowMillis: number;
+  readonly enqueued: number;
+  readonly started: number;
+  readonly completed: number;
+  readonly failed: number;
+  readonly retried: number;
+  readonly deadLettered: number;
+  readonly dropped: number;
+  readonly rateLimitExceeded: number;
+  readonly inFlight: number;
+  readonly throughputPerSec: number;
+  /**
+   * Average **queue wait** (enqueued → worker pickup) this window, **per priority**, in ms.
+   * Per-priority because wait depends on how loaded each priority lane is; a priority is absent
+   * when it had no completions this window. (Execution time is ~priority-independent, so it's
+   * reported overall, not per priority.)
+   */
+  readonly avgWaitMillis: {
+    readonly high?: number;
+    readonly normal?: number;
+    readonly low?: number;
+  };
+  /** Average **worker execution** (pickup → done) this window, ms, overall. Absent if no completions. */
+  readonly avgExecutionMillis?: number;
+  /** Average **end-to-end** time (enqueued → done = wait + execution) this window, ms, overall. Absent if no completions. */
+  readonly avgTotalMillis?: number;
 }
 
-/** @public */
-export interface QueueRetryExhaustedEvent<T, E = never> {
-  readonly entry: QueueEntry<T>;
-  readonly cause: Cause.Cause<E>;
-}
+/**
+ * The live **lifecycle event** union — the element of {@link QueueHandleApi.events}. A discrete
+ * fact emitted as the queue runs; subscribe to observe (dashboard / CLI `--watch` / TUI).
+ * Failure-bearing variants carry the worker error `E` typed (`Cause<E>` / `Exit<void, E>`), so a
+ * subscriber can `e.exit.pipe(Effect.catchTags(...))` on it; `E` defaults to `unknown` for the
+ * erased / wire form. The non-streamable `retry` affordance the old callbacks received is
+ * dropped — a subscriber holds the handle to drive control.
+ *
+ * @public
+ */
+export type QueueEvent<T, E = unknown> =
+  | { readonly _tag: "Start"; readonly queueId: string }
+  | {
+      readonly _tag: "Enqueued";
+      readonly entries: ReadonlyArray<QueueEntry<T>>;
+      readonly priority: Priority;
+      readonly batchId?: string;
+    }
+  | { readonly _tag: "Started"; readonly entry: QueueEntry<T> }
+  | {
+      readonly _tag: "Completed";
+      readonly entry: QueueEntry<T>;
+      readonly elapsed: Duration.Duration;
+    }
+  | {
+      readonly _tag: "Failed";
+      readonly entry: QueueEntry<T>;
+      readonly cause: Cause.Cause<E>;
+      readonly elapsed: Duration.Duration;
+    }
+  | {
+      readonly _tag: "Exit";
+      readonly entry: QueueEntry<T>;
+      readonly exit: Exit.Exit<void, E>;
+      readonly elapsed: Duration.Duration;
+    }
+  | {
+      readonly _tag: "RetryScheduled";
+      readonly entry: QueueEntry<T>;
+      readonly cause: Cause.Cause<E>;
+      readonly nextAttempt: number;
+    }
+  | {
+      readonly _tag: "RetryExhausted";
+      readonly entry: QueueEntry<T>;
+      readonly cause: Cause.Cause<E>;
+    }
+  | { readonly _tag: "Drained"; readonly queueId: string; readonly completed: number }
+  | { readonly _tag: "Cleared"; readonly queueId: string; readonly count: number }
+  | {
+      readonly _tag: "ShutdownRequested";
+      readonly queueId: string;
+      /** How the wind-down treats already-queued items (see `shutdownMode`). */
+      readonly mode: "drain" | "finishActive";
+      /** Items still pending when shutdown was requested. */
+      readonly pending: number;
+    }
+  | {
+      readonly _tag: "ShutdownComplete";
+      readonly queueId: string;
+      /** Total items completed over the queue's lifetime. */
+      readonly completed: number;
+    }
+  | {
+      readonly _tag: "Released";
+      readonly queueId: string;
+      readonly releaseId: string;
+      readonly entries: ReadonlyArray<QueueEntry<T>>;
+    }
+  | {
+      readonly _tag: "DeadLettered";
+      readonly queueId: string;
+      readonly entries: ReadonlyArray<QueueEntry<T>>;
+      readonly reason: string;
+    }
+  | {
+      readonly _tag: "Dropped";
+      readonly queueId: string;
+      readonly entries: ReadonlyArray<QueueEntry<T>>;
+      readonly reason: string;
+    }
+  | {
+      readonly _tag: "RateLimitExceeded";
+      readonly queueId: string;
+      readonly entry: QueueEntry<T>;
+      readonly limitKey: string;
+      readonly algorithm: "fixed-window" | "token-bucket";
+      readonly outcome: "delayed" | "rejected";
+    };
 
 /**
  * Queue declaration metadata for {@link QueueResourceDefinition} and
@@ -592,7 +778,8 @@ export interface QueueResourceServiceDefinition<
  * Attempting to enqueue the same item (by reference or by `key`) logs a warning
  * and silently drops the item to prevent infinite processing loops.
  *
- * Use `event.retry` in **`onExit`** / **`onFailed`** for intentional re-processing.
+ * For intentional re-processing, fail the worker `effect` (auto re-enqueue applies up to
+ * {@link QueueResourceConfigBase.attempts}) or re-inject via `queue.enqueue` off the events stream.
  *
  * @typeParam T - Item type
  *
@@ -618,7 +805,7 @@ export interface EffectContext<T, EEnqueue = never, R = never> {
  *
  * @typeParam T - Item type
  * @typeParam E - Failure channel surfaced as `Exit` failures from the worker `effect`
- * @typeParam R - Dependencies required while running callbacks (`effect` and queue hooks forked alongside workers)
+ * @typeParam R - Dependencies required while running the worker `effect`
  *
  * @public
  */
@@ -659,7 +846,7 @@ export interface QueueResourceConfigBase<T> {
   /** Start with processing paused. Call `resume` to begin. @default false */
   readonly paused?: boolean;
   /**
-   * When `false`, worker fibers (and the lifecycle hook monitor) are **not** forked until
+   * When `false`, worker fibers are **not** forked until
    * {@link QueueHandleApi.start} runs. Enqueue still succeeds; items accumulate until workers exist.
    * `pause` / `resume` update the latch before or after `start` — workers observe it once forked.
    *
@@ -678,20 +865,74 @@ export interface QueueResourceConfigBase<T> {
   /**
    * Extract a deduplication key from each item. When set, items with a key
    * already in-flight (enqueued or processing) are silently dropped.
-   * The key is released after processing completes (including handler).
+   * The key is released after the worker `effect` completes.
    */
   readonly key?: (item: T) => string;
   /**
-   * Max times an item may be re-enqueued via `event.retry` in exit/failure hooks.
-   * When exhausted, `onRetryExhausted` is called instead of re-enqueuing.
+   * Max **attempts** for an item — the initial try plus automatic re-enqueues. On failure the
+   * worker re-enqueues the item at its **own priority**, preserving its attempt count, until
+   * `attempts` is reached; then it's exhausted (emits a `RetryExhausted` event). Observe the
+   * `RetryScheduled` / `RetryExhausted` lifecycle on the {@link QueueHandleApi.events} stream.
+   *
+   * In-place retry of the worker effect is a separate concern — put `Effect.retry(...)` on your
+   * `effect`. Supersedes the deprecated {@link QueueResourceConfigBase.retries}.
+   *
+   * @default 1 (try once; no auto re-enqueue)
+   */
+  readonly attempts?: number;
+  /**
+   * @deprecated Use {@link QueueResourceConfigBase.attempts} (= `retries` + 1). Max times an
+   * item may be auto re-enqueued on failure.
    * @default Infinity
    */
   readonly retries?: number;
+  /**
+   * How {@link QueueHandleApi.shutdown} winds down. Either way it stops accepting new items
+   * immediately (status `phase` → `"draining"`), lets in-flight items finish, and once the queue
+   * is empty + idle emits `ShutdownComplete` and sets `phase` → `"off"`. They differ on the
+   * **already-queued** items:
+   * - `"drain"` — process the remaining queued items first (graceful; nothing is lost). **Default.**
+   * - `"finishActive"` — discard the queued items (emit a `Dropped` event for them) and only let
+   *   the in-flight ones finish (fast stop; with future persistence the discarded items are what a
+   *   restart would rebuild).
+   *
+   * @default "drain"
+   */
+  readonly shutdownMode?: "drain" | "finishActive";
+}
+
+/**
+ * Per-error disposition returned by {@link QueueResourceConfigWithoutItemSchema.onFailure}.
+ *
+ * - `"retry"` — re-enqueue the item at its own priority, honoring the `attempts` budget
+ *   (emits `RetryScheduled`, or `RetryExhausted` once the budget is spent).
+ * - `"deadLetter"` — emit a `DeadLettered` event; do **not** re-enqueue.
+ * - `"drop"` — emit a `Dropped` event; do **not** re-enqueue.
+ * - `"default"` — fall back to the queue's policy (auto re-enqueue when `attempts`/`retries` is
+ *   set, otherwise log a warning).
+ *
+ * @public
+ */
+export type QueueFailureDisposition = "retry" | "deadLetter" | "drop" | "default";
+
+/**
+ * Optional inline failure hook — the one legitimate control callback (a stream is after-the-fact
+ * and can't decide disposition). Runs in the worker `R` on each failed item, returning a
+ * {@link QueueFailureDisposition}. Observation still belongs on the `events` stream; this is
+ * **control**.
+ *
+ * @public
+ */
+export interface QueueOnFailure<T, E, R> {
+  (
+    entry: QueueEntry<T>,
+    cause: Cause.Cause<E>,
+  ): Effect.Effect<QueueFailureDisposition, never, R>;
 }
 
 /**
  * Queue configuration **without** {@link QueueResourceConfigBase} item schema.
- * Enqueue helpers on {@link QueueHandle} and hook contexts do not fail with
+ * Enqueue helpers on {@link QueueHandle} and the {@link EffectContext} do not fail with
  * schema validation errors.
  *
  * @public
@@ -704,69 +945,13 @@ export type QueueResourceConfigWithoutItemSchema<T, E, R> = QueueResourceConfigB
    * the success channel is always **`void`**.
    */
   readonly effect: (item: T, ctx: EffectContext<T, never, R>) => Effect.Effect<void, E, R>;
-  readonly onEnqueued?: (
-    batch: QueueBatch<T>,
-    controls: QueueControls<T, E, never, R>,
-  ) => Effect.Effect<void, never, R>;
-  /** Hook: fired once when the worker pool starts. */
-  readonly onStart?: (
-    event: QueueStartEvent,
-    controls: QueueControls<T, E, never, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onStarted?: (
-    entry: QueueEntry<T>,
-    controls: QueueControls<T, E, never, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onExit?: (
-    event: QueueExitEvent<T, E, R>,
-    controls: QueueControls<T, E, never, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onCompleted?: (
-    event: QueueCompletedEvent<T>,
-    controls: QueueControls<T, E, never, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onFailed?: (
-    event: QueueFailedEvent<T, E, R>,
-    controls: QueueControls<T, E, never, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onRetryScheduled?: (
-    event: QueueRetryScheduledEvent<T, E>,
-    controls: QueueControls<T, E, never, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onRetryExhausted?: (
-    event: QueueRetryExhaustedEvent<T, E>,
-    controls: QueueControls<T, E, never, R>,
-  ) => Effect.Effect<void, never, R>;
-  /** Hook: fired when pending work drains to empty after work or clear, not on cold-start idle. */
-  readonly onDrained?: (
-    event: QueueDrainedEvent,
-    controls: QueueControls<T, E, never, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onCleared?: (
-    event: QueueClearedEvent,
-    controls: QueueControls<T, E, never, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onReleased?: (
-    event: QueueReleasedEvent<T>,
-    controls: QueueControls<T, E, never, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onDeadLettered?: (
-    event: QueueDeadLetteredEvent<T>,
-    controls: QueueControls<T, E, never, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onDropped?: (
-    event: QueueDroppedEvent<T>,
-    controls: QueueControls<T, E, never, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onRateLimitExceeded?: (
-    event: QueueRateLimitExceededEvent<T>,
-    controls: QueueControls<T, E, never, R>,
-  ) => Effect.Effect<void, never, R>;
+  /** Optional inline per-error disposition. See {@link QueueOnFailure}. */
+  readonly onFailure?: QueueOnFailure<T, E, R>;
 };
 
 /**
  * Queue configuration **with** {@link QueueResourceConfigBase} item schema.
- * Public enqueue operations and hook context enqueue helpers can fail with
+ * Public enqueue operations and {@link EffectContext} enqueue helpers can fail with
  * {@link QueueItemValidationError} or {@link QueueBatchValidationError}.
  *
  * @public
@@ -781,62 +966,8 @@ export type QueueEnqueueErrors = QueueItemValidationError | QueueBatchValidation
 export type QueueResourceConfigWithItemSchema<T, E, R> = QueueResourceConfigBase<T> & {
   readonly itemSchema: Schema.Codec<T, unknown, never, never>;
   readonly effect: (item: T, ctx: EffectContext<T, QueueEnqueueErrors, R>) => Effect.Effect<void, E, R>;
-  readonly onEnqueued?: (
-    batch: QueueBatch<T>,
-    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onStart?: (
-    event: QueueStartEvent,
-    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onStarted?: (
-    entry: QueueEntry<T>,
-    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onExit?: (
-    event: QueueExitEvent<T, E, R>,
-    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onCompleted?: (
-    event: QueueCompletedEvent<T>,
-    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onFailed?: (
-    event: QueueFailedEvent<T, E, R>,
-    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onRetryScheduled?: (
-    event: QueueRetryScheduledEvent<T, E>,
-    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onRetryExhausted?: (
-    event: QueueRetryExhaustedEvent<T, E>,
-    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onDrained?: (
-    event: QueueDrainedEvent,
-    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onCleared?: (
-    event: QueueClearedEvent,
-    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onReleased?: (
-    event: QueueReleasedEvent<T>,
-    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onDeadLettered?: (
-    event: QueueDeadLetteredEvent<T>,
-    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onDropped?: (
-    event: QueueDroppedEvent<T>,
-    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onRateLimitExceeded?: (
-    event: QueueRateLimitExceededEvent<T>,
-    controls: QueueControls<T, E, QueueEnqueueErrors, R>,
-  ) => Effect.Effect<void, never, R>;
+  /** Optional inline per-error disposition. See {@link QueueOnFailure}. */
+  readonly onFailure?: QueueOnFailure<T, E, R>;
 };
 
 /**
@@ -844,7 +975,7 @@ export type QueueResourceConfigWithItemSchema<T, E, R> = QueueResourceConfigBase
  *
  * @typeParam T - Item type
  * @typeParam E - Worker `effect` failure channel
- * @typeParam R - Dependencies required while running callbacks
+ * @typeParam R - Dependencies required while running the worker `effect`
  *
  * @public
  */
@@ -934,47 +1065,31 @@ export type InferQueueWorkerError<
   C extends { readonly effect: (...args: any[]) => Effect.Effect<void, any, any> },
 > = Effect.Error<ReturnType<C["effect"]>>;
 
-type InferEffectRequirements<Value> =
-  Value extends (...args: any) => Effect.Effect<any, any, infer R>
-    ? R
-    : Value extends Effect.Effect<any, any, infer R>
-      ? R
-      : never;
-
-type InferOptionalPropertyRequirements<C, Key extends PropertyKey> =
-  Key extends keyof C ? InferEffectRequirements<C[Key]> : never;
-
 type NormalizeQueueRequirements<R> = unknown extends R
   ? [R] extends [unknown]
     ? never
     : R
   : R;
 
+/** Requirements contributed by the optional `onFailure` control hook, if present. */
+type InferQueueOnFailureRequirements<C> = C extends {
+  readonly onFailure: (...args: any[]) => Effect.Effect<any, any, infer R>;
+}
+  ? R
+  : never;
+
 /**
- * Union of service requirements declared on the worker `effect`, handler, and queue hooks.
+ * Service requirements for the queue worker: those declared on the `effect`, unioned with any
+ * declared on the optional `onFailure` control hook. (Observation is via the `events` stream —
+ * it contributes no requirements.)
  *
  * @public
  */
 export type InferQueueWorkerRequirements<
   C extends { readonly effect: (...args: any[]) => Effect.Effect<void, any, any> },
-> =
-  NormalizeQueueRequirements<
-    | Effect.Services<ReturnType<C["effect"]>>
-    | InferOptionalPropertyRequirements<C, "onEnqueued">
-    | InferOptionalPropertyRequirements<C, "onStart">
-    | InferOptionalPropertyRequirements<C, "onStarted">
-    | InferOptionalPropertyRequirements<C, "onExit">
-    | InferOptionalPropertyRequirements<C, "onCompleted">
-    | InferOptionalPropertyRequirements<C, "onFailed">
-    | InferOptionalPropertyRequirements<C, "onRetryScheduled">
-    | InferOptionalPropertyRequirements<C, "onRetryExhausted">
-    | InferOptionalPropertyRequirements<C, "onDrained">
-    | InferOptionalPropertyRequirements<C, "onCleared">
-    | InferOptionalPropertyRequirements<C, "onReleased">
-    | InferOptionalPropertyRequirements<C, "onDeadLettered">
-    | InferOptionalPropertyRequirements<C, "onDropped">
-    | InferOptionalPropertyRequirements<C, "onRateLimitExceeded">
-  >;
+> = NormalizeQueueRequirements<
+  Effect.Services<ReturnType<C["effect"]>> | InferQueueOnFailureRequirements<C>
+>;
 
 
 const hasItemSchema = <T, E, R>(
@@ -992,69 +1107,14 @@ export type QueueConfigFromEffect<
 > = { readonly effect: F } & (O extends undefined ? {} : O);
 
 /**
- * Runtime callbacks and hooks for {@link makeQueueRuntime}, parameterized by the
- * enqueue error channel carried on public/hook enqueue helpers.
+ * Runtime config for {@link makeQueueRuntime}, parameterized by the
+ * enqueue error channel carried on the public/context enqueue helpers.
  *
  * @internal
  */
 type QueueRuntimeConfig<T, E, EEnqueue, R> = QueueResourceConfigBase<T> & {
   readonly effect: (item: T, ctx: EffectContext<T, EEnqueue, R>) => Effect.Effect<void, E, R>;
-  readonly onEnqueued?: (
-    batch: QueueBatch<T>,
-    controls: QueueControls<T, E, EEnqueue, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onStart?: (
-    event: QueueStartEvent,
-    controls: QueueControls<T, E, EEnqueue, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onStarted?: (
-    entry: QueueEntry<T>,
-    controls: QueueControls<T, E, EEnqueue, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onExit?: (
-    event: QueueExitEvent<T, E, R>,
-    controls: QueueControls<T, E, EEnqueue, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onCompleted?: (
-    event: QueueCompletedEvent<T>,
-    controls: QueueControls<T, E, EEnqueue, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onFailed?: (
-    event: QueueFailedEvent<T, E, R>,
-    controls: QueueControls<T, E, EEnqueue, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onRetryScheduled?: (
-    event: QueueRetryScheduledEvent<T, E>,
-    controls: QueueControls<T, E, EEnqueue, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onRetryExhausted?: (
-    event: QueueRetryExhaustedEvent<T, E>,
-    controls: QueueControls<T, E, EEnqueue, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onDrained?: (
-    event: QueueDrainedEvent,
-    controls: QueueControls<T, E, EEnqueue, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onCleared?: (
-    event: QueueClearedEvent,
-    controls: QueueControls<T, E, EEnqueue, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onReleased?: (
-    event: QueueReleasedEvent<T>,
-    controls: QueueControls<T, E, EEnqueue, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onDeadLettered?: (
-    event: QueueDeadLetteredEvent<T>,
-    controls: QueueControls<T, E, EEnqueue, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onDropped?: (
-    event: QueueDroppedEvent<T>,
-    controls: QueueControls<T, E, EEnqueue, R>,
-  ) => Effect.Effect<void, never, R>;
-  readonly onRateLimitExceeded?: (
-    event: QueueRateLimitExceededEvent<T>,
-    controls: QueueControls<T, E, EEnqueue, R>,
-  ) => Effect.Effect<void, never, R>;
+  readonly onFailure?: QueueOnFailure<T, E, R>;
 };
 
 type ReleaseEntryEncoder<T> = (
@@ -1235,14 +1295,14 @@ const acquireQueueRateLimitAwait = <T, R>(
  * - Three bounded `Queue<InternalItem<T>>` (one per priority level)
  * - N worker fibers (managed by `FiberSet`) that loop: latch → take → latch → process
  * - Optional deferred fork via {@link QueueResourceConfigBase.autoStart}: when `false`,
- *   call {@link QueueHandleApi.start} to fork workers and the lifecycle hook monitor.
- * - `onDrained` waits on a dedicated wake until queues drain empty after processed work (not cold-start empty).
+ *   call {@link QueueHandleApi.start} to fork the worker pool.
+ * - Drain wake: waits until queues drain empty after processed work (not cold-start empty) — emits a `Drained` event.
  * - Worker wake (`takeNext`): enqueue / shutdown — avoids priority inversion vs racing priority queues.
  * - Refill wake: drain-to-empty after an item completes (or after {@link QueueHandleApi.clear}) — independent of idle worker waits.
  * - `Latch` gates worker entry (pause/resume)
  * - `Semaphore` for concurrency control within the worker pool
  * - Optional Effect `RateLimiter` when `rateLimit` is set on config
- * - Handler effects are forked into a separate `FiberSet` (never block workers)
+ * - Lifecycle facts are published to the `events` PubSub (fan-out; never block workers)
  */
 const validateItemsWithSchema = <T>(
   queueName: string,
@@ -1356,8 +1416,9 @@ const makeQueueEffectWithSchema = <
   Scope.Scope | InferQueueWorkerRequirements<C>
 > => {
   const queueName = config.name ?? "anonymous";
-  const codecId = `${queueName}/item@v1`;
   const descriptor = makeQueueItemCodecDescriptor(queueName, config.itemSchema);
+  // keep the validation/error codec id in lockstep with the descriptor's versioned id.
+  const codecId = descriptor.id;
   const encodeItem = Schema.encodeUnknownExit(config.itemSchema);
   const encodeForRelease = (
     internal: InternalItem<InferQueueItem<C>>,
@@ -1410,7 +1471,11 @@ const makeQueueEffectFromConfig = (
 ): Effect.Effect<
   QueueHandle<unknown, unknown, unknown, unknown>,
   never,
-  Scope.Scope | unknown
+  // Internal erased boundary: the worker's requirement is `any` here (the config is
+  // `any`-typed at this dispatch). `any` — not `unknown` — is the honest erasure: it stays
+  // assignable both ways, and the precise `R` is preserved on the public `makeQueueEffect`
+  // overloads. (`unknown` would assert an unprovidable service → `missingEffectContext`.)
+  Scope.Scope | any
 > =>
   hasItemSchema(config)
     ? makeQueueEffectWithSchema(config)
@@ -1451,7 +1516,10 @@ function makeQueueEffect(
 ): Effect.Effect<
   QueueHandle<unknown, unknown, unknown, unknown>,
   never,
-  Scope.Scope | unknown
+  // Erased overload-impl boundary — the precise `R` (`Scope.Scope |
+  // InferQueueWorkerRequirements<...>`) is on the overloads above; here the worker
+  // requirement is `any`, not `unknown` (see {@link makeQueueEffectFromConfig}).
+  Scope.Scope | any
 > {
   if (typeof effectOrConfig === "function") {
     const config = { ...(options ?? {}), effect: effectOrConfig };
@@ -1473,8 +1541,18 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
   Effect.gen(function* () {
     const queueName = config.name ?? "anonymous";
     const concurrency = config.concurrency ?? 5;
+    const shutdownMode = config.shutdownMode ?? "drain";
     const capacity = config.capacity ?? 50_000;
-    const maxRetries = config.retries ?? Infinity;
+    // `attempts` (preferred) supersedes the deprecated `retries` (= attempts - 1).
+    const maxRetries =
+      config.attempts !== undefined
+        ? Math.max(0, config.attempts - 1)
+        : (config.retries ?? Infinity);
+    // The worker auto re-enqueues failed items at their priority, up to `maxRetries`, whenever
+    // a bound (`attempts`/`retries`) is set. Observe outcomes via the `events` stream; drive
+    // custom per-error disposition by handling `Failed`/`Exit` there.
+    const autoReEnqueue =
+      config.attempts !== undefined || config.retries !== undefined;
     // ─── Allocate internal state ───
     // Three bounded queues: one per priority level. Backpressure at `capacity`.
     const highQueue = yield* Queue.bounded<InternalItem<T>>(capacity);
@@ -1492,18 +1570,408 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     const completedCount = yield* Ref.make(0);
     const isShutdownRef = yield* Ref.make(false);
 
+    // ─── Fan-out lifecycle events ───
+    // A sliding PubSub: publishing never blocks the worker (drops oldest when a subscriber
+    // lags), so the fan-out `events` stream can't backpressure or OOM the queue. Guaranteed
+    // delivery stays on the QueueResourceStore tier. Each `events` consumer subscribes
+    // independently via `Stream.fromPubSub`.
+    const eventsHub = yield* PubSub.sliding<QueueEvent<T, E>>(1024);
+
+    // ─── Windowed metrics (.metrics) ───
+    // Counters are accumulated INLINE in publishEvent (synchronous, at the source), never by
+    // consuming the lossy events hub — so metrics never undercount under load. Windows are
+    // dynamic: `metricsWindowMax` bounds staleness, a significant event flushes early, and
+    // `metricsWindowMin` floors the cadence so a burst (e.g. a takeAll storm) doesn't spam.
+    const metricsWindowMax = Duration.seconds(5);
+    const metricsWindowMin = Duration.millis(100);
+    const metricsHub = yield* PubSub.sliding<QueueMetrics>(256);
+    const nowMs: Effect.Effect<number> = Effect.clockWith(
+      (c) => c.currentTimeMillis,
+    );
+    interface PerPriorityAccum {
+      readonly high: number;
+      readonly normal: number;
+      readonly low: number;
+    }
+    const zeroPerPriority: PerPriorityAccum = { high: 0, normal: 0, low: 0 };
+    interface WindowAccum {
+      readonly startedAt: number;
+      readonly enqueued: number;
+      readonly started: number;
+      readonly completed: number;
+      readonly failed: number;
+      readonly retried: number;
+      readonly deadLettered: number;
+      readonly dropped: number;
+      readonly rateLimitExceeded: number;
+      // wait (enqueued → pickup), summed + counted PER PRIORITY
+      readonly waitSumMs: PerPriorityAccum;
+      readonly waitCount: PerPriorityAccum;
+      // execution (pickup → done), summed + counted OVERALL
+      readonly executionSumMs: number;
+      readonly executionCount: number;
+      // total (enqueued → done), summed + counted OVERALL
+      readonly totalSumMs: number;
+      readonly totalCount: number;
+    }
+    const freshAccum = (startedAt: number): WindowAccum => ({
+      startedAt,
+      enqueued: 0,
+      started: 0,
+      completed: 0,
+      failed: 0,
+      retried: 0,
+      deadLettered: 0,
+      dropped: 0,
+      rateLimitExceeded: 0,
+      waitSumMs: zeroPerPriority,
+      waitCount: zeroPerPriority,
+      executionSumMs: 0,
+      executionCount: 0,
+      totalSumMs: 0,
+      totalCount: 0,
+    });
+    // Wait = startedAt − enqueuedAt (ms). Undefined if the entry was never started (shouldn't
+    // happen for a Completed/Failed event, but the timestamp is optional on the type).
+    const waitMsOf = (entry: QueueEntry<T>): number | undefined =>
+      entry.timestamps.startedAt !== undefined
+        ? DateTime.toEpochMillis(entry.timestamps.startedAt) -
+          DateTime.toEpochMillis(entry.timestamps.enqueuedAt)
+        : undefined;
+    // Fold one completed/failed entry's latency (wait per-priority + execution/total overall).
+    const foldLatency = (
+      acc: WindowAccum,
+      entry: QueueEntry<T>,
+      elapsed: Duration.Duration,
+    ): WindowAccum => {
+      const execution = Duration.toMillis(elapsed);
+      const wait = waitMsOf(entry);
+      const pr = entry.priority;
+      return {
+        ...acc,
+        waitSumMs:
+          wait !== undefined
+            ? { ...acc.waitSumMs, [pr]: acc.waitSumMs[pr] + wait }
+            : acc.waitSumMs,
+        waitCount:
+          wait !== undefined
+            ? { ...acc.waitCount, [pr]: acc.waitCount[pr] + 1 }
+            : acc.waitCount,
+        executionSumMs: acc.executionSumMs + execution,
+        executionCount: acc.executionCount + 1,
+        totalSumMs:
+          wait !== undefined ? acc.totalSumMs + wait + execution : acc.totalSumMs,
+        totalCount: wait !== undefined ? acc.totalCount + 1 : acc.totalCount,
+      };
+    };
+    const accumulate = (acc: WindowAccum, event: QueueEvent<T, E>): WindowAccum => {
+      switch (event._tag) {
+        case "Enqueued":
+          return { ...acc, enqueued: acc.enqueued + event.entries.length };
+        case "Started":
+          return { ...acc, started: acc.started + 1 };
+        case "Completed":
+          return foldLatency(
+            { ...acc, completed: acc.completed + 1 },
+            event.entry,
+            event.elapsed,
+          );
+        case "Failed":
+          return foldLatency(
+            { ...acc, failed: acc.failed + 1 },
+            event.entry,
+            event.elapsed,
+          );
+        case "RetryScheduled":
+          return { ...acc, retried: acc.retried + 1 };
+        case "DeadLettered":
+          return { ...acc, deadLettered: acc.deadLettered + event.entries.length };
+        case "Dropped":
+          return { ...acc, dropped: acc.dropped + event.entries.length };
+        case "RateLimitExceeded":
+          return { ...acc, rateLimitExceeded: acc.rateLimitExceeded + 1 };
+        default:
+          return acc;
+      }
+    };
+    // Events that should close the metrics window early (the UI wants to see their effect now).
+    const isSignificant = (event: QueueEvent<T, E>): boolean =>
+      event._tag === "Drained" ||
+      event._tag === "Cleared" ||
+      event._tag === "Released" ||
+      event._tag === "DeadLettered" ||
+      event._tag === "Dropped" ||
+      event._tag === "ShutdownRequested" ||
+      event._tag === "ShutdownComplete";
+
+    // ─── OTEL metrics (Effect `Metric` → exported by the runtime's metric reader) ───
+    // The cumulative counterparts to the windowed `.metrics` stream: that stream is for live UI,
+    // these feed OpenTelemetry. Tagged per-queue so multiple queues stay distinct series.
+    const metricAttributes = { queue: queueName };
+    const enqueuedCounter = Metric.counter("queue_enqueued_total", {
+      incremental: true,
+      description: "Items enqueued",
+      attributes: metricAttributes,
+    });
+    const startedCounter = Metric.counter("queue_started_total", {
+      incremental: true,
+      description: "Items started by a worker",
+      attributes: metricAttributes,
+    });
+    const completedCounter = Metric.counter("queue_completed_total", {
+      incremental: true,
+      description: "Items completed successfully",
+      attributes: metricAttributes,
+    });
+    const failedCounter = Metric.counter("queue_failed_total", {
+      incremental: true,
+      description: "Items whose worker effect failed",
+      attributes: metricAttributes,
+    });
+    const retriedCounter = Metric.counter("queue_retried_total", {
+      incremental: true,
+      description: "Failed items re-enqueued for retry",
+      attributes: metricAttributes,
+    });
+    const deadLetteredCounter = Metric.counter("queue_dead_lettered_total", {
+      incremental: true,
+      description: "Items routed to the dead-letter disposition",
+      attributes: metricAttributes,
+    });
+    const droppedCounter = Metric.counter("queue_dropped_total", {
+      incremental: true,
+      description: "Items dropped",
+      attributes: metricAttributes,
+    });
+    const rateLimitExceededCounter = Metric.counter("queue_rate_limit_exceeded_total", {
+      incremental: true,
+      description: "Worker rate-limit rejections",
+      attributes: metricAttributes,
+    });
+    const inFlightGauge = Metric.gauge("queue_in_flight", {
+      description: "Items currently processing",
+      attributes: metricAttributes,
+    });
+    const latencyBoundaries = Metric.exponentialBoundaries({
+      start: 1,
+      factor: 2,
+      count: 12,
+    });
+    // Worker execution time (pickup → done). Named *processing* historically; it is execution.
+    const executionHistogram = Metric.histogram("queue_processing_duration_ms", {
+      description: "Item worker execution duration (pickup → done) in milliseconds",
+      attributes: metricAttributes,
+      boundaries: latencyBoundaries,
+    });
+    // Queue wait (enqueued → pickup), tagged by priority per update so OTEL can break it down.
+    const waitHistogram = Metric.histogram("queue_wait_duration_ms", {
+      description: "Item queue wait (enqueued → pickup) in milliseconds",
+      attributes: metricAttributes,
+      boundaries: latencyBoundaries,
+    });
+    // End-to-end (enqueued → done = wait + execution).
+    const totalHistogram = Metric.histogram("queue_total_duration_ms", {
+      description: "Item end-to-end duration (enqueued → done) in milliseconds",
+      attributes: metricAttributes,
+      boundaries: latencyBoundaries,
+    });
+    // Record the latency histograms for a completed/failed entry: execution always; wait (tagged
+    // by priority) and total only when the entry was started (so wait is well-defined).
+    const recordLatency = (
+      entry: QueueEntry<T>,
+      elapsed: Duration.Duration,
+    ): Effect.Effect<void> => {
+      const execution = Duration.toMillis(elapsed);
+      const wait = waitMsOf(entry);
+      return Effect.gen(function* () {
+        yield* Metric.update(executionHistogram, execution);
+        if (wait !== undefined) {
+          yield* Metric.update(
+            Metric.withAttributes(waitHistogram, { priority: entry.priority }),
+            wait,
+          );
+          yield* Metric.update(totalHistogram, wait + execution);
+        }
+      });
+    };
+    // Mirror each accumulated event onto its OTEL counter (same dispatch as `accumulate`).
+    const recordEventMetric = (event: QueueEvent<T, E>): Effect.Effect<void> => {
+      switch (event._tag) {
+        case "Enqueued":
+          return Metric.update(enqueuedCounter, event.entries.length);
+        case "Started":
+          return Metric.update(startedCounter, 1);
+        case "Completed":
+          return Effect.andThen(
+            Metric.update(completedCounter, 1),
+            recordLatency(event.entry, event.elapsed),
+          );
+        case "Failed":
+          return Effect.andThen(
+            Metric.update(failedCounter, 1),
+            recordLatency(event.entry, event.elapsed),
+          );
+        case "RetryScheduled":
+          return Metric.update(retriedCounter, 1);
+        case "DeadLettered":
+          return Metric.update(deadLetteredCounter, event.entries.length);
+        case "Dropped":
+          return Metric.update(droppedCounter, event.entries.length);
+        case "RateLimitExceeded":
+          return Metric.update(rateLimitExceededCounter, 1);
+        default:
+          return Effect.void;
+      }
+    };
+    const windowStartMs = yield* nowMs;
+    const windowAccum = yield* Ref.make(freshAccum(windowStartMs));
+    let metricsFlush = yield* Deferred.make<void>();
+    const requestMetricsFlush: Effect.Effect<void> = Effect.asVoid(
+      Deferred.succeed(metricsFlush, undefined),
+    );
+
+    const publishEvent = (event: QueueEvent<T, E>): Effect.Effect<void> =>
+      Effect.gen(function* () {
+        yield* Ref.update(windowAccum, (acc) => accumulate(acc, event));
+        yield* recordEventMetric(event);
+        yield* PubSub.publish(eventsHub, event);
+        if (isSignificant(event)) yield* requestMetricsFlush;
+      });
+
+    const emitMetricsWindow: Effect.Effect<void> = Effect.gen(function* () {
+      const now = yield* nowMs;
+      const acc = yield* Ref.getAndSet(windowAccum, freshAccum(now));
+      const windowMillis = now - acc.startedAt;
+      const inFlight = yield* Ref.get(inFlightRef);
+      const metrics: QueueMetrics = {
+        windowStart: DateTime.makeUnsafe(acc.startedAt),
+        windowEnd: DateTime.makeUnsafe(now),
+        windowMillis,
+        enqueued: acc.enqueued,
+        started: acc.started,
+        completed: acc.completed,
+        failed: acc.failed,
+        retried: acc.retried,
+        deadLettered: acc.deadLettered,
+        dropped: acc.dropped,
+        rateLimitExceeded: acc.rateLimitExceeded,
+        inFlight,
+        throughputPerSec:
+          windowMillis > 0 ? (acc.completed / windowMillis) * 1000 : 0,
+        // wait per priority — each lane present only if it had completions this window
+        avgWaitMillis: {
+          ...(acc.waitCount.high > 0
+            ? { high: acc.waitSumMs.high / acc.waitCount.high }
+            : {}),
+          ...(acc.waitCount.normal > 0
+            ? { normal: acc.waitSumMs.normal / acc.waitCount.normal }
+            : {}),
+          ...(acc.waitCount.low > 0
+            ? { low: acc.waitSumMs.low / acc.waitCount.low }
+            : {}),
+        },
+        ...(acc.executionCount > 0
+          ? { avgExecutionMillis: acc.executionSumMs / acc.executionCount }
+          : {}),
+        ...(acc.totalCount > 0
+          ? { avgTotalMillis: acc.totalSumMs / acc.totalCount }
+          : {}),
+      };
+      yield* PubSub.publish(metricsHub, metrics);
+    });
+
+    // ─── Current-state snapshot (.status) ───
+    // A SubscriptionRef recomputed from authoritative sources (queue sizes + the refs below),
+    // so every snapshot is accurate truth even though the events that trigger refreshes are
+    // lossy. `paused`/`inFlight` are tracked here because the latch/semaphore don't expose them.
+    const pausedRef = yield* Ref.make(config.paused ?? false);
+    const inFlightRef = yield* Ref.make(0);
+    // Lifecycle phase, orthogonal to paused. `shutdown` advances running → draining → off.
+    const phaseRef = yield* Ref.make<"running" | "draining" | "off">("running");
+    const computeStatus: Effect.Effect<QueueStatus> = Effect.gen(function* () {
+      const [h, n, l] = yield* Effect.all([
+        Queue.size(highQueue),
+        Queue.size(normalQueue),
+        Queue.size(lowQueue),
+      ]);
+      return {
+        sizes: {
+          high: Math.max(0, h),
+          normal: Math.max(0, n),
+          low: Math.max(0, l),
+        },
+        paused: yield* Ref.get(pausedRef),
+        inFlight: yield* Ref.get(inFlightRef),
+        completed: yield* Ref.get(completedCount),
+        phase: yield* Ref.get(phaseRef),
+      };
+    });
+    const statusRef = yield* SubscriptionRef.make(yield* computeStatus);
+    const refreshStatus = Effect.flatMap(computeStatus, (s) =>
+      SubscriptionRef.set(statusRef, s),
+    );
+    // Total items pending across all priority lanes (poll-cheap; used by shutdown finalization).
+    const totalPending: Effect.Effect<number> = Effect.gen(function* () {
+      const [h, n, l] = yield* Effect.all([
+        Queue.size(highQueue),
+        Queue.size(normalQueue),
+        Queue.size(lowQueue),
+      ]);
+      return Math.max(0, h) + Math.max(0, n) + Math.max(0, l);
+    });
+    // Finalize shutdown once the queue has drained empty AND no item is in flight: flip
+    // draining → off (exactly once), emit `ShutdownComplete`, and refresh the snapshot so its
+    // `phase` reads `"off"`. Called after each item finishes and at shutdown initiation (covers
+    // the already-idle case). The `getAndSet` guard makes the transition idempotent.
+    const finalizeShutdownIfDrained: Effect.Effect<void> = Effect.gen(function* () {
+      if ((yield* Ref.get(phaseRef)) !== "draining") return;
+      const pending = yield* totalPending;
+      const inFlight = yield* Ref.get(inFlightRef);
+      if (pending > 0 || inFlight > 0) return;
+      const previous = yield* Ref.getAndSet(phaseRef, "off");
+      if (previous !== "draining") return; // another fiber finalized first
+      yield* publishEvent({
+        _tag: "ShutdownComplete",
+        queueId: queueName,
+        completed: yield* Ref.get(completedCount),
+      });
+      yield* refreshStatus;
+      yield* Effect.logInfo(`Queue "${queueName}" shut down (off)`);
+    });
+    // One fiber recomputes the snapshot on each lifecycle event (covers enqueue/start/exit/
+    // drain/release/clear); pause/resume refresh inline (they emit no event). Tied to the
+    // queue scope, so it's interrupted on teardown.
+    yield* Effect.forkScoped(
+      Stream.runForEach(Stream.fromPubSub(eventsHub), () => refreshStatus),
+    );
+
+    // Dynamic-window metrics timer: emit when a significant event requests a flush OR the max
+    // window elapses (whichever first), then hold for the min window to coalesce bursts.
+    yield* Effect.forkScoped(
+      Effect.forever(
+        Effect.gen(function* () {
+          yield* Effect.race(
+            Effect.sleep(metricsWindowMax),
+            Deferred.await(metricsFlush),
+          );
+          metricsFlush = yield* Deferred.make<void>();
+          yield* emitMetricsWindow;
+          yield* Effect.sleep(metricsWindowMin);
+        }),
+      ),
+    );
+
     // Dedup: set of keys currently in-flight (enqueued or processing).
     // A key is added on enqueue and removed after processing completes.
     const activeKeys = yield* Ref.make(HashSet.empty<string>());
 
     // Worker wake: enqueue / shutdown unblock `takeNext` waiters on empty queues.
     let workerWakeSignal = yield* Deferred.make<void>();
-    // Drain wake: distinct so idle workers never pulse lifecycle hooks.
+    // Drain wake: distinct so idle workers never pulse a spurious Drained event.
     let drainWakeSignal = yield* Deferred.make<void>();
 
     // Managed fiber collections. Scope close interrupts all fibers automatically.
     const workerFibers = yield* FiberSet.make<void>();
-    const handlerFibers = yield* FiberSet.make<void>();
     /** Set before workers process items (autoStart or manual `start`). */
     const queueHandleSlot: { current?: QueueHandle<T, E, EEnqueue, R> } = {};
 
@@ -1850,19 +2318,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         );
       });
 
-    const runQueueHook = <A, EHook, RHook>(
-      hook: string,
-      effect: Effect.Effect<A, EHook, RHook>,
-    ): Effect.Effect<void, never, RHook> =>
-      effect.pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning(`Queue "${queueName}" hook "${hook}" failed`).pipe(
-            Effect.annotateLogs("cause", Cause.pretty(cause)),
-          )
-        ),
-        Effect.asVoid,
-      );
-
     const shouldRecordRateLimitExceeded =
       config.rateLimit !== undefined && (config.rateLimit.record ?? "exceeded") !== "off";
 
@@ -1927,26 +2382,15 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       Effect.gen(function* () {
         const occurredAtMs = yield* Effect.clockWith((c) => c.currentTimeMillis);
         const entry = queueEntryFromInternal(payload.internal);
-        const event: QueueRateLimitExceededEvent<T> = {
+
+        yield* publishEvent({
+          _tag: "RateLimitExceeded",
           queueId: queueName,
           entry,
           limitKey: payload.limitKey,
           algorithm: payload.algorithm,
           outcome: payload.outcome,
-          consume: payload.consume,
-          error: payload.error,
-        };
-
-        if (config.onRateLimitExceeded !== undefined) {
-          const handle = queueHandleSlot.current;
-          if (handle !== undefined) {
-            yield* FiberSet.run(handlerFibers)(
-              config.onRateLimitExceeded(event, handle).pipe((effect) =>
-                runQueueHook("onRateLimitExceeded", effect),
-              ),
-            );
-          }
-        }
+        });
 
         if (!shouldRecordRateLimitExceeded || Option.isNone(storeOption)) return;
         const api = storeOption.value;
@@ -2004,7 +2448,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
      * 2. Dedup key check (skip duplicates)
      * 3. Offer to the target priority queue
      * 4. Wake sleeping workers (`takeNext` waiters)
-     * 5. Fire hooks (onEnqueued)
+     * 5. Publish the `Enqueued` event
      */
     const enqueueInternal = (
       items: ReadonlyArray<T>,
@@ -2062,20 +2506,11 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         yield* recordDedupeKeyChanges("added", addedDedupeKeys);
         yield* signalWorkerWake;
 
-        const handle = queueHandleSlot.current;
-        if (handle === undefined) {
-          return yield* Effect.die(
-            new Error(`Queue "${queueName}" internal error: handle not wired before onEnqueued`),
-          );
-        }
-        if (config.onEnqueued !== undefined) {
-          yield* FiberSet.run(handlerFibers)(
-            config.onEnqueued({
-              entries: toEnqueue.map((internal) => queueEntryFromInternal(internal)),
-              priority,
-            }, handle).pipe((effect) => runQueueHook("onEnqueued", effect)),
-          );
-        }
+        yield* publishEvent({
+          _tag: "Enqueued",
+          entries: toEnqueue.map((internal) => queueEntryFromInternal(internal)),
+          priority,
+        });
       });
 
     /** Public enqueue: validate (when configured), then delegate to internal. */
@@ -2087,6 +2522,31 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       Effect.flatMap(validateForEnqueue(normalizeEnqueueInput(items), operation), (validated) =>
         enqueueInternal(validated, priority),
       );
+
+    /**
+     * Re-inject existing entries (the `release`/events round-trip). Reuses `enqueueInternal`
+     * per entry, preserving each entry's **priority**, **attempts** (via the retry count), and
+     * original **enqueuedAt**; the dedup `key` is recomputed identically by `config.key`. A new
+     * `entryId` is minted (the re-injection is a fresh enqueue on this queue).
+     */
+    const enqueueEntries = (
+      input: QueueEntry<T> | ReadonlyArray<QueueEntry<T>>,
+    ): Effect.Effect<void, never, R> => {
+      const entries = Array.isArray(input)
+        ? (input as ReadonlyArray<QueueEntry<T>>)
+        : [input as QueueEntry<T>];
+      return Effect.forEach(
+        entries,
+        (entry) =>
+          enqueueInternal(
+            [entry.item],
+            entry.priority,
+            Math.max(0, entry.attempts - 1),
+            DateTime.toEpochMillis(entry.timestamps.enqueuedAt),
+          ),
+        { discard: true },
+      );
+    };
 
     // ─── Internal: EffectContext (guarded) ───
 
@@ -2138,18 +2598,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       Effect.gen(function* () {
         const cause = Exit.isFailure(exit) ? exit.cause : Cause.empty;
         const entry = queueEntryFromInternal(internal);
-        const handle = queueHandleSlot.current;
-        if (handle === undefined) {
-          return yield* Effect.die(
-            new Error(`Queue "${queueName}" internal error: handle not wired before retry`),
-          );
-        }
         if (internal.retries >= maxRetries) {
-          if (config.onRetryExhausted !== undefined) {
-            yield* config.onRetryExhausted({ entry, cause }, handle).pipe(
-              (effect) => runQueueHook("onRetryExhausted", effect),
-            );
-          }
+          yield* publishEvent({ _tag: "RetryExhausted", entry, cause });
           yield* recordEntryEvent("exhausted", internal);
           yield* Effect.logDebug(
             `Retry exhausted for item in queue "${queueName}" after ${String(internal.retries + 1)} attempts`,
@@ -2157,13 +2607,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           return;
         }
         yield* recordEntryEvent("retried", internal);
-        if (config.onRetryScheduled !== undefined) {
-          yield* config.onRetryScheduled({
-            entry,
-            cause,
-            nextAttempt: internal.retries + 2,
-          }, handle).pipe((effect) => runQueueHook("onRetryScheduled", effect));
-        }
+        yield* publishEvent({
+          _tag: "RetryScheduled",
+          entry,
+          cause,
+          nextAttempt: internal.retries + 2,
+        });
         yield* releaseActiveKey(internal);
         yield* enqueueInternal(
           [internal.item],
@@ -2190,7 +2639,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       const low = yield* Queue.poll(lowQueue);
       if (Option.isSome(low)) return low.value;
 
-      // All empty — wait for enqueue/shutdown wake then re-poll in priority order
+      // All empty. If shutdown was requested there's nothing left to take (drain is complete, or
+      // finishActive already discarded the queued items) — interrupt this worker so it exits.
+      if (yield* Ref.get(isShutdownRef)) return yield* Effect.interrupt;
+      // Otherwise wait for an enqueue/shutdown wake then re-poll in priority order.
       yield* Deferred.await(workerWakeSignal);
       return yield* takeNext;
     });
@@ -2202,8 +2654,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
      * 1. Run user's `effect` and capture Exit
      * 2. Increment completed counter
      * 3. Release dedup key
-     * 4. Fire exit lifecycle hooks (forked)
-     * 5. Log unhandled failure when no exit/failure hook is configured
+     * 4. Publish the `Exit` / `Completed` / `Failed` events
+     * 5. Auto re-enqueue on failure up to `attempts`, else log the unhandled failure
      */
     const processItemBody = (internal: InternalItem<T>): Effect.Effect<void, never, R> =>
       Effect.gen(function* () {
@@ -2213,20 +2665,14 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             occurredAt: startedAt,
             startedAt,
           });
-          const handle = queueHandleSlot.current;
-          if (handle === undefined) {
-            return yield* Effect.die(
-              new Error(`Queue "${queueName}" internal error: handle not wired before item hooks`),
-            );
-          }
-          if (config.onStarted !== undefined) {
-            yield* FiberSet.run(handlerFibers)(
-              config.onStarted(
-                queueEntryFromInternal(internal, { startedAt }),
-                handle,
-              ).pipe((effect) => runQueueHook("onStarted", effect)),
-            );
-          }
+          yield* publishEvent({
+            _tag: "Started",
+            entry: queueEntryFromInternal(internal, { startedAt }),
+          });
+          yield* Metric.update(
+            inFlightGauge,
+            yield* Ref.updateAndGet(inFlightRef, (n) => n + 1),
+          );
           const ctx = makeEffectContext(internal);
           const exit = yield* Effect.exit(config.effect(internal.item, ctx));
           const end = yield* Effect.clockWith((c) => c.currentTimeMillis);
@@ -2247,46 +2693,61 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             },
           );
 
-          // Release dedup key BEFORE forking exit hooks. Hooks may
-          // synchronously invoke `retry`, which re-enqueues the item; that
-          // re-enqueue must observe a free dedupe key so its `HashSet.has`
-          // check passes, and its emitted `added` change must follow the
-          // main fiber's `released` change in the analytics stream. Doing
-          // this work post-fork would race the hook fiber against the main
-          // fiber, producing a transiently inconsistent `activeKeys` and
-          // out-of-order `dedupe-key.added` / `released` records.
+          // Release dedup key BEFORE the auto re-enqueue below. The re-enqueue
+          // must observe a free dedupe key so its `HashSet.has` check passes,
+          // and its emitted `added` change must follow this `released` change
+          // in the analytics stream (preserving the dedupe-key seq invariant).
           if (config.key !== undefined && internal.key !== undefined) {
             yield* Ref.update(activeKeys, HashSet.remove(internal.key));
             yield* recordDedupeKeyChange("released", internal.key);
           }
 
           const entry = queueEntryFromInternal(internal, { startedAt, completedAt });
-          const retry = retryInternal(internal, exit);
-          const exitEvent: QueueExitEvent<T, E, R> = { entry, exit, elapsed, retry };
-          yield* FiberSet.run(handlerFibers)(
-            Effect.gen(function* () {
-              if (config.onExit !== undefined) {
-                yield* config.onExit(exitEvent, handle).pipe(
-                  (effect) => runQueueHook("onExit", effect),
-                );
-              }
-              if (Exit.isSuccess(exit) && config.onCompleted !== undefined) {
-                yield* config.onCompleted({ entry, elapsed }, handle).pipe(
-                  (effect) => runQueueHook("onCompleted", effect),
-                );
-              }
-              if (Exit.isFailure(exit) && config.onFailed !== undefined) {
-                yield* config.onFailed({ entry, cause: exit.cause, elapsed, retry }, handle).pipe(
-                  (effect) => runQueueHook("onFailed", effect),
-                );
-              }
-            }),
+          // fan-out events (unconditional — observe outcomes via the `events` stream)
+          yield* publishEvent({ _tag: "Exit", entry, exit, elapsed });
+          yield* publishEvent(
+            Exit.isSuccess(exit)
+              ? { _tag: "Completed", entry, elapsed }
+              : { _tag: "Failed", entry, cause: exit.cause, elapsed },
+          );
+          yield* Metric.update(
+            inFlightGauge,
+            yield* Ref.updateAndGet(inFlightRef, (n) => Math.max(0, n - 1)),
           );
 
-          if (Exit.isFailure(exit) && config.onExit === undefined && config.onFailed === undefined) {
-            yield* Effect.logWarning(
-              `Item failed in queue "${queueName}", no exit hook configured`,
-            ).pipe(Effect.annotateLogs("cause", Cause.pretty(exit.cause)));
+          // Failure disposition. `onFailure` (if set) decides per error; otherwise the queue's
+          // default policy applies. Runs in the main fiber after the dedup key was released
+          // above, so any re-enqueue's `added` correctly follows the `released` (preserving the
+          // dedupe-key seq invariant).
+          if (Exit.isFailure(exit)) {
+            const disposition =
+              config.onFailure !== undefined
+                ? yield* config.onFailure(entry, exit.cause)
+                : "default";
+            switch (disposition) {
+              case "retry":
+                yield* retryInternal(internal, exit);
+                break;
+              case "deadLetter":
+                yield* Effect.asVoid(
+                  routePending(entry, { reason: "onFailure" }, "dead-lettered"),
+                );
+                break;
+              case "drop":
+                yield* Effect.asVoid(
+                  routePending(entry, { reason: "onFailure" }, "dropped"),
+                );
+                break;
+              case "default":
+                if (autoReEnqueue) {
+                  yield* retryInternal(internal, exit);
+                } else {
+                  yield* Effect.logWarning(
+                    `Item failed in queue "${queueName}" (no \`attempts\` set; observe via \`events\`)`,
+                  ).pipe(Effect.annotateLogs("cause", Cause.pretty(exit.cause)));
+                }
+                break;
+            }
           }
 
           yield* wakeDrainedIfAllQueuesEmpty;
@@ -2316,9 +2777,15 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
               skipRateLimitedItem(internal).pipe(Effect.as(false)),
             ),
           );
-          if (!proceed) return;
+          if (!proceed) {
+            // a skipped item still drains the queue — check whether shutdown can now finalize
+            yield* finalizeShutdownIfDrained;
+            return;
+          }
         }
         yield* semaphore.withPermits(1)(processItemBody(internal));
+        // item finished + inFlight decremented — if shutting down and now idle, flip to "off"
+        yield* finalizeShutdownIfDrained;
       });
 
     // ─── Internal: worker loop ───
@@ -2340,8 +2807,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         Effect.annotateLogs(
           Effect.forever(
             Effect.gen(function* () {
-              const shutdown = yield* Ref.get(isShutdownRef);
-              if (shutdown) return yield* Effect.interrupt;
+              // On shutdown: `finishActive` stops pulling immediately (queued items were already
+              // discarded); `drain` keeps pulling until empty, where `takeNext` interrupts. So we
+              // only short-circuit here for finishActive — drain falls through to drain the queue.
+              if (yield* Ref.get(isShutdownRef)) {
+                if (shutdownMode === "finishActive") return yield* Effect.interrupt;
+              }
 
               yield* latch.await;
               const internal = yield* takeNext;
@@ -2392,40 +2863,34 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       const handle = queueHandleSlot.current;
       if (handle === undefined) {
         return yield* Effect.die(
-          new Error(`Queue "${queueName}" internal error: handle not wired before lifecycle hooks`),
+          new Error(`Queue "${queueName}" internal error: handle not wired before drain monitor`),
         );
       }
 
-      if (config.onStart !== undefined) {
-        yield* FiberSet.run(handlerFibers)(
-          config.onStart({ queueId: queueName }, handle).pipe((effect) => runQueueHook("onStart", effect)),
-        );
-      }
+      yield* publishEvent({ _tag: "Start", queueId: queueName });
 
-      if (config.onDrained !== undefined) {
-        const onDrained = config.onDrained;
-        yield* FiberSet.run(workerFibers)(
-          Effect.forever(
-            Effect.gen(function* () {
-              yield* Deferred.await(drainWakeSignal);
+      // Drain monitor: emits `Drained` whenever pending work drains to empty.
+      yield* FiberSet.run(workerFibers)(
+        Effect.forever(
+          Effect.gen(function* () {
+            yield* Deferred.await(drainWakeSignal);
 
-              const shutdown = yield* Ref.get(isShutdownRef);
-              if (shutdown) return yield* Effect.interrupt;
+            const shutdown = yield* Ref.get(isShutdownRef);
+            if (shutdown) return yield* Effect.interrupt;
 
-              const empty = yield* handle.isEmpty;
-              if (empty) {
-                yield* Effect.logDebug(`Queue "${queueName}" drained, triggering onDrained`);
-                const completed = yield* Ref.get(completedCount);
-                yield* FiberSet.run(handlerFibers)(
-                  onDrained({ queueId: queueName, completed }, handle).pipe(
-                    (effect) => runQueueHook("onDrained", effect),
-                  ),
-                );
-              }
-            }),
-          ),
-        );
-      }
+            const empty = yield* handle.isEmpty;
+            if (empty) {
+              yield* Effect.logDebug(`Queue "${queueName}" drained`);
+              const completed = yield* Ref.get(completedCount);
+              yield* publishEvent({
+                _tag: "Drained",
+                queueId: queueName,
+                completed,
+              });
+            }
+          }),
+        ),
+      );
     });
 
     const matchesSelector = (
@@ -2451,6 +2916,33 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       internal.key === undefined
         ? Effect.void
         : Ref.update(activeKeys, HashSet.remove(internal.key));
+
+    // finishActive shutdown: drain every pending lane, release their dedup keys, and emit one
+    // `Dropped` event for the discarded entries (reason "shutdown"), so only in-flight items
+    // remain to finish. (drain mode skips this — it processes the queued items instead.)
+    const discardPendingOnShutdown: Effect.Effect<void> = Effect.gen(function* () {
+      const discarded: Array<QueueEntry<T>> = [];
+      const drainLane = (q: Queue.Queue<InternalItem<T>>): Effect.Effect<void> =>
+        Effect.gen(function* () {
+          const polled = yield* Queue.poll(q);
+          if (Option.isSome(polled)) {
+            yield* releaseActiveKey(polled.value);
+            discarded.push(queueEntryFromInternal(polled.value));
+            yield* drainLane(q);
+          }
+        });
+      yield* drainLane(highQueue);
+      yield* drainLane(normalQueue);
+      yield* drainLane(lowQueue);
+      if (discarded.length > 0) {
+        yield* publishEvent({
+          _tag: "Dropped",
+          queueId: queueName,
+          entries: discarded,
+          reason: "shutdown",
+        });
+      }
+    });
 
     const restoreActiveKey = (internal: InternalItem<T>) =>
       internal.key === undefined
@@ -2524,12 +3016,13 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             attributes: options?.attributes,
           });
         }
-        if (entries.length > 0 && config.onReleased !== undefined) {
-          yield* FiberSet.run(handlerFibers)(
-            config.onReleased({ queueId: queueName, releaseId, entries }, queueHandle).pipe(
-              (effect) => runQueueHook("onReleased", effect),
-            ),
-          );
+        if (entries.length > 0) {
+          yield* publishEvent({
+            _tag: "Released",
+            queueId: queueName,
+            releaseId,
+            entries,
+          });
         }
         yield* wakeDrainedIfAllQueuesEmpty;
         return entries;
@@ -2561,18 +3054,19 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             attributes: options?.attributes,
           });
         }
-        if (encoded.length > 0 && config.onReleased !== undefined) {
+        if (encoded.length > 0) {
           const entries = internals.map((internal) =>
             queueEntryFromInternal(internal, undefined, {
               releaseId,
               attributes: options?.attributes,
             })
           );
-          yield* FiberSet.run(handlerFibers)(
-            config.onReleased({ queueId: queueName, releaseId, entries }, queueHandle).pipe(
-              (effect) => runQueueHook("onReleased", effect),
-            ),
-          );
+          yield* publishEvent({
+            _tag: "Released",
+            queueId: queueName,
+            releaseId,
+            entries,
+          });
         }
         yield* wakeDrainedIfAllQueuesEmpty;
         return encoded;
@@ -2609,21 +3103,21 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           });
         }
         if (entries.length > 0) {
-          const event = { queueId: queueName, entries, reason: options.reason };
-          if (kind === "dead-lettered" && config.onDeadLettered !== undefined) {
-            yield* FiberSet.run(handlerFibers)(
-              config.onDeadLettered(event, queueHandle).pipe(
-                (effect) => runQueueHook("onDeadLettered", effect),
-              ),
-            );
-          }
-          if (kind === "dropped" && config.onDropped !== undefined) {
-            yield* FiberSet.run(handlerFibers)(
-              config.onDropped(event, queueHandle).pipe(
-                (effect) => runQueueHook("onDropped", effect),
-              ),
-            );
-          }
+          yield* publishEvent(
+            kind === "dead-lettered"
+              ? {
+                  _tag: "DeadLettered",
+                  queueId: queueName,
+                  entries,
+                  reason: options.reason,
+                }
+              : {
+                  _tag: "Dropped",
+                  queueId: queueName,
+                  entries,
+                  reason: options.reason,
+                },
+          );
         }
         yield* wakeDrainedIfAllQueuesEmpty;
         return entries;
@@ -2636,6 +3130,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       add: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "normal", "add"),
       prioritize: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "high", "prioritize"),
       defer: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "low", "defer"),
+      enqueue: (input: QueueEntry<T> | ReadonlyArray<QueueEntry<T>>) =>
+        enqueueEntries(input),
 
       // Read all three queue sizes in parallel, combine into total
       size: Effect.map(
@@ -2662,26 +3158,68 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       // Counter incremented after each item completes processing
       completed: Ref.get(completedCount),
 
+      // Live lifecycle events — each consumer gets its own subscription
+      events: Stream.fromPubSub(eventsHub),
+
+      // Current-state snapshot stream — current value + every change
+      status: SubscriptionRef.changes(statusRef),
+
+      // One-shot snapshot — recompute authoritative truth on read (span-traced for origin).
+      statusNow: computeStatus.pipe(Effect.withSpan("queue.statusNow")),
+
+      // Windowed metrics stream (dynamic windows)
+      metrics: Stream.fromPubSub(metricsHub),
+
       start: forkProcessingFibers.pipe(Effect.asVoid),
 
       // Close latch → workers block on next iteration before taking items
       pause: latch.close.pipe(
+        Effect.andThen(Ref.set(pausedRef, true)),
+        Effect.andThen(refreshStatus),
         Effect.andThen(recordLifecycleEvent("Paused")),
         Effect.asVoid,
       ),
 
       // Open latch → blocked workers proceed to take + process
       resume: latch.open.pipe(
+        Effect.andThen(Ref.set(pausedRef, false)),
+        Effect.andThen(refreshStatus),
         Effect.andThen(recordLifecycleEvent("Resumed")),
         Effect.asVoid,
       ),
 
-      // Mark shutdown → wake sleeping workers (so they see the flag) → record
-      shutdown: Ref.set(isShutdownRef, true).pipe(
-        Effect.andThen(signalShutdownWake),
-        Effect.andThen(recordLifecycleEvent("Shutdown")),
-        Effect.andThen(Effect.logInfo(`Queue "${queueName}" shutting down`)),
-      ),
+      // Graceful shutdown: stop accepting items (phase → draining), wind down per `shutdownMode`,
+      // and once empty + idle finalize to "off" (see `finalizeShutdownIfDrained`). Idempotent —
+      // only the first call (running → draining) does the work.
+      shutdown: Effect.gen(function* () {
+        const previous = yield* Ref.getAndSet(phaseRef, "draining");
+        if (previous !== "running") return; // already draining or off
+        yield* Ref.set(isShutdownRef, true);
+        const pending = yield* totalPending;
+        yield* publishEvent({
+          _tag: "ShutdownRequested",
+          queueId: queueName,
+          mode: shutdownMode,
+          pending,
+        });
+        yield* recordLifecycleEvent("Shutdown");
+        yield* Effect.logInfo(
+          `Queue "${queueName}" shutting down (${shutdownMode})`,
+        );
+        if (shutdownMode === "finishActive") {
+          // discard the queued items up front so only in-flight remain.
+          yield* discardPendingOnShutdown;
+        } else {
+          // drain: open the latch (and clear paused) so a paused queue still drains its backlog,
+          // rather than hanging in "draining" forever.
+          yield* latch.open;
+          yield* Ref.set(pausedRef, false);
+        }
+        yield* signalShutdownWake; // unblock takeNext waiters + the drain monitor
+        yield* requestMetricsFlush;
+        yield* refreshStatus; // snapshot now reads phase = "draining"
+        yield* finalizeShutdownIfDrained; // already empty + idle? straight to "off"
+      }),
 
       clear: Effect.gen(function* () {
         let count = 0;
@@ -2703,14 +3241,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         yield* drain(lowQueue);
         yield* Ref.set(completedCount, 0);
         yield* recordLifecycleEvent("Cleared", count);
+        yield* publishEvent({ _tag: "Cleared", queueId: queueName, count });
         yield* recordDedupeKeyChanges("released", releasedKeys);
-        if (config.onCleared !== undefined) {
-          yield* FiberSet.run(handlerFibers)(
-            config.onCleared({ queueId: queueName, count }, queueHandle).pipe(
-              (effect) => runQueueHook("onCleared", effect),
-            ),
-          );
-        }
         yield* Effect.logDebug(`Queue "${queueName}" cleared ${String(count)} items`);
         yield* wakeDrainedIfAllQueuesEmpty;
         return count;

@@ -22,7 +22,7 @@ reads it; metadata is inert to type inference + the wire contract. `R`/error cha
 honest (no `satisfies Spec` on specs — it contextually widens the error channel; the
 `<const S extends Spec>` constraint validates without widening, and no-error overloads
 hardcode `Schema.Never` so the constraint can't bind it). `ResourceTag<Self, S>` exported so
-consumers can type tags. `serverFamily` takes variadic `Resource.instance(tag, impl)` (no
+consumers can type tags. `serveInstances` takes variadic `Resource.instance(tag, impl)` (no
 tuples). **TODO:** resource-level `description` (thread through `Tag`/`tagFor`).
 
 ## 2. The `changes` stream — the live-data primitive (most important for "live")

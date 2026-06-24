@@ -1,7 +1,64 @@
-import { Effect, Schema } from "effect";
+import { Effect, Fiber, Layer, Schema, Stream } from "effect";
 import { RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import { Resource, forwardClient, groupOf, specOf } from "../src/Resource";
+
+// ── runForEachTag: tag-dispatched stream consumption (cast-free, dual, overloaded) ──
+type Ev =
+  | { readonly _tag: "A"; readonly n: number }
+  | { readonly _tag: "B"; readonly s: string }
+  | { readonly _tag: "C" };
+
+it("runForEachTag dispatches by tag — handler map, pipeable, types inferred", () => {
+  const events = Stream.fromIterable<Ev>([
+    { _tag: "A", n: 1 },
+    { _tag: "B", s: "x" },
+    { _tag: "C" },
+    { _tag: "A", n: 2 },
+  ]);
+  const program = Effect.gen(function* () {
+    const seen: Array<string> = [];
+    // pipeable + handler map; `e.n` / `e.s` only compile if inference narrowed per tag.
+    yield* events.pipe(
+      Resource.runForEachTag({
+        A: (e) => Effect.sync(() => seen.push(`A${e.n}`)),
+        B: (e) => Effect.sync(() => seen.push(`B${e.s}`)),
+        // C deliberately unhandled → ignored
+      }),
+    );
+    expect(seen).toEqual(["A1", "Bx", "A2"]);
+
+    // data-first + single tag
+    const aValues: Array<number> = [];
+    yield* Resource.runForEachTag(events, "A", (e) =>
+      Effect.sync(() => aValues.push(e.n)),
+    );
+    expect(aValues).toEqual([1, 2]);
+  });
+  return Effect.runPromise(program);
+});
+
+it("runForEachTagScoped forks into the scope and returns a Fiber (non-blocking)", () => {
+  const events = Stream.fromIterable<Ev>([
+    { _tag: "A", n: 1 },
+    { _tag: "B", s: "x" },
+    { _tag: "A", n: 2 },
+  ]);
+  const program = Effect.gen(function* () {
+    const seen: Array<string> = [];
+    // pipeable + handler map — forks automatically; we get a Fiber back, not a blocked effect.
+    const fiber = yield* events.pipe(
+      Resource.runForEachTagScoped({
+        A: (e) => Effect.sync(() => seen.push(`A${e.n}`)),
+        B: (e) => Effect.sync(() => seen.push(`B${e.s}`)),
+      }),
+    );
+    // join to observe completion deterministically (the stream is finite here)
+    yield* Fiber.join(fiber);
+    expect(seen).toEqual(["A1", "Bx", "A2"]);
+  }).pipe(Effect.scoped);
+  return Effect.runPromise(program);
+});
 
 // A resource with both a no-payload method (property) and a payload method.
 class Echo extends Resource.Tag<Echo>("test/Echo")({
@@ -69,7 +126,7 @@ it("server family routes calls to the right instance by id header", () => {
     expect(yield* b.bump({ by: 1 })).toBe(11);
   }).pipe(
     Effect.provide(
-      Resource.serverFamily(
+      Resource.serveInstances(
         Counter,
         Resource.instance(Alpha, alphaImpl),
         Resource.instance(Beta, betaImpl),
@@ -118,8 +175,12 @@ it("two resource types sharing a method name coexist on one server (group prefix
     expect(yield* widgets.size).toBe(42);
     expect(yield* crates.size).toBe("dozen");
   }).pipe(
-    Effect.provide(Resource.server(Widgets, { size: Effect.succeed(42) })),
-    Effect.provide(Resource.server(Crates, { size: Effect.succeed("dozen") })),
+    Effect.provide(
+      Layer.mergeAll(
+        Resource.server(Widgets, { size: Effect.succeed(42) }),
+        Resource.server(Crates, { size: Effect.succeed("dozen") }),
+      ),
+    ),
     Effect.scoped,
   );
   return Effect.runPromise(program);

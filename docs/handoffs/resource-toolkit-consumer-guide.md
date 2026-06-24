@@ -59,7 +59,7 @@ Resource.client(Counter)        // remote: forwards over RPC, needs an ambient P
 
 So a dashboard widget / CLI command is written once against the tag and switched between
 in-process and a running server purely by which layer is provided. (Serving side:
-`Resource.server(tag, impl)` for one, `Resource.serverFamily(factory, ...Resource.instance(tag, impl))`
+`Resource.server(tag, impl)` for one, `Resource.serveInstances(factory, ...Resource.instance(tag, impl))`
 for a family — one `RpcServer` hosts many resource types; wire tags are `groupId/method` so
 they never collide.)
 
@@ -115,7 +115,7 @@ they're plain schemas; richer UX hints (optional/default → flags, literal unio
   building against `Resource.layer` (in-process)**; keep the client swap as a layer boundary.
 - **Schema-as-UX hints.** No shared reader yet (flags/choices/masking/pretty-print). Render
   from raw schemas for now; don't hard-code formatting you'll want to derive later.
-- **Queue data-plane.** `QueueControlSpec` (control/observation: size/pause/clear/…) works;
+- **Queue data-plane.** `queueControlSpec` (control/observation: size/pause/clear/…) works;
   item verbs (`add`/`release`/…) are **not** ported yet (need per-queue itemSchema encoding).
 - **Package paths.** Final public import subpaths aren't fixed; import from `src/Resource`
   within the repo for now.

@@ -4,7 +4,7 @@
  * Workshop group contract: feeder process + job queue. Run via `pnpm run demo:pm -- group-start workshop-group`.
  */
 
-import { Cause, Clock, Data, Duration, Effect, Exit } from "effect";
+import { Clock, Data, Duration, Effect } from "effect";
 import {
   Endpoint,
   Polling,
@@ -38,7 +38,7 @@ export class JobQueue extends QueueResource.Service<
 >()("@demo/playground/Workshop/JobQueue", {
   concurrency: 2,
   capacity: 200,
-  retries: 1,
+  attempts: 2, // auto re-enqueue once on failure
   effect: (job, ctx) =>
     Effect.gen(function* () {
       yield* Effect.logInfo(
@@ -52,14 +52,6 @@ export class JobQueue extends QueueResource.Service<
         });
       }
       yield* Effect.logInfo(`[JobQueue] done ${job.id}`);
-    }),
-  onExit: ({ entry, exit }) =>
-    Exit.match(exit, {
-      onFailure: (cause) =>
-        Effect.logWarning(
-          `[JobQueue] failed ${entry.item.id}: ${Cause.pretty(cause)}`,
-        ),
-      onSuccess: () => Effect.void,
     }),
 }) {}
 
