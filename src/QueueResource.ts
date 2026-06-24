@@ -76,6 +76,7 @@ import {
   HashSet,
   Latch,
   Layer,
+  Logger,
   Metric,
   Option,
   PubSub,
@@ -88,6 +89,8 @@ import {
   SubscriptionRef,
   Types,
 } from "effect";
+import * as LogLevel from "effect/LogLevel";
+import { CurrentLogAnnotations, CurrentLogSpans } from "effect/References";
 import {
   RateLimiter as RateLimiterTag,
   RateLimiterError,
@@ -97,7 +100,14 @@ import {
   layerStoreMemory,
 } from "effect/unstable/persistence/RateLimiter";
 import type { RateLimiter as EffectRateLimiter } from "effect/unstable/persistence/RateLimiter";
-import { withQueueLogAnnotations } from "./LogContext";
+import {
+  ProcessManagerLogAnnotationKeys,
+  withQueueLogAnnotations,
+} from "./LogContext";
+import {
+  processManagerLogEntryFromLoggerOptions,
+  type ProcessManagerLogEntry,
+} from "./LogEntry";
 import {
   QueueResourceStore,
   type QueueDedupeKeyChange,
@@ -405,6 +415,16 @@ export interface QueueHandleApi<
    * load); `windowMillis` is the actual elapsed window. The UI-facing metrics surface.
    */
   readonly metrics: Stream.Stream<QueueMetrics>;
+
+  /**
+   * Live **log** stream — structured {@link ProcessManagerLogEntry}s captured from the queue
+   * engine *and* your worker `effect`, each retaining its level, message, cause, annotations
+   * (`queueId` / worker / `entryId`) and spans. Empty unless {@link QueueResourceConfigBase.captureLogs}
+   * is enabled. Backed by a sliding buffer (a slow subscriber drops oldest lines; never
+   * backpressures the workers) — the fourth observability stream alongside `events` / `status` /
+   * `metrics`.
+   */
+  readonly logs: Stream.Stream<ProcessManagerLogEntry>;
 
   /**
    * Fork the worker pool. Idempotent — safe to call multiple times.
@@ -899,6 +919,18 @@ export interface QueueResourceConfigBase<T> {
    * @default "drain"
    */
   readonly shutdownMode?: "drain" | "finishActive";
+  /**
+   * Capture logs into the {@link QueueHandleApi.logs} stream. **Off by default** (capture has
+   * cost). When enabled, **every** log emitted by the queue engine *and* by your worker `effect`
+   * is captured — with its level, message, cause, annotations (`queueId`, the worker, and the
+   * processing entry's `entryId`) and spans preserved — and published to `logs`. Capture is
+   * **merged** with your existing logger(s), so console / process-manager logging is unaffected.
+   * - `true` — capture all levels.
+   * - `{ level }` — capture only at or above `level` (filtered at the source).
+   *
+   * @default undefined (off; `logs` is an empty stream)
+   */
+  readonly captureLogs?: boolean | { readonly level?: LogLevel.LogLevel };
 }
 
 /**
@@ -1127,6 +1159,37 @@ type ReleaseEntryEncoder<T> = (
 function normalizeEnqueueInput<A>(input: A | ReadonlyArray<A>): ReadonlyArray<A> {
   return isReadonlyArray(input) ? input : [input];
 }
+
+/**
+ * A per-queue capture {@link Logger.Logger} for the {@link QueueHandleApi.logs} stream. Mirrors
+ * the process-manager capture logger ({@link processManagerLogEntryFromLoggerOptions} preserves
+ * the level, message, cause, annotations and spans verbatim), but publishes to **this** queue's
+ * sliding `logsHub` instead of a relay, filters at the source by `minLevel`, and (defensively)
+ * only captures lines annotated with this `queueId` — so when the logger is merged into a fiber
+ * whose subtree spans sibling queues, each queue still only sees its own lines. Effect v4 invokes
+ * `log` synchronously, so the publish is scheduled on the logging fiber's dispatcher.
+ */
+const makeQueueCaptureLogger = (
+  queueId: string,
+  minLevel: LogLevel.LogLevel,
+  logsHub: PubSub.PubSub<ProcessManagerLogEntry>,
+): Logger.Logger<unknown, void> =>
+  Logger.make((options) => {
+    if (!LogLevel.isGreaterThanOrEqualTo(options.logLevel, minLevel)) return;
+    const annotations = options.fiber.getRef(CurrentLogAnnotations);
+    if (annotations[ProcessManagerLogAnnotationKeys.queueId] !== queueId) return;
+    const entry = processManagerLogEntryFromLoggerOptions({
+      message: options.message,
+      logLevel: options.logLevel,
+      cause: options.cause,
+      date: options.date,
+      annotations,
+      spans: options.fiber.getRef(CurrentLogSpans),
+    });
+    options.fiber.currentDispatcher.scheduleTask(() => {
+      Effect.runFork(PubSub.publish(logsHub, entry));
+    }, 0);
+  });
 
 // ============================================================================
 // Internal Item Wrapper
@@ -1543,6 +1606,31 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     const concurrency = config.concurrency ?? 5;
     const shutdownMode = config.shutdownMode ?? "drain";
     const capacity = config.capacity ?? 50_000;
+    // ─── Log capture (opt-in) ───
+    // When enabled, a merged capture logger publishes every queue/worker log line to a sliding
+    // `logsHub` exposed as `handle.logs`. `tapLogs` installs it on the worker pool + lifecycle
+    // ops so their logs (and the user `effect`'s) are captured; off = identity (zero overhead).
+    const captureLogsConfig = config.captureLogs;
+    const captureLogsEnabled =
+      captureLogsConfig === true ||
+      (typeof captureLogsConfig === "object" && captureLogsConfig !== null);
+    const captureLogsMinLevel: LogLevel.LogLevel =
+      typeof captureLogsConfig === "object" && captureLogsConfig !== null
+        ? (captureLogsConfig.level ?? "All")
+        : "All";
+    const logsHub = yield* PubSub.sliding<ProcessManagerLogEntry>(1024);
+    const queueLoggerLayer = Logger.layer(
+      [makeQueueCaptureLogger(queueName, captureLogsMinLevel, logsHub)],
+      { mergeWithExisting: true },
+    );
+    // Install the capture logger AND stamp `queueId` on the effect's logs, so every captured line
+    // (engine lifecycle ops + worker pool) carries the queue id — which both attributes the line
+    // and satisfies the logger's per-queue filter.
+    const tapLogs = captureLogsEnabled
+      ? <A2, E2, R2>(eff: Effect.Effect<A2, E2, R2>): Effect.Effect<A2, E2, R2> =>
+          withQueueLogAnnotations(queueName, Effect.provide(eff, queueLoggerLayer))
+      : <A2, E2, R2>(eff: Effect.Effect<A2, E2, R2>): Effect.Effect<A2, E2, R2> =>
+          eff;
     // `attempts` (preferred) supersedes the deprecated `retries` (= attempts - 1).
     const maxRetries =
       config.attempts !== undefined
@@ -2751,7 +2839,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           }
 
           yield* wakeDrainedIfAllQueuesEmpty;
-      });
+      }).pipe(
+        // attribute every log emitted while processing this item (engine + user effect) to it
+        Effect.annotateLogs({ "queue.entryId": internal.entryId }),
+      );
 
     const skipRateLimitedItem = (internal: InternalItem<T>): Effect.Effect<void, never, R> =>
       Effect.gen(function* () {
@@ -3170,7 +3261,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       // Windowed metrics stream (dynamic windows)
       metrics: Stream.fromPubSub(metricsHub),
 
-      start: forkProcessingFibers.pipe(Effect.asVoid),
+      // Live captured logs (engine + worker effect). Empty unless `captureLogs` is enabled.
+      logs: captureLogsEnabled ? Stream.fromPubSub(logsHub) : Stream.empty,
+
+      start: tapLogs(forkProcessingFibers).pipe(Effect.asVoid),
 
       // Close latch → workers block on next iteration before taking items
       pause: latch.close.pipe(
@@ -3191,7 +3285,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       // Graceful shutdown: stop accepting items (phase → draining), wind down per `shutdownMode`,
       // and once empty + idle finalize to "off" (see `finalizeShutdownIfDrained`). Idempotent —
       // only the first call (running → draining) does the work.
-      shutdown: Effect.gen(function* () {
+      shutdown: tapLogs(Effect.gen(function* () {
         const previous = yield* Ref.getAndSet(phaseRef, "draining");
         if (previous !== "running") return; // already draining or off
         yield* Ref.set(isShutdownRef, true);
@@ -3219,9 +3313,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         yield* requestMetricsFlush;
         yield* refreshStatus; // snapshot now reads phase = "draining"
         yield* finalizeShutdownIfDrained; // already empty + idle? straight to "off"
-      }),
+      })),
 
-      clear: Effect.gen(function* () {
+      clear: tapLogs(Effect.gen(function* () {
         let count = 0;
         const releasedKeys: string[] = [];
         const drain = (q: Queue.Queue<InternalItem<T>>): Effect.Effect<void> =>
@@ -3246,7 +3340,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         yield* Effect.logDebug(`Queue "${queueName}" cleared ${String(count)} items`);
         yield* wakeDrainedIfAllQueuesEmpty;
         return count;
-      }),
+      })),
 
       release: (options) => releasePending(options),
 
@@ -3260,7 +3354,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     queueHandleSlot.current = queueHandle;
 
     if (autoStart) {
-      yield* forkProcessingFibers;
+      yield* tapLogs(forkProcessingFibers);
     }
 
     return queueHandle;

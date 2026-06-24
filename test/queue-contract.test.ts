@@ -1,4 +1,14 @@
-import { DateTime, Duration, Effect, Exit, Layer, Ref, Schema, Stream } from "effect";
+import {
+  DateTime,
+  Duration,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Ref,
+  Schema,
+  Stream,
+} from "effect";
 import { RpcClient, RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import { QueueResource, queueControlSpec } from "../src/QueueContract";
@@ -56,6 +66,7 @@ const makeImpl = () => {
       phase: "running" as const,
     })),
     metrics: Stream.empty,
+    logs: Stream.empty,
   };
 };
 
@@ -107,6 +118,7 @@ it("exposes the expected control verbs", () => {
       "clear",
       "completed",
       "isEmpty",
+      "logs",
       "metrics",
       "pause",
       "resume",
@@ -328,6 +340,42 @@ it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
       QueueResource.layer(LocalQueue, {
         effect: (_item: NumberItem) => Effect.void,
         concurrency: 1,
+      }),
+    ),
+    Effect.scoped,
+  );
+  return Effect.runPromise(program);
+});
+
+// ── QueueResource.layer surfaces captured logs through the toolkit tag ──
+class LoggingQueue extends QueueResource.Tag<LoggingQueue>()(
+  "test/LoggingQueue",
+  NumberItem,
+) {}
+
+it("QueueResource.layer surfaces captured logs via queue.logs", () => {
+  const program = Effect.gen(function* () {
+    const q = yield* LoggingQueue;
+    const collected = yield* Effect.forkChild(
+      Stream.runCollect(
+        Stream.take(
+          Stream.filter(q.logs, (e) => e.message.includes("handling")),
+          1,
+        ),
+      ),
+    );
+    yield* Effect.sleep(Duration.millis(20));
+    yield* q.add({ n: 42 });
+    const entry = Array.from(yield* Fiber.join(collected))[0];
+    expect(entry?.message).toContain("handling 42");
+    expect(entry?.level).toBe("Info");
+    expect(entry?.annotations.queueId).toBe("test/LoggingQueue");
+  }).pipe(
+    Effect.provide(
+      QueueResource.layer(LoggingQueue, {
+        effect: (item: NumberItem) => Effect.logInfo(`handling ${String(item.n)}`),
+        concurrency: 1,
+        captureLogs: true,
       }),
     ),
     Effect.scoped,

@@ -35,6 +35,17 @@ import {
 } from "./QueueResource";
 import type { QueueResourceConfigWithItemSchema } from "./QueueResource";
 import type { JsonValue } from "./ProcessStoreEvent";
+import { ProcessManagerLogEntrySchema } from "./LogEntry";
+
+/**
+ * A captured log line on the wire — the element of the queue's `logs` stream. Reuses the
+ * package's structured log schema ({@link ProcessManagerLogEntrySchema}: `date`, `level`,
+ * `message`, `cause?`, `annotations`, `spans`), so every datapoint and the level are preserved
+ * across RPC. (Re-exported under a queue-neutral name.)
+ *
+ * @public
+ */
+export const queueLogEntry = ProcessManagerLogEntrySchema;
 
 /**
  * The per-priority pending counts returned by `sizes`.
@@ -356,6 +367,11 @@ export const queueControlSpec = {
     description:
       "Windowed metrics (per-window counts + throughput/latency) emitted once per window.",
   }),
+  logs: Resource.stream(queueLogEntry).annotate({
+    description:
+      "Captured log lines (engine + worker effect) with level/annotations/spans — empty " +
+      "unless the queue was configured with captureLogs.",
+  }),
 };
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to
 // `unknown`. The spec is validated (without widening) at the `Resource.Tag` call site.
@@ -547,7 +563,13 @@ const layer = <
   return Layer.unwrap(
     Effect.gen(function* () {
       const context = yield* Effect.context<R>();
-      const handle = yield* QueueEngine.make({ ...config, itemSchema });
+      // Default the engine queue `name` to the tag id, so telemetry (OTEL metric `queue` tag,
+      // captured-log `queueId`) attributes to this resource; an explicit config.name still wins.
+      const handle = yield* QueueEngine.make({
+        name: tag.id,
+        ...config,
+        itemSchema,
+      });
       const provideR = <Out, Err>(
         effect: Effect.Effect<Out, Err, R>,
       ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
@@ -564,6 +586,7 @@ const layer = <
         status: handle.status,
         statusNow: handle.statusNow,
         metrics: handle.metrics,
+        logs: handle.logs,
         // The item (or batch) IS the payload — `add`/`prioritize`/`defer` take it directly. The
         // `Array.isArray` branch only picks the engine's overload (`(item)` vs `(items)`); both
         // arms forward unchanged. Re-validation can't fail post-decode, so it's `orDie`d.
