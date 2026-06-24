@@ -51,18 +51,23 @@ const hexKey = (): string =>
     .padStart(4, "0");
 const timeStr = (t: number): string => new Date(t).toLocaleTimeString();
 
-// worker: variable execution time, occasional failure (so Failed events flow)
+// worker: variable execution, occasional failure, logging each step. captureLogs
+// surfaces those lines (engine + worker) on the real `logs` stream.
 const QueueLayer = QueueResource.layer(MailQueue, {
   effect: (job: { readonly id: string }) =>
     Effect.gen(function* () {
+      yield* Effect.logInfo(`processing ${job.id}`);
       yield* Effect.sleep(Duration.millis(250 + Math.floor(rng() * 800)));
       if (rng() < 0.1) {
+        yield* Effect.logError(`failed ${job.id}`);
         return yield* new WorkerError({ id: job.id });
       }
+      yield* Effect.logInfo(`completed ${job.id}`);
       return job;
     }),
   concurrency: 3,
   attempts: 2,
+  captureLogs: true,
 });
 
 // producer daemon: items arrive on their own, mixed priority
@@ -96,33 +101,30 @@ const trendAtom = runtime.atom(
   ),
 );
 
-interface EventLine {
+interface LogLine {
   readonly id: number;
   readonly t: number;
-  readonly kind: "started" | "done" | "failed";
-  readonly key: string;
-  readonly detail: string;
+  readonly level: string;
+  readonly message: string;
 }
-const LOG: Record<EventLine["kind"], { icon: string; color: string; label: string }> = {
-  started: { icon: "►", color: "gray", label: "started" },
-  done: { icon: "✓", color: "green", label: "done" },
-  failed: { icon: "✗", color: "red", label: "failed" },
+const LEVEL_COLOR: Record<string, string> = {
+  Trace: "gray",
+  Debug: "gray",
+  Info: "white",
+  Warning: "yellow",
+  Error: "red",
+  Fatal: "red",
 };
 
-const eventsAtom = runtime.atom(
-  Stream.unwrap(Effect.map(MailQueue, (q) => q.events)).pipe(
-    Stream.scan([] as ReadonlyArray<EventLine>, (acc, e) => {
-      const now = Date.now();
-      let line: EventLine | null = null;
-      if (e._tag === "Started") {
-        line = { id: (evId += 1), t: now, kind: "started", key: e.entry.item.id, detail: `try ${e.entry.attempts}` };
-      } else if (e._tag === "Completed") {
-        line = { id: (evId += 1), t: now, kind: "done", key: e.entry.item.id, detail: `${Duration.toMillis(e.elapsed)}ms` };
-      } else if (e._tag === "Failed") {
-        line = { id: (evId += 1), t: now, kind: "failed", key: e.entry.item.id, detail: `${Duration.toMillis(e.elapsed)}ms` };
-      }
-      return line === null ? acc : [...acc, line].slice(-300);
-    }),
+// the real opt-in logs stream (worker + engine lines) — newest accumulated, capped
+const logsAtom = runtime.atom(
+  Stream.unwrap(Effect.map(MailQueue, (q) => q.logs)).pipe(
+    Stream.scan([] as ReadonlyArray<LogLine>, (acc, l) =>
+      [
+        ...acc,
+        { id: (evId += 1), t: Date.now(), level: l.level, message: l.message },
+      ].slice(-300),
+    ),
   ),
 );
 
@@ -160,7 +162,7 @@ const App = (): React.ReactElement => {
   const statusR = useAtomValue(statusAtom);
   const metricsR = useAtomValue(metricsAtom);
   const trendR = useAtomValue(trendAtom);
-  const eventsR = useAtomValue(eventsAtom);
+  const logsR = useAtomValue(logsAtom);
 
   const pause = useAtomSet(pauseFn);
   const resume = useAtomSet(resumeFn);
@@ -189,7 +191,7 @@ const App = (): React.ReactElement => {
   const status = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const metrics = AsyncResult.isSuccess(metricsR) ? metricsR.value : undefined;
   const trend = AsyncResult.isSuccess(trendR) ? trendR.value : [];
-  const events = AsyncResult.isSuccess(eventsR) ? eventsR.value : [];
+  const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
 
   const sizes: Record<Priority, number> = status?.sizes ?? WAIT0;
   const paused = status?.paused ?? false;
@@ -220,7 +222,7 @@ const App = (): React.ReactElement => {
   };
 
   const visible = Math.max(1, rows - PAGE_HEIGHT - 5);
-  const tail = events.slice(-visible);
+  const tail = logs.slice(-visible);
 
   return (
     <Box
@@ -237,35 +239,26 @@ const App = (): React.ReactElement => {
       <Box flexGrow={1} flexDirection="column" paddingX={1}>
         <Box>
           <Box flexGrow={1}>
-            <Text dimColor>EVENTS </Text>
+            <Text dimColor>LOGS </Text>
             <Text color="green">live</Text>
             <Text dimColor> · in-flight {status?.inFlight ?? 0}</Text>
           </Box>
           <Text dimColor>phase {phase}</Text>
         </Box>
         <Box flexGrow={1} flexDirection="column" justifyContent="flex-end">
-          {tail.map((e) => {
-            const m = LOG[e.kind];
-            return (
-              <Box key={e.id}>
-                <Box width={11}>
-                  <Text dimColor>{timeStr(e.t)}</Text>
-                </Box>
-                <Box width={2}>
-                  <Text color={m.color}>{m.icon}</Text>
-                </Box>
-                <Box width={9}>
-                  <Text color={m.color}>{m.label}</Text>
-                </Box>
-                <Box width={7}>
-                  <Text>{e.key}</Text>
-                </Box>
-                <Box flexGrow={1}>
-                  <Text dimColor>{e.detail}</Text>
-                </Box>
+          {tail.map((l) => (
+            <Box key={l.id}>
+              <Box width={11}>
+                <Text dimColor>{timeStr(l.t)}</Text>
               </Box>
-            );
-          })}
+              <Box width={6}>
+                <Text color={LEVEL_COLOR[l.level] ?? "white"}>{l.level}</Text>
+              </Box>
+              <Box flexGrow={1}>
+                <Text>{l.message}</Text>
+              </Box>
+            </Box>
+          ))}
         </Box>
       </Box>
 
