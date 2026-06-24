@@ -22,6 +22,10 @@ class Notify extends QueueResource.Tag<Notify>()("@acme/queues/Notify", Job) {}
 class Worker1 extends QueueResource.Tag<Worker1>()("@acme/queues/Worker1", Job) {}
 class Worker2 extends QueueResource.Tag<Worker2>()("@acme/queues/Worker2", Job) {}
 class Worker3 extends QueueResource.Tag<Worker3>()("@acme/queues/Worker3", Job) {}
+class RegionUS extends QueueResource.Tag<RegionUS>()("@acme/queues/RegionUS", Job) {}
+class RegionEU extends QueueResource.Tag<RegionEU>()("@acme/queues/RegionEU", Job) {}
+class Daily extends QueueResource.Tag<Daily>()("@acme/queues/Daily", Job) {}
+class Weekly extends QueueResource.Tag<Weekly>()("@acme/queues/Weekly", Job) {}
 
 type AllQueues =
   | Mail
@@ -30,7 +34,11 @@ type AllQueues =
   | Notify
   | Worker1
   | Worker2
-  | Worker3;
+  | Worker3
+  | RegionUS
+  | RegionEU
+  | Daily
+  | Weekly;
 type SuccessOf<T> = [T] extends [Effect.Effect<infer A, infer _E, infer _R>] ? A : never;
 type QueueSvc = SuccessOf<typeof Mail>;
 type QueueTag<Id extends AllQueues> = Effect.Effect<QueueSvc, never, Id>;
@@ -96,6 +104,10 @@ const AppLayer = Layer.mergeAll(
   producerFor(Worker1).pipe(Layer.provideMerge(QueueResource.layer(Worker1, cfg))),
   producerFor(Worker2).pipe(Layer.provideMerge(QueueResource.layer(Worker2, cfg))),
   producerFor(Worker3).pipe(Layer.provideMerge(QueueResource.layer(Worker3, cfg))),
+  producerFor(RegionUS).pipe(Layer.provideMerge(QueueResource.layer(RegionUS, cfg))),
+  producerFor(RegionEU).pipe(Layer.provideMerge(QueueResource.layer(RegionEU, cfg))),
+  producerFor(Daily).pipe(Layer.provideMerge(QueueResource.layer(Daily, cfg))),
+  producerFor(Weekly).pipe(Layer.provideMerge(QueueResource.layer(Weekly, cfg))),
 ).pipe(
   // silence the default console logger so captured worker logs don't bleed onto the
   // Ink alt-screen — captureLogs still routes them to each queue's `logs` stream.
@@ -149,6 +161,10 @@ export const REGISTRY: Record<string, QueueBundle> = {
   [Worker1.id]: bundle(Worker1),
   [Worker2.id]: bundle(Worker2),
   [Worker3.id]: bundle(Worker3),
+  [RegionUS.id]: bundle(RegionUS),
+  [RegionEU.id]: bundle(RegionEU),
+  [Daily.id]: bundle(Daily),
+  [Weekly.id]: bundle(Weekly),
 };
 
 export type Node =
@@ -171,6 +187,22 @@ export const TREE: Group = {
         { t: "q", name: Worker1.id },
         { t: "q", name: Worker2.id },
         { t: "q", name: Worker3.id },
+        {
+          t: "g",
+          name: "@acme/queues/Regional",
+          members: [
+            { t: "q", name: RegionUS.id },
+            { t: "q", name: RegionEU.id },
+          ],
+        },
+      ],
+    },
+    {
+      t: "g",
+      name: "@acme/queues/Reports",
+      members: [
+        { t: "q", name: Daily.id },
+        { t: "q", name: Weekly.id },
       ],
     },
     { t: "q", name: Notify.id },

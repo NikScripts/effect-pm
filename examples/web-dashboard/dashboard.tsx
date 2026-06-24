@@ -293,17 +293,15 @@ const FocusedPanel = (props: {
   );
 };
 
-const Section = (props: {
-  readonly title: string;
+const QueueGrid = (props: {
   readonly ids: ReadonlyArray<string>;
   readonly onOpen: (id: string) => void;
-}): React.ReactElement => (
-  <div>
-    <div style={{ color: "#64748b", margin: "16px 0 8px", fontSize: 13 }}>{props.title}</div>
+}): React.ReactElement | null =>
+  props.ids.length === 0 ? null : (
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+        gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
         gap: 10,
       }}
     >
@@ -314,8 +312,42 @@ const Section = (props: {
         );
       })}
     </div>
-  </div>
-);
+  );
+
+// total leaf queues under a group (recursive)
+const leafCount = (node: Group): number =>
+  node.members.reduce((n, m) => n + (m.t === "g" ? leafCount(m) : 1), 0);
+
+// a group and, recursively, its subgroups — nested + indented to show hierarchy
+const GroupView = (props: {
+  readonly node: Group;
+  readonly depth: number;
+  readonly onOpen: (id: string) => void;
+}): React.ReactElement => {
+  const { node, depth } = props;
+  const queues = node.members.filter((n) => n.t === "q").map((n) => n.name);
+  const subgroups = node.members.filter((n): n is Group => n.t === "g");
+  const nested = depth > 0;
+  return (
+    <div
+      style={
+        nested
+          ? { borderLeft: "2px solid #1e2636", paddingLeft: 12, marginLeft: 4, marginTop: 10 }
+          : { marginTop: 10 }
+      }
+    >
+      {nested ? (
+        <div style={{ color: "#06b6d4", margin: "4px 0 8px", fontSize: 13 }}>
+          ▸ {displayName(node.name)} <span style={{ color: "#64748b" }}>· {leafCount(node)}</span>
+        </div>
+      ) : null}
+      <QueueGrid ids={queues} onOpen={props.onOpen} />
+      {subgroups.map((sg) => (
+        <GroupView key={sg.name} node={sg} depth={depth + 1} onOpen={props.onOpen} />
+      ))}
+    </div>
+  );
+};
 
 export const App = (): React.ReactElement => {
   const [focused, setFocused] = React.useState<string | null>(null);
@@ -327,22 +359,13 @@ export const App = (): React.ReactElement => {
     }
   }
 
-  const topQueues = TREE.members.filter((n) => n.t === "q").map((n) => n.name);
-  const groups = TREE.members.filter((n): n is Group => n.t === "g");
-
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: 14 }}>
-      <h1 style={{ fontSize: 18, margin: "4px 0 2px" }}>⬢ {displayName(TREE.name)}</h1>
+      <h1 style={{ fontSize: 18, margin: "4px 0 2px" }}>
+        ⬢ {displayName(TREE.name)} <span style={{ color: "#64748b", fontSize: 13 }}>· {leafCount(TREE)} queues</span>
+      </h1>
       <div style={{ color: "#64748b", fontSize: 13 }}>tap a queue for live metrics + logs</div>
-      <Section title="queues" ids={topQueues} onOpen={setFocused} />
-      {groups.map((g) => (
-        <Section
-          key={g.name}
-          title={`${displayName(g.name)} · ${g.members.length}`}
-          ids={g.members.filter((n) => n.t === "q").map((n) => n.name)}
-          onOpen={setFocused}
-        />
-      ))}
+      <GroupView node={TREE} depth={0} onOpen={setFocused} />
     </div>
   );
 };
