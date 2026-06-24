@@ -211,7 +211,14 @@ export const ThroughputChart = (props: { readonly bundle: QueueBundle }): React.
         <XAxis dataKey="t" hide />
         <YAxis hide />
         <Tooltip contentStyle={{ background: "#1e2636", border: "1px solid #2b3650", borderRadius: 8, fontSize: 12 }} />
-        <Area type="monotone" dataKey="throughput" stroke="#22c55e" fill="url(#thr)" strokeWidth={2} />
+        <Area
+          type="monotone"
+          dataKey="throughput"
+          stroke="#22c55e"
+          fill="url(#thr)"
+          strokeWidth={2}
+          isAnimationActive={false}
+        />
       </AreaChart>
     </ResponsiveContainer>
   );
