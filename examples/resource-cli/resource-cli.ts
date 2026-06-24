@@ -109,8 +109,9 @@ export const makeResourceCli = (
     Command.make(name).pipe(
       Command.withDescription(tag.description ?? `commands for ${name}`),
       Command.withSubcommands(
-        Object.entries(specOf(tag)).map(([method, spec]) =>
-          methodCommand(method, spec, tag),
+        // local methods (streams) aren't CLI subcommands — filter them out
+        Object.entries(specOf(tag)).flatMap(([method, spec]) =>
+          "payload" in spec ? [methodCommand(method, spec, tag)] : [],
         ),
       ),
     ),

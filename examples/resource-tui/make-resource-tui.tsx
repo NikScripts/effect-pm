@@ -71,6 +71,11 @@ const buildWidget = (
   const actions: Array<ActionField> = [];
 
   for (const [name, method] of Object.entries(specOf(tag))) {
+    // local methods (streams / local-only capabilities) carry no payload and aren't
+    // rendered by the generic form — skip them (narrows to the rpc Method type).
+    if (!("payload" in method)) {
+      continue;
+    }
     const meta = methodMeta(method);
     const hasPayload = method.payload !== undefined;
     if (!hasPayload && meta.kind === "query") {

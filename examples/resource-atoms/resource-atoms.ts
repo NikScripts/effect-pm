@@ -28,9 +28,11 @@ type AtomOf<M extends AnyMethod> = M["payload"] extends Schema.Struct.Fields
     ? Atom.Atom<AsyncResult.AsyncResult<M["success"]["Type"], M["error"]["Type"]>>
     : Atom.AtomResultFn<void, M["success"]["Type"], M["error"]["Type"]>;
 
-/** The atom set inferred from a tag's spec. */
+/** The atom set inferred from a tag's spec — local methods (streams) have no atom. */
 export type ResourceAtoms<S extends Spec> = {
-  readonly [K in keyof S]: AtomOf<S[K]>;
+  readonly [K in keyof S as S[K] extends AnyMethod ? K : never]: S[K] extends AnyMethod
+    ? AtomOf<S[K]>
+    : never;
 };
 
 export const makeResourceAtoms = <Self extends R, S extends Spec, R, ER>(
@@ -44,6 +46,10 @@ export const makeResourceAtoms = <Self extends R, S extends Spec, R, ER>(
 
   const atoms: Record<string, unknown> = {};
   for (const [key, method] of Object.entries(specOf(tag))) {
+    // local methods (streams) carry no payload and produce no atom — skip them.
+    if (!("payload" in method)) {
+      continue;
+    }
     const hasPayload = method.payload !== undefined;
     const isReadAtom = !hasPayload && methodMeta(method).kind === "query";
     if (isReadAtom) {
