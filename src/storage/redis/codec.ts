@@ -104,52 +104,44 @@ export const decodeRuntimeRecordJson = (
       ),
     );
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return yield* Effect.fail(
-        new RuntimeStorageDecodeError({
-          adapter: "redis",
-          operation: "read",
-          id,
-          detail: "Runtime record JSON must be an object",
-        }),
-      );
+      return yield* new RuntimeStorageDecodeError({
+        adapter: "redis",
+        operation: "read",
+        id,
+        detail: "Runtime record JSON must be an object",
+      });
     }
     const row = parsed as Record<string, unknown>;
     const occurredAtMs = row["occurredAtMs"];
     const createdAtMs = row["createdAtMs"];
     if (typeof occurredAtMs !== "number" || typeof createdAtMs !== "number") {
-      return yield* Effect.fail(
-        new RuntimeStorageDecodeError({
-          adapter: "redis",
-          operation: "read",
-          id,
-          field: "occurredAtMs",
-          detail: "Missing or invalid timestamp fields",
-        }),
-      );
+      return yield* new RuntimeStorageDecodeError({
+        adapter: "redis",
+        operation: "read",
+        id,
+        field: "occurredAtMs",
+        detail: "Missing or invalid timestamp fields",
+      });
     }
     const recordId = readOptionalString(row["id"]) ?? id;
     if (recordId === undefined) {
-      return yield* Effect.fail(
-        new RuntimeStorageDecodeError({
-          adapter: "redis",
-          operation: "read",
-          detail: "Missing record id",
-        }),
-      );
+      return yield* new RuntimeStorageDecodeError({
+        adapter: "redis",
+        operation: "read",
+        detail: "Missing record id",
+      });
     }
     const type = readOptionalString(row["type"]);
     const runId = readOptionalString(row["runId"]);
     const processType = readOptionalString(row["processType"]);
     const processId = readOptionalString(row["processId"]);
     if (type === undefined || runId === undefined || processType === undefined || processId === undefined) {
-      return yield* Effect.fail(
-        new RuntimeStorageDecodeError({
-          adapter: "redis",
-          operation: "read",
-          id: recordId,
-          detail: "Missing required runtime record fields",
-        }),
-      );
+      return yield* new RuntimeStorageDecodeError({
+        adapter: "redis",
+        operation: "read",
+        id: recordId,
+        detail: "Missing required runtime record fields",
+      });
     }
     const occurredAt = DateTime.makeUnsafe(occurredAtMs);
     const createdAt = DateTime.makeUnsafe(createdAtMs);

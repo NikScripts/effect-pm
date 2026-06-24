@@ -420,16 +420,14 @@ export const makeSqliteRuntimeStorageService = (sql: SqlClient): RuntimeStorageS
         Effect.provideService(RuntimeStorage, makeSqliteRuntimeStorageService(sql)),
       ),
     ).pipe(
-      Effect.catchIf(
-        (error): error is SqlError => error instanceof SqlError,
-        (error) =>
-          Effect.fail(
-            new RuntimeStorageTransactionError({
-              adapter: "sqlite",
-              operation: "transaction",
-              cause: error,
-            }),
-          ),
+      Effect.catchTag("SqlError", (error) =>
+        Effect.fail(
+          new RuntimeStorageTransactionError({
+            adapter: "sqlite",
+            operation: "transaction",
+            cause: error,
+          }),
+        ),
       ),
     ),
 });

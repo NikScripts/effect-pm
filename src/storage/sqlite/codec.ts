@@ -16,6 +16,7 @@ import { DateTime, Effect, Option, Schema } from "effect";
 import type { RuntimeRecordPredicate } from "../../Query";
 import type { JsonValue } from "../../ProcessStoreEvent";
 import {
+  RuntimeStorageDecodeError,
   RuntimeStorageEncodeError,
   type RuntimeRecord,
 } from "../../RuntimeStorage";
@@ -171,10 +172,16 @@ export const decodeRuntimeRecordRow = (row: Readonly<Record<string, unknown>>): 
  */
 export const decodeRuntimeRecordRowEffect = (
   row: Readonly<Record<string, unknown>>,
-): Effect.Effect<RuntimeRecord, unknown, never> =>
+): Effect.Effect<RuntimeRecord, RuntimeStorageDecodeError, never> =>
   Effect.try({
     try: () => decodeRuntimeRecordRow(row),
-    catch: (cause) => cause,
+    catch: (cause) =>
+      new RuntimeStorageDecodeError({
+        adapter: "sqlite",
+        operation: "read",
+        cause,
+        detail: "Failed to decode runtime record row",
+      }),
   });
 
 const encodeUnknownToJsonString = (

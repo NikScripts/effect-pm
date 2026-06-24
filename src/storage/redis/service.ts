@@ -159,7 +159,7 @@ export const makeRedisRuntimeStorageService = (
         Effect.mapError((error) => redisQueryError("create", error)),
       );
       if (parseExists(existsReply)) {
-        return yield* Effect.fail(new RuntimeStorageDuplicateRecordError({ id: record.id }));
+        return yield* new RuntimeStorageDuplicateRecordError({ id: record.id });
       }
       const json = yield* encodeRuntimeRecordJson(record).pipe(
         Effect.mapError((error) => redisQueryError("create", error, error.detail)),
@@ -168,7 +168,7 @@ export const makeRedisRuntimeStorageService = (
         Effect.mapError((error) => redisQueryError("create", error)),
       );
       if (!parseSetNxOk(setReply)) {
-        return yield* Effect.fail(new RuntimeStorageDuplicateRecordError({ id: record.id }));
+        return yield* new RuntimeStorageDuplicateRecordError({ id: record.id });
       }
       yield* send.send("SADD", idsKey(namespace), record.id).pipe(
         Effect.mapError((error) => redisQueryError("create", error)),
@@ -191,7 +191,7 @@ export const makeRedisRuntimeStorageService = (
           Effect.mapError((error) => redisQueryError("upsert", error, error.detail)),
         );
         if (decoded.readonly === true) {
-          return yield* Effect.fail(new RuntimeStorageReadonlyRecordError({ id: record.id }));
+          return yield* new RuntimeStorageReadonlyRecordError({ id: record.id });
         }
       }
       yield* writeRecord(send, namespace, record, "upsert");
