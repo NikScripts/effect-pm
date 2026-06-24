@@ -109,13 +109,19 @@ engine's internal `onError` sink (not a lifecycle event).
   instance `itemSchema`, then call `enqueue`). The wire-faithful note: `deadLetter`/`drop` take
   a `queueEntrySelector` (over the wire, `entryId` identifies the target).
 - **[DONE] P4** — `QueueResource.layer(tag, config)` runs the engine behind the toolkit contract.
-  What actually shipped differs from the plan below in two ways, both for the better:
-  (a) the `itemSchema` is recovered from `tag[specSym].add.payload.item` (no extra symbol needed);
-  (b) the generic `ImplOf`/`ServiceOf` deferral was fixed at the **toolkit** level (drop the dead
+  What actually shipped differs from the plan below in three ways, all for the better:
+  (a) the enqueue verbs take their value **directly** — `add`/`prioritize`/`defer` take the item
+  (the whole item schema IS the rpc payload, a single-schema payload), and `enqueue` takes the full
+  `QueueEntry[]` directly; the contract/layer are parameterized by `F extends Schema.Struct.Fields`;
+  (b) the `itemSchema` is recovered from `tag[specSym].add.payload` (the payload now IS the item
+  schema; no extra symbol needed);
+  (c) the generic `ImplOf`/`ServiceOf` deferral was fixed at the **toolkit** level (drop the dead
   always-true `extends AnyMethod` gate, branch on the `LocalMethod` brand + `[payload] extends
-  [undefined]`) so 15/16 verbs are honestly typed; the 16th (`enqueue`, whose decoded entry type
-  goes opaque over an abstract item schema) uses **one narrow cast** pinned by
-  `test/queue-contract.test-d.ts` (`WireEntry ≅ QueueEntry`, drift fails the build). Remote
+  [undefined]`). Combined with the single-schema payload, **all 16 verbs are honestly typed and the
+  port is fully cast-free** — the decoded wire entry and the engine `QueueEntry<T>` both derive from
+  the same `Schema.Struct<F>["Type"]`, so `handle.enqueue(entries)` unifies at the layer with no
+  bridge cast (the wire≅engine invariant is now enforced structurally at the layer itself — the
+  earlier `test/queue-contract.test-d.ts` drift guard became redundant and was removed). Remote
   enqueue validation is locked by `test/queue-contract.test.ts` (decode gate) + `queue-http.test.ts`
   (real-wire). **Remaining:** `enqueueEncoded`, the `logs` stream, real-http quad test, final guide.
   Historical design (for reference):

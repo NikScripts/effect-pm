@@ -33,10 +33,7 @@ import {
   QueueMissingItemSchemaError,
   QueueResource as QueueEngine,
 } from "./QueueResource";
-import type {
-  QueueEntry,
-  QueueResourceConfigWithItemSchema,
-} from "./QueueResource";
+import type { QueueResourceConfigWithItemSchema } from "./QueueResource";
 import type { JsonValue } from "./ProcessStoreEvent";
 
 /**
@@ -537,18 +534,10 @@ const layer = <
         prioritize: (item) =>
           provideR(handle.prioritize(item)).pipe(Effect.orDie),
         defer: (item) => provideR(handle.defer(item)).pipe(Effect.orDie),
-        // The one narrow cast in the port. The wire entry's decoded `.Type` goes opaque over an
-        // abstract item schema (effect Schema's `Type_` can't resolve `keyof` of a struct whose
-        // field optionality depends on a free `F`), so the decoded `entries` can't be statically
-        // related to the engine's `QueueEntry<T>` here — even though they are the same shape. That
-        // shape equivalence is pinned by `test/queue-contract.test-d.ts` (`WireEntry` ≅
-        // `QueueEntry`), which fails the build if the two ever drift, keeping this cast sound.
-        enqueue: (entries) =>
-          provideR(
-            handle.enqueue(
-              entries as ReadonlyArray<QueueEntry<Schema.Struct<F>["Type"]>>,
-            ),
-          ),
+        // `enqueue` takes the full entry array directly — cast-free. The decoded wire entry
+        // (`queueEntry(itemSchema).Type`) and the engine's `QueueEntry<T>` are both derived from
+        // the same `Schema.Struct<F>["Type"]` for `item`, so they unify here with no bridge cast.
+        enqueue: (entries) => provideR(handle.enqueue(entries)),
         release: ({ options }) => provideR(handle.release(options)),
         releaseEncoded: ({ options }) => provideR(handle.releaseEncoded(options)),
         deadLetter: ({ selector, options }) =>
