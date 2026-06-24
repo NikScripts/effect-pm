@@ -173,11 +173,14 @@ depends on each lane's load); **`avgExecutionMillis`** (worker time, pickup → 
 config (`true`, or `{ level }` for a source-side threshold). When on, **every** log line emitted by
 the queue engine *and* by your worker `effect` is captured — with its **level**, message, cause,
 annotations (`queueId`, the worker, and the processing `queue.entryId`) and spans preserved — and
-published to `queue.logs` (a sliding, lossy buffer like the other streams). Capture is **merged**
-with your existing logger(s), so console / process-manager logging is unaffected. The element is the
-package's structured `ProcessManagerLogEntry` (re-exported as `queueLogEntry`), so it crosses RPC
-intact. (The toolkit layer also names the engine queue after the tag id, so logs and OTEL metrics
-attribute to the resource.)
+published to `queue.logs` (a sliding, lossy buffer like the other streams). A UI attaching to an
+already-running queue gets a **bounded recent tail replayed first** (the last ~100 lines), then live
+lines — so late subscribers aren't blind to what just happened (a best-effort log-tail; a few lines
+in the subscribe gap may be missed). Capture is **merged** with your existing logger(s), so console
+/ process-manager logging is unaffected. The element is the package's structured
+`ProcessManagerLogEntry` (re-exported as `queueLogEntry`), so it crosses RPC intact. (The toolkit
+layer also names the engine queue after the tag id, so logs and OTEL metrics attribute to the
+resource.)
 
 ```ts
 const EmailQueueLocal = QueueResource.layer(EmailQueue, {

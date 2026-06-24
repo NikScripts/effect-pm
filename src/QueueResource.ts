@@ -1163,16 +1163,17 @@ function normalizeEnqueueInput<A>(input: A | ReadonlyArray<A>): ReadonlyArray<A>
 /**
  * A per-queue capture {@link Logger.Logger} for the {@link QueueHandleApi.logs} stream. Mirrors
  * the process-manager capture logger ({@link processManagerLogEntryFromLoggerOptions} preserves
- * the level, message, cause, annotations and spans verbatim), but publishes to **this** queue's
- * sliding `logsHub` instead of a relay, filters at the source by `minLevel`, and (defensively)
- * only captures lines annotated with this `queueId` — so when the logger is merged into a fiber
- * whose subtree spans sibling queues, each queue still only sees its own lines. Effect v4 invokes
- * `log` synchronously, so the publish is scheduled on the logging fiber's dispatcher.
+ * the level, message, cause, annotations and spans verbatim), but hands each entry to `publish`
+ * (which fans it to **this** queue's sliding hub + replay ring) instead of a relay, filters at
+ * the source by `minLevel`, and (defensively) only captures lines annotated with this `queueId` —
+ * so when the logger is merged into a fiber whose subtree spans sibling queues, each queue still
+ * only sees its own lines. Effect v4 invokes `log` synchronously, so the publish is scheduled on
+ * the logging fiber's dispatcher.
  */
 const makeQueueCaptureLogger = (
   queueId: string,
   minLevel: LogLevel.LogLevel,
-  logsHub: PubSub.PubSub<ProcessManagerLogEntry>,
+  publish: (entry: ProcessManagerLogEntry) => Effect.Effect<void>,
 ): Logger.Logger<unknown, void> =>
   Logger.make((options) => {
     if (!LogLevel.isGreaterThanOrEqualTo(options.logLevel, minLevel)) return;
@@ -1187,7 +1188,7 @@ const makeQueueCaptureLogger = (
       spans: options.fiber.getRef(CurrentLogSpans),
     });
     options.fiber.currentDispatcher.scheduleTask(() => {
-      Effect.runFork(PubSub.publish(logsHub, entry));
+      Effect.runFork(publish(entry));
     }, 0);
   });
 
@@ -1619,8 +1620,23 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         ? (captureLogsConfig.level ?? "All")
         : "All";
     const logsHub = yield* PubSub.sliding<ProcessManagerLogEntry>(1024);
+    // A small bounded replay ring so a UI attaching to an already-running queue gets the recent
+    // tail before live lines (the log-tail UX), instead of only future ones. Bounded (still
+    // lossy beyond `logReplayCapacity`) — not full history. `publishLog` fans each captured entry
+    // to both the live hub and the ring.
+    const logReplayCapacity = 100;
+    const logReplay = yield* Ref.make<ReadonlyArray<ProcessManagerLogEntry>>([]);
+    const publishLog = (entry: ProcessManagerLogEntry): Effect.Effect<void> =>
+      Effect.andThen(PubSub.publish(logsHub, entry), () =>
+        Ref.update(logReplay, (tail) => {
+          const next = [...tail, entry];
+          return next.length <= logReplayCapacity
+            ? next
+            : next.slice(next.length - logReplayCapacity);
+        }),
+      );
     const queueLoggerLayer = Logger.layer(
-      [makeQueueCaptureLogger(queueName, captureLogsMinLevel, logsHub)],
+      [makeQueueCaptureLogger(queueName, captureLogsMinLevel, publishLog)],
       { mergeWithExisting: true },
     );
     // Install the capture logger AND stamp `queueId` on the effect's logs, so every captured line
@@ -3261,8 +3277,17 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       // Windowed metrics stream (dynamic windows)
       metrics: Stream.fromPubSub(metricsHub),
 
-      // Live captured logs (engine + worker effect). Empty unless `captureLogs` is enabled.
-      logs: captureLogsEnabled ? Stream.fromPubSub(logsHub) : Stream.empty,
+      // Captured logs (engine + worker effect). Empty unless `captureLogs` is enabled. A late
+      // subscriber gets the bounded recent tail (replay ring) first, then live lines — read at
+      // subscribe time via `Stream.unwrap`. (A handful of lines published in the gap between
+      // snapshot and live subscription may be missed — acceptable for a best-effort log tail.)
+      logs: captureLogsEnabled
+        ? Stream.unwrap(
+            Effect.map(Ref.get(logReplay), (tail) =>
+              Stream.concat(Stream.fromIterable(tail), Stream.fromPubSub(logsHub)),
+            ),
+          )
+        : Stream.empty,
 
       start: tapLogs(forkProcessingFibers).pipe(Effect.asVoid),
 

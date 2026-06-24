@@ -1979,4 +1979,24 @@ describe("QueueResource.make — log capture (.logs)", () => {
       expect(Option.isNone(yield* Fiber.join(head))).toBe(true);
     }).pipe(Effect.scoped),
   );
+
+  it.live("a late subscriber replays the recent log tail, then goes live", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-logs-replay",
+        effect: (n: number) => Effect.logInfo(`done ${String(n)}`),
+        concurrency: 1,
+        captureLogs: true,
+      });
+      // emit a line BEFORE anyone subscribes
+      yield* queue.add(1);
+      yield* waitUntilCompleted(queue, 1);
+      yield* Effect.sleep(Duration.millis(20)); // let the scheduled publish land in the ring
+      // subscribe only now — the replay ring must surface the already-emitted line
+      const replayed = yield* Stream.runHead(
+        Stream.filter(queue.logs, (e) => e.message.includes("done 1")),
+      );
+      expect(Option.isSome(replayed)).toBe(true);
+    }).pipe(Effect.scoped),
+  );
 });
