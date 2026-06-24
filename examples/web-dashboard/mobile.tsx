@@ -17,7 +17,7 @@ import {
   QueueControls,
   QueueStats,
   StatusBadge,
-  ThroughputChart,
+  MetricChart,
   displayName,
   leafIds,
 } from "./widgets";
@@ -37,10 +37,7 @@ const QueueDetail = (props: { readonly id: string; readonly onBack: () => void }
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
       <QueueStats bundle={bundle} />
-      <div className="rounded-xl border bg-card p-3">
-        <div className="mb-1 text-sm font-semibold">throughput</div>
-        <ThroughputChart bundle={bundle} />
-      </div>
+      <div className="rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
       <QueueControls bundle={bundle} />
       <div className="text-xs text-muted-foreground">
         LOGS <span className="text-[#22c55e]">live</span> · phase {s?.phase ?? "?"}

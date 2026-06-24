@@ -195,32 +195,60 @@ export const QueueStats = (props: { readonly bundle: QueueBundle }): React.React
   );
 };
 
-/** Throughput area chart from the metrics history series. */
-export const ThroughputChart = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
-  const r = useAtomValue(props.bundle.history);
-  const history = (AsyncResult.isSuccess(r) ? r.value : []) as Array<MetricPoint>;
+const METRICS = {
+  throughput: { label: "throughput /s", color: "#22c55e", source: "history" as const },
+  latency: { label: "latency (s)", color: "#eab308", source: "history" as const },
+  pending: { label: "pending", color: "#3b82f6", source: "trend" as const },
+};
+type MetricKey = keyof typeof METRICS;
+
+/** A metric chart with a dropdown to pick the series (throughput/latency/pending). */
+export const MetricChart = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
+  const [metric, setMetric] = React.useState<MetricKey>("throughput");
+  const historyR = useAtomValue(props.bundle.history);
+  const trendR = useAtomValue(props.bundle.trend);
+  const history = (AsyncResult.isSuccess(historyR) ? historyR.value : []) as Array<MetricPoint>;
+  const trend = AsyncResult.isSuccess(trendR) ? trendR.value : [];
+  const def = METRICS[metric];
+  const data =
+    def.source === "trend"
+      ? trend.map((v, i) => ({ i, value: v }))
+      : history.map((p, i) => ({ i, value: metric === "latency" ? p.latency / 1000 : p.throughput }));
   return (
-    <ResponsiveContainer width="100%" height={140}>
-      <AreaChart data={history}>
-        <defs>
-          <linearGradient id="thr" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#22c55e" stopOpacity={0.5} />
-            <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <XAxis dataKey="t" hide />
-        <YAxis hide />
-        <Tooltip contentStyle={{ background: "#1e2636", border: "1px solid #2b3650", borderRadius: 8, fontSize: 12 }} />
-        <Area
-          type="monotone"
-          dataKey="throughput"
-          stroke="#22c55e"
-          fill="url(#thr)"
-          strokeWidth={2}
-          isAnimationActive={false}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+    <div>
+      <select
+        value={metric}
+        onChange={(e) => setMetric(e.target.value as MetricKey)}
+        className="mb-2 rounded-md border bg-card px-2 py-1 text-sm font-semibold text-foreground"
+      >
+        {(Object.keys(METRICS) as Array<MetricKey>).map((k) => (
+          <option key={k} value={k}>
+            {METRICS[k].label}
+          </option>
+        ))}
+      </select>
+      <ResponsiveContainer width="100%" height={140}>
+        <AreaChart data={data}>
+          <defs>
+            <linearGradient id={`g-${metric}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={def.color} stopOpacity={0.5} />
+              <stop offset="100%" stopColor={def.color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis dataKey="i" hide />
+          <YAxis hide />
+          <Tooltip contentStyle={{ background: "#1e2636", border: "1px solid #2b3650", borderRadius: 8, fontSize: 12 }} />
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke={def.color}
+            fill={`url(#g-${metric})`}
+            strokeWidth={2}
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
   );
 };
 

@@ -138,26 +138,57 @@ interface Refs {
   readonly logsRef: SubscriptionRef.SubscriptionRef<ReadonlyArray<LogLine>>;
   readonly trendRef: SubscriptionRef.SubscriptionRef<ReadonlyArray<number>>;
 }
-const mkRefs = (): Refs => ({
-  statusRef: Effect.runSync(SubscriptionRef.make<Snapshot | undefined>(undefined)),
-  metricsRef: Effect.runSync(SubscriptionRef.make<Metrics | undefined>(undefined)),
-  historyRef: Effect.runSync(SubscriptionRef.make<ReadonlyArray<MetricPoint>>([])),
-  logsRef: Effect.runSync(SubscriptionRef.make<ReadonlyArray<LogLine>>([])),
-  trendRef: Effect.runSync(SubscriptionRef.make<ReadonlyArray<number>>([])),
-});
+// ── persistence / backfill ──────────────────────────────────────────────────
+// In the browser, the log + metrics history survives a refresh (localStorage). Node
+// (the Ink dashboard) has no localStorage, so this is a no-op there.
+const PERSIST_KEY = "queue-dashboard-history-v1";
+const canPersist = typeof localStorage !== "undefined";
+interface Saved {
+  readonly logs: ReadonlyArray<LogLine>;
+  readonly history: ReadonlyArray<MetricPoint>;
+  readonly trend: ReadonlyArray<number>;
+}
+const loadStore = (): Record<string, Saved> => {
+  if (!canPersist) {
+    return {};
+  }
+  try {
+    const raw = localStorage.getItem(PERSIST_KEY);
+    return raw === null ? {} : (JSON.parse(raw) as Record<string, Saved>);
+  } catch {
+    return {};
+  }
+};
+const STORE = loadStore();
+// continue log ids past anything restored so React keys stay unique
+logId = Object.values(STORE).reduce(
+  (mx, s) => s.logs.reduce((n, l) => Math.max(n, l.id), mx),
+  logId,
+);
+
+const mkRefs = (id: string): Refs => {
+  const saved = STORE[id];
+  return {
+    statusRef: Effect.runSync(SubscriptionRef.make<Snapshot | undefined>(undefined)),
+    metricsRef: Effect.runSync(SubscriptionRef.make<Metrics | undefined>(undefined)),
+    historyRef: Effect.runSync(SubscriptionRef.make<ReadonlyArray<MetricPoint>>(saved?.history ?? [])),
+    logsRef: Effect.runSync(SubscriptionRef.make<ReadonlyArray<LogLine>>(saved?.logs ?? [])),
+    trendRef: Effect.runSync(SubscriptionRef.make<ReadonlyArray<number>>(saved?.trend ?? [])),
+  };
+};
 
 const REFS: Record<string, Refs> = {
-  [Mail.id]: mkRefs(),
-  [Jobs.id]: mkRefs(),
-  [Billing.id]: mkRefs(),
-  [Notify.id]: mkRefs(),
-  [Worker1.id]: mkRefs(),
-  [Worker2.id]: mkRefs(),
-  [Worker3.id]: mkRefs(),
-  [RegionUS.id]: mkRefs(),
-  [RegionEU.id]: mkRefs(),
-  [Daily.id]: mkRefs(),
-  [Weekly.id]: mkRefs(),
+  [Mail.id]: mkRefs(Mail.id),
+  [Jobs.id]: mkRefs(Jobs.id),
+  [Billing.id]: mkRefs(Billing.id),
+  [Notify.id]: mkRefs(Notify.id),
+  [Worker1.id]: mkRefs(Worker1.id),
+  [Worker2.id]: mkRefs(Worker2.id),
+  [Worker3.id]: mkRefs(Worker3.id),
+  [RegionUS.id]: mkRefs(RegionUS.id),
+  [RegionEU.id]: mkRefs(RegionEU.id),
+  [Daily.id]: mkRefs(Daily.id),
+  [Weekly.id]: mkRefs(Weekly.id),
 };
 
 /** One row of the fleet table — live status + headline metrics per queue. */
@@ -260,6 +291,27 @@ managed.runFork(
     return yield* Effect.never;
   }),
 );
+
+// snapshot the log + metrics history to localStorage so a refresh backfills the
+// charts/logs instead of starting empty (browser only).
+if (canPersist) {
+  setInterval(() => {
+    const snapshot: Record<string, Saved> = {};
+    for (const id of Object.keys(REFS)) {
+      const refs = REFS[id]!;
+      snapshot[id] = {
+        logs: Effect.runSync(SubscriptionRef.get(refs.logsRef)),
+        history: Effect.runSync(SubscriptionRef.get(refs.historyRef)),
+        trend: Effect.runSync(SubscriptionRef.get(refs.trendRef)),
+      };
+    }
+    try {
+      localStorage.setItem(PERSIST_KEY, JSON.stringify(snapshot));
+    } catch {
+      /* over quota — drop this snapshot */
+    }
+  }, 5000);
+}
 
 /** The live atoms + control fns for one queue. Atoms read the accumulator refs
  *  (current value on mount, so opening a queue shows the history already gathered). */

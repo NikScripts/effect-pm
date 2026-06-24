@@ -37,7 +37,7 @@ import {
   QueueControls,
   QueueStats,
   StatusBadge,
-  ThroughputChart,
+  MetricChart,
   displayName,
   fmtMs,
   leafIds,
@@ -236,10 +236,7 @@ export const DesktopDashboard = (): React.ReactElement => {
                 <span className="flex-1 truncate font-semibold">{displayName(selected!)}</span>
               </div>
               <QueueStats bundle={bundle} />
-              <div className="rounded-xl border bg-card p-3">
-                <div className="mb-1 text-sm font-semibold">throughput</div>
-                <ThroughputChart bundle={bundle} />
-              </div>
+              <div className="rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
               <QueueControls bundle={bundle} />
             </div>
           )}
