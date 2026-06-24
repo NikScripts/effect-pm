@@ -182,6 +182,7 @@
     "example:dashboard": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/dashboard.tsx",
     "example:dashboard-mock": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/dashboard-mock.tsx",
     "example:queue-live": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/queue-live.tsx",
+    "example:web-dashboard": "vite --config examples/web-dashboard/vite.config.ts",
     "example:typed-process-group": "tsx examples/forms/process-group/process-group-make-entries.ts && tsx examples/forms/process-group/process-group-service.ts && tsx examples/forms/process-group/process-group-contract-http.ts && tsx examples/forms/process-group/process-manager-connection-registry.ts && tsx examples/forms/process-group/process-manager-endpoint-service.ts && tsx examples/forms/process-group/process-group-remote-layer.ts && tsx examples/forms/process-group/process-group-remote-contract-drift.ts",
     "example:queue-resource": "tsx examples/forms/queue/queue-resource-priority-retry.ts",
     "example:process-patterns": "tsx examples/forms/polling/polling-accelerating.ts && tsx examples/forms/polling/schedule-delayed-start.ts",
