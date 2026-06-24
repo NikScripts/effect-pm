@@ -40,6 +40,7 @@ export default defineConfig([
       ProcessManager: "src/ProcessManager.ts",
       ControlService: "src/ControlService.ts",
       Logs: "src/Logs.ts",
+      HostLogs: "src/HostLogs.ts",
       "storage/sqlite": "src/storage/sqlite/index.ts",
       "storage/redis": "src/storage/redis/index.ts",
       "storage/prisma": "src/storage/prisma.ts",

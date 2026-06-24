@@ -124,6 +124,10 @@
       "types": "./dist/Logs.d.ts",
       "default": "./dist/Logs.js"
     },
+    "./HostLogs": {
+      "types": "./dist/HostLogs.d.ts",
+      "default": "./dist/HostLogs.js"
+    },
     "./storage/sqlite": {
       "types": "./dist/storage/sqlite.d.ts",
       "default": "./dist/storage/sqlite.js"
