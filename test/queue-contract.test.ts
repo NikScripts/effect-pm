@@ -48,6 +48,12 @@ const makeImpl = () => {
     // is verified over real http in resource-stream-http.test.ts); empty streams satisfy the
     // contract. `events` (item-typed) is supplied per-instance where the item schema is known.
     status: Stream.empty,
+    statusNow: Effect.sync(() => ({
+      sizes: { high: 0, normal: pending, low: 0 },
+      paused,
+      inFlight: 0,
+      completed: done,
+    })),
     metrics: Stream.empty,
   };
 };
@@ -65,6 +71,13 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
     expect(yield* jobs.size).toBe(3);
     expect(yield* jobs.sizes).toEqual({ high: 0, normal: 3, low: 0 });
     expect(yield* jobs.isEmpty).toBe(false);
+    // one-shot status snapshot round-trips (no stream subscription needed)
+    expect(yield* jobs.statusNow).toEqual({
+      sizes: { high: 0, normal: 3, low: 0 },
+      paused: false,
+      inFlight: 0,
+      completed: 0,
+    });
 
     // control verbs route to the right instance
     yield* jobs.pause;
@@ -100,6 +113,7 @@ it("exposes the expected control verbs", () => {
       "sizes",
       "start",
       "status",
+      "statusNow",
     ].sort(),
   );
 });

@@ -31,6 +31,12 @@ const stub = {
   shutdown: Effect.void,
   clear: Effect.succeed(0),
   status: Stream.empty,
+  statusNow: Effect.succeed({
+    sizes: { high: 0, normal: 0, low: 0 },
+    paused: false,
+    inFlight: 0,
+    completed: 0,
+  }),
   metrics: Stream.empty,
   add: (_: NumberItem) => Effect.void,
   prioritize: (_: NumberItem) => Effect.void,

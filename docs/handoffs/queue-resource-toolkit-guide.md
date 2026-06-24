@@ -141,7 +141,8 @@ works.
 
 `yield* MyQueue` gives, identically local or remote:
 
-- **Reads:** `size`, `sizes`, `isEmpty`, `completed`
+- **Reads:** `size`, `sizes`, `isEmpty`, `completed`, `statusNow` (one-shot snapshot — the
+  `status` stream's element read once, for a non-`--watch` print / first paint)
 - **Lifecycle:** `start`, `pause`, `resume`, `shutdown`, `clear`
 - **Enqueue:** `add`, `prioritize`, `defer` (bare item, by priority); `enqueue` (re-inject full
   `QueueEntry`s — e.g. straight off `events`, the handoff round-trip)

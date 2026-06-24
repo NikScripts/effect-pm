@@ -324,6 +324,11 @@ export const queueControlSpec = {
     description:
       "Live current-state snapshot (per-priority sizes, paused, in-flight, completed).",
   }),
+  statusNow: Resource.query(queueStatus).annotate({
+    description:
+      "One-shot current-state snapshot — the `status` stream's element read once " +
+      "(non-`--watch` CLI print, a widget's first paint).",
+  }),
   metrics: Resource.stream(queueMetrics).annotate({
     description:
       "Windowed metrics (per-window counts + throughput/latency) emitted once per window.",
@@ -528,6 +533,7 @@ const layer = <
         shutdown: handle.shutdown,
         clear: provideR(handle.clear),
         status: handle.status,
+        statusNow: handle.statusNow,
         metrics: handle.metrics,
         // The item IS the payload — `add`/`prioritize`/`defer` take it directly, cast-free.
         add: (item) => provideR(handle.add(item)).pipe(Effect.orDie),

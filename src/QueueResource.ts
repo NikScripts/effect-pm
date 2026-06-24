@@ -391,6 +391,13 @@ export interface QueueHandleApi<
   readonly status: Stream.Stream<QueueStatus>;
 
   /**
+   * **One-shot** current-state snapshot — the same {@link QueueStatus} the {@link status} stream
+   * emits, read once. For a non-`--watch` CLI `status` print, a widget's first paint before the
+   * stream warms up, or any single render. Recomputed from authoritative sources on each read.
+   */
+  readonly statusNow: Effect.Effect<QueueStatus>;
+
+  /**
    * Live **windowed metrics** stream — one {@link QueueMetrics} per window. Windows are
    * **dynamic**: a max duration bounds staleness, but a window flushes early on a significant
    * event (release/drain/clear/dead-letter/drop/shutdown), with a small floor coalescing
@@ -2932,6 +2939,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
       // Current-state snapshot stream — current value + every change
       status: SubscriptionRef.changes(statusRef),
+
+      // One-shot snapshot — recompute authoritative truth on read (span-traced for origin).
+      statusNow: computeStatus.pipe(Effect.withSpan("queue.statusNow")),
 
       // Windowed metrics stream (dynamic windows)
       metrics: Stream.fromPubSub(metricsHub),
