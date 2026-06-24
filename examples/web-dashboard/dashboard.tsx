@@ -13,6 +13,7 @@ import {
   TREE,
   type Group,
   type LogLine,
+  type Node,
   type QueueBundle,
 } from "../resource-tui/live-queues";
 import { useAtomSet, useAtomValue } from "../queue-widget/atom-react";
@@ -293,65 +294,94 @@ const FocusedPanel = (props: {
   );
 };
 
-const QueueGrid = (props: {
-  readonly ids: ReadonlyArray<string>;
-  readonly onOpen: (id: string) => void;
-}): React.ReactElement | null =>
-  props.ids.length === 0 ? null : (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-        gap: 10,
-      }}
-    >
-      {props.ids.map((id) => {
-        const b = REGISTRY[id];
-        return b === undefined ? null : (
-          <QueueCard key={id} id={id} bundle={b} onOpen={props.onOpen} />
-        );
-      })}
-    </div>
-  );
-
 // total leaf queues under a group (recursive)
 const leafCount = (node: Group): number =>
   node.members.reduce((n, m) => n + (m.t === "g" ? leafCount(m) : 1), 0);
 
-// a group and, recursively, its subgroups — nested + indented to show hierarchy
-const GroupView = (props: {
-  readonly node: Group;
-  readonly depth: number;
-  readonly onOpen: (id: string) => void;
+const dot = (color: string): React.CSSProperties => ({
+  width: 8,
+  height: 8,
+  borderRadius: 999,
+  background: color,
+  flexShrink: 0,
+});
+
+// one live member preview line inside a group card
+const MemberRow = (props: {
+  readonly id: string;
+  readonly bundle: QueueBundle;
 }): React.ReactElement => {
-  const { node, depth } = props;
-  const queues = node.members.filter((n) => n.t === "q").map((n) => n.name);
-  const subgroups = node.members.filter((n): n is Group => n.t === "g");
-  const nested = depth > 0;
+  const r = useAtomValue(props.bundle.status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const sk = statusKey((s?.phase ?? "running") as Phase, s?.paused ?? false);
+  const pending = s === undefined ? 0 : s.sizes.high + s.sizes.normal + s.sizes.low;
   return (
-    <div
-      style={
-        nested
-          ? { borderLeft: "2px solid #1e2636", paddingLeft: 12, marginLeft: 4, marginTop: 10 }
-          : { marginTop: 10 }
-      }
-    >
-      {nested ? (
-        <div style={{ color: "#06b6d4", margin: "4px 0 8px", fontSize: 13 }}>
-          ▸ {displayName(node.name)} <span style={{ color: "#64748b" }}>· {leafCount(node)}</span>
-        </div>
-      ) : null}
-      <QueueGrid ids={queues} onOpen={props.onOpen} />
-      {subgroups.map((sg) => (
-        <GroupView key={sg.name} node={sg} depth={depth + 1} onOpen={props.onOpen} />
-      ))}
+    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#94a3b8" }}>
+      <span style={dot(STATUS[sk].color)} />
+      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {displayName(props.id)}
+      </span>
+      <span style={{ color: "#cbd5e1" }}>{pending}</span>
     </div>
   );
 };
 
+// a subgroup as a grid widget — tap to open it as its own page
+const GroupCard = (props: {
+  readonly node: Group;
+  readonly onOpen: (g: Group) => void;
+}): React.ReactElement => {
+  const { node } = props;
+  const queues = node.members.filter((n) => n.t === "q");
+  const subs = node.members.filter((n): n is Group => n.t === "g");
+  const shown = queues.slice(0, 4);
+  const moreQ = queues.length - shown.length;
+  return (
+    <button
+      type="button"
+      onClick={() => props.onOpen(node)}
+      style={{ ...card, textAlign: "left", color: "inherit", font: "inherit", cursor: "pointer", borderColor: "#06b6d455" }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <strong style={{ flex: 1, color: "#06b6d4", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          ▸ {displayName(node.name)}
+        </strong>
+        <span style={{ color: "#64748b", fontSize: 12 }}>{leafCount(node)} queues</span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {shown.map((q) => {
+          const b = REGISTRY[q.name];
+          return b === undefined ? null : <MemberRow key={q.name} id={q.name} bundle={b} />;
+        })}
+        {moreQ > 0 ? <div style={{ color: "#64748b" }}>+{moreQ} more</div> : null}
+        {subs.map((sg) => (
+          <div key={sg.name} style={{ color: "#06b6d4" }}>
+            ▸ {displayName(sg.name)} <span style={{ color: "#64748b" }}>· {leafCount(sg)}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 8, color: "#64748b", fontSize: 12 }}>tap to open →</div>
+    </button>
+  );
+};
+
+const Cell = (props: {
+  readonly node: Node;
+  readonly onOpenQueue: (id: string) => void;
+  readonly onOpenGroup: (g: Group) => void;
+}): React.ReactElement | null => {
+  if (props.node.t === "g") {
+    return <GroupCard node={props.node} onOpen={props.onOpenGroup} />;
+  }
+  const b = REGISTRY[props.node.name];
+  return b === undefined ? null : <QueueCard id={props.node.name} bundle={b} onOpen={props.onOpenQueue} />;
+};
+
 export const App = (): React.ReactElement => {
+  const [path, setPath] = React.useState<ReadonlyArray<Group>>([TREE]);
   const [focused, setFocused] = React.useState<string | null>(null);
 
+  // a queue opens its own full-screen page
   if (focused !== null) {
     const b = REGISTRY[focused];
     if (b !== undefined) {
@@ -359,13 +389,42 @@ export const App = (): React.ReactElement => {
     }
   }
 
+  const group = path[path.length - 1] ?? TREE;
+  const canBack = path.length > 1;
+
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: 14 }}>
-      <h1 style={{ fontSize: 18, margin: "4px 0 2px" }}>
-        ⬢ {displayName(TREE.name)} <span style={{ color: "#64748b", fontSize: 13 }}>· {leafCount(TREE)} queues</span>
-      </h1>
-      <div style={{ color: "#64748b", fontSize: 13 }}>tap a queue for live metrics + logs</div>
-      <GroupView node={TREE} depth={0} onOpen={setFocused} />
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+        {canBack ? (
+          <button type="button" onClick={() => setPath((p) => p.slice(0, -1))} style={ctrlBtn}>
+            ← back
+          </button>
+        ) : null}
+        <h1 style={{ fontSize: 18, margin: 0, flex: 1 }}>
+          ⬢ {path.map((g) => displayName(g.name)).join(" / ")}{" "}
+          <span style={{ color: "#64748b", fontSize: 13 }}>· {leafCount(group)} queues</span>
+        </h1>
+      </div>
+      <div style={{ color: "#64748b", fontSize: 13, marginBottom: 4 }}>
+        tap a queue for live logs · tap a group to open it
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+          gap: 10,
+          marginTop: 10,
+        }}
+      >
+        {group.members.map((node) => (
+          <Cell
+            key={`${node.t}-${node.name}`}
+            node={node}
+            onOpenQueue={setFocused}
+            onOpenGroup={(g) => setPath((p) => [...p, g])}
+          />
+        ))}
+      </div>
     </div>
   );
 };
