@@ -344,7 +344,7 @@ export const queueControlSpec = {
  * ```ts
  * class Jobs extends Resource.Tag<Jobs>("@app/Jobs")(queueSpec(JobSchema)) {}
  * const q = yield* Jobs;
- * yield* q.add({ item: aJob }); // validated natively against JobSchema on both sides
+ * yield* q.add(aJob); // the item itself is the payload — validated against JobSchema on both sides
  * ```
  *
  * `itemSchema` becomes the rpc payload schema, so RPC validates items on the wire — the
@@ -431,7 +431,7 @@ type QueueInstanceSpec<F extends Schema.Struct.Fields> = ReturnType<
  * ```ts
  * class MyQueue extends QueueResource.Tag<MyQueue>()("@app/MyQueue", JobSchema) {}
  * const q = yield* MyQueue;
- * yield* q.add({ item: aJob }); // validated natively against JobSchema on both sides
+ * yield* q.add(aJob); // the item itself is the payload — validated against JobSchema on both sides
  * ```
  *
  * `Self` is given explicitly (Effect's `()` two-stage form); the item type is inferred from

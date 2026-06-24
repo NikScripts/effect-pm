@@ -54,9 +54,9 @@ const dashboard = Effect.gen(function* () {
   const pending = yield* queue.size;
   const { high, normal, low } = yield* queue.sizes;
 
-  // commands
-  yield* queue.add({ item: { id: "j1", to: "a@x.com" } });
-  yield* queue.prioritize({ item: { id: "j2", to: "b@x.com" } });
+  // commands — the item is passed DIRECTLY (the item schema is the rpc payload)
+  yield* queue.add({ id: "j1", to: "a@x.com" });
+  yield* queue.prioritize({ id: "j2", to: "b@x.com" });
 
   // live streams — render these in the UI
   yield* queue.status.pipe(Stream.runForEach((s) => render(s)), Effect.forkScoped);
