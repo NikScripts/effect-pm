@@ -45,8 +45,11 @@ describe("ControlTransportRpc", () => {
         Effect.gen(function* () {
           const group = yield* BillingGroup;
           const rpcClient = yield* RpcTest.makeClient(ControlRpc).pipe(
-            Effect.provide(ControlTransportRpc.live),
-            Effect.provide(ControlRouter.layer(group)),
+            Effect.provide(
+              ControlTransportRpc.live.pipe(
+                Layer.provideMerge(ControlRouter.layer(group)),
+              ),
+            ),
           );
           const transport = ControlTransportRpc.client(rpcClient);
 
@@ -137,8 +140,11 @@ describe("ControlTransportRpc", () => {
         Effect.gen(function* () {
           const group = yield* BillingGroup;
           const rpcClient = yield* RpcTest.makeClient(ControlRpc).pipe(
-            Effect.provide(ControlTransportRpc.live),
-            Effect.provide(ControlRouter.layer(group)),
+            Effect.provide(
+              ControlTransportRpc.live.pipe(
+                Layer.provideMerge(ControlRouter.layer(group)),
+              ),
+            ),
           );
           const manager = ProcessManager.connect(BillingGroup, {
             transport: ControlTransportRpc.client(rpcClient),

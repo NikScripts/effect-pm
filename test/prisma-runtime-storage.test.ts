@@ -1,3 +1,6 @@
+// @effect-diagnostics asyncFunction:off
+// ^ interop test: exercises the Prisma client (inherently async) directly; async/await is the
+//   correct shape at that boundary, not production Effect control flow.
 import { describe, expect, it } from "@effect/vitest";
 import { Context, DateTime, Effect, Layer, Scope, pipe } from "effect";
 import {
@@ -402,8 +405,13 @@ describe("PrismaRuntimeStorage", () => {
       const rows = yield* storage.read({ predicate: Type.equals("queue.entry.enqueued") });
       expect(rows.map((row) => row.id)).toEqual(["context-smoke"]);
     }).pipe(
-      Effect.provide(PrismaRuntimeStorage.layerFromContext),
-      Effect.provide(PrismaRuntimeStorage.prismaClientLayer({ client: makeMemoryPrismaClient() })),
+      Effect.provide(
+        PrismaRuntimeStorage.layerFromContext.pipe(
+          Layer.provideMerge(
+            PrismaRuntimeStorage.prismaClientLayer({ client: makeMemoryPrismaClient() }),
+          ),
+        ),
+      ),
     ),
   );
 

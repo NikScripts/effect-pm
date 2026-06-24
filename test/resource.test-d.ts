@@ -142,9 +142,12 @@ void _localOk;
 const localViaClient = useLocal.pipe(
   Effect.provide(Resource.client(Box).pipe(Layer.provide(protocolLayer))),
 );
-// @effect-diagnostics-next-line missingEffectContext:off
+// Region toggle (not -next-line): the `@ts-expect-error` must sit directly above the code, so the
+// effect directive can't also be adjacent — a region off/restore covers the statement regardless.
+// @effect-diagnostics missingEffectContext:off
 // @ts-expect-error — onChange is local-only; LocalCapability<Box> unsatisfied via the client.
 const _localViaClient: Promise<void> = Effect.runPromise(localViaClient);
+// @effect-diagnostics missingEffectContext:error
 void _localViaClient;
 
 // the WIRE method is fine through the client (no capability needed).

@@ -1,3 +1,7 @@
+// @effect-diagnostics asyncFunction:off
+// @effect-diagnostics nodeBuiltinImport:off
+// ^ codegen test: shells out (child_process) to run `prisma generate` and reads the output
+//   (fs/path) — build tooling, inherently async + node-builtin, not runtime Effect code.
 import { describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";

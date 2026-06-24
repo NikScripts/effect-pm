@@ -12,7 +12,7 @@
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { Command } from "effect/unstable/cli";
 import { Resource } from "../../src/Resource";
 import { makeResourceCli } from "./resource-cli";
@@ -39,7 +39,9 @@ const cli = makeResourceCli({ counter: Counter }, "counter-cli");
 
 const program = Command.runWith(cli, { version: "0.0.0" })(
   process.argv.slice(2),
-).pipe(Effect.provide(counterLayer), Effect.provide(NodeServices.layer));
+).pipe(
+  Effect.provide(counterLayer.pipe(Layer.provideMerge(NodeServices.layer))),
+);
 
 // Boundary: the command's requirement is loose (it's built from a dynamic record
 // of tags); the resource + node layers above fully provide it at run time.
