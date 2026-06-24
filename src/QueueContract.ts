@@ -86,7 +86,17 @@ export const queueMetrics = Schema.Struct({
   // as-of window end
   inFlight: Schema.Number,
   throughputPerSec: Schema.Number,
-  avgLatencyMillis: Schema.optionalKey(Schema.Number),
+  // average queue wait (enqueued → pickup) per priority — a lane is present only if it had
+  // completions this window. Wait is per-priority because it depends on each lane's load.
+  avgWaitMillis: Schema.Struct({
+    high: Schema.optionalKey(Schema.Number),
+    normal: Schema.optionalKey(Schema.Number),
+    low: Schema.optionalKey(Schema.Number),
+  }),
+  // average worker execution (pickup → done), overall — ~priority-independent.
+  avgExecutionMillis: Schema.optionalKey(Schema.Number),
+  // average end-to-end (enqueued → done = wait + execution), overall.
+  avgTotalMillis: Schema.optionalKey(Schema.Number),
 });
 
 /** A queue entry's priority level. @public */

@@ -578,7 +578,21 @@ export interface QueueMetrics {
   readonly rateLimitExceeded: number;
   readonly inFlight: number;
   readonly throughputPerSec: number;
-  readonly avgLatencyMillis?: number;
+  /**
+   * Average **queue wait** (enqueued → worker pickup) this window, **per priority**, in ms.
+   * Per-priority because wait depends on how loaded each priority lane is; a priority is absent
+   * when it had no completions this window. (Execution time is ~priority-independent, so it's
+   * reported overall, not per priority.)
+   */
+  readonly avgWaitMillis: {
+    readonly high?: number;
+    readonly normal?: number;
+    readonly low?: number;
+  };
+  /** Average **worker execution** (pickup → done) this window, ms, overall. Absent if no completions. */
+  readonly avgExecutionMillis?: number;
+  /** Average **end-to-end** time (enqueued → done = wait + execution) this window, ms, overall. Absent if no completions. */
+  readonly avgTotalMillis?: number;
 }
 
 /**
@@ -1533,6 +1547,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     const nowMs: Effect.Effect<number> = Effect.clockWith(
       (c) => c.currentTimeMillis,
     );
+    interface PerPriorityAccum {
+      readonly high: number;
+      readonly normal: number;
+      readonly low: number;
+    }
+    const zeroPerPriority: PerPriorityAccum = { high: 0, normal: 0, low: 0 };
     interface WindowAccum {
       readonly startedAt: number;
       readonly enqueued: number;
@@ -1543,8 +1563,15 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       readonly deadLettered: number;
       readonly dropped: number;
       readonly rateLimitExceeded: number;
-      readonly latencySumMs: number;
-      readonly latencyCount: number;
+      // wait (enqueued → pickup), summed + counted PER PRIORITY
+      readonly waitSumMs: PerPriorityAccum;
+      readonly waitCount: PerPriorityAccum;
+      // execution (pickup → done), summed + counted OVERALL
+      readonly executionSumMs: number;
+      readonly executionCount: number;
+      // total (enqueued → done), summed + counted OVERALL
+      readonly totalSumMs: number;
+      readonly totalCount: number;
     }
     const freshAccum = (startedAt: number): WindowAccum => ({
       startedAt,
@@ -1556,9 +1583,46 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       deadLettered: 0,
       dropped: 0,
       rateLimitExceeded: 0,
-      latencySumMs: 0,
-      latencyCount: 0,
+      waitSumMs: zeroPerPriority,
+      waitCount: zeroPerPriority,
+      executionSumMs: 0,
+      executionCount: 0,
+      totalSumMs: 0,
+      totalCount: 0,
     });
+    // Wait = startedAt − enqueuedAt (ms). Undefined if the entry was never started (shouldn't
+    // happen for a Completed/Failed event, but the timestamp is optional on the type).
+    const waitMsOf = (entry: QueueEntry<T>): number | undefined =>
+      entry.timestamps.startedAt !== undefined
+        ? DateTime.toEpochMillis(entry.timestamps.startedAt) -
+          DateTime.toEpochMillis(entry.timestamps.enqueuedAt)
+        : undefined;
+    // Fold one completed/failed entry's latency (wait per-priority + execution/total overall).
+    const foldLatency = (
+      acc: WindowAccum,
+      entry: QueueEntry<T>,
+      elapsed: Duration.Duration,
+    ): WindowAccum => {
+      const execution = Duration.toMillis(elapsed);
+      const wait = waitMsOf(entry);
+      const pr = entry.priority;
+      return {
+        ...acc,
+        waitSumMs:
+          wait !== undefined
+            ? { ...acc.waitSumMs, [pr]: acc.waitSumMs[pr] + wait }
+            : acc.waitSumMs,
+        waitCount:
+          wait !== undefined
+            ? { ...acc.waitCount, [pr]: acc.waitCount[pr] + 1 }
+            : acc.waitCount,
+        executionSumMs: acc.executionSumMs + execution,
+        executionCount: acc.executionCount + 1,
+        totalSumMs:
+          wait !== undefined ? acc.totalSumMs + wait + execution : acc.totalSumMs,
+        totalCount: wait !== undefined ? acc.totalCount + 1 : acc.totalCount,
+      };
+    };
     const accumulate = (acc: WindowAccum, event: QueueEvent<T, E>): WindowAccum => {
       switch (event._tag) {
         case "Enqueued":
@@ -1566,19 +1630,17 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         case "Started":
           return { ...acc, started: acc.started + 1 };
         case "Completed":
-          return {
-            ...acc,
-            completed: acc.completed + 1,
-            latencySumMs: acc.latencySumMs + Duration.toMillis(event.elapsed),
-            latencyCount: acc.latencyCount + 1,
-          };
+          return foldLatency(
+            { ...acc, completed: acc.completed + 1 },
+            event.entry,
+            event.elapsed,
+          );
         case "Failed":
-          return {
-            ...acc,
-            failed: acc.failed + 1,
-            latencySumMs: acc.latencySumMs + Duration.toMillis(event.elapsed),
-            latencyCount: acc.latencyCount + 1,
-          };
+          return foldLatency(
+            { ...acc, failed: acc.failed + 1 },
+            event.entry,
+            event.elapsed,
+          );
         case "RetryScheduled":
           return { ...acc, retried: acc.retried + 1 };
         case "DeadLettered":
@@ -1647,15 +1709,48 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       description: "Items currently processing",
       attributes: metricAttributes,
     });
-    const latencyHistogram = Metric.histogram("queue_processing_duration_ms", {
-      description: "Item processing duration in milliseconds",
-      attributes: metricAttributes,
-      boundaries: Metric.exponentialBoundaries({
-        start: 1,
-        factor: 2,
-        count: 12,
-      }),
+    const latencyBoundaries = Metric.exponentialBoundaries({
+      start: 1,
+      factor: 2,
+      count: 12,
     });
+    // Worker execution time (pickup → done). Named *processing* historically; it is execution.
+    const executionHistogram = Metric.histogram("queue_processing_duration_ms", {
+      description: "Item worker execution duration (pickup → done) in milliseconds",
+      attributes: metricAttributes,
+      boundaries: latencyBoundaries,
+    });
+    // Queue wait (enqueued → pickup), tagged by priority per update so OTEL can break it down.
+    const waitHistogram = Metric.histogram("queue_wait_duration_ms", {
+      description: "Item queue wait (enqueued → pickup) in milliseconds",
+      attributes: metricAttributes,
+      boundaries: latencyBoundaries,
+    });
+    // End-to-end (enqueued → done = wait + execution).
+    const totalHistogram = Metric.histogram("queue_total_duration_ms", {
+      description: "Item end-to-end duration (enqueued → done) in milliseconds",
+      attributes: metricAttributes,
+      boundaries: latencyBoundaries,
+    });
+    // Record the latency histograms for a completed/failed entry: execution always; wait (tagged
+    // by priority) and total only when the entry was started (so wait is well-defined).
+    const recordLatency = (
+      entry: QueueEntry<T>,
+      elapsed: Duration.Duration,
+    ): Effect.Effect<void> => {
+      const execution = Duration.toMillis(elapsed);
+      const wait = waitMsOf(entry);
+      return Effect.gen(function* () {
+        yield* Metric.update(executionHistogram, execution);
+        if (wait !== undefined) {
+          yield* Metric.update(
+            Metric.withAttributes(waitHistogram, { priority: entry.priority }),
+            wait,
+          );
+          yield* Metric.update(totalHistogram, wait + execution);
+        }
+      });
+    };
     // Mirror each accumulated event onto its OTEL counter (same dispatch as `accumulate`).
     const recordEventMetric = (event: QueueEvent<T, E>): Effect.Effect<void> => {
       switch (event._tag) {
@@ -1666,12 +1761,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         case "Completed":
           return Effect.andThen(
             Metric.update(completedCounter, 1),
-            Metric.update(latencyHistogram, Duration.toMillis(event.elapsed)),
+            recordLatency(event.entry, event.elapsed),
           );
         case "Failed":
           return Effect.andThen(
             Metric.update(failedCounter, 1),
-            Metric.update(latencyHistogram, Duration.toMillis(event.elapsed)),
+            recordLatency(event.entry, event.elapsed),
           );
         case "RetryScheduled":
           return Metric.update(retriedCounter, 1);
@@ -1720,8 +1815,23 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         inFlight,
         throughputPerSec:
           windowMillis > 0 ? (acc.completed / windowMillis) * 1000 : 0,
-        ...(acc.latencyCount > 0
-          ? { avgLatencyMillis: acc.latencySumMs / acc.latencyCount }
+        // wait per priority — each lane present only if it had completions this window
+        avgWaitMillis: {
+          ...(acc.waitCount.high > 0
+            ? { high: acc.waitSumMs.high / acc.waitCount.high }
+            : {}),
+          ...(acc.waitCount.normal > 0
+            ? { normal: acc.waitSumMs.normal / acc.waitCount.normal }
+            : {}),
+          ...(acc.waitCount.low > 0
+            ? { low: acc.waitSumMs.low / acc.waitCount.low }
+            : {}),
+        },
+        ...(acc.executionCount > 0
+          ? { avgExecutionMillis: acc.executionSumMs / acc.executionCount }
+          : {}),
+        ...(acc.totalCount > 0
+          ? { avgTotalMillis: acc.totalSumMs / acc.totalCount }
           : {}),
       };
       yield* PubSub.publish(metricsHub, metrics);

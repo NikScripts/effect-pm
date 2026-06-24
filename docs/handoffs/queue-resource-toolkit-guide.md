@@ -154,6 +154,13 @@ works.
 - **Streams:** `events` (discrete lifecycle facts — tagged union), `status` (current-state
   snapshots), `metrics` (windowed aggregates)
 
+`metrics` latency fields: **`avgWaitMillis`** is **per priority** (`{ high?, normal?, low? }` —
+queue wait, enqueue → pickup; a lane is present only if it completed work that window, since wait
+depends on each lane's load); **`avgExecutionMillis`** (worker time, pickup → done) and
+**`avgTotalMillis`** (end-to-end = wait + execution) are overall. The OTEL mirror is
+`queue_wait_duration_ms` (tagged by `priority`), `queue_processing_duration_ms` (execution), and
+`queue_total_duration_ms`.
+
 **Not yet built (additive — won't break code written against the above):**
 - `logs` — a fourth, opt-in stream.
 - `enqueueEncoded` — the receive side of handoff (decode encoded entries → enqueue). `releaseEncoded`

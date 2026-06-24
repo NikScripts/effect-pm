@@ -209,6 +209,11 @@ describe("QueueResource.make — basic processing", () => {
       expect(m?.enqueued).toBe(3);
       expect(m?.completed).toBe(3);
       expect(m?.windowMillis).toBeGreaterThan(0);
+      // latency: wait is reported per priority (these were normal); execution + total overall.
+      expect(m?.avgWaitMillis.normal).toBeGreaterThanOrEqual(0);
+      expect(m?.avgWaitMillis.high).toBeUndefined();
+      expect(m?.avgExecutionMillis).toBeGreaterThanOrEqual(0);
+      expect(m?.avgTotalMillis).toBeGreaterThanOrEqual(0);
     }).pipe(Effect.scoped),
   );
 
@@ -1776,6 +1781,18 @@ describe("QueueResource.make — OTEL metrics", () => {
         );
       expect(find("queue_enqueued_total")?.state).toMatchObject({ count: 3 });
       expect(find("queue_completed_total")?.state).toMatchObject({ count: 3 });
+      // latency histograms: execution + total (overall) and wait (tagged by priority).
+      expect(find("queue_processing_duration_ms")?.state).toMatchObject({
+        count: 3,
+      });
+      expect(find("queue_total_duration_ms")?.state).toMatchObject({ count: 3 });
+      const wait = snapshot.find(
+        (m) =>
+          m.id === "queue_wait_duration_ms" &&
+          m.attributes?.queue === "test-otel-metrics" &&
+          m.attributes?.priority === "normal",
+      );
+      expect(wait?.state).toMatchObject({ count: 3 });
     }).pipe(Effect.scoped),
   );
 });
