@@ -198,6 +198,7 @@
     "example:dashboard": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/dashboard.tsx",
     "example:dashboard-mock": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/dashboard-mock.tsx",
     "example:queue-live": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/queue-live.tsx",
+    "example:web-dashboard": "vite --config examples/web-dashboard/vite.config.ts",
     "example:dashboard-demo:pm": "tsx examples/dashboard-demo/demo.runtime.ts",
     "example:dashboard-demo:ui": "vite --config examples/dashboard-demo/web/vite.config.ts",
     "example:dashboard-demo:gateway": "tsx examples/dashboard-demo/control-gateway.ts",
