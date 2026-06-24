@@ -46,6 +46,7 @@
     "plugins": [
       {
         "name": "@effect/language-service",
+        "skipDisabledOptimization": true,
         "diagnosticSeverity": {
           "anyUnknownInErrorContext": "off",
           "asyncFunction": "error",
@@ -124,7 +125,6 @@
     "dist",
     "repos",
     "examples/scenarios/nwslsoccer",
-    "examples/dashboard-demo/web/**",
     "examples/queue-widget/**",
     "examples/resource-tui/**"
   ]
