@@ -1888,3 +1888,95 @@ describe("QueueResource.make — OTEL metrics", () => {
     }).pipe(Effect.scoped),
   );
 });
+
+describe("QueueResource.make — log capture (.logs)", () => {
+  it.live("captures worker-effect logs with level + queueId/entryId annotations", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-logs-worker",
+        effect: (n: number) => Effect.logInfo(`processing ${String(n)}`),
+        concurrency: 1,
+        captureLogs: true,
+      });
+      const collected = yield* Effect.forkChild(
+        Stream.runCollect(
+          Stream.take(
+            Stream.filter(queue.logs, (e) => e.message.includes("processing")),
+            1,
+          ),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add(7);
+      const entry = Array.from(yield* Fiber.join(collected))[0];
+      expect(entry?.message).toContain("processing 7");
+      expect(entry?.level).toBe("Info"); // level preserved
+      expect(entry?.annotations.queueId).toBe("test-logs-worker");
+      expect(entry?.annotations["queue.entryId"]).toBeDefined(); // attributed to the job
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("captures the engine layer's own logs (shutdown)", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-logs-engine",
+        effect: (_n: number) => Effect.void,
+        concurrency: 1,
+        captureLogs: { level: "Info" },
+      });
+      const collected = yield* Effect.forkChild(
+        Stream.runCollect(
+          Stream.take(
+            Stream.filter(queue.logs, (e) => e.message.includes("shutting down")),
+            1,
+          ),
+        ),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.shutdown;
+      const entry = Array.from(yield* Fiber.join(collected))[0];
+      expect(entry?.message).toContain("shutting down");
+      expect(entry?.level).toBe("Info");
+      expect(entry?.annotations.queueId).toBe("test-logs-engine");
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("the level threshold filters out lower levels", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-logs-level",
+        effect: (n: number) =>
+          Effect.gen(function* () {
+            yield* Effect.logDebug(`dbg ${String(n)}`); // below threshold → dropped
+            yield* Effect.logWarning(`warn ${String(n)}`); // captured
+          }),
+        concurrency: 1,
+        captureLogs: { level: "Warn" },
+      });
+      const collected = yield* Effect.forkChild(
+        Stream.runCollect(Stream.take(queue.logs, 1)),
+      );
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add(1);
+      const entry = Array.from(yield* Fiber.join(collected))[0];
+      expect(entry?.level).toBe("Warn");
+      expect(entry?.message).toContain("warn 1");
+    }).pipe(Effect.scoped),
+  );
+
+  it.live("logs is an empty stream when capture is off (default)", () =>
+    Effect.gen(function* () {
+      const queue = yield* QueueResource.make({
+        name: "test-logs-off",
+        effect: (n: number) => Effect.logInfo(`x ${String(n)}`),
+        concurrency: 1,
+      });
+      const head = yield* Effect.forkChild(Stream.runHead(queue.logs));
+      yield* Effect.sleep(Duration.millis(20));
+      yield* queue.add(1);
+      yield* waitUntilCompleted(queue, 1);
+      // Stream.empty completes immediately with no element
+      expect(Option.isNone(yield* Fiber.join(head))).toBe(true);
+    }).pipe(Effect.scoped),
+  );
+});

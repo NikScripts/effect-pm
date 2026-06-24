@@ -39,6 +39,7 @@ const stub = {
     phase: "running" as const,
   }),
   metrics: Stream.empty,
+  logs: Stream.empty,
   add: (_: NumberItem | ReadonlyArray<NumberItem>) => Effect.void,
   prioritize: (_: NumberItem | ReadonlyArray<NumberItem>) => Effect.void,
   defer: (_: NumberItem | ReadonlyArray<NumberItem>) => Effect.void,

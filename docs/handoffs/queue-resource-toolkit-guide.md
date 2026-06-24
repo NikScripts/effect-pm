@@ -152,7 +152,7 @@ works.
 - **Routing / handoff:** `release`, `releaseEncoded` (export pending entries; encoded = wire form
   for cross-node handoff), `deadLetter`, `drop`
 - **Streams:** `events` (discrete lifecycle facts — tagged union), `status` (current-state
-  snapshots), `metrics` (windowed aggregates)
+  snapshots), `metrics` (windowed aggregates), `logs` (captured log lines — opt-in, see below)
 
 **Graceful shutdown.** `shutdown` returns immediately after *initiating*: the status snapshot's
 **`phase`** goes `running` → `draining` → `off`, and a `ShutdownRequested` then `ShutdownComplete`
@@ -169,8 +169,26 @@ depends on each lane's load); **`avgExecutionMillis`** (worker time, pickup → 
 `queue_wait_duration_ms` (tagged by `priority`), `queue_processing_duration_ms` (execution), and
 `queue_total_duration_ms`.
 
+**`logs` — the fourth stream (opt-in).** Off by default. Enable per-queue with the `captureLogs`
+config (`true`, or `{ level }` for a source-side threshold). When on, **every** log line emitted by
+the queue engine *and* by your worker `effect` is captured — with its **level**, message, cause,
+annotations (`queueId`, the worker, and the processing `queue.entryId`) and spans preserved — and
+published to `queue.logs` (a sliding, lossy buffer like the other streams). Capture is **merged**
+with your existing logger(s), so console / process-manager logging is unaffected. The element is the
+package's structured `ProcessManagerLogEntry` (re-exported as `queueLogEntry`), so it crosses RPC
+intact. (The toolkit layer also names the engine queue after the tag id, so logs and OTEL metrics
+attribute to the resource.)
+
+```ts
+const EmailQueueLocal = QueueResource.layer(EmailQueue, {
+  effect: (job) => sendEmail(job),
+  captureLogs: { level: "Info" }, // or `true` for all levels; omit for off
+});
+
+yield* queue.logs.pipe(Stream.runForEach((line) => render(line)), Effect.forkScoped);
+```
+
 **Not yet built (additive — won't break code written against the above):**
-- `logs` — a fourth, opt-in stream.
 - `enqueueEncoded` — the receive side of handoff (decode encoded entries → enqueue). `releaseEncoded`
   (the send side) exists.
 
@@ -241,7 +259,8 @@ receiver still accepts same-version entries from an older sender). A typed migra
 
 - **Local layer:** complete and tested — build UIs against it now.
 - **Remote client:** complete — `Resource.client(tag)` + transport.
-- **Remote serving helper, `logs`, `enqueueEncoded`:** pending, all additive.
+- **`logs` stream:** complete — opt-in via `captureLogs` (see §8/streams).
+- **Remote serving helper, `enqueueEncoded`:** pending, all additive.
 - **Import:** from `QueueContract` (module path), not the barrel, for now.
 
 Build remote-facing UIs locally today; the layer swap is the only thing that changes when the
