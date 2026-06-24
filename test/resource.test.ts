@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema, Stream } from "effect";
+import { Effect, Fiber, Layer, Schema, Stream } from "effect";
 import { RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import { Resource, forwardClient, groupOf, specOf } from "../src/Resource";
@@ -35,6 +35,28 @@ it("runForEachTag dispatches by tag — handler map, pipeable, types inferred", 
     );
     expect(aValues).toEqual([1, 2]);
   });
+  return Effect.runPromise(program);
+});
+
+it("runForEachTagScoped forks into the scope and returns a Fiber (non-blocking)", () => {
+  const events = Stream.fromIterable<Ev>([
+    { _tag: "A", n: 1 },
+    { _tag: "B", s: "x" },
+    { _tag: "A", n: 2 },
+  ]);
+  const program = Effect.gen(function* () {
+    const seen: Array<string> = [];
+    // pipeable + handler map — forks automatically; we get a Fiber back, not a blocked effect.
+    const fiber = yield* events.pipe(
+      Resource.runForEachTagScoped({
+        A: (e) => Effect.sync(() => seen.push(`A${e.n}`)),
+        B: (e) => Effect.sync(() => seen.push(`B${e.s}`)),
+      }),
+    );
+    // join to observe completion deterministically (the stream is finite here)
+    yield* Fiber.join(fiber);
+    expect(seen).toEqual(["A1", "Bx", "A2"]);
+  }).pipe(Effect.scoped);
   return Effect.runPromise(program);
 });
 

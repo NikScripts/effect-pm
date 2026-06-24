@@ -44,11 +44,13 @@ import {
   Context,
   Data,
   Effect,
+  Fiber,
   Function as Fn,
   Layer,
   Match,
   Option,
   Schema,
+  Scope,
   Stream,
 } from "effect";
 import { FetchHttpClient, Headers, HttpRouter } from "effect/unstable/http";
@@ -1490,6 +1492,75 @@ export const runForEachTag: {
 );
 
 /**
+ * Like {@link runForEachTag}, but **non-blocking**: it forks the consumer into the enclosing
+ * {@link Scope} ({@link Effect.forkScoped}) and hands back the {@link Fiber}, instead of running
+ * the stream to completion. This is the common case for live observation — start watching the
+ * `events`/`status`/`metrics` of a queue (or any tagged stream) in the background while the rest
+ * of your program runs; the fiber is **interrupted automatically when the scope closes** (the
+ * `Effect.scoped` block ends, or the owning layer is torn down), so you never track or kill it.
+ *
+ * Each handler's error surfaces in the **fiber's** failure channel (not the caller's). If you
+ * instead want to *block* until a (finite) stream drains — e.g. in a test — use
+ * {@link runForEachTag} and `yield*` it directly, or `Fiber.join` the fiber this returns.
+ *
+ * ```ts
+ * // no manual `Effect.forkScoped` — observation runs in the background, bound to the scope
+ * yield* queue.events.pipe(Resource.runForEachTagScoped({
+ *   Completed: ({ entry }) => Effect.log(`done ${entry.entryId}`),
+ *   Failed:    ({ cause }) => Effect.logError("job failed", cause),
+ * }))
+ * ```
+ *
+ * @public
+ */
+export const runForEachTagScoped: {
+  // ── data-last (pipeable) ──
+  <A extends TaggedEvent, Cases extends TagHandlers<A, unknown, unknown>>(
+    handlers: Cases,
+  ): (
+    self: Stream.Stream<A>,
+  ) => Effect.Effect<
+    Fiber.Fiber<void, HandlersError<Cases>>,
+    never,
+    HandlersContext<Cases> | Scope.Scope
+  >;
+  <A extends TaggedEvent, const K extends A["_tag"], E, R>(
+    tag: K,
+    f: (event: Extract<A, { readonly _tag: K }>) => Effect.Effect<void, E, R>,
+  ): (
+    self: Stream.Stream<A>,
+  ) => Effect.Effect<Fiber.Fiber<void, E>, never, R | Scope.Scope>;
+  // ── data-first ──
+  <A extends TaggedEvent, const K extends A["_tag"], E, R>(
+    self: Stream.Stream<A>,
+    tag: K,
+    f: (event: Extract<A, { readonly _tag: K }>) => Effect.Effect<void, E, R>,
+  ): Effect.Effect<Fiber.Fiber<void, E>, never, R | Scope.Scope>;
+  <A extends TaggedEvent, Cases extends TagHandlers<A, unknown, unknown>>(
+    self: Stream.Stream<A>,
+    handlers: Cases,
+  ): Effect.Effect<
+    Fiber.Fiber<void, HandlersError<Cases>>,
+    never,
+    HandlersContext<Cases> | Scope.Scope
+  >;
+} = Fn.dual(
+  (args) => Stream.isStream(args[0]),
+  <E, R>(
+    self: Stream.Stream<TaggedEvent>,
+    tagOrHandlers: string | TagHandlers<TaggedEvent, E, R>,
+    f?: (event: TaggedEvent) => Effect.Effect<void, E, R>,
+  ): Effect.Effect<Fiber.Fiber<void, E>, never, R | Scope.Scope> =>
+    // Delegate to the blocking consumer, then fork it into the enclosing scope. The two-arg
+    // (single-tag) and one-arg (handler-map) shapes are dispatched by `runForEachTag` itself.
+    Effect.forkScoped(
+      f === undefined
+        ? runForEachTag(self, tagOrHandlers as TagHandlers<TaggedEvent, E, R>)
+        : runForEachTag(self, tagOrHandlers as string, f),
+    ),
+);
+
+/**
  * Resource toolkit — schema-defined service tags. Same `yield* Tag` everywhere; only the
  * layer changes: {@link Resource.layer} runs it locally, {@link Resource.client} drives it
  * remotely, {@link Resource.server} exposes a local impl over RPC.
@@ -1514,4 +1585,5 @@ export const Resource = {
   client: clientLayer,
   clientInstances,
   runForEachTag,
+  runForEachTagScoped,
 } as const;

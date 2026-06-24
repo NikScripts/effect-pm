@@ -61,12 +61,12 @@ const dashboard = Effect.gen(function* () {
   // live streams — render these in the UI
   yield* queue.status.pipe(Stream.runForEach((s) => render(s)), Effect.forkScoped);
   yield* queue.metrics.pipe(Stream.runForEach((m) => renderMetrics(m)), Effect.forkScoped);
+  // events: runForEachTagScoped forks into the scope for you — no manual Effect.forkScoped
   yield* queue.events.pipe(
-    Resource.runForEachTag({
+    Resource.runForEachTagScoped({
       Completed: (e) => log(`done ${e.entry.item.id}`),
       Failed: (e) => log(`failed ${e.entry.item.id}`),
     }),
-    Effect.forkScoped,
   );
 });
 ```
@@ -159,22 +159,31 @@ works.
 
 ## 6. Streams
 
-All three streams are plain Effect `Stream`s. For `events` (a tagged union), use
-`Resource.runForEachTag` to dispatch by `_tag` — it's cast-free and narrows each event:
+All three streams are plain Effect `Stream`s. For `events` (a tagged union), dispatch by `_tag`
+with the cast-free, per-tag-narrowing helper. Two forms:
+
+- **`runForEachTagScoped`** — **non-blocking**: forks the consumer into the enclosing scope and
+  returns the `Fiber`; the fiber is interrupted automatically when the scope closes. This is what
+  you want for **live observation** (a UI/dashboard watching `events` in the background while the
+  rest of the program runs).
+- **`runForEachTag`** — **blocking**: runs the stream to completion in the current fiber. Use it
+  when you actually want to *wait* (draining a finite stream, a test, a one-shot pipeline).
 
 ```ts
+// live observation — forks for you, no manual Effect.forkScoped
 yield* queue.events.pipe(
-  Resource.runForEachTag({
+  Resource.runForEachTagScoped({
     Enqueued: (e) => /* e.entries, e.priority */ …,
     Completed: (e) => /* e.entry, e.elapsed */ …,
     Failed: (e) => e.cause /* Cause<WorkerError> */ …,
   }),
-  Effect.forkScoped,
 );
 ```
 
 Failure-bearing events carry the worker error typed (`Failed.cause: Cause<E>`, `Exit.exit:
-Exit<void, E>`), so you can `catchTag` on them exactly like an RPC error channel.
+Exit<void, E>`), so you can `catchTag` on them exactly like an RPC error channel. With
+`runForEachTagScoped`, a handler's error surfaces in the **fiber's** failure channel (join it to
+observe), not the caller's.
 
 Over RPC the streams are chunked, which needs **ndjson** serialization on both sides — the http
 helpers (`connectHttp` / `serveHttp`) default to it, so you don't have to think about it.
