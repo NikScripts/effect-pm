@@ -9,6 +9,14 @@ unique API. Code the way the downstream repo (e.g. `services-hub`) would actuall
 > **Imports:** everything is on the barrel (`@nikscripts/effect-pm`). `QueueResource` is a single
 > unified namespace — the toolkit `Tag` / `layer` / `server` / `serveHttp` / `configure` plus the
 > engine helpers (`make` / `Service` / `Schema` / `Errors`) — one import.
+>
+> **Browser/dashboard bundles:** for the smallest bundle, import the **light** queue surface from
+> the subpath — `import { queueTag, queueStatus, configure } from "@nikscripts/effect-pm/QueueContract"`
+> — which is **proven engine-free** (≈23kb, zero engine code) and tree-shakes in any bundler. The
+> barrel `QueueResource.Tag` is functionally identical but may include the queue engine code
+> depending on your bundler (it's pure-Effect with **no native deps**, so it never *breaks* a build —
+> just larger). Guaranteed barrel-namespace tree-shaking is a tracked follow-up
+> (`docs/plans/18-unbundled-build-treeshaking.md`).
 
 ---
 
