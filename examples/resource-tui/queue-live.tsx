@@ -19,7 +19,7 @@ import { Box, render, Text, useInput, useStdout } from "ink";
 import * as React from "react";
 import { Data, Duration, Effect, Layer, Schema, Stream } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
-import { QueueResource } from "../../src/QueueContract";
+import { QueueResource } from "../../src";
 import { RegistryProvider, useAtomSet, useAtomValue } from "../queue-widget/atom-react";
 import {
   BLANK_BORDER,

@@ -1,6 +1,6 @@
 import { Effect, Layer, Schema } from "effect";
 import { expect, it } from "vitest";
-import { QueueResource } from "../src/QueueContract";
+import { QueueResource } from "../src";
 
 // `.configure` is the toolkit successor to the old `QueueResource.Service(...).configure(...)`:
 // a config-patch *layer* (keyed by tag id) merged with the resource's layer, folded onto the base

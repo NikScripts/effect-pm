@@ -129,8 +129,10 @@ export type { ProcessScheduleLayerConfig } from "./ProcessScheduleContract";
 export { Polling } from "./Polling";
 export { ProcessSchedule } from "./ProcessSchedule";
 export { ProcessGroup } from "./ProcessGroup";
-// The single unified QueueResource namespace (engine helpers + toolkit Tag/layer/serveHttp/configure).
-export { QueueResource } from "./QueueContract";
+// The single unified QueueResource namespace. `export * as` (module namespace, Effect-style) so
+// member access tree-shakes: `QueueResource.Tag` pulls zero engine code; `make`/`layer`/`serveHttp`
+// pull the engine only when used.
+export * as QueueResource from "./internal/queueResourceNamespace";
 export { RunResource } from "./RunResource";
 export { HttpClientRunGate } from "./HttpClientRunGate";
 export {

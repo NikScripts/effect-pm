@@ -20,7 +20,7 @@ import {
   SubscriptionRef,
 } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import { QueueResource } from "../../src/QueueContract";
+import { QueueResource } from "../../src";
 
 const Job = Schema.Struct({ id: Schema.String });
 

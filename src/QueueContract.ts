@@ -33,12 +33,14 @@ import type {
   ResourceTag,
   ServiceOf,
 } from "./Resource";
+// Schemas from the light module — keeps the Tag/spec path engine-free (tree-shakeable).
 import {
   QueueItemCodecDescriptorSchema,
   QueueItemEncodingError,
   QueueMissingItemSchemaError,
-  QueueResource as QueueEngine,
-} from "./QueueResource";
+} from "./internal/queueSchema";
+// The engine is used only by the runtime verbs (buildQueueImpl/layer/server/serveHttp) below.
+import { QueueResource as QueueEngine } from "./QueueResource";
 import type { QueueResourceConfigWithItemSchema } from "./QueueResource";
 import type { JsonValue } from "./ProcessStoreEvent";
 import { ProcessManagerLogEntrySchema } from "./LogEntry";
@@ -503,7 +505,7 @@ type QueueInstanceSpec<F extends Schema.Struct.Fields> = ReturnType<
  *
  * @public
  */
-const queueTag = <Self>() => {
+export const queueTag = <Self>() => {
   function build<F extends Schema.Struct.Fields, HSelf>(
     id: string,
     itemSchema: Schema.Struct<F>,
@@ -649,7 +651,7 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R>(
     return impl;
   });
 
-const layer = <
+export const layer = <
   Self,
   F extends QueueItemFields = QueueItemFields,
   E = never,
@@ -670,7 +672,7 @@ const layer = <
  *
  * @public
  */
-const server = <
+export const server = <
   Self,
   F extends QueueItemFields = QueueItemFields,
   E = never,
@@ -691,7 +693,7 @@ const server = <
  *
  * @public
  */
-const serveHttp = <
+export const serveHttp = <
   Self,
   F extends QueueItemFields = QueueItemFields,
   E = never,
@@ -731,7 +733,7 @@ const serveHttp = <
  *
  * @public
  */
-const configure = <
+export const configure = <
   Self,
   F extends QueueItemFields = QueueItemFields,
   E = never,
@@ -741,22 +743,6 @@ const configure = <
   patch: ConfigPatch<QueueLayerConfig<Schema.Struct<F>["Type"], E, R>>,
 ): Layer.Layer<never> => configureLayer(tag.id, patch);
 
-/**
- * The single **`QueueResource`** namespace — one import for everything.
- *
- * Spreads the engine namespace (`make` / `Service` / `Schema` / `Errors` / `rateLimiterLayer`) and
- * overrides `Tag` / `layer` with the **toolkit** (location-transparent) versions: `Tag` is a normal
- * Effect service (`Context.Service` keyed by id) driven the same `yield* Tag` whether local or
- * remote — only the provided layer differs. `server` / `serveHttp` host it over RPC; `configure`
- * patches per-environment config.
- *
- * @public
- */
-export const QueueResource = {
-  ...QueueEngine,
-  Tag: queueTag,
-  layer,
-  configure,
-  server,
-  serveHttp,
-} as const;
+// The unified `QueueResource` namespace is assembled in `internal/queueResourceNamespace.ts` and
+// re-exported by the barrel as `export * as QueueResource` (so member access tree-shakes — the
+// light `Tag`/spec here never pulls the engine that `layer`/`server`/`serveHttp` use).
