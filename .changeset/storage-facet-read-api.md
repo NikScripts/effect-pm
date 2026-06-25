@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": major
+"@nikscripts/effect-pm": minor
 ---
 
 **Breaking — storage facet read/write API and stack cleanup.**

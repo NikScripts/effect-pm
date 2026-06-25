@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": major
+"@nikscripts/effect-pm": minor
 ---
 
 Replace the generic `ProcessStoreRuntime` facet with a per-domain
