@@ -282,3 +282,55 @@ const renderNode = (node: { readonly members: Record<string, unknown> }) => {
 // drive any member over RPC the same way:
 // const svc = yield* SomeTag  // provided via Resource.client(SomeTag) + connect(host)
 ```
+
+---
+
+## ServicesHub (wow-sports) — what we're actually building & dashboard priorities
+
+This package exists to run **`services-hub`** (the `wow-sports` repo). The live dashboard + TUI
+target that `ServicesHub` group. Concrete shape today:
+
+```
+ServicesHub
+├── Nwsl   — 2 processes + 3 queues
+│     ├── NwslGetSeasonMatches      (process, polls season matches/standings ~15s)
+│     ├── NwslLiveScorePoller       (process, live scores — game-day real-time)
+│     ├── NwslRosterImportQueue     (queue)
+│     ├── NwslTeamMediaImportQueue  (queue)
+│     └── NwslPlayerMediaImportQueue(queue)
+├── Wnba   — 4 processes
+│     ├── WnbaIncrementalSeasonImport (process)
+│     ├── WnbaLiveScorePoller         (process, live scores — game-day real-time)
+│     ├── WnbaSeasonApiFetch          (process)
+│     └── WnbaCoreKeyHealthCheck      (process, health/credential check)
+└── Ebwsl  — scaffolded, no resources yet (coming)
+```
+
+**Migration state:** these are still defined with the legacy `.Service` API and live behind a
+`ProcessGroup` + `ControlService` control port reached by the `pm` CLI. They are being rewritten
+to `.Tag` + separate `.layer` (examples 1–14 above). The dashboard should be built against the
+**`.Tag` toolkit surface**, not the legacy control plane.
+
+**Deploy topology** (see examples 10–13): the hub and all three league groups run on **one
+Droplet**; **one or two processes** (most likely a live-score poller) are peeled off to the
+**Mini** via a `Host`. The dashboard reaches every member uniformly with `Resource.client` +
+`connect` — a member on the Mini looks identical to a local one; only its host differs.
+
+### Dashboard build priority
+
+1. **Tree navigation** — walk `ServicesHub` with `Group.members` + `Group.isGroup` (example 15) to
+   render Hub → league → resource. This is the skeleton everything hangs off.
+2. **Live status grid** — per resource, subscribe to the `status` stream (`statusNow` for first
+   paint): processes show `supervising` / `armed` / `activeInstances` / `nextTriggerRun`; queues
+   show per-priority `sizes`, `paused`, `completed`. This is the at-a-glance health board.
+3. **Live-score pollers, front and center** — `NwslLiveScorePoller` / `WnbaLiveScorePoller` are the
+   real-time, game-day-critical ones. Surface their status + recent runs prominently; this is the
+   "live" in live dashboard.
+4. **Queue throughput** — the three NWSL import queues: render `sizes` (depth) + `completed` +
+   `metrics` (windowed throughput/latency) as progress/rate widgets.
+5. **Logs drill-in** — per-resource `logs` stream for debugging a misbehaving poller/queue.
+6. **Controls** — actuate from the UI: process `start`/`stop`/`runImmediately`/`setSchedule`;
+   queue `pause`/`resume`/`add`/`clear`. Use `methodMeta` (`destructive`) to gate confirm dialogs.
+
+Don't render from a hand-maintained list — derive everything from the contract via `specOf` +
+`methodMeta` (example 15), so new resources (Ebwsl, future leagues) appear automatically.
