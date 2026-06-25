@@ -12,8 +12,15 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/Process.ts` | `Process.make`, supervisor loop, `ProcessSupervisorRequirements`. |
 | `src/ProcessGroup.ts` | Orchestration, `make`, fork/stop, typed controls, `awaitShutdown`. |
 | `src/Polling.ts`, `src/ProcessSchedule.ts` | Cadence + gate services and preset `Layer`s. |
-| `src/QueueResource.ts` | Priority queue resource factory. |
-| `src/ResourceConfigure.ts` | Layer-composed `.configure` patches for queue/process/run services. |
+| `src/QueueResource.ts` | Priority queue **engine** + legacy `.Service` factory. |
+| `src/ResourceConfigure.ts` | Layer-composed `.configure` patches for queue/process/run services (legacy `.Service` + toolkit `.Tag`). |
+| **Toolkit (location-transparent)** | |
+| `src/Resource.ts` | Foundation — tags (`Tag`/`client`/`server`/`serveHttp`/`Host`/`connect`), `specOf`/`methodMeta` introspection. |
+| `src/QueueContract.ts` | Toolkit **queue** (`QueueResource` = `Tag`/`layer`/`configure`/`server`/`serveHttp`) → `@nikscripts/effect-pm/QueueContract`. |
+| `src/ProcessContract.ts` | Toolkit **process** (`ProcessResource`). |
+| `src/ProcessScheduleContract.ts` | Toolkit **schedule** (`ProcessScheduleResource`) — CRUD + reconcile + `changes`. |
+| `src/Group.ts` | `Group.Tag` — organize member tags (nestable; `members`/`isGroup`). |
+| `src/HostLogs.ts` | Runtime-wide log capture + stream (`HostLogs`). |
 | `src/ProcessStore.ts`, `src/ProcessStorage.ts`, `src/ProcessStoreEvent.ts` | Storage facet builder, combined facet layers, and shared event types. |
 | `src/store/*.ts` | Storage facets → `@nikscripts/effect-pm/store/*` |
 | `src/LogContext.ts`, `src/LogEntry.ts`, `src/Transport.ts` | PM log annotations, NDJSON log entries, transport config. |

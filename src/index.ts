@@ -21,7 +21,15 @@
  *   service with a `.layer`.
  * - **`ProcessStore`** — In-memory (or **Prisma**) **analytics**: execution rows + lifecycle
  *   events for processes.
- * - **`RunResource`**, **`HttpClientRunGate`**, **`HttpApiResource`**, **`Resource`** —
+ * - **Toolkit (location-transparent resources)** — **`Resource`** is the foundation: a tag is
+ *   driven by the same `yield* Tag` code whether it runs **local or remote** (`Resource.client` /
+ *   `server` / `serveHttp` / `Host` switch only the layer). Batteries-included resource kinds build
+ *   on it — **`ProcessResource`**, **`ProcessScheduleResource`**, and the toolkit queue (from
+ *   `@nikscripts/effect-pm/QueueContract`) — each with `Tag` / `layer` / `configure` / `server` /
+ *   `serveHttp`. **`Group`** organizes member tags (nestable; members may be on the same or
+ *   different hosts). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
+ *   See `docs/guides/toolkit-by-example.md`.
+ * - **`RunResource`**, **`HttpClientRunGate`**, **`HttpApiResource`** —
  *   Optional building blocks for **gated** HTTP and reusable resource patterns.
  * - **`ControlService`** + **`ProcessManager`** + **`createCli` / `runCli`** — Local and
  *   remote **control plane** helpers for ops (used by the examples CLI).
@@ -30,6 +38,7 @@
  *
  * ## Where to read next
  *
+ * - Toolkit by example (every resource/group/host/UI pattern): `docs/guides/toolkit-by-example.md`
  * - Narrative architecture: `docs/PACKAGE-GUIDE.md`
  * - API tables (Process, Polling, Schedule, ProcessGroup): `docs/PROCESS-API.md`
  * - Runnable teaching scripts: `examples/README.md`
@@ -54,6 +63,11 @@
  * **`@nikscripts/effect-pm/Logs`**, **`@nikscripts/effect-pm/ControlService`**,
  * and **`@nikscripts/effect-pm/ControlTransportRpc`**, and
  * **`@nikscripts/effect-pm/LogTransportRpc`**.
+ *
+ * Toolkit subpaths: **`@nikscripts/effect-pm/Resource`** (foundation + `specOf` / `methodMeta`),
+ * **`@nikscripts/effect-pm/QueueContract`** (toolkit queue), **`@nikscripts/effect-pm/ProcessContract`**,
+ * **`@nikscripts/effect-pm/ProcessScheduleContract`**, **`@nikscripts/effect-pm/Group`**,
+ * and **`@nikscripts/effect-pm/HostLogs`**.
  *
  * Structured log persistence: `ProcessStore.Log` (also exported as the
  * dedicated `ProcessStoreLog` facet) on the composed store. Capture/relay
