@@ -36,6 +36,8 @@ export interface ResourceUI {
   readonly kind: ResourceKind;
   /** Streaming methods → an atom holding the latest emission. */
   readonly streams: Readonly<Record<string, ValueAtom>>;
+  /** Streaming methods → an atom holding the recent window of emissions (for charts/logs). */
+  readonly histories: Readonly<Record<string, ValueAtom>>;
   /** Query methods (no payload) → a read atom. */
   readonly reads: Readonly<Record<string, ValueAtom>>;
   /** Mutations / payload methods → a command you trigger. */
@@ -43,6 +45,9 @@ export interface ResourceUI {
   /** Per-method contract metadata (kind, description, destructive, streaming). */
   readonly meta: Readonly<Record<string, MethodMeta>>;
 }
+
+/** How many recent stream emissions to retain for charts/log panes. @since 1.0.0 */
+const HISTORY = 120;
 
 /** The trailing segment of a tag id (`@repo/pkg/RosterQueue` → `RosterQueue`). @since 1.0.0 */
 export const displayName = (id: string): string => {
@@ -97,6 +102,7 @@ export const makeResourceUI = <Self extends R, S extends Spec, R, ER>(
   const erased = tag as unknown as ResourceTag<never, Spec>;
   const reactivityKey = [tag.id];
   const streams: Record<string, ValueAtom> = {};
+  const histories: Record<string, ValueAtom> = {};
   const reads: Record<string, ValueAtom> = {};
   const commands: Record<string, CommandAtom> = {};
   const meta: Record<string, MethodMeta> = {};
@@ -109,6 +115,11 @@ export const makeResourceUI = <Self extends R, S extends Spec, R, ER>(
     const hasPayload = method.payload !== undefined;
     if (m.streaming) {
       streams[key] = runtime.atom(memberStream(erased, key));
+      histories[key] = runtime.atom(
+        memberStream(erased, key).pipe(
+          Stream.scan([] as ReadonlyArray<unknown>, (acc, x) => [...acc, x].slice(-HISTORY)),
+        ),
+      );
     } else if (!hasPayload && m.kind === "query") {
       reads[key] = Atom.withReactivity(reactivityKey)(runtime.atom(memberEffect(erased, key)));
     } else {
@@ -123,6 +134,7 @@ export const makeResourceUI = <Self extends R, S extends Spec, R, ER>(
     displayName: displayName(tag.id),
     kind: detectKind(Object.keys(meta)),
     streams,
+    histories,
     reads,
     commands,
     meta,

@@ -1,45 +1,59 @@
 /**
  * @module web/primitives
  *
- * Small unstyled-ish building blocks (Tailwind utility classes; bring your own
- * Tailwind). Kept dependency-free so the shipped widgets don't drag in a component
- * library — swap them by composing the exported widgets if you want your own look.
+ * The look: shadcn-style building blocks on the dashboard theme (`theme.css`). Pure
+ * Tailwind utility classes + a tiny `cn` — no component library, no clsx/cva. Bring
+ * Tailwind and import `@nikscripts/effect-pm/web/theme.css` (or your own vars).
  *
  * @since 1.0.0
  */
 import * as React from "react";
+import { cn } from "./cn";
 
-/** A bordered surface. @since 1.0.0 */
+/** A bordered card surface. @since 1.0.0 */
 export const Card = (props: {
   readonly children: React.ReactNode;
   readonly className?: string;
 }): React.ReactElement => (
-  <div className={`rounded-xl border border-neutral-800 bg-neutral-900 p-3 ${props.className ?? ""}`}>
+  <div className={cn("rounded-xl border bg-card text-card-foreground", props.className)}>
     {props.children}
   </div>
 );
 
+/** Card inner padding. @since 1.0.0 */
+export const CardBody = (props: {
+  readonly children: React.ReactNode;
+  readonly className?: string;
+}): React.ReactElement => <div className={cn("p-3", props.className)}>{props.children}</div>;
+
 const TONES = {
-  green: "bg-green-500/15 text-green-400 border-green-500/30",
-  yellow: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
-  red: "bg-red-500/15 text-red-400 border-red-500/30",
-  blue: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-  gray: "bg-neutral-500/15 text-neutral-400 border-neutral-500/30",
+  green: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
+  yellow: "text-amber-400 bg-amber-500/10 border-amber-500/30",
+  red: "text-rose-400 bg-rose-500/10 border-rose-500/30",
+  blue: "text-sky-400 bg-sky-500/10 border-sky-500/30",
+  gray: "text-muted-foreground bg-muted border-border",
 } as const;
-/** Tone of a {@link Badge}. @since 1.0.0 */
+const FILLS = {
+  green: "bg-emerald-500",
+  yellow: "bg-amber-500",
+  red: "bg-rose-500",
+  blue: "bg-sky-500",
+  gray: "bg-neutral-500",
+} as const;
+/** Semantic tone of a {@link Badge} / {@link Button} / {@link Bar}. @since 1.0.0 */
 export type Tone = keyof typeof TONES;
 
-/** A small status pill. @since 1.0.0 */
+/** A status pill. @since 1.0.0 */
 export const Badge = (props: {
   readonly children: React.ReactNode;
   readonly tone?: Tone;
 }): React.ReactElement => (
-  <span className={`inline-block rounded-md border px-1.5 py-0.5 text-xs font-medium ${TONES[props.tone ?? "gray"]}`}>
+  <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium", TONES[props.tone ?? "gray"])}>
     {props.children}
   </span>
 );
 
-/** An action button; `tone="red"` for destructive. @since 1.0.0 */
+/** An action button; `tone="red"` reads as destructive. @since 1.0.0 */
 export const Button = (props: {
   readonly children: React.ReactNode;
   readonly onClick: () => void;
@@ -50,7 +64,10 @@ export const Button = (props: {
     type="button"
     disabled={props.disabled ?? false}
     onClick={props.onClick}
-    className={`rounded-md border px-2 py-1 text-xs font-medium disabled:opacity-40 ${TONES[props.tone ?? "gray"]}`}
+    className={cn(
+      "inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-medium transition-colors hover:brightness-125 disabled:opacity-40",
+      TONES[props.tone ?? "blue"],
+    )}
   >
     {props.children}
   </button>
@@ -62,27 +79,24 @@ export const Field = (props: {
   readonly children: React.ReactNode;
 }): React.ReactElement => (
   <div className="flex items-baseline justify-between gap-2 text-sm">
-    <span className="text-neutral-500">{props.label}</span>
-    <span className="font-medium text-neutral-200">{props.children}</span>
+    <span className="text-muted-foreground">{props.label}</span>
+    <span className="font-medium tabular-nums">{props.children}</span>
   </div>
 );
 
 /** A horizontal proportion bar (0..1). @since 1.0.0 */
-export const Bar = (props: {
-  readonly value: number;
-  readonly tone?: Tone;
-}): React.ReactElement => (
-  <div className="h-1.5 w-full overflow-hidden rounded bg-neutral-800">
+export const Bar = (props: { readonly value: number; readonly tone?: Tone }): React.ReactElement => (
+  <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
     <div
-      className={`h-full ${TONES[props.tone ?? "blue"]}`}
+      className={cn("h-full rounded-full transition-all", FILLS[props.tone ?? "blue"])}
       style={{ width: `${Math.max(0, Math.min(1, props.value)) * 100}%` }}
     />
   </div>
 );
 
-/** A titled section header. @since 1.0.0 */
+/** A small uppercase section label. @since 1.0.0 */
 export const SectionLabel = (props: { readonly children: React.ReactNode }): React.ReactElement => (
-  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
     {props.children}
   </div>
 );

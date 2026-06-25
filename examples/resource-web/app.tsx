@@ -11,8 +11,8 @@ import { ServicesHub, runtime } from "./hub";
 
 export const App = (): React.ReactElement => (
   <RegistryProvider>
-    <div className="min-h-screen bg-neutral-950 text-neutral-100">
-      <header className="border-b border-neutral-800 px-4 py-2 text-sm font-semibold">
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="border-b px-4 py-3 text-sm font-semibold">
         ServicesHub · resource dashboard
       </header>
       <GroupView runtime={runtime} group={ServicesHub} />

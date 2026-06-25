@@ -68,13 +68,13 @@ export const GroupView = <R, ER>(props: {
 
   return (
     <div className="flex flex-col gap-3 p-3">
-      <div className="flex items-center gap-2 text-sm text-neutral-400">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
         {trail.map((n, i) => (
           <React.Fragment key={n.id}>
-            {i > 0 ? <span className="text-neutral-700">/</span> : null}
+            {i > 0 ? <span className="text-muted-foreground">/</span> : null}
             <button
               type="button"
-              className="hover:text-neutral-100"
+              className="hover:text-foreground"
               onClick={() => setTrail(trail.slice(0, i + 1))}
             >
               {displayName(n.id)}

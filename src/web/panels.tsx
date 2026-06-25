@@ -26,7 +26,7 @@ export const renderLeaf = (v: unknown): React.ReactNode => {
   if (Array.isArray(v)) return `${v.length} item${v.length === 1 ? "" : "s"}`;
   if (isRecord(v)) {
     return (
-      <span className="font-mono text-xs text-neutral-400">
+      <span className="font-mono text-xs text-muted-foreground">
         {Object.entries(v).map(([k, val]) => `${k}: ${String(val)}`).join("  ")}
       </span>
     );
@@ -45,7 +45,7 @@ export const renderValue = (v: unknown): React.ReactNode => {
       </div>
     );
   }
-  return <div className="text-sm text-neutral-200">{renderLeaf(v)}</div>;
+  return <div className="text-sm text-foreground">{renderLeaf(v)}</div>;
 };
 
 const useValue = (atom: ValueAtom): { readonly value: unknown; readonly loading: boolean } => {
@@ -59,7 +59,7 @@ export const ValuePanel = (props: {
   readonly render?: (value: unknown) => React.ReactNode;
 }): React.ReactElement => {
   const { value, loading } = useValue(props.atom);
-  if (loading) return <div className="text-sm text-neutral-600">…</div>;
+  if (loading) return <div className="text-sm text-muted-foreground">…</div>;
   return <>{(props.render ?? renderValue)(value)}</>;
 };
 
@@ -91,7 +91,7 @@ export const CommandButton = (props: { readonly ui: ResourceUI; readonly name: s
           value={payload}
           onChange={(e) => setPayload(e.target.value)}
           placeholder={`${props.name} payload (json)`}
-          className="w-40 rounded border border-neutral-800 bg-neutral-950 px-1 py-0.5 text-xs text-neutral-200"
+          className="w-40 rounded border border bg-background px-1 py-0.5 text-xs text-foreground"
         />
       ) : null}
       {meta?.destructive === true ? (

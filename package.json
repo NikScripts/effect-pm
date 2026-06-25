@@ -267,10 +267,14 @@
     "@trpc/client": ">=11",
     "effect": "^4.0.0-beta.69",
     "react": ">=18",
-    "react-dom": ">=18"
+    "react-dom": ">=18",
+    "recharts": ">=2"
   },
   "peerDependenciesMeta": {
     "@prisma/client": {
+      "optional": true
+    },
+    "recharts": {
       "optional": true
     },
     "react-dom": {

@@ -22,6 +22,7 @@ export * from "./atom-react";
 export * from "./binding";
 export * from "./primitives";
 export * from "./panels";
+export * from "./chart";
 export * from "./ResourceWidget";
 export * from "./widgets";
 export * from "./GroupView";
