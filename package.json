@@ -148,6 +148,10 @@
       "types": "./dist/ProcessScheduleContract.d.ts",
       "default": "./dist/ProcessScheduleContract.js"
     },
+    "./web": {
+      "types": "./dist/web.d.ts",
+      "default": "./dist/web.js"
+    },
     "./storage/sqlite": {
       "types": "./dist/storage/sqlite.d.ts",
       "default": "./dist/storage/sqlite.js"
@@ -193,6 +197,7 @@
     "release": "npm run build && changeset publish",
     "example": "tsx examples/scenarios/full-process-group-with-queues-and-control-cli.ts",
     "example:queue-widget": "vite --config examples/queue-widget/vite.config.ts",
+    "example:resource-web": "vite --config examples/resource-web/vite.config.ts examples/resource-web",
     "example:resource-cli": "tsx examples/resource-cli/counter-cli.ts",
     "example:resource-cli-manager": "tsx examples/resource-cli/manager-cli.ts",
     "example:resource-tui": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/counter-tui.tsx",
