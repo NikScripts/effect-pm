@@ -129,7 +129,8 @@ export type { ProcessScheduleLayerConfig } from "./ProcessScheduleContract";
 export { Polling } from "./Polling";
 export { ProcessSchedule } from "./ProcessSchedule";
 export { ProcessGroup } from "./ProcessGroup";
-export { QueueResource } from "./QueueResource";
+// The single unified QueueResource namespace (engine helpers + toolkit Tag/layer/serveHttp/configure).
+export { QueueResource } from "./QueueContract";
 export { RunResource } from "./RunResource";
 export { HttpClientRunGate } from "./HttpClientRunGate";
 export {

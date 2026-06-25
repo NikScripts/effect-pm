@@ -741,7 +741,19 @@ const configure = <
   patch: ConfigPatch<QueueLayerConfig<Schema.Struct<F>["Type"], E, R>>,
 ): Layer.Layer<never> => configureLayer(tag.id, patch);
 
+/**
+ * The single **`QueueResource`** namespace — one import for everything.
+ *
+ * Spreads the engine namespace (`make` / `Service` / `Schema` / `Errors` / `rateLimiterLayer`) and
+ * overrides `Tag` / `layer` with the **toolkit** (location-transparent) versions: `Tag` is a normal
+ * Effect service (`Context.Service` keyed by id) driven the same `yield* Tag` whether local or
+ * remote — only the provided layer differs. `server` / `serveHttp` host it over RPC; `configure`
+ * patches per-environment config.
+ *
+ * @public
+ */
 export const QueueResource = {
+  ...QueueEngine,
   Tag: queueTag,
   layer,
   configure,

@@ -28,7 +28,12 @@ class SchemaEmailQueue extends QueueResource.Service<SchemaEmailQueue, Email, ne
   { itemSchema: EmailSchema, concurrency: 1 },
 ) {}
 
-class NotificationTag extends QueueResource.Tag<NotificationTag, Email, never>()("@app/NotificationTag") {}
+// Tag/layer are the unified (toolkit) forms: a service tag keyed by id + item schema, and a
+// config-object layer. (make/Service above remain the engine helpers, kept via the spread.)
+class NotificationTag extends QueueResource.Tag<NotificationTag>()(
+  "@app/NotificationTag",
+  EmailSchema,
+) {}
 
 const _makeEffectOnly = Effect.scoped(
   QueueResource.make((item: string) => Effect.logInfo(item)),
@@ -38,11 +43,14 @@ const _makeWithOptions = Effect.scoped(
   QueueResource.make((item: string) => Effect.logInfo(item), { concurrency: 2 }),
 );
 
-const _layerPositional = QueueResource.layer(NotificationTag, (_email) => Effect.void, { concurrency: 1 });
+const _layer = QueueResource.layer(NotificationTag, {
+  effect: (_email) => Effect.void,
+  concurrency: 1,
+});
 
 void EmailQueue;
 void EmailQueueWithOptions;
 void SchemaEmailQueue;
 void _makeEffectOnly;
 void _makeWithOptions;
-void _layerPositional;
+void _layer;
