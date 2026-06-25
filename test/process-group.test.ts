@@ -1,6 +1,6 @@
 import { ProcessStorage } from "../src/ProcessStorage";
 import { describe, expect, it } from "@effect/vitest"
-import { Duration, Effect, Fiber, Ref } from "effect"
+import { Duration, Effect, Fiber, Option, Ref } from "effect"
 import { ProcessGroup, ProcessGroupDuplicateDefinitionError } from "../src"
 import type { Process } from "../src"
 import { ProcessLifecycleStore } from "../src/store/processLifecycle"
@@ -24,6 +24,13 @@ const makeTickProcess = (
     ),
   ),
   runImmediately: () => Effect.void,
+  snapshot: Effect.succeed({
+    armed: false,
+    activeInstances: 0,
+    nextTriggerRun: Option.none(),
+    nextScheduleTransition: Option.none(),
+    nextPollCadence: Option.none(),
+  }),
 })
 
 describe("ProcessGroup — process lifecycle", () => {

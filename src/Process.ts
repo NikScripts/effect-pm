@@ -48,6 +48,26 @@ import type {
 // ============================================================================
 
 /**
+ * A one-shot read of a managed process's runtime mirror — the observable state the supervisor
+ * maintains as it reconciles the schedule and spawns instances. Native (engine-side) types;
+ * the toolkit contract ({@link processStatus}) maps these to its wire form.
+ *
+ * @public
+ */
+export interface ProcessSnapshot {
+  /** Whether the schedule currently places the process in a run window (derived from entries). */
+  readonly armed: boolean;
+  /** How many run instances are executing right now. */
+  readonly activeInstances: number;
+  /** When the next run instance is expected to start (none if disarmed/idle). */
+  readonly nextTriggerRun: Option.Option<Date>;
+  /** When the schedule next changes armed/disarmed (none if no future transition). */
+  readonly nextScheduleTransition: Option.Option<Date>;
+  /** The in-instance repeat cadence, when polling is configured (none otherwise). */
+  readonly nextPollCadence: Option.Option<Duration.Duration>;
+}
+
+/**
  * Managed process handle for {@link ProcessGroup}.
  *
  * @typeParam R — Environment required to run {@link Process.effect} (after optional inline layers).
@@ -68,6 +88,12 @@ export interface Process<out R> {
    * Optional execution facet — same no-op semantics as {@link Process.effect}.
    */
   readonly runImmediately: () => Effect.Effect<void, never, R>;
+  /**
+   * One-shot read of the runtime mirror (armed / active instances / next trigger / next schedule
+   * transition / poll cadence). Drives the toolkit contract's `statusNow` / `status`. Reads the
+   * supervisor's live mirror, so it reflects state regardless of who forked {@link Process.effect}.
+   */
+  readonly snapshot: Effect.Effect<ProcessSnapshot>;
 }
 
 /**
@@ -800,10 +826,19 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
       yield* Effect.logDebug(`✅ Completed immediate run of '${name}'`);
     });
 
+  const snapshot: Effect.Effect<ProcessSnapshot> = Effect.sync(() => ({
+    armed: MutableRef.get(mirror.armed),
+    activeInstances: MutableRef.get(mirror.activeInstances),
+    nextTriggerRun: MutableRef.get(mirror.nextTriggerRun),
+    nextScheduleTransition: MutableRef.get(mirror.nextScheduleTransition),
+    nextPollCadence: MutableRef.get(mirror.nextPollCadence),
+  }));
+
   const base = {
     name,
     type: "managed" as const,
     runImmediately,
+    snapshot,
   };
 
   const annotateProcessLogs = (
