@@ -42,6 +42,14 @@ it("runImmediately runs the effect once (disarmed via schedule: empty)", () =>
 
         yield* proc.runImmediately;
         expect(yield* Ref.get(ran)).toBe(1);
+
+        // run metrics increment at the single run boundary
+        const after = yield* proc.statusNow;
+        expect(after.runsStarted).toBe(1);
+        expect(after.runsSucceeded).toBe(1);
+        expect(after.runsFailed).toBe(0);
+        expect(after.lastRunStartedAt).toBeDefined();
+        expect(typeof after.lastRunDurationMillis).toBe("number");
       }).pipe(
         Effect.provide(
           ProcessResource.layer(TestProc, {

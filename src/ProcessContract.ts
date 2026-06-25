@@ -95,6 +95,10 @@ export const processScheduleEntry = Schema.Struct({
  * - `nextTriggerRun` — when the next run instance is expected to start (absent if disarmed/idle).
  * - `nextScheduleTransition` — when the schedule next changes armed/disarmed (absent if none).
  * - `nextPollCadence` — the in-instance repeat cadence, when polling is configured.
+ * - `runsStarted` / `runsSucceeded` / `runsFailed` — cumulative run counts since the layer built
+ *   (counted at the single run boundary, so they cover scheduled + polling + `runImmediately`).
+ * - `lastRunStartedAt` / `lastRunDurationMillis` — when the most recent run began and how long the
+ *   most recent finished run took (ms).
  *
  * @public
  */
@@ -105,6 +109,12 @@ export const processStatus = Schema.Struct({
   nextTriggerRun: Schema.optionalKey(Schema.DateTimeUtc),
   nextScheduleTransition: Schema.optionalKey(Schema.DateTimeUtc),
   nextPollCadence: Schema.optionalKey(Schema.Duration),
+  // run metrics (cumulative since the layer built) — counts + most-recent-run timing
+  runsStarted: Schema.Number,
+  runsSucceeded: Schema.Number,
+  runsFailed: Schema.Number,
+  lastRunStartedAt: Schema.optionalKey(Schema.DateTimeUtc),
+  lastRunDurationMillis: Schema.optionalKey(Schema.Number),
 });
 
 /**
@@ -269,6 +279,15 @@ const toWireStatus = (
     : {}),
   ...(Option.isSome(snap.nextPollCadence)
     ? { nextPollCadence: snap.nextPollCadence.value }
+    : {}),
+  runsStarted: snap.runsStarted,
+  runsSucceeded: snap.runsSucceeded,
+  runsFailed: snap.runsFailed,
+  ...(Option.isSome(snap.lastRunStartedAt)
+    ? { lastRunStartedAt: DateTime.makeUnsafe(snap.lastRunStartedAt.value.getTime()) }
+    : {}),
+  ...(Option.isSome(snap.lastRunDurationMillis)
+    ? { lastRunDurationMillis: snap.lastRunDurationMillis.value }
     : {}),
 });
 

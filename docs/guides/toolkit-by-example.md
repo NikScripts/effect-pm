@@ -127,7 +127,8 @@ const tick = Effect.gen(function* () {
 const driveProcess = Effect.gen(function* () {
   const proc = yield* SeasonMatches;
   yield* proc.runImmediately;                 // out-of-band run
-  const status = yield* proc.statusNow;       // { supervising, armed, activeInstances, nextTriggerRun, ... }
+  const status = yield* proc.statusNow;       // { supervising, armed, activeInstances, nextTriggerRun,
+                                              //   runsStarted, runsSucceeded, runsFailed, lastRunDurationMillis, ... }
   yield* proc.setSchedule([{ id: "game-1", startAt, stopAt }]); // specific run windows
   yield* proc.stop;                           // pause supervision
   yield* proc.start;                          // resume
@@ -321,8 +322,10 @@ Droplet**; **one or two processes** (most likely a live-score poller) are peeled
 1. **Tree navigation** — walk `ServicesHub` with `Group.members` + `Group.isGroup` (example 15) to
    render Hub → league → resource. This is the skeleton everything hangs off.
 2. **Live status grid** — per resource, subscribe to the `status` stream (`statusNow` for first
-   paint): processes show `supervising` / `armed` / `activeInstances` / `nextTriggerRun`; queues
-   show per-priority `sizes`, `paused`, `completed`. This is the at-a-glance health board.
+   paint): processes show `supervising` / `armed` / `activeInstances` / `nextTriggerRun` plus **run
+   metrics** (`runsStarted` / `runsSucceeded` / `runsFailed` / `lastRunDurationMillis` — render
+   success rate + last-run timing); queues show per-priority `sizes`, `paused`, `completed`. This is
+   the at-a-glance health board.
 3. **Live-score pollers, front and center** — `NwslLiveScorePoller` / `WnbaLiveScorePoller` are the
    real-time, game-day-critical ones. Surface their status + recent runs prominently; this is the
    "live" in live dashboard.
