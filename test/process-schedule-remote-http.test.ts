@@ -3,10 +3,8 @@ import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import {
-  ProcessScheduleResource,
-  type ProcessScheduleLayerConfig,
-} from "../src/ProcessScheduleContract";
+import { ProcessScheduleResource } from "../src";
+import type { ProcessScheduleLayerConfig } from "../src/ProcessScheduleContract";
 import { Resource } from "../src/Resource";
 
 // The full remote path: a REAL ProcessSchedule store served over http, driven by `Resource.client`

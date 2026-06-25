@@ -196,7 +196,7 @@ type ProcessSpec = typeof processControlSpec;
  *
  * @public
  */
-const processTag = <Self>() => {
+export const processTag = <Self>() => {
   function build<HSelf>(
     id: string,
     options: { readonly description?: string; readonly host: HostKey<HSelf> },
@@ -382,7 +382,7 @@ const buildProcessImpl = <Self, E, R>(
     return impl;
   });
 
-const layer = <Self, E = never, R = never>(
+export const layer = <Self, E = never, R = never>(
   tag: ResourceTag<Self, ProcessSpec>,
   config: ProcessLayerConfig<E, R>,
 ): Layer.Layer<Self | LocalCapability<Self>, never, R> =>
@@ -398,7 +398,7 @@ const layer = <Self, E = never, R = never>(
  *
  * @public
  */
-const server = <Self, E = never, R = never>(
+export const server = <Self, E = never, R = never>(
   tag: ResourceTag<Self, ProcessSpec>,
   config: ProcessLayerConfig<E, R>,
 ): Layer.Layer<HandlerContextOf<ProcessSpec>, never, R> =>
@@ -413,7 +413,7 @@ const server = <Self, E = never, R = never>(
  *
  * @public
  */
-const serveHttp = <Self, E = never, R = never>(
+export const serveHttp = <Self, E = never, R = never>(
   tag: ResourceTag<Self, ProcessSpec>,
   config: ProcessLayerConfig<E, R>,
   options?: Parameters<typeof Resource.serveHttp>[2],
@@ -440,15 +440,11 @@ const serveHttp = <Self, E = never, R = never>(
  *
  * @public
  */
-const configure = <Self, E = never, R = never>(
+export const configure = <Self, E = never, R = never>(
   tag: ResourceTag<Self, ProcessSpec>,
   patch: ConfigPatch<ProcessLayerConfig<E, R>>,
 ): Layer.Layer<never> => configureLayer(tag.id, patch);
 
-export const ProcessResource = {
-  Tag: processTag,
-  layer,
-  configure,
-  server,
-  serveHttp,
-} as const;
+// The unified `ProcessResource` namespace is assembled in `internal/processResourceNamespace.ts`
+// and re-exported by the barrel as `export * as ProcessResource` (so member access tree-shakes:
+// the light `Tag`/spec never pulls the engine that `layer`/`server`/`serveHttp` use).

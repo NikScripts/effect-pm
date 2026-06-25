@@ -18,11 +18,16 @@ unique API. Code the way the downstream repo (e.g. `services-hub`) would actuall
 > just larger). Guaranteed barrel-namespace tree-shaking is a tracked follow-up
 > (`docs/plans/18-unbundled-build-treeshaking.md`).
 >
-> **Per-resource bundle status (all browser-safe — zero native deps — verified):**
-> - **Queue:** fully tree-shaken via `/QueueContract` (~23kb, engine-free).
-> - **Process / Schedule:** browser-safe but their tags still carry the (pure-Effect) engine
->   (~85kb) — the light-split parity is tracked in plan 18. The dashboard works today regardless;
->   this is only bundle size.
+> **Per-resource bundle status — all tags now tree-shake (proven, browser-safe):**
+> - **Queue:** `import { queueTag } from "@nikscripts/effect-pm/QueueContract"` → ~23kb, engine-free.
+> - **Process:** `import { processTag } from "@nikscripts/effect-pm/ProcessContract"`.
+> - **Schedule:** `import { processScheduleTag } from "@nikscripts/effect-pm/ProcessScheduleContract"`.
+>   Process + Schedule together bundle to ~17kb with **zero engine symbols**.
+>
+> Use these named subpath imports in any module a browser bundle pulls (your shared tag
+> definitions). The barrel `QueueResource.Tag` / `ProcessResource.Tag` are functionally identical
+> but may include engine code depending on the bundler (pure-Effect, never *breaks* a build);
+> guaranteed barrel-namespace tree-shaking is the remaining follow-up (`docs/plans/18`).
 
 ---
 

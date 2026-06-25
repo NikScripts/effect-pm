@@ -3,7 +3,8 @@ import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { ProcessResource, type ProcessLayerConfig } from "../src/ProcessContract";
+import { ProcessResource } from "../src";
+import type { ProcessLayerConfig } from "../src/ProcessContract";
 import { ProcessSchedule } from "../src/ProcessSchedule";
 import { Resource } from "../src/Resource";
 

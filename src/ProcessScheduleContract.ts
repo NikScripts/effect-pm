@@ -140,7 +140,7 @@ type ProcessScheduleSpec = typeof processScheduleSpec;
  *
  * @public
  */
-const processScheduleTag = <Self>() => {
+export const processScheduleTag = <Self>() => {
   function build<HSelf>(
     id: string,
     options: { readonly description?: string; readonly host: HostKey<HSelf> },
@@ -215,7 +215,7 @@ const buildProcessScheduleImpl = <Self>(config?: ProcessScheduleLayerConfig) =>
     return impl;
   });
 
-const layer = <Self>(
+export const layer = <Self>(
   tag: ResourceTag<Self, ProcessScheduleSpec>,
   config?: ProcessScheduleLayerConfig,
 ): Layer.Layer<Self | LocalCapability<Self>> =>
@@ -231,7 +231,7 @@ const layer = <Self>(
  *
  * @public
  */
-const server = <Self>(
+export const server = <Self>(
   tag: ResourceTag<Self, ProcessScheduleSpec>,
   config?: ProcessScheduleLayerConfig,
 ): Layer.Layer<HandlerContextOf<ProcessScheduleSpec>> =>
@@ -247,7 +247,7 @@ const server = <Self>(
  *
  * @public
  */
-const serveHttp = <Self>(
+export const serveHttp = <Self>(
   tag: ResourceTag<Self, ProcessScheduleSpec>,
   config?: ProcessScheduleLayerConfig,
   options?: Parameters<typeof Resource.serveHttp>[2],
@@ -265,9 +265,6 @@ const serveHttp = <Self>(
  *
  * @public
  */
-export const ProcessScheduleResource = {
-  Tag: processScheduleTag,
-  layer,
-  server,
-  serveHttp,
-} as const;
+// The unified `ProcessScheduleResource` namespace is assembled in
+// `internal/processScheduleResourceNamespace.ts` and re-exported by the barrel as `export * as`
+// (so member access tree-shakes: the light `Tag`/spec never pulls the engine).

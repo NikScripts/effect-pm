@@ -1,6 +1,6 @@
 import { DateTime, Duration, Effect, Ref } from "effect";
 import { expect, it } from "vitest";
-import { ProcessResource } from "../src/ProcessContract";
+import { ProcessResource } from "../src";
 import { ProcessSchedule } from "../src/ProcessSchedule";
 
 // A managed process as a toolkit resource — driven through the same `yield* Tag` surface a
