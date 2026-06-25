@@ -201,11 +201,16 @@ export const makeControlTransportRpcServer = (
   protocol: ControlRpcServerProtocol,
   config: ControlTransportRpcServerConfig = {},
 ): ControlTransportServerShape => ({
-  serve: RpcServer.make(ControlRpc, config).pipe(
-    Effect.provide(ControlTransportRpcLive),
-    Effect.provideService(RpcServer.Protocol, protocol),
-    Effect.asVoid,
-  ),
+  // Build the handlers layer once into serve's own scope (a Context, not a per-run Layer provide),
+  // satisfying strictEffectProvide while keeping the same `Scope | ControlRouter` requirement.
+  serve: Effect.gen(function* () {
+    const handlers = yield* Layer.build(ControlTransportRpcLive);
+    return yield* RpcServer.make(ControlRpc, config).pipe(
+      Effect.provide(handlers),
+      Effect.provideService(RpcServer.Protocol, protocol),
+      Effect.asVoid,
+    );
+  }),
 });
 
 /**

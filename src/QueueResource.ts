@@ -1204,9 +1204,11 @@ const isQueueEntry = <T>(value: QueueEntrySelector<T> | QueueEntry<T>): value is
 // Core Implementation
 // ============================================================================
 
+// The closure captures the resolved limiter (see acquireQueueRateLimitAwait), so it requires only
+// `R` (from emitExceeded) — not RateLimiterTag.
 type RateLimitAwait<T, R> = (
   internal: InternalItem<T>,
-) => Effect.Effect<void, RateLimiterError, RateLimiterTag | R>;
+) => Effect.Effect<void, RateLimiterError, R>;
 
 interface RateLimitExceededEmit<T> {
   readonly internal: InternalItem<T>;
@@ -1512,14 +1514,6 @@ const makeQueueEffectFromConfig = (
     ? makeQueueEffectWithSchema(config)
     : makeQueueEffectWithoutSchema(config);
 
-const provideRateLimiterForMake = <A, E, R>(
-  config: Pick<QueueResourceConfigBase<unknown>, "rateLimit">,
-  effect: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E, R> =>
-  config.rateLimit === undefined
-    ? effect
-    : effect.pipe(Effect.provide(queueRateLimiterLayer));
-
 function makeQueueEffect<
   F extends QueueWorkerEffect<any, any, any, any>,
   O extends
@@ -1554,9 +1548,9 @@ function makeQueueEffect(
 > {
   if (typeof effectOrConfig === "function") {
     const config = { ...(options ?? {}), effect: effectOrConfig };
-    return provideRateLimiterForMake(config, makeQueueEffectFromConfig(config));
+    return makeQueueEffectFromConfig(config);
   }
-  return provideRateLimiterForMake(effectOrConfig, makeQueueEffectFromConfig(effectOrConfig));
+  return makeQueueEffectFromConfig(effectOrConfig);
 }
 
 type ValidateForEnqueue<T, EEnqueue> = (
@@ -1606,14 +1600,18 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       [makeQueueCaptureLogger(queueName, captureLogsMinLevel, publishLog)],
       { mergeWithExisting: true },
     );
-    // Install the capture logger AND stamp `queueId` on the effect's logs, so every captured line
-    // (engine lifecycle ops + worker pool) carries the queue id — which both attributes the line
-    // and satisfies the logger's per-queue filter.
-    const tapLogs = captureLogsEnabled
-      ? <A2, E2, R2>(eff: Effect.Effect<A2, E2, R2>): Effect.Effect<A2, E2, R2> =>
-          withQueueLogAnnotations(queueName, Effect.provide(eff, queueLoggerLayer))
-      : <A2, E2, R2>(eff: Effect.Effect<A2, E2, R2>): Effect.Effect<A2, E2, R2> =>
-          eff;
+    // Build the capture logger ONCE into the queue scope (a Context, not a per-call Layer provide).
+    // tapLogs installs it AND stamps `queueId` on the effect's logs, so every captured line (engine
+    // lifecycle ops + worker pool) carries the queue id — attribution + the logger's per-queue filter.
+    const queueLoggerContext = captureLogsEnabled
+      ? yield* Layer.build(queueLoggerLayer)
+      : undefined;
+    const tapLogs =
+      queueLoggerContext === undefined
+        ? <A2, E2, R2>(eff: Effect.Effect<A2, E2, R2>): Effect.Effect<A2, E2, R2> =>
+            eff
+        : <A2, E2, R2>(eff: Effect.Effect<A2, E2, R2>): Effect.Effect<A2, E2, R2> =>
+            withQueueLogAnnotations(queueName, Effect.provide(eff, queueLoggerContext));
     // `attempts` (preferred) supersedes the deprecated `retries` (= attempts - 1).
     const maxRetries =
       config.attempts !== undefined
@@ -2844,8 +2842,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     const processItem = (internal: InternalItem<T>): Effect.Effect<void, never, R> =>
       Effect.gen(function* () {
         if (rateLimitAwait !== undefined) {
+          // rateLimitAwait already holds the resolved limiter — no per-item layer provide.
           const proceed = yield* rateLimitAwait(internal).pipe(
-            Effect.provide(queueRateLimiterLayer),
             Effect.as(true),
             Effect.catchTag("RateLimiterError", () =>
               skipRateLimitedItem(internal).pipe(Effect.as(false)),
@@ -2901,8 +2899,14 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     const autoStart = config.autoStart ?? true;
     const workersStartedRef = yield* Ref.make(false);
 
-    const rateLimitAwait: RateLimitAwait<T, R> | undefined =
+    // Build the rate-limiter layer ONCE into the queue scope (a Context, not a per-call Layer
+    // provide) so every item shares the same limiter — and so strictEffectProvide is satisfied.
+    const rateLimitContext =
       config.rateLimit === undefined
+        ? undefined
+        : yield* Layer.build(queueRateLimiterLayer);
+    const rateLimitAwait: RateLimitAwait<T, R> | undefined =
+      config.rateLimit === undefined || rateLimitContext === undefined
         ? undefined
         : yield* Effect.provide(
             acquireQueueRateLimitAwait<T, R>(
@@ -2910,7 +2914,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
               config.rateLimit,
               emitRateLimitExceeded,
             ),
-            queueRateLimiterLayer,
+            rateLimitContext,
           );
 
     const forkProcessingFibers = Effect.gen(function* () {

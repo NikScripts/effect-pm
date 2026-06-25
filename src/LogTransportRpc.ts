@@ -14,7 +14,7 @@
  * @module LogTransportRpc
  */
 
-import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
+import { Context, Effect, Layer, Option, Schema, Scope, Stream } from "effect";
 import { Rpc, RpcClient, RpcGroup, RpcServer } from "effect/unstable/rpc";
 import {
   ProcessManagerLogEntrySchema,
@@ -239,11 +239,16 @@ export const LogTransportRpcLive = LogRpc.toLayer({
 export const makeLogTransportRpcServer = (
   protocol: LogRpcServerProtocol,
   config: LogTransportRpcServerConfig = {},
-): Effect.Effect<never, never, ProcessManagerLogRelay> =>
-  RpcServer.make(LogRpc, config).pipe(
-    Effect.provide(LogTransportRpcLive),
-    Effect.provideService(RpcServer.Protocol, protocol),
-  );
+): Effect.Effect<never, never, ProcessManagerLogRelay | Scope.Scope> =>
+  // Build the handlers layer once into the server's scope (a Context, not a per-run Layer provide),
+  // satisfying strictEffectProvide.
+  Effect.gen(function* () {
+    const handlers = yield* Layer.build(LogTransportRpcLive);
+    return yield* RpcServer.make(LogRpc, config).pipe(
+      Effect.provide(handlers),
+      Effect.provideService(RpcServer.Protocol, protocol),
+    );
+  });
 
 /**
  * Public helper namespace for live log Effect RPC transport.
