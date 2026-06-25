@@ -132,6 +132,10 @@
       "types": "./dist/Group.d.ts",
       "default": "./dist/Group.js"
     },
+    "./ProcessContract": {
+      "types": "./dist/ProcessContract.d.ts",
+      "default": "./dist/ProcessContract.js"
+    },
     "./storage/sqlite": {
       "types": "./dist/storage/sqlite.d.ts",
       "default": "./dist/storage/sqlite.js"

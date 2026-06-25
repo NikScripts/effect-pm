@@ -28,8 +28,34 @@
  *
  * @module ProcessContract
  */
-import { Schema } from "effect";
-import { Resource } from "./Resource";
+import {
+  Context,
+  DateTime,
+  Duration,
+  Effect,
+  Fiber,
+  Layer,
+  Option,
+  Ref,
+  Schema,
+  Stream,
+} from "effect";
+import { Resource, hostSym } from "./Resource";
+import type {
+  HandlerContextOf,
+  HostKey,
+  LocalCapability,
+  ResourceTag,
+  ServiceOf,
+} from "./Resource";
+import { Process } from "./Process";
+import type {
+  ProcessMakeOptions,
+  ProcessScheduleLayerInput,
+  ProcessSnapshot,
+} from "./Process";
+import { ProcessSchedule } from "./ProcessSchedule";
+import type { ProcessScheduleEntry } from "./ProcessSchedule";
 import { ProcessManagerLogEntrySchema } from "./LogEntry";
 
 /**
@@ -136,4 +162,239 @@ export const processControlSpec = {
   }),
 };
 // Note: no `satisfies Spec` — that would contextually widen each method's error channel to
-// `unknown`. The spec is validated (without widening) at the `Resource.Tag` call site (slice 2).
+// `unknown`. The spec is validated (without widening) at the `Resource.Tag` call site.
+
+/** The (shared, fixed) spec every process instance is built from. */
+type ProcessSpec = typeof processControlSpec;
+
+/**
+ * Define a managed process as a toolkit resource:
+ *
+ * ```ts
+ * class Fetcher extends ProcessResource.Tag<Fetcher>()("@app/Fetcher") {}
+ * const p = yield* Fetcher;
+ * yield* p.runImmediately;
+ * const s = yield* p.statusNow;
+ * ```
+ *
+ * Unlike the queue, a process has no per-instance item type — every process shares the one
+ * {@link processControlSpec}, so this binds a plain {@link Resource.Tag}. `Self` is given
+ * explicitly (Effect's `()` two-stage form). Pass `options.host` to bind the process to a
+ * {@link Resource.Host} (ship only the tag; see {@link Resource.client} / {@link Resource.connect}).
+ *
+ * @public
+ */
+const processTag = <Self>() => {
+  function build<HSelf>(
+    id: string,
+    options: { readonly description?: string; readonly host: HostKey<HSelf> },
+  ): ResourceTag<Self, ProcessSpec> & { readonly [hostSym]: HostKey<HSelf> };
+  function build(
+    id: string,
+    options?: { readonly description?: string },
+  ): ResourceTag<Self, ProcessSpec>;
+  function build(
+    id: string,
+    options?: { readonly description?: string; readonly host?: HostKey<unknown> },
+  ): ResourceTag<Self, ProcessSpec> {
+    const host = options?.host;
+    return host === undefined
+      ? Resource.Tag<Self>(id, options)(processControlSpec)
+      : Resource.Tag<Self>(id, options)(processControlSpec, host);
+  }
+  return build;
+};
+
+/**
+ * The config for {@link ProcessResource.layer} — the same options as {@link Process.make}
+ * (`effect` plus optional `polling` / `schedule` / `scheduleLayer`). The tag carries the id.
+ *
+ * @public
+ */
+export type ProcessLayerConfig<E, R> = ProcessMakeOptions<E, R>;
+
+// How often the `status` stream re-reads the snapshot. The mirror is a set of MutableRefs (no
+// native subscription), so the live stream polls it; `statusNow` is the same read, on demand.
+const statusPollInterval = Duration.millis(500);
+
+// ─── wire ⇄ engine mapping (the contract uses DateTime.Utc + optionalKey; the engine uses Date + Option) ───
+
+const toWireEntry = (
+  entry: ProcessScheduleEntry,
+): typeof processScheduleEntry.Type => ({
+  ...(Option.isSome(entry.id) ? { id: entry.id.value } : {}),
+  startAt: DateTime.makeUnsafe(entry.startAt.getTime()),
+  ...(Option.isSome(entry.stopAt)
+    ? { stopAt: DateTime.makeUnsafe(entry.stopAt.value.getTime()) }
+    : {}),
+});
+
+const fromWireEntry = (
+  wire: typeof processScheduleEntry.Type,
+): ProcessScheduleEntry => ({
+  id: wire.id !== undefined ? Option.some(wire.id) : Option.none(),
+  startAt: DateTime.toDateUtc(wire.startAt),
+  stopAt:
+    wire.stopAt !== undefined
+      ? Option.some(DateTime.toDateUtc(wire.stopAt))
+      : Option.none(),
+});
+
+const toWireStatus = (
+  snap: ProcessSnapshot,
+  supervising: boolean,
+): typeof processStatus.Type => ({
+  supervising,
+  armed: snap.armed,
+  activeInstances: snap.activeInstances,
+  ...(Option.isSome(snap.nextTriggerRun)
+    ? { nextTriggerRun: DateTime.makeUnsafe(snap.nextTriggerRun.value.getTime()) }
+    : {}),
+  ...(Option.isSome(snap.nextScheduleTransition)
+    ? {
+        nextScheduleTransition: DateTime.makeUnsafe(
+          snap.nextScheduleTransition.value.getTime(),
+        ),
+      }
+    : {}),
+  ...(Option.isSome(snap.nextPollCadence)
+    ? { nextPollCadence: snap.nextPollCadence.value }
+    : {}),
+});
+
+/**
+ * Build the live {@link Process} driver behind `tag` and map it onto the toolkit service impl —
+ * the single adapter shared by the **local** layer ({@link layer}) and the **remote** server
+ * ({@link server} / {@link serveHttp}).
+ *
+ * The schedule is **hoisted**: it's built once here (into the layer scope) and fed back to the
+ * driver as `Layer.succeedContext`, so the buried `provideStepLayers` and the contract's
+ * `schedule` / `setSchedule` / `addSchedule` / `clearSchedule` verbs all share one mutable
+ * `ProcessSchedule` instance. The default (no `schedule`/`scheduleLayer` in config) is an
+ * in-memory store so the schedule verbs are usable. The driver is forked into the scope on build
+ * (auto-start); `start` / `stop` re-fork / interrupt it. The worker `R` is captured at build time
+ * and provided to each method, so the impl requires nothing beyond the scope.
+ */
+const buildProcessImpl = <Self, E, R>(
+  tag: ResourceTag<Self, ProcessSpec>,
+  config: ProcessLayerConfig<E, R>,
+) =>
+  Effect.gen(function* () {
+    const context = yield* Effect.context<R>();
+    // The layer scope — `start` forks the driver into it (not a scope required at call time), so
+    // the fiber lives with the layer and `start` itself carries no `Scope` requirement.
+    const scope = yield* Effect.scope;
+    const provideR = <Out, Err>(
+      effect: Effect.Effect<Out, Err, R>,
+    ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
+
+    // A schedule initializer stays an initializer; a schedule *layer* (or the default in-memory
+    // store) is what we pre-build and share.
+    const scheduleInitializer =
+      typeof config.schedule === "function" ? config.schedule : undefined;
+    const baseScheduleLayer: ProcessScheduleLayerInput =
+      config.scheduleLayer ??
+      (config.schedule !== undefined && typeof config.schedule !== "function"
+        ? config.schedule
+        : ProcessSchedule.inMemory());
+    const scheduleCtx = yield* Layer.build(baseScheduleLayer);
+    const schedule = Context.get(scheduleCtx, ProcessSchedule);
+
+    const handle = Process.make(tag.id, {
+      effect: config.effect,
+      ...(config.polling !== undefined ? { polling: config.polling } : {}),
+      ...(scheduleInitializer !== undefined ? { schedule: scheduleInitializer } : {}),
+      scheduleLayer: Layer.succeedContext(scheduleCtx),
+    });
+
+    const fiberRef = yield* Ref.make<Fiber.Fiber<void, never> | null>(null);
+
+    const start = Effect.gen(function* () {
+      if ((yield* Ref.get(fiberRef)) !== null) return;
+      const fiber = yield* Effect.forkIn(provideR(handle.effect), scope);
+      yield* Ref.set(fiberRef, fiber);
+    });
+    const stop = Effect.gen(function* () {
+      const fiber = yield* Ref.get(fiberRef);
+      if (fiber === null) return;
+      yield* Fiber.interrupt(fiber);
+      yield* Ref.set(fiberRef, null);
+    });
+
+    const statusNow = Effect.gen(function* () {
+      const supervising = (yield* Ref.get(fiberRef)) !== null;
+      return toWireStatus(yield* handle.snapshot, supervising);
+    });
+
+    yield* start; // auto-start the driver on build
+
+    const impl: ServiceOf<ProcessSpec, Self> = {
+      statusNow,
+      status: Stream.tick(statusPollInterval).pipe(Stream.mapEffect(() => statusNow)),
+      schedule: Effect.map(schedule.entries, (entries) => entries.map(toWireEntry)),
+      logs: Stream.empty,
+      start,
+      stop,
+      runImmediately: provideR(handle.runImmediately()),
+      setSchedule: (entries) => schedule.set(entries.map(fromWireEntry)),
+      addSchedule: (entry) => schedule.add(fromWireEntry(entry)),
+      clearSchedule: schedule.clear,
+    };
+    return impl;
+  });
+
+const layer = <Self, E = never, R = never>(
+  tag: ResourceTag<Self, ProcessSpec>,
+  config: ProcessLayerConfig<E, R>,
+): Layer.Layer<Self | LocalCapability<Self>, never, R> =>
+  Layer.unwrap(
+    Effect.map(buildProcessImpl(tag, config), (impl) => Resource.layer(tag, impl)),
+  );
+
+/**
+ * Expose a toolkit process **over RPC** (transport-agnostic): run the live driver behind the
+ * tag and mount its handlers on the contract group. Compose with an `RpcServer` + a `Protocol`
+ * layer to serve; or use {@link serveHttp} for the http batteries. A remote
+ * {@link Resource.client} then drives the process with the identical `yield* Tag` surface.
+ *
+ * @public
+ */
+const server = <Self, E = never, R = never>(
+  tag: ResourceTag<Self, ProcessSpec>,
+  config: ProcessLayerConfig<E, R>,
+): Layer.Layer<HandlerContextOf<ProcessSpec>, never, R> =>
+  Layer.unwrap(
+    Effect.map(buildProcessImpl(tag, config), (impl) => Resource.server(tag, impl)),
+  );
+
+/**
+ * Serve a toolkit process **over http** in one call — the driver wired behind the tag and
+ * mounted on an http `RpcServer` (ndjson by default). Provide an `HttpServer` and you have a
+ * remote process; a {@link Resource.client} + transport drives it as if local.
+ *
+ * @public
+ */
+const serveHttp = <Self, E = never, R = never>(
+  tag: ResourceTag<Self, ProcessSpec>,
+  config: ProcessLayerConfig<E, R>,
+  options?: Parameters<typeof Resource.serveHttp>[2],
+) =>
+  Layer.unwrap(
+    Effect.map(buildProcessImpl(tag, config), (impl) =>
+      Resource.serveHttp(tag, impl, options),
+    ),
+  );
+
+/**
+ * Process resource toolkit — managed long-running processes on the {@link Resource} toolkit.
+ * `layer` runs it locally; `server` / `serveHttp` host it remotely; a remote
+ * {@link Resource.client} drives it with the same `yield* Tag` surface.
+ *
+ * @public
+ */
+export const ProcessResource = {
+  Tag: processTag,
+  layer,
+  server,
+  serveHttp,
+} as const;

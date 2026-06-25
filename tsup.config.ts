@@ -42,6 +42,7 @@ export default defineConfig([
       Logs: "src/Logs.ts",
       HostLogs: "src/HostLogs.ts",
       Group: "src/Group.ts",
+      ProcessContract: "src/ProcessContract.ts",
       "storage/sqlite": "src/storage/sqlite/index.ts",
       "storage/redis": "src/storage/redis/index.ts",
       "storage/prisma": "src/storage/prisma.ts",
