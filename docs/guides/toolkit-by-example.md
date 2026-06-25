@@ -17,6 +17,12 @@ unique API. Code the way the downstream repo (e.g. `services-hub`) would actuall
 > depending on your bundler (it's pure-Effect with **no native deps**, so it never *breaks* a build —
 > just larger). Guaranteed barrel-namespace tree-shaking is a tracked follow-up
 > (`docs/plans/18-unbundled-build-treeshaking.md`).
+>
+> **Per-resource bundle status (all browser-safe — zero native deps — verified):**
+> - **Queue:** fully tree-shaken via `/QueueContract` (~23kb, engine-free).
+> - **Process / Schedule:** browser-safe but their tags still carry the (pure-Effect) engine
+>   (~85kb) — the light-split parity is tracked in plan 18. The dashboard works today regardless;
+>   this is only bundle size.
 
 ---
 

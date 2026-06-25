@@ -43,6 +43,19 @@ drops the rest.
    symbols (`makeQueueRuntime`, `QueueResourceStore`) under both esbuild and Rollup.
 4. Apply the same to `ProcessResource` / `ProcessScheduleResource` namespaces.
 
+## Sibling item: light-split parity for Process / Schedule (smaller, not blocking)
+
+Only the **queue** got the full light-split. `ProcessResource` / `ProcessScheduleResource` are still
+`const … = { Tag, layer, … }` **objects** that import their engine, so importing their tags pulls
+the (pure-Effect) Process/Schedule engine — **browser-safe, just ~85kb larger**, verified no native
+deps. To make their tags tree-shake like the queue's:
+
+- their schemas are already light (in the contract), so **no schema move needed** — just convert
+  each to per-member named exports + an `internal/*Namespace.ts` + barrel `export * as`.
+
+Until then, the dashboard works but carries the process/schedule engine code. Do this for bundle
+parity when convenient; it does not block the launch.
+
 ## Why it's not urgent (the wow-sports check)
 
 - effect-pm is consumed **server-side** today (`apps/services-hub`, Node) — bundle size is moot.
