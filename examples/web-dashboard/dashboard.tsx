@@ -7,6 +7,7 @@
  */
 
 import * as React from "react";
+import { Boundary } from "./components/ui/boundary";
 import { DesktopDashboard } from "./desktop";
 import { MobileDashboard } from "./mobile";
 
@@ -23,5 +24,8 @@ const useIsDesktop = (): boolean => {
   return wide;
 };
 
-export const App = (): React.ReactElement =>
-  useIsDesktop() ? <DesktopDashboard /> : <MobileDashboard />;
+export const App = (): React.ReactElement => (
+  <Boundary label="dashboard">
+    {useIsDesktop() ? <DesktopDashboard /> : <MobileDashboard />}
+  </Boundary>
+);

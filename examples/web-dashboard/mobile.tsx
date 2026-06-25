@@ -11,6 +11,7 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import { Fleet } from "./fleet";
 import { type GroupNode, type LeafTag, leafTags, queueBundle } from "./queue-data";
 import { useAtomValue } from "../queue-widget/atom-react";
+import { Boundary } from "./components/ui/boundary";
 import { Button } from "./components/ui/button";
 import {
   Cell,
@@ -33,13 +34,17 @@ const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void
         <strong className="flex-1 truncate text-base">{displayName(props.tag.id)}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
-      <QueueStats bundle={bundle} />
-      <div className="rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
-      <QueueControls bundle={bundle} />
+      <Boundary label="stats"><QueueStats bundle={bundle} /></Boundary>
+      <Boundary label="chart">
+        <div className="rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
+      </Boundary>
+      <Boundary label="controls"><QueueControls bundle={bundle} /></Boundary>
       <div className="text-xs text-muted-foreground">
         LOGS <span className="text-[#22c55e]">live</span> · phase {s?.phase ?? "?"}
       </div>
-      <LogStream bundle={bundle} className="min-h-0 flex-1 rounded-md border bg-card py-1" />
+      <Boundary label="logs">
+        <LogStream bundle={bundle} className="min-h-0 flex-1 rounded-md border bg-card py-1" />
+      </Boundary>
     </div>
   );
 };
