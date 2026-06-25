@@ -14,7 +14,8 @@
           "globalDate": "off",
           "globalConsole": "off",
           "newPromise": "off",
-          "asyncFunction": "off"
+          "asyncFunction": "off",
+          "nodeBuiltinImport": "off"
         }
       }
     ]
