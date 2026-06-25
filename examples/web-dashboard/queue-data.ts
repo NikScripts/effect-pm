@@ -115,27 +115,35 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
   const metricsStream = Stream.unwrap(Effect.map(tag, (q) => q.metrics));
   const logsStream = Stream.unwrap(Effect.map(tag, (q) => q.logs));
 
+  // the accumulators are kept alive so opening another queue (or the grid) doesn't tear
+  // down the subscription and reset the chart/log history — they keep collecting.
   const bundle: QueueBundle = {
     status: runtime.atom(statusStream),
     metrics: runtime.atom(metricsStream),
-    history: runtime.atom(
-      metricsStream.pipe(
-        Stream.scan([] as ReadonlyArray<MetricPoint>, (acc, m) =>
-          [...acc, { t: Date.now(), throughput: m.throughputPerSec, latency: m.avgTotalMillis ?? 0 }].slice(-HISTORY),
+    history: Atom.keepAlive(
+      runtime.atom(
+        metricsStream.pipe(
+          Stream.scan([] as ReadonlyArray<MetricPoint>, (acc, m) =>
+            [...acc, { t: Date.now(), throughput: m.throughputPerSec, latency: m.avgTotalMillis ?? 0 }].slice(-HISTORY),
+          ),
         ),
       ),
     ),
-    trend: runtime.atom(
-      statusStream.pipe(
-        Stream.scan([] as ReadonlyArray<number>, (acc, s) =>
-          [...acc, s.sizes.high + s.sizes.normal + s.sizes.low].slice(-TREND),
+    trend: Atom.keepAlive(
+      runtime.atom(
+        statusStream.pipe(
+          Stream.scan([] as ReadonlyArray<number>, (acc, s) =>
+            [...acc, s.sizes.high + s.sizes.normal + s.sizes.low].slice(-TREND),
+          ),
         ),
       ),
     ),
-    logs: runtime.atom(
-      logsStream.pipe(
-        Stream.scan([] as ReadonlyArray<LogLine>, (acc, l) =>
-          [...acc, { id: (logId += 1), t: Date.now(), level: l.level, message: l.message }].slice(-300),
+    logs: Atom.keepAlive(
+      runtime.atom(
+        logsStream.pipe(
+          Stream.scan([] as ReadonlyArray<LogLine>, (acc, l) =>
+            [...acc, { id: (logId += 1), t: Date.now(), level: l.level, message: l.message }].slice(-300),
+          ),
         ),
       ),
     ),
