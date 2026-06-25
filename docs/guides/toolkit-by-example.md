@@ -3,7 +3,10 @@
 The complete DX surface for building services on the `Resource` toolkit, one example per
 unique API. Code the way the downstream repo (e.g. `services-hub`) would actually write it.
 
-> Imports: most things are on the barrel (`@nikscripts/effect-pm`). The toolkit queue is on a
+> **Style:** PascalCase is for classes, types, and namespaces only (tags, hosts, groups).
+> Everything else — layers, schemas, effects — is camelCase. Layer values use a `Layer` suffix.
+
+> **Imports:** most things are on the barrel (`@nikscripts/effect-pm`). The toolkit queue is on a
 > subpath (`@nikscripts/effect-pm/QueueContract`) because the barrel `QueueResource` name is still
 > the legacy engine during migration.
 
@@ -11,21 +14,20 @@ unique API. Code the way the downstream repo (e.g. `services-hub`) would actuall
 
 ## 1. Define a queue
 
-The tag carries the **item schema** (validated on the wire). Config — including the worker
-`effect` — lives in the **layer**, not the tag.
+The tag (a class) carries the **item schema** (validated on the wire). Config — including the
+worker `effect` — lives in the **layer**, not the tag.
 
 ```ts
 import { Effect, Schema } from "effect";
 import { QueueResource } from "@nikscripts/effect-pm/QueueContract";
 import { NwslsoccerClient } from "@services/api/nwslsoccer";
 
-const RosterJob = Schema.Struct({ teamId: Schema.String, seasonId: Schema.String });
-interface RosterJob { readonly teamId: string; readonly seasonId: string }
+const rosterJob = Schema.Struct({ teamId: Schema.String, seasonId: Schema.String });
 
-class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", RosterJob) {}
+class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", rosterJob) {}
 
-// the worker effect's requirements (NwslsoccerClient) flow into the layer's R
-const RosterQueueLive = QueueResource.layer(RosterQueue, {
+// the worker effect's requirements (NwslsoccerClient) flow into the layer's R; job is inferred
+const rosterQueueLayer = QueueResource.layer(RosterQueue, {
   effect: (job) =>
     Effect.gen(function* () {
       const client = yield* NwslsoccerClient;
@@ -46,12 +48,12 @@ Merge it with the base layer; the patch folds onto the config at build.
 ```ts
 import { Duration, Layer } from "effect";
 
-const RosterQueueProd = QueueResource.configure(RosterQueue, {
+const rosterQueueProd = QueueResource.configure(RosterQueue, {
   concurrency: 3,
   rateLimit: { window: Duration.seconds(1), limit: 10 },
 });
 
-const ProdLayer = RosterQueueLive.pipe(Layer.provideMerge(RosterQueueProd));
+const prodLayer = rosterQueueLayer.pipe(Layer.provideMerge(rosterQueueProd));
 ```
 
 ## 3. Use a queue
@@ -76,7 +78,7 @@ import { Stream } from "effect";
 const refillOnDrain = Effect.gen(function* () {
   const queue = yield* RosterQueue;
   yield* queue.events.pipe(
-    Stream.filter((e) => e._tag === "Drained"),
+    Stream.filter((event) => event._tag === "Drained"),
     Stream.runForEach(() =>
       Effect.gen(function* () {
         const jobs = yield* loadRosterJobsFromDb;
@@ -98,7 +100,7 @@ import { Polling, ProcessResource } from "@nikscripts/effect-pm";
 
 class SeasonMatches extends ProcessResource.Tag<SeasonMatches>()("nwsl/SeasonMatches") {}
 
-const SeasonMatchesLive = ProcessResource.layer(SeasonMatches, {
+const seasonMatchesLayer = ProcessResource.layer(SeasonMatches, {
   effect: Effect.gen(function* () {
     const client = yield* NwslsoccerClient;
     yield* client.season.getSeasonMatches({ params: { seasonId } });
@@ -125,7 +127,7 @@ const tick = Effect.gen(function* () {
 const driveProcess = Effect.gen(function* () {
   const proc = yield* SeasonMatches;
   yield* proc.runImmediately;                 // out-of-band run
-  const s = yield* proc.statusNow;            // { supervising, armed, activeInstances, nextTriggerRun, ... }
+  const status = yield* proc.statusNow;       // { supervising, armed, activeInstances, nextTriggerRun, ... }
   yield* proc.setSchedule([{ id: "game-1", startAt, stopAt }]); // specific run windows
   yield* proc.stop;                           // pause supervision
   yield* proc.start;                          // resume
@@ -138,7 +140,8 @@ const driveProcess = Effect.gen(function* () {
 import { ProcessScheduleResource } from "@nikscripts/effect-pm";
 
 class NwslCron extends ProcessScheduleResource.Tag<NwslCron>()("nwsl/Cron") {}
-const NwslCronLive = ProcessScheduleResource.layer(NwslCron, {
+
+const nwslCronLayer = ProcessScheduleResource.layer(NwslCron, {
   initial: [{ id: "sdp-tick", startAt }],
 });
 
@@ -170,8 +173,8 @@ class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
 
 // reach a member through the tree (names preserved)
 const useIt = Effect.gen(function* () {
-  const q = yield* ServicesHub.Nwsl.RosterQueue;
-  yield* q.add(job);
+  const queue = yield* ServicesHub.Nwsl.RosterQueue;
+  yield* queue.add(job);
 });
 ```
 
@@ -197,21 +200,21 @@ Each machine's entrypoint decides what it **runs** (provide its `.layer`, auto-s
 import { Layer } from "effect";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 
-const DropletLayer = Layer.mergeAll(
+const dropletLayer = Layer.mergeAll(
   // local on the droplet — provided directly, start immediately
-  RosterQueueLive.pipe(Layer.provideMerge(RosterQueueProd)),
-  SeasonMatchesLive,
-  NwslCronLive,
+  rosterQueueLayer.pipe(Layer.provideMerge(rosterQueueProd)),
+  seasonMatchesLayer,
+  nwslCronLayer,
   // the poller runs on the mini — wire a client to reach it
   Resource.client(LiveScorePoller).pipe(
     Layer.provide(
       Resource.connectHttp(MiniHost, { url: "http://mini.local:3010/rpc" }),
     ),
   ),
-  NwslClientLive, // your worker-dependency layers (HTTP clients, import sources, …)
+  nwslClientLayer, // your worker-dependency layers (HTTP clients, import sources, …)
 );
 
-NodeRuntime.runMain(Layer.launch(DropletLayer));
+NodeRuntime.runMain(Layer.launch(dropletLayer));
 ```
 
 ## 12. The Mini entrypoint — serve the one resource it hosts
@@ -222,12 +225,12 @@ import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 
-const MiniLayer = ProcessResource.serveHttp(LiveScorePoller, {
+const miniLayer = ProcessResource.serveHttp(LiveScorePoller, {
   effect: pollLiveScores,
   polling: Polling.spaced(Duration.seconds(5)),
 }).pipe(Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3010 })));
 
-NodeRuntime.runMain(Layer.launch(MiniLayer));
+NodeRuntime.runMain(Layer.launch(miniLayer));
 ```
 
 ## 13. Drive a remote resource — identical to local
@@ -247,7 +250,7 @@ const program = Effect.gen(function* () {
 ```ts
 import { HttpApiResource } from "@nikscripts/effect-pm";
 
-const NwslClientLive = HttpApiResource.layerEffect(
+const nwslClientLayer = HttpApiResource.layerEffect(
   NwslsoccerClient,
   buildNwslClient, // your Effect that builds the client
   { concurrency: 8 }, // gate the transport
