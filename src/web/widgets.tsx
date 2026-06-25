@@ -33,6 +33,20 @@ const Stat = (props: { readonly label: string; readonly value: React.ReactNode }
   </div>
 );
 
+// the primary controls to surface per module (the rest stay in the contract).
+const controlsFor = (ui: ResourceUI): ReadonlyArray<string> => {
+  switch (ui.kind) {
+    case "queue":
+      return ["add", "pause", "resume", "clear"];
+    case "process":
+      return ["start", "stop", "runImmediately"];
+    case "schedule":
+      return ["reconcile", "addSchedule", "clearSchedule"];
+    default:
+      return Object.keys(ui.commands);
+  }
+};
+
 /** A queue: phase, per-priority depths, throughput chart, controls, logs. @since 1.0.0 */
 export const QueueWidget = (props: { readonly ui: ResourceUI; readonly host?: string }): React.ReactElement => {
   const { ui } = props;
@@ -47,7 +61,7 @@ export const QueueWidget = (props: { readonly ui: ResourceUI; readonly host?: st
             <MetricChart atom={ui.histories["metrics"]} field="throughputPerSec" />
           </div>
         ) : null}
-        <CommandBar ui={ui} />
+        <CommandBar ui={ui} only={controlsFor(ui)} />
         {ui.histories["logs"] !== undefined ? <LogStream atom={ui.histories["logs"]} /> : null}
       </CardBody>
     </Card>
@@ -98,7 +112,7 @@ export const ProcessWidget = (props: { readonly ui: ResourceUI; readonly host?: 
       <CardBody className="flex flex-col gap-2.5">
         <ResourceHeader ui={ui} host={props.host} />
         {ui.streams["status"] !== undefined ? <ValuePanel atom={ui.streams["status"]} render={processStatus} /> : null}
-        <CommandBar ui={ui} />
+        <CommandBar ui={ui} only={controlsFor(ui)} />
         {ui.histories["logs"] !== undefined ? <LogStream atom={ui.histories["logs"]} /> : null}
       </CardBody>
     </Card>
@@ -113,10 +127,7 @@ const processStatus = (v: unknown): React.ReactNode => {
         <Badge tone={bool(s["supervising"]) ? "green" : "gray"}>{bool(s["supervising"]) ? "supervising" : "stopped"}</Badge>
         <Badge tone={bool(s["armed"]) ? "blue" : "gray"}>{bool(s["armed"]) ? "armed" : "disarmed"}</Badge>
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <Stat label="active" value={num(s["activeInstances"])} />
-        <Stat label="next run" value={<span className="text-xs">{str(s["nextTriggerRun"])}</span>} />
-      </div>
+      <Stat label="active instances" value={num(s["activeInstances"])} />
     </div>
   );
 };
@@ -131,7 +142,7 @@ export const ScheduleWidget = (props: { readonly ui: ResourceUI; readonly host?:
         <ResourceHeader ui={ui} host={props.host} />
         <SectionLabel>entries</SectionLabel>
         {live !== undefined ? <ValuePanel atom={live} render={renderEntries} /> : null}
-        <CommandBar ui={ui} />
+        <CommandBar ui={ui} only={controlsFor(ui)} />
       </CardBody>
     </Card>
   );

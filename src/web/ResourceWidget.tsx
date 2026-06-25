@@ -38,9 +38,16 @@ export const ResourceHeader = (props: {
   </div>
 );
 
-/** Every command (mutation / payload method) as a button row. @since 1.0.0 */
-export const CommandBar = (props: { readonly ui: ResourceUI }): React.ReactElement | null => {
-  const names = Object.keys(props.ui.commands);
+/** Command buttons. Pass `only` to curate which (and in what order). @since 1.0.0 */
+export const CommandBar = (props: {
+  readonly ui: ResourceUI;
+  readonly only?: ReadonlyArray<string>;
+}): React.ReactElement | null => {
+  const available = props.ui.commands;
+  const names =
+    props.only !== undefined
+      ? props.only.filter((n) => available[n] !== undefined)
+      : Object.keys(available);
   if (names.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-1.5">

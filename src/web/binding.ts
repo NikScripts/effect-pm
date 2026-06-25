@@ -55,11 +55,12 @@ export const displayName = (id: string): string => {
   return parts[parts.length - 1] ?? id;
 };
 
+// detect by the contract's *method* names (not status fields).
 const detectKind = (keys: ReadonlyArray<string>): ResourceKind => {
   const has = (k: string): boolean => keys.includes(k);
-  if (has("sizes") && has("paused")) return "queue";
-  if (has("supervising") || has("armed")) return "process";
-  if (has("reconcile") || has("entries")) return "schedule";
+  if (has("enqueue") || has("prioritize") || (has("add") && has("sizes"))) return "queue";
+  if (has("runImmediately") || (has("setSchedule") && has("stop"))) return "process";
+  if (has("reconcile") || (has("entries") && has("changes"))) return "schedule";
   if (has("run") && has("result")) return "run";
   return "resource";
 };
