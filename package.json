@@ -40,6 +40,14 @@
       "types": "./dist/QueueResource.d.ts",
       "default": "./dist/QueueResource.js"
     },
+    "./Resource": {
+      "types": "./dist/Resource.d.ts",
+      "default": "./dist/Resource.js"
+    },
+    "./QueueContract": {
+      "types": "./dist/QueueContract.d.ts",
+      "default": "./dist/QueueContract.js"
+    },
     "./ProcessGroup": {
       "types": "./dist/ProcessGroup.d.ts",
       "default": "./dist/ProcessGroup.js"

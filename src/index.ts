@@ -131,6 +131,10 @@ export {
   LocalOnlyMethod,
   MissingContractMethod,
   Resource,
+  // Contract introspection — the basis for generic UIs (walk a tag's spec, render a widget
+  // per method from its kind/description/destructive/streaming). See examples/resource-tui.
+  methodMeta,
+  specOf,
 } from "./Resource";
 export type {
   AnyLocalMethod,

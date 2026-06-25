@@ -47,4 +47,21 @@ export const Group = {
   members: <Members extends Record<string, unknown>>(group: {
     readonly members: Members;
   }): Members => group.members,
+
+  /**
+   * Whether `x` is a group tag (vs a leaf resource tag) — the discriminator for walking a tree.
+   * Tags are **classes** (so `typeof` is `"function"`, not `"object"`); a group is one carrying a
+   * `members` record. Use it to recurse on branches and treat everything else as a leaf:
+   *
+   * ```ts
+   * for (const [name, member] of Object.entries(Group.members(node)))
+   *   Group.isGroup(member) ? walk(member) : renderLeaf(name, member);
+   * ```
+   */
+  isGroup: (
+    x: unknown,
+  ): x is { readonly id: string; readonly members: Record<string, unknown> } =>
+    (typeof x === "object" || typeof x === "function") &&
+    x !== null &&
+    "members" in x,
 };
