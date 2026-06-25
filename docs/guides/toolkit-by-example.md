@@ -6,9 +6,9 @@ unique API. Code the way the downstream repo (e.g. `services-hub`) would actuall
 > **Style:** PascalCase is for classes, types, and namespaces only (tags, hosts, groups).
 > Everything else — layers, schemas, effects — is camelCase. Layer values use a `Layer` suffix.
 
-> **Imports:** most things are on the barrel (`@nikscripts/effect-pm`). The toolkit queue is on a
-> subpath (`@nikscripts/effect-pm/QueueContract`) because the barrel `QueueResource` name is still
-> the legacy engine during migration.
+> **Imports:** everything is on the barrel (`@nikscripts/effect-pm`). `QueueResource` is a single
+> unified namespace — the toolkit `Tag` / `layer` / `server` / `serveHttp` / `configure` plus the
+> engine helpers (`make` / `Service` / `Schema` / `Errors`) — one import.
 
 ---
 
@@ -19,7 +19,7 @@ worker `effect` — lives in the **layer**, not the tag.
 
 ```ts
 import { Effect, Schema } from "effect";
-import { QueueResource } from "@nikscripts/effect-pm/QueueContract";
+import { QueueResource } from "@nikscripts/effect-pm";
 import { NwslsoccerClient } from "@services/api/nwslsoccer";
 
 const rosterJob = Schema.Struct({ teamId: Schema.String, seasonId: Schema.String });
