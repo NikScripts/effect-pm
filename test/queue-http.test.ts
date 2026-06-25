@@ -3,7 +3,7 @@ import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { QueueResource } from "../src/QueueContract";
+import { QueueResource } from "../src";
 import { Resource, groupOf } from "../src/Resource";
 import type { QueueEntry } from "../src/QueueResource";
 

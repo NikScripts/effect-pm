@@ -65,6 +65,16 @@ export interface ProcessSnapshot {
   readonly nextScheduleTransition: Option.Option<Date>;
   /** The in-instance repeat cadence, when polling is configured (none otherwise). */
   readonly nextPollCadence: Option.Option<Duration.Duration>;
+  /** Total effect runs started (scheduled + polling + `runImmediately`) since the layer built. */
+  readonly runsStarted: number;
+  /** Of those, how many completed successfully. */
+  readonly runsSucceeded: number;
+  /** Of those, how many failed. */
+  readonly runsFailed: number;
+  /** When the most recent run started (none if it hasn't run yet). */
+  readonly lastRunStartedAt: Option.Option<Date>;
+  /** Wall-clock duration of the most recent finished run, in ms (none if none finished). */
+  readonly lastRunDurationMillis: Option.Option<number>;
 }
 
 /**
@@ -260,6 +270,13 @@ interface ProcessMirror {
   readonly nextPollCadence: MutableRef.MutableRef<Option.Option<Duration.Duration>>;
   readonly activeInstances: MutableRef.MutableRef<number>;
   readonly nextTriggerRun: MutableRef.MutableRef<Option.Option<Date>>;
+  // Run metrics — counted once at the single run boundary ({@link trackedProgram}), so they cover
+  // scheduled ticks, polling ticks, and `runImmediately` alike.
+  readonly runsStarted: MutableRef.MutableRef<number>;
+  readonly runsSucceeded: MutableRef.MutableRef<number>;
+  readonly runsFailed: MutableRef.MutableRef<number>;
+  readonly lastRunStartedAt: MutableRef.MutableRef<Option.Option<Date>>;
+  readonly lastRunDurationMillis: MutableRef.MutableRef<Option.Option<number>>;
 }
 
 interface ProcessBuildStateBase<E, RUser> {
@@ -420,6 +437,11 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     nextPollCadence: MutableRef.make<Option.Option<Duration.Duration>>(Option.none()),
     activeInstances: MutableRef.make(0),
     nextTriggerRun: MutableRef.make<Option.Option<Date>>(Option.none()),
+    runsStarted: MutableRef.make(0),
+    runsSucceeded: MutableRef.make(0),
+    runsFailed: MutableRef.make(0),
+    lastRunStartedAt: MutableRef.make<Option.Option<Date>>(Option.none()),
+    lastRunDurationMillis: MutableRef.make<Option.Option<number>>(Option.none()),
   };
 
   const finishInput = (args: {
@@ -465,6 +487,11 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
   ): Effect.Effect<void, never, RUser> =>
     Effect.gen(function* () {
       const executedAt = yield* Clock.currentTimeMillis;
+      MutableRef.update(mirror.runsStarted, (n) => n + 1);
+      MutableRef.set(
+        mirror.lastRunStartedAt,
+        Option.some(DateTime.toDateUtc(DateTime.makeUnsafe(executedAt))),
+      );
       const hasPrior = yield* Effect.serviceOption(ProcessExecutionStore).pipe(
         Effect.flatMap(
           Option.match({
@@ -495,6 +522,11 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
           onFailure: (error) =>
             Effect.gen(function* () {
               const completedAt = yield* Clock.currentTimeMillis;
+              MutableRef.update(mirror.runsFailed, (n) => n + 1);
+              MutableRef.set(
+                mirror.lastRunDurationMillis,
+                Option.some(completedAt - executedAt),
+              );
               yield* recordExecutionFailed({
                 scheduleKey: Option.getOrNull(scheduleIdentifier),
                 startedAt: executedAt,
@@ -509,6 +541,11 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
           onSuccess: () =>
             Effect.gen(function* () {
               const completedAt = yield* Clock.currentTimeMillis;
+              MutableRef.update(mirror.runsSucceeded, (n) => n + 1);
+              MutableRef.set(
+                mirror.lastRunDurationMillis,
+                Option.some(completedAt - executedAt),
+              );
               yield* recordExecutionCompleted({
                 scheduleKey: Option.getOrNull(scheduleIdentifier),
                 startedAt: executedAt,
@@ -832,6 +869,11 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     nextTriggerRun: MutableRef.get(mirror.nextTriggerRun),
     nextScheduleTransition: MutableRef.get(mirror.nextScheduleTransition),
     nextPollCadence: MutableRef.get(mirror.nextPollCadence),
+    runsStarted: MutableRef.get(mirror.runsStarted),
+    runsSucceeded: MutableRef.get(mirror.runsSucceeded),
+    runsFailed: MutableRef.get(mirror.runsFailed),
+    lastRunStartedAt: MutableRef.get(mirror.lastRunStartedAt),
+    lastRunDurationMillis: MutableRef.get(mirror.lastRunDurationMillis),
   }));
 
   const base = {

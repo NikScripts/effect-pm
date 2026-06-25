@@ -6,9 +6,17 @@ unique API. Code the way the downstream repo (e.g. `services-hub`) would actuall
 > **Style:** PascalCase is for classes, types, and namespaces only (tags, hosts, groups).
 > Everything else — layers, schemas, effects — is camelCase. Layer values use a `Layer` suffix.
 
-> **Imports:** most things are on the barrel (`@nikscripts/effect-pm`). The toolkit queue is on a
-> subpath (`@nikscripts/effect-pm/QueueContract`) because the barrel `QueueResource` name is still
-> the legacy engine during migration.
+> **Imports:** everything is on the barrel (`@nikscripts/effect-pm`). `QueueResource` is a single
+> unified namespace — the toolkit `Tag` / `layer` / `server` / `serveHttp` / `configure` plus the
+> engine helpers (`make` / `Service` / `Schema` / `Errors`) — one import.
+>
+> **Browser/dashboard bundles:** for the smallest bundle, import the **light** queue surface from
+> the subpath — `import { queueTag, queueStatus, configure } from "@nikscripts/effect-pm/QueueContract"`
+> — which is **proven engine-free** (≈23kb, zero engine code) and tree-shakes in any bundler. The
+> barrel `QueueResource.Tag` is functionally identical but may include the queue engine code
+> depending on your bundler (it's pure-Effect with **no native deps**, so it never *breaks* a build —
+> just larger). Guaranteed barrel-namespace tree-shaking is a tracked follow-up
+> (`docs/plans/18-unbundled-build-treeshaking.md`).
 
 ---
 
@@ -19,7 +27,7 @@ worker `effect` — lives in the **layer**, not the tag.
 
 ```ts
 import { Effect, Schema } from "effect";
-import { QueueResource } from "@nikscripts/effect-pm/QueueContract";
+import { QueueResource } from "@nikscripts/effect-pm";
 import { NwslsoccerClient } from "@services/api/nwslsoccer";
 
 const rosterJob = Schema.Struct({ teamId: Schema.String, seasonId: Schema.String });
@@ -127,7 +135,8 @@ const tick = Effect.gen(function* () {
 const driveProcess = Effect.gen(function* () {
   const proc = yield* SeasonMatches;
   yield* proc.runImmediately;                 // out-of-band run
-  const status = yield* proc.statusNow;       // { supervising, armed, activeInstances, nextTriggerRun, ... }
+  const status = yield* proc.statusNow;       // { supervising, armed, activeInstances, nextTriggerRun,
+                                              //   runsStarted, runsSucceeded, runsFailed, lastRunDurationMillis, ... }
   yield* proc.setSchedule([{ id: "game-1", startAt, stopAt }]); // specific run windows
   yield* proc.stop;                           // pause supervision
   yield* proc.start;                          // resume
@@ -321,8 +330,10 @@ Droplet**; **one or two processes** (most likely a live-score poller) are peeled
 1. **Tree navigation** — walk `ServicesHub` with `Group.members` + `Group.isGroup` (example 15) to
    render Hub → league → resource. This is the skeleton everything hangs off.
 2. **Live status grid** — per resource, subscribe to the `status` stream (`statusNow` for first
-   paint): processes show `supervising` / `armed` / `activeInstances` / `nextTriggerRun`; queues
-   show per-priority `sizes`, `paused`, `completed`. This is the at-a-glance health board.
+   paint): processes show `supervising` / `armed` / `activeInstances` / `nextTriggerRun` plus **run
+   metrics** (`runsStarted` / `runsSucceeded` / `runsFailed` / `lastRunDurationMillis` — render
+   success rate + last-run timing); queues show per-priority `sizes`, `paused`, `completed`. This is
+   the at-a-glance health board.
 3. **Live-score pollers, front and center** — `NwslLiveScorePoller` / `WnbaLiveScorePoller` are the
    real-time, game-day-critical ones. Surface their status + recent runs prominently; this is the
    "live" in live dashboard.

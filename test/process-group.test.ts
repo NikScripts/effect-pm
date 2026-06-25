@@ -30,6 +30,11 @@ const makeTickProcess = (
     nextTriggerRun: Option.none(),
     nextScheduleTransition: Option.none(),
     nextPollCadence: Option.none(),
+    runsStarted: 0,
+    runsSucceeded: 0,
+    runsFailed: 0,
+    lastRunStartedAt: Option.none(),
+    lastRunDurationMillis: Option.none(),
   }),
 })
 

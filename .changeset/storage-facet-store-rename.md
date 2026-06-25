@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": major
+"@nikscripts/effect-pm": minor
 ---
 
 **Breaking — rename storage facet services to `*Store`.**

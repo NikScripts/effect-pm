@@ -124,6 +124,18 @@ import {
   foldConfiguredSpec,
   type ConfigPatch,
 } from "./ResourceConfigure";
+// Wire/error schemas live in a light module (effect-only) so the contract's Tag/spec is engine-free.
+import {
+  QueueItemCodecDescriptorSchema,
+  QueueItemEncodingError,
+  QueueMissingItemSchemaError,
+} from "./internal/queueSchema";
+// Re-export for back-compat (consumers import these from "./QueueResource" / the barrel).
+export {
+  QueueItemCodecDescriptorSchema,
+  QueueItemEncodingError,
+  QueueMissingItemSchemaError,
+} from "./internal/queueSchema";
 
 // ============================================================================
 // Public Types
@@ -155,18 +167,6 @@ export interface QueueItemCodecDescriptor {
   /** Draft-07 JSON Schema for the **encoded** item payload. */
   readonly jsonSchema: JsonSchema.JsonSchema;
 }
-
-/**
- * Runtime schema for {@link QueueItemCodecDescriptor}.
- *
- * @public
- */
-export const QueueItemCodecDescriptorSchema = Schema.Struct({
-  id: Schema.String,
-  version: Schema.String,
-  encoding: Schema.Literal("json"),
-  jsonSchema: Schema.Unknown,
-});
 
 /**
  * Annotation key carrying an item schema's **version** — the anchor for the `@vN` marker that
@@ -251,39 +251,6 @@ export class QueueBatchValidationError extends Data.TaggedError("QueueBatchValid
   }>;
   readonly codecId?: string;
 }> {}
-
-/**
- * Encoded release was requested for a queue without `itemSchema`.
- *
- * `Schema.TaggedErrorClass` so it is both a yieldable/throwable error **and** wire-encodable —
- * it is part of the `releaseEncoded` RPC error channel (see `QueueContract`).
- *
- * @public
- */
-export class QueueMissingItemSchemaError extends Schema.TaggedErrorClass<QueueMissingItemSchemaError>()(
-  "QueueMissingItemSchemaError",
-  {
-    queue: Schema.String,
-  },
-) {}
-
-/**
- * A queue item failed schema encoding while preparing a wire handoff release.
- *
- * `Schema.TaggedErrorClass` so it is both a yieldable/throwable error **and** wire-encodable —
- * it is part of the `releaseEncoded` RPC error channel (see `QueueContract`).
- *
- * @public
- */
-export class QueueItemEncodingError extends Schema.TaggedErrorClass<QueueItemEncodingError>()(
-  "QueueItemEncodingError",
-  {
-    queue: Schema.String,
-    entryId: Schema.String,
-    message: Schema.String,
-    codecId: Schema.optionalKey(Schema.String),
-  },
-) {}
 
 /** @public */
 export type QueueReleaseEncodingError = QueueMissingItemSchemaError | QueueItemEncodingError;

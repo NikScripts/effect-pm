@@ -2,7 +2,7 @@ import { defineConfig } from "tsup";
 
 const shared = {
   format: ["esm"] as const,
-  splitting: false,
+  splitting: true,
   sourcemap: true,
   treeshake: true,
   outDir: "dist",

@@ -1,5 +1,5 @@
 ---
-"@nikscripts/effect-pm": major
+"@nikscripts/effect-pm": minor
 ---
 
 **Breaking — silo per-domain storage facets onto `RuntimeStorage` directly.**
