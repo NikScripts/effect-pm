@@ -1,22 +1,25 @@
 /**
  * @module examples/web-dashboard/widgets
  *
- * Shared queue widgets — the same building blocks render on mobile and desktop, only
- * the page layout differs. Each reads its data straight from the `live-queues` atoms.
+ * Shared queue widgets — same building blocks on mobile and desktop. Each is driven
+ * by a **tag** (its bundle comes from `queueBundle(tag)`); the tree is a `Group.Tag`
+ * walked with `Group.members` / `Group.isGroup`. No `REGISTRY`, no `TREE`.
  */
 
 import * as React from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AsyncResult } from "effect/unstable/reactivity";
+import { Group } from "../../src/Group";
 import {
-  type Group,
+  type GroupNode,
+  type LeafTag,
   type LogLine,
   type MetricPoint,
-  type Node,
   type QueueBundle,
-  REGISTRY,
-} from "../resource-tui/live-queues";
-import { useAtomValue } from "../queue-widget/atom-react";
+  leafTags,
+  queueBundle,
+} from "./queue-data";
+import { useAtomSet, useAtomValue } from "../queue-widget/atom-react";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
@@ -24,8 +27,6 @@ import { cn } from "./lib/utils";
 
 export const displayName = (key: string): string => key.split("/").pop() ?? key;
 export const fmtMs = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
-export const leafIds = (g: Group): ReadonlyArray<string> =>
-  g.members.flatMap((m) => (m.t === "g" ? leafIds(m) : [m.name]));
 
 export const STATUS: Record<string, { label: string; color: string }> = {
   running: { label: "running", color: "#22c55e" },
@@ -36,11 +37,7 @@ export const STATUS: Record<string, { label: string; color: string }> = {
 export const statusKey = (phase: string, paused: boolean): string =>
   phase === "off" ? "off" : phase === "draining" ? "draining" : paused ? "paused" : "running";
 
-const PRIO = {
-  high: "#ef4444",
-  normal: "#94a3b8",
-  low: "#3b82f6",
-} as const;
+const PRIO = { high: "#ef4444", normal: "#94a3b8", low: "#3b82f6" } as const;
 const LEVEL: Record<string, string> = {
   Info: "#cbd5e1",
   Warning: "#eab308",
@@ -73,14 +70,13 @@ const PrioRow = (props: { readonly p: keyof typeof PRIO; readonly count: number;
   </div>
 );
 
-/** A queue as a grid card (mobile cards + desktop card view). Reads its own status. */
+/** A queue as a grid card. Reads its own status straight from the tag. */
 export const QueueCard = (props: {
-  readonly id: string;
-  readonly bundle: QueueBundle;
+  readonly tag: LeafTag;
   readonly selected?: boolean;
-  readonly onOpen: (id: string) => void;
+  readonly onOpen: (tag: LeafTag) => void;
 }): React.ReactElement => {
-  const r = useAtomValue(props.bundle.status);
+  const r = useAtomValue(queueBundle(props.tag).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
   const pending = sizes.high + sizes.normal + sizes.low;
@@ -88,14 +84,14 @@ export const QueueCard = (props: {
   return (
     <button
       type="button"
-      onClick={() => props.onOpen(props.id)}
+      onClick={() => props.onOpen(props.tag)}
       className={cn(
         "rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
         props.selected === true && "border-primary",
       )}
     >
       <div className="mb-2 flex items-center gap-2">
-        <strong className="flex-1 truncate">{displayName(props.id)}</strong>
+        <strong className="flex-1 truncate">{displayName(props.tag.id)}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
       <div className="mb-2 flex justify-between text-xs text-muted-foreground">
@@ -111,27 +107,28 @@ export const QueueCard = (props: {
   );
 };
 
-const MemberRow = (props: { readonly id: string; readonly bundle: QueueBundle }): React.ReactElement => {
-  const r = useAtomValue(props.bundle.status);
+const MemberRow = (props: { readonly tag: LeafTag }): React.ReactElement => {
+  const r = useAtomValue(queueBundle(props.tag).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const sk = statusKey(s?.phase ?? "running", s?.paused ?? false);
   const pending = s === undefined ? 0 : s.sizes.high + s.sizes.normal + s.sizes.low;
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
       <span className="size-2 shrink-0 rounded-full" style={{ background: STATUS[sk]?.color }} />
-      <span className="flex-1 truncate">{displayName(props.id)}</span>
+      <span className="flex-1 truncate">{displayName(props.tag.id)}</span>
       <span className="text-foreground">{pending}</span>
     </div>
   );
 };
 
-/** A subgroup as a grid widget — tap opens it as its own page (mobile drill-down). */
+/** A subgroup as a grid widget — tap opens it as its own page (drill-down). */
 export const GroupCard = (props: {
-  readonly node: Group;
-  readonly onOpen: (g: Group) => void;
+  readonly node: GroupNode;
+  readonly onOpen: (g: GroupNode) => void;
 }): React.ReactElement => {
-  const queues = props.node.members.filter((n) => n.t === "q").slice(0, 4);
-  const subs = props.node.members.filter((n): n is Group => n.t === "g");
+  const members = Object.values(Group.members(props.node));
+  const leaves = members.filter((m): m is LeafTag => !Group.isGroup(m)).slice(0, 4);
+  const subs = members.filter((m): m is GroupNode => Group.isGroup(m));
   return (
     <button
       type="button"
@@ -139,16 +136,13 @@ export const GroupCard = (props: {
       className="rounded-xl border border-[#06b6d455] bg-card p-3 text-left transition-colors hover:border-ring"
     >
       <div className="mb-2 flex items-center gap-2">
-        <strong className="flex-1 truncate text-[#06b6d4]">▸ {displayName(props.node.name)}</strong>
-        <span className="text-xs text-muted-foreground">{leafIds(props.node).length} queues</span>
+        <strong className="flex-1 truncate text-[#06b6d4]">▸ {displayName(props.node.id)}</strong>
+        <span className="text-xs text-muted-foreground">{leafTags(props.node).length} queues</span>
       </div>
       <div className="flex flex-col gap-1">
-        {queues.map((q) => {
-          const b = REGISTRY[q.name];
-          return b === undefined ? null : <MemberRow key={q.name} id={q.name} bundle={b} />;
-        })}
+        {leaves.map((tag) => <MemberRow key={tag.id} tag={tag} />)}
         {subs.map((sg) => (
-          <div key={sg.name} className="text-xs text-[#06b6d4]">▸ {displayName(sg.name)}</div>
+          <div key={sg.id} className="text-xs text-[#06b6d4]">▸ {displayName(sg.id)}</div>
         ))}
       </div>
       <div className="mt-2 text-xs text-muted-foreground">tap to open →</div>
@@ -157,15 +151,14 @@ export const GroupCard = (props: {
 };
 
 export const Cell = (props: {
-  readonly node: Node;
-  readonly onOpenQueue: (id: string) => void;
-  readonly onOpenGroup: (g: Group) => void;
-}): React.ReactElement | null => {
-  if (props.node.t === "g") {
-    return <GroupCard node={props.node} onOpen={props.onOpenGroup} />;
+  readonly member: unknown;
+  readonly onOpenQueue: (tag: LeafTag) => void;
+  readonly onOpenGroup: (g: GroupNode) => void;
+}): React.ReactElement => {
+  if (Group.isGroup(props.member)) {
+    return <GroupCard node={props.member} onOpen={props.onOpenGroup} />;
   }
-  const b = REGISTRY[props.node.name];
-  return b === undefined ? null : <QueueCard id={props.node.name} bundle={b} onOpen={props.onOpenQueue} />;
+  return <QueueCard tag={props.member as LeafTag} onOpen={props.onOpenQueue} />;
 };
 
 export const Stat = (props: { readonly label: string; readonly value: string }): React.ReactElement => (
@@ -207,8 +200,8 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
   const [metric, setMetric] = React.useState<MetricKey>("throughput");
   const historyR = useAtomValue(props.bundle.history);
   const trendR = useAtomValue(props.bundle.trend);
-  const history = (AsyncResult.isSuccess(historyR) ? historyR.value : []) as Array<MetricPoint>;
-  const trend = AsyncResult.isSuccess(trendR) ? trendR.value : [];
+  const history: ReadonlyArray<MetricPoint> = AsyncResult.isSuccess(historyR) ? historyR.value : [];
+  const trend: ReadonlyArray<number> = AsyncResult.isSuccess(trendR) ? trendR.value : [];
   const def = METRICS[metric];
   const data =
     def.source === "trend"
@@ -252,19 +245,25 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
   );
 };
 
-export const QueueControls = (props: { readonly bundle: QueueBundle }): React.ReactElement => (
-  <div className="flex flex-wrap gap-2">
-    <Button variant="outline" size="sm" onClick={() => props.bundle.pause()}>pause</Button>
-    <Button variant="outline" size="sm" onClick={() => props.bundle.resume()}>resume</Button>
-    <Button variant="outline" size="sm" onClick={() => props.bundle.clear()}>clear</Button>
-    <Button variant="destructive" size="sm" onClick={() => props.bundle.shutdown()}>shutdown</Button>
-  </div>
-);
+export const QueueControls = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
+  const pause = useAtomSet(props.bundle.pause);
+  const resume = useAtomSet(props.bundle.resume);
+  const clear = useAtomSet(props.bundle.clear);
+  const shutdown = useAtomSet(props.bundle.shutdown);
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button variant="outline" size="sm" onClick={() => pause()}>pause</Button>
+      <Button variant="outline" size="sm" onClick={() => resume()}>resume</Button>
+      <Button variant="outline" size="sm" onClick={() => clear()}>clear</Button>
+      <Button variant="destructive" size="sm" onClick={() => shutdown()}>shutdown</Button>
+    </div>
+  );
+};
 
 /** The live log stream (auto-scrolls to newest). */
 export const LogStream = (props: { readonly bundle: QueueBundle; readonly className?: string }): React.ReactElement => {
   const r = useAtomValue(props.bundle.logs);
-  const logs = AsyncResult.isSuccess(r) ? r.value : [];
+  const logs: ReadonlyArray<LogLine> = AsyncResult.isSuccess(r) ? r.value : [];
   const ref = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     const el = ref.current;
@@ -274,7 +273,7 @@ export const LogStream = (props: { readonly bundle: QueueBundle; readonly classN
   }, [logs.length]);
   return (
     <div ref={ref} className={cn("overflow-auto text-xs", props.className)}>
-      {logs.map((l: LogLine) => (
+      {logs.map((l) => (
         <div key={l.id} className="flex gap-2 px-2 py-0.5">
           <span className="w-20 shrink-0 text-muted-foreground">{new Date(l.t).toLocaleTimeString()}</span>
           <span className="w-14 shrink-0" style={{ color: LEVEL[l.level] ?? "#cbd5e1" }}>{l.level}</span>

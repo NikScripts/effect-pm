@@ -3,37 +3,34 @@
  *
  * Touch-first drill-down: a grid of queue + subgroup widgets; tap a group to open it
  * as its own page, tap a queue for its detail (stats + throughput chart + controls +
- * live logs). Same widgets as the desktop layout — only the page shape differs.
+ * live logs). Tag-driven — the tree is the `Fleet` group tag.
  */
 
 import * as React from "react";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { REGISTRY, TREE, type Group } from "../resource-tui/live-queues";
+import { Fleet } from "./fleet";
+import { type GroupNode, type LeafTag, leafTags, queueBundle } from "./queue-data";
 import { useAtomValue } from "../queue-widget/atom-react";
 import { Button } from "./components/ui/button";
 import {
   Cell,
   LogStream,
+  MetricChart,
   QueueControls,
   QueueStats,
   StatusBadge,
-  MetricChart,
   displayName,
-  leafIds,
 } from "./widgets";
 
-const QueueDetail = (props: { readonly id: string; readonly onBack: () => void }): React.ReactElement => {
-  const bundle = REGISTRY[props.id];
-  const statusR = useAtomValue(bundle!.status);
+const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void }): React.ReactElement => {
+  const bundle = queueBundle(props.tag);
+  const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
-  if (bundle === undefined) {
-    return <div />;
-  }
   return (
     <div className="flex h-screen flex-col gap-3 p-3">
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
-        <strong className="flex-1 truncate text-base">{displayName(props.id)}</strong>
+        <strong className="flex-1 truncate text-base">{displayName(props.tag.id)}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
       <QueueStats bundle={bundle} />
@@ -48,14 +45,14 @@ const QueueDetail = (props: { readonly id: string; readonly onBack: () => void }
 };
 
 export const MobileDashboard = (): React.ReactElement => {
-  const [path, setPath] = React.useState<ReadonlyArray<Group>>([TREE]);
-  const [selected, setSelected] = React.useState<string | null>(null);
+  const [path, setPath] = React.useState<ReadonlyArray<GroupNode>>([Fleet]);
+  const [selected, setSelected] = React.useState<LeafTag | null>(null);
 
-  if (selected !== null && REGISTRY[selected] !== undefined) {
-    return <QueueDetail id={selected} onBack={() => setSelected(null)} />;
+  if (selected !== null) {
+    return <QueueDetail tag={selected} onBack={() => setSelected(null)} />;
   }
 
-  const group = path[path.length - 1] ?? TREE;
+  const group = path[path.length - 1] ?? Fleet;
   const canBack = path.length > 1;
 
   return (
@@ -65,16 +62,16 @@ export const MobileDashboard = (): React.ReactElement => {
           <Button variant="outline" size="sm" onClick={() => setPath((p) => p.slice(0, -1))}>← back</Button>
         ) : null}
         <h1 className="m-0 flex-1 text-lg font-semibold">
-          ⬢ {path.map((g) => displayName(g.name)).join(" / ")}{" "}
-          <span className="text-sm font-normal text-muted-foreground">· {leafIds(group).length} queues</span>
+          ⬢ {path.map((g) => displayName(g.id)).join(" / ")}{" "}
+          <span className="text-sm font-normal text-muted-foreground">· {leafTags(group).length} queues</span>
         </h1>
       </div>
       <div className="mb-2 text-sm text-muted-foreground">tap a queue for live logs · tap a group to open it</div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
-        {group.members.map((node) => (
+        {Object.entries(group.members).map(([name, member]) => (
           <Cell
-            key={`${node.t}-${node.name}`}
-            node={node}
+            key={name}
+            member={member}
             onOpenQueue={setSelected}
             onOpenGroup={(g) => setPath((p) => [...p, g])}
           />
