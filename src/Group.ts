@@ -1,11 +1,11 @@
 /**
- * @module examples/resource-cli/group
+ * @module Group
  *
- * `Group.Tag` — a real Context tag (built on `Context.Service`, like `Resource.Tag`)
- * that holds named member tags. Pass a record; each member becomes an accessor on
- * the class, full tag intact.
+ * `Group.Tag` — an organization tool. A real Context tag (built on `Context.Service`,
+ * like `Resource.Tag`) that holds named member tags. Pass a record; each member becomes
+ * an accessor on the class, full tag intact.
  *
- *   class MyGroup extends Group.Tag<MyGroup>("@repo/pkg/MyGroup")({
+ *   class MyGroup extends Group.Tag<MyGroup>("@pkg/MyGroup")({
  *     Counter,
  *     QueueManager,
  *   }) {}
@@ -13,10 +13,27 @@
  *   MyGroup.Counter         // the Counter tag, name intact
  *   MyGroup.members         // { Counter, QueueManager }
  *   Group.members(MyGroup)  // same, via the namespace
+ *
+ * Groups nest like any other tag: a member can itself be a `Group.Tag`, and because
+ * you pass it in under a name, the name is preserved.
+ *
+ *   class Ops extends Group.Tag<Ops>("@pkg/Ops")({
+ *     Web,            // a resource tag
+ *     Jobs: MyGroup,  // a child group — nesting is free
+ *   }) {}
+ *
+ *   Ops.Jobs.Counter  // reach into the nested group
+ *
+ * @public
  */
 
 import { Context } from "effect";
 
+/**
+ * The `Group` namespace — create group tags and read their members back out.
+ *
+ * @public
+ */
 export const Group = {
   Tag:
     <Self>(id: string) =>

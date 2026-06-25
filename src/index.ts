@@ -406,6 +406,7 @@ export {
 } from "./Logs";
 export { HostLogs } from "./HostLogs";
 export type { HostLogEntry } from "./HostLogs";
+export { Group } from "./Group";
 export {
   ProcessGroupLogContext,
   ProcessManagerLogAnnotationKeys,
