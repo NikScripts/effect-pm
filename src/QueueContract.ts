@@ -42,6 +42,8 @@ import {
 import type { QueueResourceConfigWithItemSchema } from "./QueueResource";
 import type { JsonValue } from "./ProcessStoreEvent";
 import { ProcessManagerLogEntrySchema } from "./LogEntry";
+import { configureLayer, foldConfiguredSpec } from "./ResourceConfigure";
+import type { ConfigPatch } from "./ResourceConfigure";
 
 /**
  * A captured log line on the wire — the element of the queue's `logs` stream. Reuses the
@@ -583,9 +585,14 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R>(
     const itemSchema: Schema.Codec<Schema.Struct<F>["Type"], unknown, never, never> =
       tag[specSym].add.payload.members[0];
     const context = yield* Effect.context<R>();
+    // Fold any `.configure` patches in context (keyed by the tag id) onto the base config — so
+    // per-env overrides (concurrency / rateLimit / …) merged as layers take effect at build.
+    const effectiveConfig = yield* foldConfiguredSpec<
+      QueueLayerConfig<Schema.Struct<F>["Type"], E, R>
+    >(tag.id, config);
     const handle = yield* QueueEngine.make({
       name: tag.id,
-      ...config,
+      ...effectiveConfig,
       itemSchema,
     });
     const provideR = <Out, Err>(
@@ -708,9 +715,36 @@ const serveHttp = <
  *
  * @public
  */
+/**
+ * A **config-patch layer** for the queue `tag` — the toolkit successor to the old
+ * `QueueResource.Service(...).configure(...)`. Merge it with the queue's {@link layer} (e.g. per
+ * environment) and its patch (concurrency / rateLimit / attempts / …) folds onto the layer's base
+ * config at build. Keyed by `tag.id`; later patches win. Config lives in the layer, not the tag,
+ * so `configure` takes the tag and returns a layer rather than being a tag method.
+ *
+ * ```ts
+ * const Prod = Layer.mergeAll(
+ *   QueueResource.layer(MyQueue, { effect }),
+ *   QueueResource.configure(MyQueue, { concurrency: 3, rateLimit: { window: "1 second", limit: 5 } }),
+ * );
+ * ```
+ *
+ * @public
+ */
+const configure = <
+  Self,
+  F extends QueueItemFields = QueueItemFields,
+  E = never,
+  R = never,
+>(
+  tag: ResourceTag<Self, QueueInstanceSpec<F>>,
+  patch: ConfigPatch<QueueLayerConfig<Schema.Struct<F>["Type"], E, R>>,
+): Layer.Layer<never> => configureLayer(tag.id, patch);
+
 export const QueueResource = {
   Tag: queueTag,
   layer,
+  configure,
   server,
   serveHttp,
 } as const;

@@ -57,6 +57,8 @@ import type {
 import { ProcessSchedule } from "./ProcessSchedule";
 import type { ProcessScheduleEntry } from "./ProcessSchedule";
 import { ProcessManagerLogEntrySchema } from "./LogEntry";
+import { configureLayer, foldConfiguredSpec } from "./ResourceConfigure";
+import type { ConfigPatch } from "./ResourceConfigure";
 
 /**
  * A captured log line on the wire — the element of a process's `logs` stream. Reuses the
@@ -285,7 +287,7 @@ const toWireStatus = (
  */
 const buildProcessImpl = <Self, E, R>(
   tag: ResourceTag<Self, ProcessSpec>,
-  config: ProcessLayerConfig<E, R>,
+  baseConfig: ProcessLayerConfig<E, R>,
 ) =>
   Effect.gen(function* () {
     const context = yield* Effect.context<R>();
@@ -295,6 +297,12 @@ const buildProcessImpl = <Self, E, R>(
     const provideR = <Out, Err>(
       effect: Effect.Effect<Out, Err, R>,
     ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
+
+    // Fold any `.configure` patches in context (keyed by the tag id) onto the base config.
+    const config = yield* foldConfiguredSpec<ProcessLayerConfig<E, R>>(
+      tag.id,
+      baseConfig,
+    );
 
     // A schedule initializer stays an initializer; a schedule *layer* (or the default in-memory
     // store) is what we pre-build and share.
@@ -400,9 +408,24 @@ const serveHttp = <Self, E = never, R = never>(
  *
  * @public
  */
+/**
+ * A **config-patch layer** for the process `tag` — the toolkit successor to
+ * `Process.Service(...).configure(...)`. Merge it with the process's {@link layer} (e.g. per
+ * environment) and its patch (polling / schedule / a `(previous) => next` wrap of `effect`) folds
+ * onto the layer's base config at build. Keyed by `tag.id`; later patches win. Config lives in the
+ * layer, not the tag, so `configure` takes the tag and returns a layer.
+ *
+ * @public
+ */
+const configure = <Self, E = never, R = never>(
+  tag: ResourceTag<Self, ProcessSpec>,
+  patch: ConfigPatch<ProcessLayerConfig<E, R>>,
+): Layer.Layer<never> => configureLayer(tag.id, patch);
+
 export const ProcessResource = {
   Tag: processTag,
   layer,
+  configure,
   server,
   serveHttp,
 } as const;
