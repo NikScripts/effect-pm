@@ -6,23 +6,23 @@
  * navigation tree; the leaf tags ARE the registry. No hand-rolled `REGISTRY`/`TREE`.
  */
 import { Duration, Effect, Schema } from "effect";
-import { QueueResource } from "../../src/QueueContract";
+import { queueTag } from "../../src/QueueContract";
 import { Group } from "../../src/Group";
 
 const Job = Schema.Struct({ id: Schema.String });
 
 // leaf queue tags
-export class Mail extends QueueResource.Tag<Mail>()("@acme/queues/Mail", Job) {}
-export class Jobs extends QueueResource.Tag<Jobs>()("@acme/queues/Jobs", Job) {}
-export class Billing extends QueueResource.Tag<Billing>()("@acme/queues/Billing", Job) {}
-export class Notify extends QueueResource.Tag<Notify>()("@acme/queues/Notify", Job) {}
-export class Worker1 extends QueueResource.Tag<Worker1>()("@acme/queues/Worker1", Job) {}
-export class Worker2 extends QueueResource.Tag<Worker2>()("@acme/queues/Worker2", Job) {}
-export class Worker3 extends QueueResource.Tag<Worker3>()("@acme/queues/Worker3", Job) {}
-export class RegionUS extends QueueResource.Tag<RegionUS>()("@acme/queues/RegionUS", Job) {}
-export class RegionEU extends QueueResource.Tag<RegionEU>()("@acme/queues/RegionEU", Job) {}
-export class Daily extends QueueResource.Tag<Daily>()("@acme/queues/Daily", Job) {}
-export class Weekly extends QueueResource.Tag<Weekly>()("@acme/queues/Weekly", Job) {}
+export class Mail extends queueTag<Mail>()("@acme/queues/Mail", Job) {}
+export class Jobs extends queueTag<Jobs>()("@acme/queues/Jobs", Job) {}
+export class Billing extends queueTag<Billing>()("@acme/queues/Billing", Job) {}
+export class Notify extends queueTag<Notify>()("@acme/queues/Notify", Job) {}
+export class Worker1 extends queueTag<Worker1>()("@acme/queues/Worker1", Job) {}
+export class Worker2 extends queueTag<Worker2>()("@acme/queues/Worker2", Job) {}
+export class Worker3 extends queueTag<Worker3>()("@acme/queues/Worker3", Job) {}
+export class RegionUS extends queueTag<RegionUS>()("@acme/queues/RegionUS", Job) {}
+export class RegionEU extends queueTag<RegionEU>()("@acme/queues/RegionEU", Job) {}
+export class Daily extends queueTag<Daily>()("@acme/queues/Daily", Job) {}
+export class Weekly extends queueTag<Weekly>()("@acme/queues/Weekly", Job) {}
 
 // the group tree — this is the navigable tree, nothing more is needed
 export class Regional extends Group.Tag<Regional>("@acme/queues/Regional")({ RegionUS, RegionEU }) {}
