@@ -26,7 +26,13 @@
  */
 import { Effect, Layer, Schema } from "effect";
 import { Resource, hostSym, specSym } from "./Resource";
-import type { HostKey, LocalCapability, ResourceTag } from "./Resource";
+import type {
+  HandlerContextOf,
+  HostKey,
+  LocalCapability,
+  ResourceTag,
+  ServiceOf,
+} from "./Resource";
 import {
   QueueItemCodecDescriptorSchema,
   QueueItemEncodingError,
@@ -167,14 +173,18 @@ export const queueEntry = <Sch extends Schema.Top>(itemSchema: Sch) =>
   Schema.Struct({
     item: itemSchema,
     entryId: Schema.String,
-    key: Schema.optionalKey(Schema.String),
+    // `optional` (not `optionalKey`): the engine emits `key: undefined` explicitly when no dedup
+    // key, so the wire schema must accept a present-but-undefined value (else encode fails on RPC).
+    key: Schema.optional(Schema.String),
     priority: queuePriority,
     attempts: Schema.Number,
     timestamps: queueEntryTimestamps,
-    batchId: Schema.optionalKey(Schema.String),
-    releaseId: Schema.optionalKey(Schema.String),
-    sourceResourceId: Schema.optionalKey(Schema.String),
-    attributes: Schema.optionalKey(queueEntryAttributes),
+    // `optional` (not `optionalKey`): the engine's `release`/route paths spread metadata that may
+    // hold present-but-`undefined` values, so the wire schema must accept them (else encode fails).
+    batchId: Schema.optional(Schema.String),
+    releaseId: Schema.optional(Schema.String),
+    sourceResourceId: Schema.optional(Schema.String),
+    attributes: Schema.optional(queueEntryAttributes),
   });
 
 /**
@@ -263,7 +273,9 @@ export const queueEvent = <Sch extends Schema.Top>(itemSchema: Sch) => {
 export const queueEntrySelector = <Sch extends Schema.Top>(itemSchema: Sch) =>
   Schema.Struct({
     entryId: Schema.optionalKey(Schema.String),
-    key: Schema.optionalKey(Schema.String),
+    // `optional` (not `optionalKey`): the engine emits `key: undefined` explicitly when no dedup
+    // key, so the wire schema must accept a present-but-undefined value (else encode fails on RPC).
+    key: Schema.optional(Schema.String),
     item: Schema.optionalKey(itemSchema),
   });
 
@@ -292,14 +304,15 @@ export const queueEncodedEntry = Schema.Struct({
   payload: Schema.Unknown,
   item: QueueItemCodecDescriptorSchema,
   entryId: Schema.String,
-  key: Schema.optionalKey(Schema.String),
+  // engine-output entry: optional metadata may be present-but-`undefined` (see queueEntry).
+  key: Schema.optional(Schema.String),
   priority: queuePriority,
   attempts: Schema.Number,
   timestamps: queueEntryTimestamps,
-  batchId: Schema.optionalKey(Schema.String),
-  releaseId: Schema.optionalKey(Schema.String),
-  sourceResourceId: Schema.optionalKey(Schema.String),
-  attributes: Schema.optionalKey(queueEntryAttributes),
+  batchId: Schema.optional(Schema.String),
+  releaseId: Schema.optional(Schema.String),
+  sourceResourceId: Schema.optional(Schema.String),
+  attributes: Schema.optional(queueEntryAttributes),
 });
 
 /**
@@ -545,92 +558,159 @@ export type QueueLayerConfig<A, E, R> = Omit<
  *
  * @public
  */
+/** The item-schema constraint shared by {@link layer} / {@link server} / {@link serveHttp}. */
+type QueueItemFields = Record<
+  string,
+  Schema.Codec<unknown, unknown, never, never>
+>;
+
+/**
+ * Build the live {@link QueueEngine} handle behind `tag` and map it onto the toolkit service
+ * impl — the single adapter shared by the **local** layer ({@link layer}) and the **remote**
+ * server ({@link server} / {@link serveHttp}). The worker `R` is captured at build time and
+ * provided to each method, so the impl requires nothing beyond the scope; the engine queue
+ * `name` defaults to the tag id (telemetry attribution) unless `config.name` overrides.
+ *
+ * The queue spec has no {@link Resource.local} members, so the resulting impl satisfies both
+ * `ImplOf` (for `Resource.layer`) and `WireServiceOf` (for `Resource.server` / `serveHttp`).
+ */
+const buildQueueImpl = <Self, F extends QueueItemFields, E, R>(
+  tag: ResourceTag<Self, QueueInstanceSpec<F>>,
+  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R>,
+) =>
+  Effect.gen(function* () {
+    // `add`'s payload is `item | item[]` (a union); the bare item schema is its first member.
+    const itemSchema: Schema.Codec<Schema.Struct<F>["Type"], unknown, never, never> =
+      tag[specSym].add.payload.members[0];
+    const context = yield* Effect.context<R>();
+    const handle = yield* QueueEngine.make({
+      name: tag.id,
+      ...config,
+      itemSchema,
+    });
+    const provideR = <Out, Err>(
+      effect: Effect.Effect<Out, Err, R>,
+    ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
+    // Annotated so the method params get contextual typing from the spec (and the impl is
+    // assignable to ImplOf / WireServiceOf at all three call sites — no local members here).
+    const impl: ServiceOf<QueueInstanceSpec<F>, Self> = {
+      size: handle.size,
+      sizes: handle.sizes,
+      isEmpty: handle.isEmpty,
+      completed: handle.completed,
+      start: provideR(handle.start),
+      pause: handle.pause,
+      resume: handle.resume,
+      shutdown: handle.shutdown,
+      clear: provideR(handle.clear),
+      status: handle.status,
+      statusNow: handle.statusNow,
+      metrics: handle.metrics,
+      logs: handle.logs,
+      // The item (or batch) IS the payload — `add`/`prioritize`/`defer` take it directly. The
+      // `Array.isArray` branch only picks the engine's overload (`(item)` vs `(items)`); both
+      // arms forward unchanged. Re-validation can't fail post-decode, so it's `orDie`d.
+      add: (itemOrItems) =>
+        provideR(
+          Array.isArray(itemOrItems)
+            ? handle.add(itemOrItems)
+            : handle.add(itemOrItems),
+        ).pipe(Effect.orDie),
+      prioritize: (itemOrItems) =>
+        provideR(
+          Array.isArray(itemOrItems)
+            ? handle.prioritize(itemOrItems)
+            : handle.prioritize(itemOrItems),
+        ).pipe(Effect.orDie),
+      defer: (itemOrItems) =>
+        provideR(
+          Array.isArray(itemOrItems)
+            ? handle.defer(itemOrItems)
+            : handle.defer(itemOrItems),
+        ).pipe(Effect.orDie),
+      // `enqueue` takes the full entry array directly — cast-free. The decoded wire entry
+      // (`queueEntry(itemSchema).Type`) and the engine's `QueueEntry<T>` are both derived from
+      // the same `Schema.Struct<F>["Type"]` for `item`, so they unify here with no bridge cast.
+      enqueue: (entries) => provideR(handle.enqueue(entries)),
+      release: ({ options }) => provideR(handle.release(options)),
+      releaseEncoded: ({ options }) => provideR(handle.releaseEncoded(options)),
+      deadLetter: ({ selector, options }) =>
+        provideR(handle.deadLetter(selector, options)),
+      drop: ({ selector, options }) => provideR(handle.drop(selector, options)),
+      events: handle.events,
+    };
+    return impl;
+  });
+
 const layer = <
   Self,
-  F extends Record<
-    string,
-    Schema.Codec<unknown, unknown, never, never>
-  > = Record<string, Schema.Codec<unknown, unknown, never, never>>,
+  F extends QueueItemFields = QueueItemFields,
   E = never,
   R = never,
 >(
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
   config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R>,
-): Layer.Layer<Self | LocalCapability<Self>, never, R> => {
-  // `add`'s payload is `item | item[]` (a union); the bare item schema is its first member.
-  const itemSchema: Schema.Codec<Schema.Struct<F>["Type"], unknown, never, never> =
-    tag[specSym].add.payload.members[0];
-  return Layer.unwrap(
-    Effect.gen(function* () {
-      const context = yield* Effect.context<R>();
-      // Default the engine queue `name` to the tag id, so telemetry (OTEL metric `queue` tag,
-      // captured-log `queueId`) attributes to this resource; an explicit config.name still wins.
-      const handle = yield* QueueEngine.make({
-        name: tag.id,
-        ...config,
-        itemSchema,
-      });
-      const provideR = <Out, Err>(
-        effect: Effect.Effect<Out, Err, R>,
-      ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
-      return Resource.layer(tag, {
-        size: handle.size,
-        sizes: handle.sizes,
-        isEmpty: handle.isEmpty,
-        completed: handle.completed,
-        start: provideR(handle.start),
-        pause: handle.pause,
-        resume: handle.resume,
-        shutdown: handle.shutdown,
-        clear: provideR(handle.clear),
-        status: handle.status,
-        statusNow: handle.statusNow,
-        metrics: handle.metrics,
-        logs: handle.logs,
-        // The item (or batch) IS the payload — `add`/`prioritize`/`defer` take it directly. The
-        // `Array.isArray` branch only picks the engine's overload (`(item)` vs `(items)`); both
-        // arms forward unchanged. Re-validation can't fail post-decode, so it's `orDie`d.
-        add: (itemOrItems) =>
-          provideR(
-            Array.isArray(itemOrItems)
-              ? handle.add(itemOrItems)
-              : handle.add(itemOrItems),
-          ).pipe(Effect.orDie),
-        prioritize: (itemOrItems) =>
-          provideR(
-            Array.isArray(itemOrItems)
-              ? handle.prioritize(itemOrItems)
-              : handle.prioritize(itemOrItems),
-          ).pipe(Effect.orDie),
-        defer: (itemOrItems) =>
-          provideR(
-            Array.isArray(itemOrItems)
-              ? handle.defer(itemOrItems)
-              : handle.defer(itemOrItems),
-          ).pipe(Effect.orDie),
-        // `enqueue` takes the full entry array directly — cast-free. The decoded wire entry
-        // (`queueEntry(itemSchema).Type`) and the engine's `QueueEntry<T>` are both derived from
-        // the same `Schema.Struct<F>["Type"]` for `item`, so they unify here with no bridge cast.
-        enqueue: (entries) => provideR(handle.enqueue(entries)),
-        release: ({ options }) => provideR(handle.release(options)),
-        releaseEncoded: ({ options }) => provideR(handle.releaseEncoded(options)),
-        deadLetter: ({ selector, options }) =>
-          provideR(handle.deadLetter(selector, options)),
-        drop: ({ selector, options }) => provideR(handle.drop(selector, options)),
-        events: handle.events,
-      });
-    }),
+): Layer.Layer<Self | LocalCapability<Self>, never, R> =>
+  Layer.unwrap(
+    Effect.map(buildQueueImpl(tag, config), (impl) => Resource.layer(tag, impl)),
   );
-};
+
+/**
+ * Expose a toolkit queue **over RPC** (transport-agnostic): run the live {@link QueueEngine}
+ * behind the tag and mount its handlers on the contract group. Compose with an `RpcServer` +
+ * a `Protocol` layer to actually serve; or use {@link serveHttp} for the http batteries.
+ * A remote {@link Resource.client} then drives the queue with the identical `yield* Tag` surface.
+ *
+ * @public
+ */
+const server = <
+  Self,
+  F extends QueueItemFields = QueueItemFields,
+  E = never,
+  R = never,
+>(
+  tag: ResourceTag<Self, QueueInstanceSpec<F>>,
+  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R>,
+): Layer.Layer<HandlerContextOf<QueueInstanceSpec<F>>, never, R> =>
+  Layer.unwrap(
+    Effect.map(buildQueueImpl(tag, config), (impl) => Resource.server(tag, impl)),
+  );
+
+/**
+ * Serve a toolkit queue **over http** in one call — the engine wired behind the tag and mounted
+ * on an http `RpcServer` (ndjson by default, matching {@link Resource.connectHttp}). Provide an
+ * `HttpServer` (e.g. `NodeHttpServer.layer({ port })`) and you have a remote queue; a
+ * {@link Resource.client} + transport drives it as if local.
+ *
+ * @public
+ */
+const serveHttp = <
+  Self,
+  F extends QueueItemFields = QueueItemFields,
+  E = never,
+  R = never,
+>(
+  tag: ResourceTag<Self, QueueInstanceSpec<F>>,
+  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R>,
+  options?: Parameters<typeof Resource.serveHttp>[2],
+) =>
+  Layer.unwrap(
+    Effect.map(buildQueueImpl(tag, config), (impl) =>
+      Resource.serveHttp(tag, impl, options),
+    ),
+  );
 
 /**
  * Queue resource toolkit — managed priority queues on the {@link Resource} toolkit.
  * (Model B: each instance is its own resource; data-plane procedures are typed by the
- * instance's `itemSchema`.)
+ * instance's `itemSchema`.) `layer` runs it locally; `server` / `serveHttp` host it remotely;
+ * a remote {@link Resource.client} drives it with the same `yield* Tag` surface.
  *
  * @public
  */
 export const QueueResource = {
   Tag: queueTag,
   layer,
+  server,
+  serveHttp,
 } as const;

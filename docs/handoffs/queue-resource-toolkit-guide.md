@@ -132,10 +132,20 @@ produce a `Layer` that provides `EmailQueue`. To the program they're interchange
 identical output service, identical `yield* EmailQueue`. That's why local-first UI development
 works.
 
-> **Serving side (the node that hosts the queue):** the toolkit's `Resource.serveHttp(tag, impl)`
-> exposes a resource over http, but a one-call `QueueResource.serve(tag, config)` that wires the
-> engine to it is **not built yet** — it's a small remaining piece. The *client* side above
-> (what UIs use) is complete; only the host-it-remotely helper is pending.
+> **Serving side (the node that hosts the queue):** `QueueResource.serveHttp(tag, config)` runs
+> the live engine behind the tag and exposes it over an http `RpcServer` in one call — just add an
+> `HttpServer` (e.g. `NodeHttpServer.layer({ port })`):
+>
+> ```ts
+> const EmailQueueServer = QueueResource.serveHttp(EmailQueue, {
+>   effect: (job) => sendEmail(job),
+>   concurrency: 5,
+> }).pipe(Layer.provideMerge(NodeHttpServer.layer({ port: 3002 })));
+> ```
+>
+> `QueueResource.server(tag, config)` is the transport-agnostic form (mount on any `RpcServer` +
+> `Protocol`). Both the client (`Resource.client`) and server sides are now complete — full
+> remote queue usage works end-to-end (see `test/queue-remote-http.test.ts`).
 
 ---
 
