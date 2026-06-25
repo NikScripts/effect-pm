@@ -19,9 +19,21 @@
  *
  * @module ProcessScheduleContract
  */
-import { Schema } from "effect";
-import { Resource } from "./Resource";
-import { processScheduleEntry } from "./ProcessContract";
+import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
+import { Resource, hostSym } from "./Resource";
+import type {
+  HandlerContextOf,
+  HostKey,
+  LocalCapability,
+  ResourceTag,
+  ServiceOf,
+} from "./Resource";
+import { ProcessSchedule } from "./ProcessSchedule";
+import {
+  fromWireScheduleEntry,
+  processScheduleEntry,
+  toWireScheduleEntry,
+} from "./ProcessContract";
 
 /**
  * The result of a `reconcile` — which entry ids were added / updated / removed / unchanged
@@ -108,4 +120,154 @@ export const processScheduleSpec = {
   }),
 };
 // Note: no `satisfies Spec` — that would contextually widen each method's error channel to
-// `unknown`. The spec is validated (without widening) at the `Resource.Tag` call site (next slice).
+// `unknown`. The spec is validated (without widening) at the `Resource.Tag` call site.
+
+/** The (shared, fixed) spec every process-schedule instance is built from. */
+type ProcessScheduleSpec = typeof processScheduleSpec;
+
+/**
+ * Define a process schedule as a toolkit resource:
+ *
+ * ```ts
+ * class Cron extends ProcessScheduleResource.Tag<Cron>()("@app/Cron") {}
+ * const s = yield* Cron;
+ * yield* s.reconcile(entriesFromDb);
+ * ```
+ *
+ * A fixed shared spec (every schedule has the same CRUD), so this binds a plain
+ * {@link Resource.Tag}. `Self` is given explicitly. Pass `options.host` to bind to a
+ * {@link Resource.Host} (ship only the tag; see {@link Resource.client} / {@link Resource.connect}).
+ *
+ * @public
+ */
+const processScheduleTag = <Self>() => {
+  function build<HSelf>(
+    id: string,
+    options: { readonly description?: string; readonly host: HostKey<HSelf> },
+  ): ResourceTag<Self, ProcessScheduleSpec> & { readonly [hostSym]: HostKey<HSelf> };
+  function build(
+    id: string,
+    options?: { readonly description?: string },
+  ): ResourceTag<Self, ProcessScheduleSpec>;
+  function build(
+    id: string,
+    options?: { readonly description?: string; readonly host?: HostKey<unknown> },
+  ): ResourceTag<Self, ProcessScheduleSpec> {
+    const host = options?.host;
+    return host === undefined
+      ? Resource.Tag<Self>(id, options)(processScheduleSpec)
+      : Resource.Tag<Self>(id, options)(processScheduleSpec, host);
+  }
+  return build;
+};
+
+/**
+ * The config for {@link ProcessScheduleResource.layer} — optional initial entries. The store is
+ * an in-memory {@link ProcessSchedule}; a consumer that wants a different backing can compose
+ * their own service (a future slice may accept a `ProcessSchedule` layer directly).
+ *
+ * @public
+ */
+export interface ProcessScheduleLayerConfig {
+  readonly initial?: ReadonlyArray<typeof processScheduleEntry.Type>;
+}
+
+/**
+ * Build a live {@link ProcessSchedule} service behind `tag` and map it onto the toolkit service
+ * impl — shared by the local {@link layer} and the remote {@link server} / {@link serveHttp}.
+ * The service has no requirements, so the impl needs nothing beyond the build scope.
+ */
+const buildProcessScheduleImpl = <Self>(config?: ProcessScheduleLayerConfig) =>
+  Effect.gen(function* () {
+    const initial = (config?.initial ?? []).map(fromWireScheduleEntry);
+    const scheduleCtx = yield* Layer.build(ProcessSchedule.inMemory(initial));
+    const service = Context.get(scheduleCtx, ProcessSchedule);
+
+    const wireEntries = Effect.map(service.entries, (entries) =>
+      entries.map(toWireScheduleEntry),
+    );
+
+    const impl: ServiceOf<ProcessScheduleSpec, Self> = {
+      entries: wireEntries,
+      get: ({ id }) =>
+        Effect.map(
+          service.get(id),
+          Option.match({ onNone: () => null, onSome: toWireScheduleEntry }),
+        ),
+      has: ({ id }) => service.has(id),
+      set: (entries) => service.set(entries.map(fromWireScheduleEntry)),
+      add: (entry) => service.add(fromWireScheduleEntry(entry)),
+      upsert: (entry) => service.upsert(fromWireScheduleEntry(entry)),
+      remove: ({ id }) => service.remove(id),
+      removeMany: ({ ids }) => service.removeMany(ids),
+      clear: service.clear,
+      // ReconcileResult is already { added/updated/removed/unchanged: string[] } — matches the
+      // reconcileResult schema directly, no mapping.
+      reconcile: (entries) => service.reconcile(entries.map(fromWireScheduleEntry)),
+      // Emit the entries now, then again on every mutation (`changed` gates each re-read).
+      changes: Stream.concat(
+        Stream.fromEffect(wireEntries),
+        Stream.forever(
+          Stream.fromEffect(service.changed.pipe(Effect.andThen(wireEntries))),
+        ),
+      ),
+    };
+    return impl;
+  });
+
+const layer = <Self>(
+  tag: ResourceTag<Self, ProcessScheduleSpec>,
+  config?: ProcessScheduleLayerConfig,
+): Layer.Layer<Self | LocalCapability<Self>> =>
+  Layer.unwrap(
+    Effect.map(buildProcessScheduleImpl<Self>(config), (impl) =>
+      Resource.layer(tag, impl),
+    ),
+  );
+
+/**
+ * Expose a toolkit process schedule **over RPC** (transport-agnostic). Compose with an
+ * `RpcServer` + a `Protocol` layer to serve; or use {@link serveHttp} for the http batteries.
+ *
+ * @public
+ */
+const server = <Self>(
+  tag: ResourceTag<Self, ProcessScheduleSpec>,
+  config?: ProcessScheduleLayerConfig,
+): Layer.Layer<HandlerContextOf<ProcessScheduleSpec>> =>
+  Layer.unwrap(
+    Effect.map(buildProcessScheduleImpl<Self>(config), (impl) =>
+      Resource.server(tag, impl),
+    ),
+  );
+
+/**
+ * Serve a toolkit process schedule **over http** in one call (ndjson by default). Provide an
+ * `HttpServer` and a {@link Resource.client} + transport drives it as if local.
+ *
+ * @public
+ */
+const serveHttp = <Self>(
+  tag: ResourceTag<Self, ProcessScheduleSpec>,
+  config?: ProcessScheduleLayerConfig,
+  options?: Parameters<typeof Resource.serveHttp>[2],
+) =>
+  Layer.unwrap(
+    Effect.map(buildProcessScheduleImpl<Self>(config), (impl) =>
+      Resource.serveHttp(tag, impl, options),
+    ),
+  );
+
+/**
+ * Process-schedule resource toolkit — a schedule store (CRUD + reconcile) on the
+ * {@link Resource} toolkit. `layer` runs it locally; `server` / `serveHttp` host it remotely;
+ * a remote {@link Resource.client} drives it with the same `yield* Tag` surface.
+ *
+ * @public
+ */
+export const ProcessScheduleResource = {
+  Tag: processScheduleTag,
+  layer,
+  server,
+  serveHttp,
+} as const;

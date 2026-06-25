@@ -136,6 +136,10 @@
       "types": "./dist/ProcessContract.d.ts",
       "default": "./dist/ProcessContract.js"
     },
+    "./ProcessScheduleContract": {
+      "types": "./dist/ProcessScheduleContract.d.ts",
+      "default": "./dist/ProcessScheduleContract.js"
+    },
     "./storage/sqlite": {
       "types": "./dist/storage/sqlite.d.ts",
       "default": "./dist/storage/sqlite.js"

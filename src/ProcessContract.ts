@@ -219,7 +219,11 @@ const statusPollInterval = Duration.millis(500);
 
 // ─── wire ⇄ engine mapping (the contract uses DateTime.Utc + optionalKey; the engine uses Date + Option) ───
 
-const toWireEntry = (
+/**
+ * Map a (native) engine schedule entry to its wire form. Shared with the standalone
+ * {@link ProcessScheduleContract}. @internal
+ */
+export const toWireScheduleEntry = (
   entry: ProcessScheduleEntry,
 ): typeof processScheduleEntry.Type => ({
   ...(Option.isSome(entry.id) ? { id: entry.id.value } : {}),
@@ -229,7 +233,11 @@ const toWireEntry = (
     : {}),
 });
 
-const fromWireEntry = (
+/**
+ * Map a wire schedule entry back to the engine's (native) form. Shared with the standalone
+ * {@link ProcessScheduleContract}. @internal
+ */
+export const fromWireScheduleEntry = (
   wire: typeof processScheduleEntry.Type,
 ): ProcessScheduleEntry => ({
   id: wire.id !== undefined ? Option.some(wire.id) : Option.none(),
@@ -331,13 +339,13 @@ const buildProcessImpl = <Self, E, R>(
     const impl: ServiceOf<ProcessSpec, Self> = {
       statusNow,
       status: Stream.tick(statusPollInterval).pipe(Stream.mapEffect(() => statusNow)),
-      schedule: Effect.map(schedule.entries, (entries) => entries.map(toWireEntry)),
+      schedule: Effect.map(schedule.entries, (entries) => entries.map(toWireScheduleEntry)),
       logs: Stream.empty,
       start,
       stop,
       runImmediately: provideR(handle.runImmediately()),
-      setSchedule: (entries) => schedule.set(entries.map(fromWireEntry)),
-      addSchedule: (entry) => schedule.add(fromWireEntry(entry)),
+      setSchedule: (entries) => schedule.set(entries.map(fromWireScheduleEntry)),
+      addSchedule: (entry) => schedule.add(fromWireScheduleEntry(entry)),
       clearSchedule: schedule.clear,
     };
     return impl;

@@ -106,6 +106,12 @@ export {
   processStatus,
 } from "./ProcessContract";
 export type { ProcessLayerConfig } from "./ProcessContract";
+export {
+  ProcessScheduleResource,
+  processScheduleSpec,
+  reconcileResult,
+} from "./ProcessScheduleContract";
+export type { ProcessScheduleLayerConfig } from "./ProcessScheduleContract";
 export { Polling } from "./Polling";
 export { ProcessSchedule } from "./ProcessSchedule";
 export { ProcessGroup } from "./ProcessGroup";
