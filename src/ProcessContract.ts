@@ -308,11 +308,15 @@ const buildProcessImpl = <Self, E, R>(
     // store) is what we pre-build and share.
     const scheduleInitializer =
       typeof config.schedule === "function" ? config.schedule : undefined;
+    // Default to alwaysArmed (mutable in-memory, pre-seeded with an always-open window) so a
+    // process *runs immediately* with its layer — matching the engine default and the
+    // "starts immediately unless disabled" rule. Pass `schedule: ProcessSchedule.empty` (or
+    // specific windows) to start disarmed; the store stays mutable for setSchedule either way.
     const baseScheduleLayer: ProcessScheduleLayerInput =
       config.scheduleLayer ??
       (config.schedule !== undefined && typeof config.schedule !== "function"
         ? config.schedule
-        : ProcessSchedule.inMemory());
+        : ProcessSchedule.alwaysArmed);
     const scheduleCtx = yield* Layer.build(baseScheduleLayer);
     const schedule = Context.get(scheduleCtx, ProcessSchedule);
 

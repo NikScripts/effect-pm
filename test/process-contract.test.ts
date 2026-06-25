@@ -1,19 +1,40 @@
-import { DateTime, Effect, Ref } from "effect";
+import { DateTime, Duration, Effect, Ref } from "effect";
 import { expect, it } from "vitest";
 import { ProcessResource } from "../src/ProcessContract";
+import { ProcessSchedule } from "../src/ProcessSchedule";
 
 // A managed process as a toolkit resource — driven through the same `yield* Tag` surface a
-// remote consumer uses (only the provided layer differs). Default schedule is an empty in-memory
-// store (disarmed), so the user effect runs only via `runImmediately` here.
+// remote consumer uses (only the provided layer differs). By default a process is armed and runs
+// immediately; these tests pass `schedule: ProcessSchedule.empty` to start disarmed where they
+// want to observe `runImmediately` / schedule CRUD in isolation.
 class TestProc extends ProcessResource.Tag<TestProc>()("test/process-contract/Proc") {}
 
-it("runImmediately runs the effect once; statusNow reflects the auto-started driver", () =>
+it("with the default schedule a process arms and runs its effect immediately", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const ran = yield* Ref.make(0);
       yield* Effect.gen(function* () {
         const proc = yield* TestProc;
-        // auto-started on layer build, empty schedule → disarmed, no triggers
+        // wait for the supervisor to arm + run the always-open window once
+        yield* Effect.gen(function* () {
+          while ((yield* Ref.get(ran)) < 1) yield* Effect.sleep(Duration.millis(5));
+        }).pipe(Effect.timeout(Duration.seconds(1)));
+        expect(yield* Ref.get(ran)).toBeGreaterThanOrEqual(1);
+        expect((yield* proc.statusNow).armed).toBe(true);
+      }).pipe(
+        Effect.provide(
+          ProcessResource.layer(TestProc, { effect: Ref.update(ran, (n) => n + 1) }),
+        ),
+      );
+    }),
+  ));
+
+it("runImmediately runs the effect once (disarmed via schedule: empty)", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const ran = yield* Ref.make(0);
+      yield* Effect.gen(function* () {
+        const proc = yield* TestProc;
         const before = yield* proc.statusNow;
         expect(before.supervising).toBe(true);
         expect(before.armed).toBe(false);
@@ -25,6 +46,7 @@ it("runImmediately runs the effect once; statusNow reflects the auto-started dri
         Effect.provide(
           ProcessResource.layer(TestProc, {
             effect: Ref.update(ran, (n) => n + 1),
+            schedule: ProcessSchedule.empty,
           }),
         ),
       );
@@ -49,7 +71,12 @@ it("schedule round-trips through set/add/clear and the read verb", () =>
       entries = yield* proc.schedule;
       expect(entries).toEqual([]);
     }).pipe(
-      Effect.provide(ProcessResource.layer(TestProc, { effect: Effect.void })),
+      Effect.provide(
+        ProcessResource.layer(TestProc, {
+          effect: Effect.void,
+          schedule: ProcessSchedule.empty,
+        }),
+      ),
     ),
   ));
 

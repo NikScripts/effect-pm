@@ -4,6 +4,7 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { ProcessResource, type ProcessLayerConfig } from "../src/ProcessContract";
+import { ProcessSchedule } from "../src/ProcessSchedule";
 import { Resource } from "../src/Resource";
 
 // The full remote path: a REAL toolkit Process driver served over http via
@@ -43,7 +44,7 @@ const withServer = <A, E>(
 
 it("statusNow + start/stop round-trip over http against the real driver", () =>
   Effect.runPromise(
-    withServer({ effect: Effect.void }, (_port) =>
+    withServer({ effect: Effect.void, schedule: ProcessSchedule.empty }, (_port) =>
       Effect.gen(function* () {
         const proc = yield* RemoteProc;
         const initial = yield* proc.statusNow; // auto-started on the server
@@ -60,7 +61,7 @@ it("statusNow + start/stop round-trip over http against the real driver", () =>
 
 it("schedule set/add/clear + read round-trip over http (entries cross the wire)", () =>
   Effect.runPromise(
-    withServer({ effect: Effect.void }, (_port) =>
+    withServer({ effect: Effect.void, schedule: ProcessSchedule.empty }, (_port) =>
       Effect.gen(function* () {
         const proc = yield* RemoteProc;
         const future = DateTime.makeUnsafe(4_102_444_800_000); // 2100-01-01
@@ -91,7 +92,7 @@ it("runImmediately crosses the wire and runs the server-side effect once", () =>
     Effect.gen(function* () {
       // a server-side side effect we can observe after the run
       let ran = 0;
-      yield* withServer({ effect: Effect.sync(() => { ran += 1; }) }, (_port) =>
+      yield* withServer({ effect: Effect.sync(() => { ran += 1; }), schedule: ProcessSchedule.empty }, (_port) =>
         Effect.gen(function* () {
           const proc = yield* RemoteProc;
           yield* proc.runImmediately;
