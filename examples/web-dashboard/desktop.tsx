@@ -145,7 +145,9 @@ const FleetTable = (props: {
 };
 
 export const DesktopDashboard = (): React.ReactElement => {
-  const [group, setGroup] = React.useState<GroupNode>(Fleet);
+  // tags/groups are classes (functions) — lazy-init + functional setters so React
+  // doesn't mistake them for updater functions and call the constructor.
+  const [group, setGroup] = React.useState<GroupNode>(() => Fleet);
   const [selected, setSelected] = React.useState<LeafTag | null>(null);
   const bundle = selected === null ? undefined : queueBundle(selected);
 
@@ -160,13 +162,13 @@ export const DesktopDashboard = (): React.ReactElement => {
       </header>
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel defaultSize={16} minSize={10} className="overflow-auto p-2">
-          <TreeNode node={Fleet} depth={0} activeGroup={group.id} onGroup={setGroup} />
+          <TreeNode node={Fleet} depth={0} activeGroup={group.id} onGroup={(g) => setGroup(() => g)} />
         </ResizablePanel>
         <ResizableHandle />
         <ResizablePanel defaultSize={56} minSize={30}>
           <ResizablePanelGroup orientation="vertical">
             <ResizablePanel defaultSize={62} minSize={20} className="overflow-auto">
-              <FleetTable group={group} selected={selected} onSelect={setSelected} />
+              <FleetTable group={group} selected={selected} onSelect={(tag) => setSelected(() => tag)} />
             </ResizablePanel>
             <ResizableHandle vertical />
             <ResizablePanel defaultSize={38} minSize={10} className="flex min-h-0 flex-col">

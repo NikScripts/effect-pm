@@ -77,7 +77,7 @@ export const MobileDashboard = (): React.ReactElement => {
           <Cell
             key={name}
             member={member}
-            onOpenQueue={setSelected}
+            onOpenQueue={(tag) => setSelected(() => tag)}
             onOpenGroup={(g) => setPath((p) => [...p, g])}
           />
         ))}
