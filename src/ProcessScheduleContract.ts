@@ -268,3 +268,7 @@ export const serveHttp = <Self>(
 // The unified `ProcessScheduleResource` namespace is assembled in
 // `internal/processScheduleResourceNamespace.ts` and re-exported by the barrel as `export * as`
 // (so member access tree-shakes: the light `Tag`/spec never pulls the engine).
+//
+// DX: `import * as ProcessScheduleResource from "@nikscripts/effect-pm/ProcessScheduleContract"`
+// gives a tree-shakeable namespace — `.Tag` (alias of `processScheduleTag`) pulls no engine code.
+export { processScheduleTag as Tag };

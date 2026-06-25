@@ -746,3 +746,7 @@ export const configure = <
 // The unified `QueueResource` namespace is assembled in `internal/queueResourceNamespace.ts` and
 // re-exported by the barrel as `export * as QueueResource` (so member access tree-shakes — the
 // light `Tag`/spec here never pulls the engine that `layer`/`server`/`serveHttp` use).
+//
+// DX: `import * as QueueResource from "@nikscripts/effect-pm/QueueContract"` gives a
+// tree-shakeable namespace — `QueueResource.Tag` (alias of `queueTag`) pulls no engine code.
+export { queueTag as Tag };

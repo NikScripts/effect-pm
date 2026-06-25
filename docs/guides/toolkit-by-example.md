@@ -18,16 +18,24 @@ unique API. Code the way the downstream repo (e.g. `services-hub`) would actuall
 > just larger). Guaranteed barrel-namespace tree-shaking is a tracked follow-up
 > (`docs/plans/18-unbundled-build-treeshaking.md`).
 >
-> **Per-resource bundle status — all tags now tree-shake (proven, browser-safe):**
-> - **Queue:** `import { queueTag } from "@nikscripts/effect-pm/QueueContract"` → ~23kb, engine-free.
-> - **Process:** `import { processTag } from "@nikscripts/effect-pm/ProcessContract"`.
-> - **Schedule:** `import { processScheduleTag } from "@nikscripts/effect-pm/ProcessScheduleContract"`.
->   Process + Schedule together bundle to ~17kb with **zero engine symbols**.
+> **Browser-safe tags — `import * as` from the subpath (proven engine-free):** for any module a
+> browser bundle pulls (your shared tag definitions), import the namespace from the resource's
+> subpath. You get the same `QueueResource.Tag` ergonomics, and it **tree-shakes** — zero engine code:
 >
-> Use these named subpath imports in any module a browser bundle pulls (your shared tag
-> definitions). The barrel `QueueResource.Tag` / `ProcessResource.Tag` are functionally identical
-> but may include engine code depending on the bundler (pure-Effect, never *breaks* a build);
-> guaranteed barrel-namespace tree-shaking is the remaining follow-up (`docs/plans/18`).
+> ```ts
+> import * as QueueResource from "@nikscripts/effect-pm/QueueContract";
+> import * as ProcessResource from "@nikscripts/effect-pm/ProcessContract";
+> import * as ProcessScheduleResource from "@nikscripts/effect-pm/ProcessScheduleContract";
+>
+> class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", rosterJob) {}
+> // QueueResource.Tag/ProcessResource.Tag bundle to ~27kb with ZERO engine symbols (proven).
+> ```
+>
+> The **barrel** `import { QueueResource }` is the same API but its namespace is materialized, so
+> `QueueResource.Tag` from the barrel may include engine code (pure-Effect — never *breaks* a build,
+> just larger). Use the barrel on the Node side (where you also call `.layer` / `.make` / `.serveHttp`);
+> use the `import * as … from "<subpath>"` form anywhere a browser bundles. Making the barrel
+> namespace tree-shake too is the remaining follow-up (`docs/plans/18`).
 
 ---
 

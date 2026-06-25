@@ -448,3 +448,7 @@ export const configure = <Self, E = never, R = never>(
 // The unified `ProcessResource` namespace is assembled in `internal/processResourceNamespace.ts`
 // and re-exported by the barrel as `export * as ProcessResource` (so member access tree-shakes:
 // the light `Tag`/spec never pulls the engine that `layer`/`server`/`serveHttp` use).
+//
+// DX: `import * as ProcessResource from "@nikscripts/effect-pm/ProcessContract"` gives a
+// tree-shakeable namespace — `ProcessResource.Tag` (alias of `processTag`) pulls no engine code.
+export { processTag as Tag };
