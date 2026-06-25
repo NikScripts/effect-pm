@@ -221,7 +221,7 @@
     "example:form:process-manager-endpoint-service": "tsx examples/forms/process-group/process-manager-endpoint-service.ts",
     "example:form:process-group-remote-layer": "tsx examples/forms/process-group/process-group-remote-layer.ts",
     "example:form:process-group-remote-contract-drift": "tsx examples/forms/process-group/process-group-remote-contract-drift.ts",
-    "prepare": "effect-language-service patch"
+    "prepare": "effect-language-service patch && effect-tsgo patch"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
