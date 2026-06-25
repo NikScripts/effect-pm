@@ -2,14 +2,19 @@
  * @module examples/web-dashboard/queue-server
  *
  * The host: runs the real queue engines and serves each over http (one path per
- * queue) so the browser can reach them with `Resource.client`. Serve-only for now —
- * see the note below on producers. Run: `pnpm run example:queue-server`.
+ * queue) so the browser can reach them with `Resource.client`. Drives live traffic
+ * the sanctioned way — a **client** that enqueues over the wire (a loopback producer
+ * here), not server-side `yield* tag` (a host doesn't expose its served service).
+ * Run: `pnpm run example:queue-server`.
  */
-import { Effect, Layer } from "effect";
+import { Duration, Effect, Layer } from "effect";
 import { createServer } from "node:http";
+import { FetchHttpClient } from "effect/unstable/http";
+import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { QueueResource } from "../../src/QueueContract";
+import { Resource } from "../../src/Resource";
 import {
   Billing,
   Daily,
@@ -28,6 +33,7 @@ import {
 
 const PORT = 7777;
 
+// host every queue at /rpc/<name> on one node server.
 const serveLayer = Layer.mergeAll(
   QueueResource.serveHttp(Mail, cfg, { path: `/rpc/${pathOf(Mail.id)}` }),
   QueueResource.serveHttp(Jobs, cfg, { path: `/rpc/${pathOf(Jobs.id)}` }),
@@ -42,13 +48,74 @@ const serveLayer = Layer.mergeAll(
   QueueResource.serveHttp(Weekly, cfg, { path: `/rpc/${pathOf(Weekly.id)}` }),
 ).pipe(Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: PORT })));
 
-// NOTE: `serveHttp` builds + serves the engine internally; it does NOT expose the
-// queue service to this runtime, so server-side producers (`yield* tag`) aren't
-// possible here. The queues serve live (workers auto-start); drive traffic from a
-// client once the browser path is unblocked. (Producer strategy: TODO.)
+// loopback client transport (the producer reaches the local server over http).
+const remote = (id: string) =>
+  RpcClient.layerProtocolHttp({ url: `http://localhost:${PORT}/rpc/${pathOf(id)}` }).pipe(
+    Layer.provide(RpcSerialization.layerNdjson),
+    Layer.provide(FetchHttpClient.layer),
+  );
+const clientLayer = Layer.mergeAll(
+  Resource.client(Mail).pipe(Layer.provide(remote(Mail.id))),
+  Resource.client(Jobs).pipe(Layer.provide(remote(Jobs.id))),
+  Resource.client(Billing).pipe(Layer.provide(remote(Billing.id))),
+  Resource.client(Notify).pipe(Layer.provide(remote(Notify.id))),
+  Resource.client(Worker1).pipe(Layer.provide(remote(Worker1.id))),
+  Resource.client(Worker2).pipe(Layer.provide(remote(Worker2.id))),
+  Resource.client(Worker3).pipe(Layer.provide(remote(Worker3.id))),
+  Resource.client(RegionUS).pipe(Layer.provide(remote(RegionUS.id))),
+  Resource.client(RegionEU).pipe(Layer.provide(remote(RegionEU.id))),
+  Resource.client(Daily).pipe(Layer.provide(remote(Daily.id))),
+  Resource.client(Weekly).pipe(Layer.provide(remote(Weekly.id))),
+);
+
+let rngState = 0x9e3779b9;
+const rng = (): number => {
+  rngState = (rngState * 1664525 + 1013904223) >>> 0;
+  return rngState / 0x100000000;
+};
+const hexKey = (): string => Math.floor(rng() * 0xffff).toString(16).padStart(4, "0");
+
+interface Producible {
+  readonly add: (i: { readonly id: string }) => Effect.Effect<unknown, unknown, never>;
+  readonly prioritize: (i: { readonly id: string }) => Effect.Effect<unknown, unknown, never>;
+  readonly defer: (i: { readonly id: string }) => Effect.Effect<unknown, unknown, never>;
+}
+
+// a producer is just a client that enqueues — fork one per queue.
+const produce = <R>(tag: Effect.Effect<Producible, never, R>): Effect.Effect<void, never, R> =>
+  Effect.asVoid(
+    Effect.flatMap(tag, (q) =>
+      Effect.forkDetach(
+        Effect.forever(
+          Effect.gen(function* () {
+            const r = rng();
+            const item = { id: hexKey() };
+            yield* (r < 0.2 ? q.prioritize(item) : r < 0.85 ? q.add(item) : q.defer(item)).pipe(
+              Effect.ignore,
+            );
+            yield* Effect.sleep(Duration.millis(300 + Math.floor(rng() * 500)));
+          }),
+        ),
+      ),
+    ),
+  );
+
 const program = Effect.gen(function* () {
   yield* Effect.logInfo(`queue-server listening on :${PORT}`);
+  yield* produce(Mail);
+  yield* produce(Jobs);
+  yield* produce(Billing);
+  yield* produce(Notify);
+  yield* produce(Worker1);
+  yield* produce(Worker2);
+  yield* produce(Worker3);
+  yield* produce(RegionUS);
+  yield* produce(RegionEU);
+  yield* produce(Daily);
+  yield* produce(Weekly);
   return yield* Effect.never;
 });
 
-NodeRuntime.runMain(program.pipe(Effect.provide(serveLayer), Effect.scoped));
+NodeRuntime.runMain(
+  program.pipe(Effect.provide(Layer.mergeAll(serveLayer, clientLayer)), Effect.scoped),
+);
