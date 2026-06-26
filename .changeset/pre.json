@@ -49,6 +49,7 @@
     "strict-effect-plan-and-polish",
     "terminal-contracts",
     "toolkit-treeshake-and-cleanup",
-    "typed-process-group-contracts"
+    "typed-process-group-contracts",
+    "web-widgets"
   ]
 }
