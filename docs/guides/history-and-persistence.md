@@ -28,8 +28,15 @@ const rosterQueueLayer = QueueResource.layer(RosterQueue, {
 }).pipe(Layer.provide(HistoryStore.layerMemory()));   // ← opt into history
 ```
 
-- `HistoryStore.layerMemory({ capacity })` — in-memory ring (bounded, oldest dropped). Available now.
-- SQLite / Postgres backends land later behind the **same** interface — swap the layer, nothing else.
+- `HistoryStore.layerMemory({ capacity })` — in-memory ring (bounded, oldest dropped).
+- `SQLiteHistoryStore.layer({ filename, capacity? })` (from `@nikscripts/effect-pm/storage/sqlite`)
+  — durable across restarts; `capacity` is count-based retention per stream. Same interface, swap
+  the layer:
+  ```ts
+  import { SQLiteHistoryStore } from "@nikscripts/effect-pm/storage/sqlite";
+  // …Layer.provide(SQLiteHistoryStore.layer({ filename: "history.db", capacity: 10_000 }))
+  ```
+- Postgres lands later behind the same interface.
 - No `HistoryStore` layer → history is empty (zero cost, no behavior change).
 
 ## Reading history
@@ -57,7 +64,7 @@ yield* queue.metricsHistory({ since, until })    // past metric windows (queueMe
 Same shape as the queue — set `captureLogs` on the process layer, provide a `HistoryStore`:
 
 ```ts
-const procLayer = ProcessResource.layer(NwslSync, {
+const procLayer = ScheduledProcess.layer(NwslSync, {
   effect,
   captureLogs: true,
 }).pipe(Layer.provide(HistoryStore.layerMemory()));
@@ -81,11 +88,65 @@ yield* HostLogs.stream                  // live, all runtime logs
 yield* HostLogs.history({ limit: 200 }) // durable, all runtime logs
 ```
 
-## For a dashboard
+## Durability (the durable queue)
 
-Same Tag, two reads: **`status`/`metrics`/`logs` for live**, **`*History` for backfill**. A typical
-panel: paint `logHistory({ limit })` once, then follow the `logs` stream. Both come from
-`yield* queue` (or `Resource.client(queue)` remotely) — the dashboard never touches the store.
+History is the *observability* plane. The *durability* plane is `DurableQueueStore` — a
+priority-native store so no enqueued work is lost across a restart (**at-least-once** + dedup key).
+Turn it on with `persist` + a backend layer (+ `itemSchema`, since the payload must serialize):
+
+```ts
+import { SQLiteDurableQueueStore } from "@nikscripts/effect-pm/storage/sqlite";
+
+const queueLayer = QueueResource.layer(RosterQueue, {
+  effect,
+  itemSchema: RosterItem,           // required for persist
+  persist: { maxAttempts: 3 },      // or `true` for defaults
+}).pipe(Layer.provide(SQLiteDurableQueueStore.layer({ filename: "queue.db" })));
+```
+
+When on, the store is the **source of truth**: enqueue persists, a feeder leases work into the
+workers, success/failure update the store (retry → requeue, `maxAttempts` → dead-letter), and a
+restart **recovers in-flight work**. `size`/`sizes`/`isEmpty`/`status` and shutdown-drain reflect
+the store. Off by default (in-memory only) — and the in-memory path is unchanged.
+
+**Control verbs** (`release` / `deadLetter` / `drop`) operate on the durable **backlog** — select by
+`entryId` or `key` (item-reference selectors don't survive serialization; in-flight/leased work is
+left to the workers). So a dashboard's "drop / dead-letter this item" actions work on a persisted
+queue, not just an in-memory one.
+
+## For a dashboard (query-then-tail, over RPC)
+
+Same Tag, two reads: **`status`/`metrics`/`logs` for live**, **`*History` for backfill**. The
+dashboard never touches the store — it talks to the served resource through `Resource.client`, and
+the host owns persistence. This is the proven path (`test/queue-remote-http.test.ts`).
+
+**Host (Droplet/Mini)** — serve the resource with capture + a history backend:
+
+```ts
+QueueResource.serveHttp(RosterQueue, { effect, captureLogs: true })
+  .pipe(Layer.provide(HistoryStore.layerMemory())); // or SQLiteHistoryStore.layer({ filename })
+```
+
+**Dashboard (browser/Next.js)** — a remote client; same `yield* Tag` surface:
+
+```ts
+const queue = yield* RosterQueue; // resolved from Resource.client(RosterQueue)
+
+// 1) backfill once
+const recent = yield* queue.logHistory({ limit: 200 });
+render(recent);
+
+// 2) then tail live (no gap, no store access)
+yield* queue.logs.pipe(Stream.runForEach(render), Effect.forkScoped);
+
+// live KPIs: poll statusNow, or follow the status/metrics streams
+const status = yield* queue.statusNow;             // { sizes, inFlight, completed, phase }
+yield* queue.metrics.pipe(Stream.runForEach(chart), Effect.forkScoped);
+```
+
+`logHistory` / `metricsHistory` are plain `query` verbs and cross RPC like `statusNow`; `logs` /
+`metrics` / `status` are streams over the same transport. Runtime-wide logs use `HostLogs.history`
++ `HostLogs.stream` the same way.
 
 ## What exists / what's coming
 
@@ -95,7 +156,8 @@ panel: paint `logHistory({ limit })` once, then follow the `logs` stream. Both c
 | Process | `logs` | `logHistory` | **done** (needs `captureLogs`) |
 | Runtime-wide (`HostLogs`) | `HostLogs.stream` | `HostLogs.history` | **done** — captures *all* runtime logs (incl. untagged + processes); add `HostLogs.persistLayer` |
 
-Backends: `layerMemory` now → SQLite → Postgres (same `HistoryStore` interface) — **next**.
+Backends: `layerMemory` (in-process) and `SQLiteHistoryStore.layer` (durable) ship today; Postgres
+later (same `HistoryStore` interface).
 
 ## Custom use
 

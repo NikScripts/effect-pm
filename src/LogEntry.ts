@@ -17,7 +17,7 @@ const logLevelSchema = Schema.Literals([
  *
  * @public
  */
-export interface ProcessManagerLogEntry {
+export interface LogEntry {
   readonly date: string;
   readonly level: LogLevel;
   readonly message: string;
@@ -29,7 +29,7 @@ export interface ProcessManagerLogEntry {
 /**
  * @public
  */
-export const ProcessManagerLogEntrySchema = Schema.Struct({
+export const LogEntrySchema = Schema.Struct({
   date: Schema.String,
   level: logLevelSchema,
   message: Schema.String,
@@ -38,23 +38,23 @@ export const ProcessManagerLogEntrySchema = Schema.Struct({
   spans: Schema.Array(Schema.String),
 });
 
-const ProcessManagerLogEntryNdjson = Schema.fromJsonString(ProcessManagerLogEntrySchema);
+const LogEntryNdjson = Schema.fromJsonString(LogEntrySchema);
 
 /**
  * @public
  */
-export const encodeProcessManagerLogEntryNdjson = (
-  entry: ProcessManagerLogEntry,
+export const encodeLogEntryNdjson = (
+  entry: LogEntry,
 ): Effect.Effect<string, Schema.SchemaError> =>
-  Schema.encodeEffect(ProcessManagerLogEntryNdjson)(entry);
+  Schema.encodeEffect(LogEntryNdjson)(entry);
 
 /**
  * @public
  */
-export const decodeProcessManagerLogEntryNdjson = (
+export const decodeLogEntryNdjson = (
   line: string,
-): Effect.Effect<ProcessManagerLogEntry, Schema.SchemaError> =>
-  Schema.decodeUnknownEffect(ProcessManagerLogEntryNdjson)(line);
+): Effect.Effect<LogEntry, Schema.SchemaError> =>
+  Schema.decodeUnknownEffect(LogEntryNdjson)(line);
 
 const encodeAnnotationValue = (value: unknown): string => {
   if (typeof value === "string") {
@@ -85,18 +85,18 @@ const encodeMessage = (message: unknown): string => {
 };
 
 /**
- * Build a {@link ProcessManagerLogEntry} from runtime logger options and fiber log context.
+ * Build a {@link LogEntry} from runtime logger options and fiber log context.
  *
  * @public
  */
-export const processManagerLogEntryFromLoggerOptions = (options: {
+export const logEntryFromLoggerOptions = (options: {
   readonly message: unknown;
   readonly logLevel: LogLevel;
   readonly cause: Cause.Cause<unknown>;
   readonly date: Date;
   readonly annotations: Readonly<Record<string, unknown>>;
   readonly spans: ReadonlyArray<readonly [label: string, startTime: number]>;
-}): ProcessManagerLogEntry => ({
+}): LogEntry => ({
   date: options.date.toISOString(),
   level: options.logLevel,
   message: encodeMessage(options.message),
@@ -118,8 +118,8 @@ export const processManagerLogEntryFromLoggerOptions = (options: {
  * @public
  */
 export const LogEntry = {
-  Schema: ProcessManagerLogEntrySchema,
-  encode: encodeProcessManagerLogEntryNdjson,
-  decode: decodeProcessManagerLogEntryNdjson,
-  fromLoggerOptions: processManagerLogEntryFromLoggerOptions,
+  Schema: LogEntrySchema,
+  encode: encodeLogEntryNdjson,
+  decode: decodeLogEntryNdjson,
+  fromLoggerOptions: logEntryFromLoggerOptions,
 } as const;

@@ -2,8 +2,8 @@ import { Context, Effect, Layer, Logger, Option, PubSub, Ref, Stream } from "eff
 import * as LogLevel from "effect/LogLevel";
 import { CurrentLogAnnotations, CurrentLogSpans } from "effect/References";
 import {
-  processManagerLogEntryFromLoggerOptions,
-  type ProcessManagerLogEntry,
+  logEntryFromLoggerOptions,
+  type LogEntry,
 } from "../../LogEntry";
 
 const historyCapacity = 500;
@@ -13,25 +13,25 @@ const historyCapacity = 500;
  *
  * @public
  */
-export interface ProcessManagerLogRelayService {
+export interface LogRelayService {
   readonly publish: (
-    entry: ProcessManagerLogEntry,
+    entry: LogEntry,
   ) => Effect.Effect<void>;
-  readonly snapshot: Effect.Effect<ReadonlyArray<ProcessManagerLogEntry>>;
-  readonly stream: Stream.Stream<ProcessManagerLogEntry>;
+  readonly snapshot: Effect.Effect<ReadonlyArray<LogEntry>>;
+  readonly stream: Stream.Stream<LogEntry>;
 }
 
 /**
  * @public
  */
-export class ProcessManagerLogRelay extends Context.Service<
-  ProcessManagerLogRelay,
-  ProcessManagerLogRelayService
->()("@nikscripts/effect-pm/internal/manager/logCapture/ProcessManagerLogRelay") {}
+export class LogRelay extends Context.Service<
+  LogRelay,
+  LogRelayService
+>()("@nikscripts/effect-pm/internal/manager/logCapture/LogRelay") {}
 
 const pushHistory = (
-  history: Ref.Ref<ReadonlyArray<ProcessManagerLogEntry>>,
-  entry: ProcessManagerLogEntry,
+  history: Ref.Ref<ReadonlyArray<LogEntry>>,
+  entry: LogEntry,
 ): Effect.Effect<void> =>
   Ref.update(history, (items) => {
     const next = [...items, entry];
@@ -46,12 +46,12 @@ const pushHistory = (
  * @public
  */
 export const layer = Layer.effect(
-  ProcessManagerLogRelay,
+  LogRelay,
   Effect.gen(function* () {
-    const pubsub = yield* PubSub.unbounded<ProcessManagerLogEntry>();
-    const history = yield* Ref.make<ReadonlyArray<ProcessManagerLogEntry>>([]);
+    const pubsub = yield* PubSub.unbounded<LogEntry>();
+    const history = yield* Ref.make<ReadonlyArray<LogEntry>>([]);
 
-    return ProcessManagerLogRelay.of({
+    return LogRelay.of({
       publish: (entry) =>
         Effect.gen(function* () {
           yield* PubSub.publish(pubsub, entry);
@@ -64,7 +64,7 @@ export const layer = Layer.effect(
 );
 
 /**
- * Logger that captures pure {@link ProcessManagerLogEntry} values into {@link ProcessManagerLogRelay}.
+ * Logger that captures pure {@link LogEntry} values into {@link LogRelay}.
  *
  * @remarks
  * Effect v4 invokes `log` synchronously and does not run effect-returning loggers.
@@ -73,12 +73,12 @@ export const layer = Layer.effect(
  * @public
  */
 export const captureLogger: Logger.Logger<unknown, void> = Logger.make((options) => {
-  const relayOption = Context.getOption(ProcessManagerLogRelay)(options.fiber.context);
+  const relayOption = Context.getOption(LogRelay)(options.fiber.context);
   if (Option.isNone(relayOption)) {
     return;
   }
   const relay = relayOption.value;
-  const entry = processManagerLogEntryFromLoggerOptions({
+  const entry = logEntryFromLoggerOptions({
     message: options.message,
     logLevel: options.logLevel,
     cause: options.cause,
@@ -86,7 +86,7 @@ export const captureLogger: Logger.Logger<unknown, void> = Logger.make((options)
     annotations: options.fiber.getRef(CurrentLogAnnotations),
     spans: options.fiber.getRef(CurrentLogSpans),
   });
-  const context = Context.add(options.fiber.context, ProcessManagerLogRelay, relay);
+  const context = Context.add(options.fiber.context, LogRelay, relay);
   options.fiber.currentDispatcher.scheduleTask(
     () => {
       Effect.runForkWith(context)(relay.publish(entry));
@@ -103,7 +103,7 @@ export const captureLogger: Logger.Logger<unknown, void> = Logger.make((options)
 export const captureLoggerLayer = Logger.layer(
   [captureLogger],
   { mergeWithExisting: false },
-) satisfies Layer.Layer<never, never, ProcessManagerLogRelay>;
+) satisfies Layer.Layer<never, never, LogRelay>;
 
 const logAtLevel = (
   level: LogLevel.LogLevel,
@@ -155,7 +155,7 @@ const withSpansFromEntry = (
  * @public
  */
 export const replayLogEntry = (
-  entry: ProcessManagerLogEntry,
+  entry: LogEntry,
 ): Effect.Effect<void> => {
   let program = logAtLevel(entry.level, entry.message);
   program = annotateLogsFromEntry(program, entry.annotations);

@@ -13,9 +13,6 @@
  *   disarmed while `Polling` controls in-instance repeat cadence. Optional `polling` /
  *   `schedule` layers on `Process.make` are merged into `process.effect` so fork-time
  *   requirements stay accurate in TypeScript.
- * - **`ProcessGroup`** — Bundle **process and queue entries**; `start` /
- *   `startAll` fork supervisors; contracts power the **localhost** control HTTP API
- *   and remote group layers; `awaitShutdown` waits for OS signals (Node).
  * - **`QueueResource`** — Three-level **priority** queues with **concurrency** and optional
  *   **`rateLimit`** (Effect `RateLimiter`); each queue is a **Context**
  *   service with a `.layer`.
@@ -24,15 +21,15 @@
  * - **Toolkit (location-transparent resources)** — **`Resource`** is the foundation: a tag is
  *   driven by the same `yield* Tag` code whether it runs **local or remote** (`Resource.client` /
  *   `server` / `serveHttp` / `Host` switch only the layer). Batteries-included resource kinds build
- *   on it — **`ProcessResource`**, **`ProcessScheduleResource`**, and the toolkit queue (from
+ *   on it — **`ScheduledProcess`**, **`ProcessScheduleResource`**, and the toolkit queue (from
  *   `@nikscripts/effect-pm/QueueContract`) — each with `Tag` / `layer` / `configure` / `server` /
  *   `serveHttp`. **`Group`** organizes member tags (nestable; members may be on the same or
  *   different hosts). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
  *   See `docs/guides/toolkit-by-example.md`.
  * - **`RunResource`**, **`HttpClientRunGate`**, **`HttpApiResource`** —
  *   Optional building blocks for **gated** HTTP and reusable resource patterns.
- * - **`ControlService`** + **`ProcessManager`** + **`createCli` / `runCli`** — Local and
- *   remote **control plane** helpers for ops (used by the examples CLI).
+ * - **Persistence** — `DurableQueueStore` (durable priority queue) + `HistoryStore`
+ *   (metrics/logs history); in-memory or SQLite (`@nikscripts/effect-pm/storage/sqlite`).
  * - **`DisarmedIdleSleep`** — Policy helpers for custom schedule layers (root aliases:
  *   `computeDisarmedIdleSleep`, `DEFAULT_SCHEDULE_POLL_WHILE_DISARMED`, …).
  *
@@ -40,7 +37,7 @@
  *
  * - Toolkit by example (every resource/group/host/UI pattern): `docs/guides/toolkit-by-example.md`
  * - Narrative architecture: `docs/PACKAGE-GUIDE.md`
- * - API tables (Process, Polling, Schedule, ProcessGroup): `docs/PROCESS-API.md`
+ * - API tables (Process, Polling, Schedule): `docs/PROCESS-API.md`
  * - Runnable teaching scripts: `examples/README.md`
  * - Future roadmap (priority order, **not** shipped API truth): `docs/plans/README.md`
  * - Agent-oriented repo map: `docs/AGENTS.md`
@@ -48,26 +45,22 @@
  * ## Import style
  *
  * Every public API lives under a **namespace** in its source module (`Query`,
- * `ProcessManager`, `ResourceConfigure`, …). The root barrel re-exports the same
- * bindings under **short names** (`And`, `Endpoint`, `createCli`, …) so you can
- * choose `import { And }` or `import { Query }` with `Query.And` — they are identical.
+ * `ResourceConfigure`, …). The root barrel re-exports the same bindings under **short
+ * names** (`And`, `Endpoint`, …) so you can choose `import { And }` or `import { Query }`
+ * with `Query.And` — they are identical.
  *
  * ## Dedicated subpaths
  *
  * Service/resource subpaths mirror namespaces: **`@nikscripts/effect-pm/Process`**,
  * **`@nikscripts/effect-pm/QueueResource`**, **`@nikscripts/effect-pm/Query`**,
- * **`@nikscripts/effect-pm/ResourceConfigure`**, **`@nikscripts/effect-pm/ProcessGroup`**,
- * **`@nikscripts/effect-pm/ProcessStore`**, **`@nikscripts/effect-pm/RuntimeStorage`**,
- * **`@nikscripts/effect-pm/CommandAuth`**, **`@nikscripts/effect-pm/ProcessManager`**,
- * **`@nikscripts/effect-pm/Terminal`**, **`@nikscripts/effect-pm/TerminalRpc`**,
- * **`@nikscripts/effect-pm/Logs`**, **`@nikscripts/effect-pm/ControlService`**,
- * and **`@nikscripts/effect-pm/ControlTransportRpc`**, and
- * **`@nikscripts/effect-pm/LogTransportRpc`**.
+ * **`@nikscripts/effect-pm/ResourceConfigure`**, **`@nikscripts/effect-pm/ProcessStore`**,
+ * **`@nikscripts/effect-pm/RuntimeStorage`**, and **`@nikscripts/effect-pm/Logs`**.
  *
  * Toolkit subpaths: **`@nikscripts/effect-pm/Resource`** (foundation + `specOf` / `methodMeta`),
- * **`@nikscripts/effect-pm/QueueContract`** (toolkit queue), **`@nikscripts/effect-pm/ProcessContract`**,
+ * **`@nikscripts/effect-pm/QueueContract`** (toolkit queue), **`@nikscripts/effect-pm/ScheduledProcess`**,
  * **`@nikscripts/effect-pm/ProcessScheduleContract`**, **`@nikscripts/effect-pm/Group`**,
- * and **`@nikscripts/effect-pm/HostLogs`**.
+ * **`@nikscripts/effect-pm/HostLogs`**, **`@nikscripts/effect-pm/HistoryStore`**,
+ * and **`@nikscripts/effect-pm/DurableQueueStore`**.
  *
  * Structured log persistence: `ProcessStore.Log` (also exported as the
  * dedicated `ProcessStoreLog` facet) on the composed store. Capture/relay
@@ -87,7 +80,7 @@
  *
  * **Layers in `src/`:** Prefer attaching dependencies via **built {@link Context.Context}**
  * (`Effect.provide(effect, context)`) inside the runtime, or **`ManagedRuntime`** at true OS
- * edges (see `src/bin/effect-pm.ts`). Avoid scattering {@link Effect.provide} with
+ * edges. Avoid scattering {@link Effect.provide} with
  * {@link Layer.Layer} through library internals — examples attach a **single** composed layer
  * at script entry (`examples/shared/demo-harness.ts`, same idea as `@effect/platform-node`
  * samples). **Tests** may use `Effect.provide` with layers, matching Effect’s own suites.
@@ -113,16 +106,16 @@ export {
 export { Process, ProcessMakeInvalidLayerArgument } from "./Process";
 export type { ProcessSnapshot } from "./Process";
 // Unified namespaces via `export * as` (module namespace, Effect-style) so member access
-// tree-shakes — `ProcessResource.Tag` / `ProcessScheduleResource.Tag` pull no engine code.
-export * as ProcessResource from "./internal/processResourceNamespace";
+// tree-shakes — `ScheduledProcess.Tag` / `ProcessScheduleResource.Tag` pull no engine code.
+export * as ScheduledProcess from "./internal/scheduledProcessNamespace";
 export * as ProcessScheduleResource from "./internal/processScheduleResourceNamespace";
 export {
   processControlSpec,
   processLogEntry,
   processScheduleEntry,
   processStatus,
-} from "./ProcessContract";
-export type { ProcessLayerConfig } from "./ProcessContract";
+} from "./ScheduledProcess";
+export type { ProcessLayerConfig } from "./ScheduledProcess";
 export {
   processScheduleSpec,
   reconcileResult,
@@ -130,7 +123,6 @@ export {
 export type { ProcessScheduleLayerConfig } from "./ProcessScheduleContract";
 export { Polling } from "./Polling";
 export { ProcessSchedule } from "./ProcessSchedule";
-export { ProcessGroup } from "./ProcessGroup";
 // The single unified QueueResource namespace. `export * as` (module namespace, Effect-style) so
 // member access tree-shakes: `QueueResource.Tag` pulls zero engine code; `make`/`layer`/`serveHttp`
 // pull the engine only when used.
@@ -174,152 +166,7 @@ export type {
   TagHandlers,
 } from "./Resource";
 export { ProcessStorage } from "./ProcessStorage";
-export { ControlService } from "./ControlService";
-export { ControlProtocol } from "./ControlProtocol";
-export {
-  CommandAuth,
-  CommandAuthSigner,
-  CommandAuthVerifier,
-  MissingSignatureHeader,
-  MalformedSignatureHeader,
-  UnknownKeyId,
-  ExpiredKey,
-  SignatureVerificationFailed,
-  ReplayedCommand,
-  CanonicalPayloadError,
-  KeyMaterialError,
-  CommandAuthReplayStoreError,
-  generateEd25519KeyPair,
-  loadPrivateKeyRecord,
-  ed25519Signer,
-  ed25519Verifier,
-  canonicalPayload,
-  canonicalPayloadText,
-  decodePublicKeyRecordsJson,
-  formatSignatureHeader,
-  parseSignatureHeader,
-  commandAuthErrorMessage,
-  loadPublicKeyRecords,
-  publicKeyRecordJson,
-  publicKeyRecordsJson,
-  mergePublicKeyRecords,
-} from "./CommandAuth";
-export type {
-  PublicKeyRecord,
-  PrivateKeyRecord,
-  GeneratedEd25519KeyPair,
-  GenerateEd25519KeyPairOptions,
-  LoadPrivateKeyRecordOptions,
-  LoadPublicKeyRecordsOptions,
-  CanonicalCommandAuthRequest,
-  CommandAuthSigningInput,
-  CommandAuthSignatureHeader,
-  CommandAuthReplayStoreReserveInput,
-  CommandAuthReplayStore,
-  CommandAuthSignerService,
-  CommandAuthVerifyInput,
-  CommandAuthVerifierService,
-  CommandAuthError,
-  Ed25519VerifierOptions,
-} from "./CommandAuth";
 
-export {
-  ControlRouter,
-  ControlResponseSchema,
-  ControlTransportClient,
-  ControlTransportError,
-  ControlTransportServer,
-  ControlProtocolRequestSchema,
-  ControlProtocolRequestEnvelopeSchema,
-  ControlProtocolMetadataSchema,
-  ControlProtocolResponseEnvelopeSchema,
-  ControlProtocolResponseSchema,
-  makeControlProtocolRequestEnvelope,
-  makeControlProtocolResponseEnvelope,
-  makeControlProtocolRouter,
-} from "./ControlProtocol";
-export {
-  ControlTransportHttp,
-  makeControlTransportHttpClient,
-  makeControlTransportHttpServer,
-} from "./ControlTransportHttp";
-export {
-  ControlRpc,
-  ControlRpcErrorSchema,
-  ControlTransportRpc,
-  ControlTransportRpcLive,
-  controlRpcErrorFromTransportError,
-  makeControlTransportRpcClient,
-  makeControlTransportRpcServer,
-  rpcErrorToControlTransportError,
-} from "./ControlTransportRpc";
-export {
-  LogRpc,
-  LogRpcErrorSchema,
-  LogStreamRequestSchema,
-  LogStreamScopeSchema,
-  LogTransportClient,
-  LogTransportRpc,
-  LogTransportRpcLive,
-  makeLogStream,
-  makeLogTransportRpcClient,
-  makeLogTransportRpcServer,
-} from "./LogTransportRpc";
-export type {
-  ControlRouterShape,
-  ControlProtocolMetadata,
-  ControlProtocolRequest,
-  ControlProtocolRequestEnvelope,
-  ControlProtocolResponse,
-  ControlProtocolResponseEnvelope,
-  ControlProtocolRouter,
-  ControlTransportClientShape,
-  ControlTransportServerShape,
-} from "./ControlProtocol";
-export type {
-  ControlTransportHttpClientConfig,
-  ControlTransportHttpServerConfig,
-} from "./ControlTransportHttp";
-export type {
-  ControlRpcClient,
-  ControlRpcError,
-  ControlRpcServerProtocol,
-  ControlTransportRpcApi,
-  ControlTransportRpcServerConfig,
-} from "./ControlTransportRpc";
-export type {
-  LogRpcClient,
-  LogRpcError,
-  LogRpcServerProtocol,
-  LogStreamRequest,
-  LogStreamScope,
-  LogTransportClientShape,
-  LogTransportRpcApi,
-  LogTransportRpcServerConfig,
-} from "./LogTransportRpc";
-export {
-  Terminal,
-  TerminalAuditMetadataSchema,
-  OpenTerminalSessionSchema,
-  TerminalSessionIdSchema,
-  TerminalEventSchema,
-  TerminalSessionErrorSchema,
-  TerminalSessionError,
-  TerminalSessionService,
-} from "./Terminal";
-export type {
-  OpenTerminalSession,
-  TerminalAuditMetadata,
-  TerminalSessionId,
-  TerminalEvent,
-  TerminalSessionPort,
-  TerminalSessionHandle,
-  TerminalSessionServiceShape,
-} from "./Terminal";
-export {
-  TerminalRpc,
-  TerminalRpcGroup,
-} from "./TerminalRpc";
 
 // Query / Runtime Storage
 export { Query } from "./Query";
@@ -406,39 +253,23 @@ export {
 export type { ConfigPatch } from "./ResourceConfigure";
 
 // CLI
-export { createCli, runCli, Cli } from "./cli";
 
 // Process Manager
 export {
-  Endpoint,
-  GroupConfig,
-  ProcessManager,
-  ProcessManagerConnectionError,
-  ProcessManagerConnectionRegistry,
-  ProcessManagerConfig,
-  ProcessManagerEndpointConfigError,
-  ProcessManagerRequestError,
-  Transport,
-  operatorLoggerLayer,
-  groupLocalRuntime,
-} from "./ProcessManager";
-export { httpEndpoint } from "./Transport";
-export {
-  encodeProcessManagerLogEntryNdjson,
-  decodeProcessManagerLogEntryNdjson,
-  processManagerLogEntryFromLoggerOptions,
-  ProcessManagerLogEntrySchema,
+  encodeLogEntryNdjson,
+  decodeLogEntryNdjson,
+  logEntryFromLoggerOptions,
+  LogEntrySchema,
   LogEntry,
-  type ProcessManagerLogEntry,
 } from "./LogEntry";
 export {
-  ProcessManagerLogRelay,
+  LogRelay,
   captureLogger,
   captureLoggerLayer,
   relayLayer,
   logsRelayLayer,
   replayLogEntry,
-  relayOnlyLayer as processManagerLogRelayLayer,
+  relayOnlyLayer as logRelayLayer,
   relayWithCaptureLoggerLayer,
   Logs,
 } from "./Logs";
@@ -446,40 +277,31 @@ export { HostLogs } from "./HostLogs";
 export type { HostLogEntry } from "./HostLogs";
 export { HistoryStore } from "./HistoryStore";
 export type { HistoryReadOptions, HistoryStoreShape } from "./HistoryStore";
+export {
+  DurableQueueStore,
+  DurableQueueError,
+  durablePriorityRank,
+} from "./DurableQueueStore";
+export type {
+  DurableEntry,
+  DurableEntryInput,
+  DurablePriority,
+  DurableQueueStoreShape,
+  DurableSizes,
+  FailResult,
+  OfferResult,
+} from "./DurableQueueStore";
 export { Group } from "./Group";
 export {
   ProcessGroupLogContext,
-  ProcessManagerLogAnnotationKeys,
+  LogAnnotationKeys,
   layerProcessGroupLogContext,
   withProcessLogAnnotations,
   withQueueLogAnnotations,
   LogContext,
 } from "./LogContext";
-export type { ProcessManagerRunState } from "./ProcessManager";
 export type { LogEntryRecordedEvent } from "./store/log";
 export { isLogEntryRecorded } from "./store/log";
-export type {
-  ProcessManagerEndpointConfigItem,
-  ProcessManagerConnectionConfigMap,
-  ProcessManagerCliConfig,
-  ProcessManagerConnectionMap,
-  ProcessManagerConnectionRegistryService,
-  ProcessManagerEndpointDefinition,
-  ProcessManagerEndpointSelection,
-  ProcessManagerConfigService,
-  RemoteProcessManager,
-  RemoteProcessControls,
-  RemoteQueueControls,
-  ProcessManagerEndpointConfig,
-  ProcessManagerEndpoint,
-  ProcessManagerGroupEndpointStatus,
-  ProcessManagerGroupConfigItem,
-  ProcessManagerGroupConfig,
-  ProcessManagerHttpEndpointDefinition,
-  ProcessManagerHttpTransport,
-  ProcessManagerChildEndpointDefinition,
-  ProcessManagerChildLaunchConfig,
-} from "./ProcessManager";
 
 // Process Store
 export {
@@ -497,7 +319,6 @@ export type { LogStoreApi } from "./store/log";
 export { RunResourceStore } from "./store/runResource";
 export { ProcessExecutionStore } from "./store/processExecution";
 export { ProcessLifecycleStore } from "./store/processLifecycle";
-export { ProcessGroupStore } from "./store/processGroup";
 export type {
   ProcessExecutionCompletedEvent,
   ProcessExecutionFinishInput,
@@ -511,9 +332,6 @@ export type {
   ProcessLifecycleRecordInput,
   ProcessLifecycleTag,
 } from "./store/processLifecycle";
-export type {
-  ProcessGroupMemberLifecycleInput,
-} from "./store/processGroup";
 export type {
   QueueResourceStoreDedupeKeyStatus,
   QueueResourceStoreEntryStatus,
@@ -572,51 +390,8 @@ export type {
 } from "./store/runResource";
 
 // Types - ProcessGroup
-export type {
-  ProcessGroup as ProcessGroupInterface,
-  ProcessGroupControls,
-  ProcessGroupDetails,
-  ProcessStatus,
-  QueueDetails,
-  ProcessGroupErrors,
-  ProcessEffectRequirements,
-  AllGroupProcessesRequirements,
-  ProcessGroupEntry,
-  ProcessGroupProcessEntries,
-  ProcessGroupQueueEntries,
-  ProcessGroupQueueRegistration,
-  TypedProcessGroupQueueRequirements,
-  ProcessGroupEntryRequirements,
-  ProcessGroupQueueItem,
-  ProcessGroupProcessControl,
-  ProcessGroupQueueControl,
-  ProcessGroupProcessContract,
-  ProcessGroupQueueContract,
-  ProcessGroupContract,
-  TypedProcessControls,
-  TypedQueueControls,
-  TypedProcessGroup,
-  ProcessGroupControlError,
-  ProcessGroupRemoteEndpointDefinition,
-  ProcessGroupServiceDefinition,
-  ProcessGroupQueueEnqueueError,
-  ProcessGroupQueueEnqueueRequirements,
-} from "./ProcessGroup";
 
 // Error classes - ProcessGroup
-export {
-  ProcessNotFoundError,
-  ProcessAlreadyRunningError,
-  ProcessNotRunningError,
-  ProcessGroupDuplicateDefinitionError,
-  ProcessGroupRemoteControlError,
-  UnsupportedRemoteControlError,
-  ProcessGroupProcessControlSchema,
-  ProcessGroupQueueControlSchema,
-  ProcessGroupProcessContractSchema,
-  ProcessGroupQueueContractSchema,
-  ProcessGroupContractSchema,
-} from "./ProcessGroup";
 
 // Types - Process
 export type {
@@ -701,6 +476,3 @@ export type {
 } from "./RunResource";
 
 // Types - Control Service
-export type {
-  ControlResponse,
-} from "./ControlProtocol";

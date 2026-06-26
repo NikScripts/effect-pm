@@ -1,5 +1,103 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.4
+
+### Minor Changes
+
+- 23d41bc: `QueueResource`: add a first-class **`refill`** config — a self-feeding queue that loads work from a
+  source (DB, …) on start and/or whenever it drains empty. The toolkit replacement for the legacy
+  `onStart` / `onDrained` lifecycle hooks:
+
+  ```ts
+  QueueResource.layer(RosterQueue, {
+    effect,
+    refill: {
+      onStart: true, // bootstrap once when the worker pool starts
+      onDrained: true, // re-poll the source each time the queue drains
+      load: (queue) => loadFromDb(queue),
+    },
+  });
+  ```
+
+  `load` receives the queue handle, runs in the worker `R`, and is best-effort. `onStart` is forked
+  (a slow source load doesn't block startup); `onDrained` runs after each `Drained` (drives the
+  self-feeding loop, and idles when `load` enqueues nothing). Distinct from after-the-fact `events`
+  observation — `refill` is a defining queue behavior (a pull source).
+
+- 6323949: Rename the structured-logging symbols from the vestigial `ProcessManagerLog*` to neutral `Log*`
+  (no behavior change) — the log infra never depended on the removed `ProcessManager`:
+
+  - `ProcessManagerLogEntry` → `LogEntry`, `ProcessManagerLogEntrySchema` → `LogEntrySchema`,
+    `ProcessManagerLogEntryNdjson` → `LogEntryNdjson`, `processManagerLogEntryFromLoggerOptions` →
+    `logEntryFromLoggerOptions`
+  - `ProcessManagerLogRelay` → `LogRelay` (+ `LogRelayService`), `ProcessManagerLogAnnotationKeys` →
+    `LogAnnotationKeys`
+  - `ProcessManagerLogQuery` → `LogQuery`, `ProcessManagerLogQueryError` → `LogQueryError`,
+    `ProcessManagerLogSort` → `LogSort`, `ProcessManagerLogScope` → `LogScope`
+
+  The `LogEntry` namespace (`LogEntry.Schema` / `encode` / `decode`) is unchanged; the renamed entry
+  type now merges into it. Annotation key _values_ (`groupId` / `processId` / `queueId`) are unchanged.
+
+## 0.8.0-beta.3
+
+### Minor Changes
+
+- 27eb8c4: Persistence — the two-plane design from `docs/handoffs/queue-persistence-design.md`.
+
+  **Observability plane (history).** `HistoryStore` — a tiny backend-agnostic append-log
+  (`append`/`read`, keyed by stream id; `layerMemory` today, SQLite/Postgres later). Each resource
+  reads it back via `*History` queries **on the same Tag** as the live stream, fully opt-in via
+  `serviceOption` (no store → empty):
+
+  - Queue: `logHistory` + `metricsHistory` (needs `captureLogs` for logs).
+  - Process: per-process log **capture** (`captureLogs` on the process layer) feeding `logs` +
+    `logHistory`.
+  - Runtime-wide: `HostLogs.persistLayer` + `HostLogs.history` (captures _all_ runtime logs).
+
+  Backends: `HistoryStore.layerMemory` (in-process) and `SQLiteHistoryStore.layer` (durable across
+  restarts, count-based retention) — same interface, swap the layer.
+
+  **Durability plane.** `DurableQueueStore` — a priority-native store of pending + in-flight work so
+  no enqueued item is lost across a restart (**at-least-once** + dedup key). Inspired by Effect's
+  `PersistedQueue` (lease / `attempts` / expiry-recovery blueprint) but priority-native, not FIFO:
+  strict high/normal/low + FIFO within a lane, dedup + escalation on a `dedupKey`, lease + `recover`,
+  `fail` → requeue/dead-letter, `sizes`. SQLite backend (`SQLiteDurableQueueStore` from
+  `@nikscripts/effect-pm/storage/sqlite`) over one table; single-writer leasing in a transaction.
+  The store port is on the core entry (no SQL dep).
+
+  **Engine integration.** `QueueResource` gains a `persist` option: when set (with a
+  `DurableQueueStore` layer + `itemSchema`), the store becomes the source of truth — enqueue persists,
+  a feeder leases work into the workers, completion/failure update the store, and a restart recovers
+  in-flight work. `size`/`sizes`/`isEmpty`/`status`/`clear` and shutdown-drain are store-aware, and
+  the control verbs `release`/`deadLetter`/`drop` operate on the durable backlog (by `entryId`/`key`).
+  Fully gated: with `persist` off the in-memory engine is byte-for-byte unchanged.
+
+  A guide for consumers: `docs/guides/history-and-persistence.md`.
+
+- bb6316c: Remove the pre-toolkit legacy layer (plan 17). The `Resource` toolkit + persistence now
+  supersede it, so the bespoke control plane and orchestration are deleted:
+
+  - **Control plane:** `ControlService`, `ControlProtocol`, `ControlTransportRpc`,
+    `ControlTransportHttp`, `CommandAuth`, `LogTransportRpc`, `Transport` (`httpEndpoint`).
+  - **Orchestration:** `ProcessManager`, `ProcessGroup` (+ the `store/ProcessGroup` facet /
+    `ProcessGroupStore`, removed from the composed `ProcessStorage`).
+  - **Terminal:** `Terminal`, `TerminalRpc` (dropped; use SSH).
+  - **Legacy CLI:** `cli` (`createCli`/`runCli`) and the `effect-pm` / `effect-pm-group-child`
+    bins.
+
+  Replacements (all shipped): remote control → `Resource.client`/`server`/`serveHttp`/`Host`;
+  many instances → `Resource.serveInstances`; group organization → `Group` (nestable);
+  runtime-wide logs → `HostLogs`; durability/history → `DurableQueueStore` / `HistoryStore`.
+  Their subpath exports are removed. Kept log infra (`LogEntry`/`LogContext`/`Logs`, still named
+  `ProcessManagerLog*`) is unchanged; a neutral rename is a separate follow-up.
+
+- 9b3c2d3: Rename the toolkit process tag `ProcessResource` → **`ScheduledProcess`** (namespace + the
+  `@nikscripts/effect-pm/ProcessContract` subpath → `@nikscripts/effect-pm/ScheduledProcess`). The
+  surface is unchanged — it's a process with lifecycle (`start`/`stop`/`runImmediately`),
+  observability (`status`/`logs`/`logHistory`), and schedule control. The name now reflects what it
+  is: a _scheduled process_, distinct from a plain schedule. (`Process` remains the lower-level
+  engine.) Migration: `ProcessResource.Tag`/`layer`/`server`/`serveHttp` → `ScheduledProcess.*`.
+
 ## 0.8.0-beta.2
 
 ### Minor Changes

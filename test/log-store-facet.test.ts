@@ -7,20 +7,20 @@ import { ProcessStorage } from "../src/ProcessStorage";
 
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Exit, Layer, Logger, Option } from "effect";
-import { ProcessManagerLogAnnotationKeys } from "../src/LogContext";
-import type { ProcessManagerLogEntry } from "../src/LogEntry";
+import { LogAnnotationKeys } from "../src/LogContext";
+import type { LogEntry } from "../src/LogEntry";
 import { ProcessStore } from "../src/ProcessStore";
-import { ProcessManagerLogQueryError } from "../src/internal/manager/logQuery";
+import { LogQueryError } from "../src/internal/manager/logQuery";
 import { ProcessStoreReadonlyRecordError } from "../src/ProcessStoreEvent";
 import { LogStore } from "../src/store/log";
 
-const entry = (message: string): ProcessManagerLogEntry => ({
+const entry = (message: string): LogEntry => ({
   date: "2026-05-22T20:00:00.000Z",
   level: "Info",
   message,
   annotations: {
-    [ProcessManagerLogAnnotationKeys.groupId]: "workshop-group",
-    [ProcessManagerLogAnnotationKeys.processId]: "billing/sync",
+    [LogAnnotationKeys.groupId]: "workshop-group",
+    [LogAnnotationKeys.processId]: "billing/sync",
   },
   spans: [],
 });
@@ -92,11 +92,11 @@ describe("LogStore — static optional emitters", () => {
         ),
       load: () =>
         Effect.fail(
-          new ProcessManagerLogQueryError({ reason: "not used" }),
+          new LogQueryError({ reason: "not used" }),
         ),
       query: () =>
         Effect.fail(
-          new ProcessManagerLogQueryError({ reason: "not used" }),
+          new LogQueryError({ reason: "not used" }),
         ),
     };
 

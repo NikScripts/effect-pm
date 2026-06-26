@@ -1,8 +1,8 @@
 import { Data, Effect, Option } from "effect";
 import { utcDateFromMillis } from "../utcDate";
 import { LogStore } from "../../store/log";
-import type { ProcessManagerLogScope } from "./logScope";
-import type { ProcessManagerLogEntry } from "../../LogEntry";
+import type { LogScope } from "./logScope";
+import type { LogEntry } from "../../LogEntry";
 import { replayLogEntry } from "./logCapture";
 import type { RuntimeStorageOperationalError } from "../../RuntimeStorage";
 
@@ -10,11 +10,11 @@ const defaultLogQueryLimit = 100;
 const maxLogQueryLimit = 10_000;
 
 /**
- * Sort order for {@link ProcessManagerLogQuery}.
+ * Sort order for {@link LogQuery}.
  *
  * @public
  */
-export type ProcessManagerLogSort = "asc" | "desc";
+export type LogSort = "asc" | "desc";
 
 /**
  * Storage-backed log history query (operator `pm logs`).
@@ -25,7 +25,7 @@ export type ProcessManagerLogSort = "asc" | "desc";
  *
  * @public
  */
-export interface ProcessManagerLogQuery {
+export interface LogQuery {
   /** When set, restrict to this process group id. */
   readonly groupId?: string;
   /** When set, restrict to logs annotated with this process id. */
@@ -39,35 +39,35 @@ export interface ProcessManagerLogQuery {
   /** Exclusive upper bound (`entryId` or ISO date per storage adapter). */
   readonly before?: string;
   readonly limit: number;
-  readonly sort: ProcessManagerLogSort;
+  readonly sort: LogSort;
 }
 
 /**
  * @public
  */
-export class ProcessManagerLogQueryError extends Data.TaggedError(
-  "ProcessManagerLogQueryError",
+export class LogQueryError extends Data.TaggedError(
+  "LogQueryError",
 )<{
   readonly reason: string;
 }> {}
 
 const storageLogQueryError = (
-  error: ProcessManagerLogQueryError | RuntimeStorageOperationalError,
-): ProcessManagerLogQueryError =>
-  error instanceof ProcessManagerLogQueryError
+  error: LogQueryError | RuntimeStorageOperationalError,
+): LogQueryError =>
+  error instanceof LogQueryError
     ? error
-    : new ProcessManagerLogQueryError({
+    : new LogQueryError({
         reason: `Unable to read log history from storage: ${String(error)}`,
       });
 
 const parseIsoDate = (
   field: string,
   raw: string,
-): Effect.Effect<Date, ProcessManagerLogQueryError> => {
+): Effect.Effect<Date, LogQueryError> => {
   const ms = Date.parse(raw);
   if (Number.isNaN(ms)) {
     return Effect.fail(
-      new ProcessManagerLogQueryError({
+      new LogQueryError({
         reason: `Invalid ${field} (expected ISO-8601 date): ${raw}`,
       }),
     );
@@ -78,7 +78,7 @@ const parseIsoDate = (
 const parseOptionalIsoDate = (
   field: string,
   value: Option.Option<string>,
-): Effect.Effect<Option.Option<Date>, ProcessManagerLogQueryError> =>
+): Effect.Effect<Option.Option<Date>, LogQueryError> =>
   Option.match(value, {
     onNone: () => Effect.succeed(Option.none()),
     onSome: (raw) =>
@@ -95,10 +95,10 @@ const clampLimit = (limit: number): number => {
 const validateRange = (
   from: Option.Option<Date>,
   to: Option.Option<Date>,
-): Effect.Effect<void, ProcessManagerLogQueryError> => {
+): Effect.Effect<void, LogQueryError> => {
   if (Option.isSome(from) && Option.isSome(to) && from.value.getTime() > to.value.getTime()) {
     return Effect.fail(
-      new ProcessManagerLogQueryError({
+      new LogQueryError({
         reason: "`--from` must be before or equal to `--to`",
       }),
     );
@@ -107,13 +107,13 @@ const validateRange = (
 };
 
 /**
- * Build a {@link ProcessManagerLogQuery} from CLI flag values.
+ * Build a {@link LogQuery} from CLI flag values.
  *
  * @public
  */
 const scopeToQueryFields = (
-  scope: ProcessManagerLogScope,
-): Pick<ProcessManagerLogQuery, "groupId" | "processId" | "queueId"> => {
+  scope: LogScope,
+): Pick<LogQuery, "groupId" | "processId" | "queueId"> => {
   switch (scope._tag) {
     case "all":
       return {};
@@ -126,15 +126,15 @@ const scopeToQueryFields = (
   }
 };
 
-export const buildProcessManagerLogQuery = (input: {
-  readonly scope: ProcessManagerLogScope;
+export const buildLogQuery = (input: {
+  readonly scope: LogScope;
   readonly from: Option.Option<string>;
   readonly to: Option.Option<string>;
   readonly after: Option.Option<string>;
   readonly before: Option.Option<string>;
   readonly limit: number;
-  readonly sort: ProcessManagerLogSort;
-}): Effect.Effect<ProcessManagerLogQuery, ProcessManagerLogQueryError> =>
+  readonly sort: LogSort;
+}): Effect.Effect<LogQuery, LogQueryError> =>
   Effect.gen(function* () {
     const from = yield* parseOptionalIsoDate("from", input.from);
     const to = yield* parseOptionalIsoDate("to", input.to);
@@ -160,14 +160,14 @@ export const buildProcessManagerLogQuery = (input: {
  * @public
  */
 export const queryGroupLogs = (
-  query: ProcessManagerLogQuery,
-): Effect.Effect<void, ProcessManagerLogQueryError> =>
+  query: LogQuery,
+): Effect.Effect<void, LogQueryError> =>
   Effect.serviceOption(LogStore).pipe(
     Effect.flatMap(
       Option.match({
         onNone: () =>
           Effect.fail(
-            new ProcessManagerLogQueryError({
+            new LogQueryError({
               reason:
                 "LogStore layer is not provided; compose ProcessStorage.layer or layerProcessStore(...) before reading log history.",
             }),
@@ -183,8 +183,8 @@ export const queryGroupLogs = (
  * @internal
  */
 export const replayLogQueryResults = (
-  entries: ReadonlyArray<ProcessManagerLogEntry>,
-  sort: ProcessManagerLogSort,
+  entries: ReadonlyArray<LogEntry>,
+  sort: LogSort,
 ): Effect.Effect<void> => {
   const ordered =
     sort === "asc" ? entries : [...entries].reverse();

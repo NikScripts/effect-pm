@@ -44,19 +44,19 @@ import {
 import { QueueResource as QueueEngine } from "./QueueResource";
 import type { QueueResourceConfigWithItemSchema } from "./QueueResource";
 import type { JsonValue } from "./ProcessStoreEvent";
-import { ProcessManagerLogEntrySchema } from "./LogEntry";
+import { LogEntrySchema } from "./LogEntry";
 import { configureLayer, foldConfiguredSpec } from "./ResourceConfigure";
 import type { ConfigPatch } from "./ResourceConfigure";
 
 /**
  * A captured log line on the wire — the element of the queue's `logs` stream. Reuses the
- * package's structured log schema ({@link ProcessManagerLogEntrySchema}: `date`, `level`,
+ * package's structured log schema ({@link LogEntrySchema}: `date`, `level`,
  * `message`, `cause?`, `annotations`, `spans`), so every datapoint and the level are preserved
  * across RPC. (Re-exported under a queue-neutral name.)
  *
  * @public
  */
-export const queueLogEntry = ProcessManagerLogEntrySchema;
+export const queueLogEntry = LogEntrySchema;
 
 /**
  * The per-priority pending counts returned by `sizes`.

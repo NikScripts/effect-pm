@@ -23,21 +23,19 @@
  * yield* HostLogs.stream.pipe(Stream.runForEach((line) => render(line)), Effect.forkScoped);
  * ```
  *
- * It reuses the package's existing capture-relay infrastructure
- * ({@link Logs}); the neutral `Host*` naming is the first-class face of that
- * machinery (the underlying relay/entry types keep their current names until the
- * planned rename — see `docs/plans/17-legacy-removal-and-migration.md`).
+ * It reuses the package's capture-relay infrastructure ({@link Logs}, `LogRelay`,
+ * `LogEntry`); `HostLogs` is the runtime-wide, first-class face of that machinery.
  *
  * @module HostLogs
  */
 import { Effect, Layer, Logger, Option, Schema, Stream } from "effect";
 import {
-  ProcessManagerLogRelay,
+  LogRelay,
   captureLogger,
   relayOnlyLayer,
 } from "./Logs";
-import type { ProcessManagerLogEntry } from "./LogEntry";
-import { ProcessManagerLogEntrySchema } from "./LogEntry";
+import type { LogEntry } from "./LogEntry";
+import { LogEntrySchema } from "./LogEntry";
 import { HistoryStore } from "./HistoryStore";
 import type { HistoryReadOptions } from "./HistoryStore";
 
@@ -50,7 +48,7 @@ const HOST_LOGS_STREAM_ID = "hostlogs";
  *
  * @public
  */
-export type HostLogEntry = ProcessManagerLogEntry;
+export type HostLogEntry = LogEntry;
 
 /**
  * Install runtime-wide log capture: a sliding relay plus a **merged** capture
@@ -60,7 +58,7 @@ export type HostLogEntry = ProcessManagerLogEntry;
  *
  * @public
  */
-export const layer: Layer.Layer<ProcessManagerLogRelay> = Layer.merge(
+export const layer: Layer.Layer<LogRelay> = Layer.merge(
   relayOnlyLayer,
   Logger.layer([captureLogger], { mergeWithExisting: true }),
 );
@@ -74,8 +72,8 @@ export const layer: Layer.Layer<ProcessManagerLogRelay> = Layer.merge(
 export const snapshot: Effect.Effect<
   ReadonlyArray<HostLogEntry>,
   never,
-  ProcessManagerLogRelay
-> = Effect.flatMap(ProcessManagerLogRelay, (relay) => relay.snapshot);
+  LogRelay
+> = Effect.flatMap(LogRelay, (relay) => relay.snapshot);
 
 /**
  * The live host log stream: the recent tail replayed first (so a late subscriber
@@ -83,10 +81,10 @@ export const snapshot: Effect.Effect<
  *
  * @public
  */
-export const stream: Stream.Stream<HostLogEntry, never, ProcessManagerLogRelay> =
+export const stream: Stream.Stream<HostLogEntry, never, LogRelay> =
   Stream.unwrap(
     Effect.gen(function* () {
-      const relay = yield* ProcessManagerLogRelay;
+      const relay = yield* LogRelay;
       const tail = yield* relay.snapshot;
       return Stream.concat(Stream.fromIterable(tail), relay.stream);
     }),
@@ -102,11 +100,11 @@ export const stream: Stream.Stream<HostLogEntry, never, ProcessManagerLogRelay> 
  */
 export const persistLayer = Layer.effectDiscard(
   Effect.gen(function* () {
-    const relay = yield* ProcessManagerLogRelay;
+    const relay = yield* LogRelay;
     const store = yield* HistoryStore;
     yield* Effect.forkScoped(
       Stream.runForEach(relay.stream, (entry) =>
-        Schema.encodeEffect(ProcessManagerLogEntrySchema)(entry).pipe(
+        Schema.encodeEffect(LogEntrySchema)(entry).pipe(
           Effect.flatMap((encoded) => store.append(HOST_LOGS_STREAM_ID, encoded)),
           Effect.orDie,
         ),
@@ -132,7 +130,7 @@ export const history = (
           store.read(HOST_LOGS_STREAM_ID, options).pipe(
             Effect.flatMap((rows) =>
               Effect.forEach(rows, (row) =>
-                Schema.decodeUnknownEffect(ProcessManagerLogEntrySchema)(row).pipe(
+                Schema.decodeUnknownEffect(LogEntrySchema)(row).pipe(
                   Effect.orDie,
                 ),
               ),
@@ -155,5 +153,5 @@ export const HostLogs = {
   persistLayer,
   history,
   /** The backing relay service (provided by {@link layer}). */
-  Relay: ProcessManagerLogRelay,
+  Relay: LogRelay,
 } as const;

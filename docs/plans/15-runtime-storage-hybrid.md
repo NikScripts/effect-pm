@@ -1,8 +1,8 @@
 # 15 — Hybrid `RuntimeStorage` (design spec)
 
-**Status:** Target production adapter (not shipped). Complements
-[13-queue-rate-limit-and-operational-storage.md](./13-queue-rate-limit-and-operational-storage.md)
-and [12-runtime-identity-and-singleton-runs.md](./12-runtime-identity-and-singleton-runs.md).
+**Status:** Target production adapter (not shipped). See the roadmap entry in
+[README.md](./README.md) (Persistence & storage). Builds on the shipped `RuntimeStorage` +
+`src/store/*` facet model ([STORAGE.md](../STORAGE.md)).
 
 ---
 

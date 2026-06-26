@@ -1,15 +1,15 @@
 /**
  * Process-manager log capture relay (persists via {@link LogStore}).
  *
- * @module processManagerLogsRelay
+ * @module logsRelay
  */
 
 import { Duration, Effect, Layer, Option, PubSub, Ref, Schedule, Scope, Stream } from "effect";
 import { ProcessGroupLogContext } from "../../LogContext";
-import type { ProcessManagerLogEntry } from "../../LogEntry";
+import type { LogEntry } from "../../LogEntry";
 import {
-  ProcessManagerLogRelay,
-  type ProcessManagerLogRelayService,
+  LogRelay,
+  type LogRelayService,
 } from "./logCapture";
 import { LogStore } from "../../store/log";
 import { ProcessStore } from "../../ProcessStore";
@@ -20,12 +20,12 @@ const historyCapacity = 500;
 
 type PendingLogAppend = {
   readonly entryId: string;
-  readonly entry: ProcessManagerLogEntry;
+  readonly entry: LogEntry;
 };
 
 const makePersistingRelay = (
-  base: ProcessManagerLogRelayService,
-): Effect.Effect<ProcessManagerLogRelayService, never, Scope.Scope> =>
+  base: LogRelayService,
+): Effect.Effect<LogRelayService, never, Scope.Scope> =>
   Effect.gen(function* () {
     const entryCounter = yield* Ref.make(0);
     const buffer = yield* Ref.make<ReadonlyArray<PendingLogAppend>>([]);
@@ -51,7 +51,7 @@ const makePersistingRelay = (
     yield* Effect.addFinalizer(() => flush);
     yield* Effect.forkScoped(Effect.repeat(flush, Schedule.fixed(storeFlushInterval)));
 
-    const queueAppend = (entry: ProcessManagerLogEntry): Effect.Effect<void> =>
+    const queueAppend = (entry: LogEntry): Effect.Effect<void> =>
       Effect.gen(function* () {
         const groupOption = yield* Effect.serviceOption(ProcessGroupLogContext);
         if (Option.isNone(groupOption)) {
@@ -65,7 +65,7 @@ const makePersistingRelay = (
         }
       });
 
-    return ProcessManagerLogRelay.of({
+    return LogRelay.of({
       publish: (entry) =>
         Effect.gen(function* () {
           yield* base.publish(entry);
@@ -82,13 +82,13 @@ const makePersistingRelay = (
  *
  * @public
  */
-export const logsRelayLayer: Layer.Layer<ProcessManagerLogRelay, never, Scope.Scope> =
+export const logsRelayLayer: Layer.Layer<LogRelay, never, Scope.Scope> =
   Layer.effect(
-  ProcessManagerLogRelay,
+  LogRelay,
   Effect.gen(function* () {
-    const pubsub = yield* PubSub.unbounded<ProcessManagerLogEntry>();
-    const history = yield* Ref.make<ReadonlyArray<ProcessManagerLogEntry>>([]);
-    const base = ProcessManagerLogRelay.of({
+    const pubsub = yield* PubSub.unbounded<LogEntry>();
+    const history = yield* Ref.make<ReadonlyArray<LogEntry>>([]);
+    const base = LogRelay.of({
       publish: (entry) =>
         Effect.gen(function* () {
           yield* PubSub.publish(pubsub, entry);

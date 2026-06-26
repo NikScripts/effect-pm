@@ -1,11 +1,11 @@
 import { Duration, Effect, Layer } from "effect";
 import { expect, it } from "vitest";
-import { HistoryStore, ProcessResource } from "../src";
+import { HistoryStore, ScheduledProcess } from "../src";
 import { ProcessSchedule } from "../src/ProcessSchedule";
 
 // A process started disarmed (ProcessSchedule.empty) so it only runs on runImmediately; with
 // captureLogs + a HistoryStore, its logged line is captured, persisted, and read via logHistory.
-class LogProc extends ProcessResource.Tag<LogProc>()(
+class LogProc extends ScheduledProcess.Tag<LogProc>()(
   "test/process-log-history/Proc",
 ) {}
 
@@ -28,7 +28,7 @@ it("process logHistory reads back captured logs (captureLogs + HistoryStore)", (
       );
     }).pipe(
       Effect.provide(
-        ProcessResource.layer(LogProc, {
+        ScheduledProcess.layer(LogProc, {
           effect: Effect.logInfo("process tick"),
           schedule: ProcessSchedule.empty,
           captureLogs: true,
@@ -47,7 +47,7 @@ it("process logHistory is empty without a HistoryStore (graceful, opt-in)", () =
       expect(yield* proc.logHistory({})).toEqual([]);
     }).pipe(
       Effect.provide(
-        ProcessResource.layer(LogProc, {
+        ScheduledProcess.layer(LogProc, {
           effect: Effect.logInfo("process tick"),
           schedule: ProcessSchedule.empty,
           captureLogs: true,

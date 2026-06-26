@@ -1,85 +1,35 @@
-# Future roadmap (`docs/plans/`)
+# Roadmap (future work)
 
-Everything here is **work not shipped yet**. Shipped APIs, behavior, and storage
-facets belong in **`docs/*.md`** (especially [STORAGE.md](../STORAGE.md)),
-**`docs/guides/`**, **`examples/`**, and source **TSDoc**.
+Reviewed, **not-yet-shipped** features worth holding onto. Implemented/legacy plans were removed —
+shipped behavior lives in the regular docs (`README.md`, `PROCESS-API.md`, `STORAGE.md`,
+`guides/*`) and source TSDoc, not here. Pre-1.0: breaking changes land as minor bumps.
 
-Agents: read this README for **priority order**, then open the linked plan for
-constraints and slicing.
+## Toolkit
 
----
+- **Guaranteed barrel-namespace tree-shaking** — make `import { QueueResource } from "@nikscripts/effect-pm"` + `QueueResource.Tag` tree-shake the engine in *every* bundler (subpath imports already do). Detailed plan: [18-unbundled-build-treeshaking.md](./18-unbundled-build-treeshaking.md).
+- **Resource Host health/status** — a health/status surface on `Resource.Host` / served instances (Host now exists, so this is buildable).
+- **Resource-RPC auth** — a first-class authentication/authorization story for served resources (replaces the dropped `CommandAuth`; deployments use an edge gateway / Cloudflare Zero Trust short-term).
 
-## Recently landed on the integration branch (documented elsewhere)
+## Orchestration
 
-Shipped behavior belongs in [STORAGE.md](../STORAGE.md), [PACKAGE-GUIDE.md](../PACKAGE-GUIDE.md), and [guides/](../guides/) — not in plan files long-term.
+- **Standalone spawns** — `Process.spawn` / `QueueResource.open`: multi-instance ergonomics where spawned handles are plain caller-scoped Effects (alongside `Group` + `Resource.serveInstances`).
+- **Runtime identity & singleton runs** — in-process registry + a durable cross-runtime lease to prevent duplicate runs of the same logical process across hosts.
+- **Lifecycle kernel (exploratory)** — typed transitions / eligibility for queues, items, processes, and schedule rows; projection-friendly events (not an external statechart engine).
 
-- **Prisma `RuntimeStorage`**, operational storage errors, public `Xor` removed from `Query` — [STORAGE.md](../STORAGE.md), [MIGRATION-26b262b.md](../guides/MIGRATION-26b262b.md).
-- **Export namespaces** and **ResourceConfigure** — [PACKAGE-GUIDE.md](../PACKAGE-GUIDE.md), [resource-configure.md](../guides/resource-configure.md).
-- **Control protocol** (partial) — [control-plane.md](../guides/control-plane.md); remaining work in [01-remote-cli-transport-wire.md](./01-remote-cli-transport-wire.md).
-- **Dashboard / bundler guidance** — [dashboard-integration.md](../guides/dashboard-integration.md), [service-tags-and-runtime-split.md](../guides/service-tags-and-runtime-split.md).
+## Persistence & storage
 
-Follow-up storage polish: [11-storage-prisma-follow-up.md](./11-storage-prisma-follow-up.md).
+- **Postgres backends** for `HistoryStore` and `DurableQueueStore` (same interfaces; today: in-memory + SQLite).
+- **Hybrid `RuntimeStorage`** — one adapter routing internally across SQL + Redis. Design spec: [15-runtime-storage-hybrid.md](./15-runtime-storage-hybrid.md).
+- **Storage-adapter integration testing** — real-DB integration suites beyond the in-memory conformance tests.
+- **Richer history vocabulary + listener/stream hooks** — for domains that need more than append-only facts, layered *beside* the store facets (never a `ProcessStore` monolith).
 
----
+## Durable queue refinements
 
-## Priority order (do lower rows only when dependencies permit)
+(Both deferred in the durable-queue v1.)
 
-Higher items unblock remote operations, operator UX, and honest queue typing.
+- **Metrics downsampling** — roll windows 1s → 1m → 1h for long retention.
+- **Multi-worker visibility-timeout / lease refresh** — v1 is single-host with a generous lease; add lease-refresh + `SKIP LOCKED` multi-worker semantics.
 
-| Pri | Topic | Detail doc |
-| --- | ----- | ---------- |
-| 1 | **Remote controls & transport** — `ProcessManager`/CLI polish, configurable control listen/bind, optional `@effect/rpc` / ingress gates, injection of **`ControlTransportClient`** factories | [01-remote-cli-transport-wire.md](./01-remote-cli-transport-wire.md) |
-| 2 | **ProcessGroup endpoint & child launcher DX** — third-arg `Transport`/`Endpoint.*`, removals, canonical vs alternatives | [process-group-endpoint-dx.md](./process-group-endpoint-dx.md) |
-| 3 | **Queues: unified handles, schemas, remote enqueue & handoff** — `QueueResource`/`ProcessGroup` alignment, **`itemSchema`**, release/handoff, then remote enqueue over `ControlService`/`ProcessManager` | [03-queue-remote-handoff.md](./03-queue-remote-handoff.md) |
-| 4 | **Queue analytics / projections / live reads** — `QueueResourceStore` completeness, dashboards | [04-queue-analytics.md](./04-queue-analytics.md) |
-| 5 | **Log transport abstraction + durable history + live fan-out** — port like control transport, **`LogStore`** cursors, optional PubNub | [05-log-transport.md](./05-log-transport.md) |
-| 6 | **Runtime facets: listeners, history shape, mutable config** — beside [STORAGE.md](../STORAGE.md), no revived monolith facade | [06-runtime-hooks-config.md](./06-runtime-hooks-config.md) |
-| 7 | **Schedule identity & persistence boundaries** — stable entry IDs, runtime sync/remove semantics | [07-schedule-identity.md](./07-schedule-identity.md) |
-| 8 | **Lifecycle kernel & process hooks** — explicit transitions + **`Process`** extension hooks without hiding work under schedule/polling alone | [08-lifecycle-kernel-hooks.md](./08-lifecycle-kernel-hooks.md) |
-| **8b** | **Runtime identity & singleton runs** — `instanceId`, in-process + **storage-backed** duplicate prevention, `ProcessGroup` definition validation | [12-runtime-identity-and-singleton-runs.md](./12-runtime-identity-and-singleton-runs.md) |
-| **8c** | **Queue `rateLimit` + operational storage** — Effect limiter, `RateLimiterStore`, `transaction`, extend **`configure`/`Service`** on Process/Run/HttpApi | [13-queue-rate-limit-and-operational-storage.md](./13-queue-rate-limit-and-operational-storage.md) |
-| 9 | **`Process.spawn` / `QueueResource.open`** — multi-instance scripted supervision **outside** `ProcessGroup.make` tuples; blocks honest **`RemoteService` / per-entry remote layers** | [09-standalone-spawns.md](./09-standalone-spawns.md) |
-| 10 | **TypeScript:** re-enable **`anyUnknownInErrorContext`** (keep **`serviceNotAsClass`** off) | [10-typescript-strict-unknown.md](./10-typescript-strict-unknown.md) |
-| — | **Storage / Prisma follow-up** (adapter landed; polish and docs) | [11-storage-prisma-follow-up.md](./11-storage-prisma-follow-up.md) |
-| — | **Hybrid `RuntimeStorage`** — one layer, SQL + Redis inside adapter | [15-runtime-storage-hybrid.md](./15-runtime-storage-hybrid.md) |
-| — | **Conversation index (May 2026)** — checklist; not implementation spec | [14-conversation-capture-may-2026.md](./14-conversation-capture-may-2026.md) |
+## Hygiene
 
-### Dependency hints (soft)
-
-```text
-01 / process-group-endpoint-dx ─┬─► 03 queue remote + handoff
-                                └─► 05 log transport (can overlap late 01)
-
-06 runtime hooks ─► 04 analytics (facts stable first)
-07 schedule identity ─► 08 lifecycle (clear IDs before machine)
-12 identity / leases ─► 09 spawn + cross-host start honesty
-13 transaction ─► 13 rateLimit + 12 storage leases (shared RuntimeStorage.transaction)
-03 ─► 09 RemoteService defer (queue contracts + spawn model)
-```
-
-**May 2026 design capture:** plans **12–14** record identity, queue rate limit,
-and thread decisions. Resolve **12 § Deferred** before implementing leases or
-spawn; green-light **13** rate limit separately if desired.
-
----
-
-## Planning rules
-
-- One backlog file per topic; keep each **future-only** — when shipped, shrink
-  the plan and move prose to **`docs/guides/`** or regular reference docs.
-- Storage changes: [STORAGE.md](../STORAGE.md) is authoritative; facets live under
-  `src/store/` with `store/<Domain>` subpaths.
-- Public API changes: coordinate **changesets** when releasing.
-
----
-
-## Explicitly discarded (do not resurrect without a new ADR)
-
-- Runtime-wide **`ProcessEntry`** target/live reconciler.
-- Old **`ProcessControl`** with **`switchSchedule`**, **`sleepUntil`**, metadata
-  setters.
-- **`Polling.cron`**; cron belongs on schedule generation, not polling cadence.
-- **`ProcessGroup.addProcess` / removeProcess`** until **`ProcessManager`**
-  ownership exists.
-- Public generic **`RuntimeFact` / RuntimeRef`** vocabulary for new domains
-  (**internal** envelopes may remain for narrow plumbing only).
+- **Re-enable `anyUnknownInErrorContext`** — tighten the strict-unknown TypeScript/lint gate.

@@ -31,7 +31,7 @@ import {
   type ConfigPatch,
 } from "./ResourceConfigure";
 import { isPollingLayer, isScheduleLayer } from "./internal/processLayerBrand";
-import { ProcessManagerLogAnnotationKeys } from "./LogContext";
+import { LogAnnotationKeys } from "./LogContext";
 import {
   ProcessExecutionStore,
   type ProcessExecutionFinishInput,
@@ -887,7 +887,7 @@ function createProcess<E, RUser>(state: AnyProcessBuildState<E, RUser>) {
     effect: Effect.Effect<void, never, RUser | PollingTag | ProcessScheduleTag | Clock.Clock>,
   ): Effect.Effect<void, never, RUser | PollingTag | ProcessScheduleTag | Clock.Clock> =>
     Effect.annotateLogs(effect, {
-      [ProcessManagerLogAnnotationKeys.processId]: name,
+      [LogAnnotationKeys.processId]: name,
     });
 
   if (state.pollingLayer !== undefined && state.scheduleLayer !== undefined) {

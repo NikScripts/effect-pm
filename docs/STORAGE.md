@@ -9,8 +9,7 @@
   Facets: all via `ProcessStorage.layerRuntimeStorage`, or **individual**
   `QueueResourceStore.layerRuntimeStorage` (etc.) for only what you use — each still uses the
   same `RuntimeStorage`. **Hybrid** = one adapter routing internally (e.g. SQL +
-  Redis), not a second store beside it. See
-  [plans/13-queue-rate-limit-and-operational-storage.md](./plans/13-queue-rate-limit-and-operational-storage.md).
+  Redis), not a second store beside it. See [plans/15-runtime-storage-hybrid.md](./plans/15-runtime-storage-hybrid.md).
 - **Stack:** `RuntimeStorage` (rows) + per-domain facets in `src/store/` (`@nikscripts/effect-pm/store/*`). `ProcessStore` = facet builder. `ProcessStorage` = combined built-in facet layers.
 - **One facet per domain.** Each facet owns its concrete fact / change types **and** its row codec — encoders, decoders, predicate builders. No shared envelope. No public `runtime.fact.recorded` wire type.
 - **Optional storage.** Domain code uses **static emitters** on facet stores (`QueueResourceStore.recordEntry`, …). No-op without layer; when storage is present, read and write failures surface typed errors. Use `ProcessStore.catchErrorAndLog(...)` for explicit best-effort telemetry.
@@ -31,7 +30,6 @@ Verify: `pnpm typecheck && pnpm test && pnpm lint && pnpm build`
 | `QueueResourceStore` | `store/QueueResource` | `src/store/queueResource.ts` |
 | `LogStore` | `store/Log` | `src/store/log.ts` |
 | `ProcessLifecycleStore` | `store/ProcessLifecycle` | `src/store/processLifecycle.ts` |
-| `ProcessGroupStore` | `store/ProcessGroup` | `src/store/processGroup.ts` |
 | `ProcessExecutionStore` | `store/ProcessExecution` | `src/store/processExecution.ts` |
 | `ProcessStore` | `ProcessStore` | facet builder |
 | `ProcessStorage` | `ProcessStorage` | combined built-in facet layers |
@@ -55,7 +53,6 @@ property names (same **`Context`** tags as `*Store`):
 | **`ProcessStorage.RunResource`** | **`RunResourceStore`** |
 | **`ProcessStorage.ProcessExecution`** | **`ProcessExecutionStore`** |
 | **`ProcessStorage.ProcessLifecycle`** | **`ProcessLifecycleStore`** |
-| **`ProcessStorage.ProcessGroup`** | **`ProcessGroupStore`** *(storage facet)* — not **`ProcessGroup.Service`**. |
 
 Use either import style; **`Effect.serviceOption`**, **`Layer`**, and static emitters behave identically.
 
@@ -68,7 +65,7 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 | `type` | Writer | Reader |
 |--------|--------|--------|
 | `process.execution.completed` | static `recordCompleted` / `recordFailed` / `recordInterrupted` | `yield* ProcessExecutionStore` → `.executions` |
-| `process.lifecycle.changed` | static `lifecycleChanged` / `recordMember*` | `yield* ProcessLifecycleStore` / `ProcessGroupStore` → read methods |
+| `process.lifecycle.changed` | static `lifecycleChanged` / `recordMember*` | `yield* ProcessLifecycleStore` → read methods |
 | `run-resource.fact.recorded` | static `recordRun*` | `yield* RunResourceStore` → `.facts`, `.runs`, `.byRun` |
 | `run-resource.state.changed` | static `recordStateChange` | `yield* RunResourceStore` → `.stateHistory`, `.latestState` |
 | `log.entry` | static `record` / `recordBatch` (relay) | `yield* LogStore` → `.load`, `.query` |
@@ -191,13 +188,12 @@ Built-in `withIdentifier` facets (subpath → bound id):
 | `RunResourceStore` | `store/RunResource` | `resourceId` |
 | `ProcessLifecycleStore` | `store/ProcessLifecycle` | `processId` |
 | `ProcessExecutionStore` | `store/ProcessExecution` | `processId` |
-| `ProcessGroupStore` | `store/ProcessGroup` | `groupId` |
 
 The `ProcessStoreSpine` handle (`s`) exposes the storage primitives only:
 
 | Method | Purpose |
 |--------|---------|
-| `s.runId` | Id minted when the facet spine is built; stamped on every write from that layer. **Not** sufficient alone for live-instance identity — see [plans/12-runtime-identity-and-singleton-runs.md](./plans/12-runtime-identity-and-singleton-runs.md) (`instanceId`, cross-runtime leases). |
+| `s.runId` | Id minted when the facet spine is built; stamped on every write from that layer. **Not** sufficient alone for live-instance identity — runtime identity / singleton runs (`instanceId`, cross-runtime leases) are on the [roadmap](./plans/README.md). |
 | `s.create` / `s.createBatch` | Insert one / many records |
 | `s.upsert` | Insert-or-replace one record |
 | `s.read(query?)` | Run a `RuntimeRecordQuery` (predicate, orderBy, limit, offset) |
@@ -249,11 +245,7 @@ and must not change process / queue success.
 
 ## Pending work
 
-| Area | Notes |
-|------|-------|
-| **Identity & singleton runs** | `instanceId`, in-process + **durable lease** so the same logical process is not running in another program/host. Plan: [plans/12-runtime-identity-and-singleton-runs.md](./plans/12-runtime-identity-and-singleton-runs.md). |
-| **Operational storage** | One config for facts + **state** + audit; `RuntimeStorage.transaction`; facet state/mutate helpers. Plan: [plans/13-queue-rate-limit-and-operational-storage.md](./plans/13-queue-rate-limit-and-operational-storage.md). |
-| **Queue `rateLimit`** | Effect `RateLimiter` via `RateLimiterStore` on this stack — not shipped. Same plan **13**. |
-| **Extend `configure` / `Service`** | Parity on `Process`, `RunResource`, `HttpApiResource` (see plan **13**). |
-| Telemetry proposals | `Polling`, `ProcessSchedule`, `HttpApiResource`: facet yes/no docs in `docs/storage-proposals/` (Phase 1 — proposal only). |
-| **Thread index** | [plans/14-conversation-capture-may-2026.md](./plans/14-conversation-capture-may-2026.md) |
+Storage-related future items live in the [roadmap](./plans/README.md): **hybrid `RuntimeStorage`**
+(SQL + Redis), **Postgres backends** for `HistoryStore` / `DurableQueueStore`, **storage-adapter
+integration testing**, **runtime identity & singleton runs** (durable cross-runtime lease), and
+**richer history vocabulary + listener hooks**.

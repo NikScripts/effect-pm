@@ -101,12 +101,12 @@ import {
 } from "effect/unstable/persistence/RateLimiter";
 import type { RateLimiter as EffectRateLimiter } from "effect/unstable/persistence/RateLimiter";
 import {
-  ProcessManagerLogAnnotationKeys,
+  LogAnnotationKeys,
   withQueueLogAnnotations,
 } from "./LogContext";
 import {
-  processManagerLogEntryFromLoggerOptions,
-  type ProcessManagerLogEntry,
+  logEntryFromLoggerOptions,
+  type LogEntry,
 } from "./LogEntry";
 import {
   QueueResourceStore,
@@ -118,6 +118,12 @@ import {
 import { ProcessStore } from "./ProcessStore";
 import { isJsonValue } from "./internal/json";
 import type { JsonValue } from "./ProcessStoreEvent";
+import { DurableQueueStore } from "./DurableQueueStore";
+import type {
+  DurableEntry,
+  DurableQueueStoreShape,
+  OfferResult,
+} from "./DurableQueueStore";
 import {
   configureLayer,
   configureWrapEffectField,
@@ -384,14 +390,14 @@ export interface QueueHandleApi<
   readonly metrics: Stream.Stream<QueueMetrics>;
 
   /**
-   * Live **log** stream — structured {@link ProcessManagerLogEntry}s captured from the queue
+   * Live **log** stream — structured {@link LogEntry}s captured from the queue
    * engine *and* your worker `effect`, each retaining its level, message, cause, annotations
    * (`queueId` / worker / `entryId`) and spans. Empty unless {@link QueueResourceConfigBase.captureLogs}
    * is enabled. Backed by a sliding buffer (a slow subscriber drops oldest lines; never
    * backpressures the workers) — the fourth observability stream alongside `events` / `status` /
    * `metrics`.
    */
-  readonly logs: Stream.Stream<ProcessManagerLogEntry>;
+  readonly logs: Stream.Stream<LogEntry>;
 
   /**
    * Fork the worker pool. Idempotent — safe to call multiple times.
@@ -898,6 +904,32 @@ export interface QueueResourceConfigBase<T> {
    * @default undefined (off; `logs` is an empty stream)
    */
   readonly captureLogs?: boolean | { readonly level?: LogLevel.LogLevel };
+  /**
+   * Durability — back this queue with a {@link DurableQueueStore} (provide the backend layer, e.g.
+   * `SQLiteDurableQueueStore.layer`). When on, the store is the **source of truth**: enqueue
+   * persists, a feeder leases work into the workers, completion/failure update the store, and a
+   * restart recovers in-flight work (**at-least-once** + dedup key). Requires `itemSchema`
+   * (the payload must serialize). Off by default (in-memory only).
+   *
+   * - `true` — defaults.
+   * - `{ … }` — tune `leaseMillis` (visibility timeout), `maxAttempts` (before dead-letter),
+   *   `pollIntervalMillis` (feeder idle poll).
+   */
+  readonly persist?: boolean | QueuePersistOptions;
+}
+
+/**
+ * Tuning for {@link QueueResourceConfigBase.persist}.
+ *
+ * @public
+ */
+export interface QueuePersistOptions {
+  /** Lease (visibility timeout) per taken item, ms. Keep above max processing time. @default 300000 */
+  readonly leaseMillis?: number;
+  /** Attempts before an item is dead-lettered. @default the queue's `attempts`, else 1 */
+  readonly maxAttempts?: number;
+  /** Feeder poll interval while the store is empty, ms. @default 100 */
+  readonly pollIntervalMillis?: number;
 }
 
 /**
@@ -930,6 +962,24 @@ export interface QueueOnFailure<T, E, R> {
 }
 
 /**
+ * **Self-refill** — load work into the queue from a source (DB, …) on start and/or whenever it
+ * drains empty (a self-feeding queue). `load` receives the queue handle and runs in the worker `R`,
+ * **best-effort** (failures are logged, not fatal). This is the toolkit equivalent of the legacy
+ * `onStart` / `onDrained` lifecycle hooks — a defining queue *behavior* (a pull source), distinct
+ * from after-the-fact observation on the `events` stream.
+ *
+ * @public
+ */
+export interface QueueRefill<T, E, EEnqueue, R> {
+  /** Run `load` once when the worker pool starts (bootstrap). @default false */
+  readonly onStart?: boolean;
+  /** Run `load` each time the queue drains to empty (re-poll the source). @default false */
+  readonly onDrained?: boolean;
+  /** Load + enqueue work. Handle its own errors (best-effort). */
+  readonly load: (queue: QueueHandle<T, E, EEnqueue, R>) => Effect.Effect<void, never, R>;
+}
+
+/**
  * Queue configuration **without** {@link QueueResourceConfigBase} item schema.
  * Enqueue helpers on {@link QueueHandle} and the {@link EffectContext} do not fail with
  * schema validation errors.
@@ -946,6 +996,8 @@ export type QueueResourceConfigWithoutItemSchema<T, E, R> = QueueResourceConfigB
   readonly effect: (item: T, ctx: EffectContext<T, never, R>) => Effect.Effect<void, E, R>;
   /** Optional inline per-error disposition. See {@link QueueOnFailure}. */
   readonly onFailure?: QueueOnFailure<T, E, R>;
+  /** Optional self-refill from a source on start / drain. See {@link QueueRefill}. */
+  readonly refill?: QueueRefill<T, E, never, R>;
 };
 
 /**
@@ -967,6 +1019,8 @@ export type QueueResourceConfigWithItemSchema<T, E, R> = QueueResourceConfigBase
   readonly effect: (item: T, ctx: EffectContext<T, QueueEnqueueErrors, R>) => Effect.Effect<void, E, R>;
   /** Optional inline per-error disposition. See {@link QueueOnFailure}. */
   readonly onFailure?: QueueOnFailure<T, E, R>;
+  /** Optional self-refill from a source on start / drain. See {@link QueueRefill}. */
+  readonly refill?: QueueRefill<T, E, QueueEnqueueErrors, R>;
 };
 
 /**
@@ -1114,6 +1168,7 @@ export type QueueConfigFromEffect<
 type QueueRuntimeConfig<T, E, EEnqueue, R> = QueueResourceConfigBase<T> & {
   readonly effect: (item: T, ctx: EffectContext<T, EEnqueue, R>) => Effect.Effect<void, E, R>;
   readonly onFailure?: QueueOnFailure<T, E, R>;
+  readonly refill?: QueueRefill<T, E, EEnqueue, R>;
 };
 
 type ReleaseEntryEncoder<T> = (
@@ -1122,6 +1177,12 @@ type ReleaseEntryEncoder<T> = (
   attributes: Record<string, unknown> | undefined,
 ) => Effect.Effect<QueueEncodedEntry, QueueItemEncodingError>;
 
+/** Item ⇄ durable payload codec for {@link QueueResourceConfigBase.persist} (built from `itemSchema`). */
+type PersistCodec<T> = {
+  readonly encode: (item: T) => Exit.Exit<unknown, unknown>;
+  readonly decode: (json: unknown) => Exit.Exit<T, unknown>;
+};
+
 /** Normalize public enqueue input without treating arbitrary iterables as batches. */
 function normalizeEnqueueInput<A>(input: A | ReadonlyArray<A>): ReadonlyArray<A> {
   return isReadonlyArray(input) ? input : [input];
@@ -1129,7 +1190,7 @@ function normalizeEnqueueInput<A>(input: A | ReadonlyArray<A>): ReadonlyArray<A>
 
 /**
  * A per-queue capture {@link Logger.Logger} for the {@link QueueHandleApi.logs} stream. Mirrors
- * the process-manager capture logger ({@link processManagerLogEntryFromLoggerOptions} preserves
+ * the process-manager capture logger ({@link logEntryFromLoggerOptions} preserves
  * the level, message, cause, annotations and spans verbatim), but hands each entry to `publish`
  * (which fans it to **this** queue's sliding hub + replay ring) instead of a relay, filters at
  * the source by `minLevel`, and (defensively) only captures lines annotated with this `queueId` —
@@ -1140,13 +1201,13 @@ function normalizeEnqueueInput<A>(input: A | ReadonlyArray<A>): ReadonlyArray<A>
 const makeQueueCaptureLogger = (
   queueId: string,
   minLevel: LogLevel.LogLevel,
-  publish: (entry: ProcessManagerLogEntry) => Effect.Effect<void>,
+  publish: (entry: LogEntry) => Effect.Effect<void>,
 ): Logger.Logger<unknown, void> =>
   Logger.make((options) => {
     if (!LogLevel.isGreaterThanOrEqualTo(options.logLevel, minLevel)) return;
     const annotations = options.fiber.getRef(CurrentLogAnnotations);
-    if (annotations[ProcessManagerLogAnnotationKeys.queueId] !== queueId) return;
-    const entry = processManagerLogEntryFromLoggerOptions({
+    if (annotations[LogAnnotationKeys.queueId] !== queueId) return;
+    const entry = logEntryFromLoggerOptions({
       message: options.message,
       logLevel: options.logLevel,
       cause: options.cause,
@@ -1432,6 +1493,7 @@ const makeQueueEffectWithoutSchema = <
     config,
     (items, _operation) => Effect.succeed(items),
     undefined,
+    undefined,
   );
 
 const makeQueueEffectWithSchema = <
@@ -1496,6 +1558,7 @@ const makeQueueEffectWithSchema = <
     (items, operation) =>
       validateItemsWithSchema(queueName, config.itemSchema, codecId, items, operation),
     encodeForRelease,
+    { encode: encodeItem, decode: Schema.decodeUnknownExit(config.itemSchema) },
   );
 };
 
@@ -1562,6 +1625,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
   config: QueueRuntimeConfig<T, E, EEnqueue, R>,
   validateForEnqueue: ValidateForEnqueue<T, EEnqueue>,
   encodeForRelease: ReleaseEntryEncoder<T> | undefined,
+  persistCodec: PersistCodec<T> | undefined,
 ): Effect.Effect<QueueHandle<T, E, EEnqueue, R>, never, Scope.Scope | R> =>
   Effect.gen(function* () {
     const queueName = config.name ?? "anonymous";
@@ -1580,14 +1644,14 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       typeof captureLogsConfig === "object" && captureLogsConfig !== null
         ? (captureLogsConfig.level ?? "All")
         : "All";
-    const logsHub = yield* PubSub.sliding<ProcessManagerLogEntry>(1024);
+    const logsHub = yield* PubSub.sliding<LogEntry>(1024);
     // A small bounded replay ring so a UI attaching to an already-running queue gets the recent
     // tail before live lines (the log-tail UX), instead of only future ones. Bounded (still
     // lossy beyond `logReplayCapacity`) — not full history. `publishLog` fans each captured entry
     // to both the live hub and the ring.
     const logReplayCapacity = 100;
-    const logReplay = yield* Ref.make<ReadonlyArray<ProcessManagerLogEntry>>([]);
-    const publishLog = (entry: ProcessManagerLogEntry): Effect.Effect<void> =>
+    const logReplay = yield* Ref.make<ReadonlyArray<LogEntry>>([]);
+    const publishLog = (entry: LogEntry): Effect.Effect<void> =>
       Effect.andThen(PubSub.publish(logsHub, entry), () =>
         Ref.update(logReplay, (tail) => {
           const next = [...tail, entry];
@@ -1627,6 +1691,69 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     const highQueue = yield* Queue.bounded<InternalItem<T>>(capacity);
     const normalQueue = yield* Queue.bounded<InternalItem<T>>(capacity);
     const lowQueue = yield* Queue.bounded<InternalItem<T>>(capacity);
+
+    // ─── Durability (opt-in: `persist` + a DurableQueueStore + itemSchema) ───
+    // When on, the store is the source of truth: enqueue persists, a feeder leases work into the
+    // lanes, completion/failure update the store, and boot recovers in-flight work. Off (or no
+    // store/codec) → the in-memory lanes are the queue, exactly as before.
+    const persistOptions =
+      config.persist === true
+        ? {}
+        : config.persist === undefined || config.persist === false
+          ? undefined
+          : config.persist;
+    const durableStoreOption =
+      persistOptions !== undefined && persistCodec !== undefined
+        ? yield* Effect.serviceOption(DurableQueueStore)
+        : Option.none<DurableQueueStoreShape>();
+    if (persistOptions !== undefined && persistCodec === undefined) {
+      yield* Effect.logWarning(
+        `Queue "${queueName}" persist ignored: requires an itemSchema (payload must serialize)`,
+      );
+    }
+    if (
+      persistOptions !== undefined &&
+      persistCodec !== undefined &&
+      Option.isNone(durableStoreOption)
+    ) {
+      yield* Effect.logWarning(
+        `Queue "${queueName}" persist ignored: no DurableQueueStore layer provided`,
+      );
+    }
+    const persist =
+      persistOptions !== undefined &&
+      persistCodec !== undefined &&
+      Option.isSome(durableStoreOption)
+        ? {
+            store: durableStoreOption.value,
+            codec: persistCodec,
+            leaseMillis: persistOptions.leaseMillis ?? 300_000,
+            maxAttempts:
+              persistOptions.maxAttempts ?? (config.attempts ?? 0) + 1,
+            pollInterval: Duration.millis(persistOptions.pollIntervalMillis ?? 100),
+          }
+        : undefined;
+
+    // Outstanding work per priority. Durable: the store is the truth (its pending rows include
+    // in-flight leases). In-memory: the lanes. Used by `size`/`sizes`/`isEmpty`/`statusNow` so a
+    // restart that has reloaded nothing yet still reports the durable backlog.
+    const effectiveSizes: Effect.Effect<{
+      readonly high: number;
+      readonly normal: number;
+      readonly low: number;
+    }> =
+      persist === undefined
+        ? Effect.map(
+            Effect.all([
+              Queue.size(highQueue),
+              Queue.size(normalQueue),
+              Queue.size(lowQueue),
+            ]),
+            ([high, normal, low]) => ({ high, normal, low }),
+          )
+        : persist.store
+            .sizes(queueName)
+            .pipe(Effect.catch(() => Effect.succeed({ high: 0, normal: 0, low: 0 })));
 
     // Latch: open = workers run, closed = workers block before next item.
     // Starts closed when `paused: true` so items can accumulate before processing.
@@ -1958,16 +2085,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     // Lifecycle phase, orthogonal to paused. `shutdown` advances running → draining → off.
     const phaseRef = yield* Ref.make<"running" | "draining" | "off">("running");
     const computeStatus: Effect.Effect<QueueStatus> = Effect.gen(function* () {
-      const [h, n, l] = yield* Effect.all([
-        Queue.size(highQueue),
-        Queue.size(normalQueue),
-        Queue.size(lowQueue),
-      ]);
+      const { high, normal, low } = yield* effectiveSizes;
       return {
         sizes: {
-          high: Math.max(0, h),
-          normal: Math.max(0, n),
-          low: Math.max(0, l),
+          high: Math.max(0, high),
+          normal: Math.max(0, normal),
+          low: Math.max(0, low),
         },
         paused: yield* Ref.get(pausedRef),
         inFlight: yield* Ref.get(inFlightRef),
@@ -1979,15 +2102,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     const refreshStatus = Effect.flatMap(computeStatus, (s) =>
       SubscriptionRef.set(statusRef, s),
     );
-    // Total items pending across all priority lanes (poll-cheap; used by shutdown finalization).
-    const totalPending: Effect.Effect<number> = Effect.gen(function* () {
-      const [h, n, l] = yield* Effect.all([
-        Queue.size(highQueue),
-        Queue.size(normalQueue),
-        Queue.size(lowQueue),
-      ]);
-      return Math.max(0, h) + Math.max(0, n) + Math.max(0, l);
-    });
+    // Total outstanding (durable store when persisting, else lanes); used by shutdown finalization.
+    const totalPending: Effect.Effect<number> = Effect.map(
+      effectiveSizes,
+      ({ high, normal, low }) =>
+        Math.max(0, high) + Math.max(0, normal) + Math.max(0, low),
+    );
     // Finalize shutdown once the queue has drained empty AND no item is in flight: flip
     // draining → off (exactly once), emit `ShutdownComplete`, and refresh the snapshot so its
     // `phase` reads `"off"`. Called after each item finishes and at shutdown initiation (covers
@@ -2534,6 +2654,73 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           return;
         }
 
+        // Durable path: the store is the dedup authority and the source of truth — persist each
+        // item (not the in-memory lane); the feeder leases them into the workers. Skips in-memory
+        // `activeKeys` / dedupe analytics (the store dedups on `dedupKey`).
+        if (persist !== undefined) {
+          const now =
+            enqueuedAt ?? (yield* Effect.clockWith((c) => c.currentTimeMillis));
+          const persisted: Array<InternalItem<T>> = [];
+          for (const item of items) {
+            const internal: InternalItem<T> = {
+              item,
+              entryId: nextEntryId(),
+              retries,
+              priority,
+              enqueuedAt: now,
+              key: config.key !== undefined ? config.key(item) : undefined,
+            };
+            const result = yield* Exit.match(persist.codec.encode(item), {
+              onSuccess: (payload) =>
+                isJsonValue(payload)
+                  ? persist.store
+                      .offer({
+                        id: internal.entryId,
+                        queueId: queueName,
+                        dedupKey: internal.key,
+                        priority,
+                        payload,
+                      })
+                      .pipe(
+                        Effect.catch((error) =>
+                          Effect.as(
+                            Effect.logError(
+                              `Queue "${queueName}" persist offer failed: ${String(error)}`,
+                            ),
+                            "deduplicated" as OfferResult,
+                          ),
+                        ),
+                      )
+                  : Effect.as(
+                      Effect.logError(
+                        `Queue "${queueName}" persist skipped: encoded item is not JSON-compatible`,
+                      ),
+                      "deduplicated" as OfferResult,
+                    ),
+              onFailure: (cause) =>
+                Effect.as(
+                  Effect.logError(
+                    `Queue "${queueName}" persist encode failed: ${Cause.pretty(cause)}`,
+                  ),
+                  "deduplicated" as OfferResult,
+                ),
+            });
+            if (result !== "deduplicated") persisted.push(internal);
+          }
+          if (persisted.length === 0) return;
+          yield* Effect.forEach(
+            persisted,
+            (internal) => recordEntryEvent("enqueued", internal),
+            { discard: true },
+          );
+          yield* publishEvent({
+            _tag: "Enqueued",
+            entries: persisted.map((internal) => queueEntryFromInternal(internal)),
+            priority,
+          });
+          return;
+        }
+
         const toEnqueue: Array<InternalItem<T>> = [];
         const addedDedupeKeys: Array<string> = [];
 
@@ -2726,6 +2913,33 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
      * 4. Publish the `Exit` / `Completed` / `Failed` events
      * 5. Auto re-enqueue on failure up to `attempts`, else log the unhandled failure
      */
+    // Durable terminal hooks — no-ops when persist is off. `persistComplete` removes a finished
+    // entry; `persistFail` lets the store requeue (feeder re-leases) or dead-letter at maxAttempts.
+    const persistComplete = (entryId: string): Effect.Effect<void> =>
+      persist === undefined
+        ? Effect.void
+        : persist.store
+            .complete(entryId)
+            .pipe(
+              Effect.catch((error) =>
+                Effect.logError(
+                  `Queue "${queueName}" persist complete failed: ${String(error)}`,
+                ),
+              ),
+            );
+    const persistFail = (entryId: string): Effect.Effect<void> =>
+      persist === undefined
+        ? Effect.void
+        : persist.store
+            .fail(entryId, { maxAttempts: persist.maxAttempts })
+            .pipe(
+              Effect.asVoid,
+              Effect.catch((error) =>
+                Effect.logError(
+                  `Queue "${queueName}" persist fail failed: ${String(error)}`,
+                ),
+              ),
+            );
     const processItemBody = (internal: InternalItem<T>): Effect.Effect<void, never, R> =>
       Effect.gen(function* () {
           const start = yield* Effect.clockWith((c) => c.currentTimeMillis);
@@ -2795,28 +3009,43 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
                 : "default";
             switch (disposition) {
               case "retry":
-                yield* retryInternal(internal, exit);
+                // Durable: the store owns retry (requeue/DLQ); in-memory: re-enqueue the lane.
+                if (persist !== undefined) {
+                  yield* persistFail(internal.entryId);
+                } else {
+                  yield* retryInternal(internal, exit);
+                }
                 break;
               case "deadLetter":
                 yield* Effect.asVoid(
                   routePending(entry, { reason: "onFailure" }, "dead-lettered"),
                 );
+                yield* persistComplete(internal.entryId);
                 break;
               case "drop":
                 yield* Effect.asVoid(
                   routePending(entry, { reason: "onFailure" }, "dropped"),
                 );
+                yield* persistComplete(internal.entryId);
                 break;
               case "default":
                 if (autoReEnqueue) {
-                  yield* retryInternal(internal, exit);
+                  if (persist !== undefined) {
+                    yield* persistFail(internal.entryId);
+                  } else {
+                    yield* retryInternal(internal, exit);
+                  }
                 } else {
                   yield* Effect.logWarning(
                     `Item failed in queue "${queueName}" (no \`attempts\` set; observe via \`events\`)`,
                   ).pipe(Effect.annotateLogs("cause", Cause.pretty(exit.cause)));
+                  yield* persistComplete(internal.entryId);
                 }
                 break;
             }
+          } else {
+            // success — remove the durable entry
+            yield* persistComplete(internal.entryId);
           }
 
           yield* wakeDrainedIfAllQueuesEmpty;
@@ -2917,6 +3146,72 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             rateLimitContext,
           );
 
+    // Durable feeder: leases the top-priority available entry from the store and offers it into the
+    // in-memory lanes (which drive concurrency / rate-limit / workers as usual). Blocks on a full
+    // bounded lane (natural flow control); polls when the store is empty. A poisoned payload (decode
+    // failure) is dropped from the store so it can't wedge the feeder.
+    const feederLoop: Effect.Effect<void, never, R> | undefined =
+      persist === undefined
+        ? undefined
+        : Effect.forever(
+            Effect.gen(function* () {
+              // finishActive → stop feeding at once; drain → keep feeding until the store empties.
+              if (yield* Ref.get(isShutdownRef)) {
+                if (shutdownMode === "finishActive") return yield* Effect.interrupt;
+              }
+              const taken = yield* persist.store
+                .take({ queueId: queueName, leaseMillis: persist.leaseMillis })
+                .pipe(
+                  Effect.catch((error) =>
+                    Effect.as(
+                      Effect.logError(
+                        `Queue "${queueName}" persist take failed: ${String(error)}`,
+                      ),
+                      Option.none<DurableEntry>(),
+                    ),
+                  ),
+                );
+              if (Option.isNone(taken)) {
+                // empty + shutting down (drain) → done; otherwise idle-poll
+                if (yield* Ref.get(isShutdownRef)) return yield* Effect.interrupt;
+                yield* Effect.sleep(persist.pollInterval);
+                return;
+              }
+              const entry = taken.value;
+              yield* Exit.match(persist.codec.decode(entry.payload), {
+                onSuccess: (item) =>
+                  Effect.andThen(
+                    Queue.offer(queueForPriority(entry.priority), {
+                      item,
+                      entryId: entry.id,
+                      retries: Math.max(0, entry.attempts - 1),
+                      priority: entry.priority,
+                      enqueuedAt: entry.enqueuedAtMillis,
+                      key: entry.dedupKey ?? undefined,
+                    }),
+                    // wake a worker blocked in `takeNext` (offer alone doesn't signal)
+                    signalWorkerWake,
+                  ),
+                onFailure: (cause) =>
+                  persist.store.complete(entry.id).pipe(
+                    Effect.catch(() => Effect.void),
+                    Effect.andThen(
+                      Effect.logError(
+                        `Queue "${queueName}" persist decode failed (dropped ${entry.id}): ${Cause.pretty(cause)}`,
+                      ),
+                    ),
+                  ),
+              });
+            }),
+          );
+
+    // Self-refill (optional): load work from a source on start / drain — best-effort (logged).
+    const refillConfig = config.refill;
+    const runRefill = (
+      handle: QueueHandle<T, E, EEnqueue, R>,
+    ): Effect.Effect<void, never, R> =>
+      refillConfig === undefined ? Effect.void : refillConfig.load(handle);
+
     const forkProcessingFibers = Effect.gen(function* () {
       if (yield* Ref.get(isShutdownRef)) {
         yield* Effect.logWarning(
@@ -2930,8 +3225,18 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
       if (!claimed) return;
 
+      // Reclaim work whose lease survived a previous crash/restart before feeding resumes.
+      if (persist !== undefined) {
+        yield* persist.store
+          .recover(queueName)
+          .pipe(Effect.catch(() => Effect.succeed(0)));
+      }
+
       for (let i = 0; i < concurrency; i++) {
         yield* FiberSet.run(workerFibers)(workerLoop(i));
+      }
+      if (feederLoop !== undefined) {
+        yield* FiberSet.run(workerFibers)(feederLoop);
       }
 
       yield* recordLifecycleEvent("Started");
@@ -2946,6 +3251,11 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       }
 
       yield* publishEvent({ _tag: "Start", queueId: queueName });
+
+      // Bootstrap refill (onStart): forked so a slow source load doesn't block startup.
+      if (refillConfig?.onStart === true) {
+        yield* FiberSet.run(workerFibers)(runRefill(handle));
+      }
 
       // Drain monitor: emits `Drained` whenever pending work drains to empty.
       yield* FiberSet.run(workerFibers)(
@@ -2965,6 +3275,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
                 queueId: queueName,
                 completed,
               });
+              // Self-refill on drain: re-poll the source (drives the self-feeding loop).
+              if (refillConfig?.onDrained === true) {
+                yield* runRefill(handle);
+              }
             }
           }),
         ),
@@ -3029,6 +3343,31 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
     const restorePending = (items: ReadonlyArray<InternalItem<T>>): Effect.Effect<void> =>
       Effect.gen(function* () {
+        // Durable: put drained entries back into the store (where they came from), not the lanes.
+        if (persist !== undefined) {
+          const { codec, store } = persist;
+          yield* Effect.forEach(
+            items,
+            (item) =>
+              Exit.match(codec.encode(item.item), {
+                onSuccess: (payload) =>
+                  isJsonValue(payload)
+                    ? store
+                        .offer({
+                          id: item.entryId,
+                          queueId: queueName,
+                          dedupKey: item.key,
+                          priority: item.priority,
+                          payload,
+                        })
+                        .pipe(Effect.asVoid, Effect.catch(() => Effect.void))
+                    : Effect.void,
+                onFailure: () => Effect.void,
+              }),
+            { discard: true },
+          );
+          return;
+        }
         const restoredKeys: string[] = [];
         for (const item of items) {
           yield* Queue.offer(queueForPriority(item.priority), item);
@@ -3078,10 +3417,52 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         return extracted;
       });
 
+    // Durable extraction for the control verbs: pulls the matching **available** backlog out of the
+    // store (in-flight/leased work is left to the workers) and decodes it back to InternalItems.
+    // entryId / key selectors map to the store; an item-only selector can't match serialized rows.
+    const extractPendingPersist = (
+      selector?: QueueEntrySelector<T>,
+    ): Effect.Effect<ReadonlyArray<InternalItem<T>>> => {
+      if (persist === undefined) return Effect.succeed([]);
+      const { codec, store } = persist;
+      const match =
+        selector === undefined
+          ? ({} as { id?: string; key?: string })
+          : selector.entryId !== undefined
+            ? { id: selector.entryId }
+            : selector.key !== undefined
+              ? { key: selector.key }
+              : undefined;
+      if (match === undefined) return Effect.succeed([]);
+      return store.drain(queueName, match).pipe(
+        Effect.catch(() => Effect.succeed([] as ReadonlyArray<DurableEntry>)),
+        Effect.map((entries) =>
+          entries.flatMap((entry) => {
+            const decoded = codec.decode(entry.payload);
+            return Exit.isSuccess(decoded)
+              ? [
+                  {
+                    item: decoded.value,
+                    entryId: entry.id,
+                    retries: Math.max(0, entry.attempts - 1),
+                    priority: entry.priority,
+                    enqueuedAt: entry.enqueuedAtMillis,
+                    key: entry.dedupKey ?? undefined,
+                  } satisfies InternalItem<T>,
+                ]
+              : [];
+          }),
+        ),
+      );
+    };
+
     const releasePending = (options?: QueueReleaseOptions): Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R> =>
       Effect.gen(function* () {
         const releaseId = options?.releaseId ?? nextReleaseId();
-        const internals = yield* extractPending(() => true);
+        const internals =
+          persist !== undefined
+            ? yield* extractPendingPersist()
+            : yield* extractPending(() => true);
         const entries = internals.map((internal) =>
           queueEntryFromInternal(internal, undefined, {
             releaseId,
@@ -3114,7 +3495,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           return yield* new QueueMissingItemSchemaError({ queue: queueName });
         }
         const releaseId = options?.releaseId ?? nextReleaseId();
-        const internals = yield* extractPending(() => true);
+        const internals =
+          persist !== undefined
+            ? yield* extractPendingPersist()
+            : yield* extractPending(() => true);
         const encoded = yield* Effect.forEach(
           internals,
           (internal) => encodeForRelease(internal, releaseId, options?.attributes),
@@ -3158,7 +3542,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       Effect.gen(function* () {
         const internals = isQueueEntry(selector)
           ? []
-          : yield* extractPending((internal) => matchesSelector(internal, selector));
+          : persist !== undefined
+            ? yield* extractPendingPersist(selector)
+            : yield* extractPending((internal) => matchesSelector(internal, selector));
         const entries = isQueueEntry(selector)
           ? [selector]
           : internals.map((internal) =>
@@ -3211,26 +3597,24 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       enqueue: (input: QueueEntry<T> | ReadonlyArray<QueueEntry<T>>) =>
         enqueueEntries(input),
 
-      // Read all three queue sizes in parallel, combine into total
+      // Outstanding total (durable store when persisting, else the in-memory lanes)
       size: Effect.map(
-        Effect.all([Queue.size(highQueue), Queue.size(normalQueue), Queue.size(lowQueue)]),
-        ([h, n, l]) => Math.max(0, h) + Math.max(0, n) + Math.max(0, l),
+        effectiveSizes,
+        ({ high, normal, low }) =>
+          Math.max(0, high) + Math.max(0, normal) + Math.max(0, low),
       ),
 
-      // Read all three queue sizes in parallel, return per-level breakdown
-      sizes: Effect.map(
-        Effect.all([Queue.size(highQueue), Queue.size(normalQueue), Queue.size(lowQueue)]),
-        ([h, n, l]) => ({
-          high: Math.max(0, h),
-          normal: Math.max(0, n),
-          low: Math.max(0, l),
-        }),
-      ),
+      // Per-level breakdown (durable store when persisting, else the in-memory lanes)
+      sizes: Effect.map(effectiveSizes, ({ high, normal, low }) => ({
+        high: Math.max(0, high),
+        normal: Math.max(0, normal),
+        low: Math.max(0, low),
+      })),
 
-      // True when all three priority queues report zero or negative size
+      // True when no outstanding work remains
       isEmpty: Effect.map(
-        Effect.all([Queue.size(highQueue), Queue.size(normalQueue), Queue.size(lowQueue)]),
-        ([h, n, l]) => h <= 0 && n <= 0 && l <= 0,
+        effectiveSizes,
+        ({ high, normal, low }) => high <= 0 && normal <= 0 && low <= 0,
       ),
 
       // Counter incremented after each item completes processing
@@ -3312,6 +3696,30 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       })),
 
       clear: tapLogs(Effect.gen(function* () {
+        // Durable: the store is the truth — clear it (count = removed), then purge the stale
+        // in-memory copies the feeder had leased so workers don't process them.
+        if (persist !== undefined) {
+          const cleared = yield* persist.store
+            .clear(queueName)
+            .pipe(Effect.catch(() => Effect.succeed(0)));
+          const drainDiscard = (
+            q: Queue.Queue<InternalItem<T>>,
+          ): Effect.Effect<void> =>
+            Effect.flatMap(Queue.poll(q), (polled) =>
+              Option.isSome(polled) ? drainDiscard(q) : Effect.void,
+            );
+          yield* drainDiscard(highQueue);
+          yield* drainDiscard(normalQueue);
+          yield* drainDiscard(lowQueue);
+          yield* Ref.set(completedCount, 0);
+          yield* recordLifecycleEvent("Cleared", cleared);
+          yield* publishEvent({ _tag: "Cleared", queueId: queueName, count: cleared });
+          yield* Effect.logDebug(
+            `Queue "${queueName}" cleared ${String(cleared)} items`,
+          );
+          yield* wakeDrainedIfAllQueuesEmpty;
+          return cleared;
+        }
         let count = 0;
         const releasedKeys: string[] = [];
         const drain = (q: Queue.Queue<InternalItem<T>>): Effect.Effect<void> =>

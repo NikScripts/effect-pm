@@ -1,13 +1,13 @@
 import { DateTime, Duration, Effect, Ref } from "effect";
 import { expect, it } from "vitest";
-import { ProcessResource } from "../src";
+import { ScheduledProcess } from "../src";
 import { ProcessSchedule } from "../src/ProcessSchedule";
 
 // A managed process as a toolkit resource — driven through the same `yield* Tag` surface a
 // remote consumer uses (only the provided layer differs). By default a process is armed and runs
 // immediately; these tests pass `schedule: ProcessSchedule.empty` to start disarmed where they
 // want to observe `runImmediately` / schedule CRUD in isolation.
-class TestProc extends ProcessResource.Tag<TestProc>()("test/process-contract/Proc") {}
+class TestProc extends ScheduledProcess.Tag<TestProc>()("test/process-contract/Proc") {}
 
 it("with the default schedule a process arms and runs its effect immediately", () =>
   Effect.runPromise(
@@ -23,7 +23,7 @@ it("with the default schedule a process arms and runs its effect immediately", (
         expect((yield* proc.statusNow).armed).toBe(true);
       }).pipe(
         Effect.provide(
-          ProcessResource.layer(TestProc, { effect: Ref.update(ran, (n) => n + 1) }),
+          ScheduledProcess.layer(TestProc, { effect: Ref.update(ran, (n) => n + 1) }),
         ),
       );
     }),
@@ -52,7 +52,7 @@ it("runImmediately runs the effect once (disarmed via schedule: empty)", () =>
         expect(typeof after.lastRunDurationMillis).toBe("number");
       }).pipe(
         Effect.provide(
-          ProcessResource.layer(TestProc, {
+          ScheduledProcess.layer(TestProc, {
             effect: Ref.update(ran, (n) => n + 1),
             schedule: ProcessSchedule.empty,
           }),
@@ -80,7 +80,7 @@ it("schedule round-trips through set/add/clear and the read verb", () =>
       expect(entries).toEqual([]);
     }).pipe(
       Effect.provide(
-        ProcessResource.layer(TestProc, {
+        ScheduledProcess.layer(TestProc, {
           effect: Effect.void,
           schedule: ProcessSchedule.empty,
         }),
@@ -100,6 +100,6 @@ it("stop/start toggles supervision (observable via statusNow.supervising)", () =
       yield* proc.start;
       expect((yield* proc.statusNow).supervising).toBe(true);
     }).pipe(
-      Effect.provide(ProcessResource.layer(TestProc, { effect: Effect.void })),
+      Effect.provide(ScheduledProcess.layer(TestProc, { effect: Effect.void })),
     ),
   ));

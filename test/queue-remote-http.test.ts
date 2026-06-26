@@ -3,7 +3,7 @@ import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { QueueResource } from "../src";
+import { HistoryStore, QueueResource } from "../src";
 import type { QueueLayerConfig } from "../src/QueueContract";
 import { Resource } from "../src/Resource";
 
@@ -34,6 +34,8 @@ const withServer = <A, E>(
   use: (port: number) => Effect.Effect<A, E, RemoteQueue>,
 ) => {
   const server = QueueResource.serveHttp(RemoteQueue, config).pipe(
+    // server-side history backend (only used when the config enables captureLogs)
+    Layer.provide(HistoryStore.layerMemory()),
     Layer.provideMerge(NodeHttpServer.layerTest),
   );
   return Effect.gen(function* () {
@@ -66,6 +68,38 @@ it("add (single + batch) over http → real engine processes → completed/statu
         expect(snap.sizes).toEqual({ high: 0, normal: 0, low: 0 });
         expect(snap.phase).toBe("running");
       }),
+    )));
+
+it("logHistory + metricsHistory cross http (the dashboard's backfill path)", () =>
+  Effect.runPromise(
+    withServer(
+      {
+        effect: (item) => Effect.logInfo(`processed ${item.n}`),
+        captureLogs: true,
+        concurrency: 1,
+      },
+      (_port) =>
+        Effect.gen(function* () {
+          const queue = yield* RemoteQueue;
+          yield* queue.add([{ n: 1 }, { n: 2 }]);
+          while ((yield* queue.completed) < 2) {
+            yield* Effect.sleep(Duration.millis(10));
+          }
+          // history is captured server-side, then read back over RPC
+          yield* Effect.gen(function* () {
+            while ((yield* queue.logHistory({})).length === 0) {
+              yield* Effect.sleep(Duration.millis(10));
+            }
+          }).pipe(Effect.timeout(Duration.seconds(2)));
+
+          const logs = yield* queue.logHistory({ limit: 50 });
+          expect(logs.length).toBeGreaterThan(0);
+          // decoded log entries survive the wire (level preserved)
+          expect(typeof logs[0]?.level).toBe("string");
+          // metricsHistory also serializes over RPC (array, possibly empty between windows)
+          const metrics = yield* queue.metricsHistory({});
+          expect(Array.isArray(metrics)).toBe(true);
+        }),
     )));
 
 it("release handoff round-trips full entries (item + metadata) over http", () =>

@@ -8,7 +8,7 @@
  * supplied by the relay (today it carries the PM log-bucket
  * annotation from {@link LogContext}). It is **not** tied to a
  * {@link ProcessGroup.Service} id — the facet persists and queries
- * {@link ProcessManagerLogEntry} rows regardless of how they were
+ * {@link LogEntry} rows regardless of how they were
  * scoped.
  *
  * ## At-a-glance
@@ -38,11 +38,11 @@
 
 import { DateTime, Effect } from "effect";
 import type { LogLevel } from "effect/LogLevel";
-import { ProcessManagerLogAnnotationKeys } from "../LogContext";
-import type { ProcessManagerLogEntry } from "../LogEntry";
-import type { ProcessManagerLogQuery } from "../internal/manager/logQuery";
+import { LogAnnotationKeys } from "../LogContext";
+import type { LogEntry } from "../LogEntry";
+import type { LogQuery } from "../internal/manager/logQuery";
 import {
-  ProcessManagerLogQueryError,
+  LogQueryError,
   replayLogQueryResults,
 } from "../internal/manager/logQuery";
 import {
@@ -102,24 +102,24 @@ export interface LogStoreApi {
   readonly record: (
     groupId: string,
     entryId: string,
-    entry: ProcessManagerLogEntry,
+    entry: LogEntry,
   ) => Effect.Effect<void, ProcessStoreWriteError>;
   readonly recordBatch: (
     groupId: string,
     rows: ReadonlyArray<{
       readonly entryId: string;
-      readonly entry: ProcessManagerLogEntry;
+      readonly entry: LogEntry;
     }>,
   ) => Effect.Effect<void, ProcessStoreWriteError>;
   readonly load: (
-    query: ProcessManagerLogQuery,
+    query: LogQuery,
   ) => Effect.Effect<
-    ReadonlyArray<ProcessManagerLogEntry>,
-    ProcessManagerLogQueryError
+    ReadonlyArray<LogEntry>,
+    LogQueryError
   >;
   readonly query: (
-    logQuery: ProcessManagerLogQuery,
-  ) => Effect.Effect<void, ProcessManagerLogQueryError>;
+    logQuery: LogQuery,
+  ) => Effect.Effect<void, LogQueryError>;
 }
 
 const LOG_TYPE = "log";
@@ -154,7 +154,7 @@ const isLogLevel = (
 export const makeLogRecord = (
   groupId: string,
   entryId: string,
-  entry: ProcessManagerLogEntry,
+  entry: LogEntry,
 ): Omit<RuntimeRecord, "runId" | "createdAt"> => {
   const occurredAt = Date.parse(entry.date);
   const occurredAtMs = Number.isNaN(occurredAt) ? 0 : occurredAt;
@@ -180,7 +180,7 @@ export const makeLogRecord = (
 
 const decodeLogEntryPayload = (
   value: unknown,
-): ProcessManagerLogEntry | null => {
+): LogEntry | null => {
   if (!isRecord(value)) return null;
   const date = value["date"];
   const level = value["level"];
@@ -215,7 +215,7 @@ const decodeLogEntryPayload = (
 
 interface LogRecordView {
   readonly entryId: string;
-  readonly entry: ProcessManagerLogEntry;
+  readonly entry: LogEntry;
 }
 
 const recordToLogView = (record: RuntimeRecord): LogRecordView | null => {
@@ -242,7 +242,7 @@ const parseCursorMillis = (cursor: string | undefined): number | undefined => {
 };
 
 const queryOptsFromLogQuery = (
-  query: ProcessManagerLogQuery,
+  query: LogQuery,
 ): QueryOpts => {
   const afterMs =
     parseCursorMillis(query.after) ??
@@ -263,29 +263,29 @@ const queryOptsFromLogQuery = (
 };
 
 const entryMatchesQuery = (
-  entry: ProcessManagerLogEntry,
-  query: ProcessManagerLogQuery,
+  entry: LogEntry,
+  query: LogQuery,
 ): boolean => {
   if (query.processId !== undefined) {
     const processId =
-      entry.annotations[ProcessManagerLogAnnotationKeys.processId];
+      entry.annotations[LogAnnotationKeys.processId];
     if (processId !== query.processId) return false;
   }
   if (query.queueId !== undefined) {
-    const queueId = entry.annotations[ProcessManagerLogAnnotationKeys.queueId];
+    const queueId = entry.annotations[LogAnnotationKeys.queueId];
     if (queueId !== query.queueId) return false;
   }
   if (query.groupId !== undefined) {
-    const groupId = entry.annotations[ProcessManagerLogAnnotationKeys.groupId];
+    const groupId = entry.annotations[LogAnnotationKeys.groupId];
     if (groupId !== undefined && groupId !== query.groupId) return false;
   }
   return true;
 };
 
 const sortEntries = (
-  entries: ReadonlyArray<ProcessManagerLogEntry>,
-  sort: ProcessManagerLogQuery["sort"],
-): ReadonlyArray<ProcessManagerLogEntry> => {
+  entries: ReadonlyArray<LogEntry>,
+  sort: LogQuery["sort"],
+): ReadonlyArray<LogEntry> => {
   const rows = [...entries];
   rows.sort((left, right) => {
     const leftMs = Date.parse(left.date);
@@ -297,9 +297,9 @@ const sortEntries = (
 
 const entriesFromRecords = (
   records: ReadonlyArray<RuntimeRecord>,
-  query: ProcessManagerLogQuery,
-): ReadonlyArray<ProcessManagerLogEntry> => {
-  const rows: ProcessManagerLogEntry[] = [];
+  query: LogQuery,
+): ReadonlyArray<LogEntry> => {
+  const rows: LogEntry[] = [];
   for (const record of records) {
     const view = recordToLogView(record);
     if (view === null) continue;
@@ -316,10 +316,10 @@ const loadEntries = (
     RuntimeRecord[],
     RuntimeStorageOperationalError
   >,
-  query: ProcessManagerLogQuery,
+  query: LogQuery,
 ): Effect.Effect<
-  ReadonlyArray<ProcessManagerLogEntry>,
-  ProcessManagerLogQueryError | RuntimeStorageOperationalError
+  ReadonlyArray<LogEntry>,
+  LogQueryError | RuntimeStorageOperationalError
 > =>
   Effect.gen(function* () {
     const opts = queryOptsFromLogQuery(query);
@@ -330,7 +330,7 @@ const loadEntries = (
     const records = yield* read(runtimeRecordQuery(predicates, opts));
     const entries = entriesFromRecords(records, query);
     if (entries.length === 0) {
-      return yield* new ProcessManagerLogQueryError({
+      return yield* new LogQueryError({
         reason: "No log entries matched the query",
       });
     }
@@ -342,8 +342,8 @@ const queryEntries = (
     RuntimeRecord[],
     RuntimeStorageOperationalError
   >,
-  logQuery: ProcessManagerLogQuery,
-): Effect.Effect<void, ProcessManagerLogQueryError | RuntimeStorageOperationalError> =>
+  logQuery: LogQuery,
+): Effect.Effect<void, LogQueryError | RuntimeStorageOperationalError> =>
   Effect.gen(function* () {
     const entries = yield* loadEntries(read, logQuery);
     yield* replayLogQueryResults(entries, logQuery.sort);
@@ -366,7 +366,7 @@ export class LogStore extends ProcessStore.Service<LogStore>()(
       (
         groupId: string,
         entryId: string,
-        entry: ProcessManagerLogEntry,
+        entry: LogEntry,
       ) =>
         s.create(makeLogRecord(groupId, entryId, entry)),
     recordBatch:
@@ -375,7 +375,7 @@ export class LogStore extends ProcessStore.Service<LogStore>()(
         groupId: string,
         rows: ReadonlyArray<{
           readonly entryId: string;
-          readonly entry: ProcessManagerLogEntry;
+          readonly entry: LogEntry;
         }>,
       ) =>
         s.createBatch(
@@ -383,8 +383,8 @@ export class LogStore extends ProcessStore.Service<LogStore>()(
         ),
   }),
   ProcessStore.read((s) => ({
-    load: (query: ProcessManagerLogQuery) => loadEntries(s.read, query),
-    query: (logQuery: ProcessManagerLogQuery) =>
+    load: (query: LogQuery) => loadEntries(s.read, query),
+    query: (logQuery: LogQuery) =>
       queryEntries(s.read, logQuery),
   })),
 ) {}

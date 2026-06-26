@@ -47,17 +47,11 @@ import { Layer } from "effect";
 import { RuntimeStorage } from "./RuntimeStorage";
 import { LogStore } from "./store/log";
 import { ProcessExecutionStore } from "./store/processExecution";
-import { ProcessGroupStore } from "./store/processGroup";
 import { ProcessLifecycleStore } from "./store/processLifecycle";
 import { QueueResourceStore } from "./store/queueResource";
 import { RunResourceStore } from "./store/runResource";
 
 const processLifecycleLayer = ProcessLifecycleStore.layerRuntimeStorage;
-
-const processGroupLayer = Layer.provide(
-  ProcessGroupStore.layerRuntimeStorage,
-  processLifecycleLayer,
-);
 
 const facetLayers = Layer.mergeAll(
   LogStore.layerRuntimeStorage,
@@ -65,7 +59,6 @@ const facetLayers = Layer.mergeAll(
   RunResourceStore.layerRuntimeStorage,
   ProcessExecutionStore.layerRuntimeStorage,
   processLifecycleLayer,
-  processGroupLayer,
 );
 
 /**
@@ -108,9 +101,6 @@ export const ProcessStorage = {
 
   /** Alias for {@link ProcessLifecycleStore}. */
   ProcessLifecycle: ProcessLifecycleStore,
-
-  /** Alias for {@link ProcessGroupStore}. */
-  ProcessGroup: ProcessGroupStore,
 } as const;
 
 export declare namespace ProcessStorage {
@@ -119,6 +109,5 @@ export declare namespace ProcessStorage {
     | QueueResourceStore
     | RunResourceStore
     | ProcessExecutionStore
-    | ProcessLifecycleStore
-    | ProcessGroupStore;
+    | ProcessLifecycleStore;
 }

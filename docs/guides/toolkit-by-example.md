@@ -24,11 +24,11 @@ unique API. Code the way the downstream repo (e.g. `services-hub`) would actuall
 >
 > ```ts
 > import * as QueueResource from "@nikscripts/effect-pm/QueueContract";
-> import * as ProcessResource from "@nikscripts/effect-pm/ProcessContract";
+> import * as ScheduledProcess from "@nikscripts/effect-pm/ScheduledProcess";
 > import * as ProcessScheduleResource from "@nikscripts/effect-pm/ProcessScheduleContract";
 >
 > class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", rosterJob) {}
-> // QueueResource.Tag/ProcessResource.Tag bundle to ~27kb with ZERO engine symbols (proven).
+> // QueueResource.Tag/ScheduledProcess.Tag bundle to ~27kb with ZERO engine symbols (proven).
 > ```
 >
 > The **barrel** `import { QueueResource }` is the same API but its namespace is materialized, so
@@ -123,11 +123,11 @@ Default schedule is `alwaysArmed` — it **runs immediately** with its layer. Pa
 
 ```ts
 import { Duration, Effect } from "effect";
-import { Polling, ProcessResource } from "@nikscripts/effect-pm";
+import { Polling, ScheduledProcess } from "@nikscripts/effect-pm";
 
-class SeasonMatches extends ProcessResource.Tag<SeasonMatches>()("nwsl/SeasonMatches") {}
+class SeasonMatches extends ScheduledProcess.Tag<SeasonMatches>()("nwsl/SeasonMatches") {}
 
-const seasonMatchesLayer = ProcessResource.layer(SeasonMatches, {
+const seasonMatchesLayer = ScheduledProcess.layer(SeasonMatches, {
   effect: Effect.gen(function* () {
     const client = yield* NwslsoccerClient;
     yield* client.season.getSeasonMatches({ params: { seasonId } });
@@ -213,7 +213,7 @@ import { Resource } from "@nikscripts/effect-pm";
 
 class MiniHost extends Resource.Host<MiniHost>("hosts/mini") {}
 
-class LiveScorePoller extends ProcessResource.Tag<LiveScorePoller>()(
+class LiveScorePoller extends ScheduledProcess.Tag<LiveScorePoller>()(
   "wnba/LiveScorePoller",
   { host: MiniHost },
 ) {}
@@ -253,7 +253,7 @@ import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 
-const miniLayer = ProcessResource.serveHttp(LiveScorePoller, {
+const miniLayer = ScheduledProcess.serveHttp(LiveScorePoller, {
   effect: pollLiveScores,
   polling: Polling.spaced(Duration.seconds(5)),
 }).pipe(Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3010 })));
@@ -334,10 +334,10 @@ ServicesHub
 └── Ebwsl  — scaffolded, no resources yet (coming)
 ```
 
-**Migration state:** these are still defined with the legacy `.Service` API and live behind a
-`ProcessGroup` + `ControlService` control port reached by the `pm` CLI. They are being rewritten
-to `.Tag` + separate `.layer` (examples 1–14 above). The dashboard should be built against the
-**`.Tag` toolkit surface**, not the legacy control plane.
+**Migration state:** the consumer's services are being migrated onto the `.Tag` toolkit surface
+(`.Tag` + a separate `.layer` / `serveHttp`, examples 1–14 above). Build the dashboard against that
+toolkit surface — `Resource.client` + the resource tags (see
+[history-and-persistence.md](./history-and-persistence.md) for the data layer).
 
 **Deploy topology** (see examples 10–13): the hub and all three league groups run on **one
 Droplet**; **one or two processes** (most likely a live-score poller) are peeled off to the
