@@ -43,6 +43,7 @@
     "storage-facet-store-rename",
     "strict-effect-plan-and-polish",
     "terminal-contracts",
+    "toolkit-treeshake-and-cleanup",
     "typed-process-group-contracts"
   ]
 }

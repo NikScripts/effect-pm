@@ -24,8 +24,9 @@
  *
  * @module QueueContract
  */
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Layer, Option, Schema, Stream } from "effect";
 import { Resource, hostSym, specSym } from "./Resource";
+import { HistoryStore } from "./HistoryStore";
 import type {
   HandlerContextOf,
   HostKey,
@@ -331,6 +332,18 @@ export const queueReleaseEncodingError = Schema.Union([
 ]);
 
 /**
+ * Payload fields for the `*History` queries — newest `limit` entries within an optional
+ * `[since, until]` window. Shared by `metricsHistory` / `logHistory`.
+ *
+ * @public
+ */
+export const historyQuery = {
+  limit: Schema.optionalKey(Schema.Number),
+  since: Schema.optionalKey(Schema.DateTimeUtc),
+  until: Schema.optionalKey(Schema.DateTimeUtc),
+};
+
+/**
  * The queue **control + observation** contract: the fixed-schema verbs of a queue handle,
  * shared by every queue instance. The data-plane (item-typed) verbs are added in a later
  * slice. Mirrors the matching members of `QueueResource`'s `QueueHandleApi`.
@@ -388,6 +401,20 @@ export const queueControlSpec = {
     description:
       "Captured log lines (engine + worker effect) with level/annotations/spans — empty " +
       "unless the queue was configured with captureLogs.",
+  }),
+  metricsHistory: Resource.query(Schema.Array(queueMetrics), {
+    payload: historyQuery,
+  }).annotate({
+    description:
+      "Past windowed metrics from the HistoryStore (newest `limit` within `since`/`until`); " +
+      "empty unless a HistoryStore layer is provided.",
+  }),
+  logHistory: Resource.query(Schema.Array(queueLogEntry), {
+    payload: historyQuery,
+  }).annotate({
+    description:
+      "Past captured log lines from the HistoryStore (newest `limit` within `since`/`until`); " +
+      "empty unless a HistoryStore layer is provided.",
   }),
 };
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to
@@ -600,6 +627,37 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R>(
     const provideR = <Out, Err>(
       effect: Effect.Effect<Out, Err, R>,
     ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
+
+    // History capture (optional): when a HistoryStore is provided, fork fibers that append each
+    // metrics/logs element (encoded, keyed by tag id) into the store; the `*History` queries read
+    // it back. serviceOption → no store means append is skipped and history reads return empty.
+    const history = yield* Effect.serviceOption(HistoryStore);
+    const decodeMetric = Schema.decodeUnknownEffect(queueMetrics);
+    const decodeLog = Schema.decodeUnknownEffect(queueLogEntry);
+    const metricsStreamId = `${tag.id}/metrics`;
+    const logsStreamId = `${tag.id}/logs`;
+    yield* Option.match(history, {
+      onNone: () => Effect.void,
+      onSome: (store) =>
+        Effect.gen(function* () {
+          yield* Effect.forkScoped(
+            Stream.runForEach(handle.metrics, (m) =>
+              Schema.encodeEffect(queueMetrics)(m).pipe(
+                Effect.flatMap((enc) => store.append(metricsStreamId, enc)),
+                Effect.orDie,
+              ),
+            ),
+          );
+          yield* Effect.forkScoped(
+            Stream.runForEach(handle.logs, (l) =>
+              Schema.encodeEffect(queueLogEntry)(l).pipe(
+                Effect.flatMap((enc) => store.append(logsStreamId, enc)),
+                Effect.orDie,
+              ),
+            ),
+          );
+        }),
+    });
     // Annotated so the method params get contextual typing from the spec (and the impl is
     // assignable to ImplOf / WireServiceOf at all three call sites — no local members here).
     const impl: ServiceOf<QueueInstanceSpec<F>, Self> = {
@@ -616,6 +674,26 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R>(
       statusNow: handle.statusNow,
       metrics: handle.metrics,
       logs: handle.logs,
+      metricsHistory: ({ limit, since, until }) =>
+        Option.match(history, {
+          onNone: () => Effect.succeed<ReadonlyArray<typeof queueMetrics.Type>>([]),
+          onSome: (store) =>
+            store.read(metricsStreamId, { limit, since, until }).pipe(
+              Effect.flatMap((arr) =>
+                Effect.forEach(arr, (e) => decodeMetric(e).pipe(Effect.orDie)),
+              ),
+            ),
+        }),
+      logHistory: ({ limit, since, until }) =>
+        Option.match(history, {
+          onNone: () => Effect.succeed<ReadonlyArray<typeof queueLogEntry.Type>>([]),
+          onSome: (store) =>
+            store.read(logsStreamId, { limit, since, until }).pipe(
+              Effect.flatMap((arr) =>
+                Effect.forEach(arr, (e) => decodeLog(e).pipe(Effect.orDie)),
+              ),
+            ),
+        }),
       // The item (or batch) IS the payload — `add`/`prioritize`/`defer` take it directly. The
       // `Array.isArray` branch only picks the engine's overload (`(item)` vs `(items)`); both
       // arms forward unchanged. Re-validation can't fail post-decode, so it's `orDie`d.
@@ -746,3 +824,7 @@ export const configure = <
 // The unified `QueueResource` namespace is assembled in `internal/queueResourceNamespace.ts` and
 // re-exported by the barrel as `export * as QueueResource` (so member access tree-shakes — the
 // light `Tag`/spec here never pulls the engine that `layer`/`server`/`serveHttp` use).
+//
+// DX: `import * as QueueResource from "@nikscripts/effect-pm/QueueContract"` gives a
+// tree-shakeable namespace — `QueueResource.Tag` (alias of `queueTag`) pulls no engine code.
+export { queueTag as Tag };

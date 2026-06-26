@@ -43,6 +43,17 @@ drops the rest.
    symbols (`makeQueueRuntime`, `QueueResourceStore`) under both esbuild and Rollup.
 4. Apply the same to `ProcessResource` / `ProcessScheduleResource` namespaces.
 
+## Sibling item: light-split parity for Process / Schedule — DONE
+
+`ProcessResource` / `ProcessScheduleResource` now use the same pattern as the queue (per-member
+named exports + `internal/*Namespace.ts` + barrel `export * as`; no schema move needed since their
+schemas were already light). Proven: `import { processTag }` / `{ processScheduleTag }` from their
+subpaths bundle to ~17kb together with **zero engine symbols**. So all three resource tags
+tree-shake via their subpaths today.
+
+The remaining work (above) is only making the **barrel namespace** access tree-shake (the unbundled
+build), which applies equally to all three.
+
 ## Why it's not urgent (the wow-sports check)
 
 - effect-pm is consumed **server-side** today (`apps/services-hub`, Node) — bundle size is moot.

@@ -112,8 +112,11 @@ export {
 // Namespace exports (these export objects with .make methods)
 export { Process, ProcessMakeInvalidLayerArgument } from "./Process";
 export type { ProcessSnapshot } from "./Process";
+// Unified namespaces via `export * as` (module namespace, Effect-style) so member access
+// tree-shakes — `ProcessResource.Tag` / `ProcessScheduleResource.Tag` pull no engine code.
+export * as ProcessResource from "./internal/processResourceNamespace";
+export * as ProcessScheduleResource from "./internal/processScheduleResourceNamespace";
 export {
-  ProcessResource,
   processControlSpec,
   processLogEntry,
   processScheduleEntry,
@@ -121,7 +124,6 @@ export {
 } from "./ProcessContract";
 export type { ProcessLayerConfig } from "./ProcessContract";
 export {
-  ProcessScheduleResource,
   processScheduleSpec,
   reconcileResult,
 } from "./ProcessScheduleContract";
@@ -442,6 +444,8 @@ export {
 } from "./Logs";
 export { HostLogs } from "./HostLogs";
 export type { HostLogEntry } from "./HostLogs";
+export { HistoryStore } from "./HistoryStore";
+export type { HistoryReadOptions, HistoryStoreShape } from "./HistoryStore";
 export { Group } from "./Group";
 export {
   ProcessGroupLogContext,
