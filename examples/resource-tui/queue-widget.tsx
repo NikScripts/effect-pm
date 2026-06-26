@@ -65,6 +65,15 @@ export const bar = (value: number, max: number, width: number): string => {
   return "█".repeat(filled) + "░".repeat(width - filled);
 };
 export const fmt = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
+/** Compact count (≤4 chars) so large live queues never overflow a fixed-width column. */
+export const compact = (n: number): string =>
+  n < 1000
+    ? String(n)
+    : n < 10_000
+      ? `${(n / 1000).toFixed(1)}k`
+      : n < 1_000_000
+        ? `${Math.round(n / 1000)}k`
+        : `${(n / 1_000_000).toFixed(1)}M`;
 export const spark = (vals: ReadonlyArray<number>): string => {
   if (vals.length === 0) {
     return "";
@@ -113,7 +122,7 @@ const PrioRow = (props: {
   return (
     <Box>
       <Box width={props.labelWidth}>
-        <Text>
+        <Text wrap="truncate">
           {s.symbol}
           {props.showLabel ? ` ${s.label}` : ""}
         </Text>
@@ -121,8 +130,8 @@ const PrioRow = (props: {
       <Box width={props.barWidth + 1}>
         <Text color={s.color}>{bar(count, props.max, props.barWidth)}</Text>
       </Box>
-      <Box width={3} justifyContent="flex-end">
-        <Text>{count}</Text>
+      <Box width={5} justifyContent="flex-end">
+        <Text>{compact(count)}</Text>
       </Box>
       {props.waitWidth > 0 ? (
         <Box width={props.waitWidth} justifyContent="flex-end">
@@ -237,9 +246,9 @@ export const PageXL = (props: {
         <Text bold>COMPLETED {v.completed}</Text>
       </Box>
       <Box marginTop={1} flexDirection="column">
-        <PrioRow p="high" v={v} barWidth={20} max={max} labelWidth={8} showLabel waitWidth={16} waitPrefix="wait " />
-        <PrioRow p="normal" v={v} barWidth={20} max={max} labelWidth={8} showLabel waitWidth={16} waitPrefix="wait " />
-        <PrioRow p="low" v={v} barWidth={20} max={max} labelWidth={8} showLabel waitWidth={16} waitPrefix="wait " />
+        <PrioRow p="high" v={v} barWidth={20} max={max} labelWidth={9} showLabel waitWidth={16} waitPrefix="wait " />
+        <PrioRow p="normal" v={v} barWidth={20} max={max} labelWidth={9} showLabel waitWidth={16} waitPrefix="wait " />
+        <PrioRow p="low" v={v} barWidth={20} max={max} labelWidth={9} showLabel waitWidth={16} waitPrefix="wait " />
       </Box>
       <Box marginTop={1}>
         <Box width={22}>

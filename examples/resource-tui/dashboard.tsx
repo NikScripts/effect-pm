@@ -37,6 +37,7 @@ import {
   bar,
   BLANK_BORDER,
   COLOR,
+  compact,
   displayName,
   PageXL,
   PAGE_HEIGHT,
@@ -91,27 +92,25 @@ const useTerminalSize = (): { cols: number; rows: number } => {
   return size;
 };
 
+// one priority's bar — symbol · bar · compact count (no text label: keeps the row clean
+// at any cell width and never overflows the border, even with deep live queues).
 const PrioRow = (props: {
   readonly p: Priority;
   readonly count: number;
   readonly max: number;
   readonly barWidth: number;
-  readonly showLabel: boolean;
 }): React.ReactElement => {
   const s = SYM[props.p];
   return (
     <Box>
-      <Box width={props.showLabel ? 7 : 2}>
-        <Text>
-          {s.symbol}
-          {props.showLabel ? ` ${props.p}` : ""}
-        </Text>
+      <Box width={2}>
+        <Text>{s.symbol}</Text>
       </Box>
       <Box width={props.barWidth + 1}>
         <Text color={s.color}>{bar(props.count, props.max, props.barWidth)}</Text>
       </Box>
-      <Box width={4} justifyContent="flex-end">
-        <Text>{props.count}</Text>
+      <Box width={5} justifyContent="flex-end">
+        <Text>{compact(props.count)}</Text>
       </Box>
     </Box>
   );
@@ -136,8 +135,8 @@ const QueueCell = (props: {
   const status = statusOf(s?.phase ?? "running", s?.paused ?? false);
   const pending = sizes.high + sizes.normal + sizes.low;
   const max = Math.max(sizes.high, sizes.normal, sizes.low, 1);
-  const wide = width >= 40;
-  const barWidth = Math.max(4, width - 4 - (wide ? 7 : 2) - 1 - 4);
+  // interior = width − borders(2) − paddingX(2); row = symbol(2) · bar(barWidth+1) · count(5)
+  const barWidth = Math.max(4, width - 4 - 2 - 1 - 5);
   return (
     <Box flexDirection="column" borderStyle={selected ? "double" : "round"} borderColor={selected ? "green" : COLOR[status]} height={CELL_HEIGHT} width={width} marginRight={1} marginBottom={1} paddingX={1}>
       <Box>
@@ -149,13 +148,13 @@ const QueueCell = (props: {
       </Box>
       <Box>
         <Box flexGrow={1}>
-          <Text>pending {pending}</Text>
+          <Text>pending {compact(pending)}</Text>
         </Box>
-        <Text dimColor>{s?.completed ?? 0} ✓</Text>
+        <Text dimColor>{compact(s?.completed ?? 0)} ✓</Text>
       </Box>
-      <PrioRow p="high" count={sizes.high} max={max} barWidth={barWidth} showLabel={wide} />
-      <PrioRow p="normal" count={sizes.normal} max={max} barWidth={barWidth} showLabel={wide} />
-      <PrioRow p="low" count={sizes.low} max={max} barWidth={barWidth} showLabel={wide} />
+      <PrioRow p="high" count={sizes.high} max={max} barWidth={barWidth} />
+      <PrioRow p="normal" count={sizes.normal} max={max} barWidth={barWidth} />
+      <PrioRow p="low" count={sizes.low} max={max} barWidth={barWidth} />
     </Box>
   );
 };
