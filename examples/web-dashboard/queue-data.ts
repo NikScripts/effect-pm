@@ -13,6 +13,7 @@ import { FetchHttpClient } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { Resource, specOf } from "../../src/Resource";
 import { Group } from "../../src/Group";
+import { FRESH_MS, readCache, writeCache } from "./cache";
 import {
   Billing,
   Daily,
@@ -121,6 +122,43 @@ const HISTORY = 120;
 const TREND = 60;
 let logId = 0;
 
+/** Map a captured log entry to the UI line (monotonic id for stable React keys). */
+const toLogLine = (l: { readonly level: string; readonly message: string }): LogLine => ({
+  id: (logId += 1),
+  t: Date.now(),
+  level: l.level,
+  message: l.message,
+});
+/** Continue log ids past anything restored from the cache so React keys stay unique. */
+const bumpLogIdFrom = (key: string): void => {
+  const entry = readCache<LogLine>(key);
+  if (entry !== undefined) logId = entry.items.reduce((mx, l) => Math.max(mx, l.id), logId);
+};
+
+/**
+ * Generic cached accumulator: seed from the localStorage snapshot (instant paint + skip
+ * the server history query while the snapshot is fresh), accumulate the live stream, and
+ * persist — one mechanism for every resource/atom, no per-type cache code.
+ */
+const cachedAccumulator = <A, R>(opts: {
+  readonly key: string;
+  readonly cap: number;
+  readonly live: Stream.Stream<A, never, R>;
+  readonly history?: Effect.Effect<ReadonlyArray<A>, never, R>;
+}): Stream.Stream<ReadonlyArray<A>, never, R> => {
+  const entry = readCache<A>(opts.key);
+  const fresh = entry !== undefined && Date.now() - entry.at < FRESH_MS;
+  const seed: ReadonlyArray<A> = fresh && entry !== undefined ? entry.items : [];
+  const source =
+    fresh || opts.history === undefined
+      ? opts.live
+      : Stream.concat(Stream.unwrap(Effect.map(opts.history, Stream.fromIterable)), opts.live);
+  return source.pipe(
+    Stream.scan(seed, (acc, x) => [...acc, x].slice(-opts.cap)),
+    Stream.tap((acc) => Effect.sync(() => writeCache(opts.key, acc))),
+  );
+};
+
 const cache = new Map<string, QueueBundle>();
 
 /** Build (once per tag) the atom bundle for a queue tag. */
@@ -130,47 +168,45 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
 
   const statusStream = Stream.unwrap(Effect.map(tag, (q) => q.status));
   const metricsStream = Stream.unwrap(Effect.map(tag, (q) => q.metrics));
+  const toPoint = (m: QueueMetrics): MetricPoint => ({
+    t: Date.now(),
+    throughput: m.throughputPerSec,
+    latency: m.avgTotalMillis ?? 0,
+  });
+  bumpLogIdFrom(`${tag.id}/logs`);
 
-  // plain atoms: only the currently-mounted detail subscribes, so only the queue you're
-  // viewing runs its streams/accumulators. (History resets when you leave — a persistent
-  // backfill is a later concern; right now the priority is no leak, one graph at a time.)
+  // all accumulators go through the generic cache: instant paint from localStorage, skip
+  // the server query while the snapshot is fresh, then follow live. One mechanism, no
+  // per-resource cache code.
   const bundle: QueueBundle = {
     status: runtime.atom(statusStream),
     metrics: runtime.atom(metricsStream),
-    // query-then-tail: backfill from the server's HistoryStore, then follow live metrics.
     history: runtime.atom(
-      Stream.unwrap(
-        Effect.map(tag, (q) =>
-          Stream.concat(
-            Stream.unwrap(Effect.map(q.metricsHistory({ limit: HISTORY }), Stream.fromIterable)),
-            q.metrics,
-          ),
+      cachedAccumulator({
+        key: `${tag.id}/history`,
+        cap: HISTORY,
+        live: metricsStream.pipe(Stream.map(toPoint)),
+        history: Effect.flatMap(tag, (q) => q.metricsHistory({ limit: HISTORY })).pipe(
+          Effect.map((ms) => ms.map(toPoint)),
         ),
-      ).pipe(
-        Stream.map((m) => ({ t: Date.now(), throughput: m.throughputPerSec, latency: m.avgTotalMillis ?? 0 })),
-        Stream.scan([] as ReadonlyArray<MetricPoint>, (acc, p) => [...acc, p].slice(-HISTORY)),
-      ),
+      }),
     ),
     trend: runtime.atom(
-      statusStream.pipe(
-        Stream.scan([] as ReadonlyArray<number>, (acc, s) =>
-          [...acc, s.sizes.high + s.sizes.normal + s.sizes.low].slice(-TREND),
-        ),
-      ),
+      cachedAccumulator({
+        key: `${tag.id}/trend`,
+        cap: TREND,
+        live: statusStream.pipe(Stream.map((s) => s.sizes.high + s.sizes.normal + s.sizes.low)),
+      }),
     ),
     logs: runtime.atom(
-      Stream.unwrap(
-        Effect.map(tag, (q) =>
-          Stream.concat(
-            Stream.unwrap(Effect.map(q.logHistory({ limit: 300 }), Stream.fromIterable)),
-            q.logs,
-          ),
+      cachedAccumulator({
+        key: `${tag.id}/logs`,
+        cap: 300,
+        live: Stream.unwrap(Effect.map(tag, (q) => q.logs)).pipe(Stream.map(toLogLine)),
+        history: Effect.flatMap(tag, (q) => q.logHistory({ limit: 300 })).pipe(
+          Effect.map((ls) => ls.map(toLogLine)),
         ),
-      ).pipe(
-        Stream.scan([] as ReadonlyArray<LogLine>, (acc, l) =>
-          [...acc, { id: (logId += 1), t: Date.now(), level: l.level, message: l.message }].slice(-300),
-        ),
-      ),
+      }),
     ),
     pause: runtime.fn(() => Effect.flatMap(tag, (q) => q.pause)),
     resume: runtime.fn(() => Effect.flatMap(tag, (q) => q.resume)),
@@ -198,22 +234,19 @@ export const processBundle = (tag: ProcessTag): ProcessBundle => {
   const existing = processCache.get(tag.id);
   if (existing !== undefined) return existing;
   const statusStream = Stream.unwrap(Effect.map(tag, (p) => p.status));
+  bumpLogIdFrom(`${tag.id}/logs`);
   const bundle: ProcessBundle = {
     status: runtime.atom(statusStream),
-    // query-then-tail: backfill the captured log history, then follow the live stream.
+    // cached + query-then-tail, same generic mechanism as the queue.
     logs: runtime.atom(
-      Stream.unwrap(
-        Effect.map(tag, (p) =>
-          Stream.concat(
-            Stream.unwrap(Effect.map(p.logHistory({ limit: 300 }), Stream.fromIterable)),
-            p.logs,
-          ),
+      cachedAccumulator({
+        key: `${tag.id}/logs`,
+        cap: 300,
+        live: Stream.unwrap(Effect.map(tag, (p) => p.logs)).pipe(Stream.map(toLogLine)),
+        history: Effect.flatMap(tag, (p) => p.logHistory({ limit: 300 })).pipe(
+          Effect.map((ls) => ls.map(toLogLine)),
         ),
-      ).pipe(
-        Stream.scan([] as ReadonlyArray<LogLine>, (acc, l) =>
-          [...acc, { id: (logId += 1), t: Date.now(), level: l.level, message: l.message }].slice(-300),
-        ),
-      ),
+      }),
     ),
     start: runtime.fn(() => Effect.flatMap(tag, (p) => p.start)),
     stop: runtime.fn(() => Effect.flatMap(tag, (p) => p.stop)),
