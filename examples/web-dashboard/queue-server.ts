@@ -15,7 +15,7 @@ import { createServer } from "node:http";
 // listeners → Node's MaxListeners warning floods stdout. Raise the limit. (The real fix
 // is one shared router instead of N serveHttp — a follow-up.)
 EventEmitter.defaultMaxListeners = 100;
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
@@ -42,6 +42,38 @@ import {
 
 const PORT = 7777;
 
+// ── request-rate monitor ─────────────────────────────────────────────────────
+// Streams are persistent connections (one open request the server pushes down), so the
+// dashboard's steady-state NEW requests should be ~0/s and "open" = its live streams. A
+// high rate would mean a poll/reconnect loop. The loopback producer tags its requests
+// with `x-loopback` so we report the BROWSER's load separately from the demo's traffic.
+let extReqs = 0;
+let intReqs = 0;
+let openExt = 0;
+const makeServer = () => {
+  const server = createServer();
+  server.on("request", (req, res) => {
+    if (req.headers["x-loopback"] === "1") {
+      intReqs += 1;
+      return;
+    }
+    extReqs += 1;
+    openExt += 1;
+    res.once("close", () => {
+      openExt -= 1;
+    });
+  });
+  return server;
+};
+let lastExt = 0;
+setInterval(() => {
+  const delta = extReqs - lastExt;
+  lastExt = extReqs;
+  console.log(
+    `[browser] +${delta} req/5s (${(delta / 5).toFixed(1)}/s) · ${openExt} open streams · ${extReqs} total   (producer: ${intReqs})`,
+  );
+}, 5000);
+
 // host every queue at /rpc/<name> on one node server.
 const serveLayer = Layer.mergeAll(
   serveHttp(Mail, cfg, { path: `/rpc/${pathOf(Mail.id)}` }),
@@ -66,15 +98,15 @@ const serveLayer = Layer.mergeAll(
   // captured worker logs) — they still reach the dashboard via captureLogs. The server's
   // own program logs (below) keep using the default logger so you can see them.
   Layer.provide(Logger.layer([], { mergeWithExisting: false })),
-  Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: PORT })),
+  Layer.provideMerge(NodeHttpServer.layer(makeServer, { port: PORT })),
 );
 
 // loopback client transport (the producer reaches the local server over http).
 const remote = (id: string) =>
-  RpcClient.layerProtocolHttp({ url: `http://localhost:${PORT}/rpc/${pathOf(id)}` }).pipe(
-    Layer.provide(RpcSerialization.layerNdjson),
-    Layer.provide(FetchHttpClient.layer),
-  );
+  RpcClient.layerProtocolHttp({
+    url: `http://localhost:${PORT}/rpc/${pathOf(id)}`,
+    transformClient: (c) => HttpClient.mapRequest(c, HttpClientRequest.setHeader("x-loopback", "1")),
+  }).pipe(Layer.provide(RpcSerialization.layerNdjson), Layer.provide(FetchHttpClient.layer));
 const clientLayer = Layer.mergeAll(
   Resource.client(Mail).pipe(Layer.provide(remote(Mail.id))),
   Resource.client(Jobs).pipe(Layer.provide(remote(Jobs.id))),
