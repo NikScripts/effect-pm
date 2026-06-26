@@ -39,10 +39,10 @@ const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   return (
-    <div className="flex h-screen flex-col gap-3 p-3">
+    <div className="flex h-screen flex-col gap-3 p-3" style={viewTransitionStyle(`res-${props.tag.id}`)}>
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
-        <strong className="flex-1 truncate text-base" style={viewTransitionStyle(`res-${props.tag.id}`)}>{displayName(props.tag.id)}</strong>
+        <strong className="flex-1 truncate text-base">{displayName(props.tag.id)}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
       <Boundary label="stats"><QueueStats bundle={bundle} /></Boundary>
@@ -63,10 +63,10 @@ const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void
 const ProcessDetail = (props: { readonly tag: ProcessTag; readonly onBack: () => void }): React.ReactElement => {
   const bundle = processBundle(props.tag);
   return (
-    <div className="flex h-screen flex-col gap-3 p-3">
+    <div className="flex h-screen flex-col gap-3 p-3" style={viewTransitionStyle(`res-${props.tag.id}`)}>
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
-        <strong className="flex-1 truncate text-base" style={viewTransitionStyle(`res-${props.tag.id}`)}>⚙ {displayName(props.tag.id)}</strong>
+        <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.id)}</strong>
       </div>
       <Boundary label="stats"><ProcessStats bundle={bundle} /></Boundary>
       <Boundary label="controls"><ProcessControls bundle={bundle} /></Boundary>

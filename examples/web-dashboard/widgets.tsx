@@ -93,13 +93,14 @@ export const QueueCard = (props: {
     <button
       type="button"
       onClick={() => props.onOpen(props.tag)}
+      style={viewTransitionStyle(`res-${props.tag.id}`)}
       className={cn(
         "rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
         props.selected === true && "border-primary",
       )}
     >
       <div className="mb-2 flex items-center gap-2">
-        <strong className="flex-1 truncate" style={viewTransitionStyle(`res-${props.tag.id}`)}>{displayName(props.tag.id)}</strong>
+        <strong className="flex-1 truncate">{displayName(props.tag.id)}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
       <div className="mb-2 flex justify-between text-xs text-muted-foreground">
@@ -346,11 +347,12 @@ export const ProcessCard = (props: {
     <button
       type="button"
       onClick={() => props.onOpen(props.tag)}
+      style={viewTransitionStyle(`res-${props.tag.id}`)}
       className="rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring"
     >
       <div className="mb-2 flex items-center gap-2">
         <span>⚙</span>
-        <strong className="flex-1 truncate" style={viewTransitionStyle(`res-${props.tag.id}`)}>{displayName(props.tag.id)}</strong>
+        <strong className="flex-1 truncate">{displayName(props.tag.id)}</strong>
         {hostOf(props.tag.id) !== undefined ? <Badge color="#06b6d4">⬡ {hostOf(props.tag.id)}</Badge> : null}
         <Badge color={s?.supervising === true ? "#22c55e" : "#94a3b8"}>
           {s?.supervising === true ? "running" : "stopped"}
