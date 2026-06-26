@@ -46,8 +46,19 @@ export const useViewTransition = (): ((update: () => void) => void) =>
  * morphs one into the other across a {@link useViewTransition} update. A name must be
  * unique among the elements rendered at any one time.
  *
+ * `name` is sanitized to a valid CSS `<custom-ident>`: a resource id like
+ * `@acme/queues/Mail` contains `@` and `/`, which are illegal in an identifier — the
+ * browser would drop the invalid `view-transition-name` and silently fall back to a plain
+ * crossfade (no morph). Non-ident characters become `-`, and a leading non-letter is
+ * prefixed so the result is always valid.
+ *
  * @since 1.0.0
  */
 export const viewTransitionStyle = (name: string): React.CSSProperties => ({
-  viewTransitionName: name,
+  viewTransitionName: toIdent(name),
 });
+
+const toIdent = (name: string): string => {
+  const cleaned = name.replace(/[^a-zA-Z0-9_-]/g, "-");
+  return /^[a-zA-Z_-]/.test(cleaned) ? cleaned : `vt-${cleaned}`;
+};
