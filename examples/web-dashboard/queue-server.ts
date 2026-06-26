@@ -21,6 +21,7 @@ import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { serveHttp } from "../../src/QueueContract";
 import { serveHttp as serveProcess } from "../../src/ProcessContract";
+import { HistoryStore } from "../../src/HistoryStore";
 import { Polling } from "../../src/Polling";
 import { Resource } from "../../src/Resource";
 import {
@@ -94,6 +95,8 @@ const serveLayer = Layer.mergeAll(
     { path: `/rpc/${pathOf(KeyRotation.id)}` },
   ),
 ).pipe(
+  // capture metrics + log history so the dashboard can backfill (query-then-tail).
+  Layer.provide(HistoryStore.layerMemory()),
   // silence the served layer's console logging (per-request http access logs + the
   // captured worker logs) — they still reach the dashboard via captureLogs. The server's
   // own program logs (below) keep using the default logger so you can see them.

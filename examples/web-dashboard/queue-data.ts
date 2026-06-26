@@ -125,7 +125,6 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
 
   const statusStream = Stream.unwrap(Effect.map(tag, (q) => q.status));
   const metricsStream = Stream.unwrap(Effect.map(tag, (q) => q.metrics));
-  const logsStream = Stream.unwrap(Effect.map(tag, (q) => q.logs));
 
   // plain atoms: only the currently-mounted detail subscribes, so only the queue you're
   // viewing runs its streams/accumulators. (History resets when you leave — a persistent
@@ -133,11 +132,18 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
   const bundle: QueueBundle = {
     status: runtime.atom(statusStream),
     metrics: runtime.atom(metricsStream),
+    // query-then-tail: backfill from the server's HistoryStore, then follow live metrics.
     history: runtime.atom(
-      metricsStream.pipe(
-        Stream.scan([] as ReadonlyArray<MetricPoint>, (acc, m) =>
-          [...acc, { t: Date.now(), throughput: m.throughputPerSec, latency: m.avgTotalMillis ?? 0 }].slice(-HISTORY),
+      Stream.unwrap(
+        Effect.map(tag, (q) =>
+          Stream.concat(
+            Stream.unwrap(Effect.map(q.metricsHistory({ limit: HISTORY }), Stream.fromIterable)),
+            q.metrics,
+          ),
         ),
+      ).pipe(
+        Stream.map((m) => ({ t: Date.now(), throughput: m.throughputPerSec, latency: m.avgTotalMillis ?? 0 })),
+        Stream.scan([] as ReadonlyArray<MetricPoint>, (acc, p) => [...acc, p].slice(-HISTORY)),
       ),
     ),
     trend: runtime.atom(
@@ -148,7 +154,14 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
       ),
     ),
     logs: runtime.atom(
-      logsStream.pipe(
+      Stream.unwrap(
+        Effect.map(tag, (q) =>
+          Stream.concat(
+            Stream.unwrap(Effect.map(q.logHistory({ limit: 300 }), Stream.fromIterable)),
+            q.logs,
+          ),
+        ),
+      ).pipe(
         Stream.scan([] as ReadonlyArray<LogLine>, (acc, l) =>
           [...acc, { id: (logId += 1), t: Date.now(), level: l.level, message: l.message }].slice(-300),
         ),
