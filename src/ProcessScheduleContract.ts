@@ -33,7 +33,7 @@ import {
   fromWireScheduleEntry,
   processScheduleEntry,
   toWireScheduleEntry,
-} from "./ProcessContract";
+} from "./ScheduledProcess";
 
 /**
  * The result of a `reconcile` — which entry ids were added / updated / removed / unchanged

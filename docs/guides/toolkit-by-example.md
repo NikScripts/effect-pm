@@ -24,11 +24,11 @@ unique API. Code the way the downstream repo (e.g. `services-hub`) would actuall
 >
 > ```ts
 > import * as QueueResource from "@nikscripts/effect-pm/QueueContract";
-> import * as ProcessResource from "@nikscripts/effect-pm/ProcessContract";
+> import * as ScheduledProcess from "@nikscripts/effect-pm/ScheduledProcess";
 > import * as ProcessScheduleResource from "@nikscripts/effect-pm/ProcessScheduleContract";
 >
 > class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", rosterJob) {}
-> // QueueResource.Tag/ProcessResource.Tag bundle to ~27kb with ZERO engine symbols (proven).
+> // QueueResource.Tag/ScheduledProcess.Tag bundle to ~27kb with ZERO engine symbols (proven).
 > ```
 >
 > The **barrel** `import { QueueResource }` is the same API but its namespace is materialized, so
@@ -123,11 +123,11 @@ Default schedule is `alwaysArmed` — it **runs immediately** with its layer. Pa
 
 ```ts
 import { Duration, Effect } from "effect";
-import { Polling, ProcessResource } from "@nikscripts/effect-pm";
+import { Polling, ScheduledProcess } from "@nikscripts/effect-pm";
 
-class SeasonMatches extends ProcessResource.Tag<SeasonMatches>()("nwsl/SeasonMatches") {}
+class SeasonMatches extends ScheduledProcess.Tag<SeasonMatches>()("nwsl/SeasonMatches") {}
 
-const seasonMatchesLayer = ProcessResource.layer(SeasonMatches, {
+const seasonMatchesLayer = ScheduledProcess.layer(SeasonMatches, {
   effect: Effect.gen(function* () {
     const client = yield* NwslsoccerClient;
     yield* client.season.getSeasonMatches({ params: { seasonId } });
@@ -213,7 +213,7 @@ import { Resource } from "@nikscripts/effect-pm";
 
 class MiniHost extends Resource.Host<MiniHost>("hosts/mini") {}
 
-class LiveScorePoller extends ProcessResource.Tag<LiveScorePoller>()(
+class LiveScorePoller extends ScheduledProcess.Tag<LiveScorePoller>()(
   "wnba/LiveScorePoller",
   { host: MiniHost },
 ) {}
@@ -253,7 +253,7 @@ import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 
-const miniLayer = ProcessResource.serveHttp(LiveScorePoller, {
+const miniLayer = ScheduledProcess.serveHttp(LiveScorePoller, {
   effect: pollLiveScores,
   polling: Polling.spaced(Duration.seconds(5)),
 }).pipe(Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3010 })));

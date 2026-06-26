@@ -41,11 +41,11 @@ drops the rest.
 2. Keep `"sideEffects": false`.
 3. Verify with the bundle check below that the **barrel** `QueueResource.Tag` excludes engine
    symbols (`makeQueueRuntime`, `QueueResourceStore`) under both esbuild and Rollup.
-4. Apply the same to `ProcessResource` / `ProcessScheduleResource` namespaces.
+4. Apply the same to `ScheduledProcess` / `ProcessScheduleResource` namespaces.
 
 ## Sibling item: light-split parity for Process / Schedule — DONE
 
-`ProcessResource` / `ProcessScheduleResource` now use the same pattern as the queue (per-member
+`ScheduledProcess` / `ProcessScheduleResource` now use the same pattern as the queue (per-member
 named exports + `internal/*Namespace.ts` + barrel `export * as`; no schema move needed since their
 schemas were already light). Proven: `import { processTag }` / `{ processScheduleTag }` from their
 subpaths bundle to ~17kb together with **zero engine symbols**. So all three resource tags

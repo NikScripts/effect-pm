@@ -21,7 +21,7 @@
  * - **Toolkit (location-transparent resources)** — **`Resource`** is the foundation: a tag is
  *   driven by the same `yield* Tag` code whether it runs **local or remote** (`Resource.client` /
  *   `server` / `serveHttp` / `Host` switch only the layer). Batteries-included resource kinds build
- *   on it — **`ProcessResource`**, **`ProcessScheduleResource`**, and the toolkit queue (from
+ *   on it — **`ScheduledProcess`**, **`ProcessScheduleResource`**, and the toolkit queue (from
  *   `@nikscripts/effect-pm/QueueContract`) — each with `Tag` / `layer` / `configure` / `server` /
  *   `serveHttp`. **`Group`** organizes member tags (nestable; members may be on the same or
  *   different hosts). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
@@ -57,7 +57,7 @@
  * **`@nikscripts/effect-pm/RuntimeStorage`**, and **`@nikscripts/effect-pm/Logs`**.
  *
  * Toolkit subpaths: **`@nikscripts/effect-pm/Resource`** (foundation + `specOf` / `methodMeta`),
- * **`@nikscripts/effect-pm/QueueContract`** (toolkit queue), **`@nikscripts/effect-pm/ProcessContract`**,
+ * **`@nikscripts/effect-pm/QueueContract`** (toolkit queue), **`@nikscripts/effect-pm/ScheduledProcess`**,
  * **`@nikscripts/effect-pm/ProcessScheduleContract`**, **`@nikscripts/effect-pm/Group`**,
  * **`@nikscripts/effect-pm/HostLogs`**, **`@nikscripts/effect-pm/HistoryStore`**,
  * and **`@nikscripts/effect-pm/DurableQueueStore`**.
@@ -106,16 +106,16 @@ export {
 export { Process, ProcessMakeInvalidLayerArgument } from "./Process";
 export type { ProcessSnapshot } from "./Process";
 // Unified namespaces via `export * as` (module namespace, Effect-style) so member access
-// tree-shakes — `ProcessResource.Tag` / `ProcessScheduleResource.Tag` pull no engine code.
-export * as ProcessResource from "./internal/processResourceNamespace";
+// tree-shakes — `ScheduledProcess.Tag` / `ProcessScheduleResource.Tag` pull no engine code.
+export * as ScheduledProcess from "./internal/scheduledProcessNamespace";
 export * as ProcessScheduleResource from "./internal/processScheduleResourceNamespace";
 export {
   processControlSpec,
   processLogEntry,
   processScheduleEntry,
   processStatus,
-} from "./ProcessContract";
-export type { ProcessLayerConfig } from "./ProcessContract";
+} from "./ScheduledProcess";
+export type { ProcessLayerConfig } from "./ScheduledProcess";
 export {
   processScheduleSpec,
   reconcileResult,

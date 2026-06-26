@@ -250,7 +250,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 - **`enqueue`** (capability bit; remote enqueue still blocked — see below), **`start`**, **`pause`**, **`resume`**, **`clear`**, **`status`**
 - Optional **`item`** codec descriptor when queue declared with **`itemSchema`**.
 
-**Schema exports for validation/encoding:** `ProcessGroupProcessControlSchema`, `ProcessGroupQueueControlSchema`, `ProcessGroupProcessContractSchema`, `ProcessGroupQueueContractSchema`, `ProcessGroupContractSchema`.
+**Schema exports for validation/encoding:** `ProcessGroupProcessControlSchema`, `ProcessGroupQueueControlSchema`, `ProcessGroupScheduledProcessSchema`, `ProcessGroupQueueContractSchema`, `ProcessGroupContractSchema`.
 
 ### Status shapes
 

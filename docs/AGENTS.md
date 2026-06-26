@@ -17,7 +17,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | **Toolkit (location-transparent)** | |
 | `src/Resource.ts` | Foundation — tags (`Tag`/`client`/`server`/`serveHttp`/`Host`/`connect`), `specOf`/`methodMeta` introspection. |
 | `src/QueueContract.ts` | Toolkit **queue** (`QueueResource` = `Tag`/`layer`/`configure`/`server`/`serveHttp`) → `@nikscripts/effect-pm/QueueContract`. |
-| `src/ProcessContract.ts` | Toolkit **process** (`ProcessResource`). |
+| `src/ScheduledProcess.ts` | Toolkit **process** (`ScheduledProcess`). |
 | `src/ProcessScheduleContract.ts` | Toolkit **schedule** (`ProcessScheduleResource`) — CRUD + reconcile + `changes`. |
 | `src/Group.ts` | `Group.Tag` — organize member tags (nestable; `members`/`isGroup`). |
 | `src/HostLogs.ts` | Runtime-wide log capture + stream (`HostLogs`). |

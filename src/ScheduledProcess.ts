@@ -26,7 +26,7 @@
  * `serveHttp` wiring, land in the next slice (they require exposing a controllable handle from
  * the `Process` supervisor — today the handle is only `{ effect, runImmediately }`).
  *
- * @module ProcessContract
+ * @module ScheduledProcess
  */
 import {
   Context,
@@ -244,7 +244,7 @@ type ProcessSpec = typeof processControlSpec;
  * Define a managed process as a toolkit resource:
  *
  * ```ts
- * class Fetcher extends ProcessResource.Tag<Fetcher>()("@app/Fetcher") {}
+ * class Fetcher extends ScheduledProcess.Tag<Fetcher>()("@app/Fetcher") {}
  * const p = yield* Fetcher;
  * yield* p.runImmediately;
  * const s = yield* p.statusNow;
@@ -279,7 +279,7 @@ export const processTag = <Self>() => {
 };
 
 /**
- * The config for {@link ProcessResource.layer} — the {@link Process.make} options (`effect` plus
+ * The config for {@link ScheduledProcess.layer} — the {@link Process.make} options (`effect` plus
  * optional `polling` / `schedule` / `scheduleLayer`), plus `captureLogs` to feed the `logs` stream
  * and `logHistory`. The tag carries the id.
  *
@@ -589,10 +589,10 @@ export const configure = <Self, E = never, R = never>(
   patch: ConfigPatch<ProcessLayerConfig<E, R>>,
 ): Layer.Layer<never> => configureLayer(tag.id, patch);
 
-// The unified `ProcessResource` namespace is assembled in `internal/processResourceNamespace.ts`
-// and re-exported by the barrel as `export * as ProcessResource` (so member access tree-shakes:
+// The unified `ScheduledProcess` namespace is assembled in `internal/scheduledProcessNamespace.ts`
+// and re-exported by the barrel as `export * as ScheduledProcess` (so member access tree-shakes:
 // the light `Tag`/spec never pulls the engine that `layer`/`server`/`serveHttp` use).
 //
-// DX: `import * as ProcessResource from "@nikscripts/effect-pm/ProcessContract"` gives a
-// tree-shakeable namespace — `ProcessResource.Tag` (alias of `processTag`) pulls no engine code.
+// DX: `import * as ScheduledProcess from "@nikscripts/effect-pm/ScheduledProcess"` gives a
+// tree-shakeable namespace — `ScheduledProcess.Tag` (alias of `processTag`) pulls no engine code.
 export { processTag as Tag };

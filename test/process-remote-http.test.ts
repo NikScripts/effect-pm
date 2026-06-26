@@ -3,17 +3,17 @@ import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { ProcessResource } from "../src";
-import type { ProcessLayerConfig } from "../src/ProcessContract";
+import { ScheduledProcess } from "../src";
+import type { ProcessLayerConfig } from "../src/ScheduledProcess";
 import { ProcessSchedule } from "../src/ProcessSchedule";
 import { Resource } from "../src/Resource";
 
 // The full remote path: a REAL toolkit Process driver served over http via
-// `ProcessResource.serveHttp`, driven by `Resource.client` over the wire — the same
+// `ScheduledProcess.serveHttp`, driven by `Resource.client` over the wire — the same
 // `yield* Tag` surface a local consumer uses, only the layer differs. Proves the control plane
 // (start/stop), observation (statusNow), the out-of-band run (runImmediately), and the schedule
 // CRUD all cross real RPC.
-class RemoteProc extends ProcessResource.Tag<RemoteProc>()("proc-remote/P") {}
+class RemoteProc extends ScheduledProcess.Tag<RemoteProc>()("proc-remote/P") {}
 
 // client transport: http + ndjson (matches the server's default serialization).
 const clientHttp = (port: number) =>
@@ -26,7 +26,7 @@ const withServer = <A, E>(
   config: ProcessLayerConfig<never, never>,
   use: (port: number) => Effect.Effect<A, E, RemoteProc>,
 ) => {
-  const server = ProcessResource.serveHttp(RemoteProc, config).pipe(
+  const server = ScheduledProcess.serveHttp(RemoteProc, config).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),
   );
   return Effect.gen(function* () {

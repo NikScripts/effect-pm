@@ -36,7 +36,7 @@ export default defineConfig([
       HistoryStore: "src/HistoryStore.ts",
       DurableQueueStore: "src/DurableQueueStore.ts",
       Group: "src/Group.ts",
-      ProcessContract: "src/ProcessContract.ts",
+      ScheduledProcess: "src/ScheduledProcess.ts",
       ProcessScheduleContract: "src/ProcessScheduleContract.ts",
       "storage/sqlite": "src/storage/sqlite/index.ts",
       "storage/redis": "src/storage/redis/index.ts",

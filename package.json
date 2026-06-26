@@ -108,9 +108,9 @@
       "types": "./dist/Group.d.ts",
       "default": "./dist/Group.js"
     },
-    "./ProcessContract": {
-      "types": "./dist/ProcessContract.d.ts",
-      "default": "./dist/ProcessContract.js"
+    "./ScheduledProcess": {
+      "types": "./dist/ScheduledProcess.d.ts",
+      "default": "./dist/ScheduledProcess.js"
     },
     "./ProcessScheduleContract": {
       "types": "./dist/ProcessScheduleContract.d.ts",
