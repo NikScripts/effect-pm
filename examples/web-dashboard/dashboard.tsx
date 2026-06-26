@@ -8,6 +8,8 @@
 
 import * as React from "react";
 import { Boundary } from "./components/ui/boundary";
+import { useAtomMount } from "../queue-widget/atom-react";
+import { fleetAtom } from "./queue-data";
 import { DesktopDashboard } from "./desktop";
 import { MobileDashboard } from "./mobile";
 
@@ -24,8 +26,14 @@ const useIsDesktop = (): boolean => {
   return wide;
 };
 
-export const App = (): React.ReactElement => (
-  <Boundary label="dashboard">
-    {useIsDesktop() ? <DesktopDashboard /> : <MobileDashboard />}
-  </Boundary>
-);
+export const App = (): React.ReactElement => {
+  // keep the data-layer runtime mounted for the app's lifetime, so navigating between the
+  // grid and a detail never tears it down (which would leave the next view's cold streams
+  // blank until an interaction rebuilt it).
+  useAtomMount(fleetAtom);
+  return (
+    <Boundary label="dashboard">
+      {useIsDesktop() ? <DesktopDashboard /> : <MobileDashboard />}
+    </Boundary>
+  );
+};

@@ -66,7 +66,23 @@ export const useAtomSet = <Read, Write>(
   atom: Atom.Writable<Read, Write>,
 ): ((value: Write) => void) => {
   const registry = useRegistry();
+  // Keep the atom MOUNTED while alive — a command `fn` atom only runs its effect when
+  // active, so without this `set` is a no-op (dead buttons).
+  React.useEffect(() => registry.mount(atom), [registry, atom]);
   return React.useCallback((value: Write) => registry.set(atom, value), [registry, atom]);
+};
+
+/**
+ * Mount an atom for the component's lifetime without subscribing for re-renders — a
+ * keep-alive. Mount this at the app root (with a runtime atom) so the runtime layer stays
+ * built across navigation; otherwise tearing the last atom down between views disconnects
+ * it and the next view's cold streams start blank.
+ *
+ * @since 1.0.0
+ */
+export const useAtomMount = <A,>(atom: Atom.Atom<A>): void => {
+  const registry = useRegistry();
+  React.useEffect(() => registry.mount(atom), [registry, atom]);
 };
 
 /**

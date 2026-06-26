@@ -70,6 +70,15 @@ export const useAtomSet = <Read, Write>(
   );
 };
 
+/** Mount an atom for the component's lifetime *without* subscribing for re-renders — a
+ *  keep-alive. Mount this at the app root (with a runtime atom) so the runtime layer stays
+ *  built across navigation; otherwise tearing the last atom down between views disconnects
+ *  it and the next view's cold streams start blank. */
+export const useAtomMount = <A,>(atom: Atom.Atom<A>): void => {
+  const registry = useRegistry();
+  React.useEffect(() => registry.mount(atom), [registry, atom]);
+};
+
 /** Force-refresh an atom (re-run its effect/stream). */
 export const useAtomRefresh = <A,>(atom: Atom.Atom<A>): (() => void) => {
   const registry = useRegistry();

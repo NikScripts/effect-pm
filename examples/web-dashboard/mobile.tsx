@@ -48,14 +48,14 @@ const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void
       </div>
       <Boundary label="stats"><QueueStats bundle={bundle} /></Boundary>
       <Boundary label="chart">
-        <div className="rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
+        <div className="rounded-xl border bg-card p-3 landscape:mx-auto landscape:w-full landscape:max-w-md"><MetricChart bundle={bundle} /></div>
       </Boundary>
       <Boundary label="controls"><QueueControls bundle={bundle} /></Boundary>
       <div className="text-xs text-muted-foreground">
         LOGS <span className="text-[#22c55e]">live</span> · phase {s?.phase ?? "?"}
       </div>
       <Boundary label="logs">
-        <LogStream bundle={bundle} className="min-h-0 flex-1 rounded-md border bg-card py-1 landscape:min-h-[200px]" />
+        <LogStream bundle={bundle} className="min-h-0 flex-1 rounded-md border bg-card py-1 landscape:min-h-[200px] landscape:max-h-[45dvh]" />
       </Boundary>
     </div>
   );
@@ -74,7 +74,7 @@ const ProcessDetail = (props: { readonly tag: ProcessTag; readonly onBack: () =>
       <Boundary label="controls"><ProcessControls bundle={bundle} /></Boundary>
       <div className="text-xs text-muted-foreground">LOGS <span className="text-[#22c55e]">live</span></div>
       <Boundary label="logs">
-        <LogStream bundle={bundle} className="min-h-0 flex-1 rounded-md border bg-card py-1 landscape:min-h-[200px]" />
+        <LogStream bundle={bundle} className="min-h-0 flex-1 rounded-md border bg-card py-1 landscape:min-h-[200px] landscape:max-h-[45dvh]" />
       </Boundary>
     </div>
   );
