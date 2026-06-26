@@ -1,6 +1,6 @@
 # Process, polling, and schedule — API reference
 
-This document complements the [README](../README.md) with a concise **spec-style** overview of the effect-first process stack (`Process`, `Polling`, `ProcessSchedule`, disarmed idle policy, and `ProcessGroup` lifecycle). For **when schedules run vs `ProcessGroup.start`**, **API-driven gates**, and **disarm vs `ProcessGroup.stop`**, see [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md).
+This document complements the [README](../README.md) with a concise **spec-style** overview of the effect-first process stack (`Process`, `Polling`, `ProcessSchedule`, disarmed idle policy). The toolkit wraps these as the location-transparent `ScheduledProcess` / `ProcessScheduleResource` — see [guides/toolkit-by-example.md](./guides/toolkit-by-example.md).
 
 ---
 
@@ -8,14 +8,13 @@ This document complements the [README](../README.md) with a concise **spec-style
 
 | Piece | Role |
 |--------|------|
-| **`Process`** | Builds `process.effect`: a long-lived **schedule driver** forked by `ProcessGroup`. Each schedule entry can spawn one run instance. |
+| **`Process`** | Builds `process.effect`: a long-lived **schedule driver** forked when the process starts. Each schedule entry can spawn one run instance. |
 | **`ProcessSchedule`** | Stores run windows (`startAt`, optional `stopAt`, optional `id`) and notifies the driver when entries change. |
 | **`Polling`** | **Cadence** between repeats inside a running instance (`awaitNextTick` → user `effect` → `afterTick`). |
 | **Storage facets** | Optional analytics: execution rows + lifecycle events via `ProcessStorage` / durable adapters. |
-| **`ProcessGroup`** | Owns scopes, fibers, typed process/queue controls, group contracts, control HTTP/CLI. |
-| **`ProcessManager`** | Typed remote client for a `ProcessGroup` contract. |
+| **`ScheduledProcess`** | The toolkit wrapper: this stack as a location-transparent `Resource` (lifecycle + observability + schedule control). |
 
-**One `start` (or `startAll`)** attaches the schedule driver. Schedule entries control whether instances continue repeating; `stop` / interrupt tears down the driver scope.
+**`start` / `runImmediately`** drive the schedule. Schedule entries control whether instances continue repeating; `stop` / interrupt tears down the driver scope.
 
 ---
 
@@ -126,120 +125,6 @@ These exports remain for custom schedule implementations; the schedule-driven ru
 
 ---
 
-## `ProcessGroup` (process lifecycle and group contracts)
-
-Typical control (requires the group’s `R` plus storage facets where applicable):
-
-- `start(name)` / `stop(name)` / `restart(name)`
-- `startAll()` / `stopAll()`
-- `runImmediately(name)` — tracked run without requiring armed schedule
-- `processStatus(name)` / `status`
-
-Typed group construction also supports canonical runtime entries:
-
-```typescript
-const group = yield* ProcessGroup.make("@app/BillingGroup", [
-  SyncBilling,
-  EmailQueue,
-] as const);
-
-yield* group.process(SyncBilling).runImmediately;
-yield* group.queue(EmailQueue).pause;
-```
-
-Canonical ids are slash-separated Effect-style strings with kebab-case package
-segments and case-preserving service names, such as
-`@repo/north-west/BillingGroup/SyncInvoices`. CLI commands accept normalized
-lowercase/kebab-case aliases such as
-`north-west/billing-group/sync-invoices`, but diagnostics should show canonical
-ids and display kind separately as a column or label.
-
-`ProcessGroup.Service` creates an injectable group class with `id`, `entries`,
-`contract`, `make`, and `layer`. `ProcessGroup.remoteLayer(Group, Endpoint)`
-provides that same service key from a remote `ProcessManager.Endpoint`, with
-process controls plus queue `pause`, `resume`, `clear`, and `status`.
-
-Remote queue `add`, `enqueue`, `prioritize`, and `defer` intentionally fail with
-`UnsupportedRemoteControlError` until queue item schemas are represented in the
-group contract.
-
-Stopping interrupts the schedule driver fiber and child instances; removing/closing entries does not stop the driver — active instances exit naturally on their stop checks.
-
----
-
-## `ProcessManager` (remote group client)
-
-| Member | Role |
-|--------|------|
-| `ProcessManager.ConnectionRegistry.layer([Group], { [Group.id]: url })` | Provide registry-backed remote group URLs as an Effect layer. |
-| `ProcessManager.ConnectionRegistry.layerConfig([Group], { [Group.id]: Config.string(...) })` | Provide the same registry from Effect `Config` values. |
-| `ProcessManager.connect(Group)` | Build a typed remote client by reading the group URL from `ProcessManagerConnectionRegistry`. |
-| `ProcessManager.cli([GroupA, GroupB] as const)` | Build a multi-group CLI from group contracts and the connection registry. |
-| `ProcessManager.connect(Group, { baseUrl })` | Build a typed remote client from a group service/definition. |
-| `ProcessManager.connect({ baseUrl, contract })` | Build from a raw contract for generated or contract-only clients. |
-| `ProcessManager.Endpoint<Self>()(Group)` | Injectable endpoint service that reads the group URL from `ProcessManagerConnectionRegistry`. |
-| `ProcessManager.Endpoint<Self>()(Group, { baseUrl })` | Injectable endpoint service with an inline base URL for simple examples/tests. |
-| `manager.verifyContract` | Fetches `GET /contract` and compares group id, version, process ids, queue ids, and control sets. |
-| `manager.process(id)` | Remote process start/stop/restart/run/status controls. |
-| `manager.queue(id)` | Remote queue pause/resume/clear/status controls. |
-
-Registry-backed connections are the preferred shape for application wiring:
-
-```typescript
-const RemoteGroupsLive = ProcessManager.ConnectionRegistry.layer(
-  [BillingGroup] as const,
-  {
-    [BillingGroup.id]: "http://127.0.0.1:32130",
-  },
-);
-
-const RemoteGroupsFromConfig = ProcessManager.ConnectionRegistry.layerConfig(
-  [BillingGroup] as const,
-  {
-    [BillingGroup.id]: Config.string("BILLING_GROUP_BASE_URL"),
-  },
-);
-
-const program = Effect.gen(function* () {
-  const billing = yield* ProcessManager.connect(BillingGroup);
-  yield* billing.verifyContract;
-  yield* billing.process(SyncBilling.id).runImmediately;
-}).pipe(Effect.provide(RemoteGroupsLive));
-```
-
-The same registry powers registry-backed
-`ProcessManager.Endpoint<Self>()(BillingGroup)` and
-`ProcessManager.cli([BillingGroup, StripeGroup] as const)`.
-
-Security boundary: current remote control is only appropriate for localhost or a
-trusted private network. Do not expose `ControlService` / `ProcessManager`
-targets directly to a non-private network. The current HTTP control surface does
-not provide built-in authn/authz, TLS/mTLS, request signing, replay protection,
-rate limiting, or audit logging. Future security layers should add authenticated
-transport, operator identity, scoped permissions for read vs mutation controls,
-request timestamps/nonces, and audit records for every remote command before
-public-network deployment is considered safe.
-
-CLI commands accept canonical ids such as
-`@repo/north-west/BillingGroup/SyncInvoices` and normalized suffix aliases such
-as `north-west/billing-group/sync-invoices` or `sync-invoices`. Ambiguous
-aliases fail with the minimum kebab-case suffix for each canonical candidate.
-The CLI supports `groups`, `ls`, `verify`, `status <target>`, process `start` /
-`stop` / `restart` / `now`, and queue `pause` / `resume` / `clear`.
-All target-taking commands use the same resolver, so canonical ids and
-normalized suffix aliases work for status, process controls, and queue controls.
-`--json` output is available for `groups`, `ls`, `verify`, and
-`status <target>`.
-Before issuing a remote status/control request, target-taking commands check the
-selected contract entry exposes the requested control. `status <target>` checks
-`status`; `now` checks for `runImmediately`; queue commands check `pause`,
-`resume`, or `clear`. If a process contract only exposes `status`,
-`now <target>` fails locally before any HTTP request. If a queue contract lacks
-`clear`, `clear <target>` fails the same way.
-Remote queue `add`, `enqueue`, `prioritize`, and `defer` remain unsupported.
-
----
-
 ## `ProcessStore`, `ProcessStorage`, and `RuntimeStorage`
 
 `ProcessStore` is the public builder used by storage facets
@@ -343,12 +228,9 @@ Examples are split into **forms** (one API shape) and **scenarios** (composition
 
 | File | Focus |
 |------|--------|
-| [examples/scenarios/full-process-group-with-queues-and-control-cli.ts](../examples/scenarios/full-process-group-with-queues-and-control-cli.ts) | Full `ProcessGroup` + queues + `ControlService.make` + `awaitShutdown` + root `Layer.mergeAll`. |
 | [examples/forms/schedule/](../examples/forms/schedule/) | Schedule entries (`at`, `window`, `define`) and control surfaces. |
 | [examples/forms/polling/](../examples/forms/polling/) | **`TestClock`**: accelerating polling, `resetCadence`, `peekCadence`, delayed start. |
 | [examples/scenarios/schedule-sync-from-external-db.ts](../examples/scenarios/schedule-sync-from-external-db.ts) | Simulated DB-sync pattern. |
-| [examples/scenarios/game-window-polling-with-process-group.ts](../examples/scenarios/game-window-polling-with-process-group.ts) | **`ProcessGroup.start`** + schedule ids; [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md). |
-| [examples/forms/process-group/](../examples/forms/process-group/) | Typed group entries, contracts, `ProcessManager.Endpoint`, and `ProcessGroup.remoteLayer`. |
 | [examples/forms/resource/](../examples/forms/resource/) | `RunResource`, `HttpClientRunGate`, `HttpApiResource`. |
 
 See [examples/README.md](../examples/README.md) for **`pnpm run example:*`** commands and a guided reading order.

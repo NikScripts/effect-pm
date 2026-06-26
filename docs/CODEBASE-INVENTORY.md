@@ -2,14 +2,13 @@
 
 Flat catalog of **every teachable idea** in the package: what each thing is, every form it takes, every way to configure or wire it, and every control surface (in-process vs local HTTP vs remote HTTP). For doc planning and linearization — not a file tree.
 
-**Remote control plane** = `ControlService` (localhost JSON) + `ProcessManager` / `ProcessManager.cli` (HTTP client to that API). Neither exposes schedule entry CRUD or polling cadence APIs unless your app adds its own layer on top.
 
 ---
 
 ## Cross-cutting (how pieces combine)
 
-- **Effect `Layer`** — polling, schedule, queues, storage facets (`ProcessStoreRunResource`, `ProcessStoreLog`, `ProcessStoreQueueResource`, `ProcessStoreProcessLifecycle`, `ProcessStoreProcessGroup`, `ProcessStoreProcessExecution`), platform (`FileSystem`/`Path`, `HttpClient`) merged at app root; `Process.make` can inline polling/schedule into `process.effect` so fork-time `R` excludes those tags when merged.
-- **`Effect.scoped`** — `QueueResource.make`, `ControlService.make`, remote layers acquire/release with scope.
+- **Effect `Layer`** — polling, schedule, queues, storage facets (`ProcessStoreRunResource`, `ProcessStoreLog`, `ProcessStoreQueueResource`, `ProcessStoreProcessLifecycle`, `ProcessStoreProcessExecution`), platform (`FileSystem`/`Path`, `HttpClient`) merged at app root; `Process.make` can inline polling/schedule into `process.effect` so fork-time `R` excludes those tags when merged.
+- **`Effect.scoped`** — `QueueResource.make`, remote layers acquire/release with scope.
 - **Storage optional** — when relevant facets are present in env, processes/queues/resources append analytics; when absent, behavior continues without failing.
 - **Canonical ids** — slash-separated strings (`@scope/Segment/ServiceName`); CLI/remote accept normalized kebab suffix aliases; ambiguous suffixes error with candidate list.
 - **Contract-first control** — each process/queue entry declares which controls exist; HTTP and CLI check locally before mutating; remote `verifyContract` compares local contract to `GET /contract`.
@@ -60,11 +59,10 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### Remote / HTTP / CLI
 
-- **None** — no polling endpoints on `ControlService` or `ProcessManager`.
 
 ### Status / introspection
 
-- **`peekCadence`** feeds **`ProcessDetails.nextPollCadence`** / **`ProcessGroupDetails.nextPollCadence`** (mirrors, best-effort).
+- **`peekCadence`** feeds **`ProcessDetails.nextPollCadence`** (mirrors, best-effort).
 
 ### Related types
 
@@ -142,7 +140,6 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### Remote / HTTP / CLI
 
-- **None** on `ControlService` / `ProcessManager` for schedule CRUD.
 
 ### Related types
 
@@ -161,7 +158,7 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 ### Construction forms
 
 - **`Process.make(id, { effect, polling?, schedule?, scheduleLayer? })`** or **`Process.make(id, effect, polling?, schedule?)`** — returns handle + baked layers (`process.name === id`). Third/fourth positional args may be polling preset, schedule preset, or schedule initializer (order-independent).
-- **`Process.Service<Self>()(id, effect, …)`** / **`Process.Service<Self>()(id, { effect, … })`** — class-style Context tag + `.layer` for typed `ProcessGroup` entries; id becomes `name`.
+- **`Process.Service<Self>()(id, effect, …)`** / **`Process.Service<Self>()(id, { effect, … })`** — class-style Context tag + `.layer`; id becomes `name`.
 
 ### Config fields (`ProcessMakeOptions`)
 
@@ -201,228 +198,6 @@ Flat catalog of **every teachable idea** in the package: what each thing is, eve
 
 ### Remote / HTTP / CLI
 
-- Indirect only via **ProcessGroup** process controls (`start`, `stop`, `restart`, `runImmediately`, `status`) — not schedule/polling.
-
----
-
-## ProcessGroup
-
-**What it is:** Orchestrates **process** + **queue** entries; owns fibers/scopes; exposes **typed contracts** for control surfaces; **`make`** acquires queue tags once.
-
-### Construction forms
-
-- **`ProcessGroup.make(id, entries as const, configItems?)`** — `Effect` yielding **`TypedProcessGroup`**; requires env for all queue entry tags.
-- **`ProcessGroup.Service(id, entries, configItems?)`** — injectable class: static **`id`**, **`entries`**, **`config`**, **`contract`**, **`make`**, **`layer`**; yieldable as group service.
-- **`ProcessGroup.remoteLayer(GroupService, Endpoint)`** — same service key, HTTP-backed; see Remote group.
-
-### Entry forms in tuple
-
-- **`Process.make` result** or **`Process.Service` class** — process entry.
-- **`QueueResource.Service` class** — queue entry with baked layer.
-- **`QueueResource.Tag` + `QueueResource.layer`** — queue entry with swappable layer.
-- **Empty queues array** — valid (process-only group).
-
-### Untyped handle (`ProcessGroup<R>`) — string names
-
-**Process lifecycle:** `start`, `stop`, `restart`, `startAll`, `stopAll`, `runImmediately`.
-
-**Status:** `status` (all processes + queues), `processStatus(name)`, `health`.
-
-**Queues:** `listQueues`, `getQueue(name)` → raw **`QueueHandle`**, `pauseQueue`, `resumeQueue`, `clearQueue` → count cleared. **`startAll`** runs each queue’s **`QueueHandle.start`** first (needed when **`autoStart: false`**), then starts stopped processes.
-
-**Shutdown:** `awaitShutdown({ logMessage? })` — OS signals (Node); needs `Scope`.
-
-### Typed handle (`TypedProcessGroup`)
-
-- Same operations keyed by **entry value** (`process(SyncBilling)`, `queue(EmailQueue)`).
-- **`startAll`** — runs **`queue(entry).start`** for every queue, then **`start(process)`** for every process not already running (matches legacy **`ProcessGroup.startAll`** ordering).
-- **`process(entry)`** → **`TypedProcessControls`**: `start`, `stop`, `restart`, `runImmediately`, `status`.
-- **`queue(entry)`** → **`TypedQueueControls`**: `add`, `enqueue`, `prioritize`, `defer`, **`start`**, `pause`, `resume`, `clear`, `status` (enqueue errors when item schema present).
-
-### Contract model
-
-**Group contract (`ProcessGroupContract`):** `id`, `kind: "group"`, `version: "v1"`, `processes[]`, `queues[]`.
-
-**Process contract entry:** `id`, `kind: "process"`, **`controls[]`** subset of:
-- **`start`**, **`stop`**, **`restart`**, **`runImmediately`**, **`status`**
-
-**Queue contract entry:** `id`, `kind: "queue"`, **`controls[]`** subset of:
-- **`enqueue`** (capability bit; remote enqueue still blocked — see below), **`start`**, **`pause`**, **`resume`**, **`clear`**, **`status`**
-- Optional **`item`** codec descriptor when queue declared with **`itemSchema`**.
-
-**Schema exports for validation/encoding:** `ProcessGroupProcessControlSchema`, `ProcessGroupQueueControlSchema`, `ProcessGroupScheduledProcessSchema`, `ProcessGroupQueueContractSchema`, `ProcessGroupContractSchema`.
-
-### Status shapes
-
-- **`ProcessGroupDetails`** — name, type, status (`running`|`stopped`), uptime, startTime, lastRun, executions, firstStartup, armed, nextScheduleTransition, nextPollCadence, activeInstances, nextTriggerRun.
-- **`QueueDetails`** — name, size `{ high, normal, low, total }`, completed count.
-- **`GroupHealth`** — healthy flag, processes running/stopped counts, queues active count.
-
-### Process lifecycle store events (when storage facets are present)
-
-**Tags on `process.lifecycle.changed`:** `Started`, `Stopped`, `Restarted`, `Errored`, `Recovered`, `Disabled`, `Enabled`.
-
-### Errors
-
-- **`ProcessNotFoundError`**, **`ProcessAlreadyRunningError`**, **`ProcessNotRunningError`** — local ops mistakes.
-- **`ProcessGroupRemoteControlError`** — network/HTTP failures on remote layer.
-- **`UnsupportedRemoteControlError`** — contract or platform doesn't allow op (remote enqueue, remote `awaitShutdown`, etc.).
-- **`QueueItemValidationError`**, **`QueueBatchValidationError`** — schema-backed enqueue (from QueueResource, re-exported).
-- **`ProcessGroupControlError`** — union of above for typed group error channel.
-
-### Requirement typing
-
-- **`AllGroupProcessesRequirements<Entries>`** — union of all process `effect` requirements.
-- **`ProcessGroupEntryRequirements<Entries>`** — combined env for group ops.
-- **`ProcessEffectRequirements<P>`** — per-process extract.
-
-### Remote group (`ProcessGroup.remoteLayer`)
-
-**Supported remotely (after cached `verifyContract` per call):** process `start`/`stop`/`restart`/`runImmediately`; queue `pause`/`resume`/`clear`/`status`; group `status`, `health`.
-
-**Fails with `UnsupportedRemoteControlError`:** queue `add`/`enqueue`/`prioritize`/`defer`; **`awaitShutdown`** on remote group.
-
-**Widened error channel:** `ProcessGroupRemoteControlError` | `UnsupportedRemoteControlError` | etc.
-
-### Start vs armed vs stop (group level)
-
-- **`make` / `Service.layer`** — registers entries; processes **stopped**; queues acquired.
-- **`start` / `startAll`** — forks **`process.effect`** (schedule **driver** runs).
-- **Schedule entries** — control whether instances tick (see ProcessSchedule).
-- **`stop` / `stopAll`** — interrupt driver scope + instances; lifecycle **Stopped**.
-
----
-
-## ControlService (local HTTP control plane)
-
-**What it is:** **`ControlService.make({ port?, group })`** — scoped **127.0.0.1** HTTP JSON server for a **typed** `ProcessGroup`. Re-exports **`createCli`** / **`runCli`**.
-
-### Binding & security
-
-- **Host** — localhost only.
-- **Port** — default **3001**.
-- **No auth/TLS/rate limits** — documented private-network assumption.
-
-### HTTP routes
-
-- **`GET /health`** — probe.
-- **`POST /control`** — canonical transport route carrying a protocol envelope.
-- **`GET /contract`** — serializable group contract.
-- **`GET /status`** — combined process + queue status.
-- **`GET /processes`** — list processes.
-- **`GET /processes/:id`** — single process status.
-- **`POST /processes/:id/start`**, **`stop`**, **`restart`**, **`now`** (`runImmediately`).
-- **`GET /queues`** — list queues.
-- **`GET /queues/:id`** — queue status.
-- **`POST /queues/:id/pause`**, **`resume`**, **`clear`**.
-- **`OPTIONS`** — CORS-style empty response.
-
-### Response envelope (`ControlResponse`)
-
-- **`success`**, optional **`type`** (`process` | `queue`), optional **`data`**, optional **`error`**.
-
-### Contract enforcement on routes
-
-- Resolves process/queue by name from URL.
-- Checks contract exposes requested control before running (same idea as ProcessManager CLI preflight).
-
-### What ControlService does NOT expose
-
-- Schedule `set`/`add`/`clear`/`reconcile`.
-- Polling `requestWake`/`resetCadence`.
-- Queue **enqueue** over HTTP unless your contract includes it and route implementation supports it (contract model includes `enqueue` bit; remote ProcessManager still blocks enqueue — local HTTP may expose full queue handle via group implementation — local typed queue controls include enqueue).
-
----
-
-## createCli / runCli (single-group local CLI)
-
-**What it is:** **`createCli({ name, version, port? })`** → `@effect/cli` root; **`runCli(config, argv?)`** runs it.
-
-### Commands (against one control URL)
-
-- **`ls`** — list targets.
-- **`status [name]`** — process or group status.
-- **`start [name]`**, **`stop [name]`**, **`restart [name]`**, **`now [name]`** — process controls.
-- **`pause [name]`**, **`resume [name]`**, **`clear [name]`** — queue controls.
-- **`queues`** — list queues.
-
-### Config
-
-- **`port`** — default 3001; must match running `ControlService`.
-
----
-
-## ProcessManager (remote typed client)
-
-**What it is:** HTTP client for **contract-aligned** group control; connection registry; multi-group CLI; endpoint service for `remoteLayer`.
-
-### Connection discovery forms
-
-- **`ProcessManager.connect(Group)`** — URL from **`ProcessManagerConnectionRegistry`**.
-- **`ProcessManager.connect(Group, { baseUrl })`** — explicit URL (tests/simple apps).
-- **`ProcessManager.connect({ baseUrl, contract })`** — raw contract (generated clients).
-- **`ProcessManager.ConnectionRegistry.layer(groups, { [groupId]: url })`** — static map.
-- **`ProcessManager.ConnectionRegistry.layerConfig(groups, { [groupId]: Config })`** — Effect Config strings.
-
-### Endpoint service forms
-
-- **`ProcessManager.Endpoint<Self>()(Group)`** — registry-backed.
-- **`ProcessManager.Endpoint<Self>()(Group, { baseUrl })`** — inline URL.
-- **`Endpoint`** — direct export alias for `ProcessManager.Endpoint`.
-- **`Endpoint.http({ transport })`** — endpoint definition for an HTTP control
-  transport descriptor.
-- **`Endpoint.module(load, select?)`** — typed module endpoint descriptor for a
-  local runtime. When launch config is supplied, `group-start` starts its
-  configured command out of process and waits for the HTTP control endpoint.
-- **`Endpoint.local(definition).default`**, **`Endpoint.production(definition)`**,
-  **`Endpoint.define(label, definition)`** — labeled endpoint config items for a
-  `ProcessGroup.Service(..., configItems)` / `ProcessGroup.make(..., configItems)`
-  third argument.
-- **`ProcessManager.GroupConfig(Group, items?)`** — validate and normalize
-  endpoint items for a group.
-- **`ProcessManager.Config.layer(configs)`** — explicit endpoint config override
-  layer. CLI endpoint selection uses this layer first, then group-bundled
-  `Group.config`, then the legacy `ConnectionRegistry` fallback.
-- **`ProcessManagerGroupEndpointStatus`** — `groups` command status model:
-  `Configured`, `Pending`, `Online`, `Offline`, `ContractDrift`.
-- **`ProcessManagerEndpointSelection`** — normalized endpoint entry exposed by
-  `ProcessManagerGroupConfig.endpoints`.
-
-### `RemoteProcessManager` API
-
-- **`contract`** — local typed contract value.
-- **`fetchContract`** — raw remote contract JSON.
-- **`verifyContract`** — compare group id, version, process ids, queue ids, control sets.
-- **`process(id)`** → **`RemoteProcessControls`**: `start`, `stop`, `restart`, `runImmediately`, `status`.
-- **`queue(id)`** → **`RemoteQueueControls`**: `pause`, `resume`, `clear`, `status` only (**no** remote `add`/`enqueue`/`prioritize`/`defer`).
-- **`status`** — whole group status via HTTP.
-
-### ProcessManager CLI (`ProcessManager.cli(groups, config?)`)
-
-**Subcommands:** `groups`, `ls`, `verify`, `group-start <group>`, `group-stop <group>`, `status <target>`, `start <target>`, `stop <target>`, `restart <target>`, `now <target>`, `pause <target>`, `resume <target>`, `clear <target>`.
-
-**Flags:** `--json` on `groups`, `ls`, `verify`, `status`; `--target <label>`
-on endpoint-backed runtime commands.
-
-**`groups` status:** selected HTTP endpoint configs are probed with contract
-verification and reported as `online`, `offline`, or `contract-drift`; module and
-registry-backed endpoints report `configured` until launcher/status support
-exists.
-
-**Local run state:** `group-start` reuses an existing live PID from run state
-instead of launching duplicates. `group-stop` sends `SIGTERM` to the recorded PID
-and removes stale run state when the process no longer exists.
-
-**Behavior:** resolves **canonical id or normalized suffix alias**; **preflight** contract for requested control (e.g. `now` requires `runImmediately` on contract); runs **`verifyContract`** before mutations in command paths. Human **`ls`** lists each group's entries as `KIND`, `ID`, and **contract controls** (`(none)` if empty); human **`groups`**, **`verify`**, **`status`** append short footer or pretty-print embedded status JSON respectively.
-
-### Errors
-
-- **`ProcessManagerRequestError`** — HTTP/network/decode failures.
-- **`ProcessManagerConnectionError`** — registry missing group URL.
-
-### Target resolution (used by CLI; not on main barrel)
-
-- **`normalizeProcessManagerTarget`**, **`resolveProcessManagerTarget`** — suffix matching, ambiguity → **`AmbiguousProcessManagerTarget`**, missing → **`MissingProcessManagerTarget`**.
 
 ---
 
@@ -496,7 +271,6 @@ and removes stale run state when the process no longer exists.
 
 ### Remote
 
-- **ProcessManager / remoteLayer** — no remote enqueue; local **TypedQueueControls** and **ControlService** local routes support **start**/pause/resume/clear/status; enqueue available **in-process** on typed/local handle only.
 
 ### Queue rate limit
 
@@ -750,7 +524,7 @@ Provide a custom service whose shape matches **`ProcessStoreRunResource.Type`** 
 ## Package import surfaces (for doc “where do I import X”)
 
 - **Root** `@nikscripts/effect-pm` — barrel in §index exports (Process, Polling, Schedule, Group, Queue, Run, Http*, Store, Manager, Control, CLI, disarmed helpers, types).
-- **Subpaths** — `/Process`, `/QueueResource`, `/ProcessGroup`, `/ProcessStore`, `/ProcessStorage`, `/ProcessManager`, `/ControlService`, `/storage/sqlite`, `/storage/prisma`, `/prisma`.
+- **Subpaths** — `/Process`, `/QueueResource`, `/QueueContract`, `/ScheduledProcess`, `/ProcessScheduleContract`, `/Resource`, `/Group`, `/HostLogs`, `/HistoryStore`, `/DurableQueueStore`, `/ProcessStore`, `/ProcessStorage`, `/storage/sqlite`, `/storage/prisma`, `/prisma`.
 
 ---
 
@@ -784,8 +558,6 @@ Grouped by **idea demonstrated** — not file paths as authority.
 | Schedule entries | at, window, define |
 | Schedule control surfaces | initializer, in-effect, external-fiber |
 | Polling presets / sports | spaced-read, accelerating, reset-cadence, peek-cadence, delayed-start |
-| ProcessGroup typed | make-entries, service, contract-http |
-| ProcessManager | connection-registry, endpoint-service, remote-layer, contract-drift, multi-group-cli-ux (md) |
 | Queue | priority-retry |
 | RunResource / observer | unit-and-input, runtime-observer |
 | HTTP gating | http-client-run-gate, http-api-resource tag/layerEffect |
