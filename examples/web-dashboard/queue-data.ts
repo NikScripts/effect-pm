@@ -193,11 +193,18 @@ export const processBundle = (tag: ProcessTag): ProcessBundle => {
   const existing = processCache.get(tag.id);
   if (existing !== undefined) return existing;
   const statusStream = Stream.unwrap(Effect.map(tag, (p) => p.status));
-  const logsStream = Stream.unwrap(Effect.map(tag, (p) => p.logs));
   const bundle: ProcessBundle = {
     status: runtime.atom(statusStream),
+    // query-then-tail: backfill the captured log history, then follow the live stream.
     logs: runtime.atom(
-      logsStream.pipe(
+      Stream.unwrap(
+        Effect.map(tag, (p) =>
+          Stream.concat(
+            Stream.unwrap(Effect.map(p.logHistory({ limit: 300 }), Stream.fromIterable)),
+            p.logs,
+          ),
+        ),
+      ).pipe(
         Stream.scan([] as ReadonlyArray<LogLine>, (acc, l) =>
           [...acc, { id: (logId += 1), t: Date.now(), level: l.level, message: l.message }].slice(-300),
         ),

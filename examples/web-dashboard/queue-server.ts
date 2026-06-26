@@ -91,7 +91,7 @@ const serveLayer = Layer.mergeAll(
   // the wnba key-rotation process (self-runs on a poll; no producer needed)
   serveProcess(
     KeyRotation,
-    { effect: Effect.logInfo("wnba: key-rotation check"), polling: Polling.spaced(Duration.seconds(5)) },
+    { effect: Effect.logInfo("wnba: key-rotation check"), polling: Polling.spaced(Duration.seconds(5)), captureLogs: true },
     { path: `/rpc/${pathOf(KeyRotation.id)}` },
   ),
 ).pipe(
