@@ -7,8 +7,14 @@
  * here), not server-side `yield* tag` (a host doesn't expose its served service).
  * Run: `pnpm run example:queue-server`.
  */
-import { Duration, Effect, Layer } from "effect";
+import { EventEmitter } from "node:events";
+import { Duration, Effect, Layer, Logger } from "effect";
 import { createServer } from "node:http";
+
+// We mount 12 resources (serveHttp) on one server, which stacks >10 per-request
+// listeners → Node's MaxListeners warning floods stdout. Raise the limit. (The real fix
+// is one shared router instead of N serveHttp — a follow-up.)
+EventEmitter.defaultMaxListeners = 100;
 import { FetchHttpClient } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
@@ -55,7 +61,13 @@ const serveLayer = Layer.mergeAll(
     { effect: Effect.logInfo("wnba: key-rotation check"), polling: Polling.spaced(Duration.seconds(5)) },
     { path: `/rpc/${pathOf(KeyRotation.id)}` },
   ),
-).pipe(Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: PORT })));
+).pipe(
+  // silence the served layer's console logging (per-request http access logs + the
+  // captured worker logs) — they still reach the dashboard via captureLogs. The server's
+  // own program logs (below) keep using the default logger so you can see them.
+  Layer.provide(Logger.layer([], { mergeWithExisting: false })),
+  Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: PORT })),
+);
 
 // loopback client transport (the producer reaches the local server over http).
 const remote = (id: string) =>
