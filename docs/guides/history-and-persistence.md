@@ -109,11 +109,39 @@ workers, success/failure update the store (retry → requeue, `maxAttempts` → 
 restart **recovers in-flight work**. `size`/`sizes`/`isEmpty`/`status` and shutdown-drain reflect
 the store. Off by default (in-memory only) — and the in-memory path is unchanged.
 
-## For a dashboard
+## For a dashboard (query-then-tail, over RPC)
 
-Same Tag, two reads: **`status`/`metrics`/`logs` for live**, **`*History` for backfill**. A typical
-panel: paint `logHistory({ limit })` once, then follow the `logs` stream. Both come from
-`yield* queue` (or `Resource.client(queue)` remotely) — the dashboard never touches the store.
+Same Tag, two reads: **`status`/`metrics`/`logs` for live**, **`*History` for backfill**. The
+dashboard never touches the store — it talks to the served resource through `Resource.client`, and
+the host owns persistence. This is the proven path (`test/queue-remote-http.test.ts`).
+
+**Host (Droplet/Mini)** — serve the resource with capture + a history backend:
+
+```ts
+QueueResource.serveHttp(RosterQueue, { effect, captureLogs: true })
+  .pipe(Layer.provide(HistoryStore.layerMemory())); // or SQLiteHistoryStore.layer({ filename })
+```
+
+**Dashboard (browser/Next.js)** — a remote client; same `yield* Tag` surface:
+
+```ts
+const queue = yield* RosterQueue; // resolved from Resource.client(RosterQueue)
+
+// 1) backfill once
+const recent = yield* queue.logHistory({ limit: 200 });
+render(recent);
+
+// 2) then tail live (no gap, no store access)
+yield* queue.logs.pipe(Stream.runForEach(render), Effect.forkScoped);
+
+// live KPIs: poll statusNow, or follow the status/metrics streams
+const status = yield* queue.statusNow;             // { sizes, inFlight, completed, phase }
+yield* queue.metrics.pipe(Stream.runForEach(chart), Effect.forkScoped);
+```
+
+`logHistory` / `metricsHistory` are plain `query` verbs and cross RPC like `statusNow`; `logs` /
+`metrics` / `status` are streams over the same transport. Runtime-wide logs use `HostLogs.history`
++ `HostLogs.stream` the same way.
 
 ## What exists / what's coming
 
