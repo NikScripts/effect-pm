@@ -27,7 +27,7 @@ import {
   queueLeaves,
 } from "./queue-data";
 import { useAtomSet, useAtomValue } from "../queue-widget/atom-react";
-import { viewTransitionStyle } from "../../src/web/useViewTransition";
+import { useViewTransitionStyle } from "../../src/web/useViewTransition";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
@@ -84,6 +84,7 @@ export const QueueCard = (props: {
   readonly selected?: boolean;
   readonly onOpen: (tag: LeafTag) => void;
 }): React.ReactElement => {
+  const vt = useViewTransitionStyle(`res-${props.tag.id}`);
   const r = useAtomValue(queueBundle(props.tag).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
@@ -93,7 +94,7 @@ export const QueueCard = (props: {
     <button
       type="button"
       onClick={() => props.onOpen(props.tag)}
-      style={viewTransitionStyle(`res-${props.tag.id}`)}
+      style={vt}
       className={cn(
         "rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
         props.selected === true && "border-primary",
@@ -135,6 +136,7 @@ export const GroupCard = (props: {
   readonly node: GroupNode;
   readonly onOpen: (g: GroupNode) => void;
 }): React.ReactElement => {
+  const vt = useViewTransitionStyle(`grp-${props.node.id}`);
   const members = Object.values(Group.members(props.node));
   const leaves = queueLeaves(props.node).slice(0, 4);
   const subs = members.filter((m): m is GroupNode => Group.isGroup(m));
@@ -142,7 +144,7 @@ export const GroupCard = (props: {
     <button
       type="button"
       onClick={() => props.onOpen(props.node)}
-      style={viewTransitionStyle(`grp-${props.node.id}`)}
+      style={vt}
       className="rounded-xl border border-[#06b6d455] bg-card p-3 text-left transition-colors hover:border-ring"
     >
       <div className="mb-2 flex items-center gap-2">
@@ -342,13 +344,14 @@ export const ProcessCard = (props: {
   readonly tag: ProcessTag;
   readonly onOpen: (t: ProcessTag) => void;
 }): React.ReactElement => {
+  const vt = useViewTransitionStyle(`res-${props.tag.id}`);
   const r = useAtomValue(processBundle(props.tag).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   return (
     <button
       type="button"
       onClick={() => props.onOpen(props.tag)}
-      style={viewTransitionStyle(`res-${props.tag.id}`)}
+      style={vt}
       className="rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring"
     >
       <div className="mb-2 flex items-center gap-2">

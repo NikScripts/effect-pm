@@ -19,7 +19,7 @@ import {
   queueBundle,
 } from "./queue-data";
 import { useAtomValue } from "../queue-widget/atom-react";
-import { useViewTransition, viewTransitionStyle } from "../../src/web/useViewTransition";
+import { useViewTransition, useViewTransitionStyle } from "../../src/web/useViewTransition";
 import { Boundary } from "./components/ui/boundary";
 import { Button } from "./components/ui/button";
 import {
@@ -38,8 +38,9 @@ const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void
   const bundle = queueBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const vt = useViewTransitionStyle(`res-${props.tag.id}`);
   return (
-    <div className="flex h-screen flex-col gap-3 p-3" style={viewTransitionStyle(`res-${props.tag.id}`)}>
+    <div className="flex h-screen flex-col gap-3 p-3" style={vt}>
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
         <strong className="flex-1 truncate text-base">{displayName(props.tag.id)}</strong>
@@ -62,8 +63,9 @@ const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void
 
 const ProcessDetail = (props: { readonly tag: ProcessTag; readonly onBack: () => void }): React.ReactElement => {
   const bundle = processBundle(props.tag);
+  const vt = useViewTransitionStyle(`res-${props.tag.id}`);
   return (
-    <div className="flex h-screen flex-col gap-3 p-3" style={viewTransitionStyle(`res-${props.tag.id}`)}>
+    <div className="flex h-screen flex-col gap-3 p-3" style={vt}>
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
         <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.id)}</strong>
@@ -81,26 +83,29 @@ const ProcessDetail = (props: { readonly tag: ProcessTag; readonly onBack: () =>
 export const MobileDashboard = (): React.ReactElement => {
   const [path, setPath] = React.useState<ReadonlyArray<GroupNode>>([Fleet]);
   const [selected, setSelected] = React.useState<LeafTag | ProcessTag | null>(null);
-  // animate grid ↔ detail / drill-down via the View Transitions API (crossfade, plus a
-  // morph of the resource title between its card and the detail header). Instant fallback.
+  // animate grid ↔ detail / drill-down via the View Transitions API: the activated card
+  // morphs to fill the screen while everything else grows/fades in as one image. Only the
+  // active element is named (conditional), so the new grid's cards don't pop in on their own.
   const transition = useViewTransition();
+  const group = path[path.length - 1] ?? Fleet;
+  const pageVt = useViewTransitionStyle(`grp-${group.id}`);
 
   if (selected !== null) {
+    const back = () => transition(`res-${selected.id}`, () => setSelected(null));
     return kindOf(selected) === "process" ? (
-      <ProcessDetail tag={selected as ProcessTag} onBack={() => transition(() => setSelected(null))} />
+      <ProcessDetail tag={selected as ProcessTag} onBack={back} />
     ) : (
-      <QueueDetail tag={selected as LeafTag} onBack={() => transition(() => setSelected(null))} />
+      <QueueDetail tag={selected as LeafTag} onBack={back} />
     );
   }
 
-  const group = path[path.length - 1] ?? Fleet;
   const canBack = path.length > 1;
 
   return (
-    <div className="mx-auto max-w-5xl p-3" style={viewTransitionStyle(`grp-${group.id}`)}>
+    <div className="mx-auto max-w-5xl p-3" style={pageVt}>
       <div className="mb-1 flex items-center gap-2">
         {canBack ? (
-          <Button variant="outline" size="sm" onClick={() => transition(() => setPath((p) => p.slice(0, -1)))}>← back</Button>
+          <Button variant="outline" size="sm" onClick={() => transition(`grp-${group.id}`, () => setPath((p) => p.slice(0, -1)))}>← back</Button>
         ) : null}
         <h1 className="m-0 flex-1 text-lg font-semibold">
           ⬢ {path.map((g) => displayName(g.id)).join(" / ")}{" "}
@@ -113,8 +118,8 @@ export const MobileDashboard = (): React.ReactElement => {
           <Cell
             key={name}
             member={member}
-            onOpenLeaf={(tag) => transition(() => setSelected(() => tag))}
-            onOpenGroup={(g) => transition(() => setPath((p) => [...p, g]))}
+            onOpenLeaf={(tag) => transition(`res-${tag.id}`, () => setSelected(() => tag))}
+            onOpenGroup={(g) => transition(`grp-${g.id}`, () => setPath((p) => [...p, g]))}
           />
         ))}
       </div>
