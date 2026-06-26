@@ -28,6 +28,17 @@ import {
 } from "./queue-data";
 import { useAtomSet, useAtomValue } from "../queue-widget/atom-react";
 import { useViewTransitionStyle } from "../../src/web/useViewTransition";
+import { dlog } from "./debug-console";
+
+/** A short label for an AsyncResult, for debug logging. */
+const asyncTag = (r: AsyncResult.AsyncResult<unknown, unknown>): string =>
+  AsyncResult.isSuccess(r)
+    ? `Success${Array.isArray(r.value) ? `(${r.value.length})` : ""}`
+    : AsyncResult.isFailure(r)
+      ? "Failure"
+      : AsyncResult.isWaiting(r)
+        ? "Waiting"
+        : "Initial";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
@@ -190,6 +201,7 @@ export const Stat = (props: { readonly label: string; readonly value: string }):
 export const QueueStats = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
   const statusR = useAtomValue(props.bundle.status);
   const metricsR = useAtomValue(props.bundle.metrics);
+  React.useEffect(() => dlog("status", asyncTag(statusR), "· metrics", asyncTag(metricsR)), [statusR, metricsR]);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const m = AsyncResult.isSuccess(metricsR) ? metricsR.value : undefined;
   const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
@@ -216,6 +228,7 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
   const [metric, setMetric] = React.useState<MetricKey>("throughput");
   const historyR = useAtomValue(props.bundle.history);
   const trendR = useAtomValue(props.bundle.trend);
+  React.useEffect(() => dlog("history", asyncTag(historyR), "· trend", asyncTag(trendR)), [historyR, trendR]);
   const history: ReadonlyArray<MetricPoint> = AsyncResult.isSuccess(historyR) ? historyR.value : [];
   const trend: ReadonlyArray<number> = AsyncResult.isSuccess(trendR) ? trendR.value : [];
   const def = METRICS[metric];
@@ -321,6 +334,7 @@ export const LogStream = (props: {
   readonly className?: string;
 }): React.ReactElement => {
   const r = useAtomValue(props.bundle.logs);
+  React.useEffect(() => dlog("logs", asyncTag(r)), [r]);
   const logs: ReadonlyArray<LogLine> = AsyncResult.isSuccess(r) ? r.value : [];
   const ref = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {

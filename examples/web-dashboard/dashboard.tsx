@@ -10,6 +10,7 @@ import * as React from "react";
 import { Boundary } from "./components/ui/boundary";
 import { useAtomMount } from "../queue-widget/atom-react";
 import { runtime } from "./queue-data";
+import { DebugConsole } from "./debug-console";
 import { DesktopDashboard } from "./desktop";
 import { MobileDashboard } from "./mobile";
 
@@ -36,6 +37,7 @@ export const App = (): React.ReactElement => {
   return (
     <Boundary label="dashboard">
       {useIsDesktop() ? <DesktopDashboard /> : <MobileDashboard />}
+      <DebugConsole />
     </Boundary>
   );
 };
