@@ -50,6 +50,7 @@
     "terminal-contracts",
     "toolkit-treeshake-and-cleanup",
     "typed-process-group-contracts",
-    "web-widgets"
+    "web-widgets",
+    "pm-cli"
   ]
 }
