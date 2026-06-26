@@ -18,10 +18,15 @@ export default defineConfig({
     host: true,
     port: 5175,
     allowedHosts: true,
-    // the browser is a thin client; the queues run on the Node server (queue-server.ts).
-    // proxy the RPC paths to it so the client is same-origin (no CORS).
+    // the browser is a thin client; proxy each host's RPC so the client is same-origin.
+    // /rpc → the Droplet (queues); /mini → the Mini (KeyRotation, served at its /rpc).
     proxy: {
       "/rpc": { target: "http://localhost:7777", changeOrigin: true },
+      "/mini": {
+        target: "http://localhost:7778",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/mini/, ""),
+      },
     },
   },
 });

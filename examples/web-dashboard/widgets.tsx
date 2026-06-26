@@ -18,6 +18,7 @@ import {
   type ProcessBundle,
   type ProcessTag,
   type QueueBundle,
+  hostOf,
   kindOf,
   leafTags,
   processBundle,
@@ -314,6 +315,7 @@ export const ProcessCard = (props: {
       <div className="mb-2 flex items-center gap-2">
         <span>⚙</span>
         <strong className="flex-1 truncate">{displayName(props.tag.id)}</strong>
+        {hostOf(props.tag.id) !== undefined ? <Badge color="#06b6d4">⬡ {hostOf(props.tag.id)}</Badge> : null}
         <Badge color={s?.supervising === true ? "#22c55e" : "#94a3b8"}>
           {s?.supervising === true ? "running" : "stopped"}
         </Badge>

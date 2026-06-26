@@ -8,7 +8,12 @@
 import { Duration, Effect, Schema } from "effect";
 import { queueTag } from "../../src/QueueContract";
 import { processTag } from "../../src/ProcessContract";
+import { Resource } from "../../src/Resource";
 import { Group } from "../../src/Group";
+
+/** The Mini — a second machine (your home server). Resources bound to it run + are
+ *  reached there; everything else is on the Droplet. */
+export class MiniHost extends Resource.Host<MiniHost>("hub/miniHost") {}
 
 const Job = Schema.Struct({ id: Schema.String });
 
@@ -25,8 +30,10 @@ export class RegionEU extends queueTag<RegionEU>()("@acme/queues/RegionEU", Job)
 export class Daily extends queueTag<Daily>()("@acme/queues/Daily", Job) {}
 export class Weekly extends queueTag<Weekly>()("@acme/queues/Weekly", Job) {}
 
-// a process (the wow "Mini" home server runs a wnba key-rotation detect+fix process)
-export class KeyRotation extends processTag<KeyRotation>()("@wnba/Mini/KeyRotation") {}
+// a process bound to the Mini host — it runs there, not on the Droplet.
+export class KeyRotation extends processTag<KeyRotation>()("@wnba/Mini/KeyRotation", {
+  host: MiniHost,
+}) {}
 
 // the group tree — this is the navigable tree, nothing more is needed
 export class Mini extends Group.Tag<Mini>("@wnba/Mini")({ KeyRotation }) {}

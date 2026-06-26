@@ -20,15 +20,12 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { serveHttp } from "../../src/QueueContract";
-import { serveHttp as serveProcess } from "../../src/ProcessContract";
 import { HistoryStore } from "../../src/HistoryStore";
-import { Polling } from "../../src/Polling";
 import { Resource } from "../../src/Resource";
 import {
   Billing,
   Daily,
   Jobs,
-  KeyRotation,
   Mail,
   Notify,
   RegionEU,
@@ -88,12 +85,7 @@ const serveLayer = Layer.mergeAll(
   serveHttp(RegionEU, cfg, { path: `/rpc/${pathOf(RegionEU.id)}` }),
   serveHttp(Daily, cfg, { path: `/rpc/${pathOf(Daily.id)}` }),
   serveHttp(Weekly, cfg, { path: `/rpc/${pathOf(Weekly.id)}` }),
-  // the wnba key-rotation process (self-runs on a poll; no producer needed)
-  serveProcess(
-    KeyRotation,
-    { effect: Effect.logInfo("wnba: key-rotation check"), polling: Polling.spaced(Duration.seconds(5)), captureLogs: true },
-    { path: `/rpc/${pathOf(KeyRotation.id)}` },
-  ),
+  // (the wnba key-rotation process lives on the Mini — see mini-server.ts)
 ).pipe(
   // capture metrics + log history so the dashboard can backfill (query-then-tail).
   Layer.provide(HistoryStore.layerMemory()),

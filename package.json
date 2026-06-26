@@ -202,6 +202,7 @@
     "example": "tsx examples/scenarios/full-process-group-with-queues-and-control-cli.ts",
     "example:queue-widget": "vite --config examples/queue-widget/vite.config.ts",
     "example:queue-server": "tsx examples/web-dashboard/queue-server.ts",
+    "example:mini-server": "tsx examples/web-dashboard/mini-server.ts",
     "example:web-dashboard": "vite --config examples/web-dashboard/vite.config.ts examples/web-dashboard",
     "example:resource-web": "vite --config examples/resource-web/vite.config.ts examples/resource-web",
     "example:resource-cli": "tsx examples/resource-cli/counter-cli.ts",

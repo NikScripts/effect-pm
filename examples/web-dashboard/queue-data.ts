@@ -20,6 +20,7 @@ import {
   Jobs,
   KeyRotation,
   Mail,
+  MiniHost,
   Notify,
   pathOf,
   RegionEU,
@@ -61,6 +62,9 @@ export interface GroupNode {
   readonly members: Record<string, unknown>;
 }
 
+/** Which host a resource runs on (the Mini, else undefined = the Droplet). */
+export const hostOf = (id: string): string | undefined => (id.includes("/Mini/") ? "mini" : undefined);
+
 /** Which kind of leaf a tag is, by its contract (a queue enqueues; a process runs). */
 export const kindOf = (member: unknown): "queue" | "process" => {
   const spec = specOf(member as { readonly [k: symbol]: unknown } as Parameters<typeof specOf>[0]);
@@ -86,7 +90,8 @@ const appLayer = Layer.mergeAll(
   Resource.client(RegionEU).pipe(Layer.provide(remote(RegionEU.id))),
   Resource.client(Daily).pipe(Layer.provide(remote(Daily.id))),
   Resource.client(Weekly).pipe(Layer.provide(remote(Weekly.id))),
-  Resource.client(KeyRotation).pipe(Layer.provide(remote(KeyRotation.id))),
+  // KeyRotation lives on the Mini host — reached through its own transport, not the Droplet.
+  Resource.client(KeyRotation).pipe(Layer.provide(Resource.connectHttp(MiniHost, { url: "/mini/rpc" }))),
 );
 
 /** One reactive runtime that reaches every queue (over the wire). */
