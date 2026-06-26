@@ -66,6 +66,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Device safe areas (notch / camera / home indicator): viewport-fit=cover lets the page
+   extend under the cutouts, so inset the dashboard chrome by the env() insets — keeping
+   the normal 0.75rem padding as a floor — so the title/back button and bottom controls
+   clear the hardware. */
+.safe-area {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+}
+
 /* View transitions (grid ↔ detail / drill-down): a resource/group card morphs to fill
    the screen. Slow the box morph a touch, and ease the incoming content in — start it
    slightly smaller and transparent and scale up to fill, so it doesn't pop in at full

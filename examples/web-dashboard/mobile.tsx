@@ -40,7 +40,7 @@ const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const vt = useViewTransitionStyle(`res-${props.tag.id}`);
   return (
-    <div className="flex h-screen flex-col gap-3 p-3" style={vt}>
+    <div className="flex h-screen flex-col gap-3 safe-area" style={vt}>
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
         <strong className="flex-1 truncate text-base">{displayName(props.tag.id)}</strong>
@@ -65,7 +65,7 @@ const ProcessDetail = (props: { readonly tag: ProcessTag; readonly onBack: () =>
   const bundle = processBundle(props.tag);
   const vt = useViewTransitionStyle(`res-${props.tag.id}`);
   return (
-    <div className="flex h-screen flex-col gap-3 p-3" style={vt}>
+    <div className="flex h-screen flex-col gap-3 safe-area" style={vt}>
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
         <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.id)}</strong>
@@ -102,7 +102,7 @@ export const MobileDashboard = (): React.ReactElement => {
   const canBack = path.length > 1;
 
   return (
-    <div className="mx-auto max-w-5xl p-3" style={pageVt}>
+    <div className="mx-auto max-w-5xl safe-area" style={pageVt}>
       <div className="mb-1 flex items-center gap-2">
         {canBack ? (
           <Button variant="outline" size="sm" onClick={() => transition(`grp-${group.id}`, () => setPath((p) => p.slice(0, -1)))}>← back</Button>
