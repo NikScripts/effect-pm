@@ -14,11 +14,14 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { serveHttp } from "../../src/QueueContract";
+import { ProcessResource } from "../../src/ProcessContract";
+import { Polling } from "../../src/Polling";
 import { Resource } from "../../src/Resource";
 import {
   Billing,
   Daily,
   Jobs,
+  KeyRotation,
   Mail,
   Notify,
   RegionEU,
@@ -46,6 +49,12 @@ const serveLayer = Layer.mergeAll(
   serveHttp(RegionEU, cfg, { path: `/rpc/${pathOf(RegionEU.id)}` }),
   serveHttp(Daily, cfg, { path: `/rpc/${pathOf(Daily.id)}` }),
   serveHttp(Weekly, cfg, { path: `/rpc/${pathOf(Weekly.id)}` }),
+  // the wnba key-rotation process (self-runs on a poll; no producer needed)
+  ProcessResource.serveHttp(
+    KeyRotation,
+    { effect: Effect.logInfo("wnba: key-rotation check"), polling: Polling.spaced(Duration.seconds(5)) },
+    { path: `/rpc/${pathOf(KeyRotation.id)}` },
+  ),
 ).pipe(Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: PORT })));
 
 // loopback client transport (the producer reaches the local server over http).

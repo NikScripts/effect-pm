@@ -7,6 +7,7 @@
  */
 import { Duration, Effect, Schema } from "effect";
 import { queueTag } from "../../src/QueueContract";
+import { ProcessResource } from "../../src/ProcessContract";
 import { Group } from "../../src/Group";
 
 const Job = Schema.Struct({ id: Schema.String });
@@ -24,7 +25,11 @@ export class RegionEU extends queueTag<RegionEU>()("@acme/queues/RegionEU", Job)
 export class Daily extends queueTag<Daily>()("@acme/queues/Daily", Job) {}
 export class Weekly extends queueTag<Weekly>()("@acme/queues/Weekly", Job) {}
 
+// a process (the wow "Mini" home server runs a wnba key-rotation detect+fix process)
+export class KeyRotation extends ProcessResource.Tag<KeyRotation>()("@wnba/Mini/KeyRotation") {}
+
 // the group tree — this is the navigable tree, nothing more is needed
+export class Mini extends Group.Tag<Mini>("@wnba/Mini")({ KeyRotation }) {}
 export class Regional extends Group.Tag<Regional>("@acme/queues/Regional")({ RegionUS, RegionEU }) {}
 export class Workers extends Group.Tag<Workers>("@acme/queues/Workers")({ Worker1, Worker2, Worker3, Regional }) {}
 export class Reports extends Group.Tag<Reports>("@acme/queues/Reports")({ Daily, Weekly }) {}
@@ -35,6 +40,7 @@ export class Fleet extends Group.Tag<Fleet>("@acme/queues/Ops")({
   Workers,
   Reports,
   Notify,
+  Mini,
 }) {}
 
 /** Every leaf queue tag (the ones the server hosts / the client connects to). */

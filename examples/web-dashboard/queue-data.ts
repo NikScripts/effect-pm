@@ -11,13 +11,14 @@ import { Effect, Layer, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import { FetchHttpClient } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
-import { Resource } from "../../src/Resource";
+import { Resource, specOf } from "../../src/Resource";
 import { Group } from "../../src/Group";
 import {
   Billing,
   Daily,
   Fleet,
   Jobs,
+  KeyRotation,
   Mail,
   Notify,
   pathOf,
@@ -50,11 +51,21 @@ type AllQueues =
 type QueueSvc = [typeof Mail] extends [Effect.Effect<infer A, infer _E, infer _R>] ? A : never;
 /** A leaf queue tag (yieldable for the fleet's queue service). */
 export type LeafTag = Effect.Effect<QueueSvc, never, AllQueues> & { readonly id: string };
+type ProcessSvc = [typeof KeyRotation] extends [Effect.Effect<infer A, infer _E, infer _R>] ? A : never;
+/** A leaf process tag (yieldable for a process service). */
+export type ProcessTag = Effect.Effect<ProcessSvc, never, KeyRotation> & { readonly id: string };
+
 /** A node in the `Group.Tag` tree (a group). */
 export interface GroupNode {
   readonly id: string;
   readonly members: Record<string, unknown>;
 }
+
+/** Which kind of leaf a tag is, by its contract (a queue enqueues; a process runs). */
+export const kindOf = (member: unknown): "queue" | "process" => {
+  const spec = specOf(member as { readonly [k: symbol]: unknown } as Parameters<typeof specOf>[0]);
+  return "enqueue" in spec || "sizes" in spec ? "queue" : "process";
+};
 
 // remote transport per queue (its own http path; ndjson matches the server default).
 const remote = (id: string) =>
@@ -75,6 +86,7 @@ const appLayer = Layer.mergeAll(
   Resource.client(RegionEU).pipe(Layer.provide(remote(RegionEU.id))),
   Resource.client(Daily).pipe(Layer.provide(remote(Daily.id))),
   Resource.client(Weekly).pipe(Layer.provide(remote(Weekly.id))),
+  Resource.client(KeyRotation).pipe(Layer.provide(remote(KeyRotation.id))),
 );
 
 /** One reactive runtime that reaches every queue (over the wire). */
@@ -151,11 +163,52 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
   return bundle;
 };
 
-/** Walk a `Group.Tag` tree to its leaf queue tags (depth-first). */
-export const leafTags = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<LeafTag> =>
-  Object.values(Group.members(node)).flatMap((m) =>
-    Group.isGroup(m) ? leafTags(m) : [m as LeafTag],
-  );
+type ProcessStatus = ProcessSvc extends { readonly status: Stream.Stream<infer S, infer _E, infer _R> } ? S : never;
+
+/** The atoms + controls one process card needs — derived from the tag. */
+export interface ProcessBundle {
+  readonly status: ValueAtom<ProcessStatus>;
+  readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
+  readonly start: CommandAtom;
+  readonly stop: CommandAtom;
+  readonly runImmediately: CommandAtom;
+}
+const processCache = new Map<string, ProcessBundle>();
+
+/** Build (once per tag) the atom bundle for a process tag. */
+export const processBundle = (tag: ProcessTag): ProcessBundle => {
+  const existing = processCache.get(tag.id);
+  if (existing !== undefined) return existing;
+  const statusStream = Stream.unwrap(Effect.map(tag, (p) => p.status));
+  const logsStream = Stream.unwrap(Effect.map(tag, (p) => p.logs));
+  const bundle: ProcessBundle = {
+    status: runtime.atom(statusStream),
+    logs: runtime.atom(
+      logsStream.pipe(
+        Stream.scan([] as ReadonlyArray<LogLine>, (acc, l) =>
+          [...acc, { id: (logId += 1), t: Date.now(), level: l.level, message: l.message }].slice(-300),
+        ),
+      ),
+    ),
+    start: runtime.fn(() => Effect.flatMap(tag, (p) => p.start)),
+    stop: runtime.fn(() => Effect.flatMap(tag, (p) => p.stop)),
+    runImmediately: runtime.fn(() => Effect.flatMap(tag, (p) => p.runImmediately)),
+  };
+  processCache.set(tag.id, bundle);
+  return bundle;
+};
+
+/** Walk a `Group.Tag` tree to its leaf resource tags (queues + processes), raw. */
+export const leafTags = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<unknown> =>
+  Object.values(Group.members(node)).flatMap((m) => (Group.isGroup(m) ? leafTags(m) : [m]));
+
+/** Only the queue leaves of a tree. */
+export const queueLeaves = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<LeafTag> =>
+  leafTags(node).filter((m) => kindOf(m) === "queue") as ReadonlyArray<LeafTag>;
+
+/** Only the process leaves of a tree. */
+export const processLeaves = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<ProcessTag> =>
+  leafTags(node).filter((m) => kindOf(m) === "process") as ReadonlyArray<ProcessTag>;
 
 /** One row of the fleet table — headline status + metrics, carrying its tag. */
 export interface FleetRow {
@@ -188,7 +241,7 @@ interface FleetEvent {
   readonly s: QueueStatus | undefined;
   readonly m: QueueMetrics | undefined;
 }
-const fleetEvents: ReadonlyArray<Stream.Stream<FleetEvent, never, AllQueues>> = leafTags(Fleet).flatMap((tag) => [
+const fleetEvents: ReadonlyArray<Stream.Stream<FleetEvent, never, AllQueues>> = queueLeaves(Fleet).flatMap((tag) => [
   Stream.unwrap(Effect.map(tag, (q) => q.status)).pipe(Stream.map((s): FleetEvent => ({ tag, s, m: undefined }))),
   Stream.unwrap(Effect.map(tag, (q) => q.metrics)).pipe(Stream.map((m): FleetEvent => ({ tag, s: undefined, m }))),
 ]);

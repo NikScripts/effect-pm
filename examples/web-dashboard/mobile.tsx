@@ -1,15 +1,23 @@
 /**
  * @module examples/web-dashboard/mobile
  *
- * Touch-first drill-down: a grid of queue + subgroup widgets; tap a group to open it
- * as its own page, tap a queue for its detail (stats + throughput chart + controls +
- * live logs). Tag-driven — the tree is the `Fleet` group tag.
+ * Touch-first drill-down: a grid of queue / process / subgroup widgets; tap a group to
+ * open it, tap a resource for its detail. Tag-driven — the tree is the `Fleet` group tag;
+ * each leaf is dispatched to its own widget by `kindOf`.
  */
 
 import * as React from "react";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Fleet } from "./fleet";
-import { type GroupNode, type LeafTag, leafTags, queueBundle } from "./queue-data";
+import {
+  type GroupNode,
+  type LeafTag,
+  type ProcessTag,
+  kindOf,
+  leafTags,
+  processBundle,
+  queueBundle,
+} from "./queue-data";
 import { useAtomValue } from "../queue-widget/atom-react";
 import { Boundary } from "./components/ui/boundary";
 import { Button } from "./components/ui/button";
@@ -17,6 +25,8 @@ import {
   Cell,
   LogStream,
   MetricChart,
+  ProcessControls,
+  ProcessStats,
   QueueControls,
   QueueStats,
   StatusBadge,
@@ -49,12 +59,34 @@ const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void
   );
 };
 
+const ProcessDetail = (props: { readonly tag: ProcessTag; readonly onBack: () => void }): React.ReactElement => {
+  const bundle = processBundle(props.tag);
+  return (
+    <div className="flex h-screen flex-col gap-3 p-3">
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
+        <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.id)}</strong>
+      </div>
+      <Boundary label="stats"><ProcessStats bundle={bundle} /></Boundary>
+      <Boundary label="controls"><ProcessControls bundle={bundle} /></Boundary>
+      <div className="text-xs text-muted-foreground">LOGS <span className="text-[#22c55e]">live</span></div>
+      <Boundary label="logs">
+        <LogStream bundle={bundle} className="min-h-0 flex-1 rounded-md border bg-card py-1" />
+      </Boundary>
+    </div>
+  );
+};
+
 export const MobileDashboard = (): React.ReactElement => {
   const [path, setPath] = React.useState<ReadonlyArray<GroupNode>>([Fleet]);
-  const [selected, setSelected] = React.useState<LeafTag | null>(null);
+  const [selected, setSelected] = React.useState<LeafTag | ProcessTag | null>(null);
 
   if (selected !== null) {
-    return <QueueDetail tag={selected} onBack={() => setSelected(null)} />;
+    return kindOf(selected) === "process" ? (
+      <ProcessDetail tag={selected as ProcessTag} onBack={() => setSelected(null)} />
+    ) : (
+      <QueueDetail tag={selected as LeafTag} onBack={() => setSelected(null)} />
+    );
   }
 
   const group = path[path.length - 1] ?? Fleet;
@@ -68,16 +100,16 @@ export const MobileDashboard = (): React.ReactElement => {
         ) : null}
         <h1 className="m-0 flex-1 text-lg font-semibold">
           ⬢ {path.map((g) => displayName(g.id)).join(" / ")}{" "}
-          <span className="text-sm font-normal text-muted-foreground">· {leafTags(group).length} queues</span>
+          <span className="text-sm font-normal text-muted-foreground">· {leafTags(group).length} resources</span>
         </h1>
       </div>
-      <div className="mb-2 text-sm text-muted-foreground">tap a queue for live logs · tap a group to open it</div>
+      <div className="mb-2 text-sm text-muted-foreground">tap a resource for its detail · tap a group to open it</div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
         {Object.entries(group.members).map(([name, member]) => (
           <Cell
             key={name}
             member={member}
-            onOpenQueue={(tag) => setSelected(() => tag)}
+            onOpenLeaf={(tag) => setSelected(() => tag)}
             onOpenGroup={(g) => setPath((p) => [...p, g])}
           />
         ))}

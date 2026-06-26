@@ -15,9 +15,14 @@ import {
   type LeafTag,
   type LogLine,
   type MetricPoint,
+  type ProcessBundle,
+  type ProcessTag,
   type QueueBundle,
+  kindOf,
   leafTags,
+  processBundle,
   queueBundle,
+  queueLeaves,
 } from "./queue-data";
 import { useAtomSet, useAtomValue } from "../queue-widget/atom-react";
 import { Badge } from "./components/ui/badge";
@@ -127,7 +132,7 @@ export const GroupCard = (props: {
   readonly onOpen: (g: GroupNode) => void;
 }): React.ReactElement => {
   const members = Object.values(Group.members(props.node));
-  const leaves = members.filter((m): m is LeafTag => !Group.isGroup(m)).slice(0, 4);
+  const leaves = queueLeaves(props.node).slice(0, 4);
   const subs = members.filter((m): m is GroupNode => Group.isGroup(m));
   return (
     <button
@@ -137,7 +142,7 @@ export const GroupCard = (props: {
     >
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate text-[#06b6d4]">▸ {displayName(props.node.id)}</strong>
-        <span className="text-xs text-muted-foreground">{leafTags(props.node).length} queues</span>
+        <span className="text-xs text-muted-foreground">{leafTags(props.node).length} resources</span>
       </div>
       <div className="flex flex-col gap-1">
         {leaves.map((tag) => <MemberRow key={tag.id} tag={tag} />)}
@@ -152,13 +157,17 @@ export const GroupCard = (props: {
 
 export const Cell = (props: {
   readonly member: unknown;
-  readonly onOpenQueue: (tag: LeafTag) => void;
+  readonly onOpenLeaf: (tag: LeafTag | ProcessTag) => void;
   readonly onOpenGroup: (g: GroupNode) => void;
 }): React.ReactElement => {
   if (Group.isGroup(props.member)) {
     return <GroupCard node={props.member} onOpen={props.onOpenGroup} />;
   }
-  return <QueueCard tag={props.member as LeafTag} onOpen={props.onOpenQueue} />;
+  return kindOf(props.member) === "process" ? (
+    <ProcessCard tag={props.member as ProcessTag} onOpen={props.onOpenLeaf} />
+  ) : (
+    <QueueCard tag={props.member as LeafTag} onOpen={props.onOpenLeaf} />
+  );
 };
 
 export const Stat = (props: { readonly label: string; readonly value: string }): React.ReactElement => (
@@ -260,8 +269,11 @@ export const QueueControls = (props: { readonly bundle: QueueBundle }): React.Re
   );
 };
 
-/** The live log stream (auto-scrolls to newest). */
-export const LogStream = (props: { readonly bundle: QueueBundle; readonly className?: string }): React.ReactElement => {
+/** The live log stream (auto-scrolls to newest). Works for any bundle with `logs`. */
+export const LogStream = (props: {
+  readonly bundle: { readonly logs: QueueBundle["logs"] };
+  readonly className?: string;
+}): React.ReactElement => {
   const r = useAtomValue(props.bundle.logs);
   const logs: ReadonlyArray<LogLine> = AsyncResult.isSuccess(r) ? r.value : [];
   const ref = React.useRef<HTMLDivElement>(null);
@@ -280,6 +292,63 @@ export const LogStream = (props: { readonly bundle: QueueBundle; readonly classN
           <span className="break-all">{l.message}</span>
         </div>
       ))}
+    </div>
+  );
+};
+
+// ── process widgets ──────────────────────────────────────────────────────────
+
+/** A process as a grid card — supervision state + active instances. */
+export const ProcessCard = (props: {
+  readonly tag: ProcessTag;
+  readonly onOpen: (t: ProcessTag) => void;
+}): React.ReactElement => {
+  const r = useAtomValue(processBundle(props.tag).status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  return (
+    <button
+      type="button"
+      onClick={() => props.onOpen(props.tag)}
+      className="rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring"
+    >
+      <div className="mb-2 flex items-center gap-2">
+        <span>⚙</span>
+        <strong className="flex-1 truncate">{displayName(props.tag.id)}</strong>
+        <Badge color={s?.supervising === true ? "#22c55e" : "#94a3b8"}>
+          {s?.supervising === true ? "running" : "stopped"}
+        </Badge>
+      </div>
+      <div className="flex justify-between text-xs text-muted-foreground">
+        <span>{s?.armed === true ? "armed" : "disarmed"}</span>
+        <span><strong className="text-foreground">{s?.activeInstances ?? 0}</strong> active</span>
+      </div>
+    </button>
+  );
+};
+
+/** Stat cards from a process's live status. */
+export const ProcessStats = (props: { readonly bundle: ProcessBundle }): React.ReactElement => {
+  const r = useAtomValue(props.bundle.status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Stat label="supervising" value={s?.supervising === true ? "yes" : "no"} />
+      <Stat label="armed" value={s?.armed === true ? "yes" : "no"} />
+      <Stat label="active" value={String(s?.activeInstances ?? 0)} />
+    </div>
+  );
+};
+
+/** Process controls — start / stop / run-now. */
+export const ProcessControls = (props: { readonly bundle: ProcessBundle }): React.ReactElement => {
+  const start = useAtomSet(props.bundle.start);
+  const stop = useAtomSet(props.bundle.stop);
+  const run = useAtomSet(props.bundle.runImmediately);
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button variant="outline" size="sm" onClick={() => start()}>start</Button>
+      <Button variant="outline" size="sm" onClick={() => stop()}>stop</Button>
+      <Button variant="default" size="sm" onClick={() => run()}>run now</Button>
     </div>
   );
 };

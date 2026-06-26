@@ -26,6 +26,7 @@ import {
   blankRow,
   fleetAtom,
   leafTags,
+  queueLeaves,
   queueBundle,
 } from "./queue-data";
 import { useAtomValue } from "../queue-widget/atom-react";
@@ -99,7 +100,7 @@ const FleetTable = (props: {
   const fleetR = useAtomValue(fleetAtom);
   const fleet = AsyncResult.isSuccess(fleetR) ? fleetR.value : {};
   const [sorting, setSorting] = React.useState<SortingState>([]);
-  const leaves = leafTags(props.group);
+  const leaves = queueLeaves(props.group);
   const data = React.useMemo(
     () => leaves.map((tag) => fleet[tag.id] ?? blankRow(tag)),
     [fleet, leaves],
