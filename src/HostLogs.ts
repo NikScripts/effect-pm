@@ -30,13 +30,19 @@
  *
  * @module HostLogs
  */
-import { Effect, Layer, Logger, Stream } from "effect";
+import { Effect, Layer, Logger, Option, Schema, Stream } from "effect";
 import {
   ProcessManagerLogRelay,
   captureLogger,
   relayOnlyLayer,
 } from "./Logs";
 import type { ProcessManagerLogEntry } from "./LogEntry";
+import { ProcessManagerLogEntrySchema } from "./LogEntry";
+import { HistoryStore } from "./HistoryStore";
+import type { HistoryReadOptions } from "./HistoryStore";
+
+/** The HistoryStore stream id under which runtime-wide host logs are persisted. */
+const HOST_LOGS_STREAM_ID = "hostlogs";
 
 /**
  * A captured host log line — the element of {@link stream}. (Alias of the
@@ -87,6 +93,56 @@ export const stream: Stream.Stream<HostLogEntry, never, ProcessManagerLogRelay> 
   );
 
 /**
+ * Persist runtime-wide logs: forks a fiber that appends every live log line to a
+ * {@link HistoryStore} (keyed `"hostlogs"`), so {@link history} can read them back beyond the
+ * relay's in-memory tail. Provide it alongside {@link layer} **and** a `HistoryStore` layer; the
+ * forked tap lives for the layer's scope. Opt-in — without it, nothing is persisted.
+ *
+ * @public
+ */
+export const persistLayer = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const relay = yield* ProcessManagerLogRelay;
+    const store = yield* HistoryStore;
+    yield* Effect.forkScoped(
+      Stream.runForEach(relay.stream, (entry) =>
+        Schema.encodeEffect(ProcessManagerLogEntrySchema)(entry).pipe(
+          Effect.flatMap((encoded) => store.append(HOST_LOGS_STREAM_ID, encoded)),
+          Effect.orDie,
+        ),
+      ),
+    );
+  }),
+);
+
+/**
+ * Read back persisted host logs (newest `limit` within `since`/`until`). Optional via
+ * `serviceOption(HistoryStore)` — returns `[]` when no `HistoryStore` is provided.
+ *
+ * @public
+ */
+export const history = (
+  options?: HistoryReadOptions,
+): Effect.Effect<ReadonlyArray<HostLogEntry>> =>
+  Effect.serviceOption(HistoryStore).pipe(
+    Effect.flatMap(
+      Option.match({
+        onNone: () => Effect.succeed<ReadonlyArray<HostLogEntry>>([]),
+        onSome: (store) =>
+          store.read(HOST_LOGS_STREAM_ID, options).pipe(
+            Effect.flatMap((rows) =>
+              Effect.forEach(rows, (row) =>
+                Schema.decodeUnknownEffect(ProcessManagerLogEntrySchema)(row).pipe(
+                  Effect.orDie,
+                ),
+              ),
+            ),
+          ),
+      }),
+    ),
+  );
+
+/**
  * Host logs — runtime-wide log capture + stream (everything, including untagged
  * resources). See the {@link HostLogs | module docs}.
  *
@@ -96,6 +152,8 @@ export const HostLogs = {
   layer,
   stream,
   snapshot,
+  persistLayer,
+  history,
   /** The backing relay service (provided by {@link layer}). */
   Relay: ProcessManagerLogRelay,
 } as const;
