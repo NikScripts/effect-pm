@@ -27,7 +27,26 @@ Keep the two **strict** tiers, diversify the middle into many **weighted** group
 
 (Weighted-random and standalone fair-RR were considered and dropped — DRR subsumes the useful cases.)
 
-## Engine change — a custom STM structure (replaces the three `Queue.bounded`)
+## Packaging — a separate resource type, not a change to every queue
+
+Ship this as its own resource type (`CustomQueueResource`, name TBD), **not** as a feature added to
+the standard `QueueResource`. This is the key decision that de-risks the whole thing:
+
+- The existing `QueueResource` and everything on it (wow, the dashboard) are **untouched** — no wire-
+  schema churn under live consumers. The new type carries its own (per-group) schema from day one.
+- The default queue stays lean + tree-shakeable: queues that don't weight never pull the STM
+  scheduler code (mirrors how the `QueueResource` namespace already splits the light `Tag` from the
+  engine).
+- No back-compat gymnastics (no "additive sizes" hack, no preserving `{high,normal,low}` alongside
+  groups).
+
+**Share the engine, swap only the lane store.** Factor a small internal `LaneStore` interface
+(`offer` / `take` / `sizes` / `drain`); the default wires the 3-FIFO impl, `CustomQueueResource`
+wires the weighted-STM impl. Worker pool, retries, metrics/logs/history, persistence plumbing, and
+lifecycle are shared (written once); only the data structure + scheduler differ — and only the new
+type imports the STM impl.
+
+## Engine change — a custom STM structure (the weighted `LaneStore`)
 
 Today: `highQueue` / `normalQueue` / `lowQueue` are bounded Effect `Queue`s, pulled strictly via
 `queueForPriority`. Replace with **one STM structure**:
@@ -43,9 +62,10 @@ Scope: a self-contained STM scheduler module + rewiring the worker take path in 
 
 ## Ripple effects (the real cost is downstream)
 
-1. **Wire schema + dashboard (biggest):** `sizes` / `status` / `metrics` go from `{high,normal,low}`
-   to per-group; `add`'s priority param gains `number | name`. Ripples into `QueueContract` schemas
-   and the **UI agent's** dashboard — cross-agent coordination.
+1. **Wire schema + dashboard:** because it's a **separate type**, the existing `QueueResource` and
+   dashboard are untouched — there's no migration of the current schema. The new type defines its own
+   per-group `sizes` / `status` / `metrics` and `add(item, number | name)`; the UI agent adds a
+   widget for it **when ready**, on its own timeline (additive, not a forced change).
 2. **Persistence:** `DurableQueueStore.priority_rank` is already numeric, so storing arbitrary
    numbers is small. Persisting **fairness state** (DRR deficits) across restart is the only extra —
    **skip in v1** (deficits re-converge in seconds).
