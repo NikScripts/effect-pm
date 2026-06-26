@@ -42,6 +42,12 @@ const useRegistry = (): AtomRegistry.AtomRegistry => {
 /** Subscribe to an atom; re-renders on change. The registry ref-counts it. */
 export const useAtomValue = <A,>(atom: Atom.Atom<A>): A => {
   const registry = useRegistry();
+  // Hold the atom MOUNTED for this component's lifetime so a cold stream atom (status /
+  // metrics / logs) starts — and forces its runtime layer to build — on render, not only
+  // once useSyncExternalStore's subscribe effect happens to run. Without this, opening a
+  // detail can leave the graph/logs blank until another mount (e.g. a control button)
+  // nudges the runtime. Mirrors useAtomSet.
+  React.useEffect(() => registry.mount(atom), [registry, atom]);
   const subscribe = React.useCallback(
     (onChange: () => void) => registry.subscribe(atom, onChange),
     [registry, atom],

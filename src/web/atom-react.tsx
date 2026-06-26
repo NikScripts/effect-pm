@@ -44,6 +44,11 @@ const useRegistry = (): AtomRegistry.AtomRegistry => {
  */
 export const useAtomValue = <A,>(atom: Atom.Atom<A>): A => {
   const registry = useRegistry();
+  // Hold the atom MOUNTED for this component's lifetime so a cold stream atom (status /
+  // metrics / logs) starts — and forces its runtime layer to build — on render, not only
+  // once useSyncExternalStore's subscribe effect happens to run. Without this a panel can
+  // stay blank until another mount (e.g. a control button) nudges the runtime.
+  React.useEffect(() => registry.mount(atom), [registry, atom]);
   const subscribe = React.useCallback(
     (onChange: () => void) => registry.subscribe(atom, onChange),
     [registry, atom],
