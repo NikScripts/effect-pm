@@ -20,7 +20,7 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { serveHttp } from "../../src/QueueContract";
-import { ProcessResource } from "../../src/ProcessContract";
+import { serveHttp as serveProcess } from "../../src/ProcessContract";
 import { Polling } from "../../src/Polling";
 import { Resource } from "../../src/Resource";
 import {
@@ -88,7 +88,7 @@ const serveLayer = Layer.mergeAll(
   serveHttp(Daily, cfg, { path: `/rpc/${pathOf(Daily.id)}` }),
   serveHttp(Weekly, cfg, { path: `/rpc/${pathOf(Weekly.id)}` }),
   // the wnba key-rotation process (self-runs on a poll; no producer needed)
-  ProcessResource.serveHttp(
+  serveProcess(
     KeyRotation,
     { effect: Effect.logInfo("wnba: key-rotation check"), polling: Polling.spaced(Duration.seconds(5)) },
     { path: `/rpc/${pathOf(KeyRotation.id)}` },
