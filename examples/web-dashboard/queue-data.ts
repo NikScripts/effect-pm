@@ -115,35 +115,30 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
   const metricsStream = Stream.unwrap(Effect.map(tag, (q) => q.metrics));
   const logsStream = Stream.unwrap(Effect.map(tag, (q) => q.logs));
 
-  // the accumulators are kept alive so opening another queue (or the grid) doesn't tear
-  // down the subscription and reset the chart/log history — they keep collecting.
+  // plain atoms: only the currently-mounted detail subscribes, so only the queue you're
+  // viewing runs its streams/accumulators. (History resets when you leave — a persistent
+  // backfill is a later concern; right now the priority is no leak, one graph at a time.)
   const bundle: QueueBundle = {
     status: runtime.atom(statusStream),
     metrics: runtime.atom(metricsStream),
-    history: Atom.keepAlive(
-      runtime.atom(
-        metricsStream.pipe(
-          Stream.scan([] as ReadonlyArray<MetricPoint>, (acc, m) =>
-            [...acc, { t: Date.now(), throughput: m.throughputPerSec, latency: m.avgTotalMillis ?? 0 }].slice(-HISTORY),
-          ),
+    history: runtime.atom(
+      metricsStream.pipe(
+        Stream.scan([] as ReadonlyArray<MetricPoint>, (acc, m) =>
+          [...acc, { t: Date.now(), throughput: m.throughputPerSec, latency: m.avgTotalMillis ?? 0 }].slice(-HISTORY),
         ),
       ),
     ),
-    trend: Atom.keepAlive(
-      runtime.atom(
-        statusStream.pipe(
-          Stream.scan([] as ReadonlyArray<number>, (acc, s) =>
-            [...acc, s.sizes.high + s.sizes.normal + s.sizes.low].slice(-TREND),
-          ),
+    trend: runtime.atom(
+      statusStream.pipe(
+        Stream.scan([] as ReadonlyArray<number>, (acc, s) =>
+          [...acc, s.sizes.high + s.sizes.normal + s.sizes.low].slice(-TREND),
         ),
       ),
     ),
-    logs: Atom.keepAlive(
-      runtime.atom(
-        logsStream.pipe(
-          Stream.scan([] as ReadonlyArray<LogLine>, (acc, l) =>
-            [...acc, { id: (logId += 1), t: Date.now(), level: l.level, message: l.message }].slice(-300),
-          ),
+    logs: runtime.atom(
+      logsStream.pipe(
+        Stream.scan([] as ReadonlyArray<LogLine>, (acc, l) =>
+          [...acc, { id: (logId += 1), t: Date.now(), level: l.level, message: l.message }].slice(-300),
         ),
       ),
     ),
