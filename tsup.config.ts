@@ -43,6 +43,7 @@ export default defineConfig([
       ControlService: "src/ControlService.ts",
       Logs: "src/Logs.ts",
       HostLogs: "src/HostLogs.ts",
+      HistoryStore: "src/HistoryStore.ts",
       Group: "src/Group.ts",
       ProcessContract: "src/ProcessContract.ts",
       ProcessScheduleContract: "src/ProcessScheduleContract.ts",

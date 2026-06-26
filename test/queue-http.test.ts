@@ -40,6 +40,8 @@ const stub = {
   }),
   metrics: Stream.empty,
   logs: Stream.empty,
+  metricsHistory: () => Effect.succeed([]),
+  logHistory: () => Effect.succeed([]),
   add: (_: NumberItem | ReadonlyArray<NumberItem>) => Effect.void,
   prioritize: (_: NumberItem | ReadonlyArray<NumberItem>) => Effect.void,
   defer: (_: NumberItem | ReadonlyArray<NumberItem>) => Effect.void,

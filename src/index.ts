@@ -444,6 +444,8 @@ export {
 } from "./Logs";
 export { HostLogs } from "./HostLogs";
 export type { HostLogEntry } from "./HostLogs";
+export { HistoryStore } from "./HistoryStore";
+export type { HistoryReadOptions, HistoryStoreShape } from "./HistoryStore";
 export { Group } from "./Group";
 export {
   ProcessGroupLogContext,

@@ -68,6 +68,8 @@ const makeImpl = () => {
     })),
     metrics: Stream.empty,
     logs: Stream.empty,
+    metricsHistory: () => Effect.succeed([]),
+    logHistory: () => Effect.succeed([]),
   };
 };
 
@@ -119,8 +121,10 @@ it("exposes the expected control verbs", () => {
       "clear",
       "completed",
       "isEmpty",
+      "logHistory",
       "logs",
       "metrics",
+      "metricsHistory",
       "pause",
       "resume",
       "shutdown",

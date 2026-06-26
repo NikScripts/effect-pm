@@ -136,6 +136,10 @@
       "types": "./dist/HostLogs.d.ts",
       "default": "./dist/HostLogs.js"
     },
+    "./HistoryStore": {
+      "types": "./dist/HistoryStore.d.ts",
+      "default": "./dist/HistoryStore.js"
+    },
     "./Group": {
       "types": "./dist/Group.d.ts",
       "default": "./dist/Group.js"
