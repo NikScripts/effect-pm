@@ -9,7 +9,6 @@ shipped behavior lives in the regular docs (`README.md`, `PROCESS-API.md`, `STOR
 - **Guaranteed barrel-namespace tree-shaking** — make `import { QueueResource } from "@nikscripts/effect-pm"` + `QueueResource.Tag` tree-shake the engine in *every* bundler (subpath imports already do). Detailed plan: [18-unbundled-build-treeshaking.md](./18-unbundled-build-treeshaking.md).
 - **Resource Host health/status** — a health/status surface on `Resource.Host` / served instances (Host now exists, so this is buildable).
 - **Resource-RPC auth** — a first-class authentication/authorization story for served resources (replaces the dropped `CommandAuth`; deployments use an edge gateway / Cloudflare Zero Trust short-term).
-- **`ProcessManagerLog*` → neutral rename** — the kept log infra (`ProcessManagerLogEntry` / `Relay` / `AnnotationKeys`) carries a vestigial name; rename to `Log*` / `HostLog*` (no behavior change).
 
 ## Orchestration
 

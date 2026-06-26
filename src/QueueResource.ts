@@ -101,12 +101,12 @@ import {
 } from "effect/unstable/persistence/RateLimiter";
 import type { RateLimiter as EffectRateLimiter } from "effect/unstable/persistence/RateLimiter";
 import {
-  ProcessManagerLogAnnotationKeys,
+  LogAnnotationKeys,
   withQueueLogAnnotations,
 } from "./LogContext";
 import {
-  processManagerLogEntryFromLoggerOptions,
-  type ProcessManagerLogEntry,
+  logEntryFromLoggerOptions,
+  type LogEntry,
 } from "./LogEntry";
 import {
   QueueResourceStore,
@@ -390,14 +390,14 @@ export interface QueueHandleApi<
   readonly metrics: Stream.Stream<QueueMetrics>;
 
   /**
-   * Live **log** stream — structured {@link ProcessManagerLogEntry}s captured from the queue
+   * Live **log** stream — structured {@link LogEntry}s captured from the queue
    * engine *and* your worker `effect`, each retaining its level, message, cause, annotations
    * (`queueId` / worker / `entryId`) and spans. Empty unless {@link QueueResourceConfigBase.captureLogs}
    * is enabled. Backed by a sliding buffer (a slow subscriber drops oldest lines; never
    * backpressures the workers) — the fourth observability stream alongside `events` / `status` /
    * `metrics`.
    */
-  readonly logs: Stream.Stream<ProcessManagerLogEntry>;
+  readonly logs: Stream.Stream<LogEntry>;
 
   /**
    * Fork the worker pool. Idempotent — safe to call multiple times.
@@ -1190,7 +1190,7 @@ function normalizeEnqueueInput<A>(input: A | ReadonlyArray<A>): ReadonlyArray<A>
 
 /**
  * A per-queue capture {@link Logger.Logger} for the {@link QueueHandleApi.logs} stream. Mirrors
- * the process-manager capture logger ({@link processManagerLogEntryFromLoggerOptions} preserves
+ * the process-manager capture logger ({@link logEntryFromLoggerOptions} preserves
  * the level, message, cause, annotations and spans verbatim), but hands each entry to `publish`
  * (which fans it to **this** queue's sliding hub + replay ring) instead of a relay, filters at
  * the source by `minLevel`, and (defensively) only captures lines annotated with this `queueId` —
@@ -1201,13 +1201,13 @@ function normalizeEnqueueInput<A>(input: A | ReadonlyArray<A>): ReadonlyArray<A>
 const makeQueueCaptureLogger = (
   queueId: string,
   minLevel: LogLevel.LogLevel,
-  publish: (entry: ProcessManagerLogEntry) => Effect.Effect<void>,
+  publish: (entry: LogEntry) => Effect.Effect<void>,
 ): Logger.Logger<unknown, void> =>
   Logger.make((options) => {
     if (!LogLevel.isGreaterThanOrEqualTo(options.logLevel, minLevel)) return;
     const annotations = options.fiber.getRef(CurrentLogAnnotations);
-    if (annotations[ProcessManagerLogAnnotationKeys.queueId] !== queueId) return;
-    const entry = processManagerLogEntryFromLoggerOptions({
+    if (annotations[LogAnnotationKeys.queueId] !== queueId) return;
+    const entry = logEntryFromLoggerOptions({
       message: options.message,
       logLevel: options.logLevel,
       cause: options.cause,
@@ -1644,14 +1644,14 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       typeof captureLogsConfig === "object" && captureLogsConfig !== null
         ? (captureLogsConfig.level ?? "All")
         : "All";
-    const logsHub = yield* PubSub.sliding<ProcessManagerLogEntry>(1024);
+    const logsHub = yield* PubSub.sliding<LogEntry>(1024);
     // A small bounded replay ring so a UI attaching to an already-running queue gets the recent
     // tail before live lines (the log-tail UX), instead of only future ones. Bounded (still
     // lossy beyond `logReplayCapacity`) — not full history. `publishLog` fans each captured entry
     // to both the live hub and the ring.
     const logReplayCapacity = 100;
-    const logReplay = yield* Ref.make<ReadonlyArray<ProcessManagerLogEntry>>([]);
-    const publishLog = (entry: ProcessManagerLogEntry): Effect.Effect<void> =>
+    const logReplay = yield* Ref.make<ReadonlyArray<LogEntry>>([]);
+    const publishLog = (entry: LogEntry): Effect.Effect<void> =>
       Effect.andThen(PubSub.publish(logsHub, entry), () =>
         Ref.update(logReplay, (tail) => {
           const next = [...tail, entry];

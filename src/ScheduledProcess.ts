@@ -61,12 +61,12 @@ import type {
 import { ProcessSchedule } from "./ProcessSchedule";
 import type { ProcessScheduleEntry } from "./ProcessSchedule";
 import {
-  ProcessManagerLogEntrySchema,
-  processManagerLogEntryFromLoggerOptions,
+  LogEntrySchema,
+  logEntryFromLoggerOptions,
 } from "./LogEntry";
-import type { ProcessManagerLogEntry } from "./LogEntry";
+import type { LogEntry } from "./LogEntry";
 import {
-  ProcessManagerLogAnnotationKeys,
+  LogAnnotationKeys,
   withProcessLogAnnotations,
 } from "./LogContext";
 import { HistoryStore } from "./HistoryStore";
@@ -76,20 +76,20 @@ import type { ConfigPatch } from "./ResourceConfigure";
 /**
  * Per-process capture logger — mirrors the queue's: filters to this process's logs (by the
  * `processId` annotation the supervisor already stamps) at or above `minLevel`, converts to a
- * {@link ProcessManagerLogEntry}, and publishes off-fiber.
+ * {@link LogEntry}, and publishes off-fiber.
  */
 const makeProcessCaptureLogger = (
   processId: string,
   minLevel: LogLevel.LogLevel,
-  publish: (entry: ProcessManagerLogEntry) => Effect.Effect<void>,
+  publish: (entry: LogEntry) => Effect.Effect<void>,
 ): Logger.Logger<unknown, void> =>
   Logger.make((options) => {
     if (!LogLevel.isGreaterThanOrEqualTo(options.logLevel, minLevel)) return;
     const annotations = options.fiber.getRef(CurrentLogAnnotations);
-    if (annotations[ProcessManagerLogAnnotationKeys.processId] !== processId) {
+    if (annotations[LogAnnotationKeys.processId] !== processId) {
       return;
     }
-    const entry = processManagerLogEntryFromLoggerOptions({
+    const entry = logEntryFromLoggerOptions({
       message: options.message,
       logLevel: options.logLevel,
       cause: options.cause,
@@ -104,13 +104,13 @@ const makeProcessCaptureLogger = (
 
 /**
  * A captured log line on the wire — the element of a process's `logs` stream. Reuses the
- * package's structured log schema ({@link ProcessManagerLogEntrySchema}: `date`, `level`,
+ * package's structured log schema ({@link LogEntrySchema}: `date`, `level`,
  * `message`, `cause?`, `annotations`, `spans`), so every datapoint and the level are preserved
  * across RPC. (Re-exported under a process-neutral name.)
  *
  * @public
  */
-export const processLogEntry = ProcessManagerLogEntrySchema;
+export const processLogEntry = LogEntrySchema;
 
 /**
  * One scheduled run window on the wire — the wire form of the engine's `ProcessScheduleEntry`.
@@ -404,10 +404,10 @@ const buildProcessImpl = <Self, E, R>(
       typeof captureLogsConfig === "object" && captureLogsConfig !== null
         ? (captureLogsConfig.level ?? "All")
         : "All";
-    const logsHub = yield* PubSub.sliding<ProcessManagerLogEntry>(1024);
+    const logsHub = yield* PubSub.sliding<LogEntry>(1024);
     const logReplayCapacity = 256;
-    const logReplay = yield* Ref.make<ReadonlyArray<ProcessManagerLogEntry>>([]);
-    const publishLog = (entry: ProcessManagerLogEntry): Effect.Effect<void> =>
+    const logReplay = yield* Ref.make<ReadonlyArray<LogEntry>>([]);
+    const publishLog = (entry: LogEntry): Effect.Effect<void> =>
       Effect.andThen(PubSub.publish(logsHub, entry), () =>
         Ref.update(logReplay, (tail) => {
           const next = [...tail, entry];

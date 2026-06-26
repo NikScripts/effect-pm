@@ -6,8 +6,8 @@
  */
 
 import { Effect, Option } from "effect";
-import type { ProcessManagerLogEntry } from "../../LogEntry";
-import { ProcessManagerLogAnnotationKeys } from "../../LogContext";
+import type { LogEntry } from "../../LogEntry";
+import { LogAnnotationKeys } from "../../LogContext";
 import {
   normalizeProcessManagerTarget,
   resolveProcessManagerTarget,
@@ -19,14 +19,14 @@ import {
  *
  * @internal
  */
-export type ProcessManagerLogScope =
+export type LogScope =
   | { readonly _tag: "all" }
   | { readonly _tag: "group"; readonly groupId: string }
   | { readonly _tag: "process"; readonly groupId: string; readonly processId: string }
   | { readonly _tag: "queue"; readonly groupId: string; readonly queueId: string };
 
 /** @internal */
-export const logScopeGroupId = (scope: ProcessManagerLogScope): string | undefined =>
+export const logScopeGroupId = (scope: LogScope): string | undefined =>
   scope._tag === "all" ? undefined : scope.groupId;
 
 const annotationValue = (
@@ -36,13 +36,13 @@ const annotationValue = (
 
 /** @internal */
 export const logEntryMatchesScope = (
-  entry: ProcessManagerLogEntry,
-  scope: ProcessManagerLogScope,
+  entry: LogEntry,
+  scope: LogScope,
 ): boolean => {
   if (scope._tag === "all") {
     return true;
   }
-  const group = annotationValue(entry.annotations, ProcessManagerLogAnnotationKeys.groupId);
+  const group = annotationValue(entry.annotations, LogAnnotationKeys.groupId);
   if (group !== undefined && group !== scope.groupId) {
     return false;
   }
@@ -51,12 +51,12 @@ export const logEntryMatchesScope = (
   }
   if (scope._tag === "process") {
     return (
-      annotationValue(entry.annotations, ProcessManagerLogAnnotationKeys.processId) ===
+      annotationValue(entry.annotations, LogAnnotationKeys.processId) ===
       scope.processId
     );
   }
   return (
-    annotationValue(entry.annotations, ProcessManagerLogAnnotationKeys.queueId) === scope.queueId
+    annotationValue(entry.annotations, LogAnnotationKeys.queueId) === scope.queueId
   );
 };
 
@@ -87,7 +87,7 @@ export const resolveLogScope = <G extends GroupCatalogEntry>(
   input: Option.Option<string>,
   candidates: ReadonlyArray<ProcessManagerTargetCandidate>,
 ): Effect.Effect<
-  ProcessManagerLogScope,
+  LogScope,
   { readonly reason: string }
 > =>
   Option.match(input, {

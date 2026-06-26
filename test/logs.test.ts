@@ -4,8 +4,8 @@ import * as NodePath from "@effect/platform-node/NodePath";
 import { Effect, FileSystem, Layer, Path } from "effect";
 import { LogStore } from "../src/store/log";
 import { layerProcessStore } from "../src/storage/sqlite/index";
-import { ProcessManagerLogAnnotationKeys } from "../src/LogContext";
-import type { ProcessManagerLogEntry } from "../src/LogEntry";
+import { LogAnnotationKeys } from "../src/LogContext";
+import type { LogEntry } from "../src/LogEntry";
 
 const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
@@ -19,13 +19,13 @@ describe("LogStore", () => {
       yield* fs.makeDirectory(path.dirname(sqliteFilename), { recursive: true });
       const storeLayer = layerProcessStore({ filename: sqliteFilename });
 
-      const entry: ProcessManagerLogEntry = {
+      const entry: LogEntry = {
         date: "2026-05-22T20:00:00.000Z",
         level: "Info",
         message: "sync tick",
         annotations: {
-          [ProcessManagerLogAnnotationKeys.groupId]: "workshop-group",
-          [ProcessManagerLogAnnotationKeys.processId]: "billing/sync",
+          [LogAnnotationKeys.groupId]: "workshop-group",
+          [LogAnnotationKeys.processId]: "billing/sync",
         },
         spans: [],
       };
@@ -46,7 +46,7 @@ describe("LogStore", () => {
       }).pipe(Effect.provide(storeLayer), Effect.scoped);
 
       assert.strictEqual(loaded.length, 1);
-      assert.strictEqual(loaded[0]?.annotations[ProcessManagerLogAnnotationKeys.processId], "billing/sync");
+      assert.strictEqual(loaded[0]?.annotations[LogAnnotationKeys.processId], "billing/sync");
 
       yield* Effect.gen(function* () {
         const log = yield* LogStore;

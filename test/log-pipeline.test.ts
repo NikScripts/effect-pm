@@ -2,10 +2,10 @@ import { assert, describe, it } from "@effect/vitest";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Duration, Effect, FileSystem, Layer, Path } from "effect";
-import { ProcessManagerLogRelay, relayWithCaptureLoggerLayer } from "../src/Logs";
+import { LogRelay, relayWithCaptureLoggerLayer } from "../src/Logs";
 import {
   ProcessGroupLogContext,
-  ProcessManagerLogAnnotationKeys,
+  LogAnnotationKeys,
 } from "../src/LogContext";
 import { LogStore } from "../src/store/log";
 import { layerProcessStore } from "../src/storage/sqlite/index";
@@ -32,12 +32,12 @@ describe("process manager log pipeline (H6)", () => {
         return Effect.gen(function* () {
           yield* Effect.logInfo("relay pipeline tick").pipe(
             Effect.annotateLogs({
-              [ProcessManagerLogAnnotationKeys.groupId]: groupId,
-              [ProcessManagerLogAnnotationKeys.processId]: "billing/sync",
+              [LogAnnotationKeys.groupId]: groupId,
+              [LogAnnotationKeys.processId]: "billing/sync",
             }),
           );
           yield* Effect.yieldNow;
-          const relay = yield* ProcessManagerLogRelay;
+          const relay = yield* LogRelay;
           const snap = yield* relay.snapshot;
           assert.strictEqual(snap.length, 1);
           assert.strictEqual(snap[0]?.message, "relay pipeline tick");

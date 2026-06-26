@@ -1,9 +1,9 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Cause, Effect } from "effect";
 import {
-  decodeProcessManagerLogEntryNdjson,
-  encodeProcessManagerLogEntryNdjson,
-  processManagerLogEntryFromLoggerOptions,
+  decodeLogEntryNdjson,
+  encodeLogEntryNdjson,
+  logEntryFromLoggerOptions,
 } from "../src/LogEntry";
 import { replayLogEntry } from "../src/internal/manager/logCapture";
 import { utcDateFromIso } from "../src/internal/utcDate";
@@ -13,7 +13,7 @@ const ndjsonRoundTripDate = utcDateFromIso("2024-01-01T00:00:00.000Z");
 describe("processManagerGroupLogs", () => {
   it("round-trips a structured log entry as NDJSON", () =>
     Effect.gen(function* () {
-      const entry = processManagerLogEntryFromLoggerOptions({
+      const entry = logEntryFromLoggerOptions({
         message: "hello",
         logLevel: "Info",
         cause: Cause.empty,
@@ -21,8 +21,8 @@ describe("processManagerGroupLogs", () => {
         annotations: { requestId: "abc" },
         spans: [["span-a", 0]],
       });
-      const line = yield* encodeProcessManagerLogEntryNdjson(entry);
-      const decoded = yield* decodeProcessManagerLogEntryNdjson(line.trim());
+      const line = yield* encodeLogEntryNdjson(entry);
+      const decoded = yield* decodeLogEntryNdjson(line.trim());
       assert.deepStrictEqual(decoded, entry);
     }));
 

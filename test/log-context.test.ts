@@ -1,11 +1,11 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Option } from "effect";
 import { logEntryMatchesScope, resolveLogScope } from "../src/internal/manager/logScope";
-import type { ProcessManagerLogEntry } from "../src/LogEntry";
+import type { LogEntry } from "../src/LogEntry";
 
 const entry = (
-  annotations: ProcessManagerLogEntry["annotations"],
-): ProcessManagerLogEntry => ({
+  annotations: LogEntry["annotations"],
+): LogEntry => ({
   date: "2024-01-01T00:00:00.000Z",
   level: "Info",
   message: "hello",
@@ -13,7 +13,7 @@ const entry = (
   spans: [],
 });
 
-describe("processManagerLogContext", () => {
+describe("logContext", () => {
   it("matches process scope by annotation", () => {
     const scope = {
       _tag: "process" as const,

@@ -3,7 +3,7 @@
  *
  * @remarks
  * - **`captureLoggerLayer`** — hooks Effect `Logger` and publishes structured
- *   {@link ProcessManagerLogEntry} values.
+ *   {@link LogEntry} values.
  * - **`relayLayer`** — in-memory tail + PubSub for live watch, with batched flush
  *   into {@link LogStore} on the composed {@link ProcessStore}.
  *
@@ -16,24 +16,24 @@
 
 import { Layer } from "effect";
 import {
-  ProcessManagerLogRelay,
+  LogRelay,
   captureLogger,
   captureLoggerLayer,
   layer as relayOnlyLayer,
   replayLogEntry,
-  type ProcessManagerLogRelayService,
+  type LogRelayService,
 } from "./internal/manager/logCapture";
 import { logsRelayLayer, relayLayer } from "./internal/manager/logPersistRelay";
 import { captureLoggerLayer as captureLoggerLayerImpl } from "./internal/manager/logCapture";
 import { relayLayer as relayLayerImpl } from "./internal/manager/logPersistRelay";
 
 export {
-  ProcessManagerLogRelay,
+  LogRelay,
   captureLogger,
   captureLoggerLayer,
   relayOnlyLayer,
   replayLogEntry,
-  type ProcessManagerLogRelayService,
+  type LogRelayService,
 };
 
 export { logsRelayLayer, relayLayer };
@@ -57,7 +57,7 @@ export const relayWithCaptureLoggerLayer = relayLayerImpl.pipe(
  * @public
  */
 export const Logs = {
-  ProcessManagerLogRelay,
+  LogRelay,
   captureLogger,
   captureLoggerLayer,
   relayLayer,
@@ -65,5 +65,5 @@ export const Logs = {
   replayLogEntry,
   relayOnlyLayer,
   relayWithCaptureLoggerLayer,
-  processManagerLogRelayLayer: relayOnlyLayer,
+  logRelayLayer: relayOnlyLayer,
 } as const;

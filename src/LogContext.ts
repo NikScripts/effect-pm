@@ -7,11 +7,11 @@
 import { Context, Effect, Layer } from "effect";
 
 /**
- * Standard log annotation keys for effect-pm (captured into {@link ProcessManagerLogEntry}).
+ * Standard log annotation keys for effect-pm (captured into {@link LogEntry}).
  *
  * @public
  */
-export const ProcessManagerLogAnnotationKeys = {
+export const LogAnnotationKeys = {
   groupId: "groupId",
   processId: "processId",
   queueId: "queueId",
@@ -39,7 +39,7 @@ export const layerProcessGroupLogContext = (
     ProcessGroupLogContext,
     Effect.gen(function* () {
       yield* Effect.annotateLogsScoped({
-        [ProcessManagerLogAnnotationKeys.groupId]: groupId,
+        [LogAnnotationKeys.groupId]: groupId,
       });
       return { groupId };
     }),
@@ -55,7 +55,7 @@ export const withProcessLogAnnotations = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E, R> =>
   Effect.annotateLogs(effect, {
-    [ProcessManagerLogAnnotationKeys.processId]: processId,
+    [LogAnnotationKeys.processId]: processId,
   });
 
 /**
@@ -68,7 +68,7 @@ export const withQueueLogAnnotations = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E, R> =>
   Effect.annotateLogs(effect, {
-    [ProcessManagerLogAnnotationKeys.queueId]: queueId,
+    [LogAnnotationKeys.queueId]: queueId,
   });
 
 /**
@@ -78,7 +78,7 @@ export const withQueueLogAnnotations = <A, E, R>(
  */
 export const LogContext = {
   ProcessGroupLogContext,
-  keys: ProcessManagerLogAnnotationKeys,
+  keys: LogAnnotationKeys,
   layer: layerProcessGroupLogContext,
   withProcessLogAnnotations,
   withQueueLogAnnotations,

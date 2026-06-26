@@ -256,21 +256,20 @@ export type { ConfigPatch } from "./ResourceConfigure";
 
 // Process Manager
 export {
-  encodeProcessManagerLogEntryNdjson,
-  decodeProcessManagerLogEntryNdjson,
-  processManagerLogEntryFromLoggerOptions,
-  ProcessManagerLogEntrySchema,
+  encodeLogEntryNdjson,
+  decodeLogEntryNdjson,
+  logEntryFromLoggerOptions,
+  LogEntrySchema,
   LogEntry,
-  type ProcessManagerLogEntry,
 } from "./LogEntry";
 export {
-  ProcessManagerLogRelay,
+  LogRelay,
   captureLogger,
   captureLoggerLayer,
   relayLayer,
   logsRelayLayer,
   replayLogEntry,
-  relayOnlyLayer as processManagerLogRelayLayer,
+  relayOnlyLayer as logRelayLayer,
   relayWithCaptureLoggerLayer,
   Logs,
 } from "./Logs";
@@ -295,7 +294,7 @@ export type {
 export { Group } from "./Group";
 export {
   ProcessGroupLogContext,
-  ProcessManagerLogAnnotationKeys,
+  LogAnnotationKeys,
   layerProcessGroupLogContext,
   withProcessLogAnnotations,
   withQueueLogAnnotations,
