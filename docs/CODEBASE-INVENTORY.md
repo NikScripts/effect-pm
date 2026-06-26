@@ -552,8 +552,6 @@ Grouped by **idea demonstrated** — not file paths as authority.
 
 | Idea | Example scripts |
 |------|-----------------|
-| Full stack demo | full-process-group-with-queues-and-control-cli |
-| Game window + TestClock | game-window-polling-with-process-group |
 | DB → schedule sync | schedule-sync-from-external-db |
 | Schedule entries | at, window, define |
 | Schedule control surfaces | initializer, in-effect, external-fiber |
