@@ -40,7 +40,7 @@ const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const vt = useViewTransitionStyle(`res-${props.tag.id}`);
   return (
-    <div className="flex h-screen flex-col gap-3 safe-area" style={vt}>
+    <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
         <strong className="flex-1 truncate text-base">{displayName(props.tag.id)}</strong>
@@ -55,7 +55,7 @@ const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void
         LOGS <span className="text-[#22c55e]">live</span> · phase {s?.phase ?? "?"}
       </div>
       <Boundary label="logs">
-        <LogStream bundle={bundle} className="min-h-0 flex-1 rounded-md border bg-card py-1" />
+        <LogStream bundle={bundle} className="min-h-0 flex-1 rounded-md border bg-card py-1 landscape:min-h-[200px]" />
       </Boundary>
     </div>
   );
@@ -65,7 +65,7 @@ const ProcessDetail = (props: { readonly tag: ProcessTag; readonly onBack: () =>
   const bundle = processBundle(props.tag);
   const vt = useViewTransitionStyle(`res-${props.tag.id}`);
   return (
-    <div className="flex h-screen flex-col gap-3 safe-area" style={vt}>
+    <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
         <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.id)}</strong>
@@ -74,7 +74,7 @@ const ProcessDetail = (props: { readonly tag: ProcessTag; readonly onBack: () =>
       <Boundary label="controls"><ProcessControls bundle={bundle} /></Boundary>
       <div className="text-xs text-muted-foreground">LOGS <span className="text-[#22c55e]">live</span></div>
       <Boundary label="logs">
-        <LogStream bundle={bundle} className="min-h-0 flex-1 rounded-md border bg-card py-1" />
+        <LogStream bundle={bundle} className="min-h-0 flex-1 rounded-md border bg-card py-1 landscape:min-h-[200px]" />
       </Boundary>
     </div>
   );
