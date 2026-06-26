@@ -66,11 +66,35 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* View transitions (grid ↔ detail / drill-down). A touch slower than the 0.25s default
-   so the title morph reads; honor reduced-motion by skipping the animation entirely. */
+/* View transitions (grid ↔ detail / drill-down): a resource/group card morphs to fill
+   the screen. Slow the box morph a touch, and ease the incoming content in — start it
+   slightly smaller and transparent and scale up to fill, so it doesn't pop in at full
+   size before the box has grown. Honor reduced-motion by skipping the animation. */
 ::view-transition-group(*) {
-  animation-duration: 0.32s;
+  animation-duration: 0.42s;
   animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+@keyframes vt-grow-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes vt-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+::view-transition-new(*) {
+  animation: vt-grow-in 0.42s cubic-bezier(0.2, 0, 0, 1) both;
+  transform-origin: center;
+}
+::view-transition-old(*) {
+  animation: vt-fade-out 0.2s ease-out both;
 }
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-group(*),
