@@ -35,11 +35,15 @@ import {
   Effect,
   Fiber,
   Layer,
+  Logger,
   Option,
+  PubSub,
   Ref,
   Schema,
   Stream,
 } from "effect";
+import * as LogLevel from "effect/LogLevel";
+import { CurrentLogAnnotations, CurrentLogSpans } from "effect/References";
 import { Resource, hostSym } from "./Resource";
 import type {
   HandlerContextOf,
@@ -56,9 +60,47 @@ import type {
 } from "./Process";
 import { ProcessSchedule } from "./ProcessSchedule";
 import type { ProcessScheduleEntry } from "./ProcessSchedule";
-import { ProcessManagerLogEntrySchema } from "./LogEntry";
+import {
+  ProcessManagerLogEntrySchema,
+  processManagerLogEntryFromLoggerOptions,
+} from "./LogEntry";
+import type { ProcessManagerLogEntry } from "./LogEntry";
+import {
+  ProcessManagerLogAnnotationKeys,
+  withProcessLogAnnotations,
+} from "./LogContext";
+import { HistoryStore } from "./HistoryStore";
 import { configureLayer, foldConfiguredSpec } from "./ResourceConfigure";
 import type { ConfigPatch } from "./ResourceConfigure";
+
+/**
+ * Per-process capture logger — mirrors the queue's: filters to this process's logs (by the
+ * `processId` annotation the supervisor already stamps) at or above `minLevel`, converts to a
+ * {@link ProcessManagerLogEntry}, and publishes off-fiber.
+ */
+const makeProcessCaptureLogger = (
+  processId: string,
+  minLevel: LogLevel.LogLevel,
+  publish: (entry: ProcessManagerLogEntry) => Effect.Effect<void>,
+): Logger.Logger<unknown, void> =>
+  Logger.make((options) => {
+    if (!LogLevel.isGreaterThanOrEqualTo(options.logLevel, minLevel)) return;
+    const annotations = options.fiber.getRef(CurrentLogAnnotations);
+    if (annotations[ProcessManagerLogAnnotationKeys.processId] !== processId) {
+      return;
+    }
+    const entry = processManagerLogEntryFromLoggerOptions({
+      message: options.message,
+      logLevel: options.logLevel,
+      cause: options.cause,
+      date: options.date,
+      annotations,
+      spans: options.fiber.getRef(CurrentLogSpans),
+    });
+    options.fiber.currentDispatcher.scheduleTask(() => {
+      Effect.runFork(publish(entry));
+    }, 0);
+  });
 
 /**
  * A captured log line on the wire — the element of a process's `logs` stream. Reuses the
@@ -118,6 +160,18 @@ export const processStatus = Schema.Struct({
 });
 
 /**
+ * Payload fields for `logHistory` — newest `limit` entries within an optional `[since, until]`
+ * window.
+ *
+ * @public
+ */
+export const historyQuery = {
+  limit: Schema.optionalKey(Schema.Number),
+  since: Schema.optionalKey(Schema.DateTimeUtc),
+  until: Schema.optionalKey(Schema.DateTimeUtc),
+};
+
+/**
  * The process **control + observation** contract: the fixed-schema verbs of a managed process,
  * shared by every process instance. Mirrors the controllable/observable members the engine
  * supervisor exposes (`ProcessMirror` + `ProcessScheduleControls` + lifecycle).
@@ -142,6 +196,13 @@ export const processControlSpec = {
     description:
       "Captured log lines (engine + instance effect) with level/annotations/spans — empty " +
       "unless the process was configured to capture logs.",
+  }),
+  logHistory: Resource.query(Schema.Array(processLogEntry), {
+    payload: historyQuery,
+  }).annotate({
+    description:
+      "Past captured log lines from the HistoryStore (newest `limit` within `since`/`until`); " +
+      "empty unless captureLogs + a HistoryStore layer are provided.",
   }),
 
   // ─── Lifecycle ───
@@ -218,12 +279,20 @@ export const processTag = <Self>() => {
 };
 
 /**
- * The config for {@link ProcessResource.layer} — the same options as {@link Process.make}
- * (`effect` plus optional `polling` / `schedule` / `scheduleLayer`). The tag carries the id.
+ * The config for {@link ProcessResource.layer} — the {@link Process.make} options (`effect` plus
+ * optional `polling` / `schedule` / `scheduleLayer`), plus `captureLogs` to feed the `logs` stream
+ * and `logHistory`. The tag carries the id.
  *
  * @public
  */
-export type ProcessLayerConfig<E, R> = ProcessMakeOptions<E, R>;
+export type ProcessLayerConfig<E, R> = ProcessMakeOptions<E, R> & {
+  /**
+   * Capture this process's logs (engine + instance effect) into the `logs` stream — and, with a
+   * `HistoryStore` layer, into `logHistory`. `true` = all levels; `{ level }` = at or above `level`.
+   * Off by default (empty `logs`).
+   */
+  readonly captureLogs?: boolean | { readonly level?: LogLevel.LogLevel };
+};
 
 // How often the `status` stream re-reads the snapshot. The mirror is a set of MutableRefs (no
 // native subscription), so the live stream polls it; `statusNow` is the same read, on demand.
@@ -323,6 +392,69 @@ const buildProcessImpl = <Self, E, R>(
       baseConfig,
     );
 
+    // ── Per-process log capture (optional) ──
+    // A sliding hub fed by a capture logger that filters to this process's logs (by the processId
+    // annotation the supervisor stamps). `tapLogs` installs it on the driver + runImmediately so
+    // their logs are captured; off = identity (empty `logs`, zero overhead).
+    const captureLogsConfig = config.captureLogs;
+    const captureLogsEnabled =
+      captureLogsConfig === true ||
+      (typeof captureLogsConfig === "object" && captureLogsConfig !== null);
+    const captureLogsMinLevel: LogLevel.LogLevel =
+      typeof captureLogsConfig === "object" && captureLogsConfig !== null
+        ? (captureLogsConfig.level ?? "All")
+        : "All";
+    const logsHub = yield* PubSub.sliding<ProcessManagerLogEntry>(1024);
+    const logReplayCapacity = 256;
+    const logReplay = yield* Ref.make<ReadonlyArray<ProcessManagerLogEntry>>([]);
+    const publishLog = (entry: ProcessManagerLogEntry): Effect.Effect<void> =>
+      Effect.andThen(PubSub.publish(logsHub, entry), () =>
+        Ref.update(logReplay, (tail) => {
+          const next = [...tail, entry];
+          return next.length <= logReplayCapacity
+            ? next
+            : next.slice(next.length - logReplayCapacity);
+        }),
+      );
+    const loggerContext = captureLogsEnabled
+      ? yield* Layer.build(
+          Logger.layer(
+            [makeProcessCaptureLogger(tag.id, captureLogsMinLevel, publishLog)],
+            { mergeWithExisting: true },
+          ),
+        )
+      : undefined;
+    const tapLogs =
+      loggerContext === undefined
+        ? <A2, E2, R2>(eff: Effect.Effect<A2, E2, R2>): Effect.Effect<A2, E2, R2> =>
+            eff
+        : <A2, E2, R2>(eff: Effect.Effect<A2, E2, R2>): Effect.Effect<A2, E2, R2> =>
+            withProcessLogAnnotations(tag.id, Effect.provide(eff, loggerContext));
+    const logsStream = captureLogsEnabled
+      ? Stream.unwrap(
+          Effect.map(Ref.get(logReplay), (tail) =>
+            Stream.concat(Stream.fromIterable(tail), Stream.fromPubSub(logsHub)),
+          ),
+        )
+      : Stream.empty;
+
+    // History (optional): fork a tap appending each captured line (encoded) to the HistoryStore;
+    // `logHistory` reads it back. serviceOption → no store means nothing persisted, history empty.
+    const history = yield* Effect.serviceOption(HistoryStore);
+    const logsStreamId = `${tag.id}/logs`;
+    if (captureLogsEnabled && Option.isSome(history)) {
+      const store = history.value;
+      yield* Effect.forkIn(
+        Stream.runForEach(Stream.fromPubSub(logsHub), (line) =>
+          Schema.encodeEffect(processLogEntry)(line).pipe(
+            Effect.flatMap((encoded) => store.append(logsStreamId, encoded)),
+            Effect.orDie,
+          ),
+        ),
+        scope,
+      );
+    }
+
     // A schedule initializer stays an initializer; a schedule *layer* (or the default in-memory
     // store) is what we pre-build and share.
     const scheduleInitializer =
@@ -350,7 +482,7 @@ const buildProcessImpl = <Self, E, R>(
 
     const start = Effect.gen(function* () {
       if ((yield* Ref.get(fiberRef)) !== null) return;
-      const fiber = yield* Effect.forkIn(provideR(handle.effect), scope);
+      const fiber = yield* Effect.forkIn(handle.effect.pipe(tapLogs, provideR), scope);
       yield* Ref.set(fiberRef, fiber);
     });
     const stop = Effect.gen(function* () {
@@ -371,10 +503,22 @@ const buildProcessImpl = <Self, E, R>(
       statusNow,
       status: Stream.tick(statusPollInterval).pipe(Stream.mapEffect(() => statusNow)),
       schedule: Effect.map(schedule.entries, (entries) => entries.map(toWireScheduleEntry)),
-      logs: Stream.empty,
+      logs: logsStream,
+      logHistory: ({ limit, since, until }) =>
+        Option.match(history, {
+          onNone: () => Effect.succeed<ReadonlyArray<typeof processLogEntry.Type>>([]),
+          onSome: (store) =>
+            store.read(logsStreamId, { limit, since, until }).pipe(
+              Effect.flatMap((rows) =>
+                Effect.forEach(rows, (row) =>
+                  Schema.decodeUnknownEffect(processLogEntry)(row).pipe(Effect.orDie),
+                ),
+              ),
+            ),
+        }),
       start,
       stop,
-      runImmediately: provideR(handle.runImmediately()),
+      runImmediately: handle.runImmediately().pipe(tapLogs, provideR),
       setSchedule: (entries) => schedule.set(entries.map(fromWireScheduleEntry)),
       addSchedule: (entry) => schedule.add(fromWireScheduleEntry(entry)),
       clearSchedule: schedule.clear,

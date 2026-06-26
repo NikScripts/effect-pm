@@ -52,6 +52,35 @@ yield* queue.metricsHistory({ since, until })    // past metric windows (queueMe
 `*History` options (all optional): `{ limit?: number; since?: DateTime.Utc; until?: DateTime.Utc }`
 — newest `limit` entries within the `[since, until]` window.
 
+## Processes
+
+Same shape as the queue — set `captureLogs` on the process layer, provide a `HistoryStore`:
+
+```ts
+const procLayer = ProcessResource.layer(NwslSync, {
+  effect,
+  captureLogs: true,
+}).pipe(Layer.provide(HistoryStore.layerMemory()));
+
+const proc = yield* NwslSync;
+yield* proc.logs                      // live captured lines
+yield* proc.logHistory({ limit: 100 }) // past captured lines
+```
+
+## Runtime-wide (HostLogs)
+
+`HostLogs` captures **every** log in the runtime (including untagged effects and all processes).
+Add `HostLogs.persistLayer` to persist them, then read `HostLogs.history`:
+
+```ts
+const layer = HostLogs.persistLayer.pipe(
+  Layer.provideMerge(Layer.mergeAll(HostLogs.layer, HistoryStore.layerMemory())),
+);
+// anywhere under it:
+yield* HostLogs.stream                  // live, all runtime logs
+yield* HostLogs.history({ limit: 200 }) // durable, all runtime logs
+```
+
 ## For a dashboard
 
 Same Tag, two reads: **`status`/`metrics`/`logs` for live**, **`*History` for backfill**. A typical
@@ -63,10 +92,10 @@ panel: paint `logHistory({ limit })` once, then follow the `logs` stream. Both c
 | Surface | Live | History | Notes |
 |---|---|---|---|
 | Queue | `logs`, `metrics` | `logHistory`, `metricsHistory` | **done** (needs `captureLogs` for logs) |
-| Runtime-wide (`HostLogs`) | `HostLogs.stream` | `HostLogs.history` | **in progress** — captures *all* runtime logs (incl. untagged + processes) |
-| Process | `logs` | `logHistory` | planned (needs per-process log capture) |
+| Process | `logs` | `logHistory` | **done** (needs `captureLogs`) |
+| Runtime-wide (`HostLogs`) | `HostLogs.stream` | `HostLogs.history` | **done** — captures *all* runtime logs (incl. untagged + processes); add `HostLogs.persistLayer` |
 
-Backends: `layerMemory` now → SQLite → Postgres (same `HistoryStore` interface).
+Backends: `layerMemory` now → SQLite → Postgres (same `HistoryStore` interface) — **next**.
 
 ## Custom use
 
