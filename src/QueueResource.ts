@@ -962,6 +962,24 @@ export interface QueueOnFailure<T, E, R> {
 }
 
 /**
+ * **Self-refill** — load work into the queue from a source (DB, …) on start and/or whenever it
+ * drains empty (a self-feeding queue). `load` receives the queue handle and runs in the worker `R`,
+ * **best-effort** (failures are logged, not fatal). This is the toolkit equivalent of the legacy
+ * `onStart` / `onDrained` lifecycle hooks — a defining queue *behavior* (a pull source), distinct
+ * from after-the-fact observation on the `events` stream.
+ *
+ * @public
+ */
+export interface QueueRefill<T, E, EEnqueue, R> {
+  /** Run `load` once when the worker pool starts (bootstrap). @default false */
+  readonly onStart?: boolean;
+  /** Run `load` each time the queue drains to empty (re-poll the source). @default false */
+  readonly onDrained?: boolean;
+  /** Load + enqueue work. Handle its own errors (best-effort). */
+  readonly load: (queue: QueueHandle<T, E, EEnqueue, R>) => Effect.Effect<void, never, R>;
+}
+
+/**
  * Queue configuration **without** {@link QueueResourceConfigBase} item schema.
  * Enqueue helpers on {@link QueueHandle} and the {@link EffectContext} do not fail with
  * schema validation errors.
@@ -978,6 +996,8 @@ export type QueueResourceConfigWithoutItemSchema<T, E, R> = QueueResourceConfigB
   readonly effect: (item: T, ctx: EffectContext<T, never, R>) => Effect.Effect<void, E, R>;
   /** Optional inline per-error disposition. See {@link QueueOnFailure}. */
   readonly onFailure?: QueueOnFailure<T, E, R>;
+  /** Optional self-refill from a source on start / drain. See {@link QueueRefill}. */
+  readonly refill?: QueueRefill<T, E, never, R>;
 };
 
 /**
@@ -999,6 +1019,8 @@ export type QueueResourceConfigWithItemSchema<T, E, R> = QueueResourceConfigBase
   readonly effect: (item: T, ctx: EffectContext<T, QueueEnqueueErrors, R>) => Effect.Effect<void, E, R>;
   /** Optional inline per-error disposition. See {@link QueueOnFailure}. */
   readonly onFailure?: QueueOnFailure<T, E, R>;
+  /** Optional self-refill from a source on start / drain. See {@link QueueRefill}. */
+  readonly refill?: QueueRefill<T, E, QueueEnqueueErrors, R>;
 };
 
 /**
@@ -1146,6 +1168,7 @@ export type QueueConfigFromEffect<
 type QueueRuntimeConfig<T, E, EEnqueue, R> = QueueResourceConfigBase<T> & {
   readonly effect: (item: T, ctx: EffectContext<T, EEnqueue, R>) => Effect.Effect<void, E, R>;
   readonly onFailure?: QueueOnFailure<T, E, R>;
+  readonly refill?: QueueRefill<T, E, EEnqueue, R>;
 };
 
 type ReleaseEntryEncoder<T> = (
@@ -3182,6 +3205,13 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             }),
           );
 
+    // Self-refill (optional): load work from a source on start / drain — best-effort (logged).
+    const refillConfig = config.refill;
+    const runRefill = (
+      handle: QueueHandle<T, E, EEnqueue, R>,
+    ): Effect.Effect<void, never, R> =>
+      refillConfig === undefined ? Effect.void : refillConfig.load(handle);
+
     const forkProcessingFibers = Effect.gen(function* () {
       if (yield* Ref.get(isShutdownRef)) {
         yield* Effect.logWarning(
@@ -3222,6 +3252,11 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
       yield* publishEvent({ _tag: "Start", queueId: queueName });
 
+      // Bootstrap refill (onStart): forked so a slow source load doesn't block startup.
+      if (refillConfig?.onStart === true) {
+        yield* FiberSet.run(workerFibers)(runRefill(handle));
+      }
+
       // Drain monitor: emits `Drained` whenever pending work drains to empty.
       yield* FiberSet.run(workerFibers)(
         Effect.forever(
@@ -3240,6 +3275,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
                 queueId: queueName,
                 completed,
               });
+              // Self-refill on drain: re-poll the source (drives the self-feeding loop).
+              if (refillConfig?.onDrained === true) {
+                yield* runRefill(handle);
+              }
             }
           }),
         ),
