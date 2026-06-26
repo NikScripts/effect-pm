@@ -9,8 +9,6 @@
  */
 import { Effect, Layer, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
-import { FetchHttpClient } from "effect/unstable/http";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { Resource, specOf } from "../../src/Resource";
 import { Group } from "../../src/Group";
 import { FRESH_MS, readCache, writeCache } from "./cache";
@@ -20,10 +18,10 @@ import {
   Fleet,
   Jobs,
   KeyRotation,
+  Droplet,
   Mail,
   MiniHost,
   Notify,
-  pathOf,
   RegionEU,
   RegionUS,
   Weekly,
@@ -75,33 +73,29 @@ export const kindOf = (member: unknown): "queue" | "process" => {
 // In the browser the client is same-origin (vite proxies /rpc → Droplet, /mini → Mini).
 // In Node (the TUI) there's no proxy, so reach the servers directly.
 const inBrowser = typeof window !== "undefined";
-const dropletUrl = (id: string): string =>
-  inBrowser ? `/rpc/${pathOf(id)}` : `http://localhost:7777/rpc/${pathOf(id)}`;
+const dropletRpc = inBrowser ? "/rpc" : "http://localhost:7777/rpc";
 /** The Mini host's rpc endpoint (used by `connectHttp`). */
 export const miniUrl = inBrowser ? "/mini/rpc" : "http://localhost:7778/rpc";
 
-// remote transport per queue (its own http path; ndjson matches the server default).
-const remote = (id: string) =>
-  RpcClient.layerProtocolHttp({ url: dropletUrl(id) }).pipe(
-    Layer.provide(RpcSerialization.layerNdjson),
-    Layer.provide(FetchHttpClient.layer),
-  );
+// One transport per HOST — each host serves its whole group on one /rpc (serveAllHttp),
+// so every Droplet queue shares `dropletTransport`; KeyRotation reaches the Mini.
+const dropletTransport = Resource.connectHttp(Droplet, { url: dropletRpc });
 
 /** The merged remote client layer — every fleet resource over http. Shared by the
  *  reactive runtime (below) and the `pm` CLI (run-and-exit commands). */
 export const appLayer = Layer.mergeAll(
-  Resource.client(Mail).pipe(Layer.provide(remote(Mail.id))),
-  Resource.client(Jobs).pipe(Layer.provide(remote(Jobs.id))),
-  Resource.client(Billing).pipe(Layer.provide(remote(Billing.id))),
-  Resource.client(Notify).pipe(Layer.provide(remote(Notify.id))),
-  Resource.client(Worker1).pipe(Layer.provide(remote(Worker1.id))),
-  Resource.client(Worker2).pipe(Layer.provide(remote(Worker2.id))),
-  Resource.client(Worker3).pipe(Layer.provide(remote(Worker3.id))),
-  Resource.client(RegionUS).pipe(Layer.provide(remote(RegionUS.id))),
-  Resource.client(RegionEU).pipe(Layer.provide(remote(RegionEU.id))),
-  Resource.client(Daily).pipe(Layer.provide(remote(Daily.id))),
-  Resource.client(Weekly).pipe(Layer.provide(remote(Weekly.id))),
-  // KeyRotation lives on the Mini host — reached through its own transport, not the Droplet.
+  Resource.client(Mail).pipe(Layer.provide(dropletTransport)),
+  Resource.client(Jobs).pipe(Layer.provide(dropletTransport)),
+  Resource.client(Billing).pipe(Layer.provide(dropletTransport)),
+  Resource.client(Notify).pipe(Layer.provide(dropletTransport)),
+  Resource.client(Worker1).pipe(Layer.provide(dropletTransport)),
+  Resource.client(Worker2).pipe(Layer.provide(dropletTransport)),
+  Resource.client(Worker3).pipe(Layer.provide(dropletTransport)),
+  Resource.client(RegionUS).pipe(Layer.provide(dropletTransport)),
+  Resource.client(RegionEU).pipe(Layer.provide(dropletTransport)),
+  Resource.client(Daily).pipe(Layer.provide(dropletTransport)),
+  Resource.client(Weekly).pipe(Layer.provide(dropletTransport)),
+  // KeyRotation lives on the Mini host — its own transport, not the Droplet.
   Resource.client(KeyRotation).pipe(Layer.provide(Resource.connectHttp(MiniHost, { url: miniUrl }))),
 );
 
