@@ -14,7 +14,6 @@ Override **defaults** on `Process.Service`, `QueueResource.Service`, and `RunRes
 | `.configure(patch)` | Append one `ConfigPatch` (partial, `effect` updater, or full reducer) |
 | `.wrapWorker` / `.wrapEffect` / `.wrapGate` | Shorthand: replace only `effect` via `fn(previous) => next` |
 | Resource `.layer` | `foldConfiguredSpec(id, defaultSpec)` then build runtime |
-| `ProcessGroup` | Uses `buildConfiguredProcess` on `Process.Service` entries so process patches apply before group runtime |
 
 **Not supported:** changing config after the queue/process/gate is running. Provide a new layer stack and rebuild.
 
@@ -83,7 +82,7 @@ class Sync extends Process.Service<Sync>()("@app/Sync", {
   effect: Effect.log("default"),
 }) {}
 
-// ProcessGroup path: provide configure layers where the group layer is built.
+// provide configure layers where the resource layer is built.
 const SyncConfigured = Sync.buildConfiguredProcess.pipe(
   Effect.provide(
     Layer.mergeAll(
@@ -94,7 +93,7 @@ const SyncConfigured = Sync.buildConfiguredProcess.pipe(
 );
 ```
 
-`ProcessGroup.Service` entries that expose `buildConfiguredProcess` resolve the folded spec when the group runtime is created.
+`buildConfiguredProcess` resolves the folded spec when the resource runtime is created.
 
 ---
 

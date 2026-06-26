@@ -334,10 +334,10 @@ ServicesHub
 └── Ebwsl  — scaffolded, no resources yet (coming)
 ```
 
-**Migration state:** these are still defined with the legacy `.Service` API and live behind a
-`ProcessGroup` + `ControlService` control port reached by the `pm` CLI. They are being rewritten
-to `.Tag` + separate `.layer` (examples 1–14 above). The dashboard should be built against the
-**`.Tag` toolkit surface**, not the legacy control plane.
+**Migration state:** the consumer's services are being migrated onto the `.Tag` toolkit surface
+(`.Tag` + a separate `.layer` / `serveHttp`, examples 1–14 above). Build the dashboard against that
+toolkit surface — `Resource.client` + the resource tags (see
+[history-and-persistence.md](./history-and-persistence.md) for the data layer).
 
 **Deploy topology** (see examples 10–13): the hub and all three league groups run on **one
 Droplet**; **one or two processes** (most likely a live-score poller) are peeled off to the
