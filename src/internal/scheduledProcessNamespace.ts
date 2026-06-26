@@ -12,4 +12,5 @@ export {
   layer,
   server,
   serveHttp,
+  serverEntry,
 } from "../ScheduledProcess";

@@ -32,6 +32,7 @@ import type {
   HostKey,
   LocalCapability,
   ResourceTag,
+  ServeEntry,
   ServiceOf,
 } from "./Resource";
 // Schemas from the light module — keeps the Tag/spec path engine-free (tree-shakeable).
@@ -786,6 +787,36 @@ export const serveHttp = <
       Resource.serveHttp(tag, impl, options),
     ),
   );
+
+/**
+ * A {@link Resource.serveAllHttp} entry for this queue — the tag plus the (lazily built) engine
+ * impl, so a whole group of queues/processes can be served on **one** http port:
+ *
+ * ```ts
+ * Resource.serveAllHttp([
+ *   QueueResource.serverEntry(RosterQueue, { effect, itemSchema }),
+ *   ScheduledProcess.serverEntry(SeasonMatches, { effect }),
+ * ]).pipe(Layer.provideMerge(NodeHttpServer.layer({ port: 3001 })))
+ * ```
+ *
+ * @public
+ */
+export const serverEntry = <
+  Self,
+  F extends QueueItemFields = QueueItemFields,
+  E = never,
+  R = never,
+>(
+  tag: ResourceTag<Self, QueueInstanceSpec<F>>,
+  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R>,
+): ServeEntry<R> => ({
+  tag,
+  impl: buildQueueImpl(tag, config) as unknown as Effect.Effect<
+    Record<string, unknown>,
+    never,
+    R
+  >,
+});
 
 /**
  * Queue resource toolkit — managed priority queues on the {@link Resource} toolkit.

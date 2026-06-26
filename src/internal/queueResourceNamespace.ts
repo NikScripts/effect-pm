@@ -22,6 +22,7 @@ export {
   layer,
   server,
   serveHttp,
+  serverEntry,
 } from "../QueueContract";
 
 export const make = engine.make;

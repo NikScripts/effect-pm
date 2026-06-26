@@ -53,7 +53,7 @@ import {
   Scope,
   Stream,
 } from "effect";
-import { FetchHttpClient, Headers, HttpRouter } from "effect/unstable/http";
+import { FetchHttpClient, Headers, HttpRouter, HttpServer } from "effect/unstable/http";
 import {
   Rpc,
   RpcClient,
@@ -1020,6 +1020,96 @@ const serveHttp = <S extends Spec>(
     }).pipe(Layer.provide(serverLayer(tag, impl))),
   ).pipe(Layer.provideMerge(options?.serialization ?? defaultSerialization));
 
+/**
+ * An entry for {@link serveAllHttp}: a resource tag + its built impl. Use {@link Resource.server}'s
+ * impl shape (the same `WireServiceOf` you pass to {@link serveHttp}).
+ *
+ * @public
+ */
+export interface ServeEntry<R = never> {
+  readonly tag: {
+    readonly groupId: string;
+    readonly [specSym]: Spec;
+    readonly [groupSym]: RpcGroup.RpcGroup<any>;
+  };
+  /**
+   * The resource's impl — either the built service record (a plain resource), or an `Effect` that
+   * builds it (a toolkit resource whose engine/worker is constructed at assembly, carrying its
+   * worker requirement `R`). Use `QueueResource.serverEntry` / `ScheduledProcess.serverEntry` to
+   * produce the effect form.
+   */
+  readonly impl:
+    | Record<string, unknown>
+    | Effect.Effect<Record<string, unknown>, never, R>;
+}
+
+/**
+ * Serve **many** resources on **one** http `RpcServer` (one port) — the multi-resource counterpart
+ * to {@link serveHttp}. Each resource's procedures are group-id-prefixed, so they coexist on the
+ * one `/rpc` endpoint without collision; clients reach each via `Resource.client(Tag)` over a single
+ * {@link connectHttp} transport (typically a shared {@link Host}). This is how a whole group runs
+ * behind one port.
+ *
+ * ```ts
+ * const LeagueServer = Resource.serveAllHttp([
+ *   { tag: RosterQueue, impl: rosterImpl },
+ *   { tag: SeasonMatches, impl: seasonImpl },
+ * ]).pipe(Layer.provideMerge(NodeHttpServer.layer({ port: 3001 })));
+ * ```
+ *
+ * @public
+ */
+const serveAllHttp = <R = never>(
+  entries: ReadonlyArray<ServeEntry<R>>,
+  options?: {
+    readonly path?: HttpRouter.PathInput;
+    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+  },
+): Layer.Layer<never, never, R | HttpServer.HttpServer> => {
+  if (entries.length === 0) {
+    throw new Error("Resource.serveAllHttp: at least one resource is required");
+  }
+  // Build each impl (an Effect form carries the engine/worker requirement R; a plain record is
+  // lifted with succeed), then merge every resource's RpcGroup into one (procedures are
+  // group-id-prefixed → no collision) and merge their handler tables into one toLayer over the
+  // combined group. The merge is dynamic (heterogeneous specs), so types are erased through
+  // `unknown`; the result type is pinned to `R | HttpServer` — the union of worker requirements
+  // plus the http server to listen on (same shape as a single `serveHttp`).
+  return Layer.unwrap(
+    Effect.gen(function* () {
+      const built = yield* Effect.forEach(entries, (entry) =>
+        (Effect.isEffect(entry.impl)
+          ? entry.impl
+          : Effect.succeed(entry.impl)
+        ).pipe(Effect.map((impl) => ({ tag: entry.tag, impl }))),
+      );
+      const merged = built
+        .map((b) => b.tag[groupSym])
+        .reduce((acc, group) => acc.merge(group));
+      const handlers: Record<string, (payload: unknown) => unknown> = {};
+      for (const { tag, impl } of built) {
+        for (const [key, member] of Object.entries(impl)) {
+          handlers[wireTag(tag.groupId, key)] = (payload) =>
+            typeof member === "function" ? member(payload) : member;
+        }
+      }
+      return HttpRouter.serve(
+        RpcServer.layerHttp({
+          group: merged,
+          path: options?.path ?? "/rpc",
+          protocol: "http",
+        }).pipe(
+          Layer.provide(
+            merged.toLayer(
+              handlers as unknown as Parameters<(typeof merged)["toLayer"]>[0],
+            ),
+          ),
+        ),
+      ).pipe(Layer.provideMerge(options?.serialization ?? defaultSerialization));
+    }),
+  ) as unknown as Layer.Layer<never, never, R | HttpServer.HttpServer>;
+};
+
 /** The header carrying the target instance id, set per-call by {@link forwardClient}. */
 const ID_HEADER = "id";
 
@@ -1581,6 +1671,7 @@ export const Resource = {
   layer: localLayer,
   server: serverLayer,
   serveHttp,
+  serveAllHttp,
   serveInstances,
   client: clientLayer,
   clientInstances,

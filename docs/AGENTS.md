@@ -15,7 +15,7 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/ResourceConfigure.ts` | Layer-composed `.configure` patches for queue/process/run resources. |
 | `src/HistoryStore.ts`, `src/DurableQueueStore.ts` | Observability history + durable queue ports (SQLite backends in `storage/sqlite`). |
 | **Toolkit (location-transparent)** | |
-| `src/Resource.ts` | Foundation — tags (`Tag`/`client`/`server`/`serveHttp`/`Host`/`connect`), `specOf`/`methodMeta` introspection. |
+| `src/Resource.ts` | Foundation — tags (`Tag`/`client`/`server`/`serveHttp`/`serveAllHttp`/`Host`/`connect`), `specOf`/`methodMeta` introspection. `serveAllHttp` = many resources on one port (group behind one `Host`). |
 | `src/QueueContract.ts` | Toolkit **queue** (`QueueResource` = `Tag`/`layer`/`configure`/`server`/`serveHttp`) → `@nikscripts/effect-pm/QueueContract`. |
 | `src/ScheduledProcess.ts` | Toolkit **process** (`ScheduledProcess`). |
 | `src/ProcessScheduleContract.ts` | Toolkit **schedule** (`ProcessScheduleResource`) — CRUD + reconcile + `changes`. |

@@ -50,6 +50,7 @@ import type {
   HostKey,
   LocalCapability,
   ResourceTag,
+  ServeEntry,
   ServiceOf,
 } from "./Resource";
 import { Process } from "./Process";
@@ -567,6 +568,25 @@ export const serveHttp = <Self, E = never, R = never>(
       Resource.serveHttp(tag, impl, options),
     ),
   );
+
+/**
+ * A {@link Resource.serveAllHttp} entry for this process — the tag plus the (lazily built) impl,
+ * so a whole group of processes/queues can be served on **one** http port. See
+ * {@link QueueResource.serverEntry} for the composed example.
+ *
+ * @public
+ */
+export const serverEntry = <Self, E = never, R = never>(
+  tag: ResourceTag<Self, ProcessSpec>,
+  config: ProcessLayerConfig<E, R>,
+): ServeEntry<R> => ({
+  tag,
+  impl: buildProcessImpl(tag, config) as unknown as Effect.Effect<
+    Record<string, unknown>,
+    never,
+    R
+  >,
+});
 
 /**
  * Process resource toolkit — managed long-running processes on the {@link Resource} toolkit.

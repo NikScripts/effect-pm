@@ -160,6 +160,7 @@ export type {
   MethodMeta,
   ResourceInstance,
   ResourceTag,
+  ServeEntry,
   ServiceOf,
   Spec,
   TagFactory,
