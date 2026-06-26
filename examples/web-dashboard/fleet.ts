@@ -7,7 +7,7 @@
  */
 import { Duration, Effect, Schema } from "effect";
 import { queueTag } from "../../src/QueueContract";
-import { processTag } from "../../src/ProcessContract";
+import { processTag } from "../../src/ScheduledProcess";
 import { Resource } from "../../src/Resource";
 import { Group } from "../../src/Group";
 

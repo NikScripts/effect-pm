@@ -126,6 +126,7 @@
     "repos",
     "examples/scenarios/nwslsoccer",
     "examples/queue-widget/**",
-    "examples/resource-tui/**"
+    "examples/resource-tui/**",
+    "examples/web-dashboard/**"
   ]
 }
