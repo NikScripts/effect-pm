@@ -1,55 +1,32 @@
 /**
  * @module internal/weightedLaneStore
  *
- * The custom data structure behind `CustomQueueResource` (see
+ * The weighted {@link LaneStore} impl behind `CustomQueueResource` (see
  * `docs/plans/weighted-middle-scheduling.md`). Three tiers:
  *
- * - **high** — strict top (always taken first),
- * - **middle** — arbitrarily many numeric groups (`Queue.add(item, n)`); the number is the group's
+ * - **high** — strict top (polled first),
+ * - **middle** — arbitrarily many numeric groups (`add(item, n)`); the number is the group's
  *   **weight**. Among non-empty middle groups a scheduler picks the next item — `"weighted"` (no
  *   starvation, service ∝ weight) or `"strict"` (highest number first, opt-in, can starve),
- * - **low** — strict bottom (taken only when high + middle are empty).
+ * - **low** — strict bottom (polled only when high + middle are empty).
  *
  * Built on the transactional (`Tx*`) primitives: every lane is a plain array held in a {@link TxRef}
- * (the middle groups in a {@link TxHashMap}), and a single `Effect.Transaction` does the tiered
- * choice atomically — `Effect.txRetry` provides the blocking take (wake-on-offer) and safe
- * multi-worker pulls for free, replacing manual wake signals.
+ * (the middle groups in a {@link TxHashMap}), and a single `Effect.tx` does the tiered choice
+ * atomically. It is **poll-based** — the engine owns the worker-wake/blocking (see {@link LaneStore}).
  *
  * The `"weighted"` scheduler is virtual-time weighted-fair queuing (the take-one analog of deficit
  * round robin): each active group carries a virtual time advanced by `1 / weight` per item served,
- * and the smallest virtual time is chosen — so a weight-3 group is served ~3× as often as a weight-1
- * group, yet no group starves (a neglected group keeps its low virtual time and is chosen next).
+ * and the smallest is chosen — so a weight-3 group is served ~3× as often as a weight-1 group, yet
+ * no group starves (a neglected group keeps its low virtual time and is chosen next). An unseen or
+ * rejoining group joins at the **system virtual time**, so it neither monopolizes nor is penalized.
  *
  * @internal
  */
-import { Effect, Option, Queue, TxHashMap, TxRef } from "effect";
+import { Effect, Option, TxHashMap, TxRef } from "effect";
+import type { Lane, LaneSizes, LaneStore } from "./laneStore";
 
 /** Which middle-group scheduling algorithm to use. @internal */
 export type SchedulerKind = "weighted" | "strict";
-
-/** Where an offered item goes. A middle `group` number is also its weight (must be ≥ 1). @internal */
-export type Lane = "high" | "low" | { readonly group: number };
-
-/** Per-lane occupancy. `groups` is keyed by the middle group number. @internal */
-export interface LaneSizes {
-  readonly high: number;
-  readonly low: number;
-  readonly groups: Record<number, number>;
-}
-
-/** The custom lane store — the `LaneStore` impl for weighted/strict middle scheduling. @internal */
-export interface WeightedLaneStore<A> {
-  /** Enqueue `item` into a lane (FIFO within the lane/group). */
-  readonly offer: (item: A, lane: Lane) => Effect.Effect<void>;
-  /** Take the next item by tier + middle schedule; blocks (transactionally) until one is available. */
-  readonly take: Effect.Effect<A>;
-  /** Like {@link take} but returns `Option.none` instead of blocking when empty. */
-  readonly poll: Effect.Effect<Option.Option<A>>;
-  /** Current per-lane occupancy. */
-  readonly sizes: Effect.Effect<LaneSizes>;
-  /** Remove and return every queued item (high, then middle by group ascending, then low). */
-  readonly drain: Effect.Effect<ReadonlyArray<A>>;
-}
 
 interface SchedulerState {
   /** Virtual time per active group (weighted scheduler only). Pruned when a group empties. */
@@ -109,112 +86,105 @@ const pickWeighted = (
 };
 
 /**
- * Build a {@link WeightedLaneStore}. `kind` selects the middle scheduler; the high/low tiers are
- * always strict.
+ * Build a weighted {@link LaneStore}. `kind` selects the middle scheduler; high/low are strict.
  *
  * @internal
  */
 export const makeWeightedLaneStore = <A>(options: {
   readonly kind: SchedulerKind;
-}): Effect.Effect<WeightedLaneStore<A>> =>
+}): Effect.Effect<LaneStore<A>> =>
   Effect.gen(function* () {
     const high = yield* TxRef.make<ReadonlyArray<A>>([]);
     const low = yield* TxRef.make<ReadonlyArray<A>>([]);
     const middle = yield* TxHashMap.make<number, ReadonlyArray<A>>();
     const sched = yield* TxRef.make<SchedulerState>({ vtime: {}, systemV: 0 });
-    // Wake doorbell: every offer rings it; the blocking `take` waits on it between polls. Blocking is
-    // poll + doorbell rather than transactional `txRetry` (the latter's wake proved unreliable here).
-    // An unbounded ring buffer means no lost wakeups; spurious rings just cost an extra poll.
-    const doorbell = yield* Queue.unbounded<void>();
     const pick = options.kind === "strict" ? pickStrict : pickWeighted;
 
     const offer = (item: A, lane: Lane): Effect.Effect<void> =>
-      Effect.gen(function* () {
-        yield* Effect.tx(
-          Effect.gen(function* () {
-            if (lane === "high") {
-              yield* TxRef.update(high, (xs) => [...xs, item]);
-            } else if (lane === "low") {
-              yield* TxRef.update(low, (xs) => [...xs, item]);
-            } else {
-              const key = weightOf(lane.group);
-              const existing = yield* TxHashMap.get(middle, key);
-              const next = Option.match(existing, {
-                onNone: () => [item] as ReadonlyArray<A>,
-                onSome: (xs) => [...xs, item],
-              });
-              yield* TxHashMap.set(middle, key, next);
-            }
-          }),
-        );
-        yield* Queue.offer(doorbell, undefined);
-      });
-
-    /** The tiered choice, shared by take (blocks) and poll (returns none). */
-    const choose = Effect.gen(function* () {
-      const hi = yield* TxRef.get(high);
-      const hiHead = hi[0];
-      if (hiHead !== undefined) {
-        yield* TxRef.set(high, hi.slice(1));
-        return Option.some(hiHead);
-      }
-
-      const entries = yield* TxHashMap.entries(middle);
-      const nonEmpty = entries.filter(([, items]) => items.length > 0);
-      if (nonEmpty.length > 0) {
-        const state = yield* TxRef.get(sched);
-        const picked = pick(nonEmpty, state);
-        const chosen = nonEmpty.find(([key]) => key === picked.key);
-        const item = chosen?.[1][0];
-        if (chosen !== undefined && item !== undefined) {
-          const rest = chosen[1].slice(1);
-          if (rest.length === 0) {
-            yield* TxHashMap.remove(middle, picked.key);
-            // Drop the emptied group's virtual time so it rejoins (at systemV) if it reappears.
-            const { [picked.key]: _dropped, ...prunedVtime } = picked.nextState.vtime;
-            yield* TxRef.set(sched, {
-              vtime: prunedVtime,
-              systemV: picked.nextState.systemV,
-            });
+      Effect.tx(
+        Effect.gen(function* () {
+          if (lane === "high") {
+            yield* TxRef.update(high, (xs) => [...xs, item]);
+          } else if (lane === "low") {
+            yield* TxRef.update(low, (xs) => [...xs, item]);
           } else {
-            yield* TxHashMap.set(middle, picked.key, rest);
-            yield* TxRef.set(sched, picked.nextState);
+            const key = weightOf(lane.group);
+            const existing = yield* TxHashMap.get(middle, key);
+            const next = Option.match(existing, {
+              onNone: () => [item] as ReadonlyArray<A>,
+              onSome: (xs) => [...xs, item],
+            });
+            yield* TxHashMap.set(middle, key, next);
           }
-          return Option.some(item);
+        }),
+      );
+
+    const poll: Effect.Effect<Option.Option<A>> = Effect.tx(
+      Effect.gen(function* () {
+        const hi = yield* TxRef.get(high);
+        const hiHead = hi[0];
+        if (hiHead !== undefined) {
+          yield* TxRef.set(high, hi.slice(1));
+          return Option.some(hiHead);
         }
-      }
 
-      const lo = yield* TxRef.get(low);
-      const loHead = lo[0];
-      if (loHead !== undefined) {
-        yield* TxRef.set(low, lo.slice(1));
-        return Option.some(loHead);
-      }
+        const entries = yield* TxHashMap.entries(middle);
+        const nonEmpty = entries.filter(([, items]) => items.length > 0);
+        if (nonEmpty.length > 0) {
+          const state = yield* TxRef.get(sched);
+          const picked = pick(nonEmpty, state);
+          const chosen = nonEmpty.find(([key]) => key === picked.key);
+          const item = chosen?.[1][0];
+          if (chosen !== undefined && item !== undefined) {
+            const rest = chosen[1].slice(1);
+            if (rest.length === 0) {
+              yield* TxHashMap.remove(middle, picked.key);
+              // Drop the emptied group's virtual time so it rejoins (at systemV) if it reappears.
+              const { [picked.key]: _dropped, ...prunedVtime } = picked.nextState.vtime;
+              yield* TxRef.set(sched, {
+                vtime: prunedVtime,
+                systemV: picked.nextState.systemV,
+              });
+            } else {
+              yield* TxHashMap.set(middle, picked.key, rest);
+              yield* TxRef.set(sched, picked.nextState);
+            }
+            return Option.some(item);
+          }
+        }
 
-      return Option.none<A>();
-    });
+        const lo = yield* TxRef.get(low);
+        const loHead = lo[0];
+        if (loHead !== undefined) {
+          yield* TxRef.set(low, lo.slice(1));
+          return Option.some(loHead);
+        }
 
-    const poll: Effect.Effect<Option.Option<A>> = Effect.tx(choose);
+        return Option.none<A>();
+      }),
+    );
 
-    const take: Effect.Effect<A> = Effect.gen(function* () {
-      while (true) {
-        const polled = yield* poll;
-        if (Option.isSome(polled)) return polled.value;
-        // Empty: wait for the next offer to ring the doorbell, then re-poll.
-        yield* Queue.take(doorbell);
-      }
-    });
+    const isEmpty: Effect.Effect<boolean> = Effect.tx(
+      Effect.gen(function* () {
+        const hi = yield* TxRef.get(high);
+        if (hi.length > 0) return false;
+        const lo = yield* TxRef.get(low);
+        if (lo.length > 0) return false;
+        const entries = yield* TxHashMap.entries(middle);
+        return entries.every(([, items]) => items.length === 0);
+      }),
+    );
 
     const sizes: Effect.Effect<LaneSizes> = Effect.tx(
       Effect.gen(function* () {
         const hi = yield* TxRef.get(high);
         const lo = yield* TxRef.get(low);
         const entries = yield* TxHashMap.entries(middle);
-        const groups: Record<number, number> = {};
+        const middleSizes: Record<number, number> = {};
         for (const [key, items] of entries) {
-          if (items.length > 0) groups[key] = items.length;
+          if (items.length > 0) middleSizes[key] = items.length;
         }
-        return { high: hi.length, low: lo.length, groups };
+        return { high: hi.length, low: lo.length, middle: middleSizes };
       }),
     );
 
@@ -237,5 +207,44 @@ export const makeWeightedLaneStore = <A>(options: {
       }),
     );
 
-    return { offer, take, poll, sizes, drain };
+    const extractMatching = (
+      predicate: (item: A) => boolean,
+    ): Effect.Effect<ReadonlyArray<A>> =>
+      Effect.tx(
+        Effect.gen(function* () {
+          const matched: A[] = [];
+          const partition = (items: ReadonlyArray<A>): ReadonlyArray<A> => {
+            const kept: A[] = [];
+            for (const item of items) {
+              if (predicate(item)) matched.push(item);
+              else kept.push(item);
+            }
+            return kept;
+          };
+
+          const hi = yield* TxRef.get(high);
+          yield* TxRef.set(high, partition(hi));
+
+          const entries = yield* TxHashMap.entries(middle);
+          for (const [key, items] of entries.slice().sort(([a], [b]) => a - b)) {
+            const kept = partition(items);
+            if (kept.length === 0) {
+              yield* TxHashMap.remove(middle, key);
+              yield* TxRef.update(sched, (s) => {
+                const { [key]: _dropped, ...vtime } = s.vtime;
+                return { vtime, systemV: s.systemV };
+              });
+            } else {
+              yield* TxHashMap.set(middle, key, kept);
+            }
+          }
+
+          const lo = yield* TxRef.get(low);
+          yield* TxRef.set(low, partition(lo));
+
+          return matched;
+        }),
+      );
+
+    return { offer, poll, isEmpty, sizes, drain, extractMatching };
   });
