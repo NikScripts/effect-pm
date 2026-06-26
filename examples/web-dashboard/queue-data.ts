@@ -72,9 +72,17 @@ export const kindOf = (member: unknown): "queue" | "process" => {
   return "enqueue" in spec || "sizes" in spec ? "queue" : "process";
 };
 
+// In the browser the client is same-origin (vite proxies /rpc → Droplet, /mini → Mini).
+// In Node (the TUI) there's no proxy, so reach the servers directly.
+const inBrowser = typeof window !== "undefined";
+const dropletUrl = (id: string): string =>
+  inBrowser ? `/rpc/${pathOf(id)}` : `http://localhost:7777/rpc/${pathOf(id)}`;
+/** The Mini host's rpc endpoint (used by `connectHttp`). */
+export const miniUrl = inBrowser ? "/mini/rpc" : "http://localhost:7778/rpc";
+
 // remote transport per queue (its own http path; ndjson matches the server default).
 const remote = (id: string) =>
-  RpcClient.layerProtocolHttp({ url: `/rpc/${pathOf(id)}` }).pipe(
+  RpcClient.layerProtocolHttp({ url: dropletUrl(id) }).pipe(
     Layer.provide(RpcSerialization.layerNdjson),
     Layer.provide(FetchHttpClient.layer),
   );
@@ -92,7 +100,7 @@ const appLayer = Layer.mergeAll(
   Resource.client(Daily).pipe(Layer.provide(remote(Daily.id))),
   Resource.client(Weekly).pipe(Layer.provide(remote(Weekly.id))),
   // KeyRotation lives on the Mini host — reached through its own transport, not the Droplet.
-  Resource.client(KeyRotation).pipe(Layer.provide(Resource.connectHttp(MiniHost, { url: "/mini/rpc" }))),
+  Resource.client(KeyRotation).pipe(Layer.provide(Resource.connectHttp(MiniHost, { url: miniUrl }))),
 );
 
 /** One reactive runtime that reaches every queue (over the wire). */
