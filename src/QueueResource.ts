@@ -119,7 +119,7 @@ import { isJsonValue } from "./internal/json";
 import type { JsonValue } from "./ProcessStoreEvent";
 import { DurableQueueStore } from "./DurableQueueStore";
 import { makeFifoLaneStore } from "./internal/fifoLaneStore";
-import type { Lane } from "./internal/laneStore";
+import type { Lane, LaneStore } from "./internal/laneStore";
 import type {
   DurableEntry,
   DurableQueueStoreShape,
@@ -1495,6 +1495,7 @@ const makeQueueEffectWithoutSchema = <
     (items, _operation) => Effect.succeed(items),
     undefined,
     undefined,
+    (capacity) => makeFifoLaneStore({ capacity }),
   );
 
 const makeQueueEffectWithSchema = <
@@ -1560,6 +1561,7 @@ const makeQueueEffectWithSchema = <
       validateItemsWithSchema(queueName, config.itemSchema, codecId, items, operation),
     encodeForRelease,
     { encode: encodeItem, decode: Schema.decodeUnknownExit(config.itemSchema) },
+    (capacity) => makeFifoLaneStore({ capacity }),
   );
 };
 
@@ -1627,6 +1629,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
   validateForEnqueue: ValidateForEnqueue<T, EEnqueue>,
   encodeForRelease: ReleaseEntryEncoder<T> | undefined,
   persistCodec: PersistCodec<T> | undefined,
+  // Injected lane structure — the only lane-specific dependency. The default queue passes the FIFO
+  // factory; CustomQueueResource passes the weighted one. The engine imports neither impl (only the
+  // `LaneStore` type), so a bundle pulls only the lane store it actually wires.
+  makeLaneStore: (
+    capacity: number,
+  ) => Effect.Effect<LaneStore<InternalItem<T>>>,
 ): Effect.Effect<QueueHandle<T, E, EEnqueue, R>, never, Scope.Scope | R> =>
   Effect.gen(function* () {
     const queueName = config.name ?? "anonymous";
@@ -1688,10 +1696,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     const autoReEnqueue =
       config.attempts !== undefined || config.retries !== undefined;
     // ─── Allocate internal state ───
-    // Lane store: strict high/normal/low FIFO, each bounded at `capacity` (backpressure on offer).
-    // This is the ONLY lane-specific dependency — the rest of the engine is lane-agnostic and drives
-    // it through the `LaneStore` interface (see internal/laneStore).
-    const laneStore = yield* makeFifoLaneStore<InternalItem<T>>({ capacity });
+    // The lane store is injected (FIFO for the default queue, weighted for CustomQueueResource); the
+    // rest of the engine drives it lane-agnostically through the `LaneStore` interface.
+    const laneStore = yield* makeLaneStore(capacity);
 
     // ─── Durability (opt-in: `persist` + a DurableQueueStore + itemSchema) ───
     // When on, the store is the source of truth: enqueue persists, a feeder leases work into the
