@@ -97,7 +97,7 @@ export const MobileDashboard = (): React.ReactElement => {
   const canBack = path.length > 1;
 
   return (
-    <div className="mx-auto max-w-5xl p-3">
+    <div className="mx-auto max-w-5xl p-3" style={viewTransitionStyle(`grp-${group.id}`)}>
       <div className="mb-1 flex items-center gap-2">
         {canBack ? (
           <Button variant="outline" size="sm" onClick={() => transition(() => setPath((p) => p.slice(0, -1)))}>← back</Button>

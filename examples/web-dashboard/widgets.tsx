@@ -142,6 +142,7 @@ export const GroupCard = (props: {
     <button
       type="button"
       onClick={() => props.onOpen(props.node)}
+      style={viewTransitionStyle(`grp-${props.node.id}`)}
       className="rounded-xl border border-[#06b6d455] bg-card p-3 text-left transition-colors hover:border-ring"
     >
       <div className="mb-2 flex items-center gap-2">
