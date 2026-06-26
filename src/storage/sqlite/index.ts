@@ -204,3 +204,4 @@ export const SQLiteRuntimeStorage = {
 } as const;
 
 export { SQLiteDurableQueueStore } from "./durableQueue";
+export { SQLiteHistoryStore } from "./historyStore";

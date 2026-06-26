@@ -13,6 +13,9 @@ reads it back via `*History` queries **on the same Tag** as the live stream, ful
   `logHistory`.
 - Runtime-wide: `HostLogs.persistLayer` + `HostLogs.history` (captures *all* runtime logs).
 
+Backends: `HistoryStore.layerMemory` (in-process) and `SQLiteHistoryStore.layer` (durable across
+restarts, count-based retention) — same interface, swap the layer.
+
 **Durability plane.** `DurableQueueStore` — a priority-native store of pending + in-flight work so
 no enqueued item is lost across a restart (**at-least-once** + dedup key). Inspired by Effect's
 `PersistedQueue` (lease / `attempts` / expiry-recovery blueprint) but priority-native, not FIFO:

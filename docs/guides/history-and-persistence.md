@@ -28,8 +28,15 @@ const rosterQueueLayer = QueueResource.layer(RosterQueue, {
 }).pipe(Layer.provide(HistoryStore.layerMemory()));   // ← opt into history
 ```
 
-- `HistoryStore.layerMemory({ capacity })` — in-memory ring (bounded, oldest dropped). Available now.
-- SQLite / Postgres backends land later behind the **same** interface — swap the layer, nothing else.
+- `HistoryStore.layerMemory({ capacity })` — in-memory ring (bounded, oldest dropped).
+- `SQLiteHistoryStore.layer({ filename, capacity? })` (from `@nikscripts/effect-pm/storage/sqlite`)
+  — durable across restarts; `capacity` is count-based retention per stream. Same interface, swap
+  the layer:
+  ```ts
+  import { SQLiteHistoryStore } from "@nikscripts/effect-pm/storage/sqlite";
+  // …Layer.provide(SQLiteHistoryStore.layer({ filename: "history.db", capacity: 10_000 }))
+  ```
+- Postgres lands later behind the same interface.
 - No `HistoryStore` layer → history is empty (zero cost, no behavior change).
 
 ## Reading history
@@ -116,7 +123,8 @@ panel: paint `logHistory({ limit })` once, then follow the `logs` stream. Both c
 | Process | `logs` | `logHistory` | **done** (needs `captureLogs`) |
 | Runtime-wide (`HostLogs`) | `HostLogs.stream` | `HostLogs.history` | **done** — captures *all* runtime logs (incl. untagged + processes); add `HostLogs.persistLayer` |
 
-Backends: `layerMemory` now → SQLite → Postgres (same `HistoryStore` interface) — **next**.
+Backends: `layerMemory` (in-process) and `SQLiteHistoryStore.layer` (durable) ship today; Postgres
+later (same `HistoryStore` interface).
 
 ## Custom use
 
