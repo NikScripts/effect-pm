@@ -236,7 +236,11 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
           </option>
         ))}
       </select>
-      <ResponsiveContainer width="100%" height={140}>
+      {/* fixed-height wrapper + height="100%": a percentage-sized ResponsiveContainer in a
+          content-sized flex parent grows on every measure tick (the chart can balloon to
+          thousands of px, esp. in landscape) — pinning the parent height breaks the loop. */}
+      <div className="h-[140px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data}>
           <defs>
             <linearGradient id={`g-${metric}`} x1="0" y1="0" x2="0" y2="1">
@@ -257,6 +261,7 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
           />
         </AreaChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 };

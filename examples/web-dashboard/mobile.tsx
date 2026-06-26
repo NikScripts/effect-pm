@@ -48,7 +48,7 @@ const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void
       </div>
       <Boundary label="stats"><QueueStats bundle={bundle} /></Boundary>
       <Boundary label="chart">
-        <div className="rounded-xl border bg-card p-3 landscape:mx-auto landscape:w-full landscape:max-w-md"><MetricChart bundle={bundle} /></div>
+        <div className="rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
       </Boundary>
       <Boundary label="controls"><QueueControls bundle={bundle} /></Boundary>
       <div className="text-xs text-muted-foreground">
