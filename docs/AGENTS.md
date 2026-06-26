@@ -1,6 +1,6 @@
 # Agent guide — effect-pm (`@nikscripts/effect-pm`)
 
-Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any persistence change** — module refactor list, facet rules, agent assignments), [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [RESOURCE-API.md](./RESOURCE-API.md), [SCHEDULE-AND-PROCESSGROUP.md](./SCHEDULE-AND-PROCESSGROUP.md) (schedule vs `ProcessGroup.start` / API gates), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
+Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any persistence change** — facet rules, the persistence SSOT), [PACKAGE-GUIDE.md](./PACKAGE-GUIDE.md), [PROCESS-API.md](./PROCESS-API.md), [RESOURCE-API.md](./RESOURCE-API.md), [guides/toolkit-by-example.md](./guides/toolkit-by-example.md), [guides/history-and-persistence.md](./guides/history-and-persistence.md), and [examples/README.md](../examples/README.md). It tells you **where truth lives** and **how to modify the repo safely**.
 
 ---
 
@@ -10,10 +10,10 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 |------|---------|
 | `src/index.ts` | Public exports + package-level TSDoc. **Start here for imports.** |
 | `src/Process.ts` | `Process.make`, supervisor loop, `ProcessSupervisorRequirements`. |
-| `src/ProcessGroup.ts` | Orchestration, `make`, fork/stop, typed controls, `awaitShutdown`. |
 | `src/Polling.ts`, `src/ProcessSchedule.ts` | Cadence + gate services and preset `Layer`s. |
-| `src/QueueResource.ts` | Priority queue **engine** + legacy `.Service` factory. |
-| `src/ResourceConfigure.ts` | Layer-composed `.configure` patches for queue/process/run services (legacy `.Service` + toolkit `.Tag`). |
+| `src/QueueResource.ts` | Priority queue **engine** (`Tag`/`make`/`layer`/`server`/`serveHttp`; `persist`/`refill`). |
+| `src/ResourceConfigure.ts` | Layer-composed `.configure` patches for queue/process/run resources. |
+| `src/HistoryStore.ts`, `src/DurableQueueStore.ts` | Observability history + durable queue ports (SQLite backends in `storage/sqlite`). |
 | **Toolkit (location-transparent)** | |
 | `src/Resource.ts` | Foundation — tags (`Tag`/`client`/`server`/`serveHttp`/`Host`/`connect`), `specOf`/`methodMeta` introspection. |
 | `src/QueueContract.ts` | Toolkit **queue** (`QueueResource` = `Tag`/`layer`/`configure`/`server`/`serveHttp`) → `@nikscripts/effect-pm/QueueContract`. |
@@ -23,15 +23,12 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/HostLogs.ts` | Runtime-wide log capture + stream (`HostLogs`). |
 | `src/ProcessStore.ts`, `src/ProcessStorage.ts`, `src/ProcessStoreEvent.ts` | Storage facet builder, combined facet layers, and shared event types. |
 | `src/store/*.ts` | Storage facets → `@nikscripts/effect-pm/store/*` |
-| `src/LogContext.ts`, `src/LogEntry.ts`, `src/Transport.ts` | PM log annotations, NDJSON log entries, transport config. |
+| `src/LogContext.ts`, `src/LogEntry.ts` | Log annotations + NDJSON log entries (the kept log infra; still named `ProcessManagerLog*`). |
 | `src/internal/store/spine.ts`, `service.ts`, `helpers.ts` | Shared storage plumbing — internal. Type-agnostic only; per-facet codecs live next to each facet in `src/store/`. |
-| `src/internal/manager/*` | PM child launch, log capture/relay/query, group watch — **internal**. |
-| `src/ControlService.ts` | Localhost HTTP JSON control API. |
+| `src/internal/manager/*` | Log capture / relay / query / scope (used by `Logs` + `store/log`) — **internal**. |
 | `src/react/` | Headless `ControlPlanePort`, hooks, adapters (`@nikscripts/effect-pm/react`). |
 | `src/ops-ui/` | Styled ops dashboard (Tailwind/shadcn); future package — [guides/dashboard-ops-ui.md](./guides/dashboard-ops-ui.md). |
 | `src/Logs.ts` | PM capture/relay only (`captureLoggerLayer`, `relayLayer`) — package subpath `@nikscripts/effect-pm/Logs`. |
-| `src/ProcessManager.ts` | Typed remote client and endpoint service for group control contracts. |
-| `src/cli.ts` | `createCli` / `runCli` — HTTP client for control API. |
 | `src/disarmedIdleSleep.ts` | Pure policy for disarmed idle sleep (shared with tests). |
 | `src/prisma/*` | Optional Prisma adapter (`@nikscripts/effect-pm/prisma` export). |
 | `examples/forms/*` | One API shape per file — minimal teaching references. |
@@ -46,11 +43,10 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 
 ## Invariants (do not break casually)
 
-1. **Supervisor semantics** — One fiber per started process; outer loop waits for **armed** schedule; inner loop runs **polling** ticks while armed. See `Process.ts` module doc and `docs/SCHEDULE-AND-PROCESSGROUP.md`.
+1. **Supervisor semantics** — One fiber per started process; outer loop waits for **armed** schedule; inner loop runs **polling** ticks while armed. See `Process.ts` module doc.
 2. **`Process.effect` typing** — `Process<R>`: `effect` needs the user environment plus optional storage facets supplied by `ProcessStorage.layer`. Inlined `polling` / `schedule` on `Process.make` are merged into the supervisor so **`R` excludes those services** when present (overload-resolved in `Process.ts`).
-3. **ProcessGroup combined requirements** — `AllGroupProcessesRequirements` unions `Effect.Services<p["effect"]>` across processes; app must provide that environment when calling `startAll`, etc.
-4. **Control API security** — `ControlService` binds to **127.0.0.1** only.
-5. **Storage** — See [STORAGE.md](./STORAGE.md) only (`RuntimeStorage` + `src/store/*` facets, `ProcessStore` builder, `ProcessStorage` combined layers, logs split, refactor list, agent assignments).
+3. **Location transparency** — a `Resource` tag is driven by the same `yield* Tag` code local or remote; only the provided layer differs (`.layer` vs `.client`/`.serveHttp`). Don't special-case local vs remote in resource consumers.
+4. **Storage** — See [STORAGE.md](./STORAGE.md) only (`RuntimeStorage` + `src/store/*` facets, `ProcessStore` builder, `ProcessStorage` combined layers). Toolkit persistence ports: `HistoryStore` / `DurableQueueStore` (SQLite backends in `storage/sqlite`).
 
 ---
 
@@ -181,6 +177,6 @@ by default.
   `prisma db push`, and `prisma generate`; if a restricted environment blocks
   Prisma engine install scripts, run `pnpm approve-builds` for `prisma` /
   `@prisma/engines` and reinstall before testing.
-- Examples using `ControlService` bind to localhost ports. If an example fails
-  because a port is already in use, rerun with a free port or stop the specific
-  process that owns that port.
+- Examples that serve a resource over HTTP (`serveHttp`) bind to localhost ports. If an
+  example fails because a port is already in use, rerun with a free port or stop the
+  specific process that owns that port.

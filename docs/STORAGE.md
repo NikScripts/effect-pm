@@ -31,7 +31,6 @@ Verify: `pnpm typecheck && pnpm test && pnpm lint && pnpm build`
 | `QueueResourceStore` | `store/QueueResource` | `src/store/queueResource.ts` |
 | `LogStore` | `store/Log` | `src/store/log.ts` |
 | `ProcessLifecycleStore` | `store/ProcessLifecycle` | `src/store/processLifecycle.ts` |
-| `ProcessGroupStore` | `store/ProcessGroup` | `src/store/processGroup.ts` |
 | `ProcessExecutionStore` | `store/ProcessExecution` | `src/store/processExecution.ts` |
 | `ProcessStore` | `ProcessStore` | facet builder |
 | `ProcessStorage` | `ProcessStorage` | combined built-in facet layers |
@@ -55,7 +54,6 @@ property names (same **`Context`** tags as `*Store`):
 | **`ProcessStorage.RunResource`** | **`RunResourceStore`** |
 | **`ProcessStorage.ProcessExecution`** | **`ProcessExecutionStore`** |
 | **`ProcessStorage.ProcessLifecycle`** | **`ProcessLifecycleStore`** |
-| **`ProcessStorage.ProcessGroup`** | **`ProcessGroupStore`** *(storage facet)* — not **`ProcessGroup.Service`**. |
 
 Use either import style; **`Effect.serviceOption`**, **`Layer`**, and static emitters behave identically.
 
@@ -68,7 +66,7 @@ Each facet writes one or more `RuntimeRecord.type` strings. Records carry `proce
 | `type` | Writer | Reader |
 |--------|--------|--------|
 | `process.execution.completed` | static `recordCompleted` / `recordFailed` / `recordInterrupted` | `yield* ProcessExecutionStore` → `.executions` |
-| `process.lifecycle.changed` | static `lifecycleChanged` / `recordMember*` | `yield* ProcessLifecycleStore` / `ProcessGroupStore` → read methods |
+| `process.lifecycle.changed` | static `lifecycleChanged` / `recordMember*` | `yield* ProcessLifecycleStore` → read methods |
 | `run-resource.fact.recorded` | static `recordRun*` | `yield* RunResourceStore` → `.facts`, `.runs`, `.byRun` |
 | `run-resource.state.changed` | static `recordStateChange` | `yield* RunResourceStore` → `.stateHistory`, `.latestState` |
 | `log.entry` | static `record` / `recordBatch` (relay) | `yield* LogStore` → `.load`, `.query` |
@@ -191,7 +189,6 @@ Built-in `withIdentifier` facets (subpath → bound id):
 | `RunResourceStore` | `store/RunResource` | `resourceId` |
 | `ProcessLifecycleStore` | `store/ProcessLifecycle` | `processId` |
 | `ProcessExecutionStore` | `store/ProcessExecution` | `processId` |
-| `ProcessGroupStore` | `store/ProcessGroup` | `groupId` |
 
 The `ProcessStoreSpine` handle (`s`) exposes the storage primitives only:
 

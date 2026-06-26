@@ -113,23 +113,6 @@ const SendSmsLive = SendSms.layer.pipe(
 
 ---
 
-## ProcessGroup wiring
-
-```typescript
-const groupLayer = MyGroup.layer.pipe(
-  Layer.provideMerge(
-    Layer.mergeAll(
-      EmailQueue.configure({ concurrency: 1 }),
-      Sync.wrapEffect((prev) => prev.pipe(Effect.tap(() => Effect.log("tick")))),
-    ),
-  ),
-);
-```
-
-Ensure configure layers are merged **before** or **with** queue/process service layers so `foldConfiguredSpec` sees them at acquisition.
-
----
-
 ## Tag key
 
 `resourceConfigureTagKey(id)` → `@nikscripts/effect-pm/ResourceConfigure/${id}`. Matches the service **name** / process **id** string.
@@ -140,4 +123,3 @@ Ensure configure layers are merged **before** or **with** queue/process service 
 
 - [queue-resource.md](./queue-resource.md) — queue definition forms
 - [process.md](./process.md) — process definition forms
-- [process-group.md](./process-group.md) — group layer and entries
