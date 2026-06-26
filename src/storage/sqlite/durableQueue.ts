@@ -211,6 +211,28 @@ const makeService = (sql: SqlClient): DurableQueueStoreShape => {
           }),
         )
         .pipe(Effect.mapError(fail("clear"))),
+
+    drain: (queueId, match) =>
+      sql
+        .withTransaction(
+          Effect.gen(function* () {
+            const now = yield* Clock.currentTimeMillis;
+            // available backlog (not leased), optionally narrowed to one id / key
+            let where = sql`queue_id = ${queueId} AND status = 'pending' AND (locked_until_ms IS NULL OR locked_until_ms < ${now})`;
+            if (match.id !== undefined) {
+              where = sql`${where} AND id = ${match.id}`;
+            } else if (match.key !== undefined) {
+              where = sql`${where} AND dedup_key = ${match.key}`;
+            }
+            const rows = yield* sql`SELECT * FROM ${sql(TABLE)} WHERE ${where} ORDER BY priority_rank ASC, seq ASC`;
+            const entries = rows.map(rowToEntry);
+            if (entries.length > 0) {
+              yield* sql`DELETE FROM ${sql(TABLE)} WHERE ${where}`;
+            }
+            return entries;
+          }),
+        )
+        .pipe(Effect.mapError(fail("drain"))),
   };
 };
 

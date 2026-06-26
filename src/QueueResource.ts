@@ -3304,6 +3304,31 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
     const restorePending = (items: ReadonlyArray<InternalItem<T>>): Effect.Effect<void> =>
       Effect.gen(function* () {
+        // Durable: put drained entries back into the store (where they came from), not the lanes.
+        if (persist !== undefined) {
+          const { codec, store } = persist;
+          yield* Effect.forEach(
+            items,
+            (item) =>
+              Exit.match(codec.encode(item.item), {
+                onSuccess: (payload) =>
+                  isJsonValue(payload)
+                    ? store
+                        .offer({
+                          id: item.entryId,
+                          queueId: queueName,
+                          dedupKey: item.key,
+                          priority: item.priority,
+                          payload,
+                        })
+                        .pipe(Effect.asVoid, Effect.catch(() => Effect.void))
+                    : Effect.void,
+                onFailure: () => Effect.void,
+              }),
+            { discard: true },
+          );
+          return;
+        }
         const restoredKeys: string[] = [];
         for (const item of items) {
           yield* Queue.offer(queueForPriority(item.priority), item);
@@ -3353,10 +3378,52 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         return extracted;
       });
 
+    // Durable extraction for the control verbs: pulls the matching **available** backlog out of the
+    // store (in-flight/leased work is left to the workers) and decodes it back to InternalItems.
+    // entryId / key selectors map to the store; an item-only selector can't match serialized rows.
+    const extractPendingPersist = (
+      selector?: QueueEntrySelector<T>,
+    ): Effect.Effect<ReadonlyArray<InternalItem<T>>> => {
+      if (persist === undefined) return Effect.succeed([]);
+      const { codec, store } = persist;
+      const match =
+        selector === undefined
+          ? ({} as { id?: string; key?: string })
+          : selector.entryId !== undefined
+            ? { id: selector.entryId }
+            : selector.key !== undefined
+              ? { key: selector.key }
+              : undefined;
+      if (match === undefined) return Effect.succeed([]);
+      return store.drain(queueName, match).pipe(
+        Effect.catch(() => Effect.succeed([] as ReadonlyArray<DurableEntry>)),
+        Effect.map((entries) =>
+          entries.flatMap((entry) => {
+            const decoded = codec.decode(entry.payload);
+            return Exit.isSuccess(decoded)
+              ? [
+                  {
+                    item: decoded.value,
+                    entryId: entry.id,
+                    retries: Math.max(0, entry.attempts - 1),
+                    priority: entry.priority,
+                    enqueuedAt: entry.enqueuedAtMillis,
+                    key: entry.dedupKey ?? undefined,
+                  } satisfies InternalItem<T>,
+                ]
+              : [];
+          }),
+        ),
+      );
+    };
+
     const releasePending = (options?: QueueReleaseOptions): Effect.Effect<ReadonlyArray<QueueEntry<T>>, never, R> =>
       Effect.gen(function* () {
         const releaseId = options?.releaseId ?? nextReleaseId();
-        const internals = yield* extractPending(() => true);
+        const internals =
+          persist !== undefined
+            ? yield* extractPendingPersist()
+            : yield* extractPending(() => true);
         const entries = internals.map((internal) =>
           queueEntryFromInternal(internal, undefined, {
             releaseId,
@@ -3389,7 +3456,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           return yield* new QueueMissingItemSchemaError({ queue: queueName });
         }
         const releaseId = options?.releaseId ?? nextReleaseId();
-        const internals = yield* extractPending(() => true);
+        const internals =
+          persist !== undefined
+            ? yield* extractPendingPersist()
+            : yield* extractPending(() => true);
         const encoded = yield* Effect.forEach(
           internals,
           (internal) => encodeForRelease(internal, releaseId, options?.attributes),
@@ -3433,7 +3503,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       Effect.gen(function* () {
         const internals = isQueueEntry(selector)
           ? []
-          : yield* extractPending((internal) => matchesSelector(internal, selector));
+          : persist !== undefined
+            ? yield* extractPendingPersist(selector)
+            : yield* extractPending((internal) => matchesSelector(internal, selector));
         const entries = isQueueEntry(selector)
           ? [selector]
           : internals.map((internal) =>

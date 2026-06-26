@@ -100,4 +100,45 @@ describe("QueueResource persist (SQLite durability)", () => {
       expect(yield* Ref.get(runs)).toBe(2); // tried twice, then dead-lettered
     }),
   );
+
+  it.live("release pulls the durable backlog out of the store", () =>
+    Effect.gen(function* () {
+      const storeLayer = yield* makeStoreLayer;
+      yield* Effect.gen(function* () {
+        const queue = yield* QueueResource.make({
+          name: "dq-release",
+          itemSchema: Schema.Number,
+          effect: (_n: number) => Effect.void,
+          persist: true,
+          autoStart: false, // keep the backlog available (not leased) for release
+        });
+        yield* queue.add([1, 2, 3]);
+        const released = yield* queue.release({});
+        expect(released.map((e) => e.item).sort()).toEqual([1, 2, 3]);
+        expect(yield* queue.size).toBe(0); // store drained
+      }).pipe(Effect.provide(storeLayer), Effect.scoped);
+    }),
+  );
+
+  it.live("deadLetter / drop by key remove from the durable store", () =>
+    Effect.gen(function* () {
+      const storeLayer = yield* makeStoreLayer;
+      yield* Effect.gen(function* () {
+        const queue = yield* QueueResource.make({
+          name: "dq-route",
+          itemSchema: Schema.Number,
+          key: (n: number) => String(n),
+          effect: (_n: number) => Effect.void,
+          persist: true,
+          autoStart: false,
+        });
+        yield* queue.add([1, 2, 3]);
+        yield* queue.deadLetter({ key: "1" }, { reason: "test" });
+        yield* queue.drop({ key: "2" }, { reason: "test" });
+        expect(yield* queue.size).toBe(1); // only item 3 remains in the store
+        const left = yield* queue.release({});
+        expect(left.map((e) => e.item)).toEqual([3]);
+      }).pipe(Effect.provide(storeLayer), Effect.scoped);
+    }),
+  );
 });

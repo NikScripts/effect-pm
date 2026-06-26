@@ -109,6 +109,11 @@ workers, success/failure update the store (retry → requeue, `maxAttempts` → 
 restart **recovers in-flight work**. `size`/`sizes`/`isEmpty`/`status` and shutdown-drain reflect
 the store. Off by default (in-memory only) — and the in-memory path is unchanged.
 
+**Control verbs** (`release` / `deadLetter` / `drop`) operate on the durable **backlog** — select by
+`entryId` or `key` (item-reference selectors don't survive serialization; in-flight/leased work is
+left to the workers). So a dashboard's "drop / dead-letter this item" actions work on a persisted
+queue, not just an in-memory one.
+
 ## For a dashboard (query-then-tail, over RPC)
 
 Same Tag, two reads: **`status`/`metrics`/`logs` for live**, **`*History` for backfill**. The

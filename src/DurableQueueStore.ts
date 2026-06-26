@@ -120,6 +120,15 @@ export interface DurableQueueStoreShape {
   readonly recover: (queueId: string) => Effect.Effect<number, DurableQueueError>;
   /** Delete all pending (incl. in-flight) entries for a queue. Returns the count removed. */
   readonly clear: (queueId: string) => Effect.Effect<number, DurableQueueError>;
+  /**
+   * Remove and return **available** (not in-flight) backlog entries matching `id` or `key` (all if
+   * neither given). Powers the durable `release` / `deadLetter` / `drop` control verbs. In-flight
+   * (leased) work is left untouched — it can't be selector-targeted while a worker holds it.
+   */
+  readonly drain: (
+    queueId: string,
+    match: { readonly id?: string; readonly key?: string },
+  ) => Effect.Effect<ReadonlyArray<DurableEntry>, DurableQueueError>;
 }
 
 /**
