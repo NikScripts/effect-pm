@@ -26,15 +26,13 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/LogContext.ts`, `src/LogEntry.ts` | Log annotations + NDJSON log entries (the kept log infra; still named `ProcessManagerLog*`). |
 | `src/internal/store/spine.ts`, `service.ts`, `helpers.ts` | Shared storage plumbing — internal. Type-agnostic only; per-facet codecs live next to each facet in `src/store/`. |
 | `src/internal/manager/*` | Log capture / relay / query / scope (used by `Logs` + `store/log`) — **internal**. |
-| `src/react/` | Headless `ControlPlanePort`, hooks, adapters (`@nikscripts/effect-pm/react`). |
-| `src/ops-ui/` | Styled ops dashboard (Tailwind/shadcn); future package — [guides/dashboard-ops-ui.md](./guides/dashboard-ops-ui.md). |
 | `src/Logs.ts` | PM capture/relay only (`captureLoggerLayer`, `relayLayer`) — package subpath `@nikscripts/effect-pm/Logs`. |
 | `src/disarmedIdleSleep.ts` | Pure policy for disarmed idle sleep (shared with tests). |
 | `src/prisma/*` | Optional Prisma adapter (`@nikscripts/effect-pm/prisma` export). |
 | `examples/forms/*` | One API shape per file — minimal teaching references. |
 | `examples/scenarios/*` | Descriptive compositions showing subsystems together. |
 | `examples/shared/*` | Test doubles, harness helpers, shared example utilities. |
-| `docs/guides/*.md` | API guides (definition forms, config, types); **`service-tags-and-runtime-split.md`** = bundler‑safe tags vs **`Layer`/runtime`; **`dashboard-integration.md`** = embeddable widgets + **`peerDependency`** + topology. Merge with `docs/rewrite/` over time. |
+| `docs/guides/*.md` | API guides — `toolkit-by-example.md`, `history-and-persistence.md`, `queue-resource.md`, `process.md`, `service-tags-and-runtime-split.md` (bundler-safe tags vs `Layer`/runtime). |
 | `docs/plans/*.md` | Future-only roadmap items. Implemented behavior belongs in regular docs and source TSDoc. |
 | `repos/effect/` | Vendored Effect source for read-only agent reference. **Do not import from it.** |
 | `test/*.ts` | Vitest suites — run `pnpm test`. |

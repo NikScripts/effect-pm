@@ -29,7 +29,6 @@ Detail tables also live in [`docs/PROCESS-API.md`](../PROCESS-API.md),
 | Guide | Topic |
 | --- | --- |
 | [service-tags-and-runtime-split.md](./service-tags-and-runtime-split.md) | Service **tags** vs **Layer/runtime** modules (Vite / React / RN safe) |
-| [dashboard-integration.md](./dashboard-integration.md) | Dashboard widgets, API topology, security notes |
 
 ---
 

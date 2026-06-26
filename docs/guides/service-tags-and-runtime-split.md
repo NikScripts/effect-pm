@@ -1,74 +1,53 @@
-# Service tags vs runtime layers (bundler‑safe split)
+# Service tags vs runtime layers (bundler-safe split)
 
-When you expose **`ProcessGroup.Service`**, **`Process.Service`**, or **`QueueResource.Service`** declarations to:
+Keep the **tag** (identity + contract) separate from the **runtime** (layers, `serveHttp`, storage,
+native adapters). A browser/dashboard bundle imports only the tag; the engine, SQL adapters, and
+Node bits never get pulled in.
 
-- **Browser bundles** (Vite, Next client components, RN Metro), **or**
-- **Shared npm packages** that compile against both Edge and Node,
+## Why
 
-…it is **standard practice** to keep **two modules**:
+A resource tag is just an identity + spec. The dashboard does `Resource.client(Tag)` and
+`yield* Tag` — it needs the **tag**, not the engine. If tags and runtime wiring live in one module,
+a client bundle resolves the engine (and its native deps). Splitting them keeps client bundles tiny
+and safe (proven: tag-only subpath imports bundle to a few kb with **zero** engine code).
 
-| Module role | Imports | Exported to |
-| --- | --- | --- |
-| **Tags only** (`*.tags.ts`) | `@nikscripts/effect-pm`, `effect`; **avoid** `@effect/platform-node`, `better-sqlite3`, adapters, SQLite/Prisma **runtime**, custom server-only deps | Frontend, widgets, CLI type-only consumers, codegen |
-| **Runtime** (`*.runtime.ts` / `main.ts`) | Tags module + **`Layer.mergeAll`** + **`ControlService.layerHttp`** + storage + whatever your process needs | Node (or Bun) OS edge only |
+## The split
 
-**Why:** Declaring services **instantiates merged `layer` factories** when you assemble the group. That is harmless in Node but **fatal** if a single file pulls **tags + `Layer.mergeAll` + `layerProcessStore` + SQLite** into a bundle that webpack/Vite analyzes for the client. Splitting avoids accidental resolution of native or platform-only subgraphs while still giving the UI **`typeof MyQueue`**, **`MyQueue.id`**, and **`MyGroup.contract`**.
+```ts
+// tags.ts — browser-safe. Import the tag namespace from its subpath (tree-shakes per member).
+import * as QueueResource from "@nikscripts/effect-pm/QueueContract";
+import * as ScheduledProcess from "@nikscripts/effect-pm/ScheduledProcess";
 
-## Tags module (minimal)
-
-```typescript
-// app/groups/production.tags.ts — safe to import from React/Vite
-import { Effect, Process, ProcessGroup, QueueResource } from "@nikscripts/effect-pm";
-
-export class EmailQueue extends QueueResource.Service<EmailQueue, { to: string }, never>()(
-  "@app/EmailQueue",
-  { effect: () => Effect.void, concurrency: 1 },
-) {}
-
-export class Notify extends Process.Service<Notify>()("@app/Notify", {
-  effect: Effect.void,
-}) {}
-
-export class ProdGroup extends ProcessGroup.Service<ProdGroup>()("@app/ProdGroup", [
-  Notify,
-  EmailQueue,
-] as const) {}
+export class RosterQueue extends QueueResource.Tag<RosterQueue>()("nwsl/RosterQueue", Job) {}
+export class LiveScores extends ScheduledProcess.Tag<LiveScores>()("nwsl/LiveScores") {}
 ```
 
-- No **`ControlService`**, **`ProcessStorage.layer`**, **SQLite**, **`Endpoint.local(import.meta.url)`** child launcher wiring, secrets, etc.
-- Effect `Effect` in queue/process config is acceptable as long as the module stays free of native-only transitive imports **you add** beside `effect-pm`.
-
-## Runtime module (Node edge)
-
-```typescript
-// app/groups/production.runtime.ts — Node/Bun only
+```ts
+// runtime.ts — Node OS edge only. Layers, serveHttp, storage, persistence.
 import { Layer } from "effect";
-import { ControlService } from "@nikscripts/effect-pm";
-import { EmailQueue, Notify, ProdGroup } from "./production.tags";
+import { QueueResource } from "@nikscripts/effect-pm/QueueContract";
+import { SQLiteHistoryStore } from "@nikscripts/effect-pm/storage/sqlite";
+import { RosterQueue } from "./tags";
 
-export const prodEdgeLayer = Layer.mergeAll(
-  ProdGroup.layer.pipe(Layer.provide(Layer.mergeAll(Notify.layer, EmailQueue.layer))),
-  EmailQueue.layer,
-  ControlService.layerHttp(ProdGroup, { port: 3001 }),
-);
+export const RosterQueueLive = QueueResource.serveHttp(RosterQueue, { effect, captureLogs: true })
+  .pipe(Layer.provide(SQLiteHistoryStore.layer({ filename: "history.db" })));
 ```
 
-**Rule of thumb:** if a file **`pipe(Layer.provide`** or **`ControlService`** or **`SQLiteRuntimeStorage`**, it belongs in **runtime**, not beside your widget imports.
+```ts
+// dashboard (browser) — only the tag + a client transport.
+import { Resource } from "@nikscripts/effect-pm/Resource";
+import { RosterQueue } from "./tags";
 
-## For React / embeddable components
+const queue = yield* RosterQueue;            // resolved from Resource.client(RosterQueue)
+yield* queue.logHistory({ limit: 200 });
+```
 
-Consumers should import **tags** for:
+## Rule of thumb
 
-- **Props** keyed by `typeof Notify`, `typeof EmailQueue`, `typeof ProdGroup`,
-- **`encodeURIComponent(SomeTag.id)`** for **`ControlService`** REST paths,
-- **`ProdGroup.contract`** for static layout while **`GET /contract`** refreshes live truth.
+If a file calls `Layer.provide` / `serveHttp` / `SQLiteRuntimeStorage` / a storage adapter, it
+belongs in **runtime**, not beside your client/widget imports. Import tag namespaces from their
+**subpaths** (`@nikscripts/effect-pm/QueueContract`, `/ScheduledProcess`, `/Group`, …) so member
+access tree-shakes.
 
-Widgets never need the **`Layer`** graph at compile-time if they receive a **`controlBaseUrl`** aimed at your **control gateway** — the server that forwards to private **`ControlService`** (see [dashboard-integration.md](./dashboard-integration.md)).
-
-## Naming
-
-Prefer explicit suffixes **`*.tags.ts`** / **`*.runtime.ts`** (or **`declarations`** / **`server`**) — anything that discourages **`import ../../../groups`** that accidentally grabs both.
-
-## Related
-
-- [dashboard-integration.md](./dashboard-integration.md) — product shape (React widgets + demo), **`peerDependencies`**, and **browser vs backend** topology for **`ControlService`**.
+See [history-and-persistence.md](./history-and-persistence.md) for the dashboard data layer
+(query-then-tail) and [toolkit-by-example.md](./toolkit-by-example.md) for full patterns.
