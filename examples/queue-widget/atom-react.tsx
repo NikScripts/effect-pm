@@ -55,6 +55,9 @@ export const useAtomSet = <Read, Write>(
   atom: Atom.Writable<Read, Write>,
 ): ((value: Write) => void) => {
   const registry = useRegistry();
+  // Keep the atom MOUNTED while this component is alive — a `runtime.fn` atom only runs
+  // its effect when active. Without this, `set` is a no-op (buttons appear dead).
+  React.useEffect(() => registry.mount(atom), [registry, atom]);
   return React.useCallback(
     (value: Write) => registry.set(atom, value),
     [registry, atom],
