@@ -9,8 +9,7 @@
   Facets: all via `ProcessStorage.layerRuntimeStorage`, or **individual**
   `QueueResourceStore.layerRuntimeStorage` (etc.) for only what you use — each still uses the
   same `RuntimeStorage`. **Hybrid** = one adapter routing internally (e.g. SQL +
-  Redis), not a second store beside it. See
-  [plans/13-queue-rate-limit-and-operational-storage.md](./plans/13-queue-rate-limit-and-operational-storage.md).
+  Redis), not a second store beside it. See [plans/15-runtime-storage-hybrid.md](./plans/15-runtime-storage-hybrid.md).
 - **Stack:** `RuntimeStorage` (rows) + per-domain facets in `src/store/` (`@nikscripts/effect-pm/store/*`). `ProcessStore` = facet builder. `ProcessStorage` = combined built-in facet layers.
 - **One facet per domain.** Each facet owns its concrete fact / change types **and** its row codec — encoders, decoders, predicate builders. No shared envelope. No public `runtime.fact.recorded` wire type.
 - **Optional storage.** Domain code uses **static emitters** on facet stores (`QueueResourceStore.recordEntry`, …). No-op without layer; when storage is present, read and write failures surface typed errors. Use `ProcessStore.catchErrorAndLog(...)` for explicit best-effort telemetry.
@@ -194,7 +193,7 @@ The `ProcessStoreSpine` handle (`s`) exposes the storage primitives only:
 
 | Method | Purpose |
 |--------|---------|
-| `s.runId` | Id minted when the facet spine is built; stamped on every write from that layer. **Not** sufficient alone for live-instance identity — see [plans/12-runtime-identity-and-singleton-runs.md](./plans/12-runtime-identity-and-singleton-runs.md) (`instanceId`, cross-runtime leases). |
+| `s.runId` | Id minted when the facet spine is built; stamped on every write from that layer. **Not** sufficient alone for live-instance identity — runtime identity / singleton runs (`instanceId`, cross-runtime leases) are on the [roadmap](./plans/README.md). |
 | `s.create` / `s.createBatch` | Insert one / many records |
 | `s.upsert` | Insert-or-replace one record |
 | `s.read(query?)` | Run a `RuntimeRecordQuery` (predicate, orderBy, limit, offset) |
@@ -246,11 +245,7 @@ and must not change process / queue success.
 
 ## Pending work
 
-| Area | Notes |
-|------|-------|
-| **Identity & singleton runs** | `instanceId`, in-process + **durable lease** so the same logical process is not running in another program/host. Plan: [plans/12-runtime-identity-and-singleton-runs.md](./plans/12-runtime-identity-and-singleton-runs.md). |
-| **Operational storage** | One config for facts + **state** + audit; `RuntimeStorage.transaction`; facet state/mutate helpers. Plan: [plans/13-queue-rate-limit-and-operational-storage.md](./plans/13-queue-rate-limit-and-operational-storage.md). |
-| **Queue `rateLimit`** | Effect `RateLimiter` via `RateLimiterStore` on this stack — not shipped. Same plan **13**. |
-| **Extend `configure` / `Service`** | Parity on `Process`, `RunResource`, `HttpApiResource` (see plan **13**). |
-| Telemetry proposals | `Polling`, `ProcessSchedule`, `HttpApiResource`: facet yes/no docs in `docs/storage-proposals/` (Phase 1 — proposal only). |
-| **Thread index** | [plans/14-conversation-capture-may-2026.md](./plans/14-conversation-capture-may-2026.md) |
+Storage-related future items live in the [roadmap](./plans/README.md): **hybrid `RuntimeStorage`**
+(SQL + Redis), **Postgres backends** for `HistoryStore` / `DurableQueueStore`, **storage-adapter
+integration testing**, **runtime identity & singleton runs** (durable cross-runtime lease), and
+**richer history vocabulary + listener hooks**.

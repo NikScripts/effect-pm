@@ -111,9 +111,9 @@ See [`.cursor/rules/public-vs-internal.mdc`](../.cursor/rules/public-vs-internal
 | Add a public export | Add the symbol to the module **namespace** object, export the same binding at the module top level (short name), then re-export namespace + short name from `src/index.ts`. Add a `tsup` entry and `package.json` `exports` subpath when the module is a standalone import surface. |
 | Change process semantics | Update `src/Process.ts`, tests in `test/process*.ts`, and the relevant regular docs if behavior is contractual. |
 | Add an example | Add a **form** under `examples/forms/<area>/` or a **scenario** under `examples/scenarios/`; document in `examples/README.md`; add `package.json` script if runnable. Put heavy mock / scenario prose in `examples/shared/` when it would drown the entry script. |
-| Verify types (strict Effect rules) | `pnpm run typecheck` (uses `tsgo`). `anyUnknownInErrorContext` is temporarily `"off"`; see [strict any/unknown plan](./plans/10-typescript-strict-unknown.md). |
+| Verify types (strict Effect rules) | `pnpm run typecheck` (uses `tsgo`). `anyUnknownInErrorContext` is temporarily `"off"` (re-enabling it is on the [roadmap](./plans/README.md)). |
 | Run tests | `pnpm test` |
-| Implement store / runtime / group roadmap | Follow [`STORAGE.md`](./STORAGE.md) for storage work and [`docs/plans/README.md`](./plans/README.md) for priority order. Remote/control/queue-wire: [`01-remote-cli-transport-wire.md`](./plans/01-remote-cli-transport-wire.md), [`03-queue-remote-handoff.md`](./plans/03-queue-remote-handoff.md). Storage polish: [`11-storage-prisma-follow-up.md`](./plans/11-storage-prisma-follow-up.md). |
+| Pick up future work | [`STORAGE.md`](./STORAGE.md) for the persistence model; [`docs/plans/README.md`](./plans/README.md) for the reviewed roadmap. |
 
 ---
 
