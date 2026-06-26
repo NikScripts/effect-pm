@@ -80,7 +80,6 @@ import {
   Metric,
   Option,
   PubSub,
-  Queue,
   Ref,
   Schema,
   Scope,
@@ -119,6 +118,8 @@ import { ProcessStore } from "./ProcessStore";
 import { isJsonValue } from "./internal/json";
 import type { JsonValue } from "./ProcessStoreEvent";
 import { DurableQueueStore } from "./DurableQueueStore";
+import { makeFifoLaneStore } from "./internal/fifoLaneStore";
+import type { Lane } from "./internal/laneStore";
 import type {
   DurableEntry,
   DurableQueueStoreShape,
@@ -1687,10 +1688,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     const autoReEnqueue =
       config.attempts !== undefined || config.retries !== undefined;
     // ─── Allocate internal state ───
-    // Three bounded queues: one per priority level. Backpressure at `capacity`.
-    const highQueue = yield* Queue.bounded<InternalItem<T>>(capacity);
-    const normalQueue = yield* Queue.bounded<InternalItem<T>>(capacity);
-    const lowQueue = yield* Queue.bounded<InternalItem<T>>(capacity);
+    // Lane store: strict high/normal/low FIFO, each bounded at `capacity` (backpressure on offer).
+    // This is the ONLY lane-specific dependency — the rest of the engine is lane-agnostic and drives
+    // it through the `LaneStore` interface (see internal/laneStore).
+    const laneStore = yield* makeFifoLaneStore<InternalItem<T>>({ capacity });
 
     // ─── Durability (opt-in: `persist` + a DurableQueueStore + itemSchema) ───
     // When on, the store is the source of truth: enqueue persists, a feeder leases work into the
@@ -1743,14 +1744,11 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       readonly low: number;
     }> =
       persist === undefined
-        ? Effect.map(
-            Effect.all([
-              Queue.size(highQueue),
-              Queue.size(normalQueue),
-              Queue.size(lowQueue),
-            ]),
-            ([high, normal, low]) => ({ high, normal, low }),
-          )
+        ? Effect.map(laneStore.sizes, ({ high, low, middle }) => ({
+            high,
+            normal: middle[0] ?? 0,
+            low,
+          }))
         : persist.store
             .sizes(queueName)
             .pipe(Effect.catch(() => Effect.succeed({ high: 0, normal: 0, low: 0 })));
@@ -2612,22 +2610,15 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
     /** Wake drain monitor when all priority queues are empty (after work drains). */
     const wakeDrainedIfAllQueuesEmpty = Effect.gen(function* () {
-      const h = yield* Queue.size(highQueue);
-      const n = yield* Queue.size(normalQueue);
-      const l = yield* Queue.size(lowQueue);
-      if (Math.max(0, h) + Math.max(0, n) + Math.max(0, l) === 0) {
+      if (yield* laneStore.isEmpty) {
         yield* recordLifecycleEvent("Drained");
         yield* signalDrainWake;
       }
     });
 
-    /** Select the internal queue for a given priority level. */
-    const queueForPriority = (priority: Priority) =>
-      priority === "high"
-        ? highQueue
-        : priority === "low"
-          ? lowQueue
-          : normalQueue;
+    /** Map a priority level to its lane (normal → the single middle group `0`). */
+    const laneOf = (priority: Priority): Lane =>
+      priority === "high" ? "high" : priority === "low" ? "low" : { group: 0 };
 
     // ─── Internal: enqueue logic ───
 
@@ -2753,7 +2744,9 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         // out-of-order analytics for the same dedupe-key cycle. The
         // internal `activeKeys` ref is already updated above so the
         // dedup invariant holds either way.
-        yield* Queue.offerAll(queueForPriority(priority), toEnqueue);
+        yield* Effect.forEach(toEnqueue, (i) => laneStore.offer(i, laneOf(priority)), {
+          discard: true,
+        });
         yield* Effect.forEach(
           toEnqueue,
           (internal) => recordEntryEvent("enqueued", internal),
@@ -2886,14 +2879,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
      * This avoids the priority inversion that `Effect.race(take, take, take)` would cause.
      */
     const takeNext: Effect.Effect<InternalItem<T>> = Effect.gen(function* () {
-      const high = yield* Queue.poll(highQueue);
-      if (Option.isSome(high)) return high.value;
-
-      const normal = yield* Queue.poll(normalQueue);
-      if (Option.isSome(normal)) return normal.value;
-
-      const low = yield* Queue.poll(lowQueue);
-      if (Option.isSome(low)) return low.value;
+      const polled = yield* laneStore.poll;
+      if (Option.isSome(polled)) return polled.value;
 
       // All empty. If shutdown was requested there's nothing left to take (drain is complete, or
       // finishActive already discarded the queued items) — interrupt this worker so it exits.
@@ -3181,14 +3168,17 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
               yield* Exit.match(persist.codec.decode(entry.payload), {
                 onSuccess: (item) =>
                   Effect.andThen(
-                    Queue.offer(queueForPriority(entry.priority), {
-                      item,
-                      entryId: entry.id,
-                      retries: Math.max(0, entry.attempts - 1),
-                      priority: entry.priority,
-                      enqueuedAt: entry.enqueuedAtMillis,
-                      key: entry.dedupKey ?? undefined,
-                    }),
+                    laneStore.offer(
+                      {
+                        item,
+                        entryId: entry.id,
+                        retries: Math.max(0, entry.attempts - 1),
+                        priority: entry.priority,
+                        enqueuedAt: entry.enqueuedAtMillis,
+                        key: entry.dedupKey ?? undefined,
+                      },
+                      laneOf(entry.priority),
+                    ),
                     // wake a worker blocked in `takeNext` (offer alone doesn't signal)
                     signalWorkerWake,
                   ),
@@ -3313,19 +3303,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     // `Dropped` event for the discarded entries (reason "shutdown"), so only in-flight items
     // remain to finish. (drain mode skips this — it processes the queued items instead.)
     const discardPendingOnShutdown: Effect.Effect<void> = Effect.gen(function* () {
+      const drained = yield* laneStore.drain;
       const discarded: Array<QueueEntry<T>> = [];
-      const drainLane = (q: Queue.Queue<InternalItem<T>>): Effect.Effect<void> =>
-        Effect.gen(function* () {
-          const polled = yield* Queue.poll(q);
-          if (Option.isSome(polled)) {
-            yield* releaseActiveKey(polled.value);
-            discarded.push(queueEntryFromInternal(polled.value));
-            yield* drainLane(q);
-          }
-        });
-      yield* drainLane(highQueue);
-      yield* drainLane(normalQueue);
-      yield* drainLane(lowQueue);
+      for (const internal of drained) {
+        yield* releaseActiveKey(internal);
+        discarded.push(queueEntryFromInternal(internal));
+      }
       if (discarded.length > 0) {
         yield* publishEvent({
           _tag: "Dropped",
@@ -3370,7 +3353,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         }
         const restoredKeys: string[] = [];
         for (const item of items) {
-          yield* Queue.offer(queueForPriority(item.priority), item);
+          yield* laneStore.offer(item, laneOf(item.priority));
           yield* restoreActiveKey(item);
           if (item.key !== undefined) {
             restoredKeys.push(item.key);
@@ -3386,33 +3369,14 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       select: (internal: InternalItem<T>) => boolean,
     ): Effect.Effect<ReadonlyArray<InternalItem<T>>> =>
       Effect.gen(function* () {
-        const extracted: InternalItem<T>[] = [];
+        const extracted = yield* laneStore.extractMatching(select);
         const releasedKeys: string[] = [];
-        const drainQueue = (q: Queue.Queue<InternalItem<T>>): Effect.Effect<void> =>
-          Effect.gen(function* () {
-            const kept: InternalItem<T>[] = [];
-            while (true) {
-              const item = yield* Queue.poll(q);
-              if (Option.isNone(item)) {
-                break;
-              }
-              if (select(item.value)) {
-                extracted.push(item.value);
-                yield* releaseActiveKey(item.value);
-                if (item.value.key !== undefined) {
-                  releasedKeys.push(item.value.key);
-                }
-              } else {
-                kept.push(item.value);
-              }
-            }
-            if (kept.length > 0) {
-              yield* Queue.offerAll(q, kept);
-            }
-          });
-        yield* drainQueue(highQueue);
-        yield* drainQueue(normalQueue);
-        yield* drainQueue(lowQueue);
+        for (const item of extracted) {
+          yield* releaseActiveKey(item);
+          if (item.key !== undefined) {
+            releasedKeys.push(item.key);
+          }
+        }
         yield* recordDedupeKeyChanges("released", releasedKeys);
         return extracted;
       });
@@ -3702,15 +3666,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           const cleared = yield* persist.store
             .clear(queueName)
             .pipe(Effect.catch(() => Effect.succeed(0)));
-          const drainDiscard = (
-            q: Queue.Queue<InternalItem<T>>,
-          ): Effect.Effect<void> =>
-            Effect.flatMap(Queue.poll(q), (polled) =>
-              Option.isSome(polled) ? drainDiscard(q) : Effect.void,
-            );
-          yield* drainDiscard(highQueue);
-          yield* drainDiscard(normalQueue);
-          yield* drainDiscard(lowQueue);
+          // Purge the stale in-memory copies the feeder had leased (the store is the truth).
+          yield* laneStore.drain;
           yield* Ref.set(completedCount, 0);
           yield* recordLifecycleEvent("Cleared", cleared);
           yield* publishEvent({ _tag: "Cleared", queueId: queueName, count: cleared });
@@ -3720,23 +3677,17 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           yield* wakeDrainedIfAllQueuesEmpty;
           return cleared;
         }
-        let count = 0;
+        const drained = yield* laneStore.drain;
+        const count = drained.length;
         const releasedKeys: string[] = [];
-        const drain = (q: Queue.Queue<InternalItem<T>>): Effect.Effect<void> =>
-          Effect.gen(function* () {
-            const internal = yield* Queue.poll(q);
-            if (Option.isSome(internal)) {
-              count++;
-              if (config.key !== undefined && internal.value.key !== undefined) {
-                yield* Ref.update(activeKeys, HashSet.remove(internal.value.key));
-                releasedKeys.push(internal.value.key);
-              }
-              yield* drain(q);
+        if (config.key !== undefined) {
+          for (const internal of drained) {
+            if (internal.key !== undefined) {
+              yield* Ref.update(activeKeys, HashSet.remove(internal.key));
+              releasedKeys.push(internal.key);
             }
-          });
-        yield* drain(highQueue);
-        yield* drain(normalQueue);
-        yield* drain(lowQueue);
+          }
+        }
         yield* Ref.set(completedCount, 0);
         yield* recordLifecycleEvent("Cleared", count);
         yield* publishEvent({ _tag: "Cleared", queueId: queueName, count });
