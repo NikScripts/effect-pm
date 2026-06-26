@@ -19,6 +19,7 @@
  * @since 1.0.0
  */
 export * from "./atom-react";
+export * from "./useViewTransition";
 export * from "./binding";
 export * from "./primitives";
 export * from "./panels";

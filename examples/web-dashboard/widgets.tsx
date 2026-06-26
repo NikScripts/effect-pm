@@ -27,6 +27,7 @@ import {
   queueLeaves,
 } from "./queue-data";
 import { useAtomSet, useAtomValue } from "../queue-widget/atom-react";
+import { viewTransitionStyle } from "../../src/web/useViewTransition";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
@@ -98,7 +99,7 @@ export const QueueCard = (props: {
       )}
     >
       <div className="mb-2 flex items-center gap-2">
-        <strong className="flex-1 truncate">{displayName(props.tag.id)}</strong>
+        <strong className="flex-1 truncate" style={viewTransitionStyle(`res-${props.tag.id}`)}>{displayName(props.tag.id)}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
       <div className="mb-2 flex justify-between text-xs text-muted-foreground">
@@ -349,7 +350,7 @@ export const ProcessCard = (props: {
     >
       <div className="mb-2 flex items-center gap-2">
         <span>⚙</span>
-        <strong className="flex-1 truncate">{displayName(props.tag.id)}</strong>
+        <strong className="flex-1 truncate" style={viewTransitionStyle(`res-${props.tag.id}`)}>{displayName(props.tag.id)}</strong>
         {hostOf(props.tag.id) !== undefined ? <Badge color="#06b6d4">⬡ {hostOf(props.tag.id)}</Badge> : null}
         <Badge color={s?.supervising === true ? "#22c55e" : "#94a3b8"}>
           {s?.supervising === true ? "running" : "stopped"}

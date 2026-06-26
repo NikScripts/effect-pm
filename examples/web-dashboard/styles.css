@@ -65,3 +65,17 @@ body {
   font-family: var(--font-mono);
   -webkit-font-smoothing: antialiased;
 }
+
+/* View transitions (grid ↔ detail / drill-down). A touch slower than the 0.25s default
+   so the title morph reads; honor reduced-motion by skipping the animation entirely. */
+::view-transition-group(*) {
+  animation-duration: 0.32s;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

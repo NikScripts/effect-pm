@@ -19,6 +19,7 @@ import {
   queueBundle,
 } from "./queue-data";
 import { useAtomValue } from "../queue-widget/atom-react";
+import { useViewTransition, viewTransitionStyle } from "../../src/web/useViewTransition";
 import { Boundary } from "./components/ui/boundary";
 import { Button } from "./components/ui/button";
 import {
@@ -41,7 +42,7 @@ const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void
     <div className="flex h-screen flex-col gap-3 p-3">
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
-        <strong className="flex-1 truncate text-base">{displayName(props.tag.id)}</strong>
+        <strong className="flex-1 truncate text-base" style={viewTransitionStyle(`res-${props.tag.id}`)}>{displayName(props.tag.id)}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
       <Boundary label="stats"><QueueStats bundle={bundle} /></Boundary>
@@ -65,7 +66,7 @@ const ProcessDetail = (props: { readonly tag: ProcessTag; readonly onBack: () =>
     <div className="flex h-screen flex-col gap-3 p-3">
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
-        <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.id)}</strong>
+        <strong className="flex-1 truncate text-base" style={viewTransitionStyle(`res-${props.tag.id}`)}>⚙ {displayName(props.tag.id)}</strong>
       </div>
       <Boundary label="stats"><ProcessStats bundle={bundle} /></Boundary>
       <Boundary label="controls"><ProcessControls bundle={bundle} /></Boundary>
@@ -80,12 +81,15 @@ const ProcessDetail = (props: { readonly tag: ProcessTag; readonly onBack: () =>
 export const MobileDashboard = (): React.ReactElement => {
   const [path, setPath] = React.useState<ReadonlyArray<GroupNode>>([Fleet]);
   const [selected, setSelected] = React.useState<LeafTag | ProcessTag | null>(null);
+  // animate grid ↔ detail / drill-down via the View Transitions API (crossfade, plus a
+  // morph of the resource title between its card and the detail header). Instant fallback.
+  const transition = useViewTransition();
 
   if (selected !== null) {
     return kindOf(selected) === "process" ? (
-      <ProcessDetail tag={selected as ProcessTag} onBack={() => setSelected(null)} />
+      <ProcessDetail tag={selected as ProcessTag} onBack={() => transition(() => setSelected(null))} />
     ) : (
-      <QueueDetail tag={selected as LeafTag} onBack={() => setSelected(null)} />
+      <QueueDetail tag={selected as LeafTag} onBack={() => transition(() => setSelected(null))} />
     );
   }
 
@@ -96,7 +100,7 @@ export const MobileDashboard = (): React.ReactElement => {
     <div className="mx-auto max-w-5xl p-3">
       <div className="mb-1 flex items-center gap-2">
         {canBack ? (
-          <Button variant="outline" size="sm" onClick={() => setPath((p) => p.slice(0, -1))}>← back</Button>
+          <Button variant="outline" size="sm" onClick={() => transition(() => setPath((p) => p.slice(0, -1)))}>← back</Button>
         ) : null}
         <h1 className="m-0 flex-1 text-lg font-semibold">
           ⬢ {path.map((g) => displayName(g.id)).join(" / ")}{" "}
@@ -109,8 +113,8 @@ export const MobileDashboard = (): React.ReactElement => {
           <Cell
             key={name}
             member={member}
-            onOpenLeaf={(tag) => setSelected(() => tag)}
-            onOpenGroup={(g) => setPath((p) => [...p, g])}
+            onOpenLeaf={(tag) => transition(() => setSelected(() => tag))}
+            onOpenGroup={(g) => transition(() => setPath((p) => [...p, g]))}
           />
         ))}
       </div>
