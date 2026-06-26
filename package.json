@@ -216,6 +216,7 @@
     "example:group-grid": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/group-grid-mock.tsx",
     "example:queue-logs": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/queue-logs-mock.tsx",
     "example:dashboard": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/dashboard.tsx",
+    "example:dashboard-all": "bash examples/resource-tui/run-dashboard.sh",
     "example:dashboard-mock": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/dashboard-mock.tsx",
     "example:queue-live": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/queue-live.tsx",
     "example:typed-process-group": "tsx examples/forms/process-group/process-group-make-entries.ts && tsx examples/forms/process-group/process-group-service.ts && tsx examples/forms/process-group/process-group-contract-http.ts && tsx examples/forms/process-group/process-manager-connection-registry.ts && tsx examples/forms/process-group/process-manager-endpoint-service.ts && tsx examples/forms/process-group/process-group-remote-layer.ts && tsx examples/forms/process-group/process-group-remote-contract-drift.ts",
