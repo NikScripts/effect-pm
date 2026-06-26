@@ -44,6 +44,7 @@ export default defineConfig([
       Logs: "src/Logs.ts",
       HostLogs: "src/HostLogs.ts",
       HistoryStore: "src/HistoryStore.ts",
+      DurableQueueStore: "src/DurableQueueStore.ts",
       Group: "src/Group.ts",
       ProcessContract: "src/ProcessContract.ts",
       ProcessScheduleContract: "src/ProcessScheduleContract.ts",

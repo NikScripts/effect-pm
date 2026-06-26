@@ -202,3 +202,5 @@ export const SQLiteRuntimeStorage = {
   layerProcessStoreOrDie,
   fromSqlClient,
 } as const;
+
+export { SQLiteDurableQueueStore } from "./durableQueue";

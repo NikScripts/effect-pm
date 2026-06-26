@@ -446,6 +446,20 @@ export { HostLogs } from "./HostLogs";
 export type { HostLogEntry } from "./HostLogs";
 export { HistoryStore } from "./HistoryStore";
 export type { HistoryReadOptions, HistoryStoreShape } from "./HistoryStore";
+export {
+  DurableQueueStore,
+  DurableQueueError,
+  durablePriorityRank,
+} from "./DurableQueueStore";
+export type {
+  DurableEntry,
+  DurableEntryInput,
+  DurablePriority,
+  DurableQueueStoreShape,
+  DurableSizes,
+  FailResult,
+  OfferResult,
+} from "./DurableQueueStore";
 export { Group } from "./Group";
 export {
   ProcessGroupLogContext,
