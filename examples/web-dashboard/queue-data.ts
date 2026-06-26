@@ -87,7 +87,9 @@ const remote = (id: string) =>
     Layer.provide(FetchHttpClient.layer),
   );
 
-const appLayer = Layer.mergeAll(
+/** The merged remote client layer — every fleet resource over http. Shared by the
+ *  reactive runtime (below) and the `pm` CLI (run-and-exit commands). */
+export const appLayer = Layer.mergeAll(
   Resource.client(Mail).pipe(Layer.provide(remote(Mail.id))),
   Resource.client(Jobs).pipe(Layer.provide(remote(Jobs.id))),
   Resource.client(Billing).pipe(Layer.provide(remote(Billing.id))),

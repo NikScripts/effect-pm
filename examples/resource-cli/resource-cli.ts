@@ -14,7 +14,13 @@
 import { Console, Effect, type Schema } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import { methodMeta, specOf } from "../../src/Resource";
-import type { AnyMethod } from "../../src/Resource";
+import type { AnyLocalMethod, AnyMethod } from "../../src/Resource";
+
+// A spec entry is a runnable CLI verb when it's a wire method (`kind`: query/mutate) that
+// isn't a streaming read. Streams have no run-and-exit form (their one-shot peers do —
+// statusNow, logHistory, …); local methods aren't on the wire at all.
+const isCliMethod = (m: AnyMethod | AnyLocalMethod): m is AnyMethod =>
+  "kind" in m && m.stream !== true;
 
 // The CLI maps over a heterogeneous record of different resource tags. A precise
 // union can't be expressed (the tag identity is invariant), so the values are a
@@ -26,27 +32,40 @@ type AnyTag = Effect.Effect<unknown, never, unknown> & {
   readonly description: string | undefined;
 } & Parameters<typeof specOf>[0];
 
-/** Map a payload field's schema to a CLI flag (primitives; string fallback). */
-const flagFor = (name: string, schema: Schema.Top) => {
+const isSchema = (x: unknown): x is Schema.Top =>
+  typeof x === "object" && x !== null && "ast" in x;
+
+/** A CLI flag for a primitive payload field, or `undefined` to skip it (optional-wrapped
+ *  fields, dates/durations, nested schemas — not expressible as a simple flag). */
+const flagFor = (name: string, schema: unknown): Flag.Flag<unknown> | undefined => {
+  if (!isSchema(schema)) {
+    return undefined;
+  }
   switch (schema.ast._tag) {
     case "String":
-      return Flag.string(name);
+      return Flag.string(name) as Flag.Flag<unknown>;
     case "Number":
-      return Flag.float(name);
+      return Flag.float(name) as Flag.Flag<unknown>;
     case "Boolean":
-      return Flag.boolean(name);
+      return Flag.boolean(name) as Flag.Flag<unknown>;
     default:
-      return Flag.string(name);
+      return undefined;
   }
 };
 
 const flagsOf = (method: AnyMethod): Record<string, Flag.Flag<unknown>> => {
-  if (method.payload === undefined) {
+  const payload = method.payload;
+  // No payload, or a whole-Schema payload (e.g. `Schema.Array(entry)`) that isn't a
+  // record of named fields → no flags to derive.
+  if (payload === undefined || isSchema(payload)) {
     return {};
   }
   const flags: Record<string, Flag.Flag<unknown>> = {};
-  for (const [field, schema] of Object.entries(method.payload)) {
-    flags[field] = flagFor(field, schema) as Flag.Flag<unknown>;
+  for (const [field, schema] of Object.entries(payload)) {
+    const flag = flagFor(field, schema);
+    if (flag !== undefined) {
+      flags[field] = flag;
+    }
   }
   return flags;
 };
@@ -109,12 +128,23 @@ export const makeResourceCli = (
     Command.make(name).pipe(
       Command.withDescription(tag.description ?? `commands for ${name}`),
       Command.withSubcommands(
-        // local methods (streams) aren't CLI subcommands — filter them out
         Object.entries(specOf(tag)).flatMap(([method, spec]) =>
-          "payload" in spec ? [methodCommand(method, spec, tag)] : [],
+          isCliMethod(spec) ? [methodCommand(method, spec, tag)] : [],
         ),
       ),
     ),
   );
-  return Command.make(rootName).pipe(Command.withSubcommands(namespaces));
+  // `<root> ls` — the command-name → id map (mirrors the dashboard's resource list).
+  const width = Object.keys(resources).reduce((max, name) => Math.max(max, name.length), 0);
+  const ls = Command.make("ls").pipe(
+    Command.withDescription("List resources (command name → id)."),
+    Command.withHandler(() =>
+      Console.log(
+        Object.entries(resources)
+          .map(([name, tag]) => `  ${name.padEnd(width)}  ${tag.id}`)
+          .join("\n"),
+      ),
+    ),
+  );
+  return Command.make(rootName).pipe(Command.withSubcommands([...namespaces, ls]));
 };

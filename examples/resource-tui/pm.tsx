@@ -1,56 +1,61 @@
 /**
  * @module examples/resource-tui/pm
  *
- * Configure once, get both. One record + one layer (`manager-resources.ts`) drives
- * **two renderers** chosen by argv:
+ * Configure once, get both. The `Fleet` tree (the tags) drives **two renderers**,
+ * chosen by argv:
  *
- *   pnpm run example:pm tui                 # the TUI (makeResourceTui)
- *   pnpm run example:pm queue list          # the CLI (makeResourceCli)
- *   pnpm run example:pm counter increment --by 3
+ *   pnpm run example:pm                       # no subcommand → the styled TUI dashboard
+ *   pnpm run example:pm ls                     # list resources (command name → id)
+ *   pnpm run example:pm Mail statusNow         # one-shot read, run & exit
+ *   pnpm run example:pm Mail pause             # control, run & exit
+ *   pnpm run example:pm KeyRotation start
  *   pnpm run example:pm --help
  *
- * This is the shape a user would build for their own resources: define the record,
- * then `makeResourceCli(record)` + `makeResourceTui(record, runtime)`. (The static
- * Ink import is fine now the package is ESM; a library could lazy-`import()` the TUI
- * to keep Ink out of CLI-only startup.)
+ * Resource command names are the tag's display name (its last id segment: `Mail`,
+ * `KeyRotation`). If two resources share one, the resolver lengthens just those to the
+ * shortest unique slash-suffix (`Regional/RegionUS`) — everything else stays short.
+ *
+ * Needs the example servers running (`example:queue-server` + `example:mini-server`);
+ * the CLI drives them over http via the same `appLayer` the dashboard uses.
  */
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { render } from "ink";
-import * as React from "react";
 import { Effect, Layer } from "effect";
-import { Atom } from "effect/unstable/reactivity";
 import { Command } from "effect/unstable/cli";
-import { resources, resourcesLayer } from "../resource-cli/manager-resources";
+import { KeyRotation, LEAVES } from "../web-dashboard/fleet";
+import { appLayer } from "../web-dashboard/queue-data";
 import { makeResourceCli } from "../resource-cli/resource-cli";
-import { makeResourceTui } from "./make-resource-tui";
+import { runDashboard } from "./dashboard-app";
 
 const argv = process.argv.slice(2);
 
-if (argv[0] === "tui") {
-  // ── TUI projection ──
-  const runtime = Atom.runtime(resourcesLayer);
-  const { App } = makeResourceTui(resources, runtime);
-
-  const out = process.stdout;
-  const tty = out.isTTY === true;
-  if (tty) {
-    out.write("\x1b[?1049h\x1b[2J\x1b[H");
-  }
-  const restore = () => {
-    if (tty) {
-      out.write("\x1b[?1049l");
-    }
-  };
-  render(React.createElement(App));
-  process.on("exit", restore);
+// ── no subcommand → the styled dashboard (same Fleet, same data layer) ──
+if (argv.length === 0) {
+  runDashboard();
 } else {
-  // ── CLI projection ──
+  // ── command names: shortest unique slash-suffix of each tag id ──
+  const segments = (id: string): ReadonlyArray<string> => id.split("/").filter((s) => s.length > 0);
+  const suffix = (id: string, n: number): string => segments(id).slice(-n).join("/");
+
+  const tags = [...LEAVES, KeyRotation];
+  const nameOf = (id: string): string => {
+    const depth = segments(id).length;
+    for (let n = 1; n <= depth; n += 1) {
+      const candidate = suffix(id, n);
+      if (tags.filter((t) => suffix(t.id, n) === candidate).length === 1) {
+        return candidate;
+      }
+    }
+    return id;
+  };
+  const resources = Object.fromEntries(tags.map((t) => [nameOf(t.id), t]));
+
   const cli = makeResourceCli(resources, "pm");
-  const program = Command.runWith(cli, { version: "0.0.0" })(argv).pipe(
-    Effect.provide(Layer.mergeAll(resourcesLayer, NodeServices.layer)),
+  const program = Command.runWith(cli, { version: "0.8.0-beta.6" })(argv).pipe(
+    Effect.provide(Layer.mergeAll(appLayer, NodeServices.layer)),
   );
-  // Boundary: loose requirement from the dynamic record; the layer fully provides it.
+  // Boundary: the heterogeneous resource record erases the requirement to `unknown`;
+  // `appLayer` provides every fleet service, so it's fully satisfied at run time.
   NodeRuntime.runMain(program as Effect.Effect<void, unknown>);
 }
