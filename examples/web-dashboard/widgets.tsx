@@ -11,6 +11,7 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "rec
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Group } from "../../src/Group";
 import {
+  type CommandAtom,
   type GroupNode,
   type LeafTag,
   type LogLine,
@@ -255,20 +256,54 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
   );
 };
 
-export const QueueControls = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
-  const pause = useAtomSet(props.bundle.pause);
-  const resume = useAtomSet(props.bundle.resume);
-  const clear = useAtomSet(props.bundle.clear);
-  const shutdown = useAtomSet(props.bundle.shutdown);
+/** A control button that reflects the command's round-trip: idle → … (sent, in-flight)
+ *  → ✓ (server acknowledged) / ✗ (failed). */
+export const ActionButton = (props: {
+  readonly atom: CommandAtom;
+  readonly label: string;
+  readonly destructive?: boolean;
+}): React.ReactElement => {
+  const trigger = useAtomSet(props.atom);
+  const r = useAtomValue(props.atom);
+  const pending = AsyncResult.isWaiting(r);
+  const failed = AsyncResult.isFailure(r) && !pending;
+  const [flash, setFlash] = React.useState(false);
+  const wasPending = React.useRef(false);
+  React.useEffect(() => {
+    if (pending) {
+      wasPending.current = true;
+      return;
+    }
+    if (wasPending.current && AsyncResult.isSuccess(r)) {
+      wasPending.current = false;
+      setFlash(true);
+      const t = setTimeout(() => setFlash(false), 1500);
+      return () => clearTimeout(t);
+    }
+    return;
+  }, [pending, r]);
+  const suffix = pending ? " …" : flash ? " ✓" : failed ? " ✗" : "";
   return (
-    <div className="flex flex-wrap gap-2">
-      <Button variant="outline" size="sm" onClick={() => pause()}>pause</Button>
-      <Button variant="outline" size="sm" onClick={() => resume()}>resume</Button>
-      <Button variant="outline" size="sm" onClick={() => clear()}>clear</Button>
-      <Button variant="destructive" size="sm" onClick={() => shutdown()}>shutdown</Button>
-    </div>
+    <Button
+      variant={failed || props.destructive === true ? "destructive" : "outline"}
+      size="sm"
+      disabled={pending}
+      onClick={() => trigger()}
+    >
+      {props.label}
+      {suffix}
+    </Button>
   );
 };
+
+export const QueueControls = (props: { readonly bundle: QueueBundle }): React.ReactElement => (
+  <div className="flex flex-wrap gap-2">
+    <ActionButton atom={props.bundle.pause} label="pause" />
+    <ActionButton atom={props.bundle.resume} label="resume" />
+    <ActionButton atom={props.bundle.clear} label="clear" />
+    <ActionButton atom={props.bundle.shutdown} label="shutdown" destructive />
+  </div>
+);
 
 /** The live log stream (auto-scrolls to newest). Works for any bundle with `logs`. */
 export const LogStream = (props: {
@@ -341,16 +376,11 @@ export const ProcessStats = (props: { readonly bundle: ProcessBundle }): React.R
   );
 };
 
-/** Process controls — start / stop / run-now. */
-export const ProcessControls = (props: { readonly bundle: ProcessBundle }): React.ReactElement => {
-  const start = useAtomSet(props.bundle.start);
-  const stop = useAtomSet(props.bundle.stop);
-  const run = useAtomSet(props.bundle.runImmediately);
-  return (
-    <div className="flex flex-wrap gap-2">
-      <Button variant="outline" size="sm" onClick={() => start()}>start</Button>
-      <Button variant="outline" size="sm" onClick={() => stop()}>stop</Button>
-      <Button variant="default" size="sm" onClick={() => run()}>run now</Button>
-    </div>
-  );
-};
+/** Process controls — start / stop / run-now (with round-trip feedback). */
+export const ProcessControls = (props: { readonly bundle: ProcessBundle }): React.ReactElement => (
+  <div className="flex flex-wrap gap-2">
+    <ActionButton atom={props.bundle.start} label="start" />
+    <ActionButton atom={props.bundle.stop} label="stop" />
+    <ActionButton atom={props.bundle.runImmediately} label="run now" />
+  </div>
+);
