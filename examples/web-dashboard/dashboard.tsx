@@ -9,7 +9,7 @@
 import * as React from "react";
 import { Boundary } from "./components/ui/boundary";
 import { useAtomMount } from "../queue-widget/atom-react";
-import { fleetAtom } from "./queue-data";
+import { runtime } from "./queue-data";
 import { DesktopDashboard } from "./desktop";
 import { MobileDashboard } from "./mobile";
 
@@ -27,10 +27,12 @@ const useIsDesktop = (): boolean => {
 };
 
 export const App = (): React.ReactElement => {
-  // keep the data-layer runtime mounted for the app's lifetime, so navigating between the
-  // grid and a detail never tears it down (which would leave the next view's cold streams
-  // blank until an interaction rebuilt it).
-  useAtomMount(fleetAtom);
+  // Keep the runtime LAYER warm for the app's lifetime so navigation never tears it down
+  // (which would leave the next view's cold streams blank). Mount the runtime atom itself,
+  // NOT fleetAtom — fleetAtom opens ~22 long-lived streams (status+metrics × every queue),
+  // which on the single serveAllHttp transport saturates the browser's ~6-connection limit
+  // and starves a detail's history/log streams. The bare layer holds no streams.
+  useAtomMount(runtime);
   return (
     <Boundary label="dashboard">
       {useIsDesktop() ? <DesktopDashboard /> : <MobileDashboard />}
