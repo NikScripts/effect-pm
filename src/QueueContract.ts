@@ -43,7 +43,11 @@ import {
 } from "./internal/queueSchema";
 // The engine is used only by the runtime verbs (buildQueueImpl/layer/server/serveHttp) below.
 import { QueueResource as QueueEngine } from "./QueueResource";
-import type { QueueResourceConfigWithItemSchema } from "./QueueResource";
+import type {
+  QueueEnqueueErrors,
+  QueueHandle,
+  QueueResourceConfigWithItemSchema,
+} from "./QueueResource";
 import type { JsonValue } from "./ProcessStoreEvent";
 import { LogEntrySchema } from "./LogEntry";
 import { configureLayer, foldConfiguredSpec } from "./ResourceConfigure";
@@ -568,10 +572,31 @@ export const queueTag = <Self>() => {
  *
  * @public
  */
-export type QueueLayerConfig<A, E, R> = Omit<
+export type QueueLayerConfig<A, E, R, RR = never> = Omit<
   QueueResourceConfigWithItemSchema<A, E, R>,
-  "itemSchema"
->;
+  "itemSchema" | "refill"
+> & {
+  /**
+   * Optional self-refill. Its loader carries its **own** requirement `RR` — independent of the
+   * worker `R` — so a refill that pulls from a source (a repository/DB service) the worker doesn't
+   * use is expressible; the layer's requirement is the union `R | RR`. (Sharing one `R` would
+   * intersect to `never`, since the requirement channel is contravariant.)
+   *
+   * `RR` is kept to `load`'s **return** only (the handle is requirement-free here) so TS infers it
+   * cleanly — if `RR` also appeared on the handle parameter its variance would conflict and default
+   * to `never`.
+   */
+  readonly refill?: {
+    /** Run `load` once when the worker pool starts (bootstrap). @default false */
+    readonly onStart?: boolean;
+    /** Run `load` each time the queue drains to empty (re-poll the source). @default false */
+    readonly onDrained?: boolean;
+    /** Load + enqueue work from a source. Handle its own errors (best-effort). */
+    readonly load: (
+      queue: QueueHandle<A, E, QueueEnqueueErrors, never>,
+    ) => Effect.Effect<void, never, RR>;
+  };
+};
 
 /**
  * The **local** layer for a toolkit queue instance: run the live {@link QueueEngine} behind the
@@ -606,27 +631,32 @@ type QueueItemFields = Record<
  * The queue spec has no {@link Resource.local} members, so the resulting impl satisfies both
  * `ImplOf` (for `Resource.layer`) and `WireServiceOf` (for `Resource.server` / `serveHttp`).
  */
-const buildQueueImpl = <Self, F extends QueueItemFields, E, R>(
+const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
-  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R>,
+  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ) =>
   Effect.gen(function* () {
     // `add`'s payload is `item | item[]` (a union); the bare item schema is its first member.
     const itemSchema: Schema.Codec<Schema.Struct<F>["Type"], unknown, never, never> =
       tag[specSym].add.payload.members[0];
-    const context = yield* Effect.context<R>();
+    // Capture the FULL ambient context (worker `R` + refill `RR`): the worker effect and the
+    // refill loader both run ambiently, so the captured context must cover their union.
+    const context = yield* Effect.context<R | RR>();
     // Fold any `.configure` patches in context (keyed by the tag id) onto the base config — so
     // per-env overrides (concurrency / rateLimit / …) merged as layers take effect at build.
     const effectiveConfig = yield* foldConfiguredSpec<
-      QueueLayerConfig<Schema.Struct<F>["Type"], E, R>
+      QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>
     >(tag.id, config);
+    // The engine treats requirements uniformly — worker + refill run under one context. The
+    // toolkit splits `R` / `RR` only so inference unions them (a shared contravariant `R` would
+    // intersect to `never`); here we hand the engine the combined `R | RR` config.
     const handle = yield* QueueEngine.make({
       name: tag.id,
       ...effectiveConfig,
       itemSchema,
-    });
+    } as QueueResourceConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
     const provideR = <Out, Err>(
-      effect: Effect.Effect<Out, Err, R>,
+      effect: Effect.Effect<Out, Err, R | RR>,
     ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
 
     // History capture (optional): when a HistoryStore is provided, fork fibers that append each
@@ -735,10 +765,11 @@ export const layer = <
   F extends QueueItemFields = QueueItemFields,
   E = never,
   R = never,
+  RR = never,
 >(
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
-  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R>,
-): Layer.Layer<Self | LocalCapability<Self>, never, R> =>
+  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+): Layer.Layer<Self | LocalCapability<Self>, never, R | RR> =>
   Layer.unwrap(
     Effect.map(buildQueueImpl(tag, config), (impl) => Resource.layer(tag, impl)),
   );
@@ -756,10 +787,11 @@ export const server = <
   F extends QueueItemFields = QueueItemFields,
   E = never,
   R = never,
+  RR = never,
 >(
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
-  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R>,
-): Layer.Layer<HandlerContextOf<QueueInstanceSpec<F>>, never, R> =>
+  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+): Layer.Layer<HandlerContextOf<QueueInstanceSpec<F>>, never, R | RR> =>
   Layer.unwrap(
     Effect.map(buildQueueImpl(tag, config), (impl) => Resource.server(tag, impl)),
   );
@@ -777,9 +809,10 @@ export const serveHttp = <
   F extends QueueItemFields = QueueItemFields,
   E = never,
   R = never,
+  RR = never,
 >(
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
-  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R>,
+  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
   options?: Parameters<typeof Resource.serveHttp>[2],
 ) =>
   Layer.unwrap(
@@ -806,15 +839,16 @@ export const serverEntry = <
   F extends QueueItemFields = QueueItemFields,
   E = never,
   R = never,
+  RR = never,
 >(
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
-  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R>,
-): ServeEntry<R> => ({
+  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+): ServeEntry<R | RR> => ({
   tag,
   impl: buildQueueImpl(tag, config) as unknown as Effect.Effect<
     Record<string, unknown>,
     never,
-    R
+    R | RR
   >,
 });
 
@@ -847,9 +881,10 @@ export const configure = <
   F extends QueueItemFields = QueueItemFields,
   E = never,
   R = never,
+  RR = never,
 >(
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
-  patch: ConfigPatch<QueueLayerConfig<Schema.Struct<F>["Type"], E, R>>,
+  patch: ConfigPatch<QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>>,
 ): Layer.Layer<never> => configureLayer(tag.id, patch);
 
 // The unified `QueueResource` namespace is assembled in `internal/queueResourceNamespace.ts` and
