@@ -1,28 +1,38 @@
 /**
  * @module examples/resource-tui/dashboard
  *
- * The navigable dashboard on **real queues** (`./live-queues`) — no mock. Each grid
- * card reads a queue's live `status`; opening one shows the shared XL widget driven
- * by live `status` + `metrics`, with the real `logs` stream as the tail.
+ * The navigable dashboard on the **shared, tag-driven data layer** (`../web-dashboard`)
+ * — the same `Fleet` group tag + `queueBundle`/`processBundle` the web dashboard uses,
+ * reached over http (env-aware transport: direct `:7777`/`:7778` from Node). No mock,
+ * no `REGISTRY`/`TREE`. The `Group.Tag` tree IS the navigation; each leaf is dispatched
+ * to a queue or process cell by `kindOf`; opening one shows the live detail page.
  *
  *   ↑↓←→ / hjkl  move · Enter/Space open or drill · Esc/Backspace back/up
  *   mouse  wheel scrolls, click selects, click again opens
  *   :  command bar (type any part of a tag name) · Ctrl+E edit mode · Ctrl+C quit
  *
+ *   pnpm run example:queue-server  +  example:mini-server  (then this)
  *   pnpm run example:dashboard
  */
 
 import { Box, render, Text, useInput, useStdout } from "ink";
 import * as React from "react";
 import { AsyncResult } from "effect/unstable/reactivity";
+import { Group } from "../../src/Group";
+import { Fleet } from "../web-dashboard/fleet";
 import {
-  REGISTRY,
-  TREE,
-  type Group,
-  type Node,
-  type QueueBundle,
-} from "./live-queues";
-import { RegistryProvider, useAtomValue } from "../queue-widget/atom-react";
+  hostOf,
+  kindOf,
+  processBundle,
+  processLeaves,
+  queueBundle,
+  queueLeaves,
+  type CommandAtom,
+  type GroupNode,
+  type LeafTag,
+  type ProcessTag,
+} from "../web-dashboard/queue-data";
+import { RegistryProvider, useAtomSet, useAtomValue } from "../queue-widget/atom-react";
 import {
   bar,
   BLANK_BORDER,
@@ -36,7 +46,6 @@ import {
   type View,
 } from "./queue-widget";
 
-const QUEUES = Object.keys(REGISTRY);
 const CELL_HEIGHT = 7;
 const SYM: Record<Priority, { symbol: string; color: string }> = {
   high: { symbol: "▲", color: "red" },
@@ -51,6 +60,14 @@ const LEVEL_COLOR: Record<string, string> = {
   Error: "red",
   Fatal: "red",
 };
+
+// ── tag dispatch ──────────────────────────────────────────────────────────────
+// A leaf tag carries no discriminant TS can narrow on, so `kindOf` (which inspects the
+// contract) becomes a type guard — the sanctioned alternative to a cast.
+const isProcessTag = (m: unknown): m is ProcessTag => kindOf(m) === "process";
+const isQueueTag = (m: unknown): m is LeafTag => kindOf(m) === "queue";
+/** Every leaf (queue + process) of the fleet — the command palette's targets. */
+const ALL_LEAVES: ReadonlyArray<LeafTag | ProcessTag> = [...queueLeaves(Fleet), ...processLeaves(Fleet)];
 
 const statusOf = (phase: string, paused: boolean): Status =>
   phase === "off" ? "off" : phase === "draining" ? "draining" : paused ? "paused" : "running";
@@ -100,15 +117,20 @@ const PrioRow = (props: {
   );
 };
 
-// a queue grid cell — reads its own live status
+// the ⬡ host marker (Mini), shown on resources that don't run on the Droplet
+const HostMark = (props: { readonly id: string }): React.ReactElement | null => {
+  const host = hostOf(props.id);
+  return host === undefined ? null : <Text color="cyan"> ⬡ {host}</Text>;
+};
+
+// a queue grid cell — reads its own live status straight from the tag
 const QueueCell = (props: {
-  readonly id: string;
-  readonly bundle: QueueBundle;
+  readonly tag: LeafTag;
   readonly width: number;
   readonly selected: boolean;
 }): React.ReactElement => {
-  const { id, bundle, width, selected } = props;
-  const r = useAtomValue(bundle.status);
+  const { tag, width, selected } = props;
+  const r = useAtomValue(queueBundle(tag).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
   const status = statusOf(s?.phase ?? "running", s?.paused ?? false);
@@ -120,7 +142,8 @@ const QueueCell = (props: {
     <Box flexDirection="column" borderStyle={selected ? "double" : "round"} borderColor={selected ? "green" : COLOR[status]} height={CELL_HEIGHT} width={width} marginRight={1} marginBottom={1} paddingX={1}>
       <Box>
         <Box flexGrow={1}>
-          <Text bold wrap="truncate">{displayName(id)}</Text>
+          <Text bold wrap="truncate">{displayName(tag.id)}</Text>
+          <HostMark id={tag.id} />
         </Box>
         <Text color={COLOR[status]}>{STATUS_ICON[status]}</Text>
       </Box>
@@ -137,27 +160,62 @@ const QueueCell = (props: {
   );
 };
 
+// a process grid cell — supervision state + active instances
+const ProcessCell = (props: {
+  readonly tag: ProcessTag;
+  readonly width: number;
+  readonly selected: boolean;
+}): React.ReactElement => {
+  const { tag, width, selected } = props;
+  const r = useAtomValue(processBundle(tag).status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const up = s?.supervising === true;
+  return (
+    <Box flexDirection="column" borderStyle={selected ? "double" : "round"} borderColor={selected ? "green" : up ? "green" : "gray"} height={CELL_HEIGHT} width={width} marginRight={1} marginBottom={1} paddingX={1}>
+      <Box>
+        <Box flexGrow={1}>
+          <Text bold wrap="truncate">⚙ {displayName(tag.id)}</Text>
+          <HostMark id={tag.id} />
+        </Box>
+        <Text color={up ? "green" : "gray"}>{up ? "►" : "■"}</Text>
+      </Box>
+      <Box>
+        <Box flexGrow={1}>
+          <Text>{up ? "running" : "stopped"}</Text>
+        </Box>
+        <Text dimColor>{s?.armed === true ? "armed" : "disarmed"}</Text>
+      </Box>
+      <Box marginTop={1}>
+        <Text>active </Text>
+        <Text bold>{s?.activeInstances ?? 0}</Text>
+      </Box>
+    </Box>
+  );
+};
+
 const GroupCell = (props: {
-  readonly node: Group;
+  readonly node: GroupNode;
   readonly width: number;
   readonly selected: boolean;
 }): React.ReactElement => {
   const { node, width, selected } = props;
+  const members = Object.values(Group.members(node));
+  const leafCount = leafCountOf(node);
   return (
     <Box flexDirection="column" borderStyle={selected ? "double" : "round"} borderColor={selected ? "green" : "cyan"} height={CELL_HEIGHT} width={width} marginRight={1} marginBottom={1} paddingX={1}>
       <Box>
         <Box flexGrow={1}>
           <Text bold color="cyan" wrap="truncate">
-            ▸ {displayName(node.name)}
+            ▸ {displayName(node.id)}
           </Text>
         </Box>
-        <Text dimColor>{node.members.length}</Text>
+        <Text dimColor>{leafCount}</Text>
       </Box>
       {width >= 22
-        ? node.members.slice(0, 4).map((m, i) => (
-            <Text key={`${node.name}-${i}`} dimColor wrap="truncate">
-              {m.t === "g" ? "▸ " : "  "}
-              {displayName(m.name)}
+        ? members.slice(0, 4).map((m, i) => (
+            <Text key={`${node.id}-${i}`} dimColor wrap="truncate">
+              {Group.isGroup(m) ? "▸ " : isProcessTag(m) ? "⚙ " : "  "}
+              {displayName(idOf(m))}
             </Text>
           ))
         : null}
@@ -166,24 +224,34 @@ const GroupCell = (props: {
 };
 
 const Cell = (props: {
-  readonly node: Node;
+  readonly member: unknown;
   readonly width: number;
   readonly selected: boolean;
 }): React.ReactElement => {
-  if (props.node.t === "g") {
-    return <GroupCell node={props.node} width={props.width} selected={props.selected} />;
+  if (Group.isGroup(props.member)) {
+    return <GroupCell node={props.member} width={props.width} selected={props.selected} />;
   }
-  const bundle = REGISTRY[props.node.name];
-  if (bundle === undefined) {
-    return <Box width={props.width} />;
+  if (isProcessTag(props.member)) {
+    return <ProcessCell tag={props.member} width={props.width} selected={props.selected} />;
   }
-  return <QueueCell id={props.node.name} bundle={bundle} width={props.width} selected={props.selected} />;
+  if (isQueueTag(props.member)) {
+    return <QueueCell tag={props.member} width={props.width} selected={props.selected} />;
+  }
+  return <Box width={props.width} />;
 };
+
+// ── nav helpers ───────────────────────────────────────────────────────────────
+/** Every leaf reachable under a node (recursing into subgroups). */
+const leafCountOf = (node: GroupNode): number =>
+  Object.values(Group.members(node)).reduce<number>((n, m) => n + (Group.isGroup(m) ? leafCountOf(m) : 1), 0);
+/** Display id of any nav member (group node or leaf tag). */
+const idOf = (m: unknown): string =>
+  Group.isGroup(m) ? m.id : isProcessTag(m) || isQueueTag(m) ? m.id : "";
 
 // bottom bar — view-specific hint, or the command palette (reversed: top match nearest input)
 const Bar = (props: {
   readonly cmd: string | null;
-  readonly suggestions: ReadonlyArray<string>;
+  readonly suggestions: ReadonlyArray<LeafTag | ProcessTag>;
   readonly cmdSel: number;
   readonly hint: React.ReactElement;
 }): React.ReactElement => {
@@ -194,14 +262,15 @@ const Bar = (props: {
   return (
     <Box flexDirection="column">
       {props.suggestions
-        .map((name, i) => ({ name, i }))
+        .map((tag, i) => ({ tag, i }))
         .reverse()
-        .map(({ name, i }) => (
-          <Box key={name} paddingX={1}>
+        .map(({ tag, i }) => (
+          <Box key={tag.id} paddingX={1}>
             <Text color={i === sel ? "cyan" : undefined} dimColor={i !== sel}>
               {i === sel ? "› " : "  "}
-              {displayName(name)}
-              <Text dimColor> {name}</Text>
+              {isProcessTag(tag) ? "⚙ " : ""}
+              {displayName(tag.id)}
+              <Text dimColor> {tag.id}</Text>
             </Text>
           </Box>
         ))}
@@ -214,21 +283,93 @@ const Bar = (props: {
   );
 };
 
+// a control key with round-trip feedback: idle → … (in-flight) → ✓ (ack) / ✗ (failed)
+const ControlKey = (props: {
+  readonly k: string;
+  readonly label: string;
+  readonly atom: CommandAtom;
+}): React.ReactElement => {
+  const r = useAtomValue(props.atom);
+  const pending = AsyncResult.isWaiting(r);
+  const failed = AsyncResult.isFailure(r) && !pending;
+  const [flash, setFlash] = React.useState(false);
+  const wasPending = React.useRef(false);
+  React.useEffect(() => {
+    if (pending) {
+      wasPending.current = true;
+      return;
+    }
+    if (wasPending.current && AsyncResult.isSuccess(r)) {
+      wasPending.current = false;
+      setFlash(true);
+      const t = setTimeout(() => setFlash(false), 1500);
+      return () => clearTimeout(t);
+    }
+    return;
+  }, [pending, r]);
+  const sym = pending ? " …" : flash ? " ✓" : failed ? " ✗" : "";
+  const color = failed ? "red" : flash ? "green" : pending ? "yellow" : "gray";
+  return (
+    <Text color={color}>
+      [{props.k}]{props.label}
+      {sym}{" "}
+    </Text>
+  );
+};
+
+// the live log tail — newest at the bottom
+const LogTail = (props: {
+  readonly logs: ReadonlyArray<{ readonly id: number; readonly t: number; readonly level: string; readonly message: string }>;
+  readonly visible: number;
+}): React.ReactElement => (
+  <Box flexGrow={1} flexDirection="column" justifyContent="flex-end">
+    {props.logs.slice(-props.visible).map((l) => (
+      <Box key={l.id}>
+        <Box width={11}>
+          <Text dimColor>{new Date(l.t).toLocaleTimeString()}</Text>
+        </Box>
+        <Box width={6}>
+          <Text color={LEVEL_COLOR[l.level] ?? "white"}>{l.level}</Text>
+        </Box>
+        <Box flexGrow={1}>
+          <Text>{l.message}</Text>
+        </Box>
+      </Box>
+    ))}
+  </Box>
+);
+
 // open queue full-screen: the XL widget (live status+metrics) + the real logs tail
 const FocusedQueue = (props: {
-  readonly id: string;
-  readonly bundle: QueueBundle;
+  readonly tag: LeafTag;
   readonly cols: number;
   readonly rows: number;
   readonly editMode: boolean;
-  readonly bar: React.ReactElement;
+  readonly cmd: string | null;
+  readonly bar: (hint: React.ReactElement) => React.ReactElement;
   readonly barRows: number;
 }): React.ReactElement => {
-  const { id, bundle, cols, rows, editMode } = props;
+  const { tag, cols, rows, editMode } = props;
+  const bundle = queueBundle(tag);
   const statusR = useAtomValue(bundle.status);
   const metricsR = useAtomValue(bundle.metrics);
   const logsR = useAtomValue(bundle.logs);
   const trendR = useAtomValue(bundle.trend);
+
+  // keep the command atoms mounted + grab their triggers for the keyboard controls
+  const pause = useAtomSet(bundle.pause);
+  const resume = useAtomSet(bundle.resume);
+  const clear = useAtomSet(bundle.clear);
+  const shutdown = useAtomSet(bundle.shutdown);
+  useInput(
+    (input) => {
+      if (input === "p") pause();
+      else if (input === "r") resume();
+      else if (input === "c") clear();
+      else if (input === "x") shutdown();
+    },
+    { isActive: editMode && props.cmd === null },
+  );
 
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const m = AsyncResult.isSuccess(metricsR) ? metricsR.value : undefined;
@@ -237,7 +378,7 @@ const FocusedQueue = (props: {
 
   const sizes: Record<Priority, number> = s?.sizes ?? { high: 0, normal: 0, low: 0 };
   const view: View = {
-    name: id,
+    name: tag.id,
     status: statusOf(s?.phase ?? "running", s?.paused ?? false),
     sizes,
     pending: sizes.high + sizes.normal + sizes.low,
@@ -253,7 +394,25 @@ const FocusedQueue = (props: {
     trend,
   };
   const visible = Math.max(1, rows - PAGE_HEIGHT - 3 - props.barRows);
-  const tail = logs.slice(-visible);
+
+  const hint = (
+    <Box paddingX={1} backgroundColor="gray">
+      <Text dimColor> Esc back · </Text>
+      <Text color="cyan">:</Text>
+      <Text dimColor> command · </Text>
+      <Text color={editMode ? "red" : "gray"}>{editMode ? "EDIT " : "view "}</Text>
+      {editMode ? (
+        <>
+          <ControlKey k="p" label="pause" atom={bundle.pause} />
+          <ControlKey k="r" label="resume" atom={bundle.resume} />
+          <ControlKey k="c" label="clear" atom={bundle.clear} />
+          <ControlKey k="x" label="shutdown" atom={bundle.shutdown} />
+        </>
+      ) : (
+        <Text dimColor>Ctrl+E edit</Text>
+      )}
+    </Box>
+  );
 
   return (
     <Box flexDirection="column" width={cols} height={rows} borderStyle={editMode ? "double" : BLANK_BORDER} borderColor="red">
@@ -266,53 +425,124 @@ const FocusedQueue = (props: {
             <Text dimColor>LOGS </Text>
             <Text color="green">live</Text>
             <Text dimColor> · in-flight {s?.inFlight ?? 0}</Text>
+            <HostMark id={tag.id} />
           </Box>
           <Text dimColor>phase {s?.phase ?? "?"}</Text>
         </Box>
-        <Box flexGrow={1} flexDirection="column" justifyContent="flex-end">
-          {tail.map((l) => (
-            <Box key={l.id}>
-              <Box width={11}>
-                <Text dimColor>{new Date(l.t).toLocaleTimeString()}</Text>
-              </Box>
-              <Box width={6}>
-                <Text color={LEVEL_COLOR[l.level] ?? "white"}>{l.level}</Text>
-              </Box>
-              <Box flexGrow={1}>
-                <Text>{l.message}</Text>
-              </Box>
-            </Box>
-          ))}
+        <LogTail logs={logs} visible={visible} />
+      </Box>
+      {props.bar(hint)}
+    </Box>
+  );
+};
+
+// open process full-screen: supervision stats + the real logs tail
+const FocusedProcess = (props: {
+  readonly tag: ProcessTag;
+  readonly cols: number;
+  readonly rows: number;
+  readonly editMode: boolean;
+  readonly cmd: string | null;
+  readonly bar: (hint: React.ReactElement) => React.ReactElement;
+  readonly barRows: number;
+}): React.ReactElement => {
+  const { tag, cols, rows, editMode } = props;
+  const bundle = processBundle(tag);
+  const statusR = useAtomValue(bundle.status);
+  const logsR = useAtomValue(bundle.logs);
+
+  const start = useAtomSet(bundle.start);
+  const stop = useAtomSet(bundle.stop);
+  const runNow = useAtomSet(bundle.runImmediately);
+  useInput(
+    (input) => {
+      if (input === "s") start();
+      else if (input === "x") stop();
+      else if (input === "n") runNow();
+    },
+    { isActive: editMode && props.cmd === null },
+  );
+
+  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
+  const up = s?.supervising === true;
+  const visible = Math.max(1, rows - 8 - props.barRows);
+
+  const hint = (
+    <Box paddingX={1} backgroundColor="gray">
+      <Text dimColor> Esc back · </Text>
+      <Text color="cyan">:</Text>
+      <Text dimColor> command · </Text>
+      <Text color={editMode ? "red" : "gray"}>{editMode ? "EDIT " : "view "}</Text>
+      {editMode ? (
+        <>
+          <ControlKey k="s" label="start" atom={bundle.start} />
+          <ControlKey k="x" label="stop" atom={bundle.stop} />
+          <ControlKey k="n" label="run now" atom={bundle.runImmediately} />
+        </>
+      ) : (
+        <Text dimColor>Ctrl+E edit</Text>
+      )}
+    </Box>
+  );
+
+  return (
+    <Box flexDirection="column" width={cols} height={rows} borderStyle={editMode ? "double" : BLANK_BORDER} borderColor="red">
+      <Box flexDirection="column" borderStyle="round" borderColor={up ? "green" : "gray"} paddingX={2} paddingY={1} marginX={1} marginTop={1}>
+        <Box justifyContent="space-between">
+          <Text bold color="cyan">
+            ⚙ {displayName(tag.id)}
+            <HostMark id={tag.id} />
+          </Text>
+          <Text color={up ? "green" : "gray"}>{up ? "► running" : "■ stopped"}</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Box width={24}>
+            <Text>supervising {up ? "yes" : "no"}</Text>
+          </Box>
+          <Box width={20}>
+            <Text>armed {s?.armed === true ? "yes" : "no"}</Text>
+          </Box>
+          <Box flexGrow={1}>
+            <Text>active {s?.activeInstances ?? 0}</Text>
+          </Box>
         </Box>
       </Box>
-      {props.bar}
+      <Box flexGrow={1} flexDirection="column" paddingX={1}>
+        <Box>
+          <Box flexGrow={1}>
+            <Text dimColor>LOGS </Text>
+            <Text color="green">live</Text>
+          </Box>
+        </Box>
+        <LogTail logs={logs} visible={visible} />
+      </Box>
+      {props.bar(hint)}
     </Box>
   );
 };
 
 const App = (): React.ReactElement => {
   const { cols, rows } = useTerminalSize();
-  const [path, setPath] = React.useState<ReadonlyArray<Group>>([TREE]);
+  const [path, setPath] = React.useState<ReadonlyArray<GroupNode>>([Fleet]);
   const [sel, setSel] = React.useState(0);
-  const [focused, setFocused] = React.useState<string | null>(null);
+  const [focused, setFocused] = React.useState<LeafTag | ProcessTag | null>(null);
   const [editMode, setEditMode] = React.useState(false);
   const [cmd, setCmd] = React.useState<string | null>(null);
   const [cmdSel, setCmdSel] = React.useState(0);
   const [scroll, setScroll] = React.useState(0);
 
-  const group = path[path.length - 1] ?? TREE;
-  const members = group.members;
+  const group = path[path.length - 1] ?? Fleet;
+  const members = Object.values(Group.members(group));
 
-  const focusBundle = focused === null ? undefined : REGISTRY[focused];
-
-  const membersRef = React.useRef<ReadonlyArray<Node>>(members);
+  const membersRef = React.useRef<ReadonlyArray<unknown>>(members);
   membersRef.current = members;
   const layoutRef = React.useRef({ perRow: 1, cellWidth: 16, focused, cmd, sel, scroll: 0, maxScroll: 0 });
 
   const suggestions =
     cmd === null || cmd.length === 0
       ? []
-      : QUEUES.filter((name) => displayName(name).toLowerCase().includes(cmd.toLowerCase())).slice(0, 6);
+      : ALL_LEAVES.filter((tag) => displayName(tag.id).toLowerCase().includes(cmd.toLowerCase())).slice(0, 6);
 
   const avail = cols - 4;
   let perRow = Math.max(1, Math.floor(avail / 34));
@@ -377,12 +607,7 @@ const App = (): React.ReactElement => {
             continue;
           }
           if (idx === v.sel) {
-            if (node.t === "g") {
-              setPath((p) => [...p, node]);
-              setSel(0);
-            } else {
-              setFocused(node.name);
-            }
+            open(node);
           } else {
             setSel(idx);
           }
@@ -396,15 +621,14 @@ const App = (): React.ReactElement => {
     };
   }, []);
 
-  const open = (node: Node | undefined) => {
-    if (node === undefined) {
-      return;
-    }
-    if (node.t === "g") {
-      setPath((p) => [...p, node]);
+  // tags are classes (functions) — wrap in an updater so React doesn't treat the tag as
+  // a lazy state initializer ("Cannot call a class constructor without new").
+  const open = (member: unknown) => {
+    if (Group.isGroup(member)) {
+      setPath((p) => [...p, member]);
       setSel(0);
-    } else {
-      setFocused(node.name);
+    } else if (isProcessTag(member) || isQueueTag(member)) {
+      setFocused(() => member);
     }
   };
   const back = () => {
@@ -422,7 +646,7 @@ const App = (): React.ReactElement => {
         const pick = suggestions[cmdSel] ?? suggestions[0];
         setCmd(null);
         if (pick !== undefined) {
-          setFocused(pick);
+          setFocused(() => pick);
         }
       } else if (key.escape) {
         setCmd(null);
@@ -452,19 +676,9 @@ const App = (): React.ReactElement => {
       back();
       return;
     }
+    // in the focused view the control keys are owned by the focused component's own
+    // useInput (gated on edit mode) — App only handles back / command / edit toggle.
     if (focused !== null) {
-      if (!editMode || focusBundle === undefined) {
-        return;
-      }
-      if (input === "p") {
-        focusBundle.pause();
-      } else if (input === "r") {
-        focusBundle.resume();
-      } else if (input === "c") {
-        focusBundle.clear();
-      } else if (input === "x") {
-        focusBundle.shutdown();
-      }
       return;
     }
     if (input === "h" || key.leftArrow) {
@@ -481,28 +695,33 @@ const App = (): React.ReactElement => {
   });
 
   const barRows = cmd === null ? 1 : suggestions.length + 1;
+  const renderBar = (hint: React.ReactElement) => (
+    <Bar cmd={cmd} suggestions={suggestions} cmdSel={cmdSel} hint={hint} />
+  );
 
-  // ── focused queue ──
-  if (focused !== null && focusBundle !== undefined) {
-    const hint = (
-      <Box paddingX={1} backgroundColor="gray">
-        <Text dimColor> Esc back · </Text>
-        <Text color="cyan">:</Text>
-        <Text dimColor> command · </Text>
-        <Text color={editMode ? "red" : "gray"}>{editMode ? "EDIT" : "view"}</Text>
-        <Text dimColor>{editMode ? " Ctrl+E · [p][r][c][x]" : " Ctrl+E"}</Text>
-      </Box>
-    );
-    return (
-      <FocusedQueue
-        key={focused}
-        id={focused}
-        bundle={focusBundle}
+  // ── focused resource ──
+  if (focused !== null) {
+    return isProcessTag(focused) ? (
+      <FocusedProcess
+        key={focused.id}
+        tag={focused}
         cols={cols}
         rows={rows}
         editMode={editMode}
+        cmd={cmd}
         barRows={barRows}
-        bar={<Bar cmd={cmd} suggestions={suggestions} cmdSel={cmdSel} hint={hint} />}
+        bar={renderBar}
+      />
+    ) : (
+      <FocusedQueue
+        key={focused.id}
+        tag={focused}
+        cols={cols}
+        rows={rows}
+        editMode={editMode}
+        cmd={cmd}
+        barRows={barRows}
+        bar={renderBar}
       />
     );
   }
@@ -511,7 +730,7 @@ const App = (): React.ReactElement => {
   const start = effScroll * perRow;
   const visibleCells = members.slice(start, start + visibleRows * perRow);
   const more = totalRows - (effScroll + visibleRows);
-  const crumb = path.map((g) => displayName(g.name)).join(" / ");
+  const crumb = path.map((g) => displayName(g.id)).join(" / ");
 
   return (
     <Box flexDirection="column" width={cols} height={rows} borderStyle={editMode ? "double" : BLANK_BORDER} borderColor="red">
@@ -529,24 +748,19 @@ const App = (): React.ReactElement => {
 
       <Box flexGrow={1} flexDirection="row" flexWrap="wrap" padding={1}>
         {visibleCells.map((node, i) => (
-          <Cell key={`${node.t}-${node.name}`} node={node} width={cellWidth} selected={start + i === sel} />
+          <Cell key={idOf(node)} member={node} width={cellWidth} selected={start + i === sel} />
         ))}
       </Box>
 
-      <Bar
-        cmd={cmd}
-        suggestions={suggestions}
-        cmdSel={cmdSel}
-        hint={
-          <Box paddingX={1} backgroundColor="gray">
-            <Text dimColor>{" ↑↓←→ move · Enter open · "}</Text>
-            <Text color="cyan">:</Text>
-            <Text dimColor> command · </Text>
-            <Text color={editMode ? "red" : "gray"}>{editMode ? "EDIT" : "view"}</Text>
-            <Text dimColor> Ctrl+E</Text>
-          </Box>
-        }
-      />
+      {renderBar(
+        <Box paddingX={1} backgroundColor="gray">
+          <Text dimColor>{" ↑↓←→ move · Enter open · "}</Text>
+          <Text color="cyan">:</Text>
+          <Text dimColor> command · </Text>
+          <Text color={editMode ? "red" : "gray"}>{editMode ? "EDIT" : "view"}</Text>
+          <Text dimColor> Ctrl+E</Text>
+        </Box>,
+      )}
     </Box>
   );
 };
