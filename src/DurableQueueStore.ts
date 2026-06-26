@@ -118,6 +118,8 @@ export interface DurableQueueStoreShape {
    * on boot/restart. Returns the count reclaimed.
    */
   readonly recover: (queueId: string) => Effect.Effect<number, DurableQueueError>;
+  /** Delete all pending (incl. in-flight) entries for a queue. Returns the count removed. */
+  readonly clear: (queueId: string) => Effect.Effect<number, DurableQueueError>;
 }
 
 /**

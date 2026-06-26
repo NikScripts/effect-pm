@@ -81,6 +81,27 @@ yield* HostLogs.stream                  // live, all runtime logs
 yield* HostLogs.history({ limit: 200 }) // durable, all runtime logs
 ```
 
+## Durability (the durable queue)
+
+History is the *observability* plane. The *durability* plane is `DurableQueueStore` — a
+priority-native store so no enqueued work is lost across a restart (**at-least-once** + dedup key).
+Turn it on with `persist` + a backend layer (+ `itemSchema`, since the payload must serialize):
+
+```ts
+import { SQLiteDurableQueueStore } from "@nikscripts/effect-pm/storage/sqlite";
+
+const queueLayer = QueueResource.layer(RosterQueue, {
+  effect,
+  itemSchema: RosterItem,           // required for persist
+  persist: { maxAttempts: 3 },      // or `true` for defaults
+}).pipe(Layer.provide(SQLiteDurableQueueStore.layer({ filename: "queue.db" })));
+```
+
+When on, the store is the **source of truth**: enqueue persists, a feeder leases work into the
+workers, success/failure update the store (retry → requeue, `maxAttempts` → dead-letter), and a
+restart **recovers in-flight work**. `size`/`sizes`/`isEmpty`/`status` and shutdown-drain reflect
+the store. Off by default (in-memory only) — and the in-memory path is unchanged.
+
 ## For a dashboard
 
 Same Tag, two reads: **`status`/`metrics`/`logs` for live**, **`*History` for backfill**. A typical

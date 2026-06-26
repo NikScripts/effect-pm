@@ -19,6 +19,12 @@ no enqueued item is lost across a restart (**at-least-once** + dedup key). Inspi
 strict high/normal/low + FIFO within a lane, dedup + escalation on a `dedupKey`, lease + `recover`,
 `fail` → requeue/dead-letter, `sizes`. SQLite backend (`SQLiteDurableQueueStore` from
 `@nikscripts/effect-pm/storage/sqlite`) over one table; single-writer leasing in a transaction.
-The store port is on the core entry (no SQL dep); engine integration lands in a follow-up.
+The store port is on the core entry (no SQL dep).
+
+**Engine integration.** `QueueResource` gains a `persist` option: when set (with a
+`DurableQueueStore` layer + `itemSchema`), the store becomes the source of truth — enqueue persists,
+a feeder leases work into the workers, completion/failure update the store, and a restart recovers
+in-flight work. `size`/`sizes`/`isEmpty`/`status`/`clear` and shutdown-drain are store-aware. Fully
+gated: with `persist` off the in-memory engine is byte-for-byte unchanged.
 
 A guide for consumers: `docs/guides/history-and-persistence.md`.

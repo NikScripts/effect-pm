@@ -199,6 +199,18 @@ const makeService = (sql: SqlClient): DurableQueueStoreShape => {
           }),
         )
         .pipe(Effect.mapError(fail("recover"))),
+
+    clear: (queueId) =>
+      sql
+        .withTransaction(
+          Effect.gen(function* () {
+            const counted = yield* sql`SELECT COUNT(*) AS c FROM ${sql(TABLE)} WHERE queue_id = ${queueId} AND status = 'pending'`;
+            const count = Number(asRecord(counted[0])["c"]);
+            yield* sql`DELETE FROM ${sql(TABLE)} WHERE queue_id = ${queueId} AND status = 'pending'`;
+            return count;
+          }),
+        )
+        .pipe(Effect.mapError(fail("clear"))),
   };
 };
 
