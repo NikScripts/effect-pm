@@ -1,5 +1,43 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.4
+
+### Minor Changes
+
+- 23d41bc: `QueueResource`: add a first-class **`refill`** config — a self-feeding queue that loads work from a
+  source (DB, …) on start and/or whenever it drains empty. The toolkit replacement for the legacy
+  `onStart` / `onDrained` lifecycle hooks:
+
+  ```ts
+  QueueResource.layer(RosterQueue, {
+    effect,
+    refill: {
+      onStart: true, // bootstrap once when the worker pool starts
+      onDrained: true, // re-poll the source each time the queue drains
+      load: (queue) => loadFromDb(queue),
+    },
+  });
+  ```
+
+  `load` receives the queue handle, runs in the worker `R`, and is best-effort. `onStart` is forked
+  (a slow source load doesn't block startup); `onDrained` runs after each `Drained` (drives the
+  self-feeding loop, and idles when `load` enqueues nothing). Distinct from after-the-fact `events`
+  observation — `refill` is a defining queue behavior (a pull source).
+
+- 6323949: Rename the structured-logging symbols from the vestigial `ProcessManagerLog*` to neutral `Log*`
+  (no behavior change) — the log infra never depended on the removed `ProcessManager`:
+
+  - `ProcessManagerLogEntry` → `LogEntry`, `ProcessManagerLogEntrySchema` → `LogEntrySchema`,
+    `ProcessManagerLogEntryNdjson` → `LogEntryNdjson`, `processManagerLogEntryFromLoggerOptions` →
+    `logEntryFromLoggerOptions`
+  - `ProcessManagerLogRelay` → `LogRelay` (+ `LogRelayService`), `ProcessManagerLogAnnotationKeys` →
+    `LogAnnotationKeys`
+  - `ProcessManagerLogQuery` → `LogQuery`, `ProcessManagerLogQueryError` → `LogQueryError`,
+    `ProcessManagerLogSort` → `LogSort`, `ProcessManagerLogScope` → `LogScope`
+
+  The `LogEntry` namespace (`LogEntry.Schema` / `encode` / `decode`) is unchanged; the renamed entry
+  type now merges into it. Annotation key _values_ (`groupId` / `processId` / `queueId`) are unchanged.
+
 ## 0.8.0-beta.3
 
 ### Minor Changes
