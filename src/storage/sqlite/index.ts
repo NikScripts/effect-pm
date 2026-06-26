@@ -55,7 +55,6 @@ import type { SqlError } from "effect/unstable/sql/SqlError";
 import { ProcessStorage } from "../../ProcessStorage";
 import type { LogStore } from "../../store/log";
 import type { ProcessExecutionStore } from "../../store/processExecution";
-import type { ProcessGroupStore } from "../../store/processGroup";
 import type { ProcessLifecycleStore } from "../../store/processLifecycle";
 import type { QueueResourceStore } from "../../store/queueResource";
 import type { RunResourceStore } from "../../store/runResource";
@@ -167,8 +166,7 @@ export const layerProcessStore = (
   | QueueResourceStore
   | RunResourceStore
   | ProcessExecutionStore
-  | ProcessLifecycleStore
-  | ProcessGroupStore,
+  | ProcessLifecycleStore,
   RuntimeStorageConnectionError | RuntimeStorageSchemaError,
   Scope.Scope
 > =>
@@ -189,8 +187,7 @@ export const layerProcessStoreOrDie = (
   | QueueResourceStore
   | RunResourceStore
   | ProcessExecutionStore
-  | ProcessLifecycleStore
-  | ProcessGroupStore,
+  | ProcessLifecycleStore,
   never,
   Scope.Scope
 > => layerProcessStore(config).pipe(Layer.orDie);

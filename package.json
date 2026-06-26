@@ -48,10 +48,6 @@
       "types": "./dist/QueueContract.d.ts",
       "default": "./dist/QueueContract.js"
     },
-    "./ProcessGroup": {
-      "types": "./dist/ProcessGroup.d.ts",
-      "default": "./dist/ProcessGroup.js"
-    },
     "./ProcessStore": {
       "types": "./dist/ProcessStore.d.ts",
       "default": "./dist/ProcessStore.js"
@@ -76,10 +72,6 @@
       "types": "./dist/store/ProcessLifecycle.d.ts",
       "default": "./dist/store/ProcessLifecycle.js"
     },
-    "./store/ProcessGroup": {
-      "types": "./dist/store/ProcessGroup.d.ts",
-      "default": "./dist/store/ProcessGroup.js"
-    },
     "./store/ProcessExecution": {
       "types": "./dist/store/ProcessExecution.d.ts",
       "default": "./dist/store/ProcessExecution.js"
@@ -92,41 +84,9 @@
       "types": "./dist/ResourceConfigure.d.ts",
       "default": "./dist/ResourceConfigure.js"
     },
-    "./ControlProtocol": {
-      "types": "./dist/ControlProtocol.d.ts",
-      "default": "./dist/ControlProtocol.js"
-    },
-    "./CommandAuth": {
-      "types": "./dist/CommandAuth.d.ts",
-      "default": "./dist/CommandAuth.js"
-    },
-    "./ControlTransportRpc": {
-      "types": "./dist/ControlTransportRpc.d.ts",
-      "default": "./dist/ControlTransportRpc.js"
-    },
-    "./LogTransportRpc": {
-      "types": "./dist/LogTransportRpc.d.ts",
-      "default": "./dist/LogTransportRpc.js"
-    },
-    "./Terminal": {
-      "types": "./dist/Terminal.d.ts",
-      "default": "./dist/Terminal.js"
-    },
-    "./TerminalRpc": {
-      "types": "./dist/TerminalRpc.d.ts",
-      "default": "./dist/TerminalRpc.js"
-    },
     "./RuntimeStorage": {
       "types": "./dist/RuntimeStorage.d.ts",
       "default": "./dist/RuntimeStorage.js"
-    },
-    "./ProcessManager": {
-      "types": "./dist/ProcessManager.d.ts",
-      "default": "./dist/ProcessManager.js"
-    },
-    "./ControlService": {
-      "types": "./dist/ControlService.d.ts",
-      "default": "./dist/ControlService.js"
     },
     "./Logs": {
       "types": "./dist/Logs.d.ts",
@@ -174,10 +134,6 @@
     },
     "./package.json": "./package.json"
   },
-  "bin": {
-    "effect-pm": "./dist/bin/effect-pm.js",
-    "effect-pm-group-child": "./dist/bin/effect-pm-group-child.js"
-  },
   "files": [
     "dist",
     "src",
@@ -199,7 +155,6 @@
     "changeset": "changeset",
     "version": "changeset version",
     "release": "npm run build && changeset publish",
-    "example": "tsx examples/scenarios/full-process-group-with-queues-and-control-cli.ts",
     "example:queue-widget": "vite --config examples/queue-widget/vite.config.ts",
     "example:resource-cli": "tsx examples/resource-cli/counter-cli.ts",
     "example:resource-cli-manager": "tsx examples/resource-cli/manager-cli.ts",
@@ -214,7 +169,6 @@
     "example:dashboard": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/dashboard.tsx",
     "example:dashboard-mock": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/dashboard-mock.tsx",
     "example:queue-live": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/queue-live.tsx",
-    "example:typed-process-group": "tsx examples/forms/process-group/process-group-make-entries.ts && tsx examples/forms/process-group/process-group-service.ts && tsx examples/forms/process-group/process-group-contract-http.ts && tsx examples/forms/process-group/process-manager-connection-registry.ts && tsx examples/forms/process-group/process-manager-endpoint-service.ts && tsx examples/forms/process-group/process-group-remote-layer.ts && tsx examples/forms/process-group/process-group-remote-contract-drift.ts",
     "example:queue-resource": "tsx examples/forms/queue/queue-resource-priority-retry.ts",
     "example:process-patterns": "tsx examples/forms/polling/polling-accelerating.ts && tsx examples/forms/polling/schedule-delayed-start.ts",
     "example:process-supervisor-patterns": "tsx examples/forms/polling/polling-accelerating.ts && tsx examples/forms/polling/schedule-delayed-start.ts",
@@ -223,13 +177,10 @@
     "example:schedule-control-surfaces": "tsx examples/forms/schedule/schedule-controls-initializer.ts && tsx examples/forms/schedule/schedule-controls-in-effect.ts && tsx examples/forms/schedule/schedule-controls-external-fiber.ts",
     "example:schedule-control-basics": "tsx examples/forms/schedule/schedule-at.ts && tsx examples/forms/schedule/schedule-window.ts && tsx examples/forms/schedule/schedule-define.ts",
     "example:schedule-control-db-sync": "tsx examples/scenarios/schedule-sync-from-external-db.ts",
-    "example:process-game-window": "tsx examples/scenarios/game-window-polling-with-process-group.ts",
     "example:run-resource": "tsx examples/forms/resource/run-resource-unit-and-input.ts",
     "example:http-client-run-gate": "tsx examples/forms/resource/http-client-run-gate.ts",
     "example:http-api-resource": "tsx examples/forms/resource/http-api-resource-tag-layer.ts",
     "example:nwsl-http-api-resource": "node scripts/nwsl-local.mjs example",
-    "cli": "tsx examples/cli.ts",
-    "demo:pm": "tsx examples/scenarios/process-manager-playground/cli.ts",
     "example:http-api-resource-layer-effect": "tsx examples/forms/resource/http-api-resource-layer-effect.ts",
     "example:form:schedule-at": "tsx examples/forms/schedule/schedule-at.ts",
     "example:form:schedule-window": "tsx examples/forms/schedule/schedule-window.ts",
@@ -242,13 +193,6 @@
     "example:form:polling-spaced-read": "tsx examples/forms/polling/polling-spaced-read.ts",
     "example:form:polling-accelerating-reset-cadence": "tsx examples/forms/polling/polling-accelerating-reset-cadence.ts",
     "example:form:polling-accelerating-peek-cadence": "tsx examples/forms/polling/polling-accelerating-peek-cadence.ts",
-    "example:form:process-group-make-entries": "tsx examples/forms/process-group/process-group-make-entries.ts",
-    "example:form:process-group-service": "tsx examples/forms/process-group/process-group-service.ts",
-    "example:form:process-group-contract-http": "tsx examples/forms/process-group/process-group-contract-http.ts",
-    "example:form:process-manager-connection-registry": "tsx examples/forms/process-group/process-manager-connection-registry.ts",
-    "example:form:process-manager-endpoint-service": "tsx examples/forms/process-group/process-manager-endpoint-service.ts",
-    "example:form:process-group-remote-layer": "tsx examples/forms/process-group/process-group-remote-layer.ts",
-    "example:form:process-group-remote-contract-drift": "tsx examples/forms/process-group/process-group-remote-contract-drift.ts",
     "prepare": "effect-language-service patch && effect-tsgo patch"
   },
   "dependencies": {

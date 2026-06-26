@@ -2,7 +2,6 @@ import { assert, describe, it } from "@effect/vitest";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Effect, FileSystem, Layer, Path } from "effect";
-import { groupLogSqlitePath } from "../src/internal/manager/childLaunch";
 import { LogStore } from "../src/store/log";
 import { layerProcessStore } from "../src/storage/sqlite/index";
 import { ProcessManagerLogAnnotationKeys } from "../src/LogContext";
@@ -16,7 +15,7 @@ describe("LogStore", () => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const directory = yield* fs.makeTempDirectory();
-      const sqliteFilename = groupLogSqlitePath(directory, "workshop-group");
+      const sqliteFilename = path.join(directory, "logs.sqlite");
       yield* fs.makeDirectory(path.dirname(sqliteFilename), { recursive: true });
       const storeLayer = layerProcessStore({ filename: sqliteFilename });
 
