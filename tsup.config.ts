@@ -39,6 +39,7 @@ export default defineConfig([
       ScheduledProcess: "src/ScheduledProcess.ts",
       ProcessScheduleContract: "src/ProcessScheduleContract.ts",
       web: "src/web/index.ts",
+      cli: "src/cli/index.ts",
       "storage/sqlite": "src/storage/sqlite/index.ts",
       "storage/redis": "src/storage/redis/index.ts",
       "storage/prisma": "src/storage/prisma.ts",

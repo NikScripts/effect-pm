@@ -120,6 +120,10 @@
       "types": "./dist/web.d.ts",
       "default": "./dist/web.js"
     },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "default": "./dist/cli.js"
+    },
     "./storage/sqlite": {
       "types": "./dist/storage/sqlite.d.ts",
       "default": "./dist/storage/sqlite.js"

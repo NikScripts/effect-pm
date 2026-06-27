@@ -18,7 +18,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer } from "effect";
 import { Command } from "effect/unstable/cli";
 import { resources, resourcesLayer } from "./manager-resources";
-import { makeResourceCli } from "./resource-cli";
+import { makeResourceCli } from "../../src/cli";
 
 const cli = makeResourceCli(resources, "pm");
 

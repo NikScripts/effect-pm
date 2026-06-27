@@ -25,7 +25,7 @@ import { Effect, Layer } from "effect";
 import { Command } from "effect/unstable/cli";
 import { KeyRotation, LEAVES } from "../web-dashboard/fleet";
 import { appLayer } from "../web-dashboard/queue-data";
-import { makeResourceCli } from "../resource-cli/resource-cli";
+import { makeResourceCli, resourcesByName } from "../../src/cli";
 import { runDashboard } from "./dashboard-app";
 
 const argv = process.argv.slice(2);
@@ -34,24 +34,8 @@ const argv = process.argv.slice(2);
 if (argv.length === 0) {
   runDashboard();
 } else {
-  // ── command names: shortest unique slash-suffix of each tag id ──
-  const segments = (id: string): ReadonlyArray<string> => id.split("/").filter((s) => s.length > 0);
-  const suffix = (id: string, n: number): string => segments(id).slice(-n).join("/");
-
-  const tags = [...LEAVES, KeyRotation];
-  const nameOf = (id: string): string => {
-    const depth = segments(id).length;
-    for (let n = 1; n <= depth; n += 1) {
-      const candidate = suffix(id, n);
-      if (tags.filter((t) => suffix(t.id, n) === candidate).length === 1) {
-        return candidate;
-      }
-    }
-    return id;
-  };
-  const resources = Object.fromEntries(tags.map((t) => [nameOf(t.id), t]));
-
-  const cli = makeResourceCli(resources, "pm");
+  // command names = shortest unique slash-suffix of each tag id (Mail, KeyRotation, …).
+  const cli = makeResourceCli(resourcesByName([...LEAVES, KeyRotation]), "pm");
   const program = Command.runWith(cli, { version: "0.8.0-beta.6" })(argv).pipe(
     Effect.provide(Layer.mergeAll(appLayer, NodeServices.layer)),
   );
