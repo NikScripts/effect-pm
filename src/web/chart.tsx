@@ -11,7 +11,7 @@ import * as React from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, YAxis } from "recharts";
 import { AsyncResult } from "effect/unstable/reactivity";
 import type { ValueAtom } from "./binding";
-import { useAtomValue } from "./atom-react";
+import { useAtomValue } from "../ui/atom-react";
 
 const useHistory = (atom: ValueAtom): ReadonlyArray<unknown> => {
   const r = useAtomValue(atom);

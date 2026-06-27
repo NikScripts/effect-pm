@@ -24,7 +24,7 @@ import {
   RegistryProvider,
   useAtomSet,
   useAtomValue,
-} from "../queue-widget/atom-react";
+} from "../../src/ui/atom-react";
 
 // Heterogeneous record of different tags: the same structural shape the CLI uses
 // (yieldable → its service, plus the bits we read and the stowed spec).

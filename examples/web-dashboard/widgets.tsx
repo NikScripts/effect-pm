@@ -26,7 +26,7 @@ import {
   queueBundle,
   queueLeaves,
 } from "./queue-data";
-import { useAtomSet, useAtomValue } from "../queue-widget/atom-react";
+import { useAtomSet, useAtomValue } from "../../src/ui/atom-react";
 import { useViewTransitionStyle } from "../../src/web/useViewTransition";
 import { dlog } from "./debug-console";
 

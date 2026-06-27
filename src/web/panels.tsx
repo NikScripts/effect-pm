@@ -11,7 +11,7 @@
 import * as React from "react";
 import { AsyncResult } from "effect/unstable/reactivity";
 import type { ResourceUI, ValueAtom } from "./binding";
-import { useAtomSet, useAtomValue } from "./atom-react";
+import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { Badge, Button, ConfirmButton, Field } from "./primitives";
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>

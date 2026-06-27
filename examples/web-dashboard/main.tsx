@@ -1,6 +1,6 @@
 import "./styles.css";
 import { createRoot } from "react-dom/client";
-import { RegistryProvider } from "../queue-widget/atom-react";
+import { RegistryProvider } from "../../src/ui/atom-react";
 import { ViewTransitionProvider } from "../../src/web/useViewTransition";
 import { App } from "./dashboard";
 

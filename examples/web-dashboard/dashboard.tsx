@@ -8,7 +8,7 @@
 
 import * as React from "react";
 import { Boundary } from "./components/ui/boundary";
-import { useAtomMount } from "../queue-widget/atom-react";
+import { useAtomMount } from "../../src/ui/atom-react";
 import { runtime } from "./queue-data";
 import { DebugConsole } from "./debug-console";
 import { DesktopDashboard } from "./desktop";

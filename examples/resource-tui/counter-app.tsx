@@ -20,7 +20,7 @@ import {
   RegistryProvider,
   useAtomSet,
   useAtomValue,
-} from "../queue-widget/atom-react";
+} from "../../src/ui/atom-react";
 
 class Counter extends Resource.Tag<Counter>("Counter")({
   current: Resource.query(Schema.Number),

@@ -9,9 +9,23 @@
 
 import { Box, Text } from "ink";
 import * as React from "react";
+import {
+  bar,
+  compact,
+  displayName,
+  fmt,
+  spark,
+  statusColor as COLOR,
+  statusIcon as STATUS_ICON,
+  blankBorder as BLANK_BORDER,
+  type Status,
+} from "../../src/tui";
 
-// mirrors the real queue: lifecycle `phase` (running/draining/off) folded with `paused`
-export type Status = "running" | "paused" | "draining" | "off";
+// the shared TUI primitives, re-exported so the queue views (and dashboard-app) keep
+// importing them from one place.
+export { bar, compact, displayName, fmt, spark, COLOR, STATUS_ICON, BLANK_BORDER };
+export type { Status };
+
 export type Priority = "high" | "normal" | "low";
 export type Variant = "S" | "M" | "L" | "XL";
 
@@ -29,64 +43,11 @@ export interface View {
   readonly trend: ReadonlyArray<number>;
 }
 
-export const COLOR: Record<Status, string> = {
-  running: "green",
-  paused: "yellow",
-  draining: "cyan",
-  off: "red",
-};
-export const STATUS_ICON: Record<Status, string> = {
-  running: "►",
-  paused: "‖",
-  draining: "↓",
-  off: "■",
-};
-// always-present, invisible border (spaces) so toggling a visible border never shifts layout
-export const BLANK_BORDER = {
-  topLeft: " ",
-  top: " ",
-  topRight: " ",
-  right: " ",
-  bottomRight: " ",
-  bottom: " ",
-  bottomLeft: " ",
-  left: " ",
-};
-
 const SYM: Record<Priority, { symbol: string; color: string; label: string }> = {
   high: { symbol: "▲", color: "red", label: "high" },
   normal: { symbol: "•", color: "white", label: "normal" },
   low: { symbol: "▼", color: "blue", label: "low" },
 };
-const SPARK = "▁▂▃▄▅▆▇█";
-
-export const bar = (value: number, max: number, width: number): string => {
-  const filled = max <= 0 ? 0 : Math.min(width, Math.round((value / max) * width));
-  return "█".repeat(filled) + "░".repeat(width - filled);
-};
-export const fmt = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
-/** Compact count (≤4 chars) so large live queues never overflow a fixed-width column. */
-export const compact = (n: number): string =>
-  n < 1000
-    ? String(n)
-    : n < 10_000
-      ? `${(n / 1000).toFixed(1)}k`
-      : n < 1_000_000
-        ? `${Math.round(n / 1000)}k`
-        : `${(n / 1_000_000).toFixed(1)}M`;
-export const spark = (vals: ReadonlyArray<number>): string => {
-  if (vals.length === 0) {
-    return "";
-  }
-  const max = Math.max(...vals, 1);
-  return vals
-    .map((v) => SPARK[Math.min(7, Math.floor((v / max) * 7))] ?? " ")
-    .join("");
-};
-
-/** Display name from a tag key: the last `/` segment of `@repo/package/MyQueue`. */
-export const displayName = (key: string): string => key.split("/").pop() ?? key;
-
 export const variantFor = (cols: number, rows: number): Variant =>
   cols >= 78 && rows >= 18 ? "XL" : cols >= 48 ? "L" : cols >= 34 ? "M" : "S";
 

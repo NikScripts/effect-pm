@@ -25,7 +25,7 @@ import {
   RegistryProvider,
   useAtomSet,
   useAtomValue,
-} from "../queue-widget/atom-react";
+} from "../../src/ui/atom-react";
 
 const Counter = Resource.tagFor("grid-counter", {
   value: Resource.query(Schema.Number),

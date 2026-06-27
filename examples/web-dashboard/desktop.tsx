@@ -29,7 +29,7 @@ import {
   queueLeaves,
   queueBundle,
 } from "./queue-data";
-import { useAtomValue } from "../queue-widget/atom-react";
+import { useAtomValue } from "../../src/ui/atom-react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./components/ui/resizable";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./components/ui/table";
 import {

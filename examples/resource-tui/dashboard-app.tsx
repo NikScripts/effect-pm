@@ -32,7 +32,7 @@ import {
   type LeafTag,
   type ProcessTag,
 } from "../web-dashboard/queue-data";
-import { RegistryProvider, useAtomSet, useAtomValue } from "../queue-widget/atom-react";
+import { RegistryProvider, useAtomSet, useAtomValue } from "../../src/ui/atom-react";
 import {
   bar,
   BLANK_BORDER,

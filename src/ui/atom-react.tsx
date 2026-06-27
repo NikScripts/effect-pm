@@ -1,10 +1,10 @@
 /**
- * @module web/atom-react
+ * @module ui/atom-react
  *
- * A tiny React binding over Effect's **native** reactive layer
- * (`effect/unstable/reactivity`) — a registry provider plus
- * `useSyncExternalStore`-backed hooks. No external `@effect-atom`. Atoms (runtime,
- * reads, streams, commands) are plain Effect values built by {@link makeResourceUI}.
+ * The shared React binding over Effect's **native** reactive layer
+ * (`effect/unstable/reactivity`) — a registry provider plus `useSyncExternalStore`-backed
+ * hooks. No external `@effect-atom`. Used by both the `web` and `tui` renderers (Ink is
+ * React too); atoms (runtime, reads, streams, commands) are plain Effect values.
  *
  * @since 1.0.0
  */

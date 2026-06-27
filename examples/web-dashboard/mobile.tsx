@@ -18,7 +18,7 @@ import {
   processBundle,
   queueBundle,
 } from "./queue-data";
-import { useAtomValue } from "../queue-widget/atom-react";
+import { useAtomValue } from "../../src/ui/atom-react";
 import { useViewTransition, useViewTransitionStyle } from "../../src/web/useViewTransition";
 import { Boundary } from "./components/ui/boundary";
 import { Button } from "./components/ui/button";

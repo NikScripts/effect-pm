@@ -124,6 +124,10 @@
       "types": "./dist/cli.d.ts",
       "default": "./dist/cli.js"
     },
+    "./tui": {
+      "types": "./dist/tui.d.ts",
+      "default": "./dist/tui.js"
+    },
     "./storage/sqlite": {
       "types": "./dist/storage/sqlite.d.ts",
       "default": "./dist/storage/sqlite.js"
