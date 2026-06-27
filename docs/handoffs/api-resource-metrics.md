@@ -15,20 +15,20 @@ pattern**, and rename `HttpApiResource` → **`ApiResource`**. Branch: `rewrite/
 
 ## Goals
 
-### 1. Usage metrics (primary)
-Every request already funnels through the gated `HttpClient`, so the gate transform is the natural
-instrumentation point. Add a metrics middleware (a second `HttpClient.transform` wrapping the gated
-client) recording, labeled by client `name`:
-- `api_requests_total` (counter), `api_in_flight` (gauge ±1 around each request),
-- `api_request_duration` (histogram), `api_responses_total` by status class / `api_errors_total`.
+### 1. Usage metrics (primary) — emit to the registry; the dashboard surface is `Telemetry`
+**Decided:** ApiResource just **emits to the Effect `Metric` registry**; the dashboard-native,
+cross-host aggregation lives in the separate **`Telemetry` resource** (see
+`docs/handoffs/telemetry-resource.md`). Don't build a per-resource observable here.
 
-Decisions to make:
-- **Granularity:** transport-level (per-client + per-status + latency) is easy and the right v1.
-  **Per-endpoint** labels need instrumenting at the `HttpApiClient` dispatch (not the transport) and
-  raise cardinality — defer, or derive from the `HttpApi` endpoint name, not the raw URL.
-- **Surface:** v1 = Effect `Metric.*` (global registry, labeled). v2 (for the dashboard) = a
-  per-resource observable like the queue's `.metrics` (windowed) / `.status` (in-flight now). Mirror
-  `QueueContract`'s metrics shape so the **UI agent** can reuse the dashboard data layer.
+Every request funnels through the gated `HttpClient`, so add a metrics middleware (a second
+`HttpClient.transform` wrapping the gated client), recording labeled by `client` (tag id) + `status`:
+- `api_requests_total` (counter), `api_in_flight` (gauge ±1 around each request),
+- `api_request_duration` (histogram), `api_errors_total`.
+
+**Granularity:** host/client/status are cheap (host comes from the Telemetry fan-out, free).
+**Per-endpoint** needs instrumenting at the `HttpApiClient` dispatch (the transport sees only
+method+URL; parameterized paths blow up cardinality) — stretch within v1; land client/status first.
+These same labels then slice in the dashboard via `Telemetry`.
 
 ### 2. `.Tag` class pattern
 Add `ApiResource.Tag` so a client is declared like every other toolkit resource:
