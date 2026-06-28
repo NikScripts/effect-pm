@@ -1,5 +1,40 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.7
+
+### Minor Changes
+
+- 2999895: `Resource.serveAllHttp` + `QueueResource.serverEntry` / `ScheduledProcess.serverEntry` — serve a
+  whole group of resources on one HTTP port behind one `Host` (procedures group-id-prefixed). A host
+  can now be a group on one port, not one-resource-per-port; one `Resource.connectHttp` transport
+  reaches them all.
+
+- b0a3249: Ship **`@nikscripts/effect-pm/cli`** — build a run-and-exit CLI from your resource tags.
+  `makeResourceCli(resources, rootName)` (record of tags → `effect/unstable/cli` command tree; verbs +
+  flags + help from the contract; `ls`), `resourcesByName(tags)` (shortest-unique-slash-suffix naming),
+  `render(value)`.
+
+- 615cbb1: Ship **`@nikscripts/effect-pm/tui`** + a shared UI core. The reactive React binding now lives
+  once in `src/ui/atom-react` and is shared by web + tui (Ink is React); `/tui` adds composable terminal
+  primitives (`bar`, `spark`, `compact`, `fmt`, `displayName`, `blankBorder`, `statusColor`/`statusIcon`).
+
+- 3821c91: `@nikscripts/effect-pm/web`: View Transitions helpers — `ViewTransitionProvider`,
+  `useViewTransition`, `useViewTransitionStyle` — animate navigation (a card morphs to fill the screen)
+  with conditional naming, degrading to an instant update where unsupported.
+
+### Patch Changes
+
+- 8e2e611: `@nikscripts/effect-pm/web` reactive binding: `useAtomValue` mounts the atom (inside the
+  subscription) and `useAtomSet` mounts its command atom, so cold stream atoms (status/metrics/logs)
+  start on render instead of staying blank until an interaction.
+
+- 3b4c822: Fix `QueueResource` refill dependency support: a refill `load` can require its **own**
+  services, independent of the worker `effect` (separate `RR` requirement; `layer` / `server` /
+  `serveHttp` / `serverEntry` surface the union `R | RR`). Runtime behavior unchanged.
+
+- 0e6f5cb: Docs: add `docs/guides/setup.md` — a consumer setup guide (install + peer-dep matrix, the
+  subpath map, and wiring a `serveAllHttp` server + `/cli` / `/tui` / `/web` against your tags).
+
 ## 0.8.0-beta.6
 
 ### Patch Changes

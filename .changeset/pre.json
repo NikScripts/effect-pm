@@ -51,6 +51,13 @@
     "toolkit-treeshake-and-cleanup",
     "typed-process-group-contracts",
     "web-widgets",
-    "pm-cli"
+    "pm-cli",
+    "serve-all-http",
+    "cli-export",
+    "tui-export",
+    "view-transitions",
+    "atom-mount",
+    "refill-dependency-support",
+    "setup-guide"
   ]
 }
