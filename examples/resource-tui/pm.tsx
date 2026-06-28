@@ -34,7 +34,7 @@ const argv = process.argv.slice(2);
 if (argv.length === 0) {
   runDashboard();
 } else {
-  // command names = shortest unique slash-suffix of each tag id (Mail, KeyRotation, …).
+  // command names = shortest unique slash-suffix of each tag key (Mail, KeyRotation, …).
   const cli = makeResourceCli(resourcesByName([...LEAVES, KeyRotation]), "pm");
   const program = Command.runWith(cli, { version: "0.8.0-beta.6" })(argv).pipe(
     Effect.provide(Layer.mergeAll(appLayer, NodeServices.layer)),

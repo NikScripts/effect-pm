@@ -62,13 +62,13 @@ interface ProcessService {
 }
 
 /** A queue tag — yieldable for its live service. Requirement `R` is provided by the runtime. @since 1.0.0 */
-export type QueueTag<R = never> = Effect.Effect<QueueService, never, R> & { readonly id: string };
+export type QueueTag<R = never> = Effect.Effect<QueueService, never, R> & { readonly key: string };
 /** A process tag — yieldable for its live service. @since 1.0.0 */
-export type ProcessTag<R = never> = Effect.Effect<ProcessService, never, R> & { readonly id: string };
+export type ProcessTag<R = never> = Effect.Effect<ProcessService, never, R> & { readonly key: string };
 
 /** A node in a `Group.Tag` tree. @since 1.0.0 */
 export interface GroupNode {
-  readonly id: string;
+  readonly key: string;
   readonly members: Record<string, unknown>;
 }
 
@@ -163,7 +163,7 @@ const cacheFor = <V>(map: WeakMap<object, Map<string, V>>, runtime: object): Map
 /** Build (once per runtime+tag) the atom bundle for a queue tag. @since 1.0.0 */
 export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueTag<R>): QueueBundle => {
   const cache = cacheFor(bundleCache, runtime);
-  const existing = cache.get(tag.id);
+  const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
 
   const statusStream = Stream.unwrap(Effect.map(tag, (q) => q.status));
@@ -174,7 +174,7 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
     latency: m.avgTotalMillis ?? 0,
   });
   const trendValue = (s: QueueStatus): number => s.sizes.high + s.sizes.normal + s.sizes.low;
-  bumpLogIdFrom(`${tag.id}/logs`);
+  bumpLogIdFrom(`${tag.key}/logs`);
 
   // Dedup the wire streams: ONE status stream feeds status + trend, ONE metrics stream feeds
   // metrics + history (derived via Atom.mapResult) — keeps concurrent streams under the
@@ -184,11 +184,11 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
       Stream.scan(
         {
           latest: undefined as QueueStatus | undefined,
-          trend: readCache<number>(`${tag.id}/trend`)?.items ?? [],
+          trend: readCache<number>(`${tag.key}/trend`)?.items ?? [],
         },
         (acc, s) => ({ latest: s, trend: [...acc.trend, trendValue(s)].slice(-TREND) }),
       ),
-      Stream.tap((acc) => Effect.sync(() => writeCache(`${tag.id}/trend`, acc.trend))),
+      Stream.tap((acc) => Effect.sync(() => writeCache(`${tag.key}/trend`, acc.trend))),
     ),
   );
   const metricsHistory = runtime.atom(
@@ -203,14 +203,14 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
       Stream.scan(
         {
           latest: undefined as QueueMetrics | undefined,
-          history: readCache<MetricPoint>(`${tag.id}/history`)?.items ?? [],
+          history: readCache<MetricPoint>(`${tag.key}/history`)?.items ?? [],
         },
         (acc, item) =>
           "metric" in item
             ? { latest: item.metric, history: [...acc.history, toPoint(item.metric)].slice(-HISTORY) }
             : { latest: acc.latest, history: [...acc.history, item.point].slice(-HISTORY) },
       ),
-      Stream.tap((acc) => Effect.sync(() => writeCache(`${tag.id}/history`, acc.history))),
+      Stream.tap((acc) => Effect.sync(() => writeCache(`${tag.key}/history`, acc.history))),
     ),
   );
 
@@ -221,7 +221,7 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
     trend: Atom.mapResult(statusTrend, (a) => a.trend),
     logs: runtime.atom(
       cachedAccumulator({
-        key: `${tag.id}/logs`,
+        key: `${tag.key}/logs`,
         cap: 300,
         live: Stream.unwrap(Effect.map(tag, (q) => q.logs)).pipe(Stream.map(toLogLine)),
         history: Effect.flatMap(tag, (q) => q.logHistory({ limit: 300 })).pipe(Effect.map((ls) => ls.map(toLogLine))),
@@ -232,21 +232,21 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
     clear: runtime.fn(() => Effect.flatMap(tag, (q) => q.clear)),
     shutdown: runtime.fn(() => Effect.flatMap(tag, (q) => q.shutdown)),
   };
-  cache.set(tag.id, bundle);
+  cache.set(tag.key, bundle);
   return bundle;
 };
 
 /** Build (once per runtime+tag) the atom bundle for a process tag. @since 1.0.0 */
 export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ProcessTag<R>): ProcessBundle => {
   const cache = cacheFor(processBundleCache, runtime);
-  const existing = cache.get(tag.id);
+  const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
-  bumpLogIdFrom(`${tag.id}/logs`);
+  bumpLogIdFrom(`${tag.key}/logs`);
   const bundle: ProcessBundle = {
     status: runtime.atom(Stream.unwrap(Effect.map(tag, (p) => p.status))),
     logs: runtime.atom(
       cachedAccumulator({
-        key: `${tag.id}/logs`,
+        key: `${tag.key}/logs`,
         cap: 300,
         live: Stream.unwrap(Effect.map(tag, (p) => p.logs)).pipe(Stream.map(toLogLine)),
         history: Effect.flatMap(tag, (p) => p.logHistory({ limit: 300 })).pipe(Effect.map((ls) => ls.map(toLogLine))),
@@ -256,7 +256,7 @@ export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: Proc
     stop: runtime.fn(() => Effect.flatMap(tag, (p) => p.stop)),
     runImmediately: runtime.fn(() => Effect.flatMap(tag, (p) => p.runImmediately)),
   };
-  cache.set(tag.id, bundle);
+  cache.set(tag.key, bundle);
   return bundle;
 };
 

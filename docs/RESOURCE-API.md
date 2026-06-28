@@ -1,6 +1,6 @@
 # Resource API Reference
 
-Complete guide to `QueueResource`, `RunResource`, and `HttpApiResource` — the managed resource modules in `@nikscripts/effect-pm`.
+Complete guide to `QueueResource`, `CustomQueueResource`, `RunResource`, and `HttpApiResource` — the managed resource modules in `@nikscripts/effect-pm`.
 
 ---
 
@@ -240,6 +240,96 @@ const queue = yield* BatchQueue
 yield* queue.add(yield* loadInitialBatch())
 yield* queue.resume  // now workers start in priority order
 ```
+
+---
+
+## CustomQueueResource
+
+N-level priority queues sharing the same worker engine as `QueueResource`, with a numeric lane store and
+pluggable take algorithm (`priority`, `strict-descending`, `weighted`, or custom pick). Use when the
+fixed high/normal/low trio is not enough.
+
+**Default `QueueResource` is unchanged** — custom lanes live in a separate type and subpath so the
+default import graph stays lightweight (scheduled lane code is dynamically imported only when
+`takeAlgorithm: "weighted"` or similar is selected).
+
+### When to use which
+
+| Need | Use |
+|------|-----|
+| Three priorities (`add` / `prioritize` / `defer`) | `QueueResource` |
+| Many lanes, named levels, WFQ / strict ordering | `CustomQueueResource` |
+
+### Toolkit tag (recommended)
+
+Tag factory arity mirrors positional lane config:
+
+```typescript
+import { CustomQueueResource } from "@nikscripts/effect-pm"
+import { Schema } from "effect"
+
+const Job = Schema.Struct({ id: Schema.String })
+
+// (id, schema, levelCount, namedLevels?)
+class Jobs extends CustomQueueResource.Tag<Jobs>()(
+  "@app/Jobs",
+  Job,
+  8,
+  { urgent: 0, batch: 7 },
+) {}
+
+// or: (id, schema, levelNames[]) — indices assigned 0…n−1
+class Lanes extends CustomQueueResource.Tag<Lanes>()(
+  "@app/Lanes",
+  Job,
+  ["urgent", "normal", "batch"],
+) {}
+
+const queue = yield* Jobs
+yield* queue.add({ id: "a" }, "urgent")
+yield* queue.add([{ id: "b" }, { id: "c" }], 7)
+
+const sizes = yield* queue.sizes       // Record<string, number> by configured name
+const numeric = yield* queue.levelSizes // number[] indexed by lane
+```
+
+Tree-shake the contract only (no engine on the tag import path):
+
+```typescript
+import * as CustomQueueResource from "@nikscripts/effect-pm/CustomQueueContract"
+```
+
+### Layer / engine
+
+```typescript
+CustomQueueResource.layer(Jobs, {
+  levelCount: 8,
+  namedLevels: { urgent: 0, batch: 7 },
+  takeAlgorithm: "weighted", // or "priority" | "strict-descending" | CustomTakeAlgorithm
+  effect: (job) => process(job),
+  concurrency: 5,
+})
+
+// Local engine without toolkit tag:
+import { CustomQueueResource as CustomQueueEngine } from "@nikscripts/effect-pm/CustomQueueResource"
+
+const queue = yield* CustomQueueEngine.make({
+  levelCount: 4,
+  namedLevels: { fast: 2 },
+  effect: (item) => Effect.log(String(item)),
+})
+```
+
+### Service shape differences from `QueueResource`
+
+- **`add(item, level?)`** — optional lane as numeric index or configured name (not `{ item, level }`).
+- **`sizes`** — `Record<string, number>` keyed by name (unnamed lanes appear as `"0"`, `"1"`, …).
+- **`levelSizes`** — `number[]` parallel to lane indices.
+- No `prioritize` / `defer` — pick the lane explicitly on `add`.
+
+Subpaths: `@nikscripts/effect-pm/CustomQueueResource` (namespace + engine), `@nikscripts/effect-pm/CustomQueueContract` (tag/layer/server only).
+
+Example: [`examples/forms/queue/custom-queue-resource-n-level.ts`](../examples/forms/queue/custom-queue-resource-n-level.ts) (`pnpm run example:custom-queue-resource`).
 
 ---
 

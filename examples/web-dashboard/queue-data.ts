@@ -51,14 +51,14 @@ type AllQueues =
   | RegionUS | RegionEU | Daily | Weekly;
 type QueueSvc = [typeof Mail] extends [Effect.Effect<infer A, infer _E, infer _R>] ? A : never;
 /** A leaf queue tag (yieldable for the fleet's queue service). */
-export type LeafTag = Effect.Effect<QueueSvc, never, AllQueues> & { readonly id: string };
+export type LeafTag = Effect.Effect<QueueSvc, never, AllQueues> & { readonly key: string };
 type ProcessSvc = [typeof KeyRotation] extends [Effect.Effect<infer A, infer _E, infer _R>] ? A : never;
 /** A leaf process tag (yieldable for a process service). */
-export type ProcessTag = Effect.Effect<ProcessSvc, never, KeyRotation> & { readonly id: string };
+export type ProcessTag = Effect.Effect<ProcessSvc, never, KeyRotation> & { readonly key: string };
 
 /** A node in the `Group.Tag` tree (a group). */
 export interface GroupNode {
-  readonly id: string;
+  readonly key: string;
   readonly members: Record<string, unknown>;
 }
 
@@ -171,7 +171,7 @@ const cache = new Map<string, QueueBundle>();
 
 /** Build (once per tag) the atom bundle for a queue tag. */
 export const queueBundle = (tag: LeafTag): QueueBundle => {
-  const existing = cache.get(tag.id);
+  const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
 
   const statusStream = Stream.unwrap(Effect.map(tag, (q) => q.status));
@@ -182,7 +182,7 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
     latency: m.avgTotalMillis ?? 0,
   });
   const trendValue = (s: QueueStatus): number => s.sizes.high + s.sizes.normal + s.sizes.low;
-  bumpLogIdFrom(`${tag.id}/logs`);
+  bumpLogIdFrom(`${tag.key}/logs`);
 
   // Dedup the wire streams. ONE status stream feeds both `status` and `trend`; ONE metrics
   // stream feeds both `metrics` and `history` — derived via Atom.mapResult, so the registry
@@ -196,11 +196,11 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
       Stream.scan(
         {
           latest: undefined as QueueStatus | undefined,
-          trend: readCache<number>(`${tag.id}/trend`)?.items ?? [],
+          trend: readCache<number>(`${tag.key}/trend`)?.items ?? [],
         },
         (acc, s) => ({ latest: s, trend: [...acc.trend, trendValue(s)].slice(-TREND) }),
       ),
-      Stream.tap((acc) => Effect.sync(() => writeCache(`${tag.id}/trend`, acc.trend))),
+      Stream.tap((acc) => Effect.sync(() => writeCache(`${tag.key}/trend`, acc.trend))),
     ),
   );
   const metricsHistory = runtime.atom(
@@ -215,14 +215,14 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
       Stream.scan(
         {
           latest: undefined as QueueMetrics | undefined,
-          history: readCache<MetricPoint>(`${tag.id}/history`)?.items ?? [],
+          history: readCache<MetricPoint>(`${tag.key}/history`)?.items ?? [],
         },
         (acc, item) =>
           "metric" in item
             ? { latest: item.metric, history: [...acc.history, toPoint(item.metric)].slice(-HISTORY) }
             : { latest: acc.latest, history: [...acc.history, item.point].slice(-HISTORY) },
       ),
-      Stream.tap((acc) => Effect.sync(() => writeCache(`${tag.id}/history`, acc.history))),
+      Stream.tap((acc) => Effect.sync(() => writeCache(`${tag.key}/history`, acc.history))),
     ),
   );
 
@@ -233,7 +233,7 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
     trend: Atom.mapResult(statusTrend, (a) => a.trend),
     logs: runtime.atom(
       cachedAccumulator({
-        key: `${tag.id}/logs`,
+        key: `${tag.key}/logs`,
         cap: 300,
         live: Stream.unwrap(Effect.map(tag, (q) => q.logs)).pipe(Stream.map(toLogLine)),
         history: Effect.flatMap(tag, (q) => q.logHistory({ limit: 300 })).pipe(
@@ -246,7 +246,7 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
     clear: runtime.fn(() => Effect.flatMap(tag, (q) => q.clear)),
     shutdown: runtime.fn(() => Effect.flatMap(tag, (q) => q.shutdown)),
   };
-  cache.set(tag.id, bundle);
+  cache.set(tag.key, bundle);
   return bundle;
 };
 
@@ -264,16 +264,16 @@ const processCache = new Map<string, ProcessBundle>();
 
 /** Build (once per tag) the atom bundle for a process tag. */
 export const processBundle = (tag: ProcessTag): ProcessBundle => {
-  const existing = processCache.get(tag.id);
+  const existing = processCache.get(tag.key);
   if (existing !== undefined) return existing;
   const statusStream = Stream.unwrap(Effect.map(tag, (p) => p.status));
-  bumpLogIdFrom(`${tag.id}/logs`);
+  bumpLogIdFrom(`${tag.key}/logs`);
   const bundle: ProcessBundle = {
     status: runtime.atom(statusStream),
     // cached + query-then-tail, same generic mechanism as the queue.
     logs: runtime.atom(
       cachedAccumulator({
-        key: `${tag.id}/logs`,
+        key: `${tag.key}/logs`,
         cap: 300,
         live: Stream.unwrap(Effect.map(tag, (p) => p.logs)).pipe(Stream.map(toLogLine)),
         history: Effect.flatMap(tag, (p) => p.logHistory({ limit: 300 })).pipe(
@@ -285,7 +285,7 @@ export const processBundle = (tag: ProcessTag): ProcessBundle => {
     stop: runtime.fn(() => Effect.flatMap(tag, (p) => p.stop)),
     runImmediately: runtime.fn(() => Effect.flatMap(tag, (p) => p.runImmediately)),
   };
-  processCache.set(tag.id, bundle);
+  processCache.set(tag.key, bundle);
   return bundle;
 };
 
@@ -341,7 +341,7 @@ const fleetEvents: ReadonlyArray<Stream.Stream<FleetEvent, never, AllQueues>> = 
 export const fleetAtom = runtime.atom(
   Stream.mergeAll(fleetEvents, { concurrency: "unbounded" }).pipe(
     Stream.scan({} as Record<string, FleetRow>, (acc, ev) => {
-      const prev = acc[ev.tag.id] ?? blankRow(ev.tag);
+      const prev = acc[ev.tag.key] ?? blankRow(ev.tag);
       const next: FleetRow =
         ev.s !== undefined
           ? {
@@ -355,7 +355,7 @@ export const fleetAtom = runtime.atom(
           : ev.m !== undefined
             ? { ...prev, throughput: ev.m.throughputPerSec, latency: ev.m.avgTotalMillis ?? 0 }
             : prev;
-      return { ...acc, [ev.tag.id]: next };
+      return { ...acc, [ev.tag.key]: next };
     }),
   ),
 );

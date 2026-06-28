@@ -34,11 +34,10 @@ import { Context } from "effect";
 
 /** Create a group tag holding the given named member tags. @since 1.0.0 */
 export const Tag =
-  <Self>(id: string) =>
+  <Self>(key: string) =>
   <const Members extends Record<string, unknown>>(members: Members) => {
-    const base = Context.Service<Self, { readonly members: Members }>()(id);
-    // spread the members as accessors (MyGroup.Counter), plus id + the record
-    return Object.assign(base, { id, members }, members);
+    const base = Context.Service<Self, { readonly members: Members }>()(key);
+    return Object.assign(base, { members }, members);
   };
 
 /** Get the member tags back out (the record). @since 1.0.0 */
@@ -60,6 +59,5 @@ export const members = <Members extends Record<string, unknown>>(group: {
  */
 export const isGroup = (
   x: unknown,
-): x is { readonly id: string; readonly members: Record<string, unknown> } =>
+): x is { readonly key: string; readonly members: Record<string, unknown> } =>
   (typeof x === "object" || typeof x === "function") && x !== null && "members" in x;
-

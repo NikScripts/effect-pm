@@ -12,6 +12,7 @@ shipped behavior lives in the regular docs (`README.md`, `PROCESS-API.md`, `STOR
 
 ## Orchestration
 
+- **Weighted middle scheduling** — diversify the queue's middle priority into many weighted numeric/named groups pulled by a non-starving algorithm (DRR / strict), fixing strict-priority starvation. Design spec: [weighted-middle-scheduling.md](./weighted-middle-scheduling.md).
 - **Standalone spawns** — `Process.spawn` / `QueueResource.open`: multi-instance ergonomics where spawned handles are plain caller-scoped Effects (alongside `Group` + `Resource.serveInstances`).
 - **Runtime identity & singleton runs** — in-process registry + a durable cross-runtime lease to prevent duplicate runs of the same logical process across hosts.
 - **Lifecycle kernel (exploratory)** — typed transitions / eligibility for queues, items, processes, and schedule rows; projection-friendly events (not an external statechart engine).

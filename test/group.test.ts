@@ -40,7 +40,7 @@ it("nests: reach a leaf through a child group, name preserved", () => {
 });
 
 it("the group is itself a real Context tag", () => {
-  expect(Outer.id).toBe("@nikscripts/effect-pm/test/group.test/Outer");
+  expect(Outer.key).toBe("@nikscripts/effect-pm/test/group.test/Outer");
   // built on Context.Service, so it carries the tag key — usable as a real tag
   expect(Outer.key).toBe("@nikscripts/effect-pm/test/group.test/Outer");
 });

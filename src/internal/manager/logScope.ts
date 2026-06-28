@@ -61,7 +61,7 @@ export const logEntryMatchesScope = (
 };
 
 type GroupCatalogEntry = {
-  readonly id: string;
+  readonly key: string;
 };
 
 const resolveGroupFromInput = <G extends GroupCatalogEntry>(
@@ -70,7 +70,7 @@ const resolveGroupFromInput = <G extends GroupCatalogEntry>(
 ): Option.Option<G> => {
   const normalizedInput = normalizeProcessManagerTarget(input);
   const matches = groups.filter((group) => {
-    const normalizedId = normalizeProcessManagerTarget(group.id);
+    const normalizedId = normalizeProcessManagerTarget(group.key);
     return (
       normalizedId === normalizedInput || normalizedId.endsWith(`/${normalizedInput}`)
     );
@@ -96,7 +96,7 @@ export const resolveLogScope = <G extends GroupCatalogEntry>(
       Effect.gen(function* () {
         const asGroup = resolveGroupFromInput(groups, value);
         if (Option.isSome(asGroup)) {
-          return { _tag: "group", groupId: asGroup.value.id };
+          return { _tag: "group", groupId: asGroup.value.key };
         }
         const resolution = resolveProcessManagerTarget(value, candidates);
         if (resolution._tag === "Resolved") {
@@ -105,20 +105,20 @@ export const resolveLogScope = <G extends GroupCatalogEntry>(
             return {
               _tag: "process",
               groupId: candidate.groupId,
-              processId: candidate.id,
+              processId: candidate.key,
             };
           }
           return {
             _tag: "queue",
             groupId: candidate.groupId,
-            queueId: candidate.id,
+            queueId: candidate.key,
           };
         }
         if (resolution._tag === "Ambiguous") {
           const rows = resolution.candidates
             .map(
               ({ candidate, minimumSuffix }) =>
-                `${candidate.kind}\t[${minimumSuffix}]\t${candidate.id}`,
+                `${candidate.kind}\t[${minimumSuffix}]\t${candidate.key}`,
             )
             .join("\n");
           return yield* Effect.fail({

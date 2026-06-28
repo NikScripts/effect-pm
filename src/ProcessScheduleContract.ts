@@ -143,21 +143,21 @@ type ProcessScheduleSpec = typeof processScheduleSpec;
  */
 export const processScheduleTag = <Self>() => {
   function build<HSelf>(
-    id: string,
+    key: string,
     options: { readonly description?: string; readonly host: HostKey<HSelf> },
   ): ResourceTag<Self, ProcessScheduleSpec> & { readonly [hostSym]: HostKey<HSelf> };
   function build(
-    id: string,
+    key: string,
     options?: { readonly description?: string },
   ): ResourceTag<Self, ProcessScheduleSpec>;
   function build(
-    id: string,
+    key: string,
     options?: { readonly description?: string; readonly host?: HostKey<unknown> },
   ): ResourceTag<Self, ProcessScheduleSpec> {
     const host = options?.host;
     return host === undefined
-      ? Resource.Tag<Self>(id, options)(processScheduleSpec)
-      : Resource.Tag<Self>(id, options)(processScheduleSpec, host);
+      ? Resource.Tag<Self>(key, options)(processScheduleSpec)
+      : Resource.Tag<Self>(key, options)(processScheduleSpec, host);
   }
   return build;
 };

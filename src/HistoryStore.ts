@@ -2,7 +2,7 @@
  * **HistoryStore** — a tiny, backend-agnostic append-log for stream history (metrics, logs, …).
  *
  * The toolkit's resource Tags expose **live** streams (`logs`, `metrics`, …). To read back what
- * *was* in those streams, a resource appends each element here (keyed by `${tag.id}/<stream>`), and
+ * *was* in those streams, a resource appends each element here (keyed by `${tag.key}/<stream>`), and
  * the matching `*History` query reads it back. Deliberately simpler than the `RuntimeStorage`
  * facet system: one keyed append-log with `append` + `read`, holding already-encoded JSON values so
  * a backend just persists/returns them.

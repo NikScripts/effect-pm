@@ -7,7 +7,7 @@ durable record of what flowed through them.
 ## The model in one paragraph
 
 A tiny, backend-agnostic append-log — **`HistoryStore`** — captures each stream element (keyed by
-`${tag.id}/<stream>`), and each resource exposes `*History` **query** methods right next to its live
+`${tag.key}/<stream>`), and each resource exposes `*History` **query** methods right next to its live
 stream. It's deliberately *not* the `RuntimeStorage` facet system — just `append` + `read`. History
 is **opt-in**: provide a `HistoryStore` layer to enable it; without one, capture is skipped and
 every `*History` returns `[]`. History lives on the **same Tag** as the live stream, so it crosses

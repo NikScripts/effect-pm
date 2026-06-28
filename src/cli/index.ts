@@ -29,13 +29,13 @@ import type { AnyLocalMethod, AnyMethod } from "../Resource";
 
 /**
  * The structural shape the CLI reads from a resource tag: yieldable (→ its service), with
- * `id` / `description` and the stowed contract spec. A `Resource.Tag` / `QueueResource.Tag`
+ * `key` / `description` and the stowed contract spec. A `Resource.Tag` / `QueueResource.Tag`
  * / `ScheduledProcess.Tag` class satisfies this — pass the classes directly.
  *
  * @since 1.0.0
  */
 export type CliResourceTag = Effect.Effect<unknown, never, unknown> & {
-  readonly id: string;
+  readonly key: string;
   readonly description: string | undefined;
 } & Parameters<typeof specOf>[0];
 
@@ -157,7 +157,7 @@ export const makeResourceCli = (resources: Record<string, CliResourceTag>, rootN
     Command.withHandler(() =>
       Console.log(
         Object.entries(resources)
-          .map(([name, tag]) => `  ${name.padEnd(width)}  ${tag.id}`)
+          .map(([name, tag]) => `  ${name.padEnd(width)}  ${tag.key}`)
           .join("\n"),
       ),
     ),
@@ -166,8 +166,8 @@ export const makeResourceCli = (resources: Record<string, CliResourceTag>, rootN
 };
 
 /**
- * Name a list of tags by the **shortest unique slash-suffix** of each id — `@acme/Mail` →
- * `Mail`; only on a collision are the clashing ids lengthened (`Regional/RegionUS`). Returns
+ * Name a list of tags by the **shortest unique slash-suffix** of each key — `@acme/Mail` →
+ * `Mail`; only on a collision are the clashing keys lengthened (`Regional/RegionUS`). Returns
  * the `{ commandName: tag }` record {@link makeResourceCli} takes. Adding a resource never
  * renames an existing command unless it actually collides.
  *
@@ -180,11 +180,11 @@ export const resourcesByName = <T extends CliResourceTag>(tags: ReadonlyArray<T>
     const depth = segments(id).length;
     for (let n = 1; n <= depth; n += 1) {
       const candidate = suffix(id, n);
-      if (tags.filter((t) => suffix(t.id, n) === candidate).length === 1) {
+      if (tags.filter((t) => suffix(t.key, n) === candidate).length === 1) {
         return candidate;
       }
     }
     return id;
   };
-  return Object.fromEntries(tags.map((t) => [nameOf(t.id), t]));
+  return Object.fromEntries(tags.map((t) => [nameOf(t.key), t]));
 };

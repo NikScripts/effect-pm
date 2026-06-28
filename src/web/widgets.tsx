@@ -108,7 +108,7 @@ export const QueueCard = (props: {
   readonly selected?: boolean;
   readonly onOpen: (tag: QueueTag) => void;
 }): React.ReactElement => {
-  const vt = useViewTransitionStyle(`res-${props.tag.id}`);
+  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const r = useAtomValue(useQueueBundle(props.tag).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
@@ -125,7 +125,7 @@ export const QueueCard = (props: {
       )}
     >
       <div className="mb-2 flex items-center gap-2">
-        <strong className="flex-1 truncate">{displayName(props.tag.id)}</strong>
+        <strong className="flex-1 truncate">{displayName(props.tag.key)}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
       <div className="mb-2 flex justify-between text-xs text-muted-foreground">
@@ -149,7 +149,7 @@ const MemberRow = (props: { readonly tag: QueueTag }): React.ReactElement => {
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
       <span className="size-2 shrink-0 rounded-full" style={{ background: STATUS[sk]?.color }} />
-      <span className="flex-1 truncate">{displayName(props.tag.id)}</span>
+      <span className="flex-1 truncate">{displayName(props.tag.key)}</span>
       <span className="text-foreground">{pending}</span>
     </div>
   );
@@ -160,7 +160,7 @@ export const GroupCard = (props: {
   readonly node: GroupNode;
   readonly onOpen: (g: GroupNode) => void;
 }): React.ReactElement => {
-  const vt = useViewTransitionStyle(`grp-${props.node.id}`);
+  const vt = useViewTransitionStyle(`grp-${props.node.key}`);
   const members = Object.values(Group.members(props.node));
   const leaves = queueLeaves(props.node).slice(0, 4);
   const subs = members.filter((m): m is GroupNode => Group.isGroup(m));
@@ -172,13 +172,13 @@ export const GroupCard = (props: {
       className="rounded-xl border border-[#06b6d455] bg-card p-3 text-left transition-colors hover:border-ring"
     >
       <div className="mb-2 flex items-center gap-2">
-        <strong className="flex-1 truncate text-[#06b6d4]">▸ {displayName(props.node.id)}</strong>
+        <strong className="flex-1 truncate text-[#06b6d4]">▸ {displayName(props.node.key)}</strong>
         <span className="text-xs text-muted-foreground">{leafTags(props.node).length} resources</span>
       </div>
       <div className="flex flex-col gap-1">
-        {leaves.map((tag) => <MemberRow key={tag.id} tag={tag} />)}
+        {leaves.map((tag) => <MemberRow key={tag.key} tag={tag} />)}
         {subs.map((sg) => (
-          <div key={sg.id} className="text-xs text-[#06b6d4]">▸ {displayName(sg.id)}</div>
+          <div key={sg.key} className="text-xs text-[#06b6d4]">▸ {displayName(sg.key)}</div>
         ))}
       </div>
       <div className="mt-2 text-xs text-muted-foreground">tap to open →</div>
@@ -512,7 +512,7 @@ export const ProcessCard = (props: {
   readonly tag: ProcessTag;
   readonly onOpen: (t: ProcessTag) => void;
 }): React.ReactElement => {
-  const vt = useViewTransitionStyle(`res-${props.tag.id}`);
+  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const r = useAtomValue(useProcessBundle(props.tag).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   return (
@@ -524,7 +524,7 @@ export const ProcessCard = (props: {
     >
       <div className="mb-2 flex items-center gap-2">
         <span>⚙</span>
-        <strong className="flex-1 truncate">{displayName(props.tag.id)}</strong>
+        <strong className="flex-1 truncate">{displayName(props.tag.key)}</strong>
         <Badge color={s?.supervising === true ? "#22c55e" : "#94a3b8"}>
           {s?.supervising === true ? "running" : "stopped"}
         </Badge>

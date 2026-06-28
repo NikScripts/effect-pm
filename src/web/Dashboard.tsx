@@ -81,7 +81,7 @@ const LogBox = (props: {
 const LogsPage = (props: { readonly tag: QueueTag | ProcessTag; readonly onClose: () => void }): React.ReactElement => {
   const runtime = useRuntime();
   const bundle = isProcessTag(props.tag) ? processBundle(runtime, props.tag) : queueBundle(runtime, props.tag);
-  return <LogBox bundle={bundle} full onToggle={props.onClose} meta={<> · {displayName(props.tag.id)}</>} />;
+  return <LogBox bundle={bundle} full onToggle={props.onClose} meta={<> · {displayName(props.tag.key)}</>} />;
 };
 
 const QueueDetail = (props: {
@@ -92,12 +92,12 @@ const QueueDetail = (props: {
   const bundle = useQueueBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
-  const vt = useViewTransitionStyle(`res-${props.tag.id}`);
+  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
-        <strong className="flex-1 truncate text-base">{displayName(props.tag.id)}</strong>
+        <strong className="flex-1 truncate text-base">{displayName(props.tag.key)}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
       <QueueStats bundle={bundle} />
@@ -118,12 +118,12 @@ const ProcessDetail = (props: {
   readonly onOpenLogs: () => void;
 }): React.ReactElement => {
   const bundle = useProcessBundle(props.tag);
-  const vt = useViewTransitionStyle(`res-${props.tag.id}`);
+  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
-        <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.id)}</strong>
+        <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.key)}</strong>
       </div>
       <ProcessStats bundle={bundle} />
       <ProcessControls bundle={bundle} />
@@ -137,7 +137,7 @@ const DashboardInner = (props: { readonly group: GroupNode }): React.ReactElemen
   const route = useGroupRoute(props.group);
   const { group, selected, trail } = route;
   const transition = useViewTransition();
-  const pageVt = useViewTransitionStyle(`grp-${group.id}`);
+  const pageVt = useViewTransitionStyle(`grp-${group.key}`);
 
   if (selected !== null) {
     const toGrid = (id: string) => () => transition(`res-${id}`, () => route.back());
@@ -147,8 +147,8 @@ const DashboardInner = (props: { readonly group: GroupNode }): React.ReactElemen
       if (isProcessTag(selected) || isQueueTag(selected)) return <LogsPage tag={selected} onClose={closeLogs} />;
       return <></>;
     }
-    if (isProcessTag(selected)) return <ProcessDetail tag={selected} onBack={toGrid(selected.id)} onOpenLogs={openLogs} />;
-    if (isQueueTag(selected)) return <QueueDetail tag={selected} onBack={toGrid(selected.id)} onOpenLogs={openLogs} />;
+    if (isProcessTag(selected)) return <ProcessDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} />;
+    if (isQueueTag(selected)) return <QueueDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} />;
     return <></>;
   }
 
@@ -157,10 +157,10 @@ const DashboardInner = (props: { readonly group: GroupNode }): React.ReactElemen
     <div className="mx-auto max-w-5xl safe-area" style={pageVt}>
       <div className="mb-1 flex items-center gap-2">
         {canBack ? (
-          <Button variant="outline" size="sm" onClick={() => transition(`grp-${group.id}`, () => route.back())}>← back</Button>
+          <Button variant="outline" size="sm" onClick={() => transition(`grp-${group.key}`, () => route.back())}>← back</Button>
         ) : null}
         <h1 className="m-0 flex-1 text-lg font-semibold">
-          ⬢ {trail.map((g) => displayName(g.id)).join(" / ")}{" "}
+          ⬢ {trail.map((g) => displayName(g.key)).join(" / ")}{" "}
           <span className="text-sm font-normal text-muted-foreground">· {leafTags(group).length} resources</span>
         </h1>
       </div>
@@ -170,8 +170,8 @@ const DashboardInner = (props: { readonly group: GroupNode }): React.ReactElemen
           <Cell
             key={name}
             member={member}
-            onOpenLeaf={(tag) => transition(`res-${tag.id}`, () => route.open(name))}
-            onOpenGroup={(g) => transition(`grp-${g.id}`, () => route.open(name))}
+            onOpenLeaf={(tag) => transition(`res-${tag.key}`, () => route.open(name))}
+            onOpenGroup={(g) => transition(`grp-${g.key}`, () => route.open(name))}
           />
         ))}
       </div>

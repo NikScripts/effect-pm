@@ -13,10 +13,10 @@
  *
  * const transition = useViewTransition();
  * // card: named only while it (res-<id>) is the active transition
- * <button style={useViewTransitionStyle(`res-${tag.id}`)}
- *         onClick={() => transition(`res-${tag.id}`, () => setSelected(tag))} />
+ * <button style={useViewTransitionStyle(`res-${tag.key}`)}
+ *         onClick={() => transition(`res-${tag.key}`, () => setSelected(tag))} />
  * // detail container shares the name → the card morphs into it
- * <div style={useViewTransitionStyle(`res-${tag.id}`)} />
+ * <div style={useViewTransitionStyle(`res-${tag.key}`)} />
  * ```
  *
  * Degrades to an instant update where the API is unavailable, and honors

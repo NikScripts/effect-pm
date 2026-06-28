@@ -44,7 +44,7 @@ const renderTui = (App: () => React.ReactElement): Effect.Effect<void> =>
 /** A single tag, or a group tag (its named members). */
 type TuiTarget =
   | AnyTag
-  | { readonly id: string; readonly members: Record<string, AnyTag> };
+  | { readonly key: string; readonly members: Record<string, AnyTag> };
 
 export const Terminal = {
   /** A command handler that renders a tag (or a group's members) as a TUI. */
@@ -55,7 +55,7 @@ export const Terminal = {
         const context = yield* Effect.context<never>();
         const runtime = Atom.runtime(Layer.succeedContext(context));
         const record =
-          "members" in target ? target.members : { [target.id]: target };
+          "members" in target ? target.members : { [target.key]: target };
         const { App } = makeResourceTui(record, runtime);
         yield* renderTui(App);
       }),

@@ -18,7 +18,7 @@
  * {@link defineQueueTag} from the shared control spec plus per-instance data procedures
  * whose payload/result schema **is** the instance's `itemSchema`, so Effect RPC validates
  * items natively on both sides (no codec descriptor, no manual encode/decode). This is the
- * "model B / fully per-instance" approach; the shared-spec + `id`-header path
+ * "model B / fully per-instance" approach; the shared-spec + `key`-header path
  * ({@link Resource.serveInstances}) remains for resources whose contract is identical
  * across instances (e.g. RunResource).
  *
@@ -541,19 +541,19 @@ type QueueInstanceSpec<F extends Schema.Struct.Fields> = ReturnType<
  */
 const queueTag = <Self>() => {
   function build<F extends Schema.Struct.Fields, HSelf>(
-    id: string,
+    key: string,
     itemSchema: Schema.Struct<F>,
     options: { readonly description?: string; readonly host: HostKey<HSelf> },
   ): ResourceTag<Self, QueueInstanceSpec<F>> & {
     readonly [hostSym]: HostKey<HSelf>;
   };
   function build<F extends Schema.Struct.Fields>(
-    id: string,
+    key: string,
     itemSchema: Schema.Struct<F>,
     options?: { readonly description?: string },
   ): ResourceTag<Self, QueueInstanceSpec<F>>;
   function build<F extends Schema.Struct.Fields>(
-    id: string,
+    key: string,
     itemSchema: Schema.Struct<F>,
     options?: { readonly description?: string; readonly host?: HostKey<unknown> },
   ): ResourceTag<Self, QueueInstanceSpec<F>> {
@@ -561,8 +561,8 @@ const queueTag = <Self>() => {
     const host = options?.host;
     // host rides the inferring call; `makeTag`'s inner overload narrows the tag's host.
     return host === undefined
-      ? Resource.Tag<Self>(id, options)(spec)
-      : Resource.Tag<Self>(id, options)(spec, host);
+      ? Resource.Tag<Self>(key, options)(spec)
+      : Resource.Tag<Self>(key, options)(spec, host);
   }
   return build;
 };
@@ -648,12 +648,12 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
     // per-env overrides (concurrency / rateLimit / …) merged as layers take effect at build.
     const effectiveConfig = yield* foldConfiguredSpec<
       QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>
-    >(tag.id, config);
+    >(tag.key, config);
     // The engine treats requirements uniformly — worker + refill run under one context. The
     // toolkit splits `R` / `RR` only so inference unions them (a shared contravariant `R` would
     // intersect to `never`); here we hand the engine the combined `R | RR` config.
     const handle = yield* QueueEngine.make({
-      name: tag.id,
+      name: tag.key,
       ...effectiveConfig,
       itemSchema,
     } as QueueResourceConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
@@ -667,8 +667,8 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
     const history = yield* Effect.serviceOption(HistoryStore);
     const decodeMetric = Schema.decodeUnknownEffect(queueMetrics);
     const decodeLog = Schema.decodeUnknownEffect(queueLogEntry);
-    const metricsStreamId = `${tag.id}/metrics`;
-    const logsStreamId = `${tag.id}/logs`;
+    const metricsStreamId = `${tag.key}/metrics`;
+    const logsStreamId = `${tag.key}/logs`;
     yield* Option.match(history, {
       onNone: () => Effect.void,
       onSome: (store) =>
@@ -866,7 +866,7 @@ export const serverEntry = <
  * A **config-patch layer** for the queue `tag` — the toolkit successor to the old
  * `QueueResource.Service(...).configure(...)`. Merge it with the queue's {@link layer} (e.g. per
  * environment) and its patch (concurrency / rateLimit / attempts / …) folds onto the layer's base
- * config at build. Keyed by `tag.id`; later patches win. Config lives in the layer, not the tag,
+ * config at build. Keyed by `tag.key`; later patches win. Config lives in the layer, not the tag,
  * so `configure` takes the tag and returns a layer rather than being a tag method.
  *
  * ```ts
@@ -887,7 +887,7 @@ export const configure = <
 >(
   tag: ResourceTag<Self, QueueInstanceSpec<F>>,
   patch: ConfigPatch<QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>>,
-): Layer.Layer<never> => configureLayer(tag.id, patch);
+): Layer.Layer<never> => configureLayer(tag.key, patch);
 
 // The unified `QueueResource` namespace is assembled in `internal/queueResourceNamespace.ts` and
 // re-exported by the barrel as `export * as QueueResource` (so member access tree-shakes — the
