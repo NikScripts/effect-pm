@@ -10,7 +10,7 @@ import { Effect, Layer, Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
 import { ApiMetrics } from "../../../src/ApiMetrics";
 import { HttpApiResource } from "../../../src/HttpApiResource";
-import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+import { runNodeProgramOrExit } from "../../shared/demo-harness";
 
 const DemoClientId = "examples/jsonplaceholder/DemoApiClient" as const;
 
@@ -44,17 +44,26 @@ class DemoApiMetrics extends ApiMetrics.Tag<DemoApiMetrics>(DemoClientId)() {}
 
 const program = Effect.gen(function* () {
   const client = yield* DemoApiClient;
-  const post = yield* client.posts.getPost({ path: { id: "1" } });
+  const post = yield* client.posts.getPost({ params: { id: "1" } });
   const metrics = yield* DemoApiMetrics;
   const snap = yield* metrics.usageNow;
   yield* Effect.log(`post ${post.id}: ${post.title}`);
   yield* Effect.log(`usage requests=${snap.requestsTotal} inFlight=${snap.inFlight}`);
 });
 
-runNodeProgramWithLayer(
-  program,
-  Layer.mergeAll(
-    DemoApiClient.layer.pipe(Layer.provide(FetchHttpClient.layer)),
-    ApiMetrics.layer(DemoApiMetrics),
+runNodeProgramOrExit(
+  // `.layer` is scoped (the client's concurrency semaphore), so discharge Scope at the effect
+  // with `Effect.scoped` — the same pattern the tests use — and turn request errors into defects
+  // for this demo, leaving a fully-provided `Effect<void, never, never>`.
+  program.pipe(
+    Effect.provide(
+      Layer.mergeAll(
+        DemoApiClient.layer.pipe(Layer.provide(FetchHttpClient.layer)),
+        ApiMetrics.layer(DemoApiMetrics),
+      ),
+    ),
+    Effect.scoped,
+    Effect.orDie,
   ),
+  "http-api-resource + ApiMetrics demo complete",
 );

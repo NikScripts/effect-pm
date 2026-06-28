@@ -187,7 +187,10 @@ const layerFor = <
  *
  * @public
  */
-const tag = <Self, const ClientId extends string>(clientId: ClientId) =>
+// Only `Self` is an explicit type argument — `class X extends ApiMetrics.Tag<X>(clientId)() {}`.
+// The client id's literal type isn't carried on the tag (`clientIdSym` is `string`), so a second
+// `ClientId` generic would only force callers to pass it too (TS can't partially infer).
+const tag = <Self>(clientId: string) =>
   (idOrOpts?: string | ApiMetricsTagOptions): ApiMetricsTag<Self> => {
     const { key } = resolveTagArgs(clientId, idOrOpts);
     return Object.assign(apiMetricsFactory<Self>(key), {

@@ -210,7 +210,7 @@ export const recordEndpointUsage = (
 
 /** @internal */
 export const getClientUsage = (clientId: string): Option.Option<UsageSink> =>
-  Option.fromNullable(sinks.get(clientId));
+  Option.fromNullishOr(sinks.get(clientId));
 
 /** @internal Test-only reset. */
 export const resetClientUsageForTest = (): Effect.Effect<void> =>
