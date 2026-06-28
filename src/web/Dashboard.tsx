@@ -185,8 +185,13 @@ export const DashboardView = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
 }): React.ReactElement => (
+  // The dashboard owns its font: declaring `font-mono` on its own root means the widgets render
+  // monospace regardless of the consumer's `body`/`#root` font (a value set directly on this
+  // element wins over an inherited one), and it still honours a consumer-defined `--font-mono`.
   <RuntimeProvider runtime={props.runtime}>
-    <DashboardInner group={props.group} />
+    <div className="font-mono">
+      <DashboardInner group={props.group} />
+    </div>
   </RuntimeProvider>
 );
 
