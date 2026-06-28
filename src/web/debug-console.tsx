@@ -7,7 +7,7 @@
  * panel. `dlog(...)` is a debug-only logger that shows up here.
  */
 import * as React from "react";
-import { dateFromMillis, now } from "./now";
+import { fmtClock, now } from "./now";
 
 /** True when debug mode is on. `?debug` / `?debug=1` enables (and persists); `?debug=0` clears. */
 export const debugEnabled = (): boolean => {
@@ -148,7 +148,7 @@ export const DebugConsole = (): React.ReactElement | null => {
           <div ref={ref} onScroll={onScroll} className="flex-1 overflow-auto px-2 py-1 font-mono leading-snug">
             {all.map((l) => (
               <div key={l.id} className="whitespace-pre-wrap break-all" style={{ color: COLOR[l.level] ?? "#cbd5e1" }}>
-                <span className="opacity-40">{dateFromMillis(l.t).toLocaleTimeString()} </span>
+                <span className="opacity-40">{fmtClock(l.t)} </span>
                 {l.text}
               </div>
             ))}
