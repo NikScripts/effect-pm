@@ -1,2 +1,5 @@
 @import "tailwindcss";
 @import "../../src/web/theme.css";
+/* widgets live in package source (outside this example's Vite root); Tailwind only auto-scans
+   its root, so point it at the source or the widget utilities go ungenerated. See setup.md §2b. */
+@source "../../src";

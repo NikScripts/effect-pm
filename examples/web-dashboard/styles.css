@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* The dashboard widgets now live in the package source (src/web, src/ui), which is outside
+   this example's Vite root — Tailwind only auto-scans its root, so point it at the source or
+   the utility classes the widgets use never get generated (unstyled: no padding, flat charts).
+   Consumers of the installed package use `@source ".../node_modules/@nikscripts/effect-pm/dist"`
+   instead — see docs/guides/setup.md §2b. */
+@source "../../src";
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
