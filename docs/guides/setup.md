@@ -43,6 +43,46 @@ of React/Ink/recharts.
 > **Browser bundles:** import the **light** tags from `…/QueueContract` / `…/ScheduledProcess`
 > (not the engine namespaces) so the worker engine + node deps stay out of the browser build.
 
+## 2a. Browser safety & tree-shaking
+
+The package is built for this: ESM-only, `"sideEffects": false`, tsup `treeshake` + code
+splitting, and every optional peer (react/recharts/ink/sqlite/prisma/redis) externalized. With
+an ESM tree-shaking bundler (Vite, esbuild, Rollup, webpack 5) a browser build pulls only what
+it imports.
+
+- **Browser-safe (no node built-ins):** `…/web`, `…/Group`, `…/Resource`
+  (`client`/`connect`/`connectHttp`/`Host`), `…/QueueContract` (`queueTag` + contract),
+  `…/ScheduledProcess` (`processTag`), `…/ProcessScheduleContract`, `…/cli`, `…/tui`.
+- **Node-only — never reach these from browser code:** `…/storage/sqlite` (pulls
+  `@effect/sql-sqlite-node`), `…/storage/redis`, `…/storage/prisma`, `…/prisma`, and the HTTP
+  server itself (`NodeHttpServer`) plus any worker/storage layers. (`serveAllHttp` / `serverEntry`
+  are clean to *reference*, but they belong to the server entry.)
+
+**The rule that actually bites:** keep the **contract** (light tags) in a different module from
+the **implementation** (engine layers, storage, worker `effect`s, the server). A module that
+defines a tag *and* imports its `QueueResource.layer` / `serveAllHttp` / a storage layer is
+node-coupled — importing it in the browser just to get the tag drags the whole server in.
+
+```ts
+// fleet.ts — BROWSER-SAFE: tags + hosts + groups only (light contracts)
+export class LeagueHost extends Resource.Host<LeagueHost>("nwsl/host") {}
+export class Roster extends queueTag<Roster>()("nwsl/Roster", Job, { host: LeagueHost }) {}
+export class Nwsl extends Group.Tag<Nwsl>("nwsl")({ Roster }) {}
+
+// server.ts — NODE: imports fleet.ts + the engine / storage / HTTP server
+import { Roster } from "./fleet";
+const Server = Resource.serveAllHttp([queueEntry(Roster, { effect })]).pipe(/* storage + NodeHttpServer */);
+```
+
+The browser imports `fleet.ts` (tags) + `…/web` + `Resource.client` / `connectHttp`; the server
+imports `fleet.ts` + the layers. Same tags, no leak. Prefer specific subpaths over the root
+barrel in browser code — the barrel is node-safe but reaches the whole toolkit (~260 KB of
+chunks before shaking).
+
+**Diagnose a leak:** build, grep the client bundle for `node:` / `better-sqlite3`, then use your
+bundler's import-chain view (Vite `--debug`, `rollup-plugin-visualizer`) — the chain almost
+always ends at a shared module that pulls a server/storage layer.
+
 ## 3. Define resources, bound to a host
 
 A `Host` lets a group of resources be served on one port (§4) and reached over one transport (§5).
