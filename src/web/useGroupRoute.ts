@@ -27,6 +27,11 @@ import type { GroupNode } from "./data";
 export interface GroupRoute {
   /** `[root, …descended groups]` — the breadcrumb. */
   readonly trail: ReadonlyArray<GroupNode>;
+  /** The resolved chain of **member keys** mirroring the path (the keys under which each parent
+   *  holds the next node — `["Wnba", "ImportSchedule"]`), plus any trailing leaf sub-view. These
+   *  are the names to display: `trail[i]` (for `i ≥ 1`) is reached via `keys[i-1]`, and a selected
+   *  leaf's name is `keys[trail.length-1]`. */
+  readonly keys: ReadonlyArray<string>;
   /** The deepest group in the path — the grid to render. */
   readonly group: GroupNode;
   /** The open leaf tag if the path ends on a leaf, else `null`. */
@@ -115,10 +120,11 @@ export const useGroupRoute = (root: GroupNode): GroupRoute => {
     setKeys(next);
   }, []);
 
-  const { trail, selected, view } = React.useMemo(() => resolve(root, keys), [root, keys]);
+  const { trail, selected, view, keys: resolvedKeys } = React.useMemo(() => resolve(root, keys), [root, keys]);
 
   return {
     trail,
+    keys: resolvedKeys,
     group: trail[trail.length - 1] ?? root,
     selected,
     view,

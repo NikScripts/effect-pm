@@ -105,6 +105,8 @@ const PrioRow = (props: { readonly p: keyof typeof PRIO; readonly count: number;
 /** A queue as a grid card. Reads its own status straight from the tag. @since 1.0.0 */
 export const QueueCard = (props: {
   readonly tag: QueueTag;
+  /** Display name — the member key under which the parent group holds this tag. */
+  readonly name: string;
   readonly selected?: boolean;
   readonly onOpen: (tag: QueueTag) => void;
 }): React.ReactElement => {
@@ -120,12 +122,14 @@ export const QueueCard = (props: {
       onClick={() => props.onOpen(props.tag)}
       style={vt}
       className={cn(
-        "rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
+        // flex-col so the content stays top-aligned when the grid stretches the card to the row
+        // height — a bare <button> vertically centres its content in the slack.
+        "flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
         props.selected === true && "border-primary",
       )}
     >
       <div className="mb-2 flex items-center gap-2">
-        <strong className="flex-1 truncate">{displayName(props.tag.key)}</strong>
+        <strong className="flex-1 truncate">{props.name}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
       <div className="mb-2 flex justify-between text-xs text-muted-foreground">
@@ -141,7 +145,7 @@ export const QueueCard = (props: {
   );
 };
 
-const MemberRow = (props: { readonly tag: QueueTag }): React.ReactElement => {
+const MemberRow = (props: { readonly tag: QueueTag; readonly name: string }): React.ReactElement => {
   const r = useAtomValue(useQueueBundle(props.tag).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const sk = statusKey(s?.phase ?? "running", s?.paused ?? false);
@@ -149,7 +153,7 @@ const MemberRow = (props: { readonly tag: QueueTag }): React.ReactElement => {
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
       <span className="size-2 shrink-0 rounded-full" style={{ background: STATUS[sk]?.color }} />
-      <span className="flex-1 truncate">{displayName(props.tag.key)}</span>
+      <span className="flex-1 truncate">{props.name}</span>
       <span className="text-foreground">{pending}</span>
     </div>
   );
@@ -158,30 +162,34 @@ const MemberRow = (props: { readonly tag: QueueTag }): React.ReactElement => {
 /** A subgroup as a grid widget — tap opens it as its own page (drill-down). @since 1.0.0 */
 export const GroupCard = (props: {
   readonly node: GroupNode;
+  /** Display name — the member key under which the parent group holds this subgroup. */
+  readonly name: string;
   readonly onOpen: (g: GroupNode) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`grp-${props.node.key}`);
   const members = Object.values(Group.members(props.node));
   const leaves = queueLeaves(props.node).slice(0, 4);
   const subs = members.filter((m): m is GroupNode => Group.isGroup(m));
+  // The display name of a member is the key it sits under in this node — map member identity → key.
+  const nameOf = new Map<unknown, string>(Object.entries(Group.members(props.node)).map(([k, m]) => [m, k]));
   return (
     <button
       type="button"
       onClick={() => props.onOpen(props.node)}
       style={vt}
-      className="rounded-xl border border-[#06b6d455] bg-card p-3 text-left transition-colors hover:border-ring"
+      className="flex flex-col rounded-xl border border-[#06b6d455] bg-card p-3 text-left transition-colors hover:border-ring"
     >
       <div className="mb-2 flex items-center gap-2">
-        <strong className="flex-1 truncate text-[#06b6d4]">▸ {displayName(props.node.key)}</strong>
+        <strong className="flex-1 truncate text-[#06b6d4]">▸ {props.name}</strong>
         <span className="text-xs text-muted-foreground">{leafTags(props.node).length} resources</span>
       </div>
       <div className="flex flex-col gap-1">
-        {leaves.map((tag) => <MemberRow key={tag.key} tag={tag} />)}
+        {leaves.map((tag) => <MemberRow key={tag.key} tag={tag} name={nameOf.get(tag) ?? displayName(tag.key)} />)}
         {subs.map((sg) => (
-          <div key={sg.key} className="text-xs text-[#06b6d4]">▸ {displayName(sg.key)}</div>
+          <div key={sg.key} className="text-xs text-[#06b6d4]">▸ {nameOf.get(sg) ?? displayName(sg.key)}</div>
         ))}
       </div>
-      <div className="mt-2 text-xs text-muted-foreground">tap to open →</div>
+      <div className="mt-auto pt-2 text-xs text-muted-foreground">tap to open →</div>
     </button>
   );
 };
@@ -189,16 +197,18 @@ export const GroupCard = (props: {
 /** Dispatch a group member to its card (group / queue / process). @since 1.0.0 */
 export const Cell = (props: {
   readonly member: unknown;
+  /** Display name — the member key under which the current group holds this member. */
+  readonly name: string;
   readonly onOpenLeaf: (tag: QueueTag | ProcessTag) => void;
   readonly onOpenGroup: (g: GroupNode) => void;
 }): React.ReactElement => {
   if (Group.isGroup(props.member)) {
-    return <GroupCard node={props.member as GroupNode} onOpen={props.onOpenGroup} />;
+    return <GroupCard node={props.member as GroupNode} name={props.name} onOpen={props.onOpenGroup} />;
   }
   return kindOf(props.member) === "process" ? (
-    <ProcessCard tag={props.member as ProcessTag} onOpen={props.onOpenLeaf} />
+    <ProcessCard tag={props.member as ProcessTag} name={props.name} onOpen={props.onOpenLeaf} />
   ) : (
-    <QueueCard tag={props.member as QueueTag} onOpen={props.onOpenLeaf} />
+    <QueueCard tag={props.member as QueueTag} name={props.name} onOpen={props.onOpenLeaf} />
   );
 };
 
@@ -232,15 +242,21 @@ export const QueueStats = (props: { readonly bundle: QueueBundle }): React.React
 };
 
 const METRICS = {
-  throughput: { label: "throughput /s", color: "#22c55e", source: "history" as const },
-  latency: { label: "latency (s)", color: "#eab308", source: "history" as const },
-  pending: { label: "pending", color: "#3b82f6", source: "trend" as const },
+  throughput: { label: "throughput /s", color: "#22c55e", source: "history" as const, duration: false },
+  latency: { label: "latency", color: "#eab308", source: "history" as const, duration: true },
+  pending: { label: "pending", color: "#3b82f6", source: "trend" as const, duration: false },
 };
 type MetricKey = keyof typeof METRICS;
 
-/** A metric chart with a dropdown to pick the series (throughput/latency/pending). @since 1.0.0 */
+// Divisors from milliseconds — the unit the latency series is converted into for display.
+const TIME_UNITS = { ms: 1, s: 1_000, min: 60_000, hr: 3_600_000 };
+type TimeUnit = keyof typeof TIME_UNITS;
+
+/** A metric chart with a dropdown to pick the series (throughput/latency/pending), plus — for the
+ *  duration series (latency) — a second dropdown to pick its time unit (ms/s/min/hr). @since 1.0.0 */
 export const MetricChart = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
   const [metric, setMetric] = React.useState<MetricKey>("throughput");
+  const [unit, setUnit] = React.useState<TimeUnit>("s");
   const historyR = useAtomValue(props.bundle.history);
   const trendR = useAtomValue(props.bundle.trend);
   React.useEffect(() => dlog("history", asyncTag(historyR), "· trend", asyncTag(trendR)), [historyR, trendR]);
@@ -250,20 +266,36 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
   const data =
     def.source === "trend"
       ? trend.map((v, i) => ({ i, value: v }))
-      : history.map((p, i) => ({ i, value: metric === "latency" ? p.latency / 1000 : p.throughput }));
+      : history.map((p, i) => ({ i, value: def.duration ? p.latency / TIME_UNITS[unit] : p.throughput }));
   return (
     <div>
-      <select
-        value={metric}
-        onChange={(e) => setMetric(e.target.value as MetricKey)}
-        className="mb-2 rounded-md border bg-card px-2 py-1 text-sm font-semibold text-foreground"
-      >
-        {(Object.keys(METRICS) as Array<MetricKey>).map((k) => (
-          <option key={k} value={k}>
-            {METRICS[k].label}
-          </option>
-        ))}
-      </select>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <select
+          value={metric}
+          onChange={(e) => setMetric(e.target.value as MetricKey)}
+          className="rounded-md border bg-card px-2 py-1 text-sm font-semibold text-foreground"
+        >
+          {(Object.keys(METRICS) as Array<MetricKey>).map((k) => (
+            <option key={k} value={k}>
+              {METRICS[k].label}
+            </option>
+          ))}
+        </select>
+        {def.duration ? (
+          <select
+            value={unit}
+            onChange={(e) => setUnit(e.target.value as TimeUnit)}
+            className="rounded-md border bg-card px-2 py-1 text-sm font-semibold text-foreground"
+            aria-label="time unit"
+          >
+            {(Object.keys(TIME_UNITS) as Array<TimeUnit>).map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+          </select>
+        ) : null}
+      </div>
       {/* fixed-height wrapper + height="100%": a percentage-sized ResponsiveContainer in a
           content-sized flex parent grows on every measure tick — pinning the height breaks it.
           -mx-3 -mb-3 bleeds the chart to the card edges (the card supplies the padding). */}
@@ -496,8 +528,8 @@ export const LogStream = (props: {
     <div ref={ref} className={cn("overflow-auto text-xs", props.className)}>
       {logs.map((l) => (
         <div key={l.id} className="flex gap-2 px-2 py-0.5">
-          <span className="w-[4.5rem] shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">{fmtClock(l.t)}</span>
-          <span className="w-14 shrink-0" style={{ color: LEVEL[l.level] ?? "#cbd5e1" }}>{l.level}</span>
+          <span className="w-16 shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">{fmtClock(l.t)}</span>
+          <span className="w-11 shrink-0 truncate" style={{ color: LEVEL[l.level] ?? "#cbd5e1" }}>{l.level}</span>
           <span className="break-all">{l.message}</span>
         </div>
       ))}
@@ -510,6 +542,8 @@ export const LogStream = (props: {
 /** A process as a grid card — supervision state + active instances. @since 1.0.0 */
 export const ProcessCard = (props: {
   readonly tag: ProcessTag;
+  /** Display name — the member key under which the parent group holds this tag. */
+  readonly name: string;
   readonly onOpen: (t: ProcessTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
@@ -520,11 +554,11 @@ export const ProcessCard = (props: {
       type="button"
       onClick={() => props.onOpen(props.tag)}
       style={vt}
-      className="rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring"
+      className="flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring"
     >
       <div className="mb-2 flex items-center gap-2">
         <span>⚙</span>
-        <strong className="flex-1 truncate">{displayName(props.tag.key)}</strong>
+        <strong className="flex-1 truncate">{props.name}</strong>
         <Badge color={s?.supervising === true ? "#22c55e" : "#94a3b8"}>
           {s?.supervising === true ? "running" : "stopped"}
         </Badge>
@@ -557,8 +591,10 @@ export const ProcessControls = (props: { readonly bundle: ProcessBundle }): Reac
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const up = s?.supervising === true;
   const [locked, setLocked] = React.useState(true);
+  // A process has no chart to sit beside, so its controls stay a horizontal row at every width
+  // (only the queue controls go vertical, to flank the graph).
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2 sm:flex-col sm:flex-nowrap sm:items-center sm:justify-center">
+    <div className="flex flex-wrap items-center justify-center gap-2">
       {up ? (
         <ActionButton atom={props.bundle.stop} label="stop" icon={<Square className="size-4" />} disabled={locked} confirm destructive />
       ) : (

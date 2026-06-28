@@ -135,7 +135,7 @@ const ProcessDetail = (props: {
 /** The drill-down view (runtime comes from `RuntimeProvider` above). @since 1.0.0 */
 const DashboardInner = (props: { readonly group: GroupNode }): React.ReactElement => {
   const route = useGroupRoute(props.group);
-  const { group, selected, trail } = route;
+  const { group, selected, trail, keys } = route;
   const transition = useViewTransition();
   const pageVt = useViewTransitionStyle(`grp-${group.key}`);
 
@@ -160,7 +160,9 @@ const DashboardInner = (props: { readonly group: GroupNode }): React.ReactElemen
           <Button variant="outline" size="sm" onClick={() => transition(`grp-${group.key}`, () => route.back())}>← back</Button>
         ) : null}
         <h1 className="m-0 flex-1 text-lg font-semibold">
-          ⬢ {trail.map((g) => displayName(g.key)).join(" / ")}{" "}
+          {/* group view: name each crumb by the member key it sits under in its parent (the root
+              has no parent, so fall back to its own key). `keys[i-1]` is the key for `trail[i]`. */}
+          ⬢ {trail.map((g, i) => (i === 0 ? displayName(g.key) : keys[i - 1] ?? displayName(g.key))).join(" / ")}{" "}
           <span className="text-sm font-normal text-muted-foreground">· {leafTags(group).length} resources</span>
         </h1>
       </div>
@@ -169,6 +171,7 @@ const DashboardInner = (props: { readonly group: GroupNode }): React.ReactElemen
         {Object.entries(group.members).map(([name, member]) => (
           <Cell
             key={name}
+            name={name}
             member={member}
             onOpenLeaf={(tag) => transition(`res-${tag.key}`, () => route.open(name))}
             onOpenGroup={(g) => transition(`grp-${g.key}`, () => route.open(name))}
