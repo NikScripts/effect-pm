@@ -104,6 +104,10 @@
       "types": "./dist/HostLogs.d.ts",
       "default": "./dist/HostLogs.js"
     },
+    "./HostStatus": {
+      "types": "./dist/HostStatus.d.ts",
+      "default": "./dist/HostStatus.js"
+    },
     "./HistoryStore": {
       "types": "./dist/HistoryStore.d.ts",
       "default": "./dist/HistoryStore.js"

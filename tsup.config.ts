@@ -35,6 +35,7 @@ export default defineConfig([
       RuntimeStorage: "src/RuntimeStorage.ts",
       Logs: "src/Logs.ts",
       HostLogs: "src/HostLogs.ts",
+      HostStatus: "src/HostStatus.ts",
       HistoryStore: "src/HistoryStore.ts",
       DurableQueueStore: "src/DurableQueueStore.ts",
       Group: "src/Group.ts",

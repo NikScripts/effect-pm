@@ -297,6 +297,7 @@ export {
 } from "./Logs";
 export { HostLogs } from "./HostLogs";
 export type { HostLogEntry } from "./HostLogs";
+export * as HostStatus from "./HostStatus";
 export { HistoryStore } from "./HistoryStore";
 export type { HistoryReadOptions, HistoryStoreShape } from "./HistoryStore";
 export {

@@ -41,6 +41,7 @@
  * @module Resource
  */
 import {
+  Clock,
   Context,
   Data,
   Effect,
@@ -1154,7 +1155,19 @@ const serveAllHttp = <R = never>(
   // plus the http server to listen on (same shape as a single `serveHttp`).
   return Layer.unwrap(
     Effect.gen(function* () {
-      const built = yield* Effect.forEach(entries, (entry) =>
+      // Every host auto-serves the reserved host status resource (status / logs / ping) alongside
+      // the user's resources, so a client can inspect any host without the author wiring it.
+      // Dynamic import keeps `hostStatusResource` (which imports this module) out of a static cycle;
+      // the entry is folded in before building so all entries stay one (erased) type.
+      const { hostStatusServeEntry } = yield* Effect.promise(
+        () => import("./internal/hostStatusResource"),
+      );
+      const startedAt = yield* Clock.currentTimeMillis;
+      const allEntries = [
+        ...entries,
+        hostStatusServeEntry({ startedAt, resourceCount: entries.length }),
+      ];
+      const built = yield* Effect.forEach(allEntries, (entry) =>
         (Effect.isEffect(entry.impl)
           ? entry.impl
           : Effect.succeed(entry.impl)
