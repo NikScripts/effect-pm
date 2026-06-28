@@ -62,6 +62,11 @@
     "group-routing",
     "web-real-dashboard",
     "namespace-pattern",
-    "log-time"
+    "log-time",
+    "custom-queue-resource",
+    "queue-lane-take-algorithm",
+    "resource-tag-key-rename",
+    "web-dashboard-owns-font",
+    "web-dashboard-layout-polish"
   ]
 }

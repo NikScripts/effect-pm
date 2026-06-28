@@ -1,5 +1,47 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.10
+
+### Minor Changes
+
+- 4954957: **Rename resource/service tag identity from `id` to `key`** across the toolkit. Tag
+  factories take `key` as the first argument, tags expose Effect's `.key` (not a custom `.id`),
+  `ResourceInstance` and `DuplicateResourceKey` use `key`, the UI bindings (`ResourceUI.key`) and
+  the web dashboard follow the same naming, and multi-instance RPC routing dispatches on the HTTP
+  `key` header. **BREAKING:** read `tag.key` instead of `tag.id`; pass `key` as the first factory
+  argument.
+
+- 461faa0: **Pluggable queue lane take algorithm** on `QueueResource` — schedule how lanes are
+  drained without changing the public enqueue API. Adds `levelCount` and `takeAlgorithm` to
+  `QueueResource` / `Service.configure` (`"priority"` default), built-in `"weighted"` and
+  `"strict-descending"`, a custom `CustomTakeAlgorithm` hook, and a numeric `LaneStore` seam +
+  `buildQueueEngine` extension point. The default bundle is unchanged — scheduled algorithms load
+  via dynamic import only when configured.
+
+- caf7e4d: **`CustomQueueResource` + `CustomQueueContract`** for N-level queues with named lanes,
+  `add(item, level?)`, and `Record<string, number>` sizes. Adds `Resource.mutatePair` for
+  two-argument wire methods. Subpaths: `@nikscripts/effect-pm/CustomQueueResource`,
+  `@nikscripts/effect-pm/CustomQueueContract`.
+
+### Patch Changes
+
+- b702291: `@nikscripts/effect-pm/web`: the dashboard now owns its font. It previously relied on a
+  global `body { font-family: var(--font-mono) }` plus inheritance, so a consumer rule on an
+  intermediate element (e.g. an `#root { font-family: … }` in their `index.html`, ID specificity)
+  overrode it and the dashboard rendered in the host app's font. `font-mono` is now declared on the
+  dashboard's own root, so the widgets render monospace regardless of the host's `body`/`#root`
+  font, while still honouring a consumer-defined `--font-mono` token.
+
+- 0ce4ba4: `@nikscripts/effect-pm/web` dashboard polish: process controls stay a horizontal row at
+  every width (only the queue controls go vertical, to flank the metric chart); card content stays
+  top-aligned when the grid stretches a card to the row height (instead of a bare `<button>` centring
+  its content in the slack); tighter log columns (time and level); and the metric chart gains a
+  second dropdown to pick the latency series' time unit (ms/s/min/hr). The group view now labels
+  cards and the breadcrumb by the **member key** under which each parent group holds them (the
+  routing nickname — e.g. `Nwsl`/`Wnba`), not the last segment of the tag's own key; full-screen
+  resource pages still use the tag's own key (a resource doesn't know its group-given nickname).
+  `useGroupRoute` also returns the resolved `keys` (the member-key chain mirroring the path).
+
 ## 0.8.0-beta.9
 
 ### Minor Changes
