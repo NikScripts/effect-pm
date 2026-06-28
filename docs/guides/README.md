@@ -13,6 +13,7 @@ Detail tables also live in [`docs/PROCESS-API.md`](../PROCESS-API.md),
 
 | Guide | Topic |
 | --- | --- |
+| [setup.md](./setup.md) | **Consuming the package** — install + peer deps, the subpaths, wiring a server + CLI/TUI/web against your tags |
 | [toolkit-by-example.md](./toolkit-by-example.md) | Every resource / group / host / UI pattern, by example |
 | [history-and-persistence.md](./history-and-persistence.md) | History (`*History`), the durable queue (`persist`), the dashboard query-then-tail |
 
