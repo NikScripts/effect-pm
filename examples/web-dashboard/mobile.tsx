@@ -41,22 +41,21 @@ import {
 const isProcessTag = (m: unknown): m is ProcessTag => kindOf(m) === "process";
 const isQueueTag = (m: unknown): m is LeafTag => kindOf(m) === "queue";
 
-/** The log pane with an animated fullscreen toggle — shared by the queue + process details.
- *  The panel is one named element, so toggling inside a view transition morphs it to/from
- *  fullscreen (grows to fill the screen) rather than snapping. */
-const LogPanel = (props: {
+/** The log box — one named element ("log-panel") shared by the inline detail panel and the
+ *  fullscreen logs page, so navigating between them morphs it via a view transition (the
+ *  detail's other elements fade out, since the logs page is a separate route). */
+const LogBox = (props: {
   readonly bundle: { readonly logs: QueueBundle["logs"] };
+  readonly full: boolean;
+  readonly onToggle: () => void;
   readonly meta?: React.ReactNode;
 }): React.ReactElement => {
-  const [full, setFull] = React.useState(false);
-  const transition = useViewTransition();
   const vt = useViewTransitionStyle("log-panel");
-  const toggle = (): void => transition("log-panel", () => setFull((f) => !f));
   return (
     <div
       style={vt}
       className={
-        full
+        props.full
           ? "fixed inset-0 z-50 flex flex-col gap-2 bg-background p-2 safe-area"
           : "flex min-h-0 flex-1 flex-col gap-1 landscape:min-h-[200px] landscape:max-h-[45dvh]"
       }
@@ -68,12 +67,12 @@ const LogPanel = (props: {
         </span>
         <button
           type="button"
-          onClick={toggle}
+          onClick={props.onToggle}
           className="ml-auto rounded p-1 hover:bg-accent"
-          title={full ? "exit fullscreen" : "fullscreen logs"}
-          aria-label={full ? "exit fullscreen logs" : "fullscreen logs"}
+          title={props.full ? "exit fullscreen" : "fullscreen logs"}
+          aria-label={props.full ? "exit fullscreen logs" : "fullscreen logs"}
         >
-          {full ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+          {props.full ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
         </button>
       </div>
       <LogStream bundle={props.bundle} className="min-h-0 flex-1 rounded-md border bg-card py-1" />
@@ -81,7 +80,21 @@ const LogPanel = (props: {
   );
 };
 
-const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void }): React.ReactElement => {
+/** Fullscreen logs page for a resource — its own route (`/…/Resource/logs`). Minimizing
+ *  navigates back to the detail, morphing the shared log box back into place. */
+const LogsPage = (props: {
+  readonly tag: LeafTag | ProcessTag;
+  readonly onClose: () => void;
+}): React.ReactElement => {
+  const bundle = isProcessTag(props.tag) ? processBundle(props.tag) : queueBundle(props.tag);
+  return <LogBox bundle={bundle} full onToggle={props.onClose} meta={<> · {displayName(props.tag.id)}</>} />;
+};
+
+const QueueDetail = (props: {
+  readonly tag: LeafTag;
+  readonly onBack: () => void;
+  readonly onOpenLogs: () => void;
+}): React.ReactElement => {
   const bundle = queueBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
@@ -102,12 +115,16 @@ const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void
         </div>
         <Boundary label="controls"><QueueControls bundle={bundle} /></Boundary>
       </div>
-      <LogPanel bundle={bundle} meta={<> · phase {s?.phase ?? "?"}</>} />
+      <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} meta={<> · phase {s?.phase ?? "?"}</>} />
     </div>
   );
 };
 
-const ProcessDetail = (props: { readonly tag: ProcessTag; readonly onBack: () => void }): React.ReactElement => {
+const ProcessDetail = (props: {
+  readonly tag: ProcessTag;
+  readonly onBack: () => void;
+  readonly onOpenLogs: () => void;
+}): React.ReactElement => {
   const bundle = processBundle(props.tag);
   const vt = useViewTransitionStyle(`res-${props.tag.id}`);
   return (
@@ -118,7 +135,7 @@ const ProcessDetail = (props: { readonly tag: ProcessTag; readonly onBack: () =>
       </div>
       <Boundary label="stats"><ProcessStats bundle={bundle} /></Boundary>
       <Boundary label="controls"><ProcessControls bundle={bundle} /></Boundary>
-      <LogPanel bundle={bundle} />
+      <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} />
     </div>
   );
 };
@@ -133,9 +150,16 @@ export const MobileDashboard = (): React.ReactElement => {
   const pageVt = useViewTransitionStyle(`grp-${group.id}`);
 
   if (selected !== null) {
-    const back = (id: string) => () => transition(`res-${id}`, () => route.back());
-    if (isProcessTag(selected)) return <ProcessDetail tag={selected} onBack={back(selected.id)} />;
-    if (isQueueTag(selected)) return <QueueDetail tag={selected} onBack={back(selected.id)} />;
+    const toGrid = (id: string) => () => transition(`res-${id}`, () => route.back());
+    const openLogs = (): void => transition("log-panel", () => route.open("logs"));
+    const closeLogs = (): void => transition("log-panel", () => route.back());
+    // /…/Resource/logs → the fullscreen logs page (its own route)
+    if (route.view === "logs") {
+      if (isProcessTag(selected) || isQueueTag(selected)) return <LogsPage tag={selected} onClose={closeLogs} />;
+      return <></>;
+    }
+    if (isProcessTag(selected)) return <ProcessDetail tag={selected} onBack={toGrid(selected.id)} onOpenLogs={openLogs} />;
+    if (isQueueTag(selected)) return <QueueDetail tag={selected} onBack={toGrid(selected.id)} onOpenLogs={openLogs} />;
     return <></>;
   }
 

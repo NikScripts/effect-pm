@@ -31,7 +31,11 @@ export interface GroupRoute {
   readonly group: GroupNode;
   /** The open leaf tag if the path ends on a leaf, else `null`. */
   readonly selected: unknown | null;
-  /** Descend into a member by its key (a subgroup → drill in; a leaf → open its detail). */
+  /** A sub-view of the selected leaf — the path segment after the leaf (e.g. `"logs"` for
+   *  `/Mail/logs`), else `undefined`. Leaves have no members, so any trailing segment is a view. */
+  readonly view: string | undefined;
+  /** Descend into a member by its key (a subgroup → drill in; a leaf → open its detail); on a
+   *  selected leaf, appends a sub-view segment (e.g. `open("logs")` → `/Mail/logs`). */
   readonly open: (key: string) => void;
   /** Up one segment. */
   readonly back: () => void;
@@ -52,12 +56,20 @@ const pathSegments = (): ReadonlyArray<string> =>
 const resolve = (
   root: GroupNode,
   segments: ReadonlyArray<string>,
-): { readonly trail: ReadonlyArray<GroupNode>; readonly selected: unknown | null; readonly keys: ReadonlyArray<string> } => {
+): {
+  readonly trail: ReadonlyArray<GroupNode>;
+  readonly selected: unknown | null;
+  readonly view: string | undefined;
+  readonly keys: ReadonlyArray<string>;
+} => {
   const trail: Array<GroupNode> = [root];
   const keys: Array<string> = [];
   let node: GroupNode = root;
   let selected: unknown | null = null;
-  for (const segment of segments) {
+  let view: string | undefined = undefined;
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i];
+    if (segment === undefined) break;
     const members = Group.members(node);
     const key = Object.keys(members).find((k) => k.toLowerCase() === segment.toLowerCase());
     if (key === undefined) break;
@@ -68,10 +80,16 @@ const resolve = (
       trail.push(member);
     } else {
       selected = member;
-      break; // a leaf ends the path
+      // a leaf ends tree resolution; a further segment is the leaf's sub-view (e.g. "logs")
+      const next = segments[i + 1];
+      if (next !== undefined) {
+        view = next;
+        keys.push(next);
+      }
+      break;
     }
   }
-  return { trail, selected, keys };
+  return { trail, selected, view, keys };
 };
 
 const toPath = (keys: ReadonlyArray<string>): string =>
@@ -97,12 +115,13 @@ export const useGroupRoute = (root: GroupNode): GroupRoute => {
     setKeys(next);
   }, []);
 
-  const { trail, selected } = React.useMemo(() => resolve(root, keys), [root, keys]);
+  const { trail, selected, view } = React.useMemo(() => resolve(root, keys), [root, keys]);
 
   return {
     trail,
     group: trail[trail.length - 1] ?? root,
     selected,
+    view,
     open: React.useCallback((key: string) => navigate([...keys, key]), [navigate, keys]),
     back: React.useCallback(() => navigate(keys.slice(0, -1)), [navigate, keys]),
     toRoot: React.useCallback(() => navigate([]), [navigate]),

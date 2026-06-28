@@ -371,7 +371,7 @@ const LockToggle = (props: { readonly locked: boolean; readonly onToggle: () => 
   const [armed, setArmed] = React.useState(false);
   React.useEffect(() => {
     if (!armed) return;
-    const t = setTimeout(() => setArmed(false), 3000);
+    const t = setTimeout(() => setArmed(false), 5000);
     return () => clearTimeout(t);
   }, [armed]);
   const onClick = (): void => {
@@ -380,23 +380,25 @@ const LockToggle = (props: { readonly locked: boolean; readonly onToggle: () => 
       return;
     }
     if (!armed) {
-      setArmed(true); // first tap arms the unlock
+      setArmed(true); // first tap arms the unlock (shows the open-lock, pulsing)
       return;
     }
     setArmed(false);
     props.onToggle(); // second tap unlocks
   };
+  // open-lock glyph when unlocked OR armed, so the armed state visibly previews the unlock
+  const openLook = props.locked === false || armed;
   return (
     <Button
       type="button"
       variant={armed ? "destructive" : props.locked ? "secondary" : "outline"}
       size="icon"
       onClick={onClick}
-      title={props.locked ? (armed ? "tap again to unlock" : "unlock controls") : "lock controls"}
-      aria-label={props.locked ? "unlock controls" : "lock controls"}
+      title={props.locked ? (armed ? "tap again to confirm unlock" : "locked — tap to unlock") : "lock controls"}
+      aria-label={props.locked ? (armed ? "confirm unlock" : "unlock controls") : "lock controls"}
       className={armed ? "ring-2 ring-destructive ring-offset-1 animate-pulse" : "transition-shadow"}
     >
-      {props.locked ? <Lock className="size-4" /> : <LockOpen className="size-4" />}
+      {openLook ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
     </Button>
   );
 };
@@ -409,7 +411,7 @@ export const QueueControls = (props: { readonly bundle: QueueBundle }): React.Re
   const paused = s?.paused === true;
   const [locked, setLocked] = React.useState(true);
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+    <div className="flex flex-wrap items-center justify-center gap-2 sm:flex-col sm:flex-nowrap sm:items-stretch sm:justify-start">
       {paused ? (
         <ActionButton atom={props.bundle.resume} label="resume" icon={<Play className="size-4" />} disabled={locked} />
       ) : (
@@ -505,7 +507,7 @@ export const ProcessControls = (props: { readonly bundle: ProcessBundle }): Reac
   const up = s?.supervising === true;
   const [locked, setLocked] = React.useState(true);
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+    <div className="flex flex-wrap items-center justify-center gap-2 sm:flex-col sm:flex-nowrap sm:items-stretch sm:justify-start">
       {up ? (
         <ActionButton atom={props.bundle.stop} label="stop" icon={<Square className="size-4" />} disabled={locked} confirm destructive />
       ) : (
