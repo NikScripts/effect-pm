@@ -91,7 +91,20 @@ const useLines = (): ReadonlyArray<Line> =>
 export const DebugConsole = (): React.ReactElement | null => {
   patchConsole();
   const [open, setOpen] = React.useState(false);
+  const [enabled, setEnabled] = React.useState(() => debugEnabled());
   const all = useLines();
+  // fully turn debug off: clear the persisted flag AND the ?debug URL param, then hide
+  const disable = (): void => {
+    try {
+      localStorage.removeItem("debug");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("debug");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+    } catch {
+      /* ignore */
+    }
+    setEnabled(false);
+  };
   const ref = React.useRef<HTMLDivElement>(null);
   // Auto-scroll to newest only while the user is already pinned to the bottom; if they've
   // scrolled up to read history, leave their position alone.
@@ -105,7 +118,7 @@ export const DebugConsole = (): React.ReactElement | null => {
     if (el !== null && pinned.current) el.scrollTop = el.scrollHeight;
   }, [all.length, open]);
 
-  if (!debugEnabled()) return null;
+  if (!enabled) return null;
 
   return (
     <div className="fixed bottom-2 right-2 z-50" style={{ marginBottom: "env(safe-area-inset-bottom)" }}>
@@ -122,6 +135,9 @@ export const DebugConsole = (): React.ReactElement | null => {
               className="rounded border px-2 py-0.5"
             >
               clear
+            </button>
+            <button type="button" onClick={disable} className="rounded border px-2 py-0.5">
+              disable
             </button>
             <button type="button" onClick={() => setOpen(false)} className="rounded border px-2 py-0.5">
               close

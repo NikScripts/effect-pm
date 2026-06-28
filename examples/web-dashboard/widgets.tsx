@@ -44,6 +44,15 @@ import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
 import { cn } from "./lib/utils";
 import { Lock, LockOpen, Pause, Play, Power, RotateCw, Square, Trash2 } from "lucide-react";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./components/ui/dialog";
 
 export const displayName = (key: string): string => key.split("/").pop() ?? key;
 export const fmtMs = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
@@ -280,9 +289,44 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
   );
 };
 
+/** A modal confirmation dialog (radix) — for destructive / guarded actions. */
+const ConfirmDialog = (props: {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly title: string;
+  readonly description: string;
+  readonly confirmLabel: string;
+  readonly destructive?: boolean;
+  readonly onConfirm: () => void;
+}): React.ReactElement => (
+  <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>{props.title}</DialogTitle>
+        <DialogDescription>{props.description}</DialogDescription>
+      </DialogHeader>
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline" size="sm">Cancel</Button>
+        </DialogClose>
+        <Button
+          variant={props.destructive === true ? "destructive" : "default"}
+          size="sm"
+          onClick={() => {
+            props.onConfirm();
+            props.onOpenChange(false);
+          }}
+        >
+          {props.confirmLabel}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+);
+
 /** A control button whose icon stays constant — the command's round-trip shows as motion /
  *  colour, never an icon swap: pulse while in-flight, a green ring on success, red on failure.
- *  `confirm` arms on first tap (red, pulsing) and fires on the second; `disabled` for the lock. */
+ *  `confirm` opens a modal dialog before firing; `disabled` for the lock. */
 export const ActionButton = (props: {
   readonly atom: CommandAtom;
   readonly label: string;
@@ -296,7 +340,7 @@ export const ActionButton = (props: {
   const pending = AsyncResult.isWaiting(r);
   const failed = AsyncResult.isFailure(r) && !pending;
   const [flash, setFlash] = React.useState(false);
-  const [armed, setArmed] = React.useState(false);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const wasPending = React.useRef(false);
   React.useEffect(() => {
     if (pending) {
@@ -311,95 +355,100 @@ export const ActionButton = (props: {
     }
     return;
   }, [pending, r]);
-  // confirm: first tap arms (auto-disarms after 3s), second tap fires
-  React.useEffect(() => {
-    if (!armed) return;
-    const t = setTimeout(() => setArmed(false), 3000);
-    return () => clearTimeout(t);
-  }, [armed]);
   const fire = (): void => {
-    if (props.confirm === true && !armed) {
-      setArmed(true);
+    if (props.confirm === true) {
+      setConfirmOpen(true);
       return;
     }
-    setArmed(false);
     trigger();
   };
   const disabled = pending || props.disabled === true;
-  const danger = armed || failed || props.destructive === true;
+  const danger = failed || props.destructive === true;
   const feedback = pending
     ? "animate-pulse"
-    : armed
-      ? "ring-2 ring-destructive ring-offset-1 animate-pulse"
-      : flash
-        ? "ring-2 ring-emerald-500 ring-offset-1 transition-shadow"
-        : "transition-shadow";
+    : flash
+      ? "ring-2 ring-emerald-500 ring-offset-1 transition-shadow"
+      : "transition-shadow";
+
+  const dialog =
+    props.confirm === true ? (
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={`${props.label.charAt(0).toUpperCase()}${props.label.slice(1)}?`}
+        description={`Are you sure you want to ${props.label} this resource?`}
+        confirmLabel={props.label}
+        destructive={props.destructive}
+        onConfirm={trigger}
+      />
+    ) : null;
 
   if (props.icon !== undefined) {
     return (
-      <Button
-        variant={danger ? "destructive" : "outline"}
-        size="icon"
-        disabled={disabled}
-        onClick={fire}
-        title={armed ? `tap again to confirm: ${props.label}` : props.label}
-        aria-label={armed ? `confirm ${props.label}` : props.label}
-        className={feedback}
-      >
-        {props.icon}
-      </Button>
+      <>
+        <Button
+          variant={danger ? "destructive" : "outline"}
+          size="icon"
+          disabled={disabled}
+          onClick={(e) => {
+          e.currentTarget.blur();
+          fire();
+        }}
+          title={props.label}
+          aria-label={props.label}
+          className={feedback}
+        >
+          {props.icon}
+        </Button>
+        {dialog}
+      </>
     );
   }
-  const suffix = pending ? " …" : flash ? " ✓" : failed ? " ✗" : armed ? " — confirm?" : "";
+  const suffix = pending ? " …" : flash ? " ✓" : failed ? " ✗" : "";
   return (
-    <Button
-      variant={danger ? "destructive" : "outline"}
-      size="sm"
-      disabled={disabled}
-      onClick={fire}
-      className={feedback}
-    >
-      {props.label}
-      {suffix}
-    </Button>
+    <>
+      <Button variant={danger ? "destructive" : "outline"} size="sm" disabled={disabled} onClick={fire} className={feedback}>
+        {props.label}
+        {suffix}
+      </Button>
+      {dialog}
+    </>
   );
 };
 
 /** Lock toggle for a control row — guards against accidental taps. Locking is immediate;
- *  unlocking takes a confirm tap (red + pulse) so the guard isn't fat-fingered off. */
+ *  unlocking opens a confirm dialog so the guard isn't fat-fingered off. */
 const LockToggle = (props: { readonly locked: boolean; readonly onToggle: () => void }): React.ReactElement => {
-  const [armed, setArmed] = React.useState(false);
-  React.useEffect(() => {
-    if (!armed) return;
-    const t = setTimeout(() => setArmed(false), 5000);
-    return () => clearTimeout(t);
-  }, [armed]);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const onClick = (): void => {
-    if (!props.locked) {
-      props.onToggle(); // lock immediately
+    if (props.locked) {
+      setConfirmOpen(true); // confirm to unlock
       return;
     }
-    if (!armed) {
-      setArmed(true); // first tap arms the unlock (shows the open-lock, pulsing)
-      return;
-    }
-    setArmed(false);
-    props.onToggle(); // second tap unlocks
+    props.onToggle(); // lock immediately
   };
-  // open-lock glyph when unlocked OR armed, so the armed state visibly previews the unlock
-  const openLook = props.locked === false || armed;
   return (
-    <Button
-      type="button"
-      variant={armed ? "destructive" : props.locked ? "secondary" : "outline"}
-      size="icon"
-      onClick={onClick}
-      title={props.locked ? (armed ? "tap again to confirm unlock" : "locked — tap to unlock") : "lock controls"}
-      aria-label={props.locked ? (armed ? "confirm unlock" : "unlock controls") : "lock controls"}
-      className={armed ? "ring-2 ring-destructive ring-offset-1 animate-pulse" : "transition-shadow"}
-    >
-      {openLook ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
-    </Button>
+    <>
+      <Button
+        type="button"
+        variant={props.locked ? "secondary" : "outline"}
+        size="icon"
+        onClick={onClick}
+        title={props.locked ? "unlock controls" : "lock controls"}
+        aria-label={props.locked ? "unlock controls" : "lock controls"}
+        className="transition-shadow"
+      >
+        {props.locked ? <Lock className="size-4" /> : <LockOpen className="size-4" />}
+      </Button>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Unlock controls?"
+        description="This enables the actuating controls (pause, clear, shutdown). Re-lock when you're done."
+        confirmLabel="Unlock"
+        onConfirm={props.onToggle}
+      />
+    </>
   );
 };
 
@@ -411,7 +460,7 @@ export const QueueControls = (props: { readonly bundle: QueueBundle }): React.Re
   const paused = s?.paused === true;
   const [locked, setLocked] = React.useState(true);
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2 sm:flex-col sm:flex-nowrap sm:items-stretch sm:justify-start">
+    <div className="flex flex-wrap items-center justify-center gap-2 sm:flex-col sm:flex-nowrap sm:items-center sm:justify-center">
       {paused ? (
         <ActionButton atom={props.bundle.resume} label="resume" icon={<Play className="size-4" />} disabled={locked} />
       ) : (
@@ -507,7 +556,7 @@ export const ProcessControls = (props: { readonly bundle: ProcessBundle }): Reac
   const up = s?.supervising === true;
   const [locked, setLocked] = React.useState(true);
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2 sm:flex-col sm:flex-nowrap sm:items-stretch sm:justify-start">
+    <div className="flex flex-wrap items-center justify-center gap-2 sm:flex-col sm:flex-nowrap sm:items-center sm:justify-center">
       {up ? (
         <ActionButton atom={props.bundle.stop} label="stop" icon={<Square className="size-4" />} disabled={locked} confirm destructive />
       ) : (

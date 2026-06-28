@@ -107,7 +107,7 @@ const QueueDetail = (props: {
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
       <Boundary label="stats"><QueueStats bundle={bundle} /></Boundary>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="min-w-0 sm:flex-1">
           <Boundary label="chart">
             <div className="rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
