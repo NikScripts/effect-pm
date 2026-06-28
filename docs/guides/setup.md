@@ -83,6 +83,35 @@ chunks before shaking).
 bundler's import-chain view (Vite `--debug`, `rollup-plugin-visualizer`) — the chain almost
 always ends at a shared module that pulls a server/storage layer.
 
+## 2b. Styling the web widgets (Tailwind)
+
+The `…/web` widgets are shadcn-style — Tailwind utility classes plus CSS-variable theme tokens.
+Tailwind **does not scan `node_modules` by default**, so two things must be wired up in the
+consumer or the widgets render unstyled:
+
+1. **Scan the package** so the utilities used inside the widgets get generated.
+
+   Tailwind v4 (in your CSS):
+
+   ```css
+   @import "tailwindcss";
+   @source "../node_modules/@nikscripts/effect-pm/dist";
+   ```
+
+   Tailwind v3 (`tailwind.config`):
+
+   ```js
+   content: ["./src/**/*.{ts,tsx}", "./node_modules/@nikscripts/effect-pm/dist/**/*.js"],
+   ```
+
+2. **Define the theme tokens** the widgets reference (`--card`, `--muted-foreground`, `--border`,
+   `--primary`, `--accent`, `--destructive`, `--ring`, `--radius`, …). A standard shadcn theme
+   already has these; otherwise copy the `@theme inline` + `:root` block from
+   `examples/web-dashboard/styles.css` (a dark ops theme).
+
+Symptom map: widgets render **unstyled** → #1 (Tailwind didn't see the classes in `node_modules`);
+render but **wrong / missing colours** → #2 (theme tokens not defined).
+
 ## 3. Define resources, bound to a host
 
 A `Host` lets a group of resources be served on one port (§4) and reached over one transport (§5).
