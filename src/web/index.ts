@@ -20,6 +20,7 @@
  */
 export * from "../ui/atom-react";
 export * from "./useViewTransition";
+export * from "./useGroupRoute";
 export * from "./binding";
 export * from "./primitives";
 export * from "./panels";

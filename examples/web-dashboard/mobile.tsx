@@ -10,7 +10,6 @@ import * as React from "react";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Fleet } from "./fleet";
 import {
-  type GroupNode,
   type LeafTag,
   type ProcessTag,
   kindOf,
@@ -20,6 +19,11 @@ import {
 } from "./queue-data";
 import { useAtomValue } from "../../src/ui/atom-react";
 import { useViewTransition, useViewTransitionStyle } from "../../src/web/useViewTransition";
+import { useGroupRoute } from "../../src/web/useGroupRoute";
+
+// route.selected is an opaque leaf tag — narrow it to a queue / process by its contract.
+const isProcessTag = (m: unknown): m is ProcessTag => kindOf(m) === "process";
+const isQueueTag = (m: unknown): m is LeafTag => kindOf(m) === "queue";
 import { Boundary } from "./components/ui/boundary";
 import { Button } from "./components/ui/button";
 import {
@@ -81,34 +85,31 @@ const ProcessDetail = (props: { readonly tag: ProcessTag; readonly onBack: () =>
 };
 
 export const MobileDashboard = (): React.ReactElement => {
-  const [path, setPath] = React.useState<ReadonlyArray<GroupNode>>([Fleet]);
-  const [selected, setSelected] = React.useState<LeafTag | ProcessTag | null>(null);
+  // URL ↔ nav over the Fleet tree (/Wnba/ImportSchedule, case-insensitive; back/forward work).
+  const route = useGroupRoute(Fleet);
+  const { group, selected, trail } = route;
   // animate grid ↔ detail / drill-down via the View Transitions API: the activated card
-  // morphs to fill the screen while everything else grows/fades in as one image. Only the
-  // active element is named (conditional), so the new grid's cards don't pop in on their own.
+  // morphs to fill the screen while everything else grows/fades in as one image.
   const transition = useViewTransition();
-  const group = path[path.length - 1] ?? Fleet;
   const pageVt = useViewTransitionStyle(`grp-${group.id}`);
 
   if (selected !== null) {
-    const back = () => transition(`res-${selected.id}`, () => setSelected(null));
-    return kindOf(selected) === "process" ? (
-      <ProcessDetail tag={selected as ProcessTag} onBack={back} />
-    ) : (
-      <QueueDetail tag={selected as LeafTag} onBack={back} />
-    );
+    const back = (id: string) => () => transition(`res-${id}`, () => route.back());
+    if (isProcessTag(selected)) return <ProcessDetail tag={selected} onBack={back(selected.id)} />;
+    if (isQueueTag(selected)) return <QueueDetail tag={selected} onBack={back(selected.id)} />;
+    return <></>;
   }
 
-  const canBack = path.length > 1;
+  const canBack = trail.length > 1;
 
   return (
     <div className="mx-auto max-w-5xl safe-area" style={pageVt}>
       <div className="mb-1 flex items-center gap-2">
         {canBack ? (
-          <Button variant="outline" size="sm" onClick={() => transition(`grp-${group.id}`, () => setPath((p) => p.slice(0, -1)))}>← back</Button>
+          <Button variant="outline" size="sm" onClick={() => transition(`grp-${group.id}`, () => route.back())}>← back</Button>
         ) : null}
         <h1 className="m-0 flex-1 text-lg font-semibold">
-          ⬢ {path.map((g) => displayName(g.id)).join(" / ")}{" "}
+          ⬢ {trail.map((g) => displayName(g.id)).join(" / ")}{" "}
           <span className="text-sm font-normal text-muted-foreground">· {leafTags(group).length} resources</span>
         </h1>
       </div>
@@ -118,8 +119,8 @@ export const MobileDashboard = (): React.ReactElement => {
           <Cell
             key={name}
             member={member}
-            onOpenLeaf={(tag) => transition(`res-${tag.id}`, () => setSelected(() => tag))}
-            onOpenGroup={(g) => transition(`grp-${g.id}`, () => setPath((p) => [...p, g]))}
+            onOpenLeaf={(tag) => transition(`res-${tag.id}`, () => route.open(name))}
+            onOpenGroup={(g) => transition(`grp-${g.id}`, () => route.open(name))}
           />
         ))}
       </div>
