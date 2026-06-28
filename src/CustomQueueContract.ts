@@ -7,7 +7,8 @@
  * @module CustomQueueContract
  */
 import { Effect, Layer, Option, Schema, Stream } from "effect";
-import { Resource, hostSym, specSym } from "./Resource";
+import * as Resource from "./Resource";
+import { hostSym, specSym } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
 import type {
   HandlerContextOf,
@@ -244,6 +245,7 @@ export const customQueueSpec = <F extends Schema.Struct.Fields>(
   const itemOrItems = Schema.Union([itemSchema, Schema.Array(itemSchema)]);
   const level = customQueueLevel(levelConfig.namedLevels);
   const entry = customQueueEntry(itemSchema);
+  const eventSchema = queueEvent(itemSchema);
   return {
     ...customQueueControlSpec,
     add: Resource.mutatePair(Schema.Void, itemOrItems, Schema.optional(level)).annotate({
@@ -288,7 +290,7 @@ export const customQueueSpec = <F extends Schema.Struct.Fields>(
       description: "Remove pending entries matching the selector without preserving them.",
       destructive: true,
     }),
-    events: Resource.stream(queueEvent(itemSchema)).annotate({
+    events: Resource.stream(eventSchema).annotate({
       description: "Discrete entry / worker / queue lifecycle events.",
     }),
   };

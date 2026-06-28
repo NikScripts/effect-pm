@@ -11,7 +11,8 @@ import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { Resource, groupOf } from "../src/Resource";
+import * as Resource from "../src/Resource";
+import { groupOf } from "../src/Resource";
 import { queueStatus } from "../src/QueueContract";
 
 // Streaming `.changes` over a REAL http transport (the in-memory RpcTest path is the blocker

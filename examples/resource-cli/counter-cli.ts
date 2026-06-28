@@ -14,8 +14,8 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer, Schema } from "effect";
 import { Command } from "effect/unstable/cli";
-import { Resource } from "../../src/Resource";
-import { makeResourceCli } from "./resource-cli";
+import * as Resource from "../../src/Resource";
+import { makeResourceCli } from "../../src/cli";
 
 class Counter extends Resource.Tag<Counter>("Counter")({
   current: Resource.query(Schema.Number),

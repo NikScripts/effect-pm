@@ -3,7 +3,8 @@ import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { Resource, groupOf } from "../src/Resource";
+import * as Resource from "../src/Resource";
+import { groupOf } from "../src/Resource";
 
 // The toolkit driven over a REAL http transport (not the in-memory RpcTest path): the same
 // `yield* Tag` code, the real `Resource.server` mounted on an http RpcServer, and the real

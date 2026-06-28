@@ -1736,25 +1736,23 @@ export const runForEachTagScoped: {
  *
  * @public
  */
-export const Resource = {
-  Tag: makeTag,
+export {
+  makeTag as Tag,
   tagFor,
-  Host: makeHost,
-  connect: connectLayer,
+  makeHost as Host,
+  connectLayer as connect,
   connectHttp,
-  query,
-  mutate,
-  mutatePair,
-  stream,
-  local,
   instance,
-  layer: localLayer,
-  server: serverLayer,
+  localLayer as layer,
+  serverLayer as server,
   serveHttp,
   serveAllHttp,
   serveInstances,
-  client: clientLayer,
+  clientLayer as client,
   clientInstances,
-  runForEachTag,
-  runForEachTagScoped,
-} as const;
+};
+// `query`, `mutate`, `stream`, `local`, `runForEachTag`, `runForEachTagScoped` are already
+// exported above under their public names. The whole surface is now a tree-shakeable module
+// namespace: **`import * as Resource from "@nikscripts/effect-pm/Resource"`** — `Resource.Tag`
+// / `Resource.Host` pull only what's used.
+

@@ -2,8 +2,8 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { Resource } from "../src/Resource";
-import { Group } from "../src/Group";
+import * as Resource from "../src/Resource";
+import * as Group from "../src/Group";
 
 // The real target topology: a ServicesHub group containing league groups (nesting), where almost
 // everything runs LOCAL on one Droplet (provided by its `.layer`) and one member runs REMOTE on

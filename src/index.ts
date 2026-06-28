@@ -132,7 +132,6 @@ export { HttpClientRunGate } from "./HttpClientRunGate";
 export {
   HttpApiResource,
   acceptJson,
-  instrumentEndpoints,
   type HttpApiResourceLayerEffectConfig,
 } from "./HttpApiResource";
 export {
@@ -142,12 +141,14 @@ export {
   InstanceRoutingError,
   LocalOnlyMethod,
   MissingContractMethod,
-  Resource,
   // Contract introspection — the basis for generic UIs (walk a tag's spec, render a widget
   // per method from its kind/description/destructive/streaming). See examples/resource-tui.
   methodMeta,
   specOf,
 } from "./Resource";
+// `Resource` as a tree-shakeable module namespace (Effect-style): `Resource.Tag` / `Resource.Host`
+// pull only what's used. Import `* as Resource` from the subpath, or `{ Resource }` from here.
+export * as Resource from "./Resource";
 export type {
   AnyLocalMethod,
   AnyMethod,
@@ -293,7 +294,7 @@ export type {
   FailResult,
   OfferResult,
 } from "./DurableQueueStore";
-export { Group } from "./Group";
+export * as Group from "./Group";
 export {
   ProcessGroupLogContext,
   LogAnnotationKeys,

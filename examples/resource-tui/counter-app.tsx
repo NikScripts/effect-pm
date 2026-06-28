@@ -14,13 +14,13 @@ import { Box, Text, useApp, useInput } from "ink";
 import * as React from "react";
 import { Effect, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
-import { Resource } from "../../src/Resource";
+import * as Resource from "../../src/Resource";
 import { makeResourceAtoms } from "../resource-atoms/resource-atoms";
 import {
   RegistryProvider,
   useAtomSet,
   useAtomValue,
-} from "../queue-widget/atom-react";
+} from "../../src/ui/atom-react";
 
 class Counter extends Resource.Tag<Counter>("Counter")({
   current: Resource.query(Schema.Number),

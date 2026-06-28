@@ -2,7 +2,7 @@ import { Effect, Layer, Schema } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { Resource } from "../src/Resource";
+import * as Resource from "../src/Resource";
 
 // Host-in-tag over REAL http, using the batteries-included helpers: the tag carries its own
 // transport (EdgeHost), the server is one `Resource.serveHttp` call, and the client wires the

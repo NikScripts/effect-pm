@@ -2,7 +2,7 @@ import { Effect, Layer, Schema } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { Resource } from "../src/Resource";
+import * as Resource from "../src/Resource";
 
 // Many resources, one Host, ONE server/port (the ControlService.make({group,port}) replacement).
 class LeagueHost extends Resource.Host<LeagueHost>("serveAll/host") {}

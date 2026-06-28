@@ -20,7 +20,8 @@
  * @module ProcessScheduleContract
  */
 import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
-import { Resource, hostSym } from "./Resource";
+import * as Resource from "./Resource";
+import { hostSym } from "./Resource";
 import type {
   HandlerContextOf,
   HostKey,

@@ -6,7 +6,7 @@ import { expect, it } from "vitest";
 import { ScheduledProcess } from "../src";
 import type { ProcessLayerConfig } from "../src/ScheduledProcess";
 import { ProcessSchedule } from "../src/ProcessSchedule";
-import { Resource } from "../src/Resource";
+import * as Resource from "../src/Resource";
 
 // The full remote path: a REAL toolkit Process driver served over http via
 // `ScheduledProcess.serveHttp`, driven by `Resource.client` over the wire — the same

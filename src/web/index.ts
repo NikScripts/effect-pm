@@ -1,28 +1,34 @@
 /**
  * @module web
  *
- * **Contract-driven web widgets** for the resource toolkit — the web counterpart to
- * the CLI/TUI renderers. Point them at a `Resource` tag (local or remote via
- * `Resource.client` + `connect`) or a whole `Group` tree and they render: queues,
- * processes, schedules, runs, and nested groups, with live status/metrics/logs and
- * actuating controls — all derived from each contract (`specOf` / `methodMeta`), so
- * new resources appear with no extra code.
+ * **The resource dashboard for the browser** — the web counterpart to the CLI/TUI renderers.
+ * Point `<Dashboard runtime group />` at a reactive `runtime` (an `Atom.runtime(layer)` over
+ * your tags — local engine or `Resource.client` over http) and a root `Group`, and it renders
+ * the responsive drill-down: queue / process / subgroup cards, a styled detail per resource
+ * (stats + chart + controls + logs), and a routed fullscreen log viewer — URL-backed
+ * navigation with view-transition animations.
  *
  * ```tsx
- * import { GroupView, RegistryProvider } from "@nikscripts/effect-pm/web";
- * // runtime provides every tag (Resource.client + connect for remote hosts)
- * <RegistryProvider><GroupView runtime={runtime} group={ServicesHub} /></RegistryProvider>
+ * import { Dashboard } from "@nikscripts/effect-pm/web";
+ * import { Atom } from "effect/unstable/reactivity";
+ * const runtime = Atom.runtime(appLayer); // appLayer: Resource.client(...) over connectHttp
+ * <Dashboard runtime={runtime} group={ServicesHub} />
  * ```
  *
- * React is a peer dependency; the widgets use Tailwind utility classes.
+ * Or compose the pieces: `DashboardView` + the widgets + `useQueueBundle` / `useProcessBundle`
+ * under `RegistryProvider` + `RuntimeProvider` + `ViewTransitionProvider`.
+ *
+ * Peers: `react`, `react-dom`, `recharts`. Styled with Tailwind utility classes + shadcn theme
+ * tokens — see `docs/guides/setup.md` §2a/§2b for the `@source` + token wiring.
  *
  * @since 1.0.0
  */
-export * from "./atom-react";
-export * from "./binding";
-export * from "./primitives";
-export * from "./panels";
-export * from "./chart";
-export * from "./ResourceWidget";
+export * from "../ui/atom-react";
+export * from "./useViewTransition";
+export * from "./useGroupRoute";
+export * from "./data";
+export * from "./runtime";
 export * from "./widgets";
-export * from "./GroupView";
+export * from "./Dashboard";
+export * from "./debug-console";
+export { cn } from "./cn";

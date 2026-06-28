@@ -12,7 +12,7 @@ import { Atom } from "effect/unstable/reactivity";
 import * as QueueResource from "../../src/QueueContract";
 import * as ProcessResource from "../../src/ScheduledProcess";
 import * as ProcessScheduleResource from "../../src/ProcessScheduleContract";
-import { Group } from "../../src/Group";
+import * as Group from "../../src/Group";
 import { Polling } from "../../src/Polling";
 import { ProcessStorage } from "../../src/ProcessStorage";
 

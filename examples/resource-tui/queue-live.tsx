@@ -20,7 +20,7 @@ import * as React from "react";
 import { Data, Duration, Effect, Layer, Schema, Stream } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { QueueResource } from "../../src";
-import { RegistryProvider, useAtomSet, useAtomValue } from "../queue-widget/atom-react";
+import { RegistryProvider, useAtomSet, useAtomValue } from "../../src/ui/atom-react";
 import {
   BLANK_BORDER,
   PageXL,

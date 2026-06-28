@@ -7,24 +7,19 @@
  * here), not server-side `yield* tag` (a host doesn't expose its served service).
  * Run: `pnpm run example:queue-server`.
  */
-import { EventEmitter } from "node:events";
 import { Duration, Effect, Layer, Logger } from "effect";
 import { createServer } from "node:http";
-
-// We mount 12 resources (serveHttp) on one server, which stacks >10 per-request
-// listeners → Node's MaxListeners warning floods stdout. Raise the limit. (The real fix
-// is one shared router instead of N serveHttp — a follow-up.)
-EventEmitter.defaultMaxListeners = 100;
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { serveHttp } from "../../src/QueueContract";
+import { serverEntry } from "../../src/QueueContract";
 import { HistoryStore } from "../../src/HistoryStore";
-import { Resource } from "../../src/Resource";
+import * as Resource from "../../src/Resource";
 import {
   Billing,
   Daily,
+  Droplet,
   Jobs,
   Mail,
   Notify,
@@ -35,7 +30,6 @@ import {
   Worker2,
   Worker3,
   cfg,
-  pathOf,
 } from "./fleet";
 
 const PORT = 7777;
@@ -72,21 +66,22 @@ setInterval(() => {
   );
 }, 5000);
 
-// host every queue at /rpc/<name> on one node server.
-const serveLayer = Layer.mergeAll(
-  serveHttp(Mail, cfg, { path: `/rpc/${pathOf(Mail.key)}` }),
-  serveHttp(Jobs, cfg, { path: `/rpc/${pathOf(Jobs.key)}` }),
-  serveHttp(Billing, cfg, { path: `/rpc/${pathOf(Billing.key)}` }),
-  serveHttp(Notify, cfg, { path: `/rpc/${pathOf(Notify.key)}` }),
-  serveHttp(Worker1, cfg, { path: `/rpc/${pathOf(Worker1.key)}` }),
-  serveHttp(Worker2, cfg, { path: `/rpc/${pathOf(Worker2.key)}` }),
-  serveHttp(Worker3, cfg, { path: `/rpc/${pathOf(Worker3.key)}` }),
-  serveHttp(RegionUS, cfg, { path: `/rpc/${pathOf(RegionUS.key)}` }),
-  serveHttp(RegionEU, cfg, { path: `/rpc/${pathOf(RegionEU.key)}` }),
-  serveHttp(Daily, cfg, { path: `/rpc/${pathOf(Daily.key)}` }),
-  serveHttp(Weekly, cfg, { path: `/rpc/${pathOf(Weekly.key)}` }),
-  // (the wnba key-rotation process lives on the Mini — see mini-server.ts)
-).pipe(
+// host every queue as ONE group on ONE port: `serveAllHttp` mounts a single `/rpc`
+// endpoint with group-id-prefixed procedures behind the Droplet host. (The wnba
+// key-rotation process lives on the Mini — see mini-server.ts.)
+const serveLayer = Resource.serveAllHttp([
+  serverEntry(Mail, cfg),
+  serverEntry(Jobs, cfg),
+  serverEntry(Billing, cfg),
+  serverEntry(Notify, cfg),
+  serverEntry(Worker1, cfg),
+  serverEntry(Worker2, cfg),
+  serverEntry(Worker3, cfg),
+  serverEntry(RegionUS, cfg),
+  serverEntry(RegionEU, cfg),
+  serverEntry(Daily, cfg),
+  serverEntry(Weekly, cfg),
+]).pipe(
   // capture metrics + log history so the dashboard can backfill (query-then-tail).
   Layer.provide(HistoryStore.layerMemory()),
   // silence the served layer's console logging (per-request http access logs + the
@@ -96,24 +91,28 @@ const serveLayer = Layer.mergeAll(
   Layer.provideMerge(NodeHttpServer.layer(makeServer, { port: PORT })),
 );
 
-// loopback client transport (the producer reaches the local server over http).
-const remote = (id: string) =>
+// loopback client transport: ONE Droplet-host transport the producers share (the single
+// /rpc endpoint, procedures group-prefixed). Tagged `x-loopback` so the rate monitor
+// separates the demo's own traffic from the browser's.
+const loopback = Resource.connect(
+  Droplet,
   RpcClient.layerProtocolHttp({
-    url: `http://localhost:${PORT}/rpc/${pathOf(id)}`,
+    url: `http://localhost:${PORT}/rpc`,
     transformClient: (c) => HttpClient.mapRequest(c, HttpClientRequest.setHeader("x-loopback", "1")),
-  }).pipe(Layer.provide(RpcSerialization.layerNdjson), Layer.provide(FetchHttpClient.layer));
+  }).pipe(Layer.provide(RpcSerialization.layerNdjson), Layer.provide(FetchHttpClient.layer)),
+);
 const clientLayer = Layer.mergeAll(
-  Resource.client(Mail).pipe(Layer.provide(remote(Mail.key))),
-  Resource.client(Jobs).pipe(Layer.provide(remote(Jobs.key))),
-  Resource.client(Billing).pipe(Layer.provide(remote(Billing.key))),
-  Resource.client(Notify).pipe(Layer.provide(remote(Notify.key))),
-  Resource.client(Worker1).pipe(Layer.provide(remote(Worker1.key))),
-  Resource.client(Worker2).pipe(Layer.provide(remote(Worker2.key))),
-  Resource.client(Worker3).pipe(Layer.provide(remote(Worker3.key))),
-  Resource.client(RegionUS).pipe(Layer.provide(remote(RegionUS.key))),
-  Resource.client(RegionEU).pipe(Layer.provide(remote(RegionEU.key))),
-  Resource.client(Daily).pipe(Layer.provide(remote(Daily.key))),
-  Resource.client(Weekly).pipe(Layer.provide(remote(Weekly.key))),
+  Resource.client(Mail).pipe(Layer.provide(loopback)),
+  Resource.client(Jobs).pipe(Layer.provide(loopback)),
+  Resource.client(Billing).pipe(Layer.provide(loopback)),
+  Resource.client(Notify).pipe(Layer.provide(loopback)),
+  Resource.client(Worker1).pipe(Layer.provide(loopback)),
+  Resource.client(Worker2).pipe(Layer.provide(loopback)),
+  Resource.client(Worker3).pipe(Layer.provide(loopback)),
+  Resource.client(RegionUS).pipe(Layer.provide(loopback)),
+  Resource.client(RegionEU).pipe(Layer.provide(loopback)),
+  Resource.client(Daily).pipe(Layer.provide(loopback)),
+  Resource.client(Weekly).pipe(Layer.provide(loopback)),
 );
 
 let rngState = 0x9e3779b9;

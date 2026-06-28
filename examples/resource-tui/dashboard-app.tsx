@@ -18,7 +18,7 @@
 import { Box, render, Text, useInput, useStdout } from "ink";
 import * as React from "react";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { Group } from "../../src/Group";
+import * as Group from "../../src/Group";
 import { Fleet } from "../web-dashboard/fleet";
 import {
   hostOf,
@@ -32,7 +32,7 @@ import {
   type LeafTag,
   type ProcessTag,
 } from "../web-dashboard/queue-data";
-import { RegistryProvider, useAtomSet, useAtomValue } from "../queue-widget/atom-react";
+import { RegistryProvider, useAtomSet, useAtomValue } from "../../src/ui/atom-react";
 import {
   bar,
   BLANK_BORDER,

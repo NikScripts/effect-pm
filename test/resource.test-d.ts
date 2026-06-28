@@ -1,6 +1,6 @@
 import { Effect, Layer, Schema, Stream } from "effect";
 import { RpcClient } from "effect/unstable/rpc";
-import { Resource } from "../src/Resource";
+import * as Resource from "../src/Resource";
 import type { ServiceOf } from "../src/Resource";
 
 // ── Slice 1: spec → service-interface inference ──

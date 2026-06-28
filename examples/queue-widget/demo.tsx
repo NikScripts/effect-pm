@@ -22,7 +22,7 @@ import {
   useAtomRefresh,
   useAtomSet,
   useAtomValue,
-} from "./atom-react";
+} from "../../src/ui/atom-react";
 import { makeQueueAtoms } from "./queue-atoms";
 
 // Shared reactivity key: mutations and worker completions invalidate it, the

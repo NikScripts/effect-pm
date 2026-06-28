@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { render } from "../examples/resource-cli/resource-cli";
+import { render } from "../src/cli";
 
 it("renders CLI output by value shape", () => {
   // void / nullish → ok

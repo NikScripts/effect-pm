@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
 import { expect, it } from "vitest";
-import { Resource } from "../src/Resource";
+import * as Resource from "../src/Resource";
 import { makeResourceAtoms } from "../examples/resource-atoms/resource-atoms";
 
 // A resource with one query (read atom), one void mutate, one payload mutate.

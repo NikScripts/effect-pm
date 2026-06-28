@@ -5,7 +5,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { ProcessScheduleResource } from "../src";
 import type { ProcessScheduleLayerConfig } from "../src/ProcessScheduleContract";
-import { Resource } from "../src/Resource";
+import * as Resource from "../src/Resource";
 
 // The full remote path: a REAL ProcessSchedule store served over http, driven by `Resource.client`
 // over the wire — the full CRUD + reconcile + the changes stream, all crossing real RPC.

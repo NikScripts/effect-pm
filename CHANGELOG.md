@@ -1,5 +1,84 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.9
+
+### Minor Changes
+
+- 22bb124: **Tag APIs are now uniform, tree-shakeable module namespaces** (Effect-style) — `import * as X`,
+  no object literals. `Resource` and `Group` were object exports (so `import * as` / tree-shaking
+  couldn't work); they're now per-member namespaces. The `/QueueResource` subpath previously
+  resolved to the internal engine (an object whose `Tag` had **no `host`** and didn't tree-shake)
+  — it now resolves to the namespace, so `import * as QueueResource from ".../QueueResource"` gives
+  the **host-ful** `Tag` and `QueueResource.Tag` tree-shakes (~207 KB → ~27 KB). Bare `queueTag` /
+  `processTag` are removed.
+
+  **BREAKING.** Migrate: `import { Resource }` → `import * as Resource`; `import { QueueResource }`
+  → `import * as QueueResource`; `queueTag<T>()(…)` → `QueueResource.Tag<T>()(…)`;
+  `processTag<T>()(…)` → `ScheduledProcess.Tag<T>()(…)`.
+
+### Patch Changes
+
+- 0d6d602: `@nikscripts/effect-pm/web`: log timestamps use a compact 24-hour clock (`HH:MM:SS`,
+  no AM/PM) with no-wrap + tabular figures, so the time column no longer wraps. Applied to the log
+  stream and the debug console.
+
+## 0.8.0-beta.8
+
+### Minor Changes
+
+- bcbafc3: `@nikscripts/effect-pm/web` now **ships the real dashboard** — the hand-crafted,
+  per-type UI (previously trapped in the example), not the old generic introspection view.
+  **`<Dashboard runtime={Atom.runtime(layer)} group={ServicesHub} />`** renders the responsive
+  drill-down (queue / process / subgroup cards → styled detail with stats + edge-to-edge metric
+  chart + icon controls + logs → routed fullscreen log viewer at `/Group/Resource/logs`),
+  URL-backed navigation with view-transition animations, and locked-by-default controls with a
+  confirm dialog on destructive actions. Compose the pieces (`DashboardView` + the widgets +
+  `queueBundle`/`processBundle`/`useQueueBundle`/`useProcessBundle`) under `RegistryProvider` +
+  `RuntimeProvider` + `ViewTransitionProvider`. Runtime-injected, browser-safe (no node deps);
+  the example dashboard now consumes `/web` directly. **BREAKING:** the old generic exports are
+  removed — `GroupView`, `ResourceView`/`ResourceWidget`/`useResourceUI`, `panels`, `primitives`,
+  `binding`, `chart`.
+
+- b5f9383: `@nikscripts/effect-pm/web`: add **`useGroupRoute(root)`** — URL routing that mirrors
+  the `Group` tree (`/Wnba/ImportSchedule`, case-insensitive, History API back/forward + deep
+  links). A selected leaf can carry a sub-view segment (`/Mail/logs` ⇒ `route.view === "logs"`)
+  for per-resource pages like the fullscreen log viewer.
+
+## 0.8.0-beta.7
+
+### Minor Changes
+
+- 2999895: `Resource.serveAllHttp` + `QueueResource.serverEntry` / `ScheduledProcess.serverEntry` — serve a
+  whole group of resources on one HTTP port behind one `Host` (procedures group-id-prefixed). A host
+  can now be a group on one port, not one-resource-per-port; one `Resource.connectHttp` transport
+  reaches them all.
+
+- b0a3249: Ship **`@nikscripts/effect-pm/cli`** — build a run-and-exit CLI from your resource tags.
+  `makeResourceCli(resources, rootName)` (record of tags → `effect/unstable/cli` command tree; verbs +
+  flags + help from the contract; `ls`), `resourcesByName(tags)` (shortest-unique-slash-suffix naming),
+  `render(value)`.
+
+- 615cbb1: Ship **`@nikscripts/effect-pm/tui`** + a shared UI core. The reactive React binding now lives
+  once in `src/ui/atom-react` and is shared by web + tui (Ink is React); `/tui` adds composable terminal
+  primitives (`bar`, `spark`, `compact`, `fmt`, `displayName`, `blankBorder`, `statusColor`/`statusIcon`).
+
+- 3821c91: `@nikscripts/effect-pm/web`: View Transitions helpers — `ViewTransitionProvider`,
+  `useViewTransition`, `useViewTransitionStyle` — animate navigation (a card morphs to fill the screen)
+  with conditional naming, degrading to an instant update where unsupported.
+
+### Patch Changes
+
+- 8e2e611: `@nikscripts/effect-pm/web` reactive binding: `useAtomValue` mounts the atom (inside the
+  subscription) and `useAtomSet` mounts its command atom, so cold stream atoms (status/metrics/logs)
+  start on render instead of staying blank until an interaction.
+
+- 3b4c822: Fix `QueueResource` refill dependency support: a refill `load` can require its **own**
+  services, independent of the worker `effect` (separate `RR` requirement; `layer` / `server` /
+  `serveHttp` / `serverEntry` surface the union `R | RR`). Runtime behavior unchanged.
+
+- 0e6f5cb: Docs: add `docs/guides/setup.md` — a consumer setup guide (install + peer-dep matrix, the
+  subpath map, and wiring a `serveAllHttp` server + `/cli` / `/tui` / `/web` against your tags).
+
 ## 0.8.0-beta.6
 
 ### Patch Changes

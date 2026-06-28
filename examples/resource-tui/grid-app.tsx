@@ -19,13 +19,13 @@ import { Box, Text, useApp, useInput, useStdin, useStdout } from "ink";
 import * as React from "react";
 import { Effect, Layer, Schema } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
-import { Resource } from "../../src/Resource";
+import * as Resource from "../../src/Resource";
 import { makeResourceAtoms } from "../resource-atoms/resource-atoms";
 import {
   RegistryProvider,
   useAtomSet,
   useAtomValue,
-} from "../queue-widget/atom-react";
+} from "../../src/ui/atom-react";
 
 const Counter = Resource.tagFor("grid-counter", {
   value: Resource.query(Schema.Number),
