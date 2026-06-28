@@ -60,6 +60,8 @@
     "refill-dependency-support",
     "setup-guide",
     "group-routing",
-    "web-real-dashboard"
+    "web-real-dashboard",
+    "namespace-pattern",
+    "log-time"
   ]
 }

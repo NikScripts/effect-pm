@@ -1,5 +1,27 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.9
+
+### Minor Changes
+
+- 22bb124: **Tag APIs are now uniform, tree-shakeable module namespaces** (Effect-style) — `import * as X`,
+  no object literals. `Resource` and `Group` were object exports (so `import * as` / tree-shaking
+  couldn't work); they're now per-member namespaces. The `/QueueResource` subpath previously
+  resolved to the internal engine (an object whose `Tag` had **no `host`** and didn't tree-shake)
+  — it now resolves to the namespace, so `import * as QueueResource from ".../QueueResource"` gives
+  the **host-ful** `Tag` and `QueueResource.Tag` tree-shakes (~207 KB → ~27 KB). Bare `queueTag` /
+  `processTag` are removed.
+
+  **BREAKING.** Migrate: `import { Resource }` → `import * as Resource`; `import { QueueResource }`
+  → `import * as QueueResource`; `queueTag<T>()(…)` → `QueueResource.Tag<T>()(…)`;
+  `processTag<T>()(…)` → `ScheduledProcess.Tag<T>()(…)`.
+
+### Patch Changes
+
+- 0d6d602: `@nikscripts/effect-pm/web`: log timestamps use a compact 24-hour clock (`HH:MM:SS`,
+  no AM/PM) with no-wrap + tabular figures, so the time column no longer wraps. Applied to the log
+  stream and the debug console.
+
 ## 0.8.0-beta.8
 
 ### Minor Changes
