@@ -1,49 +1,46 @@
 /**
- * @module examples/web-dashboard/mobile
+ * @module web/Dashboard
  *
- * Touch-first drill-down: a grid of queue / process / subgroup widgets; tap a group to
- * open it, tap a resource for its detail. Tag-driven — the tree is the `Fleet` group tag;
- * each leaf is dispatched to its own widget by `kindOf`.
+ * The batteries-included resource dashboard: point it at a reactive `runtime` (an
+ * `Atom.runtime(layer)` over your tags — local engine or `Resource.client` over http) and a
+ * root `Group`, and it renders the responsive drill-down — a grid of queue / process /
+ * subgroup cards, a detail view per resource (stats + chart + controls + logs), and a routed
+ * fullscreen log viewer (`/Group/Resource/logs`). Navigation is URL-backed (deep links +
+ * back/forward) and animated with view transitions.
+ *
+ * Use `<Dashboard runtime group />` for the one-liner, or compose `DashboardView` with the
+ * providers yourself (see the exports).
+ *
+ * @since 1.0.0
  */
-
 import * as React from "react";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { Fleet } from "./fleet";
+import { Maximize2, Minimize2 } from "lucide-react";
 import {
-  type LeafTag,
+  type DashboardRuntime,
+  type GroupNode,
   type ProcessTag,
   type QueueBundle,
+  type QueueTag,
   kindOf,
   leafTags,
   processBundle,
   queueBundle,
-} from "./queue-data";
-import { useAtomValue } from "../../src/ui/atom-react";
-import { useViewTransition, useViewTransitionStyle } from "../../src/web/useViewTransition";
-import { useGroupRoute } from "../../src/web/useGroupRoute";
-import { Maximize2, Minimize2 } from "lucide-react";
-
-import { Boundary } from "./components/ui/boundary";
+} from "./data";
+import { RegistryProvider, useAtomValue } from "../ui/atom-react";
+import { RuntimeProvider, useProcessBundle, useQueueBundle, useRuntime } from "./runtime";
+import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
+import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import {
-  Cell,
-  LogStream,
-  MetricChart,
-  ProcessControls,
-  ProcessStats,
-  QueueControls,
-  QueueStats,
-  StatusBadge,
-  displayName,
-} from "./widgets";
+import { Cell, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, StatusBadge, displayName } from "./widgets";
+import { DebugConsole } from "./debug-console";
 
 // route.selected is an opaque leaf tag — narrow it to a queue / process by its contract.
 const isProcessTag = (m: unknown): m is ProcessTag => kindOf(m) === "process";
-const isQueueTag = (m: unknown): m is LeafTag => kindOf(m) === "queue";
+const isQueueTag = (m: unknown): m is QueueTag => kindOf(m) === "queue";
 
 /** The log box — one named element ("log-panel") shared by the inline detail panel and the
- *  fullscreen logs page, so navigating between them morphs it via a view transition (the
- *  detail's other elements fade out, since the logs page is a separate route). */
+ *  fullscreen logs page, so navigating between them morphs it via a view transition. */
 const LogBox = (props: {
   readonly bundle: { readonly logs: QueueBundle["logs"] };
   readonly full: boolean;
@@ -80,22 +77,19 @@ const LogBox = (props: {
   );
 };
 
-/** Fullscreen logs page for a resource — its own route (`/…/Resource/logs`). Minimizing
- *  navigates back to the detail, morphing the shared log box back into place. */
-const LogsPage = (props: {
-  readonly tag: LeafTag | ProcessTag;
-  readonly onClose: () => void;
-}): React.ReactElement => {
-  const bundle = isProcessTag(props.tag) ? processBundle(props.tag) : queueBundle(props.tag);
+/** Fullscreen logs page for a resource — its own route (`/…/Resource/logs`). */
+const LogsPage = (props: { readonly tag: QueueTag | ProcessTag; readonly onClose: () => void }): React.ReactElement => {
+  const runtime = useRuntime();
+  const bundle = isProcessTag(props.tag) ? processBundle(runtime, props.tag) : queueBundle(runtime, props.tag);
   return <LogBox bundle={bundle} full onToggle={props.onClose} meta={<> · {displayName(props.tag.id)}</>} />;
 };
 
 const QueueDetail = (props: {
-  readonly tag: LeafTag;
+  readonly tag: QueueTag;
   readonly onBack: () => void;
   readonly onOpenLogs: () => void;
 }): React.ReactElement => {
-  const bundle = queueBundle(props.tag);
+  const bundle = useQueueBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const vt = useViewTransitionStyle(`res-${props.tag.id}`);
@@ -106,14 +100,12 @@ const QueueDetail = (props: {
         <strong className="flex-1 truncate text-base">{displayName(props.tag.id)}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
-      <Boundary label="stats"><QueueStats bundle={bundle} /></Boundary>
+      <QueueStats bundle={bundle} />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="min-w-0 sm:flex-1">
-          <Boundary label="chart">
-            <div className="overflow-hidden rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
-          </Boundary>
+          <div className="overflow-hidden rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
         </div>
-        <Boundary label="controls"><QueueControls bundle={bundle} /></Boundary>
+        <QueueControls bundle={bundle} />
       </div>
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} meta={<> · phase {s?.phase ?? "?"}</>} />
     </div>
@@ -125,7 +117,7 @@ const ProcessDetail = (props: {
   readonly onBack: () => void;
   readonly onOpenLogs: () => void;
 }): React.ReactElement => {
-  const bundle = processBundle(props.tag);
+  const bundle = useProcessBundle(props.tag);
   const vt = useViewTransitionStyle(`res-${props.tag.id}`);
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
@@ -133,19 +125,17 @@ const ProcessDetail = (props: {
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
         <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.id)}</strong>
       </div>
-      <Boundary label="stats"><ProcessStats bundle={bundle} /></Boundary>
-      <Boundary label="controls"><ProcessControls bundle={bundle} /></Boundary>
+      <ProcessStats bundle={bundle} />
+      <ProcessControls bundle={bundle} />
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} />
     </div>
   );
 };
 
-export const MobileDashboard = (): React.ReactElement => {
-  // URL ↔ nav over the Fleet tree (/Wnba/ImportSchedule, case-insensitive; back/forward work).
-  const route = useGroupRoute(Fleet);
+/** The drill-down view (runtime comes from `RuntimeProvider` above). @since 1.0.0 */
+const DashboardInner = (props: { readonly group: GroupNode }): React.ReactElement => {
+  const route = useGroupRoute(props.group);
   const { group, selected, trail } = route;
-  // animate grid ↔ detail / drill-down via the View Transitions API: the activated card
-  // morphs to fill the screen while everything else grows/fades in as one image.
   const transition = useViewTransition();
   const pageVt = useViewTransitionStyle(`grp-${group.id}`);
 
@@ -153,7 +143,6 @@ export const MobileDashboard = (): React.ReactElement => {
     const toGrid = (id: string) => () => transition(`res-${id}`, () => route.back());
     const openLogs = (): void => transition("log-panel", () => route.open("logs"));
     const closeLogs = (): void => transition("log-panel", () => route.back());
-    // /…/Resource/logs → the fullscreen logs page (its own route)
     if (route.view === "logs") {
       if (isProcessTag(selected) || isQueueTag(selected)) return <LogsPage tag={selected} onClose={closeLogs} />;
       return <></>;
@@ -164,7 +153,6 @@ export const MobileDashboard = (): React.ReactElement => {
   }
 
   const canBack = trail.length > 1;
-
   return (
     <div className="mx-auto max-w-5xl safe-area" style={pageVt}>
       <div className="mb-1 flex items-center gap-2">
@@ -190,3 +178,28 @@ export const MobileDashboard = (): React.ReactElement => {
     </div>
   );
 };
+
+/** The drill-down view + its runtime — compose with `RegistryProvider` + `ViewTransitionProvider`
+ *  yourself, or use `<Dashboard>` which wires all three. @since 1.0.0 */
+export const DashboardView = <R, ER>(props: {
+  readonly runtime: DashboardRuntime<R, ER>;
+  readonly group: GroupNode;
+}): React.ReactElement => (
+  <RuntimeProvider runtime={props.runtime}>
+    <DashboardInner group={props.group} />
+  </RuntimeProvider>
+);
+
+/** Batteries-included dashboard: providers + the responsive view + the (opt-in) debug console.
+ *  `<Dashboard runtime={Atom.runtime(layer)} group={ServicesHub} />`. @since 1.0.0 */
+export const Dashboard = <R, ER>(props: {
+  readonly runtime: DashboardRuntime<R, ER>;
+  readonly group: GroupNode;
+}): React.ReactElement => (
+  <RegistryProvider>
+    <ViewTransitionProvider>
+      <DashboardView runtime={props.runtime} group={props.group} />
+      <DebugConsole />
+    </ViewTransitionProvider>
+  </RegistryProvider>
+);

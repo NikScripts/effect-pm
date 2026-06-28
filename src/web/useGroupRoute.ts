@@ -21,7 +21,7 @@
  */
 import * as React from "react";
 import { Group } from "../Group";
-import type { GroupNode } from "./GroupView";
+import type { GroupNode } from "./data";
 
 /** Nav state derived from the URL. @since 1.0.0 */
 export interface GroupRoute {
