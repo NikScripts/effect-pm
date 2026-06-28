@@ -1,32 +1,42 @@
 /**
  * @module internal/queueResourceNamespace
  *
- * The single **`QueueResource`** namespace, assembled from per-member named exports so that
- * `export * as QueueResource` (in the barrel) tree-shakes per member:
+ * The single **`QueueResource`** namespace — the public `@nikscripts/effect-pm/QueueResource`
+ * subpath resolves here (not the engine), so `QueueResource.Tag` is the **contract** tag (the
+ * one with the `host` overload + `itemSchema`), consumed as a tree-shakeable module namespace:
  *
- * - `Tag` / `configure` come from the **light** contract (`QueueContract`) — using
- *   `QueueResource.Tag` pulls zero engine code.
- * - `layer` / `server` / `serveHttp` are the toolkit runtime verbs (they pull the engine, but only
- *   when actually used — e.g. in a Node entrypoint).
- * - `make` / `Service` / `Schema` / `Errors` / `rateLimiterLayer` are the engine helpers, aliased
- *   from the engine's namespace object (again, only pulled when used).
+ *   import * as QueueResource from "@nikscripts/effect-pm/QueueResource";
+ *   class Mail extends QueueResource.Tag<Mail>()("@app/Mail", JobSchema, { host: MyHost }) {}
  *
- * `Tag` is a normal Effect service (`Context.Service` keyed by id) — driven the same `yield* Tag`
- * whether local or remote; only the provided layer differs.
+ * - `Tag` / `configure` come from the **light** contract (`QueueContract`).
+ * - `layer` / `server` / `serveHttp` / `serverEntry` are the runtime verbs (pull the engine
+ *   only when used).
+ * - `make` / `Service` / `Schema` / `Errors` / `rateLimiterLayer` are the engine helpers.
  */
+import { configure, layer, queueTag, serveHttp, server, serverEntry } from "../QueueContract";
 import { QueueResource as engine } from "../QueueResource";
 
-export {
-  queueTag as Tag,
-  configure,
-  layer,
-  server,
-  serveHttp,
-  serverEntry,
-} from "../QueueContract";
+const make = engine.make;
+const Service = engine.Service;
+const Schema = engine.Schema;
+const Errors = engine.Errors;
+const rateLimiterLayer = engine.rateLimiterLayer;
 
-export const make = engine.make;
-export const Service = engine.Service;
-export const Schema = engine.Schema;
-export const Errors = engine.Errors;
-export const rateLimiterLayer = engine.rateLimiterLayer;
+export { queueTag as Tag, configure, layer, server, serveHttp, serverEntry, make, Service, Schema, Errors, rateLimiterLayer };
+
+// engine error classes / schemas / helpers — re-exported so the /QueueResource subpath
+// (which resolves to this module) still surfaces them for consumers.
+export {
+  QueueItemValidationError,
+  QueueBatchValidationError,
+  QueueMissingItemSchemaError,
+  QueueItemEncodingError,
+  QueueShutdownError,
+  QueueItemCodecDescriptorSchema,
+  makeQueueItemCodecDescriptor,
+  queueRateLimiterLayer,
+  schemaVersionAnnotation,
+  schemaVersionOf,
+  withSchemaVersion,
+} from "../QueueResource";
+export type { EffectContext, QueueEntry, QueueHandle } from "../QueueResource";
