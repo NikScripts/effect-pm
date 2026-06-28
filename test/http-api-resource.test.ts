@@ -31,7 +31,7 @@ const makeRecordingClient = (activeRef: Ref.Ref<number>, peakRef: Ref.Ref<number
 
 const pingEndpoint = HttpApiEndpoint.get("ping", "/ping", {
   success: Schema.Struct({ pong: Schema.Boolean }),
-})
+});
 
 const fakeHttpClientLayer = Layer.succeed(
   HttpClient.HttpClient,
@@ -39,12 +39,12 @@ const fakeHttpClientLayer = Layer.succeed(
     (reqEff) =>
       Effect.flatMap(reqEff, (req) =>
         Effect.succeed(
-          HttpClientResponse.fromWeb(req, new Response("{}", { status: 200 }))
-        )
+          HttpClientResponse.fromWeb(req, new Response("{}", { status: 200 })),
+        ),
       ),
-    (request) => Effect.succeed(request)
-  )
-)
+    (request) => Effect.succeed(request),
+  ),
+);
 
 describe("acceptJson", () => {
   it.live("sets Accept: application/json on outgoing requests", () =>
@@ -64,6 +64,22 @@ describe("acceptJson", () => {
     })
   )
 })
+
+describe("HttpApiResource.Service", () => {
+  it.live("builds a class tag whose layer yields a client", () => {
+    const api = HttpApi.make("vitest-service-api").add(
+      HttpApiGroup.make("g").add(pingEndpoint),
+    );
+    class Client extends HttpApiResource.Service<Client>()("test/http-api-service", api, {
+      concurrency: 1,
+    }) {}
+    return Effect.gen(function* () {
+      const client = yield* Client;
+      expect(client).toBeDefined();
+      expect(typeof client).toBe("object");
+    }).pipe(Effect.provide(Client.layer.pipe(Layer.provide(fakeHttpClientLayer))));
+  });
+});
 
 describe("HttpApiResource.make", () => {
   it.live("builds a tag whose layer yields a client", () => {

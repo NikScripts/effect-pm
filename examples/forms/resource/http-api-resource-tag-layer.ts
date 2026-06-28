@@ -1,14 +1,18 @@
 /**
- * @module examples/forms/resource/http-api-resource-tag-layer
+ * @module examples/forms/resource/http-api-resource-service-layer
  *
- * HttpApiResource.make — tag + layer. Run: `pnpm run example:http-api-resource`
+ * HttpApiResource.Service + ApiMetrics — class client and observability tag.
+ * Run: `pnpm run example:http-api-resource`
  */
 
 import { FetchHttpClient } from "effect/unstable/http";
 import { Effect, Layer, Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
-import { HttpApiResource } from "../../../src";
+import { ApiMetrics } from "../../../src/ApiMetrics";
+import { HttpApiResource } from "../../../src/HttpApiResource";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+
+const DemoClientId = "examples/jsonplaceholder/DemoApiClient" as const;
 
 const Post = Schema.Struct({
   userId: Schema.Number,
@@ -26,20 +30,31 @@ const DemoApi = HttpApi.make("jsonplaceholder-demo").add(
   ),
 );
 
-// Tag + layer: provide DemoApiClient.layer and FetchHttpClient.layer at the root.
-const DemoApiClient = HttpApiResource.make(DemoApi, {
-  name: "examples/jsonplaceholder/DemoApiClient",
-  baseUrl: "https://jsonplaceholder.typicode.com",
-  transformClient: HttpApiResource.acceptJson,
-  concurrency: 2, // throttle + concurrency on every request effect
-});
+class DemoApiClient extends HttpApiResource.Service<DemoApiClient>()(
+  DemoClientId,
+  DemoApi,
+  {
+    baseUrl: "https://jsonplaceholder.typicode.com",
+    transformClient: HttpApiResource.acceptJson,
+    concurrency: 2,
+  },
+) {}
+
+class DemoApiMetrics extends ApiMetrics.Tag<DemoApiMetrics>(DemoClientId)() {}
 
 const program = Effect.gen(function* () {
   const client = yield* DemoApiClient;
-  const post = yield* client.posts.getPost({ params: { id: "1" } });
-  yield* Effect.log(`Post #${post.id}: ${post.title.slice(0, 60)}…`);
+  const post = yield* client.posts.getPost({ path: { id: "1" } });
+  const metrics = yield* DemoApiMetrics;
+  const snap = yield* metrics.usageNow;
+  yield* Effect.log(`post ${post.id}: ${post.title}`);
+  yield* Effect.log(`usage requests=${snap.requestsTotal} inFlight=${snap.inFlight}`);
 });
 
-const mainLayer = DemoApiClient.layer.pipe(Layer.provide(FetchHttpClient.layer));
-
-runNodeProgramWithLayer(program, mainLayer, "form:http-api-resource-tag-layer finished OK");
+runNodeProgramWithLayer(
+  program,
+  Layer.mergeAll(
+    DemoApiClient.layer.pipe(Layer.provide(FetchHttpClient.layer)),
+    ApiMetrics.layer(DemoApiMetrics),
+  ),
+);

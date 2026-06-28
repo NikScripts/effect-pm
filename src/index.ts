@@ -132,8 +132,27 @@ export { HttpClientRunGate } from "./HttpClientRunGate";
 export {
   HttpApiResource,
   acceptJson,
+  instrumentEndpoints,
+  type HttpApiResourceConfig,
   type HttpApiResourceLayerEffectConfig,
 } from "./HttpApiResource";
+export {
+  ApiMetrics,
+  clientIdOf,
+  clientIdSym,
+  metricsKeyFor,
+  metricsKeySuffix,
+  type ApiMetricsTag,
+  type ApiMetricsTagOptions,
+} from "./ApiMetrics";
+export {
+  apiUsageEndpointMetrics,
+  apiUsageMetrics,
+  apiUsageSnapshot,
+  type ApiUsageMetrics,
+  type ApiUsageSnapshot,
+} from "./ApiUsageSchema";
+export * as ApiMetricsModule from "./ApiMetrics";
 export {
   DuplicateGroupId,
   DuplicateInstance,
