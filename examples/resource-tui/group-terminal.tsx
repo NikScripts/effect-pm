@@ -13,7 +13,7 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer } from "effect";
 import { Command } from "effect/unstable/cli";
-import { Group } from "../../src/Group";
+import * as Group from "../../src/Group";
 import {
   Counter,
   QueueManager,

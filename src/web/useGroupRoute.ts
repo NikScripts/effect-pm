@@ -20,7 +20,7 @@
  * @since 1.0.0
  */
 import * as React from "react";
-import { Group } from "../Group";
+import * as Group from "../Group";
 import type { GroupNode } from "./data";
 
 /** Nav state derived from the URL. @since 1.0.0 */

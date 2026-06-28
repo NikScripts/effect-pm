@@ -9,8 +9,9 @@
  */
 import { Effect, Layer, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
-import { Resource, specOf } from "../../src/Resource";
-import { Group } from "../../src/Group";
+import * as Resource from "../../src/Resource";
+import { specOf } from "../../src/Resource";
+import * as Group from "../../src/Group";
 import { FRESH_MS, readCache, writeCache } from "./cache";
 import {
   Billing,

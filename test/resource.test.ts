@@ -1,7 +1,8 @@
 import { Effect, Fiber, Layer, Schema, Stream } from "effect";
 import { RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
-import { Resource, forwardClient, groupOf, specOf } from "../src/Resource";
+import * as Resource from "../src/Resource";
+import { forwardClient, groupOf, specOf } from "../src/Resource";
 
 // ── runForEachTag: tag-dispatched stream consumption (cast-free, dual, overloaded) ──
 type Ev =

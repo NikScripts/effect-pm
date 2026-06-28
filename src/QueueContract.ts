@@ -25,7 +25,8 @@
  * @module QueueContract
  */
 import { Effect, Layer, Option, Schema, Stream } from "effect";
-import { Resource, hostSym, specSym } from "./Resource";
+import * as Resource from "./Resource";
+import { hostSym, specSym } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
 import type {
   HandlerContextOf,
@@ -450,6 +451,7 @@ export const queueSpec = <F extends Schema.Struct.Fields>(
   // trips over RPC. The payload is `item | item[]` (a single-schema union payload); the layer
   // recovers the bare `itemSchema` from `add.payload.members[0]`.
   const itemOrItems = Schema.Union([itemSchema, Schema.Array(itemSchema)]);
+  const eventSchema = queueEvent(itemSchema);
   return {
   ...queueControlSpec,
   add: Resource.mutate(Schema.Void, {
@@ -509,7 +511,7 @@ export const queueSpec = <F extends Schema.Struct.Fields>(
     description: "Remove pending entries matching the selector without preserving them.",
     destructive: true,
   }),
-  events: Resource.stream(queueEvent(itemSchema)).annotate({
+  events: Resource.stream(eventSchema).annotate({
     description: "Discrete entry / worker / queue lifecycle events.",
   }),
   };

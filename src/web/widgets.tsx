@@ -12,7 +12,7 @@ import * as React from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Lock, LockOpen, Pause, Play, Power, RotateCw, Square, Trash2 } from "lucide-react";
-import { Group } from "../Group";
+import * as Group from "../Group";
 import {
   type CommandAtom,
   type GroupNode,

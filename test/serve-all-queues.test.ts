@@ -3,7 +3,7 @@ import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { QueueResource } from "../src";
-import { Resource } from "../src/Resource";
+import * as Resource from "../src/Resource";
 
 // Two REAL queue engines bound to ONE Host, served on ONE port via serveAllHttp + serverEntry —
 // the ControlService.make({ group, port }) replacement for wow's per-league deploy.

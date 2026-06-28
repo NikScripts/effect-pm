@@ -25,7 +25,7 @@ import {
   schemaVersionOf,
   withSchemaVersion,
 } from "../src/QueueResource";
-import { Resource } from "../src/Resource";
+import * as Resource from "../src/Resource";
 import { QueueResourceStore } from "../src/store/queueResource";
 
 const fastConfig = { concurrency: 2 };

@@ -15,7 +15,7 @@ import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { serverEntry } from "../../src/QueueContract";
 import { HistoryStore } from "../../src/HistoryStore";
-import { Resource } from "../../src/Resource";
+import * as Resource from "../../src/Resource";
 import {
   Billing,
   Daily,

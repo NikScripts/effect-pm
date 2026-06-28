@@ -15,13 +15,8 @@ import { QueueResource } from "../src";
 import { queueControlSpec } from "../src/QueueContract";
 import { QueueMissingItemSchemaError } from "../src/QueueResource";
 import type { QueueEntry } from "../src/QueueResource";
-import {
-  Resource,
-  forwardClient,
-  groupOf,
-  methodMeta,
-  specOf,
-} from "../src/Resource";
+import * as Resource from "../src/Resource";
+import { forwardClient, groupOf, methodMeta, specOf } from "../src/Resource";
 
 // A queue family built from the control contract: many instances share the "queue" group.
 const Queue = Resource.tagFor("queue", queueControlSpec);

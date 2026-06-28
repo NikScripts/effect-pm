@@ -44,7 +44,8 @@ import {
 } from "effect";
 import * as LogLevel from "effect/LogLevel";
 import { CurrentLogAnnotations, CurrentLogSpans } from "effect/References";
-import { Resource, hostSym } from "./Resource";
+import * as Resource from "./Resource";
+import { hostSym } from "./Resource";
 import type {
   HandlerContextOf,
   HostKey,

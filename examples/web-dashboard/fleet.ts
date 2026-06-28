@@ -8,8 +8,8 @@
 import { Duration, Effect, Schema } from "effect";
 import * as QueueResource from "../../src/internal/queueResourceNamespace";
 import * as ScheduledProcess from "../../src/internal/scheduledProcessNamespace";
-import { Resource } from "../../src/Resource";
-import { Group } from "../../src/Group";
+import * as Resource from "../../src/Resource";
+import * as Group from "../../src/Group";
 
 /** The Mini — a second machine (your home server). Resources bound to it run + are
  *  reached there; everything else is on the Droplet. */

@@ -63,9 +63,3 @@ export const isGroup = (
 ): x is { readonly id: string; readonly members: Record<string, unknown> } =>
   (typeof x === "object" || typeof x === "function") && x !== null && "members" in x;
 
-/**
- * @deprecated Use the module namespace — `import * as Group from "@nikscripts/effect-pm/Group"`
- * (or `{ Group }` from the barrel). This object pulls all members when imported; kept for
- * back-compat.
- */
-export const Group = { Tag, members, isGroup };

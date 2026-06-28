@@ -4,7 +4,8 @@ import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { QueueResource } from "../src";
-import { Resource, groupOf } from "../src/Resource";
+import * as Resource from "../src/Resource";
+import { groupOf } from "../src/Resource";
 import type { QueueEntry } from "../src/QueueResource";
 
 // The handoff path: a full QueueEntry (item + priority + attempts + timestamps) handed to a

@@ -11,7 +11,7 @@
  */
 import { Effect, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
-import { Group } from "../Group";
+import * as Group from "../Group";
 import { specOf } from "../Resource";
 import { queueMetrics, queueStatus } from "../QueueContract";
 import { processStatus } from "../ScheduledProcess";

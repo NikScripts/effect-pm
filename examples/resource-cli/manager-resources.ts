@@ -12,7 +12,7 @@
  */
 
 import { Effect, Layer, Schema } from "effect";
-import { Resource } from "../../src/Resource";
+import * as Resource from "../../src/Resource";
 
 export class Counter extends Resource.Tag<Counter>("Counter")({
   current: Resource.query(Schema.Number),

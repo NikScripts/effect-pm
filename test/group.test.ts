@@ -1,6 +1,6 @@
 import { Context } from "effect";
 import { expect, it } from "vitest";
-import { Group } from "../src/Group";
+import * as Group from "../src/Group";
 
 // minimal leaf tags — any Context tag works as a member.
 class Counter extends Context.Service<Counter, { readonly n: number }>()(

@@ -2,8 +2,8 @@ import { Context, Effect, Layer, Schema } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
-import { Resource } from "../src/Resource";
-import { Group } from "../src/Group";
+import * as Resource from "../src/Resource";
+import * as Group from "../src/Group";
 
 // The payoff of killing ProcessManager: a `Group.Tag` is pure organization, and each member tag
 // independently resolves its OWN host. Here one group holds two members bound to two DIFFERENT

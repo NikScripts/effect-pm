@@ -5,7 +5,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { HistoryStore, QueueResource } from "../src";
 import type { QueueLayerConfig } from "../src/QueueContract";
-import { Resource } from "../src/Resource";
+import * as Resource from "../src/Resource";
 
 // The full remote path: a REAL toolkit QueueResource engine served over http via
 // `QueueResource.serveHttp`, driven by `Resource.client` over the wire. The same `yield* Tag`

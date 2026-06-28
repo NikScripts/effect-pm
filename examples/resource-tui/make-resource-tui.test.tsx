@@ -2,7 +2,7 @@ import { render } from "ink-testing-library";
 import { Effect, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { expect, it } from "vitest";
-import { Resource } from "../../src/Resource";
+import * as Resource from "../../src/Resource";
 import { makeResourceTui } from "./make-resource-tui";
 
 class Counter extends Resource.Tag<Counter>("TuiCounter")({

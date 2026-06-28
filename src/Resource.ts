@@ -1677,29 +1677,3 @@ export {
 // namespace: **`import * as Resource from "@nikscripts/effect-pm/Resource"`** — `Resource.Tag`
 // / `Resource.Host` pull only what's used.
 
-/**
- * @deprecated Use the module namespace — `import * as Resource from
- * "@nikscripts/effect-pm/Resource"` (or `{ Resource }` from the barrel). This object pulls the
- * whole toolkit when imported (no tree-shaking); kept only for back-compat.
- */
-export const Resource = {
-  Tag: makeTag,
-  tagFor,
-  Host: makeHost,
-  connect: connectLayer,
-  connectHttp,
-  query,
-  mutate,
-  stream,
-  local,
-  instance,
-  layer: localLayer,
-  server: serverLayer,
-  serveHttp,
-  serveAllHttp,
-  serveInstances,
-  client: clientLayer,
-  clientInstances,
-  runForEachTag,
-  runForEachTagScoped,
-} as const;
