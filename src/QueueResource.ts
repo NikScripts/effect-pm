@@ -120,8 +120,11 @@ import type { JsonValue } from "./ProcessStoreEvent";
 import { DurableQueueStore } from "./DurableQueueStore";
 import type { LaneStore } from "./internal/laneStore";
 import { laneStoreFactoryFromConfig } from "./internal/laneStoreFactory";
-import { defaultPriorityToLevel } from "./internal/priorityMapping";
-import type { PriorityToLevel } from "./internal/priorityMapping";
+import { levelToDefaultPriority } from "./internal/priorityMapping";
+import {
+  defaultQueueProjection,
+  type QueueRuntimeProjection,
+} from "./internal/queueProjection";
 import type {
   BuiltInTakeAlgorithm as BuiltInTakeAlgorithmInternal,
   CustomTakeAlgorithm as CustomTakeAlgorithmInternal,
@@ -530,6 +533,26 @@ export type QueueHandle<
   R = never,
 > = QueueHandleApi<T, E, EEnqueue, R> & QueueHandlePhantomWorkerFailures<E>;
 
+/**
+ * Engine handle — includes custom-queue hooks used by {@link CustomQueueResource}.
+ *
+ * @internal
+ */
+export interface QueueEngineHandle<
+  T,
+  E = never,
+  EEnqueue = never,
+  R = never,
+> extends QueueHandle<T, E, EEnqueue, R> {
+  /** Enqueue at an explicit lane index (custom queues). */
+  readonly enqueueAtLevel: (
+    items: T | ReadonlyArray<T>,
+    level: number,
+  ) => Effect.Effect<void, EEnqueue, R>;
+  /** Raw per-lane occupancy (`levelSizes[i]` = count at lane `i`). */
+  readonly levelSizes: Effect.Effect<ReadonlyArray<number>, never, R>;
+}
+
 /** @public */
 export interface QueueEntryTimestamps {
   readonly enqueuedAt: DateTime.Utc;
@@ -544,6 +567,8 @@ export interface QueueEntry<T> {
   readonly entryId: string;
   readonly key?: string;
   readonly priority: Priority;
+  /** Numeric lane index when enqueued on a multi-level (custom) queue. */
+  readonly level?: number;
   readonly attempts: number;
   readonly timestamps: QueueEntryTimestamps;
   readonly batchId?: string;
@@ -1307,8 +1332,8 @@ interface InternalItem<T> {
   readonly entryId: string;
   /** Number of times this item has been re-enqueued via retry. */
   readonly retries: number;
-  /** Priority level the item was originally enqueued at. */
-  readonly priority: Priority;
+  /** Lane index the item was originally enqueued at. */
+  readonly level: number;
   /** Timestamp (ms since epoch) when the item first entered the queue. */
   readonly enqueuedAt: number;
   /** Cached dedup key (avoids recomputing `config.key` on each check). */
@@ -1319,11 +1344,13 @@ const queueEntryFromInternal = <T>(
   internal: InternalItem<T>,
   timestamps?: Partial<Omit<QueueEntryTimestamps, "enqueuedAt">>,
   metadata?: Pick<QueueEntry<T>, "releaseId" | "sourceResourceId" | "attributes">,
+  levelToPriority: (level: number) => Priority = levelToDefaultPriority,
 ): QueueEntry<T> => ({
   item: internal.item,
   entryId: internal.entryId,
   key: internal.key,
-  priority: internal.priority,
+  priority: levelToPriority(internal.level),
+  level: internal.level,
   attempts: internal.retries + 1,
   timestamps: {
     enqueuedAt: DateTime.makeUnsafe(internal.enqueuedAt),
@@ -1542,12 +1569,15 @@ interface BuildQueueEngineBindings<T, E, EEnqueue, R> {
   readonly persistCodec: PersistCodec<T> | undefined;
   /** Override config `levelCount` when wiring a custom preset. */
   readonly levelCount?: number;
-  /** Maps public enqueue priority to a lane index (default: high=0, normal=1, low=2). */
-  readonly priorityToLevel?: PriorityToLevel;
   /** Fully custom lane store; when omitted, derived from config `levelCount` + `takeAlgorithm`. */
   readonly makeLaneStore?: (
     capacity: number,
   ) => Effect.Effect<LaneStore<InternalItem<T>>>;
+  /** Observe + enqueue projection (default: 3-level `{ high, normal, low }`). */
+  readonly projection?: QueueRuntimeProjection<
+    { readonly high: number; readonly normal: number; readonly low: number },
+    QueueStatus
+  >;
 }
 
 /**
@@ -1557,7 +1587,7 @@ interface BuildQueueEngineBindings<T, E, EEnqueue, R> {
  */
 function buildQueueEngine<T, E, EEnqueue, R>(
   bindings: BuildQueueEngineBindings<T, E, EEnqueue, R>,
-): Effect.Effect<QueueHandle<T, E, EEnqueue, R>, never, Scope.Scope | R> {
+): Effect.Effect<QueueEngineHandle<T, E, EEnqueue, R>, never, Scope.Scope | R> {
   const levelCount = bindings.levelCount ?? bindings.config.levelCount ?? 3;
   const makeLaneStore =
     bindings.makeLaneStore ??
@@ -1565,13 +1595,14 @@ function buildQueueEngine<T, E, EEnqueue, R>(
       levelCount,
       takeAlgorithm: bindings.config.takeAlgorithm,
     });
+  const projection = bindings.projection ?? defaultQueueProjection;
   return makeQueueRuntime(
     bindings.config,
     bindings.validateForEnqueue,
     bindings.encodeForRelease,
     bindings.persistCodec,
     makeLaneStore,
-    bindings.priorityToLevel ?? defaultPriorityToLevel,
+    projection,
   );
 }
 
@@ -1742,8 +1773,11 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
   makeLaneStore: (
     capacity: number,
   ) => Effect.Effect<LaneStore<InternalItem<T>>>,
-  priorityToLevel: PriorityToLevel = defaultPriorityToLevel,
-): Effect.Effect<QueueHandle<T, E, EEnqueue, R>, never, Scope.Scope | R> =>
+  projection: QueueRuntimeProjection<
+    { readonly high: number; readonly normal: number; readonly low: number },
+    QueueStatus
+  > = defaultQueueProjection,
+): Effect.Effect<QueueEngineHandle<T, E, EEnqueue, R>, never, Scope.Scope | R> =>
   Effect.gen(function* () {
     const queueName = config.name ?? "anonymous";
     const concurrency = config.concurrency ?? 5;
@@ -1850,23 +1884,27 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           }
         : undefined;
 
-    // Outstanding work per priority. Durable: the store is the truth (its pending rows include
-    // in-flight leases). In-memory: the lanes. Used by `size`/`sizes`/`isEmpty`/`statusNow` so a
-    // restart that has reloaded nothing yet still reports the durable backlog.
-    const effectiveSizes: Effect.Effect<{
-      readonly high: number;
-      readonly normal: number;
-      readonly low: number;
-    }> =
+    const levelToPriority = projection.levelToPriority;
+    const levelOf = projection.priorityToLevel;
+
+    // Outstanding work per lane. Durable: the store is the truth (3-level counts). In-memory: lanes.
+    const levelSizes: Effect.Effect<ReadonlyArray<number>> =
       persist === undefined
-        ? Effect.map(laneStore.sizes, (levels) => ({
-            high: levels[0] ?? 0,
-            normal: levels[1] ?? 0,
-            low: levels[2] ?? 0,
-          }))
+        ? laneStore.sizes
         : persist.store
             .sizes(queueName)
-            .pipe(Effect.catch(() => Effect.succeed({ high: 0, normal: 0, low: 0 })));
+            .pipe(
+              Effect.map(({ high, normal, low }) => [high, normal, low]),
+              Effect.catch(() => Effect.succeed([0, 0, 0])),
+            );
+
+    const projectedSizes = Effect.map(levelSizes, (levels) =>
+      projection.projectSizes(levels),
+    );
+
+    const totalPending = Effect.map(levelSizes, (levels) =>
+      projection.totalPending(levels),
+    );
 
     // Latch: open = workers run, closed = workers block before next item.
     // Starts closed when `paused: true` so items can accumulate before processing.
@@ -2197,37 +2235,29 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     const inFlightRef = yield* Ref.make(0);
     // Lifecycle phase, orthogonal to paused. `shutdown` advances running → draining → off.
     const phaseRef = yield* Ref.make<"running" | "draining" | "off">("running");
-    const computeStatus: Effect.Effect<QueueStatus> = Effect.gen(function* () {
-      const { high, normal, low } = yield* effectiveSizes;
-      return {
-        sizes: {
-          high: Math.max(0, high),
-          normal: Math.max(0, normal),
-          low: Math.max(0, low),
-        },
+    const computeStatus = Effect.gen(function* () {
+      const levels = yield* levelSizes;
+      return projection.buildStatus({
+        levels,
         paused: yield* Ref.get(pausedRef),
         inFlight: yield* Ref.get(inFlightRef),
         completed: yield* Ref.get(completedCount),
         phase: yield* Ref.get(phaseRef),
-      };
+      });
     });
     const statusRef = yield* SubscriptionRef.make(yield* computeStatus);
     const refreshStatus = Effect.flatMap(computeStatus, (s) =>
       SubscriptionRef.set(statusRef, s),
     );
     // Total outstanding (durable store when persisting, else lanes); used by shutdown finalization.
-    const totalPending: Effect.Effect<number> = Effect.map(
-      effectiveSizes,
-      ({ high, normal, low }) =>
-        Math.max(0, high) + Math.max(0, normal) + Math.max(0, low),
-    );
+    const totalPendingEffect = totalPending;
     // Finalize shutdown once the queue has drained empty AND no item is in flight: flip
     // draining → off (exactly once), emit `ShutdownComplete`, and refresh the snapshot so its
     // `phase` reads `"off"`. Called after each item finishes and at shutdown initiation (covers
     // the already-idle case). The `getAndSet` guard makes the transition idempotent.
     const finalizeShutdownIfDrained: Effect.Effect<void> = Effect.gen(function* () {
       if ((yield* Ref.get(phaseRef)) !== "draining") return;
-      const pending = yield* totalPending;
+      const pending = yield* totalPendingEffect;
       const inFlight = yield* Ref.get(inFlightRef);
       if (pending > 0 || inFlight > 0) return;
       const previous = yield* Ref.getAndSet(phaseRef, "off");
@@ -2455,7 +2485,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           {
             entryId: internal.entryId,
             ...(internal.key !== undefined ? { key: internal.key } : {}),
-            priority: internal.priority,
+            priority: levelToPriority(internal.level),
             attempts: internal.retries + 1,
           },
           internal.enqueuedAt,
@@ -2674,7 +2704,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
         ...(payload.error !== undefined ? { error: payload.error.message } : {}),
         ...(payload.internal.key !== undefined ? { key: payload.internal.key } : {}),
-        priority: payload.internal.priority,
+        priority: levelToPriority(payload.internal.level),
       };
     };
 
@@ -2731,22 +2761,19 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       }
     });
 
-    /** Map public priority to a lane level index. */
-    const levelOf = priorityToLevel;
-
     // ─── Internal: enqueue logic ───
 
     /**
      * Core enqueue path. Handles:
      * 1. Shutdown check (warn + drop)
      * 2. Dedup key check (skip duplicates)
-     * 3. Offer to the target priority queue
+     * 3. Offer to the target lane
      * 4. Wake sleeping workers (`takeNext` waiters)
      * 5. Publish the `Enqueued` event
      */
     const enqueueInternal = (
       items: ReadonlyArray<T>,
-      priority: Priority,
+      level: number,
       retries = 0,
       enqueuedAt?: number,
     ): Effect.Effect<void, never, R> =>
@@ -2766,12 +2793,13 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           const now =
             enqueuedAt ?? (yield* Effect.clockWith((c) => c.currentTimeMillis));
           const persisted: Array<InternalItem<T>> = [];
+          const priority = levelToPriority(level);
           for (const item of items) {
             const internal: InternalItem<T> = {
               item,
               entryId: nextEntryId(),
               retries,
-              priority,
+              level,
               enqueuedAt: now,
               key: config.key !== undefined ? config.key(item) : undefined,
             };
@@ -2820,8 +2848,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           );
           yield* publishEvent({
             _tag: "Enqueued",
-            entries: persisted.map((internal) => queueEntryFromInternal(internal)),
-            priority,
+            entries: persisted.map((internal) =>
+              queueEntryFromInternal(internal, undefined, undefined, levelToPriority),
+            ),
+            priority: levelToPriority(level),
           });
           return;
         }
@@ -2842,7 +2872,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
             item,
             entryId: nextEntryId(),
             retries,
-            priority,
+            level,
             enqueuedAt: enqueuedAt ?? (yield* Effect.clockWith((c) => c.currentTimeMillis)),
             key: config.key !== undefined ? config.key(item) : undefined,
           });
@@ -2850,15 +2880,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
         if (toEnqueue.length === 0) return;
 
-        // Record analytics for the new batch BEFORE waking workers. The
-        // dedupe-key seq counter is shared between the enqueue path and
-        // the worker's `processItem` release path; if we signal first the
-        // worker can race in and emit a `released` (with the next seq)
-        // before this enqueue's `added` has been built, producing
-        // out-of-order analytics for the same dedupe-key cycle. The
-        // internal `activeKeys` ref is already updated above so the
-        // dedup invariant holds either way.
-        yield* Effect.forEach(toEnqueue, (i) => laneStore.offer(i, levelOf(priority)), {
+        yield* Effect.forEach(toEnqueue, (i) => laneStore.offer(i, i.level), {
           discard: true,
         });
         yield* Effect.forEach(
@@ -2871,8 +2893,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
         yield* publishEvent({
           _tag: "Enqueued",
-          entries: toEnqueue.map((internal) => queueEntryFromInternal(internal)),
-          priority,
+          entries: toEnqueue.map((internal) =>
+            queueEntryFromInternal(internal, undefined, undefined, levelToPriority),
+          ),
+          priority: levelToPriority(level),
         });
       });
 
@@ -2883,7 +2907,15 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       operation: "add" | "prioritize" | "defer",
     ) =>
       Effect.flatMap(validateForEnqueue(normalizeEnqueueInput(items), operation), (validated) =>
-        enqueueInternal(validated, priority),
+        enqueueInternal(validated, levelOf(priority)),
+      );
+
+    const enqueueAtLevelPublic = (
+      items: T | ReadonlyArray<T>,
+      level: number,
+    ) =>
+      Effect.flatMap(validateForEnqueue(normalizeEnqueueInput(items), "add"), (validated) =>
+        enqueueInternal(validated, level),
       );
 
     /**
@@ -2903,7 +2935,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         (entry) =>
           enqueueInternal(
             [entry.item],
-            entry.priority,
+            entry.level ?? levelOf(entry.priority),
             Math.max(0, entry.attempts - 1),
             DateTime.toEpochMillis(entry.timestamps.enqueuedAt),
           ),
@@ -2940,7 +2972,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
           }
           if (safe.length > 0) {
             const validated = yield* validateForEnqueue(safe, operation);
-            yield* enqueueInternal(validated, priority);
+            yield* enqueueInternal(validated, levelOf(priority));
           }
         });
 
@@ -2950,7 +2982,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         defer: (items) => guardedEnqueue(items, "low", "defer"),
         attempts: internal.retries + 1,
         enqueuedAt: internal.enqueuedAt,
-        priority: internal.priority,
+        priority: levelToPriority(internal.level),
       };
     };
 
@@ -2979,7 +3011,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         yield* releaseActiveKey(internal);
         yield* enqueueInternal(
           [internal.item],
-          internal.priority,
+          internal.level,
           internal.retries + 1,
           internal.enqueuedAt,
         );
@@ -3280,22 +3312,24 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
               }
               const entry = taken.value;
               yield* Exit.match(persist.codec.decode(entry.payload), {
-                onSuccess: (item) =>
-                  Effect.andThen(
+                onSuccess: (item) => {
+                  const level = levelOf(entry.priority);
+                  return Effect.andThen(
                     laneStore.offer(
                       {
                         item,
                         entryId: entry.id,
                         retries: Math.max(0, entry.attempts - 1),
-                        priority: entry.priority,
+                        level,
                         enqueuedAt: entry.enqueuedAtMillis,
                         key: entry.dedupKey ?? undefined,
                       },
-                      levelOf(entry.priority),
+                      level,
                     ),
                     // wake a worker blocked in `takeNext` (offer alone doesn't signal)
                     signalWorkerWake,
-                  ),
+                  );
+                },
                 onFailure: (cause) =>
                   persist.store.complete(entry.id).pipe(
                     Effect.catch(() => Effect.void),
@@ -3454,7 +3488,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
                           id: item.entryId,
                           queueId: queueName,
                           dedupKey: item.key,
-                          priority: item.priority,
+                          priority: levelToPriority(item.level),
                           payload,
                         })
                         .pipe(Effect.asVoid, Effect.catch(() => Effect.void))
@@ -3467,7 +3501,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         }
         const restoredKeys: string[] = [];
         for (const item of items) {
-          yield* laneStore.offer(item, levelOf(item.priority));
+          yield* laneStore.offer(item, item.level);
           yield* restoreActiveKey(item);
           if (item.key !== undefined) {
             restoredKeys.push(item.key);
@@ -3523,7 +3557,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
                     item: decoded.value,
                     entryId: entry.id,
                     retries: Math.max(0, entry.attempts - 1),
-                    priority: entry.priority,
+                    level: levelOf(entry.priority),
                     enqueuedAt: entry.enqueuedAtMillis,
                     key: entry.dedupKey ?? undefined,
                   } satisfies InternalItem<T>,
@@ -3667,33 +3701,20 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
 
     // ─── Build public handle ───
 
-    const queueHandle: QueueHandle<T, E, EEnqueue, R> = {
-      // Enqueue delegates — priority is the only difference
+    const queueHandle: QueueEngineHandle<T, E, EEnqueue, R> = {
       add: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "normal", "add"),
       prioritize: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "high", "prioritize"),
       defer: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "low", "defer"),
       enqueue: (input: QueueEntry<T> | ReadonlyArray<QueueEntry<T>>) =>
         enqueueEntries(input),
+      enqueueAtLevel: enqueueAtLevelPublic,
+      levelSizes,
 
-      // Outstanding total (durable store when persisting, else the in-memory lanes)
-      size: Effect.map(
-        effectiveSizes,
-        ({ high, normal, low }) =>
-          Math.max(0, high) + Math.max(0, normal) + Math.max(0, low),
-      ),
+      size: totalPendingEffect,
 
-      // Per-level breakdown (durable store when persisting, else the in-memory lanes)
-      sizes: Effect.map(effectiveSizes, ({ high, normal, low }) => ({
-        high: Math.max(0, high),
-        normal: Math.max(0, normal),
-        low: Math.max(0, low),
-      })),
+      sizes: projectedSizes,
 
-      // True when no outstanding work remains
-      isEmpty: Effect.map(
-        effectiveSizes,
-        ({ high, normal, low }) => high <= 0 && normal <= 0 && low <= 0,
-      ),
+      isEmpty: Effect.map(levelSizes, (levels) => projection.isEmptyLevels(levels)),
 
       // Counter incremented after each item completes processing
       completed: Ref.get(completedCount),
@@ -3747,7 +3768,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         const previous = yield* Ref.getAndSet(phaseRef, "draining");
         if (previous !== "running") return; // already draining or off
         yield* Ref.set(isShutdownRef, true);
-        const pending = yield* totalPending;
+        const pending = yield* totalPendingEffect;
         yield* publishEvent({
           _tag: "ShutdownRequested",
           queueId: queueName,

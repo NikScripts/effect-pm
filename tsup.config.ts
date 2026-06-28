@@ -18,6 +18,8 @@ export default defineConfig([
     entry: {
       index: "src/index.ts",
       Process: "src/Process.ts",
+      CustomQueueContract: "src/CustomQueueContract.ts",
+      CustomQueueResource: "src/CustomQueueResource.ts",
       QueueResource: "src/QueueResource.ts",
       Resource: "src/Resource.ts",
       QueueContract: "src/QueueContract.ts",

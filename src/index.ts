@@ -461,6 +461,32 @@ export type {
   ConsumeResult,
 } from "./QueueResource";
 
+export * as CustomQueueResource from "./internal/customQueueResourceNamespace";
+
+export type {
+  CustomQueueHandle,
+  CustomQueueEnqueue,
+  CustomQueueLevelConfig,
+  CustomQueueRefill,
+  CustomQueueResourceConfig,
+  CustomQueueResourceConfigWithoutItemSchema,
+  CustomQueueResourceConfigWithItemSchema,
+  CustomQueueStatus,
+} from "./CustomQueueResource";
+
+export type {
+  CustomQueueTagOptions,
+} from "./CustomQueueContract";
+
+export {
+  customQueueControlSpec,
+  customQueueEntry,
+  customQueueLevel,
+  customQueueSizes,
+  customQueueSpec,
+  customQueueStatus,
+} from "./CustomQueueContract";
+
 export {
   QueueItemCodecDescriptorSchema,
   makeQueueItemCodecDescriptor,

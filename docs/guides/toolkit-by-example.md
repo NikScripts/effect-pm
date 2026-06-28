@@ -273,7 +273,49 @@ const program = Effect.gen(function* () {
 // provided with: Resource.client(LiveScorePoller).pipe(Layer.provide(connectHttp(MiniHost, ...)))
 ```
 
-## 14. HttpApiResource — a concurrency-gated client (compat helper)
+## 14. CustomQueueResource — N-level queues
+
+Use when you need more than high/normal/low. Same toolkit pattern as `QueueResource`, but the tag
+takes **lane config positionally** and `add` is **`add(item, level?)`**:
+
+```ts
+import { CustomQueueResource } from "@nikscripts/effect-pm";
+import { Schema } from "effect";
+
+const Job = Schema.Struct({ id: Schema.String });
+
+class ImportJobs extends CustomQueueResource.Tag<ImportJobs>()(
+  "nwsl/ImportJobs",
+  Job,
+  5,
+  { live: 0, roster: 4 },
+) {}
+
+const importJobsLayer = CustomQueueResource.layer(ImportJobs, {
+  levelCount: 5,
+  namedLevels: { live: 0, roster: 4 },
+  takeAlgorithm: "weighted",
+  effect: (job) => processImport(job),
+});
+
+// Same yield* ImportJobs code local or remote; only the layer changes.
+const program = Effect.gen(function* () {
+  const queue = yield* ImportJobs;
+  yield* queue.add({ id: "evt-1" }, "live");
+  const sizes = yield* queue.sizes; // { live: 1, "1": 0, ... }
+});
+```
+
+Contract-only import (tree-shake engine):
+
+```ts
+import * as CustomQueueResource from "@nikscripts/effect-pm/CustomQueueContract";
+```
+
+See [`docs/RESOURCE-API.md`](../RESOURCE-API.md#customqueueresource) and
+[`examples/forms/queue/custom-queue-resource-n-level.ts`](../../examples/forms/queue/custom-queue-resource-n-level.ts).
+
+## 15. HttpApiResource — a concurrency-gated client (compat helper)
 
 ```ts
 import { HttpApiResource } from "@nikscripts/effect-pm";
@@ -285,7 +327,7 @@ const nwslClientLayer = HttpApiResource.layerEffect(
 );
 ```
 
-## 15. A generic UI — walk the tree + introspect each contract
+## 16. A generic UI — walk the tree + introspect each contract
 
 This is all a dashboard/TUI needs: enumerate, introspect, drive.
 

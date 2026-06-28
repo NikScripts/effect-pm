@@ -150,6 +150,11 @@ export interface MethodAnnotations {
   readonly description?: string;
   /** A `mutate` that loses state (`shutdown`/`clear`/`drop`) → confirm / danger styling. */
   readonly destructive?: boolean;
+  /**
+   * When `"pair"`, a 2-tuple payload is surfaced as two call arguments `(first, second?)`
+   * instead of a single tuple (used by custom-queue `add(item, level?)`).
+   */
+  readonly callStyle?: "pair";
 }
 
 /** Brands a {@link Method} so a spec entry is distinguishable from a plain object. */
@@ -174,6 +179,7 @@ export interface Method<
   Su extends Schema.Top,
   E extends Schema.Top,
   Str extends boolean = false,
+  Ann extends MethodAnnotations = MethodAnnotations,
 > {
   readonly [methodTypeId]: typeof methodTypeId;
   readonly kind: Kind;
@@ -182,10 +188,10 @@ export interface Method<
   readonly error: E;
   /** A streaming read (`Stream` member) when `true`; a one-shot `Effect` otherwise. */
   readonly stream: Str;
-  readonly annotations: MethodAnnotations;
-  readonly annotate: (
-    annotations: MethodAnnotations,
-  ) => Method<Kind, P, Su, E, Str>;
+  readonly annotations: Ann;
+  readonly annotate: <A extends MethodAnnotations>(
+    annotations: A,
+  ) => Method<Kind, P, Su, E, Str, Ann & A>;
 }
 
 /** Any {@link Method}, erased — the element type of a {@link Spec}. @public */
@@ -194,7 +200,8 @@ export type AnyMethod = Method<
   Schema.Struct.Fields | Schema.Top | undefined,
   Schema.Top,
   Schema.Top,
-  boolean
+  boolean,
+  MethodAnnotations
 >;
 
 /** @internal */
@@ -302,14 +309,15 @@ const makeMethod = <
   Su extends Schema.Top,
   E extends Schema.Top,
   Str extends boolean,
+  Ann extends MethodAnnotations = MethodAnnotations,
 >(
   kind: Kind,
   payload: P,
   success: Su,
   error: E,
   stream: Str,
-  annotations: MethodAnnotations,
-): Method<Kind, P, Su, E, Str> => ({
+  annotations: Ann,
+): Method<Kind, P, Su, E, Str, Ann> => ({
   [methodTypeId]: methodTypeId,
   kind,
   payload,
@@ -317,8 +325,8 @@ const makeMethod = <
   error,
   stream,
   annotations,
-  annotate: (a) =>
-    makeMethod(kind, payload, success, error, stream, { ...annotations, ...a }),
+  annotate: <A extends MethodAnnotations>(a: A): Method<Kind, P, Su, E, Str, Ann & A> =>
+    makeMethod(kind, payload, success, error, stream, { ...annotations, ...a } as Ann & A),
 });
 
 /**
@@ -430,6 +438,46 @@ export function mutate(
   );
 }
 
+type PairMethodAnnotations = MethodAnnotations & { readonly callStyle: "pair" };
+
+/**
+ * Like {@link mutate}, but the payload must be a 2-tuple schema surfaced as two call
+ * arguments `(first, second?)` — used by custom-queue `add(item, level?)`.
+ *
+ * @public
+ */
+export function mutatePair<
+  Su extends Schema.Top,
+  H extends Schema.Top,
+  T extends Schema.Top,
+>(
+  success: Su,
+  head: H,
+  tail: T,
+): Method<"mutate", Schema.Tuple<readonly [H, T]>, Su, Schema.Never, false, PairMethodAnnotations>;
+export function mutatePair<Su extends Schema.Top, P extends Schema.Tuple<readonly [Schema.Top, Schema.Top]>>(
+  success: Su,
+  payload: P,
+): Method<"mutate", P, Su, Schema.Never, false, PairMethodAnnotations>;
+export function mutatePair(
+  success: Schema.Top,
+  headOrPayload: Schema.Top,
+  tail?: Schema.Top,
+): Method<"mutate", Schema.Tuple<readonly [Schema.Top, Schema.Top]>, Schema.Top, Schema.Never, false, PairMethodAnnotations> {
+  const payload =
+    tail === undefined
+      ? headOrPayload
+      : Schema.Tuple([headOrPayload, tail]);
+  return makeMethod(
+    "mutate",
+    payload as Schema.Tuple<readonly [Schema.Top, Schema.Top]>,
+    success,
+    Schema.Never,
+    false,
+    { callStyle: "pair" },
+  );
+}
+
 /**
  * Define a **stream** (a live, idempotent push source) whose elements are `success`. The
  * service member surfaces as a `Stream<Success, Error>` (a property, or `(payload) => Stream`
@@ -513,13 +561,30 @@ type PayloadOf<M extends AnyMethod> = M["payload"] extends Schema.Top
 // and tuple-wrapping does **not** fix that (it only stops distribution). `… extends [undefined]`
 // is instead decidable with `Sch` fully opaque (an object type is never `undefined`, regardless
 // of `Sch`), so it resolves eagerly under a generic spec. `M["stream"]` is a literal boolean.
+type MutateMethodFn<M extends AnyMethod> = M extends Method<
+  MethodKind,
+  infer _P,
+  infer _Su,
+  infer _E,
+  infer _Str,
+  infer Ann
+>
+  ? Ann extends { readonly callStyle: "pair" }
+    ? PayloadOf<M> extends readonly [infer H, infer T]
+      ? undefined extends T
+        ? (arg0: H, arg1?: T) => Effect.Effect<SuccessOf<M>, ErrorOf<M>>
+        : (arg0: H, arg1: T) => Effect.Effect<SuccessOf<M>, ErrorOf<M>>
+      : (payload: PayloadOf<M>) => Effect.Effect<SuccessOf<M>, ErrorOf<M>>
+    : (payload: PayloadOf<M>) => Effect.Effect<SuccessOf<M>, ErrorOf<M>>
+  : (payload: PayloadOf<M>) => Effect.Effect<SuccessOf<M>, ErrorOf<M>>;
+
 export type ServiceMethod<M extends AnyMethod> = M["stream"] extends true
   ? [M["payload"]] extends [undefined]
     ? Stream.Stream<SuccessOf<M>, ErrorOf<M>>
     : (payload: PayloadOf<M>) => Stream.Stream<SuccessOf<M>, ErrorOf<M>>
   : [M["payload"]] extends [undefined]
     ? Effect.Effect<SuccessOf<M>, ErrorOf<M>>
-    : (payload: PayloadOf<M>) => Effect.Effect<SuccessOf<M>, ErrorOf<M>>;
+    : MutateMethodFn<M>;
 
 /**
  * The full service interface inferred from a {@link Spec}. Wire {@link Method}s map to
@@ -958,6 +1023,21 @@ const localLayer = <Self, S extends Spec>(
  *
  * @public
  */
+/** Invoke a wire impl member — spreads 2-tuple payloads when `callStyle` is `"pair"`. @internal */
+const invokeWireMethod = (
+  member: unknown,
+  method: AnyMethod,
+  payload: unknown,
+): unknown => {
+  if (typeof member !== "function") {
+    return member;
+  }
+  if (method.annotations.callStyle === "pair" && Array.isArray(payload)) {
+    return member(payload[0], payload[1]);
+  }
+  return member(payload);
+};
+
 const serverLayer = <S extends Spec>(
   tag: {
     readonly groupId: string;
@@ -973,7 +1053,7 @@ const serverLayer = <S extends Spec>(
     // runtime-checked: payload methods are functions (call them); no-payload methods
     // are `Effect` properties (return as-is, ignoring the payload arg).
     handlers[wireTag(tag.groupId, key)] = (payload) =>
-      typeof member === "function" ? member(payload) : member;
+      invokeWireMethod(member, tag[specSym][key] as AnyMethod, payload);
   }
   // Boundary assertion (runtime-safe): the handlers mirror the same spec the group was
   // built from, and RPC validates every payload/result against the spec schemas at the
@@ -1203,7 +1283,7 @@ const serveInstances = <S extends Spec>(
         );
       }
       const member = (impl as Record<string, unknown>)[key];
-      return typeof member === "function" ? member(payload) : member;
+      return invokeWireMethod(member, spec[key] as AnyMethod, payload);
     };
   }
 
@@ -1266,7 +1346,9 @@ export const forwardClient = <S extends Spec>(
     service[key] =
       m.payload === undefined
         ? call(undefined, { headers })
-        : (payload: unknown) => call(payload, { headers });
+        : m.annotations.callStyle === "pair"
+          ? (arg0: unknown, arg1?: unknown) => call([arg0, arg1], { headers })
+          : (payload: unknown) => call(payload, { headers });
   }
   // Boundary assertion (runtime-safe): every method verified present above; RPC validates
   // every payload/result against the spec schemas at the wire.
@@ -1665,6 +1747,7 @@ export const Resource = {
   connectHttp,
   query,
   mutate,
+  mutatePair,
   stream,
   local,
   instance,
