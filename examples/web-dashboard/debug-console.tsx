@@ -93,9 +93,16 @@ export const DebugConsole = (): React.ReactElement | null => {
   const [open, setOpen] = React.useState(false);
   const all = useLines();
   const ref = React.useRef<HTMLDivElement>(null);
+  // Auto-scroll to newest only while the user is already pinned to the bottom; if they've
+  // scrolled up to read history, leave their position alone.
+  const pinned = React.useRef(true);
+  const onScroll = (): void => {
+    const el = ref.current;
+    if (el !== null) pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+  };
   React.useEffect(() => {
     const el = ref.current;
-    if (el !== null) el.scrollTop = el.scrollHeight;
+    if (el !== null && pinned.current) el.scrollTop = el.scrollHeight;
   }, [all.length, open]);
 
   if (!debugEnabled()) return null;
@@ -120,7 +127,7 @@ export const DebugConsole = (): React.ReactElement | null => {
               close
             </button>
           </div>
-          <div ref={ref} className="flex-1 overflow-auto px-2 py-1 font-mono leading-snug">
+          <div ref={ref} onScroll={onScroll} className="flex-1 overflow-auto px-2 py-1 font-mono leading-snug">
             {all.map((l) => (
               <div key={l.id} className="whitespace-pre-wrap break-all" style={{ color: COLOR[l.level] ?? "#cbd5e1" }}>
                 <span className="opacity-40">{new Date(l.t).toLocaleTimeString()} </span>

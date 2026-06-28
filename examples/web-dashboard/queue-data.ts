@@ -109,8 +109,8 @@ export type CommandAtom = Atom.AtomResultFn<void, unknown, unknown>;
 
 /** The atoms + controls one queue card needs — all derived from the tag. */
 export interface QueueBundle {
-  readonly status: ValueAtom<QueueStatus>;
-  readonly metrics: ValueAtom<QueueMetrics>;
+  readonly status: ValueAtom<QueueStatus | undefined>;
+  readonly metrics: ValueAtom<QueueMetrics | undefined>;
   readonly history: ValueAtom<ReadonlyArray<MetricPoint>>;
   readonly trend: ValueAtom<ReadonlyArray<number>>;
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
@@ -121,6 +121,9 @@ export interface QueueBundle {
 }
 type QueueStatus = QueueSvc extends { readonly status: Stream.Stream<infer S, infer _E, infer _R> } ? S : never;
 type QueueMetrics = QueueSvc extends { readonly metrics: Stream.Stream<infer M, infer _E, infer _R> } ? M : never;
+
+// one combined metrics stream carries both backfill points and live raw metrics
+type MetricsItem = { readonly point: MetricPoint } | { readonly metric: QueueMetrics };
 
 const HISTORY = 120;
 const TREND = 60;
@@ -177,31 +180,56 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
     throughput: m.throughputPerSec,
     latency: m.avgTotalMillis ?? 0,
   });
+  const trendValue = (s: QueueStatus): number => s.sizes.high + s.sizes.normal + s.sizes.low;
   bumpLogIdFrom(`${tag.id}/logs`);
 
-  // all accumulators go through the generic cache: instant paint from localStorage, skip
-  // the server query while the snapshot is fresh, then follow live. One mechanism, no
-  // per-resource cache code.
-  const bundle: QueueBundle = {
-    status: runtime.atom(statusStream),
-    metrics: runtime.atom(metricsStream),
-    history: runtime.atom(
-      cachedAccumulator({
-        key: `${tag.id}/history`,
-        cap: HISTORY,
-        live: metricsStream.pipe(Stream.map(toPoint)),
-        history: Effect.flatMap(tag, (q) => q.metricsHistory({ limit: HISTORY })).pipe(
-          Effect.map((ms) => ms.map(toPoint)),
+  // Dedup the wire streams. ONE status stream feeds both `status` and `trend`; ONE metrics
+  // stream feeds both `metrics` and `history` — derived via Atom.mapResult, so the registry
+  // runs each underlying stream once. (Separate atoms each opened their own RPC stream: a
+  // detail's status + trend + metrics + history streams, plus logs and two history queries,
+  // blew past the browser's ~6-connection-per-origin limit, leaving the last two — trend and
+  // history — stuck "Waiting" until an interaction freed a slot.) The metrics-history backfill
+  // is concatenated ahead of live; trend/history seed from the localStorage cache.
+  const statusTrend = runtime.atom(
+    statusStream.pipe(
+      Stream.scan(
+        {
+          latest: undefined as QueueStatus | undefined,
+          trend: readCache<number>(`${tag.id}/trend`)?.items ?? [],
+        },
+        (acc, s) => ({ latest: s, trend: [...acc.trend, trendValue(s)].slice(-TREND) }),
+      ),
+      Stream.tap((acc) => Effect.sync(() => writeCache(`${tag.id}/trend`, acc.trend))),
+    ),
+  );
+  const metricsHistory = runtime.atom(
+    Stream.concat(
+      Stream.unwrap(
+        Effect.flatMap(tag, (q) => q.metricsHistory({ limit: HISTORY })).pipe(
+          Effect.map((ms) => Stream.fromIterable(ms.map((m): MetricsItem => ({ point: toPoint(m) })))),
         ),
-      }),
+      ),
+      metricsStream.pipe(Stream.map((m): MetricsItem => ({ metric: m }))),
+    ).pipe(
+      Stream.scan(
+        {
+          latest: undefined as QueueMetrics | undefined,
+          history: readCache<MetricPoint>(`${tag.id}/history`)?.items ?? [],
+        },
+        (acc, item) =>
+          "metric" in item
+            ? { latest: item.metric, history: [...acc.history, toPoint(item.metric)].slice(-HISTORY) }
+            : { latest: acc.latest, history: [...acc.history, item.point].slice(-HISTORY) },
+      ),
+      Stream.tap((acc) => Effect.sync(() => writeCache(`${tag.id}/history`, acc.history))),
     ),
-    trend: runtime.atom(
-      cachedAccumulator({
-        key: `${tag.id}/trend`,
-        cap: TREND,
-        live: statusStream.pipe(Stream.map((s) => s.sizes.high + s.sizes.normal + s.sizes.low)),
-      }),
-    ),
+  );
+
+  const bundle: QueueBundle = {
+    status: Atom.mapResult(statusTrend, (a) => a.latest),
+    metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
+    history: Atom.mapResult(metricsHistory, (a) => a.history),
+    trend: Atom.mapResult(statusTrend, (a) => a.trend),
     logs: runtime.atom(
       cachedAccumulator({
         key: `${tag.id}/logs`,
