@@ -24,44 +24,48 @@
  *
  *   Ops.Jobs.Counter  // reach into the nested group
  *
+ * Consume as a tree-shakeable module namespace: `import * as Group from
+ * "@nikscripts/effect-pm/Group"` (or `{ Group }` from the barrel).
+ *
  * @public
  */
 
 import { Context } from "effect";
 
+/** Create a group tag holding the given named member tags. @since 1.0.0 */
+export const Tag =
+  <Self>(id: string) =>
+  <const Members extends Record<string, unknown>>(members: Members) => {
+    const base = Context.Service<Self, { readonly members: Members }>()(id);
+    // spread the members as accessors (MyGroup.Counter), plus id + the record
+    return Object.assign(base, { id, members }, members);
+  };
+
+/** Get the member tags back out (the record). @since 1.0.0 */
+export const members = <Members extends Record<string, unknown>>(group: {
+  readonly members: Members;
+}): Members => group.members;
+
 /**
- * The `Group` namespace — create group tags and read their members back out.
+ * Whether `x` is a group tag (vs a leaf resource tag) — the discriminator for walking a tree.
+ * Tags are **classes** (so `typeof` is `"function"`, not `"object"`); a group is one carrying a
+ * `members` record. Use it to recurse on branches and treat everything else as a leaf:
  *
- * @public
+ * ```ts
+ * for (const [name, member] of Object.entries(Group.members(node)))
+ *   Group.isGroup(member) ? walk(member) : renderLeaf(name, member);
+ * ```
+ *
+ * @since 1.0.0
  */
-export const Group = {
-  Tag:
-    <Self>(id: string) =>
-    <const Members extends Record<string, unknown>>(members: Members) => {
-      const base = Context.Service<Self, { readonly members: Members }>()(id);
-      // spread the members as accessors (MyGroup.Counter), plus id + the record
-      return Object.assign(base, { id, members }, members);
-    },
+export const isGroup = (
+  x: unknown,
+): x is { readonly id: string; readonly members: Record<string, unknown> } =>
+  (typeof x === "object" || typeof x === "function") && x !== null && "members" in x;
 
-  /** Get the member tags back out (the record). */
-  members: <Members extends Record<string, unknown>>(group: {
-    readonly members: Members;
-  }): Members => group.members,
-
-  /**
-   * Whether `x` is a group tag (vs a leaf resource tag) — the discriminator for walking a tree.
-   * Tags are **classes** (so `typeof` is `"function"`, not `"object"`); a group is one carrying a
-   * `members` record. Use it to recurse on branches and treat everything else as a leaf:
-   *
-   * ```ts
-   * for (const [name, member] of Object.entries(Group.members(node)))
-   *   Group.isGroup(member) ? walk(member) : renderLeaf(name, member);
-   * ```
-   */
-  isGroup: (
-    x: unknown,
-  ): x is { readonly id: string; readonly members: Record<string, unknown> } =>
-    (typeof x === "object" || typeof x === "function") &&
-    x !== null &&
-    "members" in x,
-};
+/**
+ * @deprecated Use the module namespace — `import * as Group from "@nikscripts/effect-pm/Group"`
+ * (or `{ Group }` from the barrel). This object pulls all members when imported; kept for
+ * back-compat.
+ */
+export const Group = { Tag, members, isGroup };
