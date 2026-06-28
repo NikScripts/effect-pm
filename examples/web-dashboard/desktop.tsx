@@ -196,7 +196,7 @@ export const DesktopDashboard = (): React.ReactElement => {
                 <span className="flex-1 truncate font-semibold">{displayName(selected.id)}</span>
               </div>
               <QueueStats bundle={bundle} />
-              <div className="rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
+              <div className="overflow-hidden rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
               <QueueControls bundle={bundle} />
             </div>
           )}

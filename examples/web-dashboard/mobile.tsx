@@ -110,7 +110,7 @@ const QueueDetail = (props: {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="min-w-0 sm:flex-1">
           <Boundary label="chart">
-            <div className="rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
+            <div className="overflow-hidden rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
           </Boundary>
         </div>
         <Boundary label="controls"><QueueControls bundle={bundle} /></Boundary>
