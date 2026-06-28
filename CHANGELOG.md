@@ -4,6 +4,13 @@
 
 ### Minor Changes
 
+- 70146c5: **`ApiMetrics` observability resource + `HttpApiResource.Service`.** `ApiMetrics` (a
+  `Resource.tagFor` factory) links to an `HttpApiResource.Service` by `clientId` and exposes a
+  windowed `metrics` stream and a `usageNow` query (requests, errors, throughput, per-endpoint
+  breakdown). `HttpApiResource.Service` is a class factory for a typed API client with endpoint
+  usage metrics and registry hooks. New subpaths: `@nikscripts/effect-pm/ApiMetrics`,
+  `@nikscripts/effect-pm/ApiUsageSchema`, `@nikscripts/effect-pm/HttpApiResource`.
+
 - 4954957: **Rename resource/service tag identity from `id` to `key`** across the toolkit. Tag
   factories take `key` as the first argument, tags expose Effect's `.key` (not a custom `.id`),
   `ResourceInstance` and `DuplicateResourceKey` use `key`, the UI bindings (`ResourceUI.key`) and
