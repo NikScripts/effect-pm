@@ -253,7 +253,7 @@ const TIME_UNITS = { ms: 1, s: 1_000, min: 60_000, hr: 3_600_000 };
 type TimeUnit = keyof typeof TIME_UNITS;
 
 /** A metric chart with a dropdown to pick the series (throughput/latency/pending), plus — for the
- *  duration series (latency) — a second dropdown to pick its time unit (ms/s/min/hr). @since 1.0.0 */
+ *  duration series (latency) — a compact toggle that cycles its time unit (ms→s→min→hr). @since 1.0.0 */
 export const MetricChart = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
   const [metric, setMetric] = React.useState<MetricKey>("throughput");
   const [unit, setUnit] = React.useState<TimeUnit>("s");
@@ -282,18 +282,21 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
           ))}
         </select>
         {def.duration ? (
-          <select
-            value={unit}
-            onChange={(e) => setUnit(e.target.value as TimeUnit)}
-            className="rounded-md border bg-card px-2 py-1 text-sm font-semibold text-foreground"
-            aria-label="time unit"
+          // Compact unit control: tap to cycle ms → s → min → hr → (loop). Cheaper on width than
+          // a second dropdown, which matters on a phone.
+          <button
+            type="button"
+            onClick={() => {
+              const units = Object.keys(TIME_UNITS) as Array<TimeUnit>;
+              const next = units[(units.indexOf(unit) + 1) % units.length];
+              if (next !== undefined) setUnit(next);
+            }}
+            className="rounded-md border bg-card px-2 py-1 text-sm font-semibold text-foreground transition-colors hover:border-ring"
+            aria-label={`time unit: ${unit} (tap to change)`}
+            title="tap to change unit"
           >
-            {(Object.keys(TIME_UNITS) as Array<TimeUnit>).map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </select>
+            {unit}
+          </button>
         ) : null}
       </div>
       {/* fixed-height wrapper + height="100%": a percentage-sized ResponsiveContainer in a
