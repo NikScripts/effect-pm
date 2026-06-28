@@ -58,6 +58,8 @@
     "view-transitions",
     "atom-mount",
     "refill-dependency-support",
-    "setup-guide"
+    "setup-guide",
+    "group-routing",
+    "web-real-dashboard"
   ]
 }

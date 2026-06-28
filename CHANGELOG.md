@@ -1,5 +1,27 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.8
+
+### Minor Changes
+
+- bcbafc3: `@nikscripts/effect-pm/web` now **ships the real dashboard** — the hand-crafted,
+  per-type UI (previously trapped in the example), not the old generic introspection view.
+  **`<Dashboard runtime={Atom.runtime(layer)} group={ServicesHub} />`** renders the responsive
+  drill-down (queue / process / subgroup cards → styled detail with stats + edge-to-edge metric
+  chart + icon controls + logs → routed fullscreen log viewer at `/Group/Resource/logs`),
+  URL-backed navigation with view-transition animations, and locked-by-default controls with a
+  confirm dialog on destructive actions. Compose the pieces (`DashboardView` + the widgets +
+  `queueBundle`/`processBundle`/`useQueueBundle`/`useProcessBundle`) under `RegistryProvider` +
+  `RuntimeProvider` + `ViewTransitionProvider`. Runtime-injected, browser-safe (no node deps);
+  the example dashboard now consumes `/web` directly. **BREAKING:** the old generic exports are
+  removed — `GroupView`, `ResourceView`/`ResourceWidget`/`useResourceUI`, `panels`, `primitives`,
+  `binding`, `chart`.
+
+- b5f9383: `@nikscripts/effect-pm/web`: add **`useGroupRoute(root)`** — URL routing that mirrors
+  the `Group` tree (`/Wnba/ImportSchedule`, case-insensitive, History API back/forward + deep
+  links). A selected leaf can carry a sub-view segment (`/Mail/logs` ⇒ `route.view === "logs"`)
+  for per-resource pages like the fullscreen log viewer.
+
 ## 0.8.0-beta.7
 
 ### Minor Changes
