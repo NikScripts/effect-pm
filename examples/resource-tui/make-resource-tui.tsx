@@ -29,7 +29,7 @@ import {
 // Heterogeneous record of different tags: the same structural shape the CLI uses
 // (yieldable → its service, plus the bits we read and the stowed spec).
 export type AnyTag = Effect.Effect<unknown, never, unknown> & {
-  readonly id: string;
+  readonly key: string;
   readonly description: string | undefined;
 } & Parameters<typeof specOf>[0];
 
@@ -63,7 +63,7 @@ const buildWidget = (
   key: string,
   tag: AnyTag,
 ): WidgetModel => {
-  const reactivityKey = [tag.id];
+  const reactivityKey = [tag.key];
   const call = (service: unknown, name: string): unknown =>
     (service as Record<string, unknown>)[name];
 

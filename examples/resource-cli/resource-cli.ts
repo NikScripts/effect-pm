@@ -28,7 +28,7 @@ const isCliMethod = (m: AnyMethod | AnyLocalMethod): m is AnyMethod =>
 // `description`, and the stowed spec (`specOf`). Dispatch is dynamic (handlers
 // cast per method); each method stays typed `AnyMethod` for metadata/flags.
 type AnyTag = Effect.Effect<unknown, never, unknown> & {
-  readonly id: string;
+  readonly key: string;
   readonly description: string | undefined;
 } & Parameters<typeof specOf>[0];
 
@@ -141,7 +141,7 @@ export const makeResourceCli = (
     Command.withHandler(() =>
       Console.log(
         Object.entries(resources)
-          .map(([name, tag]) => `  ${name.padEnd(width)}  ${tag.id}`)
+          .map(([name, tag]) => `  ${name.padEnd(width)}  ${tag.key}`)
           .join("\n"),
       ),
     ),

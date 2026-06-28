@@ -41,7 +41,7 @@ const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void
     <div className="flex h-screen flex-col gap-3 p-3">
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
-        <strong className="flex-1 truncate text-base">{displayName(props.tag.id)}</strong>
+        <strong className="flex-1 truncate text-base">{displayName(props.tag.key)}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
       <Boundary label="stats"><QueueStats bundle={bundle} /></Boundary>
@@ -65,7 +65,7 @@ const ProcessDetail = (props: { readonly tag: ProcessTag; readonly onBack: () =>
     <div className="flex h-screen flex-col gap-3 p-3">
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
-        <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.id)}</strong>
+        <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.key)}</strong>
       </div>
       <Boundary label="stats"><ProcessStats bundle={bundle} /></Boundary>
       <Boundary label="controls"><ProcessControls bundle={bundle} /></Boundary>
@@ -99,7 +99,7 @@ export const MobileDashboard = (): React.ReactElement => {
           <Button variant="outline" size="sm" onClick={() => setPath((p) => p.slice(0, -1))}>← back</Button>
         ) : null}
         <h1 className="m-0 flex-1 text-lg font-semibold">
-          ⬢ {path.map((g) => displayName(g.id)).join(" / ")}{" "}
+          ⬢ {path.map((g) => displayName(g.key)).join(" / ")}{" "}
           <span className="text-sm font-normal text-muted-foreground">· {leafTags(group).length} resources</span>
         </h1>
       </div>

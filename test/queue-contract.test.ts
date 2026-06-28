@@ -79,8 +79,8 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
 
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Queue));
-    const jobs = forwardClient(rpc, specOf(Queue), Jobs.groupId, Jobs.id);
-    const mail = forwardClient(rpc, specOf(Queue), Mail.groupId, Mail.id);
+    const jobs = forwardClient(rpc, specOf(Queue), Jobs.groupId, Jobs.key);
+    const mail = forwardClient(rpc, specOf(Queue), Mail.groupId, Mail.key);
 
     // observation verbs round-trip
     expect(yield* jobs.size).toBe(3);
@@ -190,7 +190,7 @@ it("queue add round-trips with a per-instance item schema (native validation)", 
   };
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Numbers));
-    const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.id);
+    const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.key);
     // `add` is typed by the instance's itemSchema; RPC validates the item on the wire.
     yield* svc.add({ n: 5 });
     yield* svc.add({ n: 7 });
@@ -223,7 +223,7 @@ it("prioritize / defer / enqueue round-trip over the per-instance group", () => 
   };
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Numbers));
-    const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.id);
+    const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.key);
     yield* svc.prioritize({ n: 1 });
     yield* svc.defer({ n: 2 });
     yield* svc.enqueue([
@@ -266,7 +266,7 @@ it("release returns entries; releaseEncoded surfaces a typed wire error", () => 
   };
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Numbers));
-    const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.id);
+    const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.key);
     const released = yield* svc.release({});
     expect(released.map((e) => e.item.n)).toEqual([3]);
 

@@ -260,21 +260,21 @@ type ProcessSpec = typeof processControlSpec;
  */
 export const processTag = <Self>() => {
   function build<HSelf>(
-    id: string,
+    key: string,
     options: { readonly description?: string; readonly host: HostKey<HSelf> },
   ): ResourceTag<Self, ProcessSpec> & { readonly [hostSym]: HostKey<HSelf> };
   function build(
-    id: string,
+    key: string,
     options?: { readonly description?: string },
   ): ResourceTag<Self, ProcessSpec>;
   function build(
-    id: string,
+    key: string,
     options?: { readonly description?: string; readonly host?: HostKey<unknown> },
   ): ResourceTag<Self, ProcessSpec> {
     const host = options?.host;
     return host === undefined
-      ? Resource.Tag<Self>(id, options)(processControlSpec)
-      : Resource.Tag<Self>(id, options)(processControlSpec, host);
+      ? Resource.Tag<Self>(key, options)(processControlSpec)
+      : Resource.Tag<Self>(key, options)(processControlSpec, host);
   }
   return build;
 };
@@ -282,7 +282,7 @@ export const processTag = <Self>() => {
 /**
  * The config for {@link ScheduledProcess.layer} — the {@link Process.make} options (`effect` plus
  * optional `polling` / `schedule` / `scheduleLayer`), plus `captureLogs` to feed the `logs` stream
- * and `logHistory`. The tag carries the id.
+ * and `logHistory`. The tag carries the key.
  *
  * @public
  */
@@ -387,9 +387,9 @@ const buildProcessImpl = <Self, E, R>(
       effect: Effect.Effect<Out, Err, R>,
     ): Effect.Effect<Out, Err> => Effect.provide(effect, context);
 
-    // Fold any `.configure` patches in context (keyed by the tag id) onto the base config.
+    // Fold any `.configure` patches in context (keyed by the tag key) onto the base config.
     const config = yield* foldConfiguredSpec<ProcessLayerConfig<E, R>>(
-      tag.id,
+      tag.key,
       baseConfig,
     );
 
@@ -420,7 +420,7 @@ const buildProcessImpl = <Self, E, R>(
     const loggerContext = captureLogsEnabled
       ? yield* Layer.build(
           Logger.layer(
-            [makeProcessCaptureLogger(tag.id, captureLogsMinLevel, publishLog)],
+            [makeProcessCaptureLogger(tag.key, captureLogsMinLevel, publishLog)],
             { mergeWithExisting: true },
           ),
         )
@@ -430,7 +430,7 @@ const buildProcessImpl = <Self, E, R>(
         ? <A2, E2, R2>(eff: Effect.Effect<A2, E2, R2>): Effect.Effect<A2, E2, R2> =>
             eff
         : <A2, E2, R2>(eff: Effect.Effect<A2, E2, R2>): Effect.Effect<A2, E2, R2> =>
-            withProcessLogAnnotations(tag.id, Effect.provide(eff, loggerContext));
+            withProcessLogAnnotations(tag.key, Effect.provide(eff, loggerContext));
     const logsStream = captureLogsEnabled
       ? Stream.unwrap(
           Effect.map(Ref.get(logReplay), (tail) =>
@@ -442,7 +442,7 @@ const buildProcessImpl = <Self, E, R>(
     // History (optional): fork a tap appending each captured line (encoded) to the HistoryStore;
     // `logHistory` reads it back. serviceOption → no store means nothing persisted, history empty.
     const history = yield* Effect.serviceOption(HistoryStore);
-    const logsStreamId = `${tag.id}/logs`;
+    const logsStreamId = `${tag.key}/logs`;
     if (captureLogsEnabled && Option.isSome(history)) {
       const store = history.value;
       yield* Effect.forkIn(
@@ -472,7 +472,7 @@ const buildProcessImpl = <Self, E, R>(
     const scheduleCtx = yield* Layer.build(baseScheduleLayer);
     const schedule = Context.get(scheduleCtx, ProcessSchedule);
 
-    const handle = Process.make(tag.id, {
+    const handle = Process.make(tag.key, {
       effect: config.effect,
       ...(config.polling !== undefined ? { polling: config.polling } : {}),
       ...(scheduleInitializer !== undefined ? { schedule: scheduleInitializer } : {}),
@@ -599,7 +599,7 @@ export const serverEntry = <Self, E = never, R = never>(
  * A **config-patch layer** for the process `tag` — the toolkit successor to
  * `Process.Service(...).configure(...)`. Merge it with the process's {@link layer} (e.g. per
  * environment) and its patch (polling / schedule / a `(previous) => next` wrap of `effect`) folds
- * onto the layer's base config at build. Keyed by `tag.id`; later patches win. Config lives in the
+ * onto the layer's base config at build. Keyed by `tag.key`; later patches win. Config lives in the
  * layer, not the tag, so `configure` takes the tag and returns a layer.
  *
  * @public
@@ -607,7 +607,7 @@ export const serverEntry = <Self, E = never, R = never>(
 export const configure = <Self, E = never, R = never>(
   tag: ResourceTag<Self, ProcessSpec>,
   patch: ConfigPatch<ProcessLayerConfig<E, R>>,
-): Layer.Layer<never> => configureLayer(tag.id, patch);
+): Layer.Layer<never> => configureLayer(tag.key, patch);
 
 // The unified `ScheduledProcess` namespace is assembled in `internal/scheduledProcessNamespace.ts`
 // and re-exported by the barrel as `export * as ScheduledProcess` (so member access tree-shakes:

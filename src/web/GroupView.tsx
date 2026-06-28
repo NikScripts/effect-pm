@@ -18,7 +18,7 @@ import { useResourceUI } from "./ResourceWidget";
 
 /** A tree node: a group tag or subgroup. @since 1.0.0 */
 export interface GroupNode {
-  readonly id: string;
+  readonly key: string;
   readonly members: Record<string, unknown>;
 }
 
@@ -31,7 +31,7 @@ export const LeafWidget = <R, ER>(props: {
   // Boundary: a non-group member of a Group is a resource tag (erased for the walk).
   const tag = props.member as ResourceTag<never, Spec>;
   const ui = useResourceUI(props.runtime, tag);
-  return <ResourceView ui={ui} host={props.hostFor?.(ui.id)} />;
+  return <ResourceView ui={ui} host={props.hostFor?.(ui.key)} />;
 };
 
 /** Render the members of one node: branches as openable cards, leaves as widgets. @since 1.0.0 */
@@ -70,14 +70,14 @@ export const GroupView = <R, ER>(props: {
     <div className="flex flex-col gap-3 p-3">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         {trail.map((n, i) => (
-          <React.Fragment key={n.id}>
+          <React.Fragment key={n.key}>
             {i > 0 ? <span className="text-muted-foreground">/</span> : null}
             <button
               type="button"
               className="hover:text-foreground"
               onClick={() => setTrail(trail.slice(0, i + 1))}
             >
-              {displayName(n.id)}
+              {displayName(n.key)}
             </button>
           </React.Fragment>
         ))}

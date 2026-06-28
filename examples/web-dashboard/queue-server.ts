@@ -74,17 +74,17 @@ setInterval(() => {
 
 // host every queue at /rpc/<name> on one node server.
 const serveLayer = Layer.mergeAll(
-  serveHttp(Mail, cfg, { path: `/rpc/${pathOf(Mail.id)}` }),
-  serveHttp(Jobs, cfg, { path: `/rpc/${pathOf(Jobs.id)}` }),
-  serveHttp(Billing, cfg, { path: `/rpc/${pathOf(Billing.id)}` }),
-  serveHttp(Notify, cfg, { path: `/rpc/${pathOf(Notify.id)}` }),
-  serveHttp(Worker1, cfg, { path: `/rpc/${pathOf(Worker1.id)}` }),
-  serveHttp(Worker2, cfg, { path: `/rpc/${pathOf(Worker2.id)}` }),
-  serveHttp(Worker3, cfg, { path: `/rpc/${pathOf(Worker3.id)}` }),
-  serveHttp(RegionUS, cfg, { path: `/rpc/${pathOf(RegionUS.id)}` }),
-  serveHttp(RegionEU, cfg, { path: `/rpc/${pathOf(RegionEU.id)}` }),
-  serveHttp(Daily, cfg, { path: `/rpc/${pathOf(Daily.id)}` }),
-  serveHttp(Weekly, cfg, { path: `/rpc/${pathOf(Weekly.id)}` }),
+  serveHttp(Mail, cfg, { path: `/rpc/${pathOf(Mail.key)}` }),
+  serveHttp(Jobs, cfg, { path: `/rpc/${pathOf(Jobs.key)}` }),
+  serveHttp(Billing, cfg, { path: `/rpc/${pathOf(Billing.key)}` }),
+  serveHttp(Notify, cfg, { path: `/rpc/${pathOf(Notify.key)}` }),
+  serveHttp(Worker1, cfg, { path: `/rpc/${pathOf(Worker1.key)}` }),
+  serveHttp(Worker2, cfg, { path: `/rpc/${pathOf(Worker2.key)}` }),
+  serveHttp(Worker3, cfg, { path: `/rpc/${pathOf(Worker3.key)}` }),
+  serveHttp(RegionUS, cfg, { path: `/rpc/${pathOf(RegionUS.key)}` }),
+  serveHttp(RegionEU, cfg, { path: `/rpc/${pathOf(RegionEU.key)}` }),
+  serveHttp(Daily, cfg, { path: `/rpc/${pathOf(Daily.key)}` }),
+  serveHttp(Weekly, cfg, { path: `/rpc/${pathOf(Weekly.key)}` }),
   // (the wnba key-rotation process lives on the Mini — see mini-server.ts)
 ).pipe(
   // capture metrics + log history so the dashboard can backfill (query-then-tail).
@@ -103,17 +103,17 @@ const remote = (id: string) =>
     transformClient: (c) => HttpClient.mapRequest(c, HttpClientRequest.setHeader("x-loopback", "1")),
   }).pipe(Layer.provide(RpcSerialization.layerNdjson), Layer.provide(FetchHttpClient.layer));
 const clientLayer = Layer.mergeAll(
-  Resource.client(Mail).pipe(Layer.provide(remote(Mail.id))),
-  Resource.client(Jobs).pipe(Layer.provide(remote(Jobs.id))),
-  Resource.client(Billing).pipe(Layer.provide(remote(Billing.id))),
-  Resource.client(Notify).pipe(Layer.provide(remote(Notify.id))),
-  Resource.client(Worker1).pipe(Layer.provide(remote(Worker1.id))),
-  Resource.client(Worker2).pipe(Layer.provide(remote(Worker2.id))),
-  Resource.client(Worker3).pipe(Layer.provide(remote(Worker3.id))),
-  Resource.client(RegionUS).pipe(Layer.provide(remote(RegionUS.id))),
-  Resource.client(RegionEU).pipe(Layer.provide(remote(RegionEU.id))),
-  Resource.client(Daily).pipe(Layer.provide(remote(Daily.id))),
-  Resource.client(Weekly).pipe(Layer.provide(remote(Weekly.id))),
+  Resource.client(Mail).pipe(Layer.provide(remote(Mail.key))),
+  Resource.client(Jobs).pipe(Layer.provide(remote(Jobs.key))),
+  Resource.client(Billing).pipe(Layer.provide(remote(Billing.key))),
+  Resource.client(Notify).pipe(Layer.provide(remote(Notify.key))),
+  Resource.client(Worker1).pipe(Layer.provide(remote(Worker1.key))),
+  Resource.client(Worker2).pipe(Layer.provide(remote(Worker2.key))),
+  Resource.client(Worker3).pipe(Layer.provide(remote(Worker3.key))),
+  Resource.client(RegionUS).pipe(Layer.provide(remote(RegionUS.key))),
+  Resource.client(RegionEU).pipe(Layer.provide(remote(RegionEU.key))),
+  Resource.client(Daily).pipe(Layer.provide(remote(Daily.key))),
+  Resource.client(Weekly).pipe(Layer.provide(remote(Weekly.key))),
 );
 
 let rngState = 0x9e3779b9;

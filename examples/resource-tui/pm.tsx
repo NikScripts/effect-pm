@@ -43,13 +43,13 @@ if (argv.length === 0) {
     const depth = segments(id).length;
     for (let n = 1; n <= depth; n += 1) {
       const candidate = suffix(id, n);
-      if (tags.filter((t) => suffix(t.id, n) === candidate).length === 1) {
+      if (tags.filter((t) => suffix(t.key, n) === candidate).length === 1) {
         return candidate;
       }
     }
     return id;
   };
-  const resources = Object.fromEntries(tags.map((t) => [nameOf(t.id), t]));
+  const resources = Object.fromEntries(tags.map((t) => [nameOf(t.key), t]));
 
   const cli = makeResourceCli(resources, "pm");
   const program = Command.runWith(cli, { version: "0.8.0-beta.6" })(argv).pipe(

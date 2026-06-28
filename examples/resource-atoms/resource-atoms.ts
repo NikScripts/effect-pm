@@ -9,7 +9,7 @@
  * - **anything else** (a payload, or a `mutate`) → a `runtime.fn`.
  *
  * Everything comes from the tag: atom **types** from its spec, the read/command
- * split from `methodMeta(...).kind`, the reactivity key from `tag.id`.
+ * split from `methodMeta(...).kind`, the reactivity key from `tag.key`.
  */
 
 import { Effect, Schema } from "effect";
@@ -39,7 +39,7 @@ export const makeResourceAtoms = <Self extends R, S extends Spec, R, ER>(
   runtime: Atom.AtomRuntime<R, ER>,
   tag: ResourceTag<Self, S>,
 ): ResourceAtoms<S> => {
-  const reactivityKey = [tag.id];
+  const reactivityKey = [tag.key];
   const keys = { reactivityKeys: reactivityKey };
   const call = (service: unknown, key: string): unknown =>
     (service as Record<string, unknown>)[key];

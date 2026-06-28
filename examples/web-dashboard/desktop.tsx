@@ -58,15 +58,15 @@ const TreeNode = (props: {
         onClick={() => props.onGroup(node)}
         className={cn(
           "flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-sm hover:bg-accent",
-          props.activeGroup === node.id && "bg-accent text-accent-foreground",
+          props.activeGroup === node.key && "bg-accent text-accent-foreground",
         )}
         style={{ paddingLeft: 8 + depth * 12 }}
       >
         <span className="text-[#06b6d4]">▸</span>
-        <span className="truncate">{displayName(node.id)}</span>
+        <span className="truncate">{displayName(node.key)}</span>
       </button>
       {subs.map((sg) => (
-        <TreeNode key={sg.id} {...props} node={sg} depth={depth + 1} />
+        <TreeNode key={sg.key} {...props} node={sg} depth={depth + 1} />
       ))}
     </div>
   );
@@ -76,8 +76,8 @@ const columns: ReadonlyArray<ColumnDef<FleetRow>> = [
   {
     id: "queue",
     header: "queue",
-    accessorFn: (r) => r.tag.id,
-    cell: (c) => <span className="font-medium text-foreground">{displayName(c.row.original.tag.id)}</span>,
+    accessorFn: (r) => r.tag.key,
+    cell: (c) => <span className="font-medium text-foreground">{displayName(c.row.original.tag.key)}</span>,
   },
   {
     id: "status",
@@ -102,7 +102,7 @@ const FleetTable = (props: {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const leaves = queueLeaves(props.group);
   const data = React.useMemo(
-    () => leaves.map((tag) => fleet[tag.id] ?? blankRow(tag)),
+    () => leaves.map((tag) => fleet[tag.key] ?? blankRow(tag)),
     [fleet, leaves],
   );
   const table = useReactTable({
@@ -130,8 +130,8 @@ const FleetTable = (props: {
       <TableBody>
         {table.getRowModel().rows.map((r) => (
           <TableRow
-            key={r.original.tag.id}
-            data-selected={r.original.tag.id === props.selected?.id}
+            key={r.original.tag.key}
+            data-selected={r.original.tag.key === props.selected?.key}
             onClick={() => props.onSelect(r.original.tag)}
             className="cursor-pointer"
           >
@@ -155,15 +155,15 @@ export const DesktopDashboard = (): React.ReactElement => {
   return (
     <div className="flex h-screen flex-col">
       <header className="flex items-center gap-2 border-b px-4 py-2">
-        <span className="font-semibold">⬢ {displayName(group.id)}</span>
+        <span className="font-semibold">⬢ {displayName(group.key)}</span>
         <span className="text-xs text-muted-foreground">· {leafTags(group).length} queues</span>
         {selected !== null ? (
-          <span className="ml-auto text-xs text-muted-foreground">{displayName(selected.id)}</span>
+          <span className="ml-auto text-xs text-muted-foreground">{displayName(selected.key)}</span>
         ) : null}
       </header>
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel defaultSize={16} minSize={10} className="overflow-auto p-2">
-          <TreeNode node={Fleet} depth={0} activeGroup={group.id} onGroup={(g) => setGroup(() => g)} />
+          <TreeNode node={Fleet} depth={0} activeGroup={group.key} onGroup={(g) => setGroup(() => g)} />
         </ResizablePanel>
         <ResizableHandle />
         <ResizablePanel defaultSize={56} minSize={30}>
@@ -174,7 +174,7 @@ export const DesktopDashboard = (): React.ReactElement => {
             <ResizableHandle vertical />
             <ResizablePanel defaultSize={38} minSize={10} className="flex min-h-0 flex-col">
               <div className="border-b px-3 py-1 text-xs text-muted-foreground">
-                LOGS{selected !== null ? ` · ${displayName(selected.id)}` : ""}
+                LOGS{selected !== null ? ` · ${displayName(selected.key)}` : ""}
               </div>
               {bundle === undefined ? (
                 <div className="grid flex-1 place-items-center text-xs text-muted-foreground">select a queue</div>
@@ -193,7 +193,7 @@ export const DesktopDashboard = (): React.ReactElement => {
           ) : (
             <div className="flex flex-col gap-3 p-3">
               <div className="flex items-center gap-2">
-                <span className="flex-1 truncate font-semibold">{displayName(selected.id)}</span>
+                <span className="flex-1 truncate font-semibold">{displayName(selected.key)}</span>
               </div>
               <QueueStats bundle={bundle} />
               <div className="rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>

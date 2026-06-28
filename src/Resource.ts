@@ -28,7 +28,7 @@
  * - {@link Resource.client} — drive it remotely over RPC, as if local;
  * - {@link Resource.server} — expose one local impl over RPC (transport-agnostic handlers);
  * - {@link Resource.serveInstances} — serve many factory instances behind one group,
- *   routed by the per-call `id` header.
+ *   routed by the per-call instance-key header.
  *
  * Over **http**, the batteries-included pair collapses the transport boilerplate (ndjson by
  * default on both, so client/server can't disagree on the codec):
@@ -66,14 +66,14 @@ import {
 // ── typed errors (Data.TaggedError — never raw `Error`) ──
 
 /**
- * Two resources declared the same **instance id**. Effect's `Context` is keyed by the id
+ * Two resources declared the same **instance key**. Effect's `Context` is keyed by the key
  * string and silently last-write-wins, so we fail fast at declaration.
  *
  * @public
  */
-export class DuplicateResourceId extends Data.TaggedError(
-  "DuplicateResourceId",
-)<{ readonly id: string }> {}
+export class DuplicateResourceKey extends Data.TaggedError(
+  "DuplicateResourceKey",
+)<{ readonly key: string }> {}
 
 /**
  * Two resources declared the same **group id** (the wire prefix) — they'd collide on a
@@ -91,11 +91,11 @@ export class DuplicateGroupId extends Data.TaggedError("DuplicateGroupId")<{
  * @public
  */
 export class DuplicateInstance extends Data.TaggedError("DuplicateInstance")<{
-  readonly id: string;
+  readonly key: string;
 }> {}
 
 /**
- * A family request reached the server with no routable instance `id` header — a
+ * A family request reached the server with no routable instance key header — a
  * protocol-level fault (the contract was satisfied), surfaced as a defect.
  *
  * @public
@@ -104,8 +104,8 @@ export class InstanceRoutingError extends Data.TaggedError(
   "InstanceRoutingError",
 )<{
   readonly method: string;
-  readonly reason: "missing-id" | "unknown-id";
-  readonly id?: string;
+  readonly reason: "missing-key" | "unknown-key";
+  readonly key?: string;
 }> {}
 
 /**
@@ -779,8 +779,6 @@ export type HostKey<HSelf> = Context.Key<HSelf, HostProtocol>;
  */
 export interface ResourceTag<Self, S extends Spec>
   extends Context.ServiceClass<Self, string, ServiceOf<S, Self>> {
-  /** Instance identity — the Context key and the per-call routing header value. */
-  readonly id: string;
   /** Wire prefix — namespaces this resource's procedures on a shared `RpcServer`. */
   readonly groupId: string;
   /** Resource-level help text (CLI/TUI section help, dashboard panel title) — if declared. */
@@ -801,8 +799,8 @@ export interface ResourceTag<Self, S extends Spec>
   readonly [hostSym]: HostKey<unknown> | undefined;
 }
 
-/** Claimed instance ids — duplicate declarations fail fast (Effect won't catch same-key Tags). */
-const claimedIds = new Set<string>();
+/** Claimed instance keys — duplicate declarations fail fast (Effect won't catch same-key Tags). */
+const claimedKeys = new Set<string>();
 /** Claimed group ids — the wire prefixes; duplicates would collide on a shared `RpcServer`. */
 const claimedGroupIds = new Set<string>();
 
@@ -815,30 +813,29 @@ const claimGroupId = (groupId: string): void => {
 };
 
 /**
- * The single tag-creation primitive: dup-id guard + `Context.Service` + stow id/groupId/spec/group.
- * Both {@link makeTag} (per-tag spec) and {@link tagFor} (shared spec) go through it. `id` is the
+ * The single tag-creation primitive: dup-key guard + `Context.Service` + stow groupId/spec/group.
+ * Both {@link makeTag} (per-tag spec) and {@link tagFor} (shared spec) go through it. `key` is the
  * instance identity (Context key + routing header); `groupId` is the wire prefix.
  */
 const buildInstanceTag = <Self, S extends Spec>(
   groupId: string,
-  id: string,
+  key: string,
   spec: S,
   group: RpcGroupOf<S>,
   description: string | undefined,
   host: HostKey<unknown> | undefined,
 ) => {
-  if (claimedIds.has(id)) {
-    throw new DuplicateResourceId({ id });
+  if (claimedKeys.has(key)) {
+    throw new DuplicateResourceKey({ key });
   }
-  claimedIds.add(id);
-  const base = Context.Service<Self, ServiceOf<S, Self>>()(id);
+  claimedKeys.add(key);
+  const base = Context.Service<Self, ServiceOf<S, Self>>()(key);
   // per-resource local capability — granted only by localLayer, never the client.
   const localCap: Context.Key<LocalCapability<Self>, { readonly granted: true }> =
     Context.Service<LocalCapability<Self>, { readonly granted: true }>()(
-      `${id}/__local`,
+      `${key}/__local`,
     );
   return Object.assign(base, {
-    id,
     groupId,
     description,
     [specSym]: spec,
@@ -861,15 +858,15 @@ const buildInstanceTag = <Self, S extends Spec>(
  * const c = yield* Counter; // { increment: (p) => Effect<void>; current: Effect<number> }
  * ```
  *
- * Ids must be unique: a duplicate **throws at declaration** — Effect's `Context` is
- * keyed by the id string and silently last-write-wins on collisions, so we guard it.
- * For a single resource the id is also its **group id** (the wire prefix for its
+ * Keys must be unique: a duplicate **throws at declaration** — Effect's `Context` is
+ * keyed by the key string and silently last-write-wins on collisions, so we guard it.
+ * For a single resource the key is also its **group id** (the wire prefix for its
  * procedures), so a shared `RpcServer` can host it alongside other resource types.
  *
  * @public
  */
 const makeTag = <Self>(
-  id: string,
+  key: string,
   options?: { readonly description?: string },
 ) => {
   // The spec is the inferring call; the optional `host` rides here (not alongside the
@@ -885,13 +882,13 @@ const makeTag = <Self>(
     spec: S,
     host?: HostKey<unknown>,
   ): ResourceTag<Self, S> {
-    // single resource: id doubles as the group id (its wire prefix)
-    claimGroupId(id);
+    // single resource: key doubles as the group id (its wire prefix)
+    claimGroupId(key);
     return buildInstanceTag<Self, S>(
-      id,
-      id,
+      key,
+      key,
       spec,
-      buildRpcGroup(id, spec),
+      buildRpcGroup(key, spec),
       options?.description,
       host,
     );
@@ -900,14 +897,14 @@ const makeTag = <Self>(
 };
 
 /**
- * A {@link tagFor} factory: `<Self>(id) => tag`, plus the shared family metadata
+ * A {@link tagFor} factory: `<Self>(key) => tag`, plus the shared family metadata
  * (`groupId` / `description` / spec / group) that {@link serveInstances} reads without an
  * instance.
  *
  * @public
  */
 export interface TagFactory<S extends Spec> {
-  <Self>(id: string): ResourceTag<Self, S>;
+  <Self>(key: string): ResourceTag<Self, S>;
   readonly groupId: string;
   readonly description: string | undefined;
   readonly [specSym]: S;
@@ -922,7 +919,7 @@ export interface TagFactory<S extends Spec> {
  * @public
  */
 export interface HostTagFactory<S extends Spec, HSelf> {
-  <Self>(id: string): ResourceTag<Self, S> & {
+  <Self>(key: string): ResourceTag<Self, S> & {
     readonly [hostSym]: HostKey<HSelf>;
   };
   readonly groupId: string;
@@ -934,18 +931,18 @@ export interface HostTagFactory<S extends Spec, HSelf> {
 /**
  * Build a **factory** tag-maker that bakes a shared {@link Spec} once under a `groupId`:
  * every instance shares the same contract + RPC group, and callers **never pass the spec**
- * — only an instance id. Use for resource families (many instances, one contract). The
+ * — only an instance key. Use for resource families (many instances, one contract). The
  * `groupId` (e.g. `"queue"`) is the wire prefix for the family's procedures, so a shared
  * `RpcServer` can host this family next to other resource types without tag collisions;
- * instances are told apart by the per-call `id` header.
+ * instances are told apart by the per-call `key` header.
  *
  * Pass `options.host` to bind the whole family to a {@link Host}: every instance becomes a
  * host-bearing tag and ships only-the-tag (see {@link Resource.client} / {@link Resource.connect}).
  *
  * ```ts
  * const Queue = Resource.tagFor("queue", { pause: Resource.mutate(Schema.Void) });
- * class Jobs extends Queue<Jobs>("@app/Jobs") {}  // spec baked in; just the instance id
- * class Mail extends Queue<Mail>("@app/Mail") {}  // shares contract + group, routed by id
+ * class Jobs extends Queue<Jobs>("@app/Jobs") {}  // spec baked in; just the instance key
+ * class Mail extends Queue<Mail>("@app/Mail") {}  // shares contract + group, routed by key
  * ```
  *
  * @public
@@ -968,10 +965,10 @@ function tagFor<const S extends Spec>(
   claimGroupId(groupId);
   const group = buildRpcGroup(groupId, spec);
   const host = options?.host;
-  const factory = <Self>(id: string) =>
+  const factory = <Self>(key: string) =>
     buildInstanceTag<Self, S>(
       groupId,
-      id,
+      key,
       spec,
       group,
       options?.description,
@@ -1190,8 +1187,8 @@ const serveAllHttp = <R = never>(
   ) as unknown as Layer.Layer<never, never, R | HttpServer.HttpServer>;
 };
 
-/** The header carrying the target instance id, set per-call by {@link forwardClient}. */
-const ID_HEADER = "id";
+/** The header carrying the target instance key, set per-call by {@link forwardClient}. */
+const INSTANCE_KEY_HEADER = "key";
 
 /**
  * One instance of a factory paired with its implementation — the element of
@@ -1200,7 +1197,7 @@ const ID_HEADER = "id";
  * @public
  */
 export interface ResourceInstance<S extends Spec> {
-  readonly id: string;
+  readonly key: string;
   readonly impl: WireServiceOf<S>;
 }
 
@@ -1212,18 +1209,18 @@ export interface ResourceInstance<S extends Spec> {
 const instance = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   impl: WireServiceOf<S>,
-): ResourceInstance<S> => ({ id: tag.id, impl });
+): ResourceInstance<S> => ({ key: tag.key, impl });
 
 /**
  * The **family server** layer: serve **many instances of one factory** behind a
  * single contract group, dispatching each request to the right instance by the
- * per-call `id` header. Instances share one {@link tagFor} factory (one spec, one
+ * per-call `key` header. Instances share one {@link tagFor} factory (one spec, one
  * RPC group); each is passed once via {@link Resource.instance}.
  *
  * Why one variadic call rather than one-layer-per-instance: composing instances as
  * sibling layers would silently keep only the last (Effect's `Context` is a map —
  * same-key layers last-write-wins). Passing them together is the foolproof shape:
- * every instance is wired, and a duplicate id **throws at assembly**.
+ * every instance is wired, and a duplicate key **throws at assembly**.
  *
  * ```ts
  * const Queue = Resource.tagFor("queue", { pause: Resource.mutate(Schema.Void) });
@@ -1250,18 +1247,18 @@ const serveInstances = <S extends Spec>(
   const group = factory[groupSym];
   const spec = factory[specSym];
 
-  // Build the routing table once, at assembly: id → instance impl. A duplicate id
+  // Build the routing table once, at assembly: key → instance impl. A duplicate key
   // is a wiring mistake — fail loudly rather than silently shadow an instance.
   const table = new Map<string, WireServiceOf<S>>();
-  for (const { id, impl } of instances) {
-    if (table.has(id)) {
-      throw new DuplicateInstance({ id });
+  for (const { key, impl } of instances) {
+    if (table.has(key)) {
+      throw new DuplicateInstance({ key });
     }
-    table.set(id, impl);
+    table.set(key, impl);
   }
 
-  // One handler per contract method; each reads the `id` header, looks up the
-  // instance, and dispatches. A missing/unknown id is a protocol-level fault
+  // One handler per contract method; each reads the instance-key header, looks up the
+  // instance, and dispatches. A missing/unknown key is a protocol-level fault
   // (the contract is satisfied) → die, not a typed domain error.
   const handlers: Record<
     string,
@@ -1270,16 +1267,16 @@ const serveInstances = <S extends Spec>(
   for (const key of Object.keys(spec)) {
     // handlers are keyed by the wire tag (group-prefixed), matching the group's procedures.
     handlers[wireTag(factory.groupId, key)] = (payload, options) => {
-      const id = Option.getOrUndefined(Headers.get(options.headers, ID_HEADER));
-      if (id === undefined) {
+      const instanceKey = Option.getOrUndefined(Headers.get(options.headers, INSTANCE_KEY_HEADER));
+      if (instanceKey === undefined) {
         return Effect.die(
-          new InstanceRoutingError({ method: key, reason: "missing-id" }),
+          new InstanceRoutingError({ method: key, reason: "missing-key" }),
         );
       }
-      const impl = table.get(id);
+      const impl = table.get(instanceKey);
       if (impl === undefined) {
         return Effect.die(
-          new InstanceRoutingError({ method: key, reason: "unknown-id", id }),
+          new InstanceRoutingError({ method: key, reason: "unknown-key", key: instanceKey }),
         );
       }
       const member = (impl as Record<string, unknown>)[key];
@@ -1315,7 +1312,7 @@ export const specOf = <S extends Spec>(tag: { readonly [specSym]: S }): S =>
 
 /**
  * Map an RPC client + a spec into the typed service, forwarding each method to its
- * group-prefixed wire tag and pinning the instance id as a header. Shared by
+ * group-prefixed wire tag and pinning the instance key as a header. Shared by
  * {@link Resource.client} (production, over a real `Protocol`) and the in-memory
  * round-trip test (client from `RpcTest`).
  *
@@ -1325,9 +1322,9 @@ export const forwardClient = <S extends Spec>(
   rpc: unknown,
   spec: S,
   groupId: string,
-  id: string,
+  instanceKey: string,
 ): WireServiceOf<S> => {
-  const headers = { id };
+  const headers = { key: instanceKey };
   // narrowest possible assertion: keyed by string only — the precise per-tag signatures are
   // erased by the dynamic lookup, so we assert nothing about the values and instead verify
   // each is callable at runtime before use (a malformed client fails loudly, never mis-calls).
@@ -1363,7 +1360,7 @@ export const forwardClient = <S extends Spec>(
  * class EdgeHost extends Resource.Host<EdgeHost>("edge") {}
  * ```
  *
- * Attach it to a tag (`Resource.Tag<Self>(id)(spec, EdgeHost)`) to make the tag carry its own
+ * Attach it to a tag (`Resource.Tag<Self>(key)(spec, EdgeHost)`) to make the tag carry its own
  * transport — then ship only the tag: {@link Resource.client} reads the host to resolve where
  * to connect, and a consumer wires the transport once with {@link Resource.connect}.
  *
@@ -1436,7 +1433,7 @@ const buildClientService = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   rpc: unknown,
 ): ServiceOf<S, Self> => {
-  const wire = forwardClient(rpc, tag[specSym], tag.groupId, tag.id) as Record<
+  const wire = forwardClient(rpc, tag[specSym], tag.groupId, tag.key) as Record<
     string,
     unknown
   >;
@@ -1510,7 +1507,7 @@ function clientLayer<Self, S extends Spec>(
 /** A wire-only instance tag for {@link clientInstances} — keyed via the covariant
  * {@link Context.Key} base so distinct `Self`s are accepted without `any`. @internal */
 type WireInstanceTag<S extends Spec> = Context.Key<unknown, WireServiceOf<S>> & {
-  readonly id: string;
+  readonly key: string;
 };
 
 /** The instance identifiers a {@link clientInstances} layer provides (the union of tag `Self`s). */
@@ -1522,7 +1519,7 @@ type InstanceIdentifiers<
 /**
  * The **client** layer for **many instances of one factory**, sharing a single RPC client —
  * the client mirror of {@link Resource.serveInstances}. Builds **one** `RpcClient` for the
- * family's group and provides every instance's handle from it, each pinned to its own `id`
+ * family's group and provides every instance's handle from it, each pinned to its own instance-key
  * header. So 100 instances of one control shape cost **one** client (and one shared
  * connection), not one client each — the contract/group/schemas are already shared.
  *
@@ -1550,7 +1547,7 @@ const clientInstances = <
           rpc,
           factory[specSym],
           factory.groupId,
-          tag.id,
+          tag.key,
         );
         context = Context.add(context, tag, service);
       }

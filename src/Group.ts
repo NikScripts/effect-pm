@@ -36,11 +36,11 @@ import { Context } from "effect";
  */
 export const Group = {
   Tag:
-    <Self>(id: string) =>
+    <Self>(key: string) =>
     <const Members extends Record<string, unknown>>(members: Members) => {
-      const base = Context.Service<Self, { readonly members: Members }>()(id);
-      // spread the members as accessors (MyGroup.Counter), plus id + the record
-      return Object.assign(base, { id, members }, members);
+      const base = Context.Service<Self, { readonly members: Members }>()(key);
+      // spread the members as accessors (MyGroup.Counter), plus the members record
+      return Object.assign(base, { members }, members);
     },
 
   /** Get the member tags back out (the record). */
@@ -60,7 +60,7 @@ export const Group = {
    */
   isGroup: (
     x: unknown,
-  ): x is { readonly id: string; readonly members: Record<string, unknown> } =>
+  ): x is { readonly key: string; readonly members: Record<string, unknown> } =>
     (typeof x === "object" || typeof x === "function") &&
     x !== null &&
     "members" in x,

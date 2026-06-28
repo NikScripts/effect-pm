@@ -72,7 +72,7 @@ class Echo extends Resource.Tag<Echo>("test/Echo")({
 it("client ↔ server round-trips in-memory", () => {
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Echo));
-    const svc = forwardClient(rpc, specOf(Echo), Echo.groupId, Echo.id);
+    const svc = forwardClient(rpc, specOf(Echo), Echo.groupId, Echo.key);
 
     expect(yield* svc.ping).toBe("pong");
     expect(yield* svc.shout({ msg: "hi" })).toBe("HI");
@@ -98,7 +98,7 @@ const Counter = Resource.tagFor("counter", {
 class Alpha extends Counter<Alpha>("test/Alpha") {}
 class Beta extends Counter<Beta>("test/Beta") {}
 
-it("server family routes calls to the right instance by id header", () => {
+it("server family routes calls to the right instance by key header", () => {
   // Two independent instance impls behind ONE shared contract group.
   let alphaTotal = 0;
   let betaTotal = 0;
@@ -114,10 +114,10 @@ it("server family routes calls to the right instance by id header", () => {
 
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Counter));
-    const a = forwardClient(rpc, specOf(Counter), Alpha.groupId, Alpha.id);
-    const b = forwardClient(rpc, specOf(Counter), Beta.groupId, Beta.id);
+    const a = forwardClient(rpc, specOf(Counter), Alpha.groupId, Alpha.key);
+    const b = forwardClient(rpc, specOf(Counter), Beta.groupId, Beta.key);
 
-    // routed by id: each forwarder pins its own instance id as a header
+    // routed by key: each forwarder pins its own instance key as a header
     expect(yield* a.label).toBe("alpha");
     expect(yield* b.label).toBe("beta");
     expect(yield* a.bump({ by: 3 })).toBe(3);
@@ -168,8 +168,8 @@ it("two resource types sharing a method name coexist on one server (group prefix
   const root = groupOf(Widgets).merge(groupOf(Crates));
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(root);
-    const widgets = forwardClient(rpc, specOf(Widgets), Widgets.groupId, Widgets.id);
-    const crates = forwardClient(rpc, specOf(Crates), Crates.groupId, Crates.id);
+    const widgets = forwardClient(rpc, specOf(Widgets), Widgets.groupId, Widgets.key);
+    const crates = forwardClient(rpc, specOf(Crates), Crates.groupId, Crates.key);
 
     // each `size` resolves to its own resource despite the shared method name
     expect(yield* widgets.size).toBe(42);

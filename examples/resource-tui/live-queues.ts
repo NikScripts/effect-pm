@@ -178,17 +178,17 @@ const mkRefs = (id: string): Refs => {
 };
 
 const REFS: Record<string, Refs> = {
-  [Mail.id]: mkRefs(Mail.id),
-  [Jobs.id]: mkRefs(Jobs.id),
-  [Billing.id]: mkRefs(Billing.id),
-  [Notify.id]: mkRefs(Notify.id),
-  [Worker1.id]: mkRefs(Worker1.id),
-  [Worker2.id]: mkRefs(Worker2.id),
-  [Worker3.id]: mkRefs(Worker3.id),
-  [RegionUS.id]: mkRefs(RegionUS.id),
-  [RegionEU.id]: mkRefs(RegionEU.id),
-  [Daily.id]: mkRefs(Daily.id),
-  [Weekly.id]: mkRefs(Weekly.id),
+  [Mail.key]: mkRefs(Mail.key),
+  [Jobs.key]: mkRefs(Jobs.key),
+  [Billing.key]: mkRefs(Billing.key),
+  [Notify.key]: mkRefs(Notify.key),
+  [Worker1.key]: mkRefs(Worker1.key),
+  [Worker2.key]: mkRefs(Worker2.key),
+  [Worker3.key]: mkRefs(Worker3.key),
+  [RegionUS.key]: mkRefs(RegionUS.key),
+  [RegionEU.key]: mkRefs(RegionEU.key),
+  [Daily.key]: mkRefs(Daily.key),
+  [Weekly.key]: mkRefs(Weekly.key),
 };
 
 /** One row of the fleet table — live status + headline metrics per queue. */
@@ -277,17 +277,17 @@ const daemonsFor = <Id extends AllQueues>(
 // boot the whole fleet once, at module load
 managed.runFork(
   Effect.gen(function* () {
-    yield* daemonsFor(Mail, Mail.id, REFS[Mail.id]!);
-    yield* daemonsFor(Jobs, Jobs.id, REFS[Jobs.id]!);
-    yield* daemonsFor(Billing, Billing.id, REFS[Billing.id]!);
-    yield* daemonsFor(Notify, Notify.id, REFS[Notify.id]!);
-    yield* daemonsFor(Worker1, Worker1.id, REFS[Worker1.id]!);
-    yield* daemonsFor(Worker2, Worker2.id, REFS[Worker2.id]!);
-    yield* daemonsFor(Worker3, Worker3.id, REFS[Worker3.id]!);
-    yield* daemonsFor(RegionUS, RegionUS.id, REFS[RegionUS.id]!);
-    yield* daemonsFor(RegionEU, RegionEU.id, REFS[RegionEU.id]!);
-    yield* daemonsFor(Daily, Daily.id, REFS[Daily.id]!);
-    yield* daemonsFor(Weekly, Weekly.id, REFS[Weekly.id]!);
+    yield* daemonsFor(Mail, Mail.key, REFS[Mail.key]!);
+    yield* daemonsFor(Jobs, Jobs.key, REFS[Jobs.key]!);
+    yield* daemonsFor(Billing, Billing.key, REFS[Billing.key]!);
+    yield* daemonsFor(Notify, Notify.key, REFS[Notify.key]!);
+    yield* daemonsFor(Worker1, Worker1.key, REFS[Worker1.key]!);
+    yield* daemonsFor(Worker2, Worker2.key, REFS[Worker2.key]!);
+    yield* daemonsFor(Worker3, Worker3.key, REFS[Worker3.key]!);
+    yield* daemonsFor(RegionUS, RegionUS.key, REFS[RegionUS.key]!);
+    yield* daemonsFor(RegionEU, RegionEU.key, REFS[RegionEU.key]!);
+    yield* daemonsFor(Daily, Daily.key, REFS[Daily.key]!);
+    yield* daemonsFor(Weekly, Weekly.key, REFS[Weekly.key]!);
     return yield* Effect.never;
   }),
 );
@@ -331,17 +331,17 @@ export type QueueBundle = ReturnType<typeof bundle>;
 
 /** id → its live atoms + controls. */
 export const REGISTRY: Record<string, QueueBundle> = {
-  [Mail.id]: bundle(Mail, REFS[Mail.id]!),
-  [Jobs.id]: bundle(Jobs, REFS[Jobs.id]!),
-  [Billing.id]: bundle(Billing, REFS[Billing.id]!),
-  [Notify.id]: bundle(Notify, REFS[Notify.id]!),
-  [Worker1.id]: bundle(Worker1, REFS[Worker1.id]!),
-  [Worker2.id]: bundle(Worker2, REFS[Worker2.id]!),
-  [Worker3.id]: bundle(Worker3, REFS[Worker3.id]!),
-  [RegionUS.id]: bundle(RegionUS, REFS[RegionUS.id]!),
-  [RegionEU.id]: bundle(RegionEU, REFS[RegionEU.id]!),
-  [Daily.id]: bundle(Daily, REFS[Daily.id]!),
-  [Weekly.id]: bundle(Weekly, REFS[Weekly.id]!),
+  [Mail.key]: bundle(Mail, REFS[Mail.key]!),
+  [Jobs.key]: bundle(Jobs, REFS[Jobs.key]!),
+  [Billing.key]: bundle(Billing, REFS[Billing.key]!),
+  [Notify.key]: bundle(Notify, REFS[Notify.key]!),
+  [Worker1.key]: bundle(Worker1, REFS[Worker1.key]!),
+  [Worker2.key]: bundle(Worker2, REFS[Worker2.key]!),
+  [Worker3.key]: bundle(Worker3, REFS[Worker3.key]!),
+  [RegionUS.key]: bundle(RegionUS, REFS[RegionUS.key]!),
+  [RegionEU.key]: bundle(RegionEU, REFS[RegionEU.key]!),
+  [Daily.key]: bundle(Daily, REFS[Daily.key]!),
+  [Weekly.key]: bundle(Weekly, REFS[Weekly.key]!),
 };
 
 export type Node =
@@ -354,22 +354,22 @@ export const TREE: Group = {
   t: "g",
   name: "@acme/queues/Ops",
   members: [
-    { t: "q", name: Mail.id },
-    { t: "q", name: Jobs.id },
-    { t: "q", name: Billing.id },
+    { t: "q", name: Mail.key },
+    { t: "q", name: Jobs.key },
+    { t: "q", name: Billing.key },
     {
       t: "g",
       name: "@acme/queues/Workers",
       members: [
-        { t: "q", name: Worker1.id },
-        { t: "q", name: Worker2.id },
-        { t: "q", name: Worker3.id },
+        { t: "q", name: Worker1.key },
+        { t: "q", name: Worker2.key },
+        { t: "q", name: Worker3.key },
         {
           t: "g",
           name: "@acme/queues/Regional",
           members: [
-            { t: "q", name: RegionUS.id },
-            { t: "q", name: RegionEU.id },
+            { t: "q", name: RegionUS.key },
+            { t: "q", name: RegionEU.key },
           ],
         },
       ],
@@ -378,10 +378,10 @@ export const TREE: Group = {
       t: "g",
       name: "@acme/queues/Reports",
       members: [
-        { t: "q", name: Daily.id },
-        { t: "q", name: Weekly.id },
+        { t: "q", name: Daily.key },
+        { t: "q", name: Weekly.key },
       ],
     },
-    { t: "q", name: Notify.id },
+    { t: "q", name: Notify.key },
   ],
 };

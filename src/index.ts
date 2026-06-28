@@ -138,7 +138,7 @@ export {
 export {
   DuplicateGroupId,
   DuplicateInstance,
-  DuplicateResourceId,
+  DuplicateResourceKey,
   InstanceRoutingError,
   LocalOnlyMethod,
   MissingContractMethod,

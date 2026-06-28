@@ -334,7 +334,7 @@ export type CustomQueueInstanceSpec<F extends Schema.Struct.Fields> = Omit<
  */
 export const customQueueTag = <Self>() => {
   function build<F extends Schema.Struct.Fields, HSelf>(
-    id: string,
+    key: string,
     itemSchema: Schema.Struct<F>,
     levelCount: number,
     namedLevels: Readonly<Record<string, number>> | undefined,
@@ -343,7 +343,7 @@ export const customQueueTag = <Self>() => {
     readonly [hostSym]: HostKey<HSelf>;
   };
   function build<F extends Schema.Struct.Fields, HSelf>(
-    id: string,
+    key: string,
     itemSchema: Schema.Struct<F>,
     levelNames: readonly string[],
     options: CustomQueueTagOptions & { readonly host: HostKey<HSelf> },
@@ -351,20 +351,20 @@ export const customQueueTag = <Self>() => {
     readonly [hostSym]: HostKey<HSelf>;
   };
   function build<F extends Schema.Struct.Fields>(
-    id: string,
+    key: string,
     itemSchema: Schema.Struct<F>,
     levelCount: number,
     namedLevels?: Readonly<Record<string, number>>,
     options?: CustomQueueTagOptions,
   ): ResourceTag<Self, CustomQueueInstanceSpec<F>>;
   function build<F extends Schema.Struct.Fields>(
-    id: string,
+    key: string,
     itemSchema: Schema.Struct<F>,
     levelNames: readonly string[],
     options?: CustomQueueTagOptions,
   ): ResourceTag<Self, CustomQueueInstanceSpec<F>>;
   function build<F extends Schema.Struct.Fields>(
-    id: string,
+    key: string,
     itemSchema: Schema.Struct<F>,
     levelCountOrNames: number | readonly string[],
     fourth?:
@@ -381,8 +381,8 @@ export const customQueueTag = <Self>() => {
     const spec = customQueueSpec(itemSchema, levelConfig) as CustomQueueInstanceSpec<F>;
     void rest;
     return host === undefined
-      ? Resource.Tag<Self>(id, { description })(spec)
-      : Resource.Tag<Self>(id, { description })(spec, host);
+      ? Resource.Tag<Self>(key, { description })(spec)
+      : Resource.Tag<Self>(key, { description })(spec, host);
   }
   return build;
 };
@@ -427,9 +427,9 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
     const context = yield* Effect.context<R | RR>();
     const effectiveConfig = yield* foldConfiguredSpec<
       CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>
-    >(tag.id, config);
+    >(tag.key, config);
     const handle = yield* CustomQueueEngine.make({
-      name: tag.id,
+      name: tag.key,
       ...effectiveConfig,
       itemSchema,
     } as CustomQueueResourceConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
@@ -440,8 +440,8 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
     const history = yield* Effect.serviceOption(HistoryStore);
     const decodeMetric = Schema.decodeUnknownEffect(queueMetrics);
     const decodeLog = Schema.decodeUnknownEffect(queueLogEntry);
-    const metricsStreamId = `${tag.id}/metrics`;
-    const logsStreamId = `${tag.id}/logs`;
+    const metricsStreamId = `${tag.key}/metrics`;
+    const logsStreamId = `${tag.key}/logs`;
     yield* Option.match(history, {
       onNone: () => Effect.void,
       onSome: (store) =>
@@ -595,6 +595,6 @@ export const configure = <
 >(
   tag: ResourceTag<Self, CustomQueueInstanceSpec<F>>,
   patch: ConfigPatch<CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>>,
-): Layer.Layer<never> => configureLayer(tag.id, patch);
+): Layer.Layer<never> => configureLayer(tag.key, patch);
 
 export { customQueueTag as Tag };

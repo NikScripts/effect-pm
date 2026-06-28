@@ -31,7 +31,7 @@ export type CommandAtom = Atom.AtomResultFn<unknown, unknown, unknown>;
 
 /** The reactive UI surface of one resource, classified by contract. @since 1.0.0 */
 export interface ResourceUI {
-  readonly id: string;
+  readonly key: string;
   readonly displayName: string;
   readonly kind: ResourceKind;
   /** Streaming methods → an atom holding the latest emission. */
@@ -49,10 +49,10 @@ export interface ResourceUI {
 /** How many recent stream emissions to retain for charts/log panes. @since 1.0.0 */
 const HISTORY = 120;
 
-/** The trailing segment of a tag id (`@repo/pkg/RosterQueue` → `RosterQueue`). @since 1.0.0 */
-export const displayName = (id: string): string => {
-  const parts = id.split("/");
-  return parts[parts.length - 1] ?? id;
+/** The trailing segment of a tag key (`@repo/pkg/RosterQueue` → `RosterQueue`). @since 1.0.0 */
+export const displayName = (key: string): string => {
+  const parts = key.split("/");
+  return parts[parts.length - 1] ?? key;
 };
 
 // detect by the contract's *method* names (not status fields).
@@ -101,7 +101,7 @@ export const makeResourceUI = <Self extends R, S extends Spec, R, ER>(
   tag: ResourceTag<Self, S>,
 ): ResourceUI => {
   const erased = tag as unknown as ResourceTag<never, Spec>;
-  const reactivityKey = [tag.id];
+  const reactivityKey = [tag.key];
   const streams: Record<string, ValueAtom> = {};
   const histories: Record<string, ValueAtom> = {};
   const reads: Record<string, ValueAtom> = {};
@@ -131,8 +131,8 @@ export const makeResourceUI = <Self extends R, S extends Spec, R, ER>(
   }
 
   return {
-    id: tag.id,
-    displayName: displayName(tag.id),
+    key: tag.key,
+    displayName: displayName(tag.key),
     kind: detectKind(Object.keys(meta)),
     streams,
     histories,

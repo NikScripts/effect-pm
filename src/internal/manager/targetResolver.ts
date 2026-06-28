@@ -11,7 +11,7 @@
 
 /** Candidate command target from a fetched group contract. */
 export interface ProcessManagerTargetCandidate {
-  readonly id: string;
+  readonly key: string;
   readonly kind: "process" | "queue";
   readonly groupId: string;
   readonly controls: ReadonlyArray<string>;
@@ -65,7 +65,7 @@ const normalizeSegment = (segment: string): string =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-/** Normalize a full process/queue id or user-entered alias. */
+/** Normalize a full process/queue key or user-entered alias. */
 export const normalizeProcessManagerTarget = (input: string): string =>
   splitSegments(input)
     .map(normalizeSegment)
@@ -113,7 +113,7 @@ export const resolveProcessManagerTarget = (
   const normalizedInput = normalizeProcessManagerTarget(input);
   const indexed = candidates.map((candidate) => ({
     candidate,
-    normalizedId: normalizeProcessManagerTarget(candidate.id),
+    normalizedId: normalizeProcessManagerTarget(candidate.key),
   }));
   const matches = indexed.filter(({ normalizedId }) =>
     isSuffixMatch(normalizedId, normalizedInput)

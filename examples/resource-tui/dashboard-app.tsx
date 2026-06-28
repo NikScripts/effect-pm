@@ -117,8 +117,8 @@ const PrioRow = (props: {
 };
 
 // the ⬡ host marker (Mini), shown on resources that don't run on the Droplet
-const HostMark = (props: { readonly id: string }): React.ReactElement | null => {
-  const host = hostOf(props.id);
+const HostMark = (props: { readonly tagKey: string }): React.ReactElement | null => {
+  const host = hostOf(props.tagKey);
   return host === undefined ? null : <Text color="cyan"> ⬡ {host}</Text>;
 };
 
@@ -141,8 +141,8 @@ const QueueCell = (props: {
     <Box flexDirection="column" borderStyle={selected ? "double" : "round"} borderColor={selected ? "green" : COLOR[status]} height={CELL_HEIGHT} width={width} marginRight={1} marginBottom={1} paddingX={1}>
       <Box>
         <Box flexGrow={1}>
-          <Text bold wrap="truncate">{displayName(tag.id)}</Text>
-          <HostMark id={tag.id} />
+          <Text bold wrap="truncate">{displayName(tag.key)}</Text>
+          <HostMark tagKey={tag.key} />
         </Box>
         <Text color={COLOR[status]}>{STATUS_ICON[status]}</Text>
       </Box>
@@ -173,8 +173,8 @@ const ProcessCell = (props: {
     <Box flexDirection="column" borderStyle={selected ? "double" : "round"} borderColor={selected ? "green" : up ? "green" : "gray"} height={CELL_HEIGHT} width={width} marginRight={1} marginBottom={1} paddingX={1}>
       <Box>
         <Box flexGrow={1}>
-          <Text bold wrap="truncate">⚙ {displayName(tag.id)}</Text>
-          <HostMark id={tag.id} />
+          <Text bold wrap="truncate">⚙ {displayName(tag.key)}</Text>
+          <HostMark tagKey={tag.key} />
         </Box>
         <Text color={up ? "green" : "gray"}>{up ? "►" : "■"}</Text>
       </Box>
@@ -205,14 +205,14 @@ const GroupCell = (props: {
       <Box>
         <Box flexGrow={1}>
           <Text bold color="cyan" wrap="truncate">
-            ▸ {displayName(node.id)}
+            ▸ {displayName(node.key)}
           </Text>
         </Box>
         <Text dimColor>{leafCount}</Text>
       </Box>
       {width >= 22
         ? members.slice(0, 4).map((m, i) => (
-            <Text key={`${node.id}-${i}`} dimColor wrap="truncate">
+            <Text key={`${node.key}-${i}`} dimColor wrap="truncate">
               {Group.isGroup(m) ? "▸ " : isProcessTag(m) ? "⚙ " : "  "}
               {displayName(idOf(m))}
             </Text>
@@ -243,9 +243,9 @@ const Cell = (props: {
 /** Every leaf reachable under a node (recursing into subgroups). */
 const leafCountOf = (node: GroupNode): number =>
   Object.values(Group.members(node)).reduce<number>((n, m) => n + (Group.isGroup(m) ? leafCountOf(m) : 1), 0);
-/** Display id of any nav member (group node or leaf tag). */
+/** Display key of any nav member (group node or leaf tag). */
 const idOf = (m: unknown): string =>
-  Group.isGroup(m) ? m.id : isProcessTag(m) || isQueueTag(m) ? m.id : "";
+  Group.isGroup(m) ? m.key : isProcessTag(m) || isQueueTag(m) ? m.key : "";
 
 // bottom bar — view-specific hint, or the command palette (reversed: top match nearest input)
 const Bar = (props: {
@@ -264,12 +264,12 @@ const Bar = (props: {
         .map((tag, i) => ({ tag, i }))
         .reverse()
         .map(({ tag, i }) => (
-          <Box key={tag.id} paddingX={1}>
+          <Box key={tag.key} paddingX={1}>
             <Text color={i === sel ? "cyan" : undefined} dimColor={i !== sel}>
               {i === sel ? "› " : "  "}
               {isProcessTag(tag) ? "⚙ " : ""}
-              {displayName(tag.id)}
-              <Text dimColor> {tag.id}</Text>
+              {displayName(tag.key)}
+              <Text dimColor> {tag.key}</Text>
             </Text>
           </Box>
         ))}
@@ -377,7 +377,7 @@ const FocusedQueue = (props: {
 
   const sizes: Record<Priority, number> = s?.sizes ?? { high: 0, normal: 0, low: 0 };
   const view: View = {
-    name: tag.id,
+    name: tag.key,
     status: statusOf(s?.phase ?? "running", s?.paused ?? false),
     sizes,
     pending: sizes.high + sizes.normal + sizes.low,
@@ -424,7 +424,7 @@ const FocusedQueue = (props: {
             <Text dimColor>LOGS </Text>
             <Text color="green">live</Text>
             <Text dimColor> · in-flight {s?.inFlight ?? 0}</Text>
-            <HostMark id={tag.id} />
+            <HostMark tagKey={tag.key} />
           </Box>
           <Text dimColor>phase {s?.phase ?? "?"}</Text>
         </Box>
@@ -490,8 +490,8 @@ const FocusedProcess = (props: {
       <Box flexDirection="column" borderStyle="round" borderColor={up ? "green" : "gray"} paddingX={2} paddingY={1} marginX={1} marginTop={1}>
         <Box justifyContent="space-between">
           <Text bold color="cyan">
-            ⚙ {displayName(tag.id)}
-            <HostMark id={tag.id} />
+            ⚙ {displayName(tag.key)}
+            <HostMark tagKey={tag.key} />
           </Text>
           <Text color={up ? "green" : "gray"}>{up ? "► running" : "■ stopped"}</Text>
         </Box>
@@ -541,7 +541,7 @@ export const App = (): React.ReactElement => {
   const suggestions =
     cmd === null || cmd.length === 0
       ? []
-      : ALL_LEAVES.filter((tag) => displayName(tag.id).toLowerCase().includes(cmd.toLowerCase())).slice(0, 6);
+      : ALL_LEAVES.filter((tag) => displayName(tag.key).toLowerCase().includes(cmd.toLowerCase())).slice(0, 6);
 
   const avail = cols - 4;
   let perRow = Math.max(1, Math.floor(avail / 34));
@@ -702,7 +702,7 @@ export const App = (): React.ReactElement => {
   if (focused !== null) {
     return isProcessTag(focused) ? (
       <FocusedProcess
-        key={focused.id}
+        key={focused.key}
         tag={focused}
         cols={cols}
         rows={rows}
@@ -713,7 +713,7 @@ export const App = (): React.ReactElement => {
       />
     ) : (
       <FocusedQueue
-        key={focused.id}
+        key={focused.key}
         tag={focused}
         cols={cols}
         rows={rows}
@@ -729,7 +729,7 @@ export const App = (): React.ReactElement => {
   const start = effScroll * perRow;
   const visibleCells = members.slice(start, start + visibleRows * perRow);
   const more = totalRows - (effScroll + visibleRows);
-  const crumb = path.map((g) => displayName(g.id)).join(" / ");
+  const crumb = path.map((g) => displayName(g.key)).join(" / ");
 
   return (
     <Box flexDirection="column" width={cols} height={rows} borderStyle={editMode ? "double" : BLANK_BORDER} borderColor="red">

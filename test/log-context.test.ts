@@ -42,11 +42,11 @@ describe("logContext", () => {
   it("resolves a process target without a group flag", () =>
     Effect.gen(function* () {
       const scope = yield* resolveLogScope(
-        [{ id: "workshop-group" }],
+        [{ key: "workshop-group" }],
         Option.some("sync"),
         [
           {
-            id: "billing/sync",
+            key: "billing/sync",
             kind: "process",
             groupId: "workshop-group",
             controls: [],
