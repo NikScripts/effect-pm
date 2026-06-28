@@ -124,6 +124,18 @@
       "types": "./dist/ProcessScheduleContract.d.ts",
       "default": "./dist/ProcessScheduleContract.js"
     },
+    "./ApiMetrics": {
+      "types": "./dist/ApiMetrics.d.ts",
+      "default": "./dist/ApiMetrics.js"
+    },
+    "./ApiUsageSchema": {
+      "types": "./dist/ApiUsageSchema.d.ts",
+      "default": "./dist/ApiUsageSchema.js"
+    },
+    "./HttpApiResource": {
+      "types": "./dist/HttpApiResource.d.ts",
+      "default": "./dist/HttpApiResource.js"
+    },
     "./web": {
       "types": "./dist/web.d.ts",
       "default": "./dist/web.js"
