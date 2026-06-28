@@ -118,8 +118,17 @@ import { ProcessStore } from "./ProcessStore";
 import { isJsonValue } from "./internal/json";
 import type { JsonValue } from "./ProcessStoreEvent";
 import { DurableQueueStore } from "./DurableQueueStore";
-import { makeFifoLaneStore } from "./internal/fifoLaneStore";
-import type { Lane, LaneStore } from "./internal/laneStore";
+import type { LaneStore } from "./internal/laneStore";
+import { laneStoreFactoryFromConfig } from "./internal/laneStoreFactory";
+import { defaultPriorityToLevel } from "./internal/priorityMapping";
+import type { PriorityToLevel } from "./internal/priorityMapping";
+import type {
+  BuiltInTakeAlgorithm as BuiltInTakeAlgorithmInternal,
+  CustomTakeAlgorithm as CustomTakeAlgorithmInternal,
+  TakeAlgorithm as TakeAlgorithmInternal,
+  TakeAlgorithmPick as TakeAlgorithmPickInternal,
+  TakeAlgorithmPickContext as TakeAlgorithmPickContextInternal,
+} from "./internal/takeAlgorithm";
 import type {
   DurableEntry,
   DurableQueueStoreShape,
@@ -158,6 +167,56 @@ export {
  * @public
  */
 export type Priority = "high" | "normal" | "low";
+
+/**
+ * Built-in lane take algorithms for {@link QueueResourceConfigBase.takeAlgorithm}.
+ *
+ * - `"priority"` — lowest level index first (default; classic high → normal → low on 3 levels).
+ * - `"strict-descending"` — highest level index first (can starve lower levels).
+ * - `"weighted"` — virtual-time weighted fair queuing; level index is the weight (≥ 1).
+ *
+ * @public
+ */
+export type BuiltInTakeAlgorithm = BuiltInTakeAlgorithmInternal;
+
+/**
+ * Context passed to a {@link CustomTakeAlgorithm} on each non-blocking take.
+ *
+ * @public
+ */
+export type TakeAlgorithmPickContext = TakeAlgorithmPickContextInternal;
+
+/**
+ * Result of a custom take pick — which level to dequeue from and updated scheduler state.
+ *
+ * @public
+ */
+export type TakeAlgorithmPick = TakeAlgorithmPickInternal;
+
+/**
+ * User-supplied take algorithm. Return `undefined` when nothing should be taken (empty).
+ *
+ * @example
+ * ```ts
+ * const takeAlgorithm: CustomTakeAlgorithm = ({ nonEmpty, state }) => {
+ *   const idx = typeof state === "number" ? state : 0;
+ *   const pick = nonEmpty[idx % nonEmpty.length];
+ *   return pick === undefined
+ *     ? undefined
+ *     : { level: pick.level, nextState: idx + 1 };
+ * };
+ * ```
+ *
+ * @public
+ */
+export type CustomTakeAlgorithm = CustomTakeAlgorithmInternal;
+
+/**
+ * Lane take algorithm: a built-in name or a custom pick function.
+ *
+ * @public
+ */
+export type TakeAlgorithm = TakeAlgorithmInternal;
 
 /**
  * JSON-safe metadata for queue item wire encoding and typed group contracts.
@@ -857,6 +916,20 @@ export interface QueueResourceConfigBase<T> {
   /** Max items per priority queue (bounded backpressure). @default 50_000 */
   readonly capacity?: number;
   /**
+   * Number of priority lanes. The default queue uses 3 (`high`=0, `normal`=1, `low`=2).
+   *
+   * @default 3
+   */
+  readonly levelCount?: number;
+  /**
+   * How workers pick among non-empty lanes when taking the next item. `"priority"` is strict
+   * lowest-index-first (the default 3-level behavior). `"weighted"` and `"strict-descending"`
+   * apply to all configured levels; a {@link CustomTakeAlgorithm} function is also accepted.
+   *
+   * @default "priority"
+   */
+  readonly takeAlgorithm?: TakeAlgorithm;
+  /**
    * Extract a deduplication key from each item. When set, items with a key
    * already in-flight (enqueued or processing) are silently dropped.
    * The key is released after the worker `effect` completes.
@@ -1461,6 +1534,47 @@ const validateItemsWithSchema = <T>(
   });
 };
 
+/** Extension point for {@link CustomQueueResource} and other queue presets. @internal */
+interface BuildQueueEngineBindings<T, E, EEnqueue, R> {
+  readonly config: QueueRuntimeConfig<T, E, EEnqueue, R>;
+  readonly validateForEnqueue: ValidateForEnqueue<T, EEnqueue>;
+  readonly encodeForRelease: ReleaseEntryEncoder<T> | undefined;
+  readonly persistCodec: PersistCodec<T> | undefined;
+  /** Override config `levelCount` when wiring a custom preset. */
+  readonly levelCount?: number;
+  /** Maps public enqueue priority to a lane index (default: high=0, normal=1, low=2). */
+  readonly priorityToLevel?: PriorityToLevel;
+  /** Fully custom lane store; when omitted, derived from config `levelCount` + `takeAlgorithm`. */
+  readonly makeLaneStore?: (
+    capacity: number,
+  ) => Effect.Effect<LaneStore<InternalItem<T>>>;
+}
+
+/**
+ * Wire the shared queue runtime with lane-store and priority-mapping options.
+ *
+ * @internal
+ */
+function buildQueueEngine<T, E, EEnqueue, R>(
+  bindings: BuildQueueEngineBindings<T, E, EEnqueue, R>,
+): Effect.Effect<QueueHandle<T, E, EEnqueue, R>, never, Scope.Scope | R> {
+  const levelCount = bindings.levelCount ?? bindings.config.levelCount ?? 3;
+  const makeLaneStore =
+    bindings.makeLaneStore ??
+    laneStoreFactoryFromConfig<InternalItem<T>>({
+      levelCount,
+      takeAlgorithm: bindings.config.takeAlgorithm,
+    });
+  return makeQueueRuntime(
+    bindings.config,
+    bindings.validateForEnqueue,
+    bindings.encodeForRelease,
+    bindings.persistCodec,
+    makeLaneStore,
+    bindings.priorityToLevel ?? defaultPriorityToLevel,
+  );
+}
+
 type MakeQueueEffectResult<C extends QueueResourceConfig<any, any, any>> =
   [C] extends [QueueResourceConfigWithItemSchema<any, any, any>]
     ? QueueHandle<
@@ -1490,13 +1604,12 @@ const makeQueueEffectWithoutSchema = <
   never,
   Scope.Scope | InferQueueWorkerRequirements<C>
 > =>
-  makeQueueRuntime(
+  buildQueueEngine({
     config,
-    (items, _operation) => Effect.succeed(items),
-    undefined,
-    undefined,
-    (capacity) => makeFifoLaneStore({ capacity }),
-  );
+    validateForEnqueue: (items, _operation) => Effect.succeed(items),
+    encodeForRelease: undefined,
+    persistCodec: undefined,
+  });
 
 const makeQueueEffectWithSchema = <
   const C extends QueueResourceConfigWithItemSchema<any, any, any>,
@@ -1550,19 +1663,13 @@ const makeQueueEffectWithSchema = <
         ),
     });
   };
-  return makeQueueRuntime<
-    InferQueueItem<C>,
-    InferQueueWorkerError<C>,
-    QueueEnqueueErrors,
-    InferQueueWorkerRequirements<C>
-  >(
+  return buildQueueEngine({
     config,
-    (items, operation) =>
+    validateForEnqueue: (items, operation) =>
       validateItemsWithSchema(queueName, config.itemSchema, codecId, items, operation),
     encodeForRelease,
-    { encode: encodeItem, decode: Schema.decodeUnknownExit(config.itemSchema) },
-    (capacity) => makeFifoLaneStore({ capacity }),
-  );
+    persistCodec: { encode: encodeItem, decode: Schema.decodeUnknownExit(config.itemSchema) },
+  });
 };
 
 const makeQueueEffectFromConfig = (
@@ -1635,6 +1742,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
   makeLaneStore: (
     capacity: number,
   ) => Effect.Effect<LaneStore<InternalItem<T>>>,
+  priorityToLevel: PriorityToLevel = defaultPriorityToLevel,
 ): Effect.Effect<QueueHandle<T, E, EEnqueue, R>, never, Scope.Scope | R> =>
   Effect.gen(function* () {
     const queueName = config.name ?? "anonymous";
@@ -1751,10 +1859,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       readonly low: number;
     }> =
       persist === undefined
-        ? Effect.map(laneStore.sizes, ({ high, low, middle }) => ({
-            high,
-            normal: middle[0] ?? 0,
-            low,
+        ? Effect.map(laneStore.sizes, (levels) => ({
+            high: levels[0] ?? 0,
+            normal: levels[1] ?? 0,
+            low: levels[2] ?? 0,
           }))
         : persist.store
             .sizes(queueName)
@@ -2623,9 +2731,8 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
       }
     });
 
-    /** Map a priority level to its lane (normal → the single middle group `0`). */
-    const laneOf = (priority: Priority): Lane =>
-      priority === "high" ? "high" : priority === "low" ? "low" : { group: 0 };
+    /** Map public priority to a lane level index. */
+    const levelOf = priorityToLevel;
 
     // ─── Internal: enqueue logic ───
 
@@ -2751,7 +2858,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         // out-of-order analytics for the same dedupe-key cycle. The
         // internal `activeKeys` ref is already updated above so the
         // dedup invariant holds either way.
-        yield* Effect.forEach(toEnqueue, (i) => laneStore.offer(i, laneOf(priority)), {
+        yield* Effect.forEach(toEnqueue, (i) => laneStore.offer(i, levelOf(priority)), {
           discard: true,
         });
         yield* Effect.forEach(
@@ -3184,7 +3291,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
                         enqueuedAt: entry.enqueuedAtMillis,
                         key: entry.dedupKey ?? undefined,
                       },
-                      laneOf(entry.priority),
+                      levelOf(entry.priority),
                     ),
                     // wake a worker blocked in `takeNext` (offer alone doesn't signal)
                     signalWorkerWake,
@@ -3360,7 +3467,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
         }
         const restoredKeys: string[] = [];
         for (const item of items) {
-          yield* laneStore.offer(item, laneOf(item.priority));
+          yield* laneStore.offer(item, levelOf(item.priority));
           yield* restoreActiveKey(item);
           if (item.key !== undefined) {
             restoredKeys.push(item.key);
@@ -4081,4 +4188,12 @@ export const QueueResource = {
     QueueItemEncodingError,
     QueueShutdownError,
   },
+
+  /**
+   * Build a queue handle with custom lane wiring. Used by {@link CustomQueueResource} and other
+   * presets; the default {@link QueueResource.layer} uses this with built-in priority mapping.
+   *
+   * @internal
+   */
+  buildQueueEngine,
 } as const;

@@ -132,6 +132,7 @@ export { HttpClientRunGate } from "./HttpClientRunGate";
 export {
   HttpApiResource,
   acceptJson,
+  instrumentEndpoints,
   type HttpApiResourceLayerEffectConfig,
 } from "./HttpApiResource";
 export {
@@ -447,6 +448,11 @@ export type {
   QueueRouteOptions,
   QueueReleaseEncodingError,
   Priority,
+  BuiltInTakeAlgorithm,
+  TakeAlgorithm,
+  TakeAlgorithmPick,
+  TakeAlgorithmPickContext,
+  CustomTakeAlgorithm,
   QueueItemCodecDescriptor,
   InferQueueEnqueueError,
   InferQueueItem,
