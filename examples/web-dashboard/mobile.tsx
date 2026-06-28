@@ -12,6 +12,7 @@ import { Fleet } from "./fleet";
 import {
   type LeafTag,
   type ProcessTag,
+  type QueueBundle,
   kindOf,
   leafTags,
   processBundle,
@@ -20,10 +21,8 @@ import {
 import { useAtomValue } from "../../src/ui/atom-react";
 import { useViewTransition, useViewTransitionStyle } from "../../src/web/useViewTransition";
 import { useGroupRoute } from "../../src/web/useGroupRoute";
+import { Maximize2, Minimize2 } from "lucide-react";
 
-// route.selected is an opaque leaf tag — narrow it to a queue / process by its contract.
-const isProcessTag = (m: unknown): m is ProcessTag => kindOf(m) === "process";
-const isQueueTag = (m: unknown): m is LeafTag => kindOf(m) === "queue";
 import { Boundary } from "./components/ui/boundary";
 import { Button } from "./components/ui/button";
 import {
@@ -38,6 +37,50 @@ import {
   displayName,
 } from "./widgets";
 
+// route.selected is an opaque leaf tag — narrow it to a queue / process by its contract.
+const isProcessTag = (m: unknown): m is ProcessTag => kindOf(m) === "process";
+const isQueueTag = (m: unknown): m is LeafTag => kindOf(m) === "queue";
+
+/** The log pane with an animated fullscreen toggle — shared by the queue + process details.
+ *  The panel is one named element, so toggling inside a view transition morphs it to/from
+ *  fullscreen (grows to fill the screen) rather than snapping. */
+const LogPanel = (props: {
+  readonly bundle: { readonly logs: QueueBundle["logs"] };
+  readonly meta?: React.ReactNode;
+}): React.ReactElement => {
+  const [full, setFull] = React.useState(false);
+  const transition = useViewTransition();
+  const vt = useViewTransitionStyle("log-panel");
+  const toggle = (): void => transition("log-panel", () => setFull((f) => !f));
+  return (
+    <div
+      style={vt}
+      className={
+        full
+          ? "fixed inset-0 z-50 flex flex-col gap-2 bg-background p-2 safe-area"
+          : "flex min-h-0 flex-1 flex-col gap-1 landscape:min-h-[200px] landscape:max-h-[45dvh]"
+      }
+    >
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span>
+          LOGS <span className="text-[#22c55e]">live</span>
+          {props.meta}
+        </span>
+        <button
+          type="button"
+          onClick={toggle}
+          className="ml-auto rounded p-1 hover:bg-accent"
+          title={full ? "exit fullscreen" : "fullscreen logs"}
+          aria-label={full ? "exit fullscreen logs" : "fullscreen logs"}
+        >
+          {full ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+        </button>
+      </div>
+      <LogStream bundle={props.bundle} className="min-h-0 flex-1 rounded-md border bg-card py-1" />
+    </div>
+  );
+};
+
 const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void }): React.ReactElement => {
   const bundle = queueBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
@@ -51,16 +94,15 @@ const QueueDetail = (props: { readonly tag: LeafTag; readonly onBack: () => void
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
       <Boundary label="stats"><QueueStats bundle={bundle} /></Boundary>
-      <Boundary label="chart">
-        <div className="rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
-      </Boundary>
-      <Boundary label="controls"><QueueControls bundle={bundle} /></Boundary>
-      <div className="text-xs text-muted-foreground">
-        LOGS <span className="text-[#22c55e]">live</span> · phase {s?.phase ?? "?"}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+        <div className="min-w-0 sm:flex-1">
+          <Boundary label="chart">
+            <div className="rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
+          </Boundary>
+        </div>
+        <Boundary label="controls"><QueueControls bundle={bundle} /></Boundary>
       </div>
-      <Boundary label="logs">
-        <LogStream bundle={bundle} className="min-h-0 flex-1 rounded-md border bg-card py-1 landscape:min-h-[200px] landscape:max-h-[45dvh]" />
-      </Boundary>
+      <LogPanel bundle={bundle} meta={<> · phase {s?.phase ?? "?"}</>} />
     </div>
   );
 };
@@ -76,10 +118,7 @@ const ProcessDetail = (props: { readonly tag: ProcessTag; readonly onBack: () =>
       </div>
       <Boundary label="stats"><ProcessStats bundle={bundle} /></Boundary>
       <Boundary label="controls"><ProcessControls bundle={bundle} /></Boundary>
-      <div className="text-xs text-muted-foreground">LOGS <span className="text-[#22c55e]">live</span></div>
-      <Boundary label="logs">
-        <LogStream bundle={bundle} className="min-h-0 flex-1 rounded-md border bg-card py-1 landscape:min-h-[200px] landscape:max-h-[45dvh]" />
-      </Boundary>
+      <LogPanel bundle={bundle} />
     </div>
   );
 };

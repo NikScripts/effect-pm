@@ -43,6 +43,7 @@ import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
 import { cn } from "./lib/utils";
+import { Lock, LockOpen, Pause, Play, Power, RotateCw, Square, Trash2 } from "lucide-react";
 
 export const displayName = (key: string): string => key.split("/").pop() ?? key;
 export const fmtMs = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
@@ -279,18 +280,23 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
   );
 };
 
-/** A control button that reflects the command's round-trip: idle → … (sent, in-flight)
- *  → ✓ (server acknowledged) / ✗ (failed). */
+/** A control button whose icon stays constant — the command's round-trip shows as motion /
+ *  colour, never an icon swap: pulse while in-flight, a green ring on success, red on failure.
+ *  `confirm` arms on first tap (red, pulsing) and fires on the second; `disabled` for the lock. */
 export const ActionButton = (props: {
   readonly atom: CommandAtom;
   readonly label: string;
+  readonly icon?: React.ReactNode;
   readonly destructive?: boolean;
+  readonly disabled?: boolean;
+  readonly confirm?: boolean;
 }): React.ReactElement => {
   const trigger = useAtomSet(props.atom);
   const r = useAtomValue(props.atom);
   const pending = AsyncResult.isWaiting(r);
   const failed = AsyncResult.isFailure(r) && !pending;
   const [flash, setFlash] = React.useState(false);
+  const [armed, setArmed] = React.useState(false);
   const wasPending = React.useRef(false);
   React.useEffect(() => {
     if (pending) {
@@ -300,18 +306,58 @@ export const ActionButton = (props: {
     if (wasPending.current && AsyncResult.isSuccess(r)) {
       wasPending.current = false;
       setFlash(true);
-      const t = setTimeout(() => setFlash(false), 1500);
+      const t = setTimeout(() => setFlash(false), 1200);
       return () => clearTimeout(t);
     }
     return;
   }, [pending, r]);
-  const suffix = pending ? " …" : flash ? " ✓" : failed ? " ✗" : "";
+  // confirm: first tap arms (auto-disarms after 3s), second tap fires
+  React.useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 3000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  const fire = (): void => {
+    if (props.confirm === true && !armed) {
+      setArmed(true);
+      return;
+    }
+    setArmed(false);
+    trigger();
+  };
+  const disabled = pending || props.disabled === true;
+  const danger = armed || failed || props.destructive === true;
+  const feedback = pending
+    ? "animate-pulse"
+    : armed
+      ? "ring-2 ring-destructive ring-offset-1 animate-pulse"
+      : flash
+        ? "ring-2 ring-emerald-500 ring-offset-1 transition-shadow"
+        : "transition-shadow";
+
+  if (props.icon !== undefined) {
+    return (
+      <Button
+        variant={danger ? "destructive" : "outline"}
+        size="icon"
+        disabled={disabled}
+        onClick={fire}
+        title={armed ? `tap again to confirm: ${props.label}` : props.label}
+        aria-label={armed ? `confirm ${props.label}` : props.label}
+        className={feedback}
+      >
+        {props.icon}
+      </Button>
+    );
+  }
+  const suffix = pending ? " …" : flash ? " ✓" : failed ? " ✗" : armed ? " — confirm?" : "";
   return (
     <Button
-      variant={failed || props.destructive === true ? "destructive" : "outline"}
+      variant={danger ? "destructive" : "outline"}
       size="sm"
-      disabled={pending}
-      onClick={() => trigger()}
+      disabled={disabled}
+      onClick={fire}
+      className={feedback}
     >
       {props.label}
       {suffix}
@@ -319,14 +365,62 @@ export const ActionButton = (props: {
   );
 };
 
-export const QueueControls = (props: { readonly bundle: QueueBundle }): React.ReactElement => (
-  <div className="flex flex-wrap gap-2">
-    <ActionButton atom={props.bundle.pause} label="pause" />
-    <ActionButton atom={props.bundle.resume} label="resume" />
-    <ActionButton atom={props.bundle.clear} label="clear" />
-    <ActionButton atom={props.bundle.shutdown} label="shutdown" destructive />
-  </div>
-);
+/** Lock toggle for a control row — guards against accidental taps. Locking is immediate;
+ *  unlocking takes a confirm tap (red + pulse) so the guard isn't fat-fingered off. */
+const LockToggle = (props: { readonly locked: boolean; readonly onToggle: () => void }): React.ReactElement => {
+  const [armed, setArmed] = React.useState(false);
+  React.useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 3000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  const onClick = (): void => {
+    if (!props.locked) {
+      props.onToggle(); // lock immediately
+      return;
+    }
+    if (!armed) {
+      setArmed(true); // first tap arms the unlock
+      return;
+    }
+    setArmed(false);
+    props.onToggle(); // second tap unlocks
+  };
+  return (
+    <Button
+      type="button"
+      variant={armed ? "destructive" : props.locked ? "secondary" : "outline"}
+      size="icon"
+      onClick={onClick}
+      title={props.locked ? (armed ? "tap again to unlock" : "unlock controls") : "lock controls"}
+      aria-label={props.locked ? "unlock controls" : "lock controls"}
+      className={armed ? "ring-2 ring-destructive ring-offset-1 animate-pulse" : "transition-shadow"}
+    >
+      {props.locked ? <Lock className="size-4" /> : <LockOpen className="size-4" />}
+    </Button>
+  );
+};
+
+/** Prototype controls: icon buttons, with pause/resume folded into one toggle that reflects
+ *  the live `paused` state. */
+export const QueueControls = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
+  const statusR = useAtomValue(props.bundle.status);
+  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const paused = s?.paused === true;
+  const [locked, setLocked] = React.useState(true);
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+      {paused ? (
+        <ActionButton atom={props.bundle.resume} label="resume" icon={<Play className="size-4" />} disabled={locked} />
+      ) : (
+        <ActionButton atom={props.bundle.pause} label="pause" icon={<Pause className="size-4" />} disabled={locked} />
+      )}
+      <ActionButton atom={props.bundle.clear} label="clear" icon={<Trash2 className="size-4" />} disabled={locked} confirm />
+      <ActionButton atom={props.bundle.shutdown} label="shutdown" icon={<Power className="size-4" />} disabled={locked} confirm destructive />
+      <LockToggle locked={locked} onToggle={() => setLocked((l) => !l)} />
+    </div>
+  );
+};
 
 /** The live log stream (auto-scrolls to newest). Works for any bundle with `logs`. */
 export const LogStream = (props: {
@@ -403,10 +497,22 @@ export const ProcessStats = (props: { readonly bundle: ProcessBundle }): React.R
 };
 
 /** Process controls — start / stop / run-now (with round-trip feedback). */
-export const ProcessControls = (props: { readonly bundle: ProcessBundle }): React.ReactElement => (
-  <div className="flex flex-wrap gap-2">
-    <ActionButton atom={props.bundle.start} label="start" />
-    <ActionButton atom={props.bundle.stop} label="stop" />
-    <ActionButton atom={props.bundle.runImmediately} label="run now" />
-  </div>
-);
+/** Prototype controls: icon buttons, start/stop folded into one toggle on the live
+ *  `supervising` state. */
+export const ProcessControls = (props: { readonly bundle: ProcessBundle }): React.ReactElement => {
+  const statusR = useAtomValue(props.bundle.status);
+  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const up = s?.supervising === true;
+  const [locked, setLocked] = React.useState(true);
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+      {up ? (
+        <ActionButton atom={props.bundle.stop} label="stop" icon={<Square className="size-4" />} disabled={locked} confirm destructive />
+      ) : (
+        <ActionButton atom={props.bundle.start} label="start" icon={<Play className="size-4" />} disabled={locked} />
+      )}
+      <ActionButton atom={props.bundle.runImmediately} label="run now" icon={<RotateCw className="size-4" />} disabled={locked} />
+      <LockToggle locked={locked} onToggle={() => setLocked((l) => !l)} />
+    </div>
+  );
+};
