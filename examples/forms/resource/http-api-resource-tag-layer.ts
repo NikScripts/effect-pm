@@ -1,7 +1,7 @@
 /**
  * @module examples/forms/resource/http-api-resource-tag-layer
  *
- * HttpApiResource.Tag — class tag + baked-in layer. Run: `pnpm run example:http-api-resource`
+ * HttpApiResource.make — tag + layer. Run: `pnpm run example:http-api-resource`
  */
 
 import { FetchHttpClient } from "effect/unstable/http";
@@ -26,15 +26,13 @@ const DemoApi = HttpApi.make("jsonplaceholder-demo").add(
   ),
 );
 
-class DemoApiClient extends HttpApiResource.Tag<DemoApiClient>()(
-  "examples/jsonplaceholder/DemoApiClient",
-  DemoApi,
-  {
-    baseUrl: "https://jsonplaceholder.typicode.com",
-    transformClient: HttpApiResource.acceptJson,
-    concurrency: 2,
-  },
-) {}
+// Tag + layer: provide DemoApiClient.layer and FetchHttpClient.layer at the root.
+const DemoApiClient = HttpApiResource.make(DemoApi, {
+  name: "examples/jsonplaceholder/DemoApiClient",
+  baseUrl: "https://jsonplaceholder.typicode.com",
+  transformClient: HttpApiResource.acceptJson,
+  concurrency: 2, // throttle + concurrency on every request effect
+});
 
 const program = Effect.gen(function* () {
   const client = yield* DemoApiClient;

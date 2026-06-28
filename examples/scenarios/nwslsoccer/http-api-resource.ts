@@ -1,5 +1,5 @@
 /**
- * NWSL SDP client via {@link HttpApiResource.make} (same API as {@link NwslsoccerClient}, plus optional concurrency).
+ * NWSL SDP client via {@link HttpApiResource.make} (same API as {@link NwslsoccerClient}, plus optional `limits`).
  *
  * Compare `client.ts`: that uses `Context.Tag` + `HttpApiClient.make`. Here the factory returns a
  * **tag + `layer`** from this package — concurrency / throttle apply on the transport like
@@ -33,9 +33,11 @@ const program = Effect.gen(function* () {
   const baseUrl = yield* NwslSoccerApiBaseUrl;
   const NwslTag = HttpApiResource.make(NwslsoccerApi, {
     name: "examples/nwslsoccer/NwslHttpApiResource",
-    baseUrl,
-    transformClient: HttpApiResource.acceptJson,
-    concurrency: 2,
+    client: {
+      baseUrl,
+      transformClient: HttpApiResource.acceptJson,
+    },
+    limits: { concurrency: 2 },
   });
   yield* Effect.gen(function* () {
     const client = yield* NwslTag;

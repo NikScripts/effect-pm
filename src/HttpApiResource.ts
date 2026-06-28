@@ -2,43 +2,49 @@
  * HttpApiResource — typed HTTP API client with transport-level concurrency gating.
  *
  * Wraps Effect's `HttpApiClient.make` with a `Semaphore`-based concurrency gate
- * on the `HttpClient` transport layer (via `HttpClientRunGate.withRunner` applied to
- * `HttpClient.transform`).
+ * on the `HttpClient` transport layer (via `HttpClient.transform`). This limits
+ * how many concurrent HTTP requests can be in-flight through this client.
  *
- * ## Endpoint usage metrics
- *
- * Each schema endpoint is wrapped via `HttpApi.reflect` after the client is built.
- * Labels use stable schema names (not raw URLs):
- *
- * | Metric | Type | Labels | What it measures |
- * |--------|------|--------|------------------|
- * | `httpapi_endpoint_requests_total` | counter | `client`, `group`, `endpoint`, `outcome` | Invocations (`outcome`: `success` \| `error`) |
- * | `httpapi_endpoint_errors_total` | counter | `client`, `group`, `endpoint`, `error` | Failures by tagged error (`_tag` or `Failure`) |
- * | `httpapi_endpoint_duration_ms` | histogram (ms) | `client`, `group`, `endpoint` | Wall time per endpoint call |
- *
- * Each endpoint call also opens an Effect span named `{group}.{endpoint}` (kind `client`)
- * with `client`, `httpapi.group`, and `httpapi.endpoint` attributes — aligned with usage
- * identity, not generic `http.client GET` transport spans alone.
- *
- * ### Transport (secondary)
- *
- * `httpapi_in_flight` (gauge, label `client`) — concurrent HTTP round-trips; for throttle
- * tuning, not usage ranking.
+ * ## Entry points
  *
  * | Function | Purpose |
  * |----------|---------|
- * | `HttpApiResource.Tag` | Class factory: tag + baked-in `.layer` |
- * | `HttpApiResource.make` | Functional tag + `.layer` from an HttpApi schema |
+ * | `HttpApiResource.make` | Build a tag + `.layer` from an HttpApi schema |
  * | `HttpApiResource.layerEffect` | Gate an existing client-building effect |
  * | `HttpApiResource.acceptJson` | `Accept: application/json` header helper |
+ *
+ * ## Usage
+ *
+ * ```ts
+ * import { HttpApi, HttpApiGroup, HttpApiEndpoint } from "effect/unstable/httpapi"
+ * import { HttpApiResource } from "@nikscripts/effect-pm"
+ * import { Schema } from "effect"
+ *
+ * // Define your API schema
+ * const myEndpoint = HttpApiEndpoint.get("getUser", "/users/:id", {
+ *   success: Schema.Struct({ name: Schema.String }),
+ * })
+ * const MyApi = HttpApi.make("my-api").add(HttpApiGroup.make("users").add(myEndpoint))
+ *
+ * // Create a gated client (max 5 concurrent requests)
+ * const MyClient = HttpApiResource.make(MyApi, {
+ *   name: "@app/MyClient",
+ *   baseUrl: "https://api.example.com",
+ *   concurrency: 5,
+ * })
+ *
+ * // Use in program
+ * const user = yield* MyClient
+ * const result = yield* user.users.getUser({ path: { id: "123" } })
+ * ```
  *
  * @module HttpApiResource
  */
 
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { HttpApi, HttpApiClient } from "effect/unstable/httpapi";
+import { HttpApiClient } from "effect/unstable/httpapi";
 import type { HttpApi as HttpApiType, HttpApiGroup } from "effect/unstable/httpapi";
-import { Cause, Clock, Context, Effect, Exit, Layer, Metric, Predicate, Ref, Semaphore } from "effect";
+import { Context, Effect, Layer, Semaphore } from "effect";
 import { HttpClientRunGate } from "./HttpClientRunGate";
 import type { RunResourceRunner } from "./RunResource";
 
@@ -49,6 +55,12 @@ import type { RunResourceRunner } from "./RunResource";
 /**
  * Configuration for {@link HttpApiResource.make}.
  *
+ * Flat config — no nested objects. `concurrency` controls max in-flight requests.
+ *
+ * @typeParam ApiId - The HttpApi identifier string
+ * @typeParam Groups - The HttpApiGroup types in the API
+ * @typeParam Name - String literal service key
+ *
  * @public
  */
 export interface HttpApiResourceConfig<
@@ -56,14 +68,28 @@ export interface HttpApiResourceConfig<
   _Groups extends HttpApiGroup.Any,
   Name extends string = string,
 > {
+  /** Context tag id (service key). Use a stable, namespaced string. */
   readonly name: Name;
+  /** Base URL for all requests. */
   readonly baseUrl?: URL | string | undefined;
+  /**
+   * Transform the `HttpClient` before requests. Applied BEFORE the concurrency gate.
+   * Use for custom headers, auth injection, request signing, etc.
+   */
   readonly transformClient?:
     | ((client: HttpClient.HttpClient) => HttpClient.HttpClient)
     | undefined;
+  /**
+   * Transform the response effect. Applied after decode.
+   * Use for response-level middleware (caching, retry, etc.).
+   */
   readonly transformResponse?:
     | ((effect: Effect.Effect<unknown, unknown, unknown>) => Effect.Effect<unknown, unknown, unknown>)
     | undefined;
+  /**
+   * Max concurrent HTTP requests through this client.
+   * When omitted, no concurrency limit is applied (pass-through).
+   */
   readonly concurrency?: number;
 }
 
@@ -72,16 +98,11 @@ export interface HttpApiResourceConfig<
  *
  * @public
  */
-export interface HttpApiResourceLayerEffectConfig<
-  ApiId extends string = string,
-  Groups extends HttpApiGroup.Any = HttpApiGroup.Any,
-> {
-  readonly concurrency?: number;
+export interface HttpApiResourceLayerEffectConfig {
   /**
-   * When set, endpoint usage metrics and spans are applied to the built client
-   * (same as {@link instrumentEndpoints}).
+   * Max concurrent HTTP requests. When omitted, no limit.
    */
-  readonly api?: HttpApiType.HttpApi<ApiId, Groups>;
+  readonly concurrency?: number;
 }
 
 // ============================================================================
@@ -90,180 +111,26 @@ export interface HttpApiResourceLayerEffectConfig<
 
 /**
  * `Accept: application/json` header on every request.
+ * Pipe-friendly: `client.pipe(acceptJson)` or use in `transformClient`.
  *
  * @public
  */
 export const acceptJson = <E, R>(
   client: HttpClient.HttpClient.With<E, R>,
 ): HttpClient.HttpClient.With<E, R> =>
+  // Apply Accept header to all outgoing requests
   client.pipe(
     HttpClient.mapRequest(HttpClientRequest.setHeader("Accept", "application/json")),
   );
-
-type EndpointLabels = {
-  readonly client: string;
-  readonly group: string;
-  readonly endpoint: string;
-};
-
-const endpointSpanName = (labels: EndpointLabels): string =>
-  `${labels.group}.${labels.endpoint}`;
-
-const failureLabel = (cause: Cause.Cause<unknown>): string => {
-  const squashed = Cause.squash(cause);
-  if (Predicate.hasProperty(squashed, "_tag") && typeof squashed._tag === "string") {
-    return squashed._tag;
-  }
-  return "Failure";
-};
-
-// ============================================================================
-// Metrics
-// ============================================================================
-
-const latencyBoundaries = Metric.exponentialBoundaries({ start: 1, factor: 2, count: 12 });
-
-const makeEndpointMetrics = (clientId: string) => ({
-  requests: Metric.counter("httpapi_endpoint_requests_total", {
-    incremental: true,
-    description: "HttpApi endpoint invocations by outcome",
-    attributes: { client: clientId },
-  }),
-  errors: Metric.counter("httpapi_endpoint_errors_total", {
-    incremental: true,
-    description: "HttpApi endpoint failures by error tag",
-    attributes: { client: clientId },
-  }),
-  duration: Metric.histogram("httpapi_endpoint_duration_ms", {
-    description: "HttpApi endpoint call duration in milliseconds",
-    attributes: { client: clientId },
-    boundaries: latencyBoundaries,
-  }),
-});
-
-const recordEndpointUsage = (
-  exit: Exit.Exit<unknown, unknown>,
-  durationMs: number,
-  labels: EndpointLabels,
-  metrics: ReturnType<typeof makeEndpointMetrics>,
-): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    const base = { group: labels.group, endpoint: labels.endpoint };
-    const outcome = Exit.isFailure(exit) ? "error" : "success";
-    yield* Metric.update(Metric.withAttributes(metrics.requests, { ...base, outcome }), 1);
-    yield* Metric.update(Metric.withAttributes(metrics.duration, base), durationMs);
-    if (Exit.isFailure(exit)) {
-      yield* Metric.update(
-        Metric.withAttributes(metrics.errors, { ...base, error: failureLabel(exit.cause) }),
-        1,
-      );
-    }
-  });
-
-const wrapEndpointCall = <Fn extends (...args: Array<never>) => Effect.Effect<unknown, unknown, unknown>>(
-  call: Fn,
-  labels: EndpointLabels,
-  metrics: ReturnType<typeof makeEndpointMetrics>,
-): Fn => {
-  const wrapped = (...args: Parameters<Fn>) =>
-    Effect.gen(function* () {
-      const start = yield* Clock.currentTimeMillis;
-      const exit = yield* Effect.exit(
-        call(...args).pipe(
-          Effect.withSpan(endpointSpanName(labels), {
-            kind: "client",
-            attributes: {
-              client: labels.client,
-              "httpapi.group": labels.group,
-              "httpapi.endpoint": labels.endpoint,
-            },
-          }),
-        ),
-      );
-      const duration = (yield* Clock.currentTimeMillis) - start;
-      yield* recordEndpointUsage(exit, duration, labels, metrics);
-      return yield* Exit.match(exit, {
-        onFailure: Effect.failCause,
-        onSuccess: Effect.succeed,
-      });
-    });
-  return wrapped as Fn;
-};
-
-/**
- * Wrap every endpoint on a built HttpApi client with usage metrics and spans.
- *
- * @public
- */
-export const instrumentEndpoints = <
-  ApiId extends string,
-  Groups extends HttpApiGroup.Any,
->(
-  api: HttpApiType.HttpApi<ApiId, Groups>,
-  client: HttpApiClient.Client<Groups>,
-  clientId: string,
-): void => {
-  const metrics = makeEndpointMetrics(clientId);
-  HttpApi.reflect(api, {
-    onGroup: () => {},
-    onEndpoint({ group, endpoint }) {
-      const bucket: Record<string, unknown> | undefined = group.topLevel
-        ? (client as Record<string, unknown>)
-        : (client as Record<string, Record<string, unknown>>)[group.identifier];
-      if (bucket === undefined) {
-        return;
-      }
-      const original = bucket[endpoint.name];
-      if (typeof original !== "function") {
-        return;
-      }
-      bucket[endpoint.name] = wrapEndpointCall(
-        original as (...args: Array<never>) => Effect.Effect<unknown, unknown, unknown>,
-        { client: clientId, group: group.identifier, endpoint: endpoint.name },
-        metrics,
-      );
-    },
-  });
-};
-
-type InFlightTransform = <E, R>(
-  client: HttpClient.HttpClient.With<E, R>,
-) => HttpClient.HttpClient.With<E, R>;
-
-const makeInFlightTransform = (
-  clientId: string,
-): Effect.Effect<InFlightTransform, never, never> =>
-  Effect.gen(function* () {
-    const inFlightRef = yield* Ref.make(0);
-    const inFlightGauge = Metric.gauge("httpapi_in_flight", {
-      description: "HTTP round-trips currently in flight for this client tag",
-      attributes: { client: clientId },
-    });
-
-    return <E, R>(client: HttpClient.HttpClient.With<E, R>) =>
-      HttpClient.transform(client, (effect, _request) =>
-        Effect.gen(function* () {
-          yield* Metric.update(
-            inFlightGauge,
-            yield* Ref.updateAndGet(inFlightRef, (n) => n + 1),
-          );
-          const exit = yield* Effect.exit(effect);
-          yield* Metric.update(
-            inFlightGauge,
-            yield* Ref.updateAndGet(inFlightRef, (n) => Math.max(0, n - 1)),
-          );
-          return yield* Exit.match(exit, {
-            onFailure: Effect.failCause,
-            onSuccess: Effect.succeed,
-          });
-        }),
-      );
-  });
 
 // ============================================================================
 // Internal: build the runner from concurrency config
 // ============================================================================
 
+/**
+ * Build a RunResourceRunner (semaphore gate) from concurrency config.
+ * When concurrency is undefined, returns an identity wrapper (no gating).
+ */
 const makeRunnerFromConcurrency = (
   concurrency: number | undefined,
 ): Effect.Effect<RunResourceRunner, never, never> =>
@@ -275,70 +142,20 @@ const makeRunnerFromConcurrency = (
           <A, E, R>(effect: Effect.Effect<A, E, R>) => sem.withPermits(1)(effect),
       );
 
-const applyTransportMiddleware = (
-  client: HttpClient.HttpClient,
-  options: {
-    readonly runner: RunResourceRunner;
-    readonly withInFlight: InFlightTransform;
-    readonly transformClient?: HttpApiResourceConfig<string, HttpApiGroup.Any, string>["transformClient"];
-  },
-): HttpClient.HttpClient => {
-  const userTransformed =
-    options.transformClient !== undefined ? options.transformClient(client) : client;
-  const gated = HttpClientRunGate.withRunner(options.runner)(userTransformed);
-  return options.withInFlight(gated);
-};
-
-const maybeInstrumentEndpoints = <
-  ApiId extends string,
-  Groups extends HttpApiGroup.Any,
-  Service,
->(
-  service: Service,
-  clientId: string,
-  api: HttpApiType.HttpApi<ApiId, Groups> | undefined,
-): Service => {
-  if (api !== undefined) {
-    instrumentEndpoints(api, service as HttpApiClient.Client<Groups>, clientId);
-  }
-  return service;
-};
-
 // ============================================================================
-// Core
+// Core: build the HttpApiClient with transport gate
 // ============================================================================
 
-const buildLayer = <
-  ApiId extends string,
-  Groups extends HttpApiGroup.Any,
-  Name extends string,
-  Self,
->(
-  tag: Context.Key<Self, HttpApiClient.Client<Groups>>,
-  api: HttpApiType.HttpApi<ApiId, Groups>,
-  config: HttpApiResourceConfig<ApiId, Groups, Name>,
-) =>
-  Layer.effect(tag)(
-    Effect.gen(function* () {
-      const runner = yield* makeRunnerFromConcurrency(config.concurrency);
-      const withInFlight = yield* makeInFlightTransform(config.name);
-
-      const client = yield* HttpApiClient.make(api, {
-        baseUrl: config.baseUrl,
-        transformClient: (c) =>
-          applyTransportMiddleware(c, {
-            runner,
-            withInFlight,
-            transformClient: config.transformClient,
-          }),
-        transformResponse: config.transformResponse,
-      });
-
-      instrumentEndpoints(api, client, config.name);
-      return client;
-    }),
-  );
-
+/**
+ * Internal factory: creates the Context tag and gated Layer for an HttpApi.
+ *
+ * Pipeline:
+ * 1. Allocate concurrency semaphore (if configured)
+ * 2. Acquire HttpClient from context
+ * 3. Apply user's transformClient (auth, headers, etc.)
+ * 4. Apply concurrency gate via HttpClientRunGate
+ * 5. Build typed HttpApiClient with the gated transport
+ */
 function makeHttpApiResource<
   ApiId extends string,
   Groups extends HttpApiGroup.Any,
@@ -350,59 +167,58 @@ function makeHttpApiResource<
   type ClientShape = HttpApiClient.Client<Groups>;
 
   const tag = Context.Service<ClientShape>(config.name);
-  const layer = buildLayer(tag, api, config);
+
+  const layer = Layer.effect(tag)(
+    Effect.gen(function* () {
+      // Build the concurrency gate (identity if no limit)
+      const runner = yield* makeRunnerFromConcurrency(config.concurrency);
+
+      // Build the typed client with gated transport
+      return yield* HttpApiClient.make(api, {
+        baseUrl: config.baseUrl,
+        transformClient: (c) => {
+          // User transform first (auth, headers), then gate wraps the full request
+          const userTransformed = config.transformClient !== undefined ? config.transformClient(c) : c;
+          return HttpClientRunGate.withRunner(runner)(userTransformed);
+        },
+        transformResponse: config.transformResponse,
+      });
+    }),
+  );
 
   return Object.assign(tag, { layer });
 }
 
-const httpApiResourceTag = <Self>() =>
-  <
-    ApiId extends string,
-    Groups extends HttpApiGroup.Any,
-    const Name extends string,
-  >(
-    name: Name,
-    api: HttpApiType.HttpApi<ApiId, Groups>,
-    config?: Omit<HttpApiResourceConfig<ApiId, Groups, Name>, "name">,
-  ): Context.ServiceClass<Self, Name, HttpApiClient.Client<Groups>> & {
-    readonly layer: Layer.Layer<Self, never, HttpClient.HttpClient>;
-  } => {
-    type ClientShape = HttpApiClient.Client<Groups>;
-    const fullConfig = { ...config, name } as HttpApiResourceConfig<ApiId, Groups, Name>;
-    const Base = Context.Service<Self, ClientShape>()(name);
-    const layer = buildLayer(Base, api, fullConfig);
-    return class extends Base {
-      static readonly layer = layer;
-    } as Context.ServiceClass<Self, Name, ClientShape> & {
-      readonly layer: Layer.Layer<Self, never, HttpClient.HttpClient>;
-    };
-  };
-
+/**
+ * Layer helper: wrap an existing client-building effect with a transport gate.
+ *
+ * Acquires `HttpClient` from context, applies the concurrency gate, then
+ * provides the gated client to `effect` so the resulting typed client
+ * uses the shared gate for all requests.
+ *
+ * @public
+ */
 function layerEffect<
   Service,
   Identifier,
   Error,
   Requirements,
-  ApiId extends string = string,
-  Groups extends HttpApiGroup.Any = HttpApiGroup.Any,
 >(
   tag: Context.Key<Identifier, Service>,
   effect: Effect.Effect<Service, Error, Requirements>,
-  config: HttpApiResourceLayerEffectConfig<ApiId, Groups> = {},
+  config: HttpApiResourceLayerEffectConfig = {},
 ) {
   return Layer.effect(tag)(
     Effect.gen(function* () {
+      // Allocate concurrency gate
       const runner = yield* makeRunnerFromConcurrency(config.concurrency);
-      const withInFlight = yield* makeInFlightTransform(String(tag.key));
+      // Get platform HttpClient and wrap with gate
       const httpClient = yield* HttpClient.HttpClient;
-      const instrumented = applyTransportMiddleware(httpClient, {
-        runner,
-        withInFlight,
-      });
-      const service = yield* effect.pipe(
-        Effect.provideService(HttpClient.HttpClient, instrumented),
+      const gatedHttpClient = HttpClientRunGate.withRunner(runner)(httpClient);
+      // Run the user's client-building effect with the gated transport
+      return yield* effect.pipe(
+        Effect.provideService(HttpClient.HttpClient, gatedHttpClient),
       );
-      return maybeInstrumentEndpoints(service, String(tag.key), config.api);
     }),
   );
 }
@@ -418,22 +234,42 @@ function layerEffect<
  */
 export const HttpApiResource = {
   /**
-   * Class factory: declare a typed HttpApi client with a baked-in `.layer`.
+   * Build a typed HttpApiClient tag with `.layer`.
+   *
+   * The layer requires `HttpClient.HttpClient` in context (provide via
+   * `FetchHttpClient.layer` or a test mock).
    *
    * @example
    * ```ts
-   * class MyClient extends HttpApiResource.Tag<MyClient>()("@app/MyClient", MyApi, {
+   * const MyClient = HttpApiResource.make(MyApi, {
+   *   name: "@app/MyClient",
    *   baseUrl: "https://api.example.com",
    *   concurrency: 5,
-   * }) {}
+   * })
    * const client = yield* MyClient
+   * yield* client.users.getUser({ path: { id: "123" } })
    * ```
    */
-  Tag: httpApiResourceTag,
-
-  /** Functional equivalent of {@link Tag} — returns a tag value with `.layer`. */
   make: makeHttpApiResource,
+
+  /**
+   * Wrap an existing client-building effect with a shared transport gate.
+   * Useful when you already have a custom `HttpApiClient.make` pipeline.
+   *
+   * @example
+   * ```ts
+   * class MyClient extends Context.Service<MyClient, ClientShape>()("@app/MyClient") {}
+   * const MyClientLive = HttpApiResource.layerEffect(MyClient, myCustomMakeEffect, {
+   *   concurrency: 10,
+   * })
+   * ```
+   */
   layerEffect,
+
+  /**
+   * `Accept: application/json` header helper.
+   * Use in `transformClient` or pipe directly: `client.pipe(acceptJson)`.
+   */
   acceptJson,
-  instrumentEndpoints,
 } as const;
+

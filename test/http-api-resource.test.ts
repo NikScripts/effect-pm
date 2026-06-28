@@ -1,13 +1,9 @@
 import { it, describe, expect } from "@effect/vitest"
-import { Context, Effect, Exit, Layer, Metric, Ref, Schema } from "effect"
+import { Context, Effect, Layer, Ref, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import type { HttpClientError } from "effect/unstable/http"
 import { HttpApi, HttpApiClient, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 import { acceptJson, HttpApiResource } from "../src"
-
-const pingEndpoint = HttpApiEndpoint.get("ping", "/ping", {
-  success: Schema.Struct({ pong: Schema.Boolean }),
-})
 
 const json200 = JSON.stringify({ pong: true })
 
@@ -32,6 +28,10 @@ const makeRecordingClient = (activeRef: Ref.Ref<number>, peakRef: Ref.Ref<number
       ),
     (request) => Effect.succeed(request)
   )
+
+const pingEndpoint = HttpApiEndpoint.get("ping", "/ping", {
+  success: Schema.Struct({ pong: Schema.Boolean }),
+})
 
 const fakeHttpClientLayer = Layer.succeed(
   HttpClient.HttpClient,
@@ -206,153 +206,6 @@ describe("HttpApiResource.make", () => {
       }).pipe(Effect.provide(Tag.layer.pipe(Layer.provide(httpLayer))))
     })
   )
-
-  it.live("records endpoint usage metrics by group + endpoint name", () =>
-    Effect.gen(function* () {
-      const active = yield* Ref.make(0)
-      const peak = yield* Ref.make(0)
-      const api = HttpApi.make("vitest-metrics").add(HttpApiGroup.make("g").add(pingEndpoint))
-      const Tag = HttpApiResource.make(api, {
-        name: "test/http-api-metrics",
-        concurrency: 2,
-      })
-      const httpLayer = Layer.succeed(
-        HttpClient.HttpClient,
-        makeRecordingClient(active, peak)
-      )
-      yield* Effect.gen(function* () {
-        const client = yield* Tag
-        yield* Effect.all(
-          Array.from({ length: 3 }, () => client.g.ping()),
-          { concurrency: "unbounded" },
-        )
-      }).pipe(Effect.provide(Tag.layer.pipe(Layer.provide(httpLayer))))
-      const snapshot = yield* Metric.snapshot
-      const findEndpoint = (id: string) =>
-        snapshot.find(
-          (m) =>
-            m.id === id &&
-            m.attributes?.client === "test/http-api-metrics" &&
-            m.attributes?.group === "g" &&
-            m.attributes?.endpoint === "ping",
-        )
-      expect(findEndpoint("httpapi_endpoint_requests_total")?.state).toMatchObject({ count: 3 })
-      expect(findEndpoint("httpapi_endpoint_duration_ms")?.state).toMatchObject({ count: 3 })
-      expect(
-        snapshot.find(
-          (m) =>
-            m.id === "httpapi_endpoint_requests_total" &&
-            m.attributes?.client === "test/http-api-metrics" &&
-            m.attributes?.group === "g" &&
-            m.attributes?.endpoint === "ping" &&
-            m.attributes?.outcome === "success",
-        )?.state,
-      ).toMatchObject({ count: 3 })
-      expect(
-        snapshot.find(
-          (m) =>
-            m.id === "httpapi_in_flight" &&
-            m.attributes?.client === "test/http-api-metrics",
-        )?.state,
-      ).toBeDefined()
-    }).pipe(Effect.scoped),
-  )
-
-  it.live("records outcome=error and error tag on endpoint failure", () =>
-    Effect.gen(function* () {
-      const failEndpoint = HttpApiEndpoint.get("fail", "/fail", {
-        success: Schema.Struct({ ok: Schema.Boolean }),
-      })
-      const api = HttpApi.make("vitest-fail").add(HttpApiGroup.make("g").add(failEndpoint))
-      const Tag = HttpApiResource.make(api, {
-        name: "test/http-api-fail-metrics",
-      })
-      const httpLayer = Layer.succeed(
-        HttpClient.HttpClient,
-        HttpClient.makeWith<never, never, HttpClientError.HttpClientError, never>(
-          (reqEff) =>
-            Effect.flatMap(reqEff, (req) =>
-              Effect.succeed(
-                HttpClientResponse.fromWeb(
-                  req,
-                  new Response("not json", { status: 500, headers: { "content-type": "text/plain" } }),
-                ),
-              ),
-            ),
-          (request) => Effect.succeed(request),
-        ),
-      )
-      const exit = yield* Effect.gen(function* () {
-        const client = yield* Tag
-        yield* client.g.fail()
-      }).pipe(Effect.exit, Effect.provide(Tag.layer.pipe(Layer.provide(httpLayer))))
-      expect(Exit.isFailure(exit)).toBe(true)
-      const snapshot = yield* Metric.snapshot
-      expect(
-        snapshot.find(
-          (m) =>
-            m.id === "httpapi_endpoint_requests_total" &&
-            m.attributes?.client === "test/http-api-fail-metrics" &&
-            m.attributes?.group === "g" &&
-            m.attributes?.endpoint === "fail" &&
-            m.attributes?.outcome === "error",
-        )?.state,
-      ).toMatchObject({ count: 1 })
-      expect(
-        snapshot.find(
-          (m) =>
-            m.id === "httpapi_endpoint_errors_total" &&
-            m.attributes?.client === "test/http-api-fail-metrics" &&
-            m.attributes?.group === "g" &&
-            m.attributes?.endpoint === "fail",
-        )?.state,
-      ).toMatchObject({ count: 1 })
-    }).pipe(Effect.scoped),
-  )
-})
-
-describe("HttpApiResource.Tag", () => {
-  it.live("declares a class tag with baked-in layer and endpoint metrics", () =>
-    Effect.gen(function* () {
-      const api = HttpApi.make("vitest-tag-api").add(HttpApiGroup.make("g").add(pingEndpoint))
-      class PingClient extends HttpApiResource.Tag<PingClient>()("test/http-api-resource-tag", api, {
-        concurrency: 1,
-      }) {}
-      const httpLayer = Layer.succeed(
-        HttpClient.HttpClient,
-        HttpClient.makeWith<never, never, HttpClientError.HttpClientError, never>(
-          (reqEff) =>
-            Effect.flatMap(reqEff, (req) =>
-              Effect.succeed(
-                HttpClientResponse.fromWeb(
-                  req,
-                  new Response(json200, {
-                    status: 200,
-                    headers: { "content-type": "application/json" },
-                  }),
-                ),
-              ),
-            ),
-          (request) => Effect.succeed(request),
-        ),
-      )
-      yield* Effect.gen(function* () {
-        const client = yield* PingClient
-        yield* client.g.ping()
-      }).pipe(Effect.provide(PingClient.layer.pipe(Layer.provide(httpLayer))))
-      const snapshot = yield* Metric.snapshot
-      expect(
-        snapshot.find(
-          (m) =>
-            m.id === "httpapi_endpoint_requests_total" &&
-            m.attributes?.client === "test/http-api-resource-tag" &&
-            m.attributes?.group === "g" &&
-            m.attributes?.endpoint === "ping" &&
-            m.attributes?.outcome === "success",
-        )?.state,
-      ).toMatchObject({ count: 1 })
-    }),
-  )
 })
 
 describe("HttpApiResource.layerEffect", () => {
@@ -374,7 +227,6 @@ describe("HttpApiResource.layerEffect", () => {
       ) {}
       const layerCapture = HttpApiResource.layerEffect(Tag, makeClient, {
         concurrency: 1,
-        api,
       })
       const httpLayer = Layer.succeed(
         HttpClient.HttpClient,
@@ -397,17 +249,6 @@ describe("HttpApiResource.layerEffect", () => {
       }).pipe(Effect.provide(layerCapture.pipe(Layer.provide(httpLayer))))
       expect(result.builds).toBe(1)
       expect(result.peakConcurrent).toBe(1)
-      const snapshot = yield* Metric.snapshot
-      expect(
-        snapshot.find(
-          (m) =>
-            m.id === "httpapi_endpoint_requests_total" &&
-            m.attributes?.client === "@nikscripts/effect-pm/test/http-api-resource.test/Tag" &&
-            m.attributes?.group === "g" &&
-            m.attributes?.endpoint === "ping" &&
-            m.attributes?.outcome === "success",
-        )?.state,
-      ).toMatchObject({ count: 12 })
     })
   )
 })
