@@ -6,11 +6,4 @@
  * light (the contract's spec is engine-free), while `layer` / `server` / `serveHttp` pull the
  * Process engine only when actually used (e.g. in a Node entrypoint).
  */
-export {
-  processTag as Tag,
-  configure,
-  layer,
-  server,
-  serveHttp,
-  serverEntry,
-} from "../ScheduledProcess";
+export { Tag, configure, layer, server, serveHttp, serverEntry } from "../ScheduledProcess";

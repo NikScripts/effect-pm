@@ -6,8 +6,8 @@
  * navigation tree; the leaf tags ARE the registry. No hand-rolled `REGISTRY`/`TREE`.
  */
 import { Duration, Effect, Schema } from "effect";
-import { queueTag } from "../../src/QueueContract";
-import { processTag } from "../../src/ScheduledProcess";
+import * as QueueResource from "../../src/internal/queueResourceNamespace";
+import * as ScheduledProcess from "../../src/internal/scheduledProcessNamespace";
 import { Resource } from "../../src/Resource";
 import { Group } from "../../src/Group";
 
@@ -22,20 +22,20 @@ export class Droplet extends Resource.Host<Droplet>("hub/droplet") {}
 const Job = Schema.Struct({ id: Schema.String });
 
 // leaf queue tags
-export class Mail extends queueTag<Mail>()("@acme/queues/Mail", Job, { host: Droplet }) {}
-export class Jobs extends queueTag<Jobs>()("@acme/queues/Jobs", Job, { host: Droplet }) {}
-export class Billing extends queueTag<Billing>()("@acme/queues/Billing", Job, { host: Droplet }) {}
-export class Notify extends queueTag<Notify>()("@acme/queues/Notify", Job, { host: Droplet }) {}
-export class Worker1 extends queueTag<Worker1>()("@acme/queues/Worker1", Job, { host: Droplet }) {}
-export class Worker2 extends queueTag<Worker2>()("@acme/queues/Worker2", Job, { host: Droplet }) {}
-export class Worker3 extends queueTag<Worker3>()("@acme/queues/Worker3", Job, { host: Droplet }) {}
-export class RegionUS extends queueTag<RegionUS>()("@acme/queues/RegionUS", Job, { host: Droplet }) {}
-export class RegionEU extends queueTag<RegionEU>()("@acme/queues/RegionEU", Job, { host: Droplet }) {}
-export class Daily extends queueTag<Daily>()("@acme/queues/Daily", Job, { host: Droplet }) {}
-export class Weekly extends queueTag<Weekly>()("@acme/queues/Weekly", Job, { host: Droplet }) {}
+export class Mail extends QueueResource.Tag<Mail>()("@acme/queues/Mail", Job, { host: Droplet }) {}
+export class Jobs extends QueueResource.Tag<Jobs>()("@acme/queues/Jobs", Job, { host: Droplet }) {}
+export class Billing extends QueueResource.Tag<Billing>()("@acme/queues/Billing", Job, { host: Droplet }) {}
+export class Notify extends QueueResource.Tag<Notify>()("@acme/queues/Notify", Job, { host: Droplet }) {}
+export class Worker1 extends QueueResource.Tag<Worker1>()("@acme/queues/Worker1", Job, { host: Droplet }) {}
+export class Worker2 extends QueueResource.Tag<Worker2>()("@acme/queues/Worker2", Job, { host: Droplet }) {}
+export class Worker3 extends QueueResource.Tag<Worker3>()("@acme/queues/Worker3", Job, { host: Droplet }) {}
+export class RegionUS extends QueueResource.Tag<RegionUS>()("@acme/queues/RegionUS", Job, { host: Droplet }) {}
+export class RegionEU extends QueueResource.Tag<RegionEU>()("@acme/queues/RegionEU", Job, { host: Droplet }) {}
+export class Daily extends QueueResource.Tag<Daily>()("@acme/queues/Daily", Job, { host: Droplet }) {}
+export class Weekly extends QueueResource.Tag<Weekly>()("@acme/queues/Weekly", Job, { host: Droplet }) {}
 
 // a process bound to the Mini host — it runs there, not on the Droplet.
-export class KeyRotation extends processTag<KeyRotation>()("@wnba/Mini/KeyRotation", {
+export class KeyRotation extends ScheduledProcess.Tag<KeyRotation>()("@wnba/Mini/KeyRotation", {
   host: MiniHost,
 }) {}
 

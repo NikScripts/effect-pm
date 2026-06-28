@@ -537,7 +537,7 @@ type QueueInstanceSpec<F extends Schema.Struct.Fields> = ReturnType<
  *
  * @public
  */
-export const queueTag = <Self>() => {
+const queueTag = <Self>() => {
   function build<F extends Schema.Struct.Fields, HSelf>(
     id: string,
     itemSchema: Schema.Struct<F>,

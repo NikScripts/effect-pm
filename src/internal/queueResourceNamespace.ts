@@ -13,7 +13,7 @@
  *   only when used).
  * - `make` / `Service` / `Schema` / `Errors` / `rateLimiterLayer` are the engine helpers.
  */
-import { configure, layer, queueTag, serveHttp, server, serverEntry } from "../QueueContract";
+import { Tag, configure, layer, serveHttp, server, serverEntry } from "../QueueContract";
 import { QueueResource as engine } from "../QueueResource";
 
 const make = engine.make;
@@ -22,7 +22,7 @@ const Schema = engine.Schema;
 const Errors = engine.Errors;
 const rateLimiterLayer = engine.rateLimiterLayer;
 
-export { queueTag as Tag, configure, layer, server, serveHttp, serverEntry, make, Service, Schema, Errors, rateLimiterLayer };
+export { Tag, configure, layer, server, serveHttp, serverEntry, make, Service, Schema, Errors, rateLimiterLayer };
 
 // engine error classes / schemas / helpers — re-exported so the /QueueResource subpath
 // (which resolves to this module) still surfaces them for consumers.

@@ -258,7 +258,7 @@ type ProcessSpec = typeof processControlSpec;
  *
  * @public
  */
-export const processTag = <Self>() => {
+const processTag = <Self>() => {
   function build<HSelf>(
     id: string,
     options: { readonly description?: string; readonly host: HostKey<HSelf> },
