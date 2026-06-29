@@ -1169,7 +1169,7 @@ export const ApiMetricChart = (props: { readonly bundle: ApiBundle }): React.Rea
 /** One per-endpoint row (the element of a metrics window's `byEndpoint`). */
 type EndpointRow = ApiUsageMetrics["byEndpoint"][number];
 
-const endpointColumns: ReadonlyArray<ColumnDef<EndpointRow>> = [
+const endpointColumns: Array<ColumnDef<EndpointRow>> = [
   {
     id: "group",
     header: "group",
@@ -1207,7 +1207,7 @@ export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.R
   const [sorting, setSorting] = React.useState<SortingState>([{ id: "requests", desc: true }]);
   const table = useReactTable({
     data: rows,
-    columns: endpointColumns as Array<ColumnDef<EndpointRow>>,
+    columns: endpointColumns,
     state: { sorting },
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
