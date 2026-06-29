@@ -19,12 +19,11 @@ import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema
 
 const importJob = Schema.Struct({ id: Schema.String });
 
-/** The WNBA host — a remote machine (see `server.ts`) serving the box-score queue and the
- *  live-score poller. The browser connects to it over `/rpc`; its `HostStatus` drives the dot. */
+// Two remote machines (see `server.ts`): the box-score queue lives on `WnbaHost`, the live-score
+// poller on `LiveHost` — so the dashboard's host die shows two pips (one per host).
 export class WnbaHost extends Resource.Host<WnbaHost>("wnba/host") {}
+export class LiveHost extends Resource.Host<LiveHost>("wnba/live-host") {}
 
-// A queue (box-score imports) and a scheduled process (the live-score poller) — both bound to
-// `WnbaHost`, so the dashboard shows one host dot — plus an API-usage tap over the scores client.
 export class BoxScoreQueue extends QueueResource.Tag<BoxScoreQueue>()(
   "wnba/BoxScoreQueue",
   importJob,
@@ -32,7 +31,7 @@ export class BoxScoreQueue extends QueueResource.Tag<BoxScoreQueue>()(
 ) {}
 export class LiveScorePoller extends ProcessResource.Tag<LiveScorePoller>()(
   "wnba/LiveScorePoller",
-  { host: WnbaHost },
+  { host: LiveHost },
 ) {}
 export class ScoresApi extends ApiMetrics.Tag<ScoresApi>()("@wnba/ScoresApi") {}
 
@@ -143,14 +142,16 @@ const scoresApiMock = {
 // browser is a thin `Resource.client` over `/rpc` (vite proxies it to the host). `ScoresApi` is a
 // local mock. One shared transport → one host dot, auto-fed by the host's `HostStatus`.
 const wnbaTransport = Resource.connectHttp(WnbaHost, { url: "/rpc" });
+const liveTransport = Resource.connectHttp(LiveHost, { url: "/live/rpc" });
 
-// Expose `WnbaHost` itself in the runtime (not only the resource clients): the host-status dot reads
-// `HostStatus` over the host's transport, so it needs `WnbaHost` in context. `wnbaTransport` is one
-// const (shared by reference), so all of these reuse a single connection.
+// Expose each host itself in the runtime (not only the resource clients): the host-status die reads
+// `HostStatus` over each host's transport, so it needs the host in context. Each transport is one
+// const (shared by reference), so the client + the die reuse a single connection per host.
 const appLayer = Layer.mergeAll(
   wnbaTransport,
+  liveTransport,
   Resource.client(BoxScoreQueue).pipe(Layer.provide(wnbaTransport)),
-  Resource.client(LiveScorePoller).pipe(Layer.provide(wnbaTransport)),
+  Resource.client(LiveScorePoller).pipe(Layer.provide(liveTransport)),
   Resource.layer(ScoresApi, scoresApiMock),
 );
 

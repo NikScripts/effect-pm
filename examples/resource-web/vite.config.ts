@@ -14,10 +14,15 @@ export default defineConfig({
     host: true,
     port: 5176,
     allowedHosts: true,
-    // The browser is a thin client; proxy the WnbaHost's RPC so the client is same-origin (no CORS).
-    // `/rpc` → the host served by `server.ts` (pnpm run example:resource-web-server).
+    // The browser is a thin client; proxy each host's RPC so the client is same-origin (no CORS).
+    // `/rpc` → WnbaHost (box-score queue); `/live` → LiveHost (live-score poller), both from server.ts.
     proxy: {
       "/rpc": { target: "http://localhost:7780", changeOrigin: true },
+      "/live": {
+        target: "http://localhost:7781",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/live/, ""),
+      },
     },
   },
 });

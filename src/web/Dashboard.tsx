@@ -232,7 +232,10 @@ const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void })
 };
 
 /** The drill-down view (runtime comes from `RuntimeProvider` above). @since 1.0.0 */
-const DashboardInner = (props: { readonly group: GroupNode }): React.ReactElement => {
+const DashboardInner = (props: {
+  readonly group: GroupNode;
+  readonly onOpenHost: (host: HostRef) => void;
+}): React.ReactElement => {
   const route = useGroupRoute(props.group);
   const { group, selected, trail, keys } = route;
   const transition = useViewTransition();
@@ -271,6 +274,8 @@ const DashboardInner = (props: { readonly group: GroupNode }): React.ReactElemen
           ⬢ {trail.map((g, i) => (i === 0 ? displayName(g.key) : keys[i - 1] ?? displayName(g.key))).join(" / ")}{" "}
           <span className="text-sm font-normal text-muted-foreground">· {leafTags(group).length} resources</span>
         </h1>
+        {/* host-status die — all hosts the dashboard's resources are bound to (the root group). */}
+        <HostBar group={props.group} onOpenHost={props.onOpenHost} />
       </div>
       <div className="mb-2 text-sm text-muted-foreground">tap a resource for its detail · tap a group to open it</div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
@@ -288,39 +293,29 @@ const DashboardInner = (props: { readonly group: GroupNode }): React.ReactElemen
   );
 };
 
-/** Host status dots (top-right) + the fullscreen host view they open. Hosts come straight off the
- *  tags (`hostsOf`), so this overlays the normal drill-down on its own axis. @since 1.0.0 */
-const HostsLayer = (props: {
-  readonly group: GroupNode;
-  readonly children: React.ReactNode;
-}): React.ReactElement => {
-  const [host, setHost] = React.useState<HostRef | null>(null);
-  if (host !== null) return <HostDetail host={host} onBack={() => setHost(null)} />;
-  return (
-    <>
-      {props.children}
-      <HostBar group={props.group} onOpenHost={setHost} />
-    </>
-  );
-};
-
 /** The drill-down view + its runtime — compose with `RegistryProvider` + `ViewTransitionProvider`
- *  yourself, or use `<Dashboard>` which wires all three. @since 1.0.0 */
+ *  yourself, or use `<Dashboard>` which wires all three. The host-status die lives in the header
+ *  (see `DashboardInner`); opening a host swaps in its full screen. @since 1.0.0 */
 export const DashboardView = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
-}): React.ReactElement => (
+}): React.ReactElement => {
+  const [host, setHost] = React.useState<HostRef | null>(null);
   // The dashboard owns its font: declaring `font-mono` on its own root means the widgets render
   // monospace regardless of the consumer's `body`/`#root` font (a value set directly on this
   // element wins over an inherited one), and it still honours a consumer-defined `--font-mono`.
-  <RuntimeProvider runtime={props.runtime}>
-    <div className="font-mono">
-      <HostsLayer group={props.group}>
-        <DashboardInner group={props.group} />
-      </HostsLayer>
-    </div>
-  </RuntimeProvider>
-);
+  return (
+    <RuntimeProvider runtime={props.runtime}>
+      <div className="font-mono">
+        {host !== null ? (
+          <HostDetail host={host} onBack={() => setHost(null)} />
+        ) : (
+          <DashboardInner group={props.group} onOpenHost={setHost} />
+        )}
+      </div>
+    </RuntimeProvider>
+  );
+};
 
 /** Batteries-included dashboard: providers + the responsive view + the (opt-in) debug console.
  *  `<Dashboard runtime={Atom.runtime(layer)} group={ServicesHub} />`. @since 1.0.0 */

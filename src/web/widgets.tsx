@@ -1385,7 +1385,7 @@ export const HostBar = (props: {
   if (hosts.length === 0) return null;
   const layout = pipLayout(hosts.length);
   return (
-    <div className="fixed right-2 top-2 z-40 safe-area">
+    <div className="relative shrink-0">
       <button
         type="button"
         aria-label={`${hosts.length} host${hosts.length === 1 ? "" : "s"}`}

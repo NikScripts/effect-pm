@@ -22,7 +22,8 @@ import { ProcessSchedule } from "../../src/ProcessSchedule";
 import { ProcessStorage } from "../../src/ProcessStorage";
 import { BoxScoreQueue, LiveScorePoller } from "./hub";
 
-const PORT = 7780;
+const WNBA_PORT = 7780;
+const LIVE_PORT = 7781;
 
 const importWorker = (job: { readonly id: string }) =>
   Effect.gen(function* () {
@@ -48,12 +49,22 @@ const pollerSchedule = ProcessSchedule.define(({ window, all }) =>
   all(...wnbaGames.map((g) => window(g.id, toDate(g.tipOff - 20 * MIN), toDate(g.tipOff + 60 * MIN)))),
 );
 
-const serveLayer = Resource.serveAllHttp([
+// Two hosts in one process, each its own port + `/rpc`: the box-score queue on WnbaHost, the
+// live-score poller on LiveHost. Each `serveAllHttp` consumes its own NodeHttpServer (Layer.provide,
+// not provideMerge — so the two don't fight over one HttpServer service when merged).
+const wnbaHost = Resource.serveAllHttp([
   queueEntry(BoxScoreQueue, {
     effect: importWorker,
     concurrency: 3,
     captureLogs: true,
   }),
+]).pipe(
+  Layer.provide(HistoryStore.layerMemory()),
+  Layer.provide(Logger.layer([], { mergeWithExisting: false })),
+  Layer.provide(NodeHttpServer.layer(() => createServer(), { port: WNBA_PORT })),
+);
+
+const liveHost = Resource.serveAllHttp([
   processEntry(LiveScorePoller, {
     effect: Effect.logInfo("wnba: polling live scores"),
     polling: Polling.spaced(Duration.seconds(2)),
@@ -64,12 +75,16 @@ const serveLayer = Resource.serveAllHttp([
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(ProcessStorage.layer),
   Layer.provide(Logger.layer([], { mergeWithExisting: false })),
-  Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: PORT })),
+  Layer.provide(NodeHttpServer.layer(() => createServer(), { port: LIVE_PORT })),
 );
 
+// Each host is its own forked scope (NOT merged) so each gets its own HttpRouter — merging them
+// would register `/rpc` twice on one shared router. One process, two independent servers.
 const program = Effect.gen(function* () {
-  yield* Effect.logInfo(`wnba host (BoxScoreQueue + LiveScorePoller) listening on :${PORT}`);
+  yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(wnbaHost)));
+  yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(liveHost)));
+  yield* Effect.logInfo(`wnba host (BoxScoreQueue) :${WNBA_PORT} · live host (LiveScorePoller) :${LIVE_PORT}`);
   return yield* Effect.never;
 });
 
-NodeRuntime.runMain(program.pipe(Effect.provide(serveLayer), Effect.scoped));
+NodeRuntime.runMain(program.pipe(Effect.scoped));
