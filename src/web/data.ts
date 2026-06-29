@@ -184,29 +184,23 @@ const tagWireKey = (member: unknown): string | undefined => {
   return undefined;
 };
 
-/** The chain of **member keys** from a group's root to the leaf whose wire key is `key` (as reported
- *  by a host's `HostStatus.resources[].key`), or `undefined` if not found. Lets the host page open a
- *  resource's detail by navigating the same `Group` route the dashboard uses. @since 1.0.0 */
-export const pathToResource = (
-  group: unknown,
-  key: string,
-): ReadonlyArray<string> | undefined => {
-  const walk = (
-    node: unknown,
-    trail: ReadonlyArray<string>,
-  ): ReadonlyArray<string> | undefined => {
+/** The leaf resource tag in a group tree whose wire key is `key` (as reported by a host's
+ *  `HostStatus.resources[].key`), or `undefined` if not found. Lets the host page open a served
+ *  resource's detail directly (without round-tripping through the group route). @since 1.0.0 */
+export const leafByKey = (group: unknown, key: string): unknown => {
+  const walk = (node: unknown): unknown => {
     if (!Group.isGroup(node)) return undefined;
-    for (const [name, member] of Object.entries(Group.members(node))) {
+    for (const member of Object.values(Group.members(node))) {
       if (Group.isGroup(member)) {
-        const found = walk(member, [...trail, name]);
+        const found = walk(member);
         if (found !== undefined) return found;
       } else if (tagWireKey(member) === key) {
-        return [...trail, name];
+        return member;
       }
     }
     return undefined;
   };
-  return walk(group, []);
+  return walk(group);
 };
 
 /** Which kind of leaf a tag is — by the contract's stamped kind. @since 1.0.0 */

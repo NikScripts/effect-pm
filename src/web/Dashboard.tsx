@@ -25,8 +25,8 @@ import {
   type QueueBundle,
   type QueueTag,
   kindOf,
+  leafByKey,
   leafTags,
-  pathToResource,
   processBundle,
   queueBundle,
 } from "./data";
@@ -321,25 +321,54 @@ const DashboardInner = (props: {
   );
 };
 
+/** A resource's detail opened **from a host** — rendered on the host axis (so "back" returns to the
+ *  host, not the group), with logs/schedule as local sub-views. Reuses the same detail widgets the
+ *  group route uses. @since 1.0.0 */
+const HostResourceView = (props: {
+  readonly tag: unknown;
+  readonly onBack: () => void;
+}): React.ReactElement => {
+  const [view, setView] = React.useState<"main" | "logs" | "schedule">("main");
+  const { tag } = props;
+  if (view === "logs" && (isProcessTag(tag) || isQueueTag(tag))) {
+    return <LogsPage tag={tag} onClose={() => setView("main")} />;
+  }
+  if (view === "schedule" && isProcessTag(tag)) {
+    return <SchedulePage tag={tag} onClose={() => setView("main")} />;
+  }
+  if (isApiTag(tag)) return <ApiDetail tag={tag} onBack={props.onBack} />;
+  if (isProcessTag(tag)) {
+    return (
+      <ProcessDetail
+        tag={tag}
+        onBack={props.onBack}
+        onOpenLogs={() => setView("logs")}
+        onOpenSchedule={() => setView("schedule")}
+      />
+    );
+  }
+  if (isQueueTag(tag)) {
+    return <QueueDetail tag={tag} onBack={props.onBack} onOpenLogs={() => setView("logs")} />;
+  }
+  return <></>;
+};
+
 /** The drill-down view + its runtime — compose with `RegistryProvider` + `ViewTransitionProvider`
  *  yourself, or use `<Dashboard>` which wires all three. The host-status die lives in the header
- *  (see `DashboardInner`); opening a host swaps in its full screen. @since 1.0.0 */
+ *  (see `DashboardInner`); opening a host swaps in its full screen, and opening a resource from a
+ *  host stays on the host axis so "back" returns there. @since 1.0.0 */
 export const DashboardView = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
 }): React.ReactElement => {
   const [host, setHost] = React.useState<HostRef | null>(null);
-  // Open a served resource from the host page: navigate the group route to it (the route mirrors the
-  // `Group` tree in the URL), then close the host overlay — `DashboardInner` remounts and resolves
-  // the new path to that resource's detail. A resource not found in the tree just closes the overlay.
+  // A resource opened from the host page (its tag). Kept separate from `host` so "back" pops to the
+  // host detail (host stays set underneath), not up the group route.
+  const [hostTag, setHostTag] = React.useState<unknown>(null);
   const openResource = React.useCallback(
     (resourceKey: string): void => {
-      const path = pathToResource(props.group, resourceKey);
-      if (path !== undefined) {
-        const url = path.length === 0 ? "/" : `/${path.map(encodeURIComponent).join("/")}`;
-        window.history.pushState(null, "", url);
-      }
-      setHost(null);
+      const found = leafByKey(props.group, resourceKey);
+      if (found !== undefined) setHostTag(found);
     },
     [props.group],
   );
@@ -349,7 +378,9 @@ export const DashboardView = <R, ER>(props: {
   return (
     <RuntimeProvider runtime={props.runtime}>
       <div className="font-mono">
-        {host !== null ? (
+        {hostTag !== null ? (
+          <HostResourceView tag={hostTag} onBack={() => setHostTag(null)} />
+        ) : host !== null ? (
           <HostDetail host={host} onBack={() => setHost(null)} onOpenResource={openResource} />
         ) : (
           <DashboardInner group={props.group} onOpenHost={setHost} />
