@@ -66,26 +66,61 @@ const pollerSchedule = ProcessSchedule.define(({ window, all }) =>
 // Normally `ApiMetrics.layerFor(tag, HttpApiResource.Service)` feeds this from real outbound
 // requests; for a standalone in-browser fixture we provide the tag directly with fake windows so
 // the API widget (sparkline + endpoint table) has something live to show.
+// A realistic-ish WNBA stats API surface — several HttpApi groups, each with a few endpoints
+// (`group` is the HttpApiGroup; `endpoint` the method + path). `weight` ~ how busy it tends to be,
+// `avg` its baseline latency. Cumulative per-endpoint totals build the snapshot's `topEndpoints`.
+interface EndpointSpec {
+  readonly group: string;
+  readonly endpoint: string;
+  readonly weight: number;
+  readonly avg: number;
+}
+const apiCatalog: ReadonlyArray<EndpointSpec> = [
+  { group: "games", endpoint: "GET /games", weight: 8, avg: 45 },
+  { group: "games", endpoint: "GET /games/:id", weight: 12, avg: 38 },
+  { group: "games", endpoint: "GET /games/:id/boxscore", weight: 10, avg: 95 },
+  { group: "games", endpoint: "GET /games/live", weight: 16, avg: 130 },
+  { group: "games", endpoint: "GET /games/:id/play-by-play", weight: 11, avg: 150 },
+  { group: "teams", endpoint: "GET /teams", weight: 3, avg: 28 },
+  { group: "teams", endpoint: "GET /teams/:id", weight: 5, avg: 32 },
+  { group: "teams", endpoint: "GET /teams/:id/roster", weight: 6, avg: 60 },
+  { group: "players", endpoint: "GET /players/:id", weight: 7, avg: 36 },
+  { group: "players", endpoint: "GET /players/:id/stats", weight: 6, avg: 72 },
+  { group: "players", endpoint: "GET /players/:id/splits", weight: 4, avg: 110 },
+  { group: "standings", endpoint: "GET /standings", weight: 3, avg: 24 },
+  { group: "odds", endpoint: "GET /odds", weight: 5, avg: 64 },
+  { group: "odds", endpoint: "GET /odds/:gameId", weight: 4, avg: 52 },
+];
+
 let apiTotal = 0;
 let apiErrors = 0;
-const endpoint = (name: string, requests: number, errors: number, avgDurationMs: number) => ({
-  group: "scores",
-  endpoint: name,
-  requests,
-  errors,
-  avgDurationMs,
-});
+const apiCumulative = new Map<string, { requests: number; errors: number }>();
+
 const fakeWindow: Effect.Effect<ApiUsageMetrics> = Effect.gen(function* () {
   const nowMs = yield* Clock.currentTimeMillis;
-  const games = yield* Random.nextIntBetween(5, 25);
-  const teams = yield* Random.nextIntBetween(0, 8);
-  const sync = yield* Random.nextIntBetween(0, 3);
-  const requests = games + teams + sync;
-  const errors = (yield* Random.next) < 0.25 ? 1 : 0;
-  const avg = yield* Random.nextIntBetween(40, 100);
-  const inFlight = yield* Random.nextIntBetween(0, 4);
+  const byEndpoint: Array<ApiUsageMetrics["byEndpoint"][number]> = [];
+  let requests = 0;
+  let errors = 0;
+  for (const spec of apiCatalog) {
+    const reqs = yield* Random.nextIntBetween(0, spec.weight + 1);
+    if (reqs === 0) continue; // an endpoint not hit this window isn't reported
+    const errs = (yield* Random.next) < 0.06 ? Math.min(reqs, yield* Random.nextIntBetween(1, 3)) : 0;
+    const jitter = yield* Random.nextIntBetween(-10, 12);
+    requests += reqs;
+    errors += errs;
+    const prev = apiCumulative.get(spec.endpoint) ?? { requests: 0, errors: 0 };
+    apiCumulative.set(spec.endpoint, { requests: prev.requests + reqs, errors: prev.errors + errs });
+    byEndpoint.push({
+      group: spec.group,
+      endpoint: spec.endpoint,
+      requests: reqs,
+      errors: errs,
+      avgDurationMs: Math.max(5, spec.avg + jitter),
+    });
+  }
   apiTotal += requests;
   apiErrors += errors;
+  const inFlight = yield* Random.nextIntBetween(0, 6);
   return {
     windowStart: DateTime.makeUnsafe(nowMs - 2_000),
     windowEnd: DateTime.makeUnsafe(nowMs),
@@ -94,27 +129,25 @@ const fakeWindow: Effect.Effect<ApiUsageMetrics> = Effect.gen(function* () {
     errors,
     inFlight,
     throughputPerSec: requests / 2,
-    byEndpoint: [
-      endpoint("GET /games", games, errors, avg),
-      endpoint("GET /teams", teams, 0, 30),
-      endpoint("POST /sync", sync, 0, 120),
-    ],
+    byEndpoint,
   };
 });
 const scoresApiMock = {
   metrics: Stream.tick(Duration.seconds(2)).pipe(Stream.mapEffect(() => fakeWindow)),
   usageNow: Effect.map(
-    Random.nextIntBetween(0, 4),
+    Random.nextIntBetween(0, 6),
     (inFlight): ApiUsageSnapshot => ({
       clientId: "@wnba/ScoresApi",
       inFlight,
       requestsTotal: apiTotal,
       errorsTotal: apiErrors,
-      topEndpoints: [
-        { group: "scores", endpoint: "GET /games", requests: Math.floor(apiTotal * 0.7), errors: apiErrors },
-        { group: "scores", endpoint: "GET /teams", requests: Math.floor(apiTotal * 0.25), errors: 0 },
-        { group: "scores", endpoint: "POST /sync", requests: Math.floor(apiTotal * 0.05), errors: 0 },
-      ],
+      topEndpoints: apiCatalog
+        .map((spec) => {
+          const c = apiCumulative.get(spec.endpoint) ?? { requests: 0, errors: 0 };
+          return { group: spec.group, endpoint: spec.endpoint, requests: c.requests, errors: c.errors };
+        })
+        .sort((a, b) => b.requests - a.requests)
+        .slice(0, 5),
     }),
   ),
 };
