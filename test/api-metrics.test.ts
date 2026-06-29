@@ -1,13 +1,19 @@
 import { beforeEach, describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Layer, Ref, Schema, Stream } from "effect";
-import { RpcTest } from "effect/unstable/rpc";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import {
+  FetchHttpClient,
+  HttpClient,
+  HttpClientResponse,
+  HttpServer,
+} from "effect/unstable/http";
 import type { HttpClientError } from "effect/unstable/http";
+import { NodeHttpServer } from "@effect/platform-node";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
 import { ApiMetrics, clientIdOf, metricsKeyFor } from "../src/ApiMetrics";
 import { HttpApiResource } from "../src/HttpApiResource";
 import { resetClientUsageForTest } from "../src/internal/apiUsageRegistry";
-import { forwardClient, groupOf, specOf } from "../src/Resource";
+import * as Resource from "../src/Resource";
 
 const ClientId = "test/api-metrics/client" as const;
 
@@ -53,7 +59,8 @@ describe("ApiMetrics.Tag", () => {
   it("auto-suffixes the Resource key and stores clientIdSym", () => {
     expect(DemoMetrics.key).toBe(metricsKeyFor(ClientId));
     expect(clientIdOf(DemoMetrics)).toBe(ClientId);
-    expect(DemoMetrics.groupId).toBe("apiMetrics");
+    // per-instance group: the groupId is the metrics key (its own wire prefix), not a shared family
+    expect(DemoMetrics.groupId).toBe(metricsKeyFor(ClientId));
   });
 });
 
@@ -88,61 +95,71 @@ describe("ApiMetrics.layer", () => {
   );
 });
 
-describe("ApiMetrics.serveInstances", () => {
+describe("ApiMetrics per-instance groups + serveAllHttp", () => {
   const OtherClientId = "test/api-metrics/other" as const;
   class OtherMetrics extends ApiMetrics.Tag<OtherMetrics>()(OtherClientId) {}
 
-  it("routes factory instances by key header", () => {
-    const alphaImpl = {
-      usageNow: Effect.succeed({
-        clientId: ClientId,
-        inFlight: 0,
-        requestsTotal: 1,
-        errorsTotal: 0,
-        topEndpoints: [{ group: "g", endpoint: "alpha", requests: 1, errors: 0 }],
-      }),
-      metrics: Stream.empty,
-    };
-    const betaImpl = {
-      usageNow: Effect.succeed({
-        clientId: OtherClientId,
-        inFlight: 0,
-        requestsTotal: 2,
-        errorsTotal: 0,
-        topEndpoints: [{ group: "g", endpoint: "beta", requests: 2, errors: 0 }],
-      }),
-      metrics: Stream.empty,
-    };
-
-    const program = Effect.gen(function* () {
-      const rpc = yield* RpcTest.makeClient(groupOf(DemoMetrics));
-      const alphaSvc = forwardClient(
-        rpc,
-        specOf(DemoMetrics),
-        DemoMetrics.groupId,
-        DemoMetrics.key,
-      );
-      const betaSvc = forwardClient(
-        rpc,
-        specOf(OtherMetrics),
-        OtherMetrics.groupId,
-        OtherMetrics.key,
-      );
-      const alpha = yield* alphaSvc.usageNow;
-      const beta = yield* betaSvc.usageNow;
-      expect(alpha.topEndpoints[0]?.endpoint).toBe("alpha");
-      expect(beta.topEndpoints[0]?.endpoint).toBe("beta");
-    }).pipe(
-      Effect.provide(
-        ApiMetrics.serveInstances(
-          ApiMetrics.instance(DemoMetrics, alphaImpl),
-          ApiMetrics.instance(OtherMetrics, betaImpl),
-        ),
-      ),
-      Effect.scoped,
-    );
-    return Effect.runPromise(program);
+  it("each tag is its own group with a distinct, key-prefixed wire id", () => {
+    expect(DemoMetrics.groupId).not.toBe(OtherMetrics.groupId);
+    expect(OtherMetrics.groupId).toBe(metricsKeyFor(OtherClientId));
   });
+
+  // Two metrics tags served on one host via `serveAllHttp`; each reached over http with its own
+  // per-instance group — `Resource.client` routes to the right one (no shared key header).
+  const alphaImpl = {
+    usageNow: Effect.succeed({
+      clientId: ClientId,
+      inFlight: 0,
+      requestsTotal: 1,
+      errorsTotal: 0,
+      topEndpoints: [{ group: "g", endpoint: "alpha", requests: 1, errors: 0 }],
+    }),
+    metrics: Stream.empty,
+  };
+  const betaImpl = {
+    usageNow: Effect.succeed({
+      clientId: OtherClientId,
+      inFlight: 0,
+      requestsTotal: 2,
+      errorsTotal: 0,
+      topEndpoints: [{ group: "g", endpoint: "beta", requests: 2, errors: 0 }],
+    }),
+    metrics: Stream.empty,
+  };
+  const Server = Resource.serveAllHttp([
+    { tag: DemoMetrics, impl: alphaImpl },
+    { tag: OtherMetrics, impl: betaImpl },
+  ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+
+  it("serveAllHttp serves both; clients read the right one", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
+        const port = addr._tag === "TcpAddress" ? addr.port : 0;
+        const protocol = RpcClient.layerProtocolHttp({
+          url: `http://127.0.0.1:${port}/rpc`,
+        }).pipe(
+          Layer.provide(RpcSerialization.layerNdjson),
+          Layer.provide(FetchHttpClient.layer),
+        );
+        yield* Effect.gen(function* () {
+          const demo = yield* DemoMetrics;
+          const other = yield* OtherMetrics;
+          const alpha = yield* demo.usageNow;
+          const beta = yield* other.usageNow;
+          expect(alpha.topEndpoints[0]?.endpoint).toBe("alpha");
+          expect(beta.topEndpoints[0]?.endpoint).toBe("beta");
+        }).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              Resource.client(DemoMetrics),
+              Resource.client(OtherMetrics),
+            ).pipe(Layer.provide(protocol)),
+          ),
+          Effect.scoped,
+        );
+      }).pipe(Effect.provide(Server), Effect.scoped),
+    ));
 });
 
 describe("ApiMetrics.layerFor", () => {

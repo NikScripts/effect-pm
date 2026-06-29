@@ -35,16 +35,14 @@ import {
 } from "./ApiUsageSchema";
 import { ensureClientUsage } from "./internal/apiUsageRegistry";
 import {
-  clientInstances,
-  instance,
+  Tag as resourceTag,
   layer as resourceLayer,
   query,
-  serveInstances,
   stream,
-  tagFor,
-  type ResourceInstance,
+  type HostBoundTag,
+  type HostKey,
   type ResourceTag,
-  type ServiceOf,
+  type ServeEntry,
 } from "./Resource";
 
 // ============================================================================
@@ -92,6 +90,21 @@ export type ApiMetricsTag<Self> = ResourceTag<Self, ApiMetricsSpec> & {
   readonly [clientIdSym]: string;
 };
 
+/**
+ * A host-bound {@link ApiMetricsTag} — its `[hostSym]` narrowed to the host (so `Resource.client`
+ * resolves the transport). A **named** type so a consumer can `export` a host-bound metrics tag
+ * without leaking the internal `clientIdSym` (TS4020). Returned by `ApiMetrics.Tag()(id, { host })`.
+ *
+ * @public
+ */
+export type ApiMetricsHostTag<Self, HSelf> = HostBoundTag<
+  Self,
+  ApiMetricsSpec,
+  HSelf
+> & {
+  readonly [clientIdSym]: string;
+};
+
 /** @internal */
 export type ApiMetricsSpec = {
   readonly metrics: ReturnType<typeof stream<typeof apiUsageMetrics>>;
@@ -109,12 +122,15 @@ const apiMetricsSpec = {
   }),
 };
 
-/** Shared RPC family — one group for all ApiMetrics instances. @internal */
 /** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
  *  classify it via {@link Resource.kindOf} without sniffing the spec. @since 1.0.0 */
 export const kind = "@nikscripts/effect-pm/ApiMetrics";
 
-const apiMetricsFactory = tagFor("apiMetrics", apiMetricsSpec, { kind });
+/** The per-instance Resource key (wire group prefix) for a metrics tag. A host-bound tag prefixes by
+ *  its host's key, so two hosts serving the **same** `clientId` (e.g. the same SDP client behind two
+ *  league hosts) get distinct groups and never collide. @internal */
+const keyFor = (clientId: string, host: HostKey<unknown> | undefined): string =>
+  host === undefined ? metricsKeyFor(clientId) : `${host.key}/${metricsKeyFor(clientId)}`;
 
 /**
  * Read the linked outbound client id from an {@link ApiMetrics} tag.
@@ -168,24 +184,62 @@ const layerFor = <
   options?: ApiMetricsTagOptions,
 ): Layer.Layer<Self, never, Scope.Scope> => layer(tag, options);
 
+/** Tag-construction options for {@link ApiMetrics.Tag}: bind the metrics resource to a {@link
+ *  Resource.Host} (so it's served + reached on that host) and/or set its dashboard panel title.
+ *  @public */
+export interface ApiMetricsConstructOptions<HSelf = never> {
+  readonly host?: HostKey<HSelf>;
+  readonly description?: string;
+}
+
 /**
- * Class factory for an {@link ApiMetrics} instance tag.
+ * A serveAllHttp entry for one {@link ApiMetrics} tag — served like a queue/process, fed from the
+ * in-process Metric registry ({@link ApiMetrics.layer} semantics, via `instrumentEndpoints`). Add
+ * the tag to the served host's `Group` and drop this into `serveAllHttp([...])`. @public
+ */
+const serverEntry = <Self>(
+  tag: ApiMetricsTag<Self>,
+  options?: ApiMetricsTagOptions,
+): ServeEntry<Scope.Scope> => ({
+  tag,
+  impl: buildImpl(tag[clientIdSym], options),
+});
+
+/**
+ * Class factory for an {@link ApiMetrics} instance tag — its own per-instance RPC group, so it
+ * serves on a host alongside queues/processes via {@link ApiMetrics.serverEntry} and is reached with
+ * `Resource.client`. Bind it to a host with `{ host }`.
  *
  * @example
  * ```ts
- * class NwslMetrics extends ApiMetrics.Tag<NwslMetrics>()(NwslClientId) {}
+ * class NwslMetrics extends ApiMetrics.Tag<NwslMetrics>()(NwslClientId, { host: NwslHost }) {}
  * ```
  *
  * @public
  */
-// `Context.Service`-shaped: `<Self>()(clientId)`. Only `Self` is explicit; the client id's literal
-// isn't carried on the tag (`clientIdSym` is `string`). Window/description live on the layer, so the
-// construction call takes just the client id.
-const tag = <Self>() =>
-  (clientId: string): ApiMetricsTag<Self> =>
-    Object.assign(apiMetricsFactory<Self>(metricsKeyFor(clientId)), {
-      [clientIdSym]: clientId,
-    }) as ApiMetricsTag<Self>;
+// `Context.Service`-shaped: `<Self>()(clientId, options?)`. Only `Self` is explicit; the client id's
+// literal isn't carried on the tag (`clientIdSym` is `string`). The host-bearing call narrows the
+// return so `Resource.client` resolves its transport (window cadence lives on the layer/serverEntry).
+const tag = <Self>() => {
+  function build(clientId: string): ApiMetricsTag<Self>;
+  function build<HSelf>(
+    clientId: string,
+    options: { readonly host: HostKey<HSelf>; readonly description?: string },
+  ): ApiMetricsHostTag<Self, HSelf>;
+  function build(
+    clientId: string,
+    options?: ApiMetricsConstructOptions<unknown>,
+  ): ApiMetricsTag<Self> {
+    const host = options?.host;
+    const key = keyFor(clientId, host);
+    const base =
+      host === undefined
+        ? resourceTag<Self>()(key, apiMetricsSpec, { kind, description: options?.description })
+        : resourceTag<Self>()(key, apiMetricsSpec, { kind, description: options?.description, host });
+    return Object.assign(base, { [clientIdSym]: clientId });
+  }
+  return build;
+};
 
 /**
  * ApiMetrics toolkit — shared observability contract for outbound API clients.
@@ -203,23 +257,8 @@ export const ApiMetrics = {
   clientIdOf,
   layer,
   layerFor,
-  /** Serve many instances behind one shared RPC group. */
-  serveInstances: (
-    ...instances: ReadonlyArray<ResourceInstance<ApiMetricsSpec>>
-  ) => serveInstances(apiMetricsFactory, ...instances),
-  /** One RPC client for many factory instances (dashboard). */
-  clientInstances: <const Tags extends ReadonlyArray<ApiMetricsTag<unknown>>>(
-    ...tags: Tags
-  ) =>
-    clientInstances(
-      apiMetricsFactory,
-      ...(tags as ReadonlyArray<ResourceTag<unknown, ApiMetricsSpec>>),
-    ),
-  /** Pair an instance tag with its implementation for {@link serveInstances}. */
-  instance: <Self>(
-    tag: ApiMetricsTag<Self>,
-    impl: ServiceOf<ApiMetricsSpec>,
-  ) => instance(tag, impl),
+  /** A `serveAllHttp` entry for one tag — serve it on a host like a queue/process. @see {@link serverEntry} */
+  serverEntry,
   /** Wire schemas re-exported for widgets and RPC. */
   apiUsageMetrics,
   apiUsageSnapshot,

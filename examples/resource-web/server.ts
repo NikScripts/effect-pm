@@ -7,7 +7,7 @@
  * host status dot goes live. Run: `pnpm run example:resource-web-server` (alongside
  * `pnpm run example:resource-web`).
  */
-import { DateTime, Duration, Effect, Layer } from "effect";
+import { Clock, DateTime, Duration, Effect, Layer, Random, Stream } from "effect";
 // A node host entry point — the raw http server is exactly what `NodeHttpServer.layer` wants.
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { createServer } from "node:http";
@@ -21,7 +21,8 @@ import { HostLogs } from "../../src/HostLogs";
 import { Polling } from "../../src/Polling";
 import { ProcessSchedule } from "../../src/ProcessSchedule";
 import { ProcessStorage } from "../../src/ProcessStorage";
-import { BoxScoreQueue, LiveScorePoller, PlayByPlayQueue } from "./hub";
+import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
+import { BoxScoreQueue, LiveScorePoller, PlayByPlayQueue, ScoresApi } from "./hub";
 
 const WNBA_PORT = 7780;
 const LIVE_PORT = 7781;
@@ -51,15 +52,107 @@ const pollerSchedule = ProcessSchedule.define(({ window, all }) =>
   all(...wnbaGames.map((g) => window(g.id, toDate(g.tipOff - 20 * MIN), toDate(g.tipOff + 60 * MIN)))),
 );
 
-// Three hosts in one process, each its own port + `/rpc`: the box-score queue on WnbaHost, the
-// live-score poller on LiveHost, the play-by-play queue on StatsHost. Each `serveAllHttp` consumes
-// its own NodeHttpServer (Layer.provide, not provideMerge — so they don't fight over one HttpServer).
+// ── ScoresApi — synthetic API-usage windows (served on WnbaHost) ─────────────
+// A real consumer instruments its outbound client (`HttpApiResource.instrumentEndpoints`) and serves
+// `ApiMetrics.serverEntry(tag)` (fed from the Metric registry). For the fixture there's no real
+// client, so we hand the served tag a mock `{ metrics, usageNow }` with synthetic windows — a
+// realistic-ish WNBA stats surface (HttpApi groups × endpoints), accumulated for `topEndpoints`.
+interface EndpointSpec {
+  readonly group: string;
+  readonly endpoint: string;
+  readonly weight: number;
+  readonly avg: number;
+}
+const apiCatalog: ReadonlyArray<EndpointSpec> = [
+  { group: "games", endpoint: "GET /games", weight: 8, avg: 45 },
+  { group: "games", endpoint: "GET /games/:id", weight: 12, avg: 38 },
+  { group: "games", endpoint: "GET /games/:id/boxscore", weight: 10, avg: 95 },
+  { group: "games", endpoint: "GET /games/live", weight: 16, avg: 130 },
+  { group: "games", endpoint: "GET /games/:id/play-by-play", weight: 11, avg: 150 },
+  { group: "teams", endpoint: "GET /teams", weight: 3, avg: 28 },
+  { group: "teams", endpoint: "GET /teams/:id", weight: 5, avg: 32 },
+  { group: "teams", endpoint: "GET /teams/:id/roster", weight: 6, avg: 60 },
+  { group: "players", endpoint: "GET /players/:id", weight: 7, avg: 36 },
+  { group: "players", endpoint: "GET /players/:id/stats", weight: 6, avg: 72 },
+  { group: "players", endpoint: "GET /players/:id/splits", weight: 4, avg: 110 },
+  { group: "standings", endpoint: "GET /standings", weight: 3, avg: 24 },
+  { group: "odds", endpoint: "GET /odds", weight: 5, avg: 64 },
+  { group: "odds", endpoint: "GET /odds/:gameId", weight: 4, avg: 52 },
+];
+
+let apiTotal = 0;
+let apiErrors = 0;
+const apiCumulative = new Map<string, { requests: number; errors: number }>();
+
+const fakeWindow: Effect.Effect<ApiUsageMetrics> = Effect.gen(function* () {
+  const nowMs = yield* Clock.currentTimeMillis;
+  const byEndpoint: Array<ApiUsageMetrics["byEndpoint"][number]> = [];
+  let requests = 0;
+  let errors = 0;
+  for (const spec of apiCatalog) {
+    const reqs = yield* Random.nextIntBetween(0, spec.weight + 1);
+    if (reqs === 0) continue; // an endpoint not hit this window isn't reported
+    const errs = (yield* Random.next) < 0.06 ? Math.min(reqs, yield* Random.nextIntBetween(1, 3)) : 0;
+    const jitter = yield* Random.nextIntBetween(-10, 12);
+    requests += reqs;
+    errors += errs;
+    const prev = apiCumulative.get(spec.endpoint) ?? { requests: 0, errors: 0 };
+    apiCumulative.set(spec.endpoint, { requests: prev.requests + reqs, errors: prev.errors + errs });
+    byEndpoint.push({
+      group: spec.group,
+      endpoint: spec.endpoint,
+      requests: reqs,
+      errors: errs,
+      avgDurationMs: Math.max(5, spec.avg + jitter),
+    });
+  }
+  apiTotal += requests;
+  apiErrors += errors;
+  const inFlight = yield* Random.nextIntBetween(0, 6);
+  return {
+    windowStart: DateTime.makeUnsafe(nowMs - 2_000),
+    windowEnd: DateTime.makeUnsafe(nowMs),
+    windowMillis: 2_000,
+    requests,
+    errors,
+    inFlight,
+    throughputPerSec: requests / 2,
+    byEndpoint,
+  };
+});
+const scoresApiMock = {
+  metrics: Stream.tick(Duration.seconds(2)).pipe(Stream.mapEffect(() => fakeWindow)),
+  usageNow: Effect.map(
+    Random.nextIntBetween(0, 6),
+    (inFlight): ApiUsageSnapshot => ({
+      clientId: "@wnba/ScoresApi",
+      inFlight,
+      requestsTotal: apiTotal,
+      errorsTotal: apiErrors,
+      topEndpoints: apiCatalog
+        .map((spec) => {
+          const c = apiCumulative.get(spec.endpoint) ?? { requests: 0, errors: 0 };
+          return { group: spec.group, endpoint: spec.endpoint, requests: c.requests, errors: c.errors };
+        })
+        .sort((a, b) => b.requests - a.requests)
+        .slice(0, 5),
+    }),
+  ),
+};
+
+// Three hosts in one process, each its own port + `/rpc`: the box-score queue + scores API on
+// WnbaHost, the live-score poller on LiveHost, the play-by-play queue on StatsHost. Each
+// `serveAllHttp` consumes its own NodeHttpServer (Layer.provide, not provideMerge — so they don't
+// fight over one HttpServer).
 const wnbaHost = Resource.serveAllHttp([
   queueEntry(BoxScoreQueue, {
     effect: importWorker,
     concurrency: 3,
     captureLogs: true,
   }),
+  // ApiMetrics serves like any resource; the fixture hands it the mock impl directly (a real app
+  // would use `ApiMetrics.serverEntry(ScoresApi)`, fed from the instrumented client's registry).
+  { tag: ScoresApi, impl: scoresApiMock },
 ]).pipe(
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(HostLogs.layer),

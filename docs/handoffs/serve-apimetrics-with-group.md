@@ -1,5 +1,18 @@
 # Handoff: serve ApiMetrics alongside a served group (one host, one transport)
 
+> ✅ **DONE (2026-06-29).** `ApiMetrics` is now a **per-instance resource** (its own RPC group),
+> host-bindable, with `ApiMetrics.serverEntry(tag)` → a `ServeEntry`. It composes into
+> `serveAllHttp([...])` next to queues/processes and is read with `Resource.client` over the host's
+> transport — fed from the Metric registry (`ApiMetrics.layer` semantics). Host-bound tags are keyed
+> per-host (`<hostKey>/<clientId>/metrics`) so the same `clientId` on two hosts doesn't collide
+> (the cross-host concern in the notes below). This is closest to **option 2** plus the per-instance
+> grouping from the notes. The shared-group `serveInstances`/`clientInstances`/`instance` family was
+> removed. Verified end-to-end in `examples/resource-web` (ScoresApi served on WnbaHost) +
+> `test/api-metrics.test.ts`. The original request is kept below for context.
+
+---
+
+
 Make a served host expose its **ApiMetrics** resources the same way it exposes queues/processes — so
 a dashboard that `connectHttp`s the host reads API-usage panels over the same transport, with no
 second mount. Today there's no clean path: `serveAllHttp` takes `ServeEntry` (queue/process
