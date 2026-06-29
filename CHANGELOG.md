@@ -1,5 +1,27 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.12
+
+### Minor Changes
+
+- fa8762c: **Unified tag construction shape (BREAKING).** Service tags now all follow the Effect
+  `Context.Service` idiom — `Tag<Self>()(identity, …, options?)`. `Resource.Tag<Self>(key)(spec)`
+  becomes `Resource.Tag<Self>()(key, spec, options?)` (and `host` moves from a positional arg into
+  `options.host`); `ApiMetrics.Tag<Self>(clientId)()` becomes `ApiMetrics.Tag<Self>()(clientId)`.
+  The queue / scheduled-process / custom-queue / process-schedule / run factories already used this
+  shape and are unchanged, as is `Resource.tagFor`. No back-compat / deprecation (beta).
+
+- 765d195: **Per-resource readiness → `/health` 503 + `HostStatus` board.** Every resource can report
+  whether it's working, derived from its own status (SSOT). `Resource.withReadiness` is a dual
+  combinator (`withReadiness(tag, fn)` or `tag.pipe(withReadiness(fn))`) that attaches a derivation
+  `(svc) => Effect<{ ready, detail? }>`; the built-in contracts apply it (queue/custom-queue ready
+  iff the worker pool is `running`, scheduled-process iff `supervising`), a bare `Resource.Tag` opts
+  in the same way, and a tag without one is ready by default. `serveAllHttp` aggregates once: the
+  always-on **`GET /health`** route returns `200`/`503` (`status: "ok" | "degraded"`) with a body
+  listing each resource's `{ key, kind, ready, detail? }`, and **`HostStatus`** folds the same
+  aggregate into its schema (`status` + `resources[]`, plus `HostStatus.resourceReadiness`). Restores
+  the readiness endpoint the removed control plane used to provide.
+
 ## 0.8.0-beta.11
 
 ### Minor Changes
