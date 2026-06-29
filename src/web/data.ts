@@ -9,10 +9,12 @@
  *
  * @since 1.0.0
  */
-import { DateTime, Duration, Effect, type Schema, Stream } from "effect";
+import { DateTime, Duration, Effect, Layer, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
+import { RpcClient } from "effect/unstable/rpc";
 import * as Group from "../Group";
-import { hostOf, kindOf as resourceKindOf, specOf, type HostKey } from "../Resource";
+import { client, hostOf, kindOf as resourceKindOf, specOf, type HostKey } from "../Resource";
+import * as HostStatus from "../HostStatus";
 import { kind as queueKind, queueMetrics, queueStatus } from "../QueueContract";
 import { kind as processKind, processScheduleEntry, processStatus } from "../ScheduledProcess";
 import { kind as apiKind } from "../ApiMetrics";
@@ -127,6 +129,12 @@ export interface ProcessBundle {
   /** Remove all schedule entries. @since 1.0.0 */
   readonly clearSchedule: CommandAtom;
 }
+/** The atoms one host dot/detail needs — its live status (up, readiness rollup, per-resource).
+ *  Read-only. @since 1.0.0 */
+export interface HostBundle {
+  readonly id: string;
+  readonly status: ValueAtom<HostStatus.Status | undefined>;
+}
 /** The atoms one API-metrics card needs — read-only (no commands). @since 1.0.0 */
 export interface ApiBundle {
   /** Cumulative usage snapshot (totals + top endpoints), polled. @since 1.0.0 */
@@ -224,6 +232,7 @@ const cachedAccumulator = <A, R>(opts: {
 const bundleCache = new WeakMap<object, Map<string, QueueBundle>>();
 const processBundleCache = new WeakMap<object, Map<string, ProcessBundle>>();
 const apiBundleCache = new WeakMap<object, Map<string, ApiBundle>>();
+const hostBundleCache = new WeakMap<object, Map<string, HostBundle>>();
 const cacheFor = <V>(map: WeakMap<object, Map<string, V>>, runtime: object): Map<string, V> => {
   let m = map.get(runtime);
   if (m === undefined) {
@@ -382,6 +391,41 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
     history: Atom.mapResult(metricsHistory, (a) => a.history),
   };
   cache.set(tag.key, bundle);
+  return bundle;
+};
+
+// A HostStatus client over a specific host's transport: a HostKey's *value* is the RPC `Protocol`,
+// so provide it as the ambient `RpcClient.Protocol`. The tag-walk (`hostsOf`) erases the host's
+// identity, and the runtime supplies its transport via `connect`, so we restate the resolved
+// requirement — the same contained boundary assertion `Resource.client` makes for host-bearing tags.
+const hostStatusClient = (host: HostKey<unknown>) =>
+  client(HostStatus.Tag).pipe(
+    Layer.provide(Layer.effect(RpcClient.Protocol, host as HostKey<never>)),
+  );
+
+/** Build (once per runtime+host) the atom bundle for a host's live status — read straight from the
+ *  reserved `HostStatus` resource over that host's transport. @since 1.0.0 */
+export const hostStatusBundle = <R, ER>(
+  runtime: DashboardRuntime<R, ER>,
+  ref: HostRef,
+): HostBundle => {
+  const cache = cacheFor(hostBundleCache, runtime);
+  const existing = cache.get(ref.id);
+  if (existing !== undefined) return existing;
+  const bundle: HostBundle = {
+    id: ref.id,
+    status: runtime.atom(
+      Stream.unwrap(
+        Effect.map(HostStatus.Tag, (h) => h.status).pipe(
+          // The atom owns this per-host client's scope (it lives as long as the atom is mounted),
+          // so providing it here is the entry point — not a mid-pipeline provide that leaks scope.
+          // @effect-diagnostics-next-line strictEffectProvide:off
+          Effect.provide(hostStatusClient(ref.host)),
+        ),
+      ),
+    ),
+  };
+  cache.set(ref.id, bundle);
   return bundle;
 };
 
