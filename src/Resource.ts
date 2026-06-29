@@ -54,7 +54,7 @@ import {
   Scope,
   Stream,
 } from "effect";
-import { FetchHttpClient, Headers, HttpRouter, HttpServer } from "effect/unstable/http";
+import { FetchHttpClient, Headers, HttpRouter, HttpServer, HttpServerResponse } from "effect/unstable/http";
 import {
   Rpc,
   RpcClient,
@@ -1167,6 +1167,11 @@ const serveAllHttp = <R = never>(
   options?: {
     readonly path?: HttpRouter.PathInput;
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+    /** Readiness `/health` route (always mounted; set `path` to relocate it). A dumb probe gets
+     *  `200`/`503`; the JSON body lists the host's resources for a dashboard health board. */
+    readonly health?: {
+      readonly path?: HttpRouter.PathInput;
+    };
   },
 ): Layer.Layer<never, never, R | HttpServer.HttpServer> => {
   if (entries.length === 0) {
@@ -1208,19 +1213,42 @@ const serveAllHttp = <R = never>(
             typeof member === "function" ? member(payload) : member;
         }
       }
-      return HttpRouter.serve(
-        RpcServer.layerHttp({
-          group: merged,
-          path: options?.path ?? "/rpc",
-          protocol: "http",
-        }).pipe(
-          Layer.provide(
-            merged.toLayer(
-              handlers as unknown as Parameters<(typeof merged)["toLayer"]>[0],
-            ),
+      const rpcAppLayer = RpcServer.layerHttp({
+        group: merged,
+        path: options?.path ?? "/rpc",
+        protocol: "http",
+      }).pipe(
+        Layer.provide(
+          merged.toLayer(
+            handlers as unknown as Parameters<(typeof merged)["toLayer"]>[0],
           ),
         ),
-      ).pipe(Layer.provideMerge(options?.serialization ?? defaultSerialization));
+      );
+      // A plain HTTP readiness route alongside `/rpc` — a dumb probe (deploy gate, load balancer)
+      // gets a status code; the JSON body lists what this host serves for a dashboard health board.
+      // Phase 1: the server answering proves it's listening, so report `ok` + the resource roster;
+      // per-resource readiness (→ `503` when a resource is down) folds in once the `ready` seam lands.
+      const resources = entries.map((entry) => ({
+        key: entry.tag.groupId,
+        kind: kindOf(entry.tag) ?? "resource",
+      }));
+      const healthRoute = HttpRouter.add(
+        "GET",
+        options?.health?.path ?? "/health",
+        Effect.gen(function* () {
+          const ts = yield* Clock.currentTimeMillis;
+          return yield* HttpServerResponse.json({
+            status: "ok",
+            listening: true,
+            resources,
+            uptimeMillis: ts - startedAt,
+            ts,
+          }).pipe(Effect.orDie);
+        }),
+      );
+      return HttpRouter.serve(Layer.merge(rpcAppLayer, healthRoute)).pipe(
+        Layer.provideMerge(options?.serialization ?? defaultSerialization),
+      );
     }),
   ) as unknown as Layer.Layer<never, never, R | HttpServer.HttpServer>;
 };

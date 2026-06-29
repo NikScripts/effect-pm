@@ -1,0 +1,32 @@
+import { Effect, Layer, Schema } from "effect";
+import { FetchHttpClient, HttpClient, HttpServer } from "effect/unstable/http";
+import { NodeHttpServer } from "@effect/platform-node";
+import { expect, it } from "vitest";
+import { QueueResource } from "../src";
+import * as Resource from "../src/Resource";
+
+// A served host exposes a plain HTTP `/health` readiness route alongside `/rpc` — so a dumb probe
+// (deploy gate, load balancer) gets a status code, and the JSON body lists the host's resources.
+const Item = Schema.Struct({ n: Schema.Number });
+class HealthHost extends Resource.Host<HealthHost>("health/host") {}
+class HealthQueue extends QueueResource.Tag<HealthQueue>()("health/Q", Item, { host: HealthHost }) {}
+
+const Server = Resource.serveAllHttp([
+  QueueResource.serverEntry(HealthQueue, { effect: (_i: { n: number }) => Effect.void }),
+]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+
+it("serveAllHttp mounts a /health readiness route (200 + resource roster)", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
+      const port = addr._tag === "TcpAddress" ? addr.port : 0;
+      yield* Effect.gen(function* () {
+        const client = yield* HttpClient.HttpClient;
+        const res = yield* client.get(`http://127.0.0.1:${port}/health`);
+        expect(res.status).toBe(200);
+        const body = yield* res.text;
+        expect(body).toContain('"status":"ok"');
+        expect(body).toContain("health/Q"); // the served resource is in the roster
+      }).pipe(Effect.provide(FetchHttpClient.layer), Effect.scoped);
+    }).pipe(Effect.provide(Server), Effect.scoped),
+  ));
