@@ -32,7 +32,7 @@ import { useProcessBundle, useQueueBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
-import { dateFromMillis, fmtClock, fmtDayLabel, millisFromLocalInput, now, startOfDayMillis } from "./now";
+import { dateFromMillis, fmtClock, fmtDayLabel, millisFromLocalInput, now, startOfDayMillis, toLocalInput } from "./now";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
@@ -672,31 +672,42 @@ const ScheduleRow = (props: { readonly entry: ScheduleEntry }): React.ReactEleme
   </li>
 );
 
-/** The popup that adds one run window — start (required) + optional stop. @since 1.0.0 */
-export const AddWindowDialog = (props: {
+/** The popup to add **or edit** one run window — start (required) + optional stop. When `initial`
+ *  is given it's an edit (fields pre-filled, `onDelete` shown); otherwise it adds. @since 1.0.0 */
+export const WindowDialog = (props: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
-  readonly onAdd: (entry: ScheduleEntry) => void;
+  readonly initial?: ScheduleEntry;
+  readonly onSubmit: (entry: ScheduleEntry) => void;
+  readonly onDelete?: () => void;
 }): React.ReactElement => {
   const [start, setStart] = React.useState("");
   const [stop, setStop] = React.useState("");
+  // Re-seed the fields whenever the dialog opens (empty for add, the entry's times for edit).
+  React.useEffect(() => {
+    if (!props.open) return;
+    setStart(props.initial === undefined ? "" : toLocalInput(DateTime.toEpochMillis(props.initial.startAt)));
+    setStop(
+      props.initial?.stopAt === undefined ? "" : toLocalInput(DateTime.toEpochMillis(props.initial.stopAt)),
+    );
+  }, [props.open, props.initial]);
+  const editing = props.initial !== undefined;
   const startMs = millisFromLocalInput(start);
   const submit = (): void => {
     if (startMs === undefined) return;
     const stopMs = millisFromLocalInput(stop);
-    props.onAdd({
+    props.onSubmit({
+      ...(props.initial?.id !== undefined ? { id: props.initial.id } : {}),
       startAt: DateTime.makeUnsafe(startMs),
       ...(stopMs !== undefined ? { stopAt: DateTime.makeUnsafe(stopMs) } : {}),
     });
-    setStart("");
-    setStop("");
     props.onOpenChange(false);
   };
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add run window</DialogTitle>
+          <DialogTitle>{editing ? "Edit run window" : "Add run window"}</DialogTitle>
           <DialogDescription>The process is armed while now is inside a window.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3 py-1">
@@ -720,10 +731,25 @@ export const AddWindowDialog = (props: {
           </label>
         </div>
         <DialogFooter>
+          {editing && props.onDelete !== undefined ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              className="mr-auto"
+              onClick={() => {
+                props.onDelete?.();
+                props.onOpenChange(false);
+              }}
+            >
+              <Trash2 className="size-4" /> Delete
+            </Button>
+          ) : null}
           <DialogClose asChild>
             <Button variant="outline" size="sm">Cancel</Button>
           </DialogClose>
-          <Button size="sm" onClick={submit} disabled={startMs === undefined}>Add window</Button>
+          <Button size="sm" onClick={submit} disabled={startMs === undefined}>
+            {editing ? "Save" : "Add window"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -742,6 +768,7 @@ export const useScheduleEdit = (
 ): {
   readonly list: ReadonlyArray<ScheduleEntry>;
   readonly addEntry: (entry: ScheduleEntry) => void;
+  readonly update: (index: number, entry: ScheduleEntry) => void;
   readonly remove: (index: number) => void;
   readonly clearAll: () => void;
 } => {
@@ -755,10 +782,12 @@ export const useScheduleEdit = (
     setEdited(next);
     setSchedule(next);
   };
+  const byStart = (a: ScheduleEntry, b: ScheduleEntry): number =>
+    DateTime.toEpochMillis(a.startAt) - DateTime.toEpochMillis(b.startAt);
   return {
     list,
-    addEntry: (entry) =>
-      apply([...list, entry].sort((a, b) => DateTime.toEpochMillis(a.startAt) - DateTime.toEpochMillis(b.startAt))),
+    addEntry: (entry) => apply([...list, entry].sort(byStart)),
+    update: (i, entry) => apply(list.map((e, j) => (j === i ? entry : e)).sort(byStart)),
     remove: (i) => apply(list.filter((_, j) => j !== i)),
     clearAll: () => {
       setEdited([]);
@@ -777,10 +806,10 @@ const DAY_MS = 86_400_000;
 export const WeekSchedule = (props: {
   readonly entries: ReadonlyArray<ScheduleEntry>;
   readonly weekStart: number;
-  /** When provided (and unlocked), tapping a window's block requests its removal by entry index. */
-  readonly onRemoveEntry?: (index: number) => void;
+  /** When provided (and unlocked), tapping a window's block selects it (to edit) by entry index. */
+  readonly onSelectEntry?: (index: number) => void;
 }): React.ReactElement => {
-  const clickable = props.onRemoveEntry;
+  const clickable = props.onSelectEntry;
   const nowMs = now();
   const todayStart = startOfDayMillis(nowMs);
   const days = Array.from({ length: 7 }, (_, i) => props.weekStart + i * DAY_MS);
@@ -833,7 +862,7 @@ export const WeekSchedule = (props: {
                       "absolute inset-x-0.5 z-20 overflow-hidden rounded border border-primary bg-primary/30 px-1 text-left text-[10px] leading-tight text-foreground",
                       clickable !== undefined && "cursor-pointer hover:bg-primary/50",
                     )}
-                    title={clickable === undefined ? `${label} · ${range}` : `${label} · ${range} — tap to remove`}
+                    title={clickable === undefined ? `${label} · ${range}` : `${label} · ${range} — tap to edit`}
                   >
                     {label}
                   </button>,

@@ -28,6 +28,13 @@ export const millisFromLocalInput = (value: string): number | undefined => {
   return Number.isNaN(ms) ? undefined : ms;
 };
 
+/** Epoch ms → the value an `<input type="datetime-local">` shows (local wall time). @since 1.0.0 */
+export const toLocalInput = (millis: number): string => {
+  const d = dateFromMillis(millis);
+  const p = (n: number): string => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
 const DAY_MS = 86_400_000;
 
 /** Local midnight (epoch ms) of the day containing `millis`. @since 1.0.0 */

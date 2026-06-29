@@ -32,7 +32,7 @@ import { RuntimeProvider, useProcessBundle, useQueueBundle, useRuntime } from ".
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { AddWindowDialog, Cell, ConfirmDialog, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ScheduleEditor, StatusBadge, WeekSchedule, displayName, useScheduleEdit } from "./widgets";
+import { Cell, ConfirmDialog, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ScheduleEditor, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
 
@@ -88,45 +88,63 @@ const LogsPage = (props: { readonly tag: QueueTag | ProcessTag; readonly onClose
 const DAY_MS = 86_400_000;
 
 /** Fullscreen weekly schedule view for a process — its own route (`/…/Process/schedule`): a 7-day
- *  calendar grid of the run windows with week navigation, plus add / clear behind one lock. */
+ *  calendar grid of the run windows. Week nav up top (top-right kept free); add / clear / lock in a
+ *  bottom bar; tap a window to edit or delete it. */
 const SchedulePage = (props: { readonly tag: ProcessTag; readonly onClose: () => void }): React.ReactElement => {
   const bundle = useProcessBundle(props.tag);
-  const { list, addEntry, remove, clearAll } = useScheduleEdit(bundle);
+  const { list, addEntry, update, remove, clearAll } = useScheduleEdit(bundle);
   const [weekStart, setWeekStart] = React.useState(() => startOfWeekMillis(now()));
-  const [addOpen, setAddOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState<number | "new" | undefined>(undefined);
   const [confirmClear, setConfirmClear] = React.useState(false);
-  const [confirmRemove, setConfirmRemove] = React.useState<number | undefined>(undefined);
   const [locked, setLocked] = React.useState(true);
   const vt = useViewTransitionStyle("schedule-panel");
+  const thisWeek = startOfWeekMillis(now());
+  const initialEntry = typeof editing === "number" ? list[editing] : undefined;
   return (
     <div style={vt} className="fixed inset-0 z-50 flex flex-col gap-2 bg-background p-2 safe-area">
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onClose}>← back</Button>
         <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.key)} · schedule</strong>
-        <LockToggle locked={locked} onToggle={() => setLocked((l) => !l)} />
+        {/* top-right intentionally free */}
       </div>
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex items-center gap-2">
         <Button variant="ghost" size="icon" onClick={() => setWeekStart((w) => w - 7 * DAY_MS)} aria-label="previous week">
           <ChevronLeft className="size-4" />
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => setWeekStart(startOfWeekMillis(now()))}>this week</Button>
+        <button type="button" onClick={() => setWeekStart(thisWeek)} className="flex-1 text-center leading-tight">
+          <div className="text-sm font-semibold">Week of {fmtDayLabel(weekStart)}</div>
+          <div className="text-xs text-muted-foreground">{weekStart === thisWeek ? "This week" : "Jump to this week"}</div>
+        </button>
         <Button variant="ghost" size="icon" onClick={() => setWeekStart((w) => w + 7 * DAY_MS)} aria-label="next week">
           <ChevronRight className="size-4" />
-        </Button>
-        <span className="text-xs text-muted-foreground">week of {fmtDayLabel(weekStart)}</span>
-        <Button variant="outline" size="sm" className="ml-auto" onClick={() => setAddOpen(true)} disabled={locked}>
-          <Plus className="size-4" /> add
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => setConfirmClear(true)} disabled={locked || list.length === 0}>
-          <Trash2 className="size-4" />
         </Button>
       </div>
       <WeekSchedule
         entries={list}
         weekStart={weekStart}
-        onRemoveEntry={locked ? undefined : (i) => setConfirmRemove(i)}
+        onSelectEntry={locked ? undefined : (i) => setEditing(i)}
       />
-      <AddWindowDialog open={addOpen} onOpenChange={setAddOpen} onAdd={addEntry} />
+      <div className="flex items-center justify-center gap-2 border-t pt-2">
+        <Button variant="outline" size="sm" onClick={() => setEditing("new")} disabled={locked}>
+          <Plus className="size-4" /> add
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setConfirmClear(true)} disabled={locked || list.length === 0}>
+          <Trash2 className="size-4" /> clear
+        </Button>
+        <LockToggle locked={locked} onToggle={() => setLocked((l) => !l)} />
+      </div>
+      <WindowDialog
+        open={editing !== undefined}
+        onOpenChange={(open) => {
+          if (!open) setEditing(undefined);
+        }}
+        initial={initialEntry}
+        onSubmit={(entry) => {
+          if (editing === "new") addEntry(entry);
+          else if (typeof editing === "number") update(editing, entry);
+        }}
+        onDelete={typeof editing === "number" ? () => remove(editing) : undefined}
+      />
       <ConfirmDialog
         open={confirmClear}
         onOpenChange={setConfirmClear}
@@ -135,20 +153,6 @@ const SchedulePage = (props: { readonly tag: ProcessTag; readonly onClose: () =>
         confirmLabel="Clear"
         destructive
         onConfirm={clearAll}
-      />
-      <ConfirmDialog
-        open={confirmRemove !== undefined}
-        onOpenChange={(open) => {
-          if (!open) setConfirmRemove(undefined);
-        }}
-        title="Remove window?"
-        description="Remove this run window from the schedule."
-        confirmLabel="Remove"
-        destructive
-        onConfirm={() => {
-          if (confirmRemove !== undefined) remove(confirmRemove);
-          setConfirmRemove(undefined);
-        }}
       />
     </div>
   );
