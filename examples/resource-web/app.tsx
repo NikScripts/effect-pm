@@ -10,8 +10,8 @@ import { Dashboard } from "../../src/web";
 import { ServicesHub, runtime } from "./hub";
 
 export const App = (): React.ReactElement => (
+  // No header here — the Dashboard renders its own group breadcrumb (⬢ ServicesHub …).
   <div className="min-h-screen bg-background text-foreground">
-    <header className="border-b px-4 py-3 text-sm font-semibold">ServicesHub · resource dashboard</header>
     <Dashboard runtime={runtime} group={ServicesHub} />
   </div>
 );
