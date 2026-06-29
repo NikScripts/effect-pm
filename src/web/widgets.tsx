@@ -18,7 +18,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { DateTime } from "effect";
+import { Cause, DateTime } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Lock, LockOpen, Maximize2, Pause, Play, Power, RotateCw, Square, Trash2 } from "lucide-react";
 import * as Group from "../Group";
@@ -1296,6 +1296,10 @@ const HostDot = (props: {
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const [open, setOpen] = React.useState(false);
   const color = hostColor(s);
+  React.useEffect(() => {
+    dlog("host", props.host.id, asyncTag(r));
+    if (AsyncResult.isFailure(r)) dlog("host", props.host.id, "FAILURE", Cause.pretty(r.cause));
+  }, [r, props.host.id]);
   return (
     <div className="relative">
       <button
@@ -1358,6 +1362,10 @@ export const HostBar = (props: {
   readonly onOpenHost: (host: HostRef) => void;
 }): React.ReactElement | null => {
   const hosts = hostsOf(props.group);
+  const ids = hosts.map((h) => h.id).join(", ");
+  React.useEffect(() => {
+    dlog("hostBar: hosts =", hosts.length, ids === "" ? "(none)" : ids);
+  }, [hosts.length, ids]);
   if (hosts.length === 0) return null;
   return (
     <div className="fixed right-2 top-2 z-40 flex items-center gap-1.5 safe-area">

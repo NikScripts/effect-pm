@@ -94,7 +94,20 @@ export const DebugConsole = (): React.ReactElement | null => {
   patchConsole();
   const [open, setOpen] = React.useState(false);
   const [enabled, setEnabled] = React.useState(() => debugEnabled());
+  const [copied, setCopied] = React.useState(false);
   const all = useLines();
+  // Copy the whole log to the clipboard (no devtools on mobile) — `[clock] [level] text` per line.
+  const copy = (): void => {
+    const text = all.map((l) => `${fmtClock(l.t)} [${l.level}] ${l.text}`).join("\n");
+    try {
+      void navigator.clipboard.writeText(text);
+      setCopied(true);
+      // @effect-diagnostics-next-line globalTimers:off
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      /* clipboard unavailable (insecure context) — ignore */
+    }
+  };
   // fully turn debug off: clear the persisted flag AND the ?debug URL param, then hide
   const disable = (): void => {
     try {
@@ -128,6 +141,9 @@ export const DebugConsole = (): React.ReactElement | null => {
         <div className="flex h-[42dvh] w-[92vw] max-w-xl flex-col rounded-lg border bg-black/90 text-xs shadow-xl">
           <div className="flex items-center gap-2 border-b px-2 py-1">
             <strong className="flex-1">debug console · {all.length}</strong>
+            <button type="button" onClick={copy} className="rounded border px-2 py-0.5">
+              {copied ? "copied" : "copy"}
+            </button>
             <button
               type="button"
               onClick={() => {
