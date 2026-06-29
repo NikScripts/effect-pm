@@ -7,6 +7,7 @@
  * panel. `dlog(...)` is a debug-only logger that shows up here.
  */
 import * as React from "react";
+import { Bug, Check, Copy, Power, Trash2, X } from "lucide-react";
 import { fmtClock, now } from "./now";
 
 /** True when debug mode is on. `?debug` / `?debug=1` enables (and persists); `?debug=0` clears. */
@@ -139,26 +140,28 @@ export const DebugConsole = (): React.ReactElement | null => {
     <div className="fixed bottom-2 right-2 z-50" style={{ marginBottom: "env(safe-area-inset-bottom)" }}>
       {open ? (
         <div className="flex h-[42dvh] w-[92vw] max-w-xl flex-col rounded-lg border bg-black/90 text-xs shadow-xl">
-          <div className="flex items-center gap-2 border-b px-2 py-1">
+          <div className="flex items-center gap-1.5 border-b px-2 py-1">
             <strong className="flex-1">debug console · {all.length}</strong>
-            <button type="button" onClick={copy} className="rounded border px-2 py-0.5">
-              {copied ? "copied" : "copy"}
+            <button type="button" aria-label={copied ? "copied" : "copy log"} title="copy" onClick={copy} className="rounded border p-1">
+              {copied ? <Check size={14} /> : <Copy size={14} />}
             </button>
             <button
               type="button"
+              aria-label="clear log"
+              title="clear"
               onClick={() => {
                 lines = [];
                 notify();
               }}
-              className="rounded border px-2 py-0.5"
+              className="rounded border p-1"
             >
-              clear
+              <Trash2 size={14} />
             </button>
-            <button type="button" onClick={disable} className="rounded border px-2 py-0.5">
-              disable
+            <button type="button" aria-label="disable debug" title="disable" onClick={disable} className="rounded border p-1">
+              <Power size={14} />
             </button>
-            <button type="button" onClick={() => setOpen(false)} className="rounded border px-2 py-0.5">
-              close
+            <button type="button" aria-label="close console" title="close" onClick={() => setOpen(false)} className="rounded border p-1">
+              <X size={14} />
             </button>
           </div>
           <div ref={ref} onScroll={onScroll} className="flex-1 overflow-auto px-2 py-1 font-mono leading-snug">
@@ -173,10 +176,13 @@ export const DebugConsole = (): React.ReactElement | null => {
       ) : (
         <button
           type="button"
+          aria-label="open debug console"
+          title="debug console"
           onClick={() => setOpen(true)}
-          className="rounded-full border bg-black/80 px-3 py-2 text-sm shadow-lg"
+          className="flex items-center gap-1 rounded-full border bg-black/80 px-3 py-2 text-sm shadow-lg"
         >
-          🐛 {all.length}
+          <Bug size={16} />
+          {all.length}
         </button>
       )}
     </div>
