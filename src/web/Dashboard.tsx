@@ -26,6 +26,7 @@ import {
   type QueueTag,
   kindOf,
   leafTags,
+  pathToResource,
   processBundle,
   queueBundle,
 } from "./data";
@@ -328,6 +329,20 @@ export const DashboardView = <R, ER>(props: {
   readonly group: GroupNode;
 }): React.ReactElement => {
   const [host, setHost] = React.useState<HostRef | null>(null);
+  // Open a served resource from the host page: navigate the group route to it (the route mirrors the
+  // `Group` tree in the URL), then close the host overlay — `DashboardInner` remounts and resolves
+  // the new path to that resource's detail. A resource not found in the tree just closes the overlay.
+  const openResource = React.useCallback(
+    (resourceKey: string): void => {
+      const path = pathToResource(props.group, resourceKey);
+      if (path !== undefined) {
+        const url = path.length === 0 ? "/" : `/${path.map(encodeURIComponent).join("/")}`;
+        window.history.pushState(null, "", url);
+      }
+      setHost(null);
+    },
+    [props.group],
+  );
   // The dashboard owns its font: declaring `font-mono` on its own root means the widgets render
   // monospace regardless of the consumer's `body`/`#root` font (a value set directly on this
   // element wins over an inherited one), and it still honours a consumer-defined `--font-mono`.
@@ -335,7 +350,7 @@ export const DashboardView = <R, ER>(props: {
     <RuntimeProvider runtime={props.runtime}>
       <div className="font-mono">
         {host !== null ? (
-          <HostDetail host={host} onBack={() => setHost(null)} />
+          <HostDetail host={host} onBack={() => setHost(null)} onOpenResource={openResource} />
         ) : (
           <DashboardInner group={props.group} onOpenHost={setHost} />
         )}

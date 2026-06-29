@@ -1487,11 +1487,13 @@ export const HostBar = (props: {
   );
 };
 
-/** Fullscreen host view: header + each served resource's readiness (graphs land with host metrics).
- *  @since 1.0.0 */
+/** Fullscreen host view: header + each served resource's readiness (tap → that resource's page).
+ *  Graphs land with host metrics. @since 1.0.0 */
 export const HostDetail = (props: {
   readonly host: HostRef;
   readonly onBack: () => void;
+  /** Open a served resource's detail page, by its wire key (`HostStatus.resources[].key`). */
+  readonly onOpenResource: (resourceKey: string) => void;
 }): React.ReactElement => {
   const r = useAtomValue(useHostBundle(props.host).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
@@ -1517,16 +1519,23 @@ export const HostDetail = (props: {
             <div className="mb-2 text-sm font-semibold">resources</div>
             <ul className="space-y-1">
               {s.resources.map((res) => (
-                <li key={res.key} className="flex items-center gap-2 text-sm">
-                  <span
-                    className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: res.ready ? "#22c55e" : "#eab308" }}
-                  />
-                  <span className="flex-1 truncate">{displayName(res.key)}</span>
-                  <Badge>{displayName(res.kind)}</Badge>
-                  <span className="text-muted-foreground">
-                    {res.ready ? "ready" : (res.detail ?? "not ready")}
-                  </span>
+                <li key={res.key}>
+                  <button
+                    type="button"
+                    onClick={() => props.onOpenResource(res.key)}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
+                  >
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: res.ready ? "#22c55e" : "#eab308" }}
+                    />
+                    <span className="flex-1 truncate">{displayName(res.key)}</span>
+                    <Badge>{displayName(res.kind)}</Badge>
+                    <span className="text-muted-foreground">
+                      {res.ready ? "ready" : (res.detail ?? "not ready")}
+                    </span>
+                    <span className="shrink-0 text-muted-foreground">›</span>
+                  </button>
                 </li>
               ))}
             </ul>

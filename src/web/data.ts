@@ -171,6 +171,42 @@ export const hostsOf = (group: unknown): ReadonlyArray<HostRef> => {
   return [...seen.values()];
 };
 
+/** A tag's wire identity (its `groupId`, falling back to `key`) — what a host's `HostStatus`
+ *  reports for each served resource. @since 1.0.0 */
+const tagWireKey = (member: unknown): string | undefined => {
+  if ((typeof member !== "object" && typeof member !== "function") || member === null) {
+    return undefined;
+  }
+  if ("groupId" in member && typeof member.groupId === "string") return member.groupId;
+  if ("key" in member && typeof member.key === "string") return member.key;
+  return undefined;
+};
+
+/** The chain of **member keys** from a group's root to the leaf whose wire key is `key` (as reported
+ *  by a host's `HostStatus.resources[].key`), or `undefined` if not found. Lets the host page open a
+ *  resource's detail by navigating the same `Group` route the dashboard uses. @since 1.0.0 */
+export const pathToResource = (
+  group: unknown,
+  key: string,
+): ReadonlyArray<string> | undefined => {
+  const walk = (
+    node: unknown,
+    trail: ReadonlyArray<string>,
+  ): ReadonlyArray<string> | undefined => {
+    if (!Group.isGroup(node)) return undefined;
+    for (const [name, member] of Object.entries(Group.members(node))) {
+      if (Group.isGroup(member)) {
+        const found = walk(member, [...trail, name]);
+        if (found !== undefined) return found;
+      } else if (tagWireKey(member) === key) {
+        return [...trail, name];
+      }
+    }
+    return undefined;
+  };
+  return walk(group, []);
+};
+
 /** Which kind of leaf a tag is — by the contract's stamped kind. @since 1.0.0 */
 export const kindOf = (member: unknown): "queue" | "process" | "api" => {
   // Prefer the contract's stamped kind (set by each `.Tag` factory); fall back to sniffing the spec
