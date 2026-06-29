@@ -905,7 +905,10 @@ export const withReadiness: {
   // data-last (pipe): `tag.pipe(Resource.withReadiness(fn))` — the service type is derived from the
   // piped tag; `Self` is widened to `any` here so this can be used in a class `extends` position
   // without TS resolving the class's own (still-being-declared) type — see test/resource-readiness.
-  <T extends ResourceTag<any, any>>(
+  // The constraint includes `HostBoundTag` explicitly: a host-bound tag is a *distinct* interface
+  // (not just `ResourceTag<X>`), so `.pipe`'s `this` assignment to a bare `ResourceTag<any, any>`
+  // fails its invariant `[groupSym]` map — naming it here keeps the comparison same-generic (lenient).
+  <T extends ResourceTag<any, any> | HostBoundTag<any, any, any>>(
     readiness: ReadinessOf<
       T extends ResourceTag<any, infer S extends Spec> ? ServiceOf<S, any> : never
     >,

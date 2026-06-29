@@ -6,9 +6,11 @@
  * poller), and an API-usage tap (`ScoresApi`). Every resource is **hosted remotely** across three
  * hosts (served by `server.ts`); the browser reaches each via `Resource.connectHttp` (vite proxies
  * `/rpc` / `/live` / `/stats`), which is what lights up the top-right **host die**. `ScoresApi` is an
- * `ApiMetrics` resource served on `WnbaHost` via `ApiMetrics.serverEntry`.
+ * `ApiMetrics` resource served on `WnbaHost` via `ApiMetrics.serverEntry`. `ScoresDb` is a dependency
+ * resource the box-score queue's readiness depends on (`readinessOf`) — when its (simulated)
+ * connection blips, the queue cascades to degraded, dogfooding dependency-aware readiness.
  */
-import { Layer, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import * as Resource from "../../src/Resource";
 import * as QueueResource from "../../src/QueueContract";
@@ -25,10 +27,31 @@ export class WnbaHost extends Resource.Host<WnbaHost>("wnba/scores") {}
 export class LiveHost extends Resource.Host<LiveHost>("wnba/live") {}
 export class StatsHost extends Resource.Host<StatsHost>("wnba/stats") {}
 
+// A "scores database" connection, served on WnbaHost. Its readiness reflects a (simulated) physical
+// connection that drops briefly now and then; the box-score queue *depends on* it (below), so when the
+// DB blips the queue cascades to degraded. This dogfoods `readinessOf` + the readiness cascade.
+export class ScoresDb extends Resource.Tag<ScoresDb>()(
+  "wnba/ScoresDb",
+  { connected: Resource.query(Schema.Boolean) },
+  { host: WnbaHost },
+).pipe(
+  Resource.withReadiness((svc) =>
+    Effect.map(svc.connected, (c) =>
+      c ? { ready: true } : { ready: false, detail: "connecting to scores DB…" },
+    ),
+  ),
+) {}
+
 export class BoxScoreQueue extends QueueResource.Tag<BoxScoreQueue>()(
   "wnba/BoxScoreQueue",
   importJob,
   { host: WnbaHost },
+).pipe(
+  // depend on the scores DB: ready only when the queue is running AND the DB is connected. `base` is
+  // the queue's own `phase === "running"` check — kept, not replaced — AND-ed with the DB's readiness.
+  Resource.withReadiness((_svc, base) =>
+    Resource.allReady([base, Resource.readinessOf(ScoresDb)]),
+  ),
 ) {}
 export class LiveScorePoller extends ProcessResource.Tag<LiveScorePoller>()(
   "wnba/LiveScorePoller",
@@ -46,6 +69,7 @@ export class ScoresApi extends ApiMetrics.Tag<ScoresApi>()("@wnba/ScoresApi", {
 /** WNBA league group — a nested group the dashboard drills into. */
 export class Wnba extends Group.Tag<Wnba>("hub/Wnba")({
   LiveScorePoller,
+  ScoresDb,
   BoxScoreQueue,
   PlayByPlayQueue,
   ScoresApi,
@@ -76,6 +100,7 @@ const appLayer = Layer.mergeAll(
   Resource.client(LiveScorePoller).pipe(Layer.provide(liveTransport)),
   Resource.client(PlayByPlayQueue).pipe(Layer.provide(statsTransport)),
   Resource.client(ScoresApi).pipe(Layer.provide(wnbaTransport)),
+  Resource.client(ScoresDb).pipe(Layer.provide(wnbaTransport)),
 );
 
 /** One reactive runtime providing every resource in the hub. */

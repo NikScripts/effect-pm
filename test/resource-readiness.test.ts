@@ -106,3 +106,25 @@ it("not ready (with the dependency's detail) when the DB is down", () =>
 it("the factory/base check still applies — a stopped worker is not ready even if the DB is up", () =>
   Effect.runPromise(checkWorker(true, false)).then((r) =>
     expect(r).toEqual({ ready: false, detail: "stopped" })));
+
+// Regression: a host-bound tag must be able to extend readiness via `.pipe`. A `HostBoundTag` is a
+// distinct interface, so `.pipe`'s `this` assignment to a bare `ResourceTag<any, any>` used to fail
+// on its invariant `[groupSym]` map; the data-last `withReadiness` overload now names HostBoundTag.
+class DepHost extends Resource.Host<DepHost>("dep/host") {}
+class HostedWorker extends Resource.Tag<HostedWorker>()(
+  "dep/HostedWorker",
+  { running: Resource.query(Schema.Boolean) },
+  { host: DepHost },
+).pipe(
+  Resource.withReadiness((svc) =>
+    Effect.map(svc.running, (r) => (r ? { ready: true } : { ready: false, detail: "stopped" })),
+  ),
+) {}
+
+it("a host-bound tag can extend readiness via .pipe (regression)", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const w = yield* HostedWorker;
+      return yield* Resource.readinessCheck(HostedWorker, w);
+    }).pipe(Effect.provide(Resource.layer(HostedWorker, { running: Effect.succeed(false) }))),
+  ).then((r) => expect(r).toEqual({ ready: false, detail: "stopped" })));

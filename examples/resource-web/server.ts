@@ -22,7 +22,7 @@ import { Polling } from "../../src/Polling";
 import { ProcessSchedule } from "../../src/ProcessSchedule";
 import { ProcessStorage } from "../../src/ProcessStorage";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
-import { BoxScoreQueue, LiveScorePoller, PlayByPlayQueue, ScoresApi } from "./hub";
+import { BoxScoreQueue, LiveScorePoller, PlayByPlayQueue, ScoresApi, ScoresDb } from "./hub";
 
 const WNBA_PORT = 7780;
 const LIVE_PORT = 7781;
@@ -140,8 +140,15 @@ const scoresApiMock = {
   ),
 };
 
-// Three hosts in one process, each its own port + `/rpc`: the box-score queue + scores API on
-// WnbaHost, the live-score poller on LiveHost, the play-by-play queue on StatsHost. Each
+// Simulated physical connection for the scores DB: connected most of the time, dropping ~6s every
+// 45s (epoch-aligned) so the box-score queue's dependency-aware readiness visibly cascades to
+// degraded and then recovers. A real DB resource would acquire this eagerly with `Layer.scoped`.
+const scoresDbImpl = {
+  connected: Effect.map(Clock.currentTimeMillis, (now) => now % 45_000 > 6_000),
+};
+
+// Three hosts in one process, each its own port + `/rpc`: the box-score queue + scores DB + scores
+// API on WnbaHost, the live-score poller on LiveHost, the play-by-play queue on StatsHost. Each
 // `serveAllHttp` consumes its own NodeHttpServer (Layer.provide, not provideMerge — so they don't
 // fight over one HttpServer).
 const wnbaHost = Resource.serveAllHttp([
@@ -153,7 +160,13 @@ const wnbaHost = Resource.serveAllHttp([
   // ApiMetrics serves like any resource; the fixture hands it the mock impl directly (a real app
   // would use `ApiMetrics.serverEntry(ScoresApi)`, fed from the instrumented client's registry).
   { tag: ScoresApi, impl: scoresApiMock },
+  // Serve the scores DB from its own provided service (below) — the same instance the box-score
+  // queue's readiness depends on via `readinessOf(ScoresDb)`, so the cascade is consistent.
+  { tag: ScoresDb, impl: ScoresDb },
 ]).pipe(
+  // provide ScoresDb so the queue's readiness derivation (`readinessOf(ScoresDb)`) can resolve it;
+  // the served entry above re-exposes this same service over RPC.
+  Layer.provide(Resource.layer(ScoresDb, scoresDbImpl)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(HostLogs.layer),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: WNBA_PORT })),
