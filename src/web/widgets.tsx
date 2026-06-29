@@ -990,9 +990,22 @@ export const PagedCard = (props: {
         ref={ref}
         onScroll={() => {
           const el = ref.current;
-          if (el !== null && el.clientWidth > 0) setActive(Math.round(el.scrollLeft / el.clientWidth));
+          if (el === null) return;
+          // nearest page by element offset — robust to the inter-page gap (clientWidth math isn't).
+          let best = 0;
+          let bestD = Infinity;
+          Array.from(el.children).forEach((c, i) => {
+            if (c instanceof HTMLElement) {
+              const d = Math.abs(c.offsetLeft - el.scrollLeft);
+              if (d < bestD) {
+                bestD = d;
+                best = i;
+              }
+            }
+          });
+          setActive(best);
         }}
-        className="flex snap-x snap-mandatory overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex snap-x snap-mandatory gap-4 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {props.pages.map((page, i) => (
           <div key={i} className="w-full shrink-0 snap-center">{page}</div>
@@ -1007,7 +1020,10 @@ export const PagedCard = (props: {
               onClick={(e) => {
                 e.stopPropagation();
                 const el = ref.current;
-                if (el !== null) el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+                const child = el?.children[i];
+                if (el !== null && child instanceof HTMLElement) {
+                  el.scrollTo({ left: child.offsetLeft, behavior: "smooth" });
+                }
               }}
               className={cn("size-1.5 rounded-full transition-colors", i === active ? "bg-foreground" : "bg-muted-foreground/40")}
               aria-label={`page ${i + 1}`}
@@ -1288,15 +1304,30 @@ const fmtUptime = (ms: number): string => {
 
 /** One host indicator dot + tap-for-info popover (tap again, or "view host", for the full screen).
  *  @since 1.0.0 */
-/** Compact pip layout: dots packed into ≤3 rows (columns grow), sized **larger when there are
- *  fewer** hosts. Column-major fill (each column up to 3 tall). @since 1.0.0 */
+// Dice-face pip cells (a 3×3 grid, cells 0..8 row-major) for 1–9 hosts. Mostly the classic faces,
+// with two intentional tweaks: 3 is a **pyramid** (top-centre over the two bottom corners) rather
+// than the diagonal, and 4 is **2-on-2** (the corners). 10+ keeps 3 rows and grows columns.
+const DICE: Record<number, ReadonlyArray<number>> = {
+  1: [4],
+  2: [0, 8],
+  3: [1, 6, 8],
+  4: [0, 2, 6, 8],
+  5: [0, 2, 4, 6, 8],
+  6: [0, 3, 6, 2, 5, 8],
+  7: [0, 3, 6, 4, 2, 5, 8],
+  8: [0, 3, 6, 1, 7, 2, 5, 8],
+  9: [0, 1, 2, 3, 4, 5, 6, 7, 8],
+};
+
+/** Pip layout: dice-face cell placement (1–9) in a 3×3 grid, else 3 rows × growing columns. Dots
+ *  are sized **larger when there are fewer** hosts. @since 1.0.0 */
 const pipLayout = (
   n: number,
 ): {
-  readonly cols: number;
-  readonly rows: number;
   readonly dot: string;
   readonly gap: string;
+  readonly cols: number;
+  readonly rows: number;
   readonly cells: ReadonlyArray<{ readonly row: number; readonly col: number }>;
 } => {
   const size =
@@ -1307,15 +1338,24 @@ const pipLayout = (
         : n <= 9
           ? { dot: "0.34375rem", gap: "0.25rem" }
           : { dot: "0.28125rem", gap: "0.1875rem" };
+  if (n <= 9) {
+    const order = DICE[n] ?? [];
+    return {
+      ...size,
+      cols: 3,
+      rows: 3,
+      cells: order.map((c) => ({ row: Math.floor(c / 3) + 1, col: (c % 3) + 1 })),
+    };
+  }
   return {
-    cols: Math.ceil(n / 3),
-    rows: Math.min(n, 3),
     ...size,
+    cols: Math.ceil(n / 3),
+    rows: 3,
     cells: Array.from({ length: n }, (_, i) => ({ row: (i % 3) + 1, col: Math.floor(i / 3) + 1 })),
   };
 };
 
-/** One host's pip — a coloured dot filling its grid cell, colour from its HostStatus. @since 1.0.0 */
+/** One host's pip — a coloured dot at its die cell, colour from its HostStatus. @since 1.0.0 */
 const HostPip = (props: {
   readonly host: HostRef;
   readonly cell: { readonly row: number; readonly col: number };
@@ -1329,12 +1369,32 @@ const HostPip = (props: {
   return (
     <span
       className="h-full w-full rounded-full"
-      style={{
-        gridRow: props.cell.row,
-        gridColumn: props.cell.col,
-        backgroundColor: hostColor(s),
-      }}
+      style={{ gridRow: props.cell.row, gridColumn: props.cell.col, backgroundColor: hostColor(s) }}
     />
+  );
+};
+
+/** Static preview of the host die at a given count — the dice pip pattern only (no live status), for
+ *  examples/docs that want to show the 1..9 faces. @since 1.0.0 */
+export const HostDots = (props: { readonly count: number }): React.ReactElement => {
+  const layout = pipLayout(props.count);
+  return (
+    <div
+      className="grid"
+      style={{
+        gap: layout.gap,
+        gridTemplateColumns: `repeat(${layout.cols}, ${layout.dot})`,
+        gridTemplateRows: `repeat(${layout.rows}, ${layout.dot})`,
+      }}
+    >
+      {layout.cells.map((cell, i) => (
+        <span
+          key={i}
+          className="h-full w-full rounded-full bg-foreground"
+          style={{ gridRow: cell.row, gridColumn: cell.col }}
+        />
+      ))}
+    </div>
   );
 };
 

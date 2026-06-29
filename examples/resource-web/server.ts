@@ -20,10 +20,11 @@ import { HistoryStore } from "../../src/HistoryStore";
 import { Polling } from "../../src/Polling";
 import { ProcessSchedule } from "../../src/ProcessSchedule";
 import { ProcessStorage } from "../../src/ProcessStorage";
-import { BoxScoreQueue, LiveScorePoller } from "./hub";
+import { BoxScoreQueue, LiveScorePoller, PlayByPlayQueue } from "./hub";
 
 const WNBA_PORT = 7780;
 const LIVE_PORT = 7781;
+const STATS_PORT = 7782;
 
 const importWorker = (job: { readonly id: string }) =>
   Effect.gen(function* () {
@@ -49,9 +50,9 @@ const pollerSchedule = ProcessSchedule.define(({ window, all }) =>
   all(...wnbaGames.map((g) => window(g.id, toDate(g.tipOff - 20 * MIN), toDate(g.tipOff + 60 * MIN)))),
 );
 
-// Two hosts in one process, each its own port + `/rpc`: the box-score queue on WnbaHost, the
-// live-score poller on LiveHost. Each `serveAllHttp` consumes its own NodeHttpServer (Layer.provide,
-// not provideMerge — so the two don't fight over one HttpServer service when merged).
+// Three hosts in one process, each its own port + `/rpc`: the box-score queue on WnbaHost, the
+// live-score poller on LiveHost, the play-by-play queue on StatsHost. Each `serveAllHttp` consumes
+// its own NodeHttpServer (Layer.provide, not provideMerge — so they don't fight over one HttpServer).
 const wnbaHost = Resource.serveAllHttp([
   queueEntry(BoxScoreQueue, {
     effect: importWorker,
@@ -78,12 +79,27 @@ const liveHost = Resource.serveAllHttp([
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: LIVE_PORT })),
 );
 
+const statsHost = Resource.serveAllHttp([
+  queueEntry(PlayByPlayQueue, {
+    effect: importWorker,
+    concurrency: 3,
+    captureLogs: true,
+  }),
+]).pipe(
+  Layer.provide(HistoryStore.layerMemory()),
+  Layer.provide(Logger.layer([], { mergeWithExisting: false })),
+  Layer.provide(NodeHttpServer.layer(() => createServer(), { port: STATS_PORT })),
+);
+
 // Each host is its own forked scope (NOT merged) so each gets its own HttpRouter — merging them
-// would register `/rpc` twice on one shared router. One process, two independent servers.
+// would register `/rpc` twice on one shared router. One process, three independent servers.
 const program = Effect.gen(function* () {
   yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(wnbaHost)));
   yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(liveHost)));
-  yield* Effect.logInfo(`wnba host (BoxScoreQueue) :${WNBA_PORT} · live host (LiveScorePoller) :${LIVE_PORT}`);
+  yield* Effect.forkScoped(Effect.never.pipe(Effect.provide(statsHost)));
+  yield* Effect.logInfo(
+    `wnba :${WNBA_PORT} (BoxScoreQueue) · live :${LIVE_PORT} (LiveScorePoller) · stats :${STATS_PORT} (PlayByPlayQueue)`,
+  );
   return yield* Effect.never;
 });
 

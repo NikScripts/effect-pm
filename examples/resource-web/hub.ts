@@ -19,10 +19,12 @@ import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema
 
 const importJob = Schema.Struct({ id: Schema.String });
 
-// Two remote machines (see `server.ts`): the box-score queue lives on `WnbaHost`, the live-score
-// poller on `LiveHost` — so the dashboard's host die shows two pips (one per host).
+// Three remote machines (see `server.ts`): the box-score queue on `WnbaHost`, the live-score poller
+// on `LiveHost`, the play-by-play queue on `StatsHost` — so the dashboard's host die shows three
+// pips (a pyramid).
 export class WnbaHost extends Resource.Host<WnbaHost>("wnba/scores") {}
 export class LiveHost extends Resource.Host<LiveHost>("wnba/live") {}
+export class StatsHost extends Resource.Host<StatsHost>("wnba/stats") {}
 
 export class BoxScoreQueue extends QueueResource.Tag<BoxScoreQueue>()(
   "wnba/BoxScoreQueue",
@@ -33,12 +35,18 @@ export class LiveScorePoller extends ProcessResource.Tag<LiveScorePoller>()(
   "wnba/LiveScorePoller",
   { host: LiveHost },
 ) {}
+export class PlayByPlayQueue extends QueueResource.Tag<PlayByPlayQueue>()(
+  "wnba/PlayByPlayQueue",
+  importJob,
+  { host: StatsHost },
+) {}
 export class ScoresApi extends ApiMetrics.Tag<ScoresApi>()("@wnba/ScoresApi") {}
 
 /** WNBA league group — a nested group the dashboard drills into. */
 export class Wnba extends Group.Tag<Wnba>("hub/Wnba")({
   LiveScorePoller,
   BoxScoreQueue,
+  PlayByPlayQueue,
   ScoresApi,
 }) {}
 
@@ -138,11 +146,12 @@ const scoresApiMock = {
 };
 
 // ── Browser runtime ──────────────────────────────────────────────────────────
-// The box-score queue + live-score poller are served remotely on `WnbaHost` (server.ts); the
-// browser is a thin `Resource.client` over `/rpc` (vite proxies it to the host). `ScoresApi` is a
-// local mock. One shared transport → one host dot, auto-fed by the host's `HostStatus`.
+// The box-score queue, live-score poller, and play-by-play queue are served remotely on three hosts
+// (server.ts); the browser is a thin `Resource.client` over each host's `/rpc` (vite proxies them).
+// `ScoresApi` is a local mock. One transport per host → one pip each, auto-fed by `HostStatus`.
 const wnbaTransport = Resource.connectHttp(WnbaHost, { url: "/rpc" });
 const liveTransport = Resource.connectHttp(LiveHost, { url: "/live/rpc" });
+const statsTransport = Resource.connectHttp(StatsHost, { url: "/stats/rpc" });
 
 // Expose each host itself in the runtime (not only the resource clients): the host-status die reads
 // `HostStatus` over each host's transport, so it needs the host in context. Each transport is one
@@ -150,8 +159,10 @@ const liveTransport = Resource.connectHttp(LiveHost, { url: "/live/rpc" });
 const appLayer = Layer.mergeAll(
   wnbaTransport,
   liveTransport,
+  statsTransport,
   Resource.client(BoxScoreQueue).pipe(Layer.provide(wnbaTransport)),
   Resource.client(LiveScorePoller).pipe(Layer.provide(liveTransport)),
+  Resource.client(PlayByPlayQueue).pipe(Layer.provide(statsTransport)),
   Resource.layer(ScoresApi, scoresApiMock),
 );
 
