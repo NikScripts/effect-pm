@@ -134,6 +134,8 @@ export interface ProcessBundle {
 export interface HostBundle {
   readonly id: string;
   readonly status: ValueAtom<HostStatus.Status | undefined>;
+  /** The host's runtime-wide log stream (recent tail, then live). @since 1.0.0 */
+  readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
 }
 /** The atoms one API-metrics card needs — read-only (no commands). @since 1.0.0 */
 export interface ApiBundle {
@@ -448,6 +450,8 @@ export const hostStatusBundle = <R, ER>(
   const cache = cacheFor(hostBundleCache, runtime);
   const existing = cache.get(ref.id);
   if (existing !== undefined) return existing;
+  const logsKey = `${ref.id}/logs`;
+  bumpLogIdFrom(logsKey);
   const bundle: HostBundle = {
     id: ref.id,
     status: runtime.atom(
@@ -457,6 +461,18 @@ export const hostStatusBundle = <R, ER>(
       Stream.unwrap(Effect.map(HostStatus.Tag, (h) => h.status)).pipe(
         Stream.provide(hostStatusClient(ref.host)),
       ),
+    ),
+    logs: runtime.atom(
+      // `cachedAccumulator`'s live + history both require `HostStatus.Tag`; provide the per-host
+      // client once over the combined stream (same stream-scoped provide as `status`).
+      cachedAccumulator({
+        key: logsKey,
+        cap: 300,
+        live: Stream.unwrap(Effect.map(HostStatus.Tag, (h) => h.logs)).pipe(Stream.map(toLogLine)),
+        history: Effect.flatMap(HostStatus.Tag, (h) => h.logHistory({ limit: 300 })).pipe(
+          Effect.map((entries) => entries.map(toLogLine)),
+        ),
+      }).pipe(Stream.provide(hostStatusClient(ref.host))),
     ),
   };
   cache.set(ref.id, bundle);

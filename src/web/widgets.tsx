@@ -1304,61 +1304,54 @@ const fmtUptime = (ms: number): string => {
 
 /** One host indicator dot + tap-for-info popover (tap again, or "view host", for the full screen).
  *  @since 1.0.0 */
-// Dice-face pip cells (a 3×3 grid, cells 0..8 row-major) for 1–9 hosts. Mostly the classic faces,
-// with two intentional tweaks: 3 is a **pyramid** (top-centre over the two bottom corners) rather
-// than the diagonal, and 4 is **2-on-2** (the corners). 10+ keeps 3 rows and grows columns.
-const DICE: Record<number, ReadonlyArray<number>> = {
-  1: [4],
-  2: [0, 8],
-  3: [1, 6, 8],
-  4: [0, 2, 6, 8],
-  5: [0, 2, 4, 6, 8],
-  6: [0, 3, 6, 2, 5, 8],
-  7: [0, 3, 6, 4, 2, 5, 8],
-  8: [0, 3, 6, 1, 7, 2, 5, 8],
-  9: [0, 1, 2, 3, 4, 5, 6, 7, 8],
-};
-
-/** Pip layout: dice-face cell placement (1–9) in a 3×3 grid, else 3 rows × growing columns. Dots
- *  are sized **larger when there are fewer** hosts. @since 1.0.0 */
+/** Compact "barrel stack" pip layout: dots in bottom-heavy, centered rows (≤3 rows) — upper rows
+ *  nestle over the gaps below, so 3 → 1 over 2, 4 → 2-on-2, etc. Dots are sized **larger when there
+ *  are fewer** hosts; beyond 9 the rows just keep widening. @since 1.0.0 */
 const pipLayout = (
   n: number,
 ): {
   readonly dot: string;
   readonly gap: string;
-  readonly cols: number;
-  readonly rows: number;
-  readonly cells: ReadonlyArray<{ readonly row: number; readonly col: number }>;
+  readonly rows: ReadonlyArray<number>;
 } => {
   const size =
     n <= 2
-      ? { dot: "0.625rem", gap: "0.375rem" }
+      ? { dot: "0.625rem", gap: "0.3125rem" }
       : n <= 4
-        ? { dot: "0.4375rem", gap: "0.3125rem" }
+        ? { dot: "0.5rem", gap: "0.25rem" }
         : n <= 9
-          ? { dot: "0.34375rem", gap: "0.25rem" }
-          : { dot: "0.28125rem", gap: "0.1875rem" };
-  if (n <= 9) {
-    const order = DICE[n] ?? [];
-    return {
-      ...size,
-      cols: 3,
-      rows: 3,
-      cells: order.map((c) => ({ row: Math.floor(c / 3) + 1, col: (c % 3) + 1 })),
-    };
+          ? { dot: "0.375rem", gap: "0.21875rem" }
+          : { dot: "0.3125rem", gap: "0.1875rem" };
+  let rows: ReadonlyArray<number>;
+  if (n <= 2) {
+    rows = [n];
+  } else if (n <= 6) {
+    // two rows, bottom-heavy: 3 → [1,2], 4 → [2,2], 5 → [2,3], 6 → [3,3]
+    const bottom = Math.ceil(n / 2);
+    rows = [n - bottom, bottom];
+  } else {
+    // three rows, bottom-heavy: 7 → [2,2,3], 8 → [2,3,3], 9 → [3,3,3]
+    const r3 = Math.ceil(n / 3);
+    const r2 = Math.ceil((n - r3) / 2);
+    rows = [n - r3 - r2, r2, r3];
   }
-  return {
-    ...size,
-    cols: Math.ceil(n / 3),
-    rows: 3,
-    cells: Array.from({ length: n }, (_, i) => ({ row: (i % 3) + 1, col: Math.floor(i / 3) + 1 })),
-  };
+  return { ...size, rows };
 };
 
-/** One host's pip — a coloured dot at its die cell, colour from its HostStatus. @since 1.0.0 */
+/** Slice items into the layout's bottom-heavy rows (top → bottom). @since 1.0.0 */
+const pipRows = <A,>(items: ReadonlyArray<A>, rows: ReadonlyArray<number>): ReadonlyArray<ReadonlyArray<A>> => {
+  let cursor = 0;
+  return rows.map((count) => {
+    const slice = items.slice(cursor, cursor + count);
+    cursor += count;
+    return slice;
+  });
+};
+
+/** One host's pip — a coloured dot, colour from its HostStatus. @since 1.0.0 */
 const HostPip = (props: {
   readonly host: HostRef;
-  readonly cell: { readonly row: number; readonly col: number };
+  readonly size: string;
 }): React.ReactElement => {
   const r = useAtomValue(useHostBundle(props.host).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
@@ -1368,31 +1361,32 @@ const HostPip = (props: {
   }, [r, props.host.id]);
   return (
     <span
-      className="h-full w-full rounded-full"
-      style={{ gridRow: props.cell.row, gridColumn: props.cell.col, backgroundColor: hostColor(s) }}
+      className="rounded-full"
+      style={{ width: props.size, height: props.size, backgroundColor: hostColor(s) }}
     />
   );
 };
 
-/** Static preview of the host die at a given count — the dice pip pattern only (no live status), for
- *  examples/docs that want to show the 1..9 faces. @since 1.0.0 */
+/** Static preview of the host die at a given count — the barrel-stack pip pattern only (no live
+ *  status), for examples/docs that want to show the 1..9 shapes. @since 1.0.0 */
 export const HostDots = (props: { readonly count: number }): React.ReactElement => {
   const layout = pipLayout(props.count);
+  const rows = pipRows(
+    Array.from({ length: props.count }, (_, i) => i),
+    layout.rows,
+  );
   return (
-    <div
-      className="grid"
-      style={{
-        gap: layout.gap,
-        gridTemplateColumns: `repeat(${layout.cols}, ${layout.dot})`,
-        gridTemplateRows: `repeat(${layout.rows}, ${layout.dot})`,
-      }}
-    >
-      {layout.cells.map((cell, i) => (
-        <span
-          key={i}
-          className="h-full w-full rounded-full bg-foreground"
-          style={{ gridRow: cell.row, gridColumn: cell.col }}
-        />
+    <div className="flex flex-col items-center" style={{ gap: layout.gap }}>
+      {rows.map((row, ri) => (
+        <div key={ri} className="flex" style={{ gap: layout.gap }}>
+          {row.map((i) => (
+            <span
+              key={i}
+              className="rounded-full bg-foreground"
+              style={{ width: layout.dot, height: layout.dot }}
+            />
+          ))}
+        </div>
       ))}
     </div>
   );
@@ -1445,6 +1439,7 @@ export const HostBar = (props: {
   }, [hosts.length, ids]);
   if (hosts.length === 0) return null;
   const layout = pipLayout(hosts.length);
+  const rowGroups = pipRows(hosts, layout.rows);
   return (
     <div className="relative shrink-0">
       <button
@@ -1453,16 +1448,13 @@ export const HostBar = (props: {
         onClick={() => setOpen((o) => !o)}
         className="block p-1 transition-transform active:scale-95"
       >
-        <div
-          className="grid"
-          style={{
-            gap: layout.gap,
-            gridTemplateColumns: `repeat(${layout.cols}, ${layout.dot})`,
-            gridTemplateRows: `repeat(${layout.rows}, ${layout.dot})`,
-          }}
-        >
-          {hosts.map((h, i) => (
-            <HostPip key={h.id} host={h} cell={layout.cells[i] ?? { row: 1, col: 1 }} />
+        <div className="flex flex-col items-center" style={{ gap: layout.gap }}>
+          {rowGroups.map((row, ri) => (
+            <div key={ri} className="flex" style={{ gap: layout.gap }}>
+              {row.map((h) => (
+                <HostPip key={h.id} host={h} size={layout.dot} />
+              ))}
+            </div>
           ))}
         </div>
       </button>
@@ -1495,7 +1487,8 @@ export const HostDetail = (props: {
   /** Open a served resource's detail page, by its wire key (`HostStatus.resources[].key`). */
   readonly onOpenResource: (resourceKey: string) => void;
 }): React.ReactElement => {
-  const r = useAtomValue(useHostBundle(props.host).status);
+  const bundle = useHostBundle(props.host);
+  const r = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const color = hostColor(s);
   return (
@@ -1515,7 +1508,7 @@ export const HostDetail = (props: {
             <Stat label="resources" value={String(s.resourceCount)} />
             <Stat label="status" value={s.status} />
           </div>
-          <div className="overflow-auto rounded-xl border bg-card p-3">
+          <div className="max-h-[38dvh] shrink-0 overflow-auto rounded-xl border bg-card p-3">
             <div className="mb-2 text-sm font-semibold">resources</div>
             <ul className="space-y-1">
               {s.resources.map((res) => (
@@ -1539,6 +1532,10 @@ export const HostDetail = (props: {
                 </li>
               ))}
             </ul>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card">
+            <div className="shrink-0 border-b px-3 py-2 text-sm font-semibold">logs</div>
+            <LogStream bundle={{ logs: bundle.logs }} className="flex-1 py-1" />
           </div>
           {/* Pass 2: host metrics graphs (CPU / mem / throughput) land here with HostStatus.metrics. */}
         </>

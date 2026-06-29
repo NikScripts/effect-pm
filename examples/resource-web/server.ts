@@ -7,7 +7,7 @@
  * host status dot goes live. Run: `pnpm run example:resource-web-server` (alongside
  * `pnpm run example:resource-web`).
  */
-import { DateTime, Duration, Effect, Layer, Logger } from "effect";
+import { DateTime, Duration, Effect, Layer } from "effect";
 // A node host entry point — the raw http server is exactly what `NodeHttpServer.layer` wants.
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { createServer } from "node:http";
@@ -17,6 +17,7 @@ import * as Resource from "../../src/Resource";
 import { serverEntry as queueEntry } from "../../src/QueueContract";
 import { serverEntry as processEntry } from "../../src/ScheduledProcess";
 import { HistoryStore } from "../../src/HistoryStore";
+import { HostLogs } from "../../src/HostLogs";
 import { Polling } from "../../src/Polling";
 import { ProcessSchedule } from "../../src/ProcessSchedule";
 import { ProcessStorage } from "../../src/ProcessStorage";
@@ -61,7 +62,7 @@ const wnbaHost = Resource.serveAllHttp([
   }),
 ]).pipe(
   Layer.provide(HistoryStore.layerMemory()),
-  Layer.provide(Logger.layer([], { mergeWithExisting: false })),
+  Layer.provide(HostLogs.layer),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: WNBA_PORT })),
 );
 
@@ -75,7 +76,7 @@ const liveHost = Resource.serveAllHttp([
 ]).pipe(
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(ProcessStorage.layer),
-  Layer.provide(Logger.layer([], { mergeWithExisting: false })),
+  Layer.provide(HostLogs.layer),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: LIVE_PORT })),
 );
 
@@ -87,7 +88,7 @@ const statsHost = Resource.serveAllHttp([
   }),
 ]).pipe(
   Layer.provide(HistoryStore.layerMemory()),
-  Layer.provide(Logger.layer([], { mergeWithExisting: false })),
+  Layer.provide(HostLogs.layer),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: STATS_PORT })),
 );
 
