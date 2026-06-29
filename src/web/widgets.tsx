@@ -242,21 +242,22 @@ export const QueueStats = (props: { readonly bundle: QueueBundle }): React.React
 };
 
 const METRICS = {
-  throughput: { label: "throughput /s", color: "#22c55e", source: "history" as const, duration: false },
-  latency: { label: "latency", color: "#eab308", source: "history" as const, duration: true },
-  pending: { label: "pending", color: "#3b82f6", source: "trend" as const, duration: false },
+  throughput: { label: "throughput", color: "#22c55e", source: "history" as const, rate: true },
+  latency: { label: "latency (s)", color: "#eab308", source: "history" as const, rate: false },
+  pending: { label: "pending", color: "#3b82f6", source: "trend" as const, rate: false },
 };
 type MetricKey = keyof typeof METRICS;
 
-// Divisors from milliseconds — the unit the latency series is converted into for display.
-const TIME_UNITS = { ms: 1, s: 1_000, min: 60_000, hr: 3_600_000 };
-type TimeUnit = keyof typeof TIME_UNITS;
+// Throughput is measured per second; these are the rate windows the toggle cycles (multiply the
+// per-second value to get per-minute / per-hour).
+const RATE_UNITS = { "/s": 1, "/min": 60, "/hr": 3600 };
+type RateUnit = keyof typeof RATE_UNITS;
 
-/** A metric chart with a dropdown to pick the series (throughput/latency/pending), plus — for the
- *  duration series (latency) — a compact toggle that cycles its time unit (ms→s→min→hr). @since 1.0.0 */
+/** A metric chart with a dropdown to pick the series (throughput/latency/pending), plus — for
+ *  throughput — a compact toggle that cycles the rate window (/s→/min→/hr). @since 1.0.0 */
 export const MetricChart = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
   const [metric, setMetric] = React.useState<MetricKey>("throughput");
-  const [unit, setUnit] = React.useState<TimeUnit>("s");
+  const [rate, setRate] = React.useState<RateUnit>("/s");
   const historyR = useAtomValue(props.bundle.history);
   const trendR = useAtomValue(props.bundle.trend);
   React.useEffect(() => dlog("history", asyncTag(historyR), "· trend", asyncTag(trendR)), [historyR, trendR]);
@@ -266,7 +267,7 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
   const data =
     def.source === "trend"
       ? trend.map((v, i) => ({ i, value: v }))
-      : history.map((p, i) => ({ i, value: def.duration ? p.latency / TIME_UNITS[unit] : p.throughput }));
+      : history.map((p, i) => ({ i, value: def.rate ? p.throughput * RATE_UNITS[rate] : p.latency / 1000 }));
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -281,21 +282,21 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
             </option>
           ))}
         </select>
-        {def.duration ? (
-          // Compact unit control: tap to cycle ms → s → min → hr → (loop). Cheaper on width than
-          // a second dropdown, which matters on a phone.
+        {def.rate ? (
+          // Compact rate-window control: tap to cycle /s → /min → /hr → (loop). Cheaper on width
+          // than a second dropdown, which matters on a phone.
           <button
             type="button"
             onClick={() => {
-              const units = Object.keys(TIME_UNITS) as Array<TimeUnit>;
-              const next = units[(units.indexOf(unit) + 1) % units.length];
-              if (next !== undefined) setUnit(next);
+              const units = Object.keys(RATE_UNITS) as Array<RateUnit>;
+              const next = units[(units.indexOf(rate) + 1) % units.length];
+              if (next !== undefined) setRate(next);
             }}
             className="rounded-md border bg-card px-2 py-1 text-sm font-semibold text-foreground transition-colors hover:border-ring"
-            aria-label={`time unit: ${unit} (tap to change)`}
-            title="tap to change unit"
+            aria-label={`rate window: ${rate} (tap to change)`}
+            title="tap to change rate window"
           >
-            {unit}
+            {rate}
           </button>
         ) : null}
       </div>
