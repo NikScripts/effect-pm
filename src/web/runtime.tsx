@@ -12,11 +12,14 @@ import type { Atom } from "effect/unstable/reactivity";
 import {
   type ApiBundle,
   type ApiTag,
+  type HostBundle,
+  type HostRef,
   type ProcessBundle,
   type ProcessTag,
   type QueueBundle,
   type QueueTag,
   apiBundle,
+  hostStatusBundle,
   processBundle,
   queueBundle,
 } from "./data";
@@ -49,3 +52,6 @@ export const useProcessBundle = (tag: ProcessTag): ProcessBundle => processBundl
 
 /** Build (memoized per runtime+tag) the atom bundle for an API-metrics tag, using the context runtime. @since 1.0.0 */
 export const useApiBundle = (tag: ApiTag): ApiBundle => apiBundle(useRuntime(), tag);
+
+/** Build (memoized per runtime+host) the atom bundle for a host's status, using the context runtime. @since 1.0.0 */
+export const useHostBundle = (ref: HostRef): HostBundle => hostStatusBundle(useRuntime(), ref);

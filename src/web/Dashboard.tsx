@@ -20,6 +20,7 @@ import {
   type ApiTag,
   type DashboardRuntime,
   type GroupNode,
+  type HostRef,
   type ProcessTag,
   type QueueBundle,
   type QueueTag,
@@ -33,7 +34,7 @@ import { RuntimeProvider, useApiBundle, useProcessBundle, useQueueBundle, useRun
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { ApiEndpointTable, ApiMetricChart, ApiStats, Cell, ConfirmDialog, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ScheduleEditor, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { ApiEndpointTable, ApiMetricChart, ApiStats, Cell, ConfirmDialog, HostBar, HostDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ScheduleEditor, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
 
@@ -287,6 +288,22 @@ const DashboardInner = (props: { readonly group: GroupNode }): React.ReactElemen
   );
 };
 
+/** Host status dots (top-right) + the fullscreen host view they open. Hosts come straight off the
+ *  tags (`hostsOf`), so this overlays the normal drill-down on its own axis. @since 1.0.0 */
+const HostsLayer = (props: {
+  readonly group: GroupNode;
+  readonly children: React.ReactNode;
+}): React.ReactElement => {
+  const [host, setHost] = React.useState<HostRef | null>(null);
+  if (host !== null) return <HostDetail host={host} onBack={() => setHost(null)} />;
+  return (
+    <>
+      {props.children}
+      <HostBar group={props.group} onOpenHost={setHost} />
+    </>
+  );
+};
+
 /** The drill-down view + its runtime — compose with `RegistryProvider` + `ViewTransitionProvider`
  *  yourself, or use `<Dashboard>` which wires all three. @since 1.0.0 */
 export const DashboardView = <R, ER>(props: {
@@ -298,7 +315,9 @@ export const DashboardView = <R, ER>(props: {
   // element wins over an inherited one), and it still honours a consumer-defined `--font-mono`.
   <RuntimeProvider runtime={props.runtime}>
     <div className="font-mono">
-      <DashboardInner group={props.group} />
+      <HostsLayer group={props.group}>
+        <DashboardInner group={props.group} />
+      </HostsLayer>
     </div>
   </RuntimeProvider>
 );

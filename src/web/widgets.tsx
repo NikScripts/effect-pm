@@ -35,12 +35,15 @@ import {
   type QueueBundle,
   type QueueTag,
   type ScheduleEntry,
+  type HostRef,
+  hostsOf,
   kindOf,
   leafTags,
   queueLeaves,
 } from "./data";
 import type { ApiUsageMetrics } from "../ApiUsageSchema";
-import { useApiBundle, useProcessBundle, useQueueBundle } from "./runtime";
+import type { Status as HostStatusValue } from "../HostStatus";
+import { useApiBundle, useHostBundle, useProcessBundle, useQueueBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
@@ -1262,6 +1265,157 @@ export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.R
             </tbody>
           </table>
         </div>
+      )}
+    </div>
+  );
+};
+
+// ── Host widgets ─────────────────────────────────────────────────────────────
+// Hosts are read straight off the tags (`hostsOf`): a dot per host the group's resources are bound
+// to. Each dot's colour + popover come from that host's `HostStatus` (over its own transport).
+
+/** A host's overall colour: grey while connecting, red down, amber degraded, green ok. @since 1.0.0 */
+const hostColor = (s: HostStatusValue | undefined): string =>
+  s === undefined ? "#64748b" : !s.up ? "#ef4444" : s.status === "degraded" ? "#eab308" : "#22c55e";
+
+/** Format an uptime span (ms) compactly. @since 1.0.0 */
+const fmtUptime = (ms: number): string => {
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
+};
+
+/** One host indicator dot + tap-for-info popover (tap again, or "view host", for the full screen).
+ *  @since 1.0.0 */
+const HostDot = (props: {
+  readonly host: HostRef;
+  readonly onOpen: (host: HostRef) => void;
+}): React.ReactElement => {
+  const r = useAtomValue(useHostBundle(props.host).status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const [open, setOpen] = React.useState(false);
+  const color = hostColor(s);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-label={`host ${displayName(props.host.id)}`}
+        onClick={() => setOpen((o) => !o)}
+        className="block h-3 w-3 rounded-full ring-2 ring-background transition-transform active:scale-90"
+        style={{ backgroundColor: color }}
+      />
+      {open ? (
+        <div className="absolute right-0 top-5 z-50 w-60 rounded-lg border bg-card p-2 text-xs shadow-lg">
+          <div className="mb-1 flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+            <strong className="flex-1 truncate">{displayName(props.host.id)}</strong>
+            <span className="text-muted-foreground">{s !== undefined ? (s.up ? s.status : "down") : "…"}</span>
+          </div>
+          {s !== undefined ? (
+            <>
+              <div className="text-muted-foreground">
+                up {fmtUptime(s.uptimeMillis)} · {s.resourceCount} resources
+              </div>
+              <ul className="mt-1 space-y-0.5">
+                {s.resources.map((res) => (
+                  <li key={res.key} className="flex items-center gap-1">
+                    <span
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: res.ready ? "#22c55e" : "#eab308" }}
+                    />
+                    <span className="flex-1 truncate">{displayName(res.key)}</span>
+                    {res.detail !== undefined ? (
+                      <span className="truncate text-muted-foreground">{res.detail}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <div className="text-muted-foreground">connecting…</div>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2 w-full"
+            onClick={() => {
+              setOpen(false);
+              props.onOpen(props.host);
+            }}
+          >
+            view host →
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+/** The row of host status dots (top-right). Renders nothing for a hostless (local) group. @since 1.0.0 */
+export const HostBar = (props: {
+  readonly group: GroupNode;
+  readonly onOpenHost: (host: HostRef) => void;
+}): React.ReactElement | null => {
+  const hosts = hostsOf(props.group);
+  if (hosts.length === 0) return null;
+  return (
+    <div className="fixed right-2 top-2 z-40 flex items-center gap-1.5 safe-area">
+      {hosts.map((h) => (
+        <HostDot key={h.id} host={h} onOpen={props.onOpenHost} />
+      ))}
+    </div>
+  );
+};
+
+/** Fullscreen host view: header + each served resource's readiness (graphs land with host metrics).
+ *  @since 1.0.0 */
+export const HostDetail = (props: {
+  readonly host: HostRef;
+  readonly onBack: () => void;
+}): React.ReactElement => {
+  const r = useAtomValue(useHostBundle(props.host).status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const color = hostColor(s);
+  return (
+    <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible">
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={props.onBack}>
+          ← back
+        </Button>
+        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
+        <strong className="flex-1 truncate text-base">{displayName(props.host.id)}</strong>
+        <span className="text-sm text-muted-foreground">{s !== undefined ? (s.up ? s.status : "down") : "…"}</span>
+      </div>
+      {s !== undefined ? (
+        <>
+          <div className="flex gap-3">
+            <Stat label="uptime" value={fmtUptime(s.uptimeMillis)} />
+            <Stat label="resources" value={String(s.resourceCount)} />
+            <Stat label="status" value={s.status} />
+          </div>
+          <div className="overflow-auto rounded-xl border bg-card p-3">
+            <div className="mb-2 text-sm font-semibold">resources</div>
+            <ul className="space-y-1">
+              {s.resources.map((res) => (
+                <li key={res.key} className="flex items-center gap-2 text-sm">
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: res.ready ? "#22c55e" : "#eab308" }}
+                  />
+                  <span className="flex-1 truncate">{displayName(res.key)}</span>
+                  <Badge>{displayName(res.kind)}</Badge>
+                  <span className="text-muted-foreground">
+                    {res.ready ? "ready" : (res.detail ?? "not ready")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          {/* Pass 2: host metrics graphs (CPU / mem / throughput) land here with HostStatus.metrics. */}
+        </>
+      ) : (
+        <div className="text-muted-foreground">connecting to host…</div>
       )}
     </div>
   );
