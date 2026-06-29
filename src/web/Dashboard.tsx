@@ -91,10 +91,11 @@ const DAY_MS = 86_400_000;
  *  calendar grid of the run windows with week navigation, plus add / clear behind one lock. */
 const SchedulePage = (props: { readonly tag: ProcessTag; readonly onClose: () => void }): React.ReactElement => {
   const bundle = useProcessBundle(props.tag);
-  const { list, addEntry, clearAll } = useScheduleEdit(bundle);
+  const { list, addEntry, remove, clearAll } = useScheduleEdit(bundle);
   const [weekStart, setWeekStart] = React.useState(() => startOfWeekMillis(now()));
   const [addOpen, setAddOpen] = React.useState(false);
   const [confirmClear, setConfirmClear] = React.useState(false);
+  const [confirmRemove, setConfirmRemove] = React.useState<number | undefined>(undefined);
   const [locked, setLocked] = React.useState(true);
   const vt = useViewTransitionStyle("schedule-panel");
   return (
@@ -120,7 +121,11 @@ const SchedulePage = (props: { readonly tag: ProcessTag; readonly onClose: () =>
           <Trash2 className="size-4" />
         </Button>
       </div>
-      <WeekSchedule entries={list} weekStart={weekStart} />
+      <WeekSchedule
+        entries={list}
+        weekStart={weekStart}
+        onRemoveEntry={locked ? undefined : (i) => setConfirmRemove(i)}
+      />
       <AddWindowDialog open={addOpen} onOpenChange={setAddOpen} onAdd={addEntry} />
       <ConfirmDialog
         open={confirmClear}
@@ -130,6 +135,20 @@ const SchedulePage = (props: { readonly tag: ProcessTag; readonly onClose: () =>
         confirmLabel="Clear"
         destructive
         onConfirm={clearAll}
+      />
+      <ConfirmDialog
+        open={confirmRemove !== undefined}
+        onOpenChange={(open) => {
+          if (!open) setConfirmRemove(undefined);
+        }}
+        title="Remove window?"
+        description="Remove this run window from the schedule."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={() => {
+          if (confirmRemove !== undefined) remove(confirmRemove);
+          setConfirmRemove(undefined);
+        }}
       />
     </div>
   );
@@ -181,7 +200,7 @@ const ProcessDetail = (props: {
       </div>
       <ProcessStats bundle={bundle} />
       <ProcessControls bundle={bundle} locked={locked} onToggleLock={() => setLocked((l) => !l)} />
-      <ScheduleEditor bundle={bundle} locked={locked} onOpenFull={props.onOpenSchedule} />
+      <ScheduleEditor bundle={bundle} onOpenFull={props.onOpenSchedule} />
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} />
     </div>
   );

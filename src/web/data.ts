@@ -9,7 +9,7 @@
  *
  * @since 1.0.0
  */
-import { DateTime, Effect, type Schema, Stream } from "effect";
+import { DateTime, Duration, Effect, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
 import { specOf } from "../Resource";
@@ -271,7 +271,11 @@ export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: Proc
         history: Effect.flatMap(tag, (p) => p.logHistory({ limit: 300 })).pipe(Effect.map((ls) => ls.map(toLogLine))),
       }),
     ),
-    schedule: runtime.atom(Effect.flatMap(tag, (p) => p.schedule)),
+    // Poll the schedule so a read-only inline view reflects edits made on the fullscreen page (and
+    // any external changes) — the contract exposes `schedule` as a query, not a live stream.
+    schedule: runtime.atom(
+      Stream.tick(Duration.seconds(3)).pipe(Stream.mapEffect(() => Effect.flatMap(tag, (p) => p.schedule))),
+    ),
     start: runtime.fn(() => Effect.flatMap(tag, (p) => p.start)),
     stop: runtime.fn(() => Effect.flatMap(tag, (p) => p.stop)),
     runImmediately: runtime.fn(() => Effect.flatMap(tag, (p) => p.runImmediately)),

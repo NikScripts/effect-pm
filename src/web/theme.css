@@ -41,3 +41,43 @@
 }
 * { border-color: var(--border); }
 body { background: var(--background); color: var(--foreground); font-family: var(--font-mono); -webkit-font-smoothing: antialiased; }
+
+/* The shipped widgets use these — keep them with the theme so consumers get correct padding and
+   the drill-down animation out of the box (override/remove as you like). */
+
+/* Device safe areas (notch / home indicator): the dashboard chrome insets by the env() insets,
+   with the normal 0.75rem padding as a floor, so content clears the hardware and the screen edge. */
+.safe-area {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+}
+
+/* View transitions (grid ↔ detail / drill-down): a card morphs to fill the screen; ease the
+   incoming content in (scale + fade) instead of popping. Honour reduced-motion. */
+::view-transition-group(*) {
+  animation-duration: 0.42s;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+@keyframes vt-grow-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes vt-fade-out {
+  to { opacity: 0; }
+}
+::view-transition-new(*) {
+  animation: vt-grow-in 0.42s cubic-bezier(0.2, 0, 0, 1) both;
+  transform-origin: center;
+}
+::view-transition-old(*) {
+  animation: vt-fade-out 0.2s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

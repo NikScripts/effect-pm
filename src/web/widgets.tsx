@@ -12,7 +12,7 @@ import * as React from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { DateTime } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { Lock, LockOpen, Maximize2, Pause, Play, Plus, Power, RotateCw, Square, Trash2, X } from "lucide-react";
+import { Lock, LockOpen, Maximize2, Pause, Play, Power, RotateCw, Square, Trash2 } from "lucide-react";
 import * as Group from "../Group";
 import {
   type CommandAtom,
@@ -660,27 +660,15 @@ const fmtWhen = (e: DateTime.Utc): string =>
     hour12: false,
   });
 
-/** A row in the schedule list — one run window. */
-const ScheduleRow = (props: {
-  readonly entry: ScheduleEntry;
-  readonly locked: boolean;
-  readonly onRemove: () => void;
-}): React.ReactElement => (
+/** A read-only row in the inline schedule summary — one run window. Editing/removal lives on the
+ *  fullscreen week view. */
+const ScheduleRow = (props: { readonly entry: ScheduleEntry }): React.ReactElement => (
   <li className="flex items-center gap-2 text-sm">
     <span className="tabular-nums">{fmtWhen(props.entry.startAt)}</span>
     <span className="text-muted-foreground">
       → {props.entry.stopAt === undefined ? "open-ended" : fmtWhen(props.entry.stopAt)}
     </span>
-    <button
-      type="button"
-      onClick={props.onRemove}
-      disabled={props.locked}
-      className="ml-auto rounded p-1 text-muted-foreground hover:bg-accent disabled:opacity-40"
-      aria-label="remove window"
-      title="remove window"
-    >
-      <X className="size-4" />
-    </button>
+    {props.entry.id !== undefined ? <span className="ml-auto text-xs text-muted-foreground">{props.entry.id}</span> : null}
   </li>
 );
 
@@ -789,7 +777,10 @@ const DAY_MS = 86_400_000;
 export const WeekSchedule = (props: {
   readonly entries: ReadonlyArray<ScheduleEntry>;
   readonly weekStart: number;
+  /** When provided (and unlocked), tapping a window's block requests its removal by entry index. */
+  readonly onRemoveEntry?: (index: number) => void;
 }): React.ReactElement => {
+  const clickable = props.onRemoveEntry;
   const nowMs = now();
   const todayStart = startOfDayMillis(nowMs);
   const days = Array.from({ length: 7 }, (_, i) => props.weekStart + i * DAY_MS);
@@ -830,15 +821,22 @@ export const WeekSchedule = (props: {
                 const top = ((from - dayStart) / DAY_MS) * DAY_PX;
                 const height = Math.max(((to - from) / DAY_MS) * DAY_PX, 4);
                 const label = entry.id ?? fmtClock(s);
+                const range = `${fmtWhen(entry.startAt)} → ${entry.stopAt === undefined ? "open-ended" : fmtWhen(entry.stopAt)}`;
                 return [
-                  <div
+                  <button
+                    type="button"
                     key={`${idx}-${dayStart}`}
+                    disabled={clickable === undefined}
+                    onClick={clickable === undefined ? undefined : () => clickable(idx)}
                     style={{ top, height }}
-                    className="absolute inset-x-0.5 z-20 overflow-hidden rounded border border-primary bg-primary/30 px-1 text-[10px] leading-tight text-foreground"
-                    title={`${label} · ${fmtWhen(entry.startAt)} → ${entry.stopAt === undefined ? "open-ended" : fmtWhen(entry.stopAt)}`}
+                    className={cn(
+                      "absolute inset-x-0.5 z-20 overflow-hidden rounded border border-primary bg-primary/30 px-1 text-left text-[10px] leading-tight text-foreground",
+                      clickable !== undefined && "cursor-pointer hover:bg-primary/50",
+                    )}
+                    title={clickable === undefined ? `${label} · ${range}` : `${label} · ${range} — tap to remove`}
                   >
                     {label}
-                  </div>,
+                  </button>,
                 ];
               })}
             </div>
@@ -849,20 +847,15 @@ export const WeekSchedule = (props: {
   );
 };
 
-/** View + edit a process's schedule (the run windows that arm it). Reads the current entries, then
- *  `setSchedule`/`clearSchedule` to mutate — gated by the **shared** process lock (`locked`), so one
- *  lock guards both the controls and the schedule. Adding a window is a popup; `onOpenFull` expands
- *  to the fullscreen week view. @since 1.0.0 */
+/** A read-only summary of a process's schedule (the run windows that arm it) — the count, the list,
+ *  and an expand button to the fullscreen week view, which is where editing (add / remove / clear)
+ *  happens. @since 1.0.0 */
 export const ScheduleEditor = (props: {
   readonly bundle: ProcessBundle;
-  readonly locked: boolean;
   readonly onOpenFull?: () => void;
 }): React.ReactElement => {
-  const { list, addEntry, remove, clearAll } = useScheduleEdit(props.bundle);
-  const [addOpen, setAddOpen] = React.useState(false);
-  const [confirmClear, setConfirmClear] = React.useState(false);
-  const locked = props.locked;
-
+  const r = useAtomValue(props.bundle.schedule);
+  const list = AsyncResult.isSuccess(r) ? r.value : [];
   return (
     <div className="flex flex-col gap-2 rounded-xl border bg-card p-3">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -872,18 +865,12 @@ export const ScheduleEditor = (props: {
             type="button"
             onClick={props.onOpenFull}
             className="ml-auto rounded p-1 hover:bg-accent"
-            title="week view"
-            aria-label="fullscreen week view"
+            title="open week view to edit"
+            aria-label="open fullscreen week view"
           >
             <Maximize2 className="size-4" />
           </button>
         ) : null}
-        <Button variant="outline" size="sm" className={props.onOpenFull === undefined ? "ml-auto" : ""} onClick={() => setAddOpen(true)} disabled={locked}>
-          <Plus className="size-4" /> add
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => setConfirmClear(true)} disabled={locked || list.length === 0}>
-          <Trash2 className="size-4" />
-        </Button>
       </div>
 
       {list.length === 0 ? (
@@ -891,26 +878,10 @@ export const ScheduleEditor = (props: {
       ) : (
         <ul className="flex flex-col gap-1">
           {list.map((entry, i) => (
-            <ScheduleRow
-              key={`${DateTime.toEpochMillis(entry.startAt)}-${i}`}
-              entry={entry}
-              locked={locked}
-              onRemove={() => remove(i)}
-            />
+            <ScheduleRow key={`${DateTime.toEpochMillis(entry.startAt)}-${i}`} entry={entry} />
           ))}
         </ul>
       )}
-
-      <AddWindowDialog open={addOpen} onOpenChange={setAddOpen} onAdd={addEntry} />
-      <ConfirmDialog
-        open={confirmClear}
-        onOpenChange={setConfirmClear}
-        title="Clear schedule?"
-        description="Remove all run windows. The process disarms until new windows are added."
-        confirmLabel="Clear"
-        destructive
-        onConfirm={clearAll}
-      />
     </div>
   );
 };
