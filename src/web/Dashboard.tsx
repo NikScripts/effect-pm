@@ -17,6 +17,7 @@ import * as React from "react";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Plus, Trash2 } from "lucide-react";
 import {
+  type ApiTag,
   type DashboardRuntime,
   type GroupNode,
   type ProcessTag,
@@ -28,17 +29,18 @@ import {
   queueBundle,
 } from "./data";
 import { RegistryProvider, useAtomValue } from "../ui/atom-react";
-import { RuntimeProvider, useProcessBundle, useQueueBundle, useRuntime } from "./runtime";
+import { RuntimeProvider, useApiBundle, useProcessBundle, useQueueBundle, useRuntime } from "./runtime";
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { Cell, ConfirmDialog, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ScheduleEditor, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { ApiEndpointTable, ApiMetricChart, ApiStats, Cell, ConfirmDialog, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ScheduleEditor, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
 
-// route.selected is an opaque leaf tag — narrow it to a queue / process by its contract.
+// route.selected is an opaque leaf tag — narrow it to a queue / process / api by its contract.
 const isProcessTag = (m: unknown): m is ProcessTag => kindOf(m) === "process";
 const isQueueTag = (m: unknown): m is QueueTag => kindOf(m) === "queue";
+const isApiTag = (m: unknown): m is ApiTag => kindOf(m) === "api";
 
 /** The log box — one named element ("log-panel") shared by the inline detail panel and the
  *  fullscreen logs page, so navigating between them morphs it via a view transition. */
@@ -210,6 +212,24 @@ const ProcessDetail = (props: {
   );
 };
 
+/** Detail view for an API-metrics resource — stats + usage chart + endpoint table. Read-only: no
+ *  controls, no logs (an `ApiMetrics` tap has neither). */
+const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void }): React.ReactElement => {
+  const bundle = useApiBundle(props.tag);
+  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
+  return (
+    <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
+        <strong className="flex-1 truncate text-base">🌐 {displayName(props.tag.key)}</strong>
+      </div>
+      <ApiStats bundle={bundle} />
+      <div className="overflow-hidden rounded-xl border bg-card p-3"><ApiMetricChart bundle={bundle} /></div>
+      <ApiEndpointTable bundle={bundle} />
+    </div>
+  );
+};
+
 /** The drill-down view (runtime comes from `RuntimeProvider` above). @since 1.0.0 */
 const DashboardInner = (props: { readonly group: GroupNode }): React.ReactElement => {
   const route = useGroupRoute(props.group);
@@ -231,6 +251,7 @@ const DashboardInner = (props: { readonly group: GroupNode }): React.ReactElemen
       if (isProcessTag(selected)) return <SchedulePage tag={selected} onClose={closeSchedule} />;
       return <></>;
     }
+    if (isApiTag(selected)) return <ApiDetail tag={selected} onBack={toGrid(selected.key)} />;
     if (isProcessTag(selected)) return <ProcessDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} onOpenSchedule={openSchedule} />;
     if (isQueueTag(selected)) return <QueueDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} />;
     return <></>;

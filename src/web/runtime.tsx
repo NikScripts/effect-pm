@@ -10,10 +10,13 @@
 import * as React from "react";
 import type { Atom } from "effect/unstable/reactivity";
 import {
+  type ApiBundle,
+  type ApiTag,
   type ProcessBundle,
   type ProcessTag,
   type QueueBundle,
   type QueueTag,
+  apiBundle,
   processBundle,
   queueBundle,
 } from "./data";
@@ -43,3 +46,6 @@ export const useQueueBundle = (tag: QueueTag): QueueBundle => queueBundle(useRun
 
 /** Build (memoized per runtime+tag) the atom bundle for a process tag, using the context runtime. @since 1.0.0 */
 export const useProcessBundle = (tag: ProcessTag): ProcessBundle => processBundle(useRuntime(), tag);
+
+/** Build (memoized per runtime+tag) the atom bundle for an API-metrics tag, using the context runtime. @since 1.0.0 */
+export const useApiBundle = (tag: ApiTag): ApiBundle => apiBundle(useRuntime(), tag);

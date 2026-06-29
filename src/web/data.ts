@@ -15,6 +15,8 @@ import * as Group from "../Group";
 import { kindOf as resourceKindOf, specOf } from "../Resource";
 import { kind as queueKind, queueMetrics, queueStatus } from "../QueueContract";
 import { kind as processKind, processScheduleEntry, processStatus } from "../ScheduledProcess";
+import { kind as apiKind } from "../ApiMetrics";
+import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
 import { FRESH_MS, readCache, writeCache } from "./cache";
 import { now } from "./now";
 
@@ -39,6 +41,13 @@ export interface MetricPoint {
   readonly t: number;
   readonly throughput: number;
   readonly latency: number;
+}
+/** A windowed API-usage sample for the API chart. @since 1.0.0 */
+export interface ApiPoint {
+  readonly t: number;
+  readonly throughput: number;
+  readonly errors: number;
+  readonly inFlight: number;
 }
 
 /** The structural shape of a queue's live service the widgets consume. */
@@ -65,11 +74,18 @@ interface ProcessService {
   readonly setSchedule: (entries: ReadonlyArray<ScheduleEntry>) => Effect.Effect<void>;
   readonly clearSchedule: Effect.Effect<void>;
 }
+/** The structural shape of an API-metrics resource's live service (read-only). */
+interface ApiService {
+  readonly metrics: Stream.Stream<ApiUsageMetrics>;
+  readonly usageNow: Effect.Effect<ApiUsageSnapshot>;
+}
 
 /** A queue tag — yieldable for its live service. Requirement `R` is provided by the runtime. @since 1.0.0 */
 export type QueueTag<R = never> = Effect.Effect<QueueService, never, R> & { readonly key: string };
 /** A process tag — yieldable for its live service. @since 1.0.0 */
 export type ProcessTag<R = never> = Effect.Effect<ProcessService, never, R> & { readonly key: string };
+/** An API-metrics tag — yieldable for its live service. @since 1.0.0 */
+export type ApiTag<R = never> = Effect.Effect<ApiService, never, R> & { readonly key: string };
 
 /** A node in a `Group.Tag` tree. @since 1.0.0 */
 export interface GroupNode {
@@ -111,14 +127,24 @@ export interface ProcessBundle {
   /** Remove all schedule entries. @since 1.0.0 */
   readonly clearSchedule: CommandAtom;
 }
+/** The atoms one API-metrics card needs — read-only (no commands). @since 1.0.0 */
+export interface ApiBundle {
+  /** Cumulative usage snapshot (totals + top endpoints), polled. @since 1.0.0 */
+  readonly status: ValueAtom<ApiUsageSnapshot | undefined>;
+  /** The latest usage window. @since 1.0.0 */
+  readonly metrics: ValueAtom<ApiUsageMetrics | undefined>;
+  /** Accumulated chart points (throughput / errors / in-flight per window). @since 1.0.0 */
+  readonly history: ValueAtom<ReadonlyArray<ApiPoint>>;
+}
 
-/** Which kind of leaf a tag is, by its contract (a queue enqueues; a process runs). @since 1.0.0 */
-export const kindOf = (member: unknown): "queue" | "process" => {
+/** Which kind of leaf a tag is — by the contract's stamped kind. @since 1.0.0 */
+export const kindOf = (member: unknown): "queue" | "process" | "api" => {
   // Prefer the contract's stamped kind (set by each `.Tag` factory); fall back to sniffing the spec
   // for a bare `Resource.Tag` (or an older tag without a stamped kind).
   const stamped = resourceKindOf(member);
   if (stamped === queueKind) return "queue";
   if (stamped === processKind) return "process";
+  if (stamped === apiKind) return "api";
   const spec = specOf(member as Parameters<typeof specOf>[0]);
   return "enqueue" in spec || "sizes" in spec ? "queue" : "process";
 };
@@ -171,6 +197,7 @@ const cachedAccumulator = <A, R>(opts: {
 // bundles are runtime-specific (their atoms close over the runtime), so cache per runtime+tag
 const bundleCache = new WeakMap<object, Map<string, QueueBundle>>();
 const processBundleCache = new WeakMap<object, Map<string, ProcessBundle>>();
+const apiBundleCache = new WeakMap<object, Map<string, ApiBundle>>();
 const cacheFor = <V>(map: WeakMap<object, Map<string, V>>, runtime: object): Map<string, V> => {
   let m = map.get(runtime);
   if (m === undefined) {
@@ -288,6 +315,45 @@ export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: Proc
       Effect.flatMap(tag, (p) => p.setSchedule(entries)),
     ),
     clearSchedule: runtime.fn(() => Effect.flatMap(tag, (p) => p.clearSchedule)),
+  };
+  cache.set(tag.key, bundle);
+  return bundle;
+};
+
+/** Build (once per runtime+tag) the atom bundle for an API-metrics tag — read-only. @since 1.0.0 */
+export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R>): ApiBundle => {
+  const cache = cacheFor(apiBundleCache, runtime);
+  const existing = cache.get(tag.key);
+  if (existing !== undefined) return existing;
+  const toApiPoint = (m: ApiUsageMetrics): ApiPoint => ({
+    t: DateTime.toEpochMillis(m.windowEnd),
+    throughput: m.throughputPerSec,
+    errors: m.errors,
+    inFlight: m.inFlight,
+  });
+  // One metrics stream feeds the latest window + the accumulated chart history (no server backfill
+  // for API — there's no history query — so seed from the localStorage cache and accumulate live).
+  const metricsHistory = runtime.atom(
+    Stream.unwrap(Effect.map(tag, (a) => a.metrics)).pipe(
+      Stream.scan(
+        {
+          latest: undefined as ApiUsageMetrics | undefined,
+          history: readCache<ApiPoint>(`${tag.key}/api-history`)?.items ?? [],
+        },
+        (acc, m) => ({ latest: m, history: [...acc.history, toApiPoint(m)].slice(-HISTORY) }),
+      ),
+      Stream.tap((acc) =>
+        Effect.sync(() => writeCache(`${tag.key}/api-history`, acc.history.slice(-HISTORY_CACHE))),
+      ),
+    ),
+  );
+  const bundle: ApiBundle = {
+    // usageNow is a query (not a stream), so poll it for a live-ish snapshot.
+    status: runtime.atom(
+      Stream.tick(Duration.seconds(3)).pipe(Stream.mapEffect(() => Effect.flatMap(tag, (a) => a.usageNow))),
+    ),
+    metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
+    history: Atom.mapResult(metricsHistory, (a) => a.history),
   };
   cache.set(tag.key, bundle);
   return bundle;

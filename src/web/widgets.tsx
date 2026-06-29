@@ -15,6 +15,9 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import { Lock, LockOpen, Maximize2, Pause, Play, Power, RotateCw, Square, Trash2 } from "lucide-react";
 import * as Group from "../Group";
 import {
+  type ApiBundle,
+  type ApiPoint,
+  type ApiTag,
   type CommandAtom,
   type GroupNode,
   type LogLine,
@@ -28,7 +31,7 @@ import {
   leafTags,
   queueLeaves,
 } from "./data";
-import { useProcessBundle, useQueueBundle } from "./runtime";
+import { useApiBundle, useProcessBundle, useQueueBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
@@ -196,18 +199,22 @@ export const GroupCard = (props: {
   );
 };
 
-/** Dispatch a group member to its card (group / queue / process). @since 1.0.0 */
+/** Dispatch a group member to its card (group / queue / process / api). @since 1.0.0 */
 export const Cell = (props: {
   readonly member: unknown;
   /** Display name — the member key under which the current group holds this member. */
   readonly name: string;
-  readonly onOpenLeaf: (tag: QueueTag | ProcessTag) => void;
+  readonly onOpenLeaf: (tag: QueueTag | ProcessTag | ApiTag) => void;
   readonly onOpenGroup: (g: GroupNode) => void;
 }): React.ReactElement => {
   if (Group.isGroup(props.member)) {
     return <GroupCard node={props.member as GroupNode} name={props.name} onOpen={props.onOpenGroup} />;
   }
-  return kindOf(props.member) === "process" ? (
+  const kind = kindOf(props.member);
+  if (kind === "api") {
+    return <ApiCard tag={props.member as ApiTag} name={props.name} onOpen={props.onOpenLeaf} />;
+  }
+  return kind === "process" ? (
     <ProcessCard tag={props.member as ProcessTag} name={props.name} onOpen={props.onOpenLeaf} />
   ) : (
     <QueueCard tag={props.member as QueueTag} name={props.name} onOpen={props.onOpenLeaf} />
@@ -913,6 +920,257 @@ export const ScheduleEditor = (props: {
             <ScheduleRow key={`${DateTime.toEpochMillis(entry.startAt)}-${i}`} entry={entry} />
           ))}
         </ul>
+      )}
+    </div>
+  );
+};
+
+// ── api widgets ───────────────────────────────────────────────────────────────
+
+/** Error-rate → health label + colour (green / amber / red). Shared by the API card badge and
+ *  {@link ApiStats}. @since 1.0.0 */
+export const apiHealth = (requests: number, errors: number): { readonly label: string; readonly color: string } => {
+  const rate = requests > 0 ? errors / requests : 0;
+  if (rate >= 0.1) return { label: "errors", color: "#ef4444" };
+  if (rate >= 0.02) return { label: "degraded", color: "#eab308" };
+  return { label: "healthy", color: "#22c55e" };
+};
+
+/** A tiny inline sparkline (last ~40 values), no axes — for the API card's throughput face. */
+const Sparkline = (props: { readonly points: ReadonlyArray<number>; readonly color: string }): React.ReactElement => {
+  const pts = props.points.slice(-40);
+  if (pts.length < 2) return <div className="h-10" />;
+  const max = Math.max(...pts, 1);
+  const min = Math.min(...pts, 0);
+  const range = max - min || 1;
+  const line = pts
+    .map((v, i) => `${(i / (pts.length - 1)) * 100},${100 - ((v - min) / range) * 100}`)
+    .join(" ");
+  return (
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-10 w-full">
+      <polyline points={line} fill="none" stroke={props.color} strokeWidth={2} vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+};
+
+/** A reusable iOS-home-screen-style **paged card**: horizontal scroll-snap track + dot indicators.
+ *  Presentational. Tap fires `onOpen` (a swipe scrolls instead and the click is suppressed); the
+ *  root is a `div role="button"` so a horizontal scroller can nest cleanly. @since 1.0.0 */
+export const PagedCard = (props: {
+  readonly pages: ReadonlyArray<React.ReactNode>;
+  readonly onOpen?: () => void;
+  readonly style?: React.CSSProperties;
+}): React.ReactElement => {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [active, setActive] = React.useState(0);
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={props.onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") props.onOpen?.();
+      }}
+      style={props.style}
+      className="flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring focus-visible:border-ring focus-visible:outline-none"
+    >
+      <div
+        ref={ref}
+        onScroll={() => {
+          const el = ref.current;
+          if (el !== null && el.clientWidth > 0) setActive(Math.round(el.scrollLeft / el.clientWidth));
+        }}
+        className="flex snap-x snap-mandatory overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {props.pages.map((page, i) => (
+          <div key={i} className="w-full shrink-0 snap-center">{page}</div>
+        ))}
+      </div>
+      {props.pages.length > 1 ? (
+        <div className="mt-2 flex justify-center gap-1">
+          {props.pages.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                const el = ref.current;
+                if (el !== null) el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+              }}
+              className={cn("size-1.5 rounded-full transition-colors", i === active ? "bg-foreground" : "bg-muted-foreground/40")}
+              aria-label={`page ${i + 1}`}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+/** Top endpoints (busiest first) from the latest window, or the snapshot's `topEndpoints`. */
+const topEndpoints = (
+  bundle: { readonly requests: number; readonly errors: number; readonly endpoint: string }[],
+  limit: number,
+): ReadonlyArray<{ readonly endpoint: string; readonly requests: number; readonly errors: number }> =>
+  [...bundle].sort((a, b) => b.requests - a.requests).slice(0, limit);
+
+/** An API-metrics resource as a grid card — a {@link PagedCard}: page 1 is throughput + health,
+ *  page 2 is the busiest endpoints. Read-only. @since 1.0.0 */
+export const ApiCard = (props: {
+  readonly tag: ApiTag;
+  /** Display name — the member key under which the parent group holds this tag. */
+  readonly name: string;
+  readonly onOpen: (t: ApiTag) => void;
+}): React.ReactElement => {
+  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
+  const bundle = useApiBundle(props.tag);
+  const statusR = useAtomValue(bundle.status);
+  const metricsR = useAtomValue(bundle.metrics);
+  const historyR = useAtomValue(bundle.history);
+  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const m = AsyncResult.isSuccess(metricsR) ? metricsR.value : undefined;
+  const history = AsyncResult.isSuccess(historyR) ? historyR.value : [];
+  const health = apiHealth(s?.requestsTotal ?? 0, s?.errorsTotal ?? 0);
+  const endpoints = topEndpoints([...(m?.byEndpoint ?? [])], 3);
+  const maxReq = Math.max(...endpoints.map((e) => e.requests), 1);
+
+  const page1 = (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <span>🌐</span>
+        <strong className="flex-1 truncate">{props.name}</strong>
+        <Badge color={health.color}>{health.label}</Badge>
+      </div>
+      <div className="flex justify-between text-xs text-muted-foreground">
+        <span><strong className="text-foreground">{(m?.throughputPerSec ?? 0).toFixed(1)}</strong> req/s</span>
+        <span><strong className="text-foreground">{s?.inFlight ?? 0}</strong> in-flight</span>
+      </div>
+      <Sparkline points={history.map((p) => p.throughput)} color={health.color} />
+    </div>
+  );
+  const page2 = (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <span>🌐</span>
+        <strong className="flex-1 truncate">{props.name}</strong>
+        <span className="text-xs text-muted-foreground">endpoints</span>
+      </div>
+      {endpoints.length === 0 ? (
+        <div className="text-xs text-muted-foreground">No endpoint activity yet.</div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {endpoints.map((e, i) => (
+            <div key={`${e.endpoint}-${i}`} className="flex items-center gap-2">
+              <span className="w-24 truncate text-xs">{e.endpoint}</span>
+              <Bar value={e.requests} max={maxReq} color="#3b82f6" />
+              <span className="w-10 text-right text-xs">{e.requests}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+  return <PagedCard onOpen={() => props.onOpen(props.tag)} style={vt} pages={[page1, page2]} />;
+};
+
+/** Stat cards from an API resource's snapshot + latest window. @since 1.0.0 */
+export const ApiStats = (props: { readonly bundle: ApiBundle }): React.ReactElement => {
+  const statusR = useAtomValue(props.bundle.status);
+  const metricsR = useAtomValue(props.bundle.metrics);
+  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const m = AsyncResult.isSuccess(metricsR) ? metricsR.value : undefined;
+  const requests = s?.requestsTotal ?? 0;
+  const errors = s?.errorsTotal ?? 0;
+  const rate = requests > 0 ? (errors / requests) * 100 : 0;
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Stat label="requests" value={String(requests)} />
+      <Stat label="errors" value={String(errors)} />
+      <Stat label="error rate" value={`${rate.toFixed(1)}%`} />
+      <Stat label="in-flight" value={String(s?.inFlight ?? 0)} />
+      <Stat label="req/s" value={(m?.throughputPerSec ?? 0).toFixed(1)} />
+    </div>
+  );
+};
+
+const API_SERIES = {
+  throughput: { label: "throughput /s", color: "#22c55e", pick: (p: ApiPoint) => p.throughput },
+  errors: { label: "errors", color: "#ef4444", pick: (p: ApiPoint) => p.errors },
+  inFlight: { label: "in-flight", color: "#3b82f6", pick: (p: ApiPoint) => p.inFlight },
+};
+type ApiSeriesKey = keyof typeof API_SERIES;
+
+/** An API usage chart — a dropdown switches throughput / errors / in-flight, fed from the
+ *  accumulated metrics history. @since 1.0.0 */
+export const ApiMetricChart = (props: { readonly bundle: ApiBundle }): React.ReactElement => {
+  const [series, setSeries] = React.useState<ApiSeriesKey>("throughput");
+  const r = useAtomValue(props.bundle.history);
+  const history: ReadonlyArray<ApiPoint> = AsyncResult.isSuccess(r) ? r.value : [];
+  const def = API_SERIES[series];
+  const data = history.map((p, i) => ({ i, value: def.pick(p) }));
+  return (
+    <div>
+      <select
+        value={series}
+        onChange={(e) => setSeries(e.target.value as ApiSeriesKey)}
+        className="mb-2 rounded-md border bg-card px-2 py-1 text-sm font-semibold text-foreground"
+      >
+        {(Object.keys(API_SERIES) as Array<ApiSeriesKey>).map((k) => (
+          <option key={k} value={k}>{API_SERIES[k].label}</option>
+        ))}
+      </select>
+      <div className="-mx-3 -mb-3 h-[140px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id={`ga-${series}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={def.color} stopOpacity={0.5} />
+                <stop offset="100%" stopColor={def.color} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <XAxis dataKey="i" hide />
+            <YAxis hide />
+            <Tooltip contentStyle={{ background: "#1e2636", border: "1px solid #2b3650", borderRadius: 8, fontSize: 12 }} />
+            <Area type="monotone" dataKey="value" stroke={def.color} fill={`url(#ga-${series})`} strokeWidth={2} isAnimationActive={false} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+};
+
+/** The per-endpoint table — group · endpoint with requests / errors / avg-ms, busiest first, error
+ *  rows tinted. The distinctive API widget. @since 1.0.0 */
+export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.ReactElement => {
+  const r = useAtomValue(props.bundle.metrics);
+  const m = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const rows = [...(m?.byEndpoint ?? [])].sort((a, b) => b.requests - a.requests);
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border bg-card p-3">
+      <div className="text-xs text-muted-foreground">ENDPOINTS · {rows.length}</div>
+      {rows.length === 0 ? (
+        <div className="text-xs text-muted-foreground">No endpoint activity yet.</div>
+      ) : (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs text-muted-foreground">
+              <th className="text-left font-normal">endpoint</th>
+              <th className="text-right font-normal">req</th>
+              <th className="text-right font-normal">err</th>
+              <th className="text-right font-normal">avg</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((e, i) => (
+              <tr key={`${e.group}/${e.endpoint}-${i}`} className={e.errors > 0 ? "text-[#ef4444]" : ""}>
+                <td className="truncate">{e.group} · {e.endpoint}</td>
+                <td className="text-right tabular-nums">{e.requests}</td>
+                <td className="text-right tabular-nums">{e.errors}</td>
+                <td className="text-right tabular-nums">{e.avgDurationMs !== undefined ? fmtMs(e.avgDurationMs) : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   );
