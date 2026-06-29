@@ -415,13 +415,11 @@ export const hostStatusBundle = <R, ER>(
   const bundle: HostBundle = {
     id: ref.id,
     status: runtime.atom(
-      Stream.unwrap(
-        Effect.map(HostStatus.Tag, (h) => h.status).pipe(
-          // The atom owns this per-host client's scope (it lives as long as the atom is mounted),
-          // so providing it here is the entry point — not a mid-pipeline provide that leaks scope.
-          // @effect-diagnostics-next-line strictEffectProvide:off
-          Effect.provide(hostStatusClient(ref.host)),
-        ),
+      // Provide the per-host client at the STREAM level so its scope spans the whole subscription.
+      // (Providing it to the producing Effect tore the scoped RPC client down as soon as that effect
+      // returned the stream, interrupting it — "all fibers interrupted".)
+      Stream.unwrap(Effect.map(HostStatus.Tag, (h) => h.status)).pipe(
+        Stream.provide(hostStatusClient(ref.host)),
       ),
     ),
   };
