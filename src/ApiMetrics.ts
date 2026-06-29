@@ -110,7 +110,11 @@ const apiMetricsSpec = {
 };
 
 /** Shared RPC family — one group for all ApiMetrics instances. @internal */
-const apiMetricsFactory = tagFor("apiMetrics", apiMetricsSpec);
+/** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
+ *  classify it via {@link Resource.kindOf} without sniffing the spec. @since 1.0.0 */
+export const kind = "@nikscripts/effect-pm/ApiMetrics";
+
+const apiMetricsFactory = tagFor("apiMetrics", apiMetricsSpec, { kind });
 
 const resolveTagArgs = (
   clientId: string,
@@ -206,6 +210,8 @@ const tag = <Self>(clientId: string) =>
 export const ApiMetrics = {
   /** @see {@link tag} */
   Tag: tag,
+  /** This contract's canonical kind (stamped on every tag; read via {@link Resource.kindOf}). */
+  kind,
   /** Suffix appended to `clientId` for the default Resource key. */
   metricsKeySuffix,
   metricsKeyFor,

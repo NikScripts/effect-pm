@@ -539,6 +539,10 @@ type QueueInstanceSpec<F extends Schema.Struct.Fields> = ReturnType<
  *
  * @public
  */
+/** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
+ *  classify it via {@link Resource.kindOf} without sniffing the spec. @since 1.0.0 */
+export const kind = "@nikscripts/effect-pm/QueueResource";
+
 const queueTag = <Self>() => {
   function build<F extends Schema.Struct.Fields, HSelf>(
     key: string,
@@ -559,10 +563,11 @@ const queueTag = <Self>() => {
   ): ResourceTag<Self, QueueInstanceSpec<F>> {
     const spec = queueSpec(itemSchema);
     const host = options?.host;
+    const tagOptions = { description: options?.description, kind };
     // host rides the inferring call; `makeTag`'s inner overload narrows the tag's host.
     return host === undefined
-      ? Resource.Tag<Self>(key, options)(spec)
-      : Resource.Tag<Self>(key, options)(spec, host);
+      ? Resource.Tag<Self>(key, tagOptions)(spec)
+      : Resource.Tag<Self>(key, tagOptions)(spec, host);
   }
   return build;
 };

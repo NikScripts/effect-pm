@@ -141,6 +141,10 @@ type ProcessScheduleSpec = typeof processScheduleSpec;
  *
  * @public
  */
+/** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
+ *  classify it via {@link Resource.kindOf} without sniffing the spec. @since 1.0.0 */
+export const kind = "@nikscripts/effect-pm/ProcessScheduleResource";
+
 export const processScheduleTag = <Self>() => {
   function build<HSelf>(
     key: string,
@@ -155,9 +159,10 @@ export const processScheduleTag = <Self>() => {
     options?: { readonly description?: string; readonly host?: HostKey<unknown> },
   ): ResourceTag<Self, ProcessScheduleSpec> {
     const host = options?.host;
+    const tagOptions = { description: options?.description, kind };
     return host === undefined
-      ? Resource.Tag<Self>(key, options)(processScheduleSpec)
-      : Resource.Tag<Self>(key, options)(processScheduleSpec, host);
+      ? Resource.Tag<Self>(key, tagOptions)(processScheduleSpec)
+      : Resource.Tag<Self>(key, tagOptions)(processScheduleSpec, host);
   }
   return build;
 };

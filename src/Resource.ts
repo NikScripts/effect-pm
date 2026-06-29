@@ -745,6 +745,12 @@ export const groupSym: unique symbol = Symbol.for(
 export const localCapSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Resource/localCap",
 );
+/** Where a contract's **kind** (its canonical id, e.g. `@nikscripts/effect-pm/QueueResource`) is
+ *  stowed on a Tag — set by each contract's `.Tag` factory so consumers (the dashboard) can
+ *  classify a tag without sniffing its spec. Absent on a bare {@link Resource.Tag}. @internal */
+export const kindSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/kind",
+);
 /** Where the resource's {@link Host} (if any) is stowed on a Tag. @internal */
 export const hostSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Resource/host",
@@ -798,7 +804,22 @@ export interface ResourceTag<Self, S extends Spec>
    * discriminates the host-aware path.
    */
   readonly [hostSym]: HostKey<unknown> | undefined;
+  /** The contract's kind (canonical id) — set by a contract `.Tag` factory, `undefined` for a bare
+   *  {@link Resource.Tag}. Read it with {@link kindOf}. */
+  readonly [kindSym]: string | undefined;
 }
+
+/** The contract kind a tag was built for (e.g. `@nikscripts/effect-pm/QueueResource`), or
+ *  `undefined` for a bare {@link Resource.Tag} or any non-tag. The robust replacement for sniffing
+ *  a tag's spec; accepts `unknown` so a `Group` member can be passed straight in. @since 1.0.0 */
+export const kindOf = (tag: unknown): string | undefined => {
+  // A resource tag is a class (so `typeof` is "function"), with the kind stamped as a static.
+  if ((typeof tag === "object" || typeof tag === "function") && tag !== null && kindSym in tag) {
+    const value = tag[kindSym];
+    return typeof value === "string" ? value : undefined;
+  }
+  return undefined;
+};
 
 /** Claimed instance keys — duplicate declarations fail fast (Effect won't catch same-key Tags). */
 const claimedKeys = new Set<string>();
@@ -825,6 +846,7 @@ const buildInstanceTag = <Self, S extends Spec>(
   group: RpcGroupOf<S>,
   description: string | undefined,
   host: HostKey<unknown> | undefined,
+  kind: string | undefined,
 ) => {
   if (claimedKeys.has(key)) {
     throw new DuplicateResourceKey({ key });
@@ -843,6 +865,7 @@ const buildInstanceTag = <Self, S extends Spec>(
     [groupSym]: group,
     [localCapSym]: localCap,
     [hostSym]: host,
+    [kindSym]: kind,
   });
 };
 
@@ -868,7 +891,7 @@ const buildInstanceTag = <Self, S extends Spec>(
  */
 const makeTag = <Self>(
   key: string,
-  options?: { readonly description?: string },
+  options?: { readonly description?: string; readonly kind?: string },
 ) => {
   // The spec is the inferring call; the optional `host` rides here (not alongside the
   // explicit `<Self>` above) so its identity `HSelf` can be inferred from the argument —
@@ -892,6 +915,7 @@ const makeTag = <Self>(
       buildRpcGroup(key, spec),
       options?.description,
       host,
+      options?.kind,
     );
   }
   return build;
@@ -951,17 +975,17 @@ export interface HostTagFactory<S extends Spec, HSelf> {
 function tagFor<const S extends Spec, HSelf>(
   groupId: string,
   spec: S,
-  options: { readonly description?: string; readonly host: HostKey<HSelf> },
+  options: { readonly description?: string; readonly kind?: string; readonly host: HostKey<HSelf> },
 ): HostTagFactory<S, HSelf>;
 function tagFor<const S extends Spec>(
   groupId: string,
   spec: S,
-  options?: { readonly description?: string },
+  options?: { readonly description?: string; readonly kind?: string },
 ): TagFactory<S>;
 function tagFor<const S extends Spec>(
   groupId: string,
   spec: S,
-  options?: { readonly description?: string; readonly host?: HostKey<unknown> },
+  options?: { readonly description?: string; readonly kind?: string; readonly host?: HostKey<unknown> },
 ): TagFactory<S> {
   claimGroupId(groupId);
   const group = buildRpcGroup(groupId, spec);
@@ -974,6 +998,7 @@ function tagFor<const S extends Spec>(
       group,
       options?.description,
       host,
+      options?.kind,
     );
   // Stow the shared groupId/description/spec/group on the factory too, so the family
   // server ({@link serveInstances}) can read the contract + prefix without an instance.

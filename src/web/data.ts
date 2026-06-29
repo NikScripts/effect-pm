@@ -12,9 +12,9 @@
 import { DateTime, Duration, Effect, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
-import { specOf } from "../Resource";
-import { queueMetrics, queueStatus } from "../QueueContract";
-import { processScheduleEntry, processStatus } from "../ScheduledProcess";
+import { kindOf as resourceKindOf, specOf } from "../Resource";
+import { kind as queueKind, queueMetrics, queueStatus } from "../QueueContract";
+import { kind as processKind, processScheduleEntry, processStatus } from "../ScheduledProcess";
 import { FRESH_MS, readCache, writeCache } from "./cache";
 import { now } from "./now";
 
@@ -114,6 +114,11 @@ export interface ProcessBundle {
 
 /** Which kind of leaf a tag is, by its contract (a queue enqueues; a process runs). @since 1.0.0 */
 export const kindOf = (member: unknown): "queue" | "process" => {
+  // Prefer the contract's stamped kind (set by each `.Tag` factory); fall back to sniffing the spec
+  // for a bare `Resource.Tag` (or an older tag without a stamped kind).
+  const stamped = resourceKindOf(member);
+  if (stamped === queueKind) return "queue";
+  if (stamped === processKind) return "process";
   const spec = specOf(member as Parameters<typeof specOf>[0]);
   return "enqueue" in spec || "sizes" in spec ? "queue" : "process";
 };

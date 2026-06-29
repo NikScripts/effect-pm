@@ -334,6 +334,10 @@ export type CustomQueueInstanceSpec<F extends Schema.Struct.Fields> = Omit<
  *
  * @public
  */
+/** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
+ *  classify it via {@link Resource.kindOf} without sniffing the spec. @since 1.0.0 */
+export const kind = "@nikscripts/effect-pm/CustomQueueResource";
+
 export const customQueueTag = <Self>() => {
   function build<F extends Schema.Struct.Fields, HSelf>(
     key: string,
@@ -383,8 +387,8 @@ export const customQueueTag = <Self>() => {
     const spec = customQueueSpec(itemSchema, levelConfig) as CustomQueueInstanceSpec<F>;
     void rest;
     return host === undefined
-      ? Resource.Tag<Self>(key, { description })(spec)
-      : Resource.Tag<Self>(key, { description })(spec, host);
+      ? Resource.Tag<Self>(key, { description, kind })(spec)
+      : Resource.Tag<Self>(key, { description, kind })(spec, host);
   }
   return build;
 };
