@@ -1065,9 +1065,11 @@ export const ApiCard = (props: {
       <div className="flex flex-col gap-1">
         {endpoints.map((e, i) => (
           <div key={`${e.endpoint}-${i}`} className="flex items-center gap-2">
-            <span className="w-24 truncate text-xs">{e.endpoint}</span>
-            <Bar value={e.requests} max={maxReq} color="#3b82f6" />
-            <span className="w-10 text-right text-xs">{e.requests}</span>
+            <span className="flex-1 truncate text-xs">{e.endpoint}</span>
+            <div className="flex w-14 shrink-0">
+              <Bar value={e.requests} max={maxReq} color="#3b82f6" />
+            </div>
+            <span className="w-7 text-right text-xs">{e.requests}</span>
           </div>
         ))}
       </div>
@@ -1169,9 +1171,15 @@ type EndpointRow = ApiUsageMetrics["byEndpoint"][number];
 
 const endpointColumns: ReadonlyArray<ColumnDef<EndpointRow>> = [
   {
+    id: "group",
+    header: "group",
+    accessorKey: "group",
+    cell: (c) => <span className="block truncate text-muted-foreground">{c.getValue<string>()}</span>,
+  },
+  {
     id: "endpoint",
     header: "endpoint",
-    accessorFn: (r) => `${r.group} · ${r.endpoint}`,
+    accessorKey: "endpoint",
     cell: (c) => <span className="block truncate">{c.getValue<string>()}</span>,
   },
   { id: "requests", header: "req", accessorKey: "requests" },
@@ -1183,6 +1191,9 @@ const endpointColumns: ReadonlyArray<ColumnDef<EndpointRow>> = [
     cell: (c) => (c.row.original.avgDurationMs !== undefined ? fmtMs(c.row.original.avgDurationMs) : "—"),
   },
 ];
+
+/** The numeric (right-aligned) endpoint columns. */
+const numericEndpointCols = new Set(["requests", "errors", "avg"]);
 
 const SORT_GLYPH: Record<string, string> = { asc: " ▲", desc: " ▼" };
 
@@ -1219,7 +1230,8 @@ export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.R
                       onClick={h.column.getToggleSortingHandler()}
                       className={cn(
                         "cursor-pointer select-none py-1 font-normal hover:text-foreground",
-                        h.column.id === "endpoint" ? "text-left" : "text-right",
+                        numericEndpointCols.has(h.column.id) ? "text-right" : "text-left",
+                        h.column.id === "group" ? "w-20" : "",
                         h.column.id === "requests" || h.column.id === "errors" ? "w-12" : "",
                         h.column.id === "avg" ? "w-16" : "",
                       )}
@@ -1239,7 +1251,7 @@ export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.R
                       key={cell.id}
                       className={cn(
                         "py-0.5",
-                        cell.column.id === "endpoint" ? "truncate" : "text-right tabular-nums",
+                        numericEndpointCols.has(cell.column.id) ? "text-right tabular-nums" : "truncate",
                       )}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
