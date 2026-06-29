@@ -10,6 +10,14 @@
  */
 import * as React from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  type ColumnDef,
+  type SortingState,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
 import { DateTime } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Lock, LockOpen, Maximize2, Pause, Play, Power, RotateCw, Square, Trash2 } from "lucide-react";
@@ -31,6 +39,7 @@ import {
   leafTags,
   queueLeaves,
 } from "./data";
+import type { ApiUsageMetrics } from "../ApiUsageSchema";
 import { useApiBundle, useProcessBundle, useQueueBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
@@ -1031,7 +1040,7 @@ export const ApiCard = (props: {
   const m = AsyncResult.isSuccess(metricsR) ? metricsR.value : undefined;
   const history = AsyncResult.isSuccess(historyR) ? historyR.value : [];
   const health = apiHealth(s?.requestsTotal ?? 0, s?.errorsTotal ?? 0);
-  const endpoints = topEndpoints([...(m?.byEndpoint ?? [])], 3);
+  const endpoints = topEndpoints([...(m?.byEndpoint ?? [])], 6);
   const maxReq = Math.max(...endpoints.map((e) => e.requests), 1);
 
   const page1 = (
@@ -1048,28 +1057,21 @@ export const ApiCard = (props: {
       <Sparkline points={history.map((p) => p.throughput)} color={health.color} />
     </div>
   );
-  const page2 = (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <span>🌐</span>
-        <strong className="flex-1 truncate">{props.name}</strong>
-        <span className="text-xs text-muted-foreground">endpoints</span>
+  // No header on page 2 — drop it so we can fit more endpoint bars (page 1 already names the card).
+  const page2 =
+    endpoints.length === 0 ? (
+      <div className="text-xs text-muted-foreground">No endpoint activity yet.</div>
+    ) : (
+      <div className="flex flex-col gap-1">
+        {endpoints.map((e, i) => (
+          <div key={`${e.endpoint}-${i}`} className="flex items-center gap-2">
+            <span className="w-24 truncate text-xs">{e.endpoint}</span>
+            <Bar value={e.requests} max={maxReq} color="#3b82f6" />
+            <span className="w-10 text-right text-xs">{e.requests}</span>
+          </div>
+        ))}
       </div>
-      {endpoints.length === 0 ? (
-        <div className="text-xs text-muted-foreground">No endpoint activity yet.</div>
-      ) : (
-        <div className="flex flex-col gap-1">
-          {endpoints.map((e, i) => (
-            <div key={`${e.endpoint}-${i}`} className="flex items-center gap-2">
-              <span className="w-24 truncate text-xs">{e.endpoint}</span>
-              <Bar value={e.requests} max={maxReq} color="#3b82f6" />
-              <span className="w-10 text-right text-xs">{e.requests}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+    );
   return <PagedCard onOpen={() => props.onOpen(props.tag)} style={vt} pages={[page1, page2]} />;
 };
 
@@ -1162,38 +1164,92 @@ export const ApiMetricChart = (props: { readonly bundle: ApiBundle }): React.Rea
   );
 };
 
-/** The per-endpoint table — group · endpoint with requests / errors / avg-ms, busiest first, error
- *  rows tinted. The distinctive API widget. @since 1.0.0 */
+/** One per-endpoint row (the element of a metrics window's `byEndpoint`). */
+type EndpointRow = ApiUsageMetrics["byEndpoint"][number];
+
+const endpointColumns: ReadonlyArray<ColumnDef<EndpointRow>> = [
+  {
+    id: "endpoint",
+    header: "endpoint",
+    accessorFn: (r) => `${r.group} · ${r.endpoint}`,
+    cell: (c) => <span className="block truncate">{c.getValue<string>()}</span>,
+  },
+  { id: "requests", header: "req", accessorKey: "requests" },
+  { id: "errors", header: "err", accessorKey: "errors" },
+  {
+    id: "avg",
+    header: "avg",
+    accessorFn: (r) => r.avgDurationMs ?? 0,
+    cell: (c) => (c.row.original.avgDurationMs !== undefined ? fmtMs(c.row.original.avgDurationMs) : "—"),
+  },
+];
+
+const SORT_GLYPH: Record<string, string> = { asc: " ▲", desc: " ▼" };
+
+/** The per-endpoint table — `group · endpoint` with requests / errors / avg-ms, in a sortable
+ *  TanStack table (tap a header to sort; default busiest-first). Error rows are tinted. The
+ *  distinctive API widget. @since 1.0.0 */
 export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.ReactElement => {
   const r = useAtomValue(props.bundle.metrics);
   const m = AsyncResult.isSuccess(r) ? r.value : undefined;
-  const rows = [...(m?.byEndpoint ?? [])].sort((a, b) => b.requests - a.requests);
+  const rows = React.useMemo(() => [...(m?.byEndpoint ?? [])], [m]);
+  const [sorting, setSorting] = React.useState<SortingState>([{ id: "requests", desc: true }]);
+  const table = useReactTable({
+    data: rows,
+    columns: endpointColumns as Array<ColumnDef<EndpointRow>>,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
   return (
-    <div className="flex flex-col gap-2 rounded-xl border bg-card p-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-2 rounded-xl border bg-card p-3">
       <div className="text-xs text-muted-foreground">ENDPOINTS · {rows.length}</div>
       {rows.length === 0 ? (
         <div className="text-xs text-muted-foreground">No endpoint activity yet.</div>
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-xs text-muted-foreground">
-              <th className="text-left font-normal">endpoint</th>
-              <th className="text-right font-normal">req</th>
-              <th className="text-right font-normal">err</th>
-              <th className="text-right font-normal">avg</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((e, i) => (
-              <tr key={`${e.group}/${e.endpoint}-${i}`} className={e.errors > 0 ? "text-[#ef4444]" : ""}>
-                <td className="truncate">{e.group} · {e.endpoint}</td>
-                <td className="text-right tabular-nums">{e.requests}</td>
-                <td className="text-right tabular-nums">{e.errors}</td>
-                <td className="text-right tabular-nums">{e.avgDurationMs !== undefined ? fmtMs(e.avgDurationMs) : "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="min-h-0 flex-1 overflow-auto">
+          <table className="w-full table-fixed text-sm">
+            <thead className="sticky top-0 bg-card">
+              {table.getHeaderGroups().map((hg) => (
+                <tr key={hg.id} className="text-xs text-muted-foreground">
+                  {hg.headers.map((h) => (
+                    <th
+                      key={h.id}
+                      onClick={h.column.getToggleSortingHandler()}
+                      className={cn(
+                        "cursor-pointer select-none py-1 font-normal hover:text-foreground",
+                        h.column.id === "endpoint" ? "text-left" : "text-right",
+                        h.column.id === "requests" || h.column.id === "errors" ? "w-12" : "",
+                        h.column.id === "avg" ? "w-16" : "",
+                      )}
+                    >
+                      {flexRender(h.column.columnDef.header, h.getContext())}
+                      {SORT_GLYPH[h.column.getIsSorted() as string] ?? ""}
+                    </th>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+            <tbody>
+              {table.getRowModel().rows.map((row) => (
+                <tr key={row.id} className={row.original.errors > 0 ? "text-[#ef4444]" : ""}>
+                  {row.getVisibleCells().map((cell) => (
+                    <td
+                      key={cell.id}
+                      className={cn(
+                        "py-0.5",
+                        cell.column.id === "endpoint" ? "truncate" : "text-right tabular-nums",
+                      )}
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
