@@ -855,23 +855,41 @@ export const kindOf = (tag: unknown): string | undefined => {
 /**
  * Attach a {@link Readiness} derivation to a tag — the seam the host's `/health` and `HostStatus`
  * aggregate over. Each contract applies it from its own status (so readiness can't drift from
- * status); a bare {@link Resource.Tag} can opt in the same way:
+ * status); a bare {@link Resource.Tag} can opt in the same way. Dual (data-first or `.pipe`):
  *
  * ```ts
- * class EdgeCache extends Resource.withReadiness(
- *   Resource.Tag<EdgeCache>()("edge/Cache", { warm: Resource.query(Schema.Boolean) }),
- *   (svc) => Effect.map(svc.warm, (warm) => ({ ready: warm, ...(warm ? {} : { detail: "cold" }) })),
+ * class EdgeCache extends Resource.Tag<EdgeCache>()("edge/Cache", {
+ *   warm: Resource.query(Schema.Boolean),
+ * }).pipe(
+ *   Resource.withReadiness((svc) =>
+ *     Effect.map(svc.warm, (warm) => ({ ready: warm, ...(warm ? {} : { detail: "cold" }) })),
+ *   ),
  * ) {}
  * ```
  *
  * @public
  */
-export const withReadiness = <T extends ResourceTag<any, any>>(
-  tag: T,
-  readiness: ReadinessOf<
-    T extends ResourceTag<infer Self, infer S> ? ServiceOf<S, Self> : never
-  >,
-): T => Object.assign(tag, { [readinessSym]: readiness });
+export const withReadiness: {
+  // data-last (pipe): `tag.pipe(Resource.withReadiness(fn))` — the service type is derived from the
+  // piped tag; `Self` is widened to `any` here so this can be used in a class `extends` position
+  // without TS resolving the class's own (still-being-declared) type — see test/resource-readiness.
+  <T extends ResourceTag<any, any>>(
+    readiness: ReadinessOf<
+      T extends ResourceTag<any, infer S extends Spec> ? ServiceOf<S, any> : never
+    >,
+  ): (tag: T) => T;
+  // data-first: `Resource.withReadiness(tag, fn)` — full `ServiceOf<S, Self>` (contracts use this).
+  <T extends ResourceTag<any, any>>(
+    tag: T,
+    readiness: ReadinessOf<
+      T extends ResourceTag<infer Self, infer S extends Spec> ? ServiceOf<S, Self> : never
+    >,
+  ): T;
+} = Fn.dual(
+  2,
+  <T extends ResourceTag<any, any>>(tag: T, readiness: ReadinessOf<unknown>): T =>
+    Object.assign(tag, { [readinessSym]: readiness }),
+);
 
 /**
  * Run a tag's readiness derivation against its built service. A tag that declares none is **ready by

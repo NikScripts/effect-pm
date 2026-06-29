@@ -8,11 +8,10 @@ import * as HostStatus from "../src/HostStatus";
 // A resource carries its own readiness derivation (here a bare Resource.Tag opts in via
 // `withReadiness`). When it reports "not ready", the host's `/health` returns 503 and `HostStatus`
 // reads `degraded` with the per-resource detail — the same aggregate, two faces (SSOT).
-class Warming extends Resource.withReadiness(
-  Resource.Tag<Warming>()("readiness/Warming", {
-    ping: Resource.query(Schema.String),
-  }),
-  () => Effect.succeed({ ready: false, detail: "warming up" }),
+class Warming extends Resource.Tag<Warming>()("readiness/Warming", {
+  ping: Resource.query(Schema.String),
+}).pipe(
+  Resource.withReadiness(() => Effect.succeed({ ready: false, detail: "warming up" })),
 ) {}
 
 const Server = Resource.serveAllHttp([
