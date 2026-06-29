@@ -24,7 +24,7 @@ const importJob = Schema.Struct({ id: Schema.String });
 // over the scores client — under one league.
 class BoxScoreQueue extends QueueResource.Tag<BoxScoreQueue>()("wnba/BoxScoreQueue", importJob) {}
 class LiveScorePoller extends ProcessResource.Tag<LiveScorePoller>()("wnba/LiveScorePoller") {}
-class ScoresApi extends ApiMetrics.Tag<ScoresApi>("@wnba/ScoresApi")() {}
+class ScoresApi extends ApiMetrics.Tag<ScoresApi>()("@wnba/ScoresApi") {}
 
 /** WNBA league group — a nested group the dashboard drills into. */
 export class Wnba extends Group.Tag<Wnba>("hub/Wnba")({

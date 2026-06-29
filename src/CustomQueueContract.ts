@@ -387,8 +387,8 @@ export const customQueueTag = <Self>() => {
     const spec = customQueueSpec(itemSchema, levelConfig) as CustomQueueInstanceSpec<F>;
     void rest;
     return host === undefined
-      ? Resource.Tag<Self>(key, { description, kind })(spec)
-      : Resource.Tag<Self>(key, { description, kind })(spec, host);
+      ? Resource.Tag<Self>()(key, spec, { description, kind })
+      : Resource.Tag<Self>()(key, spec, { description, kind, host });
   }
   return build;
 };

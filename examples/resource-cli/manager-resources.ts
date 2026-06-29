@@ -14,13 +14,13 @@
 import { Effect, Layer, Schema } from "effect";
 import * as Resource from "../../src/Resource";
 
-export class Counter extends Resource.Tag<Counter>("Counter")({
+export class Counter extends Resource.Tag<Counter>()("Counter", {
   current: Resource.query(Schema.Number),
   increment: Resource.mutate(Schema.Void, { payload: { by: Schema.Number } }),
   reset: Resource.mutate(Schema.Void).annotate({ destructive: true }),
 }) {}
 
-export class QueueManager extends Resource.Tag<QueueManager>("QueueManager")({
+export class QueueManager extends Resource.Tag<QueueManager>()("QueueManager", {
   list: Resource.query(Schema.Array(Schema.String)),
   status: Resource.query(
     Schema.Struct({

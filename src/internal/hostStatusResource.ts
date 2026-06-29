@@ -50,9 +50,9 @@ export type HostStatus = typeof hostStatus.Type;
  * The reserved host status resource tag — hostless, so a client queries it over whichever host
  * transport it points the ambient `RpcClient.Protocol` at. @since 1.0.0
  */
-export class HostStatusResource extends Resource.Tag<HostStatusResource>(
+export class HostStatusResource extends Resource.Tag<HostStatusResource>()(
   HOST_STATUS_KEY,
-)({
+  {
   status: Resource.stream(hostStatus).annotate({
     description: "Live host status (up / uptime / resource count), re-emitted periodically.",
   }),

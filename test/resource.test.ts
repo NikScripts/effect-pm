@@ -62,7 +62,7 @@ it("runForEachTagScoped forks into the scope and returns a Fiber (non-blocking)"
 });
 
 // A resource with both a no-payload method (property) and a payload method.
-class Echo extends Resource.Tag<Echo>("test/Echo")({
+class Echo extends Resource.Tag<Echo>()("test/Echo", {
   ping: Resource.query(Schema.String),
   shout: Resource.mutate(Schema.String, { payload: { msg: Schema.String } }),
 }) {}
@@ -139,10 +139,10 @@ it("server family routes calls to the right instance by key header", () => {
 });
 
 // ── resource-level description (tools: section help / panel title) ──
-class Described extends Resource.Tag<Described>("described", {
-  description: "A described resource.",
-})({
+class Described extends Resource.Tag<Described>()("described", {
   ping: Resource.query(Schema.String),
+}, {
+  description: "A described resource.",
 }) {}
 const DescribedFamily = Resource.tagFor(
   "describedFamily",
@@ -157,10 +157,10 @@ it("carries a resource-level description on tags and factory instances", () => {
 });
 
 // ── shared server: two DIFFERENT resource types with a same-named method don't collide ──
-class Widgets extends Resource.Tag<Widgets>("widgets")({
+class Widgets extends Resource.Tag<Widgets>()("widgets", {
   size: Resource.query(Schema.Number), // same method name as Crates.size, different type
 }) {}
-class Crates extends Resource.Tag<Crates>("crates")({
+class Crates extends Resource.Tag<Crates>()("crates", {
   size: Resource.query(Schema.String),
 }) {}
 

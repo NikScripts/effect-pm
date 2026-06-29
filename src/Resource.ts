@@ -12,7 +12,7 @@
  * `.annotate({...})`:
  *
  * ```ts
- * class Counter extends Resource.Tag<Counter>("@app/Counter")({
+ * class Counter extends Resource.Tag<Counter>()("@app/Counter", {
  *   current: Resource.query(Schema.Number).annotate({ description: "Current value." }),
  *   add: Resource.mutate(Schema.Void, { payload: { by: Schema.Number } }),
  *   reset: Resource.mutate(Schema.Void).annotate({ destructive: true }),
@@ -874,7 +874,7 @@ const buildInstanceTag = <Self, S extends Spec>(
  * `Context.Tag`, but the value type is **inferred from the spec**:
  *
  * ```ts
- * class Counter extends Resource.Tag<Counter>("Counter")({
+ * class Counter extends Resource.Tag<Counter>()("Counter", {
  *   increment: Resource.mutate(Schema.Void, { payload: { by: Schema.Number } }),
  *   current: Resource.query(Schema.Number),
  * }) {}
@@ -889,22 +889,33 @@ const buildInstanceTag = <Self, S extends Spec>(
  *
  * @public
  */
-const makeTag = <Self>(
-  key: string,
-  options?: { readonly description?: string; readonly kind?: string },
-) => {
-  // The spec is the inferring call; the optional `host` rides here (not alongside the
-  // explicit `<Self>` above) so its identity `HSelf` can be inferred from the argument —
-  // a `<Self>`-explicit call can't also infer a second type param. Host-bearing returns
-  // narrow `[hostSym]` to a concrete `HostKey`, which is how `Resource.client` discriminates.
-  function build<const S extends Spec>(spec: S): ResourceTag<Self, S>;
-  function build<const S extends Spec, HSelf>(
+const makeTag = <Self>() => {
+  // `Context.Service`-shaped: `Tag<Self>()(key, spec, options?)`. The spec (2nd arg) is the
+  // inferring call; `options.host` rides the inferring call so its identity `HSelf` infers from the
+  // argument, and the host-bearing overload narrows `[hostSym]` to a concrete `HostKey` — which is
+  // how `Resource.client` discriminates the host-aware path.
+  function build<const S extends Spec>(
+    key: string,
     spec: S,
-    host: HostKey<HSelf>,
+    options?: { readonly description?: string; readonly kind?: string },
+  ): ResourceTag<Self, S>;
+  function build<const S extends Spec, HSelf>(
+    key: string,
+    spec: S,
+    options: {
+      readonly description?: string;
+      readonly kind?: string;
+      readonly host: HostKey<HSelf>;
+    },
   ): ResourceTag<Self, S> & { readonly [hostSym]: HostKey<HSelf> };
   function build<const S extends Spec>(
+    key: string,
     spec: S,
-    host?: HostKey<unknown>,
+    options?: {
+      readonly description?: string;
+      readonly kind?: string;
+      readonly host?: HostKey<unknown>;
+    },
   ): ResourceTag<Self, S> {
     // single resource: key doubles as the group id (its wire prefix)
     claimGroupId(key);
@@ -914,7 +925,7 @@ const makeTag = <Self>(
       spec,
       buildRpcGroup(key, spec),
       options?.description,
-      host,
+      options?.host,
       options?.kind,
     );
   }

@@ -279,8 +279,8 @@ const processTag = <Self>() => {
     const host = options?.host;
     const tagOptions = { description: options?.description, kind };
     return host === undefined
-      ? Resource.Tag<Self>(key, tagOptions)(processControlSpec)
-      : Resource.Tag<Self>(key, tagOptions)(processControlSpec, host);
+      ? Resource.Tag<Self>()(key, processControlSpec, tagOptions)
+      : Resource.Tag<Self>()(key, processControlSpec, { ...tagOptions, host });
   }
   return build;
 };

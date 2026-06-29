@@ -17,7 +17,7 @@ import { Command } from "effect/unstable/cli";
 import * as Resource from "../../src/Resource";
 import { makeResourceCli } from "../../src/cli";
 
-class Counter extends Resource.Tag<Counter>("Counter")({
+class Counter extends Resource.Tag<Counter>()("Counter", {
   current: Resource.query(Schema.Number),
   reset: Resource.mutate(Schema.Void),
   increment: Resource.mutate(Schema.Void, { payload: { by: Schema.Number } }),

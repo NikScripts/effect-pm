@@ -40,7 +40,7 @@ class DemoApiClient extends HttpApiResource.Service<DemoApiClient>()(
   },
 ) {}
 
-class DemoApiMetrics extends ApiMetrics.Tag<DemoApiMetrics>(DemoClientId)() {}
+class DemoApiMetrics extends ApiMetrics.Tag<DemoApiMetrics>()(DemoClientId) {}
 
 const program = Effect.gen(function* () {
   const client = yield* DemoApiClient;

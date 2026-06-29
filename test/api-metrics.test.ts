@@ -11,7 +11,7 @@ import { forwardClient, groupOf, specOf } from "../src/Resource";
 
 const ClientId = "test/api-metrics/client" as const;
 
-class DemoMetrics extends ApiMetrics.Tag<DemoMetrics>(ClientId)() {}
+class DemoMetrics extends ApiMetrics.Tag<DemoMetrics>()(ClientId) {}
 
 const pingEndpoint = HttpApiEndpoint.get("ping", "/ping", {
   success: Schema.Struct({ pong: Schema.Boolean }),
@@ -90,7 +90,7 @@ describe("ApiMetrics.layer", () => {
 
 describe("ApiMetrics.serveInstances", () => {
   const OtherClientId = "test/api-metrics/other" as const;
-  class OtherMetrics extends ApiMetrics.Tag<OtherMetrics>(OtherClientId)() {}
+  class OtherMetrics extends ApiMetrics.Tag<OtherMetrics>()(OtherClientId) {}
 
   it("routes factory instances by key header", () => {
     const alphaImpl = {

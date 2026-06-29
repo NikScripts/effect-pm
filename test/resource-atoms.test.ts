@@ -5,7 +5,7 @@ import * as Resource from "../src/Resource";
 import { makeResourceAtoms } from "../examples/resource-atoms/resource-atoms";
 
 // A resource with one query (read atom), one void mutate, one payload mutate.
-class Counter extends Resource.Tag<Counter>("ratoms/Counter")({
+class Counter extends Resource.Tag<Counter>()("ratoms/Counter", {
   current: Resource.query(Schema.Number), // no-payload query → READ atom
   reset: Resource.mutate(Schema.Void), // void mutate → command fn
   increment: Resource.mutate(Schema.Void, { payload: { by: Schema.Number } }), // payload → fn

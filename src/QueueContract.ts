@@ -433,7 +433,7 @@ export const queueControlSpec = {
  * {@link Resource.Tag} — each instance is its own resource (its own RPC group):
  *
  * ```ts
- * class Jobs extends Resource.Tag<Jobs>("@app/Jobs")(queueSpec(JobSchema)) {}
+ * class Jobs extends Resource.Tag<Jobs>()("@app/Jobs", queueSpec(JobSchema)) {}
  * const q = yield* Jobs;
  * yield* q.add(aJob); // the item itself is the payload — validated against JobSchema on both sides
  * ```
@@ -566,8 +566,8 @@ const queueTag = <Self>() => {
     const tagOptions = { description: options?.description, kind };
     // host rides the inferring call; `makeTag`'s inner overload narrows the tag's host.
     return host === undefined
-      ? Resource.Tag<Self>(key, tagOptions)(spec)
-      : Resource.Tag<Self>(key, tagOptions)(spec, host);
+      ? Resource.Tag<Self>()(key, spec, tagOptions)
+      : Resource.Tag<Self>()(key, spec, { ...tagOptions, host });
   }
   return build;
 };

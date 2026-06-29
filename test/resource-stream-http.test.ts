@@ -18,7 +18,7 @@ import { queueStatus } from "../src/QueueContract";
 // Streaming `.changes` over a REAL http transport (the in-memory RpcTest path is the blocker
 // the design note flagged — this proves the wire works end to end). Streams need a
 // newline-delimited serialization for chunked responses, so client + server use ndjson.
-class Ticker extends Resource.Tag<Ticker>("stream/Ticker")({
+class Ticker extends Resource.Tag<Ticker>()("stream/Ticker", {
   current: Resource.query(Schema.Number),
   changes: Resource.stream(Schema.Number),
 }) {}
@@ -77,7 +77,7 @@ it("streams a resource's changes over real http (chunked, in order)", () => {
 // then each subsequent change (dashboard atom / CLI --watch / TUI). Exercised in-process
 // (local layer) with a `Deferred` ready-latch so the subscription is established before the
 // updates — deterministic, no cross-wire timing race.
-class Status extends Resource.Tag<Status>("stream/Status")({
+class Status extends Resource.Tag<Status>()("stream/Status", {
   set: Resource.mutate(Schema.Void, { payload: { value: Schema.String } }),
   changes: Resource.stream(Schema.String),
 }) {}
@@ -85,7 +85,7 @@ class Status extends Resource.Tag<Status>("stream/Status")({
 // The queue contract's `status` snapshot streams over http — proves the real `queueStatus`
 // (per-priority sizes + paused + in-flight + completed) crosses the wire as stream elements,
 // using the batteries-included `serveHttp` (ndjson by default, which streaming needs).
-class QueueWatch extends Resource.Tag<QueueWatch>("stream/QueueWatch")({
+class QueueWatch extends Resource.Tag<QueueWatch>()("stream/QueueWatch", {
   status: Resource.stream(queueStatus),
 }) {}
 

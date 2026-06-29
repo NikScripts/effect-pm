@@ -5,7 +5,7 @@ import { expect, it } from "vitest";
 import * as Resource from "../../src/Resource";
 import { makeResourceTui } from "./make-resource-tui";
 
-class Counter extends Resource.Tag<Counter>("TuiCounter")({
+class Counter extends Resource.Tag<Counter>()("TuiCounter", {
   current: Resource.query(Schema.Number),
   increment: Resource.mutate(Schema.Void, { payload: { by: Schema.Number } }),
   reset: Resource.mutate(Schema.Void).annotate({ destructive: true }),

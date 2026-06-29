@@ -45,7 +45,7 @@ const _notEffect: Effect.Effect<number> = ss.changes;
 void _notEffect;
 
 // ── Slice 2: Tag + `yield*` + local layer ──
-class Counter extends Resource.Tag<Counter>("Counter")({
+class Counter extends Resource.Tag<Counter>()("Counter", {
   increment: Resource.mutate(Schema.Void, { payload: { by: Schema.Number } }),
   reset: Resource.mutate(Schema.Void),
   current: Resource.query(Schema.Number),
@@ -92,7 +92,7 @@ void _factoryB;
 // ── remote path: the client layer's only requirement is the transport `Protocol` ──
 // (Locks the precise-group typing: a regression that re-leaked `any` into `R` would
 // make this program's `R` non-`never` and fail to satisfy `runPromise`.)
-class Remote extends Resource.Tag<Remote>("test/Remote")({
+class Remote extends Resource.Tag<Remote>()("test/Remote", {
   ping: Resource.query(Schema.String),
   shout: Resource.mutate(Schema.String, { payload: { msg: Schema.String } }),
 }) {}
@@ -112,7 +112,7 @@ void _remoteRun;
 // A method that returns a function can't cross RPC. Declared with Resource.local, it
 // surfaces as `Effect<T, never, LocalCapability<Box>>` — callable only when the LOCAL
 // layer (which grants the capability) is provided, a compile error under the client.
-class Box extends Resource.Tag<Box>("test/Box")({
+class Box extends Resource.Tag<Box>()("test/Box", {
   read: Resource.query(Schema.Number),
   onChange:
     Resource.local<(cb: (n: number) => void) => Effect.Effect<void>>(),
@@ -176,9 +176,9 @@ void _procClients;
 // A host-bearing tag carries its own transport. `Resource.client(tag)` then requires the
 // HOST (not the ambient Protocol), and `Resource.connect(Host, transport)` wires it once.
 class EdgeHost extends Resource.Host<EdgeHost>("test/edge") {}
-class Hosted extends Resource.Tag<Hosted>("test/Hosted")(
+class Hosted extends Resource.Tag<Hosted>()("test/Hosted", 
   { ping: Resource.query(Schema.String) },
-  EdgeHost,
+  { host: EdgeHost },
 ) {}
 
 // the host-bearing client's only requirement is the host itself.

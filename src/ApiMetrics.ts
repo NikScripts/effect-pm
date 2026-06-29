@@ -12,7 +12,7 @@
  * ```ts
  * export const NwslClientId = "@app/Nwsl" as const;
  *
- * class NwslMetrics extends ApiMetrics.Tag<NwslMetrics>(NwslClientId)() {}
+ * class NwslMetrics extends ApiMetrics.Tag<NwslMetrics>()(NwslClientId) {}
  * ```
  *
  * Runtime wiring (server):
@@ -116,19 +116,6 @@ export const kind = "@nikscripts/effect-pm/ApiMetrics";
 
 const apiMetricsFactory = tagFor("apiMetrics", apiMetricsSpec, { kind });
 
-const resolveTagArgs = (
-  clientId: string,
-  idOrOpts?: string | ApiMetricsTagOptions,
-): { readonly key: string; readonly options: ApiMetricsTagOptions } => {
-  if (idOrOpts === undefined) {
-    return { key: metricsKeyFor(clientId), options: {} };
-  }
-  if (typeof idOrOpts === "string") {
-    return { key: idOrOpts, options: {} };
-  }
-  return { key: metricsKeyFor(clientId), options: idOrOpts };
-};
-
 /**
  * Read the linked outbound client id from an {@link ApiMetrics} tag.
  *
@@ -186,21 +173,19 @@ const layerFor = <
  *
  * @example
  * ```ts
- * class NwslMetrics extends ApiMetrics.Tag<NwslMetrics>(NwslClientId)() {}
+ * class NwslMetrics extends ApiMetrics.Tag<NwslMetrics>()(NwslClientId) {}
  * ```
  *
  * @public
  */
-// Only `Self` is an explicit type argument — `class X extends ApiMetrics.Tag<X>(clientId)() {}`.
-// The client id's literal type isn't carried on the tag (`clientIdSym` is `string`), so a second
-// `ClientId` generic would only force callers to pass it too (TS can't partially infer).
-const tag = <Self>(clientId: string) =>
-  (idOrOpts?: string | ApiMetricsTagOptions): ApiMetricsTag<Self> => {
-    const { key } = resolveTagArgs(clientId, idOrOpts);
-    return Object.assign(apiMetricsFactory<Self>(key), {
+// `Context.Service`-shaped: `<Self>()(clientId)`. Only `Self` is explicit; the client id's literal
+// isn't carried on the tag (`clientIdSym` is `string`). Window/description live on the layer, so the
+// construction call takes just the client id.
+const tag = <Self>() =>
+  (clientId: string): ApiMetricsTag<Self> =>
+    Object.assign(apiMetricsFactory<Self>(metricsKeyFor(clientId)), {
       [clientIdSym]: clientId,
     }) as ApiMetricsTag<Self>;
-  };
 
 /**
  * ApiMetrics toolkit — shared observability contract for outbound API clients.

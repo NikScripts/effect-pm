@@ -10,12 +10,12 @@ import * as Resource from "../src/Resource";
 // where to connect from the host. Serialization defaults to ndjson on BOTH helpers, so the
 // two sides can't disagree on the codec.
 class EdgeHost extends Resource.Host<EdgeHost>("hostHttp/edge") {}
-class Echo extends Resource.Tag<Echo>("hostHttp/Echo")(
+class Echo extends Resource.Tag<Echo>()("hostHttp/Echo", 
   {
     ping: Resource.query(Schema.String),
     shout: Resource.mutate(Schema.String, { payload: { msg: Schema.String } }),
   },
-  EdgeHost,
+  { host: EdgeHost },
 ) {}
 
 // the whole server, collapsed — only the platform HttpServer is left to provide

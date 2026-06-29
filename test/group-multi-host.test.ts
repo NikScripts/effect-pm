@@ -12,13 +12,13 @@ import * as Group from "../src/Group";
 class HostA extends Resource.Host<HostA>("multi/hostA") {}
 class HostB extends Resource.Host<HostB>("multi/hostB") {}
 
-class Alpha extends Resource.Tag<Alpha>("multi/Alpha")(
+class Alpha extends Resource.Tag<Alpha>()("multi/Alpha", 
   { where: Resource.query(Schema.String) },
-  HostA,
+  { host: HostA },
 ) {}
-class Beta extends Resource.Tag<Beta>("multi/Beta")(
+class Beta extends Resource.Tag<Beta>()("multi/Beta", 
   { where: Resource.query(Schema.String) },
-  HostB,
+  { host: HostB },
 ) {}
 
 // one group, members on different hosts (could just as easily be same host)

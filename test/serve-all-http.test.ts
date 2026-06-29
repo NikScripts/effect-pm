@@ -6,12 +6,13 @@ import * as Resource from "../src/Resource";
 
 // Many resources, one Host, ONE server/port (the ControlService.make({group,port}) replacement).
 class LeagueHost extends Resource.Host<LeagueHost>("serveAll/host") {}
-class Alpha extends Resource.Tag<Alpha>("serveAll/Alpha")(
-  { where: Resource.query(Schema.String) }, LeagueHost,
+class Alpha extends Resource.Tag<Alpha>()("serveAll/Alpha", 
+  { where: Resource.query(Schema.String) },
+  { host: LeagueHost },
 ) {}
-class Beta extends Resource.Tag<Beta>("serveAll/Beta")(
+class Beta extends Resource.Tag<Beta>()("serveAll/Beta", 
   { where: Resource.query(Schema.String), shout: Resource.mutate(Schema.String, { payload: { msg: Schema.String } }) },
-  LeagueHost,
+  { host: LeagueHost },
 ) {}
 
 const Server = Resource.serveAllHttp([

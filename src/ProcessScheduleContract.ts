@@ -161,8 +161,8 @@ export const processScheduleTag = <Self>() => {
     const host = options?.host;
     const tagOptions = { description: options?.description, kind };
     return host === undefined
-      ? Resource.Tag<Self>(key, tagOptions)(processScheduleSpec)
-      : Resource.Tag<Self>(key, tagOptions)(processScheduleSpec, host);
+      ? Resource.Tag<Self>()(key, processScheduleSpec, tagOptions)
+      : Resource.Tag<Self>()(key, processScheduleSpec, { ...tagOptions, host });
   }
   return build;
 };

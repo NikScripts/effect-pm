@@ -9,7 +9,7 @@ import { groupOf } from "../src/Resource";
 // The toolkit driven over a REAL http transport (not the in-memory RpcTest path): the same
 // `yield* Tag` code, the real `Resource.server` mounted on an http RpcServer, and the real
 // `Resource.client` forwarding over `RpcClient`'s http protocol.
-class Echo extends Resource.Tag<Echo>("http/Echo")({
+class Echo extends Resource.Tag<Echo>()("http/Echo", {
   ping: Resource.query(Schema.String),
   shout: Resource.mutate(Schema.String, { payload: { msg: Schema.String } }),
 }) {}
