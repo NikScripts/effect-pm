@@ -1288,90 +1288,139 @@ const fmtUptime = (ms: number): string => {
 
 /** One host indicator dot + tap-for-info popover (tap again, or "view host", for the full screen).
  *  @since 1.0.0 */
-const HostDot = (props: {
+// 3×3 dice-face cell sets (cells 0..8, row-major) for 1–9 hosts; 10+ keeps 3 rows + adds columns.
+const DICE: Record<number, ReadonlyArray<number>> = {
+  1: [4],
+  2: [0, 8],
+  3: [0, 4, 8],
+  4: [0, 2, 6, 8],
+  5: [0, 2, 4, 6, 8],
+  6: [0, 3, 6, 2, 5, 8],
+  7: [0, 3, 6, 2, 5, 8, 4],
+  8: [0, 1, 2, 3, 5, 6, 7, 8],
+  9: [0, 1, 2, 3, 4, 5, 6, 7, 8],
+};
+
+/** Grid placement (1-based row/col) for each host's pip: a die face for 1–9, else 3 rows × more cols. */
+const pipLayout = (
+  n: number,
+): {
+  readonly cols: number;
+  readonly cells: ReadonlyArray<{ readonly row: number; readonly col: number }>;
+} => {
+  if (n <= 9) {
+    const order = DICE[n] ?? [];
+    return {
+      cols: 3,
+      cells: order.map((c) => ({ row: Math.floor(c / 3) + 1, col: (c % 3) + 1 })),
+    };
+  }
+  const cols = Math.ceil(n / 3);
+  return {
+    cols,
+    cells: Array.from({ length: n }, (_, i) => ({ row: (i % 3) + 1, col: Math.floor(i / 3) + 1 })),
+  };
+};
+
+/** One host's pip in the die — a coloured dot placed at its cell, colour from its HostStatus. @since 1.0.0 */
+const HostPip = (props: {
   readonly host: HostRef;
-  readonly onOpen: (host: HostRef) => void;
+  readonly cell: { readonly row: number; readonly col: number };
 }): React.ReactElement => {
   const r = useAtomValue(useHostBundle(props.host).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
-  const [open, setOpen] = React.useState(false);
-  const color = hostColor(s);
   React.useEffect(() => {
-    dlog("host", props.host.id, asyncTag(r));
     if (AsyncResult.isFailure(r)) dlog("host", props.host.id, "FAILURE", Cause.pretty(r.cause));
+    else dlog("host", props.host.id, asyncTag(r));
   }, [r, props.host.id]);
   return (
-    <div className="relative">
-      <button
-        type="button"
-        aria-label={`host ${displayName(props.host.id)}`}
-        onClick={() => setOpen((o) => !o)}
-        className="block h-3 w-3 rounded-full ring-2 ring-background transition-transform active:scale-90"
-        style={{ backgroundColor: color }}
-      />
-      {open ? (
-        <div className="absolute right-0 top-5 z-50 w-60 rounded-lg border bg-card p-2 text-xs shadow-lg">
-          <div className="mb-1 flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-            <strong className="flex-1 truncate">{displayName(props.host.id)}</strong>
-            <span className="text-muted-foreground">{s !== undefined ? (s.up ? s.status : "down") : "…"}</span>
-          </div>
-          {s !== undefined ? (
-            <>
-              <div className="text-muted-foreground">
-                up {fmtUptime(s.uptimeMillis)} · {s.resourceCount} resources
-              </div>
-              <ul className="mt-1 space-y-0.5">
-                {s.resources.map((res) => (
-                  <li key={res.key} className="flex items-center gap-1">
-                    <span
-                      className="h-1.5 w-1.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: res.ready ? "#22c55e" : "#eab308" }}
-                    />
-                    <span className="flex-1 truncate">{displayName(res.key)}</span>
-                    {res.detail !== undefined ? (
-                      <span className="truncate text-muted-foreground">{res.detail}</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : (
-            <div className="text-muted-foreground">connecting…</div>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-2 w-full"
-            onClick={() => {
-              setOpen(false);
-              props.onOpen(props.host);
-            }}
-          >
-            view host →
-          </Button>
-        </div>
-      ) : null}
-    </div>
+    <span
+      className="rounded-full"
+      style={{
+        gridRow: props.cell.row,
+        gridColumn: props.cell.col,
+        backgroundColor: hostColor(s),
+      }}
+    />
   );
 };
 
-/** The row of host status dots (top-right). Renders nothing for a hostless (local) group. @since 1.0.0 */
+/** One host's row in the hosts panel — status + name + readiness; tap to open its full screen. @since 1.0.0 */
+const HostRow = (props: {
+  readonly host: HostRef;
+  readonly onOpen: () => void;
+}): React.ReactElement => {
+  const r = useAtomValue(useHostBundle(props.host).status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={props.onOpen}
+        className="flex w-full items-center gap-1.5 rounded px-1 py-1 text-left hover:bg-muted"
+      >
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: hostColor(s) }} />
+        <span className="flex-1 truncate">{displayName(props.host.id)}</span>
+        <span className="text-muted-foreground">
+          {s !== undefined ? `${s.up ? s.status : "down"} · ${s.resourceCount}` : "…"}
+        </span>
+      </button>
+    </li>
+  );
+};
+
+/** The single host-status **die** button (top-right): one pip per host, coloured by its status — a die
+ *  face for 1–9 hosts, then 3 rows + more columns. Tap to list the hosts (tap one → its full screen).
+ *  Renders nothing for a hostless (local) group. @since 1.0.0 */
 export const HostBar = (props: {
   readonly group: GroupNode;
   readonly onOpenHost: (host: HostRef) => void;
 }): React.ReactElement | null => {
   const hosts = hostsOf(props.group);
   const ids = hosts.map((h) => h.id).join(", ");
+  const [open, setOpen] = React.useState(false);
   React.useEffect(() => {
     dlog("hostBar: hosts =", hosts.length, ids === "" ? "(none)" : ids);
   }, [hosts.length, ids]);
   if (hosts.length === 0) return null;
+  const layout = pipLayout(hosts.length);
   return (
-    <div className="fixed right-2 top-2 z-40 flex items-center gap-1.5 safe-area">
-      {hosts.map((h) => (
-        <HostDot key={h.id} host={h} onOpen={props.onOpenHost} />
-      ))}
+    <div className="fixed right-2 top-2 z-40 safe-area">
+      <button
+        type="button"
+        aria-label={`${hosts.length} host${hosts.length === 1 ? "" : "s"}`}
+        onClick={() => setOpen((o) => !o)}
+        className="rounded-md border bg-card p-1.5 shadow-sm transition-transform active:scale-95"
+      >
+        <div
+          className="grid gap-1"
+          style={{
+            gridTemplateColumns: `repeat(${layout.cols}, 0.375rem)`,
+            gridTemplateRows: "repeat(3, 0.375rem)",
+          }}
+        >
+          {hosts.map((h, i) => (
+            <HostPip key={h.id} host={h} cell={layout.cells[i] ?? { row: 1, col: 1 }} />
+          ))}
+        </div>
+      </button>
+      {open ? (
+        <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-lg border bg-card p-2 text-xs shadow-lg">
+          <div className="mb-1 font-semibold">hosts · {hosts.length}</div>
+          <ul className="space-y-0.5">
+            {hosts.map((h) => (
+              <HostRow
+                key={h.id}
+                host={h}
+                onOpen={() => {
+                  setOpen(false);
+                  props.onOpenHost(h);
+                }}
+              />
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 };
