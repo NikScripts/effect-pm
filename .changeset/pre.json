@@ -68,6 +68,9 @@
     "resource-tag-key-rename",
     "web-dashboard-owns-font",
     "web-dashboard-layout-polish",
-    "api-metrics"
+    "api-metrics",
+    "resource-kind",
+    "host-status-resource",
+    "web-api-widget"
   ]
 }

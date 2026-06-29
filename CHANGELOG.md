@@ -1,5 +1,36 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.11
+
+### Minor Changes
+
+- ace74b5: **Tags now carry their contract kind.** Each contract's `.Tag` factory stamps a canonical
+  `kind` id on the tag (e.g. `@nikscripts/effect-pm/QueueResource`), read with **`Resource.kindOf(tag)`**
+  — so consumers (notably the web/TUI dashboards) classify a tag by what it *is* instead of sniffing
+  its spec members (which mis-classified `ApiMetrics` as a process and broke custom-queue /
+  process-schedule tags). Each contract exports its `kind` (`QueueResource.kind`,
+  `ScheduledProcess.kind`, `ApiMetrics.kind`, `CustomQueueResource.kind`,
+  `ProcessScheduleResource.kind`); `makeTag` / `tagFor` accept a `kind` option.
+
+- 6f7039b: **Host status — every served host auto-exposes its status + logs.** New
+  `@nikscripts/effect-pm/HostStatus`: a reserved, hostless resource (`status` stream, `statusNow`,
+  `ping`, `logs` stream, `logHistory`) that `Resource.serveAllHttp` now serves automatically
+  alongside your resources — the host author wires nothing. Query any host with
+  `HostStatus.clientHttp(url)` (or any `RpcClient.Protocol` for `Resource.client(HostStatus.Tag)`).
+  Status reports `{ up, startedAt, uptimeMillis, resourceCount }`; logs/history come from the
+  runtime-wide `HostLogs` relay when provided.
+
+- 21418f0: **`@nikscripts/effect-pm/web` — API-resource dashboard widget** for `ApiMetrics` taps.
+  A read-only per-type widget: `ApiCard` (a reusable iOS-style **`PagedCard`** — throughput
+  sparkline + error-rate health badge, and a busiest-endpoints face), `ApiStats`, `ApiMetricChart`
+  (throughput / errors / in-flight with the shared time-window toggle), and `ApiEndpointTable`
+  (group / endpoint / requests / errors / avg in a sortable **TanStack** table). The dashboard
+  classifies `ApiMetrics` leaves via the stamped kind and renders an `ApiDetail`; exposes
+  `apiBundle` / `useApiBundle`. Also this cycle: a fullscreen **weekly schedule** editor for
+  scheduled processes, chart **time-window** control, group-view names from member keys, and the
+  shipped `theme.css` now carries `.safe-area` + view-transition CSS. Uses the optional peer
+  `@tanstack/react-table` (alongside the existing `recharts`).
+
 ## 0.8.0-beta.10
 
 ### Minor Changes
