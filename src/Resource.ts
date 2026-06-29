@@ -778,11 +778,19 @@ export interface Readiness {
 
 /**
  * Derive {@link Readiness} from a resource's materialized service — read its status, don't store new
- * state. Attach one with {@link withReadiness}; read the result with {@link readinessCheck}.
+ * state. The second argument, `base`, is the readiness **already** on the tag (e.g. a contract
+ * factory's own check) — `yield* base` to extend it (a queue's `phase === "running"` **and** your
+ * dependency checks), or ignore it to replace it. Stacks: each {@link withReadiness} wraps the prior.
+ * Attach one with {@link withReadiness}; read the result with {@link readinessCheck}.
  *
  * @public
  */
-export type ReadinessOf<Service> = (service: Service) => Effect.Effect<Readiness>;
+export type ReadinessOf<Service> = (
+  service: Service,
+  base: Effect.Effect<Readiness, never, any>,
+  // The derivation may depend on services (e.g. `Resource.readinessOf(Database)`); that requirement
+  // is satisfied by the serve context the host runs readiness in, and erased at this storage seam.
+) => Effect.Effect<Readiness, never, any>;
 
 // ── host: the transport for a resource, carried in the Tag ──
 
@@ -911,8 +919,15 @@ export const withReadiness: {
   ): T;
 } = Fn.dual(
   2,
-  <T extends ResourceTag<any, any>>(tag: T, readiness: ReadinessOf<unknown>): T =>
-    Object.assign(tag, { [readinessSym]: readiness }),
+  <T extends ResourceTag<any, any>>(tag: T, readiness: ReadinessOf<unknown>): T => {
+    // Stack onto any readiness already on the tag (e.g. a contract factory's own check): the new
+    // derivation receives the prior one (applied to the same service) as `base`, so it can extend
+    // it (`yield* base`) or replace it (ignore `base`). `base` flows down the chain from the root.
+    const prior = tag[readinessSym];
+    const composed: ReadinessOf<ServiceOf<any, any>> = (service, base) =>
+      readiness(service, prior === undefined ? base : prior(service, base));
+    return Object.assign(tag, { [readinessSym]: composed });
+  },
 );
 
 /**
@@ -928,13 +943,44 @@ export const readinessCheck = (
     const derive = tag[readinessSym];
     if (typeof derive === "function") {
       // Symbol-stored metadata is type-erased (as with specSym/groupSym); recover the derivation
-      // `withReadiness` stored. The only place this shape is asserted.
-      const fn = derive as ReadinessOf<unknown>;
-      return fn(service);
+      // `withReadiness` stored. This single assertion also erases the derivation's requirement (its
+      // dependency services are ambient in the serve context the host runs readiness within).
+      const fn = derive as (
+        service: unknown,
+        base: Effect.Effect<Readiness>,
+      ) => Effect.Effect<Readiness>;
+      // root of the chain: the innermost derivation sees `{ ready: true }` if it reads `base`.
+      return fn(service, Effect.succeed({ ready: true }));
     }
   }
   return Effect.succeed({ ready: true });
 };
+
+/**
+ * Pull a resource's readiness **by tag** — yields its service and runs its derivation. Use it inside
+ * another resource's {@link withReadiness} to make readiness *depend on* a resource it depends on:
+ * `yield* Resource.readinessOf(Database)`. The dependency lands in the readiness Effect's
+ * requirements, so it's **compile-time checked**, and it works local *or* remote (it re-derives from
+ * the dependency's served status). @since 1.0.0
+ */
+export const readinessOf = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+): Effect.Effect<Readiness, never, Self> =>
+  Effect.flatMap(tag, (service) => readinessCheck(tag, service));
+
+/**
+ * Combine readiness checks with **AND**: ready iff all are ready, else the first not-ready one (with
+ * its detail). Sugar for extending a base with dependency checks:
+ * `withReadiness((svc, base) => Resource.allReady([base, Resource.readinessOf(Database)]))`.
+ * @since 1.0.0
+ */
+export const allReady = <R>(
+  checks: ReadonlyArray<Effect.Effect<Readiness, never, R>>,
+): Effect.Effect<Readiness, never, R> =>
+  Effect.map(Effect.all(checks), (results) => {
+    const notReady = results.find((r) => !r.ready);
+    return notReady ?? { ready: true };
+  });
 
 /** Claimed instance keys — duplicate declarations fail fast (Effect won't catch same-key Tags). */
 const claimedKeys = new Set<string>();

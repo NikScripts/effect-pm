@@ -22,6 +22,23 @@ model, multiple faces — no parallel `HostHealth` / `Resource.health`:**
     `{ key, kind, ready, detail? }`), and **`HostStatus`** gains `status` + `resources[]` from the
     same aggregate (no parallel `HostHealth`). Tests: `test/resource-readiness.test.ts`.
   - Resolved decisions held: `/health` always-on; not-ready ⇒ 503 with per-resource detail.
+- **Phase 2.5 — DONE.** **Dependency-aware readiness.** A resource's readiness can compose other
+  resources' readiness:
+  - `withReadiness` derivations take the prior readiness as `base` (2nd arg) and **stack** — extend
+    the factory's check (`yield* base` then AND deps) rather than replace it.
+  - `Resource.readinessOf(tag)` pulls a resource's readiness by tag (yields its service + runs its
+    derivation); used inside another resource's `withReadiness` to depend on it. Compile-time checked
+    (the dep is in the readiness Effect's `R`) and works local *or* remote (re-derives from served
+    status). `Resource.allReady([...])` ANDs checks (first not-ready wins).
+  - **No `dependsOn` field, no graph extraction, no service/spec member** — readiness stays the SSOT
+    derivation on the tag; the dependency is named once (in the readiness Effect, type-checked). We
+    deliberately did **not** add runtime dependency validation (the type system + `Layer` already do
+    it) — that would fight Effect.
+  - **Acquisition (companion guidance, not API):** get hard dependencies ready by acquiring them
+    eagerly with `Layer.scoped` (failures surface at boot; warm by first use; lean on the driver's
+    lazy physical connections so no idle sockets). Go lazy only for conditional deps, single-flighting
+    init with `Effect.cached` into the service's own scope. **`Layer` = "starts first"; readiness =
+    "stays ready".** Tests: `test/resource-readiness.ts`.
 - **Phase 3 — TODO (UI):** a dashboard **health board** reading the `HostStatus.resources[]` stream
   (the data is now there). Lowest priority per the original roadmap.
 

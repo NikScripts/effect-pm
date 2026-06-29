@@ -58,3 +58,51 @@ it("HostStatus reports the same per-resource readiness (degraded board)", () =>
       ),
     ).pipe(Effect.provide(Server), Effect.scoped),
   ));
+
+// ── readiness composition: a resource whose readiness depends on another resource ───────────────
+// The DB is a proper resource with its own readiness; a worker extends its base "running" check to
+// also require the DB (via `readinessOf` + `allReady`), reusing — not redefining — both checks.
+class Database extends Resource.Tag<Database>()("dep/Database", {
+  ping: Resource.query(Schema.Boolean),
+}).pipe(
+  Resource.withReadiness((svc) =>
+    Effect.map(svc.ping, (ok) => (ok ? { ready: true } : { ready: false, detail: "disconnected" })),
+  ),
+) {}
+
+class Worker extends Resource.Tag<Worker>()("dep/Worker", {
+  running: Resource.query(Schema.Boolean),
+}).pipe(
+  // a "factory" base check: ready iff running
+  Resource.withReadiness((svc) =>
+    Effect.map(svc.running, (r) => (r ? { ready: true } : { ready: false, detail: "stopped" })),
+  ),
+  // a consumer extends it: still running AND the Database dependency is ready
+  Resource.withReadiness((_svc, base) =>
+    Resource.allReady([base, Resource.readinessOf(Database)]),
+  ),
+) {}
+
+const checkWorker = (dbOk: boolean, running: boolean) =>
+  Effect.gen(function* () {
+    const worker = yield* Worker;
+    return yield* Resource.readinessCheck(Worker, worker);
+  }).pipe(
+    Effect.provide(
+      Layer.mergeAll(
+        Resource.layer(Database, { ping: Effect.succeed(dbOk) }),
+        Resource.layer(Worker, { running: Effect.succeed(running) }),
+      ),
+    ),
+  );
+
+it("ready when the worker's own check and its DB dependency are both ready", () =>
+  Effect.runPromise(checkWorker(true, true)).then((r) => expect(r).toEqual({ ready: true })));
+
+it("not ready (with the dependency's detail) when the DB is down", () =>
+  Effect.runPromise(checkWorker(false, true)).then((r) =>
+    expect(r).toEqual({ ready: false, detail: "disconnected" })));
+
+it("the factory/base check still applies — a stopped worker is not ready even if the DB is up", () =>
+  Effect.runPromise(checkWorker(true, false)).then((r) =>
+    expect(r).toEqual({ ready: false, detail: "stopped" })));
