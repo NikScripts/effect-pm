@@ -33,14 +33,32 @@ const HOST_STATUS_KEY = "@pm/host-status";
 const STATUS_INTERVAL = Duration.seconds(2);
 
 /**
- * A host's live status — whether it's up, when it started, how long it's been up, and how many
- * resources it serves. @since 1.0.0
+ * One served resource's readiness, as the host reports it — its wire key, {@link Resource.kindOf}
+ * kind, whether it's ready, and (when not) why. The element of {@link hostStatus}'s `resources`.
+ * @since 1.0.0
+ */
+export const hostResourceReadiness = Schema.Struct({
+  key: Schema.String,
+  kind: Schema.String,
+  ready: Schema.Boolean,
+  detail: Schema.optionalKey(Schema.String),
+});
+
+/** A served resource's readiness as reported by its host. @since 1.0.0 */
+export type HostResourceReadiness = typeof hostResourceReadiness.Type;
+
+/**
+ * A host's live status — whether it's up, its overall readiness rollup, when it started, how long
+ * it's been up, how many resources it serves, and each resource's readiness. `status` is `degraded`
+ * (and `/health` returns 503) when any served resource is not ready. @since 1.0.0
  */
 export const hostStatus = Schema.Struct({
   up: Schema.Boolean,
+  status: Schema.Literals(["ok", "degraded"]),
   startedAt: Schema.DateTimeUtc,
   uptimeMillis: Schema.Number,
   resourceCount: Schema.Number,
+  resources: Schema.Array(hostResourceReadiness),
 });
 
 /** Live host status. @since 1.0.0 */
@@ -78,16 +96,24 @@ export class HostStatusResource extends Resource.Tag<HostStatusResource>()(
 export const buildHostStatusImpl = (options: {
   readonly startedAt: number;
   readonly resourceCount: number;
+  /** Per-resource readiness aggregate (same one `/health` reads); absent ⇒ no resources, `ok`. */
+  readonly readiness?: Effect.Effect<ReadonlyArray<HostResourceReadiness>>;
 }) => {
-  const statusNow = Effect.map(
-    Clock.currentTimeMillis,
-    (now): HostStatus => ({
+  const readiness = options.readiness ?? Effect.succeed([]);
+  const statusNow: Effect.Effect<HostStatus> = Effect.gen(function* () {
+    const now = yield* Clock.currentTimeMillis;
+    const resources = yield* readiness;
+    const ok = resources.every((r) => r.ready);
+    const status: "ok" | "degraded" = ok ? "ok" : "degraded";
+    return {
       up: true,
+      status,
       startedAt: DateTime.makeUnsafe(options.startedAt),
       uptimeMillis: now - options.startedAt,
       resourceCount: options.resourceCount,
-    }),
-  );
+      resources,
+    };
+  });
   return {
     statusNow,
     status: Stream.tick(STATUS_INTERVAL).pipe(Stream.mapEffect(() => statusNow)),
@@ -112,6 +138,7 @@ export const buildHostStatusImpl = (options: {
 export const hostStatusServeEntry = (options: {
   readonly startedAt: number;
   readonly resourceCount: number;
+  readonly readiness?: Effect.Effect<ReadonlyArray<HostResourceReadiness>>;
 }): ServeEntry => ({
   tag: HostStatusResource,
   impl: buildHostStatusImpl(options),

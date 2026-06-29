@@ -386,9 +386,17 @@ export const customQueueTag = <Self>() => {
     const { description, host, ...rest } = tagOptions;
     const spec = customQueueSpec(itemSchema, levelConfig) as CustomQueueInstanceSpec<F>;
     void rest;
-    return host === undefined
-      ? Resource.Tag<Self>()(key, spec, { description, kind })
-      : Resource.Tag<Self>()(key, spec, { description, kind, host });
+    const tag =
+      host === undefined
+        ? Resource.Tag<Self>()(key, spec, { description, kind })
+        : Resource.Tag<Self>()(key, spec, { description, kind, host });
+    // Readiness from the queue's own status (SSOT): ready iff the worker pool is running.
+    return Resource.withReadiness(tag, (svc) =>
+      Effect.map(svc.statusNow, (s) => ({
+        ready: s.phase === "running",
+        ...(s.phase === "running" ? {} : { detail: `phase: ${s.phase}` }),
+      })),
+    );
   }
   return build;
 };

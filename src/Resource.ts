@@ -751,10 +751,38 @@ export const localCapSym: unique symbol = Symbol.for(
 export const kindSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Resource/kind",
 );
+/** Where a resource's **readiness derivation** (status → ready) is stowed on a Tag — a sibling of
+ *  {@link kindSym}, applied by {@link withReadiness}. Absent ⇒ the resource is ready by default.
+ *  @internal */
+export const readinessSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/readiness",
+);
 /** Where the resource's {@link Host} (if any) is stowed on a Tag. @internal */
 export const hostSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Resource/host",
 );
+
+// ── readiness: a derived view of a resource's status, aggregated into host /health + HostStatus ──
+
+/**
+ * A resource's readiness — derived from its own status (its single source of truth), aggregated
+ * into a host's `/health` and `HostStatus`. `ready: false` with a `detail` says *why* (surfaced in
+ * the `/health` body and the dashboard health board).
+ *
+ * @public
+ */
+export interface Readiness {
+  readonly ready: boolean;
+  readonly detail?: string;
+}
+
+/**
+ * Derive {@link Readiness} from a resource's materialized service — read its status, don't store new
+ * state. Attach one with {@link withReadiness}; read the result with {@link readinessCheck}.
+ *
+ * @public
+ */
+export type ReadinessOf<Service> = (service: Service) => Effect.Effect<Readiness>;
 
 // ── host: the transport for a resource, carried in the Tag ──
 
@@ -807,6 +835,9 @@ export interface ResourceTag<Self, S extends Spec>
   /** The contract's kind (canonical id) — set by a contract `.Tag` factory, `undefined` for a bare
    *  {@link Resource.Tag}. Read it with {@link kindOf}. */
   readonly [kindSym]: string | undefined;
+  /** The resource's readiness derivation, if any (applied by {@link withReadiness}); `undefined`
+   *  ⇒ ready by default. Read it via {@link readinessCheck}. */
+  readonly [readinessSym]: ReadinessOf<ServiceOf<S, Self>> | undefined;
 }
 
 /** The contract kind a tag was built for (e.g. `@nikscripts/effect-pm/QueueResource`), or
@@ -819,6 +850,48 @@ export const kindOf = (tag: unknown): string | undefined => {
     return typeof value === "string" ? value : undefined;
   }
   return undefined;
+};
+
+/**
+ * Attach a {@link Readiness} derivation to a tag — the seam the host's `/health` and `HostStatus`
+ * aggregate over. Each contract applies it from its own status (so readiness can't drift from
+ * status); a bare {@link Resource.Tag} can opt in the same way:
+ *
+ * ```ts
+ * class EdgeCache extends Resource.withReadiness(
+ *   Resource.Tag<EdgeCache>()("edge/Cache", { warm: Resource.query(Schema.Boolean) }),
+ *   (svc) => Effect.map(svc.warm, (warm) => ({ ready: warm, ...(warm ? {} : { detail: "cold" }) })),
+ * ) {}
+ * ```
+ *
+ * @public
+ */
+export const withReadiness = <T extends ResourceTag<any, any>>(
+  tag: T,
+  readiness: ReadinessOf<
+    T extends ResourceTag<infer Self, infer S> ? ServiceOf<S, Self> : never
+  >,
+): T => Object.assign(tag, { [readinessSym]: readiness });
+
+/**
+ * Run a tag's readiness derivation against its built service. A tag that declares none is **ready by
+ * default**, so an unaware or bare resource never falsely fails a host's readiness gate. Accepts
+ * `unknown` so a served entry's tag + impl pass straight in. @since 1.0.0
+ */
+export const readinessCheck = (
+  tag: unknown,
+  service: unknown,
+): Effect.Effect<Readiness> => {
+  if ((typeof tag === "object" || typeof tag === "function") && tag !== null && readinessSym in tag) {
+    const derive = tag[readinessSym];
+    if (typeof derive === "function") {
+      // Symbol-stored metadata is type-erased (as with specSym/groupSym); recover the derivation
+      // `withReadiness` stored. The only place this shape is asserted.
+      const fn = derive as ReadinessOf<unknown>;
+      return fn(service);
+    }
+  }
+  return Effect.succeed({ ready: true });
 };
 
 /** Claimed instance keys — duplicate declarations fail fast (Effect won't catch same-key Tags). */
@@ -866,6 +939,7 @@ const buildInstanceTag = <Self, S extends Spec>(
     [localCapSym]: localCap,
     [hostSym]: host,
     [kindSym]: kind,
+    [readinessSym]: undefined,
   });
 };
 
@@ -1204,16 +1278,27 @@ const serveAllHttp = <R = never>(
         () => import("./internal/hostStatusResource"),
       );
       const startedAt = yield* Clock.currentTimeMillis;
-      const allEntries = [
-        ...entries,
-        hostStatusServeEntry({ startedAt, resourceCount: entries.length }),
-      ];
-      const built = yield* Effect.forEach(allEntries, (entry) =>
+      const buildImpl = (entry: ServeEntry<R>) =>
         (Effect.isEffect(entry.impl)
           ? entry.impl
           : Effect.succeed(entry.impl)
-        ).pipe(Effect.map((impl) => ({ tag: entry.tag, impl }))),
+        ).pipe(Effect.map((impl) => ({ tag: entry.tag, impl })));
+      // Build the user's resources first so the readiness aggregate can close over their impls —
+      // both the `/health` route and the host-status resource read this ONE aggregate (SSOT): each
+      // resource's own `readiness` derivation (default: ready), keyed by tag + kind.
+      const userBuilt = yield* Effect.forEach(entries, buildImpl);
+      const readiness = Effect.forEach(userBuilt, ({ tag, impl }) =>
+        Effect.map(readinessCheck(tag, impl), (r) => ({
+          key: tag.groupId,
+          kind: kindOf(tag) ?? "resource",
+          ready: r.ready,
+          ...(r.detail !== undefined ? { detail: r.detail } : {}),
+        })),
       );
+      const hostBuilt = yield* buildImpl(
+        hostStatusServeEntry({ startedAt, resourceCount: entries.length, readiness }),
+      );
+      const built = [...userBuilt, hostBuilt];
       const merged = built
         .map((b) => b.tag[groupSym])
         .reduce((acc, group) => acc.merge(group));
@@ -1236,25 +1321,26 @@ const serveAllHttp = <R = never>(
         ),
       );
       // A plain HTTP readiness route alongside `/rpc` — a dumb probe (deploy gate, load balancer)
-      // gets a status code; the JSON body lists what this host serves for a dashboard health board.
-      // Phase 1: the server answering proves it's listening, so report `ok` + the resource roster;
-      // per-resource readiness (→ `503` when a resource is down) folds in once the `ready` seam lands.
-      const resources = entries.map((entry) => ({
-        key: entry.tag.groupId,
-        kind: kindOf(entry.tag) ?? "resource",
-      }));
+      // gets a status code; the JSON body lists the host's resources for a dashboard health board.
+      // Readiness aggregates each resource's own derivation; if any is down the host is `degraded`
+      // → 503 (so a deploy gate won't promote a half-booted host).
       const healthRoute = HttpRouter.add(
         "GET",
         options?.health?.path ?? "/health",
         Effect.gen(function* () {
           const ts = yield* Clock.currentTimeMillis;
+          const resources = yield* readiness;
+          const ok = resources.every((r) => r.ready);
           return yield* HttpServerResponse.json({
-            status: "ok",
+            status: ok ? "ok" : "degraded",
             listening: true,
             resources,
             uptimeMillis: ts - startedAt,
             ts,
-          }).pipe(Effect.orDie);
+          }).pipe(
+            Effect.map((res) => HttpServerResponse.setStatus(res, ok ? 200 : 503)),
+            Effect.orDie,
+          );
         }),
       );
       return HttpRouter.serve(Layer.merge(rpcAppLayer, healthRoute)).pipe(

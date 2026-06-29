@@ -26,14 +26,25 @@ import * as Resource from "./Resource";
 import {
   HostStatusResource,
   hostStatus,
+  hostResourceReadiness,
   type HostStatus as HostStatusType,
+  type HostResourceReadiness as HostResourceReadinessType,
 } from "./internal/hostStatusResource";
 
-/** Live host status: `{ up, startedAt, uptimeMillis, resourceCount }`. @since 1.0.0 */
+/** Live host status: `{ up, status, startedAt, uptimeMillis, resourceCount, resources }`. The
+ *  `status` rollup is `degraded` (and `/health` returns 503) when any resource is not ready.
+ *  @since 1.0.0 */
 export const status = hostStatus;
 
 /** Live host status. @since 1.0.0 */
 export type Status = HostStatusType;
+
+/** One served resource's readiness as reported by its host — the element of `status.resources`.
+ *  @since 1.0.0 */
+export const resourceReadiness = hostResourceReadiness;
+
+/** A served resource's readiness as reported by its host. @since 1.0.0 */
+export type ResourceReadiness = HostResourceReadinessType;
 
 /**
  * The reserved host status resource tag — hostless. Drive it with {@link HostStatus.clientHttp}

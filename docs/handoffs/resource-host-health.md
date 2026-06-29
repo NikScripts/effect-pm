@@ -10,15 +10,20 @@ model, multiple faces — no parallel `HostHealth` / `Resource.health`:**
   so it returns `200 { status:"ok", listening, resources:[{key,kind}], uptimeMillis, ts }` — the
   resource roster comes from the served entries (`Resource.kindOf` per tag). This unblocks the
   wow-sports deploy gate (`curl -sf /health`). Test: `test/host-health.test.ts`.
-- **Phase 2 — TODO (decided design):**
-  - **Per-resource readiness via a uniform `ready` seam on the contract** (chosen over deriving from
-    each kind's status): every resource reports its own readiness; the host aggregates into
-    `/health`'s `resources[]` and flips overall `status` → `503` when a resource is down.
-  - **Fold readiness into `HostStatus`** (extend its schema with overall `status` + `resources[]`)
-    rather than a new `HostHealth` schema / `Resource.health` / `healthStream` — the dashboard board
-    reads the `HostStatus` stream it already consumes. SSOT: one host ops surface.
-  - Resolved open decisions: `/health` **always-on**; `starting` and `degraded` both **`503`** (don't
-    promote a degraded host; the body says which resource); consumer `checks` hook still planned.
+- **Phase 2 — DONE.** Per-resource readiness, derived from each resource's own status (SSOT), not a
+  separate stored field:
+  - **`Resource.withReadiness(tag, (svc) => Effect<{ ready, detail? }>)`** combinator (Effect-style,
+    composed after construction — *not* a baked option, *not* a plugin array; the plugin idea was
+    rejected as un-Effect-y, see the construction-shape decision). Contracts apply it from status:
+    queue/custom-queue ready iff `phase === "running"`, scheduled-process iff `supervising`. Bare
+    tags opt in the same way; absent ⇒ **ready by default**. Read via `Resource.readinessCheck`.
+  - `serveAllHttp` runs ONE readiness pass over the served entries; both faces consume it:
+    **`/health` → 503 / `status: "degraded"`** when any resource is down (body lists
+    `{ key, kind, ready, detail? }`), and **`HostStatus`** gains `status` + `resources[]` from the
+    same aggregate (no parallel `HostHealth`). Tests: `test/resource-readiness.test.ts`.
+  - Resolved decisions held: `/health` always-on; not-ready ⇒ 503 with per-resource detail.
+- **Phase 3 — TODO (UI):** a dashboard **health board** reading the `HostStatus.resources[]` stream
+  (the data is now there). Lowest priority per the original roadmap.
 
 The original spec below is kept for context; where it says `Resource.health` / `HostHealth` /
 "new schema", prefer folding into `HostStatus` per the above.

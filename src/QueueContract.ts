@@ -565,9 +565,17 @@ const queueTag = <Self>() => {
     const host = options?.host;
     const tagOptions = { description: options?.description, kind };
     // host rides the inferring call; `makeTag`'s inner overload narrows the tag's host.
-    return host === undefined
-      ? Resource.Tag<Self>()(key, spec, tagOptions)
-      : Resource.Tag<Self>()(key, spec, { ...tagOptions, host });
+    const tag =
+      host === undefined
+        ? Resource.Tag<Self>()(key, spec, tagOptions)
+        : Resource.Tag<Self>()(key, spec, { ...tagOptions, host });
+    // Readiness derived from the queue's own status (SSOT): ready iff the worker pool is running.
+    return Resource.withReadiness(tag, (svc) =>
+      Effect.map(svc.statusNow, (s) => ({
+        ready: s.phase === "running",
+        ...(s.phase === "running" ? {} : { detail: `phase: ${s.phase}` }),
+      })),
+    );
   }
   return build;
 };

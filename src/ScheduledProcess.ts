@@ -278,9 +278,17 @@ const processTag = <Self>() => {
   ): ResourceTag<Self, ProcessSpec> {
     const host = options?.host;
     const tagOptions = { description: options?.description, kind };
-    return host === undefined
-      ? Resource.Tag<Self>()(key, processControlSpec, tagOptions)
-      : Resource.Tag<Self>()(key, processControlSpec, { ...tagOptions, host });
+    const tag =
+      host === undefined
+        ? Resource.Tag<Self>()(key, processControlSpec, tagOptions)
+        : Resource.Tag<Self>()(key, processControlSpec, { ...tagOptions, host });
+    // Readiness from the process's own status (SSOT): ready iff its trigger driver is supervising.
+    return Resource.withReadiness(tag, (svc) =>
+      Effect.map(svc.statusNow, (s) => ({
+        ready: s.supervising,
+        ...(s.supervising ? {} : { detail: "not supervising" }),
+      })),
+    );
   }
   return build;
 };
