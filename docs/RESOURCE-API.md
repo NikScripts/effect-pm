@@ -4,6 +4,33 @@ Complete guide to `QueueResource`, `CustomQueueResource`, `RunResource`, and `Ht
 
 ---
 
+## Resource kinds
+
+Every contract's `.Tag` factory stamps a canonical **kind** id on the tag it builds, so consumers can classify a tag by *what it is* rather than sniffing its spec members (which is fragile — e.g. a queue and an `ApiMetrics` tap both expose a `metrics` stream).
+
+```ts
+import * as Resource from "@nikscripts/effect-pm/Resource";
+import * as QueueResource from "@nikscripts/effect-pm/QueueContract";
+
+Resource.kindOf(MyQueue);        // "@nikscripts/effect-pm/QueueResource"
+Resource.kindOf(MyQueue) === QueueResource.kind; // true
+Resource.kindOf(SomePlainTag);   // undefined  (a bare Resource.Tag carries no kind)
+```
+
+`Resource.kindOf(tag)` accepts `unknown` (so a `Group` member passes straight in) and returns the kind id or `undefined`. Each contract exports its id as `kind`:
+
+| Contract | `kind` |
+| --- | --- |
+| `QueueResource` (`…/QueueContract`) | `@nikscripts/effect-pm/QueueResource` |
+| `ScheduledProcess` | `@nikscripts/effect-pm/ScheduledProcess` |
+| `CustomQueueResource` (`…/CustomQueueContract`) | `@nikscripts/effect-pm/CustomQueueResource` |
+| `ProcessScheduleResource` (`…/ProcessScheduleContract`) | `@nikscripts/effect-pm/ProcessScheduleResource` |
+| `ApiMetrics` | `@nikscripts/effect-pm/ApiMetrics` |
+
+This is how the web/TUI dashboards pick the right widget for each `Group` leaf. A bare `Resource.Tag` has no stamped kind; pass `{ kind }` to `Resource.Tag(key, { kind })` / `Resource.tagFor(groupId, spec, { kind })` to give a custom contract its own.
+
+---
+
 ## QueueResource
 
 Priority queue with managed workers, deduplication, retry, and lifecycle hooks.

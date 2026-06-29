@@ -524,7 +524,7 @@ Provide a custom service whose shape matches **`ProcessStoreRunResource.Type`** 
 ## Package import surfaces (for doc “where do I import X”)
 
 - **Root** `@nikscripts/effect-pm` — barrel in §index exports (Process, Polling, Schedule, Group, Queue, Run, Http*, Store, Manager, Control, CLI, disarmed helpers, types).
-- **Subpaths** — `/Process`, `/QueueResource`, `/QueueContract`, `/ScheduledProcess`, `/ProcessScheduleContract`, `/Resource`, `/Group`, `/HostLogs`, `/HistoryStore`, `/DurableQueueStore`, `/ProcessStore`, `/ProcessStorage`, `/storage/sqlite`, `/storage/prisma`, `/prisma`.
+- **Subpaths** — `/Process`, `/QueueResource`, `/QueueContract`, `/CustomQueueResource`, `/CustomQueueContract`, `/ScheduledProcess`, `/ProcessScheduleContract`, `/Resource`, `/Group`, `/HostLogs`, `/HostStatus`, `/ApiMetrics`, `/ApiUsageSchema`, `/HttpApiResource`, `/HistoryStore`, `/DurableQueueStore`, `/ProcessStore`, `/ProcessStorage`, `/storage/sqlite`, `/storage/redis`, `/storage/prisma`, `/prisma`, `/web`, `/cli`, `/tui`.
 
 ---
 

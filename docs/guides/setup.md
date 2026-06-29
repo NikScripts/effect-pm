@@ -32,6 +32,8 @@ of React/Ink/recharts.
 | `…/QueueContract` | `queueTag` (light tag), `serverEntry`, `serveHttp`, `layer` for a managed queue |
 | `…/ScheduledProcess` | `processTag` (light tag), `serverEntry`, `serveHttp`, `layer` for a scheduled/polling process |
 | `…/ProcessScheduleContract` | `processScheduleTag` — a schedule (run-windows) as its own resource |
+| `…/ApiMetrics`, `…/ApiUsageSchema`, `…/HttpApiResource` | outbound-API usage observability — an `ApiMetrics.Tag` tap over an `HttpApiResource.Service` client |
+| `…/HostStatus` | the reserved host status resource (auto-served by `serveAllHttp`): `status` / `ping` / `logs` |
 | `…/Group` | `Group.Tag` — the nestable navigation tree |
 | `…/HistoryStore`, `…/DurableQueueStore` | history backfill + durable queue |
 | `…/ProcessStore`, `…/ProcessStorage`, `…/RuntimeStorage`, `…/Logs` | storage facets + structured logs |
@@ -105,12 +107,19 @@ consumer or the widgets render unstyled:
    ```
 
 2. **Define the theme tokens** the widgets reference (`--card`, `--muted-foreground`, `--border`,
-   `--primary`, `--accent`, `--destructive`, `--ring`, `--radius`, …). A standard shadcn theme
-   already has these; otherwise copy the `@theme inline` + `:root` block from
-   `examples/web-dashboard/styles.css` (a dark ops theme).
+   `--primary`, `--accent`, `--destructive`, `--ring`, `--radius`, …) plus the `.safe-area` class
+   (device-inset padding) and the view-transition keyframes the drill-down uses. The shipped
+   `src/web/theme.css` carries all of these (a dark ops theme) — import it, or copy its `@theme
+   inline` + `:root` + `.safe-area` + `::view-transition-*` blocks. Without `.safe-area` the
+   dashboard renders edge-to-edge with no margins.
+
+3. **Install the optional peer deps the widgets use:** `react` / `react-dom`, `recharts` (the
+   metric charts), and — for the API resource's endpoint table — `@tanstack/react-table`. They're
+   declared as optional peers; `/web` imports them, so install the ones for the widgets you render.
 
 Symptom map: widgets render **unstyled** → #1 (Tailwind didn't see the classes in `node_modules`);
-render but **wrong / missing colours** → #2 (theme tokens not defined).
+render but **wrong / missing colours / no margins** → #2 (theme tokens / `.safe-area` not defined);
+**module-not-found** at runtime → #3 (a peer dep isn't installed).
 
 ## 3. Define resources, bound to a host
 
@@ -216,6 +225,15 @@ widgets from `@nikscripts/effect-pm/web`, or terminal widgets from `@nikscripts/
 (`bar`, `spark`, `compact`, `statusColor`, …). The `examples/web-dashboard` and
 `examples/resource-tui` trees (shipped in the package) are the working reference — copy their
 `queue-data` data layer and widgets as a starting point.
+
+The batteries-included `<Dashboard runtime={Atom.runtime(layer)} group={Root} />` renders the
+responsive drill-down directly from a `Group.Tag` tree: a **hand-crafted widget per resource
+type** — queue (cards + chart + controls + logs), scheduled process (controls + a schedule editor
+with a fullscreen weekly view), and API-metrics (a paged card + usage chart + sortable endpoint
+table). It classifies each leaf by the contract's **stamped kind** (`Resource.kindOf` — see the
+[Resource API](../RESOURCE-API.md#resource-kinds)), not by sniffing the spec, so a new contract in
+the tree renders as itself rather than a mis-typed cell. The `examples/resource-web` tree (one of
+each unique thing) is the working reference.
 
 > Keep concurrent live streams per view ≤ ~5: a browser caps an origin at ~6 HTTP/1.1
 > connections, so derive related views from one stream (see the example data layer) rather
