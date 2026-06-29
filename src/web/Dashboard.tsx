@@ -119,6 +119,8 @@ const ProcessDetail = (props: {
 }): React.ReactElement => {
   const bundle = useProcessBundle(props.tag);
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
+  // One lock for the whole process detail — guards both the controls and the schedule editor.
+  const [locked, setLocked] = React.useState(true);
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
       <div className="flex items-center gap-2">
@@ -126,8 +128,8 @@ const ProcessDetail = (props: {
         <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.key)}</strong>
       </div>
       <ProcessStats bundle={bundle} />
-      <ProcessControls bundle={bundle} />
-      <ScheduleEditor bundle={bundle} />
+      <ProcessControls bundle={bundle} locked={locked} onToggleLock={() => setLocked((l) => !l)} />
+      <ScheduleEditor bundle={bundle} locked={locked} />
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} />
     </div>
   );

@@ -622,12 +622,17 @@ export const ProcessStats = (props: { readonly bundle: ProcessBundle }): React.R
 };
 
 /** Process controls: icon buttons, start/stop folded into one toggle on the live `supervising`
- *  state, a lock, and confirm on stop. @since 1.0.0 */
-export const ProcessControls = (props: { readonly bundle: ProcessBundle }): React.ReactElement => {
+ *  state, a lock, and confirm on stop. The lock is hoisted (one lock guards both these controls
+ *  and the {@link ScheduleEditor}), so the caller owns `locked` / `onToggleLock`. @since 1.0.0 */
+export const ProcessControls = (props: {
+  readonly bundle: ProcessBundle;
+  readonly locked: boolean;
+  readonly onToggleLock: () => void;
+}): React.ReactElement => {
   const statusR = useAtomValue(props.bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const up = s?.supervising === true;
-  const [locked, setLocked] = React.useState(true);
+  const locked = props.locked;
   // A process has no chart to sit beside, so its controls stay a horizontal row at every width
   // (only the queue controls go vertical, to flank the graph).
   return (
@@ -638,7 +643,7 @@ export const ProcessControls = (props: { readonly bundle: ProcessBundle }): Reac
         <ActionButton atom={props.bundle.start} label="start" icon={<Play className="size-4" />} disabled={locked} />
       )}
       <ActionButton atom={props.bundle.runImmediately} label="run now" icon={<RotateCw className="size-4" />} disabled={locked} />
-      <LockToggle locked={locked} onToggle={() => setLocked((l) => !l)} />
+      <LockToggle locked={locked} onToggle={props.onToggleLock} />
     </div>
   );
 };
@@ -655,19 +660,104 @@ const fmtWhen = (e: DateTime.Utc): string =>
     hour12: false,
   });
 
-/** View + edit a process's schedule (the run windows that arm it). Reads the current entries,
- *  then `setSchedule`/`clearSchedule` to mutate — locked by default; unlock to edit. Edits apply
- *  optimistically (the schedule is read once on open). @since 1.0.0 */
-export const ScheduleEditor = (props: { readonly bundle: ProcessBundle }): React.ReactElement => {
+/** A row in the schedule list — one run window. */
+const ScheduleRow = (props: {
+  readonly entry: ScheduleEntry;
+  readonly locked: boolean;
+  readonly onRemove: () => void;
+}): React.ReactElement => (
+  <li className="flex items-center gap-2 text-sm">
+    <span className="tabular-nums">{fmtWhen(props.entry.startAt)}</span>
+    <span className="text-muted-foreground">
+      → {props.entry.stopAt === undefined ? "open-ended" : fmtWhen(props.entry.stopAt)}
+    </span>
+    <button
+      type="button"
+      onClick={props.onRemove}
+      disabled={props.locked}
+      className="ml-auto rounded p-1 text-muted-foreground hover:bg-accent disabled:opacity-40"
+      aria-label="remove window"
+      title="remove window"
+    >
+      <X className="size-4" />
+    </button>
+  </li>
+);
+
+/** The popup that adds one run window — start (required) + optional stop. @since 1.0.0 */
+const AddWindowDialog = (props: {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onAdd: (entry: ScheduleEntry) => void;
+}): React.ReactElement => {
+  const [start, setStart] = React.useState("");
+  const [stop, setStop] = React.useState("");
+  const startMs = millisFromLocalInput(start);
+  const submit = (): void => {
+    if (startMs === undefined) return;
+    const stopMs = millisFromLocalInput(stop);
+    props.onAdd({
+      startAt: DateTime.makeUnsafe(startMs),
+      ...(stopMs !== undefined ? { stopAt: DateTime.makeUnsafe(stopMs) } : {}),
+    });
+    setStart("");
+    setStop("");
+    props.onOpenChange(false);
+  };
+  return (
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add run window</DialogTitle>
+          <DialogDescription>The process is armed while now is inside a window.</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-3 py-1">
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            start
+            <input
+              type="datetime-local"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+              className="rounded-md border bg-background px-2 py-1 text-sm text-foreground"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            stop (optional — blank = open-ended)
+            <input
+              type="datetime-local"
+              value={stop}
+              onChange={(e) => setStop(e.target.value)}
+              className="rounded-md border bg-background px-2 py-1 text-sm text-foreground"
+            />
+          </label>
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline" size="sm">Cancel</Button>
+          </DialogClose>
+          <Button size="sm" onClick={submit} disabled={startMs === undefined}>Add window</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+/** View + edit a process's schedule (the run windows that arm it). Reads the current entries, then
+ *  `setSchedule`/`clearSchedule` to mutate — gated by the **shared** process lock (`locked`), so
+ *  one lock guards both the controls and the schedule. Edits apply optimistically (the schedule is
+ *  read once on open); adding a window is a popup. @since 1.0.0 */
+export const ScheduleEditor = (props: {
+  readonly bundle: ProcessBundle;
+  readonly locked: boolean;
+}): React.ReactElement => {
   const loadedR = useAtomValue(props.bundle.schedule);
   const loaded = AsyncResult.isSuccess(loadedR) ? loadedR.value : undefined;
   const setSchedule = useAtomSet(props.bundle.setSchedule);
   const clearSchedule = useAtomSet(props.bundle.clearSchedule);
   const [edited, setEdited] = React.useState<ReadonlyArray<ScheduleEntry> | undefined>(undefined);
-  const [start, setStart] = React.useState("");
-  const [stop, setStop] = React.useState("");
-  const [locked, setLocked] = React.useState(true);
+  const [addOpen, setAddOpen] = React.useState(false);
   const [confirmClear, setConfirmClear] = React.useState(false);
+  const locked = props.locked;
 
   const list = edited ?? loaded ?? [];
 
@@ -675,18 +765,8 @@ export const ScheduleEditor = (props: { readonly bundle: ProcessBundle }): React
     setEdited(next);
     setSchedule(next);
   };
-  const add = (): void => {
-    const s = millisFromLocalInput(start);
-    if (s === undefined) return;
-    const e = millisFromLocalInput(stop);
-    const entry: ScheduleEntry = {
-      startAt: DateTime.makeUnsafe(s),
-      ...(e !== undefined ? { stopAt: DateTime.makeUnsafe(e) } : {}),
-    };
+  const addEntry = (entry: ScheduleEntry): void =>
     apply([...list, entry].sort((a, b) => DateTime.toEpochMillis(a.startAt) - DateTime.toEpochMillis(b.startAt)));
-    setStart("");
-    setStop("");
-  };
   const remove = (i: number): void => apply(list.filter((_, j) => j !== i));
   const clearAll = (): void => {
     setEdited([]);
@@ -697,9 +777,12 @@ export const ScheduleEditor = (props: { readonly bundle: ProcessBundle }): React
     <div className="flex flex-col gap-2 rounded-xl border bg-card p-3">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span>SCHEDULE · {list.length} window{list.length === 1 ? "" : "s"}</span>
-        <span className="ml-auto">
-          <LockToggle locked={locked} onToggle={() => setLocked((l) => !l)} />
-        </span>
+        <Button variant="outline" size="sm" className="ml-auto" onClick={() => setAddOpen(true)} disabled={locked}>
+          <Plus className="size-4" /> add
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setConfirmClear(true)} disabled={locked || list.length === 0}>
+          <Trash2 className="size-4" />
+        </Button>
       </div>
 
       {list.length === 0 ? (
@@ -707,59 +790,17 @@ export const ScheduleEditor = (props: { readonly bundle: ProcessBundle }): React
       ) : (
         <ul className="flex flex-col gap-1">
           {list.map((entry, i) => (
-            <li key={`${DateTime.toEpochMillis(entry.startAt)}-${i}`} className="flex items-center gap-2 text-sm">
-              <span className="tabular-nums">{fmtWhen(entry.startAt)}</span>
-              <span className="text-muted-foreground">→ {entry.stopAt === undefined ? "open-ended" : fmtWhen(entry.stopAt)}</span>
-              <button
-                type="button"
-                onClick={() => remove(i)}
-                disabled={locked}
-                className="ml-auto rounded p-1 text-muted-foreground hover:bg-accent disabled:opacity-40"
-                aria-label="remove window"
-                title="remove window"
-              >
-                <X className="size-4" />
-              </button>
-            </li>
+            <ScheduleRow
+              key={`${DateTime.toEpochMillis(entry.startAt)}-${i}`}
+              entry={entry}
+              locked={locked}
+              onRemove={() => remove(i)}
+            />
           ))}
         </ul>
       )}
 
-      <div className="flex flex-wrap items-end gap-2 border-t pt-2">
-        <label className="flex flex-col gap-0.5 text-xs text-muted-foreground">
-          start
-          <input
-            type="datetime-local"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-            disabled={locked}
-            className="rounded-md border bg-background px-2 py-1 text-sm text-foreground disabled:opacity-40"
-          />
-        </label>
-        <label className="flex flex-col gap-0.5 text-xs text-muted-foreground">
-          stop (optional)
-          <input
-            type="datetime-local"
-            value={stop}
-            onChange={(e) => setStop(e.target.value)}
-            disabled={locked}
-            className="rounded-md border bg-background px-2 py-1 text-sm text-foreground disabled:opacity-40"
-          />
-        </label>
-        <Button variant="outline" size="sm" onClick={add} disabled={locked || millisFromLocalInput(start) === undefined}>
-          <Plus className="size-4" /> add
-        </Button>
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => setConfirmClear(true)}
-          disabled={locked || list.length === 0}
-          className="ml-auto"
-        >
-          <Trash2 className="size-4" /> clear
-        </Button>
-      </div>
-
+      <AddWindowDialog open={addOpen} onOpenChange={setAddOpen} onAdd={addEntry} />
       <ConfirmDialog
         open={confirmClear}
         onOpenChange={setConfirmClear}
