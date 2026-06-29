@@ -1288,41 +1288,34 @@ const fmtUptime = (ms: number): string => {
 
 /** One host indicator dot + tap-for-info popover (tap again, or "view host", for the full screen).
  *  @since 1.0.0 */
-// 3×3 dice-face cell sets (cells 0..8, row-major) for 1–9 hosts; 10+ keeps 3 rows + adds columns.
-const DICE: Record<number, ReadonlyArray<number>> = {
-  1: [4],
-  2: [0, 8],
-  3: [0, 4, 8],
-  4: [0, 2, 6, 8],
-  5: [0, 2, 4, 6, 8],
-  6: [0, 3, 6, 2, 5, 8],
-  7: [0, 3, 6, 2, 5, 8, 4],
-  8: [0, 1, 2, 3, 5, 6, 7, 8],
-  9: [0, 1, 2, 3, 4, 5, 6, 7, 8],
-};
-
-/** Grid placement (1-based row/col) for each host's pip: a die face for 1–9, else 3 rows × more cols. */
+/** Compact pip layout: dots packed into ≤3 rows (columns grow), sized **larger when there are
+ *  fewer** hosts. Column-major fill (each column up to 3 tall). @since 1.0.0 */
 const pipLayout = (
   n: number,
 ): {
   readonly cols: number;
+  readonly rows: number;
+  readonly dot: string;
+  readonly gap: string;
   readonly cells: ReadonlyArray<{ readonly row: number; readonly col: number }>;
 } => {
-  if (n <= 9) {
-    const order = DICE[n] ?? [];
-    return {
-      cols: 3,
-      cells: order.map((c) => ({ row: Math.floor(c / 3) + 1, col: (c % 3) + 1 })),
-    };
-  }
-  const cols = Math.ceil(n / 3);
+  const size =
+    n <= 2
+      ? { dot: "0.75rem", gap: "0.25rem" }
+      : n <= 4
+        ? { dot: "0.5rem", gap: "0.1875rem" }
+        : n <= 9
+          ? { dot: "0.375rem", gap: "0.1875rem" }
+          : { dot: "0.3125rem", gap: "0.125rem" };
   return {
-    cols,
+    cols: Math.ceil(n / 3),
+    rows: Math.min(n, 3),
+    ...size,
     cells: Array.from({ length: n }, (_, i) => ({ row: (i % 3) + 1, col: Math.floor(i / 3) + 1 })),
   };
 };
 
-/** One host's pip in the die — a coloured dot placed at its cell, colour from its HostStatus. @since 1.0.0 */
+/** One host's pip — a coloured dot filling its grid cell, colour from its HostStatus. @since 1.0.0 */
 const HostPip = (props: {
   readonly host: HostRef;
   readonly cell: { readonly row: number; readonly col: number };
@@ -1335,7 +1328,7 @@ const HostPip = (props: {
   }, [r, props.host.id]);
   return (
     <span
-      className="rounded-full"
+      className="h-full w-full rounded-full"
       style={{
         gridRow: props.cell.row,
         gridColumn: props.cell.col,
@@ -1393,10 +1386,11 @@ export const HostBar = (props: {
         className="rounded-md border bg-card p-1.5 shadow-sm transition-transform active:scale-95"
       >
         <div
-          className="grid gap-1"
+          className="grid"
           style={{
-            gridTemplateColumns: `repeat(${layout.cols}, 0.375rem)`,
-            gridTemplateRows: "repeat(3, 0.375rem)",
+            gap: layout.gap,
+            gridTemplateColumns: `repeat(${layout.cols}, ${layout.dot})`,
+            gridTemplateRows: `repeat(${layout.rows}, ${layout.dot})`,
           }}
         >
           {hosts.map((h, i) => (
