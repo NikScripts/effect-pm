@@ -104,7 +104,7 @@ const SchedulePage = (props: { readonly tag: ProcessTag; readonly onClose: () =>
     <div style={vt} className="fixed inset-0 z-50 flex flex-col gap-2 bg-background p-2 safe-area">
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onClose}>← back</Button>
-        <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.key)} · schedule</strong>
+        <strong className="flex-1 truncate text-base">Schedule</strong>
         {/* top-right intentionally free */}
       </div>
       <div className="flex items-center gap-2">
