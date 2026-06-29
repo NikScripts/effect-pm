@@ -262,22 +262,41 @@ const DashboardInner = (props: {
   }
 
   const canBack = trail.length > 1;
+  // name each crumb by the member key it sits under in its parent (the root has no parent, so fall
+  // back to its own key). `keys[i-1]` is the key for `trail[i]`.
+  const title = trail
+    .map((g, i) => (i === 0 ? displayName(g.key) : keys[i - 1] ?? displayName(g.key)))
+    .join(" / ");
+  const countCircle = (
+    /* resource count as a small circle, the number knocked out as negative space */
+    <span
+      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-bold text-background"
+      title={`${leafTags(group).length} resources`}
+      aria-label={`${leafTags(group).length} resources`}
+    >
+      {leafTags(group).length}
+    </span>
+  );
   return (
     <div className="mx-auto max-w-5xl safe-area" style={pageVt}>
-      <div className="mb-1 flex items-center gap-2">
+      <div className="relative mb-1 flex items-center gap-2">
         {canBack ? (
-          <Button variant="outline" size="sm" onClick={() => transition(`grp-${group.key}`, () => route.back())}>← back</Button>
-        ) : null}
-        <h1 className="m-0 flex-1 text-lg font-semibold">
-          {/* group view: name each crumb by the member key it sits under in its parent (the root
-              has no parent, so fall back to its own key). `keys[i-1]` is the key for `trail[i]`. */}
-          ⬢ {trail.map((g, i) => (i === 0 ? displayName(g.key) : keys[i - 1] ?? displayName(g.key))).join(" / ")}{" "}
-          <span className="text-sm font-normal text-muted-foreground">· {leafTags(group).length} resources</span>
-        </h1>
+          <>
+            <Button variant="outline" size="sm" onClick={() => transition(`grp-${group.key}`, () => route.back())}>← back</Button>
+            {/* centered to the row (≈ the screen), not the flex remainder — absolutely overlaid, taps
+                pass through to the back/count/die around it. The ⬢ is dropped on drilled-in pages. */}
+            <h1 className="pointer-events-none absolute inset-0 m-0 flex items-center justify-center truncate px-24 text-lg font-semibold">
+              {title}
+            </h1>
+            <div className="flex-1" />
+          </>
+        ) : (
+          <h1 className="m-0 flex-1 text-lg font-semibold">⬢ {title}</h1>
+        )}
+        {countCircle}
         {/* host-status die — all hosts the dashboard's resources are bound to (the root group). */}
         <HostBar group={props.group} onOpenHost={props.onOpenHost} />
       </div>
-      <div className="mb-2 text-sm text-muted-foreground">tap a resource for its detail · tap a group to open it</div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
         {Object.entries(group.members).map(([name, member]) => (
           <Cell
@@ -288,6 +307,10 @@ const DashboardInner = (props: {
             onOpenGroup={(g) => transition(`grp-${g.key}`, () => route.open(name))}
           />
         ))}
+      </div>
+      {/* the tap hint sits at the bottom, out of the way */}
+      <div className="mt-6 pb-3 text-center text-sm text-muted-foreground">
+        tap a resource for its detail · tap a group to open it
       </div>
     </div>
   );

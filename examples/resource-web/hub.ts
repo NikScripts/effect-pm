@@ -21,8 +21,8 @@ const importJob = Schema.Struct({ id: Schema.String });
 
 // Two remote machines (see `server.ts`): the box-score queue lives on `WnbaHost`, the live-score
 // poller on `LiveHost` — so the dashboard's host die shows two pips (one per host).
-export class WnbaHost extends Resource.Host<WnbaHost>("wnba/host") {}
-export class LiveHost extends Resource.Host<LiveHost>("wnba/live-host") {}
+export class WnbaHost extends Resource.Host<WnbaHost>("wnba/scores") {}
+export class LiveHost extends Resource.Host<LiveHost>("wnba/live") {}
 
 export class BoxScoreQueue extends QueueResource.Tag<BoxScoreQueue>()(
   "wnba/BoxScoreQueue",
