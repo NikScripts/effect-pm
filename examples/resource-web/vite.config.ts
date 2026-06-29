@@ -10,5 +10,14 @@ export default defineConfig({
       "is-in-ci": fileURLToPath(new URL("./shims/is-in-ci.js", import.meta.url)),
     },
   },
-  server: { host: true, port: 5176, allowedHosts: true },
+  server: {
+    host: true,
+    port: 5176,
+    allowedHosts: true,
+    // The browser is a thin client; proxy the WnbaHost's RPC so the client is same-origin (no CORS).
+    // `/rpc` → the host served by `server.ts` (pnpm run example:resource-web-server).
+    proxy: {
+      "/rpc": { target: "http://localhost:7780", changeOrigin: true },
+    },
+  },
 });
