@@ -12,7 +12,7 @@
 import { DateTime, Duration, Effect, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
-import { kindOf as resourceKindOf, specOf } from "../Resource";
+import { hostOf, kindOf as resourceKindOf, specOf, type HostKey } from "../Resource";
 import { kind as queueKind, queueMetrics, queueStatus } from "../QueueContract";
 import { kind as processKind, processScheduleEntry, processStatus } from "../ScheduledProcess";
 import { kind as apiKind } from "../ApiMetrics";
@@ -136,6 +136,32 @@ export interface ApiBundle {
   /** Accumulated chart points (throughput / errors / in-flight per window). @since 1.0.0 */
   readonly history: ValueAtom<ReadonlyArray<ApiPoint>>;
 }
+
+/** A host that backs one or more of a group's resources — its id (the `Resource.Host` key) plus the
+ *  transport key itself. Read straight off the tags (`hostOf`), so the dashboard's host list is the
+ *  distinct hosts its resources are bound to — no separate registry. @since 1.0.0 */
+export interface HostRef {
+  readonly id: string;
+  readonly host: HostKey<unknown>;
+}
+
+/** Walk a group tree and collect the distinct hosts its resources are bound to. A hostless
+ *  (local/in-process) group yields `[]` — host dots appear only when resources name a host. @since 1.0.0 */
+export const hostsOf = (group: unknown): ReadonlyArray<HostRef> => {
+  const seen = new Map<string, HostRef>();
+  const walk = (node: unknown): void => {
+    if (Group.isGroup(node)) {
+      for (const member of Object.values(Group.members(node))) walk(member);
+      return;
+    }
+    const host = hostOf(node);
+    if (host !== undefined && !seen.has(host.key)) {
+      seen.set(host.key, { id: host.key, host });
+    }
+  };
+  walk(group);
+  return [...seen.values()];
+};
 
 /** Which kind of leaf a tag is — by the contract's stamped kind. @since 1.0.0 */
 export const kindOf = (member: unknown): "queue" | "process" | "api" => {

@@ -852,6 +852,17 @@ export const kindOf = (tag: unknown): string | undefined => {
   return undefined;
 };
 
+/** The {@link Host} a tag is bound to (its transport key), or `undefined` for a hostless/bare tag
+ *  or any non-tag. Accepts `unknown` so a `Group` member passes straight in — walk a group tree and
+ *  collect the distinct hosts to know which hosts back its resources. @since 1.0.0 */
+export const hostOf = (tag: unknown): HostKey<unknown> | undefined => {
+  if ((typeof tag === "object" || typeof tag === "function") && tag !== null && hostSym in tag) {
+    const value = tag[hostSym];
+    return value === undefined ? undefined : (value as HostKey<unknown>);
+  }
+  return undefined;
+};
+
 /**
  * Attach a {@link Readiness} derivation to a tag — the seam the host's `/health` and `HostStatus`
  * aggregate over. Each contract applies it from its own status (so readiness can't drift from
