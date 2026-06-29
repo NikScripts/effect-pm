@@ -10,8 +10,9 @@
  */
 import * as React from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { DateTime } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { Lock, LockOpen, Pause, Play, Power, RotateCw, Square, Trash2 } from "lucide-react";
+import { Lock, LockOpen, Pause, Play, Plus, Power, RotateCw, Square, Trash2, X } from "lucide-react";
 import * as Group from "../Group";
 import {
   type CommandAtom,
@@ -22,6 +23,7 @@ import {
   type ProcessTag,
   type QueueBundle,
   type QueueTag,
+  type ScheduleEntry,
   kindOf,
   leafTags,
   queueLeaves,
@@ -30,7 +32,7 @@ import { useProcessBundle, useQueueBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
-import { fmtClock, now } from "./now";
+import { dateFromMillis, fmtClock, millisFromLocalInput, now } from "./now";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
@@ -637,6 +639,136 @@ export const ProcessControls = (props: { readonly bundle: ProcessBundle }): Reac
       )}
       <ActionButton atom={props.bundle.runImmediately} label="run now" icon={<RotateCw className="size-4" />} disabled={locked} />
       <LockToggle locked={locked} onToggle={() => setLocked((l) => !l)} />
+    </div>
+  );
+};
+
+// ── schedule editing ──────────────────────────────────────────────────────────
+
+/** A schedule entry's `DateTime.Utc` → a compact human label. */
+const fmtWhen = (e: DateTime.Utc): string =>
+  dateFromMillis(DateTime.toEpochMillis(e)).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+/** View + edit a process's schedule (the run windows that arm it). Reads the current entries,
+ *  then `setSchedule`/`clearSchedule` to mutate — locked by default; unlock to edit. Edits apply
+ *  optimistically (the schedule is read once on open). @since 1.0.0 */
+export const ScheduleEditor = (props: { readonly bundle: ProcessBundle }): React.ReactElement => {
+  const loadedR = useAtomValue(props.bundle.schedule);
+  const loaded = AsyncResult.isSuccess(loadedR) ? loadedR.value : undefined;
+  const setSchedule = useAtomSet(props.bundle.setSchedule);
+  const clearSchedule = useAtomSet(props.bundle.clearSchedule);
+  const [edited, setEdited] = React.useState<ReadonlyArray<ScheduleEntry> | undefined>(undefined);
+  const [start, setStart] = React.useState("");
+  const [stop, setStop] = React.useState("");
+  const [locked, setLocked] = React.useState(true);
+  const [confirmClear, setConfirmClear] = React.useState(false);
+
+  const list = edited ?? loaded ?? [];
+
+  const apply = (next: ReadonlyArray<ScheduleEntry>): void => {
+    setEdited(next);
+    setSchedule(next);
+  };
+  const add = (): void => {
+    const s = millisFromLocalInput(start);
+    if (s === undefined) return;
+    const e = millisFromLocalInput(stop);
+    const entry: ScheduleEntry = {
+      startAt: DateTime.makeUnsafe(s),
+      ...(e !== undefined ? { stopAt: DateTime.makeUnsafe(e) } : {}),
+    };
+    apply([...list, entry].sort((a, b) => DateTime.toEpochMillis(a.startAt) - DateTime.toEpochMillis(b.startAt)));
+    setStart("");
+    setStop("");
+  };
+  const remove = (i: number): void => apply(list.filter((_, j) => j !== i));
+  const clearAll = (): void => {
+    setEdited([]);
+    clearSchedule();
+  };
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border bg-card p-3">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span>SCHEDULE · {list.length} window{list.length === 1 ? "" : "s"}</span>
+        <span className="ml-auto">
+          <LockToggle locked={locked} onToggle={() => setLocked((l) => !l)} />
+        </span>
+      </div>
+
+      {list.length === 0 ? (
+        <div className="text-xs text-muted-foreground">No run windows — the process is disarmed.</div>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {list.map((entry, i) => (
+            <li key={`${DateTime.toEpochMillis(entry.startAt)}-${i}`} className="flex items-center gap-2 text-sm">
+              <span className="tabular-nums">{fmtWhen(entry.startAt)}</span>
+              <span className="text-muted-foreground">→ {entry.stopAt === undefined ? "open-ended" : fmtWhen(entry.stopAt)}</span>
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                disabled={locked}
+                className="ml-auto rounded p-1 text-muted-foreground hover:bg-accent disabled:opacity-40"
+                aria-label="remove window"
+                title="remove window"
+              >
+                <X className="size-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="flex flex-wrap items-end gap-2 border-t pt-2">
+        <label className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+          start
+          <input
+            type="datetime-local"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+            disabled={locked}
+            className="rounded-md border bg-background px-2 py-1 text-sm text-foreground disabled:opacity-40"
+          />
+        </label>
+        <label className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+          stop (optional)
+          <input
+            type="datetime-local"
+            value={stop}
+            onChange={(e) => setStop(e.target.value)}
+            disabled={locked}
+            className="rounded-md border bg-background px-2 py-1 text-sm text-foreground disabled:opacity-40"
+          />
+        </label>
+        <Button variant="outline" size="sm" onClick={add} disabled={locked || millisFromLocalInput(start) === undefined}>
+          <Plus className="size-4" /> add
+        </Button>
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={() => setConfirmClear(true)}
+          disabled={locked || list.length === 0}
+          className="ml-auto"
+        >
+          <Trash2 className="size-4" /> clear
+        </Button>
+      </div>
+
+      <ConfirmDialog
+        open={confirmClear}
+        onOpenChange={setConfirmClear}
+        title="Clear schedule?"
+        description="Remove all run windows. The process disarms until new windows are added."
+        confirmLabel="Clear"
+        destructive
+        onConfirm={clearAll}
+      />
     </div>
   );
 };

@@ -14,7 +14,7 @@ import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
 import { specOf } from "../Resource";
 import { queueMetrics, queueStatus } from "../QueueContract";
-import { processStatus } from "../ScheduledProcess";
+import { processScheduleEntry, processStatus } from "../ScheduledProcess";
 import { FRESH_MS, readCache, writeCache } from "./cache";
 import { now } from "./now";
 
@@ -24,6 +24,8 @@ export type QueueStatus = Schema.Schema.Type<typeof queueStatus>;
 export type QueueMetrics = Schema.Schema.Type<typeof queueMetrics>;
 /** Live process status (from the contract schema). @since 1.0.0 */
 export type ProcessStatus = Schema.Schema.Type<typeof processStatus>;
+/** One scheduled run window (from the contract schema): `{ id?, startAt, stopAt? }`. @since 1.0.0 */
+export type ScheduleEntry = Schema.Schema.Type<typeof processScheduleEntry>;
 
 /** A captured log line for the log pane. @since 1.0.0 */
 export interface LogLine {
@@ -56,9 +58,12 @@ interface ProcessService {
   readonly status: Stream.Stream<ProcessStatus>;
   readonly logs: Stream.Stream<{ readonly level: string; readonly message: string }>;
   readonly logHistory: (o: { readonly limit: number }) => Effect.Effect<ReadonlyArray<{ readonly level: string; readonly message: string }>>;
+  readonly schedule: Effect.Effect<ReadonlyArray<ScheduleEntry>>;
   readonly start: Effect.Effect<void>;
   readonly stop: Effect.Effect<void>;
   readonly runImmediately: Effect.Effect<void>;
+  readonly setSchedule: (entries: ReadonlyArray<ScheduleEntry>) => Effect.Effect<void>;
+  readonly clearSchedule: Effect.Effect<void>;
 }
 
 /** A queue tag — yieldable for its live service. Requirement `R` is provided by the runtime. @since 1.0.0 */
@@ -96,9 +101,15 @@ export interface QueueBundle {
 export interface ProcessBundle {
   readonly status: ValueAtom<ProcessStatus | undefined>;
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
+  /** The current schedule entries (run windows), read once on open. @since 1.0.0 */
+  readonly schedule: ValueAtom<ReadonlyArray<ScheduleEntry>>;
   readonly start: CommandAtom;
   readonly stop: CommandAtom;
   readonly runImmediately: CommandAtom;
+  /** Replace all schedule entries. @since 1.0.0 */
+  readonly setSchedule: Atom.AtomResultFn<ReadonlyArray<ScheduleEntry>, void, unknown>;
+  /** Remove all schedule entries. @since 1.0.0 */
+  readonly clearSchedule: CommandAtom;
 }
 
 /** Which kind of leaf a tag is, by its contract (a queue enqueues; a process runs). @since 1.0.0 */
@@ -260,9 +271,14 @@ export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: Proc
         history: Effect.flatMap(tag, (p) => p.logHistory({ limit: 300 })).pipe(Effect.map((ls) => ls.map(toLogLine))),
       }),
     ),
+    schedule: runtime.atom(Effect.flatMap(tag, (p) => p.schedule)),
     start: runtime.fn(() => Effect.flatMap(tag, (p) => p.start)),
     stop: runtime.fn(() => Effect.flatMap(tag, (p) => p.stop)),
     runImmediately: runtime.fn(() => Effect.flatMap(tag, (p) => p.runImmediately)),
+    setSchedule: runtime.fn((entries: ReadonlyArray<ScheduleEntry>) =>
+      Effect.flatMap(tag, (p) => p.setSchedule(entries)),
+    ),
+    clearSchedule: runtime.fn(() => Effect.flatMap(tag, (p) => p.clearSchedule)),
   };
   cache.set(tag.key, bundle);
   return bundle;

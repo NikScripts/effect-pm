@@ -18,3 +18,12 @@ export const dateFromMillis = (millis: number): Date => utcDateFromMillis(millis
 
 /** A compact 24-hour clock string (`HH:MM:SS`, no AM/PM) for log timestamps. @since 1.0.0 */
 export const fmtClock = (millis: number): string => dateFromMillis(millis).toLocaleTimeString([], { hour12: false });
+
+/** Parse an `<input type="datetime-local">` value (local wall time) to epoch millis — `undefined`
+ *  if blank/invalid. Confined here since it constructs a `Date` to interpret the local zone. @since 1.0.0 */
+export const millisFromLocalInput = (value: string): number | undefined => {
+  if (value === "") return undefined;
+  // @effect-diagnostics-next-line globalDate:off
+  const ms = new Date(value).getTime();
+  return Number.isNaN(ms) ? undefined : ms;
+};

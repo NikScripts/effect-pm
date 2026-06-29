@@ -32,7 +32,7 @@ import { RuntimeProvider, useProcessBundle, useQueueBundle, useRuntime } from ".
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { Cell, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, StatusBadge, displayName } from "./widgets";
+import { Cell, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ScheduleEditor, StatusBadge, displayName } from "./widgets";
 import { DebugConsole } from "./debug-console";
 
 // route.selected is an opaque leaf tag — narrow it to a queue / process by its contract.
@@ -127,6 +127,7 @@ const ProcessDetail = (props: {
       </div>
       <ProcessStats bundle={bundle} />
       <ProcessControls bundle={bundle} />
+      <ScheduleEditor bundle={bundle} />
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} />
     </div>
   );
