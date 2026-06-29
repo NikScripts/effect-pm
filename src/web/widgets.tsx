@@ -496,7 +496,7 @@ export const LogStream = (props: {
     <div ref={ref} className={cn("overflow-auto text-xs", props.className)}>
       {logs.map((l) => (
         <div key={l.id} className="flex gap-2 px-2 py-0.5">
-          <span className="w-[4.5rem] shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">{fmtClock(l.t)}</span>
+          <span className="w-18 shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">{fmtClock(l.t)}</span>
           <span className="w-14 shrink-0" style={{ color: LEVEL[l.level] ?? "#cbd5e1" }}>{l.level}</span>
           <span className="break-all">{l.message}</span>
         </div>
