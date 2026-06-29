@@ -250,25 +250,49 @@ type MetricKey = keyof typeof METRICS;
 
 // Time windows the chart can show — each filters the deep metrics history by the point's real
 // (server) timestamp, so the curve's span actually changes (backed by the host's history store).
+// Only the windows the data actually reaches are offered (see `availableWindows`).
+const ALL_MS = Number.POSITIVE_INFINITY;
 const WINDOWS = [
   { label: "1m", ms: 60_000 },
   { label: "15m", ms: 900_000 },
   { label: "1h", ms: 3_600_000 },
+  { label: "6h", ms: 21_600_000 },
+  { label: "1d", ms: 86_400_000 },
+  { label: "1w", ms: 604_800_000 },
+  { label: "30d", ms: 2_592_000_000 },
+  { label: "1y", ms: 31_536_000_000 },
+  { label: "all", ms: ALL_MS },
 ] as const;
+type Window = (typeof WINDOWS)[number];
+
+/** The windows worth offering for a history that spans `spanMs`: every finite window the data
+ *  fully covers, plus `all` once there's any data — and always at least the smallest, so there's
+ *  a valid choice. "Only show what's available." */
+const availableWindows = (spanMs: number, hasData: boolean): ReadonlyArray<Window> => {
+  const finite = WINDOWS.filter((w) => w.ms !== ALL_MS && spanMs >= w.ms);
+  const all = WINDOWS.filter((w) => w.ms === ALL_MS && hasData);
+  const list = [...finite, ...all];
+  return list.length > 0 ? list : [WINDOWS[0]];
+};
 
 /** A metric chart with a dropdown to pick the series (throughput/latency/pending), plus — for the
  *  history-backed series — a compact toggle that cycles the time window (1m→15m→1h). @since 1.0.0 */
 export const MetricChart = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
   const [metric, setMetric] = React.useState<MetricKey>("throughput");
-  const [windowIdx, setWindowIdx] = React.useState(0);
+  // Selection is kept by duration (not index) so it survives as more windows unlock with data.
+  const [windowMs, setWindowMs] = React.useState<number>(WINDOWS[0].ms);
   const historyR = useAtomValue(props.bundle.history);
   const trendR = useAtomValue(props.bundle.trend);
   React.useEffect(() => dlog("history", asyncTag(historyR), "· trend", asyncTag(trendR)), [historyR, trendR]);
   const history: ReadonlyArray<MetricPoint> = AsyncResult.isSuccess(historyR) ? historyR.value : [];
   const trend: ReadonlyArray<number> = AsyncResult.isSuccess(trendR) ? trendR.value : [];
   const def = METRICS[metric];
-  const win = WINDOWS[windowIdx] ?? WINDOWS[0];
-  const cutoff = now() - win.ms;
+  const oldest = history[0];
+  const span = oldest === undefined ? 0 : now() - oldest.t;
+  const windows = availableWindows(span, history.length > 0);
+  // clamp the selection to what's currently available (fall back to the largest available)
+  const win = windows.find((w) => w.ms === windowMs) ?? windows[windows.length - 1] ?? WINDOWS[0];
+  const cutoff = win.ms === ALL_MS ? Number.NEGATIVE_INFINITY : now() - win.ms;
   const data =
     def.source === "trend"
       ? trend.map((v, i) => ({ i, value: v }))
@@ -290,11 +314,15 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
           ))}
         </select>
         {def.source === "history" ? (
-          // Compact time-window control: tap to cycle 1m → 15m → 1h → (loop). Cheaper on width
-          // than a second dropdown, which matters on a phone.
+          // Compact time-window control: tap to cycle through the windows the data reaches.
+          // Cheaper on width than a second dropdown, which matters on a phone.
           <button
             type="button"
-            onClick={() => setWindowIdx((i) => (i + 1) % WINDOWS.length)}
+            onClick={() => {
+              const idx = windows.findIndex((w) => w.ms === win.ms);
+              const next = windows[(idx + 1) % windows.length];
+              if (next !== undefined) setWindowMs(next.ms);
+            }}
             className="rounded-md border bg-card px-2 py-1 text-sm font-semibold text-foreground transition-colors hover:border-ring"
             aria-label={`time window: ${win.label} (tap to change)`}
             title="tap to change time window"
