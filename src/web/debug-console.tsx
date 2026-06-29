@@ -95,19 +95,43 @@ export const DebugConsole = (): React.ReactElement | null => {
   patchConsole();
   const [open, setOpen] = React.useState(false);
   const [enabled, setEnabled] = React.useState(() => debugEnabled());
-  const [copied, setCopied] = React.useState(false);
+  const [copyState, setCopyState] = React.useState<"idle" | "ok" | "fail">("idle");
   const all = useLines();
-  // Copy the whole log to the clipboard (no devtools on mobile) — `[clock] [level] text` per line.
-  const copy = (): void => {
+  // Copy the whole log (no devtools on mobile) — `[clock] [level] text` per line. The async clipboard
+  // API is absent over a non-secure origin (http on a LAN/Tailscale IP), so fall back to a hidden
+  // textarea + execCommand. Always give feedback: check (ok) / x (failed). A DOM clipboard handler,
+  // not Effect domain — async/await is the right shape here.
+  // @effect-diagnostics-next-line asyncFunction:off
+  const copy = async (): Promise<void> => {
     const text = all.map((l) => `${fmtClock(l.t)} [${l.level}] ${l.text}`).join("\n");
+    let ok = false;
     try {
-      void navigator.clipboard.writeText(text);
-      setCopied(true);
-      // @effect-diagnostics-next-line globalTimers:off
-      setTimeout(() => setCopied(false), 1200);
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText !== undefined) {
+        await navigator.clipboard.writeText(text);
+        ok = true;
+      }
     } catch {
-      /* clipboard unavailable (insecure context) — ignore */
+      ok = false;
     }
+    if (!ok) {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.top = "0";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch {
+        ok = false;
+      }
+    }
+    setCopyState(ok ? "ok" : "fail");
+    // @effect-diagnostics-next-line globalTimers:off
+    setTimeout(() => setCopyState("idle"), 1500);
   };
   // fully turn debug off: clear the persisted flag AND the ?debug URL param, then hide
   const disable = (): void => {
@@ -142,8 +166,20 @@ export const DebugConsole = (): React.ReactElement | null => {
         <div className="flex h-[42dvh] w-[92vw] max-w-xl flex-col rounded-lg border bg-black/90 text-xs shadow-xl">
           <div className="flex items-center gap-1.5 border-b px-2 py-1">
             <strong className="flex-1">debug console · {all.length}</strong>
-            <button type="button" aria-label={copied ? "copied" : "copy log"} title="copy" onClick={copy} className="rounded border p-1">
-              {copied ? <Check size={14} /> : <Copy size={14} />}
+            <button
+              type="button"
+              aria-label={copyState === "ok" ? "copied" : copyState === "fail" ? "copy failed" : "copy log"}
+              title={copyState === "fail" ? "copy failed" : "copy"}
+              onClick={() => void copy()}
+              className="rounded border p-1"
+            >
+              {copyState === "ok" ? (
+                <Check size={14} className="text-green-500" />
+              ) : copyState === "fail" ? (
+                <X size={14} className="text-red-500" />
+              ) : (
+                <Copy size={14} />
+              )}
             </button>
             <button
               type="button"
