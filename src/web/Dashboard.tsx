@@ -278,8 +278,12 @@ const DashboardInner = (props: {
     </span>
   );
   return (
-    <div className="mx-auto max-w-5xl safe-area" style={pageVt}>
-      <div className="relative mb-1 flex items-center gap-2">
+    // trim the base top padding (keep the notch inset) — the freed space goes below the header.
+    <div
+      className="mx-auto max-w-5xl safe-area"
+      style={{ ...pageVt, paddingTop: "max(0.25rem, env(safe-area-inset-top))" }}
+    >
+      <div className="relative mb-4 flex items-center gap-2">
         {canBack ? (
           <>
             <Button variant="outline" size="sm" onClick={() => transition(`grp-${group.key}`, () => route.back())}>← back</Button>
