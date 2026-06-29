@@ -30,7 +30,7 @@ import { useProcessBundle, useQueueBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
-import { fmtClock } from "./now";
+import { fmtClock, now } from "./now";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
@@ -242,32 +242,39 @@ export const QueueStats = (props: { readonly bundle: QueueBundle }): React.React
 };
 
 const METRICS = {
-  throughput: { label: "throughput", color: "#22c55e", source: "history" as const, rate: true },
-  latency: { label: "latency (s)", color: "#eab308", source: "history" as const, rate: false },
-  pending: { label: "pending", color: "#3b82f6", source: "trend" as const, rate: false },
+  throughput: { label: "throughput /s", color: "#22c55e", source: "history" as const },
+  latency: { label: "latency (s)", color: "#eab308", source: "history" as const },
+  pending: { label: "pending", color: "#3b82f6", source: "trend" as const },
 };
 type MetricKey = keyof typeof METRICS;
 
-// Throughput is measured per second; these are the rate windows the toggle cycles (multiply the
-// per-second value to get per-minute / per-hour).
-const RATE_UNITS = { "/s": 1, "/min": 60, "/hr": 3600 };
-type RateUnit = keyof typeof RATE_UNITS;
+// Time windows the chart can show — each filters the deep metrics history by the point's real
+// (server) timestamp, so the curve's span actually changes (backed by the host's history store).
+const WINDOWS = [
+  { label: "1m", ms: 60_000 },
+  { label: "15m", ms: 900_000 },
+  { label: "1h", ms: 3_600_000 },
+] as const;
 
-/** A metric chart with a dropdown to pick the series (throughput/latency/pending), plus — for
- *  throughput — a compact toggle that cycles the rate window (/s→/min→/hr). @since 1.0.0 */
+/** A metric chart with a dropdown to pick the series (throughput/latency/pending), plus — for the
+ *  history-backed series — a compact toggle that cycles the time window (1m→15m→1h). @since 1.0.0 */
 export const MetricChart = (props: { readonly bundle: QueueBundle }): React.ReactElement => {
   const [metric, setMetric] = React.useState<MetricKey>("throughput");
-  const [rate, setRate] = React.useState<RateUnit>("/s");
+  const [windowIdx, setWindowIdx] = React.useState(0);
   const historyR = useAtomValue(props.bundle.history);
   const trendR = useAtomValue(props.bundle.trend);
   React.useEffect(() => dlog("history", asyncTag(historyR), "· trend", asyncTag(trendR)), [historyR, trendR]);
   const history: ReadonlyArray<MetricPoint> = AsyncResult.isSuccess(historyR) ? historyR.value : [];
   const trend: ReadonlyArray<number> = AsyncResult.isSuccess(trendR) ? trendR.value : [];
   const def = METRICS[metric];
+  const win = WINDOWS[windowIdx] ?? WINDOWS[0];
+  const cutoff = now() - win.ms;
   const data =
     def.source === "trend"
       ? trend.map((v, i) => ({ i, value: v }))
-      : history.map((p, i) => ({ i, value: def.rate ? p.throughput * RATE_UNITS[rate] : p.latency / 1000 }));
+      : history
+          .filter((p) => p.t >= cutoff)
+          .map((p, i) => ({ i, value: metric === "latency" ? p.latency / 1000 : p.throughput }));
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -282,21 +289,17 @@ export const MetricChart = (props: { readonly bundle: QueueBundle }): React.Reac
             </option>
           ))}
         </select>
-        {def.rate ? (
-          // Compact rate-window control: tap to cycle /s → /min → /hr → (loop). Cheaper on width
+        {def.source === "history" ? (
+          // Compact time-window control: tap to cycle 1m → 15m → 1h → (loop). Cheaper on width
           // than a second dropdown, which matters on a phone.
           <button
             type="button"
-            onClick={() => {
-              const units = Object.keys(RATE_UNITS) as Array<RateUnit>;
-              const next = units[(units.indexOf(rate) + 1) % units.length];
-              if (next !== undefined) setRate(next);
-            }}
+            onClick={() => setWindowIdx((i) => (i + 1) % WINDOWS.length)}
             className="rounded-md border bg-card px-2 py-1 text-sm font-semibold text-foreground transition-colors hover:border-ring"
-            aria-label={`rate window: ${rate} (tap to change)`}
-            title="tap to change rate window"
+            aria-label={`time window: ${win.label} (tap to change)`}
+            title="tap to change time window"
           >
-            {rate}
+            {win.label}
           </button>
         ) : null}
       </div>

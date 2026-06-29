@@ -9,7 +9,7 @@
  *
  * @since 1.0.0
  */
-import { Effect, type Schema, Stream } from "effect";
+import { DateTime, Effect, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
 import { specOf } from "../Resource";
@@ -110,7 +110,11 @@ export const kindOf = (member: unknown): "queue" | "process" => {
 // one combined metrics stream carries both backfill points and live raw metrics
 type MetricsItem = { readonly point: MetricPoint } | { readonly metric: QueueMetrics };
 
-const HISTORY = 120;
+// Retain a deep metrics history (server keeps up to ~10k) so the chart's time-window control can
+// show real backfill up to ~1 hour; the localStorage cache keeps only a small recent slice for
+// instant first paint (the server query refills the rest, since the metrics atom always backfills).
+const HISTORY = 1800;
+const HISTORY_CACHE = 120;
 const TREND = 60;
 let logId = 0;
 
@@ -168,8 +172,10 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
 
   const statusStream = Stream.unwrap(Effect.map(tag, (q) => q.status));
   const metricsStream = Stream.unwrap(Effect.map(tag, (q) => q.metrics));
+  // Stamp the point with the metric's own window-end (real server time), not the client's receive
+  // time — so backfilled points land at their true position on the time axis (the window filter).
   const toPoint = (m: QueueMetrics): MetricPoint => ({
-    t: now(),
+    t: DateTime.toEpochMillis(m.windowEnd),
     throughput: m.throughputPerSec,
     latency: m.avgTotalMillis ?? 0,
   });
@@ -210,7 +216,9 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
             ? { latest: item.metric, history: [...acc.history, toPoint(item.metric)].slice(-HISTORY) }
             : { latest: acc.latest, history: [...acc.history, item.point].slice(-HISTORY) },
       ),
-      Stream.tap((acc) => Effect.sync(() => writeCache(`${tag.key}/history`, acc.history))),
+      Stream.tap((acc) =>
+        Effect.sync(() => writeCache(`${tag.key}/history`, acc.history.slice(-HISTORY_CACHE))),
+      ),
     ),
   );
 
