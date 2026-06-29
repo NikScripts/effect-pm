@@ -1301,12 +1301,12 @@ const pipLayout = (
 } => {
   const size =
     n <= 2
-      ? { dot: "0.75rem", gap: "0.25rem" }
+      ? { dot: "0.625rem", gap: "0.375rem" }
       : n <= 4
-        ? { dot: "0.5rem", gap: "0.1875rem" }
+        ? { dot: "0.4375rem", gap: "0.3125rem" }
         : n <= 9
-          ? { dot: "0.375rem", gap: "0.1875rem" }
-          : { dot: "0.3125rem", gap: "0.125rem" };
+          ? { dot: "0.34375rem", gap: "0.25rem" }
+          : { dot: "0.28125rem", gap: "0.1875rem" };
   return {
     cols: Math.ceil(n / 3),
     rows: Math.min(n, 3),
@@ -1338,25 +1338,33 @@ const HostPip = (props: {
   );
 };
 
-/** One host's row in the hosts panel — status + name + readiness; tap to open its full screen. @since 1.0.0 */
+/** One host's row in the hosts panel — name + status + uptime + per-resource readiness counts; tap to
+ *  open its full screen. @since 1.0.0 */
 const HostRow = (props: {
   readonly host: HostRef;
   readonly onOpen: () => void;
 }): React.ReactElement => {
   const r = useAtomValue(useHostBundle(props.host).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const ready = s !== undefined ? s.resources.filter((x) => x.ready).length : 0;
+  const total = s !== undefined ? s.resources.length : 0;
   return (
     <li>
       <button
         type="button"
         onClick={props.onOpen}
-        className="flex w-full items-center gap-1.5 rounded px-1 py-1 text-left hover:bg-muted"
+        className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left hover:bg-muted"
       >
-        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: hostColor(s) }} />
-        <span className="flex-1 truncate">{displayName(props.host.id)}</span>
-        <span className="text-muted-foreground">
-          {s !== undefined ? `${s.up ? s.status : "down"} · ${s.resourceCount}` : "…"}
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: hostColor(s) }} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium">{displayName(props.host.id)}</span>
+          <span className="mt-0.5 block text-[0.7rem] leading-tight text-muted-foreground">
+            {s !== undefined
+              ? `${s.up ? s.status : "down"} · up ${fmtUptime(s.uptimeMillis)} · ${ready}/${total} ready`
+              : "connecting…"}
+          </span>
         </span>
+        <span className="shrink-0 text-muted-foreground">›</span>
       </button>
     </li>
   );
@@ -1383,7 +1391,7 @@ export const HostBar = (props: {
         type="button"
         aria-label={`${hosts.length} host${hosts.length === 1 ? "" : "s"}`}
         onClick={() => setOpen((o) => !o)}
-        className="rounded-md border bg-card p-1.5 shadow-sm transition-transform active:scale-95"
+        className="block p-1 transition-transform active:scale-95"
       >
         <div
           className="grid"
@@ -1399,8 +1407,8 @@ export const HostBar = (props: {
         </div>
       </button>
       {open ? (
-        <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-lg border bg-card p-2 text-xs shadow-lg">
-          <div className="mb-1 font-semibold">hosts · {hosts.length}</div>
+        <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border bg-card p-2 text-sm shadow-lg">
+          <div className="mb-1 px-1 font-semibold">hosts · {hosts.length}</div>
           <ul className="space-y-0.5">
             {hosts.map((h) => (
               <HostRow
