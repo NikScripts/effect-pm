@@ -1329,8 +1329,14 @@ const pipLayout = (
     // two rows, bottom-heavy: 3 → [1,2], 4 → [2,2], 5 → [2,3], 6 → [3,3]
     const bottom = Math.ceil(n / 2);
     rows = [n - bottom, bottom];
+  } else if (n === 7) {
+    rows = [2, 3, 2]; // widest row in the middle (hex bulge)
+  } else if (n === 8) {
+    rows = [3, 2, 3]; // narrow row in the middle
+  } else if (n === 9) {
+    rows = [3, 3, 3];
   } else {
-    // three rows, bottom-heavy: 7 → [2,2,3], 8 → [2,3,3], 9 → [3,3,3]
+    // 10+: three rows, bottom-heavy, just keep widening
     const r3 = Math.ceil(n / 3);
     const r2 = Math.ceil((n - r3) / 2);
     rows = [n - r3 - r2, r2, r3];
