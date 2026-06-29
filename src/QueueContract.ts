@@ -26,12 +26,13 @@
  */
 import { Effect, Layer, Option, Schema, Stream } from "effect";
 import * as Resource from "./Resource";
-import { hostSym, specSym } from "./Resource";
+import { specSym } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
 import type {
   HandlerContextOf,
   HostKey,
   LocalCapability,
+  HostBoundTag,
   ResourceTag,
   ServeEntry,
   ServiceOf,
@@ -548,9 +549,7 @@ const queueTag = <Self>() => {
     key: string,
     itemSchema: Schema.Struct<F>,
     options: { readonly description?: string; readonly host: HostKey<HSelf> },
-  ): ResourceTag<Self, QueueInstanceSpec<F>> & {
-    readonly [hostSym]: HostKey<HSelf>;
-  };
+  ): HostBoundTag<Self, QueueInstanceSpec<F>, HSelf>;
   function build<F extends Schema.Struct.Fields>(
     key: string,
     itemSchema: Schema.Struct<F>,

@@ -8,7 +8,7 @@
  */
 import { Effect, Layer, Option, Schema, Stream } from "effect";
 import * as Resource from "./Resource";
-import { hostSym, specSym } from "./Resource";
+import { specSym } from "./Resource";
 import { HistoryStore } from "./HistoryStore";
 import type {
   HandlerContextOf,
@@ -16,6 +16,7 @@ import type {
   LocalCapability,
   Method,
   MethodAnnotations,
+  HostBoundTag,
   ResourceTag,
   ServeEntry,
   ServiceOf,
@@ -345,17 +346,13 @@ export const customQueueTag = <Self>() => {
     levelCount: number,
     namedLevels: Readonly<Record<string, number>> | undefined,
     options: CustomQueueTagOptions & { readonly host: HostKey<HSelf> },
-  ): ResourceTag<Self, CustomQueueInstanceSpec<F>> & {
-    readonly [hostSym]: HostKey<HSelf>;
-  };
+  ): HostBoundTag<Self, CustomQueueInstanceSpec<F>, HSelf>;
   function build<F extends Schema.Struct.Fields, HSelf>(
     key: string,
     itemSchema: Schema.Struct<F>,
     levelNames: readonly string[],
     options: CustomQueueTagOptions & { readonly host: HostKey<HSelf> },
-  ): ResourceTag<Self, CustomQueueInstanceSpec<F>> & {
-    readonly [hostSym]: HostKey<HSelf>;
-  };
+  ): HostBoundTag<Self, CustomQueueInstanceSpec<F>, HSelf>;
   function build<F extends Schema.Struct.Fields>(
     key: string,
     itemSchema: Schema.Struct<F>,

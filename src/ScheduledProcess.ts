@@ -45,11 +45,11 @@ import {
 import * as LogLevel from "effect/LogLevel";
 import { CurrentLogAnnotations, CurrentLogSpans } from "effect/References";
 import * as Resource from "./Resource";
-import { hostSym } from "./Resource";
 import type {
   HandlerContextOf,
   HostKey,
   LocalCapability,
+  HostBoundTag,
   ResourceTag,
   ServeEntry,
   ServiceOf,
@@ -267,7 +267,7 @@ const processTag = <Self>() => {
   function build<HSelf>(
     key: string,
     options: { readonly description?: string; readonly host: HostKey<HSelf> },
-  ): ResourceTag<Self, ProcessSpec> & { readonly [hostSym]: HostKey<HSelf> };
+  ): HostBoundTag<Self, ProcessSpec, HSelf>;
   function build(
     key: string,
     options?: { readonly description?: string },

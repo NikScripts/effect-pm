@@ -840,6 +840,19 @@ export interface ResourceTag<Self, S extends Spec>
   readonly [readinessSym]: ReadinessOf<ServiceOf<S, Self>> | undefined;
 }
 
+/**
+ * A {@link ResourceTag} bound to a concrete {@link Host} — its `[hostSym]` narrowed to that host's
+ * `HostKey<HSelf>`, which is how {@link Resource.client} discriminates the host-aware path. Returned
+ * by the host-bearing tag constructors. It's a **named** type (not an inline `& { [hostSym] }`) so a
+ * consumer can `export` a host-bearing tag without leaking the internal symbol (TS4020).
+ *
+ * @public
+ */
+export interface HostBoundTag<Self, S extends Spec, HSelf>
+  extends ResourceTag<Self, S> {
+  readonly [hostSym]: HostKey<HSelf>;
+}
+
 /** The contract kind a tag was built for (e.g. `@nikscripts/effect-pm/QueueResource`), or
  *  `undefined` for a bare {@link Resource.Tag} or any non-tag. The robust replacement for sniffing
  *  a tag's spec; accepts `unknown` so a `Group` member can be passed straight in. @since 1.0.0 */
@@ -1010,7 +1023,7 @@ const makeTag = <Self>() => {
       readonly kind?: string;
       readonly host: HostKey<HSelf>;
     },
-  ): ResourceTag<Self, S> & { readonly [hostSym]: HostKey<HSelf> };
+  ): HostBoundTag<Self, S, HSelf>;
   function build<const S extends Spec>(
     key: string,
     spec: S,
@@ -1058,9 +1071,7 @@ export interface TagFactory<S extends Spec> {
  * @public
  */
 export interface HostTagFactory<S extends Spec, HSelf> {
-  <Self>(key: string): ResourceTag<Self, S> & {
-    readonly [hostSym]: HostKey<HSelf>;
-  };
+  <Self>(key: string): HostBoundTag<Self, S, HSelf>;
   readonly groupId: string;
   readonly description: string | undefined;
   readonly [specSym]: S;
@@ -1657,7 +1668,7 @@ const buildClientService = <Self, S extends Spec>(
  * @public
  */
 function clientLayer<Self, S extends Spec, HSelf>(
-  tag: ResourceTag<Self, S> & { readonly [hostSym]: HostKey<HSelf> },
+  tag: HostBoundTag<Self, S, HSelf>,
 ): Layer.Layer<Self, never, HSelf>;
 function clientLayer<Self, S extends Spec>(
   tag: ResourceTag<Self, S>,

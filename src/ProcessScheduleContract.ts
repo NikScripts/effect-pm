@@ -21,11 +21,11 @@
  */
 import { Context, Effect, Layer, Option, Schema, Stream } from "effect";
 import * as Resource from "./Resource";
-import { hostSym } from "./Resource";
 import type {
   HandlerContextOf,
   HostKey,
   LocalCapability,
+  HostBoundTag,
   ResourceTag,
   ServiceOf,
 } from "./Resource";
@@ -149,7 +149,7 @@ export const processScheduleTag = <Self>() => {
   function build<HSelf>(
     key: string,
     options: { readonly description?: string; readonly host: HostKey<HSelf> },
-  ): ResourceTag<Self, ProcessScheduleSpec> & { readonly [hostSym]: HostKey<HSelf> };
+  ): HostBoundTag<Self, ProcessScheduleSpec, HSelf>;
   function build(
     key: string,
     options?: { readonly description?: string },
