@@ -74,6 +74,10 @@
     "web-api-widget",
     "host-health-route",
     "resource-construction-shape",
-    "resource-readiness"
+    "resource-readiness",
+    "host-bound-tag",
+    "apimetrics-per-instance-serve",
+    "host-status-dashboard",
+    "readiness-dependencies"
   ]
 }

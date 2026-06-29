@@ -1,5 +1,37 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.13
+
+### Minor Changes
+
+- e1bf860: **Hosts in the dashboard.** `Resource.hostOf(tag)` reads a tag's bound `Resource.Host`, so
+  the web dashboard derives its host list from the `Group` tree (no registry). A host-status **die**
+  in the header shows one pip per host (coloured by its `HostStatus`, barrel-stacked, larger when
+  fewer); tap it for a hosts panel, tap a host for its full screen (per-resource readiness + live
+  logs), tap a resource to open its detail (back returns to the host). Header polished (screen-centered
+  title, negative-space resource count). New `/web`: `HostBar`, `HostDetail`, `HostDots`,
+  `hostStatusBundle`, `useHostBundle`, `leafByKey`; debug console gained icon + copy buttons. The
+  `resource-web` example is now a real remote dashboard (three hosts over `serveAllHttp`).
+
+- 9ae6c42: **ApiMetrics serves on a host (BREAKING).** `ApiMetrics` is now a per-instance resource
+  with its own RPC group, so it composes into `serveAllHttp` like a queue/process. New
+  `ApiMetrics.Tag<Self>()(clientId, { host?, description? })` (host-bearing returns `ApiMetricsHostTag`)
+  and `ApiMetrics.serverEntry(tag)` (fed from the Metric registry); host-bound keys are host-prefixed
+  so the same `clientId` on two hosts doesn't collide. Removed `serveInstances` / `clientInstances` /
+  `instance`; `layer` / `layerFor` unchanged.
+
+- a5a4b3c: **Dependency-aware readiness.** `withReadiness` derivations receive the prior readiness as
+  `base` and **stack** (extend a factory's check instead of replacing it); `Resource.readinessOf(tag)`
+  pulls a resource's readiness by tag (compile-time-checked dependency, local or remote);
+  `Resource.allReady([...])` ANDs checks. So a queue/process can report degraded when a dependency
+  (e.g. a database resource) is down.
+
+### Patch Changes
+
+- ad91f49: **Host-bearing tags can be `export`ed** — the host-bearing constructors return a named
+  `Resource.HostBoundTag` (and `ApiMetricsHostTag`) instead of an inline intersection, fixing TS4020
+  ("uses private name `hostSym`") when a consumer exports a host-bound tag.
+
 ## 0.8.0-beta.12
 
 ### Minor Changes
