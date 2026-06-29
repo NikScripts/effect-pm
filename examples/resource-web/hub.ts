@@ -144,7 +144,11 @@ const scoresApiMock = {
 // local mock. One shared transport → one host dot, auto-fed by the host's `HostStatus`.
 const wnbaTransport = Resource.connectHttp(WnbaHost, { url: "/rpc" });
 
+// Expose `WnbaHost` itself in the runtime (not only the resource clients): the host-status dot reads
+// `HostStatus` over the host's transport, so it needs `WnbaHost` in context. `wnbaTransport` is one
+// const (shared by reference), so all of these reuse a single connection.
 const appLayer = Layer.mergeAll(
+  wnbaTransport,
   Resource.client(BoxScoreQueue).pipe(Layer.provide(wnbaTransport)),
   Resource.client(LiveScorePoller).pipe(Layer.provide(wnbaTransport)),
   Resource.layer(ScoresApi, scoresApiMock),
