@@ -683,13 +683,15 @@ export const WindowDialog = (props: {
 }): React.ReactElement => {
   const [start, setStart] = React.useState("");
   const [stop, setStop] = React.useState("");
-  // Re-seed the fields whenever the dialog opens (empty for add, the entry's times for edit).
+  // Seed the fields once per open (the false→true edge), NOT on every `initial` change — the
+  // schedule polls, so re-seeding on `initial` would clobber the user's edits mid-typing.
+  const wasOpen = React.useRef(false);
   React.useEffect(() => {
-    if (!props.open) return;
-    setStart(props.initial === undefined ? "" : toLocalInput(DateTime.toEpochMillis(props.initial.startAt)));
-    setStop(
-      props.initial?.stopAt === undefined ? "" : toLocalInput(DateTime.toEpochMillis(props.initial.stopAt)),
-    );
+    if (props.open && !wasOpen.current) {
+      setStart(props.initial === undefined ? "" : toLocalInput(DateTime.toEpochMillis(props.initial.startAt)));
+      setStop(props.initial?.stopAt === undefined ? "" : toLocalInput(DateTime.toEpochMillis(props.initial.stopAt)));
+    }
+    wasOpen.current = props.open;
   }, [props.open, props.initial]);
   const editing = props.initial !== undefined;
   const startMs = millisFromLocalInput(start);
@@ -705,7 +707,8 @@ export const WindowDialog = (props: {
   };
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent>
+      {/* Don't autofocus the first field — on iOS focusing a datetime-local pops the picker. */}
+      <DialogContent onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>{editing ? "Edit run window" : "Add run window"}</DialogTitle>
           <DialogDescription>The process is armed while now is inside a window.</DialogDescription>
