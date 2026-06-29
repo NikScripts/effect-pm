@@ -1104,21 +1104,44 @@ type ApiSeriesKey = keyof typeof API_SERIES;
  *  accumulated metrics history. @since 1.0.0 */
 export const ApiMetricChart = (props: { readonly bundle: ApiBundle }): React.ReactElement => {
   const [series, setSeries] = React.useState<ApiSeriesKey>("throughput");
+  // Selection is kept by duration (not index) so it survives as more windows unlock with data.
+  const [windowMs, setWindowMs] = React.useState<number>(WINDOWS[0].ms);
   const r = useAtomValue(props.bundle.history);
   const history: ReadonlyArray<ApiPoint> = AsyncResult.isSuccess(r) ? r.value : [];
   const def = API_SERIES[series];
-  const data = history.map((p, i) => ({ i, value: def.pick(p) }));
+  const oldest = history[0];
+  const span = oldest === undefined ? 0 : now() - oldest.t;
+  const windows = availableWindows(span, history.length > 0);
+  const win = windows.find((w) => w.ms === windowMs) ?? windows[windows.length - 1] ?? WINDOWS[0];
+  const cutoff = win.ms === ALL_MS ? Number.NEGATIVE_INFINITY : now() - win.ms;
+  const data = history.filter((p) => p.t >= cutoff).map((p, i) => ({ i, value: def.pick(p) }));
   return (
     <div>
-      <select
-        value={series}
-        onChange={(e) => setSeries(e.target.value as ApiSeriesKey)}
-        className="mb-2 rounded-md border bg-card px-2 py-1 text-sm font-semibold text-foreground"
-      >
-        {(Object.keys(API_SERIES) as Array<ApiSeriesKey>).map((k) => (
-          <option key={k} value={k}>{API_SERIES[k].label}</option>
-        ))}
-      </select>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <select
+          value={series}
+          onChange={(e) => setSeries(e.target.value as ApiSeriesKey)}
+          className="rounded-md border bg-card px-2 py-1 text-sm font-semibold text-foreground"
+        >
+          {(Object.keys(API_SERIES) as Array<ApiSeriesKey>).map((k) => (
+            <option key={k} value={k}>{API_SERIES[k].label}</option>
+          ))}
+        </select>
+        {/* Compact time-window control: tap to cycle through the windows the data reaches. */}
+        <button
+          type="button"
+          onClick={() => {
+            const idx = windows.findIndex((w) => w.ms === win.ms);
+            const next = windows[(idx + 1) % windows.length];
+            if (next !== undefined) setWindowMs(next.ms);
+          }}
+          className="rounded-md border bg-card px-2 py-1 text-sm font-semibold text-foreground transition-colors hover:border-ring"
+          aria-label={`time window: ${win.label} (tap to change)`}
+          title="tap to change time window"
+        >
+          {win.label}
+        </button>
+      </div>
       <div className="-mx-3 -mb-3 h-[140px]">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
