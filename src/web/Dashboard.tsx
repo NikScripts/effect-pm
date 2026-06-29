@@ -15,7 +15,7 @@
  */
 import * as React from "react";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Plus, Trash2 } from "lucide-react";
 import {
   type DashboardRuntime,
   type GroupNode,
@@ -32,7 +32,8 @@ import { RuntimeProvider, useProcessBundle, useQueueBundle, useRuntime } from ".
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { Cell, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ScheduleEditor, StatusBadge, displayName } from "./widgets";
+import { AddWindowDialog, Cell, ConfirmDialog, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ScheduleEditor, StatusBadge, WeekSchedule, displayName, useScheduleEdit } from "./widgets";
+import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
 
 // route.selected is an opaque leaf tag — narrow it to a queue / process by its contract.
@@ -84,6 +85,56 @@ const LogsPage = (props: { readonly tag: QueueTag | ProcessTag; readonly onClose
   return <LogBox bundle={bundle} full onToggle={props.onClose} meta={<> · {displayName(props.tag.key)}</>} />;
 };
 
+const DAY_MS = 86_400_000;
+
+/** Fullscreen weekly schedule view for a process — its own route (`/…/Process/schedule`): a 7-day
+ *  calendar grid of the run windows with week navigation, plus add / clear behind one lock. */
+const SchedulePage = (props: { readonly tag: ProcessTag; readonly onClose: () => void }): React.ReactElement => {
+  const bundle = useProcessBundle(props.tag);
+  const { list, addEntry, clearAll } = useScheduleEdit(bundle);
+  const [weekStart, setWeekStart] = React.useState(() => startOfWeekMillis(now()));
+  const [addOpen, setAddOpen] = React.useState(false);
+  const [confirmClear, setConfirmClear] = React.useState(false);
+  const [locked, setLocked] = React.useState(true);
+  const vt = useViewTransitionStyle("schedule-panel");
+  return (
+    <div style={vt} className="fixed inset-0 z-50 flex flex-col gap-2 bg-background p-2 safe-area">
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={props.onClose}>← back</Button>
+        <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.key)} · schedule</strong>
+        <LockToggle locked={locked} onToggle={() => setLocked((l) => !l)} />
+      </div>
+      <div className="flex items-center gap-2 text-sm">
+        <Button variant="ghost" size="icon" onClick={() => setWeekStart((w) => w - 7 * DAY_MS)} aria-label="previous week">
+          <ChevronLeft className="size-4" />
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setWeekStart(startOfWeekMillis(now()))}>this week</Button>
+        <Button variant="ghost" size="icon" onClick={() => setWeekStart((w) => w + 7 * DAY_MS)} aria-label="next week">
+          <ChevronRight className="size-4" />
+        </Button>
+        <span className="text-xs text-muted-foreground">week of {fmtDayLabel(weekStart)}</span>
+        <Button variant="outline" size="sm" className="ml-auto" onClick={() => setAddOpen(true)} disabled={locked}>
+          <Plus className="size-4" /> add
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setConfirmClear(true)} disabled={locked || list.length === 0}>
+          <Trash2 className="size-4" />
+        </Button>
+      </div>
+      <WeekSchedule entries={list} weekStart={weekStart} />
+      <AddWindowDialog open={addOpen} onOpenChange={setAddOpen} onAdd={addEntry} />
+      <ConfirmDialog
+        open={confirmClear}
+        onOpenChange={setConfirmClear}
+        title="Clear schedule?"
+        description="Remove all run windows. The process disarms until new windows are added."
+        confirmLabel="Clear"
+        destructive
+        onConfirm={clearAll}
+      />
+    </div>
+  );
+};
+
 const QueueDetail = (props: {
   readonly tag: QueueTag;
   readonly onBack: () => void;
@@ -116,6 +167,7 @@ const ProcessDetail = (props: {
   readonly tag: ProcessTag;
   readonly onBack: () => void;
   readonly onOpenLogs: () => void;
+  readonly onOpenSchedule: () => void;
 }): React.ReactElement => {
   const bundle = useProcessBundle(props.tag);
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
@@ -129,7 +181,7 @@ const ProcessDetail = (props: {
       </div>
       <ProcessStats bundle={bundle} />
       <ProcessControls bundle={bundle} locked={locked} onToggleLock={() => setLocked((l) => !l)} />
-      <ScheduleEditor bundle={bundle} locked={locked} />
+      <ScheduleEditor bundle={bundle} locked={locked} onOpenFull={props.onOpenSchedule} />
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} />
     </div>
   );
@@ -146,11 +198,17 @@ const DashboardInner = (props: { readonly group: GroupNode }): React.ReactElemen
     const toGrid = (id: string) => () => transition(`res-${id}`, () => route.back());
     const openLogs = (): void => transition("log-panel", () => route.open("logs"));
     const closeLogs = (): void => transition("log-panel", () => route.back());
+    const openSchedule = (): void => transition("schedule-panel", () => route.open("schedule"));
+    const closeSchedule = (): void => transition("schedule-panel", () => route.back());
     if (route.view === "logs") {
       if (isProcessTag(selected) || isQueueTag(selected)) return <LogsPage tag={selected} onClose={closeLogs} />;
       return <></>;
     }
-    if (isProcessTag(selected)) return <ProcessDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} />;
+    if (route.view === "schedule") {
+      if (isProcessTag(selected)) return <SchedulePage tag={selected} onClose={closeSchedule} />;
+      return <></>;
+    }
+    if (isProcessTag(selected)) return <ProcessDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} onOpenSchedule={openSchedule} />;
     if (isQueueTag(selected)) return <QueueDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} />;
     return <></>;
   }

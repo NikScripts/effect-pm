@@ -1,17 +1,15 @@
 /**
  * @module examples/resource-web/hub
  *
- * An example `ServicesHub`-shaped tree (the wow-sports shape: leagues of processes +
- * queues + a schedule, nested under one hub) built on the **real** `.Tag` toolkit —
- * the review fixture for the shipped `@nikscripts/effect-pm/web` widgets. Local
- * layers here so it renders standalone; swapping each for `Resource.client` + connect
- * is how it points at a remote host.
+ * The review fixture for the shipped `@nikscripts/effect-pm/web` widgets — one of each **unique**
+ * thing the dashboard renders, no duplicates: a nested group, a queue, and a scheduled process
+ * (the WNBA live-score poller, armed only around game time). Local layers so it renders standalone;
+ * swapping each for `Resource.client` + connect is how it points at a remote host.
  */
 import { DateTime, Duration, Effect, Layer, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import * as QueueResource from "../../src/QueueContract";
 import * as ProcessResource from "../../src/ScheduledProcess";
-import * as ProcessScheduleResource from "../../src/ProcessScheduleContract";
 import * as Group from "../../src/Group";
 import { Polling } from "../../src/Polling";
 import { ProcessSchedule } from "../../src/ProcessSchedule";
@@ -19,31 +17,18 @@ import { ProcessStorage } from "../../src/ProcessStorage";
 
 const importJob = Schema.Struct({ id: Schema.String });
 
-// ── NWSL — two import queues + a season-matches process ──────────────────────
-class RosterImportQueue extends QueueResource.Tag<RosterImportQueue>()("nwsl/RosterImportQueue", importJob) {}
-class MediaImportQueue extends QueueResource.Tag<MediaImportQueue>()("nwsl/MediaImportQueue", importJob) {}
-class SeasonMatches extends ProcessResource.Tag<SeasonMatches>()("nwsl/SeasonMatches") {}
-
-// ── WNBA — a live-score poller + a cron schedule ─────────────────────────────
+// A queue (box-score imports) and a scheduled process (the live-score poller), under one league.
+class BoxScoreQueue extends QueueResource.Tag<BoxScoreQueue>()("wnba/BoxScoreQueue", importJob) {}
 class LiveScorePoller extends ProcessResource.Tag<LiveScorePoller>()("wnba/LiveScorePoller") {}
-class WnbaCron extends ProcessScheduleResource.Tag<WnbaCron>()("wnba/Cron") {}
 
-/** NWSL league group. */
-export class Nwsl extends Group.Tag<Nwsl>("hub/Nwsl")({
-  RosterImportQueue,
-  MediaImportQueue,
-  SeasonMatches,
-}) {}
-
-/** WNBA league group. */
+/** WNBA league group — a nested group the dashboard drills into. */
 export class Wnba extends Group.Tag<Wnba>("hub/Wnba")({
   LiveScorePoller,
-  Cron: WnbaCron,
+  BoxScoreQueue,
 }) {}
 
 /** The hub the dashboard renders. */
 export class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
-  Nwsl,
   Wnba,
 }) {}
 
@@ -72,18 +57,12 @@ const pollerSchedule = ProcessSchedule.define(({ window, all }) =>
 );
 
 const appLayer = Layer.mergeAll(
-  QueueResource.layer(RosterImportQueue, { effect: importWorker, concurrency: 3 }),
-  QueueResource.layer(MediaImportQueue, { effect: importWorker, concurrency: 2 }),
-  ProcessResource.layer(SeasonMatches, {
-    effect: Effect.logInfo("nwsl: polling season matches"),
-    polling: Polling.spaced(Duration.seconds(3)),
-  }),
+  QueueResource.layer(BoxScoreQueue, { effect: importWorker, concurrency: 3 }),
   ProcessResource.layer(LiveScorePoller, {
     effect: Effect.logInfo("wnba: polling live scores"),
     polling: Polling.spaced(Duration.seconds(2)),
     scheduleLayer: pollerSchedule,
   }),
-  ProcessScheduleResource.layer(WnbaCron, { initial: [] }),
 ).pipe(Layer.provide(ProcessStorage.layer));
 
 /** One reactive runtime providing every resource in the hub. */

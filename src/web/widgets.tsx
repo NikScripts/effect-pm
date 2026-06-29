@@ -12,7 +12,7 @@ import * as React from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { DateTime } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { Lock, LockOpen, Pause, Play, Plus, Power, RotateCw, Square, Trash2, X } from "lucide-react";
+import { Lock, LockOpen, Maximize2, Pause, Play, Plus, Power, RotateCw, Square, Trash2, X } from "lucide-react";
 import * as Group from "../Group";
 import {
   type CommandAtom,
@@ -32,7 +32,7 @@ import { useProcessBundle, useQueueBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
-import { dateFromMillis, fmtClock, millisFromLocalInput, now } from "./now";
+import { dateFromMillis, fmtClock, fmtDayLabel, millisFromLocalInput, now, startOfDayMillis } from "./now";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
@@ -493,7 +493,7 @@ export const ActionButton = (props: {
 
 /** Lock toggle for a control row — guards against accidental taps. Locking is immediate;
  *  unlocking opens a confirm dialog so the guard isn't fat-fingered off. @since 1.0.0 */
-const LockToggle = (props: { readonly locked: boolean; readonly onToggle: () => void }): React.ReactElement => {
+export const LockToggle = (props: { readonly locked: boolean; readonly onToggle: () => void }): React.ReactElement => {
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const onClick = (): void => {
     if (props.locked) {
@@ -685,7 +685,7 @@ const ScheduleRow = (props: {
 );
 
 /** The popup that adds one run window — start (required) + optional stop. @since 1.0.0 */
-const AddWindowDialog = (props: {
+export const AddWindowDialog = (props: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly onAdd: (entry: ScheduleEntry) => void;
@@ -746,38 +746,139 @@ const AddWindowDialog = (props: {
  *  `setSchedule`/`clearSchedule` to mutate — gated by the **shared** process lock (`locked`), so
  *  one lock guards both the controls and the schedule. Edits apply optimistically (the schedule is
  *  read once on open); adding a window is a popup. @since 1.0.0 */
-export const ScheduleEditor = (props: {
-  readonly bundle: ProcessBundle;
-  readonly locked: boolean;
-}): React.ReactElement => {
-  const loadedR = useAtomValue(props.bundle.schedule);
+/** The shared edit state for a process schedule — the current entries plus add/remove/clear, applied
+ *  optimistically (the schedule reads once on open). Used by both the inline {@link ScheduleEditor}
+ *  and the fullscreen week view. @since 1.0.0 */
+export const useScheduleEdit = (
+  bundle: ProcessBundle,
+): {
+  readonly list: ReadonlyArray<ScheduleEntry>;
+  readonly addEntry: (entry: ScheduleEntry) => void;
+  readonly remove: (index: number) => void;
+  readonly clearAll: () => void;
+} => {
+  const loadedR = useAtomValue(bundle.schedule);
   const loaded = AsyncResult.isSuccess(loadedR) ? loadedR.value : undefined;
-  const setSchedule = useAtomSet(props.bundle.setSchedule);
-  const clearSchedule = useAtomSet(props.bundle.clearSchedule);
+  const setSchedule = useAtomSet(bundle.setSchedule);
+  const clearSchedule = useAtomSet(bundle.clearSchedule);
   const [edited, setEdited] = React.useState<ReadonlyArray<ScheduleEntry> | undefined>(undefined);
-  const [addOpen, setAddOpen] = React.useState(false);
-  const [confirmClear, setConfirmClear] = React.useState(false);
-  const locked = props.locked;
-
   const list = edited ?? loaded ?? [];
-
   const apply = (next: ReadonlyArray<ScheduleEntry>): void => {
     setEdited(next);
     setSchedule(next);
   };
-  const addEntry = (entry: ScheduleEntry): void =>
-    apply([...list, entry].sort((a, b) => DateTime.toEpochMillis(a.startAt) - DateTime.toEpochMillis(b.startAt)));
-  const remove = (i: number): void => apply(list.filter((_, j) => j !== i));
-  const clearAll = (): void => {
-    setEdited([]);
-    clearSchedule();
+  return {
+    list,
+    addEntry: (entry) =>
+      apply([...list, entry].sort((a, b) => DateTime.toEpochMillis(a.startAt) - DateTime.toEpochMillis(b.startAt))),
+    remove: (i) => apply(list.filter((_, j) => j !== i)),
+    clearAll: () => {
+      setEdited([]);
+      clearSchedule();
+    },
   };
+};
+
+const HOUR_PX = 28;
+const DAY_PX = 24 * HOUR_PX;
+const DAY_MS = 86_400_000;
+
+/** A weekly calendar grid of the run windows — 7 day columns × 24 hours, each window drawn as a
+ *  block at its real position, with a "now" line. Multi-day windows are clipped per day; open-ended
+ *  windows fill to the end of each day from their start. @since 1.0.0 */
+export const WeekSchedule = (props: {
+  readonly entries: ReadonlyArray<ScheduleEntry>;
+  readonly weekStart: number;
+}): React.ReactElement => {
+  const nowMs = now();
+  const todayStart = startOfDayMillis(nowMs);
+  const days = Array.from({ length: 7 }, (_, i) => props.weekStart + i * DAY_MS);
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card">
+      <div className="flex border-b text-xs text-muted-foreground">
+        <div className="w-10 shrink-0" />
+        {days.map((d) => (
+          <div key={d} className={cn("flex-1 p-1 text-center", d === todayStart && "font-semibold text-foreground")}>
+            {fmtDayLabel(d)}
+          </div>
+        ))}
+      </div>
+      <div className="flex min-h-0 flex-1 overflow-y-auto">
+        <div className="w-10 shrink-0">
+          {Array.from({ length: 24 }, (_, h) => (
+            <div key={h} style={{ height: HOUR_PX }} className="pr-1 text-right text-[10px] text-muted-foreground">
+              {String(h).padStart(2, "0")}
+            </div>
+          ))}
+        </div>
+        {days.map((dayStart) => {
+          const dayEnd = dayStart + DAY_MS;
+          return (
+            <div key={dayStart} className="relative flex-1 border-l" style={{ height: DAY_PX }}>
+              {Array.from({ length: 24 }, (_, h) => (
+                <div key={h} style={{ top: h * HOUR_PX }} className="absolute inset-x-0 border-b border-border/40" />
+              ))}
+              {nowMs >= dayStart && nowMs < dayEnd ? (
+                <div className="absolute inset-x-0 z-10 border-t-2 border-[#ef4444]" style={{ top: ((nowMs - dayStart) / DAY_MS) * DAY_PX }} />
+              ) : null}
+              {props.entries.flatMap((entry, idx) => {
+                const s = DateTime.toEpochMillis(entry.startAt);
+                const e = entry.stopAt === undefined ? Number.POSITIVE_INFINITY : DateTime.toEpochMillis(entry.stopAt);
+                const from = Math.max(s, dayStart);
+                const to = Math.min(e, dayEnd);
+                if (to <= from) return [];
+                const top = ((from - dayStart) / DAY_MS) * DAY_PX;
+                const height = Math.max(((to - from) / DAY_MS) * DAY_PX, 4);
+                const label = entry.id ?? fmtClock(s);
+                return [
+                  <div
+                    key={`${idx}-${dayStart}`}
+                    style={{ top, height }}
+                    className="absolute inset-x-0.5 z-20 overflow-hidden rounded border border-primary bg-primary/30 px-1 text-[10px] leading-tight text-foreground"
+                    title={`${label} · ${fmtWhen(entry.startAt)} → ${entry.stopAt === undefined ? "open-ended" : fmtWhen(entry.stopAt)}`}
+                  >
+                    {label}
+                  </div>,
+                ];
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+/** View + edit a process's schedule (the run windows that arm it). Reads the current entries, then
+ *  `setSchedule`/`clearSchedule` to mutate — gated by the **shared** process lock (`locked`), so one
+ *  lock guards both the controls and the schedule. Adding a window is a popup; `onOpenFull` expands
+ *  to the fullscreen week view. @since 1.0.0 */
+export const ScheduleEditor = (props: {
+  readonly bundle: ProcessBundle;
+  readonly locked: boolean;
+  readonly onOpenFull?: () => void;
+}): React.ReactElement => {
+  const { list, addEntry, remove, clearAll } = useScheduleEdit(props.bundle);
+  const [addOpen, setAddOpen] = React.useState(false);
+  const [confirmClear, setConfirmClear] = React.useState(false);
+  const locked = props.locked;
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border bg-card p-3">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span>SCHEDULE · {list.length} window{list.length === 1 ? "" : "s"}</span>
-        <Button variant="outline" size="sm" className="ml-auto" onClick={() => setAddOpen(true)} disabled={locked}>
+        {props.onOpenFull !== undefined ? (
+          <button
+            type="button"
+            onClick={props.onOpenFull}
+            className="ml-auto rounded p-1 hover:bg-accent"
+            title="week view"
+            aria-label="fullscreen week view"
+          >
+            <Maximize2 className="size-4" />
+          </button>
+        ) : null}
+        <Button variant="outline" size="sm" className={props.onOpenFull === undefined ? "ml-auto" : ""} onClick={() => setAddOpen(true)} disabled={locked}>
           <Plus className="size-4" /> add
         </Button>
         <Button variant="ghost" size="sm" onClick={() => setConfirmClear(true)} disabled={locked || list.length === 0}>

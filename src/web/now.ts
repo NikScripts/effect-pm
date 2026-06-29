@@ -27,3 +27,22 @@ export const millisFromLocalInput = (value: string): number | undefined => {
   const ms = new Date(value).getTime();
   return Number.isNaN(ms) ? undefined : ms;
 };
+
+const DAY_MS = 86_400_000;
+
+/** Local midnight (epoch ms) of the day containing `millis`. @since 1.0.0 */
+export const startOfDayMillis = (millis: number): number => {
+  const d = dateFromMillis(millis);
+  return (
+    millis -
+    (d.getHours() * 3_600_000 + d.getMinutes() * 60_000 + d.getSeconds() * 1_000 + d.getMilliseconds())
+  );
+};
+
+/** Local midnight (epoch ms) of the Sunday that starts the week containing `millis`. @since 1.0.0 */
+export const startOfWeekMillis = (millis: number): number =>
+  startOfDayMillis(millis) - dateFromMillis(millis).getDay() * DAY_MS;
+
+/** A short weekday + day-of-month label for a day, e.g. "Mon 3". @since 1.0.0 */
+export const fmtDayLabel = (millis: number): string =>
+  dateFromMillis(millis).toLocaleDateString([], { weekday: "short", day: "numeric" });
