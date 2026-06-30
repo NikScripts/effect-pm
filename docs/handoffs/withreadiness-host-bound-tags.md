@@ -68,9 +68,10 @@ need a hand-rolled overload, and new helpers don't silently exclude host-bound t
 
 ## ✅ SHIPPED (2026-06-29) — #1, #2 resolved; #3 evaluated, union kept
 
-- **#1, #2** resolved: both `withReadiness` overloads accept `ResourceTag<any, any> |
-  HostBoundTag<any, any, any>`, so a host-bound tag works via the data-last
-  `tag.pipe(Resource.withReadiness(...))` form (wow's `TODO(#29)` path) — regression test in
+- **#1, #2** resolved on **both** forms. Data-last `.pipe` names both arms (`ResourceTag<any, any> |
+  HostBoundTag<any, any, any>`); data-first uses **inferred** overloads (host-bound first, then
+  hostless) so it accepts a fully-defined host-bound *class* (`typeof X`) and preserves the host in the
+  return — the way `client`/`layer` accept a class. Regression tests for both in
   `test/resource-readiness.test.ts`. **Group types stay fully precise (`RpcGroupOf<S>`); no cast.**
 - **#3 (root cause) — evaluated three structural fixes, kept the explicit union:**
   - *Erase `[groupSym]` to `RpcGroup<any>`* (makes `HostBoundTag` assignable) — **rejected**: it
@@ -82,13 +83,12 @@ need a hand-rolled overload, and new helpers don't silently exclude host-bound t
   - *Host as a 3rd type param of `ResourceTag`* — viable but a worse trade: needs a conditional
     `[hostSym]` field, widening every helper constraint to `<any,any,any>` (same footgun, reshaped),
     fragile `client` `never`-vs-host discrimination, a public signature change, and perf risk.
-  - **Kept:** the explicit union on the ~2 helpers that take a tag. It's not a band-aid — it's the
-    honest "accepts either tag variant" input (`client` already uses the same shape), fully precise,
-    no cast, lowest risk. The only cost is naming both arms on those helpers.
-- **Caveat:** the data-**first** *class* form `Resource.withReadiness(SomeHostBoundClass, fn)` does
-  **not** typecheck (a `typeof Class` constructor isn't assignable to the union — a `Context.ServiceClass`
-  variance quirk, independent of `[groupSym]`). The supported host-bound path is the data-last `.pipe`
-  form, which is what the contracts and wow use. Data-first works for host-bound tag *values* (contracts).
+  - **Kept:** name both variants on the helpers that take a tag — data-last via the explicit union,
+    data-first via inferred overloads. It's the honest "accepts either tag variant" input (`client`
+    uses the same shape), fully precise, no cast, lowest risk.
+- The earlier data-first *class* caveat is **resolved**: making the data-first overloads inferred
+  (rather than a fixed `<any,any>` union) lets a `typeof Class` constructor match — exactly how
+  `client`/`layer` already accept a host-bound class — with the host preserved in the return.
 
 ## Consumer status
 

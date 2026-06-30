@@ -915,12 +915,17 @@ export const withReadiness: {
     >,
   ): (tag: T) => T;
   // data-first: `Resource.withReadiness(tag, fn)` — full `ServiceOf<S, Self>` (contracts use this).
-  <T extends ResourceTag<any, any> | HostBoundTag<any, any, any>>(
-    tag: T,
-    readiness: ReadinessOf<
-      T extends ResourceTag<infer Self, infer S extends Spec> ? ServiceOf<S, Self> : never
-    >,
-  ): T;
+  // Two **inferred** overloads (not a fixed `<any,any>` union) so a fully-defined *class* — a
+  // `typeof X` constructor — is accepted, the way `client`/`layer` accept one; host-bound first so a
+  // host-bound tag keeps its host in the return.
+  <Self, S extends Spec, HSelf>(
+    tag: HostBoundTag<Self, S, HSelf>,
+    readiness: ReadinessOf<ServiceOf<S, Self>>,
+  ): HostBoundTag<Self, S, HSelf>;
+  <Self, S extends Spec>(
+    tag: ResourceTag<Self, S>,
+    readiness: ReadinessOf<ServiceOf<S, Self>>,
+  ): ResourceTag<Self, S>;
 } = Fn.dual(
   2,
   <T extends ResourceTag<any, any>>(tag: T, readiness: ReadinessOf<unknown>): T => {

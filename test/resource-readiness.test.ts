@@ -128,3 +128,19 @@ it("a host-bound tag can extend readiness via .pipe (regression)", () =>
       return yield* Resource.readinessCheck(HostedWorker, w);
     }).pipe(Effect.provide(Resource.layer(HostedWorker, { running: Effect.succeed(false) }))),
   ).then((r) => expect(r).toEqual({ ready: false, detail: "stopped" })));
+
+// Regression: data-first `withReadiness(tag, fn)` accepts a fully-defined host-bound CLASS (a
+// `typeof X` constructor). The data-first overloads are inferred (like `client`/`layer`), so the class
+// matches and its host is preserved in the return.
+class DataFirstWorker extends Resource.Tag<DataFirstWorker>()(
+  "dep/DataFirstWorker",
+  { running: Resource.query(Schema.Boolean) },
+  { host: DepHost },
+) {}
+
+it("data-first withReadiness accepts a host-bound class (regression)", () => {
+  const tag = Resource.withReadiness(DataFirstWorker, (svc) =>
+    Effect.map(svc.running, (r) => (r ? { ready: true } : { ready: false, detail: "stopped" })),
+  );
+  expect(tag).toBe(DataFirstWorker);
+});
