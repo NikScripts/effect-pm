@@ -1,5 +1,34 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.14
+
+### Minor Changes
+
+- 606dbbc: **Full-screen health board.** Tapping the host-status die opens a full-screen board over
+  every host's `HostStatus.resources[]`: a stat strip (hosts ok · resources ready · attention count),
+  a "needs attention" list of degraded resources across all hosts with their root cause (tap → that
+  resource), and a card per host (status · uptime · ready/total · resource count · a "ready over time"
+  sparkline) with its resource roster. Clean overlay navigation (resource → host → board → dashboard).
+  New `/web` export `HealthBoard`; the die now just opens it.
+
+- f844488: **Readiness on resource detail pages.** A resource's page shows an amber
+  `degraded — <root cause>` banner under its header when it isn't ready (read from its host's
+  `HostStatus` — the SSOT the board uses, via new `data.resourceHostRef`). It renders nothing while
+  ready/connecting, so it only takes space on a problem. New `/web` export `ResourceReadinessBanner`.
+
+### Patch Changes
+
+- 4d367ea: Host metrics: each health-board host card shows a client-accumulated **readiness
+  sparkline** (ready-count over time) that dips when a resource degrades — no server change.
+
+- 871b71e: The resource-page readiness banner is hidden while ready (only appears on a degraded
+  resource), so it doesn't push content down in the normal case.
+
+- bf83f20: **`withReadiness` accepts host-bound tags on both overloads.** The host-bound fix (a
+  `HostBoundTag` isn't assignable to a bare `ResourceTag<any, any>` — invariant `[groupSym]`) now
+  covers the data-first `Resource.withReadiness(tag, fn)` overload too, not just data-last `.pipe`.
+  (The supported way to attach readiness to a host-bound tag remains the data-last `.pipe` form.)
+
 ## 0.8.0-beta.13
 
 ### Minor Changes

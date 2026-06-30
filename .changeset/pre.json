@@ -78,6 +78,10 @@
     "host-bound-tag",
     "apimetrics-per-instance-serve",
     "host-status-dashboard",
-    "readiness-dependencies"
+    "readiness-dependencies",
+    "host-bound-readiness-pipe",
+    "health-board-triage",
+    "resource-readiness-banner",
+    "withreadiness-data-first-host-bound"
   ]
 }
