@@ -158,9 +158,10 @@ const wnbaHost = Resource.serveAllHttp([
     concurrency: 3,
     captureLogs: true,
   }),
-  // ApiMetrics serves like any resource; the fixture hands it the mock impl directly (a real app
-  // would use `ApiMetrics.serverEntry(ScoresApi)`, fed from the instrumented client's registry).
-  { tag: ScoresApi, impl: scoresApiMock },
+  // ApiMetrics serves like any resource; the fixture hands it the mock impl via `Resource.serverEntry`
+  // (spec-checked against the tag) — a real app would use `ApiMetrics.serverEntry(ScoresApi)`, fed from
+  // the instrumented client's registry.
+  Resource.serverEntry(ScoresApi, scoresApiMock),
   // Serve the scores DB from its own provided service (below) — the same instance the box-score
   // queue's readiness depends on via `readinessOf(ScoresDb)`, so the cascade is consistent.
   { tag: ScoresDb, impl: ScoresDb },

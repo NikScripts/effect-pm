@@ -111,19 +111,19 @@ See `apps/services-hub/docs/MONITORABLE-RESOURCES-PLAN.md` in the consumer repo.
 - `src/Resource.ts:614` `WireServiceOf<S>` — the spec-checked impl shape the literal path skips.
 - `src/ScheduledProcess.ts:593`, `src/ApiMetrics.ts:200` — the precedent `serverEntry`s (`{ tag, impl }`).
 
-## Maintainer status (2026-06-29) — DEFERRED, with a doc signpost shipped
+## Maintainer status (2026-06-29) — ✅ SHIPPED
 
-Implemented `Resource.serverEntry(tag, impl: WireServiceOf<S>): ServeEntry<never>` and hit a hard
-**tsgo perf cliff**: merely *exporting* it (not calling it) takes a `import * as Resource` consumer's
-typecheck from ~1s to **>5min**. Reproduced on `examples/resource-web` (defined-but-unexported = 1s;
-exported = >5min, both return-annotation variants). `serveHttp`/`server` use the same `WireServiceOf<S>`
-exported without issue, so it's something about `serverEntry`'s shape in the namespace under `import *`
-— not understood yet. Since **wow does `import * as Resource`**, shipping it would hang their typechecks
-— the opposite of the goal. So it's **not shipped** pending a tsgo perf investigation.
+`Resource.serverEntry(tag, impl: WireServiceOf<S>): ServeEntry<never>` is shipped — a spec-checked
+`serveAllHttp` entry, mirroring the contract `serverEntry`s. The `Resource.instance` JSDoc now points
+custom-resource serving at it (and says `instance` is for `serveInstances`). Dogfooded in
+`examples/resource-web` (ScoresApi served via `Resource.serverEntry`).
 
-What **did** ship: the discoverability fix — the `Resource.instance` JSDoc now says it's *not* for
-serving a single custom resource, and points to a `{ tag, impl }` entry in `serveAllHttp` + `client`.
-The `{ tag, impl }` literal remains the supported path (works today; impl just isn't spec-checked).
+False alarm en route: a first attempt looked like a hard tsgo/tsc perf cliff (a `import * as Resource`
+consumer's typecheck jumped from ~1s to >7min). Root cause was a **double export** — `export const
+serverEntry` *and* `serverEntry` in the `export { … }` aggregation block (the other helpers are
+`const X` + `export { X }`). The malformed duplicate export sent both compilers into a pathological
+loop. Declared once (`const serverEntry`, exported via the block), typecheck is back to ~2s. Lesson
+recorded so the next person doesn't mistake a duplicate-export for a type-perf problem.
 
 ## Related
 

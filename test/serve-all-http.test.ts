@@ -16,7 +16,9 @@ class Beta extends Resource.Tag<Beta>()("serveAll/Beta",
 ) {}
 
 const Server = Resource.serveAllHttp([
-  { tag: Alpha, impl: { where: Effect.succeed("alpha") } },
+  // Alpha via the spec-checked `Resource.serverEntry` (#4); Beta via a raw `{ tag, impl }` literal —
+  // both forms compose in one `serveAllHttp`, and the result requirement unions cleanly (#5).
+  Resource.serverEntry(Alpha, { where: Effect.succeed("alpha") }),
   { tag: Beta, impl: { where: Effect.succeed("beta"), shout: ({ msg }: { msg: string }) => Effect.succeed(msg.toUpperCase()) } },
 ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 

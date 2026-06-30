@@ -75,14 +75,18 @@ entry across three league serves.
 - Consumer: `apps/services-hub/src/layers/{nwsl,ebwsl,wnba}-serve.ts` — `as ServeEntry<never>` on each
   `ApiMetrics.serverEntry(...)`.
 
-## Maintainer status (2026-06-29) — DEFERRED (tsgo perf)
+## Maintainer status (2026-06-29) — ✅ SHIPPED
 
-Tried the variadic union signature (`<const Entries extends ReadonlyArray<ServeEntry<any>>>` +
-`Entries[number] extends ServeEntry<infer R> ? R : never`). It type-checks correctly but the
-conditional-over-a-tuple, evaluated against entries with **large specs** (a queue's ~22-method spec),
-blows the `examples/resource-web` typecheck past **2min** (was ~1s). Not worth a 🟡 DX win — reverted.
-The `as ServeEntry<never>` workaround stays for now; revisit with a cheaper formulation (the value side
-already builds each entry independently, so it's purely a signature-cost problem).
+`serveAllHttp` now takes `<const Entries extends ReadonlyArray<ServeEntry<any>>>` and **unions** each
+entry's `R` into the result (no per-entry `as ServeEntry<never>`). The earlier "this is too slow"
+conclusion was a misattribution — the slowness was the `serverEntry` double-export bug (see the
+serverEntry handoff), present in the same diff; with that fixed the variadic typechecks in ~2s.
+
+One real subtlety handled: a plain `{ tag, impl }` literal (impl a `Record`, no `Effect`) leaves `R`
+unconstrained → it infers `unknown`/`any`, which would poison the union. So the extractor collapses
+`any`/`unknown` to `never` (`EntryR`): typed entries (`serverEntry`, the contract `serverEntry`s) carry
+a real `R` that's kept; bare literals contribute nothing. Mixed queue-worker `R` + ApiMetrics `Scope`
+now unions cleanly.
 
 ## Related
 

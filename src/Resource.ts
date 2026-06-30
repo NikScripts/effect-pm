@@ -1322,6 +1322,44 @@ export interface ServeEntry<R = never> {
 }
 
 /**
+ * A typed {@link ServeEntry} for a **raw** custom resource — `serveAllHttp`'s counterpart to
+ * {@link Resource.layer} for serving. The impl is **spec-checked** against the tag's {@link Spec}
+ * (`WireServiceOf<S>`), so a typo or missing method is a compile error — a hand-written `{ tag, impl }`
+ * literal is typed `Record<string, unknown>` and silently accepts them. Mirrors
+ * `QueueResource.serverEntry` / `ScheduledProcess.serverEntry` / `ApiMetrics.serverEntry`. Note
+ * {@link instance} is **not** this — it builds a `ResourceInstance` for the {@link serveInstances}
+ * family and won't fit `serveAllHttp`.
+ *
+ * ```ts
+ * Resource.serveAllHttp([
+ *   Resource.serverEntry(Database, { status: pingStatus }), // ✅ spec-checked impl
+ *   QueueResource.serverEntry(RosterQueue, { effect }),
+ * ]);
+ * ```
+ *
+ * @public
+ */
+const serverEntry = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  impl: WireServiceOf<S>,
+): ServeEntry<never> => ({ tag, impl });
+
+/** One entry's requirement `R`, with `any`/`unknown` collapsed to `never` — a plain `{ tag, impl }`
+ *  literal (impl a `Record`, no `Effect`) leaves `R` unconstrained, so it infers `unknown` (or `any`);
+ *  treat that as "no requirement" rather than poisoning the whole union. Typed entries (`serverEntry`,
+ *  the contract `serverEntry`s) carry a real `R` that's kept. */
+type EntryR<E> = E extends ServeEntry<infer R>
+  ? 0 extends 1 & R
+    ? never
+    : unknown extends R
+      ? never
+      : R
+  : never;
+
+/** Union of every entry's requirement — `serveAllHttp`'s result `R` (see {@link EntryR}). */
+type ServeEntriesR<Entries extends ReadonlyArray<ServeEntry<any>>> = EntryR<Entries[number]>;
+
+/**
  * Serve **many** resources on **one** http `RpcServer` (one port) — the multi-resource counterpart
  * to {@link serveHttp}. Each resource's procedures are group-id-prefixed, so they coexist on the
  * one `/rpc` endpoint without collision; clients reach each via `Resource.client(Tag)` over a single
@@ -1337,8 +1375,8 @@ export interface ServeEntry<R = never> {
  *
  * @public
  */
-const serveAllHttp = <R = never>(
-  entries: ReadonlyArray<ServeEntry<R>>,
+const serveAllHttp = <const Entries extends ReadonlyArray<ServeEntry<any>>>(
+  entries: Entries,
   options?: {
     readonly path?: HttpRouter.PathInput;
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
@@ -1348,7 +1386,9 @@ const serveAllHttp = <R = never>(
       readonly path?: HttpRouter.PathInput;
     };
   },
-): Layer.Layer<never, never, R | HttpServer.HttpServer> => {
+  // Entries can carry *different* requirements (a queue's worker `R`, an ApiMetrics entry's `Scope`, a
+  // plain resource's `never`); union them — like `Layer.mergeAll` — instead of pinning all to one `R`.
+): Layer.Layer<never, never, ServeEntriesR<Entries> | HttpServer.HttpServer> => {
   if (entries.length === 0) {
     throw new Error("Resource.serveAllHttp: at least one resource is required");
   }
@@ -1368,7 +1408,7 @@ const serveAllHttp = <R = never>(
         () => import("./internal/hostStatusResource"),
       );
       const startedAt = yield* Clock.currentTimeMillis;
-      const buildImpl = (entry: ServeEntry<R>) =>
+      const buildImpl = (entry: ServeEntry<any>) =>
         (Effect.isEffect(entry.impl)
           ? entry.impl
           : Effect.succeed(entry.impl)
@@ -1437,7 +1477,7 @@ const serveAllHttp = <R = never>(
         Layer.provideMerge(options?.serialization ?? defaultSerialization),
       );
     }),
-  ) as unknown as Layer.Layer<never, never, R | HttpServer.HttpServer>;
+  ) as unknown as Layer.Layer<never, never, ServeEntriesR<Entries> | HttpServer.HttpServer>;
 };
 
 /** The header carrying the target instance key, set per-call by {@link forwardClient}. */
@@ -1459,9 +1499,8 @@ export interface ResourceInstance<S extends Spec> {
  *
  * **Not** how you serve a single custom resource on a shared host: this returns a
  * {@link ResourceInstance} for the {@link serveInstances} family, which `serveAllHttp` rejects. To
- * serve a custom `Resource.Tag` alongside queues/processes, put a `{ tag, impl }` entry in
- * {@link serveAllHttp} directly (the `impl` is the same {@link Resource.layer}/{@link Resource.server}
- * record), then reach it with {@link Resource.client} — see the `serveAllHttp` example.
+ * serve a custom `Resource.Tag` alongside queues/processes, use {@link Resource.serverEntry} (a
+ * spec-checked `serveAllHttp` entry), then reach it with {@link Resource.client}.
  *
  * @public
  */
@@ -2004,6 +2043,7 @@ export {
   instance,
   localLayer as layer,
   serverLayer as server,
+  serverEntry,
   serveHttp,
   serveAllHttp,
   serveInstances,
