@@ -27,7 +27,7 @@ of React/Ink/recharts.
 
 | Import | Purpose |
 | --- | --- |
-| `…/Resource` | `Resource.Tag` / `Host` / `client` / `connect` / `connectHttp` / `serveHttp` / **`serveAllHttp`** / `serverEntry`-host wiring |
+| `…/Resource` | `Resource.Tag` / `Host` / `client` / `connect` / `connectHttp` / `serveHttp` / **`serveAllHttp`** / **`serverEntry`** + readiness (**`withReadiness`** / **`readinessOf`** / **`allReady`**) |
 | `…/QueueContract` | `queueTag` (light tag), `serverEntry`, `serveHttp`, `layer` for a managed queue |
 | `…/ScheduledProcess` | `processTag` (light tag), `serverEntry`, `serveHttp`, `layer` for a scheduled/polling process |
 | `…/ProcessScheduleContract` | `processScheduleTag` — a schedule (run-windows) as its own resource |
@@ -39,7 +39,7 @@ of React/Ink/recharts.
 | `…/storage/sqlite` · `/redis` | durable storage backends |
 | **`…/cli`** | `makeResourceCli`, `resourcesByName`, `render` — a run-and-exit CLI from your tags |
 | **`…/tui`** | the reactive binding + terminal primitives for Ink dashboards |
-| **`…/web`** | React widgets + the reactive binding for browser dashboards |
+| **`…/web`** | React widgets + the reactive binding for browser dashboards — incl. the host **`HealthBoard`** (die → degraded resources + per-host cards) and `ResourceReadinessBanner` |
 
 > **Browser bundles:** import the **light** tags from `…/QueueContract` / `…/ScheduledProcess`
 > (not the engine namespaces) so the worker engine + node deps stay out of the browser build.

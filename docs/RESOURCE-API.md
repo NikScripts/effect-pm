@@ -530,6 +530,60 @@ const MyClientLive = HttpApiResource.layerEffect(MyClient, myCustomMake, {
 
 ---
 
+## Readiness
+
+Any resource can report **readiness** — whether it's actually able to serve, beyond merely being up. A host aggregates its resources' readiness into one result with two faces (SSOT): the plain `GET /health` route (`200` ok / `503` degraded) and `HostStatus` (the dashboard health board).
+
+`Readiness` is `{ ready: boolean; detail?: string }`. Attach a derivation with **`Resource.withReadiness`** — dual, so it reads naturally in a class `extends`:
+
+```ts
+class EdgeCache extends Resource.Tag<EdgeCache>()("edge/Cache", {
+  warm: Resource.query(Schema.Boolean),
+}).pipe(
+  Resource.withReadiness((svc) =>
+    Effect.map(svc.warm, (warm) => (warm ? { ready: true } : { ready: false, detail: "cold" })),
+  ),
+) {}
+```
+
+Derivations **stack**: a later `withReadiness` receives the previous one as a second arg, `base`, so you extend a contract's built-in check (e.g. a queue's `phase === "running"`) instead of replacing it.
+
+**Depend on another resource.** `Resource.readinessOf(tag)` yields a resource's service and runs *its* derivation; `Resource.allReady([...])` combines checks with AND (first not-ready wins). So a queue can report degraded when a dependency (e.g. a `Database` resource) is down — compile-time-checked (the dependency lands in the readiness Effect's requirements), and it works whether the dependency is local or reached over RPC:
+
+```ts
+class Jobs extends QueueResource.Tag<Jobs>()("app/Jobs", Item, { host: AppHost }).pipe(
+  Resource.withReadiness((_svc, base) =>
+    Resource.allReady([base, Resource.readinessOf(Database)]),
+  ),
+) {}
+```
+
+`Resource.readinessCheck(tag, service)` runs a tag's derivation (a tag with none is **ready by default**); `serveAllHttp` calls it to build the host aggregate.
+
+On the dashboard, the host **health board** (tap the host die) lists degraded resources across every host with their root cause, and each resource's own detail page shows a `degraded — <root cause>` banner (`ResourceReadinessBanner`).
+
+> Acquisition vs. readiness: get hard dependencies ready by acquiring them eagerly with `Layer.scoped` (failures surface at boot); readiness covers the *runtime* health `Layer` can't see (a connection that drops after boot).
+
+---
+
+## Serving custom resources (`serveAllHttp` / `serverEntry`)
+
+`Resource.serveAllHttp([entries])` serves **many** resources on **one** host/port (one `/rpc` + the auto-mounted `/health` + `HostStatus`); a client reaches each via `Resource.client(Tag)` over one `connectHttp` transport. It accepts entries with **different** requirements and **unions** them (a queue's worker `R`, an `ApiMetrics` `Scope`, a plain resource's `never`) — no per-entry cast.
+
+Build an entry with the contract `serverEntry` (`QueueResource` / `ScheduledProcess` / `ApiMetrics`) or, for a **raw** `Resource.Tag`, **`Resource.serverEntry(tag, impl)`** — which **spec-checks** the impl against the tag's spec (a bare `{ tag, impl }` literal is typed `Record<string, unknown>` and silently accepts typos). Two impl forms: a plain **record** (`R = never`) or an **`Effect`** that builds it carrying a requirement `R`.
+
+```ts
+Resource.serveAllHttp([
+  QueueResource.serverEntry(RosterQueue, { effect }),     // worker R
+  ApiMetrics.serverEntry(SdpApi),                         // Scope
+  Resource.serverEntry(Database, { status: pingStatus }), // raw, spec-checked
+]).pipe(Layer.provideMerge(NodeHttpServer.layer({ port: 3001 })));
+```
+
+> `Resource.instance` is **not** for this — it builds a `ResourceInstance` for the `serveInstances` family (one factory, many keyed instances) and won't fit `serveAllHttp`. To serve one custom resource, use `serverEntry`.
+
+---
+
 ## ProcessStorage Integration
 
 Resource modules automatically record runtime facts when the relevant storage facet is available in the environment. No configuration is needed beyond composing `ProcessStorage.layer` or a durable storage layer.
