@@ -66,6 +66,21 @@ the offending field covariant / `out`, relax `[groupSym]` to a bivariant or `unk
 have `Resource.Tag(…, { host })` return an intersection that stays assignable. Then helpers don't each
 need a hand-rolled overload, and new helpers don't silently exclude host-bound tags.
 
+## ✅ SHIPPED (2026-06-29) — #1, #2, #3 all resolved
+
+- **#3 (root cause)** fixed by **erasing `[groupSym]` to `RpcGroup.RpcGroup<any>`** on `ResourceTag`
+  (the exact "relax `[groupSym]`" option above; it already matched `ServeEntry.tag`'s field). With the
+  one invariant member gone, `HostBoundTag` *is* assignable to `ResourceTag<any, any>`. The
+  `Context.ServiceClass` constructor-variance worry turned out to be downstream of this too —
+  `typeof HostBoundClass` assigns now as well. The precise group is still built at runtime; only the
+  field type widened (sole reader is `serveAllHttp`'s merge, which just needs `.merge`).
+- **The `withReadiness` band-aid is gone** — both overloads are back to plain `ResourceTag<any, any>`,
+  no `| HostBoundTag`. No `| HostBoundTag` band-aids remain in the codebase (`client`'s `HostBoundTag`
+  overload stays — it's semantic discrimination for transport resolution, not an accept-it band-aid).
+- **#1, #2** are subsumed: data-last `.pipe` **and** data-first `withReadiness(tag, fn)` both accept a
+  host-bound tag (regression tests for both in `test/resource-readiness.test.ts`). wow's `TODO(#29)`
+  one-liner works on whichever form they prefer once this lands (next beta).
+
 ## Consumer status
 
 wow-sports shipped the served `Database` card without readiness (a plain host-bound tag — works) and

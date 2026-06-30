@@ -827,7 +827,13 @@ export interface ResourceTag<Self, S extends Spec>
   /** Resource-level help text (CLI/TUI section help, dashboard panel title) — if declared. */
   readonly description: string | undefined;
   readonly [specSym]: S;
-  readonly [groupSym]: RpcGroupOf<S>;
+  // Erased to `RpcGroup<any>` (the same shape `ServeEntry.tag` uses), NOT `RpcGroupOf<S>`: the
+  // per-`S` map (`ReadonlyMap<string, Rpc<methodName, …>>`) is invariant, which is the one member
+  // that makes a host-bound tag (a distinct interface) fail structural assignability to a bare
+  // `ResourceTag<any, any>`. Erasing it lets `HostBoundTag` *be* a `ResourceTag<any, any>` — so no
+  // helper needs a `| HostBoundTag` band-aid. The precise group is still built (`buildRpcGroup`); only
+  // the field type is widened, and the sole reader (`serveAllHttp` merge) just needs `.merge`.
+  readonly [groupSym]: RpcGroup.RpcGroup<any>;
   readonly [localCapSym]: Context.Key<
     LocalCapability<Self>,
     { readonly granted: true }
@@ -905,17 +911,15 @@ export const withReadiness: {
   // data-last (pipe): `tag.pipe(Resource.withReadiness(fn))` — the service type is derived from the
   // piped tag; `Self` is widened to `any` here so this can be used in a class `extends` position
   // without TS resolving the class's own (still-being-declared) type — see test/resource-readiness.
-  // The constraint names `HostBoundTag` explicitly: a host-bound tag is a distinct `interface` (kept an
-  // interface, not an intersection alias, so an exported host-bound tag doesn't leak `hostSym` through
-  // this generic — TS4020), so it isn't assignable to a bare `ResourceTag<any, any>` (invariant
-  // `[groupSym]`). Naming it keeps the comparison same-generic (lenient). Same on the data-first form.
-  <T extends ResourceTag<any, any> | HostBoundTag<any, any, any>>(
+  // Host-bound tags work without a `| HostBoundTag` arm: `HostBoundTag` is now assignable to
+  // `ResourceTag<any, any>` (the invariant `[groupSym]` was erased — see the field).
+  <T extends ResourceTag<any, any>>(
     readiness: ReadinessOf<
       T extends ResourceTag<any, infer S extends Spec> ? ServiceOf<S, any> : never
     >,
   ): (tag: T) => T;
   // data-first: `Resource.withReadiness(tag, fn)` — full `ServiceOf<S, Self>` (contracts use this).
-  <T extends ResourceTag<any, any> | HostBoundTag<any, any, any>>(
+  <T extends ResourceTag<any, any>>(
     tag: T,
     readiness: ReadinessOf<
       T extends ResourceTag<infer Self, infer S extends Spec> ? ServiceOf<S, Self> : never
