@@ -69,11 +69,12 @@ resources."
      status:      Resource.query(DbStatus),
      metrics:     Resource.stream(Metric),
    }).pipe(
-     Resource.multi((c) => ({
-       //          ↑ c = the typed per-instance contract (local-only excluded), precise
-       totalConnections: c.connections.pipe(Resource.combine(Combine.sum)),
-       fleetStatus:      c.status.pipe(Resource.combine(mergeStatus)),
-       fleetMetrics:     c.metrics.pipe(Resource.combine(Combine.mergeStreams)),
+     Resource.multi((m) => ({
+       //          ↑ m = the multi builder, typed against the contract (precise)
+       totalConnections: m.query((host) => host.connections, Combine.sum),
+       fleetMetrics:     m.stream((host) => host.metrics, Combine.mergeStreams),
+       // the possibilities — the full per-host client, fold over any/several fields:
+       fleetHealth:      m.query((host) => Effect.all({ conn: host.connections, st: host.status }), summarizeHealth),
      })),
      // future contract features pipe on here too
    );
@@ -84,10 +85,14 @@ resources."
    ) {}
    ```
 
-   - **Combine pipes onto the picked field** — `c.connections.pipe(Resource.combine(Combine.sum))`,
-     not separate `multiQuery`/`multiStream` constructors. The field knows its kind (query → fold,
-     stream → transform), so one `Resource.combine` combinator covers both; the source is implicit in
-     what you pipe. Fully type-checked (wrong kind / combine type → compile error).
+   - **The selector gets the full per-host client** (`host: ServiceOf<S>`), not a single picked field —
+     so a multi field can fold over any/several fields, derive, or call across them. `m.query(sel, fold)`
+     is exactly slice-1 `combineQuery(peerMap, sel, fold)`; `m.stream(sel, transform)` is `combineStream`.
+   - **Kind is glanceable** (it's an *extension* of the core contract): multi fields live in the
+     `Resource.multi((m) => …)` block (visually separate from `contract({…})`) **and** use `m.query` /
+     `m.stream` — distinct from the core `Resource.query` / `Resource.stream`. (Name the builder what
+     reads best — `m` / `fleet` / `across`.) This replaces the `c.field.pipe(Resource.combine(…))` form,
+     which buried the kind and only saw one field.
    - Combined fields sit **directly on the service under their own names**, beside the per-instance
      fields: `svc.connections` (this host) and `svc.totalConnections` (fleet). One class, both reads.
    - `Tag` consumes the resulting spec unchanged; `.pipe(withReadiness(...))` / `.pipe(multiHost(...))`
@@ -125,7 +130,7 @@ resources."
   wired by the toolkit straight from the tag's `multiHost` set (each host carries its URL). So there's
   **no `serveAcrossHosts({host, url, impl}[])` helper** — it would only re-state what the tag holds.
 - **Mesh (modes 2/3):** the toolkit builds a **keyed map of clients to the peers** from the tag's host
-  set + URLs. `c.connections.pipe(combine(...))` on host A = gather `A.local.connections` + each peer
+  set + URLs. `m.query((host) => host.connections, fold)` on host A = gather `A.local.connections` + each peer
   client's `.connections` (peers answer the **plain** per-instance query — no recursion) → fold over
   the per-host record.
 - **No mesh (mode 1):** the dashboard/aggregator holds all the hosts and does the same fold client-side.
@@ -154,7 +159,7 @@ host/URL/topology → decision 2 the `Host` carries its URL, so mode-3 needs no 
    (no Spec surgery, no wiring), browser + node, fully unit-tested. Usable today by a node aggregator.
    `src/MultiHost.ts`, exported `@nikscripts/effect-pm/MultiHost`.
 2. **Contract pipeline + wiring.** `Resource.contract({...}).pipe(Resource.multi((c) => ({...})))` with
-   `c.field.pipe(Resource.combine(strategy))`; `Host` carries its URL + `multiHost(...)` on the tag;
+   `m.query((host) => host.field, fold)` / `m.stream(...)` (full per-host client); `Host` carries its URL + `multiHost(...)` on the tag;
    multi-field impls call the slice-1 combine over a keyed peer map built from the tag; serve-per-host
    (`serverEntry`); modes 1–3. (`multiStream` lifecycle resolved here.)
 3. **Dashboard tools.** Expand a hostless leaf into per-host facets + the combined service; discovery
