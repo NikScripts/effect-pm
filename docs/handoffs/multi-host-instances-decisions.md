@@ -157,17 +157,25 @@ per-host outcome type → decision 9; contract shape → decision 8 piped form; 
 decision 2 the `Host` carries its URL.)
 
 ## Build slices
-1. **Combine core (this slice).** The isomorphic primitive: gather a field across a **caller-supplied**
-   keyed peer map, capturing each host's outcome, + the `Combine` strategies + `HostResult`. Pure
-   (no Spec surgery, no wiring), browser + node, fully unit-tested. Usable today by a node aggregator.
-   `src/MultiHost.ts`, exported `@nikscripts/effect-pm/MultiHost`.
-2. **Contract pipeline + wiring.** `Resource.contract({...}).pipe(Resource.multi((c) => ({...})))` with
-   `m.query((host) => host.field, fold)` / `m.stream(...)` (full per-host client); `Host` carries its URL + `multiHost(...)` on the tag;
-   multi-field impls call the slice-1 combine over a keyed peer map built from the tag; serve-per-host
-   (`serverEntry`); modes 1–3. (`multiStream` lifecycle resolved here.)
-3. **Dashboard tools.** Expand a hostless leaf into per-host facets + the combined service; discovery
-   via `hostsOf` + `HostStatus`.
-4. **Elected host (mode 4).** Static aggregator first; redis-push as the scale option.
+1. **Combine core — ✅ SHIPPED** (`src/MultiHost.ts`, `@nikscripts/effect-pm/MultiHost`). The isomorphic
+   primitive: `combineQuery`/`combineStream` gather a field across a caller-supplied keyed peer map,
+   capturing each host's outcome (`HostResult`), + the `Combine` strategies. Pure, browser + node, tested.
+2. **Contract pipeline + holder-side combine — ✅ SHIPPED** (slices 2a + 2b-1 + 2b-2, `src/Resource.ts`):
+   - `MultiField` member kind; `Spec`/`ServiceOf` extended (fleet fields surface as `Effect`/`Stream`);
+     wire/impl/rpc mappers + runtime iterators exclude them. `InstanceServiceOf<S>` = one host's service.
+   - `Resource.contract({...}).pipe(Resource.multi((m) => ({...})))` — `m.query`/`m.stream` with the
+     **full per-host client** selector, precise (data-last, flatMap-style), no casts. Each `MultiField`
+     carries a `materialize(peers)` closure (slice-1 combine).
+   - `Resource.combined(contract, peers)` — the holder-side **"combine anywhere"** tool: per-host client
+     map → fleet fields, gathered + folded locally. Browser/node/CLI. **Usable now.**
+3. **Auto-wiring on the tag — ⏳ NEXT (2b-3).** Variadic `Resource.multiHost(...hosts)` + `Host` carrying
+   its URL, so `client(tag)` auto-builds the per-host clients and `svc.totalConnections` works straight
+   off the tag (no explicit `Resource.combined` call). `Tag` accepts a `Contract`. `multiStream` live
+   subscription lifecycle. *Open design:* per-instance members on the combined tag-service (which host?),
+   and auto-composing N per-host transports inside one client layer.
+4. **Dashboard tools.** Expand a hostless leaf into per-host facets + the combined service; discovery
+   via `hostsOf` + `HostStatus`. (The dashboard can already use `Resource.combined` with its per-host bundles.)
+5. **Elected host / scale.** Deferred; push-to-redis if a holder shouldn't fan out (no mesh today).
 
 ## Builds on (already shipped)
 - `Resource.serverEntry` (record + Effect forms) — the per-host serve primitive (beta.15).
