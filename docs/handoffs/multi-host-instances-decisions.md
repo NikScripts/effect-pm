@@ -129,6 +129,25 @@ resources."
     the contract (decision 8); the **host set** (mode 2) is `.pipe(Resource.multiHost(NwslHost,
     EbwslHost, WnbaHost))` — variadic, the hosts carry their own URLs (decision 2) — or omitted (mode 1).
 
+13. **Two systems, one set of functions: holder-side `combined` vs internal `peers`.** A `MultiField`
+    holds *only* functions (selector + combine, captured in `materialize(peers)`), so the combine logic
+    is **reused verbatim** wherever there's a peer map — what differs is only *where the map comes from*
+    and *who computes*:
+    - **Holder-side fleet fields** (`Resource.combined(contract, peers)` / `svc.totalConnections`) — the
+      **default**, for *external* reads (dashboard / aggregator). The holder supplies clients it already
+      has; topology is holder→each host (star); peers **never** talk to each other; compute is local to
+      the holder. No mesh.
+    - **Internal peer capability** (`Resource.peers(Database)` — lowercase, a value/accessor — provided
+      by `Resource.peersLayer(Database)`) — **opt-in**, for the resource's *own* logic (a method impl,
+      readiness, a coordinator) needing cross-host data. `peersLayer` connects the `multiHost` set (via
+      `Host.url`) → a `host → InstanceServiceOf` map; topology is host→its peers (a **deliberate, scoped
+      mesh**); compute is on the host. You then feed that map to the **same** `Resource.combined` (or
+      `combineQuery`/`combineStream`, or iterate it raw). Connections from a host to its peers exist
+      **only** where you provide `peersLayer`; the default path never meshes.
+
+    So `Resource.combined` is the single shared entry point — the holder hands it its own clients, a host
+    hands it `yield* Resource.peers(...)`. Same call, same materializers.
+
 ## How it works (mechanism)
 - **Serve:** each host's process runs the same `serverEntry(Database, impl)` — its own local instance.
   Nothing host-specific is passed (no URL, no host list). Hosts **don't** connect to each other — no
@@ -168,11 +187,18 @@ decision 2 the `Host` carries its URL.)
      carries a `materialize(peers)` closure (slice-1 combine).
    - `Resource.combined(contract, peers)` — the holder-side **"combine anywhere"** tool: per-host client
      map → fleet fields, gathered + folded locally. Browser/node/CLI. **Usable now.**
-3. **Auto-wiring on the tag — ⏳ NEXT (2b-3).** Variadic `Resource.multiHost(...hosts)` + `Host` carrying
-   its URL, so `client(tag)` auto-builds the per-host clients and `svc.totalConnections` works straight
-   off the tag (no explicit `Resource.combined` call). `Tag` accepts a `Contract`. `multiStream` live
-   subscription lifecycle. *Open design:* per-instance members on the combined tag-service (which host?),
-   and auto-composing N per-host transports inside one client layer.
+3. **Tag auto-wiring + internal peers — ⏳ NEXT (2b-3).**
+   - Variadic `Resource.multiHost(...hosts)` + `Host` carrying its URL, so `client(tag)` auto-builds the
+     per-host client map and `svc.totalConnections` works straight off the tag (no explicit
+     `Resource.combined` call — the holder convenience). `Tag` accepts a `Contract`.
+   - **`Resource.peers(Database)`** (lowercase accessor) + **`Resource.peersLayer(Database)`** — the
+     internal peer capability (decision 13): `peersLayer` connects the `multiHost` set into a
+     `host → InstanceServiceOf` map; an impl/readiness does `const peers = yield* Resource.peers(...)`
+     then **reuses** `Resource.combined`/`combineQuery` on it. Only new surface for peer comms; combine
+     logic is the shipped contract fields. Opt-in mesh, scoped to where `peersLayer` is provided.
+   - Shared **peer-map builder** behind both (auto-build in `client` ↔ `peersLayer`). `multiStream`
+     live-subscription lifecycle. *Open design:* per-instance members on the combined tag-service (which
+     host?); auto-composing N per-host transports in one client layer.
 4. **Dashboard tools.** Expand a hostless leaf into per-host facets + the combined service; discovery
    via `hostsOf` + `HostStatus`. (The dashboard can already use `Resource.combined` with its per-host bundles.)
 5. **Elected host / scale.** Deferred; push-to-redis if a holder shouldn't fan out (no mesh today).
