@@ -25,7 +25,7 @@
 import { Console, Effect, type Schema } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import { methodMeta, specOf } from "../Resource";
-import type { AnyLocalMethod, AnyMethod } from "../Resource";
+import type { AnyLocalMethod, AnyMethod, AnyMultiField } from "../Resource";
 
 /**
  * The structural shape the CLI reads from a resource tag: yieldable (→ its service), with
@@ -41,7 +41,8 @@ export type CliResourceTag = Effect.Effect<unknown, never, unknown> & {
 
 // A spec entry is a runnable CLI verb when it's a wire method (`kind`: query/mutate) that
 // isn't a streaming read. Streams have no run-and-exit form; local methods aren't on the wire.
-const isCliMethod = (m: AnyMethod | AnyLocalMethod): m is AnyMethod =>
+// multi fields (derived, no `kind`) are excluded by the `"kind" in m` gate.
+const isCliMethod = (m: AnyMethod | AnyLocalMethod | AnyMultiField): m is AnyMethod =>
   "kind" in m && m.stream !== true;
 
 const isSchema = (x: unknown): x is Schema.Top =>

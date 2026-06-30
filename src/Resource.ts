@@ -50,10 +50,12 @@ import {
   Layer,
   Match,
   Option,
+  Pipeable,
   Schema,
   Scope,
   Stream,
 } from "effect";
+import type { HostResult, HostStream } from "./MultiHost";
 import { FetchHttpClient, Headers, HttpRouter, HttpServer, HttpServerResponse } from "effect/unstable/http";
 import {
   Rpc,
@@ -245,17 +247,53 @@ export interface LocalMethod<T> {
 /** Any {@link LocalMethod}, erased. @public */
 export type AnyLocalMethod = LocalMethod<unknown>;
 
+/** Brands a {@link MultiField} so a spec entry is distinguishable from a wire/local method. */
+const multiFieldTypeId: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/multiField",
+);
+
 /**
- * A resource contract: method name → wire {@link Method} or off-wire {@link LocalMethod}.
- * The single source of truth.
+ * A **multi-host** member of a contract — built by the {@link Resource.multi} builder's
+ * `m.query` / `m.stream`. It is **derived**, never served: calling it gathers a per-instance
+ * method from every host in the tag's set (the full per-host client) and folds the results
+ * **locally** (an `Effect.all` + fold, via the `/MultiHost` combine). It is *not* part of the
+ * wire contract and never appears in a server impl. In the service it surfaces as
+ * `Effect<B, EE>` (query) or `Stream<B, EE>` (stream) — the fold/transform output.
  *
  * @public
  */
-export type Spec = Record<string, AnyMethod | AnyLocalMethod>;
+export interface MultiField<Str extends boolean, B, EE = never> {
+  readonly [multiFieldTypeId]: typeof multiFieldTypeId;
+  /** A streaming combine (`Stream` member) when `true`; a one-shot `Effect` otherwise. */
+  readonly stream: Str;
+  /** Per-host selector over the full client — type-erased here, typed in the constructor. */
+  readonly selector: (host: never) => unknown;
+  /** The fold (query) / transform (stream) — type-erased here, typed in the constructor. */
+  readonly combine: (perHost: never) => unknown;
+  /** Phantom carrier of the fold/transform **output** type (type-level only, never set). */
+  readonly outputType?: B;
+  /** Phantom carrier of the combined member's **error** type (type-level only, never set). */
+  readonly errorType?: EE;
+}
+
+/** Any {@link MultiField}, erased. @public */
+export type AnyMultiField = MultiField<boolean, unknown, unknown>;
+
+/**
+ * A resource contract: method name → wire {@link Method}, off-wire {@link LocalMethod}, or
+ * derived {@link MultiField}. The single source of truth.
+ *
+ * @public
+ */
+export type Spec = Record<string, AnyMethod | AnyLocalMethod | AnyMultiField>;
 
 /** Runtime guard: is a spec entry a {@link LocalMethod} (vs a wire {@link Method})? */
-const isLocalMethod = (m: AnyMethod | AnyLocalMethod): m is AnyLocalMethod =>
+const isLocalMethod = (m: AnyMethod | AnyLocalMethod | AnyMultiField): m is AnyLocalMethod =>
   localMethodTypeId in m;
+
+/** Runtime guard: is a spec entry a derived {@link MultiField}? */
+const isMultiField = (m: AnyMethod | AnyLocalMethod | AnyMultiField): m is AnyMultiField =>
+  multiFieldTypeId in m;
 
 /**
  * Declare a **local-only** member of type `T` (see {@link LocalMethod}). Not serialized,
@@ -604,16 +642,26 @@ export type ServiceMethod<M extends AnyMethod> = M["stream"] extends true
 // the item schema). Dropping the dead gate and narrowing with `Exclude<…, AnyLocalMethod>`
 // keeps the result identical for every concrete spec while letting it reduce under a generic
 // spec too. See `docs/handoffs/resource-toolkit-new-features.md`.
+/** A {@link MultiField} → its service member: `Stream<B,EE>` (stream) or `Effect<B,EE>` (query). */
+export type ServiceMultiField<M extends AnyMultiField> =
+  M extends MultiField<infer Str, infer B, infer EE>
+    ? Str extends true
+      ? Stream.Stream<B, EE>
+      : Effect.Effect<B, EE>
+    : never;
+
 export type ServiceOf<S extends Spec, Self = unknown> = {
-  readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
-    ? Effect.Effect<T, never, LocalCapability<Self>>
-    : ServiceMethod<Exclude<S[K], AnyLocalMethod>>;
+  readonly [K in keyof S]: S[K] extends AnyMultiField
+    ? ServiceMultiField<S[K]>
+    : S[K] extends LocalMethod<infer T>
+      ? Effect.Effect<T, never, LocalCapability<Self>>
+      : ServiceMethod<Exclude<S[K], AnyLocalMethod | AnyMultiField>>;
 };
 
 /** The wire-only service: just the {@link Method}s (used by the server impl + forwarder). */
 type WireServiceOf<S extends Spec> = {
-  readonly [K in keyof S as S[K] extends AnyLocalMethod ? never : K]: ServiceMethod<
-    Exclude<S[K], AnyLocalMethod>
+  readonly [K in keyof S as S[K] extends AnyLocalMethod | AnyMultiField ? never : K]: ServiceMethod<
+    Exclude<S[K], AnyLocalMethod | AnyMultiField>
   >;
 };
 
@@ -623,10 +671,95 @@ type WireServiceOf<S extends Spec> = {
  * wraps it to require the {@link LocalCapability}).
  */
 type ImplOf<S extends Spec> = {
-  readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
+  readonly [K in keyof S as S[K] extends AnyMultiField ? never : K]: S[K] extends LocalMethod<infer T>
     ? T
-    : ServiceMethod<Exclude<S[K], AnyLocalMethod>>;
+    : ServiceMethod<Exclude<S[K], AnyLocalMethod | AnyMultiField>>;
 };
+
+// ── multi-host contract pipeline ──
+
+/**
+ * The builder passed to {@link multi}. Its `query` / `stream` construct {@link MultiField}s whose
+ * **selector receives the full per-host client** (`ServiceOf<S>`), so a fold can read any or several
+ * fields. `query` gathers an `Effect` member across the hosts and folds the per-host
+ * {@link HostResult}s; `stream` gathers a `Stream` member and transforms the per-host
+ * {@link HostStream}s. (The gather itself is the `/MultiHost` combine, wired at materialization.)
+ *
+ * @public
+ */
+export interface MultiBuilder<S extends Spec> {
+  readonly query: <A, E, B>(
+    selector: (host: ServiceOf<S>) => Effect.Effect<A, E>,
+    combine: (results: ReadonlyArray<HostResult<A, E>>) => B,
+  ) => MultiField<false, B, never>;
+  readonly stream: <A, E, B, EE>(
+    selector: (host: ServiceOf<S>) => Stream.Stream<A, E>,
+    transform: (streams: ReadonlyArray<HostStream<A, E>>) => Stream.Stream<B, EE>,
+  ) => MultiField<true, B, EE>;
+}
+
+/** Holds a {@link Contract}'s underlying spec off the spec's own key space. */
+const contractSpecSym: unique symbol = Symbol.for(
+  "@nikscripts/effect-pm/Resource/contractSpec",
+);
+
+/**
+ * A **pipeable** contract — the per-instance {@link Spec}, carried so multi-host fields (and future
+ * contract extensions) can be `.pipe`d on against a precisely-typed handle. Build with
+ * {@link contract}, extend with {@link multi}, pass to {@link Tag}.
+ *
+ * @public
+ */
+export interface Contract<S extends Spec> extends Pipeable.Pipeable {
+  readonly [contractSpecSym]: S;
+}
+
+const makeContract = <S extends Spec>(spec: S): Contract<S> =>
+  Object.assign(Object.create(Pipeable.Prototype), { [contractSpecSym]: spec });
+
+/** Runtime guard: is this a {@link Contract} (vs a bare {@link Spec})? */
+const isContract = (c: Spec | Contract<Spec>): c is Contract<Spec> => contractSpecSym in c;
+
+/** The per-instance {@link Spec} behind a {@link Contract} (or a bare spec passed directly). */
+export const specFromContract = <S extends Spec>(c: Contract<S> | S): S =>
+  isContract(c) ? c[contractSpecSym] : c;
+
+/**
+ * Start a **multi-host contract**: wrap the per-instance fields so {@link multi} can pipe derived
+ * fleet fields on. A plain (non-multi) resource doesn't need this — pass the spec object to
+ * {@link Tag} directly.
+ *
+ * @public
+ */
+export const contract = <const S extends Spec>(spec: S): Contract<S> => makeContract(spec);
+
+/**
+ * Pipe **derived multi-host fields** onto a {@link Contract} (data-last). The builder `m` is typed
+ * against the base contract, so its selectors receive the full per-host client. Precise because the
+ * base is already typed when the pipe applies (a value, not a class self-reference). Other contract
+ * extensions pipe on the same way.
+ *
+ * @public
+ */
+export const multi =
+  <S extends Spec, M extends Record<string, AnyMultiField>>(build: (m: MultiBuilder<S>) => M) =>
+  (self: Contract<S>): Contract<S & M> => {
+    const builder: MultiBuilder<S> = {
+      query: (selector, combine) => ({
+        [multiFieldTypeId]: multiFieldTypeId,
+        stream: false,
+        selector,
+        combine,
+      }),
+      stream: (selector, transform) => ({
+        [multiFieldTypeId]: multiFieldTypeId,
+        stream: true,
+        selector,
+        combine: transform,
+      }),
+    };
+    return makeContract({ ...self[contractSpecSym], ...build(builder) });
+  };
 
 // ── type-level: one Spec → the precisely-typed RPC contract group ──
 
@@ -702,8 +835,8 @@ export const buildRpcGroup = <const S extends Spec>(
   spec: S,
 ): RpcGroupOf<S> => {
   const rpcs = Object.entries(spec).flatMap(([method, m]) => {
-    // local-only members are off-wire — they get no rpc.
-    if (isLocalMethod(m)) return [];
+    // local-only members are off-wire, and multi fields are derived — neither gets an rpc.
+    if (isLocalMethod(m) || isMultiField(m)) return [];
     const tag = wireTag(groupId, method);
     const options: {
       payload?: Schema.Struct.Fields | Schema.Top;
@@ -1206,6 +1339,9 @@ const localLayer = <Self, S extends Spec>(
   const members = impl as Record<string, unknown>;
   const service: Record<string, unknown> = {};
   for (const [key, m] of Object.entries(spec)) {
+    // multi fields are derived — materialized by the holder gathering across the host set
+    // (see /MultiHost), never from the local impl. Skip here.
+    if (isMultiField(m)) continue;
     // local members surface as `Effect<T, never, LocalCapability>` — requiring the cap to
     // obtain the raw value; wire members pass through unchanged.
     service[key] = isLocalMethod(m)
@@ -1654,7 +1790,8 @@ export const forwardClient = <S extends Spec>(
   const service: Record<string, unknown> = {};
   for (const [key, m] of Object.entries(spec)) {
     // local-only members aren't on the wire — the client stubs them (see clientLayer).
-    if (isLocalMethod(m)) continue;
+    // multi fields are derived (gathered across the host set) — materialized separately (see /MultiHost).
+    if (isLocalMethod(m) || isMultiField(m)) continue;
     // the wire tag is group-prefixed; the service surface keeps the bare method name
     const call = calls[wireTag(groupId, key)];
     // completeness + callability check — `typeof` narrows `call` to a callable, so the
