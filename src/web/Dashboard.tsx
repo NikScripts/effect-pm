@@ -236,6 +236,7 @@ const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void })
 const DashboardInner = (props: {
   readonly group: GroupNode;
   readonly onOpenHost: (host: HostRef) => void;
+  readonly onOpenResource: (resourceKey: string) => void;
 }): React.ReactElement => {
   const route = useGroupRoute(props.group);
   const { group, selected, trail, keys } = route;
@@ -300,7 +301,11 @@ const DashboardInner = (props: {
         )}
         {countCircle}
         {/* host-status die — all hosts the dashboard's resources are bound to (the root group). */}
-        <HostBar group={props.group} onOpenHost={props.onOpenHost} />
+        <HostBar
+          group={props.group}
+          onOpenHost={props.onOpenHost}
+          onOpenResource={props.onOpenResource}
+        />
       </div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
         {Object.entries(group.members).map(([name, member]) => (
@@ -383,7 +388,11 @@ export const DashboardView = <R, ER>(props: {
         ) : host !== null ? (
           <HostDetail host={host} onBack={() => setHost(null)} onOpenResource={openResource} />
         ) : (
-          <DashboardInner group={props.group} onOpenHost={setHost} />
+          <DashboardInner
+            group={props.group}
+            onOpenHost={setHost}
+            onOpenResource={openResource}
+          />
         )}
       </div>
     </RuntimeProvider>

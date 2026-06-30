@@ -1430,12 +1430,58 @@ const HostRow = (props: {
   );
 };
 
+/** A host's **degraded** resources as triage rows (resource · host · root-cause detail) — tap to open
+ *  the resource's detail page. Renders nothing while the host is connecting or all-ready, so the
+ *  health board's "needs attention" list shows only real problems across every host. @since 1.0.0 */
+const HostDegradedRows = (props: {
+  readonly host: HostRef;
+  readonly onOpenResource: (resourceKey: string) => void;
+}): React.ReactElement | null => {
+  const r = useAtomValue(useHostBundle(props.host).status);
+  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  if (s === undefined) return null;
+  const down = s.resources.filter((x) => !x.ready);
+  if (down.length === 0) return null;
+  return (
+    <>
+      {down.map((res) => (
+        <li key={res.key}>
+          <button
+            type="button"
+            onClick={() => props.onOpenResource(res.key)}
+            className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted"
+          >
+            <span className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: "#eab308" }} />
+            <span className="min-w-0 flex-1">
+              <span className="flex items-baseline justify-between gap-2">
+                <span className="truncate font-medium">
+                  {displayName(res.key.split("/").pop() ?? res.key)}
+                </span>
+                <span className="shrink-0 text-[0.7rem] text-muted-foreground">
+                  {displayName(props.host.id)}
+                </span>
+              </span>
+              {res.detail !== undefined ? (
+                <span className="mt-0.5 block truncate text-[0.7rem] leading-tight text-amber-600">
+                  └ {res.detail}
+                </span>
+              ) : null}
+            </span>
+          </button>
+        </li>
+      ))}
+    </>
+  );
+};
+
 /** The single host-status **die** button (top-right): one pip per host, coloured by its status — a die
- *  face for 1–9 hosts, then 3 rows + more columns. Tap to list the hosts (tap one → its full screen).
+ *  face for 1–9 hosts, then 3 rows + more columns. Tap to open the **health board** — degraded
+ *  resources first (with root cause, tap → that resource), then every host (tap → its full screen).
  *  Renders nothing for a hostless (local) group. @since 1.0.0 */
 export const HostBar = (props: {
   readonly group: GroupNode;
   readonly onOpenHost: (host: HostRef) => void;
+  readonly onOpenResource: (resourceKey: string) => void;
 }): React.ReactElement | null => {
   const hosts = hostsOf(props.group);
   const ids = hosts.map((h) => h.id).join(", ");
@@ -1466,6 +1512,20 @@ export const HostBar = (props: {
       </button>
       {open ? (
         <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border bg-card p-2 text-sm shadow-lg">
+          {/* triage: degraded resources across every host float to the top, with root cause; tap one
+              to open its detail. Renders nothing when all-healthy, so this section self-hides. */}
+          <ul className="space-y-0.5 empty:hidden">
+            {hosts.map((h) => (
+              <HostDegradedRows
+                key={`down-${h.id}`}
+                host={h}
+                onOpenResource={(k) => {
+                  setOpen(false);
+                  props.onOpenResource(k);
+                }}
+              />
+            ))}
+          </ul>
           <div className="mb-1 px-1 font-semibold">hosts · {hosts.length}</div>
           <ul className="space-y-0.5">
             {hosts.map((h) => (

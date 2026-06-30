@@ -140,11 +140,12 @@ const scoresApiMock = {
   ),
 };
 
-// Simulated physical connection for the scores DB: connected most of the time, dropping ~6s every
-// 45s (epoch-aligned) so the box-score queue's dependency-aware readiness visibly cascades to
-// degraded and then recovers. A real DB resource would acquire this eagerly with `Layer.scoped`.
+// Simulated physical connection for the scores DB: connected ~20s, then disconnected ~10s, on a 30s
+// epoch-aligned cycle — frequent enough to actually watch the box-score queue's dependency-aware
+// readiness cascade to degraded and recover. A real DB resource would acquire this eagerly with
+// `Layer.scoped` (failures at boot); here we just toggle a flag so the health board has something live.
 const scoresDbImpl = {
-  connected: Effect.map(Clock.currentTimeMillis, (now) => now % 45_000 > 6_000),
+  connected: Effect.map(Clock.currentTimeMillis, (now) => now % 30_000 > 10_000),
 };
 
 // Three hosts in one process, each its own port + `/rpc`: the box-score queue + scores DB + scores
