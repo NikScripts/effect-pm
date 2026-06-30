@@ -1,5 +1,31 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.15
+
+### Minor Changes
+
+- f21e20e: **`Resource.serverEntry(tag, impl)`** — a typed `serveAllHttp` entry for a raw custom
+  resource (mirrors the contract `serverEntry`s). The impl is **spec-checked** against the tag's spec,
+  unlike a bare `{ tag, impl }` literal (typed `Record<string, unknown>`). Two forms: a record
+  (`R = never`) or an `Effect` that builds it carrying a requirement `R`. `Resource.instance` (for the
+  `serveInstances` family) now points here.
+
+- 1a13471: **`serveAllHttp` unions each entry's requirement `R`** instead of pinning all to one — a host
+  serving queues/processes (worker `R`) next to `ApiMetrics` (`Scope`) and plain resources (`never`)
+  no longer needs `as ServeEntry<never>` per entry. Bare `{ tag, impl }` literals contribute nothing
+  rather than poisoning the union.
+
+- dfb27f2: **Removed the Prisma storage backend (BREAKING).** `@nikscripts/effect-pm/storage/prisma`
+  and `…/prisma`, `PrismaRuntimeStorage`, the structural client types, the `effect-pm` prisma CLI
+  helpers, and the `@prisma/client` optional peer are gone — an unused, codegen-heavy backend already
+  covered by the **sqlite** and **redis** backends. (Recoverable from git.)
+
+### Patch Changes
+
+- 5e6b954: **`Resource.withReadiness` data-first accepts a host-bound class** (a `typeof X` constructor),
+  via inferred overloads (host preserved in the return), the way `client`/`layer` do. Resource group
+  types stay fully precise (`RpcGroupOf<S>`) — no erasure, no cast.
+
 ## 0.8.0-beta.14
 
 ### Minor Changes
