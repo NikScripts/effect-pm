@@ -55,7 +55,7 @@ import {
   Scope,
   Stream,
 } from "effect";
-import type { HostResult, HostStream } from "./MultiHost";
+import { combineQuery, combineStream, type HostResult, type HostStream } from "./MultiHost";
 import { FetchHttpClient, Headers, HttpRouter, HttpServer, HttpServerResponse } from "effect/unstable/http";
 import {
   Rpc,
@@ -266,10 +266,12 @@ export interface MultiField<Str extends boolean, B, EE = never> {
   readonly [multiFieldTypeId]: typeof multiFieldTypeId;
   /** A streaming combine (`Stream` member) when `true`; a one-shot `Effect` otherwise. */
   readonly stream: Str;
-  /** Per-host selector over the full client — type-erased here, typed in the constructor. */
-  readonly selector: (host: never) => unknown;
-  /** The fold (query) / transform (stream) — type-erased here, typed in the constructor. */
-  readonly combine: (perHost: never) => unknown;
+  /**
+   * Materialize this field against a per-host client map (`host → ServiceOf` of this resource) — a
+   * closure captured where the selector/combine types are known, so the holder just calls it. For a
+   * query field it returns `Effect<B, EE>`; for a stream field, `Stream<B, EE>`.
+   */
+  readonly materialize: (peers: Record<string, unknown>) => unknown;
   /** Phantom carrier of the fold/transform **output** type (type-level only, never set). */
   readonly outputType?: B;
   /** Phantom carrier of the combined member's **error** type (type-level only, never set). */
@@ -748,14 +750,17 @@ export const multi =
       query: (selector, combine) => ({
         [multiFieldTypeId]: multiFieldTypeId,
         stream: false,
-        selector,
-        combine,
+        // Boundary: a peer map's values are this resource's per-host clients (`ServiceOf<S>`), erased
+        // to `unknown` for the holder's generic materializer — recovered here where the selector's
+        // type is known, so the gather (slice-1 combine) stays fully typed.
+        materialize: (peers) =>
+          combineQuery(peers as Record<string, ServiceOf<S>>, selector, combine),
       }),
       stream: (selector, transform) => ({
         [multiFieldTypeId]: multiFieldTypeId,
         stream: true,
-        selector,
-        combine: transform,
+        materialize: (peers) =>
+          combineStream(peers as Record<string, ServiceOf<S>>, selector, transform),
       }),
     };
     return makeContract({ ...self[contractSpecSym], ...build(builder) });

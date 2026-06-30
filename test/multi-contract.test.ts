@@ -34,6 +34,26 @@ it("contract().pipe(multi(...)) merges per-instance + multi fields into one spec
   ]);
 });
 
+it("a multi field materializes by gathering + folding across a peer map", () => {
+  const spec = Resource.specFromContract(databaseSpec);
+  // a fake host → client map (what the holder supplies); wnba is down
+  const peers = {
+    nwsl: { connections: Effect.succeed(3), status: Effect.succeed({ connected: true }) },
+    ebwsl: { connections: Effect.succeed(5), status: Effect.succeed({ connected: true }) },
+    wnba: { connections: Effect.fail("down"), status: Effect.fail("down") },
+  };
+  const totalField = spec.totalConnections as Resource.MultiField<false, number>;
+  const reportField = spec.fleetReporting as Resource.MultiField<false, number>;
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const total = yield* (totalField.materialize(peers) as Effect.Effect<number>);
+      expect(total).toBe(8); // 3 + 5; wnba (failed) skipped by Combine.sum
+      const reporting = yield* (reportField.materialize(peers) as Effect.Effect<number>);
+      expect(reporting).toBe(2); // 2 hosts answered Effect.all({conn, st}); wnba failed
+    }),
+  );
+});
+
 it("ServiceOf surfaces multi fields precisely (query → Effect, stream → Stream)", () => {
   type S = typeof databaseSpec extends Resource.Contract<infer Sp> ? Sp : never;
   type Svc = Resource.ServiceOf<S>;
