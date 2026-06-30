@@ -1637,7 +1637,8 @@ export const HealthBoard = (props: {
 };
 
 /** Reads one resource's readiness from its host's `HostStatus` (the host computes it — SSOT). Always
- *  has a host (the public wrapper renders nothing for a hostless tag). @since 1.0.0 */
+ *  has a host (the public wrapper renders nothing for a hostless tag). Shows **only when degraded** —
+ *  nothing while ready/connecting, so the banner only takes space when there's a problem. @since 1.0.0 */
 const ReadinessBannerInner = (props: {
   readonly tag: unknown;
   readonly host: HostRef;
@@ -1646,19 +1647,15 @@ const ReadinessBannerInner = (props: {
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const key = tagWireKey(props.tag);
   const readiness = s?.resources.find((x) => x.key === key);
-  if (readiness === undefined) return null; // connecting, or not served by this host yet
-  const ready = readiness.ready;
+  if (readiness === undefined || readiness.ready) return null; // ready/connecting → no banner
   return (
     <div
       className="flex items-center gap-2 rounded-md border px-2 py-1.5 text-[0.8rem]"
-      style={ready ? undefined : { borderColor: "#eab308", backgroundColor: "rgba(234,179,8,0.08)" }}
+      style={{ borderColor: "#eab308", backgroundColor: "rgba(234,179,8,0.08)" }}
     >
-      <span
-        className="h-2 w-2 shrink-0 rounded-full"
-        style={{ backgroundColor: ready ? "#22c55e" : "#eab308" }}
-      />
-      <span className="font-medium">{ready ? "ready" : "degraded"}</span>
-      {!ready && readiness.detail !== undefined ? (
+      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: "#eab308" }} />
+      <span className="font-medium">degraded</span>
+      {readiness.detail !== undefined ? (
         <span className="min-w-0 flex-1 truncate text-amber-600">— {readiness.detail}</span>
       ) : (
         <span className="flex-1" />
@@ -1668,9 +1665,10 @@ const ReadinessBannerInner = (props: {
   );
 };
 
-/** A resource's **readiness** line for its detail page — green "ready" or an amber "degraded — &lt;root
- *  cause&gt;" banner, read from its host's `HostStatus` (the same SSOT the health board uses). Renders
- *  nothing for a hostless (local) resource. @since 1.0.0 */
+/** A resource's **degraded** banner for its detail page — an amber "degraded — &lt;root cause&gt;" line
+ *  read from its host's `HostStatus` (the same SSOT the health board uses). Renders nothing while the
+ *  resource is ready/connecting or hostless, so it only appears (pushing content down) on a problem.
+ *  @since 1.0.0 */
 export const ResourceReadinessBanner = (props: { readonly tag: unknown }): React.ReactElement | null => {
   const host = resourceHostRef(props.tag);
   if (host === undefined) return null;
