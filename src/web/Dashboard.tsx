@@ -35,7 +35,7 @@ import { RuntimeProvider, useApiBundle, useProcessBundle, useQueueBundle, useRun
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { ApiEndpointTable, ApiMetricChart, ApiStats, Cell, ConfirmDialog, HostBar, HostDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ScheduleEditor, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { ApiEndpointTable, ApiMetricChart, ApiStats, Cell, ConfirmDialog, HealthBoard, HostBar, HostDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ScheduleEditor, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
 
@@ -235,8 +235,7 @@ const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void })
 /** The drill-down view (runtime comes from `RuntimeProvider` above). @since 1.0.0 */
 const DashboardInner = (props: {
   readonly group: GroupNode;
-  readonly onOpenHost: (host: HostRef) => void;
-  readonly onOpenResource: (resourceKey: string) => void;
+  readonly onOpenHealth: () => void;
 }): React.ReactElement => {
   const route = useGroupRoute(props.group);
   const { group, selected, trail, keys } = route;
@@ -301,11 +300,7 @@ const DashboardInner = (props: {
         )}
         {countCircle}
         {/* host-status die — all hosts the dashboard's resources are bound to (the root group). */}
-        <HostBar
-          group={props.group}
-          onOpenHost={props.onOpenHost}
-          onOpenResource={props.onOpenResource}
-        />
+        <HostBar group={props.group} onOpen={props.onOpenHealth} />
       </div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
         {Object.entries(group.members).map(([name, member]) => (
@@ -366,9 +361,11 @@ export const DashboardView = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
 }): React.ReactElement => {
+  // Three stacked overlays over the group view, in back-pop order: a resource opened from a host/board
+  // (`hostTag`) sits over a host's full screen (`host`), which sits over the health board (`health`).
+  // Keeping them separate means "back" pops one layer at a time — resource → host → board → dashboard.
+  const [health, setHealth] = React.useState(false);
   const [host, setHost] = React.useState<HostRef | null>(null);
-  // A resource opened from the host page (its tag). Kept separate from `host` so "back" pops to the
-  // host detail (host stays set underneath), not up the group route.
   const [hostTag, setHostTag] = React.useState<unknown>(null);
   const openResource = React.useCallback(
     (resourceKey: string): void => {
@@ -387,12 +384,15 @@ export const DashboardView = <R, ER>(props: {
           <HostResourceView tag={hostTag} onBack={() => setHostTag(null)} />
         ) : host !== null ? (
           <HostDetail host={host} onBack={() => setHost(null)} onOpenResource={openResource} />
-        ) : (
-          <DashboardInner
+        ) : health ? (
+          <HealthBoard
             group={props.group}
+            onBack={() => setHealth(false)}
             onOpenHost={setHost}
             onOpenResource={openResource}
           />
+        ) : (
+          <DashboardInner group={props.group} onOpenHealth={() => setHealth(true)} />
         )}
       </div>
     </RuntimeProvider>
