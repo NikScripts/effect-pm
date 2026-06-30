@@ -1335,19 +1335,38 @@ export interface ServeEntry<R = never> {
  * {@link instance} is **not** this — it builds a `ResourceInstance` for the {@link serveInstances}
  * family and won't fit `serveAllHttp`.
  *
+ * Two impl forms: a plain **record** (`R = never`), or an **`Effect`** that builds the record at
+ * assembly and carries a requirement `R` (e.g. a pooled connection) — `R` is surfaced into the entry
+ * so `serveAllHttp` demands + unions it, instead of erasing it as a bare `{ tag, impl }` literal would.
+ *
  * ```ts
  * Resource.serveAllHttp([
- *   Resource.serverEntry(Database, { status: pingStatus }), // ✅ spec-checked impl
+ *   Resource.serverEntry(Database, { status: pingStatus }),        // record impl
+ *   Resource.serverEntry(Cache, Effect.map(Pool, makeCacheImpl)),  // Effect impl, R = Pool
  *   QueueResource.serverEntry(RosterQueue, { effect }),
  * ]);
  * ```
  *
  * @public
  */
-const serverEntry = <Self, S extends Spec>(
+// record impl (plain resource — no requirement)
+function serverEntry<Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   impl: WireServiceOf<S>,
-): ServeEntry<never> => ({ tag, impl });
+): ServeEntry<never>;
+// Effect impl (built at assembly, carrying a requirement `R` — e.g. a pooled connection, or serving
+// the resource's own provided service): `R` is surfaced into the entry, so `serveAllHttp` demands it
+// (and unions it across entries) instead of it being erased.
+function serverEntry<Self, S extends Spec, R>(
+  tag: ResourceTag<Self, S>,
+  impl: Effect.Effect<WireServiceOf<S>, never, R>,
+): ServeEntry<R>;
+function serverEntry<Self, S extends Spec, R>(
+  tag: ResourceTag<Self, S>,
+  impl: WireServiceOf<S> | Effect.Effect<WireServiceOf<S>, never, R>,
+): ServeEntry<R> {
+  return { tag, impl };
+}
 
 /** One entry's requirement `R`, with `any`/`unknown` collapsed to `never` — a plain `{ tag, impl }`
  *  literal (impl a `Record`, no `Effect`) leaves `R` unconstrained, so it infers `unknown` (or `any`);

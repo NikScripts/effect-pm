@@ -163,8 +163,10 @@ const wnbaHost = Resource.serveAllHttp([
   // the instrumented client's registry.
   Resource.serverEntry(ScoresApi, scoresApiMock),
   // Serve the scores DB from its own provided service (below) — the same instance the box-score
-  // queue's readiness depends on via `readinessOf(ScoresDb)`, so the cascade is consistent.
-  { tag: ScoresDb, impl: ScoresDb },
+  // queue's readiness depends on via `readinessOf(ScoresDb)`, so the cascade is consistent. The
+  // Effect-form `serverEntry` spec-checks the impl and surfaces its `ScoresDb` requirement (provided
+  // below) instead of a bare `{ tag, impl }` literal that would erase it.
+  Resource.serverEntry(ScoresDb, ScoresDb),
 ]).pipe(
   // provide ScoresDb so the queue's readiness derivation (`readinessOf(ScoresDb)`) can resolve it;
   // the served entry above re-exposes this same service over RPC.
