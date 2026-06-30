@@ -105,7 +105,7 @@ Two planes, both opt-in, same `yield* Tag` surface, in-memory or SQLite:
   from `@nikscripts/effect-pm/storage/sqlite` make both durable across restarts.
 
 Process / run analytics use `ProcessStore` / `ProcessStorage` over `RuntimeStorage`
-(`@nikscripts/effect-pm/storage/{sqlite,redis,prisma}`).
+(`@nikscripts/effect-pm/storage/{sqlite,redis}`).
 
 ## Docs
 

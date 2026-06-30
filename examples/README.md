@@ -69,7 +69,6 @@ Storage options:
 - `ProcessStorage.layerRuntimeStorage` + `@nikscripts/effect-pm/storage/sqlite` — durable local SQLite runtime records.
 - `LogStore` — structured log history (`record`, `load`, `query`); `@nikscripts/effect-pm/Logs` handles capture/relay in group children.
 - `QueueResourceStore` — queue semantic storage facet.
-- `PrismaRuntimeStorage` from `@nikscripts/effect-pm/storage/prisma` — Prisma-backed runtime records with app-owned generated client and migrations.
 
 ### Schedule
 
