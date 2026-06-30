@@ -905,16 +905,17 @@ export const withReadiness: {
   // data-last (pipe): `tag.pipe(Resource.withReadiness(fn))` — the service type is derived from the
   // piped tag; `Self` is widened to `any` here so this can be used in a class `extends` position
   // without TS resolving the class's own (still-being-declared) type — see test/resource-readiness.
-  // The constraint includes `HostBoundTag` explicitly: a host-bound tag is a *distinct* interface
-  // (not just `ResourceTag<X>`), so `.pipe`'s `this` assignment to a bare `ResourceTag<any, any>`
-  // fails its invariant `[groupSym]` map — naming it here keeps the comparison same-generic (lenient).
+  // The constraint names `HostBoundTag` explicitly: a host-bound tag is a distinct `interface` (kept an
+  // interface, not an intersection alias, so an exported host-bound tag doesn't leak `hostSym` through
+  // this generic — TS4020), so it isn't assignable to a bare `ResourceTag<any, any>` (invariant
+  // `[groupSym]`). Naming it keeps the comparison same-generic (lenient). Same on the data-first form.
   <T extends ResourceTag<any, any> | HostBoundTag<any, any, any>>(
     readiness: ReadinessOf<
       T extends ResourceTag<any, infer S extends Spec> ? ServiceOf<S, any> : never
     >,
   ): (tag: T) => T;
   // data-first: `Resource.withReadiness(tag, fn)` — full `ServiceOf<S, Self>` (contracts use this).
-  <T extends ResourceTag<any, any>>(
+  <T extends ResourceTag<any, any> | HostBoundTag<any, any, any>>(
     tag: T,
     readiness: ReadinessOf<
       T extends ResourceTag<infer Self, infer S extends Spec> ? ServiceOf<S, Self> : never
