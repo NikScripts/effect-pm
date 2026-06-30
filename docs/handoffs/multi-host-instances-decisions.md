@@ -45,14 +45,19 @@ resources."
    (transport) is the discriminator**, no prefix/suffix. The instance **key/suffix is reserved** for
    **same-host multiplicity** (>1 instance on one host) — a separate, deferred mechanism.
 
-6. **Combine runs server-side, locally on whatever host you call** (modes 2/3). The `multiQuery` /
-   `multiStream` fields, invoked on any host, gather from **self + peers** and combine. The consumer
-   points a client at **any** host and reads the fleet value; the dashboard gets it with one call to one
-   host. (Mode 1: the combine runs client-side in the dashboard/aggregator, which holds all the hosts.)
+6. **Multi fields are *derived*, combined **locally where they're called** — no host-side gather, no
+   mesh.** Calling a multi field is an `Effect.all` across the host instances (gather each host's
+   per-instance method, complete when all respond, fold in-process) — it runs in **whoever holds the
+   tag** (the dashboard, an aggregator, another service), with no intermediary and no host serving a
+   combined RPC. (The freeform fold output isn't a wire `Schema`, so it *can't* be an RPC a host serves;
+   the gathered per-instance values are schema'd, the fold is local. This supersedes an earlier
+   "combine runs server-side on the host you call" take.) Modes are just where the host set comes from
+   (tag vs layer); the combine is always local to the holder.
 
 7. **Peers are a keyed set, never `client(tag)` × N.** Providing the same tag N times into one Context
-   is a last-write-wins collision. So the host set / layer helper supplies a **`host → client` keyed
-   map**, and the multi fields iterate that. This is the primitive the multi fields read.
+   is a last-write-wins collision. So the host set supplies a **`host → client` keyed map** (the full
+   per-host client), and the multi fields iterate that — slice-1 `combineQuery`/`combineStream`. The
+   selector gets the **full** per-host client, so a fold can read any/several fields.
 
 8. **Multi fields are a piped contract extension (`Resource.multi`), combine pipes onto the field.**
    A single object literal can't type-safely reference its own siblings (TS infers the literal as a
@@ -116,9 +121,9 @@ resources."
     assembles their own widget. Per-host **readiness** is already generic (the health board shows each
     host facet without knowing the shape).
 
-11. **The combine machinery is isomorphic (browser + node/bun).** It lives in the **browser-safe core**
-    (`/Resource`), so a dashboard, a node/bun aggregator, and a CLI all use the same combine. Mode-1
-    (client-side) and modes 2/3 (server-side) reuse the same fold/merge logic.
+11. **The combine machinery is isomorphic (browser + node/bun).** It lives in the **browser-safe core**,
+    so a dashboard, a node/bun aggregator, and a CLI all use the same combine — always local to the
+    holder (decision 6), regardless of mode.
 
 12. **The host set is piped on the tag, variadic** (like `withReadiness`). The combine *fields* live in
     the contract (decision 8); the **host set** (mode 2) is `.pipe(Resource.multiHost(NwslHost,
@@ -126,32 +131,30 @@ resources."
 
 ## How it works (mechanism)
 - **Serve:** each host's process runs the same `serverEntry(Database, impl)` — its own local instance.
-  Nothing host-specific is passed (no URL, no host list); the peer connections the gather needs are
-  wired by the toolkit straight from the tag's `multiHost` set (each host carries its URL). So there's
-  **no `serveAcrossHosts({host, url, impl}[])` helper** — it would only re-state what the tag holds.
-- **Mesh (modes 2/3):** the toolkit builds a **keyed map of clients to the peers** from the tag's host
-  set + URLs. `m.query((host) => host.connections, fold)` on host A = gather `A.local.connections` + each peer
-  client's `.connections` (peers answer the **plain** per-instance query — no recursion) → fold over
-  the per-host record.
-- **No mesh (mode 1):** the dashboard/aggregator holds all the hosts and does the same fold client-side.
+  Nothing host-specific is passed (no URL, no host list). Hosts **don't** connect to each other — no
+  mesh. So there's **no `serveAcrossHosts({host, url, impl}[])` helper** either.
+- **Combine (always local to the holder):** the holder (dashboard / aggregator / any service using the
+  tag) builds a **keyed map of clients** — one per-host client of THIS resource — from the tag's
+  `multiHost` set + each host's URL. `m.query((host) => host.connections, fold)` = `Effect.all` over
+  that map (each host answers its **plain** per-instance method, fully typed/schema'd), then fold the
+  per-host results **in-process**. Same in browser, node, CLI. Mode 1 (host set at the layer) and
+  mode 2 (host set on the tag) differ only in **where the host set comes from** — the combine itself is
+  identical and local.
 - **Readiness** stays per-host and local (each host's `/health`); any cross-host rollup is a
-  dashboard/combine concern, not `/health`.
+  combine/holder concern, not `/health`.
 
 ## Open questions (resolve in the build slice)
-- **Elected host (mode 4)** — three shapes, cheapest first: **(a) statically-designated aggregator**
-  (one host meshes to peers + serves the multi fields; single point); **(b) any-entry, forward-to-
-  elected** (every host exposes the field but forwards to the one gatherer); **(c) push to a shared
-  store** (each host publishes its own values to redis; combined = read all from the store — connections
-  go **linear**, no mesh, survives a down host; needs the store). Recommendation: ship (a) for the
-  simple win, keep (c) as the scale story. Needs a call.
-- **`multiStream` lifecycle** — N live peer subscriptions managed on the serving host (merge/transform,
-  teardown, a peer dropping/reconnecting). [slice 2]
-- **`combine` scope** — pick exactly one per-instance field (locked default; combine pipes onto it),
-  or allow folding over several at once? [slice 2]
+- **`multiStream` lifecycle** — the holder opens N live per-host subscriptions and merges/transforms
+  them; teardown + a host dropping/reconnecting. [slice 2]
 - **Same-host multiplicity** — the reserved instance-key mechanism (decision 5), if/when needed. [later]
+- **Scale (formerly "elected host", mode 4)** — *lower priority now*: with the derived/local model
+  there's **no mesh** (the holder opens N client connections, linear in hosts). If a holder ever
+  shouldn't fan out to every host, the fallback is **push-to-redis** (each host publishes its own
+  values; the holder reads the aggregate from the store). Deferred; not needed at league scale.
 
-(Resolved since v1: per-host outcome type → decision 9; the contract shape → decision 8 piped form;
-host/URL/topology → decision 2 the `Host` carries its URL, so mode-3 needs no separate fleet map.)
+(Resolved since v1: combine is local to the holder, no mesh / no host-side gather → decision 6;
+per-host outcome type → decision 9; contract shape → decision 8 piped form; host/URL/topology →
+decision 2 the `Host` carries its URL.)
 
 ## Build slices
 1. **Combine core (this slice).** The isomorphic primitive: gather a field across a **caller-supplied**
