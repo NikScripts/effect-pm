@@ -34,22 +34,21 @@ it("contract().pipe(multi(...)) merges per-instance + multi fields into one spec
   ]);
 });
 
-it("a multi field materializes by gathering + folding across a peer map", () => {
-  const spec = Resource.specFromContract(databaseSpec);
-  // a fake host → client map (what the holder supplies); wnba is down
+it("Resource.combined builds the fleet fields from a per-host client map", () => {
+  // a fake host → per-instance client map (what a holder supplies); wnba is down (a defect, since a
+  // no-error query's error channel is `never` — the runtime captures it as a failure exit).
   const peers = {
-    nwsl: { connections: Effect.succeed(3), status: Effect.succeed({ connected: true }) },
-    ebwsl: { connections: Effect.succeed(5), status: Effect.succeed({ connected: true }) },
-    wnba: { connections: Effect.fail("down"), status: Effect.fail("down") },
+    nwsl: { connections: Effect.succeed(3), status: Effect.succeed({ connected: true }), metrics: Stream.make(1) },
+    ebwsl: { connections: Effect.succeed(5), status: Effect.succeed({ connected: true }), metrics: Stream.make(2) },
+    wnba: { connections: Effect.die("down"), status: Effect.die("down"), metrics: Stream.empty },
   };
-  const totalField = spec.totalConnections as Resource.MultiField<false, number>;
-  const reportField = spec.fleetReporting as Resource.MultiField<false, number>;
+  const fleet = Resource.combined(databaseSpec, peers);
   return Effect.runPromise(
     Effect.gen(function* () {
-      const total = yield* (totalField.materialize(peers) as Effect.Effect<number>);
-      expect(total).toBe(8); // 3 + 5; wnba (failed) skipped by Combine.sum
-      const reporting = yield* (reportField.materialize(peers) as Effect.Effect<number>);
-      expect(reporting).toBe(2); // 2 hosts answered Effect.all({conn, st}); wnba failed
+      expect(yield* fleet.totalConnections).toBe(8); // 3 + 5; wnba (down) skipped by Combine.sum
+      expect(yield* fleet.fleetReporting).toBe(2); // 2 hosts answered Effect.all({conn, st})
+      const merged = yield* Stream.runCollect(fleet.fleetMetrics);
+      expect([...merged].sort((a, b) => a - b)).toEqual([1, 2]);
     }),
   );
 });

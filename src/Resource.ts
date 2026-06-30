@@ -660,6 +660,19 @@ export type ServiceOf<S extends Spec, Self = unknown> = {
       : ServiceMethod<Exclude<S[K], AnyLocalMethod | AnyMultiField>>;
 };
 
+/**
+ * A **single host's** service — the per-instance members only (wire methods + locals), **without**
+ * the derived fleet {@link MultiField}s (one host has no fleet). This is what a `multi` selector
+ * receives per host, and the value type of the per-host client map a holder gathers over.
+ *
+ * @public
+ */
+export type InstanceServiceOf<S extends Spec, Self = unknown> = {
+  readonly [K in keyof S as S[K] extends AnyMultiField ? never : K]: S[K] extends LocalMethod<infer T>
+    ? Effect.Effect<T, never, LocalCapability<Self>>
+    : ServiceMethod<Exclude<S[K], AnyLocalMethod | AnyMultiField>>;
+};
+
 /** The wire-only service: just the {@link Method}s (used by the server impl + forwarder). */
 type WireServiceOf<S extends Spec> = {
   readonly [K in keyof S as S[K] extends AnyLocalMethod | AnyMultiField ? never : K]: ServiceMethod<
@@ -691,11 +704,11 @@ type ImplOf<S extends Spec> = {
  */
 export interface MultiBuilder<S extends Spec> {
   readonly query: <A, E, B>(
-    selector: (host: ServiceOf<S>) => Effect.Effect<A, E>,
+    selector: (host: InstanceServiceOf<S>) => Effect.Effect<A, E>,
     combine: (results: ReadonlyArray<HostResult<A, E>>) => B,
   ) => MultiField<false, B, never>;
   readonly stream: <A, E, B, EE>(
-    selector: (host: ServiceOf<S>) => Stream.Stream<A, E>,
+    selector: (host: InstanceServiceOf<S>) => Stream.Stream<A, E>,
     transform: (streams: ReadonlyArray<HostStream<A, E>>) => Stream.Stream<B, EE>,
   ) => MultiField<true, B, EE>;
 }
@@ -754,17 +767,51 @@ export const multi =
         // to `unknown` for the holder's generic materializer — recovered here where the selector's
         // type is known, so the gather (slice-1 combine) stays fully typed.
         materialize: (peers) =>
-          combineQuery(peers as Record<string, ServiceOf<S>>, selector, combine),
+          combineQuery(peers as Record<string, InstanceServiceOf<S>>, selector, combine),
       }),
       stream: (selector, transform) => ({
         [multiFieldTypeId]: multiFieldTypeId,
         stream: true,
         materialize: (peers) =>
-          combineStream(peers as Record<string, ServiceOf<S>>, selector, transform),
+          combineStream(peers as Record<string, InstanceServiceOf<S>>, selector, transform),
       }),
     };
     return makeContract({ ...self[contractSpecSym], ...build(builder) });
   };
+
+/** The **derived fleet** members of a service — only the {@link MultiField}s. What {@link combined}
+ *  returns. @public */
+export type MultiServiceOf<S extends Spec> = {
+  readonly [K in keyof S as S[K] extends AnyMultiField ? K : never]: S[K] extends AnyMultiField
+    ? ServiceMultiField<S[K]>
+    : never;
+};
+
+/**
+ * Build a contract's **derived fleet fields** from a per-host client map (`host → ServiceOf` of a
+ * single host of this resource) — each field gathers across the hosts and folds **locally** (the
+ * `/MultiHost` combine). The "combine metrics wherever you need them" tool: it runs in the browser, in
+ * node/bun, or a CLI — the holder supplies the per-host clients (e.g. a dashboard's per-host bundles),
+ * and per-host (non-fleet) reads are just `peers[host]`.
+ *
+ * ```ts
+ * const fleet = Resource.combined(databaseSpec, { nwsl: nwslClient, ebwsl: ebwslClient });
+ * const total = yield* fleet.totalConnections;
+ * ```
+ *
+ * @public
+ */
+export const combined = <S extends Spec>(
+  contract: Contract<S> | S,
+  peers: Record<string, InstanceServiceOf<S>>,
+): MultiServiceOf<S> => {
+  const out: Record<string, unknown> = {};
+  for (const [key, m] of Object.entries(specFromContract(contract))) {
+    if (isMultiField(m)) out[key] = m.materialize(peers);
+  }
+  // Boundary assertion (runtime-safe): each fleet field materialized key-for-key from the spec.
+  return out as MultiServiceOf<S>;
+};
 
 // ── type-level: one Spec → the precisely-typed RPC contract group ──
 
