@@ -19,10 +19,14 @@ resources."
    and is allowed, but it is **not** the instance mechanism. Instance multiplicity is a **runtime fact**
    (which hosts serve it), never encoded in the group tree.
 
-2. **Everything to use a service lives in the tag.** A tag is self-sufficient. So a multi-host tag
-   **may carry its host set (addresses)** — that's the self-contained mode. The host is **not**
-   mandatory on the tag; it can also be supplied at the layer. (This supersedes an earlier wrong take
-   that the host must come off the tag — both are valid; see the modes.)
+2. **Everything to use a service lives in the tag — and the `Host` carries its own URL.** A tag is
+   self-sufficient. `Resource.Host<H>("id", { url })` carries the address, so the host has everything
+   needed to connect to it; a multi-host tag names its host *set* (`multiHost(NwslHost, …)`), so the
+   tag transitively holds the host set **and** each host's URL — fully self-contained, no URLs passed
+   anywhere. (Also tightens the single-host case: `connect`/`client` read the URL off the host instead
+   of a separate `connectHttp(host, { url })` arg.) The URL is sourced however you like *at host
+   definition* — a literal, `process.env`, or Config — it just ends up on the host. Host on the tag is
+   not mandatory: a host-relative tag (no `multiHost`) supplies hosts at the layer (mode 1).
 
 3. **Three connection/availability modes (have it both ways):**
    - **(1) No hosts in the tag** — hosts supplied at the layer. Combined fields resolve **only where the
@@ -50,33 +54,48 @@ resources."
    is a last-write-wins collision. So the host set / layer helper supplies a **`host → client` keyed
    map**, and the multi fields iterate that. This is the primitive the multi fields read.
 
-8. **`multiQuery` / `multiStream` are contract field kinds, defined via a type-safe two-phase helper.**
-   An object literal can't reference its own siblings, so the contract is built in two phases — per
-   instance fields first, then multi fields against a **typed** handle:
+8. **Multi fields are a piped contract extension (`Resource.multi`), combine pipes onto the field.**
+   A single object literal can't type-safely reference its own siblings (TS infers the literal as a
+   whole — `(self) => self.x` degrades `self.x` to the constraint type; verified). The base contract
+   must be typed *before* the multi fields reference it. So `Resource.contract({…})` is a **pipeable**
+   contract, and `Resource.multi((c) => …)` is a **data-last combinator** (typed like `Effect.flatMap`):
+   because the base is already typed when the pipe applies, `c` is **precise** (verified — wrong field
+   name / kind is a compile error). It's a pipeline, so other contract-level features pipe on the same
+   way — `multi` is just the first.
 
    ```ts
    const databaseSpec = Resource.contract({
      connections: Resource.query(Schema.Number),
      status:      Resource.query(DbStatus),
      metrics:     Resource.stream(Metric),
-   }).multi((c) => ({
-     //          ↑ c = the typed per-instance contract (local-only fields excluded)
-     totalConnections: Resource.multiQuery(c.connections, Combine.sum),
-     fleetStatus:      Resource.multiQuery(c.status, mergeStatus),
-     fleetMetrics:     Resource.multiStream(c.metrics, mergeMetrics),
-   }));
+   }).pipe(
+     Resource.multi((c) => ({
+       //          ↑ c = the typed per-instance contract (local-only excluded), precise
+       totalConnections: c.connections.pipe(Resource.combine(Combine.sum)),
+       fleetStatus:      c.status.pipe(Resource.combine(mergeStatus)),
+       fleetMetrics:     c.metrics.pipe(Resource.combine(Combine.mergeStreams)),
+     })),
+     // future contract features pipe on here too
+   );
 
    class Database extends Resource.Tag<Database>()("app/Database", databaseSpec).pipe(
      Resource.withReadiness(databaseReadiness),
+     Resource.multiHost(NwslHost, EbwslHost, WnbaHost),
    ) {}
    ```
 
-   - The picked field is the **actual method** (`c.connections`), type-checked — not a string. Wrong
-     name, wrong kind (e.g. a stream into `multiQuery`), or a local-only field → compile error.
+   - **Combine pipes onto the picked field** — `c.connections.pipe(Resource.combine(Combine.sum))`,
+     not separate `multiQuery`/`multiStream` constructors. The field knows its kind (query → fold,
+     stream → transform), so one `Resource.combine` combinator covers both; the source is implicit in
+     what you pipe. Fully type-checked (wrong kind / combine type → compile error).
    - Combined fields sit **directly on the service under their own names**, beside the per-instance
      fields: `svc.connections` (this host) and `svc.totalConnections` (fleet). One class, both reads.
-   - Returns the merged spec; `Tag` consumes it unchanged, `.pipe(withReadiness(...))` still composes.
-   - Plain (non-multi) resources keep the object-literal spec — `.contract().multi()` is **opt-in**.
+   - `Tag` consumes the resulting spec unchanged; `.pipe(withReadiness(...))` / `.pipe(multiHost(...))`
+     still compose. Plain (non-multi) resources keep the object-literal spec — `Resource.contract` +
+     `Resource.multi` is **opt-in**.
+   - Why precise here but the tag's data-last `withReadiness` widens `Self`: the base contract is a
+     normal value (type known at pipe time), whereas a tag piped in a class `extends` position is its
+     own still-being-declared type (self-recursive) so must widen.
 
 9. **Per-host attribution + dev-controlled failure.** The fold/transform receives the per-host
    **outcomes**, so a down peer is the **dev's** call — sum the survivors, fail hard, or report "2/3
@@ -96,17 +115,19 @@ resources."
     (`/Resource`), so a dashboard, a node/bun aggregator, and a CLI all use the same combine. Mode-1
     (client-side) and modes 2/3 (server-side) reuse the same fold/merge logic.
 
-12. **Multi-host config is piped on the tag** (like `withReadiness`). The combine *fields* live in the
-    contract (decision 8); the **host set** (mode 2) is piped on the tag — e.g.
-    `.pipe(Resource.multiHost({ hosts }))` — or omitted (mode 1). Exact marker name/shape is Open, but
-    it pipes, consistent with everything else.
+12. **The host set is piped on the tag, variadic** (like `withReadiness`). The combine *fields* live in
+    the contract (decision 8); the **host set** (mode 2) is `.pipe(Resource.multiHost(NwslHost,
+    EbwslHost, WnbaHost))` — variadic, the hosts carry their own URLs (decision 2) — or omitted (mode 1).
 
 ## How it works (mechanism)
-- **Serve:** each host's `serveAllHttp` includes `serverEntry(Database, impl)` — its own local instance.
-- **Mesh (modes 2/3):** a layer helper (or the tag's host set) wires each host with a **keyed map of
-  clients to its non-self peers**. `multiQuery(c.connections)` on host A = gather `A.local.connections`
-  + each peer client's `.connections` (peers answer the **plain** per-instance query — no recursion) →
-  fold over the per-host record.
+- **Serve:** each host's process runs the same `serverEntry(Database, impl)` — its own local instance.
+  Nothing host-specific is passed (no URL, no host list); the peer connections the gather needs are
+  wired by the toolkit straight from the tag's `multiHost` set (each host carries its URL). So there's
+  **no `serveAcrossHosts({host, url, impl}[])` helper** — it would only re-state what the tag holds.
+- **Mesh (modes 2/3):** the toolkit builds a **keyed map of clients to the peers** from the tag's host
+  set + URLs. `c.connections.pipe(combine(...))` on host A = gather `A.local.connections` + each peer
+  client's `.connections` (peers answer the **plain** per-instance query — no recursion) → fold over
+  the per-host record.
 - **No mesh (mode 1):** the dashboard/aggregator holds all the hosts and does the same fold client-side.
 - **Readiness** stays per-host and local (each host's `/health`); any cross-host rollup is a
   dashboard/combine concern, not `/health`.
@@ -120,20 +141,22 @@ resources."
   simple win, keep (c) as the scale story. Needs a call.
 - **`multiStream` lifecycle** — N live peer subscriptions managed on the serving host (merge/transform,
   teardown, a peer dropping/reconnecting). [slice 2]
-- **`multiQuery` scope** — pick exactly one per-instance field (locked default), or allow folding over
-  several at once? [slice 2]
-- **Topology source for mode 3** — the fleet map `[{ host, url }]` the layer helper needs. [slice 2]
+- **`combine` scope** — pick exactly one per-instance field (locked default; combine pipes onto it),
+  or allow folding over several at once? [slice 2]
 - **Same-host multiplicity** — the reserved instance-key mechanism (decision 5), if/when needed. [later]
+
+(Resolved since v1: per-host outcome type → decision 9; the contract shape → decision 8 piped form;
+host/URL/topology → decision 2 the `Host` carries its URL, so mode-3 needs no separate fleet map.)
 
 ## Build slices
 1. **Combine core (this slice).** The isomorphic primitive: gather a field across a **caller-supplied**
    keyed peer map, capturing each host's outcome, + the `Combine` strategies + `HostResult`. Pure
    (no Spec surgery, no wiring), browser + node, fully unit-tested. Usable today by a node aggregator.
    `src/MultiHost.ts`, exported `@nikscripts/effect-pm/MultiHost`.
-2. **Contract field-kinds + wiring.** `Resource.contract({...}).multi((c) => ({...}))`, `multiQuery` /
-   `multiStream` as spec fields whose impls call the slice-1 combine; the keyed peer map from a layer
-   helper / in-tag host set; serve-per-host; modes 1–3; the mode-3 topology map. (`multiStream`
-   lifecycle resolved here.)
+2. **Contract pipeline + wiring.** `Resource.contract({...}).pipe(Resource.multi((c) => ({...})))` with
+   `c.field.pipe(Resource.combine(strategy))`; `Host` carries its URL + `multiHost(...)` on the tag;
+   multi-field impls call the slice-1 combine over a keyed peer map built from the tag; serve-per-host
+   (`serverEntry`); modes 1–3. (`multiStream` lifecycle resolved here.)
 3. **Dashboard tools.** Expand a hostless leaf into per-host facets + the combined service; discovery
    via `hostsOf` + `HostStatus`.
 4. **Elected host (mode 4).** Static aggregator first; redis-push as the scale option.
