@@ -52,6 +52,10 @@
       "types": "./dist/Resource.d.ts",
       "default": "./dist/Resource.js"
     },
+    "./MultiHost": {
+      "types": "./dist/MultiHost.d.ts",
+      "default": "./dist/MultiHost.js"
+    },
     "./QueueContract": {
       "types": "./dist/QueueContract.d.ts",
       "default": "./dist/QueueContract.js"

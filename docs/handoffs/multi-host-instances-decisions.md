@@ -78,11 +78,13 @@ resources."
    - Returns the merged spec; `Tag` consumes it unchanged, `.pipe(withReadiness(...))` still composes.
    - Plain (non-multi) resources keep the object-literal spec — `.contract().multi()` is **opt-in**.
 
-9. **Per-host attribution + dev-controlled failure.** The fold/transform receives a **record keyed by
-   host** whose values carry each host's **outcome** (success/failure), so a down peer is the **dev's**
-   call per situation — sum the survivors, fail hard, or report "2/3 reporting." The toolkit imposes no
-   policy; the built-in combines (`sum`, etc.) skip down hosts by default. (Exact outcome type — `Exit`
-   per host vs an `{ up; down }` split — is Open.)
+9. **Per-host attribution + dev-controlled failure.** The fold/transform receives the per-host
+   **outcomes**, so a down peer is the **dev's** call — sum the survivors, fail hard, or report "2/3
+   reporting." The toolkit imposes no policy; built-in combines (`sum`, etc.) skip down hosts.
+   **Locked outcome type:** a query combine receives `ReadonlyArray<HostResult<A, E>>` where
+   `HostResult = { host: string; exit: Exit<A, E> }` (Effect-native success/failure, host-attributed);
+   a stream combine receives `ReadonlyArray<{ host: string; stream: Stream<A, E> }>`. `Combine.*`
+   helpers operate on the successes; a custom fold sees the full array (failures included).
 
 10. **Tools, not widgets, for custom resources.** A custom resource's shape is unknown, so the toolkit
     can't render its widget (same reason generic introspection UI was rejected). It ships **tools** —
@@ -117,13 +119,24 @@ resources."
   go **linear**, no mesh, survives a down host; needs the store). Recommendation: ship (a) for the
   simple win, keep (c) as the scale story. Needs a call.
 - **`multiStream` lifecycle** — N live peer subscriptions managed on the serving host (merge/transform,
-  teardown, a peer dropping/reconnecting).
-- **Failure outcome type** the fold receives (`Record<host, Exit<A,E>>` vs `{ up: Record<host,A>; down:
-  Record<host,E> }`).
+  teardown, a peer dropping/reconnecting). [slice 2]
 - **`multiQuery` scope** — pick exactly one per-instance field (locked default), or allow folding over
-  several at once?
-- **Topology source for mode 3** — the fleet map `[{ host, url }]` the layer helper needs.
-- **Same-host multiplicity** — the reserved instance-key mechanism (decision 5), if/when needed.
+  several at once? [slice 2]
+- **Topology source for mode 3** — the fleet map `[{ host, url }]` the layer helper needs. [slice 2]
+- **Same-host multiplicity** — the reserved instance-key mechanism (decision 5), if/when needed. [later]
+
+## Build slices
+1. **Combine core (this slice).** The isomorphic primitive: gather a field across a **caller-supplied**
+   keyed peer map, capturing each host's outcome, + the `Combine` strategies + `HostResult`. Pure
+   (no Spec surgery, no wiring), browser + node, fully unit-tested. Usable today by a node aggregator.
+   `src/MultiHost.ts`, exported `@nikscripts/effect-pm/MultiHost`.
+2. **Contract field-kinds + wiring.** `Resource.contract({...}).multi((c) => ({...}))`, `multiQuery` /
+   `multiStream` as spec fields whose impls call the slice-1 combine; the keyed peer map from a layer
+   helper / in-tag host set; serve-per-host; modes 1–3; the mode-3 topology map. (`multiStream`
+   lifecycle resolved here.)
+3. **Dashboard tools.** Expand a hostless leaf into per-host facets + the combined service; discovery
+   via `hostsOf` + `HostStatus`.
+4. **Elected host (mode 4).** Static aggregator first; redis-push as the scale option.
 
 ## Builds on (already shipped)
 - `Resource.serverEntry` (record + Effect forms) — the per-host serve primitive (beta.15).

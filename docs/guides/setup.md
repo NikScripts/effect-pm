@@ -34,6 +34,7 @@ of React/Ink/recharts.
 | `…/ApiMetrics`, `…/ApiUsageSchema`, `…/HttpApiResource` | outbound-API usage observability — an `ApiMetrics.Tag` tap over an `HttpApiResource.Service` client |
 | `…/HostStatus` | the reserved host status resource (auto-served by `serveAllHttp`): `status` / `ping` / `logs` |
 | `…/Group` | `Group.Tag` — the nestable navigation tree |
+| `…/MultiHost` | combine a field across N instances of one resource (`combineQuery` / `combineStream` / `Combine`) — isomorphic |
 | `…/HistoryStore`, `…/DurableQueueStore` | history backfill + durable queue |
 | `…/ProcessStore`, `…/ProcessStorage`, `…/RuntimeStorage`, `…/Logs` | storage facets + structured logs |
 | `…/storage/sqlite` · `/redis` | durable storage backends |
@@ -52,7 +53,7 @@ an ESM tree-shaking bundler (Vite, esbuild, Rollup, webpack 5) a browser build p
 it imports.
 
 - **Browser-safe (no node built-ins):** `…/web`, `…/Group`, `…/Resource`
-  (`client`/`connect`/`connectHttp`/`Host`), `…/QueueContract` (`queueTag` + contract),
+  (`client`/`connect`/`connectHttp`/`Host`), `…/MultiHost`, `…/QueueContract` (`queueTag` + contract),
   `…/ScheduledProcess` (`processTag`), `…/ProcessScheduleContract`, `…/cli`, `…/tui`.
 - **Node-only — never reach these from browser code:** `…/storage/sqlite` (pulls
   `@effect/sql-sqlite-node`), `…/storage/redis`, and the HTTP
