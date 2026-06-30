@@ -33,7 +33,7 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 | **Process runtime** | `pnpm run example:process-supervisor-patterns` |
 | **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
 | **Resource gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → http-client → http-api forms |
-| **Storage** | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) → [`process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) → [`process-store-prisma-structural-client.ts`](./forms/process-store/process-store-prisma-structural-client.ts) |
+| **Storage** | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) → [`process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) |
 
 ---
 
@@ -62,7 +62,6 @@ Cross-cutting narrative: [docs/PACKAGE-GUIDE.md](../docs/PACKAGE-GUIDE.md). API 
 |------|---------|
 | [`forms/process-store/process-store-memory.ts`](./forms/process-store/process-store-memory.ts) | `ProcessStorage.layer` + lifecycle facet reads |
 | [`forms/process-store/process-store-events-sqlite-layer.ts`](./forms/process-store/process-store-events-sqlite-layer.ts) | `layerProcessStore` + facet reads on SQLite |
-| [`forms/process-store/process-store-prisma-structural-client.ts`](./forms/process-store/process-store-prisma-structural-client.ts) | Structural Prisma client shape for `PrismaRuntimeStorage` |
 
 Storage options:
 
