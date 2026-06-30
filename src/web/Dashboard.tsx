@@ -35,7 +35,7 @@ import { RuntimeProvider, useApiBundle, useProcessBundle, useQueueBundle, useRun
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { ApiEndpointTable, ApiMetricChart, ApiStats, Cell, ConfirmDialog, HealthBoard, HostBar, HostDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ScheduleEditor, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { ApiEndpointTable, ApiMetricChart, ApiStats, Cell, ConfirmDialog, HealthBoard, HostBar, HostDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, QueueControls, QueueStats, ResourceReadinessBanner, ScheduleEditor, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
 
@@ -178,6 +178,7 @@ const QueueDetail = (props: {
         <strong className="flex-1 truncate text-base">{displayName(props.tag.key)}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
+      <ResourceReadinessBanner tag={props.tag} />
       <QueueStats bundle={bundle} />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="min-w-0 sm:flex-1">
@@ -206,6 +207,7 @@ const ProcessDetail = (props: {
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
         <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.key)}</strong>
       </div>
+      <ResourceReadinessBanner tag={props.tag} />
       <ProcessStats bundle={bundle} />
       <ProcessControls bundle={bundle} locked={locked} onToggleLock={() => setLocked((l) => !l)} />
       <ScheduleEditor bundle={bundle} onOpenFull={props.onOpenSchedule} />
@@ -225,6 +227,7 @@ const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void })
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
         <strong className="flex-1 truncate text-base">🌐 {displayName(props.tag.key)}</strong>
       </div>
+      <ResourceReadinessBanner tag={props.tag} />
       <ApiStats bundle={bundle} />
       <div className="overflow-hidden rounded-xl border bg-card p-3"><ApiMetricChart bundle={bundle} /></div>
       <ApiEndpointTable bundle={bundle} />

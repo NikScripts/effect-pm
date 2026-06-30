@@ -178,13 +178,20 @@ export const hostsOf = (group: unknown): ReadonlyArray<HostRef> => {
 
 /** A tag's wire identity (its `groupId`, falling back to `key`) — what a host's `HostStatus`
  *  reports for each served resource. @since 1.0.0 */
-const tagWireKey = (member: unknown): string | undefined => {
+export const tagWireKey = (member: unknown): string | undefined => {
   if ((typeof member !== "object" && typeof member !== "function") || member === null) {
     return undefined;
   }
   if ("groupId" in member && typeof member.groupId === "string") return member.groupId;
   if ("key" in member && typeof member.key === "string") return member.key;
   return undefined;
+};
+
+/** The {@link HostRef} a resource tag is bound to (its `Resource.Host`), or `undefined` for a hostless
+ *  tag — lets a resource page read its own readiness from its host's `HostStatus`. @since 1.0.0 */
+export const resourceHostRef = (tag: unknown): HostRef | undefined => {
+  const host = hostOf(tag);
+  return host === undefined ? undefined : { id: host.key, host };
 };
 
 /** The leaf resource tag in a group tree whose wire key is `key` (as reported by a host's
