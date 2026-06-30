@@ -111,6 +111,20 @@ See `apps/services-hub/docs/MONITORABLE-RESOURCES-PLAN.md` in the consumer repo.
 - `src/Resource.ts:614` `WireServiceOf<S>` — the spec-checked impl shape the literal path skips.
 - `src/ScheduledProcess.ts:593`, `src/ApiMetrics.ts:200` — the precedent `serverEntry`s (`{ tag, impl }`).
 
+## Maintainer status (2026-06-29) — DEFERRED, with a doc signpost shipped
+
+Implemented `Resource.serverEntry(tag, impl: WireServiceOf<S>): ServeEntry<never>` and hit a hard
+**tsgo perf cliff**: merely *exporting* it (not calling it) takes a `import * as Resource` consumer's
+typecheck from ~1s to **>5min**. Reproduced on `examples/resource-web` (defined-but-unexported = 1s;
+exported = >5min, both return-annotation variants). `serveHttp`/`server` use the same `WireServiceOf<S>`
+exported without issue, so it's something about `serverEntry`'s shape in the namespace under `import *`
+— not understood yet. Since **wow does `import * as Resource`**, shipping it would hang their typechecks
+— the opposite of the goal. So it's **not shipped** pending a tsgo perf investigation.
+
+What **did** ship: the discoverability fix — the `Resource.instance` JSDoc now says it's *not* for
+serving a single custom resource, and points to a `{ tag, impl }` entry in `serveAllHttp` + `client`.
+The `{ tag, impl }` literal remains the supported path (works today; impl just isn't spec-checked).
+
 ## Related
 
 - `serve-apimetrics-with-group.md` — the shipped `ApiMetrics.serverEntry` (closest precedent).

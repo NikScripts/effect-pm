@@ -1457,6 +1457,12 @@ export interface ResourceInstance<S extends Spec> {
 /**
  * Pair a factory instance tag with its implementation, for {@link Resource.serveInstances}.
  *
+ * **Not** how you serve a single custom resource on a shared host: this returns a
+ * {@link ResourceInstance} for the {@link serveInstances} family, which `serveAllHttp` rejects. To
+ * serve a custom `Resource.Tag` alongside queues/processes, put a `{ tag, impl }` entry in
+ * {@link serveAllHttp} directly (the `impl` is the same {@link Resource.layer}/{@link Resource.server}
+ * record), then reach it with {@link Resource.client} — see the `serveAllHttp` example.
+ *
  * @public
  */
 const instance = <Self, S extends Spec>(
