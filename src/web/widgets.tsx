@@ -1459,6 +1459,7 @@ const ResourceReadinessRow = (props: {
 const HostHealthCard = (props: {
   readonly host: HostRef;
   readonly s: HostStatusValue | undefined;
+  readonly history: ReadonlyArray<number>;
   readonly onOpen: () => void;
   readonly onOpenResource: (resourceKey: string) => void;
 }): React.ReactElement => {
@@ -1483,6 +1484,17 @@ const HostHealthCard = (props: {
         </span>
         <span className="shrink-0 text-muted-foreground">›</span>
       </button>
+      {props.history.length >= 2 ? (
+        <div className="border-t px-2 pb-1 pt-1">
+          <div className="mb-0.5 flex items-baseline justify-between text-[0.65rem] text-muted-foreground">
+            <span>ready over time</span>
+            <span>
+              {ready}/{total}
+            </span>
+          </div>
+          <Sparkline points={props.history} color={hostColor(s)} />
+        </div>
+      ) : null}
       {s !== undefined && s.resources.length > 0 ? (
         <ul className="space-y-0.5 border-t px-1 py-1">
           {s.resources.map((res) => (
@@ -1547,8 +1559,14 @@ export const HealthBoard = (props: {
 }): React.ReactElement => {
   const hosts = hostsOf(props.group);
   const rows = hosts.map((host) => {
-    const r = useAtomValue(useHostBundle(host).status);
-    return { host, s: AsyncResult.isSuccess(r) ? r.value : undefined };
+    const bundle = useHostBundle(host);
+    const r = useAtomValue(bundle.status);
+    const h = useAtomValue(bundle.health);
+    return {
+      host,
+      s: AsyncResult.isSuccess(r) ? r.value : undefined,
+      history: AsyncResult.isSuccess(h) ? h.value : [],
+    };
   });
   const degraded = rows.flatMap(({ host, s }) =>
     (s?.resources ?? []).filter((x) => !x.ready).map((res) => ({ host, res })),
@@ -1600,11 +1618,12 @@ export const HealthBoard = (props: {
           hosts · {hosts.length}
         </h2>
         <div className="space-y-2">
-          {rows.map(({ host, s }) => (
+          {rows.map(({ host, s, history }) => (
             <HostHealthCard
               key={host.id}
               host={host}
               s={s}
+              history={history}
               onOpen={() => props.onOpenHost(host)}
               onOpenResource={props.onOpenResource}
             />

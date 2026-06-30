@@ -136,6 +136,9 @@ export interface HostBundle {
   readonly status: ValueAtom<HostStatus.Status | undefined>;
   /** The host's runtime-wide log stream (recent tail, then live). @since 1.0.0 */
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
+  /** Ready-resource count over time (one point per status tick) — a readiness sparkline that dips
+   *  when a resource (or its dependency) degrades. @since 1.0.0 */
+  readonly health: ValueAtom<ReadonlyArray<number>>;
 }
 /** The atoms one API-metrics card needs — read-only (no commands). @since 1.0.0 */
 export interface ApiBundle {
@@ -465,6 +468,17 @@ export const hostStatusBundle = <R, ER>(
         live: Stream.unwrap(Effect.map(HostStatus.Tag, (h) => h.logs)).pipe(Stream.map(toLogLine)),
         history: Effect.flatMap(HostStatus.Tag, (h) => h.logHistory({ limit: 300 })).pipe(
           Effect.map((entries) => entries.map(toLogLine)),
+        ),
+      }).pipe(Stream.provide(hostStatusClient(ref.host))),
+    ),
+    // Ready-count over time, accumulated client-side from the status stream — a compact readiness
+    // sparkline (no server change). Dips when a resource degrades (e.g. a dependency blips).
+    health: runtime.atom(
+      cachedAccumulator({
+        key: `${ref.id}/health`,
+        cap: 120,
+        live: Stream.unwrap(Effect.map(HostStatus.Tag, (h) => h.status)).pipe(
+          Stream.map((st) => st.resources.filter((x) => x.ready).length),
         ),
       }).pipe(Stream.provide(hostStatusClient(ref.host))),
     ),
