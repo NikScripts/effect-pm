@@ -827,13 +827,7 @@ export interface ResourceTag<Self, S extends Spec>
   /** Resource-level help text (CLI/TUI section help, dashboard panel title) — if declared. */
   readonly description: string | undefined;
   readonly [specSym]: S;
-  // Erased to `RpcGroup<any>` (the same shape `ServeEntry.tag` uses), NOT `RpcGroupOf<S>`: the
-  // per-`S` map (`ReadonlyMap<string, Rpc<methodName, …>>`) is invariant, which is the one member
-  // that makes a host-bound tag (a distinct interface) fail structural assignability to a bare
-  // `ResourceTag<any, any>`. Erasing it lets `HostBoundTag` *be* a `ResourceTag<any, any>` — so no
-  // helper needs a `| HostBoundTag` band-aid. The precise group is still built (`buildRpcGroup`); only
-  // the field type is widened, and the sole reader (`serveAllHttp` merge) just needs `.merge`.
-  readonly [groupSym]: RpcGroup.RpcGroup<any>;
+  readonly [groupSym]: RpcGroupOf<S>;
   readonly [localCapSym]: Context.Key<
     LocalCapability<Self>,
     { readonly granted: true }
@@ -908,18 +902,20 @@ export const hostOf = (tag: unknown): HostKey<unknown> | undefined => {
  * @public
  */
 export const withReadiness: {
-  // data-last (pipe): `tag.pipe(Resource.withReadiness(fn))` — the service type is derived from the
-  // piped tag; `Self` is widened to `any` here so this can be used in a class `extends` position
+  // The input is "any resource tag, host-bound or not" — `HostBoundTag` is a distinct interface, so
+  // it isn't structurally assignable to a bare `ResourceTag<any, any>` (its one invariant member,
+  // `[groupSym]`); naming both arms is the honest type for "accepts either variant" (`client` does the
+  // same). `Self` is widened to `any` on the data-last form so it works in a class `extends` position
   // without TS resolving the class's own (still-being-declared) type — see test/resource-readiness.
-  // Host-bound tags work without a `| HostBoundTag` arm: `HostBoundTag` is now assignable to
-  // `ResourceTag<any, any>` (the invariant `[groupSym]` was erased — see the field).
-  <T extends ResourceTag<any, any>>(
+  //
+  // data-last (pipe): `tag.pipe(Resource.withReadiness(fn))` — service type derived from the piped tag.
+  <T extends ResourceTag<any, any> | HostBoundTag<any, any, any>>(
     readiness: ReadinessOf<
       T extends ResourceTag<any, infer S extends Spec> ? ServiceOf<S, any> : never
     >,
   ): (tag: T) => T;
   // data-first: `Resource.withReadiness(tag, fn)` — full `ServiceOf<S, Self>` (contracts use this).
-  <T extends ResourceTag<any, any>>(
+  <T extends ResourceTag<any, any> | HostBoundTag<any, any, any>>(
     tag: T,
     readiness: ReadinessOf<
       T extends ResourceTag<infer Self, infer S extends Spec> ? ServiceOf<S, Self> : never

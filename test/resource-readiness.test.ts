@@ -128,19 +128,3 @@ it("a host-bound tag can extend readiness via .pipe (regression)", () =>
       return yield* Resource.readinessCheck(HostedWorker, w);
     }).pipe(Effect.provide(Resource.layer(HostedWorker, { running: Effect.succeed(false) }))),
   ).then((r) => expect(r).toEqual({ ready: false, detail: "stopped" })));
-
-// Regression (#2/#3): with HostBoundTag assignable to ResourceTag<any,any> (invariant groupSym erased),
-// the DATA-FIRST overload accepts a host-bound tag with no `| HostBoundTag` band-aid. DataFirstWorker
-// is host-bound + plain (no readiness in extends → no self-recursion); apply readiness in the body.
-class DataFirstWorker extends Resource.Tag<DataFirstWorker>()(
-  "dep/DataFirstWorker",
-  { running: Resource.query(Schema.Boolean) },
-  { host: DepHost },
-) {}
-
-it("data-first withReadiness accepts a host-bound tag (regression for #2/#3)", () => {
-  const tag = Resource.withReadiness(DataFirstWorker, (svc) =>
-    Effect.map(svc.running, (r) => (r ? { ready: true } : { ready: false, detail: "stopped" })),
-  );
-  expect(tag).toBe(DataFirstWorker);
-});

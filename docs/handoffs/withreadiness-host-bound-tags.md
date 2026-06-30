@@ -66,20 +66,29 @@ the offending field covariant / `out`, relax `[groupSym]` to a bivariant or `unk
 have `Resource.Tag(…, { host })` return an intersection that stays assignable. Then helpers don't each
 need a hand-rolled overload, and new helpers don't silently exclude host-bound tags.
 
-## ✅ SHIPPED (2026-06-29) — #1, #2, #3 all resolved
+## ✅ SHIPPED (2026-06-29) — #1, #2 resolved; #3 evaluated, union kept
 
-- **#3 (root cause)** fixed by **erasing `[groupSym]` to `RpcGroup.RpcGroup<any>`** on `ResourceTag`
-  (the exact "relax `[groupSym]`" option above; it already matched `ServeEntry.tag`'s field). With the
-  one invariant member gone, `HostBoundTag` *is* assignable to `ResourceTag<any, any>`. The
-  `Context.ServiceClass` constructor-variance worry turned out to be downstream of this too —
-  `typeof HostBoundClass` assigns now as well. The precise group is still built at runtime; only the
-  field type widened (sole reader is `serveAllHttp`'s merge, which just needs `.merge`).
-- **The `withReadiness` band-aid is gone** — both overloads are back to plain `ResourceTag<any, any>`,
-  no `| HostBoundTag`. No `| HostBoundTag` band-aids remain in the codebase (`client`'s `HostBoundTag`
-  overload stays — it's semantic discrimination for transport resolution, not an accept-it band-aid).
-- **#1, #2** are subsumed: data-last `.pipe` **and** data-first `withReadiness(tag, fn)` both accept a
-  host-bound tag (regression tests for both in `test/resource-readiness.test.ts`). wow's `TODO(#29)`
-  one-liner works on whichever form they prefer once this lands (next beta).
+- **#1, #2** resolved: both `withReadiness` overloads accept `ResourceTag<any, any> |
+  HostBoundTag<any, any, any>`, so a host-bound tag works via the data-last
+  `tag.pipe(Resource.withReadiness(...))` form (wow's `TODO(#29)` path) — regression test in
+  `test/resource-readiness.test.ts`. **Group types stay fully precise (`RpcGroupOf<S>`); no cast.**
+- **#3 (root cause) — evaluated three structural fixes, kept the explicit union:**
+  - *Erase `[groupSym]` to `RpcGroup<any>`* (makes `HostBoundTag` assignable) — **rejected**: it
+    discards the precision `RpcClient.make` is built to preserve (the un-Effect move); a real downgrade
+    even though the `any` is sealed to one field.
+  - *Type-alias `HostBoundTag = ResourceTag<Self,S> & {…}`* — **rejected**: assignable, but the
+    intersection expands inline through generics and leaks `hostSym` (TS4020) even though `hostSym` is
+    already exported.
+  - *Host as a 3rd type param of `ResourceTag`* — viable but a worse trade: needs a conditional
+    `[hostSym]` field, widening every helper constraint to `<any,any,any>` (same footgun, reshaped),
+    fragile `client` `never`-vs-host discrimination, a public signature change, and perf risk.
+  - **Kept:** the explicit union on the ~2 helpers that take a tag. It's not a band-aid — it's the
+    honest "accepts either tag variant" input (`client` already uses the same shape), fully precise,
+    no cast, lowest risk. The only cost is naming both arms on those helpers.
+- **Caveat:** the data-**first** *class* form `Resource.withReadiness(SomeHostBoundClass, fn)` does
+  **not** typecheck (a `typeof Class` constructor isn't assignable to the union — a `Context.ServiceClass`
+  variance quirk, independent of `[groupSym]`). The supported host-bound path is the data-last `.pipe`
+  form, which is what the contracts and wow use. Data-first works for host-bound tag *values* (contracts).
 
 ## Consumer status
 
