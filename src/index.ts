@@ -16,7 +16,7 @@
  * - **`QueueResource`** — Three-level **priority** queues with **concurrency** and optional
  *   **`rateLimit`** (Effect `RateLimiter`); each queue is a **Context**
  *   service with a `.layer`.
- * - **`ProcessStore`** — In-memory (or **Prisma**) **analytics**: execution rows + lifecycle
+ * - **`ProcessStore`** — In-memory (or **SQLite**) **analytics**: execution rows + lifecycle
  *   events for processes.
  * - **Toolkit (location-transparent resources)** — **`Resource`** is the foundation: a tag is
  *   driven by the same `yield* Tag` code whether it runs **local or remote** (`Resource.client` /
@@ -69,7 +69,7 @@
  * Storage is `layerProcessStore` from `@nikscripts/effect-pm/storage/sqlite` or other `RuntimeStorage` + `ProcessStore` composition.
  *
  * Storage adapters use lower-case subpaths:
- * **`@nikscripts/effect-pm/storage/sqlite`** and **`@nikscripts/effect-pm/storage/prisma`**
+ * **`@nikscripts/effect-pm/storage/sqlite`** and **`@nikscripts/effect-pm/storage/redis`**
  * for durable runtime records.
  *
  * ## Source-only helpers

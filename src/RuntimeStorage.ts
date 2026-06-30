@@ -3,7 +3,7 @@
  * effect-pm package.
  *
  * @remarks
- * Storage adapters (in-memory, SQLite, future Prisma…) implement
+ * Storage adapters (in-memory, SQLite, Redis) implement
  * {@link RuntimeStorageService} and yield through the
  * {@link RuntimeStorage} service tag. Per-domain storage facets in
  * `src/store/*` (queue, run-resource, process lifecycle, …) build their
@@ -19,7 +19,7 @@
  * Error channels distinguish logical storage outcomes from operational durable
  * failures. Duplicate ids and readonly rows are logical contract failures.
  * Connection, schema, query, decode, transaction, and availability failures are
- * operational errors shared by durable adapters such as SQLite and Prisma.
+ * operational errors shared by durable adapters such as SQLite and Redis.
  *
  * @module RuntimeStorage
  */
@@ -139,7 +139,7 @@ export class RuntimeStorageReadonlyRecordError extends Data.TaggedError(
  *
  * @public
  */
-export type RuntimeStorageAdapter = "memory" | "sqlite" | "prisma" | (string & {});
+export type RuntimeStorageAdapter = "memory" | "sqlite" | "redis" | (string & {});
 
 /**
  * Runtime storage operation that encountered an operational failure.

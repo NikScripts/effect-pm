@@ -49,7 +49,7 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 | Schedule composition + runtime updates | [examples/forms/schedule/](../examples/forms/schedule/) |
 | Understand process runtime semantics | [PROCESS-API.md](./PROCESS-API.md) + `src/Process.ts` TSDoc |
 | API tables (make, Polling, Schedule) | [PROCESS-API.md](./PROCESS-API.md) |
-| Process storage facets (`ProcessStorage`, SQLite, Prisma) | [STORAGE.md](./STORAGE.md) |
+| Process storage facets (`ProcessStorage`, SQLite, Redis) | [STORAGE.md](./STORAGE.md) |
 | UI / bundlers importing service tags | [guides/service-tags-and-runtime-split.md](./guides/service-tags-and-runtime-split.md) |
 | AI / agent onboarding (repo map, conventions) | [AGENTS.md](./AGENTS.md) |
 
@@ -69,16 +69,14 @@ dedicated subpaths for focused imports:
 - `@nikscripts/effect-pm/HistoryStore`, `@nikscripts/effect-pm/DurableQueueStore`
 - `@nikscripts/effect-pm/Process`, `@nikscripts/effect-pm/QueueResource`, `@nikscripts/effect-pm/ProcessStore`
 - `@nikscripts/effect-pm/storage/sqlite`
-- `@nikscripts/effect-pm/storage/prisma`
+- `@nikscripts/effect-pm/storage/redis`
 
 Structured logs use `LogStore` (`record`, `load`, `query`) with `ProcessStorage` or `layerProcessStore` composed; child capture uses `@nikscripts/effect-pm/Logs` (`captureLoggerLayer`, `relayLayer`)
 at launch (`layerProcessStore` from `storage/sqlite`). Durable
 normalized runtime records use `@nikscripts/effect-pm/storage/sqlite`
-(`SQLiteRuntimeStorage`) or `@nikscripts/effect-pm/storage/prisma`
-(`PrismaRuntimeStorage`) with `ProcessStorage.layerRuntimeStorage`. Run
+(`SQLiteRuntimeStorage`) with `ProcessStorage.layerRuntimeStorage`. Run
 `SQLiteRuntimeStorage.make` under `Effect.scoped` (or `it.live`) so the
-underlying `SqlClient` stays open for the whole usage window; Prisma clients are
-constructed and disconnected by the consuming app.
+underlying `SqlClient` stays open for the whole usage window.
 
 For durable adapter work, start with
 [STORAGE.md](./STORAGE.md).

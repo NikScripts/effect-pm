@@ -7,7 +7,6 @@ const shared = {
   treeshake: true,
   outDir: "dist",
   external: [
-    "@prisma/client",
     "@effect/sql-sqlite-node",
   ],
 };
@@ -49,8 +48,6 @@ export default defineConfig([
       tui: "src/tui/index.ts",
       "storage/sqlite": "src/storage/sqlite/index.ts",
       "storage/redis": "src/storage/redis/index.ts",
-      "storage/prisma": "src/storage/prisma.ts",
-      "prisma/index": "src/prisma/index.ts",
     },
     dts: true,
     clean: true,

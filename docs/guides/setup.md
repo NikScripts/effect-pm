@@ -19,7 +19,6 @@ npm install @nikscripts/effect-pm effect
 | `@nikscripts/effect-pm/tui` | `react`, plus **`ink`** (yours — `/tui` ships primitives + the binding, not Ink) |
 | `@nikscripts/effect-pm/web` | `react`, `react-dom`, `recharts`, `@tanstack/react-table`, `@tanstack/react-query` |
 | `@nikscripts/effect-pm/storage/sqlite` | `@effect/sql-sqlite-node` |
-| `@nikscripts/effect-pm/storage/prisma` | `@prisma/client` (your generated client) |
 
 The package is ESM-only. UI deps are **optional peers**: a server-only consumer pulls none
 of React/Ink/recharts.
@@ -37,7 +36,7 @@ of React/Ink/recharts.
 | `…/Group` | `Group.Tag` — the nestable navigation tree |
 | `…/HistoryStore`, `…/DurableQueueStore` | history backfill + durable queue |
 | `…/ProcessStore`, `…/ProcessStorage`, `…/RuntimeStorage`, `…/Logs` | storage facets + structured logs |
-| `…/storage/sqlite` · `/redis` · `/prisma` | durable storage backends |
+| `…/storage/sqlite` · `/redis` | durable storage backends |
 | **`…/cli`** | `makeResourceCli`, `resourcesByName`, `render` — a run-and-exit CLI from your tags |
 | **`…/tui`** | the reactive binding + terminal primitives for Ink dashboards |
 | **`…/web`** | React widgets + the reactive binding for browser dashboards |
@@ -48,7 +47,7 @@ of React/Ink/recharts.
 ## 2a. Browser safety & tree-shaking
 
 The package is built for this: ESM-only, `"sideEffects": false`, tsup `treeshake` + code
-splitting, and every optional peer (react/recharts/ink/sqlite/prisma/redis) externalized. With
+splitting, and every optional peer (react/recharts/ink/sqlite/redis) externalized. With
 an ESM tree-shaking bundler (Vite, esbuild, Rollup, webpack 5) a browser build pulls only what
 it imports.
 
@@ -56,7 +55,7 @@ it imports.
   (`client`/`connect`/`connectHttp`/`Host`), `…/QueueContract` (`queueTag` + contract),
   `…/ScheduledProcess` (`processTag`), `…/ProcessScheduleContract`, `…/cli`, `…/tui`.
 - **Node-only — never reach these from browser code:** `…/storage/sqlite` (pulls
-  `@effect/sql-sqlite-node`), `…/storage/redis`, `…/storage/prisma`, `…/prisma`, and the HTTP
+  `@effect/sql-sqlite-node`), `…/storage/redis`, and the HTTP
   server itself (`NodeHttpServer`) plus any worker/storage layers. (`serveAllHttp` / `serverEntry`
   are clean to *reference*, but they belong to the server entry.)
 

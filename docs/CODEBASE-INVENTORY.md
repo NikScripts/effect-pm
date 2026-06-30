@@ -367,7 +367,7 @@ the built-in facets over `RuntimeStorage`.
   `RuntimeStorage`.
 - **`@nikscripts/effect-pm/storage/sqlite`** — `SQLiteRuntimeStorage` durable
   `RuntimeStorageService` and `layerProcessStore({ filename })`.
-- **`@nikscripts/effect-pm/storage/prisma`** — `PrismaRuntimeStorage` durable `RuntimeStorageService` and `layerProcessStore({ client })`.
+- **`@nikscripts/effect-pm/storage/redis`** — `RedisRuntimeStorage` durable `RuntimeStorageService`.
 
 ### Facet write/read
 
@@ -411,7 +411,7 @@ and call its domain read methods.
 ### Adapter behavior
 
 - SQLite stores normalized `RuntimeRecord` rows.
-- Prisma is intentionally unavailable until rebuilt as a `RuntimeStorage` adapter.
+- Durable runtime storage is provided by the **sqlite** and **redis** adapters.
 
 ### Codec (storage row mapping)
 
@@ -495,36 +495,10 @@ Provide a custom service whose shape matches **`ProcessStoreRunResource.Type`** 
 
 ---
 
-## PrismaRuntimeStorage + effect-pm CLI (storage tooling)
-
-### `PrismaRuntimeStorage` namespace
-
-- **`make(client)`**, **`layer({ client })`**, **`layerFromContext`** — provide Prisma-backed `RuntimeStorage`.
-- **`layerProcessStore({ client })`** — provides all built-in storage facets through Prisma-backed runtime records.
-- **`PrismaClientService`**, **`prismaClientLayer({ client })`**
-- **`schema`**, **`schemaModelMarker`** — `EffectPmRuntimeRecord` schema fragment mapped to `effect_pm_runtime_records`.
-
-### Structural types (`prisma/types`)
-
-- **`PrismaRuntimeStorageClient`**, **`EffectPmRuntimeRecordDelegate`**, **`EffectPmRuntimeRecordRow`**, **`EffectPmRuntimeRecordCreateInput`**, **`JsonValue`**, query arg types.
-
-### `addPrismaSchema` (library + CLI)
-
-- Detect single-file vs multi-file Prisma layout.
-- **`--separate-file`**, **`--no-separate-file`**, **`--dry-run`**
-- Results: **`AlreadyPresent`**, **`DryRun`**, **`Wrote`** or **`AddPrismaError`**.
-
-### `effect-pm` bin commands
-
-- **`effect-pm prisma:print-schema`** — stdout fragment.
-- **`effect-pm add prisma [flags]`** — write models; suggests migrate command.
-
----
-
 ## Package import surfaces (for doc “where do I import X”)
 
 - **Root** `@nikscripts/effect-pm` — barrel in §index exports (Process, Polling, Schedule, Group, Queue, Run, Http*, Store, Manager, Control, CLI, disarmed helpers, types).
-- **Subpaths** — `/Process`, `/QueueResource`, `/QueueContract`, `/CustomQueueResource`, `/CustomQueueContract`, `/ScheduledProcess`, `/ProcessScheduleContract`, `/Resource`, `/Group`, `/HostLogs`, `/HostStatus`, `/ApiMetrics`, `/ApiUsageSchema`, `/HttpApiResource`, `/HistoryStore`, `/DurableQueueStore`, `/ProcessStore`, `/ProcessStorage`, `/storage/sqlite`, `/storage/redis`, `/storage/prisma`, `/prisma`, `/web`, `/cli`, `/tui`.
+- **Subpaths** — `/Process`, `/QueueResource`, `/QueueContract`, `/CustomQueueResource`, `/CustomQueueContract`, `/ScheduledProcess`, `/ProcessScheduleContract`, `/Resource`, `/Group`, `/HostLogs`, `/HostStatus`, `/ApiMetrics`, `/ApiUsageSchema`, `/HttpApiResource`, `/HistoryStore`, `/DurableQueueStore`, `/ProcessStore`, `/ProcessStorage`, `/storage/sqlite`, `/storage/redis`, `/web`, `/cli`, `/tui`.
 
 ---
 
@@ -559,7 +533,7 @@ Grouped by **idea demonstrated** — not file paths as authority.
 | Queue | priority-retry |
 | RunResource / observer | unit-and-input, runtime-observer |
 | HTTP gating | http-client-run-gate, http-api-resource tag/layerEffect |
-| Store backends | memory, events-file-layer, prisma-structural-client |
+| Store backends | memory, events-file-layer, sqlite, redis |
 | NWSL HttpApi scenario | nwslsoccer subtree (optional local) |
 
 ---

@@ -30,7 +30,6 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | `src/internal/manager/*` | Log capture / relay / query / scope (used by `Logs` + `store/log`) — **internal**. |
 | `src/Logs.ts` | PM capture/relay only (`captureLoggerLayer`, `relayLayer`) — package subpath `@nikscripts/effect-pm/Logs`. |
 | `src/disarmedIdleSleep.ts` | Pure policy for disarmed idle sleep (shared with tests). |
-| `src/prisma/*` | Optional Prisma adapter (`@nikscripts/effect-pm/prisma` export). |
 | `examples/forms/*` | One API shape per file — minimal teaching references. |
 | `examples/scenarios/*` | Descriptive compositions showing subsystems together. |
 | `examples/shared/*` | Test doubles, harness helpers, shared example utilities. |
@@ -151,8 +150,7 @@ dependencies are missing in a fresh cloud workspace.
 
 **No external services required for the standard checks.** The Vitest suites and
 examples run in-process. SQLite `RuntimeStorage` tests exercise
-`@effect/sql-sqlite-node`. Prisma `RuntimeStorage` tests use both structural
-mocks and a generated Prisma SQLite client in a temporary project.
+`@effect/sql-sqlite-node`.
 `package.json` lists `better-sqlite3` under `pnpm.onlyBuiltDependencies` so the
 transitive native dependency can compile when installs run with ignored scripts
 by default.
@@ -173,10 +171,6 @@ by default.
 - `pnpm install` runs the `prepare` hook, which patches TypeScript with
   `@effect/language-service`; seeing `effect-language-service patch` output is
   expected.
-- The generated Prisma integration test invokes the local `prisma` CLI,
-  `prisma db push`, and `prisma generate`; if a restricted environment blocks
-  Prisma engine install scripts, run `pnpm approve-builds` for `prisma` /
-  `@prisma/engines` and reinstall before testing.
 - Examples that serve a resource over HTTP (`serveHttp`) bind to localhost ports. If an
   example fails because a port is already in use, rerun with a free port or stop the
   specific process that owns that port.

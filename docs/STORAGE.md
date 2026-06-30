@@ -5,7 +5,7 @@
 ## Rules
 
 - **`RuntimeStorage` is all storage** — one **`RuntimeStorage`** service in context.
-  Provide one durable adapter (`layerProcessStore`, Prisma, redis, or hybrid).
+  Provide one durable adapter (`layerProcessStore` — sqlite, redis, or hybrid).
   Facets: all via `ProcessStorage.layerRuntimeStorage`, or **individual**
   `QueueResourceStore.layerRuntimeStorage` (etc.) for only what you use — each still uses the
   same `RuntimeStorage`. **Hybrid** = one adapter routing internally (e.g. SQL +
@@ -212,17 +212,10 @@ The facet **owns** all wire-shape work:
 
 **Adapters:** implement `RuntimeStorageService` (e.g. `src/storage/sqlite/`); wire via `ProcessStorage.layerRuntimeStorage` or `layerProcessStore`. Adapters never speak the facet vocabulary — they store and query generic `RuntimeRecord` rows.
 
-`PrismaRuntimeStorage` stores the same normalized rows through a consumer-owned
-Prisma client. The generated model is `EffectPmRuntimeRecord`, mapped to the
-`effect_pm_runtime_records` table. JSON-shaped runtime fields are serialized
-into `*_json` string columns so the adapter can preserve
-`RuntimeStorage.memory` null / unset semantics without importing generated
-Prisma null sentinels.
-
 `RuntimeStorageError` separates logical failures (duplicate id, readonly row)
 from operational failures (connection, schema, query, decode, transaction,
 unavailable). Durable adapters map driver and decode failures into those public
-tags instead of leaking Prisma / SQLite error types.
+tags instead of leaking the underlying SQLite / Redis error types.
 
 SQLite exposes typed acquisition failures from `layerProcessStore`; use
 `layerProcessStoreOrDie` only at application edges that intentionally treat
