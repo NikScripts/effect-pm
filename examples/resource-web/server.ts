@@ -7,7 +7,7 @@
  * host status dot goes live. Run: `pnpm run example:resource-web-server` (alongside
  * `pnpm run example:resource-web`).
  */
-import { Clock, DateTime, Duration, Effect, Layer, Random, Stream } from "effect";
+import { Clock, Console, DateTime, Duration, Effect, Layer, Random, Stream } from "effect";
 // A node host entry point — the raw http server is exactly what `NodeHttpServer.layer` wants.
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { createServer } from "node:http";
@@ -163,6 +163,26 @@ const scoresDbImpl = {
   connected: Effect.map(Clock.currentTimeMillis, (now) => now % 180_000 > 10_000),
 };
 
+// Dogfood the durable log storage: after the live-score poller has logged a few times, read its logs
+// back out of LogStore two ways — every line on the live host, and just the poller's lines (by
+// resource). Proves the persist → query round-trip. (Provided into liveHost, which has the LogStore.)
+const logStorageDemo = Layer.effectDiscard(
+  Effect.forkScoped(
+    Effect.gen(function* () {
+      yield* Effect.sleep(Duration.seconds(8));
+      const onHost = yield* HostLogs.byHost("live", { limit: 500 });
+      const fromPoller = yield* HostLogs.byResource({
+        processId: "wnba/LiveScorePoller",
+      });
+      // Console.log (direct stdout) so the demo is visible regardless of the serve's logger routing
+      yield* Console.log(
+        `[logs] durable storage — live host holds ${onHost.length} lines; ` +
+          `${fromPoller.length} are LiveScorePoller's (by resource)`,
+      );
+    }),
+  ),
+);
+
 // Three hosts in one process, each its own port + `/rpc`: the box-score queue + scores DB + scores
 // API on WnbaHost, the live-score poller on LiveHost, the play-by-play queue on StatsHost. Each
 // `serveAllHttp` consumes its own NodeHttpServer (Layer.provide, not provideMerge — so they don't
@@ -191,7 +211,12 @@ const wnbaHost = Resource.serveAllHttp([
   // the served entry above re-exposes this same service over RPC.
   Layer.provide(Resource.layer(ScoresDb, scoresDbImpl)),
   Layer.provide(HistoryStore.layerMemory()),
+  // live relay (dashboard log stream) + durable storage: persistLayer("wnba") batches every captured
+  // line into LogStore bucketed by host; ProcessStorage backs LogStore (memory here — swap for sqlite/
+  // redis for cross-restart history). Queryable via HostLogs.byHost("wnba") / byResource({ queueId }).
   Layer.provide(HostLogs.layer),
+  Layer.provide(HostLogs.persistLayer("wnba")),
+  Layer.provide(ProcessStorage.layer),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: WNBA_PORT })),
 );
 
@@ -206,8 +231,12 @@ const liveHost = Resource.serveAllHttp([
 ]).pipe(
   Layer.provide(Resource.peersLayer(WorkerPool, LiveHost)),
   Layer.provide(HistoryStore.layerMemory()),
-  Layer.provide(ProcessStorage.layer),
   Layer.provide(HostLogs.layer),
+  // provideMerge (not provide): these install a logger / fork a fiber and provide no service, so a
+  // bare provide would be pruned as unused — merging forces the build.
+  Layer.provideMerge(HostLogs.persistLayer("live")),
+  Layer.provideMerge(logStorageDemo),
+  Layer.provide(ProcessStorage.layer),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: LIVE_PORT })),
 );
 
@@ -222,6 +251,8 @@ const statsHost = Resource.serveAllHttp([
   Layer.provide(Resource.peersLayer(WorkerPool, StatsHost)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(HostLogs.layer),
+  Layer.provide(HostLogs.persistLayer("stats")),
+  Layer.provide(ProcessStorage.layer),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: STATS_PORT })),
 );
 
