@@ -93,6 +93,7 @@
     "host-logs-storage",
     "hostless-client-host-arg",
     "peer-url-resolver",
-    "self-host-accessor"
+    "self-host-accessor",
+    "per-resource-serve"
   ]
 }
