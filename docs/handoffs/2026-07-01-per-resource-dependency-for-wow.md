@@ -5,8 +5,13 @@
 `strictEffectProvide` flags, because heterogeneous per-resource sources can't hoist to `serveAllHttp`'s
 single shared provide without double-enqueue).
 
-**Status:** ✅ **released as `0.8.0-beta.18`** — merged to `main`, dogfooded
-(`examples/serve-per-resource-deps.ts`). Bump your vendored effect-pm to beta.18 and migrate the 9 sites.
+**Status:** ✅ released as `0.8.0-beta.18` (the primitive), but ⚠️ **the migration below does NOT apply to
+your 9 sites** — they're all **engine** resources (queues/processes), and shipped `Resource.serve` serves
+**raw query resources only** (it mounts the RPC surface but runs no worker/tick engine). See
+[`2026-07-01-engine-resource-serve-gap.md`](./2026-07-01-engine-resource-serve-gap.md) — engine-aware
+`serve` (`QueueResource.serve` / `ScheduledProcess.serve`) is the real fix; **do not graduate
+`strictEffectProvide → "error"` until it ships.** The example below is correct only for raw
+`Resource.Tag` query resources.
 
 > "source" is your `EventManager` term and stays in wow — the package names nothing after it. What you
 > called a per-resource *source* is, to effect-pm, just the resource's requirement `R` (a dependency
