@@ -16,15 +16,14 @@ The consumer holds **one class**, never N. It's "one resource, N instances," not
 class NwslHost extends Resource.Host<NwslHost>("nwsl", { url: nwslUrl }) {}
 // … EbwslHost, WnbaHost
 
-// contract — plain fields; combined fields are plain queries tagged `fleet`. Bind a **primary host**
-// (a hostless tag with any `.pipe(combinator)` in class-extends recurses — a general limitation);
-// `multiHost` is the fleet the peers gather over. `multiHost` takes an **array** (it's `Fn.dual`).
+// contract — plain fields; combined fields are plain queries tagged `fleet`. The fleet is a
+// **factory option** (`multiHost`), so the tag stays hostless — every instance is an equal peer,
+// no "primary" host. (A hostless tag with a `.pipe(combinator)` in class-extends recurses, so the
+// fleet rides the factory, not a pipe.)
 class Database extends Resource.Tag<Database>()("app/Database", {
   connections:      Resource.query(Schema.Number),
   totalConnections: Resource.query(Schema.Number).pipe(Resource.fleet),
-}, { host: NwslHost }).pipe(
-  Resource.multiHost([NwslHost, EbwslHost, WnbaHost]),
-) {}
+}, { multiHost: [NwslHost, EbwslHost, WnbaHost] }) {}
 
 // layer — the Effect form: resolve peers once; totalConnections folds peers + self
 const database = Resource.layer(
@@ -51,9 +50,11 @@ Resource.serveAllHttp([Resource.serverEntry(Database, databaseImpl)]).pipe(
 ## Locked decisions
 1. **Groups only organize.** One tag = one group node; same-tag-at-multiple-positions = a cross-link
    (one identity, many nav paths), never the instance mechanism. Instance count is a runtime fact.
-2. **The `Host` carries its url** (`Resource.Host("id", { url })`), and `multiHost([hosts])` (array, `Fn.dual`,
-   piped) puts the fleet on the tag — so the tag is self-describing. `connectHttp` reads `host.url` (an
-   explicit arg overrides); neither → `MissingHostUrl`.
+2. **The `Host` carries its url** (`Resource.Host("id", { url })`), and the fleet is a `Tag` factory
+   option (`{ multiHost: [hosts] }`) — the tag stays **hostless**, no primary. (A `multiHost([hosts])`
+   pipe combinator exists too, for host-bound tags — but the option is the multi-host default.) So the
+   tag is self-describing (fleet + each host's url). `connectHttp` reads `host.url` (an explicit arg
+   overrides); neither → `MissingHostUrl`.
 3. **A server layer per host** — each host runs the same `serverEntry(Database, impl)`. Not
    "one-serves-the-rest."
 4. **No instance suffix** for multi-host — the host (transport) is the discriminator. The key/suffix is

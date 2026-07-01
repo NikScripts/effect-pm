@@ -234,10 +234,11 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(
     `wnba :${WNBA_PORT} (BoxScoreQueue) · live :${LIVE_PORT} (LiveScorePoller) · stats :${STATS_PORT} (PlayByPlayQueue)`,
   );
-  // WorkerPool is served on all three hosts with `peersLayer`, so a client hitting any host gets
-  // `fleetActive` = this host's `active` + its peers' (5 + 3 + 4 = 12). The peer connections are
-  // established when each host's `peersLayer` builds above.
-  yield* Effect.logInfo("WorkerPool: multi-host (fleetActive folds active across wnba/live/stats)");
+  // WorkerPool (hostless, `multiHost` set) is served on all three hosts with `peersLayer`, so a client
+  // hitting any host gets `fleetActive` = that host's `active` + its peers' (5 + 3 + 4 = 12); the peer
+  // connections are established when each `peersLayer` builds above. (The fold is proven end-to-end in
+  // `test/multi-host-peers-http.test.ts`.)
+  yield* Effect.logInfo("WorkerPool: multi-host, served on wnba/live/stats (fleetActive folds active)");
   return yield* Effect.never;
 });
 

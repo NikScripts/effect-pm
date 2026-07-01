@@ -1083,6 +1083,7 @@ const buildInstanceTag = <Self, S extends Spec>(
   description: string | undefined,
   host: HostKey<unknown> | undefined,
   kind: string | undefined,
+  multiHostSet: ReadonlyArray<AnyHost> | undefined,
 ) => {
   if (claimedKeys.has(key)) {
     throw new DuplicateResourceKey({ key });
@@ -1108,6 +1109,7 @@ const buildInstanceTag = <Self, S extends Spec>(
     [kindSym]: kind,
     [readinessSym]: undefined,
     [peersSym]: peersKey,
+    [multiHostSym]: multiHostSet,
   });
 };
 
@@ -1139,7 +1141,11 @@ const makeTag = <Self>() => {
   function build<const S extends Spec>(
     key: string,
     spec: S,
-    options?: { readonly description?: string; readonly kind?: string },
+    options?: {
+      readonly description?: string;
+      readonly kind?: string;
+      readonly multiHost?: ReadonlyArray<AnyHost>;
+    },
   ): ResourceTag<Self, S>;
   function build<const S extends Spec, HSelf>(
     key: string,
@@ -1148,6 +1154,7 @@ const makeTag = <Self>() => {
       readonly description?: string;
       readonly kind?: string;
       readonly host: HostKey<HSelf>;
+      readonly multiHost?: ReadonlyArray<AnyHost>;
     },
   ): HostBoundTag<Self, S, HSelf>;
   function build<const S extends Spec>(
@@ -1157,6 +1164,7 @@ const makeTag = <Self>() => {
       readonly description?: string;
       readonly kind?: string;
       readonly host?: HostKey<unknown>;
+      readonly multiHost?: ReadonlyArray<AnyHost>;
     },
   ): ResourceTag<Self, S> {
     // single resource: key doubles as the group id (its wire prefix)
@@ -1169,6 +1177,7 @@ const makeTag = <Self>() => {
       options?.description,
       options?.host,
       options?.kind,
+      options?.multiHost,
     );
   }
   return build;
@@ -1250,6 +1259,7 @@ function tagFor<const S extends Spec>(
       options?.description,
       host,
       options?.kind,
+      undefined, // the shared-spec (instance family) path doesn't take a fleet
     );
   // Stow the shared groupId/description/spec/group on the factory too, so the family
   // server ({@link serveInstances}) can read the contract + prefix without an instance.

@@ -44,9 +44,8 @@ export class WorkerPool extends Resource.Tag<WorkerPool>()(
     active: Resource.query(Schema.Number),
     fleetActive: Resource.query(Schema.Number).pipe(Resource.fleet),
   },
-  { host: WnbaHost }, // a primary host (client default); `multiHost` below is the fleet peers gather over
-).pipe(
-  Resource.multiHost([WnbaHost, LiveHost, StatsHost]),
+  // the fleet, as a factory option — hostless, every instance equal (no primary host).
+  { multiHost: [WnbaHost, LiveHost, StatsHost] },
 ) {}
 
 // A "scores database" connection, served on WnbaHost. Its readiness reflects a (simulated) physical
