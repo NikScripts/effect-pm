@@ -2,8 +2,8 @@
 
 > **✅ Fixed (option 1) — `QueueResource.serve` now resolves.** Re-exported `serve` through the
 > `QueueResource` namespace (`src/internal/queueResourceNamespace.ts`), symmetric with
-> `ScheduledProcess.serve`, so the changeset/example/docs are correct as written. Ships in the next beta.
-> Thanks for the precise report.
+> `ScheduledProcess.serve`, so the changeset/example/docs are correct as written. **Released in
+> `0.8.0-beta.20`** — bump your vendored effect-pm. Thanks for the precise report.
 
 **Consumer:** wow-sports services-hub, adopting **beta.19** engine-aware serve to migrate our 9
 `strictEffectProvide` sites. Small, specific finding — the feature works, but the documented API name

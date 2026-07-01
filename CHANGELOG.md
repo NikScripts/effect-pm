@@ -1,5 +1,15 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.20
+
+### Patch Changes
+
+- 537cc40: **Fix: `QueueResource.serve` now resolves.** The beta.19 engine-`serve` for queues was added to
+  `QueueContract` but not re-exported through the `QueueResource` namespace, so `QueueResource.serve` (as
+  written in the beta.19 changeset, example, and docs) didn't exist — only `QueueContract.serve` did,
+  asymmetric with `ScheduledProcess.serve`. Re-exported `serve` through `QueueResource` so the two match
+  and the docs are correct as written.
+
 ## 0.8.0-beta.19
 
 ### Minor Changes

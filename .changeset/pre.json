@@ -96,6 +96,7 @@
     "self-host-accessor",
     "per-resource-serve",
     "engine-serve",
-    "serve-ergonomics"
+    "serve-ergonomics",
+    "queue-serve-namespace"
   ]
 }
