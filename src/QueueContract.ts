@@ -836,6 +836,43 @@ export const serveHttp = <
   );
 
 /**
+ * A **`serve`-style** layer for this queue — the engine-running counterpart to {@link Resource.serve}.
+ * Runs the worker / refill / `persist` / `captureLogs` engine (like {@link serverEntry}) **and** mounts
+ * the queue's RPC handlers **and** registers into {@link Resource.servedResourcesLayer}, while
+ * **preserving the worker requirement `R`** so a per-resource `Layer.provide` discharges it in isolation.
+ *
+ * Reach for this (with {@link Resource.httpServer}) when queues on one host need **different**
+ * implementations of the same dependency tag; use {@link serverEntry} + {@link Resource.serveAllHttp}
+ * for the shared-dependency case.
+ *
+ * ```ts
+ * Resource.httpServer().pipe(
+ *   Layer.provideMerge(Layer.mergeAll(
+ *     QueueResource.serve(RosterImportQueue, rosterCfg).pipe(Layer.provide(emptyHookSource)),
+ *     QueueResource.serve(MediaImportQueue,  mediaCfg).pipe(Layer.provide(emptyHookSource)),
+ *   )),
+ *   Layer.provide(Resource.servedResourcesLayer),
+ *   Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
+ * );
+ * ```
+ *
+ * @public
+ */
+export const serve = <
+  Self,
+  F extends QueueItemFields = QueueItemFields,
+  E = never,
+  R = never,
+  RR = never,
+>(
+  tag: ResourceTag<Self, QueueInstanceSpec<F>>,
+  config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+) =>
+  Layer.unwrap(
+    Effect.map(buildQueueImpl(tag, config), (impl) => Resource.serve(tag, impl)),
+  );
+
+/**
  * A {@link Resource.serveAllHttp} entry for this queue — the tag plus the (lazily built) engine
  * impl, so a whole group of queues/processes can be served on **one** http port:
  *

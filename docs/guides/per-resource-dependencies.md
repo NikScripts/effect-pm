@@ -27,37 +27,41 @@ layer memoization, not by data.
 
 | Primitive | Role |
 |-----------|------|
-| `Resource.serve(tag, impl)` | A resource's handler layer. Unlike the internal server layer it **preserves** the handlers' requirement `R`, so you can `Layer.provide` each resource's dependency onto *it*. Self-registers for `/health`. |
+| `Resource.serve(tag, impl)` | A **raw resource's** handler layer (impl is the query record). Unlike the internal server layer it **preserves** the handlers' requirement `R`, so you can `Layer.provide` each resource's dependency onto *it*. Self-registers for `/health`. |
+| `QueueResource.serve(tag, config)` / `ScheduledProcess.serve(tag, config)` | The **engine** forms — same isolation, but the served layer also **runs the engine** (worker/refill/persist for queues, tick schedule for processes). Use these for queue/process resources; `Resource.serve` only mounts handlers and would leave the worker/tick dead. |
 | `Resource.httpServer(options?)` | Reads the registry, merges every served group onto **one** `RpcServer` (`/rpc`), and mounts a `/health` route. |
-| `Resource.servedResourcesLayer` | The registry `serve` writes to and `httpServer` reads. |
+| `Resource.servedResourcesLayer` | The registry the `serve` forms write to and `httpServer` reads. |
 | `Resource.provide(dependency, [resources])` | Sugar for `Layer.mergeAll(resources).pipe(Layer.provide(dependency))` — "these resources, on this dependency." |
+
+> **Query resource vs. engine resource.** A bare `Resource.Tag` (status queries, streams) uses
+> `Resource.serve(tag, recordImpl)`. A `QueueResource` / `ScheduledProcess` is an **engine** — its worker
+> or tick must actually run — so use `QueueResource.serve(tag, config)` / `ScheduledProcess.serve(tag,
+> config)`. Both are `serve`-style layers (preserve `R`, register for `/health`); the engine forms just
+> also start the engine. Composing an engine tag with `Resource.serve` would mount its RPC surface but
+> never run the worker.
 
 ## A complete example
 
 ```ts
 import { Layer } from "effect";
 import * as Resource from "@nikscripts/effect-pm/Resource";
+import * as ScheduledProcess from "@nikscripts/effect-pm/ScheduledProcess";
 import { NodeHttpServer } from "@effect/platform-node";
 import { createServer } from "node:http";
 
-// each tick DECLARES its dependency — no Effect.provide in the body
-const seasonMatchesImpl = {
-  run: Effect.gen(function* () {
-    const handlers = yield* ImportHandlers;      // required, not provided here
-    yield* handlers.fetchAndPersist(/* … */);
-  }),
-};
+// each tick body DECLARES its dependency — no Effect.provide in the body
+// { effect: Effect.gen(function* () { const handlers = yield* ImportHandlers; … }), polling, … }
 
 const Host = Resource.httpServer({ health: { path: "/health" } }).pipe(
   Layer.provideMerge(
     Layer.mergeAll(
-      // resources that share the plain handler → state it once with `provide`
+      // processes that share the plain handler → state it once with `provide`
       Resource.provide(plainImportHandlers, [
-        Resource.serve(SeasonMatches,   seasonMatchesImpl),
-        Resource.serve(LiveScorePoller, pollerImpl),
+        ScheduledProcess.serve(SeasonMatches,   seasonMatchesCfg),
+        ScheduledProcess.serve(LiveScorePoller, pollerCfg),
       ]),
-      // a resource that needs the hooked handler → its own Layer.provide, isolated
-      Resource.serve(SeasonImport, importImpl).pipe(Layer.provide(hookedImportHandlers)),
+      // a process that needs the hooked handler → its own Layer.provide, isolated
+      ScheduledProcess.serve(SeasonImport, importCfg).pipe(Layer.provide(hookedImportHandlers)),
     ),
   ),
   Layer.provide(Resource.servedResourcesLayer),  // shared registry

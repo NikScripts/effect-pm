@@ -584,6 +584,26 @@ export const serveHttp = <Self, E = never, R = never>(
   );
 
 /**
+ * A **`serve`-style** layer for this process — the engine-running counterpart to {@link Resource.serve}.
+ * Runs the tick schedule engine (like {@link serverEntry}) **and** mounts the process's RPC handlers
+ * **and** registers into {@link Resource.servedResourcesLayer}, while **preserving the tick requirement
+ * `R`** so a per-resource `Layer.provide` discharges it in isolation.
+ *
+ * Reach for this (with {@link Resource.httpServer}) when processes on one host need **different**
+ * implementations of the same dependency tag (e.g. a hooked vs. plain source); use {@link serverEntry} +
+ * {@link Resource.serveAllHttp} for the shared-dependency case.
+ *
+ * @public
+ */
+export const serve = <Self, E = never, R = never>(
+  tag: ResourceTag<Self, ProcessSpec>,
+  config: ProcessLayerConfig<E, R>,
+): Layer.Layer<HandlerContextOf<ProcessSpec>, never, R> =>
+  Layer.unwrap(
+    Effect.map(buildProcessImpl(tag, config), (impl) => Resource.serve(tag, impl)),
+  );
+
+/**
  * A {@link Resource.serveAllHttp} entry for this process — the tag plus the (lazily built) impl,
  * so a whole group of processes/queues can be served on **one** http port. See
  * {@link QueueResource.serverEntry} for the composed example.

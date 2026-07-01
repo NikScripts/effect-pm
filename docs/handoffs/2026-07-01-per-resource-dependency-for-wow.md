@@ -5,13 +5,20 @@
 `strictEffectProvide` flags, because heterogeneous per-resource sources can't hoist to `serveAllHttp`'s
 single shared provide without double-enqueue).
 
-**Status:** ✅ released as `0.8.0-beta.18` (the primitive), but ⚠️ **the migration below does NOT apply to
-your 9 sites** — they're all **engine** resources (queues/processes), and shipped `Resource.serve` serves
-**raw query resources only** (it mounts the RPC surface but runs no worker/tick engine). See
-[`2026-07-01-engine-resource-serve-gap.md`](./2026-07-01-engine-resource-serve-gap.md) — engine-aware
-`serve` (`QueueResource.serve` / `ScheduledProcess.serve`) is the real fix; **do not graduate
-`strictEffectProvide → "error"` until it ships.** The example below is correct only for raw
-`Resource.Tag` query resources.
+**Status:** ✅ resolved. The primitive shipped `0.8.0-beta.18`; **engine-aware `serve`
+(`QueueResource.serve` / `ScheduledProcess.serve`) is now built** (see
+[`2026-07-01-engine-resource-serve-gap.md`](./2026-07-01-engine-resource-serve-gap.md)), so your 9 engine
+sites migrate too. For a **query resource**, `Resource.serve(tag, recordImpl)`; for a **queue/process**,
+use the engine form — it runs the worker/tick engine *and* preserves `R`:
+
+```ts
+// engine resources — the worker/tick runs, R isolated per resource
+ScheduledProcess.serve(NwslGetSeasonMatches, seasonMatchesCfg).pipe(Layer.provide(processTickHandlersLayer))
+QueueResource.serve(NwslRosterImportQueue, rosterCfg).pipe(Layer.provide(emptyHookSourceLayer))
+```
+
+Compose them under `Resource.httpServer` exactly like the raw example below. You can graduate
+`strictEffectProvide → "error"`.
 
 > "source" is your `EventManager` term and stays in wow — the package names nothing after it. What you
 > called a per-resource *source* is, to effect-pm, just the resource's requirement `R` (a dependency

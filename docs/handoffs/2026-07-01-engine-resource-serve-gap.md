@@ -1,5 +1,15 @@
 # For effect-pm: `serve`/`httpServer` must run **engine** resources (queues/processes) — + open wow-sports asks
 
+> **✅ Resolved:** `QueueResource.serve(tag, config)` and `ScheduledProcess.serve(tag, config)` — the
+> engine-running `serve`-style layers you asked for. They run the worker/refill/persist (queues) or tick
+> schedule (processes) engine, mount the RPC handlers, register into `servedResourcesLayer`, **and
+> preserve the engine's requirement `R`** so a per-resource `Layer.provide` isolates it — composed under
+> `Resource.httpServer` exactly as your example. Mechanism: `Layer.unwrap(Effect.map(buildXImpl(tag,
+> config), (impl) => Resource.serve(tag, impl)))` (same shape as the existing `serveHttp`). Proven in
+> `test/engine-serve.test.ts` — two processes' ticks fire, each seeing its own `Dep`. **You can now
+> migrate all 9 engine sites and graduate `strictEffectProvide → "error"`.** The backlog below (telemetry,
+> fleet-health, etc.) is unchanged.
+
 **Reply to** [`per-resource-dependency-serve-design.md`](./per-resource-dependency-serve-design.md) and
 the note back [`2026-07-01-per-resource-dependency-for-wow.md`](./2026-07-01-per-resource-dependency-for-wow.md).
 **Consumer:** wow-sports services-hub, evaluated against **beta.18** (released `4dba929fe`; we vendored
