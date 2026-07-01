@@ -66,6 +66,15 @@ the offending field covariant / `out`, relax `[groupSym]` to a bivariant or `unk
 have `Resource.Tag(…, { host })` return an intersection that stays assignable. Then helpers don't each
 need a hand-rolled overload, and new helpers don't silently exclude host-bound tags.
 
+## ✅ CLOSED — verified live in beta.16 (2026-07-01)
+
+Re-checked against `main` / beta.16 per the wow-sports multi-host findings: both `withReadiness` forms
+accept a host-bound tag — data-last `.pipe(Resource.withReadiness(fn))` in a class `extends`, and
+data-first `Resource.withReadiness(HostBoundClass, fn)` — with no `TS2684` / `TS2345`. The readiness
+regression suite (`test/resource-readiness.test.ts`, 7 tests) is green. Consumers can now attach
+readiness to a host-bound `Resource.Tag` and have it gate the host `/health`. **This doc is closed** —
+the details below are the shipping record.
+
 ## ✅ SHIPPED (2026-06-29) — #1, #2 resolved; #3 evaluated, union kept
 
 - **#1, #2** resolved on **both** forms. Data-last `.pipe` names both arms (`ResourceTag<any, any> |

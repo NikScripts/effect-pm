@@ -86,6 +86,15 @@ Resource.serveAllHttp([Resource.serverEntry(Database, databaseImpl)]).pipe(
    you write `pool.activeCount() + others`, so self-inclusion is explicit, never a silent miss.
 10. **Tools, not widgets, for custom resources** — the toolkit ships the primitives (`peers`, `Combine`);
     the consumer builds the fold + any widget.
+11. **Readiness is per-host and local — `/health` never does a cross-host hop.** (Agreed 2026-07-01, from
+    wow-sports finding #4.) A `fleet` field can *report* fleet health, but readiness that gates a host's
+    `/health` stays local. Rationale: a health check that reached peers would be slow **and cascade** —
+    one host down would make every other host report unhealthy over RPC, a false fleet-wide outage; and
+    `/health` must stay fast + dependency-free. **Fleet-aware alerting** ("page if <2/3 DBs live") is a
+    *separate monitor* that polls a `fleet` field **as a client** and alerts — observation, not gating.
+    So there's a clear path for fleet health (a monitor), and a firm boundary at `/health` (local only).
+    Not a silent gap; a deliberate line. If fleet-gated `/health` is ever truly wanted it needs a new,
+    explicit opt-in — do not add it implicitly.
 
 ## How it works (mechanism)
 - **Serve:** each host runs `serverEntry(Database, impl)` + (where its logic reaches peers)

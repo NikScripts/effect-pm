@@ -90,6 +90,12 @@ it here so the "coming next" work has a concrete repro.
 
 ### 4. Fleet-level readiness
 
+> **✅ Decided (2026-07-01): keep readiness per-host + local; `/health` never hops cross-host.** A
+> health check that reached peers would be slow and *cascade* (one host down → all report unhealthy).
+> Fleet-aware alerting is a **separate monitor** polling a `fleet` field as a client — observation, not
+> gating. Locked as decision #11 in `multi-host-instances-decisions.md`. Fleet-gated `/health` would
+> need a new explicit opt-in; not added implicitly.
+
 Decisions doc: _"readiness stays per-host and local; no cross-host hop."_ So a `fleetStatus` can't feed
 `/health` or an alert ("page if <2/3 DBs live"). That's a fine default, but if fleet-aware gating is ever
 wanted there's no path today. Flagging it so it's a **decision**, not a silent gap.
@@ -104,10 +110,10 @@ Per the decisions doc's "Deferred / open", none of these block wow (3 hosts = a 
 
 ## Adjacent, pre-existing
 
-**Host-bound `withReadiness` (#29 / `withreadiness-host-bound-tags.md`)** — wow's real
-`databaseReadiness` is still parked on it, but `resource-web/hub.ts` now uses `withReadiness` +
-`readinessOf` on host-bound tags and compiles. Likely unblocked in beta.16; worth a re-check to close
-that doc, which would let the _existing_ per-league DB gate `/health` independent of the fleet work.
+**Host-bound `withReadiness` (#29 / `withreadiness-host-bound-tags.md`)** — **✅ verified live in
+beta.16** (2026-07-01): both forms accept a host-bound tag (data-last `.pipe` + data-first
+`withReadiness(HostBoundClass, fn)`), no `TS2684`/`TS2345`; readiness suite green; that doc is closed.
+wow can now un-park `databaseReadiness` and let the per-league DB gate `/health`.
 
 ---
 
