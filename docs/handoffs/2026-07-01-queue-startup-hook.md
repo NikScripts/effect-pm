@@ -1,7 +1,23 @@
 # Request: a first-class queue **startup hook** (`onStarted`) in `QueueResource`
 
 **From:** wow-sports services-hub (source: `wow-sports/docs/effect-pm/queue-startup-seed-hook-request.md`).
-**Status:** open, unbuilt. Small + well-specified — ready to build on a go.
+
+> **✅ Already exists — no new API needed (your request predates it).** `QueueResource`'s **`refill`**
+> config *is* this hook: `refill: { onStart: true, load: (queue) => … }` runs `load` **once when the
+> worker pool starts** (forked, non-blocking, best-effort), with the live `QueueHandle` — identical
+> signature and semantics to the proposed `onStarted`. Migrate each parked site:
+>
+> ```ts
+> const nwslRosterImportQueueConfig = {
+>   effect: importRoster,
+>   concurrency: 10,
+>   refill: { onStart: true, load: (queue) => runNwslRosterImportQueueRefill(queue) }, // ← was TODO(...)
+> } satisfies QueueResourceConfigWithoutItemSchema<NwslRosterImportJob, never, R>;
+> ```
+>
+> Documented on `QueueRefill` (`QueueResource.ts`) and in `docs/guides/queue-resource.md`. `onDrained: true`
+> additionally re-fires `load` each time the queue drains — your idempotent refills can use both. Adding a
+> separate `onStarted` alias was declined as redundant. **Original request below, for the record.**
 
 ## The gap
 
