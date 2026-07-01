@@ -584,6 +584,54 @@ Resource.serveAllHttp([
 
 ---
 
+## Multi-host resources (one shape, N instances)
+
+One resource served as **N instances**, one per host (`Database` on three league hosts). Combined/fleet values are **plain queries** you tag with `Resource.fleet` and implement in the layer by folding `Resource.peers` + your own value — no special field kind.
+
+```ts
+import { Combine, combineQuery } from "@nikscripts/effect-pm/MultiHost";
+
+// hosts carry their own url; bind a primary host + declare the fleet with `multiHost([...])`
+class NwslHost extends Resource.Host<NwslHost>("nwsl", { url: nwslUrl }) {}
+class Database extends Resource.Tag<Database>()(
+  "app/Database",
+  {
+    connections:      Resource.query(Schema.Number),                 // per-instance ("leaf")
+    totalConnections: Resource.query(Schema.Number).pipe(Resource.fleet), // combined across the fleet
+  },
+  { host: NwslHost },
+).pipe(Resource.multiHost([NwslHost, EbwslHost, WnbaHost])) {}
+
+// the layer, Effect form (`Resource.layer` also takes an `Effect` that builds the impl): resolve
+// `peers` once, then `totalConnections` folds them + this host's own value.
+const database = Resource.layer(
+  Database,
+  Effect.gen(function* () {
+    const peers = yield* Resource.peers(Database); // the other hosts' leaf clients (keyed by host)
+    return {
+      connections: Effect.sync(() => pool.activeCount()),
+      totalConnections: combineQuery(peers, (p) => p.connections, Combine.sum).pipe(
+        Effect.map((others) => pool.activeCount() + others),
+      ),
+    };
+  }),
+);
+
+// serve on each host: the layer + `peersLayer` (the opt-in mesh — only where a host reaches its peers)
+Resource.serveAllHttp([Resource.serverEntry(Database, database)]).pipe(
+  Layer.provide(Resource.peersLayer(Database, NwslHost)),
+);
+```
+
+- **`Resource.fleet(method)`** (or `query(...).pipe(Resource.fleet)`) — a combined field: served + client-visible like any query, but **excluded from `Resource.peers`**, so a fold can't call a peer's own fleet field (a fan-out). Fold over **leaf** fields.
+- **`Resource.peers(tag)`** — the other hosts' leaf clients, keyed by host. Fold with `/MultiHost`'s `combineQuery`/`combineStream` + `Combine` (`sum`/`byHost`/`mergeStreams`/`mergeByHost`/…). Requires the peers capability, provided by **`Resource.peersLayer(tag, self)`** (connects the `multiHost` set minus self, via each `Host.url`) or **`Resource.peersFrom(tag, clients)`** (an explicit client map — a holder's bundles, or a test).
+- **`Resource.layer(tag, effect)`** — the Effect form: build the impl effectfully; its requirement (e.g. `peers`) becomes the layer's, discharged by providing `peersLayer` alongside. `Resource.serverEntry` has the same Effect form (`serveAllHttp` unions the requirement).
+- A **client calling a fleet field on any host** gets the whole-fleet value — that host gathered its peers + itself. No cross-host hop at `/health`; readiness stays per-host.
+
+The **combine primitives** (`@nikscripts/effect-pm/MultiHost`) are isomorphic (browser + node): `combineQuery`/`combineStream` capture each host's outcome (`HostResult`), so a fold owns the down-host policy.
+
+---
+
 ## ProcessStorage Integration
 
 Resource modules automatically record runtime facts when the relevant storage facet is available in the environment. No configuration is needed beyond composing `ProcessStorage.layer` or a durable storage layer.

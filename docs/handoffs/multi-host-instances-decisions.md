@@ -16,12 +16,14 @@ The consumer holds **one class**, never N. It's "one resource, N instances," not
 class NwslHost extends Resource.Host<NwslHost>("nwsl", { url: nwslUrl }) {}
 // … EbwslHost, WnbaHost
 
-// contract — plain fields; combined fields are plain queries tagged `fleet`
+// contract — plain fields; combined fields are plain queries tagged `fleet`. Bind a **primary host**
+// (a hostless tag with any `.pipe(combinator)` in class-extends recurses — a general limitation);
+// `multiHost` is the fleet the peers gather over. `multiHost` takes an **array** (it's `Fn.dual`).
 class Database extends Resource.Tag<Database>()("app/Database", {
   connections:      Resource.query(Schema.Number),
   totalConnections: Resource.query(Schema.Number).pipe(Resource.fleet),
-}).pipe(
-  Resource.multiHost(NwslHost, EbwslHost, WnbaHost),
+}, { host: NwslHost }).pipe(
+  Resource.multiHost([NwslHost, EbwslHost, WnbaHost]),
 ) {}
 
 // layer — the Effect form: resolve peers once; totalConnections folds peers + self
@@ -49,7 +51,7 @@ Resource.serveAllHttp([Resource.serverEntry(Database, databaseImpl)]).pipe(
 ## Locked decisions
 1. **Groups only organize.** One tag = one group node; same-tag-at-multiple-positions = a cross-link
    (one identity, many nav paths), never the instance mechanism. Instance count is a runtime fact.
-2. **The `Host` carries its url** (`Resource.Host("id", { url })`), and `multiHost(...hosts)` (variadic,
+2. **The `Host` carries its url** (`Resource.Host("id", { url })`), and `multiHost([hosts])` (array, `Fn.dual`,
    piped) puts the fleet on the tag — so the tag is self-describing. `connectHttp` reads `host.url` (an
    explicit arg overrides); neither → `MissingHostUrl`.
 3. **A server layer per host** — each host runs the same `serverEntry(Database, impl)`. Not

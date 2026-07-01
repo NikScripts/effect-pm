@@ -5,7 +5,7 @@
 **Multi-host via `Resource.peers`.** Combined/fleet values are written as **plain queries in the resource layer**, not a special contract field kind: implement e.g. `totalConnections` with `Resource.peers` (the other hosts' clients) + your own value. New surface:
 
 - `Resource.Host("id", { url })` — a host carries its own transport url.
-- `Resource.multiHost(NwslHost, EbwslHost, WnbaHost)` — pipe the fleet (host set) onto the tag.
+- `Resource.multiHost([NwslHost, EbwslHost, WnbaHost])` — pipe the fleet (host set) onto the tag. `Resource.fleet(method)` tags a combined field (served, but excluded from `peers`).
 - `Resource.peers(tag)` — the peer clients (other hosts, keyed by host), for a resource's own cross-host logic; fold with `/MultiHost` `combineQuery`/`combineStream` and add your own value.
 - `Resource.peersLayer(tag, self)` — the **opt-in mesh**: connect the `multiHost` set (minus self) via each host's url. `Resource.peersFrom(tag, clients)` — provide peers from an explicit client map (a holder's bundles, or a test).
 
