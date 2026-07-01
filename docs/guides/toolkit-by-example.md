@@ -261,6 +261,30 @@ const miniLayer = ScheduledProcess.serveHttp(LiveScorePoller, {
 NodeRuntime.runMain(Layer.launch(miniLayer));
 ```
 
+## 12b. Serve many resources on one host (`serveAllHttp` / `serverEntry`)
+
+A host usually runs **several** resources on **one** port. `Resource.serveAllHttp([entries])` mounts them
+all behind one `/rpc` (+ an auto `/health` + `HostStatus`); each entry is built with a **spec-checked**
+`serverEntry` — `QueueResource.serverEntry` / `ScheduledProcess.serverEntry` (they carry the engine) or
+`Resource.serverEntry(tag, impl)` for a raw resource. It **unions** each entry's requirement (a queue's
+worker `R`, an `ApiMetrics` `Scope`, …) into the layer's `R | HttpServer` — no per-entry cast.
+
+```ts
+const dropletLayer = Resource.serveAllHttp([
+  QueueResource.serverEntry(RosterImportQueue, { effect: importRoster, itemSchema: RosterItem }),
+  ScheduledProcess.serverEntry(SeasonMatches, { effect: fetchSeason, polling: Polling.spaced(hour) }),
+  Resource.serverEntry(Database, { status: pingStatus }),
+]).pipe(Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3001 })));
+```
+
+Clients reach each member with `Resource.client(Tag)` over **one** `connectHttp(Host)` transport (§13).
+Working references: `test/serve-all-queues.test.ts` (two real queue engines, one host, one port) and
+`test/serve-all-http.test.ts`.
+
+**When resources need _different_ implementations of the same dependency** (a hooked vs. plain source),
+`serveAllHttp`'s single shared provide can't isolate them — reach for `Resource.serve` / `httpServer`
+instead. See [per-resource-dependencies.md](./per-resource-dependencies.md).
+
 ## 13. Drive a remote resource — identical to local
 
 The whole point of location transparency: the consuming code doesn't change, only the layer.

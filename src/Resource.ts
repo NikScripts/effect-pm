@@ -1536,34 +1536,6 @@ export const serve = <S extends Spec, Impl extends ServeImplOf<S, any>>(
   >;
 };
 
-/**
- * The shared http server for resources composed with {@link serve} — the multi-resource,
- * heterogeneous-dependency counterpart to {@link serveHttp} / {@link serveAllHttp}. Reads the
- * {@link ServedResources} registry (populated by the `serve` layers `provideMerge`d onto it), merges
- * every registered group onto **one** `RpcServer` at `path` (default `/rpc`), and mounts a `/health`
- * route aggregating each resource's readiness. Because each `serve` layer carries **its own**
- * `Layer.provide`d dependency, resources needing different implementations of the same tag stay isolated
- * — no shared union-provide:
- *
- * Pass the `serve` layers directly (recommended) — it bundles the `provideMerge` + registry, so you list
- * resources and provide only the platform (and any shared dependency):
- *
- * ```ts
- * const Host = Resource.httpServer([
- *   Resource.serve(A, implA).pipe(Layer.provide(depA)),
- *   Resource.serve(B, implB).pipe(Layer.provide(depB)),
- * ], { health: { path: "/health" } }).pipe(
- *   Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
- * );
- * ```
- *
- * Or the low-level form — `httpServer(options)` requires you to `Layer.provideMerge` the `serve` layers
- * (kept, not pruned) + `Resource.servedResourcesLayer` yourself. Either way the handlers ride the context
- * the `serve` layers provide; if one is missing the `RpcServer` fails at **build** (a clear boot error),
- * never a silent runtime gap.
- *
- * @public
- */
 /** Options for {@link httpServer}. @public */
 export interface HttpServerOptions {
   readonly path?: HttpRouter.PathInput;
@@ -1625,6 +1597,34 @@ const httpServerBase = (
     }),
   ) as unknown as Layer.Layer<never, never, ServedResources | HttpServer.HttpServer>;
 
+/**
+ * The shared http server for resources composed with {@link serve} — the multi-resource,
+ * heterogeneous-dependency counterpart to {@link serveHttp} / {@link serveAllHttp}. Reads the
+ * {@link ServedResources} registry, merges every registered group onto **one** `RpcServer` at `path`
+ * (default `/rpc`), and mounts a `/health` route aggregating each resource's readiness. Because each
+ * `serve` layer carries **its own** `Layer.provide`d dependency, resources needing different
+ * implementations of the same tag stay isolated — no shared union-provide.
+ *
+ * Pass the `serve` layers as the first argument (recommended) — it bundles the `provideMerge` +
+ * {@link servedResourcesLayer}, so you list resources and provide only the platform (and any shared
+ * dependency):
+ *
+ * ```ts
+ * const Host = Resource.httpServer([
+ *   Resource.serve(A, implA).pipe(Layer.provide(depA)),
+ *   Resource.serve(B, implB).pipe(Layer.provide(depB)),
+ * ], { health: { path: "/health" } }).pipe(
+ *   Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
+ * );
+ * ```
+ *
+ * The low-level `httpServer(options)` form requires you to `Layer.provideMerge` the `serve` layers (kept,
+ * not pruned) + {@link servedResourcesLayer} yourself. Either way the handlers ride the context the
+ * `serve` layers provide; if one is missing the `RpcServer` fails at **build** (a clear boot error), never
+ * a silent runtime gap.
+ *
+ * @public
+ */
 export function httpServer(
   options?: HttpServerOptions,
 ): Layer.Layer<never, never, ServedResources | HttpServer.HttpServer>;

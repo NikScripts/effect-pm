@@ -5,6 +5,10 @@ Both are small, well-scoped edits. Branch: `rewrite/resource-toolkit`.
 
 ## 1. Document `serveAllHttp` + `serverEntry` (currently undocumented)
 
+> **✅ Done:** added §12b "Serve many resources on one host (`serveAllHttp` / `serverEntry`)" to
+> `docs/guides/toolkit-by-example.md` — the pattern, the `R | HttpServer` union, the `serve-all-*` test
+> references, and a pointer to `per-resource-dependencies.md` for the heterogeneous-dependency case.
+
 `Resource.serveAllHttp` (serve many resources on one HTTP port behind one `Host`) and
 `QueueResource.serverEntry` / `ScheduledProcess.serverEntry` shipped but appear in **no** guide —
 only `docs/AGENTS.md` and the UI handoff. Add a section to **`docs/guides/toolkit-by-example.md`**

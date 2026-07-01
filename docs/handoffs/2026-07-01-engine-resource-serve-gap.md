@@ -132,10 +132,10 @@ Not blockers for beta.18; captured so the picture is complete. (The queue **star
    multi-worker lease / visibility-timeout refinement, and metrics **downsampling** (1s→1m→1h). Explicitly
    deferred; single-host at league scale is fine, so no urgency.
 
-4. **Docs** ([`docs-updates.md`](./docs-updates.md)) — `serveAllHttp` + `QueueResource.serverEntry` /
-   `ScheduledProcess.serverEntry` still lack a dedicated guide section (they appear only in `AGENTS.md`
-   and handoffs). The new `per-resource-dependencies.md` guide is great; the base serving path deserves
-   the same treatment, and — once engine-`serve` lands — a note on when to use which.
+4. **Docs** ([`docs-updates.md`](./docs-updates.md)) — ✅ base serving now documented: `toolkit-by-example.md`
+   §12b covers `serveAllHttp` + `serverEntry`, with a pointer to `per-resource-dependencies.md` for when
+   to use `serve` / `httpServer` instead. (docs-updates.md #2 — the refill section drift — is a separate,
+   still-open doc fix.)
 
 _Resolved since our last round (thank you): `withReadiness` on host-bound tags (#29, beta.16),
 `selfHost` / `peersLayer({url})` / `client(tag, host)` (beta.17), the raw-resource per-resource-dependency
