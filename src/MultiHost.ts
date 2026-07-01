@@ -94,4 +94,13 @@ export const Combine = {
   /** Interleave every host's stream into one (a `transform` for {@link combineStream}). */
   mergeStreams: <A, E>(streams: ReadonlyArray<HostStream<A, E>>): Stream.Stream<A, E> =>
     streams.reduce<Stream.Stream<A, E>>((acc, s) => Stream.merge(acc, s.stream), Stream.empty),
+  /** Interleave every host's stream into one, **tagging** each element with its host — attribution
+   *  when following peers (a `transform` for {@link combineStream}). */
+  mergeByHost: <A, E>(
+    streams: ReadonlyArray<HostStream<A, E>>,
+  ): Stream.Stream<{ readonly host: string; readonly value: A }, E> =>
+    streams.reduce<Stream.Stream<{ readonly host: string; readonly value: A }, E>>(
+      (acc, s) => Stream.merge(acc, Stream.map(s.stream, (value) => ({ host: s.host, value }))),
+      Stream.empty,
+    ),
 };

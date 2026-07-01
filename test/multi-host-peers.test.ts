@@ -9,17 +9,20 @@ class Database extends Resource.Tag<Database>()("test/peers/Database", {
   totalConnections: Resource.query(Schema.Number),
 }) {}
 
-const database = Resource.layer(Database, {
-  connections: Effect.succeed(2),
-  totalConnections: Effect.gen(function* () {
-    const others = yield* combineQuery(
-      yield* Resource.peers(Database),
-      (p) => p.connections,
-      Combine.sum,
-    );
-    return 2 + others; // self (2) + peers — you write self in
+// build the impl effectfully (the Effect form of Resource.layer): resolve peers once; the members
+// close over the clients and combined fields are plain queries implemented via combineQuery + self.
+const database = Resource.layer(
+  Database,
+  Effect.gen(function* () {
+    const peers = yield* Resource.peers(Database);
+    return {
+      connections: Effect.succeed(2),
+      totalConnections: combineQuery(peers, (p) => p.connections, Combine.sum).pipe(
+        Effect.map((others) => 2 + others), // self (2) + peers — you write self in
+      ),
+    };
   }),
-});
+);
 
 // the per-host peer clients (what peersLayer connects; here supplied explicitly via peersFrom)
 const fakePeers = {
