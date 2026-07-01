@@ -42,6 +42,7 @@ export default defineConfig([
       ScheduledProcess: "src/ScheduledProcess.ts",
       ProcessScheduleContract: "src/ProcessScheduleContract.ts",
       ApiMetrics: "src/ApiMetrics.ts",
+      Telemetry: "src/Telemetry.ts",
       ApiUsageSchema: "src/ApiUsageSchema.ts",
       HttpApiResource: "src/HttpApiResource.ts",
       web: "src/web/index.ts",

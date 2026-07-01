@@ -136,6 +136,10 @@
       "types": "./dist/ApiMetrics.d.ts",
       "default": "./dist/ApiMetrics.js"
     },
+    "./Telemetry": {
+      "types": "./dist/Telemetry.d.ts",
+      "default": "./dist/Telemetry.js"
+    },
     "./ApiUsageSchema": {
       "types": "./dist/ApiUsageSchema.d.ts",
       "default": "./dist/ApiUsageSchema.js"

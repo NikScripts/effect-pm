@@ -153,6 +153,7 @@ export {
   type ApiUsageSnapshot,
 } from "./ApiUsageSchema";
 export * as ApiMetricsModule from "./ApiMetrics";
+export * as Telemetry from "./Telemetry";
 export {
   DuplicateGroupId,
   DuplicateInstance,

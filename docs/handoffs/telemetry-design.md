@@ -1,5 +1,11 @@
 # Design: Telemetry — a thin, custom, dashboard-native metrics surface
 
+> **✅ BUILT (2026-07-01).** `src/Telemetry.ts` (`Tag` / `layer` / `serverEntry` + `MetricsSnapshot`
+> envelope + sampler), subpath `@nikscripts/effect-pm/Telemetry`, guide `docs/guides/telemetry.md`,
+> round-trip test `test/telemetry-serve.test.ts` (labeled counter round-trips via `snapshot` over RPC +
+> `live` streams in-process). Fully **browser-safe** (pure Effect `Metric`/`PubSub` — no node deps), so
+> the whole module is importable by the dashboard. OTEL stayed doc-only.
+
 **Status:** design, pre-code. Walk + approve before implementation (see "Decisions" — ✅ locked vs ☐ to-walk).
 **Consumer driver:** wow-sports (fleet metrics in the built-in dashboard/TUI; Sentry free tier via OTEL).
 
@@ -126,8 +132,10 @@ example). Dashboard/TUI panels = UI agent.
   envelope, so the later change is reading `tap.changes` instead of a local sampler).
 - ✅ **B1** — `ApiMetrics` coexists untouched.
 - ✅ **Thin** — serve the snapshot; no retention/alerting/query (that's OTEL/Grafana).
-- ☐ Envelope shape (tagged union above) — to-walk with the UI agent.
-- ☐ Hostless `Telemetry` tag + `client(Telemetry, host)` fan-out — to-walk.
-- ☐ v1 metric types = counter/gauge/histogram (Frequency/Summary deferred) — to-walk.
-- ☐ Default sampler cadence ~1s, configurable — to-walk.
-- ☐ Subpath name `@nikscripts/effect-pm/Telemetry` — to-walk.
+- ✅ Envelope shape = the tagged union above (histogram buckets cumulative `[boundary, count]`).
+- ✅ Hostless `Telemetry` tag; dashboard fans out via `client(Telemetry, host)` per host.
+- ✅ v1 metric types = counter/gauge/histogram (Frequency/Summary deferred, additive).
+- ✅ Default sampler cadence ~1s, configurable; sliding PubSub.
+- ✅ Subpath `@nikscripts/effect-pm/Telemetry`.
+
+**All locked 2026-07-01 — building.**
