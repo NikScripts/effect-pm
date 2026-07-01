@@ -582,6 +582,31 @@ Resource.serveAllHttp([
 
 > `Resource.instance` is **not** for this — it builds a `ResourceInstance` for the `serveInstances` family (one factory, many keyed instances) and won't fit `serveAllHttp`. To serve one custom resource, use `serverEntry`.
 
+### Per-resource dependencies (`serve` / `httpServer`)
+
+`serveAllHttp` unions every entry's `R` into **one** shared provide — ideal when resources share their dependencies. When resources on one host need **different implementations of the same tag** (mutually exclusive — e.g. one worker fires post-persist hooks, another must not), one shared provide can't tell them apart. `Resource.serve` + `Resource.httpServer` give each resource **its own** `Layer.provide`, isolated:
+
+- **`Resource.serve(tag, impl)`** — a resource's handler layer that **preserves** the handlers' requirement `R` (via `ServeRequirements<Impl>`), so a per-resource `Layer.provide` discharges it. Self-registers into `ServedResources` for `/health`. (`R = never` — a handler that closes over its dependency at build — behaves like the internal `serverLayer`.)
+- **`Resource.httpServer(options?)`** — reads the registry, merges every `serve`d group onto **one** `RpcServer` (`/rpc`) + a `/health` route aggregating readiness. **`provideMerge`** the `serve` layers onto it (not `provide` — they must be kept, not pruned).
+- **`Resource.servedResourcesLayer`** / **`Resource.ServedResources`** — the `Ref`-backed registry `serve` appends to and `httpServer` reads.
+- **`Resource.provide(dependency, [resources])`** — sugar for `Layer.mergeAll(resources).pipe(Layer.provide(dependency))` — "these resources, on this dependency."
+
+```ts
+Resource.httpServer({ health: { path: "/health" } }).pipe(
+  Layer.provideMerge(Layer.mergeAll(
+    Resource.provide(importHandlers, [                          // a group sharing one dependency
+      Resource.serve(SeasonMatches,   seasonMatchesImpl),
+      Resource.serve(LiveScorePoller, pollerImpl),
+    ]),
+    Resource.serve(SeasonImport, importImpl).pipe(Layer.provide(hookedImport)), // its own — isolated
+  )),
+  Layer.provide(Resource.servedResourcesLayer),                 // shared registry: serve registers, httpServer reads
+  Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
+);
+```
+
+The tick/worker body just **declares** its dependency (`const h = yield* ImportHandlers`) — no `Effect.provide`, so `strictEffectProvide: "error"` stays clean. Sharing is by **memoization** (same `dependency` value → one instance; `Layer.fresh(dependency)` to isolate). A missing handler fails the `RpcServer` at **boot**, never silently. Use `serveAllHttp` for the shared-dependency case (most hosts); reach for `serve` / `httpServer` when resources need **different** implementations of the same tag.
+
 ---
 
 ## Multi-host resources (one shape, N instances)

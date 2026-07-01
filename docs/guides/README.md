@@ -25,6 +25,7 @@ Detail tables also live in [`docs/PROCESS-API.md`](../PROCESS-API.md),
 | [process.md](./process.md) | `ScheduledProcess` / the `Process` engine |
 | [queue-resource.md](./queue-resource.md) | `QueueResource` — priority, concurrency, `rateLimit`, `refill`, `persist` |
 | [resource-configure.md](./resource-configure.md) | `.configure` layer patches (per-env overrides) |
+| [per-resource-dependencies.md](./per-resource-dependencies.md) | Serving resources that need **different** implementations of the same dependency, isolated — `Resource.serve` / `httpServer` |
 
 ## Ops & UI
 

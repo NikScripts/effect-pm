@@ -168,9 +168,15 @@ No `Effect.provide` appears in consumer code — bodies `yield*` their requireme
   `test/multi-resource-isolated-deps.test.ts`. (The `Layer.fresh` case is inherent to Effect
   memoization; add an explicit assertion when wiring the real consumer.)
 - ✅ No `Effect.provide` in the consumer path — dependencies ride `Layer.provide` on each `serve`.
-- ⬜ **Remaining:** docs (guide section + `RESOURCE-API.md` entries for `serve` / `httpServer` /
-  `servedResourcesLayer`); optionally re-base `serveAllHttp` as sugar (§5.3) and ship the
-  `Resource.provide(layer, resources)` grouping helper. None block use — the primitives are complete.
+- ✅ **Docs:** `RESOURCE-API.md` section (`serve` / `httpServer` / `servedResourcesLayer` / `provide`) +
+  a dedicated guide `docs/guides/per-resource-dependencies.md` (linked in the guides index).
+- ✅ **Grouping helper shipped:** `Resource.provide(dependency, [resources])`.
+- ⬜ **Deliberately not done — re-basing `serveAllHttp` as sugar (§5.3).** Evaluated and declined: it
+  would need to absorb the Effect-form impls, host-status auto-mount, and readiness aggregate
+  `serveAllHttp` already handles, and `serve` takes a *record* impl (not the Effect-form). Real risk to a
+  core, widely-used function for marginal internal gain. The two stay complementary: `serveAllHttp` =
+  shared-dependency serve; `serve` / `httpServer` = heterogeneous per-resource dependencies. Revisit only
+  if the duplication becomes a maintenance cost.
 
 ## Resolved open questions (from §9)
 

@@ -1617,6 +1617,29 @@ export const httpServer = (options?: {
   ) as unknown as Layer.Layer<never, never, ServedResources | HttpServer.HttpServer>;
 
 /**
+ * Provide one dependency `Layer` to several {@link serve} layers at once — sugar for
+ * `Layer.mergeAll(resources).pipe(Layer.provide(dependency))`. Reads as "these resources, on this
+ * dependency," so a group that shares an implementation states it once:
+ *
+ * ```ts
+ * Resource.provide(ImportHandlers.layer, [
+ *   Resource.serve(SeasonMatches,   seasonMatchesImpl),
+ *   Resource.serve(LiveScorePoller, pollerImpl),
+ * ])
+ * ```
+ *
+ * It's plain `Layer.provide` underneath — no config-embedded layer — so sharing stays governed by
+ * memoization (same `dependency` value → one instance; `Layer.fresh` to isolate).
+ *
+ * @public
+ */
+export const provide = <ROut, EL, RL, A, E, R>(
+  dependency: Layer.Layer<ROut, EL, RL>,
+  resources: readonly [Layer.Layer<A, E, R>, ...ReadonlyArray<Layer.Layer<A, E, R>>],
+): Layer.Layer<A, E | EL, Exclude<R, ROut> | RL> =>
+  Layer.mergeAll(...resources).pipe(Layer.provide(dependency));
+
+/**
  * Expose a resource over **http** in one call — the server mirror of {@link connectHttp}, and
  * the batteries-included form of {@link serverLayer}. Mounts the contract group on an http
  * `RpcServer` at `path` (default `/rpc`) with the impl's handlers and the serialization codec
