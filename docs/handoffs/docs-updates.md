@@ -24,6 +24,10 @@ only `docs/AGENTS.md` and the UI handoff. Add a section to **`docs/guides/toolki
 
 ## 2. Fix the refill section in `docs/guides/queue-resource.md`
 
+> **✅ Done:** the Self-refill section now states `load` may require services the worker `effect` doesn't,
+> folded into the layer's `R` (the union of worker + refill requirements) — no longer implies it's
+> constrained to the worker's `R`. Links the `queue-refill-deps.test.ts` regression.
+
 The **Self-refill** section (~line 49-60) says only *"`load` … runs in the worker `R`"* — stale since
 the refill-dependency fix. Update it to:
 

@@ -57,8 +57,11 @@ QueueResource.layer(RosterQueue, {
 });
 ```
 
-`load` receives the handle, runs in the worker `R`, best-effort. `onStart` is forked; `onDrained`
-re-polls after each drain (idles when `load` enqueues nothing).
+`load` receives the handle and runs best-effort. It may require services the worker `effect` **doesn't**
+— e.g. a repository or DB the workers never touch. Those are folded into the layer's requirement `R` (the
+**union** of the worker's and the refill's services), so provide them all; the refill isn't constrained to
+the worker's dependencies. `onStart` is forked; `onDrained` re-polls after each drain (idles when `load`
+enqueues nothing). (Regression: `test/queue-refill-deps.test.ts`.)
 
 ## Durability (`persist`)
 
