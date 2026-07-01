@@ -86,6 +86,9 @@
     "remove-prisma-storage",
     "resource-server-entry",
     "serveallhttp-union-r",
-    "withreadiness-host-bound-class"
+    "withreadiness-host-bound-class",
+    "effect-beta-92",
+    "multi-host-combine-core",
+    "multi-host-peers"
   ]
 }

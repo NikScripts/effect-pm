@@ -1,5 +1,30 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.16
+
+### Minor Changes
+
+- 85336ae: **Multi-host resources via `Resource.peers`.** One resource shape served as N host-local
+  instances (one per host). Combined/fleet values are plain queries tagged `Resource.fleet` and
+  implemented in the layer by folding `Resource.peers` (the other hosts' leaf clients) + your own value
+  — no special field kind. New surface: `Resource.Host("id", { url })` (the host carries its url),
+  `.pipe(Resource.multiHost([hosts]))` (the fleet — hostless, every instance an equal peer),
+  `Resource.peers` / `peersLayer` / `peersFrom` (the opt-in mesh), and `Resource.fleet` / `FleetField`
+  (a combined field: served + client-visible, but **excluded from `peers`** so a fold can't fan out).
+  `Resource.layer` / `Resource.serverEntry` gain an **`Effect` form** (build the impl effectfully — e.g.
+  resolve `peers` once). `Method` is now `Pipeable`.
+
+- dfa8dd2: **`@nikscripts/effect-pm/MultiHost`** — the isomorphic combine core (browser + node):
+  `combineQuery` / `combineStream` gather a field across a keyed peer map, capturing each host's outcome
+  (`HostResult`), then fold; `Combine` ships `sum` / `collect` / `byHost` / `successes` / `failures` /
+  `mergeStreams` / `mergeByHost`. A custom fold sees every outcome and owns the down-host policy.
+
+### Patch Changes
+
+- 26c7c41: **Upgrade Effect to `4.0.0-beta.92`** (from `beta.69`) — `effect` (peer + dev),
+  `@effect/platform-node`, `@effect/sql-sqlite-node`, `@effect/vitest` in lockstep. No source changes
+  needed. Consumers should move to `effect@^4.0.0-beta.92`.
+
 ## 0.8.0-beta.15
 
 ### Minor Changes

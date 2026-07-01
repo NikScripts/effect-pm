@@ -56,6 +56,11 @@ Resource.serveAllHttp([Resource.serverEntry(Database, databaseImpl)]).pipe(
    the tag recursing on its own type; `multiHost` takes an **array**.) So the tag is self-describing
    (fleet + each host's url). `connectHttp` reads `host.url` (an explicit arg overrides); neither →
    `MissingHostUrl`.
+   - **Bright line (plain TS, not toolkit-specific):** a combinator's callback in the class-`extends`
+     base must not reference the class being defined — e.g. don't put `readinessOf(Database)` inside
+     `Database`'s own `withReadiness` (a class can't mention itself in its own base). Referencing a
+     *peer* tag (`readinessOf(ScoresDb)` from another resource) is fine. Nothing else about piping —
+     hostless, host-bound, `multiHost` + `withReadiness` together — recurses.
 3. **A server layer per host** — each host runs the same `serverEntry(Database, impl)`. Not
    "one-serves-the-rest."
 4. **No instance suffix** for multi-host — the host (transport) is the discriminator. The key/suffix is
