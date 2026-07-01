@@ -5,8 +5,8 @@
 `strictEffectProvide` flags, because heterogeneous per-resource sources can't hoist to `serveAllHttp`'s
 single shared provide without double-enqueue).
 
-**Status:** built + tested on branch `cursor/beta-18-dependency-serve`; ships in **effect-pm beta.18**
-(not yet released). Vendor the branch to try it now, or wait for the release.
+**Status:** ✅ **released as `0.8.0-beta.18`** — merged to `main`, dogfooded
+(`examples/serve-per-resource-deps.ts`). Bump your vendored effect-pm to beta.18 and migrate the 9 sites.
 
 > "source" is your `EventManager` term and stays in wow — the package names nothing after it. What you
 > called a per-resource *source* is, to effect-pm, just the resource's requirement `R` (a dependency
