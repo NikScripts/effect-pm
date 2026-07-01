@@ -22,6 +22,11 @@ So the primitives are sound. The gaps below are about the **consumption ergonomi
 
 ### 1. A "which host am I?" accessor for the impl — needed for `byHost` folds
 
+> **✅ Resolved (beta.17):** `Resource.selfHost(tag)` — returns the host key this instance runs as (the
+> same key `peers` are keyed by). Provided by `peersLayer` (now bundled) or standalone `selfHostLayer`.
+> No hand-threading: `return { ...byHost, [yield* Resource.selfHost(tag)]: ownValue }`. See
+> `test/multi-host-selfhost.test.ts`; dogfooded on `WorkerPool.activeByHost` in `resource-web`.
+
 `peersLayer(tag, self)` knows `self`; the `serverEntry` impl does **not** receive it. That's fine for
 `Combine.sum` (self is a value you add in), but a fleet **health table** wants `Combine.byHost` — one
 row per host, keyed — and the impl then has to key _its own_ row with no way to name itself. We worked
@@ -67,6 +72,11 @@ map (or reading peer URLs from a `ConfigProvider`), so mesh wiring isn't frozen 
 is the blocker for a fleet that isn't all on one droplet.
 
 ### 3. Client read for a _hostless_ multiHost tag (already flagged as "coming next")
+
+> **✅ Resolved (beta.17):** `Resource.client(tag, host)` — name which instance to read;
+> `Resource.client(FleetDatabase, NwslHost).pipe(Layer.provide(connectHttp(NwslHost)))`. The transport
+> resolves from the host, so the requirement is enforced at compile time (no more runtime "Service not
+> found"). See `test/multi-host-hostless-client.test.ts`.
 
 This is the SSOT's own open question (`multi-host-instances.md` line 60: _"with no host on the tag, how
 does `Resource.client` name the host?"_). Confirmed from the consumer side: `connectHttp(NwslHost)` +

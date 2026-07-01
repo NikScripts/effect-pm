@@ -867,11 +867,20 @@ export interface PeersId<Self> {
   readonly _peers: Self;
 }
 
+/** Phantom brand for the per-resource {@link selfHost} capability (which host this instance runs as),
+ *  so distinct resources' self-host identities don't collide in one context. @internal */
+export interface SelfHostId<Self> {
+  readonly _selfHost: Self;
+}
+
 /** Holds a tag's `multiHost` set (the fleet). @internal */
 const multiHostSym: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/multiHost");
 
 /** Holds a tag's per-resource {@link peers} capability key. @internal */
 const peersSym: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/peers");
+
+/** Holds a tag's per-resource {@link selfHost} capability key. @internal */
+const selfHostSym: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/selfHost");
 
 /**
  * The type of a resource tag carrying spec `S` — what {@link Resource.Tag} / a
@@ -910,6 +919,10 @@ export interface ResourceTag<Self, S extends Spec>
   /** The per-resource {@link peers} capability key — its value is this resource's peer clients
    *  (the other hosts' leaf services), keyed by host. Provided by {@link peersLayer}, read via {@link peers}. */
   readonly [peersSym]: Context.Key<PeersId<Self>, Record<string, PeerServiceOf<S>>>;
+  /** The per-resource {@link selfHost} capability key — its value is the host key this instance runs
+   *  as (the same key its peers are keyed by). Provided by {@link peersLayer} / {@link selfHostLayer},
+   *  read via {@link selfHost}. */
+  readonly [selfHostSym]: Context.Key<SelfHostId<Self>, string>;
   /** The fleet — the tag's `multiHost` set, if declared (via {@link multiHost}); else `undefined`. */
   readonly [multiHostSym]?: ReadonlyArray<AnyHost>;
 }
@@ -1098,6 +1111,10 @@ const buildInstanceTag = <Self, S extends Spec>(
   // only by peersLayer (the opt-in mesh), never by default.
   const peersKey: Context.Key<PeersId<Self>, Record<string, PeerServiceOf<S>>> =
     Context.Service<PeersId<Self>, Record<string, PeerServiceOf<S>>>()(`${key}/__peers`);
+  // per-resource self-host capability — its value is the host key this instance runs as, provided
+  // by peersLayer / selfHostLayer, never by default.
+  const selfHostKey: Context.Key<SelfHostId<Self>, string> =
+    Context.Service<SelfHostId<Self>, string>()(`${key}/__selfHost`);
   return Object.assign(base, {
     groupId,
     description,
@@ -1108,6 +1125,7 @@ const buildInstanceTag = <Self, S extends Spec>(
     [kindSym]: kind,
     [readinessSym]: undefined,
     [peersSym]: peersKey,
+    [selfHostSym]: selfHostKey,
   });
 };
 
@@ -1926,31 +1944,68 @@ export const peers = <Self, S extends Spec>(
 ): Effect.Effect<Record<string, PeerServiceOf<S>>, never, PeersId<Self>> => tag[peersSym];
 
 /**
+ * The host key this instance runs as — the **same key** its {@link peers} are keyed by. For folds that
+ * key per host (`Combine.byHost`), so a resource's own logic can name its **own** row without
+ * hand-threading the host key. Requires the {@link selfHostLayer} / {@link peersLayer} capability:
+ *
+ * ```ts
+ * fleetStatus: Effect.gen(function* () {
+ *   const self = yield* Resource.selfHost(FleetDatabase); // the host key I am
+ *   const peers = yield* Resource.peers(FleetDatabase);
+ *   const byHost = yield* combineQuery(peers, (p) => p.status, Combine.byHost);
+ *   return { ...byHost, [self]: yield* ownStatus }; // key my own row, consistently
+ * })
+ * ```
+ *
+ * @public
+ */
+export const selfHost = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+): Effect.Effect<string, never, SelfHostId<Self>> => tag[selfHostSym];
+
+/**
+ * Provide the {@link selfHost} capability on **this** host — the host key this instance runs as. Bundled
+ * into {@link peersLayer} (so a mesh resource gets it for free); use this standalone when a resource
+ * keys per host but doesn't gather peers, or alongside {@link peersFrom} in a test. No transport, no
+ * failure path — just the identity.
+ *
+ * @public
+ */
+export const selfHostLayer = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  self: AnyHost,
+): Layer.Layer<SelfHostId<Self>> => Layer.succeed(tag[selfHostSym], self.key);
+
+/**
  * Provide the {@link peers} capability on **this** host: connect every OTHER host in the tag's
- * {@link multiHost} set (via each {@link Host}'s url) and expose them as the peer clients. The
- * **opt-in mesh** — add it to a host's serve only where the resource's own logic reaches across hosts.
- * `self` is the host you are, so you're excluded from your own peer set.
+ * {@link multiHost} set (via each {@link Host}'s url) and expose them as the peer clients. Also provides
+ * the {@link selfHost} capability (this host's key) for `byHost`-style folds. The **opt-in mesh** — add
+ * it to a host's serve only where the resource's own logic reaches across hosts. `self` is the host you
+ * are, so you're excluded from your own peer set.
  *
  * @public
  */
 export const peersLayer = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   self: AnyHost,
-): Layer.Layer<PeersId<Self>> =>
-  Layer.effect(
-    tag[peersSym],
-    Effect.gen(function* () {
-      const reachable = (tag[multiHostSym] ?? [])
-        .filter((host) => host.key !== self.key)
-        .flatMap((host) => (host.url === undefined ? [] : [{ key: host.key, url: host.url }]));
-      const entries = yield* Effect.forEach(reachable, ({ key, url }) =>
-        Effect.map(buildPeerClient(tag, url), (client) => [key, client] as const),
-      );
-      // Boundary: each peer client is a full `ServiceOf<S>` — a width-supertype of the leaf
-      // `PeerServiceOf<S>` the capability exposes — but the mapped types don't reduce under a generic
-      // `S`, so TS can't see the overlap; the erasure through `unknown` is the honest boundary.
-      return Object.fromEntries(entries) as unknown as Record<string, PeerServiceOf<S>>;
-    }),
+): Layer.Layer<PeersId<Self> | SelfHostId<Self>> =>
+  Layer.merge(
+    Layer.effect(
+      tag[peersSym],
+      Effect.gen(function* () {
+        const reachable = (tag[multiHostSym] ?? [])
+          .filter((host) => host.key !== self.key)
+          .flatMap((host) => (host.url === undefined ? [] : [{ key: host.key, url: host.url }]));
+        const entries = yield* Effect.forEach(reachable, ({ key, url }) =>
+          Effect.map(buildPeerClient(tag, url), (client) => [key, client] as const),
+        );
+        // Boundary: each peer client is a full `ServiceOf<S>` — a width-supertype of the leaf
+        // `PeerServiceOf<S>` the capability exposes — but the mapped types don't reduce under a generic
+        // `S`, so TS can't see the overlap; the erasure through `unknown` is the honest boundary.
+        return Object.fromEntries(entries) as unknown as Record<string, PeerServiceOf<S>>;
+      }),
+    ),
+    selfHostLayer(tag, self),
   );
 
 /**

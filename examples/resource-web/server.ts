@@ -35,11 +35,17 @@ const STATS_PORT = HOST_PORTS.stats;
 const workerPoolImpl = (own: number) =>
   Effect.gen(function* () {
     const peers = yield* Resource.peers(WorkerPool);
+    const self = yield* Resource.selfHost(WorkerPool); // which host am I — no hand-threaded key
     return {
       active: Effect.succeed(own),
       fleetActive: combineQuery(peers, (p) => p.active, Combine.sum).pipe(
         Effect.map((others) => own + others),
       ),
+      // a per-host map: peers folded by host + this instance's own row, keyed by `self`
+      activeByHost: Effect.gen(function* () {
+        const byHost = yield* combineQuery(peers, (p) => p.active, Combine.byHost);
+        return { ...byHost, [self]: own };
+      }),
     };
   });
 

@@ -41,6 +41,8 @@ export class StatsHost extends Resource.Host<StatsHost>("wnba/stats", { url: rpc
 export class WorkerPool extends Resource.Tag<WorkerPool>()("wnba/WorkerPool", {
   active: Resource.query(Schema.Number),
   fleetActive: Resource.query(Schema.Number).pipe(Resource.fleet),
+  // a per-host view (one row per host) — needs `selfHost` to key this instance's own row
+  activeByHost: Resource.query(Schema.Record(Schema.String, Schema.Number)).pipe(Resource.fleet),
 }).pipe(
   Resource.multiHost([WnbaHost, LiveHost, StatsHost]), // hostless, every instance an equal peer
 ) {}
