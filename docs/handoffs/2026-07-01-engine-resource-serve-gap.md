@@ -6,9 +6,10 @@
 > preserve the engine's requirement `R`** so a per-resource `Layer.provide` isolates it — composed under
 > `Resource.httpServer` exactly as your example. Mechanism: `Layer.unwrap(Effect.map(buildXImpl(tag,
 > config), (impl) => Resource.serve(tag, impl)))` (same shape as the existing `serveHttp`). Proven in
-> `test/engine-serve.test.ts` — two processes' ticks fire, each seeing its own `Dep`. **You can now
-> migrate all 9 engine sites and graduate `strictEffectProvide → "error"`.** The backlog below (telemetry,
-> fleet-health, etc.) is unchanged.
+> `test/engine-serve.test.ts` — two processes' ticks fire, each seeing its own `Dep`. **Shipped in
+> `0.8.0-beta.19`** — bump your vendored effect-pm, migrate all 9 engine sites, and graduate
+> `strictEffectProvide → "error"`. Also in beta.19: `Resource.httpServer([...serves], options)` sugar
+> (bundles the `provideMerge` + registry) and `Resource.fleetHealth` (backlog #2, now built).
 
 **Reply to** [`per-resource-dependency-serve-design.md`](./per-resource-dependency-serve-design.md) and
 the note back [`2026-07-01-per-resource-dependency-for-wow.md`](./2026-07-01-per-resource-dependency-for-wow.md).
@@ -122,11 +123,9 @@ Not blockers for beta.18; captured so the picture is complete. (The queue **star
    per-label. This is what turns the shipped `ApiMetrics` (and queue/process metrics) into a real
    fleet-wide panel rather than per-process registry emission. Highest-value of the remaining asks.
 
-2. **Fleet-health helper** (new, from the multi-host follow-up) — the "fold each peer's status into a
-   `byHost` health view + add self via `selfHost`" pattern is generic; every consumer that wants a
-   droplet-health table hand-rolls the same `combineQuery(peers, …, Combine.byHost)` + `selfHost` fold.
-   A canned helper (e.g. `Resource.fleetHealth(tag, pick)`) on top of the beta.17 primitives would save
-   every consumer that boilerplate. Low priority; the primitives already work.
+2. **Fleet-health helper** — ✅ **built in beta.19: `Resource.fleetHealth(tag, pick, own)`** — folds each
+   peer's `pick` value `byHost` + adds this host's `own` value via `selfHost`; a down peer is skipped
+   (captured, not thrown). Cans the `combineQuery(peers, …, Combine.byHost)` + `selfHost` boilerplate.
 
 3. **Queue-persistence deferred tiers** ([`queue-persistence-design.md`](./queue-persistence-design.md)) —
    multi-worker lease / visibility-timeout refinement, and metrics **downsampling** (1s→1m→1h). Explicitly

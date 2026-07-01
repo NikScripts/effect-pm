@@ -5,8 +5,9 @@
 `strictEffectProvide` flags, because heterogeneous per-resource sources can't hoist to `serveAllHttp`'s
 single shared provide without double-enqueue).
 
-**Status:** ✅ resolved. The primitive shipped `0.8.0-beta.18`; **engine-aware `serve`
-(`QueueResource.serve` / `ScheduledProcess.serve`) is now built** (see
+**Status:** ✅ resolved — **released in `0.8.0-beta.19`** (bump your vendored effect-pm to it). The
+per-resource primitive shipped `beta.18`; **engine-aware `serve` (`QueueResource.serve` /
+`ScheduledProcess.serve`) shipped `beta.19`** (see
 [`2026-07-01-engine-resource-serve-gap.md`](./2026-07-01-engine-resource-serve-gap.md)), so your 9 engine
 sites migrate too. For a **query resource**, `Resource.serve(tag, recordImpl)`; for a **queue/process**,
 use the engine form — it runs the worker/tick engine *and* preserves `R`:
@@ -17,7 +18,8 @@ ScheduledProcess.serve(NwslGetSeasonMatches, seasonMatchesCfg).pipe(Layer.provid
 QueueResource.serve(NwslRosterImportQueue, rosterCfg).pipe(Layer.provide(emptyHookSourceLayer))
 ```
 
-Compose them under `Resource.httpServer` exactly like the raw example below. You can graduate
+Compose them under `Resource.httpServer([...serves], options)` (the `beta.19` sugar bundles the
+`provideMerge` + registry) — see the guide `docs/guides/per-resource-dependencies.md`. You can graduate
 `strictEffectProvide → "error"`.
 
 > "source" is your `EventManager` term and stays in wow — the package names nothing after it. What you
