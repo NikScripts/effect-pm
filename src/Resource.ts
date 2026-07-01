@@ -1859,10 +1859,26 @@ const connectHttp = <Self>(
  *
  * @public
  */
-export const multiHost =
-  (...hosts: ReadonlyArray<AnyHost>) =>
-  <T extends ResourceTag<any, any> | HostBoundTag<any, any, any>>(tag: T): T =>
-    Object.assign(tag, { [multiHostSym]: hosts });
+export const multiHost: {
+  // data-last (pipe): mirrors `withReadiness` — the data-first overloads (which infer `Self`/`S` and
+  // return the *specific* tag) are what let a class `extends … .pipe(multiHost(...))` resolve without
+  // recursing on its own type, so `multiHost` is `Fn.dual` too (not a bare curry).
+  <T extends ResourceTag<any, any> | HostBoundTag<any, any, any>>(
+    hosts: ReadonlyArray<AnyHost>,
+  ): (tag: T) => T;
+  <Self, S extends Spec, HSelf>(
+    tag: HostBoundTag<Self, S, HSelf>,
+    hosts: ReadonlyArray<AnyHost>,
+  ): HostBoundTag<Self, S, HSelf>;
+  <Self, S extends Spec>(
+    tag: ResourceTag<Self, S>,
+    hosts: ReadonlyArray<AnyHost>,
+  ): ResourceTag<Self, S>;
+} = Fn.dual(
+  2,
+  <T extends ResourceTag<any, any>>(tag: T, hosts: ReadonlyArray<AnyHost>): T =>
+    Object.assign(tag, { [multiHostSym]: hosts }),
+);
 
 /** Build a client to one peer host over http (its own `url`) — the same wire client as
  *  {@link buildClientService}, scoped to its transport. */

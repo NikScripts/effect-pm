@@ -22,11 +22,26 @@ import { Polling } from "../../src/Polling";
 import { ProcessSchedule } from "../../src/ProcessSchedule";
 import { ProcessStorage } from "../../src/ProcessStorage";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
-import { BoxScoreQueue, LiveScorePoller, PlayByPlayQueue, ScoresApi, ScoresDb } from "./hub";
+import { BoxScoreQueue, HOST_PORTS, LiveHost, LiveScorePoller, PlayByPlayQueue, ScoresApi, ScoresDb, StatsHost, WnbaHost, WorkerPool } from "./hub";
+import { Combine, combineQuery } from "../../src/MultiHost";
 
-const WNBA_PORT = 7780;
-const LIVE_PORT = 7781;
-const STATS_PORT = 7782;
+const WNBA_PORT = HOST_PORTS.wnba;
+const LIVE_PORT = HOST_PORTS.live;
+const STATS_PORT = HOST_PORTS.stats;
+
+// The WorkerPool impl, Effect form (spec-checked by `serverEntry`): resolve `peers` once, then
+// `fleetActive` folds the peers' `active` + this host's own. `own` varies per host so the fleet total
+// is meaningful; the impl's `peers` requirement is discharged by `peersLayer` at each serve.
+const workerPoolImpl = (own: number) =>
+  Effect.gen(function* () {
+    const peers = yield* Resource.peers(WorkerPool);
+    return {
+      active: Effect.succeed(own),
+      fleetActive: combineQuery(peers, (p) => p.active, Combine.sum).pipe(
+        Effect.map((others) => own + others),
+      ),
+    };
+  });
 
 const importWorker = (job: { readonly id: string }) =>
   Effect.gen(function* () {
@@ -167,7 +182,11 @@ const wnbaHost = Resource.serveAllHttp([
   // Effect-form `serverEntry` spec-checks the impl and surfaces its `ScoresDb` requirement (provided
   // below) instead of a bare `{ tag, impl }` literal that would erase it.
   Resource.serverEntry(ScoresDb, ScoresDb),
+  // the multi-host WorkerPool, served here + on the other two hosts; `peersLayer` (below) lets this
+  // instance reach the others so `fleetActive` gathers across the fleet.
+  Resource.serverEntry(WorkerPool, workerPoolImpl(5)),
 ]).pipe(
+  Layer.provide(Resource.peersLayer(WorkerPool, WnbaHost)),
   // provide ScoresDb so the queue's readiness derivation (`readinessOf(ScoresDb)`) can resolve it;
   // the served entry above re-exposes this same service over RPC.
   Layer.provide(Resource.layer(ScoresDb, scoresDbImpl)),
@@ -183,7 +202,9 @@ const liveHost = Resource.serveAllHttp([
     scheduleLayer: pollerSchedule,
     captureLogs: true,
   }),
+  Resource.serverEntry(WorkerPool, workerPoolImpl(3)),
 ]).pipe(
+  Layer.provide(Resource.peersLayer(WorkerPool, LiveHost)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(ProcessStorage.layer),
   Layer.provide(HostLogs.layer),
@@ -196,7 +217,9 @@ const statsHost = Resource.serveAllHttp([
     concurrency: 3,
     captureLogs: true,
   }),
+  Resource.serverEntry(WorkerPool, workerPoolImpl(4)),
 ]).pipe(
+  Layer.provide(Resource.peersLayer(WorkerPool, StatsHost)),
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(HostLogs.layer),
   Layer.provide(NodeHttpServer.layer(() => createServer(), { port: STATS_PORT })),
@@ -211,6 +234,10 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(
     `wnba :${WNBA_PORT} (BoxScoreQueue) · live :${LIVE_PORT} (LiveScorePoller) · stats :${STATS_PORT} (PlayByPlayQueue)`,
   );
+  // WorkerPool is served on all three hosts with `peersLayer`, so a client hitting any host gets
+  // `fleetActive` = this host's `active` + its peers' (5 + 3 + 4 = 12). The peer connections are
+  // established when each host's `peersLayer` builds above.
+  yield* Effect.logInfo("WorkerPool: multi-host (fleetActive folds active across wnba/live/stats)");
   return yield* Effect.never;
 });
 

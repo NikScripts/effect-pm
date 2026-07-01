@@ -23,9 +23,31 @@ const importJob = Schema.Struct({ id: Schema.String });
 // Three remote machines (see `server.ts`): the box-score queue on `WnbaHost`, the live-score poller
 // on `LiveHost`, the play-by-play queue on `StatsHost` — so the dashboard's host die shows three
 // pips (a pyramid).
-export class WnbaHost extends Resource.Host<WnbaHost>("wnba/scores") {}
-export class LiveHost extends Resource.Host<LiveHost>("wnba/live") {}
-export class StatsHost extends Resource.Host<StatsHost>("wnba/stats") {}
+/** The three hosts' ports (one process, three servers — see `server.ts`). Exported so the host urls
+ *  here and the servers stay in sync. Each host carries its server-side url so `Resource.peersLayer`
+ *  can reach its peers; the browser overrides it with a vite-proxied path (below). */
+export const HOST_PORTS = { wnba: 7780, live: 7781, stats: 7782 } as const;
+const rpcUrl = (port: number) => `http://127.0.0.1:${port}/rpc`;
+
+export class WnbaHost extends Resource.Host<WnbaHost>("wnba/scores", { url: rpcUrl(HOST_PORTS.wnba) }) {}
+export class LiveHost extends Resource.Host<LiveHost>("wnba/live", { url: rpcUrl(HOST_PORTS.live) }) {}
+export class StatsHost extends Resource.Host<StatsHost>("wnba/stats", { url: rpcUrl(HOST_PORTS.stats) }) {}
+
+// A **multi-host** resource: the SAME WorkerPool served on all three hosts — one class, three
+// instances. `active` is this instance's own count (a leaf field peers can read); `fleetActive` is the
+// total across the fleet — a `fleet`-tagged query the layer folds from `Resource.peers` + its own
+// value (see `server.ts`). Dogfoods `fleet` + `peers` + layer-from-effect end to end across three real
+// servers.
+export class WorkerPool extends Resource.Tag<WorkerPool>()(
+  "wnba/WorkerPool",
+  {
+    active: Resource.query(Schema.Number),
+    fleetActive: Resource.query(Schema.Number).pipe(Resource.fleet),
+  },
+  { host: WnbaHost }, // a primary host (client default); `multiHost` below is the fleet peers gather over
+).pipe(
+  Resource.multiHost([WnbaHost, LiveHost, StatsHost]),
+) {}
 
 // A "scores database" connection, served on WnbaHost. Its readiness reflects a (simulated) physical
 // connection that drops briefly now and then; the box-score queue *depends on* it (below), so when the
