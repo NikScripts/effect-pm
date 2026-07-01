@@ -85,6 +85,7 @@
           "leakingRequirements": "error",
           "missedPipeableOpportunity": "error",
           "missingEffectServiceDependency": "error",
+          "missingLayerContext": "off",
           "multipleEffectProvide": "error",
           "nestedEffectGenYield": "error",
           "newPromise": "error",

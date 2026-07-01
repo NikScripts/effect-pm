@@ -50,6 +50,7 @@ import {
   Layer,
   Match,
   Option,
+  Pipeable,
   Schema,
   Scope,
   Stream,
@@ -187,7 +188,7 @@ export interface Method<
   E extends Schema.Top,
   Str extends boolean = false,
   Ann extends MethodAnnotations = MethodAnnotations,
-> {
+> extends Pipeable.Pipeable {
   readonly [methodTypeId]: typeof methodTypeId;
   readonly kind: Kind;
   readonly payload: P;
@@ -210,6 +211,29 @@ export type AnyMethod = Method<
   boolean,
   MethodAnnotations
 >;
+
+/** Brands a {@link Method} as a **fleet** field — combined across the hosts (implemented in the layer
+ *  via {@link peers}); served + client-visible like any query, but excluded from {@link peers}. */
+const fleetTypeId: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/fleet");
+
+/** A {@link Method} marked as a fleet field (via {@link fleet}). @public */
+export type FleetField<M extends AnyMethod> = M & { readonly [fleetTypeId]: true };
+
+/**
+ * Mark a contract method as a **fleet** field — one combined across the hosts (its layer impl folds
+ * {@link peers} + its own value). It's served and client-visible like any query, but **excluded from
+ * {@link peers}**, so a fold over peers can't call a peer's *own* fleet field (a fan-out, not what you
+ * want). The one lightweight tag the plain-query model keeps, purely for this exclusion.
+ *
+ * ```ts
+ * connections:      Resource.query(Schema.Number),               // per-instance (leaf) — peers see it
+ * totalConnections: Resource.fleet(Resource.query(Schema.Number)), // fleet — peers don't
+ * ```
+ *
+ * @public
+ */
+export const fleet = <M extends AnyMethod>(method: M): FleetField<M> =>
+  Object.assign(Object.create(Pipeable.Prototype), method, { [fleetTypeId]: true as const });
 
 /** @internal */
 declare const localCapabilityTypeId: unique symbol;
@@ -324,17 +348,18 @@ const makeMethod = <
   error: E,
   stream: Str,
   annotations: Ann,
-): Method<Kind, P, Su, E, Str, Ann> => ({
-  [methodTypeId]: methodTypeId,
-  kind,
-  payload,
-  success,
-  error,
-  stream,
-  annotations,
-  annotate: <A extends MethodAnnotations>(a: A): Method<Kind, P, Su, E, Str, Ann & A> =>
-    makeMethod(kind, payload, success, error, stream, { ...annotations, ...a } as Ann & A),
-});
+): Method<Kind, P, Su, E, Str, Ann> =>
+  Object.assign(Object.create(Pipeable.Prototype), {
+    [methodTypeId]: methodTypeId,
+    kind,
+    payload,
+    success,
+    error,
+    stream,
+    annotations,
+    annotate: <A extends MethodAnnotations>(a: A): Method<Kind, P, Su, E, Str, Ann & A> =>
+      makeMethod(kind, payload, success, error, stream, { ...annotations, ...a } as Ann & A),
+  });
 
 /**
  * Define a **query** (idempotent read) returning `success`. Add a `payload` and/or `error`
@@ -623,6 +648,17 @@ type WireServiceOf<S extends Spec> = {
   >;
 };
 
+/** A **peer's** service as seen by {@link peers} — the per-instance ("leaf") wire methods only:
+ *  {@link FleetField}s and {@link LocalMethod}s are excluded, so a fold can't recurse into a peer's
+ *  own fleet field. A full {@link ServiceOf} is assignable to it (width), so real clients fit. */
+type PeerServiceOf<S extends Spec> = {
+  readonly [K in keyof S as S[K] extends { readonly [fleetTypeId]: true }
+    ? never
+    : S[K] extends AnyLocalMethod
+      ? never
+      : K]: ServiceMethod<Exclude<S[K], AnyLocalMethod>>;
+};
+
 /**
  * The **implementation** a {@link localLayer} / {@link serverLayer} expects: wire members are their
  * `Effect`/`Stream`/function, and each {@link LocalMethod} is its **raw** value `T` (the toolkit wraps
@@ -872,8 +908,8 @@ export interface ResourceTag<Self, S extends Spec>
    *  ⇒ ready by default. Read it via {@link readinessCheck}. */
   readonly [readinessSym]: ReadinessOf<ServiceOf<S, Self>> | undefined;
   /** The per-resource {@link peers} capability key — its value is this resource's peer clients
-   *  (the other hosts' services), keyed by host. Provided by {@link peersLayer}, read via {@link peers}. */
-  readonly [peersSym]: Context.Key<PeersId<Self>, Record<string, ServiceOf<S, Self>>>;
+   *  (the other hosts' leaf services), keyed by host. Provided by {@link peersLayer}, read via {@link peers}. */
+  readonly [peersSym]: Context.Key<PeersId<Self>, Record<string, PeerServiceOf<S>>>;
   /** The fleet — the tag's `multiHost` set, if declared (via {@link multiHost}); else `undefined`. */
   readonly [multiHostSym]?: ReadonlyArray<AnyHost>;
 }
@@ -1060,8 +1096,8 @@ const buildInstanceTag = <Self, S extends Spec>(
     );
   // per-resource peer capability — its value is this resource's other-host clients, provided
   // only by peersLayer (the opt-in mesh), never by default.
-  const peersKey: Context.Key<PeersId<Self>, Record<string, ServiceOf<S, Self>>> =
-    Context.Service<PeersId<Self>, Record<string, ServiceOf<S, Self>>>()(`${key}/__peers`);
+  const peersKey: Context.Key<PeersId<Self>, Record<string, PeerServiceOf<S>>> =
+    Context.Service<PeersId<Self>, Record<string, PeerServiceOf<S>>>()(`${key}/__peers`);
   return Object.assign(base, {
     groupId,
     description,
@@ -1871,7 +1907,7 @@ const buildPeerClient = <Self, S extends Spec>(
  */
 export const peers = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
-): Effect.Effect<Record<string, ServiceOf<S, Self>>, never, PeersId<Self>> => tag[peersSym];
+): Effect.Effect<Record<string, PeerServiceOf<S>>, never, PeersId<Self>> => tag[peersSym];
 
 /**
  * Provide the {@link peers} capability on **this** host: connect every OTHER host in the tag's
@@ -1894,7 +1930,10 @@ export const peersLayer = <Self, S extends Spec>(
       const entries = yield* Effect.forEach(reachable, ({ key, url }) =>
         Effect.map(buildPeerClient(tag, url), (client) => [key, client] as const),
       );
-      return Object.fromEntries(entries);
+      // Boundary: each peer client is a full `ServiceOf<S>` — a width-supertype of the leaf
+      // `PeerServiceOf<S>` the capability exposes — but the mapped types don't reduce under a generic
+      // `S`, so TS can't see the overlap; the erasure through `unknown` is the honest boundary.
+      return Object.fromEntries(entries) as unknown as Record<string, PeerServiceOf<S>>;
     }),
   );
 
@@ -1907,7 +1946,7 @@ export const peersLayer = <Self, S extends Spec>(
  */
 export const peersFrom = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
-  peers: Record<string, ServiceOf<S, Self>>,
+  peers: Record<string, PeerServiceOf<S>>,
 ): Layer.Layer<PeersId<Self>> => Layer.succeed(tag[peersSym], peers);
 
 /**

@@ -10,16 +10,16 @@ class Database extends Resource.Tag<Database>()(
   "peers-http/Database",
   {
     connections: Resource.query(Schema.Number),
-    totalConnections: Resource.query(Schema.Number), // a plain query, gathered in the layer
+    totalConnections: Resource.query(Schema.Number).pipe(Resource.fleet), // gathered in the layer
   },
   { host: DbHost },
 ) {}
 
-// the other hosts' clients, as peersLayer would connect them (fake here — no 2nd server needed to
-// prove the wire path: client → this server → its peers-gather → response).
+// the other hosts' clients (leaf fields only), as peersLayer would connect them — fake here, no 2nd
+// server needed to prove the wire path: client → this server → its peers-gather → response.
 const fakePeers = {
-  ebwsl: { connections: Effect.succeed(5), totalConnections: Effect.succeed(0) },
-  wnba: { connections: Effect.succeed(3), totalConnections: Effect.succeed(0) },
+  ebwsl: { connections: Effect.succeed(5) },
+  wnba: { connections: Effect.succeed(3) },
 };
 
 const Server = Resource.serveAllHttp([

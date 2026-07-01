@@ -3,10 +3,11 @@ import { expect, it } from "vitest";
 import { Combine, combineQuery } from "../src/MultiHost";
 import * as Resource from "../src/Resource";
 
-// combined fields are PLAIN queries; the layer implements them via Resource.peers + your own value.
+// combined fields are plain queries, tagged `fleet` (so peers exclude them); the layer implements them
+// via Resource.peers + your own value.
 class Database extends Resource.Tag<Database>()("test/peers/Database", {
   connections: Resource.query(Schema.Number),
-  totalConnections: Resource.query(Schema.Number),
+  totalConnections: Resource.query(Schema.Number).pipe(Resource.fleet),
 }) {}
 
 // build the impl effectfully (the Effect form of Resource.layer): resolve peers once; the members
@@ -24,11 +25,24 @@ const database = Resource.layer(
   }),
 );
 
-// the per-host peer clients (what peersLayer connects; here supplied explicitly via peersFrom)
+// the per-host peer clients (leaf fields only — peers exclude fleet fields); supplied via peersFrom
 const fakePeers = {
-  ebwsl: { connections: Effect.succeed(5), totalConnections: Effect.succeed(0) },
-  wnba: { connections: Effect.succeed(3), totalConnections: Effect.succeed(0) },
+  ebwsl: { connections: Effect.succeed(5) },
+  wnba: { connections: Effect.succeed(3) },
 };
+
+it("peers exclude fleet fields at compile time (the footgun is a type error)", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const ps = yield* Resource.peers(Database);
+      const p = ps.ebwsl;
+      if (p !== undefined) {
+        expect(yield* p.connections).toBe(5); // leaf field — exposed to peers
+        // @ts-expect-error — totalConnections is a `fleet` field, excluded from peers (no fan-out)
+        void p.totalConnections;
+      }
+    }).pipe(Effect.provide(Resource.peersFrom(Database, fakePeers))),
+  ));
 
 it("a combined field gathers peers (Resource.peers) + adds self; the layer discharges the capability", () =>
   Effect.runPromise(
