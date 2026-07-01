@@ -1997,11 +1997,15 @@ const buildClientService = <Self, S extends Spec>(
  * same `yield* Tag` code as the local layer, only the provided layer differs, so it doesn't
  * matter where the resource actually runs.
  *
- * Two paths, by whether the tag carries a {@link Host}:
+ * Three paths, by whether — and where — the tag names a {@link Host}:
  * - **host-bearing tag** — the transport is resolved from the tag's host; the layer's only
  *   requirement is that host (satisfied by {@link Resource.connect}). Ship just the tag.
- * - **hostless tag** — the transport is taken from the ambient `RpcClient.Protocol`, supplied
- *   at wire-up. (Remote use stays optional: a hostless resource can also just run locally via
+ * - **hostless tag, host at the client** — a multi-host resource is N instances (one per host), so
+ *   the client names *which* instance: `client(tag, host)`. The transport is resolved from that host
+ *   (like a host-bearing tag), so the layer requires the host — satisfied by {@link Resource.connect}.
+ *   The requirement is enforced at compile time, so there's no way to wire it wrong at runtime.
+ * - **hostless tag, ambient transport** — the transport is taken from the ambient `RpcClient.Protocol`,
+ *   supplied at wire-up. (Remote use stays optional: a hostless resource can also just run locally via
  *   {@link Resource.layer}, or be served as its own process.)
  *
  * @public
@@ -2009,16 +2013,22 @@ const buildClientService = <Self, S extends Spec>(
 function clientLayer<Self, S extends Spec, HSelf>(
   tag: HostBoundTag<Self, S, HSelf>,
 ): Layer.Layer<Self, never, HSelf>;
+function clientLayer<Self, S extends Spec, HSelf>(
+  tag: ResourceTag<Self, S>,
+  host: HostKey<HSelf>,
+): Layer.Layer<Self, never, HSelf>;
 function clientLayer<Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
 ): Layer.Layer<Self, never, RpcClient.Protocol>;
 function clientLayer<Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
+  host?: HostKey<unknown>,
 ): Layer.Layer<Self, never, RpcClient.Protocol> {
   const group = tag[groupSym];
-  const host = tag[hostSym];
-  // hostless: take the transport from the ambient `RpcClient.Protocol` — fully typed, no cast.
-  if (host === undefined) {
+  // an explicit `host` (for a hostless tag) wins; otherwise the tag's own host, if any.
+  const hostKey = host ?? tag[hostSym];
+  // no host anywhere: take the transport from the ambient `RpcClient.Protocol` — fully typed, no cast.
+  if (hostKey === undefined) {
     return Layer.effect(
       tag,
       Effect.map(RpcClient.make(group), (client) =>
@@ -2026,14 +2036,16 @@ function clientLayer<Self, S extends Spec>(
       ),
     );
   }
-  // host-bearing: resolve the transport from the host and provide it locally to the client, so
-  // the layer requires the host rather than the ambient Protocol. The host's identity is erased
-  // to `unknown` on the base tag; the `host`-overload pins the precise `HSelf` for callers, so
-  // this one contained boundary assertion restates the impl's return type (runtime-safe).
+  // host chosen (from the tag or the argument): resolve the transport from that host service and
+  // provide it locally to the client, so the layer requires the host rather than the ambient
+  // Protocol. Reading a provided host service can't fail and `RpcClient.make` has no error channel,
+  // so client construction never fails or dies — only the resulting method calls carry typed errors.
+  // The host identity is erased to `unknown` on the base tag; the two host-typed overloads pin the
+  // precise `HSelf` for callers, so this one contained boundary assertion restates the impl's return.
   const layer = Layer.effect(
     tag,
     Effect.map(
-      Effect.flatMap(host, (protocol) =>
+      Effect.flatMap(hostKey, (protocol) =>
         Effect.provideService(
           RpcClient.make(group),
           RpcClient.Protocol,

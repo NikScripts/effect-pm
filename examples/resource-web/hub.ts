@@ -119,6 +119,10 @@ const appLayer = Layer.mergeAll(
   Resource.client(PlayByPlayQueue).pipe(Layer.provide(statsTransport)),
   Resource.client(ScoresApi).pipe(Layer.provide(wnbaTransport)),
   Resource.client(ScoresDb).pipe(Layer.provide(wnbaTransport)),
+  // WorkerPool is a *hostless* multi-host tag, so the client names which instance to read — here the
+  // one on WnbaHost. `client(tag, host)` resolves the transport from that host, so the requirement is
+  // the host (satisfied by wnbaTransport), enforced at compile time.
+  Resource.client(WorkerPool, WnbaHost).pipe(Layer.provide(wnbaTransport)),
 );
 
 /** One reactive runtime providing every resource in the hub. */

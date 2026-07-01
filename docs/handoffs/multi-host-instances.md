@@ -57,8 +57,11 @@ EbwslHost.serveAllHttp([ …, Resource.localInstance(Database, databaseStatus) ]
 
 - Wire key would need to be host-scoped (`<hostKey>/<id>`) — **the exact mechanism host-bound
   `ApiMetrics` tags already use** (`<hostKey>/<clientId>/metrics`), so collisions are a solved problem.
-- Open: with no host on the tag, how does `Resource.client` name the host? (explicit arg? a
-  host-scoped transport?)
+- ~~Open: with no host on the tag, how does `Resource.client` name the host?~~ **Resolved (beta.17):**
+  an **explicit arg** — `Resource.client(tag, host)`. A hostless resource is N instances, so the client
+  names which one; the transport resolves from that host (like a host-bound tag), so the layer requires
+  the host (satisfied by `connectHttp(host)`) — enforced at compile time, no runtime "Service not
+  found". See `test/multi-host-hostless-client.test.ts`.
 
 ### B — A helper that **builds the layers** _(requested)_
 
