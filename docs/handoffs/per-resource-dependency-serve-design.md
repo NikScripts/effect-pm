@@ -1,9 +1,12 @@
 # Design: per-resource dependency provision at the serve (beta.18)
 
-**Status:** core primitive **built + tested** on branch `cursor/beta-18-dependency-serve` — `Resource.serve`
-(preserves `R`, isolation proven, effect-ls clean). Remaining for beta.18: the `Resource.httpServer` +
-served-resources registry conveniences (§3, §5.1), and re-basing `serveAllHttp` as sugar (§5.3). Target
-release beta.18.
+**Status:** the full surface is **built + tested** on branch `cursor/beta-18-dependency-serve` —
+`Resource.serve` (preserves `R`, isolation), `Resource.httpServer` + `ServedResources` /
+`servedResourcesLayer` (shared server + `/health` from the registry). typecheck / effect-ls / eslint
+clean, 375 tests. The **ordering held** (registry populated before the server reads it) — validated by
+`/health` listing both resources in `test/multi-resource-http-server.test.ts`. Remaining, optional:
+re-basing `serveAllHttp` as sugar over `serve`/`httpServer` (§5.3) — the existing `serveAllHttp` is
+untouched and still the right tool for the shared-dependency case. Target release beta.18.
 **Problem report:** [`2026-07-01-per-resource-source-provide.md`](./2026-07-01-per-resource-source-provide.md)
 (the consumer statement; note "source" there is a wow `EventManager` term — **it is not used in this
 design or in any effect-pm surface**; the general concept is a resource's requirement `R`).
@@ -157,9 +160,28 @@ No `Effect.provide` appears in consumer code — bodies `yield*` their requireme
 
 ## 10. Definition of done
 
-- The three-implementation example (§4) compiles and serves on one `/rpc`, with `/health` listing all
-  resources.
-- The sharing test (§6), including the double-enqueue regression, passes.
-- A consumer building it needs **no** `Effect.provide` — `strictEffectProvide: "error"` is clean.
-- Docs: a guide section + `RESOURCE-API.md` entries for `serve` / `httpServer`; `serveAllHttp` documented
-  as the shared-dependency sugar over them.
+- ✅ **Built:** `Resource.serve` (R-preserving), `Resource.httpServer`, `ServedResources` /
+  `servedResourcesLayer`. typecheck / effect-ls / eslint clean, 375 tests, build clean.
+- ✅ Serves multiple resources on one `/rpc` with `/health` listing all of them —
+  `test/multi-resource-http-server.test.ts` (also proves the registry ordering).
+- ✅ Isolation: two resources, same tag, different values, read back distinct —
+  `test/multi-resource-isolated-deps.test.ts`. (The `Layer.fresh` case is inherent to Effect
+  memoization; add an explicit assertion when wiring the real consumer.)
+- ✅ No `Effect.provide` in the consumer path — dependencies ride `Layer.provide` on each `serve`.
+- ⬜ **Remaining:** docs (guide section + `RESOURCE-API.md` entries for `serve` / `httpServer` /
+  `servedResourcesLayer`); optionally re-base `serveAllHttp` as sugar (§5.3) and ship the
+  `Resource.provide(layer, resources)` grouping helper. None block use — the primitives are complete.
+
+## Resolved open questions (from §9)
+
+- **Precise `R` typing:** solved via `ServeRequirements<Impl>` (extract from the impl value, not a
+  mapped-type parameter).
+- **Registry mechanism + ordering:** a `Ref`-backed accumulator (`ServedResources`) works; `serve`
+  registers only if it's present (optional), and the `provideMerge` dependency chain guarantees every
+  `serve` registers before `httpServer` reads — validated by `/health`.
+- **Local-boot parallel:** none needed — `serve` is just a layer; a local runtime merges the same
+  `serve` layers without `httpServer`.
+- **The keep-it-alive detail:** consumers must `Layer.provideMerge` (not `Layer.provide`) the `serve`
+  layers onto `httpServer`, else they're pruned as unused (they provide no service `httpServer`'s *type*
+  requires — the handlers flow dynamically). Documented on `httpServer`; a missing handler fails the
+  `RpcServer` at boot, not silently.

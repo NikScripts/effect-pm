@@ -51,6 +51,7 @@ import {
   Match,
   Option,
   Pipeable,
+  Ref,
   Schema,
   Scope,
   Stream,
@@ -1376,6 +1377,53 @@ const serverLayer = <S extends Spec>(
 };
 
 /**
+ * One served resource's registry entry — its group (folded into the shared server), wire id, kind, and
+ * readiness derivation. {@link serve} appends it; {@link httpServer} reads them for the merged server +
+ * `/health` + host-status.
+ *
+ * @public
+ */
+export interface ServedResource {
+  readonly groupId: string;
+  readonly group: RpcGroup.RpcGroup<any>;
+  readonly kind: string;
+  readonly readiness: Effect.Effect<Readiness>;
+}
+
+/**
+ * The served-resources registry — an accumulator {@link serve} appends to and {@link httpServer} reads.
+ * A plain `Ref`-backed list (not type-level state), so many `serve` layers compose under `Layer.mergeAll`
+ * and the server sees every one. Provided by {@link httpServer} (or {@link servedResourcesLayer}); `serve`
+ * registers **only if it's present** (so `serve` also works standalone).
+ *
+ * @public
+ */
+export class ServedResources extends Context.Service<
+  ServedResources,
+  {
+    readonly register: (entry: ServedResource) => Effect.Effect<void>;
+    readonly all: Effect.Effect<ReadonlyArray<ServedResource>>;
+  }
+>()("@nikscripts/effect-pm/Resource/ServedResources") {}
+
+/**
+ * A fresh {@link ServedResources} registry. {@link httpServer} bundles one; provide this standalone only
+ * to collect `serve` registrations without the http server.
+ *
+ * @public
+ */
+export const servedResourcesLayer: Layer.Layer<ServedResources> = Layer.effect(
+  ServedResources,
+  Effect.gen(function* () {
+    const ref = yield* Ref.make<ReadonlyArray<ServedResource>>([]);
+    return {
+      register: (entry) => Ref.update(ref, (all) => [...all, entry]),
+      all: Ref.get(ref),
+    };
+  }),
+);
+
+/**
  * A {@link serve} handler for one wire method — like {@link ServiceMethod}, but the handler may carry a
  * **run-time requirement `R`** (a dependency it `yield*`s), which {@link serve} preserves so a
  * per-resource `Layer.provide` can discharge it in isolation.
@@ -1458,10 +1506,115 @@ export const serve = <S extends Spec, Impl extends ServeImplOf<S, any>>(
   // the handlers' requirement `R` — extracted from `impl` by {@link ServeRequirements} — instead of
   // erasing it, so a per-resource `Layer.provide` can discharge it. `HandlerContextOf<S>` is the rpc
   // handler slots; the requirement is the union of the handlers' run-time needs.
-  return group.toLayer(
+  const handlerLayer = group.toLayer(
     handlers as unknown as Parameters<(typeof group)["toLayer"]>[0],
-  ) as unknown as Layer.Layer<HandlerContextOf<S>, never, ServeRequirements<Impl>>;
+  );
+  // register into the served-resources registry when one is present (`httpServer` provides it), so the
+  // shared server + `/health` discover this resource without the caller listing it twice. Merged (not
+  // provided) so it isn't pruned as unused; a no-op when no registry is in context (standalone `serve`).
+  const registration = Layer.effectDiscard(
+    Effect.serviceOption(ServedResources).pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.void,
+          onSome: (registry) =>
+            registry.register({
+              groupId: tag.groupId,
+              group,
+              kind: kindOf(tag) ?? "resource",
+              readiness: readinessCheck(tag, impl),
+            }),
+        }),
+      ),
+    ),
+  );
+  return Layer.merge(handlerLayer, registration) as unknown as Layer.Layer<
+    HandlerContextOf<S>,
+    never,
+    ServeRequirements<Impl>
+  >;
 };
+
+/**
+ * The shared http server for resources composed with {@link serve} — the multi-resource,
+ * heterogeneous-dependency counterpart to {@link serveHttp} / {@link serveAllHttp}. Reads the
+ * {@link ServedResources} registry (populated by the `serve` layers `provideMerge`d onto it), merges
+ * every registered group onto **one** `RpcServer` at `path` (default `/rpc`), and mounts a `/health`
+ * route aggregating each resource's readiness. Because each `serve` layer carries **its own**
+ * `Layer.provide`d dependency, resources needing different implementations of the same tag stay isolated
+ * — no shared union-provide:
+ *
+ * ```ts
+ * const Host = Resource.httpServer({ health: { path: "/health" } }).pipe(
+ *   Layer.provideMerge(Layer.mergeAll(          // provideMerge — the serve layers must be KEPT, not pruned
+ *     Resource.serve(A, implA).pipe(Layer.provide(depA)),
+ *     Resource.serve(B, implB).pipe(Layer.provide(depB)),
+ *   )),
+ *   Layer.provide(Resource.servedResourcesLayer), // shared registry: serve registers, httpServer reads
+ *   Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
+ * );
+ * ```
+ *
+ * The handlers ride the context the `serve` layers provide; if one is missing the `RpcServer` fails at
+ * **build** (a clear boot error), never a silent runtime gap.
+ *
+ * @public
+ */
+export const httpServer = (options?: {
+  readonly path?: HttpRouter.PathInput;
+  readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+  readonly health?: { readonly path?: HttpRouter.PathInput };
+}): Layer.Layer<never, never, ServedResources | HttpServer.HttpServer> =>
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const registry = yield* ServedResources;
+      const entries = yield* registry.all;
+      if (entries.length === 0) {
+        throw new Error(
+          "Resource.httpServer: no resources registered — provideMerge at least one Resource.serve(...) layer",
+        );
+      }
+      const startedAt = yield* Clock.currentTimeMillis;
+      const merged = entries
+        .map((entry) => entry.group)
+        .reduce((acc, group) => acc.merge(group));
+      const readiness = Effect.forEach(entries, (entry) =>
+        Effect.map(entry.readiness, (result) => ({
+          key: entry.groupId,
+          kind: entry.kind,
+          ready: result.ready,
+          ...(result.detail !== undefined ? { detail: result.detail } : {}),
+        })),
+      );
+      const rpcAppLayer = RpcServer.layerHttp({
+        group: merged,
+        path: options?.path ?? "/rpc",
+        protocol: "http",
+      });
+      const healthRoute = HttpRouter.add(
+        "GET",
+        options?.health?.path ?? "/health",
+        Effect.gen(function* () {
+          const ts = yield* Clock.currentTimeMillis;
+          const resources = yield* readiness;
+          const ok = resources.every((resource) => resource.ready);
+          return yield* HttpServerResponse.json({
+            status: ok ? "ok" : "degraded",
+            listening: true,
+            resources,
+            uptimeMillis: ts - startedAt,
+            ts,
+          }).pipe(
+            Effect.map((response) => HttpServerResponse.setStatus(response, ok ? 200 : 503)),
+            Effect.orDie,
+          );
+        }),
+      );
+      return HttpRouter.serve(Layer.merge(rpcAppLayer, healthRoute)).pipe(
+        Layer.provideMerge(options?.serialization ?? defaultSerialization),
+      );
+    }),
+  ) as unknown as Layer.Layer<never, never, ServedResources | HttpServer.HttpServer>;
 
 /**
  * Expose a resource over **http** in one call — the server mirror of {@link connectHttp}, and
