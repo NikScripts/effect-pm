@@ -38,14 +38,11 @@ export class StatsHost extends Resource.Host<StatsHost>("wnba/stats", { url: rpc
 // total across the fleet — a `fleet`-tagged query the layer folds from `Resource.peers` + its own
 // value (see `server.ts`). Dogfoods `fleet` + `peers` + layer-from-effect end to end across three real
 // servers.
-export class WorkerPool extends Resource.Tag<WorkerPool>()(
-  "wnba/WorkerPool",
-  {
-    active: Resource.query(Schema.Number),
-    fleetActive: Resource.query(Schema.Number).pipe(Resource.fleet),
-  },
-  // the fleet, as a factory option — hostless, every instance equal (no primary host).
-  { multiHost: [WnbaHost, LiveHost, StatsHost] },
+export class WorkerPool extends Resource.Tag<WorkerPool>()("wnba/WorkerPool", {
+  active: Resource.query(Schema.Number),
+  fleetActive: Resource.query(Schema.Number).pipe(Resource.fleet),
+}).pipe(
+  Resource.multiHost([WnbaHost, LiveHost, StatsHost]), // hostless, every instance an equal peer
 ) {}
 
 // A "scores database" connection, served on WnbaHost. Its readiness reflects a (simulated) physical

@@ -591,17 +591,13 @@ One resource served as **N instances**, one per host (`Database` on three league
 ```ts
 import { Combine, combineQuery } from "@nikscripts/effect-pm/MultiHost";
 
-// hosts carry their own url; declare the fleet with the `multiHost` factory option (hostless — every
-// instance is an equal peer, no primary host).
+// hosts carry their own url; pipe the fleet on with `multiHost([...])` (hostless — every instance an
+// equal peer, no primary host).
 class NwslHost extends Resource.Host<NwslHost>("nwsl", { url: nwslUrl }) {}
-class Database extends Resource.Tag<Database>()(
-  "app/Database",
-  {
-    connections:      Resource.query(Schema.Number),                 // per-instance ("leaf")
-    totalConnections: Resource.query(Schema.Number).pipe(Resource.fleet), // combined across the fleet
-  },
-  { multiHost: [NwslHost, EbwslHost, WnbaHost] },
-) {}
+class Database extends Resource.Tag<Database>()("app/Database", {
+  connections:      Resource.query(Schema.Number),                 // per-instance ("leaf")
+  totalConnections: Resource.query(Schema.Number).pipe(Resource.fleet), // combined across the fleet
+}).pipe(Resource.multiHost([NwslHost, EbwslHost, WnbaHost])) {}
 
 // the layer, Effect form (`Resource.layer` also takes an `Effect` that builds the impl): resolve
 // `peers` once, then `totalConnections` folds them + this host's own value.
