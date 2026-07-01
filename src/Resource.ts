@@ -617,16 +617,71 @@ type WireServiceOf<S extends Spec> = {
   >;
 };
 
+/** A `mutate` impl member allowed to require `R` — {@link MutateMethodFn} with `R` in the returned
+ *  `Effect`'s requirement slot (a directly-inferable position, so `R` flows from the impl). */
+type MutateImplFn<M extends AnyMethod, R> = M extends Method<
+  MethodKind,
+  infer _P,
+  infer _Su,
+  infer _E,
+  infer _Str,
+  infer Ann
+>
+  ? Ann extends { readonly callStyle: "pair" }
+    ? PayloadOf<M> extends readonly [infer H, infer T]
+      ? undefined extends T
+        ? (arg0: H, arg1?: T) => Effect.Effect<SuccessOf<M>, ErrorOf<M>, R>
+        : (arg0: H, arg1: T) => Effect.Effect<SuccessOf<M>, ErrorOf<M>, R>
+      : (payload: PayloadOf<M>) => Effect.Effect<SuccessOf<M>, ErrorOf<M>, R>
+    : (payload: PayloadOf<M>) => Effect.Effect<SuccessOf<M>, ErrorOf<M>, R>
+  : (payload: PayloadOf<M>) => Effect.Effect<SuccessOf<M>, ErrorOf<M>, R>;
+
+/** A wire impl member — like {@link ServiceMethod} but with `R` in the yielded `Effect`/`Stream`'s
+ *  requirement slot, so a resource's own impl can require a capability (e.g. {@link peers}) and the
+ *  layer discharges it. `R` is directly inferable from the impl (unlike wrapping the whole member). */
+type ImplMethod<M extends AnyMethod, R> = M["stream"] extends true
+  ? [M["payload"]] extends [undefined]
+    ? Stream.Stream<SuccessOf<M>, ErrorOf<M>, R>
+    : (payload: PayloadOf<M>) => Stream.Stream<SuccessOf<M>, ErrorOf<M>, R>
+  : [M["payload"]] extends [undefined]
+    ? Effect.Effect<SuccessOf<M>, ErrorOf<M>, R>
+    : MutateImplFn<M, R>;
+
+/** The wire-only impl a {@link serverLayer} expects — the {@link Method}s as {@link ImplMethod}s
+ *  (each may require `R`; the server discharges it by providing it). */
+type WireImplOf<S extends Spec, R = never> = {
+  readonly [K in keyof S as S[K] extends AnyLocalMethod ? never : K]: ImplMethod<
+    Exclude<S[K], AnyLocalMethod>,
+    R
+  >;
+};
+
 /**
- * The **implementation** shape a {@link Resource.layer} expects: wire methods as
- * `Effect`/functions, and each {@link LocalMethod} as its **raw** value `T` (the toolkit
- * wraps it to require the {@link LocalCapability}).
+ * The **implementation** a {@link localLayer} / {@link serverLayer} expects. Wire members are their
+ * `Effect`/`Stream`/function, each optionally requiring `R` (a capability like {@link peers}, which
+ * the layer discharges); {@link LocalMethod}s are their raw value `T`.
  */
-type ImplOf<S extends Spec> = {
+type ImplOf<S extends Spec, R = never> = {
   readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
     ? T
-    : ServiceMethod<Exclude<S[K], AnyLocalMethod>>;
+    : ImplMethod<Exclude<S[K], AnyLocalMethod>, R>;
 };
+
+/** The requirement `R` an impl member yields (an `Effect`/`Stream`, or a function returning one). */
+type MemberR<T> = T extends (...args: ReadonlyArray<never>) => Effect.Effect<unknown, unknown, infer R>
+  ? R
+  : T extends (...args: ReadonlyArray<never>) => Stream.Stream<unknown, unknown, infer R>
+    ? R
+    : T extends Effect.Effect<unknown, unknown, infer R>
+      ? R
+      : T extends Stream.Stream<unknown, unknown, infer R>
+        ? R
+        : never;
+
+/** The **union** of every member's requirement `R` across an impl — the capability the layer must
+ *  discharge (e.g. {@link peers}). Extracted covariantly (per-member inference would collapse to the
+ *  contravariant intersection, `never`), so a mixed impl surfaces `never | PeersId = PeersId`. */
+type ImplContext<Impl> = { [K in keyof Impl]-?: MemberR<Impl[K]> }[keyof Impl];
 
 // ── type-level: one Spec → the precisely-typed RPC contract group ──
 
@@ -812,6 +867,23 @@ type HostProtocol = Context.Service.Shape<typeof RpcClient.Protocol>;
  */
 export type HostKey<HSelf> = Context.Key<HSelf, HostProtocol>;
 
+/** A {@link Resource.Host} erased — a {@link HostKey} that also carries its own transport `url`
+ *  (decision 2), so a tag's `multiHost` set is self-describing and {@link peersLayer} can reach each
+ *  one. An element of a tag's fleet. @public */
+export type AnyHost = HostKey<unknown> & { readonly url: string | undefined };
+
+/** Phantom brand for the per-resource {@link peers} capability, so distinct resources' peer sets
+ *  don't collide in one context. @internal */
+export interface PeersId<Self> {
+  readonly _peers: Self;
+}
+
+/** Holds a tag's `multiHost` set (the fleet). @internal */
+const multiHostSym: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/multiHost");
+
+/** Holds a tag's per-resource {@link peers} capability key. @internal */
+const peersSym: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/peers");
+
 /**
  * The type of a resource tag carrying spec `S` — what {@link Resource.Tag} / a
  * {@link Resource.tagFor} factory produce (and what you extend). Lets a consumer write
@@ -846,6 +918,11 @@ export interface ResourceTag<Self, S extends Spec>
   /** The resource's readiness derivation, if any (applied by {@link withReadiness}); `undefined`
    *  ⇒ ready by default. Read it via {@link readinessCheck}. */
   readonly [readinessSym]: ReadinessOf<ServiceOf<S, Self>> | undefined;
+  /** The per-resource {@link peers} capability key — its value is this resource's peer clients
+   *  (the other hosts' services), keyed by host. Provided by {@link peersLayer}, read via {@link peers}. */
+  readonly [peersSym]: Context.Key<PeersId<Self>, Record<string, ServiceOf<S, Self>>>;
+  /** The fleet — the tag's `multiHost` set, if declared (via {@link multiHost}); else `undefined`. */
+  readonly [multiHostSym]?: ReadonlyArray<AnyHost>;
 }
 
 /**
@@ -1028,6 +1105,10 @@ const buildInstanceTag = <Self, S extends Spec>(
     Context.Service<LocalCapability<Self>, { readonly granted: true }>()(
       `${key}/__local`,
     );
+  // per-resource peer capability — its value is this resource's other-host clients, provided
+  // only by peersLayer (the opt-in mesh), never by default.
+  const peersKey: Context.Key<PeersId<Self>, Record<string, ServiceOf<S, Self>>> =
+    Context.Service<PeersId<Self>, Record<string, ServiceOf<S, Self>>>()(`${key}/__peers`);
   return Object.assign(base, {
     groupId,
     description,
@@ -1037,6 +1118,7 @@ const buildInstanceTag = <Self, S extends Spec>(
     [hostSym]: host,
     [kindSym]: kind,
     [readinessSym]: undefined,
+    [peersSym]: peersKey,
   });
 };
 
@@ -1190,33 +1272,50 @@ function tagFor<const S extends Spec>(
   });
 }
 
+/** Discharge a captured context into a service member — whatever shape it is (an `Effect`, a
+ *  `Stream`, or a function returning one) — so a member that required a capability (e.g. {@link peers})
+ *  becomes callable with nothing extra. @internal */
+const dischargeMember = (member: unknown, context: Context.Context<never>): unknown => {
+  if (typeof member === "function") {
+    const fn = member as (...args: ReadonlyArray<unknown>) => unknown;
+    return (...args: ReadonlyArray<unknown>) => dischargeMember(fn(...args), context);
+  }
+  if (Effect.isEffect(member)) return Effect.provide(member, context);
+  if (Stream.isStream(member)) return Stream.provideContext(member, context);
+  return member;
+};
+
 /**
  * The **local** layer for a resource: provide a real implementation of its service. Grants
  * the resource's {@link LocalCapability}, so any {@link Resource.local} (local-only) members
- * become callable here — they're a compile error under {@link Resource.client}.
+ * become callable here — they're a compile error under {@link Resource.client}. If the impl
+ * requires a capability `R` (e.g. {@link peers}), it's discharged from the ambient context here.
  *
  * @public
  */
-const localLayer = <Self, S extends Spec>(
+const localLayer = <Self, S extends Spec, Impl extends ImplOf<S, any>>(
   tag: ResourceTag<Self, S>,
-  impl: ImplOf<S>,
-): Layer.Layer<Self | LocalCapability<Self>> => {
+  impl: Impl,
+): Layer.Layer<Self | LocalCapability<Self>, never, ImplContext<Impl>> => {
   const cap = tag[localCapSym];
   const spec = tag[specSym];
   const members = impl as Record<string, unknown>;
-  const service: Record<string, unknown> = {};
-  for (const [key, m] of Object.entries(spec)) {
-    // local members surface as `Effect<T, never, LocalCapability>` — requiring the cap to
-    // obtain the raw value; wire members pass through unchanged.
-    service[key] = isLocalMethod(m)
-      ? Effect.as(cap, members[key])
-      : members[key];
-  }
-  return Layer.merge(
-    // Boundary assertion (runtime-safe): service is built from the same spec, key-for-key.
-    Layer.succeed(tag, service as ServiceOf<S, Self>),
-    Layer.succeed(cap, { granted: true }),
-  );
+  // Capture the ambient context (e.g. the `peers` capability provided alongside) once, and
+  // **discharge** it into every wire member, so the stored service is `R = never` (matching
+  // `ServiceOf`) even though the impl required a capability. The capability's scope rides the layer.
+  const build = Effect.map(Effect.context<ImplContext<Impl>>(), (context) => {
+    const service: Record<string, unknown> = {};
+    for (const [key, m] of Object.entries(spec)) {
+      // local members surface as `Effect<T, never, LocalCapability>` — requiring the cap to obtain
+      // the raw value; wire members get `R` discharged so they're callable with nothing extra.
+      service[key] = isLocalMethod(m)
+        ? Effect.as(cap, members[key])
+        : dischargeMember(members[key], context);
+    }
+    // Boundary assertion (runtime-safe): built from the same spec, key-for-key; `R` discharged above.
+    return service as ServiceOf<S, Self>;
+  });
+  return Layer.merge(Layer.effect(tag, build), Layer.succeed(cap, { granted: true }));
 };
 
 /**
@@ -1241,14 +1340,14 @@ const invokeWireMethod = (
   return member(payload);
 };
 
-const serverLayer = <S extends Spec>(
+const serverLayer = <S extends Spec, Impl extends WireImplOf<S, any>>(
   tag: {
     readonly groupId: string;
     readonly [specSym]: S;
     readonly [groupSym]: RpcGroupOf<S>;
   },
-  impl: WireServiceOf<S>,
-): Layer.Layer<HandlerContextOf<S>> => {
+  impl: Impl,
+): Layer.Layer<HandlerContextOf<S>, never, ImplContext<Impl>> => {
   const group = tag[groupSym];
   const handlers: Record<string, (payload: unknown) => unknown> = {};
   for (const [key, member] of Object.entries(impl)) {
@@ -1258,13 +1357,13 @@ const serverLayer = <S extends Spec>(
     handlers[wireTag(tag.groupId, key)] = (payload) =>
       invokeWireMethod(member, tag[specSym][key] as AnyMethod, payload);
   }
-  // Boundary assertion (runtime-safe): the handlers mirror the same spec the group was
-  // built from, and RPC validates every payload/result against the spec schemas at the
-  // wire. The output type is pinned to {@link HandlerContextOf} so the layer's
-  // requirement channel stays `never` (RpcGroup's `ToHandlerFn` defaults it to `any`).
+  // Boundary assertion (runtime-safe): the handlers mirror the same spec the group was built from,
+  // and RPC validates every payload/result against the spec schemas at the wire. The output pins
+  // {@link HandlerContextOf}; any capability `R` the handlers require (e.g. peers) rides the layer's
+  // requirement channel, discharged by the serve providing it.
   return group.toLayer(
     handlers as unknown as Parameters<(typeof group)["toLayer"]>[0],
-  ) as Layer.Layer<HandlerContextOf<S>>;
+  ) as Layer.Layer<HandlerContextOf<S>, never, ImplContext<Impl>>;
 };
 
 /**
@@ -1283,13 +1382,13 @@ const serverLayer = <S extends Spec>(
  *
  * @public
  */
-const serveHttp = <S extends Spec>(
+const serveHttp = <S extends Spec, Impl extends WireImplOf<S, any>>(
   tag: {
     readonly groupId: string;
     readonly [specSym]: S;
     readonly [groupSym]: RpcGroupOf<S>;
   },
-  impl: WireServiceOf<S>,
+  impl: Impl,
   options?: {
     readonly path?: HttpRouter.PathInput;
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
@@ -1688,8 +1787,10 @@ export const forwardClient = <S extends Spec>(
  *
  * @public
  */
-const makeHost = <Self>(name: string) =>
-  Context.Service<Self, HostProtocol>()(name);
+const makeHost = <Self>(name: string, options?: { readonly url?: string }) =>
+  Object.assign(Context.Service<Self, HostProtocol>()(name), {
+    url: options?.url,
+  });
 
 /**
  * Wire a {@link Host}'s transport, **once**, from any RPC client `Protocol` layer — the
@@ -1744,6 +1845,104 @@ const connectHttp = <Self>(
       Layer.provide(FetchHttpClient.layer),
     ),
   );
+
+// ── multi-host: the fleet + peer clients ──
+
+/**
+ * Declare a resource's **fleet** — the hosts it's served on — piped onto the tag (like
+ * {@link withReadiness}). Variadic; each {@link Host} carries its own url (decision 2), so the tag is
+ * self-describing. Read by {@link peersLayer} to reach the other hosts.
+ *
+ * ```ts
+ * class Database extends Resource.Tag<Database>()("app/Database", spec).pipe(
+ *   Resource.multiHost(NwslHost, EbwslHost, WnbaHost),
+ * ) {}
+ * ```
+ *
+ * @public
+ */
+export const multiHost =
+  (...hosts: ReadonlyArray<AnyHost>) =>
+  <T extends ResourceTag<any, any> | HostBoundTag<any, any, any>>(tag: T): T =>
+    Object.assign(tag, { [multiHostSym]: hosts });
+
+/** Build a client to one peer host over http (its own `url`) — the same wire client as
+ *  {@link buildClientService}, scoped to its transport. */
+const buildPeerClient = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  url: string,
+): Effect.Effect<ServiceOf<S, Self>, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    // build the http protocol into the enclosing scope, then feed its value to the client (a value
+    // provide, not a layer provide — so it doesn't break scope lifetimes; same shape as clientLayer).
+    const context = yield* Layer.build(
+      RpcClient.layerProtocolHttp({ url }).pipe(
+        Layer.provide(defaultSerialization),
+        Layer.provide(FetchHttpClient.layer),
+      ),
+    );
+    const client = yield* Effect.provideService(
+      RpcClient.make(tag[groupSym]),
+      RpcClient.Protocol,
+      Context.get(context, RpcClient.Protocol),
+    );
+    return buildClientService(tag, client);
+  });
+
+/**
+ * The resource's **peer clients** — the OTHER hosts' services (per-instance fields), keyed by host —
+ * for a resource's *own* cross-host logic. Requires the {@link peersLayer} capability. Fold them with
+ * `/MultiHost`'s `combineQuery`/`combineStream` (or iterate) and add your own value:
+ *
+ * ```ts
+ * totalConnections: Effect.gen(function* () {
+ *   const others = yield* combineQuery(yield* Resource.peers(Database), (p) => p.connections, Combine.sum);
+ *   return pool.activeCount() + others; // self + peers — you write self in
+ * }),
+ * ```
+ *
+ * @public
+ */
+export const peers = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+): Effect.Effect<Record<string, ServiceOf<S, Self>>, never, PeersId<Self>> => tag[peersSym];
+
+/**
+ * Provide the {@link peers} capability on **this** host: connect every OTHER host in the tag's
+ * {@link multiHost} set (via each {@link Host}'s url) and expose them as the peer clients. The
+ * **opt-in mesh** — add it to a host's serve only where the resource's own logic reaches across hosts.
+ * `self` is the host you are, so you're excluded from your own peer set.
+ *
+ * @public
+ */
+export const peersLayer = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  self: AnyHost,
+): Layer.Layer<PeersId<Self>> =>
+  Layer.effect(
+    tag[peersSym],
+    Effect.gen(function* () {
+      const reachable = (tag[multiHostSym] ?? [])
+        .filter((host) => host.key !== self.key)
+        .flatMap((host) => (host.url === undefined ? [] : [{ key: host.key, url: host.url }]));
+      const entries = yield* Effect.forEach(reachable, ({ key, url }) =>
+        Effect.map(buildPeerClient(tag, url), (client) => [key, client] as const),
+      );
+      return Object.fromEntries(entries);
+    }),
+  );
+
+/**
+ * Provide the {@link peers} capability from an **explicit** client map — for a holder that already
+ * holds the per-host clients (a dashboard's per-host bundles), or for a test. {@link peersLayer} is
+ * the auto-connecting form (from the tag's `multiHost` set + urls); this one takes the clients as-is.
+ *
+ * @public
+ */
+export const peersFrom = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  peers: Record<string, ServiceOf<S, Self>>,
+): Layer.Layer<PeersId<Self>> => Layer.succeed(tag[peersSym], peers);
 
 /**
  * Build the client-side service for a tag from a wired RPC client: forward every wire method
