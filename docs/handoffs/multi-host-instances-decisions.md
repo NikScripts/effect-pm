@@ -1,217 +1,107 @@
 # Decisions: one resource, N host-local instances (multi-host)
 
-**Status:** design **locked** except the Open Questions at the end. Not yet built. This is the SSOT —
-build from this, don't regenerate shapes from chat. Input/exploration: `multi-host-instances.md`
-(wow-sports). Consumer plan: `apps/services-hub/docs/MONITORABLE-RESOURCES-PLAN.md`.
+**Status:** the core is **SHIPPED** on `cursor/multi-host-instances` (peers model). This doc is the SSOT —
+build from it, don't regenerate shapes from chat. Earlier drafts explored a "multi-host contract field
+kind" (`m.query`/`m.stream`/`Resource.combined`) — that was **gutted**; combined fields are plain queries
+implemented via `Resource.peers`. Exploration input: `multi-host-instances.md` (wow-sports).
 
 ## The need
-One resource **shape** (e.g. `Database`) that exists as **N instances of that one shape**, one per host
-serve (`Database` on `NwslHost` / `EbwslHost` / `WnbaHost`): same spec + readiness, **independent state +
-readiness**, each **served locally on its own host**. The consumer holds **one class**, never N. The
-count is incidental (leagues today; `main`+`cms` tomorrow). It is "one resource, N instances," not "N
-resources."
+One resource **shape** (e.g. `Database`) served as **N instances**, one per host (`Database` on
+`NwslHost` / `EbwslHost` / `WnbaHost`): same contract, independent state + readiness, each served locally.
+The consumer holds **one class**, never N. It's "one resource, N instances," not "N resources."
+
+## The shape (shipped)
+```ts
+// hosts carry their own url
+class NwslHost extends Resource.Host<NwslHost>("nwsl", { url: nwslUrl }) {}
+// … EbwslHost, WnbaHost
+
+// contract — plain fields; combined fields are plain queries tagged `fleet`
+class Database extends Resource.Tag<Database>()("app/Database", {
+  connections:      Resource.query(Schema.Number),
+  totalConnections: Resource.query(Schema.Number).pipe(Resource.fleet),
+}).pipe(
+  Resource.multiHost(NwslHost, EbwslHost, WnbaHost),
+) {}
+
+// layer — the Effect form: resolve peers once; totalConnections folds peers + self
+const database = Resource.layer(
+  Database,
+  Effect.gen(function* () {
+    const peers = yield* Resource.peers(Database);
+    return {
+      connections: Effect.sync(() => pool.activeCount()),
+      totalConnections: combineQuery(peers, (p) => p.connections, Combine.sum).pipe(
+        Effect.map((others) => pool.activeCount() + others),
+      ),
+    };
+  }),
+);
+
+// serve a host: the layer + the peers capability (opt-in mesh) + an http server
+Resource.serveAllHttp([Resource.serverEntry(Database, databaseImpl)]).pipe(
+  Layer.provide(Resource.peersLayer(Database, NwslHost)),
+  Layer.provideMerge(NodeHttpServer.layer({ port })),
+);
+// a client → any host → totalConnections → that host gathers peers + self → the fleet total.
+```
 
 ## Locked decisions
-
-1. **Groups only organize.** A multi-host resource is **one tag = one group node**. The group expresses
-   *position in the nav tree*, never hosting or instance count. The same tag **may** appear at multiple
-   group positions — that's a **cross-link** (one identity, multiple nav paths; a symlink, not a copy)
-   and is allowed, but it is **not** the instance mechanism. Instance multiplicity is a **runtime fact**
-   (which hosts serve it), never encoded in the group tree.
-
-2. **Everything to use a service lives in the tag — and the `Host` carries its own URL.** A tag is
-   self-sufficient. `Resource.Host<H>("id", { url })` carries the address, so the host has everything
-   needed to connect to it; a multi-host tag names its host *set* (`multiHost(NwslHost, …)`), so the
-   tag transitively holds the host set **and** each host's URL — fully self-contained, no URLs passed
-   anywhere. (Also tightens the single-host case: `connect`/`client` read the URL off the host instead
-   of a separate `connectHttp(host, { url })` arg.) The URL is sourced however you like *at host
-   definition* — a literal, `process.env`, or Config — it just ends up on the host. Host on the tag is
-   not mandatory: a host-relative tag (no `multiHost`) supplies hosts at the layer (mode 1).
-
-3. **Three connection/availability modes (have it both ways):**
-   - **(1) No hosts in the tag** — hosts supplied at the layer. Combined fields resolve **only where the
-     layer knows the hosts** (the dashboard / a node aggregator). No peer mesh. ("Original plan.")
-   - **(2) Hosts in the tag** — the tag carries the host set (addresses) → **self-contained**; combined
-     fields work from **any** client, anywhere.
-   - **(3) Layer helper** — pass the hosts when building the serve/client layer → combined wherever that
-     layer is.
-   - **(4) Elected host** — *Open* (see below); reduces the mesh.
-
-4. **A server layer per host** — each host runs `Resource.serverEntry(Database, impl)` on its own
-   `serveAllHttp` (its own `RpcServer`). **Not** "one serves, the rest client."
-
-5. **No instance suffix/key for the multi-host case.** Each host is a separate RPC server over a
-   separate transport, so every host serves the resource under the **same** wire key — the **host
-   (transport) is the discriminator**, no prefix/suffix. The instance **key/suffix is reserved** for
-   **same-host multiplicity** (>1 instance on one host) — a separate, deferred mechanism.
-
-6. **Multi fields are *derived*, combined **locally where they're called** — no host-side gather, no
-   mesh.** Calling a multi field is an `Effect.all` across the host instances (gather each host's
-   per-instance method, complete when all respond, fold in-process) — it runs in **whoever holds the
-   tag** (the dashboard, an aggregator, another service), with no intermediary and no host serving a
-   combined RPC. (The freeform fold output isn't a wire `Schema`, so it *can't* be an RPC a host serves;
-   the gathered per-instance values are schema'd, the fold is local. This supersedes an earlier
-   "combine runs server-side on the host you call" take.) Modes are just where the host set comes from
-   (tag vs layer); the combine is always local to the holder.
-
-7. **Peers are a keyed set, never `client(tag)` × N.** Providing the same tag N times into one Context
-   is a last-write-wins collision. So the host set supplies a **`host → client` keyed map** (the full
-   per-host client), and the multi fields iterate that — slice-1 `combineQuery`/`combineStream`. The
-   selector gets the **full** per-host client, so a fold can read any/several fields.
-
-8. **Multi fields are a piped contract extension (`Resource.multi`), combine pipes onto the field.**
-   A single object literal can't type-safely reference its own siblings (TS infers the literal as a
-   whole — `(self) => self.x` degrades `self.x` to the constraint type; verified). The base contract
-   must be typed *before* the multi fields reference it. So `Resource.contract({…})` is a **pipeable**
-   contract, and `Resource.multi((c) => …)` is a **data-last combinator** (typed like `Effect.flatMap`):
-   because the base is already typed when the pipe applies, `c` is **precise** (verified — wrong field
-   name / kind is a compile error). It's a pipeline, so other contract-level features pipe on the same
-   way — `multi` is just the first.
-
-   ```ts
-   const databaseSpec = Resource.contract({
-     connections: Resource.query(Schema.Number),
-     status:      Resource.query(DbStatus),
-     metrics:     Resource.stream(Metric),
-   }).pipe(
-     Resource.multi((m) => ({
-       //          ↑ m = the multi builder, typed against the contract (precise)
-       totalConnections: m.query((host) => host.connections, Combine.sum),
-       fleetMetrics:     m.stream((host) => host.metrics, Combine.mergeStreams),
-       // the possibilities — the full per-host client, fold over any/several fields:
-       fleetHealth:      m.query((host) => Effect.all({ conn: host.connections, st: host.status }), summarizeHealth),
-     })),
-     // future contract features pipe on here too
-   );
-
-   class Database extends Resource.Tag<Database>()("app/Database", databaseSpec).pipe(
-     Resource.withReadiness(databaseReadiness),
-     Resource.multiHost(NwslHost, EbwslHost, WnbaHost),
-   ) {}
-   ```
-
-   - **The selector gets the full per-host client** (`host: ServiceOf<S>`), not a single picked field —
-     so a multi field can fold over any/several fields, derive, or call across them. `m.query(sel, fold)`
-     is exactly slice-1 `combineQuery(peerMap, sel, fold)`; `m.stream(sel, transform)` is `combineStream`.
-   - **Kind is glanceable** (it's an *extension* of the core contract): multi fields live in the
-     `Resource.multi((m) => …)` block (visually separate from `contract({…})`) **and** use `m.query` /
-     `m.stream` — distinct from the core `Resource.query` / `Resource.stream`. (Name the builder what
-     reads best — `m` / `fleet` / `across`.) This replaces the `c.field.pipe(Resource.combine(…))` form,
-     which buried the kind and only saw one field.
-   - Combined fields sit **directly on the service under their own names**, beside the per-instance
-     fields: `svc.connections` (this host) and `svc.totalConnections` (fleet). One class, both reads.
-   - `Tag` consumes the resulting spec unchanged; `.pipe(withReadiness(...))` / `.pipe(multiHost(...))`
-     still compose. Plain (non-multi) resources keep the object-literal spec — `Resource.contract` +
-     `Resource.multi` is **opt-in**.
-   - Why precise here but the tag's data-last `withReadiness` widens `Self`: the base contract is a
-     normal value (type known at pipe time), whereas a tag piped in a class `extends` position is its
-     own still-being-declared type (self-recursive) so must widen.
-
-9. **Per-host attribution + dev-controlled failure.** The fold/transform receives the per-host
-   **outcomes**, so a down peer is the **dev's** call — sum the survivors, fail hard, or report "2/3
-   reporting." The toolkit imposes no policy; built-in combines (`sum`, etc.) skip down hosts.
-   **Locked outcome type:** a query combine receives `ReadonlyArray<HostResult<A, E>>` where
-   `HostResult = { host: string; exit: Exit<A, E> }` (Effect-native success/failure, host-attributed);
-   a stream combine receives `ReadonlyArray<{ host: string; stream: Stream<A, E> }>`. `Combine.*`
-   helpers operate on the successes; a custom fold sees the full array (failures included).
-
-10. **Tools, not widgets, for custom resources.** A custom resource's shape is unknown, so the toolkit
-    can't render its widget (same reason generic introspection UI was rejected). It ships **tools** —
-    discover instances, per-host facets, the combined service, the combine primitives — and the consumer
-    assembles their own widget. Per-host **readiness** is already generic (the health board shows each
-    host facet without knowing the shape).
-
-11. **The combine machinery is isomorphic (browser + node/bun).** It lives in the **browser-safe core**,
-    so a dashboard, a node/bun aggregator, and a CLI all use the same combine — always local to the
-    holder (decision 6), regardless of mode.
-
-12. **The host set is piped on the tag, variadic** (like `withReadiness`). The combine *fields* live in
-    the contract (decision 8); the **host set** (mode 2) is `.pipe(Resource.multiHost(NwslHost,
-    EbwslHost, WnbaHost))` — variadic, the hosts carry their own URLs (decision 2) — or omitted (mode 1).
-
-13. **Two systems, one set of functions: holder-side `combined` vs internal `peers`.** A `MultiField`
-    holds *only* functions (selector + combine, captured in `materialize(peers)`), so the combine logic
-    is **reused verbatim** wherever there's a peer map — what differs is only *where the map comes from*
-    and *who computes*:
-    - **Holder-side fleet fields** (`Resource.combined(contract, peers)` / `svc.totalConnections`) — the
-      **default**, for *external* reads (dashboard / aggregator). The holder supplies clients it already
-      has; topology is holder→each host (star); peers **never** talk to each other; compute is local to
-      the holder. No mesh.
-    - **Internal peer capability** (`Resource.peers(Database)` — lowercase, a value/accessor — provided
-      by `Resource.peersLayer(Database)`) — **opt-in**, for the resource's *own* logic (a method impl,
-      readiness, a coordinator) needing cross-host data. `peersLayer` connects the `multiHost` set (via
-      `Host.url`) → a `host → InstanceServiceOf` map; topology is host→its peers (a **deliberate, scoped
-      mesh**); compute is on the host. You then feed that map to the **same** `Resource.combined` (or
-      `combineQuery`/`combineStream`, or iterate it raw). Connections from a host to its peers exist
-      **only** where you provide `peersLayer`; the default path never meshes.
-
-    So `Resource.combined` is the single shared entry point — the holder hands it its own clients, a host
-    hands it `yield* Resource.peers(...)`. Same call, same materializers.
+1. **Groups only organize.** One tag = one group node; same-tag-at-multiple-positions = a cross-link
+   (one identity, many nav paths), never the instance mechanism. Instance count is a runtime fact.
+2. **The `Host` carries its url** (`Resource.Host("id", { url })`), and `multiHost(...hosts)` (variadic,
+   piped) puts the fleet on the tag — so the tag is self-describing. `connectHttp` reads `host.url` (an
+   explicit arg overrides); neither → `MissingHostUrl`.
+3. **A server layer per host** — each host runs the same `serverEntry(Database, impl)`. Not
+   "one-serves-the-rest."
+4. **No instance suffix** for multi-host — the host (transport) is the discriminator. The key/suffix is
+   reserved for **same-host** multiplicity (deferred).
+5. **Combined fields are plain queries, tagged `Resource.fleet`.** `Resource.fleet(method)` (or
+   `query(...).pipe(Resource.fleet)`) marks a field as combined-across-the-fleet: served + client-visible
+   like any query, but **excluded from `peers`** (`PeerServiceOf`) so a fold can't call a peer's own fleet
+   field (fan-out). The one lightweight tag the plain-query model keeps.
+6. **`Resource.layer` has an `Effect` form (layer-from-effect).** Build the impl effectfully — acquire a
+   pool, **resolve `peers` once** — and its requirement `R` becomes the layer's (members close over what
+   they need, stay `R = never`). Provide `R` (e.g. `peersLayer`) alongside. Mirrors `serverEntry`'s two
+   forms; `serverLayer`/`serveHttp`/`serveAllHttp` carry `R` via the `serverEntry` Effect form.
+7. **`peers` is the opt-in mesh.** `Resource.peers(tag)` yields the other hosts' **leaf** clients (keyed
+   by host), for the resource's own cross-host logic. `Resource.peersLayer(tag, self)` connects the
+   `multiHost` set (minus self) via each `Host.url`; `Resource.peersFrom(tag, clients)` provides an
+   explicit client map (a holder's bundles, or a test). Connections from a host to its peers exist **only**
+   where you provide `peersLayer` — nowhere else meshes.
+8. **Combine primitives are isomorphic** (`@nikscripts/effect-pm/MultiHost`, browser + node): `combineQuery`
+   / `combineStream` gather a field across a peer map, capturing each host's outcome (`HostResult =
+   { host, exit }`); `Combine` = `sum`/`collect`/`byHost`/`successes`/`failures`/`mergeStreams`/`mergeByHost`
+   (host-tagged). The fold sees every outcome → **dev-controlled** down-host policy.
+9. **Fold over leaf fields, add self yourself** — `peers` excludes fleet fields (compile-enforced), and
+   you write `pool.activeCount() + others`, so self-inclusion is explicit, never a silent miss.
+10. **Tools, not widgets, for custom resources** — the toolkit ships the primitives (`peers`, `Combine`);
+    the consumer builds the fold + any widget.
 
 ## How it works (mechanism)
-- **Serve:** each host's process runs the same `serverEntry(Database, impl)` — its own local instance.
-  Nothing host-specific is passed (no URL, no host list). Hosts **don't** connect to each other — no
-  mesh. So there's **no `serveAcrossHosts({host, url, impl}[])` helper** either.
-- **Combine (always local to the holder):** the holder (dashboard / aggregator / any service using the
-  tag) builds a **keyed map of clients** — one per-host client of THIS resource — from the tag's
-  `multiHost` set + each host's URL. `m.query((host) => host.connections, fold)` = `Effect.all` over
-  that map (each host answers its **plain** per-instance method, fully typed/schema'd), then fold the
-  per-host results **in-process**. Same in browser, node, CLI. Mode 1 (host set at the layer) and
-  mode 2 (host set on the tag) differ only in **where the host set comes from** — the combine itself is
-  identical and local.
-- **Readiness** stays per-host and local (each host's `/health`); any cross-host rollup is a
-  combine/holder concern, not `/health`.
+- **Serve:** each host runs `serverEntry(Database, impl)` + (where its logic reaches peers)
+  `peersLayer(Database, thatHost)`. Hosts connect to peers **only** via `peersLayer`.
+- **A combined field is served.** A client calls `totalConnections` on **any** host; that host's layer
+  gathers its peers (`peers` clients, over the wire) + its own value and returns the fleet total. So a
+  single-host client gets the fleet value — the host did the gather. (Proven: `multi-host-peers-http.test.ts`.)
+- **Readiness** stays per-host and local (`/health`); no cross-host hop there.
 
-## Open questions (resolve in the build slice)
-- **`multiStream` lifecycle** — the holder opens N live per-host subscriptions and merges/transforms
-  them; teardown + a host dropping/reconnecting. [slice 2]
-- **Same-host multiplicity** — the reserved instance-key mechanism (decision 5), if/when needed. [later]
-- **Scale (formerly "elected host", mode 4)** — *lower priority now*: with the derived/local model
-  there's **no mesh** (the holder opens N client connections, linear in hosts). If a holder ever
-  shouldn't fan out to every host, the fallback is **push-to-redis** (each host publishes its own
-  values; the holder reads the aggregate from the store). Deferred; not needed at league scale.
+## Deferred / open
+- **Coordinator** — a separate instance-manager (a program/process/resource), *not* an elected instance
+  (instances are peers). Doable later; out of scope here.
+- **Same-host multiplicity** — the reserved instance-key mechanism, if/when needed.
+- **Scale** — the mesh is N×(N−1) connections; fine at league scale. If a fleet grows, push-to-redis
+  (each host publishes its own values; a holder reads the aggregate) avoids the mesh. Deferred.
 
-(Resolved since v1: combine is local to the holder, no mesh / no host-side gather → decision 6;
-per-host outcome type → decision 9; contract shape → decision 8 piped form; host/URL/topology →
-decision 2 the `Host` carries its URL.)
+## Shipped surface
+- `@nikscripts/effect-pm/MultiHost`: `combineQuery`, `combineStream`, `Combine`, `HostResult`, `HostStream`.
+- `Resource`: `Host` (with `url`), `multiHost`, `fleet` / `FleetField`, `peers` / `peersLayer` / `peersFrom`,
+  `PeersId`, `AnyHost`, `MissingHostUrl`; `layer` gains the `Effect` form; `Method` is now `Pipeable`.
+- Tests: `multi-host.test.ts` (combine core), `multi-host-peers.test.ts` (local + the fleet/peers
+  compile-time guard), `multi-host-peers-http.test.ts` (served over http).
 
-## Build slices
-1. **Combine core — ✅ SHIPPED** (`src/MultiHost.ts`, `@nikscripts/effect-pm/MultiHost`). The isomorphic
-   primitive: `combineQuery`/`combineStream` gather a field across a caller-supplied keyed peer map,
-   capturing each host's outcome (`HostResult`), + the `Combine` strategies. Pure, browser + node, tested.
-2. **Contract pipeline + holder-side combine — ✅ SHIPPED** (slices 2a + 2b-1 + 2b-2, `src/Resource.ts`):
-   - `MultiField` member kind; `Spec`/`ServiceOf` extended (fleet fields surface as `Effect`/`Stream`);
-     wire/impl/rpc mappers + runtime iterators exclude them. `InstanceServiceOf<S>` = one host's service.
-   - `Resource.contract({...}).pipe(Resource.multi((m) => ({...})))` — `m.query`/`m.stream` with the
-     **full per-host client** selector, precise (data-last, flatMap-style), no casts. Each `MultiField`
-     carries a `materialize(peers)` closure (slice-1 combine).
-   - `Resource.combined(contract, peers)` — the holder-side **"combine anywhere"** tool: per-host client
-     map → fleet fields, gathered + folded locally. Browser/node/CLI. **Usable now.**
-3. **Tag auto-wiring + internal peers — ⏳ NEXT (2b-3).**
-   - Variadic `Resource.multiHost(...hosts)` + `Host` carrying its URL, so `client(tag)` auto-builds the
-     per-host client map and `svc.totalConnections` works straight off the tag (no explicit
-     `Resource.combined` call — the holder convenience). `Tag` accepts a `Contract`.
-   - **`Resource.peers(Database)`** (lowercase accessor) + **`Resource.peersLayer(Database)`** — the
-     internal peer capability (decision 13): `peersLayer` connects the `multiHost` set into a
-     `host → InstanceServiceOf` map; an impl/readiness does `const peers = yield* Resource.peers(...)`
-     then **reuses** `Resource.combined`/`combineQuery` on it. Only new surface for peer comms; combine
-     logic is the shipped contract fields. Opt-in mesh, scoped to where `peersLayer` is provided.
-   - Shared **peer-map builder** behind both (auto-build in `client` ↔ `peersLayer`). `multiStream`
-     live-subscription lifecycle. *Open design:* per-instance members on the combined tag-service (which
-     host?); auto-composing N per-host transports in one client layer.
-4. **Dashboard tools.** Expand a hostless leaf into per-host facets + the combined service; discovery
-   via `hostsOf` + `HostStatus`. (The dashboard can already use `Resource.combined` with its per-host bundles.)
-5. **Elected host / scale.** Deferred; push-to-redis if a holder shouldn't fan out (no mesh today).
-
-## Builds on (already shipped)
-- `Resource.serverEntry` (record + Effect forms) — the per-host serve primitive (beta.15).
-- Host-scoped key scheme (from `ApiMetrics`) — available if a key is ever needed.
-- Readiness — `withReadiness` / `readinessOf` / `allReady`, per-host `/health` + `HostStatus`.
-- Host discovery — `hostsOf` + `HostStatus.resources` (the dashboard already streams these).
-
-## Divergence from the exploration (`multi-host-instances.md`)
-The exploration leaned toward **unifying** the instance family into one host-aware keyed primitive
-(its "direction D"). We **diverged**: keep the axes **separate** — host-relative tags + server-side
-`multiQuery`/`multiStream` gather for *cross-host*; reserve the keyed-instance mechanism for *same-host*
-multiplicity. Cleaner (each mechanism does one thing), and it adds the typed `contract().multi()`
-helper + combined-fields-on-the-service, which the exploration didn't have.
+## Gutted (do not resurrect from old drafts)
+The multi-host **contract field kind** — `Resource.contract(...).pipe(Resource.multi((m) => ({...})))`,
+`m.query`/`m.stream`, `MultiField`, `ServiceMultiField`, `InstanceServiceOf`, `MultiServiceOf`,
+`Resource.combined` — was removed. Combined fields are plain `fleet`-tagged queries folded in the layer via
+`peers`. Slice 1's `/MultiHost` `Combine` primitives are the surviving, reused piece.
