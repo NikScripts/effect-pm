@@ -76,17 +76,38 @@ yield* proc.logHistory({ limit: 100 }) // past captured lines
 
 ## Runtime-wide (HostLogs)
 
-`HostLogs` captures **every** log in the runtime (including untagged effects and all processes).
-Add `HostLogs.persistLayer` to persist them, then read `HostLogs.history`:
+`HostLogs` captures **every** log in the runtime (including untagged effects and all processes) — live
+via `HostLogs.stream`, and **durably** via `HostLogs.persistLayer(host)`, queryable **by host** or **by
+resource**.
 
 ```ts
-const layer = HostLogs.persistLayer.pipe(
-  Layer.provideMerge(Layer.mergeAll(HostLogs.layer, HistoryStore.layerMemory())),
+const HostLive = myHost.pipe(
+  Effect.provide(HostLogs.layer),                    // live capture + relay (the `stream`)
+  // provideMerge, not provide: persistLayer installs a logger and provides no service, so a bare
+  // provide would be pruned as unused.
+  Layer.provideMerge(HostLogs.persistLayer("wnba")), // durable, bucketed by this host
+  Effect.provide(ProcessStorage.layer),              // backs LogStore (swap for sqlite/redis)
 );
-// anywhere under it:
-yield* HostLogs.stream                  // live, all runtime logs
-yield* HostLogs.history({ limit: 200 }) // durable, all runtime logs
 ```
+
+`persistLayer(host)` installs a batched capture logger: it builds a structured entry, stamps it with
+the `host` annotation while preserving each line's `processId` / `queueId`, and writes batches (Effect
+`Stream.groupedWithin`) into `LogStore` — backed by `RuntimeStorage` (memory / sqlite / redis via
+`ProcessStorage`). Because the logger is installed at layer-build, it captures every line from the start
+(no relay-subscription race).
+
+Then read the stored logs two ways — both return `[]` (not an error) when nothing matches, newest
+first:
+
+```ts
+yield* HostLogs.stream                                     // live, all runtime logs
+yield* HostLogs.byHost("wnba", { limit: 200 })             // durable — everything this host logged
+yield* HostLogs.byResource({ queueId: "wnba/BoxScoreQueue" }) // durable — one resource, across hosts
+```
+
+`byHost` filters the host bucket; `byResource` filters the `processId` / `queueId` annotation (so it
+spans hosts). Both take `{ limit?, sort?, from?, to? }`. A host's served `HostStatus.logHistory`
+(what the dashboard reads) is backed by the same store.
 
 ## Durability (the durable queue)
 
@@ -145,8 +166,8 @@ yield* queue.metrics.pipe(Stream.runForEach(chart), Effect.forkScoped);
 ```
 
 `logHistory` / `metricsHistory` are plain `query` verbs and cross RPC like `statusNow`; `logs` /
-`metrics` / `status` are streams over the same transport. Runtime-wide logs use `HostLogs.history`
-+ `HostLogs.stream` the same way.
+`metrics` / `status` are streams over the same transport. Runtime-wide logs use `HostLogs.byHost` /
+`HostLogs.byResource` + `HostLogs.stream` the same way.
 
 ## What exists / what's coming
 
@@ -154,7 +175,7 @@ yield* queue.metrics.pipe(Stream.runForEach(chart), Effect.forkScoped);
 |---|---|---|---|
 | Queue | `logs`, `metrics` | `logHistory`, `metricsHistory` | **done** (needs `captureLogs` for logs) |
 | Process | `logs` | `logHistory` | **done** (needs `captureLogs`) |
-| Runtime-wide (`HostLogs`) | `HostLogs.stream` | `HostLogs.history` | **done** — captures *all* runtime logs (incl. untagged + processes); add `HostLogs.persistLayer` |
+| Runtime-wide (`HostLogs`) | `HostLogs.stream` | `HostLogs.byHost` / `HostLogs.byResource` | **done** — captures *all* runtime logs (incl. untagged + processes); add `HostLogs.persistLayer(host)` for durable, host/resource-queryable storage |
 
 Backends: `layerMemory` (in-process) and `SQLiteHistoryStore.layer` (durable) ship today; Postgres
 later (same `HistoryStore` interface).

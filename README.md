@@ -100,9 +100,10 @@ Two planes, both opt-in, same `yield* Tag` surface, in-memory or SQLite:
 
 - **Durability** — `DurableQueueStore` (priority-native, at-least-once + dedup). Enable with
   `persist` on the queue; a restart recovers in-flight work.
-- **Observability history** — `HistoryStore` backs `logHistory` / `metricsHistory` and
-  `HostLogs.history` (runtime-wide). `SQLiteHistoryStore.layer` / `SQLiteDurableQueueStore.layer`
-  from `@nikscripts/effect-pm/storage/sqlite` make both durable across restarts.
+- **Observability history** — `HistoryStore` backs `logHistory` / `metricsHistory`; runtime-wide logs
+  are durably stored by `HostLogs.persistLayer(host)` (into `LogStore`) and read back with
+  `HostLogs.byHost` / `HostLogs.byResource`. `SQLiteHistoryStore.layer` / `SQLiteDurableQueueStore.layer`
+  from `@nikscripts/effect-pm/storage/sqlite` make these durable across restarts.
 
 Process / run analytics use `ProcessStore` / `ProcessStorage` over `RuntimeStorage`
 (`@nikscripts/effect-pm/storage/{sqlite,redis}`).
