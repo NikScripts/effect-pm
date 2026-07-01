@@ -98,10 +98,21 @@ their vocabulary. The package contributes only `serve` / `httpServer`.
    just populated by registration instead of an entries array. Simplest impl: a `Ref` keyed by
    `groupId`; **reject duplicate `groupId`s** with a clear error at build.
 2. **One shared `RpcServer` over the registered groups.** Groups are prefix-namespaced by `groupId`, so
-   many resources share one `/rpc` with no collision. **The crux to prove:** that N independent
-   `group.toLayer(handlers)` layers (each with its own `Layer.provide`d requirement) can feed a single
-   `RpcServer` built over the merged group — i.e. we can stop merging impls into one table without
-   losing the single server. Prototype this first; the whole design rests on it.
+   many resources share one `/rpc` with no collision. **✅ PROVEN** (`test/_proto-serverR.test.ts` on
+   branch `cursor/beta-18-dependency-serve`): two `group.toLayer(handlers)` layers, each with a
+   *different* value of the **same** `Dep` tag `Layer.provide`d (A←1, B←2), feed one `RpcServer` over
+   `groupA.merge(groupB)`; over http a client reads `A.read → 1` and `B.read → 2` — **isolated, not
+   collapsed**. So we can stop merging impls into one table without losing the single server; the design's
+   load-bearing assumption holds.
+
+   **Key finding from the prototype:** today's `serverLayer` **erases** the handlers' `R`
+   (`as Layer<HandlerContextOf<S>>`, `Resource.ts` ~1375). That erasure is *why* all handlers currently
+   share one ambient provide — and it must be *removed* for per-resource `Layer.provide` to isolate
+   (otherwise `Layer.provide(dep)` looks unused and gets pruned). The production `Resource.serve` must
+   **preserve** `R` in its type: `Layer<HandlerContextOf<S>, never, R>` where `R` is the handlers'
+   requirements. The prototype `serverR` proves the runtime but fakes the types (loose casts); pinning
+   that `R` precisely — inferred from an impl whose methods may carry `R` — is the main **type** work
+   left (the runtime is settled).
 3. **`serveAllHttp` becomes sugar** for the common single-dependency case:
    `serveAllHttp([{ tag, impl }])` ≡ `httpServer().pipe(Layer.provide(mergeAll(entries.map(e => serve(e.tag, e.impl)))))`,
    with any shared dependency provided once at the root. Keep it — most hosts are homogeneous.

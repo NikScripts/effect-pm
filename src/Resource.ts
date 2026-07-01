@@ -1376,6 +1376,34 @@ const serverLayer = <S extends Spec>(
 };
 
 /**
+ * PROTOTYPE (beta.18 crux — `per-resource-dependency-serve-design.md`): like {@link serverLayer} but
+ * **preserves** the handlers' requirement `R` (caller-declared) instead of erasing it to `never`, so a
+ * resource's dependency can be `Layer.provide`d **per resource** (isolated) rather than shared from one
+ * ambient provide. Throwaway — validates that N such layers can feed one `RpcServer` without collapsing.
+ *
+ * @internal
+ */
+export const serverR = <R = unknown>(
+  tag: {
+    readonly groupId: string;
+    readonly [specSym]: Spec;
+    readonly [groupSym]: RpcGroup.RpcGroup<any>;
+  },
+  impl: Record<string, unknown>,
+): Layer.Layer<unknown, never, R> => {
+  const group = tag[groupSym];
+  const handlers: Record<string, (payload: unknown) => unknown> = {};
+  for (const [key, member] of Object.entries(impl)) {
+    handlers[wireTag(tag.groupId, key)] = (payload) =>
+      invokeWireMethod(member as AnyMethod, tag[specSym][key] as AnyMethod, payload);
+  }
+  // preserve R (declared by the caller) through the same dynamic boundary serverLayer erases it at.
+  return group.toLayer(
+    handlers as unknown as Parameters<(typeof group)["toLayer"]>[0],
+  ) as unknown as Layer.Layer<unknown, never, R>;
+};
+
+/**
  * Expose a resource over **http** in one call — the server mirror of {@link connectHttp}, and
  * the batteries-included form of {@link serverLayer}. Mounts the contract group on an http
  * `RpcServer` at `path` (default `/rpc`) with the impl's handlers and the serialization codec
