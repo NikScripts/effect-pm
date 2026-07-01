@@ -14,8 +14,9 @@ Resource.peersLayer(FleetDatabase, NwslHost, {
 })
 ```
 
-Any requirement of the resolver (e.g. a `ConfigProvider`) flows to the layer. A host with no url from
-either source is **skipped** — a partial mesh, never a throw. Fully back-compatible: omit `options` and
-`peersLayer` reads `Host.url` exactly as before.
+The resolver's **error and requirements flow to the layer** (typed): a `Config`-backed resolver
+surfaces a `ConfigError` as a typed layer-build failure (fail-fast on a misconfigured url), or use
+`Config.option` to skip a missing one. A host that resolves to no url is **skipped** — a partial mesh,
+never a throw. Fully back-compatible: omit `options` and `peersLayer` reads `Host.url` exactly as before.
 
 Addresses wow-sports finding #2 (config/runtime peer urls for `peersLayer`).

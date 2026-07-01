@@ -1986,25 +1986,27 @@ export const selfHostLayer = <Self, S extends Spec>(
  * **Peer urls:** each {@link Host}'s own `url` is the default (the standard practice — the host carries
  * how to reach it). Pass `options.url` to **override** per host — an env-specific port, a tunnel, or a
  * value from Effect `Config` — falling back to `Host.url` when the resolver returns `undefined`. A host
- * with no url from either source is **skipped** (never a throw), so a partial mesh degrades cleanly. Any
- * requirement of the resolver (e.g. a `ConfigProvider`) flows to the layer.
+ * with no url from either source is **skipped** (never a throw), so a partial mesh degrades cleanly. The
+ * resolver's error and requirements flow to the layer (typed): a `Config`-backed resolver surfaces a
+ * `ConfigError` as a typed layer-build failure — fail-fast on a misconfigured url — or return `undefined`
+ * (e.g. via `Config.option`) to skip that peer instead.
  *
  * @public
  */
-export const peersLayer = <Self, S extends Spec, RIn = never>(
+export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
   tag: ResourceTag<Self, S>,
   self: AnyHost,
   options?: {
-    readonly url?: (host: AnyHost) => Effect.Effect<string | undefined, never, RIn>;
+    readonly url?: (host: AnyHost) => Effect.Effect<string | undefined, EIn, RIn>;
   },
-): Layer.Layer<PeersId<Self> | SelfHostId<Self>, never, RIn> =>
+): Layer.Layer<PeersId<Self> | SelfHostId<Self>, EIn, RIn> =>
   Layer.merge(
     Layer.effect(
       tag[peersSym],
       Effect.gen(function* () {
         const others = (tag[multiHostSym] ?? []).filter((host) => host.key !== self.key);
         // the host's own url is the default; an optional resolver overrides it, falling back to the url.
-        const resolveUrl = (host: AnyHost): Effect.Effect<string | undefined, never, RIn> =>
+        const resolveUrl = (host: AnyHost): Effect.Effect<string | undefined, EIn, RIn> =>
           options?.url === undefined
             ? Effect.succeed(host.url)
             : Effect.map(options.url(host), (override) => override ?? host.url);
