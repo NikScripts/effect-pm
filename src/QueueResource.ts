@@ -794,15 +794,14 @@ export interface QueueResourceMetadata<
   readonly tag: Context.Service<Id, QueueHandle<T, E, EEnqueue, R>>;
   /**
    * Serializable item codec metadata when {@link QueueResourceConfig.itemSchema}
-   * was provided on {@link QueueResource.Service}. Used by typed {@link ProcessGroup}
+   * was provided on {@link QueueResource.Service}. Used by typed the process manager
    * contracts for remote discovery and drift checks.
    */
   readonly item?: QueueItemCodecDescriptor;
 }
 
 /**
- * Canonical queue declaration that can be registered with a typed
- * ProcessGroup.
+ * Canonical queue declaration.
  *
  * @public
  */
@@ -1169,11 +1168,6 @@ export class QueueShutdownError extends Data.TaggedError(
 )<{
   readonly queue: string;
 }> {}
-
-// ============================================================================
-// Backwards-compat type alias for ProcessGroup
-// ============================================================================
-
 
 // ============================================================================
 // Internal Utilities
@@ -4100,7 +4094,7 @@ export const QueueResource = {
    * a `.layer` property for providing the queue to your program.
    *
    * When `itemSchema` is set, the declaration also exposes {@link QueueResourceDefinition.item}
-   * for typed {@link ProcessGroup} contracts.
+   * for typed the process manager contracts.
    *
    * @example
    * ```ts

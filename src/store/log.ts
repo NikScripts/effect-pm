@@ -7,7 +7,7 @@
  * apps. The `groupId` parameter is an opaque log-bucket partition key
  * supplied by the relay (today it carries the PM log-bucket
  * annotation from {@link LogContext}). It is **not** tied to a
- * {@link ProcessGroup.Service} id — the facet persists and queries
+ * the resource service id — the facet persists and queries
  * {@link LogEntry} rows regardless of how they were
  * scoped.
  *

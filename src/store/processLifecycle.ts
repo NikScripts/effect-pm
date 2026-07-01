@@ -6,7 +6,7 @@
  * Process-scoped analytics for {@link Process.spawn}, supervisors, and
  * any writer that records lifecycle without a group. For group control
  * paths (`start` / `stop` / `restart` with a `groupId`), use
- * {@link ProcessGroupStore} instead — it stamps
+ * {@link ProcessStore} instead — it stamps
  * `attributes.groupId` and exposes group-scoped queries.
  *
  * ## At-a-glance
@@ -127,7 +127,7 @@ let processLifecycleSeq = 0;
 /**
  * Build a `process.lifecycle.changed` runtime record.
  *
- * @internal Shared with {@link ProcessGroupStore} member writes.
+ * @internal Shared with {@link ProcessStore} member writes.
  */
 export const makeProcessLifecycleRecord = (
   input: ProcessLifecycleRecordInput & { readonly groupId?: string },
@@ -152,7 +152,7 @@ export const makeProcessLifecycleRecord = (
 /**
  * Decode a `process.lifecycle.changed` runtime record back into a typed event.
  *
- * @internal Shared with {@link ProcessGroupStore} member reads.
+ * @internal Shared with {@link ProcessStore} member reads.
  */
 export const recordToLifecycleEvent = (
   record: RuntimeRecord,

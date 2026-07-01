@@ -70,7 +70,7 @@
  * planned future feature (`RunResourceStore.live(resourceId)`)
  * will replace this pattern with a proper `Stream` subscription.
  *
- * **Durable run history (compose at app / `ProcessGroup.localEnvLayer`):**
+ * **Durable run history (compose at app / `layerProcessStore`):**
  *
  * ```ts
  * import { ProcessStore } from "@nikscripts/effect-pm"

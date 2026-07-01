@@ -15,7 +15,7 @@
  *
  * ## Optional execution analytics
  *
- * When a store layer is composed at the app or {@link ProcessGroup.localEnvLayer}
+ * When a store layer is composed at the app or `layerProcessStore`
  * boundary, finished runs emit `process.execution.completed` rows. Without a store,
  * supervisor behavior is unchanged — writes are silent no-ops. Target integration is
  * {@link ProcessExecutionStore} when composed at app or group boundaries.
@@ -78,7 +78,7 @@ export interface ProcessSnapshot {
 }
 
 /**
- * Managed process handle for {@link ProcessGroup}.
+ * Managed process handle for the process manager.
  *
  * @typeParam R — Environment required to run {@link Process.effect} (after optional inline layers).
  *
@@ -90,7 +90,7 @@ export interface Process<out R> {
   /**
    * Long-running trigger driver that spawns run instances.
    * Optional `ProcessExecutionStore` facet — execution rows are recorded when
-   * present, silently skipped when absent (compose at app / {@link ProcessGroup.localEnvLayer}).
+   * present, silently skipped when absent (compose at app / `layerProcessStore`).
    */
   readonly effect: Effect.Effect<void, never, R>;
   /**
@@ -108,7 +108,7 @@ export interface Process<out R> {
 
 /**
  * Canonical process declaration that can be registered with a typed
- * {@link ProcessGroup}.
+ * the process manager.
  *
  * @remarks
  * The declaration carries the process handle under {@link process} rather than
@@ -130,7 +130,7 @@ export interface ProcessDefinition<out Id extends string, out R>
  *
  * @remarks
  * This mirrors Effect's class-based `Context.Service` style while attaching the
- * metadata `ProcessGroup` needs for typed registration and contract generation.
+ * metadata the process manager needs for typed registration and contract generation.
  *
  * @public
  */
@@ -159,7 +159,7 @@ export interface ProcessServiceDefinition<Self, Id extends string, E, R>
   ) => Layer.Layer<never>;
   /**
    * {@link Process} built from {@link defaultSpec} after folding configure patches.
-   * {@link ProcessGroup} uses this when assembling the group runtime.
+   * the process manager uses this when assembling the group runtime.
    */
   readonly buildConfiguredProcess: Effect.Effect<Process<R>>;
 }

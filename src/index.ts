@@ -412,10 +412,6 @@ export type {
   RunResourceStateHistoryQuery,
 } from "./store/runResource";
 
-// Types - ProcessGroup
-
-// Error classes - ProcessGroup
-
 // Types - Process
 export type {
   Process as ProcessInterface,
