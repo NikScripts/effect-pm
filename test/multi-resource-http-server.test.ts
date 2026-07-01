@@ -21,10 +21,8 @@ const impl = { read: Effect.map(Dep, (value) => value) };
 const layerA = Resource.serve(A, impl).pipe(Layer.provide(Layer.succeed(Dep, 1)));
 const layerB = Resource.serve(B, impl).pipe(Layer.provide(Layer.succeed(Dep, 2)));
 
-const Host = Resource.httpServer({ health: { path: "/health" } }).pipe(
-  // provideMerge — the serve layers must be kept (they register + supply the handlers), not pruned
-  Layer.provideMerge(Layer.mergeAll(layerA, layerB)),
-  Layer.provide(Resource.servedResourcesLayer),
+// the serves form — httpServer([...]) bundles the provideMerge + registry
+const Host = Resource.httpServer([layerA, layerB], { health: { path: "/health" } }).pipe(
   Layer.provideMerge(NodeHttpServer.layerTest),
 );
 

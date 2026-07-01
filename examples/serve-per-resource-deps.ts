@@ -35,16 +35,14 @@ class Import extends Resource.Tag<Import>()("example/Import", {
 // same impl body for both — it just reports which ImportHandlers it was given
 const impl = { handler: Effect.map(ImportHandlers, (handlers) => handlers.label) };
 
-const Host = Resource.httpServer({ health: { path: "/health" } }).pipe(
-  Layer.provideMerge(
-    Layer.mergeAll(
-      Resource.serve(Matches, impl).pipe(Layer.provide(plainHandlers)), // plain
-      Resource.serve(Import, impl).pipe(Layer.provide(hookedHandlers)), // hooked — isolated
-    ),
-  ),
-  Layer.provide(Resource.servedResourcesLayer),
-  Layer.provide(NodeHttpServer.layer(() => createServer(), { port: PORT })),
-);
+// httpServer([...serve layers], options) — bundles the provideMerge + registry
+const Host = Resource.httpServer(
+  [
+    Resource.serve(Matches, impl).pipe(Layer.provide(plainHandlers)), // plain
+    Resource.serve(Import, impl).pipe(Layer.provide(hookedHandlers)), // hooked — isolated
+  ],
+  { health: { path: "/health" } },
+).pipe(Layer.provide(NodeHttpServer.layer(() => createServer(), { port: PORT })));
 
 const base = `http://127.0.0.1:${PORT}`;
 const clientTransport = RpcClient.layerProtocolHttp({ url: `${base}/rpc` }).pipe(

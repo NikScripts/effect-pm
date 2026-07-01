@@ -52,22 +52,25 @@ import { createServer } from "node:http";
 // each tick body DECLARES its dependency — no Effect.provide in the body
 // { effect: Effect.gen(function* () { const handlers = yield* ImportHandlers; … }), polling, … }
 
-const Host = Resource.httpServer({ health: { path: "/health" } }).pipe(
-  Layer.provideMerge(
-    Layer.mergeAll(
-      // processes that share the plain handler → state it once with `provide`
-      Resource.provide(plainImportHandlers, [
-        ScheduledProcess.serve(SeasonMatches,   seasonMatchesCfg),
-        ScheduledProcess.serve(LiveScorePoller, pollerCfg),
-      ]),
-      // a process that needs the hooked handler → its own Layer.provide, isolated
-      ScheduledProcess.serve(SeasonImport, importCfg).pipe(Layer.provide(hookedImportHandlers)),
-    ),
-  ),
-  Layer.provide(Resource.servedResourcesLayer),  // shared registry
-  Layer.provide(NodeHttpServer.layer(() => createServer(), { port: 3001 })),
-);
+// httpServer([...serve layers], options) bundles the provideMerge + registry — list resources, provide
+// only the platform (and any shared dependency).
+const Host = Resource.httpServer(
+  [
+    // processes that share the plain handler → state it once with `provide`
+    Resource.provide(plainImportHandlers, [
+      ScheduledProcess.serve(SeasonMatches,   seasonMatchesCfg),
+      ScheduledProcess.serve(LiveScorePoller, pollerCfg),
+    ]),
+    // a process that needs the hooked handler → its own Layer.provide, isolated
+    ScheduledProcess.serve(SeasonImport, importCfg).pipe(Layer.provide(hookedImportHandlers)),
+  ],
+  { health: { path: "/health" } },
+).pipe(Layer.provide(NodeHttpServer.layer(() => createServer(), { port: 3001 })));
 ```
+
+> The low-level form `httpServer(options)` still exists — then you `Layer.provideMerge` the `serve` layers
+> (kept, not pruned) + `Resource.servedResourcesLayer` yourself. The `serves` form removes that boilerplate
+> and the `provideMerge`-vs-`provide` footgun.
 
 `SeasonImport` gets the hooked handler; `SeasonMatches` and `LiveScorePoller` get the plain one — on one
 `/rpc`, with `/health` listing all three. A client reaches each with `Resource.client(Tag)` as usual.

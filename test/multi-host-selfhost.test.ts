@@ -53,6 +53,29 @@ it("selfHost keys the own row consistently with peer keys in a byHost fold", () 
     ),
   ));
 
+it("Resource.fleetHealth cans the byHost fold + adds self", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const byHost = yield* Resource.fleetHealth(
+        FleetDatabase,
+        (peer) => peer.status,
+        Effect.succeed(true), // this host's own value
+      );
+      expect(byHost).toEqual({
+        "selfhost/NwslHost": true, // self
+        "selfhost/EbwslHost": false, // peer
+        "selfhost/WnbaHost": true, // peer
+      });
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          Resource.peersFrom(FleetDatabase, fakePeers),
+          Resource.selfHostLayer(FleetDatabase, NwslHost),
+        ),
+      ),
+    ),
+  ));
+
 it("peersLayer bundles selfHost — one capability, both provided", () =>
   Effect.runPromise(
     Effect.gen(function* () {

@@ -65,6 +65,7 @@ import {
   RpcSerialization,
   RpcServer,
 } from "effect/unstable/rpc";
+import { Combine, combineQuery } from "./MultiHost";
 
 // ── typed errors (Data.TaggedError — never raw `Error`) ──
 
@@ -1544,27 +1545,35 @@ export const serve = <S extends Spec, Impl extends ServeImplOf<S, any>>(
  * `Layer.provide`d dependency, resources needing different implementations of the same tag stay isolated
  * — no shared union-provide:
  *
+ * Pass the `serve` layers directly (recommended) — it bundles the `provideMerge` + registry, so you list
+ * resources and provide only the platform (and any shared dependency):
+ *
  * ```ts
- * const Host = Resource.httpServer({ health: { path: "/health" } }).pipe(
- *   Layer.provideMerge(Layer.mergeAll(          // provideMerge — the serve layers must be KEPT, not pruned
- *     Resource.serve(A, implA).pipe(Layer.provide(depA)),
- *     Resource.serve(B, implB).pipe(Layer.provide(depB)),
- *   )),
- *   Layer.provide(Resource.servedResourcesLayer), // shared registry: serve registers, httpServer reads
+ * const Host = Resource.httpServer([
+ *   Resource.serve(A, implA).pipe(Layer.provide(depA)),
+ *   Resource.serve(B, implB).pipe(Layer.provide(depB)),
+ * ], { health: { path: "/health" } }).pipe(
  *   Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
  * );
  * ```
  *
- * The handlers ride the context the `serve` layers provide; if one is missing the `RpcServer` fails at
- * **build** (a clear boot error), never a silent runtime gap.
+ * Or the low-level form — `httpServer(options)` requires you to `Layer.provideMerge` the `serve` layers
+ * (kept, not pruned) + `Resource.servedResourcesLayer` yourself. Either way the handlers ride the context
+ * the `serve` layers provide; if one is missing the `RpcServer` fails at **build** (a clear boot error),
+ * never a silent runtime gap.
  *
  * @public
  */
-export const httpServer = (options?: {
+/** Options for {@link httpServer}. @public */
+export interface HttpServerOptions {
   readonly path?: HttpRouter.PathInput;
   readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   readonly health?: { readonly path?: HttpRouter.PathInput };
-}): Layer.Layer<never, never, ServedResources | HttpServer.HttpServer> =>
+}
+
+const httpServerBase = (
+  options?: HttpServerOptions,
+): Layer.Layer<never, never, ServedResources | HttpServer.HttpServer> =>
   Layer.unwrap(
     Effect.gen(function* () {
       const registry = yield* ServedResources;
@@ -1615,6 +1624,41 @@ export const httpServer = (options?: {
       );
     }),
   ) as unknown as Layer.Layer<never, never, ServedResources | HttpServer.HttpServer>;
+
+export function httpServer(
+  options?: HttpServerOptions,
+): Layer.Layer<never, never, ServedResources | HttpServer.HttpServer>;
+export function httpServer<R>(
+  serves: readonly [
+    Layer.Layer<any, never, R>,
+    ...ReadonlyArray<Layer.Layer<any, never, R>>,
+  ],
+  options?: HttpServerOptions,
+): Layer.Layer<never, never, R | HttpServer.HttpServer>;
+export function httpServer(
+  servesOrOptions?:
+    | ReadonlyArray<Layer.Layer<any, never, any>>
+    | HttpServerOptions,
+  maybeOptions?: HttpServerOptions,
+): Layer.Layer<never, never, unknown> {
+  // the serves form bundles the boilerplate: provideMerge the serve layers (kept, not pruned) + the
+  // shared registry, so the caller lists resources and provides only the platform (+ any shared dep).
+  if (Array.isArray(servesOrOptions)) {
+    const serves = servesOrOptions as ReadonlyArray<Layer.Layer<any, never, unknown>>;
+    // the overload guarantees non-empty; merge into one layer without the tuple constraint of mergeAll.
+    const merged = serves
+      .slice(1)
+      .reduce<Layer.Layer<unknown, never, unknown>>(
+        (acc, layer) => Layer.merge(acc, layer),
+        serves[0]!,
+      );
+    return httpServerBase(maybeOptions).pipe(
+      Layer.provideMerge(merged),
+      Layer.provide(servedResourcesLayer),
+    ) as unknown as Layer.Layer<never, never, unknown>;
+  }
+  return httpServerBase(servesOrOptions as HttpServerOptions | undefined);
+}
 
 /**
  * Provide one dependency `Layer` to several {@link serve} layers at once — sugar for
@@ -2306,6 +2350,39 @@ export const peersFrom = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   peers: Record<string, PeerServiceOf<S>>,
 ): Layer.Layer<PeersId<Self>> => Layer.succeed(tag[peersSym], peers);
+
+/**
+ * A **fleet-health fold** — `pick` a leaf value from every peer, key it **by host** (`Combine.byHost`),
+ * and add **this** host's own value keyed by {@link selfHost}. The canned form of the recurring
+ * droplet-health-table pattern, on the {@link peers} + {@link selfHost} + `/MultiHost` primitives:
+ *
+ * ```ts
+ * // in a resource's layer — a `fleet` field returning one row per host
+ * fleetStatus: Resource.fleetHealth(FleetDatabase, (peer) => peer.status, ownStatus)
+ * ```
+ *
+ * A down peer is skipped (its `pick` failure is captured, never thrown) — a partial table, not an error.
+ * Requires the {@link peersLayer} capability (which bundles {@link selfHost}). The only error / requirement
+ * is `own`'s.
+ *
+ * @public
+ */
+export const fleetHealth = <Self, S extends Spec, A, EPick, EOwn, ROwn>(
+  tag: ResourceTag<Self, S>,
+  pick: (peer: PeerServiceOf<S>) => Effect.Effect<A, EPick>,
+  own: Effect.Effect<A, EOwn, ROwn>,
+): Effect.Effect<
+  Record<string, A>,
+  EOwn,
+  ROwn | PeersId<Self> | SelfHostId<Self>
+> =>
+  Effect.gen(function* () {
+    const self = yield* selfHost(tag);
+    const peerClients = yield* peers(tag);
+    const byHost = yield* combineQuery(peerClients, pick, Combine.byHost);
+    const ownValue = yield* own;
+    return { ...byHost, [self]: ownValue };
+  });
 
 /**
  * Build the client-side service for a tag from a wired RPC client: forward every wire method
