@@ -94,6 +94,8 @@
     "hostless-client-host-arg",
     "peer-url-resolver",
     "self-host-accessor",
-    "per-resource-serve"
+    "per-resource-serve",
+    "engine-serve",
+    "serve-ergonomics"
   ]
 }

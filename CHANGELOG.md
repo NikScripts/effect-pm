@@ -1,5 +1,26 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.19
+
+### Minor Changes
+
+- f423286: **Engine-aware `serve` — `QueueResource.serve` / `ScheduledProcess.serve`.** The beta.18
+  `Resource.serve` is query-only (mounts RPC handlers, runs no engine), so it can't serve queue/process
+  resources with isolated per-resource dependencies. These new forms are the engine-running counterparts:
+  they run the worker / refill / `persist` (queues) or tick schedule (processes) engine, mount the RPC
+  handlers, register into `Resource.servedResourcesLayer`, **and preserve the worker/tick requirement `R`**
+  so a per-resource `Layer.provide` isolates it — composed under `Resource.httpServer` exactly like
+  `Resource.serve`. Same shape as the existing `serveHttp`. `serveAllHttp` + `serverEntry` stay the
+  shared-dependency tool.
+
+- ac258d3: **Two ergonomic helpers.** `Resource.httpServer(serves, options?)` — pass the `serve` layers as
+  the first argument and it bundles the `provideMerge` + `servedResourcesLayer` boilerplate (and removes
+  the `provideMerge`-vs-`provide` footgun); the low-level `httpServer(options)` form is unchanged.
+  `Resource.fleetHealth(tag, pick, own)` — the canned droplet-health fold: `pick` a leaf from every peer,
+  key it **by host** (`Combine.byHost`), and add this host's `own` value keyed by `selfHost` — the
+  recurring `combineQuery(peers, pick, Combine.byHost)` + `selfHost` pattern in one call. A down peer is
+  skipped (captured, never thrown).
+
 ## 0.8.0-beta.18
 
 ### Minor Changes
