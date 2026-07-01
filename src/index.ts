@@ -316,9 +316,8 @@ export type {
 } from "./DurableQueueStore";
 export * as Group from "./Group";
 export {
-  ProcessGroupLogContext,
   LogAnnotationKeys,
-  layerProcessGroupLogContext,
+  withHostLogAnnotations,
   withProcessLogAnnotations,
   withQueueLogAnnotations,
   LogContext,

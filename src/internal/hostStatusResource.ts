@@ -24,7 +24,8 @@ import * as Resource from "../Resource";
 import type { ServeEntry } from "../Resource";
 import { LogRelay } from "../Logs";
 import { LogEntrySchema } from "../LogEntry";
-import { history as hostLogsHistory } from "../HostLogs";
+import type { LogEntry } from "../LogEntry";
+import { LogStore } from "../store/log";
 
 /** The reserved group id (wire prefix) for the host status resource. */
 const HOST_STATUS_KEY = "@pm/host-status";
@@ -126,8 +127,20 @@ export const buildHostStatusImpl = (options: {
         return Stream.concat(Stream.fromIterable(tail), relay.value.stream);
       }),
     ),
+    // this host's durable logs (its own LogStore holds only its lines). Optional — `[]` when no
+    // LogStore is composed. Newest first.
     logHistory: (payload: { readonly limit: number }) =>
-      hostLogsHistory({ limit: payload.limit }),
+      Effect.serviceOption(LogStore).pipe(
+        Effect.flatMap(
+          Option.match({
+            onNone: () => Effect.succeed<ReadonlyArray<LogEntry>>([]),
+            onSome: (store) =>
+              store
+                .load({ limit: payload.limit, sort: "desc" })
+                .pipe(Effect.catch(() => Effect.succeed<ReadonlyArray<LogEntry>>([]))),
+          }),
+        ),
+      ),
   };
 };
 

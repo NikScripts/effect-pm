@@ -1,60 +1,55 @@
 /**
- * **Host logs** — capture and stream **every** log emitted in a runtime, including
- * resources that aren't tagged and bare `Effect.log*` calls.
+ * **Host logs** — capture, stream, and **durably store** every log emitted in a runtime, queryable
+ * **by host** or **by resource**.
  *
  * @remarks
- * This is the runtime-wide complement to the per-resource `logs` stream on
- * `QueueResource` / the toolkit `Resource`: rather than scoping capture to one
- * resource's worker fibers, `HostLogs.layer` installs a **merged** capture logger
- * over the whole runtime and fans every structured {@link HostLogEntry} into a
- * sliding relay you can `stream`.
+ * `HostLogs.layer` installs a runtime-wide capture logger + an in-memory sliding relay ({@link stream}
+ * / {@link snapshot} for live watch), the runtime-wide complement to a resource's own `logs` stream.
  *
- * - **Merged** (`mergeWithExisting: true`): your existing console / app loggers
- *   keep running — Host logs *adds* capture, it doesn't replace your logging.
- * - **Runtime-wide:** any `Effect.log*` anywhere under the provided layer is
- *   captured, with its level, message, cause, annotations and spans intact (one
- *   {@link HostLogEntry} schema, shared with the per-resource capture).
- * - **Late subscribers** get the relay's recent tail (via {@link snapshot}) before
- *   live lines — the same log-tail UX as the queue's `logs`.
+ * `HostLogs.persistLayer(host)` adds **durable** storage: it forks a batched writer that appends every
+ * captured line to {@link LogStore}, **bucketed by `host`**, with each line's resource annotations
+ * (`processId` / `queueId`) preserved. So stored logs are queryable two ways:
+ *
+ * - {@link byHost} — every line a host emitted (across all its resources);
+ * - {@link byResource} — every line a specific queue/process emitted (across hosts).
+ *
+ * Storage is whatever `ProcessStorage.layer` composes ({@link LogStore} rides `RuntimeStorage` —
+ * memory / sqlite / redis). It's opt-in: without `persistLayer`, logs are the in-memory tail only.
  *
  * ```ts
- * const program = myApp.pipe(Effect.provide(HostLogs.layer));
- * // elsewhere, with HostLogs.layer in context:
- * yield* HostLogs.stream.pipe(Stream.runForEach((line) => render(line)), Effect.forkScoped);
+ * const HostLive = myHost.pipe(
+ *   Effect.provide(HostLogs.layer),
+ *   Effect.provide(HostLogs.persistLayer("wnba")), // requires LogStore (ProcessStorage.layer)
+ * );
+ * // later, anywhere with LogStore in context:
+ * const hostLines = yield* HostLogs.byHost("wnba", { limit: 200 });
+ * const queueLines = yield* HostLogs.byResource({ queueId: "BoxScoreQueue" });
  * ```
- *
- * It reuses the package's capture-relay infrastructure ({@link Logs}, `LogRelay`,
- * `LogEntry`); `HostLogs` is the runtime-wide, first-class face of that machinery.
  *
  * @module HostLogs
  */
-import { Effect, Layer, Logger, Option, Schema, Stream } from "effect";
-import {
-  LogRelay,
-  captureLogger,
-  relayOnlyLayer,
-} from "./Logs";
+import { Duration, Effect, Layer, Logger, Queue, Ref, Stream } from "effect";
+import { CurrentLogAnnotations, CurrentLogSpans } from "effect/References";
+import { LogRelay, captureLogger, relayOnlyLayer } from "./Logs";
+import { LogAnnotationKeys } from "./LogContext";
 import type { LogEntry } from "./LogEntry";
-import { LogEntrySchema } from "./LogEntry";
-import { HistoryStore } from "./HistoryStore";
-import type { HistoryReadOptions } from "./HistoryStore";
-
-/** The HistoryStore stream id under which runtime-wide host logs are persisted. */
-const HOST_LOGS_STREAM_ID = "hostlogs";
+import { logEntryFromLoggerOptions } from "./LogEntry";
+import { LogStore } from "./store/log";
+import type { LogQuery, LogSort } from "./internal/manager/logQuery";
+import { LogQueryError } from "./internal/manager/logQuery";
 
 /**
- * A captured host log line — the element of {@link stream}. (Alias of the
- * package's structured log entry; the neutral name is the public face.)
+ * A captured host log line — the element of {@link stream}. (Alias of the package's structured log
+ * entry; the neutral name is the public face.)
  *
  * @public
  */
 export type HostLogEntry = LogEntry;
 
 /**
- * Install runtime-wide log capture: a sliding relay plus a **merged** capture
- * logger that publishes every log line to it. Provide this at your app root; then
- * read {@link stream} / {@link snapshot} (they require the relay this layer
- * provides). Merged, so it never silences your existing loggers.
+ * Install runtime-wide log capture: a sliding relay plus a **merged** capture logger that publishes
+ * every log line to it. Provide at your app root; then read {@link stream} / {@link snapshot} (they
+ * require the relay this layer provides). Merged, so it never silences your existing loggers.
  *
  * @public
  */
@@ -64,85 +59,144 @@ export const layer: Layer.Layer<LogRelay> = Layer.merge(
 );
 
 /**
- * The recent captured tail (bounded), read once. Useful for a first paint, or for
- * composing your own replay; {@link stream} already prepends it.
+ * The recent captured tail (bounded), read once — for a first paint. {@link stream} already prepends it.
  *
  * @public
  */
-export const snapshot: Effect.Effect<
-  ReadonlyArray<HostLogEntry>,
-  never,
-  LogRelay
-> = Effect.flatMap(LogRelay, (relay) => relay.snapshot);
+export const snapshot: Effect.Effect<ReadonlyArray<HostLogEntry>, never, LogRelay> = Effect.flatMap(
+  LogRelay,
+  (relay) => relay.snapshot,
+);
 
 /**
- * The live host log stream: the recent tail replayed first (so a late subscriber
- * isn't blind to what just happened), then live lines. Requires {@link layer}.
+ * The live host log stream: the recent tail replayed first, then live lines. Requires {@link layer}.
  *
  * @public
  */
-export const stream: Stream.Stream<HostLogEntry, never, LogRelay> =
-  Stream.unwrap(
-    Effect.gen(function* () {
-      const relay = yield* LogRelay;
-      const tail = yield* relay.snapshot;
-      return Stream.concat(Stream.fromIterable(tail), relay.stream);
-    }),
-  );
-
-/**
- * Persist runtime-wide logs: forks a fiber that appends every live log line to a
- * {@link HistoryStore} (keyed `"hostlogs"`), so {@link history} can read them back beyond the
- * relay's in-memory tail. Provide it alongside {@link layer} **and** a `HistoryStore` layer; the
- * forked tap lives for the layer's scope. Opt-in — without it, nothing is persisted.
- *
- * @public
- */
-export const persistLayer = Layer.effectDiscard(
+export const stream: Stream.Stream<HostLogEntry, never, LogRelay> = Stream.unwrap(
   Effect.gen(function* () {
     const relay = yield* LogRelay;
-    const store = yield* HistoryStore;
-    yield* Effect.forkScoped(
-      Stream.runForEach(relay.stream, (entry) =>
-        Schema.encodeEffect(LogEntrySchema)(entry).pipe(
-          Effect.flatMap((encoded) => store.append(HOST_LOGS_STREAM_ID, encoded)),
-          Effect.orDie,
-        ),
-      ),
-    );
+    const tail = yield* relay.snapshot;
+    return Stream.concat(Stream.fromIterable(tail), relay.stream);
   }),
 );
 
 /**
- * Read back persisted host logs (newest `limit` within `since`/`until`). Optional via
- * `serviceOption(HistoryStore)` — returns `[]` when no `HistoryStore` is provided.
+ * Durably store this host's logs: forks a **batched** writer that appends every captured line to
+ * {@link LogStore}, **bucketed by `host`**, stamping each line with the `host` annotation while
+ * preserving its `processId` / `queueId`. Requires {@link layer} (for the relay) and a `LogStore`
+ * (compose `ProcessStorage.layer` + a backend). The forked writer lives for the layer's scope.
  *
  * @public
  */
-export const history = (
-  options?: HistoryReadOptions,
-): Effect.Effect<ReadonlyArray<HostLogEntry>> =>
-  Effect.serviceOption(HistoryStore).pipe(
-    Effect.flatMap(
-      Option.match({
-        onNone: () => Effect.succeed<ReadonlyArray<HostLogEntry>>([]),
-        onSome: (store) =>
-          store.read(HOST_LOGS_STREAM_ID, options).pipe(
-            Effect.flatMap((rows) =>
-              Effect.forEach(rows, (row) =>
-                Schema.decodeUnknownEffect(LogEntrySchema)(row).pipe(
-                  Effect.orDie,
-                ),
-              ),
-            ),
-          ),
-      }),
-    ),
+export const persistLayer = (host: string): Layer.Layer<never, never, LogStore> =>
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const store = yield* LogStore;
+      // a durable buffer created at layer-build: the logger below offers into it (synchronously, from
+      // the moment it's installed — no subscription race), a forked writer batches out of it.
+      const queue = yield* Queue.unbounded<HostLogEntry>();
+      const counter = yield* Ref.make(0);
+      yield* Effect.forkScoped(
+        Stream.runForEach(
+          // Effect-native windowing: up to 64 lines or every 250ms, whichever first
+          Stream.groupedWithin(Stream.fromQueue(queue), 64, Duration.millis(250)),
+          (entries) =>
+            Effect.gen(function* () {
+              const start = yield* Ref.getAndUpdate(counter, (n) => n + entries.length);
+              const rows = entries.map((entry, index) => ({
+                // monotonic, zero-padded so it sorts + works as a cursor
+                entryId: String(start + index).padStart(12, "0"),
+                entry: {
+                  ...entry,
+                  annotations: { ...entry.annotations, [LogAnnotationKeys.host]: host },
+                },
+              }));
+              return yield* store.recordBatch(host, rows).pipe(Effect.orDie);
+            }),
+        ),
+      );
+      // a merged capture logger that builds a structured entry and offers it to the buffer
+      const logger = Logger.make<unknown, void>((options) => {
+        const entry = logEntryFromLoggerOptions({
+          message: options.message,
+          logLevel: options.logLevel,
+          cause: options.cause,
+          date: options.date,
+          annotations: options.fiber.getRef(CurrentLogAnnotations),
+          spans: options.fiber.getRef(CurrentLogSpans),
+        });
+        options.fiber.currentDispatcher.scheduleTask(() => {
+          Effect.runForkWith(options.fiber.context)(Queue.offer(queue, entry));
+        }, 0);
+      });
+      return Logger.layer([logger], { mergeWithExisting: true });
+    }),
   );
 
+const queryLimitDefault = 200;
+
+const runQuery = (
+  query: LogQuery,
+): Effect.Effect<ReadonlyArray<HostLogEntry>, never, LogStore> =>
+  Effect.flatMap(LogStore, (store) => store.load(query)).pipe(
+    // an empty match is `[]`, not an error, for a query API
+    Effect.catchIf(
+      (error): error is LogQueryError => error instanceof LogQueryError,
+      () => Effect.succeed<ReadonlyArray<HostLogEntry>>([]),
+    ),
+    // a storage failure (backend down) is a defect for a best-effort log read
+    Effect.orDie,
+  );
+
+/** Options shared by {@link byHost} / {@link byResource}. @public */
+export interface LogReadOptions {
+  readonly limit?: number;
+  readonly sort?: LogSort;
+  readonly from?: Date;
+  readonly to?: Date;
+}
+
 /**
- * Host logs — runtime-wide log capture + stream (everything, including untagged
- * resources). See the {@link HostLogs | module docs}.
+ * Read the durable logs for a **whole host** (every resource on it), newest first. Requires
+ * {@link LogStore}; returns `[]` if none match.
+ *
+ * @public
+ */
+export const byHost = (
+  host: string,
+  options?: LogReadOptions,
+): Effect.Effect<ReadonlyArray<HostLogEntry>, never, LogStore> =>
+  runQuery({
+    groupId: host,
+    limit: options?.limit ?? queryLimitDefault,
+    sort: options?.sort ?? "desc",
+    ...(options?.from === undefined ? {} : { from: options.from }),
+    ...(options?.to === undefined ? {} : { to: options.to }),
+  });
+
+/**
+ * Read the durable logs for a **specific resource** (a queue/process, across hosts), newest first.
+ * Requires {@link LogStore}; returns `[]` if none match.
+ *
+ * @public
+ */
+export const byResource = (
+  resource: { readonly processId?: string; readonly queueId?: string },
+  options?: LogReadOptions,
+): Effect.Effect<ReadonlyArray<HostLogEntry>, never, LogStore> =>
+  runQuery({
+    ...(resource.processId === undefined ? {} : { processId: resource.processId }),
+    ...(resource.queueId === undefined ? {} : { queueId: resource.queueId }),
+    limit: options?.limit ?? queryLimitDefault,
+    sort: options?.sort ?? "desc",
+    ...(options?.from === undefined ? {} : { from: options.from }),
+    ...(options?.to === undefined ? {} : { to: options.to }),
+  });
+
+/**
+ * Host logs — runtime-wide capture + live stream + durable, host/resource-queryable storage.
+ * See the {@link HostLogs | module docs}.
  *
  * @public
  */
@@ -151,7 +205,8 @@ export const HostLogs = {
   stream,
   snapshot,
   persistLayer,
-  history,
+  byHost,
+  byResource,
   /** The backing relay service (provided by {@link layer}). */
   Relay: LogRelay,
 } as const;

@@ -1,39 +1,50 @@
 import { Duration, Effect, Layer } from "effect";
 import { expect, it } from "vitest";
-import { HistoryStore, HostLogs } from "../src";
+import { HostLogs } from "../src";
+import { LogAnnotationKeys } from "../src/LogContext";
+import { ProcessStorage } from "../src/ProcessStorage";
 
-// Runtime-wide log capture (HostLogs.layer) + the persist tap (HostLogs.persistLayer) + an
-// in-memory HistoryStore. A bare Effect.logInfo anywhere under this layer is captured, appended,
-// and readable via HostLogs.history.
-const persisted = HostLogs.persistLayer.pipe(
-  Layer.provideMerge(
-    Layer.mergeAll(HostLogs.layer, HistoryStore.layerMemory()),
-  ),
+// HostLogs.layer (runtime-wide capture + relay) + persistLayer(host) → durable LogStore (memory
+// backend via ProcessStorage). Bare Effect.log* lines are captured, batched, persisted bucketed by
+// host, and readable **by host** or **by resource**.
+const HOST = "wnba";
+const storage = HostLogs.persistLayer(HOST).pipe(
+  Layer.provideMerge(Layer.mergeAll(HostLogs.layer, ProcessStorage.layer)),
 );
 
-it("HostLogs.history reads back persisted runtime logs", () =>
+it("persists runtime logs bucketed by host — readable by host and by resource", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      yield* Effect.logInfo("hello from host logs");
-      // the persist tap appends asynchronously — wait until history is populated
-      yield* Effect.gen(function* () {
-        while ((yield* HostLogs.history()).length === 0) {
-          yield* Effect.sleep(Duration.millis(10));
-        }
-      }).pipe(Effect.timeout(Duration.seconds(2)));
+      yield* Effect.logInfo("host-wide line");
+      yield* Effect.annotateLogs(Effect.logInfo("worker line"), {
+        [LogAnnotationKeys.processId]: "worker-1",
+      });
 
-      const rows = yield* HostLogs.history({ limit: 50 });
-      expect(rows.length).toBeGreaterThan(0);
+      // the persist writer batches on a ~250ms window — poll until both lines land
+      yield* Effect.gen(function* () {
+        while ((yield* HostLogs.byHost(HOST)).length < 2) {
+          yield* Effect.sleep(Duration.millis(20));
+        }
+      }).pipe(Effect.timeout(Duration.seconds(3)));
+
+      const hostRows = yield* HostLogs.byHost(HOST, { limit: 50 });
+      expect(hostRows.length).toBeGreaterThanOrEqual(2);
+      // every stored line carries the host annotation (the bucket)
       expect(
-        rows.some((r) => JSON.stringify(r).includes("hello from host logs")),
+        hostRows.every((row) => row.annotations[LogAnnotationKeys.host] === HOST),
       ).toBe(true);
-    }).pipe(Effect.provide(persisted), Effect.scoped),
+      expect(hostRows.some((row) => row.message.includes("host-wide line"))).toBe(true);
+
+      // by resource: only the line annotated with that processId
+      const workerRows = yield* HostLogs.byResource({ processId: "worker-1" });
+      expect(workerRows.length).toBe(1);
+      expect(workerRows[0]?.message).toBe("worker line");
+    }).pipe(Effect.provide(storage), Effect.scoped),
   ));
 
-it("HostLogs.history is empty without a HistoryStore (graceful, opt-in)", () =>
+it("byResource is empty for a resource with no logs (graceful, not an error)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      yield* Effect.logInfo("not persisted");
-      expect(yield* HostLogs.history()).toEqual([]);
-    }).pipe(Effect.provide(HostLogs.layer), Effect.scoped),
+      expect(yield* HostLogs.byResource({ queueId: "never" })).toEqual([]);
+    }).pipe(Effect.provide(storage), Effect.scoped),
   ));

@@ -42,12 +42,10 @@ export const logEntryMatchesScope = (
   if (scope._tag === "all") {
     return true;
   }
-  const group = annotationValue(entry.annotations, LogAnnotationKeys.groupId);
-  if (group !== undefined && group !== scope.groupId) {
-    return false;
-  }
+  // "group" is legacy CLI scoping (groups were removed) — no per-entry group annotation remains, so it
+  // matches every line. Resource scopes still filter by their processId / queueId annotation.
   if (scope._tag === "group") {
-    return group === undefined || group === scope.groupId;
+    return true;
   }
   if (scope._tag === "process") {
     return (

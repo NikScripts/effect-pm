@@ -1,94 +1,28 @@
 /**
- * Process-manager log capture relay (persists via {@link LogStore}).
+ * In-memory log relay — a bounded sliding tail + PubSub for live watch. Durable persistence is a
+ * separate, opt-in concern (`HostLogs.persistLayer(host)` → {@link LogStore}, keyed by host).
  *
  * @module logsRelay
  */
 
-import { Duration, Effect, Layer, Option, PubSub, Ref, Schedule, Scope, Stream } from "effect";
-import { ProcessGroupLogContext } from "../../LogContext";
+import { Effect, Layer, PubSub, Ref, type Scope, Stream } from "effect";
 import type { LogEntry } from "../../LogEntry";
-import {
-  LogRelay,
-  type LogRelayService,
-} from "./logCapture";
-import { LogStore } from "../../store/log";
-import { ProcessStore } from "../../ProcessStore";
+import { LogRelay } from "./logCapture";
 
-const storeFlushInterval = Duration.millis(250);
-const storeFlushBatchSize = 64;
 const historyCapacity = 500;
 
-type PendingLogAppend = {
-  readonly entryId: string;
-  readonly entry: LogEntry;
-};
-
-const makePersistingRelay = (
-  base: LogRelayService,
-): Effect.Effect<LogRelayService, never, Scope.Scope> =>
-  Effect.gen(function* () {
-    const entryCounter = yield* Ref.make(0);
-    const buffer = yield* Ref.make<ReadonlyArray<PendingLogAppend>>([]);
-
-    const flush = Effect.gen(function* () {
-      const groupOption = yield* Effect.serviceOption(ProcessGroupLogContext);
-      if (Option.isNone(groupOption)) {
-        return;
-      }
-      const batch = yield* Ref.getAndSet(buffer, []);
-      if (batch.length === 0) {
-        return;
-      }
-      yield* LogStore.recordBatch(groupOption.value.groupId, batch).pipe(
-        ProcessStore.catchErrorAndLog({
-          message: "LogStore write failed while relaying logs",
-          level: "warning",
-          annotations: { groupId: groupOption.value.groupId },
-        }),
-      );
-    });
-
-    yield* Effect.addFinalizer(() => flush);
-    yield* Effect.forkScoped(Effect.repeat(flush, Schedule.fixed(storeFlushInterval)));
-
-    const queueAppend = (entry: LogEntry): Effect.Effect<void> =>
-      Effect.gen(function* () {
-        const groupOption = yield* Effect.serviceOption(ProcessGroupLogContext);
-        if (Option.isNone(groupOption)) {
-          return;
-        }
-        const entryId = String((yield* Ref.getAndUpdate(entryCounter, (n) => n + 1)));
-        yield* Ref.update(buffer, (rows) => [...rows, { entryId, entry }]);
-        const pending = yield* Ref.get(buffer);
-        if (pending.length >= storeFlushBatchSize) {
-          yield* flush;
-        }
-      });
-
-    return LogRelay.of({
-      publish: (entry) =>
-        Effect.gen(function* () {
-          yield* base.publish(entry);
-          yield* queueAppend(entry);
-          yield* flush;
-        }),
-      snapshot: base.snapshot,
-      stream: base.stream,
-    });
-  });
-
 /**
- * Relay layer with in-memory tail plus batched flush into {@link LogStore}.
+ * Relay layer: an in-memory sliding tail (last {@link historyCapacity}) for {@link LogRelay.snapshot}
+ * plus a PubSub for {@link LogRelay.stream} (live watch).
  *
  * @public
  */
-export const logsRelayLayer: Layer.Layer<LogRelay, never, Scope.Scope> =
-  Layer.effect(
+export const logsRelayLayer: Layer.Layer<LogRelay, never, Scope.Scope> = Layer.effect(
   LogRelay,
   Effect.gen(function* () {
     const pubsub = yield* PubSub.unbounded<LogEntry>();
     const history = yield* Ref.make<ReadonlyArray<LogEntry>>([]);
-    const base = LogRelay.of({
+    return LogRelay.of({
       publish: (entry) =>
         Effect.gen(function* () {
           yield* PubSub.publish(pubsub, entry);
@@ -102,7 +36,6 @@ export const logsRelayLayer: Layer.Layer<LogRelay, never, Scope.Scope> =
       snapshot: Ref.get(history),
       stream: Stream.fromPubSub(pubsub),
     });
-    return yield* makePersistingRelay(base);
   }),
 );
 

@@ -2,56 +2,51 @@ import { assert, describe, it } from "@effect/vitest";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { Duration, Effect, FileSystem, Layer, Path } from "effect";
-import { LogRelay, relayWithCaptureLoggerLayer } from "../src/Logs";
-import {
-  ProcessGroupLogContext,
-  LogAnnotationKeys,
-} from "../src/LogContext";
-import { LogStore } from "../src/store/log";
+import { HostLogs } from "../src";
+import { LogAnnotationKeys } from "../src/LogContext";
 import { layerProcessStore } from "../src/storage/sqlite/index";
 
 const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
-describe("process manager log pipeline (H6)", () => {
-  it.live("captureLoggerLayer → relayLayer → Log → SQLite load", () =>
+describe("host log pipeline → SQLite", () => {
+  it.live("capture → persistLayer(host) → LogStore (SQLite) → byHost / byResource", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const directory = yield* fs.makeTempDirectory();
-      const sqliteFilename = path.join(directory, "logs.sqlite");
-      const groupId = "pipeline-test-group";
-      return { sqliteFilename, groupId };
+      return path.join(directory, "logs.sqlite");
     }).pipe(
-      Effect.flatMap(({ sqliteFilename, groupId }) => {
-        const childEnv = Layer.mergeAll(
-          layerProcessStore({ filename: sqliteFilename }),
-          Layer.succeed(ProcessGroupLogContext, { groupId }),
-          relayWithCaptureLoggerLayer,
+      Effect.flatMap((sqliteFilename) => {
+        const host = "wnba";
+        const env = HostLogs.persistLayer(host).pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              HostLogs.layer,
+              layerProcessStore({ filename: sqliteFilename }),
+            ),
+          ),
         );
 
         return Effect.gen(function* () {
-          yield* Effect.logInfo("relay pipeline tick").pipe(
-            Effect.annotateLogs({
-              [LogAnnotationKeys.groupId]: groupId,
-              [LogAnnotationKeys.processId]: "billing/sync",
-            }),
-          );
-          yield* Effect.yieldNow;
-          const relay = yield* LogRelay;
-          const snap = yield* relay.snapshot;
-          assert.strictEqual(snap.length, 1);
-          assert.strictEqual(snap[0]?.message, "relay pipeline tick");
-          yield* Effect.yieldNow;
-          yield* Effect.sleep(Duration.millis(500));
-          const log = yield* LogStore;
-          const loaded = yield* log.load({
-            groupId,
-            limit: 10,
-            sort: "desc",
+          yield* Effect.annotateLogs(Effect.logInfo("sqlite pipeline tick"), {
+            [LogAnnotationKeys.processId]: "billing/sync",
           });
-          assert.strictEqual(loaded.length, 1);
-          assert.strictEqual(loaded[0]?.message, "relay pipeline tick");
-        }).pipe(Effect.provide(childEnv), Effect.scoped);
+
+          // the batched writer flushes on a ~250ms window — poll SQLite until the line lands
+          yield* Effect.gen(function* () {
+            while ((yield* HostLogs.byHost(host)).length === 0) {
+              yield* Effect.sleep(Duration.millis(20));
+            }
+          }).pipe(Effect.timeout(Duration.seconds(3)));
+
+          const byHost = yield* HostLogs.byHost(host, { limit: 10 });
+          assert.strictEqual(byHost.length, 1);
+          assert.strictEqual(byHost[0]?.message, "sqlite pipeline tick");
+
+          const byResource = yield* HostLogs.byResource({ processId: "billing/sync" });
+          assert.strictEqual(byResource.length, 1);
+          assert.strictEqual(byResource[0]?.message, "sqlite pipeline tick");
+        }).pipe(Effect.provide(env), Effect.scoped);
       }),
       Effect.provide(nodePlatform),
     ),

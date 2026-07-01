@@ -275,10 +275,7 @@ const entryMatchesQuery = (
     const queueId = entry.annotations[LogAnnotationKeys.queueId];
     if (queueId !== query.queueId) return false;
   }
-  if (query.groupId !== undefined) {
-    const groupId = entry.annotations[LogAnnotationKeys.groupId];
-    if (groupId !== undefined && groupId !== query.groupId) return false;
-  }
+  // the host bucket is filtered at the storage layer (ProcessId.equals below), not by annotation.
   return true;
 };
 
