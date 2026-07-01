@@ -1,5 +1,38 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.17
+
+### Minor Changes
+
+- 0ab917e: **Durable log storage, queryable by host or by resource.** `HostLogs.persistLayer(host)`
+  installs a batched capture logger that durably stores every runtime log line in `LogStore` — bucketed
+  by host, with each line's `processId` / `queueId` preserved — backed by `RuntimeStorage` (memory /
+  sqlite / redis via `ProcessStorage`). Read it back with `HostLogs.byHost(host, opts?)` (every line a
+  host logged) or `HostLogs.byResource({ processId?, queueId? }, opts?)` (a specific queue/process,
+  across hosts); both return `[]` (not an error) when empty, newest first. The logger is installed at
+  layer-build so it captures from the start (no relay-subscription race). **Removes** the stranded
+  process-group log paths: `ProcessGroupLogContext` / `layerProcessGroupLogContext` and the flat
+  `HostLogs.history` / `HistoryStore`-bucket persistence are gone; `LogAnnotationKeys` gains `host`
+  (drops `groupId`), adds `withHostLogAnnotations`.
+
+- 1c7ebef: **`Resource.client(tag, host)` — read a hostless multi-host tag as a client.** A hostless
+  `multiHost` tag is N instances, so the client names which one:
+  `Resource.client(FleetDatabase, NwslHost).pipe(Layer.provide(connectHttp(NwslHost)))`. The transport
+  resolves from that host, so the layer requires it (satisfied by `connectHttp`) — enforced at compile
+  time. Turns the previous runtime `Service not found: RpcClient/Protocol` (a hostless client wired to a
+  host service) into a type error. Host-bound tags unchanged (`Resource.client(tag)`).
+
+- 28f3769: **`Resource.selfHost(tag)` — the host key a multi-host instance runs as**, the same key its
+  `Resource.peers` are keyed by. For `Combine.byHost` folds (one row per host), so a resource keys its
+  own row without hand-threading: `return { ...byHost, [self]: ownValue }`. Provided by `peersLayer`
+  (now bundled) or standalone `Resource.selfHostLayer(tag, self)`.
+
+- cd8a472: **`Resource.peersLayer(tag, self, { url })` — override peer urls** without freezing them into
+  the host contract. `Host.url` stays the default; the resolver `url: (host) => Effect<string |
+  undefined>` overrides per host (env ports, tunnels, Effect `Config`), falling back to `Host.url`. Its
+  error + requirements flow to the layer (typed) — a `ConfigError` is a typed layer-build failure, or
+  return `undefined` to skip a peer. Fully back-compatible (omit `options`).
+
 ## 0.8.0-beta.16
 
 ### Minor Changes

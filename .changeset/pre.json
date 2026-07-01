@@ -89,6 +89,10 @@
     "withreadiness-host-bound-class",
     "effect-beta-92",
     "multi-host-combine-core",
-    "multi-host-peers"
+    "multi-host-peers",
+    "host-logs-storage",
+    "hostless-client-host-arg",
+    "peer-url-resolver",
+    "self-host-accessor"
   ]
 }
