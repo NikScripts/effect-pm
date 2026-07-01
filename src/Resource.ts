@@ -1376,31 +1376,91 @@ const serverLayer = <S extends Spec>(
 };
 
 /**
- * PROTOTYPE (beta.18 crux — `per-resource-dependency-serve-design.md`): like {@link serverLayer} but
- * **preserves** the handlers' requirement `R` (caller-declared) instead of erasing it to `never`, so a
- * resource's dependency can be `Layer.provide`d **per resource** (isolated) rather than shared from one
- * ambient provide. Throwaway — validates that N such layers can feed one `RpcServer` without collapsing.
+ * A {@link serve} handler for one wire method — like {@link ServiceMethod}, but the handler may carry a
+ * **run-time requirement `R`** (a dependency it `yield*`s), which {@link serve} preserves so a
+ * per-resource `Layer.provide` can discharge it in isolation.
  *
- * @internal
+ * @public
  */
-export const serverR = <R = unknown>(
+export type ServeMethod<M extends AnyMethod, R> = M["stream"] extends true
+  ? [M["payload"]] extends [undefined]
+    ? Stream.Stream<SuccessOf<M>, ErrorOf<M>, R>
+    : (payload: PayloadOf<M>) => Stream.Stream<SuccessOf<M>, ErrorOf<M>, R>
+  : [M["payload"]] extends [undefined]
+    ? Effect.Effect<SuccessOf<M>, ErrorOf<M>, R>
+    : (payload: PayloadOf<M>) => Effect.Effect<SuccessOf<M>, ErrorOf<M>, R>;
+
+/**
+ * The implementation {@link serve} expects — the tag's wire members, whose handlers may share a run-time
+ * requirement `R`. `R` is inferred from the impl (via {@link ServeRequirements}, the union of every
+ * handler's requirement) and preserved on the returned layer, so it's discharged **per resource** by
+ * `Layer.provide`, not shared ambiently.
+ *
+ * @public
+ */
+export type ServeImplOf<S extends Spec, R> = {
+  readonly [K in keyof S as S[K] extends AnyLocalMethod ? never : K]: ServeMethod<
+    Exclude<S[K], AnyLocalMethod>,
+    R
+  >;
+};
+
+/**
+ * The union of every handler's run-time requirement `R` in a {@link serve} impl — extracted from the
+ * impl value (not a mapped-type parameter), so `serve` can **infer** it. Each member is one of the four
+ * {@link ServeMethod} forms; a member that requires nothing contributes `never`.
+ *
+ * @public
+ */
+export type ServeRequirements<Impl> = {
+  [K in keyof Impl]: Impl[K] extends (payload: never) => Effect.Effect<unknown, unknown, infer R>
+    ? R
+    : Impl[K] extends (payload: never) => Stream.Stream<unknown, unknown, infer R>
+      ? R
+      : Impl[K] extends Effect.Effect<unknown, unknown, infer R>
+        ? R
+        : Impl[K] extends Stream.Stream<unknown, unknown, infer R>
+          ? R
+          : never;
+}[keyof Impl];
+
+/**
+ * A resource's **handler layer** — mounts the tag's group handlers, with the handlers' requirement `R`
+ * **preserved** (not erased). Unlike {@link serverLayer}, whose `R` is erased to `never` (so all handlers
+ * share one ambient provide), `serve`'s `R` rides the layer's requirement channel, so a per-resource
+ * `Layer.provide` discharges *this* resource's dependency in isolation:
+ *
+ * ```ts
+ * Resource.serve(SeasonMatches, seasonMatchesImpl).pipe(Layer.provide(importHandlersLayer))
+ * ```
+ *
+ * `R = never` (a handler that closes over its dependency at build) behaves exactly like `serverLayer`.
+ * The point of `serve` is the run-time-requirement case: N resources needing different implementations of
+ * the same tag, each isolated — merge the `serve` layers onto one `RpcServer` (groups are prefix-keyed).
+ *
+ * @public
+ */
+export const serve = <S extends Spec, Impl extends ServeImplOf<S, any>>(
   tag: {
     readonly groupId: string;
-    readonly [specSym]: Spec;
-    readonly [groupSym]: RpcGroup.RpcGroup<any>;
+    readonly [specSym]: S;
+    readonly [groupSym]: RpcGroupOf<S>;
   },
-  impl: Record<string, unknown>,
-): Layer.Layer<unknown, never, R> => {
+  impl: Impl,
+): Layer.Layer<HandlerContextOf<S>, never, ServeRequirements<Impl>> => {
   const group = tag[groupSym];
   const handlers: Record<string, (payload: unknown) => unknown> = {};
   for (const [key, member] of Object.entries(impl)) {
     handlers[wireTag(tag.groupId, key)] = (payload) =>
-      invokeWireMethod(member as AnyMethod, tag[specSym][key] as AnyMethod, payload);
+      invokeWireMethod(member, tag[specSym][key] as AnyMethod, payload);
   }
-  // preserve R (declared by the caller) through the same dynamic boundary serverLayer erases it at.
+  // dynamic handler construction (the same boundary `serverLayer` uses); the outer assertion **preserves**
+  // the handlers' requirement `R` — extracted from `impl` by {@link ServeRequirements} — instead of
+  // erasing it, so a per-resource `Layer.provide` can discharge it. `HandlerContextOf<S>` is the rpc
+  // handler slots; the requirement is the union of the handlers' run-time needs.
   return group.toLayer(
     handlers as unknown as Parameters<(typeof group)["toLayer"]>[0],
-  ) as unknown as Layer.Layer<unknown, never, R>;
+  ) as unknown as Layer.Layer<HandlerContextOf<S>, never, ServeRequirements<Impl>>;
 };
 
 /**

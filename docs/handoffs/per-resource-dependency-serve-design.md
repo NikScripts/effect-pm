@@ -1,6 +1,9 @@
 # Design: per-resource dependency provision at the serve (beta.18)
 
-**Status:** design, not built. Target release beta.18.
+**Status:** core primitive **built + tested** on branch `cursor/beta-18-dependency-serve` — `Resource.serve`
+(preserves `R`, isolation proven, effect-ls clean). Remaining for beta.18: the `Resource.httpServer` +
+served-resources registry conveniences (§3, §5.1), and re-basing `serveAllHttp` as sugar (§5.3). Target
+release beta.18.
 **Problem report:** [`2026-07-01-per-resource-source-provide.md`](./2026-07-01-per-resource-source-provide.md)
 (the consumer statement; note "source" there is a wow `EventManager` term — **it is not used in this
 design or in any effect-pm surface**; the general concept is a resource's requirement `R`).
@@ -105,14 +108,18 @@ their vocabulary. The package contributes only `serve` / `httpServer`.
    collapsed**. So we can stop merging impls into one table without losing the single server; the design's
    load-bearing assumption holds.
 
-   **Key finding from the prototype:** today's `serverLayer` **erases** the handlers' `R`
+   **Key finding, now resolved:** today's `serverLayer` **erases** the handlers' `R`
    (`as Layer<HandlerContextOf<S>>`, `Resource.ts` ~1375). That erasure is *why* all handlers currently
-   share one ambient provide — and it must be *removed* for per-resource `Layer.provide` to isolate
-   (otherwise `Layer.provide(dep)` looks unused and gets pruned). The production `Resource.serve` must
-   **preserve** `R` in its type: `Layer<HandlerContextOf<S>, never, R>` where `R` is the handlers'
-   requirements. The prototype `serverR` proves the runtime but fakes the types (loose casts); pinning
-   that `R` precisely — inferred from an impl whose methods may carry `R` — is the main **type** work
-   left (the runtime is settled).
+   share one ambient provide — so per-resource isolation needs it removed (else `Layer.provide(dep)` looks
+   unused and gets pruned). **`Resource.serve` is built and real** (not a cast-fake):
+   `serve(tag, impl): Layer<HandlerContextOf<S>, never, ServeRequirements<Impl>>` — it **infers and
+   preserves** the handlers' requirement. The precise-`R` typing (the earlier open question) is solved by
+   extracting `R` from the impl **value** via `ServeRequirements<Impl>` (a `[keyof Impl]` union over the
+   four `ServeMethod` forms) rather than a mapped-type parameter (which TS won't infer through). No loose
+   casts — only the same documented dynamic-handler boundary `serverLayer` already uses. effect-ls clean;
+   isolation proven in `test/multi-resource-isolated-deps.test.ts` (A←Dep=1, B←Dep=2, one `/rpc`, read
+   back 1 and 2). `serverLayer` (R-erasing) stays for the build-time-resolved case; `serve` is the
+   run-time-requirement primitive and subsumes it (`R = never` behaves identically).
 3. **`serveAllHttp` becomes sugar** for the common single-dependency case:
    `serveAllHttp([{ tag, impl }])` ≡ `httpServer().pipe(Layer.provide(mergeAll(entries.map(e => serve(e.tag, e.impl)))))`,
    with any shared dependency provided once at the root. Keep it — most hosts are homogeneous.
