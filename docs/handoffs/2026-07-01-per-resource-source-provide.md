@@ -1,5 +1,10 @@
 # Problem: per-resource source layers force `Effect.provide` inside tick bodies
 
+> **Design response (beta.18):** [`per-resource-dependency-serve-design.md`](./per-resource-dependency-serve-design.md)
+> — settled in package terms (dependency `R`, not "source"): per-resource `Layer.provide` on a
+> `Resource.serve(tag, impl)` layer + `Resource.httpServer` reading a served-resources registry. No
+> config-embedded layer, no branding.
+
 > A consumer (wow-sports services-hub) report. This is a **problem statement**, not a proposed API —
 > the goal is to find the idiomatic effect-pm shape. Grounded in `Resource.serveAllHttp` /
 > `ScheduledProcess` / `QueueResource` as of 0.8.0-beta.16.
