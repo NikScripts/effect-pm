@@ -1978,26 +1978,47 @@ export const selfHostLayer = <Self, S extends Spec>(
 
 /**
  * Provide the {@link peers} capability on **this** host: connect every OTHER host in the tag's
- * {@link multiHost} set (via each {@link Host}'s url) and expose them as the peer clients. Also provides
- * the {@link selfHost} capability (this host's key) for `byHost`-style folds. The **opt-in mesh** — add
- * it to a host's serve only where the resource's own logic reaches across hosts. `self` is the host you
- * are, so you're excluded from your own peer set.
+ * {@link multiHost} set and expose them as the peer clients. Also provides the {@link selfHost}
+ * capability (this host's key) for `byHost`-style folds. The **opt-in mesh** — add it to a host's serve
+ * only where the resource's own logic reaches across hosts. `self` is the host you are, so you're
+ * excluded from your own peer set.
+ *
+ * **Peer urls:** each {@link Host}'s own `url` is the default (the standard practice — the host carries
+ * how to reach it). Pass `options.url` to **override** per host — an env-specific port, a tunnel, or a
+ * value from Effect `Config` — falling back to `Host.url` when the resolver returns `undefined`. A host
+ * with no url from either source is **skipped** (never a throw), so a partial mesh degrades cleanly. Any
+ * requirement of the resolver (e.g. a `ConfigProvider`) flows to the layer.
  *
  * @public
  */
-export const peersLayer = <Self, S extends Spec>(
+export const peersLayer = <Self, S extends Spec, RIn = never>(
   tag: ResourceTag<Self, S>,
   self: AnyHost,
-): Layer.Layer<PeersId<Self> | SelfHostId<Self>> =>
+  options?: {
+    readonly url?: (host: AnyHost) => Effect.Effect<string | undefined, never, RIn>;
+  },
+): Layer.Layer<PeersId<Self> | SelfHostId<Self>, never, RIn> =>
   Layer.merge(
     Layer.effect(
       tag[peersSym],
       Effect.gen(function* () {
-        const reachable = (tag[multiHostSym] ?? [])
-          .filter((host) => host.key !== self.key)
-          .flatMap((host) => (host.url === undefined ? [] : [{ key: host.key, url: host.url }]));
-        const entries = yield* Effect.forEach(reachable, ({ key, url }) =>
-          Effect.map(buildPeerClient(tag, url), (client) => [key, client] as const),
+        const others = (tag[multiHostSym] ?? []).filter((host) => host.key !== self.key);
+        // the host's own url is the default; an optional resolver overrides it, falling back to the url.
+        const resolveUrl = (host: AnyHost): Effect.Effect<string | undefined, never, RIn> =>
+          options?.url === undefined
+            ? Effect.succeed(host.url)
+            : Effect.map(options.url(host), (override) => override ?? host.url);
+        const resolved = yield* Effect.forEach(others, (host) =>
+          Effect.map(resolveUrl(host), (url) => ({ key: host.key, url })),
+        );
+        const entries = yield* Effect.forEach(
+          // a host with no url anywhere is skipped — a partial mesh, not a failure
+          resolved.filter(
+            (entry): entry is { readonly key: string; readonly url: string } =>
+              entry.url !== undefined,
+          ),
+          ({ key, url }) =>
+            Effect.map(buildPeerClient(tag, url), (client) => [key, client] as const),
         );
         // Boundary: each peer client is a full `ServiceOf<S>` — a width-supertype of the leaf
         // `PeerServiceOf<S>` the capability exposes — but the mapped types don't reduce under a generic

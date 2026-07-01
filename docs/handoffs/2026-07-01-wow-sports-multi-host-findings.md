@@ -56,6 +56,12 @@ it isn't discoverable from the tests/examples (all of which use `Combine.sum`, w
 
 ### 2. Config/runtime peer URLs for `peersLayer`
 
+> **✅ Resolved (beta.17):** `peersLayer(tag, self, { url: (host) => Effect<string | undefined> })`.
+> `Host.url` stays the default (standard); the resolver overrides per host — env ports, tunnels, or
+> Effect `Config` — falling back to `Host.url`, skipping a host with no url (never a throw). The
+> resolver's requirements (e.g. `ConfigProvider`) flow to the layer. See
+> `test/multi-host-peer-url-resolver.test.ts`.
+
 `peersLayer` reads each `Host.url`, which is baked into the (browser-safe) host contract. To wire the
 mesh we hardcoded loopback control ports into the host defs:
 
