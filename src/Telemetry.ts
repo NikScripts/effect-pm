@@ -131,35 +131,62 @@ type MetricSnapshotElem =
     ? A
     : never;
 
-const encode = (
-  snapshot: ReadonlyArray<MetricSnapshotElem>,
-  ts: number,
-): MetricsSnapshot => ({
-  ts,
-  metrics: snapshot.flatMap((s): ReadonlyArray<MetricDatum> => {
-    const id = s.id;
-    const labels = s.attributes ?? {};
-    switch (s.type) {
-      case "Counter":
-        return [{ _tag: "counter", id, labels, count: Number(s.state.count) }];
-      case "Gauge":
-        return [{ _tag: "gauge", id, labels, value: Number(s.state.value) }];
-      case "Histogram":
-        return [
-          {
-            _tag: "histogram",
-            id,
-            labels,
-            buckets: s.state.buckets.map(([le, count]) => ({ le, count })),
-            count: s.state.count,
-            sum: s.state.sum,
-          },
-        ];
-      default:
-        return []; // Frequency / Summary — deferred (add additively)
-    }
-  }),
+/** Effect `Metric` attributes → wire labels (absent = none). @internal */
+const labelsOf = (attributes: MetricLabels | undefined): MetricLabels =>
+  attributes ?? {};
+
+/** One raw `[boundary, count]` histogram bucket → the wire shape. @internal */
+const toBucket = ([le, count]: readonly [number, number]): HistogramBucket => ({
+  le,
+  count,
 });
+
+/**
+ * Encode one registry metric → zero-or-one {@link MetricDatum} — `Frequency`/`Summary` encode to none
+ * (deferred), so this returns an array a `flatMap` folds away.
+ *
+ * @internal
+ */
+const encodeDatum = (s: MetricSnapshotElem): ReadonlyArray<MetricDatum> => {
+  const { id } = s;
+  const labels = labelsOf(s.attributes);
+  switch (s.type) {
+    case "Counter":
+      return [{ _tag: "counter", id, labels, count: Number(s.state.count) }];
+    case "Gauge":
+      return [{ _tag: "gauge", id, labels, value: Number(s.state.value) }];
+    case "Histogram":
+      return [
+        {
+          _tag: "histogram",
+          id,
+          labels,
+          buckets: s.state.buckets.map(toBucket),
+          count: s.state.count,
+          sum: s.state.sum,
+        },
+      ];
+    default:
+      return [];
+  }
+};
+
+/** Encode a raw `Metric.snapshot` result + timestamp into the wire envelope. Pure. @internal */
+const encodeSnapshot = (
+  raw: ReadonlyArray<MetricSnapshotElem>,
+  ts: number,
+): MetricsSnapshot => ({ ts, metrics: raw.flatMap(encodeDatum) });
+
+/**
+ * The current registry snapshot, encoded — the **single source** of "take a snapshot" (the served
+ * `snapshot` query and the `live` sampler both use it). Usable locally, without the resource.
+ *
+ * @public
+ */
+export const snapshotNow: Effect.Effect<MetricsSnapshot> = Effect.map(
+  Effect.all([Clock.currentTimeMillis, Metric.snapshot]),
+  ([ts, raw]) => encodeSnapshot(raw, ts),
+);
 
 // ============================================================================
 // Contract (Tag)
@@ -238,6 +265,24 @@ export interface TelemetryOptions {
   readonly interval?: Duration.Duration;
 }
 
+/** Default live-stream sampling cadence. @internal */
+const defaultInterval = Duration.seconds(1);
+/** `live` buffer depth — sliding, so a slow subscriber drops old frames instead of backpressuring. @internal */
+const liveBufferSize = 8;
+
+/** The sampling fiber body: publish {@link snapshotNow} every `interval`, forever. @internal */
+const sampleLoop = (
+  hub: PubSub.PubSub<MetricsSnapshot>,
+  interval: Duration.Duration,
+): Effect.Effect<never> =>
+  Effect.forever(
+    snapshotNow.pipe(
+      Effect.flatMap((snap) => PubSub.publish(hub, snap)),
+      Effect.andThen(Effect.sleep(interval)),
+    ),
+  );
+
+/** The served impl: `snapshot` (fresh sample on demand) + `live` (the sampled stream). @internal */
 const buildImpl = (
   options?: TelemetryOptions,
 ): Effect.Effect<
@@ -249,24 +294,10 @@ const buildImpl = (
   Scope.Scope
 > =>
   Effect.gen(function* () {
-    const interval = options?.interval ?? Duration.seconds(1);
-    // sliding so a slow subscriber can't backpressure the sampling fiber
-    const hub = yield* PubSub.sliding<MetricsSnapshot>(8);
-    const sample = Effect.gen(function* () {
-      const ts = yield* Clock.currentTimeMillis;
-      const raw = yield* Metric.snapshot;
-      return encode(raw, ts);
-    });
-    yield* Effect.forkScoped(
-      Effect.forever(
-        Effect.gen(function* () {
-          yield* PubSub.publish(hub, yield* sample);
-          yield* Effect.sleep(interval);
-        }),
-      ),
-    );
+    const hub = yield* PubSub.sliding<MetricsSnapshot>(liveBufferSize);
+    yield* Effect.forkScoped(sampleLoop(hub, options?.interval ?? defaultInterval));
     return {
-      snapshot: sample,
+      snapshot: snapshotNow,
       live: Stream.fromPubSub(hub),
     };
   });
