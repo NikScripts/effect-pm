@@ -246,3 +246,38 @@ With the structural `kind` check making everything reduce under generic `F`, **r
 precise (no `any`) — if `FlatSpecOf` itself uses the `kind` check so it reduces + satisfies `Spec`
 generically. Try that path first in the dedicated effort; fall back to opaque only if `FlatSpecOf<S>`
 still won't satisfy the `Spec` constraint generically.
+
+## Nesting — kind-check attempt: got to 89 errors, src nearly clean; the LAST wall (2026-07-02, reverted green)
+Applied the brand-free `kind`-check everywhere + made `groupSym` precise (`RpcGroupOf<S>` — killed the
+`any`-leak). Result: **`src/Resource.ts` down to ~3 errors, total 89** (was 134), almost all remaining in
+consumers/tests. Confirmed wins:
+- `kind`-check (`S[K] extends { readonly kind: MethodKind }`) distinguishes leaf-vs-group and **reduces
+  under generic F** — the core insight holds.
+- Precise `groupSym: RpcGroupOf<S>` (with `RpcUnionOf` recursing path-keyed + `kind`-check) **removed the
+  `any`-leak** (remote-http errors dropped sharply).
+- `ServeEntry` (non-generic) must use opaque `[specSym]: FlatSpec` / `[groupSym]: RpcGroup<any>` (no `S`).
+
+**The one remaining wall:** feeding a `kind`-checked leaf into `ServiceMethod<M extends AnyMethod>`. The
+leaf is known to have `kind` but not (to TS) to be a full `AnyMethod`:
+- `Extract<S[K], AnyMethod>` → drags `F`, doesn't reduce.
+- `S[K] & AnyMethod` → **corrupts the payload** (`{limit} & (Fields|Top|undefined)` collapses toward
+  `never` → "arg not assignable to never").
+
+**Fix for it (next session): infer the method's parts instead of constraining `AnyMethod`.** Replace
+`ServiceMethod<Exclude<S[K], AnyLocalMethod>>` with a branch that **captures the props via `infer`** (prop
+*presence* checks are `F`-independent):
+```ts
+S[K] extends {
+  readonly kind: MethodKind;
+  readonly success: infer Su extends Schema.Top;
+  readonly error: infer E extends Schema.Top;
+  readonly payload: infer P;
+  readonly stream: infer Str extends boolean;
+} ? ServiceMemberOf<Su, E, P, Str>          // inline ServiceMethod's logic over the inferred parts
+  : S[K] extends Spec ? ServiceOf<S[K], Self> : never
+```
+i.e. make a `ServiceMemberOf<Su, E, P, Str>` (and `ServeMemberOf`, `RpcOfParts`) that take the *parts*, not
+a constrained `M`. `infer … extends Schema.Top` captures `Su` without a whole-`AnyMethod` conditional, so it
+reduces under generic `F` AND keeps the precise payload. Also: one `TS2589` in the client type
+(`ToHandler<RpcUnionOf<S>>` vs `ServiceOf<S>`) — break it with `as unknown as` at that clientLayer boundary.
+This is the last piece; everything else (kind-check, precise group, runtime flatten/nest, phantom) is proven.
