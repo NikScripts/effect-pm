@@ -130,3 +130,21 @@ Re-examine every existing resource + process (`QueueContract`, `ScheduledProcess
 nested groups now that those shapes exist — e.g. a queue's `size`/`pending` reading better as live `value`s
 than `effect` pulls, host/telemetry status as `value`s, related fields grouped by nesting. A polish pass,
 not a rewrite; do it before the big release.
+
+## Nesting integration — CONFIRMED cascade (attempted 2026-07-02, reverted to keep main green)
+Both type properties are proven (`FlatSpecOf` compiles; `FlatSpecOf<flat>` ≈ flat, so `specSym` retype is
+backward-compatible). Opening the integration confirmed the exact ~20-site cascade — **mechanical, no
+surprises**, but atomic (all coupled through `Spec`), so it needs a session with runway, not a tail-end:
+1. **`ServiceOf` / `ImplOf`** — add the recurse branch: after local/constant/value, `S[K] extends AnyMethod
+   ? ServiceMethod<S[K]> : S[K] extends Spec ? ServiceOf<S[K], Self> : never` (fixes the
+   `Exclude<S[K], AnyLocalMethod>` constraint errors once `Spec` is widened).
+2. **`specSym` retype → `FlatSpecOf<S>`** across **every** tag-interface declaration (~10 sites:
+   `makeTag`, `localLayer`, `serverLayer`, `serverEntry`, `clientLayer`, `httpServer` internals, peers, …)
+   + **`groupSym` → `RpcGroupOf<FlatSpecOf<S>>`**. This makes every `Object.entries(tag[specSym])` site see
+   flat leaves again (fixes the `AnyMethod | Spec` iterate errors + `buildRpcGroup` `m.success` errors).
+3. **Tag construction** runs `flattenSpec(nestedSpec)` into `specSym`; **materializations** run
+   `flattenImpl(nestedImpl, nestedSpec)` then build the flat service then `nestService(...)`.
+4. **`nestService`** needs `noUncheckedIndexedAccess`-safe indexing (`parts[i]!` or a guarded local).
+5. One example (`examples/resource-atoms`) iterates a spec directly — update to `isSpecLeaf`.
+The working `flattenSpec`/`flattenImpl`/`nestService`/`isSpecLeaf`/`FlatSpecOf` are drafted in this doc's
+git history (reverted commit's diff) — reinstate them as the starting point.
