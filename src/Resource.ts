@@ -1597,6 +1597,13 @@ const httpServerBase = (
     }),
   ) as unknown as Layer.Layer<never, never, ServedResources | HttpServer.HttpServer>;
 
+// Array form of `Layer.mergeAll` (which needs a non-empty *tuple*): fold the list into one layer. The
+// `httpServer` overload guarantees a non-empty list; untyped plumbing behind that typed overload.
+const mergeLayers = (
+  layers: ReadonlyArray<Layer.Layer<any, never, any>>,
+): Layer.Layer<any, never, any> =>
+  layers.reduce((acc, layer) => Layer.merge(acc, layer));
+
 /**
  * The shared http server for resources composed with {@link serve} — the multi-resource,
  * heterogeneous-dependency counterpart to {@link serveHttp} / {@link serveAllHttp}. Reads the
@@ -1644,16 +1651,8 @@ export function httpServer(
   // the serves form bundles the boilerplate: provideMerge the serve layers (kept, not pruned) + the
   // shared registry, so the caller lists resources and provides only the platform (+ any shared dep).
   if (Array.isArray(servesOrOptions)) {
-    const serves = servesOrOptions as ReadonlyArray<Layer.Layer<any, never, unknown>>;
-    // the overload guarantees non-empty; merge into one layer without the tuple constraint of mergeAll.
-    const merged = serves
-      .slice(1)
-      .reduce<Layer.Layer<unknown, never, unknown>>(
-        (acc, layer) => Layer.merge(acc, layer),
-        serves[0]!,
-      );
     return httpServerBase(maybeOptions).pipe(
-      Layer.provideMerge(merged),
+      Layer.provideMerge(mergeLayers(servesOrOptions)),
       Layer.provide(servedResourcesLayer),
     ) as unknown as Layer.Layer<never, never, unknown>;
   }
