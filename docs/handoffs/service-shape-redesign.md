@@ -148,3 +148,24 @@ surprises**, but atomic (all coupled through `Spec`), so it needs a session with
 5. One example (`examples/resource-atoms`) iterates a spec directly — update to `isSpecLeaf`.
 The working `flattenSpec`/`flattenImpl`/`nestService`/`isSpecLeaf`/`FlatSpecOf` are drafted in this doc's
 git history (reverted commit's diff) — reinstate them as the starting point.
+
+## Nesting — the REAL blocker (2nd attempt 2026-07-02, reverted green)
+Drove the full integration. It **compiles for concrete specs** (the probes) but hits **TS type-system
+limits under a generic `S`** — the free-type-parameter deferral the flat code warns about, now biting:
+- **`FlatSpecOf<S>` does not satisfy the `Spec` constraint** wherever it flows into `RpcGroupOf<…>` /
+  `RpcUnionOf<…>` / tag interfaces under a *generic* `S` (it reduces for concrete `S`, not generic). ~30
+  of the 42 errors are this one root cause.
+- **`TS2589 "excessively deep"`** at one factory site (`HostTagFactory<S>` region) — `FlatSpecOf` recursion
+  exceeds TS's depth in that context.
+
+**So `specSym: FlatSpecOf<S>` is the wrong move.** The pivot: **keep the wire types OPAQUE.**
+- `specSym: Record<string, AnyMethod | AnyLocalMethod>` (a flat spec, **not** `FlatSpecOf<S>`), `groupSym:
+  RpcGroup.RpcGroup<any>` — decoupled from `S`, so no `FlatSpecOf<S>`-in-constraint and no deep instantiation.
+- Precision lives **only** in `ServiceOf<S>` / `ImplOf<S>` (the consumer-facing nested types) — which
+  already recurse fine.
+- The wire (buildRpcGroup / serverLayer / forwardClient) runs on the opaque flat spec at runtime via
+  `flattenSpec`/`flattenImpl`/`nestService`; one documented boundary cast per construction (consistent with
+  the existing `as unknown as RpcGroupOf<S>` casts). `FlatSpecOf` the *type* is then unnecessary — only the
+  runtime `flattenSpec` is.
+This is a real architectural decision (opaque wire vs precise flat type) — make it deliberately. Runtime
+helpers + `ServiceOf`/`ImplOf` recursion are correct as drafted; only the wire *typing* changes.
