@@ -14,7 +14,7 @@
  * ```ts
  * class Counter extends Resource.Tag<Counter>()("@app/Counter", {
  *   current: Resource.effect(Schema.Number).annotate({ description: "Current value." }),
- *   add: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
+ *   add: Resource.effectFn(Schema.Void, { payload: Schema.Struct({ by: Schema.Number }) }),
  *   reset: Resource.effectFn(Schema.Void).annotate({ destructive: true }),
  * }) {}
  *
@@ -468,13 +468,16 @@ const makeMethod = <
 
 /**
  * Define an **`effect`** field — resolves to `Effect<Su, E>` in the service (a lazy, re-runnable read),
- * named for what it resolves to. Add a `payload` and/or `error` via options; attach help/metadata with
- * `.annotate({ description, ... })`. The other shapes are {@link value} / {@link constant} /
- * {@link effectFn} / {@link stream}.
+ * named for what it resolves to. Add a `payload` (a parameterized read becomes a function) and/or `error`
+ * via options; attach help/metadata with `.annotate({ description, ... })`. The other shapes are
+ * {@link value} / {@link constant} / {@link effectFn} / {@link stream}.
+ *
+ * `payload` is a single **schema** or struct **fields** — same as Effect's `Rpc.make`. Prefer a schema
+ * (`Schema.Struct({ … })`, or any schema such as a union) so the input's shape is explicit.
  *
  * ```ts
  * size: Resource.effect(Schema.Number).annotate({ description: "Total pending." }),
- * get: Resource.effect(Schema.User, { payload: { id: Schema.String } }),
+ * get: Resource.effect(Schema.User, { payload: Schema.Struct({ id: Schema.String }) }),
  * ```
  *
  * @public
@@ -486,6 +489,11 @@ export function effect<Su extends Schema.Top, const F extends Schema.Struct.Fiel
   success: Su,
   options: { readonly payload: F },
 ): Method<"query", F, Su, Schema.Never>;
+// whole-schema payload — the value is passed/decoded directly (mirrors `Rpc.make`'s schema form).
+export function effect<Su extends Schema.Top, P extends Schema.Top>(
+  success: Su,
+  options: { readonly payload: P },
+): Method<"query", P, Su, Schema.Never>;
 export function effect<Su extends Schema.Top, E extends Schema.Top>(
   success: Su,
   options: { readonly error: E },
@@ -498,10 +506,18 @@ export function effect<
   success: Su,
   options: { readonly payload: F; readonly error: E },
 ): Method<"query", F, Su, E>;
+export function effect<
+  Su extends Schema.Top,
+  P extends Schema.Top,
+  E extends Schema.Top,
+>(
+  success: Su,
+  options: { readonly payload: P; readonly error: E },
+): Method<"query", P, Su, E>;
 export function effect(
   success: Schema.Top,
   options?: {
-    readonly payload?: Schema.Struct.Fields;
+    readonly payload?: Schema.Struct.Fields | Schema.Top;
     readonly error?: Schema.Top;
   },
 ): AnyMethod {
@@ -576,10 +592,13 @@ export const value = <Su extends Schema.Top>(
  * named for what it resolves to. Use `Schema.Void` for `success` when it returns nothing. Add a `payload`
  * and/or `error` via options; attach help/metadata with `.annotate({ description, destructive })`.
  *
+ * `payload` is a single **schema** or struct **fields** — same as Effect's `Rpc.make`. A bare schema (a
+ * union, an item, `Schema.Struct({ … })`) is the input directly — e.g. `add(item | item[])`.
+ *
  * ```ts
  * pause: Resource.effectFn(Schema.Void).annotate({ description: "Pause." }),
  * clear: Resource.effectFn(Schema.Number).annotate({ destructive: true }),
- * enqueue: Resource.effectFn(Schema.Void, { payload: { item: Item }, error: Full }),
+ * enqueue: Resource.effectFn(Schema.Void, { payload: Schema.Struct({ item: Item }), error: Full }),
  * ```
  *
  * @public
@@ -682,10 +701,11 @@ export function mutatePair(
  *
  * Counts as a `query` for tools (an idempotent read). `success` is the **element** schema and
  * `error` (if any) is the **stream error** schema; both must be encodable (they cross RPC).
+ * `payload` is a single **schema** or struct **fields** — same as Effect's `Rpc.make`.
  *
  * ```ts
  * changes: Resource.stream(QueueSnapshot).annotate({ description: "Live queue state." }),
- * tail: Resource.stream(LogLine, { payload: { since: Schema.Number } }),
+ * tail: Resource.stream(LogLine, { payload: Schema.Struct({ since: Schema.Number }) }),
  * ```
  *
  * @public
@@ -697,6 +717,11 @@ export function stream<Su extends Schema.Top, const F extends Schema.Struct.Fiel
   success: Su,
   options: { readonly payload: F },
 ): Method<"query", F, Su, Schema.Never, true>;
+// whole-schema payload — the value is passed/decoded directly (mirrors `Rpc.make`'s schema form).
+export function stream<Su extends Schema.Top, P extends Schema.Top>(
+  success: Su,
+  options: { readonly payload: P },
+): Method<"query", P, Su, Schema.Never, true>;
 export function stream<Su extends Schema.Top, E extends Schema.Top>(
   success: Su,
   options: { readonly error: E },
@@ -709,10 +734,18 @@ export function stream<
   success: Su,
   options: { readonly payload: F; readonly error: E },
 ): Method<"query", F, Su, E, true>;
+export function stream<
+  Su extends Schema.Top,
+  P extends Schema.Top,
+  E extends Schema.Top,
+>(
+  success: Su,
+  options: { readonly payload: P; readonly error: E },
+): Method<"query", P, Su, E, true>;
 export function stream(
   success: Schema.Top,
   options?: {
-    readonly payload?: Schema.Struct.Fields;
+    readonly payload?: Schema.Struct.Fields | Schema.Top;
     readonly error?: Schema.Top;
   },
 ): AnyMethod {
@@ -1330,7 +1363,7 @@ const buildInstanceTag = <Self, S extends Spec>(
  *
  * ```ts
  * class Counter extends Resource.Tag<Counter>()("Counter", {
- *   increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
+ *   increment: Resource.effectFn(Schema.Void, { payload: Schema.Struct({ by: Schema.Number }) }),
  *   current: Resource.effect(Schema.Number),
  * }) {}
  *

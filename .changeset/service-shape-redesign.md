@@ -18,6 +18,10 @@ Effects.
   request). Identical local and remote (remote is eventually-consistent). For fixed values use `constant`;
   on-demand reads use `effect`.
 
+- **`payload` accepts a single schema everywhere (Effect-aligned).** `effect` and `stream` previously took
+  only loose struct **fields**; they now also take a single **schema** — a `Schema.Struct({…})`, a bare item,
+  or a union (`item | item[]`) — exactly like `effectFn` and Effect's `Rpc.make` (`Schema.Top | Schema.Struct.Fields`).
+  Both forms stay supported; prefer the schema form so the input's shape is explicit (loose fields bit the queues).
 - **Nested specs (spec-tree).** A spec can now nest — groups of leaves — to arbitrary depth
   (`connections: { size: effect(Number), changes: stream(Number) }`). The tree flattens to **path-keyed**
   wire procedures (`"connections.size"`) and nests back in the service, so `p.connections.size` /
