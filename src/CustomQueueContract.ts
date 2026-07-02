@@ -433,8 +433,13 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ) =>
   Effect.gen(function* () {
+    // `specSym` holds the flat spec (opaque leaf types) at runtime — recover the precise `add` payload
+    // at this introspection boundary.
+    const addMethod = tag[specSym].add as unknown as {
+      readonly payload: CustomQueueInstanceSpec<F>["add"]["payload"];
+    };
     const itemSchema: Schema.Codec<Schema.Struct<F>["Type"], unknown, never, never> =
-      itemSchemaFromCustomQueueAdd(tag[specSym].add.payload);
+      itemSchemaFromCustomQueueAdd(addMethod.payload);
     const context = yield* Effect.context<R | RR>();
     const effectiveConfig = yield* foldConfiguredSpec<
       CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>

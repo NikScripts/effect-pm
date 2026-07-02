@@ -281,3 +281,35 @@ a constrained `M`. `infer … extends Schema.Top` captures `Su` without a whole-
 reduces under generic `F` AND keeps the precise payload. Also: one `TS2589` in the client type
 (`ToHandler<RpcUnionOf<S>>` vs `ServiceOf<S>`) — break it with `as unknown as` at that clientLayer boundary.
 This is the last piece; everything else (kind-check, precise group, runtime flatten/nest, phantom) is proven.
+
+## Nesting — SHIPPED (2026-07-02, branch `nesting-integration`, commit 661a1ffb8)
+Done, green (386 tests, typecheck + Effect LSP clean). The brand-free path worked end to end.
+
+**The type breakthrough that closed it:** `AsMethod<T>` — reconstruct a `Method` from a leaf's parts via
+`infer … extends …`. Prop-*presence* checks are F-independent, so it reduces under a generic item schema
+**and** keeps the payload precise, where the two earlier candidates both failed (`Extract<S[K],AnyMethod>`
+drags F → doesn't reduce; `S[K] & AnyMethod` collapses the payload toward `never`). Leaf-vs-group is a
+plain structural `kind` check — **no symbol brand** (answers the no-brands ask).
+
+**Final shape (what's on the branch):**
+- `Spec` widened to `interface { [k]: AnyMethod | AnyLocalMethod | Spec }`; `FlatSpec` = flat leaf record.
+- Recursive types recurse on groups, `ServiceMethod<AsMethod<S[K]>>` (etc.) on leaves; `RpcUnionOf` is
+  path-keyed. `HandlerContextOf` reduces → **no `any`-leak** (precise serve `R`), no `RpcGroup<any>` needed
+  except `ServeEntry` (non-generic) and the one deep-`RpcClient` cast in `buildPeerClient` (a `TS2589`).
+- `specSym: FlatSpec` (opaque runtime) + phantom `specTypeSym: S` for inference; `groupSym: RpcGroupOf<S>`
+  stays **precise** (opaque there reintroduced the `any`-leak).
+- `FlatSpecOf<S>` (reducing, precise) is the return of `specOf`/`forwardClient` so consumers/tests keep
+  precision; the few generic spec-iterators (cli, web/data, resource-atoms) cast to `FlatSpec`.
+- Runtime `flattenSpec`/`flattenImpl`/`nestService` thread through **every** materialization: localLayer,
+  serverLayer, `serve`, `serveAllHttp`, `serveInstances`, client. `nestService` returns the **same
+  reference** when unnested so live `value` setters aren't orphaned.
+- Two documented boundary casts for opaque-`specSym` introspection (QueueContract/CustomQueueContract read
+  `tag[specSym].add.payload`).
+
+Known follow-up (untested edge): a `value` field **inside a nested group** — its in-place setter targets the
+flat key; `nestService`'s identity-when-flat covers all shipped (flat) specs, but a value-in-group would
+need the setter pointed at the nested leaf. No such spec exists yet.
+
+**Left to do before the big release:** re-examine existing resources/processes for `constant`/`value`/nesting
+adoption; then merge `nesting-integration` (awaiting the go — do NOT merge to main without explicit per-action
+approval).

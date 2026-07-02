@@ -13,7 +13,7 @@ import { DateTime, Duration, Effect, Layer, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import { RpcClient } from "effect/unstable/rpc";
 import * as Group from "../Group";
-import { client, hostOf, kindOf as resourceKindOf, specOf, type HostKey } from "../Resource";
+import { client, hostOf, kindOf as resourceKindOf, specOf, type FlatSpec, type HostKey } from "../Resource";
 import * as HostStatus from "../HostStatus";
 import { kind as queueKind, queueMetrics, queueStatus } from "../QueueContract";
 import { kind as processKind, processScheduleEntry, processStatus } from "../ScheduledProcess";
@@ -221,7 +221,7 @@ export const kindOf = (member: unknown): "queue" | "process" | "api" => {
   if (stamped === queueKind) return "queue";
   if (stamped === processKind) return "process";
   if (stamped === apiKind) return "api";
-  const spec = specOf(member as Parameters<typeof specOf>[0]);
+  const spec = specOf(member as Parameters<typeof specOf>[0]) as unknown as FlatSpec;
   return "enqueue" in spec || "sizes" in spec ? "queue" : "process";
 };
 

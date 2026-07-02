@@ -2,9 +2,9 @@
 "@nikscripts/effect-pm": minor
 ---
 
-**Service-shape redesign (in progress) — shape-named builders + `constant`.** Spec builders are being
-renamed for **what they resolve to in the service**, not the RPC verb, and the set is expanding beyond
-Effects.
+**Service-shape redesign — shape-named builders, `constant`/`value`, single-schema payloads, and nested
+specs.** Spec builders are named for **what they resolve to in the service**, not the RPC verb, the set
+expands beyond Effects, payloads match Effect's `Rpc.make`, and specs can nest.
 
 - **`Resource.effect`** (→ `Effect<A>`, was `query`) and **`Resource.effectFn`** (→ `(In) => Effect<A>`,
   was `mutate`) — the shape-named vocabulary. **`query`/`mutate` are retired** (renamed across the whole
@@ -18,5 +18,15 @@ Effects.
   request). Identical local and remote (remote is eventually-consistent). For fixed values use `constant`;
   on-demand reads use `effect`.
 
-Next (staged): nesting (spec-tree) → retiring `query`/`mutate` → single merged value-stream + optional
-`initial`. See `docs/handoffs/service-shape-redesign.md`.
+- **`payload` accepts a single schema everywhere (Effect-aligned).** `effect` and `stream` previously took
+  only loose struct **fields**; they now also take a single **schema** — a `Schema.Struct({…})`, a bare item,
+  or a union (`item | item[]`) — exactly like `effectFn` and Effect's `Rpc.make` (`Schema.Top | Schema.Struct.Fields`).
+  Both forms stay supported; prefer the schema form so the input's shape is explicit (loose fields bit the queues).
+- **Nested specs (spec-tree).** A spec can now nest — groups of leaves — to arbitrary depth
+  (`connections: { size: effect(Number), changes: stream(Number) }`). The tree flattens to **path-keyed**
+  wire procedures (`"connections.size"`) and nests back in the service, so `p.connections.size` /
+  `p.admin.ban({…})` work identically **local and remote**. Leaves may be any builder
+  (`effect`/`effectFn`/`stream`/`constant`/`value`/local).
+
+Next (staged): single merged value-stream + optional `initial`. See
+`docs/handoffs/service-shape-redesign.md`.

@@ -15,7 +15,7 @@
 import { Effect, Schema } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import { methodMeta, specOf } from "../../src/Resource";
-import type { AnyMethod, ResourceTag, Spec } from "../../src/Resource";
+import type { AnyMethod, FlatSpec, ResourceTag, Spec } from "../../src/Resource";
 
 /** One spec method → its atom kind, by the contract. */
 type AtomOf<M extends AnyMethod> = M["payload"] extends Schema.Struct.Fields
@@ -45,7 +45,7 @@ export const makeResourceAtoms = <Self extends R, S extends Spec, R, ER>(
     (service as Record<string, unknown>)[key];
 
   const atoms: Record<string, unknown> = {};
-  for (const [key, method] of Object.entries(specOf(tag))) {
+  for (const [key, method] of Object.entries(specOf(tag) as unknown as FlatSpec)) {
     // local methods (streams) carry no payload and produce no atom — skip them.
     if (!("payload" in method)) {
       continue;

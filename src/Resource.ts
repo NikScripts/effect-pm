@@ -14,7 +14,7 @@
  * ```ts
  * class Counter extends Resource.Tag<Counter>()("@app/Counter", {
  *   current: Resource.effect(Schema.Number).annotate({ description: "Current value." }),
- *   add: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
+ *   add: Resource.effectFn(Schema.Void, { payload: Schema.Struct({ by: Schema.Number }) }),
  *   reset: Resource.effectFn(Schema.Void).annotate({ destructive: true }),
  * }) {}
  *
@@ -285,11 +285,112 @@ export type AnyLocalMethod = LocalMethod<unknown>;
  *
  * @public
  */
-export type Spec = Record<string, AnyMethod | AnyLocalMethod>;
+export interface Spec {
+  readonly [k: string]: AnyMethod | AnyLocalMethod | Spec;
+}
+
+/** A **flat** spec — a path-keyed record of leaves (no nested groups). The wire machinery runs on this;
+ *  a (possibly nested) {@link Spec} flattens to it via {@link flattenSpec}. @internal */
+export type FlatSpec = Record<string, AnyMethod | AnyLocalMethod>;
+
+/** Union → intersection — folds the per-leaf records from {@link FlatSpecOf}. @internal */
+type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) extends (
+  k: infer I,
+) => void
+  ? I
+  : never;
+
+/**
+ * The **precise** flat spec for a (possibly nested) `S` — path-keyed leaves (`"group.leaf"`). Used only in
+ * *return* positions ({@link specOf} / {@link forwardClient}), never a constraint, so the intersection is
+ * fine. The `kind` check + {@link AsMethod} keep it reducing under a generic item schema. @internal */
+export type FlatSpecOf<S, Prefix extends string = ""> = UnionToIntersection<
+  {
+    [K in keyof S & string]: S[K] extends { readonly kind: MethodKind }
+      ? { readonly [P in `${Prefix}${K}`]: AsMethod<S[K]> }
+      : S[K] extends AnyLocalMethod
+        ? { readonly [P in `${Prefix}${K}`]: S[K] }
+        : S[K] extends Spec
+          ? FlatSpecOf<S[K], `${Prefix}${K}.`>
+          : never;
+  }[keyof S & string]
+>;
+
+/**
+ * Reconstruct a proper {@link Method} from a leaf's parts via `infer` — prop-*presence* + `infer …
+ * extends …` is **F-independent** (reduces under a generic item schema) and keeps the payload precise,
+ * unlike `Extract`/`&`. Lets the recursive spec types feed the existing `ServiceMethod`/`ServeMethod`/
+ * `RpcOf` under a nested, generic `Spec`. @internal
+ */
+type AsMethod<T> = T extends {
+  readonly kind: infer K extends MethodKind;
+  readonly payload: infer P extends Schema.Struct.Fields | Schema.Top | undefined;
+  readonly success: infer Su extends Schema.Top;
+  readonly error: infer E extends Schema.Top;
+  readonly stream: infer Str extends boolean;
+  readonly annotations: infer Ann extends MethodAnnotations;
+}
+  ? Method<K, P, Su, E, Str, Ann>
+  : never;
 
 /** Runtime guard: is a spec entry a {@link LocalMethod} (vs a wire {@link Method})? */
-const isLocalMethod = (m: AnyMethod | AnyLocalMethod): m is AnyLocalMethod =>
-  localMethodTypeId in m;
+const isLocalMethod = (
+  m: AnyMethod | AnyLocalMethod | Spec,
+): m is AnyLocalMethod => localMethodTypeId in m;
+
+/** Runtime guard: is a spec entry a **leaf** (wire/local method) vs a nested **group**? @internal */
+const isSpecLeaf = (
+  v: AnyMethod | AnyLocalMethod | Spec,
+): v is AnyMethod | AnyLocalMethod => methodTypeId in v || localMethodTypeId in v;
+
+/** Flatten a nested spec to a flat path-keyed record (identity for a flat spec). @internal */
+const flattenSpec = (spec: Spec, prefix = ""): FlatSpec => {
+  const flat: Record<string, AnyMethod | AnyLocalMethod> = {};
+  for (const [k, v] of Object.entries(spec)) {
+    if (isSpecLeaf(v)) flat[`${prefix}${k}`] = v;
+    else Object.assign(flat, flattenSpec(v, `${prefix}${k}.`));
+  }
+  return flat;
+};
+
+/** Flatten a nested impl to a flat path-keyed record, walking each path from the (flat) spec's keys —
+ *  identity for a flat spec. @internal */
+const flattenImpl = (
+  impl: Record<string, unknown>,
+  flatSpec: FlatSpec,
+): Record<string, unknown> => {
+  const flat: Record<string, unknown> = {};
+  for (const path of Object.keys(flatSpec)) {
+    let node: unknown = impl;
+    for (const part of path.split(".")) {
+      node = (node as Record<string, unknown>)[part];
+    }
+    flat[path] = node;
+  }
+  return flat;
+};
+
+/** Nest a flat path-keyed service back into the tree. **Identity (same reference) when there's no nesting**
+ *  — so `value` fields' in-place setters keep updating the *returned* object. @internal */
+const nestService = (
+  flat: Record<string, unknown>,
+): Record<string, unknown> => {
+  // no dotted keys → already the final shape; return it as-is so live `value` setters aren't orphaned.
+  if (!Object.keys(flat).some((k) => k.includes("."))) return flat;
+  const nested: Record<string, unknown> = {};
+  for (const [path, val] of Object.entries(flat)) {
+    const parts = path.split(".");
+    const last = parts.pop();
+    if (last === undefined) continue;
+    let node = nested;
+    for (const part of parts) {
+      node[part] = (node[part] as Record<string, unknown> | undefined) ?? {};
+      node = node[part] as Record<string, unknown>;
+    }
+    node[last] = val;
+  }
+  return nested;
+};
 
 /**
  * Declare a **local-only** member of type `T` (see {@link LocalMethod}). Not serialized,
@@ -367,13 +468,16 @@ const makeMethod = <
 
 /**
  * Define an **`effect`** field — resolves to `Effect<Su, E>` in the service (a lazy, re-runnable read),
- * named for what it resolves to. Add a `payload` and/or `error` via options; attach help/metadata with
- * `.annotate({ description, ... })`. The other shapes are {@link value} / {@link constant} /
- * {@link effectFn} / {@link stream}.
+ * named for what it resolves to. Add a `payload` (a parameterized read becomes a function) and/or `error`
+ * via options; attach help/metadata with `.annotate({ description, ... })`. The other shapes are
+ * {@link value} / {@link constant} / {@link effectFn} / {@link stream}.
+ *
+ * `payload` is a single **schema** or struct **fields** — same as Effect's `Rpc.make`. Prefer a schema
+ * (`Schema.Struct({ … })`, or any schema such as a union) so the input's shape is explicit.
  *
  * ```ts
  * size: Resource.effect(Schema.Number).annotate({ description: "Total pending." }),
- * get: Resource.effect(Schema.User, { payload: { id: Schema.String } }),
+ * get: Resource.effect(Schema.User, { payload: Schema.Struct({ id: Schema.String }) }),
  * ```
  *
  * @public
@@ -385,6 +489,11 @@ export function effect<Su extends Schema.Top, const F extends Schema.Struct.Fiel
   success: Su,
   options: { readonly payload: F },
 ): Method<"query", F, Su, Schema.Never>;
+// whole-schema payload — the value is passed/decoded directly (mirrors `Rpc.make`'s schema form).
+export function effect<Su extends Schema.Top, P extends Schema.Top>(
+  success: Su,
+  options: { readonly payload: P },
+): Method<"query", P, Su, Schema.Never>;
 export function effect<Su extends Schema.Top, E extends Schema.Top>(
   success: Su,
   options: { readonly error: E },
@@ -397,10 +506,18 @@ export function effect<
   success: Su,
   options: { readonly payload: F; readonly error: E },
 ): Method<"query", F, Su, E>;
+export function effect<
+  Su extends Schema.Top,
+  P extends Schema.Top,
+  E extends Schema.Top,
+>(
+  success: Su,
+  options: { readonly payload: P; readonly error: E },
+): Method<"query", P, Su, E>;
 export function effect(
   success: Schema.Top,
   options?: {
-    readonly payload?: Schema.Struct.Fields;
+    readonly payload?: Schema.Struct.Fields | Schema.Top;
     readonly error?: Schema.Top;
   },
 ): AnyMethod {
@@ -475,10 +592,13 @@ export const value = <Su extends Schema.Top>(
  * named for what it resolves to. Use `Schema.Void` for `success` when it returns nothing. Add a `payload`
  * and/or `error` via options; attach help/metadata with `.annotate({ description, destructive })`.
  *
+ * `payload` is a single **schema** or struct **fields** — same as Effect's `Rpc.make`. A bare schema (a
+ * union, an item, `Schema.Struct({ … })`) is the input directly — e.g. `add(item | item[])`.
+ *
  * ```ts
  * pause: Resource.effectFn(Schema.Void).annotate({ description: "Pause." }),
  * clear: Resource.effectFn(Schema.Number).annotate({ destructive: true }),
- * enqueue: Resource.effectFn(Schema.Void, { payload: { item: Item }, error: Full }),
+ * enqueue: Resource.effectFn(Schema.Void, { payload: Schema.Struct({ item: Item }), error: Full }),
  * ```
  *
  * @public
@@ -581,10 +701,11 @@ export function mutatePair(
  *
  * Counts as a `query` for tools (an idempotent read). `success` is the **element** schema and
  * `error` (if any) is the **stream error** schema; both must be encodable (they cross RPC).
+ * `payload` is a single **schema** or struct **fields** — same as Effect's `Rpc.make`.
  *
  * ```ts
  * changes: Resource.stream(QueueSnapshot).annotate({ description: "Live queue state." }),
- * tail: Resource.stream(LogLine, { payload: { since: Schema.Number } }),
+ * tail: Resource.stream(LogLine, { payload: Schema.Struct({ since: Schema.Number }) }),
  * ```
  *
  * @public
@@ -596,6 +717,11 @@ export function stream<Su extends Schema.Top, const F extends Schema.Struct.Fiel
   success: Su,
   options: { readonly payload: F },
 ): Method<"query", F, Su, Schema.Never, true>;
+// whole-schema payload — the value is passed/decoded directly (mirrors `Rpc.make`'s schema form).
+export function stream<Su extends Schema.Top, P extends Schema.Top>(
+  success: Su,
+  options: { readonly payload: P },
+): Method<"query", P, Su, Schema.Never, true>;
 export function stream<Su extends Schema.Top, E extends Schema.Top>(
   success: Su,
   options: { readonly error: E },
@@ -608,10 +734,18 @@ export function stream<
   success: Su,
   options: { readonly payload: F; readonly error: E },
 ): Method<"query", F, Su, E, true>;
+export function stream<
+  Su extends Schema.Top,
+  P extends Schema.Top,
+  E extends Schema.Top,
+>(
+  success: Su,
+  options: { readonly payload: P; readonly error: E },
+): Method<"query", P, Su, E, true>;
 export function stream(
   success: Schema.Top,
   options?: {
-    readonly payload?: Schema.Struct.Fields;
+    readonly payload?: Schema.Struct.Fields | Schema.Top;
     readonly error?: Schema.Top;
   },
 ): AnyMethod {
@@ -701,17 +835,25 @@ export type ServiceOf<S extends Spec, Self = unknown> = {
   readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
     ? Effect.Effect<T, never, LocalCapability<Self>>
     : S[K] extends { readonly [constantTypeId]: true }
-      ? SuccessOf<Exclude<S[K], AnyLocalMethod>>
+      ? SuccessOf<AsMethod<S[K]>>
       : S[K] extends { readonly [valueTypeId]: true }
-        ? SuccessOf<Exclude<S[K], AnyLocalMethod>>
-        : ServiceMethod<Exclude<S[K], AnyLocalMethod>>;
+        ? SuccessOf<AsMethod<S[K]>>
+        : S[K] extends { readonly kind: MethodKind } // leaf (F-independent; reconstruct via AsMethod)
+          ? ServiceMethod<AsMethod<S[K]>>
+          : S[K] extends Spec
+            ? ServiceOf<S[K], Self> // nested group → nested service
+            : never;
 };
 
 /** The wire-only service: just the {@link Method}s (used by the server impl + forwarder). */
 type WireServiceOf<S extends Spec> = {
-  readonly [K in keyof S as S[K] extends AnyLocalMethod ? never : K]: ServiceMethod<
-    Exclude<S[K], AnyLocalMethod>
-  >;
+  readonly [K in keyof S as S[K] extends AnyLocalMethod ? never : K]: S[K] extends {
+    readonly kind: MethodKind;
+  }
+    ? ServiceMethod<AsMethod<S[K]>>
+    : S[K] extends Spec
+      ? WireServiceOf<S[K]>
+      : never;
 };
 
 /** A **peer's** service as seen by {@link peers} — the per-instance ("leaf") wire methods only:
@@ -722,7 +864,11 @@ type PeerServiceOf<S extends Spec> = {
     ? never
     : S[K] extends AnyLocalMethod
       ? never
-      : K]: ServiceMethod<Exclude<S[K], AnyLocalMethod>>;
+      : K]: S[K] extends { readonly kind: MethodKind }
+    ? ServiceMethod<AsMethod<S[K]>>
+    : S[K] extends Spec
+      ? PeerServiceOf<S[K]>
+      : never;
 };
 
 /**
@@ -735,7 +881,11 @@ type PeerServiceOf<S extends Spec> = {
 type ImplOf<S extends Spec> = {
   readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
     ? T
-    : ServiceMethod<Exclude<S[K], AnyLocalMethod>>;
+    : S[K] extends { readonly kind: MethodKind }
+      ? ServiceMethod<AsMethod<S[K]>>
+      : S[K] extends Spec
+        ? ImplOf<S[K]> // nested group → nested impl
+        : never;
 };
 
 // ── type-level: one Spec → the precisely-typed RPC contract group ──
@@ -762,11 +912,16 @@ type RpcOf<K extends string, M extends AnyMethod> = M["stream"] extends true
     >
   : Rpc.Rpc<K, PayloadSchemaOf<M>, M["success"], M["error"]>;
 
-/** The union of every wire method's {@link RpcOf} — the group's full RPC set (local methods excluded). */
-type RpcUnionOf<S extends Spec> = {
-  readonly [K in keyof S & string]: S[K] extends AnyMethod
-    ? RpcOf<K, S[K]>
-    : never;
+/** The union of every wire method's {@link RpcOf} — **path-keyed** across nested groups (local methods
+ *  excluded). The `kind` check + {@link AsMethod} keep it reducing under a generic item schema. */
+type RpcUnionOf<S extends Spec, Prefix extends string = ""> = {
+  readonly [K in keyof S & string]: S[K] extends { readonly kind: MethodKind }
+    ? RpcOf<`${Prefix}${K}`, AsMethod<S[K]>>
+    : S[K] extends AnyLocalMethod
+      ? never
+      : S[K] extends Spec
+        ? RpcUnionOf<S[K], `${Prefix}${K}.`>
+        : never;
 }[keyof S & string];
 
 /**
@@ -807,10 +962,10 @@ const wireTag = (groupId: string, method: string): string => `${groupId}/${metho
  *
  * @internal
  */
-export const buildRpcGroup = <const S extends Spec>(
+export const buildRpcGroup = (
   groupId: string,
-  spec: S,
-): RpcGroupOf<S> => {
+  spec: FlatSpec,
+): RpcGroup.RpcGroup<any> => {
   const rpcs = Object.entries(spec).flatMap(([method, m]) => {
     // local-only members are off-wire — they get no rpc.
     if (isLocalMethod(m)) return [];
@@ -833,7 +988,7 @@ export const buildRpcGroup = <const S extends Spec>(
   // the type derives from the same `spec` — but `Object.entries` erases the literal keys
   // to `string` (and the wire tag carries the group prefix the logical type omits), so the
   // precise per-method type is reattached here. One single source (the spec) drives both.
-  return RpcGroup.make(...rpcs) as unknown as RpcGroupOf<S>;
+  return RpcGroup.make(...rpcs) as unknown as RpcGroup.RpcGroup<any>;
 };
 
 // ── the Tag: a Context service whose value is `ServiceOf<Spec>` ──
@@ -847,6 +1002,12 @@ export const buildRpcGroup = <const S extends Spec>(
 export const specSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Resource/spec",
 );
+/**
+ * Phantom carrier of a tag's (possibly nested) spec type `S`, so functions can **infer** `S` from a tag —
+ * {@link specSym} holds the *flat* spec at runtime and can't carry the nested `S`. Type-only, never set at
+ * runtime. @internal
+ */
+declare const specTypeSym: unique symbol;
 /** Where the built RPC group is stowed on a Tag. @internal */
 export const groupSym: unique symbol = Symbol.for(
   "@nikscripts/effect-pm/Resource/group",
@@ -962,7 +1123,8 @@ export interface ResourceTag<Self, S extends Spec>
   readonly groupId: string;
   /** Resource-level help text (CLI/TUI section help, dashboard panel title) — if declared. */
   readonly description: string | undefined;
-  readonly [specSym]: S;
+  readonly [specSym]: FlatSpec;
+  readonly [specTypeSym]?: S;
   readonly [groupSym]: RpcGroupOf<S>;
   readonly [localCapSym]: Context.Key<
     LocalCapability<Self>,
@@ -1184,7 +1346,7 @@ const buildInstanceTag = <Self, S extends Spec>(
   return Object.assign(base, {
     groupId,
     description,
-    [specSym]: spec,
+    [specSym]: flattenSpec(spec),
     [groupSym]: group,
     [localCapSym]: localCap,
     [hostSym]: host,
@@ -1201,7 +1363,7 @@ const buildInstanceTag = <Self, S extends Spec>(
  *
  * ```ts
  * class Counter extends Resource.Tag<Counter>()("Counter", {
- *   increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
+ *   increment: Resource.effectFn(Schema.Void, { payload: Schema.Struct({ by: Schema.Number }) }),
  *   current: Resource.effect(Schema.Number),
  * }) {}
  *
@@ -1249,7 +1411,7 @@ const makeTag = <Self>() => {
       key,
       key,
       spec,
-      buildRpcGroup(key, spec),
+      buildRpcGroup(key, flattenSpec(spec)),
       options?.description,
       options?.host,
       options?.kind,
@@ -1269,7 +1431,8 @@ export interface TagFactory<S extends Spec> {
   <Self>(key: string): ResourceTag<Self, S>;
   readonly groupId: string;
   readonly description: string | undefined;
-  readonly [specSym]: S;
+  readonly [specSym]: FlatSpec;
+  readonly [specTypeSym]?: S;
   readonly [groupSym]: RpcGroupOf<S>;
 }
 
@@ -1284,7 +1447,8 @@ export interface HostTagFactory<S extends Spec, HSelf> {
   <Self>(key: string): HostBoundTag<Self, S, HSelf>;
   readonly groupId: string;
   readonly description: string | undefined;
-  readonly [specSym]: S;
+  readonly [specSym]: FlatSpec;
+  readonly [specTypeSym]?: S;
   readonly [groupSym]: RpcGroupOf<S>;
 }
 
@@ -1323,7 +1487,7 @@ function tagFor<const S extends Spec>(
   options?: { readonly description?: string; readonly kind?: string; readonly host?: HostKey<unknown> },
 ): TagFactory<S> {
   claimGroupId(groupId);
-  const group = buildRpcGroup(groupId, spec);
+  const group = buildRpcGroup(groupId, flattenSpec(spec));
   const host = options?.host;
   const factory = <Self>(key: string) =>
     buildInstanceTag<Self, S>(
@@ -1340,7 +1504,7 @@ function tagFor<const S extends Spec>(
   return Object.assign(factory, {
     groupId,
     description: options?.description,
-    [specSym]: spec,
+    [specSym]: flattenSpec(spec),
     [groupSym]: group,
   });
 }
@@ -1411,9 +1575,12 @@ function localLayer<Self, S extends Spec, R>(
   // service and the granted capability — one `effectContext` layer, so any `Scope` the impl's
   // construction needs is managed by the layer (not merged in separately).
   const build = Effect.gen(function* () {
-    const members = (yield* (Effect.isEffect(impl)
+    const builtImpl = (yield* (Effect.isEffect(impl)
       ? impl
       : Effect.succeed(impl))) as Record<string, unknown>;
+    // impl may be nested (grouped) — flatten to path keys matching the flat spec, build the flat service,
+    // then nest it back on the way out.
+    const members = flattenImpl(builtImpl, spec);
     const service: Record<string, unknown> = {};
     for (const [key, m] of Object.entries(spec)) {
       // local members surface as `Effect<T, never, LocalCapability>` (require the cap to obtain the
@@ -1436,7 +1603,7 @@ function localLayer<Self, S extends Spec, R>(
       }
     }
     // Boundary assertion (runtime-safe): built from the same spec, key-for-key.
-    return Context.make(tag, service as ServiceOf<S, Self>).pipe(
+    return Context.make(tag, nestService(service) as ServiceOf<S, Self>).pipe(
       Context.add(cap, { granted: true }),
     );
   });
@@ -1468,14 +1635,17 @@ const invokeWireMethod = (
 const serverLayer = <S extends Spec>(
   tag: {
     readonly groupId: string;
-    readonly [specSym]: S;
+    readonly [specSym]: FlatSpec;
+    readonly [specTypeSym]?: S;
     readonly [groupSym]: RpcGroupOf<S>;
   },
   impl: WireServiceOf<S>,
 ): Layer.Layer<HandlerContextOf<S>> => {
   const group = tag[groupSym];
   const handlers: Record<string, (payload: unknown) => unknown> = {};
-  for (const [key, member] of Object.entries(impl)) {
+  // flatten a (possibly nested) impl to path keys matching the flat spec + path-keyed group procedures.
+  const flatImpl = flattenImpl(impl as Record<string, unknown>, tag[specSym]);
+  for (const [key, member] of Object.entries(flatImpl)) {
     // handlers are keyed by the wire tag (group-prefixed), matching the group's procedures.
     // runtime-checked: payload methods are functions (call them); no-payload methods
     // are `Effect` properties (return as-is, ignoring the payload arg).
@@ -1488,7 +1658,7 @@ const serverLayer = <S extends Spec>(
   // requirement channel, discharged by the serve providing it.
   return group.toLayer(
     handlers as unknown as Parameters<(typeof group)["toLayer"]>[0],
-  ) as Layer.Layer<HandlerContextOf<S>>;
+  ) as unknown as Layer.Layer<HandlerContextOf<S>>;
 };
 
 /**
@@ -1562,10 +1732,13 @@ export type ServeMethod<M extends AnyMethod, R> = M["stream"] extends true
  * @public
  */
 export type ServeImplOf<S extends Spec, R> = {
-  readonly [K in keyof S as S[K] extends AnyLocalMethod ? never : K]: ServeMethod<
-    Exclude<S[K], AnyLocalMethod>,
-    R
-  >;
+  readonly [K in keyof S as S[K] extends AnyLocalMethod ? never : K]: S[K] extends {
+    readonly kind: MethodKind;
+  }
+    ? ServeMethod<AsMethod<S[K]>, R>
+    : S[K] extends Spec
+      ? ServeImplOf<S[K], R>
+      : never;
 };
 
 /**
@@ -1606,14 +1779,17 @@ export type ServeRequirements<Impl> = {
 export const serve = <S extends Spec, Impl extends ServeImplOf<S, any>>(
   tag: {
     readonly groupId: string;
-    readonly [specSym]: S;
+    readonly [specSym]: FlatSpec;
+    readonly [specTypeSym]?: S;
     readonly [groupSym]: RpcGroupOf<S>;
   },
   impl: Impl,
 ): Layer.Layer<HandlerContextOf<S>, never, ServeRequirements<Impl>> => {
   const group = tag[groupSym];
   const handlers: Record<string, (payload: unknown) => unknown> = {};
-  for (const [key, member] of Object.entries(impl)) {
+  // flatten a (possibly nested) impl to path keys matching the flat spec + path-keyed group procedures.
+  const flatImpl = flattenImpl(impl as Record<string, unknown>, tag[specSym]);
+  for (const [key, member] of Object.entries(flatImpl)) {
     handlers[wireTag(tag.groupId, key)] = (payload) =>
       invokeWireMethod(member, tag[specSym][key] as AnyMethod, payload);
   }
@@ -1815,7 +1991,8 @@ export const provide = <ROut, EL, RL, A, E, R>(
 const serveHttp = <S extends Spec>(
   tag: {
     readonly groupId: string;
-    readonly [specSym]: S;
+    readonly [specSym]: FlatSpec;
+    readonly [specTypeSym]?: S;
     readonly [groupSym]: RpcGroupOf<S>;
   },
   impl: WireServiceOf<S>,
@@ -1841,7 +2018,7 @@ const serveHttp = <S extends Spec>(
 export interface ServeEntry<R = never> {
   readonly tag: {
     readonly groupId: string;
-    readonly [specSym]: Spec;
+    readonly [specSym]: FlatSpec;
     readonly [groupSym]: RpcGroup.RpcGroup<any>;
   };
   /**
@@ -1987,7 +2164,12 @@ const serveAllHttp = <const Entries extends ReadonlyArray<ServeEntry<any>>>(
         .reduce((acc, group) => acc.merge(group));
       const handlers: Record<string, (payload: unknown) => unknown> = {};
       for (const { tag, impl } of built) {
-        for (const [key, member] of Object.entries(impl)) {
+        // flatten a (possibly nested) impl to path keys matching the flat spec + path-keyed procedures.
+        const flatImpl = flattenImpl(
+          impl as Record<string, unknown>,
+          tag[specSym],
+        );
+        for (const [key, member] of Object.entries(flatImpl)) {
           handlers[wireTag(tag.groupId, key)] = (payload) =>
             typeof member === "function" ? member(payload) : member;
         }
@@ -2090,7 +2272,8 @@ const instance = <Self, S extends Spec>(
 const serveInstances = <S extends Spec>(
   factory: {
     readonly groupId: string;
-    readonly [specSym]: S;
+    readonly [specSym]: FlatSpec;
+    readonly [specTypeSym]?: S;
     readonly [groupSym]: RpcGroupOf<S>;
   },
   ...instances: ReadonlyArray<ResourceInstance<S>>
@@ -2098,14 +2281,15 @@ const serveInstances = <S extends Spec>(
   const group = factory[groupSym];
   const spec = factory[specSym];
 
-  // Build the routing table once, at assembly: key → instance impl. A duplicate key
-  // is a wiring mistake — fail loudly rather than silently shadow an instance.
-  const table = new Map<string, WireServiceOf<S>>();
+  // Build the routing table once, at assembly: key → instance impl (flattened to path keys so nested
+  // groups dispatch by the same path-keyed procedures the handlers use). A duplicate key is a wiring
+  // mistake — fail loudly rather than silently shadow an instance.
+  const table = new Map<string, Record<string, unknown>>();
   for (const { key, impl } of instances) {
     if (table.has(key)) {
       throw new DuplicateInstance({ key });
     }
-    table.set(key, impl);
+    table.set(key, flattenImpl(impl as Record<string, unknown>, spec));
   }
 
   // One handler per contract method; each reads the instance-key header, looks up the
@@ -2140,7 +2324,7 @@ const serveInstances = <S extends Spec>(
   // to {@link HandlerContextOf} to keep the layer's requirement channel `never`.
   return group.toLayer(
     handlers as unknown as Parameters<(typeof group)["toLayer"]>[0],
-  ) as Layer.Layer<HandlerContextOf<S>>;
+  ) as unknown as Layer.Layer<HandlerContextOf<S>>;
 };
 
 /**
@@ -2149,7 +2333,8 @@ const serveInstances = <S extends Spec>(
  * @internal
  */
 export const groupOf = <S extends Spec>(tag: {
-  readonly [specSym]: S;
+  readonly [specSym]: FlatSpec;
+  readonly [specTypeSym]?: S;
   readonly [groupSym]: RpcGroupOf<S>;
 }): RpcGroupOf<S> => tag[groupSym];
 
@@ -2158,8 +2343,10 @@ export const groupOf = <S extends Spec>(tag: {
  *
  * @internal
  */
-export const specOf = <S extends Spec>(tag: { readonly [specSym]: S }): S =>
-  tag[specSym];
+export const specOf = <S extends Spec>(tag: {
+  readonly [specSym]: FlatSpec;
+  readonly [specTypeSym]?: S;
+}): FlatSpecOf<S> => tag[specSym] as unknown as FlatSpecOf<S>;
 
 /**
  * Map an RPC client + a spec into the typed service, forwarding each method to its
@@ -2181,7 +2368,9 @@ export const forwardClient = <S extends Spec>(
   // each is callable at runtime before use (a malformed client fails loudly, never mis-calls).
   const calls = rpc as Record<string, unknown>;
   const service: Record<string, unknown> = {};
-  for (const [key, m] of Object.entries(spec)) {
+  // iterate the FLAT (path-keyed) spec so members are leaves; the built flat service is nested by the
+  // caller (buildClientService) when needed. Precise `WireServiceOf<S>` is restored at the return.
+  for (const [key, m] of Object.entries(flattenSpec(spec as unknown as Spec))) {
     // local-only members aren't on the wire — the client stubs them (see clientLayer).
     if (isLocalMethod(m)) continue;
     // the wire tag is group-prefixed; the service surface keeps the bare method name
@@ -2200,7 +2389,7 @@ export const forwardClient = <S extends Spec>(
   }
   // Boundary assertion (runtime-safe): every method verified present above; RPC validates
   // every payload/result against the spec schemas at the wire.
-  return service as WireServiceOf<S>;
+  return service as unknown as WireServiceOf<S>;
 };
 
 /**
@@ -2334,8 +2523,10 @@ const buildPeerClient = <Self, S extends Spec>(
         Layer.provide(FetchHttpClient.layer),
       ),
     );
-    const client = yield* Effect.provideService(
-      RpcClient.make(tag[groupSym]),
+    // `client`'s precise RPC type is deep (`From<RpcUnionOf<S>>`); `buildClientService` takes `unknown`,
+    // so widen here to stop TS deeply comparing it against `ServiceOf<S>` (a `TS2589`).
+    const client: unknown = yield* Effect.provideService(
+      RpcClient.make(tag[groupSym] as RpcGroup.RpcGroup<any>),
       RpcClient.Protocol,
       Context.get(context, RpcClient.Protocol),
     );
@@ -2534,7 +2725,7 @@ const buildClientService = <Self, S extends Spec>(
       }
     }
     // Boundary assertion (runtime-safe): built from the spec, key-for-key.
-    return service as ServiceOf<S, Self>;
+    return nestService(service) as ServiceOf<S, Self>;
   });
 
 /**
@@ -2633,7 +2824,8 @@ const clientInstances = <
 >(
   factory: {
     readonly groupId: string;
-    readonly [specSym]: S;
+    readonly [specSym]: FlatSpec;
+    readonly [specTypeSym]?: S;
     readonly [groupSym]: RpcGroupOf<S>;
   },
   ...tags: Tags
@@ -2642,12 +2834,9 @@ const clientInstances = <
     Effect.map(RpcClient.make(factory[groupSym]), (rpc) => {
       let context = Context.empty();
       for (const tag of tags) {
-        const service = forwardClient(
-          rpc,
-          factory[specSym],
-          factory.groupId,
-          tag.key,
-        );
+        const service = nestService(
+          forwardClient(rpc, factory[specSym], factory.groupId, tag.key),
+        ) as WireServiceOf<S>;
         context = Context.add(context, tag, service);
       }
       // The only cast here: TS can't track the identifier union accumulated by the
