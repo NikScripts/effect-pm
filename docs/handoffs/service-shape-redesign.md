@@ -58,8 +58,19 @@ per-use on their leaf. (This is deliberate — per-field `Exit` would kill the p
    `buildRpcGroup` emits a reserved `resolve` RPC folding value leaves; `serverLayer` implements it
    (`Effect.all` over normalized providers); `forwardClient`/materialization run `resolve` once and set
    plain props; `ServiceOf` maps `value` → plain `A`; local layer resolves values at build. Flat first.
-3. **nesting.** Recurse the spec-walk in `buildRpcGroup` / `serverLayer` / `forwardClient` /
-   `ServiceOf` / the `resolve` struct; path-based procedure names. Guard leaf-vs-group by the brand.
+3. **nesting** (the biggest — scoped, not started). **Approach: flatten-at-construction /
+   nest-at-materialization**, to leave the delicate flat type machinery untouched:
+   - `Spec` gains nested groups: `Record<string, AnyMethod | AnyLocalMethod | Spec>`.
+   - **Tag construction** flattens the nested spec to a **flat path-keyed spec** (`"connections.size"`)
+     stored in `specSym`; `buildRpcGroup` / `serverLayer` / `forwardClient` run on the **flat** spec
+     unchanged (path keys are method names with dots — `wireTag(groupId, "connections.size")`).
+   - **Impl** is provided nested → flatten it the same way at `localLayer` / `serverEntry` / client.
+   - **Materialization output**: `nestService(flatService)` splits path keys back into the nested object.
+   - **Types**: `ServiceOf` / `ImplOf` recurse over the *nested* spec (group → nested object, leaf → its
+     shape); leaf-vs-group told apart by the `methodTypeId` / local / constant / value brands.
+   - Risk lives entirely in the **type-level tree recursion** feeding `RpcUnionOf`/`ServiceOf` — the flat
+     type code already carries free-type-parameter deferral gotchas (see its comments), so this needs a
+     full focused pass, not a tail-end one.
 4. **hard rename.** Migrate all consumers + tests `query→effect` / `mutate→effectFn`; retire `query`/
    `mutate` (and internal `MethodKind` strings if worth it). The RPC names are then gone.
 
