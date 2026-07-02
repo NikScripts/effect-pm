@@ -44,6 +44,8 @@ import {
   Clock,
   Context,
   Data,
+  Deferred,
+  Duration,
   Effect,
   Fiber,
   Function as Fn,
@@ -447,6 +449,35 @@ export const constant = <Su extends Schema.Top>(
     [constantTypeId]: true as const,
   });
 
+/** Brands a {@link Method} as a **value** — a plain property kept live by a background stream. */
+const valueTypeId: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/value");
+
+/** A {@link Method} marked as a value field (via {@link value}). @public */
+export type ValueField<M extends AnyMethod> = M & {
+  readonly [valueTypeId]: true;
+};
+
+/** Runtime guard: is a spec entry a {@link value} field? */
+const isValueMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
+  valueTypeId in m;
+
+/**
+ * Define a **`value`** field — a **plain** property (`p.x: A`, no `yield*`) kept **live** by a background
+ * stream. The impl supplies a `SubscriptionRef`'s `.changes` (or any stream that emits its current value
+ * on subscribe); each acquire subscribes once, **blocks for the initial value**, and thereafter keeps the
+ * property current in place. Reads are free — `yield* Tag` never makes a request. Identical local and
+ * remote (remote is eventually-consistent — latency, not divergence). For fixed values use `constant`; for
+ * on-demand reads use `effect`. See `docs/handoffs/service-shape-redesign.md`.
+ *
+ * @public
+ */
+export const value = <Su extends Schema.Top>(
+  success: Su,
+): ValueField<Method<"query", undefined, Su, typeof Schema.Never, true>> =>
+  Object.assign(Object.create(Pipeable.Prototype), stream(success), {
+    [valueTypeId]: true as const,
+  });
+
 /**
  * Define a **mutate** (mutation) returning `success` (use `Schema.Void` when it returns
  * nothing). Add a `payload` and/or `error` via options; attach help/metadata with
@@ -688,7 +719,9 @@ export type ServiceOf<S extends Spec, Self = unknown> = {
     ? Effect.Effect<T, never, LocalCapability<Self>>
     : S[K] extends { readonly [constantTypeId]: true }
       ? SuccessOf<Exclude<S[K], AnyLocalMethod>>
-      : ServiceMethod<Exclude<S[K], AnyLocalMethod>>;
+      : S[K] extends { readonly [valueTypeId]: true }
+        ? SuccessOf<Exclude<S[K], AnyLocalMethod>>
+        : ServiceMethod<Exclude<S[K], AnyLocalMethod>>;
 };
 
 /** The wire-only service: just the {@link Method}s (used by the server impl + forwarder). */
@@ -1329,6 +1362,42 @@ function tagFor<const S extends Spec>(
   });
 }
 
+/** Block-for-initial timeout for a {@link value} field's first push. @internal */
+const valueInitialTimeout = Duration.seconds(30);
+
+/**
+ * Bind a {@link value} field's live stream to a plain, in-place-mutated service property: block for the
+ * initial value (a source that never emits fails acquisition **loudly**, as a defect), set it, then fork
+ * an updater that keeps the property current. So `yield* Tag` reads a cheap property; freshness is push,
+ * not pull. Shared by the local and client materializations, so `value` behaves identically on both.
+ * @internal
+ */
+const bindValueToProp = (
+  source: Stream.Stream<unknown>,
+  set: (v: unknown) => void,
+  label: string,
+): Effect.Effect<void, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    const firstArrived = yield* Deferred.make<void>();
+    yield* Effect.forkScoped(
+      Stream.runForEach(source, (v) =>
+        Effect.andThen(
+          Effect.sync(() => set(v)),
+          Deferred.succeed(firstArrived, undefined),
+        ),
+      ),
+    );
+    yield* Effect.race(
+      Deferred.await(firstArrived),
+      Effect.andThen(
+        Effect.sleep(valueInitialTimeout),
+        Effect.die(
+          new Error(`Resource value "${label}" produced no initial value in time`),
+        ),
+      ),
+    );
+  });
+
 /**
  * The **local** layer for a resource: provide a real implementation of its service. Grants
  * the resource's {@link LocalCapability}, so any {@link Resource.local} (local-only) members
@@ -1371,6 +1440,14 @@ function localLayer<Self, S extends Spec, R>(
         service[key] = Effect.as(cap, members[key]);
       } else if (isConstantMethod(m)) {
         service[key] = yield* (members[key] as Effect.Effect<unknown>);
+      } else if (isValueMethod(m)) {
+        yield* bindValueToProp(
+          members[key] as Stream.Stream<unknown>,
+          (v) => {
+            service[key] = v;
+          },
+          key,
+        );
       } else {
         service[key] = members[key];
       }
@@ -2446,7 +2523,7 @@ export const fleetHealth = <Self, S extends Spec, A, EPick, EOwn, ROwn>(
 const buildClientService = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   rpc: unknown,
-): Effect.Effect<ServiceOf<S, Self>> =>
+): Effect.Effect<ServiceOf<S, Self>, never, Scope.Scope> =>
   Effect.gen(function* () {
     const wire = forwardClient(rpc, tag[specSym], tag.groupId, tag.key) as Record<
       string,
@@ -2462,6 +2539,15 @@ const buildClientService = <Self, S extends Spec>(
       } else if (isConstantMethod(m)) {
         // resolve the constant's query once at acquire → a plain value
         service[key] = yield* (wire[key] as Effect.Effect<unknown>);
+      } else if (isValueMethod(m)) {
+        // subscribe once, block for the initial, keep the plain property live in place
+        yield* bindValueToProp(
+          wire[key] as Stream.Stream<unknown>,
+          (v) => {
+            service[key] = v;
+          },
+          key,
+        );
       }
     }
     // Boundary assertion (runtime-safe): built from the spec, key-for-key.
