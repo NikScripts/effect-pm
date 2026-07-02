@@ -2,9 +2,9 @@
 "@nikscripts/effect-pm": minor
 ---
 
-**Service-shape redesign (in progress) — shape-named builders + `constant`.** Spec builders are being
-renamed for **what they resolve to in the service**, not the RPC verb, and the set is expanding beyond
-Effects.
+**Service-shape redesign — shape-named builders, `constant`/`value`, single-schema payloads, and nested
+specs.** Spec builders are named for **what they resolve to in the service**, not the RPC verb, the set
+expands beyond Effects, payloads match Effect's `Rpc.make`, and specs can nest.
 
 - **`Resource.effect`** (→ `Effect<A>`, was `query`) and **`Resource.effectFn`** (→ `(In) => Effect<A>`,
   was `mutate`) — the shape-named vocabulary. **`query`/`mutate` are retired** (renamed across the whole
@@ -28,5 +28,5 @@ Effects.
   `p.admin.ban({…})` work identically **local and remote**. Leaves may be any builder
   (`effect`/`effectFn`/`stream`/`constant`/`value`/local).
 
-Next (staged): retiring the last of the old vocab → single merged value-stream + optional `initial`. See
+Next (staged): single merged value-stream + optional `initial`. See
 `docs/handoffs/service-shape-redesign.md`.

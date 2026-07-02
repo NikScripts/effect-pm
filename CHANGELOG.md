@@ -1,5 +1,29 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.22
+
+### Minor Changes
+
+- d201c0e: **Service-shape redesign — shape-named builders, `constant`/`value`, single-schema payloads,
+  and nested specs.** Spec builders are named for **what they resolve to in the service**, not the RPC
+  verb, the set expands beyond Effects, payloads match Effect's `Rpc.make`, and specs can nest.
+
+  - **`Resource.effect`** (→ `Effect<A>`, was `query`) and **`Resource.effectFn`** (→ `(In) => Effect<A>`,
+    was `mutate`) — shape-named vocabulary. **`query`/`mutate` are retired** (renamed toolkit-wide): update
+    `Resource.query` → `Resource.effect`, `Resource.mutate` → `Resource.effectFn`. **(BREAKING)**
+  - **`Resource.constant(S)`** — a value resolved **once at acquire**, surfaced as a **plain** property
+    (`p.x: A`, no `yield*`), identical local and remote. **`Resource.value(S)`** — a plain property kept
+    **live** by a background stream (impl supplies a `SubscriptionRef`'s `.changes`); acquire blocks for the
+    initial value, then reads are free.
+  - **`payload` accepts a single schema everywhere (Effect-aligned).** `effect`/`stream` previously took
+    only loose struct **fields**; they now also take a single **schema** — a `Schema.Struct({…})`, a bare
+    item, or a union (`item | item[]`) — exactly like `effectFn` and `Rpc.make`
+    (`Schema.Top | Schema.Struct.Fields`). Both forms stay supported; prefer the schema form.
+  - **Nested specs (spec-tree).** A spec can nest — groups of leaves — to any depth
+    (`connections: { size: effect(Number), changes: stream(Number) }`); the tree flattens to **path-keyed**
+    wire procedures (`"connections.size"`) and nests back in the service, so `p.connections.size` works
+    identically **local and remote**. Leaves may be any builder.
+
 ## 0.8.0-beta.21
 
 ### Minor Changes
