@@ -650,9 +650,18 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
   config: QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ) =>
   Effect.gen(function* () {
-    // `add`'s payload is `item | item[]` (a union); the bare item schema is its first member.
+    // `add`'s payload is `item | item[]` (a union); the bare item schema is its first member. `specSym`
+    // holds the *flat* spec (opaque leaf types) at runtime — recover the precise item schema at this
+    // introspection boundary.
+    const addMethod = tag[specSym].add as unknown as {
+      readonly payload: {
+        readonly members: readonly [
+          Schema.Codec<Schema.Struct<F>["Type"], unknown, never, never>,
+        ];
+      };
+    };
     const itemSchema: Schema.Codec<Schema.Struct<F>["Type"], unknown, never, never> =
-      tag[specSym].add.payload.members[0];
+      addMethod.payload.members[0];
     // Capture the FULL ambient context (worker `R` + refill `RR`): the worker effect and the
     // refill loader both run ambiently, so the captured context must cover their union.
     const context = yield* Effect.context<R | RR>();

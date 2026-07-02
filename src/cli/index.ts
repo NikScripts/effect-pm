@@ -25,7 +25,7 @@
 import { Console, Effect, type Schema } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import { methodMeta, specOf } from "../Resource";
-import type { AnyLocalMethod, AnyMethod } from "../Resource";
+import type { AnyLocalMethod, AnyMethod, FlatSpec } from "../Resource";
 
 /**
  * The structural shape the CLI reads from a resource tag: yieldable (→ its service), with
@@ -145,7 +145,7 @@ export const makeResourceCli = (resources: Record<string, CliResourceTag>, rootN
     Command.make(name).pipe(
       Command.withDescription(tag.description ?? `commands for ${name}`),
       Command.withSubcommands(
-        Object.entries(specOf(tag)).flatMap(([method, spec]) =>
+        Object.entries(specOf(tag) as unknown as FlatSpec).flatMap(([method, spec]) =>
           isCliMethod(spec) ? [methodCommand(method, spec, tag)] : [],
         ),
       ),
