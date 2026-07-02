@@ -51,6 +51,34 @@ per-use on their leaf. (This is deliberate — per-field `Exit` would kill the p
 4. **hard rename.** Migrate all consumers + tests `query→effect` / `mutate→effectFn`; retire `query`/
    `mutate` (and internal `MethodKind` strings if worth it). The RPC names are then gone.
 
+## FINAL locked decisions (2026-07-02) — governed by the *no silent divergence* law
+
+**The law:** a field behaves **identically** local↔remote, or its divergence is **loud** (a type/dependency
+error, like `local`). Silent same-looking-but-different is banned.
+
+**Taxonomy (all nestable to any depth, all Schema-serializable):**
+- **`constant(S, { initial? })`** — plain `p.x: A`, resolved **once at acquire** (batched), never changes.
+- **`value(S, { initial? })`** — plain `p.x: A`, kept live by **one** background delta-stream (below); each
+  `yield* Tag` reads the current cell (cheap, no request). Provider = a `SubscriptionRef<A>` (or seeded
+  stream) so it has a current value.
+- **`effect` / `effectFn`** — pull, `Effect<A>` / `(In) => Effect<A>`, one request per call.
+- **`stream`** — explicit push `Stream<A>` (consumer subscribes; establishing it is effectful, surfaced as
+  `Stream`).
+- **`local`** — off-wire, loud (capability error remotely).
+
+**The value channel (deltas, one stream):** every `value` leaf (nested included) is merged into **one**
+per-resource stream of `{ path, value }` **deltas** (each leaf's `SubscriptionRef.changes`, path-tagged —
+merge, not `combineLatest`). Client keeps a cell per path, patches on each delta. **No snapshot message.**
+Initial state = the first delta per leaf (SubscriptionRef emits current on subscribe).
+
+**Initial / acquire:** **block acquire** until every value-path has its first delta (authoritative — no
+placeholder), with a **timeout** so a never-emitting source fails acquisition *loudly*. Optional
+**contract-level `initial`** opts a leaf out of the block (starts at the placeholder, goes live) — the
+contract default is shared so it stays transparent. `constant`/`value` errors surface **at acquire**.
+
+**`yield* Tag` stays cheap** — reads cells, never a request (the divergence-free, footgun-free result).
+Remote cells are eventually-consistent (latency = physics, not silent divergence).
+
 ## Later slices (parked)
 `ref`/`subscriptionRef` (value ⊕ changes) · `deferred` (likely folded into `effect`) · push family
 (`sink`/`queue`/`pubsub`, gated on client-streaming transport — verify) · true sub-resources.
