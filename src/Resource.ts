@@ -420,6 +420,33 @@ export function query(
  */
 export const effect: typeof query = query;
 
+/** Brands a {@link Method} as a **constant** — resolved once at acquire, surfaced as a plain value. */
+const constantTypeId: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/constant");
+
+/** A {@link Method} marked as a constant field (via {@link constant}). @public */
+export type ConstantField<M extends AnyMethod> = M & {
+  readonly [constantTypeId]: true;
+};
+
+/** Runtime guard: is a spec entry a {@link constant} field? */
+const isConstantMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
+  constantTypeId in m;
+
+/**
+ * Define a **`constant`** field — a value resolved **once** when the resource is acquired, surfaced as a
+ * **plain** property (`p.x: A`, no `yield*`), identical local and remote. For values fixed after startup.
+ * The impl supplies the value as an `Effect<A>` (run once at acquire; use `Effect.succeed` for a literal).
+ * Live values are `value`; on-demand reads are `effect`. See `docs/handoffs/service-shape-redesign.md`.
+ *
+ * @public
+ */
+export const constant = <Su extends Schema.Top>(
+  success: Su,
+): ConstantField<Method<"query", undefined, Su, typeof Schema.Never>> =>
+  Object.assign(Object.create(Pipeable.Prototype), query(success), {
+    [constantTypeId]: true as const,
+  });
+
 /**
  * Define a **mutate** (mutation) returning `success` (use `Schema.Void` when it returns
  * nothing). Add a `payload` and/or `error` via options; attach help/metadata with
@@ -659,7 +686,9 @@ export type ServiceMethod<M extends AnyMethod> = M["stream"] extends true
 export type ServiceOf<S extends Spec, Self = unknown> = {
   readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
     ? Effect.Effect<T, never, LocalCapability<Self>>
-    : ServiceMethod<Exclude<S[K], AnyLocalMethod>>;
+    : S[K] extends { readonly [constantTypeId]: true }
+      ? SuccessOf<Exclude<S[K], AnyLocalMethod>>
+      : ServiceMethod<Exclude<S[K], AnyLocalMethod>>;
 };
 
 /** The wire-only service: just the {@link Method}s (used by the server impl + forwarder). */
@@ -1329,22 +1358,28 @@ function localLayer<Self, S extends Spec, R>(
   // Build the service (from the record or the Effect), then hand back a Context carrying both the
   // service and the granted capability — one `effectContext` layer, so any `Scope` the impl's
   // construction needs is managed by the layer (not merged in separately).
-  const build = Effect.map(
-    Effect.isEffect(impl) ? impl : Effect.succeed(impl),
-    (built) => {
-      const members = built as Record<string, unknown>;
-      const service: Record<string, unknown> = {};
-      for (const [key, m] of Object.entries(spec)) {
-        // local members surface as `Effect<T, never, LocalCapability>` — requiring the cap to obtain
-        // the raw value; wire members pass through unchanged.
-        service[key] = isLocalMethod(m) ? Effect.as(cap, members[key]) : members[key];
+  const build = Effect.gen(function* () {
+    const members = (yield* (Effect.isEffect(impl)
+      ? impl
+      : Effect.succeed(impl))) as Record<string, unknown>;
+    const service: Record<string, unknown> = {};
+    for (const [key, m] of Object.entries(spec)) {
+      // local members surface as `Effect<T, never, LocalCapability>` (require the cap to obtain the
+      // value); constant fields are resolved once here into a plain value; other wire members pass
+      // through unchanged.
+      if (isLocalMethod(m)) {
+        service[key] = Effect.as(cap, members[key]);
+      } else if (isConstantMethod(m)) {
+        service[key] = yield* (members[key] as Effect.Effect<unknown>);
+      } else {
+        service[key] = members[key];
       }
-      // Boundary assertion (runtime-safe): built from the same spec, key-for-key.
-      return Context.make(tag, service as ServiceOf<S, Self>).pipe(
-        Context.add(cap, { granted: true }),
-      );
-    },
-  );
+    }
+    // Boundary assertion (runtime-safe): built from the same spec, key-for-key.
+    return Context.make(tag, service as ServiceOf<S, Self>).pipe(
+      Context.add(cap, { granted: true }),
+    );
+  });
   return Layer.effectContext(build);
 }
 
@@ -2244,7 +2279,7 @@ const buildPeerClient = <Self, S extends Spec>(
       RpcClient.Protocol,
       Context.get(context, RpcClient.Protocol),
     );
-    return buildClientService(tag, client);
+    return yield* buildClientService(tag, client);
   });
 
 /**
@@ -2411,23 +2446,27 @@ export const fleetHealth = <Self, S extends Spec, A, EPick, EOwn, ROwn>(
 const buildClientService = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   rpc: unknown,
-): ServiceOf<S, Self> => {
-  const wire = forwardClient(rpc, tag[specSym], tag.groupId, tag.key) as Record<
-    string,
-    unknown
-  >;
-  const cap = tag[localCapSym];
-  const service: Record<string, unknown> = { ...wire };
-  for (const [key, m] of Object.entries(tag[specSym])) {
-    if (isLocalMethod(m)) {
-      service[key] = Effect.flatMap(cap, () =>
-        Effect.die(new LocalOnlyMethod({ method: key })),
-      );
+): Effect.Effect<ServiceOf<S, Self>> =>
+  Effect.gen(function* () {
+    const wire = forwardClient(rpc, tag[specSym], tag.groupId, tag.key) as Record<
+      string,
+      unknown
+    >;
+    const cap = tag[localCapSym];
+    const service: Record<string, unknown> = { ...wire };
+    for (const [key, m] of Object.entries(tag[specSym])) {
+      if (isLocalMethod(m)) {
+        service[key] = Effect.flatMap(cap, () =>
+          Effect.die(new LocalOnlyMethod({ method: key })),
+        );
+      } else if (isConstantMethod(m)) {
+        // resolve the constant's query once at acquire → a plain value
+        service[key] = yield* (wire[key] as Effect.Effect<unknown>);
+      }
     }
-  }
-  // Boundary assertion (runtime-safe): built from the spec, key-for-key.
-  return service as ServiceOf<S, Self>;
-};
+    // Boundary assertion (runtime-safe): built from the spec, key-for-key.
+    return service as ServiceOf<S, Self>;
+  });
 
 /**
  * The **client** layer for a resource: drive it over RPC **as if it were local** — the exact
@@ -2468,7 +2507,7 @@ function clientLayer<Self, S extends Spec>(
   if (hostKey === undefined) {
     return Layer.effect(
       tag,
-      Effect.map(RpcClient.make(group), (client) =>
+      Effect.flatMap(RpcClient.make(group), (client) =>
         buildClientService(tag, client),
       ),
     );
@@ -2481,7 +2520,7 @@ function clientLayer<Self, S extends Spec>(
   // precise `HSelf` for callers, so this one contained boundary assertion restates the impl's return.
   const layer = Layer.effect(
     tag,
-    Effect.map(
+    Effect.flatMap(
       Effect.flatMap(hostKey, (protocol) =>
         Effect.provideService(
           RpcClient.make(group),

@@ -42,7 +42,12 @@ per-use on their leaf. (This is deliberate — per-field `Exit` would kill the p
 1. **✅ DONE — shape-named builders.** `Resource.effect` / `Resource.effectFn` added (alias `query`/
    `mutate`, full overloads); `stream` already shape-named. Additive, nothing breaks. New vocabulary in
    place.
-2. **value shape + batched `resolve` + provider normalization.** New `MethodKind`/marker for `value`;
+2. **✅ DONE — `constant`.** Plain value resolved once at acquire, identical local↔remote — reuses the
+   query wire (impl = `Effect<A>`); `ServiceOf` maps it to plain `A`; `localLayer` + `buildClientService`
+   resolve it once at build. Test: `test/resource-constant.test.ts` (local + remote round-trip). v1 is
+   non-failing (`E = never`) — fallible/`initial`/batched-resolve are follow-ups.
+
+3. **value shape + delta channel + provider normalization.** New `MethodKind`/marker for `value`;
    `buildRpcGroup` emits a reserved `resolve` RPC folding value leaves; `serverLayer` implements it
    (`Effect.all` over normalized providers); `forwardClient`/materialization run `resolve` once and set
    plain props; `ServiceOf` maps `value` → plain `A`; local layer resolves values at build. Flat first.
