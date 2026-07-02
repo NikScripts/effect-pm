@@ -224,3 +224,25 @@ documented in the two attempt-notes above — foundation, recurse the 5 types, `
 `buildRpcGroup`/`forwardClient` take `FlatSpec`, runtime flatten/nest in both materializations) **but with
 the brand-check form above from the start**. Then typecheck-iterate the consumers; the generic queue/process
 specs should now reduce. Validate with a nested-spec round-trip test (local + remote).
+
+## Nesting — SOLUTION revised: NO brand, use a narrow structural check (validated 2026-07-02)
+The `[methodTypeId]` brand was unnecessary — what matters is checking a **narrow F-independent property**,
+not the whole `AnyMethod` (which drags the F-parameterized schemas → TS defers). **Probe-validated:**
+`M<Su> extends AnyMethod` does NOT reduce under a generic `Su`; `M<Su> extends { readonly kind: string }`
+DOES. So distinguish leaf-vs-group by the method's own **`kind`** field — no symbol brand, no type pollution:
+```ts
+S[K] extends { readonly kind: MethodKind }          // a leaf method (incl. generic-F) — reduces
+  ? ServiceMethod<Exclude<S[K], AnyLocalMethod>>     // Exclude checks localMethodTypeId only → F-independent
+  : ServiceOf<Extract<S[K], Spec>>                   // else a nested group
+```
+Apply in every recursive type (`ServiceOf`/`ImplOf`/`WireServiceOf`/`PeerServiceOf`/`ServeImplOf`) **and**
+`RpcUnionOf` (`S[K] extends { readonly kind: MethodKind } ? RpcOf<K, S[K]> : never`) — the latter makes
+`HandlerContextOf<generic-F>` reduce, killing the `any`-leak too (same root cause).
+
+**Bonus — this may also drop the opaque wire + the `specTypeSym` phantom.** Those were only needed because
+the recursive types didn't reduce, forcing `RpcGroup<any>` (leaks `any`) and losing `S` from `specSym`.
+With the structural `kind` check making everything reduce under generic `F`, **retry the *first*
+(non-opaque) approach**: `specSym: FlatSpecOf<S>` precise (no phantom), `groupSym: RpcGroupOf<FlatSpecOf<S>>`
+precise (no `any`) — if `FlatSpecOf` itself uses the `kind` check so it reduces + satisfies `Spec`
+generically. Try that path first in the dedicated effort; fall back to opaque only if `FlatSpecOf<S>`
+still won't satisfy the `Spec` constraint generically.
