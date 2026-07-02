@@ -68,9 +68,22 @@ per-use on their leaf. (This is deliberate — per-field `Exit` would kill the p
    - **Materialization output**: `nestService(flatService)` splits path keys back into the nested object.
    - **Types**: `ServiceOf` / `ImplOf` recurse over the *nested* spec (group → nested object, leaf → its
      shape); leaf-vs-group told apart by the `methodTypeId` / local / constant / value brands.
-   - Risk lives entirely in the **type-level tree recursion** feeding `RpcUnionOf`/`ServiceOf` — the flat
-     type code already carries free-type-parameter deferral gotchas (see its comments), so this needs a
-     full focused pass, not a tail-end one.
+   - Risk lives entirely in the **type-level tree recursion** feeding `RpcUnionOf`/`ServiceOf`.
+   - **✅ Type foundation PROVEN** (isolated probe, compiled clean incl. a `@ts-expect-error` that a group
+     is not a leaf key, nested paths fold, leaf types preserved). The working `FlatSpecOf`:
+     ```ts
+     type FlatSpecOf<Sp, Prefix extends string = ""> = UnionToIntersection<{
+       [K in keyof Sp & string]: Sp[K] extends AnyMethod | AnyLocalMethod
+         ? { readonly [P in `${Prefix}${K}`]: Sp[K] }
+         : FlatSpecOf<Sp[K], `${Prefix}${K}.`>;
+     }[keyof Sp & string]>;
+     ```
+     `ServiceOf`/`ImplOf` recurse directly over the nested spec (group → nested object, leaf → shape).
+   - **Remaining (the integration, ~15–20 coupled edits):** widen `Spec` to nested; `specSym` stores
+     `FlatSpecOf<S>` (a runtime `flattenSpec`); `buildRpcGroup`/`serverLayer`/`forwardClient` take the flat
+     spec (`RpcGroupOf<FlatSpecOf<S>>`); `ServiceOf`/`ImplOf` recurse; runtime `flattenImpl` (localLayer /
+     serverEntry / client) + `nestService` (materialization output). All coupled through `Spec`, so it's
+     one atomic change — a focused pass.
 4. **✅ DONE — hard rename.** Migrate all consumers + tests `query→effect` / `mutate→effectFn`; retire `query`/
    `mutate` (and internal `MethodKind` strings if worth it). The RPC names are then gone.
 
