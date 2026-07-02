@@ -75,16 +75,16 @@ export class HostStatusResource extends Resource.Tag<HostStatusResource>()(
   status: Resource.stream(hostStatus).annotate({
     description: "Live host status (up / uptime / resource count), re-emitted periodically.",
   }),
-  statusNow: Resource.query(hostStatus).annotate({
+  statusNow: Resource.effect(hostStatus).annotate({
     description: "One-shot host status snapshot.",
   }),
-  ping: Resource.query(Schema.Number).annotate({
+  ping: Resource.effect(Schema.Number).annotate({
     description: "Server epoch milliseconds — a round-trip liveness probe.",
   }),
   logs: Resource.stream(LogEntrySchema).annotate({
     description: "Runtime-wide host log stream (recent tail, then live). Empty unless HostLogs.layer is provided.",
   }),
-  logHistory: Resource.query(Schema.Array(LogEntrySchema), {
+  logHistory: Resource.effect(Schema.Array(LogEntrySchema), {
     payload: { limit: Schema.Number },
   }).annotate({
     description: "Replay persisted host logs (newest `limit`). Empty unless a HistoryStore is provided.",

@@ -182,7 +182,7 @@ export const historyQuery = {
  */
 export const processControlSpec = {
   // ─── Observation ───
-  statusNow: Resource.query(processStatus).annotate({
+  statusNow: Resource.effect(processStatus).annotate({
     description:
       "One-shot current-state snapshot (armed, active instances, next trigger/transition, " +
       "poll cadence) — the `status` stream's element read once.",
@@ -191,7 +191,7 @@ export const processControlSpec = {
     description:
       "Live current-state snapshot — emits the current process state and every change.",
   }),
-  schedule: Resource.query(Schema.Array(processScheduleEntry)).annotate({
+  schedule: Resource.effect(Schema.Array(processScheduleEntry)).annotate({
     description: "The process's current schedule entries (run windows), sorted by startAt.",
   }),
   logs: Resource.stream(processLogEntry).annotate({
@@ -199,7 +199,7 @@ export const processControlSpec = {
       "Captured log lines (engine + instance effect) with level/annotations/spans — empty " +
       "unless the process was configured to capture logs.",
   }),
-  logHistory: Resource.query(Schema.Array(processLogEntry), {
+  logHistory: Resource.effect(Schema.Array(processLogEntry), {
     payload: historyQuery,
   }).annotate({
     description:
@@ -208,30 +208,30 @@ export const processControlSpec = {
   }),
 
   // ─── Lifecycle ───
-  start: Resource.mutate(Schema.Void).annotate({
+  start: Resource.effectFn(Schema.Void).annotate({
     description: "Begin supervising — fork the trigger driver (idempotent).",
   }),
-  stop: Resource.mutate(Schema.Void).annotate({
+  stop: Resource.effectFn(Schema.Void).annotate({
     description: "Stop supervising — interrupt the driver and any active run instances.",
     destructive: true,
   }),
-  runImmediately: Resource.mutate(Schema.Void).annotate({
+  runImmediately: Resource.effectFn(Schema.Void).annotate({
     description:
       "Run the process effect once with tracking, out of band — independent of the trigger cadence.",
   }),
 
   // ─── Schedule mutation (this is how you arm/disarm: armed is derived from entries) ───
-  setSchedule: Resource.mutate(Schema.Void, {
+  setSchedule: Resource.effectFn(Schema.Void, {
     payload: Schema.Array(processScheduleEntry),
   }).annotate({
     description: "Replace all schedule entries.",
   }),
-  addSchedule: Resource.mutate(Schema.Void, {
+  addSchedule: Resource.effectFn(Schema.Void, {
     payload: processScheduleEntry,
   }).annotate({
     description: "Append one schedule entry.",
   }),
-  clearSchedule: Resource.mutate(Schema.Void).annotate({
+  clearSchedule: Resource.effectFn(Schema.Void).annotate({
     description: "Remove all schedule entries (disarms until new entries are added).",
     destructive: true,
   }),

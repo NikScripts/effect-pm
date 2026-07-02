@@ -13,8 +13,8 @@ class Dep extends Context.Service<Dep, number>()(
   "@nikscripts/effect-pm/test/multi-resource-isolated-deps.test/Dep",
 ) {}
 
-class A extends Resource.Tag<A>()("proto/A", { read: Resource.query(Schema.Number) }) {}
-class B extends Resource.Tag<B>()("proto/B", { read: Resource.query(Schema.Number) }) {}
+class A extends Resource.Tag<A>()("proto/A", { read: Resource.effect(Schema.Number) }) {}
+class B extends Resource.Tag<B>()("proto/B", { read: Resource.effect(Schema.Number) }) {}
 
 // one impl reading the Dep tag — its requirement `R = Dep` is inferred + preserved by `serve`
 const impl = { read: Effect.map(Dep, (value) => value) };

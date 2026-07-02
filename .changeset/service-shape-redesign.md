@@ -7,7 +7,8 @@ renamed for **what they resolve to in the service**, not the RPC verb, and the s
 Effects.
 
 - **`Resource.effect`** (→ `Effect<A>`, was `query`) and **`Resource.effectFn`** (→ `(In) => Effect<A>`,
-  was `mutate`) — the shape-named vocabulary. `query`/`mutate` still work.
+  was `mutate`) — the shape-named vocabulary. **`query`/`mutate` are retired** (renamed across the whole
+  toolkit); update call sites `Resource.query` → `Resource.effect`, `Resource.mutate` → `Resource.effectFn`.
 - **`Resource.constant(S)`** — a value resolved **once at acquire** and surfaced as a **plain** property
   (`p.x: A`, no `yield*`), **identical local and remote**. Reuses the query wire; the impl supplies
   `Effect<A>` (use `Effect.succeed` for a literal).

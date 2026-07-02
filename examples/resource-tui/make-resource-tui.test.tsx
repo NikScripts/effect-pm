@@ -6,9 +6,9 @@ import * as Resource from "../../src/Resource";
 import { makeResourceTui } from "./make-resource-tui";
 
 class Counter extends Resource.Tag<Counter>()("TuiCounter", {
-  current: Resource.query(Schema.Number),
-  increment: Resource.mutate(Schema.Void, { payload: { by: Schema.Number } }),
-  reset: Resource.mutate(Schema.Void).annotate({ destructive: true }),
+  current: Resource.effect(Schema.Number),
+  increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
+  reset: Resource.effectFn(Schema.Void).annotate({ destructive: true }),
 }) {}
 
 let v = 0;

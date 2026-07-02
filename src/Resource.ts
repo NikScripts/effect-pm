@@ -7,15 +7,15 @@
  * contract — the inferred service interface, the client forwarder, and the server
  * handlers all derive from it.
  *
- * Each method is built by {@link Resource.query} (idempotent read) or
- * {@link Resource.mutate} (mutation); tool metadata (help text, destructive hint) rides
+ * Each method is built by {@link effect} (idempotent read) or
+ * {@link effectFn} (mutation); tool metadata (help text, destructive hint) rides
  * `.annotate({...})`:
  *
  * ```ts
  * class Counter extends Resource.Tag<Counter>()("@app/Counter", {
- *   current: Resource.query(Schema.Number).annotate({ description: "Current value." }),
- *   add: Resource.mutate(Schema.Void, { payload: { by: Schema.Number } }),
- *   reset: Resource.mutate(Schema.Void).annotate({ destructive: true }),
+ *   current: Resource.effect(Schema.Number).annotate({ description: "Current value." }),
+ *   add: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
+ *   reset: Resource.effectFn(Schema.Void).annotate({ destructive: true }),
  * }) {}
  *
  * const c = yield* Counter;        // { current: Effect<number>; add: (p) => Effect<void>; reset: Effect<void> }
@@ -35,7 +35,7 @@
  * - {@link Resource.serveHttp} — expose a resource on an http `RpcServer` in one call;
  * - {@link Resource.connectHttp} — wire a {@link Resource.Host}'s transport from a `url`.
  *
- * A method is {@link Resource.query} (one-shot read), {@link Resource.mutate} (mutation), or
+ * A method is {@link effect} (one-shot read), {@link effectFn} (mutation), or
  * {@link Resource.stream} (a live `Stream` source, e.g. `changes`).
  *
  * @module Resource
@@ -142,7 +142,7 @@ export class MissingHostUrl extends Data.TaggedError("MissingHostUrl")<{
 
 /**
  * How a method behaves, for tools (CLI/TUI/dashboard) — **explicit, never inferred**;
- * encoded by the constructor used ({@link Resource.query} vs {@link Resource.mutate}):
+ * encoded by the constructor used ({@link effect} vs {@link effectFn}):
  * - **`query`** — an idempotent read (CLI prints it, dashboard reads it as an Atom);
  * - **`mutate`** — a mutation (CLI confirms, dashboard calls it as `runtime.fn`).
  *
@@ -173,8 +173,8 @@ export interface MethodAnnotations {
 const methodTypeId: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/method");
 
 /**
- * One method of a resource contract — built by {@link Resource.query} /
- * {@link Resource.mutate} / {@link Resource.stream}. Carries its `kind`, schemas
+ * One method of a resource contract — built by {@link effect} /
+ * {@link effectFn} / {@link Resource.stream}. Carries its `kind`, schemas
  * (`payload` / `success` / `error`), whether it's a `stream` (a push source vs a one-shot
  * read), and tool annotations. `.annotate({...})` returns a copy with merged annotations,
  * mirroring Effect's schema idiom.
@@ -230,8 +230,8 @@ export type FleetField<M extends AnyMethod> = M & { readonly [fleetTypeId]: true
  * want). The one lightweight tag the plain-query model keeps, purely for this exclusion.
  *
  * ```ts
- * connections:      Resource.query(Schema.Number),               // per-instance (leaf) — peers see it
- * totalConnections: Resource.fleet(Resource.query(Schema.Number)), // fleet — peers don't
+ * connections:      Resource.effect(Schema.Number),               // per-instance (leaf) — peers see it
+ * totalConnections: Resource.fleet(Resource.effect(Schema.Number)), // fleet — peers don't
  * ```
  *
  * @public
@@ -335,8 +335,8 @@ export const methodMeta = (m: AnyMethod): MethodMeta => ({
 });
 
 /**
- * The single {@link Method} constructor — {@link query}, {@link mutate}, and
- * {@link stream} all go through it.
+ * The single {@link Method} constructor — {@link effect}, {@link effectFn}, {@link constant},
+ * {@link value}, and {@link stream} all go through it.
  */
 const makeMethod = <
   Kind extends MethodKind,
@@ -366,28 +366,30 @@ const makeMethod = <
   });
 
 /**
- * Define a **query** (idempotent read) returning `success`. Add a `payload` and/or `error`
- * via options; attach help/metadata with `.annotate({ description, ... })`.
+ * Define an **`effect`** field — resolves to `Effect<Su, E>` in the service (a lazy, re-runnable read),
+ * named for what it resolves to. Add a `payload` and/or `error` via options; attach help/metadata with
+ * `.annotate({ description, ... })`. The other shapes are {@link value} / {@link constant} /
+ * {@link effectFn} / {@link stream}.
  *
  * ```ts
- * size: Resource.query(Schema.Number).annotate({ description: "Total pending." }),
- * get: Resource.query(Schema.User, { payload: { id: Schema.String } }),
+ * size: Resource.effect(Schema.Number).annotate({ description: "Total pending." }),
+ * get: Resource.effect(Schema.User, { payload: { id: Schema.String } }),
  * ```
  *
  * @public
  */
-export function query<Su extends Schema.Top>(
+export function effect<Su extends Schema.Top>(
   success: Su,
 ): Method<"query", undefined, Su, Schema.Never>;
-export function query<Su extends Schema.Top, const F extends Schema.Struct.Fields>(
+export function effect<Su extends Schema.Top, const F extends Schema.Struct.Fields>(
   success: Su,
   options: { readonly payload: F },
 ): Method<"query", F, Su, Schema.Never>;
-export function query<Su extends Schema.Top, E extends Schema.Top>(
+export function effect<Su extends Schema.Top, E extends Schema.Top>(
   success: Su,
   options: { readonly error: E },
 ): Method<"query", undefined, Su, E>;
-export function query<
+export function effect<
   Su extends Schema.Top,
   const F extends Schema.Struct.Fields,
   E extends Schema.Top,
@@ -395,7 +397,7 @@ export function query<
   success: Su,
   options: { readonly payload: F; readonly error: E },
 ): Method<"query", F, Su, E>;
-export function query(
+export function effect(
   success: Schema.Top,
   options?: {
     readonly payload?: Schema.Struct.Fields;
@@ -411,16 +413,6 @@ export function query(
     {},
   );
 }
-
-/**
- * Define an **`effect`** field — resolves to `Effect<Su, E>` in the service (a lazy, re-runnable read).
- * The shape-named form of {@link query}: named for **what it resolves to**, not the RPC verb. Identical
- * options. Part of the shape-named vocabulary (`value` / `effect` / `effectFn` / `stream`) — see
- * `docs/handoffs/service-shape-redesign.md`.
- *
- * @public
- */
-export const effect: typeof query = query;
 
 /** Brands a {@link Method} as a **constant** — resolved once at acquire, surfaced as a plain value. */
 const constantTypeId: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/constant");
@@ -445,7 +437,7 @@ const isConstantMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
 export const constant = <Su extends Schema.Top>(
   success: Su,
 ): ConstantField<Method<"query", undefined, Su, typeof Schema.Never>> =>
-  Object.assign(Object.create(Pipeable.Prototype), query(success), {
+  Object.assign(Object.create(Pipeable.Prototype), effect(success), {
     [constantTypeId]: true as const,
   });
 
@@ -479,35 +471,35 @@ export const value = <Su extends Schema.Top>(
   });
 
 /**
- * Define a **mutate** (mutation) returning `success` (use `Schema.Void` when it returns
- * nothing). Add a `payload` and/or `error` via options; attach help/metadata with
- * `.annotate({ description, destructive })`.
+ * Define an **`effectFn`** field — resolves to `(In) => Effect<Su, E>` in the service (a call with input),
+ * named for what it resolves to. Use `Schema.Void` for `success` when it returns nothing. Add a `payload`
+ * and/or `error` via options; attach help/metadata with `.annotate({ description, destructive })`.
  *
  * ```ts
- * pause: Resource.mutate(Schema.Void).annotate({ description: "Pause." }),
- * clear: Resource.mutate(Schema.Number).annotate({ destructive: true }),
- * enqueue: Resource.mutate(Schema.Void, { payload: { item: Item }, error: Full }),
+ * pause: Resource.effectFn(Schema.Void).annotate({ description: "Pause." }),
+ * clear: Resource.effectFn(Schema.Number).annotate({ destructive: true }),
+ * enqueue: Resource.effectFn(Schema.Void, { payload: { item: Item }, error: Full }),
  * ```
  *
  * @public
  */
-export function mutate<Su extends Schema.Top>(
+export function effectFn<Su extends Schema.Top>(
   success: Su,
 ): Method<"mutate", undefined, Su, Schema.Never>;
-export function mutate<Su extends Schema.Top, const F extends Schema.Struct.Fields>(
+export function effectFn<Su extends Schema.Top, const F extends Schema.Struct.Fields>(
   success: Su,
   options: { readonly payload: F },
 ): Method<"mutate", F, Su, Schema.Never>;
 // whole-schema payload — the value is passed/decoded directly (e.g. `add(item)`).
-export function mutate<Su extends Schema.Top, P extends Schema.Top>(
+export function effectFn<Su extends Schema.Top, P extends Schema.Top>(
   success: Su,
   options: { readonly payload: P },
 ): Method<"mutate", P, Su, Schema.Never>;
-export function mutate<Su extends Schema.Top, E extends Schema.Top>(
+export function effectFn<Su extends Schema.Top, E extends Schema.Top>(
   success: Su,
   options: { readonly error: E },
 ): Method<"mutate", undefined, Su, E>;
-export function mutate<
+export function effectFn<
   Su extends Schema.Top,
   const F extends Schema.Struct.Fields,
   E extends Schema.Top,
@@ -515,7 +507,7 @@ export function mutate<
   success: Su,
   options: { readonly payload: F; readonly error: E },
 ): Method<"mutate", F, Su, E>;
-export function mutate<
+export function effectFn<
   Su extends Schema.Top,
   P extends Schema.Top,
   E extends Schema.Top,
@@ -523,7 +515,7 @@ export function mutate<
   success: Su,
   options: { readonly payload: P; readonly error: E },
 ): Method<"mutate", P, Su, E>;
-export function mutate(
+export function effectFn(
   success: Schema.Top,
   options?: {
     readonly payload?: Schema.Struct.Fields | Schema.Top;
@@ -540,19 +532,10 @@ export function mutate(
   );
 }
 
-/**
- * Define an **`effectFn`** field — resolves to `(In) => Effect<Su, E>` in the service (a call with input).
- * The shape-named form of {@link mutate}: named for **what it resolves to**, not the RPC verb. Identical
- * options. Part of the shape-named vocabulary (`value` / `effect` / `effectFn` / `stream`).
- *
- * @public
- */
-export const effectFn: typeof mutate = mutate;
-
 type PairMethodAnnotations = MethodAnnotations & { readonly callStyle: "pair" };
 
 /**
- * Like {@link mutate}, but the payload must be a 2-tuple schema surfaced as two call
+ * Like {@link effectFn}, but the payload must be a 2-tuple schema surfaced as two call
  * arguments `(first, second?)` — used by custom-queue `add(item, level?)`.
  *
  * @public
@@ -1053,7 +1036,7 @@ export const hostOf = (tag: unknown): HostKey<unknown> | undefined => {
  *
  * ```ts
  * class EdgeCache extends Resource.Tag<EdgeCache>()("edge/Cache", {
- *   warm: Resource.query(Schema.Boolean),
+ *   warm: Resource.effect(Schema.Boolean),
  * }).pipe(
  *   Resource.withReadiness((svc) =>
  *     Effect.map(svc.warm, (warm) => ({ ready: warm, ...(warm ? {} : { detail: "cold" }) })),
@@ -1218,8 +1201,8 @@ const buildInstanceTag = <Self, S extends Spec>(
  *
  * ```ts
  * class Counter extends Resource.Tag<Counter>()("Counter", {
- *   increment: Resource.mutate(Schema.Void, { payload: { by: Schema.Number } }),
- *   current: Resource.query(Schema.Number),
+ *   increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
+ *   current: Resource.effect(Schema.Number),
  * }) {}
  *
  * const c = yield* Counter; // { increment: (p) => Effect<void>; current: Effect<number> }
@@ -1317,7 +1300,7 @@ export interface HostTagFactory<S extends Spec, HSelf> {
  * host-bearing tag and ships only-the-tag (see {@link Resource.client} / {@link Resource.connect}).
  *
  * ```ts
- * const Queue = Resource.tagFor("queue", { pause: Resource.mutate(Schema.Void) });
+ * const Queue = Resource.tagFor("queue", { pause: Resource.effectFn(Schema.Void) });
  * class Jobs extends Queue<Jobs>("@app/Jobs") {}  // spec baked in; just the instance key
  * class Mail extends Queue<Mail>("@app/Mail") {}  // shares contract + group, routed by key
  * ```
@@ -2091,7 +2074,7 @@ const instance = <Self, S extends Spec>(
  * every instance is wired, and a duplicate key **throws at assembly**.
  *
  * ```ts
- * const Queue = Resource.tagFor("queue", { pause: Resource.mutate(Schema.Void) });
+ * const Queue = Resource.tagFor("queue", { pause: Resource.effectFn(Schema.Void) });
  * class Jobs extends Queue<Jobs>("@app/Jobs") {}
  * class Mail extends Queue<Mail>("@app/Mail") {}
  *

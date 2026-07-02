@@ -13,8 +13,8 @@ class Dep extends Context.Service<Dep, number>()(
   "@nikscripts/effect-pm/test/multi-resource-http-server.test/Dep",
 ) {}
 
-class A extends Resource.Tag<A>()("httpserver/A", { read: Resource.query(Schema.Number) }) {}
-class B extends Resource.Tag<B>()("httpserver/B", { read: Resource.query(Schema.Number) }) {}
+class A extends Resource.Tag<A>()("httpserver/A", { read: Resource.effect(Schema.Number) }) {}
+class B extends Resource.Tag<B>()("httpserver/B", { read: Resource.effect(Schema.Number) }) {}
 
 const impl = { read: Effect.map(Dep, (value) => value) };
 

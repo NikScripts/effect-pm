@@ -9,7 +9,7 @@ import * as HostStatus from "../src/HostStatus";
 // `withReadiness`). When it reports "not ready", the host's `/health` returns 503 and `HostStatus`
 // reads `degraded` with the per-resource detail — the same aggregate, two faces (SSOT).
 class Warming extends Resource.Tag<Warming>()("readiness/Warming", {
-  ping: Resource.query(Schema.String),
+  ping: Resource.effect(Schema.String),
 }).pipe(
   Resource.withReadiness(() => Effect.succeed({ ready: false, detail: "warming up" })),
 ) {}
@@ -63,7 +63,7 @@ it("HostStatus reports the same per-resource readiness (degraded board)", () =>
 // The DB is a proper resource with its own readiness; a worker extends its base "running" check to
 // also require the DB (via `readinessOf` + `allReady`), reusing — not redefining — both checks.
 class Database extends Resource.Tag<Database>()("dep/Database", {
-  ping: Resource.query(Schema.Boolean),
+  ping: Resource.effect(Schema.Boolean),
 }).pipe(
   Resource.withReadiness((svc) =>
     Effect.map(svc.ping, (ok) => (ok ? { ready: true } : { ready: false, detail: "disconnected" })),
@@ -71,7 +71,7 @@ class Database extends Resource.Tag<Database>()("dep/Database", {
 ) {}
 
 class Worker extends Resource.Tag<Worker>()("dep/Worker", {
-  running: Resource.query(Schema.Boolean),
+  running: Resource.effect(Schema.Boolean),
 }).pipe(
   // a "factory" base check: ready iff running
   Resource.withReadiness((svc) =>
@@ -113,7 +113,7 @@ it("the factory/base check still applies — a stopped worker is not ready even 
 class DepHost extends Resource.Host<DepHost>("dep/host") {}
 class HostedWorker extends Resource.Tag<HostedWorker>()(
   "dep/HostedWorker",
-  { running: Resource.query(Schema.Boolean) },
+  { running: Resource.effect(Schema.Boolean) },
   { host: DepHost },
 ).pipe(
   Resource.withReadiness((svc) =>
@@ -134,7 +134,7 @@ it("a host-bound tag can extend readiness via .pipe (regression)", () =>
 // matches and its host is preserved in the return.
 class DataFirstWorker extends Resource.Tag<DataFirstWorker>()(
   "dep/DataFirstWorker",
-  { running: Resource.query(Schema.Boolean) },
+  { running: Resource.effect(Schema.Boolean) },
   { host: DepHost },
 ) {}
 

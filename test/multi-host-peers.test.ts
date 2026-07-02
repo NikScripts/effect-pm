@@ -6,8 +6,8 @@ import * as Resource from "../src/Resource";
 // combined fields are plain queries, tagged `fleet` (so peers exclude them); the layer implements them
 // via Resource.peers + your own value.
 class Database extends Resource.Tag<Database>()("test/peers/Database", {
-  connections: Resource.query(Schema.Number),
-  totalConnections: Resource.query(Schema.Number).pipe(Resource.fleet),
+  connections: Resource.effect(Schema.Number),
+  totalConnections: Resource.effect(Schema.Number).pipe(Resource.fleet),
 }) {}
 
 // build the impl effectfully (the Effect form of Resource.layer): resolve peers once; the members

@@ -28,10 +28,10 @@ import {
 } from "../../src/ui/atom-react";
 
 const Counter = Resource.tagFor("grid-counter", {
-  value: Resource.query(Schema.Number),
-  inc: Resource.mutate(Schema.Void),
-  dec: Resource.mutate(Schema.Void),
-  reset: Resource.mutate(Schema.Void).annotate({ destructive: true }),
+  value: Resource.effect(Schema.Number),
+  inc: Resource.effectFn(Schema.Void),
+  dec: Resource.effectFn(Schema.Void),
+  reset: Resource.effectFn(Schema.Void).annotate({ destructive: true }),
 });
 
 const impl = (start: number) => {

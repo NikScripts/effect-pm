@@ -7,9 +7,9 @@ import type { ServiceOf } from "../src/Resource";
 // (No `satisfies Spec`: it contextually widens each method's error channel to `unknown`.
 // `ServiceOf<typeof _spec>` already enforces `_spec extends Spec` without widening.)
 const _spec = {
-  current: Resource.query(Schema.Number), // no payload → property, success = number
-  reset: Resource.mutate(Schema.Void), // no payload → property, success = void
-  add: Resource.mutate(Schema.Void, {
+  current: Resource.effect(Schema.Number), // no payload → property, success = number
+  reset: Resource.effectFn(Schema.Void), // no payload → property, success = void
+  add: Resource.effectFn(Schema.Void, {
     payload: { id: Schema.String },
     error: Schema.String,
   }), // payload → method, error channel
@@ -46,9 +46,9 @@ void _notEffect;
 
 // ── Slice 2: Tag + `yield*` + local layer ──
 class Counter extends Resource.Tag<Counter>()("Counter", {
-  increment: Resource.mutate(Schema.Void, { payload: { by: Schema.Number } }),
-  reset: Resource.mutate(Schema.Void),
-  current: Resource.query(Schema.Number),
+  increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
+  reset: Resource.effectFn(Schema.Void),
+  current: Resource.effect(Schema.Number),
 }) {}
 
 // `yield* Tag` yields the inferred service; requirement is the Tag itself
@@ -70,8 +70,8 @@ void _layer;
 
 // ── factory: tagFor bakes a shared spec; instances pass only an id ──
 const Counter2 = Resource.tagFor("test/counter", {
-  tick: Resource.mutate(Schema.Void),
-  count: Resource.query(Schema.Number),
+  tick: Resource.effectFn(Schema.Void),
+  count: Resource.effect(Schema.Number),
 });
 class TickA extends Counter2<TickA>("test/TickA") {}
 class TickB extends Counter2<TickB>("test/TickB") {}
@@ -93,8 +93,8 @@ void _factoryB;
 // (Locks the precise-group typing: a regression that re-leaked `any` into `R` would
 // make this program's `R` non-`never` and fail to satisfy `runPromise`.)
 class Remote extends Resource.Tag<Remote>()("test/Remote", {
-  ping: Resource.query(Schema.String),
-  shout: Resource.mutate(Schema.String, { payload: { msg: Schema.String } }),
+  ping: Resource.effect(Schema.String),
+  shout: Resource.effectFn(Schema.String, { payload: { msg: Schema.String } }),
 }) {}
 
 declare const protocolLayer: Layer.Layer<RpcClient.Protocol>;
@@ -113,7 +113,7 @@ void _remoteRun;
 // surfaces as `Effect<T, never, LocalCapability<Box>>` — callable only when the LOCAL
 // layer (which grants the capability) is provided, a compile error under the client.
 class Box extends Resource.Tag<Box>()("test/Box", {
-  read: Resource.query(Schema.Number),
+  read: Resource.effect(Schema.Number),
   onChange:
     Resource.local<(cb: (n: number) => void) => Effect.Effect<void>>(),
 }) {}
@@ -161,8 +161,8 @@ void _wireViaClient;
 // ── clientInstances: one shared client serves many instances of one control shape ──
 // (100 processes that can only start/drop cost ONE client, not one each.)
 const Proc = Resource.tagFor("proc", {
-  start: Resource.mutate(Schema.Void),
-  drop: Resource.mutate(Schema.Void),
+  start: Resource.effectFn(Schema.Void),
+  drop: Resource.effectFn(Schema.Void),
 });
 class P1 extends Proc<P1>("@app/p1") {}
 class P2 extends Proc<P2>("@app/p2") {}
@@ -177,7 +177,7 @@ void _procClients;
 // HOST (not the ambient Protocol), and `Resource.connect(Host, transport)` wires it once.
 class EdgeHost extends Resource.Host<EdgeHost>("test/edge") {}
 class Hosted extends Resource.Tag<Hosted>()("test/Hosted", 
-  { ping: Resource.query(Schema.String) },
+  { ping: Resource.effect(Schema.String) },
   { host: EdgeHost },
 ) {}
 
@@ -211,7 +211,7 @@ void _hostlessClient;
 // One host baked into the factory → every instance is a host-bearing tag.
 const HostedProc = Resource.tagFor(
   "hostedProc",
-  { start: Resource.mutate(Schema.Void) },
+  { start: Resource.effectFn(Schema.Void) },
   { host: EdgeHost },
 );
 class HP1 extends HostedProc<HP1>("@app/hp1") {}

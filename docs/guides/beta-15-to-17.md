@@ -31,8 +31,8 @@ One resource shape served as N host-local instances (one per host), each with in
 ```ts
 class NwslHost extends Resource.Host<NwslHost>("app/NwslHost", { url: nwslUrl }) {}
 class Database extends Resource.Tag<Database>()("app/Database", {
-  connections:      Resource.query(Schema.Number),                      // per-instance ("leaf")
-  totalConnections: Resource.query(Schema.Number).pipe(Resource.fleet), // combined across the fleet
+  connections:      Resource.effect(Schema.Number),                      // per-instance ("leaf")
+  totalConnections: Resource.effect(Schema.Number).pipe(Resource.fleet), // combined across the fleet
 }).pipe(Resource.multiHost([NwslHost, EbwslHost, WnbaHost])) {}
 ```
 

@@ -71,7 +71,7 @@ per-use on their leaf. (This is deliberate — per-field `Exit` would kill the p
    - Risk lives entirely in the **type-level tree recursion** feeding `RpcUnionOf`/`ServiceOf` — the flat
      type code already carries free-type-parameter deferral gotchas (see its comments), so this needs a
      full focused pass, not a tail-end one.
-4. **hard rename.** Migrate all consumers + tests `query→effect` / `mutate→effectFn`; retire `query`/
+4. **✅ DONE — hard rename.** Migrate all consumers + tests `query→effect` / `mutate→effectFn`; retire `query`/
    `mutate` (and internal `MethodKind` strings if worth it). The RPC names are then gone.
 
 ## FINAL locked decisions (2026-07-02) — governed by the *no silent divergence* law

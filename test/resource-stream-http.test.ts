@@ -19,7 +19,7 @@ import { queueStatus } from "../src/QueueContract";
 // the design note flagged — this proves the wire works end to end). Streams need a
 // newline-delimited serialization for chunked responses, so client + server use ndjson.
 class Ticker extends Resource.Tag<Ticker>()("stream/Ticker", {
-  current: Resource.query(Schema.Number),
+  current: Resource.effect(Schema.Number),
   changes: Resource.stream(Schema.Number),
 }) {}
 
@@ -78,7 +78,7 @@ it("streams a resource's changes over real http (chunked, in order)", () => {
 // (local layer) with a `Deferred` ready-latch so the subscription is established before the
 // updates — deterministic, no cross-wire timing race.
 class Status extends Resource.Tag<Status>()("stream/Status", {
-  set: Resource.mutate(Schema.Void, { payload: { value: Schema.String } }),
+  set: Resource.effectFn(Schema.Void, { payload: { value: Schema.String } }),
   changes: Resource.stream(Schema.String),
 }) {}
 

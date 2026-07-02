@@ -13,11 +13,11 @@ class HostA extends Resource.Host<HostA>("multi/hostA") {}
 class HostB extends Resource.Host<HostB>("multi/hostB") {}
 
 class Alpha extends Resource.Tag<Alpha>()("multi/Alpha", 
-  { where: Resource.query(Schema.String) },
+  { where: Resource.effect(Schema.String) },
   { host: HostA },
 ) {}
 class Beta extends Resource.Tag<Beta>()("multi/Beta", 
-  { where: Resource.query(Schema.String) },
+  { where: Resource.effect(Schema.String) },
   { host: HostB },
 ) {}
 

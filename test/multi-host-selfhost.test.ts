@@ -7,8 +7,8 @@ class NwslHost extends Resource.Host<NwslHost>("selfhost/NwslHost") {}
 
 // a fleet health view: `status` per instance, `fleetStatus` a per-host map (Combine.byHost)
 class FleetDatabase extends Resource.Tag<FleetDatabase>()("selfhost/FleetDatabase", {
-  status: Resource.query(Schema.Boolean),
-  fleetStatus: Resource.query(Schema.Record(Schema.String, Schema.Boolean)).pipe(Resource.fleet),
+  status: Resource.effect(Schema.Boolean),
+  fleetStatus: Resource.effect(Schema.Record(Schema.String, Schema.Boolean)).pipe(Resource.fleet),
 }) {}
 
 // the impl keys its OWN row with `selfHost` — no hand-threaded host key

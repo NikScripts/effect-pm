@@ -59,55 +59,55 @@ export const reconcileResult = Schema.Struct({
  */
 export const processScheduleSpec = {
   // ─── Read ───
-  entries: Resource.query(Schema.Array(processScheduleEntry)).annotate({
+  entries: Resource.effect(Schema.Array(processScheduleEntry)).annotate({
     description: "All current schedule entries, sorted by startAt.",
   }),
-  get: Resource.query(Schema.NullOr(processScheduleEntry), {
+  get: Resource.effect(Schema.NullOr(processScheduleEntry), {
     payload: { id: Schema.String },
   }).annotate({
     description: "Look up an entry by id; null if not found.",
   }),
-  has: Resource.query(Schema.Boolean, {
+  has: Resource.effect(Schema.Boolean, {
     payload: { id: Schema.String },
   }).annotate({
     description: "Whether an entry with the given id exists.",
   }),
 
   // ─── Mutate ───
-  set: Resource.mutate(Schema.Void, {
+  set: Resource.effectFn(Schema.Void, {
     payload: Schema.Array(processScheduleEntry),
   }).annotate({
     description: "Replace all entries.",
   }),
-  add: Resource.mutate(Schema.Void, {
+  add: Resource.effectFn(Schema.Void, {
     payload: processScheduleEntry,
   }).annotate({
     description: "Append one entry.",
   }),
-  upsert: Resource.mutate(Schema.Void, {
+  upsert: Resource.effectFn(Schema.Void, {
     payload: processScheduleEntry,
   }).annotate({
     description: "Insert or update an entry by id.",
   }),
-  remove: Resource.mutate(Schema.Boolean, {
+  remove: Resource.effectFn(Schema.Boolean, {
     payload: { id: Schema.String },
   }).annotate({
     description: "Remove an entry by id; returns whether it was found.",
     destructive: true,
   }),
-  removeMany: Resource.mutate(Schema.Number, {
+  removeMany: Resource.effectFn(Schema.Number, {
     payload: { ids: Schema.Array(Schema.String) },
   }).annotate({
     description: "Remove multiple entries by id; returns the count removed.",
     destructive: true,
   }),
-  clear: Resource.mutate(Schema.Void).annotate({
+  clear: Resource.effectFn(Schema.Void).annotate({
     description: "Remove all entries.",
     destructive: true,
   }),
 
   // ─── Sync ───
-  reconcile: Resource.mutate(reconcileResult, {
+  reconcile: Resource.effectFn(reconcileResult, {
     payload: Schema.Array(processScheduleEntry),
   }).annotate({
     description:

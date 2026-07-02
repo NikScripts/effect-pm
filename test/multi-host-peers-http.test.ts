@@ -9,8 +9,8 @@ class DbHost extends Resource.Host<DbHost>("peers-http/host") {}
 class Database extends Resource.Tag<Database>()(
   "peers-http/Database",
   {
-    connections: Resource.query(Schema.Number),
-    totalConnections: Resource.query(Schema.Number).pipe(Resource.fleet), // gathered in the layer
+    connections: Resource.effect(Schema.Number),
+    totalConnections: Resource.effect(Schema.Number).pipe(Resource.fleet), // gathered in the layer
   },
   { host: DbHost },
 ) {}

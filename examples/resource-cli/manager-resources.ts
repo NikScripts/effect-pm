@@ -15,14 +15,14 @@ import { Effect, Layer, Schema } from "effect";
 import * as Resource from "../../src/Resource";
 
 export class Counter extends Resource.Tag<Counter>()("Counter", {
-  current: Resource.query(Schema.Number),
-  increment: Resource.mutate(Schema.Void, { payload: { by: Schema.Number } }),
-  reset: Resource.mutate(Schema.Void).annotate({ destructive: true }),
+  current: Resource.effect(Schema.Number),
+  increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
+  reset: Resource.effectFn(Schema.Void).annotate({ destructive: true }),
 }) {}
 
 export class QueueManager extends Resource.Tag<QueueManager>()("QueueManager", {
-  list: Resource.query(Schema.Array(Schema.String)),
-  status: Resource.query(
+  list: Resource.effect(Schema.Array(Schema.String)),
+  status: Resource.effect(
     Schema.Struct({
       id: Schema.String,
       pending: Schema.Number,
@@ -30,9 +30,9 @@ export class QueueManager extends Resource.Tag<QueueManager>()("QueueManager", {
     }),
     { payload: { id: Schema.String } },
   ),
-  pause: Resource.mutate(Schema.Void, { payload: { id: Schema.String } }),
-  resume: Resource.mutate(Schema.Void, { payload: { id: Schema.String } }),
-  enqueue: Resource.mutate(Schema.Void, {
+  pause: Resource.effectFn(Schema.Void, { payload: { id: Schema.String } }),
+  resume: Resource.effectFn(Schema.Void, { payload: { id: Schema.String } }),
+  enqueue: Resource.effectFn(Schema.Void, {
     payload: { id: Schema.String, item: Schema.String },
   }),
 }) {}

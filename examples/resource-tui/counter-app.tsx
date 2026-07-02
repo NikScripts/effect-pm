@@ -23,9 +23,9 @@ import {
 } from "../../src/ui/atom-react";
 
 class Counter extends Resource.Tag<Counter>()("Counter", {
-  current: Resource.query(Schema.Number),
-  reset: Resource.mutate(Schema.Void).annotate({ destructive: true }),
-  increment: Resource.mutate(Schema.Void, { payload: { by: Schema.Number } }),
+  current: Resource.effect(Schema.Number),
+  reset: Resource.effectFn(Schema.Void).annotate({ destructive: true }),
+  increment: Resource.effectFn(Schema.Void, { payload: { by: Schema.Number } }),
 }) {}
 
 let value = 0;

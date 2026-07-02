@@ -14,12 +14,12 @@ class MiniHost extends Resource.Host<MiniHost>("hub/miniHost") {}
 
 // Local on the Droplet (no host) — stands in for a roster import queue.
 class RosterQueue extends Resource.Tag<RosterQueue>()("hub/RosterQueue", {
-  count: Resource.query(Schema.Number),
+  count: Resource.effect(Schema.Number),
 }) {}
 
 // Remote on the Mini (host-bound) — stands in for the one poller that runs on the mini.
 class LiveScorePoller extends Resource.Tag<LiveScorePoller>()("hub/LiveScorePoller", 
-  { where: Resource.query(Schema.String) },
+  { where: Resource.effect(Schema.String) },
   { host: MiniHost },
 ) {}
 

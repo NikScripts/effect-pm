@@ -7,7 +7,7 @@ import * as Resource from "../src/Resource";
 // a hostless multi-host tag (no `{ host }`) — the fleet is on the tag, but the tag names no single host.
 class DbHost extends Resource.Host<DbHost>("hostless-client/DbHost") {}
 class FleetDatabase extends Resource.Tag<FleetDatabase>()("hostless-client/FleetDatabase", {
-  status: Resource.query(Schema.Boolean),
+  status: Resource.effect(Schema.Boolean),
 }).pipe(
   Resource.multiHost([DbHost]),
 ) {}

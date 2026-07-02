@@ -17,7 +17,7 @@ class Sched extends ProcessScheduleResource.Tag<Sched>()("kindtest/Sched") {}
 class C extends CustomQueueResource.Tag<C>()("kindtest/C", Item, 3) {}
 class M extends ApiMetrics.Tag<M>()("kindtest/M") {}
 class Bare extends Resource.Tag<Bare>()("kindtest/Bare", {
-  ping: Resource.query(Schema.String),
+  ping: Resource.effect(Schema.String),
 }) {}
 
 it("each contract stamps its kind; a bare Resource.Tag has none", () => {

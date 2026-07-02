@@ -538,7 +538,7 @@ Any resource can report **readiness** — whether it's actually able to serve, b
 
 ```ts
 class EdgeCache extends Resource.Tag<EdgeCache>()("edge/Cache", {
-  warm: Resource.query(Schema.Boolean),
+  warm: Resource.effect(Schema.Boolean),
 }).pipe(
   Resource.withReadiness((svc) =>
     Effect.map(svc.warm, (warm) => (warm ? { ready: true } : { ready: false, detail: "cold" })),
@@ -621,8 +621,8 @@ import { Combine, combineQuery } from "@nikscripts/effect-pm/MultiHost";
 // equal peer, no primary host).
 class NwslHost extends Resource.Host<NwslHost>("nwsl", { url: nwslUrl }) {}
 class Database extends Resource.Tag<Database>()("app/Database", {
-  connections:      Resource.query(Schema.Number),                 // per-instance ("leaf")
-  totalConnections: Resource.query(Schema.Number).pipe(Resource.fleet), // combined across the fleet
+  connections:      Resource.effect(Schema.Number),                 // per-instance ("leaf")
+  totalConnections: Resource.effect(Schema.Number).pipe(Resource.fleet), // combined across the fleet
 }).pipe(Resource.multiHost([NwslHost, EbwslHost, WnbaHost])) {}
 
 // the layer, Effect form (`Resource.layer` also takes an `Effect` that builds the impl): resolve

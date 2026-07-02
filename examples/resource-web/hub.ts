@@ -39,10 +39,10 @@ export class StatsHost extends Resource.Host<StatsHost>("wnba/stats", { url: rpc
 // value (see `server.ts`). Dogfoods `fleet` + `peers` + layer-from-effect end to end across three real
 // servers.
 export class WorkerPool extends Resource.Tag<WorkerPool>()("wnba/WorkerPool", {
-  active: Resource.query(Schema.Number),
-  fleetActive: Resource.query(Schema.Number).pipe(Resource.fleet),
+  active: Resource.effect(Schema.Number),
+  fleetActive: Resource.effect(Schema.Number).pipe(Resource.fleet),
   // a per-host view (one row per host) — needs `selfHost` to key this instance's own row
-  activeByHost: Resource.query(Schema.Record(Schema.String, Schema.Number)).pipe(Resource.fleet),
+  activeByHost: Resource.effect(Schema.Record(Schema.String, Schema.Number)).pipe(Resource.fleet),
 }).pipe(
   Resource.multiHost([WnbaHost, LiveHost, StatsHost]), // hostless, every instance an equal peer
 ) {}
@@ -52,7 +52,7 @@ export class WorkerPool extends Resource.Tag<WorkerPool>()("wnba/WorkerPool", {
 // DB blips the queue cascades to degraded. This dogfoods `readinessOf` + the readiness cascade.
 export class ScoresDb extends Resource.Tag<ScoresDb>()(
   "wnba/ScoresDb",
-  { connected: Resource.query(Schema.Boolean) },
+  { connected: Resource.effect(Schema.Boolean) },
   { host: WnbaHost },
 ).pipe(
   Resource.withReadiness((svc) =>

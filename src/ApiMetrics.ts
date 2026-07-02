@@ -37,7 +37,7 @@ import { ensureClientUsage } from "./internal/apiUsageRegistry";
 import {
   Tag as resourceTag,
   layer as resourceLayer,
-  query,
+  effect,
   stream,
   type HostBoundTag,
   type HostKey,
@@ -108,7 +108,7 @@ export type ApiMetricsHostTag<Self, HSelf> = HostBoundTag<
 /** @internal */
 export type ApiMetricsSpec = {
   readonly metrics: ReturnType<typeof stream<typeof apiUsageMetrics>>;
-  readonly usageNow: ReturnType<typeof query<typeof apiUsageSnapshot>>;
+  readonly usageNow: ReturnType<typeof effect<typeof apiUsageSnapshot>>;
 };
 
 const apiMetricsSpec = {
@@ -116,7 +116,7 @@ const apiMetricsSpec = {
     description:
       "Windowed API usage (requests, errors, throughput, per-endpoint breakdown) emitted once per window.",
   }),
-  usageNow: query(apiUsageSnapshot).annotate({
+  usageNow: effect(apiUsageSnapshot).annotate({
     description:
       "Point-in-time usage snapshot — cumulative totals and top endpoints.",
   }),

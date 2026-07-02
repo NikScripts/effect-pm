@@ -10,7 +10,7 @@ import { buildHostStatusImpl } from "../src/internal/hostStatusResource";
 // A host serving one ordinary resource over `serveAllHttp` must ALSO auto-serve its host status
 // (status / ping / logs / logHistory) without the author wiring anything — driven over real http.
 class Echo extends Resource.Tag<Echo>()("hostStatus/Echo", {
-  ping: Resource.query(Schema.String),
+  ping: Resource.effect(Schema.String),
 }) {}
 
 const Server = Resource.serveAllHttp([

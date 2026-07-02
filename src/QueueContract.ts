@@ -358,35 +358,35 @@ export const historyQuery = {
  * @public
  */
 export const queueControlSpec = {
-  size: Resource.query(Schema.Number).annotate({
+  size: Resource.effect(Schema.Number).annotate({
     description: "Total pending items across all priority levels.",
   }),
-  sizes: Resource.query(queueSizes).annotate({
+  sizes: Resource.effect(queueSizes).annotate({
     description: "Pending item count per priority level.",
   }),
-  isEmpty: Resource.query(Schema.Boolean).annotate({
+  isEmpty: Resource.effect(Schema.Boolean).annotate({
     description: "Whether all priority queues are empty.",
   }),
-  completed: Resource.query(Schema.Number).annotate({
+  completed: Resource.effect(Schema.Number).annotate({
     description: "Total items that have finished processing (success or failure).",
   }),
-  start: Resource.mutate(Schema.Void).annotate({
+  start: Resource.effectFn(Schema.Void).annotate({
     description:
       "Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown).",
   }),
-  pause: Resource.mutate(Schema.Void).annotate({
+  pause: Resource.effectFn(Schema.Void).annotate({
     description: "Pause processing; items can still be enqueued and accumulate.",
   }),
-  resume: Resource.mutate(Schema.Void).annotate({
+  resume: Resource.effectFn(Schema.Void).annotate({
     description: "Resume processing after a pause.",
   }),
-  shutdown: Resource.mutate(Schema.Void).annotate({
+  shutdown: Resource.effectFn(Schema.Void).annotate({
     description:
       "Permanently stop the queue (graceful): phase → draining, later enqueues dropped, " +
       "in-flight finishes, queued items drained or discarded per shutdownMode, then phase → off.",
     destructive: true,
   }),
-  clear: Resource.mutate(Schema.Number).annotate({
+  clear: Resource.effectFn(Schema.Number).annotate({
     description:
       "Drain all pending items and reset the completed counter; returns the count cleared.",
     destructive: true,
@@ -395,7 +395,7 @@ export const queueControlSpec = {
     description:
       "Live current-state snapshot (per-priority sizes, paused, in-flight, completed).",
   }),
-  statusNow: Resource.query(queueStatus).annotate({
+  statusNow: Resource.effect(queueStatus).annotate({
     description:
       "One-shot current-state snapshot — the `status` stream's element read once " +
       "(non-`--watch` CLI print, a widget's first paint).",
@@ -409,14 +409,14 @@ export const queueControlSpec = {
       "Captured log lines (engine + worker effect) with level/annotations/spans — empty " +
       "unless the queue was configured with captureLogs.",
   }),
-  metricsHistory: Resource.query(Schema.Array(queueMetrics), {
+  metricsHistory: Resource.effect(Schema.Array(queueMetrics), {
     payload: historyQuery,
   }).annotate({
     description:
       "Past windowed metrics from the HistoryStore (newest `limit` within `since`/`until`); " +
       "empty unless a HistoryStore layer is provided.",
   }),
-  logHistory: Resource.query(Schema.Array(queueLogEntry), {
+  logHistory: Resource.effect(Schema.Array(queueLogEntry), {
     payload: historyQuery,
   }).annotate({
     description:
@@ -455,38 +455,38 @@ export const queueSpec = <F extends Schema.Struct.Fields>(
   const eventSchema = queueEvent(itemSchema);
   return {
   ...queueControlSpec,
-  add: Resource.mutate(Schema.Void, {
+  add: Resource.effectFn(Schema.Void, {
     payload: itemOrItems,
   }).annotate({
     description: "Enqueue an item (or a batch) at normal priority.",
   }),
-  prioritize: Resource.mutate(Schema.Void, {
+  prioritize: Resource.effectFn(Schema.Void, {
     payload: itemOrItems,
   }).annotate({
     description:
       "Enqueue an item (or a batch) at high priority (processed before normal and low).",
   }),
-  defer: Resource.mutate(Schema.Void, {
+  defer: Resource.effectFn(Schema.Void, {
     payload: itemOrItems,
   }).annotate({
     description: "Enqueue an item (or a batch) at low priority (processed after high and normal).",
   }),
   // `enqueue` takes the entry array directly (same shape `events`/`release` produce).
-  enqueue: Resource.mutate(Schema.Void, {
+  enqueue: Resource.effectFn(Schema.Void, {
     payload: Schema.Array(queueEntry(itemSchema)),
   }).annotate({
     description:
       "Re-inject existing entries (e.g. off the events stream / a release) — each re-enters " +
       "at its own priority with its attempts preserved. The handoff / round-trip primitive.",
   }),
-  release: Resource.mutate(Schema.Array(queueEntry(itemSchema)), {
+  release: Resource.effectFn(Schema.Array(queueEntry(itemSchema)), {
     payload: { options: Schema.optionalKey(queueReleaseOptions) },
   }).annotate({
     description:
       "Export pending entries for handoff and remove them from this queue; returns them decoded.",
     destructive: true,
   }),
-  releaseEncoded: Resource.mutate(Schema.Array(queueEncodedEntry), {
+  releaseEncoded: Resource.effectFn(Schema.Array(queueEncodedEntry), {
     payload: { options: Schema.optionalKey(queueReleaseOptions) },
     error: queueReleaseEncodingError,
   }).annotate({
@@ -494,7 +494,7 @@ export const queueSpec = <F extends Schema.Struct.Fields>(
       "Export pending entries in encoded/wire form for remote handoff (requires an itemSchema).",
     destructive: true,
   }),
-  deadLetter: Resource.mutate(Schema.Array(queueEntry(itemSchema)), {
+  deadLetter: Resource.effectFn(Schema.Array(queueEntry(itemSchema)), {
     payload: {
       selector: queueEntrySelector(itemSchema),
       options: queueRouteOptions,
@@ -503,7 +503,7 @@ export const queueSpec = <F extends Schema.Struct.Fields>(
     description: "Remove pending entries matching the selector and route them to a dead letter.",
     destructive: true,
   }),
-  drop: Resource.mutate(Schema.Array(queueEntry(itemSchema)), {
+  drop: Resource.effectFn(Schema.Array(queueEntry(itemSchema)), {
     payload: {
       selector: queueEntrySelector(itemSchema),
       options: queueRouteOptions,

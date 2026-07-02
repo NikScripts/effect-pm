@@ -122,38 +122,38 @@ export const customQueueEntrySelector = <Sch extends Schema.Top>(itemSchema: Sch
  * @public
  */
 export const customQueueControlSpec = {
-  size: Resource.query(Schema.Number).annotate({
+  size: Resource.effect(Schema.Number).annotate({
     description: "Total pending items across all lanes.",
   }),
-  sizes: Resource.query(customQueueSizes).annotate({
+  sizes: Resource.effect(customQueueSizes).annotate({
     description: "Pending item count per named lane (non-zero lanes only).",
   }),
-  levelSizes: Resource.query(Schema.Array(Schema.Number)).annotate({
+  levelSizes: Resource.effect(Schema.Array(Schema.Number)).annotate({
     description: "Raw per-lane occupancy (`levelSizes[i]` = count at lane `i`).",
   }),
-  isEmpty: Resource.query(Schema.Boolean).annotate({
+  isEmpty: Resource.effect(Schema.Boolean).annotate({
     description: "Whether all lanes are empty.",
   }),
-  completed: Resource.query(Schema.Number).annotate({
+  completed: Resource.effect(Schema.Number).annotate({
     description: "Total items that have finished processing (success or failure).",
   }),
-  start: Resource.mutate(Schema.Void).annotate({
+  start: Resource.effectFn(Schema.Void).annotate({
     description:
       "Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown).",
   }),
-  pause: Resource.mutate(Schema.Void).annotate({
+  pause: Resource.effectFn(Schema.Void).annotate({
     description: "Pause processing; items can still be enqueued and accumulate.",
   }),
-  resume: Resource.mutate(Schema.Void).annotate({
+  resume: Resource.effectFn(Schema.Void).annotate({
     description: "Resume processing after a pause.",
   }),
-  shutdown: Resource.mutate(Schema.Void).annotate({
+  shutdown: Resource.effectFn(Schema.Void).annotate({
     description:
       "Permanently stop the queue (graceful): phase → draining, later enqueues dropped, " +
       "in-flight finishes, queued items drained or discarded per shutdownMode, then phase → off.",
     destructive: true,
   }),
-  clear: Resource.mutate(Schema.Number).annotate({
+  clear: Resource.effectFn(Schema.Number).annotate({
     description:
       "Drain all pending items and reset the completed counter; returns the count cleared.",
     destructive: true,
@@ -162,7 +162,7 @@ export const customQueueControlSpec = {
     description:
       "Live current-state snapshot (per-lane sizes, paused, in-flight, completed).",
   }),
-  statusNow: Resource.query(customQueueStatus).annotate({
+  statusNow: Resource.effect(customQueueStatus).annotate({
     description:
       "One-shot current-state snapshot — the `status` stream's element read once.",
   }),
@@ -174,13 +174,13 @@ export const customQueueControlSpec = {
     description:
       "Captured log lines (engine + worker effect) — empty unless captureLogs is enabled.",
   }),
-  metricsHistory: Resource.query(Schema.Array(queueMetrics), {
+  metricsHistory: Resource.effect(Schema.Array(queueMetrics), {
     payload: historyQuery,
   }).annotate({
     description:
       "Past windowed metrics from the HistoryStore; empty unless HistoryStore is provided.",
   }),
-  logHistory: Resource.query(Schema.Array(queueLogEntry), {
+  logHistory: Resource.effect(Schema.Array(queueLogEntry), {
     payload: historyQuery,
   }).annotate({
     description:
@@ -253,27 +253,27 @@ export const customQueueSpec = <F extends Schema.Struct.Fields>(
       description:
         "Enqueue an item (or batch) at an optional lane — numeric index or configured name.",
     }),
-    enqueue: Resource.mutate(Schema.Void, {
+    enqueue: Resource.effectFn(Schema.Void, {
       payload: Schema.Array(entry),
     }).annotate({
       description:
         "Re-inject existing entries — each re-enters at its own level with attempts preserved.",
     }),
-    release: Resource.mutate(Schema.Array(entry), {
+    release: Resource.effectFn(Schema.Array(entry), {
       payload: { options: Schema.optionalKey(queueReleaseOptions) },
     }).annotate({
       description:
         "Export pending entries for handoff and remove them from this queue.",
       destructive: true,
     }),
-    releaseEncoded: Resource.mutate(Schema.Array(queueEncodedEntry), {
+    releaseEncoded: Resource.effectFn(Schema.Array(queueEncodedEntry), {
       payload: { options: Schema.optionalKey(queueReleaseOptions) },
       error: queueReleaseEncodingError,
     }).annotate({
       description: "Export pending entries in encoded/wire form for remote handoff.",
       destructive: true,
     }),
-    deadLetter: Resource.mutate(Schema.Array(entry), {
+    deadLetter: Resource.effectFn(Schema.Array(entry), {
       payload: {
         selector: customQueueEntrySelector(itemSchema),
         options: queueRouteOptions,
@@ -282,7 +282,7 @@ export const customQueueSpec = <F extends Schema.Struct.Fields>(
       description: "Remove pending entries matching the selector and route to dead letter.",
       destructive: true,
     }),
-    drop: Resource.mutate(Schema.Array(entry), {
+    drop: Resource.effectFn(Schema.Array(entry), {
       payload: {
         selector: customQueueEntrySelector(itemSchema),
         options: queueRouteOptions,

@@ -12,8 +12,8 @@ import * as Resource from "../src/Resource";
 class EdgeHost extends Resource.Host<EdgeHost>("hostHttp/edge") {}
 class Echo extends Resource.Tag<Echo>()("hostHttp/Echo", 
   {
-    ping: Resource.query(Schema.String),
-    shout: Resource.mutate(Schema.String, { payload: { msg: Schema.String } }),
+    ping: Resource.effect(Schema.String),
+    shout: Resource.effectFn(Schema.String, { payload: { msg: Schema.String } }),
   },
   { host: EdgeHost },
 ) {}

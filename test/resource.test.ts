@@ -63,8 +63,8 @@ it("runForEachTagScoped forks into the scope and returns a Fiber (non-blocking)"
 
 // A resource with both a no-payload method (property) and a payload method.
 class Echo extends Resource.Tag<Echo>()("test/Echo", {
-  ping: Resource.query(Schema.String),
-  shout: Resource.mutate(Schema.String, { payload: { msg: Schema.String } }),
+  ping: Resource.effect(Schema.String),
+  shout: Resource.effectFn(Schema.String, { payload: { msg: Schema.String } }),
 }) {}
 
 // True two-sided round-trip in-process: the real `Resource.server` handlers are wired to
@@ -93,8 +93,8 @@ it("client ↔ server round-trips in-memory", () => {
 
 // ── multi-instance: many instances of one factory, one server, routed by id ──
 const Counter = Resource.tagFor("counter", {
-  bump: Resource.mutate(Schema.Number, { payload: { by: Schema.Number } }),
-  label: Resource.query(Schema.String),
+  bump: Resource.effectFn(Schema.Number, { payload: { by: Schema.Number } }),
+  label: Resource.effect(Schema.String),
 });
 class Alpha extends Counter<Alpha>("test/Alpha") {}
 class Beta extends Counter<Beta>("test/Beta") {}
@@ -140,13 +140,13 @@ it("server family routes calls to the right instance by key header", () => {
 
 // ── resource-level description (tools: section help / panel title) ──
 class Described extends Resource.Tag<Described>()("described", {
-  ping: Resource.query(Schema.String),
+  ping: Resource.effect(Schema.String),
 }, {
   description: "A described resource.",
 }) {}
 const DescribedFamily = Resource.tagFor(
   "describedFamily",
-  { tick: Resource.mutate(Schema.Void) },
+  { tick: Resource.effectFn(Schema.Void) },
   { description: "A described family." },
 );
 class FamA extends DescribedFamily<FamA>("describedFamily/A") {}
@@ -158,10 +158,10 @@ it("carries a resource-level description on tags and factory instances", () => {
 
 // ── shared server: two DIFFERENT resource types with a same-named method don't collide ──
 class Widgets extends Resource.Tag<Widgets>()("widgets", {
-  size: Resource.query(Schema.Number), // same method name as Crates.size, different type
+  size: Resource.effect(Schema.Number), // same method name as Crates.size, different type
 }) {}
 class Crates extends Resource.Tag<Crates>()("crates", {
-  size: Resource.query(Schema.String),
+  size: Resource.effect(Schema.String),
 }) {}
 
 it("two resource types sharing a method name coexist on one server (group prefix)", () => {

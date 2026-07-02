@@ -8,7 +8,7 @@ class SelfHost extends Resource.Host<SelfHost>("resolver/SelfHost") {}
 // PeerHost carries NO baked url — its url is a deploy concern the resolver supplies
 class PeerHost extends Resource.Host<PeerHost>("resolver/PeerHost") {}
 class Fleet extends Resource.Tag<Fleet>()("resolver/Fleet", {
-  count: Resource.query(Schema.Number),
+  count: Resource.effect(Schema.Number),
 }).pipe(
   Resource.multiHost([SelfHost, PeerHost]),
 ) {}

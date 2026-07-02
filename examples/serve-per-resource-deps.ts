@@ -26,10 +26,10 @@ const plainHandlers = Layer.succeed(ImportHandlers, { label: "plain" });
 const hookedHandlers = Layer.succeed(ImportHandlers, { label: "hooked" });
 
 class Matches extends Resource.Tag<Matches>()("example/Matches", {
-  handler: Resource.query(Schema.String),
+  handler: Resource.effect(Schema.String),
 }) {}
 class Import extends Resource.Tag<Import>()("example/Import", {
-  handler: Resource.query(Schema.String),
+  handler: Resource.effect(Schema.String),
 }) {}
 
 // same impl body for both — it just reports which ImportHandlers it was given

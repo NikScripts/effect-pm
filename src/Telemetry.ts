@@ -21,7 +21,7 @@ import {
 import {
   Tag as resourceTag,
   layer as resourceLayer,
-  query,
+  effect,
   stream,
   type HostBoundTag,
   type HostKey,
@@ -193,7 +193,7 @@ export const snapshotNow: Effect.Effect<MetricsSnapshot> = Effect.map(
 // ============================================================================
 
 const telemetrySpec = {
-  snapshot: query(metricsSnapshot).annotate({
+  snapshot: effect(metricsSnapshot).annotate({
     description: "Point-in-time snapshot of this host's whole Metric registry.",
   }),
   live: stream(metricsSnapshot).annotate({
