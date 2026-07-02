@@ -411,6 +411,16 @@ export function query(
 }
 
 /**
+ * Define an **`effect`** field — resolves to `Effect<Su, E>` in the service (a lazy, re-runnable read).
+ * The shape-named form of {@link query}: named for **what it resolves to**, not the RPC verb. Identical
+ * options. Part of the shape-named vocabulary (`value` / `effect` / `effectFn` / `stream`) — see
+ * `docs/handoffs/service-shape-redesign.md`.
+ *
+ * @public
+ */
+export const effect: typeof query = query;
+
+/**
  * Define a **mutate** (mutation) returning `success` (use `Schema.Void` when it returns
  * nothing). Add a `payload` and/or `error` via options; attach help/metadata with
  * `.annotate({ description, destructive })`.
@@ -471,6 +481,15 @@ export function mutate(
     {},
   );
 }
+
+/**
+ * Define an **`effectFn`** field — resolves to `(In) => Effect<Su, E>` in the service (a call with input).
+ * The shape-named form of {@link mutate}: named for **what it resolves to**, not the RPC verb. Identical
+ * options. Part of the shape-named vocabulary (`value` / `effect` / `effectFn` / `stream`).
+ *
+ * @public
+ */
+export const effectFn: typeof mutate = mutate;
 
 type PairMethodAnnotations = MethodAnnotations & { readonly callStyle: "pair" };
 
