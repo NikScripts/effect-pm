@@ -18,5 +18,11 @@ Effects.
   request). Identical local and remote (remote is eventually-consistent). For fixed values use `constant`;
   on-demand reads use `effect`.
 
-Next (staged): nesting (spec-tree) → retiring `query`/`mutate` → single merged value-stream + optional
-`initial`. See `docs/handoffs/service-shape-redesign.md`.
+- **Nested specs (spec-tree).** A spec can now nest — groups of leaves — to arbitrary depth
+  (`connections: { size: effect(Number), changes: stream(Number) }`). The tree flattens to **path-keyed**
+  wire procedures (`"connections.size"`) and nests back in the service, so `p.connections.size` /
+  `p.admin.ban({…})` work identically **local and remote**. Leaves may be any builder
+  (`effect`/`effectFn`/`stream`/`constant`/`value`/local).
+
+Next (staged): retiring the last of the old vocab → single merged value-stream + optional `initial`. See
+`docs/handoffs/service-shape-redesign.md`.
