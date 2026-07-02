@@ -97,6 +97,7 @@
     "per-resource-serve",
     "engine-serve",
     "serve-ergonomics",
-    "queue-serve-namespace"
+    "queue-serve-namespace",
+    "telemetry"
   ]
 }

@@ -1,5 +1,18 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.21
+
+### Minor Changes
+
+- 66a6be9: **New: `Telemetry` — a thin, custom, dashboard-native metrics surface.** Serves a host's whole
+  Effect `Metric` registry as a `Resource` (`snapshot` query + `live` ~1s stream) for building custom
+  in-app metrics UIs with no external infra — the counterpart to OTEL export (same source, different
+  sink; OTEL stays doc-only via `@effect/opentelemetry`, no new dependency). `import * as Telemetry from
+  "@nikscripts/effect-pm/Telemetry"` → `Telemetry.Tag` / `layer` / `serverEntry` / `snapshotNow` + the
+  `MetricsSnapshot` envelope (tagged counter/gauge/histogram). Host axis is free (which host you connected
+  to); fan out with `Resource.client(tag, host)`. Cardinality-disciplined. See
+  `docs/guides/telemetry.md`.
+
 ## 0.8.0-beta.20
 
 ### Patch Changes
