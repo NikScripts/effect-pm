@@ -196,3 +196,31 @@ are real TS-limit problems, not edits. Options: **(A) descope nesting** — ship
 "the redesign" (nesting parked); **(B) a dedicated effort** solving generic-spec reduction (e.g. a
 non-recursive `ServiceOf` via a distributive helper, or precise-but-bounded group typing to kill the `any`
 leak); **(C) restrict nesting to non-generic (consumer-defined) resources** only. This is the user's call.
+
+## Nesting — the SOLUTION (identified 2026-07-02; dedicated effort chosen)
+Both blockers (generic-`F` → `unknown`; `any`-leak) have **one root cause**: my recursive rewrite branches
+on `S[K] extends AnyMethod` / `S[K] extends Spec`, which **drag the `F`-parameterized schemas into the
+conditional → TS defers** (the exact gotcha the flat `ServiceOf` comment documents). The old flat code
+avoided it by branching **only on the `LocalMethod` symbol brand** (`F`-independent) + `Exclude<…,
+AnyLocalMethod>`.
+
+**Fix: detect leaf-vs-group by the `[methodTypeId]` BRAND (a symbol → `F`-independent, always reduces),
+never by `extends AnyMethod`/`extends Spec`.** Apply to every recursive type (`ServiceOf` / `ImplOf` /
+`WireServiceOf` / `PeerServiceOf` / `ServeImplOf` / `RpcUnionOf`):
+```ts
+// leaf method (ANY method incl. generic-F) — brand check reduces under free F:
+S[K] extends { readonly [methodTypeId]: unknown }
+  ? ServiceMethod<Exclude<S[K], AnyLocalMethod>>   // Exclude is F-independent too (checks localMethodTypeId)
+  // else it's a group:
+  : ServiceOf<Extract<S[K], Spec>>
+// (constant/value brand checks come first, as today; LocalMethod check first of all)
+```
+`RpcUnionOf` likewise: `S[K] extends { [methodTypeId]: unknown } ? RpcOf<K, S[K]> : never` — this makes
+`HandlerContextOf<generic-F>` reduce, which kills the `RpcGroup<any>` `R`-leak too (same root cause).
+
+**Dedicated-effort plan (fresh session, full budget):** reinstate the opaque integration (all edits
+documented in the two attempt-notes above — foundation, recurse the 5 types, `specSym: FlatSpec` +
+`specTypeSym` phantom on ResourceTag **and** every inline tag type, `groupSym: RpcGroup<any>`,
+`buildRpcGroup`/`forwardClient` take `FlatSpec`, runtime flatten/nest in both materializations) **but with
+the brand-check form above from the start**. Then typecheck-iterate the consumers; the generic queue/process
+specs should now reduce. Validate with a nested-spec round-trip test (local + remote).
