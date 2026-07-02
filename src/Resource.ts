@@ -53,6 +53,7 @@ import {
   Match,
   Option,
   Pipeable,
+  Predicate,
   Ref,
   Schema,
   Scope,
@@ -169,8 +170,9 @@ export interface MethodAnnotations {
   readonly callStyle?: "pair";
 }
 
-/** Brands a {@link Method} so a spec entry is distinguishable from a plain object. */
-const methodTypeId: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/method");
+/** Identity brand for a {@link Method} (Effect-style string `TypeId`) — distinguishes a spec leaf from a
+ *  plain object; guarded with `Predicate.hasProperty`. */
+const MethodTypeId = "~nikscripts/effect-pm/Resource/Method" as const;
 
 /**
  * One method of a resource contract — built by {@link effect} /
@@ -193,7 +195,7 @@ export interface Method<
   Str extends boolean = false,
   Ann extends MethodAnnotations = MethodAnnotations,
 > extends Pipeable.Pipeable {
-  readonly [methodTypeId]: typeof methodTypeId;
+  readonly [MethodTypeId]: typeof MethodTypeId;
   readonly kind: Kind;
   readonly payload: P;
   readonly success: Su;
@@ -216,12 +218,10 @@ export type AnyMethod = Method<
   MethodAnnotations
 >;
 
-/** Brands a {@link Method} as a **fleet** field — combined across the hosts (implemented in the layer
- *  via {@link peers}); served + client-visible like any query, but excluded from {@link peers}. */
-const fleetTypeId: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/fleet");
-
-/** A {@link Method} marked as a fleet field (via {@link fleet}). @public */
-export type FleetField<M extends AnyMethod> = M & { readonly [fleetTypeId]: true };
+/** A {@link Method} marked as a **fleet** field (via {@link fleet}) — combined across the hosts (in the
+ *  layer via {@link peers}); served + client-visible like any query, but excluded from {@link peers}.
+ *  Marked with a readable `fleet: true`. @public */
+export type FleetField<M extends AnyMethod> = M & { readonly fleet: true };
 
 /**
  * Mark a contract method as a **fleet** field — one combined across the hosts (its layer impl folds
@@ -237,7 +237,7 @@ export type FleetField<M extends AnyMethod> = M & { readonly [fleetTypeId]: true
  * @public
  */
 export const fleet = <M extends AnyMethod>(method: M): FleetField<M> =>
-  Object.assign(Object.create(Pipeable.Prototype), method, { [fleetTypeId]: true as const });
+  Object.assign(Object.create(Pipeable.Prototype), method, { fleet: true as const });
 
 /** @internal */
 declare const localCapabilityTypeId: unique symbol;
@@ -255,10 +255,9 @@ export interface LocalCapability<in out Self> {
   readonly [localCapabilityTypeId]: Self;
 }
 
-/** Brands a {@link LocalMethod} so a spec entry is distinguishable from a wire {@link Method}. */
-const localMethodTypeId: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Resource/localMethod",
-);
+/** Identity brand for a {@link LocalMethod} (Effect-style string `TypeId`) — distinguishes an off-wire
+ *  local member from a wire {@link Method}. */
+const LocalMethodTypeId = "~nikscripts/effect-pm/Resource/LocalMethod" as const;
 
 /**
  * A **local-only** member of a resource contract — built by {@link Resource.local}. It is
@@ -271,7 +270,7 @@ const localMethodTypeId: unique symbol = Symbol.for(
  * @public
  */
 export interface LocalMethod<T> {
-  readonly [localMethodTypeId]: typeof localMethodTypeId;
+  readonly [LocalMethodTypeId]: typeof LocalMethodTypeId;
   /** Phantom carrier of the member's local type — type-level only, never set at runtime. */
   readonly value?: T;
 }
@@ -336,12 +335,14 @@ type AsMethod<T> = T extends {
 /** Runtime guard: is a spec entry a {@link LocalMethod} (vs a wire {@link Method})? */
 const isLocalMethod = (
   m: AnyMethod | AnyLocalMethod | Spec,
-): m is AnyLocalMethod => localMethodTypeId in m;
+): m is AnyLocalMethod => Predicate.hasProperty(m, LocalMethodTypeId);
 
 /** Runtime guard: is a spec entry a **leaf** (wire/local method) vs a nested **group**? @internal */
 const isSpecLeaf = (
   v: AnyMethod | AnyLocalMethod | Spec,
-): v is AnyMethod | AnyLocalMethod => methodTypeId in v || localMethodTypeId in v;
+): v is AnyMethod | AnyLocalMethod =>
+  Predicate.hasProperty(v, MethodTypeId) ||
+  Predicate.hasProperty(v, LocalMethodTypeId);
 
 /** Flatten a nested spec to a flat path-keyed record (identity for a flat spec). @internal */
 const flattenSpec = (spec: Spec, prefix = ""): FlatSpec => {
@@ -403,7 +404,7 @@ const nestService = (
  * @public
  */
 export const local = <T>(): LocalMethod<T> => ({
-  [localMethodTypeId]: localMethodTypeId,
+  [LocalMethodTypeId]: LocalMethodTypeId,
 });
 
 /**
@@ -455,7 +456,7 @@ const makeMethod = <
   annotations: Ann,
 ): Method<Kind, P, Su, E, Str, Ann> =>
   Object.assign(Object.create(Pipeable.Prototype), {
-    [methodTypeId]: methodTypeId,
+    [MethodTypeId]: MethodTypeId,
     kind,
     payload,
     success,
@@ -531,17 +532,15 @@ export function effect(
   );
 }
 
-/** Brands a {@link Method} as a **constant** — resolved once at acquire, surfaced as a plain value. */
-const constantTypeId: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/constant");
-
-/** A {@link Method} marked as a constant field (via {@link constant}). @public */
+/** A {@link Method} marked as a **constant** field (via {@link constant}) — resolved once at acquire,
+ *  surfaced as a plain value. Tagged with a readable `_tag: "constant"`. @public */
 export type ConstantField<M extends AnyMethod> = M & {
-  readonly [constantTypeId]: true;
+  readonly _tag: "constant";
 };
 
 /** Runtime guard: is a spec entry a {@link constant} field? */
 const isConstantMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
-  constantTypeId in m;
+  Predicate.hasProperty(m, "_tag") && m._tag === "constant";
 
 /**
  * Define a **`constant`** field — a value resolved **once** when the resource is acquired, surfaced as a
@@ -555,20 +554,18 @@ export const constant = <Su extends Schema.Top>(
   success: Su,
 ): ConstantField<Method<"query", undefined, Su, typeof Schema.Never>> =>
   Object.assign(Object.create(Pipeable.Prototype), effect(success), {
-    [constantTypeId]: true as const,
+    _tag: "constant" as const,
   });
 
-/** Brands a {@link Method} as a **value** — a plain property kept live by a background stream. */
-const valueTypeId: unique symbol = Symbol.for("@nikscripts/effect-pm/Resource/value");
-
-/** A {@link Method} marked as a value field (via {@link value}). @public */
+/** A {@link Method} marked as a **value** field (via {@link value}) — a plain property kept live by a
+ *  background stream. Tagged with a readable `_tag: "value"`. @public */
 export type ValueField<M extends AnyMethod> = M & {
-  readonly [valueTypeId]: true;
+  readonly _tag: "value";
 };
 
 /** Runtime guard: is a spec entry a {@link value} field? */
 const isValueMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
-  valueTypeId in m;
+  Predicate.hasProperty(m, "_tag") && m._tag === "value";
 
 /**
  * Define a **`value`** field — a **plain** property (`p.x: A`, no `yield*`) kept **live** by a background
@@ -584,7 +581,7 @@ export const value = <Su extends Schema.Top>(
   success: Su,
 ): ValueField<Method<"query", undefined, Su, typeof Schema.Never, true>> =>
   Object.assign(Object.create(Pipeable.Prototype), stream(success), {
-    [valueTypeId]: true as const,
+    _tag: "value" as const,
   });
 
 /**
@@ -834,9 +831,9 @@ export type ServiceMethod<M extends AnyMethod> = M["stream"] extends true
 export type ServiceOf<S extends Spec, Self = unknown> = {
   readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
     ? Effect.Effect<T, never, LocalCapability<Self>>
-    : S[K] extends { readonly [constantTypeId]: true }
+    : S[K] extends { readonly _tag: "constant" }
       ? SuccessOf<AsMethod<S[K]>>
-      : S[K] extends { readonly [valueTypeId]: true }
+      : S[K] extends { readonly _tag: "value" }
         ? SuccessOf<AsMethod<S[K]>>
         : S[K] extends { readonly kind: MethodKind } // leaf (F-independent; reconstruct via AsMethod)
           ? ServiceMethod<AsMethod<S[K]>>
@@ -860,7 +857,7 @@ type WireServiceOf<S extends Spec> = {
  *  {@link FleetField}s and {@link LocalMethod}s are excluded, so a fold can't recurse into a peer's
  *  own fleet field. A full {@link ServiceOf} is assignable to it (width), so real clients fit. */
 type PeerServiceOf<S extends Spec> = {
-  readonly [K in keyof S as S[K] extends { readonly [fleetTypeId]: true }
+  readonly [K in keyof S as S[K] extends { readonly fleet: true }
     ? never
     : S[K] extends AnyLocalMethod
       ? never
