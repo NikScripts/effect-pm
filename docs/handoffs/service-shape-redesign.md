@@ -123,3 +123,10 @@ Remote cells are eventually-consistent (latency = physics, not silent divergence
 `typecheck` (both projects) · `effect-language-service diagnostics` (0) · `eslint` · `build` · `test`;
 no `as`/`!` casts (structural); explicit `export interface` for public types; changeset on the increment
 that changes public API.
+
+## Follow-up (after the redesign lands, user-requested 2026-07-02)
+Re-examine every existing resource + process (`QueueContract`, `ScheduledProcess`, `ApiMetrics`,
+`Telemetry`, `HostStatus`, `HostLogs`, …) for fields that should become `constant` / `value` (live) /
+nested groups now that those shapes exist — e.g. a queue's `size`/`pending` reading better as live `value`s
+than `effect` pulls, host/telemetry status as `value`s, related fields grouped by nesting. A polish pass,
+not a rewrite; do it before the big release.
