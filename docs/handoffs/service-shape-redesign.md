@@ -169,3 +169,30 @@ limits under a generic `S`** — the free-type-parameter deferral the flat code 
   runtime `flattenSpec` is.
 This is a real architectural decision (opaque wire vs precise flat type) — make it deliberately. Runtime
 helpers + `ServiceOf`/`ImplOf` recursion are correct as drafted; only the wire *typing* changes.
+
+## Nesting — FULL diagnosis after the opaque attempt (2026-07-02, reverted green)
+The opaque-wire pivot got **`src/Resource.ts` to compile CLEAN** with nesting (widen `Spec`; recurse
+`ServiceOf`/`ImplOf`/`WireServiceOf`/`PeerServiceOf`/`ServeImplOf`; `specSym: FlatSpec`,
+`groupSym: RpcGroup<any>`; `buildRpcGroup`/`forwardClient` take `FlatSpec`; runtime `flattenSpec` /
+`flattenImpl` (walks flat path keys) / `nestService` in both materializations). Then:
+- **`specSym: FlatSpec` broke `S`-inference** (functions take an inline `{ [specSym]: FlatSpec, … }` tag, so
+  `S` was unrecoverable → `serve` saw `ServeImplOf<Spec, …>`). **Fix that worked:** a phantom
+  `declare const specTypeSym` + `readonly [specTypeSym]?: S` on `ResourceTag` **and every inline tag type**
+  (perl-insert between `specSym` and `groupSym`). Dropped **134 → 83** consumer errors.
+- **The 83 that remain are structural, not mechanical:**
+  1. **Generic consumer specs don't reduce.** `QueueContract`/`ScheduledProcess`/`CustomQueueContract` are
+     generic over the item schema `F`; the recursive `ServiceOf`/`RpcUnionOf` **don't evaluate under a free
+     `F`**, so service members become `unknown` (`test/queue-contract.test` "Type 'unknown' must have
+     `[Symbol.iterator]`"). This is the free-type-parameter deferral, now in the *generic resources*.
+  2. **`RpcGroup<any>` leaks `any` into consumers' `R`** — the ~24 `*-remote-http` errors
+     (`Effect<…, any>` not assignable to `Effect<…, never>`). The opaque `any` propagates through
+     `HandlerContextOf`.
+  3. **Toolkit introspection** (`tag[specSym].add.payload…` in `QueueContract`/`CustomQueueContract`) needs
+     `isSpecLeaf` narrowing (a few sites).
+
+**Conclusion / decision needed:** nesting fundamentally requires widening `Spec`, which stresses the
+toolkit's *generic* resources' recursive types (1) and forces an opaque group that leaks `any` (2). These
+are real TS-limit problems, not edits. Options: **(A) descope nesting** — ship the 4 shipped increments as
+"the redesign" (nesting parked); **(B) a dedicated effort** solving generic-spec reduction (e.g. a
+non-recursive `ServiceOf` via a distributive helper, or precise-but-bounded group typing to kill the `any`
+leak); **(C) restrict nesting to non-generic (consumer-defined) resources** only. This is the user's call.
