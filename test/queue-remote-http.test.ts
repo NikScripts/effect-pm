@@ -1,4 +1,4 @@
-import { Duration, Effect, Fiber, Layer, Schema, Stream } from "effect";
+import { Duration, Effect, Fiber, Layer, Option, Schema, Stream } from "effect";
 import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
@@ -59,12 +59,16 @@ it("add (single + batch) over http → real engine processes → completed/statu
         const queue = yield* RemoteQueue;
         yield* queue.add({ n: 1 }); // item directly, over the wire
         yield* queue.add([{ n: 2 }, { n: 3 }]); // batch in one RPC call
-        // the server-side engine processes them; observe via the queue's own state over RPC
-        while ((yield* queue.completed) < 3) {
-          yield* Effect.sleep(Duration.millis(10));
-        }
-        expect(yield* queue.completed).toBe(3);
-        const snap = yield* queue.statusNow;
+        // the server-side engine processes them; observe the live status `value` via its delta
+        // stream (current snapshot first, then updates) as it crosses RPC.
+        const drained = yield* Stream.runHead(
+          Stream.filter(
+            Resource.changes(queue, (s) => s.status),
+            (s) => s.completed >= 3,
+          ),
+        );
+        const snap = Option.getOrThrow(drained);
+        expect(snap.completed).toBe(3);
         expect(snap.sizes).toEqual({ high: 0, normal: 0, low: 0 });
         expect(snap.phase).toBe("running");
       }),
@@ -82,22 +86,25 @@ it("logHistory + metricsHistory cross http (the dashboard's backfill path)", () 
         Effect.gen(function* () {
           const queue = yield* RemoteQueue;
           yield* queue.add([{ n: 1 }, { n: 2 }]);
-          while ((yield* queue.completed) < 2) {
-            yield* Effect.sleep(Duration.millis(10));
-          }
+          yield* Stream.runDrain(
+            Stream.takeUntil(
+              Resource.changes(queue, (s) => s.status),
+              (s) => s.completed >= 2,
+            ),
+          );
           // history is captured server-side, then read back over RPC
           yield* Effect.gen(function* () {
-            while ((yield* queue.logHistory({})).length === 0) {
+            while ((yield* queue.logs.history({})).length === 0) {
               yield* Effect.sleep(Duration.millis(10));
             }
           }).pipe(Effect.timeout(Duration.seconds(2)));
 
-          const logs = yield* queue.logHistory({ limit: 50 });
+          const logs = yield* queue.logs.history({ limit: 50 });
           expect(logs.length).toBeGreaterThan(0);
           // decoded log entries survive the wire (level preserved)
           expect(typeof logs[0]?.level).toBe("string");
           // metricsHistory also serializes over RPC (array, possibly empty between windows)
-          const metrics = yield* queue.metricsHistory({});
+          const metrics = yield* queue.metrics.history({});
           expect(Array.isArray(metrics)).toBe(true);
         }),
     )));
@@ -130,7 +137,10 @@ it("the status stream flows over http from the real engine", () =>
         const collected = yield* Effect.forkChild(
           Stream.runCollect(
             Stream.take(
-              Stream.filter(queue.status, (s) => s.sizes.normal >= 2),
+              Stream.filter(
+                Resource.changes(queue, (s) => s.status),
+                (s) => s.sizes.normal >= 2,
+              ),
               1,
             ),
           ),

@@ -19,7 +19,7 @@ The source is already structured the Effect way (commit `6741eddbd`):
   per-member named exports.
 - `tsup splitting: true` — the engine is a shared **chunk**, not inlined into every entry.
 
-**Proven (esbuild):** `import { queueTag } from "@nikscripts/effect-pm/QueueContract"` bundles to
+**Proven (esbuild):** `import { queueTag } from "@nikscripts/effect-pm/QueueResource"` bundles to
 **23kb with zero engine symbols** (was 352kb). The **subpath is the guaranteed engine-free path.**
 
 ## The remaining gap

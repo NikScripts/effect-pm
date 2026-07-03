@@ -71,11 +71,11 @@ describe("SQLiteHistoryStore", () => {
           const queue = yield* SQ;
           yield* queue.add([{ n: 1 }, { n: 2 }]);
           yield* Effect.gen(function* () {
-            while ((yield* queue.logHistory({})).length === 0) {
+            while ((yield* queue.logs.history({})).length === 0) {
               yield* Effect.sleep(Duration.millis(10));
             }
           }).pipe(Effect.timeout(Duration.seconds(2)));
-          expect((yield* queue.logHistory({ limit: 50 })).length).toBeGreaterThan(0);
+          expect((yield* queue.logs.history({ limit: 50 })).length).toBeGreaterThan(0);
         }).pipe(
           Effect.provide(
             QueueResource.layer(SQ, {

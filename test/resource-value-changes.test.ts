@@ -37,6 +37,10 @@ it("changes(svc, s => …) streams a value's deltas — flat + nested", () =>
         const [seen] = yield* Effect.all([collect, drive], { concurrency: 2 });
         expect(Array.from(seen)).toEqual([0, 1, 2]); // current replayed, then the deltas
 
+        // the PLAIN read must be live too — not frozen at the initial value. The nested `stats` group
+        // means the service is built with dotted keys, which used to orphan the top-level value setter.
+        expect(p.count).toBe(2);
+
         // nested value field — selector navigates the tree, no string path
         const online = yield* Resource.changes(p, (s) => s.stats.online).pipe(
           Stream.take(1),

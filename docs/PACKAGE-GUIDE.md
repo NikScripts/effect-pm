@@ -61,7 +61,7 @@ Root imports from `@nikscripts/effect-pm` remain backwards compatible. Prefer
 dedicated subpaths for focused imports:
 
 - `@nikscripts/effect-pm/Resource`
-- `@nikscripts/effect-pm/QueueContract`
+- `@nikscripts/effect-pm/QueueResource`
 - `@nikscripts/effect-pm/ScheduledProcess`
 - `@nikscripts/effect-pm/ProcessScheduleContract`
 - `@nikscripts/effect-pm/Group`
@@ -119,7 +119,7 @@ streaming projection is planned.
 2. **Forking** a process driver needs **`R` plus any storage facets you compose**, where `R` is whatever remains after optional inlined `polling` / `schedule` layers. Use **`ProcessSupervisorRequirements<C>`** (exported type) if you build configs generically.
 3. Prefer **`Layer.mergeAll(...)`** + **one** `Effect.provide` at the app root for many independent layers (clearer dependency graph; matches Effect lint guidance).
 4. **Hosting (`serveHttp`) is over RPC.** Auth/transport security is the deployment's responsibility (e.g. a private network or an edge gateway); a first-class auth story for `Resource` RPC is a future feature. Don't expose a host on the public internet without it.
-5. **Browser / widget bundles** import only the **tag** (from its subpath, e.g. `@nikscripts/effect-pm/QueueContract`) — keep it **separate** from `Layer` / `serveHttp` / storage wiring so client builds never resolve native adapters. See [guides/service-tags-and-runtime-split.md](./guides/service-tags-and-runtime-split.md).
+5. **Browser / widget bundles** import only the **tag** (from its subpath, e.g. `@nikscripts/effect-pm/QueueResource`) — keep it **separate** from `Layer` / `serveHttp` / storage wiring so client builds never resolve native adapters. See [guides/service-tags-and-runtime-split.md](./guides/service-tags-and-runtime-split.md).
 
 ---
 

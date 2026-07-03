@@ -1,6 +1,6 @@
 {
   "name": "@nikscripts/effect-pm",
-  "version": "0.8.0-beta.22",
+  "version": "0.8.0-beta.23",
   "packageManager": "pnpm@10.33.4",
   "description": "Manage long-running Effect processes with runtime control. Queue resource-heavy operations with configurable throttling and priorities. Schedule recurring tasks with cron. Check status, start/stop processes, and view metrics through a CLI while your application runs.",
   "keywords": [
@@ -40,10 +40,6 @@
       "types": "./dist/QueueResource.d.ts",
       "default": "./dist/QueueResource.js"
     },
-    "./CustomQueueContract": {
-      "types": "./dist/CustomQueueContract.d.ts",
-      "default": "./dist/CustomQueueContract.js"
-    },
     "./CustomQueueResource": {
       "types": "./dist/CustomQueueResource.d.ts",
       "default": "./dist/CustomQueueResource.js"
@@ -55,10 +51,6 @@
     "./MultiHost": {
       "types": "./dist/MultiHost.d.ts",
       "default": "./dist/MultiHost.js"
-    },
-    "./QueueContract": {
-      "types": "./dist/QueueContract.d.ts",
-      "default": "./dist/QueueContract.js"
     },
     "./ProcessStore": {
       "types": "./dist/ProcessStore.d.ts",
@@ -127,10 +119,6 @@
     "./ScheduledProcess": {
       "types": "./dist/ScheduledProcess.d.ts",
       "default": "./dist/ScheduledProcess.js"
-    },
-    "./ProcessScheduleContract": {
-      "types": "./dist/ProcessScheduleContract.d.ts",
-      "default": "./dist/ProcessScheduleContract.js"
     },
     "./ApiMetrics": {
       "types": "./dist/ApiMetrics.d.ts",

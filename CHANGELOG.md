@@ -1,5 +1,34 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.23
+
+### Minor Changes
+
+- bf1ba7a: **Live `value` fields in the queues + the accessors, a de-brand, a multiHost deadlock fix, and
+  export-naming cleanup.**
+
+  - **`Resource.changes(svc, (s) => s.a.b)` / `Resource.ref(svc, …)`** — subscribe to a `value` field's live
+    delta stream (current value first, then every update), or grab its `SubscriptionRef`. A **selector**
+    (nesting-friendly, full autocomplete), not a string path. `value` fields are now `SubscriptionRef`-backed;
+    the plain read is unchanged.
+  - **De-brand (Effect idiom).** Internal symbol brands → a string identity `TypeId` + readable **`_tag`**
+    (`"constant"`/`"value"`) / **`fleet: true`**; spec types read as English, no `Symbol(…)` keys.
+    **`.annotate()` now preserves the marker** (`value(x).annotate({…})` stays a value — was a silent degrade).
+  - **`ImplOf<S>` exported** — the impl type (a `value`'s impl is its feeding `Stream`, a `constant`'s the
+    `Effect<A>`), distinct from `ServiceOf`.
+  - **Queues adopt `value` (BREAKING service shape).** `status` → live `value` (plain `p.status` **and**
+    `changes`-subscribable); `statusNow`/`sizes`/`completed` removed (read `p.status.*`); `size`/`isEmpty` →
+    `value`; `metrics`/`logs` → nested `{ live, history }`. Same for `CustomQueueResource` (`levelSizes` stays
+    an `effect`).
+  - **Fix (multiHost): peer clients are lazy** — a `value`/`stream` field no longer deadlocks the serve.
+    `peersLayer` no longer eager-builds peer clients; a peer reads a `value` **one-shot** (`PeerServiceOf`'s
+    `value` is `Effect<A>`, so `combineQuery(peers, (p) => p.n, …)` works like an `effect`), and unreachable
+    peers are dropped. A `value`-bearing multiHost resource now boots against a down/co-booting peer.
+  - **Export naming (BREAKING).** `./QueueResource` + `./CustomQueueResource` subpaths resolve to their full
+    tree-shakeable namespaces; the confusing `./QueueContract` + `./CustomQueueContract` subpaths are removed
+    (import from `*/Resource`). No code moved; the light-Tag/heavy-engine split is unchanged.
+  - **Removed `ProcessScheduleResource`** (unapproved, unused). The `ProcessSchedule` primitive is untouched.
+
 ## 0.8.0-beta.22
 
 ### Minor Changes

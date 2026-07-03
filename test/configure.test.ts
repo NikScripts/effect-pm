@@ -17,7 +17,7 @@ it("QueueResource.configure folds onto the layer config (paused override wins)",
     Effect.gen(function* () {
       const q = yield* CfgQueue;
       // base config paused:false, configure patch paused:true → effective paused:true
-      expect((yield* q.statusNow).paused).toBe(true);
+      expect(q.status.paused).toBe(true);
     }).pipe(
       Effect.provide(
         QueueResource.layer(CfgQueue, {
@@ -35,7 +35,7 @@ it("without a configure patch the base config stands", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const q = yield* CfgQueue;
-      expect((yield* q.statusNow).paused).toBe(false);
+      expect(q.status.paused).toBe(false);
     }).pipe(
       Effect.provide(
         QueueResource.layer(CfgQueue, {

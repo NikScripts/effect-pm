@@ -13,13 +13,13 @@ import { HistoryStore } from "./HistoryStore";
 import type {
   HandlerContextOf,
   HostKey,
+  ImplOf,
   LocalCapability,
   Method,
   MethodAnnotations,
   HostBoundTag,
   ResourceTag,
   ServeEntry,
-  ServiceOf,
 } from "./Resource";
 import { CustomQueueResource as CustomQueueEngine } from "./CustomQueueResource";
 import type {
@@ -116,27 +116,36 @@ export const customQueueEntrySelector = <Sch extends Schema.Top>(itemSchema: Sch
     item: Schema.optionalKey(itemSchema),
   });
 
+/** Total pending across all lanes — the `size`/`isEmpty` `value`s derive from `status.sizes`. @internal */
+const sumLaneSizes = (sizes: Record<string, number>): number =>
+  Object.values(sizes).reduce((a, b) => a + b, 0);
+
 /**
  * Shared control + observation contract for every custom-queue instance.
  *
  * @public
  */
 export const customQueueControlSpec = {
-  size: Resource.effect(Schema.Number).annotate({
+  // ── live current state — one SubscriptionRef-backed source of truth ──
+  // `status` is the whole snapshot; `size`/`isEmpty` are `Stream.map` derivations of it (SSOT). Plain
+  // reads (`p.size`) and subscribable (`Resource.changes(p, (s) => s.size)`).
+  status: Resource.value(customQueueStatus).annotate({
+    description:
+      "Live current-state snapshot: per-lane sizes, paused, in-flight, completed, phase.",
+  }),
+  size: Resource.value(Schema.Number).annotate({
     description: "Total pending items across all lanes.",
   }),
-  sizes: Resource.effect(customQueueSizes).annotate({
-    description: "Pending item count per named lane (non-zero lanes only).",
+  isEmpty: Resource.value(Schema.Boolean).annotate({
+    description: "Whether all lanes are empty.",
   }),
+  // stays `effect`: the raw per-index array isn't in the named-Record `status.sizes`, so it can't be a
+  // reliable `Stream.map` of `status` — an on-demand pull is the honest shape.
   levelSizes: Resource.effect(Schema.Array(Schema.Number)).annotate({
     description: "Raw per-lane occupancy (`levelSizes[i]` = count at lane `i`).",
   }),
-  isEmpty: Resource.effect(Schema.Boolean).annotate({
-    description: "Whether all lanes are empty.",
-  }),
-  completed: Resource.effect(Schema.Number).annotate({
-    description: "Total items that have finished processing (success or failure).",
-  }),
+
+  // ── lifecycle commands ──
   start: Resource.effectFn(Schema.Void).annotate({
     description:
       "Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown).",
@@ -158,34 +167,32 @@ export const customQueueControlSpec = {
       "Drain all pending items and reset the completed counter; returns the count cleared.",
     destructive: true,
   }),
-  status: Resource.stream(customQueueStatus).annotate({
-    description:
-      "Live current-state snapshot (per-lane sizes, paused, in-flight, completed).",
-  }),
-  statusNow: Resource.effect(customQueueStatus).annotate({
-    description:
-      "One-shot current-state snapshot — the `status` stream's element read once.",
-  }),
-  metrics: Resource.stream(queueMetrics).annotate({
-    description:
-      "Windowed metrics (per-window counts + throughput/latency) emitted once per window.",
-  }),
-  logs: Resource.stream(queueLogEntry).annotate({
-    description:
-      "Captured log lines (engine + worker effect) — empty unless captureLogs is enabled.",
-  }),
-  metricsHistory: Resource.effect(Schema.Array(queueMetrics), {
-    payload: historyQuery,
-  }).annotate({
-    description:
-      "Past windowed metrics from the HistoryStore; empty unless HistoryStore is provided.",
-  }),
-  logHistory: Resource.effect(Schema.Array(queueLogEntry), {
-    payload: historyQuery,
-  }).annotate({
-    description:
-      "Past captured log lines from the HistoryStore; empty unless HistoryStore is provided.",
-  }),
+
+  // ── observability — live stream + history query, paired by nesting ──
+  metrics: {
+    live: Resource.stream(queueMetrics).annotate({
+      description:
+        "Windowed metrics (per-window counts + throughput/latency) emitted once per window.",
+    }),
+    history: Resource.effect(Schema.Array(queueMetrics), {
+      payload: historyQuery,
+    }).annotate({
+      description:
+        "Past windowed metrics from the HistoryStore; empty unless HistoryStore is provided.",
+    }),
+  },
+  logs: {
+    live: Resource.stream(queueLogEntry).annotate({
+      description:
+        "Captured log lines (engine + worker effect) — empty unless captureLogs is enabled.",
+    }),
+    history: Resource.effect(Schema.Array(queueLogEntry), {
+      payload: historyQuery,
+    }).annotate({
+      description:
+        "Past captured log lines from the HistoryStore; empty unless HistoryStore is provided.",
+    }),
+  },
 };
 
 /** Tag options beyond lane config (description, host). @public */
@@ -388,11 +395,14 @@ export const customQueueTag = <Self>() => {
         ? Resource.Tag<Self>()(key, spec, { description, kind })
         : Resource.Tag<Self>()(key, spec, { description, kind, host });
     // Readiness from the queue's own status (SSOT): ready iff the worker pool is running.
+    // `status` is a live `value` — a plain, always-current property (no effect to run).
     return Resource.withReadiness(tag, (svc) =>
-      Effect.map(svc.statusNow, (s) => ({
-        ready: s.phase === "running",
-        ...(s.phase === "running" ? {} : { detail: `phase: ${s.phase}` }),
-      })),
+      Effect.succeed({
+        ready: svc.status.phase === "running",
+        ...(svc.status.phase === "running"
+          ? {}
+          : { detail: `phase: ${svc.status.phase}` }),
+      }),
     );
   }
   return build;
@@ -481,47 +491,48 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
         }),
     });
 
-    const impl: ServiceOf<CustomQueueInstanceSpec<F>, Self> = {
-      size: provideR(handle.size),
-      sizes: provideR(handle.sizes),
+    const impl: ImplOf<CustomQueueInstanceSpec<F>> = {
+      // live current state — `status` is the SubscriptionRef.changes stream; the scalars derive from it.
+      status: handle.status,
+      size: Stream.map(handle.status, (s) => sumLaneSizes(s.sizes)),
+      isEmpty: Stream.map(handle.status, (s) => sumLaneSizes(s.sizes) === 0),
       levelSizes: provideR(handle.levelSizes),
-      isEmpty: provideR(handle.isEmpty),
-      completed: handle.completed,
       start: provideR(handle.start),
       pause: handle.pause,
       resume: handle.resume,
       shutdown: handle.shutdown,
       clear: provideR(handle.clear),
-      status: handle.status,
-      statusNow: handle.statusNow,
-      metrics: handle.metrics,
-      logs: handle.logs,
-      metricsHistory: ({ limit, since, until }) =>
-        Option.match(history, {
-          onNone: () => Effect.succeed<ReadonlyArray<typeof queueMetrics.Type>>([]),
-          onSome: (store) =>
-            store.read(metricsStreamId, { limit, since, until }).pipe(
-              Effect.flatMap((arr) =>
-                Effect.forEach(arr, (e) => decodeMetric(e).pipe(Effect.orDie)),
+      metrics: {
+        live: handle.metrics,
+        history: ({ limit, since, until }) =>
+          Option.match(history, {
+            onNone: () => Effect.succeed<ReadonlyArray<typeof queueMetrics.Type>>([]),
+            onSome: (store) =>
+              store.read(metricsStreamId, { limit, since, until }).pipe(
+                Effect.flatMap((arr) =>
+                  Effect.forEach(arr, (e) => decodeMetric(e).pipe(Effect.orDie)),
+                ),
               ),
-            ),
-        }),
-      logHistory: ({ limit, since, until }) =>
-        Option.match(history, {
-          onNone: () => Effect.succeed<ReadonlyArray<typeof queueLogEntry.Type>>([]),
-          onSome: (store) =>
-            store.read(logsStreamId, { limit, since, until }).pipe(
-              Effect.flatMap((arr) =>
-                Effect.forEach(arr, (e) => decodeLog(e).pipe(Effect.orDie)),
+          }),
+      },
+      logs: {
+        live: handle.logs,
+        history: ({ limit, since, until }) =>
+          Option.match(history, {
+            onNone: () => Effect.succeed<ReadonlyArray<typeof queueLogEntry.Type>>([]),
+            onSome: (store) =>
+              store.read(logsStreamId, { limit, since, until }).pipe(
+                Effect.flatMap((arr) =>
+                  Effect.forEach(arr, (e) => decodeLog(e).pipe(Effect.orDie)),
+                ),
               ),
-            ),
-        }),
+          }),
+      },
       add: ((
         itemOrItems: Schema.Struct<F>["Type"] | ReadonlyArray<Schema.Struct<F>["Type"]>,
         level?: number | string,
-      ) => provideR(handle.add(itemOrItems, level)).pipe(Effect.orDie)) as ServiceOf<
-        CustomQueueInstanceSpec<F>,
-        Self
+      ) => provideR(handle.add(itemOrItems, level)).pipe(Effect.orDie)) as ImplOf<
+        CustomQueueInstanceSpec<F>
       >["add"],
       enqueue: (entries) => provideR(handle.enqueue(entries)),
       release: ({ options }) => provideR(handle.release(options)),

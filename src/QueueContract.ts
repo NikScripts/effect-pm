@@ -31,11 +31,11 @@ import { HistoryStore } from "./HistoryStore";
 import type {
   HandlerContextOf,
   HostKey,
+  ImplOf,
   LocalCapability,
   HostBoundTag,
   ResourceTag,
   ServeEntry,
-  ServiceOf,
 } from "./Resource";
 // Schemas from the light module — keeps the Tag/spec path engine-free (tree-shakeable).
 import {
@@ -358,18 +358,21 @@ export const historyQuery = {
  * @public
  */
 export const queueControlSpec = {
-  size: Resource.effect(Schema.Number).annotate({
+  // ── live current state — one SubscriptionRef-backed source of truth ──
+  // `status` is the whole snapshot; the scalars are `Stream.map` derivations of it (SSOT). All are
+  // plain reads (`p.size`) and subscribable (`Resource.changes(p, (s) => s.size)`).
+  status: Resource.value(queueStatus).annotate({
+    description:
+      "Live current-state snapshot: per-priority sizes, paused, in-flight, completed, phase.",
+  }),
+  size: Resource.value(Schema.Number).annotate({
     description: "Total pending items across all priority levels.",
   }),
-  sizes: Resource.effect(queueSizes).annotate({
-    description: "Pending item count per priority level.",
-  }),
-  isEmpty: Resource.effect(Schema.Boolean).annotate({
+  isEmpty: Resource.value(Schema.Boolean).annotate({
     description: "Whether all priority queues are empty.",
   }),
-  completed: Resource.effect(Schema.Number).annotate({
-    description: "Total items that have finished processing (success or failure).",
-  }),
+
+  // ── lifecycle commands ──
   start: Resource.effectFn(Schema.Void).annotate({
     description:
       "Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown).",
@@ -391,38 +394,35 @@ export const queueControlSpec = {
       "Drain all pending items and reset the completed counter; returns the count cleared.",
     destructive: true,
   }),
-  status: Resource.stream(queueStatus).annotate({
-    description:
-      "Live current-state snapshot (per-priority sizes, paused, in-flight, completed).",
-  }),
-  statusNow: Resource.effect(queueStatus).annotate({
-    description:
-      "One-shot current-state snapshot — the `status` stream's element read once " +
-      "(non-`--watch` CLI print, a widget's first paint).",
-  }),
-  metrics: Resource.stream(queueMetrics).annotate({
-    description:
-      "Windowed metrics (per-window counts + throughput/latency) emitted once per window.",
-  }),
-  logs: Resource.stream(queueLogEntry).annotate({
-    description:
-      "Captured log lines (engine + worker effect) with level/annotations/spans — empty " +
-      "unless the queue was configured with captureLogs.",
-  }),
-  metricsHistory: Resource.effect(Schema.Array(queueMetrics), {
-    payload: historyQuery,
-  }).annotate({
-    description:
-      "Past windowed metrics from the HistoryStore (newest `limit` within `since`/`until`); " +
-      "empty unless a HistoryStore layer is provided.",
-  }),
-  logHistory: Resource.effect(Schema.Array(queueLogEntry), {
-    payload: historyQuery,
-  }).annotate({
-    description:
-      "Past captured log lines from the HistoryStore (newest `limit` within `since`/`until`); " +
-      "empty unless a HistoryStore layer is provided.",
-  }),
+
+  // ── observability — live stream + history query, paired by nesting ──
+  metrics: {
+    live: Resource.stream(queueMetrics).annotate({
+      description:
+        "Windowed metrics (per-window counts + throughput/latency) emitted once per window.",
+    }),
+    history: Resource.effect(Schema.Array(queueMetrics), {
+      payload: historyQuery,
+    }).annotate({
+      description:
+        "Past windowed metrics from the HistoryStore (newest `limit` within `since`/`until`); " +
+        "empty unless a HistoryStore layer is provided.",
+    }),
+  },
+  logs: {
+    live: Resource.stream(queueLogEntry).annotate({
+      description:
+        "Captured log lines (engine + worker effect) with level/annotations/spans — empty " +
+        "unless the queue was configured with captureLogs.",
+    }),
+    history: Resource.effect(Schema.Array(queueLogEntry), {
+      payload: historyQuery,
+    }).annotate({
+      description:
+        "Past captured log lines from the HistoryStore (newest `limit` within `since`/`until`); " +
+        "empty unless a HistoryStore layer is provided.",
+    }),
+  },
 };
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to
 // `unknown`. The spec is validated (without widening) at the `Resource.Tag` call site.
@@ -569,11 +569,14 @@ const queueTag = <Self>() => {
         ? Resource.Tag<Self>()(key, spec, tagOptions)
         : Resource.Tag<Self>()(key, spec, { ...tagOptions, host });
     // Readiness derived from the queue's own status (SSOT): ready iff the worker pool is running.
+    // `status` is a live `value` — a plain, always-current property (no effect to run).
     return Resource.withReadiness(tag, (svc) =>
-      Effect.map(svc.statusNow, (s) => ({
-        ready: s.phase === "running",
-        ...(s.phase === "running" ? {} : { detail: `phase: ${s.phase}` }),
-      })),
+      Effect.succeed({
+        ready: svc.status.phase === "running",
+        ...(svc.status.phase === "running"
+          ? {}
+          : { detail: `phase: ${svc.status.phase}` }),
+      }),
     );
   }
   return build;
@@ -714,40 +717,49 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
     });
     // Annotated so the method params get contextual typing from the spec (and the impl is
     // assignable to ImplOf / WireServiceOf at all three call sites — no local members here).
-    const impl: ServiceOf<QueueInstanceSpec<F>, Self> = {
-      size: handle.size,
-      sizes: handle.sizes,
-      isEmpty: handle.isEmpty,
-      completed: handle.completed,
+    const impl: ImplOf<QueueInstanceSpec<F>> = {
+      // live current state — `status` is the SubscriptionRef.changes stream; the scalars are
+      // derivations of that one stream (so a single source feeds every view — SSOT).
+      status: handle.status,
+      size: Stream.map(
+        handle.status,
+        (s) => s.sizes.high + s.sizes.normal + s.sizes.low,
+      ),
+      isEmpty: Stream.map(
+        handle.status,
+        (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
+      ),
       start: provideR(handle.start),
       pause: handle.pause,
       resume: handle.resume,
       shutdown: handle.shutdown,
       clear: provideR(handle.clear),
-      status: handle.status,
-      statusNow: handle.statusNow,
-      metrics: handle.metrics,
-      logs: handle.logs,
-      metricsHistory: ({ limit, since, until }) =>
-        Option.match(history, {
-          onNone: () => Effect.succeed<ReadonlyArray<typeof queueMetrics.Type>>([]),
-          onSome: (store) =>
-            store.read(metricsStreamId, { limit, since, until }).pipe(
-              Effect.flatMap((arr) =>
-                Effect.forEach(arr, (e) => decodeMetric(e).pipe(Effect.orDie)),
+      metrics: {
+        live: handle.metrics,
+        history: ({ limit, since, until }) =>
+          Option.match(history, {
+            onNone: () => Effect.succeed<ReadonlyArray<typeof queueMetrics.Type>>([]),
+            onSome: (store) =>
+              store.read(metricsStreamId, { limit, since, until }).pipe(
+                Effect.flatMap((arr) =>
+                  Effect.forEach(arr, (e) => decodeMetric(e).pipe(Effect.orDie)),
+                ),
               ),
-            ),
-        }),
-      logHistory: ({ limit, since, until }) =>
-        Option.match(history, {
-          onNone: () => Effect.succeed<ReadonlyArray<typeof queueLogEntry.Type>>([]),
-          onSome: (store) =>
-            store.read(logsStreamId, { limit, since, until }).pipe(
-              Effect.flatMap((arr) =>
-                Effect.forEach(arr, (e) => decodeLog(e).pipe(Effect.orDie)),
+          }),
+      },
+      logs: {
+        live: handle.logs,
+        history: ({ limit, since, until }) =>
+          Option.match(history, {
+            onNone: () => Effect.succeed<ReadonlyArray<typeof queueLogEntry.Type>>([]),
+            onSome: (store) =>
+              store.read(logsStreamId, { limit, since, until }).pipe(
+                Effect.flatMap((arr) =>
+                  Effect.forEach(arr, (e) => decodeLog(e).pipe(Effect.orDie)),
+                ),
               ),
-            ),
-        }),
+          }),
+      },
       // The item (or batch) IS the payload — `add`/`prioritize`/`defer` take it directly. The
       // `Array.isArray` branch only picks the engine's overload (`(item)` vs `(items)`); both
       // arms forward unchanged. Re-validation can't fail post-decode, so it's `orDie`d.
@@ -947,10 +959,11 @@ export const configure = <
   patch: ConfigPatch<QueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>>,
 ): Layer.Layer<never> => configureLayer(tag.key, patch);
 
-// The unified `QueueResource` namespace is assembled in `internal/queueResourceNamespace.ts` and
-// re-exported by the barrel as `export * as QueueResource` (so member access tree-shakes — the
-// light `Tag`/spec here never pulls the engine that `layer`/`server`/`serveHttp` use).
+// This file is the **light half** (`Tag`/spec/schemas, no engine). The public `QueueResource` namespace is
+// assembled in `internal/queueResourceNamespace.ts` (light `Tag` here + engine `layer`/`serve`/…), and is
+// what the `./QueueResource` subpath + the barrel `export * as QueueResource` both resolve to — so member
+// access tree-shakes (`QueueResource.Tag` pulls no engine code). This module is internal; import from
+// `@nikscripts/effect-pm/QueueResource`.
 //
-// DX: `import * as QueueResource from "@nikscripts/effect-pm/QueueContract"` gives a
-// tree-shakeable namespace — `QueueResource.Tag` (alias of `queueTag`) pulls no engine code.
+// DX: `import * as QueueResource from "@nikscripts/effect-pm/QueueResource"` → `QueueResource.Tag`.
 export { queueTag as Tag };

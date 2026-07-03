@@ -13,7 +13,7 @@ import { DateTime, Duration, Effect, Layer, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import { RpcClient } from "effect/unstable/rpc";
 import * as Group from "../Group";
-import { client, hostOf, kindOf as resourceKindOf, specOf, type FlatSpec, type HostKey } from "../Resource";
+import { changes, client, hostOf, kindOf as resourceKindOf, specOf, type FlatSpec, type HostKey } from "../Resource";
 import * as HostStatus from "../HostStatus";
 import { kind as queueKind, queueMetrics, queueStatus } from "../QueueContract";
 import { kind as processKind, processScheduleEntry, processStatus } from "../ScheduledProcess";
@@ -52,13 +52,22 @@ export interface ApiPoint {
   readonly inFlight: number;
 }
 
-/** The structural shape of a queue's live service the widgets consume. */
+/** The structural shape of a queue's live service the widgets consume. `status`/`size`/`isEmpty` are live
+ *  `value`s (plain reads; subscribe with `Resource.changes`); `metrics`/`logs` are `{ live, history }`. */
 interface QueueService {
-  readonly status: Stream.Stream<QueueStatus>;
-  readonly metrics: Stream.Stream<QueueMetrics>;
-  readonly logs: Stream.Stream<{ readonly level: string; readonly message: string }>;
-  readonly metricsHistory: (o: { readonly limit: number }) => Effect.Effect<ReadonlyArray<QueueMetrics>>;
-  readonly logHistory: (o: { readonly limit: number }) => Effect.Effect<ReadonlyArray<{ readonly level: string; readonly message: string }>>;
+  readonly status: QueueStatus;
+  readonly size: number;
+  readonly isEmpty: boolean;
+  readonly metrics: {
+    readonly live: Stream.Stream<QueueMetrics>;
+    readonly history: (o: { readonly limit: number }) => Effect.Effect<ReadonlyArray<QueueMetrics>>;
+  };
+  readonly logs: {
+    readonly live: Stream.Stream<{ readonly level: string; readonly message: string }>;
+    readonly history: (o: {
+      readonly limit: number;
+    }) => Effect.Effect<ReadonlyArray<{ readonly level: string; readonly message: string }>>;
+  };
   readonly pause: Effect.Effect<void>;
   readonly resume: Effect.Effect<void>;
   readonly clear: Effect.Effect<void>;
@@ -290,8 +299,11 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
   const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
 
-  const statusStream = Stream.unwrap(Effect.map(tag, (q) => q.status));
-  const metricsStream = Stream.unwrap(Effect.map(tag, (q) => q.metrics));
+  // `status` is a live `value` — subscribe via `changes`; `metrics` is nested `{ live, history }`.
+  const statusStream = Stream.unwrap(
+    Effect.map(tag, (q) => changes(q, (s) => s.status)),
+  );
+  const metricsStream = Stream.unwrap(Effect.map(tag, (q) => q.metrics.live));
   // Stamp the point with the metric's own window-end (real server time), not the client's receive
   // time — so backfilled points land at their true position on the time axis (the window filter).
   const toPoint = (m: QueueMetrics): MetricPoint => ({
@@ -320,7 +332,7 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
   const metricsHistory = runtime.atom(
     Stream.concat(
       Stream.unwrap(
-        Effect.flatMap(tag, (q) => q.metricsHistory({ limit: HISTORY })).pipe(
+        Effect.flatMap(tag, (q) => q.metrics.history({ limit: HISTORY })).pipe(
           Effect.map((ms) => Stream.fromIterable(ms.map((m): MetricsItem => ({ point: toPoint(m) })))),
         ),
       ),
@@ -351,8 +363,8 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
       cachedAccumulator({
         key: `${tag.key}/logs`,
         cap: 300,
-        live: Stream.unwrap(Effect.map(tag, (q) => q.logs)).pipe(Stream.map(toLogLine)),
-        history: Effect.flatMap(tag, (q) => q.logHistory({ limit: 300 })).pipe(Effect.map((ls) => ls.map(toLogLine))),
+        live: Stream.unwrap(Effect.map(tag, (q) => q.logs.live)).pipe(Stream.map(toLogLine)),
+        history: Effect.flatMap(tag, (q) => q.logs.history({ limit: 300 })).pipe(Effect.map((ls) => ls.map(toLogLine))),
       }),
     ),
     pause: runtime.fn(() => Effect.flatMap(tag, (q) => q.pause)),

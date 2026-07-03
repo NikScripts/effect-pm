@@ -34,7 +34,7 @@ Subpaths:
 
 | Import | Carries |
 |--------|---------|
-| `@nikscripts/effect-pm/CustomQueueContract` | Tag, layer, server — no engine |
+| `@nikscripts/effect-pm/CustomQueueResource` | Tag, layer, server — no engine |
 | `@nikscripts/effect-pm/CustomQueueResource` | Namespace + `make` engine |
 
 ## Remaining
