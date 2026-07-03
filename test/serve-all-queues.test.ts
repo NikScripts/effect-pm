@@ -32,7 +32,7 @@ it("two real queues on one node/port via serveAllHttp", () =>
         const waitCompleted = (q: typeof a, n: number) =>
           Stream.runHead(
             Stream.filter(
-              Resource.changes(q, (s) => s.status),
+              q.status.changes,
               (s) => s.completed >= n,
             ),
           );

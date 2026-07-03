@@ -13,7 +13,7 @@ import { DateTime, Duration, Effect, Layer, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import { RpcClient } from "effect/unstable/rpc";
 import * as Group from "../Group";
-import { changes, client, nodeOf, kindOf as resourceKindOf, specOf, type FlatSpec, type NodeKey } from "../Resource";
+import { client, nodeOf, kindOf as resourceKindOf, specOf, type FlatSpec, type NodeKey, type Subscribable } from "../Resource";
 import * as NodeStatus from "../NodeStatus";
 import { kind as queueKind, queueMetrics, queueStatus } from "../QueueContract";
 import { kind as processKind, processScheduleEntry, processStatus } from "../ScheduledProcess";
@@ -52,12 +52,12 @@ export interface ApiPoint {
   readonly inFlight: number;
 }
 
-/** The structural shape of a queue's live service the widgets consume. `status`/`size`/`isEmpty` are live
- *  `value`s (plain reads; subscribe with `Resource.changes`); `metrics`/`logs` are `{ live, history }`. */
+/** The structural shape of a queue's live service the widgets consume. `status`/`size`/`isEmpty` are
+ *  reactive `ref`s (`Subscribable`: `.get` / `.changes`); `metrics`/`logs` are `{ live, history }`. */
 interface QueueService {
-  readonly status: QueueStatus;
-  readonly size: number;
-  readonly isEmpty: boolean;
+  readonly status: Subscribable<QueueStatus>;
+  readonly size: Subscribable<number>;
+  readonly isEmpty: Subscribable<boolean>;
   readonly metrics: {
     readonly live: Stream.Stream<QueueMetrics>;
     readonly history: (o: { readonly limit: number }) => Effect.Effect<ReadonlyArray<QueueMetrics>>;
@@ -299,9 +299,9 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
   const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
 
-  // `status` is a live `value` — subscribe via `changes`; `metrics` is nested `{ live, history }`.
+  // `status` is a reactive `ref` — subscribe via `.changes`; `metrics` is nested `{ live, history }`.
   const statusStream = Stream.unwrap(
-    Effect.map(tag, (q) => changes(q, (s) => s.status)),
+    Effect.map(tag, (q) => q.status.changes),
   );
   const metricsStream = Stream.unwrap(Effect.map(tag, (q) => q.metrics.live));
   // Stamp the point with the metric's own window-end (real server time), not the client's receive

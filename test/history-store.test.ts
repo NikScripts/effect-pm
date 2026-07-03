@@ -1,7 +1,6 @@
 import { Duration, Effect, Layer, Schema, Stream } from "effect";
 import { expect, it } from "vitest";
 import { HistoryStore, QueueResource } from "../src";
-import * as Resource from "../src/Resource";
 
 const NumberItem = Schema.Struct({ n: Schema.Number });
 interface NumberItem {
@@ -29,7 +28,7 @@ it("queue logHistory reads back captured logs (HistoryStore provided to the laye
       yield* queue.add([{ n: 1 }, { n: 2 }, { n: 3 }]);
       yield* Stream.runDrain(
         Stream.takeUntil(
-          Resource.changes(queue, (s) => s.status),
+          queue.status.changes,
           (s) => s.completed >= 3,
         ),
       );

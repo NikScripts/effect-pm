@@ -1,7 +1,6 @@
 import { Context, Effect, Fiber, Layer, Schema, Stream } from "effect";
 import { expect, it } from "vitest";
 import { QueueResource } from "../src";
-import * as Resource from "../src/Resource";
 
 // A refill loader that needs its OWN service dependency (like wow's Prisma repo) — distinct from
 // the worker, which needs nothing. Probes whether the refill's R is surfaced + provided.
@@ -38,7 +37,7 @@ it("refill loader gets its own service dependency", () =>
       const completed = yield* Effect.forkChild(
         Stream.runHead(
           Stream.filter(
-            Resource.changes(q, (s) => s.status),
+            q.status.changes,
             (s) => s.completed >= 3,
           ),
         ),

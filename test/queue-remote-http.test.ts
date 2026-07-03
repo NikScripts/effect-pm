@@ -63,7 +63,7 @@ it("add (single + batch) over http → real engine processes → completed/statu
         // stream (current snapshot first, then updates) as it crosses RPC.
         const drained = yield* Stream.runHead(
           Stream.filter(
-            Resource.changes(queue, (s) => s.status),
+            queue.status.changes,
             (s) => s.completed >= 3,
           ),
         );
@@ -88,7 +88,7 @@ it("logHistory + metricsHistory cross http (the dashboard's backfill path)", () 
           yield* queue.add([{ n: 1 }, { n: 2 }]);
           yield* Stream.runDrain(
             Stream.takeUntil(
-              Resource.changes(queue, (s) => s.status),
+              queue.status.changes,
               (s) => s.completed >= 2,
             ),
           );
@@ -138,7 +138,7 @@ it("the status stream flows over http from the real engine", () =>
           Stream.runCollect(
             Stream.take(
               Stream.filter(
-                Resource.changes(queue, (s) => s.status),
+                queue.status.changes,
                 (s) => s.sizes.normal >= 2,
               ),
               1,

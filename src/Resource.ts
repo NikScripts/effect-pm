@@ -44,8 +44,6 @@ import {
   Clock,
   Context,
   Data,
-  Deferred,
-  Duration,
   Effect,
   Fiber,
   Function as Fn,
@@ -597,28 +595,27 @@ export const constant = <Su extends Schema.Top>(
 ): ConstantField<Method<"query", undefined, Su, typeof Schema.Never>> =>
   marked(effect(success), { _tag: "constant" as const });
 
-/** A {@link Method} marked as a **value** field (via {@link value}) — a plain property kept live by a
- *  background stream. Tagged with a readable `_tag: "value"`. @public */
-export type ValueField<M extends AnyMethod> = Marked<M, { readonly _tag: "value" }>;
+/** A {@link Method} marked as a **ref** field (via {@link ref}) — surfaces as a {@link Subscribable}.
+ *  Tagged with a readable `_tag: "ref"`. @public */
+export type RefField<M extends AnyMethod> = Marked<M, { readonly _tag: "ref" }>;
 
-/** Runtime guard: is a spec entry a {@link value} field? */
-const isValueMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
-  Predicate.hasProperty(m, "_tag") && m._tag === "value";
+/** Runtime guard: is a spec entry a {@link ref} field? */
+const isRefMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
+  Predicate.hasProperty(m, "_tag") && m._tag === "ref";
 
 /**
- * Define a **`value`** field — a **plain** property (`p.x: A`, no `yield*`) kept **live** by a background
- * stream. The impl supplies a `SubscriptionRef`'s `.changes` (or any stream that emits its current value
- * on subscribe); each acquire subscribes once, **blocks for the initial value**, and thereafter keeps the
- * property current in place. Reads are free — `yield* Tag` never makes a request. Identical local and
- * remote (remote is eventually-consistent — latency, not divergence). For fixed values use `constant`; for
- * on-demand reads use `effect`. See `docs/handoffs/service-shape-redesign.md`.
+ * Define a **`ref`** field — reactive state surfaced as a {@link Subscribable}<A> (`get` + `changes`),
+ * uniform local and remote. The impl **owns** a `SubscriptionRef` (writes it) and provides it via
+ * {@link subscribable}; consumers **read** (`yield* svc.x.get`) and **observe** (`svc.x.changes`) — a read
+ * is an honest `Effect`, not a synchronous peek. For values fixed at acquire use `constant`; for on-demand
+ * calls use `effect`. See `docs/handoffs/2026-07-03-contract-serve-reform.md`.
  *
  * @public
  */
-export const value = <Su extends Schema.Top>(
+export const ref = <Su extends Schema.Top>(
   success: Su,
-): ValueField<Method<"query", undefined, Su, typeof Schema.Never, true>> =>
-  marked(stream(success), { _tag: "value" as const });
+): RefField<Method<"query", undefined, Su, typeof Schema.Never, true>> =>
+  marked(stream(success), { _tag: "ref" as const });
 
 /**
  * A **read-only reactive value**: its current value ({@link Subscribable.get}, an `Effect`) plus a stream
@@ -640,6 +637,18 @@ export const subscribable = <A>(
 ): Subscribable<A> => ({
   get: SubscriptionRef.get(source),
   changes: SubscriptionRef.changes(source),
+});
+
+/**
+ * Derive a {@link Subscribable} from another by mapping both its current value and its changes — one source
+ * of truth feeds every view (a queue's `size`/`isEmpty` from its `status`). @public
+ */
+export const mapSubscribable = <A, B>(
+  source: Subscribable<A>,
+  f: (a: A) => B,
+): Subscribable<B> => ({
+  get: Effect.map(source.get, f),
+  changes: Stream.map(source.changes, f),
 });
 
 /**
@@ -891,8 +900,8 @@ export type ServiceOf<S extends Spec, Self = unknown> = {
     ? Effect.Effect<T, never, LocalCapability<Self>>
     : S[K] extends { readonly _tag: "constant" }
       ? SuccessOf<AsMethod<S[K]>>
-      : S[K] extends { readonly _tag: "value" }
-        ? SuccessOf<AsMethod<S[K]>>
+      : S[K] extends { readonly _tag: "ref" }
+        ? Subscribable<SuccessOf<AsMethod<S[K]>>>
         : S[K] extends { readonly kind: MethodKind } // leaf (F-independent; reconstruct via AsMethod)
           ? ServiceMethod<AsMethod<S[K]>>
           : S[K] extends Spec
@@ -903,12 +912,14 @@ export type ServiceOf<S extends Spec, Self = unknown> = {
 /** The wire-only service: just the {@link Method}s (used by the server impl + forwarder). */
 type WireServiceOf<S extends Spec> = {
   readonly [K in keyof S as S[K] extends AnyLocalMethod ? never : K]: S[K] extends {
-    readonly kind: MethodKind;
+    readonly _tag: "ref";
   }
-    ? ServiceMethod<AsMethod<S[K]>>
-    : S[K] extends Spec
-      ? WireServiceOf<S[K]>
-      : never;
+    ? Subscribable<SuccessOf<AsMethod<S[K]>>> // impl provides the Subscribable; wire serves its .changes
+    : S[K] extends { readonly kind: MethodKind }
+      ? ServiceMethod<AsMethod<S[K]>>
+      : S[K] extends Spec
+        ? WireServiceOf<S[K]>
+        : never;
 };
 
 /** A **peer's** service as seen by {@link peers} — the per-instance ("leaf") wire methods only:
@@ -919,8 +930,8 @@ type PeerServiceOf<S extends Spec> = {
     ? never
     : S[K] extends AnyLocalMethod
       ? never
-      : K]: S[K] extends { readonly _tag: "value" }
-    ? // a peer reads a `value` **one-shot** (its current value, lazily) — not a live subscription, so
+      : K]: S[K] extends { readonly _tag: "ref" }
+    ? // a peer reads a `ref` **one-shot** (its current value, lazily) — not a live subscription, so
       // folding it never opens a persistent connection at build (see buildPeerService).
       Effect.Effect<SuccessOf<AsMethod<S[K]>>>
     : S[K] extends { readonly kind: MethodKind }
@@ -946,11 +957,13 @@ type PeerServiceOf<S extends Spec> = {
 export type ImplOf<S extends Spec> = {
   readonly [K in keyof S]: S[K] extends LocalMethod<infer T>
     ? T
-    : S[K] extends { readonly kind: MethodKind }
-      ? ServiceMethod<AsMethod<S[K]>>
-      : S[K] extends Spec
-        ? ImplOf<S[K]> // nested group → nested impl
-        : never;
+    : S[K] extends { readonly _tag: "ref" }
+      ? Subscribable<SuccessOf<AsMethod<S[K]>>> // impl owns the SubscriptionRef, provided via subscribable()
+      : S[K] extends { readonly kind: MethodKind }
+        ? ServiceMethod<AsMethod<S[K]>>
+        : S[K] extends Spec
+          ? ImplOf<S[K]> // nested group → nested impl
+          : never;
 };
 
 /**
@@ -1390,11 +1403,8 @@ const readinessCheckServed = (
     for (const [key, m] of Object.entries(spec)) {
       if (isConstantMethod(m)) {
         setPath(view, key, yield* (flat[key] as Effect.Effect<unknown>));
-      } else if (isValueMethod(m)) {
-        const head = yield* Stream.runHead(
-          flat[key] as Stream.Stream<unknown>,
-        ).pipe(Effect.scoped);
-        setPath(view, key, Option.getOrUndefined(head));
+      } else if (isRefMethod(m)) {
+        setPath(view, key, yield* (flat[key] as Subscribable<unknown>).get);
       } else {
         setPath(view, key, flat[key]);
       }
@@ -1639,125 +1649,40 @@ function tagFor<const S extends Spec>(
   });
 }
 
-/** Block-for-initial timeout for a {@link value} field's first push. @internal */
-const valueInitialTimeout = Duration.seconds(30);
-
-/** Where a materialized service stows its {@link value} fields' `SubscriptionRef`s (path-keyed), for
- *  {@link changes} / {@link ref} to subscribe to. Runtime-only — never in {@link ServiceOf}. @internal */
-const valueRefsSym: unique symbol = Symbol.for(
-  "@nikscripts/effect-pm/Resource/valueRefs",
-);
-
-/** Registry of a service's value-field cells, path-keyed (`"connections.size"`). @internal */
-type ValueRefs = Record<string, SubscriptionRef.SubscriptionRef<unknown>>;
-
-/** Attach the value-field ref registry to a built (nested) service — only when it has value fields, so a
- *  service with none stays a clean record. @internal */
-const withValueRefs = <T extends object>(service: T, refs: ValueRefs): T =>
-  Object.keys(refs).length === 0
-    ? service
-    : Object.assign(service, { [valueRefsSym]: refs });
-
-/** Resolve a value-field selector `(s) => s.a.b` to its flat path via a path-recording proxy — so
- *  {@link changes} / {@link ref} address nested fields **without string paths**. @internal */
-const selectorPath = (select: (s: never) => unknown): string => {
-  const parts: Array<string> = [];
-  const probe = (): unknown =>
-    new Proxy(() => {}, {
-      get: (_t, prop) => {
-        if (typeof prop === "string") parts.push(prop);
-        return probe();
-      },
-    });
-  select(probe() as never);
-  return parts.join(".");
-};
-
-/** Look up the `SubscriptionRef` backing the value field a selector picks; dies loudly if it isn't a
- *  live {@link value} field. @internal */
-const valueRefOf = <Svc extends object, A>(
-  service: Svc,
-  select: (s: Svc) => A,
-): SubscriptionRef.SubscriptionRef<A> => {
-  const path = selectorPath(select as (s: never) => unknown);
-  const refs = Predicate.hasProperty(service, valueRefsSym)
-    ? (service[valueRefsSym] as ValueRefs)
-    : undefined;
-  const cell = refs?.[path];
-  if (cell === undefined) {
-    throw new Error(
-      `Resource.changes/ref: "${path}" is not a live value field on this service`,
-    );
-  }
-  return cell as SubscriptionRef.SubscriptionRef<A>;
-};
-
 /**
- * Subscribe to a {@link value} field's live delta stream — `SubscriptionRef.changes` under the hood, so
- * you get the current value immediately, then every update. Pick the field with a **selector** (nesting-
- * friendly, no string paths); passing a non-`value` field dies loudly.
- *
- * ```ts
- * const p = yield* Live;
- * yield* Resource.changes(p, (s) => s.connections.size).pipe(
- *   Stream.runForEach((n) => Console.log(n)),
- * );
- * ```
- *
- * @public
+ * Client side of a {@link ref} field: a {@link Subscribable} over the RPC changes stream — `changes` is the
+ * stream itself; `get` takes its replayed current head (a `SubscriptionRef`'s changes emit the current value
+ * on subscribe). No mirror, no block-for-initial. @internal
  */
-export const changes = <Svc extends object, A>(
-  service: Svc,
-  select: (s: Svc) => A,
-): Stream.Stream<A> => SubscriptionRef.changes(valueRefOf(service, select));
-
-/**
- * The `SubscriptionRef` backing a {@link value} field — for `get`, `changes`, or bridging to an `Atom`.
- * Same selector as {@link changes}. @public
- */
-export const ref = <Svc extends object, A>(
-  service: Svc,
-  select: (s: Svc) => A,
-): SubscriptionRef.SubscriptionRef<A> => valueRefOf(service, select);
-
-/**
- * Bind a {@link value} field's live stream to a plain, in-place-mutated service property: block for the
- * initial value (a source that never emits fails acquisition **loudly**, as a defect), set it, then fork
- * an updater that keeps the property current. So `yield* Tag` reads a cheap property; freshness is push,
- * not pull. Shared by the local and client materializations, so `value` behaves identically on both.
- * @internal
- */
-const bindValueToProp = (
-  source: Stream.Stream<unknown>,
-  set: (v: unknown) => void,
-  label: string,
-): Effect.Effect<SubscriptionRef.SubscriptionRef<unknown>, never, Scope.Scope> =>
+// Client side of a ref field: ONE kept-open subscription to the RPC changes stream mirrors the latest into
+// a local cache (never closing the wire stream — closing a `Never`-error RPC stream early trips its error
+// decode). `get` reads the cache (waiting on the local cache stream for the first value if needed — safe to
+// close); `changes` replays from the same cache, so a client opens exactly one wire stream per ref. No
+// block-for-initial at build, so a slow/absent source never deadlocks acquisition.
+const clientSubscribable = <A>(
+  wire: Stream.Stream<A>,
+): Effect.Effect<Subscribable<A>, never, Scope.Scope> =>
   Effect.gen(function* () {
-    // back the field with a SubscriptionRef so the delta stream can be subscribed to directly
-    // ({@link changes} / {@link ref}) instead of only read via the plain property.
-    const cell = yield* SubscriptionRef.make<unknown>(undefined);
-    const firstArrived = yield* Deferred.make<void>();
+    const cache = yield* SubscriptionRef.make<Option.Option<A>>(Option.none());
     yield* Effect.forkScoped(
-      Stream.runForEach(source, (v) =>
-        Effect.andThen(
-          Effect.sync(() => set(v)), // mirror into the plain property (cheap synchronous read)
-          Effect.andThen(
-            SubscriptionRef.set(cell, v), // fan out to subscribers
-            Deferred.succeed(firstArrived, undefined),
-          ),
+      Stream.runForEach(wire, (v) => SubscriptionRef.set(cache, Option.some(v))),
+    );
+    const present: Stream.Stream<A> = SubscriptionRef.changes(cache).pipe(
+      Stream.filter(Option.isSome),
+      Stream.map((o) => o.value),
+    );
+    return {
+      changes: present,
+      get: SubscriptionRef.get(cache).pipe(
+        Effect.flatMap(
+          Option.match({
+            onSome: (v: A) => Effect.succeed(v),
+            onNone: () =>
+              Stream.runHead(present).pipe(Effect.scoped, Effect.map(Option.getOrThrow)),
+          }),
         ),
       ),
-    );
-    yield* Effect.race(
-      Deferred.await(firstArrived),
-      Effect.andThen(
-        Effect.sleep(valueInitialTimeout),
-        Effect.die(
-          new Error(`Resource value "${label}" produced no initial value in time`),
-        ),
-      ),
-    );
-    return cell;
+    };
   });
 
 /**
@@ -1796,33 +1721,25 @@ function localLayer<Self, S extends Spec, R>(
     // impl may be nested (grouped) — flatten to path keys matching the flat spec, build the flat service,
     // then nest it back on the way out.
     const members = flattenImpl(builtImpl, spec);
-    // build directly into the nested shape (via setPath) so `value` setters write the object the consumer
-    // holds; the impl was flattened to path keys, so `key` here is the flat path.
+    // build directly into the nested shape (via setPath); the impl was flattened to path keys, so `key`
+    // here is the flat path.
     const service: Record<string, unknown> = {};
-    const valueRefs: ValueRefs = {};
     for (const [key, m] of Object.entries(spec)) {
       // local members surface as `Effect<T, never, LocalCapability>` (require the cap to obtain the
-      // value); constant fields are resolved once here into a plain value; other wire members pass
-      // through unchanged.
+      // value); constant fields are resolved once here into a plain value; ref fields and other wire
+      // members (their `Subscribable` / `Effect` / `Stream` / function) pass through unchanged.
       if (isLocalMethod(m)) {
         setPath(service, key, Effect.as(cap, members[key]));
       } else if (isConstantMethod(m)) {
         setPath(service, key, yield* (members[key] as Effect.Effect<unknown>));
-      } else if (isValueMethod(m)) {
-        valueRefs[key] = yield* bindValueToProp(
-          members[key] as Stream.Stream<unknown>,
-          (v) => setPath(service, key, v),
-          key,
-        );
       } else {
         setPath(service, key, members[key]);
       }
     }
     // Boundary assertion (runtime-safe): built from the same spec, key-for-key.
-    return Context.make(
-      tag,
-      withValueRefs(service, valueRefs) as ServiceOf<S, Self>,
-    ).pipe(Context.add(cap, { granted: true }));
+    return Context.make(tag, service as ServiceOf<S, Self>).pipe(
+      Context.add(cap, { granted: true }),
+    );
   });
   return Layer.effectContext(build);
 }
@@ -1840,6 +1757,10 @@ const invokeWireMethod = (
   method: AnyMethod,
   payload: unknown,
 ): unknown => {
+  // a ref's impl is a Subscribable; the wire serves its changes stream (the client rebuilds get from it).
+  if (isRefMethod(method)) {
+    return (member as Subscribable<unknown>).changes;
+  }
   if (typeof member !== "function") {
     return member;
   }
@@ -1950,12 +1871,14 @@ export type ServeMethod<M extends AnyMethod, R> = M["stream"] extends true
  */
 export type ServeImplOf<S extends Spec, R> = {
   readonly [K in keyof S as S[K] extends AnyLocalMethod ? never : K]: S[K] extends {
-    readonly kind: MethodKind;
+    readonly _tag: "ref";
   }
-    ? ServeMethod<AsMethod<S[K]>, R>
-    : S[K] extends Spec
-      ? ServeImplOf<S[K], R>
-      : never;
+    ? Subscribable<SuccessOf<AsMethod<S[K]>>>
+    : S[K] extends { readonly kind: MethodKind }
+      ? ServeMethod<AsMethod<S[K]>, R>
+      : S[K] extends Spec
+        ? ServeImplOf<S[K], R>
+        : never;
 };
 
 /**
@@ -2388,7 +2311,7 @@ const serveAllHttp = <const Entries extends ReadonlyArray<ServeEntry<any>>>(
         );
         for (const [key, member] of Object.entries(flatImpl)) {
           handlers[wireTag(tag.groupId, key)] = (payload) =>
-            typeof member === "function" ? member(payload) : member;
+            invokeWireMethod(member, tag[specSym][key] as AnyMethod, payload);
         }
       }
       const rpcAppLayer = RpcServer.layerHttp({
@@ -2743,7 +2666,7 @@ const buildPeerService = <Self, S extends Spec>(
   >;
   const service: Record<string, unknown> = {};
   for (const [key, m] of Object.entries(tag[specSym])) {
-    if (isValueMethod(m)) {
+    if (isRefMethod(m)) {
       // one-shot current value: subscribe, take the first (the replayed current), close. Lazy — no
       // connection until folded; fails (dropped by combineQuery) if the peer is unreachable.
       setPath(
@@ -2971,7 +2894,6 @@ const buildClientService = <Self, S extends Spec>(
     // build directly into the nested shape (via setPath) so `value` setters write the object the consumer
     // holds; `wire` + `tag[specSym]` are flat path keys.
     const service: Record<string, unknown> = {};
-    const valueRefs: ValueRefs = {};
     for (const [key, m] of Object.entries(tag[specSym])) {
       if (isLocalMethod(m)) {
         setPath(
@@ -2982,19 +2904,15 @@ const buildClientService = <Self, S extends Spec>(
       } else if (isConstantMethod(m)) {
         // resolve the constant's query once at acquire → a plain value
         setPath(service, key, yield* (wire[key] as Effect.Effect<unknown>));
-      } else if (isValueMethod(m)) {
-        // subscribe once, block for the initial, keep the plain property live in place
-        valueRefs[key] = yield* bindValueToProp(
-          wire[key] as Stream.Stream<unknown>,
-          (v) => setPath(service, key, v),
-          key,
-        );
+      } else if (isRefMethod(m)) {
+        // a Subscribable over the RPC changes stream (one kept-open subscription → local cache)
+        setPath(service, key, yield* clientSubscribable(wire[key] as Stream.Stream<unknown>));
       } else {
         setPath(service, key, wire[key]);
       }
     }
     // Boundary assertion (runtime-safe): built from the spec, key-for-key.
-    return withValueRefs(service, valueRefs) as ServiceOf<S, Self>;
+    return service as ServiceOf<S, Self>;
   });
 
 /**

@@ -21,16 +21,18 @@ class HttpQueue extends QueueResource.Tag<HttpQueue>()("queue-http/Q", NumberIte
 // last entries the server received on `enqueue`, after crossing the wire and decoding.
 const received: Array<QueueEntry<NumberItem>> = [];
 
+// ref-field impls are Subscribables (a static one for this stub: current + a single-emit changes).
+const sub = <A>(v: A) => ({ get: Effect.succeed(v), changes: Stream.make(v) });
+
 const stub = {
-  // value-field impls are the backing streams (current value kept live in place).
-  size: Stream.make(0),
-  isEmpty: Stream.make(true),
+  size: sub(0),
+  isEmpty: sub(true),
   start: Effect.void,
   pause: Effect.void,
   resume: Effect.void,
   shutdown: Effect.void,
   clear: Effect.succeed(0),
-  status: Stream.make({
+  status: sub({
     sizes: { high: 0, normal: 0, low: 0 },
     paused: false,
     inFlight: 0,

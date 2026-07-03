@@ -41,13 +41,16 @@ const makeImpl = () => {
   const statusRef = Effect.runSync(SubscriptionRef.make(initial));
   const patch = (f: (s: typeof initial) => typeof initial) =>
     Effect.runSync(SubscriptionRef.update(statusRef, f));
-  const status = SubscriptionRef.changes(statusRef);
+  const statusSub = Resource.subscribable(statusRef);
   return {
-    // live current state — `status` is the SSOT; the scalars derive from it (`value` impls are streams).
-    status,
-    size: Stream.map(status, (s) => s.sizes.high + s.sizes.normal + s.sizes.low),
-    isEmpty: Stream.map(
-      status,
+    // live current state — `status` is the SSOT Subscribable; the scalars are mapped views (`ref` impls).
+    status: statusSub,
+    size: Resource.mapSubscribable(
+      statusSub,
+      (s) => s.sizes.high + s.sizes.normal + s.sizes.low,
+    ),
+    isEmpty: Resource.mapSubscribable(
+      statusSub,
       (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
     ),
     start: Effect.void,
@@ -368,7 +371,7 @@ it("QueueResource.layer runs the engine behind the toolkit tag (local)", () => {
     // the queue is now empty — the live `isEmpty` delta stream reflects it.
     const emptied = yield* Stream.runHead(
       Stream.filter(
-        Resource.changes(q, (s) => s.isEmpty),
+        q.isEmpty.changes,
         (e) => e === true,
       ),
     );

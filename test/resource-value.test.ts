@@ -1,15 +1,15 @@
-import { Duration, Effect, Layer, Schema, SubscriptionRef } from "effect";
+import { Effect, Layer, Schema, SubscriptionRef } from "effect";
 import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Resource from "../src/Resource";
 
-// `value` fields are PLAIN properties kept live by a background stream. Read with no yield*; the property
-// tracks the source; acquire blocks for the initial value.
+// `ref` fields surface as a `Subscribable`: `yield* p.x.get` (current value) + `p.x.changes` (stream),
+// uniform local and remote. The impl owns the `SubscriptionRef` (provided via `Resource.subscribable`).
 
-class Live extends Resource.Tag<Live>()("value-test/Live", {
-  count: Resource.value(Schema.Number),
+class Live extends Resource.Tag<Live>()("ref-test/Live", {
+  count: Resource.ref(Schema.Number),
 }) {}
 
 const protocol = (url: string) =>
@@ -18,30 +18,28 @@ const protocol = (url: string) =>
     Layer.provide(FetchHttpClient.layer),
   );
 
-it("value is plain + live — LOCAL", () =>
+it("ref.get reads the current value — LOCAL (no mirror, no sleep)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const ref = yield* SubscriptionRef.make(0);
+      const cell = yield* SubscriptionRef.make(0);
       yield* Effect.gen(function* () {
         const p = yield* Live;
-        expect(p.count).toBe(0); // initial, plain — no yield*
-        yield* SubscriptionRef.set(ref, 5);
-        yield* Effect.sleep(Duration.millis(30)); // let the updater fiber apply the delta
-        const p2 = yield* Live;
-        expect(p2.count).toBe(5); // live — the property tracked the source
+        expect(yield* p.count.get).toBe(0);
+        yield* SubscriptionRef.set(cell, 5);
+        expect(yield* p.count.get).toBe(5); // get reads the source directly — always current
       }).pipe(
-        Effect.provide(Resource.layer(Live, { count: SubscriptionRef.changes(ref) })),
+        Effect.provide(Resource.layer(Live, { count: Resource.subscribable(cell) })),
         Effect.scoped,
       );
     }),
   ));
 
-it("value is plain + resolved at acquire — REMOTE (same shape)", () =>
+it("ref.get reads the current value — REMOTE (same shape over the wire)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const ref = yield* SubscriptionRef.make(42);
+      const cell = yield* SubscriptionRef.make(42);
       const Node = Resource.serveAllHttp([
-        Resource.serverEntry(Live, { count: SubscriptionRef.changes(ref) }),
+        Resource.serverEntry(Live, { count: Resource.subscribable(cell) }),
       ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
 
       yield* Effect.gen(function* () {
@@ -51,7 +49,7 @@ it("value is plain + resolved at acquire — REMOTE (same shape)", () =>
 
         yield* Effect.gen(function* () {
           const p = yield* Live;
-          expect(p.count).toBe(42); // plain — the initial delta, over the wire
+          expect(yield* p.count.get).toBe(42); // current, reconstructed from the RPC changes stream
         }).pipe(
           Effect.provide(Resource.client(Live).pipe(Layer.provide(protocol(`${base}/rpc`)))),
           Effect.scoped,

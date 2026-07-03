@@ -361,14 +361,14 @@ export const queueControlSpec = {
   // ── live current state — one SubscriptionRef-backed source of truth ──
   // `status` is the whole snapshot; the scalars are `Stream.map` derivations of it (SSOT). All are
   // plain reads (`p.size`) and subscribable (`Resource.changes(p, (s) => s.size)`).
-  status: Resource.value(queueStatus).annotate({
+  status: Resource.ref(queueStatus).annotate({
     description:
       "Live current-state snapshot: per-priority sizes, paused, in-flight, completed, phase.",
   }),
-  size: Resource.value(Schema.Number).annotate({
+  size: Resource.ref(Schema.Number).annotate({
     description: "Total pending items across all priority levels.",
   }),
-  isEmpty: Resource.value(Schema.Boolean).annotate({
+  isEmpty: Resource.ref(Schema.Boolean).annotate({
     description: "Whether all priority queues are empty.",
   }),
 
@@ -569,14 +569,14 @@ const queueTag = <Self>() => {
         ? Resource.Tag<Self>()(key, spec, tagOptions)
         : Resource.Tag<Self>()(key, spec, { ...tagOptions, node });
     // Readiness derived from the queue's own status (SSOT): ready iff the worker pool is running.
-    // `status` is a live `value` — a plain, always-current property (no effect to run).
+    // `status` is a reactive `ref` (Subscribable) — read its current value to derive readiness.
     return Resource.withReadiness(tag, (svc) =>
-      Effect.succeed({
-        ready: svc.status.phase === "running",
-        ...(svc.status.phase === "running"
+      Effect.map(svc.status.get, (status) => ({
+        ready: status.phase === "running",
+        ...(status.phase === "running"
           ? {}
-          : { detail: `phase: ${svc.status.phase}` }),
-      }),
+          : { detail: `phase: ${status.phase}` }),
+      })),
     );
   }
   return build;
@@ -717,16 +717,20 @@ const buildQueueImpl = <Self, F extends QueueItemFields, E, R, RR = never>(
     });
     // Annotated so the method params get contextual typing from the spec (and the impl is
     // assignable to ImplOf / WireServiceOf at all three call sites — no local members here).
+    // one Subscribable source of truth (get = statusNow, changes = status stream); the scalars are
+    // mapped views of it (SSOT) — a ref field surfaces as Subscribable local + remote.
+    const statusSub = {
+      get: handle.statusNow,
+      changes: handle.status,
+    };
     const impl: ImplOf<QueueInstanceSpec<F>> = {
-      // live current state — `status` is the SubscriptionRef.changes stream; the scalars are
-      // derivations of that one stream (so a single source feeds every view — SSOT).
-      status: handle.status,
-      size: Stream.map(
-        handle.status,
+      status: statusSub,
+      size: Resource.mapSubscribable(
+        statusSub,
         (s) => s.sizes.high + s.sizes.normal + s.sizes.low,
       ),
-      isEmpty: Stream.map(
-        handle.status,
+      isEmpty: Resource.mapSubscribable(
+        statusSub,
         (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
       ),
       start: provideR(handle.start),
