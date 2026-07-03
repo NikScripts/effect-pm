@@ -897,11 +897,15 @@ type PeerServiceOf<S extends Spec> = {
     ? never
     : S[K] extends AnyLocalMethod
       ? never
-      : K]: S[K] extends { readonly kind: MethodKind }
-    ? ServiceMethod<AsMethod<S[K]>>
-    : S[K] extends Spec
-      ? PeerServiceOf<S[K]>
-      : never;
+      : K]: S[K] extends { readonly _tag: "value" }
+    ? // a peer reads a `value` **one-shot** (its current value, lazily) — not a live subscription, so
+      // folding it never opens a persistent connection at build (see buildPeerService).
+      Effect.Effect<SuccessOf<AsMethod<S[K]>>>
+    : S[K] extends { readonly kind: MethodKind }
+      ? ServiceMethod<AsMethod<S[K]>>
+      : S[K] extends Spec
+        ? PeerServiceOf<S[K]>
+        : never;
 };
 
 /**
@@ -2663,12 +2667,56 @@ export const multiHost: {
     Object.assign(tag, { [multiHostSym]: hosts }),
 );
 
-/** Build a client to one peer host over http (its own `url`) — the same wire client as
- *  {@link buildClientService}, scoped to its transport. */
+/**
+ * Build a **peer** service — a fully **lazy** client for folding across hosts ({@link combineQuery} /
+ * {@link combineStream}). Unlike {@link buildClientService} it never resolves `constant`s or subscribes
+ * `value` fields at build: those open a connection and (for a `value`) block on the initial push, so a
+ * co-booting or down peer would hang the whole serve. A `value` is read **one-shot** here (`Stream.runHead`
+ * → its replayed current), so the network is touched only when a fold runs, and `combineQuery` drops an
+ * unreachable peer instead of deadlocking at build. @internal
+ */
+const buildPeerService = <Self, S extends Spec>(
+  tag: ResourceTag<Self, S>,
+  rpc: unknown,
+): PeerServiceOf<S> => {
+  const wire = forwardClient(rpc, tag[specSym], tag.groupId, tag.key) as Record<
+    string,
+    unknown
+  >;
+  const service: Record<string, unknown> = {};
+  for (const [key, m] of Object.entries(tag[specSym])) {
+    if (isValueMethod(m)) {
+      // one-shot current value: subscribe, take the first (the replayed current), close. Lazy — no
+      // connection until folded; fails (dropped by combineQuery) if the peer is unreachable.
+      setPath(
+        service,
+        key,
+        Stream.runHead(wire[key] as Stream.Stream<unknown>).pipe(
+          Effect.scoped,
+          Effect.flatMap(
+            Option.match({
+              onNone: () =>
+                Effect.die(new Error(`peer value "${key}" produced no value`)),
+              onSome: (v) => Effect.succeed(v),
+            }),
+          ),
+        ),
+      );
+    } else {
+      // effect / effectFn / stream / constant — already their lazy wire form (Effect/Stream); no eager
+      // resolve/subscribe. Locals aren't on the wire.
+      setPath(service, key, wire[key]);
+    }
+  }
+  return service as PeerServiceOf<S>;
+};
+
+/** Build a lazy client to one peer host over http (its own `url`), scoped to its transport. Fully lazy —
+ *  see {@link buildPeerService} (nothing connects until a fold reads a field). */
 const buildPeerClient = <Self, S extends Spec>(
   tag: ResourceTag<Self, S>,
   url: string,
-): Effect.Effect<ServiceOf<S, Self>, never, Scope.Scope> =>
+): Effect.Effect<PeerServiceOf<S>, never, Scope.Scope> =>
   Effect.gen(function* () {
     // build the http protocol into the enclosing scope, then feed its value to the client (a value
     // provide, not a layer provide — so it doesn't break scope lifetimes; same shape as clientLayer).
@@ -2678,14 +2726,12 @@ const buildPeerClient = <Self, S extends Spec>(
         Layer.provide(FetchHttpClient.layer),
       ),
     );
-    // `client`'s precise RPC type is deep (`From<RpcUnionOf<S>>`); `buildClientService` takes `unknown`,
-    // so widen here to stop TS deeply comparing it against `ServiceOf<S>` (a `TS2589`).
     const client: unknown = yield* Effect.provideService(
       RpcClient.make(tag[groupSym] as RpcGroup.RpcGroup<any>),
       RpcClient.Protocol,
       Context.get(context, RpcClient.Protocol),
     );
-    return yield* buildClientService(tag, client);
+    return buildPeerService(tag, client);
   });
 
 /**

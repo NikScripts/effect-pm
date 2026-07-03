@@ -85,3 +85,22 @@ We shipped FleetDatabase with `runtimeConnections` as **`effect`** (pull) — bo
 end-to-end (`wnba.totalConnections == Σ runtimeConnections`, 3 == 1+1+1 across the three runtimes). We'd
 switch the leaf to **`value`** (a live count, nicer for the dashboard's `Resource.changes` subscribe) the
 moment peer stream-clients connect lazily. Flagging so the next consumer doesn't have to bisect it.
+
+---
+
+## RESOLVED (2026-07-02, branch queue-value-adoption)
+
+**Fix: peer clients are now fully lazy** (`buildPeerService`, replacing `buildClientService` inside
+`buildPeerClient`). A peer never resolves `constant`s or subscribes `value`/`stream` fields at build — so
+nothing connects until a fold reads a field:
+- `value` on a peer reads **one-shot** (`Stream.runHead` → its replayed current) — an `Effect`, so
+  `combineQuery(peers, (p) => p.n, …)` works exactly like an `effect` field. `PeerServiceOf<value>` is now
+  `Effect<A>` (was `Stream<A>` via the generic leaf mapping).
+- `effect`/`effectFn`/`stream`/`constant` are already their lazy wire forms.
+
+Result: a `value`-bearing multiHost resource **boots against a down/co-booting peer** (verified: build
+completes in ~4ms vs the 30s block-for-initial deadlock), and a fold **drops** an unreachable peer — a
+refused peer fails fast; a black-hole peer should be per-peer `Effect.timeout`'d by the consumer's fold
+(the library doesn't impose a connect timeout). So you can switch `runtimeConnections` to `value` now.
+
+Regression test: `test/multi-host-peers-lazy.test.ts` (build-boots + fold-drops-down-peer).
