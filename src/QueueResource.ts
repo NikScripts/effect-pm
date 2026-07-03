@@ -2266,9 +2266,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R>(
     });
     // One fiber recomputes the snapshot on each lifecycle event (covers enqueue/start/exit/
     // drain/release/clear); pause/resume refresh inline (they emit no event). Tied to the
-    // queue scope, so it's interrupted on teardown.
+    // queue scope, so it's interrupted on teardown. Subscribe **synchronously** (not the lazy
+    // `Stream.fromPubSub` inside the fork) so the very first event can't be dropped by a
+    // subscription race — a mutating op right after acquire must still refresh the snapshot.
+    const statusEvents = yield* PubSub.subscribe(eventsHub);
     yield* Effect.forkScoped(
-      Stream.runForEach(Stream.fromPubSub(eventsHub), () => refreshStatus),
+      Stream.runForEach(Stream.fromSubscription(statusEvents), () => refreshStatus),
     );
 
     // Dynamic-window metrics timer: emit when a significant event requests a flush OR the max

@@ -1403,9 +1403,8 @@ const readinessCheckServed = (
     for (const [key, m] of Object.entries(spec)) {
       if (isConstantMethod(m)) {
         setPath(view, key, yield* (flat[key] as Effect.Effect<unknown>));
-      } else if (isRefMethod(m)) {
-        setPath(view, key, yield* (flat[key] as Subscribable<unknown>).get);
       } else {
+        // ref → its Subscribable (the readiness derivation reads `.get` itself); other wire members as-is
         setPath(view, key, flat[key]);
       }
     }
