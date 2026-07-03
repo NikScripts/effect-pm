@@ -1,5 +1,21 @@
 # @nikscripts/effect-pm
 
+## 0.8.0-beta.24
+
+### Minor Changes
+
+- fa4fae6: **`Resource.make` for reusable impls, and host-free multiHost resources.**
+
+  - **`Resource.make(tag, impl)`** — anchor a **hoisted** implementation to its contract at the definition
+    site. Inline impls (`layer` / `serverEntry` / `serve`) are already typed; extracting one to a `const`
+    (to share across the local layer + a served entry, or several serves) loses that typing and surfaces the
+    mistake far away at the serve call. `Resource.make` infers the tag's spec, constrains `impl` to its
+    `ImplOf`, returns it typed. Overloaded for the `Effect`-form (`R`); runtime identity. Also exports
+    **`SpecOf<T>`** for the `obj satisfies ImplOf<SpecOf<typeof Tag>>` route.
+  - **Host-free multiHost.** `Resource.peersLayer(tag, self, { hosts })` takes the fleet **at the use site**,
+    so a shared multiHost resource is defined host-free and exported (hosts are a deployment concern).
+    Falls back to the tag's baked `.multiHost([…])` when omitted (backward-compatible).
+
 ## 0.8.0-beta.23
 
 ### Minor Changes
